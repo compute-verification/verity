@@ -73,7 +73,7 @@ def clear_observations() -> None:
 
 def observe_device_name(name: str | None) -> None:
     """The device the Build answers for (vLLM's `current_platform.get_device_name()`: the declared one, else the host's), whose
-    cuBLAS device pin the bf16 GEMM rules read (`bf16_gemm_check.default_cublas_route`); None: the one pin of its capability."""
+    cuBLAS device pin the bf16 GEMM rules read (`bf16_gemm_check.default_cublas_route`); None: the route scan's device (`ROUTE_CONDITIONS["device"]`)."""
     _OBSERVED["device_name"] = name
 
 

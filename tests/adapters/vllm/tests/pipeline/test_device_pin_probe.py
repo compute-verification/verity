@@ -46,7 +46,7 @@ def test_the_pin_is_the_routes_at_the_like_devices_shapes_and_the_conditions_rea
     BC.device_pin.cache_clear()
     try:
         assert BC.default_cublas_route("linear", 1, 4096, 2048, H100) == ("non_split", {})
-        assert BC.route_departures({"cublas": H100_FACTS}) == []
+        assert BC.route_departures({"cublas": H100_FACTS}, H100) == []
     finally:
         BC.device_pin.cache_clear()
 

@@ -4,7 +4,8 @@
 
 A Program that binds a Definition only the pin binds (`bf16_gemm_check.ROUTE_DEFINITIONS`, in the replay's population or its
 unreplayable families) computes cuBLAS's routes as the pin's scan saw them, which hold only under the scan's conditions
-(`ROUTE_CONDITIONS`, or on another device its own pin's: `bf16_gemm_check.route_pin_of`); the rank's facts of record (`engine_of_record.cublas`, measured in its process) must be those, else FAIL naming each
+(`ROUTE_CONDITIONS`, or for a Build made for another device that device's pin's: `bf16_gemm_check.route_pin_of` of the
+replay's `build_device`); the rank's facts of record (`engine_of_record.cublas`, measured in its process) must be those, else FAIL naming each
 departure, an unrecorded fact one too."""
 from __future__ import annotations
 
@@ -29,15 +30,15 @@ def route_pin_gate(sr: dict | None, *, rank: int) -> tuple[dict | None, str | No
     bound = BC.route_bound(fams)
     if not bound:
         return None, None
-    engine = sr.get("engine_of_record")
-    departures = BC.route_departures(engine)
-    seen = (engine or {}).get("cublas")
-    pin = BC.route_pin_of(seen.get("device") if isinstance(seen, dict) else None)[0]
+    built_for = sr.get("build_device")      # the device the Build answered for; a replay that records none is the scan's
+    departures = BC.route_departures(sr.get("engine_of_record"), built_for if isinstance(built_for, str) else None)
+    pin = BC.route_pin_of(built_for)[0]
     named = ", ".join(f"{f} x{n}" for f, n in bound.items())
     why = (f"cuBLAS route pin (rank {rank}): {named} bound at the routes of {pin}, served otherwise: {'; '.join(departures)}"
            if departures else None)
-    block = {"rule": "a rank whose Program binds bf16_gemm_check.ROUTE_DEFINITIONS served under bf16_gemm_check.ROUTE_CONDITIONS (the route "
-                     "pin's scan), every fact measured in the rank's process; a departure or an unrecorded fact = the rank FAILs by name",
+    block = {"rule": "a rank whose Program binds bf16_gemm_check.ROUTE_DEFINITIONS served under the route conditions of the device its Build "
+                     "was made for (bf16_gemm_check.route_pin_of: ROUTE_CONDITIONS, the route pin's scan, when the Build names none), every "
+                     "fact measured in the rank's process; a departure or an unrecorded fact = the rank FAILs by name",
              "rank": int(rank), "families": bound, "pin": pin, "departures": departures, "ok": not departures, "why": why}
     return block, why
 

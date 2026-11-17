@@ -84,9 +84,9 @@ def route_bound(by_family: dict[str, int]) -> dict[str, int]:
 
 
 def route_pin_of(device: Any) -> tuple[str, dict[str, Any] | None]:
-    """The route pin a process on `device` (the name it reports) is held to, (its record, its conditions): the scan's
-    (`cublas_routes.json`) on the scan's device and on an unnamed one, else that device's pin's own `conditions`, measured where
-    its routes were (`verity-vllm device-pin probe`); None for a device with no pin or a pin without them."""
+    """The route pin a Program built for `device` binds, (its record, its conditions): the scan's (`cublas_routes.json`) for the
+    scan's device and for a Build that names none, else that device's pin's own `conditions`, measured where its routes were
+    (`verity-vllm device-pin probe`); None for a device with no pin or a pin without them."""
     if not isinstance(device, str) or device == ROUTE_CONDITIONS["device"]:
         return CUBLAS_ROUTES["run_record"], ROUTE_CONDITIONS
     try:
@@ -96,16 +96,17 @@ def route_pin_of(device: Any) -> tuple[str, dict[str, Any] | None]:
     return str(pin.get("evidence", {}).get("cublas", f"device_pins/{device.replace(' ', '_')}.json")), pin.get("conditions")
 
 
-def route_departures(engine: dict[str, Any] | None) -> list[str]:
-    """Each way a serving process's facts of record (`engine_facts_of_record`) are not its device's route pin's conditions
-    (`route_pin_of`), by name: a fact recorded otherwise, or not recorded (a fact the process could not read is recorded as
-    'unavailable: <why>', which no condition is); [] when it ran under them."""
+def route_departures(engine: dict[str, Any] | None, device: str | None = None) -> list[str]:
+    """Each way a serving process's facts of record (`engine_facts_of_record`) are not the route conditions of the device its
+    Program was built for (`route_pin_of(device)`, the scan's when the Build names none), by name: a fact recorded otherwise
+    (a process on another device than the Build's among them), or not recorded (a fact the process could not read is recorded
+    as 'unavailable: <why>', which no condition is); [] when it ran under them."""
     seen = (engine or {}).get("cublas")
     if not isinstance(seen, dict):
         return [f"no cuBLAS facts recorded (engine_of_record.cublas; the pin's: {ROUTE_CONDITIONS})"]
-    record, conditions = route_pin_of(seen.get("device"))
+    record, conditions = route_pin_of(device)
     if conditions is None:
-        return [f"device {seen.get('device')!r}: no route pin measured on it ({record}): run `verity-vllm device-pin probe` there"]
+        return [f"the Program was built for {device!r}, on which no route pin is measured ({record}): run `verity-vllm device-pin probe` there"]
     env = seen.get("env") if isinstance(seen.get("env"), dict) else {}
     pairs = [(k, seen.get(k, KeyError), w) for k, w in conditions.items() if k != "env"]
     pairs += [(v, env.get(v, KeyError), w) for v, w in conditions["env"].items()]
@@ -134,16 +135,6 @@ def device_pin(device: str) -> dict[str, Any]:
     if not path.is_file():
         raise KeyError(f"no device pin {path.name} in {DEVICE_PINS.name}/")
     return json.loads(path.read_text())
-
-
-@cache
-def capability_pin(cc: tuple[int, int]) -> dict[str, Any]:
-    """The one pinned device of compute capability `cc`."""
-    pins = [json.loads(p.read_text()) for p in sorted(DEVICE_PINS.glob("*.json"))]
-    got = [p for p in pins if tuple(p["compute_capability"]) == tuple(cc)]
-    if len(got) != 1:
-        raise KeyError(f"{len(got)} device pins of compute capability {cc} in {DEVICE_PINS.name}/; one is required")
-    return got[0]
 
 
 def pinned_routes(device: str | None = None) -> dict[str, dict[str, Any]]:

@@ -1,6 +1,6 @@
 """The device pins (`adapters/vllm/verity_vllm/definitions/registry/device_pins/`): the cc 9.0 device's probed cuBLAS routes are the eager Build's default routes off the
 GLM-5.3 capture's shapes, a route is never read for an M the probe did not run, a pin is found by its device's reported name, a named
-device reads its own pin only, and a process is held to the route conditions of the device it reports."""
+device reads its own pin only, and a process is held to the route conditions of the device its Build was made for."""
 from __future__ import annotations
 
 import json
@@ -23,12 +23,10 @@ def test_the_capture_pins_come_first():
 
 
 def test_a_pin_is_found_by_the_name_its_device_reports():
-    pin = BC.device_pin(BC.capability_pin((9, 0))["device"])
-    assert tuple(pin["compute_capability"]) == (9, 0) and pin["sms"] > 0
+    pin = BC.device_pin(BC.ROUTE_CONDITIONS["device"])
+    assert pin["device"] == BC.ROUTE_CONDITIONS["device"] and tuple(pin["compute_capability"]) == (9, 0) and pin["sms"] > 0
     with pytest.raises(KeyError):
         BC.device_pin("no such device")
-    with pytest.raises(KeyError):
-        BC.capability_pin((1, 0))
 
 
 H100 = "NVIDIA H100 80GB HBM3"
@@ -45,10 +43,8 @@ def h100_pin(tmp_path, monkeypatch):
     (pins / f"{H100.replace(' ', '_')}.json").write_text(json.dumps(pin))
     monkeypatch.setattr(BC, "DEVICE_PINS", pins)
     BC.device_pin.cache_clear()
-    BC.capability_pin.cache_clear()
     yield pin
     BC.device_pin.cache_clear()
-    BC.capability_pin.cache_clear()
 
 
 def _todays_route(pin: dict, phase: str, M: int, K: int, N: int) -> tuple[str, dict[str, int]] | None:
@@ -85,9 +81,9 @@ def _assert_todays(pin: dict) -> int:
 
 def test_the_h200_and_a_build_naming_no_device_read_todays_route_at_every_recorded_launch():
     """Every M up to the scan's m_max at every captured shape, and every pinned shape: the route an H200 or a device-less
-    Build binds, and the route conditions its process is held to, are those of the one cc 9.0 pin and the scan."""
-    pin = BC.capability_pin((9, 0))["cublas"]
-    assert BC.capability_pin((9, 0))["device"] == BC.ROUTE_CONDITIONS["device"]
+    Build binds, and the route conditions its process is held to, are one and the same, and those of the scan and of the scan
+    device's pin, the one cc 9.0 pin a device-less Build read before it named its device."""
+    pin = BC.device_pin(BC.ROUTE_CONDITIONS["device"])["cublas"]
     assert _assert_todays(pin) > len(pin)
 
 
@@ -108,19 +104,20 @@ def _engine(**cublas):
     return {"cublas": {**{k: v for k, v in BC.ROUTE_CONDITIONS.items() if k != "env"}, "env": dict(env), **cublas}}
 
 
-def test_a_process_is_held_to_its_own_devices_route_conditions(h100_pin):
-    assert BC.route_departures(_engine()) == []
-    assert BC.route_departures(_engine(**h100_pin["conditions"])) == []
-    assert BC.route_departures(_engine(device=H100)) == ["cublas_version 120901 (pin: 120900)"]
-    assert BC.route_departures(_engine(**{**h100_pin["conditions"], "device": BC.ROUTE_CONDITIONS["device"]})) == [
-        "cublas_version 120900 (pin: 120901)"]
+def test_a_process_is_held_to_the_route_conditions_of_the_device_its_build_was_made_for(h100_pin):
+    h100 = h100_pin["conditions"]
+    assert BC.route_departures(_engine()) == BC.route_departures(_engine(), BC.ROUTE_CONDITIONS["device"]) == []
+    assert BC.route_departures(_engine(**h100), H100) == []
+    assert BC.route_departures(_engine(device=H100)) == [f"device {H100!r} (pin: 'NVIDIA H200')"]
+    assert BC.route_departures(_engine(**h100)) == [f"device {H100!r} (pin: 'NVIDIA H200')", "cublas_version 120900 (pin: 120901)"]
+    assert BC.route_departures(_engine(), H100) == [f"device 'NVIDIA H200' (pin: {H100!r})", "cublas_version 120901 (pin: 120900)"]
 
 
-def test_a_device_with_no_measured_conditions_departs_by_name(h100_pin):
-    [why] = BC.route_departures(_engine(device="NVIDIA B300"))
-    assert "'NVIDIA B300': no route pin measured on it" in why and "verity-vllm device-pin probe" in why
+def test_a_build_for_a_device_with_no_measured_conditions_departs_by_name(h100_pin):
+    [why] = BC.route_departures(_engine(device="NVIDIA B300"), "NVIDIA B300")
+    assert "built for 'NVIDIA B300', on which no route pin is measured" in why and "verity-vllm device-pin probe" in why
     del h100_pin["conditions"]
     (BC.DEVICE_PINS / f"{H100.replace(' ', '_')}.json").write_text(json.dumps(h100_pin))
     BC.device_pin.cache_clear()
-    [why] = BC.route_departures(_engine(device=H100))
-    assert "no route pin measured on it" in why
+    [why] = BC.route_departures(_engine(device=H100), H100)
+    assert "on which no route pin is measured" in why
