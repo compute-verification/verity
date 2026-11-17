@@ -5,8 +5,6 @@ compares with (`dsa_norm_rows.block_rmsnorm_rows`) against the reference evaluat
 About 40 seconds, at the served statics: the binding the hardware capture holds to the H200's words is this one."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 

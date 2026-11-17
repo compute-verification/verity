@@ -1425,15 +1425,15 @@ def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_b
 def test_llama32_1bs_arms_keep_each_requests_ids_and_its_cost_is_a_point_of_glm53s_metric(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Llama 3.2 1B has no recipe: its default arms are `KEPT`, whose ours keeps each request's ids, which a replay under
-    vLLM's client reads. Its cost of `record-ids` over `compiled` and its replay match are points of GLM-5.3's ids, and
-    the cost of no other arms is; each point's member names the model, the card and the arm, the cost's over its
-    reference, so that the two models' points are two lines of one metric."""
+    vLLM's client reads. Its cost of `record-ids` over `compiled`, its replay match and its advice are points of
+    GLM-5.3's ids, and the cost of no other arms is; each point's member names the model, the card and the arm, the
+    cost's over its reference, so that the two models' points are two lines of one metric."""
     assert P.default_arms("llama32-1b") == P.KEPT and not S.MODELS["llama32-1b"].published
     assert all(a in S.ARMS for a in P.KEPT) and "ids" in S.ARMS[P.KEPT[2]].plugin
     (tmp_path / "out" / "record-ids.1").mkdir(parents=True)
     assert P.default_arms("llama32-1b", tmp_path / "out") == P.KEPT
-    assert (P.METRICS["llama32-1b"], P.MATCH["llama32-1b"]) == (P.METRICS["glm53"], P.MATCH["glm53"])
-    assert "llama32-1b" not in P.ADVICE
+    assert (P.METRICS["llama32-1b"], P.MATCH["llama32-1b"], P.ADVICE["llama32-1b"]) == (
+        P.METRICS["glm53"], P.MATCH["glm53"], P.ADVICE["glm53"])
 
     def cost(stock: str, ours: str) -> dict:
         arms = S.lifetimes([a | {"model_id": "llama32-1b"} for a in
