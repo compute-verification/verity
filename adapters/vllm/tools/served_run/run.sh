@@ -88,7 +88,8 @@ def git(*args: str) -> subprocess.CompletedProcess:
 
 
 placed = {**{k: v for k, v in node.items() if not isinstance(v, dict)}, **r.get("env", {}),
-          **r.get("tie" if tie else "plain", {}).get("env", {}), **coins.get("env", {}), "PP_PEER": on}
+          **r.get("tie" if tie else "plain", {}).get("env", {}), **coins.get("env", {}), "PP_PEER": on,
+          **({"H1_PEER": on} if r is placement["run"]["window"] else {})}
 # PRODUCT is the configuration's, and a launch parameter with no default the launch's
 env = {k: fill(str(v), k) for k, v in placed.items()
        if k not in given and not (run == "settings" and (k == "PRODUCT" or unset(str(v))))}

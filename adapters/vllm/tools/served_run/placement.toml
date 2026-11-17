@@ -64,7 +64,6 @@ COMPOSE_OFF_NODE = "1"
 COMPOSE_NODE = "vy-nebius-cpu-14"
 LEASE_MEM_GB = "128"
 GPU_LEASE_WHO = "vllm-served-run"
-H1_PEER = "vy-spot-glm53"
 
 [run.window.plain]
 env = { POUW = "h1", H1_GATE = "", V3C_CLASS = "", COMPOSITE = "" }

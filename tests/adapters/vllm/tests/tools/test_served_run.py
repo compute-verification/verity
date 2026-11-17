@@ -225,14 +225,19 @@ def test_the_compose_run_sends_the_windows_hand_off_to_the_compose_node(tmp_path
 
 @pytest.mark.parametrize("args", [("window",), ("window", "--development"), ("window", "--tie"), ("setup",), ("copy",),
                                   ("audit",), ("audit", "--development"), ("compose",)])
-def test_every_run_carries_its_nodes_name_in_the_cluster_as_pp_peer_gate_or_no_gate(tmp_path, args):
+def test_every_run_carries_its_nodes_name_in_the_cluster_as_pp_peer_and_a_window_as_h1_peer(tmp_path, args):
     at = {**ROW_OF_CARDS, "SERVED_RUN": "r-window", "AUDIT_NODE": "vy-nebius-cpu-16"}
     if args[0] == "compose":
         at["HANDOFF"] = str(handoff(tmp_path, git(make_tree(tmp_path), "rev-parse", "HEAD")))
     got = run(tmp_path, *args, "--dry-run", **at)
     assert got.returncode == 0, got.stderr
-    words = shlex.split(got.stdout)
-    assert env_of(got)["PP_PEER"] == words[words.index("--on") + 1]
+    words, env = shlex.split(got.stdout), env_of(got)
+    assert env["PP_PEER"] == words[words.index("--on") + 1]
+    assert env.get("H1_PEER") == (env["PP_PEER"] if args[0] == "window" else None)
+
+
+def test_no_file_of_the_served_run_names_the_retired_node():
+    assert not [f.name for f in HERE.rglob("*") if f.is_file() and b"vy-dc-h200" in f.read_bytes()]
 
 
 def test_the_compose_run_refuses_another_commit_than_the_windows(tmp_path):
