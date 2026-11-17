@@ -53,11 +53,10 @@ The route:
    `security/Proofs/Pous/P2/Rows.lean` then applies at `S + 1` (`meets_m1p_of_row`); `S = ⌊(18/19)·B·w⌋` does not
    depend on `b` either.
 4. `m1p` is correct (`b ≤ w`, `p ≤ 2^w`), `|C| = B·w ≥ n = B·b`, and within the `21/20` space bound
-   (`20·w ≤ 21·b`). No payload and no code block lies in the tail (`pad_lt`, `m1p_code`), and the code blocks are
-   uniform on `[0, p)` (`m1p_code_uniform`).
+   (`20·w ≤ 21·b`). No payload and no code block lies in the tail (`pad_lt`, `m1p_code`).
 
 The generic count (`PousGen`) is `security/Proofs/Pous/P2/Count.lean`, the certificate
-plumbing (`PousP2`, up to `meets_m1_of_row`) is `security/Proofs/Pous/P2/Rows.lean`, and
+plumbing (`PousP2`) is `security/Proofs/Pous/P2/Rows.lean`, and
 A3′ is `PousTrackA.a3_prime_lam`. This module's own part is `PousP2p`.
 -/
 
@@ -157,50 +156,6 @@ theorem m1p_code (B w p b : ℕ) [NeZero B] (hb : 2 ^ b ≤ p) (hp2 : p ≤ 2 ^ 
     (ω : (permsp B w p).Ω) (j : Fin B) :
     bitsVal (((m1p B w p b).enc W ω ()).2 j) = (ω j).symm ⟨bitsVal (pad B w b W j), pad_lt hb hp2 W j⟩ :=
   bitsVal_permAct_of_lt (ω j).symm hp2 (pad_lt hb hp2 W j)
-
-/-- `Π_j(x) = y` holds for a `1/p` fraction of the permutation tuples. -/
-theorem card_eval_eq (B p : ℕ) (j : Fin B) (x y : Fin p) :
-    (univ.filter fun ω : PousGen.Om B (Fin p) => ω j x = y).card * p = Fintype.card (PousGen.Om B (Fin p)) := by
-  classical
-  have hR : ∀ v : Fin p, v ∉ PousGen.R ([] : List (PousGen.Ent B (Fin p))) j := fun v h => by
-    simpa using PousGen.mem_R.1 h
-  have hc : ∀ v : Fin p, (PousGen.cons [((j, x), v)]).card = (univ.filter fun ω : PousGen.Om B (Fin p) =>
-      ω j x = y).card := by
-    intro v
-    have e : PousGen.cons [((j, x), y)] = univ.filter fun ω : PousGen.Om B (Fin p) => ω j x = y := by
-      rw [PousGen.cons_cons, PousGen.cons_nil]
-    rw [← e]
-    exact le_antisymm (PousGen.card_cons_le [] j x (hR v) (hR y)) (PousGen.card_cons_le [] j x (hR y) (hR v))
-  have h := PousGen.card_cons_split ([] : List (PousGen.Ent B (Fin p))) j x
-  rw [PousGen.cons_nil, card_univ] at h
-  rw [h]
-  simp only [hc, sum_const, card_univ, Fintype.card_fin, smul_eq_mul, mul_comm]
-
-/-- **The code blocks are uniform on `[0, p)`**: each value `v < p` is block `j` of the code with probability
-`1/p`, and by `m1p_code` no value `≥ p` is. -/
-theorem m1p_code_uniform (B w p b : ℕ) [NeZero B] (hb : 2 ^ b ≤ p) (hp2 : p ≤ 2 ^ w)
-    (W : Bits (B * b)) (j : Fin B) (v : Fin p) :
-    pr (fun ω : (permsp B w p).Ω => bitsVal (((m1p B w p b).enc W ω ()).2 j) = v) = (p : ℝ≥0∞)⁻¹ := by
-  classical
-  have hp0 : 0 < p := lt_of_lt_of_le (Nat.two_pow_pos _) hb
-  have hiff : ∀ ω : (permsp B w p).Ω, bitsVal (((m1p B w p b).enc W ω ()).2 j) = v ↔
-      ω j v = ⟨bitsVal (pad B w b W j), pad_lt hb hp2 W j⟩ := by
-    intro ω
-    rw [m1p_code B w p b hb hp2, ← Fin.ext_iff, Equiv.symm_apply_eq, eq_comm]
-  have hcard := card_eval_eq B p j v ⟨bitsVal (pad B w b W j), pad_lt hb hp2 W j⟩
-  obtain ⟨c, hc⟩ : ∃ c, (univ.filter fun ω : PousGen.Om B (Fin p) =>
-      ω j v = ⟨bitsVal (pad B w b W j), pad_lt hb hp2 W j⟩).card = c := ⟨_, rfl⟩
-  rw [hc] at hcard
-  have hc0 : c ≠ 0 := by
-    rintro rfl
-    exact Fintype.card_ne_zero (α := PousGen.Om B (Fin p)) (by rw [← hcard, zero_mul])
-  rw [pr_def]
-  have e1 : (univ.filter fun ω : (permsp B w p).Ω => bitsVal (((m1p B w p b).enc W ω ()).2 j) = v).card = c := by
-    rw [← hc]; exact PousGen.card_filter_congr _ _ _ _ hiff
-  have e2 : Fintype.card (permsp B w p).Ω = p * c := by rw [mul_comm]; exact hcard.symm
-  rw [e1, e2, Nat.cast_mul, ENNReal.div_eq_inv_mul,
-    ENNReal.mul_inv (Or.inl (by exact_mod_cast hp0.ne')) (Or.inl (ENNReal.natCast_ne_top _)), mul_assoc,
-    ENNReal.inv_mul_cancel (by exact_mod_cast hc0) (ENNReal.natCast_ne_top _), mul_one]
 
 /-! ### Query trees over `[0, p)` -/
 

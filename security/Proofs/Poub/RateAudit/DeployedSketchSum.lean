@@ -23,7 +23,7 @@ only the tag-guess term `N/2^h`. The composed bound is
   `(1 − d̄)^(d·n) + (1 − d_w/n)^(d·n) + n·ε + (n·P·G)·N/2^h + (n·P)·qtot/2^(8r)`.
 
 At the deployed parameters (`h = 512`, `r = 12`) and the same caps `G = qtot = 2^55` the query term is
-`n·P·2^-41` (`sketchQueryTermCapsSum`), non-vacuous where the product form's `2^14` was vacuous, and the guess term
+`n·P·2^-41`, non-vacuous where the product form's `2^14` was vacuous, and the guess term
 `n·P·G·N/2^512` stays negligible.
 
 The chain: `card_resample_ground` (the resampling count against its ground set), `Prover.card_bad_ground_le` (one
@@ -34,8 +34,7 @@ union over a candidate family's query indices), `Prover.pr_unpaid_rank_family_le
 `ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployed` (the deployed guarantee,
 `ResourceAccounting.Guarantees.RemoteRunConservationSketchDeployed`, card 5d1805d1). The budget is the named assumption
 `ResourceAccounting.Assumptions.SketchHashBudget`; `budget_of_bounded` shows `qtot = G·q` always satisfies it, so the sum
-form at the worst budget recovers the product form (`RemoteRunConservationSketchDeployedProduct` in
-`DeployedSketch.lean` keeps that bound stated).
+form at the worst budget recovers the product form.
 -/
 
 @[expose] public section
@@ -659,29 +658,6 @@ theorem pr_conservation_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Sketc
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
-/-- `pr_conservation_of_unpaid` at the deployed receipt parameters (`RemoteRunConservationSketchDeployed`'s): the
-samples' terms are at most `2·2^-40`. -/
-theorem pr_deployed_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N 128)
-    (A : SketchDeployedRun n P N 128 ρ 512 S L q 16 G 2773) (X : ℕ) (hn : 7 ≤ n) (hP : 0 < P) (hN : 0 < N)
-    (εu : ℝ≥0∞) (hu : pr (fun x : Ω × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
-      ∃ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 + P * (S + (L - ρ * 256) + X) <
-        ((A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1).card * (128 * 256)) ≤ εu) :
-    pr (fun x : Ω × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
-      (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
-        ((((∑ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
-            (1 - (0.0015 + gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
-          ∃ w, (((A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
-            (1 - (0.01 + gammaSketch N 128 ρ S L X)) * (P * N * 32768)))
-      ≤ 2 / 2 ^ 40 + εu := by
-  have h := pr_conservation_of_unpaid store A X 0.0015 0.01 (by omega) hP hN (by norm_num) (by norm_num) εu hu
-  refine (le_of_eq ?_).trans (h.trans ?_)
-  · norm_num [mul_assoc]
-  rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
-    rw [ENNReal.div_add_div_same]; norm_num]
-  gcongr
-  · exact Rate.Deployed.pooled_deployed n hn
-  · exact Rate.Deployed.window_deployed n (by omega)
-
 end SketchDeployedRun
 
 end ResourceAccounting.RateSketch
@@ -732,7 +708,7 @@ theorem RemoteRunConservationSketchSum :
 /-- **The verbatim sketch session at the deployed receipt parameters, under the per-pass hash budget**
 (`ResourceAccounting.Guarantees.RemoteRunConservationSketchDeployed`). `RemoteRunConservationSketchSum` at 4 KiB
 tiles (`m = 128`), 16 sketch rows, SHA-512 tags, rank `r = 12`, 2,773 pooled openings per window, `d̄ = 0.15%`,
-`d_w = 1%`. At the conservative caps `G = qtot = 2^55` the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`),
+`d_w = 1%`. At the conservative caps `G = qtot = 2^55` the query term is `n·P·2^-41`,
 where the product form's `G·q/2^96` alone was `2^14`. -/
 theorem RemoteRunConservationSketchDeployed :
     ResourceAccounting.Guarantees.RemoteRunConservationSketchDeployed := by
@@ -759,14 +735,5 @@ theorem RemoteRunConservationSketchDeployed :
   gcongr
   · exact Deployed.pooled_deployed n hn
   · exact Deployed.window_deployed n (by omega)
-
-/-- At the conservative deployed caps the sum form's query term is `2^-41` before multiplying by windows and passes:
-`qtot = 2^55` total oracle queries per pass at rank `r = 12`. The product form's same-caps term,
-`sketchQueryTermCaps`, is `2^14`. -/
-theorem sketchQueryTermCapsSum :
-    (2 ^ 55 : ℝ≥0∞) / 2 ^ 96 = 1 / 2 ^ 41 := by
-  rw [show (2 : ℝ≥0∞) ^ 96 = 2 ^ 55 * 2 ^ 41 by rw [← pow_add]]
-  simpa using (ENNReal.mul_div_mul_left (c := (2 : ℝ≥0∞) ^ 55) 1 (2 ^ 41)
-    (pow_ne_zero _ (by norm_num)) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top))
 
 end ResourceAccounting.SecurityProofs

@@ -1016,7 +1016,8 @@ theorem pr_conservation_of_unpaid_causal {Ω : Type} [Fintype Ω]
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
-/-- `pr_deployed_of_unpaid` for causal correct sets `cor` and reads `rd`: the samples' terms are at most `2·2^-40`. -/
+/-- `pr_conservation_of_unpaid` at the deployed receipt parameters, for causal correct sets `cor` and reads `rd`: the
+samples' terms are at most `2·2^-40`. -/
 theorem pr_deployed_of_unpaid_causal {Ω : Type} [Fintype Ω]
     (cor : Ω → (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin n → Finset (Fin P × Fin N))
     (rd : Ω → (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin n → ℕ)

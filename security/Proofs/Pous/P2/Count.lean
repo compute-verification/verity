@@ -584,13 +584,6 @@ theorem count_main (S Q g : ℕ) (p : Bits S → Fin B → Tree (Fin B × X) X X
 
 end Main
 
-/-- Filters by equivalent predicates, whatever their decidability instances, have the same size. -/
-theorem card_filter_congr {α : Type} [Fintype α] (P P' : α → Prop) (d : DecidablePred P) (d' : DecidablePred P')
-    (h : ∀ x, P x ↔ P' x) : (@Finset.filter α P d univ).card = (@Finset.filter α P' d' univ).card := by
-  congr 1
-  ext x
-  simp [h]
-
 theorem frac_le {N K X P : ℕ} (hK : 0 < K) (hP : 0 < P) (h : N * P ≤ X * K) :
     (N : ℝ≥0∞) / K ≤ (X : ℝ≥0∞) / P := by
   rw [ENNReal.div_le_iff (by exact_mod_cast hK.ne') (ENNReal.natCast_ne_top _), div_eq_mul_inv, mul_right_comm,

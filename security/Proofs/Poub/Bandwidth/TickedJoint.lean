@@ -149,26 +149,6 @@ theorem audit_joint (C : Ticked.Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o, (
     have := hx.2
     nlinarith
 
-/-- **Mbw for the chip as a tick transducer, in the capacity form**: without passive memory, every tick's reply has
-width at most `βm`, and the probability that the chip's tags pass while `βm T + S + βs T + λ < k b + n` is at most
-`AuditRO`'s bound. -/
-theorem audit_joint_capacity (C : Ticked.Chip N b h S) (βm βs qt T : ℕ) (hw : ∀ st o, C.width st o ≤ βm)
-    (hq : ∀ st o, (C.ask st o).length ≤ qt) (ζ : Bits S → List (Obs h) → Bits n)
-    (state : Store N b → Bits n → Bits S) (hbm : Bits n → Hbm N b) (rest : Bits n → Rest N b h)
-    (hrest : ∀ z E O O', rest z E O = rest z E O')
-    (hζ : ∀ E z O, ζ (state E z) (observe C βs (state E z) (hbm z) (rest z) E O T [] [] []) = z) (s k lam : ℕ) :
-    pr (fun x : (Store N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
-        (∀ i, C.tags (state x.1.1 x.1.2)
-            (observe C βs (state x.1.1 x.1.2) (hbm x.1.2) (rest x.1.2) x.1.1 x.2.1 T [] [] []) (x.2.2 i) =
-            x.2.1 (x.2.2 i, x.1.1 (x.2.2 i))) ∧
-          βm * T + S + βs * T + lam < k * b + n)
-      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (((T * qt).choose k : ℕ) : ℝ≥0∞) / 2 ^ lam := by
-  refine (pr_mono fun x hx => ⟨hx.1, ?_⟩).trans (audit_joint C βs qt T hq ζ state hbm rest hrest hζ s k lam)
-  have := hbmBits_le C βs βm hw (state x.1.1 x.1.2) (hbm x.1.2) (rest x.1.2) x.1.1 x.2.1 T [] [] []
-  have := hx.2
-  simp only [hbmBits, List.map_nil, List.sum_nil] at *
-  nlinarith
-
 end SecurityProofs.Ticked
 
 end Bandwidth

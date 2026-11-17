@@ -62,7 +62,7 @@ Two forms of B3 follow, as the model's B3 row has them:
   `βm T + S + βs T + m b + λ < k b`. A width bound per run would not do here: an alphabet's signals can differ only in
   their width-0 wires, so the information a link carries in a tick is its alphabet index, not the width delivered.
 
-`audit_reads_ro` and `audit_ro` are `AuditInteractiveRO`'s bounds when the rest ignores the oracle.
+`audit_reads_ro` is `AuditInteractiveRO`'s bound when the rest ignores the oracle.
 -/
 
 @[expose] public section
@@ -397,21 +397,6 @@ theorem audit_reads_ro (C : Ticked.Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o
   · rw [hi]
     have := hx.2
     nlinarith
-
-/-- **The capacity form when the rest ignores the oracle**. -/
-theorem audit_ro (C : Ticked.Chip N b h S) (βm βs qt T : ℕ) (hw : ∀ st o, C.width st o ≤ βm)
-    (hq : ∀ st o, (C.ask st o).length ≤ qt) (state : Store N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h)
-    (hrest : ∀ E O O', rest E O = rest E O') (s k lam : ℕ) :
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
-        (∀ i, C.tags (state x.1) (observe C βs (state x.1) hbm rest x.1 x.2.1 T [] [] []) (x.2.2 i) =
-            x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
-          βm * T + S + βs * T + lam < k * b)
-      ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (((T * qt).choose k : ℕ) : ℝ≥0∞) / 2 ^ lam := by
-  refine (pr_mono fun x hx => ⟨hx.1, ?_⟩).trans (audit_reads_ro C βs qt T hq state hbm rest hrest s k lam)
-  have := hbmBits_le C βs βm hw (state x.1) hbm rest x.1 x.2.1 T [] [] []
-  have := hx.2
-  simp only [hbmBits, List.map_nil, List.sum_nil] at *
-  nlinarith
 
 end SecurityProofs.Ticked
 

@@ -37,9 +37,8 @@ recipe of `Family.lean` and a union exponent that grows with `k`:
 - `N = 1`: `e = 9k + 129` and `β = 265254744 − e` (`a = 69`, `b = 59`), the same way.
 
 Lowering `β` by at most `22,029` bits (`N ≥ 2`) and `2,829` bits (`N = 1`) keeps `p₀ ≤ 95923/100000` in both cases
-(`p₀_fam_le`, `p₀_one_le`; at `N = 1` and `k = 300` with 15 bits to spare), and `binTail_mono` replaces `p₀` by
-`95923/100000`. At `t = 0` and `k = 111` the statement is `BandMultiMeetsFamily`'s, by
-`gradedMeets_zero_iff` (`D = 5 ≤ D_late`, `Q = 2^20 ≤ Q_late`).
+(`p₀_fam_le`, `p₀_one_le`; at `N = 1` and `k = 300` with 15 bits to spare). At `t = 0` and `k = 111` the
+statement is `BandMultiMeetsFamily`'s, by `gradedMeets_zero_iff` (`D = 5 ≤ D_late`, `Q = 2^20 ≤ Q_late`).
 
 **The deployment condition: the window is too short to re-encode `C`.** The certificate holds at every
 `(D_late, Q_late)` (`band_graded_fam_dom`); the conditions on `D_late` are necessary for the game's `S`-bit state to
