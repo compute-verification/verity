@@ -35,7 +35,7 @@ ABOUT = ("TemplateInstances / TemplatePopulations programs over verity/circuits'
          "SHA-512 of its descriptor id and its program digest; checked and written by test_population_recorded.py")
 REWRITE = "`uv run python tools/check/pins.py --write tests/verity/circuits/population_recorded.json`"
 #: `population`'s own families, which its sidecar binds as roots too: not templates of a population here
-POPULATIONS = ("TemplateInstances", "TemplatePopulations", "WiredPopulations", "WordBits", "BitsWord")
+POPULATIONS = ("TemplateInstances", "TemplatePopulations", "WiredPopulations", "WiredSlots", "WordBits", "BitsWord")
 #: the packages under `verity/circuits` whose sidecars the record never held
 UNRECORDED = ("kernels", "private_circuits")
 
