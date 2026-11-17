@@ -2455,7 +2455,7 @@ def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sam
     reason = S.said({"work": row}, {"work": ("vy-dc-h200", "real")}, "vy-dc-h200")
     said = f"{S.PEARLPLUS_SAID}, {weaker}" if weaker else S.PEARLPLUS_SAID
     assert reason.startswith("PoUW: accept") and reason.endswith(said), reason
-    assert weaker is None or f"sampled {design}, which takes no stratum of each reader template" in weaker
+    assert weaker is None or f"sampled {design}, not a stratified rate over a cut whose tables' readers" in weaker
 
 
 def test_pearlpluss_verdict_of_record_keeps_a_class_held_runs_give_up_and_not_its_exact_credit(tmp_path, monkeypatch, live):
@@ -4773,9 +4773,10 @@ NO_TIE = ("PREFLIGHT: under H1_TIE V3c's audit is tied to H1's W, whose tables t
 
 
 def _no_reader(sampling_design: str) -> str:
-    return ("PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, and only a stratified rate "
-            "(stratified-rate:NUM/DEN) samples a stratum of each reader template, which reaches every table only where "
-            f"each table's readers are templates of their own: V3C_LAW is {_published(sampling_design)}")
+    return ("PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, and a stratified rate "
+            "(stratified-rate:NUM/DEN), the one rule the tie takes without PEARLPLUS_TIE_UNIFORM, samples a stratum of each "
+            "reader template, which reaches every table only where each table's readers are templates of their own: "
+            f"V3C_LAW is {_published(sampling_design)}")
 
 
 @pytest.mark.parametrize("args, extra, records_audit, line", [
