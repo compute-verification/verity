@@ -221,20 +221,6 @@ def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
     return {"commit": commit, "clean": clean, "verifier_sha512": file_sha512(exe), "cites": cites, "lock": lock}
 
 
-def sampled_coins(cases: Sequence[dict[str, Any]], key_sha512: str | None) -> str | None:
-    """``live`` when the sampled-proofs case's challenger key (its params' ``challenger.key``) is the one this machine pins
-    (``key_sha512``), else ``simulated``, a case naming no key and no pin included; None with no such case."""
-    for p in cases:
-        if p["id"] != SAMPLED:
-            continue
-        try:
-            named = hashlib.sha512(bytes.fromhex(p["params"]["challenger"]["key"]["public"])).hexdigest()
-        except (KeyError, TypeError, ValueError, AttributeError):
-            return "simulated"
-        return "live" if key_sha512 and named == key_sha512.lower() else "simulated"
-    return None
-
-
 def uncited(p: dict[str, Any]) -> str | None:
     """Why the lock at provenance `p`'s commit refutes the guarantee its accept cites: it lists no such guarantee."""
     if p["cites"] is not None and p["lock"] is not None and not p["lock"]["listed"]:
@@ -252,6 +238,20 @@ def unestablished(p: dict[str, Any]) -> str | None:
         return f"{p['commit']} holds no {LOCK}"
     if not p["clean"]:
         return f"the tree's tracked files differ from {p['commit']}"
+    return None
+
+
+def sampled_coins(cases: Sequence[dict[str, Any]], key_sha512: str | None) -> str | None:
+    """``live`` when the sampled-proofs case's challenger key (its params' ``challenger.key``) is the one this machine pins
+    (``key_sha512``), else ``simulated``, a case naming no key and no pin included; None with no such case."""
+    for p in cases:
+        if p["id"] != SAMPLED:
+            continue
+        try:
+            named = hashlib.sha512(bytes.fromhex(p["params"]["challenger"]["key"]["public"])).hexdigest()
+        except (KeyError, TypeError, ValueError, AttributeError):
+            return "simulated"
+        return "live" if key_sha512 and named == key_sha512.lower() else "simulated"
     return None
 
 
@@ -325,13 +325,13 @@ def run(a: argparse.Namespace) -> int:
         rc = p.returncode
         ran = provenance(a.product, Path(shutil.which(a.exe) or a.exe), a.tree)
         lines.append(f"RAN {ran['commit']} clean={ran['clean']} sha512={ran['verifier_sha512']} cites={ran['cites']}")
-        if ran["cites"] is not None and coins == "simulated":
-            ran.setdefault("not_covered", {"id": SAMPLED}).update(coins=coins, coins_on=a.coins_on)
-            lines.append(f"NOT_COVERED {SAMPLED} coins: simulated on {a.coins_on}: {ran['cites']} does not cover it")
         lines += [f"NOT_ESTABLISHED {why}"] if (why := unestablished(ran)) else []
         if rc == 0 and (why := uncited(ran)) is not None:
             lines.append(f"UNCITED {why}")
             rc = UNCITED
+        if ran["cites"] is not None and coins == "simulated":
+            ran.setdefault("not_covered", {"id": SAMPLED}).update(coins=coins, coins_on=a.coins_on)
+            lines.append(f"NOT_COVERED {SAMPLED} coins: simulated on {a.coins_on}: {ran['cites']} does not cover it")
     lines += [f"EXCEPTION {x}" for x in exceptions(a.product)]
     record = canonical(public_record(a.product, commitment, cases, gone, verdict, a.development, ran)
                        | ({"coins": coins, "coins_on": {SAMPLED: a.coins_on}} if coins else {}))
