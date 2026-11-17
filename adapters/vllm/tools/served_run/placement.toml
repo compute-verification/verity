@@ -70,7 +70,7 @@ env = { POUW = "h1", H1_GATE = "", V3C_CLASS = "", COMPOSITE = "" }
 
 [run.window.tie]
 # V3C_AUDIT_MEM_GB above node A's memory defers the records audit off the node
-env = { POUW = "pearlplus", PEARLPLUS_TIE = "1", V3C_CLASS = "4,32,4", V3C_LAW = "${V3C_LAW:-stratified-rate:1/2097152}", PRECISION = "bfloat16", V3C_AUDIT_MEM_GB = "2100" }
+env = { POUW = "pearlplus", PEARLPLUS_TIE = "1", V3C_CLASS = "4,32,4", V3C_LAW = "${V3C_LAW:-stratified-rate:1/2097152}", PRECISION = "bfloat16", V3C_AUDIT_MEM_GB = "2100", POUW_TIMEOUT = "300m", PEARLPLUS_LEAN_TIMEOUT = "13500" }
 
 [run.window.coins.gate]
 main_line = true
