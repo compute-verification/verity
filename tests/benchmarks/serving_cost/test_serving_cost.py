@@ -53,7 +53,7 @@ def minify_record(tmp: Path) -> Path:
     return d
 
 
-def lifetime(out: Path, name: str, seconds: float, mode: str | None, decode: list[tuple[int, int]] = ()) -> None:
+def lifetime(out: Path, name: str, seconds: float, mode: str | None, decode: tuple[tuple[int, int], ...] = ()) -> None:
     d = out / name
     for rep, t0 in ((1, 0.0), (2, 100.0)):
         p = d / "agentic@4" / f"rep-{rep}"
@@ -76,7 +76,7 @@ def capture_record(tmp: Path, minify: str = MINIFY, below: bool = True) -> Path:
     out = d / "out"
     for k in (1, 2):
         lifetime(out, f"prod-trace.{k}", 50.0, None)
-        lifetime(out, f"prod-record.{k}", 52.0, "canonical", [(4, 131066), (1, 19994)])
+        lifetime(out, f"prod-record.{k}", 52.0, "canonical", ((4, 131066), (1, 19994)))
     counters = {"rows_long": 1, "rows_bisected": 80, "rows_refined": 1600, "rows_at": 1, "calls": 1}
     (out / "topk_counters.json").write_text(json.dumps({"dirs": {f"prod-record.{k}": counters for k in (1, 2)}}))
     layers = [{"arm": "prod-record", "over": "prod-trace", "value": 0.02, "ci95": [0.01, 0.03], "pairs": 2}]

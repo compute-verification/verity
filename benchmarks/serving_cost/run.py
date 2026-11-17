@@ -119,12 +119,12 @@ def priced_point(out: Path, u: dict, a: argparse.Namespace) -> dict[str, Any]:
 
 
 def price(a: argparse.Namespace) -> int:
-    cap_dir, cap = stored("capture", a.capture, "price")
+    capture_dir, got = stored("capture", a.capture, "price")
     min_dir, _ = stored("minify", a.minify, "price")
-    if (named := (cap.get("workload_fingerprint") or {}).get("minify")) != a.minify:
+    if (named := (got.get("workload_fingerprint") or {}).get("minify")) != a.minify:
         refuse("price", f"capture run {a.capture} was taken against minify run {named!r}, not {a.minify}: give "
                         "the minify run its capture names")
-    r = priced_point(cap_dir / "out", priced.units(min_dir / UNITS), a)
+    r = priced_point(capture_dir / "out", priced.units(min_dir / UNITS), a)
     unpriced = [list(x) for x in UNPRICED]
     out = place(a.out)
     out.mkdir(parents=True, exist_ok=True)
