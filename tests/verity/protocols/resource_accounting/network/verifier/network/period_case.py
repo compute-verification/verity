@@ -709,7 +709,7 @@ def _scan(j, program: str, s: NetworkAttesterParams) -> Scan:
         raise D.Reject("scan: the ingress template doesn't return a u16, a state of its sin's leaves and a view of an "
                        "egress bucket's state's leaves, or the start template doesn't take and return a state of "
                        "those leaves, so a tie of the scan's state or view would equate rows of two lengths "
-                       "(NetworkCheck.Period.ingressReturn, startReturn)")
+                       "(NetworkVerifier.Period.ingressReturn, startReturn)")
     inputs = sum(int(w[1]) * _members(x) for x in nodes if (w := INPUT_ID.match(callees[x["fn"]])))
     bits = lambda ps: sum(bits_of(t) for _, t in ps)  # noqa: E731
     nb = T // s.every
@@ -747,19 +747,19 @@ def _scan(j, program: str, s: NetworkAttesterParams) -> Scan:
     E = leaves_of(ety)
     if not _reads_entries(xi, 2, 0, s.every, E, pks, j):
         raise D.Reject(f"scan: bucket t's prog<j> is not row ⌊t / {s.every}⌋ of lane j's slot entries' input node, "
-                       "its slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)")
+                       "its slot of the boundary bucket t reads (NetworkVerifier.Period.readsEntries)")
     own = [_input_arg(a, nodes, j) for a in own_args]
     if len(set(own)) != len(own) or any(k in own for k in pks):
         raise D.Reject("scan: two of the templates' row, state and egress arguments read one input node, or one reads "
                        "a lane's slot entries': an input node would be left that nothing reads, or a slot entry would "
-                       "be a state gate (NetworkCheck.Period.argsApart)")
+                       "be a state gate (NetworkVerifier.Period.argsApart)")
     whole = lambda a: (q := _affine(_parts(a["refs"], nodes)[0]))[3] == _members(nodes[q[1]])  # noqa: E731
     if not (all(whole(a) for a in own_args) and all(_members(nodes[k]) == nb * E for k in pks)
             and E <= bits_of(ety) and all(k in pks or k in own for k, x in enumerate(nodes) if _is_input(x, j))):
         raise D.Reject("scan: an input node with a leaf nothing reads: a row, state or egress argument that is not all "
                        f"its input node's leaves, a lane's slot entries' node of other leaves than its {nb} entries' "
                        "(each of at least a bit), or an input node that is neither's "
-                       "(NetworkCheck.Period.inputsRead)")
+                       "(NetworkVerifier.Period.inputsRead)")
     if not _topological(j):
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
@@ -3206,12 +3206,12 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     d, nodes, ts = parts()
     row, sin = nodes[ts[1]]["args"][:2]
     sin["refs"] = {"affine": ["n", row["refs"]["affine"][1], 0, sin["refs"]["affine"][3]]}
-    out["shared"] = own(d), "(NetworkCheck.Period.argsApart)"
+    out["shared"] = own(d), "(NetworkVerifier.Period.argsApart)"
 
     d, nodes, ts = parts()
     own_sin, sin = nodes[ts[0]]["args"][0], nodes[ts[1]]["args"][1]
     own_sin["refs"] = {"affine": ["n", sin["refs"]["affine"][1], 0, own_sin["refs"]["affine"][3]]}
-    out["carried"] = own(d), "(NetworkCheck.Period.argsApart)"
+    out["carried"] = own(d), "(NetworkVerifier.Period.argsApart)"
 
     d, nodes, ts = parts()
     ks, kp = nodes[ts[-1]]["args"][0]["refs"]["affine"][1], _member_ref(nodes[ts[1]], 2, 0, 0, d)[1]
@@ -3219,12 +3219,12 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     nodes[kp] = nodes[kp] | {"n": max(S, E), "out": typed(d, ["Array", max(S, E), ["Value", 1]])}
     nodes[ks] = nodes[ks] | {"n": min(S, E), "out": typed(d, ["Array", min(S, E), ["Value", 1]])}
     nodes[ts[-1]]["args"][0]["refs"] = {"affine": ["n", kp, 0, S]}
-    out["entries"] = own(d), "(NetworkCheck.Period.argsApart)"
+    out["entries"] = own(d), "(NetworkVerifier.Period.argsApart)"
 
     d, nodes, ts = parts()
     nodes.append({"args": [], "axes": [], "fn": d["callees"].index("Input1_v1"), "form": "batch", "n": 0,
                   "out": typed(d, ["Array", 0, ["Value", 1]])})
-    out["unread"] = own(d), "(NetworkCheck.Period.inputsRead)"
+    out["unread"] = own(d), "(NetworkVerifier.Period.inputsRead)"
 
     d, nodes, ts = parts()
     kr = nodes[ts[-2]]["args"][0]["refs"]["affine"][1]

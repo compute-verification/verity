@@ -27,7 +27,7 @@ credits nothing in either form.
 
 @[expose] public section
 
-namespace PouwCheck.PearlPlus
+namespace PouwVerifier.PearlPlus
 
 /-- H1's window grid (`window.GRID_BITS`): its points are the positive integers with at most `GRID_BITS + 1` significant
 bits. -/
@@ -117,4 +117,4 @@ private def classRun (excluded : List Nat) : List Pass :=
   g.giveUp == 335544320 && g.work.credited == 134190203114 && exact.credited - g.work.credited == 4196341 &&
   g.work.macs == structural.macs && g.work.creditedTiles == structural.creditedTiles
 
-end PouwCheck.PearlPlus
+end PouwVerifier.PearlPlus
