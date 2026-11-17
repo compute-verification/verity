@@ -131,7 +131,7 @@ tier                                # {'dram': 9011200000000, 'disk': 5584738461
 ways_out(node, "node0")            # (Way('node0/eth0', 400000000000, True), Way('node0/storage', 5584738461544, False))
 ~~~
 
-`CARDS` and `NODES`, the directories the sheets are in, are `hardware/cards/` and `hardware/nodes/` beside the `verity`
+`CARDS` and `NODES`, the directories the sheets are in, are `calibration/hardware/cards/` and `calibration/hardware/nodes/` beside the `verity`
 package's directory, the first of this file's resolved parents so named. The readers of card files (`skus`,
 `load_card`) and of node files (`node_kinds`, `load_node`) take `directory`, and every reader of the node files that
 reads a card file (`load_node`, `leaves`, `ways_out`) takes `cards_directory`, the directories the files are in, so
@@ -1560,9 +1560,9 @@ def check(log: Registration, auditor: Auditor) -> Site:
 
 _PACKAGE = next(p for p in Path(__file__).resolve().parents if p.name == "verity")
 """The `verity` package's directory, the first of this file's resolved parents so named: the sheets are in the
-top-level `hardware/` beside it, whatever this file's depth in the package, and wherever a link to the package that
+top-level `calibration/hardware/` beside it, whatever this file's depth in the package, and wherever a link to the package that
 imported it is (a `research run` job imports `verity` through one)."""
-CARDS = _PACKAGE.parent / "hardware" / "cards"
+CARDS = _PACKAGE.parent / "calibration" / "hardware" / "cards"
 CARD_KINDS = ("gpu", "host", "server", "timebase")
 MARKS = ("ceiling", "measurement", "premise", "placeholder")
 ENTRY = frozenset({"value", "unit", "mark", "source"})
@@ -1659,7 +1659,7 @@ def _check_entry(entry: dict, at: str) -> None:
             raise InvalidArtifact(f"{at}: give it a {field}")
 
 
-NODES = _PACKAGE.parent / "hardware" / "nodes"
+NODES = _PACKAGE.parent / "calibration" / "hardware" / "nodes"
 CARD_KIND = {"device": "gpu", "host": "host"}
 """The kind of card each of a node's tables names by ``sku``."""
 TIER = {"dram": ("memory", "bandwidth_max"), "disk": ("disk", "read_max")}

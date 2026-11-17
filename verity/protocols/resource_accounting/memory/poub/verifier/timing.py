@@ -78,27 +78,27 @@ GPU_WRITE_BYTES_PER_S = GPU_SPEC_BYTES_PER_S
 1,597.568 GB/s (`GPU_SPEC_BYTES_PER_S`), 4.5% above every write measured on it.  Labels
 derived on the device were written at 1,528.98 GB/s by TMA bulk stores and 1,526.48 by 16-byte evict-first stores, a
 constant at 1,521.88 by the driver's memset, and labels streamed in over its PCIe 5.0 x16 at 56.39 GB/s by the copy
-engines and 51.40 by zero copy (`benchmarks/bandwidth/write.cu`).  A ceiling must bound every prover, and a measured
+engines and 51.40 by zero copy (`calibration/bandwidth/write.cu`).  A ceiling must bound every prover, and a measured
 rate bounds only the kernels tried, so the sheet's rate stands.  A fill of codec labels
 derived from a seed is bounded lower, by the labeller: the node's `SQUARINGS_PER_S[width]` over the codec's
 `encode_squarings` a block (`audit.Rebuild`), about 1.05 GB/s a GPU under `codec.DEFAULT`."""
 HOST_WRITE_BYTES_PER_S = HOST_SPEC_BYTES_PER_S
 """The host DRAM's write ceiling: its specified 819.2 GB/s, 16 channels of DDR5-6400, above every write measured on it.
 16 cores of one socket, all a guest got on a loaded node, wrote labels at 207.69 GB/s by non-temporal AVX-512 stores,
-88.16 by `rep stosb` and 82.35 by cached stores (`benchmarks/bandwidth/write_host.c`); a GPU streams labels in at
-57.25 GB/s over its link (D2H, `benchmarks/bandwidth/write.cu`), and 8 links at PCIe 5.0 x16's 63 GB/s are below the
+88.16 by `rep stosb` and 82.35 by cached stores (`calibration/bandwidth/write_host.c`); a GPU streams labels in at
+57.25 GB/s over its link (D2H, `calibration/bandwidth/write.cu`), and 8 links at PCIe 5.0 x16's 63 GB/s are below the
 DRAM's rate.  The sheet's rate stands for `GPU_WRITE_BYTES_PER_S`'s reason, and so does its bound on derived labels.
 No DPU write ceiling is stated: no BlueField-3 fill rate is measured, only its coverage, and the datacenter model reads
 an unset rate as infinite, timing a DPU's wipe by its links."""
 GPU_CHIP_BYTES = 263_163_904
 """One RTX PRO 6000's on-chip storage at most: 188 SMs' registers, L1 and shared memory, L1.5, instruction caches,
-uniform registers and warp state, its L2, TLB and 1 MiB of buffers (`benchmarks/bandwidth/chip.cu`)."""
+uniform registers and warp state, its L2, TLB and 1 MiB of buffers (`calibration/bandwidth/chip.cu`)."""
 HOST_CHIP_BYTES = 1_000_341_504
 """The host's on-chip storage at most, bounded for the whole host, two Xeon 6776P sockets of 64 cores each, whatever
 share of them its VM gets (the measured node's guest sees 2 × 48): each socket's 336 MiB of L3 and 2 MiB of uncore queues, and
 each core's 2 MiB of L2, 48 KiB of L1d, 64 KiB of L1i and 64 KiB of registers and buffers. The cache sizes are the
 guest's CPUID topology on that host type (its lscpu), and the 128 cores the host's
-(`benchmarks/rate_squaring/gamma.py`). The 64 KiB a core and 2 MiB a socket are allowances, not an enumeration: two
+(`calibration/rate_squaring/gamma.py`). The 64 KiB a core and 2 MiB a socket are allowances, not an enumeration: two
 threads' architectural state with AMX tiles (about 11 KiB each), the physical register files and the load, store and
 fill buffers; and the memory controllers', UPI's and PCIe's queues."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES

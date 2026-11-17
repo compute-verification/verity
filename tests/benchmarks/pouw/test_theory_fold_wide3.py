@@ -6,7 +6,7 @@ from pathlib import Path
 
 import fold_opt_fx as fx
 
-THEORY = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "theory"
+THEORY = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory"
 
 
 def test_fold_wide3_matches_fold_opt_fx(tmp_path):

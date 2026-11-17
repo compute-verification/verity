@@ -28,8 +28,8 @@ from verity.device import (MARKS, NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, 
                            HostFigures, Link, Loc, Malformed, Refused, Registration, Sheet, Site, auditor_host, check,
                            clock_drift, node_figures, refusal)
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
-NODE_FILES = Path(__file__).resolve().parents[3] / "hardware/nodes"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/nodes"
 HOST = "host0"
 """The id a test registers a node's host under: a node file names none."""
 CHALLENGER = "challenger0"

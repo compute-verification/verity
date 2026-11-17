@@ -2412,7 +2412,7 @@ requires-dist = [{ name = "verity-bench", editable = "benchmarks/harness" }]
 [[package]]
 name = "verity-certifier-timing"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/certifier_timing" }
+source = { virtual = "tests/calibration/certifier_timing" }
 dependencies = [
     { name = "verity" },
     { name = "verity-config" },
@@ -2748,7 +2748,7 @@ requires-dist = [{ name = "verity-machine-model", editable = "benchmarks/machine
 [[package]]
 name = "verity-native-peak"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/native_peak" }
+source = { virtual = "tests/calibration/native_peak" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -2943,7 +2943,7 @@ requires-dist = [
 [[package]]
 name = "verity-tc-probe"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/tc_probe" }
+source = { virtual = "tests/calibration/tc_probe" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -2962,7 +2962,7 @@ requires-dist = [
 [[package]]
 name = "verity-tc-probe-fp4"
 version = "0.0.0"
-source = { virtual = "tests/benchmarks/tc_probe_fp4" }
+source = { virtual = "tests/calibration/tc_probe_fp4" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },

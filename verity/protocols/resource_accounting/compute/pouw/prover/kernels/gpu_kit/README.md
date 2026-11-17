@@ -12,9 +12,9 @@ harness; this kit is for a standalone `.cu` bench, and its constants are the har
 | `dump.py` | The dump format: `NAME.bin` and a `dump.jsonl` line a buffer, layout `bytes` or `sha512-be`; the reader checks sizes and names |
 | `compare.py` | The twin compare: a device dump against its twin's, naming the first difference and the known faults (not written, byte order, layout) |
 
-**What a caller may import.** A bench includes `bench.cuh` (`../edited_gemm/egemm80.cu`, `../../../../../../../../benchmarks/pouw/opcode_probe/probe.cuh`,
-`../../../../../../../../benchmarks/pouw/tensor_kinds/sm80.cu`). A script loads `sass_gate.py` from its file and reads the names in its `__all__`
-(`../../../../../../../../benchmarks/pouw/opcode_probe/probe.py`, `../../../../../../../../benchmarks/pouw/tensor_kinds/sm80.py`). `banks.py`, `dump.py` and `compare.py` state an `__all__` each;
+**What a caller may import.** A bench includes `bench.cuh` (`../edited_gemm/egemm80.cu`, `../../../../../../../../calibration/pouw/opcode_probe/probe.cuh`,
+`../../../../../../../../calibration/pouw/tensor_kinds/sm80.cu`). A script loads `sass_gate.py` from its file and reads the names in its `__all__`
+(`../../../../../../../../calibration/pouw/opcode_probe/probe.py`, `../../../../../../../../calibration/pouw/tensor_kinds/sm80.py`). `banks.py`, `dump.py` and `compare.py` state an `__all__` each;
 their readers are the kit's own files and its tests. `sass_gate.py` and `compare.py` are commands too (below).
 
 **What it never does.** It holds no kernel and no twin of one: the bench brings both. Its Python launches nothing on a
@@ -61,4 +61,4 @@ the same names and compare with `python compare.py DEVICE_DIR TWIN_DIR` (exit 9 
 - **EGEMM's digest byte order (63f78c35a):** the device dumped its digests' native uint64 words, so no reference matched.
   `gk::Dump::digests` writes SHA-512's big-endian bytes, and `compare.py` names a word-reversed difference as byte order.
 
-`../../../../../../../../benchmarks/pouw/opcode_probe/` is the kit's first user. The tests are `../../../../../../../../tests/benchmarks/pouw/test_gpu_kit.py`.
+`../../../../../../../../calibration/pouw/opcode_probe/` is the kit's first user. The tests are `../../../../../../../../tests/benchmarks/pouw/test_gpu_kit.py`.

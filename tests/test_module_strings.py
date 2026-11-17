@@ -2,7 +2,7 @@
 can't leave a dangling `importlib.import_module("...")`, `python -m ...`, entry point or `module:attr` registry spec behind.
 
 A name is this tree's when its top level is a package a workspace member declares (`suites.importable`) or a directory the
-members live under (`benchmarks.tc_probe.tool`, as `research run --tool` loads by file from the repository root); any other top
+members live under (`calibration.tc_probe.tool`, as `research run --tool` loads by file from the repository root); any other top
 level is a third party's and is skipped. Names resolve by file, without importing anything: a module is `<path>.py`, or a
 directory (a package; `python -m` needs its `__main__.py`), and an attribute is a name the module's file binds at top level.
 """
@@ -234,7 +234,7 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     """The names come from the members' build configuration, so a renamed package keeps being checked; and each form is found."""
     assert {"verity", "verity_vllm", "research", "circuit_check", "tools", "benchmarks"} <= set(roots())
     assert dangling("attr", "research.cli", "main") is None
-    assert dangling("attr", "benchmarks.tc_probe.tool", "TC_PROBE") is None
+    assert dangling("attr", "calibration.tc_probe.tool", "TC_PROBE") is None
     assert dangling("main", "research", None) is None
     assert dangling("import", "verity.circuits.ops.boolean.gemm", None) is None
     assert dangling("import", "verity.circuits.ops.no_such_module", None) == "no such module"

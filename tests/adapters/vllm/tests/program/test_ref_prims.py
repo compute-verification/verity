@@ -720,7 +720,7 @@ def test_log_vs_torch():
                          "words": res_vec["words"], "exact_fraction": res_vec["exact_fraction"],
                          "max_ulp": max(res_vec["max_ulp"], res_sca["max_ulp"])},
                  gate_check={"evaluated": "primitive evaluator"},
-                 notes="The reference is correctly rounded on every binary32 word (benchmarks/f32_exhaustive); torch's log "
+                 notes="The reference is correctly rounded on every binary32 word (calibration/f32_exhaustive); torch's log "
                        "is within 1 ulp of it.")
 
 

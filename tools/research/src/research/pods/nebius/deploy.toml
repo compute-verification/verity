@@ -1403,13 +1403,13 @@ owner = "infra"
 # node's python3 has no verity package, so the check reads them by path
 [[file]]
 path = "/workspace/custody/hardware/nodes/rtx-pro-6000-server-x8.toml"
-src = "hardware/nodes/rtx-pro-6000-server-x8.toml"
+src = "calibration/hardware/nodes/rtx-pro-6000-server-x8.toml"
 nodes = ["vy-nebius-1", "vy-nebius-2"]
 owner = "infra"
 
 [[file]]
 path = "/workspace/custody/hardware/cards/rtx-pro-6000-server.toml"
-src = "hardware/cards/rtx-pro-6000-server.toml"
+src = "calibration/hardware/cards/rtx-pro-6000-server.toml"
 nodes = ["vy-nebius-1", "vy-nebius-2"]
 owner = "infra"
 

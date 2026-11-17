@@ -76,7 +76,7 @@ how = """No tracked file holds a public IPv4 address that `research.addresses` c
 an exception below excepts: a file, how many of its addresses, and why they are nobody's machine of ours."""
 
 [[finding.except]]
-path = "benchmarks/pouw/dc/dc.cuh"
+path = "calibration/pouw/dc/dc.cuh"
 count = 1
 kind = "version"
 reason = "a PTX ISA section number, beside the one the rule reads as such"

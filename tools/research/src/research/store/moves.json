@@ -5149,6 +5149,38 @@
         "verity/protocols/resource_accounting/memory/poub/prover/remote_session/": "verity/protocols/resource_accounting/memory/poub/prover/poub_session/",
         "verity/protocols/resource_accounting/memory/poub/verifier/remote_session/": "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/"
       }
+    },
+    {
+      "paths": {
+        "hardware/": "calibration/hardware/",
+        "benchmarks/tc_probe/": "calibration/tc_probe/",
+        "tests/benchmarks/tc_probe/": "tests/calibration/tc_probe/",
+        "benchmarks/tc_probe_fp4/": "calibration/tc_probe_fp4/",
+        "tests/benchmarks/tc_probe_fp4/": "tests/calibration/tc_probe_fp4/",
+        "benchmarks/native_peak/": "calibration/native_peak/",
+        "tests/benchmarks/native_peak/": "tests/calibration/native_peak/",
+        "benchmarks/f32_exhaustive/": "calibration/f32_exhaustive/",
+        "benchmarks/training_slowdown/": "calibration/training/",
+        "tests/benchmarks/training_slowdown/": "tests/calibration/training/",
+        "benchmarks/circuit_properties/": "calibration/circuit_properties/",
+        "tests/benchmarks/circuit_properties/": "tests/calibration/circuit_properties/",
+        "benchmarks/tensor_duty/": "calibration/tensor_duty/",
+        "tests/benchmarks/tensor_duty/": "tests/calibration/tensor_duty/",
+        "benchmarks/pouw/dc/": "calibration/pouw/dc/",
+        "benchmarks/pouw/opcode_probe/": "calibration/pouw/opcode_probe/",
+        "benchmarks/pouw/tensor_kinds/": "calibration/pouw/tensor_kinds/",
+        "benchmarks/pouw/sass_census/": "calibration/pouw/sass_census/",
+        "benchmarks/pouw/facet_break/": "calibration/pouw/facet_break/",
+        "benchmarks/pouw/theory/": "calibration/pouw/theory/",
+        "benchmarks/bandwidth/": "calibration/bandwidth/",
+        "tests/benchmarks/bandwidth/": "tests/calibration/bandwidth/",
+        "benchmarks/rate_squaring/": "calibration/rate_squaring/",
+        "tests/benchmarks/rate_squaring/": "tests/calibration/rate_squaring/",
+        "benchmarks/certifier_timing/": "calibration/certifier_timing/",
+        "tests/benchmarks/certifier_timing/": "tests/calibration/certifier_timing/",
+        "benchmarks/sampling_plan/": "calibration/sampling_plan/",
+        "tests/benchmarks/sampling_plan/": "tests/calibration/sampling_plan/"
+      }
     }
   ]
 }

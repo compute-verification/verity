@@ -6,7 +6,7 @@ same function on bits (`verity.circuits.boolean.trace`).
 
 `F32ExpRn_v2` computes exp(x) = 2^n 2^f to within 2^-55 relative and rounds that once, nearest even, subnormal results
 included. No binary32 x whose exp(x) rounds to a finite nonzero word has exp(x) within 2^-29 ulp (so 2^-53 relative) of a
-rounding boundary, so the one rounding is exp(x)'s correct rounding, the word's; `benchmarks/f32_exhaustive/run.py boolean
+rounding boundary, so the one rounding is exp(x)'s correct rounding, the word's; `calibration/f32_exhaustive/run.py boolean
 F32ExpRn` holds it to `F32ExpRn_v1` on all 2^32 words.
 
 - t = x log2(e) in fixed point, F = 57 fraction bits: the 24-bit significand times log2(e) at K = 64 bits (a constant, so
@@ -30,7 +30,7 @@ F32ExpRn` holds it to `F32ExpRn_v1` on all 2^32 words.
 `F32LogRn_v2` computes ln(x) = E ln2 + L1 + L2 + L3 + ln(1 + u) in fixed point at LF = 77 fraction bits and rounds that
 once, nearest even. ln(x) of a binary32 x != 1 lies at least 2^-54 from a rounding boundary, except near 1: at least
 2^-62.8 for x within 2^-15 of 1, and 2^-70.6 for x within 2^-22 (the closest, at 0x3F7FFFFE, 1 - 2^-23). The error is
-below each, so the one rounding is ln(x)'s correct rounding, the word's; `benchmarks/f32_exhaustive/run.py boolean
+below each, so the one rounding is ln(x)'s correct rounding, the word's; `calibration/f32_exhaustive/run.py boolean
 F32LogRn` holds it to `F32LogRn_v1` on all 2^32 words.
 
 - x = m 2^E with m = 1 + M 2^-23: a subnormal's significand shifted up by its leading-zero count, E = e - 127 - lz.

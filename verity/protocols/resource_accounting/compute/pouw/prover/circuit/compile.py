@@ -224,7 +224,7 @@ class RowNoise:
         return self.a[0] + self.a[1] * k, self.b[0] + self.b[1] * k
 
 
-#: The attention forms H1 is to carry (`benchmarks/pouw/theory/attn_noise.py`'s `h_table`): QKᵀ's Q row carries
+#: The attention forms H1 is to carry (`calibration/pouw/theory/attn_noise.py`'s `h_table`): QKᵀ's Q row carries
 #: its c (a bit an entry) and its U (320 bits), its K row its b (a bit an entry); P·V's P row its U (224 bits), its V column
 #: its b. QKᵀ is `DotBf16`'s; P·V's kind is the one a plugged unit takes (`Scheme.plug(..., rows=PV_ROWS)`). H1's scheme has no
 #: unit for either yet, so its `rows` are read only once one is plugged: a `DotBf16` dot is refused (`scheme`) first.

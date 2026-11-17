@@ -24,7 +24,7 @@ what the session ran with. `verity bench memory --help` lists its other ways in.
 
 - **[uv](https://docs.astral.sh/uv/getting-started/installation/)**, which runs every command here.
 - **A Linux machine with one NVIDIA H200 or RTX PRO 6000 Blackwell.** These are the cards the tree has a data sheet
-  (`hardware/nodes/`) for, and the share is of the card's own sheet. An H100 has none, so `--local` prints no number
+  (`calibration/hardware/nodes/`) for, and the share is of the card's own sheet. An H100 has none, so `--local` prints no number
   there, saying so, before it starts anything. Another card needs a data sheet (named with `LOCAL_NODE`), and a result
   against a sheet that is not `main`'s is not comparable.
 - **A vLLM environment, `VLLM_PY`:** a Python with vLLM installed (`uv venv V && uv pip install --python V/bin/python
@@ -93,7 +93,7 @@ target is 0.14 at an error of at most 2^-100.**
   not a number from another.
 - The share is of the one card's read rate and its host's: the verifier's node is one card of the card's node sheet,
   handed to it as `--node`. A line names the card and the sheet with the SHA-256 of the tree's data sheets
-  (`hardware/`) and of the verifier (`verity/protocols/resource_accounting/memory/poub/verifier/`), Markdown left out, in the JSON's
+  (`calibration/hardware/`) and of the verifier (`verity/protocols/resource_accounting/memory/poub/verifier/`), Markdown left out, in the JSON's
   `machine` with the arena's GiB and vLLM's share of the card.
 
 **Exit codes:**

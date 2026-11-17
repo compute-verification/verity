@@ -70,7 +70,7 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           "tools/research/src/research/pods/sh/gpu_lease.sh",
           "verity/protocols/resource_accounting/memory/poub/prover/word_codec/cuda_lib.py",
           # sheets.py: the node's figures, read from its node file and cards
-          "verity/device.py", "hardware/cards", "hardware/nodes",
+          "verity/device.py", "calibration/hardware/cards", "calibration/hardware/nodes",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with SPOT's one cost fit; and the
           # ledger and credit checks' Lean verifier, `spot-verifier` (`coins.lean_answer`), with the
           # interface its package requires

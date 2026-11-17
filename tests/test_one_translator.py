@@ -23,7 +23,7 @@ from test_boundaries import ROOT, _is_test, _tracked_python
 
 ADAPTER = "adapters/torch/"
 PACKAGE = "verity_torch"
-BENCHMARK = "benchmarks/training_slowdown/"
+BENCHMARK = "calibration/training/"
 #: what traces a PyTorch program as a graph, by the name its module defines it under
 TRACERS = frozenset({
     "torch.fx.experimental.proxy_tensor.make_fx", "torch.func.functionalize", "torch.export.export", "torch.export",

@@ -132,7 +132,7 @@ def as_local(record: dict) -> dict:
 #: the `ran with` detail of such a record, under `--local` on an H200
 LOCAL_DETAIL = ("2773 openings a window; 7 windows of 1,000 ms; 16 sketch rows, not the deployed registration's 64; the "
                 "sample's term a window 2^-101.0; lateness allowed 2 ms; the error against a prover of 2^80 SHA-512 "
-                "compressions on any hardware; the share against hardware/nodes/h200-sxm-141gb-x1.toml at one card")
+                "compressions on any hardware; the share against calibration/hardware/nodes/h200-sxm-141gb-x1.toml at one card")
 
 
 class FakeStore:
@@ -1170,7 +1170,7 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
                                                 f"{ARENA * GIB / 1e9:.2f} GB of its ")
     assert "; paced: 7 credited stretches of 1,000 ms, 12 groups a stretch at 85 ms a pass" in doc["ran_with"]["detail"]
     assert text[1] == f"  {M.LOCAL}" and doc["local"] == M.LOCAL
-    assert text[2] == (f"  card: NVIDIA H200, the verifier's node one card of hardware/nodes/h200-sxm-141gb-x1.toml; "
+    assert text[2] == (f"  card: NVIDIA H200, the verifier's node one card of calibration/hardware/nodes/h200-sxm-141gb-x1.toml; "
                        f"data sheets sha256 {M.digest(M.SHEETS)[:16]}, verifier sha256 {M.digest(M.VERIFIER)[:16]}")
     assert text[3] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
     assert doc["machine"] == {"card": "NVIDIA H200", "sheet": "h200-sxm-141gb-x1", "arena_gib": ARENA, "util": 0.88,
@@ -1336,7 +1336,7 @@ def test_a_paced_sessions_line_is_its_records_pace_and_states_no_windows():
         "stretches of 1,000 ms, 19 groups a stretch at 52.9063 ms a pass, a coin every 1 pass, 2773 openings a "
         "stretch, 146 a group; 152 passes in 152 groups; 16 sketch rows, not the deployed registration's 64; the "
         "sample's term a pass group 2^-101.0; lateness allowed 190 ms; error 2.8e-05 (2^-15.1) against a prover of "
-        "2^80 SHA-512 compressions on any hardware; the share against hardware/nodes/h200-sxm-141gb-x1.toml at one "
+        "2^80 SHA-512 compressions on any hardware; the share against calibration/hardware/nodes/h200-sxm-141gb-x1.toml at one "
         "card")
     assert M.parameters({}, vs | {"ledger": {"inputs": {"passes": [12] * 96}}})["passes"] == 1152
     assert M.parameters({}, vs | {"ledger": {"inputs": {"passes": True}}})["passes"] is None
@@ -1358,7 +1358,7 @@ def test_local_states_the_arena_its_engine_recorded_and_not_its_own_arguments(st
     (Machine(driver=False), "--local serves on an NVIDIA GPU, and there is no nvidia-smi here, so no NVIDIA driver", 3),
     (Machine(smi_rc=9), "--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc 9: NVIDIA-SMI has failed)",
      3),
-    (Machine(card="NVIDIA H100 80GB HBM3, 9.0"), "the tree has no data sheet for NVIDIA H100 80GB HBM3 (hardware/nodes/ "
+    (Machine(card="NVIDIA H100 80GB HBM3, 9.0"), "the tree has no data sheet for NVIDIA H100 80GB HBM3 (calibration/hardware/nodes/ "
      "has h200-sxm-141gb-x1, rtx-pro-6000-server-x8 for its cards), and the share is of the card's own sheet", 3),
     (Machine(fetch_rc=1), "unsloth/Llama-3.2-1B@9535bd9b1d1d (config.json, generation_config.json, model.safetensors, "
      "special_tokens_map.json, tokenizer.json, tokenizer_config.json) couldn't be fetched into", 3),

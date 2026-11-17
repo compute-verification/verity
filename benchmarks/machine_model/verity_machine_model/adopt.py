@@ -1,4 +1,4 @@
-"""Adopt a measured census, such as an opcode probe's `census.csv` (`benchmarks/pouw/opcode_probe`), at the last epoch.
+"""Adopt a measured census, such as an opcode probe's `census.csv` (`calibration/pouw/opcode_probe`), at the last epoch.
 
 Each (kind, row) keeps the faster of its line at the epoch before and the measured one: a row's u is what every program
 pays on it at least, so the lower measurement is the one every program satisfies. A faster measurement closes the old

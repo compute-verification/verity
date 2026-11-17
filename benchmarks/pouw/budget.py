@@ -244,7 +244,7 @@ def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
                         round(1 - costs.statement_fixed * sessions / total, 5), _cut_label(s["cut"])])
         regimes[name] = {"commit": commit, "statement": statement, "points": pts}
     head = subprocess.run(["git", "-C", str(tree), "rev-parse", "--short=10", "HEAD"], capture_output=True, text=True)
-    doc = {"source": "budget.py --sampling-sweep: OPT2's int8 Llama-3.1-8B row (benchmarks/sampling_plan/"
+    doc = {"source": "budget.py --sampling-sweep: OPT2's int8 Llama-3.1-8B row (calibration/sampling_plan/"
                      f"int8_llama.py at {head.stdout.strip() or 'unknown'}), cost-model/v1, δ_s = 2^-41, a week of one "
                      "RTX PRO 6000; point = [B_s, eps_sample, draws a week, unit_share, linears' cut]",
            "regimes": regimes}

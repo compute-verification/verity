@@ -80,12 +80,12 @@ at every R, and a `static_assert` bounds R to 1..64.
 - **The CPU reference has no dial.** `egemm_ref.py` recomputes the one-round fold. A receipt at R > 1 is checked on the
   device only (the product against cuBLASLt and the poisoned control), until `xin_receipts` and `xin13_receipts` loop
   their absorb as the kernel does.
-- **What `benchmarks/pouw/theory/egemm_depthr_check.py` tests.** For the same-word R-round fold it searches one family of changes to a committed
+- **What `calibration/pouw/theory/egemm_depthr_check.py` tests.** For the same-word R-round fold it searches one family of changes to a committed
   word (5n + 2 a word at width n: each limb's single bit flips, a +1 on the two added limbs, a paired flip on the two
   XOR-in limbs) for a change that no state sees: at width 8 over every odd key pair, at widths 10 and 12 over keys the
   reduced `key_ok_r11` admits, and at 32 bits on sampled states, for R up to 5. It passes when it finds none on a key
-  `key_ok_r11` admits. It does not search the word space. `benchmarks/pouw/theory/fold_kernel_check.py` does, and reports
-  a 16-element group of changes that fixes the fold at every key and every R; `benchmarks/pouw/theory/fold_open_shape_check.py`
+  `key_ok_r11` admits. It does not search the word space. `calibration/pouw/theory/fold_kernel_check.py` does, and reports
+  a 16-element group of changes that fixes the fold at every key and every R; `calibration/pouw/theory/fold_open_shape_check.py`
   gives width-8 keys the reduced `key_ok_r11` admits at which further changes fix it. `EG_ROUNDS == 1`, the default, is
   the fold of record, and a depth R ≥ 2 rests on nothing here. `egemm.cu` derives its keys under `key_ok_r9`, which has
   no KJ19 clause (`key_ok_r11` is `key_ok_r9` with it).
@@ -111,7 +111,7 @@ at every R, and a `static_assert` bounds R to 1..64.
 `cpv.cu` and `apv.cu` include `cgemm.cu`; `fattn.cu` includes `apv.cu`. Four references (`egemm_ref.py`, `cgemm_ref.py`,
 `d2sgemm_ref.py`, `egemm80_ref.py`) load `floored_gemm/derive.py` from its file for its `tile_receipts`, putting
 nothing on `sys.path`, and the Dither-C and P V references recompute through `co_words.py` (the words
-`benchmarks/pouw/theory/checked_strip.py` analyses, which loads it back), which `cgemm_ref.py` loads the same way. Inside the directory,
+`calibration/pouw/theory/checked_strip.py` analyses, which loads it back), which `cgemm_ref.py` loads the same way. Inside the directory,
 `cwgemm_ref.py`, `cpv_ref.py` and `apv_ref.py` import `cgemm_ref.py`, and `apv_ref.py` imports `cpv_ref.py`'s
 `patch_cols`, as `verity`'s modules; each module another script imports lists in `__all__`
 what they read of it (the suite's tests read more of a module than its list). From outside the directory,

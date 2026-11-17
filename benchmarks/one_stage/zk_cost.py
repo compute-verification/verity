@@ -82,7 +82,7 @@ from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS  # noqa: E4
 #: a templated statement's id (`verity_flock.circuit.TMPL_STATEMENT`): its prover and server read the placed unit
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 
-#: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
+#: ANDs of the pieces of a unit with its rows' openings (calibration/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
 S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): a `full` statement's
 MAX_BITS = 1 << 35
