@@ -48,8 +48,22 @@ research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run
   --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4
 ~~~
 
+Each point names its `model` (the checkpoint, `repo@revision`), its `hardware` (the cards it was served on) and its
+`member`, the model, the card and the arm (the cost's over its stock), which tells its line from the id's other
+models' and arms'. The 1B has no speculative decoding, so no advice line.
+
+**The method a serving cost is measured by.** Four arms, `prod`, `prod-again`, `prod-seeded` and `prod-record`, each
+served in nine server lifetimes in that alternating order, each lifetime opening with a 20-second warm-up pass that
+no figure counts (the benchmark's `WARM_S`) and then two counted passes (`--reps 2 --lifetimes 9 --leave-out 0`).
+The cost is the mean of the nine lifetime pairs' costs with its Student's t 95% interval over them, t at the pairs
+less one, and stock against stock, `prod-again` over `prod` taken the same way, is the noise floor printed beside it
+and never subtracted.
+
 ## What is not yet true
 
+- **Two rules of the cost's method are not yet the report's own.** The job's first lifetime pair, its servers
+  started cold, is left out of the figure, and a figure from a node any card of which slowed down in a counted pass
+  is named as on a throttled node, with no verdict; the report counts every pair and reads no card's clock.
 - **The advice line's serve is not under the network attester.** No arm of this command is served under the
   certifier's record or the certified tick, so the arrivals are charged at what they would cost without the tick. The
   kept count is charged at its code's bits: the accept test has a Definition, and no block of a served Program calls
