@@ -1,5 +1,5 @@
 """What SPOT[Flock]'s two-stage Lean model (`SpotFlock.stmtOk`) reads of a run of the two-stage toy, and the auditor's
-copies it reads them against (`SpotFlock.Held`), as `tests/benchmarks/two_stage/TwoGuard.lean` reads them. A run of
+copies it reads them against (`SpotFlock.Held`), as `tests/benchmarks/one_stage/TwoGuard.lean` reads them. A run of
 another design exports the same at its own `Design`.
 
 `export` writes, from a run's ``--out`` (`audit.py`) and its stream:
@@ -192,7 +192,7 @@ def export_registration(out: Path, run_out: Path, stream, order: int, n: int, q:
     replay blocks sampled and ``k`` proof blocks a cell (one count, or each template's), at ``design`` (the toy's
     where none is given), each fixed before the run: ``held.json`` and, from the params under ``run_out`` (``proofs.json``, ``references/``), each
     template's ``ref-<t>.bin`` and ``ref-<t>.reads.json``, written to ``out``. It reads no record, session or coin of
-    the run: `tests/benchmarks/two_stage/TwoGuard.lean`'s ``files`` reads these alone. -> ``held.json``'s object."""
+    the run: `tests/benchmarks/one_stage/TwoGuard.lean`'s ``files`` reads these alone. -> ``held.json``'s object."""
     from verity.protocols.proofs.spot.verifier import second_stage as SS
     from verity.circuits.codec import canonical_json, descriptor_id, encode_program
     from verity.commitments.periods.rows import expected_ports

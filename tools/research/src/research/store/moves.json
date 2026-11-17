@@ -5152,6 +5152,15 @@
     },
     {
       "paths": {
+        "benchmarks/two_stage/": "benchmarks/one_stage/",
+        "tests/benchmarks/two_stage/TwoGuard.lean": "tests/benchmarks/one_stage/TwoGuard.lean",
+        "tests/benchmarks/two_stage/guard_node.py": "tests/benchmarks/one_stage/guard_node.py",
+        "tests/benchmarks/two_stage/test_guard.py": "tests/benchmarks/one_stage/test_guard.py",
+        "tests/benchmarks/two_stage/test_toy.py": "tests/benchmarks/one_stage/test_toy.py"
+      }
+    },
+    {
+      "paths": {
         "demos/": "applications/"
       }
     }

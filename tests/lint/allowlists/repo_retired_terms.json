@@ -294,7 +294,7 @@
     {"file": "benchmarks/one_stage/inference_only.py", "count": 9},
     {"file": "benchmarks/one_stage/interfaces/README.md", "count": 7},
     {"file": "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "count": 1},
-    {"file": "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py", "count": 20},
+    {"file": "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py", "count": 11},
     {"file": "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py", "count": 48},
     {"file": "benchmarks/one_stage/kept_composite.sh", "count": 2},
     {"file": "benchmarks/one_stage/m1_unit.py", "count": 8},
@@ -481,9 +481,6 @@
     {"file": "benchmarks/training_slowdown/run.py", "count": 1},
     {"file": "benchmarks/training_slowdown/training_slowdown/capture/circuit.py", "count": 7},
     {"file": "benchmarks/training_slowdown/training_slowdown/formalism.py", "count": 16},
-    {"file": "benchmarks/two_stage/audit.py", "count": 16},
-    {"file": "benchmarks/two_stage/guard.py", "count": 4},
-    {"file": "benchmarks/two_stage/toy.py", "count": 2},
     {"file": "benchmarks/verifier_cost/README.md", "count": 4},
     {"file": "benchmarks/verifier_cost/flock_rows.py", "count": 15},
     {"file": "benchmarks/verifier_cost/flock_rows.sh", "count": 1},
@@ -2348,8 +2345,6 @@
     {"file": "tests/benchmarks/spot_proved/test_stage_moe_allreduce.py", "count": 33},
     {"file": "tests/benchmarks/spot_proved/test_stage_rows.py", "count": 25},
     {"file": "tests/benchmarks/spot_proved/test_tree_allreduce.py", "count": 8},
-    {"file": "tests/benchmarks/two_stage/TwoGuard.lean", "count": 15},
-    {"file": "tests/benchmarks/two_stage/test_toy.py", "count": 9},
     {"file": "tests/conftest.py", "count": 3},
     {"file": "tests/import_order.toml", "count": 1},
     {"file": "tests/infra/ops/test_cloud_watch.py", "count": 4},
@@ -3203,6 +3198,11 @@
     {"file": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/difftest_vectors.py", "count": 7},
     {"file": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/theta_difftest_vectors.py", "count": 1},
     {"file": "verity/runtime/runner.py", "count": 1},
-    {"file": "verity/runtime/sources.py", "count": 7}
+    {"file": "verity/runtime/sources.py", "count": 7},
+    {"file": "benchmarks/one_stage/audit.py", "count": 16},
+    {"file": "benchmarks/one_stage/guard.py", "count": 4},
+    {"file": "benchmarks/one_stage/toy.py", "count": 2},
+    {"file": "tests/benchmarks/one_stage/TwoGuard.lean", "count": 15},
+    {"file": "tests/benchmarks/one_stage/test_toy.py", "count": 9}
   ]
 }

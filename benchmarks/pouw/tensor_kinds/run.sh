@@ -65,7 +65,9 @@ done
 kill \$SMI 2>/dev/null
 nvidia-smi -q -d CLOCK,POWER,PERFORMANCE --id="\$U" >"$OUT/smi-after.txt" 2>&1
 EOF
-gpu-lease 1 --wait --max-min 25 -- bash "$WORK/gpu.sh"
+lease=(gpu-lease 1 --wait --max-min 25 --)
+[ -n "${GPU_LEASE_UUID:-}" ] && lease=()
+"${lease[@]}" bash "$WORK/gpu.sh"
 lrc=$?
 echo "gpu lease rc=$lrc" >>"$OUT/gpu.log"
 if [ ! -s "$OUT/tensor_kinds.jsonl" ]; then
