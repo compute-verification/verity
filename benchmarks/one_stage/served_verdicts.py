@@ -2414,7 +2414,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
-           lean: str = "no composite was read", development: bool = False, inference_only: Mapping[str, Any] | None = None,
+           lean: str = "no composite was read", development: bool = False,
+           inference_only: Mapping[str, Any] | None = None,
            ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
