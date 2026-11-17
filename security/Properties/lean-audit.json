@@ -99,6 +99,8 @@
   "Properties.InferenceOnly.PinnedRead",
   "Properties.InferenceOnly.RecordForm",
   "Properties.InferenceOnly.RecordRows",
+  "Properties.InferenceOnly.RowsHonest",
+  "Properties.InferenceOnly.RowsHonest.Case",
   "Properties.Certifier.JointBridge.SpaceOfPeriodHeld",
   "Properties.Poub.Remote",
   "Properties.Poub.Remote.Coins",
@@ -341,6 +343,10 @@
    "digest": "cb340bc9849e55341a23e61cfb347c028250c423c59bbc2c8da6b952df8038cf",
    "issue": "TRN-103",
    "due": "2026-11-30"
+  },
+  "InferenceOnlyVerifier.Properties.Record.RowsHonestAccepted": {
+   "owner": "@proofs",
+   "due": "2026-12-01"
   },
   "MemoryAttester.Properties.CountRan": {
    "owner": "@network-accounting",
@@ -1214,7 +1220,6 @@
   "Properties.Poub.Remote"
  ],
  "escapes": {
-  "Verity.rowsUnbuilt": "the behavior of the inference-only policy's rows check (verity/inference-only/rows/v1), which no compiled check carries yet: the game reads the check under that id (Verity.rowsCheck) and states nothing of what it does, so its target at a composite that lists it (Verity.Vocab.InferenceOnlySound at Verity.Registration.Composite.plain) is proved only from the compiled check that replaces this, never by computing a placeholder; the code refuses every list naming the id (Core.Composites.ofIds)",
   "Verity.rowsHeld": "the inference-only policy's clause where v0 doesn't decide it, a composite listing no v0 (remote's plain sibling) or listing the rows check: the clause in rows on the record's circuit, which the rows check's guarantee states; until then nothing says what it is, so v0's clause, which would hold of every play where no v0 case is accepted, doesn't decide the plain sibling's inference-only target (Verity.Vocab.inferenceOnlySound takes v0 listed and the rows check not)"
  },
  "claims": {
@@ -1626,6 +1631,10 @@
   },
   "Properties.Poub.Shared.openingsUnreadUntilSampled": {
    "honest": ["Properties.Poub.Line.SecurityProofs.lineHeld_honest"]
+  },
+  "InferenceOnlyVerifier.Properties.Record.SecurityProofs.RowsComplies": {
+   "honest": ["InferenceOnlyVerifier.Properties.Record.SecurityProofs.RowsComplies_honest"],
+   "nontrivial": "InferenceOnlyVerifier.Properties.Record.SecurityProofs.RowsComplies_nontrivial"
   }
  },
  "unwitnessed": {
@@ -2309,6 +2318,7 @@
   }
  },
  "witnesses_assumed": {
+  "InferenceOnlyVerifier.Properties.Record.RowsHonestAccepted": "not an assumption about the world but an unproved fact about code: the compiled rows check (`inference-only-rows check`) and the Python reference both accept the honest two-template case `RowsHonest.Case` holds (`test_inference_only_rows_protocol.py`), and the kernel doesn't evaluate it, since the check parses circuit files of tens of megabytes (`Flock.ProvedScope.circuitOf`) and computes their SHA-512s; until Lean proves it on a kernel-checked one-template case, the honest witness of `RowsComplies` takes it.",
   "Properties.Poub.Subprotocol.HonestLogAccepted": "not an assumption about the world but an unproved fact about code: the compiled check (`poub-protocol`) and the Python verifier both accept the honest one-window log `HonestLog.Case` holds (`test_honest_log.py`), and the kernel doesn't evaluate it, since `Flock.unhex` is quadratic on a list-backed array and `Session.close`'s `receiptSample` fails `decide +kernel` for a cause not yet found; until Lean proves it, the honest witness of `lineHeldAtSubprotocol` takes it."
  },
  "layers": {
@@ -2900,6 +2910,15 @@
   "PouwVerifier.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.MonitoringPeriodJ10R.ExecutionPhaseAccepts`: the window's round coins read through the challenger's session; PouwVerifier's lock declares no spec layer for `PouwVerifier.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
  },
  "guarantees": {
+  "InferenceOnlyVerifier.Properties.Record.SecurityProofs.RowsComplies": {
+   "owner": "@proofs"
+  },
+  "InferenceOnlyVerifier.Properties.Record.SecurityProofs.RowsComplies_honest": {
+   "owner": "@proofs"
+  },
+  "InferenceOnlyVerifier.Properties.Record.SecurityProofs.RowsComplies_nontrivial": {
+   "owner": "@proofs"
+  },
   "InferenceOnlyVerifier.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
    "signature": [
@@ -14902,6 +14921,10 @@
    "Properties.NetworkPeriod.rowsStartCharged": {
     "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
+   },
+   "InferenceOnlyVerifier.Properties.Record.SecurityProofs.RowsComplies": {
+    "function": "InferenceOnly.RowsProtocol.checkBlobs",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -14977,7 +15000,7 @@
    "Properties.Spot.MonitoringPeriod.LedgerOfDevice": "unstated: the ledger the period's check reads (Spot.MonitoringPeriod.read) is the device's own from its first line, none dropped and none added, up to a line stamped at or after the monitoring period's end, or a break; it takes Properties.Spot.MonitoringPeriod.Numbered (a line of the device's ledger that is an entry numbered i is its line i), a hypothesis of this statement alone that no guarantee takes, and a lemma of the modelled device once the model builds its whole ledger; proved from that hypothesis in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDevice; no guarantee entry while it takes it",
    "Properties.Spot.MonitoringPeriod.LedgerOfDeviceSigned": "unstated: every line of the ledger the period's check reads (Spot.MonitoringPeriod.read) but the last is the device's own line whole, its signature included, so the LMS leaf read from each is the device's, or the finder at the lines' whole texts (Properties.Spot.MonitoringPeriod.findLineBreak: Properties.Challenger.findBreak on the ledger, else a SHA-512 collision among the presented lines' and the device's whole texts) outputs a break; the last presented line's signature stays free; it takes Properties.Spot.MonitoringPeriod.Numbered and Properties.Spot.MonitoringPeriod.Chained (the device's line after a line names as prev the SHA-512 of that line's whole text), hypotheses of this statement alone that no guarantee takes, and lemmas of the modelled device once the model builds its whole ledger; proved from them in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDeviceSigned; no guarantee entry while it takes them",
    "Properties.Challenger.SampledByDevice": "unstated: Challenger.sampleCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Drawn.sampledByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it",
-   "Verity.plain_soundness_of_subprotocols": "frozen (premise): Verity.remote_soundness_of_subprotocols's statement at remote's plain sibling: the union bound at the compiled verifier of the plain sibling's list (Verity.Registration.Composite.plain, remote's list with the inference-only policy's rows check, verity/inference-only/rows/v1, in v0's place; Verity.componentsOf_plain) in the same causal game, from Verity.soundness_at_of_targets at the plain sibling; its three subprotocols are sampled proofs v2, PoUW by Pearl+'s run verdict (PouwVerifier.PearlPlus.Protocol) and the inference-only policy decided by the rows check (Verity.rowsCheck, whose behavior Verity.rowsUnbuilt leaves unstated until a compiled check carries its id), with the same errors, Vocab and claims as at remote; it takes the three targets (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound at the plain sibling) as hypotheses until each is proved, and the code refuses the plain sibling's list until then (Core.Composites.ofIds, Verity.ofIds_plain)",
+   "Verity.plain_soundness_of_subprotocols": "frozen (premise): Verity.remote_soundness_of_subprotocols's statement at remote's plain sibling: the union bound at the compiled verifier of the plain sibling's list (Verity.Registration.Composite.plain, remote's list with the inference-only policy's rows check, verity/inference-only/rows/v1, in v0's place; the code's Core.Remote.Plain.protocol, Verity.verifier_plain, Verity.ofIds_plain) in the same causal game, from Verity.soundness_at_of_targets at the plain sibling; its three subprotocols are sampled proofs v2, PoUW by Pearl+'s run verdict (PouwVerifier.PearlPlus.Protocol) and the inference-only policy decided by the rows check (Verity.rowsCheck, InferenceOnly.RowsProtocol.protocol), with the same errors, Vocab and claims as at remote but the policy's, the rows check's clause (Verity.rowsHeld); it takes SPOT's and PoUW's targets (Verity.Vocab.SpotSound, PouwSound at the plain sibling) as hypotheses until each is proved, and proves the policy's (Verity.Vocab.inferenceOnlySound_rows)",
    "InferenceOnlyVerifier.Properties.DescCountsCK": "unstated: a published complies of the count of (c, k)-inference blocks (InferenceOnlyVerifier.Count.check, the judgment against n alone) means the Boolean declaration the Program lowers to by the gate table complies with InferenceOnly.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and InferenceOnlyVerifier.Desc's summaries to cover the parameter leaves a Definition's gates read",
    "InferenceOnlyVerifier.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
    "Properties.Poub.Subprotocol.QBytesAtSubprotocol": "unstated: on the subprotocol's acceptance, the `q_bytes` it publishes is at most `BLOCK_BYTES` times the record's receipts the trace gets right, except with `LineHeldAtSubprotocol`'s bound at `DELTA`, under `Live`, `Refused` and `Counted`; unproved, a statement that gets a guarantee entry, and a shape.properties entry naming `Poub.Protocol.check`'s accept, with its proof",

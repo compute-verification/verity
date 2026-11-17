@@ -1,6 +1,7 @@
 module
 
 public import Properties.InferenceOnly.RecordRows
+public import Properties.InferenceOnly.RowsHonest
 public import Proofs.Properties.InferenceOnly.RecordComplies
 public import Proofs.Properties.InferenceOnly.RecordBlockGates
 public import Proofs.Properties.InferenceOnly.RecordTemplates
@@ -250,14 +251,23 @@ theorem zeroDen_parse :
   rw [rows_instance_program, rows_instance_record, hg, ha, hp]
   rfl
 
+/-- **`RowsComplies`' honest witness**: the compiled rows check accepts the honest case (`RowsHonestAccepted`), and
+there its conclusion holds. -/
+theorem RowsComplies_honest (h : RowsHonestAccepted) :
+    ∃ (p : InferenceOnly.RowsProtocol.Params) (c : InferenceOnlyVerifier.Protocol.Commitment)
+      (e : InferenceOnly.RowsProtocol.Evidence) (bs : Core.Blobs) (pub : Unit) (prof : Json),
+      (Core.canonicalJson RowsHonest.params.toUTF8 >>= InferenceOnly.RowsProtocol.paramsOf) = .ok p ∧
+        InferenceOnlyVerifier.Protocol.commitmentOf RowsHonest.commitment.toUTF8 = .ok c ∧
+        InferenceOnly.RowsProtocol.evidenceOf RowsHonest.evidence.toUTF8 = .ok e ∧
+        InferenceOnly.RowsProtocol.checkBlobs p c e bs = .accept pub prof ∧ _root_.Properties.Remote.RowsHeld p c e bs := by
+  obtain ⟨p, c, e, bs, pub, prof, hp, hc, he, ha⟩ := h
+  exact ⟨p, c, e, bs, pub, prof, hp, hc, he, ha, RowsComplies p c e bs pub prof ha⟩
+
 /-- **`RowsComplies` fails without `InferenceOnly.RowsProtocol.checkBlobs`.** At a case whose `α` has denominator 0,
-which a verifier that accepted every case would accept, the record check reads no record: its conclusion's first part
-fails. -/
+which a verifier that accepted every case would accept, the record check reads no record, so `RowsHeld` fails. -/
 theorem RowsComplies_nontrivial :
-    ∀ r, ¬ InferenceOnlyVerifier.Record.read
-      (InferenceOnly.RowsProtocol.instanceOf zeroDen ⟨"", none⟩)
-      (InferenceOnly.RowsProtocol.trustedOf zeroDen ⟨.null, "", .empty⟩) = .ok r := by
-  intro r h
+    ¬ _root_.Properties.Remote.RowsHeld zeroDen ⟨"", none⟩ ⟨.null, "", .empty⟩ Core.Blobs.empty := by
+  rintro ⟨r, _, h, -⟩
   unfold InferenceOnlyVerifier.Record.read InferenceOnlyVerifier.Record.front at h
   rw [zeroDen_parse] at h
   cases h

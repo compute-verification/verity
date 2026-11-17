@@ -19,7 +19,10 @@ untraced = [
 ]
 # `verity_difftest`, through which the network checks' tests speak to their Lean executables
 # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
-inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "tools/difftest/python/verity_difftest"]
+# the honest rows case the rows check's honest witness reads (`RowsHonestAccepted`), which
+# test_inference_only_rows_protocol.py holds to its accept case
+inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "tools/difftest/python/verity_difftest",
+          "security/Properties/InferenceOnly/RowsHonest/Case.lean"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -43,4 +46,4 @@ paths = ["verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_inference_only_rows_protocol.py"]
-paths = ["verity"]
+paths = ["verity", "security/Properties/InferenceOnly/RowsHonest/Case.lean"]
