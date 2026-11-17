@@ -59,11 +59,11 @@ VARIABLES = {
     "CLASSES": "4,32,4 8,32,4,4,16", "V3C_CLASS": "8,32,4,4,16",
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
                        "--gate user@gate-1 --peer peer-1",
-    "DEVELOPMENT": "1", "H1_KEY_SHA512": KEY, "LOAD": "varied", "PEARLC_CHALLENGER_GATE": "gate-command",
+    "DEVELOPMENT": "1", "H1_KEY_SHA512": KEY, "LOAD": "fixed", "PEARLPLUS_TIE_UNIFORM": "1", "PEARLC_CHALLENGER_GATE": "gate-command",
     "PEARLC_CHALLENGER_PEER": "peer-1", "PEARLPLUS_TIE": "1", "POUW": "pearlplus", "PRODUCT": "onsite",
-    "PRECISION": "verity_int8", "REPO": "verity-int8/Llama-3.2-1B-INT8",
-    "REV": "15b0976d400d796ee589e7737d03a919526bf800", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
-    "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16", "WIPE_ADDRESS": "192.0.2.1:7001",
+    "PRECISION": "bfloat16", "REPO": "unsloth/Llama-3.2-1B",
+    "REV": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
+    "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "2", "WIPE_ADDRESS": "192.0.2.1:7001",
     "WIPE_CMD": f'WIPE_KEY_SHA512={WIPE_PIN} bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"',
     "POUS_CMD": 'bash benchmarks/pous/served_piece.sh "$@"', "ONSITE_PIECES": "benchmarks/pous/onsite_pieces.sh",
     "POUS_ARGS": f"--trusted-sha512 {PIN['pous']} --rounds 320 --challenger-address 192.0.2.1:7000 "
@@ -137,19 +137,25 @@ def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(dem
     assert {p["protocol"] for p in cfg["pin"]} == {"pous", "wipe"} & set(T.DEMOS[demo])
 
 
-def test_remote_has_the_values_pearl_pluss_tie_takes_and_no_onsite_application_takes_them():
-    remote = R.load(ROOT / "applications" / "remote.toml", REG)
-    assert remote["workload"]["params"] == {"model": "unsloth/Llama-3.2-1B", "precision": "bfloat16", "slots": 4,
-                                            "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
-                                            "window-steps": 2, "load": "fixed"}
-    assert remote["params"]["verity/pouw/pearl-plus/v1"] == {"class": "4,27,2", "tie-uniform": True}
-    hooks = T.variables(remote, {})
-    assert {k: hooks[k] for k in ("REPO", "PRECISION", "SLOTS", "WINDOW_STEPS", "LOAD", "V3C_CLASS", "CLASSES",
-                                  "PEARLPLUS_TIE_UNIFORM")} == {
-        "REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": "4", "WINDOW_STEPS": "2", "LOAD": "fixed",
-        "V3C_CLASS": "4,27,2", "CLASSES": "4,27,2", "PEARLPLUS_TIE_UNIFORM": "1"}
-    for demo in set(T.DEMOS) - {"remote"}:
-        assert R.load(ROOT / "applications" / f"{demo}.toml", REG)["workload"]["params"] == T.SERVED.default_params
+TIED = {"model": "unsloth/Llama-3.2-1B", "precision": "bfloat16", "slots": 4,
+        "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "window-steps": 2, "load": "fixed"}
+TIED_WORKLOAD = {"REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": "4", "WINDOW_STEPS": "2",
+                 "LOAD": "fixed"}
+TIED_CLASS = {"V3C_CLASS": "4,27,2", "CLASSES": "4,27,2", "PEARLPLUS_TIE_UNIFORM": "1"}
+
+
+def test_remote_and_onsite_full_have_the_values_pearl_pluss_tie_takes_and_the_smaller_sets_keep_the_defaults():
+    for demo in ("remote", "onsite_full"):
+        cfg = R.load(ROOT / "applications" / f"{demo}.toml", REG)
+        assert cfg["workload"]["params"] == TIED, demo
+        assert cfg["params"]["verity/pouw/pearl-plus/v1"] == {"class": "4,27,2", "tie-uniform": True}, demo
+        assert T.SERVE.variables(cfg, {}).items() >= TIED_WORKLOAD.items(), demo
+        assert T.PARTIES["pearl-plus"][T.WORKERS].variables(cfg, {}).items() >= TIED_CLASS.items(), demo
+    hooks = T.variables(R.load(ROOT / "applications" / "remote.toml", REG), {})
+    assert hooks.items() >= (TIED_WORKLOAD | TIED_CLASS).items()
+    for demo in set(T.DEMOS) - {"remote", "onsite_full"}:
+        cfg = R.load(ROOT / "applications" / f"{demo}.toml", REG)
+        assert cfg["workload"]["params"] == T.SERVED.default_params and "pearl-plus" not in cfg["protocols"]
 
 
 def test_the_configuration_states_no_host_or_address():
@@ -552,7 +558,7 @@ def stand_in(tmp: Path, name: str, body: str) -> str:
 
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
 RUNNER = """mkdir -p "$OUT"
-/usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|ONSITE_PIECES|BANDWIDTH_CMD|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+|POUW|PRODUCT|PEARLPLUS_TIE|PEARLC_[A-Z_]+)=' \
+/usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|ONSITE_PIECES|BANDWIDTH_CMD|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+|POUW|PRODUCT|PEARLPLUS_TIE|PEARLPLUS_TIE_UNIFORM|PEARLC_[A-Z_]+)=' \
   | sort > "$OUT/hooks.txt"
 """
 

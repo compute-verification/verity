@@ -236,11 +236,12 @@ HEADERS = {
 HEADER = HEADERS["onsite_full"]
 
 
-#: an application's own workload values and component parameters over the shared defaults: remote's are those Pearl+'s
-#: tie takes
-DEMO_VALUES = {"remote": ({"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
-                           "precision": "bfloat16", "slots": 4, "window-steps": 2, "load": "fixed"},
-                          {SP.IDS["pearl-plus"]: {"class": "4,27,2", "tie-uniform": True}})}
+#: an application's own workload values and component parameters over the shared defaults: those Pearl+'s tie takes,
+#: which remote and onsite both serve
+_TIED = ({"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+          "precision": "bfloat16", "slots": 4, "window-steps": 2, "load": "fixed"},
+         {SP.IDS["pearl-plus"]: {"class": "4,27,2", "tie-uniform": True}})
+DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED}
 
 
 def configuration(commit: str, demo: str = "onsite_full",

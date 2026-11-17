@@ -3,7 +3,7 @@
 # `tests/test_configurations.py` holds this file to those files, so a change to a configuration changes its line here.
 # A device's `trusted-device` holds only under a hash listed here (`memory_attester.trusted_device`): any other file is
 # a rehearsal, no bound. A second lane's application puts its line in this same file, and no change touches another application's line.
-"applications/onsite_full.toml" = "1c13e4873226d6ff341d1a1657b2e7a1e1f6a5e5785ea8341eae0a9c55ff3de01b0ddd7a826114fc62e943b395195ff36099e008f4bfb5b78b16a7a65f6afe81"
+"applications/onsite_full.toml" = "9465184de01aa65c9293ae3f6981f6ea7af0b46cc3160565a6aec9fb1d8dce8a2de91e9208cb8ad852ddc351ebccd009654063e2649c854c4652d432b9088976"
 "applications/onsite_compute.toml" = "f5ca90b1a0f6c0b201537a257c2c7070050a8f94629b4356ca437cca08d9b627e3fbb2da763263e35fccb143ae171e908f3f7de57f120d206a17dda2c1554322"
 "applications/onsite_network.toml" = "9d9c1d03935955f17207629a34cc2001c04b90185587a00fe6a08bb88f342c59cde7036cc73eef8d75abb2b9e14295857d7ab94207f3b2d7572fc78ef519f00e"
 "applications/remote.toml" = "0b0611e7cbff2cd20514e26a4fe3feb1af746b33d061f3be43ff4679657429edef66a8d47b5c59600dc835865cb92442eac0c6f278b27481eef742782b5762ed"
