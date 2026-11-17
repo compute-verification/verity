@@ -1,0 +1,10 @@
+#!/bin/sh
+# vy-compose-gate: vllm's compose verb on vy-auditor-2, a copy of vy-verifier-gate pointed at /opt/vy-compose,
+# the root infra pins for it. research's compose keys (.ssh/authorized_keys.compose) are forced to `vy-compose-gate LANE`; the
+# request comes from SSH_ORIGINAL_COMMAND and the hand-off tar on stdin, which exec and sudo pass through to the pinned gate.
+# host.py's path below is the pinned tree's layout, so this file and /opt/vy-compose/current change together (pin.sh).
+set -eu
+if [ "$(id -u)" != 0 ]; then
+  exec sudo -n /usr/local/sbin/vy-compose-gate --ssh "${SSH_ORIGINAL_COMMAND:-}" --key "${1:--}"
+fi
+exec /usr/bin/python3 -I /opt/vy-compose/current/verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py gate "$@"

@@ -1373,8 +1373,9 @@ def record(out: Path, instruction: str, device: str, results: dict, primary: str
     if primary is None or "sweep" not in results:
         return
     from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
     sw = results["sweep"]
-    card = "-".join(device.lower().split()).removeprefix("nvidia-")
+    card = kit.card_short(device, directory=CARD_FILES)
     fields = {"instruction": instruction, "card": card, "words_compared": sw["gated_elements"], "model": primary, "tiles": "sweep"}
     m = kit.writer(out).measurement(METRIC, sw["total_mismatches_vs_model"][primary], "words", mark="measured",
                                     member=f"{instruction}-{card}", extra=fields)

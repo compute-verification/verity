@@ -543,7 +543,7 @@ def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp
     assert json.loads((out / "compute.json").read_text()) == doc
     assert list(doc) == ["value", "unit", "commit", "run", "target", "met", "credited_macs", "model_macs", "macs",
                          "linears_share", "passes_macs", "scheme", "epsilon_s", "delta_s", "lean", "coins", "record",
-                         "withdrawn", "model", "revision", "class", "policy_agrees", "tokens", "tokens_from", "wall_s",
+                         "withdrawn", "model", "revision", "card", "class", "policy_agrees", "tokens", "tokens_from", "wall_s",
                          "capacity_share", "made_up_says", "ran_with", "audit"]
     # with no number the kit writes the document with no value and why, and the metric alone, with no value and why
     none = tmp_path / "none" / "out"
@@ -593,6 +593,21 @@ def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capac
         assert m["audit"] is False
     assert C.NO_SPAN == ("a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
                          "developer's machine")
+
+
+@pytest.mark.parametrize("card, line", [("NVIDIA H200", "llama-3.2-1b-h200"),
+                                        ("NVIDIA H100 80GB HBM3", "llama-3.2-1b-h100-80gb-hbm3"), (None, None)])
+def test_each_measurement_names_the_served_model_then_the_card_the_record_says_it_served_on(
+        store, tmp_path, capsys, monkeypatch, stamped, card, line):
+    """The member is the record's: the model its policy registers and the card `serve.sh` checked and served on
+    (`RAN`'s ``card``), not the host the share is read on (`STAMP`'s); a record that names no card writes none."""
+    out = tmp_path / "out"
+    monkeypatch.setenv("OUT", str(out))
+    store.add(RUN, a_record(tmp_path, **REAL, RAN=ran(challenger="in-process", development=True, card=card)))
+    assert bench(store, "--from", RUN) == 0
+    assert json.loads(capsys.readouterr().out.splitlines()[-1])["card"] == card
+    got = json.loads((out / "result.json").read_text())["measurements"]
+    assert len(got) == 8 and [m.get("member") for m in got] == [line] * 8
 
 
 def h200_site(devices: int):

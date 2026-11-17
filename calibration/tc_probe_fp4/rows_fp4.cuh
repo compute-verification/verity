@@ -16,7 +16,7 @@ enum RowKind {
     R_MXF8F6F4_E2M1 = 5,      // kind::mxf8f6f4 scale_vec::1X ue8m0, e2m1 x e2m1
     R_MXF8F6F4_E2M1_E4M3 = 6, // kind::mxf8f6f4 scale_vec::1X ue8m0, e2m1 x e4m3
     R_MXF8F6F4_E4M3_E2M1 = 7, // kind::mxf8f6f4 scale_vec::1X ue8m0, e4m3 x e2m1
-    R_F8F6F4_E4M3 = 8,        // kind::f8f6f4 e4m3 x e4m3: the FP8 reference rate in w1_price.cu only (its capture is benchmarks/tc_probe's)
+    R_F8F6F4_E4M3 = 8,        // kind::f8f6f4 e4m3 x e4m3: the FP8 reference rate in w1_price.cu only (its capture is calibration/tc_probe's)
     R_SP_NVF4 = 9,            // mma.sp m16n8k128 kind::mxf4nvf4 4X ue4m3: w1_price.cu only (mma_fp4.cu's sparse_tiles_kernel<0>, same text)
     R_SP_MXF4 = 10,           // mma.sp m16n8k128 kind::mxf4nvf4 2X ue8m0: likewise (sparse_tiles_kernel<1>)
 };  // kind::mxf4nvf4 scale_vec::4X with ue8m0 is refused by ptxas 12.9 ("Illegal modifier '.scale_vec::4X' ... with type '.ue8m0'")
