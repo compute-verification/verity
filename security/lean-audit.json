@@ -1310,18 +1310,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "InferenceOnly.Assumptions.Coverage": {
-   "owner": "@lean",
-   "digest": "c068197b509e80379939199fba3cad531c7181079bcb62309d97f64bc9a448d5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "InferenceOnly.Assumptions.ThetaRegistered": {
-   "owner": "@compute-accounting",
-   "digest": "6c0116715e6ff4a59f53352e6ca48b2e72b0a4c9f4c3b4c03944839d94d6030e",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "InferenceOnly.CompliesRate": {
    "owner": "@lean",
    "digest": "57fe163d6f5b4027697c153f649958fae08325fe51f22aaa8c150cdbc303d21e",
@@ -3148,12 +3136,6 @@
   "Verity.Recursive.LiveCoins": {
    "owner": "@proofs",
    "digest": "8546e06c806d9823031c662a2c463f83113cfaf39894ef4f03cf02912d4933ba",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.RegisteredCircuit.Contains": {
-   "owner": "@lean",
-   "digest": "db9a57e137191c699b57ec4d63450e0988eb73ad592071d3b4908fa53c44cc59",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -32552,11 +32534,10 @@
    }
   },
   "Definitions.Core.RegisteredCircuit": {
-   "digest": "1f820a0f41b266c5ff016b02540225e3ee4987109a401c37b4cae01a84bab5ae",
+   "digest": "9ca938427570d0274d0b6ccda3708e051d21114b8198bdc839256edf846c0769",
    "definitions": {
     "Verity.RegisteredCircuit": "05b5f9b83c6a61dbb1f6a11d505b6e912b680218dc018eab911b9f42fa5fdd54",
     "Verity.RegisteredCircuit.B": "a483189b805e31ff95e253cb0ecd9f6ed9a13a1309631e03161c498726ef0cca",
-    "Verity.RegisteredCircuit.Contains": "db9a57e137191c699b57ec4d63450e0988eb73ad592071d3b4908fa53c44cc59",
     "Verity.RegisteredCircuit.D": "b3ebeb94b139a559712748ae66c4a9809cb27500131528c6a6c40357acd6ab74",
     "Verity.RegisteredCircuit.Implements": "7112284919cc82ffaad87a301e060d4ef74520d51e67424b2abe5cc5e256e626",
     "Verity.RegisteredCircuit.a": "e3f7ba70871b4d19ca69753042fbfcb2bd907823de790a5908177ba9738cace1",
@@ -33732,18 +33713,6 @@
     "InferenceOnly.CompliesRate": "57fe163d6f5b4027697c153f649958fae08325fe51f22aaa8c150cdbc303d21e",
     "InferenceOnly.Policy": "2f77812f2dfd2f950e4346ecccd7e21d54a6b9e2bd9397b44e5b757cff4dfb93",
     "InferenceOnly.freshInput": "b648030f3e828c81aa38f42662c0fe4ef5559fba6b65b8b4bf8c30359f473034"
-   }
-  },
-  "Definitions.InferenceOnly.Assumptions": {
-   "digest": "44228580ab93e05c96092156de52025cbcc6309eb932108a60880ef409c354df",
-   "definitions": {
-    "InferenceOnly.Assumptions.Coverage": "c068197b509e80379939199fba3cad531c7181079bcb62309d97f64bc9a448d5"
-   }
-  },
-  "Definitions.InferenceOnly.Assumptions.Theta": {
-   "digest": "6bfd28cea787e11018676eb7ff22eccef06f61778d5ec58754ac92b2f0e3d06b",
-   "definitions": {
-    "InferenceOnly.Assumptions.ThetaRegistered": "6c0116715e6ff4a59f53352e6ca48b2e72b0a4c9f4c3b4c03944839d94d6030e"
    }
   },
   "Definitions.InferenceOnly.Guarantees.CompliesCK": {
@@ -39206,6 +39175,13 @@
     "ResourceAccounting.Gates.tableReadBits": "fcd62f42d48a5307139d6a539f1f2ae516fa973b515d3499125747afffdfd18c"
    }
   },
+  "Definitions.ResourceAccounting.Guarantees.Actual": {
+   "digest": "2079cca47c9b5a73c092e986269660bfe750e23fb5ba98279fa5040e2728be0d",
+   "definitions": {
+    "ResourceAccounting.Guarantees.Actual.ServerBlocks": "acd46bbb88ec7d140cbe42cea040ce286f241e4e7f69d7365027390a5ebe0423",
+    "ResourceAccounting.Guarantees.Actual.ServerBlocksAt": "1b18c5c6281937a777e0f60f0c089fe8e80e940b9551d3d05e948fcdd3dc2298"
+   }
+  },
   "Definitions.ResourceAccounting.Guarantees.FpG1": {
    "digest": "502f53a9d209cc3375f7572b7320c81c84fb459bf1f9afbb6bf2dad0008ea6f0",
    "definitions": {
@@ -39557,16 +39533,6 @@
     "Slowdown.Cut.Toy.val": "11e4435f15db13a774e04c850ade65ffbc1162526efd0bdc1bf974c9404582ce",
     "Slowdown.Cut.Toy.xGate": "714e576dcd28d34782a34e721bf3b761cada805b971d8e7e08356639f016a486",
     "Slowdown.Cut.Toy.yGate": "103b06ce058813b79c9aaac1099d940f77654112b672ef7c17bceaab05aa00fc"
-   }
-  },
-  "Definitions.Slowdown.Dark": {
-   "digest": "d8f117f1c7d0d52f500cc197d82440847efa5e9c5663f3c96daab7e03668cdb8",
-   "definitions": {
-    "Slowdown.PartialContainment": "4716b57cc3a026d458201434ca329fc09a4b3d07b4ae376dfcc23707f8a6a328",
-    "Slowdown.PartialContainment.S": "f322eae861e40a7fcb54dea52c0a196c76ec8d3ac8882c6fe7e7ce7644bc2a04",
-    "Slowdown.PartialContainment.dark": "9fe02bf0b415ec79f581204e3c43a5ae7df142dd974e9f361905e930faf8c91c",
-    "Slowdown.PartialContainment.emb": "2ef75b334fa5cdcc42ff5c5f02332cdd4fa05a35c1c9361fde5caaed5b7bff80",
-    "Slowdown.PartialContainment.ofContainment": "b647be64a5ad3f549a4ea7883f51d8511e1cdbb2219f196115227d62f2c906b4"
    }
   },
   "Definitions.Slowdown.Formalism.Circuits": {
