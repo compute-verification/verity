@@ -5067,7 +5067,6 @@
         "benchmarks/tc_probe/pyproject.toml": "tests/benchmarks/tc_probe/pyproject.toml",
         "benchmarks/tc_probe_fp4/pyproject.toml": "tests/benchmarks/tc_probe_fp4/pyproject.toml",
         "benchmarks/tensor_duty/pyproject.toml": "tests/benchmarks/tensor_duty/pyproject.toml",
-        "benchmarks/torch_gpu/p2_stage/pyproject.toml": "tests/benchmarks/torch_gpu/p2_stage/pyproject.toml",
         "benchmarks/training_slowdown/pyproject.toml": "tests/benchmarks/training_slowdown/pyproject.toml",
         "benchmarks/training_slowdown/grader/pyproject.toml": "tests/benchmarks/training_slowdown/grader/pyproject.toml",
         "benchmarks/tree/pyproject.toml": "tests/benchmarks/tree/pyproject.toml",
@@ -5249,6 +5248,7 @@
     {
       "paths": {
         "benchmarks/two_stage/": "benchmarks/one_stage/",
+        "benchmarks/two_stage/settings.py": "tests/benchmarks/one_stage/settings.py",
         "tests/benchmarks/two_stage/TwoGuard.lean": "tests/benchmarks/one_stage/TwoGuard.lean",
         "tests/benchmarks/two_stage/guard_node.py": "tests/benchmarks/one_stage/guard_node.py",
         "tests/benchmarks/two_stage/test_guard.py": "tests/benchmarks/one_stage/test_guard.py",
