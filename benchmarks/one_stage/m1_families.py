@@ -171,12 +171,8 @@ def sizes(census: str, out: str, also: list[str] = ()) -> int:
 def one_card_record(commit_dir: str | Path) -> dict:
     """A single-card Commit's record in `tp.serving_rows.record`'s keys, as a world of 1: its last instrumented pair-0 run
     (``runs.jsonl``), its workload's sha256, and rank 0's Programs of record, the Commit's ``--program-digest`` and its
-    ``--required-manifest``'s components (`commit_plan.digests_of_record`, as its replay checks them). A run with a TP run root
+    ``--required-manifest``'s component digests (the set its replay checks the Programs against). A run with a TP run root
     is a tensor-parallel record and refused."""
-    from types import SimpleNamespace
-
-    from verity_vllm.pipeline import commit_plan as CP
-
     d = Path(commit_dir)
     rows = [json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines() if x.strip()]
     row = next((r for r in reversed(rows) if r.get("arm") != "control" and r.get("pair") == 0), None)
@@ -189,8 +185,12 @@ def one_card_record(commit_dir: str | Path) -> dict:
     man = flag("--required-manifest")
     if man and not Path(man).is_file():
         raise SystemExit(f"{d / 'versions.json'}: the Commit's --required-manifest {man} is not there")
-    of_record = CP.digests_of_record(SimpleNamespace(program_digest=flag("--program-digest")),
-                                     json.loads(Path(man).read_text()) if man else None)
+    of_record = {flag("--program-digest")} - {None}
+    if man:
+        m = json.loads(Path(man).read_text())
+        of_record |= {str(x) for x in m.get("component_digests") or []}
+        of_record |= {str(c["program_digest"]) for c in (m.get("components") or {}).values()
+                      if isinstance(c, dict) and c.get("program_digest")}
     if not of_record:
         raise SystemExit(f"{d / 'versions.json'}: the Commit names no --program-digest or --required-manifest, so no Program of record")
     return {"world": 1, "of_record": {"0": sorted(of_record)}, "label": row.get("label"), "workload": flag("--workload"),
