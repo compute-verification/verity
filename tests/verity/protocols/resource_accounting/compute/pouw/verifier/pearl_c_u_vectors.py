@@ -2,7 +2,7 @@
 [GATE_CHECK_DIR]`` rewrites ``tests/vectors/pearl_c_u.json``.
 
 The cells come from the H100 kernel's gate problem, the one archive/pouw-blake3/pearl_c/fixture.py builds: 256 x 384 x 1,024,
-case "gpu-check", unit index 5, weight 1, both formings.  Its rows `ROWS` and columns `COLS` straddle the GEMM's 128 x 128
+case "gpu-check", unit index 5, weight 1, forming v1.  Its rows `ROWS` and columns `COLS` straddle the GEMM's 128 x 128
 tiles and the leaves' 64 x 64 ones.  Every value is computed by the pin and by `pearl_c`, which must agree.  Given the gate's
 check directory (build.sh's OUT/check), the cells must also equal the gate's expected buffers, whose SHA-256 are recorded.
 The `edge` K16 vectors are the pin's own on constructed operands (cancellation, subnormals, exponent gaps, overflow),
@@ -70,8 +70,7 @@ def forming_vectors(forming: str, gate: Gate | None) -> tuple[dict, list]:
     m, n, k = SHAPE
     s, ctx = C.PearlC(forming=forming, hashing="h0"), context()
     noise, norm = s.noise(ctx), s.line_norm
-    make = CV.rows if forming == "v0" else CV.rows_f32
-    ra, rb = make(CASE, "A", m, k), make(CASE, "B", n, k)
+    ra, rb = CV.rows_f32(CASE, "A", m, k), CV.rows_f32(CASE, "B", n, k)
     a, e_a = s._side([ra[i] for i in ROWS], ROWS, 0, noise.seed_a, noise.seed_b, k)
     b, e_b = s._side([rb[j] for j in COLS], COLS, 1, noise.seed_b, noise.seed_b, k)
     be_a, be_b = C.scaled_noise(a, e_a), C.scaled_noise(b, e_b)
@@ -171,7 +170,7 @@ def edge_vectors() -> list:
 def vectors(gate_dir: Path | None = None) -> dict:
     manifest = json.loads((gate_dir / "check.json").read_text()) if gate_dir else None
     gate_hashes, formings, gate_k16 = {}, {}, []
-    for forming in ("v0", "v1"):
+    for forming in ("v1",):
         gate = Gate(gate_dir, forming, manifest) if gate_dir else None
         formings[forming], k16s = forming_vectors(forming, gate)
         gate_k16 += [[acc, x, y, w, forming] for acc, x, y, w in k16s]

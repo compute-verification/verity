@@ -66,7 +66,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier import codec as r
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
 
 #: The PoUB session's processes (not a package), whose prover runs in the Commit's.
-REMOTE_SESSION = Path(__file__).resolve().parent.parent / "remote_session"
+REMOTE_SESSION = Path(__file__).resolve().parent.parent / "poub_session"
 #: kv.cu's launchers over torch (``paged.py``, with ``kv_bench.py`` beside it), the remote session's device encode.
 VLLM_ENCODED = Path(__file__).resolve().parent.parent / "word_codec"
 

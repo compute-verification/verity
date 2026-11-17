@@ -6,6 +6,7 @@
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
+  Inside pytest it writes nothing into the research run the process started under (`refuse_the_started_run`).
   `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once, and
   `writer(out, kind)` writes a result of that `kind`, the artifact kind `research` stores it as.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
@@ -64,6 +65,7 @@ import re
 import shutil
 import statistics
 import subprocess
+import sys
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -510,13 +512,51 @@ class Writer:
         return doc
 
 
+#: the environment this process started with, which no monkeypatch or conftest changes (Linux; elsewhere the kit's import)
+_START = Path("/proc/self/environ")
+_PLACES = ("RESEARCH_RUN_DIR", "OUT")
+
+
+def _started_under() -> tuple[Path, ...]:
+    if _START.is_file():
+        environ = {k: v for k, _, v in (e.partition("=") for e in os.fsdecode(_START.read_bytes()).split("\0"))
+                   if k in _PLACES}
+    else:
+        environ = {n: v for n in _PLACES if (v := settings.raw(n)) is not None}
+    return tuple(Path(settings.get(n, environ)).resolve() for n in _PLACES if settings.is_set(n, environ))
+
+
+#: `$RESEARCH_RUN_DIR` and `$OUT` as this process started: the places of the research run it runs under, which a test
+#: inherits
+STARTED_UNDER = _started_under()
+
+
+def under_pytest() -> bool:
+    # pytest's own modules load before any conftest or test module; PYTEST_CURRENT_TEST misses collection and imports
+    return "_pytest" in sys.modules
+
+
+def refuse_the_started_run(place: str | os.PathLike) -> None:
+    """Inside pytest, refuses to write `place` where it is in `STARTED_UNDER`, so a test's figures never become the
+    measurements of the run it runs under; a test that plays a run sets its own `RESEARCH_RUN_DIR`, which it may write."""
+    if not under_pytest():
+        return
+    p = Path(place).resolve()
+    if run := next((d for d in STARTED_UNDER if p.is_relative_to(d)), None):
+        raise ValueError(f"inside pytest the kit writes nothing into the research run this process started under, and "
+                         f"{place} is in {run}: name a test's tmp_path as the place, or run the suite with "
+                         "tools/check/suites.py, which drops the run's variables")
+
+
 def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
     """The writer of this run's result (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now, of `kind`
     where given (`Writer.kind`). Under a research run (`RESEARCH_RUN_DIR` set) the result is
     `$RESEARCH_RUN_DIR/result.json`, the one file `research` reads a run's result from, whatever `out` is, so its evidence
-    paths are relative to the run's directory; outside one it is `out/result.json`."""
+    paths are relative to the run's directory; outside one it is `out/result.json`. Inside pytest it refuses the run the
+    process started under (`refuse_the_started_run`)."""
 
     where = settings.RESEARCH_RUN_DIR if settings.is_set("RESEARCH_RUN_DIR") else out
+    refuse_the_started_run(where)
     return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp(), kind, run_command())
 
 
