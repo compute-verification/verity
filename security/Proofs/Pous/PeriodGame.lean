@@ -8,23 +8,8 @@ import Proofs.Pous.P2.Rounds
 import all Init.Data.Array.Basic
 import all Init.Data.String.Defs
 
-/-!
-# Proof of PoUS's per-period guarantee in the shared coin game
-
-**At uniform streams** (`periodHeldCoins`, `periodHeldCoinsAt`). `PeriodHeld`'s probability is `Pous.pr`'s fraction
-(`ResourceAccounting.pr_eq_toReal`), which is `Verity.Game.prCoin` (`pr_eq_prCoin`). Where the session, the device record and
-the schedule don't read the primitive, the event at `(ω, y)` is the event at `(ω₀, y)` for every `ω`, so over
-`(ω, y)` it has the probability it has over `y` at any one `ω₀` (`prCoin_snd`), and the ring model's bound is the coin
-game's (`prCoin_le_of_pr`).
-
-**At the deployed challenger's streams** (`periodHeldSha512`, `periodHeldSha512At`). `derive` is SHA-512 keyed by the
-64-byte source after `derivePre`, at the one input `deriveTail` (`derive_eq`), and its key is the digest's first 32
-bytes (`keyOf_eq'`); block `c` of stream `j` is SHA-512 keyed by that key after `STREAM`, at `streamInputs (j, c)`
-(`streamsOf_eq`), 37 bytes each and distinct (`streamInputs_length`, `streamInputs_inj`), so none is a prefix of another.
-`Sha512Prf` at the key test replaces the derived key by the first 32 bytes of a uniform digest, uniform bytes; at the
-streams' test it replaces the blocks by uniform digests, which lay out as uniform streams (`blocksEquiv`). Each step adds
-its `ε` (`prCoin_challenger_le`), on top of the bound at uniform streams.
--/
+/-! The proof of PoUS's per-period guarantee in the shared coin game, at uniform streams and at the deployed
+challenger's streams. -/
 
 @[expose] public section
 
@@ -34,8 +19,6 @@ open Pous.EndToEnd PousCheck PousCheck.Properties MemoryChallenger FlockSoundnes
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000
-
-/-! ## The coin game's probability -/
 
 theorem prCoin_congr_equiv {A B : Type} [Fintype A] [Fintype B] (e : A ≃ B) {p : A → Prop} {q : B → Prop}
     (h : ∀ a, p a ↔ q (e a)) : prCoin p = prCoin q := by
@@ -81,7 +64,6 @@ theorem pr_eq_prCoin {C : Type} [Fintype C] (p : C → Prop) : Pous.pr p = prCoi
   refine Finset.sum_congr rfl fun c _ => ?_
   by_cases hc : p c <;> simp [hc]
 
-/-- A ring-model bound on an event that doesn't read the primitive is the coin game's bound at any primitive. -/
 theorem prCoin_le_of_pr {Ω Y : Type} [Fintype Ω] [Fintype Y] (E : Ω × Y → Prop) {b : ℝ} (h : Pouw.pr E ≤ b)
     (hE : ∀ ω ω' y, E (ω, y) ↔ E (ω', y)) (ω : Ω) : prCoin (fun y => E (ω, y)) ≤ ENNReal.ofReal b := by
   have : Nonempty Ω := ⟨ω⟩
@@ -95,8 +77,6 @@ theorem prCoin_le_of_pr {Ω Y : Type} [Fintype Ω] [Fintype Y] (E : Ω × Y → 
 
 theorem ofReal_bound : ENNReal.ofReal ((Params.δ : ℝ) + Params.εMax.toReal) ≤ ENNReal.ofReal Params.δ + Params.εMax :=
   ENNReal.ofReal_add_le.trans (by gcongr; exact ENNReal.ofReal_toReal_le)
-
-/-! ## The memory challenger's derivation, as SHA-512 on messages -/
 
 theorem keyOf_eq (d : Hash.Digest) : keyOf d = ⟨Array.ofFn fun i : Fin 32 => d (Fin.castAdd 32 i)⟩ := by
   unfold keyOf
@@ -173,7 +153,6 @@ theorem be8_size (x : ℕ) : (be8 x).size = 8 := by simp [be8, ByteArray.size]
 theorem be8_last (c : ℕ) : (be8 c).data.toList[7]? = some c.toUInt8 := by
   simp [be8]
 
-/-- What every `streamInputs` starts with: the index's frame header, the frame of `"u"` and the integer frame's header. -/
 def streamHeader : ByteArray := ⟨#[98]⟩ ++ be8 20 ++ frame (.str "u") ++ ⟨#[105]⟩ ++ be8 1
 
 theorem streamHeader_size : streamHeader.size = 28 := by decide +kernel
@@ -261,7 +240,6 @@ theorem derive_eq (N : ℕ) (sid : ByteArray) (src : Bytes 64) :
   simp only [frame, hs, ByteArray.append_assoc]
   rfl
 
-/-- What block `jc.2` of stream `jc.1` hashes under the key `K`. -/
 def blockMsg (K : Fin 32 → UInt8) (jc : Fin 105 × Fin 64) : Hash.Msg :=
   STREAM.data.toList ++ List.ofFn K ++ streamInputs jc
 
@@ -284,16 +262,12 @@ theorem streamsOf_eq (K : Fin 32 → UInt8) :
   rw [this, Array.getD_eq_getD_getElem?, Array.getElem?_ofFn]
   simp [Nat.mod_lt]
 
-/-! ## The two tests of `Sha512Prf` -/
-
-/-- A byte as the code holds it. -/
 def byteEquiv : Fin 256 ≃ UInt8 where
   toFun x := x.val.toUInt8
   invFun u := u.toFin
   left_inv x := by apply Fin.ext; simp
   right_inv u := by simp
 
-/-- Uniform digests at the 105 · 64 block inputs are uniform streams, laid out in counter mode. -/
 def blocksEquiv : (Fin 105 × Fin 64 → Hash.Digest) ≃ Streams where
   toFun := streamsOfBlocks
   invFun s jc i := byteEquiv (s jc.1 ⟨jc.2.val * 64 + i.val, by unfold DRAW_BYTES; omega⟩)
@@ -311,7 +285,6 @@ def blocksEquiv : (Fin 105 × Fin 64 → Hash.Digest) ≃ Streams where
     simp only [this]
     exact byteEquiv.symm_apply_apply _
 
-/-- A digest's first 32 bytes and its last 32. -/
 def digestSplit : Hash.Digest ≃ (Fin 32 → UInt8) × (Fin 32 → UInt8) :=
   (Equiv.arrowCongr (finSumFinEquiv : Fin 32 ⊕ Fin 32 ≃ Fin 64).symm (Equiv.refl UInt8)).trans
     (Equiv.sumArrowEquivProdArrow _ _ _)
@@ -325,8 +298,6 @@ theorem digestSplit_fst (d : Hash.Digest) : (digestSplit d).1 = fun i => d (Fin.
 theorem keyOf_eq' (d : Hash.Digest) : keyOf d = ⟨Array.ofFn (digestSplit d).1⟩ := by
   rw [keyOf_eq, digestSplit_fst]
 
-/-- **The bound at the deployed challenger's streams**: a bound `b` at uniform streams, plus `Sha512Prf`'s `ε` at the
-key test (one input) and at the streams' test (105 · 64 inputs). -/
 theorem prCoin_challenger_le (N : ℕ) (sid : ByteArray) (F : HmCoins → Streams → Prop) {b : ℝ≥0∞}
     (hb : prCoin (fun y : HmCoins × Streams => F y.1 y.2) ≤ b) (ε : ℕ → ℕ → ℝ≥0∞) (t : ℕ)
     (h1 : Hash.Assumptions.Sha512Prf sha512Digest ε derivePre 64 (fun _ : Unit => deriveTail N sid)
@@ -376,8 +347,6 @@ theorem prCoin_challenger_le (N : ℕ) (sid : ByteArray) (F : HmCoins → Stream
     _ ≤ b + ε t (105 * 64) + ε t 1 := by gcongr; exact q1.trans (by gcongr)
     _ = b + ε t 1 + ε t (105 * 64) := add_right_comm _ _ _
 
-/-! ## The four guarantees -/
-
 theorem periodHeldCoins : PeriodHeldCoins := by
   intro D Q L hW ι α ΩW ΩQ _ _ d r P τ round S hdev hinst hS o hs hd hsch ω
   refine (prCoin_le_of_pr _ (periodHeld D Q L hW ι α ΩW ΩQ d r P τ round S hdev hinst hS o)
@@ -403,8 +372,6 @@ theorem periodHeldSha512At : PeriodHeldSha512At := by
   intro p ε₀ D Q L hnum hW pt N _ h1 h2 ι α ΩW ΩQ _ _ d r P round S hdev hS o hs hd hsch ω ε t k1 k2
   exact prCoin_challenger_le N P.sid (fun c s => AcceptedShortAt pt N r P S (o.1, o.2, (ω, c, s)))
     (periodHeldCoinsAt p ε₀ D Q L hnum hW pt N h1 h2 ι α ΩW ΩQ d r P round S hdev hS o hs hd hsch ω) ε t k1 k2
-
-/-! ## Their witnesses -/
 
 theorem prCoin_true {C : Type} [Fintype C] [Nonempty C] : prCoin (fun _ : C => True) = 1 := by
   unfold prCoin avg

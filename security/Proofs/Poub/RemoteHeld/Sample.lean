@@ -51,66 +51,7 @@ import Proofs.Poub.RemoteHeld.OverTime
 import Std.Tactic.BVDecide.Normalize.Prop
 import Proofs.Pous.Prob
 
-/-!
-# The openings' pooled bound: the proof
-
-Window `t`'s size `U_t` and correct receipts `C_t` are fixed before its openings coin (`Live`), so given the other coins
-and the earlier windows' coins the window's sample is `Key.subset` on the first blocks `prf t` gives a uniform coin. The
-hybrid is proved for a session read through a commitment (`Committed`, `Live` of `Committed.view c`), as the memory line
-over the prover's records (`RemoteHeld.Line`) states it; the guarantees take the session the prover plays, which holds
-no commitment while the session runs, as the committed session whose view reads none (`Draw.pooledSampleLive`).
-
-* **On uniform first blocks** (`Draw.pr_test_le`). Step `i` of the partial Fisher–Yates reads the words of its first
-  block, independent and uniform (`Draw.pr_words_le`: word `j + 1` of a block is word `j` of the bits below its top
-  word, `Draw.wordAt_succ`). The sampler rejects a word with probability at most `2^-64 − 2^-128` (`Draw.pr_reject_le`,
-  `2^w mod N < N ≤ 2^(w − 64)` and `w ≤ 128` for `N < 2^64`), and the block holds at least 4 words, so it rejects them
-  all with probability at most `2^-256 − 2^-512` (`Draw.pr_pick_none_le`), and some step is rejected with probability
-  at most `s'_t·(2^-256 − 2^-512)` (`Draw.pr_not_accepted_le`). An accepted word gives each of the
-  `U_t − i` offsets at most a `1/(U_t − i)` share, and so does the first word the sampler accepts
-  (`Draw.pr_pick_hit_le`: `Σ_j ρ^j·(1 − ρ)/(U_t − i) ≤ 1/(U_t − i)`, `ρ` a word's rejection). Once the earlier
-  steps took receipts of `C_t`, `g_t − i` of the positions left hold receipts of `C_t` (`Draw.card_arrange_mem`), so
-  step `i` takes one with probability at most `(g_t − i)/(U_t − i) ≤ g_t/U_t`, and the sample lands in `C_t` with
-  probability at most `(g_t/U_t)^(s'_t)`, `0` when `g_t < s'_t` (`Draw.pr_window_le`, the steps as rounds of
-  `Draw.pr_rounds_le`, the adaptive product bound `Draw.pr_live_le`): `bound t` (`Run.bound`).
-* **The pooled bound** (`Draw.prod_le_of_pooled_lt`). When the wrong receipts pass the pooled bound, the wrong shares
-  `f_t = 1 − g_t/U_t` are no point of its knapsack, so a window has fewer correct receipts than samples, or
-  `Σ_t s'_t·f_t` passes the budget `S·(1 − δ^(1/S))` and weighted AM–GM puts `∏_t bound t` at most `δ`.
-* **The hybrid over windows** (`Draw.pr_potential_le`). The potential after `t` windows (`Run.potential`) is the
-  event that windows `j < t` land on `prf j` and a uniform 512-bit threshold coin `u` falls below `P = ∏_{j<t} bound j`
-  (`below`, of probability `Draw.coinWeight δ P`, `min(1, δ/P)` rounded down to a multiple of `2^-512`,
-  `Draw.pr_below`). After no window it has probability at most `δ`. Window `t`'s step (`Draw.pr_potential_succ_le`, the
-  arithmetic `Draw.hybrid_step`) first trades the commitment for `Committed.junk com t`, whose leaf `t` commits zeros,
-  at the potentials after `t + 1` and after `t` windows: that is `Committed.hide com prf δ t`, `0` at a view that reads
-  no commitment (`Draw.hide_const`). In the junk session windows `j ≤ t` read nothing of coin `t` (`Draw.SwapFree`, from
-  `Live` at each fixed commitment, `Draw.swapFree_junk`). There window `t`'s distinguisher on `prf t` under a uniform
-  key is the potential after `t + 1` windows, its key read as window `t`'s coin (`Draw.pr_potential_succ`, by
-  `Draw.swapCoin`), so it is at most its probability on uniform blocks plus its advantage. On uniform blocks it is at
-  most the potential after `t` windows plus `s_t/2^256` (`Draw.pr_distinguisher_le`): given the earlier coins, window
-  `t` lands with probability at most `s'_t·(2^-256 − 2^-512) + bound t`, independently of `u` falling below
-  `P·bound t`, and `coinWeight δ (P·bound t)·(s'_t·(2^-256 − 2^-512) + bound t)` is at most `coinWeight δ P + s_t/2^256`
-  (`Draw.window_step_le`: rounding costs at most `2^-512`, which the sharper rejection bound pays when `s'_t ≥ 1`; a
-  window of no samples has bound `1`).
-* **On the coin** (`Draw.pooledSample`). Off the binding event, where no opened receipt was presented with an accepted row
-  other than the one its root holds, a receipt `Refused` lets through is correct (`Draw.opened_sub`); the binding event
-  costs its probability, `Receipts.binding`. An accepted sample ignores the fallbacks (`Draw.openings_congr`), so on an
-  accepting outcome past the pooled bound and off the binding event every window lands on `prf t` while
-  `∏_t bound t ≤ δ`, where `u` always falls below: the potential after `n` windows (`Draw.pr_landed_le`). That bound is `δ` plus each
-  window's `s_t/2^256`, its distinguisher's advantage at the junk commitment and its hiding term, plus the binding term
-  (`Draw.pooledSample`, `Draw.error_toReal`). `PooledSample` is it at the session the prover plays, with no hiding term
-  (`Draw.pooledSampleLive`); `LiveCoinsSampled` and the memory line at the record's pooled bound (`HeldSampled` and its
-  time-held forms) follow from it as `Held` does from `LiveCoins`.
-
-**What the term is.** Window `t`'s term, `prfAdvantage (prf t) (D.distinguisher prf δ t)`, is one distinguisher's
-advantage, fixed by the session: it reads at most `s_t` first blocks of window `t`'s stream
-(`Draw.distinguisher_congr`) and otherwise runs the session's own windows, which read no bit of coin `t` before it is
-released, so efficient provers and verifiers give an efficient distinguisher with `s_t` queries, C3's form. An honest
-session, every receipt correct, gains nothing (`Draw.prfAdvantage_honest`). The
-term it replaces, the supremum of the advantage over every window test `test U k C`, was at least `1 − 2^-43` whatever
-the session (at `U = 2^300`, `k = 1`, `C` the first opening under each of the `2^256` keys, which the
-test lands in on `prf` always and on uniform blocks with probability at most `2^-44 + 2^-64`). That test is a window's
-distinguisher only in a session whose correct receipts are those `2^256` openings, which a prover can't compute; it
-passes, and C3 bounds no such distinguisher.
--/
+/-! The proof of the openings' pooled bound, by a hybrid over the windows. -/
 
 @[expose] public section
 
@@ -124,11 +65,6 @@ open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions R
 
 namespace Sample
 
-/-! ## Adaptive rounds -/
-
-/-- Rounds `0, …, n − 1`, each with coins `Y i` and then `Z i`. Round `i`'s event `A i` reads the coins of rounds up to
-`i`, and `h i`, read off the earlier rounds and round `i`'s first coins, bounds the probability of `A i` over its second
-coins. Then every event holds while the bounds multiply to at most `c` with probability at most `c`. -/
 theorem pr_live_le : ∀ (n : ℕ) (Y Z : Fin n → Type) [∀ i, Fintype (Y i)] [∀ i, Fintype (Z i)]
     (A : (i : Fin n) → ((j : Fin n) → Y j × Z j) → Prop) (h : (i : Fin n) → ((j : Fin n) → Y j × Z j) → ℝ≥0∞),
     (∀ i ω ω', (∀ j, j ≤ i → ω j = ω' j) → (A i ω ↔ A i ω')) →
@@ -206,16 +142,11 @@ theorem pr_live_le : ∀ (n : ℕ) (Y Z : Fin n → Type) [∀ i, Fintype (Y i)]
     calc pr A₀ * (c / H) ≤ H * (c / H) := by gcongr
       _ ≤ c := ENNReal.mul_div_le
 
-/-! ## One coordinate -/
-
-/-- An event that reads one coordinate of a product has at most that coordinate's probability. -/
 theorem pr_coord_le {ι : Type} [Fintype ι] [DecidableEq ι] {β : ι → Type} [∀ i, Fintype (β i)] (i : ι)
     (P : β i → Prop) : pr (fun z : (j : ι) → β j => P (z i)) ≤ pr P := by
   rw [pr_equiv (Equiv.piSplitAt i β)]
   refine pr_le_of_fiber _ _ (fun y => ?_)
   simp [Equiv.piSplitAt_symm_apply]
-
-/-! ## The block's words -/
 
 theorem width_pos (N : ℕ) : 0 < width N := by
   unfold width
@@ -245,7 +176,6 @@ theorem bitsVal_wordAt (N j : ℕ) {L : ℕ} (b : Pous.Bits L) :
     Pous.bitsVal (wordAt N j b) = Pous.bitsVal b / 2 ^ (L - (j + 1) * width N) % 2 ^ width N := by
   simp [wordAt, bitsVal_symm]
 
-/-- A block's top `w` bits and the `L − w` below them. -/
 def splitTop (w : ℕ) {L : ℕ} (b : Pous.Bits L) : Pous.Bits w × Pous.Bits (L - w) :=
   ((Pous.bitsEquiv w).symm ⟨Pous.bitsVal b / 2 ^ (L - w) % 2 ^ w, Nat.mod_lt _ (Nat.two_pow_pos _)⟩,
     (Pous.bitsEquiv (L - w)).symm ⟨Pous.bitsVal b % 2 ^ (L - w), Nat.mod_lt _ (Nat.two_pow_pos _)⟩)
@@ -262,8 +192,6 @@ theorem splitTop_injective {w L : ℕ} (h : w ≤ L) : Function.Injective (split
   apply Actual.bitsVal_injective L
   rw [← Nat.div_add_mod (Pous.bitsVal b) (2 ^ (L - w)), ← Nat.div_add_mod (Pous.bitsVal b') (2 ^ (L - w)), e1, e2]
 
-/-- **A block's top bits and the bits below them are independent**: an event of each has at most the product of
-their probabilities. -/
 theorem pr_split_le {w L : ℕ} (h : w ≤ L) (P : Pous.Bits w → Prop) (Q : Pous.Bits (L - w) → Prop) :
     pr (fun b : Pous.Bits L => P (splitTop w b).1 ∧ Q (splitTop w b).2) ≤ pr P * pr Q := by
   have hcard : Fintype.card (Pous.Bits L) = Fintype.card (Pous.Bits w × Pous.Bits (L - w)) := by
@@ -294,8 +222,6 @@ theorem wordAt_succ (N j : ℕ) {L : ℕ} (b : Pous.Bits L) (h : (j + 2) * width
   have e2 : 2 ^ (L - w) = 2 ^ (L - (q + w)) * 2 ^ q := by rw [← pow_add]; congr 1; omega
   rw [e1, e2, Nat.mod_mul_right_div_self, Nat.mod_mod_of_dvd _ (pow_dvd_pow 2 hwq)]
 
-/-- **The block's words are independent**: the first `c` words of an `L`-bit block, `c·w ≤ L`, satisfy events `A j`
-with at most the product of their probabilities. -/
 theorem pr_words_le (N c : ℕ) : ∀ (L : ℕ), c * width N ≤ L → ∀ (A : ℕ → Pous.Bits (width N) → Prop),
     pr (fun b : Pous.Bits L => ∀ j, j < c → A j (wordAt N j b)) ≤ ∏ j ∈ range c, pr (A j) := by
   induction c with
@@ -334,7 +260,6 @@ theorem card_reject (N w : ℕ) :
   have h3 : 2 ^ w % N ≤ 2 ^ w := Nat.mod_le _ _
   omega
 
-/-- **The sampler rejects a word** with probability `(2^w mod N)/2^w`. -/
 theorem pr_reject_le (N w : ℕ) :
     pr (fun u : Pous.Bits w => Actual.wordIndex N u = none) ≤ ENNReal.ofReal ((2 ^ w % N : ℕ) / 2 ^ w) := by
   classical
@@ -343,7 +268,6 @@ theorem pr_reject_le (N w : ℕ) :
   simp only [Fintype.card_fun, Fintype.card_bool, Fintype.card_fin, Nat.cast_pow, Nat.cast_ofNat]
   rw [div_mul_cancel₀ _ (by positivity)]
 
-/-- **A word gives an offset in `P`** with probability at most `|P ∩ [0, N)|·⌊2^w/N⌋/2^w`. -/
 theorem pr_hit_le (N w : ℕ) (P : ℕ → Prop) [DecidablePred P] :
     pr (fun u : Pous.Bits w => ∃ o : Fin N, Actual.wordIndex N u = some o ∧ P o) ≤
       ENNReal.ofReal (((range N).filter P).card * (2 ^ w / N : ℕ) / 2 ^ w) := by
@@ -372,7 +296,6 @@ theorem pr_hit_le (N w : ℕ) (P : ℕ → Prop) [DecidablePred P] :
   · push_cast
     ring
 
-/-- The first value `f` gives on `[0, c)`, if any, comes after only `none`s. -/
 theorem findSome?_range_some {β : Type} (f : ℕ → Option β) :
     ∀ (c : ℕ) {a : β}, (List.range c).findSome? f = some a → ∃ j < c, (∀ i < j, f i = none) ∧ f j = some a
   | 0, _, h => by simp at h
@@ -394,7 +317,6 @@ theorem pick_eq_none {N : ℕ} {b : Pous.Bits 512} :
   rw [List.findSome?_eq_none_iff]
   simp [List.mem_range]
 
-/-- `(a − a²)⁴ ≤ a⁴ − a⁸` at `a = 2^-64`. -/
 theorem quartic_le : (1 / 2 ^ 64 - 1 / 2 ^ 128 : ℝ) ^ 4 ≤ 1 / 2 ^ 256 - 1 / 2 ^ 512 := by
   have hp : ∀ k : ℕ, (1 : ℝ) / 2 ^ (64 * k) = (1 / 2 ^ 64) ^ k := fun k => by rw [div_pow, one_pow, ← pow_mul]
   rw [show (128 : ℕ) = 64 * 2 from rfl, show (256 : ℕ) = 64 * 4 from rfl, show (512 : ℕ) = 64 * 8 from rfl, hp, hp,
@@ -408,8 +330,6 @@ theorem quartic_le : (1 / 2 ^ 64 - 1 / 2 ^ 128 : ℝ) ^ 4 ≤ 1 / 2 ^ 256 - 1 / 
     _ ≤ a ^ 4 * (1 - a ^ 4) := mul_le_mul_of_nonneg_left (by linarith) (by positivity)
     _ = a ^ 4 - a ^ 8 := by ring
 
-/-- **The sampler rejects all of a block's words** with probability at most `2^-256 − 2^-512` for `0 < N < 2^64`:
-the block holds at least `4` words, independent, each rejected with probability `(2^w mod N)/2^w ≤ 2^-64 − 2^-128`. -/
 theorem pr_pick_none_le {N : ℕ} (h0 : 0 < N) (hN : N < 2 ^ 64) :
     pr (fun z : Pous.Bits 512 => pick N z = none) ≤ ENNReal.ofReal (1 / 2 ^ 256 - 1 / 2 ^ 512) := by
   set ρ : ℝ := ((2 ^ width N % N : ℕ) : ℝ) / 2 ^ width N with hρdef
@@ -434,9 +354,6 @@ theorem pr_pick_none_le {N : ℕ} (h0 : 0 < N) (hN : N < 2 ^ 64) :
           _ ≤ (1 / 2 ^ 64 - 1 / 2 ^ 128) ^ 4 := pow_le_pow_left₀ hρ0 hρ 4
           _ ≤ 1 / 2 ^ 256 - 1 / 2 ^ 512 := quartic_le
 
-/-- **Each offset has at most a `1/N` share**: the block's sample gives an offset in `P` with probability at most
-`|P ∩ [0, N)| / N`. Word `j` decides with the earlier words rejected, with probability at most
-`ρ^j·|P ∩ [0, N)|·⌊2^w/N⌋/2^w`, `ρ = (2^w mod N)/2^w`, and `⌊2^w/N⌋/2^w = (1 − ρ)/N`. -/
 theorem pr_pick_hit_le (N : ℕ) (P : ℕ → Prop) [DecidablePred P] :
     pr (fun z : Pous.Bits 512 => ∃ o : Fin N, pick N z = some o ∧ P o) ≤
       ENNReal.ofReal (((range N).filter P).card / N) := by
@@ -510,11 +427,8 @@ theorem pr_pick_hit_le (N : ℕ) (P : ℕ → Prop) [DecidablePred P] :
           ENNReal.ofReal_sum_of_nonneg fun j _ => mul_nonneg (pow_nonneg hρ0 _) hη0]
     _ ≤ ENNReal.ofReal (p / N) := ENNReal.ofReal_le_ofReal hsum
 
-/-! ## The arrangement -/
-
 theorem arrange_succ (j : ℕ → ℕ) (i : ℕ) : arrange j (i + 1) = arrange j i * Equiv.swap i (i + j i) := rfl
 
-/-- Later swaps leave the earlier positions alone. -/
 theorem arrange_fix (j : ℕ → ℕ) {p i : ℕ} (hp : p < i) : ∀ i', i ≤ i' → arrange j i' p = arrange j i p := by
   intro i' hi
   induction i', hi using Nat.le_induction with
@@ -530,7 +444,6 @@ theorem arrange_congr {j j' : ℕ → ℕ} : ∀ {k : ℕ}, (∀ l, l < k → j 
   | k + 1, h => by
     rw [arrange_succ, arrange_succ, arrange_congr (fun l hl => h l (by omega)), h k (by omega)]
 
-/-- Swaps inside `[0, U)` keep `[0, U)`. -/
 theorem arrange_lt {j : ℕ → ℕ} {U : ℕ} : ∀ {i : ℕ}, i ≤ U → (∀ l, l < i → l + j l < U) →
     ∀ p, p < U → arrange j i p < U
   | 0, _, _, p, hp => hp
@@ -548,7 +461,6 @@ theorem image_arrange {j : ℕ → ℕ} {U i : ℕ} (hi : i ≤ U) (hj : ∀ l, 
     exact mem_range.2 (arrange_lt hi hj p (mem_range.1 hp))
   · rw [card_image_of_injective _ (Equiv.injective _)]
 
-/-- The positions of `[0, U)` holding receipts of `C` number `|C ∩ [0, U)|`. -/
 theorem card_arrange_mem {j : ℕ → ℕ} {U i : ℕ} (hi : i ≤ U) (hj : ∀ l, l < i → l + j l < U) (C : Finset ℕ) :
     ((range U).filter fun p => arrange j i p ∈ C).card = ((range U).filter (· ∈ C)).card := by
   calc ((range U).filter fun p => arrange j i p ∈ C).card
@@ -557,13 +469,10 @@ theorem card_arrange_mem {j : ℕ → ℕ} {U i : ℕ} (hi : i ≤ U) (hj : ∀ 
     _ = (((range U).image (arrange j i)).filter (· ∈ C)).card := by rw [filter_image]
     _ = _ := by rw [image_arrange hi hj]
 
-/-! ## One window's sample on uniform first blocks -/
-
 theorem card_split (U i : ℕ) (hi : i ≤ U) (Q : ℕ → Prop) [DecidablePred Q] :
     ((range U).filter Q).card = ((range i).filter Q).card + ((range (U - i)).filter fun o => Q (i + o)).card := by
   rw [card_filter, card_filter, card_filter, ← sum_range_add_sum_Ico _ hi, sum_Ico_eq_sum_range]
 
-/-- **Rounds of uniform coins**: the adaptive product bound `pr_live_le` with no first coins. -/
 theorem pr_rounds_le (n : ℕ) (Z : Fin n → Type) [∀ i, Fintype (Z i)]
     (A : (i : Fin n) → ((j : Fin n) → Z j) → Prop) (h : (i : Fin n) → ((j : Fin n) → Z j) → ℝ≥0∞)
     (hA : ∀ i ω ω', (∀ j, j ≤ i → ω j = ω' j) → (A i ω ↔ A i ω'))
@@ -622,9 +531,6 @@ theorem openings_congr {m U k : ℕ} {b : Blocks m} (r r' : ℕ → ℕ) (hk : k
   rw [arrange_congr (offsets_congr r r' hk ha)]
 
 open Classical in
-/-- **One window's sample lands in `C`** with probability at most `(g/U)^k`, `g = |C ∩ [0, U)|`, and never when
-`g < k`: step `i` takes one of the `U − i` positions left, `g − i` of which hold receipts of `C` once the earlier steps
-took receipts of `C`, each with at most a `1/(U − i)` share. -/
 theorem pr_window_le {m U k : ℕ} (hU : U ≤ m) (hk : k ≤ U) (C : Finset ℕ) (r : ℕ → ℕ) :
     pr (fun b : Blocks m => accepted U k b ∧ openings U k b r ⊆ C) ≤
       ENNReal.ofReal (if k ≤ ((range U).filter (· ∈ C)).card
@@ -740,7 +646,6 @@ theorem pr_window_le {m U k : ℕ} (hU : U ≤ m) (hk : k ≤ U) (C : Finset ℕ
 
 
 open Classical in
-/-- A window's sample is rejected somewhere with probability at most `k·(2^-256 − 2^-512)`. -/
 theorem pr_not_accepted_le {m U k : ℕ} (hm : m < 2 ^ 64) (hU : U ≤ m) (hk : k ≤ U) :
     pr (fun b : Blocks m => ¬ accepted U k b) ≤ ENNReal.ofReal (k * (1 / 2 ^ 256 - 1 / 2 ^ 512)) := by
   refine (Bandwidth.pr_mono (fun b hb => (?_ : ∃ i : Fin m,
@@ -767,8 +672,6 @@ theorem pr_not_accepted_le {m U k : ℕ} (hm : m < 2 ^ 64) (hU : U ≤ m) (hk : 
         rw [← ENNReal.ofReal_natCast, ← ENNReal.ofReal_mul (by positivity)]
 
 open Classical in
-/-- **A window test on uniform first blocks** outputs true with probability at most `k·(2^-64 − 2^-512)` (some first
-word rejected) plus `(g/U)^k`, `g = |C ∩ [0, U)|`, the latter `0` when `g < k`. -/
 theorem pr_test_le {m U k : ℕ} (hm : m < 2 ^ 64) (hU : U ≤ m) (hk : k ≤ U) (C : Finset ℕ) :
     pr (test (m := m) U k C) ≤ ENNReal.ofReal (k * (1 / 2 ^ 256 - 1 / 2 ^ 512)) +
       ENNReal.ofReal (if k ≤ ((range U).filter (· ∈ C)).card
@@ -780,7 +683,6 @@ theorem pr_test_le {m U k : ℕ} (hm : m < 2 ^ 64) (hU : U ≤ m) (hk : k ≤ U)
   · exact Or.inr ⟨ha, hb ha⟩
   · exact Or.inl ha
 
-/-- The test reads the first `k` blocks only. -/
 theorem test_congr {m U k : ℕ} (C : Finset ℕ) {b b' : Blocks m} (h : ∀ i : Fin m, (i : ℕ) < k → b i = b' i) :
     test U k C b ↔ test U k C b' := by
   have ha : accepted U k b ↔ accepted U k b' :=
@@ -797,17 +699,12 @@ theorem test_congr {m U k : ℕ} (C : Finset ℕ) {b b' : Blocks m} (h : ∀ i :
   unfold test
   rw [ha, ho]
 
-/-- An accepted sample opens receipts among the window's `U`. -/
 theorem openings_subset {m U k : ℕ} {b : Blocks m} (r : ℕ → ℕ) (hk : k ≤ U) (hkm : k ≤ m)
     (ha : accepted U k b) : openings U k b r ⊆ range U := by
   intro q hq
   obtain ⟨p, hp, rfl⟩ := mem_image.1 hq
   exact mem_range.2 (arrange_lt hk (offsets_lt r hkm ha) p (by have := mem_range.1 hp; omega))
 
-/-! ## The pooled bound -/
-
-/-- Wrong receipts beyond the pooled bound leave the windows' samples, all landing on correct receipts, a probability
-of at most `δ`: `∏_t (g_t/U_t)^(d_t) ≤ δ`, and `0` when a window has fewer correct receipts than samples. -/
 theorem prod_le_of_pooled_lt {n : ℕ} (U g d : Fin n → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) (hg : ∀ t, g t ≤ U t)
     (h : pooled n U d δ < ∑ t, ((U t - g t : ℕ) : ℝ)) :
     ∏ t, (if d t ≤ g t then ((g t : ℝ) / U t) ^ d t else 0) ≤ δ := by
@@ -894,9 +791,6 @@ theorem prod_le_of_pooled_lt {n : ℕ} (U g d : Fin n → ℕ) {δ : ℝ} (hδ :
     _ ≤ (δ ^ ((S : ℝ)⁻¹)) ^ S := pow_le_pow_left₀ (Real.rpow_nonneg hP0 _) hroot S
     _ = δ := Real.rpow_inv_natCast_pow hδ hSpos.ne'
 
-/-! ## Pairs -/
-
-/-- A probability over a pair is the average over the first coordinate of its fibers' probabilities. -/
 theorem pr_eq_sum_div₁ {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → Prop) :
     pr Q = (∑ x, pr fun y => Q (x, y)) / Fintype.card X := by
   classical
@@ -909,7 +803,6 @@ theorem pr_eq_sum_div₁ {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → Pr
   rw [ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
   ring
 
-/-- A bound that holds at every value of the first coordinate, up to `e`, holds for the pair. -/
 theorem pr_le_add_of_fiber {X Y Z : Type} [Fintype X] [Fintype Y] [Fintype Z] (P : X × Y → Prop)
     (Q : X × Z → Prop) (e : ℝ≥0∞) (h : ∀ x, pr (fun y => P (x, y)) ≤ pr (fun z => Q (x, z)) + e) :
     pr P ≤ pr Q + e := by
@@ -920,7 +813,6 @@ theorem pr_le_add_of_fiber {X Y Z : Type} [Fintype X] [Fintype Y] [Fintype Z] (P
         rw [sum_add_distrib, ENNReal.add_div, sum_const, card_univ, nsmul_eq_mul]
     _ ≤ _ := add_le_add le_rfl (ENNReal.div_le_of_le_mul (mul_comm _ _).le)
 
-/-- An event of the first coordinate has its own probability. -/
 theorem pr_fst_eq {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (P : α → Prop) :
     pr (fun z : α × β => P z.1) = pr P := by
   classical
@@ -931,7 +823,6 @@ theorem pr_fst_eq {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (P : α
   rw [e, card_product, card_univ, Fintype.card_prod, Nat.cast_mul, Nat.cast_mul]
   exact ENNReal.mul_div_mul_right _ _ (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
 
-/-- An event of the second coordinate has at most its own probability. -/
 theorem pr_snd_le {α β : Type} [Fintype α] [Fintype β] (P : β → Prop) : pr (fun z : α × β => P z.2) ≤ pr P := by
   rcases isEmpty_or_nonempty α with hα | hα
   · exact (le_of_eq (Bandwidth.pr_eq_zero_of_card _ Fintype.card_eq_zero)).trans zero_le
@@ -944,9 +835,6 @@ theorem pr_true {α : Type} [Fintype α] [Nonempty α] : pr (fun _ : α => True)
   rw [filter_true, card_univ]
   exact ENNReal.div_self (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
 
-/-! ## The threshold coin -/
-
-/-- The probability of `below δ P`: `1` at `P ≤ δ`, else `⌊δ·2^512/P⌋/2^512`. -/
 noncomputable def coinWeight (δ P : ℝ) : ℝ := if P ≤ δ then 1 else ⌊δ * 2 ^ 512 / P⌋₊ / 2 ^ 512
 
 theorem coinWeight_nonneg (δ P : ℝ) : 0 ≤ coinWeight δ P := by
@@ -997,7 +885,6 @@ theorem pr_below {δ : ℝ} (hδ : 0 ≤ δ) (P : ℝ) : pr (below δ P) = ENNRe
       ENNReal.ofReal_div_of_pos (by positivity), ENNReal.ofReal_natCast, ENNReal.ofReal_pow (by norm_num),
       ENNReal.ofReal_ofNat, Nat.cast_pow, Nat.cast_ofNat]
 
-/-- The step's rounding: `ρ·coinWeight(Pρ) ≤ coinWeight(P) + 2^-512`. -/
 theorem mul_coinWeight_le {δ P ρ : ℝ} (hδ : 0 ≤ δ) (hP : 0 ≤ P) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) :
     ρ * coinWeight δ (P * ρ) ≤ coinWeight δ P + 1 / 2 ^ 512 := by
   by_cases h : P * ρ ≤ δ
@@ -1020,7 +907,6 @@ theorem mul_coinWeight_le {δ P ρ : ℝ} (hδ : 0 ≤ δ) (hP : 0 ≤ P) (hρ0 
       _ = δ / P := by field_simp
       _ ≤ coinWeight δ P + 1 / 2 ^ 512 := (lt_coinWeight_add (h'.trans_le hPρ)).le
 
-/-- **One window's step**: `coinWeight(Pρ)·(k(2^-64 − 2^-512) + ρ) ≤ coinWeight(P) + s/2^64`. -/
 theorem window_step_le {δ P ρ : ℝ} {k s : ℕ} (hδ : 0 ≤ δ) (hP : 0 ≤ P) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (hks : k ≤ s)
     (h0 : k = 0 → ρ = 1) :
     coinWeight δ (P * ρ) * (k * (1 / 2 ^ 256 - 1 / 2 ^ 512) + ρ) ≤ coinWeight δ P + s / 2 ^ 256 := by
@@ -1040,8 +926,6 @@ theorem window_step_le {δ P ρ : ℝ} {k s : ℕ} (hδ : 0 ≤ δ) (hP : 0 ≤ 
 
 theorem gap_nonneg : (0 : ℝ) ≤ 1 / 2 ^ 256 - 1 / 2 ^ 512 :=
   sub_nonneg.2 (one_div_le_one_div_of_le (by positivity) (pow_le_pow_right₀ (by norm_num) (by norm_num)))
-
-/-! ## The hybrid over windows -/
 
 section Run
 
@@ -1080,14 +964,11 @@ theorem bound_eq {t : Fin n} {ω ω' : SampleCoins n κ X} (e1 : D.size t ω = D
   unfold Run.bound
   rw [e3, e4, e1]
 
-/-- Windows `j ≤ t` read nothing of window `t`'s openings coin: replacing it leaves their sizes and correct receipts
-as they are. -/
 def SwapFree (t : Fin n) : Prop :=
   ∀ j, j ≤ t → ∀ (x : X) (c : Fin n → Pous.Bits κ) (K : Pous.Bits κ),
     D.size j (x, Function.update c t K) = D.size j (x, c) ∧
       D.correct j (x, Function.update c t K) = D.correct j (x, c)
 
-/-- Window `t`'s coin traded for the key: `((x, c), u), K ↦ ((x, c[t ↦ K]), u), c_t`. -/
 def swapCoin (t : Fin n) : (SampleCoins n κ X × Pous.Bits 512) × Pous.Bits κ ≃ (SampleCoins n κ X × Pous.Bits 512) × Pous.Bits κ where
   toFun z := (((z.1.1.1, Function.update z.1.1.2 t z.2), z.1.2), z.1.1.2 t)
   invFun z := (((z.1.1.1, Function.update z.1.1.2 t z.2), z.1.2), z.1.1.2 t)
@@ -1127,8 +1008,6 @@ theorem distinguisher_swap_iff (prf : Fin n → Pous.Bits κ → Blocks m) (δ :
     · have := h1 t (Nat.lt_succ_self _)
       rwa [hl t le_rfl, Function.update_self] at this
 
-/-- **The real side**: window `t`'s distinguisher on `prf t` under a uniform key is the potential after `t + 1`
-windows, its key read as window `t`'s coin, in a session whose windows `j ≤ t` read nothing of that coin. -/
 theorem pr_potential_succ [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n)
     (hS : SwapFree D t) :
     pr (D.potential prf δ ((t : ℕ) + 1)) = pr (fun x : (SampleCoins n κ X × Pous.Bits 512) × Pous.Bits κ =>
@@ -1144,8 +1023,6 @@ theorem pr_potential_succ [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m
         funext x
         exact propext (distinguisher_swap_iff D prf δ t hS x).symm
 
-/-- **The ideal side**: on uniform blocks, window `t`'s distinguisher outputs true with probability at most the
-potential after `t` windows plus `s_t/2^64`. -/
 theorem pr_distinguisher_le [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ}
     (hδ : 0 ≤ δ) (hm : m < 2 ^ 64) (t : Fin n) :
     pr (D.distinguisher prf δ t) ≤ pr (D.potential prf δ t) + ENNReal.ofReal (s t / 2 ^ 256) := by
@@ -1189,9 +1066,6 @@ theorem pr_distinguisher_le [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks
       _ = 0 := pr_false
       _ ≤ _ := zero_le
 
-/-! ## What the distinguisher is -/
-
-/-- **Window `t`'s distinguisher reads at most `s_t` first blocks.** -/
 theorem distinguisher_congr (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n)
     (y : SampleCoins n κ X × Pous.Bits 512) {b b' : Blocks m} (h : ∀ i : Fin m, (i : ℕ) < s t → b i = b' i) :
     D.distinguisher prf δ t (y, b) ↔ D.distinguisher prf δ t (y, b') := by
@@ -1199,7 +1073,6 @@ theorem distinguisher_congr (prf : Fin n → Pous.Bits κ → Blocks m) (δ : �
     test_congr _ fun i hi => h i (lt_of_lt_of_le hi (min_le_left _ _))
   simp only [Run.distinguisher, e]
 
-/-- **An honest session's distinguishers gain nothing.** -/
 theorem prfAdvantage_honest [Fintype X] (hc : ∀ t ω, range (D.size t ω : ℕ) ⊆ D.correct t ω)
     (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
     Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t) = 0 := by
@@ -1224,10 +1097,6 @@ theorem prfAdvantage_honest [Fintype X] (hc : ∀ t ω, range (D.size t ω : ℕ
 
 end Run
 
-/-! ## The junk-commitment hybrid -/
-
-/-- One window's step, as arithmetic: the potential after `t + 1` windows at the deployed commitment `p1`, at the
-junk one `j1`, the potentials after `t` windows at the junk commitment `jt` and the deployed one `pt`. -/
 theorem hybrid_step {p1 j1 jt pt β e a : ℝ≥0∞} (hj : j1 ≤ jt + e + a) (h : pt ≤ β) :
     p1 ≤ β + (e + (a + ((p1 - j1) + (jt - pt)))) :=
   calc p1 ≤ j1 + (p1 - j1) := le_add_tsub
@@ -1248,8 +1117,6 @@ theorem play_size (com : SampleCoins n κ X → Cm) (t : Fin n) (ω : SampleCoin
 theorem play_correct (com : SampleCoins n κ X → Cm) (t : Fin n) (ω : SampleCoins n κ X) :
     (F.play com).correct t ω = (F.view (com ω)).correct t ω := rfl
 
-/-- **The junk session's windows `j ≤ t` read nothing of window `t`'s coin**: its commitment reads none of coin `t`,
-and at each fixed commitment windows `j ≤ t` read only the other coins and the earlier openings coins. -/
 theorem swapFree_junk (hL : ∀ c, Live (F.view c)) (com : SampleCoins n κ X → Cm) (t : Fin n) :
     SwapFree (F.play (Committed.junk com t)) t := by
   intro j hj x c K
@@ -1265,8 +1132,6 @@ theorem hide_le [Fintype X] (com : SampleCoins n κ X → Cm) (prf : Fin n → P
   unfold Committed.hide
   exact add_le_add (tsub_le_self.trans (pr_le_one _)) (tsub_le_self.trans (pr_le_one _))
 
-/-- One window of the hybrid: the potential gains at most `s_t/2^64`, window `t`'s distinguisher's advantage at the
-junk commitment, and window `t`'s hiding term. -/
 theorem pr_potential_succ_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : SampleCoins n κ X → Cm)
     (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 64) (t : Fin n) {β : ℝ≥0∞}
     (h : pr ((F.play com).potential prf δ t) ≤ β) :
@@ -1281,7 +1146,6 @@ theorem pr_potential_succ_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : Sa
       (add_le_add (pr_distinguisher_le _ prf hδ hm t) le_rfl)
   exact hybrid_step hJ h
 
-/-- **The hybrid**: the potential after `t` windows is at most `δ` plus the first `t` windows' errors. -/
 theorem pr_potential_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : SampleCoins n κ X → Cm)
     (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 64) :
     ∀ t, t ≤ n → pr ((F.play com).potential prf δ t) ≤ ENNReal.ofReal δ +
@@ -1309,8 +1173,6 @@ theorem pr_potential_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : SampleC
       (le_of_eq ?_)
     ring
 
-/-- Every window landing on `prf` while the bounds multiply to at most `δ` has probability at most `δ` plus the
-windows' errors. -/
 theorem pr_landed_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : SampleCoins n κ X → Cm)
     (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 64) (E : SampleCoins n κ X → Prop)
     (hE : ∀ ω, E ω → (∀ t, (F.play com).lands t ω (prf t (ω.2 t))) ∧ ∏ t, (F.play com).bound t ω ≤ δ) :
@@ -1326,8 +1188,6 @@ theorem pr_landed_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : SampleCoin
 
 end Committed
 
-/-- The hybrid's error as the guarantees state it: `δ`, the windows' `s_t/2^64`, and the advantages, hiding terms and
-binding term summed apart. -/
 theorem error_toReal {n : ℕ} (s : Fin n → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) (a h : Fin n → ℝ≥0∞) (ha : ∀ t, a t ≤ 1)
     (hh : ∀ t, h t ≤ 1 + 1) (b : ℝ≥0∞) (hb : b ≤ 1) {p : ℝ≥0∞}
     (hp : p ≤ ENNReal.ofReal δ + ∑ t, (ENNReal.ofReal ((s t : ℝ) / 2 ^ 256) + (a t + h t)) + b) :
@@ -1355,8 +1215,6 @@ theorem error_toReal {n : ℕ} (s : Fin n → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) (
         rw [ENNReal.toReal_add hq' hb', ENNReal.toReal_add hq hh', ENNReal.toReal_add ENNReal.ofReal_ne_top ha',
           ENNReal.toReal_ofReal hpos]
 
-/-- An opened receipt that `Refused` lets through on an accepting outcome off the binding event is correct: a moved one
-is in the event. -/
 theorem opened_sub {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
     {D : Remote.Sample.Run n m s κ X}
     {prf : Fin n → Pous.Bits κ → Blocks m} {rest : SampleCoins n κ X → Fin n → ℕ → ℕ} {T : Trace (SampleCoins n κ X)}
@@ -1365,7 +1223,6 @@ theorem opened_sub {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintyp
     D.opened prf rest t ω ⊆ D.correct t ω :=
   fun p hp => (hR ω ha t p hp).resolve_right fun hmv => hb ⟨t, p, hp, hmv⟩
 
-/-- `PooledSample` at one committed session. -/
 theorem pooledSample {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X]
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (F : Committed n m s κ X Cm)
     (com : SampleCoins n κ X → Cm) (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 64)
@@ -1411,7 +1268,6 @@ theorem pooledSample {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [F
     (fun t => F.hide com prf δ t) (fun t => tsub_le_self.trans (pr_le_one _)) (fun t => hide_le F com prf δ t)
     (R.binding (F.play com) prf rest) (pr_le_one _) (hsplit.trans (add_le_add hall le_rfl))
 
-/-- A session that reads no commitment has no hiding term. -/
 theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X]
     (D : Remote.Sample.Run n m s κ X)
     (com : SampleCoins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
@@ -1420,8 +1276,6 @@ theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
       (pr (D.potential prf δ t) - pr (D.potential prf δ t)) = 0
   rw [tsub_self, tsub_self, add_zero]
 
-/-- `PooledSample` at one session: the committed bound at a view that reads no commitment, whose hiding terms vanish
-(`hide_const`). -/
 theorem pooledSampleLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ)
     (D : Remote.Sample.Run n m s κ X)

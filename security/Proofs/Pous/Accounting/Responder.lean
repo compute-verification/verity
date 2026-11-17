@@ -5,30 +5,7 @@ public import Proofs.ResourceAccounting.Actual.Confidence
 public import Proofs.Pous.Accounting.Memory
 import Proofs.Pous.Prob
 
-/-!
-# B2, proved
-
-`LengthCode`: the code's last `1` sits at the string's length, so equal codes have equal lengths, then equal bits.
-`TimelyTicks`: by induction on `j`, each period adding at most `span`.
-
-`B2` is a choice construction. The responder's state before challenge `j` is `stateOf`: `lengthCode M` of `X`'s state's
-content at `t x j`, a `τ`-bit code of `t x j` (injective on the ticks challenge `j` takes on the runs on time, `ticks`),
-and the help's `H`-bit code (`exists_code`), packed into `N` bits (`pack`). The preprocessing picks an outcome with the
-primitive and the encoding it is given (`pre`); the step at challenge `j` picks an outcome whose state codes to its
-state, with content of at most `M` bits, a tick among `ticks j`, and whose challenge `j` is the one asked (`out`), and
-returns that run's answer and its next state. At an outcome on time where `mem_X(t_j) ≤ M`, the pick has the same
-content (`LengthCode`, with `content_length_le`), the same tick and the same help (the codes are injective), so the same
-ingress until the earlier of the two next ticks, so by `CausalFrom` the same `acts` until then, so by `ArrivalRule` the
-same next tick (`next_tick_eq`), so the same period, `acts` and answer, and the same state at the next tick
-(`image_state_eq_of_acts`: what `X` does during a period includes its state at the period's end). `seqAnswers_eq` and
-`seqState_eq` fold that over the challenges.
-
-`B2Audit` applies PoUS's guarantee to that responder at `M = N − 1 − τ − H`: an outcome that passes with
-`mem_X(t_j) + 1 + τ + H ≤ N` is on time and one the responder answers correctly. The deployed forms get `TicksIn`
-from a fixed first tick (`ticksIn_of_start`: on time, challenge `j`'s tick is in `[t₀, t₀ + j·span]`).
-`B2Determines` reads `z` back with a left inverse of the length code (`decodeLen`). `B2_fixed` and `B2Audit_fixed`
-check that the fixed-schedule statements are the case `t x = t`, `τ = 0`.
--/
+/-! The proof of B2, a choice construction of the responder from the location's run. -/
 
 @[expose] public section
 
@@ -76,8 +53,6 @@ theorem TimelyTicks : Guarantees.TimelyTicks := by
 
 namespace Responder
 
-/-- What `X` does during `[t, u)`, `t < u`, fixes its state at `u` as seen (its state at the end of the period's
-last tick is among what it does). -/
 theorem image_state_eq_of_acts {L : Type*} [LinearOrder L] {Ω : Type*} {S : Ω → Actual.Run L} {X : Finset L}
     {t u : ℕ} (htu : t < u) {r r' : Ω} (h : (S r).acts X (Set.Ico t u) = (S r').acts X (Set.Ico t u)) :
     ((S r).state X u).image (S r).seen = ((S r').state X u).image (S r').seen := by
@@ -104,9 +79,6 @@ variable {L : Type*} [LinearOrder L] {I : Pous.IdealModel} {sch : Pous.Scheme I}
   {S : Pous.Outcome sch k → Actual.Run L} {X : Finset L} {t : Pous.Outcome sch k → ℕ → ℕ} {α : Type*}
   {help : Pous.Outcome sch k → α}
 
-/-- **The next tick agrees**: at two outcomes with the same help, challenge `j`, tick `t j` and content there, the next
-challenge tick is the same. Until the earlier of the two, what reaches `X` is the same (`IngressFixed`), so what `X`
-does is (`CausalFrom`), and the earlier one is then the other's too (`ArrivalRule`). -/
 theorem next_tick_eq (hc : CausalFrom S) (hinc : ∀ x (j : Fin k), t x j < t x (j + 1)) (hin : IngressFixed S X t help)
     (har : ArrivalRule S X t help) {x x' : Pous.Outcome sch k} (j : Fin k) (hh : help x = help x')
     (hi : x.2.2 j = x'.2.2 j) (ht : t x j = t x' j)
@@ -123,8 +95,6 @@ theorem next_tick_eq (hc : CausalFrom S) (hinc : ∀ x (j : Fin k), t x j < t x 
     exact har x' x j _ hh.symm hi.symm ht.symm hs hacts.symm rfl
 
 omit [LinearOrder L] in
-/-- On time with the first tick at `t₀`, challenge `j`'s tick is in `[t₀, t₀ + j·span]`, so with `k·span ≤ 2^τ` it
-takes at most `2^τ` values. -/
 theorem ticksIn_of_start (hinc : ∀ x (j : Fin k), t x j < t x (j + 1)) {t₀ span τ : ℕ} (h0 : ∀ x, t x 0 = t₀)
     (hτ : k * span ≤ 2 ^ τ) : TicksIn t span τ := by
   intro j
@@ -148,11 +118,9 @@ theorem ticksIn_of_start (hinc : ∀ x (j : Fin k), t x j < t x (j + 1)) {t₀ s
       omega
   exact_mod_cast this
 
-/-- The ticks challenge `j` takes on the runs on time. -/
 def ticks (t : Pous.Outcome sch k → ℕ → ℕ) (span : ℕ) (j : ℕ) : Set ℕ := {v | ∃ x, Timely (t x) span k ∧ t x j = v}
 
 omit [LinearOrder L] in
-/-- With `TicksIn`, each challenge's ticks on the runs on time have a `τ`-bit code, injective on them. -/
 theorem exists_tick_code {span τ : ℕ} (h : TicksIn t span τ) :
     ∃ ct : ℕ → ℕ → Pous.Bits τ, ∀ j < k, Set.InjOn (ct j) (ticks t span j) := by
   have : ∀ j : ℕ, ∃ c : ℕ → Pous.Bits τ, j < k → Set.InjOn c (ticks t span j) := by
@@ -184,7 +152,6 @@ theorem pack_inj {A B N : ℕ} (hN : A + B ≤ N) {a a' : Pous.Bits A} {b b' : P
     simp only [pack, show ¬ (A + i.val < A) by omega, dite_false, e, i.isLt, dite_true] at this
     exact this
 
-/-- The first `A` bits of an `N`-bit state. -/
 def unpack (A N : ℕ) (hN : A ≤ N) (σ : Pous.Bits N) : Pous.Bits A := fun i => σ ⟨i, by omega⟩
 
 theorem unpack_pack {A B N : ℕ} (hN : A ≤ N) (a : Pous.Bits A) (b : Pous.Bits B) :
@@ -193,7 +160,6 @@ theorem unpack_pack {A B N : ℕ} (hN : A ≤ N) (a : Pous.Bits A) (b : Pous.Bit
   simp [unpack, pack, i.isLt]
 
 open Classical in
-/-- A left inverse of `lengthCode M` on strings of at most `M` bits. -/
 noncomputable def decodeLen (M : ℕ) (a : Pous.Bits (M + 1)) : List Bool :=
   if h : ∃ l : List Bool, l.length ≤ M ∧ lengthCode M l = a then Classical.choose h else []
 
@@ -202,7 +168,6 @@ theorem decodeLen_lengthCode {M : ℕ} {l : List Bool} (hl : l.length ≤ M) : d
   rw [decodeLen, dite_eq_left h]
   exact LengthCode M (Classical.choose_spec h).1 hl (Classical.choose_spec h).2
 
-/-- A help with at most `2^H` values has an `H`-bit code, injective on them. -/
 theorem exists_code {β α : Type*} [Finite β] (help : β → α) {H : ℕ}
     (h : (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) : ∃ c : α → Pous.Bits H, Set.InjOn c (Set.range help) := by
   have hle : (Set.range help).encard ≤ (Set.univ : Set (Pous.Bits H)).encard := by
@@ -272,22 +237,16 @@ variable {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme
   (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (span M τ H N : ℕ)
   (c : α → Pous.Bits H) (ct : ℕ → ℕ → Pous.Bits τ)
 
-/-- The responder's state before challenge `j` at the outcome `x`: `X`'s content at `t x j` coded in `M + 1` bits, the
-tick's code and the help's code. -/
 noncomputable def stateOf (x : Pous.Outcome sch k) (j : ℕ) : Pous.Bits N :=
   pack (M + 1) (τ + H) N (lengthCode M ((S x).content X (t x j))) (pack τ H (τ + H) (ct j (t x j)) (c (help x)))
 
 open Classical in
-/-- The preprocessing: the state at the first challenge of an outcome with the given primitive and encoding. -/
 noncomputable def pre : Pous.Preprocessor sch N := fun _ pp C ω =>
   if h : ∃ x : Pous.Outcome sch k, x.1 = ω ∧ sch.enc W ω x.2.1 = (pp, C) then
     stateOf sch S X t help M τ H N c ct (Classical.choose h) 0
   else fun _ => false
 
 open Classical in
-/-- What the step at challenge `j` returns from the state `σ` and the index `i`: the answer and the next state of an
-outcome whose state codes to `σ`, with content of at most `M` bits and a tick among `ticks j`, and whose challenge `j`
-is `i`. -/
 noncomputable def out (j : ℕ) (σ : Pous.Bits N) (i : Fin sch.B) : Pous.Bits sch.ℓ × Pous.Bits N :=
   if hj : j < k then
     if h : ∃ x : Pous.Outcome sch k, x.2.2 ⟨j, hj⟩ = i ∧ ((S x).content X (t x j)).length ≤ M ∧
@@ -297,15 +256,12 @@ noncomputable def out (j : ℕ) (σ : Pous.Bits N) (i : Fin sch.B) : Pous.Bits s
     else (fun _ => false, σ)
   else (fun _ => false, σ)
 
-/-- The responder: `out`, with no query. -/
 noncomputable def resp : Pous.SeqResponderOn sch N 0 0 0 where
   step _ _ j σ i := .ret (out sch S X t ans help span M τ H N c ct j σ i)
   bounded _ _ _ _ _ := fun _ => by simp [Pous.OracleAlgorithm.mulDepth, Pous.OracleAlgorithm.keyWork, Pous.OracleAlgorithm.ringWork]
 
 variable {sch W S X t ans help span M τ H N c ct}
 
-/-- When the setup fixes `X`'s state at the first challenge, that tick and the help, the preprocessing returns
-`stateOf … 0`. -/
 theorem pre_spec (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k) :
     pre sch W S X t help M τ H N c ct W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1 =
       stateOf sch S X t help M τ H N c ct x 0 := by
@@ -322,8 +278,6 @@ variable (hc : CausalFrom S) (hinc : ∀ x (j : Fin k), t x j < t x (j + 1)) (hi
   (hcode : Set.InjOn c (Set.range help)) (hN : M + 1 + τ + H ≤ N)
 include hc hinc hin har hct hcode hN
 
-/-- At an outcome on time where `X`'s content at `t x j` has at most `M` bits, the step at challenge `j` answers as `X`
-does and, unless `j` is the last challenge, moves to `X`'s next state. -/
 theorem out_spec (x : Pous.Outcome sch k) (hx : Timely (t x) span k) (j : ℕ) (hj : j < k)
     (hm : ((S x).content X (t x j)).length ≤ M) :
     (out sch S X t ans help span M τ H N c ct j (stateOf sch S X t help M τ H N c ct x j) (x.2.2 ⟨j, hj⟩)).1 =
@@ -363,7 +317,6 @@ theorem out_spec (x : Pous.Outcome sch k) (hx : Timely (t x) span k) (j : ℕ) (
     simp only [stateOf]
     rw [hc', hnext, hhelp]
 
-/-- **The responder answers as `X` does** at every outcome on time where `mem_X(t_j) ≤ M` at each challenge. -/
 theorem seqAnswers_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k) (hx : Timely (t x) span k)
     (hm : ∀ j : Fin k, (S x).mem X (t x j) ≤ M) :
     Pous.seqAnswers ((Pous.ringRO B w p).answer x.1)
@@ -386,8 +339,6 @@ theorem seqAnswers_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k
   funext i
   simp [is, i.isLt]
 
-/-- **The state before each challenge is `stateOf`** at every outcome on time where `mem_X(t_j) ≤ M` at each
-challenge. -/
 theorem seqState_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k) (hx : Timely (t x) span k)
     (hm : ∀ j : Fin k, (S x).mem X (t x j) ≤ M) (j : ℕ) (hj : j < k) :
     Pous.Sampled.seqState ((Pous.ringRO B w p).answer x.1)
@@ -472,14 +423,8 @@ theorem B2AddsP2Ring : Guarantees.B2AddsP2Ring := by
     (fun z => ticksIn_of_start (hinc z) (h0 z) hτ) hcount htime hm hζ
   rwa [Nat.cast_ofNat] at this
 
-/-! ### The fixed-schedule statements
-
-A fixed schedule `t : ℕ → ℕ` is the case `t x = t` for every outcome, with `span = t k` and `τ = 0`; each of the six
-fixed-schedule statements is proved here, word for word, from its restatement (its `Passes` is `PassesFixed`). -/
-
 namespace Responder
 
-/-- `Passes` on a fixed schedule `t`. -/
 def PassesFixed {L : Type*} {I : Pous.IdealModel} (sch : Pous.Scheme I) {k : ℕ} (W : Pous.Bits sch.n)
     (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ)
     (x : Pous.Outcome sch k) : Prop :=
@@ -518,7 +463,6 @@ end
 end Responder
 
 open Responder in
-/-- **`B2` on a fixed schedule**, from `B2` at `t x = t`, `span = t k` and `τ = 0`. -/
 theorem B2_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k : ℕ)
     (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
     (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (M H N : ℕ)
@@ -538,7 +482,6 @@ theorem B2_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pou
   exact ⟨A₁, A₂, fun x hm => hA x (fixed_timely ht k) hm⟩
 
 open Responder in
-/-- **`B2Audit` on a fixed schedule**, from `B2Audit` at `t x = t`, `span = t k` and `τ = 0`. -/
 theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p))
     (N k : ℕ) (δ ε : ℝ≥0∞) (hsec : Pous.AuditSecureOn sch .sequential N 0 0 0 k δ ε)
     (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
@@ -554,7 +497,6 @@ theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch 
     (B2Audit sch N k δ ε hsec W S X (fun _ => t) (t k) ans help 0 H hc (fun _ j => ht (Nat.lt_succ_self j))
       (fixed_setup hset) (fixed_ingress hin) fixed_arrival fixed_ticksIn hcount)
 
-/-- **`B2P2Ring` on a fixed schedule**, from `B2Audit_fixed`. -/
 theorem B2P2Ring_fixed :
   Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
     ∀ {L : Type*} [LinearOrder L] (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
@@ -577,7 +519,6 @@ theorem B2P2Ring_fixed :
   exact B2Audit_fixed _ _ _ _ _ hsec W S X t ans help H hc ht hset hin hcount
 
 open Responder in
-/-- **`B2Determines` on a fixed schedule**, from `B2Determines` at `t z x = t`, `span = t k` and `τ = 0`. -/
 theorem B2Determines_fixed :
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k q : ℕ)
     (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
@@ -605,7 +546,6 @@ theorem B2Determines_fixed :
     (fun _ => fixed_ticksIn) hcount (fun _ _ => fixed_timely ht k) hm hζ
 
 open Responder in
-/-- **`B2Adds` on a fixed schedule**, from `B2Adds` at `t z x = t`, `span = t k` and `τ = 0`. -/
 theorem B2Adds_fixed :
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N c : ℕ)
     (δ ε : ℝ≥0∞), Pous.AuditSecureOn sch .sequential N 0 0 0 c δ ε →
@@ -628,7 +568,6 @@ theorem B2Adds_fixed :
       (fun _ _ j => ht (Nat.lt_succ_self j)) (fun z => fixed_setup (hset z)) (fun z => fixed_ingress (hin z))
       (fun _ => fixed_arrival) (fun _ => fixed_ticksIn) hcount (fun _ _ => fixed_timely ht c) hm hζ)
 
-/-- **`B2AddsP2Ring` on a fixed schedule**, from `B2Adds_fixed`. -/
 theorem B2AddsP2Ring_fixed :
   Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
     ∀ {L : Type*} [LinearOrder L] (q k : ℕ) (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)

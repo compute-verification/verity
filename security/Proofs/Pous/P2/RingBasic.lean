@@ -4,19 +4,7 @@ public import Mathlib.NumberTheory.LegendreSymbol.Basic
 public import Definitions.Pous.P2.Cost
 public import Proofs.Pous.P2.Domain
 
-/-!
-# P2 in the ring model: the cost bound, the labels, and correctness
-
-The cost model is `security/Definitions/Pous/P2/Cost.lean`. This file proves:
-
-* `ringBounded_of_bounded`: `Bounded D Q → RingBounded D Q Q` (every round counts at most once, every query at most
-  once in each count), so `MeetsOn` at `(D, Q, Q)` implies `Meets` at `(D, Q)` (`meets_of_meetsOn`);
-* `sqE_bijective`: under an odd labeling, P2's parity-signed square is a bijection of `Z/p` when `p` is a prime
-  `≡ 3 mod 4` (`−1` is a non-residue, and `x`, `−x` have labels of opposite parity);
-* `p2ring_correct`: `decBlock` inverts `encBlock` on every primitive, so `p2ring` is `Correct`;
-* `complete`: `p2ring` is correct, holds `W`, is within the space bound, decodes a block with two multiplication
-  rounds, two key queries and three ring queries, and storing `C` whole passes the audit with no query.
--/
+/-! P2 in the ring model: the cost bound, the labels' bijection and correctness. -/
 
 @[expose] public section
 
@@ -25,13 +13,10 @@ namespace PousP2Ring
 open Pous PousP2p
 open scoped ENNReal
 
-/-! ### Programs: sequencing and the ring cost -/
-
 section OracleAlgorithm
 
 variable {B w p : ℕ} [NeZero p] {α β : Type}
 
-/-- Run `P`, then `g` on its output. -/
 def pbind : OracleAlgorithm (ringRO B w p) α → (α → OracleAlgorithm (ringRO B w p) β) → OracleAlgorithm (ringRO B w p) β
   | .ret a, g => g a
   | .round qs k, g => .round qs fun as => pbind (k as) g
@@ -118,7 +103,6 @@ theorem ringWork_le_work (P : OracleAlgorithm (ringRO B w p) α) : P.ringWork f 
       simp only [OracleAlgorithm.ringWork, OracleAlgorithm.work]
       exact Nat.add_le_add (List.countP_le_length) (ih _)
 
-/-- **The old bound is a special case**: a `(D, Q)`-bounded program is `(D, Q, Q)`-bounded in the ring model. -/
 theorem ringBounded_of_bounded {D Q : ℕ} {P : OracleAlgorithm (ringRO B w p) α} (h : P.Bounded D Q) :
     P.RingBounded D Q Q := fun ω =>
   ⟨(mulDepth_le_depth _ P).trans (h ω).1, (keyWork_le_work _ P).trans (h ω).2,
@@ -126,7 +110,6 @@ theorem ringBounded_of_bounded {D Q : ℕ} {P : OracleAlgorithm (ringRO B w p) �
 
 end OracleAlgorithm
 
-/-- Security against every `(D, Q, Q)`-bounded responder is security against every `(D, Q)`-bounded one. -/
 theorem auditSecure_of_auditSecureOn {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (reveal : Reveal)
     (S D Q k : ℕ) (δ ε : ℝ≥0∞) (h : AuditSecureOn sch reveal S D Q Q k δ ε) :
     AuditSecure sch reveal S D Q k δ ε := by
@@ -138,13 +121,9 @@ theorem auditSecure_of_auditSecureOn {B w p : ℕ} [NeZero p] (sch : Scheme (rin
       intro W A₁ A₂
       exact h W A₁ ⟨A₂.step, fun W pp j σ i => ringBounded_of_bounded (A₂.bounded W pp j σ i)⟩
 
-/-- **`MeetsOn` at `(D, Q, Q)` implies `Meets` at `(D, Q)`**, in either reveal mode, for every scheme in the ring
-model: the ring bound only enlarges the class of responders the requirement quantifies over. -/
 theorem meets_of_meetsOn {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (reveal : Reveal) (D Q k : ℕ)
     (ε : ℝ≥0∞) (h : MeetsOn sch reveal D Q Q k ε) : Meets sch reveal D Q k ε :=
   ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, auditSecure_of_auditSecureOn sch reveal _ D Q k _ ε h.2.2.2.2⟩
-
-/-! ### Labels -/
 
 section Labels
 
@@ -176,7 +155,6 @@ theorem lab_injective (hp2 : p ≤ 2 ^ w) : Function.Injective (lab w φ) := fun
 theorem lab_symm (τ : Fin p) : lab w φ (φ.1.symm τ) = bitsOfNat w τ := by
   simp [lab]
 
-/-- An odd labeling fixes `0` when `p` is odd. -/
 theorem lab_zero (hodd : p % 2 = 1) : φ.1 0 = 0 := by
   have h := φ.2 0
   rw [neg_zero] at h
@@ -193,7 +171,6 @@ theorem lab_eq_zero_iff (hodd : p % 2 = 1) {x : ZMod p} : φ.1 x = 0 ↔ x = 0 :
 theorem val_lab_neg (hodd : p % 2 = 1) {x : ZMod p} (hx : x ≠ 0) : (φ.1 (-x) : ℕ) = p - φ.1 x := by
   rw [φ.2 x, Fin.val_neg, ite_eq_right ((lab_eq_zero_iff φ hodd).not.2 hx)]
 
-/-- `x` and `−x` have labels of opposite parity, for `x ≠ 0` and `p` odd. -/
 theorem parity_neg (hodd : p % 2 = 1) {x : ZMod p} (hx : x ≠ 0) : (φ.1 (-x) : ℕ) % 2 ≠ (φ.1 x : ℕ) % 2 := by
   rw [val_lab_neg φ hodd hx]
   have := (φ.1 x).isLt
@@ -224,7 +201,6 @@ theorem sigmaK_lt {K r : Bits w} (h : bitsVal r < p) : bitsVal (sigmaK p K r) < 
   · exact h
 
 omit [NeZero p] in
-/-- `σ_K` is an involution on the labels below `p`. -/
 theorem sigmaK_sigmaK {K r : Bits w} (h : bitsVal r < p) : sigmaK p K (sigmaK p K r) = r := by
   have hx : (fun i => xor ((fun i => xor (r i) (K i) : Bits w) i) (K i) : Bits w) = r :=
     funext fun i => by simp
@@ -235,8 +211,6 @@ theorem sigmaK_sigmaK {K r : Bits w} (h : bitsVal r < p) : sigmaK p K (sigmaK p 
     rw [e, e]
 
 end Labels
-
-/-! ### The model's answers on valid labels -/
 
 section Answers
 
@@ -261,8 +235,6 @@ theorem answer_offset (j : Fin B) :
   (lab_symm ω.1 _).symm
 
 end Answers
-
-/-! ### The parity-signed square is a bijection -/
 
 section Square
 
@@ -310,14 +282,11 @@ theorem sqE_surjective (hp : p.Prime) (h4 : p % 4 = 3) (φ : OddLabeling p) : Fu
 theorem sqE_rhoE (hp : p.Prime) (h4 : p % 4 = 3) (φ : OddLabeling p) (y : ZMod p) : sqE φ (rhoE φ y) = y :=
   Function.invFun_eq (sqE_surjective hp h4 φ y)
 
-/-- `ρ` is the inverse of `sqE`: any `x` with `sqE x = y` is `ρ(y)`. -/
 theorem rhoE_eq (hp : p.Prime) (h4 : p % 4 = 3) (φ : OddLabeling p) {x y : ZMod p} (h : sqE φ x = y) :
     rhoE φ y = x :=
   sqE_injective hp h4 φ ((sqE_rhoE hp h4 φ y).trans h.symm)
 
 end Square
-
-/-! ### Correctness -/
 
 section Correct
 
@@ -326,7 +295,6 @@ variable {B w p b : ℕ} [NeZero p]
 theorem nthAns_zero {w : ℕ} (a : Bits w) (as : List (Bits w)) : nthAns (a :: as) 0 = a := rfl
 theorem nthAns_succ {w : ℕ} (a : Bits w) (as : List (Bits w)) (i : ℕ) : nthAns (a :: as) (i + 1) = nthAns as i := rfl
 
-/-- `decBlock`'s run, unfolded: `u = σ_K(sqFix(c, c²))`, then the label of `sqFix(u, u²) + (−τ)`. -/
 theorem run_decBlock (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (j : Fin B) (c : Bits w) :
     (decBlock B w p b j c).run f =
       bitsOfNat b (bitsVal (f (RingQry.add
@@ -335,7 +303,6 @@ theorem run_decBlock (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (j : Fin B)
             (sigmaK p (f (RingQry.key j .mask)) (sqFix p c (f (RingQry.mul c c)))))))
         (negL p (f (RingQry.key j .offset)))))) := rfl
 
-/-- `decBlock` on a valid label `lab c`: the label of `sqE(σ_K(sqE c)) − t`, read mod `2^b`. -/
 theorem decBlock_lab (hp2 : p ≤ 2 ^ w) (hodd : p % 2 = 1) (ω : (ringRO B w p).Ω) (j : Fin B) (c : ZMod p) :
     (decBlock B w p b j (lab w ω.1 c)).run ((ringRO B w p).answer ω) =
       bitsOfNat b (bitsVal (lab w ω.1
@@ -348,7 +315,6 @@ theorem decBlock_lab (hp2 : p ≤ 2 ^ w) (hodd : p % 2 = 1) (ω : (ringRO B w p)
   conv_lhs => rw [hu']
   rw [answer_mul ω hp2, sqFix_lab ω.1 hp2 hodd, answer_add ω hp2]
 
-/-- **`decBlock` inverts `encBlock`** on every primitive, for a payload label below `p`. -/
 theorem decBlock_encBlock (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (ω : (ringRO B w p).Ω) (j : Fin B)
     {v : Bits w} (hv : bitsVal v < p) :
     (decBlock B w p b j (encBlock ω.1 (ω.2 j).1 (ω.2 j).2 v)).run ((ringRO B w p).answer ω) =
@@ -383,15 +349,9 @@ theorem p2ring_spaceBound [NeZero B] (hsp : 20 * w ≤ 21 * b) : (p2ring B w p b
   have hB : (0 : ℚ) ≤ B := Nat.cast_nonneg _
   nlinarith
 
-/-- One block's decoding: two rounds with a multiplication, two key queries, three ring queries. -/
 theorem decBlock_bounded (j : Fin B) (c : Bits w) : (decBlock B w p b j c).RingBounded 2 2 3 := fun _ =>
   ⟨le_of_eq rfl, le_of_eq rfl, le_of_eq rfl⟩
 
-/-- **Completeness (non-vacuity) of P2 in the ring model.** For every prime `p ≡ 3 mod 4` with `2^b ≤ p ≤ 2^w` and
-`20·w ≤ 21·b`: `p2ring B w p b` is correct, holds `W` and is within the space bound; decoding one block
-(`decBlock`, the program `dec` runs on every block) is `RingBounded 2 2 3`: two rounds that contain a
-multiplication, two key queries and three ring queries, on every primitive; and storing `C` whole and answering by
-lookup (`honestPre`, no query) passes the sequential audit with probability 1 for every `k`. -/
 theorem complete (B w p b : ℕ) [NeZero B] [NeZero p] (hp : p.Prime) (h4 : p % 4 = 3) (hb : 2 ^ b ≤ p)
     (hp2 : p ≤ 2 ^ w) (hsp : 20 * w ≤ 21 * b) :
     (p2ring B w p b).Correct ∧ (p2ring B w p b).CodeHoldsW ∧ (p2ring B w p b).SpaceBound Params.expansion ∧

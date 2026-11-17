@@ -3,13 +3,7 @@ module
 public import Definitions.InferenceOnly.Guarantees.PartitionCovers
 public import Proofs.Core.Circuit
 
-/-!
-# Proof of Lemma A.1: a `(c, k)`-partition's completed proof blocks cover the circuit
-
-Proof block `u`'s completion `I ∪ in(I)` with inputs `in(I)` is a subcircuit: a gate of `I` reads only gates of `I ∪ in(I)`,
-and a source in it is in `in(I)`, since every gate of `I` is an operation gate and so reads some gate (positive fan-in).
-It computes exactly `I`, so the completions compute every operation gate.
--/
+/-! Proof of Lemma A.1: a `(c, k)`-partition's completed proof blocks cover the circuit. -/
 
 @[expose] public section
 
@@ -17,7 +11,6 @@ namespace InferenceOnly.SecurityProofs
 
 open Verity Slowdown.Covering Finset
 
-/-- Proof block `u`'s completion `I ∪ in(I)`, with inputs `in(I)`, on a circuit of positive fan-in. -/
 def completion {d : RegisteredCircuit} {B : ℕ} (P : Partition d.D B)
     (hfan : ∀ g, d.D.isInput g = false → (d.D.reads g).Nonempty) (u : Fin B) : Subcircuit d.D where
   gates := P.gates u ∪ d.D.into (P.gates u)

@@ -4,23 +4,8 @@ public import Proofs.Pous.Lemmas.PeriodDeployed
 public import Proofs.Pous.Period
 public import Proofs.Pous.P2.RingTrunc
 
-/-!
-# Proofs of PoUS's per-period guarantee at the deployed ring budget, and of its honest and nontrivial lemmas
-
-`periodHeldDeployed` is `periodHeld` at `(RING_D, RING_Q, RING_L)`. The budget sits outside both regions where
-`P2RingAuditSecure` is refuted: `RING_D` is one round short of a root (`rootProg_not_ringBounded`), so recomputation
-(two roots, `32,894` rounds) does not fit it, and the truncation family refutes `k = 105` only from `L = 2^169`
-(`not_p2RingAuditSecure_trunc`, at `t = 168`, `m = 501,819`: `(501819/2^19)^105 ≈ 0.01006`), far above `RING_L = 2^64`.
-At `t = 167` its `m = 501,788` gives `(501788/2^19)^105 ≈ 0.009996 < 1%`, so `2^169` is where that family starts.
-
-The honest period (`periodHeldHonest`): the honest strategy is the lookup strategy (`periodHeld_honest`), which keeps
-its state and runs a `ret` every round (`seqRounds_ret`), so each answer takes no round or query, and its state is
-`C`'s `FULL` bits, which the capacity account holds at tick `0` of the window; the code's sample never fails at a
-32-byte id (`coinView_some`, `uniformOn_split`), and a lookup returns the challenged block; `63,000,000 · 105 + 2^30 + 437,248,000 = 8,125,989,824 ≤
-S₀ = 8,169,621,180`; `⌊854,000 · 349 / 36,155⌋ = 8,243 ≤ 16,446`; and `16,447 · 36,155 / 349 ≥ 1.995 · 854,000`.
-The empty period has probability 1 of the accept-all event, and the honest one held `105 · FULL` bit-ticks
-(`periodHeldNontrivial`).
--/
+/-! The proofs of PoUS's per-period guarantee at the deployed ring budget, which lies outside both regions where
+`P2RingAuditSecure` is refuted, and of its honest and nontrivial lemmas. -/
 
 @[expose] public section
 
@@ -35,8 +20,6 @@ theorem periodHeldDeployed : PeriodHeldDeployed := by
   intro hP
   exact periodHeld RING_D RING_Q RING_L hP
 
-/-! ## The budget -/
-
 theorem limit_ns : LIMIT_NS = 854000 := rfl
 
 theorem deadline_rounds : DEADLINE_ROUNDS = 8243 := by
@@ -44,8 +27,6 @@ theorem deadline_rounds : DEADLINE_ROUNDS = 8243 := by
   rw [limit_ns, Nat.floor_eq_iff (by norm_num [ROUND_NS])]
   norm_num [ROUND_NS]
 
-/-- **`RING_D` is one round short of a root**: `rootProg` at P2's exponent takes `16,447` multiplication rounds on
-every primitive (`PousP2Ring.rootProg_cost`), so no root finishes within `RING_D`. -/
 theorem rootProg_not_ringBounded (e : ℕ) (a : Bits 16448) (Q L : ℕ) :
     ¬ (PousP2Ring.rootProg 16446 e a : OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) _).RingBounded RING_D Q L := by
   intro h
@@ -55,10 +36,6 @@ theorem rootProg_not_ringBounded (e : ℕ) (a : Bits 16448) (Q L : ℕ) :
   have h2 : 16446 + 1 ≤ 16446 := h1
   omega
 
-/-- **`P2RingAuditSecure` is false from `L = 2^169`**, if `p` is prime: keeping `501,819` blocks without their low
-`168` bits (`16,280` bits a block, within the state bound `8,169,621,180`) and searching the `2^168` completions
-(`PousP2Ring.trunc_seq_accepted`, `2` multiplication rounds, `2` key queries and `2^169` ring queries an answer) passes
-the `105` sequential challenges with probability at least `(501819/2^19)^105 > 1% + 2^-129 + 2^-130`. -/
 theorem not_p2RingAuditSecure_trunc (hP : PrimeP16448) (D Q L : ℕ) (hD : 2 ≤ D) (hQ : 2 ≤ Q) (hL : 2 ^ 169 ≤ L) :
     ¬ P2RingAuditSecure D Q L := by
   intro hsec
@@ -87,8 +64,6 @@ theorem not_p2RingAuditSecure_trunc (hP : PrimeP16448) (D Q L : ℕ) (hD : 2 ≤
   rw [hL', hR, ENNReal.ofReal_le_ofReal_iff (by positivity)] at h
   have hlt : 1 / 100 + ((2⁻¹ : ℝ) ^ 129 + (2⁻¹ : ℝ) ^ 130) < ((501819 : ℝ) / 2 ^ 19) ^ 105 := by norm_num
   exact absurd h (not_le.2 hlt)
-
-/-! ## The honest and the empty period -/
 
 theorem S_eq : Pous.EndToEnd.S = 8169621180 := PousP2Ring.stateBound_p2ring_b19 _ _
 

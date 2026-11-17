@@ -4,18 +4,7 @@ public import Definitions.Pous.Guarantees.StreamedWipe
 import Mathlib.Analysis.Complex.ExponentialBounds
 import Proofs.Pous.StreamedWipe.Bound
 
-/-!
-# The streamed-label wipe at 2.6 TB and 74,000 challenges
-
-`streamed_wipe` at `N = 40,625,000,000`, `b = 512`, `M = N · 512`, `k = 74,000` and `g = N − 15,610,000`:
-
-- **sampling** (`sampling_le`): `(1 − D/N)^k ≤ e^(−k·D/N) ≤ 2^-41` once `k·D/N ≥ 41 · 0.6931471808 > 41 · ln 2`; here
-  `k·D/N = 28.434`;
-- **compression** (`compression_le`): `C(N, N−D+1) = C(N, D−1) ≤ N^(D−1) ≤ 2^(36·(D−1))` and `k ≤ 2^17`, so the term is
-  at most `2^(17 + 36·(D−1) + (D−1)·b + E − q) ≤ 2^-41` once `q ≥ E + 17 + 548·(D−1) + 41 = E + 8,554,279,510`.
-
-Both lemmas are stated for any `N`, `D` and `k`, so that no power of the deployed numbers is ever evaluated.
--/
+/-! The streamed-label wipe at 2.6 TB and 74,000 challenges. -/
 
 @[expose] public section
 
@@ -24,7 +13,6 @@ namespace PousStreamedWipe
 open Pous Pous.StreamedWipe
 open scoped ENNReal
 
-/-- **Sampling.** `((N − D)/N)^k ≤ 2^-t` once `k · D / N ≥ t · 0.6931471808`. -/
 theorem sampling_le {N D k t : ℕ} (hDN : D ≤ N) (hN : 0 < N) (h : (t : ℝ) * 0.6931471808 ≤ k * D / N) :
     (((N - D : ℕ) : ℝ≥0∞) / N) ^ k ≤ (2⁻¹ : ℝ≥0∞) ^ t := by
   have hNr : (0 : ℝ) < N := by exact_mod_cast hN
@@ -55,8 +43,6 @@ theorem sampling_le {N D k t : ℕ} (hDN : D ≤ N) (hN : 0 < N) (h : (t : ℝ) 
   rw [hl, hr]
   exact ENNReal.ofReal_le_ofReal hreal
 
-/-- **Compression.** With `M = N · b`, `N ≤ 2^36` and `k ≤ 2^17`, the compression term at `g = N − D` is at most
-`2^-41` once `q ≥ E + 17 + (36 + b) · (D − 1) + 41`. -/
 theorem compression_le {N D k b q M E : ℕ} (hD : 1 ≤ D) (hDN : D ≤ N) (hN : N ≤ 2 ^ 36) (hk : k ≤ 2 ^ 17)
     (hM : M = N * b) (hq : 17 + 36 * (D - 1) + (D - 1) * b + E + 41 ≤ q) :
     (k : ℝ≥0∞) * (N.choose (N - D + 1) : ℝ≥0∞) * 2 ^ (M + E) / 2 ^ (q + (N - D + 1) * b) ≤ (2⁻¹ : ℝ≥0∞) ^ 41 := by
@@ -81,7 +67,6 @@ theorem compression_le {N D k b q M E : ℕ} (hD : 1 ≤ D) (hDN : D ≤ N) (hN 
 theorem half_pow_succ_add (t : ℕ) : (2⁻¹ : ℝ≥0∞) ^ (t + 1) + (2⁻¹ : ℝ≥0∞) ^ (t + 1) = (2⁻¹ : ℝ≥0∞) ^ t := by
   rw [← two_mul, pow_succ, mul_comm, mul_assoc, ENNReal.inv_mul_cancel two_ne_zero ENNReal.ofNat_ne_top, mul_one]
 
-/-- **`StreamedWipeMeets2600GB`**: `streamed_wipe` at `g = N − 15,610,000`, with the error split `2^-41 + 2^-41`. -/
 theorem streamed_wipe_meets_2600GB : Pous.Guarantees.StreamedWipeMeets2600GB := by
   intro q E κ prf P hq
   refine (streamed_wipe 40625000000 74000 512 q (40625000000 * 512) E κ (40625000000 - 15610000) prf P).trans

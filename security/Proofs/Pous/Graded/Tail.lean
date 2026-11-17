@@ -11,20 +11,7 @@ import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Pous.Sanity
 import Proofs.Pous.Thm1.Theorem1iTimed
 
-/-!
-# The tail rule for sequential rounds
-
-`pr_seq_le` bounds the probability that all `k` rounds succeed by `c^k` when each succeeds with conditional
-probability at most `c` given the history. `pr_hits_ge_le_binomial` is its tail form: the probability that at most
-`t` of the `k` rounds fail is at most `binTail k t c = P[Bin(k, c) ≥ k − t] = Σ_{j ≤ t} C(k, j)·(1 − c)^j·c^(k − j)`,
-for every `c ≤ 1`. It is one induction on `k`, as for `pr_seq_le`. In the step, a first round that succeeds with
-probability `q ≤ c` leaves at most `q·T(t) + (1 − q)·T(t − 1)`, which is at most `c·T(t) + (1 − c)·T(t − 1)` because
-the bound grows with `t` (`binTail_le_succ`, `mix_le`). The bound also grows with `c` on `[0, 1]` (`binTail_mono`), so
-a certified `p₀ ≤ r` may be replaced by `r`.
-
-Pure probability: no game and no primitive. A round is any function of the history, through a state `x : X` that
-`nxt` advances and `ok` judges.
--/
+/-! The tail rule for sequential rounds, pure probability with no game and no primitive. -/
 
 @[expose] public section
 
@@ -33,10 +20,6 @@ namespace PousGraded
 open Pous PousThm1
 open scoped ENNReal
 
-/-! ### The binomial tail -/
-
-/-- `P[Bin(k, c) ≥ k − t]`: at most `t` failures among `k` independent rounds that each succeed with probability
-`c`. -/
 noncomputable def binTail (k t : ℕ) (c : ℝ≥0∞) : ℝ≥0∞ :=
   ∑ j ∈ Finset.range (t + 1), (k.choose j : ℝ≥0∞) * (1 - c) ^ j * c ^ (k - j)
 
@@ -68,13 +51,11 @@ theorem binTail_succ_succ (k t : ℕ) (c : ℝ≥0∞) :
   simp only [Nat.choose_zero_right, Nat.cast_one, pow_zero, one_mul, mul_one, Nat.sub_zero, pow_succ']
   ring
 
-/-- More tolerated failures, a larger bound. -/
 theorem binTail_le_succ (k t : ℕ) (c : ℝ≥0∞) : binTail k t c ≤ binTail k (t + 1) c := by
   unfold binTail
   rw [Finset.sum_range_succ _ (t + 1)]
   exact le_self_add
 
-/-- A mixture of `a` and `b ≤ a` grows with the weight on `a`. -/
 theorem mix_le {q c a b : ℝ≥0∞} (hqc : q ≤ c) (hc : c ≤ 1) (hba : b ≤ a) :
     q * a + (1 - q) * b ≤ c * a + (1 - c) * b := by
   obtain ⟨e, rfl⟩ : ∃ e, c = q + e := ⟨c - q, (add_tsub_cancel_of_le hqc).symm⟩
@@ -86,7 +67,6 @@ theorem mix_le {q c a b : ℝ≥0∞} (hqc : q ≤ c) (hc : c ≤ 1) (hba : b �
     _ ≤ q * a + (1 - (q + e)) * b + e * a := by gcongr
     _ = (q + e) * a + (1 - (q + e)) * b := by rw [add_mul]; exact add_right_comm _ _ _
 
-/-- **The bound grows with `c` on `[0, 1]`.** -/
 theorem binTail_mono {c c' : ℝ≥0∞} (hcc : c ≤ c') (hc' : c' ≤ 1) : ∀ k t, binTail k t c ≤ binTail k t c'
   | 0, t => by rw [binTail_zero_left, binTail_zero_left]
   | k + 1, 0 => by
@@ -102,8 +82,6 @@ theorem binTail_mono {c c' : ℝ≥0∞} (hcc : c ≤ c') (hc' : c' ≤ 1) : ∀
         _ ≤ c' * binTail k (t + 1) c' + (1 - c') * binTail k t c' :=
             mix_le hcc hc' (binTail_le_succ k t c')
 
-/-! ### Probability -/
-
 theorem pr_add_pr_not {α : Type} [Fintype α] [Nonempty α] (P : α → Prop) :
     pr P + pr (fun x => ¬ P x) = 1 := by
   classical
@@ -115,8 +93,6 @@ theorem pr_not {α : Type} [Fintype α] [Nonempty α] (P : α → Prop) : pr (fu
   ENNReal.eq_sub_of_add_eq (ne_top_of_le_ne_top ENNReal.one_ne_top (pr_le_one P))
     ((add_comm _ _).trans (pr_add_pr_not P))
 
-/-- **A first-coordinate branch.** On `P`, an event of conditional probability at most `a`; off `P`, one of
-conditional probability at most `b`. -/
 theorem pr_ite_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonempty β]
     (P : α → Prop) (R₁ R₂ : α → β → Prop) (a b : ℝ≥0∞) (h₁ : ∀ x, pr (R₁ x) ≤ a) (h₂ : ∀ x, pr (R₂ x) ≤ b) :
     pr (fun y : α × β => (P y.1 ∧ R₁ y.1 y.2) ∨ (¬ P y.1 ∧ R₂ y.1 y.2)) ≤
@@ -165,24 +141,16 @@ theorem pr_ite_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonemp
     _ = (pr P * a + pr (fun x => ¬ P x) * b) * (Fintype.card α * Fintype.card β) := by
         rw [pr_def P, pr_def (fun x => ¬ P x), e3, e1, e2]
 
-/-! ### Rounds -/
-
-/-- The state after the history `h`, from round `j` in state `x`. -/
 def after {X : Type} {B : ℕ} (nxt : ℕ → X → Fin B → X) : ℕ → List (Fin B) → X → X
   | _, [], x => x
   | j, i :: is, x => after nxt (j + 1) is (nxt j x i)
 
 open Classical in
-/-- The rounds of `is` that fail, from round `j` in state `x`: round `j` at index `i` succeeds iff `ok j x i`, and
-moves to the state `nxt j x i`. -/
 noncomputable def misses {X : Type} {B : ℕ} (nxt : ℕ → X → Fin B → X) (ok : ℕ → X → Fin B → Prop) :
     ℕ → List (Fin B) → X → ℕ
   | _, [], _ => 0
   | j, i :: is, x => (if ok j x i then 0 else 1) + misses nxt ok (j + 1) is (nxt j x i)
 
-/-- **The tail rule.** If after every history of fewer than `k` indices a uniform next index succeeds with
-probability at most `c ≤ 1`, then at most `t` of the `k` rounds fail with probability at most
-`P[Bin(k, c) ≥ k − t]`. At `t = 0` it is `pr_seq_le`'s `c^k`. -/
 theorem pr_hits_ge_le_binomial {X : Type} {B : ℕ} [NeZero B] (nxt : ℕ → X → Fin B → X) (ok : ℕ → X → Fin B → Prop)
     (c : ℝ≥0∞) (hc : c ≤ 1) :
     ∀ (k t j : ℕ) (x : X),

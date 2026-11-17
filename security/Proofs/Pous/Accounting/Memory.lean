@@ -6,15 +6,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.Data.Sym.Sym2.Init
 
-/-!
-# Memory adds, by counting: the guarantees
-
-Each statement of `security/Definitions/Pous/Accounting/Guarantees/Memory.lean`, proved:
-
-* `Memory/Counting.lean`: the counting core, Markov's inequality over the disjoint fibres;
-* `Memory/Adds.lean`: the composition with PoUS's guarantee: each fibre coded into `S` bits, the coded adversary
-  answering as the location does, and the union over the challenges; the isolation forms at `H = 0`.
--/
+/-! The proofs that memory adds, by counting. -/
 
 @[expose] public section
 

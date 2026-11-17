@@ -39,14 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Poub.BoundReceipt.Audit
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Receipts bound to the matmul when the locations' answers depend on the mix (`e > 0`)
-
-At each value of the mix the node is a `Node` (`InteractiveNode.under`), so `BoundReceiptLink`'s compressions apply
-as they are, each at a fixed mix. The guess is taken over the node's queries instead of one location's: if neither
-location queried block `j`'s point, a mix that differs only there gives the same receipts (`QueryDetermined`), so a
-right receipt there is a guess, at most one value of the mix in `2^h` for each location's receipt.
--/
+/-! Receipts bound to the matmul when the locations' answers depend on the mix (`e > 0`). -/
 
 @[expose] public section
 
@@ -60,14 +53,11 @@ variable {N a b h S L q Lz qz : ℕ}
 
 theorem under_ofNode (A : Node N a b h S L q Lz qz) (G : Mix N a b h) : (ofNode A).under G = A := rfl
 
-/-- A node whose answers ignore the mix has `QueryDetermined`: each location's run changes nowhere it didn't query. -/
 theorem ofNode_queryDetermined (A : Node N a b h S L q Lz qz) : (ofNode A).QueryDetermined := by
   intro E z G G' hg hr
   exact ⟨(Chip.run_congr ((A.gpu z).world E noStream (atZ G z)) (atZ G' z) _ hg).1,
     (Chip.run_congr ((A.rest E).world E z G) (atE G' E) _ hr).1⟩
 
-/-- If neither location made block `j`'s receipt under `G₁`, a mix `G₂` equal to `G₁` off `(j, E_j, z_j)` gives the
-same receipts at both locations. -/
 theorem receipts_off (A : InteractiveNode N a b h S L q Lz qz) (hA : A.QueryDetermined) (E : Store N b)
     (z : Store N a) (j : Fin N) (G₁ G₂ : Mix N a b h)
     (hg : ¬ (A.under G₁).MadeAtGpu E z G₁ j) (hr : ¬ (A.under G₁).MadeAtRest E z G₁ j)
@@ -86,7 +76,6 @@ theorem receipts_off (A : InteractiveNode N a b h S L q Lz qz) (hA : A.QueryDete
     rw [noStream_eq r] at hy
     exact hy
 
-/-- The GPU's receipt for a block neither location made is right for at most a `2^-h` fraction of mixes. -/
 theorem card_guess_gpu (A : InteractiveNode N a b h S L q Lz qz) (hA : A.QueryDetermined) (E : Store N b)
     (z : Store N a) (j : Fin N)
     [DecidablePred (fun G : Mix N a b h => (A.under G).gpuReceipts E z G j = G (j, E j, z j) ∧
@@ -104,7 +93,6 @@ theorem card_guess_gpu (A : InteractiveNode N a b h S L q Lz qz) (hA : A.QueryDe
   · rw [hx, ← h₁.1, ← h₂.1, ht]
   · exact hoff x hx
 
-/-- The rest's receipt for a block neither location made is right for at most a `2^-h` fraction of mixes. -/
 theorem card_guess_rest (A : InteractiveNode N a b h S L q Lz qz) (hA : A.QueryDetermined) (E : Store N b)
     (z : Store N a) (j : Fin N)
     [DecidablePred (fun G : Mix N a b h => (A.under G).restReceipts E z G j = G (j, E j, z j) ∧
@@ -211,7 +199,7 @@ theorem BoundReceiptLinkInteractive : ResourceAccounting.Guarantees.BoundReceipt
   refine (pr_or_le _ _).trans ?_
   refine (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ((pr_or_le _ _).trans (add_le_add ?_ ?_))).trans
     (le_of_eq (add_assoc _ _ _).symm)
-  · -- the sample misses the blocks made nowhere
+  ·
     have hc := pr_le_of_card (fun x : Store N b × (Store N a × Mix N a b h × (Fin s → Fin N)) =>
         (gQ x.1 x.2.1 x.2.2.1 ∪ rQ x.1 x.2.1 x.2.2.1).card < k ∧
           ∀ i, x.2.2.2 i ∈ gQ x.1 x.2.1 x.2.2.1 ∪ rQ x.1 x.2.1 x.2.2.1) (N ^ s) ((k - 1) ^ s) hN (by
@@ -228,7 +216,7 @@ theorem BoundReceiptLinkInteractive : ResourceAccounting.Guarantees.BoundReceipt
       · simp [hk])
     refine hc.trans (le_of_eq ?_)
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
-  · -- a guessed receipt: its point queried at neither location
+  ·
     refine (pr_exists_le _).trans ?_
     have hi : ∀ i : Fin s, pr (fun x : Store N b × (Store N a × Mix N a b h × (Fin s → Fin N)) =>
         ((A.under x.2.2.1).gpuReceipts x.1 x.2.1 x.2.2.1 (x.2.2.2 i) =
@@ -254,7 +242,7 @@ theorem BoundReceiptLinkInteractive : ResourceAccounting.Guarantees.BoundReceipt
         exact card_filter_prod_le' _ _ _ (fun I => InteractiveNode.card_guess_rest A hA E z (I i))
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans (le_of_eq ?_)
     rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, mul_div_assoc', mul_comm]
-  · -- the GPU made `k − m`: compressing the store, at each mix
+  ·
     refine (pr_le_of_card _ (2 ^ lam) (q.choose (k - m)) (by positivity) (by
       rw [hΩ]
       refine (card_filter_prod_le' _ _ (q.choose (k - m) * Fintype.card (Store N b)) (fun y => ?_)).trans
@@ -264,7 +252,7 @@ theorem BoundReceiptLinkInteractive : ResourceAccounting.Guarantees.BoundReceipt
       simpa [Fintype.card_prod] using this)).trans (le_of_eq ?_)
     push_cast
     rfl
-  · -- the rest made `m + 1`: compressing the tile outputs, at each mix
+  ·
     refine (pr_le_of_card _ (2 ^ lam) (qz.choose (m + 1)) (by positivity) (by
       rw [hΩ]
       refine (card_filter_prod_le _ _ (qz.choose (m + 1) * Fintype.card (Store N a) *
@@ -278,7 +266,6 @@ theorem BoundReceiptLinkInteractive : ResourceAccounting.Guarantees.BoundReceipt
     rfl
 
 
-/-- At a node whose answers ignore the mix, `BoundReceiptLinkInteractive` is `BoundReceiptLink`. -/
 theorem boundReceiptLink_of_interactive : ResourceAccounting.Guarantees.BoundReceiptLink :=
   fun N a b h S L q Lz qz s k m F cTag cEnc w Fz lam A hm =>
     BoundReceiptLinkInteractive N a b h S L q Lz qz s k m F cTag cEnc w Fz lam (InteractiveNode.ofNode A)

@@ -6,23 +6,7 @@ import Proofs.Pous.StreamedWipe.Bound
 import Proofs.Pous.StreamedWipe.Deployed
 import Proofs.Pous.StreamedWipe.Family
 
-/-!
-# The streamed-label wipe per server, with the count of the missing labels
-
-`streamed_wipe` at `b = 512`, `M = n · 512 + R`, `k` reads and `g = n − D` with `D = ⌈n/r⌉`, as
-`streamed_wipe_le_of_reads`, with the compression term's count `C(n, D − 1)` bounded by
-`2^(m·(⌊log₂⌊3n/m⌋⌋ + 1))`, `m = D − 1` (`choose_le_two_pow_countBits`), instead of `2^n`:
-
-- `C(n, m) · m! ≤ n^m` (`Nat.descFactorial_le_pow`);
-- `m^m ≤ 3^m · m!` (`pow_self_le_three_pow_mul_factorial`, from `m^m/m! ≤ e^m` and `e < 3`);
-- `3n < m · 2^(⌊log₂⌊3n/m⌋⌋ + 1)`, so `(3n)^m ≤ m^m · 2^(m·(⌊log₂⌊3n/m⌋⌋ + 1))`.
-
-`StreamedWipeMeetsServer` is it at `M = M_s`, `StreamedWipeMeetsServer5GB` at the 5 GB point, and the four servers'
-instances are the 5 GB form at their `n`, `R`, `r` and `k` (the H200's the measured deployment `StreamedWipe.h200`),
-each `(r − 1)^k · 2^129 ≤ r^k` and each `B(n, r, k, R) ≤ 4·10^10` decided by the kernel. Each guarantee is its claim at
-`StreamedWipe.Accepts`, whose `winRealBy` and `wipeDistinguisherBy` are `winReal` and `wipeDistinguisher` by
-definition. The claims' witnesses are `security/Proofs/Pous/StreamedWipe/Witnesses.lean`.
--/
+/-! The streamed-label wipe per server, with the count of the missing labels. -/
 
 @[expose] public section
 
@@ -31,7 +15,6 @@ namespace PousStreamedWipe
 open Pous Pous.StreamedWipe
 open scoped ENNReal
 
-/-- `m^m ≤ 3^m · m!`, from `m^m / m! ≤ e^m` and `e < 3`. -/
 theorem pow_self_le_three_pow_mul_factorial (m : ℕ) : m ^ m ≤ 3 ^ m * m.factorial := by
   have h := Real.pow_div_factorial_le_exp (m : ℝ) (Nat.cast_nonneg m) m
   have he : Real.exp m ≤ 3 ^ m := by
@@ -41,7 +24,6 @@ theorem pow_self_le_three_pow_mul_factorial (m : ℕ) : m ^ m ≤ 3 ^ m * m.fact
   rw [div_le_iff₀ hf] at h
   exact_mod_cast h.trans (mul_le_mul_of_nonneg_right he hf.le)
 
-/-- **The count of the missing labels**: `C(n, m) ≤ 2^(m·(⌊log₂⌊3n/m⌋⌋ + 1))`. -/
 theorem choose_le_two_pow_countBits (n m : ℕ) : n.choose m ≤ 2 ^ countBits n m := by
   unfold countBits
   rcases Nat.eq_zero_or_pos m with rfl | hm
@@ -60,8 +42,6 @@ theorem choose_le_two_pow_countBits (n m : ℕ) : n.choose m ≤ 2 ^ countBits n
     _ ≤ 3 ^ m * m.factorial * 2 ^ (m * (L + 1)) :=
         Nat.mul_le_mul_right _ (pow_self_le_three_pow_mul_factorial m)
 
-/-- **Compression with a count.** With `M = N · b + R`, `k ≤ 2^j` and `C(N, D − 1) ≤ 2^c`, the compression term at
-`g = N − D` is at most `2^-t` once `q ≥ j + c + (D − 1) · b + R + E + t`. -/
 theorem compression_le_count {N D k b q M E t j R c : ℕ} (hD : 1 ≤ D) (hDN : D ≤ N) (hk : k ≤ 2 ^ j)
     (hC : N.choose (D - 1) ≤ 2 ^ c) (hM : M = N * b + R) (hq : j + c + (D - 1) * b + R + E + t ≤ q) :
     (k : ℝ≥0∞) * (N.choose (N - D + 1) : ℝ≥0∞) * 2 ^ (M + E) / 2 ^ (q + (N - D + 1) * b) ≤ (2⁻¹ : ℝ≥0∞) ^ t := by
@@ -80,8 +60,6 @@ theorem compression_le_count {N D k b q M E t j R c : ℕ} (hD : 1 ≤ D) (hDN :
     ENNReal.le_div_iff_mul_le (Or.inl (pow_ne_zero _ two_ne_zero)) (Or.inl (ENNReal.pow_ne_top ENNReal.ofNat_ne_top))]
   exact_mod_cast hnat
 
-/-- `streamed_wipe` at `g = n − ⌈n/r⌉` on a server of `M = n · 512 + R` bits, with the count of the missing labels
-and the error split `2^-129 + 2^-129`. -/
 theorem streamed_wipe_le_of_reads_tight {r k n R q M E κ : ℕ} (hr : 0 < r) (hk : (r - 1) ^ k * 2 ^ 129 ≤ r ^ k)
     (hn : 0 < n) (hM : M = n * 512 + R) (hq : fillShare n r k + R + E ≤ q)
     (prf : Bits κ → Fin n → Bits 512) (P : Prover n k 512 q M E) :
@@ -104,23 +82,18 @@ theorem streamed_wipe_le_of_reads_tight {r k n R q M E κ : ℕ} (hr : 0 < r) (h
           (compression_le_count hD1 hDn Nat.lt_log2_self.le (choose_le_two_pow_countBits n _) hM (by omega))
     _ = (2⁻¹ : ℝ≥0∞) ^ 128 := half_pow_succ_add 128
 
-/-- **`StreamedWipeMeetsReadsTight`**: `streamed_wipe_le_of_reads_tight` at `M = n · 512 + R`. -/
 theorem streamed_wipe_meets_reads_tight : Pous.Guarantees.StreamedWipeMeetsReadsTight :=
   fun _ _ hr hk _ hn _ _ _ _ prf P hq => streamed_wipe_le_of_reads_tight hr hk hn rfl hq prf P
 
-/-- **`StreamedWipeMeetsServer`**: `streamed_wipe_le_of_reads_tight` at `M = M_s = 512 · n + R`. -/
 theorem streamed_wipe_meets_server : Pous.Guarantees.StreamedWipeMeetsServer :=
   fun _ _ _ hMs hn _ _ hr hk _ _ _ prf P hq =>
     streamed_wipe_le_of_reads_tight hr hk hn (by rw [hMs, mul_comm]) hq prf P
 
-/-- **`StreamedWipeMeetsServer5GB`**: `StreamedWipeMeetsServer` with `B(n, r, k, R) ≤ 4·10^10`. -/
 theorem streamed_wipe_meets_server_5GB : Pous.Guarantees.StreamedWipeMeetsServer5GB :=
   fun Ms n R hMs hn r k hr hk hB q E κ prf P hq =>
     streamed_wipe_meets_server Ms n R hMs hn r k hr hk q E κ prf P
       (by unfold OperatingPoint at hB; omega)
 
-/-- **`StreamedWipeMeetsServerH200`**: the 5 GB form at the deployed H200 as measured, `StreamedWipe.h200`:
-`n = 2,319,974,400`, `M_s = 1,206,038,560,768`, `r = 62` and `k = 5500`. -/
 theorem streamed_wipe_meets_server_H200 : Pous.Guarantees.StreamedWipeMeetsServerH200 := fun q E κ prf P hq =>
   streamed_wipe_meets_server_5GB h200.Ms h200.n h200.R (by decide +kernel) (by decide +kernel) h200.r h200.k
     (by decide +kernel) (by decide +kernel) (by unfold OperatingPoint; decide +kernel) q E κ prf P hq

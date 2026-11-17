@@ -37,16 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Poub.Bandwidth.Joint
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Bandwidth adds, by counting (Mbw), for the chip as a tick transducer
-
-`AuditJoint` for the chip of `Ticked.lean`, the audited location read tick by tick, when its view determines `z`: a
-decoder `ζ` recovers `z` from the chip's state at the window's start and what it observed in the window (HBM's
-replies, the rest's signals and the oracle's answers), section 5's "the chip's view (state at the seed, its links'
-deliveries in the window) determines `z`". The state, HBM and the rest may depend on `z` as well as the store; the rest
-ignores the oracle (`e = 0`). `Ticked.jointDevice` is the transducer as a `JointDevice` whose chip outputs its tags
-and `ζ` of what it observed, through `Ticked.prog`, capped and translated as `Ticked.device` is.
--/
+/-! Bandwidth adds, by counting (Mbw), for the chip as a tick transducer whose view determines `z`. -/
 
 @[expose] public section
 
@@ -59,15 +50,11 @@ namespace Ticked
 
 variable {N b h S n : ℕ}
 
-/-- The rest at a fixed oracle as one side source: at `IChip.addr v a`, its bit at `a` after the chip sent `v`. -/
 def jointSide (rest : Rest N b h) (E : Store N b) (a : ℕ) : Bool :=
   match (Encodable.decode a : Option (List Bool × ℕ)) with
   | some p => side rest E (fun _ _ => false) p.1 p.2
   | none => false
 
-/-- **The transducer as a joint device** over `T` ticks, for a decoder `ζ`: its state, HBM as device memory and the
-rest at a fixed oracle as side sources, each from the store and `z`; the chip runs `prog` ending in the tags and `ζ` of
-what it observed, capped at `c` side bits and `q` queries. -/
 def jointDevice (C : Chip N b h S) (βs T : ℕ) (ζ : Bits S → List (Obs h) → Bits n)
     (state : Store N b → Bits n → Bits S) (hbm : Bits n → Hbm N b) (rest : Bits n → Rest N b h) (c q : ℕ) :
     JointDevice N b h S c 0 q n where
@@ -119,12 +106,6 @@ open Bandwidth.Ticked
 
 variable {N b h S n : ℕ}
 
-/-- **Mbw for the chip as a tick transducer, in the reads form** (`e = 0`, passive memory): with the rest ignoring the
-oracle and its link delivering `βs` bits a tick, the chip's state at the window's start `S` bits fixed by the store and
-`z`, HBM hearing only the chip and at most `qt` queries a tick, if the chip's view determines `z` (`hζ`) then the
-probability over the store, `z`, the oracle and the sample that the chip's tags pass while
-`hbmBits + S + βs T + λ < k b + n` is at most `AuditRO`'s bound. So an accept gives `n ≤ hbmBits − cert_bw`, with
-`cert_bw = k b − S − βs T − λ` what `audit_reads_ro` certifies. -/
 theorem audit_joint (C : Ticked.Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o, (C.ask st o).length ≤ qt)
     (ζ : Bits S → List (Obs h) → Bits n) (state : Store N b → Bits n → Bits S) (hbm : Bits n → Hbm N b)
     (rest : Bits n → Rest N b h) (hrest : ∀ z E O O', rest z E O = rest z E O')
@@ -149,9 +130,6 @@ theorem audit_joint (C : Ticked.Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o, (
     have := hx.2
     nlinarith
 
-/-- **Mbw for the chip as a tick transducer, in the capacity form**: without passive memory, every tick's reply has
-width at most `βm`, and the probability that the chip's tags pass while `βm T + S + βs T + λ < k b + n` is at most
-`AuditRO`'s bound. -/
 theorem audit_joint_capacity (C : Ticked.Chip N b h S) (βm βs qt T : ℕ) (hw : ∀ st o, C.width st o ≤ βm)
     (hq : ∀ st o, (C.ask st o).length ≤ qt) (ζ : Bits S → List (Obs h) → Bits n)
     (state : Store N b → Bits n → Bits S) (hbm : Bits n → Hbm N b) (rest : Bits n → Rest N b h)

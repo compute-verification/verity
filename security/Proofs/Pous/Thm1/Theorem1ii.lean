@@ -3,20 +3,7 @@ module
 public import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 
-/-!
-# Report Theorem 1(ii), untimed: a proof of `Pous.Guarantees.Theorem1ii`
-
-The basic compression argument (report §3, proof of Theorem 1(ii)). Fix `W`, `A₁` and the product-form responder
-`A₂`. For a setup `a = (ω, r)` with `σ = A₁(W, pp, C, ω)`, block `i` is *good* if `A₂(W, pp, σ, ω, i) = C i`, and
-`E a` says the wrong blocks fit in `β` bits: `S + B + #wrong·ℓ ≤ β`.
-
-1. Averaging (`pr_all_good_le`). Off `E`, `#good ≤ p₀·B`, so `k` uniform challenges all land on good blocks with
-   probability `(#good/B)^k ≤ p₀^k`. Hence `Pr[accept] ≤ Pr[E] + p₀^k`.
-2. Compression. The message `(σ, patch)`, where `patch i = some (C i)` on wrong blocks and `none` on good ones, takes
-   at most `2^S·2^B·2^(β−S−B) = 2^β` values on `E` (`card_fits_le`), so it has a `β`-bit code (`exists_code`). The
-   expander decodes the message and returns the patched block where there is one, else `A₂`'s answer. On `E` it
-   rebuilds `C`, so `Pr[E] ≤ π` by `INC(β, π)`.
--/
+/-! Report Theorem 1(ii), untimed: a proof of `Pous.Guarantees.Theorem1ii` by the basic compression argument. -/
 
 @[expose] public section
 
@@ -25,9 +12,6 @@ namespace PousThm1ii
 open Pous
 open scoped ENNReal
 
-/-! ### Uniform probability -/
-
-/-- `pr` does not depend on how the sample space is labelled. -/
 theorem pr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (P : β → Prop) :
     pr (fun a => P (e a)) = pr P := by
   classical
@@ -36,8 +20,6 @@ theorem pr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (P : �
   rw [← Fintype.card_subtype, ← Fintype.card_subtype]
   exact Fintype.card_congr (e.subtypeEquiv fun _ => Iff.rfl)
 
-/-- **Conditioning on the first coordinate.** If every fibre off `E` has probability at most `c`, the product event
-has probability at most `Pr[E] + c`. -/
 theorem pr_prod_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonempty β]
     (P : α → β → Prop) (E : α → Prop) (c : ℝ≥0∞) (h : ∀ a, ¬ E a → pr (P a) ≤ c) :
     pr (fun x : α × β => P x.1 x.2) ≤ pr E + c := by
@@ -76,16 +58,12 @@ theorem pr_prod_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonem
         rw [add_mul, ← mul_assoc (_ / (Fintype.card α : ℝ≥0∞)), ENNReal.div_mul_cancel hα0 hαt]
         ring
 
-/-- `k` indices, all in `G`: `|G|^k` of them. -/
 theorem card_pi_mem (k B : ℕ) (G : Finset (Fin B)) :
     (Finset.univ.filter fun I : Fin k → Fin B => ∀ j, I j ∈ G).card = G.card ^ k := by
   have : (Finset.univ.filter fun I : Fin k → Fin B => ∀ j, I j ∈ G) = Fintype.piFinset fun _ => G := by
     ext I; simp [Fintype.mem_piFinset]
   rw [this, Fintype.card_piFinset, Finset.prod_const, Finset.card_univ, Fintype.card_fin]
 
-/-! ### The threshold `p₀` -/
-
-/-- If `g` of `B` blocks are right and the other `b` do not fit, `S + B + b·ℓ > β`, then `g ≤ p₀·B`. -/
 theorem good_le_p₀ (B ℓ β S g b : ℕ) (hB : 0 < B) (hgb : g + b = B) (h : β < S + B + b * ℓ) :
     (g : ℝ) ≤ p₀ β S B ℓ * B := by
   unfold p₀
@@ -104,8 +82,6 @@ theorem good_le_p₀ (B ℓ β S g b : ℕ) (hB : 0 < B) (hgb : g + b = B) (h : 
     linarith
 
 open Classical in
-/-- **Averaging.** `k` uniform challenges all land on blocks the responder gets right with probability at most
-`Pr[the wrong blocks fit in β bits] + p₀^k`. -/
 theorem pr_all_good_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (B ℓ β S k : ℕ) (hB : 0 < B)
     (good : Ω → Fin B → Prop) :
     pr (fun x : Ω × (Fin k → Fin B) => ∀ j, good x.1 (x.2 j)) ≤
@@ -132,9 +108,6 @@ theorem pr_all_good_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (B ℓ β S k : �
     _ = ENNReal.ofReal (p₀ β S B ℓ) * B := by
         rw [ENNReal.ofReal_mul' (Nat.cast_nonneg _), ENNReal.ofReal_natCast]
 
-/-! ### Compression -/
-
-/-- **Codes from counting.** A set of at most `2^β` points has a `β`-bit code that decodes every point of it. -/
 theorem exists_code {X : Type} [Fintype X] [Nonempty X] (T : Finset X) (β : ℕ) (h : T.card ≤ 2 ^ β) :
     ∃ (c : X → Bits β) (d : Bits β → X), ∀ x ∈ T, d (c x) = x := by
   classical
@@ -145,8 +118,6 @@ theorem exists_code {X : Type} [Fintype X] [Nonempty X] (T : Finset X) (β : ℕ
   simp only [hx, dite_true, hex]
   exact congrArg Subtype.val (e.injective hex.choose_spec)
 
-/-- **Counting patches.** Assignments of an optional `ℓ`-bit block to each of `B` positions, with at most `L` bits
-of blocks in total: at most `2^B · 2^L`. -/
 theorem card_patches_le (B ℓ L : ℕ) :
     (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
       (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ L).card ≤ 2 ^ B * 2 ^ L := by
@@ -184,15 +155,11 @@ theorem card_patches_le (B ℓ L : ℕ) :
   refine (Finset.card_filter_le _ _).trans ?_
   rw [Finset.card_univ, Fintype.card_finset, Fintype.card_fin]
 
-/-- The compressor's message: the responder's state, and a replacement for each block it gets wrong. -/
 abbrev Desc (S B ℓ : ℕ) : Type := Bits S × (Fin B → Option (Bits ℓ))
 
-/-- The messages that fit in `β` bits: `S` for the state, `B` for the set of replaced blocks, `ℓ` per replaced
-block. -/
 def fits (S B ℓ β : ℕ) : Finset (Desc S B ℓ) :=
   Finset.univ.filter fun x => S + B + (Finset.univ.filter fun i => x.2 i ≠ none).card * ℓ ≤ β
 
-/-- At most `2^β` messages fit: `2^S` states times `2^B·2^(β−S−B)` patches (none if `β < S + B`). -/
 theorem card_fits_le (S B ℓ β : ℕ) : (fits S B ℓ β).card ≤ 2 ^ β := by
   by_cases hβ : S + B ≤ β
   · have hsub : fits S B ℓ β ⊆ Finset.univ ×ˢ (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
@@ -213,15 +180,12 @@ theorem card_fits_le (S B ℓ β : ℕ) : (fits S B ℓ β).card ≤ 2 ^ β := b
     rw [this, Finset.card_empty]
     exact Nat.zero_le _
 
-/-- Replace every block where the prediction `P` differs from `C`. -/
 def patch {B ℓ : ℕ} (P C : Fin B → Bits ℓ) : Fin B → Option (Bits ℓ) :=
   fun i => if P i = C i then none else some (C i)
 
-/-- The patched block where there is one, else the prediction: this is `C`. -/
 theorem patch_getD {B ℓ : ℕ} (P C : Fin B → Bits ℓ) (i : Fin B) : (patch P C i).getD (P i) = C i := by
   by_cases h : P i = C i <;> simp [patch, h]
 
-/-- If the blocks where `P` differs from `C` fit (`S + B + #wrong·ℓ ≤ β`), so does the message `(σ, patch P C)`. -/
 theorem mem_fits_patch {S B ℓ β : ℕ} (σ : Bits S) (P C : Fin B → Bits ℓ) {_ : DecidablePred fun i => ¬ P i = C i}
     (h : S + B + (Finset.univ.filter fun i => ¬ P i = C i).card * ℓ ≤ β) : (σ, patch P C) ∈ fits S B ℓ β := by
   rw [fits, Finset.mem_filter]

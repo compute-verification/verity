@@ -39,30 +39,7 @@ import Proofs.Pouw.TS.Sampled
 import Proofs.Pouw.RelativeSecurity
 import Proofs.Pous.Prob
 
-/-!
-# The receipts' binding bound: the proof
-
-Fix window `t` and a receipt `p`, and read a cut of coins and its continuations `cont t` (the other coins and the
-earlier windows' openings coins kept, window `t`'s and the later ones fresh), which have `spliceAt`'s two identities
-(`Binding.cont_left`, `Binding.cont_swap`).
-
-* **The held row** (`Binding.held_cont`, `Binding.tally_le_held`). `Receipts.held` is the plurality of the rows the
-  receipt shows over the cut's continuations (`ResourceAccounting.TS.plural`), so every continuation holds the cut's row, and
-  no row is shown alone on more of them.
-* **Per receipt** (`Plurality.moved_le_forked`, at `cont t`). A move shows the presented row against the plurality
-  (`Plurality.Mov`), and the moves squared are at most the pairs of continuations showing two different rows
-  (`Plurality.Frk`): `Pr[p moved]² ≤ Pr[p forked]`.
-* **Over the window's receipts** (`Binding.window_le`). The union bound and Cauchy–Schwarz over `L_t` give
-  `(Σ_p Pr[p moved])² ≤ |L_t|·Σ_p Pr[p forked]`. A run opens at most `s_t` receipts (`Binding.card_opened_le`), so
-  `Σ_p Pr[p forked] ≤ s_t·Pr[some p forked]` (`Binding.sum_prob_le`). A forked receipt is accepted in both runs
-  with two different rows: at one verifier, root and rank that is a SHA-512 collision among what the two checks hashed
-  (`Hash.SecurityProofs.RowBinding`), the fork's break (`Receipts.Broken`), and otherwise the roots split
-  (`Receipts.Split`).
-* **Under `cr/sha-512`** (`Binding.fork_le_finder`). A break is a collision the window's fork finder outputs, so
-  `fork_t ≤ Pr[finder succeeds] ≤ q_t²/2^513`.
-* **Fixed roots** (`Binding.binding_le_of_fixed`). Where the window's cut fixes its receipts' roots, ranks and
-  verifiers, `split_t = 0`, and `√(|L_t|·s_t·q_t²/2^513) = √(|L_t|·s_t)·q_t/2^256.5`.
--/
+/-! The proof of the receipts' binding bound, per receipt by plurality and over the window by Cauchy–Schwarz. -/
 
 @[expose] public section
 
@@ -73,8 +50,6 @@ open ResourceAccounting.SecurityProofs.TS.Plurality (Frk)
 
 namespace Binding
 
-/-- Events each of which names a member of a set of at most `k`: their probabilities sum to at most `k` times that of
-some one of them. -/
 theorem sum_prob_le {Y P : Type} [Fintype Y] (L : Finset P) (F : P → Y → Prop) (A : Y → Finset P) (k : ℕ)
     (hA : ∀ p y, F p y → p ∈ A y) (hk : ∀ y, (A y).card ≤ k) :
     ∑ p ∈ L, prob (F p) ≤ k * prob (fun y => ∃ p ∈ L, F p y) := by
@@ -114,14 +89,12 @@ theorem cont_swap (t : Fin n) (ω ζ : SampleCoins n κ X) : cont t (cont t ω �
   refine Prod.ext rfl (funext fun j => ?_)
   by_cases h : j < t <;> simp [h]
 
-/-- **The held row reads only the cut**: every continuation of `ω` from window `t`'s cut holds `ω`'s row. -/
 theorem held_cont [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω ζ : SampleCoins n κ X) (p : ℕ) :
     R.held D prf rest t (cont t ω ζ) p = R.held D prf rest t ω p :=
   ResourceAccounting.SecurityProofs.TS.Plurality.plural_sp (opens := R.Shows D prf rest t p) (cont_left t) ω ζ
 
-/-- **The held row is the likeliest**: no row is shown alone on more of window `t`'s continuations of `ω`. -/
 theorem tally_le_held [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : SampleCoins n κ X) (p : ℕ) (v : Hash.Row) :
@@ -137,13 +110,11 @@ theorem claims_pr {α : Type} [Fintype α] (P : α → Prop) : Claims.Pr P = pro
   unfold Claims.Pr prob Claims.prUniform
   congr
 
-/-- A window opens at most `s_t` receipts: its samples, `min(s_t, U_t)`. -/
 theorem card_opened_le (D : Remote.Sample.Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : SampleCoins n κ X) : (D.opened prf rest t ω).card ≤ s t := by
   unfold Run.opened openings
   exact Finset.card_image_le.trans ((Finset.card_range _).le.trans (by unfold Run.samples; exact min_le_left _ _))
 
-/-- **Window `t`'s share of the binding term** is at most `√(|L_t|·s_t·(fork_t + split_t))`. -/
 theorem window_le [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ) (hL : ∀ t ω, D.opened prf rest t ω ⊆ L t)
@@ -193,7 +164,6 @@ theorem window_le [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n
       _ = _ := by ring
   exact h1.trans ((Real.sqrt_sq hA).symm.le.trans (Real.sqrt_le_sqrt hfin))
 
-/-- A fork break is a collision the window's fork finder outputs. -/
 theorem fork_le_finder [Fintype X] [Nonempty X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (q : ℕ) :
     (R.fork D prf rest t).toReal ≤ (R.finder D prf rest t q).Pr (fun u => (R.hash u).bytes) := by
@@ -210,7 +180,6 @@ theorem fork_le_finder [Fintype X] [Nonempty X] (D : Remote.Sample.Run n m s κ 
 
 end Binding
 
-/-- **The receipts' binding term, in its fork form** (`ResourceAccounting.Guarantees.Remote.ReceiptsBindingOfFork`). -/
 theorem ReceiptsBindingOfFork : ResourceAccounting.Guarantees.Remote.ReceiptsBindingOfFork := by
   intro n m s κ X _ D R prf rest L hL
   rw [Receipts.binding, Binding.toReal_pr]
@@ -231,8 +200,6 @@ namespace Binding
 
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type}
 
-/-- **Fixed roots**: where every window's cut fixes its receipts' verifiers, roots and ranks, the roots never split,
-and under `cr/sha-512` the binding term is at most `Σ_t √(|L_t|·s_t)·q_t/2^256.5`, `ledger.binding`'s charge. -/
 theorem binding_le_of_fixed [Fintype X] [Nonempty X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ)
     (q : Fin n → ℕ) (hL : ∀ t ω, D.opened prf rest t ω ⊆ L t)

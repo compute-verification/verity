@@ -6,15 +6,7 @@ import Mathlib.Combinatorics.SetFamily.LYM
 import Mathlib.NumberTheory.LucasLehmer
 import Proofs.Poub.Tag.Basic
 
-/-!
-# Erdős's Littlewood–Offord bound
-
-With positive weights, the bit vectors with one given weighted sum, read as the sets of their `1`s, form an antichain:
-a strictly larger set has a strictly larger sum. Sperner's theorem (`IsAntichain.sperner`) bounds an antichain of subsets
-of a `u`-set by `C(u, ⌊u/2⌋)` (`card_level_pos_le`). Nonzero weights reduce to positive ones by flipping the bits whose
-weight is negative, which shifts every sum by the same constant (`card_level_le_choose`). `littlewoodOfford` is
-`ResourceAccounting.Guarantees.Sketch.LittlewoodOfford`.
--/
+/-! Erdős's Littlewood–Offord bound, by Sperner's theorem. -/
 
 @[expose] public section
 
@@ -23,7 +15,6 @@ namespace ResourceAccounting.TagProofs
 open ResourceAccounting.Tag Finset
 open scoped ENNReal
 
-/-- With positive weights, at most `C(u, ⌊u/2⌋)` bit vectors share a weighted sum. -/
 theorem card_level_pos_le {u : ℕ} (w : Fin u → ℤ) (hw : ∀ j, 0 < w j) (t : ℤ) :
     (univ.filter fun ε : Fin u → Bool => unreadSum w ε = t).card ≤ u.choose (u / 2) := by
   classical
@@ -53,8 +44,6 @@ theorem card_level_pos_le {u : ℕ} (w : Fin u → ℤ) (hw : ∀ j, 0 < w j) (t
   rw [card_image_of_injective _ hinj, Fintype.card_fin] at this
   exact this
 
-/-- With nonzero weights, at most `C(u, ⌊u/2⌋)` bit vectors share a weighted sum: flipping the bits of the negative
-weights maps them one to one onto the bit vectors with one sum under the weights' absolute values. -/
 theorem card_level_le_choose {u : ℕ} (v : Fin u → ℤ) (hv : ∀ j, v j ≠ 0) (t : ℤ) :
     (univ.filter fun ε : Fin u → Bool => unreadSum v ε = t).card ≤ u.choose (u / 2) := by
   classical

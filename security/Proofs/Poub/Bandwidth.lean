@@ -12,19 +12,7 @@ public import Proofs.Poub.Bandwidth.Joint
 public import Proofs.Poub.Bandwidth.TickedJoint
 public import Proofs.Poub.Bandwidth.CausalJoint
 
-/-! The bandwidth audit v0's proofs: the guarantee in the random-oracle model, PoUB's per-pass lemma
-(`ResourceAccounting.SecurityProofs.Remote.AuditRO`), its completeness (`Bandwidth.SecurityProofs.HonestPasses`), the guarantee
-with relayed tags (`Bandwidth.SecurityProofs.AuditRelay`), with side sources that answer what the chip sent
-(`Bandwidth.SecurityProofs.AuditInteractive`, and `AuditInteractiveRO` when they ignore the oracle), and for the chip
-as a tick transducer over
-the links' signals (B3: `Bandwidth.SecurityProofs.Ticked.audit_reads` in the reads form, given passive memory, and
-`Ticked.audit` in the capacity form), and for the chip of a strategy causal from every tick whose links split what
-crosses into it (`Bandwidth.SecurityProofs.Causal.audit_reads`, with the chip's state `M + 1` bits), and from the links'
-alphabets, passive memory and the oracle as a location (`Causal.audit_links`; `Causal.audit_capacity`, the capacity
-form); and bandwidth additivity by counting, for a device that also holds a secret its chip's view determines
-(`Bandwidth.SecurityProofs.AuditJoint`, Mbw), and for the chip as a tick transducer whose view determines it
-(`Bandwidth.SecurityProofs.Ticked.audit_joint`; `Ticked.audit_joint_capacity`, the capacity form), and for the chip of a
-strategy causal from every tick over the store and that secret (`Bandwidth.SecurityProofs.Causal.audit_joint`), and
-from its links (`Causal.audit_links_joint`; `Causal.audit_capacity_joint`, the capacity form). -/
+/-! The bandwidth audit v0's proofs: the random-oracle guarantee, its completeness, relayed tags, interactive side
+sources, B3 and bandwidth additivity (Mbw). -/
 
 @[expose] public section

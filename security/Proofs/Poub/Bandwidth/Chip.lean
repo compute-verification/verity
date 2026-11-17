@@ -41,13 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 import Proofs.Pous.Prob
 
-/-!
-# Chip programs: congruence, replay from a trace, and counting
-
-`run_congr`: changing the oracle off the points a run queries changes neither the run nor its queries.
-`replay_trace`: given the oracle, the run's queries are a function of the chip program and its trace, the bits device
-memory, side sources and regeneration answered with. The counting lemmas turn per-fiber bounds into bounds on `pr`.
--/
+/-! Chip programs: congruence off the queried points, replay from a trace, and counting. -/
 
 @[expose] public section
 
@@ -60,7 +54,6 @@ namespace Chip
 
 variable {N b h : ℕ} {α : Type}
 
-/-- The bits a run was answered with, other than the oracle's: device memory, side sources and regenerated blocks. -/
 def trace (w : World N b h) : Chip N b h α → List Bool
   | done _ => []
   | tag x k => (k (w.oracle x)).trace w
@@ -68,7 +61,6 @@ def trace (w : World N b h) : Chip N b h α → List Bool
   | side a k => w.side a :: (k (w.side a)).trace w
   | regen j k => List.ofFn (w.block j) ++ (k (w.block j)).trace w
 
-/-- The queries a run makes, recomputed from the oracle and a stream of the bits it was answered with otherwise. -/
 def replay (O : Oracle N b h) : Chip N b h α → (ℕ → Bool) → List (Fin N × Bits b)
   | done _, _ => []
   | tag x k, f => x :: (k (O x)).replay O f
@@ -106,7 +98,6 @@ theorem replay_trace (w : World N b h) (c : Chip N b h α) (l : List Bool) :
       simp
     rw [hb, hs, ih]
 
-/-- The side-source bits a run read, in order. -/
 def sideTrace (w : World N b h) : Chip N b h α → List Bool
   | done _ => []
   | tag x k => (k (w.oracle x)).sideTrace w
@@ -114,7 +105,6 @@ def sideTrace (w : World N b h) : Chip N b h α → List Bool
   | side a k => w.side a :: (k (w.side a)).sideTrace w
   | regen j k => (k (w.block j)).sideTrace w
 
-/-- A run's value, recomputed from an oracle, device memory, the store and a stream of the side-source bits it read. -/
 def runSide (O : Oracle N b h) (mem : ℕ → Bool) (blk : Store N b) : Chip N b h α → (ℕ → Bool) → α
   | done a, _ => a
   | tag x k, f => (k (O x)).runSide O mem blk f
@@ -130,8 +120,6 @@ theorem sideTrace_length (w : World N b h) (c : Chip N b h α) : (c.sideTrace w)
   | side a k ih => simp [sideTrace, sideBits, ih]
   | regen j k ih => simp [sideTrace, sideBits, ih]
 
-/-- Given device memory and the store, the run is a function of the oracle at its queries and the side bits it read:
-any oracle that agrees with the world's at the run's queries recomputes it from those bits. -/
 theorem runSide_sideTrace (w : World N b h) (O' : Oracle N b h) (c : Chip N b h α)
     (ho : ∀ x ∈ c.queries w, O' x = w.oracle x) :
     c.runSide O' w.mem w.block (fun n => (c.sideTrace w).getD n false) = c.run w := by
@@ -148,7 +136,6 @@ theorem runSide_sideTrace (w : World N b h) (O' : Oracle N b h) (c : Chip N b h 
     exact ih _ ho
   | regen j k ih => exact ih _ ho
 
-/-- Changing the oracle off the points a run queries changes neither the run nor its queries. -/
 theorem run_congr (w : World N b h) (O' : Oracle N b h) (c : Chip N b h α)
     (ho : ∀ x ∈ c.queries w, O' x = w.oracle x) :
     c.run { w with oracle := O' } = c.run w ∧ c.queries { w with oracle := O' } = c.queries w := by
@@ -165,8 +152,6 @@ theorem run_congr (w : World N b h) (O' : Oracle N b h) (c : Chip N b h α)
   | regen j k ih => exact ih _ ho
 
 end Chip
-
-/-! ## Counting -/
 
 theorem card_filter_prod_le {α β : Type} [Fintype α] [Fintype β] (P : α × β → Prop) [DecidablePred P]
     (d m : ℕ) (h : ∀ a, (Finset.univ.filter (fun y => P (a, y))).card * d ≤ m) :
@@ -188,7 +173,6 @@ theorem card_filter_prod_le' {α β : Type} [Fintype α] [Fintype β] (P : α ×
   calc ∑ y, (Finset.univ.filter (fun a => P (a, y))).card * d ≤ ∑ _y : β, m := Finset.sum_le_sum (fun y _ => h y)
     _ = m * Fintype.card β := by simp [mul_comm]
 
-/-- A set of functions that is determined by its values off one point has at most one member per value there. -/
 theorem card_line_le {X Y : Type} [Fintype X] [DecidableEq X] [Fintype Y] (x₀ : X) (s : Finset (X → Y))
     (hs : ∀ f ∈ s, ∀ g ∈ s, (∀ x, x ≠ x₀ → f x = g x) → f = g) :
     s.card * Fintype.card Y ≤ Fintype.card (X → Y) := by
@@ -220,8 +204,6 @@ theorem pr_mono {Ω : Type} [Fintype Ω] {P Q : Ω → Prop} (h : ∀ x, P x →
   exact h _
 
 open Classical in
-/-- A probability over a store and live coins whose public part is a pair is the same over the store, the public
-part's two halves and the sample, in that order. -/
 theorem pr_coins_flat {S A B D : Type} [Fintype S] [Fintype A] [Fintype B] [Fintype D]
     (P : S × ((A × B) × D) → Prop) :
     pr P = pr (fun x : S × A × B × D => P (x.1, (x.2.1, x.2.2.1), x.2.2.2)) := by

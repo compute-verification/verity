@@ -7,16 +7,7 @@ import Proofs.Pous.Sanity
 import Proofs.Pous.Thm1.Theorem1iiSeq
 import Proofs.Pous.Thm1.Theorem1iiiTimed
 
-/-!
-# Fibre counting: `PousProofs.fibre_count`, as drafted
-
-Fix `W`. At `(pp, ω)` the codewords that decode to `W` form the fibre `F(W, pp, ω)`, and the true `C` lies in
-it (`Correct`). The untimed expander sees `W`, `pp` and `ω`, so a fibre of at most `2^β` codewords has a `β`-bit
-code (`exists_code`), and `INC(β, π)` gives `Pr[fibre ≤ 2^β] ≤ π`. So every `W` has a fibre above `2^β` with
-probability at least `1 − π`. At a fixed `ω` the fibres over `W` partition the codewords for each `pp`, so fewer
-than `2^(t + B·ℓ)/2^β` values of `W` have any fibre above `2^β`. Summing over `W` and the setup (double counting)
-gives `(1 − π)·2^n·2^β ≤ 2^(t + B·ℓ)`.
--/
+/-! Fibre counting: `PousProofs.fibre_count`, as drafted. -/
 
 @[expose] public section
 
@@ -25,10 +16,6 @@ namespace PousThm1
 open Pous
 open scoped ENNReal
 
-/-! ### Uniform probability -/
-
-/-! ### Codes from counting -/
-
 end PousThm1
 
 namespace PousProofs
@@ -36,18 +23,15 @@ namespace PousProofs
 open Pous PousThm1
 open scoped ENNReal
 
-/-- Fibre counting (report Proposition 9(a), audit §5 item 1): untimed `INC(β, π)` for a correct scheme forces
-`(1 − π)·2^(n + β) ≤ 2^(t + B·ℓ)`. Within the space bound this is `β ≲ 0.05·n`, far below `ρ|C|`, so the untimed
-`INC` hypothesis of `Guarantees.Theorem1ii` cannot hold at the operating point in this model. -/
+/-- Within the space bound this is `β ≲ 0.05·n`, far below `ρ|C|`, so the untimed `INC` hypothesis of
+`Guarantees.Theorem1ii` cannot hold at the operating point in this model. -/
 theorem fibre_count {M : IdealModel} (sch : Scheme M) (hc : sch.Correct) (β : ℕ) (π : ℝ≥0∞) (h : INC sch β π) :
     (1 - π) * 2 ^ (sch.n + β) ≤ 2 ^ (sch.t + sch.B * sch.ℓ) := by
   classical
-  -- the codewords that decode to `W` under `(pp, ω)`
   let F : Bits sch.n → Bits sch.t → M.Ω → Finset sch.Code := fun W pp ω =>
     Finset.univ.filter fun C => sch.dec pp C (M.answer ω) = W
   let big : Bits sch.n → M.Ω × sch.Coins → Prop := fun W a =>
     2 ^ β < (F W (sch.enc W a.1 a.2).1 a.1).card
-  -- a fibre of at most `2^β` codewords has a `β`-bit code, and the true codeword lies in it
   have hsmall : ∀ W, pr (fun a : M.Ω × sch.Coins => ¬ big W a) ≤ π := by
     intro W
     let T : Bits sch.n × Bits sch.t × M.Ω → Finset sch.Code := fun x =>
@@ -65,14 +49,12 @@ theorem fibre_count {M : IdealModel} (sch : Scheme M) (hc : sch.Correct) (β : �
     simp only [big, not_lt] at ha
     simp only [T, ha, ite_true, F, Finset.mem_filter, Finset.mem_univ, true_and]
     exact hc W a.1 a.2
-  -- so every `W` has a large fibre with probability at least `1 − π`
   have hbig : ∀ W, 1 - π ≤ pr (big W) := by
     intro W
     have h1 := pr_add_pr_not (big W)
     calc 1 - π ≤ 1 - pr (fun a => ¬ big W a) := tsub_le_tsub_left (hsmall W) _
       _ = pr (big W) := by
           rw [← h1, ENNReal.add_sub_cancel_right (ne_top_of_le_ne_top ENNReal.one_ne_top (pr_le_one _))]
-  -- at each primitive, fewer than `2^(t + B·ℓ − β)` values of `W` have a large fibre
   have hcount : ∀ ω : M.Ω,
       (Finset.univ.filter fun W => ∃ pp, 2 ^ β < (F W pp ω).card).card * 2 ^ β ≤ 2 ^ (sch.t + sch.B * sch.ℓ) := by
     intro ω
@@ -94,7 +76,6 @@ theorem fibre_count {M : IdealModel} (sch : Scheme M) (hc : sch.Correct) (β : �
           rw [Finset.sum_const, Finset.card_univ, smul_eq_mul, Fintype.card_fun, Fintype.card_fin,
             Fintype.card_fun, Fintype.card_fun, Fintype.card_bool, Fintype.card_fin, Fintype.card_fin, ← pow_mul,
             ← pow_add, mul_comm sch.ℓ]
-  -- double counting over `(W, setup)`
   have hdouble : (∑ W, (Finset.univ.filter (big W)).card) * 2 ^ β ≤
       Fintype.card (M.Ω × sch.Coins) * 2 ^ (sch.t + sch.B * sch.ℓ) := by
     have hswap : ∑ W, (Finset.univ.filter (big W)).card =

@@ -17,14 +17,7 @@ import Proofs.Pous.Period
 import Proofs.Pouw.Prob
 import VCVio.Prelude.Core
 
-/-!
-# Proof of PoUS's per-period guarantee at any point and block count
-
-`periodHeld`'s proof (`Proofs.Pous.Period`) with the point's certificate (`certified_ofAt`, from
-`Pous.EndToEnd.SecurityProofs.runCertifiesAt`) and the ring game at `N`
-(`Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide`) in place of the deployed ones. `periodHeldDemo` is its
-instance at Demo B's `N`, with the state bound `Pous.SecurityProofs.stateBound_p2ring_demo` gives.
--/
+/-! The proof of PoUS's per-period guarantee at any point and block count. -/
 
 @[expose] public section
 
@@ -80,19 +73,10 @@ theorem periodHeldDemo : PeriodHeldDemo := by
   exact periodHeldAt p ε₀ D Q L hnum hW pt N (by rw [hN]; norm_num) (by rw [hN]; norm_num) ι α ΩW ΩQ d r P
     round S hdev (by rw [hSN, Nat.cast_ofNat]; exact hS) o
 
-/-! ### The honest and nontrivial lemmas at any block count
-
-`periodHeld`'s, at `N`: `RingDeviceAt` holds at a device whose capacity account exceeds `SAt N` at a tick of the
-capacity window on every coin, and the bound `δ + ε_max` is below an event that always holds. -/
-
-/-- A server for a scheme in the ring model that keeps nothing and answers every index with the zero block, with no
-query. -/
 def nullRing {B w p : ℕ} [NeZero p] (sc : Scheme (ringRO B w p)) (S D Q L : ℕ) : RingServer sc S D Q L :=
   ⟨fun _ _ _ _ _ => false, fun _ _ _ σ _ => .ret (fun _ => false, σ),
     fun _ _ _ _ _ _ => ⟨Nat.zero_le _, Nat.zero_le _, Nat.zero_le _⟩⟩
 
-/-- **`RingDeviceAt` holds at an honest device**, one whose capacity account exceeds `SAt N` at a tick of the capacity
-window on every coin, at every point and `(D, Q, L)`. -/
 theorem ringDeviceAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι}
     {α ΩW ΩQ : Type} [Fintype α]
     (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
@@ -106,7 +90,6 @@ theorem ringDeviceAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [F
   exfalso
   omega
 
-/-- **`periodHeldAt` holds at the honest instance**: its device premise, `ringDeviceAt_honest`. -/
 theorem periodHeldAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι}
     {α ΩW ΩQ : Type} [Fintype α]
     (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
@@ -115,15 +98,12 @@ theorem periodHeldAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [F
     RingDeviceAt N pt r P D Q L round :=
   ringDeviceAt_honest N pt r P D Q L round hfull
 
-/-- **`periodHeldAt` is nontrivial**: at every block count, an event that holds on every capacity coin exceeds its
-bound `δ + ε_max`. -/
 theorem periodHeldAt_nontrivial (N : ℕ) [NeZero N] :
     ¬ Pouw.pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
       (Params.δ : ℝ) + Params.εMax.toReal := by
   rw [Pouw.pr_eq_one fun _ => trivial]
   exact not_le.2 bound_toReal_lt_one
 
-/-- **`periodHeldDemo` holds at the honest instance**: `periodHeldAt_honest` at Demo B's `N`. -/
 theorem periodHeldDemo_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι}
     {α ΩW ΩQ : Type} [Fintype α]
     (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
@@ -132,7 +112,6 @@ theorem periodHeldDemo_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} 
     RingDeviceAt N pt r P D Q L round :=
   ringDeviceAt_honest N pt r P D Q L round hfull
 
-/-- **`periodHeldDemo` is nontrivial**: `periodHeldAt_nontrivial` at Demo B's `N`. -/
 theorem periodHeldDemo_nontrivial (N : ℕ) [NeZero N] :
     ¬ Pouw.pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
       (Params.δ : ℝ) + Params.εMax.toReal :=

@@ -2,12 +2,7 @@ module
 
 public import Definitions.Pous.Model.FreeBlocks
 
-/-!
-# The free-blocks audit with no free blocks is the sequential audit
-
-`seqAcceptsFree` with `F = 0` is `seqAccepts`, so `AuditSecureFree sch 0` is `AuditSecure sch .sequential`: the game
-`P2SlackFamilyFreeBlocks` reads changes only what a free block lets through.
--/
+/-! The free-blocks audit with no free blocks is the sequential audit. -/
 
 @[expose] public section
 
@@ -40,7 +35,6 @@ theorem seqAcceptsFree_zero (sch : Scheme M) {S D Q : ℕ} (k : ℕ) (W : Bits s
   · intro h j
     rw [h]; simp
 
-/-- With no free blocks, the free-blocks target is the sequential audit's. -/
 theorem auditSecureFree_zero (sch : Scheme M) (S D Q k : ℕ) (δ ε : ENNReal) :
     AuditSecureFree sch 0 S D Q k δ ε ↔ AuditSecure sch .sequential S D Q k δ ε := by
   have hpr : ∀ W (A₁ : Preprocessor sch S) (Fr : FreeSet sch 0) (A₂ : SeqResponder sch S D Q),

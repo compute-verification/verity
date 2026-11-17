@@ -5,18 +5,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.Data.Sym.Sym2.Init
 
-/-!
-# N10's two core lemmas, on the trusted definitions of `Pous.Invertible`
-
-The proofs of `transpose_mixing` and `reverse_needs_all_children`, which are `Pous.Guarantees.TransposeMixing` and
-`Pous.Guarantees.ReverseNeedsAllChildren`. The N10 target is refuted (`Pous.SecurityProofs.P3.Refutation`) and is
-not here.
-
-* `transpose_mixing`: with the `K_{n,n}` connector, recovering **one** lower-layer label needs **all** `n` top
-  labels.
-* `reverse_needs_all_children`: unfolding the trusted reverse rule, a reverse (decode) move on a lower node needs a
-  pebble on every green child.
--/
+/-! N10's two core lemmas on the trusted definitions of `Pous.Invertible`; the refuted N10 target is not here. -/
 
 @[expose] public section
 
@@ -26,9 +15,6 @@ open Pous Pous.Invertible
 
 variable {n wc : ℕ}
 
-/-- **Transpose mixing.** Fix a lower node `u`. Component `v` of `c¹_u` is a function of `c²_v` alone, and every `v`
-contributes. So if the top labels are known only on a proper subset `S ⊊ univ`, there are two top configurations
-agreeing on `S` whose `u`-th lower labels differ. -/
 theorem transpose_mixing (P : Equiv.Perm (Lab n wc)) (k2 : Fin n → Lab n wc) (hwc : 0 < wc)
     (u : Fin n) (S : Finset (Fin n)) (hS : S ≠ Finset.univ) :
     ∃ c2 c2' : Fin n → Lab n wc, (∀ v ∈ S, c2 v = c2' v) ∧ decodeLower P c2 k2 u ≠ decodeLower P c2' k2 u := by
@@ -37,7 +23,6 @@ theorem transpose_mixing (P : Equiv.Perm (Lab n wc)) (k2 : Fin n → Lab n wc) (
     push Not at h
     exact hS (Finset.eq_univ_of_forall h)
   set p0 : Fin wc := ⟨0, hwc⟩ with hp0
-  -- the `u`-components of the two decoded inputs differ in bit `p0`
   let X0 : Bits wc := fun _ => false
   let X1 : Bits wc := Function.update X0 p0 true
   let base : Lab n wc := fun _ _ => false
@@ -57,8 +42,6 @@ theorem transpose_mixing (P : Equiv.Perm (Lab n wc)) (k2 : Fin n → Lab n wc) (
     rw [show X0 p0 = false from rfl, show X1 p0 = true from Function.update_self _ _ _] at hbit
     cases hk : k2 v₀ u p0 <;> simp [hk] at hbit
 
-/-- **A reverse move needs all green children.** To place a pebble on a layer-0 node by a reverse (decode) move from
-configuration `C`, every layer-1 node must already carry a pebble. -/
 theorem reverse_needs_all_children (G : Labelling.TopoDAG n) (C : Finset (Fin 2 × Fin n)) (a : Fin n)
     (hrev : ¬ (∀ x, DRG.StackedEdge node2 (drg2 G) green2 x (node2 0 a) → x ∈ C))
     (havail : DRG.Available node2 (drg2 G) green2 C (node2 0 a)) :

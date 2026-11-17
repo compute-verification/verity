@@ -3,17 +3,8 @@ module
 public import Definitions.InferenceOnly.Assumptions.Theta
 public import Proofs.Core.Circuit
 
-/-!
-# Pulling a division back through a containment
-
-Each inference block of a containing declaration, intersected with the contained circuit's gates, is a piece of the contained circuit
-(`pull`): the pieces divide `c` into inference blocks no larger, and each piece reads no more fresh input than its inference block, since a
-fresh input value it reads is either a computed gate of `c` outside the piece or a fresh input gate of `c`, and the containment
-carries both to fresh input values its inference block reads.
-
-A total containment is a partial one with no dark gates (`PartialContainment.ofContainment`), and `ThetaRegistered` for
-it keeps the fresh inputs of `c` that a piece reads out of `d`'s θ (`freshInput_pull`).
--/
+/-! Pulling a division back through a containment, into pieces that read no more fresh input than their inference
+blocks. -/
 
 @[expose] public section
 
@@ -27,7 +18,6 @@ section Pull
 
 variable {C D : Circuit} (M : Containment C D) {n : ℕ} (P : Partition D n)
 
-/-- The division of `C` that a division of `D` induces through a containment: each gate in the unit of its image. -/
 def pull : Partition C n where
   unit g := P.unit (M.emb g)
   input_iff g := by rw [P.input_iff, M.isInput_emb]
@@ -50,7 +40,6 @@ theorem card_pull_gates_le (u : Fin n) : ((pull M P).gates u).card ≤ (P.gates 
 theorem width_map (S : Finset (Fin C.N)) : C.width S = D.width (S.map ⟨M.emb, M.emb_inj⟩) := by
   simp [Circuit.width, Finset.sum_map, M.emb_w]
 
-/-- A gate outside a piece that the piece reads is, through the containment, a gate outside its inference block that the inference block reads. -/
 theorem into_pull_map (u : Fin n) :
     (C.into ((pull M P).gates u)).map ⟨M.emb, M.emb_inj⟩ ⊆ D.into (P.gates u) := by
   intro b hb
@@ -68,7 +57,6 @@ theorem into_pull_map (u : Fin n) :
   rw [M.reads_emb g hgi]
   exact Finset.mem_map_of_mem _ hag
 
-/-- An input gate that a piece reads is read by `C`'s computed gates. -/
 theorem into_pull_into_computed (u : Fin n) {a : Fin C.N} (ha : a ∈ C.into ((pull M P).gates u))
     (hai : C.isInput a = true) : a ∈ C.into C.computed := by
   simp only [Circuit.into, Finset.mem_filter, Finset.mem_univ, true_and] at ha ⊢

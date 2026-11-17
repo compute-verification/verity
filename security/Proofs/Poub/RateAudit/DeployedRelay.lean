@@ -4,21 +4,8 @@ public import Mathlib
 public import Proofs.Poub.RateAudit.Conservation
 public import Proofs.Poub.RateAudit.DeployedRun
 
-/-!
-# PoUB as deployed, with side sources that may relay receipts: the proof
-
-**Completions as memory reads.** `Deployed.lean` simulates a pass device by reading its completions over the side
-link, which costs nothing while the side sources ignore the oracle. When they may relay receipts, every bit of the link
-is a bit a relayed receipt can come from (`card_relay_le`), so the completions go to device memory instead
-(`PIDevice.toInteractiveMem`): a completion's `x` bits are read at odd addresses that name the word, the width, the
-function and the bit, which the memory answers from the store, and an original read at `a` goes to `2a`, in the tier
-of `a`. The link and the side sources are the device's, the receipts and queries are the device's, nothing is rebuilt,
-and the tier reads are the device's plus its completed bits.
-
-**A pass, a window, a session.** `RatePaid` bounds each simulated pass at `m` relayed words; a window's unpaid words
-are its passes' at each candidate (`GrindChain.pr_unpaid_le`), with the completed bits, at most `X`, paid from the
-slack; the session is `DeployedRun.pr_paid_of_window` and the samples, as in `Deployed.lean`.
--/
+/-! The proof of PoUB as deployed with side sources that may relay receipts, with the completions read from device
+memory. -/
 
 @[expose] public section
 
@@ -32,7 +19,6 @@ namespace IChip
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- Read `n` bits of device memory at the addresses `addr`, then continue with them. -/
 def readMem : (n : ℕ) → (Fin n → ℕ) → (Bits n → IChip N b h ρ α) → IChip N b h ρ α
   | 0, _, k => k Fin.elim0
   | n + 1, addr, k => ingress (addr 0) (fun β => readMem n (fun i => addr i.succ) (fun z => k (Fin.cons β z)))
@@ -77,7 +63,6 @@ theorem readMem_rebuilds (w : IWorld N b h ρ) (v : List Bool) :
     simp only [readMem, rebuilds]
     rw [readMem_rebuilds w v n, cons_mem]
 
-/-- Reading `n` bits of device memory reads `n` bits over the tiers, whichever they are. -/
 theorem readMem_tierBits {τ : ℕ} (tier : ℕ → Fin τ) (w : IWorld N b h ρ) (v : List Bool) :
     ∀ (n : ℕ) (addr : Fin n → ℕ) (k : Bits n → IChip N b h ρ α),
       ∑ t, (readMem n addr k).tierBits tier t w v = ∑ t, (k (fun i => w.mem (addr i))).tierBits tier t w v + n
@@ -94,12 +79,9 @@ namespace PIChip
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- Device memory that also answers completions: an original read at `a` is at `2a`, and `code j x g i` at
-`2·code j x g i + 1`. -/
 noncomputable def memOf (E : Store N b) (f : ℕ → Bool) (a : ℕ) : Bool :=
   if a % 2 = 0 then f (a / 2) else decode E (a / 2)
 
-/-- The simulating chip with completions read from device memory: link bits within `ℓ` and queries within `m`. -/
 noncomputable def simMem (dflt : α) : ℕ → ℕ → PIChip N b h ρ α → IChip N b h ρ α
   | _, _, done a => .done a
   | ℓ, m, tag y k => if m = 0 then .done dflt else .tag y (fun t => simMem dflt ℓ (m - 1) (k t))
@@ -109,7 +91,6 @@ noncomputable def simMem (dflt : α) : ℕ → ℕ → PIChip N b h ρ α → IC
   | ℓ, m, complete j x _ g k => IChip.readMem x (fun i => 2 * code j x g i + 1) (fun z => simMem dflt ℓ m (k z))
   | ℓ, m, send β p => .send β (simMem dflt ℓ m p)
 
-/-- The simulating chip is within its counts in every world. -/
 theorem simMem_bounded (dflt : α) (w : IWorld N b h ρ) :
     ∀ (c : PIChip N b h ρ α) (ℓ m : ℕ) (v : List Bool),
       (simMem dflt ℓ m c).linkBits w v ≤ ℓ ∧ ((simMem dflt ℓ m c).queries w v).length ≤ m := by
@@ -144,7 +125,6 @@ theorem simMem_bounded (dflt : α) (w : IWorld N b h ρ) :
     exact ih _ ℓ m v
   | send β p ih => intro ℓ m v; simpa [simMem, IChip.linkBits, IChip.queries] using ih ℓ m (β :: v)
 
-/-- The world the simulating chip runs in, for the device's world `w`. -/
 noncomputable def memWorld (w : IWorld N b h ρ) : IWorld N b h ρ :=
   { w with mem := memOf w.store w.mem }
 
@@ -163,9 +143,6 @@ theorem memWorld_mem_code (w : IWorld N b h ρ) (j : Fin N) (x : ℕ) (g : Bits 
   have h2 : ((2 * code j x g i + 1) % 2 = 0) = False := by simp only [eq_iff_iff, iff_false]; omega
   simp only [h2, ↓reduceIte, show (2 * code j x g i + 1) / 2 = code j x g i by omega, decode_code]
 
-/-- Within its counts, the simulating chip returns what the chip does and queries what it queries, in the chip's
-world; its reads over the tiers (an address `a` in the tier of `a/2`) are the chip's plus its completed bits, and it
-rebuilds nothing. -/
 theorem simMem_eq (dflt : α) {τ : ℕ} (tier : ℕ → Fin τ) (w : IWorld N b h ρ) :
     ∀ (c : PIChip N b h ρ α) (ℓ m : ℕ) (v : List Bool),
       c.linkBits w v ≤ ℓ → (c.queries w v).length ≤ m →
@@ -237,8 +214,6 @@ namespace PIDevice
 
 variable {N b h ρ S L q : ℕ}
 
-/-- The interactive device that simulates a pass device on its own link: its device memory also answers the completed
-bits from the store. -/
 noncomputable def toInteractiveMem (A : PIDevice N b h ρ S L q) : InteractiveProver N b h ρ S L q where
   state := A.state
   mem E := PIChip.memOf E (A.mem E)
@@ -246,8 +221,6 @@ noncomputable def toInteractiveMem (A : PIDevice N b h ρ S L q) : InteractivePr
   chip st := PIChip.simMem (fun _ _ => false) L q (A.chip st)
   bounded st w := PIChip.simMem_bounded _ w (A.chip st) L q []
 
-/-- The simulating device commits the device's receipts, reads over the tiers what the device reads and completes, and
-rebuilds nothing. -/
 theorem toInteractiveMem_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) :
     A.toInteractiveMem.correct E R O = A.correct E R O ∧
@@ -261,7 +234,6 @@ theorem toInteractiveMem_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ
   have ht : A.toInteractiveMem.tags E R O = A.tags E R O := h₁
   simp only [InteractiveProver.correct, PIDevice.correct, ht]
 
-/-- **A pass device's correct receipts are paid for, with any side sources**: `RatePaid` at the simulating device. -/
 theorem pr_unpaid_relay_le {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (m lam : ℕ) :
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, A.toInteractiveMem.tierReads (fun a => tier (a / 2)) t x.1 x.2.1 x.2.2 +
@@ -277,15 +249,11 @@ namespace DeployedWindow
 
 variable {P N b h ρ S L q r s G : ℕ}
 
-/-- The grinding chain of the memory-simulating devices. -/
 noncomputable def toGrindMem (A : DeployedWindow P N b h ρ S L q r s G) : GrindChain P N b h ρ S L q r s G where
   device j η c := (A.device j η c).toInteractiveMem
   cand := A.cand
   pick := A.pick
 
-/-- **A window's unpaid words with any side sources**, its sample beside: with `X` covering every pass's completed bits,
-the probability that its reads and `P` slacks `X + slack` fall short of its correct receipts' words is at most
-`P·G·ε`. -/
 theorem pr_unpaid_sample_mem_le {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (X slack d : ℕ)
     (ε : ℝ≥0∞) (hX : ∀ j η c E R O, (A.device j η c).completed E R O ≤ X)
     (hε : ∀ j η c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
@@ -334,7 +302,6 @@ open scoped ENNReal
 
 variable {n P N b h ρ S L q r s d G τ : ℕ}
 
-/-- The relay error, finite. -/
 theorem relayErr_ne_top (N h L m q lam : ℕ) :
     (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam ≠ ⊤ :=
   ENNReal.add_ne_top.2 ⟨ENNReal.div_ne_top (ENNReal.mul_ne_top (by simp) (by simp)) (by simp),
@@ -351,7 +318,6 @@ theorem relayErr_toReal (P G N h L m q lam : ℕ) :
   simp only [ENNReal.toReal_natCast, ENNReal.toReal_pow, ENNReal.toReal_ofNat]
   ring
 
-/-- Window `w`'s bound with any side sources, at the slack `S + (L − ρ) + X + (λ + m·b)` a pass. -/
 theorem window_relay_le (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) {lam m rounds cRoot F : ℕ}
     {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot) (hW : ResourceAccounting.Assumptions.WorkHardness b rounds cRoot cost)
     (hF : ∀ w η j ι c, ResourceAccounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) (w : Fin n) (η) :
@@ -366,7 +332,6 @@ theorem window_relay_le (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ
   have : P * (S + (L - ρ) + X + (lam + m * b)) = P * (X + (S + (L - ρ) + lam + m * b)) := by ring
   omega
 
-/-- **Paid** for the deployed session's run with any side sources, at the run's slack `λ + m·b`. -/
 theorem ofDeployed_paid_relay (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam m rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = n * P) (hab : a.b = b) (hal : a.lam = lam + m * b)
@@ -402,7 +367,6 @@ theorem ofDeployed_paid_relay (A : DeployedRun n P N b h ρ S L q r s d G) (tier
       n * P * (L - ρ) + n * P * S + n * P * X + n * P * (lam + m * b) := by ring
   omega
 
-/-- **Paid** for window `w`'s run with any side sources, at the run's slack `λ + m·b`. -/
 theorem ofDeployedWindow_paid_relay (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam m rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = P) (hab : a.b = b) (hal : a.lam = lam + m * b)
@@ -429,9 +393,6 @@ theorem ofDeployedWindow_paid_relay (A : DeployedRun n P N b h ρ S L q r s d G)
   have e : P * (S + (L - ρ) + X + (lam + m * b)) = P * (L - ρ) + P * S + P * X + P * (lam + m * b) := by ring
   omega
 
-/-- `RemoteRunConservationRelay`'s reading on any store `store ω` sampled before the session's coins, from a bound
-`ε_u` on some window's unpaid words at the slack `S + (L − ρ) + X + (λ + m·b)` a pass: the samples' terms hold at every
-store, and only the unpaid words read the store's distribution. -/
 theorem run_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (lam m rounds cRoot F : ℕ) (dbar dw : ℝ)
     (hn : 0 < n) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b) (hdw : dw ≤ 1) (εu : ℝ≥0∞)

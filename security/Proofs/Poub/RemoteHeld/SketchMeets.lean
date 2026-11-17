@@ -4,26 +4,8 @@ public import Proofs.Poub.RemoteHeld.Sketch
 public import Definitions.Poub.Remote.SketchToy
 import Proofs.Pouw.Prob
 
-/-!
-# The deployed sketch bound's premises meet, and its conclusion bites
-
-`ResourceAccounting.Guarantees.Remote.SketchBoundDeployed` has its premises met at an honest session
-(`SketchBoundDeployed_honest`) and its conclusion false on a trace that accepts everything
-(`SketchBoundDeployed_nontrivial`).
-
-The instances are `Definitions.Poub.Remote.SketchToy`'s.
-
-* **Met.** The honest session (`Toy.honest`): one pass of one candidate over a store of one 4096-byte block,
-  at the deployed receipts (`m = 128`, `h = 512`, 64 sign rows). Its device holds the block's 128 sectors on chip
-  (`S = 2^15` bits) and tags the block with one query, the receipt hash of its index and its sketch, so the block's
-  receipt is right at every outcome (`SketchMeets.honest_accepts`). SHA-512's keys at the seed are the outcome's own
-  coins (`Hs` the keys, `keys` the identity), so `SketchHashRandom` holds at any `ε`. Its trace
-  (`Toy.honestTrace`) accepts where the block's receipt is right, counts it correct and holds it in node memory
-  at every tick: `KeyBudget` at one query a pass, `Receipted` and `Present` hold.
-* **Bites.** The toy (`Toy.acceptAll`): one pass over one block, counted correct and never present, on an audit
-  that accepts every outcome. `SketchBound` there claims probability at most the deployed δs at `Q = 0`, `P = 1`,
-  `ε = 0` and `N = 1`, below `2^-511`, for an event of probability `1`.
--/
+/-! The deployed sketch bound's premises meet at an honest session, and its conclusion fails on a trace that accepts
+everything. -/
 
 @[expose] public section
 
@@ -32,7 +14,6 @@ namespace ResourceAccounting.SecurityProofs.Remote
 open Finset ResourceAccounting.RateSketch ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sketch
   ResourceAccounting.Remote.Sketch.Assumptions ResourceAccounting.Remote.Sketch.Toy
 
-/-- The honest device's receipt is right at every outcome, so the honest session is accepted on all of them. -/
 theorem SketchMeets.honest_accepts (ω : Outcome Unit Hs₁ 1 128) : honestTrace.accepts ω := by
   show (0 : Fin 1) ∈ honest.correctAt ω 0 0
   simp only [Run.correctAt, Run.devAt, Run.coins, Prover.correct, Prover.tags, Prover.prog, honest, device, Chip.run,

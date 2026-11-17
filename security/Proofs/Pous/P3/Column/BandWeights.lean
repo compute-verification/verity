@@ -5,17 +5,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.Data.Sym.Sym2.Init
 
-/-!
-# Weighted starts and ends in the band
-
-Two peeling lemmas with weights, and the window/block counting they are used with.
-
-* `weighted_starts`: if ranks `t` increase along band edges of `R`, then `Σ_{w ∈ R} φ(t w) ≤ Σ_{s ∈ starts R} Ψ(t s)`
-  whenever `φ x + Ψ (x + 1) ≤ Ψ x` and `Ψ` is non-increasing. With `φ x = #{u : x < r u}` and `Ψ x = Σ_u (r u − x)`,
-  each rebuild segment is charged to its start.
-* `weighted_ends`: dually, `Σ_{u ∈ U} ψ(r u) ≤ Σ_{x ∈ ends U} Θ(r x)` whenever `ψ x + Θ (x − 1) ≤ Θ x` and `Θ` is
-  non-decreasing. With `ψ x = x − t` and `Θ x = tri (x − t)`, each dropped segment is charged to its end.
--/
+/-! Weighted starts and ends in the band, and the counting they are used with. -/
 
 @[expose] public section
 
@@ -24,8 +14,6 @@ namespace PousP3Column
 open Pous Pous.ColumnGame
 
 variable {n : ℕ}
-
-/-! ### Windows of starts -/
 
 theorem starts_window_disjoint (k : ℕ) (S : Finset (Fin n)) {a b : Fin n} (ha : a ∈ starts k S)
     (hb : b ∈ starts k S) (hab : a ≠ b) : Disjoint (window k a) (window k b) := by
@@ -47,7 +35,6 @@ theorem starts_small_card_le_one (k : ℕ) (S : Finset (Fin n)) :
   · exact (Finset.mem_filter.1 hb.1).2 a (starts_subset k S ha.1) ⟨hlt, by omega⟩
   · exact (Finset.mem_filter.1 ha.1).2 b (starts_subset k S hb.1) ⟨hlt, by omega⟩
 
-/-- The full starts, each with its window, occupy disjoint `k + 1` nodes. -/
 theorem full_starts_mul_le (k : ℕ) (S : Finset (Fin n)) :
     ((starts k S).filter fun v => k ≤ v.val).card * (k + 1) ≤ n := by
   classical
@@ -81,9 +68,6 @@ theorem full_starts_mul_le (k : ℕ) (S : Finset (Fin n)) :
     _ ≤ (Finset.univ : Finset (Fin n)).card := Finset.card_le_card (Finset.subset_univ _)
     _ = n := by rw [Finset.card_univ, Fintype.card_fin]
 
-/-! ### Weighted starts -/
-
-/-- **Weighted starts.** Charge each node of `R` to the start of its segment. -/
 theorem weighted_starts (k : ℕ) (t : Fin n → ℕ) (φ Ψ : ℕ → ℕ) (hΨ : ∀ x, φ x + Ψ (x + 1) ≤ Ψ x)
     (hmono : ∀ x y, x ≤ y → Ψ y ≤ Ψ x) :
     ∀ R : Finset (Fin n), (∀ a b, Band k a b → a ∈ R → b ∈ R → t a < t b) →
@@ -108,7 +92,6 @@ theorem weighted_starts (k : ℕ) (t : Fin n → ℕ) (φ Ψ : ℕ → ℕ) (hΨ
       have : x ∈ R' := h ▸ hTR hx
       exact (Finset.mem_sdiff.1 this).2 hx
     have hIH := ih R' hlt fun a b h ha hb => ht a b h (Finset.mem_sdiff.1 ha).1 (Finset.mem_sdiff.1 hb).1
-    -- each start of `R'` has a start of `R` among its predecessors, with a smaller rank
     let g : Fin n → Fin n := fun v => if hv : ∃ u ∈ R, Band k u v then Classical.choose hv else v
     have hg : ∀ v ∈ starts k R', g v ∈ T ∧ Band k (g v) v ∧ t (g v) < t v := by
       intro v hv
@@ -146,9 +129,6 @@ theorem weighted_starts (k : ℕ) (t : Fin n → ℕ) (φ Ψ : ℕ → ℕ) (hΨ
       _ = ∑ s ∈ T, (φ (t s) + Ψ (t s + 1)) := by rw [Finset.sum_add_distrib]
       _ ≤ ∑ s ∈ T, Ψ (t s) := Finset.sum_le_sum fun s _ => hΨ _
 
-/-! ### Ends and their successor blocks -/
-
-/-- The `k` successors of `x`. -/
 def block (k : ℕ) (x : Fin n) : Finset (Fin n) := Finset.univ.filter fun v => Band k x v
 
 theorem block_card (k : ℕ) (x : Fin n) (hx : x.val + k < n) : k ≤ (block k x).card := by
@@ -190,7 +170,6 @@ theorem block_disjoint_of_end (k : ℕ) (U : Finset (Fin n)) {x : Fin n} (hx : x
     ∀ v ∈ block k x, v ∉ U := fun v hv hvU =>
   (Finset.mem_filter.1 hx).2 v hvU (Finset.mem_filter.1 hv).2
 
-/-- At most one end has fewer than `k` successors. -/
 theorem ends_final_card_le_one (k : ℕ) (U : Finset (Fin n)) :
     ((ends k U).filter fun x => ¬ x.val + k < n).card ≤ 1 := by
   rw [Finset.card_le_one]
@@ -205,7 +184,6 @@ theorem ends_final_card_le_one (k : ℕ) (U : Finset (Fin n)) :
   · exact (Finset.mem_filter.1 ha.1).2 b hbU ⟨hlt, by omega⟩
   · exact (Finset.mem_filter.1 hb.1).2 a haU ⟨hlt, by omega⟩
 
-/-- The non-final ends' blocks are disjoint `k`-sets inside any `Z` containing them. -/
 theorem nonfinal_ends_mul_le (k : ℕ) (U Z : Finset (Fin n)) (E : Finset (Fin n))
     (hE : E ⊆ (ends k U).filter fun x => x.val + k < n) (hZ : ∀ x ∈ E, block k x ⊆ Z) :
     E.card * k ≤ Z.card := by
@@ -219,9 +197,6 @@ theorem nonfinal_ends_mul_le (k : ℕ) (U Z : Finset (Fin n)) (E : Finset (Fin n
     _ = (E.biUnion (block k)).card := (Finset.card_biUnion hdisj).symm
     _ ≤ Z.card := Finset.card_le_card (Finset.biUnion_subset.2 hZ)
 
-/-! ### Weighted ends -/
-
-/-- **Weighted ends.** Charge each node of `U` to the end of its segment. -/
 theorem weighted_ends (k : ℕ) (r : Fin n → ℕ) (ψ Θ : ℕ → ℕ) (hΘ : ∀ x, ψ x + Θ (x - 1) ≤ Θ x)
     (hmono : ∀ x y, x ≤ y → Θ x ≤ Θ y) :
     ∀ U : Finset (Fin n), (∀ a b, Band k a b → a ∈ U → b ∈ U → r a < r b) →
@@ -286,9 +261,6 @@ theorem weighted_ends (k : ℕ) (r : Fin n → ℕ) (ψ Θ : ℕ → ℕ) (hΘ :
       _ = ∑ x ∈ E, (ψ (r x) + Θ (r x - 1)) := by rw [Finset.sum_add_distrib]
       _ ≤ ∑ x ∈ E, Θ (r x) := Finset.sum_le_sum fun x _ => hΘ _
 
-/-! ### Triangular numbers -/
-
-/-- `tri m = 0 + 1 + ⋯ + m`. -/
 def tri (m : ℕ) : ℕ := ∑ i ∈ Finset.range (m + 1), i
 
 theorem tri_succ (m : ℕ) : tri (m + 1) = tri m + (m + 1) := by
@@ -297,7 +269,6 @@ theorem tri_succ (m : ℕ) : tri (m + 1) = tri m + (m + 1) := by
 theorem tri_mono {a b : ℕ} (h : a ≤ b) : tri a ≤ tri b :=
   Finset.sum_le_sum_of_subset_of_nonneg (Finset.range_subset_range.2 (by omega)) fun _ _ _ => Nat.zero_le _
 
-/-- The step `weighted_ends` needs, for `ψ x = x − t`, `Θ x = tri (x − t)`. -/
 theorem tri_step (t x : ℕ) : (x - t) + tri (x - 1 - t) ≤ tri (x - t) := by
   rcases Nat.lt_or_ge t x with h | h
   · obtain ⟨m, hm⟩ : ∃ m, x - t = m + 1 := ⟨x - t - 1, by omega⟩

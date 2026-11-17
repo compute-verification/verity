@@ -39,19 +39,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `HistoryReadBinding` says something
-
-The honest and nontrivial witnesses (the lock's `witnesses`) of `Hash.SecurityProofs.HistoryReadBinding`, under the
-spec's SHA-512 (`Pouw.PearlC.Sha512.digest`):
-
-* `HistoryReadBinding_honest`: in a table of the pinned capacity, `2^17` ranks, holding one row of one word and the
-  placeholder past it, the read at rank 0 of that row under its 192-byte salt, with the tree's own path, returns ok, and
-  the row and salt are behind the string at rank 0.
-* `HistoryReadBinding_nontrivial`: when every read is ok (the premise dropped), the row `[false]` read at rank 0 of a
-  table of one rank, beside the row `[true]` behind its string, is not that row, and none of the messages the two
-  openings hashed collide under SHA-512, so the conclusion fails there.
--/
+/-! The honest and nontrivial witnesses of `Hash.SecurityProofs.HistoryReadBinding`, under the spec's SHA-512. -/
 
 @[expose] public section
 
@@ -59,21 +47,16 @@ namespace Hash.SecurityProofs
 
 open Hash
 
-/-- The spec's SHA-512 (`Pouw.PearlC.Sha512.digest`) on bytes, its digest's 64 bytes. -/
 local notation "SHA512" => fun (x : Hash.Msg) (i : Fin 64) =>
   Nat.toUInt8 (List.getD (Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)) (Fin.val i) 0)
 
-/-- The verifier's hm96 key. -/
 local notation "key₀" => List.replicate 64 (0 : UInt8)
 
-/-- The honest table's domain, at the pinned capacity. -/
 local notation "D₀" => Tree.Domain.mk (fun _ => 4) (2 ^ 17) (fun r => r)
 
-/-- The honest table's one row, one word, and its salt. -/
 local notation "row₀" => List.replicate 16 true
 local notation "salt₀" => List.replicate 192 (2 : UInt8)
 
-/-- The honest table's strings: its row's at rank 0, the placeholder's of a one-word row past it. -/
 local notation "s₀" => HistoryTable.string 1
   (fun _ => Hm96.commitString SHA512 key₀ (RowLeaf.Format.seg.digest SHA512 row₀) salt₀)
   (HistoryTable.placeholder SHA512 SHA512 key₀ 1)
@@ -94,13 +77,10 @@ theorem HistoryReadBinding_honest :
     rfl
   exact ⟨Or.inr (HistoryTable.accepts_opening SHA512 SHA512 D₀ key₀ s₀ row₀ salt₀ 0 (by decide) hrow hsalt hs), hs⟩
 
-/-- The nontrivial instance's domain: one rank. -/
 local notation "D₁" => Tree.Domain.mk (fun _ => 4) 1 (fun r => r)
 
-/-- The read's witness at rank 0: the row `[false]`, no salt, no siblings. -/
 local notation "o₁" => RowLeaf.Opening.mk [false] [] []
 
-/-- The opening of the row `[true]` under the salt `[0]` at rank 0, with the tree's own path. -/
 local notation "op₁" => HistoryTable.opening SHA512 D₁ [] (fun _ => []) [true] [0] 0
 
 /-- **`HistoryReadBinding`'s nontrivial witness**: with every read ok, the row `[false]` read at rank 0 is not the row
