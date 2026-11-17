@@ -119,7 +119,6 @@ public import Proofs.Compose.ComposeMonitoringPeriod.Honest
 public import Proofs.ResourceAccounting.Served
 public import Proofs.Pous.Obligation
 public import Proofs.Compose.Additive
-public import Proofs.Slowdown.Coverage
 public import Proofs.Slowdown.ServingBlocks
 public import Proofs.Slowdown.ServingBlocks.Witnesses
 public import Proofs.ResourceAccounting.Defs.Actual.Source
@@ -134,8 +133,7 @@ public import Definitions.Pous.P2.Cost
 behind them, and the proofs of resource accounting's properties, the bridges that read each subprotocol's per-period
 guarantee as the joint period's input (`JointBridge/`, such as `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld`,
 locked in `security/Properties/lean-audit.json`). `Defs` holds the proof-only vocabulary no guarantee reads,
-`Sanity` shows the joint guarantee's hypotheses hold, and `Coverage` proves the inference-only policy's
-`Slowdown.SecurityProofs.CapabilityFloor`. `security/lean-audit.json` pins each guarantee's theorem, so a
+and `Sanity` shows the joint guarantee's hypotheses hold. `security/lean-audit.json` pins each guarantee's theorem, so a
 change to the guarantee, or to a definition it reads, changes its record.
 
 ## Where the top guarantees are proved

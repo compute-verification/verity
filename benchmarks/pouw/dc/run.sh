@@ -71,8 +71,8 @@ if [ "${DC_LEASED:-}" != 1 ]; then
   [ "${DC_BUILD_ONLY:-}" = 1 ] && exit 0
 
   lease=()
-  command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 40 --)
-  [ ${#lease[@]} -eq 0 ] && echo "run.sh: no gpu-lease on this node; running on its one GPU directly" >&2
+  [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 40 --)
+  [ ${#lease[@]} -eq 0 ] && [ -z "${GPU_LEASE_UUID:-}" ] && echo "run.sh: no gpu-lease on this node; running on its one GPU directly" >&2
   "${lease[@]}" env DC_LEASED=1 WORK="$WORK" bash "${BASH_SOURCE[0]}" "$FAM"
   exit $?
 fi
@@ -114,12 +114,20 @@ if [ "$FAM" = sm100 ] && [ -z "${DC_ONLY:-}" ]; then
 fi
 
 mapfile -t bins <"$WORK/built"
+prc=0
 for b in "${bins[@]}"; do
   case "$(basename "$b")" in scalar) o="$OUT/scalar" ;; *) o="$OUT/probes" ;; esac
   sel=()
   [ -n "${DC_ONLY:-}" ] && sel+=(--only "$DC_ONLY")
   [ "${DC_PASSED_ONLY:-}" = 1 ] && sel+=(--passed-only)
-  python3 "$PROBE" run "$b" --out "$o" --reps 10 "${sel[@]}" || echo "run.sh: probe.py run $(basename "$b") failed" >&2
+  python3 "$PROBE" run "$b" --out "$o" --reps 10 "${sel[@]}" \
+    || { echo "run.sh: probe.py run $(basename "$b") failed" >&2; prc=1; }
 done
-[ "$FAM" = sm90jb ] || python3 "$HERE/analyze.py" "$FAM" "$OUT" --json "$OUT/analysis.json" | tee "$OUT/verdict.json"
+record=(--record "$OUT")
+[ $prc = 0 ] || record+=(--failed "probe.py run refused or failed a binary")
+[ $exact = 1 ] || record=(--record "$OUT" --failed "a dgemm gate is not exact")
+ROOT=$HERE/../../..
+[ "$FAM" = sm90jb ] || PYTHONPATH="$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 "$HERE/analyze.py" "$FAM" "$OUT" --json "$OUT/analysis.json" "${record[@]}" | tee "$OUT/verdict.json"
 [ $exact = 1 ] || exit 4
+[ $prc = 0 ] || exit 1

@@ -1,4 +1,4 @@
-"""PoUS's session checked inside proofs: the verifier's side. The memory challenger's signed record never reaches it in
+"""PoUS's session checked inside proofs: the verifier's side. The memory attester's signed record never reaches it in
 the clear; it reads the outcomes of ``k + 2`` proofs, linked only by their committed rows.
 
     unit 0      PousSessionSig_v1{N, W, H}          (key, m, sig): the signature over m verifies under the key
@@ -13,8 +13,8 @@ each parameter's committed row and then each output's as the proof system stages
 each, `periods.interface.unit_rows`), and the values of the parameters that are public in its proof, which this module
 computes again from the commitment, the openings and the key. The links, which the window's wires make: unit 0's ``m``
 is unit 1's output m, and unit j + 2's records row is unit 1's records output ⌊j/2⌋. `check_session` is
-`memory_challenger.verdict` with the session's rows read only through those proofs; `run.check_at` calls
-`memory_challenger.verdict` until PoUS's verifier switches to it.
+`memory_attester.verdict` with the session's rows read only through those proofs; `run.check_at` calls
+`memory_attester.verdict` until PoUS's verifier switches to it.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 __all__ = ["SessionProofs", "UnitOutcome", "check_session", "clear_reasons", "known_reasons", "link_reasons",
            "programs"]
@@ -81,7 +81,7 @@ def _by_j(openings: Sequence[mc.CoinOpening]) -> dict[int, mc.CoinOpening]:
 def clear_reasons(commitment: mc.SessionCommitment, openings: Sequence[mc.CoinOpening], scheme: str, public_key: bytes,
                   *, trusted: frozenset[bytes] | set[bytes], schemes: Mapping[str, mc.Verify] = mc.SCHEMES) -> tuple[str, ...]:
     """What the verifier checks in the clear: the scheme is accepted (and its program known), the key is a trusted memory
-    challenger's, and every round's opening, the last one for its j, opens its committed coin."""
+    attester's, and every round's opening, the last one for its j, opens its committed coin."""
     reasons: list[str] = []
     if scheme not in schemes or scheme not in _LMS_PARAMS:
         reasons.append(f"signature scheme {scheme!r} is not accepted")

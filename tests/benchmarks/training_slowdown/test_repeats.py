@@ -7,12 +7,11 @@ import synthetic
 import test_resume
 import torch
 import torch.nn.functional as F
-from test_formalism import he_row
 from test_grade import CONFIG, registry
+from test_one_calculator import he_row
 
 from conftest import D, VOCAB
 from training_slowdown import config, flops, run, starts, work
-from training_slowdown import formalism as F_
 from training_slowdown import grade as G
 from training_slowdown.data import Data
 from training_slowdown.flops import Counter
@@ -296,7 +295,7 @@ def test_a_jobs_record_carries_its_steps_repeats_to_its_grade_and_the_record_wit
     after, before = (G.grade(config, reg_, [{"seed": 0, "split": "search", "record": r}], [
         {"seed": 0, "split": "search", "record": r}]) for r in (rec, without_count(rec)))
     row = G.rows_of(rec)[-1]
-    he, he0 = (G.traced(r, row)["formalism"]["products"]["he"] for r in (rec, without_count(rec)))
+    he, he0 = (G.traced(r, row)["products"]["he"] for r in (rec, without_count(rec)))
     changed = G.changed_steps(rec, None)
     assert he["repeats"] == {"positions": sum(s["repeats"] for s in changed), "tokens": batch * ctx * len(changed),
                              "measured": batch * ctx * len(changed)} and "repeats" not in he0
@@ -304,17 +303,14 @@ def test_a_jobs_record_carries_its_steps_repeats_to_its_grade_and_the_record_wit
     for a, b in zip(he["groups"], he0["groups"]):
         assert a["macs"] == (pytest.approx(b["macs"] * share, rel=1e-12) if not all(b["weight"]) else b["macs"])
     assert any(not all(g["weight"]) for g in he["groups"])
-    assert after["record_slowdown"]["terms"]["products"] is not None and before["record_slowdown"]["terms"]["products"] is not None
-    shape = synthetic.SHAPE | {"forward_macs_per_token": rec["forward_macs_per_token"]}
-    for r, s, premise, other in ((rec, after, work.P_REPEATS, work.P_BATCH),
-                                 (without_count(rec), before, work.P_BATCH, work.P_REPEATS)):
-        bound = F_.bound(F_.measure(G.traced(r, row), shape), s["policy"]["c_gates"], s["policy"]["k_bits"])
-        published = [s["record_slowdown"]["products_rests_on"], bound["rests_on"]["products"],
-                     G.per_period(1.0, s["record_slowdown"] | {"binding_kind": "products"})["parts"]["proved"]]
+    assert after["record_slowdown"]["term"] is not None and before["record_slowdown"]["term"] is not None
+    for s, premise, other in ((after, work.P_REPEATS, work.P_BATCH), (before, work.P_BATCH, work.P_REPEATS)):
+        published = [s["rests_on"]["record_slowdown"],
+                     G.per_period(1.0, s["record_slowdown"] | {"binds": "products"})["parts"]["proved"]]
         assert all(premise in x and other not in x for x in published)
-    assert work.COUNTED in after["record_slowdown"]["products_rests_on"]
-    assert G.traced(rec, row)["formalism"]["labels"]["products"].endswith(F_.COUNTED_PRODUCTS)
-    assert F_.COUNTED_PRODUCTS not in G.traced(without_count(rec), row)["formalism"]["labels"]["products"]
+    assert work.COUNTED in after["rests_on"]["record_slowdown"]
+    assert G.traced(rec, row)["label"].endswith(work.COUNTED_PRODUCTS)
+    assert work.COUNTED_PRODUCTS not in G.traced(without_count(rec), row)["label"]
 
 
 def test_a_stopped_and_continued_job_counts_the_unbroken_jobs_repeats(tmp_path, monkeypatch):

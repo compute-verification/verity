@@ -1,4 +1,4 @@
-"""The environment variables `minutes.py` reads, declared once (`tests/lint/test_repo_env_reads.py`: reads belong here)."""
+"""The environment variables `run_minutes.py` reads, declared once (`tests/lint/test_repo_env_reads.py`: reads belong here)."""
 from __future__ import annotations
 
 import os

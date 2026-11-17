@@ -40,12 +40,12 @@ them off the replay as it runs, as `codec.replay_record` reads its lookups, and 
 
 from __future__ import annotations
 
+import dataclasses
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
-import re
 from typing import Any, NamedTuple
 
 from verity_vllm.engine.hooks import Hooks

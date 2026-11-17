@@ -1,0 +1,12 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "memory-accounting/host-squaring-rate"
+title = "Host modular squaring rate"
+owner = "memory-accounting"
+unit = "squarings a second"
+axis = "The most squarings a second modulo the store codec's 512-bit prime a host's cores did in one run, every build gated first, each point naming its processor and core count."
+better = "higher"
+command = "research run --on auto --cpus 48 --project verity --cwd source -- bash benchmarks/rate_squaring/ifma.sh"
+every = "7d"

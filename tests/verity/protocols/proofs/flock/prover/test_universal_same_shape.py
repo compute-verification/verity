@@ -1,8 +1,8 @@
-"""Class-fixed regions: two private circuits of one class, `UniversalUnit_v1{G, N_IN, N_OUT}`, staged as the bench stages the
-universal unit (`benchmarks/private_circuit/universal.py`: a one-Call Program partitioned by `Q_template_instance`,
+"""Class-fixed regions: two private circuits of one class, `UniversalUnit_v1{G, N_IN, N_OUT}`, staged as the universal unit is
+staged (a one-Call Program partitioned by `Q_template_instance`,
 `class_statement.stage` packed, each description source one row every instance opens, x one row per instance) on the same x
-under one staging salt key, give one statement but for its regions' bytes. One description is the bench's (a random circuit
-description padded to the class), the other a uniformly random bit string of the class (any index, reads past the wires included);
+under one staging salt key, give one statement but for its regions' bytes. One description is a random circuit
+description padded to the class, the other a uniformly random bit string of the class (any index, reads past the wires included);
 each staging builds its own Program, units and partition.
 
 * **The statement.** The circuit is the same byte for byte: its digest and class digest, and META's ports, ranges, leaf
@@ -68,7 +68,7 @@ def _description(rng: random.Random, G: int, N_IN: int, N_OUT: int, any_index: b
 
 
 def _lanes(units, cl, net: U.PrivateCircuit, xs: list[list[int]]):
-    """The bench's `universal.lanes`: (inputs, outputs, row identities), the description's sources one row for every instance,
+    """The universal unit's lanes: (inputs, outputs, row identities), the description's sources one row for every instance,
     x one row per instance."""
     act, uc = units.activation(cl.definition), cl.representative
     leaf_param = []

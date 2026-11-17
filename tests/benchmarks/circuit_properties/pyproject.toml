@@ -23,8 +23,16 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # registry), and test_smollm2_layer holds its SmolLM2-135M shapes to the measured layer (run.slowdown_shapes). The registry
 # reads the inference-only policy's calibrations and the H200 servers' cards (slowdown/params.py). The runner writes its metric into the run's result with
 # the harness kit's writer (`benchmarks/harness/verity_bench`: `kit` and its `settings`, which read `verity_config`).
-# `adapters/torch/verity_torch`: what `verity_vllm` imports.
-inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
+# `adapters/torch/verity_torch`: what `verity_vllm` imports. Llama 3.2 1B's configuration is the adapter's of record
+# (references.pinned): its checkpoint manifests, its pinned config.json, and what `config_of` and `dense_generic` import.
+inputs = ["adapters/vllm/manifests", "adapters/vllm/verity_vllm/config.py", "adapters/vllm/verity_vllm/settings.py",
+          "adapters/vllm/verity_vllm/engine/__init__.py", "adapters/vllm/verity_vllm/engine/profiles/__init__.py",
+          "adapters/vllm/verity_vllm/engine/profiles/cases.py", "adapters/vllm/verity_vllm/engine/profiles/dense_generic.py",
+          "adapters/vllm/verity_vllm/engine/profiles/hf_configs/LLAMA32_1B.config.json",
+          "adapters/vllm/verity_vllm/program/__init__.py", "adapters/vllm/verity_vllm/program/model.py",
+          "adapters/vllm/verity_vllm/records/__init__.py", "adapters/vllm/verity_vllm/records/fields.py",
+          "adapters/vllm/verity_vllm/records/workload.py",
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
           "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
           "benchmarks/slowdown/slowdown", "benchmarks/slowdown/data", "benchmarks/nci/calibrations.json",
           "hardware/cards/h200-sxm-141gb.toml", "hardware/cards/dgx-h200.toml",

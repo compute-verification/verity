@@ -30,6 +30,7 @@ import atexit
 import fcntl
 import functools
 import json
+import os
 import subprocess
 import tempfile
 import threading
@@ -66,7 +67,8 @@ def executable(exe: str = EXE) -> Path:
         try:
             p = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
         except FileNotFoundError:
-            raise LeanError(f"lake is not on the PATH, so {exe} in {PACKAGE} cannot be built") from None
+            raise LeanError(f"lake is not on the PATH ({os.pathsep.join(os.get_exec_path())}), so {exe} in {PACKAGE} cannot be "
+                            "built: put elan's bin on the PATH (tools/verity/lean/setup.sh installs it in ~/.elan/bin)") from None
     if p.returncode != 0:
         raise LeanError(f"lake build {exe} in {PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
     return PACKAGE / ".lake" / "build" / "bin" / exe

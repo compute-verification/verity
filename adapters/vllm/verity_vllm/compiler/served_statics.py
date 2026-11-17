@@ -41,21 +41,22 @@ proof block's Flock block is set by its two rows' in-circuit hashing, G·R·(3 +
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Sequence
 
 from verity.circuits import boolean as BL
+from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import Circuit, and_reduce
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
 from verity.commitments.gates.frame_v3 import _part, _refs
 from verity.protocols.resource_accounting.network.verifier import head_check as HC
+
 from verity_vllm.compiler import replay_chain as RC
 from verity_vllm.compiler import served_rows as SR
 from verity_vllm.compiler import served_tie as ST
-from verity.circuits.boolean import BIT
 
 STATICS = ("R", "G", "IW", "L", "T")
 STEP = ("R", "L", "T")
@@ -150,7 +151,7 @@ def statics_bits(S, programs: Sequence[Program]) -> list[int]:
         prog = list(prog or ())
         if len(prog) > S.R:
             raise ValueError(f"a step of {len(prog)} rows is over R = {S.R}")
-        slot = {"valid": [], "start": [], "n": []}
+        slot: dict[str, list] = {"valid": [], "start": [], "n": []}
         for k in range(S.R):
             start, n = prog[k] if k < len(prog) else (0, 0)
             slot["valid"].append(ST._bits_int(int(k < len(prog)), 1))

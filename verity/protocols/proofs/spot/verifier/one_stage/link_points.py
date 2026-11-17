@@ -4,9 +4,9 @@ A session of a member's statement opens its link at `PT_LOCAL + nbl(g, c)` point
 circuit's `g` units a proof block (META `vus_per_block`). A sample over several members samples a random count of each
 member's units. One that runs out of the verifier's public coins fails the window (`OneStageZk.RAN_OUT`); one that ends
 samples between the member's fewest and most units (`ended`, `bounds`). The docket of the per-member form refuses a
-member whose fewest and most give different link points, a member whose fewest is none (some sample that ends misses
-it and gives it no statement, so the check sets up no session of its circuit), and a sampling design no sample of
-which ends (`refused`, `ends`, the docket's `link-points`).
+member whose fewest and most give different link points, and a sampling design no sample of which ends (`refused`,
+`ends`, the docket's `link-points`). A member whose fewest is none is one some sample that ends misses: it gives it no
+statement, so the check sets up no session of its circuit.
 """
 from __future__ import annotations
 
@@ -86,14 +86,13 @@ NEVER_ENDS = "link points: no draw under the law ends, so each of its windows fa
 
 
 def refused(sampling_design: Mapping[str, Any], population: int, members: Sequence[Member]) -> list[int]:
-    """The members the docket refuses, by index: one some sample that ends misses (its fewest sampled proof blocks
-    is none), and one whose fewest and most sampled proof blocks, over the samples that end, give different link points
-    (`bounds`); ValueError (`NEVER_ENDS`) when no sample under `sampling_design` ends."""
+    """The members the docket refuses, by index: one whose fewest and most sampled proof blocks, over the samples that
+    end, give different link points (`bounds`); ValueError (`NEVER_ENDS`) when no sample under `sampling_design` ends."""
     bs = bounds(sampling_design, population, members)
     if not ends(sampling_design, population):
         raise ValueError(NEVER_ENDS)
     return [i for i, ((_, g), b) in enumerate(zip(members, bs))
-            if b is not None and (b[0] == 0 or nbl(g, b[0]) != nbl(g, b[1]))]
+            if b is not None and nbl(g, b[0]) != nbl(g, b[1])]
 
 
 def sampling_design_of(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any],

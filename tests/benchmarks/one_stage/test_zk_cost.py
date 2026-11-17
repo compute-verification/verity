@@ -21,6 +21,8 @@ from verity.device import load_card, rate
 sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage")))
 import zk_cost as Z
 
+CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+
 K, FIXED_S, MARGINAL_S = 6144, 2.0, 1e-3
 PUBLIC_INPUTS = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
 NO_PROGRAM = "refused: a session without the verifier's program (--program)"
@@ -42,7 +44,7 @@ def _records(out: Path, sizes: tuple[int, ...] = (1024, 2048)) -> None:
 
 
 def test_the_h200_e4m3_peak_is_the_data_sheets_at_the_tensor_clock():
-    card = load_card("h200-sxm-141gb")
+    card = load_card("h200-sxm-141gb", directory=CARD_FILES)
     peak = rate(card, fmt="e4m3")
     assert peak == 132 * 4096 * 1830 * 10**6
     assert float(peak) == pytest.approx(9.8945e14, rel=1e-4)
@@ -53,7 +55,7 @@ def test_overhead_divides_a_blocks_seconds_by_the_cards_rate(tmp_path):
     _records(tmp_path)
     assert Z.overhead(argparse.Namespace(out=str(tmp_path), card="h200-sxm-141gb", run="r-test")) == 0
     (t,) = json.loads((tmp_path / "overhead.json").read_text())["types"].values()
-    peak = float(rate(load_card("h200-sxm-141gb"), fmt="e4m3"))
+    peak = float(rate(load_card("h200-sxm-141gb", directory=CARD_FILES), fmt="e4m3"))
     assert t["peak_mac_per_s"] == peak
     dev = t["arms"]["dev"]
     assert dev["marginal_s"] == pytest.approx(MARGINAL_S) and dev["fixed_s"] == pytest.approx(FIXED_S)
