@@ -1235,7 +1235,8 @@ def test_a_cost_over_its_target_says_so_in_the_validation_whose_status_stays_the
 GLM = f"{S.MODELS['glm53'].repo}@{S.MODELS['glm53'].revision}"
 
 
-def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: str = "prod", ours: str = "prod-record") -> list[dict]:
+def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: str = "prod", ours: str = "prod-record",
+             parts: list[str] | None = None) -> list[dict]:
     """The measurements of the run's result.json once the report of a job with the cost line ``c`` is declared in it,
     where the benchmark's cost step wrote its own and an earlier report one under the metric's id."""
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
@@ -1248,9 +1249,26 @@ def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: st
                          {"name": "vllm/prod-advice-bits-glm53", "value": 9.0}]}))
     monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
     r = {"cost": c, "tokens": P.not_measured("no replay ran"), "load": S.AGENTIC, "commit": "c" * 40, "run": "r-1",
-         "arms": {"stock": stock, "again": None, "ours": ours}, "model": GLM}
+         "arms": {"stock": stock, "again": None, "ours": ours}, "model": GLM, **({"parts": parts} if parts else {})}
     assert P.declare(tmp_path / "out", r, tmp_path / "out" / "replay-compiled") == tmp_path / "result.json"
     return json.loads((tmp_path / "result.json").read_text())["measurements"]
+
+
+def test_prod_all_ons_cost_over_prod_is_a_point_of_the_same_metric_that_says_what_it_leaves_off(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """One metric for every configuration: `prod-all-on` over `prod` is a point of the cost's id beside `prod-record`'s,
+    its member naming the arm and its parts what it has on and leaves off; over another stock it is none."""
+    by = {"prod": sessions_arm("prod", [2.0] * 6), "prod-again": sessions_arm("prod-again", [2.0] * 6),
+          "prod-all-on": sessions_arm("prod-all-on", [1.99, 1.988, 1.992, 1.99, 1.989, 1.991])}
+    c = P.cost(tmp_path, by, "prod", "prod-all-on", None, S.AGENTIC, 1.0)
+    assert c["stands"] and c["metric"] == "vllm/prod-serving-cost-glm53"
+    assert P.cost(tmp_path, by, "prod-again", "prod-all-on", None, S.AGENTIC, 1.0)["metric"] is None
+    assert P.costed("prod", P.ALL_ON, "glm53") and not P.costed("compiled", P.ALL_ON, "llama32-1b")
+    parts = S.parts_of("prod-all-on", {"every_s": 60.0})
+    got = declared(tmp_path, monkeypatch, c, ours="prod-all-on", parts=parts)
+    assert (got[1]["name"], got[1]["member"], got[1]["parts"]) == (
+        "vllm/prod-serving-cost-glm53", "glm-5.3-h200-prod-all-on-over-prod", parts)
+    assert "the network attester's egress pacing: off" in parts
 
 
 def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_where_it_stands(

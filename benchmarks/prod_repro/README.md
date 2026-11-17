@@ -105,9 +105,11 @@ two arms are at the same settings. Of `prod-record` it holds two more: `vllm/pro
 the replayed window's served tokens the replay gave back before a request's first difference, where the replay's
 record agrees with what it kept; and `vllm/prod-advice-bits-glm53`, the advice line's bits charged a request, where
 that line is measured. For Llama 3.2 1B (`record-ids` over `compiled`) the cost and the replay match are points of the
-same two ids, older than their other models; the 1B has no speculative decoding, so no advice line. Each point names
-its `model` (the checkpoint, `repo@revision`), its `hardware` (the cards it was served on) and its `member`, the model,
-the card and the arm (the cost's over its stock), which tells its line from the id's other models' and arms'.
+same two ids, older than their other models; the 1B has no speculative decoding, so no advice line. The cost of
+`prod-all-on` over `prod` (`--ours prod-all-on`: the serving cost benchmark's README, "Everything on at the recipe's
+line") is a point of the cost's id too, and its `parts` say in words what it has on and what it leaves off. Each point
+names its `model` (the checkpoint, `repo@revision`), its `hardware` (the cards it was served on) and its `member`, the
+model, the card and the arm (the cost's over its stock), which tells its line from the id's other models' and arms'.
 Otherwise the result holds no entry under an id.
 
 The job fails where an arm or the replay fails, where a replay was asked for and its tokens were not compared, and
