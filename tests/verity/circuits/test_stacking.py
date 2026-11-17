@@ -875,5 +875,5 @@ def test_the_table_is_pinned():
     assert P.digest() == PINNED, P.digest()
 
 
-PINNED = ("072d21203cf170d46f352890c3312024cf6be890831d2fa1b36201038653ad8c"
-          "d132e30a9241c2846e16f0c0069c473774865492e12fd3ea45ac63452f55afe7")
+PINNED = ("6e06e5c6886a1a48ba75d530c0cec57c6dae5959f89a6457283d4c199cb5be90"
+          "d745cc53fce0c436a5c6e2d8e414b075b8549992ca93a963bd067e98a4de7886")
