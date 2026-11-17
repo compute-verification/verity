@@ -22,7 +22,7 @@ remote composite's error is the union bound over its subprotocols' errors (`Veri
   `--zk` table's bound, its rewinding finders, the link finders and extraction). These grow with T, so the figure pools
   them over the prover's compute.
 - **Sampling's part of SPOT's error, not this figure:** ε at δ, the chance a sample misses more than an ε share of wrong
-  proof blocks (`Verity.Sampled.Live.sampleMiss`). It doesn't grow with T, and `benchmarks/sampling_plan/` evaluates it.
+  proof blocks (`Verity.Sampled.Live.sampleMiss`). It doesn't grow with T, and `calibration/sampling_plan/` evaluates it.
 - **The other subprotocols' errors, not in the total.** The output and the figure's record say each:
   - `pouw (Pearl+): open, not in the total`: `Verity.Vocab.PouwSound`, an open premise of the guarantee.
   - `inference-only policy: open, not in the total`: `Verity.Vocab.InferenceOnlySound`, which

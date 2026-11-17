@@ -2,7 +2,7 @@
 types have no statement the Lean verifier accepted, recounted from a request cover record (`cover.json`, schema
 `circuits/request-cover/v7`, or v8: v7 with `card`, the card it is of, by its `source`, `path` and `tree`).
 
-`--card CARD` holds the record to a sampling plan's card (`benchmarks/sampling_plan/glm53_blocks.json`): the record's
+`--card CARD` holds the record to a sampling plan's card (`calibration/sampling_plan/glm53_blocks.json`): the record's
 on-card types must be exactly the card's `definitions`, else it is refused (exit 2), naming up to five types on each
 side.
 
