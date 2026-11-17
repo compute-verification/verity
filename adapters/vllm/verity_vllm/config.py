@@ -56,7 +56,7 @@ WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
 RECORDS = MANIFESTS / "records.json"
-CARD_FILES = ROOT.parents[1] / "hardware/cards"
+CARD_FILES = ROOT.parents[1] / "calibration/hardware/cards"
 
 
 def checkpoints_hf_home() -> str | None:

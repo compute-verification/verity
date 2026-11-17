@@ -14,7 +14,7 @@
 # The window is over a registered store of a few thousand blocks. Lean holds every opening's proof, everything the
 # verifier received is scanned for the sampled proof blocks' bytes, and the cost points are the prover's cost per opening.
 # a8_gpu.sh takes the cost points on sm_120 (`flock-circuit prove --zk --gpu`), as a GPU host job, and a8_cost.py reads a
-# run's sessions into the one cost model's observations (benchmarks/sampling_plan).
+# run's sessions into the one cost model's observations (calibration/sampling_plan).
 set -uo pipefail
 export HZ_CONFIGS=a8 HZ_MEM_GB=${A8_MEM_GB:?}
 if [ -n "${A8_CACHE:-}" ] && mkdir -p "$A8_CACHE" 2>/dev/null && [ -w "$A8_CACHE" ]; then export HZ_CACHE=$A8_CACHE; fi
