@@ -28,21 +28,7 @@ import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The decoder is right at a plain session of `J` hidden-output tables
-
-`decodesOnPHJ_exec`: `PlainJ.decodesOnPJ_exec` under hidden outputs, the plain counterpart of the decoder
-`ZkHidden.zk_session_soundHJ` reads (without its masks). At an outcome verity-verify-proof accepts, at table `j`:
-
-* `RecordsLiveJ` gives the record's sample `dj S`, the proof files, the link points, and table `j`'s root and streams.
-* `setupOf_tablePHJ` sets table `j` up with setupHidden under `tagsAt` at `drawJ` (`HiddenExec.setupTables_okH` at one
-  table, `ZkHidden.setupTables_partsH` at several); `SampleOkPHJ` gives its proved units and link points, so a
-  `SampleSetupH` exists (`HiddenExec.sampleSetupH_of_setupHiddenI`), and `planPHJ`'s table `j` is its table
-  (`tablePHJ_of`), `stmtOf` of setupHidden's statement.
-* `accepts_reps_atH` (`DecodeZLJ.accepts_reps_at` under hidden outputs, from the acceptance lemmas without `hh`) gives
-  each rep's run and rounds and the salted verdict; `repRun_at` makes each run a `RepRun` for `decJ`, and
-  `playsT_of_repRun` a run on its tape.
--/
+/-! The decoder is right at a plain session of `J` hidden-output tables (`decodesOnPHJ_exec`). -/
 
 @[expose] public section
 
@@ -59,9 +45,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **verity-verify-proof sets table `j` up under its tags at its sample, under hidden outputs**, without `--zk`
-(`PlainJ.setupOf_tablePJ` with `setupHidden`, `ZkHidden.setupOf_tableJH` at the plain inputs): at the record's sample `d`,
-`setupTables` at `I` has `nTab I` tables, table `j` setupHidden's statement under `tagsAt` at `drawJ`. -/
 theorem setupOf_tablePHJ {I : Inputs} {record : String} {d : Lean.Json} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hh : I.tags.hiddenOutputs = true) (hd : recordDraw record = some d) (hs : setupOf I record = .ok (spec, sts)) :
     sts.size = nTab I ∧ ∀ (j : ℕ) (hj : j < sts.size),
@@ -92,9 +75,6 @@ theorem setupOf_tablePHJ {I : Inputs} {record : String} {d : Lean.Json} {spec : 
     rw [e1, hpart]
     exact hall j hj
 
-/-- **verity-verify-proof's acceptance under hidden outputs, table by table and rep by rep** (`DecodeZLJ.accepts_reps_at`
-under hidden outputs): the acceptance lemmas without `hh` (`accepts_verdict_leafAny`, `accepts_rep_roundsAny`,
-`setupTables_pointsAny`) at every table `j`, the verdict at `leaf512` under `hm96-sha512/v1` leaves (`leafOfId_hm96`). -/
 theorem accepts_reps_atH {I : Inputs} {t : Exec.Transcript}
     (hrr : I.tags.retainRounds = true) (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord),
@@ -162,11 +142,6 @@ variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)
   (x₀ : HiddenExec.SampleSetupH (inputsPJ I 0) mPts S₀ d₀)
 
 set_option maxHeartbeats 4000000 in
-/-- **The decoder is right at a plain session of `J` hidden-output tables** (the decoder premise at `--plain-tables --session-tables J`
-under hidden outputs): given the tags, the session's circuit, `wr` the challenger's record and the challenger's samples
-setting each table up at `mPts` link points, `DecodesOnJ` holds at `planPHJ` with the decoder `decJ` on each table's two
-streams, single coins as field elements, no final messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and
-its openings `opnPHJ`. -/
 theorem decodesOnPHJ_exec (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (L : SamplingDesign n)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)

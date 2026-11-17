@@ -20,24 +20,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
-/-!
-# A `--zk` rep's rounds after round 0 carry its messages
-
-`zk_carries`: the chunk lemma at `wRestZ`, glued from four phases with `CarriesP.append`.
-
-* The zerocheck's tail and the lincheck: DecodeZL's `zl_carries` without round 0, which closes at the first coin and
-  carries nothing (`carries_drop_coin`, `zl_tail_carries`).
-* The opening: `carries_switch` and `carries_switches` from the ring switches' decoded lengths (`op_carries_sizes`).
-* Ligerito with level 0's hiding (`zk_lig_carries`): the non-ZK session's rounds (`carriesP_f`, `carriesP_fold'`,
-  `carriesP_mid`), with level 0's pair's sums (`carriesP_ev`), the second `ρ` coin's empty round and the round of `T'`,
-  `ybar`, the last lane message and the level-1 cap (`carriesP_tcap`). The `--zk` schedule is its statement version's
-  (`fast100At`: fast100's, or the wide-leaf schedule) with level 0 restratified (`zk_schedule_fast100`), so the level
-  loop is `carriesP_levels` at that schedule, whose levels fit its bounds (`fast100_small`; level 0 at `--zk` does
-  not).
-* The inner proof's four rounds (`carriesP_inner`).
-
-`ligPadShape_pat` is level 0 masked's coin pattern, the rounds' (`isCoin_rec` for the level loop).
--/
+/-! A `--zk` rep's rounds after round 0 carry its messages (`zk_carries`). -/
 
 @[expose] public section
 
@@ -67,7 +50,6 @@ theorem zk_schedule_fast100 {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Z
       simp only [Array.getD_eq_getD_getElem?, Array.set!_eq_setIfInBounds, Array.getElem?_setIfInBounds]
       simp [show (0 : ℕ) ≠ i by omega]
 
-/-- Dropping a phase's first round, when it is a coin's alone and carries nothing. -/
 theorem carries_drop_coin {w₀ : List DecodeZL.Wire} {W : List (List DecodeZL.Wire)} {σ₀ : Exec.Kind}
     {σ : List Exec.Kind} {c₀ F : List Frame} {ms t : List Msg} (h : Carries (w₀ :: W) (σ₀ :: σ) (c₀ ++ F) ms t)
     (hc : chunks c₀ = ([c₀], [])) (hw : decRound w₀ ⟨(encs c₀).toArray⟩ = []) (hσ : isCoin σ₀ = true) :
@@ -83,7 +65,6 @@ theorem carries_drop_coin {w₀ : List DecodeZL.Wire} {W : List (List DecodeZL.W
   · rw [hc] at l; simpa using l
   · simpa [coinPat, groupPat, hσ] using c
 
-/-- **The zerocheck's tail and the lincheck carry their messages**: `zl_carries` without round 0. -/
 theorem zl_tail_carries (m kLog : ℕ) (zp : ZerocheckProof) (lp : LincheckProof) (hm : 14 ≤ m)
     (h1ab : zp.round1ab.size = 64) (h1c : zp.round1c.size = 64) (hzP : lp.zPartial.size = 64) :
     Carries (wZL m kLog).tail ((zcShape 𝔽 m).tail ++ lcShape 𝔽 kLog) (zcTailZ m zp ++ lcFrames kLog lp)
@@ -97,7 +78,6 @@ theorem zl_tail_carries (m kLog : ℕ) (zp : ZerocheckProof) (lp : LincheckProof
   refine carries_drop_coin (w₀ := []) (σ₀ := .coin (Fin 6 → 𝔽)) ?_ hc₀ (decRound_nil _) rfl
   simpa [wZL, zcShape, zcFrames, zcTailZ] using h
 
-/-- **The opening's rounds carry its messages**, from the ring switches' lengths alone. -/
 theorem op_carries_sizes (rs : Array (Array F128)) (n : ℕ) (hn : rs.size = n) (h1 : 1 ≤ n)
     (h : ∀ v ∈ rs, v.size = 128) : Carries (wOP n) (opShape 𝔽 n) (rsFrames n rs) (opMsgs n rs) [] := by
   obtain ⟨k, rfl⟩ : ∃ k, n = k + 1 := ⟨n - 1, by omega⟩
@@ -112,8 +92,6 @@ theorem op_carries_sizes (rs : Array (Array F128)) (n : ℕ) (hn : rs.size = n) 
   have := h₁.append (h₂.append h₃)
   simpa [wOP, opShape, switches, rsFrames, opMsgs, List.range_eq_range', List.range'_succ, List.replicate_succ]
     using this
-
-/-! ## Level 0's hiding rounds and the inner proof's -/
 
 theorem ybar_vals (l : List F256) (acc : Array F128) :
     (l.foldl (fun acc v => (acc.push v.c0).push v.c1) acc).toList = acc.toList ++ l.flatMap fun v => [v.c0, v.c1] := by
@@ -139,7 +117,6 @@ theorem ybar_get : ∀ (l : List F256) (i : ℕ), i < l.length →
         show 0 + 1 + 1 + 2 * i + 1 = 0 + 1 + 1 + (2 * i + 1) by omega, e₀, e₁, h₀, h₁]
       simp
 
-/-- The round of the pair's sums `e`, closed by the first `ρ` coin. -/
 theorem carriesP_ev (z : Zk.Level0Msgs) :
     CarriesP [[wEv]] [false, true] ([.vec [z.e0.c0, z.e0.c1], .vec [z.e1.c0, z.e1.c1]] ++ [.sq 2 2]) [evMsg z] [] := by
   have hwf : ∀ f ∈ ([.vec [z.e0.c0, z.e0.c1], .vec [z.e1.c0, z.e1.c1]] ++ [.sq 2 2] : List Frame), f.WF := by
@@ -152,8 +129,6 @@ theorem carriesP_ev (z : Zk.Level0Msgs) :
   rw [decRound_encs hwf]
   simp [readAll, wEv, evMsg, valsOf, bytesOf, Frame.vals, Frame.byteStr]
 
-/-- The round after the second `ρ` coin: `LABEL_CLOSE`, `T'`, `ybar`, the last lane round's message and the level-1
-cap, closed by the first out-of-domain point's coins. -/
 theorem carriesP_tcap (z : Zk.Level0Msgs) {t : ℕ} (hyb : z.ybar.size = t) (ht : 2 * t < 2 ^ 64)
     (m : F256 × F256) {c : Array ByteArray} (hc : ∀ x ∈ c.toList, x.size = 64) (hcs : c.size < 2 ^ 32)
     {dim : ℕ} (hd : dim ≠ 0) (hdw : dim < 2 ^ 64) :
@@ -212,8 +187,6 @@ theorem carriesP_tcap (z : Zk.Level0Msgs) {t : ℕ} (hyb : z.ybar.size = t) (ht 
     obtain ⟨g₀, g₁⟩ := ybar_get z.ybar.toList i.val hi
     rw [g₀, g₁, Array.getElem!_toList]
 
-/-- **The inner proof's rounds carry its messages**: `final_c'`, `[ρ, σ]`, `τ`'s commitment and `Y`, each closed by
-the next coin. -/
 theorem carriesP_inner (pr : Zk.InnerProof) (finalC : F128) {nY : ℕ} (hy : pr.y.size = nY)
     (hyw : pr.y.size < 2 ^ 64) (htau : pr.tauCommit.size = 64) :
     CarriesP (wInner nY) [false, true, false, true, false, true, false, true] (innerFr pr finalC 10)
@@ -261,8 +234,6 @@ theorem carriesP_inner (pr : Zk.InnerProof) (finalC : F128) {nY : ℕ} (hy : pr.
   have := h₁.append (h₂.append (h₃.append h₄))
   simpa [wInner, innerFr, innerMsgs] using this
 
-/-! ## Ligerito with level 0's hiding -/
-
 theorem isCoin_foldZ (F K : Type) : ∀ k, (foldShapeZ F K (k + 1)).map isCoin =
     (List.replicate k [true, false]).flatten ++ [true]
   | 0 => rfl
@@ -271,9 +242,6 @@ theorem isCoin_foldZ (F K : Type) : ∀ k, (foldShapeZ F K (k + 1)).map isCoin =
         isCoin_foldZ F K k]
       simp [List.replicate_succ]
 
-/-- **The coin pattern of level 0 masked**: the start's coin, the first out-of-domain value's round, the `k0` lane
-rounds, the pair's sums' round, the second `ρ` coin's, the round of `T'`, `ybar`, the last message and the level-1
-cap, then the non-ZK session's level 0 queries and level loop. -/
 theorem ligPadShape_pat (sch : Flock.Schedule) (t : ℕ) (hk0 : 1 ≤ sch.k0) (hdim : DimSeam sch) :
     coinPat (ligPadShape 𝔽 𝕂 Dig (schedOf sch) 2 t) = [true] ++ ([false, true] ++
       ((List.replicate (sch.k0 - 1) [false, true]).flatten ++ ([false, true] ++ ([false, true] ++ ([true] ++
@@ -312,10 +280,6 @@ theorem ligPadShape_pat (sch : Flock.Schedule) (t : ℕ) (hk0 : 1 ≤ sch.k0) (h
     List.map_replicate]
   simp [shift_pat, pMid, isCoin]
 
-/-- **Ligerito's rounds with level 0's hiding carry its messages**: the non-ZK session's rounds (`lig_carries`'s
-pieces), with the pair's sums' round, the second `ρ` coin's and the round of `T'`, `ybar`, the last lane message and the
-level-1 cap between the lane rounds and level 0's queries. The level loop is the non-ZK session's at fast100's schedule,
-which differs from the `--zk` one only at level 0. -/
 theorem zk_lig_carries (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (zp : Zk.ZkProof)
     (T : F128) (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (h64 : st.merkle.digestLen = 64)
     (hs : ProofSizes (shapeZK st sch extras) zp.proof) (hyb : zp.level0.ybar.size = tPad) :
@@ -368,8 +332,6 @@ theorem zk_lig_carries (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras 
     simp [wLIGZ, schedOf, this]
   rw [hw]
   simpa [ligFramesZ, ligMsgsZ, l0Fr, introFr, List.append_assoc] using this
-
-/-! ## The chunk lemma -/
 
 theorem carriesP_of_carries {W : List (List DecodeZL.Wire)} {σ : List Exec.Kind} {F : List Frame} {ms t : List Msg}
     (h : Carries W σ F ms t) : CarriesP W (coinPat σ) F ms t := h

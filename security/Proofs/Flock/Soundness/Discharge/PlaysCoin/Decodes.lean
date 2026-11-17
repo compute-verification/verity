@@ -5,16 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Tape
 
-/-!
-# `Decodes` from the reps' runs
-
-`playsT_of_repRun`: a rep's `RepRun` along a spine of its game is a run on the decoded tape. The run on two lists is a
-run on one tape whose coin steps are the rounds' `coinMsg true` (`coinsOfRounds`). That tape's kinds are the spine's,
-up to its length (`Spine.prefix`), so its messages cut at its coins are the `RepRun`'s groups, and the tape is the
-decoded one (`tapeOfGroups`). So `decodesOfRuns`, `decodesAllOfRuns` and `decodesOnOfRuns`; the reps' spine is
-`repShape` (`repC_spine`). `decodesOfRunsAt` reads the spine only along the runs that end where the `RepRun` ends
-(`playsT_of_repRunAt`).
--/
+/-! `Decodes` from the reps' runs. -/
 
 @[expose] public section
 
@@ -35,8 +26,6 @@ theorem length_steps : ∀ ts : List Step,
       simp only [List.filterMap_cons, Sum.getLeft?_inr, Sum.getRight?_inr, List.length_cons, length_steps ts]
       omega
 
-/-- **A rep's run on its decoded tape.** A `RepRun` of `g` along a spine of `g` is a run of `g` on the tape the decoder
-reads off the rounds, with `one := fun _ => true`, then the tail. -/
 theorem playsT_of_repRun {P : Type} {g : Game P} {σ : List Exec.Kind} {dec : ℕ → ByteArray → List Msg} {rs : List Round}
     {tail : List Msg} {p : P} (hs : Spine g σ) (h : RepRun g σ dec rs tail p) :
     PlaysT g (tapeFrom dec (fun _ => true) 0 rs ++ tail.map .inl) p := by
@@ -50,8 +39,6 @@ theorem playsT_of_repRun {P : Type} {g : Game P} {σ : List Exec.Kind} {dec : �
     tapeOfGroups dec 0 rs tail ts h2 (by rw [hk, h1]; exact hcut)
   exact e ▸ hpt
 
-/-- **A rep's run on its decoded tape, at its end.** `playsT_of_repRun` with the spine needed only along the runs that
-end in `p`. -/
 theorem playsT_of_repRunAt {P : Type} {g : Game P} {σ : List Exec.Kind} {dec : ℕ → ByteArray → List Msg}
     {rs : List Round} {tail : List Msg} {p : P} (hs : SpineAt g σ p) (h : RepRun g σ dec rs tail p) :
     PlaysT g (tapeFrom dec (fun _ => true) 0 rs ++ tail.map .inl) p := by
@@ -75,7 +62,6 @@ theorem decodesOfRuns : DecodesOfRuns := by
   obtain ⟨pend, h₀, h₁, hv⟩ := h o ho
   exact ⟨pend, playsT_of_repRun (hσ o.pts 0) h₀, playsT_of_repRun (hσ o.pts 1) h₁, hv⟩
 
-/-- The reps of table `T` have the spine `repSpine`. -/
 theorem repsOf_spine (D : Type) {mPts : ℕ} (T : TabSpec mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) :
     Spine (repsOf (D := D) execArith T pts r) (repSpine D T pts) :=
   repC_spine execArith r.val T.S T.sch T.hm _

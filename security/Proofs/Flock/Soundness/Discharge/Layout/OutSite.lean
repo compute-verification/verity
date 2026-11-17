@@ -11,23 +11,14 @@ import Proofs.Flock.Soundness.Refine.Walk
 
 set_option Elab.async false
 
-/-!
-# The sampled proof blocks' returned outputs: the population's
-
-A sampled statement's outputs are `HmRow.drawn`'s: instance `r`'s `nOut` output words are proved unit `D.proved[r]`'s in
-the registered population's public file (`sampled_outputs`), which holds `n · nOut` words, each below `2^16`
-(`loadPublic_outputs`). So at a proved unit's slot, region "out"'s output `j` of the slot's leaf is the population's
-(`outVal_sampled`), and a satisfying witness holds its bits at the slot's output columns (`out_sampled`; at a sampled proof block's
-site in its table's accepted statement, `out_site`).
--/
+/-! At a proved unit's slot, a satisfying witness of a sampled statement holds the registered population's returned
+outputs. -/
 
 namespace FlockSoundness.Discharge.Layout
 
 open Flock Refine Model
 
--- `walk_step` down the unfolded do-block that puts the sample in the population's header, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **`HmRow.drawn`'s outputs**: the proved units' `nOut` output words, unit by unit. -/
 theorem sampled_outputs {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmRow.drawn c pop d = .ok pub) :
     ∃ D, Draw.UnitSample.ofJson d = .ok D ∧ pub.outputs =
       D.proved.foldl (fun acc u => acc ++ pop.outputs.extract (u * c.outWords) (u * c.outWords + c.outWords)) #[] := by
@@ -45,9 +36,7 @@ theorem two_bytes_lt (a b : UInt8) : a.toNat + 256 * b.toNat < 2 ^ 16 := by
   have := b.toNat_lt
   omega
 
--- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **The population's outputs**: a public file holds `n · nOut` output words, each two bytes (below `2^16`). -/
 theorem loadPublic_outputs {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Public}
     (h : HmRow.loadPublic tags c file = .ok pop) :
     pop.outputs.size = pop.n * c.outWords ∧ ∀ x ∈ pop.outputs, x < 2 ^ 16 := by
@@ -69,9 +58,6 @@ theorem getD_lt_of_forall {a : Array ℕ} {B : ℕ} (h : ∀ x ∈ a, x < B) (hB
   · exact h _ (Array.getElem_mem _)
   · exact hB
 
-/-- **Region "out"'s output at a proved unit's slot is the population's**: at block `o` and unit slot `k` whose instance
-`o · c.g + k / upv` is proved, output `j` of the slot's leaf (an output word below `nOut`) is proved unit
-`D.proved[o · c.g + k / upv]`'s in the population. -/
 theorem outVal_sampled {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.UnitSample}
     (h : HmRow.drawn c pop d = .ok pub) (hD : Draw.UnitSample.ofJson d = .ok D)
     (hsz : pop.outputs.size = pop.n * c.outWords) (hlt : ∀ u ∈ D.proved, u < D.population)
@@ -93,11 +79,7 @@ theorem outVal_sampled {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Dra
   rw [hsz, ← hpopn]
   nlinarith
 
-/-- **The returned outputs a satisfying witness of a sampled statement holds at a proved unit's slot** are the unit's in
-the registered population's public file: in an untyped circuit whose unit returns the outputs, at block `o` and unit slot
-`k` (below `2^⌊log₂ count⌋`) whose instance `o · c.g + k / upv` is proved, the bit at column `16 j + t` of the slot's
-returned-output group is bit `t` of the population's output word `lo[j]` of unit `D.proved[o · c.g + k / upv]`, for the
-leaf's outputs `lo` (words below `nOut`, `hlo`), under `out_pinned`'s conditions on the output group. -/
+/-- Holds at unit slots `k` below `2^⌊log₂ count⌋`. -/
 theorem out_sampled {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}
     {st : Stmt} (h : Stmt.setupH tags circuitFile publicFile coins tables (some d) partition program = .ok st)
@@ -129,10 +111,6 @@ theorem out_sampled {tags : Tags} {circuitFile publicFile : ByteArray} {coins : 
 
 variable {T : Model.Statement}
 
-/-- **The returned outputs at a sampled proof block's site are the population's**: in a satisfying witness of an accepted sampled
-statement of an untyped circuit whose unit returns the outputs, at a site (`BcSite`: block `o`, template instance `g`, proved unit `u`),
-the bit at column `16 j + t` of the returned-output group of the template instance's copy `u'` is bit `t` of the
-population's output word `lo[j]` of `u`, for the copy's leaf's outputs `lo`, under `out_pinned`'s conditions. -/
 theorem out_site (a : Placed.Accepted T) {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSite a pop o g u)
     (ho : a.st.c.outNet = a.st.c.unitNet) (hty : a.st.c.typed = none)
     {z : Witness T.m} (hz : T.Satisfies z) {u' j t : ℕ} (hu' : u' < a.st.c.upv)

@@ -1,8 +1,3 @@
-/-
-The verifier's SHA-512 (`Flock.Sha512.hash`) as the chain of its compressions: the padded message (`padData`), the
-chaining value after each block (`chain`), and the digest's bytes, big-endian per word (`digestOf`), whose bit `t` is bit
-`wordBit t` of the chaining value in word order.
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Exec
@@ -35,23 +30,18 @@ open Flock
 /-- The 16 bytes of a message length `len` (in bytes) as SHA-512's 128-bit big-endian bit count. -/
 def lenBytes (len : ℕ) : List UInt8 := (List.range' 0 16).map fun a => ((len * 8) >>> (8 * (15 - a)) % 256).toUInt8
 
-/-- The number of zero bytes SHA-512's padding puts after `msg ‖ 0x80`. -/
 def zeroPad (len : ℕ) : ℕ := (240 - (len + 1) % 128) % 128
 
-/-- SHA-512's padded message (FIPS 180-4 §5.1.2) as `Sha512.hash` builds it: `msg ‖ 0x80 ‖ 0…0 ‖ len`. -/
 def padData (msg : ByteArray) : ByteArray :=
   (List.range' 0 16).foldl (fun b a => b.push ((msg.size * 8) >>> (8 * (15 - a)) % 256).toUInt8)
     ((List.range' 0 ((240 - (msg.push 128).size % 128) % 128)).foldl (fun b _ => b.push 0) (msg.push 128))
 
-/-- The chaining value after the first `n` blocks of `data`. -/
 def chain (data : ByteArray) (n : ℕ) : Array UInt64 :=
   (List.range' 0 n).foldl (fun h blk => Sha512.compress h data (128 * blk)) Sha512.iv
 
-/-- The digest of a chaining value: its eight words, big-endian. -/
 def digestOf (h : Array UInt64) : ByteArray :=
   ⟨Array.ofFn (n := 64) fun i => (h[i.val / 8]! >>> (8 * (7 - i.val % 8)).toUInt64).toUInt8⟩
 
-/-- **`Sha512.hash` is the chain of its compressions over the padded message.** -/
 theorem hash_eq (msg : ByteArray) : Sha512.hash msg = digestOf (chain (padData msg) ((padData msg).size / 128)) := by
   simp only [Sha512.hash, Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl,
     bind_pure_comp, map_pure, Std.Legacy.Range.size, Nat.reduceSub, Nat.reduceAdd, Nat.sub_zero,
@@ -66,7 +56,6 @@ theorem foldl_push_data (f : ℕ → UInt8) : ∀ (l : List ℕ) (b : ByteArray)
         List.append_assoc]
       rfl
 
-/-- The padded message's bytes. -/
 theorem padData_data (msg : ByteArray) :
     (padData msg).data.toList = msg.data.toList ++ [128] ++ List.replicate (zeroPad msg.size) 0 ++ lenBytes msg.size := by
   rw [padData, foldl_push_data (fun a => ((msg.size * 8) >>> (8 * (15 - a)) % 256).toUInt8),
@@ -84,7 +73,6 @@ theorem size_padData_mod (msg : ByteArray) : (padData msg).size % 128 = 0 := by
   unfold zeroPad at this
   omega
 
-/-- The chain over `n + 1` blocks is one more compression of the chain over `n`. -/
 theorem chain_succ (data : ByteArray) (n : ℕ) :
     chain data (n + 1) = Sha512.compress (chain data n) data (128 * n) := by
   rw [chain, chain, List.range'_concat, List.foldl_append, List.foldl_cons, List.foldl_nil, Nat.zero_add,
@@ -98,8 +86,6 @@ theorem getD_digestOf (h : Array UInt64) {i : ℕ} (hi : i < 64) :
   simp only [digestOf, Array.toList_ofFn, List.getD_eq_getElem?_getD, List.getElem?_ofFn, hi, dite_true,
     Option.getD_some]
 
-/-- **The digest's bit order**: bit `t < 512` of `digestOf h` (byte-string order) is bit `wordBit t` of `h`'s words in
-word order. -/
 theorem bitL_digestOf (h : Array UInt64) {t : ℕ} (ht : t < 512) :
     bitL (digestOf h).data.toList t = wbit (toBV h) (wordBit t) := by
   rw [bitL, getD_digestOf h (by omega), wbit, getD_toBV]
@@ -117,22 +103,18 @@ theorem blocks_pos (msg : ByteArray) : 0 < (padData msg).size / 128 := by
   have := size_padData_mod msg
   omega
 
-/-- The chaining value before the last block of `msg`'s padded message. -/
 def lastCv (msg : ByteArray) : List (BitVec 64) :=
   (List.range 8).map fun i => (chain (padData msg) ((padData msg).size / 128 - 1))[i]!.toBitVec
 
-/-- The last block of `msg`'s padded message: its sixteen big-endian words. -/
 def lastBlock (msg : ByteArray) : List (BitVec 64) :=
   (List.range 16).map fun i => (wordBE (padData msg) (128 * ((padData msg).size / 128 - 1)) i).toBitVec
 
-/-- **SHA-512's digest bits are the last compression's**: bit `t < 512` of `Sha512.hash msg` (byte-string order) is bit
-`wordBit t` of `compressV` of the chaining value before the last block and the last block. -/
 theorem bitL_hash (msg : ByteArray) {t : ℕ} (ht : t < 512) :
     bitL (Sha512.hash msg).data.toList t = wbit (compressV (lastCv msg) (lastBlock msg)) (wordBit t) := by
   rw [hash_eq, bitL_digestOf _ ht, lastCv, lastBlock, ← compress_eq, ← chain_succ,
     Nat.sub_add_cancel (blocks_pos msg)]
 
-/-! ## Message words -/
+/-! The verifier's SHA-512 (`Flock.Sha512.hash`) as the chain of its compressions over the padded message. -/
 
 theorem getLsbD_step (x : UInt64) (b : UInt8) (p : ℕ) :
     (x <<< 8 ||| b.toUInt64).toBitVec.getLsbD p =
@@ -149,7 +131,6 @@ theorem getLsbD_step (x : UInt64) (b : UInt8) (p : ℕ) :
       Nat.testBit_lt_two_pow (lt_of_lt_of_le (UInt8.toNat_lt b) (Nat.pow_le_pow_right (by norm_num) (by omega)))
     simp [hp, this]
 
-/-- `k ≤ 8` bytes `g 0, …, g (k-1)` read big-endian: bit `p` is bit `p % 8` of byte `k - 1 - p / 8`. -/
 theorem getLsbD_foldBE (g : ℕ → UInt8) : ∀ k ≤ 8, ∀ p : ℕ,
     ((List.range' 0 k).foldl (fun (x : UInt64) j => x <<< 8 ||| (g j).toUInt64) 0).toBitVec.getLsbD p =
       (decide (p < 8 * k) && (g (k - 1 - p / 8)).toNat.testBit (p % 8))
@@ -167,7 +148,6 @@ theorem getLsbD_foldBE (g : ℕ → UInt8) : ∀ k ≤ 8, ∀ p : ℕ,
         · simp [h2, show p < 64 by omega, show p - 8 < 8 * k by omega]
         · simp [h2, show ¬ (p - 8 < 8 * k) by omega]
 
-/-- Word `i` of the block at `off` of a byte list, big-endian. -/
 def wordL (l : List UInt8) (off i : ℕ) : UInt64 :=
   (List.range' 0 8).foldl (fun x j => x <<< 8 ||| (l.getD (off + 8 * i + j) 0).toUInt64) 0
 
@@ -189,8 +169,6 @@ theorem wordL_congr {l l' : List UInt8} {off off' i i' : ℕ}
   unfold wordL
   refine List.foldl_ext _ _ _ fun x j hj => ?_
   rw [h j (by simp at hj; omega)]
-
-/-! ## The compression reads only its block -/
 
 theorem compress_congr (h : Array UInt64) {d d' : ByteArray} {off off' : ℕ}
     (hd : ∀ k < 128, d.get! (off + k) = d'.get! (off' + k)) : Sha512.compress h d off = Sha512.compress h d' off' := by

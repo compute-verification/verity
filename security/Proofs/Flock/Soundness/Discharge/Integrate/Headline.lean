@@ -4,27 +4,8 @@ public import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
 public import Proofs.Flock.Soundness.Discharge.Hm.Site
 public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
-/-!
-# The headline at the executable, with every open guarantee named
-
-`Prog.flock_headline` is about the unsalted batched session. At the proving statements (`hm96-sha512/v1` leaves) an
-honest transcript fails its openings check, so the headline the executable instantiates is the salted, one-table
-form at verity-verify-proof's verdict, `Prog.flock_headline_live_on`, whose hypotheses are `Prog.flock_headline`'s (`pp`,
-`hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with the refinement discharged up to the decoder (`hdec`, the
-decoder right at the sampling design's samples, `DecodesOn`).
-
-`flock_headline_exec` instantiates it at the proving program `Placed.keyProg c hU n` (the circuit's program on Δ's
-source keys), its returned outputs' bits for the program's outputs (`Layout.outsOf`), and the one-table plan of the
-session's inputs (`planAt`, `Sites.lean`), with:
-* `pp := Placed.Sites.progPlaces_keyProg` at `sitesAt` (W6 and `Layout.Aliased` at keyProg's places);
-* `hConst := Const.constCols_keyProg`, `hZero := Zero.zeroCols_keyProg`, at `ones := {oneG}`, `zeros := {zeroG}`;
-* `lay := Layout.keyedLayout` (`layAt`) and `rs := Layout.keyedRowsOuts` (`rsAt`) at row widths `16 · words` and the
-  rows' salt columns `Discharge.Hm.saltCol`, with `hsite` from `sitesAt_bcSite`;
-* `hHm := Discharge.Hm.keyedRowsOuts_computes` (`rsAt_computes`).
-
-Its hypotheses on the statement's form (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`) are ones verity-verify-proof refuses a statement
-failing (`Flock.ProvedScope`), and `FailClosed.flock_headline_exec` takes none of them.
--/
+/-! The headline at the executable (`flock_headline_exec`), in its salted one-table form because an honest transcript
+at `hm96-sha512/v1` leaves fails the unsalted headline's openings check. -/
 
 @[expose] public section
 
@@ -60,9 +41,6 @@ noncomputable abbrev rsAt : Binding.HmRows (layAt hU ht hc dj x₀ (pub := pub) 
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
     (sitesAt_bcSite ht dj x₀ hc (Layout.scopeOk_spec hU hscope).2.1 hpub hpt)
 
-/-- **`hHm` at the session's rows**: `Hm.keyedRowsOuts_computes`. In a satisfying witness of a sampled proof block's
-table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under the salt at its
-`hm96` slot. -/
 theorem rsAt_computes : (rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).Computes :=
   Hm.keyedRowsOuts_computes (sitesAt_parse ht dj x₀ hc) hc (Layout.scopeOk_spec hU hscope).1
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope)
@@ -71,44 +49,9 @@ theorem rsAt_computes : (rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).Com
 /-- The one-table plan's tables, as `Prog.flock_headline_live_on` takes them. -/
 noncomputable abbrev tablesAt : Finset (Fin n) → Reg → TabSpec mPts := fun S _ => (tableAt ht dj x₀ S).T
 
-/-- **The headline at the executable.** Let `I` be a verify command's inputs (one table) whose one circuit file parses
-to an untyped circuit `c` (`hc`, `ht`) and whose public file loads to `pub` with no shared-row tables (`hpt`, as
-the circuit prover's per-instance public files load, under `@967b8d06` too, whose tag allows them), and let the
-challenger write sample `S` as the JSON `dj S` (`x₀` one sample it sets up). Let the units be sampled with
-`Flock.Draw.drawWith`'s stratified sampling design on the challenger's coins, a byte source A3 makes uniform, and let each sample's
-session be the challenger's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, verity-verify-proof
-accepts with at least `K` incorrect proof blocks of the proving program `Placed.keyProg c hU n`, at the simulated prover's
-committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
-at most `miss(K) + ε_ks + ε_bind`.
-
-Its hypotheses, past the session's inputs:
-* the circuit is in `rs`'s scope, `hscope : Layout.scopeOk c = true`: a check that runs on the parsed circuit, that the
-  unit has only its leaf group, returns the outputs, has `unitLog ≤ 32`, reads only port bits among its inputs, and
-  has only `sha512/row/v1` rows (`v1Ports`: each port `v2 = false`, unsegmented, `bits = 16 · words`, `0 < chunks`).
-  `Layout.scopeOk_spec` gives `rs`'s `h1`, `ho` and `PortReads`, `Layout.scopeOk_ports` gives `hHm`'s v1 rows;
-* `hdec` (`DecodesOn`, at the sampling design's samples only), open (the framing decoder, `wr` as the server's
-  record, `opn`, `fin`, `capOf`). At a sample verity-verify-proof accepts whose record carries the challenger's sample `dj S`,
-  proving `S`, with link points `mPts`, the table is `stmtOf` of the statement it accepted (`tableAt_of_accepts`, by
-  `model_eq_stmtOf`), the statement the executable's acceptance plays. At an accepted sample whose link points are not `mPts`
-  the table is unsatisfiable and `hdec` fails there, so `hdec` also needs every accepted sample of the sampling design to set up at
-  `mPts`; setupH's link points are `mPtsOf c.g |D.proved|` (`Exec.setupH_mPts_sampled`, `Exec.setupH_mPts_eq`);
-* the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),
-  `ecr/sha-512` for the link finders (`hCR`); A6 (`uniform/flock-coin-server`) is the live session `liveTable` itself;
-* numeric conditions and the strata's match (`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht'`).
-
-Scope. W6 is definitional on the untyped path: the unit's rows are the parsed net's (`Rows.ofNet`), and nothing verifies
-that the unit net lowers its template's Definition. The tail stages of `tc_units` templates are outside every unit's
-rows. The typed path is not the prover's. `keyProg` has no edges between units: the headline bounds template instances
-that fail at their own committed values, and a template instance reading its producers' outputs is carried by the copy
-constraints and the region pins, not by an edge of the program. The proof coins are the challenger's, on its keyed coin
-tree (A6, tree coins): `verify` refuses a session on a committed seed's coins (`ProvedScope.servedForm`), so a session
-counts only under `--coins tree`. The tag is whatever the verifier passes as `--statement`: a session counts when
-`verity-verify-proof verify --statement verity/flock-circuit@967b8d06 --coins tree` accepts it with one table, so the headline
-covers only public-output `@967b8d06` sessions, from older builds. Main's prover now always writes the
-hidden-output statement (`verity/flock-circuit`, the default `--statement`, `hiddenOutputs = true`), under which
-`setupTables` calls `setupHidden`, which this headline does not cover: `HiddenExec.flock_headline_exec_hidden`
-does, and `FailClosed.flock_verify_sound` states both. Sessions of more than one table are outside it (the circuit
-prover's default is one). -/
+/-- Covers only one-table public-output `@967b8d06` sessions under `--coins tree`, and `hdec` is open. Nothing
+verifies that the unit net lowers its template's Definition, and `keyProg` has no edges between units, so it bounds
+only template instances that fail at their own committed values. -/
 theorem flock_headline_exec
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)

@@ -31,7 +31,6 @@ theorem bitL_xorBytes {a b : List UInt8} (ha : a.length = 64) (hb : b.length = 6
     List.getElem?_eq_getElem (show t / 8 < b.length by omega)]
   simp [UInt8.toNat_xor, Nat.testBit_xor]
 
-/-- Byte strings of one length with the same bits are equal. -/
 theorem eq_of_bitL {A B : List UInt8} (h1 : A.length = B.length) (h : ∀ t < 8 * A.length, bitL A t = bitL B t) :
     A = B := by
   refine List.ext_getElem h1 fun i hi hi' => UInt8.toNat_inj.mp (Nat.eq_of_testBit_eq fun b => ?_)
@@ -52,10 +51,7 @@ theorem length_commitString (r s : List UInt8) : (Binding.commitString r s).leng
     length_digBytes, Refine.K512.mask_len]
   rfl
 
-/-- **The hm96 slot outputs the commit string's bits.** In a satisfying assignment `z` of the hm96 circuit's rows (under
-the executable's key), if its `cv` inputs hold the chaining value of a row's bytes `r` before their last block, its `pad`
-inputs their last block and its salt inputs a 192-byte salt `s`, then output bit `t < 1024` is bit `t` of
-`commitString r s = SHA-512(r) ⊕ M·s ‖ SHA-512(salt_prefix ‖ s)` (bit `t % 8` of byte `t / 8`). -/
+/-- Output bit `t < 1024` is bit `t % 8` of byte `t / 8` of `commitString r s`. -/
 theorem hm96_commit (z : Var → Bool) (h : stHolds z ((hm96Row Hm96.Default512.key).run St.empty).2) (r : List UInt8)
     {s : List UInt8} (hs : s.length = 192) (hcv : ∀ q < 512, z q = wbit (lastCv ⟨r.toArray⟩) q)
     (hpad : ∀ q < 1024, z (512 + q) = wbit (lastBlock ⟨r.toArray⟩) q) (hy : ∀ q < 1536, z (1536 + q) = bitL s q) :

@@ -5,15 +5,7 @@ public import Proofs.Flock.Soundness.ZK.Hiding
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Assumptions
 
-/-!
-# One committed round's leaf
-
-* `hiding_fun`: T1 (`Claims.Hm96Hiding`) for `[0,1]`-valued tests: from an event bound to a bound on every
-  expectation, by the statistical-distance argument (the event is where the real leaf's mass exceeds the ideal's).
-* `kern g v`: the salt's posterior given leaf `v`, for the leaf map `g` of a fixed block: uniform on the fiber of `v`
-  (uniform on all salts when the fiber is empty, a value the real round never takes).
-* `fiber_avg`: redrawing the salt from its posterior given its own leaf leaves a uniform salt's average unchanged.
--/
+/-! One committed round's leaf: T1 for `[0,1]`-valued tests (`hiding_fun`) and the salt's posterior (`kern`). -/
 
 @[expose] public section
 
@@ -26,7 +18,6 @@ section Mass
 
 variable {Ω V : Type} [Fintype Ω] [DecidableEq V]
 
-/-- The mass of `v` under the pushforward of a uniform `Ω` by `g`. -/
 noncomputable def mass (g : Ω → V) (v : V) : ℝ≥0∞ :=
   ∑ ω, (Fintype.card Ω : ℝ≥0∞)⁻¹ * if g ω = v then 1 else 0
 
@@ -45,8 +36,6 @@ theorem mass_ne_top [Nonempty Ω] (g : Ω → V) (v : V) : mass g v ≠ ∞ := b
     (ENNReal.inv_ne_top.2 (Nat.cast_ne_zero.2 Fintype.card_ne_zero)) ?_
   split_ifs <;> simp
 
-/-- **From events to `[0,1]`-valued tests**: if no event separates the pushforwards of `g` and `g'` by more than `δ`,
-no test with values in `[0,1]` does. -/
 theorem avg_le_of_prCoin {Ω' : Type} [Fintype Ω'] [Nonempty Ω'] (g : Ω → V) (g' : Ω' → V) (S : Finset V)
     (hS : ∀ ω, g ω ∈ S) (hS' : ∀ ω, g' ω ∈ S) {δ : ℝ≥0∞}
     (h : ∀ P : V → Prop, prCoin (fun ω => P (g ω)) ≤ prCoin (fun ω => P (g' ω)) + δ)
@@ -101,8 +90,6 @@ section Hiding
 
 variable {Salt B Cs D : Type} [Fintype Salt] [Nonempty Salt] [AddCommGroup B] [Fintype B]
 
-/-- **T1 for `[0,1]`-valued tests**, at a leaf shifted by any digest `x`: replacing the leaf `H(x + M·y, c(y))` by the
-ideal `H(U, c(y))` changes the expectation of any test with values in `[0,1]` by at most `δ`. -/
 theorem hiding_fun (My : Salt → B) (cs : Salt → Cs) {δ : ℝ≥0∞} (hT : Claims.Hm96Hiding My cs δ)
     (H : B × Cs → D) (x : B) (Γ : D → ℝ≥0∞) (hΓ : ∀ d, Γ d ≤ 1) :
     avg (fun y => Γ (H (x + My y, cs y))) ≤ avg (fun q : B × Salt => Γ (H (q.1, cs q.2))) + δ := by
@@ -124,8 +111,7 @@ section Kernel
 variable {Salt D : Type} [Fintype Salt]
 
 open Classical in
-/-- **The salt's posterior given leaf `v`** under the leaf map `g`: uniform on the fiber of `v`, or on all salts when
-the fiber is empty. -/
+/-- Uniform on all salts when the fiber of `v` is empty, a leaf the real round never takes. -/
 noncomputable def kern (g : Salt → D) (v : D) (y : Salt) : ℝ≥0∞ :=
   if (univ.filter fun y' => g y' = v).Nonempty then
     (if g y = v then ((univ.filter fun y' => g y' = v).card : ℝ≥0∞)⁻¹ else 0)
@@ -145,8 +131,6 @@ theorem sum_kern_le_one [Nonempty Salt] (g : Salt → D) (v : D) (G : Salt → �
   calc ∑ y, kern g v y * G y ≤ ∑ y, kern g v y * 1 := Finset.sum_le_sum fun y _ => mul_le_mul_right (hG y) _
     _ = 1 := by simp only [mul_one, sum_kern]
 
-/-- **The fiber identity**: a uniform salt `y`, with `Φ` read at `y` and its leaf `g y`, has the same total as a uniform
-salt whose leaf is kept and which is then redrawn from its posterior given that leaf. -/
 theorem fiber_avg (g : Salt → D) (Φ : Salt → D → ℝ≥0∞) :
     ∑ y, Φ y (g y) = ∑ y, ∑ y', kern g (g y) y' * Φ y' (g y) := by
   classical

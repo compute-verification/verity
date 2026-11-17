@@ -16,14 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# A decoded `--zk` proof's lengths
-
-`zk_decode_sizes`: `Zk.decode` reads the pair with `decodeProof`'s lengths (`DecodeZL.ProofSizes`), and `Y`'s length
-is a `u64`. The reader is stepped through as `DecodeZL.decodeProof_sizes` steps through `decodeProof`'s, with
-`DecodeZL`'s `Post` lemmas; after the pair come level 0's hiding messages (an `Option` tag) and the inner proof, whose
-`Y` is a `vecAny` (`yields_vecAny_size`, `post_inner_y`).
--/
+/-! A decoded `--zk` proof's lengths (`zk_decode_sizes`). -/
 
 @[expose] public section
 

@@ -14,13 +14,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 set_option Elab.async false
 
-/-!
-# The sampled proof blocks are in the population, with a closure
-
-`Draw.UnitSample.proved` sorts the sampled proof blocks with their closure (`Array.qsort`) when the closure isn't empty. Every swap
-of `qsort` keeps a property every element has (`all_qsort`), so every proved unit is below the population
-(`proved_lt_population`), as each sampled proof block and each closure unit is (`ofJson_lt`).
--/
+/-! Every proved unit of a sample is below the population, with or without a closure (`proved_lt_population`). -/
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 
@@ -66,7 +60,6 @@ theorem all_qpartition {n : ℕ} (as : Vector α n) (lt : α → α → Bool) (l
     (all_ite_swap (all_ite_swap (all_ite_swap h _ _ _ _ _) _ _ _ _ _) _ _ _ _ _)
 
 variable (P) in
-/-- Every element of a vector has `P`. -/
 def AllP {n : ℕ} (as : Vector α n) : Prop := ∀ k (hk : k < n), P as[k]
 
 private theorem all_sort {n : ℕ} (lt : α → α → Bool) :
@@ -92,7 +85,6 @@ private theorem all_sort {n : ℕ} (lt : α → α → Bool) :
             (ih (mid - lo) (by omega) _ _ _ _ _ _ rfl hp)
     · exact h
 
-/-- **Every element of `qsort`'s result has a property every element of its input has.** -/
 theorem all_qsort (as : Array α) (lt : α → α → Bool) (h : ∀ x ∈ as, P x) : ∀ x ∈ as.qsort lt, P x := by
   unfold Array.qsort
   split
@@ -103,7 +95,6 @@ theorem all_qsort (as : Array α) (lt : α → α → Bool) (h : ∀ x ∈ as, P
     refine all_sort lt _ as.toVector _ _ _ _ _ rfl (fun k hk => ?_) k (by simpa using hk)
     exact h _ (by simp)
 
-/-- **Every proved unit of a sample is below the population**, with or without a closure. -/
 theorem proved_lt_population {d : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson d = .ok D) :
     ∀ u ∈ D.proved, u < D.population := by
   obtain ⟨hu, hc⟩ := ofJson_lt h

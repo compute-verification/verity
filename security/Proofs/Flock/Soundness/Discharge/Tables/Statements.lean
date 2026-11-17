@@ -3,31 +3,8 @@ module
 public import Proofs.Flock.Soundness.Discharge.Tables.Headline
 public import Proofs.Flock.Soundness.Discharge.Tables.Accepts
 
-/-!
-# Sessions of `J` tables: the statements
-
-The open guarantee is sessions of more than one table (`--session-tables J`, `J > 1`). Each statement is a `Prop`
-here, and its theorem is below it.
-
-* `SessionTransfer`: the protocol-level transfer at `J` tables. Against any live prover of `liveSession` (one `Commit`
-  of `J` roots, one link-point sample every table reads, the `2J` rep streams in any order the prover picks with each
-  round's coins flipped after its bytes, then every proof file), the live verdict holds with probability at most the
-  model session's acceptance of every table (`modelSession`, the tables concurrently through `batch`) against the
-  simulated prover `simSession`, whenever every table's decoder is right (`DecodesTable`, one per table).
-* `SessionBLModel`: the salted session on the tables `ts` is `modelSession`'s.
-* `ExecRefinesTables`: the refinement for any plan,
-  `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL … plan)) (simAuditJ …)` given `DecodesOnJ`.
-* `HeadlineTables`: `Prog.flock_headline_live_on` with `plan S R` of any length `J`, at the live stratified sample.
-* `HeadlineTablesSubset`: the same at the live subset sample, with count curve `C(n − K, kd) / C(n, kd)`; verity-verify-proof
-  takes no other sample at `J > 1`.
-* `AcceptsTables`: verity-verify-proof's acceptance at `count > 1`: the record's sample, when there is one, is a subset sample;
-  the session's units (the sample's, without one the population's) split into `count` equal parts; and table `j` is
-  `setupH`'s statement under `Tags.tableIdentity count j` at the subset sample `partSample` of part `j`.
-
-The decoder (`DecodesTable`, inside `DecodesOnJ`) is a named hypothesis per sample, registration and table: at one table
-it is `DecodesOn`'s, which `decodesOn_exec` (`Discharge/DecodeZL`) discharges for the plain headline's tables, and its
-coin half is `decodesOnOfRuns`'s.
--/
+/-! The statements of sessions of `J` tables, each with its theorem below it; the decoder `DecodesTable` is a
+hypothesis per sample, registration and table. -/
 
 @[expose] public section
 
@@ -38,7 +15,6 @@ open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The transfer at `J` tables.** -/
 def SessionTransfer : Prop :=
   ∀ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin J → Cp → P × P → Op → OutT)
     (ok : Fin J → OutT → Prop) (dflt : OutT) (pL : LiveOutJ J mPts → Prop) (opn : Array ByteArray → Fin J → Op)
@@ -54,7 +30,6 @@ theorem session_transfer : SessionTransfer :=
   fun out ok dflt pL opn dg dec one fin capOf N G hinh hdec Pr =>
     live_le_session out ok dflt pL opn dg dec one fin capOf N G hinh hdec Pr
 
-/-- **The salted session on `J` tables is `modelSession`'s.** -/
 def SessionBLModel : Prop :=
   ∀ {K D Sl : Type} [Field K] [DecidableEq K] {mPts : ℕ} (A : Arith 𝔽 K) (H : List UInt8 → D)
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) (ts : List (TabSpec mPts)),
@@ -64,7 +39,6 @@ def SessionBLModel : Prop :=
 theorem sessionBL_model : SessionBLModel :=
   fun A H E Lf ts => sessionBL_eq_modelSession A H E Lf ts
 
-/-- **The refinement for sessions of `J` tables.** -/
 def ExecRefinesTables : Prop :=
   ∀ {D Sl : Type} [Nonempty D] [Inhabited D] [Inhabited Sl] {mPts n : ℕ} {Reg : Type} (H : List UInt8 → D)
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
@@ -84,7 +58,6 @@ theorem execRefines_tables_stmt : ExecRefinesTables :=
   fun H E Lf plan I wr opn dg dec one fin capOf N _ hdec τ =>
     execRefines_tables H E Lf plan I wr opn dg dec one fin capOf N hdec τ
 
-/-- **The headline at the executable for sessions of `J` tables, at the live stratified sample.** -/
 def HeadlineTables : Prop :=
   ∀ {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
@@ -131,7 +104,6 @@ theorem headline_tables : HeadlineTables := by
   exact p.flock_headline_live_tables outs σs ks hks St hS Kd pop Lb src hA3 plan tab pp ones hConst zeros hZero lay rs
     hHm hk hRw hM hρ hr ht K I wr opn dg dec one fin capOf N hdec τ hCR hKS
 
-/-- **The headline at the executable for sessions of `J` tables, at the live subset sample.** -/
 def HeadlineTablesSubset : Prop :=
   ∀ {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
     (kd : ℕ) (_hkd : kd ≤ n)
@@ -186,12 +158,6 @@ def partSample (population : ℕ) (units : Array ℕ) (count j : ℕ) : Json :=
     ("units", Json.arr ((units.extract (j * (units.size / count)) (j * (units.size / count) + units.size / count)).map
       Lean.toJson))]
 
-/-- **verity-verify-proof's acceptance at more than one table.** When `Accepts I t` at `count > 1` under a tag without hidden
-outputs: the tag allows several tables and `count ≤ 64`; the record's sample, when there is one, is a subset or stratified
-sample, whose
-population and units are the session's (without one, the population's every unit); the units split into `count`
-nonempty equal parts; and table `j` is `setupH`'s statement under `Tags.tableIdentity count j` at the subset sample of
-part `j`. -/
 def AcceptsTables : Prop :=
   ∀ {I : Inputs} {t : Transcript}, I.tags.hiddenOutputs = false → 1 < I.count → Accepts I t →
     ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧

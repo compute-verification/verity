@@ -11,27 +11,7 @@ import Proofs.Flock.Soundness.Discharge.ZkCoins.Lazy
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 
-/-!
-# Committed coins against live coins: a hybrid over committed rounds
-
-`committed_le` (`CommittedLe`) and its hm96-sha512 form `committed_le_hm96` (`CommittedLeHm96`).
-
-Each committed round is in a mode (`m j : Option D`): real (`none`), with its block and salt uniform and the prover
-shown its leaf, or ideal with leaf `v` (`some v`), with its block uniform, its salt sampled from the posterior of `v`
-(`kern`) and the prover shown `v`. `Exp m` is the committed prover's success probability in mode `m`; with every round
-real it is `probC`.
-
-* `exp_step`: one round from real to ideal costs `δ`, with the ideal leaf averaged over its sampling design. For each block, the
-  salt is first redrawn from its posterior given its own leaf (`fiber_avg`, exact); the run is then a `[0,1]`-valued
-  test of that leaf, and T1 (`hiding_fun`) swaps it for an ideal leaf; with the leaf fixed, the round's sampling design changes
-  (`reweight`) to the ideal mode's.
-* `exp_le`: by induction on the number of real rounds; when none is left, the prover's view is a constant and the
-  rounds' block marginals are uniform, so `lazy` bounds the run by `value` against live coins.
-
-The bound is `value`, the optimal adaptive prover's against live coins, for every committed prover: the commitment
-costs `δ` per committed round, added once, and whatever `value` satisfies (the table bound's square, from
-`value_interleave_le`) carries over.
--/
+/-! Committed coins against live coins, by a hybrid over committed rounds (`committed_le`, `committed_le_hm96`). -/
 
 @[expose] public section
 
@@ -73,21 +53,17 @@ section Hybrid
 variable {I Blk Salt D α : Type} [Fintype I] [DecidableEq I] [Fintype Blk] [Nonempty Blk] [Fintype Salt]
   [Nonempty Salt]
 
-/-- Round `j`'s sampling design in mode `m j`: uniform when real; a uniform block and the posterior of leaf `v` when ideal. -/
 noncomputable def wt (ℓ : I → Blk × Salt → D) (m : I → Option D) (j : I) (z : Blk × Salt) : ℝ≥0∞ :=
   (m j).elim (Fintype.card (Blk × Salt) : ℝ≥0∞)⁻¹ fun v =>
     (Fintype.card Blk : ℝ≥0∞)⁻¹ * kern (fun y => ℓ j (z.1, y)) v z.2
 
-/-- What the prover is shown of round `j` in mode `m j`: the leaf when real, `v` when ideal. -/
 def view (ℓ : I → Blk × Salt → D) (m : I → Option D) (ω : I → Blk × Salt) (j : I) : D :=
   (m j).getD (ℓ j (ω j))
 
-/-- The committed prover's success probability with the rounds in modes `m`. -/
 noncomputable def Exp (p : α → Prop) (g : TGame I Blk α) (ℓ : I → Blk × Salt → D)
     (τ : (I → D) → TGame.CStrat Salt g) (m : I → Option D) : ℝ≥0∞ :=
   ∑ ω, W (wt ℓ m) ω * TGame.pr p g (τ (view ℓ m ω)) ω
 
-/-- The run after round `k` is ideal with leaf `v` and block `b`, with the salt from the posterior of `v`. -/
 noncomputable def post (p : α → Prop) (g : TGame I Blk α) (ℓ : I → Blk × Salt → D)
     (τ : (I → D) → TGame.CStrat Salt g) (m : I → Option D) (ω : I → Blk × Salt) (k : I) (b : Blk) (v : D) :
     ℝ≥0∞ :=
@@ -154,8 +130,6 @@ theorem wt_update_self (ℓ : I → Blk × Salt → D) (m : I → Option D) (k :
     wt ℓ (update m k (some v)) k z = (Fintype.card Blk : ℝ≥0∞)⁻¹ * kern (fun y => ℓ k (z.1, y)) v z.2 :=
   wt_some (update_self k (some v) m) z
 
-/-- **The ideal mode's run**: with round `k` ideal with leaf `v`, the committed prover's success probability is the
-real-mode weights' average of `post`'s block average. -/
 theorem exp_ideal (p : α → Prop) (g : TGame I Blk α) (ℓ : I → Blk × Salt → D)
     (τ : (I → D) → TGame.CStrat Salt g) (m : I → Option D) (k : I) (v : D) :
     Exp p g ℓ τ (update m k (some v)) = ∑ ω, W (wt ℓ m) ω * avg fun b => post p g ℓ τ m ω k b v := by
@@ -187,8 +161,6 @@ theorem exp_ideal (p : α → Prop) (g : TGame I Blk α) (ℓ : I → Blk × Sal
         refine Finset.sum_congr rfl fun y _ => ?_
         exact mul_assoc _ _ _
 
-/-- **One round from real to ideal.** If round `k`'s leaf, for every block, is `δ`-hidden against the ideal leaves
-`ideal q` (`hide`), then making round `k` ideal, with its leaf averaged over `q`, costs at most `δ`. -/
 theorem exp_step {Q : Type} [Fintype Q] (p : α → Prop) (g : TGame I Blk α) (ℓ : I → Blk × Salt → D)
     (τ : (I → D) → TGame.CStrat Salt g) (ideal : Q → D) {δ : ℝ≥0∞} (k : I)
     (hide : ∀ (b : Blk) (Γ : D → ℝ≥0∞), (∀ d, Γ d ≤ 1) →
@@ -239,8 +211,6 @@ theorem card_none_update (m : I → Option D) (k : I) (v : D) :
     simp
   · simp [hj]
 
-/-- **The hybrid**: with `n` real rounds, the committed prover's success probability is at most `value` against
-live coins plus `n·δ`. -/
 theorem exp_le {Q : Type} [Fintype Q] [Nonempty Q] (p : α → Prop) (g : TGame I Blk α) (hg : g.Distinct)
     (ℓ : I → Blk × Salt → D) (τ : (I → D) → TGame.CStrat Salt g) (ideal : Q → D) {δ : ℝ≥0∞}
     (hide : ∀ (k : I) (b : Blk) (Γ : D → ℝ≥0∞), (∀ d, Γ d ≤ 1) →
@@ -284,7 +254,6 @@ theorem exp_le {Q : Type} [Fintype Q] [Nonempty Q] (p : α → Prop) (g : TGame 
 
 end Hybrid
 
-/-- **Committed coins cost their hiding gap once a round** (`CommittedLe`). -/
 theorem committed_le : CommittedLe := by
   intro I Blk Salt B Cs D α _ _ _ _ _ _ _ _ p g hg dig My cs H δ₁ hT τ
   have h := exp_le p g hg (leaf dig My cs H) τ (fun q : B × Salt => H (q.1, cs q.2))
@@ -298,9 +267,6 @@ theorem committed_le : CommittedLe := by
   unfold W
   simp only [hw, Finset.prod_const, Finset.card_univ, Fintype.card_pi, Nat.cast_pow, ENNReal.inv_pow]
 
-/-- **Committed coins at hm96-sha512 under a fresh key** (`CommittedLeHm96`): `committed_le` at each key's event,
-interaction, digests, leaf hash and prover, and at its hiding gap (`CROnly.hm96Hiding_gap`), averaged over the key
-(`CROnly.hm96_sha512_sum`). -/
 theorem committed_le_hm96 : CommittedLeHm96 := by
   intro E I Blk Cs D α _ _ _ hE _ _ _ _ _ p g hg dig cs hcs H τ
   calc avg (fun κ => probC (p κ) (g κ) (dig κ) (CROnly.hankel (n := 512) (l := 1536) κ) cs (H κ) (τ κ))

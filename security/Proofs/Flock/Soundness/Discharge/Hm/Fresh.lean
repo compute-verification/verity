@@ -19,12 +19,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-Where the builder's rows put their outputs: after `nIn` input bits only `fresh` adds rows, each outputting the next bit,
-so the `k`-th row in creation order outputs bit `nIn + k` (`Good`), the column `Flock.HmNets.layout` gives it
-(`col_and`). `Fresh m`: running `m` keeps that. Both nets keep it from the end of their inputs (`good_compression3`,
-`good_hm96Row`).
--/
+/-! Where the builder's rows put their outputs: the `k`-th row in creation order outputs bit `nIn + k`. -/
 
 @[expose] public section
 
@@ -32,11 +27,9 @@ namespace FlockSoundness.Discharge.Hm
 
 open Flock.HmNets hiding and
 
-/-- After `nIn` input bits, the rows (creation order) output bits `nIn, nIn + 1, …`, and the next bit follows them. -/
 def Good (nIn : ℕ) (s : St) : Prop :=
   s.next = nIn + s.rows.length ∧ ∀ (k : ℕ) (r : Row), s.rows.reverse[k]? = some r → r.out = nIn + k
 
-/-- `m` adds rows only as `fresh` does. -/
 def Fresh {α : Type} (m : M α) : Prop := ∀ nIn s, Good nIn s → Good nIn (m.run s).2
 
 namespace Fresh
@@ -148,12 +141,10 @@ theorem fresh_hmTail (key : ByteArray) (cv pad y : List Lin) : Fresh (hmTail key
   Fresh.bind' (fresh_compress _ _) fun _ => Fresh.bind' (fresh_compress _ _) fun _ =>
     Fresh.bind' (fresh_compress _ _) fun _ => Fresh.pure' _
 
-/-- **The sha512x3 net's rows output bits `4608, 4609, …`** in creation order, after its 4608 input bits. -/
 theorem good_compression3 : Good 4608 (compression3.run St.empty).2 := by
   rw [compression3_run, snd_pair]
   exact fresh_shaOuts sha3Ins 4608 ⟨4608, []⟩ ⟨rfl, fun k r h => by simp at h⟩
 
-/-- **The hm96 net's rows output bits `3072, 3073, …`** in creation order, after its 3072 input bits. -/
 theorem good_hm96Row (key : ByteArray) : Good 3072 ((hm96Row key).run St.empty).2 := by
   rw [hm96Row_run]
   exact fresh_hmTail key _ _ _ 3072 ⟨0 + 512 + 1024 + 1536, []⟩ ⟨rfl, fun k r h => by simp at h⟩

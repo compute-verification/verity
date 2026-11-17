@@ -62,7 +62,6 @@ theorem length_saltMid : saltMid.length = 8 := by simp [saltMid]
 
 theorem length_saltTail : saltTail.length = 8 := rfl
 
-/-- A bit of concatenated 64-bit words is its word's bit. -/
 theorem bit_flatten (z : Var → Bool) : ∀ {ws : List Word}, Words64 ws → ∀ p : ℕ,
     bit z ws.flatten p = (bv z (ws.getD (p / 64) [])).getLsbD (p % 64)
   | [], _, p => by simp [bit, bv_nil]
@@ -88,7 +87,6 @@ theorem eval_maskBit (z : Var → Bool) (key : ByteArray) (y : List Lin) (i : �
 theorem wordBit_lt {t : ℕ} (ht : t < 512) : wordBit t < 512 := by
   unfold wordBit; omega
 
-/-- `Flock.HmNets.hm96Row` after its three inputs. -/
 def hmTail (key : ByteArray) (cv pad y : List Lin) : M (List Lin × List Lin × List Lin × List Lin) := do
   let x ← compress (words cv 8) (words pad 16)
   let yw := saltWords y
@@ -101,9 +99,6 @@ def hmTail (key : ByteArray) (cv pad y : List Lin) : M (List Lin × List Lin × 
 theorem hm96Row_eq (key : ByteArray) : hm96Row key =
     (input 512 >>= fun cv => input 1024 >>= fun pad => input 1536 >>= fun y => hmTail key cv pad y) := rfl
 
-/-- **The hm96 gadget computes `b ‖ c`** on inputs `cv`, `pad`, `y`: whenever its rows hold, its output's bit `t < 512` is
-bit `t` (byte-string order) of the padding compression `x = F(cv, pad)` XOR bit `t` of `M(key)·y`, and its bit `512 + t`
-is bit `t` of `c = F(F(mid, y₀), y₁ ‖ tail)`, SHA-512's last two compressions of `salt_prefix ‖ y`. -/
 theorem sound_hmTail (key : ByteArray) (cv pad y : List Lin) : Sound (hmTail key cv pad y) fun z io =>
     io.1 = cv ∧ io.2.1 = pad ∧ io.2.2.1 = y ∧ (cv.length = 512 → pad.length = 1024 → io.2.2.2.length = 1024 ∧
       ∀ t < 512,

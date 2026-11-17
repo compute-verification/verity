@@ -8,23 +8,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
-/-!
-# `hZero` at the circuit's program (e2e, untyped statements)
-
-The untyped statement `Stmt.setupH` accepted places a template instance (`upv` stacked copies of the unit net) at each sampled proof block's site
-(`Placed.Sites`, `Placed.progPlaces`), and Δ copies into each stacked input the column `Aliased.copyPos` names.
-- `copyPos_zero`: at a stacked input that reads the zero (`ZeroIn`), that column is a unit slot's forced-zero row.
-- `stack_zero_block`, `accepted_zero_block`: so in every block of a satisfying witness the input carries 0
-  (`Aliased.copyPos_block`, `Aliased.zeroPos_block`).
-- `zeroCols_uniform`: `hZero` for the program of `n` units of the circuit's template instance rows (`Placed.uniform`) at the sites, each
-  unit's instance the program's own (`Const.Prog.instC`), when every input the program wires to its zero gate reads the
-  zero. `zeroCols_circuitProg`: the same on source-indexed input gates (`Placed.circuitProg`), when every input with no
-  source reads the zero.
-- `srcKey_zero_iff`: Δ's source key (`Aliased.srcKey`) at a stacked input is the zero exactly when the input reads the
-  zero, so `zeroCols_keyIdx`, on the gates indexed by those keys (`Aliased.keyIdx`), assumes nothing about the wiring.
-  `zeroCols_progPlaces` is the same at `Placed.progPlaces`, and `zeroCols_keyProg` at `Placed.Sites.progPlaces_keyProg`,
-  which takes only the sites and the parse.
--/
+/-! `hZero` at the circuit's program, on untyped statements (`zeroCols_keyProg`). -/
 
 @[expose] public section
 
@@ -34,15 +18,11 @@ namespace FlockSoundness.Discharge.Zero
 
 open Model Audit
 
-/-! ## Δ's copy positions at the zero -/
-
 section copies
 
 variable {tags : Tags} {st : Stmt} (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
   (F : Aliased.UnitFacts tags st)
 
-/-- **Δ's copy position at a stacked input that reads the zero is a forced-zero row**: template instance `g`'s input
-`x`'s (`Aliased.copyPos`) is its slot's forced-zero row (a zero leaf) or the first slot's (a cut bit past 16). -/
 theorem copyPos_zero {g : ℕ} (hg : g < st.c.g) {x : ℕ} (hx : x < st.c.upv * (st.c.unit.inWords * WORD))
     (hz : ZeroIn st.c x) : Aliased.IsZeroPos L regs F (Aliased.copyPos L regs F hg x) := by
   have hs := Aliased.stack_copy_lt L hg hx
@@ -55,8 +35,6 @@ theorem copyPos_zero {g : ℕ} (hg : g < st.c.g) {x : ℕ} (hx : x < st.c.upv * 
   · exact ⟨_, hs, rfl⟩
 
 include F in
-/-- **A stacked input that reads the zero carries 0**: at template instance `g`'s place (`Layout.col`), in every block
-of a satisfying witness. -/
 theorem stack_zero_block {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hz : ZeroIn st.c x.val)
     {z : Model.Witness (L.model regs).m} (hsat : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
@@ -71,8 +49,6 @@ theorem stack_zero_block {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.un
 
 end copies
 
-/-- **At an accepted untyped statement, a template instance's stacked input that reads the zero carries 0**, at the
-template instance's columns (`Placed.Accepted.col`), in every block of a satisfying witness. -/
 theorem accepted_zero_block {T : Model.Statement} (a : Placed.Accepted T) {g : ℕ} (hg : g < a.st.c.g)
     (x : Fin a.rows.w) (hx : x.val < a.rows.nIn) (hz : ZeroIn a.st.c x.val) {z : Model.Witness T.m}
     (hsat : T.Satisfies z) (o : Fin (2 ^ T.nbl)) : T.block z o (a.col hg x) = 0 := by
@@ -80,16 +56,12 @@ theorem accepted_zero_block {T : Model.Statement} (a : Placed.Accepted T) {g : �
   subst hT
   exact stack_zero_block (setupH_layout ht h) regs (Aliased.setupH_unitFacts ht h) hg x hx hz hsat o
 
-/-- An accepted untyped statement's circuit is the one its circuit file parses to. -/
 theorem accepted_c_eq {T : Model.Statement} (a : Placed.Accepted T) {c : Flock.Circuit}
     (hp : HmRow.parse a.tags a.cf a.tables = .ok c) : a.st.c = c := by
   have := (setupH_spec a.ht a.h).1
   rw [hp] at this
   exact (Except.ok.inj this).symm
 
-/-! ## Δ's source keys at the zero -/
-
-/-- **Δ's source key at a port bit is the zero exactly when the bit reads the zero** (`ZeroPort`). -/
 theorem srcAt_zero_iff (c : Flock.Circuit) (s₀ p t : ℕ) : Aliased.srcAt c (s₀ % c.upv) p t = .zero ↔ ZeroPort c s₀ p t := by
   unfold Aliased.srcAt ZeroPort
   by_cases hp : p < (c.unit.inGroups.getD 0 default).bits.size
@@ -111,7 +83,6 @@ theorem srcAt_zero_iff (c : Flock.Circuit) (s₀ p t : ℕ) : Aliased.srcAt c (s
       refine iff_of_false ?_ (by rw [hf]; simp)
       split <;> simp
 
-/-- **Δ's source key at a stacked input is the zero exactly when the input reads the zero** (`ZeroIn`). -/
 theorem srcKey_zero_iff {c : Flock.Circuit} {x : ℕ} (hx : x < c.upv * (c.unit.inWords * WORD)) :
     Aliased.srcKey c x = .zero ↔ ZeroIn c x := by
   have hn : 0 < c.unit.inWords * WORD := Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hx; omega
@@ -124,13 +95,10 @@ theorem srcKey_zero_iff {c : Flock.Circuit} {x : ℕ} (hx : x < c.upv * (c.unit.
   · rw [ite_eq_right hm]
     exact iff_of_false (fun h => by cases h) (fun h => hm h.1)
 
-/-! ## The program of `n` units -/
-
 section uniform
 
 variable {k : ℕ} {R : Rows} {ins : ℕ → Fin R.nIn → Fin k} {one : Fin k} {hone : ∀ u c, ins u c ≠ one}
 
-/-- A program input of `uniform` is no unit's gate. -/
 theorem unit_uniform : ∀ (n : ℕ) (g : Fin (Placed.gates k R n)), g.val < k →
     (Placed.uniform k R ins one hone n).unit g = none
   | 0, _, _ => rfl
@@ -139,7 +107,6 @@ theorem unit_uniform : ∀ (n : ℕ) (g : Fin (Placed.gates k R n)), g.val < k �
     change (Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _).unit g = none
     simp only [Prog.unit, h', ↓reduceDIte, unit_uniform n ⟨g.val, h'⟩ hg, Option.map_none]
 
-/-- `uniform` wires unit `u`'s input `i` to the input gate `ins u i`. -/
 theorem insAt_uniform : ∀ (n : ℕ) (u : Fin n) (i : ℕ) (hi : i < R.nIn),
     (Const.Prog.insAt (Placed.uniform k R ins one hone n) u i).val = (ins u.val ⟨i, hi⟩).val
   | 0, u, _, _ => u.elim0
@@ -154,7 +121,6 @@ theorem insAt_uniform : ∀ (n : ℕ) (u : Fin n) (i : ℕ) (hi : i < R.nIn),
       rw [Const.Prog.insAt_castSucc]
       simp [insAt_uniform n v i hi]
 
-/-- `uniform` wires every unit's constant to the input gate `one`. -/
 theorem oneAt_uniform : ∀ (n : ℕ) (u : Fin n),
     (Const.Prog.oneAt (Placed.uniform k R ins one hone n) u).val = one.val
   | 0, u => u.elim0
@@ -169,14 +135,11 @@ theorem oneAt_uniform : ∀ (n : ℕ) (u : Fin n),
       rw [Const.Prog.oneAt_castSucc]
       simp [oneAt_uniform n v]
 
-/-- **Every unit of `uniform` has its constant on `one`** (`Const.Prog.OneGate`). -/
 theorem oneGate_uniform (n : ℕ) :
     Const.Prog.OneGate (Placed.uniform k R ins one hone n) (Fin.castLE (Placed.le_gates k R n) one) :=
   fun u => Fin.ext (oneAt_uniform n u)
 
 end uniform
-
-/-! ## `hZero` at the circuit's program -/
 
 section circuit
 
@@ -185,11 +148,6 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → 
   {k : ℕ} {c : Flock.Circuit} {hU : Built c.unit} {ins : ℕ → Fin (Placed.circuitRows c hU).nIn → Fin k}
   {one : Fin k} {hone : ∀ u x, ins u x ≠ one}
 
-/-- **`hZero` for the circuit's program at the accepted statements' sites.** The program of `n` units of the circuit's template instance
-rows (`Placed.uniform`), each sampled proof block placed at its site (`si`: its template instance and block in its table's
-accepted untyped statement, whose circuit file parses to `c`) with the program's own instance (`Const.Prog.instC`):
-every column on the zero gate carries 0 in every satisfying witness, when every input the program wires to the zero gate
-reads the zero (`hzer`). -/
 theorem zeroCols_uniform (si : Placed.Sites plan tab)
     (hrows : si.RowsOf (Placed.uniform k (Placed.circuitRows c hU) ins one hone n))
     (hparse : ∀ S R u (h : u ∈ S),
@@ -220,8 +178,6 @@ theorem zeroCols_uniform (si : Placed.Sites plan tab)
     exact accepted_zero_block (si.acc S R u h) (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) x) hxa
       hza hsat _
 
-/-- **`hZero` for the circuit's program on source-indexed input gates** (`Placed.circuitProg`): an input with no source
-is on the zero gate, so it suffices that every input with no source reads the zero (`hsrc`). -/
 theorem zeroCols_circuitProg {B : ℕ} {src : Fin (Placed.circuitRows c hU).nIn → Option (Fin B)}
     (si : Placed.Sites plan tab) (hrows : si.RowsOf (Placed.circuitProg c hU n B src))
     (hparse : ∀ S R u (h : u ∈ S),
@@ -235,9 +191,6 @@ theorem zeroCols_circuitProg {B : ℕ} {src : Fin (Placed.circuitRows c hU).nIn 
   zeroCols_uniform si hrows hparse pp hinst ho hcol (fun h => by simp [Placed.zeroGate, Placed.oneGate, Fin.ext_iff] at h)
     fun u x hx => hsrc x ((Placed.insOf_eq_zero_iff u.isLt x).1 hx)
 
-/-- **`hZero` for the circuit's program with its input gates indexed by Δ's source keys** (`Aliased.keyIdx`, the wiring
-that gives `pp.aliased`): an input's key is the zero exactly when it reads the zero (`srcKey_zero_iff`), so nothing is
-left to assume about the wiring. -/
 theorem zeroCols_keyIdx (si : Placed.Sites plan tab)
     (hrows : si.RowsOf (Placed.circuitProg c hU n (Placed.circuitRows c hU).nIn
       (Aliased.keyIdx c (Placed.circuitRows c hU).nIn)))
@@ -256,8 +209,6 @@ theorem zeroCols_keyIdx (si : Placed.Sites plan tab)
     exact (srcKey_zero_iff (lt_of_lt_of_le h1 (Nat.mul_le_mul_left _ (Nat.min_le_left _ _)))).1
       ((Aliased.keyIdx_eq_none x).1 hx)
 
-/-- **`hZero` at `Placed.progPlaces`** with the program's own instance, for the program whose input gates are indexed by
-Δ's source keys: `zeroCols_keyIdx` with its place hypotheses discharged. -/
 theorem zeroCols_progPlaces (si : Placed.Sites plan tab)
     (hrows : si.RowsOf (Placed.circuitProg c hU n (Placed.circuitRows c hU).nIn
       (Aliased.keyIdx c (Placed.circuitRows c hU).nIn)))
@@ -271,8 +222,6 @@ theorem zeroCols_progPlaces (si : Placed.Sites plan tab)
       {Fin.castLE (Placed.le_gates _ _ n) (Placed.zeroGate n (Placed.circuitRows c hU).nIn)} :=
   zeroCols_keyIdx si hrows hparse _ (fun _ => rfl) (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl)
 
-/-- **`hZero` at `Placed.Sites.progPlaces_keyProg`**, the places of the circuit's program on Δ's source keys that take
-only the sites and the parse: every column on the zero gate carries 0 in every satisfying witness. -/
 theorem zeroCols_keyProg (hU : Built c.unit) {si : Placed.Sites plan tab}
     (hparse : ∀ S R u (h : u ∈ S),
       HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)

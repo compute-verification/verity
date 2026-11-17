@@ -22,14 +22,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Hm.Copy
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
-/-!
-A row's `b ‖ c` in a satisfying witness of a typed template's statement (`row_bc_typed`, and at the statement
-`Stmt.setupH` accepted, `row_bc_setupH_typed`): the commit string of the row and salt its slots read. `row_bc_of_sat`'s
-four copies (`row_copies_of_sat`) are Δ's one copy at each `cv` and `pad` input bit (`inBit_copy`, with `RowRanges.ofT`'s
-filters); the constant bits read the pin (`pin_bitT`) and the root's first slot's forced-zero row (`zero_bitT`, there
-because `HmRow.checkTyped` refuses a root that fills its slot). The rows are `sha512/row/v1`'s because `HmRow.rowPorts`
-refuses a typed statement's bit rows (`ParseFactsT.v1`).
--/
+/-! A row's `b ‖ c` in a satisfying witness of a typed template's statement. -/
 
 @[expose] public section
 
@@ -47,7 +40,6 @@ variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} 
 set_option hygiene false in
 local notation "𝒖" => done.getD unit default
 
-/-- The pin carries 1, in every block of a satisfying witness of a typed template's statement. -/
 theorem pin_bitT {u : D} (T : TemplateLayout st tb words done u)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) :
@@ -57,10 +49,8 @@ theorem pin_bitT {u : D} (T : TemplateLayout st tb words done u)
   rw [hpin, hz.2.1 o]
   rfl
 
-/-- **The root's first slot's forced-zero row carries 0**, in every block of a satisfying witness of a typed template's
-statement with a template instance: the root's net has no row past its useful rows (`checkTyped` refuses a root that
-fills its slot), and no slot constant, flat Δ pair (those are in the rows' circuits' slots) or typed tail entry (those
-are at unit columns) is there. -/
+/-- Holds because `checkTyped` refuses a root that fills its slot, so the root's net has no row past its
+useful rows. -/
 theorem zero_bitT (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) (C : CheckFactsT st.c tb) (hg : 0 < st.c.g)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
@@ -123,10 +113,6 @@ theorem zero_bitT (hd : deriveChecked types ls info words unit = .ok done) (hul 
   rw [chunkBit_of_lt _ z o hx, hZ.block_eq hz o]
   rfl
 
-/-- **The four copies into template instance `g`'s row `p`**, in every block of a satisfying witness of a typed
-template's statement of `sha512/row/v1` rows (`hv1`): the first compression's `cv` is the row prefix's midstate, each
-later compression's `cv` the previous one's output, the `hm96` slot's `cv` the last compression's output, and its `pad`
-the padding block. These are `row_bc_of_sat`'s hypotheses. -/
 theorem row_copies_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked types ls info words unit = .ok done)
     (hul : unit < ls.size) (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
     (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb)
@@ -188,9 +174,6 @@ theorem row_copies_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked
       (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
     exact chunkBit_constSrc _ _ hpin hzero
 
-/-- **A row's `b ‖ c`**, in every block of a satisfying witness of a typed template's statement of `sha512/row/v1` rows
-(`hv1`): the commit string of the row prefix and message its `sha512x3` slots read, and the salt its `hm96` slot reads.
--/
 theorem row_bc_typed {tags : Tags} {t : Typed.Template} (hd : deriveChecked types ls info words unit = .ok done)
     (hul : unit < ls.size) (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
     (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb)
@@ -213,10 +196,8 @@ end Typed
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
-/-- **A row's `b ‖ c` at the typed template statement `Stmt.setupH` accepted**: in every block of a satisfying witness,
-template instance `g`'s row `p`'s `hm96` slot outputs the commit string of the row prefix and message its `sha512x3` slots
-read, under the salt its `hm96` slot reads. Unlike `row_bc_setupH`, it takes no hypothesis on the rows: they are
-`sha512/row/v1` rows because `HmRow.rowPorts` refuses a typed statement's others (`ParseFactsT.v1`). -/
+/-- Takes no hypothesis on the rows, unlike `row_bc_setupH`, because `HmRow.rowPorts` refuses a typed statement's
+rows other than `sha512/row/v1` (`ParseFactsT.v1`). -/
 theorem row_bc_setupH_typed (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
     (hr : Typed.read tags cf tables = .ok (k, .inr t))

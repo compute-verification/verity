@@ -9,25 +9,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# A template instance's rows over every net, joined by Δ's wires
-
-`Placed.circuitRows` stacks the unit net's rows `units_per_vu` times, so it is a template instance's rows only when no
-wire reaches the unit. `instRows c` is the whole template instance: every slot of every net but the rows' circuits
-(`sha512x3`, `hm96`), that is the unit's copies, the stage nets and the lookup slots. Column `off` of net `n`'s slot `i` is
-`code n i off`, and its row is the block's there (`row`):
-- at a computed row (past the net's input rows, before its constant), the net's local `A` and `B` rows, `B` with a lookup
-  slot's folded table side (`entB`);
-- at the constant, a copy of `one`;
-- at an input bit a wire fills (`feed`), the net's local row there with Δ's two pairs: `(x, x)` (`addSelf`) and
-  `(x, src)`, the wire's source bit;
-- at any other column, no row.
-
-The logical inputs (`inCols`) are the unit's stacked inputs that no wire fills, in stacked order: its leaf and cut bits
-and its input padding rows. `order` appends, pass by pass, every column whose row reads only columns already listed. So
-the rows are `Ordered` (`logical_ordered`) whatever the wires are: a column on a cycle of wires, or one that reads a
-column with no row, never enters the order. `instRows` is `Rows.compose` of them.
--/
+/-! A template instance's rows over every net, joined by Δ's wires (`instRows c`), `Ordered` whatever the wires are. -/
 
 @[expose] public section
 
@@ -36,8 +18,6 @@ open Flock FlockLevel3
 namespace FlockSoundness.Discharge.Inst
 
 open Compose
-
-/-! ## Columns of a template instance -/
 
 /-- **Column `off` of net `n`'s slot `i`** of a template instance, as one number. -/
 def code (n i off : ℕ) : ℕ := Nat.pair n (Nat.pair i off)
@@ -74,8 +54,6 @@ def pos (c : Circuit) (g x : ℕ) : ℕ := c.slotCol (codeNet x) g (codeSlot x) 
 
 theorem pos_code (c : Circuit) (g n i off : ℕ) : pos c g (code n i off) = c.slotCol n g i + off := by
   simp [pos]
-
-/-! ## Each column's row -/
 
 /-- Net `n`'s local `A` entry. -/
 def entA (c : Circuit) (n r j : ℕ) : ZMod 2 := sparseEntry (netOf c n).a r j
@@ -162,8 +140,6 @@ theorem rowAt_comp {c : Circuit} {n i o : ℕ} {p : List ℕ × List ℕ} (h : r
     · intro h
       exact ⟨s, rfl, (Option.some.inj (Option.some.inj h)).symm⟩
 
-/-! ## The logical inputs -/
-
 /-- **The unit's stacked inputs that no wire fills**: stacked input `x` is input `x % W` of copy `x / W`. -/
 def inX (c : Circuit) : List ℕ :=
   (List.range (c.upv * netIn c c.unitNet)).filter fun x =>
@@ -174,8 +150,6 @@ def inCode (c : Circuit) (x : ℕ) : ℕ := code c.unitNet (x / netIn c c.unitNe
 
 /-- **The logical inputs**: the columns of the unit's stacked inputs no wire fills. -/
 def inCols (c : Circuit) : List ℕ := (inX c).map (inCode c)
-
-/-! ## The order -/
 
 /-- **A column is ready** once its row reads only listed columns (a constant always is; a column with no row never). -/
 def ready (c : Circuit) (acc : List ℕ) (x : ℕ) : Bool :=
@@ -199,7 +173,6 @@ def order (c : Circuit) : List ℕ := (step c)^[(cols c).length] (inCols c)
 /-- **The template instance's rows in logical order.** -/
 def logical (c : Circuit) : Logical := ⟨(inCols c).length, order c, fun x => (row c x).getD none⟩
 
-/-- What every pass keeps: the inputs first, and each later column has a row, which reads only columns before it. -/
 def Inv (c : Circuit) (l : List ℕ) : Prop :=
   inCols c <+: l ∧ ∀ ℓ < l.length, (inCols c).length ≤ ℓ → row c (l.getD ℓ 0) ≠ none ∧
     ∀ p, row c (l.getD ℓ 0) = some (some p) → ∀ y ∈ p.1 ++ p.2, y ∈ l.take ℓ
@@ -261,7 +234,6 @@ theorem row_of_getD {c : Circuit} {x : ℕ} {p : List ℕ × List ℕ} (h : (row
   revert h
   rcases row c x with _ | _ | q <;> simp
 
-/-- **The template instance's rows read only earlier columns**, or `one`. -/
 theorem logical_ordered (c : Circuit) : Ordered (logical c) := by
   obtain ⟨hpre, hrow⟩ := inv_order c
   refine ordered_of_take hpre.length_le fun ℓ hℓ hn p hp y hy => ?_

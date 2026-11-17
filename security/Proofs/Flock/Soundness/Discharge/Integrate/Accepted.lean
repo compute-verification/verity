@@ -12,25 +12,8 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# A sample verity-verify-proof accepts sets up
-
-`tableAt` is setupH's statement at a sample with a `SampleSetup`, and unsatisfiable elsewhere. A `SampleSetup` is more than
-setupH's acceptance: the sample proves the sampled proof blocks, `0 < c.g`, the proved units fit the blocks, `m` has a `fast100`
-schedule of at least two levels, and the statement's link points are `mPts`. All but the first and the last follow
-from a one-table acceptance:
-* `0 < c.g`: `HmRow.check` takes the unit range's `c.g · c.upv` slots to be a power of two when the unit returns the
-  outputs (`g_pos`);
-* the blocks: setupH's `nbl` is at least `log2ceil ⌈n / c.g⌉`, and a sampled statement's `n` is the sample's proved units
-  (`setupH_n`, `Layout.sampled_spec`);
-* the schedule: verity-verify-proof ran `fast100` on the table's `m` (`verify_one_ok`), and every executable `fast100` schedule
-  is `Accounting.fast100`'s (`fast100_schedOf`) with at least two levels (`fast100_two`).
-
-`sampleSetup_of_accepts`: a one-table acceptance whose record's sample is `d` gives setupH's statement at `d` and the
-sample `D`, and a `SampleSetup` whenever `D` proves `S` and the statement's link points are `mPts`. `tableAt_of_accepts`:
-then `tableAt`'s table at `S` is `stmtOf` of the statement verity-verify-proof accepted. The link points are setupH's
-`PT_LOCAL + nbl`, a function of `|D.proved|` and `c.g` (`Exec.setupH_mPts_sampled`).
--/
+/-! A sample verity-verify-proof accepts sets up (`sampleSetup_of_accepts`), so there the table is `stmtOf` of the
+accepted statement (`tableAt_of_accepts`). -/
 
 @[expose] public section
 
@@ -39,7 +22,6 @@ namespace FlockSoundness.Discharge.Integrate
 open Flock FlockLevel3 Refine
 open FlockSoundness.Discharge.Exec (Inputs Accepts recordDraw accepts_one)
 
-/-- Every executable `fast100` schedule has at least two levels. -/
 theorem fast100_two (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) : 2 ≤ s.levels.size := by
   by_cases hm : m < 40
   · have key : ∀ m : Fin 40, ∀ s ∈ Flock.fast100 m.val, decide (2 ≤ s.levels.size) = true := by
@@ -47,7 +29,6 @@ theorem fast100_two (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some 
     simpa using key ⟨m, hm⟩ s hs
   · rw [exec_fast100_none m (by omega)] at hs; cases hs
 
-/-- `Accounting.fast100`'s schedule at an `m` the executable's `fast100` schedules, with its two first levels. -/
 theorem model_sched {m : ℕ} {s : Flock.Schedule} (hs : Flock.fast100 m = some s) :
     ∃ k0 l₀ l₁ rest ext, Accounting.fast100 m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ := by
   have h1 := fast100_schedOf m
@@ -68,7 +49,6 @@ theorem model_sched {m : ℕ} {s : Flock.Schedule} (hs : Flock.fast100 m = some 
   unfold schedOf
   rw [hl, hm]
 
-/-- The unit range's `c.g · c.upv` slots are a power of two when the unit returns the outputs, so `0 < c.g`. -/
 theorem g_pos {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) (ho : c.outNet = c.unitNet) : 0 < c.g := by
   have P := parse_facts h
@@ -81,9 +61,7 @@ theorem g_pos {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteAr
   · rw [h0, Nat.zero_mul] at hp; omega
   · exact h0
 
--- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **setupH's instances and blocks**: `n` is the (sampled) public file's, and `nbl = max 3 (log2ceil ⌈n / c.g⌉)`. -/
 theorem setupH_n {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :
@@ -97,7 +75,6 @@ theorem setupH_n {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coi
     subst h
     exact ⟨rfl, rfl⟩
 
-/-- `n` instances fit `c.g · 2^nbl` slots when `nbl ≥ log2ceil ⌈n / g⌉`. -/
 theorem fits_blocks {n g : ℕ} (hg : 0 < g) : n ≤ g * 2 ^ max 3 (log2ceil (max ((n + g - 1) / g) 1)) := by
   have hd := Nat.div_add_mod (n + g - 1) g
   have hr := Nat.mod_lt (n + g - 1) hg
@@ -112,8 +89,6 @@ variable {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : F
   (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
 include ht hc ho
 
-/-- **A `SampleSetup` from setupH's acceptance at a sample**, a `fast100` schedule of its `m`, the sample proving `S`, and its
-link points `mPts`. -/
 theorem sampleSetup_of_setupH {st : Stmt}
     (h : Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program = .ok st)
     {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitSample}
@@ -133,9 +108,6 @@ theorem sampleSetup_of_setupH {st : Stmt}
   exact ⟨⟨st, h, D, hD, hS, hg, hblk, st.m, k0, l₀, l₁, rest, ext, hsch,
     by have := exec_fast100_ge hf; omega, hmPts⟩, rfl⟩
 
-/-- **A sample verity-verify-proof accepts sets up.** A one-table acceptance whose record's sample is `d`: setupH accepted its
-inputs at `d` (`st`), the sample decodes (`D`), and whenever `D` proves `S` and `st`'s link points are `mPts`, a
-`SampleSetup` at `d` has statement `st`. -/
 theorem sampleSetup_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) {t : Exec.Transcript}
     (h : Accepts I t)
     (hd : recordDraw t.record = some d) :
@@ -149,9 +121,6 @@ theorem sampleSetup_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.coun
   obtain ⟨D, hD, -⟩ := Layout.sampled_spec hdr
   exact ⟨st, D, hst, hD, fun hS hm => sampleSetup_of_setupH ht hc ho hst hf hD hS hm⟩
 
-/-- **At a sample verity-verify-proof accepts, the headline's table is `stmtOf` of the statement it accepted**: when the
-session's record carries the challenger's sample `dj S`, that sample proves `S`, and setupH's statement at it has link
-points `mPts`. -/
 theorem tableAt_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)}
     (x₀ : SampleSetup I mPts S₀ (dj S₀)) {t : Exec.Transcript} (h : Accepts I t)

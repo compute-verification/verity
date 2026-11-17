@@ -23,11 +23,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-The salt digest `c = SHA-512(salt_prefix ‖ y)` of `hm96-sha512/v1` as the hm96 circuit computes it: from the salt
-prefix's midstate (`saltMid`), over the salt's 24 big-endian words and the fixed padding of a 320-byte message
-(`saltTail`).
--/
+/-! The salt digest `c = SHA-512(salt_prefix ‖ y)` of `hm96-sha512/v1` as the hm96 circuit computes it. -/
 
 @[expose] public section
 
@@ -42,10 +38,8 @@ theorem size_saltPrefix : Hm96.Default512.saltPrefix.size = 128 := by decide +ke
 theorem length_saltPrefix : Hm96.Default512.saltPrefix.data.toList.length = 128 := by
   rw [Array.length_toList, ByteArray.size_data, size_saltPrefix]
 
-/-- The salt's 24 message words, big-endian. -/
 def saltWordsV (s : List UInt8) : List (BitVec 64) := (List.range 24).map fun i => (wordL s 0 i).toBitVec
 
-/-- The circuit's salt words are the salt's when its salt bits are the salt's bytes' bits. -/
 theorem map_bv_saltWords (z : Var → Bool) (y : List Lin) (s : List UInt8) (hy : ∀ q < 1536, bit z y q = bitL s q) :
     (saltWords y).map (bv z) = saltWordsV s := by
   simp only [saltWords, saltWordsV, List.map_map]
@@ -59,7 +53,6 @@ theorem map_bv_saltWords (z : Var → Bool) (y : List Lin) (s : List UInt8) (hy 
   rw [h1, hy _ (by omega), bitL, show (64 * i + 8 * (7 - j / 8) + j % 8) / 8 = 0 + 8 * i + (7 - j / 8) by omega,
     show (64 * i + 8 * (7 - j / 8) + j % 8) % 8 = j % 8 by omega]
 
-/-- The salt digest's message `salt_prefix ‖ y`. -/
 def saltMsg (s : List UInt8) : ByteArray := ⟨(Hm96.Default512.saltPrefix.data.toList ++ s).toArray⟩
 
 theorem saltMsg_data (s : List UInt8) :
@@ -68,7 +61,6 @@ theorem saltMsg_data (s : List UInt8) :
 theorem size_saltMsg {s : List UInt8} (hs : s.length = 192) : (saltMsg s).size = 320 := by
   rw [← ByteArray.size_data, ← Array.length_toList, saltMsg_data, List.length_append, length_saltPrefix, hs]
 
-/-- The padding of a 320-byte message: `0x80`, 47 zeros, the bit count 2560 in 16 bytes. -/
 def saltPadT : List UInt8 := [128] ++ List.replicate 47 0 ++ lenBytes 320
 
 theorem saltMsg_pad {s : List UInt8} (hs : s.length = 192) :
@@ -100,8 +92,6 @@ theorem getD_saltPad_hi {s : List UInt8} (hs : s.length = 192) {k : ℕ} (hk : 3
   rw [List.getD_append_right _ _ _ _ (by simp [size_saltPrefix, hs]; omega)]
   simp [size_saltPrefix, hs]
 
-/-- The chaining value before the salt digest's last block: the prefix's midstate, compressed with the salt's first 16
-words. -/
 theorem lastCv_saltMsg {s : List UInt8} (hs : s.length = 192) :
     lastCv (saltMsg s) = compressV saltMid ((saltWordsV s).take 16) := by
   have hpd := saltMsg_pad hs
@@ -129,7 +119,6 @@ theorem lastCv_saltMsg {s : List UInt8} (hs : s.length = 192) :
   rw [h2]
   rfl
 
-/-- The salt digest's last block: the salt's last 8 words, then the padding's. -/
 theorem lastBlock_saltMsg {s : List UInt8} (hs : s.length = 192) :
     lastBlock (saltMsg s) = (saltWordsV s).drop 16 ++ saltTail := by
   have hpd := saltMsg_pad hs
@@ -155,8 +144,6 @@ theorem lastBlock_saltMsg {s : List UInt8} (hs : s.length = 192) :
         (i' := i - 8) fun j hj => ?_]
       rw [hpd, getD_saltPad_hi hs (by omega), show 256 + 8 * i + j - 320 = 0 + 8 * (i - 8) + j by omega]
 
-/-- **The salt digest's bits**: bit `t < 512` of `SHA-512(salt_prefix ‖ y)` (byte-string order) is bit `wordBit t` of
-the prefix's midstate compressed with the salt's 24 words and the padding. -/
 theorem bitL_saltHash {s : List UInt8} (hs : s.length = 192) {t : ℕ} (ht : t < 512) :
     bitL (Sha512.hash (saltMsg s)).data.toList t =
       wbit (compressV (compressV saltMid ((saltWordsV s).take 16)) ((saltWordsV s).drop 16 ++ saltTail))

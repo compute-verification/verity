@@ -21,13 +21,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Soundness.ExecSetup
 
-/-!
-A row's `b ‖ c` in a satisfying witness of the accepted template statement. `HmRow.rowSlots` puts port `p`'s compression
-`k` at `sha512x3` slot `(at_p + k) / 3`, place `(at_p + k) % 3`, with `at_p` the earlier ports' chunks (`rowSlots_eq`).
-So the satisfying witness holds the `sha512x3` and `hm96` rows at every compression of the row (`shaSlot_of_sat`,
-`hmSlot_of_sat`), and `port_commit_rows` gives the row's commit string at its `hm96` slot's outputs (`row_bc_of_sat`),
-given the port's words fill its chunks and the block holds Δ's copies into the slots' `cv` and `pad` inputs.
--/
+/-! A row's `b ‖ c` in a satisfying witness of the accepted template statement. -/
 
 @[expose] public section
 
@@ -37,10 +31,8 @@ namespace FlockSoundness.Discharge.Hm
 
 open Compose Flock.DeriveAll Types.Dag
 
-/-- The compressions before port `p`'s. -/
 def atOf (ports : Array Port) (p : ℕ) : ℕ := ((ports.toList.take p).map (·.chunks)).sum
 
-/-- Port `p`'s compressions, each its `sha512x3` slot and its place in the slot. -/
 def slotsOf (ports : Array Port) (p : ℕ) : Array (ℕ × ℕ) :=
   (Array.range ports[p]!.chunks).map fun k => ((atOf ports p + k) / 3, (atOf ports p + k) % 3)
 
@@ -91,7 +83,6 @@ theorem rowSlots_entry {ports : Array Port} {p k : ℕ} (hp : p < ports.size) (h
   rw [rowSlots_get hp, slotsOf, getElem!_pos _ k (by simp [hk])]
   simp
 
-/-- Compression `k` of port `p`'s row: its slot is one of the template instance's `sha512x3` slots, and its place in the slot is below 3. -/
 theorem rowSlot_lt {ports : Array Port} {p k : ℕ} (hp : p < ports.size) (hk : k < ports[p]!.chunks) :
     ((HmRow.rowSlots ports).2[p]!)[k]!.1 < (HmRow.rowSlots ports).1 ∧ ((HmRow.rowSlots ports).2[p]!)[k]!.2 < 3 := by
   have hsz : (HmRow.rowSlots ports).2.size = ports.size := by
@@ -107,12 +98,6 @@ variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} 
 set_option hygiene false in
 local notation "𝒖" => done.getD unit default
 
-/-- **A row's `b ‖ c` in a satisfying witness of the accepted template statement.** At template instance `g`, port `p`'s
-row: if it is not segmented (`hs`) and its words fill its chunks, at least one (`hn`, `hw`) and the block holds Δ's
-copies into the slots' inputs (the first compression's `cv` the row prefix's midstate, each later `cv` the previous
-compression's output, the `hm96` slot's `cv` the last output and its `pad` the padding block), then the 128 bytes the
-block holds at `bcCol` are the commit string of the `2 · words` row bytes at `Typed.msgCol` and the 192 salt bytes at
-`saltCol`. -/
 theorem row_bc_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked types ls info words unit = .ok done)
     (hul : unit < ls.size) (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
     (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb)
