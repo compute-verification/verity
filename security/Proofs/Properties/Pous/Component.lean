@@ -28,7 +28,7 @@ import all Init.Data.Repr
   `C*`s and the two tables have one root each, so by `mth_binds` their leaves agree or the trees collide, and a leaf
   that agrees has one row (`leafInput`), whose block is one (`blockInput`), or the runs' data collide.
 * `wipeAccepts`: `StreamedWipe.verdict` is its checks before the batches (`wpre`) followed by the batches (`wtail`),
-  as `MemoryAttester.verdict` is in `Proofs.Properties.Pous.MemoryAttester`; an accepted verdict has no reason, so
+  as `MemoryChallenger.verdict` is in `Proofs.Properties.Pous.MemoryChallenger`; an accepted verdict has no reason, so
   each check passed.
 
 Each acceptance statement's two lemmas:
