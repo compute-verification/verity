@@ -31,7 +31,7 @@ means = "one directory per serving system, holding only what attaches Verity to 
 
 [[tree]]
 path = "applications/"
-means = "one file per demo, the configuration `verity run` reads, and nothing else: README.md (one table of them), remote.toml, onsite_network.toml, onsite_compute.toml (the default) and onsite_full.toml. A demo holds no code"
+means = "one file per application, the configuration `verity run` reads, and nothing else: README.md (one table of them), remote.toml, onsite_network.toml, onsite_compute.toml (the default) and onsite_full.toml. An application holds no code"
 
 [[tree]]
 path = "applications/README.md"
@@ -39,7 +39,7 @@ means = "one table: the file, what it shows, its command, how far it runs and is
 
 [[tree]]
 path = "applications/remote.toml"
-means = "the remote demo: SPOT, PoUW and the inference-only policy, with no auditor's device at the site"
+means = "the remote application: SPOT, PoUW and the inference-only policy, with no auditor's device at the site"
 
 [[tree]]
 path = "applications/onsite_network.toml"
