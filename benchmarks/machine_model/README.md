@@ -84,6 +84,7 @@ uv run machine-model designs              # the design registry
 uv run machine-model eps [DESIGN]         # a design's ε at q* = 8: every term, the LP's mixes, the ε(q*) curve
 uv run machine-model eps --table          # every design, one line each
 uv run machine-model eps --table --credit floor --operands floor --lookups
+uv run machine-model eps --device sm_89 --table --credit floor --operands floor
 uv run machine-model headline             # each family's design of record at the data-sheet and measured readings
 uv run machine-model lean-headline [--check]   # write every family's headline instances as Lean, or check them
 uv run machine-model redteam [DESIGN]     # the binding and near-binding rows, and how far each can move
@@ -424,8 +425,8 @@ Counted per GPU without them, the host's AMX and AVX-512 (and NVLink peers) take
 ## Devices
 
 `data/` is sm_120's, the RTX PRO 6000 at the node's 2,092 MHz lock, and every command reads it unless `--device` or
-`--data` names another directory. Another device's measurements go in `data/devices/sm_NN/`: sm_90 (the H200) and
-sm_100 (the B200). `machine-model render devices` lists each
+`--data` names another directory. Another device's measurements go in `data/devices/sm_NN/`: sm_80 (the A100-SXM4-80GB
+at default boost), sm_89 (the L40S), sm_90 (the H200) and sm_100 (the B200). `machine-model render devices` lists each
 directory a command can price, with its epochs, rows, census lines, vectors, designs and honest kernels. A device
 directory follows these rules:
 
