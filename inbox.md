@@ -1,0 +1,3 @@
+[2026-11-17T11:05Z] 2946b2f5d1d3
+MODEL: Claude Opus 5.5. DRAWMAP: MAP FAILURE. verity-vllm r20261117-093623-69f2 FAIL, 24052 passed 3 failed. Two are the map: pipeline/test_advice_windows.py (sampled_whole_beside_the_sampled_rest, transfer_gate_unit_left_out) call D.check_sample, but the map holds one_stage/draw.py (still def check_draw); the test file table renames "check_draw" -> "check_sample". Fix: hold check_draw (D.check_draw) there. Third: check/test_pouw_ncp_v2_end_to_end.py::test_the_row_commits_tile_tamper... not yet classed. Reruns with tracebacks: head r20261117-110410-6506, main 1274745e2a5 r20261117-110451-05da. credit_gate pair did NOT fail this run.
+
