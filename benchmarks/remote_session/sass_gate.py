@@ -4,7 +4,8 @@ other kernel of the build is held to the base's, instruction for instruction, by
 reasons on stderr):
 
 - one of the seven missing from the build or from the listing, compiled for another arch, an arch this gate has no
-  table for (`ARCHS`: sm_90a and sm_120a, each as read from its build), or with a ptxas warning;
+  table for (`ARCHS`: sm_90a and sm_120a, each as read from its build), or with a ptxas warning; with --no-leaf64 (a
+  build without -DLEAF_PASS64) the leaf pass's two (`LEAF64`) are not wanted, and refused if the build has either;
 - a sketching kernel (`SKETCHING`, the five that compute σ) whose tensor-core instructions aren't the int8 form alone,
   IMMA.16832.S8.S8 (mma.m16n8k32 on s8 operands into s32), in a multiple of 4 (64 rows are four of its 16), and any
   tensor-core instruction in the other two;
@@ -21,7 +22,7 @@ OUT_JSON holds each kernel's record: its registers, stack frame and spills, its 
 instructions, its float instructions by mnemonic (`float`) and the divisions they make (`divisions`). With
 --listings, DIR gets each kernel's listing, a line an entry as `same_sass.py` reads it.
 
-  python3 sass_gate.py PTXAS_TXT SASS_TXT OUT_JSON [--arch sm_90a] [--listings DIR]
+  python3 sass_gate.py PTXAS_TXT SASS_TXT OUT_JSON [--arch sm_90a] [--listings DIR] [--no-leaf64]
 """
 from __future__ import annotations
 
@@ -60,6 +61,7 @@ SKETCHING = {"sketch64_pass_kernel", "pass_consumer_kernel<64>", "subtree64_rece
 #: a pass's packed signs from its seed, and a chained pass's seed and signs: one launch a pass
 ONCE = {"signs_kernel<64>", "chain_prepare_kernel<64>"}
 WANT = SKETCHING | ONCE
+LEAF64 = {"leaf_pass64_kernel", "leaf_consumer64_kernel"}
 #: by arch, as ptxas builds them: `local`, the bytes of stack frame or spill a kernel holds (a kernel it doesn't name,
 #: none): the consumers and the leaf pass's reader run at the register limit, as their 16-row twins do, and the
 #: once-a-pass kernels keep a SHA-512 schedule on the stack, as theirs do; and `capped`, what a kernel held to REGS_MAX
@@ -143,8 +145,8 @@ def _check(name: str, r: dict) -> list[str]:
     return out
 
 
-def gate(ptxas: str, sass: str, arch: str = "sm_90a") -> tuple[dict, list[str]]:
-    """The seven kernels' records by `short` name, and what the gate refuses."""
+def gate(ptxas: str, sass: str, arch: str = "sm_90a", leaf64: bool = True) -> tuple[dict, list[str]]:
+    """The seven kernels' records by `short` name, and what the gate refuses; without leaf64, the five not `LEAF64`."""
     listed = H.sass_functions(sass)
     mine = {n for n in [*listed, *_COMPILING.findall(ptxas)] if short(n) in WANT}
     kept, keep = [], False
@@ -166,9 +168,11 @@ def gate(ptxas: str, sass: str, arch: str = "sm_90a") -> tuple[dict, list[str]]:
         arch=arch, counts=COUNTS, atom=_atom, line=_line, check=_check, local_ok=local_ok, unreported=True,
         record={**dict.fromkeys(COUNTS, 0), "IMMA": 0, "instructions": 0, "constants": 0, "float": {}, "other_mma": []},
         allowed=lambda name: ATOM if short(name) in SKETCHING else "none")
-    missing = sorted(WANT - {short(n) for n in mine})
+    missing = sorted((WANT if leaf64 else WANT - LEAF64) - {short(n) for n in mine})
     if missing:
         problems.append(f"kernels missing from the build: {missing}")
+    if not leaf64 and (built := sorted(LEAF64 & {short(n) for n in mine})):
+        problems.append(f"a build without -DLEAF_PASS64 has the 64-row leaf pass's kernels: {built}")
     return {short(n): {"symbol": n, "local_ok": local_ok[n], **r} for n, r in funcs.items()}, problems
 
 
@@ -179,9 +183,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("out")
     ap.add_argument("--arch", default="sm_90a")
     ap.add_argument("--listings", type=Path, metavar="DIR")
+    ap.add_argument("--no-leaf64", dest="leaf64", action="store_false",
+                    help="the build has no -DLEAF_PASS64: the leaf pass's 64-row kernels are refused, not wanted")
     a = ap.parse_args(argv)
     sass = a.sass.read_text()
-    funcs, problems = gate(a.ptxas.read_text(), sass, a.arch)
+    funcs, problems = gate(a.ptxas.read_text(), sass, a.arch, a.leaf64)
     if a.listings:
         a.listings.mkdir(parents=True, exist_ok=True)
         listed = H.sass_functions(sass)
