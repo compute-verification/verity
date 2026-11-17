@@ -181,7 +181,7 @@ OWN_CAPS = {
                      "security/Proofs/ResourceAccounting/Gates"),
                     "the stacking gates' caps, what a block's outputs cap in units; Pearl's is PoUW's"),
     **dict.fromkeys(tuple(f"benchmarks/{b}/"
-                          for b in ("pous", "remote_session", "vllm_encoded", "kv_filler", "codec_tensor")),
+                          for b in ("pous", "poub_session", "vllm_encoded", "kv_filler", "codec_tensor")),
                     "PoUS's and PoUB's benchmarks' caps (an RTT allowance, a period's cap, a buffer's rows, a fill's "
                     "CTAs); Pearl's is PoUW's"),
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
@@ -217,11 +217,11 @@ OWN_NAMES = {
          "ticks: a span of time, which GLOSSARY.md's row of \"window\" calls a period, and not the stretch of time a "
          "bound is about that its row of `*Period*` retires", ()),
         (r"(?<=[Aa]ttest[./])Period",
-         "an auditor party's certification period (`Attest.Period`): the stretch whose records one signed root "
+         "an auditor party's attestation period (`Attest.Period`): the stretch whose records one signed root "
          "commits, a period by GLOSSARY.md's row of \"window\", and not the stretch of time a bound is about that its "
          "row of `*Period*` retires", ()),
         (r"Period(?:Signed|Sound|Run)",
-         "the certification period of `Attest.Period`, in its guarantees' names (`PeriodSigned`, `PeriodSound`, "
+         "the attestation period of `Attest.Period`, in its guarantees' names (`PeriodSigned`, `PeriodSound`, "
          "`PeriodRun`), in their two files only: elsewhere `PeriodRun` is compose's and `PeriodSound` PoUW's",
          ("security/Properties/Attest.lean", "security/Proofs/Properties/Pous/MemoryChallenger/Attest.lean")),
         (r"_PeriodAuditor",

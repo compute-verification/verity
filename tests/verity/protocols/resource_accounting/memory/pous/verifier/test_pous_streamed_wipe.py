@@ -17,7 +17,7 @@ import pytest
 from pous_fakes import Clock
 
 from verity.commitments.randomness import derive
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_store as WS
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
@@ -35,13 +35,13 @@ def params(batch: int = 1, limit: int = LIMIT) -> sw.WipeParams:
 
 
 def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=None, mark_source=None,
-               server: bytes = SERVER) -> WC.WipeMemoryChallenger:
-    return WC.WipeMemoryChallenger(SECRET, server, SESSION, p or params(),
+               server: bytes = SERVER) -> WC.WipeMemoryAttester:
+    return WC.WipeMemoryAttester(SECRET, server, SESSION, p or params(),
                                    signer or ts.TestSigner(b"wipe challenger", height=2), log=log or ts.session_log(),
                                    clock=clock or Clock(1_000_000), coin_secret=b"coins", mark_source=mark_source)
 
 
-def run(c: WC.WipeMemoryChallenger, respond=None, *, clock: Clock | None = None,
+def run(c: WC.WipeMemoryAttester, respond=None, *, clock: Clock | None = None,
         spend=lambda b: 20_000) -> sw.SignedWipe:
     prover = WS.Prover(c.params)
     for start, data in c.fill(100):
@@ -150,12 +150,12 @@ def test_one_session_an_id():
         challenger(log=log)
 
 
-DEFAULT_CLOCK = WC.WipeMemoryChallenger.__init__.__kwdefaults__["clock"]
-"""`WipeMemoryChallenger`'s default clock as the module has it: read at import, before `conftest.py` replaces it in each test."""
+DEFAULT_CLOCK = WC.WipeMemoryAttester.__init__.__kwdefaults__["clock"]
+"""`WipeMemoryAttester`'s default clock as the module has it: read at import, before `conftest.py` replaces it in each test."""
 
 
 def test_the_default_clock_is_the_raw_one_and_its_resolution_is_checked(monkeypatch):
-    """`raw_clock_ns` reads `CLOCK_MONOTONIC_RAW`, the clock the header names. It is the default of `WipeMemoryChallenger`, of the
+    """`raw_clock_ns` reads `CLOCK_MONOTONIC_RAW`, the clock the header names. It is the default of `WipeMemoryAttester`, of the
     wipe's party and of an in-process wipe, and a challenger on it is refused where that clock ticks too coarsely."""
     asked = []
     monkeypatch.setattr(sw.time, "clock_gettime_ns", lambda clk: asked.append(("ns", clk)) or 7)
@@ -185,7 +185,7 @@ class Reads:
         return self.now
 
 
-def stream(c: WC.WipeMemoryChallenger, how: str, sent: list) -> None:
+def stream(c: WC.WipeMemoryAttester, how: str, sent: list) -> None:
     """The whole fill, by `fill` or by `fill_by`, each thing streamed noted in `sent`."""
     if how == "fill":
         for first, _ in c.fill(100):

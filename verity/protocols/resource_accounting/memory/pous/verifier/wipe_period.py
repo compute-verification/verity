@@ -1,21 +1,21 @@
 """The streamed wipe's verifier, the wipe's component of onsite Verity (`verity/wipe/v0`, `MemoryChallenger.WipeProtocol`
-in `verity/protocols/resource_accounting/memory/pous/attester/lean/`): the memory challenger fills the node's memory with its streamed
+in `verity/protocols/resource_accounting/memory/pous/attester/lean/`): the memory attester fills the node's memory with its streamed
 labels and times its spot reads (`streamed_wipe`) and signs the session, and the verifier answers (`answer`), as the
 Lean does, on the commitment and the evidence: the signed session and one egress count beside it, `egress_mib`, in whole
 MiB (`streamed_wipe.egress_units`), `EGRESS_MAX_UNITS` when none is given (`egress_of`):
 
 * a commitment of another server or session rejects;
 * an egress outside 0 to `EGRESS_MAX_UNITS` rejects;
-* a session the memory challenger hasn't signed (the prover left, or its reads aren't verified yet) is undecided;
+* a session the memory attester hasn't signed (the prover left, or its reads aren't verified yet) is undecided;
 * else `streamed_wipe.verdict`, whose reasons, joined by `"; "`, are a rejection's: a late or wrong read, an untrusted
   key, a bad signature, an uncovered batch size.
 
 An accepted wipe publishes `uncounted`, `certify` at `EGRESS_MAX_UNITS`: `certified` false, whatever count the evidence
 names. No network attester signs that count, so until the check that composes the wipe with the network attester
-holds it to the attester's, the bound is taken on no count, and the profile names the evidence's count as a gap
+holds it to the network attester's, the bound is taken on no count, and the profile names the evidence's count as a gap
 (`writer_gap`). `certify` is what that check is to publish: `{"certified", "egress_mib", "eps", "foreign_bits", "k",
 "memory_bits", "r"}`, `memory_bits = M` the declared tiers' bits (the fill's `n · 512` and `R` past it, the memory it doesn't reach),
-`k` the session's timed reads, which the memory challenger chose (`wipe_party --reads`), and `r = ratio(k)`, the
+`k` the session's timed reads, which the memory attester chose (`wipe_party --reads`), and `r = ratio(k)`, the
 largest `r` with `(r − 1)^k · 2^129 ≤ r^k`. When the bound covers the session (`k` from 1 to `MAX_READS`, an egress count
 that isn't saturated) `foreign_bits` is `Pous.Guarantees.StreamedWipeMeetsReads`' threshold
 `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128` (`foreign_bits`), with `E` the evidence's egress.
@@ -32,7 +32,7 @@ count and a session with no start mark. Nothing here calls it: on its own it cer
 
 What runs one wipe, the prover's end of its session and the answer here, is `pous/prover/wipe_run.py`. What an accepted
 wipe's bound doesn't cover is `uncertified`, from its placement (`wipe_party.placement`): the key custody of a session
-not signed under a key the committed configuration's `[[pin]]` entries give the memory challenger for the wipe
+not signed under a key the committed configuration's `[[pin]]` entries give the memory attester for the wipe
 (`period.deployment`), an uncounted egress, the node's memory outside the declared tiers, what the prover's store leaves
 out (`store_gaps`) and each link leaving the node that no network attester counts (`wipe_party.link`). Without
 `wipe-protocol` among the period's tools the Python's accept decides nothing (`NO_JUDGE`). `foreign_labels` is the
@@ -48,13 +48,13 @@ from typing import Any
 
 from verity.commitments.identity import canonical_json_bytes
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from . import streamed_wipe as sw
 from . import wipe_party
 from .wipe_party import READS
 
 PROTOCOL = "verity/wipe/v0"
-"""`MemoryChallenger.WipeProtocol.ID`; a test signer's wipes answer under `memory_challenger.TEST_PREFIX` + it."""
+"""`MemoryChallenger.WipeProtocol.ID`; a test signer's wipes answer under `memory_attester.TEST_PREFIX` + it."""
 EPS = Fraction(1, 2 ** 128)
 MAX_READS = 1 << 17
 """The most reads the certificate is computed at: `ratio` compares numbers of about `k · log₂ r` bits."""
@@ -230,7 +230,7 @@ def named(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None,
           egress_mib: int | None) -> dict[str, Any] | None:
     """`MemoryChallenger.WipeProtocol.named`, what a composition's tie reads off the wipe's case: the start mark the
     signed message names, the session's start and end messages (`streamed_wipe.start_message` and `end_message`, the
-    64 bytes the memory challenger hands the network attester for each of its two marks) and the evidence's count in
+    64 bytes the memory attester hands the network attester for each of its two marks) and the evidence's count in
     whole MiB. None while the session is unsigned or the evidence gives no count. It raises what `end_message` raises
     where the signed session's message can't be formed (a batch record past a field's width), as no session `outcome`
     accepts is. It names no device, link or key."""
@@ -253,7 +253,7 @@ def outcome_counted(server: bytes, session: bytes, trusted: Collection[bytes], c
     refusals, then a rejection where `named` refuses the session, of an evidence that gives no count (`NO_COUNT`) and
     of a session that names no start mark (`NO_MARK`), and on acceptance `certify` at the evidence's count with
     `counted_profile`. It holds the count to nothing, as `outcome` does: only under a composition that ties `named` to
-    the network attester's count over the span between the session's two marks is the count the attester's."""
+    the network attester's count over the span between the session's two marks is the count the network attester's."""
     out = outcome(server, session, trusted, commitment, signed, schemes, egress_mib=egress_mib)
     if out[0] != "accept":
         return out

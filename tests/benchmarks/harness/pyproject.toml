@@ -135,7 +135,7 @@ inputs = [
     "benchmarks/recursion_figures", "tests/test_vllm_public_api.py",
     # `verity bench compute` and `verity bench memory` print and write through the kit's report, which a test holds
     # each to on its own suite's fixtures and stand-in store, and they read what their own suites declare
-    "benchmarks/compute", "benchmarks/memory", "benchmarks/remote_session/summary.py", "verity/protocol.py",
+    "benchmarks/compute", "benchmarks/memory", "benchmarks/poub_session/summary.py", "verity/protocol.py",
     "verity/channel.py", "verity/device.py", "verity/errors.py", "verity/party.py", "verity/runtime/__init__.py",
     "verity/runtime/handshake.py", "verity/runtime/framing.py", "tools/config/verity_config",
     # and `verity bench inference_only --stated-only`, run as its own process, prices the stated policy with the
@@ -147,6 +147,7 @@ inputs = [
     # pyproject.toml ([tool.verity.interface] core), its README and its runner, so a declared directory and its README
     # are listed here, which the test checks
     "benchmarks/compute/README.md", "benchmarks/memory/README.md", "benchmarks/inference_only/README.md",
+    "benchmarks/exfiltration/README.md",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -170,6 +171,14 @@ paths = ["artifacts.json"]
 [[tool.verity.tests.reads]]
 tests = ["test_env.py"]
 paths = ["pyproject.toml", "*/pyproject.toml", "adapters/vllm/verity_vllm"]
+
+# the H200 spec's setup, which a test runs as run_point.sh does, hashes Pearl-C's sm_90a sources and sm_120's headers, and
+# env.sh reads every workspace member's pyproject.toml
+[[tool.verity.tests.reads]]
+tests = ["test_bench_served.py"]
+paths = ["pyproject.toml", "*/pyproject.toml",
+         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90",
+         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_settings.py"]
