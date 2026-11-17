@@ -1,0 +1,3 @@
+[2026-11-17T16:54Z] df7aaf439b98
+MODEL: Claude Opus 5.5. DRAWMAP: all seven groups PASS at dd868082f48 (main fe30d18de17c): vllm 5574 (24002), pouw-bench 3030 (1611), one_stage f8ee (1794), pouw/verifier f1bd (1819), 12 PoUW suites 78c1, repository 057d (381), difftests 9e18 (3 of 3; the first launch edb2 used the suite's old name). BUT main moved meanwhile to 3b5aa4c91a0c (78 commits). It touches 12 of the map's 151 files, and merge-tree shows conflicts, so dd86 no longer merges cleanly. I am doing a trial application on 3b5aa (no push) to size a regeneration; say if you want it pushed and rerun.
+
