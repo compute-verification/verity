@@ -2,31 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Window.Logged
 
-/-!
-# SPOT's coupling over a window: the members' answered stops, in order in the play's log
-
-The members' sessions' traces run one after another, each from where the one before it ended, and the play the
-sampled verdict accepts is the one on the tape of the position the last ends at. This module says where in that one
-play's log each member's trace answered, and what the walk has answered by the stop the next member's starts at.
-
-* **What the traces have answered by a stop** (`Walked`): in the log `Lg`, with the releases after the logs `done`
-  answered, after the log `pre` at the live rounds `a`. Each answered log is no longer than `pre` and some round picks
-  after it; each round no longer live picks after an answered log; each pick before `pre` is after an answered log;
-  and no live round picks after one. It holds at the play's start with nothing answered and every round live
-  (`walked_nil`), where `AnsweredBy` takes a first answered log.
-* **Answering a stop** (`Walked.next`): where `Lg` has, after `pre` and releases no live round picks, a release a
-  live round picks, the log before that release is longer than every answered log, and `Walked` holds there with that
-  log answered and the rounds that pick the release no longer live.
-* **The rounds' trace to its end, in order in the log** (`RoundsEnd.order`): `RoundsReach.order` on a trace to its
-  end, at the log of the play on the tape of any position past the end: each answered stop releases its round's coins
-  after a log longer than every answered one and than the one before, the walk from the trace's end stops where
-  `StopOf` says with `Walked` at those logs answered too, and the trace answered its `N` rounds or ended at a stop the
-  decoders submit nothing at.
-* **A member's session's trace, in order in the log** (`MemberReach.order`): the same from the session's first stop,
-  where not every cut is past: the link points' bits are released after a log longer than every answered one, each
-  answered round's coins after a longer one, and the walk from the session's end stops where `StopOf` says with
-  `Walked` at all of those answered.
--/
+/-! SPOT's coupling over a window: the members' answered stops, in order in the play's log. -/
 
 @[expose] public section
 
@@ -38,16 +14,10 @@ open FlockSoundness.Refine (roundOf)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## What the traces have answered by a stop -/
-
 section Walked
 
 variable {R : ℕ}
 
-/-- **What the members' traces have answered by a stop**, in the log `Lg`, with the releases after the logs `done`
-answered, after the log `pre` at the live rounds `a`: each answered log is no longer than `pre` and some round picks
-after it; each round not live in `a` picks after an answered log; each round picking before `pre` picks after an
-answered log; and no live round picks after one. -/
 structure Walked (P : Fin R → List Release → Frame → Prop) (Lg pre : List Release) (a : Fin R → Prop)
     (done : List (List Release)) : Prop where
   picked : ∀ L₁ ∈ done, L₁.length ≤ pre.length ∧ ∃ j, PicksIn P Lg j L₁
@@ -55,7 +25,6 @@ structure Walked (P : Fin R → List Release → Frame → Prop) (Lg pre : List 
   before : ∀ j L₁, PicksIn P Lg j L₁ → L₁.length < pre.length → L₁ ∈ done
   live : ∀ j L₁, L₁ ∈ done → PicksIn P Lg j L₁ → ¬ a j
 
-/-- **Nothing is answered at the play's start**, from the empty log with every round live. -/
 theorem walked_nil (P : Fin R → List Release → Frame → Prop) (Lg : List Release) :
     Walked P Lg [] (fun _ => True) [] where
   picked _ h := absurd h List.not_mem_nil
@@ -63,9 +32,6 @@ theorem walked_nil (P : Fin R → List Release → Frame → Prop) (Lg : List Re
   before _ _ _ h := absurd h (Nat.not_lt_zero _)
   live _ _ h := absurd h List.not_mem_nil
 
-/-- **A pick before the end of a segment no live round picks in is after an answered log**: where each round picks at
-most one release of `Lg`, `Lg` is `pre`, the segment `L` and the rest, and no live round picks in `L` after `pre`
-(`AnsweredBy.seg`). -/
 theorem Walked.seg {P : Fin R → List Release → Frame → Prop} {Lg pre : List Release} {a : Fin R → Prop}
     {done : List (List Release)} (hA : Walked P Lg pre a done) (hU : PicksOnce P Lg) {L L₃ : List Release}
     (hNP : NoPick P a pre L) (hLg : Lg = pre ++ (L ++ L₃)) {j : Fin R} {L₁ : List Release}
@@ -80,9 +46,6 @@ theorem Walked.seg {P : Fin R → List Release → Frame → Prop} {Lg pre : Lis
       exact hL₀
   · exact hA.before j L₁ hp (by omega)
 
-/-- **Answering a stop**: where each round picks at most one release of `Lg`, and `Lg` has, after `pre` and releases
-`L` no live round picks, a release `r` that the live round `j` picks, the log `pre ++ L` before `r` is longer than
-every answered log, and `Walked` holds after it with it answered and the rounds that pick `r` there no longer live. -/
 theorem Walked.next {P : Fin R → List Release → Frame → Prop} {Lg pre : List Release} {a : Fin R → Prop}
     {done : List (List Release)} (hA : Walked P Lg pre a done) (hU : PicksOnce P Lg) {L L' : List Release}
     {r : Release} (hNP : NoPick P a pre L) (hLg : Lg = (pre ++ L) ++ r :: L') {j : Fin R} (haj : a j)
@@ -123,24 +86,11 @@ theorem Walked.next {P : Fin R → List Release → Frame → Prop} {Lg pre : Li
 
 end Walked
 
-/-! ## The rounds' trace to its end, in order in the log -/
-
 section Rounds
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} {D : PosDecoders g σ R Reg}
   {M : CoinMap g σ Ω R mPts} {dg : ByteArray → ByteArray} {J : ℕ} {B : RoundHold}
 
-/-- **The rounds' trace to its end, in order in the log** (`RoundsReach.order`, on a trace to its end): on a trace
-from a position that keeps the invariant at the cuts `Ks₀` and whose walk stops where `StopOf` says after the log `pre`
-at the live rounds `a`, with the releases after the logs `done` answered (`Walked`) in the log `Lg` of the play on the
-tape of a position `r` past the trace's end, where each round picks at most one release of `Lg` and only openings the
-device serves, the decoders submit nothing at a stop that fixes no cut, the coin map writes a round's coins into the
-stop's opening as their bits `bitsOf`, and off `B` the opening's class at those bits is not empty: the outcome's rounds
-are the answered submissions' in order; each answered stop releases its round's coins after a log (`LoggedAfter`)
-longer than every answered one and than the one before, the cuts the stop fixes at the bytes that release answers
-(`CutsAt`), at a position that keeps the invariant and whose stop, the coins written in and consumed, the trace's end
-is past; the walk from the trace's end stops where `StopOf` says, with those logs answered too (`Walked`); and the
-trace answered `N` rounds or ended at a stop the decoders submit nothing at. -/
 theorem RoundsEnd.order {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
@@ -229,26 +179,11 @@ theorem RoundsEnd.order {P : Fin R → List Release → Frame → Prop} {rv : Fi
 
 end Rounds
 
-/-! ## A member's session's trace, in order in the log -/
-
 section Member
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} {D : ℕ → PosDecoders g σ R Reg}
   {M : ExecutionPhaseCoinMap g σ Ω R} {BL : ExecutionPhaseLinkHold} {B : ExecutionPhaseRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
 
-/-- **A member's session's trace, in order in the log**: on the trace of the session of the member at place `i` from a
-position that keeps the invariant at the cuts `Ks₀`, whose walk stops where `StopOf` says after the log `pre` at the
-live rounds `a` and where not every cut is past, with the releases after the logs `done` answered (`Walked`) in the
-log `Lg` of the play on the tape of a position `r` past the trace's end, where each round picks at most one release of
-`Lg` and only openings the device serves, the member's decoders submit nothing at a stop that fixes no cut, the
-member's coin map writes the link points and a round's coins into a stop's opening as their bits (`bitsL`, `bitsOf`),
-and off the member's held-off events the opening's class at those bits is not empty: the session's outcome is the root
-decoded at its first stop, link points `pts`, the answered submissions' rounds in order and the member's proof files
-at its end; `Lg` has `pts`' bits after a log `L₀` longer than every answered one, at an opening the rounds whose cuts
-the first stop fixes pick, those cuts at the bytes it answers; each answered stop releases its round's coins after a
-log longer than `L₀` and than the one before (`RoundsEnd.order`); the walk from the session's end stops where `StopOf`
-says, with `L₀` and those logs answered too (`Walked`); and the trace answered the member's `N` rounds or ended at a
-stop the decoders submit nothing at. -/
 theorem MemberReach.order {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)

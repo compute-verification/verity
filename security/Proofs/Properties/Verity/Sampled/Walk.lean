@@ -4,31 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Messages
 public import Proofs.Properties.Verity.Sampled.Leaves
 public import Proofs.Core.Game.InterleaveBridge
 
-/-!
-# SPOT's coupling: where the walk stops
-
-The projection (`Project`) walks a play of the period's game to the next node where one of the rounds' cuts is fixed
-(`Game.Pos.walk`). On the period's game as the device's releases and then the evidence (`relK`), at the cuts fixed at
-the first frame each round's reading picks (`frameCut`), the walk stops only at the play's end or right after an opening
-frame a live round picks, when each reading picks only openings (`walk_relK`):
-
-* **The walk, a step at a time** (`Pos.walk_here`, `Pos.walk_send`, `Pos.walk_coin`, `Pos.walk_skip`): at a node where a
-  cut is fixed the walk stays; elsewhere it follows the prover's message or the tape's coin; where every cut is past,
-  it runs to the play's end.
-* **The live rounds' cuts** (`DigestCut.LiveCuts`): each live round's cut, every other round's past. After a frame the
-  prover sends, a live round's cut is the one after the frame (`freshCut`, `helloCut`, `openCut`); after an opening
-  frame, it is fixed there where the round's reading picks the frame, and follows the opening's coin otherwise
-  (`optOpenCut`).
-* **The device's trees, as its log shows them** (`TreesOf`): one tree of each `Hello`'s shape, in order, each stream
-  with as many rounds opened as the log shows openings of it, and as many coin-tree lines as the log's releases wrote;
-  each release keeps it (`TreesOf.fresh`, `TreesOf.hello`, `TreesOf.opening`).
-* **Where the walk stops** (`StopOf`, `walk_relK`, `walk_cast`, `walk_send_cast`, the last from the request the
-  strategy sends, `cast_send_fst`): after releases no live round picks (`NoPick`), the
-  play's end, every cut past there; or the node after an opening frame a live round picks after the device's log before
-  the walk and those releases, at the trees that log shows, with the live rounds' cuts there, fixed exactly at the
-  rounds that pick it (`isHere_openCuts`). Consuming that stop leaves live the rounds that didn't pick it
-  (`liveCuts_consume`), and the walk from there stops the same way (`stopOf_next`).
--/
+/-! SPOT's coupling: where the walk stops. -/
 
 @[expose] public section
 
@@ -38,7 +14,6 @@ variable {α V ι : Type}
 
 namespace DigestCut
 
-/-- **`Ks` are the cuts `K` at the rounds `a` holds of**, every other round's cut past. -/
 def LiveCuts {g : Game α} (a : ι → Prop) (K Ks : ι → DigestCut V g) : Prop :=
   ∀ i, a i ∧ Ks i = K i ∨ ¬ a i ∧ Ks i = .skip
 
@@ -87,7 +62,6 @@ theorem atCoin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α}
 
 end LiveCuts
 
-/-- **A decision's cut is fixed at its node where neither branch's is.** -/
 theorem AgreeCut.isHere_iteCut {D : Type} {H : V → D} {c : Prop} {dc : Decidable c} {t e : Game α}
     {ct : AgreeCut H t} {ce : AgreeCut H e} (ht : ct.cut.isHere = false) (he : ce.cut.isHere = false) :
     (AgreeCut.iteCut (dc := dc) ct ce).cut.isHere = false := by
@@ -101,14 +75,12 @@ namespace Pos
 
 variable {g : Game α} {σ : Strategy g}
 
-/-- **At a node where a cut is fixed, the walk stays.** -/
 theorem walk_here : ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (x : CoinTape g' s')
     (back : CoinTape g' s' → CoinTape g σ), (∃ i, (Ks i).isHere) → walk g' s' Ks x back = ⟨g', s', Ks, x, back⟩
   | .ret _, _, _, _, _, _ => rfl
   | .send _ _, _, _, _, _, h => by rw [walk, ite_eq_left_of_eq_true _ _ (eq_true h)]
   | @Game.coin _ _ _ _ _, _, _, _, _, h => by rw [walk, ite_eq_left_of_eq_true _ _ (eq_true h)]
 
-/-- **Where no cut is fixed at the prover's message, the walk follows it.** -/
 theorem walk_send {M : Type} {k : M → Game α} (s' : Strategy (.send M k)) (Ks : ι → DigestCut V (.send M k))
     (x : CoinTape (.send M k) s') (back : CoinTape (.send M k) s' → CoinTape g σ) (h : ∀ i, (Ks i).isHere = false) :
     walk (.send M k) s' Ks x back = walk (k s'.1) s'.2 (fun i => (Ks i).atSend s'.1) x back := by
@@ -118,7 +90,6 @@ theorem walk_send {M : Type} {k : M → Game α} (s' : Strategy (.send M k)) (Ks
   rw [walk, ite_eq_right_of_eq_false _ _ (eq_false hf)]
 
 open Classical in
-/-- **Where no cut is fixed at a coin, the walk follows the tape's coin.** -/
 theorem walk_coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α}
     (s' : Strategy (@Game.coin _ C iF iN k)) (Ks : ι → DigestCut V (@Game.coin _ C iF iN k))
     (x : CoinTape (@Game.coin _ C iF iN k) s') (back : CoinTape (@Game.coin _ C iF iN k) s' → CoinTape g σ)
@@ -130,7 +101,6 @@ theorem walk_coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game 
     cases hi
   rw [walk, ite_eq_right_of_eq_false _ _ (eq_false hf)]
 
-/-- **Where every cut is past, the walk runs to the play's end**, every cut past there. -/
 theorem walk_skip : ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (x : CoinTape g' s')
     (back : CoinTape g' s' → CoinTape g σ), (∀ i, Ks i = .skip) →
       (∀ i, (walk g' s' Ks x back).Ks i = .skip) ∧ (walk g' s' Ks x back).g' = .ret (CoinTape.run g' s' x)
@@ -151,8 +121,6 @@ namespace Verity
 open Game
 
 variable {β ι : Type}
-
-/-! ## The releases after a frame, and each round's cut there -/
 
 /-- **The releases after a fresh frame of the family `l`**, at the families the device's coin leaves (`o`, `takeCoin`'s;
 `none` where it refuses the coin). -/
@@ -189,13 +157,11 @@ section Cuts
 
 variable (P : List Release → Frame → Prop) (rv : β → Option Claims.Msg)
 
-/-- A round's cut after a fresh frame it doesn't pick. -/
 noncomputable def freshCut (k : ℕ) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release) (l : String)
     (b : ByteArray) (o : Option (List (String × ℕ))) : DigestCut.AgreeCut sha512Msg (freshK k ts f l b o) :=
   optCut o .skip fun fs' => .coin fun x =>
     frameCut P rv k fs' ts (fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
 
-/-- A round's cut after a `Hello` it doesn't pick. -/
 noncomputable def helloCut (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
     (pre : List Release) (spec : Flock.CoinTree.Spec) (ν : ByteArray) :
     DigestCut.AgreeCut sha512Msg (helloK k fs ts f spec ν) :=
@@ -203,7 +169,6 @@ noncomputable def helloCut (k : ℕ) (fs : List (String × ℕ)) (ts : List Open
     (fun log => f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log))
     (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩])) .skip
 
-/-- A round's cut after an opening of the tree `T` it doesn't pick, at the round the opening opens. -/
 noncomputable def treeOpenCut (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
     (pre : List Release) (i s n : ℕ) (b : ByteArray) (T : OpenTree)
     (q : Option (Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog))) :
@@ -212,15 +177,12 @@ noncomputable def treeOpenCut (k : ℕ) (fs : List (String × ℕ)) (ts : List O
     frameCut P rv k fs (ts.set i (T.bump p.1)) (fun log => f (⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log))
       (pre ++ [⟨.opening i s n, b, TreeDraw.opened d.1 n⟩])
 
-/-- A round's cut after an opening of the `i`-th tree it doesn't pick, at the tree. -/
 noncomputable def optOpenCut (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
     (pre : List Release) (i s n : ℕ) (b : ByteArray) (o : Option OpenTree) :
     DigestCut.AgreeCut sha512Msg (optOpenK k fs ts f i s n b o) :=
   .iteCut (optCut o .skip fun T => treeOpenCut P rv k fs ts f pre i s n b T (T.next s n)) .skip
 
 open Classical in
-/-- **A round's cut after an opening frame**: fixed there, at the bytes the frame answers, where the round's reading
-picks the frame after the log `pre`; otherwise the cut after the opening's coin. -/
 noncomputable def openCut (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
     (pre : List Release) (i s n : ℕ) (b : ByteArray) (o : Option OpenTree) :
     DigestCut Claims.Msg (optOpenK k fs ts f i s n b o) :=
@@ -280,8 +242,6 @@ end OpenCut
 
 end Cuts
 
-/-! ## The device's trees, as its log shows them -/
-
 /-- Whether a frame opens a round of tree `i`'s stream `s`. -/
 def Frame.opensAt (i s : ℕ) : Frame → Bool
   | .opening i' s' _ => i' == i && s' == s
@@ -297,8 +257,6 @@ def openedIn (ts : List OpenTree) (i s : ℕ) : ℕ :=
   | some T => if h : s < T.spec.streams.size then T.opened ⟨s, h⟩ else 0
   | none => 0
 
-/-- **The device's trees are the ones its log shows**: one of each `Hello`'s shape, in order, with as many rounds of
-each stream opened as the log shows openings of it, and as many coin-tree lines as the log's releases wrote. -/
 structure TreesOf (log : List Release) (ts : List OpenTree) : Prop where
   specs : ts.map (·.spec) = Sampled.helloSpecs log
   opened : ∀ i s, openedIn ts i s = openedOf log i s
@@ -329,7 +287,6 @@ theorem openedIn_ge {ts : List OpenTree} {i : ℕ} {T : OpenTree} (hT : ts[i]? =
 theorem openedIn_none {ts : List OpenTree} {i : ℕ} (hT : ts[i]? = none) (s : ℕ) : openedIn ts i s = 0 := by
   simp [openedIn, hT]
 
-/-- **An opening the device serves opens the stream's next round**, within a block. -/
 theorem OpenTree.next_some {T : OpenTree} {s n : ℕ} {p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)}
     (h : T.next s n = some p) : p.1.val = s ∧ p.2.val = T.opened p.1 ∧ n ≤ T.spec.block := by
   unfold OpenTree.next at h
@@ -341,7 +298,6 @@ theorem OpenTree.next_some {T : OpenTree} {s n : ℕ} {p : Fin T.spec.streams.si
     · cases h
   · cases h
 
-/-- **The device serves an opening of a stream with a round left**, within a block. -/
 theorem OpenTree.next_eq {T : OpenTree} {s n : ℕ} (hs : s < T.spec.streams.size)
     (hr : T.opened ⟨s, hs⟩ < 2 ^ T.spec.roundsLog) (hn : n ≤ T.spec.block) :
     T.next s n = some (⟨s, hs⟩, ⟨T.opened ⟨s, hs⟩, hr⟩) := by
@@ -431,10 +387,6 @@ theorem opening {log : List Release} {ts : List OpenTree} (h : TreesOf log ts) {
 
 end TreesOf
 
-/-! ## Where the walk stops -/
-
-/-- **No release of `L` answers a frame a live round picks**: after the log `pre` and the releases of `L` before it, the
-reading of no round `a` holds of picks the release's frame. -/
 def NoPick (P : ι → List Release → Frame → Prop) (a : ι → Prop) (pre L : List Release) : Prop :=
   ∀ j, a j → ∀ L₁ r L₂, L = L₁ ++ r :: L₂ → ¬ P j (pre ++ L₁) r.frame
 
@@ -456,11 +408,6 @@ theorem noPick_cons {P : ι → List Release → Frame → Prop} {a : ι → Pro
 
 variable {g : Game β} {σ : Strategy g}
 
-/-- **Where the walk stops**, from the device's log `pre`, the continuation `f` and the live rounds `a`: after releases
-`L` no live round picks (`NoPick`), either at the play's end, every cut past there, the end of a play of `f L`; or at
-the node after an opening frame of the `i`-th tree's stream `s` that a live round picks after the log `pre ++ L`, the
-device's frames left `k`, families `fs` and trees `ts` (the ones that log shows, `TreesOf`), the continuation `f` after
-`L`, with the live rounds' cuts there (`openCut`). -/
 def StopOf (P : ι → List Release → Frame → Prop) (rv : ι → β → Option Claims.Msg) (pre : List Release)
     (f : List Release → Game β) (a : ι → Prop) (q : Pos g σ Claims.Msg ι) : Prop :=
   ∃ L, NoPick P a pre L ∧
@@ -475,9 +422,6 @@ def StopOf (P : ι → List Release → Frame → Prop) (rv : ι → β → Opti
           q = ⟨optOpenK k fs ts f' i s n b ts[i]?, s'', Ks, x'', back''⟩ ∧
             DigestCut.LiveCuts a (fun j => openCut (P j) (rv j) k fs ts f' (pre ++ L) i s n b ts[i]?) Ks)
 
-/-- **The walk from the device's releases with `k` frames left stops as `StopOf` says**, at every families,
-continuation, log, trees that log shows and live rounds, the live rounds' cuts those at the first frame their readings
-pick. -/
 def RelStops (P : ι → List Release → Frame → Prop) (rv : ι → β → Option Claims.Msg) (k : ℕ) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release) (a : ι → Prop)
     (s' : Strategy (relK k fs ts f)) (Ks : ι → DigestCut Claims.Msg (relK k fs ts f))
@@ -504,7 +448,6 @@ theorem stopOf_end {pre : List Release} {f : List Release → Game β} {a : ι �
   obtain ⟨hK, hg⟩ := Pos.walk_skip (f []) s' Ks x back h
   exact ⟨[], noPick_nil P a pre, Or.inl ⟨hK, _, hg, s', x, rfl⟩⟩
 
-/-- **The walk from a decision's node stops as the walk from the branch it takes does**, at that branch's cuts. -/
 theorem stopOf_ite {pre : List Release} {f : List Release → Game β} {a : ι → Prop} {c : Prop} {t e : Game β}
     {Ct : ι → DigestCut.AgreeCut sha512Msg t} {Ce : ι → DigestCut.AgreeCut sha512Msg e} :
     ∀ (dc : Decidable c) (s' : Strategy (@ite _ c dc t e)) (Ks : ι → DigestCut Claims.Msg (@ite _ c dc t e))
@@ -615,8 +558,6 @@ theorem walk_optOpenK {fs : List (String × ℕ)} {ts : List OpenTree} {f : List
 
 end Steps
 
-/-- **The walk from the device's releases stops at the play's end or right after an opening frame a live round
-picks**, where each round's reading picks only openings. -/
 theorem walk_relK (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) :
     ∀ k, RelStops (g := g) (σ := σ) P rv k
   | 0 => fun _ _ _ _ _ s' Ks x back _ hKs => stopOf_end s' Ks x back (hKs.eq_skip fun _ _ => rfl)
@@ -646,8 +587,6 @@ theorem walk_relK (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i 
         exact walk_optOpenK (walk_relK hP k) hn hT ts[i]? rfl s₁ _ x back
           (h2.congr fun j hj => openCut_neg (hn j hj) _)
 
-/-- **The walk from any node the device's releases are equal to stops as `StopOf` says** (`walk_relK`), at the cuts
-cast onto it. -/
 theorem walk_cast (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {k : ℕ} {fs : List (String × ℕ)}
     {ts : List OpenTree} {f : List Release → Game β} {pre : List Release} {a : ι → Prop} {g' : Game β}
     (h : relK k fs ts f = g') (s' : Strategy g') (Ks : ι → DigestCut Claims.Msg g') (x : CoinTape g' s')
@@ -657,15 +596,11 @@ theorem walk_cast (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i 
   subst h
   exact walk_relK hP k fs ts f pre a s' Ks x back hT hKs
 
-/-- **A strategy's first move, cast onto an equal send**, is its own. -/
 theorem cast_send_fst {A : Type} {k k' : A → Game β} (e : Game.send A k = Game.send A k')
     (s : Strategy (Game.send A k)) : (cast (congrArg Strategy e) s).1 = s.1 := by
   cases e
   rfl
 
-/-- **The walk from the prover's request stops as `StopOf` says** (`walk_relK`), from the empty log at the releases
-continuing to `f` at the request the strategy sends, at the cuts after each request cast onto a node the request's is
-equal to. -/
 theorem walk_send_cast (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {k : ℕ}
     {fs : List (String × ℕ)} {f : ByteArray → List Release → Game β} {a : ι → Prop} {g' : Game β}
     (h : (Game.send ByteArray fun r => relK k fs [] (f r)) = g') (s' : Strategy g') (Ks : ι → DigestCut Claims.Msg g')
@@ -678,8 +613,6 @@ theorem walk_send_cast (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .openi
   rw [show Pos.walk _ s' Ks x back = _ from Pos.walk_send s' Ks x back (hKs.isHere fun _ _ => rfl)]
   exact walk_relK hP k fs [] (f s'.1) [] a s'.2 _ x back TreesOf.nil (hKs.atSend s'.1)
 
-/-- **Consuming a stop after an opening frame leaves live the rounds that didn't pick it**, each at its cut after the
-opening's coin. -/
 theorem liveCuts_consume {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β}
     {pre : List Release} {i s n : ℕ} {b : ByteArray} {o : Option OpenTree} {a : ι → Prop}
     {Ks : ι → DigestCut Claims.Msg (optOpenK k fs ts f i s n b o)}
@@ -699,7 +632,6 @@ theorem liveCuts_consume {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTr
     · exact ite_eq_left hc
     · exact (ite_eq_right hc).trans (h.skip_of ha)
 
-/-- **At a stop after an opening frame, a round's cut is fixed exactly where the round is live and picks the frame.** -/
 theorem isHere_openCuts {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β}
     {pre : List Release} {i s n : ℕ} {b : ByteArray} {o : Option OpenTree} {a : ι → Prop}
     {Ks : ι → DigestCut Claims.Msg (optOpenK k fs ts f i s n b o)}
@@ -714,8 +646,6 @@ theorem isHere_openCuts {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTre
   · rw [h.skip_of ha]
     exact iff_of_false Bool.false_ne_true fun h' => ha h'.1
 
-/-- **The walk from a stop after an opening frame, consumed, stops as `StopOf` says**, at the rounds that didn't pick
-the frame and on any rewriting of the tape there. -/
 theorem stopOf_next (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {k : ℕ} {fs : List (String × ℕ)}
     {ts : List OpenTree} {f : List Release → Game β} {pre : List Release} {i s n : ℕ} {b : ByteArray}
     {a : ι → Prop} {q : Pos g σ Claims.Msg ι} (s'' : Strategy (optOpenK k fs ts f i s n b ts[i]?))

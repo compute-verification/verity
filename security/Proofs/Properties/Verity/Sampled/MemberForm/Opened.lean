@@ -2,27 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.MemberForm.Tree
 
-/-!
-# Each opening the read shows is a round its tree shows opened, and a record's tree opens only its rounds
-
-`Lines.trees_log` and `Trees.opened_in` go from a tree's rounds to the release log's lines. A session of several needs
-the way back: of an opening the read shows, the round its tree shows opened, with what the tree holds of it.
-
-* **A record's tree opens only the record's rounds** (`ret_tail`, `opened_recorded`, `tree_recorded`):
-  `sessionTreeReason` ends on the test that each round its tree shows opened is below the rounds the record gives
-  that round's stream (`recordRounds`), so a record it accepts has it; at a member's tree, of the tree less its last
-  opening.
-* **Each line opening a round is its tree's opening** (`LinesOpened`, `Opened`, `lines_opened`): where `coinTreesOf`
-  accepts the lines, each line that opens a round names a tree read, whose opening of that round of that stream is
-  the line's own: its count, what it was opened after and its coins' SHA-512.
-* **An opening the read shows** (`read_opening`): so each opening the read shows, of tree `i`'s stream `si`, is the
-  opening a tree read shows of the round the read's openings of that stream before it count, of the stream named so,
-  with the opening's count, answering the bytes the tree's opening was opened after, with the coins the records give
-  that round.
-* **Which tree** (`tree_root_inj`, `tree_of_key`, `mem_pop_or_back`, `mem_unclosed`): trees read of one root are one
-  tree, so the tree an opening is of is the one first of its root; and an opening a tree shows, other than its last,
-  is one the tree less its last opening shows.
--/
+/-! Each opening the read shows is a round its tree shows opened, and a record's tree opens only its rounds. -/
 
 @[expose] public section
 
@@ -33,10 +13,6 @@ open Spot Spot.Challenger
 
 open private strOf from Spot.ChallengerTrees
 
-/-! ## A record's tree opens only the record's rounds -/
-
-/-- **A loop that returns at its first reason, then its reason**: where none returns, the reason after the loop is
-none. -/
 theorem ret_tail {α γ σ : Type}
     {f : α → Option (Option γ) × σ → Id (ForInStep (Option (Option γ) × σ))}
     {g : Option (Option γ) × σ → Id (Option γ)}
@@ -56,9 +32,6 @@ theorem ret_tail {α γ σ : Type}
     rw [e] at h
     exact ⟨_, h⟩
 
-/-- **A record `sessionTreeReason` accepts, at any tables, records each round its tree shows opened**: its coin
-tree's root is that of a tree of the log, and each round that tree shows opened is below the rounds the record gives
-that round's stream (`recordRounds`). -/
 theorem opened_recorded {trees : Array LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
     (h : sessionTreeReason trees tables record = none) :
     ∃ t ∈ trees, recordTree record = t.root ∧ ∀ o ∈ t.opened, o.round < recordRounds record o.stream := by
@@ -120,31 +93,21 @@ theorem opened_recorded {trees : Array LoggedTree} {tables : Array (String × Op
 
 variable {t : LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
 
-/-- **A member's record records each round its tree less its last opening shows opened** (`opened_recorded`, at the
-one tree the member's check holds the record to). -/
 theorem tree_recorded (h : sessionTreeReason #[t.unclosed] tables record = none) :
     ∀ o ∈ t.unclosed.opened, o.round < recordRounds record o.stream := by
   obtain ⟨t', ht', -, hall⟩ := opened_recorded h
   obtain rfl := mem_one ht'
   exact hall
 
-/-! ## Each line opening a round is its tree's opening -/
-
-/-- **What `coinTreesOf` holds of each line that opens a round**, of the trees `trees` it read from the lines `pre`:
-the line names a tree of them, and that tree's opening of the line's round of the line's stream is the line's own,
-with its count, what it was opened after and its coins' SHA-512. -/
 def LinesOpened (pre : List String) (trees : Array LoggedTree) : Prop :=
   ∀ l ∈ pre, treeLine l = true → ∀ d, event l = .ok d → jsonStrIs (getD d "event") TREE_EVENT = false →
     ∃ t ∈ trees, getD d "tree" = .str t.root ∧ ∃ S k n, getD d "stream" = .str S ∧
       nat? (getD d "round") = some k ∧ nat? (getD d "n") = some n ∧
       t.opening S k = some ⟨S, k, n, strOf (getD d "after"), strOf (getD d "coins")⟩
 
-/-- `coinTreesOf`'s invariant here: each round a tree opened is below the count of its stream's rounds opened, and
-`LinesOpened`. -/
 def Opened (pre : List String) (trees : Array LoggedTree) : Prop :=
   (∀ t ∈ trees, ∀ o ∈ t.opened, o.round < (t.opened.filter (·.stream == o.stream)).size) ∧ LinesOpened pre trees
 
-/-- A round opened next of its stream is the one `opening` finds. -/
 theorem opening_new {ts : Array LoggedTree} {i : ℕ} {t : LoggedTree} {x : TreeOpening} (hget : ts[i]? = some t)
     (hr : ∀ o ∈ t.opened, o.round < (t.opened.filter (·.stream == o.stream)).size)
     (hk : x.round = (t.opened.filter (·.stream == x.stream)).size) :
@@ -162,7 +125,6 @@ theorem opening_new {ts : Array LoggedTree} {i : ℕ} {t : LoggedTree} {x : Tree
   rw [Array.find?_push, hfind]
   simp
 
-/-- A tree's round opened stays opened, of a tree of the same root, when another round of a tree is. -/
 theorem opening_kept {ts : Array LoggedTree} {i : ℕ} {x : TreeOpening} {t : LoggedTree} {S : String} {k : ℕ}
     {o : TreeOpening} (ht : t ∈ ts) (ho : t.opening S k = some o) :
     ∃ t' ∈ ts.modify i (fun t => { t with opened := t.opened.push x }), t'.root = t.root ∧
@@ -172,7 +134,6 @@ theorem opening_kept {ts : Array LoggedTree} {i : ℕ} {x : TreeOpening} {t : Lo
   · exact ⟨t, hm, rfl, ho⟩
   · exact ⟨_, hm, rfl, Lines.opening_push ho x⟩
 
-/-- **Each line `coinTreesOf` reads keeps `Opened`.** -/
 theorem lines_opened {log : List String} {trees : Array LoggedTree} (h : coinTreesOf log = .ok trees) :
     Opened log trees := by
   unfold coinTreesOf at h
@@ -262,16 +223,9 @@ theorem lines_opened {log : List String} {trees : Array LoggedTree} (h : coinTre
               exact ⟨t'', ht'', by rw [hroot'', hroot]; exact htree, s, k, n, hstream, hkn.1, hkn.2, ho''⟩
         · cases hr
 
-/-! ## An opening the read shows -/
-
 variable {label : String} {after : ByteArray} {recs : List Json} {ξ : ByteArray} {lines : List String}
   {log : List Verity.Release} {trees : Array LoggedTree}
 
-/-- **An opening the read shows is the round its tree shows opened**: where `coinTreesOf` accepts the release log's
-lines and `readLog` reads them, an opening `x` the read shows of tree `i`'s stream `si`, of `n` coins, is of a tree
-read `t` and a stream `name` of it (`KeyAt`), named so in the specs of the `Hello`s before `x`; `t` shows opened the
-round of `name` that the read's openings of that stream before `x` count, of `n` coins, after bytes that in hex are
-what `x` answers; and `x`'s coins are the ones the records give that round (`Lines.openCoins`). -/
 theorem read_opening (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     {pre : List Verity.Release} {x : Verity.Release} {post : List Verity.Release} (he : log = pre ++ x :: post)
     {i si n : ℕ} (hx : x.frame = .opening i si n) :
@@ -294,22 +248,16 @@ theorem read_opening (hT : coinTreesOf lines = .ok trees) (hR : readLog label af
   rw [haft]
   exact hans
 
-/-! ## Which tree -/
-
-/-- Trees read of one root are one tree. -/
 theorem tree_root_inj (hT : coinTreesOf lines = .ok trees) {t t' : LoggedTree} (ht : t ∈ trees) (ht' : t' ∈ trees)
     (h : t'.root = t.root) : t' = t :=
   List.inj_on_of_nodup_map (Lines.trees_log hT).nodup (Array.mem_toList_iff.2 ht') (Array.mem_toList_iff.2 ht) h
 
-/-- **The tree a stream of the trees read is of is the one first of its root**: a stream of tree `i` of the trees
-read is of the tree `t'` (`KeyAt`), and `t` is the tree read first of its root at `i`, so `t'` is `t`. -/
 theorem tree_of_key (hT : coinTreesOf lines = .ok trees) {t t' : LoggedTree} (ht : t ∈ trees) (ht' : t' ∈ trees)
     {i si : ℕ} {name : String} (hi : (heldTrees trees).findIdx? (·.1 == t.root) = some i)
     (hk : KeyAt (heldTrees trees) i si t'.root name) : t' = t := by
   obtain ⟨sp, hg⟩ := keyAt_root hk
   exact tree_root_inj hT ht ht' (findIdx_fst hi hg)
 
-/-- An entry of an array is one of the array less its last, or its last. -/
 theorem mem_pop_or_back {β : Type} {a : Array β} {o : β} (h : o ∈ a) : o ∈ a.pop ∨ a.back? = some o := by
   obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 h
   by_cases hl : i < a.size - 1
@@ -319,7 +267,6 @@ theorem mem_pop_or_back {β : Type} {a : Array β} {o : β} (h : o ∈ a) : o �
     subst this
     simp [Array.back?]
 
-/-- **An opening a tree shows, other than its last, is one the tree less its last opening shows.** -/
 theorem mem_unclosed {o oc : TreeOpening} (ho : o ∈ t.opened) (hb : t.opened.back? = some oc) (hne : o ≠ oc) :
     o ∈ t.unclosed.opened := by
   rcases mem_pop_or_back ho with h | h

@@ -3,19 +3,7 @@ module
 public import Spot.OneStageZk
 public import Proofs.Properties.Certifier.Check.Bytes
 
-/-!
-# A member's session's evidence decodes one way
-
-The bytes a member's session's closing round is opened after the SHA-512 of (`Spot.OneStageZk.evidenceBytes`) hold the
-number of the evidence's parts, then each part's length and its bytes, each count in an 8-byte big-endian word. Read
-as lists of bytes (`bs`):
-
-* **The encoding** (`bs_evidenceBytes`): the count's word, then each part's length's word and its bytes (`enc`).
-* **A word read back** (`word_value`, `beNat_bs`): `Flock.Draw.beNat` at a word `be64 x` is `x`.
-* **The decoder inverts the encoder** (`evidenceParts_evidenceBytes`): `Spot.OneStageZk.evidenceParts` of the bytes of
-  parts under `2^64` many, each under `2^64` bytes, is those parts. So two such lists of parts with the same bytes are
-  one list (`evidenceBytes_inj`): a digest of the bytes fixes every part's bytes, up to one SHA-512 collision.
--/
+/-! A member's session's evidence decodes one way. -/
 
 @[expose] public section
 
@@ -24,8 +12,6 @@ namespace Verity.Sampled.MemberForm
 open Flock (be64)
 open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj be64_bs be64_size byte_toNat toNat_toUInt8 ofBytes
   ofBytes_be)
-
-/-! ## Lists -/
 
 theorem take_append_length {α : Type} : ∀ (a b : List α), (a ++ b).take a.length = a
   | [], _ => rfl
@@ -52,16 +38,12 @@ theorem drop_drop_of {α : Type} : ∀ (l : List α) (i j : ℕ), (l.drop i).dro
     rw [Nat.add_right_comm]
     exact drop_drop_of l i j
 
-/-! ## Bytes -/
-
 theorem get!_data (b : ByteArray) (j : ℕ) (hj : j < b.size) :
     b.get! j = b.data.toList[j]'(by rw [Array.length_toList]; exact hj) := by
   show b.data[j]! = _
   rw [getElem!_pos b.data j hj]
   simp
 
-/-- **A big-endian read is its bytes' fold**: `Flock.Draw.beNat` of `len` bytes of `b` from `off`, over `b`'s list
-of bytes. -/
 theorem beNat_bs (b : ByteArray) (off len : ℕ) (h : off + len ≤ b.size) :
     Flock.Draw.beNat b off len = (((bs b).drop off).take len).foldl (fun acc x => acc * 256 + x.toNat) 0 := by
   have e : ((bs b).drop off).take len = (List.range len).map fun i => b.get! (off + i) := by
@@ -74,12 +56,10 @@ theorem beNat_bs (b : ByteArray) (off len : ℕ) (h : off + len ≤ b.size) :
   rw [e, List.foldl_map]
   rfl
 
-/-- A byte of a word is that byte of its value. -/
 theorem byte_eq (x : UInt64) (k : ℕ) (hk : k < 64) : (x >>> (UInt64.ofNat k)).toUInt8 = (x.toNat >>> k).toUInt8 := by
   apply UInt8.toNat_inj.mp
   rw [byte_toNat x k hk, toNat_toUInt8, Nat.shiftRight_eq_div_pow]
 
-/-- **A word's bytes fold to its value.** -/
 theorem word_value (x : UInt64) : (bs (be64 x)).foldl (fun acc y => acc * 256 + y.toNat) 0 = x.toNat := by
   have b0 : (x >>> 56).toUInt8 = (x.toNat >>> 56).toUInt8 := byte_eq x 56 (by omega)
   have b1 : (x >>> 48).toUInt8 = (x.toNat >>> 48).toUInt8 := byte_eq x 48 (by omega)
@@ -100,15 +80,12 @@ theorem word_value (x : UInt64) : (bs (be64 x)).foldl (fun acc y => acc * 256 + 
   rw [e]
   exact ofBytes_be 8 x.toNat hx
 
-/-- A length under `2^64` is its word's value. -/
 theorem toNat_size {n : ℕ} (h : n < 2 ^ 64) : n.toUInt64.toNat = n := by
   simp only [Nat.toUInt64, UInt64.toNat_ofNat']
   exact Nat.mod_eq_of_lt h
 
 theorem bs_extract (b : ByteArray) (s e : ℕ) : bs (b.extract s e) = ((bs b).drop s).take (e - s) := by
   simp only [bs, ByteArray.data_extract, Array.toList_extract, List.extract_eq_take_drop]
-
-/-! ## The encoding -/
 
 /-- The parts `l`'s bytes as `Spot.OneStageZk.evidenceBytes` lays them out after their count: each part's length's
 word, then its bytes. -/
@@ -125,16 +102,11 @@ theorem bs_foldl : ∀ (l : List ByteArray) (acc : ByteArray),
     rw [bs_foldl l, bs_append, bs_append]
     simp only [List.append_assoc]
 
-/-- **The evidence's bytes**: the count's word, then the parts' (`enc`). -/
 theorem bs_evidenceBytes (ps : Array ByteArray) :
     bs (_root_.Spot.OneStageZk.evidenceBytes ps) = bs (be64 ps.size.toUInt64) ++ enc ps.toList := by
   unfold _root_.Spot.OneStageZk.evidenceBytes
   rw [← Array.foldl_toList, bs_foldl]
 
-/-! ## The decoder -/
-
-/-- **The decoder's scan reads the parts back**: where `b`'s bytes from `o` are the parts `l`'s, each part under
-`2^64` bytes, `partsFrom` at `l`'s count from `o` is `l`. -/
 theorem partsFrom_enc : ∀ (l : List ByteArray) (b : ByteArray) (o : ℕ), (∀ p ∈ l, p.size < 2 ^ 64) →
     (bs b).drop o = enc l → o ≤ b.size → _root_.Spot.OneStageZk.partsFrom b l.length o = some l
   | [], b, o, _, h, ho => by
@@ -168,8 +140,6 @@ theorem partsFrom_enc : ∀ (l : List ByteArray) (b : ByteArray) (o : ℕ), (∀
     rw [ite_eq_left h8, hbe, ite_eq_left hstop, ih, hext]
     rfl
 
-/-- **The decoder inverts the encoder**: `evidenceParts` of the bytes of the parts `ps`, under `2^64` many and each
-under `2^64` bytes, is `ps`. -/
 theorem evidenceParts_evidenceBytes (ps : Array ByteArray) (hn : ps.size < 2 ^ 64)
     (hp : ∀ p ∈ ps, p.size < 2 ^ 64) :
     _root_.Spot.OneStageZk.evidenceParts (_root_.Spot.OneStageZk.evidenceBytes ps) = some ps := by
@@ -190,8 +160,6 @@ theorem evidenceParts_evidenceBytes (ps : Array ByteArray) (hn : ps.size < 2 ^ 6
   rw [ite_eq_left h8, hbe, hl]
   simp
 
-/-- **Parts with the same bytes are the same parts**, each list under `2^64` parts and each part under `2^64` bytes:
-the encoding decodes one way. -/
 theorem evidenceBytes_inj {ps qs : Array ByteArray} (hn : ps.size < 2 ^ 64) (hp : ∀ p ∈ ps, p.size < 2 ^ 64)
     (hm : qs.size < 2 ^ 64) (hq : ∀ q ∈ qs, q.size < 2 ^ 64)
     (h : _root_.Spot.OneStageZk.evidenceBytes ps = _root_.Spot.OneStageZk.evidenceBytes qs) : ps = qs := by

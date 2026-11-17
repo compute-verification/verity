@@ -4,25 +4,7 @@ public import Proofs.Properties.Verity.Sampled.MovesReach
 public import Proofs.Properties.Verity.Sampled.LinkPts
 public import Proofs.Properties.Verity.Sampled.Link
 
-/-!
-# The roots decoded at the first stop are the record's `root_B`
-
-`MovesOf` asks that the roots the decoders read at the first stop, `D.root` of its modes, be the `root_B` of the session
-v2's record decodes to (its clause (ii)). At the readings and the decoders at the session's layout, where the first stop
-fixes the link's round, the play's sampled verdict accepts, the log v2's check read is the device's, and the device's
-first opening is of the stream `Spot.Challenger.TREE_SESSION` of the tree it opens (the order
-`SampleLinkFirst` states), they are (`firstStop_rootB`):
-
-* **The bytes the link answers** (`link_answers`): v2's read of the device's first opening is the read of the release
-  log's line opening round 0 of the session stream of the log's one tree (`readLog_round`), and that line is the one
-  `coinTreesOf` takes as that tree's round (`opensRound_unique`, `opened_after`), which the challenger opened after the
-  SHA-512 of the link's message in v2's record (`checkBlobsAt_link`). So the opening answers that message's SHA-512.
-* **The link's round's mode** (`RoundsReach.stop_modes_reveal`): off the misses, the round the first stop fixes, the
-  link's, decodes the message the play reveals for it, the link's message in v2's record at the session's tables
-  (`v2_tables`), whose SHA-512 the opening answers; no other round is fixed there (`readingAt_unique`).
-* **Its roots** (`root_record`): the link's message is `Σ`, then the one table's `root_B`, which the decoders read past
-  `Σ`'s 64 bytes.
--/
+/-! The roots decoded at the first stop are the record's `root_B`. -/
 
 @[expose] public section
 
@@ -38,21 +20,13 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## The line `coinTreesOf` takes as a tree's round -/
-
-/-- **A release log line opening a round, after the bytes the tree shows**: a coin tree's line opening round `o.round`
-of stream `o.stream` of the tree whose root is `root` (`OpensRound`), whose `after` is `o.after` and whose `n` is
-`o.n`. -/
 def AfterLine (l root : String) (o : TreeOpening) : Prop :=
   OpensRound l root o.stream o.round ∧
     ∃ d, event l = .ok d ∧ getD d "after" = .str o.after ∧ nat? (getD d "n") = some o.n
 
-/-- Each round a tree of `trees` shows opened is a line of `log` opening it after the bytes the tree shows. -/
 def OpenedAfter (log : List String) (trees : Array LoggedTree) : Prop :=
   ∀ t ∈ trees, ∀ o ∈ t.opened, ∃ l ∈ log, AfterLine l t.root o
 
-/-- **Each round the release log's trees show opened is a line of the log opening it**, naming that tree, with the
-round's stream and number and the bytes it was opened after (`coinTreesOf`). -/
 theorem opened_after {log : List String} {trees : Array LoggedTree} (h : coinTreesOf log = .ok trees) :
     OpenedAfter log trees := by
   unfold coinTreesOf at h
@@ -132,7 +106,6 @@ theorem opened_after {log : List String} {trees : Array LoggedTree} (h : coinTre
           cases hc : getD d "after" <;> rw [hc] at hhex <;> first | rfl | cases hhex
         · cases hr
 
-/-- Two places of a list holding elements `p` accepts, with as many such elements before each, are one place. -/
 theorem eq_of_countP_eq {β : Type} {p : β → Bool} :
     ∀ {a a' b b' : List β} {x x' : β}, a ++ x :: b = a' ++ x' :: b' → p x = true → p x' = true →
       a.countP p = a'.countP p → x = x'
@@ -153,9 +126,6 @@ theorem eq_of_countP_eq {β : Type} {p : β → Bool} :
     rw [List.countP_cons, List.countP_cons] at hc
     exact eq_of_countP_eq h hx hx' (Nat.add_right_cancel hc)
 
-/-- **Each round of a tree's stream has one line**: where `coinTreesOf` accepts the release log `lines`, two of its
-lines opening round `k` of stream `name` of the coin tree whose root is `ρ` are one, each the line after the `k` lines
-opening that stream (`coinTreesOf_round`). -/
 theorem opensRound_unique {lines : List String} {trees : Array LoggedTree} (h : coinTreesOf lines = .ok trees)
     {ρ name l l' : String} {k : ℕ} (hl : l ∈ lines) (hl' : l' ∈ lines) (ho : OpensRound l ρ name k)
     (ho' : OpensRound l' ρ name k) : l = l' := by
@@ -164,23 +134,17 @@ theorem opensRound_unique {lines : List String} {trees : Array LoggedTree} (h : 
   exact eq_of_countP_eq (he.symm.trans he') ho.opensLine ho'.opensLine
     ((coinTreesOf_round h he ho).symm.trans (coinTreesOf_round h he' ho'))
 
-/-! ## The log before the link -/
-
-/-- **A log whose first opening is none opens no round.** -/
 theorem noOpening_of_firstOpened {L₀ : List Verity.Release} (h : firstOpened L₀ = none) :
     ∀ q ∈ L₀, ∀ i s n, q.frame ≠ .opening i s n := fun q hq i s n hq' => by
   have h' := List.findSome?_eq_none_iff.1 h q hq
   simp [hq'] at h'
 
-/-- **A log that opens no round opens none of a stream.** -/
 theorem openedOf_eq_zero {l : List Verity.Release} (h : ∀ q ∈ l, ∀ i s n, q.frame ≠ .opening i s n) (i s : ℕ) :
     openedOf l i s = 0 :=
   List.countP_eq_zero.2 fun q hq hp => by
     obtain ⟨n, hn⟩ := opening_of_opensAt hp
     exact h q hq i s n hn
 
-/-- **The read v2's check shows of the device's log, at a release**: where the reads of `lr` are of the releases
-`L₀ ++ r :: L`, `lr` reads `r` at its place, after reads of `L₀`'s frames, with `r`'s frame and the bytes `r` answered. -/
 theorem logged_answers {r : Verity.Release} {L : List Verity.Release} :
     ∀ {L₀ lr : List Verity.Release}, List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) (L₀ ++ r :: L) →
       ∃ pre y post, lr = pre ++ y :: post ∧ List.Forall₂ (fun a b => a.frame = b.frame) pre L₀ ∧
@@ -195,10 +159,6 @@ theorem logged_answers {r : Verity.Release} {L : List Verity.Release} :
     obtain ⟨pre, y, post, rfl, hfr, hy, ha⟩ := logged_answers h.2
     exact ⟨y' :: pre, y, post, rfl, .cons h.1.1 hfr, hy, ha⟩
 
-/-! ## The bytes the link answers -/
-
-/-- **The session v2 sets up has the session's tables**: wherever v2 sets `A` up, the session v2's check verified is
-on the statement's one table. -/
 theorem v2_tables {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
@@ -216,10 +176,6 @@ theorem v2_tables {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : L
     exact congrArg (fun t => #[t]) (zkTags_table _)
   · exact absurd h1 (by show ¬ 1 < 1; omega)
 
-/-- **The device's first opening answers the SHA-512 of the link's message in v2's record**: where `A` is the session
-v2 sets up on the parameters, the sampled verdict accepts, the log v2's check read is the device's, and the device's
-first opening `r`, after releases `L₀` that open none, opens the stream `TREE_SESSION` of the tree it opens, the record
-v2 reads has a link's message `m` at the session's tables, and `r` answered `m`'s SHA-512. -/
 theorem link_answers {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {A : Live} {x : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ) (hv : V.Verdict k .sampled x)
     (hl : Binding.Logged Binding.readsV2 x) {L₀ L : List Verity.Release} {r : Verity.Release} {i s n : ℕ}
@@ -281,15 +237,6 @@ theorem link_answers {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
     exact hlm
   · rw [← hya, ← Except.ok.inj hu]
 
-/-! ## The roots at the first stop -/
-
-/-- **The roots decoded at the first stop are the record's `root_B`** (`MovesOf`'s clause (ii)): at the readings and
-the decoders at the session's layout, on a trace from the first stop at the widened sample `ω`, any rewriting of its
-tape consumed, off the misses, where the play's sampled verdict accepts, the log v2's check read is the device's, the
-device's first opening is of the stream `TREE_SESSION` of the tree it opens, the first stop's fixed rounds pick a release
-after a log `L₀` that opens none (`LoggedAfter`, the link's round) and its cuts are at the bytes that release answers
-(`CutsAt`), the roots the decoders read at the first stop are the `root_B` of the session v2's record decodes to at the
-session `--zk` sets up at `A`. -/
 theorem firstStop_rootB {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A)
     {record₀ : Verity.Exchange → Option Claims.Msg} {recordDigest : Claims.Msg} {rd : Reading A.rounds}

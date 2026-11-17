@@ -5,48 +5,7 @@ public import Proofs.Properties.Verity.Sampled.RecordDraw
 public import Proofs.Properties.Verity.Sampled.LinkPts
 public import Proofs.Properties.Verity.Sampled.SpecTie
 
-/-!
-# `MovesReach`, clause by clause
-
-On the joint distribution's support off the held-off events (`ReachesOff`), each outcome is the writer's at the widened sample's
-sample, the decoded registration and a live session's outcome (`reachesOff_out`). What v2's files decode to in the play on
-the tape beside it, clause by clause of `MovesOf`:
-
-* **The play from the first stop** (`ReachesOff.out_reaches`): the play beside an outcome is one the first stop
-  reaches (`firstStop_playReaches`), at the widened sample and the link points the outcome is the writer's at.
-* **The record's sample** (`ReachesOff.recordDraw`, clause (i)): at the sample-coupled coin map, where the play's sampled
-  verdict accepts, the log v2 read is the device's, v2 reads the sample's coins of the family `label` answering `after`,
-  and every release of that family precedes every opening, the record decodes to the session's sample file at the
-  outcome's sample (`recordSample_firstStop`, `sample_extend`).
-* **An answered stop's round** (`stop_round`, toward clause (iv)): a stop the trace answers on the first table's rep
-  `r` stream, at that stream's `k`-th opening, submits the record's round `k` of that stream, as `roundOf` makes it of
-  the stop's message and the coins the opening released; the record's stream has that many rounds
-  (`recordRounds_decode`).
-* **The rep rounds** (`rep_rounds`, clause (iv) at the first table): the rounds the answered stops submit on the first
-  table's rep `r`, in order, are the record's rounds of that stream (`repRounds`), by `stream_rounds` at the stream's
-  openings, `stop_round` at each and `openedOf_eq_recordRounds` for their count. It takes, about v2's read and the
-  record, that each round the record gives a stream gives coins (`hsome`), that each stream it gives rounds of is a
-  stream of the tree read (`hkey`), and that each opening answers its round's digest (`hans`).
-* **The rep rounds at a `ReachesOff` witness** (`firstStop_reps`, clause (iv)): at a layout with a link slot and one
-  table, an outcome reached at a widened sample and link points off the held-off events is the writer's there at rep
-  rounds that are the record's, where the log's first opening is the session stream's: the first stop fixes a cut
-  (`firstStop_fixes`), the trace's answered stops are in order in the log (`firstStop_order`), the link's opening is the
-  log's first (`firstOpened_link`), and `rep_rounds` at each rep. It is stated at the witness, so that `MovesReach`
-  reads every clause at one sample, one set of link points and one set of rep rounds.
-* **The rounds a record `sessionTreeReason` accepts** (`recordRound_isSome`, `keyAt_of_record`): each round it gives a
-  stream gives coins (`rep_rounds`'s `hsome`), and each stream it gives rounds of is a stream of the tree v2's read
-  holds (`hkey`), the line opening its round 0 naming that stream of that tree.
-* **v2's read on an accepted play** (`verdict_read`, `verdict_nodup`, `verdict_opens`): where the sampled verdict
-  accepts and the log v2's check read is the device's, v2 read one coin tree's release log at the record it parsed,
-  which `sessionTreeReason` holds to it; the log's trees name their streams distinctly, and it has an opening, of the
-  record's link points.
-* **Clause (iv) at the session's layout, from the verdict** (`firstStop_reps_verdict`): at `Live.layout` and
-  `Live.tables`, the rep rounds at a `ReachesOff` witness are those of the session v2's record decodes to at the
-  session `--zk` sets up at `A`, for every record and session `MovesOf` reads; v2's read, the spec's tables, digests
-  and retained rounds come from the verdict (`verdict_read`, `SetsUp.setup_one`, `setup_sha512Digests`), and the
-  layout's slot for each round the log opens of a stream of the record's tree from the session's coin tree
-  (`SetsUp.covers_logged`).
--/
+/-! `MovesReach`, clause by clause. -/
 
 @[expose] public section
 
@@ -64,8 +23,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **An outcome on the joint distribution's support off `BL` and `B` is the writer's, beside a play the first stop reaches**
-(`reachesOff_out`, `firstStop_playReaches`). -/
 theorem ReachesOff.out_reaches {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
     {rd : Reading A.rounds} {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} {BL : LinkHold A.mP} {B : RoundHold}
@@ -82,11 +39,6 @@ theorem ReachesOff.out_reaches {V : Vocab d α} {θ : ByteArray} {F : Array Byte
   obtain ⟨_, h1, -⟩ := hr.out
   exact ⟨ω, pts, _, hL, h1, firstStop_playReaches V θ F c A rd σ M ω hr⟩
 
-/-- **The record's sample on the joint distribution's support** (`MovesOf`'s clause (i)): at the sample-coupled coin map, an
-outcome on the joint distribution's support off `BL` and `B` is the writer's at the widened sample `ω`, and where the play beside
-it ends where the sampled verdict accepts, the log v2 read is the device's, v2 reads the sample's coins of the family
-`label` answering `after`, and every release of that family precedes every opening, its record decodes to the session's
-sample file at `ω`'s sample (`ReachesOff.out_reaches`, `recordSample_firstStop`). -/
 theorem ReachesOff.recordDraw (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray}
     {c : ByteArray} {k : Verity.Registration.Composite} {A : Live} {rd : Reading A.rounds}
     {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg} {BL : LinkHold A.mP} {B : RoundHold}
@@ -118,10 +70,6 @@ theorem ReachesOff.recordDraw (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α}
   rw [sample_extend]
   exact recordSample_firstStop e hA ht hR hH hrd hm hsrc ω hreach hv hl hN hP hrec
 
-/-! ## The rep rounds, stop by stop -/
-
-/-- **The rounds the record gives a decoded stream are its rounds**: where `record` decodes to `sess` and parses as `J`,
-`recordRounds` reads of `J`'s stream `name`, not the session stream, the count of rounds of `sess`'s stream so named. -/
 theorem recordRounds_decode {spec : Flock.SessionSpec} {record : String} {sess : Flock.RunRecord} {J : Json}
     {name : String} {y : Flock.StreamRec} (hd : Flock.Record.decode spec record = .ok sess)
     (hJ : Flock.JsonParse.parse record = .ok J)
@@ -146,15 +94,6 @@ theorem recordRounds_decode {spec : Flock.SessionSpec} {record : String} {sess :
     rw [str_getD hy''.1, hy''.1]
     rfl
 
-/-- **An answered stop's round is the record's**, at the readings at a layout `L` whose round `j` is round `k` of the
-first table's rep `r` stream: where the stop `q`, keeping the invariant at the rounds' cuts, fixes round `j`'s cut at
-the most likely message `w`, the rest of the trace runs from it off every miss, and the device's log has the coins `cs`
-of `w`'s count released at the opening of tree `i`'s stream `s`, named that stream, after the log `m` at which the cuts
-the stop fixes are at the bytes that opening answers and which opened that stream `k` times: where v2 read the log of
-one tree (`readLog`, `coinTreesOf`) of the record `sessionTreeReason` accepts, `Flock.Zk.verify` accepts the record
-under retained rounds and SHA-512 digests at `A`'s digest, the log opens only the record's rounds (`OpenedRecorded`),
-each round the record gives a stream gives coins (`hsome`) and each opening v2 read answers its round's digest
-(`hans`), the record's stream so named has round `k`, and it is the round `roundOf` makes of `w` and `cs`. -/
 theorem stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
     {tables : Array String} {L : Fin A.rounds → Slot} {record : Exchange → Option Claims.Msg}
     {recordDigest : Claims.Msg} {rd : Reading A.rounds} (hrd : rd = readingAt tables L record recordDigest)
@@ -277,7 +216,6 @@ theorem stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
   rw [e, hB', hS', hN', ← hcoins, ← hdg]
   all_goals rfl
 
-/-- A stream of the trees a read of one tree names is of the first tree. -/
 theorem KeyAt.eq_zero {trees : Array LoggedTree} (h1 : trees.size = 1) {i si : ℕ} {ρ name : String}
     (h : KeyAt (heldTrees trees) i si ρ name) : i = 0 := by
   have hlt : i < (heldTrees trees).length := (List.findIdx?_eq_some_iff_getElem.1 h.1).1
@@ -290,15 +228,6 @@ theorem map_range_getElem! {γ : Type} [Inhabited γ] (xs : Array γ) :
   rw [List.getElem_map, List.getElem_range, Array.getElem_toList]
   exact getElem!_pos xs n (by simpa using h₂)
 
-/-- **The trace's rounds on the first table's rep `r` stream are the record's** (`MovesOf`'s clause (iv) at a rep):
-at the readings and the decoders at a layout `L`, injective, of distinct tables, where the trace's answered stops `as`
-each release their round's coins after the logs `ms` (`firstStop_order`, at the coin map that writes a round's coins
-as `roundBits fieldEnc`), the device's log `Lg` opens the session stream first, the layout has a slot for each round
-`Lg` opens of a stream of the record's tree (`hcovL`), and v2's read and the record are as `stop_round` takes them,
-with each stream the record gives
-rounds of a stream of the tree read (`hkey`), the rounds the stops on that stream submit, in order, are the record's
-rounds of it (`repRounds`): by `stream_rounds` at the stream's openings, `stop_round` at each, and
-`openedOf_eq_recordRounds` for their count; a stream the record gives no rounds has no stop on it. -/
 theorem rep_rounds {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
     (reg : Option Claims.Msg → A.Reg) {tables : Array String} {L : Fin A.rounds → Slot}
     (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
@@ -437,18 +366,6 @@ theorem rep_rounds {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
     rw [hfil, hR, hnil]
     all_goals rfl
 
-/-- **The rep rounds at a sample the joint distribution's support is reached at** (`MovesOf`'s clause (iv) at a `ReachesOff`
-witness): at the readings and the decoders at a layout `L`, injective, of distinct tables, whose rep slots are of a
-plan's one table and which has a link slot, and at the sample-coupled coin map under `fieldEnc`, an outcome with a
-widened sample `ω` and link points `pts` off the link's empty class, with a trace off the rounds' empty class from the
-first stop ending on it, is the writer's at `ω`, `pts` and some rep rounds; where the tape beside it misses nowhere, its
-log has an opening, its trees name their streams distinctly, its first opening is the session stream's
-(`SampleLinkFirst`'s second conjunct), the layout has a slot for each round the log opens of a stream of the record's
-tree, and v2's read and the record are as `rep_rounds` takes them, those rep rounds are the record's (`repRounds`), at
-every table and rep
-(`firstStop_fixes`, `firstStop_order`, `firstOpened_link`, `rep_rounds`). It takes the witness, not `ReachesOff`, since
-the rep rounds sit inside the writer's output with the roots and the link points, which the other clauses read at the
-same witness. -/
 theorem firstStop_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
     (reg : Option Claims.Msg → A.Reg) {tables : Array String} {L : Fin A.rounds → Slot}
     (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
@@ -527,12 +444,6 @@ theorem firstStop_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
       rw [htz]
       exact hcovL hk s r k hk') hrec hJ hd hv hret h512 hdg htab h0 hO hsome hkey hans
 
-/-! ## The rounds a record `sessionTreeReason` accepts -/
-
-/-- **Each round of each stream a record `sessionTreeReason` accepts gives, gives coins, and is opened after its
-digest**: the record's coin tree is a tree `t` of the log's, the record gives its streams as an array, and each round
-of a stream of it named `name` gives coins (`recordCoins?`) and is a round `t` shows opened (`LoggedTree.opening`)
-after the round's `msg_sha512`. -/
 theorem rounds_held {trees : Array LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
     (h : sessionTreeReason trees tables record = none) :
     ∃ t ∈ trees, recordTree record = t.root ∧ ∃ streams, _root_.Spot.getD record "streams" = .arr streams ∧
@@ -607,15 +518,11 @@ theorem rounds_held {trees : Array LoggedTree} {tables : Array (String × Option
   · exact fun _ _ => ⟨(), rfl⟩
   · exact fun _ => ⟨(), rfl⟩
 
-/-- A record's stream named `name`, as `recordRound` and `recordRounds` find it. -/
 def streamNamed (name : String) (x : Json) : Bool :=
   match _root_.Spot.getD x "stream" with
   | .str n => n == name
   | _ => false
 
-/-- **Each round a record `sessionTreeReason` accepts gives a stream gives coins** (`recordRound`), below the rounds it
-gives that stream (`recordRounds`): the session stream's round 0 its link points' (`LinkTrees.link_some`), and each
-other stream's its round's (`rounds_held`). -/
 theorem recordRound_isSome {trees : Array LoggedTree} {tabsB : Array (String × Option ℕ)} {J : Json}
     (h : sessionTreeReason trees tabsB J = none) (name : String) :
     ∀ k < recordRounds J name, (recordRound J name k).isSome := by
@@ -652,10 +559,6 @@ theorem recordRound_isSome {trees : Array LoggedTree} {tabsB : Array (String × 
   simp only [hx, Option.bind_some, hrs, hrk]
   exact (hall x (Array.mem_of_find?_eq_some hx) _ rs hxn hrs (rs[k], k) (Array.mem_zipIdx_iff_getElem?.2 hrk)).1
 
-/-- **Each stream a record `sessionTreeReason` accepts gives rounds of is a stream of the tree read**: where
-`coinTreesOf` reads the release log `lines` as `trees`, its round 0 (`recordRound_isSome`) is opened on a line of the
-log naming the record's tree and that stream (`Trees.open_held`), which names that stream of that tree among the trees
-v2's read holds (`heldTrees`, `coinTreesOf_fold`, `treeFold_keyAt`). -/
 theorem keyAt_of_record {lines : List String} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     {tabsB : Array (String × Option ℕ)} {J : Json} (h : sessionTreeReason trees tabsB J = none) {name : String}
     (hpos : 0 < recordRounds J name) : ∃ i si, KeyAt (heldTrees trees) i si (recordTree J) name := by
@@ -663,12 +566,6 @@ theorem keyAt_of_record {lines : List String} {trees : Array LoggedTree} (hT : c
   obtain ⟨l, hl, _, _, htl, d, hev, hTE, hroot, hs, -⟩ := Trees.open_held hT h hcs
   exact treeFold_keyAt (records := []) lines [] _ (coinTreesOf_fold [] hT) l hl htl d hev hTE hroot hs
 
-/-! ## At the session's layout, from the verdict -/
-
-/-- **v2's read on an accepted play**: where `A` is the session v2 sets up on the parameters, the sampled verdict
-accepts and the log v2's check read is the device's, v2 read the release log `lines` of one coin tree
-(`coinTreesOf`) as the releases `lr` (`readLog`) whose reads are the device's log's, at the record it parsed as `Jr`,
-which `sessionTreeReason` holds to that tree at some tables (`Trees.records_held`). -/
 theorem verdict_read {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {A : Live} {x : Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ) (hv : V.Verdict k .sampled x)
     (hl : Binding.Logged Binding.readsV2 x) {text : String} (hrec : sentRecord x.sent = some text) :
@@ -712,9 +609,6 @@ theorem verdict_read {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
   obtain ⟨tabsB, hJt⟩ := Trees.records_held hth (r := rs) (by simp [he]) hgb' hgu hJp
   exact ⟨dr.label, c.digest, ξ, lines, lr, ts, J, tabsB, hlog, hread, hct, h1, hJt, hJ⟩
 
-/-- **An accepted play's trees name their streams distinctly**: where the sampled verdict accepts and the log v2's
-check read is the device's, each `Hello` of the device's log names distinct streams, as v2's read of it does
-(`verdict_read`, `readLog_nodup`). -/
 theorem verdict_nodup {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {A : Live} {x : Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ) (hv : V.Verdict k .sampled x)
     (hl : Binding.Logged Binding.readsV2 x) {text : String} (hrec : sentRecord x.sent = some text) :
@@ -725,9 +619,6 @@ theorem verdict_nodup {V : Vocab d α} {k : Verity.Registration.Composite} {θ :
   rw [← helloSpecs_congr hlg]
   exact readLog_nodup hct hread
 
-/-- **An accepted play's log has an opening**: where the sampled verdict accepts and the log v2's check read is the
-device's, the record v2 parsed gives its link points' coins (`LinkTrees.link_some`), which the release log opens on a
-line (`Trees.open_held`) that v2's read reads as an opening (`readLog_opens`), whose frame the device's log has. -/
 theorem verdict_opens {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {A : Live} {x : Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ) (hv : V.Verdict k .sampled x)
     (hl : Binding.Logged Binding.readsV2 x) {text : String} (hrec : sentRecord x.sent = some text) :
@@ -742,24 +633,10 @@ theorem verdict_opens {V : Vocab d α} {k : Verity.Registration.Composite} {θ :
   obtain ⟨L₁, L₂, he⟩ := List.append_of_mem hq
   exact ⟨L₁, q, L₂, i, s, n, he, hyq.1.symm.trans hyo⟩
 
-/-- **The session reads a round**: its link's (`Live.rounds_eq`). -/
 theorem Live.rounds_pos (A : Live) : 0 < A.rounds := by
   rw [A.rounds_eq]
   exact Nat.succ_pos _
 
-/-- **The rep rounds at a `ReachesOff` witness are the record's, at the session's layout** (`MovesOf`'s clause (iv) as
-`MovesReach` reads it): at the readings and the decoders at the session's layout (`Live.layout`, `Live.tables`), and
-at the sample-coupled coin map under `fieldEnc`, an outcome
-reached at a widened sample `ω` and link points `pts` off the link's and the rounds' empty classes, where the play
-beside it is accepted by the sampled verdict, misses nowhere, and the log v2's check read is the device's, is the
-writer's at `ω`, `pts` and rep rounds that are those of the session v2's record decodes to (`repRounds`) at the session
-`--zk` sets up at `A`, at every table and rep. It takes, of the device's log, that its first opening is the session
-stream's and that it opens only the record's rounds (`OpenedRecorded`); and of v2's read and the record, the
-statement `rep_rounds`'s premise `hans` is an instance of (`verdict_read`, `SetsUp.setup_one`, `setup_sha512Digests`,
-`firstStop_reps`). That the log has an opening and that its trees name their streams distinctly come from the verdict
-(`verdict_opens`, `verdict_nodup`), its premises `hsome` and `hkey` from the record `sessionTreeReason` accepts
-(`recordRound_isSome`, `keyAt_of_record`), and the layout's slot for each round the log opens of a stream of the
-record's tree from the session's coin tree, which `Record.decode` holds the record's to (`SetsUp.covers_logged`). -/
 theorem firstStop_reps_verdict {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg) (record : Exchange → Option Claims.Msg)

@@ -5,38 +5,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Named
 public import Proofs.Properties.Verity.Sampled.RootB
 public import Proofs.Properties.Verity.Sampled.Window.Trees
 
-/-!
-# The members' sessions, one after another, in the read of the release log
-
-The per-member form holds the members' sessions to the challenger's release log by
-`Spot.Challenger.membersTreeReason`: each session's coins its own tree's, its tree's last round its closing round,
-opened after the SHA-512 of its evidence, no tree two sessions', and the trees' lines, the line that samples a tree
-and each line opening a round of it, one tree after another in the sessions' order (`membersOrder`). v2's read of the
-same lines (`readLog`) is the device's log. What the check gives of that read:
-
-* **The scan** (`orderScan`, `membersOrderFrom_scan`): `membersOrder` over the trees' lines (`memberLine`), each its
-  tree and whether it is the tree's closing round. Before any line the scan's list holds every earlier line's tree
-  (`orderScan_split`), so an earlier line's tree is at or before a line's own in the list (`orderScan_order`); and
-  after a tree's closing round no line is of that tree, where the list names no tree twice (`orderScan_last`). On the
-  lines: `membersOrder_order`, `membersOrder_last`, and `membersOrder_before_closing`: every line of a tree before a
-  session's closing round, the line that samples the tree too (`memberLine_hello`), is of that session's tree or an
-  earlier session's, so nothing of a later session's tree is in the log before the session is closed.
-* **In order** (`opens_in_order`): in the read, an opening of session `j`'s tree has only openings of sessions' trees
-  at or before `j` before it.
-* **A session's closing round** (`closing_read`): where a tree shows round 1 of its session stream opened, the read has
-  an opening of that tree's session stream, after one opening of that stream, answering the bytes that round was opened
-  after, and no opening of the tree after it.
-* **Recorded before the next** (`evidence_before`): that opening is before every opening of a later session's tree.
-* **The members' check** (`membersTreeReason_none`, `memberTreeReason_none`, `members_read`): where
-  `membersTreeReason` accepts, the three hold of the read at the sessions' trees, each session's closing round
-  answering the bytes its evidence's SHA-512 names (`answers_of_hex`), and each session's tree less its closing round
-  is the session's as v2's one-statement check holds one (`sessionTreeReason`).
-* **Acceptance gives the order** (`Accepted`, `Accepted.opensInOrder`, `Accepted.opensLast`, `Accepted.specs`): a
-  log that is the read of lines the members' check accepts has every opening of a session's tree
-  (`opening_session`), the sessions' rounds one session after another (`Verity.Sampled.OpensInOrder`), so an opening
-  of a tree opened before is of the last tree opened (`Verity.Sampled.OpensLast`), and each tree's streams named
-  once.
--/
+/-! The members' sessions, one after another, in the read of the release log. -/
 
 @[expose] public section
 
@@ -47,13 +16,10 @@ open Spot Spot.Challenger
 
 open private strOf from Spot.ChallengerTrees
 
-/-! ## Lists -/
-
 theorem nodup_idx {l : List String} (hn : l.Nodup) {i j : ℕ} {x : String} (hi : l[i]? = some x)
     (hj : l[j]? = some x) : i = j :=
   (hn.getElem?_inj (List.getElem?_eq_some_iff.1 hi).1).1 (hi.trans hj.symm)
 
-/-- A list that repeats an entry is not free of repeats. -/
 theorem not_nodup_snoc {l E : List String} {x : String} (hx : x ∈ l) (hn : (l ++ [x] ++ E).Nodup) : False := by
   obtain ⟨k, hk⟩ := List.getElem?_of_mem hx
   have hklt : k < l.length := (List.getElem?_eq_some_iff.1 hk).1
@@ -66,7 +32,6 @@ theorem not_nodup_snoc {l E : List String} {x : String} (hx : x ∈ l) (hn : (l 
   have := nodup_idx hn h1 h2
   omega
 
-/-- In a list free of repeats, an entry among those up to `a` is at or before `a`. -/
 theorem idx_le {l A B : List String} {a b : String} (hn : l.Nodup) (hl : l = A ++ a :: B) (hb : b ∈ A ++ [a])
     {j j' : ℕ} (hj : l[j]? = some a) (hj' : l[j']? = some b) : j' ≤ j := by
   have ha : l[A.length]? = some a := by
@@ -102,7 +67,6 @@ theorem countP_pos_of_mem {α : Type} {p : α → Bool} :
     · have := countP_pos_of_mem h hp
       omega
 
-/-- The entry a count is reached at: where more than `k` entries hold `p`, one holds it after exactly `k` that do. -/
 theorem split_at_count {α : Type} {p : α → Bool} : ∀ (L : List α) (k : ℕ), k < L.countP p →
     ∃ a q b, L = a ++ q :: b ∧ p q = true ∧ a.countP p = k
   | [], _, h => absurd h (by simp)
@@ -118,7 +82,6 @@ theorem split_at_count {α : Type} {p : α → Bool} : ∀ (L : List α) (k : �
       obtain ⟨a, q, b, hL, hq, ha⟩ := split_at_count L k h
       exact ⟨x :: a, q, b, congrArg (x :: ·) hL, hq, by rw [List.countP_cons, ite_eq_right hx, Nat.add_zero, ha]⟩
 
-/-- Two entries holding `p`, each after as many that do, are one entry. -/
 theorem same_at_count {p : String → Bool} {a b a₂ b₂ : List String} {c c₂ : String}
     (h : a ++ c :: b = a₂ ++ c₂ :: b₂) (hc : p c = true) (hc₂ : p c₂ = true) (hk : a.countP p = a₂.countP p) :
     c = c₂ := by
@@ -137,8 +100,6 @@ theorem same_at_count {p : String → Bool} {a b a₂ b₂ : List String} {c c�
       obtain ⟨rfl, -⟩ := List.cons.inj ha
       rw [List.countP_append, List.countP_cons, ite_eq_left hc₂] at hk
       omega
-
-/-! ## The scan -/
 
 /-- `Spot.Challenger.membersOrderFrom`'s scan over the trees' lines, each its tree and whether it is the tree's
 closing round. -/
@@ -163,7 +124,6 @@ theorem membersOrderFrom_scan : ∀ (ls : List String) (roots : Array String) (l
       rw [List.filterMap_cons_some h]
       simp only [membersOrderFrom, orderScan, h, membersOrderFrom_scan ls]
 
-/-- One step of the scan: a line of the last tree, not yet closed, or the first line of another. -/
 theorem orderScan_cons {roots : Array String} {last : Option String} {closed : Bool} {root : String}
     {session : Bool} {ops : List (String × Bool)} {out : Array String}
     (h : orderScan roots last closed ((root, session) :: ops) = some out) :
@@ -182,7 +142,6 @@ theorem orderScan_cons {roots : Array String} {last : Option String} {closed : B
     · rw [ite_eq_right h2] at h
       cases h
 
-/-- The scan only adds to its list. -/
 theorem orderScan_prefix : ∀ (ops : List (String × Bool)) (roots : Array String) (last : Option String)
     (closed : Bool) (out : Array String), orderScan roots last closed ops = some out →
     ∃ E, out.toList = roots.toList ++ E
@@ -196,7 +155,6 @@ theorem orderScan_prefix : ∀ (ops : List (String × Bool)) (roots : Array Stri
     · obtain ⟨E, hE⟩ := orderScan_prefix ops (roots.push root) (some root) session out h'
       exact ⟨root :: E, by rw [hE, Array.toList_push, List.append_assoc, List.singleton_append]⟩
 
-/-- The scan's last tree is the last of its list. -/
 def LastOf (roots : Array String) (last : Option String) : Prop :=
   ∀ r, last = some r → ∃ A, roots.toList = A ++ [r]
 
@@ -208,8 +166,6 @@ theorem lastOf_push (roots : Array String) (root : String) : LastOf (roots.push 
   intro r hr
   exact ⟨roots.toList, by rw [Array.toList_push, Option.some.inj hr]⟩
 
-/-- **The scan at a split**: the scan of `pre ++ rest` is a scan of `rest` from a state whose list holds the list
-it began with and the tree of every line of `pre`. -/
 theorem orderScan_split : ∀ (pre rest : List (String × Bool)) (roots : Array String) (last : Option String)
     (closed : Bool) (out : Array String), orderScan roots last closed (pre ++ rest) = some out → LastOf roots last →
     ∃ roots₁ last₁ closed₁, orderScan roots₁ last₁ closed₁ rest = some out ∧ LastOf roots₁ last₁ ∧
@@ -233,8 +189,6 @@ theorem orderScan_split : ∀ (pre rest : List (String × Bool)) (roots : Array 
       · exact hx root (by rw [Array.toList_push]; simp)
       · exact hq q hq'
 
-/-- **An earlier line's tree is at or before a line's own**: the scan's list is the trees up to the line's, then
-the rest, and every earlier line's tree is among those up to it. -/
 theorem orderScan_order {ops pre post : List (String × Bool)} {p : String × Bool} {roots : Array String}
     {last : Option String} {closed : Bool} {out : Array String} (h : orderScan roots last closed ops = some out)
     (hI : LastOf roots last) (he : ops = pre ++ p :: post) :
@@ -253,7 +207,6 @@ theorem orderScan_order {ops pre post : List (String × Bool)} {p : String × Bo
     exact ⟨roots₁.toList, E, by rw [hE, Array.toList_push, List.append_assoc, List.singleton_append],
       fun q hq' => List.mem_append_left _ (hq q hq')⟩
 
-/-- A tree the scan has left has no line more, where its list names no tree twice. -/
 theorem orderScan_gone : ∀ (ops : List (String × Bool)) (roots : Array String) (last : Option String)
     (closed : Bool) (out : Array String), orderScan roots last closed ops = some out → out.toList.Nodup →
     ∀ ρ, ρ ∈ roots.toList → last ≠ some ρ → ∀ p ∈ ops, p.1 ≠ ρ
@@ -273,7 +226,6 @@ theorem orderScan_gone : ∀ (ops : List (String × Bool)) (roots : Array String
       · exact orderScan_gone ops (roots.push root) (some root) session out h' hn ρ
           (by rw [Array.toList_push]; exact List.mem_append_left _ hρ) (fun e => hne (Option.some.inj e)) p hp
 
-/-- A closed tree has no line more. -/
 theorem orderScan_closed {ops : List (String × Bool)} {roots : Array String} {out : Array String} {ρ : String}
     (h : orderScan roots (some ρ) true ops = some out) (hn : out.toList.Nodup) (hρ : ρ ∈ roots.toList) :
     ∀ p ∈ ops, p.1 ≠ ρ := by
@@ -290,7 +242,6 @@ theorem orderScan_closed {ops : List (String × Bool)} {roots : Array String} {o
       · exact orderScan_gone ops (roots.push root) (some root) session out h' hn ρ
           (by rw [Array.toList_push]; exact List.mem_append_left _ hρ) (fun e => hne (Option.some.inj e)) p hp
 
-/-- **After a tree's closing round, no line of that tree**, where the scan's list names no tree twice. -/
 theorem orderScan_last {ops pre post : List (String × Bool)} {ρ : String} {roots : Array String}
     {last : Option String} {closed : Bool} {out : Array String} (h : orderScan roots last closed ops = some out)
     (hI : LastOf roots last) (hn : out.toList.Nodup) (he : ops = pre ++ (ρ, true) :: post) :
@@ -304,10 +255,6 @@ theorem orderScan_last {ops pre post : List (String × Bool)} {ρ : String} {roo
     exact orderScan_closed h' hn (by rw [hA]; simp)
   · exact orderScan_closed h' hn (by rw [Array.toList_push]; simp)
 
-/-! ## The lines -/
-
-/-- A line opening a round, as `memberLine` reads it: of the tree it names, a closing round where it is round
-`CLOSING_ROUND` of the stream named the session's. -/
 theorem memberLine_open {l : String} {d : Json} {ρ : String} (he : event l = .ok d)
     (hT : jsonStrIs (getD d "event") TREE_EVENT = false) (hO : jsonStrIs (getD d "event") OPEN_EVENT = true)
     (hr : getD d "tree" = .str ρ) :
@@ -317,7 +264,6 @@ theorem memberLine_open {l : String} {d : Json} {ρ : String} (he : event l = .o
   rw [he]
   simp only [hT, hO, hr, Bool.false_eq_true, ↓reduceIte]
 
-/-- A line opening a stream of a tree is a line `memberLine` reads, of that tree. -/
 theorem memberLine_opensLine {l ρ name : String} (h : opensLine ρ name l = true) :
     ∃ b, memberLine l = some (ρ, b) := by
   unfold opensLine at h
@@ -332,16 +278,12 @@ theorem memberLine_opensLine {l ρ name : String} (h : opensLine ρ name l = tru
     rw [Lines.treeLine_ok he, hT, Bool.false_or] at ht
     exact ⟨_, memberLine_open he hT ht (Trees.strIs hr)⟩
 
-/-- The line opening round 1 of a tree's stream named the session's is its closing round, as `memberLine` reads
-it. -/
 theorem memberLine_closing {l ρ : String} (h : OpensRound l ρ TREE_SESSION 1) : memberLine l = some (ρ, true) := by
   obtain ⟨ht, d, he, hT, hr, hs, hk⟩ := h
   rw [Lines.treeLine_ok he, hT, Bool.false_or] at ht
   rw [memberLine_open he hT ht hr, hs, hk]
   simp [jsonStrIs, CLOSING_ROUND]
 
-/-- The line that samples a tree (`Lines.helloRoot`) is a line `memberLine` reads, of that tree, and no closing
-round. -/
 theorem memberLine_hello {l ρ : String} (h : Lines.helloRoot l = some ρ) : memberLine l = some (ρ, false) := by
   unfold Lines.helloRoot at h
   cases he : event l with
@@ -369,8 +311,6 @@ theorem memberLine_hello {l ρ : String} (h : Lines.helloRoot l = some ρ) : mem
     · rw [if_neg hT] at h
       cases h
 
-/-- **The lines' trees in the sessions' order**: where `membersOrder` reads the lines as the trees `used`, a line of
-the tree `ρ` splits `used` at `ρ`, and every earlier line's tree is among those up to it. -/
 theorem membersOrder_order {lines preL postL : List String} {l : String} {used : Array String}
     (h : membersOrder lines = some used) (hl : lines = preL ++ l :: postL) {ρ : String} {b : Bool}
     (ho : memberLine l = some (ρ, b)) :
@@ -382,8 +322,6 @@ theorem membersOrder_order {lines preL postL : List String} {l : String} {used :
   obtain ⟨A, B, hout, hq⟩ := orderScan_order h (lastOf_none _) hs
   exact ⟨A, B, hout, fun l' hl' ρ' b' ho' => hq (ρ', b') (List.mem_filterMap.2 ⟨l', hl', ho'⟩)⟩
 
-/-- **A tree's closing round is its last line**: where `membersOrder` reads the lines as trees none named twice, no
-line after a tree's closing round is of that tree. -/
 theorem membersOrder_last {lines a b : List String} {c : String} {used : Array String}
     (h : membersOrder lines = some used) (hn : used.toList.Nodup) (hl : lines = a ++ c :: b) {ρ : String}
     (hc : memberLine c = some (ρ, true)) : ∀ y ∈ b, ∀ b', memberLine y ≠ some (ρ, b') := by
@@ -394,10 +332,6 @@ theorem membersOrder_last {lines a b : List String} {c : String} {used : Array S
   intro y hy b' hy'
   exact orderScan_last h (lastOf_none _) hn hs (ρ, b') (List.mem_filterMap.2 ⟨y, hy, hy'⟩) rfl
 
-/-- **Nothing of a later session's tree before a session's closing round**: where `membersOrder` reads the lines as
-the trees `used`, none named twice, every line of a tree before the closing round of the tree `used[j]`, the line
-that samples the tree (`memberLine_hello`) or one opening a round of it (`memberLine_opensLine`), is of a tree
-`used[j']` with `j' ≤ j`. -/
 theorem membersOrder_before_closing {lines a b : List String} {c : String} {used : Array String}
     (h : membersOrder lines = some used) (hn : used.toList.Nodup) (hl : lines = a ++ c :: b) {ρ : String}
     (hc : memberLine c = some (ρ, true)) {j : ℕ} (hj : used[j]? = some ρ) {y : String} (hy : y ∈ a) {ρ' : String}
@@ -405,8 +339,6 @@ theorem membersOrder_before_closing {lines a b : List String} {c : String} {used
   obtain ⟨A, B, hused, hbefore⟩ := membersOrder_order h hl hc
   exact idx_le hn hused (hbefore y hy ρ' b' hy') (by rw [Array.getElem?_toList]; exact hj)
     (by rw [Array.getElem?_toList]; exact hj')
-
-/-! ## The read -/
 
 theorem opening_of_opensAt {fr : Verity.Frame} {i s : ℕ} (h : fr.opensAt i s = true) :
     ∃ n, fr = .opening i s n := by
@@ -429,7 +361,6 @@ theorem keyAt_root {ts : List (String × Json)} {i si : ℕ} {ρ name : String} 
   obtain ⟨-, sp, hg, -⟩ := h
   exact ⟨sp, hg⟩
 
-/-- The tree first of a root has that root. -/
 theorem findIdx_fst {ts : List (String × Json)} {i : ℕ} {ρ : String} {y : String × Json}
     (hf : ts.findIdx? (·.1 == ρ) = some i) (hg : ts[i]? = some y) : y.1 = ρ := by
   obtain ⟨hlt, hp, -⟩ := List.findIdx?_eq_some_iff_getElem.1 hf
@@ -437,7 +368,6 @@ theorem findIdx_fst {ts : List (String × Json)} {i : ℕ} {ρ : String} {y : St
   rw [hx] at hp
   exact beq_iff_eq.1 hp
 
-/-- Sessions of one tree are one session, where no tree is two sessions'. -/
 theorem tree_inj {used : Array String} (hn : used.toList.Nodup) {ts : List (String × Json)} {tree : ℕ → ℕ}
     (htree : ∀ j ρ, used[j]? = some ρ → ts.findIdx? (·.1 == ρ) = some (tree j)) {j j' : ℕ} (hj : j < used.size)
     (hj' : j' < used.size) (h : tree j = tree j') : j = j' := by
@@ -453,10 +383,6 @@ theorem tree_inj {used : Array String} (hn : used.toList.Nodup) {ts : List (Stri
 variable {label : String} {after : ByteArray} {recs : List Json} {ξ : ByteArray} {lines : List String}
   {log : List Verity.Release} {trees : Array LoggedTree}
 
-/-- **The sessions' trees are opened in the sessions' order**: where `coinTreesOf` accepts the release log's lines,
-`readLog` reads them, `membersOrder` reads them as the trees `used`, none named twice, and `tree` numbers each
-session's tree as the read does, an opening of session `j`'s tree has only openings of the trees of sessions at or
-before `j` before it. -/
 theorem opens_in_order (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     {used : Array String} (hO : membersOrder lines = some used) (hn : used.toList.Nodup) {tree : ℕ → ℕ}
     (htree : ∀ j ρ, used[j]? = some ρ → (heldTrees trees).findIdx? (·.1 == ρ) = some (tree j))
@@ -488,9 +414,6 @@ theorem opens_in_order (hT : coinTreesOf lines = .ok trees) (hR : readLog label 
   · rw [Array.getElem?_toList, Array.getElem?_eq_getElem hj, eρ]
   · rw [Array.getElem?_toList, Array.getElem?_eq_getElem hj', eρ']
 
-/-- **Every opening the read shows is of a session's tree**: where `coinTreesOf` accepts the release log's lines,
-`readLog` reads them, `membersOrder` reads them as the trees `used` and `tree` numbers each session's tree as the
-read does, an opening of the `i`-th tree is of some session's, `i` its number. -/
 theorem opening_session (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     {used : Array String} (hO : membersOrder lines = some used) {tree : ℕ → ℕ}
     (htree : ∀ j ρ, used[j]? = some ρ → (heldTrees trees).findIdx? (·.1 == ρ) = some (tree j))
@@ -508,11 +431,6 @@ theorem opening_session (hT : coinTreesOf lines = .ok trees) (hR : readLog label
   rw [Array.getElem?_toList] at hj
   exact ⟨j, (Array.getElem?_eq_some_iff.1 hj).1, Option.some.inj ((htree j ρ hj).symm.trans (keyAt_idx hkey))⟩
 
-/-- **A session's closing round, in the read**: where `coinTreesOf` accepts the release log's lines, `readLog` reads
-them and `membersOrder` reads them as trees none named twice, a tree that shows round 1 of its stream named the
-session's opened has in the read an opening `x` of that stream of it (`KeyAt`), named so in the specs of the `Hello`s
-before it, after one opening of that stream, answering the bytes that round was opened after, with no opening of the
-tree after it. -/
 theorem closing_read (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     {used : Array String} (hO : membersOrder lines = some used) (hn : used.toList.Nodup) {t : LoggedTree}
     (ht : t ∈ trees) {o : TreeOpening} (ho : o ∈ t.opened) (hs : o.stream = TREE_SESSION) (hk : o.round = 1) :
@@ -574,9 +492,6 @@ theorem closing_read (hT : coinTreesOf lines = .ok trees) (hR : readLog label af
   obtain ⟨bly, hbly⟩ := memberLine_opensLine hroy.1.opensLine
   exact membersOrder_last hO hn hlines hclose ly (by simp) bly (by rw [hbly, eρ])
 
-/-- **A session's closing round is before the next session's tree**: with `closing_read`'s premises and `tree`
-numbering each session's tree as the read does, the read's opening that answers the bytes session `j'`'s tree's round
-1 of its session stream was opened after is before every opening of the tree of a session `j` after `j'`. -/
 theorem evidence_before (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     {used : Array String} (hO : membersOrder lines = some used) (hn : used.toList.Nodup) {tree : ℕ → ℕ}
     (htree : ∀ j ρ, used[j]? = some ρ → (heldTrees trees).findIdx? (·.1 == ρ) = some (tree j)) {j' : ℕ}
@@ -614,11 +529,8 @@ theorem evidence_before (hT : coinTreesOf lines = .ok trees) (hR : readLog label
       have := opens_in_order hT hR hO hn htree hex hj' hxf (show r ∈ Lc by rw [hLc]; simp) hj hr
       omega
 
-/-! ## What the members' check gives -/
-
 theorem strOf_str (s : String) : strOf (Json.str s) = s := rfl
 
-/-- The coin trees the sessions' records name, by root, in the sessions' order. -/
 def usedOf (records : Array (String × Array (String × Option ℕ) × Json × String)) : Array String :=
   records.map fun x => strOf (getD (getD x.2.2.1 "coin_tree") "root")
 
@@ -638,8 +550,6 @@ theorem closes_fields {o : TreeOpening} {evidence : String} (h : o.closes eviden
   simp only [Bool.and_eq_true, beq_iff_eq] at h
   exact ⟨h.1.1.1.1, h.1.1.1.2, h.1.1.2, h.1.2⟩
 
-/-- **What `membersTreeReason` accepts**: every session's record as `memberTreeReason` holds it, no tree two
-sessions', and the lines' rounds one tree after another in the sessions' order. -/
 theorem membersTreeReason_none {records : Array (String × Array (String × Option ℕ) × Json × String)}
     (h : membersTreeReason trees lines records = none) :
     (∀ x ∈ records, memberTreeReason trees x.2.1 x.2.2.1 x.2.2.2 = none) ∧ (usedOf records).toList.Nodup ∧
@@ -668,16 +578,11 @@ theorem membersTreeReason_none {records : Array (String × Array (String × Opti
         · rename_i h3
           exact ⟨heach, Lines.distinct_nodup (Decidable.of_not_not h1), Decidable.of_not_not h3⟩
 
-/-- The bytes a round opened after the SHA-512 of `b`, in hex, answers. -/
 theorem answers_of_hex {ev : String} {a b : ByteArray} (h : Flock.unhex ev = .ok a) (he : ev = sha512Hex b) :
     a = Flock.Sha512.hash b := by
   rw [he] at h
   exact (Except.ok.inj ((FlockComplete.JsonRT.unhex_hexOf (Flock.Sha512.hash b)).symm.trans h)).symm
 
-/-- **Each session's tree, by the members' check**: where `membersTreeReason` accepts the sessions `records`, each
-session's record names a logged tree, the one `usedOf` lists at the session's place, which less its closing round is
-the session's as `sessionTreeReason` holds one and shows round 1 of its session stream opened after the session's
-evidence's SHA-512 in hex. -/
 theorem sessions_trees {records : Array (String × Array (String × Option ℕ) × Json × String)}
     (hM : membersTreeReason trees lines records = none) (j : ℕ)
     (x : String × Array (String × Option ℕ) × Json × String) (hx : records[j]? = some x) :
@@ -690,9 +595,6 @@ theorem sessions_trees {records : Array (String × Array (String × Option ℕ) 
   exact ⟨t, ht, hroot, by rw [usedOf_getElem? hx, hroot, strOf_str], hS, o,
     Array.mem_of_getElem? (show t.opened[t.opened.size - 1]? = some o from ho), hs, hk, ha⟩
 
-/-- **The sessions' trees as the read numbers them**: where `coinTreesOf` accepts the release log's lines, `readLog`
-reads them and `membersTreeReason` accepts the sessions `records`, a numbering `tree` gives each session's tree its
-place among the trees the read holds. -/
 theorem members_tree (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     {records : Array (String × Array (String × Option ℕ) × Json × String)}
     (hM : membersTreeReason trees lines records = none) :
@@ -714,17 +616,6 @@ theorem members_tree (hT : coinTreesOf lines = .ok trees) (hR : readLog label af
   obtain ⟨i, hi⟩ := hidx j ρ hρ
   simp only [hρ, Option.bind_some, hi, Option.getD_some]
 
-/-- **The members' sessions on the read**: where `coinTreesOf` accepts the release log's lines, `readLog` reads them
-and `membersTreeReason` accepts the sessions `records` against them, there is a numbering `tree` of the sessions'
-trees, as the read numbers trees, at which:
-
-* each session's record names a logged tree, the `tree j`-th the read numbers; that tree less its closing round is
-  the session's as `sessionTreeReason` holds one; and the read has an opening of its stream named the session's, after
-  one opening of that stream, answering the bytes the session's evidence's SHA-512 names in hex, with no opening of the
-  tree after it;
-* an opening of session `j`'s tree has only openings of the trees of sessions at or before `j` before it;
-* before an opening of session `j`'s tree, each earlier session has an opening answering the bytes its evidence's
-  SHA-512 names in hex. -/
 theorem members_read (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     {records : Array (String × Array (String × Option ℕ) × Json × String)}
     (hM : membersTreeReason trees lines records = none) :
@@ -761,20 +652,12 @@ theorem members_read (hT : coinTreesOf lines = .ok trees) (hR : readLog label af
     rw [ha] at hun
     exact ⟨q, hq, hun⟩
 
-/-! ## Acceptance gives the order -/
-
-/-- **The members' check accepted the log's lines**: the device's log `log` is v2's read (`readLog`) of release log
-lines `coinTreesOf` accepts, against which `Spot.Challenger.membersTreeReason` accepts some sessions' records and
-evidence. It is what the per-member form's acceptance gives of a play's log. -/
 def Accepted (log : List Verity.Release) : Prop :=
   ∃ (label : String) (after : ByteArray) (recs : List Json) (ξ : ByteArray) (lines : List String)
     (trees : Array LoggedTree) (records : Array (String × Array (String × Option ℕ) × Json × String)),
     coinTreesOf lines = .ok trees ∧ readLog label after recs ξ lines = some log ∧
       membersTreeReason trees lines records = none
 
-/-- **Acceptance gives the sessions one after another** (`Verity.Sampled.OpensInOrder`): where the members' check
-accepts the log's lines, some numbering `tree` of as many sessions' trees has every opening the log shows of a
-session's tree, and every round opened before a round of session `j`'s tree of that tree or an earlier session's. -/
 theorem Accepted.opensInOrder {log : List Verity.Release} (h : Accepted log) :
     ∃ (tree : ℕ → ℕ) (m : ℕ), (∀ r ∈ log, ∀ i s n, r.frame = .opening i s n → ∃ j, j < m ∧ tree j = i) ∧
       Verity.Sampled.OpensInOrder tree m log := by
@@ -785,13 +668,10 @@ theorem Accepted.opensInOrder {log : List Verity.Release} (h : Accepted log) :
   intro pre r post he j hj s n hr q hq j' hj' s' n' hq'
   exact opens_in_order hT hR hO hnod htree he hj hr hq hj' hq'
 
-/-- **Acceptance gives each opening of a tree opened before as the last tree's** (`Verity.Sampled.OpensLast`): the
-sessions' rounds are opened one session after another (`Accepted.opensInOrder`, `opensLast_of_sessions`). -/
 theorem Accepted.opensLast {log : List Verity.Release} (h : Accepted log) : Verity.Sampled.OpensLast log := by
   obtain ⟨tree, m, hall, hord⟩ := h.opensInOrder
   exact Verity.Sampled.opensLast_of_sessions hall hord
 
-/-- **Acceptance gives each tree's streams named once** (`readLog_nodup`). -/
 theorem Accepted.specs {log : List Verity.Release} (h : Accepted log) :
     ∀ sp ∈ helloSpecs log, sp.streams.toList.Nodup := by
   obtain ⟨label, after, recs, ξ, lines, trees, records, hT, hR, -⟩ := h

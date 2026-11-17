@@ -2,28 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Window.Reach
 
-/-!
-# SPOT's coupling over a window: each member's written coins in the play's log
-
-Where the projection writes a member's link points and its rounds' coins into its stops' openings, the play on the
-tape the window's walk ends on releases them there, whichever members' sessions follow.
-
-* **The release in the log, past the stop** (`release_past`, `stop_logged_past`): `RoundsReach.release` and
-  `RoundsReach.stop_logged` at any position past the stop with the bits written in and consumed (`Pos.Past`), where
-  the one-session lemmas take a trace from it. A later session's walk goes on from the stop's coin node to its next
-  stop, which keeps the coin written there.
-* **A member's session keeps where the walk stops** (`MemberReach.stopsAt`, `stopsAt_rootStop`): the stop after a
-  member's session's end is where `StopsAt` says, from a log and the close after it, as the stop its session starts
-  at is; the play's first stop is, on any tape.
-* **A member's written coins in the log** (`MemberReach.logged`): on a member's session's trace from a position
-  whose stop is where `StopsAt` says and fixes a cut, where the coin map writes the link points and each round's
-  coins into the stops' openings as bits and off the held-off events the openings' classes at them are not empty, the
-  play on the tape of any position past the trace's end releases the link points' bits and each answered round's
-  coins at an opening the rounds whose cuts the stop fixes pick, and the session's outcome is those rounds in order.
-* **The members' steps, at where the walk stops** (`MemberSteps`, `memberDecodes_of_stops`): `MemberDecodes` at any
-  invariant, beside the play's start kept and `StopsAt` at the stop a member's session starts at, both handed to each
-  member's step.
--/
+/-! SPOT's coupling over a window: each member's written coins in the play's log. -/
 
 @[expose] public section
 
@@ -35,17 +14,10 @@ open FlockSoundness.Refine (roundOf)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The release in the log, past the stop -/
-
 section Past
 
 variable {g : Game Exchange} {σ : Strategy g} {R : ℕ}
 
-/-- **A stop's written release is in the play's log, at any position past the stop**: at a stop after an opening
-frame of the `i`-th tree's stream `s` that the device serves after the log `pre`, its releases continuing to the close
-after `pre` and them, off the opening's empty class at `bits`, the play on the tape of any position past the stop
-with `bits` written into its opening and consumed has as its log `pre`, then the opening answering `b` with `bits`,
-then the rest (`RoundsReach.release`, whose trace ends at such a position). -/
 theorem release_past {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray} {k : ℕ}
     {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game Exchange} {pre : List Release} {i s n : ℕ}
     {b : ByteArray} {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)}
@@ -70,12 +42,6 @@ theorem release_past {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq 
   refine ⟨L, ?_⟩
   rw [hX, hL, hw]
 
-/-- **A stop's written coins are in the play's log, at an opening its fixed rounds pick, at any position past the
-stop**: at a position that keeps the invariant at the cuts `Ks₀`, where `StopsAt` says and not every cut is past,
-where each round's reading picks only openings the device serves, off the opening's empty class at `bits`, the play
-on the tape of any position past the position with `bits` written into its opening and consumed releases `bits` at an
-opening the rounds whose cuts the position fixes pick (`LoggedAt`; `RoundsReach.stop_logged`, whose trace ends at
-such a position). -/
 theorem stop_logged_past {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {Ks₀ : Fin R → DigestCut Claims.Msg g}
@@ -99,15 +65,11 @@ theorem stop_logged_past {P : Fin R → List Release → Frame → Prop} {rv : F
 
 end Past
 
-/-! ## A member's written coins in the log -/
-
 section Member
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} {D : ℕ → PosDecoders g σ R Reg}
   {M : ExecutionPhaseCoinMap g σ Ω R} {BL : ExecutionPhaseLinkHold} {B : ExecutionPhaseRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
 
-/-- **The stop after a member's session's end is where `StopsAt` says**, from a log and the close after it, where the
-stop its session starts at is and each round's reading picks only openings (`StopsAt.next` at each consumed stop). -/
 theorem MemberReach.stopsAt {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {i : ℕ}
@@ -119,16 +81,6 @@ theorem MemberReach.stopsAt {P : Fin R → List Release → Frame → Prop} {rv 
     rw [Pos.toStop_toStop]
     exact hq
 
-/-- **A member's written coins are in the play's log**: on the trace of the session of the member at place `i` from a
-position that keeps the invariant at the cuts `Ks₀`, whose stop is where `StopsAt` says and where not every cut is
-past, where each round's reading picks only openings the device serves, the member's decoders submit nothing at a stop
-that fixes no cut, the member's coin map writes the link points and a round's coins into a stop's opening as their
-bits (`bitsL`, `bitsOf`), and off the member's held-off events the opening's class at those bits is not empty: the
-session's outcome is the root decoded at its first stop, link points `pts`, the answered submissions' rounds in order
-and the member's proof files at its end; and the play on the tape of any position `r` past the trace's end (the
-position the last member's session ends at is one) releases `pts`' bits at an opening the rounds whose cuts the first
-stop fixes pick, and each answered submission's coins at an opening the rounds whose cuts its stop fixes pick
-(`firstStop_logged` and `RoundsReach.answers_logged`, at a member of a window). -/
 theorem MemberReach.logged {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
@@ -172,15 +124,10 @@ theorem MemberReach.logged {P : Fin R → List Release → Frame → Prop} {rv :
 
 end Member
 
-/-! ## The decoders' premise at each member, at where the walk stops -/
-
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
-/-- **The play's first stop is where `StopOf` says**, on any tape: from the empty log, the close after `σ`'s request
-and what the device releases, with every round live, where each round's reading picks only openings
-(`stopOf_firstStop`, at any readings and tape). -/
 theorem stopOf_rootStop {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ)
     (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n) :
     StopOf rd.round rd.reveal [] (finish (V.signer θ) θ F c σ.1) (fun _ => True)
@@ -191,23 +138,11 @@ theorem stopOf_rootStop {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c
   rw [e] at h
   exact h
 
-/-- **The play's first stop is where `StopsAt` says**, on any tape: from the empty log after `σ`'s request with every
-round live, where each round's reading picks only openings (`stopOf_rootStop`). -/
 theorem stopsAt_rootStop {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ)
     (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n) :
     StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 (Pos.root (roundCuts V θ F c rd) x).toStop :=
   ⟨[], _, fun _ => True, fun _ => rfl, stopOf_rootStop V θ F c rd σ x hP⟩
 
-/-- **The members' steps at a window, at where the walk stops**, at an invariant `I` of the widened coins, the position
-`r` the members' traces end at, a member's place and the position its session starts at: `I` holds at the play's
-start on the coin map's tape, whatever `r` (`start`); the session's trace of each member with a proof block in the
-sample, from a position `I` holds at that keeps the play's start and whose stop is where `StopsAt` says, ending at a
-position `q` that `r` is past, where `r` keeps the play's start and its tape's play the sampled verdict accepts,
-misses at no round and not at the record and `P` holds of, has `I` at the next place and the position past the stop
-after `q`, the session's closing round's, and writes a transcript verity-verify-proof `--zk` accepts at the member's `own`
-(`step`); and a member with no proof block in the sample, which has
-no statement and no session in the play, has `I` at the next place and the same position (`skip`). It is
-`MemberDecodes` with what every member's trace keeps handed to the step. -/
 structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
@@ -236,11 +171,6 @@ structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop
       P (CoinTape.run (V.game θ F c) σ r.tape) →
     ((W.extend M.widening).joint t).ended ω = true
 
-/-- **The decoders' premise at each member's session, at where the walk stops** (`MemberDecodes`): from the members'
-steps (`MemberSteps`) at an invariant `I`, it holds at `I` beside the play's start kept and `StopsAt` at the stop a
-member's session starts at, wherever each round's reading picks only openings. The play's start and where the walk
-stops are kept by every member's trace (`MemberReach.inv`, `MemberReach.stopsAt`), so `MemberReach.logged` applies at
-each member. -/
 theorem memberDecodes_of_stops (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)

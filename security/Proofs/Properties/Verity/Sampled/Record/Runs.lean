@@ -3,16 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Record.Facts
 public import Proofs.Flock.Claims.Sampling.Prefix
 
-/-!
-# Every checked unit's session is the record's one Flock session (`SessionRuns`)
-
-At the record's statement the verifier runs `SAMPLE_ROUNDS` sample rounds and the sample file round, then one session of
-verity-verify-proof `--zk` at the statement the sample file sets up (`prefixAt`: `SamplingDeploy.PrefixAt` with the sample file
-round's check `okAt`); there is no unit anywhere else (`eq_xOf_of_nPU`). Every unit's rounds are the session's, and
-`sessionOf` reads a view whose sample file round passed as the session's statement and the rounds after it, and one whose
-sample file round refused as `refused`, so `SessionRuns` is `SamplingDeploy.sessionRuns_prefix` at verity-verify-proof `--zk`
-against SHA-512 (`flockAt_sha512`).
--/
+/-! Every checked unit's session is the record's one Flock session (`SessionRuns`). -/
 
 @[expose] public section
 
@@ -23,7 +14,6 @@ open Claims Claims.Sampling
 variable (A : Live) (o : Own) (e : Ext)
 
 open Classical in
-/-- **The sample file round's check**, on the messages and coins so far: `sampleOk` at the sample file and the sampling coins. -/
 noncomputable def okAt (as : List Msg) (cs : List FlockDeploy.Coin) : Bool :=
   decide (sampleOk A o (as.getD SAMPLE_ROUNDS []) (cs.take SAMPLE_ROUNDS))
 
@@ -31,10 +21,6 @@ open Classical in
 theorem sampleOk_of_okAt {as : List Msg} {cs : List FlockDeploy.Coin} (h : okAt A o as cs = true) :
     sampleOk A o (as.getD SAMPLE_ROUNDS []) (cs.take SAMPLE_ROUNDS) :=
   of_decide_eq_true h
-
-/-! The record's fields at a statement `x`, by `rfl` only where `x` is a variable: at `xOf A o` itself,
-`ite_eq_left rfl` takes the branch, since unfolding the record there would evaluate the statement's bytes. The parse
-is `record_parse_eq`. -/
 
 theorem record_session (x : Msg) (u : ℕ) (v : Seen) :
     (record A o e).session x u v = if x = xOf A o then some (sessionOf A o v) else none := rfl
@@ -45,7 +31,6 @@ theorem flockV_next : (FlockDeploy.V true).next = FlockDeploy.next true := rfl
 
 theorem nums_fst (xS : Msg) : (Nums xS).1 = (FlockDeploy.V true).k xS := rfl
 
-/-- **Units are only at the record's statement**: elsewhere the statement doesn't parse. -/
 theorem eq_xOf_of_nPU {x : Msg} (hx : 0 < nPU (record A o e) x) : x = xOf A o := by
   by_contra h
   have hp : (record A o e).parse x = none := by
@@ -57,9 +42,6 @@ theorem record_session_xOf (u : ℕ) (v : Seen) : (record A o e).session (xOf A 
   (record_session A o e (xOf A o) u v).trans (ite_eq_left rfl)
 
 open Classical in
-/-- **The record's verifier is a prefix, then one session**: the sample rounds answer a coin, the sample file round answers
-`[]` where `okAt` passes and refuses elsewhere, and past it each round is verity-verify-proof `--zk`'s at the session's
-statement, with `kS` rounds where `okAt` passed (`numsOk`). -/
 theorem prefixAt :
     SamplingDeploy.PrefixAt FlockDeploy.sha512 (V A o) (FlockDeploy.V true) (xOf A o) (SAMPLE_ROUNDS + 1) (kS A o)
       (okAt A o) (sessStmt A o) where
@@ -93,8 +75,6 @@ theorem prefixAt :
     rw [Nat.add_sub_cancel, kS]
     exact h3
 
-/-- **`SessionRuns` at the record**: every checked unit's session is the record's one verity-verify-proof `--zk` session, on
-the rounds after the sample file round. -/
 theorem sessionRuns : SessionRuns FlockDeploy.sha512 (record A o e) :=
   SamplingDeploy.sessionRuns_prefix FlockDeploy.sha512 (record A o e) SamplingDeploy.flockAt_sha512
     (fun _ => SAMPLE_ROUNDS + 1) (fun _ => kS A o) (fun _ => okAt A o) (fun _ => sessStmt A o)

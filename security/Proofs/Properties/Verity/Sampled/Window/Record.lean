@@ -3,38 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Window.Streams
 public import Proofs.Properties.Verity.Sampled.RootB
 
-/-!
-# SPOT's coupling over a window: a session's moves are its record's
-
-A member's session's trace answers its rounds at releases of the one play's log (`Window/Answered.lean`), which the
-window's readings name as the `u`-th session's link and rep rounds (`Window/Sessions.lean`). This module reads what
-that trace decodes against the record the verifier read for that session, clause by clause of `MemberMovesOf`, as
-`RootB.lean`, `LinkPts.lean` and `MovesReach.lean` do at one session:
-
-* **The record of each session** (`sessionRecordAt`, `sentRecordAt`, `sessionReveal`): the `u`-th session's record
-  in what the prover sent, and what the play reveals for a slot of that session, the link's message or a rep round's
-  in that record, or, for its closing round, the session's evidence, the bytes its proof files are read from; at
-  session `0` the record is the one session's (`sentRecordAt_zero`).
-* **What the verifier's read of a session holds the device's log to** (`SessionRead`): at the `u`-th tree the log
-  opens, the tree's first opening is of its stream named the session's, answers the SHA-512 of the record's link
-  message and releases the record's link coins; each later opening of it is of a round the record gives its stream,
-  answers that round's digest and releases that round's coins; the log opens every round the record gives a stream;
-  each stream the record gives rounds of is a stream of the tree; the tree is the session's coin tree; each of
-  its openings asks for the count of coins the record gives there, a coin a 16 bytes of the link's points and a
-  round's `n`; and the tree's last opening is the session's closing round, the second opening of its stream named the
-  session's, answering the SHA-512 of the session's evidence. But for the closing round it is the several-session
-  form of what `MovesReach.lean` and `CountsLayout.lean` derive from the one-session read (`verdict_read`, `hans`,
-  `OpenedRecorded`, `keyAt_of_record`, `SetsUp.helloSpec_session`, `Trees.session_counted`), stated on the log
-  alone.
-* **A stop's messages off the misses** (`stop_modes_tape`): at a position that keeps the invariant, on a tape through
-  it that misses nowhere, a round fixed there decodes the message the play reveals for it, where the cuts are at the
-  bytes the release answers and the message has that SHA-512.
-* **The roots** (`session_rootB`, clause (ii)) and **the link points** (`session_pts`, clause (iii)) at a session's
-  first stop, and **an answered stop's message and round** (`session_stop_msg`, `session_stop_round`,
-  `session_answered`) and **the rep rounds**
-  (`session_reps`, clause (iv)): the rounds the session's answered stops submit on a rep of its one table, in order,
-  are the record's rounds of that stream (`session_stream_rounds`, `SessionRead.openedOf_le`).
--/
+/-! SPOT's coupling over a window: a session's moves are its record's. -/
 
 @[expose] public section
 
@@ -51,19 +20,11 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## A stop's messages, off the misses -/
-
-/-- **A later position's tape is a tape through the earlier one.** -/
 theorem _root_.Verity.Game.Pos.Le.through {β W κ : Type} {g : Game β} {σ : Strategy g} {q r : Pos g σ W κ}
     (h : q.Le r) : ∃ y, r.tape = q.back y := by
   obtain ⟨f, hf⟩ := h
   exact ⟨f r.x, hf r.x⟩
 
-/-- **Off the misses, a stop decodes the message the play reveals for its round**, on any tape through it
-(`RoundsReach.stop_modes_reveal`, at a tape and no trace): at a position `q` that keeps the invariant at the rounds'
-cuts, on a tape `z` through `q` that misses nowhere, where the cuts `q` fixes are at the bytes the release `r` of the
-play's log answers (`CutsAt`) and the play reveals for a round fixed there a message `w` whose SHA-512 is those
-bytes, `q` decodes `w` for that round. -/
 theorem stop_modes_tape {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R : ℕ}
     {rd : Reading R} {σ : Strategy (V.game θ F c)} {q : Pos (V.game θ F c) σ Claims.Msg (Fin R)}
     (hq : q.Inv (roundCuts V θ F c rd)) {z : CoinTape (V.game θ F c) σ} (hz : ∃ y, z = q.back y)
@@ -84,8 +45,6 @@ theorem stop_modes_tape {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} 
   by_contra hne
   exact hn.1 i ((DigestCut.missOn_iff _ _ _).2 ⟨w, hrev, hne⟩)
 
-/-- **A stop whose fixed rounds all pick one frame decodes a message for one round only**, at a window's readings
-of distinct tables, one at least (`executionPhaseReadingAt_unique`). -/
 theorem executionPhaseStop_modes {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup) (hT : 0 < tables.size)
     {per : ℕ} (hper : 0 < per) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {g : Game Exchange} {σ : Strategy g}
@@ -96,10 +55,6 @@ theorem executionPhaseStop_modes {R : ℕ} {tables : Array String} (ht : tables.
   Pos.modes_eq_none (Bool.eq_false_iff.2 fun h =>
     hj' (executionPhaseReadingAt_unique ht hT hper reveal record recordDigest (hall j' h) hP))
 
-/-- **A session's first stop is at its link's opening**: at a window's readings of distinct tables, where the rounds
-the stop `q` fixes pick a release after the log `L₀` (`LoggedAfter`) and each round picking after `L₀` is the link's
-of session `u`, that release is an opening of a tree `L₀` didn't open, after `L₀` opened `u` trees, and `q` decodes
-a message for the link's round only. -/
 theorem LoggedAfter.session_link {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup)
     (hT : 0 < tables.size) {per : ℕ} (hper : 0 < per) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {g : Game Exchange} {σ : Strategy g}
@@ -119,12 +74,6 @@ theorem LoggedAfter.session_link {R : ℕ} {tables : Array String} (ht : tables.
   exact ⟨j, _, _, _, b, L, hjK, executionPhaseStop_modes ht hT hper reveal record recordDigest hall hj, hjl, hju, hlog,
     hni, hlen⟩
 
-/-- **An answered stop's slot, at a session of a window** (`LoggedAfter.slot`): at a window's readings of distinct
-tables, no fewer than the decoders' `J`, and the decoders at its layout, a stop `q` that decodes the submission `sub`
-and whose fixed rounds pick a release after the log `pre` fixes a rep round `j` of the first table, at which it
-decodes the message `sub` is made of; the release is an opening the device serves of the tree `pre` opened at `j`'s
-session's place, of its stream named that table's rep, after as many openings of it as the round's number. The
-session's closing round, past the tables, decodes no submission. -/
 theorem LoggedAfter.session_slot {R J : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) {tables : Array String}
     (ht : tables.toList.Nodup) (hJ : J ≤ tables.size) {per : ℕ} (hper : 0 < per)
     (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
@@ -156,9 +105,6 @@ theorem LoggedAfter.session_slot {R J : ℕ} {Reg : Type} (reg : Option Claims.M
   rw [slotStream_lt htT r] at hname
   exact ⟨ht', r, k, w, j, _, _, _, b, L', hLj', hj, hw, hs, hsv, hu, hname, hk, he, hP⟩
 
-/-- **A window's rounds have a slot for each of a session's rep streams' first `K` rounds**, wherever each session
-has at least `2K + 2` rounds and the window has `u + 1` sessions' rounds (`Live.layout_covers`, at a session of a
-window). -/
 theorem executionPhase_covers (T : ℕ) {R per u K : ℕ} (hper : 2 * K + 2 ≤ per) (hu : (u + 1) * per ≤ R) (ρ : Fin 2) :
     ∀ k < K, ∃ j : Fin R, j.val / per = u ∧ slotOf T per (j.val % per) = .rep 0 ρ k := fun k hk => by
   have hρ := ρ.isLt
@@ -175,8 +121,6 @@ theorem executionPhase_covers (T : ℕ) {R per u K : ℕ} (hper : 2 * K + 2 ≤ 
     rw [Nat.mul_add_mod, Nat.mod_eq_of_lt hlt, slotOf_of_ne T hne]
     exact slotAt_rep k ρ
 
-/-- **A window's rounds have each session's closing round**, at its last place, wherever the window has `u + 1`
-sessions' rounds. -/
 theorem executionPhase_close (T : ℕ) {R per u : ℕ} (hper : 0 < per) (hu : (u + 1) * per ≤ R) :
     ∃ j : Fin R, j.val / per = u ∧ slotOf T per (j.val % per) = closeSlot T := by
   have hlt : per - 1 < per := by omega
@@ -190,30 +134,18 @@ theorem executionPhase_close (T : ℕ) {R per u : ℕ} (hper : 0 < per) (hu : (u
     rw [Nat.mul_add_mod, Nat.mod_eq_of_lt hlt]
     exact slotOf_last T (by omega)
 
-/-- One table is a table. -/
 theorem one_table_pos (tb : String) : 0 < (#[tb] : Array String).size := Nat.zero_lt_one
 
-/-! ## The record of each session -/
-
-/-- **The `u`-th session's record as the verifier reads it** on the blobs `bs`: the blob the evidence's `u`-th
-session names as its record, as text (`sessionRecord`, at each session). -/
 def sessionRecordAt (u : ℕ) (e : _root_.Spot.OneStageZk.Evidence) (bs : _root_.Core.Blobs) : Option String :=
   e.sessions[u]?.bind fun s => (bs.get s.record s!"session {s.name}'s record").toOption.bind String.fromUTF8?
 
-/-- The first session's record is the one session's. -/
 theorem sessionRecordAt_zero : sessionRecordAt 0 = sessionRecord := rfl
 
-/-- **The `u`-th session's record the verifier reads in what the prover sent**, on the blobs sent (`sentRecord`, at
-each session). -/
 def sentRecordAt (u : ℕ) (s : Verity.Sent) : Option String :=
   (caseOf s).toOption.bind fun x => sessionRecordAt u x.2.2 (_root_.Core.Blobs.ofArray s.blobs)
 
-/-- The first session's record in what the prover sent is the one session's. -/
 theorem sentRecordAt_zero : sentRecordAt 0 = sentRecord := rfl
 
-/-- **What the play reveals for a slot of the `u`-th session** (`slotReveal`, at each session): the link's message
-of that session's record, the round's of the table's rep stream in it, or, at a slot past the tables, the session's
-closing round's, the session's evidence (`evidence`): the bytes its proof files are read from. -/
 def sessionReveal (tables : Array String) (evidence : ℕ → Exchange → Option Claims.Msg) (u : ℕ) :
     Slot → Exchange → Option Claims.Msg
   | .link => fun o => (sentRecordAt u o.sent).bind (linkMsg · tables)
@@ -238,15 +170,10 @@ theorem sessionReveal_rep (tables : Array String) (evidence : ℕ → Exchange �
     else tables[t]?.bind fun a => (sentRecordAt u o.sent).bind (roundMsg · (repStreamName a r.val) k)) = _
   rw [if_neg hne, ha, Option.bind_some]
 
-/-- What the play reveals for a session's closing round is the session's evidence. -/
 theorem sessionReveal_close (tables : Array String) (evidence : ℕ → Exchange → Option Claims.Msg) (u : ℕ)
     (o : Exchange) : sessionReveal tables evidence u (closeSlot tables.size) o = evidence u o :=
   if_pos rfl
 
-/-! ## What the verifier's read of a session holds the device's log to -/
-
-/-- **Where an opening of a session's tree is among the trees a log has opened**: an opening of the `u`-th tree a
-log opens is the first of that tree, after the log has opened `u` trees, or follows a log whose `u`-th tree it is. -/
 theorem opened_at_or_new {Lg L₁ L₂ : List Release} {x : Release} {i s n u : ℕ} (he : Lg = L₁ ++ x :: L₂)
     (hx : x.frame = .opening i s n) (hτ : (openedTrees Lg)[u]? = some i) :
     (i ∉ openedTrees L₁ ∧ (openedTrees L₁).length = u) ∨ (openedTrees L₁)[u]? = some i := by
@@ -263,23 +190,6 @@ theorem opened_at_or_new {Lg L₁ L₂ : List Release} {x : Release} {i s n u : 
       rw [hE, List.getElem?_append_right (Nat.le_refl _), Nat.sub_self, List.getElem?_cons_zero]
     exact Or.inl ⟨hmem, nodup_getElem?_inj (openedTrees_nodup Lg) h hτ⟩
 
-/-- **What the verifier's read of a session holds the device's log to, less the closing round**, at the `u`-th tree
-the log `Lg` opens, the session's record `text`, parsed as `J` and decoded as `sess`, and the session's tables:
-
-* `coins`: each round the record gives a stream gives coins;
-* `link`: the tree's first opening is of its stream named the session's, answers the SHA-512 of the record's link
-  message, and releases the record's link coins where the record gives any;
-* `round`: each later opening of the tree, of a stream other than the session's, is of a round the record gives that
-  stream, answers that round's digest, and releases that round's coins where the record gives any;
-* `full`: the log opens every round the record gives a stream of the tree;
-* `key`: each stream the record gives rounds of is a stream of the tree;
-* `tree`: the tree is sampled with the session's coin tree;
-* `linkCount`: the tree's first opening asks for a coin a 16 bytes of the record's link coins;
-* `roundCount`: each later opening of the tree, of a stream other than the session's, asks for the `n` of the round
-  the record gives there.
-
-No field reads an opening of the tree's stream named the session's after its first, so none changes where the log
-drops one (`SessionOpens.drop_iff`, `Window/Closing.lean`). -/
 structure SessionOpens (Lg : List Release) (tables : Array String) (u : ℕ) (text : String) (J : Json)
     (sess : Flock.RunRecord) : Prop where
   parse : Flock.JsonParse.parse text = .ok J
@@ -310,10 +220,6 @@ structure SessionOpens (Lg : List Release) (tables : Array String) (u : ℕ) (te
     (name == TREE_SESSION) = false → ∀ st, sess.streams.find? (·.name == name) = some st →
       openedOf L₁ i s < st.rounds.size → n = st.rounds[openedOf L₁ i s]!.n
 
-/-- **What the verifier's read of a session holds the device's log to**: `SessionOpens`, and the session's closing
-round at its evidence `w`, the bytes its proof files are read from (`close`): the tree has an opening of its stream
-named the session's after one opening of that stream, the link's; it answers the SHA-512 of the session's evidence;
-and no opening of the tree follows it. -/
 structure SessionRead (Lg : List Release) (tables : Array String) (u : ℕ) (text : String) (J : Json)
     (sess : Flock.RunRecord) (w : Claims.Msg) : Prop extends SessionOpens Lg tables u text J sess where
   close : ∀ i, (openedTrees Lg)[u]? = some i → ∃ Lc x L₂ s n, Lg = Lc ++ x :: L₂ ∧ x.frame = .opening i s n ∧
@@ -322,8 +228,6 @@ structure SessionRead (Lg : List Release) (tables : Array String) (u : ℕ) (tex
     sha512Msg w = x.answers.data.toList ∧
     ∀ L₁ y L₃ s' n', Lg = L₁ ++ y :: L₃ → y.frame = .opening i s' n' → L₁.length ≤ Lc.length
 
-/-- **A log a session's read holds opens each rep stream of the session's tree at most the rounds the record gives
-it** (`openedOf_le_recordRounds`, at a session of a window). -/
 theorem SessionRead.openedOf_le {Lg : List Release} {tables : Array String} {u : ℕ} {text : String} {J : Json}
     {sess : Flock.RunRecord} {w : Claims.Msg} (hR : SessionRead Lg tables u text J sess w) (hS : LogServed Lg)
     {i s : ℕ}
@@ -358,15 +262,6 @@ theorem SessionRead.openedOf_le {Lg : List Release} {tables : Array String} {u :
     · rw [ite_eq_right hr]
       exact ih (r :: post) he
 
-/-! ## The roots and the link points -/
-
-/-- **The roots decoded at a session's first stop are its record's `root_B`** (`MemberMovesOf`'s roots;
-`firstStop_rootB`, at a session of a window): at a window's readings at one table and the decoders at its layout, at
-a position `q` that keeps the invariant, on a tape through it off the misses, where the rounds `q` fixes pick a
-release after the log `L₀` (`LoggedAfter`), each round picking after `L₀` is the link's of session `u`, the cuts
-`q` fixes are at the bytes that release answers (`CutsAt`), and the verifier's read holds the play's log to session
-`u`'s record (`SessionRead`), the roots the decoders read at `q` are the `root_B` of the session the record decodes
-to. -/
 theorem session_rootB {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R : ℕ} {Reg : Type}
     (reg : Option Claims.Msg → Reg) {tb : String} {per : ℕ} (hper : 0 < per)
     (ev : ℕ → Exchange → Option Claims.Msg) (record₀ : Exchange → Option Claims.Msg)
@@ -402,11 +297,6 @@ theorem session_rootB {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c
   rw [ht]
   exact hw
 
-/-- **The link points the device's log shows at a session's first stop are its record's** (`MemberMovesOf`'s link
-points; `link_pts`, at a session of a window): at a window's readings of distinct tables, where the rounds the stop
-`q` fixes pick a release after the log `L₀` that released `linkBits fieldEnc pts`, each round picking after `L₀` is
-the link's of session `u`, and the verifier's read holds the log to session `u`'s record (`SessionRead`) decoded at
-a session of two link points of some coordinates, the session's link points read as `pts`. -/
 theorem session_pts {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup) (hT : 0 < tables.size) {per : ℕ}
     (hper : 0 < per) (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) {g : Game Exchange} {σ : Strategy g} {q : Pos g σ Claims.Msg (Fin R)}
@@ -425,15 +315,6 @@ theorem session_pts {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup)
     (hcoins (link_bits_ne hd hR.parse hp2 hpos hb')).symm
   exact pts_of_record hd hR.parse hp2 hb' hbits
 
-/-! ## The rep rounds, stop by stop -/
-
-/-- **An answered stop's message is its session's record's** (`stop_round`'s message, at a session of a window): at a
-window's readings at one table, at a position `q` that keeps the invariant, on a tape through it off the misses,
-where `q` fixes round `j`'s cut, round `k` of rep `ρ` of session `u`, at the most likely message `w`, and the
-device's log has an opening of the `u`-th tree's stream `s`, named that rep's, after the log `m` at which the cuts
-`q` fixes are at the bytes that opening answers and which opened that stream `k` times: where the verifier's read
-holds the log to session `u`'s record (`SessionRead`) and `Flock.Zk.verify` accepts the record under retained rounds
-and SHA-512 digests, the record's stream so named has round `k`, whose message is `w`. -/
 theorem session_stop_msg {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R : ℕ}
     {tb : String} (per : ℕ) (ev : ℕ → Exchange → Option Claims.Msg) (record₀ : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) {rd : Reading R}
@@ -496,9 +377,6 @@ theorem session_stop_msg {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray}
   rw [hwb]
   exact ⟨st, hst', hkR, hmsg⟩
 
-/-- **An answered stop's round is its session's record's** (`stop_round`, at a session of a window): at
-`session_stop_msg`'s stop, where the opening released the coins `cs` of `w`'s count, the record's stream named the
-rep's has round `k`, and it is the round `roundOf` makes of `w` and `cs`. -/
 theorem session_stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R : ℕ}
     {tb : String} (per : ℕ) (ev : ℕ → Exchange → Option Claims.Msg) (record₀ : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) {rd : Reading R}
@@ -563,14 +441,6 @@ theorem session_stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
   rw [e, hB', hS', hN', ← hcoins, ← hdg]
   all_goals rfl
 
-/-- **An answered stop of a session submits its record's round** (`LoggedAfter.session_slot`, `session_stop_round`):
-at a window's readings at one table and the decoders at its layout, at a position `q` that keeps the invariant, on a
-tape through it off the misses, where `q` decodes the submission `sub`, the rounds it fixes pick a release after the
-log `m` that released `roundBits fieldEnc cs`, each round picking after `m` is of session `u`, the cuts `q` fixes are
-at the bytes that release answers, and the verifier's read and the record are as `session_stop_round` takes them:
-the release is an opening the device serves of the `u`-th tree's stream named `sub`'s rep's, a rep round of session
-`u` picks it, and the round `roundOf` makes of `sub` and `cs` is the record's round of that stream at the count of
-its openings in `m`. -/
 theorem session_answered {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R J : ℕ}
     {Reg : Type} (reg : Option Claims.Msg → Reg) (hJ : J ≤ 1) {tb : String} {per : ℕ} (hper : 0 < per)
     (ev : ℕ → Exchange → Option Claims.Msg) (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg)
@@ -609,19 +479,6 @@ theorem session_answered {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray}
   subst hk
   exact ⟨j, _, i, s, n, _, L', hju, hLj, hP, he, rfl, hsv, hu', hname', st, hst, hkR, hround⟩
 
-/-! ## The rep rounds -/
-
-/-- **A session's trace's rounds on a rep stream of its table are its record's** (`MemberMovesOf`'s rounds;
-`rep_rounds`, at a session of a window): at a window's readings at one table, of at least `1026` rounds a session
-and `u + 1` sessions' rounds, and the decoders at its layout, where the session's answered stops `as`, each keeping
-the invariant with the tape `z` through it, each release their round's coins after the logs `ms`, each longer than
-the one before (`MemberReach.order`, at the coin map that writes a round's coins as `roundBits fieldEnc`); `z`
-misses nowhere; each round picking after one of `ms` is of session `u`, every release a round of session `u` picks
-is after `L₀` or one of `ms`, or is its closing round's, and only the link's round picks after `L₀`; the log opens a
-`u`-th tree and its trees
-name their streams distinctly; and the verifier's read holds the log to session `u`'s record (`SessionRead`), which
-`Flock.Zk.verify` accepts under retained rounds and SHA-512 digests: the rounds the stops submit on the table's rep
-`ρ`, in order, are the record's rounds of that stream (`repRounds`). -/
 theorem session_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R J : ℕ}
     {Reg : Type} (reg : Option Claims.Msg → Reg) (hJ : J ≤ 1) {tb : String} {per : ℕ} (hper : 1026 ≤ per)
     (ev : ℕ → Exchange → Option Claims.Msg) (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg)

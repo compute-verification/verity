@@ -4,31 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Counts
 public import Proofs.Properties.Verity.Sampled.Window.Closing
 public import Proofs.Properties.Verity.Sampled.MemberForm.Order
 
-/-!
-# SPOT's coupling over a window: the members' steps, from each session's read
-
-`MemberSteps` at a window whose members each have one table, at the sessions' readings (`sessionReading`: the
-`u`-th session's rounds are the `u`-th tree's, its link's, its rep rounds' and its closing round's) and the sessions'
-decoders (`sessionDecoders`: the roots and a round's submission as one session's, and the proof files decoded from the
-evidence the session's closing round reveals).
-
-* **The sessions in the sample's order** (`sampledBefore`): the session of the member at place `i` is the one after as
-  many sessions as members before `i` have a proof block in the sample.
-* **What the verdict gives at a window** (`ExecutionPhaseSessions`, the premise): at the sample `S`, each tree the log opens
-  names its streams once (`ExecutionPhaseSessions.specs`), an opening of a tree opened before is of the last tree opened
-  (`ExecutionPhaseSessions.order`), and the log opens at most as many trees as members `S` samples; and each sampled member has a
-  session's verdict at its statement whose record carries the member's part of `S`, is the record sent for its
-  session, decodes to what the verifier's read holds the log to at that session (`SessionRead`), and whose proof files
-  are decoded from the evidence its closing round reveals.
-* **A session's first stop and answered stops** (`link_stop`, `answered_count`): the first stop of a session that
-  has a tree is at an opening asking for both link points' coordinates, and an answered stop's opening asks for its
-  submission's count, so a trace off the empty classes at their counts is off the empty classes.
-* **A member's step** (`session_step`): on the member's session's trace, the stops are its session's in the log's
-  order, the stop after its end is its closing round's, the walk goes on with one more session done, and the
-  session's roots, link points, rep rounds and proof files are its record's and its verdict's.
-* **The members' steps** (`memberSteps_of_sessions`): `MemberSteps` at the invariant `StepInv`, that the walk has
-  answered exactly the sessions before the member's.
--/
+/-! SPOT's coupling over a window: the members' steps, from each session's read. -/
 
 @[expose] public section
 
@@ -46,20 +22,14 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## A member's rounds -/
-
-/-- A stream of a member's session's coin tree holds `2^9` rounds. -/
 theorem Member.roundsLog_eq {nJ : ℕ} (m : Member nJ) : m.coinSpec.roundsLog = 9 := rfl
 
-/-- A member's session has 1026 rounds: its link's, its two rep streams' 512 each, and its closing round. -/
 theorem Member.rounds_eq {nJ : ℕ} (m : Member nJ) : m.rounds = 1026 :=
   (congrArg (fun k => 2 * 2 ^ k + 2) m.roundsLog_eq).trans (by decide)
 
-/-- A member's session has 1024 live rounds. -/
 theorem Member.N_eq {nJ : ℕ} (m : Member nJ) : m.N = 1024 :=
   (congrArg (fun k => 2 * 2 ^ k) m.roundsLog_eq).trans (by decide)
 
-/-- Flock's member's live rounds are the member's. -/
 theorem Member.toV5_N {nJ : ℕ} (m : Member nJ) (t : ℕ) : (m.toV5 t).N = 1024 := m.N_eq
 
 theorem sum_rounds {nJ : ℕ} : ∀ l : List (Member nJ), (l.map Member.rounds).sum = l.length * 1026
@@ -68,10 +38,7 @@ theorem sum_rounds {nJ : ℕ} : ∀ l : List (Member nJ), (l.map Member.rounds).
     rw [List.map_cons, List.sum_cons, sum_rounds l, List.length_cons, m.rounds_eq]
     omega
 
-/-- **A window's rounds are 1026 a member.** -/
 theorem ExecutionPhase.rounds_eq (W : ExecutionPhase) : W.rounds = W.ms.length * 1026 := sum_rounds W.ms
-
-/-! ## The sessions in the sample's order -/
 
 theorem countP_take_zero {γ : Type _} (p : γ → Bool) (l : List γ) : (l.take 0).countP p = 0 := by simp
 
@@ -93,7 +60,6 @@ theorem countP_take_succ_none {γ : Type _} (p : γ → Bool) {l : List γ} {i :
 theorem countP_take_le {γ : Type _} (p : γ → Bool) (l : List γ) (i : ℕ) : (l.take i).countP p ≤ i :=
   Nat.le_trans List.countP_le_length (by rw [List.length_take]; exact Nat.min_le_left _ _)
 
-/-- **Each count below the count of a prefix is the count before one of its members `p` holds of.** -/
 theorem countP_take_exists {γ : Type _} (p : γ → Bool) (l : List γ) : ∀ n v, v < (l.take n).countP p →
     ∃ i a, l[i]? = some a ∧ p a = true ∧ (l.take i).countP p = v
   | 0, v, h => by
@@ -122,12 +88,10 @@ noncomputable def sampledBefore {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (
 theorem sampledBefore_zero {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) : sampledBefore ms S 0 = 0 :=
   countP_take_zero _ ms
 
-/-- A member with a proof block in the sample has a session. -/
 theorem sampledBefore_succ_of_sampled {nJ : ℕ} {ms : List (Member nJ)} {S : Finset (Fin nJ)} {i : ℕ} {m : Member nJ}
     (h : ms[i]? = some m) (hd : (m.part S).Nonempty) : sampledBefore ms S (i + 1) = sampledBefore ms S i + 1 :=
   countP_take_succ_pos _ h (@decide_eq_true _ (Classical.propDecidable _) hd)
 
-/-- A member with no proof block in the sample has no session. -/
 theorem sampledBefore_succ_of_not {nJ : ℕ} {ms : List (Member nJ)} {S : Finset (Fin nJ)} {i : ℕ} {m : Member nJ}
     (h : ms[i]? = some m) (hd : ¬ (m.part S).Nonempty) : sampledBefore ms S (i + 1) = sampledBefore ms S i :=
   countP_take_succ_neg _ h fun hp => hd (@of_decide_eq_true _ (Classical.propDecidable _) hp)
@@ -135,8 +99,6 @@ theorem sampledBefore_succ_of_not {nJ : ℕ} {ms : List (Member nJ)} {S : Finset
 theorem sampledBefore_le {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) (i : ℕ) : sampledBefore ms S i ≤ i :=
   countP_take_le _ ms i
 
-/-- **Each session before a place is a sampled member's**: the session after `v` others, of fewer than the sessions
-before place `n`, is that of a member with a proof block in the sample that `v` sessions come before. -/
 theorem sampledBefore_exists {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) (n v : ℕ)
     (h : v < sampledBefore ms S n) :
     ∃ i m, ms[i]? = some m ∧ (m.part S).Nonempty ∧ sampledBefore ms S i = v := by
@@ -154,25 +116,15 @@ theorem forall₂_right_mem {γ : Type _} {δ : Type _} {Rl : γ → δ → Prop
     · obtain ⟨a, ha, hr⟩ := ih hb
       exact ⟨a, List.mem_cons_of_mem _ ha, hr⟩
 
-/-! ## The sessions' readings and decoders -/
-
-/-- **The readings of a window's sessions**, each of one table `tb` and 1026 rounds: round `j` is of session
-`j / 1026`, at the slot at place `j % 1026` (`executionPhaseReadingAt`), and the play reveals for it the session's record's
-message at that slot, or at the closing round's the session's evidence `ev` (`sessionReveal`). -/
 abbrev sessionReading (R : ℕ) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
     (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) : Reading R :=
   executionPhaseReadingAt #[tb] 1026 (sessionReveal #[tb] ev) record₀ recordDigest
 
-/-- **The proof files a session's decoders read at the position its trace ends at**: the files `filesDec` decodes
-from the most likely message of a closing round the next stop fixes, the session's evidence. -/
 noncomputable def closeFiles {g : Game Exchange} {σ : Strategy g} {R : ℕ}
     (filesDec : Claims.Msg → Array ByteArray) (q : Pos g σ Claims.Msg (Fin R)) : Array ByteArray :=
   (((List.finRange R).findSome? fun j => if j.val % 1026 + 1 = 1026 then q.toStop.modes j else none).map
     filesDec).getD #[]
 
-/-- **The decoders of a session of a window**, each of one table `tb` and 1026 rounds: the registration by `reg`,
-`Commit`'s roots and a round's submission as one session's at the session's slots (`decodersAt`), and the proof files
-decoded from the evidence its closing round reveals (`closeFiles`). -/
 noncomputable def sessionDecoders {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Type}
     (reg : Option Claims.Msg → Reg) (tb : String) (filesDec : Claims.Msg → Array ByteArray) :
     PosDecoders g σ R Reg where
@@ -181,8 +133,6 @@ noncomputable def sessionDecoders {g : Game Exchange} {σ : Strategy g} {R : ℕ
   sub := (decodersAt reg fun j : Fin R => slotOf (#[tb] : Array String).size 1026 (j.val % 1026)).sub
   files := closeFiles filesDec
 
-/-- **The proof files at a stop that fixes one closing round**: where the stop after `q` fixes round `jc`, a closing
-round, with the most likely message `w`, and no other round, the proof files are those `filesDec` decodes from `w`. -/
 theorem closeFiles_eq {g : Game Exchange} {σ : Strategy g} {R : ℕ} (filesDec : Claims.Msg → Array ByteArray)
     {q : Pos g σ Claims.Msg (Fin R)} {jc : Fin R} {w : Claims.Msg} (hjc : jc.val % 1026 + 1 = 1026)
     (hw : q.toStop.modes jc = some w) (hs : ∀ j, j ≠ jc → q.toStop.modes j = none) :
@@ -198,18 +148,11 @@ theorem closeFiles_eq {g : Game Exchange} {σ : Strategy g} {R : ℕ} (filesDec 
   rw [h1]
   rfl
 
-/-! ## What the verdict gives at a window -/
-
-/-- **A window whose members each have one table, named `tb`, with hm96-sha512 rows.** -/
 structure MembersAt (W : ExecutionPhase) (tb : String) : Prop where
   count : ∀ m ∈ W.ms, m.I.count = 1
   rows : ∀ m ∈ W.ms, m.I.tags.hm96Rows = true
   table : ∀ m ∈ W.ms, m.I.tags.table = tb
 
-/-- **What a session's verdict and the verifier's read give at session `v`** of the play `x`, at one table `tb`: the
-record sent for the session is `text`, the verifier's read holds the log to it at the evidence `w₀` (`SessionRead`),
-it decodes at `spec` to `sess`, verity-verify-proof `--zk` accepts it with the proof files `proofs`, and `spec` is a
-session of the one table `tb`, `Σ` a SHA-512 digest, rounds retained, two link points and SHA-512 round digests. -/
 structure SessionSpecAt (x : Exchange) (tb : String) (v : ℕ) (text : String) (spec : Flock.SessionSpec)
     (tabs : Array Flock.Setup) (proofs : Array ByteArray) (sess : Flock.RunRecord) (J : Json) (w₀ : Claims.Msg) :
     Prop where
@@ -224,13 +167,6 @@ structure SessionSpecAt (x : Exchange) (tb : String) (v : ℕ) (text : String) (
   sha512 : spec.sha512Digests = true
   dg : spec.dg = Flock.Sha512.hash
 
-/-- **What the verdict gives at a window**, at the sample `S` and the play `x`: each tree the log opens names its
-streams once (`specs`), and an opening of a tree opened before is of the last tree opened (`order`); the log opens at
-most as many trees as members have a proof block in `S` (`trees`); and each member `m` with a proof block in `S`, at
-place `i`, has a session's verdict (`SessionVerdict`) at a statement that is `m`'s whose record carries `m`'s part of
-`S` as its sample, is the record sent for the session after as many sessions as sampled members come before `m`,
-decodes to what the verifier's read holds the log to at that session, a tree the log opens, and whose proof files
-`filesDec` decodes from the evidence `ev` the session's closing round reveals (`session`). -/
 structure ExecutionPhaseSessions (W : ExecutionPhase) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray) (S : Finset (Fin W.nJ)) (x : Exchange) : Prop where
   specs : ∀ sp ∈ helloSpecs x.log, sp.streams.toList.Nodup
@@ -248,8 +184,6 @@ structure ExecutionPhaseSessions (W : ExecutionPhase) (tb : String) (ev : ℕ �
       (openedTrees x.log)[sampledBefore W.ms S i]? = some τ ∧
       ev (sampledBefore W.ms S i) x = some w ∧ filesDec w = proofs
 
-/-- **A sampled member's session, with the session `--zk` sets up at the member**: `ExecutionPhaseSessions.session` with the
-session's shape at a member of one table (`Member.spec_at`). -/
 theorem ExecutionPhaseSessions.specAt {W : ExecutionPhase} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
     {filesDec : Claims.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
     (h : ExecutionPhaseSessions W tb ev filesDec S x) (hMA : MembersAt W tb) {i : ℕ} {m : Member W.nJ}
@@ -273,8 +207,6 @@ theorem ExecutionPhaseSessions.specAt {W : ExecutionPhase} {tb : String} {ev : �
     ⟨hsent, hread, hdec, hv.verify, htab.trans (congrArg (fun t => #[t]) (hMA.table m hmem)), hsig, hret, hpts,
       h512, hdg⟩, hτ, hev, hfd⟩
 
-/-- **Every tree the log opens is a sampled member's session's**, with its verdict's read: the log opens at most as
-many trees as the sample samples members, and each count below that is the sessions before a sampled member. -/
 theorem ExecutionPhaseSessions.all {W : ExecutionPhase} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
     {filesDec : Claims.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
     (h : ExecutionPhaseSessions W tb ev filesDec S x) (hMA : MembersAt W tb) :
@@ -289,16 +221,6 @@ theorem ExecutionPhaseSessions.all {W : ExecutionPhase} {tb : String} {ev : ℕ 
   rw [hdv] at hA
   exact ⟨record, spec, tabs, proofs, sess, J, w, hA⟩
 
-/-! ## A session's first stop and answered stops -/
-
-/-- **A session's first stop is at its link's opening**: at a stop where `StopOf` says, with the releases after the
-logs `done` answered and those the picks of the sessions before the `u`-th (`SessDone`), in a log that opens more
-than `u` trees and that the verifier's read holds to session `u`'s record decoded at a session of two link points,
-not every cut is past and every description of the stop's opening asks for both link points' coordinates. The play
-doesn't end at the stop: every pick would be answered, but the `u`-th tree's link's isn't (`SessDone.not_all`). The
-stop's release is the first pick not answered, so the link's of session `u` (`SessDone.first_stop`), an opening of a
-tree not opened before after `u` trees (`SessionPicks.link`), which asks for the link points' coordinates
-(`SessionRead.link_n`). -/
 theorem link_stop {g : Game Exchange} {σ : Strategy g} {R : ℕ} {P : Fin R → List Release → Frame → Prop}
     {rv : Fin R → Exchange → Option Claims.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
     {c rq : ByteArray} (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
@@ -342,11 +264,6 @@ theorem link_stop {g : Game Exchange} {σ : Strategy g} {R : ℕ} {P : Fin R →
       cases h1
     · exact hR.link_n hd hp2 he hx hni (hc.trans hsu)
 
-/-- **An answered stop's opening asks for its submission's count**: at a stop of the sessions' readings where
-`StopOf` says, that decodes the submission `s`, on a tape through it off the misses whose play's every opened tree
-is a session's with its verdict's read (`SessionSpecAt`), every description of the stop's opening asks for `s.n`
-coins. The stop's release is a rep round's of a session (`LoggedAfter.session_slot`), which asks for its message's
-count (`session_stop_count`). -/
 theorem answered_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R J : ℕ}
     {Reg : Type} (reg : Option Claims.Msg → Reg) (hJ : J ≤ 1) {tb : String}
     (ev : ℕ → Exchange → Option Claims.Msg) (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg)
@@ -389,25 +306,6 @@ theorem answered_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
     intro o'
     exact (hcnt o').trans (hn1.symm.trans (hcount.trans (congrArg SubmitJ.n hsa).symm))
 
-/-! ## A member's step -/
-
-/-- **A member's step, at its session's read**: on the trace of the session of the member `m` at place `i`, off the
-empty classes at their counts, from a position where the walk stops where `StopOf` says with the picks of the
-sessions before the `u`-th answered (`Walked`, `SessDone`), to a position `q` that `r` is past, where `r`'s tape
-misses nowhere, its play's log opens trees in order and names each tree's streams once, every opened tree is a
-session's with its verdict's read, and the `u`-th is the member's (`SessionSpecAt` at its record, with the evidence
-its closing round reveals decoding to its proof files): the walk from past the stop after `q` stops where `StopOf`
-says with the picks of the sessions before the `u + 1`-th answered, and the session's outcome's roots, link points,
-rep rounds and proof files are the record's and the verdict's.
-
-The trace is off the empty classes (`link_stop`, `answered_count`), so its stops are in the log in order
-(`MemberReach.order`): the first is session `u`'s link's (`SessDone.first_stop`) and each answered one a rep
-round's of session `u` (`SessDone.rep_stop`). The stop after `q` is session `u`'s closing round's
-(`SessDone.close_stop`): the trace answered the session's 1024 live rounds, which with the link's are all its
-rounds but the closing one (`covers_of_card`), or ended at a stop the decoders submit nothing at, which a rep
-round's isn't. So the session's picks are all answered past it (`SessDone.closed`), the closing stop's most likely
-message is the session's evidence (`stop_modes_tape`), and the roots, link points and rep rounds are the record's
-(`session_rootB`, `session_pts`, `session_reps`). -/
 theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R nJ : ℕ} {Ω : Type}
     (reg : Option Claims.Msg → ByteArray) {tb : String} (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray) (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg)
@@ -464,7 +362,6 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
     (List.getElem?_eq_some_iff.1 hτ).1
   have hu1 : (u + 1) * 1026 ≤ R := (Nat.mul_le_mul_right 1026 (Nat.succ_le_of_lt hul)).trans hTr
   have hJ : memberTabs S Rg (m.toV5 t) ≤ 1 := (m.tabs_eq t S Rg).le
-  -- the trace is off the empty classes
   obtain ⟨hK, hcntL⟩ := link_stop hP hPS hpi' hf hSO hzp hW hSP hDn hul hA.read hA.decode hA.points
   have hmr' : MemberReach (fun _ => sessionDecoders reg tb filesDec) M
       (fun _ _ => linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
@@ -483,7 +380,6 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
       have hz' := (((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans (hLe.trans hqr.le)).through
       exact hB0 ⟨o', ho', answered_count reg hJ ev record₀ recordDigest rfl (Pos.toStop_spec hQ.1).2.2 hf₁ hSO₁
         hz' hn hs hall o', hne⟩
-  -- its stops, in order in the log
   have hsub : (sessionDecoders (g := V.game θ F c) (σ := σ) (R := R) reg tb filesDec).sub
       (memberTabs S Rg (m.toV5 t)) (fun _ => none) = none :=
     sub_eq_none reg (fun j : Fin R => slotOf (#[tb] : Array String).size 1026 (j.val % 1026)) _ (fun _ _ => rfl)
@@ -515,7 +411,6 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
         slotOf (#[tb] : Array String).size 1026 (j.val % 1026) = .link ∧ j.val / 1026 = u := fun j hp => by
     rw [hSP.unique j j₀ L₀ hp h₀]
     exact ⟨hl₀, hu₀⟩
-  -- the roots and the link points
   have hroot := session_rootB reg (per := 1026) (by omega) ev record₀ recordDigest rfl hpi' hzp hn hLA₀ hcut₀
     hL₀' hA.sent hA.read hA.decode hA.tables hA.sigma
   have hpts : ptsOf (memberPts (m.toV5 t)) sess.points = pts := by
@@ -524,7 +419,6 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
       exact absurd b.isLt (by omega)
     · exact session_pts (by simp) (one_table_pos tb) (by omega) (sessionReveal #[tb] ev) record₀ recordDigest
         hLA₀ hL₀' hA.read hA.decode hA.points hpos
-  -- the answered stops are rep rounds' of the session
   have hms0 : ∀ m' ∈ ms, ∃ (j : Fin R) (ρ : Fin 2) (k : ℕ),
       slotOf (#[tb] : Array String).size 1026 (j.val % 1026) = .rep 0 ρ k ∧
         PicksIn (sessionReading R tb ev record₀ recordDigest).round
@@ -544,7 +438,6 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
   have hrep : ∀ m' ∈ ms, ∀ j : Fin R, PicksIn (sessionReading R tb ev record₀ recordDigest).round
       (CoinTape.run (V.game θ F c) σ r.tape).log j m' → j.val / 1026 = u := fun m' hm' j hj =>
     (hDn.rep_stop hSP h₀ hu₀ hms hlt₀ hgt hm' hj (hbefore m' ((hd' m').2 (Or.inr (Or.inl hm'))))).2
-  -- the session's closing round's pick
   obtain ⟨Lc, xc, Lc₂, sc, nc, hLc, hxc, hτc, hnamec, hopc, hshac, hlastc⟩ := hA.read.close τ hτ
   obtain ⟨jc, hjcu, hjcs⟩ :=
     executionPhase_close (#[tb] : Array String).size (R := R) (per := 1026) (u := u) (by omega) hu1
@@ -569,7 +462,6 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
       exact absurd h'.1 (Nat.ne_of_gt (one_table_pos tb))
     · have h1 : jc.val / 1026 < u := (hDn jc Lc hc).1 h
       omega
-  -- the stop after the trace's end is the closing round's
   have hi_q := (Pos.toStop_spec (hmr.inv hpi)).2.2
   have hzq := hqr.through
   obtain ⟨L, hNP, ⟨-, hlog⟩ | ⟨ic, s, n, b, bits, L', f'', ⟨j, haj, hjK, hj⟩, hallq, hlog, hcutq, -, hf'', hnext⟩⟩ :=
@@ -630,7 +522,6 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
   subst hLcEq
   have hxc' : xc = ⟨.opening ic s n, b, bits⟩ := (List.cons.inj (List.append_cancel_left (hLc.symm.trans hlog))).1
   rw [hxc'] at hshac
-  -- the closing stop decodes the session's evidence
   have hrev : (sessionReading R tb ev record₀ recordDigest).reveal jc (CoinTape.run (V.game θ F c) σ r.tape) =
       some w := by
     show sessionReveal #[tb] ev (jc.val / 1026) (slotOf (#[tb] : Array String).size 1026 (jc.val % 1026))
@@ -639,7 +530,6 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
     exact hev
   have hmode := stop_modes_tape hi_q hzq hn hcutq hlog hjK' hrev hshac
   have hfiles : closeFiles filesDec q = proofs := (closeFiles_eq filesDec hjcc hmode hsingle).trans hfd
-  -- the session's picks are all answered past the closing stop
   have hW'' := (hW'.next hU hNP (r := ⟨.opening ic s n, b, bits⟩) hlog haj hj).2
   have hlastu : ∀ (j₁ : Fin R) L₁, PicksIn (sessionReading R tb ev record₀ recordDigest).round
       (CoinTape.run (V.game θ F c) σ r.tape).log j₁ L₁ → j₁.val / 1026 = u → L₁.length ≤ (pre' ++ L).length :=
@@ -659,7 +549,6 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
   have hDn' : SessDone (sessionReading R tb ev record₀ recordDigest).round (fun j => j.val / 1026)
       (CoinTape.run (V.game θ F c) σ r.tape).log ((pre' ++ L) :: done') (u + 1) :=
     hDn.closed hSP h₀ hu₀ hrep hc hjcu (fun L₁ => by rw [List.mem_cons, hd' L₁]) hW'' hlastu
-  -- the rep rounds
   have hcov : ∀ (j₁ : Fin R) L₁, j₁.val / 1026 = u → PicksIn (sessionReading R tb ev record₀ recordDigest).round
       (CoinTape.run (V.game θ F c) σ r.tape).log j₁ L₁ → L₁ = L₀ ∨ L₁ ∈ ms ∨
         slotOf (#[tb] : Array String).size 1026 (j₁.val % 1026) = closeSlot (#[tb] : Array String).size :=
@@ -697,18 +586,10 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
   · rw [hout]
     exact hfiles
 
-/-! ## The members' steps -/
-
-/-- `SessDone` at an equal count of sessions. -/
 theorem SessDone.of_eq {R : ℕ} {P : Fin R → List Release → Frame → Prop} {su : Fin R → ℕ} {Lg : List Release}
     {done : List (List Release)} {u u' : ℕ} (h : SessDone P su Lg done u) (e : u = u') : SessDone P su Lg done u' :=
   e ▸ h
 
-/-- **The members' steps' invariant**, at the widened coins `ω`, the position `r` the members' traces end at, the
-place `i` and the position `p` its member's session starts at: the walk from `p` stops where `StopOf` says, with
-the releases after the logs `done` answered in the log of the play on `r`'s tape (`Walked`), those being the picks
-of the sessions before the one after as many as members before `i` have a proof block in the sample (`SessDone`,
-`sampledBefore`), and `p` is past the play's start on the coin map's tape. -/
 def StepInv (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (W : ExecutionPhase)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
     (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) (i : ℕ)
@@ -721,14 +602,6 @@ def StepInv (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArr
       (sampledBefore W.ms ((W.extend M.widening).L.draw ω) i) ∧
     (Pos.root (roundCuts V θ F c rd) (M.start ω)).Past p
 
-/-- **The members' steps, from each session's read** (`MemberSteps`): at a window whose members each have the one
-table `tb` (`MembersAt`), at the sessions' readings and decoders, off the empty classes at their counts, at a coin
-map that writes the link points' and each round's coins' bits into a stop's opening, and at the invariant
-`StepInv`, wherever a play on a tape through the first stop of the coin map's tape at `ω` that the sampled verdict
-accepts and `P` holds of has the sessions of the sample at `ω` (`ExecutionPhaseSessions`). The start is the play's first
-stop (`stopOf_rootStop`) with nothing answered; a member with no proof block in the sample has no session, so the
-sessions before the next place are the same; and a sampled member's step is `session_step` at its session, the one
-after `sampledBefore` others, with the moves its record decodes to (`MemberMovesOf`). -/
 theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (reg : Option Claims.Msg → ByteArray) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)

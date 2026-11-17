@@ -2,15 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled
 
-/-!
-# A `--zk` session's record holds the coins its tree's log shows opened
-
-`Spot.Challenger.sessionTreeReason` accepts a session's record (`none`), at any tables, only where the record's
-coin tree is one the release log shows sampled (`trees`, `coinTreesOf`'s) under the record's root, and each round the
-record gives coins of is one the log shows opened of that tree, with those coins' SHA-512 (`round_held`): its link's
-points as the session stream's round 0, and each stream's rounds. Its loops return at their first reason, so where a
-loop returns none, each of its steps yielded (`forIn_held`).
--/
+/-! A `--zk` session's record holds the coins its tree's log shows opened. -/
 
 @[expose] public section
 
@@ -22,8 +14,6 @@ open Spot Spot.Challenger
 theorem strIs {j : Json} {s : String} (h : jsonStrIs j s = true) : j = .str s := by
   cases j <;> simp_all [jsonStrIs]
 
-/-- **A loop that returns at its first reason** (a step `.done (some (some w), _)`, or else `.yield (none, _)`) returns
-a reason, or none with each step yielded. -/
 theorem forIn_held {α γ σ : Type} {P : α → Prop}
     {f : α → Option (Option γ) × σ → Id (ForInStep (Option (Option γ) × σ))}
     (hf : ∀ x u s, f x (none, u) = s →
@@ -50,7 +40,6 @@ theorem forIn_held_arr {α γ σ : Type} {P : α → Prop}
   rw [← Array.forIn_toList]
   exact (forIn_held hf xs.toList u).imp id fun ⟨hn, hall⟩ => ⟨hn, fun x hx => hall x (Array.mem_def.1 hx)⟩
 
-/-- **A loop that returns at its first reason, then its reason**: where none returns, each step yielded. -/
 theorem ret_held {α γ σ : Type} {P : α → Prop}
     {f : α → Option (Option γ) × σ → Id (ForInStep (Option (Option γ) × σ))}
     {g : Option (Option γ) × σ → Id (Option γ)}
@@ -65,8 +54,6 @@ theorem ret_held {α γ σ : Type} {P : α → Prop}
     exact absurd h (hg w _)
   · exact hall
 
-/-- **A loop that returns at its first reason, as a step of an outer one**: the outer step returns the inner reason,
-or yields none with each inner step yielded. -/
 theorem step_held {α γ σ τ : Type} {P : α → Prop}
     {f : α → Option (Option γ) × σ → Id (ForInStep (Option (Option γ) × σ))}
     {g : Option (Option γ) × σ → Id (ForInStep (Option (Option γ) × τ))}
@@ -89,19 +76,13 @@ theorem step_held {α γ σ τ : Type} {P : α → Prop}
     obtain ⟨u', hu⟩ := hg0 _
     exact .inr ⟨u', hu, hall⟩
 
-/-- Round `x.2` of a record's stream `name`, the round's record `x.1`: the coins it gives are a round the log shows
-opened of tree `t`, with those coins' SHA-512. -/
 def RoundHeld (t : LoggedTree) (name : String) (x : Json × Nat) : Prop :=
   ∀ cs, recordCoins? (getD x.1 "coins") = some cs → ∃ o, t.opening name x.2 = some o ∧ o.coins = sha512Hex cs
 
-/-- Each round of a record's stream `s` is held (`RoundHeld`) of tree `t`. -/
 def StreamHeld (t : LoggedTree) (s : Json) : Prop :=
   ∀ name rounds, getD s "stream" = .str name → getD s "rounds" = .arr rounds →
     ∀ x ∈ rounds.zipIdx, RoundHeld t name x
 
-/-- **A record `sessionTreeReason` accepts, at any tables, holds the coins its tree's log shows opened**: its coin
-tree's root is that of a tree of the log, and each round the record gives coins of (`Verity.Sampled.recordRound`) is
-one the log shows opened of that tree, with those coins' SHA-512. -/
 theorem round_held {trees : Array LoggedTree} {tables : Array (String × Option Nat)} {record : Json} {stream : String}
     {k : Nat} {cs : ByteArray} (h : sessionTreeReason trees tables record = none)
     (hr : Verity.Sampled.recordRound record stream k = some cs) :
@@ -197,7 +178,6 @@ theorem round_held {trees : Array LoggedTree} {tables : Array (String × Option 
     obtain ⟨r, hrk, hcs⟩ := Option.bind_eq_some_iff.1 hr
     exact hall x (Array.mem_of_find?_eq_some hx) _ rs hxn hxr (r, k) (Array.mem_zipIdx_iff_getElem?.2 hrk) cs hcs
 
-/-- **Each session `sessionsTreeReason` accepts has a record `sessionTreeReason` accepts at its tables.** -/
 theorem sessions_held {trees : Array LoggedTree} {records : Array (String × Array (String × Option Nat) × Json)}
     (h : sessionsTreeReason trees records = none) : ∀ x ∈ records, sessionTreeReason trees x.2.1 x.2.2 = none := by
   unfold sessionsTreeReason at h
@@ -212,11 +192,8 @@ theorem sessions_held {trees : Array LoggedTree} {records : Array (String × Arr
   | none => rfl
   | some w => exact (hne w (by rw [hr]; rfl)).elim
 
-/-- `Except.ok`'s bind is the continuation at its value. -/
 theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
-/-- **A loop invariant in `Except`**, over a loop whose steps only yield or throw: `I pre s` holds of the members `pre`
-read so far and the state `s` after them. -/
 theorem forIn_inv {α σ ε : Type} {f : α → σ → Except ε (ForInStep σ)} {I : List α → σ → Prop}
     (step : ∀ pre x s r, I pre s → f x s = .ok r → ∃ t, r = .yield t ∧ I (pre ++ [x]) t) :
     ∀ (l pre : List α) (s t : σ), I pre s → forIn l s f = .ok t → I (pre ++ l) t
@@ -244,14 +221,11 @@ theorem forIn_inv_run {α σ ε : Type} {f : α → σ → Except ε (ForInStep 
     subst e
     simpa using forIn_inv step l [] s t' hs hl
 
-/-- **An open line** of a release log: a tree line (`treeLine`) whose event isn't a tree's sample, naming tree `root`,
-the round `o.round` of stream `o.stream` it opens, and its coins' SHA-512 `o.coins`. -/
 def OpenLine (l root : String) (o : TreeOpening) : Prop :=
   treeLine l = true ∧ ∃ d, event l = .ok d ∧ jsonStrIs (getD d "event") TREE_EVENT = false ∧
     getD d "tree" = .str root ∧ getD d "stream" = .str o.stream ∧ nat? (getD d "round") = some o.round ∧
     getD d "coins" = .str o.coins
 
-/-- Each round a tree of `trees` shows opened is an open line of `log` naming that tree. -/
 def OpenedIn (log : List String) (trees : Array LoggedTree) : Prop :=
   ∀ t ∈ trees, ∀ o ∈ t.opened, ∃ l ∈ log, OpenLine l t.root o
 
@@ -266,8 +240,6 @@ theorem mem_modify {β : Type} {xs : Array β} {i : Nat} {g : β → β} {b : β
     exact .inr ⟨xs[i], Array.getElem?_eq_getElem hj', rfl⟩
   · exact .inl (Array.getElem_mem hj')
 
-/-- **Each round the release log's trees show opened is an open line of the log** naming that tree, with the round's
-stream, number and coins' SHA-512 (`coinTreesOf`). -/
 theorem opened_in {log : List String} {trees : Array LoggedTree} (h : coinTreesOf log = .ok trees) :
     OpenedIn log trees := by
   unfold coinTreesOf at h
@@ -348,9 +320,6 @@ theorem opened_in {log : List String} {trees : Array LoggedTree} (h : coinTreesO
         · cases hr
 
 
-/-- **A round a record gives coins of is an open line of the release log** naming the record's tree, with that round's
-stream and number and those coins' SHA-512: where the log's trees are `coinTreesOf`'s and `sessionTreeReason` accepts
-the record against them, at any tables. -/
 theorem open_held {log : List String} {trees : Array LoggedTree} {tables : Array (String × Option Nat)} {record : Json}
     {stream : String} {k : Nat} {cs : ByteArray} (ht : coinTreesOf log = .ok trees)
     (h : sessionTreeReason trees tables record = none) (hr : Verity.Sampled.recordRound record stream k = some cs) :
@@ -363,16 +332,12 @@ theorem open_held {log : List String} {trees : Array LoggedTree} {tables : Array
   rw [hroot, ← hc, ← hp.1, ← hp.2]
   exact hol
 
-/-- `Except`'s bind is `.ok` only at an `.ok` value whose continuation is. -/
 theorem bind_ok {ε α β : Type} {x : Except ε α} {g : α → Except ε β} {b : β} (h : (x >>= g) = .ok b) :
     ∃ a, x = .ok a ∧ g a = .ok b := by
   cases hx : x with
   | error e => rw [hx] at h; cases h
   | ok a => rw [hx] at h; exact ⟨a, rfl, h⟩
 
-/-- **The one statement's acceptance holds its sessions to the challenger's trees**: on parameters that name no
-members, an audit `checkBlobsAt` accepts read the trees (`treesOf`), and its sessions' records hold to them on the
-verifier's own files (`treesHeld`). -/
 theorem accepted_trees {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
     {e : Spot.OneStageZk.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public}
     {prof : Core.Integrity} (hm : p.members = none)
@@ -391,7 +356,6 @@ theorem accepted_trees {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitmen
   obtain ⟨_, hheld, -⟩ := bind_ok hrun
   exact ⟨ts, hts, hheld⟩
 
-/-- A blob `get` reads names only what its refusal says. -/
 theorem get_ok {bs : Core.Blobs} {d w : String} {b : ByteArray} (w' : String) (h : bs.get d w = .ok b) :
     (bs.get d w').toOption = some b := by
   have e : (bs.get d w).toOption = (bs.get d w').toOption := by
@@ -406,9 +370,6 @@ theorem get_ok {bs : Core.Blobs} {d w : String} {b : ByteArray} (w' : String) (h
   rw [h] at e
   exact e.symm
 
-/-- **Each record v2's evidence names holds to the trees where `treesHeld` accepts**: the record a session's blob
-parses to through `Flock.JsonParse.parse`, as `Verity.Sampled.recordOn` reads it (`null` where it doesn't parse),
-is one `sessionTreeReason` accepts against them, at the tables `treesHeld` reads for its session. -/
 theorem records_held {p : Spot.OneStageZk.Own} {ts : Array LoggedTree} {e : Spot.OneStageZk.Evidence}
     {bs : Core.Blobs} (h : Spot.OneStageZk.treesHeld p ts e bs = .ok ()) {r} (hr : r ∈ e.sessions)
     {w : String} {b : ByteArray} {str : String} {rec : Json} (hb : (bs.get r.record w).toOption = some b)
