@@ -22,15 +22,15 @@ primitive's canonical entry is its entry (`same_prim`), and no primitive's entry
 
 public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program
 open Claims.Json (Wf)
 open FlockDeploy (JsonEquiv jsonForm jsonEquiv_arr_iff)
-open InferenceOnlyCheck.DefinitionDigest (canonicalEntry flatParts written isComposite)
+open InferenceOnlyVerifier.DefinitionDigest (canonicalEntry flatParts written isComposite)
 open private natJ? intJ? paramsOf at_ buildNode from Circuits.Program
-open InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk (array_mapM_size array_mapM_get buildNode_spec)
+open InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk (array_mapM_size array_mapM_get buildNode_spec)
 
 namespace ReadsPinProof
 
@@ -867,6 +867,6 @@ theorem readsPin : ReadsPin := by
     exact (not_prim_comp hj' hj hp' hc hce he.symm).elim
   · exact same_comp hd hd' hkey (comp_view hj hc hce) (comp_view hj' hc' hce') hw hw' he hcal
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 end
