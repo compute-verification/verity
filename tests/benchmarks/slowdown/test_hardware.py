@@ -8,10 +8,10 @@ from slowdown.hardware import Fleet, Location
 from slowdown.params import Registry
 from verity.device import load_card, number
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 REG = Registry.load()
-CENSUS_DIR = Path(__file__).resolve().parents[3] / "benchmarks" / "census"
+CENSUS_DIR = Path(__file__).resolve().parents[3] / "calibration" / "census"
 CENSUS = {d["id"]: d for d in json.loads((CENSUS_DIR / "hardware.json").read_text())}
 
 
@@ -48,7 +48,7 @@ def test_the_reference_fleets_are_the_census_datacenters_gpus_or_four_of_it(name
 
 @pytest.mark.parametrize("name", ["world-h200", "world-nvl72"])
 def test_the_world_fleets_serve_the_census_adversary_in_its_monitoring_period(name):
-    """`world-inference-2027` (`benchmarks/census/adversary.json`): its `total_flop` at the fleet's serving MFU."""
+    """`world-inference-2027` (`calibration/census/adversary.json`): its `total_flop` at the fleet's serving MFU."""
     world = next(a for a in json.loads((CENSUS_DIR / "adversary.json").read_text()) if a["id"] == "world-inference-2027")
     f = REG.table(f"fleet.{name}")
     flops = REG[f"location.{f['location']}.flops"]

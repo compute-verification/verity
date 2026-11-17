@@ -214,7 +214,7 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
                  "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py",
                  "verity/protocols/compose/verifier/live_challenger/auditor.py"):
         assert not lowrisk([path, "README.md"], flags.plain_excludes), f"drive.toml's excludes let {path} land on a verdict"
-    for path in ("GLOSSARY.md", "benchmarks/census/README.md"):
+    for path in ("GLOSSARY.md", "calibration/census/README.md"):
         assert lowrisk([path], flags.plain_excludes), f"drive.toml's excludes keep {path} on the whole check"
 
 

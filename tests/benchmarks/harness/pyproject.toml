@@ -105,13 +105,13 @@ inputs = [
     "tools/research/src/research/pods/nebius/slot_only.py",
     # the overhead table scales γ by the census's datacenter, world and datasheet rates and the slowdown calculator's FLOP-to-gates conversion,
     # and `verity bench overhead` is the door's runner, which a test runs
-    "benchmarks/census/deployments.json",
-    "benchmarks/census/adversary.json",
-    "benchmarks/census/hardware.json",
+    "calibration/census/deployments.json",
+    "calibration/census/adversary.json",
+    "calibration/census/hardware.json",
     "benchmarks/slowdown/data/hardware.toml",
     "benchmarks/overhead/run.py",
     # a card the door measures on reads its SMs and L2 from its card file through verity.device
-    "hardware/cards",
+    "calibration/hardware/cards",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
     # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
     # door's runner, which a test runs

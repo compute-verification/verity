@@ -20,7 +20,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 
 def signers_port(cases: st.SearchStrategy) -> D.ProtocolPort:
-    return D.ProtocolPort("memory-challenger-test", M.protocol_reference(M.TEST_ID, M.ts.SCHEMES), cases, package=M.PACKAGE)
+    return D.ProtocolPort("memory-attester-test", M.protocol_reference(M.TEST_ID, M.ts.SCHEMES), cases, package=M.PACKAGE)
 
 
 def deployed_port(cases: st.SearchStrategy) -> D.ProtocolPort:

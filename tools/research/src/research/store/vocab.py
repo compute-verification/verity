@@ -377,7 +377,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "{window, layers, wall_min, peak_gib, root_nodes, digests [16-hex prefixes], workload, guard pass|fail|n/a, commit branch@sha}"),
     _k(TRAINING_SLOWDOWN, GROUP_RESULT, TEXT, "on a training-slowdown job's run (when it is queued) and its run record (once "
        "the run ends with one), by `verity bench training-slowdown`: the job, as DIGEST/SEED/SPLIT, its attack config's "
-       "digest (benchmarks/training_slowdown/training_slowdown/config.py), its seed and its held-out split; the command's "
+       "digest (calibration/training/training_slowdown/config.py), its seed and its held-out split; the command's "
        "only state", pattern=r"[0-9a-f]{64}/\d+/(search|final)"),
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
@@ -482,7 +482,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
     _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
-    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (benchmarks/tc_probe/trust.py)"),
+    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (calibration/tc_probe/trust.py)"),
     _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
     _k(STAGED, GROUP_EVIDENCE, TEXT, "on ckpt:<repo>@<revision>: the UTC time a host finished staging the checkpoint's weights and checking every "
        "shard's sha256, written by the step that stages them (`verity-vllm records staged`); its ref names the evidence (the staging run, "

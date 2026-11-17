@@ -18,7 +18,7 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 
 
 def kinds_of(circuit, IF):

@@ -17,7 +17,7 @@ so the ranges' nodes are the root's nodes whose callee's key is no input id.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Flock.TemplateQuery (Desc DDef DNode TRange isInput)
 
@@ -296,4 +296,4 @@ theorem ranges_spec {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.r
     · rfl
     · simp [Form.name] at h2
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.DefinitionDigest
+public import InferenceOnlyVerifier.DefinitionDigest
 
 /-!
 # Which branch a Definition's digests take
@@ -15,7 +15,7 @@ callees. Both decide it by `isComposite`, which compares the entry's `form` as a
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.DefinitionDigest.SecurityProofs
+namespace InferenceOnlyVerifier.DefinitionDigest.SecurityProofs
 
 open Lean (Json)
 
@@ -36,4 +36,4 @@ theorem canonicalEntry_of_not_composite (callees types : Array Json) (e : Json)
   simp only [hf]
   rfl
 
-end InferenceOnlyCheck.DefinitionDigest.SecurityProofs
+end InferenceOnlyVerifier.DefinitionDigest.SecurityProofs
