@@ -126,7 +126,7 @@ its passes are not the window SPOT audited; under PEARLPLUS_TIE, ``--tie W``, th
 Pearl-C period its live salt session joined, `pearlplus_why_tied`). ``record`` composes an accepted one as PoUW's verdict of record
 only where `pearlplus_of_record` holds it to live coins under ``--key-sha512``, the lane ``--lane``'s own reserve and
 Pearl-C period, a sample session the lane reserved first after that period closed and opened on the run's commitment, the
-window's docket chained after Pearl+'s window record, that period's circuit the window-circuit record V3c held the
+window's docket chained after Pearl+'s window record and its records audit tied to it accepted, that period's circuit the window-circuit record V3c held the
 window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
 first condition it fails.
 
@@ -405,12 +405,19 @@ AS_WRITTEN = "as the served node wrote it"
 #: ... SPOT's under ``record --sampled-lean`` (`lean_sampled_row`)
 LEAN_HERE = ("recomputed on this host by the Lean verifier (vstar-recursive sampled check) from the proofs and public "
              "files of the window's sampled proofs case, not the served node's answer")
+MEMBERS_COVER = ("each sampled proof block proved in its own kind's statement against the one registration's roots on live "
+                 "coins; members with no sampled proof block were not proved, and no theorem yet covers a sample that "
+                 "misses members; the wires between members are not held; the circuit files' digests are fixed before "
+                 "the coins in the parameters but not signed in the docket")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
 PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwCheck.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
                   "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
 #: what the composed verdict's reason (`said`) says of that row's accept
 PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor device re-checks"
+WEAKER_TIE = ("a weaker tie, not the tied guarantee: the window's records audit tied to W sampled {design}, not a stratified "
+              "rate, so its accept shows only that the tables its sampled proof blocks read hold the served model's own "
+              "values at W's roots, not that every table W registers does")
 #: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
@@ -1827,6 +1834,20 @@ def spot_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
         return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 
+def members_reached(members: Mapping[str, Any], answer: Mapping[str, Any]) -> dict[str, Any]:
+    from verity_e2e_demo import block_record as BR
+
+    drawn, delta = answer["public"].get("drawn") or [], Fraction(answer["profile"]["delta"])
+    by_member = []
+    for name, m in sorted(members.items()):
+        n = sum(hi - lo for lo, hi in m["units"])
+        k = sum(lo <= u < hi for u in drawn for lo, hi in m["units"])
+        if k:
+            by_member.append({"member": name, "of": n, "drawn": k})
+    return {"members": {"sampled": len(by_member), "registered": len(members)},
+            "bounds": BR.member_bounds(by_member, delta), "by_member": by_member}
+
+
 def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | None = None,
                      run: str | None = None) -> dict[str, Any]:
     """SPOT's row from this host's own run of remote's SPOT Lean (`served_cases.sampled_case`: the
@@ -1834,9 +1855,11 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
     on files in a 0700 directory under ``scratch``, its answer tied to the window's docket (`LEAN_HERE`),
     whatever the audit's summary and record say. An audit that wrote no v2 case (a plain run's, or one a5 refused) leaves
     no proofs to recompute from: its row is `spot_row`'s, its ``answer_from`` saying so. So does a case whose check
-    was not started (`served_cases.NotStarted`: its blob files sum past the limit, the host makes no memory scope, or
-    its proofs are in the per-member form): the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why,
-    the sum and the limit. A case the Lean doesn't make or answer, or an answer about another record, is the row's error."""
+    was not started (`served_cases.NotStarted`: its blob files sum past the limit, or the host makes no memory scope):
+    the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why, the sum and the limit. A case the Lean
+    doesn't make or answer, or an answer about another record, is the row's error. An accept of a case in the
+    per-member form carries ``covers`` (`MEMBERS_COVER`), ``members`` (sampled of registered) and each sampled
+    member's bound over its own proof blocks (``bounds``), and no ε over the workload."""
     import served_cases as SC
 
     if not (audit_dir / "window" / "case-v2.json").is_file():
@@ -1847,7 +1870,11 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
         case = SC.sampled_case(audit_dir)
         answer, _line = SC.lean_answer(exe or SC.build(*SC.SAMPLED_LEAN), case, scratch, SC.SAMPLED_CMD)
         SC.tie(answer, SC.SAMPLED, SC.record_of(case)[1])
-        return {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
+        row = {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
+        proofs = case["params"].get("proofs")
+        if isinstance(proofs, dict) and "members" in proofs and row["verdict"] == "accept":
+            return {**row, "covers": MEMBERS_COVER, "epsilon": None, **members_reached(proofs["members"], answer)}
+        return row
     except SC.NotStarted as e:
         return {**spot_row(audit_dir, run), "not_started": {"reason": str(e), **e.line},
                 "answer_from": f"{AS_WRITTEN} ({WRITTEN['integrity']}): this host's Lean check of the audit's v2 case was "
@@ -1969,7 +1996,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        and the verdict is over the coin published at its sample (`pearlplus_coin`).
        Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
        window's docket R under `spot` is chained right after W, and its records audit is tied to W
-       (``records_audit --tie W``), so the window SPOT audited reads the roots Pearl+ credits. The period's
+       (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
     4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
@@ -2045,6 +2072,9 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
                       f"Pearl+'s window record W {w[:16]}...")
     if ((summary.get("tie") or {}).get("record")) != w:
         return None, f"the window's records audit is not tied to Pearl+'s window record W {w[:16]}... (records_audit --tie W)"
+    if (accepted := (summary.get("audit") or {}).get("accepted")) is not True:
+        return None, (f"the window's records audit tied to W didn't accept ({AUDIT_SUMMARY}'s audit.accepted is "
+                      f"{accepted!r}), so nothing shows the window SPOT audited reads the roots Pearl+ credits")
     try:
         held = hashlib.sha512((spot / CIRCUIT_RECORD).read_bytes()).hexdigest()
     except OSError as e:
@@ -2075,12 +2105,15 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     eps = _rational(work.get("epsilon"))
     if eps is None or eps != _rational(ref.get("epsilon")):
         return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
+    design = summary.get("sampling_design")
+    weaker = {} if str(design).startswith("stratified-rate:") else {"weaker_tie": WEAKER_TIE.format(design=design)}
     return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
                                                               ("credited", "credited_tiles", "macs", "rho", "epsilon")}
                                  | ({"give_up": work["give_up"]} if "give_up" in work else {})},
             "profile": {**answer["profile"], "lane": lane, "key_sha512": key, "period": name, "session": session,
                         "draw_session": drew.get("session"), "reference_work": ref,
-                        "lean": {k: lean.get(k) for k in ("verdict", "commitment", "source", "drawn", "work", "tie")}}}, None
+                        "lean": {k: lean.get(k) for k in ("verdict", "commitment", "source", "drawn", "work", "tie")},
+                        **weaker}}, None
 
 
 def piece(key: str, pieces_dir: Path, run: str | None = None, **of_record: Any
@@ -2198,6 +2231,8 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
     named = entry.get("named_terms")
     error = BR.error_form(_ratio(Fraction(entry["error"]), BR.DELTAS), named)
     no = [d for d, x in entry["at"].items() if not x["holds"]]
+    if no and "members" in entry["quantity"]:
+        return [f"at δ = {d}: {entry['at'][d]['why']}" for d in no]
     if no:
         return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
     return [f"its error reads {error}"] if named else []
@@ -2221,6 +2256,8 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
             s = ("accept" if server is not None else "accept, naming no server: not carried") + (f" ({'; '.join(t)})" if t else "")
             if r.get("answer_from") == PEARLPLUS_FROM:
                 s += f", {PEARLPLUS_SAID}"
+                if weaker := ((r.get("answer") or {}).get("profile") or {}).get("weaker_tie"):
+                    s += f", {weaker}"
         else:
             s = f"{v}: {r.get('reason')}"
         out.append(f"{NAMES[k]}: {s}")
