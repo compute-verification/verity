@@ -583,6 +583,28 @@ def test_a_mark_and_a_land_verdict_carry_across_a_restack():
     assert {r["name"]: r for r in qt.table(d)}["Mark to `main`"]["day"] == "p50 75, p90 75 min (n=1); 1 of the heads a restack's, 0 marked before it"
 
 
+def test_a_land_verdict_the_loops_carry_line_carried_counts_at_the_new_head_and_one_it_would_or_did_not_carry_does_not():
+    """#3 merged `main` into `h3`, its marked and verdicted head, and the loop took both at `m3` by its own change and logged a
+    `carry` line: #3 waits with a land verdict, as it did at `h3`. A `carry` line under `verdict_carry = "shadow"` ("would
+    carry") or one that didn't carry leaves `m3` with no label of its own, and #3 isn't counted as marked."""
+    def line(why: str, carries: bool = True) -> dict:
+        return {"action": "carry", "at": at("02:00"), "number": 3, "heads": ["m3"], "old": "h3", "carries": carries, "why": why,
+                "shadow": False}
+
+    backlog = "Marked and waiting now (the backlog)"
+    before = {r["name"]: r for r in qt.table(doc())}[backlog]["now"]
+    d = doc()
+    d["open"]["3"] = "m3"
+    d["control"]["decisions"].append(line("carried #3's land from h3 to m3 (its own change is that head's, patch-id abc)"))
+    assert qt.carries(d["control"]["decisions"]) == {"m3": "h3"} and qt.stands_on(d) == {"m3": "h3"}
+    assert {r["name"]: r for r in qt.table(d)}[backlog]["now"] == before
+    assert qt.carried(d["labels"], qt.stands_on(d), "3", "m3") == d["labels"]["3@h3"]
+    for later in (line("would carry #3's land from h3 to m3 (...)"), line("did not carry #3's land from h3 to m3 (...)", False)):
+        e = dict(d, control=dict(d["control"], decisions=[*d["control"]["decisions"], later]))
+        assert qt.carries(e["control"]["decisions"]) == {}
+        assert {r["name"]: r for r in qt.table(e)}[backlog]["now"].startswith("2 PRs: 0 with a land verdict, 2 without")
+
+
 def left() -> list[dict]:
     """The loop's lines leaving heads out: #4 before the build that took it, #5 for `main`, #3 for a PR built before it, and a
     closed PR's head."""

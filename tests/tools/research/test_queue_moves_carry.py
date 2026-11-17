@@ -137,6 +137,7 @@ def test_a_restack_across_a_move_keeps_the_mark_and_verdict_and_one_more_edit_or
         f"research queue: #1 at {new[:8]} takes the `{key}` labels at {old[:8]}: none of its own counts, and its own change is "
         f"theirs across the moves `main` landed since, as a restack carries it (patch-id {q.own_change(new)[:12]})"
         for key in (vocab.READY, vocab.REVIEWED)]
+    assert labels.took == {(1, new, key): (old, q.own_change(new), True) for key in (vocab.READY, vocab.REVIEWED)}
     assert not any(Path(world.tmp, "scratch").iterdir())                 # each script's scratch worktree is gone
 
     class Unsigned:
