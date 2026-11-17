@@ -51,12 +51,11 @@
 # POUW=pearlplus remote's composite of record (`remote-v1`, `Core.Remote.V1`, whose work
 # subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case; composite.py remote-v1), and where the tree
 # lacks it none (`COMPOSITE: not run`, exit 1), else v0.
-# On the served node itself (SERVED_NODE unset or its own host), which the prover controls, a composite claims no record:
-# it is refused (COMPOSITE refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its
-# first line COMPOSITE DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py
-# --development). COMPOSE_DEVELOPMENT=WHY composes it as a development check anywhere, WHY its reason: a deferral's
-# follow-on sets it, since it composes on a prover node. The cases under the serve dir's private/compose and
-# private/deferred (a hand-off's or a deferral's copies) are no product's.
+# The cases under the serve dir's private/compose and private/deferred (a hand-off's or a deferral's copies) are no
+# product's. Each composite.py gets VERITY_CONFIGURATION, the hash of the configuration `verity run` read, as its
+# --configuration: a memory case listing a key that committed configuration doesn't pin is the run's key, refused
+# (exit 67) under VERITY_HOLD_PLACEMENT=1, which passes --hold-placement, and taken otherwise, and a composite whose
+# memory cases list keys is a development check (key_pin: run) either way. No hand-off carries either.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -66,20 +65,6 @@ TPY=${TPY:-$TREE/.venv/bin/python}
 [ -x "$TPY" ] || TPY=$PY
 P=$D/private/composite
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
-dev=()
-if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
-  dev=(--development "$COMPOSE_DEVELOPMENT")
-  say "COMPOSITE DEVELOPMENT: ${dev[1]}"
-elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
-  if [ "${COMPOSE_OFF_NODE:-1}" != 0 ]; then
-    say "COMPOSITE refused: this is the served node $(hostname -s), which the prover controls, so a composite here claims" \
-        "no record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it" \
-        "here as a development check)"
-    exit 1
-  fi
-  dev=(--development "composed on the served node $(hostname -s), which the prover controls: a development check, no claim of record (COMPOSE_OFF_NODE=0)")
-  say "COMPOSITE DEVELOPMENT: ${dev[1]}"
-fi
 PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
   onsite) products=(remote onsite) ;;
@@ -171,16 +156,19 @@ for f in sorted(root.rglob("case.json")):
 EOF
 )
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
-    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" "${dev[@]}" > "$P/$x.log" 2>&1
+    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" \
+    ${VERITY_CONFIGURATION:+--configuration "$VERITY_CONFIGURATION"} \
+    $([ "${VERITY_HOLD_PLACEMENT:-}" = 1 ] && echo --hold-placement) > "$P/$x.log" 2>&1
   r=$?
-  grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
+  grep -E '^(DEVELOPMENT|KEY_PIN|REFUSED|NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
   case $r in
     0 | 1 | 2) ;;
     65) say "COMPOSITE $x: composite.py wrote no public line (exit 65: they share bytes with a case's evidence)"; bad=1 ;;
+    67) say "COMPOSITE $x: composite.py ran no check (exit 67: a memory case trusts a key the configuration doesn't pin)"; bad=1 ;;
     *) say "COMPOSITE $x: composite.py exit $r, its log on the node"; bad=1 ;;
   esac
 done
-if [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
+if [ "${SERVED_NODE:-${PP_PEER:-}}" = "${PP_PEER:-}" ]; then
   say "COMPOSITE: composed on $(hostname -s), which holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
 elif [ -n "${COMPOSE_HANDOFF:-}" ]; then
   say "COMPOSITE: composed on $(hostname -s), not the served node $SERVED_NODE: from its compose hand-off (verifier-side files, no witness) and the cases written and checked here from it, not from the parties that produced them"

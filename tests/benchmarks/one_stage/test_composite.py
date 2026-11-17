@@ -119,6 +119,127 @@ def test_a_development_composite_says_so_first_and_in_its_public_record(tmp_path
     assert "development" not in json.loads((tmp_path / "public2" / "composite.json").read_text())
 
 
+COMMITTED_HASH = "c0" * 64
+
+
+def pinned_tree(d: Path, pins: list[tuple[str, str, bytes]]) -> Path:
+    """A tree committing one configuration, of hash `COMMITTED_HASH`, whose pins give each (party, protocol) its key."""
+    (d / C.COMMITTED).parent.mkdir(parents=True)
+    (d / C.COMMITTED).write_text(f'"configurations/c.toml" = "{COMMITTED_HASH}"\n')
+    (d / "configurations").mkdir()
+    (d / "configurations" / "c.toml").write_text("".join(
+        f'[[pin]]\nparty = "{party}"\nprotocol = "{protocol}"\nkey-sha512 = "{hashlib.sha512(k).hexdigest()}"\n'
+        for party, protocol, k in pins))
+    return d
+
+
+def keyed(tmp_path: Path, id: str, key: bytes, configuration: list[str]) -> tuple[int, Path]:
+    """Onsite composed from one case of `id` trusting `key`, under a tree whose configuration pins the device's key
+    ``05…05`` for every memory case's party and protocol."""
+    device = b"\x05" * 64
+    tree = pinned_tree(tmp_path / "tree", [(*pin, device) for pin in C.TRUSTING.values()])
+    case = put(tmp_path / "case", id, {"trusted": [key.hex()]}, b"\x01", b"{}", b"\x01" * 64, verdict="accept")
+    rc = C.main(["onsite", "--cases", str(case), *outs(tmp_path, tree=tree), *configuration,
+                 "--exe", lean(tmp_path, {"protocol": "verity/onsite/v0", "verdict": "accept"}, 0)])
+    return rc, tmp_path / "public" / "composite.json"
+
+
+@pytest.mark.parametrize("id", sorted(C.TRUSTING))
+def test_the_product_trusts_only_the_keys_the_configuration_pins(tmp_path, capsys, id):
+    """The case is written in the developer's private directory, so its list of trusted keys is the developer's: under
+    ``--hold-placement`` a key the configuration doesn't pin is refused by name, before the check runs, and nothing is
+    composed."""
+    rc, record = keyed(tmp_path, id, b"\x07" * 64, ["--configuration", COMMITTED_HASH, "--hold-placement"])
+    party, protocol = C.TRUSTING[id]
+    assert rc == C.UNPINNED
+    assert capsys.readouterr().out.splitlines() == [
+        f"REFUSED {id}: its case trusts 1 key(s) configurations/c.toml pins for no {party} {protocol} session, and only a pinned "
+        f"key's sessions count: sign them under the key configurations/c.toml pins for {party}'s {protocol} sessions, or "
+        "compose with no --configuration, a development check (key_pin: run)"]
+    assert not record.exists() and not (tmp_path / "private").exists()
+
+
+@pytest.mark.parametrize("id", sorted(C.TRUSTING))
+def test_without_the_hold_a_key_the_configuration_does_not_pin_is_taken_as_the_run_s(tmp_path, capsys, id):
+    """Without ``--hold-placement`` a run's key under a committed configuration is taken: the Lean runs and its accept
+    stands, and the composite is ``key_pin: run`` and a development check whose line says the key is the run's, not the
+    configuration's pin."""
+    rc, record = keyed(tmp_path, id, b"\x07" * 64, ["--configuration", COMMITTED_HASH])
+    doc = json.loads(record.read_text())
+    why = f"{C.RUN_KEY.format(ids=id, path='configurations/c.toml', hash=COMMITTED_HASH)}; {C.UNVOUCHED}"
+    assert (rc, doc["verdict"]["verdict"], doc["key_pin"], doc["key_pin_why"], doc["development"]) == (
+        0, "accept", "run", why, C.run_keys(why))
+    lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+    assert lines[:2] == [f"DEVELOPMENT {C.run_keys(why)}", f"KEY_PIN run: {why}"]
+    assert lines[1].startswith(f"KEY_PIN run: {id}: each lists a key configurations/c.toml (hash {COMMITTED_HASH}) pins "
+                               "for no session of its party and protocol, so that key is the run's, not the "
+                               "configuration's pin; ")
+    assert "REFUSED" not in capsys.readouterr().out
+
+
+def test_without_the_hold_a_run_s_key_never_reads_as_the_configuration_s_pin(tmp_path, capsys):
+    """A run's key taken under a committed configuration, beside a pinned one, is written nowhere as
+    ``key_pin: configuration``."""
+    device, run = b"\x05" * 64, b"\x07" * 64
+    tree = pinned_tree(tmp_path / "tree", [(*pin, device) for pin in C.TRUSTING.values()])
+    cases = [put(tmp_path / "cases" / id.replace("/", "_"), id, {"trusted": [k.hex()]}, b"\x01", b"{}", b"\x01" * 64,
+                 verdict="accept") for id, k in (("verity/pous/p2/v4/run", run), ("verity/wipe/v0", device))]
+    rc = C.main(["onsite", *(x for c in cases for x in ("--cases", str(c))), *outs(tmp_path, tree=tree),
+                 "--configuration", COMMITTED_HASH,
+                 "--exe", lean(tmp_path, {"protocol": "verity/onsite/v0", "verdict": "accept"}, 0)])
+    doc = json.loads((tmp_path / "public" / "composite.json").read_text())
+    assert (rc, doc["key_pin"]) == (0, "run") and doc["key_pin_why"].startswith("verity/pous/p2/v4/run: each lists a key ")
+    written = [f.read_bytes() for d in ("public", "private") for f in (tmp_path / d).rglob("*") if f.is_file()]
+    for text in (*written, capsys.readouterr().out.encode()):
+        assert b'"key_pin":"configuration"' not in text.replace(b" ", b"") and b"KEY_PIN configuration" not in text
+
+
+@pytest.mark.parametrize("id", sorted(C.TRUSTING))
+def test_a_key_the_configuration_pins_composes_and_is_still_the_run_s(tmp_path, id):
+    """The configuration's pins only refuse: a pinned key composes and the Lean's accept stands, but no composite
+    vouches for the keys, so it is ``key_pin: run`` and a development check."""
+    rc, record = keyed(tmp_path, id, b"\x05" * 64, ["--configuration", COMMITTED_HASH])
+    doc = json.loads(record.read_text())
+    why = f"{C.CHECKED.format(path='configurations/c.toml', hash=COMMITTED_HASH)}; {C.UNVOUCHED}"
+    assert (rc, doc["verdict"]["verdict"], doc["key_pin"], doc["key_pin_why"], doc["development"]) == (
+        0, "accept", "run", why, C.run_keys(why))
+    assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines()[:2] == [
+        f"DEVELOPMENT {C.run_keys(why)}", f"KEY_PIN run: {why}"]
+    trusted, = (c["params"]["trusted"] for c in json.loads((tmp_path / "private" / "params.json").read_text())["components"])
+    assert trusted == [(b"\x05" * 64).hex()]
+
+
+@pytest.mark.parametrize("configuration", [[], ["--configuration", "d1" * 64]], ids=["none", "uncommitted"])
+def test_keys_no_committed_configuration_pins_are_the_run_s_and_claim_no_record(tmp_path, configuration):
+    """With no committed configuration nothing refuses: the composite runs, says ``key_pin: run`` and is a development
+    check, which `served_verdicts.composite_answer` takes as no record."""
+    rc, record = keyed(tmp_path, "verity/pous/p2/v4/run", b"\x07" * 64, configuration)
+    doc = json.loads(record.read_text())
+    why = f"{C.RUN_KEYS}; {C.UNVOUCHED}"
+    assert (rc, doc["key_pin"], doc["key_pin_why"], doc["development"]) == (0, "run", why, C.run_keys(why))
+    assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines()[:2] == [
+        f"DEVELOPMENT {C.run_keys(why)}", f"KEY_PIN run: {why}"]
+
+
+@pytest.mark.parametrize("env", [{}, {"SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1", "PP_PEER": "vy-auditor-2"}],
+                         ids=["unset", "the-gate-s-variables-set-by-hand"])
+def test_no_environment_makes_a_composite_claim_the_configuration_s_pins(tmp_path, capsys, monkeypatch, env):
+    """The variables that say where a compose runs are the developer's to set: with them set by hand, a pinned key and a
+    committed configuration, ``key_pin: configuration`` is written nowhere."""
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    rc, record = keyed(tmp_path, "verity/wipe/v0", b"\x05" * 64, ["--configuration", COMMITTED_HASH])
+    assert (rc, json.loads(record.read_text())["key_pin"]) == (0, "run")
+    written = [f.read_bytes() for d in ("public", "private") for f in (tmp_path / d).rglob("*") if f.is_file()]
+    for text in (*written, capsys.readouterr().out.encode()):
+        assert b'"key_pin":"configuration"' not in text.replace(b" ", b"") and b"KEY_PIN configuration" not in text
+
+
+def test_memory_cases_listing_no_key_need_no_pin(tmp_path):
+    assert C.main(["onsite", *onsite_cases(tmp_path), *outs(tmp_path), "--configuration", COMMITTED_HASH]) == 0
+    assert "key_pin" not in json.loads((tmp_path / "public" / "composite.json").read_text())
+
+
 def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_it(tmp_path):
     product = next(iter(C.CITES))
     tree = git_tree(tmp_path / "tree", [C.CITES[product]])
