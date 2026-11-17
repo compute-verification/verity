@@ -118,7 +118,7 @@ staging them through `benchmarks/served_units/stage.py` is the next workload's w
 instance one proof block of `Q_template_instance` v0, so the population is one stratum and the stratified sampling design samples B
 of its proof blocks uniformly. The lanes are those Flock's class sweep
 gives that proof-block class at seed 0. The manifest pins every lane's digest and the population's; the prover run recomputes
-them before proving, and the result names the manifest by its SHA-256. The words are uniform 16-bit encodings: at K = 6144
+them before proving, and the result names the manifest by its SHA-256. The words are uniform 16-bit encodings: at K = 2048 and K = 6144
 every coordinate meets a NaN, so every output is the same NaN word (`output_words` in the manifest). A Boolean circuit's
 proving cost doesn't depend on the values it carries. Regenerate with `instances --workload W --write`.
 
