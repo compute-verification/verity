@@ -67,7 +67,12 @@
 #      record and W (--tie), of record (--of-record) on a live session's coins, within PEARLPLUS_LEAN_TIMEOUT seconds
 #      (default 3,600), and writes its answer to PIECE_DIR/pearlplus-lean.json,
 #      the file `served_verdicts.pearlplus_of_record` reads, only where it is the Python verdict's; both verdicts, its
-#      command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
+#      command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way. With
+#      PEARLPLUS_LEAN_CONCURRENT=1 the Lean verifier runs beside the Python's instead: pouw-pearlplus is built before
+#      step 4 (where PEARLPLUS_LEAN_EXE names none), `served_passes.py lean --launch` runs it once the Python's verifier
+#      wrote its coin record, on the arguments verify got (its run in the serve dir's private/pearlplus/lean-launch.json),
+#      and once both ended `lean --printout` holds that run to verify's document as above, refusing a command line other
+#      than the one the document gives; what each verifier verifies is the same, and each check_cost says concurrent;
 #   4c. where the Lean answered, `served_passes.py case` writes the parts of the run's case as remote's composite of
 #      record reads it that need no docket, and the pass files its opened tiles read, to
 #      SERVE_DIR/private/pearlplus/case, where served_cases.py makes the case once the window's record R is made;
@@ -145,6 +150,7 @@ export PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
 BF16="sm_90's BF16 rows $([ "$PEARLC_BF16_ROWS" = 0 ] && echo off || echo on) (PEARLC_BF16_ROWS=$PEARLC_BF16_ROWS)"
 
 TIE=${PEARLPLUS_TIE:-} K=${2:?WINDOW} SERVED=$Q/served.json W=$Q/window-record.json GO=1
+CONCURRENT=${PEARLPLUS_LEAN_CONCURRENT:-} L=''
 [ -z "$TIE" ] || SERVED=$Q/passes/served.json
 
 t=$(date +%s)
@@ -343,6 +349,17 @@ print("ok" if (d.get("reserves") or {}).get("ok") is True and d.get("close") els
     "reserves since its open the window's salt sessions alone (served_verdicts.sh's PEARLPLUS-PERIOD line), so no draw" \
     "follows it"; GO=; }
 fi
+lean_exe() {  # LX: PEARLPLUS_LEAN_EXE, else pouw-pearlplus built here; empty where it doesn't build
+  LX=${PEARLPLUS_LEAN_EXE:-}
+  if [ -z "$LX" ]; then
+    LX=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/.lake/build/bin/pouw-pearlplus
+    (cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
+      say "lean: pouw-pearlplus doesn't build (its log in the serve dir's private/pearlplus), so no Lean answer is written"
+      LX=; }
+  fi
+  [ -n "$LX" ] && [ -x "$LX" ] || LX=
+}
+[ -z "$CONCURRENT" ] || [ -z "$GO" ] || lean_exe
 if [ -n "$GO" ]; then
   period close
   t=$(date +%s)
@@ -350,11 +367,19 @@ if [ -n "$GO" ]; then
   [ -z "$TIE" ] || TA=(--tie "$W" ${PEARLPLUS_CLASS:+--class "$PEARLPLUS_CLASS"})
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "$Q/passes" --out "$P/verify.json" \
     --answer "$P/pearlplus-answer.json" --jobs "${PEARLPLUS_JOBS:-$(nproc)}" ${PEARLPLUS_SAMPLES:+--draws "$PEARLPLUS_SAMPLES"} \
-    ${PEARLPLUS_OVER_CAP:+--over-cap "$PEARLPLUS_OVER_CAP"} ${FAST:+--fast} ${TA[@]+"${TA[@]}"} > "$Q/verify.log" 2>&1 &
+    ${PEARLPLUS_OVER_CAP:+--over-cap "$PEARLPLUS_OVER_CAP"} ${FAST:+--fast} ${TA[@]+"${TA[@]}"} ${CONCURRENT:+--concurrent} \
+    > "$Q/verify.log" 2>&1 &
   V=$!
   # the coin record leaves the passes the moment verify samples it, before its replay: a deleted one would sample afresh
   while [ ! -s "$Q/passes/coin.json" ] && kill -0 "$V" 2>/dev/null; do sleep 1; done
   if [ -s "$Q/passes/coin.json" ]; then
+    if [ -n "$CONCURRENT" ] && [ -n "$LX" ]; then  # the Lean verifier beside the Python's, on the coin record it wrote
+      "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py lean --launch "$Q/lean-launch.json" \
+        --passes "$Q/passes" --exe "$LX" ${PEARLPLUS_SAMPLES:+--draws "$PEARLPLUS_SAMPLES"} \
+        ${PEARLPLUS_OVER_CAP:+--over-cap "$PEARLPLUS_OVER_CAP"} ${TA[@]+"${TA[@]}"} \
+        --timeout "${PEARLPLUS_LEAN_TIMEOUT:-3600}" > "$Q/lean-launch.log" 2>&1 &
+      L=$!
+    fi
     "$TPY" benchmarks/one_stage/served_verdicts.py coin "$P" --record "$Q/passes/coin.json" --run "${RESEARCH_RUN_ID:-}" \
       ${RESEARCH_RUN_DIR:+--run-dir "$RESEARCH_RUN_DIR"} > "$Q/coin.log" 2>&1
     say "coin: $(tail -1 "$Q/coin.log" | cut -c1-400)"
@@ -369,22 +394,26 @@ if [ -n "$GO" ]; then
   wait "$V"
   rc=$?
   say "verdict: served_passes.py verify exit $rc after $(took "$t"): $(tail -1 "$Q/verify.log" | cut -c1-400)"
+  if [ -n "$L" ]; then
+    wait "$L"
+    say "lean: served_passes.py lean --launch exit $? after $(took "$t"): $(tail -1 "$Q/lean-launch.log" | cut -c1-400)"
+  fi
 fi
 
 rm -f "$P/pearlplus-lean.json"
-if [ -n "$GO" ] && [ -s "$P/verify.json" ]; then
+if [ -z "$CONCURRENT" ] && [ -n "$GO" ] && [ -s "$P/verify.json" ]; then
   t=$(date +%s)
-  LX=${PEARLPLUS_LEAN_EXE:-}
-  if [ -z "$LX" ]; then
-    LX=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/.lake/build/bin/pouw-pearlplus
-    (cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
-      say "lean: pouw-pearlplus doesn't build (its log in the serve dir's private/pearlplus), so no Lean answer is written"
-      LX=; }
-  fi
-  [ -n "$LX" ] && [ -x "$LX" ] || LX=
+  lean_exe
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py lean --passes "$Q/passes" --verify "$P/verify.json" \
     --exe "${LX:-none}" --out "$P/pearlplus-lean.json" --timeout "${PEARLPLUS_LEAN_TIMEOUT:-3600}" > "$Q/lean.log" 2>&1
   say "lean: served_passes.py lean exit $? after $(took "$t"): $(tail -1 "$Q/lean.log" | cut -c1-400)"
+fi
+if [ -n "$CONCURRENT" ] && [ -n "$GO" ] && [ -s "$P/verify.json" ]; then
+  t=$(date +%s)
+  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py lean --passes "$Q/passes" --verify "$P/verify.json" \
+    --exe "${LX:-none}" --printout "$Q/lean-launch.json" --out "$P/pearlplus-lean.json" > "$Q/lean.log" 2>&1
+  say "lean: served_passes.py lean --printout exit $? after $(took "$t"), its verifier run beside the Python's:" \
+    "$(tail -1 "$Q/lean.log" | cut -c1-400)"
 fi
 if [ -s "$P/pearlplus-lean.json" ]; then
   t=$(date +%s)

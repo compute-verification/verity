@@ -50,7 +50,8 @@ elif script == "served_passes.py" and cmd == "retain":
     else:
         print("retain PASS: 3 of 3 passes with calls retained")
 elif script == "served_passes.py" and cmd == "verify":
-    Path(opt("--passes"), "coin.json").write_text("{}")
+    if not os.environ.get("TOY_NO_COIN"):
+        Path(opt("--passes"), "coin.json").write_text("{}")
     Path(opt("--out")).write_text(json.dumps({"answer": {"verdict": "accept"}}))
     print("ACCEPT verity/pouw/pearl-plus/v1")
 elif script == "served_passes.py" and cmd == "lean":
@@ -264,6 +265,74 @@ def test_under_pearlplus_tie_and_the_gate_the_piece_samples_only_after_a_period_
                 "since its open the window's salt sessions alone (served_verdicts.sh's PEARLPLUS-PERIOD line), so no draw "
                 "follows it") in lines
         assert not (sd / "pearl" / "w7" / "coin.json").exists()
+
+
+def _exe(tmp_path: Path) -> Path:
+    exe = tmp_path / "pouw-pearlplus"
+    exe.write_text("#!/bin/sh\nexit 0\n")
+    exe.chmod(0o755)
+    return exe
+
+
+def test_without_pearlplus_lean_concurrent_the_lean_verifier_follows_the_pythons_as_before(tmp_path):
+    """Without the switch the Lean verifier runs once the Python's ended, on its document, as it always did: no launch,
+    no ``--printout``, and verify not told it ran beside one."""
+    exe = _exe(tmp_path)
+    run, sd, _tree = _piece(tmp_path, _epoch(), PEARLPLUS_LEAN_EXE=str(exe))
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    q, piece = sd / "private" / "pearlplus", (tmp_path / "piece").resolve()
+    steps = _steps(tmp_path)
+    assert [Path(a[0]).name + " " + a[1] for a in steps][-4:] == [
+        "served_passes.py verify", "served_verdicts.py coin", "served_passes.py lean", "served_verdicts.py pearlplus"]
+    verify, lean = steps[-4], steps[-2]
+    assert "--concurrent" not in verify and not (q / "lean-launch.json").exists()
+    assert lean[1:] == ["lean", "--passes", str(q / "passes"), "--verify", str(piece / "verify.json"), "--exe", str(exe),
+                        "--out", str(piece / "pearlplus-lean.json"), "--timeout", "3600"]
+
+
+def test_with_pearlplus_lean_concurrent_the_lean_verifier_runs_beside_the_pythons_once_its_coin_record_is_written(tmp_path):
+    """With PEARLPLUS_LEAN_CONCURRENT=1 the Lean verifier is launched once verify wrote its coin record, before verify
+    ends, on the arguments verify got (draws, W and class, its timeout PEARLPLUS_LEAN_TIMEOUT's), and once both ended
+    ``lean --printout`` holds its run to verify's document; verify is told it ran beside it."""
+    exe = _exe(tmp_path)
+    run, sd, _tree = _piece(tmp_path, _epoch(), PEARLPLUS_LEAN_EXE=str(exe), PEARLPLUS_LEAN_CONCURRENT="1",
+                            PEARLPLUS_CLASS="4,32,3", PEARLPLUS_SAMPLES="16", PEARLPLUS_LEAN_TIMEOUT="13500")
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    q, piece = sd / "private" / "pearlplus", (tmp_path / "piece").resolve()
+    steps = _steps(tmp_path)
+    verify = next(a for a in steps if a[1] == "verify")
+    launch, compare = (a for a in steps if a[1] == "lean")
+    pearlplus = next(a for a in steps if a[1] == "pearlplus")
+    assert steps.index(verify) < steps.index(launch) < steps.index(compare) < steps.index(pearlplus)
+    w = str(q / "window-record.json")
+    assert verify[verify.index("--draws"):verify.index("--draws") + 2] == ["--draws", "16"] and verify[-1] == "--concurrent"
+    assert verify[verify.index("--tie"):verify.index("--tie") + 4] == ["--tie", w, "--class", "4,32,3"]
+    assert launch[1:] == ["lean", "--launch", str(q / "lean-launch.json"), "--passes", str(q / "passes"), "--exe", str(exe),
+                          "--draws", "16", "--tie", w, "--class", "4,32,3", "--timeout", "13500"]
+    assert compare[1:] == ["lean", "--passes", str(q / "passes"), "--verify", str(piece / "verify.json"), "--exe", str(exe),
+                           "--printout", str(q / "lean-launch.json"), "--out", str(piece / "pearlplus-lean.json")]
+    lines = run.stdout.splitlines()
+    assert any(x.startswith("POUW lean: served_passes.py lean --launch exit 0 after ") for x in lines), lines
+
+
+@pytest.mark.parametrize("case", ["no coin record", "no executable"])
+def test_with_pearlplus_lean_concurrent_no_lean_verifier_is_launched_without_a_coin_record_or_an_executable(tmp_path, case):
+    """A verify that refused before its coin wrote no coin record, and a pouw-pearlplus that doesn't build (built before
+    verify under the switch) is none: no launch, and the comparison runs as without the switch, refusing for want of a
+    run."""
+    extra = {"TOY_NO_COIN": "1", "PEARLPLUS_LEAN_EXE": str(_exe(tmp_path))} if case == "no coin record" else {}
+    run, sd, _tree = _piece(tmp_path, _epoch(), PEARLPLUS_LEAN_CONCURRENT="1", **extra)
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    leans = [a for a in _steps(tmp_path) if a[1] == "lean"]
+    assert len(leans) == 1 and "--launch" not in leans[0] and "--printout" in leans[0]
+    assert leans[0][leans[0].index("--exe") + 1] == (extra.get("PEARLPLUS_LEAN_EXE") or "none")
+    lines = run.stdout.splitlines()
+    if case == "no coin record":
+        assert "POUW coin: served_passes.py verify drew none (it refused the run before its coin)" in lines
+    else:
+        built = lines.index("POUW lean: pouw-pearlplus doesn't build (its log in the serve dir's private/pearlplus), so no "
+                            "Lean answer is written")
+        assert built < next(i for i, x in enumerate(lines) if x.startswith("POUW verdict: "))
 
 
 RECORD = '''import json, os, sys

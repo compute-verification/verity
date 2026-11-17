@@ -10,9 +10,11 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
   served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...]
                           [--window-record W [--previous-record FILE] [--day-declaration FILE]]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W [--class S,P,O]] --out verify.json [--answer answer.json]
-                          [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
+                          [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R] [--concurrent]
   served_passes.py lean --passes DIR [--manifest M ...] --verify verify.json --exe pouw-pearlplus|build
-                        --out pearlplus-lean.json [--check C] [--timeout S]
+                        --out pearlplus-lean.json [--check C] [--timeout S] [--printout FILE]
+  served_passes.py lean --launch FILE --passes DIR [--manifest M ...] --exe pouw-pearlplus [--draws 459]
+                        [--over-cap RULE] [--test-instance] [--tie W [--class S,P,O]] [--timeout S]
   served_passes.py uncredited --passes DIR --verify verify.json --out uncredited.json
   served_passes.py case --passes DIR --verify verify.json --lean pearlplus-lean.json --out CASE_DIR
   served_passes.py arm --out config.json [--spec SPEC] [--arm ARM]
@@ -135,6 +137,15 @@ exits 0 on a written accept, 1 on a written reject and 2 when it wrote no answer
 ``ACCEPT`` or ``REJECT`` and names each pass as the document does (``RUN:PATH sha256:DIGEST``), the line `verify.sh` and
 the PoUW harness's verify step (`pearl_c_sm90/overhead_arm.verifier`) act on; no other line starts so.
 
+``lean --launch FILE`` runs the Lean verifier beside the Python's, before ``verify`` wrote its document: on the command line
+`lean_argv` writes from what ``verify`` is given (``--draws``, ``--over-cap``, ``--test-instance``, ``--tie`` and ``--class``,
+each with ``verify``'s default) and the coin record ``DIR/coin.json``, which it refuses to run without, since a Lean that
+finds no record writes its own on the node's sample. It writes to FILE the command line, the executable's SHA-256, its
+exit code, what it printed and its cost, ``concurrent`` among it, and exits 0 once the executable ran, else 2.
+``lean --verify verify.json --printout FILE`` is then ``lean`` on that run instead of its own: it refuses unless FILE's
+command line is the one ``verify``'s document gives and its executable is ``--exe``'s, and holds the printout to the
+Python's verdict as ``lean`` does.
+
 ``uncredited`` is where an accepted run's linears' MACs went uncredited, call by call (`verify_run.uncredited_calls`, the
 verify document's ``uncredited``), for a verdict whose document predates it: the passes in DIR (``pass-*/manifest.json``,
 found by the SHA-256s ``--verify``'s document names, so a renamed DIR still serves) read as `verify` reads them against
@@ -216,6 +227,9 @@ LEAN_EXE = LEAN_PACKAGE / ".lake" / "build" / "bin" / "pouw-pearlplus"
 LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
 #: why the step refuses where the two verdicts disagree
 LEAN_DISAGREES = "the Lean verdict and the Python's disagree, so no Lean answer is written"
+#: ``lean --launch``'s record of the Lean verifier it ran beside the Python's, and why ``--printout`` refuses another run
+LEAN_LAUNCH_SCHEMA = "verity-pouw/pearl-plus-lean-launch/v1"
+LAUNCHED_ELSEWHERE = "the launched Lean verifier's command line is not the one verify's document gives"
 #: `case`'s parts of the run's case, and its directory of the files they name, each under the SHA-512 of its bytes
 CASE_SCHEMA = "verity-pouw/pearl-plus-case-parts/v1"
 #: the coin record's fields the protocol's params name (`PouwCheck.PearlPlus.Protocol.recordKeys`)
@@ -234,9 +248,10 @@ LOAD = ("spec", "arm", "requests", "prompt_tokens", "output_tokens")
 CLOCK = time.perf_counter
 
 
-def check_cost(seconds: float, **more: int) -> dict:
+def check_cost(seconds: float, **more: int | bool) -> dict:
     """What a check of Pearl+'s cost where it ran, in its own document: its wall ``seconds`` and the ``node`` it ran on
-    (this host: the served node wherever the piece runs there), with `more` (the Python check's ``jobs``)."""
+    (this host: the served node wherever the piece runs there), with `more` (the Python check's ``jobs``, and
+    ``concurrent`` where the two verifiers ran side by side)."""
     return {"seconds": round(seconds, 3), "node": socket.gethostname().split(".")[0], **more}
 
 
@@ -621,7 +636,7 @@ def verify(args: argparse.Namespace) -> int:
                                     dropped=dropped, record=record, draw=draw,
                                     over_cap=over_inert_bound_rule(VR.verify_passes, args.over_cap),
                                     test_instance=args.test_instance, window_class=args.cls))
-        doc["check_cost"] = check_cost(CLOCK() - t0, jobs=args.jobs)
+        doc["check_cost"] = check_cost(CLOCK() - t0, jobs=args.jobs, **({"concurrent": True} if args.concurrent else {}))
         if served is not None and not args.manifest and doc["answer"]["verdict"] == "accept":
             doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins, rounds)
     out = Path(args.out)
@@ -692,7 +707,57 @@ def python_answer(doc: dict) -> dict:
             "work": (a.get("public") or {}).get("work"), "exact_work": (a.get("profile") or {}).get("exact_work")}
 
 
+def run_lean(argv: list[str], timeout: float, **more: bool) -> dict:
+    """`argv` run within `timeout` seconds: its exit code (None where it gave none in time), what it printed and its cost
+    (`check_cost`, with `more`)."""
+    t0 = CLOCK()
+    try:
+        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired:
+        return {"rc": None, "stdout": "", "stderr": "", "check_cost": check_cost(CLOCK() - t0, **more)}
+    return {"rc": p.returncode, "stdout": p.stdout, "stderr": p.stderr, "check_cost": check_cost(CLOCK() - t0, **more)}
+
+
+def lean_launch(args: argparse.Namespace) -> int:
+    sys.path.insert(0, str(HERE))
+    import verify_run as VR
+
+    passes, exe, out = Path(args.passes), Path(args.exe), Path(args.launch)
+    record = passes / COIN
+    rec = {"schema": LEAN_LAUNCH_SCHEMA, "exe": str(exe), "exe_sha256": None, "argv": None, "timeout": args.timeout,
+           "rc": None, "stdout": None, "stderr": None, "check_cost": None, "reason": None}
+
+    def done(reason: str | None, rc: int) -> int:
+        rec["reason"] = reason
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(rec, indent=1) + "\n")
+        print(f"lean launch REFUSED: {reason}" if reason is not None else
+              f"lean launch: the Lean verifier beside the Python's exited {rec['rc']} -> {out.name}", flush=True)
+        return rc
+
+    if not record.is_file() or record.stat().st_size == 0:
+        return done(f"no coin record at {record}: a Lean verifier that finds none writes its own on the node's sample, "
+                    "so it runs only once the Python's verifier wrote it", 2)
+    served = json.loads((passes / "served.json").read_text()) if (passes / "served.json").exists() else None
+    try:
+        paths = args.manifest or (retention(passes, served)[0] if served is not None else manifests(passes)[0])
+        live = isinstance(VR.epoch_coins(passes / "coins.json"), VR.LiveCommitment)
+        over_cap = over_inert_bound_rule(VR.verify_passes, args.over_cap)
+    except (KeyError, OSError, TypeError, ValueError) as e:
+        return done(f"the retained passes or their coins can't be read: {type(e).__name__}: {e}", 2)
+    if not exe.is_file():
+        return done(f"no Lean executable at {exe}", 2)
+    rec["exe_sha256"] = hashlib.sha256(exe.read_bytes()).hexdigest()
+    rec["argv"] = lean_argv(exe, passes / "coins.json", DRAWS if args.draws is None else args.draws, record, paths,
+                            Path(args.tie) if args.tie else None, over_cap, args.test_instance, of_record=live,
+                            load=None if args.cls is None else list(args.cls))
+    rec.update(run_lean(rec["argv"], args.timeout, concurrent=True))
+    return done(None, 0)
+
+
 def lean(args: argparse.Namespace) -> int:
+    if args.launch:
+        return lean_launch(args)
     sys.path.insert(0, str(HERE))
     import verify_run as VR
 
@@ -752,22 +817,33 @@ def lean(args: argparse.Namespace) -> int:
     rec["argv"] = lean_argv(exe, passes / "coins.json", doc["draws"], record, paths,
                             Path(doc["tie_record"]) if doc.get("tie_record") else None, doc.get("over_cap", OVER_INERT_BOUND[0]),
                             doc.get("test_instance", False), of_record=live, load=doc.get("class"))
-    t0 = CLOCK()
-    try:
-        p = subprocess.run(rec["argv"], capture_output=True, text=True, timeout=args.timeout, check=False)
-    except subprocess.TimeoutExpired:
-        rec["check_cost"] = check_cost(CLOCK() - t0)
-        return done(f"the Lean gave no verdict within {args.timeout} s", 2)
-    rec["check_cost"] = check_cost(CLOCK() - t0)
-    rec["rc"], rec["stderr"] = p.returncode, p.stderr[-2000:] or None
-    said = p.stdout.strip().splitlines()
+    if args.printout:
+        try:
+            ran = json.loads(Path(args.printout).read_text())
+        except (OSError, ValueError) as e:
+            return done(f"the launched Lean verifier left no printout at {args.printout}: {type(e).__name__}: {e}", 2)
+        rec["launched"] = str(args.printout)
+        if ran.get("reason") is not None:
+            return done(f"the launched Lean verifier didn't run: {ran['reason']}", 2)
+        if ran.get("argv") != rec["argv"]:
+            return done(f"{LAUNCHED_ELSEWHERE}: it ran {ran.get('argv')}", 2)
+        if ran.get("exe_sha256") != rec["exe_sha256"]:
+            return done("the launched Lean verifier's executable is not --exe's, by SHA-256", 2)
+        timeout = ran.get("timeout")
+    else:
+        ran, timeout = run_lean(rec["argv"], args.timeout), args.timeout
+    rec["check_cost"] = ran["check_cost"]
+    if ran["rc"] is None:
+        return done(f"the Lean gave no verdict within {timeout} s", 2)
+    rec["rc"], rec["stderr"] = ran["rc"], ran["stderr"][-2000:] or None
+    said = ran["stdout"].strip().splitlines()
     try:
         got = json.loads(said[-1]) if said else None
     except ValueError as e:
         rec["unparsed"] = f"the Lean's last line isn't JSON: {e}"
         got = None
-    if not isinstance(got, dict) or p.returncode != (got.get("verdict") != "accept"):
-        return done(f"the Lean exited {p.returncode} without a verdict: {(p.stdout + p.stderr).strip()[-400:]}", 2)
+    if not isinstance(got, dict) or ran["rc"] != (got.get("verdict") != "accept"):
+        return done(f"the Lean exited {ran['rc']} without a verdict: {(ran['stdout'] + ran['stderr']).strip()[-400:]}", 2)
     rec["lean"] = got
     answer, want = lean_answer(got), rec["python"]
     differ = [k for k in LEAN_HELD if got.get(k) != want[k]]
@@ -982,6 +1058,8 @@ def main(argv: list[str] | None = None) -> int:
                    "credits it nothing, reject rejects the run (default: verify_run.verify_passes' own, uncredited)")
     v.add_argument("--test-instance", action="store_true", help="the passes are a test instance's: their tile may be "
                    "other than 64 x 64, and the verdict credits nothing")
+    v.add_argument("--concurrent", action="store_true", help="the Lean verifier runs beside this one (lean --launch): "
+                   "check_cost says so")
     a = sub.add_parser("arm")
     a.add_argument("--spec", type=Path, default=SPEC)
     a.add_argument("--arm", help=f"the spec's {ARM_PREFIX}* arm (default: its one)")
@@ -990,12 +1068,22 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--passes", required=True)
     n.add_argument("--manifest", action="append", type=Path,
                    help="a pass's manifest, in order, repeated: the passes verify --manifest named (default: as verify's)")
-    n.add_argument("--verify", required=True, help="verify's --out document")
+    n.add_argument("--verify", help="verify's --out document")
     n.add_argument("--exe", required=True, help=f"PouwVerifier.PearlPlus's pouw-pearlplus, built, or {BUILD!r}: built first "
                    "in its package (LEAN_PACKAGE)")
-    n.add_argument("--out", required=True, help="where the Lean's answer goes where it agrees with the Python's")
+    n.add_argument("--out", help="where the Lean's answer goes where it agrees with the Python's")
     n.add_argument("--check", help=f"where both verdicts go (default: {LEAN_CHECK} beside --out)")
     n.add_argument("--timeout", type=float, default=3600, help="seconds the Lean has to answer (default 3,600)")
+    n.add_argument("--printout", help="with --verify: lean --launch's FILE, the Lean verifier's run to hold to the Python's "
+                   "verdict in place of running it here")
+    n.add_argument("--launch", metavar="FILE", help="run the Lean verifier beside the Python's once DIR/coin.json is "
+                   "written, before verify's document, on verify's arguments below, its run to FILE")
+    n.add_argument("--draws", type=int, help=f"with --launch: verify's --draws (default {DRAWS})")
+    n.add_argument("--over-cap", choices=OVER_INERT_BOUND, help="with --launch: verify's --over-cap")
+    n.add_argument("--test-instance", action="store_true", help="with --launch: verify's --test-instance")
+    n.add_argument("--tie", metavar="W", help="with --launch: verify's --tie")
+    n.add_argument("--class", dest="cls", type=window_class, metavar="SLOTS,PROMPT,OUTPUTS",
+                   help="with --launch and --tie: verify's --class")
     u = sub.add_parser("uncredited")
     u.add_argument("--passes", required=True)
     u.add_argument("--verify", required=True, help="verify's --out document, an accept")
@@ -1008,6 +1096,18 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     if args.cmd == "verify" and args.cls is not None and not args.tie:
         p.error("verify --class holds the passes --tie W ties to its class's fixed load: it is read only beside --tie")
+    if args.cmd == "lean" and args.launch:
+        if args.verify or args.out or args.printout or args.exe == BUILD:
+            p.error("lean --launch runs a built pouw-pearlplus before verify's document: no --verify, --out, --printout "
+                    "or --exe build (build it first)")
+        if args.cls is not None and not args.tie:
+            p.error("lean --class is verify's, read only beside --tie")
+    elif args.cmd == "lean":
+        if not (args.verify and args.out):
+            p.error("lean takes --verify and --out (or --launch FILE)")
+        if args.draws is not None or args.over_cap or args.test_instance or args.tie or args.cls is not None:
+            p.error("lean takes --draws, --over-cap, --test-instance, --tie and --class only with --launch: otherwise "
+                    "they are verify's document's")
     if args.cmd == "retain" and args.previous_record and not args.window_record:
         p.error("retain --previous-record names the record W is chained after: it is read only beside --window-record")
     if args.cmd == "retain" and args.day_declaration and not args.window_record:
