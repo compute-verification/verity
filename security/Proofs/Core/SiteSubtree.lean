@@ -115,7 +115,7 @@ the subtree's prover places, its memory challengers or its certifiers. -/
 theorem outside_mem_compl (hno : ∀ x ∈ S.locs, x.id ≠ outside) (hk : S.kind? outside ≠ some .certifier)
     {i : String} (hi : i ≠ outside) :
     S.place outside ∈
-      (S.placesIn (S.proverUnder i ∪ (S.challengersOf ∅ i \ ∅)) ∪ S.placesIn (S.certifiersOf i ∪ ∅))ᶜ := by
+      (S.placesIn (S.proverUnder i ∪ (S.challengersOf ∅ i \ ∅)) ∪ S.placesIn (S.attestersOf i ∪ ∅))ᶜ := by
   classical
   rw [Finset.mem_compl, Finset.mem_union, S.mem_placesIn, S.mem_placesIn, S.place_outside]
   rintro (h | h)
@@ -125,7 +125,7 @@ theorem outside_mem_compl (hno : ∀ x ∈ S.locs, x.id ≠ outside) (hk : S.kin
     · unfold challengersOf at h
       exact Finset.notMem_empty _ (Finset.mem_filter.1 (Finset.mem_sdiff.1 h).1).2.2.1
   · rcases Finset.mem_union.1 h with h | h
-    · unfold certifiersOf at h
+    · unfold attestersOf at h
       exact hk (Finset.mem_filter.1 h).2.1
     · exact Finset.notMem_empty _ h
 
@@ -246,7 +246,7 @@ theorem within_of_not_shared {pinned : Finset String} {i y : String}
 /-- The network attesters of the subtree at `i`, the challengers `units` and the subtree's other challengers are together the
 auditor's devices at the subtree. -/
 theorem units_union_sinks {pinned units : Finset String} {i : String} (hu : units ⊆ S.challengersOf pinned i) :
-    S.certifiersOf i ∪ units ∪ (S.challengersOf pinned i \ units) = S.auditorsOf pinned i := by
+    S.attestersOf i ∪ units ∪ (S.challengersOf pinned i \ units) = S.auditorsOf pinned i := by
   ext y
   simp only [auditorsOf, Finset.mem_union, Finset.mem_sdiff]
   constructor

@@ -809,7 +809,7 @@ def paramsOf (j : Json) : V Params := do
 through the period's own decoder (`paramsOf`): what a composition that pins its network attester's keys (an `AuditorPin`
 each, the pinned list `AuditorPins`) reads off the period's parameters, as `Core.Onsite.store` reads PoUS's root off its
 commitment through PoUS's decoder. -/
-def certifierEntries (j : Json) : V (Array Entry) := (·.entries) <$> paramsOf j
+def attesterEntries (j : Json) : V (Array Entry) := (·.entries) <$> paramsOf j
 
 -- the parameters list the network attester's entries: two decode, in order, each with its key, its session and its start, a
 -- key listed in two sessions among them. Refused, each by name: no entry; an entry below the one before it; two entries
@@ -860,11 +860,11 @@ def certifierEntries (j : Json) : V (Array Entry) := (·.entries) <$> paramsOf j
       s!"sessions: write each key's session in its entry of \"keys\", {write}"
 
 /-- The link the parameters name, the one whose records the period checks, read through the period's own decoder
-(`paramsOf`): with `certifierEntries`, what a composition reads off the period's parameters. -/
-def certifierLink (j : Json) : V String := (·.link) <$> paramsOf j
+(`paramsOf`): with `attesterEntries`, what a composition reads off the period's parameters. -/
+def attesterLink (j : Json) : V String := (·.link) <$> paramsOf j
 
 -- parameters the period refuses give no link
-#guard (certifierLink (Json.mkObj [("link", .str "eth0")])).toOption == none
+#guard (attesterLink (Json.mkObj [("link", .str "eth0")])).toOption == none
 
 /-- A window record of one of `Flock.WindowRecord.FORMATS`. -/
 def registrationOf (j : Json) (ctx : String) : V Json := do

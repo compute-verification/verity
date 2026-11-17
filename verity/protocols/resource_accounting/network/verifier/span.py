@@ -51,8 +51,8 @@ from verity.protocols.resource_accounting.network.verifier.certificate import (D
                                                             Direction, LmsKey)
 from verity.protocols.resource_accounting.network.verifier.network_attester import INTEGER_FIELDS, NetworkAttesterParams as Schedule
 
-ID = domains.CERTIFIER_SPAN_PROTOCOL
-COMMITMENT_TAG = domains.CERTIFIER_SPAN
+ID = domains.ATTESTER_SPAN_PROTOCOL
+COMMITMENT_TAG = domains.ATTESTER_SPAN
 #: what a link's name gains for the link its fails record is attested under
 FAILS = "fails"
 PARAMS_KEYS = ["key", "link", "lms", "schedule", "session"]

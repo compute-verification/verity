@@ -31,7 +31,7 @@ def test_the_arm_is_the_tick_arm_with_the_attester_in_front(tmp_path: Path, monk
     (tmp_path / "tick_plugin.py").touch()
     monkeypatch.setattr(S, "TICK_PLUGIN", tmp_path / "tick_plugin.py")
     monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100))
-    cells = S.certifier_cells(None, {"chat": (96,)})
+    cells = S.attester_cells(None, {"chat": (96,)})
     tau = S.tick_args(None, "220,230", bucket_ms=cells["bucket_ms"])
     assert tau == {"bucket_us": 250000, "sat_us": 220000, "free_us": 230000, "calibrated_from": None}
     assert S.tick_args(None, "220,230")["bucket_us"] == 100000
@@ -49,16 +49,16 @@ def test_the_arm_is_the_tick_arm_with_the_attester_in_front(tmp_path: Path, monk
 
 
 def test_the_schedule_has_a_lane_and_a_queue_place_for_each_request_in_flight():
-    cells = S.certifier_cells(None, {"chat": (48, 96)})
+    cells = S.attester_cells(None, {"chat": (48, 96)})
     assert cells == {**S.CELLS, "lanes": 96, "queue": 96}
     assert S.ceiling(cells) == 384.0 and S.cell_payload(cells) == 4096 - 9
-    assert S.certifier_cells("delay=20, lanes=128,max_tokens_cap=256", {"chat": (96,)}) == {
+    assert S.attester_cells("delay=20, lanes=128,max_tokens_cap=256", {"chat": (96,)}) == {
         **S.CELLS, "delay": 20, "lanes": 128, "queue": 96, "max_tokens_cap": 256}
     for text, why in (("queue=64", "a queue of 64 under the rung 96"), ("tokens=256", "NAME=N, NAME one of cell_bytes"),
                       ("slots=two", "NAME=N"), ("max_tokens_cap=4096", "max_tokens_cap is a u32 from 1 to"),
                       ("cell_bytes=8", "a cell holds its")):
         with pytest.raises(SystemExit, match=why):
-            S.certifier_cells(text, {"chat": (96,)})
+            S.attester_cells(text, {"chat": (96,)})
     assert S.certified_loads(ARM, "chat=96") == {"chat": (96,)}
     for text, why in (("long", "not long"), ("chat=96,long", "not long"), ("prefix", "not prefix"), (None, "--loads")):
         with pytest.raises(SystemExit, match=why):
@@ -66,7 +66,7 @@ def test_the_schedule_has_a_lane_and_a_queue_place_for_each_request_in_flight():
 
 
 def test_each_sides_commands_are_the_fronts_the_attesters_and_the_shims(tmp_path: Path):
-    cells = S.certifier_cells(None, {"chat": (96,)})
+    cells = S.attester_cells(None, {"chat": (96,)})
     assert S.front_argv(8000, 18746, S.cell_payload(cells), tmp_path / "front.jsonl")[1:] == [
         "-m", "verity_vllm.pipeline.cli", "ids-front", "--upstream", "127.0.0.1:8000", "--listen", "127.0.0.1:18746",
         "--id-payload", "4087", "--log", str(tmp_path / "front.jsonl")]
@@ -384,7 +384,7 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
 def test_the_cost_of_an_arm_behind_the_attester_says_what_it_is_of():
     """The report's text never calls such an arm's cost GPU time a token: it names the schedule's ceiling on its
     tokens a second, and what the network attester's check found of the run."""
-    cells = S.certifier_cells(None, {"chat": (96,)})
+    cells = S.attester_cells(None, {"chat": (96,)})
     k = {"cells": cells, "windows": 16, "ceiling_tok_per_s": S.ceiling(cells)}
     assert S.attester_text(ARM, None) == []
     first, second = S.attester_text(ARM, k)
