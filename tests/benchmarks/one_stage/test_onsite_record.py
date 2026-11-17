@@ -103,7 +103,7 @@ MEASURED = {"format": "verity/advice-charge/v2", "label": "measured on test run 
             "prompt_len": {"count": 5}, "output_len": {"count": 5}, "finishes": {"eos": 3, "length": 2, "abort": 0}}
 TREE = "ab12" * 10
 #: the network attester's published verdict line, after an earlier attempt's
-LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
+LINE = 'THE NETWORK ATTESTER {"rc": 0, "verdict": "accept"}'
 #: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
 #: the auditor's record of its network attester's key, as `record_files.public_json` writes one, and session; and
@@ -112,7 +112,7 @@ CAPACITY = 1008 * 512 * 8
 CERT_KEY = {"params": [64, 8, 10], "public": "c3" * 64, "key_id": "1d" * 16}
 SESSION = "5e" * 32
 ENTRY = {"key": CERT_KEY["public"], "session": SESSION, "start": 0}
-CERTIFIER = {"first": 0, "keys": [ENTRY], "lms": {"H": 10, "N": 64, "W": 8, "toy": False}}
+ATTESTER = {"first": 0, "keys": [ENTRY], "lms": {"H": 10, "N": 64, "W": 8, "toy": False}}
 
 
 def key_record(key: dict = CERT_KEY, session: str = SESSION) -> dict:
@@ -295,7 +295,7 @@ def lock(tmp_path_factory, monkeypatch) -> Path:
 
 def answer(public: dict | None, verdict: str = "accept") -> dict:
     return {"protocol": OR.NETWORK, "verdict": verdict, "reason": None, "commitment": "ab" * 64, "public": public,
-            "profile": {"link": "served", "windows": 1, "placement": {"trusted-device": "the certifier on the gate's host"}}}
+            "profile": {"link": "served", "windows": 1, "placement": {"trusted-device": "the network attester on the gate's host"}}}
 
 
 def network_row(public: dict | None) -> dict:
@@ -356,7 +356,7 @@ def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None
                audit: dict | None = AUDITED, draw: dict = SUBSET1, bound: int = N - 1) -> Path:
     """A toy $OUT: SPOT accepted under ``draw`` with ``bound`` (`integrity_answer`), its audit's record
     ``audit`` (none where None), PoUW and the network attester missing unless given, the given composites and
-    certifier case, and its COINS line, its sampled-proofs part ``coins`` (none where None); and beside it the auditor's
+    attester case, and its COINS line, its sampled-proofs part ``coins`` (none where None); and beside it the auditor's
     inputs (`auditor_files`)."""
     out = tmp_path / "out"
     auditor_files(out)
@@ -384,7 +384,7 @@ def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None
 
 
 def chain_report(n2: str = "all", scan: str = "all") -> dict:
-    """The network attester's published chain report (`certifier_piece.PUBLIC`), its draws at these sampling_designs."""
+    """The network attester's published chain report (`attester_piece.PUBLIC`), its draws at these sampling_designs."""
     return {"steps": {s: {"eps_at_delta": {"law": sampling_design, "eps": "0"}} for s, sampling_design in (("n2", n2), ("scan", scan))}}
 
 
@@ -471,7 +471,7 @@ def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list
              draws: dict | None = ALL, params: dict | None = None, onsite: bool = True) -> Path:
     """A run whose network attester accepted ``public``, its case the period's of ``windows`` execution phases at
     ``schedule``, whose caps are the schedule's (`Schedule.rowsCells`) unless given, the network attester's key, LMS
-    parameters and session the auditor's record's (`CERTIFIER`) and any other ``params``, and whose commitment holds
+    parameters and session the auditor's record's (`ATTESTER`) and any other ``params``, and whose commitment holds
     ``audits``' dockets, with ``registration`` its published advice registration, none where None, ``coins`` its
     COINS line's sampled-proofs part (`served_out`), ``draws`` its chain report, none where None, and remote's
     composite and, where ``onsite``, onsite's (`with_onsite`), the composite of record that composed its case."""
@@ -480,12 +480,12 @@ def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list
         caps = [schedule["egress_cells"]] * (schedule["lanes"] * windows * schedule["window"])
     out = served_out(tmp_path, network=network_row(public), work=pouw,
                      case={"commitment": commitment(*audits), "evidence": "00",
-                           "params": {"windows": windows, "cells": caps, "schedule": schedule, **CERTIFIER}
+                           "params": {"windows": windows, "cells": caps, "schedule": schedule, **ATTESTER}
                            | (params or {})},
                      composites={"remote": remote_composite()}, coins=coins)
     (out / "machine.txt").write_text(f"ubuntu\n{NODE}\n{TREE}\n96\nserve dir /serve/d\n")
     with open(out / "verdicts.txt", "a") as f:
-        f.write(f'THE NETWORK CERTIFIER {{"rc": 1, "verdict": "error"}}\nRECORD {{}}\n{LINE}\n'
+        f.write(f'THE NETWORK ATTESTER {{"rc": 1, "verdict": "error"}}\nRECORD {{}}\n{LINE}\n'
                 "COMPOSITE CASE verity/certifier/v0 accept\n")
     if registration is not None:
         (out / OR.REGISTRATION).write_text(json.dumps(registration))
@@ -556,7 +556,7 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert sum(t["bits"] for t in b["terms"]) == b["K"]
     assert b["notes"] == [OR.OVERCOUNT] and "k_sched" in OR.OVERCOUNT and "k_fail" in OR.OVERCOUNT
     assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}
-    assert rec["placement"] == {"trusted-device": "the certifier on the gate's host"}
+    assert rec["placement"] == {"trusted-device": "the network attester on the gate's host"}
     assert rec["advice_charge"]["charged"] == {"is": OR.CHARGED, "bits_per_phase": [9088], "share": 9088 / K,
                                                "lean": "scans[j].free"}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
@@ -622,9 +622,9 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     lock.write_text(json.dumps(lock_doc({g: [] for g in OR.RESTS_ON if g != TIED})))
     rec = held_both(tmp_path)
     of = rec["bound"]["of_record"]
-    assert TIED in UNPINNED and OR.CERTIFIER_KEY not in UNNAMED
+    assert TIED in UNPINNED and OR.ATTESTER_KEY not in UNNAMED
     assert (of["held"], of["open"], of["K"]) == (
-        ["free", "circuit"], [*(n for n in OR.PREMISES if n != OR.CERTIFIER_KEY), TIED], K + 2 ** 23 + 1)
+        ["free", "circuit"], [*(n for n in OR.PREMISES if n != OR.ATTESTER_KEY), TIED], K + 2 ** 23 + 1)
     assert {"sampled-leg-bridge", "reg-opens-at"} <= set(of["open"])
     assert [p["missing"] for p in of["premises"]["premises"].values()] == [
         list(p["discharged_by"]) for p in OR.PREMISES.values()]
@@ -651,7 +651,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     wrong = OR.PREMISES["wrong-bounds"]["is"]
     assert all(x in wrong for x in ("RegMatches", "`sampled-leg-bridge`", "v.law is g.rule.samplingDesignOver n",
                                     "Draw.sameSamplingDesign", "jeq a (toJson n) → nat? a = some n"))
-    assert all(x in OR.PREMISES[OR.CERTIFIER_KEY]["is"] for x in ("certifier-key/v1", "beside trusted-device",
+    assert all(x in OR.PREMISES[OR.ATTESTER_KEY]["is"] for x in ("certifier-key/v1", "beside trusted-device",
                                                                  "`NOT_ESTABLISHED`", "`UNCHARGED`", "hA, hr and hkey"))
     assert all(x in OR.CHECKED[OR.AUDITOR_RECORD] for x in ("never the prover's node or its deployment.json",
                                                             "an obligation on the auditor's configuration"))
@@ -941,7 +941,7 @@ def test_each_guarantee_the_tight_K_rests_on_is_named_by_what_it_takes_at_its_st
             assert set(lock["guarantees"][g]["assumptions"]) <= set(r["takes"]) | set(OR.STANDING), g
 
 
-def test_at_the_trees_lock_certifier_key_stays_open_and_the_network_verdict_unestablished_until_it_is_stated(
+def test_at_the_trees_lock_attester_key_stays_open_and_the_network_verdict_unestablished_until_it_is_stated(
         monkeypatch, tmp_path):
     """No Lean states PeriodLeakRegistered (`RESTATE_PERIOD`): the tree's locks hold no statement of it, and `RESTS_ON`
     pins none. So at the tree's lock certifier-key stays open even where the run's check of the auditor's record (hA,
@@ -958,12 +958,12 @@ def test_at_the_trees_lock_certifier_key_stays_open_and_the_network_verdict_unes
     for checked, why in (({OR.AUDITOR_RECORD: {"holds": True}}, None),
                          ({OR.AUDITOR_RECORD: {"holds": False, "why": "toy"}}, "toy"), (None, OR.NOT_CHECKED)):
         got = OR.premises(OR.LOCKS, checked=checked)
-        assert got["unread"] == [] and {OR.CERTIFIER_KEY, OR.PERIOD_REGISTERED} <= set(got["open"])
+        assert got["unread"] == [] and {OR.ATTESTER_KEY, OR.PERIOD_REGISTERED} <= set(got["open"])
         assert got["rests_on"][OR.PERIOD_REGISTERED] == {"missing": "not in the lock", "takes": r["takes"],
                                                          "restate": OR.RESTATE_PERIOD}
-        assert got["premises"][OR.CERTIFIER_KEY].get("unchecked") == why
+        assert got["premises"][OR.ATTESTER_KEY].get("unchecked") == why
     v = record(accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"])))["verdicts"]["the network certifier"]
-    assert (v["verdict"], v["answer"]) == (OR.NOT_ESTABLISHED, "accept") and OR.CERTIFIER_KEY in v["open"]
+    assert (v["verdict"], v["answer"]) == (OR.NOT_ESTABLISHED, "accept") and OR.ATTESTER_KEY in v["open"]
     assert OR.KEY_OPEN in v["why"], v["why"]
 
 
@@ -1548,7 +1548,7 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
         f"the composite of record has no {OR.NETWORK} case stating the SHA-512 of the parameters the period's check read")
     assert rec["of_record"] == {"holds": False, "missing": ["onsite"], "not_accepting": [],
                                 "not_established": ["sampled proofs", "the network certifier"], "not_credited": [],
-                                "not_claimed": ["PoUW"], "conditional_on": [OR.CERTIFIER_KEY],
+                                "not_claimed": ["PoUW"], "conditional_on": [OR.ATTESTER_KEY],
                                 "uncredited": OR.UNESTABLISHED_CREDIT, **ONSITE_OF_RECORD}
     doc = json.loads((with_onsite(out) / "composite" / "remote-network" / "composite.json").read_text())
     assert record(out)["of_record"] == {"holds": True, "missing": [], "not_accepting": [], "not_established": [],
@@ -1605,7 +1605,7 @@ def test_spot_verdict_is_its_subprotocol_in_the_composite_of_record_never_the_re
     assert OR.summary(rec)["verdicts"]["sampled proofs"] == verdict
 
 
-def test_under_the_network_certifiers_composite_without_pouw_the_run_is_of_record_over_its_subprotocols_alone(
+def test_under_the_network_attesters_composite_without_pouw_the_run_is_of_record_over_its_subprotocols_alone(
         tmp_path, capsys):
     """A run with the network attester's composite without PoUW, under its own id: it is the composite of record, named
     by that id, though remote's and remote-network's, which compose PoUW's case, reject naming it missing. The run is of
@@ -1687,7 +1687,7 @@ def test_the_inference_only_verdict_says_where_alpha_and_gamma_came_from_never_a
 
 
 @pytest.mark.parametrize("how", ["unlisted", "restated", "another key", "no registration", "a case rewritten"])
-def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_established_and_its_bound_conditional_on_it(
+def test_while_attester_key_is_open_an_accepted_network_verdict_is_not_established_and_its_bound_conditional_on_it(
         tmp_path, lock, capsys, how):
     """certifier-key open, every other premise discharged, both checks held and the coins live: the network
     attester's verdict is not established, its Lean answer's accept beside it, never cited as an accept with an open
@@ -1712,14 +1712,14 @@ def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_establis
         (out / OR.CASE).write_text(json.dumps(case | {"params": case["params"] | {"keys": [dict(ENTRY, key=ANOTHER)]}}))
         auditor_files(out, key=key_record(dict(CERT_KEY, public=ANOTHER)), site=site_registration(ANOTHER))
     assert main([str(out)]) == 0
-    rec, cond = json.loads((out / "record" / "onsite.json").read_text()), [OR.CERTIFIER_KEY]
+    rec, cond = json.loads((out / "record" / "onsite.json").read_text()), [OR.ATTESTER_KEY]
     by_lock = how in ("unlisted", "restated")
     assert rec["checked"][OR.AUDITOR_RECORD]["holds"] is by_lock
     if how == "a case rewritten":
         assert rec["checked"][OR.AUDITOR_RECORD]["why"] == (
             f"the period's parameters ({OR.CASE}'s params) aren't, by SHA-512, those its check read (the composite of "
             f"record's {OR.NETWORK} case's params_sha512)")
-    assert ("unchecked" in rec["bound"]["of_record"]["premises"]["premises"][OR.CERTIFIER_KEY]) is not by_lock
+    assert ("unchecked" in rec["bound"]["of_record"]["premises"]["premises"][OR.ATTESTER_KEY]) is not by_lock
     nv = rec["verdicts"]["the network certifier"]
     assert {k: nv[k] for k in ("protocol", "verdict", "answer", "open", "why")} == {
         "protocol": OR.NETWORK, "verdict": OR.NOT_ESTABLISHED, "answer": "accept", "open": cond, "why": OR.KEY_OPEN}
@@ -1741,40 +1741,40 @@ ANOTHER = "d4" * 64
 #: each way the auditor's inputs fail auditor-record, as (its certifier-key record, its registration, the period's
 #: params, why): None where the run gives no such input, a str where the file holds those bytes
 REFUSED_INPUTS = {
-    "no record": (None, site_registration(), CERTIFIER, "the run gave no --certifier-key, the auditor's input it reads"),
-    "no registration": (key_record(), None, CERTIFIER,
+    "no record": (None, site_registration(), ATTESTER, "the run gave no --certifier-key, the auditor's input it reads"),
+    "no registration": (key_record(), None, ATTESTER,
                         "the run gave no --site-registration, the auditor's input it reads"),
-    "unreadable": ("{", site_registration(), CERTIFIER, "--certifier-key can't be read: JSONDecodeError"),
-    "another schema": (key_record() | {"schema": "verity/other/v1"}, site_registration(), CERTIFIER,
+    "unreadable": ("{", site_registration(), ATTESTER, "--certifier-key can't be read: JSONDecodeError"),
+    "another schema": (key_record() | {"schema": "verity/other/v1"}, site_registration(), ATTESTER,
                        f"--certifier-key isn't a {WC.RECORD} record of a key and a session"),
-    "no session": ({k: v for k, v in key_record().items() if k != "session"}, site_registration(), CERTIFIER,
+    "no session": ({k: v for k, v in key_record().items() if k != "session"}, site_registration(), ATTESTER,
                    f"--certifier-key isn't a {WC.RECORD} record of a key and a session"),
-    "another key": (key_record(dict(CERT_KEY, public=ANOTHER)), site_registration(ANOTHER), CERTIFIER,
+    "another key": (key_record(dict(CERT_KEY, public=ANOTHER)), site_registration(ANOTHER), ATTESTER,
                     "the period's key isn't the auditor's record's"),
-    "another session": (key_record(session="6f" * 32), site_registration(), CERTIFIER,
+    "another session": (key_record(session="6f" * 32), site_registration(), ATTESTER,
                         "the period's session isn't the auditor's record's"),
-    "another LMS": (key_record(dict(CERT_KEY, params=[64, 8, 15])), site_registration(), CERTIFIER,
+    "another LMS": (key_record(dict(CERT_KEY, params=[64, 8, 15])), site_registration(), ATTESTER,
                     "the period's lms isn't the auditor's record's"),
-    "a toy LMS": (key_record(), site_registration(), dict(CERTIFIER, lms=dict(CERTIFIER["lms"], toy=True)),
+    "a toy LMS": (key_record(), site_registration(), dict(ATTESTER, lms=dict(ATTESTER["lms"], toy=True)),
                   "the period's lms isn't the auditor's record's"),
     "another key and session": (key_record(dict(CERT_KEY, public=ANOTHER), "6f" * 32), site_registration(ANOTHER),
-                                CERTIFIER, "the period's key and session aren't the auditor's record's"),
-    "no keys in the period": (key_record(), site_registration(), {k: v for k, v in CERTIFIER.items() if k != "keys"},
+                                ATTESTER, "the period's key and session aren't the auditor's record's"),
+    "no keys in the period": (key_record(), site_registration(), {k: v for k, v in ATTESTER.items() if k != "keys"},
                               OR.NO_KEYS),
     "the single key's form": (key_record(), site_registration(),
-                              {"key": CERT_KEY["public"], "lms": CERTIFIER["lms"], "session": SESSION}, OR.NO_KEYS),
+                              {"key": CERT_KEY["public"], "lms": ATTESTER["lms"], "session": SESSION}, OR.NO_KEYS),
     "no period": (key_record(), site_registration(), None, OR.NO_KEYS),
-    "no entry holds the phase": (key_record(), site_registration(), dict(CERTIFIER, keys=[dict(ENTRY, start=1)]),
+    "no entry holds the phase": (key_record(), site_registration(), dict(ATTESTER, keys=[dict(ENTRY, start=1)]),
                                  OR.NO_ENTRY),
-    "a log its check refuses": (key_record(), site_registration(placed=ANOTHER), CERTIFIER,
+    "a log its check refuses": (key_record(), site_registration(placed=ANOTHER), ATTESTER,
                                 "the auditor's registration log doesn't check: entry 0: owner"),
     "another composite": (key_record(), site_registration() | {"params": site_registration(composite="remote")["params"]},
-                          CERTIFIER, "the auditor's registration log doesn't check: composite: the log is "
+                          ATTESTER, "the auditor's registration log doesn't check: composite: the log is "
                                      "onsite's, not remote's"),
     "another form": (key_record(), {"auditor": site_registration()["params"]["auditor"], "log": site_registration()["log"]},
-                     CERTIFIER, "--site-registration isn't a registration's params and log: Malformed: not {params, log}"),
-    "no certifier holding the key": (key_record(), site_registration(ANOTHER), CERTIFIER,
-                                     "the auditor's registration holds the record's key for no network certifier its "
+                     ATTESTER, "--site-registration isn't a registration's params and log: Malformed: not {params, log}"),
+    "no attester holding the key": (key_record(), site_registration(ANOTHER), ATTESTER,
+                                     "the auditor's registration holds the record's key for no network attester its "
                                      "log places"),
 }
 
@@ -1782,10 +1782,10 @@ REFUSED_INPUTS = {
 def test_auditor_record_holds_where_the_auditors_record_and_registration_hold_the_periods_key_lms_and_session(tmp_path):
     """auditor-record on the run (`OR.auditor_record`): the period's parameters are, by SHA-512, those the composite of
     record composed, the auditor's certifier-key record states their key, LMS parameters and session, and its
-    registration, which checks, holds that key for a network attester its log places; it names that certifier and
+    registration, which checks, holds that key for a network attester its log places; it names that attester and
     each input it read by SHA-512."""
     a = auditor_files(tmp_path / "out")
-    assert OR.auditor_record(CERTIFIER, sha512_of(CERTIFIER), a["certifier_key"], a["site_registration"]) == {
+    assert OR.auditor_record(ATTESTER, sha512_of(ATTESTER), a["certifier_key"], a["site_registration"]) == {
         "is": OR.CHECKED[OR.AUDITOR_RECORD], "holds": True, "certifier": "cert0",
         "from": {flag: hashlib.sha512(a[f].read_bytes()).hexdigest()
                  for flag, f in (("--certifier-key", "certifier_key"), ("--site-registration", "site_registration"))}}
@@ -1816,7 +1816,7 @@ def test_auditor_record_holds_the_key_and_session_of_the_entry_whose_stretch_hol
     second's stretch, auditor-record holds the second's key and session to the auditor's record, the entry
     NetworkCheck.Period.entryAt picks, so it holds against a record of the second and not against one of the first."""
     first = {"key": ANOTHER, "session": "6f" * 32, "start": 0}
-    params = dict(CERTIFIER, first=4, keys=[first, dict(ENTRY, start=3)])
+    params = dict(ATTESTER, first=4, keys=[first, dict(ENTRY, start=3)])
     a = auditor_files(tmp_path / "second")
     got = OR.auditor_record(params, sha512_of(params), a["certifier_key"], a["site_registration"])
     assert (got["holds"], got["certifier"]) == (True, "cert0"), got
@@ -1829,10 +1829,10 @@ def test_auditor_record_holds_the_key_and_session_of_the_entry_whose_stretch_hol
 @pytest.mark.parametrize("composed, why", [
     (None, f"the composite of record has no {OR.NETWORK} case stating the SHA-512 of the parameters the period's "
            "check read"),
-    (sha512_of(dict(CERTIFIER, key=ANOTHER)), f"the period's parameters ({OR.CASE}'s params) aren't, by SHA-512, those "
+    (sha512_of(dict(ATTESTER, key=ANOTHER)), f"the period's parameters ({OR.CASE}'s params) aren't, by SHA-512, those "
                                                f"its check read (the composite of record's {OR.NETWORK} case's "
                                                "params_sha512)"),
-    (sha512_of({**CERTIFIER, "windows": 1}), f"the period's parameters ({OR.CASE}'s params) aren't, by SHA-512, those "
+    (sha512_of({**ATTESTER, "windows": 1}), f"the period's parameters ({OR.CASE}'s params) aren't, by SHA-512, those "
                                               f"its check read (the composite of record's {OR.NETWORK} case's "
                                               "params_sha512)"),
 ])
@@ -1843,7 +1843,7 @@ def test_auditor_record_doesnt_hold_where_the_periods_params_arent_by_sha512_tho
     whether another key or any field more, auditor-record doesn't hold, though the auditor's record and registration
     state those parameters' key, LMS parameters and session."""
     a = auditor_files(tmp_path / "out")
-    got = OR.auditor_record(CERTIFIER, composed, a["certifier_key"], a["site_registration"])
+    got = OR.auditor_record(ATTESTER, composed, a["certifier_key"], a["site_registration"])
     assert (got["holds"], got["why"]) == (False, why) and "certifier" not in got
 
 
@@ -1908,7 +1908,7 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
                                           ("[]", f"{OR.CASE} isn't an object")])
 def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no_case_doesnt(tmp_path, text, unread):
     """A period whose audits list no circuit files holds auditor-listing, listing none, with no published period read;
-    with no certifier case, or one that can't be read or isn't an object, the run can't say what the period lists, so
+    with no attester case, or one that can't be read or isn't an object, the run can't say what the period lists, so
     it doesn't hold, saying why, the network attester's verdict is not established, both auditor-record and auditor-listing
     open, and there is no bound."""
     out = accepted(tmp_path)
@@ -1927,7 +1927,7 @@ def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no
         "is": OR.CHECKED[OR.SCAN_STATE_PINNED], "holds": False, "why": f"no case lists the period's audits: {unread}"}
     nv = rec["verdicts"]["the network certifier"]
     assert (nv["verdict"], nv["open"], nv["why"]) == (
-        OR.NOT_ESTABLISHED, [OR.CERTIFIER_KEY, OR.AUDITOR_LISTING, OR.SCAN_STATE_PINNED],
+        OR.NOT_ESTABLISHED, [OR.ATTESTER_KEY, OR.AUDITOR_LISTING, OR.SCAN_STATE_PINNED],
         f"{OR.KEY_OPEN}; {OR.LISTING_UNMET}; {OR.STATE_UNPINNED}")
     assert "missing" in rec["bound"] and rec["periods"] == {"missing": "no bound"}
 
@@ -2383,7 +2383,7 @@ def test_the_pooled_count_is_the_floor_of_ln_links_over_delta_over_q_past_a_floa
             assert (OR.horizon(Fraction(1), above), OR.horizon(Fraction(1), below)) == (k - 1, k)
 
 
-def test_a_run_with_no_certifier_case_states_the_pooled_count_and_no_period_cells(tmp_path):
+def test_a_run_with_no_attester_case_states_the_pooled_count_and_no_period_cells(tmp_path):
     g = record(with_onsite(served_out(tmp_path)))["spot"]
     assert (g["per_window"]["epsilon"], g["pooled"]["incorrect_at_most"]) == ("15/16", 443)
     assert g["pooled"]["periods"] == {"missing": f"no {OR.CASE}: a window's length is an execution phase's, its params' "
@@ -2464,8 +2464,8 @@ def test_padding_out_of_free_open_leaves_the_conservative_figure_of_record_and_n
     assert (line["K"], line["open"], "K_tight" in line) == (KR, ["padding-out-of-free"], False)
 
 
-def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_answer_and_else_the_drop(tmp_path):
-    """Remote's report drops the network attester whatever its pieces hold; with the split certifier behind the front
+def test_a_remote_run_whose_report_drops_the_attester_takes_its_period_checks_answer_and_else_the_drop(tmp_path):
+    """Remote's report drops the network attester whatever its pieces hold; with the split attester behind the front
     its period check's answer, beside its case under OUT/pieces/certifier, is the verdict and the bound, as onsite's
     report composes it."""
     out = accepted(tmp_path)
@@ -2481,7 +2481,7 @@ def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_a
     rec = record(out)
     assert rec["verdicts"]["the network certifier"] == {"protocol": OR.NETWORK, "verdict": "accept",
                                                         "from": "pieces/certifier/answer.json"}
-    assert rec["bound"]["K"] == K and rec["placement"] == {"trusted-device": "the certifier on the gate's host"}
+    assert rec["bound"]["K"] == K and rec["placement"] == {"trusted-device": "the network attester on the gate's host"}
     assert rec == record(accepted(tmp_path / "onsite")) | {"verdicts": rec["verdicts"]}
 
 

@@ -5,7 +5,7 @@ The mirror and the generator are `period_case.py`'s: `reference` (its `answer`) 
 answer format, `build` makes a period with one change (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases), and `case` a small period aimed at a verdict or at a decoding failure
 (`KINDS`). This module re-exports
-what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it samples onsite's certifier cases from
+what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it samples onsite's attester cases from
 `build` and answers them with `reference` (`tests/verity/protocols/compose/verifier/lean/reference.py`)."""
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ def test_the_period_check_agrees_with_its_mirror(server):
 
 
 def test_each_verdict_is_the_mirrors(server):
-    """A short run over an honest period, an undecided execution phase and a forged certificate: all three verdicts."""
+    """A short run over an honest period, an undecided execution phase and a forged attestation: all three verdicts."""
     port = dataclasses.replace(PORT, inputs=cases(("rows-honest", "rows-answer-undecided", "rows-cert-forged")))
     stats = D.run(port, examples=40, server=server)
     assert all(stats.counts.get(v) for v in (ACCEPT, REJECT, UNDECIDED)), stats
@@ -97,9 +97,9 @@ def refused_by_lean_alone(case: dict, server, why: str) -> None:
     assert why in json.loads(x.value.lean[1])["reason"], x.value
 
 
-def test_a_mirror_that_skips_the_ingress_certificate_is_caught(server, monkeypatch):
-    """A mirror that reads only the egress records' certificates accepts a period whose requests' certificate is forged,
-    and Lean refuses it at the certificates."""
+def test_a_mirror_that_skips_the_ingress_attestation_is_caught(server, monkeypatch):
+    """A mirror that reads only the egress records' attestations accepts a period whose requests' attestation is forged,
+    and Lean refuses it at the attestations."""
     real = PC._certifies_on
     monkeypatch.setattr(PC, "_certifies_on", lambda p, link, d, w, c: d is INGRESS or real(p, link, d, w, c))
     skipped = [c for n in range(12) if reference(c := build("rows-cert-forged", n, small=True))["verdict"] == ACCEPT]
@@ -140,7 +140,7 @@ ROWS_REFUSALS = {
 
 
 def test_the_rows_form_refuses_what_it_must(server):
-    """An execution phase missing one of its records' certificates, one the network attester left uncertified for
+    """An execution phase missing one of its records' attestations, one the network attester left unattested for
     refusing a connection (traffic past its Program slots), a registration not under a listed key, the scan's answer
     for another window's rows, rows under a schedule whose digest isn't the bound one (one field off, or another
     response cap or none), scans at two δ, a scan answered over
@@ -160,7 +160,7 @@ def test_the_rows_form_refuses_what_it_must(server):
 
 
 def certificates(case: dict) -> list[Certificate]:
-    """A case's certificates, its row registrations' among them."""
+    """A case's attestations, its row registrations' among them."""
     windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
     regs = [{"key_id": (c := doc["certificate"])["key"], "link": doc["link"], "direction": doc["direction"],
              "window": doc["window"], "digest": c["digest"], "signature": c["signature"]}
@@ -170,12 +170,12 @@ def certificates(case: dict) -> list[Certificate]:
 
 
 def signers(case: dict) -> set[str]:
-    """The identifiers of the keys a case's certificates and row registrations name as their signers."""
+    """The identifiers of the keys a case's attestations and row registrations name as their signers."""
     return {c.key_id.hex() for c in certificates(case)}
 
 
 def by_window(case: dict) -> list[tuple[int, list[Certificate]]]:
-    """A case's execution phases by the period's numbers, each with its certificates, its row registrations' among
+    """A case's execution phases by the period's numbers, each with its attestations, its row registrations' among
     them."""
     windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
     return [(case["params"]["first"] + i, certificates({"evidence": D.canonical({"windows": [x]}).encode().hex()}))
@@ -193,7 +193,7 @@ def listed_ids(case: dict) -> list[str]:
 
 
 def weaken(monkeypatch, pick) -> None:
-    """A mirror that holds a certificate or a row registration for the period's execution phase `w` to the entry
+    """A mirror that holds an attestation or a row registration for the period's execution phase `w` to the entry
     `pick(p, w, key_id)` gives for the key identifier it names, where the mirror picks by the execution phase alone
     (`PC._entry_at`)."""
     def certifies_on(p, link, d, w, c):
@@ -216,12 +216,12 @@ def weaken(monkeypatch, pick) -> None:
 
 def test_an_execution_phase_picks_its_entry_and_is_signed_at_its_sessions_number(server, monkeypatch):
     """The parameters list the attester's entries, each a key, its session and the start of its stretch, and the
-    period's execution phase alone picks the entry its certificates and row registrations are held to: that entry's key,
+    period's execution phase alone picks the entry its attestations and row registrations are held to: that entry's key,
     its session, and that session's number for the execution phase, the period's less the entry's start. A period
     whose every signature is the second of two entries' (`second-key`), and one whose one execution phase is the
     second's stretch's first, the one after the first entry's last, signed by the second at its number 0
     (`two-stretches`), are accepted by Lean with the mirror's public; and a mirror that reads only the first listed
-    entry, or holds a certificate to the period's number, refuses what Lean accepts."""
+    entry, or holds an attestation to the period's number, refuses what Lean accepts."""
     cases = {(m, n): build(m, n, small=n % 2 == 0)
              for m in ("rows-second-key", "rows-two-stretches") for n in range(4)}
     for (m, n), case in cases.items():
@@ -252,17 +252,17 @@ def test_an_execution_phase_picks_its_entry_and_is_signed_at_its_sessions_number
 
 
 #: The changes in which a listed entry signs outside its stretch: two listed entries in turn over a period the second's
-#: stretch holds, and one certificate or one row registration under the first.
+#: stretch holds, and one attestation or one row registration under the first.
 OUTSIDE_STRETCH = ("rows-two-signers", "rows-cert-outside-stretch", "rows-reg-outside-stretch")
 
 
-def test_a_mirror_that_looks_the_entry_up_by_the_certificates_id_is_caught(server, monkeypatch):
-    """The execution phase picks the entry, and nothing a certificate names does. A period of two listed entries whose
+def test_a_mirror_that_looks_the_entry_up_by_the_attestations_id_is_caught(server, monkeypatch):
+    """The execution phase picks the entry, and nothing an attestation names does. A period of two listed entries whose
     execution phases the second's stretch holds, in which the first entry signs too, in its own session at its own
-    number for the execution phase (every other signature in `two-signers`, one certificate or one row registration in
+    number for the execution phase (every other signature in `two-signers`, one attestation or one row registration in
     `…-outside-stretch`), is refused by Lean and by the mirror and by name (`PC.OUTSIDE`), though every signature
-    verifies under a listed key in that key's session, and every certificate at that session's number; and a mirror that
-    looks the entry up by the key identifier the certificate names accepts what Lean refuses by that name."""
+    verifies under a listed key in that key's session, and every attestation at that session's number; and a mirror that
+    looks the entry up by the key identifier the attestation names accepts what Lean refuses by that name."""
     cases = {(m, n): build(m, n, small=n % 2 == 0) for m in OUTSIDE_STRETCH for n in range(4)}
     for (m, n), case in cases.items():
         p = PC.params(case["params"])
@@ -288,18 +288,18 @@ def test_a_mirror_that_looks_the_entry_up_by_the_certificates_id_is_caught(serve
             refused_by_lean_alone(cases[m, n], server, PC.OUTSIDE)
 
 
-#: The changes that put a certificate or a row registration under the picked entry's key in the other entry's session.
+#: The changes that put an attestation or a row registration under the picked entry's key in the other entry's session.
 OTHER_SESSION = ("rows-cert-other-session", "rows-reg-other-session")
-#: The changes that put a certificate or a row registration under the picked entry at the period's number for the
+#: The changes that put an attestation or a row registration under the picked entry at the period's number for the
 #: execution phase, not its session's.
 PERIOD_NUMBER = ("rows-cert-period-number", "rows-reg-period-number")
 
 
 def test_a_signature_in_another_entrys_session_or_at_the_periods_number_is_refused(server, monkeypatch):
     """An entry's session and numbers are its own: a period of two listed entries, the second's stretch holding its
-    execution phases, in which one certificate (one of the three records') or one row registration is the second entry's key's in the first entry's session, or names
+    execution phases, in which one attestation (one of the three records') or one row registration is the second entry's key's in the first entry's session, or names
     the period's number for its execution phase where the session's belongs, is refused by Lean and by the mirror, as no
-    unlisted signer's and no listed key's outside its stretch; and a mirror that takes the picked key's certificate in
+    unlisted signer's and no listed key's outside its stretch; and a mirror that takes the picked key's attestation in
     any listed session, or at either number, accepts what Lean refuses."""
     for m in (*OTHER_SESSION, *PERIOD_NUMBER):
         for n in range(4):
@@ -340,7 +340,7 @@ def test_a_signature_in_another_entrys_session_or_at_the_periods_number_is_refus
                 refused_by_lean_alone(build(m, n, small=True), server, "window ")
 
 
-#: The changes that put a certificate or a row registration under a key the parameters don't list.
+#: The changes that put an attestation or a row registration under a key the parameters don't list.
 UNLISTED = ("rows-cert-unlisted", "rows-reg-unlisted")
 #: The changes to a signature's key or session: a key that isn't listed or another key under the picked entry's
 #: identifier, and another session.
@@ -348,7 +348,7 @@ KEY_AND_SESSION = ("rows-cert-key", "rows-cert-session", "rows-reg-key", "rows-r
 
 
 def test_a_signer_that_is_not_listed_is_refused_by_name(server, monkeypatch):
-    """A certificate (one of the three records') or a row registration whose signer is not one of the listed keys is refused, by Lean and by the mirror and by name
+    """An attestation (one of the three records') or a row registration whose signer is not one of the listed keys is refused, by Lean and by the mirror and by name
     (`PC.UNLISTED`), though its signature verifies under its own key; the changes to a signature's key and session
     still refuse, none of a listed signer's naming it; and a mirror that takes the unlisted key as the picked entry's
     accepts what Lean refuses by that name."""
@@ -421,7 +421,7 @@ def test_a_key_listed_in_two_sessions_is_held_to_its_signed_starts(server, monke
     at its number, the second entry starting as many execution phases after the first as its session's signed base is
     after the first's on the key's life (`two-sessions`), is accepted by Lean with the mirror's public. The same list
     with the second session's signed base another, every signature still verifying, is refused by Lean and by the
-    mirror and by name (`PC.NOT_SIGNED`); and a mirror that reads the starts' certificates and not their bases accepts
+    mirror and by name (`PC.NOT_SIGNED`); and a mirror that reads the starts' attestations and not their bases accepts
     what Lean refuses by that name. A period is one execution phase, so one spanning the restart, an execution phase in
     each stretch, its starts held, is refused by both by name (`restart`, `PC.CARRIED`). A key's first listed entry is
     held to no start: moving every base of a key by one amount changes no verdict."""
@@ -458,7 +458,7 @@ def test_a_key_listed_in_two_sessions_is_held_to_its_signed_starts(server, monke
 def test_a_keys_later_session_is_the_one_after_its_entry_listed_before_it(server, monkeypatch):
     """A key listed in two sessions has the second's ordinal the first's next (`two-sessions`, accepted above): its device
     state gives each session it starts the next ordinal, so a session of the key between the two, which the list
-    leaves out, leaves a gap. The same list with the second session's ordinal another, its start still certified and
+    leaves out, leaves a gap. The same list with the second session's ordinal another, its start still attested and
     its base where the first puts it (`start-skipped`), is refused by Lean and by the mirror, by name (`PC.SKIPPED`);
     and a mirror that reads the ordinals' signatures and not their order accepts what Lean refuses by that name."""
     for n in range(6):
@@ -481,8 +481,8 @@ def test_a_keys_later_session_is_the_one_after_its_entry_listed_before_it(server
 
 
 def test_a_start_its_session_did_not_certify_is_refused_by_name(server, monkeypatch):
-    """A period shows one signed start for each listed entry, each its session's certified start as the
-    network attester's own verifier reads it. A shown start that is no egress certificate of window 0 under the link's
+    """A period shows one signed start for each listed entry, each its session's attested start as the
+    network attester's own verifier reads it. A shown start that is no egress attestation of window 0 under the link's
     start name, that names a key other than its entry's, that names another schedule's digest than the period's, whose
     base, ordinal and schedule do not open the digest it signs, or whose signature does not verify under its entry's key
     in its entry's session is refused by Lean and by the mirror, by name (`PC.UNCERTIFIED`) and by the
@@ -1611,7 +1611,7 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server):
     """`case(kind, seed)` reaches its kind's verdict for each kind, the ones that fail to decode refused where they fail
     (a digest only once the commitment decodes); an accepted period's eps is its scans' deltas summed with its tied
     audits' sampled in part, and its profile names no sync; its evidence holds each execution phase's three records'
-    certificates and two row registrations, with one scan an execution phase, all at one δ, and a schedules term equal to
+    attestations and two row registrations, with one scan an execution phase, all at one δ, and a schedules term equal to
     the cells'; `cases(seed)` is one of each with its answer; and Lean gives every one of them the mirror's answer."""
     sampled = {(k, s): PC.case(k, s) for k in KINDS for s in range(6)}
     answers = {ks: PC.answer(c) for ks, c in sampled.items()}
