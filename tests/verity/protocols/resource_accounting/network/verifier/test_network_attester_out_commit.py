@@ -239,7 +239,7 @@ def test_not_a_record(signed, edit):
 
 def test_signer_refusal(fresh):
     """A signer signs window after window of its one session, and refuses another session, so that window has no out
-    certificate."""
+    attestation."""
     s = fresh()
     for w in (0, 1):
         out = O.commit_out(VALUES, shape=SHAPE, key=s, session=S.SESSION, window=w)

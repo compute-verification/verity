@@ -53,7 +53,7 @@ class HeldSession(Protocol):
 
 
 class LinkEnds(Protocol):
-    """The link an instance holds (`link`, its name as a certificate signs it): connections in from outside the
+    """The link an instance holds (`link`, its name as an attestation signs it): connections in from outside the
     manifest and out to the serving endpoint, each by a number the runtime gives."""
 
     link: str
