@@ -616,9 +616,29 @@ def test_unmet_takes_the_machines_this_host_stands_for_as_one_host():
     cfg = config(**AUDITOR)
     assert R.unmet(cfg, REG, COMMIT, ["auditor-1"]) == []
     assert R.unmet(cfg, REG, COMMIT, ["auditor-1", "local"]) == [
-        "challenger shares this host (auditor-1, local) with the developer's firewall, workers: Faithful and Secret unmet"]
+        "challenger shares this host (auditor-1, local) with the developer's firewall, workers: Faithful and Secret unmet",
+        "network-certifier shares this host (auditor-1, local) with the developer's firewall, workers: trusted-device unmet",
+        "verifier shares this host (auditor-1, local) with the developer's firewall, workers: trusted-device unmet"]
     assert R.unmet(config(), REG, COMMIT) == [
-        "challenger shares local with the developer's firewall, workers: Faithful and Secret unmet"]
+        "challenger shares local with the developer's firewall, workers: Faithful and Secret unmet",
+        "network-certifier shares local with the developer's firewall, workers: trusted-device unmet",
+        "verifier shares local with the developer's firewall, workers: trusted-device unmet"]
+
+
+def test_the_simulated_line_names_the_network_attester_when_it_shares_the_developers_host(tmp_path):
+    cfg = config(**AUDITOR)
+    rc, lines = run(tmp_path, verifier_says(accepting(cfg, "verity/onsite/v0")), "--on", "auditor-1", "--on", "local",
+                    cfg=cfg)
+    assert rc == 0 and lines[0]["coins"] == "simulated"
+    assert "network-certifier shares this host (auditor-1, local) with the developer's firewall, workers: " \
+           "trusted-device unmet" in lines[0]["simulated"]
+
+
+def test_an_auditors_party_that_sends_no_coins_on_the_developers_host_leaves_the_coins_unsimulated():
+    cfg = config(challenger="auditor-1", network_certifier="auditor-1")
+    assert R.unmet(cfg, REG, COMMIT, ["auditor-1"]) == [
+        "verifier shares local with the developer's firewall, workers: trusted-device unmet"]
+    assert not R.senders(cfg, REG) & R.sharing(cfg, REG, ["auditor-1"]).keys()
 
 
 @pytest.mark.parametrize("machines, coins", [(["auditor-1"], "development"), (["auditor-1", "local"], "simulated")])
@@ -797,7 +817,7 @@ def starting_first(events: list, writes: dict | None = GATE, reg: R.Registry | N
     reg = reg or registry()
     attester = reg.parties["certifier"]["network-certifier"]
 
-    def serve(cfg, state):
+    def serve(cfg, state, machines):
         events.append("serve")
         attester(cfg, state, True)
         if writes is not None:
@@ -870,7 +890,7 @@ def test_a_party_started_first_is_stopped_when_a_later_party_fails(tmp_path, cap
     ({"pouw": {"gate": "g", "peer": "p"}}, "not a table per subprotocol of strings and integers keyed"),
 ])
 def test_bindings_a_party_ends_before_writing_or_writes_other_than_it_declares_are_refused(tmp_path, wrote, why):
-    start = R.Start({"certifier": ("gate", "peer")}, lambda c, s: None, lambda c, s: None)
+    start = R.Start({"certifier": ("gate", "peer")}, lambda c, s, m: None, lambda c, s: None)
     if wrote is not None:
         (tmp_path / "public" / "network-certifier").mkdir(parents=True)
         (tmp_path / "public" / "network-certifier" / "bindings.json").write_text(
@@ -902,7 +922,7 @@ def test_a_dry_run_says_what_a_party_started_first_writes(tmp_path, capsys):
 def test_a_start_process_serves_until_verity_run_stops_it_then_calls_its_stop(tmp_path, monkeypatch):
     events: list = []
 
-    def serve(cfg, state):
+    def serve(cfg, state, machines):
         events.append("serve")
         os.kill(os.getpid(), R.signal.SIGTERM)
 
@@ -916,6 +936,62 @@ def test_a_start_process_serves_until_verity_run_stops_it_then_calls_its_stop(tm
     finally:
         R.signal.signal(R.signal.SIGTERM, handler)
     assert events == ["serve", "stop"]
+
+
+def test_a_start_process_hands_its_party_the_machines_this_host_stands_for(tmp_path, monkeypatch):
+    seen: list = []
+
+    def serve(cfg, state, machines):
+        seen.append(machines)
+        os.kill(os.getpid(), R.signal.SIGTERM)
+
+    reg = dataclasses.replace(REG, starts={"network-certifier": R.Start({}, serve, lambda c, s: None)})
+    monkeypatch.setattr(R, "registry", lambda *a: reg)
+    path = tmp_path / "config.toml"
+    path.write_text(K.render(config(**AUDITOR)))
+    handler = R.signal.getsignal(R.signal.SIGTERM)
+    try:
+        assert R.main(["start", str(path), str(tmp_path), "network-certifier", "auditor-1", "local"]) == 0
+    finally:
+        R.signal.signal(R.signal.SIGTERM, handler)
+    assert seen == [["auditor-1", "local"]]
+
+
+def test_verity_run_hands_a_party_it_starts_first_the_machines_its_on_names(tmp_path, monkeypatch):
+    monkeypatch.setattr(R, "archive", lambda state, commit: "tree.tar")
+    reg, seen = starting_first([]), []
+    start = reg.starts["network-certifier"]
+    reg = dataclasses.replace(reg, starts={"network-certifier": dataclasses.replace(
+        start, serve=lambda cfg, state, machines: seen.append(machines) or start.serve(cfg, state, machines))})
+    rc, lines = run(tmp_path, reg, "--on", "auditor-1", "--on", "local", cfg=config(**AUDITOR))
+    assert rc == 0 and [x["verdict"] for x in lines] == ["accept"] and seen == [["auditor-1", "local"]]
+
+
+def refusing(cfg, state, machines):
+    raise Refused("not-its-machine", f"gate-host is none of {', '.join(machines)}")
+
+
+def test_a_start_process_whose_party_refuses_makes_verity_run_refuse_by_the_partys_name(tmp_path, monkeypatch, capsys):
+    start = R.Start({"certifier": ("gate", "peer")}, refusing, lambda c, s: None)
+    monkeypatch.setattr(R, "registry", lambda *a: dataclasses.replace(REG, starts={"network-certifier": start}))
+    path = tmp_path / "config.toml"
+    path.write_text(K.render(config()))
+    assert R.main(["start", str(path), str(tmp_path), "network-certifier", "prover-node"]) == 2
+    assert "network-certifier: refused not-its-machine: gate-host is none of prover-node" in capsys.readouterr().err
+    with pytest.raises(Refused) as e:
+        R.wait_bindings(tmp_path, "network-certifier", start, lambda: False)
+    assert (e.value.name, e.value.detail) == ("not-its-machine", "network-certifier: gate-host is none of prover-node")
+
+
+def test_a_party_started_first_that_refuses_stops_the_run_with_its_own_reason(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(R, "archive", lambda state, commit: "tree.tar")
+    events: list = []
+    reg = starting_first(events)
+    reg = dataclasses.replace(reg, starts={"network-certifier": dataclasses.replace(
+        reg.starts["network-certifier"], serve=refusing)})
+    rc, lines = run(tmp_path, reg)
+    assert rc == 2 and lines == [] and events == []
+    assert "verity run: refused not-its-machine: gate-host is none of local" in capsys.readouterr().err
 
 
 def test_a_spawned_party_is_stopped_by_sigterm_and_gives_its_exit_code(tmp_path):

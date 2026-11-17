@@ -38,10 +38,12 @@ half and that half's SHA-512 in ``STATE/public/<party>/key.json``. When a party 
 also gets an archive of the commit that runs, ``STATE/tree.tar`` (its files under ``<commit>/``), which `run.json` names
 (``tree``) beside the commit (``program``) and each party's process reads as ``VERITY_PROGRAM`` and ``VERITY_TREE``.
 
-A party the table starts first (its ``STARTS``, `Start`: the bindings it writes, by subprotocol, its ``serve`` and
-``stop``, and the seconds `verity run` waits, ``within``) starts before every other party here, in a process of its own
-(``start CONFIG STATE PARTY MACHINE...``), its output in ``STATE/logs/<party>.log``; with ``--bindings`` giving every
-binding it writes it isn't started, since it runs where they say, and giving only some is refused (``binding``).
+A party the table starts first (its ``STARTS``, `Start`: the bindings it writes, by subprotocol, its ``serve``, given
+the configuration, the state and the machines this host stands for, its ``stop``, and the seconds `verity run` waits,
+``within``) starts before every other party here, in a process of its own (``start CONFIG STATE PARTY MACHINE...``), its
+output in ``STATE/logs/<party>.log``; with ``--bindings`` giving every binding it writes it isn't started, since it runs
+where they say, and giving only some is refused (``binding``). A ``serve`` that refuses (`Refused`) ends its process,
+and `verity run` refuses by that name, with the party's detail, and the run stops.
 `verity run` waits for what it writes, ``STATE/public/<party>/bindings.json`` (written whole, by a rename: a table per
 subprotocol of strings and integers), and adds it to the run's bindings before any party that reads them starts; one
 that ends first, writes other keys or writes none within ``within`` seconds is refused by name (``bindings``), and the
@@ -81,7 +83,8 @@ binding is given, else the workload's, a development run's, which makes ``coins`
 
 ``coins`` is ``simulated`` when the challenger's host is one a prover's party is on (its machine, or two machines this
 host stands for), else ``development`` (the keys are made for the run). ``simulated`` names each premise the placement
-leaves unmet (a party that sends coins on a developer's party's host: `Faithful` and `Secret`), and a configured program
+leaves unmet (each party of the auditor's on a developer's party's host: `Faithful` and `Secret` for one that sends
+coins, ``trusted-device`` for any other), and a configured program
 commit that isn't the running tree's, except for NAME, whose application runs with the running tree's commit as its
 program.
 
@@ -139,7 +142,7 @@ Entry = Callable[[Mapping[str, Any], Path, bool], int]
 @dataclass(frozen=True)
 class Start:
     writes: Mapping[str, tuple[str, ...]]
-    serve: Callable[[Mapping[str, Any], Path], None]
+    serve: Callable[[Mapping[str, Any], Path, Sequence[str]], None]
     stop: Callable[[Mapping[str, Any], Path], None]
     within: int = 600
 
@@ -335,11 +338,16 @@ def archive(state: Path, commit: str, root: Path = ROOT) -> str:
     return out.name
 
 
+def senders(cfg: Mapping[str, Any], reg: Registry) -> set[str]:
+    listed = [reg.components[c] for c in cfg["protocols"]]
+    return {ch.sender for ch in K.declared(listed, reg.workloads[cfg["workload"]["name"]])[1].values() if ch.carries_coins}
+
+
 def sharing(cfg: Mapping[str, Any], reg: Registry, machines: Sequence[str]) -> dict[str, list[str]]:
     listed = [reg.components[c] for c in cfg["protocols"]]
-    parties, channels = K.declared(listed, reg.workloads[cfg["workload"]["name"]])
+    parties = K.declared(listed, reg.workloads[cfg["workload"]["name"]])[0]
     at, out = placed(cfg), {}
-    for p in sorted({ch.sender for ch in channels.values() if ch.carries_coins}):
+    for p in sorted(q for q in at if parties[q].principal != "developer"):
         host = set(machines) if at[p] in machines else {at[p]}
         if shared := sorted(q for q, m in at.items() if m in host and parties[q].principal == "developer"):
             out[p] = shared
@@ -347,12 +355,13 @@ def sharing(cfg: Mapping[str, Any], reg: Registry, machines: Sequence[str]) -> d
 
 
 def unmet(cfg: Mapping[str, Any], reg: Registry, head: str | None, machines: Sequence[str] = (K.LOCAL,)) -> list[str]:
-    """The premises the run's placement leaves unmet (module docstring): each party that sends coins on a developer's
+    """The premises the run's placement leaves unmet (module docstring): each party of the auditor's on a developer's
     party's host (its machine, or ``machines``, the ones this host stands for), and a configured program commit other
     than the running tree's ``head``."""
-    at, host = placed(cfg), f"this host ({', '.join(machines)})"
+    at, host, coins = placed(cfg), f"this host ({', '.join(machines)})", senders(cfg, reg)
     out = [f"{p} shares {at[p] if {at[q] for q in shared} == {at[p]} else host} with the developer's "
-           f"{', '.join(shared)}: Faithful and Secret unmet" for p, shared in sharing(cfg, reg, machines).items()]
+           f"{', '.join(shared)}: {'Faithful and Secret' if p in coins else 'trusted-device'} unmet"
+           for p, shared in sharing(cfg, reg, machines).items()]
     if head != cfg["program"]["commit"]:
         out.append(f"the program is the running tree's {head}, not the configured {cfg['program']['commit']}")
     return out
@@ -532,14 +541,15 @@ class Served:
 class InProcess:
     """Each entry in this process: for a run whose entries are functions of the test that runs it."""
 
-    def __init__(self, cfg: Mapping[str, Any], reg: Registry, state: Path, local: bool) -> None:
-        self.cfg, self.reg, self.state, self.local = cfg, reg, state, local
+    def __init__(self, cfg: Mapping[str, Any], reg: Registry, state: Path, local: bool,
+                 machines: Sequence[str] = (K.LOCAL,)) -> None:
+        self.cfg, self.reg, self.state, self.local, self.machines = cfg, reg, state, local, list(machines)
 
     def run(self, party: str) -> int:
         return run_party(self.cfg, self.reg, self.state, party, self.local)
 
     def start(self, party: str) -> Served:
-        self.reg.starts[party].serve(self.cfg, self.state)
+        self.reg.starts[party].serve(self.cfg, self.state, self.machines)
         return Served(self.reg.starts[party], self.cfg, self.state)
 
 
@@ -559,6 +569,9 @@ def wait_bindings(state: Path, party: str, start: Start, alive: Callable[[], boo
     f, until = state / "public" / party / "bindings.json", clock() + start.within
     while not f.is_file():
         if not alive():
+            if (why := state / "logs" / f"{party}.refused").is_file():
+                refusal = json.loads(why.read_text())
+                raise Refused(refusal["name"], f"{party}: {refusal['detail']}")
             raise Refused("bindings", f"{party} ended before it wrote {f} (its log: STATE/logs/{party}.log)")
         if clock() >= until:
             raise Refused("bindings", f"{party} wrote no {f} within {start.within} s, so no party that reads it "
@@ -660,7 +673,7 @@ def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequenc
              for x in (r.outcomes[VERIFIER]["outcome"] or {}).get("verdicts", [])]
     on = coins_on(cfg, reg, machines)
     lines = [{**x, "coins_on": {**on, **x.get("coins_on", {})}} for x in lines]
-    if sharing(cfg, reg, machines):
+    if senders(cfg, reg) & sharing(cfg, reg, machines).keys():
         lines = [{**x, "coins": "simulated"} for x in lines]
     if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:
         lines = [{**x, "product": cid} if x.get("combined_by") else
@@ -735,7 +748,7 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
         print(f"verity run: refused {e.name}: {e.detail}", file=sys.stderr)
         return 2
     say("RUN", {"state": str(state), "parties": chosen, "configuration": K.digest(cfg), "periods": a.periods})
-    runner = (InProcess(cfg, reg, state, set(placed(cfg).values()) <= set(machines)) if in_process else
+    runner = (InProcess(cfg, reg, state, set(placed(cfg).values()) <= set(machines), machines) if in_process else
               Processes(config, state, machines))
     program = {**cfg, "program": {**cfg["program"], "commit": ran}} if named and ran else cfg
     return execute(cfg, reg, state, chosen, runner, unmet(program, reg, ran, machines), machines, starts)
@@ -789,12 +802,18 @@ def config_main(argv: Sequence[str], reg: Registry | None = None) -> int:
 
 
 def start_main(argv: Sequence[str]) -> int:
-    config, state, party = argv[:3]
+    config, state, party, *machines = argv
     reg = registry()
     cfg, start = load(Path(config), reg), reg.starts[party]
     stopping = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stopping.set())
-    start.serve(cfg, Path(state))
+    try:
+        start.serve(cfg, Path(state), machines)
+    except Refused as e:
+        (Path(state) / "logs").mkdir(parents=True, exist_ok=True)
+        (Path(state) / "logs" / f"{party}.refused").write_text(json.dumps({"name": e.name, "detail": e.detail}))
+        print(f"{party}: refused {e.name}: {e.detail}", file=sys.stderr)
+        return 2
     stopping.wait()
     start.stop(cfg, Path(state))
     return 0
