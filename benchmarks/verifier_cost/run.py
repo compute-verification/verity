@@ -11,6 +11,10 @@ the size of the circuit that description unrolls to (README.md).
       and the digest) on Serve_v1 under the template query of its Calls, and under `Q_word` v1 and `Q_call` v1 at X = 16
       where its Calls' distinct Definitions have at most GATES gates in all; and on the served shape, the population
       program of Serve_v1's largest Definition at N instances (`Q_template_instance`); DIR/partition.json.
+  scaling NAME [ARG ...] | scaling --list
+      one of SCALING's scripts, each timing a verifier's function against the size of what it reads, its Lean
+      (`<name>/Main.lean`) built in a scratch Lake package against the checkout's verifier; with no ARG, at SCALING's small
+      sizes. Under `research run`, which sets OUT (README.md has each script's full sizes).
   store RUN [--runs-dir DIR]
       a `job.sh` run's results.json or partition.json (`research fetch RUN --all`) as one evidence/v1 record, naming
       the run and its commit; prints its art: id. From a VM with the store's keys: a node's shell has none.
@@ -302,6 +306,30 @@ def partition(args) -> int:
     return 0
 
 
+#: name -> (its script here, its arguments at a size one CPU slot runs in minutes)
+SCALING: dict[str, tuple[str, tuple[str, ...]]] = {
+    "registration": ("registration.sh", ("1024", "4096")),
+    "population": ("population.sh", ("20", "50", "10000")),
+    "members_parse": ("members_parse.sh", ("1000", "25000")),
+    "ledger_replay": ("ledger_replay/ledger_replay.sh", ("10", "30")),
+    "flock_read": ("flock_read.sh", ("256",)),
+    "flock_tmpl": ("flock_tmpl.sh", ("256",)),
+    "whole_run": ("whole_run.sh", ("run", "toy", "146", "1000")),
+}
+
+
+def scaling(args) -> int:
+    if args.list:
+        for name, (script, sizes) in SCALING.items():
+            print(f"{name}\tbenchmarks/verifier_cost/{script} {' '.join(sizes)}")
+        return 0
+    if args.name not in SCALING:
+        print(f"no scaling benchmark {args.name!r}: one of {', '.join(SCALING)}", file=sys.stderr)
+        return 2
+    script, sizes = SCALING[args.name]
+    return subprocess.run(["bash", str(HERE / script), *(args.args or sizes)], cwd=ROOT).returncode
+
+
 def store(args) -> int:
     subprocess.run(["research", "fetch", args.run, "--all"], check=True, capture_output=True)
     run = args.runs_dir / args.run
@@ -376,6 +404,10 @@ def main(argv: list[str] | None = None) -> int:
     q.add_argument("--unrolled-max", type=int, default=5_000_000)
     q.add_argument("--repeat", type=int, default=3)
     q.add_argument("--exe", type=Path, default=PIECES)
+    c = sub.add_parser("scaling")
+    c.add_argument("--list", action="store_true")
+    c.add_argument("name", nargs="?")
+    c.add_argument("args", nargs=argparse.REMAINDER)
     s = sub.add_parser("store")
     s.add_argument("run")
     s.add_argument("--runs-dir", type=Path, default=Path.home() / ".research/runs")
@@ -383,7 +415,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("art")
     p.add_argument("--to", required=True)
     args = ap.parse_args(argv)
-    return {"measure": measure, "partition": partition, "store": store, "plot": plot}[args.cmd](args)
+    if args.cmd == "scaling" and not args.list and not args.name:
+        ap.error("scaling: name a benchmark, or --list")
+    return {"measure": measure, "partition": partition, "scaling": scaling, "store": store, "plot": plot}[args.cmd](args)
 
 
 if __name__ == "__main__":

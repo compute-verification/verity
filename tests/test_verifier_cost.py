@@ -79,7 +79,7 @@ ALLOWED: dict[str, str] = {
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
         "behind Tmpl.unitNet's thunks, built only where a check reads them: open on the templated statement's path, "
         "where verify --zk's KsScope.checkOf reads them (ProvedScope.scopeOkH's portReadsB) before refusing the "
-        "statement as a version it doesn't serve (ProvedScope.servedForm; benchmarks/verifier_cost/flock_served)",
+        "statement as a version it doesn't serve (ProvedScope.servedForm)",
     "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean":
         "HmOut.unrolled (and HmOut.parseStmt), a templated file's statement circuit, the flat circuit its template "
         "unrolls to, which the soundness statements read; no check runs it: verify sets up on and "
