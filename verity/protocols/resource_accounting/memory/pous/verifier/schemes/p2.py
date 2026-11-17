@@ -508,7 +508,7 @@ def family_certificate(params: P2Params) -> CapacityBound | None:
     `CERT_FAMILY_BLOCKS`, in any number of segments: the theorem is about `m1p B 16448 (2^16448 − 21065) b` for every such
     `B`, and segments only frame each block's keys.  `P2.certificate` stays the registered point's alone, the one the
     memory attester's coverage and the timed audit's Lean properties read; the run protocol (`period.gaps`,
-    `PousCheck.RunProtocol.gaps`) takes this one where the registered one doesn't fit."""
+    `PousVerifier.RunProtocol.gaps`) takes this one where the registered one doesn't fit."""
     lo, hi = CERT_FAMILY_BLOCKS
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
@@ -521,7 +521,7 @@ def wide_certificate(params: P2Params) -> CapacityBound | None:
     `CERT_WIDE_BLOCKS`, in any number of segments: at every point of the run's composed check and every `N` from `2^19`
     to `2^27`, an accepted period with no break while the node held fewer than `⌊ρ·N·16448⌋` bits has probability at
     most `δ + ε_max = 1% + 2^-128`, read at `N` = the store's blocks, under `WIDE_CLAIMS`.  The run protocol takes it
-    above `family_certificate`'s range (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
+    above `family_certificate`'s range (`period.certificate`, `PousVerifier.RunProtocol.certificate`)."""
     lo, hi = CERT_WIDE_BLOCKS
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
@@ -536,7 +536,7 @@ def wide320_certificate(params: P2Params) -> CapacityBound | None:
     blocks, under `WIDE_CLAIMS`, at uniform indices.  `delta` is that `2^-20`, the theorem's whole bound.  `2^eps_log2`
     is `2^-127`, the advantage of `prf/sha-512` for the memory attester's SHA-512 indices, assumed at that figure:
     `Hash.Assumptions.Sha512Prf` takes the advantage as a parameter, which no model fixes, and the theorem doesn't read
-    it.  The run protocol doesn't take it (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
+    it.  The run protocol doesn't take it (`period.certificate`, `PousVerifier.RunProtocol.certificate`)."""
     lo, hi = CERT_WIDE_BLOCKS
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None

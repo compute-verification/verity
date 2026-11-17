@@ -5,7 +5,7 @@ The store C* holds W's registered rows row-aligned (`setup_circuit`'s layout): b
 n = ⌈N/P⌉ slots a row of N bytes.  The auditor's challenger samples `SAMPLE` of the store's B blocks after the store's
 commitment is registered (the verifier's `setup_proof.sampling_design`); each sampled block is one proof block, an
 instance of the setup unit (`setup_unit`) over its block of C*, its base, the row of W that holds its payload and its
-slot; the auditor's check reads the proof system's verdict in place of the store (`PousCheck.SetupInProofs`).
+slot; the auditor's check reads the proof system's verdict in place of the store (`PousVerifier.SetupInProofs`).
 
 `SetupGives` (`security/Properties/Pous/SetupInProofs.lean`) is the lemma over this: its `W` is `padded`'s, so its
 `slice q W u` is `slot_payload(row, slot)` at `place(u)`, and its `BlockOk` is what the unit computes.

@@ -1,4 +1,4 @@
-"""`pous-signed-run serve` (`PousCheck.SignedRun`) against the Python verifier of the same case (`answer_of`: the case
+"""`pous-signed-run serve` (`PousVerifier.SignedRun`) against the Python verifier of the same case (`answer_of`: the case
 decoded as the Lean decodes it, then `period.answer_signed`, which is `run.check_signed_at` and the signed run's profile):
 every field of the answer, and the reason of each refusal of the check.
 
@@ -85,7 +85,7 @@ def _evidence(b: bytes) -> tuple:
 
 
 def answer_of(protocol: str, schemes: dict):
-    """`PousCheck.SignedRun.mkProtocol protocol schemes`'s answer in Python."""
+    """`PousVerifier.SignedRun.mkProtocol protocol schemes`'s answer in Python."""
     def check(p, published, e) -> tuple:
         (point, sid, trusted), (session, setup, openings) = p, e
         a = period.answer_signed(point, schemes, trusted, published, session, setup, openings, sid, protocol)
@@ -308,7 +308,7 @@ def test_setup_accepted_is_the_certificates_hypothesis() -> None:
 def test_setup_accepted_is_one_string() -> None:
     """The Lean's `SETUP_ACCEPTED`, its string literals joined, is the Python's: no served case reaches a point with a
     certificate, so this holds the two to one value, and each side's own test holds its profile to it."""
-    lean = (LEAN / "PousCheck" / "SignedRun.lean").read_text()
+    lean = (LEAN / "PousVerifier" / "SignedRun.lean").read_text()
     body = re.search(r"^def SETUP_ACCEPTED : String :=\n((?:  .*\n)+)", lean, re.M)
     literal = r'"(?:[^"\\]|\\.)*"'
     assert body and re.fullmatch(rf"(?:\s*{literal}\s*(?:\+\+)?)+\s*", body.group(1)), \
