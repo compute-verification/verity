@@ -1,6 +1,6 @@
 #!/bin/bash
 # vcf-job-run.sh NAME PARTITION MINUTES JOBSCRIPT [SBATCH_ARG...]: run on the control pod, deployed as /data/vcf/vcf-job-run.sh.
-# Submits JOBSCRIPT as one Slurm batch job on VCF's cluster under Daniel's account, waits for it, copies its output to OUT
+# Submits JOBSCRIPT as one Slurm batch job on VCF's cluster under the account its key names, waits for it, copies its output to OUT
 # (default /data/vcf-jobs/NAME-STAMP/) on the pod, and removes the job's directory under the account's home. Only the pod holds
 # the key; nothing of ours but JOBSCRIPT and SEND's payload is sent there. MINUTES is at most 30 (an unreserved job); a job
 # still pending after PEND_MIN minutes (default 20) is cancelled. sacct.txt records its node, submit, start and end.
