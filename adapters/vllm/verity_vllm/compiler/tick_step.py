@@ -13,21 +13,21 @@ from verity.circuits.types import Array
 
 from verity_vllm.compiler import replay_step as RS
 
-STATICS = RS.STATICS + ("TAU", "CSAT", "CFREE", "C1", "CU")
+STATICS = RS.STATICS + ("TAU", "CSAT", "CFREE", "C1", "CU", "CARRY")
 #: a bucket count's width: T is a bucket count q and a remainder r < TAU
 QW = 32
 
 
 def widths(S: SimpleNamespace) -> SimpleNamespace:
-    """`replay_step.widths` with RW = bitlen(TAU − 1). Refuses amounts whose largest advance reaches a bucket, and a class
-    that can't see the first arrival a step leaves (A ≥ min(M, R) + 1)."""
+    """`replay_step.widths` with RW = bitlen(TAU − 1). Refuses amounts whose largest advance reaches CARRY buckets, and a
+    class that can't see the first arrival a step leaves (A ≥ min(M, R) + 1)."""
     Z = RS.widths(S)
-    if min(S.TAU, S.CSAT, S.CFREE) < 1 or S.C1 < 0 or S.CU not in (0, 1):
-        raise ValueError(f"tick statics TAU={S.TAU}, CSAT={S.CSAT}, CFREE={S.CFREE}, C1={S.C1}, CU={S.CU}: TAU, CSAT and "
-                         "CFREE positive, C1 at least 0, CU 0 or 1")
-    if (most := max(S.CSAT, S.CFREE) + S.C1 * S.T) >= S.TAU:
-        raise ValueError(f"the largest advance max(CSAT, CFREE) + C1·T = {most} reaches the bucket TAU = {S.TAU}: the step "
-                         "carries at most one bucket a step")
+    if min(S.TAU, S.CSAT, S.CFREE, S.CARRY) < 1 or S.C1 < 0 or S.CU not in (0, 1):
+        raise ValueError(f"tick statics TAU={S.TAU}, CSAT={S.CSAT}, CFREE={S.CFREE}, C1={S.C1}, CU={S.CU}, CARRY={S.CARRY}: "
+                         "TAU, CSAT, CFREE and CARRY positive, C1 at least 0, CU 0 or 1")
+    if (most := max(S.CSAT, S.CFREE) + S.C1 * S.T) >= S.CARRY * S.TAU:
+        raise ValueError(f"the largest advance max(CSAT, CFREE) + C1·T = {most} reaches CARRY = {S.CARRY} buckets of "
+                         f"TAU = {S.TAU}: the step carries fewer than CARRY buckets")
     if S.A < min(S.M, S.R) + 1:
         raise ValueError(f"A = {S.A} arrivals in view with up to {min(S.M, S.R)} taken a step: the tick step needs "
                          f"A ≥ min(M, R) + 1 = {min(S.M, S.R) + 1}, to see the first arrival it doesn't take")
@@ -75,26 +75,28 @@ def _build(C, S, *elements):
     out = RS._split(RS._out_fields(S), RS._build(C, S, *inner, tap=tap))
 
     rows = or_reduce(C, [e[0] for e in out["row_valid"]])
+    w = ((S.CARRY + 1) * S.TAU - 1).bit_length()
     if S.CSAT == S.CFREE:
-        c = const_bits(S.CSAT, Z.RW)
+        c = const_bits(S.CSAT, w)
     else:
         sat = or_reduce(C, [tap["preempted"], out["wait_valid"][0][0],
                             RS._lt(C, out["taken"][0], RS._popcount(C, given, Z.AC + 1))])
-        c = mux(C, sat, const_bits(S.CSAT, Z.RW), const_bits(S.CFREE, Z.RW))
-    w = Z.RW + 1
+        c = mux(C, sat, const_bits(S.CSAT, w), const_bits(S.CFREE, w))
     n = RS._sub(C, const_bits(S.T, Z.TW), tap["budget"], Z.TW)
-    d = RS._pad(RS._sel(C, rows, c), w)
+    d = RS._sel(C, rows, c)
     for j in range(S.C1.bit_length()):
         if S.C1 >> j & 1:
             d = add(C, d, RS._pad([ZERO] * j + n, w), width=w)
     s = add(C, RS._pad(r, w), d, width=w)
-    over, under = sub(C, s, const_bits(S.TAU, w), w)
-    wrap = under.inv()
-    r = mux(C, wrap, over[:Z.RW], s[:Z.RW])
-    qq = add(C, list(q), [wrap], width=QW, carry_out=True)
+    m = []
+    for j in reversed(range(S.CARRY.bit_length())):
+        over, under = sub(C, s, const_bits(S.TAU << j, w), w)
+        m.insert(0, under.inv())
+        s = mux(C, m[0], over, s) if j else mux(C, m[0], over[:Z.RW], s[:Z.RW])
+    qq = add(C, list(q), m, width=QW, carry_out=True)
     bad.append(qq[QW])
 
-    res = {**out, "ok": [[C.AND(out["ok"][0][0], or_reduce(C, bad).inv())]], "tick_q": [qq[:QW]], "tick_r": [r]}
+    res = {**out, "ok": [[C.AND(out["ok"][0][0], or_reduce(C, bad).inv())]], "tick_q": [qq[:QW]], "tick_r": [s]}
     return [e for name, _n, _w in _out_fields(S) for e in res[name]]
 
 
@@ -108,17 +110,20 @@ TickStep = _part(
     "one step of the certified tick (`ReplayStep_v1`'s step with every given arrival asked): the clock T = q·TAU + r jumps "
     "to the next arrival's bucket close when nothing runs or waits (CU = 0) or nothing waits (CU = 1); the step is given "
     "the leading arrivals whose buckets have closed; after a step with rows T advances by CSAT if it preempted, left a "
-    "request waiting or left a given arrival, else CFREE, plus C1 for each token it schedules; 0 for ok to refuse what "
+    "request waiting or left a given arrival, else CFREE, plus C1 for each token it schedules, carrying fewer than CARRY "
+    "buckets; 0 for ok to refuse what "
     "`ReplayStep_v1` refuses, a remainder r ≥ TAU or a bucket count past 32 bits "
     "(`pipeline.advice_code.tick_step.reference`). It rests on three things: T starts at 0; r < TAU, which it refuses "
     "otherwise; and the arrivals' buckets are bound only once the slice ties them")
 
 
 def statics(R: int, W: int, A: int, engine: dict, IW: int, *, tau: int, sat: int, free: int, token: int = 0,
-            quiet: bool = True, EW: int = 0) -> dict:
+            quiet: bool = True, carry: int = 1, EW: int = 0) -> dict:
     """`replay_step.statics` with the tick's amounts in one unit of time (the bucket ``tau``, the advances ``sat``,
-    ``free`` and ``token``) and its catch-up (``quiet``: only when nothing runs or waits), refused as `widths` refuses."""
-    st = {**RS.statics(R, W, A, engine, IW, EW), "TAU": tau, "CSAT": sat, "CFREE": free, "C1": token, "CU": int(not quiet)}
+    ``free`` and ``token``), its catch-up (``quiet``: only when nothing runs or waits) and the most buckets a step
+    carries, refused as `widths` refuses."""
+    st = {**RS.statics(R, W, A, engine, IW, EW), "TAU": tau, "CSAT": sat, "CFREE": free, "C1": token, "CU": int(not quiet),
+          "CARRY": carry}
     widths(SimpleNamespace(**st))
     return st
 

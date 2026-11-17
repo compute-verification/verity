@@ -14,15 +14,18 @@ from verity_vllm.pipeline.advice_code import tick_step as TS
 
 TODAY = TS.Rule(TT.TICK.bucket_us, TT.TICK.sat_us, TT.TICK.free_us)
 CHOSEN = TS.Rule(10**8, 6_303_000, 6_303_000, 18_126)
+SEVERAL = TS.Rule(10**8, 278_000_000, 152_000_000, 18_126)
 RULES = {f"{name}-{'quiet' if quiet else 'unqueued'}": dataclasses.replace(rule, quiet=quiet)
-         for name, rule in (("today", TODAY), ("chosen", CHOSEN)) for quiet in (True, False)}
+         for name, rule in (("today", TODAY), ("chosen", CHOSEN), ("several", SEVERAL)) for quiet in (True, False)}
 
 Step = tuple[TS.State, TS.Inputs, TS.Out]
 
 
-def binding(e: SC.Engine, n: int, R: int, W: int, A: int, rule: TS.Rule) -> dict:
+def binding(e: SC.Engine, n: int, R: int, W: int, A: int, rule: TS.Rule, carry: int | None = None) -> dict:
+    most = max(rule.sat, rule.free) + rule.token * e.max_num_batched_tokens
     return TK.statics(R, W, A, dataclasses.asdict(e), max(n - 1, 1).bit_length(), tau=rule.bucket, sat=rule.sat,
-                      free=rule.free, token=rule.token, quiet=rule.quiet)
+                      free=rule.free, token=rule.token, quiet=rule.quiet,
+                      carry=most // rule.bucket + 1 if carry is None else carry)
 
 
 def scan(S: SimpleNamespace, rule: TS.Rule, ios: list[SC.RequestIO], released: list[int]) -> list[Step]:
@@ -56,6 +59,8 @@ def seen(steps: list[Step], rule: TS.Rule) -> set[str]:
             out.add("jumps while running" if st.step.running else "jumps")
         elif o.rows and st.clock // rule.bucket != o.state.clock // rule.bucket:
             out.add("carries")
+            if o.state.clock // rule.bucket - st.clock // rule.bucket > 1:
+                out.add("carries several")
         moved = o.state.clock - st.clock - rule.token * sum(n for *_, n in o.rows)
         if o.rows and not jump and moved == rule.sat != rule.free:
             out.add("saturates")
@@ -78,7 +83,7 @@ def test_the_circuit_is_the_reference_on_the_plan(name: str, asy: bool) -> None:
     steps = scan(SimpleNamespace(**st_), rule, ios, released)
     held(st_, steps)
     want = {"carries", "jumps"} | ({"saturates"} if rule.sat != rule.free else set()) | (
-        set() if rule.quiet else {"jumps while running"})
+        set() if rule.quiet else {"jumps while running"}) | ({"carries several"} if rule.free > rule.bucket else set())
     assert want <= seen(steps, rule)
 
 
@@ -149,14 +154,43 @@ def test_a_remainder_at_a_bucket_or_past_it_is_refused() -> None:
     assert want is not None and got[0][1] == want.clock > CHOSEN.bucket
 
 
-def test_the_binding_refuses_an_advance_that_reaches_a_bucket() -> None:
+@pytest.mark.parametrize("k", range(4))
+def test_a_step_carries_each_count_of_buckets_up_to_carry_at_its_edge(k: int) -> None:
+    e = SC.Engine(max_num_seqs=2, max_num_batched_tokens=64, max_model_len=64, num_gpu_blocks=16, block_size=16)
+    rule = TS.Rule(1000, k * 1000 + 5, k * 1000 + 5)
+    st_ = binding(e, 2, 2, 2, 3, rule, carry=4)
+    S = SimpleNamespace(**st_)
+    running = RS.State((RS.Req(0, 4, 3, out=1, comp=4),), (), RS.empty(S).free - 1)
+    clocks = [8 * rule.bucket - 6, 8 * rule.bucket - 5]
+    got = TK.evaluate(st_, [(running, t, RS.Inputs(()), ()) for t in clocks])
+    want = [TS.reference(S, rule, TS.State(running, t), TS.Inputs((), ())).state for t in clocks]
+    assert all(o.ok for o, _ in got) and [c for _, c in got] == [w.clock for w in want if w is not None]
+    assert [c // rule.bucket - 7 for _, c in got] == [k, k + 1]
+
+
+def test_a_bucket_count_past_32_bits_is_refused_when_several_buckets_are_added() -> None:
+    e = SC.Engine(max_num_seqs=2, max_num_batched_tokens=64, max_model_len=64, num_gpu_blocks=16, block_size=16)
+    rule = TS.Rule(1000, 3005, 3005)
+    st_ = binding(e, 2, 2, 2, 3, rule, carry=4)
+    running = RS.State((RS.Req(0, 4, 3, out=1, comp=4),), (), RS.empty(SimpleNamespace(**st_)).free - 1)
+    top = (1 << TK.QW) - 1
+    got = TK.evaluate(st_, [(running, (top - k) * rule.bucket + rule.bucket - 5, RS.Inputs(()), ()) for k in (4, 3)])
+    assert [o.ok for o, _ in got] == [True, False] and got[0][1] == top * rule.bucket
+
+
+def test_the_binding_refuses_an_advance_that_reaches_carry_buckets() -> None:
     e = SC.Engine(max_num_seqs=8, max_num_batched_tokens=2048, max_model_len=512, num_gpu_blocks=64, block_size=16)
     most = CHOSEN.sat + CHOSEN.token * 2048
-    binding(e, 2, 8, 1, 9, dataclasses.replace(CHOSEN, bucket=most + 1))
-    with pytest.raises(ValueError, match=rf"max\(CSAT, CFREE\) \+ C1·T = {most} reaches the bucket TAU = {most}:"):
-        binding(e, 2, 8, 1, 9, dataclasses.replace(CHOSEN, bucket=most))
-    binding(e, 2, 8, 1, 9, CHOSEN)
-    with pytest.raises(ValueError, match=r"max\(CSAT, CFREE\) \+ C1·T = 154791192 reaches the bucket TAU = 100000000"):
-        binding(dataclasses.replace(e, max_num_batched_tokens=8192), 2, 8, 1, 9, CHOSEN)
+    binding(e, 2, 8, 1, 9, dataclasses.replace(CHOSEN, bucket=most + 1), carry=1)
+    with pytest.raises(ValueError, match=rf"C1·T = {most} reaches CARRY = 1 buckets of TAU = {most}:"):
+        binding(e, 2, 8, 1, 9, dataclasses.replace(CHOSEN, bucket=most), carry=1)
+    binding(e, 2, 8, 1, 9, CHOSEN, carry=1)
+    recipe = dataclasses.replace(e, max_num_batched_tokens=8192)
+    with pytest.raises(ValueError, match=r"C1·T = 154791192 reaches CARRY = 1 buckets of TAU = 100000000"):
+        binding(recipe, 2, 8, 1, 9, CHOSEN, carry=1)
+    assert binding(recipe, 2, 8, 1, 9, CHOSEN)["CARRY"] == 2
+    binding(recipe, 2, 8, 1, 9, TS.Rule(10**8, 100_000_255, 100_000_255, 12_207), carry=2)
+    with pytest.raises(ValueError, match=r"C1·T = 200000000 reaches CARRY = 2 buckets"):
+        binding(recipe, 2, 8, 1, 9, TS.Rule(10**8, 100_000_256, 100_000_256, 12_207), carry=2)
     with pytest.raises(ValueError, match=r"A ≥ min\(M, R\) \+ 1 = 9"):
         binding(e, 2, 8, 1, 8, CHOSEN)
