@@ -60,7 +60,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   digest ``--program``, the value's leaf width, a value held across windows dropping only the window), interface 1's.
 * **The attester's key** is ``--key``'s (`certifier_key.load_key`'s layout), one LMS leaf a value (733 at H200), in
   session ``--session``: the verifier pins a load and the windows' transfers under one key and session, so the load's
-  session is the serving certifier's.
+  session is the serving network attester's.
 
 ``load_bench.py`` times the relay.
 """
@@ -421,7 +421,7 @@ def _work(args: tuple[Task, bytes]) -> tuple[int, int, bytes, int, bytes | None]
 # --- the relay ----------------------------------------------------------------------------------------------------------
 
 #: a refusal's word, which is all a run publishes of it (``load-relay.json``'s ``refused``, a store's record's): the
-#: certifier's own nine, of its store, its link's source and its signer, and ``sink`` for every way the developer's
+#: network attester's own nine, of its store, its link's source and its signer, and ``sink`` for every way the developer's
 #: sink failed, since which way is the developer's to choose
 REFUSALS = ("digest", "decode", "length", "signer", "no-digests", "no-store", "not-interface-1", "no-record",
             "store-size", "sink")
