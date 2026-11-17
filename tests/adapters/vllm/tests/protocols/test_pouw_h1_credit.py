@@ -1,4 +1,4 @@
-"""`pouw_h1_credit`, `pouw_h1_gpu.py --credit`'s check, on a small window served with the real tile unit and receipts from
+"""`pouw_h1_credit` on a small window served with the real tile unit and receipts from
 `h1tile.reference` (slow: the window Program's real tile unit takes half a minute to declare): core credit's statement
 steps accept the honest window, and refuse each prover-side negative by name."""
 from __future__ import annotations
