@@ -98,11 +98,12 @@ def test_a_card_short_is_refused_by_name_unless_one_records_driver_holds_it_exac
                                          ("NVIDIA H100 80GB HBM3", "h100"), ("NVIDIA RTX PRO 6000 Blackwell Server Edition",
                                                                              "rtx-pro-6000"), ("NVIDIA B200", "b200")])
 def test_a_card_is_the_workloads_when_card_short_resolves_each_name_to_its_short(card, short):
-    assert kit.wrong_card("spec", short, card) is None
+    assert kit.is_card(card, short) and kit.wrong_card("spec", short, card) is None
 
 
 @pytest.mark.parametrize("card", ["NVIDIA H100 NVL", "NVIDIA H100 PCIe", "NVIDIA H200, NVIDIA B200", "none", ""])
 def test_any_other_card_is_refused_naming_the_workloads(card):
+    assert not kit.is_card(card, "h200")
     assert kit.wrong_card("steady", "h200", card) == (
         f"the card is a {card}, not the h200 of spec 'steady' (NVIDIA H200): run it on a node whose card is a NVIDIA H200, "
         "or use the spec for this card")

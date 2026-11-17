@@ -4,8 +4,8 @@
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `card_short(name)`: the card's name in a measurement's member, from the one card record under `cards_directory()` whose
-  `driver` holds the stamp's `card` exactly; `wrong_card(workload, short, card)` says why a stamp's card isn't the one a
-  workload names.
+  `driver` holds the stamp's `card` exactly; `is_card(card, short)` says whether a stamp's card is the one a workload
+  names, and `wrong_card(workload, short, card)` why not.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
@@ -229,9 +229,14 @@ def card_short(name: str, *, directory: Path | None = None) -> str:
     return found[0]["short"]
 
 
+def is_card(card: str, short: str, *, directory: Path | None = None) -> bool:
+    directory = directory or cards_directory()
+    return all(len(found := _holding(name, directory)) == 1 and found[0].get("short") == short for name in card.split(", "))
+
+
 def wrong_card(workload: str, short: str, card: str, *, directory: Path | None = None) -> str | None:
     directory = directory or cards_directory()
-    if all(len(found := _holding(name, directory)) == 1 and found[0].get("short") == short for name in card.split(", ")):
+    if is_card(card, short, directory=directory):
         return None
     want = " or ".join(d["value"] for c in _gpu_cards(directory) if c.get("short") == short for d in c.get("driver", ()))
     return (f"the card is a {card}, not the {short} of spec {workload!r} ({want}): run it on a node whose card is a "

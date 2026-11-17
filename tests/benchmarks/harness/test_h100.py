@@ -10,7 +10,7 @@ from verity_bench.vllm.presets import SPEC_ROOT, resolve_spec
 
 COPIES = {"llama32-1b-1gpu-pouw-protocol-served-h100": "llama32-1b-1gpu-pouw-protocol-served-h200",
           "llama32-1b-bf16-h100-served-arm": "llama32-1b-bf16-h200-served-arm"}
-#: nvidia-smi's names for the H100s and the H200, and the card each is, by the node side's test (`kit.wrong_card`)
+#: nvidia-smi's names for the H100s and the H200, and the card each is, by the node side's test (`kit.is_card`)
 NAMES = {"NVIDIA H100 80GB HBM3": "h100", "NVIDIA H200": "h200", "NVIDIA H100 NVL": None, "NVIDIA H100 PCIe": None}
 
 
@@ -25,7 +25,7 @@ def test_each_h100_spec_is_its_h200_spec_with_only_the_card_changed(h100, h200):
 
 @pytest.mark.parametrize("name, card", NAMES.items())
 def test_an_h100_spec_takes_the_h100_sxm_card_alone_and_an_h200_spec_no_h100(name, card):
-    assert [gpu for gpu in ("h100", "h200") if kit.wrong_card("spec", gpu, name) is None] == ([card] if card else [])
+    assert [gpu for gpu in ("h100", "h200") if kit.is_card(name, gpu)] == ([card] if card else [])
 
 
 def test_the_h100_pouw_spec_runs_direct_on_the_h100_vm_through_its_slot_and_one_card_lease():
