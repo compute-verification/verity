@@ -3839,7 +3839,8 @@ class Loop:
 
     def _rerun(self, a: Rerun, c: Candidate, t: Tick) -> list[dict]:
         """Run ``a.keys`` afresh (graph2's `rerun`), their results so far set aside (`Past.since`) so each reads pending until
-        it has a newer one; a key of the run beside the check starts that run again.  Without graph2's `rerun`, logged as
+        it has a newer one; a key of the run beside the check starts that run again, carrying its runs' passes
+        (`vqueue_slim.start`'s ``after``), so only what they didn't pass runs again.  Without graph2's `rerun`, logged as
         absent: the policy takes the rerun as done, and its failure stands."""
         w, line = self.world, dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads)
         j = t.judged[c.sha]
@@ -3856,7 +3857,8 @@ class Loop:
                                 keys=list(a.keys), absent=True, done=False)]
         stopped = list(_running(j).get("ids") or ()) if set(a.keys) & beside else []
         stop_failed = w.cancel_runs(stopped, f"vqueue: candidate {c.sha[:12]}'s failure is rerun afresh") if stopped else {}
-        again = self._start(t, c.sha, c.base, line, "started again: its failure is rerun") if set(a.keys) & beside else []
+        again = self._start(t, c.sha, c.base, line, "started again: its failure is rerun",
+                            carry=(j.record or {}).get("ids") or ()) if set(a.keys) & beside else []
         return [self.record(t, "rerun", **line, why=f"the lone member's own failures, afresh: {said or 'the run beside'}",
                             failed=failed, keys=list(a.keys), counts=counts, done=True,
                             **({"beside_cancelled": stopped} if stopped else {}),

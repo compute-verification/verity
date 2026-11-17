@@ -4488,6 +4488,36 @@ def test_under_gate_check_a_failure_that_names_no_test_is_never_inherited(env, m
     assert _acts(loop.tick()) == ["slim", "eject", "drop"] and env.main() == main and len(env.withdrawn) == 1
 
 
+@pytest.mark.parametrize("early", [False, True])
+def test_under_gate_check_a_lone_member_s_failure_rerun_afresh_carries_the_passes_of_the_runs_it_starts_again(
+        env, monkeypatch, early):
+    main = env.main()
+    env.put(1, {"1.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=1)
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    runs.end(main)
+    if early:
+        runs.fail(sha, 1, step="lean-audit", log="error: security/Foo.lean:3:0: type mismatch\n", at=T0 + 60)
+        env.clock = T0 + 300
+    else:
+        runs.end(sha, 3, "pytest", "Killed\n", (_row(beyond=True),))
+    monkeypatch.setattr(vqueue_slim, "left", lambda d, rid: any(rid in ids for ids, _ in env.cancelled)
+                        or runs.state.get(rid, ("running",))[0] == "done")
+    carried, launch = [], loop.world.slim_driver().launch_after_landing
+
+    def launched(repo, commit, *a, **kw):
+        carried.append((commit, os.environ.get(vqueue_slim.CARRY_ENV)))
+        return launch(repo, commit, *a, **kw)
+
+    loop.world.slim_driver().launch_after_landing = launched
+    logged = loop.tick()
+    rerun = next(r for r in logged if r["action"] == "rerun")
+    again = next(r for r in logged if r["action"] == "slim" and r["why"] == "started again: its failure is rerun")
+    assert rerun.get("beside_cancelled") == (["c-4", "c-5", "c-6"] if early else None), rerun
+    assert (again["record"]["carry"], carried) == (["c-4", "c-5", "c-6"], [(sha, "c-4,c-5,c-6")] * 3)
+
+
 def test_under_gate_check_a_suite_killed_at_its_time_limit_is_named_where_it_is_judged_and_its_retry_reruns_only_it(
         env, monkeypatch):
     main = env.main()
