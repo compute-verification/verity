@@ -1126,7 +1126,7 @@ def test_a_capture_that_holds_none_of_the_runs_packets_is_read_and_says_every_by
                        "part: the multisets differ"
 
 
-def test_a_connection_that_failed_is_a_bound_and_an_uncertified_record_is_said(tmp_path):
+def test_a_connection_that_failed_is_a_bound_and_an_unattested_record_is_said(tmp_path):
     """The server sends 100 bytes of a response and never ends it, so the network attester fails the connection
     (late) with one cell of them in its record and stops reading. The record's count of that connection is a floor
     from the server and a ceiling to it: the capture's 100 bytes are inside it, the flow pairs inside the bounds, and
