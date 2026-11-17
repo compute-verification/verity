@@ -281,29 +281,21 @@ def capture(a: argparse.Namespace) -> int:
 
 
 def priced_point(out: Path, tables: dict, a: argparse.Namespace, fp: dict, units_from: str) -> dict[str, Any]:
-    u, pu = tables["decode"], tables.get("prefill")
-    layers = []
-    for ours in a.ours:
-        if not priced.lifetimes(out, ours):
-            continue
-        layer = priced.layer(out, ours, a.reference, u, pu)
-        layer["measured"] = priced.measured(out, ours, a.reference)
-        layers.append(layer)
-    if not layers:
+    if not any(priced.lifetimes(out, ours) for ours in a.ours):
         refuse("price", f"the capture served none of {', '.join(a.ours)}: give --ours an arm it served")
+    got = priced.price(out, tables["decode"], tested_by=a.capture, units_from=units_from, ours=a.ours,
+                       reference=a.reference, stock=a.stock, model=fp["served"], card=fp["card"],
+                       pu=tables.get("prefill"), name=METRIC)
+    layers = [{k: v for k, v in layer.items() if k != "adjusted"} for layer in got["layers"]]
     first = layers[0]
-    member = f"{fp['served']}-{fp['card']}-{first['ours']}"
     unpriced = ([["top-k", "prefill steps"]]
                 if not first["prefill_priced"] and any(x["prefill_steps"] for x in first["each"]) else [])
-    below = priced.measured(out, a.reference, a.stock)
-    why = ("no lifetime pair was priced" if not first["cost"] else
-           "the counters hold no failed rows, so only the pass's base is priced" if not first["failed_priced"] else
-           f"the capture measured no {a.reference} over {a.stock} with an interval"
-           if not (below and below.get("ci95")) else None)
-    r: dict[str, Any] = {"layers": layers, "member": member, "why": why, "unpriced": unpriced}
-    if not why:
-        assert below is not None
-        r["point"] = priced.point(first, below, a.capture, units_from, member)
+    why = got.get("no_point")
+    if why == f"the job measured no {a.reference} over {a.stock} with an interval":
+        why = f"the capture measured no {a.reference} over {a.stock} with an interval"
+    r: dict[str, Any] = {"layers": layers, "member": got["member"], "why": why, "unpriced": unpriced}
+    if got["point"]:
+        r["point"] = got["point"]
     return r
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -410,3 +411,53 @@ def test_confirm_reads_no_figure_from_a_price_under_another_id(store, tmp_path):
         {"name": "vllm/prod-serving-cost-glm53", "value": 2.5, "mark": "partial", "member": MEMBER}])
     with pytest.raises(SystemExit, match="holds no priced figure under benchmarks/serving-cost-priced"):
         S.main(["confirm", "--price", PRICE, "--measured", MEASURED])
+
+
+def _stored(out: Path) -> str:
+    r = result(out)
+    volatile = {"commit", "run", "host", "version"}
+    r["measurements"] = [{k: v for k, v in m.items() if k not in volatile} for m in r["measurements"]]
+    doc = {"result": r, "priced": json.loads((out / "priced.json").read_text())}
+    return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()
+
+
+@pytest.mark.parametrize("units, below, prefill, digest", [
+    ((), True, True, "919cf2acb8bfa16c69c745dc43a83bd00406195b88a68f60ca10dc7c06c620d2"),
+    ((UNITS,), True, True, "054ce6f725613251a5229743025756321c1d8367eec1dc286bb763921bcf2243"),
+    ((), True, False, "b31d5b90a556ca54e271d634ba0e1b73b3af5c7b6b205f65807a6b2150d7ad5e"),
+    ((), False, True, "b8cc7273efde2e4d3bfb3a1b6fb274ddba4135a1daaa349ca09fff3ae1073978"),
+])
+def test_price_stores_the_record_it_stored_before_it_called_priced_price(store, tmp_path, units, below, prefill, digest):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path, below=below, prefill=prefill)
+    store[UNITS] = units_record(tmp_path, UNITS, S.UNITS_KIND, PREFILL, shapes="prefill")
+    price(tmp_path / "price", *units)
+    assert _stored(tmp_path / "price") == digest
+
+
+def test_price_reads_a_units_run_as_stress_py_units_stores_it(store, tmp_path):
+    from benchmarks.dsa_topk import units as U
+
+    def timer(values: str, rows: int, keys: int, how: str | None) -> dict:
+        us = 1e-4 * rows * keys / 64
+        if how is None:
+            return {"fast_us": us, **{p: {"ok": True, "us": 2 * us, "added_us": us, "per_call": {"rows_long": rows}}
+                                      for p in U.PASSES.values()}}
+        return {"copy_us": us, **{p: {"ok": True, "one_call": {"rows_long": rows, "rows_bisected": rows}, "us": 5 * us}
+                                  for p in U.PASSES.values()}}
+
+    run = tmp_path / UNITS
+    assert U.write(run / "out", run / "result.json", "prefill", U.lines("prefill", timer), "a stand-in")
+    store[MINIFY], store[CAPTURE], store[UNITS] = minify_record(tmp_path), capture_record(tmp_path), run
+    out = tmp_path / "price"
+    assert price(out, UNITS) == 0
+    (m,) = result(out)["measurements"]
+    assert m["mark"] == "modeled" and m["unpriced"] == [] and m["inputs"] == ["modeled", CAPTURE, MINIFY, UNITS]
+    assert {x["path"]: x["runs"] for x in m["priced_by"]}["prefill steps, cut pass, every row failed, over the base"] \
+        == [UNITS]
+
+
+def test_price_refuses_arms_the_capture_did_not_serve(store, tmp_path):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    with pytest.raises(SystemExit, match="the capture served none of prod-record-bisect: give --ours an arm it served"):
+        S.main(["price", "--capture", CAPTURE, "--minify", MINIFY, "--ours", "prod-record-bisect", "--out",
+                str(tmp_path / "price")])
