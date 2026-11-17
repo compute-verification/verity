@@ -4,9 +4,9 @@ public import NetworkVerifier.TransferBlocks
 public import Lms.Sign
 
 /-!
-# N2's execution phase verdict of record: what its Lean code (`NetworkVerifier.TransferBlocks`) does
+# N2's execution phase verdict of record: what its Lean code (`NetworkCheck.TransferBlocks`) does
 
-The property of `NetworkVerifier.TransferBlocks.verdict`, the verdict of record on one execution phase of N2
+The property of `NetworkCheck.TransferBlocks.verdict`, the verdict of record on one execution phase of N2
 (`service.OF_RECORD` in `verity/protocols/accounting/certifier/verifier/service.py`), stated against its functions as they run: for
 every case, if the verdict accepts, the execution phase's proof block was proved, its rows opened to an output word of
 3, both certificates are the certifier's, its declared sync is one of Σ_sync (on a network attester link, which

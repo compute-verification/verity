@@ -1,4 +1,4 @@
-"""`audit.Audit` with every verdict computed by the Lean check, `verity/network-records/v3` (`NetworkVerifier.Records`, the
+"""`audit.Audit` with every verdict computed by the Lean check, `verity/network-records/v3` (`NetworkCheck.Records`, the
 `network-records` executable of `verity/protocols/resource_accounting/network/verifier/lean`), which `audit.py` is the reference for.
 
 `Audit` here has `audit.Audit`'s interface and returns its `Verdict`s, so a caller switches by its import line alone.
@@ -28,7 +28,7 @@ after a request starts its own executable at its first; `SERVER`'s is closed at 
 and `certificates`, the client's check of one window's served certificates (`certificate_refusals`, with
 `audit.certificate_refusals` beside it as the reference).
 
-`encode` is the commitment's encoding of one published record (`NetworkVerifier/Records.lean`'s module docstring).
+`encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
 """
 
 from __future__ import annotations
@@ -186,7 +186,7 @@ class Server:
         return self.call(fn, case)["link_windows"]
 
     def call(self, fn: str, case: dict) -> Any:
-        """`fn`'s output on `case` (`verdicts`, `verdicts-no-grid`, or `link-window`: `NetworkVerifier.TransferBlocks`'s verdict
+        """`fn`'s output on `case` (`verdicts`, `verdicts-no-grid`, or `link-window`: `NetworkCheck.TransferBlocks`'s verdict
         of record on one execution phase); `ValueError` when the Lean refuses the case."""
         self._own()
         with self._lock:
@@ -341,7 +341,7 @@ def _certificate_json(c: Certificate) -> dict:
 def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int, certificates: Sequence[Certificate],
                          clocks: Sequence[Certificate], seen: Sequence[bytes] = (), server: Server | None = None
                          ) -> tuple[list[str | None], list[str | None]]:
-    """`audit.certificate_refusals`, each refusal the Lean's (`NetworkVerifier.TransferBlocks.refusals`, `network-records
+    """`audit.certificate_refusals`, each refusal the Lean's (`NetworkCheck.TransferBlocks.refusals`, `network-records
     verdicts`' ``certificates``), with `audit.certificate_refusals` run beside it as the reference: where the two differ
     on any certificate or clock certificate, every one of the window is refused as `disagreement`. A key other than an
     `LmsKey`, a certificate of ill-typed fields, or anything else the Lean refuses to read raises `ValueError`; a
