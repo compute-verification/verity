@@ -4467,6 +4467,39 @@ def test_a_landed_move_that_adds_its_own_map_judges_a_head_lacking_it_by_that_ma
     assert Q.lacked_moves(world.origin, move, names) == [(move, "tools/move/own_map.toml", ["c.txt"])]
 
 
+def _commit(world: World, tree_of: str, *parents: str, msg: str) -> str:
+    """A commit of ``tree_of``'s tree on ``parents`` with message ``msg``, on the origin."""
+    tree = _git(world.dev, "rev-parse", f"{tree_of}^{{tree}}")
+    sha = _git(world.dev, "commit-tree", tree, *(x for p in parents for x in ("-p", p)), "-m", msg)
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")
+    return sha
+
+
+def test_a_move_main_holds_only_through_a_merge_that_kept_its_first_parents_tree_is_no_move_a_head_lacks(world):
+    """A branch's earlier, landed work merged back with `-s ours` brought into `main`'s history a copy of a move `main` never
+    ran from it: the merge's tree is its first parent's, so the copy changed nothing on `main`, and a head without it lacks
+    nothing (`moves_between`, `lacked_moves`). A move on `main`'s first-parent line, and one a merge lands as its second
+    parent with its tree, are still found, and `move_lines.toml`'s `move = false` still takes one out. The same case is
+    restack.py's (`test_restack.py`)."""
+    line = "Move\n\nLayout-move: tools/move/x_map.toml"
+    base = _move_main(world, {"tools/move/x_map.toml": '[paths]\n"c.txt" = "moved/c.txt"\n'})
+    head = world.change({"e.txt": "reads c.txt\n"}, base=base)
+    copy = _commit(world, world.change({"moved/c.txt": "c\n"}, base=base), base, msg=line)
+    beside = world.change({"m.txt": "1\n"}, base=base)
+    ours = _commit(world, beside, beside, copy, msg="Merge the branch's earlier, landed work, keeping this tree (-s ours)")
+    _git(world.dev, "push", "-q", "origin", f"{ours}:refs/heads/main")
+    assert Q.moves_between(world.origin, ours, head) == []
+    assert Q.lacked_moves(world.origin, ours, head) == []
+    real = _commit(world, world.change({"n.txt": "n\n"}, base=ours), ours, msg=line)
+    side = _commit(world, world.change({"s.txt": "s\n"}, base=real), real, msg=line)
+    landed = _commit(world, side, real, side, msg="Queue: #2 lands the move")
+    assert [m for m, _ in Q.moves_between(world.origin, landed, head)] == [real, side]
+    assert Q.lacked_moves(world.origin, landed, head) == [(real, "tools/move/x_map.toml", ["c.txt"]),
+                                                          (side, "tools/move/x_map.toml", ["c.txt"])]
+    corrected = world.change({Q.MOVE_LINES: f'["{real}"]\nmove = false\nreason = "It ran nothing."\n'}, base=landed)
+    assert [m for m, _ in Q.moves_between(world.origin, corrected, head)] == [side]
+
+
 def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
     """`crossed` reads `lacked_moves`'s predicate against a move PR's map at its head, and `main`'s copy beside it: a head
     whose files or added lines name neither copy's retired names crosses it, and none crosses a move whose map can't be read

@@ -1412,6 +1412,28 @@ def test_a_commit_its_entry_says_is_no_move_is_read_as_none_by_both_readers_and_
     assert r["status"] == "no-moves"
 
 
+def test_a_move_main_holds_only_through_a_merge_that_kept_its_first_parents_tree_is_none_a_branch_lacks(repo, lines):
+    """A branch's earlier, landed work merged back with `-s ours` brought into main's history a copy of a move main never ran
+    from it: the merge's tree is its first parent's, so the copy changed nothing on main, and `moves_on` leaves it out, as
+    research's `queue.moves_between` does (`test_queue.py`). A move on main's first-parent line, one a merge lands as its
+    second parent with its tree, and `move = false` are as they were."""
+    git(repo, "checkout", "-q", "-b", "stale", "base")
+    copy = commit(repo, "a copy of the move, made again on the branch" + LINE, {"NOTES.md": "notes, copied\n"})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-s", "ours", "-m", "merge the branch's earlier, landed work, keeping this tree", "stale")
+    assert RS.tree_of("HEAD", str(repo)) == RS.tree_of("HEAD^1", str(repo)) and RS.contains(copy, "main", str(repo))
+    assert RS.moves_on("main", "pr", str(repo)) == []
+    real = commit(repo, "a move on main" + LINE, {"README.md": "readme 2\n"})
+    git(repo, "checkout", "-q", "-b", "side")
+    side = commit(repo, "a move a merge lands" + LINE, {"README.md": "readme 3\n"})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-m", "land the side's move", "side")
+    found = [(c, RS.LINE_SCRIPT["Layout-move"], ("--map", "tools/move/layout_map.toml")) for c in (real, side)]
+    assert RS.moves_on("main", "pr", str(repo)) == found, "the copy stays out, the two moves that changed main are in"
+    correct(lines, {real: {"move": False, "reason": "It ran nothing."}})
+    assert RS.moves_on("main", "pr", str(repo)) == found[1:]
+
+
 @pytest.mark.parametrize("entry, fix", [
     ({"id": "f7b30e1f7ce9", "line": "Move: tools/move/m.toml", "reason": "r"}, "the commit's 40-hex id"),
     ({"line": "Move: tools/move/m.toml --lock", "reason": "r"}, "is no move line"),
