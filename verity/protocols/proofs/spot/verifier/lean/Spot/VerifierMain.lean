@@ -6,8 +6,8 @@ public import Spot.Pieces
 /-!
 # `spot-verifier`: the verifier, and the challenger's coins
 
-The verifier's functions (`Pieces.verifier`: the one-stage audit's checks, the stream's and the fleet's rules, and the
-challenger's ledger and session checks, `challenger_ledger`, `challenger_head`, `challenger_session`,
+The verifier's functions (`Pieces.verifier`: the one-stage audit's checks, round 2's statement check
+(`second_statements`), the stream's and the fleet's rules, and the challenger's ledger and session checks, `challenger_ledger`, `challenger_head`, `challenger_session`,
 `challenger_credited` and `challenger_pinned`) behind `Difftest.respond`'s line protocol, and one more request,
 `{"fn": "coins", "input": n}`: `n` bytes of the operating system's randomness (`IO.getRandomBytes`, A3's
 `uniform/io-getrandombytes`), answered `{"output": HEX}`: the entropy a challenger flips its coins from
