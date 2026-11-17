@@ -1,7 +1,7 @@
 # This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
 # enforces it.
 
-# one GPU of the node for the model arm (vLLM from the node's VENV), about 20 minutes with its startup; the stub arm on its CPUs
+# one GPU of the node for the model arm (vLLM from the node's VENV), within its lease's 50 minutes; the stub arm on its CPUs
 [[metric]]
 id = "network-accounting/attester-added-first-byte"
 title = "Network attester's wait to first byte"

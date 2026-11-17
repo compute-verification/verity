@@ -358,6 +358,10 @@ def model_arm(a: argparse.Namespace, s: dict[str, int], work: Path) -> dict:
         server.wait()
 
 
+def _ms(x: float | None) -> str:
+    return "none" if x is None else f"{x:.1f}"
+
+
 def render(doc: dict) -> str:
     lines = [f"# What the network attester costs the requests it carries, at scan class {doc['class']}", ""]
     for r in doc["arms"]:
@@ -377,8 +381,8 @@ def render(doc: dict) -> str:
                   f"{r['scheduled_last_bucket']} ({r['scheduled_last_ms']:.0f} ms), against {r['direct_last_ms']:.1f} ms"
                   if r["added_last_ms"] is not None else "added time to the last byte: none ended",
                   f"tick lateness at the full stated capacity {r['tick_lateness_ms']} ms; check {r['full']}",
-                  f"guard: planted {g['plant_ms']:g} ms read {g['planted_shift_ms']} ms; direct against itself "
-                  f"{g['direct_against_itself_ms']} ms; " + ("holds" if not g["failed"] else "FAILED: " + "; ".join(g["failed"])),
+                  f"guard: planted {g['plant_ms']:g} ms read {_ms(g['planted_shift_ms'])} ms; direct against itself "
+                  f"{_ms(g['direct_against_itself_ms'])} ms; " + ("holds" if not g["failed"] else "FAILED: " + "; ".join(g["failed"])),
                   ""]
     lines += [doc["model_arm"], ""]
     return "\n".join(lines)
