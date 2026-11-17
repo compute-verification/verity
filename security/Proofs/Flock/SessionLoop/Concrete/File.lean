@@ -57,16 +57,7 @@ import all Init.Data.String.Modify
 import all Init.Data.String.Extra
 import all Init.Data.String.Legacy
 
-/-! # The concrete statement's circuit file, and what `HmRow.parse` makes of it
-
-The circuit file of the statement `concreteStmt` (`Concrete/Stmt.lean`): V\*'s file layout (`RecDeploy.VStarNets.fileLs`)
-with the one-unit net `copy16` (`unitLaid`, 16 input words copied to 16 output words), a META line (`metaText`) and the
-verifier's own `sha512x3` and `hm96` nets as parameters `ls` and `lh`, so that no term here asks the kernel to build
-them. `parse_cW` walks `HmRow.parse` on its bytes (`bytesOf`) to the circuit `cW`, at hypotheses that the statement's
-proof discharges at the open guarantee that the two nets build (`Properties.Flock.Nets.FixedNetsBuild`).
-
-The walk is `fwd_def` (`Concrete/Fwd.lean`); its rules are the lemmas below, each a fact about one step of the parse.
--/
+/-! The concrete statement's circuit file and `HmRow.parse`'s walk on it, the verifier's two nets taken as parameters so that no term asks the kernel to build them. -/
 
 @[expose] public section
 open Flock RecDeploy.VStarNets FlockVBridge.Names

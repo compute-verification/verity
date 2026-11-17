@@ -8,25 +8,7 @@ import Mathlib.Basic.ENNReal.BigOperators
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Game
 
-/-!
-# A period's run: the union bound and the pooled escape
-
-* `monitoringPeriod_union`: if every sampling block's event has probability at most `ε i` at every strategy satisfying `good i`,
-  then in a period whose prover satisfies `good` at every sampling block on every run (`MonitoringPeriodGood`), some sampling
-  block's event happens with probability at most `Σ_i ε i`.
-* `monitoringPeriod_horizon`: if at every such strategy the sampling block's records all carry one weight `w` and the sampling
-  block's "miss" event has probability at most `x ^ w`, then every sampling block misses with total weight at least `M`
-  with probability at most `x ^ M`, for `x ≤ 1`. It is `FlockSoundness.Audit.SamplingDesign.pooled_escape`'s induction on the
-  period's game tree: sampling block `i`'s weight is fixed by the strategy that plays it, before its coins.
-
-* `monitoringPeriod_unionE`: `monitoringPeriod_union` against bounds `ε i + f i τ` that read the strategy: the sum gains `f`'s expectation
-  at the strategy that plays each sampling block (`monitoringPeriodE`). `expect_compTo` is that expectation as a game's: a game
-  played after the period's sampling blocks up to one (`compTo`).
-
-Both are inductions on the sampling blocks; within a sampling block, `value_runBind_le_add` and `value_runBind_le_mul`
-take the sampling block's own probability out of the run, with the rest of the period bounded at every end of the
-sampling block.
--/
+/-! A period's run: the union bound and the pooled escape. -/
 
 @[expose] public section
 
@@ -53,15 +35,12 @@ theorem atEnds_of_forall {f : α → Game δ} {Q : (a : α) → Strategy (f a) �
   | .send _ kk, s => atEnds_of_forall hQ (kk s.1) s.2
   | @Game.coin _ _ _ _ kk, s => fun c => atEnds_of_forall hQ (kk c) (s c)
 
-/-- **The expectation at the ends of `g`** played by `s`: of `c a s'` at the end `a`, with `s'` the strategy `s` leaves
-for `f a`, over `g`'s coins. -/
 noncomputable def endsE (f : α → Game δ) (c : (a : α) → Strategy (f a) → ℝ) :
     (g : Game α) → Strategy (g.bind f) → ℝ
   | .ret a, s => c a s
   | .send _ kk, s => endsE f c (kk s.1) s.2
   | @Game.coin _ C iF _ kk, s => (∑ x : C, endsE f c (kk x) (s x)) / (@Fintype.card C iF)
 
-/-- **A run's expectation is the expectation, at the ends of its first game, of the rest's.** -/
 theorem expect_runBind (F : γ → ℝ) (f : α → Game δ) (k : (a : α) → Strategy (f a) → Game γ)
     (ks : (a : α) → (s' : Strategy (f a)) → Strategy (k a s')) :
     ∀ (g : Game α) (s : Strategy (g.bind f)),
@@ -139,9 +118,6 @@ private theorem ofReal_avg {C : Type} [Fintype C] [Nonempty C] (E : C → ℝ) (
     ENNReal.ofReal_inv_of_pos (by exact_mod_cast Fintype.card_pos), ENNReal.ofReal_natCast, Finset.sum_mul]
   exact Finset.sum_congr rfl fun x _ => mul_comm _ _
 
-/-- **One sampling block, then the rest: the union step.** If the rest of the run has `p` with probability at most
-`ε + c a s'` from every end `a` of `g` outside `q`, the run has `p` with probability at most `g`'s probability of `q`,
-plus `ε`, plus the expectation of `c` at the ends of `g`. -/
 theorem value_runBind_le_add (f : α → Game δ) (k : (a : α) → Strategy (f a) → Game γ) (p : γ → Prop)
     (q : α → Prop) (ε : ℝ≥0∞) (c : (a : α) → Strategy (f a) → ℝ) (hc : ∀ a s', 0 ≤ c a s') :
     ∀ (g : Game α) (s : Strategy (g.bind f)),
@@ -176,9 +152,6 @@ theorem value_runBind_le_add (f : α → Game δ) (k : (a : α) → Strategy (f 
             rfl
 
 open Classical in
-/-- **One sampling block, then the rest: the product step.** If the rest of the run has `p` with probability at most `c`
-from every end of `g` in `q`, and never from an end outside `q`, the run has `p` with probability at most `g`'s
-probability of `q`, times `c`. -/
 theorem value_runBind_le_mul (f : α → Game δ) (k : (a : α) → Strategy (f a) → Game γ) (p : γ → Prop)
     (q : α → Prop) (c : ℝ≥0∞) :
     ∀ (g : Game α) (s : Strategy (g.bind f)),
@@ -226,8 +199,6 @@ theorem atEnds_of_atSomeEnd {ι : Type} {f : α → Game δ} {P : ι → (a : α
   | .send _ kk, s, h => atEnds_of_atSomeEnd hQ (kk s.1) s.2 h
   | @Game.coin _ _ _ _ kk, s, h => fun c => atEnds_of_atSomeEnd hQ (kk c) (s c) fun x hx => h x ⟨c, hx⟩
 
-/-- **`MonitoringPeriodGood` from its flat form**: `good` at every strategy the period plays a sampling block with
-(`MonitoringPeriodPlays`). -/
 theorem monitoringPeriodGood_of_plays (G : (i : ℕ) → Game (β i)) (good : (i : ℕ) → Strategy (G i) → Prop) :
     ∀ (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)), (∀ j τ, MonitoringPeriodPlays G i T s j τ → good j τ) →
       MonitoringPeriodGood G good i T s
@@ -239,8 +210,6 @@ theorem monitoringPeriodGood_of_plays (G : (i : ℕ) → Game (β i)) (good : (i
           (fun _ s' h' => monitoringPeriodGood_of_plays G good T (i + 1) s' fun j τ hp => h' ⟨j, τ⟩ hp) (G i) s
           fun x hx => h x.1 x.2 (Or.inr hx)⟩
 
-/-- **The expectation of `f` at sampling block `i + d`** of the period played by `s`, at the strategy that plays it
-there, over the coins of the sampling blocks before it; `0` past the period's end. -/
 noncomputable def monitoringPeriodE (G : (i : ℕ) → Game (β i)) (f : (j : ℕ) → Strategy (G j) → ℝ)
     (d i T : ℕ) (s : Strategy (monitoringPeriodG G i T)) : ℝ :=
   match T, s, d with
@@ -259,7 +228,6 @@ theorem monitoringPeriodE_nonneg {f : (j : ℕ) → Strategy (G j) → ℝ} (hf 
   | 0, i, _ + 1, _ => hf i _
   | d + 1, i, T + 1, s => endsE_nonneg (fun _ s' => monitoringPeriodE_nonneg hf d (i + 1) T s') (G i) s
 
-/-- `monitoringPeriodE` is monotone in `f` at the strategies satisfying `good`, on a period whose prover satisfies it. -/
 theorem monitoringPeriodE_mono {good : (i : ℕ) → Strategy (G i) → Prop} {f f' : (j : ℕ) → Strategy (G j) → ℝ} :
     ∀ (d i T : ℕ) (s : Strategy (monitoringPeriodG G i T)), MonitoringPeriodGood G good i T s →
       (∀ j τ, j = i + d → good j τ → f j τ ≤ f' j τ) → monitoringPeriodE G f d i T s ≤ monitoringPeriodE G f' d i T s
@@ -311,10 +279,6 @@ theorem monitoringPeriodE_sum {ι : Type} (t : Finset ι) (f : ι → (j : ℕ) 
 
 end PeriodE
 
-/-- **The union bound over a period's sampling blocks, against bounds that read the strategy.** If every sampling
-block's event has probability at most `ε i + f i τ` at every strategy `τ` satisfying `good i`, then in a period whose
-prover satisfies `good` at every sampling block on every run, some sampling block's event happens with probability at
-most `Σ_i ε i` plus the sum over the sampling blocks of `f`'s expectation at the strategy that plays each. -/
 theorem monitoringPeriod_unionE {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
     (bad : ρ → Prop) (good : (i : ℕ) → Strategy (G i) → Prop) (ε : ℕ → ℝ≥0∞) (f : (j : ℕ) → Strategy (G j) → ℝ)
     (hf : ∀ j τ, 0 ≤ f j τ)
@@ -362,7 +326,6 @@ theorem monitoringPeriod_unionE {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec
             rw [hε, hE, ENNReal.ofReal_add (hf _ _) (endsE_nonneg hc (G i) s)]
             ring
 
-/-- **The union bound over a period's sampling blocks.** -/
 theorem monitoringPeriod_union {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
     (bad : ρ → Prop) (good : (i : ℕ) → Strategy (G i) → Prop) (ε : ℕ → ℝ≥0∞)
     (hstage : ∀ i τ, good i τ → prob (fun b => bad (rec i τ b)) (G i) τ ≤ ε i)
@@ -373,7 +336,6 @@ theorem monitoringPeriod_union {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec 
   rwa [Finset.sum_congr rfl fun d _ => monitoringPeriodE_zero G d i T s, Finset.sum_const_zero, ENNReal.ofReal_zero,
     add_zero] at h
 
-/-- **The pooled escape over a period's sampling blocks.** -/
 theorem monitoringPeriod_horizon {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
     (miss : ρ → Prop) (wt : ρ → ℕ) (good : (i : ℕ) → Strategy (G i) → Prop) (x : ℝ≥0∞) (hx : x ≤ 1)
     (hstage : ∀ i τ, good i τ →
@@ -413,8 +375,6 @@ theorem monitoringPeriod_horizon {ρ : Type} (G : (i : ℕ) → Game (β i)) (re
         _ = x ^ (w + (M - w)) := (pow_add _ _ _).symm
         _ ≤ x ^ M := pow_le_pow_of_le_one zero_le hx (by omega)
 
-/-- **The expectation of a game played after a period's sampling blocks up to `i + d`** is `monitoringPeriodE` of the game's
-expectation at the strategy that plays sampling block `i + d`. -/
 theorem expect_compTo {γ : Type} (G : (i : ℕ) → Game (β i)) (F : γ → ℝ) (K : (j : ℕ) → Strategy (G j) → Game γ)
     (KS : (j : ℕ) → (τ : Strategy (G j)) → Strategy (K j τ)) :
     ∀ (d i T : ℕ) (h : d < T) (s : Strategy (monitoringPeriodG G i T)),

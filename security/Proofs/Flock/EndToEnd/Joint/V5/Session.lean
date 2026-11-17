@@ -5,20 +5,7 @@ public import Proofs.Flock.Bridge.V5.EndToEndHidden
 public import Proofs.Flock.Bridge.V5.OpeningsCanon
 public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 
-/-!
-# A member's session alone: its sampled proof blocks at verity-verify-proof `--zk --public-inputs`, at any sampling design
-
-`SampledKSLiveV5`'s session with an event of the sample in place of the count curve, as
-`zk_session_soundJ_custody_sampled_reg` is `zk_session_soundJ_custody_reg`'s:
-
-* `execRefinesZK_tables_sampledA`: `execRefinesZK_tables_sampled` at any acceptance `acc` (`simZJA`);
-* `ZkLink.zk_flock_sampledC_regC`: `Audit.extraction_audit_sampled` at `analysisZCRegC`, so in the compiled batched audit
-  `Pr[accepts ∧ some drawn proof block is in incorrectRegZc] ≤ ε_ks + ε_bind`;
-* `MemberV5.accepted_drawnIncorrect_le`: a member's session accepts at its `own` with a sampled proof block incorrect, at V5's
-  canonical openings, with probability at most `ε_ks + ε_bind` at its sampling design. Custody at `own` and one table
-  (`decodesZCJH_custodyAt`) holds at any sampling design whose samples have the session's link points, so the bound does
-  too, and it needs no A3.
--/
+/-! A member's session alone: its sampled proof blocks at verity-verify-proof `--zk --public-inputs`, at any sampling design and with no A3. -/
 
 @[expose] public section
 
@@ -43,8 +30,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : SamplingDesign n}
 
-/-- **`execRefinesZK_tables_sampled` at `acc`**: `acc` accepts the live audit at a sample in `E` no likelier than the
-compiled batched audit, played by `simZJA … τ`, accepts at a sample in `E`. -/
 theorem execRefinesZK_tables_sampledA (hdec : DecodesOnZKJA A Hs planZ acc wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) (E : Finset (Fin n) → Prop) :
     prob (fun o => acc o.2.2 ∧ E o.2.1) (auditLive L Reg (liveOfZJ dg planZ N wr)) τ ≤
@@ -87,9 +72,6 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc) (canon : Fin C.N → vb.Opening → Prop) {L : SamplingDesign n}
 
-/-- **The sampled proof blocks of the compiled `--zk` audit, against the registration with canonical openings**: it
-accepts with a sampled proof block in `incorrectRegZc` with probability at most `ε_ks + ε_bind`, `zk_flock_countC_regC`'s
-terms without the miss term. -/
 theorem zk_flock_sampledC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -117,8 +99,6 @@ open scoped ENNReal
 
 variable {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ)
 
-/-- **A member's session accepted with a sampled proof block incorrect**, played alone at the sampling design `L` by `τ`:
-at most `ε_ks + ε_bind` at `L`. -/
 theorem accepted_drawnIncorrect_le (L : SamplingDesign m.n) (hL : m.OneClass L) (τ : Strategy (m.game L))
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planZHJP m.dj m.y₀ (L.draw ω) (reg (m.sim L hL τ))) j
       (zcStrat execArith hs512 (planZHJP m.dj m.y₀) (cont (m.sim L hL τ) ω)) m.qF m.qS)

@@ -4,18 +4,12 @@ public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Two-stage detection risk: the proofs
-
-The proofs of the two-stage statements of `Partitioning.Guarantees`.
--/
+/-! Two-stage detection risk: the proofs. -/
 
 @[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs
 
-/-- With `G = C(x, j)`, `B = C(x, j+1)` and `A = C(x, j+2)`: `B² ≤ 2AG + 2BG + G²`. Through `B (j+1) = G (x − j)` and
-`A (j+2) = B (x − j − 1)`, it is `G² (j s² + 2(j+1)² s + (j+1)²(j+2)) ≥ 0` with `s = x − j`. -/
 theorem choose_sq_le (x j : ℕ) :
     ((x.choose (j + 1) : ℝ)) ^ 2 ≤
       2 * x.choose (j + 2) * x.choose j + 2 * x.choose (j + 1) * x.choose j + (x.choose j : ℝ) ^ 2 := by
@@ -179,7 +173,6 @@ section Nested
 open Finset Game
 open scoped ENNReal
 
-/-- Averaging over a pair of coins is averaging over the first of the average over the second. -/
 theorem avg_prod_eq {C D : Type} [Fintype C] [Fintype D] (f : C × D → ℝ≥0∞) :
     avg f = avg fun c => avg fun d => f (c, d) := by
   unfold avg
@@ -195,9 +188,6 @@ theorem prCoin_prod {C D : Type} [Fintype C] [Fintype D] (p : C × D → Prop) :
   unfold prCoin
   exact avg_prod_eq _
 
-/-- **The nested sampling design's missProb, in `ℝ≥0∞`.** Each replay block `i` contributes its Bernoulli factor (`SamplingDesign.bernFactor`)
-at the missProb, under the uniform `k`-subset, of its own wrong proof blocks: its two coins are independent of the
-other replay blocks'. -/
 theorem nested_escape (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) (hab : a ≤ b) (B : Finset (Fin (R * N))) :
     (nested R N k a b hk).missProb B =
       ∏ i, SamplingDesign.bernFactor a b

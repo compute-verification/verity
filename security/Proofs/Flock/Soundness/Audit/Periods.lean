@@ -3,33 +3,7 @@ module
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 public import Proofs.Flock.Soundness.Game
 
-/-!
-# The monitoring period: adaptive per-period bounds over `T` periods
-
-A monitoring period is `T` periods, period `t` with its own uniform coins in `Ω t`, independent of the others: a run is
-`ω : (t : Fin T) → Ω t`, uniform. What happens in period `t` may depend on everything before it, so an event or a factor
-of period `t` is a function of the whole run that reads only the periods up to `t` (`Adapted`), and a bound fixed before
-period `t`'s coins reads only the periods before `t` (`Predictable`). "Given any history, period `t`'s event has
-probability at most `p` over its own coins" is `∀ ω, prCoin (fun a => E t (Function.update ω t a)) ≤ p`.
-
-* `avg_prod_le`: the one induction. Adapted factors `f t` whose average over period `t`'s coins is at most a
-  predictable `g t` have `E[∏_t f_t · [∏_t g_t ≤ c]] ≤ c`: the tower rule over the history, peeling period 0
-  (`avg_fin_cons`).
-* `prCoin_forall_prod_le`, `prCoin_forall_le_prod`, `prCoin_forall_mem_le_prod`: events (`f` an indicator). Every
-  period of `S` has its event with probability at most `∏_{t ∈ S} p_t`.
-* `prCoin_count_le`: the event holds in at least `M` of the `T` periods with probability at most
-  `Σ_{|S| = M} ∏_{t ∈ S} p_t`; at one `p`, `C(T, M) · p^M` (`prCoin_count_le_choose`). `prCoin_count_mul_pow_le` is
-  the Chernoff form, `Pr · z^M ≤ (1 + (z − 1)·p)^T` for `z ≥ 1` (`f = z^[E]`), and `prCoin_count_le_of_log` its
-  value at `δ`: `M ≥ ((z − 1)·T·p + ln(1/δ))/ln z` gives at most `δ`.
-* `prCoin_forall_sum_le_pow`: when period `t`'s event has probability at most `ρ^(w t)` with `w t` predictable, every
-  period's event holds with `Σ_t w_t ≥ M` with probability at most `ρ^M`. `prCoin_forall_count_le_pow` is its count:
-  when `p` bounds "accepted and short" in each period given the history and shortness is fixed before the period's
-  coins, every period is accepted with at least `M` short with probability at most `p^M`. Shortness that the period's
-  own coins decide gets only the count bounds: an adversary short on a `p`-share of each period's coins, where it is
-  accepted, is accepted in every period and short in `Binomial(T, p)` of them.
-
-`Audit.SamplingDesign`'s pooled escape (`Pooled.lean`) is the instance at uniform `kd`-subset samples.
--/
+/-! The monitoring period: adaptive per-period bounds over `T` periods. -/
 
 @[expose] public section
 
@@ -38,11 +12,9 @@ namespace FlockSoundness.Audit.Periods
 open Game
 open scoped ENNReal
 
-/-- `f t` reads only the periods up to `t`. -/
 def Adapted {T : ℕ} {Ω : Fin T → Type} {β : Fin T → Type} (f : (t : Fin T) → ((i : Fin T) → Ω i) → β t) : Prop :=
   ∀ t ω ω', (∀ i, i ≤ t → ω i = ω' i) → f t ω = f t ω'
 
-/-- `f t` reads only the periods before `t`: it is fixed before period `t`'s coins. -/
 def Predictable {T : ℕ} {Ω : Fin T → Type} {β : Fin T → Type} (f : (t : Fin T) → ((i : Fin T) → Ω i) → β t) :
     Prop :=
   ∀ t ω ω', (∀ i, i < t → ω i = ω' i) → f t ω = f t ω'
@@ -82,7 +54,6 @@ theorem Predictable.zero {f : (t : Fin (T + 1)) → ((i : Fin (T + 1)) → Ω i)
 
 end Tail
 
-/-- Independent periods: a uniform run of `T + 1` periods is a uniform period 0 and an independent uniform rest. -/
 theorem avg_fin_cons {T : ℕ} {Ω : Fin (T + 1) → Type} [∀ t, Fintype (Ω t)]
     (F : ((i : Fin (T + 1)) → Ω i) → ℝ≥0∞) :
     avg F = avg fun a : Ω 0 => avg fun ρ : (i : Fin T) → Ω i.succ => F (Fin.cons a ρ) := by
@@ -105,9 +76,6 @@ theorem eq_zero_of_avg_eq_zero {C : Type} [Fintype C] {u : C → ℝ≥0∞} (h 
   · exact absurd h' (ENNReal.inv_ne_zero.2 (ENNReal.natCast_ne_top _))
   · exact h'
 
-/-- **The monitoring-period step.** Adapted factors `f t` whose average over period `t`'s coins, at any history, is
-at most a predictable `g t`: the run's product of factors, on the runs whose bounds multiply to at most `c`, averages
-at most `c`. -/
 theorem avg_prod_le : ∀ {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
     (f g : (t : Fin T) → ((i : Fin T) → Ω i) → ℝ≥0∞), Adapted f → Predictable g →
     (∀ t ω, avg (fun a : Ω t => f t (Function.update ω t a)) ≤ g t ω) → ∀ c : ℝ≥0∞,
@@ -165,8 +133,6 @@ theorem avg_prod_le : ∀ {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)
 
 variable {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
 
-/-- **Events.** Period `t`'s adapted event has probability at most a predictable `g t` given the history: every
-period's event holds, with the bounds multiplying to at most `c`, with probability at most `c`. -/
 theorem prCoin_forall_prod_le (E : (t : Fin T) → ((i : Fin T) → Ω i) → Prop)
     (g : (t : Fin T) → ((i : Fin T) → Ω i) → ℝ≥0∞) (hE : Adapted E) (hg : Predictable g)
     (h : ∀ t ω, prCoin (fun a : Ω t => E t (Function.update ω t a)) ≤ g t ω) (c : ℝ≥0∞) :
@@ -182,14 +148,12 @@ theorem prCoin_forall_prod_le (E : (t : Fin T) → ((i : Fin T) → Ω i) → Pr
   · exact zero_le
   · exact zero_le
 
-/-- Every period's event, at constant bounds `p t`: at most `∏_t p_t`. -/
 theorem prCoin_forall_le_prod (E : (t : Fin T) → ((i : Fin T) → Ω i) → Prop) (hE : Adapted E) (p : Fin T → ℝ≥0∞)
     (h : ∀ t ω, prCoin (fun a : Ω t => E t (Function.update ω t a)) ≤ p t) :
     prCoin (fun ω => ∀ t, E t ω) ≤ ∏ t, p t :=
   (prCoin_mono fun _ hω => ⟨hω, le_rfl⟩).trans
     (prCoin_forall_prod_le E (fun t _ => p t) hE (fun _ _ _ _ => rfl) h _)
 
-/-- Every period of `S` has its event: at most `∏_{t ∈ S} p_t`. -/
 theorem prCoin_forall_mem_le_prod (E : (t : Fin T) → ((i : Fin T) → Ω i) → Prop) (hE : Adapted E)
     (p : Fin T → ℝ≥0∞) (h : ∀ t ω, prCoin (fun a : Ω t => E t (Function.update ω t a)) ≤ p t)
     (S : Finset (Fin T)) :
@@ -204,8 +168,6 @@ theorem prCoin_forall_mem_le_prod (E : (t : Fin T) → ((i : Fin T) → Ω i) �
   rwa [Finset.prod_ite_mem, Finset.univ_inter] at key
 
 open Classical in
-/-- **The count.** The adapted event holds in at least `M` of the `T` periods with probability at most
-`Σ_{S ⊆ [T], |S| = M} ∏_{t ∈ S} p_t`. -/
 theorem prCoin_count_le (E : (t : Fin T) → ((i : Fin T) → Ω i) → Prop) (hE : Adapted E) (p : Fin T → ℝ≥0∞)
     (h : ∀ t ω, prCoin (fun a : Ω t => E t (Function.update ω t a)) ≤ p t) (M : ℕ) :
     prCoin (fun ω => M ≤ (Finset.univ.filter fun t => E t ω).card) ≤
@@ -216,7 +178,6 @@ theorem prCoin_count_le (E : (t : Fin T) → ((i : Fin T) → Ω i) → Prop) (h
   exact ⟨S, Finset.mem_powersetCard.2 ⟨Finset.subset_univ _, hSc⟩, fun t ht => (Finset.mem_filter.1 (hS ht)).2⟩
 
 open Classical in
-/-- The count at one bound `p`: at most `C(T, M) · p^M`. -/
 theorem prCoin_count_le_choose (E : (t : Fin T) → ((i : Fin T) → Ω i) → Prop) (hE : Adapted E) {p : ℝ≥0∞}
     (h : ∀ t ω, prCoin (fun a : Ω t => E t (Function.update ω t a)) ≤ p) (M : ℕ) :
     prCoin (fun ω => M ≤ (Finset.univ.filter fun t => E t ω).card) ≤ T.choose M * p ^ M := by
@@ -228,7 +189,6 @@ theorem prCoin_count_le_choose (E : (t : Fin T) → ((i : Fin T) → Ω i) → P
         rw [Finset.sum_const, Finset.card_powersetCard, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
 open Classical in
-/-- **The count, Chernoff form.** For `z ≥ 1`, `Pr[at least M periods] · z^M ≤ (1 + (z − 1)·p)^T`. -/
 theorem prCoin_count_mul_pow_le (E : (t : Fin T) → ((i : Fin T) → Ω i) → Prop) (hE : Adapted E) {p z : ℝ≥0∞}
     (hz : 1 ≤ z) (h : ∀ t ω, prCoin (fun a : Ω t => E t (Function.update ω t a)) ≤ p) (M : ℕ) :
     prCoin (fun ω => M ≤ (Finset.univ.filter fun t => E t ω).card) * z ^ M ≤ (1 + (z - 1) * p) ^ T := by
@@ -255,8 +215,6 @@ theorem prCoin_count_mul_pow_le (E : (t : Fin T) → ((i : Fin T) → Ω i) → 
     exact zero_le
 
 open Classical in
-/-- **The count at `δ`.** At a real bound `p` per period and any `z > 1`, the event holds in at least
-`((z − 1)·T·p + ln(1/δ))/ln z` periods with probability at most `δ`; at `z = e`, `(e − 1)·T·p + ln(1/δ)`. -/
 theorem prCoin_count_le_of_log (E : (t : Fin T) → ((i : Fin T) → Ω i) → Prop) (hE : Adapted E) {p : ℝ} (hp : 0 ≤ p)
     (h : ∀ t ω, prCoin (fun a : Ω t => E t (Function.update ω t a)) ≤ ENNReal.ofReal p) {z δ : ℝ} (hz : 1 < z)
     (hδ : 0 < δ) {M : ℕ} (hM : ((z - 1) * T * p + Real.log (1 / δ)) / Real.log z ≤ M) :
@@ -283,8 +241,6 @@ theorem prCoin_count_le_of_log (E : (t : Fin T) → ((i : Fin T) → Ω i) → P
   rw [← ENNReal.ofReal_pow hz0.le, ← ENNReal.ofReal_mul hδ.le]
   exact ENNReal.ofReal_le_ofReal hreal
 
-/-- **Predictable weights.** Period `t`'s adapted event has probability at most `ρ^(w t)` given the history, with `w t`
-fixed before period `t`'s coins: every period's event holds with `Σ_t w_t ≥ M` with probability at most `ρ^M`. -/
 theorem prCoin_forall_sum_le_pow (E : (t : Fin T) → ((i : Fin T) → Ω i) → Prop)
     (w : (t : Fin T) → ((i : Fin T) → Ω i) → ℕ) (hE : Adapted E) (hw : Predictable w) {ρ : ℝ≥0∞} (hρ : ρ ≤ 1)
     (h : ∀ t ω, prCoin (fun a : Ω t => E t (Function.update ω t a)) ≤ ρ ^ w t ω) (M : ℕ) :
@@ -295,9 +251,8 @@ theorem prCoin_forall_sum_le_pow (E : (t : Fin T) → ((i : Fin T) → Ω i) →
   exact pow_le_pow_of_le_one zero_le hρ hω.2
 
 open Classical in
-/-- **Accepted and short, shortness predictable.** `p` bounds "accepted and short" in each period given the history,
-and whether period `t` is short is fixed before its coins: every period is accepted with at least `M` short with
-probability at most `p^M`. -/
+/-- Whether period `t` is short must be fixed before its coins; shortness the period's own coins decide gets only
+the count bounds. -/
 theorem prCoin_forall_count_le_pow (A S : (t : Fin T) → ((i : Fin T) → Ω i) → Prop) (hA : Adapted A)
     (hS : Predictable S) {p : ℝ≥0∞}
     (h : ∀ t ω, prCoin (fun a : Ω t => A t (Function.update ω t a) ∧ S t (Function.update ω t a)) ≤ p) (M : ℕ) :

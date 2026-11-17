@@ -6,19 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Registered.Binding
 
-/-!
-# Registered reads off the registrant's leaf, at the outcome's sample
-
-`ReadsX.prob_off_le` bounds the probability that a registered read's session leaf is not the registrant's at one
-registration and one set of reads. In a live session both are the outcome's: the registration is the one the prover sent,
-and the verifier checks only the reads of the units it samples. So:
-
-* `rowIn S`: a commit string that is a row of a unit of `S`; `ReadsX.restrict`: the reads at the positions `A` keeps;
-* `ReadsX.prob_offOn_le`: `prob_off_le` with the reads, the registration and the paths read off the outcome;
-* `prob_auditLive_sample`: an event of the live audit's sample alone has the sampling design's probability (implications at every
-  outcome of the session bound probabilities: `prob_auditLive_liveOfZJ_mono`, `Proofs.Flock.Recursive.Flock`);
-* `reg_cast`: a strategy's registration survives a cast along an equation of sessions.
--/
+/-! Registered reads off the registrant's leaf, at the outcome's sample. -/
 
 @[expose] public section
 
@@ -61,11 +49,6 @@ def restrict (rd : ReadsX lay rs) (A : lay.Pos → Prop) : ReadsX lay rs where
   wpath := rd.wpath
   committed p h := rd.committed p h.1
 
-/-- **`prob_off_le` at the outcome's reads and registration.** In a game `G` played by `σ` whose accepted outcomes `o`
-(`accept`) the verifier's registered check holds on, for the reads `rdo o` at the registration `Rof o` through
-`path o`: the probability of accepting while one of `rdo o`'s reads has a leaf under `Rof o` that is not the
-registrant's is at most `qR²/2^513`, under `SHA512CRStrict` (`cr/sha-512`) for the finder that plays `G` once and
-outputs the extractor's pair. -/
 theorem prob_offOn_le {β : Type} (G : Game β) (σ : Strategy G) (rdo : β → ReadsX lay rs) (Rof : β → Reg)
     (accept : β → Prop) (path : β → lay.Pos → ByteArray) (hchk : ∀ o, accept o → (rdo o).Checked (Rof o) (path o))
     {qR : ℝ} (hR : (StrictCR.oneRun G σ fun o => (rdo o).pick (Rof o) (path o)).CR H512 qR) :
@@ -92,7 +75,6 @@ namespace FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine
 open scoped ENNReal
 
-/-- **An event of the live audit's sample alone has the sampling design's probability.** -/
 theorem prob_auditLive_sample {n : ℕ} {L : SamplingDesign n} {Reg : Type} (live : Finset (Fin n) → Reg → Game Exec.Transcript)
     (τ : Strategy (auditLive L Reg live)) (Q : Finset (Fin n) → Prop) :
     prob (fun o => Q o.2.1) (auditLive L Reg live) τ = prCoin fun ω => Q (L.draw ω) := by
@@ -106,7 +88,6 @@ theorem prob_auditLive_sample {n : ℕ} {L : SamplingDesign n} {Reg : Type} (liv
   · rw [if_neg h]
     exact le_antisymm ((prob_mono (fun _ hq => h hq) _ _).trans (prob_false _ _).le) zero_le
 
-/-- **A strategy's registration survives a cast along an equation of sessions.** -/
 theorem reg_cast {n : ℕ} {L : SamplingDesign n} {Reg : Type} {g g' : Finset (Fin n) → Reg → Game Bool} (h : g = g')
     (x : Strategy (audit L Reg g)) : reg (cast (congrArg (fun g => Strategy (audit L Reg g)) h) x) = reg x := by
   subst h

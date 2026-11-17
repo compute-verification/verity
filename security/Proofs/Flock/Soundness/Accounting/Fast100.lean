@@ -5,33 +5,13 @@ import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# The bound for `fast100` run twice on one root
-
-For every witness size the profile supports and every statement shape the three statements of
-`Flock.Statement` can take (at most `2^27` bits per block, 1024 public regions and 64 link-point
-coordinates, well beyond today's statements), `tableError` is at most
-
-* `2^-205` for every `22 ≤ m ≤ 35` (`tableError_le_of_le_33`, `tableError_le_of_34_35`), at the
-  analysis slack `η = 1/200`.
-
-At `η = 1/50` these were 2^-195.5 and, with the seventh level at `m = 34, 35`, 2^-195.4. The slack
-is the analysis's choice: the radius `1 − √ρ − η` and the list bound `1/(2ηρ)` follow it, and
-the verifier never reads it.
-
-**Method.** Each real term is bounded by a rational one (`…Up`): `√(2^-r)` by a rational upper
-bound, and the mutual-correlated-agreement numerator of BCHKS25 Theorem 4.6 by a crude closed
-form (its terms sit below 2^-180, against about 2^-102.5 for the queries). The rational bound is then
-checked by exact arithmetic for each `m`.
--/
+/-! The bound for `fast100` run twice on one root, at the analysis slack `η = 1/200`, which the verifier never reads. -/
 
 @[expose] public section
 
 namespace FlockSoundness.Accounting
 
 open Real
-
-/-! ## Rational upper bounds, term by term -/
 
 theorem sqrtUp_nonneg (r : ℕ) : 0 ≤ sqrtUp r := by
   unfold sqrtUp; split_ifs <;> positivity
@@ -52,7 +32,6 @@ theorem queryError_le (l : Level) (hr : l.logInvRate ≤ 7) :
 
 theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols) :
     0 ≤ l.mcaA ∧ l.mcaA ≤ (mcaUp l : ℝ) := by
-  -- names for the pieces of ArkLib's expression
   set r := l.logInvRate with hr_def
   set c := l.logCols with hc_def
   have hk2 : (2 : ℕ) ≤ 2 ^ c := by
@@ -82,7 +61,6 @@ theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols)
       _ = ((k : ℝ) - 1) * (2 ^ r * 2) := by ring
   have hρ_le1 : ρ ≤ 1 := by rw [hρ]; exact div_le_one_of_le₀ (one_le_pow₀ (by norm_num)) h2r.le
   have hρr_le1 : ρr ≤ 1 := hρr_le.trans hρ_le1
-  -- the square root pieces
   have hs : ρr ^ ((1 : ℝ) / 2) = Real.sqrt ρr := (Real.sqrt_eq_rpow ρr).symm
   have hs_le : Real.sqrt ρr ≤ Real.sqrt ρ := Real.sqrt_le_sqrt hρr_le
   have hs_le1 : Real.sqrt ρr ≤ 1 := Real.sqrt_le_one.2 hρr_le1
@@ -95,7 +73,6 @@ theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols)
     simpa [Real.rpow_natCast] using this
   have h32pos : 0 < ρr ^ ((3 : ℝ) / 2) := Real.rpow_pos_of_pos hρr_pos _
   have hsq_pos : 0 < Real.sqrt ρr := Real.sqrt_pos.2 hρr_pos
-  -- the radius and the multiplicity parameter
   set δ : ℝ := l.radius with hδ_def
   have hδ : δ = 1 - Real.sqrt ρ - 1 / 200 := by rw [hδ_def, Level.radius, eta]
   have hden : 1 / 200 ≤ 1 - Real.sqrt ρr - δ := by rw [hδ]; linarith
@@ -110,7 +87,6 @@ theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols)
   have hmm_ge : 3 ≤ mm := le_max_right _ _
   have hδ_le1 : δ ≤ 1 := by rw [hδ]; linarith [Real.sqrt_nonneg ρ]
   have hδ_ge : -1 ≤ δ := by rw [hδ]; linarith
-  -- the numerator
   have hδρ : δ * ρr ≤ 1 := by
     have := mul_le_mul_of_nonneg_right hδ_le1 hρr_pos.le
     linarith
@@ -137,7 +113,6 @@ theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols)
     norm_num at e1 e2 ⊢
     linarith
   have hnum0 : (0 : ℝ) ≤ 2 * (401 / 2) ^ 5 + 3 * (401 / 2) := by norm_num
-  -- the two terms of `a`
   have hρr2 : 1 / 2 ^ (2 * r + 2) ≤ ρr ^ 2 := by
     calc 1 / 2 ^ (2 * r + 2) = (1 / 2 ^ (r + 1) : ℝ) ^ 2 := by rw [div_pow, ← pow_mul]; ring_nf
       _ ≤ ρr ^ 2 := by gcongr
@@ -164,7 +139,6 @@ theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols)
   have hT2_nonneg : 0 ≤ (mm + 1 / 2) / ρr ^ ((1 : ℝ) / 2) := by
     have : 0 ≤ mm + 1 / 2 := by linarith
     positivity
-  -- assemble
   have hA : l.mcaA = (2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr) / (3 * ρr ^ ((3 : ℝ) / 2)) * n
       + (mm + 1 / 2) / ρr ^ ((1 : ℝ) / 2) := rfl
   have hup : ((mcaUp l : ℚ) : ℝ) =
@@ -218,8 +192,6 @@ theorem ligeritoError_le : ∀ ls : List Level, (∀ l ∈ ls, l.Ok) →
       have h1 := midLevelError_le l l' (h l (by simp))
       have h2 := ligeritoError_le (l' :: rest) fun x hx => h x (List.mem_cons_of_mem _ hx)
       linarith
-
-/-! ## The statement ranges -/
 
 theorem piopError_le (m L₀ : ℕ) (st : Stmt) (hst : st.InRange) :
     piopError m st.kLog st.nClaims L₀ ≤ ((piopNumMax m L₀ : ℚ) / 2 ^ 128 : ℚ) := by

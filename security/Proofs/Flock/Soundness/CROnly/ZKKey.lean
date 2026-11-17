@@ -12,17 +12,7 @@ import Proofs.Flock.Soundness.CROnly.ZK
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 
-/-!
-# Lemma C at a uniform hm96 key
-
-`adaptive_prefinal_gap` bounds Lemma C's gap at a fixed key by `2·|L|·δ₁(κ)`, with `δ₁(κ)` the hiding gap of the leaves'
-salt hashes under key `κ`. Here the key is sampled uniformly, first and independently of the salts, and everything else
-(the witnesses, the table, the prover, the verifier `V*`, the event and the leaf hash) may depend on it: the gap is then
-`2·|L|` times the gap's mean over the key (`adaptive_prefinal_key`), and for `hm96-sha512` that mean is at most `2^-257`
-(`adaptive_prefinal_hm96_sha512`). The leaf hash depends on the key because hm96-sha512's leaves are
-`H(leaf_prefix(key) ‖ ·)` with `leaf_prefix(key) = leaf tag ‖ H(key)` (`hm96/PROTOCOL.md` §2). So Lemma C needs of the
-key only that it is uniform.
--/
+/-! Lemma C at a uniform hm96 key, which is all Lemma C needs of the key. -/
 
 @[expose] public section
 
@@ -32,8 +22,6 @@ open Finset ZK
 open Game (prCoin avg avg_mono avg_add)
 open scoped ENNReal
 
-/-- **A bound at every fixed `t`, on average over a uniform `t`**: `ZK.prCoin_avg_close` with a bound that depends on
-`t`. -/
 theorem prCoin_avg_close_var {Tp X : Type} [Fintype Tp] [Fintype X] (A A' : Tp → X → Prop) (ε : Tp → ℝ≥0∞)
     (h : ∀ t, prCoin (A t) ≤ prCoin (A' t) + ε t) :
     prCoin (fun p : Tp × X => A p.1 p.2) ≤ prCoin (fun p : Tp × X => A' p.1 p.2) + avg ε := by
@@ -65,10 +53,8 @@ variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [CharP F 2] [AddCommG
   [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B]
   [Fintype Hi] [DecidableEq Hi] {J : ℕ}
 
-/-- **Lemma C at a uniform key**: `adaptive_prefinal_gap` with the key `κ` that hashes the leaves' salts (`My κ`) sampled
-uniformly and independently of the prover's coins, the salts and the verifier's tape. The witnesses `w κ`, `w' κ`, the
-table, the prover, the verifier `V*`, the event and the leaf hash `H κ` may all depend on the key, which is public. The
-gap is `2·|L|` times the hiding gap's mean over the key. -/
+/-- The witnesses, the table, the prover, the verifier `V*`, the event and the leaf hash may all depend on the key,
+which is public. -/
 theorem adaptive_prefinal_key {n : ℕ} {Cn M Cc Ω L Tp Key : Type} [Inhabited M] [DecidableEq M] [Fintype Ω]
     [Nonempty Ω] [Fintype L] [DecidableEq L] [Fintype Tp] [Nonempty Tp] [DecidableEq Cc] [Fintype Key]
     (T : Key → (Fin n → Cn) → Fin J → Table F K W Salt (B × Salt) D Hi VL)
@@ -103,10 +89,6 @@ theorem adaptive_prefinal_key {n : ℕ} {Cn M Cc Ω L Tp Key : Type} [Inhabited 
 
 end Real
 
-/-- **Lemma C for `hm96-sha512` at a uniform key**: `adaptive_prefinal_key` with salts of 1536 bits, hashed by the
-Hankel matrix of a uniform 2047-bit key into 512 bits, a salt hash `cs` with at most `2^512` values (SHA-512's), and a
-leaf hash `H κ` that may depend on the key (hm96-sha512's leaf prefix carries `H(key)`): the gap is at most
-`2·|L|·2^-257`. Bits are a field `Fb` of two elements. -/
 theorem adaptive_prefinal_hm96_sha512 {Fb : Type} [Field Fb] [Fintype Fb] [DecidableEq Fb]
     (hF : Fintype.card Fb = 2) {F K W D Hi VL : Type} [Field F] [Field K] [CharP F 2] [AddCommGroup Hi] [Fintype F]
     [DecidableEq F] [Fintype Hi] [DecidableEq Hi] {J n : ℕ} {Cn M Cc Ω L Tp : Type} [Inhabited M] [DecidableEq M]

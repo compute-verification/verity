@@ -6,25 +6,7 @@ import Mathlib.Basic.ENNReal.Real
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The one-stage audit with a randomized extractor
-
-The knowledge extractor of a compiled table reruns the prover after its first commitment and
-decodes what it saw (`Knowledge.lean`), so whether it succeeds is a probability over its reruns,
-not a fact about the state. And the table theorems' bounds depend on the prover (its collision
-finders' advantages). This file restates the one-stage audit for that case (`ExtractionAnalysis`),
-in the joint form the table and session theorems state:
-
-* `ks S R τ u`: `Pr[the session accepts ∧ extraction of drawn unit u fails]`, from the session state
-  `τ`, over the fresh run and the extractor's reruns;
-* `link S R τ u X`: `Pr[it accepts ∧ extraction of u succeeds but differs from X on u's wires]`;
-* `cover`: for a sampled proof block incorrect in `X`, `Pr[accept] ≤ ks + link` (every extractor outcome fails
-  one way or the other).
-
-The named hypotheses bound `ks` and `link` at the unit a rule picks before the session's first coin,
-averaged over the sample (`KnowledgeSound`, `BindSound`); the bounds are functions of the prover's
-state. `extraction_audit_le` is `audit_le` in this form; the count curve is `extraction_audit_count`.
--/
+/-! The one-stage audit with a randomized extractor, whose success is a probability over its reruns and whose bounds depend on the prover. -/
 
 @[expose] public section
 
@@ -35,7 +17,6 @@ open scoped ENNReal
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
-/-- A per-unit quantity at the unit a rule picks, and zero when it picks none or an unsampled one. -/
 noncomputable def atTgt (S : Finset (Fin n)) (t : Option (Fin n)) (f : Fin n → ℝ≥0∞) : ℝ≥0∞ :=
   t.elim 0 fun u => if u ∈ S then f u else 0
 
@@ -49,9 +30,6 @@ theorem atTgt_le {S : Finset (Fin n)} {f : Fin n → ℝ≥0∞} {c : ℝ≥0∞
     · exact h u hu
     · exact zero_le
 
-/-- What the analysis of an audit fixes when extraction is randomized: the committed transcript,
-and for each sampled proof block the joint probabilities of the two ways its table can accept while it is
-incorrect. -/
 structure ExtractionAnalysis (L : SamplingDesign n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool)
     where
   Tr : Type
@@ -68,18 +46,14 @@ namespace ExtractionAnalysis
 
 variable (A : ExtractionAnalysis L Reg session)
 
-/-- The committed transcript of an audit strategy. -/
 def committedOf (σ : Strategy (audit L Reg session)) : A.Tr := A.committed (reg σ) (cont σ)
 
-/-- **Knowledge soundness, per unit** (named hypothesis `ε_ks`, which may depend on the prover's
-state): for every prover and every rule that picks a sampled proof block before the session's first coin,
-the average over the sample of `Pr[accept ∧ extraction of the picked unit fails]`. -/
+/-- Named hypothesis `ε_ks`, which may depend on the prover's state. -/
 def KnowledgeSound (εks : (R : Reg) → Cont L Reg session R → ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
     avg (fun ω => atTgt (L.draw ω) (tgt ω) (A.ks (L.draw ω) R (τ ω))) ≤ εks R τ
 
-/-- **The binding error** (named hypothesis `ε_bind`, which may depend on the prover's state):
-likewise, with `Pr[accept ∧ extraction succeeds but disagrees with the committed transcript]`. -/
+/-- Named hypothesis `ε_bind`, which may depend on the prover's state. -/
 def BindSound (εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
     avg (fun ω => atTgt (L.draw ω) (tgt ω) fun u => A.link (L.draw ω) R (τ ω) u (A.committed R τ)) ≤
@@ -92,8 +66,6 @@ namespace Analysis
 variable (A : Analysis L Reg session)
 
 open Classical in
-/-- **A deterministic extractor is the special case**: `ks` is `Pr[accept ∧ extraction of u
-fails]`, zero or the acceptance probability, and likewise `link`. -/
 noncomputable def toExtraction : ExtractionAnalysis L Reg session where
   Tr := A.Tr
   incorrect := A.incorrect
@@ -128,7 +100,6 @@ theorem BindSound.toExtraction {A : Analysis L Reg session} {εbind : ℝ≥0∞
 
 end Analysis
 
-/-- **The one-stage audit bound, with a randomized extractor.** -/
 theorem extraction_audit_le (A : ExtractionAnalysis L Reg session)
     {εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound εbind) (E : A.Tr → Finset (Fin n) → Prop)
@@ -178,8 +149,6 @@ theorem extraction_audit_le (A : ExtractionAnalysis L Reg session)
     _ = _ := avg_add₃ _ _ _
     _ ≤ _ := add_le_add (add_le_add (avg_ite_eq_prCoin _).le (hks R τ tgt)) (hlink R τ tgt)
 
-/-- **The count curve, with a randomized extractor**:
-`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_count (A : ExtractionAnalysis L Reg session)
     {εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound εbind) (K : ℕ) (σ : Strategy (audit L Reg session)) :
@@ -192,7 +161,6 @@ theorem extraction_audit_count (A : ExtractionAnalysis L Reg session)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => absurd h.1 hB).trans
       (prCoin_false.le.trans (zero_le))
 
-/-- **Sampled proof blocks, with a randomized extractor**, are correct up to `ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_sampled (A : ExtractionAnalysis L Reg session)
     {εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound εbind) (σ : Strategy (audit L Reg session)) :
