@@ -725,9 +725,10 @@ import json
 import test_pearltie as TP, test_remotetie as TR, window_tie as WT
 pearl, h1 = TP.make_toy(), TR.make_toy()
 doc = json.loads(json.dumps(pearl.low.circuit.declared()))
+own = {{TP.SS.SCAN_STATE: pearl.values[TP.SS.SCAN_STATE].entry()}}
 for w in (pearl.W, TP._flipped(pearl).W):
-    tied = WT.tie_of(doc, w)
-    assert tied == RA.tie_of(doc, w, None) and tied[0]["registered"], tied
+    tied = WT.tie_of(doc, w, own)
+    assert tied == RA.tie_of(doc, w, None, own) and tied[0]["registered"], tied
 ids = [t for c in (pearl.low.circuit, h1.low.circuit) for t in c.ids]
 assert ids and all(descriptor_id(WT.catalog_resolve(t)) == descriptor_id(RA.catalog_resolve(t)) == t for t in ids)
 """
