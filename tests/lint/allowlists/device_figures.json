@@ -59,7 +59,7 @@
     {"file": "verity/circuits/ops/boolean/elementwise.circuit-check.json", "count": 1, "lane": "circuits"},
     {"file": "verity/circuits/ops/tables/mufu_tanh_sm89.json", "count": 1, "lane": "circuits"},
     {"file": "verity/protocols/resource_accounting/memory/poub/verifier/timing.py", "count": 8, "lane": "memory-accounting"},
-    {"file": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/WipeProtocol.lean", "count": 1, "lane": "memory-accounting"},
+    {"file": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/WipeProtocol.lean", "count": 1, "lane": "memory-accounting"},
     {"file": "verity/protocols/registration/verifier/lean/RegistrationLog.lean", "count": 1, "lane": "proofs"},
     {"file": "verity/protocols/registration/verifier/lean/RegistrationLog/SiteV2Guards.lean", "count": 9, "lane": "proofs"},
     {"file": "verity/protocols/interface/CoreProtocol/Account.lean", "count": 1, "lane": "proofs"}

@@ -24,7 +24,7 @@
  },
  "layers": {
   "PousCheck": {
-   "imports": ["PousCheck", "Flock", "CoreProtocol", "Identity", "Randomness", "MemoryChallenger"],
+   "imports": ["PousCheck", "Flock", "CoreProtocol", "Identity", "Randomness", "MemoryAttester"],
    "except": ["PousCheck.SetupDifftest"],
    "why": "the program is code: Lean core, Flock's executable primitives, the core protocol interface, the core primitives (identity, randomness) and the memory challenger's verdict (PousCheck.Run composes it with the setup) only, no Mathlib and nothing of Security"
   }

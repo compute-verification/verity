@@ -5149,6 +5149,16 @@
         "verity/protocols/resource_accounting/memory/poub/prover/remote_session/": "verity/protocols/resource_accounting/memory/poub/prover/poub_session/",
         "verity/protocols/resource_accounting/memory/poub/verifier/remote_session/": "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/"
       }
+    },
+    {
+      "paths": {
+        "security/Proofs/Properties/Pous/MemoryChallenger.lean": "security/Proofs/Properties/Pous/MemoryAttester.lean",
+        "security/Proofs/Properties/Pous/MemoryChallenger/": "security/Proofs/Properties/Pous/MemoryAttester/",
+        "security/Properties/Pous/MemoryChallenger.lean": "security/Properties/Pous/MemoryAttester.lean",
+        "security/Properties/Pous/MemoryChallenger/": "security/Properties/Pous/MemoryAttester/",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger.lean": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester.lean",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/"
+      }
     }
   ]
 }

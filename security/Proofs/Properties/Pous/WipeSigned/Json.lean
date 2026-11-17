@@ -2,7 +2,7 @@ module
 
 import all Init.Data.Int.Repr
 import all Init.Data.Repr
-public import MemoryChallenger.Records
+public import MemoryAttester.Records
 
 /-!
 # What `pyJsonStr` writes is read back
@@ -19,7 +19,7 @@ word for word (`jsonStr`, `tiersJson`), which are those definitions by `rfl` (`p
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SecurityProofs.WipeJson
+namespace MemoryAttester.Properties.SecurityProofs.WipeJson
 
 /-- `Records.lean`'s `hex4`, word for word. -/
 def hex4 (n : Nat) : String :=
@@ -382,4 +382,4 @@ theorem tiers_split {t t' : Array (String × Nat)} {r r' : List Char}
     obtain ⟨hl, hr⟩ := rest_split h
     exact ⟨by rw [hy, hl], hr⟩
 
-end MemoryChallenger.Properties.SecurityProofs.WipeJson
+end MemoryAttester.Properties.SecurityProofs.WipeJson
