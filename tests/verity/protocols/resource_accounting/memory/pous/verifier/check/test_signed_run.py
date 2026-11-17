@@ -3,7 +3,7 @@ decoded as the Lean decodes it, then `period.answer_signed`, which is `run.check
 every field of the answer, and the reason of each refusal of the check.
 
 The cases are a small store set up at the small point (`period.point_for(size, W, C0)`), its session run by the memory
-challenger, the setup record signed by the session's key under the session's id for the published outputs the test hands
+attester, the setup record signed by the session's key under the session's id for the published outputs the test hands
 it, and one opening per round made from the prover's table (`period.openings_of`). Under `--test` the session's key is a
 test signer's (its setup record at the next leaf); under the deployed protocol it is a key at S1's deployed parameters
 (`mc_cases.deployed_signer`, which signs at leaf 0 alone, so both records are signed there). Each case is honest or under
@@ -30,7 +30,7 @@ import verity_difftest as D
 from test_run import LEAN, M, _decode_session, _decode_setup, _point_of
 from verity_difftest import protocol as P
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
@@ -131,14 +131,14 @@ def _zeros_on_odd_rounds(blocks):
 
 def signed_run(signer, coins: bytes = COINS, prover=period_prover.honest, setup_signer=None, setup_session: bytes | None = None,
                **record) -> Signed:
-    """The memory challenger's session on `held()` under `coins` (as `period_prover.audit` runs it), signed by `signer`, whose
+    """The memory attester's session on `held()` under `coins` (as `period_prover.audit` runs it), signed by `signer`, whose
     key the verifier trusts; the setup record signed by
     `setup_signer` (by default the session's key, at its next leaf for a test key) under `setup_session` (by default the
     session's id) for the published outputs, each overridden by `record`; and the openings from the prover's table."""
     h, pub = held(), held().published
     q = h.point.params
     sid = challenger_session.coin_session_id(coins, period.SESSION_DOMAIN, "n0", pub.root)
-    challenger = mc.MemoryChallenger(mc.CoinTree.draw(coins, sid, q.blocks, h.point.k), signer, log=M.ts.session_log(),
+    challenger = mc.MemoryAttester(mc.CoinTree.draw(coins, sid, q.blocks, h.point.k), signer, log=M.ts.session_log(),
                                      limit_ns=h.point.limit_ns, block_bytes=q.block_bytes, binding=pub.root,
                                      clock=M.Clock(10 ** 9))
     signed = challenger.run(prover(h.blocks))

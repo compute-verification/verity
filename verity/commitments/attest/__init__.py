@@ -1,7 +1,7 @@
 """A party's signed period roots and its liveness records: how an auditor device's signatures reach the verifier only
 through the prover's zero-knowledge proofs.
 
-An auditor party (a memory challenger, a network attester) on a device holds a lower HSS key the device's identity
+An auditor party (a memory attester, a network attester) on a device holds a lower HSS key the device's identity
 certified for it in the deployment (`verity.commitments.crypto.lms.Identity.issue`, `PartyKey`). Over one certification period it
 commits every execution phase's records, each a byte string, as the leaves of one frame-v3-sha512 tree (`root`):
 

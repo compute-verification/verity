@@ -207,7 +207,7 @@ credited utilization u is below a public floor u_min. Without it, the bound belo
 Φ_D.
 
 Onsite adds four subprotocols on devices at the site: memory wipes cut each registered server's life into server
-blocks, each carrying at most k_wipe bits across its boundary; network certification bounds each server's ingress to
+blocks, each carrying at most k_wipe bits across its boundary; network attestation bounds each server's ingress to
 r_in bits a tick, besides side channels at r_side; and PoUS and PoUB bound the memory and bandwidth used.
 
 ### Part 1: reaching the target requires hard-to-localize computation
@@ -521,7 +521,7 @@ what the lock records: named assumptions, open premises (with issue and due date
 | PoUW | `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditMonitoringPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/MonitoringPeriod.lean` | Proved from open premises alone: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`, `EveryExecutionPhase`, `PrefixOf`, `Scope`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `verity-verify-proof --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved from the open premises `DeviceModel` (the device model) and `P2RingAuditSecure` (a conjecture) and the named assumption `Instantiates` (`pous-ring-instantiation`); no honest witness (unwitnessed). The coin-game form adds the named assumption `Hash.Assumptions.Sha512Prf` at the memory attester's two tests (its `ε_prf` in the bound), the domain hypothesis `Fits` (the certificate's fit) and the open premise `ReadsNoPrimitive` (the run reads no primitive), with both witnesses |
 | Bandwidth audit, PoUB's per-pass lemma | `ResourceAccounting.Guarantees.Remote.AuditRO`, `Definitions/Poub/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
-| Network certification | `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`, `Definitions/Certifier/Guarantees/MonitoringPeriod.lean` | Proved from the open premises SPOT's `Claims.SamplingGeneric.Compiled.KS`, `CertifierRegisters`, `ScopeAcc` and `TrustedDevice` (in the trust base, provisionally) and the domain hypothesis `Claims.Sampling.CommitmentScheme.Binds`; no named assumption. Each execution phase is bounded alone, with no union over the period yet |
+| Network attestation | `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`, `Definitions/Certifier/Guarantees/MonitoringPeriod.lean` | Proved from the open premises SPOT's `Claims.SamplingGeneric.Compiled.KS`, `CertifierRegisters`, `ScopeAcc` and `TrustedDevice` (in the trust base, provisionally) and the domain hypothesis `Claims.Sampling.CommitmentScheme.Binds`; no named assumption. Each execution phase is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
 | PoUB | `Properties.Poub.Line.LineHeld`, `Properties/Poub/Remote/Line.lean` | Inside protocol soundness: its P2 audit (`Poub.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, and `Verity.soundness_of_subprotocols` at `.onsite` takes its target, `BandwidthAuditSound`, as an open premise. In its own form it is proved from open premises alone: `Covered`, `Covers`, `IngressCounted`, `Paced` and `SketchBoundAt` of `ResourceAccounting.Remote.Held.Assumptions`, and `Counted`, `Live` and `Refused` of `ResourceAccounting.Remote.Sample.Assumptions` |
 
@@ -535,7 +535,7 @@ site. It composes three subprotocols, SPOT (one-stage v2; the recursive audit re
 accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when the
 policy and the one-stage audit commit to one record and every execution phase of the period names it as its Commit record
 (`Core.Composition.tiedSame`, `Core.Remote.windows`). Onsite holds the same two ties (`Core.Onsite.ties`) and adds PoUS,
-PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store.
+PoUB, network attestation and memory wipes, with PoUS and PoUB-P2 on one store.
 
 - **Guarantees:** the table's SPOT row and PoUW's period guarantee,
   `Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`, both proved. Neither is stated yet as its target in
