@@ -586,6 +586,43 @@ def test_a_pass_that_is_not_ws(exe, tmp_path):
     assert got["reason"] == "ValueError: W's pearl-a/1/1: its root not the call's"
 
 
+def test_a_run_tied_to_the_windows_registration_record(exe, tmp_path):
+    """The window's registration record R in W's place (`test_pearl_c_vllm.registration_record`: W's calls' entries among
+    its registered values, W's B rows in its ``window`` header's ``pearl_b``): the Lean holds the passes to R as the
+    Python does and prints the same tie, R's digest and its table count. It refuses, in the Python's words and before the
+    coin, an R whose header holds no B rows (`R_UNTIED_WEIGHTS`), one that registers B among its values, one whose header
+    holds an entry that is no B rows, one whose A, y or B entry differs from the run's, misses one, holds one twice or
+    one the run doesn't have, and one that is no v2 record, each named as R's."""
+    a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))
+    w = T.window_record(a, b)
+    r = T.registration_record(w)
+    (rfile := tmp_path / "r.json").write_text(json.dumps(r))
+    got = same(exe, [a, b], 8, tie=rfile, record=tmp_path / "coin.json")
+    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(r), "tables": 10}
+    reg, (b0, b1) = r["registered"], r["window"][VR.PEARL_B]
+
+    def header(*bs: dict) -> dict:
+        return {**r, "window": {**r["window"], VR.PEARL_B: list(bs)}}
+    cases = [(T.registration_record(w, pearl_b=False), f"ValueError: {VR.R_UNTIED_WEIGHTS}"),
+             (header(), f"ValueError: {VR.R_UNTIED_WEIGHTS}"),
+             ({**r, "registered": [*reg, b0]},
+              "ValueError: R registers pearl-b/0 among its values: R's B rows are its window's pearl_b entries"),
+             (header(b0, b1, {"value": "pearl-a/0/0"}),
+              "ValueError: R's window's pearl_b holds an entry that is no pearl-b/ value"),
+             (header(b0), "ValueError: R registers no pearl-b/1"),
+             (header(b0, b1, b0), "ValueError: R registers pearl-b/0 twice"),
+             (header(b0, b1, {**b0, "value": "pearl-b/2"}), "ValueError: R registers pearl-b/2, no weight of the run's"),
+             (header({**b0, "root": b1["root"]}, b1), "ValueError: R's pearl-b/0: its root not the weight's"),
+             ({**r, "registered": [{**e, "root": "00" * 64} if e["value"] == "pearl-a/0/0" else e for e in reg]},
+              "ValueError: R's pearl-a/0/0: its root not the call's"),
+             ({**r, "registered": [e for e in reg if e["value"] != "pearl-y/1/0"]}, "ValueError: R registers no pearl-y/1/0"),
+             ({**r, "format": T.REG.FORMAT}, "ValueError: R is no verity/registration/v2 record with registered values")]
+    for doc, why in cases:
+        rfile.write_text(json.dumps(doc))
+        got = same(exe, [a, b], tie=rfile)
+        assert (got["verdict"], got["reason"], got["tie"], got["commitment"]) == ("reject", why, None, None), got
+
+
 def test_the_version_2_tie_at_the_run_of_records_size(exe, tmp_path, capsys):
     """At the run of record's size (`test_pearl_c_vllm.record_size_passes`: class (4, 32, 4), 4 passes of
     Llama-3.2-1B's 64 cut linears, 256 calls, a served instance's 64 x 64 tiles, each root an hm96 root over fake row

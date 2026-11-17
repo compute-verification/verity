@@ -2077,7 +2077,7 @@ def test_the_run_verdict_holds_the_windows_registration_record_r_to_its_calls_an
     cases = [(registration_record(w, pearl_b=False), VR.R_UNTIED_WEIGHTS),
              (header(), VR.R_UNTIED_WEIGHTS),
              ({**r, "registered": [*r["registered"], b0]}, "R registers pearl-b/0 among its values"),
-             (header(b0, b1, {"value": "pearl-a/0/0"}), "no pearl-b/ entry"),
+             (header(b0, b1, {"value": "pearl-a/0/0"}), "R's window's pearl_b holds an entry that is no pearl-b/ value"),
              (header(b0), "R registers no pearl-b/1"),
              (header(b0, b1, b0), "R registers pearl-b/0 twice"),
              (header({**b0, "root": man["weights"]["1"]["root"]}, b1), "R's pearl-b/0: its root not the weight's"),

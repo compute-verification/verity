@@ -37,7 +37,11 @@ tiles open B against (`Pass.weightRoots`, which the fixed operands' root folds),
 the ones W registers is refused before its coin, a version-2 W that registers no fixed operand among them. That is a W at
 version 2, its header's ``version`` (`wVersion`). A W that states none is version 1, written before W registered the
 fixed operands: it is held to the calls alone, as it was then, and the verdict's tie names its fixed operands untied
-(`WEIGHTS_UNTIED`), so its accept says that no fixed operand it credits is a registered value. Its digest is
+(`WEIGHTS_UNTIED`), so its accept says that no fixed operand it credits is a registered value. The window record may
+instead be the registration record the run is on itself, R, its digest the commitment's `record`, whose ``window`` header
+holds the fixed operands' B rows (`PEARL_B`): the check holds the passes to R (`tieOf`'s R path), and remote's tie of the
+execution phase is then R's own `previous`. A window record whose header holds `PEARL_B` and is not that record is
+refused. Its digest is
 SHA-512(`commitmentTag` ‖ 0 ‖ the commitment's bytes).
 
 **Evidence**, canonical JSON `{"files": [files, …]}`, one object per pass in the commitment's order: each manifest path
@@ -130,6 +134,8 @@ def commitmentOf (b : ByteArray) : V Commitment := do
   let windowDigest ← match Flock.WindowRecord.digest window with
     | .ok d => pure d
     | .error e => throw s!"window: record: {e}"
+  if ((get? window "window").bind (get? · PEARL_B)).isSome && windowDigest != record then
+    throw "window: record is a registration record that registers B rows, not the record the run is on"
   let nats (what : String) : V (Option (List Nat)) := match (get? w what).getD .null with
     | .null => pure none
     | .arr xs => match xs.toList.mapM (·.getNat?.toOption) with

@@ -596,9 +596,9 @@ def _registered_b(r: dict) -> list:
     bs = (r.get("window") or {}).get(PEARL_B) if isinstance(r.get("window"), dict) else None
     if not isinstance(bs, list) or not bs:
         raise ValueError(R_UNTIED_WEIGHTS)
-    if bad := next((e for e in bs if not (isinstance(e, dict) and isinstance(e.get("value"), str)
-                                         and e["value"].startswith(TIE_PREFIXES[2]))), None):
-        raise ValueError(f"R's window's {PEARL_B} holds {str(bad)[:80]}, no pearl-b/ entry")
+    if not all(isinstance(e, dict) and isinstance(e.get("value"), str) and e["value"].startswith(TIE_PREFIXES[2])
+               for e in bs):
+        raise ValueError(f"R's window's {PEARL_B} holds an entry that is no pearl-b/ value")
     return bs
 
 

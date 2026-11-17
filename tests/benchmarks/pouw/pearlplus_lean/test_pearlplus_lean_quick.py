@@ -64,6 +64,7 @@ def test_the_tie_names_are_verify_runs():
         return re.search(rf'def {name} : String :=\s*"([^"]*)"', tie).group(1)
     assert (lit("UNTIED_WEIGHTS"), lit("WEIGHTS_UNTIED"), lit("V1_WEIGHTS")) == (VR.UNTIED_WEIGHTS, VR.WEIGHTS_UNTIED,
                                                                                  VR.V1_WEIGHTS)
+    assert (lit("PEARL_B"), lit("R_UNTIED_WEIGHTS")) == (VR.PEARL_B, VR.R_UNTIED_WEIGHTS)
     assert int(re.search(r"def W_VERSION : Nat := (\d+)", tie).group(1)) == VR.PWR.VERSION
     unknown = re.search(r'def UNKNOWN_VERSION : String :=\s*s!"([^"]*)" \+\+\s*"([^"]*)"', tie).groups()
     assert "".join(unknown).replace("{W_VERSION}", str(VR.PWR.VERSION)) == VR.PWR.UNKNOWN_VERSION

@@ -468,9 +468,17 @@ def runRecord (k : Case) : Option (List ByteArray) :=
 def run : Tie :=
   ⟨"record", [(InferenceOnlyVerifier.Protocol.protocolId, policyRecord), (PouwVerifier.PearlPlus.Protocol.protocolId, runRecord)]⟩
 
-/-- The execution phase record W Pearl+'s check holds the run's passes to: its digest, as Pearl+ decodes its commitment. -/
+/-- The record `r` is chained right after (its `previous`); the empty string of bytes, no record's digest, when it names
+none. -/
+def previousOf (r : Lean.Json) : ByteArray :=
+  ((r.getObjValAs? String "previous").toOption.bind fun s => (Flock.unhex s).toOption).getD ByteArray.empty
+
+/-- The execution phase record W Pearl+'s check holds the run's passes to: its digest, as Pearl+ decodes its commitment.
+When Pearl+ holds them to the registration record the run is on itself (its window record's digest is its `record`),
+that record's `previous`, which `run` ties to the policy's. -/
 def runExecutionPhase (k : Case) : Option (List ByteArray) :=
-  (PouwVerifier.PearlPlus.Protocol.commitmentOf k.commitment).toOption.map fun c => [c.windowDigest]
+  (PouwVerifier.PearlPlus.Protocol.commitmentOf k.commitment).toOption.map fun c =>
+    [if c.windowDigest == c.record then previousOf c.window else c.windowDigest]
 
 /-- The record the policy's record is chained right after (its `previous`), as the policy decodes its record; the empty
 string of bytes, no record's digest, when it names none, so that a record chained after nothing is a stray. -/
@@ -560,6 +568,14 @@ private def executionPhaseStray (policy : String) (w : String) : Option String :
 -- both ties hold on a run on the policy's record whose W that record is chained right after
 #guard (ties.findSome? (·.strays [committing InferenceOnlyVerifier.Protocol.protocol (chainedAfter 0 (record 9)),
   pearlIn (chainedAfter 0 (record 9)) (record 9)])) == none
+-- and on a run whose passes Pearl+ holds to the policy's record R itself: the execution phase is R's own `previous`
+#guard runExecutionPhase (pearlIn (chainedAfter 0 (record 9)) (chainedAfter 0 (record 9))) == some [digestOf (record 9)]
+#guard (ties.findSome? (·.strays [committing InferenceOnlyVerifier.Protocol.protocol (chainedAfter 0 (record 9)),
+  pearlIn (chainedAfter 0 (record 9)) (chainedAfter 0 (record 9))])) == none
+-- a run held to another registration than the policy's is a stray of the record
+#guard (ties.findSome? (·.strays [committing InferenceOnlyVerifier.Protocol.protocol (chainedAfter 0 (record 9)),
+  pearlIn (chainedAfter 1 (record 9)) (chainedAfter 1 (record 9))])) ==
+  some "record: verity/inference-only/v0 and verity/pouw/pearl-plus/v1 named different values"
 
 end V1
 
