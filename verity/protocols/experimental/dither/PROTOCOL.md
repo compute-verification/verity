@@ -29,7 +29,7 @@ sampling rate.
 Under "One proof system" (`AGENTS.md`), Dither owns what is committed, which proof blocks need proofs, the public Program
 each must pass, and what it does with the outcome. Coins, selection, timing, proving, verifying and the record are the
 service's. The second half of this document states what Dither needs from the service, each need as a requirement on the
-challenger, the certifier or the ZK server, with the premise it makes true.
+challenger, the network attester or the ZK server, with the premise it makes true.
 
 ## Terms
 
@@ -64,7 +64,7 @@ The Glossary's terms (`GLOSSARY.md`), the shared notation, and these:
 - **W_ans**: the honest cost at μ° of the period's answers, the selected proof blocks' proofs.
 - **ε_skip**: Dither's ε, the share of W_reg a period may skip: the Notation's ε_W, PoUW's part of the fleet's ε_skip
   (`GLOSSARY.md`, "Narrower senses"). **δ_coin** is the sampling failure probability and
-  **δ_crypto** the cryptographic one. **k_infil** and **k_exfil** are the bits the certifier counts into and out of the
+  **δ_crypto** the cryptographic one. **k_infil** and **k_exfil** are the bits the network attester counts into and out of the
   replica.
 - **F**: the adversary resource model's total over a period: census `world-inference-2027`, 9.36e30 FP8 FLOP a year.
 
@@ -196,7 +196,7 @@ re-picked at K − L:
 
 ## An execution phase's runs
 
-Before any coin of the period is flipped, the replica registers (see "Registration") and binds the weight root. The certifier
+Before any coin of the period is flipped, the replica registers (see "Registration") and binds the weight root. The network attester
 signs its registration receipt of both. No coin is derived from that receipt: every stream of a call, d_B, U and the
 permutations among them, is seeded per call after the block's operand roots (see "Coins"). Then the replica's execution
 phases follow in one sequence, each through two runs.
@@ -204,18 +204,18 @@ phases follow in one sequence, each through two runs.
 **Block b's dither run.**
 - **Commit phase.** It starts at block b − 1's value-root receipt (at the registration receipt for the first block). The
   replica sends b's public shape (its calls, their classes and shapes, and W_b) and each call's operand root. The
-  certifier signs the operand-root receipt.
+  network attester signs the operand-root receipt.
 - **Challenge phase.** The challenger samples b's seeds from the operand-root receipt (see "Coins"), and they enter the
   boundary at t_b. No seed of b exists before that receipt, and none goes out before block b − 1's value-root receipt.
 - **Response phase.** The replica runs b's calls on the noised operands and sends their value roots, due within Δ:
-  arrive_b ≤ t_b + Δ. A late root fails the period. The certifier signs the value-root receipt.
+  arrive_b ≤ t_b + Δ. A late root fails the period. The network attester signs the value-root receipt.
 
 **Block b's check run.**
 - **Commit phase**: the value roots, bound by the value-root receipt.
 - **Challenge phase.** The challenger flips b's check coin from the value-root receipt, so tc_b ≥ arrive_b. The coin
   carries either "not selected", with probability 1 − π_b, or the one proof block of b to prove (see "The sampling
   design"). One coin carries both, so the answer is timed from the coin `Timed` reads as tc.
-- **Response phase**, if b is selected: the proof of its proof block, which reaches the certifier within τ_ans of the
+- **Response phase**, if b is selected: the proof of its proof block, which reaches the network attester within τ_ans of the
   check coin: ansAt_b ≤ tc_b + τ_ans. It runs beside later blocks' runs (see "Timing"). An unselected block's check run
   ends at its check coin.
 
@@ -265,7 +265,7 @@ is credited"). Its block still checks O for O's consumers, and the credit takes 
 
 **Acceptance.** The period is accepted only if all of these hold:
 - every selected proof block's proof verifies;
-- the certifier's signed times follow each run's order: every operand-root receipt before its block's seeds, every value
+- the network attester's signed times follow each run's order: every operand-root receipt before its block's seeds, every value
   root within Δ of its seeds, every check coin after its value roots, and every answer within τ_ans of its check coin;
 - its signed counts k_infil and k_exfil are within E_in and E_out, caps set before the period.
 
@@ -366,12 +366,12 @@ to them in one root (see "The coin commitment"). Once the receipt a sample follo
 the root and derives the sample's coins from c and the receipt, inside the challenger,
 as `derive(c, "verity/pouw/dither/<kind>/v1", ctx)` (`verity.commitments.randomness`: SHA-512 over the domain tag, the coin and
 the receipt, under tags distinct from PoUW's noise-seed tags), where:
-- c's opening is checked by the certifiers against the root they hold privately. The prover gets no Merkle path and no
+- c's opening is checked by the network attesters against the root they hold privately. The prover gets no Merkle path and no
   root before its last root, and receives the paths and the root at close (the withheld mode): opening sample j to it
   early would hand it the root before later blocks' roots;
 - kind is `seeds` (a block's dither and noise seeds, each call's from c, the receipt and the call's index: `seeds` in
   `prover/dither.py`) or `check` (its check coin);
-- ctx = {period, replica, execution phase index, receipt}, where receipt is the digest of the certifier's signed receipt
+- ctx = {period, replica, execution phase index, receipt}, where receipt is the digest of the network attester's signed receipt
   of what the coin follows: the block's operand roots for `seeds`, and its value roots for `check`.
 
 So a derived coin never has to open against the root; its c does. No c serves two samples, no context repeats, and no
@@ -390,13 +390,13 @@ committed, so no soundness statement takes a hiding premise on it.
 - The public configuration names each replica's sampling challenger, its identity and LMS key, and never its coin root.
 - Before the monitoring period, the challenger sends its committed root to the network attesters over their private
   links (`WitnessPathPrivate`), never to the prover first.
-- A sample's c opens against the root, to the certifiers, only after the receipt the sample follows, and the sample's coins
+- A sample's c opens against the root, to the network attesters, only after the receipt the sample follows, and the sample's coins
   are derived from c and that receipt (see above). So the challenger can't choose a block's seeds after seeing its roots, and the prover
   can't know them before it sends the roots.
 - A multi-server replica has one sample, from the challenger on its lowest-numbered server. Each server's certifier exempts
   from k_infil only the coin frames derived from a c that opened against that root, with the receipt they name, and
   counts everything else as ingress. Each
-  certifier re-clocks the forwarded coins on its own ingress grid, with the certifiers' clocks synced under the
+  certifier re-clocks the forwarded coins on its own ingress grid, with the network attesters' clocks synced under the
   one-clock rule (see "The boundary").
 
 **Seeds.** Every credited coin comes from streamed 512-bit seeds, each covering at most 512·N_max MACs, that is, at
@@ -412,50 +412,50 @@ is shared between replicas.
 ### The boundary
 
 The network attester watches the replica's boundary, signs its receipts and arrival times, and counts k_infil and
-k_exfil. Dither needs these of the challenger and the certifier:
+k_exfil. Dither needs these of the challenger and the network attester:
 
 - **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-device`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
-  the certifier counts. Its statement is `Pouw.Assumptions.CoinsConfidential`'s docstring
+  the network attester counts. Its statement is `Pouw.Assumptions.CoinsConfidential`'s docstring
   (`security/Definitions/Pouw/Assumptions/Dither.lean`). The placement premise `WitnessPathPrivate`
   (`ResourceAccounting.Assumptions.Parties.WitnessPathPrivate`) discharges it in prose, with no Lean proof yet: private
   messages (the devices' signed records and salts, the prover's witness, a server's coins) travel only on private
-  links, and the certifier sits on the server's own uplink.
-  - **The MVP: the certifier's device is the challenger.** The device that runs the
+  links, and the network attester sits on the server's own uplink.
+  - **The MVP: the network attester's device is the challenger.** The device that runs the
     replica's network attester produces its live coins, so each coin is made at the boundary it enters: no path carries
-    one in from outside and no key is needed for it. A multi-node replica's challenger is the certifier device of its
+    one in from outside and no key is needed for it. A multi-node replica's challenger is the network attester device of its
     lowest-numbered server, and its coins reach the other servers' certifiers only over the auditor's private links.
-  - After the MVP, a challenger on a device of its own may reach the certifier only over a private link. A keyed path
+  - After the MVP, a challenger on a device of its own may reach the network attester only over a private link. A keyed path
     across hosts the developer controls is open (see "Open"). A SHA-512 keystream with HMAC-SHA-512, at
     the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
     RTX PRO 6000 V4 replica's 24.0 GB/s.
   - The challenger's side is two premises, named as in `verity/protocols/proofs/spot/verifier/README.md`:
     - `CoinsConfidential`: the named Prop `Pouw.Assumptions.CoinsConfidential` above, listed in the lock, which
       `FleetSound` takes: a replica's strategy reads none of its own coins.
-    - `OneClock`: the challenger's release times and the certifier's ingress and receipt times are read on one clock,
-      and a challenger on a device of its own keeps its clock within 1.03 s of the certifier's (the one clock below).
+    - `OneClock`: the challenger's release times and the network attester's ingress and receipt times are read on one clock,
+      and a challenger on a device of its own keeps its clock within 1.03 s of the network attester's (the one clock below).
       It is a spec premise: the Lean reads every time on one axis and names no Prop for it.
   - Without it an outside machine reads the dither on the path and serves the execution phase, and ε_skip rises to the credited
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
 - **The exclusion is exact** (what makes `CertifierSeesImports` true). Under the MVP the sampling server's coins are made
-  on its certifier's device and are never imports there. Every other server's certifier, and any certifier whose
+  on its network attester's device and are never imports there. Every other server's certifier, and any certifier whose
   challenger has a device of its own, excludes them only so:
   - k_infil leaves out only a coin frame derived from a c that opened against the sampling challenger's committed root,
     with the receipt it names, and carrying its expected (period, replica, execution phase, kind, sequence number) once,
     at its expected length.
   - Every other byte counts: malformed, unverifiable, duplicate, replayed or late messages into k_infil, and the
     stream's reverse traffic (acknowledgements, flow control) into k_exfil.
-  - The certifier holds the committed root, the challenger's LMS public key from the configuration, and the schedule
+  - The network attester holds the committed root, the challenger's LMS public key from the configuration, and the schedule
     of expected frames and lengths. It needs each opened c only to check the frames derived from it.
 - **Each certifier re-clocks the stream.** It terminates the forwarded stream and sends it into its boundary on
   its own ingress grid: fixed sizes, fixed order, no flow control from inside, and a drop is a visible failure.
   Otherwise the packets' delays and order carry uncounted bits, and V4's ε_net grows ×1.04 to ×7.3.
-- **One clock.** The certifier stamps the coins' entry into the boundary (t_b, tc_b) and every receipt and arrival
+- **One clock.** The network attester stamps the coins' entry into the boundary (t_b, tc_b) and every receipt and arrival
   (the operand roots, arrive_b, ansAt_b) on its own clock, which under the MVP is the challenger's too. A challenger of
-  its own would have to keep its clock within 1.03 s of the certifier's, and so does every other certifier of a
+  its own would have to keep its clock within 1.03 s of the network attester's, and so does every other certifier of a
   multi-server replica against the sampling server's.
-- **Receipts are authenticated.** The challenger learns that roots are in only from the certifier's signed receipts,
+- **Receipts are authenticated.** The challenger learns that roots are in only from the network attester's signed receipts,
   whose digests are in the coins' contexts and messages. A forged receipt would flip a check coin before the roots.
 - **A multi-node replica has one boundary**, carried by certifier-to-certifier traffic on auditor-private links under
   `WitnessPathPrivate`, never through the developer's network, with the replica's certifiers keeping one count, each
@@ -466,9 +466,9 @@ k_exfil. Dither needs these of the challenger and the certifier:
 **What each device signs.**
 - The challenger, per coin message: the period, replica, execution phase, kind, sequence number, issue time and the
   payload's digest. A check coin's message also carries the value-root receipt's digest. It signs them with LMS in Merkle
-  batches, one signature per batch root. A challenger of its own is checked live by the certifier with HMAC-SHA-512.
-  It signs its committed coin root once, for the certifiers (see "Coins").
-- The certifier: its receipts (operand roots, value roots, answers), the coins' entry times, k_infil and k_exfil, and its
+  batches, one signature per batch root. A challenger of its own is checked live by the network attester with HMAC-SHA-512.
+  It signs its committed coin root once, for the network attesters (see "Coins").
+- The network attester: its receipts (operand roots, value roots, answers), the coins' entry times, k_infil and k_exfil, and its
   counts of rejected messages.
 - All of it is witness and never reaches the auditor in the clear.
 
@@ -585,8 +585,8 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
 - **What a noised call's work is worth over weights the prover chose.** The credit can't take it from registration's pin
   of B (see "The segment and the noise repeat length"). It is the least work a noised segment forces at the worst
   operands the prover can choose, `SAKMatmul` stated over the noised operands alone, and it has no value yet.
-- **The challenger's and the certifier's specs** (network-accounting, infra and proofs): the challenger on the
-  certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node private links, as
+- **The challenger's and the network attester's specs** (network-accounting, infra and proofs): the challenger on the
+  network attester's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node private links, as
   implemented.
 - **Keyed transport**, for a channel that can't meet `WitnessPathPrivate c`, the per-channel premise:
   `verity.commitments.crypto.transport`, with `Guarantees.TransportPassiveZk` taking either that premise or `ChannelHides`
@@ -602,7 +602,7 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
     through the period, each fixed before its own run's challenge phase but after earlier answers' releases, so the rule
     is to be read per statement for a stream.
 - **τ_ans**, from a passing measured run (see "Timing").
-- **The coin root** (see "Coins"): how a certifier checks a forwarded frame's derivation from its opened c is the
+- **The coin root** (see "Coins"): how a network attester checks a forwarded frame's derivation from its opened c is the
   challenger's spec.
 - **Credit becomes size** (the Glossary's Size): an execution phase's credit becomes its size. Then ε_skip is a
   share of the registered size, and the channel term stays in bits, k_infil and k_exfil, without ε_net's β.

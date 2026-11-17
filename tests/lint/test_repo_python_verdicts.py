@@ -221,12 +221,12 @@ def test_no_newly_missing_site() -> None:
 
 
 #: memory accounting's paths, and the only places under them, or of its owner, where Python can still accept: each where
-#: no Lean verifier of the verdict is written (the pair session's LMS signatures, and the memory challenger's)
+#: no Lean verifier of the verdict is written (the pair session's LMS signatures, and the memory attester's)
 MEMORY_PATHS = ("verity/protocols/resource_accounting/memory/", "benchmarks/memory/", "benchmarks/pous/",
-                "benchmarks/remote_session/")
+                "benchmarks/poub_session/")
 MEMORY_PLACES = {
-    ("pair-session-signatures", "verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py"),
-    ("signatures", "verity/protocols/resource_accounting/memory/pous/attester/memory_challenger.py"),
+    ("pair-session-signatures", "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py"),
+    ("signatures", "verity/protocols/resource_accounting/memory/pous/attester/memory_attester.py"),
 }
 
 

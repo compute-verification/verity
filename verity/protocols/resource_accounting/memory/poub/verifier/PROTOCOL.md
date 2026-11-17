@@ -1142,8 +1142,8 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     proof block's to check, inside zero knowledge, against the prover's memory map and the circuit's requirement
     (I4). The verifier here checks only that each pass names a step above the last.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
-    pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
-    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py`),
+    pass at \(s\) ran while serving executed \(s\). A network attester that stamps each step's record and each pass's root
+    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py`),
     at most \(k\) steps past the pass in flight, \(k\) its own choice: each pass covers the newest step serving has
     handed, the steps serving ran past in between have no pass and are credited nothing, and the pass at \(s\) reads
     the store resident at \(s\) while serving executes later steps. That store must still be in place as the pass
@@ -1174,7 +1174,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   sessions credit nothing after the seed. Open: the schedule is witness (a
   request's arrivals and lengths), in the clear here as v0's plans are, so deployed it is committed and the check is
   a proof block whose output is the bits; the bits are the whole session's schedule, an upper bound on what the prover
-  chose after a pass's coins; the cap travels with the session's parameters, and `benchmarks/remote_session`'s hello
+  chose after a pass's coins; the cap travels with the session's parameters, and `benchmarks/poub_session`'s hello
   carries none, so its sessions credit nothing after the seed; and A7's sessions send their circuit's read sets as
   plans, not the resident sets, so
   the check refuses them and they are credited nothing after the seed until they send the replay's plans.
@@ -1300,7 +1300,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     holds, so the store's filler plan leaves the released blocks out), and the
     prover's audit side turns the record into appends, releases and plan changes (`Replay`; deferred, a step's
     appended blocks are those of appends already sent). The record is the prover's: \(d_j\) is witness, and the
-    verifier sees only the append roots, the releases and the plans; `benchmarks/remote_session` carries them over
+    verifier sees only the append roots, the releases and the plans; `benchmarks/poub_session` carries them over
     the wire: each append its own message, answered with its coin (§4), sent after the root before the pass that
     first reads it and before that pass's reads, its blocks encoded once the coin arrives; then each root's message
     its releases, its plan as a change, and the pass's step. A KV page under the seed's key, as vLLM's encoded store
