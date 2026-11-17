@@ -121,7 +121,7 @@ def pous_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = m
 
 def wipe_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
                 protocol: str = wipe_period.PROTOCOL) -> dict[str, Any]:
-    """`MemoryChallenger.WipeProtocol`'s answer on ``case`` by its Python (`wipe_period.answer`), from the case's bytes
+    """`MemoryAttester.WipeProtocol`'s answer on ``case`` by its Python (`wipe_period.answer`), from the case's bytes
     alone; refused unless the case is exactly what `wipe_period.case` makes of what it decodes to."""
     commitment, ev = _shape(case)
     p = case["params"]
