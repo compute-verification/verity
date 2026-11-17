@@ -1639,6 +1639,9 @@ def scan_state_pinned(out: Path, case: Any) -> dict[str, Any]:
     period, summary, rec = docs[PERIOD], docs[AUDIT_SUMMARY], docs[AUDIT]
     own = (summary.get("registered") or {}).get("own") if isinstance(summary.get("registered"), Mapping) else None
     pin = own.get(SCAN_STATE) if isinstance(own, Mapping) else None
+    if isinstance(own, Mapping) and (more := sorted(set(own) - {SCAN_STATE})):
+        return res | {"why": f"the run's {AUDIT_SUMMARY} takes {more} as the execution phase's own (registered.own), "
+                             f"and only {SCAN_STATE} is"}
     for i, entry in held:
         if regs[i] != period.get("registration"):
             return res | {"why": f"audit {i}'s registration registers {SCAN_STATE}, and the run's {PERIOD} "

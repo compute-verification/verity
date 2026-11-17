@@ -1967,6 +1967,8 @@ NO_OWN = (f"audit 0's registration registers {OR.SCAN_STATE}, and the run's {OR.
     ("another value, root and domain", f"the entry audit 0's registered reads opened {OR.SCAN_STATE} at isn't, by its "
                                        "value and root and domain, its registration's registered entry"),
     ("no reads of it", NO_OWN),
+    ("another value as its own too", f"the run's {OR.AUDIT_SUMMARY} takes ['pearl-a/0/0'] as the execution phase's own "
+                                     f"(registered.own), and only {OR.SCAN_STATE} is"),
     ("no registered reads", NO_OWN),
     ("no summary", f"audit 0's registration registers {OR.SCAN_STATE}, and the run's {OR.AUDIT_SUMMARY} "
                    "can't be read: FileNotFoundError"),
@@ -1990,7 +1992,10 @@ def test_the_network_and_composite_verdicts_are_established_only_where_v3cs_read
     pin = {"another root": dict(STATE_ENTRY, root="5b" * 64), "another domain": dict(STATE_ENTRY, domain="d6" * 64),
            "another value, root and domain": {"value": "weights/w@8", "root": "ef" * 64, "domain": "fe" * 64},
            "no reads of it": None}.get(how, STATE_ENTRY)
-    out = scan_state_run(tmp_path, None if how == "no registered reads" else {} if pin is None else {OR.SCAN_STATE: pin},
+    own = {} if pin is None else {OR.SCAN_STATE: pin}
+    if how == "another value as its own too":
+        own["pearl-a/0/0"] = {"value": "pearl-a/0/0", "root": "ef" * 64, "domain": "fe" * 64}
+    out = scan_state_run(tmp_path, None if how == "no registered reads" else own,
                          registration=NO_ADVICE if how == "another audit's period" else STATED,
                          accepted_=how != "not accepted",
                          audit=audit_record(reported={MEMBER: False}) if how == "reads not reported" else AUDITED)
