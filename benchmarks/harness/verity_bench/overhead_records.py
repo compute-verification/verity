@@ -339,8 +339,8 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
     for each model that row's γ of record with its interval (the kernel model's as the metric's own reading, every other
     model's as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
-    as its target, from its run and its points' art, with its note and what the γ is over; where the table has no γ of
-    record there, no value and why."""
+    as its target, from its run and its points' art, with its note, whether its run timed y's commitment (`commits_y`,
+    where the row says) and what the γ is over; where the table has no γ of record there, no value and why."""
 
     rows = {(r["scheme"], r["card"], r["model"], r["point"]): r for r in table["rows"]}
     out = []
@@ -362,7 +362,8 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
             verdict = "within target" if g["gamma"] <= O.GAMMA_MAX else "over target"
             out.append(m | {"value": g["gamma"], "interval": g.get("ci95"), "verdict": verdict,
                             "inputs": [r["run"], r["points_art"]],
-                            "extra": m["extra"] | ({"note": r["note"]} if r.get("note") else {})})
+                            "extra": m["extra"] | ({"note": r["note"]} if r.get("note") else {})
+                            | ({"commits_y": r["commits_y"]} if r.get("commits_y") is not None else {})})
     return out
 
 
