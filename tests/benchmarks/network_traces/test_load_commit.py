@@ -1,4 +1,4 @@
-"""load_commit's host side: its streamed commitments are their references' (the certifier's hm96 root is
+"""load_commit's host side: its streamed commitments are their references' (the attester's hm96 root is
 `Registered.commit`'s, the store's leaves and root are `pous.verifier`'s), and the frozen shape's load is the 130.10 GiB
 of INT8 weights and the 68 M P2 blocks they encode into, each matrix a power of two of 256-byte rows. Nothing here times
 anything (`load_commit.main` does, on a node)."""

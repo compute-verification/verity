@@ -11,6 +11,7 @@ def _network_advice_roots() -> list[Any]:
     each within the whole-Definition lowering budget the proof blocks exceed, so each part's Flock lowering is checked
     and pinned. The proof block at L = 240 takes about 150 s, so it stays out of `check`."""
     from verity.circuits.defs import bind
+
     from verity_vllm.compiler.advice_check import PARTS, unit
 
     return [unit(40), *(bind(d, L=240) for d in PARTS)]

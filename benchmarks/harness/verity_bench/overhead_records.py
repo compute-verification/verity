@@ -58,6 +58,8 @@ GATES = Path("benchmarks/slowdown/data/hardware.toml")
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
 GAMMA_UNIT = "busy SM-seconds over stock's, less one"
+#: each model but the kernel model as the words that open its member, `MODEL-CARD` (`measurements`)
+MEMBER_MODEL = {"llama3.2-1b": "llama-3.2-1b"}
 
 Executor = Callable[[Sequence[str], Path], int]
 
@@ -66,26 +68,30 @@ def _execute(argv: Sequence[str], root: Path) -> int:
     return subprocess.run(list(argv), cwd=root, check=False).returncode
 
 
-def launch_argv(root: Path, node: str, minutes: float, job: Sequence[str], sends: Sequence[Path] = ()) -> list[str]:
-    """The node side as a `research run` on one GPU of `node`, from this checkout."""
+def launch_argv(root: Path, node: str, minutes: float, job: Sequence[str], sends: Sequence[Path] = (), *,
+                gpu: str | None = None, cores: str | None = None) -> list[str]:
+    """The node side as a `research run` on one GPU of `node` (the GPU `gpu` and the CPUs `cores`, where given), from this
+    checkout."""
 
     env = [f"VERITY_BENCH_VENV={v}"] if (v := settings.VERITY_BENCH_VENV) else []
     return ["research", "run", "--on", node, "--project", "verity", "--campaign", "overhead",
             "--source", str(root), "--cwd", "source", "--timeout", f"{minutes:g}m", "--require-result",
             *[x for f in sends for x in ("--send", str(f))], *[x for e in env for x in ("--env", e)],
-            "--", *kit.lease(1, minutes), "bash", NODE_JOB, *job]
+            "--", *kit.lease(1, minutes, on=gpu, cores=cores), "bash", NODE_JOB, *job]
 
 
 def launch_points(root: Path, node: str, card: str, model: str, precision: str, minutes: float | None = None,
-                  execute: Executor | None = None) -> int:
+                  execute: Executor | None = None, *, gpu: str | None = None, cores: str | None = None) -> int:
     job = ["points", "--card", card, "--model", model, "--precision", precision]
-    return (execute or _execute)(launch_argv(root, node, minutes or MINUTES["points"], job), root)
+    return (execute or _execute)(launch_argv(root, node, minutes or MINUTES["points"], job, gpu=gpu, cores=cores), root)
 
 
 def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point: str, points: str | None = None,
-               minutes: float | None = None, execute: Executor | None = None, cubin: str | None = None) -> int:
-    """A scheme's timed run at the card's points of record (or the art `points`), which it ships to the node with the art
-    `cubin`, the one cubin the scheme's arm loads (without it the run is development only)."""
+               minutes: float | None = None, execute: Executor | None = None, cubin: str | None = None, *,
+               model: str = O.KERNEL_MODEL, gpu: str | None = None, cores: str | None = None) -> int:
+    """A scheme's timed run at the card's and `model`'s points of record (or the art `points`, which must be theirs), which
+    it ships to the node with the art `cubin`, the one cubin the scheme's arm loads (without it the run is development
+    only)."""
 
     if cubin is not None:
         if O.scheme(scheme).arm is None:
@@ -98,12 +104,13 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
             raise ValueError(f"--cubin {cubin} isn't one file: it names the art of the one cubin the arm loads")
     else:
         O.scheme(scheme)
-    art = points or current_points(store, card)
+    art = points or current_points(store, card, model)
     if art is None:
-        raise ValueError(f"no points of record for the {card}: run `verity bench overhead points --card {card} --on NODE`, "
-                         "then `verity bench overhead points --store RUN`")
-    if store.get_manifest(art).meta.get("card") != card:
-        raise ValueError(f"{art} holds the points of the {store.get_manifest(art).meta.get('card')}, not the {card}")
+        raise ValueError(f"no points of record for the {card} and {model}: run `verity bench overhead points --card {card} "
+                         f"--model {model} --on NODE`, then `verity bench overhead points --store RUN`")
+    held = {k: store.get_manifest(art).meta.get(k) for k in ("card", "model")}
+    if held != {"card": card, "model": model}:
+        raise ValueError(f"{art} holds the points of the {held['card']} and {held['model']}, not the {card} and {model}")
     with tempfile.TemporaryDirectory() as tmp:
         sent = [Path(tmp) / "points.json"]
         shutil.copyfile(store.fetch(art), sent[0])
@@ -112,7 +119,8 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
             (Path(tmp) / "cubin").mkdir()
             sent.append(Path(store.fetch(cubin, Path(tmp) / "cubin")))
             job += ["--cubin", sent[-1].name, "--cubin-art", cubin]
-        return (execute or _execute)(launch_argv(root, node, minutes or MINUTES["run"], job, sent), root)
+        return (execute or _execute)(launch_argv(root, node, minutes or MINUTES["run"], job, sent, gpu=gpu, cores=cores),
+                                     root)
 
 
 # ---- reading the store -------------------------------------------------------------------------------------------------------
@@ -217,7 +225,7 @@ def cubin_why(store: Any, arm: Mapping) -> str | None:
 
 
 def gamma_rows(store: Any) -> list[dict]:
-    """Every (scheme, card, point)'s γ from the newest labelled run that times it, of record or with why not."""
+    """Every (scheme, card, model, point)'s γ from the newest labelled run that times it, of record or with why not."""
 
     best: dict[tuple, dict] = {}
     for run in records(store).get(RUN_RECORD, []):
@@ -225,12 +233,13 @@ def gamma_rows(store: Any) -> list[dict]:
             continue
         doc, whys = of_record(store, run)
         if doc is None:
-            best.setdefault(("?", "?", run), {"scheme": None, "card": None, "point": None, "run": run, "of_record": False,
-                                              "why": "; ".join(whys)})
+            best.setdefault(("?", "?", "?", run), {"scheme": None, "card": None, "model": None, "point": None, "run": run,
+                                                   "of_record": False, "why": "; ".join(whys)})
             continue
         for name, p in (doc.get("points") or {}).items():
             arm = doc.get("arm")
-            row = {"scheme": doc.get("scheme"), "card": doc.get("card"), "point": name, "m": p.get("m"), "run": run,
+            row = {"scheme": doc.get("scheme"), "card": doc.get("card"), "model": doc.get("model"), "point": name,
+                   "m": p.get("m"), "run": run,
                    "points_art": doc.get("points_art"), "gamma": p.get("gamma"), "gamma_least_sm": p.get("gamma_least_sm"),
                    "gamma_weight_side_bound": p.get("gamma_weight_side_bound"), "aa": p.get("aa"),
                    "epsilon": p.get("epsilon"), "perplexity": p.get("perplexity"), "gate": p.get("gate"),
@@ -238,7 +247,7 @@ def gamma_rows(store: Any) -> list[dict]:
                    "note": O.y_note(arm)}
             why = whys + list(p.get("whys") or [])
             row |= {"of_record": not why, "why": "; ".join(why) or None}
-            best[(row["scheme"], row["card"], name)] = row
+            best[(row["scheme"], row["card"], row["model"], name)] = row
     return [best[k] for k in sorted(best, key=lambda k: tuple(map(str, k)))]
 
 
@@ -324,34 +333,40 @@ def build(store: Any = None, *, root: Path | None = None, local_only: bool = Fal
 
 
 def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
-    """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, that
-    row's γ of record with its interval, measured, held to the scheme gate (`overhead.GAMMA_MAX`) as its target, from its
-    run and its points' art, with its note and what every γ is over; where the table has no γ of record there, no value
-    and why."""
+    """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
+    for each model that row's γ of record with its interval (the kernel model's as the metric's own reading, every other
+    model's as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
+    as its target, from its run and its points' art, with its note and what the γ is over; where the table has no γ of
+    record there, no value and why."""
 
-    rows = {(r["scheme"], r["card"], r["point"]): r for r in table["rows"]}
+    rows = {(r["scheme"], r["card"], r["model"], r["point"]): r for r in table["rows"]}
     out = []
     for name, row in metrics.items():
         scheme, card, point = row.split("/")
-        r = rows.get((scheme, card, point))
-        g = (r or {}).get("gamma") or {}
-        m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
-                             "extra": {"covers": table["covers"]}}
-        if r is None or not r["of_record"] or g.get("gamma") is None:
-            why = (r or {}).get("why") or f"no labelled run times {scheme} at {card}'s {point} (`{RUN_OF_RECORD}={RUN_RECORD}`)"
-            out.append(m | {"value": None, "why": f"no γ of record: {why}"})
-            continue
-        verdict = "within target" if g["gamma"] <= O.GAMMA_MAX else "over target"
-        out.append(m | {"value": g["gamma"], "interval": g.get("ci95"), "verdict": verdict,
-                        "inputs": [r["run"], r["points_art"]],
-                        "extra": m["extra"] | ({"note": r["note"]} if r.get("note") else {})})
+        for model in O.MODELS:
+            own = model == O.KERNEL_MODEL
+            r = rows.get((scheme, card, model, point))
+            g = (r or {}).get("gamma") or {}
+            m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
+                                 "extra": {"covers": table["covers"] if own else O.covers(model)}}
+            if not own:
+                m["member"] = f"{MEMBER_MODEL[model]}-{card}"
+            if r is None or not r["of_record"] or g.get("gamma") is None:
+                why = (r or {}).get("why") or (f"no labelled run times {scheme} at {card}'s {point}"
+                                               + ("" if own else f" on {model}") + f" (`{RUN_OF_RECORD}={RUN_RECORD}`)")
+                out.append(m | {"value": None, "why": f"no γ of record: {why}"})
+                continue
+            verdict = "within target" if g["gamma"] <= O.GAMMA_MAX else "over target"
+            out.append(m | {"value": g["gamma"], "interval": g.get("ci95"), "verdict": verdict,
+                            "inputs": [r["run"], r["points_art"]],
+                            "extra": m["extra"] | ({"note": r["note"]} if r.get("note") else {})})
     return out
 
 
 def record(table: Mapping, metrics: Mapping[str, str]) -> None:
     """Writes a table (`build`) into this research run's result (`kit.writer`): the table as `TABLE`, named a measurement
     file and the validation's evidence, the runs of record it read in the fingerprint, `measurements` under `metrics`' ids,
-    and the validation: passed when each metric has a γ of record, else failed, naming those without one."""
+    and the validation: passed when each metric has a γ of record of its own, else failed, naming those without one."""
 
     writer = kit.writer(settings.RESEARCH_RUN_DIR)
     kept = writer.out / TABLE
@@ -362,8 +377,9 @@ def record(table: Mapping, metrics: Mapping[str, str]) -> None:
     written = measurements(table, metrics)
     for m in written:
         writer.measurement(**m)
-    missing = [m["name"] for m in written if m["value"] is None]
-    detail = (f"{len(written) - len(missing)} of {len(written)} metrics have a γ of record (the source check, `of_record`)"
+    own = [m for m in written if "member" not in m]
+    missing = [m["name"] for m in own if m["value"] is None]
+    detail = (f"{len(own) - len(missing)} of {len(own)} metrics have a γ of record (the source check, `of_record`)"
               + (f"; none for {', '.join(missing)}" if missing else ""))
     writer.validation("failed" if missing else "passed", "verity_bench.overhead_records.of_record", detail, [TABLE])
 
@@ -386,11 +402,21 @@ def _eps(e: Mapping | None) -> str:
 
 
 def render(table: Mapping) -> str:
-    c = table["census"]
+    rows = table["rows"]
+    out = _section(table["census"], [r for r in rows if r["model"] in (O.KERNEL_MODEL, None)], table["covers"])
+    for model in O.MODELS:
+        if model != O.KERNEL_MODEL:
+            own = [r for r in rows if r["model"] == model]
+            out += f"\n## {model}\n\n" + (_section(table["census"], own, O.covers(model)) if own else
+                                           f"No labelled run times {model} (`{RUN_OF_RECORD}={RUN_RECORD}`): it has no γ.\n")
+    return out
+
+
+def _section(c: Mapping, rows: list[dict], covers: str) -> str:
     lines = ["| Scheme | Card | Point | m | γ [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run | Note |",
              "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     refused = []
-    for r in table["rows"]:
+    for r in rows:
         if not r["of_record"]:
             refused.append(r)
             continue
@@ -398,7 +424,7 @@ def render(table: Mapping) -> str:
         lines.append(f"| {r['scheme']} | {r['card']} | {r['point']} | {r['m']} | {_g(r['gamma'])} | {_g(r['gamma_least_sm'])} "
                      f"| {_g(r['gamma_weight_side_bound'])} | {_g(r['aa'])} | {_eps(r['epsilon'])} | "
                      f"{'yes' if gate.get('passes') else 'no'} | {r['run']} | {r.get('note') or ''} |")
-    lines += ["", table["covers"],
+    lines += ["", covers,
               "", (f"Per monitoring period, over all compute: the {c['datacenter']} datacenter's {c['gpus']:,} GPUs in "
                    f"{c['window_s']} s windows, spending the share γ/(1+γ) of its compute on proving, and the world's "
                    f"{c['world_flop_per_year']:.3g} FLOP a year of useful work ({c['world']}), to which proving adds γ times it. "
@@ -406,7 +432,7 @@ def render(table: Mapping) -> str:
                    f"{c['gates_per_flop']:g} a FLOP ({c['gates_basis']}); the datacenter's FLOP at its card's datasheet rate."), "",
               "| Scheme | Card | Point | Share | Time period | DC GPU-hours | DC gates | World FLOP | World gates | Note |",
               "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
-    for r in table["rows"]:
+    for r in rows:
         if p := r.get("periods"):
             for n in ("window", *O.PERIODS_H):
                 q = p[n]
