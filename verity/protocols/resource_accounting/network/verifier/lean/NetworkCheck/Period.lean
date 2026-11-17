@@ -7,8 +7,8 @@ public import CoreProtocol.Profile
 public import Flock.Program
 public import Flock.Public
 public import Flock.WindowRecord
-public import InferenceOnlyCheck.Desc
-public import InferenceOnlyCheck.DefinitionDigest
+public import InferenceOnlyVerifier.Desc
+public import InferenceOnlyVerifier.DefinitionDigest
 public import NetworkCheck.Period.ConnectionRows
 public import NetworkCheck.Period.Start
 public import Spot.Record
@@ -19,8 +19,8 @@ meta import CoreProtocol.Profile
 meta import Flock.Program
 meta import Flock.Public
 meta import Flock.WindowRecord
-meta import InferenceOnlyCheck.Desc
-meta import InferenceOnlyCheck.DefinitionDigest
+meta import InferenceOnlyVerifier.Desc
+meta import InferenceOnlyVerifier.DefinitionDigest
 meta import NetworkCheck.Period.ConnectionRows
 meta import NetworkCheck.Period.Start
 meta import Spot.Record
@@ -110,7 +110,7 @@ and the schedule's row (`EgressBucket`), in the Boolean profile's types (a byte 
 gate is a template's parameter. An egress template that takes its row as an input, the checker form, is refused by name: no
 egress gate is an input (`NetTiming.BoundaryGates.Fits`), so `K` counts only what a Program that computes its egress rows
 leaves free. The rest of what `NetTiming.BoundaryGates.Fits` asks is read off the description (`scanOf`): the Program laid out
-as the decoder lays one out and within its resolution's walk (`InferenceOnlyCheck.Desc`), every egress leaf returned by the root
+as the decoder lays one out and within its resolution's walk (`InferenceOnlyVerifier.Desc`), every egress leaf returned by the root
 and computed by the egress template, and every template's argument one input node's leaves, no egress template's an
 ingress row's. A compute audit's free inputs are in the term of each execution phase whose scan's `prog` is its output
 (`tiedAudits`), and its other layout terms and its units' bits are in no term.
@@ -369,7 +369,7 @@ namespace NetworkCheck.Period
 open Lean (Json toJson)
 open Flock (V)
 open NetworkCheck.Check (Certificate)
-open InferenceOnlyCheck.DefinitionDigest (closureDigest)
+open InferenceOnlyVerifier.DefinitionDigest (closureDigest)
 
 /-! ## The check -/
 

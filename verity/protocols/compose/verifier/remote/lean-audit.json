@@ -11,7 +11,7 @@
     "CoreComposition.Blobs",
     "CoreComposition.Cases",
     "CoreComposition.Tie",
-    "InferenceOnlyCheck.Protocol",
+    "InferenceOnlyVerifier.Protocol",
     "PouwVerifier.Period",
     "Spot.OneStage",
     "Spot.OneStageZk",

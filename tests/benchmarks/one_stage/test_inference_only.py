@@ -1,5 +1,5 @@
 """`inference_only.py`: a served run's inference-only verdict, its registered circuit's blocks against the (c, k, n) it
-registered before it served, by `InferenceOnlyCheck.Count`'s rule. `BitAtx32_v1`'s price is an explicit circuit that computes the
+registered before it served, by `InferenceOnlyVerifier.Count`'s rule. `BitAtx32_v1`'s price is an explicit circuit that computes the
 primitive, input by input; the verdict's rule is the count rule's reference (`inference_only_reference.check_count_detail`) on its
 rows, and the Lean instance it makes is one on which that reference counts the verdict's gates; n is the H200's sessions
 at the declared utilization over the lease, rounded up to the grid, from the class's fixed load alone; the policy is its
@@ -11,11 +11,11 @@ accepts within (c, k, n), refuses past each, and refuses as undecided what the r
 after the serve began unless said retroactive, a primitive with no price, a closed window with no seal, a window the
 class doesn't take), its public form naming no window and publishing no count: it judges n on the exact count, which
 only the private form holds, so runs whose counts differ publish one verdict, unless n falls between them, and then
-differ in their judgment alone. The verdict on c and k is `inference-only-check --count`'s, the Lean verifier's: it
+differ in their judgment alone. The verdict on c and k is `inference-only-verifier --count`'s, the Lean verifier's: it
 takes its whole verdict, with ``--detail`` where the binary's usage names it, into the private form alone, and publishes
 its gates and fresh bits a block, ``complies`` and the rule that failed, and none of its counts or total; a Lean
 verifier that gives no verdict, or none at all, leaves the run undecided; the record's count stands beside the verdict.
-The tests stand the reference in for the Lean verifier; the slow test runs `inference-only-check --count`."""
+The tests stand the reference in for the Lean verifier; the slow test runs `inference-only-verifier --count`."""
 from __future__ import annotations
 
 import json
@@ -280,7 +280,7 @@ def lean(monkeypatch) -> Path:
     ref = IO._reference()
     monkeypatch.setattr(IO, "lean_count", lambda exe, inst, scratch, timeout_s=1800: {
         "flags": ["--count", "--detail"], "out": ref.check_count_detail(inst)})
-    return Path("inference-only-check")
+    return Path("inference-only-verifier")
 
 
 def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(small, tmp_path, lean):
@@ -430,7 +430,7 @@ def test_a_policy_written_after_the_serve_began_is_read_only_when_said_retroacti
 
 
 def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(small, tmp_path, capsys, lean):
-    """`verdict` writes the public verdict to --out and the full one, 0600, to --private, `inference-only-check --count --detail`'s
+    """`verdict` writes the public verdict to --out and the full one, 0600, to --private, `inference-only-verifier --count --detail`'s
     whole verdict in the private one alone, and prints the public line."""
     row = IO.session_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
@@ -456,25 +456,25 @@ def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(sma
 
 
 def test_a_lean_verifier_that_gives_no_verdict_leaves_the_run_undecided(small, tmp_path):
-    """An `inference-only-check` that exits non-zero or prints no JSON object gives no verdict, so the run is refused as
+    """An `inference-only-verifier` that exits non-zero or prints no JSON object gives no verdict, so the run is refused as
     undecided, saying why; what it printed stays in the private verdict."""
     row = IO.session_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
     for body, why, said in (("echo no >&2; exit 2", "exit 2", "no"), ("echo hello", "printed no JSON object", "hello"),
                             ("echo '[7, 9]'", "printed no JSON object", "[7, 9]")):
-        exe = tmp_path / "inference-only-check"
+        exe = tmp_path / "inference-only-verifier"
         exe.write_text(f"#!/bin/sh\n{body}\n")
         exe.chmod(0o755)
         pub, full = IO.verdict(_policy(row), small, d, None, None, lean=exe, scratch=tmp_path)
-        assert pub["verdict"] == "refuse" and pub["lean"] == {"error": f"inference-only-check --count {why}"}
-        assert pub["reason"] == f"undecided: the Lean verifier gave no verdict: inference-only-check --count {why}"
-        assert full["lean_detail"] == {"flags": ["--count"], "error": f"inference-only-check --count {why}", "said": said,
+        assert pub["verdict"] == "refuse" and pub["lean"] == {"error": f"inference-only-verifier --count {why}"}
+        assert pub["reason"] == f"undecided: the Lean verifier gave no verdict: inference-only-verifier --count {why}"
+        assert full["lean_detail"] == {"flags": ["--count"], "error": f"inference-only-verifier --count {why}", "said": said,
                                        "memory": SC.UNLIMITED}
         assert list(tmp_path.glob("tmp*.json")) == []
 
 
 def test_the_lean_verifier_runs_behind_the_hosts_memory_limit(small, tmp_path, monkeypatch):
-    """Both of `inference-only-check`'s calls, its usage and its count, run behind the scope `served_cases.limits` gives
+    """Both of `inference-only-verifier`'s calls, its usage and its count, run behind the scope `served_cases.limits` gives
     a check on this host, and the private verdict says under which limit."""
     row = IO.session_row(small, None, None)
     exe = _inference_only_check(tmp_path / "lean", NEW_USAGE, {"complies": False}, _whole(row))
@@ -496,7 +496,7 @@ exec "$@"
 
 
 def test_a_host_with_no_memory_limit_starts_no_lean_verifier_and_the_row_is_an_error(small, tmp_path, monkeypatch):
-    """On a host that makes no memory scope (and runs no address-space limit) `inference-only-check` is not started: the
+    """On a host that makes no memory scope (and runs no address-space limit) `inference-only-verifier` is not started: the
     run is undecided, saying why, and the record's row says the verifier gave no verdict (``error``), not ``reject``."""
     monkeypatch.delenv("CHECK_SCOPE")
     monkeypatch.setattr(SC, "scope_here", lambda: False)
@@ -504,7 +504,7 @@ def test_a_host_with_no_memory_limit_starts_no_lean_verifier_and_the_row_is_an_e
     row = IO.session_row(small, None, None)
     exe = _inference_only_check(tmp_path / "lean", NEW_USAGE, {"complies": True}, _whole(row))
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    why = f"inference-only-check not started: {SC.limits().refusal}"
+    why = f"inference-only-verifier not started: {SC.limits().refusal}"
     assert (pub["verdict"], pub["lean"]) == ("refuse", {"error": why})
     assert pub["reason"] == f"{SV.UNDECIDED}the Lean verifier gave no verdict: {why}"
     assert full["lean_detail"] == {"flags": ["--count"], "error": why}
@@ -512,22 +512,22 @@ def test_a_host_with_no_memory_limit_starts_no_lean_verifier_and_the_row_is_an_e
     assert SV.inference_only_row(pub)["verdict"] == "error"
 
 
-#: `inference-only-check`'s usage while ``--count`` printed its whole verdict, and once it prints that only with ``--detail``
-OLD_USAGE = "usage: inference-only-check [--unrolled] INSTANCE TRUSTED | inference-only-check --policy [--unrolled] INSTANCE | inference-only-check --count INSTANCE"
+#: `inference-only-verifier`'s usage while ``--count`` printed its whole verdict, and once it prints that only with ``--detail``
+OLD_USAGE = "usage: inference-only-verifier [--unrolled] INSTANCE TRUSTED | inference-only-verifier --policy [--unrolled] INSTANCE | inference-only-verifier --count INSTANCE"
 NEW_USAGE = OLD_USAGE.replace("--count INSTANCE", "--count [--detail] INSTANCE")
 #: a count of blocks no other number in the verdict holds
 COUNT = 987654321
 
 
 def _inference_only_check(where: Path, usage: str, count: dict, detail: dict | None) -> Path:
-    """A stand-in `inference-only-check` that answers as the built one does: ``--count INSTANCE`` prints ``count``, ``--count --detail
+    """A stand-in `inference-only-verifier` that answers as the built one does: ``--count INSTANCE`` prints ``count``, ``--count --detail
     INSTANCE`` prints ``detail`` where it has one, and anything else gets ``usage``, exit 2. It logs each call's
     arguments to ``args.log`` beside it."""
     where.mkdir(parents=True)
     (where / "count.json").write_text(json.dumps(count))
     if detail is not None:
         (where / "detail.json").write_text(json.dumps(detail))
-    exe = where / "inference-only-check"
+    exe = where / "inference-only-verifier"
     exe.write_text(f"""#!/bin/sh
 echo "$*" >> '{where}/args.log'
 if [ "$1" = --count ] && [ $# -eq 2 ]; then cat '{where}/count.json'; exit 0; fi
@@ -540,7 +540,7 @@ exit 2
 
 
 def _whole(row: dict) -> dict:
-    """`InferenceOnlyCheck.Count`'s whole verdict on the session Program: its row's fresh bits past k, and a count."""
+    """`InferenceOnlyVerifier.Count`'s whole verdict on the session Program: its row's fresh bits past k, and a count."""
     return {"blocks": [[row["key"], row["gates"], row["fresh"] + 5, COUNT]], "total": COUNT, "complies": False,
             "failure": [0, "fresh"]}
 
@@ -551,7 +551,7 @@ def _whole(row: dict) -> dict:
 ], ids=["count-prints-all", "detail-prints-all"])
 def test_the_verdict_is_the_lean_verifiers_and_takes_its_gates_fresh_bits_and_failure_and_none_of_its_counts(small, tmp_path, usage,
                                                                                                          public, flags):
-    """An `inference-only-check` whose ``--count`` prints its whole verdict, and one that prints only ``{complies}`` unless given
+    """An `inference-only-verifier` whose ``--count`` prints its whole verdict, and one that prints only ``{complies}`` unless given
     ``--detail``, which its usage names: each is called for its whole verdict, rows, total and failure, which the private
     verdict keeps whole. Where it counts more fresh bits than the record's count and than k, the run is refused on k by
     its count, the record's count beside it, and the public verdict and its line take only its gates and fresh bits a
@@ -574,20 +574,20 @@ def test_the_verdict_is_the_lean_verifiers_and_takes_its_gates_fresh_bits_and_fa
 
 
 def test_a_binary_whose_usage_hides_detail_gives_no_rows_which_is_said(small, tmp_path):
-    """An `inference-only-check` that prints only ``{complies}`` for ``--count`` and whose usage names no ``--detail`` gives no row
+    """An `inference-only-verifier` that prints only ``{complies}`` for ``--count`` and whose usage names no ``--detail`` gives no row
     of the block: the run is undecided, saying so, and takes nothing from it."""
     row = IO.session_row(small, None, None)
     exe = _inference_only_check(tmp_path / "lean", OLD_USAGE, {"complies": False}, _whole(row))
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    assert pub["verdict"] == "refuse" and pub["lean"] == {"error": "inference-only-check --count printed no row of the block"}
-    assert pub["reason"] == "undecided: the Lean verifier gave no verdict: inference-only-check --count printed no row of the block"
+    assert pub["verdict"] == "refuse" and pub["lean"] == {"error": "inference-only-verifier --count printed no row of the block"}
+    assert pub["reason"] == "undecided: the Lean verifier gave no verdict: inference-only-verifier --count printed no row of the block"
     assert full["lean_detail"] == {"flags": ["--count"], "out": {"complies": False}, "memory": SC.UNLIMITED}
 
 
 @pytest.mark.parametrize(("usage", "flags"), [(OLD_USAGE, ["--count"]), (NEW_USAGE, ["--count", "--detail"])],
                          ids=["count-prints-all", "detail-prints-all"])
 def test_an_inference_only_check_refusal_lands_in_lean_with_its_code_and_message_alone(small, tmp_path, usage, flags):
-    """`inference-only-check`'s refusal, with or without ``--detail``, lands in ``lean`` as its ``error`` and ``message``, and
+    """`inference-only-verifier`'s refusal, with or without ``--detail``, lands in ``lean`` as its ``error`` and ``message``, and
     the run is undecided, saying both; anything else it carries, a count here, stays in the private verdict."""
     row = IO.session_row(small, None, None)
     refusal = {"error": "program", "message": "E_REINTERPRET: a reference reads a leaf at another width"}
@@ -602,12 +602,12 @@ def test_an_inference_only_check_refusal_lands_in_lean_with_its_code_and_message
 
 @pytest.mark.slow
 def test_inference_only_check_counts_the_verdicts_gates_on_the_session_program(small, tmp_path):
-    """The compiled `inference-only-check --count` on `small`'s session Program counts the record's gates and fresh bits a
+    """The compiled `inference-only-verifier --count` on `small`'s session Program counts the record's gates and fresh bits a
     block and accepts: the Lean verifier whose verdict it is reads the instance it is given, as only the built executable can show (the
     reference test holds the instance to the Python count, and `inference-only-count-difftest` the Lean to the reference)."""
     import served_cases as SC
 
-    exe = SC.build(SC.INFERENCE_ONLY_LEAN[0], "inference-only-check")
+    exe = SC.build(SC.INFERENCE_ONLY_LEAN[0], "inference-only-verifier")
     row = IO.session_row(small, None, None)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"]["agrees_on_gates"] is True and pub["lean"]["gates"] == row["gates"]

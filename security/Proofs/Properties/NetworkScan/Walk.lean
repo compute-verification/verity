@@ -1,7 +1,7 @@
 module
 
 public import Properties.NetworkScan
-public import InferenceOnlyCheck.Desc
+public import InferenceOnlyVerifier.Desc
 public import Proofs.Properties.InferenceOnly.BodiesOk
 public import Proofs.Properties.InferenceOnly.OperandsResolve
 public import Proofs.Properties.InferenceOnly.ReadsExact
@@ -10,7 +10,7 @@ public import Proofs.Properties.InferenceOnly.ReadsExact
 # The walk lemma
 
 **The walk lemma** (`MemberReads`): in a Program Flock decodes, topological (`Flock.Program.Prog.orderViolation`) and
-laid out (`InferenceOnlyCheck.Desc.bodiesLaidOut`), a gate in the activation of member `m` of a root node `k` calling a composite
+laid out (`InferenceOnlyVerifier.Desc.bodiesLaidOut`), a gate in the activation of member `m` of a root node `k` calling a composite
 (by a batch or a call: a scan's iteration reads the one before) reads only gates of that activation, or a gate one of
 node `k`'s argument references resolves to from the root, what its arguments bind. It is where Flock's walk
 (`Flock.Program.Prog.gate`, `Flock.Program.resolve`) takes a gate's operands, and the scan's causality
@@ -35,7 +35,7 @@ namespace Properties.NetworkScan
 gates of that activation, or a gate a reference of one of node `k`'s arguments resolves to from the root. -/
 def MemberReads : Prop :=
   ∀ (bytes : ByteArray) (P : Flock.Program.Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
-    InferenceOnlyCheck.Desc.bodiesLaidOut P = true →
+    InferenceOnlyVerifier.Desc.bodiesLaidOut P = true →
     ∀ k < (P.defs[P.root]!).body.nodes.size, ∀ m < ((P.defs[P.root]!).body.nodes[k]!).members,
       (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false →
       ((P.defs[P.root]!).body.nodes[k]!).form ≠ .scan →
@@ -52,7 +52,7 @@ end Properties.NetworkScan
 namespace Properties.NetworkScan.WalkProof
 
 open Flock.Program
-open InferenceOnlyCheck.Properties.SecurityProofs
+open InferenceOnlyVerifier.Properties.SecurityProofs
 
 /-- The activations at or below `A`: `A`, and each member of a node of one. -/
 inductive Below (A : Scope) : Scope → Prop
