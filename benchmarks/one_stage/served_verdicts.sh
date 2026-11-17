@@ -680,9 +680,11 @@ v3c_live() { [[ $V3C_CHALLENGER == gate:* ]]; }
 SP_CHALLENGER=${PP_CHALLENGER:-local}
 # A gate's address given as ${NAME} (placement.toml's form, which keeps it out of the launch's recorded params) is filled
 # from this run's environment (`research run --env-host`, or run.sh settings' from the node's env file); a NAME the
-# environment doesn't set stays as given, for the preflight's refusal (`unfilled`)
+# environment doesn't set stays as given, for the preflight's refusal (`unfilled`); NAME_GIVEN keeps the form given, which
+# is what a kept file (the deferral's settings) holds
 fill_host() {
   local re='^([^$]*)\$\{([A-Za-z_][A-Za-z0-9_]*)\}(.*)$' v=${!1} out= n
+  printf -v "$1_GIVEN" %s "$v"
   while [[ $v =~ $re ]]; do
     out+=${BASH_REMATCH[1]} n=${BASH_REMATCH[2]} v=${BASH_REMATCH[3]}
     if [ -n "${!n:-}" ]; then out+=${!n}; else out+="\${$n}"; fi
@@ -949,6 +951,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --ports "$ports" "${link[@]}" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
+  "$PY" "$SV" unhost "$OUT/v3c-audit/audit.log" "$OUT/v3c-audit/audit.err"
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
   [ -z "$PEARLPLUS_TIE" ] || say "V3C-TIE: $(grep -m1 '^TIE ' "$OUT/v3c-audit/audit.log" | "$PY" -c 'import json, sys
 line = sys.stdin.read()
@@ -1470,7 +1473,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
     [ -z "${DAY_PARAMS:-}" ] || cp "$DAY_PARAMS" "$DEFER_DIR/day-params.json" || return 1
   fi
   fixed_limits || return 1
-  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "$V3C_LAW" V3C_CHALLENGER "$V3C_CHALLENGER" \
+  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "$V3C_LAW" V3C_CHALLENGER "$V3C_CHALLENGER_GIVEN" \
     DEVELOPMENT "$DEVELOPMENT" H1_TIE "${H1_TIE:-}" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "$(hostname)" SERVED_PEER "$V3C_PEER" DEFERRED_TREE "$(tree_sha)" COMPOSE_OFF_NODE "$COMPOSE_OFF_NODE" \
     COMPOSE_NODE "$COMPOSE_NODE" DAY "${DAY:-}" PEARLPLUS_TIE_UNIFORM "${PEARLPLUS_TIE_UNIFORM:-}" > "$DEFER_DIR/deferred.env" || return 1
@@ -1751,6 +1754,7 @@ gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: t
   (cd "$D" && tar --create --dereference --no-recursion --file=- --files-from="$COMPOSE_DIR/inputs.txt") \
     | $COMPOSE_GATE compose > "$answer" 2> "$D/private/gate-compose.err"
   rc=${PIPESTATUS[1]}
+  "$SAY_PY" "$SV" unhost "$D/private/gate-compose.err"
   "$SAY_PY" "$SV" composed "$answer" "$OUT/compose" --gate-exit "$rc" --err "$D/private/gate-compose.err" \
     | publish_lines
   return "${PIPESTATUS[0]}"

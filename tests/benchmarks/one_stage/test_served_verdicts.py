@@ -4217,6 +4217,67 @@ def test_a_gate_given_by_its_host_variable_reaches_the_audit_filled_and_no_publi
     assert not [x for x in lines if CHALLENGER_HOST in x], lines
 
 
+#: a documentation address, the gate's, which ssh's own refusal names
+DOC_HOST = "192.0.2.7"
+SSH_REFUSED = f"ssh: connect to host {DOC_HOST} port 22: Connection refused"
+NAMED_REFUSED = "ssh: connect to host vy-challenger-1 port 22: Connection refused"
+
+
+def _holding(tmp_path: Path, *dirs: str) -> list[Path]:
+    """The files under ``dirs`` (of ``tmp_path``) that hold DOC_HOST."""
+    return [p for d in dirs for p in (tmp_path / d).rglob("*") if p.is_file() and DOC_HOST in p.read_text(errors="replace")]
+
+
+@pytest.mark.parametrize("refuses", ["gate", "audit"])
+def test_a_gate_whose_ssh_refuses_is_named_by_its_machine_and_no_line_or_kept_file_holds_its_address(tmp_path, refuses):
+    """ssh's own refusal names the host it reached: where the gate's check (`served_verdicts.py gate`) or V3c's audit
+    quotes it, the gate's address (VY_CHALLENGER_1_HOST's) is its machine's name, in the published line and in every file
+    under $OUT and the serve dir's private/."""
+    env = {**_live(tmp_path, [LEDGER_LINE]), "PP_CHALLENGER": BY_HOST, "VY_CHALLENGER_1_HOST": DOC_HOST}
+    audit = FAKE_RECORDS_AUDIT
+    if refuses == "gate":
+        _script(tmp_path / "gate" / "ssh", f'echo "{SSH_REFUSED}" >&2\nexit 255')
+    else:
+        audit = audit.replace('if a[0] == "audit":\n', f'if a[0] == "audit":\n    sys.exit("{SSH_REFUSED}")\n', 1)
+    rc, lines, _order, _limits = _v3c(tmp_path, records_audit=audit, **env)
+    said = [x for x in lines if NAMED_REFUSED in x]
+    assert rc != 0 and said and said[0].startswith("V3C-GATE refused: " if refuses == "gate" else "V3C-AUDIT: no RECORDS"), lines
+    assert not [x for x in lines if DOC_HOST in x], lines
+    assert not _holding(tmp_path, "out", "serve/private")
+
+
+def test_a_compose_gate_whose_ssh_refuses_is_named_by_its_machine_in_its_line_and_its_kept_stderr(tmp_path):
+    """The compose gate's ssh refusal reaches GATE-COMPOSE's line and the serve dir's private/gate-compose.err with the
+    gate's address (VY_AUDITOR_2_HOST's) as its machine's name."""
+    gate = tmp_path / "compose-gate"
+    _script(gate, f'cat > /dev/null\necho "{SSH_REFUSED}" >&2\nexit 255')
+    out = tmp_path / "served-out"
+    run = _handed(tmp_path, cmd=("gate-compose", str(out / "pieces"), str(out / "record" / "inference-only.json")),
+                  COMPOSITE="", COMPOSE_GATE=str(gate), VY_AUDITOR_2_HOST=DOC_HOST)
+    lines = (out / "verdicts.txt").read_text().splitlines()
+    assert run.returncode == 1 and lines[-1] == (
+        "GATE-COMPOSE failed (ssh exit 255): no answer from the compose gate (IndexError): ssh: connect to host "
+        "vy-auditor-2 port 22: Connection refused"), (run.stderr, lines)
+    assert "vy-auditor-2" in (tmp_path / "serve" / "private" / "gate-compose.err").read_text()
+    assert not _holding(tmp_path, "served-out", "serve/private")
+
+
+def test_a_deferral_keeps_the_gate_as_given_and_its_follow_on_fills_the_address_from_its_own_environment(tmp_path):
+    """The deferral's settings (private/deferred/deferred.env, kept and copied to the follow-on) hold V3C_CHALLENGER as
+    given, its ${VY_CHALLENGER_1_HOST} unfilled, and its follow-on fills it from its own environment."""
+    assert _deferred(tmp_path, DEVELOPMENT=None, PP_CHALLENGER=BY_HOST, PP_PEER="vy-dc-h200",
+                     VY_CHALLENGER_1_HOST=DOC_HOST).returncode == 0
+    assert _deferral_settings(tmp_path)["V3C_CHALLENGER"] == BY_HOST
+    assert not _holding(tmp_path, "serve/private", "served-out")
+    env = {**_live(tmp_path, [LEDGER_LINE], hosts=True), "PP_CHALLENGER": None, "PP_PEER": None, "V3C_PEER": "cpu-6",
+           "VY_CHALLENGER_1_HOST": DOC_HOST}
+    rc, lines, order, _limits = _follow(tmp_path, **env)
+    assert rc == 2 and "audit" in order, (lines, order)
+    assert _audited(tmp_path, ("--challenger",)) == {"--challenger": f"gate:research@{DOC_HOST}"}
+    assert not [x for x in lines if DOC_HOST in x], lines
+    assert not _holding(tmp_path, "out", "serve/private")
+
+
 @pytest.mark.parametrize("extra, other", [
     ({"H1_GATE": GATE, "H1_PEER": "vy-dc-h200-3"}, "H1_PEER"),
     ({"POUW": "pearlplus", "H1_PEER": "vy-dc-h200-3"}, "PEARLC_CHALLENGER_PEER"),

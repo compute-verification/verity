@@ -22,6 +22,7 @@ SPOT, and the one record of every verdict (the block record).
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
                               [--tree SHA [--tree-on BRANCH]] [--served-compare FILE] [--composite DIR]
     served_verdicts.py witness < PATHS
+    served_verdicts.py unhost FILE...
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
     served_verdicts.py public-registration REGISTRATION
@@ -935,12 +936,22 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
             **{p: doc.get(p) for p in PREMISES}}
 
 
+def unhosted(text: str) -> str:
+    """``text`` with each address a ``NAME_HOST`` variable of this environment holds replaced by its machine's name, NAME
+    in lower case with - for _ (VY_CHALLENGER_1_HOST: vy-challenger-1), as served_verdicts.sh's gate_machine names a gate:
+    ssh's own refusal names the host it reached, and a child's stderr carries no address into a line or a kept file."""
+    held = [(k, v) for k, v in os.environ.items() if len(k) > len("_HOST") and k.endswith("_HOST") and v]
+    for k, v in sorted(held, key=lambda kv: -len(kv[1])):
+        text = text.replace(v, k[:-len("_HOST")].lower().replace("_", "-"))
+    return text
+
+
 def _gate_out(gate: str, *words: str) -> bytes:
     """The gate's answer to `words` through its command `gate`, the words one shell-quoted line as `commit_coins.ChallengerGate`
     sends them; RuntimeError naming what it said when it refuses."""
     p = subprocess.run([*shlex.split(gate), shlex.join(words)], capture_output=True, check=False)
     if p.returncode:
-        said = (p.stdout + p.stderr).decode(errors="replace").strip()
+        said = unhosted((p.stdout + p.stderr).decode(errors="replace").strip())
         raise RuntimeError(f"the gate refused {words[0]} (exit {p.returncode}): {said[-400:]}")
     return p.stdout
 
@@ -2334,7 +2345,7 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | 
     except (OSError, IndexError, ValueError) as e:
         said = [x for x in (err.read_text(errors="replace").splitlines() if err and err.is_file() else []) if x.strip()]
         return 1, (f"GATE-COMPOSE failed (ssh exit {gate_exit}): no answer from the compose gate ({type(e).__name__})"
-                   + (f": {said[-1].strip()[:400]}" if said else ""))
+                   + (f": {unhosted(said[-1].strip())[:400]}" if said else ""))
     if "refused" in doc:
         return 3, f"GATE-COMPOSE refused by the compose gate: {str(doc['refused'])[:800]}"
     c = doc.get("compose") or {}
@@ -2688,6 +2699,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                    "window tied to W, its window/registration.json, its records audit's summary.json and the "
                    "window-circuit record V3c held R's circuit to, circuit-record.json (default --sampled-proofs)")
     sub.add_parser("witness")
+    sub.add_parser("unhost").add_argument("files", nargs="+", type=Path)
     rb = sub.add_parser("rebase")
     rb.add_argument("serve_dir", type=Path)
     rb.add_argument("served_dir")
@@ -2711,6 +2723,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         for path, why in found:
             print(f"WITNESS {path}: {why}", flush=True)
         return 1 if found else 0
+    if a.cmd == "unhost":
+        for f in a.files:
+            if f.is_file():
+                f.write_text(unhosted(f.read_text(errors="replace")))
+        return 0
     if a.cmd == "rebase":
         try:
             done = rebase(a.serve_dir, a.served_dir, [x for x in sys.stdin.read().splitlines() if x.strip()], held=a.held)
