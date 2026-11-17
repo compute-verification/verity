@@ -5,21 +5,8 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Zerocheck
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
 
-/-!
-# The masked zerocheck's forms evaluate to the clear replay
-
-`Zk.replay` replays the zerocheck on the masked proof `zc'` (each sent value its clear value plus its pad, `Masks`) and
-builds affine forms `Lin` in the pads. This file restates its zerocheck terms verbatim (`r1c`, `r1ab`, `computedC`, `fcL`,
-`running`, `prodL`, at `s = lay.len`) and evaluates them at the pads `h` (`evalL l h = l.c + ⟨l.a, h⟩`):
-
-* `running_eval`: the running form after `j` residual rounds evaluates to the clear replay's `claim`;
-* `c_eval_eval`: `computedC + fc` (the constraint `zerocheck c_eval`) evaluates to `Pc(z) + final_c`;
-* `final_eval`: at `h_ab = h_fa·h_fb`, `running + prod` (the constraint `zerocheck final a·b`) evaluates to
-  `claim … n + final_a·final_b`.
-
-At any coins, for any clear proof. With `Zerocheck.c_eval` and `Zerocheck.final_ab`, both constraints evaluate to 0 at the
-honest prover's pads (`c_eval_zero`, `final_zero`). `evalL_combo` evaluates `verifyInner`'s batched form.
--/
+/-! `Zk.replay`'s zerocheck terms, restated verbatim, evaluate at the pads to the clear replay's values at any
+coins. -/
 
 @[expose] public section
 
@@ -30,9 +17,6 @@ open FlockSoundness.Discharge.Composed.Zerocheck
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The replay's zerocheck terms, at `s = lay.len` -/
-
-/-- The value of the affine form `l` at the pads `h`: `c + Σ a_i h_i`. -/
 def evalL (l : Lin) (h : Array F128) : F128 := l.c + dot l.a h
 
 def r1c (lay : PadLayout) (zc : ZerocheckProof) : Array Lin :=
@@ -71,7 +55,6 @@ def prodL (lay : PadLayout) (zc : ZerocheckProof) : Lin :=
   ⟨zc.finalA * zc.finalB,
     (((Array.replicate lay.len 0).set! lay.fb zc.finalA).set! lay.fa zc.finalB).set! lay.hab 1⟩
 
-/-- `zc'` is the clear `zc` masked by the pads `h` at `lay`'s indices, on its first `n` residual rounds. -/
 structure Masks (lay : PadLayout) (h : Array F128) (zc zc' : ZerocheckProof) (n : ℕ) : Prop where
   round1ab : ∀ i < 64, zc'.round1ab[i]! = zc.round1ab[i]! + h[lay.r1ab i]!
   round1c : ∀ i < 64, zc'.round1c[i]! = zc.round1c[i]! + h[lay.r1c i]!
@@ -79,8 +62,6 @@ structure Masks (lay : PadLayout) (h : Array F128) (zc zc' : ZerocheckProof) (n 
   finalA : zc'.finalA = zc.finalA + h[lay.fa]!
   finalB : zc'.finalB = zc.finalB + h[lay.fb]!
   finalC : zc'.finalC = zc.finalC + h[lay.fc]!
-
-/-! ## Arrays and the field -/
 
 theorem add_add_self (v x : F128) : v + x + x = v := by
   apply eq_of_of
@@ -123,8 +104,6 @@ theorem get_map_lin (f : ℕ → Lin) {n i : ℕ} (hi : i < n) : ((Array.range n
 
 theorem mem_map_range {f : ℕ → Lin} {n : ℕ} {l : Lin} (hl : l ∈ (Array.range n).map f) : ∃ i < n, f i = l := by
   simpa using hl
-
-/-! ## The forms' values -/
 
 theorem of_evalL_range (l : Lin) (h : Array F128) (s : ℕ) (hl : l.a.size = s) :
     GF128.of (evalL l h) = GF128.of l.c + ∑ k ∈ Finset.range s, GF128.of l.a[k]! * GF128.of h[k]! := by
@@ -180,10 +159,8 @@ theorem evalL_scale (x : Lin) (k : F128) (h : Array F128) : evalL (x.scale k) h 
   show GF128.of (x.c * k) + _ = _
   rw [of_mul, add_mul]
 
-/-- `Lin.combo`'s inner update `a_k ← a_k + w·l_k`. -/
 def innerStep (w : F128) (la b : Array F128) (k : ℕ) : Array F128 := b.set! k (b[k]! + w * la[k]!)
 
-/-- `Lin.combo`'s outer update by `w_i·l_i`. -/
 def outerStep (ws : Array F128) (ls : Array Lin) (s : ℕ) (st : F128 × Array F128) (i : ℕ) : F128 × Array F128 :=
   (st.1 + ws[i]! * ls[i]!.c, (List.range (min s ls[i]!.a.size)).foldl (innerStep ws[i]! ls[i]!.a) st.2)
 
@@ -258,7 +235,6 @@ theorem outer_fold (ws : Array F128) (ls : Array Lin) (s : ℕ) (h : Array F128)
         of_evalL_range _ h s hn, of_add, of_mul]
       ring
 
-/-- **`Lin.combo` evaluates to the weighted sum of its forms' values**, all on `s` pads. -/
 theorem evalL_combo (ws : Array F128) (ls : Array Lin) (s : ℕ) (h : Array F128)
     (hl : ∀ l ∈ ls, l.a.size = s) :
     evalL (Lin.combo ws ls s) h = dot ws (ls.map fun l => evalL l h) := by
@@ -271,8 +247,6 @@ theorem evalL_combo (ws : Array F128) (ls : Array Lin) (s : ℕ) (h : Array F128
   rw [outer_fold ws ls s h _ hl', dot_eq_foldl, of_foldl_dot, ← GF128.zero_eq, zero_add, Array.size_map]
   refine Finset.sum_congr rfl fun i hi => ?_
   rw [get_map' _ ls i (by have := Finset.mem_range.1 hi; omega)]
-
-/-! ## The layout's indices -/
 
 theorem fa_lt_fb (lay : PadLayout) : lay.fa < lay.fb := by simp only [PadLayout.fb]; omega
 
@@ -301,8 +275,6 @@ theorem ml_lt_len (lay : PadLayout) (j t : ℕ) (hj : j < lay.nMlv) (ht : t < 2)
   simp only [PadLayout.fa] at this
   simp only [PadLayout.ml]
   omega
-
-/-! ## The replay's terms' values -/
 
 theorem size_r1c (lay : PadLayout) (zc : ZerocheckProof) (i : ℕ) (hi : i < 64) : (r1c lay zc)[i]!.a.size = lay.len := by
   simp only [r1c]; rw [get_map_lin _ hi]; simp
@@ -382,9 +354,6 @@ theorem evalL_prodL (lay : PadLayout) (zc : ZerocheckProof) (h : Array F128) :
   simp only [of_add, of_mul]
   ring
 
-/-! ## The three facts -/
-
-/-- **The running form evaluates to the clear claim**, after `j ≤ n ≤ nMlv` residual rounds. -/
 theorem running_eval (lay : PadLayout) (h : Array F128) (zc zc' : ZerocheckProof) (n : ℕ)
     (hn : n ≤ lay.nMlv) (hm : Masks lay h zc zc' n) (r rho : Array F128) (z : F128) (j : ℕ) (hj : j ≤ n) :
     evalL (running lay zc' r rho z j) h = claim zc r rho z j := by
@@ -413,14 +382,12 @@ theorem running_eval (lay : PadLayout) (h : Array F128) (zc zc' : ZerocheckProof
       rw [ih (by omega), evalL_masked _ _ _ h0, evalL_masked _ _ _ h1, add_add_self, add_add_self]
       rfl
 
-/-- **`zerocheck c_eval` evaluates to its two clear sides**: `Pc(z) + final_c`. -/
 theorem c_eval_eval (lay : PadLayout) (h : Array F128) (zc zc' : ZerocheckProof) (n : ℕ)
     (hm : Masks lay h zc zc' n) (z : F128) :
     evalL ((computedC lay zc' z).add (fcL lay zc')) h = dot (lagrange nodesL den6Inv z) zc.round1c + zc.finalC := by
   rw [evalL_add _ _ h (by simp [size_computedC, fcL]), evalL_computedC lay h zc zc' n hm z, fcL,
     evalL_masked _ _ _ (fc_lt_len lay), hm.finalC, add_add_self]
 
-/-- **`zerocheck final a·b` evaluates to its two clear sides** at `h_ab = h_fa·h_fb`: `claim … n + final_a·final_b`. -/
 theorem final_eval (lay : PadLayout) (h : Array F128) (zc zc' : ZerocheckProof) (n : ℕ)
     (hn : n ≤ lay.nMlv) (hm : Masks lay h zc zc' n) (hab : h[lay.hab]! = h[lay.fa]! * h[lay.fb]!)
     (r rho : Array F128) (z : F128) :
@@ -432,16 +399,11 @@ theorem final_eval (lay : PadLayout) (h : Array F128) (zc zc' : ZerocheckProof) 
   linear_combination (GF128.of zc.finalA * GF128.of h[lay.fb]! + GF128.of zc.finalB * GF128.of h[lay.fa]! +
     2 * GF128.of h[lay.fa]! * GF128.of h[lay.fb]!) * two_eq_zero'
 
-/-! ## At the honest prover -/
-
-/-- `zerocheck c_eval` vanishes at the honest prover's pads, at every coin. -/
 theorem c_eval_zero (lay : PadLayout) (h : Array F128) (n : ℕ) (a b c : ℕ → 𝔽)
     (r rho : Array F128) (z : F128) (zc' : ZerocheckProof) (hm : Masks lay h (honest n a b c r rho z) zc' n) :
     evalL ((computedC lay zc' z).add (fcL lay zc')) h = 0 := by
   rw [c_eval_eval lay h _ zc' n hm z, Zerocheck.c_eval, add_self']
 
-/-- `zerocheck final a·b` vanishes at the honest prover's pads with `h_ab = h_fa·h_fb`, for valid tables, at every coin with
-`r_k ≠ 1` for `k < n`. -/
 theorem final_zero (lay : PadLayout) (h : Array F128) (n : ℕ) (hn : n ≤ lay.nMlv)
     (a b c : ℕ → 𝔽) (hvalid : ∀ i < 2 ^ (n + 6), a i * b i = c i) (r rho : Array F128) (hr : ∀ k < n, r[k]! ≠ 1)
     (z : F128) (zc' : ZerocheckProof) (hm : Masks lay h (honest n a b c r rho z) zc' n)
@@ -449,7 +411,6 @@ theorem final_zero (lay : PadLayout) (h : Array F128) (n : ℕ) (hn : n ≤ lay.
     evalL ((running lay zc' r rho z n).add (prodL lay zc')) h = 0 := by
   rw [final_eval lay h _ zc' n hn hm hab r rho z, final_ab n a b c r rho z hvalid hr, add_self']
 
-/-- A form's value as a sum over its `s` pads in the field (`InnerHolds`'s shape). -/
 theorem of_evalL (l : Lin) (h : Array F128) (s : ℕ) (hl : l.a.size = s) :
     GF128.of (evalL l h) = GF128.of l.c + ∑ k : Fin s, GF128.of l.a[k.val]! * GF128.of h[k.val]! := by
   rw [evalL, of_add, of_dot _ _ s hl]

@@ -16,19 +16,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# `innerOf`'s lane phase: level 0's two lane-phase rows vanish at an honest prover's pads
-
-Rep `r`'s rows `ligerito lane phase (c0)`, `(c1)` (`rowsOf`'s rows 5 and 6: `limbRows` of `laneRow`), on the honest
-masked values (`honestMasked`: `honestAt` plus the exposed pads) and the honest restart `T' = Σ_c y₁'(c)·b̄(c)`, given the
-ring switch's target `T = Σ_y f(y)·b(y)` (`hT`, at the opening's batched basis `openB`). No coin is excluded: the lane
-rounds don't divide, so these hold at every coin vector, an outer coin `1` included.
-
-* `laneRun_eval`: after `j ≤ k₀` lane rounds the claim's value at the pads is `Σ_y f_j(y)·B_j(y)` (`laneF`, `laneB`), from
-  `T + Σ_i β_i·y_i = Σ_y f(y)·B(y)` and one honest round at a time (`lane_round`).
-* `laneF_k0`: `f` folded by every lane challenge is `Σ_l eq(r̄, l)·f(l + 2^k₀·c)`, the folded lanes `y₁`.
-* `laneRow_eval`, `laneRows_honest`: the `K` row's value is `0`, and so are both its coordinate rows.
--/
+/-! Level 0's two lane-phase rows vanish at the honest prover's pads at every coin vector, an outer coin `1`
+included, because the lane rounds don't divide. -/
 
 @[expose] public section
 
@@ -39,7 +28,6 @@ open Flock Model ZkSession ZkView ZK Refine
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **A `K` row's coordinate rows vanish where it does** (the converse of `eval_eq_zero_of_limbRows`). -/
 theorem limbRows_eval_eq_zero {np : ℕ} (row : LinK 𝕂 np) (h : Fin np → 𝔽)
     (h0 : LinK.eval execArith h row = 0) (k : Fin 2) : (limbRows execArith row k).eval h = 0 := by
   have key : LinK.eval execArith h row =
@@ -56,8 +44,6 @@ theorem limbRows_eval_eq_zero {np : ℕ} (row : LinK 𝕂 np) (h : Fin np → �
   · simpa [limbRows, Lin.eval] using h₀
   · simpa [limbRows, Lin.eval] using h₁
 
-/-- **One honest lane round** (characteristic 2): the round's message `(q(0), q₂)` of `q(X) = Σ_y f(X, y)·B(X, y)`, read
-from the claim `Σ_x f(x)·B(x)` (`from(msg, s)`), is the sum of the tables folded at `t`. -/
 theorem lane_round {K : Type} [Field K] [CharP K 2] (n : ℕ) (f B : ℕ → K) (t : K) :
     (∑ y ∈ Finset.range (2 ^ n), f (2 * y) * B (2 * y)) +
         t * ((∑ x ∈ Finset.range (2 ^ (n + 1)), f x * B x) +
@@ -71,14 +57,13 @@ theorem lane_round {K : Type} [Field K] [CharP K 2] (n : ℕ) (f B : ℕ → K) 
   simp only [foldLo]
   linear_combination (t * f (2 * y + 1) * B (2 * y + 1)) * h2
 
-/-- Folding by a list of challenges, one more at the end. -/
 theorem foldLoL_append_single {K : Type} [Field K] :
     ∀ (l : List K) (t : K) (u : ℕ → K), foldLoL (l ++ [t]) u = foldLo t (foldLoL l u)
   | [], _, _ => rfl
   | a :: l, t, u => by rw [List.cons_append, foldLoL, foldLoL, foldLoL_append_single l t (foldLo a u)]
 
-/-- Swapping a weighted double sum (stated over any commutative semiring: `Finset.mul_sum` doesn't rewrite at
-`GF128`/`GF256`'s instances, but they unify with it). -/
+/-- Stated over any commutative semiring because `Finset.mul_sum` doesn't rewrite at `GF128`/`GF256`'s
+instances, but they unify with it. -/
 theorem sum_mul_sum_swap {K ι κ : Type} [CommSemiring K] (s : Finset ι) (t : Finset κ) (a : ι → K)
     (e : ι → κ → K) (w : κ → K) :
     ∑ i ∈ s, a i * ∑ y ∈ t, e i y * w y = ∑ y ∈ t, w y * ∑ i ∈ s, a i * e i y := by
@@ -96,25 +81,19 @@ section Lane
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
   (zw : Witness Tz.S.m) {nE L : ℕ} (R : Fin 2 → Fin L → 𝔽) (hp : Fin (nE + 4) → 𝔽)
 
-/-- **The honest masked values**: each exposed value's clear value (`honestAt`) plus its pad. -/
 noncomputable def honestMasked : Fin nE → 𝔽 := fun i => honestAt Tz st c r zw R i.val + hp (Fin.castAdd 4 i)
 
-/-- A masked value unmasked by its pad is the clear value (characteristic 2). -/
 theorem msgAt_add_pad (k : ℕ) (hk : k < nE) :
     msgAt (honestMasked Tz st c r zw R hp) k + hp (ix nE k) = honestAt Tz st c r zw R k := by
   have hix : ix nE k = Fin.castAdd 4 ⟨k, hk⟩ := Fin.ext (by simp [ix, Nat.mod_eq_of_lt (by omega : k < nE + 4)])
   simp only [msgAt, dite_eq_left hk, honestMasked, hix]
   rw [add_assoc, CharTwo.add_self_eq_zero, add_zero]
 
-/-- A masked `K` message at the pads: its clear coordinates. -/
 theorem eval_mkK (i₀ i₁ : ℕ) (h₀ : i₀ < nE) (h₁ : i₁ < nE) :
     LinK.eval execArith hp (mkK (honestMasked Tz st c r zw R hp) i₀ i₁) =
       execArith.ofLimbs (honestAt Tz st c r zw R i₀) (honestAt Tz st c r zw R i₁) := by
   simp only [mkK, map_add, eval_cK, eval_padK]
   rw [ofLimbs_add, msgAt_add_pad Tz st c r zw R hp i₀ h₀, msgAt_add_pad Tz st c r zw R hp i₁ h₁]
-
-/-! ### The layout's level-0 indices -/
-
 
 theorem lgOod_lt (hE : (layOf Tz st).hab = nE) (i : ℕ) (hi : i < (layOf Tz st).nOod0) :
     (layOf Tz st).lgOod i < nE := by
@@ -128,9 +107,6 @@ theorem lgE_lt (hE : (layOf Tz st).hab = nE) (i t : ℕ) (hi : i < 2) (ht : t < 
     (layOf Tz st).lgE i t < nE := by
   subst hE; simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.lgE, Zk.PadLayout.hab]; omega
 
-/-! ### The honest values at level 0's indices -/
-
-/-- The out-of-domain value: `y₀ = Σ_y eq(z₀, y)·f(y)`. -/
 theorem honestAt_lgOod (i : ℕ) (hi : i < (layOf Tz st).nOod0) :
     honestAt Tz st c r zw R ((layOf Tz st).lgOod i) =
       ∑ y ∈ Finset.range (2 ^ (Tz.S.m - 7)), eqAt (oodPoint Tz st c r i) y * wordOf zw y := by
@@ -141,7 +117,6 @@ theorem honestAt_lgOod (i : ℕ) (hi : i < (layOf Tz st).nOod0) :
     ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)),
     ite_eq_left (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)), show (layOf Tz st).lgOod i - (layOf Tz st).lgOod 0 = i by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab] at *; omega)]
 
-/-- Lane round `j`'s message coordinates. -/
 theorem honestAt_lgMsg (j t : ℕ) (hj : j < Tz.sch.k0) (ht : t < 4) :
     honestAt Tz st c r zw R ((layOf Tz st).lgMsg j t) =
       let m := laneMsg Tz st c r zw j
@@ -168,7 +143,6 @@ theorem honestAt_lgMsg_snd (j : ℕ) (hj : j < Tz.sch.k0) :
   rw [honestAt_lgMsg Tz st c r zw R j 2 hj (by omega), honestAt_lgMsg Tz st c r zw R j 3 hj (by omega)]
   simpa using ofLimbs_coords execArith execArith_correct (laneMsg Tz st c r zw j).2
 
-/-- The extra lanes' sums `e_i = Σ_c R_i(c)·b̄(c)`. -/
 theorem honestAt_lgE (i : Fin 2) :
     execArith.ofLimbs (honestAt Tz st c r zw R ((layOf Tz st).lgE i 0))
       (honestAt Tz st c r zw R ((layOf Tz st).lgE i 1)) =
@@ -192,9 +166,6 @@ theorem honestAt_lgE (i : Fin 2) :
   simpa [hR] using ofLimbs_coords execArith execArith_correct
     (∑ col : Fin L, execArith.embed (R i col) * bFold Tz st c r col.val)
 
-/-! ### The lane rounds -/
-
-/-- The claim before the lane rounds: `T + Σ_i β_i·y_i = Σ_y f(y)·B(y)`. -/
 theorem laneRun_zero_eval (hE : (layOf Tz st).hab = nE) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽)
     (hT : openT Tz st c r sh = ∑ y ∈ Finset.range (2 ^ (Tz.S.m - 7)), wordOf zw y * openB Tz st c r y) :
     LinK.eval execArith hp (laneRun Tz st c r (honestMasked Tz st c r zw R hp) sh 0) =
@@ -211,7 +182,6 @@ theorem laneRun_zero_eval (hE : (layOf Tz st).hab = nE) {nC : ℕ} (sh : Fin nC 
   rw [add_right_inj]
   exact sum_mul_sum_swap _ _ _ _ _
 
-/-- **After `j ≤ k₀` lane rounds** the claim's value at the pads is `Σ_y f_j(y)·B_j(y)`. -/
 theorem laneRun_eval (hE : (layOf Tz st).hab = nE) (hk : Tz.sch.k0 ≤ Tz.S.m - 7) {nC : ℕ}
     (sh : Fin nC → Fin 128 → 𝔽)
     (hT : openT Tz st c r sh = ∑ y ∈ Finset.range (2 ^ (Tz.S.m - 7)), wordOf zw y * openB Tz st c r y) :
@@ -230,9 +200,6 @@ theorem laneRun_eval (hE : (layOf Tz st).hab = nE) (hk : Tz.sch.k0 ≤ Tz.S.m - 
       simp only [laneMsg]
       exact lane_round _ _ _ _
 
-/-! ### The folded lanes -/
-
-/-- The lane challenges `r̄_0 … r̄_{j−1}`. -/
 def laneChs (j : ℕ) : List 𝕂 := (List.range j).map (laneCh Tz st c r)
 
 theorem laneF_eq_foldLoL (j : ℕ) : laneF Tz st c r zw j = foldLoL (laneChs Tz st c r j) (laneF Tz st c r zw 0) := by
@@ -242,7 +209,6 @@ theorem laneF_eq_foldLoL (j : ℕ) : laneF Tz st c r zw j = foldLoL (laneChs Tz 
       rw [laneChs, List.range_succ, List.map_append, List.map_singleton, foldLoL_append_single, ← laneChs, ← ih]
       rfl
 
-/-- `eq(r̄, l)` over the lane challenges: `eqLane`'s product. -/
 theorem eqList_laneChs (l : ℕ) :
     eqList (laneChs Tz st c r Tz.sch.k0) l = ∏ i : Fin Tz.sch.k0,
       if l.testBit i.val then FlockLevel3.GF256.of (c.rest.lane r i)
@@ -253,7 +219,6 @@ theorem eqList_laneChs (l : ℕ) :
     simp [List.getD_eq_getElem?_getD, i.isLt]
   simp only [hget, zero_add, laneCh, seqOf, dite_eq_left i.isLt]
 
-/-- **`f` folded by every lane challenge** is the `eq(r̄, ·)`-weighted sum of lane `l`'s word `l + 2^k₀·c`. -/
 theorem laneF_k0 (col : ℕ) :
     laneF Tz st c r zw Tz.sch.k0 col = ∑ l : Fin (2 ^ Tz.sch.k0),
       (∏ i : Fin Tz.sch.k0, if l.val.testBit i.val then FlockLevel3.GF256.of (c.rest.lane r i)
@@ -265,10 +230,6 @@ theorem laneF_k0 (col : ℕ) :
   rw [eqList_laneChs]
   rfl
 
-/-! ### The rows -/
-
-/-- **Level 0's lane-phase row vanishes** at the honest pads: the claim after the `k₀` lane rounds is
-`Σ_c y₁(c)·b̄(c)`, and `y₁' = y₁ + ρ₀·R₀ + ρ₁·R₁` gives `T' = claim + ρ₀·e₀ + ρ₁·e₁`. -/
 theorem laneRow_eval (hE : (layOf Tz st).hab = nE) (hk : Tz.sch.k0 ≤ Tz.S.m - 7)
     (hL : L = 2 ^ (Tz.S.m - 7 - Tz.sch.k0)) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽)
     (hT : openT Tz st c r sh = ∑ y ∈ Finset.range (2 ^ (Tz.S.m - 7)), wordOf zw y * openB Tz st c r y)
@@ -294,7 +255,6 @@ theorem laneRow_eval (hE : (layOf Tz st).hab = nE) (hk : Tz.sch.k0 ≤ Tz.S.m - 
   rw [sub_eq_zero]
   congr 2 <;> exact mul_sum_assoc _ _ _ _
 
-/-- **Both lane-phase rows vanish** at the honest pads (`rowsOf`'s rows 5 and 6). -/
 theorem laneRows_honest (hE : (layOf Tz st).hab = nE) (hk : Tz.sch.k0 ≤ Tz.S.m - 7)
     (hL : L = 2 ^ (Tz.S.m - 7 - Tz.sch.k0)) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽)
     (hT : openT Tz st c r sh = ∑ y ∈ Finset.range (2 ^ (Tz.S.m - 7)), wordOf zw y * openB Tz st c r y)

@@ -2,15 +2,8 @@ module
 
 public import Flock.HmRow
 
-/-!
-# A segmented row's compressions in closed form
-
-A `sha512/row-seg/v1` port's `segs` lists each segment's bits and compressions (`HmRow.segShape`). Segment `j`'s
-compressions start at `firstOf segs j`, the compressions of the segments before it, and the outer message's at
-`firstOf segs s`. The executable's loops over `segs` (`HmRow.chainStart`, `HmRow.msgBit`, and `HmRow.byteAt`'s fold) are
-these prefix sums: `chainStart_some` and `chainStart_first` say a compression starts a chain exactly at a segment's or
-the outer message's first, and `msgBit_seg` and `msgBit_outer` say what each compression's message bit is.
--/
+/-! A `sha512/row-seg/v1` row's compressions in closed form: the executable's loops over `segs` as prefix
+sums. -/
 
 @[expose] public section
 
@@ -67,9 +60,6 @@ theorem firstOf_mono {i j : Nat} (hij : i ≤ j) (hj : j ≤ segs.size) : firstO
   · exact Nat.le_of_lt (firstOf_lt hpos h hj)
   · exact Nat.le_refl _
 
-/-! ### `chainStart` -/
-
-/-- `HmRow.chainStart`'s loop body over a segmented row's `segs`. -/
 def csBody (segs : Array (Nat × Nat)) (k : Nat) (j : Nat) (st : Option (Option Nat) × Nat) :
     Id (ForInStep (Option (Option Nat) × Nat)) :=
   if (k == st.2) = true then pure (ForInStep.done (some (some j), st.2))
@@ -150,7 +140,6 @@ theorem cs_loop_last {i m f : Nat} (him : i + m ≤ segs.size) (hf : f = firstOf
 
 end Loop
 
-/-- A compression that starts a chain is a segment's first (`j < s`) or the outer message's (`j = s`). -/
 theorem chainStart_some {p : Port} (hs : p.segs = some segs) {k j : Nat} (h : HmRow.chainStart p k = some j) :
     j ≤ segs.size ∧ k = firstOf segs j := by
   simp only [HmRow.chainStart, hs, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.sub_zero,
@@ -170,7 +159,6 @@ theorem chainStart_some {p : Port} (hs : p.segs = some segs) {k j : Nat} (h : Hm
     exact ⟨by omega, a⟩
 
 include hpos in
-/-- Every segment's first compression, and the outer message's, starts a chain. -/
 theorem chainStart_first {p : Port} (hs : p.segs = some segs) {j : Nat} (hj : j ≤ segs.size) :
     HmRow.chainStart p (firstOf segs j) = some j := by
   simp only [HmRow.chainStart, hs, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.sub_zero,
@@ -188,23 +176,17 @@ theorem chainStart_first {p : Port} (hs : p.segs = some segs) {j : Nat} (hj : j 
     subst this
     simp
 
-/-- A compression of a segmented row starts no chain off its segments' and the outer message's firsts. -/
 theorem chainStart_none {p : Port} (hs : p.segs = some segs) {k : Nat} (hk : ∀ j ≤ segs.size, k ≠ firstOf segs j) :
     HmRow.chainStart p k = none := by
   rcases h : HmRow.chainStart p k with _ | j
   · rfl
   · obtain ⟨a, b⟩ := chainStart_some hs h; exact absurd b (hk j a)
 
-/-! ### `msgBit` -/
-
-/-- Segment `j`'s message bit at compression `k` (its first `f`), block byte `o`, bit `b`: a row bit while the segment's
-`m` bits last, then its fill and SHA-512's padding. -/
 def segVal (p : Port) (j k f o b m : Nat) : HmRow.MsgBit :=
   if 8 * (128 * (k - f) + o) + b < m then .row (HmRow.ROW_SEG_BITS * j + 8 * (128 * (k - f) + o) + b)
   else .const (decide ((m + 7) / 8 ≤ 128 * (k - f) + o) &&
     ((HmRow.segTail p j).get! (128 * (k - f) + o - (m + 7) / 8)).toNat >>> b % 2 == 1)
 
-/-- `HmRow.msgBit`'s loop body over a segmented row's `segs`. -/
 def mbBody (p : Port) (segs : Array (Nat × Nat)) (k o b : Nat) (j : Nat) (st : Option HmRow.MsgBit × Nat) :
     Id (ForInStep (Option HmRow.MsgBit × Nat)) :=
   if k < st.2 + segs[j]!.2 then
@@ -266,8 +248,6 @@ theorem mb_loop_past {i m f : Nat} (him : i + m ≤ segs.size) (hf : f = firstOf
 
 end Loop
 
-/-- A compression in segment `j` (`firstOf j ≤ k < firstOf (j + 1)`) reads the segment's row bits, then its fill and
-padding. -/
 theorem msgBit_seg {p : Port} (hs : p.segs = some segs) {j k : Nat} (hj : j < segs.size)
     (hk1 : firstOf segs j ≤ k) (hk2 : k < firstOf segs (j + 1)) (t : Nat) :
     HmRow.msgBit p k t =
@@ -281,7 +261,6 @@ theorem msgBit_seg {p : Port} (hs : p.segs = some segs) {j k : Nat} (hj : j < se
   obtain ⟨r1, r2⟩ := R
   cases this; rfl
 
-/-- A compression from the outer message's first on reads the segments' digests, then the outer padding. -/
 theorem msgBit_outer {p : Port} (hs : p.segs = some segs) {k : Nat} (hk : firstOf segs segs.size ≤ k) (t : Nat) :
     HmRow.msgBit p k t =
       if 128 * (k - firstOf segs segs.size) + (HmRow.chunkBit t).1 < 64 * segs.size then
@@ -301,13 +280,10 @@ theorem msgBit_outer {p : Port} (hs : p.segs = some segs) {k : Nat} (hk : firstO
   simp only [foldl_extract]
   split <;> rfl
 
-/-! ### `byteAt` -/
-
 theorem byteAt_seg {p : Port} (hs : p.segs = some segs) (byte : Nat) :
     HmRow.byteAt p byte = (firstOf segs (byte / 1024) + byte % 1024 / 128, byte % 128) := by
   simp only [HmRow.byteAt, hs, foldl_extract]
 
-/-- Every segment of `HmRow.segShape` has a compression after its first block. -/
 theorem segShape_pos (l : Nat) : ∀ j < (HmRow.segShape l).1.size, 0 < (HmRow.segShape l).1[j]!.2 := by
   intro j hj
   rw [getElem!_pos _ j hj]

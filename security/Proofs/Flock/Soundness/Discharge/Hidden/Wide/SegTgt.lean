@@ -21,16 +21,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
 import Proofs.Flock.Soundness.Discharge.Hm.Bc
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
-/-!
-# A segmented row's `b ‖ c` in a satisfying witness
-
-The copies `port_commit_seg` takes, from Δ: at a segmented row's own columns (`segPos`, compression `k`'s inputs, the
-`hm96` slot's at `k = chunks`), Δ's copies are the row's (`filter_rowsAny`): a chain start's `cv` bit its midstate's
-(`segCv_filter_start`), any other `cv` bit the chain's or the `hm96` wire's (`segCv_filter_chain`, `segCv_filter_hm`),
-and a message bit the constant or digest bit `HmRow.msgBit` names (`segMsg_filter`). So in every block of a satisfying
-witness of the untyped statement those bits hold what `port_commit_seg` needs (`seg_copies_tgt`), and a segmented row's
-`b ‖ c` is the commit string of `RowSeg.enc` of its bytes (`seg_bc_tgt`).
--/
+/-! A `sha512/row-seg/v1` row's `b ‖ c` in a satisfying witness of the untyped statement. -/
 
 @[expose] public section
 
@@ -46,9 +37,6 @@ open SegShape
 
 namespace Any
 
-/-! ## A segmented row's columns -/
-
-/-- Offset `off` of compression `k`'s inputs at template instance `g`'s row `p`, its `hm96` slot's at `k = chunks`. -/
 def segPos (c : Circuit) (g p k off : ℕ) : ℕ :=
   if k < c.ports[p]!.chunks then shaPos c g p k off else c.slotCol c.hmNet g p + off
 
@@ -106,7 +94,6 @@ theorem segMsgCopies_mem {pin g p k : ℕ} {e : ℕ × ℕ} (he : e ∈ segMsgCo
   obtain ⟨t, ht, he⟩ := he
   exact ⟨t, ht, segBitCopy_fst he⟩
 
-/-- Δ's copies into a segmented row at its compression `k₀`'s inputs are compression `k₀`'s. -/
 theorem segCopies_filter {pin g p k₀ off₀ : ℕ} {segs : Array (ℕ × ℕ)} (hg : g < c.g) (hp : p < c.ports.size)
     (hk₀ : k₀ ≤ c.ports[p]!.chunks) (ho₀ : off₀ < 1536) :
     (segCopiesOf c pin g p segs).filter (fun e => e.1 = segPos c g p k₀ off₀) =
@@ -123,8 +110,6 @@ theorem segCopies_filter {pin g p k₀ off₀ : ℕ} {segs : Array (ℕ × ℕ)}
     rw [he1, segMsg_pos R hp]
     exact fun h => hne (segPos_inj R hg hp (by omega) (by omega) hk₀ ho₀ h).1
 
-/-- The rows' wires' copies at a segmented row: a chain's into a compression's `cv` that is no chain start, and the
-`hm96` wire's into its slot's `cv` when that is none. -/
 theorem wireFAny_mem' {g p : ℕ} {e : ℕ × ℕ} (hp : p < c.ports.size) (he : e ∈ wireFAny c g p) :
     (∃ k t, 1 ≤ k ∧ k < c.ports[p]!.chunks ∧ HmRow.chainStart c.ports[p]! k = none ∧ t < 512 ∧
         e = (segPos c g p k t, Flat.wireSrc c g (chainWire c.ports c.shaNet p k) + t)) ∨
@@ -160,7 +145,6 @@ theorem wireFAny_mem' {g p : ℕ} {e : ℕ × ℕ} (hp : p < c.ports.size) (he :
       rw [hmWireDst_eq R.rowNets]
     · cases hw
 
-/-- **Δ's one copy into a chain start's `cv` bit**: its midstate's (a segment's, or the outer message's). -/
 theorem segCv_filter_start {pin g p k t₀ j : ℕ} {segs : Array (ℕ × ℕ)} (hs : c.ports[p]!.segs = some segs)
     (hg : g < c.g) (hp : p < c.ports.size) (hk : k ≤ c.ports[p]!.chunks) (ht₀ : t₀ < 512)
     (hj : HmRow.chainStart c.ports[p]! k = some j) :
@@ -197,7 +181,6 @@ theorem segCv_filter_start {pin g p k t₀ j : ℕ} {segs : Array (ℕ × ℕ)} 
   rw [← segCv_pos R hp]
   exact filter_map_single _ _ _ _ ht₀
 
-/-- **Δ's one copy into a compression's `cv` bit that is no chain start**: the chain's from the previous compression. -/
 theorem segCv_filter_chain {pin g p k t₀ : ℕ} {segs : Array (ℕ × ℕ)} (hs : c.ports[p]!.segs = some segs)
     (hg : g < c.g) (hp : p < c.ports.size) (hk1 : 1 ≤ k) (hk : k < c.ports[p]!.chunks) (ht₀ : t₀ < 512)
     (hn : HmRow.chainStart c.ports[p]! k = none) :
@@ -263,7 +246,6 @@ theorem segCv_filter_chain {pin g p k t₀ : ℕ} {segs : Array (ℕ × ℕ)} (h
   rw [hx, chainWidth_eq R.rowNets hs']
   exact filter_map_single _ _ _ _ ht₀
 
-/-- **Δ's one copy into the `hm96` slot's `cv` bit when that is no chain start**: the `hm96` wire's. -/
 theorem segCv_filter_hm {pin g p t₀ : ℕ} {segs : Array (ℕ × ℕ)} (hs : c.ports[p]!.segs = some segs)
     (hg : g < c.g) (hp : p < c.ports.size) (h0 : 0 < c.ports[p]!.chunks) (ht₀ : t₀ < 512)
     (hn : HmRow.chainStart c.ports[p]! c.ports[p]!.chunks = none) :
@@ -319,8 +301,6 @@ theorem segCv_filter_hm {pin g p t₀ : ℕ} {segs : Array (ℕ × ℕ)} (hs : c
   rw [hx]
   exact filter_map_single _ _ _ _ ht₀
 
-/-- **Δ's copies into a segmented row's message bit**: the constant or digest bit `HmRow.msgBit` names, none at a row
-bit. -/
 theorem segMsg_filter {pin g p k t₀ : ℕ} {segs : Array (ℕ × ℕ)} (hs : c.ports[p]!.segs = some segs)
     (hg : g < c.g) (hp : p < c.ports.size) (hk : k ≤ c.ports[p]!.chunks) (ht₀ : t₀ < 1024) :
     (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
@@ -361,16 +341,11 @@ theorem segMsg_filter {pin g p k t₀ : ℕ} {segs : Array (ℕ × ℕ)} (hs : c
 
 end Pos
 
-/-! ## In a satisfying witness -/
-
 section Bc
 
 variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags st)
 include L F
 
-/-- **The copies into a segmented row**, in every block of a satisfying witness of the untyped statement: each chain
-start's `cv` its midstate, every other `cv` the previous compression's output, and each message bit the constant or
-the digest bit `HmRow.msgBit` names. -/
 theorem seg_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
@@ -389,7 +364,6 @@ theorem seg_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
   have hrw : RowWires st.c := F.parse.rowWires
   have hpin := pin_bit_ex L hz o
   have hzero := zero_bit_ex L F hupv (by omega) hz o
-  -- every column of the row is a self input bit of its slot
   have hat : ∀ k ≤ st.c.ports[p]!.chunks, ∀ off < 1536, ∀ src,
       (rowCopiesAny st.c st.pin ++
           wireCopiesOf st.c (HmRow.rowWires st.c.ports st.c.shaNet st.c.hmNet).toList).filter
@@ -438,10 +412,6 @@ theorem seg_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
     rw [segMsg_pos R hp] at hf ⊢
     exact hat k hk _ (by omega) _ hf
 
-/-- **A segmented row's `b ‖ c`**, in every block of a satisfying witness of the untyped statement: at a
-`sha512/row-seg/v1` row of `l` bits shaped `HmRow.segShape l` whose segments' bytes reach their last blocks
-(`SegFits`), the commit string of `RowSeg.enc l` of the row's `(l + 7) / 8` bytes at `Typed.msgCol`, under the salt its
-`hm96` slot reads. -/
 theorem seg_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p l : ℕ} (hg : g < st.c.g)

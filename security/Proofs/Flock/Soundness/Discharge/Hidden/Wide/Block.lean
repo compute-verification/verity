@@ -21,12 +21,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.Soundness.ExecSetup
 
-/-!
-# A template instance per block, from acceptance
-
-`HmRow.check` refuses an untyped circuit of `vus_per_block = 0` (`Flock.HmRow`, D9), the one check that does when a
-tail returns the outputs (`check_g_pos`), and `Stmt.setupH` parses its circuit through it (`setupH_g_pos`).
--/
+/-! `HmRow.check` refuses an untyped circuit of `vus_per_block = 0`, so a statement `Stmt.setupH` accepts
+has a template instance per block. -/
 
 @[expose] public section
 
@@ -36,7 +32,6 @@ namespace FlockSoundness.Discharge.Hidden
 
 open FlockSoundness.Discharge.Layout (ite_throw_cond)
 
-/-- **`check_g_pos`**: an untyped circuit `HmRow.check` accepts has a template instance per block. -/
 theorem check_g_pos {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
     (h : HmRow.check c tags ls = .ok ()) : 0 < c.g := by
   unfold HmRow.check at h
@@ -63,7 +58,6 @@ theorem check_g_pos {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed =
   simp only [beq_iff_eq] at hg
   exact Nat.pos_of_ne_zero hg
 
-/-- **`setupH_g_pos`**: a statement `Stmt.setupH` accepts with untyped tags has a template instance per block. -/
 theorem setupH_g_pos {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : 0 < st.c.g := by
