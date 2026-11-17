@@ -55,8 +55,9 @@ def memory(tmp_path: Path, monkeypatch) -> int:
     references.write_text("{}")
     monkeypatch.setattr(MEMORY.M, "REFERENCES", references)
     store = MEMORY.FakeStore(tmp_path / "store")
-    store.add(MEMORY.RUN, {"out/verifier.json": MEMORY.a_record(MEMORY.with_amounts(MEMORY.a_session()))})
-    return MEMORY.bench(store, "--from", MEMORY.RUN)
+    store.add(BENCH, {"out/verifier.json": MEMORY.a_record(MEMORY.with_amounts(MEMORY.a_session()))})
+    monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
+    return MEMORY.bench(store, "--from", BENCH)
 
 
 def inference_only(tmp_path: Path, monkeypatch, *argv: str) -> int:

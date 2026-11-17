@@ -31,7 +31,7 @@ thread bounds from `Throttles` and its forms, which `Proofs.InferenceOnly.DescVe
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 open Lean (Json)
 
@@ -75,4 +75,4 @@ theorem descThrottlesDarkSlots_of (h : Properties.DescAgrees) (hT : Properties.T
     Properties.DescThrottlesDarkSlots :=
   fun _ _ hev => onExpansions_of h hT hev
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs
