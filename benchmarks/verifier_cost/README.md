@@ -140,6 +140,20 @@ research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd
   bash benchmarks/verifier_cost/population.sh 20 50 100000 1000000 6963296
 ~~~
 
+`wires.sh N...` times a window circuit's wires (`Spot.Wires.check`) against their count: `wires/Main.lean`, built in a
+scratch Lake package against the checkout's verifier, makes N wires over eight templates, cross wires and self wires
+alternating, and times the check, its overlap test (`pairwiseDisjoint`, which compiled code runs as the sweep over the
+wires sorted by reader, port and start, `pairwiseDisjoint_eq_sweep`), its order (`orderCode` with `orderedWire`), the
+overlap test on the wires with one doubled, and the overlap test as a loop over every pair. It fails where the sweep and
+the loop disagree or the sweep passes the doubled wire. The loop runs up to `REF_MAX` wires (default 20000). The sweep
+must grow no faster than N log N; the order, which walks the order's ranges for each wire, is a time that quadruples where
+N doubles. `$OUT` gets wires.jsonl, one row per N and function (wires, milliseconds, peak RSS).
+
+~~~sh
+research run --as proofs --project verity --on auto --cwd clone -- \
+  bash benchmarks/verifier_cost/wires.sh 1000 5000 20000
+~~~
+
 `members_parse.sh N...` times the per-member form's parse of its members (`OneStageZk.membersOf`) against their count:
 `members_parse/Main.lean`, built in a scratch Lake package against the checkout's verifier, makes N members of one range
 of proof blocks each, no proof block in two, and times the parse on them, then on the same members with one more whose range starts
