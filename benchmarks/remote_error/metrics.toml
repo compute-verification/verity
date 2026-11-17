@@ -3,21 +3,21 @@
 
 # Each is written for each fleet's week, month and year; the world's month, the one each id names, is written last.
 [[metric]]
-id = "soundness/remote-crypto-error-log2"
-title = "Remote audit cryptography fooled"
+id = "soundness/remote-spot-crypto-error-log2"
+title = "SPOT cryptography fooled"
 owner = "soundness"
 unit = "log₂ of error"
-axis = "Log₂ of the chance the remote application's cryptography is fooled over the world's month, against the world's GPUs' SHA-512 calls: bound's formula proved, value evaluated in Python at stated parameters, PoUW's and the policy's terms open and left out."
+axis = "Log₂ of SPOT's cryptographic error in the remote application over the world's month, against the world's GPUs' SHA-512 calls: bound's formula proved in Lean under four open premises; value evaluated in Python; SPOT's part only, with PoUW (Pearl+) and the inference-only policy open and not in the total."
 better = "lower"
 command = "research run --on auto --cwd source -- uv run python benchmarks/remote_error/run.py"
 every = "30d"
 
 [[metric]]
-id = "soundness/remote-crypto-error-share-log2"
-title = "Remote cryptography error per window"
+id = "soundness/remote-spot-crypto-error-share-log2"
+title = "SPOT cryptography per window"
 owner = "soundness"
 unit = "log₂ of error a machine-window"
-axis = "Log₂ of the remote application's cryptographic soundness error over the world's month a machine-window audited: bound's formula proved, value evaluated in Python at stated parameters."
+axis = "Log₂ of SPOT's cryptographic error in the remote application over the world's month a machine-window audited: bound's formula proved in Lean under four open premises; value evaluated in Python; SPOT's part only."
 better = "lower"
 command = "research run --on auto --cwd source -- uv run python benchmarks/remote_error/run.py"
 every = "30d"

@@ -1,5 +1,5 @@
-# The remote application's cryptographic soundness error (benchmarks/remote_error/README.md): `run.py`, which evaluates
-# the remote guarantee's cryptographic terms at stated parameters. Not a package: a script, and the suite that tests it.
+# SPOT's cryptographic error in the remote application (benchmarks/remote_error/README.md): `run.py`, which evaluates the
+# remote guarantee's cryptographic terms of SPOT at its parameters. Not a package: a script, and the suite that tests it.
 [tool.pytest.ini_options]
 testpaths = ["."]
 pythonpath = ["../../../benchmarks/remote_error"]
@@ -9,7 +9,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # run.py reads the census's reference fleets, the monitoring periods (`verity.protocol.MONITORING_PERIODS`, which imports
 # the wire), the locks' records of the guarantee, and writes a research run's result through the harness kit (stdlib only
-# with verity_config); the tests read the Lean files the terms name
+# with verity_config); the parameters it reads from the Lean verifier, the proofs, the composer's sizes, the remote
+# application's configuration and the commitment card; the tests read the Lean files the terms name
 inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json",
           "security/lean-audit.json", "security/Properties/lean-audit.json",
           "verity/protocol.py", "verity/channel.py", "verity/__init__.py", "verity/errors.py", "tools/config/verity_config",
@@ -23,4 +24,8 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "security/Proofs/Flock/Claims/NumbersTable.lean",
           "security/Proofs/Flock/Soundness/Discharge/ZkSession/Numbers.lean",
           "security/Properties/Verity/Game.lean", "security/Definitions/Core/Interaction.lean",
-          "security/Definitions/Hash/Assumptions.lean", "security/Proofs/Properties/Verity/InferenceOnly.lean"]
+          "security/Definitions/Hash/Assumptions.lean", "security/Proofs/Properties/Verity/InferenceOnly.lean",
+          "verity/protocols/proofs/flock/verifier/Flock/Zk.lean",
+          "verity/protocols/proofs/flock/verifier/Flock/Schedule.lean",
+          "security/Proofs/Flock/Soundness/Discharge/ZkBind/Rate.lean", "verity/commitments/periods/interface.py",
+          "demos/remote.toml", "benchmarks/spot_figures/cards/commitment.all.json"]
