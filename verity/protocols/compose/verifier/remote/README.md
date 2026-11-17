@@ -52,8 +52,8 @@ names, `Session*` means a run of a subprotocol.
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
 | SPOT ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/spot_flock/verifier/lean`), one-stage, recursive or two-stage by its `form` | `verity/sampled-proofs/v1` |
-| PoUW ([README](../../../resource_accounting/compute/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwVerifier.PearlPlus.Protocol.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
-| PoUW, v0 | the period's credited work, execution phases all or nothing | `PouwVerifier.Period.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
+| PoUW ([README](../../../resource_accounting/compute/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
+| PoUW, v0 | the period's credited work, execution phases all or nothing | `PouwCheck.Period.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../../../workload_classification/training_detection/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `InferenceOnlyCheck.Protocol.protocol` (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied ties components`
@@ -87,7 +87,7 @@ rule and its difftest are the composition's ([README](../lean/README.md),
       inference-only policy's check.
    2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
    3. The developer proves each sampled proof block with Flock `--zk` behind the ZK server, and the Lean verifier
-      `verity-verify-proof` checks each proof. PoUW's check (`pouw-verifier`) reads each PoUW period's commitment, proofs and
+      `verity-verify-proof` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment, proofs and
       receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
       accounting adds the phase's share (Accounting, below).
@@ -225,7 +225,7 @@ The time credit adds the data sheet's rates.
 - SPOT: `Properties.Spot.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
   form (v2) ends, on its own run's verdicts.
 - PoUW's period credit: `Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`, `CheckedCreditMonitoringPeriod`'s conclusion
-  at `PouwVerifier.Credit.executionPhase`'s verdict over J10-R's tile stratum, the guarantee `PouwVerifier.Period.protocol` names
+  at `PouwCheck.Credit.executionPhase`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
   (`GUARANTEE`) and refuses every other form of an execution phase for, **proved** under the premises above.
 - The time credit: `ResourceAccounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
 - The proofs behind PoUW's credit, `ResourceAccounting.Guarantees.TS.SessionSoundAt`: **proved**, under `AcceptedLive` (no
@@ -527,8 +527,8 @@ run runs both halves on one served run, PoUW's as a development run:
   `verity/pouw/period/v1` case, so no run of record of the remote verdict has passed: its run is moved, at proof level none,
   and no remote guarantee exists for its verdicts to reach (the open gap, above).
 
-What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-verifier`, the
-suite `verity-pouw-verifier-difftest`; `verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/README.md`), and the composite's difftest
+What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the
+suite `verity-pouw-check-difftest`; `verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/README.md`), and the composite's difftest
 (`tests/verity/protocols/compose/verifier/lean`).
 
 ## Read next

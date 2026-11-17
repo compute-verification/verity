@@ -5,7 +5,7 @@ public import Definitions.Pouw.PearlC.Unscale
 public import Properties.Pouw.Commit
 
 /-!
-# Pearl+'s run verdict: what its Lean code (`PouwVerifier.PearlPlus.check`) does
+# Pearl+'s run verdict: what its Lean code (`PouwCheck.PearlPlus.check`) does
 
 The properties of the executable verdict (`verity/protocols/accounting/pouw/verifier/lean/pearlplus/`, the port of
 `benchmarks/pouw/pearl_c_vllm/verify_run.verify_passes`), stated against `check` and the functions it runs, for every input:

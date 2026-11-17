@@ -8,7 +8,7 @@ public import Properties.Pouw.ServedWork
 
 `ServedWork` is the remote form: the prover's whole inventory is one machine of 𝓜 whose programs exchange nothing
 outside it, and an accepted period's priced work on it is at least `p` a credited word, less the luck allowances.
-`ServedFreed` is the onsite form at the same check (the J10-R period, `PouwVerifier.Credit.window` on each window): the
+`ServedFreed` is the onsite form at the same check (the J10-R period, `PouwCheck.Credit.window` on each window): the
 inventory is the registered devices, a network attester counts the bits their window programs exchange with machines
 outside them, and an accepted period that the certifier also accepts frees at most `ε C` of the registered devices'
 capacity at the period's dual price (`Pouw.Dither.Period.FreedWithin`). It composes:

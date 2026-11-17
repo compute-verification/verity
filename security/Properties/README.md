@@ -37,7 +37,7 @@ from the registry, path by path: `research msg owners PATH`.
 | `Hash/` | Core's identity hash is Flock's SHA-512 |
 | `InferenceOnly/`, `InferenceOnly.lean` | What the inference-only check's verdicts mean (`InferenceOnlyCheck`) |
 | `Pous/`, `Pous.lean` | PoUS's setup, timed audit, period and wipe (`PousCheck`, `MemoryChallenger`) |
-| `Pouw/`, `Pouw.lean` | PoUW's execution phase, its check, commitments, credit and period (`PouwWindow`, `PouwVerifier`) |
+| `Pouw/`, `Pouw.lean` | PoUW's execution phase, its check, commitments, credit and period (`PouwWindow`, `PouwCheck`) |
 | `Spot/`, `Spot.lean` | SPOT's one-stage audit: its verdict, sample, plan check and wires (`Spot`) |
 | `Verity/` | Soundness at a composite's compiled verifier ([README](Verity/README.md)) |
 | `Annot.lean` | The description-level annotation check's property (`Flock.AnnotExpand`) |

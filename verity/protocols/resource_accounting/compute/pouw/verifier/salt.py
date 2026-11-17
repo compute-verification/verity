@@ -102,7 +102,7 @@ def _bound(stream: Any, prover: Any) -> bytes:
 def pouw_salt(reveal: bytes, window: int, stream: bytes, prover: bytes) -> bytes:
     """The salt PoUW applies in execution phase `window`, from the network attester's salt `reveal`, for the registration of `stream`
     and `prover`: SHA-512(`SALT_TAG` ‖ reveal ‖ u64be(execution phase) ‖ stream ‖ prover), every part fixed-width. This is the
-    only place that states it (Lean's `PouwVerifier.pouwSalt` mirrors it), and `test_pouw_salt_form` pins it.
+    only place that states it (Lean's `PouwCheck.pouwSalt` mirrors it), and `test_pouw_salt_form` pins it.
 
     `stream` and `prover` are recorded with the network attester before it samples the execution phase's salt (`pouw_record`), so two
     registrations of one execution phase are salted apart, and the prover can't grind its seeds over them once it holds the salt.
@@ -117,7 +117,7 @@ def pouw_salt(reveal: bytes, window: int, stream: bytes, prover: bytes) -> bytes
 def pouw_record(weights_root: bytes, stream: bytes, prover: bytes) -> bytes:
     """What PoUW records with the network attester for a PoUW execution phase before its salt is sampled, and
     `committed` reads back: SHA-512(`RECORD_TAG` ‖ weights_root ‖ stream ‖ prover), every part fixed-width (Lean's
-    `PouwVerifier.pouwRecord`). So the network attester's word orders the weights, the stream and the prover before the salt."""
+    `PouwCheck.pouwRecord`). So the network attester's word orders the weights, the stream and the prover before the salt."""
     if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
         raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
     return hashlib.sha512(RECORD_TAG + weights_root + _bound(stream, prover)).digest()
@@ -125,7 +125,7 @@ def pouw_record(weights_root: bytes, stream: bytes, prover: bytes) -> bytes:
 
 def window_open_root(weights_root: bytes, requests_root: bytes, session: str) -> bytes:
     """A live execution phase's open root: SHA-512(`WINDOW_OPEN_TAG` ‖ weights_root ‖ requests_root ‖ SHA-512(session)), every
-    part 64 bytes, the session's id hashed from its ASCII (Lean's `PouwVerifier.windowOpenRoot` mirrors it, and
+    part 64 bytes, the session's id hashed from its ASCII (Lean's `PouwCheck.windowOpenRoot` mirrors it, and
     `test_window_open_root_form` pins it).
 
     `weights_root` is `weights.weights_root`, the fold of each K's registered ``<PREFIX>b/<K>`` root (the B rows, int8
@@ -147,7 +147,7 @@ def window_open_root(weights_root: bytes, requests_root: bytes, session: str) ->
 
 def epoch_open_root(weights_root: bytes, k: int) -> bytes:
     """A Pearl-C salt execution phase's open root: SHA-512(`EPOCH_OPEN_TAG` ‖ weights_root ‖ u64be(k)), 97 bytes hashed with no
-    separator, every part at a fixed offset (Lean's `PouwVerifier.epochOpenRoot` mirrors it, and `test_epoch_open_root_form`
+    separator, every part at a fixed offset (Lean's `PouwCheck.epochOpenRoot` mirrors it, and `test_epoch_open_root_form`
     pins it).
 
     `weights_root` is the pass's `audit.weights_root`, W, and `k` its manifest's ``pass_index``: the execution phase's number among
@@ -164,7 +164,7 @@ def epoch_open_root(weights_root: bytes, k: int) -> bytes:
 
 def anchored_epoch_root(weights_root: bytes, anchors_root: bytes, k: int) -> bytes:
     """An H1 execution phase's salt execution phase's open root: SHA-512(`ANCHORED_EPOCH_TAG` ‖ weights_root ‖ anchors_root ‖ u64be(k)),
-    161 bytes hashed with no separator, every part at a fixed offset (Lean's `PouwVerifier.anchoredEpochRoot` mirrors it,
+    161 bytes hashed with no separator, every part at a fixed offset (Lean's `PouwCheck.anchoredEpochRoot` mirrors it,
     and `test_anchored_epoch_root_form` pins it).
 
     `weights_root` is the execution phase's W and `anchors_root` its X, the root of the activations it committed after serving

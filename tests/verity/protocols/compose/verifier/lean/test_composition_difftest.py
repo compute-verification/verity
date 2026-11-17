@@ -1000,7 +1000,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
 
 
 INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
-#: How Pearl+'s refusal of params that name none of its keys starts (`PouwVerifier.PearlPlus.Protocol`'s guard, which gives
+#: How Pearl+'s refusal of params that name none of its keys starts (`PouwCheck.PearlPlus.Protocol`'s guard, which gives
 #: no digest); the reference compares no reason
 PEARL_PLUS_REFUSED = "params: keys are not coins,"
 

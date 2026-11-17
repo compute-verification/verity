@@ -31,10 +31,10 @@ before its salt (`pouwRecord`, `salt.pouw_record`), and passes only a pass salte
 receipt.
 
 `liveSaltCheck` is `core_check.live_salt` (LIVESALT2, stated in `Properties.Pouw.LiveSalt`), the Pearl-C form of
-`saltCheck` (`PouwVerifier.Rounds`): the session's root is the pass's salt execution phase's root (`epochOpenRoot` of its weights'
+`saltCheck` (`PouwCheck.Rounds`): the session's root is the pass's salt execution phase's root (`epochOpenRoot` of its weights'
 root W and its `pass_index`), not an execution phase's open root, and the session counts only when it is reserved for the salt coin alone (`PouwWindow.SALT_FAMILIES`) and the ledger ends it
 complete, having released that coin. It sits here, not beside `saltCheck`, because `passEpoch` reads it and
-`PouwVerifier.Rounds` imports this module. `saltChallengePhase` is the session both read.
+`PouwCheck.Rounds` imports this module. `saltChallengePhase` is the session both read.
 
 Both read the coin versions of `coinVersion`: the current one, whose binding and weights' root are `tagged`'s whole
 SHA-512, and, only in a replay of a recorded pass, the e2e-service passes', which keep its first 32 bytes. A replay of a
