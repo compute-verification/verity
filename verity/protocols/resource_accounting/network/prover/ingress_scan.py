@@ -1,4 +1,4 @@
-"""The ingress side of the step-indexed scan: one proof block a certifier bucket t, `IngressScanBucket`, which reads
+"""The ingress side of the step-indexed scan: one proof block a network attester bucket t, `IngressScanBucket`, which reads
 bucket t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's
 egress view, its outputs beside an ok bit (the generator form); the scan's start, `IngressScanStart`, gives the first
 bucket its S_{−1}. Every switch is computed from the state and the rows; none is witness. Nothing here is in a
@@ -39,8 +39,8 @@ Each field is least significant bit first, the fields in `layout`'s order, then 
 proof block, committed under its hiding leaf and registered as `verity/certifier/scan-state/v1`'s row b − 1: slot j's
 `occ`, 1 where the slot's Program starts at b and 0 for an empty slot, its `fields`, the request's prompt length, and
 its prompt ids, prompt position p at `ids[position(p)]` for p below `fields`, each IDB bits, beside the request's
-`max_tokens`, `seed`, `temperature` and `top_p`. The ids are the scan's own reading of the certified cells, each the
-decimal field of the network attester's signed ingress row its request came in on, so the row is held to the certified
+`max_tokens`, `seed`, `temperature` and `top_p`. The ids are the scan's own reading of the attested cells, each the
+decimal field of the network attester's signed ingress row its request came in on, so the row is held to the attested
 bytes by the scan's gates and needs no other tie. A Program that reads its slot as i32s (occupancy, prompt length and NP
 ids; vLLM's `ScanSlots_v2`) reads `occ`, `fields` and the ids each at its bits in the state row (`slot_row`),
 zero-extended, copies with no gate, through a read of the whole state row (`state_bits`, 9,353 words at w63's class).
@@ -265,7 +265,7 @@ class Class:
                 "egress": (params.egress == "id", "= id, the egress record's form")}
         bad = [f"{k} {want} (it is {getattr(params, k)})" for k, (ok, want) in need.items() if not ok]
         if bad:
-            raise ValueError(f"{self} doesn't serve the network certifier at these parameters: set " + "; ".join(bad))
+            raise ValueError(f"{self} doesn't serve the network attester at these parameters: set " + "; ".join(bad))
 
 
 def slot_layout(cls: Class) -> tuple[tuple[str, int], ...]:
@@ -901,7 +901,7 @@ _STEP = ("each block continues the live slot on its ordinal or takes the lowest 
          "switch is computed from the state, the entries and the row")
 IngressScanBucket = _part(
     "IngressScanBucket", STATICS, _sig, _build,
-    "the scan's state S_t = `ingress_scan.step` of sin, bucket t's ingress row (lanes·r network certifier cells of B bytes, a "
+    "the scan's state S_t = `ingress_scan.step` of sin, bucket t's ingress row (lanes·r network attester cells of B bytes, a "
     "block of r a live connection in ordinal order) and the Programs' entries prog0 … prog<lanes − 1> (each "
     "`SlotEntry_v1`'s row of its slot), and its egress view at t (`egress.EgressBucket`'s state), with 1 in bit 0 of "
     "the first output iff every check of the step holds: " + _STEP, version=3)

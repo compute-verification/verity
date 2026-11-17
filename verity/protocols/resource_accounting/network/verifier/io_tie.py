@@ -96,7 +96,7 @@ CELL_USED = HEADER.size + ID_EVENT_BYTES
 #: the network attester's `END` kind (`network_attester.END`), beside `link_frame`'s `PAD` and `DATA`
 END = 0x20
 #: a response's last bytes, after its events: the network attester's `END` holds them; the workload declares the same
-#: (`certifier.prover.workload.TRAILER`), held equal by `tests/test_network_attester_id_request_writers.py`
+#: (`attester.prover.workload.TRAILER`), held equal by `tests/test_network_attester_id_request_writers.py`
 TRAILER = b"data: [DONE]" + EVENT_END
 #: `IoTieCell`'s output: ok, data, end, the stream and the id
 CELL_OUT = 3 + 32 + 32
@@ -116,7 +116,7 @@ SAMPLED = "sampled_token_ids"
 def id_event(token_id: int, size: int = ID_EVENT_BYTES) -> bytes:
     """The canonical event of one token id in `size` bytes: `ID_EVENT_HEAD`, the id right-aligned in 10 decimal
     characters, then `ID_EVENT_TAIL` with spaces (JSON whitespace) ahead of its blank line to fill `size`. The
-    workload's declaration (`certifier.prover.workload.id_event`) writes the same bytes, held equal by
+    workload's declaration (`attester.prover.workload.id_event`) writes the same bytes, held equal by
     `tests/test_network_attester_id_request_writers.py`."""
     if type(token_id) is not int or not 0 <= token_id < 1 << 32:
         raise ValueError(f"a token id is a u32, not {token_id!r}")
@@ -312,13 +312,13 @@ def window_map(shape: Shape, outputs: Sequence[Output], release: Sequence[int], 
     arrival = sorted(range(n_req), key=lambda i: order[i])
     for a, b in zip(arrival, arrival[1:]):
         if _count("an admission bucket", admitted[b], 0) < _count("an admission bucket", admitted[a], 0):
-            raise ValueError(f"the network certifier admits in arrival order: request {b} (stream {order[b] + 1}) is admitted at "
+            raise ValueError(f"the network attester admits in arrival order: request {b} (stream {order[b] + 1}) is admitted at "
                              f"bucket {admitted[b]}, before request {a} (stream {order[a] + 1}) at {admitted[a]}")
     outs: list[dict[int, Output]] = [{} for _ in range(n_req)]
     for o, b in zip(outputs, release):
         want = admitted[o.request] + D + o.index // r
         if b != want:
-            raise ValueError(f"request {o.request}'s output {o.index} is released at bucket {b}, not the network certifier's {want}")
+            raise ValueError(f"request {o.request}'s output {o.index} is released at bucket {b}, not the network attester's {want}")
         if o.index in outs[o.request] or not 0 <= o.row < sh.P:
             raise ValueError(f"an output is its request's once, at a batch row below P = {sh.P}, not {o}")
         outs[o.request][o.index] = o
@@ -829,7 +829,7 @@ def _body_bucket(B, S, row, mp, port, switches_):
 
 IoTieBucket = CompositeDefinition(
     "IoTieBucket", 1, ("B", "R", "P", "S"), _sig_bucket, _body_bucket, conformance="exact-model-tested",
-    doc="1 iff every cell of the bucket row (the network certifier's registered row, read by the proof system: bit 8k + i is bit i "
+    doc="1 iff every cell of the bucket row (the network attester's registered row, read by the proof system: bit 8k + i is bit i "
         "of byte k) is its map record's, with a DATA cell's id the entry the record names of the S port rows (the "
         "Commit's registered rows at the bucket's steps, read by the proof system) (`IoTieContent`): the I/O tie of "
         "one egress bucket row, every cell opened; an execution phase's tie is its T rows'")

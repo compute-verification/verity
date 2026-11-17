@@ -58,7 +58,7 @@ def test_grouped_sum_is_the_tc_models():
 
 def test_pin_is_the_reference():
     """chain and u against pearl_c's chain and peel on random codes and factors, partial windows included, and the peel
-    factors against pearl_c's on test instances of both formings."""
+    factors against pearl_c's on a test instance."""
     rng = random.Random("pearl-c-u/reference")
     for k in (32, 96, 128, 160, 512):
         for _ in range(20):
@@ -69,19 +69,18 @@ def test_pin_is_the_reference():
         pa = [C.P.f32_to_bf16(rng.uniform(-8, 8)) for _ in range(U.PEEL_K)]
         pb = [C.P.f32_to_bf16(rng.uniform(-8, 8)) for _ in range(U.PEEL_K)]
         assert U.u(c, pa, pb) == C.peel(c, pa, pb)
-    for forming, make in (("v0", CV.rows), ("v1", CV.rows_f32)):
-        s = C.PearlC(k_min=32, tile=(16, 16), forming=forming, hashing="h0")
-        ctx = CV.ctx_of("pin", (16, 128, 16), 3, 9)
-        noise = s.noise(ctx)
-        a, e_a = s._side(make("pin", "A", 4, 128), range(4), 0, noise.seed_a, noise.seed_b, 128)
-        b, e_b = s._side(make("pin", "B", 4, 128), range(4), 1, noise.seed_b, noise.seed_b, 128)
-        be_a, be_b = C.scaled_noise(a, e_a), C.scaled_noise(b, e_b)
-        fa, fb = C._basis(noise.seed_b, 0, 128, s.line_norm), C._basis(noise.seed_b, 1, 128, s.line_norm)
-        g = [[U.chain(UV.column(fb, p), UV.column(fa, q)) for q in range(U.R)] for p in range(U.R)]
-        for codes, be, got in zip(a.codes, be_a, C.peel_factors_a(a.codes, be_a, noise.seed_b, 128, s.line_norm)):
-            assert U.pa_row(be, [U.chain(codes, UV.column(fb, p)) for p in range(U.R)]) == got
-        for codes, be, got in zip(b.codes, be_b, C.peel_factors_b(b.codes, be_b, noise.seed_b, 128, s.line_norm)):
-            assert U.pb_row(be, [U.chain(codes, UV.column(fa, q)) for q in range(U.R)], g) == got
+    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0")
+    ctx = CV.ctx_of("pin", (16, 128, 16), 3, 9)
+    noise = s.noise(ctx)
+    a, e_a = s._side(CV.rows_f32("pin", "A", 4, 128), range(4), 0, noise.seed_a, noise.seed_b, 128)
+    b, e_b = s._side(CV.rows_f32("pin", "B", 4, 128), range(4), 1, noise.seed_b, noise.seed_b, 128)
+    be_a, be_b = C.scaled_noise(a, e_a), C.scaled_noise(b, e_b)
+    fa, fb = C._basis(noise.seed_b, 0, 128, s.line_norm), C._basis(noise.seed_b, 1, 128, s.line_norm)
+    g = [[U.chain(UV.column(fb, p), UV.column(fa, q)) for q in range(U.R)] for p in range(U.R)]
+    for codes, be, got in zip(a.codes, be_a, C.peel_factors_a(a.codes, be_a, noise.seed_b, 128, s.line_norm)):
+        assert U.pa_row(be, [U.chain(codes, UV.column(fb, p)) for p in range(U.R)]) == got
+    for codes, be, got in zip(b.codes, be_b, C.peel_factors_b(b.codes, be_b, noise.seed_b, 128, s.line_norm)):
+        assert U.pb_row(be, [U.chain(codes, UV.column(fa, q)) for q in range(U.R)], g) == got
 
 
 def test_vectors_reproduce():

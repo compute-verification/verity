@@ -40,7 +40,7 @@ import json
 import signal
 import sys
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -120,7 +120,7 @@ async def _body(reader: asyncio.StreamReader, chunked: bool) -> AsyncIterator[by
             yield data
 
 
-async def token_ids(reader: asyncio.StreamReader) -> AsyncIterator[list[int]]:
+async def token_ids(reader: asyncio.StreamReader) -> AsyncGenerator[list[int], None]:
     """Each chunk's token ids (`chunk_ids`) of a streamed ``/v1/completions`` response read from `reader`, through
     ``data: [DONE]``; `Broken` where the response isn't a 200 whose events go on to ``[DONE]``."""
     try:
@@ -308,6 +308,7 @@ def main(opts: Options) -> int:
         out = stack.enter_context(Path(opts.log).open("a", buffering=1, encoding="utf-8")) if opts.log else None
 
         def log(rec: dict[str, Any]) -> None:
+            assert out is not None
             out.write(json.dumps(rec, separators=(",", ":")) + "\n")
         try:
             front = Front(upstream, opts.id_payload, log=log if out is not None else None)

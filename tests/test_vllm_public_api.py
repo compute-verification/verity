@@ -66,7 +66,7 @@ PUBLIC = {
     "verity_vllm.engine.served_seed": "I1: the seed a served request is sampled under (its own, the public default for a greedy "
                                       "one, or derived from its window's seed coin and its id) and the windows' seed coins",
     "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
-                                    "order: its reference, kernels and install, which benchmarks/kernels/moe_align checks and times",
+                                    "order: its reference, kernels and install",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
@@ -81,7 +81,7 @@ PUBLIC = {
     "verity_vllm.engine.env": "I1: the engine's environment, written before torch and vLLM are imported: vLLM's pinned and served "
                               "variables (ENGINE, pin, served_defaults, apply_engine), a target's (apply_target), a fresh "
                               "compile and its directories (apply_compile_fresh, compile_dirs, own_compile_dirs, own_inductor_dir, "
-                              "INDUCTOR_DIR_MARK), which the harness's engine and benchmarks/replay_determinism write",
+                              "INDUCTOR_DIR_MARK), which the harness's engine writes",
     "verity_vllm.engine.arrivals": "I1: an engine driven over a step-indexed arrival schedule (run_requests_arrivals), its "
                                    "forwards counted (ForwardCounter) and the steps each request arrived at "
                                    "(realized_arrive_steps), which the harness's engine serves under",
@@ -194,12 +194,12 @@ PUBLIC = {
                                               "the compiler reads and benchmarks/network_e2e measures",
     "verity_vllm.pipeline.advice_code.schedule": "I1: the scheduler replay's engine config, certified tick, steps and request "
                                                  "states",
-    "verity_vllm.pipeline.advice_code.pool": "I1: the replay of vLLM's KV block pool, which the certifier's cache vectors are "
+    "verity_vllm.pipeline.advice_code.pool": "I1: the replay of vLLM's KV block pool, which the network attester's cache vectors are "
                                              "held to",
-    "verity_vllm.pipeline.advice_code.replay": "I1: the replay of vLLM's scheduler, which the certifier's replay vectors and "
+    "verity_vllm.pipeline.advice_code.replay": "I1: the replay of vLLM's scheduler, which the network attester's replay vectors and "
                                                "the traces' admission are held to",
     "verity_vllm.pipeline.advice_code.derived": "I1: advice v1's derived rules (the walk, the prefixes, the tie), which the "
-                                                "certifier's derived vectors are held to",
+                                                "network attester's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
     "verity_vllm.compiler.replay_step": "I1: one scheduler step of the compiler's replay (its statics, inputs, state, "
                                         "outputs and reference), which benchmarks/network_e2e's replay vectors are held to",
@@ -297,10 +297,10 @@ PUBLIC = {
                                               "attach), which benchmarks/pouw's Pearl-C arms attach",
     "verity_vllm.protocols.poub.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
                                                      "weights it binds (model_weights, WeightRegion, Every), which "
-                                                     "benchmarks/remote_session and benchmarks/vllm_encoded serve under",
+                                                     "benchmarks/poub_session and benchmarks/vllm_encoded serve under",
     "verity_vllm.protocols.poub.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
-                                                     "pipeline.remote_session reaches through protocols.driver and "
-                                                     "benchmarks/remote_session serves under",
+                                                     "pipeline.poub_session reaches through protocols.driver and "
+                                                     "benchmarks/poub_session serves under",
     "verity_vllm.query.manifest.format": "I7: the required-value manifest's format, the vocabulary every manifest producer and "
                                          "consumer shares (load_program), which benchmarks/prove_path reads",
 }
@@ -334,7 +334,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.numerics.glm53_rows",
     "verity_vllm.definitions.numerics.int8_rows",
     "verity_vllm.definitions.numerics.kernel_registry",
-    "verity_vllm.definitions.numerics.marlin_moe_rows",
     "verity_vllm.definitions.numerics.rms_relation",
     "verity_vllm.definitions.numerics.rows",
     "verity_vllm.definitions.numerics.serve3_reference",

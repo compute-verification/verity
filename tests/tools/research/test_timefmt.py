@@ -159,7 +159,7 @@ def test_a_stamp_at_or_behind_the_clock_no_stamp_and_a_doubt_all_pass(now, text)
     assert stamp_ahead(text, now) is None
 
 
-SUN_1257 = dt.datetime(2026, 11, 15, 20, 57, 30, tzinfo=UTC)                           # Sun 15 Nov, 12:57 PM PST
+SUN_1257 = dt.datetime(2026, 11, 15, 20, 57, 30, tzinfo=UTC)                           # Sunday, 12:57 PM PST
 HEADINGS = [f"{b}{h}{b}{s}" for h in ("FOR THE COORDINATOR", "FOR THE LEAN LANE'S COORDINATOR")
             for b in ("", "**") for s in (" \u2014", " \u2013", " -", ":")] + ["**FOR THE COORDINATOR:**"]
 

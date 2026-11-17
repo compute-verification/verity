@@ -4,7 +4,7 @@ Nothing here is in a Spec.
 
 **One proof block a link, execution phase and slot stride** (`LengthsRow`). It reads two rows and no cell:
 ``requests``, the compute side's committed row of the stride's K request slots, and ``fails``, row j of the network
-attester's fails table, a registered read (a certified input). Its outputs are ``o0``, a u16 whose bit 0 is 1
+attester's fails table, a registered read (an attested input). Its outputs are ``o0``, a u16 whose bit 0 is 1
 (`ACCEPT`) exactly when the fails row is of its form against the request row and whose other 15 bits are 0, ``o1``, a
 u16, the row's failures F, and ``o2``, the lengths row. The row is gates of the circuit, never an input: the proof
 block's statement commits o2 under the salt of the network attester's lengths row j and registers it as a read of that
@@ -409,7 +409,7 @@ def _build(C, S, requests, fails):
 
 LengthsRow = part(
     "LengthsRow", STATICS, _sig, _build,
-    "one row of the network certifier's lengths table computed from the request row of its K slots (valid K×1, id "
+    "one row of the network attester's lengths table computed from the request row of its K slots (valid K×1, id "
     "K×IW, P K×LW, O K×LW, each element LSB first, zero-padded to whole u16s) and the fails row (a slot u16 class, u16 "
     "at): the third output's slot k is u32 id + 1, u32 the bytes of the canonical id request of P prompt ids in "
     "B-byte cells and u32 at where the class has bit 0 set, else O, all 0 where valid is 0; the second output counts "
@@ -482,7 +482,7 @@ def blocks(sh: Shape, opened: Rows, requests: Sequence[Sequence[Request]]) -> li
         for k, (got, want) in enumerate(zip(slot.iter_unpack(row), slot.iter_unpack(signed))):
             for name, a, b in zip(("N + 1", "bytes", "n"), got, want):
                 if a != b:
-                    raise Refused(f"row {j}: slot {k}: the request row gives {name} = {a} and the network certifier "
+                    raise Refused(f"row {j}: slot {k}: the request row gives {name} = {a} and the network attester "
                                   f"signed {b}")
         out.append(RowBlock(j, tuple(_slots(sh, mine)), failed, failures, row))
     return out

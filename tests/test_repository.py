@@ -67,7 +67,7 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
 #: artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
-    "benchmarks/census/workloads.json": 384 * 1024,
+    "calibration/census/workloads.json": 384 * 1024,
     "tests/adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
     "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
@@ -78,7 +78,7 @@ ALLOWLIST = {
     "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
     # GLM-5.3's block card and its sparse-attention partition card: each key block's values units and key rows' writers
     # are a type a column block
-    "benchmarks/sampling_plan/glm53_blocks.json": 448 * 1024,
+    "calibration/sampling_plan/glm53_blocks.json": 448 * 1024,
     "benchmarks/spot_figures/cards/partition.glm-5.3.64864861b277.json": 320 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
@@ -190,9 +190,9 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
         assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
     assert markdown_over_cap(soundness + "README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
-    certifier = "verity/protocols/resource_accounting/network/verifier/"
-    assert markdown_over_cap(certifier + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {certifier}protocol/")
-    assert markdown_over_cap(certifier + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{certifier}protocol/")
+    attester = "verity/protocols/resource_accounting/network/verifier/"
+    assert markdown_over_cap(attester + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {attester}protocol/")
+    assert markdown_over_cap(attester + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{attester}protocol/")
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP) is None
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP + 5).startswith(
         ".agents/skills/x/SKILL.md: 16 KB > 16 KB, 5 bytes over; compact it")
@@ -413,3 +413,11 @@ def test_fetched_fixtures_are_gitignored() -> None:
                          capture_output=True, text=True).stdout.split("\n")
     unignored = sorted(set(fetched) - {x for x in out if x})
     assert not unignored, "registry entries git does not track must be gitignored (add them to .gitignore):\n" + "\n".join(unignored)
+
+
+def test_the_tree_tracks_no_symbolic_link() -> None:
+    """A tracked link where a build writes (a package's `.lake`, a path dependency) would let the tree choose what the
+    build writes. `sandbox.sh` refuses such a link, which is the protection (a change could edit this test); this keeps
+    the tree from needing one, so the refusal never stops an honest build."""
+    out = subprocess.run(["git", "ls-files", "-s", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
+    assert not (links := [e.split(b"\t", 1)[1].decode() for e in out.split(b"\0") if e.startswith(b"120000 ")]), links

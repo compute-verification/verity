@@ -1,4 +1,4 @@
-"""A file of blobs, each behind its length: what a certifier's records and their salts are kept in on disk."""
+"""A file of blobs, each behind its length: what a network attester's records and their salts are kept in on disk."""
 
 from __future__ import annotations
 

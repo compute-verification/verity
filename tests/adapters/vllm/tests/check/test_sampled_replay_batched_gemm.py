@@ -5,8 +5,6 @@ stores as "P" progressions (B*N runs of K leaves at stride N); the replay gather
 them, and names a gather that spans fields."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import re
 
 import numpy as np
@@ -15,20 +13,20 @@ import torch
 import torch.nn as nn
 from verity.circuits.defs import bind, conformance_label
 from verity.circuits.evaluation import evaluate
+
+from tests.program.test_dsa_derive import STANDIN, _bf16, served  # noqa: F401  (the H200 Build fixture)
+from verity_vllm.check.replay import evaluate as EV
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import opening as OP
 from verity_vllm.definitions.numerics import batched_gemm_rows, rows
 from verity_vllm.definitions.numerics.batched_gemm_rows import batched_gemm
 from verity_vllm.definitions.numerics.kernel_registry import Declined
 from verity_vllm.definitions.registry import b1, hopper
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.definitions.registry import cublas_bf16 as CB
-
-from tests.program.test_dsa_derive import STANDIN, _bf16, served  # noqa: F401  (the H200 Build fixture)
-from verity_vllm.check.replay import evaluate as EV
-from verity_vllm.check.replay import index as IX
-from verity_vllm.check.replay import opening as OP
 from verity_vllm.program import compact as CP
-from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.query.manifest import format as RM
 
 HOP = '{"fn":"HopperBF16WgmmaDot16_v1"}'

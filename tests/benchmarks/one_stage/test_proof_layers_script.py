@@ -55,6 +55,12 @@ def test_it_refuses_under_96_gb_of_host_memory_available():
     assert "under 96 GB of\n# host memory available" in TEXT
 
 
+def test_it_refuses_under_96_gb_free_under_work():
+    assert re.findall(r'\[ "\$\{free_gb:-0\}" -ge (\d+) \]', TEXT) == ["96"]
+    assert "not 96: WORK peaks at about 21 GB, and 75 GB must stay free beside it" in TEXT
+    assert "under 96 GB free under WORK (75 GB left beside WORK's peak of about 21 GB)" in TEXT
+
+
 def test_every_refusal_comes_before_the_first_step():
     first_step = TEXT.index("trap finish EXIT")
     refusals = [m.start() for m in re.finditer(r"\brefuse \"", TEXT)]

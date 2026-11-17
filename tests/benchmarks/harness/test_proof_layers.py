@@ -78,8 +78,34 @@ def test_an_accepted_recursive_run_gives_its_path_without_leans_step_and_its_rel
     assert result.proof_bytes == 18000000 and "10 releases" in result.bytes_what
     assert result.workload == ("K = 4096, N = 2: N x GemmCoordinate_v2{K,DOT=HopperBF16WgmmaDot16_v1} under "
                             "Q_template_instance (rec_reprice.py)")
-    assert result.ran_with == "ran with: not stated"
+    assert result.ran_with == ("ran with: coins in-process; parameters not stated (inputs.inner: on the challenger's coin "
+                               "tree (FC_COINS=tree); params.tree_from test-os)")
     assert result.detail == "inputs.inner: on the challenger's coin tree (FC_COINS=tree); params.tree_from test-os"
+
+
+def test_a_stored_recursive_run_states_its_coins_and_proof_but_not_parameters_its_record_lacks(tmp_path):
+    root = recursion(tmp_path)
+    path = root / "out" / "recursion_e2e.json"
+    doc = json.loads(path.read_text())
+    doc["params"]["modes"] = "zk_server"
+    doc["inputs"]["outer"] = "each V* statement with --zk on loopback, every proof block sampled, one at a time, in each of MODES"
+    path.write_text(json.dumps(doc))
+    result = PL.read("recursion", str(root))
+    assert result.proof == "zk"
+    assert result.ran_with == ("ran with: coins in-process; parameters not stated (inputs.inner: on the challenger's coin "
+                               "tree (FC_COINS=tree); params.tree_from test-os; inputs.outer: every proof block sampled)")
+
+
+@pytest.mark.parametrize(("tree_from", "coins"), [("local", "local challenger"), ("10.0.0.2:7000", "not stated")])
+def test_a_recursive_runs_record_of_development_parameters_is_stated_with_its_coins(tmp_path, tree_from, coins):
+    root = recursion(tmp_path)
+    path = root / "out" / "recursion_e2e.json"
+    doc = json.loads(path.read_text())
+    doc["params"] |= {"tree_from": tree_from, "parameters": "development"}
+    path.write_text(json.dumps(doc))
+    assert PL.read("recursion", str(root)).ran_with == (
+        f"ran with: coins {coins}; parameters development (inputs.inner: on the challenger's coin tree (FC_COINS=tree); "
+        f"params.tree_from {tree_from}; params.parameters development)")
 
 
 @pytest.mark.parametrize("composed", [False, None])
@@ -148,7 +174,7 @@ def table_lines(text: str) -> dict[str, str]:
 
 def test_a_plain_sampling_result_writes_null_with_why_under_every_id(tmp_path):
     results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path, plain=True)))]
-    own = [m for m in PL.measured(results, IDS) if m["member"] is None]
+    own = [m for m in PL.measured(results, IDS) if m["member"] == "sampling"]
     assert [m["name"] for m in own] == list(IDS)
     assert all(m["value"] is None and "says its proof is plain" in m["why"] and m["extra"]["proof"] == "plain" for m in own)
 
@@ -217,19 +243,21 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert json.loads((tmp_path / "report" / "proof-layers.json").read_text()) == doc
     written = json.loads((tmp_path / "report" / "result.json").read_text())["measurements"]
     assert [(m["name"], m.get("member")) for m in written] == [
-        (name, member) for name in IDS for member in ("flock", "zero knowledge", None)]
+        (name, member) for name in IDS for member in ("flock", "flock-zero-knowledge", "sampling")]
     values = {(m["name"], m.get("member")): m for m in written}
-    assert [values[name, "zero knowledge"]["value"] for name in IDS] == [3.0, 1.0, 850000.0]
-    assert [values[name, None]["value"] for name in IDS] == [5.0, 2.0, 125.0]
+    assert [values[name, "flock-zero-knowledge"]["value"] for name in IDS] == [3.0, 1.0, 850000.0]
+    assert [values[name, "sampling"]["value"] for name in IDS] == [5.0, 2.0, 125.0]
     assert all(values[name, "flock"]["value"] is None and values[name, "flock"]["why"].startswith("not run") for name in IDS)
     assert {m["unit"] for m in written} == {"s a proof block", "bytes a proof block"} and all(m["mark"] == "measured"
                                                                                            for m in written)
-    assert doc["results"][3]["ran_with"] == "ran with: not stated" and doc["results"][3]["prover_s"] == 1202.0
+    assert doc["results"][3]["ran_with"].startswith("ran with: coins in-process; parameters not stated (")
+    assert doc["results"][3]["prover_s"] == 1202.0
     head = text.splitlines()
     assert head[1:6] == [PL.NOT_AN_AUDIT, "- Flock: ran with: not stated",
                          ("- Flock with zero knowledge: ran with: coins local challenger; parameters not stated "
                           "(PROVE-PATH coins challenger; summary.json coins.challenger local)"),
-                         "- with sampling: ran with: not stated", "- with recursion: ran with: not stated"]
+                         "- with sampling: ran with: not stated",
+                         "- with recursion: " + doc["results"][3]["ran_with"]]
     assert doc["audit"] is False and "audit" not in text.replace(PL.NOT_AN_AUDIT, "")
     line = table_lines(text)
     assert "| 1202 s a run, wall (one recursive run's path" in line["with recursion"]
@@ -250,7 +278,7 @@ def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_
     results = [PL.read("flock", None), refused, chunk, PL.read("recursion", str(recursion(tmp_path / "r")))]
     written = PL.measured(results, IDS)
     assert len(written) == 9 and all(m["value"] is None and m["why"] for m in written)
-    assert {m["member"] for m in written} == {"flock", "zero knowledge", None}
+    assert {m["member"] for m in written} == {"flock", "flock-zero-knowledge", "sampling"}
     with pytest.raises(ValueError, match="not one of"):
         PL.measured(results, {"benchmarks/x": "seconds"})
 

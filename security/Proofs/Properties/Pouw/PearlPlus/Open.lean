@@ -22,7 +22,7 @@ Flock's binding proof (`FlockSoundness.Binding.RowSeg`), which is on Mathlib.
 
 namespace Properties.Pouw.PearlPlus
 
-open PouwCommit PouwCheck.PearlPlus
+open PouwCommit PouwVerifier.PearlPlus
 
 theorem break_mono {L L' M M' : List ByteArray} (hL : ∀ x ∈ L, x ∈ M) (hL' : ∀ x ∈ L', x ∈ M') :
     Commit.Break L L' → Commit.Break M M'

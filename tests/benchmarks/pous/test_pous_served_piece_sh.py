@@ -70,6 +70,8 @@ def node(tmp_path) -> dict[str, str]:
     bin_.mkdir()
     _exe(bin_ / "lake", LAKE)
     _exe(bin_ / "gpu-lease", LEASE)
+    _exe(bin_ / "systemd-run", "#!/bin/sh\nexit 1\n")
+    _exe(bin_ / "prlimit", f'#!/bin/sh\necho "$1" >> {tmp_path / "limit"}; shift 2; exec "$@"\n')
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(("GPU_LEASE_", "POUS_", "BW_", "CUDA_VISIBLE", "FAKE_"))
            and k not in ("LEASE_MIN", "MEM_GB", "ANSWERS_MEM_GB")}
@@ -133,6 +135,20 @@ def test_the_two_leans_are_built_in_a_scratch_copy_before_the_card_is_asked_for(
     assert _argv(node, "--answers")[:-1] == argv[:-1]
     assert _stamps(d) == ["start", "loaded libp2v1.so", f"built {RUN_EXE}", f"built {BW_EXE}", "asked for the card",
                           "leased the card", "the sessions' part exit 0", "the answers' part exit 0"]
+
+
+def test_where_no_systemd_user_scope_is_made_the_answers_run_behind_prlimit_or_not_at_all(node, tmp_path):
+    d, env = tmp_path / "pieces" / "pous", node | {"POUS_EXE": "/built/" + RUN_EXE, "BW_CASE_EXE": "/built/" + BW_EXE}
+    assert _piece(env, d).returncode == 0
+    assert (tmp_path / "limit").read_text().splitlines() == [f"--as={1 << 30}", f"--as={128 << 30}"]
+    assert [line[1] for line in _log(node) if line[0] == "piece"] == ["--sessions", "--answers"]
+    _exe(Path(node["PATH"].split(":")[0]) / "prlimit", "#!/bin/sh\nexit 1\n")
+    Path(node["FAKE_LOG"]).unlink()
+    r = _piece(env, d)
+    assert r.returncode == 2 and r.stdout.splitlines()[-1] == (
+        "POUS: no answer: this host makes no systemd user scope and runs no prlimit: the answers run only under a "
+        "memory limit of their own"), r.stdout + r.stderr
+    assert [line[1] for line in _log(node) if line[0] == "piece"] == ["--sessions"]
 
 
 @pytest.mark.parametrize("exits, code", [({"FAKE_SESSIONS_EXIT": "1"}, 1), ({"FAKE_SESSIONS_EXIT": "2"}, 2),

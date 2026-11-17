@@ -26,18 +26,18 @@ import numpy as np
 import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.periods import wiring as WI
 from verity.circuits.ops.boolean import versions as BB
+from verity.commitments.periods import wiring as WI
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity_flock.class_statement import UnitStager
+
+from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.definitions.registry import boolean_topp_stages as BT
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import sampling_rows as SR
 from verity_vllm.definitions.registry import topp_keep_builder as K
 from verity_vllm.definitions.registry import topp_stages as T
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity_flock.class_statement import UnitStager
-
-from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import stage_rows as ST
