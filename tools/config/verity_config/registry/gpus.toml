@@ -18,6 +18,17 @@ nebius_preset = ""
 runpod_type_id = "NVIDIA H200"
 count_per_node = 8
 
+[[gpu]]
+id = "h100"
+census_id = "h100-sxm5-80gb/e4m3"
+# The SXM5 card's whole name: a card matches when this is part of its nvidia-smi name, and the NVL and PCIe cards'
+# names also hold "NVIDIA H100".
+nvidia_smi_name = "NVIDIA H100 80GB HBM3"
+nebius_platform = "gpu-h100-sxm"
+nebius_preset = ""
+runpod_type_id = ""
+count_per_node = 8
+
 # vy-dc-b200's GPUs
 [[gpu]]
 id = "b200"

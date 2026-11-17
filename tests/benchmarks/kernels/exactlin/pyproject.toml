@@ -6,4 +6,8 @@ testpaths = ["."]
 
 [tool.verity.tests]
 # test_dither_a_helpers reads int8_fused's source and dither_a.py's, holding the names the second reads to the first.
-inputs = ["adapters/vllm/verity_vllm/engine/int8_fused.py", "benchmarks/hash/dither/dither_a.py", "benchmarks/kernels/exactlin"]
+# test_kbench_record writes kbench.py's result through the harness kit's writer.
+inputs = ["adapters/vllm/verity_vllm/engine/int8_fused.py", "benchmarks/hash/dither/dither_a.py", "benchmarks/kernels/exactlin",
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+          "tools/config/verity_config", "verity/__init__.py", "verity/errors.py"]

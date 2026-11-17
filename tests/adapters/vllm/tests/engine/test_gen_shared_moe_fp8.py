@@ -13,8 +13,6 @@ attests the cuteDSL gate tier only when a gate is eligible for it.
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import dataclasses
 import importlib
 import math
@@ -22,10 +20,10 @@ import math
 import pytest
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.definitions.registry import moe as MOE
 from verity_vllm.definitions.registry.prims import BF16, F32
-
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,

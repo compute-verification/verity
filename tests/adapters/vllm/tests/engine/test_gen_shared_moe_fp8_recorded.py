@@ -15,8 +15,6 @@ quant and `moe_sum`, every event of the scope claimed, and the add after it is `
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import dataclasses
 import functools
 import gzip
@@ -27,10 +25,10 @@ from pathlib import Path
 
 import pytest
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import moe as MOE
 
 from tests.engine.moe_scope_cut import cut, write
 from tests.engine.test_gen_shared_moe_fp8 import _fits
+from verity_vllm.definitions.registry import moe as MOE
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.observe.events import Note, Root, RunHeader
 from verity_vllm.observe.fold.patterns import triton_name

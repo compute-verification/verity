@@ -1,7 +1,7 @@
 """P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v3-gpu | p2-v3-mc-gpu`) on CPU: the
 reference (`verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/reference.py`) against the spec's pinned vectors, and every step of the arm with the reference standing in for
 the GPU library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's memory
-challenger process (`verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py`'s `protocol.TimedAudit`, or `memory_challenger/live.py`)
+attester process (`verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py`'s `protocol.TimedAudit`, or `memory_attester/live.py`)
 on its logical clock, so no outcome depends on a clock."""
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[3]
 BENCH = ROOT / "benchmarks" / "pous"
 WS = {"id": "toy/linears", "bytes": 2560, "tensors": [["q", 16, 32], ["k", 8, 32], ["down", 32, 16]]}
 SEED = "5eed" * 8
-"""`--seed` for the `V3` arm's `verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py` and the `MC` arm's `memory_challenger/live.py`:
+"""`--seed` for the `V3` arm's `verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py` and the `MC` arm's `memory_attester/live.py`:
 an audit's challenges, and so its controls' verdicts, are fixed."""
 MC_CHANGED = [9, 8]
 """Of the 105 blocks each of the `MC` arm's two sessions samples under `SEED` from the small case's 192, those whose index is a
@@ -366,7 +366,7 @@ def test_the_v3_arm_gates_on_the_specs_vectors():
     assert got["passed"] and "p2-v4/w16448/0" in got["checks"], got
 
 
-def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_challenger(tmp_path):
+def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_attester(tmp_path):
     """Under `V3` the device's `C` is v3's encoding of `W` (v3's own codec decodes it back), the leaves are `vk`'s, and every
     audit and control is `protocol.TimedAudit`'s.  At the test's 128-bit width P2 has no certificate, so the audit runs as a
     research audit and says so."""
@@ -383,8 +383,8 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_ch
     params = schemes.P2Params(128, 173, 64, 3)
     setup = body["setup"]
     assert setup["scheme"] == "p2-128/v4" and setup["manifest"] == params.manifest() and len(bytes.fromhex(setup["salt"])) == 24
-    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-gpu", "memory_challenger": "verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py",
-                                      "memory_challenger_args": []}
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-gpu", "memory_attester": "verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py",
+                                      "memory_attester_args": []}
     w = b"".join(_bench()._w_segment(WS["id"], s, params.segment_bytes, WS["bytes"]) for s in range(3))
     commitment = protocol.commit(schemes.P2(params), w)
     salt = protocol.sample_salt(harness.SETUP_SOURCE, commitment)
@@ -406,7 +406,7 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_ch
 def test_the_v3_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fails(tmp_path):
     body = _bench().P2V3Gpu().run(_args(tmp_path, k=105, seed=SEED), WS, tmp_path, backend=_backend(), params=_small())
     gates, honest = body["gates"], body["metrics"]["audit"]
-    assert body["implementation"]["memory_challenger_args"] == ["--strict"]
+    assert body["implementation"]["memory_attester_args"] == ["--strict"]
     assert "has no certificate" in honest["refused"] and honest["audits"] == 0 and honest["responder"]["answered"] == 0
     assert not gates["timed_audit"]["passed"] and not gates["certificate"]["passed"] and body["profile"] is None
 
@@ -459,7 +459,7 @@ def test_bench_judges_an_in_process_p2_audit_before_a_profile_and_no_other(tmp_p
 
 def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
     """`verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py`'s audit, strict, of `p2-16448/v4` at its registered point (one segment), against a responder whose
-    blocks match `vk`'s leaves, on the logical clock (or `clock`): the memory challenger checks leaves, not codewords."""
+    blocks match `vk`'s leaves, on the logical clock (or `clock`): the memory attester checks leaves, not codewords."""
     import hashlib
 
     sys.path.insert(0, str(BENCH))
@@ -481,9 +481,9 @@ def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
         responder.stop()
 
 
-def test_protocol_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it(tmp_path):
-    """The end-to-end claim's memory challenger: `Δ + 354 µs` (the cap) is inside `P2SlackFamilyUncond`'s
-    certificate, so 105 challenges run and are accepted; `Δ + 355 µs` fits one 854,029 ns root call, so the memory challenger
+def test_protocol_memory_attester_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it(tmp_path):
+    """The end-to-end claim's memory attester: `Δ + 354 µs` (the cap) is inside `P2SlackFamilyUncond`'s
+    certificate, so 105 challenges run and are accepted; `Δ + 355 µs` fits one 854,029 ns root call, so the memory attester
     refuses before sending any challenge."""
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 
@@ -498,9 +498,9 @@ def test_protocol_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_
 
 
 def test_the_host_trace_splits_each_slow_round_trip_into_where_its_time_went():
-    """A ping over `TRACE_OVER_NS` is kept; a challenge is kept when its round trip or the memory challenger's time for it is
+    """A ping over `TRACE_OVER_NS` is kept; a challenge is kept when its round trip or the memory attester's time for it is
     over, and its split adds up: send, the wait for the first byte (the responder's reported time and the rest), the rest of
-    the answer, and the memory challenger's own work outside the round trip."""
+    the answer, and the memory attester's own work outside the round trip."""
     sys.path.insert(0, str(BENCH))
     from verity.protocols.resource_accounting.memory.pous.attester import timed_audit as live
 
@@ -523,7 +523,7 @@ def test_the_host_trace_splits_each_slow_round_trip_into_where_its_time_went():
 
 
 def test_a_wall_clock_audit_traces_every_round_trip_and_a_logical_one_none(tmp_path):
-    """On a clock that is not the logical one, the memory challenger logs every round trip (the pings before and after and
+    """On a clock that is not the logical one, the memory attester logs every round trip (the pings before and after and
     each answer, the 50 warm-up pings before each set included) and its thread's faults and context switches; each kept split
     adds up to its round trip."""
     import itertools
@@ -538,7 +538,7 @@ def test_a_wall_clock_audit_traces_every_round_trip_and_a_logical_one_none(tmp_p
     for row in trace["kept"]:
         assert row["send_ns"] + row["wait_ns"] + row["recv_ns"] == row["roundtrip_ns"]
         assert row["server_ns"] + row["responder_other_ns"] == row["wait_ns"]
-    assert set(doc["memory_challenger_rusage"]["after"]) == {"minflt", "majflt", "nvcsw", "nivcsw"}
+    assert set(doc["memory_attester_rusage"]["after"]) == {"minflt", "majflt", "nvcsw", "nivcsw"}
     doc, _ = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
     assert "host_trace" not in doc
 
@@ -573,11 +573,11 @@ def test_a_cached_encoding_is_reused_for_its_own_setup_and_never_when_its_bytes_
     assert hashlib.sha256(data.read_bytes()).hexdigest() == rec["sha256"]
 
 
-def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_test_signer(tmp_path):
-    """Under `MC` every audit and control is the memory challenger's: its leaves are each block's `sha512/row/v2` digest,
+def test_the_memory_attester_arm_audits_v3s_blocks_and_fails_closed_under_its_test_signer(tmp_path):
+    """Under `MC` every audit and control is the memory attester's: its leaves are each block's `sha512/row/v2` digest,
     the honest sessions pass under the test signer's own mapping and every control is rejected under it (the tampered one
     for a flipped bit in a block's last byte, the bad-signature one for a flipped signature bit and for a receipt time
-    edited after signing).  `memory_challenger.SCHEMES` accepts S1's scheme alone, so the real verdict rejects every test-signed session
+    edited after signing).  `memory_attester.SCHEMES` accepts S1's scheme alone, so the real verdict rejects every test-signed session
     and no profile is issued; a session's public part is its commitment, its verdict and its coin openings.  The sessions'
     coins are `SEED`'s, in the honest audit and in every control, so which blocks a control's sessions sample, and with them
     its count of wrong answers and its verdicts, are the same on every run (`MC_CHANGED`)."""
@@ -590,13 +590,13 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
               "late_control", "recompute_control", "tampered_control", "signature_control", "fail_closed"):
         assert gates[g]["passed"], (g, gates[g])
     assert "certificate" not in gates and body["profile"] is None
-    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "memory_challenger": "benchmarks/pous/memory_challenger/live.py",
-                                      "memory_challenger_args": ["--signer", "test"]}
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "memory_attester": "benchmarks/pous/memory_attester/live.py",
+                                      "memory_attester_args": ["--signer", "test"]}
     nb = _small().width_bytes
     raw = (tmp_path / "leaves-p2.bin").read_bytes()
     assert len(raw) == 64 * body["blocks"]
     honest = m["audit"]
-    assert honest["memory_challenger"] == "memory_challenger.MemoryChallenger" and honest["limit_ns"] == 854_000 and honest["limit_fixed_before_load"]
+    assert honest["memory_attester"] == "memory_attester.MemoryAttester" and honest["limit_ns"] == 854_000 and honest["limit_fixed_before_load"]
     assert honest["audits"] == honest["audits_accepted_under_signer"] == 2 and honest["audits_accepted"] == 0
     assert honest["answers"] == 2 * 105 and honest["profile"] is None and honest["signer"]["test"]
     assert honest["signer"]["scheme"] == "test/lms-sha512/n64-w1-h1/v0"
@@ -626,11 +626,11 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
 
 
 def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset(), audits: int = 2, **kw):
-    """`memory_challenger/live.py`'s audit, strict, of `p2-16448/v4` at its registered point (one segment), on the logical
+    """`memory_attester/live.py`'s audit, strict, of `p2-16448/v4` at its registered point (one segment), on the logical
     clock, against a responder whose blocks are the digests' (`tamper`'s with their last byte's top bit flipped)."""
     sys.path.insert(0, str(BENCH))
     from band_gpu import harness as H
-    from memory_challenger import live
+    from memory_attester import live
 
     from verity.protocols.resource_accounting.memory.pous.verifier import schemes
 
@@ -648,7 +648,7 @@ def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset(), aud
         responder.stop()
 
 
-def test_the_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it():
+def test_the_memory_attester_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it():
     """`Δ + 354 µs` is inside `P2SlackFamilyUncond`'s certificate: 105 rounds a session run, the test-signed sessions pass
     under the test signer's mapping and the real verdict rejects them; `Δ + 355 µs` is refused before any round.  Every
     session is bound to the root the setup publishes for the responder's `C*`."""
@@ -672,7 +672,7 @@ def test_the_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_pa
     assert "fits 1 calls of 854029 ns" in doc["refused"]
 
 
-def test_the_memory_challenger_catches_a_flipped_bit_in_a_blocks_last_byte():
+def test_the_memory_attester_catches_a_flipped_bit_in_a_blocks_last_byte():
     """Every block tampered: each round's digest is wrong, each session rejected, and no round is late or retried."""
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 
@@ -700,7 +700,7 @@ def test_a_seeded_session_is_refused_off_the_logical_clock_and_off_the_test_sign
 
 
 @pytest.mark.parametrize("record", ["lean", "python"])
-def test_the_memory_challenger_records_both_verdicts_whichever_is_the_records(record, monkeypatch):
+def test_the_memory_attester_records_both_verdicts_whichever_is_the_records(record, monkeypatch):
     """`judge` runs the Lean verdict and the Python's on every session and keeps both in the witness; `RECORD_VERDICT` picks
     the record's, and where the two agree the record is the same either way."""
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
@@ -719,12 +719,12 @@ def test_the_memory_challenger_records_both_verdicts_whichever_is_the_records(re
 @pytest.mark.parametrize("record", ["lean", "python"])
 @pytest.mark.parametrize("forced", ["lean", "python"])
 def test_a_disagreement_between_the_verdicts_rejects_the_session(forced, record, monkeypatch):
-    """`forced`'s verdict flips its accept bit: under `memory_challenger.SCHEMES` it accepts the test-signed sessions the other
+    """`forced`'s verdict flips its accept bit: under `memory_attester.SCHEMES` it accepts the test-signed sessions the other
     rejects, and under the signer's mapping it rejects the honest ones the other accepts.  Each session is rejected for the
     disagreement, with both verdicts named, whichever one accepted and whichever is the record's."""
     import json
 
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 
     live = _live()
@@ -756,7 +756,7 @@ def test_a_disagreement_between_the_verdicts_rejects_the_session(forced, record,
 
 def _live():
     sys.path.insert(0, str(BENCH))
-    from memory_challenger import live
+    from memory_attester import live
 
     return live
 
@@ -764,7 +764,7 @@ def _live():
 def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monkeypatch):
     """A verdict that fails after the sessions signed (as when `judge` could not import the Lean's server)
     takes nothing with it: every signed session is in `sessions_out` first, whole, and still verifies under its signer."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
     from verity.protocols.resource_accounting.memory.pous.verifier import schemes
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 
@@ -831,7 +831,7 @@ def test_a_lean_verdict_that_cannot_load_stops_the_audit_before_any_signer_opens
     assert not any((tmp_path / f).exists() for f in ("key", "sessions.json", "session-log"))
 
 
-def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused(tmp_path, monkeypatch):
+def test_the_memory_attesters_lms_key_is_made_once_and_its_leaves_never_reused(tmp_path, monkeypatch):
     """`--lms-key DIR`: the first use makes the key there (seed, public key, tree, leaf state), a later one loads it without a
     keygen and signs at the next leaf, and a tree that is not the public key's is refused.  At a small height, so under a
     `test/` id."""
@@ -870,7 +870,7 @@ class _SparseTree:
 def _deployed_signer(tmp_path):
     """An S1 signer at `lms.DEPLOYED` over `_SparseTree`, its leaf state in `tmp_path`, for one session."""
     from verity.commitments.crypto import lms
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))
@@ -879,10 +879,10 @@ def _deployed_signer(tmp_path):
 
 
 def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profile(tmp_path, monkeypatch):
-    """With `--signer lms` the verdict is `memory_challenger.SCHEMES`'s and it accepts the honest session: the profile is
+    """With `--signer lms` the verdict is `memory_attester.SCHEMES`'s and it accepts the honest session: the profile is
     issued under the certificate; the bad-signature control rejects it flipped or edited under the same mapping.  The
     session's id is in the session log, made with the new key."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 
     live, signer = _live(), _deployed_signer(tmp_path)
@@ -906,7 +906,7 @@ def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profil
 def test_an_lms_signed_audit_takes_a_session_log_of_its_own_and_an_existing_key_needs_its_log(tmp_path, monkeypatch):
     """`--session-log FILE`: an LMS-signed audit refuses to start without one or with one inside `--lms-key`, and for a
     key that exists (its `seed` there) it refuses a missing log before any session, with no leaf spent and no log made."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
     from verity.protocols.resource_accounting.memory.pous.verifier import schemes
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 
@@ -919,7 +919,7 @@ def test_an_lms_signed_audit_takes_a_session_log_of_its_own_and_an_existing_key_
                           limit_ns=500_000 + p2.RTT_ALLOWANCE_CAP_NS, clock=live.LogicalClock(), signer="lms", lms_key=key,
                           **kw)
 
-    with pytest.raises(ValueError, match="takes the memory challenger's session log"):
+    with pytest.raises(ValueError, match="takes the memory attester's session log"):
         audit()
     with pytest.raises(ValueError, match="inside the key's directory"):
         audit(session_log_path=key / "sessions")

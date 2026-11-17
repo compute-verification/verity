@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.EndToEnd.Period.Run
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 public import Flock.Desc
 
 /-!

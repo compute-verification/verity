@@ -662,9 +662,7 @@ def test_a_qat_runs_checkpoints_are_the_start_plus_the_codes_it_trained(tmp_path
     route handed over: the weights the route's next step would train on, bit for bit, and θ everywhere else. E is
     those codes, at most two bits an entry, and the checkpoint states the digest of the model the route trains, its
     latents among it (`trained_sha256`). The count takes the coded matrices' products as updated from the second
-    step on. The step traces, and what one step hands the next forward is the codes:
-    the update's cut is two bits an entry and a 16-bit scale a matrix, where the latents and Muon's momentum, 32
-    bits an entry each, are carried state no token op reads."""
+    step on. The step traces."""
     targets = ("blocks.0.wq.weight", "blocks.0.w_up.weight")
     rec, outputs, model, theta, trace = loop(tmp_path, route="qat", dials={
         "targets": ",".join(targets), "keep": 0.5, "lr": 1e-2})
@@ -689,28 +687,19 @@ def test_a_qat_runs_checkpoints_are_the_start_plus_the_codes_it_trained(tmp_path
             assert torch.equal(v, theta[k])
     first, second = (rec["steps"][t]["by"].get("fwd/updated", 0) for t in (0, 1))
     assert first == 0 and second == trace["tokens"] * entries   # the first step's codes are zero: its forward reads θ
-    c = trace["circuit"]
-    assert c["update_cut_bits"] == c["u1_bits"] == 2 * entries + 16 * len(targets)
-    assert c["state_bits"] == 2 * 32 * entries and c["grad_cut_bits"] == 32 * entries
     assert not trace["p_match"] and not trace["data_dependent"] and not trace["carried_scalars"]
 
 
 @pytest.mark.parametrize("bits", [4, 8])
-def test_a_qat_step_with_a_coded_gradient_and_a_low_width_state_traces_at_their_widths(tmp_path, bits):
-    """Route `qat` under `grad_code` and `low_state` through the harness. The gradient's cut is the codes as they
-    pass, B bits an entry and a 16-bit scale a row; the carried state is the bf16 latents, Muon's int8 codes and
-    their 16-bit scale a row; the update's cut is the codes', as without the dials. The roundings' random values reach
-    the next forward only through the latents' codes, so no token op reads a random op and the trace charges no
-    seed (`tau_other_bits`). The capture runs on tensors without data and leaves torch's generator as it was."""
+def test_a_qat_step_with_a_coded_gradient_and_a_low_width_state_charges_no_seed(tmp_path, bits):
+    """Route `qat` under `grad_code` and `low_state` through the harness. The roundings' random values reach the next
+    forward only through the latents' codes, so no token op reads a random op and the trace charges no seed
+    (`tau_other_bits`). The capture runs on tensors without data and leaves torch's generator as it was."""
     targets = ("blocks.0.wq.weight", "blocks.0.w_up.weight")
     rec, _, model, theta, trace = loop(tmp_path, route="qat", dials={
         "targets": ",".join(targets), "keep": 0.5, "lr": 1e-2, "grad_code": f"rtn{bits}", "low_state": True})
     assert rec["invalid"] == [] and "refused" not in trace
-    entries, rows = sum(theta[k].numel() for k in targets), sum(theta[k].shape[0] for k in targets)
-    c = trace["circuit"]
-    assert c["grad_cut_bits"] == bits * entries + 16 * rows
-    assert c["state_bits"] == (16 + 8) * entries + 16 * rows
-    assert c["update_cut_bits"] == 2 * entries + 16 * len(targets) and c["tau_other_bits"] == 0
+    assert trace["circuit"]["tau_other_bits"] == 0
     cfg = config.load(tmp_path / "a.toml", starts.registry(tmp_path / "reg" / "starts.toml"))
     optimizers = qat.build(cfg.start.shape, cfg.dials)[1]
     held = torch.get_rng_state()

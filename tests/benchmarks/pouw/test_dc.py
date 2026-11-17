@@ -313,6 +313,22 @@ def test_analyze_sm90_pass_line(tmp_path):
     assert not an.analyze("sm90", tmp_path / "b")["M3"]["pass"]
 
 
+def test_record_writes_the_fastest_form_over_honest_and_a_failed_gate_writes_none(tmp_path, no_gpu):
+    wg = {"0:IGMMA.64x256x32.S8.S8*": 128 / 4096}
+    _rows(tmp_path / "rows", {"wg_s8_n256_a1": wg, "imma_s8_k16": {"0:IMMA.16816.S8.S8": 1.1},
+                              "wgz_s8_n256_a1": {"0:IGMMA.64x256x32.S8.S8*": 2 * 128 / 4096}})
+    assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / "ok")]) == 0
+    doc = json.loads((tmp_path / "ok" / "result.json").read_text())
+    [m] = doc["measurements"]
+    assert doc["validation"]["status"] == "passed" and m["value"] == pytest.approx(1.1)
+    assert (m["name"], m["unit"], m["mark"], m["family"], m["form"], m["honest_form"], m["host"]["card"]) == (
+        an.METRIC, "times honest", "measured", "sm90", "mma.sync s8_k16", "wgmma s8 m64n256k32", "none")
+    assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / "bad"),
+                    "--failed", "a dgemm gate is not exact"]) == 1
+    doc = json.loads((tmp_path / "bad" / "result.json").read_text())
+    assert doc["validation"]["status"] == "failed" and doc["measurements"] == []
+
+
 def test_uniform_tables_pin_every_loop():
     """Each family's tables pin every probe's loop: the alone chains count a uniform opcode, every other uniform probe
     the MMA beside them, and each IMAD-form probe an opcode of its loop."""

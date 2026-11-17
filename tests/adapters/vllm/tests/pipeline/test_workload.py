@@ -527,7 +527,7 @@ def test_the_generator_logs_what_it_did_each_message_at_its_level_and_keeps_its_
     assert checked(check, "PASS")
     assert refused == ("ERROR", f"--reason ['moe_backend']: a reason is SWITCH=TEXT for a switch of {sorted(W.served.DEFAULTS)}")
     _generate(tmp_path, "x-eager", rc=3, target=json.dumps({"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False}))
-    assert said()[-1] == ("ERROR", "row id execution suffix 'x-eager' != the target's execution label 'eager'")
+    assert said()[-1] == ("ERROR", "workload id execution suffix 'x-eager' != the target's execution label 'eager'")
     monkeypatch.setattr(W, "find_tokenizer", lambda repo, revision: None)
     assert W.main(W.Options(**opts)) == 2
     assert said() == [("ERROR", f"tokenizer.json for org/x@{'0' * 40} not found under {W.hf_home()} — pass --tokenizer or use --lengths-only")]
@@ -537,7 +537,7 @@ def test_the_generator_logs_what_it_did_each_message_at_its_level_and_keeps_its_
     (check,) = said()
     assert checked(check, "FAIL: " + "; ".join(bad)) and not (tmp_path / "w.json").exists()
     assert W.main(W.Options(**opts, lengths_only=True)) == 0 and (tmp_path / "w.json").exists()
-    assert said() == [("WARNING", "§12 self-check: " + "; ".join(bad)), note]
+    assert said() == [("WARNING", "self-check: " + "; ".join(bad)), note]
 
 
 REV = "ab" * 20

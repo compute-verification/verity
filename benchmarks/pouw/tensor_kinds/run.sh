@@ -65,10 +65,19 @@ done
 kill \$SMI 2>/dev/null
 nvidia-smi -q -d CLOCK,POWER,PERFORMANCE --id="\$U" >"$OUT/smi-after.txt" 2>&1
 EOF
-gpu-lease 1 --wait --max-min 25 -- bash "$WORK/gpu.sh"
-echo "gpu lease rc=$?" >>"$OUT/gpu.log"
+lease=(gpu-lease 1 --wait --max-min 25 --)
+[ -n "${GPU_LEASE_UUID:-}" ] && lease=()
+"${lease[@]}" bash "$WORK/gpu.sh"
+lrc=$?
+echo "gpu lease rc=$lrc" >>"$OUT/gpu.log"
+if [ ! -s "$OUT/tensor_kinds.jsonl" ]; then
+  echo "tensor_kinds: nothing was timed (gpu-lease rc $lrc): no fit" >&2
+  exit 3
+fi
 
-python3 "$SRC/tensor_kinds.py" "$OUT" >"$OUT/fit.log" 2>&1
+ROOT=$SRC/../../..
+PYTHONPATH="$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 "$SRC/tensor_kinds.py" "$OUT" --record >"$OUT/fit.log" 2>&1
 rc=$?
 cat "$OUT/gpu.log" "$OUT/fit.log" >&2
 exit $rc

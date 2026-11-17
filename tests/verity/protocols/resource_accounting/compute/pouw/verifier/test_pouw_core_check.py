@@ -388,7 +388,7 @@ def _certified_pass(p: int) -> tuple[bytes, str, bytes, bytes, bytes, bytes]:
 
 
 def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
-    """At the opening of record. A certified execution phase's pass passes `pass_epoch` under the certifier's reveal,
+    """At the opening of record. A certified execution phase's pass passes `pass_epoch` under the network attester's reveal,
     and `certified_salt` is the salt it checked, `salt.pouw_salt(reveal, p, stream, prover)`. A salted unit whose public
     row was formed under that salt opens under it (the honest twin: every rule of the opening met). The same unit with
     its public row formed under a salt the prover chose, which it can form before any certifier salt exists, is refused
