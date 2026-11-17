@@ -22,7 +22,7 @@ from verity.protocols.resource_accounting.network.prover import block_certifier 
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())
 (ROWS_RUN,) = ANSWERS
 E2E = ROOT / "benchmarks/one_stage/interfaces"
-#: the owner a block record names for the certifier's leg, as its runner path passes it
+#: the owner a block record names for the network attester's leg, as its runner path passes it
 OWNER = "network-accounting"
 BLOCK_SCHEMA = E2E / "verity_e2e_demo" / "schemas" / "block-record.v2.schema.json"
 

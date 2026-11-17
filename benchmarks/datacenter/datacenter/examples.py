@@ -110,11 +110,11 @@ def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: tuple[
                uplink_gbps: int = UPLINK_GBPS, spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6,
                outside_latency: float | None = None, cadence: Cadence | None = None) -> Datacenter:
     """`blocks` nodes (`rtx_node`, named `{prefix}0`, `{prefix}1`, …, each `with_dpu` when `dpus`) behind a leaf-spine
-    fabric: each node's way out (its NIC, or its DPU) to its own certifier (`{prefix}I.cert`), the certifier to a leaf
+    fabric: each node's way out (its NIC, or its DPU) to its own certifier (`{prefix}I.cert`), the network attester to a leaf
     switch (round-robin over `leaves`), every leaf to every spine, and the hosts `outside` every block (kind `outside`)
     and the `challengers` on the leaves too. With one leaf, `spines` may be 0. Latencies are one way, in seconds:
     `uplink_latency` from a node to its certifier, `fabric_latency` a fabric hop, and an outside host's link a WAN of
-    `outside_latency` when it is given, else a fabric hop. `cadence` is the certifiers' (`Cadence`'s default when None)."""
+    `outside_latency` when it is given, else a fabric hop. `cadence` is the network attesters' (`Cadence`'s default when None)."""
     if blocks < 1 or leaves < 1 or (leaves > 1 and spines < 1):
         raise ValueError("at least one block and one leaf, and spines to join more than one leaf")
     up = Assumption("fabric/uplink", uplink_gbps * 1_000_000_000, "bit/s", "declared")

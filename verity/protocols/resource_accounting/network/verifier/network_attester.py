@@ -8,7 +8,7 @@ bytes unchanged in content or not at all: no tokenizer, API, request or stop str
 addition is on the server's side (`release`): each HTTP request's place in the release order and its release bucket on
 the server's copy, and, with `watermark`, a stream that tells the server each bucket's close. What the network attester
 decides is the framing and the timing, both public functions of the schedule (`NetworkAttesterParams`), and it certifies every
-cell it sends with the certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
+cell it sends with the network attester's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `link_frame.encode_frame(kind, ordinal, payload)`: the header (kind u8,
 the connection's ordinal u32, the payload's length u32), at most P = B − 9 payload bytes, zero fill. `DATA` carries

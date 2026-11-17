@@ -6,10 +6,10 @@ refusing a changed one and a changed cell; the run's deployment is the auditor's
 and a copy of it re-signed, rewritten or in other bytes is refused; the certified I/O read off the cells is the requests
 and responses served;
 N2's link is the network attester's (both heads at its digest, no sync, charge 0) and its references expect honest
-accepted and tampered refused on its signed digest alone. A certifier rehearsal's run (its records through the older certifier's proxy)
-is refused by name (`network_attester_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in an active
+accepted and tampered refused on its signed digest alone. A network attester rehearsal's run (its records through the older network attester's proxy)
+is refused by name (`network_attester_chain.PROXY`) by every reader: its files, or a network attester's deployment.json in an active
 network attester's run. The report on the network attester path requires the certificates, the endpoint, the tie, N2
-and the scan, names its stubs, and refuses a step whose input is a certifier rehearsal's or another network attester
+and the scan, names its stubs, and refuses a step whose input is a network attester rehearsal's or another network attester
 run's."""
 
 from __future__ import annotations
@@ -193,7 +193,7 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
     whether it accepted and the gate's own list of counts (`auditor.NETWORK_CERTIFIER_COUNTS`, its `cell_rows` cut to
     `auditor.CELL_ROWS`). The step's list is the gate's, so a key the gate does not publish is not written by the
     chain: the check's problems and their number, the summary's counts of the traffic and its other keys (a
-    connection's bytes before padding, the requests' tokens, the certifier's clocks) stay in the witness, and so
+    connection's bytes before padding, the requests' tokens, the network attester's clocks) stay in the witness, and so
     does a key the summary gains later. The record's leak guard reads
     pieces of 32 bytes and sees no shorter value, so this is held by name."""
     assert (WC.COUNTS, WC.CELL_ROWS) == (G.NETWORK_CERTIFIER_COUNTS, G.CELL_ROWS), (
@@ -289,8 +289,8 @@ def test_a_runs_deployment_is_the_auditors_record_or_refused_naming_its_copy_and
 
 @pytest.fixture(scope="module")
 def certifier_run(tmp_path_factory):
-    """A certifier rehearsal's run as a fetched one holds it: its plan and calibration, and a deployment.json naming the
-    certifier's key and links, which no active network attester's does."""
+    """A network attester rehearsal's run as a fetched one holds it: its plan and calibration, and a deployment.json naming the
+    network attester's key and links, which no active network attester's does."""
     run = tmp_path_factory.mktemp("certifier") / "honest"
     run.mkdir()
     docs = {"plan.json": {"windows": 2}, "calibration.json": {"grid": {}},

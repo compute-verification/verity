@@ -44,7 +44,7 @@ TICK = (100_000, 30_000, 40_000)
 EOS = 2
 RUN = "c0ffee"
 N = 36
-#: the certifier run's origin in the trace-corpus directories, unix seconds
+#: the network attester run's origin in the trace-corpus directories, unix seconds
 T0 = 1_700_000_000.0
 
 
@@ -56,7 +56,7 @@ def engine(asy: bool):
 
 def plan(seed: int = 7) -> tuple[list, list[float]]:
     """A fixed release sequence, the certified data: N requests released in bursts with idle gaps between (seconds from
-    the certifier run's origin), each prompt a 32-token prefix shared with every third request then its own tail, and
+    the network attester run's origin), each prompt a 32-token prefix shared with every third request then its own tail, and
     each output ending on EOS or running to max_tokens."""
     rng = random.Random(seed)
     t, ios, times = 0.05, [], []

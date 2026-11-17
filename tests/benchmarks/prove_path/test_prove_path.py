@@ -2034,8 +2034,8 @@ def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
 
 
 def test_window_commit_without_the_certifiers_reader_or_state_file_is_refused_by_name():
-    """SPOT imports neither the certifier nor a benchmark, so window-commit takes the reader of the run a serve kept and
-    the name the certifier's scan reads the opened scan state under from its caller, and refuses by name without them."""
+    """SPOT imports neither network attestation nor a benchmark, so window-commit takes the reader of the run a serve kept and
+    the name network attestation's scan reads the opened scan state under from its caller, and refuses by name without them."""
     for given in ({}, {"kept_ingress": lambda serve_dir: None}, {"scan_state_file": "unread"}):
         with pytest.raises(ValueError, match="by what its caller passes .*run benchmarks/one_stage/window_commit.py"):
             PP.window_commit_of_builds(argparse.Namespace(), **given)

@@ -104,7 +104,7 @@ as above.
 `case(kind, seed)` is a small period aimed at a verdict, or at a decoding failure (`KINDS`), and `cases(seed)` one of
 each with its answer, as a composition's difftest takes a real component's cases.
 
-This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
+This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the network attester's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
 
 from __future__ import annotations
@@ -263,7 +263,7 @@ class Audit:
 
 @dataclasses.dataclass(frozen=True)
 class Entry:
-    """One entry of the parameters' `"keys"`, a certifier session's: its LMS key, its session, and the start of its
+    """One entry of the parameters' `"keys"`, a network attester session's: its LMS key, its session, and the start of its
     stretch of execution phases, in the numbers `first` is in."""
     key: LmsKey
     session: bytes
@@ -1070,7 +1070,7 @@ def _holds(reg: dict, doc: dict) -> bool:
 #: port, or its `registered` entry's value
 PROG = "scan/prog"
 #: the scan's state in a registration: its `roots` entry's port (`stateName`), or its `registered` entry's value, the
-#: value a window circuit registers the scan's state rows as (`stateValue`, the certifier's `blocks.SCAN_STATE`)
+#: value a window circuit registers the scan's state rows as (`stateValue`, the network attester's `blocks.SCAN_STATE`)
 STATE = "scan/state"
 SCAN_STATE = "verity/certifier/scan-state/v1"
 #: `tiedKey`: the key of one-stage's public outputs that holds the tied Inputs its registration check let through
@@ -1692,7 +1692,7 @@ SECOND = ("second-key", "two-signers", "cert-other-session", "reg-other-session"
 
 @dataclasses.dataclass(frozen=True)
 class Stretch:
-    """An entry the generator lists: a certifier session's private key, its session, and its stretch's start."""
+    """An entry the generator lists: a network attester session's private key, its session, and its stretch's start."""
     key: lms.PrivateKey
     session: bytes
     start: int

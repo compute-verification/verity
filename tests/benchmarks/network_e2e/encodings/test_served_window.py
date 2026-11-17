@@ -2,7 +2,7 @@
 the replay is the served scheduler on every step, every window opens on a drained engine, ReplayStep_v1 is the
 scheduler on windows 212 and 1 under the served async engine, `replay_vectors --slice` builds the compile slice's w212
 fixtures (at the engine class's AsyncScheduler, and at the sync class) and its async w1 fixtures from the run's own
-records, and the certifier's charge chain is `code_v1`'s charge of the decisions alone on every window."""
+records, and the network attester's charge chain is `code_v1`'s charge of the decisions alone on every window."""
 from __future__ import annotations
 
 import dataclasses
@@ -87,7 +87,7 @@ def test_every_window_opens_drained(recs):
 @pytest.mark.slow
 def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
     """Each window opens on a drained engine, so its first arrival is admitted unasked (`Replay.forced`), which is no
-    decision. The certifier's charge chain (`charge_chain.session` at the engine class's D = 32, under the async-light
+    decision. The network attester's charge chain (`charge_chain.session` at the engine class's D = 32, under the async-light
     book) over the 339 windows' decisions is `code_v1`'s charge of them alone (`Advice(arrived=…)`, every other count
     0) on every window, 5,500 bits: its context ``run`` counts
     decisions only, so a forced admission doesn't reset it as it resets the replay's ``pc``. Charged as a decision (a 1,
@@ -115,7 +115,7 @@ def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
 @pytest.mark.slow
 def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails(recs):
     """With the length terms sent (`lengths.widths`: each request's output_len in width(max_tokens + 1) bits, then its
-    finish in 1), code_v1's window costs its decisions' segment plus its requests' tails. The certifier's window chain
+    finish in 1), code_v1's window costs its decisions' segment plus its requests' tails. The network attester's window chain
     (`window_charge.session` at D = 32, a length slot for each of the window's requests with the trace's max_tokens and
     output_len) charges exactly that on each of windows 0 … 212, and CompileSlice_v7 on w212 at its own statics
     (`compile_slice_w212.json`), from the chain's carry into it, accepts that charge, carries out the chain's carry and
@@ -186,7 +186,7 @@ def test_replay_step_is_w212s_scheduler(recs):
 
 
 def test_the_slice_fixture_is_w212s(recs, tmp_path):
-    """`replay_vectors --slice 212 --AS 0` writes the certifier's sync-class `compile_slice_w212.json` from the run's
+    """`replay_vectors --slice 212 --AS 0` writes the network attester's sync-class `compile_slice_w212.json` from the run's
     records: requests 308 to 310 of the session, their 14 decisions (each a 0 until the request is admitted), the 20
     steps' rows, and the seal's served rows for the window with the runner's ids."""
     out = tmp_path / "w212.json"

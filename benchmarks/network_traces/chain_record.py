@@ -30,7 +30,7 @@
   report's. A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a network attester
   run) never makes the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`,
   its ``scope``), and its verdict is ``scan accepted``, ``scan accepted on the period check`` or ``scan refused``: N2
-  isn't required, and the rest is held as before. On the certifier-only path (``--job``'s ``path``,
+  isn't required, and the rest is held as before. On the network attester-only path (``--job``'s ``path``,
   `CERTIFIER_ONLY`) there are no network attester rows: the scan isn't
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
   N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
@@ -53,7 +53,7 @@
   --warden-run`'s. Each is held to the network attester run the certificates step read (`on_network_attester`), every one is
   required, and the report names what the path stands on (`NETWORK_CERTIFIER_STUBBED`, or `NETWORK_CERTIFIER_SERVED_STUBBED` on the served node's
   endpoint report).
-* **leak**: K per monitoring period (week, month, year) on the certifier's gate run, pooled at δ = 1% and 10⁻⁶ and in the
+* **leak**: K per monitoring period (week, month, year) on the network attester's gate run, pooled at δ = 1% and 10⁻⁶ and in the
   per-period form, each beside its share of one copy of the weights (`leak`), computed by `leak_bounds`' scaling by
   links: one link at the run's rate, and as many of it summed as the census's reference datacenter and the world
   have machines. The network attester's term at a scope's own load is `verity bench certifier_term`.
@@ -102,7 +102,7 @@ CLEAR = {
            "lengths and the network certifier's release) and its o0 verdict bit; never a cell or its salt (n2_tie_zk's RECEIVED, "
            "scanned for every piece)",
 }
-#: the certifier-only path (``--job``'s ``path``): the records are the certifier rehearsal's alone
+#: the network attester-only path (``--job``'s ``path``): the records are the network attester rehearsal's alone
 CERTIFIER_ONLY = "certifier-only"
 #: a report given no N2 summary (``report`` without ``--n2``, `chain_record.sh`'s ``CR_SCAN_ONLY=1``): the scan's
 #: part of the record, whose N2 runs in jobs of its own; its verdict is ``scan accepted`` (or on the period check,
@@ -115,7 +115,7 @@ RESTS = "accepted on the period check"
 RESTS_WHY = ("the honest round's registration names {tied} tied: its acceptance rests on the network period check "
              "(NetworkCheck.Period's wired), which ties their rows to the audit that registered them and refuses "
              "scan_zk's stand-in block (period_case.UNWIRED)")
-#: what a report on the certifier-only path stands on that isn't the chain's own
+#: what a report on the network attester-only path stands on that isn't the chain's own
 STUBBED = (
     "the records come from the certifier-only path (a rehearsal's proxy in front of the endpoint), not the "
     "network certifier's own cells as one device, so there are no network certifier rows and the scan isn't run",
@@ -258,7 +258,7 @@ def network_attester_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
 
 def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
     """The endpoint's own advice for the network attester run of ``dep`` (its ``deployment.json``), as network-e2e's
-    `endpoint_advice` makes it for a certifier rehearsal's: `verity-vllm advice` over the endpoint's records ``ep``
+    `endpoint_advice` makes it for a network attester rehearsal's: `verity-vllm advice` over the endpoint's records ``ep``
     (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the network attester's bucket unless an index is there,
     then ``chain.served_advice`` on the certified I/O ``io`` (`network_attester_chain.io`'s) over the network attester's
     execution phases, with the model's EOS ids ``eos`` (a network attester run records none)."""
@@ -328,7 +328,7 @@ def tie_step(t: dict | None, job: dict | None = None) -> dict:
 
 def on_network_attester(step: dict, doc: dict | None, run_id: str | None, what: str) -> dict:
     """A network-certifier-path step held to the network attester run the certificates step read (``run_id``): refused
-    by name (`network_attester_chain.PROXY`) when its input is a certifier rehearsal's (it names no active network attester run),
+    by name (`network_attester_chain.PROXY`) when its input is a network attester rehearsal's (it names no active network attester run),
     and when it is another network attester run's."""
     from benchmarks.network_traces.network_attester_chain import PROXY
 
@@ -640,7 +640,7 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
 def network_terms(cert: dict, endpoint: dict) -> dict:
     """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
     when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync,
-    and no cell: no connection passes the certifier but the link, whose counts the advice fixes."""
+    and no cell: no connection passes the network attester but the link, whose counts the advice fixes."""
     bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
     advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
     return {"advice": advice, "syncs": None if syncs is None else math.ceil((cert.get("windows") or 0) * syncs),
@@ -835,7 +835,7 @@ def merged_n2(paths: list[str] | None) -> dict | None:
 
 
 def stubbed(job: dict, custody_doc: dict, endpoint: dict | None = None) -> list[str]:
-    """What a certifier-only report stands on that isn't the chain's own: `STUBBED`, and where its gate runs ran and
+    """What a network attester-only report stands on that isn't the chain's own: `STUBBED`, and where its gate runs ran and
     what served them when their ``request.json`` says (demo_chain.sh's); a network-certifier-path report's,
     `NETWORK_CERTIFIER_STUBBED`, or `NETWORK_CERTIFIER_SERVED_STUBBED` when its endpoint step (``endpoint``) ran on the served node."""
     if job.get("path") == NETWORK_CERTIFIER:

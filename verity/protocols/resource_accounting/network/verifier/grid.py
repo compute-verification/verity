@@ -1,4 +1,4 @@
-"""The certifier's grid on one link: constant-rate, left-packed, FIFO release (Lean `NetTiming.Protocol.Grid`).
+"""The network attester's grid on one link: constant-rate, left-packed, FIFO release (Lean `NetTiming.Protocol.Grid`).
 
 A grid is one link's record for one window: `buckets` rows of `allocation` slots. A slot holds either a real frame
 (`bytes` of the fixed frame size) or padding (`None`). Every bucket emits exactly `allocation` frames on the wire: the
@@ -46,7 +46,7 @@ COMPLETE = Status()
 
 @dataclass(frozen=True, slots=True)
 class GridParams:
-    """W1: fixed by the protocol before the window, derived from a security parameter. The certifier only executes them."""
+    """W1: fixed by the protocol before the window, derived from a security parameter. The network attester only executes them."""
 
     buckets: int  # T, buckets per window
     allocation: int  # r, frames per bucket: the constant rate and the cap
@@ -121,7 +121,7 @@ class Certifier:
 
     - **Enqueue.** The sender hands frames with `enqueue`. A frame handed during bucket t, before its cutoff, is eligible
       for bucket t. With `first`, it goes to the head of the queue, ahead of every frame queued: the ingress
-      certifier's own salt frame. Release counts don't read the order, so `released` is unchanged.
+      network attester's own salt frame. Release counts don't read the order, so `released` is unchanged.
     - **Tick.** `tick` releases bucket t: min(queue, r) frames in queue order, then padding, so the wire always carries r.
     - **Faults.** A fault is an overflow beyond Q, a frame of the wrong size, or one reported with `fault`. It makes the
       rest of the window padding and drops the queue, since nothing is forwarded uncertified, and it records the first

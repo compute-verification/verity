@@ -1,8 +1,8 @@
-"""The release order on the server's side. Each request a certifier releases reaches the server with three headers:
-`x-verity-release: N`, N its 0-based index in the certifier run's release order (dense: each released request once, a
+"""The release order on the server's side. Each request a network attester releases reaches the server with three headers:
+`x-verity-release: N`, N its 0-based index in the network attester run's release order (dense: each released request once, a
 request a fault drops before its release unnumbered); `x-verity-release-run: ID`, the run's id in hex; and, from the
 network attester, `x-verity-release-bucket: A`, the bucket of the release, counted from 0 at the run's origin. So
-`serve-openai --admit release-order` adds requests to its engine in the order the certifier released them, whatever
+`serve-openai --admit release-order` adds requests to its engine in the order the network attester released them, whatever
 order it reads their bodies in, and the advice needn't carry the permutation between the two.
 
 **The watermark** is a stream on which the server learns that a bucket has closed. The network attester opens one
@@ -17,7 +17,7 @@ may read after line t, so a server that admits at bucket t waits for each of the
 bytes still arrive (`read_watermark` gives t, n and the lost). The network attester never reads the server's side of
 that connection and never waits on it.
 
-The headers and the watermark are the certifier's, sent to the server only. The link's frames, the network attester's
+The headers and the watermark are the network attester's, sent to the server only. The link's frames, the network attester's
 cells and every record hold the client's bytes, so what is certified and tied (cell counts, prompt lengths, the I/O
 tie's request frames) is the same with them or without. A lost release is the server connection's state, which the
 server sees itself. N, A and n are read back from the signed ingress records: the network attester's `END` cells in
@@ -41,7 +41,7 @@ from typing import Sequence
 from urllib.parse import unquote_to_bytes
 
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = b"x-verity-release", b"x-verity-release-run", b"x-verity-release-bucket"
-#: the bytes of a certifier's run id, which it samples at its construction
+#: the bytes of a network attester's run id, which it samples at its construction
 RUN_ID_BYTES = 32
 WATERMARK_PATH = b"/verity/watermark"
 WATERMARK_END = b"0\r\n\r\n"

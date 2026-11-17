@@ -5,7 +5,7 @@ the test gives, the guard on a clock the test moves, and the network attester on
   rate; `step` reads through a drift; `samples_to_show` is where a decoder at chance has its upper bound at the value.
 - `Plan.writes` keeps `write`'s and `burst`'s bytes in time for the next interval, bit 1's by the release and bit
   0's away from it, and `delay`'s bit 1 half an interval late.
-- `run.score` on recorded timestamps: through a certifier that passes bytes on as they come the planted delay is one
+- `run.score` on recorded timestamps: through a network attester that passes bytes on as they come the planted delay is one
   bit an interval and the ignored bit none (the guard's two bounds), on one host and from an observer on another
   whose clock drifts; through one that releases at a fixed time neither attack shows; and a first arrival an
   interval off the server's, an admission the server didn't take, a chunk of another interval's bytes or a failed
@@ -13,7 +13,7 @@ the test gives, the guard on a clock the test moves, and the network attester on
 - The network attester itself, on a clock the test moves: under `write` and `burst` every interval's cell leaves in
   its own interval whatever the bits (the last, with the server's end, as the `END` cell) and ends in the byte that
   names it, and under `delay` the first late interval fails the connection closed.
-- `--launch`'s schedule is one interval's cycle from the release time, open and then shut for the certifier's
+- `--launch`'s schedule is one interval's cycle from the release time, open and then shut for the network attester's
   priority alone, and a case whose bytes went around it is named; the guard's cases and a control are rows of
   their own and no part of the number.
 - The kernel's stamps are a second column of every row: a read's ancillary data is parsed, this host's kernel
@@ -193,7 +193,7 @@ def _case(tmp_path: Path, cfg: dict, arrival, *, first: int = 12, shift: int = 0
     """A recorded case: the server's bits from interval `first`, and the observer's arrivals from its connection's
     first interval (`shift` intervals later than that, for a segment that doesn't fit), `arrival(t, writes)` seconds
     after the origin for interval t whose bit's writes are `writes`. Interval t's chunk ends in the byte
-    `relabel(t)` mod 256, and the certifier admitted the connection in interval `admitted` (the one the server
+    `relabel(t)` mod 256, and the network attester admitted the connection in interval `admitted` (the one the server
     took). With `clock`, the observer is another host's: its arrival x seconds after the origin is at `clock(x)`
     seconds on its own clock. With `stamp`, the kernel stamped interval t's bytes `stamp(t, x)` seconds after the
     origin, x the observer's own arrival (None: its read carried no stamp), and the observer's wall clock moved
@@ -234,7 +234,7 @@ def _path(rng: random.Random) -> float:
 
 
 def test_the_guard_on_a_clock_the_test_moves(tmp_path):
-    """A certifier that passes bytes on as they come: an interval arrives when the server wrote it, plus a path of
+    """A network attester that passes bytes on as they come: an interval arrives when the server wrote it, plus a path of
     300 µs ± 100 µs. The planted delay is one bit an interval and the ignored bit none: the guard's two bounds, with
     room (over seeds 0–199 the planted bit's `bits` is 1.0 at every seed and the ignored bit's at most 0.0210 at
     these 400 intervals)."""
@@ -282,7 +282,7 @@ def test_the_guard_from_another_hosts_clock(tmp_path):
 
 
 def test_a_release_at_a_fixed_time_shows_neither_attack(tmp_path):
-    """A certifier whose release time nothing moves: an interval arrives its path after its release time, whenever
+    """A network attester whose release time nothing moves: an interval arrives its path after its release time, whenever
     the server wrote. Over seeds 0–199 `bits` is at most 0.0235, on one host and from another's clock."""
     rng = random.Random(2)
     for attack in ("write", "burst"):
@@ -365,7 +365,7 @@ def test_the_number_is_the_most_any_attack_showed_and_the_ceiling_every_attacks_
 
 def test_halts_counts_every_idle_state_that_stops_a_core(tmp_path):
     """`halts` sums the entries of every core's idle states but the polling one, and says why where it has no count:
-    no state to read, or one that went while it was read. A case's `halted` is its certifier's count after less
+    no state to read, or one that went while it was read. A case's `halted` is its network attester's count after less
     before, None where either is no count, and a row's the sum of its cases'."""
     assert "no cpuidle driver" in parties.halts(tmp_path)
     for cpu, (polls, stops, deeper) in enumerate([(5, 7, 1), (9, 3, 0)]):
@@ -592,7 +592,7 @@ def test_a_gated_connection_sends_at_the_launch_priority():
 
 
 def test_the_launch_gate_is_one_intervals_cycle_from_the_release_time(tmp_path):
-    """The schedule passes the certifier's priority for the gate's opening alone and every other always, each on a
+    """The schedule passes the network attester's priority for the gate's opening alone and every other always, each on a
     queue of its own; `txtime` adds the queue that holds the stamped packets; and a case whose gated queue carried
     under a packet an interval (a handshake's alone, say), or dropped, is named."""
     launch = bench._launch_arg("eth1,20,5")
@@ -658,7 +658,7 @@ def test_an_observers_chunks_start_and_end_where_the_bytes_say():
 
 
 class _Wire:
-    """One side's connection in memory: a reader the test feeds, and what the certifier wrote to it with the tick
+    """One side's connection in memory: a reader the test feeds, and what the network attester wrote to it with the tick
     it wrote it in."""
 
     def __init__(self, ticks, data: bytes = b"") -> None:
@@ -686,7 +686,7 @@ class _Wire:
 
 async def _certify(attack: str, intervals: int) -> tuple[Certifier, list[tuple[int, int, int]], int, dict[int, int]]:
     """The network attester on a clock the test moves, at the benchmark's schedule, one client, and the server's
-    plan: each write reaches the certifier before the first tick at or after its time. Returns the certifier, the
+    plan: each write reaches the network attester before the first tick at or after its time. Returns the network attester, the
     client's cells as (tick, kind, last byte), the first interval the server wrote for and its bits."""
     cfg = CFG | {"certifier": "network", "attack": attack, "ignore": False, "intervals": intervals}
     plan, tau, total = parties.plan_of(cfg), cfg["interval_ms"] / 1000, cfg["delay"] + intervals + 16

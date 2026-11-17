@@ -1,5 +1,5 @@
 """The network attester's coin link (D7 of `security/Definitions/Certifier/Guarantees.lean`, "The coins"): the one
-path a window's live coins take from the challenger to the server it audits, counted and re-clocked on the certifier's
+path a window's live coins take from the challenger to the server it audits, counted and re-clocked on the network attester's
 own grids.
 
 The challenger (`spot.remote`, served by `verity/protocols/compose/verifier/live_challenger/serve.py`) and this link run on one auditor

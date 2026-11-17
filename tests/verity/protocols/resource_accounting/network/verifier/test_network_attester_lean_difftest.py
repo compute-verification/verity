@@ -1,4 +1,4 @@
-"""The difftest of the Python audit against the certifier's Lean program: the Python half.
+"""The difftest of the Python audit against the network attester's Lean program: the Python half.
 
 `device/program/lean/scripts/difftest_vectors.py` writes 10,000 random instances and this package's results on each
 (`schedule.expected_grids`, `Audit.check_link` with the first differing bucket, `Audit.check_ingress_link`, and each

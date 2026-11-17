@@ -38,7 +38,7 @@ engine's resulting parameters, the seed and its rule). A greedy request without 
 split count is not pinned yet, so its sample is not a function of the committed values.
 
 The default precision is ``verity_int8`` (int8 linears, vLLM's attention), the one setting whose 16-token probe (0.81 s at 4 in
-flight) fits network certification's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even without the Commit. The ``verity_int8``
+flight) fits network attestation's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even without the Commit. The ``verity_int8``
 quantization method is registered under every precision, so a pin whose checkpoint names it loads under ``--precision pin`` too.
 
 The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepped by one thread, the process's main

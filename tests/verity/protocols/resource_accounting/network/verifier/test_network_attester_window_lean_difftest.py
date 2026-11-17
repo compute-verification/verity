@@ -1,4 +1,4 @@
-"""The difftest of `window_charge.reference_window` against the certifier's Lean program: the Python half.
+"""The difftest of `window_charge.reference_window` against the network attester's Lean program: the Python half.
 
 `device/program/lean/scripts/window_vectors.py` writes 4,000 instances, a book, a carry and windows of decision, hit, order and length
 slots, and `reference_window`'s results on each: window by window from the carry, and chained from the book's first

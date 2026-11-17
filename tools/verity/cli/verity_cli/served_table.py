@@ -409,10 +409,10 @@ POUB = Session(("verity.protocols.resource_accounting.memory.poub.verifier.p2_pa
                starts=P2.starts(onsite.pin, onsite.signer))
 
 
-#: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
+#: what the network attester's front asks of serve-openai: its id-form requests answered in the id form, an id event the
 #: 503-byte payload of the front's 512-byte cells; every other request is answered as before
 ID_FORM = "--protocol ids --id-payload 503"
-#: the certifier's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
+#: network attestation's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
 #: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
 #: served_verdicts.sh's default class
 SCAN_CLASS = "8,32,4,4,16"

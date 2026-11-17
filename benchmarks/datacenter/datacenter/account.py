@@ -89,7 +89,7 @@ class BlockAccount:
     reads_local_at_least: float = 0.0
     forced: float = 0.0
     assumptions: list[str] = field(default_factory=list)
-    #: for a block with a salt in its certifier's custody, k: the bits that could carry it out before registration
+    #: for a block with a salt in its network attester's custody, k: the bits that could carry it out before registration
     custody: float | None = None
     #: each facet's share of the epoch
     loads: dict[str, float] = field(default_factory=dict)
@@ -155,7 +155,7 @@ class Account:
     @property
     def sound(self) -> bool:
         """No refused port-window and nothing overcredited: the AND over this model's own record check
-        (`claims.check_records`), with no ε or share credit. The network verdict of record is the certifier's
+        (`claims.check_records`), with no ε or share credit. The network verdict of record is the network attester's
         `TransferBlocks.network_verdict` (`verity/protocols/resource_accounting/network/verifier/service.py`), the same AND over a link's outcomes
         of record; this model builds no proof-system streams, so it doesn't read it."""
         return not self.refused and not self.overcredited
@@ -380,7 +380,7 @@ class Accounts:
         """The share of the registered weights, `registered_bits`, that could have left over the epochs: each
         epoch's covert budget, its export where it is charged, and σ (`sigma`) from each of its servers over its real
         duration. Weight custody over a horizon needs this share well below 1. The covert budget's inbound channels
-        (inputs, ingress timing) count too, and the certifier protocol's free fields don't, since no record here has
+        (inputs, ingress timing) count too, and the network attester protocol's free fields don't, since no record here has
         any."""
         return Custody(registered_bits, self.covert_bits, sum(a.export_bits for a in self.epochs if a.export_charged),
                        float(sigma) * sum(a.seconds * a.servers for a in self.epochs), sigma,

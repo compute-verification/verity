@@ -785,7 +785,7 @@ def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dic
     """The window's audit as one compute audit of the network attester's period (module docstring's ``period``):
     ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ``tied`` is the window
     value the period ties to its scan's state tree (``stateTied``): the network attester's scan-state value, which the
-    caller passes, since SPOT reads the certifier's output as a certified input and never imports it. ValueError where the
+    caller passes, since SPOT reads the network attester's output as a certified input and never imports it. ValueError where the
     circuit isn't the one the docket binds, the window commits no ``tied`` value its circuit reads, the audit wrote no
     Program or another than the docket names, or its answer commits to another docket."""
     from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI

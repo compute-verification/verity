@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# certifier_timing's cases with the certifier and the observer on two hosts, one side each:
+# certifier_timing's cases with the network attester and the observer on two hosts, one side each:
 #
-#   pair.sh serve   ADDR PORT START OUT [serve's flags]   on the certifier's host: OUT/out/<case>/
+#   pair.sh serve   ADDR PORT START OUT [serve's flags]   on the network attester's host: OUT/out/<case>/
 #   pair.sh observe ADDR PORT START OUT                   on the observer's: OUT/seen/<case>/observer.json
 #
-# and then, with both at hand, `run.py score A/out/* --observer B/seen`. ADDR:PORT is where the certifier listens and
+# and then, with both at hand, `run.py score A/out/* --observer B/seen`. ADDR:PORT is where the network attester listens and
 # the observer's host reaches it. START is a time of day both hosts' clocks give (`date +%s`), ahead of both: the
 # cases start on it one after another, each at a time both sides work out alone, so a case that fails takes no other
 # with it and nothing else passes between the hosts. A side that comes late leaves the cases whose time has passed.
@@ -12,7 +12,7 @@
 # The cases, by PARTS (default: guard attacks control): the guard's two (the relay, the planted delay and its ignored
 # twin), each of ATTACKS (default: write burst) with each of OBSERVERS (default: spin plain), and `write`'s control,
 # the server ignoring its bits. INTERVALS (3000) and GUARD_INTERVALS (600) are their lengths and INTERVAL_MS (100)
-# the certifier's bucket; both sides take the same. A case of n intervals takes n * INTERVAL_MS / 1000 + 45 seconds,
+# the network attester's bucket; both sides take the same. A case of n intervals takes n * INTERVAL_MS / 1000 + 45 seconds,
 # so a second set (other flags, another OUT) starts that many after the first for each of its cases. TREE is the
 # checkout whose certifier it is, where `serve` takes `--tree`.
 set -euo pipefail

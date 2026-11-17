@@ -2,7 +2,7 @@
 harness's `ProtocolPort`.
 
 The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module docstring) and runs the real `Audit`:
-`check_link` on each egress link, then `check_ingress_link` on each ingress link, under the certifier's `LmsKey` in its
+`check_link` on each egress link, then `check_ingress_link` on each ingress link, under the network attester's `LmsKey` in its
 session. The cases are generated spatial units: an honest network attester (`grid.Certifier` driven by
 `schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
 a small LMS key in a sampled certifier session, then one change
@@ -271,7 +271,7 @@ class _Signer:
 
 
 class _Faulty(Certifier):
-    """A certifier that faults with `faults[t]` before releasing global bucket t."""
+    """A network attester that faults with `faults[t]` before releasing global bucket t."""
 
     def __init__(self, link, params, faults):
         super().__init__(link, params)
@@ -487,7 +487,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         records[at] = CertifiedRecord(r.head, r.salt,
                                       dataclasses.replace(c, signature=lms.sign_at(k2, 0, c.message(session)).encode()))
     elif m == "other-session" and at is not None:
-        # the same key's certificate of the same record in another of the certifier's sessions
+        # the same key's certificate of the same record in another of the network attester's sessions
         r = records[at]
         c = r.certificate
         other = draw(st.sampled_from([_flip(session, n), bytes(lms.SESSION_BYTES), bytes(range(lms.SESSION_BYTES))])

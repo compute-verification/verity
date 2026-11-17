@@ -158,7 +158,7 @@ def bits(adv, T: int, windows: int, config: dict | None, io: list[dict] | None) 
 # --- the endpoint's own advice ----------------------------------------------------------------------------------------
 
 ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
-SLACK_S = 1.0  # the endpoint's clock against the certifier's: a Commit window opening this soon before the run's origin
+SLACK_S = 1.0  # the endpoint's clock against the network attester's: a Commit window opening this soon before the run's origin
 COUNTS = ("v0_bits", "derived_bits", "derived_shaped_bits", "forced_bits")
 ROW_ORDER = {"runner": "batch", "scheduling": "scheduling"}
 

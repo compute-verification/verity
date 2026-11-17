@@ -3,7 +3,7 @@ the one root of its words.
 
 The window opens in this order. The record takes the weights' root, the committer's hm96 leaf over the window's key
 (``key_leaf``: with salt_w, the key derives the hiding of the committer's leaves) and the window's call count
-(``calls``), all three fixed before the certifier samples the window's salt salt_w. Then the record takes salt_w
+(``calls``), all three fixed before the network attester samples the window's salt salt_w. Then the record takes salt_w
 (`salted`). Then come the calls, in order: each one's root(A_j), at a position j below ``calls`` (`a_root`), so the
 committer's positions are injective. Once every call is in, the forward's words root comes (`words`): one words
 instance a forward, its calls' words in call order.
@@ -80,7 +80,7 @@ class PassRecord:
             raise RecordError(f"pass {self.pass_index}: {what} after the pass's record was published")
 
     def salted(self, salt: bytes) -> None:
-        """The window's salt salt_w, which the certifier sampled once it held the weights' root, the key leaf and the
+        """The window's salt salt_w, which the network attester sampled once it held the weights' root, the key leaf and the
         call count: once, before any A root."""
         self._open("the window's salt")
         if self.salt is not None:

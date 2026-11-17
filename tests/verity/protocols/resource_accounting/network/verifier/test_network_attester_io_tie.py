@@ -1,5 +1,5 @@
 """The I/O tie's prototype (`io_tie`) on the network attester's own egress: variable-length responses on a link served
-through the network attester's schedule (`network_attester.NetworkAttester._egress` cuts every cell, the certifier's grid lays them out a
+through the network attester's schedule (`network_attester.NetworkAttester._egress` cuts every cell, the network attester's grid lays them out a
 row a bucket, as `network_attester_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's
 map (through advice v1's order permutation where the engine's numbering isn't the arrival order, as on the corpus's
 heavy trace); and the Commit's sampled ids, one hiding row a step, which each bucket's proof block reads at its outputs'

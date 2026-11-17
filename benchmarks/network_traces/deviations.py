@@ -33,7 +33,7 @@ stream's next output, and the Commit is the ids given (``--ids``, the server's r
 or under ``--stand-in`` the stand-in endpoint's own (`network_attester_serve.fake_ids` of each request). Without either the tie
 isn't run, and the row says so. ``--ids`` is JSON lines, a request each with its `output_ids`: under its `user`, or
 under its `id` ``verity-<run>-<N>``, the name the certified tick gives a request that brings none (`tick_plugin`), the
-certifier's run id and the request's release number, so the server's own record of its requests is read as it is.
+network attester's run id and the request's release number, so the server's own record of its requests is read as it is.
 
 **A refusal counts only where it is the deviation's** (`row`). The tie's content refuses exactly the ids the planted
 bits changed, or exactly the connections whose last event was dropped, in a try the relay's check accepts. The relay
@@ -45,7 +45,7 @@ is never a deviation refused.
 **What the bound charges** (`leak_bounds.terms`): a connection's schedule and its fail cell, each ⌈log2(cells + 1)⌉
 bits, and the jitter, 0 at a jitter bound of 1; a refused class is charged nothing.
 
-**What a try keeps** (`keep`). ``--out`` gets a file a class, ``CLASS.json``: the schedule, the certifier's run id,
+**What a try keeps** (`keep`). ``--out`` gets a file a class, ``CLASS.json``: the schedule, the network attester's run id,
 the check's verdict in its words and its counts; of each connection its request's name, its release number, its cells'
 kinds, the ids it was sent, whether and why it failed, the bits planted on it and whether the front's response to
 it was whole; the egress record's cells, each as (bucket, slot, kind, stream, id); what the network attester logged

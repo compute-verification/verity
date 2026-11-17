@@ -24,7 +24,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-# the encodings' traces and the certifier's vectors that compile_slice_zk.py reads are fetched fixtures (artifacts.json)
+# the encodings' traces and the network attester's vectors that compile_slice_zk.py reads are fetched fixtures (artifacts.json)
 PYTHONPATH=$SRC/tools/research/src "$PY" -m research data fetch-fixtures --repo "$SRC" \
   tests/benchmarks/network_e2e/encodings/fixtures tests/verity/protocols/resource_accounting/network/verifier/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
   || { tail -20 "$OUT/fetch-fixtures.log"; exit 7; }

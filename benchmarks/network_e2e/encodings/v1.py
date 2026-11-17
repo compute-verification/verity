@@ -60,7 +60,7 @@ def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> 
     ingress bucket standing for its release a, its ingress time then its engine index for its ordinal, so that the
     record is in release order, and the trace's release buckets. A run under the certified tick (`Trace.releases`) has
     its releases certified: each request's `end` is its release bucket and its ordinal its release number, and its
-    outputs' buckets are on the certifier run's grid, none before its release; all count from the run's first release
+    outputs' buckets are on the network attester run's grid, none before its release; all count from the run's first release
     bucket."""
     if not trace.clocked():
         raise AdviceCodeError("the trace has no clock, so no certified buckets")

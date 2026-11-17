@@ -131,7 +131,7 @@ def case(egress: Sequence[tuple[str, Sequence[LogicalFrame], Sequence[ClockSync]
          grid: GridParams, ingress_grid: GridParams, sync_set: SyncSet, key: LmsKey, session: bytes,
          records: Sequence[Published]) -> dict:
     """A `serve` case of `verity/network-records/v3`: the unit's egress links with their frames and syncs, its ingress
-    links, the certifier's key and session, and the records."""
+    links, the network attester's key and session, and the records."""
     p = key.params
     params = {"egress": {"grid": _grid_json(grid), "links": [l for l, _, _ in egress]},
               "ingress": {"grid": _grid_json(ingress_grid), "links": list(ingress)},

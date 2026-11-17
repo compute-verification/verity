@@ -8,7 +8,7 @@
 # env: SC_GROUP=G (scan_zk.sh's: G execution phases, each a registration; a setting, in the result beside the identity)
 #      SC_CORES=N (21, the least a slot of the network pool gives: the job is pinned to the first N cores it has, and
 #      a job with fewer is refused; another N is another identity, which compares with no result at 21)
-#      SC_CLASS (w63k4, the benchmark's; `test`, the certifier tests' class, rehearses this runner, and its result
+#      SC_CLASS (w63k4, the benchmark's; `test`, the network attester tests' class, rehearses this runner, and its result
 #      compares with no w63k4 one)  SC_MEM_GB (128)  SC_CACHE  SC_PORT (scan_zk.sh's)
 # Every other SC_ setting is cleared, those of scan_zk.sh that change what is proved among them, and so are
 # OMP_NUM_THREADS and OMP_THREAD_LIMIT, which nproc answers with in place of the pin and the scan sizes its provers'

@@ -1,5 +1,5 @@
 """load-relay: the network attester's relay of the weights' load to the H200 and its commit of what crosses, in the exact
-form the units read it. The certifier reads the load from a source (a file, a pipe, another host's stream), writes every
+form the units read it. The network attester reads the load from a source (a file, a pipe, another host's stream), writes every
 byte on to the sink (the H200's) as it reads it, and commits every tensor of the seeded weights' manifest as a
 registered value, as the reading program's units read it (interface 1's registration for a program named by its
 digest): every tensor 16-bit leaves (a Boolean program's one-bit leaves rounded up, as the served step's Program reads
@@ -27,7 +27,7 @@ The demo's load is the gate's (``vy-challenger-gate weights-write`` and ``load-r
   4 TCP streams (one a tunnel), each value's bytes held to its digest as it crosses (`relay`'s ``digests``) and
   committed under the verifier's domain, every row's salts sent on to the sink with it. The sink writes the weights
   stream (what the H200's server loads) and the witness ``--witness`` (0600): the salts are the prover's alone,
-  kept on the H200's host and never on the certifier's. The relay writes ``load-heads.json`` (`heads_doc`) and
+  kept on the H200's host and never on the network attester's. The relay writes ``load-heads.json`` (`heads_doc`) and
   ``load-relay.json`` (its counts and the sink's acknowledgements), and signs nothing.
 * **The signature** (`heads_of`, `sign_heads`, `load_doc`): the serving network attester's one signer signs the
   heads in its session before it serves (``network_attester_serve.py serve --load-heads``), so one LMS key and one session
@@ -42,7 +42,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
     bytes, 139,862,212,608 B; the segment files back to back), then every tensor the store doesn't hold (the scales,
     norms and embeddings, 36,760,576 B) back to back in manifest order. The store's tensors are interface 1's s8
     matrices: a layer's ``qkv_proj`` is ``wq ‖ wk ‖ wv`` and its ``o_proj``, ``up_proj`` and ``down_proj`` are ``wo``,
-    ``wup`` and ``wdown``; ``lm_head`` is ``head`` (`store_tensors`). The certifier decodes each block a value's rows
+    ``wup`` and ``wdown``; ``lm_head`` is ``head`` (`store_tensors`). The network attester decodes each block a value's rows
     fall in (`pous.schemes.p2`'s keys after ``--salt``, the store's, and ``m = sq(σ_K(sq(c))) − t mod p``), refusing
     a block that isn't a codeword and a nonzero byte past a store tensor's end, and commits the decoded bytes. The
     store's blocks past its last tensor are relayed and not decoded: no unit reads them.
@@ -58,9 +58,9 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   ``hm96_salt``), here only to hold this commit to interface 1's fixture roots.
 * **The domain** is a parameter, by default the one the verifier derives (`transfer_rows.domain`: the reading program's
   digest ``--program``, the value's leaf width, a value held across windows dropping only the window), interface 1's.
-* **The certifier's key** is ``--key``'s (`certifier_key.load_key`'s layout), one LMS leaf a value (733 at H200), in
+* **The network attester's key** is ``--key``'s (`certifier_key.load_key`'s layout), one LMS leaf a value (733 at H200), in
   session ``--session``: the verifier pins a load and the windows' transfers under one key and session, so the load's
-  session is the serving certifier's.
+  session is the serving network attester's.
 
 ``load_bench.py`` times the relay.
 """
@@ -291,7 +291,7 @@ def plan(values: Sequence[Value], fmt: str = "plain", shape: Shape | None = None
 # --- one chunk's commit ---------------------------------------------------------------------------------------------------
 
 def os_salts(value: int, first: int, n: int) -> bytes:
-    """The certifier's salts: `n` rows' 192 bytes each, fresh from the operating system."""
+    """The network attester's salts: `n` rows' 192 bytes each, fresh from the operating system."""
     return os.urandom(SALT_BYTES * n)
 
 
@@ -421,14 +421,14 @@ def _work(args: tuple[Task, bytes]) -> tuple[int, int, bytes, int, bytes | None]
 # --- the relay ----------------------------------------------------------------------------------------------------------
 
 #: a refusal's word, which is all a run publishes of it (``load-relay.json``'s ``refused``, a store's record's): the
-#: certifier's own nine, of its store, its link's source and its signer, and ``sink`` for every way the developer's
+#: network attester's own nine, of its store, its link's source and its signer, and ``sink`` for every way the developer's
 #: sink failed, since which way is the developer's to choose
 REFUSALS = ("digest", "decode", "length", "signer", "no-digests", "no-store", "not-interface-1", "no-record",
             "store-size", "sink")
 
 
 class Refused(Exception):
-    """The certifier refuses the load: it signs nothing. `code` is its word among `REFUSALS`; the sentence (``str``)
+    """The network attester refuses the load: it signs nothing. `code` is its word among `REFUSALS`; the sentence (``str``)
     may name a value, a path of the auditor's device or what the sink said, and stays with the run's witness."""
 
     def __init__(self, code: str, why: str) -> None:

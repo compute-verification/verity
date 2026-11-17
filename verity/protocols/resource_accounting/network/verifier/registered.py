@@ -1,14 +1,14 @@
 """The network attester's link and key, read from the registered hardware: the Python mirror of
 `NetworkCheck.Registered` (`lean/NetworkCheck/Registered.lean`), which defines it.
 
-`registered(site, head, link, key)` reads a link's name and a certifier's key off the site of an accepted registration
+`registered(site, head, link, key)` reads a link's name and a network attester's key off the site of an accepted registration
 log's view: the link joins a network attester and a host, and the key is the one that certifier registered. It returns
-what the registration states of them (`Registered`): the link's id, its host end, the certifier's id and registered
+what the registration states of them (`Registered`): the link's id, its host end, the network attester's id and registered
 key, the link's capacity β in bits a second each way, and the head of the log the site was read at, which it carries
 and doesn't read. `Refused`, with the Lean's message, for a link that is no link of the site, a link that doesn't join a
-network attester and a host (the certifier's other half, to the outside; a host's bare uplink; a link between two
-hosts; a memory challenger's link), a certifier whose registered key is not lower-case hex, a key that is not the
-certifier's registered key, and a network attester's link that states no capacity, with or without a reason no
+network attester and a host (the network attester's other half, to the outside; a host's bare uplink; a link between two
+hosts; a memory challenger's link), a network attester whose registered key is not lower-case hex, a key that is not the
+network attester's registered key, and a network attester's link that states no capacity, with or without a reason no
 certifier splits it: there is no line rate to read for it.
 
 The registered key of a network attester is the string the checks' `key` parameter is: its LMS public key, I ‖ T[1],
@@ -186,8 +186,8 @@ def lower_hex(s: str) -> bool:
 
 
 def key_refusal(certifier: Mapping[str, Any], key: str) -> str | None:
-    """Why `key` is not the key of the network attester, or None when it is: the certifier's registered key is its LMS
-    public key in lower-case hex, and `key` is that string. The one reading of a certifier's registered key."""
+    """Why `key` is not the key of the network attester, or None when it is: the network attester's registered key is its LMS
+    public key in lower-case hex, and `key` is that string. The one reading of a network attester's registered key."""
     c, registered_key = certifier["id"], certifier["key"]
     if not lower_hex(registered_key):
         return (f"network certifier {c} registers the key {registered_key}, which is not lower-case hex; a network "
@@ -199,9 +199,9 @@ def key_refusal(certifier: Mapping[str, Any], key: str) -> str | None:
 
 def registered(site: Mapping[str, Any], head: str, link: str, key: str) -> Registered:
     """The network attester's link and key, as registered: `link` names a link of `site` (a `site_of`) that joins a
-    network attester and a host, and `key` is that certifier's registered key. `head`, the head of the log the site
+    network attester and a host, and `key` is that network attester's registered key. `head`, the head of the log the site
     was read at, is carried unread. `Refused` otherwise, naming the network attesters' links of the site or the
-    certifier's registered key, and last for a link that states no capacity."""
+    network attester's registered key, and last for a link that states no capacity."""
     k = next((x for x in site["links"] if x["id"] == link), None)
     if k is None:
         raise Refused(f"link {link}: no link of the registered hardware; {_right_links(site)}")

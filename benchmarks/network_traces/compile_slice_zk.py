@@ -57,7 +57,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
   ``adv`` row is row i of the advice's hiding registration (`verity.commitments.advice`: its leaf from b‖c, its path
   to the registered root), its ``srv`` row j is leaf i·(P / G) + j of the served rows' registration
   (`served_rows.leaf`, `served_rows.leaf_ok`), its
-  ``cert`` row is the certified record's commitment (a stand-in: one ``cert`` row under the certifier's salt, b‖c as
+  ``cert`` row is the certified record's commitment (a stand-in: one ``cert`` row under the network attester's salt, b‖c as
   `a7.opens` recomputes it; ``arrival``, ``tokens`` and ``max-tokens`` hold rows other than it, and ``max-tokens`` this
   check alone refuses), and its ``cin`` and ``cout`` rows are the window's carry rows in the session's chain
   (`window_charge.check_chain` on the earlier windows' openings and the unit's two).
@@ -427,7 +427,7 @@ def population(meta: dict, kinds: tuple[str, ...]) -> int:
 
 
 def certified(M, port, words: list[int], salt: bytes) -> bytes:
-    """The certified record's commitment b‖c (the stand-in: the honest ``cert`` row under the certifier's salt)."""
+    """The certified record's commitment b‖c (the stand-in: the honest ``cert`` row under the network attester's salt)."""
     return M.CS.FC._commit_strings([port], {port.name: M.np.asarray([words], dtype=M.np.uint16)}, {port.name: [salt]})[port.name][0]
 
 

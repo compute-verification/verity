@@ -1,4 +1,4 @@
-"""negatives: what network certification of arbitrary vLLM usage must refuse, beside honest traffic, each naming the
+"""negatives: what network attestation of arbitrary vLLM usage must refuse, beside honest traffic, each naming the
 check that refuses it by its refusal code, and the advice and Commit tamperings each a pure edit.
 
     python benchmarks/network_traces/negatives.py table [--markdown]
@@ -13,7 +13,7 @@ I3's (serve-openai's).
 - ``plan``: what the endpoint sent, tampered by a shim between the endpoint and the network attester while serving:
   the network attester certifies what the shim wrote.
 - ``certified``: the certified records the prover commits (`certified.jsonl`) after the run, under the certificates the
-  certifier issued.
+  network attester issued.
 - ``frames``: the certified frames the prover opens under each record's frames root (the I/O tie's reads).
 - ``advice``: the advice string the prover hands the compiler after serving (I1).
 - ``commit``: the Commit record of the run's committed values (I3).
@@ -23,10 +23,10 @@ it that fails. On the proof system's stream every refusal shows only ``reject`` 
 verifier); the code is what the verifier establishes:
 - ``NetworkHeadCheck_v2.{opening,fields,counts,signed}``: N2's head check of each end (`head_check.reference_parts`):
   the head opens under the registered root, its fields (link, end, window, grid, status complete), its counts the
-  profile's row, and its record digest under the certifier's salt the certificate's signed digest;
+  profile's row, and its record digest under the network attester's salt the certificate's signed digest;
 - ``NetworkServedCounts_v1``: N2's served counts on a served link (`served.reference`);
 - ``audit.VIOLATION``: N2's audit of both records (`audit.Audit`, the Python reference of the Lean check of record);
-- ``Issuer.refused``: no check's but the certifier's: it certifies no record whose status isn't complete
+- ``Issuer.refused``: no check's but the network attester's: it certifies no record whose status isn't complete
   (`certificate.Issuer`, which lists the execution phase in `refused`), so the window has no certified record and the
   link stops there;
 - pending checks, by the names their drafts give them: ``IoTieRequest`` (`io_request`'s ingress tie, a unit a bucket

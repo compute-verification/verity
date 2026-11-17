@@ -215,7 +215,7 @@ def weaken(monkeypatch, pick) -> None:
 
 
 def test_an_execution_phase_picks_its_entry_and_is_signed_at_its_sessions_number(server, monkeypatch):
-    """The parameters list the certifier's entries, each a key, its session and the start of its stretch, and the
+    """The parameters list the network attester's entries, each a key, its session and the start of its stretch, and the
     period's execution phase alone picks the entry its certificates and row registrations are held to: that entry's key,
     its session, and that session's number for the execution phase, the period's less the entry's start. A period
     whose every signature is the second of two entries' (`second-key`), and one whose one execution phase is the

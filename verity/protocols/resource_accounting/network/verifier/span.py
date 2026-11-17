@@ -144,7 +144,7 @@ def _schedule(j: Any) -> Schedule:
 
 
 def params(j: Any) -> Params:
-    """The count's parameters, all public: the network attester's LMS key and its parameters, the certifier session,
+    """The count's parameters, all public: the network attester's LMS key and its parameters, the network attester session,
     the link, its name held to what the period's check holds it to, and the schedule. With the registered hardware
     (`site`, the site of a registration log's view, and `head`, the head of the log it was read at, which come
     together), the link and the key are read off the site (`registered.registered`): the link joins a network

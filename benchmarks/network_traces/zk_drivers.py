@@ -1,4 +1,4 @@
-"""zk-drivers: the command line of the network attester's zero-knowledge drivers, which live in the certifier's prover
+"""zk-drivers: the command line of the network attester's zero-knowledge drivers, which live in the network attester's prover
 (`verity/protocols/resource_accounting/network/prover/`) and take the proof system's benchmark drivers as one
 `proof_drivers.ProofDrivers`. This builds it from SPOT's template audit, challenger session and development challenger
 (`a0`, `a5_coins`, `local_challenger`),
