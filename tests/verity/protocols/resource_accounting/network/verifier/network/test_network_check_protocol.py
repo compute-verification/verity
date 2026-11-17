@@ -642,7 +642,7 @@ def counted(case) -> dict:
     return out
 
 
-PORT = D.ProtocolPort("network-check", counted, cases(), package=LEAN)
+PORT = D.ProtocolPort("network-verifier", counted, cases(), package=LEAN)
 server = D.server_fixture(PORT)
 
 
@@ -678,7 +678,7 @@ def test_a_reference_wrong_on_one_path_is_caught(server):
             return "accept", {}, {}
         return out
 
-    port = D.ProtocolPort("network-check", lambda case: reference(case, own_clock), cases(), package=LEAN)
+    port = D.ProtocolPort("network-verifier", lambda case: reference(case, own_clock), cases(), package=LEAN)
     with pytest.raises(D.Mismatch) as x:
         D.run(port, examples=1200, server=server)
     assert (x.value.lean[0], x.value.python[0]) == ("reject", "accept")
