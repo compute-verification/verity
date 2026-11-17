@@ -69,7 +69,7 @@ def _needles(blobs: dict[str, bytes]) -> dict[bytes, str]:
 def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     scan = SimpleNamespace(PIECE=16, needles=_needles, find=lambda data, t: {n: 1 for nd, n in t.items() if nd in data})
     blobs, held = n2.blobs_of(runs["honest"])
-    assert {k.rsplit(" ", 1)[0] for k in blobs} >= {"head egress", "head salt ingress", "certifier salt egress",
+    assert {k.rsplit(" ", 1)[0] for k in blobs} >= {"head egress", "head salt ingress", "attester salt egress",
                                                      "record salt ingress", "sibling 1 egress"}
     assert any(len(b) % 16 for b in blobs.values())  # a head's tail (403 bytes), which only the last pieces cover
     every = {b[o:o + 16].ljust(16, b"\0") for b in blobs.values()

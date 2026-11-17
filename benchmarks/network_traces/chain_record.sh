@@ -22,14 +22,14 @@
 #            $OUT/leak-guard.json), and the rest of the hold released to $OUT
 # The path is the network attester path (CR_PATH=warden, the only one): every step reads the active network attester's own run
 # (CR_WARDEN_RUN, or the one gate run holding a certified.jsonl) and nothing of a network attester rehearsal's, which in
-# CR_GATES is refused by name; the report requires every step (chain_record.NETWORK_CERTIFIER).
+# CR_GATES is refused by name; the report requires every step (chain_record.NETWORK_ATTESTER).
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
 #      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)
 #      CR_DEPLOYED=1 (certs refuses a key that isn't LMS at lms.DEPLOYED, H = 20)
 #      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
 #      an art: id, or a directory; or the served node's endpoint report instead, a report.json beside no
 #      advice_trace.jsonl, which the endpoint step then reads rather than runs)
-#      CR_N2_CMD (replaces n2_zk.py prove; run with NETWORK_CERTIFIER, BIN, LEAN and N2OUT set, writing N2OUT/summary.json)
+#      CR_N2_CMD (replaces n2_zk.py prove; run with NETWORK_ATTESTER, BIN, LEAN and N2OUT set, writing N2OUT/summary.json)
 #      CR_WARDEN_RUN (the network attester rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more
 # scan_zk.py      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
 #      CR_EOS_IDS (the endpoint step: the model's EOS token ids,
@@ -41,7 +41,7 @@
 #      CR_PINS (the verifier's own pins, a JSON {param: root}: the report's --pins, the registered rows K leaves out)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
 #      X.case.json beside it, a path or a name under inputs/): the report's --period-answer, whose block says why it
-#      writes no certifier entry (chain_record.block_entry)
+#      writes no attester entry (chain_record.block_entry)
 #      CR_SCAN_ONLY=1 (the scan alone, its report given no N2 summary: "scan only, N2 not given"; the record's N2 runs
 #      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
 #      CR_QUARANTINE (where what the record mustn't hold goes, 0700 and outside the run dir: by default quarantine/RUN
@@ -59,7 +59,7 @@
 # which execution phases its members' signer refused, and its log of them with its stderr and its children's, n2.log),
 # nor a child's log in a step's output (a session's prove.log and serve.log). Those are witness,
 # kept on the chain's private side, $Q/witness/STEP (0700, outside the run dir and the hold), where the period's case
-# reads the answers (certifier_piece.py), and never released.
+# reads the answers (attester_piece.py), and never released.
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
 # them), so none of it may hold the gates' witness. Every step writes to the hold, $Q/held (0700, outside the run dir),
 # and so does the job's own stdout and stderr (released as out/stdout.log), so nothing it writes reaches the record
@@ -142,7 +142,7 @@ done
 CR_PATH=${CR_PATH:-warden}
 [ "$CR_PATH" = warden ] || { log "chain: CR_PATH=$CR_PATH: the network attester path is the only one"; exit 3; }
 PROXY=$(find "$G" \( -name plan.json -o -name calibration.json -o -name proxy.json.gz \) -print -quit)
-[ -z "$PROXY" ] || { log "chain: the network attester path reads no certifier rehearsal's run (its records through" \
+[ -z "$PROXY" ] || { log "chain: the network attester path reads no attester rehearsal's run (its records through" \
   "the older network attester's proxy), and ${PROXY#$G/} is one's"; exit 3; }
 if [ -n "${CR_WARDEN_RUN:-}" ]; then NETWORK_CERTIFIER=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
 else NETWORK_CERTIFIER=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); NETWORK_CERTIFIER=${NETWORK_CERTIFIER%/witness}; fi

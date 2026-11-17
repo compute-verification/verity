@@ -21,8 +21,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "test_capture_loopback.py",
-    "test_certifier_piece.py",
-    "test_certifier_term.py",
+    "test_attester_piece.py",
+    "test_attester_term.py",
     "test_chain_record.py",
     "test_chain_record_guard.py",
     "test_kept_scan.py",
@@ -38,7 +38,7 @@ untraced = [
 # header, read through the encodings' replay (with the modules `_encodings` loads beside it); the trace is in the
 # encodings' fixtures, one fetched tree, which is listed whole so that suites.py fetches it. compile_slice_zk lowers and
 # stages through one_stage's a0, a7 and a8 (with the population a0 and a7 read), and a8 reads Flock's proof format
-# with its verifier's reader. test_certifier_piece holds the block record's certifier entry to the block record's
+# with its verifier's reader. test_attester_piece holds the block record's attester entry to the block record's
 # schema and `block_record`; test_chain_record reads certifier/v0 cases from period_case
 # (the period check's Python mirror, with verity_difftest's decoders, and its pinned slot entry's fixture).
 # Network attestation's zero-knowledge drivers' tests run on the drivers zk_drivers.py installs: one-stage's a7, a8 and
@@ -48,8 +48,8 @@ untraced = [
 # demo_stub's endpoint records are read as the network attester path's endpoint step reads them: `verity-vllm advice` (with the
 # step trace and the records it imports, the engine handle the step trace finds a scheduler through, the registry it
 # wraps the scheduler through with the ranks its parts run by, and its CLI, which served_session's endpoint step runs it
-# through) and network-e2e's chain. certifier_piece is the network attester's piece of one_stage's served_verdicts,
-# whose pieces and record test_certifier_piece runs it through into the block record.
+# through) and network-e2e's chain. attester_piece is the network attester's piece of one_stage's served_verdicts,
+# whose pieces and record test_attester_piece runs it through into the block record.
 # leak_bounds counts K over the census's reference datacenter and the world, one link a machine: the world is the slowdown calculator's
 # world fleet and its machine's GPUs, and the weights are the workload card's parameters. A scope's requests are by
 # default the sampling plan's: the break-even planner's case, which it builds from Figure 1's lines (figure1.py,
@@ -84,14 +84,14 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           # across its package and the PyTorch adapter's; demo_stub's `verity-vllm advice`, the encodings' replay and
           # compile_slice_zk's compiler read the vLLM package too. Both packages are listed whole, as they move often. SPOT's
           # prove_path, which test_kept_scan imports with the records_audit it imports, reads its sources' list.
-          # test_certifier_term runs `verity bench certifier_term`'s runner, test_block_certifier holds the block certifier to
-          # the block record's period-0 fixture, and test_certifier_piece holds the CLI's served_table to scan_zk's scan class.
+          # test_attester_term runs `verity bench certifier_term`'s runner, test_block_attester holds the block attester to
+          # the block record's period-0 fixture, and test_attester_piece holds the CLI's served_table to scan_zk's scan class.
           "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
           "benchmarks/certifier_term/run.py",
           "tests/benchmarks/one_stage/interfaces/fixtures/block-record-r2-period0.json",
           "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/records_audit.py",
           "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py", "benchmarks/network_traces"]
-# network-rows, the compiled audit of the network attester's records, which test_certifier_piece builds in its package
+# network-rows, the compiled audit of the network attester's records, which test_attester_piece builds in its package
 # (as the piece does) and runs on the synthetic run's records; the Lean verifier, whose statement setup test_network_attester_zk
 # and test_egress_zk run on their staged members.
 artifacts = ["verity/protocols/resource_accounting/network/verifier/lean/.lake/build/bin/network-rows",
@@ -101,7 +101,7 @@ artifacts = ["verity/protocols/resource_accounting/network/verifier/lean/.lake/b
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["test_certifier_piece.py"]
+tests = ["test_attester_piece.py"]
 paths = ["benchmarks/network_traces"]
 
 [[tool.verity.tests.reads]]

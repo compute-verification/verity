@@ -91,7 +91,7 @@ def test_a_headline_row_names_what_breaks(change, message):
     change(c["value"]["rows"][0])
     with pytest.raises(ValueError, match=message):
         cards.check(c)
-def test_a_certifier_card_is_a_network_attester_schedule():
+def test_a_attester_card_is_a_network_attester_schedule():
     """A network attester card's schedule is `NetworkAttesterParams`' fields: an unknown field, a cap past the egress cells and a cap
     outside the id egress form are refused, as the network attester refuses them."""
     c = good() | {"slot": "certifier", "value": {"schedule": {"max_tokens_cap": 875}}}

@@ -6,14 +6,14 @@ wrote no answer errs; and SPOT's accepted answer composes, with the others missi
 block record. The block record's verdict is the Lean check's answer, so with none here it is undecided (the window's
 pending) even when every subprotocol accepted on its node; the record names each one missing, rejecting, malformed or
 about another server. An accepted network attester's clause names the one link K counts and every other
-link of the node uncounted and uncertified; one whose certifier ran on the node names no link. The wipe composes only
+link of the node uncounted and uncertified; one whose attester ran on the node names no link. The wipe composes only
 when its answer accepts on the record's server. Remote's product runs no onsite piece and composes SPOT and
 PoUW alone, the others dropped. PoUW's development piece checks the window's gate session and credits
 nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and count the class of record only where
-CLASSES names it; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
+CLASSES names it; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's attester
 front doesn't take, a front whose endpoint isn't on the network attester's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 attester's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
@@ -632,7 +632,7 @@ def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
     assert capsys.readouterr().out == "no session (FileNotFoundError)\n"
 
 
-def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_private_after_the_record(tmp_path):
+def test_the_attesters_chain_files_that_count_requests_move_to_the_serve_dirs_private_after_the_record(tmp_path):
     """`served_verdicts.sh private-pieces` moves CERTIFIER_PRIVATE out of $OUT/pieces/certifier into the serve dir's
     private/, 0700, and leaves the piece's answer, its certificates and its verdict where the record and its reader
     find them. The piece's case is in that private directory already, where the piece keeps it (0600): the move
@@ -861,7 +861,7 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
 
 
 @pytest.mark.parametrize("key", ["trusted-device", "trusted-host"])
-def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests_on(tmp_path, key):
+def test_an_accepted_attester_answer_says_what_its_trusted_device_premise_rests_on(tmp_path, key):
     """The network attester's answer as its piece writes it when it ran on the gate's machine and the piece's steps on
     the served node: its accept's clause says the piece establishes no trusted-device and gives no bound, and which
     machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices having placed it. A record
@@ -880,7 +880,7 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests
     assert line["reason"].split("; the network certifier: ", 1)[1].startswith(f"accept (trusted-device {premise}; ")
 
 
-def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_gate_names_none(tmp_path):
+def test_an_accepted_attester_answer_names_the_one_link_k_counts_and_a_local_gate_names_none(tmp_path):
     """The network attester's placement as its piece writes it. On the gate's host, its ``links`` are the relayed link
     K counts and the gate's ssh link it doesn't: the accept's clause names the counted link and says every other link of
     the node is uncounted and uncertified, before the premise. Under ``--gate local`` it has no links, and the clause
@@ -1080,7 +1080,7 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     pieces, ran = tmp_path / "pieces", tmp_path / "ran"
     pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
     env = {"POUW_CMD": f"echo '{json.dumps(pouw)}' > \"$3/answer.json\"",
-           **{f"{c}_CMD": f"touch {ran}" for c in ("POUS", "BANDWIDTH", "CERTIFIER")}}
+           **{f"{c}_CMD": f"touch {ran}" for c in ("POUS", "BANDWIDTH", "ATTESTER")}}
     got = S.pieces(tmp_path, 1, pieces, env=env, node="vy-dc-h200", product="remote")
     why = "not run: the remote product composes sampled proofs and PoUW alone"
     assert not ran.exists()
@@ -3526,7 +3526,7 @@ V3C_DEV = "a development challenger session where it runs (V3C_CHALLENGER local)
 V3C_ENTRY = f"COINS V3c's audit: {V3C_DEV}"
 
 
-def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_the_period_json_after(tmp_path):
+def test_v3c_runs_the_attesters_chain_beside_its_audit_and_its_period_check_on_the_period_json_after(tmp_path):
     """After its COINS line, the window commit, then the split network attester's chain (it reads the commit's scan state)
     beside V3c's audit and its period.json, and the attestation period check on it once both are done, each within its
     own limit; the check gets the serve dir, the window, network attestation's piece dir and V3c's dir, and writes the answer
@@ -3561,7 +3561,7 @@ def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_
 
 def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
     """V3c's audit wrote no period.json: no period check, and `served_verdicts.sh v3c` exits 1 once it has moved the
-    chain's log to the serve dir's private/pieces/certifier."""
+    chain's log to the serve dir's private/pieces/attester."""
     rc, lines, order, _limits = _v3c(tmp_path, FAIL_PERIOD="1")
     assert rc == 1 and order[:2] == ["window-circuit", "window-commit"]
     assert sorted(order[2:]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
@@ -3578,7 +3578,7 @@ def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
     ((), {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None},
      "PREFLIGHT: the split attestation period check reads V3c's period.json, and V3C_CLASS is empty"),
 ])
-def test_the_split_certifier_needs_v3c_and_no_whole_piece_beside_it(tmp_path, args, extra, line):
+def test_the_split_attester_needs_v3c_and_no_whole_piece_beside_it(tmp_path, args, extra, line):
     """The split's period check writes network attestation's answer from V3c's period.json, so the preflight refuses it beside
     CERTIFIER_CMD, the whole piece's command, and in a run that leaves V3c out, before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, args, **extra)
@@ -5042,7 +5042,7 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
 
 
 def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
-    """The follow-on of `_deferred`'s deferral: `served_verdicts.sh v3c` with D alone (no K, class or certifier) on
+    """The follow-on of `_deferred`'s deferral: `served_verdicts.sh v3c` with D alone (no K, class or attester) on
     cpu-6, a node with V3c's audit's memory, at the served node's tree, in `_v3c`'s toy tree with a record and a
     composite that note their arguments (``extra`` adds to the environment, None unsetting): `_v3c`'s outcome."""
     _script(tmp_path / "tree" / "benchmarks" / "one_stage" / "served_composite.sh", FAKE_SERVED_COMPOSITE)
@@ -6385,14 +6385,14 @@ def _script(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" --bucket-ms 4000 --warmup 0'
+FRONT = '"$PY" benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" --bucket-ms 4000 --warmup 0'
 
 
 IDS = "--protocol ids --id-payload 503"
 #: the runner's refusal of a front in front of an endpoint that is off the id form
 OFF_IDS = ("PREFLIGHT: the network attester front sends id-form requests, which serve-openai answers only under "
            f"SERVE_ARGS='{IDS}'")
-SESSION_CLOSE = '"$PY" benchmarks/network_traces/certifier_piece.py close "$1" "$2"'
+SESSION_CLOSE = '"$PY" benchmarks/network_traces/attester_piece.py close "$1" "$2"'
 
 
 @pytest.mark.parametrize("load, front, takes, serve_args, line", [
@@ -6400,7 +6400,7 @@ SESSION_CLOSE = '"$PY" benchmarks/network_traces/certifier_piece.py close "$1" "
     ("front", FRONT, "--gate --warmup --bucket-ms", IDS, None),
     ("varied", "", "", "", None),
     ("varied", FRONT, "--gate --warmup --bucket-ms-x", IDS, "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this "
-                                                             "tree's certifier front doesn't take"),
+                                                             "tree's attester front doesn't take"),
     ("front", "", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
     ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", OFF_IDS),
 ])
@@ -6408,8 +6408,8 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
         tmp_path, load, front, takes, serve_args, line):
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     (tree / "benchmarks" / "network_traces").mkdir(parents=True)
-    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
-        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
+    (tree / "benchmarks" / "network_traces" / "attester_piece.py").write_text(
+        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: attester_piece.py front PORT [{takes}]')\n")
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "LOAD": load, "CERTIFIER_FRONT": front, "SERVE_ARGS": serve_args}
@@ -6423,8 +6423,8 @@ SESSION = {"LOAD": "session", "CERTIFIER_FRONT": FRONT + " --session --client-po
            "LOAD_CMD": "the-callers-load", "CERTIFIER_CLOSE": SESSION_CLOSE, "SERVE_ARGS": IDS}
 SESSION_TAKES = "--gate --warmup --bucket-ms --session --client-port --windows"
 NO_SESSION = ("PREFLIGHT: LOAD=session is the caller's load through a relay session, which CERTIFIER_FRONT opens "
-              "(certifier_piece.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes "
-              "(certifier_piece.py close), and {} is unset")
+              "(attester_piece.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes "
+              "(attester_piece.py close), and {} is unset")
 
 
 @pytest.mark.parametrize("env, takes, line", [
@@ -6436,7 +6436,7 @@ NO_SESSION = ("PREFLIGHT: LOAD=session is the caller's load through a relay sess
      "PREFLIGHT: LOAD=session sends the caller's load through a relay session, and CERTIFIER_FRONT passes no "
      "--session, so its front would send a group of its own"),
     (SESSION, "--gate --warmup --bucket-ms --client-port --windows",
-     "PREFLIGHT: CERTIFIER_FRONT passes --session, which this tree's certifier front doesn't take"),
+     "PREFLIGHT: CERTIFIER_FRONT passes --session, which this tree's attester front doesn't take"),
     ({**SESSION, "SERVE_ARGS": ""}, SESSION_TAKES, OFF_IDS),
     ({**SESSION, "LOAD": "varied", "CERTIFIER_CLOSE": "", "CERTIFIER_FRONT": FRONT}, SESSION_TAKES,
      "PREFLIGHT: LOAD_CMD is LOAD=session's, and LOAD is varied: unset it"),
@@ -6453,8 +6453,8 @@ def test_the_preflight_takes_a_session_only_whole_and_none_of_it_under_another_l
     passes ``--session`` are each refused, so no run of another load starts a relay session."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     (tree / "benchmarks" / "network_traces").mkdir(parents=True)
-    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
-        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
+    (tree / "benchmarks" / "network_traces" / "attester_piece.py").write_text(
+        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: attester_piece.py front PORT [{takes}]')\n")
     _script(venv / "python", f'exec {sys.executable} "$@"')
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, check=False,
                         env={"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent),
@@ -6997,7 +6997,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
             p for p in C.COMPONENTS[x] if p not in want]
 
 
-def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory_which_holds_no_answer(tmp_path):
+def test_the_composite_takes_no_case_from_the_attester_pieces_private_directory_which_holds_no_answer(tmp_path):
     """Network attestation's piece keeps its case in the serve dir's private/pieces/certifier, beside the chain files
     `private-pieces` moves there and no answer: its answer is the run's, under OUT/pieces. served_composite.sh, with
     onsite_pieces.sh's `onsite_cases` and composite.py as they are and a stand-in for each product's Lean (`NO_LEAN`),
@@ -7006,7 +7006,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     remote, which doesn't compose it, misses nothing. What reads the network attester's private case into a composite is not
     shown here."""
     import composite as C
-    certifier = "verity/certifier/v0"
+    attester = "verity/certifier/v0"
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     (tmp_path / "lean").write_text(f"#!{sys.executable}\n{NO_LEAN}")
     (tmp_path / "lean").chmod(0o755)
@@ -7018,7 +7018,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
     own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])
-           if p != certifier}
+           if p != attester}
     for p, where in own.items():
         (d / "private" / where).mkdir(parents=True)
         (d / "private" / where / "case.json").write_text(json.dumps(
@@ -7034,17 +7034,17 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
         (kept / f).parent.mkdir(parents=True, exist_ok=True)
         (kept / f).write_text(text)
     (out / "pieces" / "certifier").mkdir(parents=True)
-    (out / "pieces" / "certifier" / "answer.json").write_text(json.dumps({"protocol": certifier, "verdict": "accept"}))
+    (out / "pieces" / "certifier" / "answer.json").write_text(json.dumps({"protocol": attester, "verdict": "accept"}))
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
     r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
                        check=False, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
-    assert certifier in C.COMPONENTS["onsite"] and certifier not in C.COMPONENTS["remote"]
+    assert attester in C.COMPONENTS["onsite"] and attester not in C.COMPONENTS["remote"]
     said = [x for x in (out / "verdicts.txt").read_text().splitlines() if "NOT_ESTABLISHED" in x or "LEFT_OUT" in x]
-    assert said == [*UNSHOWN["remote"], f"COMPOSITE onsite: NOT_ESTABLISHED missing {certifier}", *UNSHOWN["onsite"]]
+    assert said == [*UNSHOWN["remote"], f"COMPOSITE onsite: NOT_ESTABLISHED missing {attester}", *UNSHOWN["onsite"]]
     for x in ("remote", "onsite"):
-        want = [p for p in C.COMPONENTS[x] if p != certifier]
+        want = [p for p in C.COMPONENTS[x] if p != attester]
         made = d / "private" / "composite" / x / "private"
         assert [(c["id"], c["params"]) for c in json.loads((made / "params.json").read_text())["components"]] == [
             (p, {"in": own[p]}) for p in want]
@@ -7416,10 +7416,10 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
               f"    : > {tmp_path}/up; echo > {tmp_path}/ready; read _ < {tmp_path}/hold ;;\n"
               "  *serve_load.py*) echo '4/4 ok'; exit 0 ;;\n"
               "  *weights-registration*) exit 1 ;;\n"
-              "  *'certifier_piece.py front '*' --session '*)\n"
+              "  *'attester_piece.py front '*' --session '*)\n"
               "    [ -z \"$FRONT_REFUSES\" ] || exit 2\n"
               f"    mkdir -p {session} && echo '{{}}' > {session}/relay.json ;;\n"
-              f"  *'certifier_piece.py close '*) [ -f {session}/relay.json ] || exit 2; : > {session}/fetch.tar.gz ;;\n"
+              f"  *'attester_piece.py close '*) [ -f {session}/relay.json ] || exit 2; : > {session}/fetch.tar.gz ;;\n"
               "  *) exit 0 ;;\n"
               "esac")
     for path, body in ((venv / "python", python), (bin_ / "sleep", f"[ -e {tmp_path}/up ] || read _ < {tmp_path}/ready")):
@@ -7463,8 +7463,8 @@ SERVE_LOAD = ("TMP/tree/adapters/vllm/tools/served_run/serve_load.py --port 1819
               f"--prompt-range 16:24 --release {RELEASE_RUN} --seed 1 --out TMP/serve/load.jsonl")
 VARIED_LOAD = SERVE_LOAD.format(load="--varied 4 --rate 1000 --max-tokens 4")
 FIXED_LOAD = SERVE_LOAD.format(load="--fixed 4 --window-steps 256")
-REHEARSAL_FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" --gate local'
-FRONT_CALL = "benchmarks/network_traces/certifier_piece.py front 18190 TMP/serve TMP/serve/private/certifier-front --gate local"
+REHEARSAL_FRONT = '"$PY" benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" --gate local'
+FRONT_CALL = "benchmarks/network_traces/attester_piece.py front 18190 TMP/serve TMP/serve/private/certifier-front --gate local"
 FRONT_LINE = "TMP/tree/benchmarks/one_stage/served_verdicts.py front-line TMP/serve/private/certifier-front/session.json"
 SAID_UP = ["SERVE SERVE-OPENAI listening",
            "NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free "
@@ -7514,13 +7514,13 @@ def test_under_every_other_load_the_serve_step_starts_nothing_of_a_session(tmp_p
                                                "CERTIFIER_CLOSE": _notes(tmp_path, "a session's close")})
     assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (rc, calls)
     assert lines == SAID_UP + said + SAID_STOPPED
-    assert not [c for c in calls if "--session" in c or "certifier_piece.py close" in c or "a session's" in c]
-    assert sum("certifier_piece.py" in c for c in calls) == ("CERTIFIER_FRONT" in env)
+    assert not [c for c in calls if "--session" in c or "attester_piece.py close" in c or "a session's" in c]
+    assert sum("attester_piece.py" in c for c in calls) == ("CERTIFIER_FRONT" in env)
 
 
 SESSION_FRONT = REHEARSAL_FRONT + " --session --client-port 18191 --windows 8"
 SESSION_FRONT_CALL = FRONT_CALL + " --session --client-port 18191 --windows 8"
-CLOSE_CALL = "benchmarks/network_traces/certifier_piece.py close TMP/serve TMP/serve/private/certifier-front"
+CLOSE_CALL = "benchmarks/network_traces/attester_piece.py close TMP/serve TMP/serve/private/certifier-front"
 CALLERS_LOAD = "the caller's load: TMP/serve/private/certifier/run-1/relay.json TMP/serve"
 SAID_SENT = ("REQUESTS (exit {rc}): the caller's load, sent through the network certifier's relay session (the serve "
              "dir's load.log, on the node)")

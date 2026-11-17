@@ -54,15 +54,15 @@ def stored(host) -> A.Host:
 
 def gate(host, argv, *, key=LANE, active=lambda r: False, token="ab12", stdin=None):
     argv = ["--ssh", shlex.join(argv)] + ([] if key is None else ["--key", key])
-    return A.gate(argv, host, now=T0, token=token, own=lambda p: None, certifier_active=active,
-                  start_certifier=lambda r: None,
+    return A.gate(argv, host, now=T0, token=token, own=lambda p: None, attester_active=active,
+                  start_attester=lambda r: None,
                   read=lambda n: pytest.fail("read stdin") if stdin is None else stdin[:n])
 
 
 def ended_why(host, end: dict) -> str:
     """The sentence a run's end's `ended` word stands for, which the gate writes to the run's `witness/` alone."""
     assert end["ended"] in A.ENDED
-    return (host.certifier / end["run"] / A.WITNESS / A.ENDED_WHY).read_text().removesuffix("\n")
+    return (host.attester / end["run"] / A.WITNESS / A.ENDED_WHY).read_text().removesuffix("\n")
 
 
 def refused(rc: int, out: bytes) -> str:
@@ -83,7 +83,7 @@ def test_weights_write_needs_the_store_disk_and_a_lane_key_and_its_run_writes_th
             refused(*gate(host, write, key=key))
     assert "--shape 'small': one of ['h200', 'tiny']" in refused(*gate(host, ["weights-write", "--shape", "small"]))
     assert "weights-write: unrecognized arguments: --peer" in refused(*gate(host, write + ["--peer", "vy-nebius-1"]))
-    assert not host.certifier.exists()
+    assert not host.attester.exists()
 
     ends = []
     for token in ("ab12", "cd34"):
@@ -101,7 +101,7 @@ def test_weights_write_needs_the_store_disk_and_a_lane_key_and_its_run_writes_th
         assert end["store"] == {"status": status, "format": LR.STORE_FORMAT, "shape": LR.TINY.name,
                                 "model": LR.model_id(LR.TINY), "stream_bytes": 34240,
                                 "fold": LR.STORE_DIGESTS[LR.TINY.name]}
-        d = host.certifier / end["run"]
+        d = host.attester / end["run"]
         assert set(end["files"]) == {"store.json"} and json.loads((d / "out" / "store.json").read_text()) == end["store"]
         assert {p.name for p in (d / A.WITNESS).iterdir()} == {"rehearse.log", "store.json", A.ENDED_WHY}
         assert json.loads((d / A.WITNESS / "store.json").read_text()) == end["store"]
@@ -119,7 +119,7 @@ def test_a_refused_store_write_ends_in_its_word_and_a_record_out_of_form_is_not_
     run = json.loads(gate(host, write)[1])["run"]
     host.store.rmdir()
     end = A.certifier_run(host, run, pinned=PIN, wait=lambda proc, s: proc.wait())
-    d = host.certifier / run
+    d = host.attester / run
     assert end["rc"] == 1 and end["ended"] == "exited" and end["store"] == {"refused": "no-store"}
     assert json.loads((d / "out" / "store.json").read_text()) == {"refused": "no-store"}
     public = (d / "end.json").read_text() + (d / "out" / "store.json").read_text()
@@ -143,7 +143,7 @@ def test_a_refused_store_write_ends_in_its_word_and_a_record_out_of_form_is_not_
                                                            f"import pathlib; out = pathlib.Path({str(out)!r})\n{wrote}"])
     assert (end["rc"], end["ended"], end["store"], end["files"]) == (2, "unruled", None, {})
     assert "holds ['fold', 'format', 'model', 'path'" in ended_why(host, end)
-    assert str(host.store) not in (host.certifier / run / "end.json").read_text()
+    assert str(host.store) not in (host.attester / run / "end.json").read_text()
 
 
 def test_the_store_write_runs_load_relay_write_over_every_core_into_the_store():
@@ -168,7 +168,7 @@ def test_a_store_write_whose_unit_is_stopped_stops_its_writer_and_writes_its_end
     assert end["device"] == "weights" and end["rc"] == -signal.SIGTERM and end["ended"] == "stopped"
     assert ended_why(host, end) == A.STOPPED
     assert end["store"] is None and end["files"] == {}
-    assert (host.certifier / end["run"] / A.WITNESS / "rehearse.log").is_file()
+    assert (host.attester / end["run"] / A.WITNESS / "rehearse.log").is_file()
 
 
 def test_a_store_write_whose_unit_is_stopped_fails_though_its_writer_exits_0_on_the_signal(host, stop_held, tmp_path):
@@ -212,7 +212,7 @@ def test_the_gate_refuses_a_load_it_cant_check(stored, bad, why):
     good = dict(zip(LOAD[1::2], LOAD[2::2]))
     good.update(dict(zip(bad[::2], bad[1::2])))
     assert why in refused(*gate(stored, ["load-relay", *[w for kv in good.items() for w in kv]]))
-    assert not stored.certifier.exists()
+    assert not stored.attester.exists()
 
 
 def test_a_load_is_refused_unless_the_store_holds_its_shape_as_weights_write_wrote_it(host):
@@ -234,14 +234,14 @@ def test_a_load_is_refused_unless_the_store_holds_its_shape_as_weights_write_wro
         f.write(b"\0")
     assert word() == "store-size"
     assert "--program" in refused(*gate(host, [w for w in LOAD if w not in ("--program", PROGRAM)]))
-    assert not host.certifier.exists()
+    assert not host.attester.exists()
 
 
 def test_a_key_that_reads_only_starts_no_load(stored):
     for key in (None, "-"):
         assert "this key reads only: a load is started with a lane's own gate key, or by vy-admin" in \
             refused(*gate(stored, LOAD, key=key))
-    assert not stored.certifier.exists()
+    assert not stored.attester.exists()
 
 
 def test_a_lane_key_starts_a_load_a_network_attester_rehearsal_with_its_load_whose_minutes_come_first(stored):
@@ -276,11 +276,11 @@ def test_a_loads_minutes_are_its_weights_and_witness_at_the_links_rate_and_the_e
 def test_the_longest_minutes_fit_in_the_rehearsal_units_runtime_and_leave_an_h200_load_100_of_serving():
     """The gate's cap and 10 minutes for the tunnels and the outcome are within the unit's RuntimeMaxSec."""
     limit = re.search(r"^RuntimeMaxSec=(\d+)h$", UNIT.read_text(), re.M)
-    assert limit and A.CERTIFIER_MINUTES[1] + 10 <= int(limit[1]) * 60
-    assert A.CERTIFIER_MINUTES[1] - A.load_minutes("h200") >= 100
+    assert limit and A.ATTESTER_MINUTES[1] + 10 <= int(limit[1]) * 60
+    assert A.ATTESTER_MINUTES[1] - A.load_minutes("h200") >= 100
 
 
-def test_the_rehearsal_units_stop_signals_certifier_run_alone_and_gives_it_time_to_write_the_end():
+def test_the_rehearsal_units_stop_signals_attester_run_alone_and_gives_it_time_to_write_the_end():
     """`KillMode=mixed`: a stop's SIGTERM goes to `certifier-run` alone, which passes it to the runner, closes the
     tunnels and writes the end (`auditor._Stop`); only what is left at `TimeoutStopSec` is killed."""
     unit = UNIT.read_text()
@@ -333,7 +333,7 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_neither
     locals_ = [l for _, l, _ in sinks]
     assert len({local, *locals_}) == 5 and ups == [local, *locals_]
     (req, work, url, kw), = seen
-    d = stored.certifier / run
+    d = stored.attester / run
     assert req["load"]["shape"] == "tiny" and work == d / A.WITNESS and url == f"http://127.0.0.1:{local}"
     assert kw == {"sinks": [("127.0.0.1", p) for p in locals_], "store": stored.store}
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "ended"
@@ -383,7 +383,7 @@ def test_a_refused_load_publishes_nothing_of_its_relay_and_its_sentence_stays_in
         up=lambda t, p: True, wait=lambda proc, s: proc.wait(),
         command=lambda req, work, url, **kw: [
             sys.executable, "-c", f"import json, pathlib; out = pathlib.Path({str(work)!r})\n{files}"])
-    d = stored.certifier / run
+    d = stored.attester / run
     assert (end["rc"], end["ended"]) == (1, "exited") and "load" not in end
     assert end["verdict"] == {"accepted": False} and end["files"] == {}
     assert json.loads((d / A.WITNESS / "load-relay.json").read_text()) == {"refused": "sink"}

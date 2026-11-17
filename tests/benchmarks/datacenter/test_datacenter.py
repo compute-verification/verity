@@ -159,10 +159,10 @@ def test_work_is_credited_in_ands_and_takes_time_by_kind_at_its_rate():
     assert {"a.gpu.bf16", "a.gpu.fp8", "a.gpu.gates"} <= set(a.assumptions)
 
 
-def test_a_boundary_link_without_a_certifier_breaks_coverage():
+def test_a_boundary_link_without_a_attester_breaks_coverage():
     dc = datacenter()
     dc.links.append(LinkEntry("a.gpu", "leaf", Assumption("bypass", 1e9, "bit/s")))
-    assert any("passes no certifier" in p for p in dc.validate())
+    assert any("passes no attester" in p for p in dc.validate())
     assert datacenter().validate() == []
 
 
@@ -271,7 +271,7 @@ def test_the_links_where_two_machines_the_auditor_doesnt_control_meet_are_uncove
     assert certified().validate() == [] and certified().uncovered_links() == []
 
 
-def test_the_export_is_reported_by_port_and_charged_only_when_certifiers_cover_every_link(setup):
+def test_the_export_is_reported_by_port_and_charged_only_when_attesters_cover_every_link(setup):
     """The covert budget is only what goes beyond the committed computation, so committed
     values leaving a block were free, and something off the block can read them. The export, λ_out, is the committed
     bits that cross a certified boundary out of a block, to another block or outside, by egress port and within the
@@ -290,7 +290,7 @@ def test_the_export_is_reported_by_port_and_charged_only_when_certifiers_cover_e
         accounts.append(account(audit(run(q, INPUTS, Plan(EPOCH)), profile), profile))
     leaf, covered = accounts
     assert leaf.sound and leaf.exported == out and leaf.export_bits == 1024 and not leaf.export_charged
-    assert leaf.uncovered == ["world-leaf"] and "not applicable while no certifier covers world-leaf" in repr(leaf)
+    assert leaf.uncovered == ["world-leaf"] and "not applicable while no attester covers world-leaf" in repr(leaf)
     assert covered.sound and covered.exported == out and covered.export_charged and covered.uncovered == []
     assert "charged as novel information read by their receivers" in repr(covered)
     assert leaf.covert_bits == covered.covert_bits == 4 * 4 * 7 + 512
@@ -352,7 +352,7 @@ def test_values_that_are_not_the_programs_evaluation_are_refused(setup):
     assert {r.why for r in refusals(audit(t, p.public(plan)))} >= {"the committed values are not the Program's evaluation"}
 
 
-def test_records_are_checked_against_the_declared_ones_whatever_the_certifier_signs():
+def test_records_are_checked_against_the_declared_ones_whatever_the_attester_signs():
     """The mock datacenter's records carry the real network attester's digest, not `observe.digest`: `check_records` compares
     whatever the attester signs with what an honest run would have it sign."""
     cadence, port = datacenter().cadence, Port("a.cert", "egress")
@@ -374,7 +374,7 @@ def test_a_refused_window_is_charged_at_its_links_full_capacity(setup):
 
 
 def test_a_block_out_for_maintenance_owes_no_records_but_what_it_held_is_charged(setup):
-    """Maintenance: someone the auditor doesn't control has the block in hand. Its certifiers owe no records then, so the
+    """Maintenance: someone the auditor doesn't control has the block in hand. Its attesters owe no records then, so the
     epoch stays sound, but everything it held may leave (charged to the covert budget), anything may come back in, and
     only a wipe after the maintenance bounds what it holds when it rejoins."""
     dc, p = setup
@@ -423,8 +423,8 @@ def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named
     assert narrow.forced == 512 and narrow.local_at_least > 0.85 * narrow.credited and wide.local_at_least == 0
 
 
-def test_a_salt_in_its_certifiers_custody_pins_the_work_that_depends_on_it():
-    """The salt anchor. Zone a's certifier releases a 512-bit salt into a alone. The noised product p
+def test_a_salt_in_its_attesters_custody_pins_the_work_that_depends_on_it():
+    """The salt anchor. Zone a's attester releases a 512-bit salt into a alone. The noised product p
     (PoUW's proof work) depends on it and never leaves, so a helper off the block can't have computed it. That holds
     while k, the bits that could carry the salt out before registration, stays at most 384: a's egress timing advice
     (4 windows × 7 bits) and nothing else here. A 512-bit telemetry input delivered out of a voids it, and so does a
@@ -592,13 +592,13 @@ def test_a_link_between_datacenters_is_fabric_and_coverage_is_per_block():
     assert [repr(p) for p in merged.ports] == [f"{s}.{b}.cert:{d}" for s in ("east", "west") for b in "ab"
                                                for d in ("in", "out")]
     assert Fleet([east, west], [LinkEntry("east.a.gpu", "west.leaf", wan)]).validate() == [
-        "inter-datacenter link east.a.gpu-west.leaf passes no certifier (coverage)"]
+        "inter-datacenter link east.a.gpu-west.leaf passes no attester (coverage)"]
     assert Fleet([east, west], [LinkEntry("east.leaf", "west.spine", wan)]).validate() == [
         "inter-datacenter link east.leaf-west.spine names an unknown device 'west.spine'"]
     assert Fleet([datacenter(), datacenter()]).validate() == [f"device {d!r} is in both dc0 and dc0" for d in
                                                               ("a.gpu", "b.gpu", "a.cert", "b.cert", "leaf", "challenger")]
     leaky = replace(east, links=[*east.links, LinkEntry("east.a.gpu", "east.leaf", wan)])
-    assert Fleet([leaky, west]).validate() == ["east: boundary link east.a.gpu-east.leaf passes no certifier (coverage)"]
+    assert Fleet([leaky, west]).validate() == ["east: boundary link east.a.gpu-east.leaf passes no attester (coverage)"]
 
 
 def test_a_ledger_adds_covert_bits_across_nights_and_wipes_bound_what_each_night_carries(setup):

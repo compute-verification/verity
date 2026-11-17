@@ -93,8 +93,8 @@ def sampling_design(meta: dict) -> str | None:
     return "two-stage" if TWO_STAGE in (meta.get("plugin") or ()) else None
 
 
-def certifier(meta: dict) -> dict | None:
-    """Whether the serve ran under the certified tick. Nothing here says which certifier stood in front of it."""
+def attester(meta: dict) -> dict | None:
+    """Whether the serve ran under the certified tick. Nothing here says which attester stood in front of it."""
     return {"tick": meta["tick"] is not None} if "tick" in meta else None
 
 
@@ -108,7 +108,7 @@ READERS: dict[str, Callable[[dict], object]] = {
     "decoding": decoding,
     "execution_phase": execution_phase,
     "sampling_design": sampling_design,
-    "certifier": certifier,
+    "certifier": attester,
 }
 
 

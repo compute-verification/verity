@@ -165,7 +165,7 @@ flowchart LR
         pouw["pouw<br/>compute"]
         pous["pous<br/>memory held"]
         poub["poub<br/>memory read"]
-        certifier["certifier<br/>network"]
+        attester["attester<br/>network"]
     end
     subgraph policy["workload classification"]
         io["inference_only<br/>the inference-only policy"]
@@ -185,7 +185,7 @@ flowchart LR
     poub --> pous
     pouw --> registration
     pous --> registration
-    certifier --> registration
+    attester --> registration
     spot --> flock
     recursion --> flock
     spot_flock --> spot
@@ -278,7 +278,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The compute audit's cost model, and the commands that run an audit on a served run | in SPOT (`prover/audit/`, `prover/cost/`, `verifier/one_stage/`, `verifier/challenger/`), but the audit commands still load scripts under `benchmarks/` (the proof subprotocol, the network attester's pieces, the one-stage replay, the tampered stagings, the bundle's format), and the demo's orchestration script runs them | SPOT's `prover/` and `verifier/`, started from a demo's configuration. The measured proving costs stay recorded under `benchmarks/` and are handed in as data |
 | Registration | The log's Lean and Python, the site entry's check and both difftests are in `verity/protocols/registration/`. The site log's own types (its entries, refusals and digests, and `Site.ofLog`) are still in the interface's `CoreProtocol/Site.lean`, and their Python (the log and the site entry's check) in `verity/device.py` | `verity/protocols/registration/`, an accounting protocol that runs once, over `device.py`'s types. Its Lean is cut out of the interface's package, so it is a code change and not in the two chains of moves |
 | The policy's two calculators | `benchmarks/inference_only/` and `benchmarks/slowdown/` | training renames the slowdown one |
-| The network attester's developer side | Its serving loop and keys are in `attester/`, which the auditor's device starts. Its developer side hangs off one edge, the served table's `CERTIFIER_PIECE`: about 6,800 lines of `benchmarks/network_traces/`, which start the proof drivers in `prover/` on about 4,900 lines of `benchmarks/one_stage/` (`proof_drivers.install`), which rule 9 forbids | network attestation's `prover/` |
+| The network attester's developer side | Its serving loop and keys are in `attester/`, which the auditor's device starts. Its developer side hangs off one edge, the served table's `ATTESTER_PIECE`: about 6,800 lines of `benchmarks/network_traces/`, which start the proof drivers in `prover/` on about 4,900 lines of `benchmarks/one_stage/` (`proof_drivers.install`), which rule 9 forbids | network attestation's `prover/` |
 | vLLM's scheduler and the advice format, which rule 1 keeps out of `verity/` | The modules that restate the scheduler (the replay step and chain, the compile slices, the cache step, the served rows, tie and statics, the advice check) are in `adapters/vllm/verity_vllm/compiler/`. Four files of the advice's format and its charge are in network attestation's `verifier/` and `prover/` (`advice.py`, `arith_encode.py`, `charge_chain.py`, `window_charge.py`) | The four stay until network attestation takes the advice through an interface: the trusted tie service reads the format, and the charge is mirrored in network attestation's Lean (`AdviceV1`, `WindowCharge`), so moving it changes a Lean statement |
 | The areas of `security/` | named before the carve | each carries its protocol's name, and the accounting area holds one protocol's files |
 | Calibration | `hardware/`'s data sheets, and under `benchmarks/` the probes and harnesses that choose a parameter or test an assumption one rests on | `calibration/`, which nothing imports |
