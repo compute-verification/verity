@@ -301,7 +301,7 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
     rw [throw_run_go] at h'
     cases h'
   obtain ⟨inner, t₈, l₈, h₈, -⟩ := run_bind_ok hc
-  -- the ZK server's inner proof drew its first coin, so that round is below `n`
+  -- the ZK server's inner proof sampled its first coin, so that round is below `n`
   have hl₄n : l₄.size < n := by
     unfold FlockComplete.innerP at h₈
     try dsimp only at h₈

@@ -131,7 +131,7 @@ def resultJ : Session.Result → Json
   | .released k => Json.mkObj [("released", match k with | some k => toJson k | none => .null)]
   | .appended first coin => Json.mkObj [("first", toJson first), ("coin", hexJ coin)]
   | .ok => Json.mkObj [("ok", .bool true)]
-  | .drew ds => Json.mkObj [("draws", .arr (ds.map pairJ))]
+  | .sampled ds => Json.mkObj [("draws", .arr (ds.map pairJ))]
   | .accepted t => Json.mkObj [("accepted", toJson t)]
 
 /-- The record `Session.record` makes; its pace names `in_flight` only at one window in flight (`Flight`). -/

@@ -43,7 +43,7 @@ import Proofs.Flock.Soundness.ZK.RealLeaves
 # `RecursiveZKLoop` at any worker that reads its answers
 
 `Flock.Guarantees.RecursiveZKLoopAnySum` is `RecursiveZKLoop` with no premise on the inner worker: its next request is
-any function of what `flock-zk-server live` answered it so far, the salts it drew included (`ZkServerAdaptive.Worker`),
+any function of what `flock-zk-server live` answered it so far, the salts it sampled included (`ZkServerAdaptive.Worker`),
 so it takes no `ZkServerSends`. The live zk_server then sends the schedule's transcript filled with commit strings whose
 digests read only the salts before them, cut at a stop (`Flock.SecurityProofs.adaptOut_any`); V*'s statements read the
 commitments the ZK server sent, and run only when the inner session finished. The view is released at one stop of the
@@ -251,7 +251,7 @@ def loopRelease {Ωa : Type} {n : ℕ} (M : Fin n → ℕ) :
 `RecursiveZKLoop` with no premise on the inner worker. The auditor's tape is `Ωa` and the worker's randomness `Ωp`.
 The inner worker `w a p` sends `flock-zk-server live` (`Flock.ZkServer.liveWith` at the pinned schedule `s`, modelled by
 `ZkServerAdaptive.adaptOut`) at most `N` requests, each any function of what the ZK server answered it so far: what it
-sent the challenger's live-coin part for each request and the salts it drew for them. The ZK server's salts are `fwHoles s + r`
+sent the challenger's live-coin part for each request and the salts it sampled for them. The ZK server's salts are `fwHoles s + r`
 strings of 192 uniform bytes `b`, read in turn: the first `fwHoles s` are those the schedule's transcript's commit
 strings can sample, and `r` more cover the fresh salts a session reads beyond those it samples. V*'s `m` statements
 `stmt j (a, h)` at the tape and the commitments `h` the ZK server sent (`OuterZK.LoopSessions.atWorker` at `anyCtx`) are

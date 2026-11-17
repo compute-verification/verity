@@ -343,7 +343,7 @@ structure C3 where
   stacked : Option RecVStar.StackedShape
   commits : RecVStar.InnerCommits
 
-/-- Stream `s`'s coins by round, as the challenger's live-coin part drew them. -/
+/-- Stream `s`'s coins by round, as the challenger's live-coin part sampled them. -/
 def C3.coins (c3 : C3) (unit s : String) : V (Array (Array F128)) := do
   let some st := c3.commits.stream? s | throw s!"rec-coins: {unit}: the inner transcript has no stream {s}"
   return st.coins
@@ -730,7 +730,7 @@ def checkOpenTops (inn : Inner) (c : Circuit) (own : Array Registered.Port) (lk 
 /-- **Check 5's link points and its levels' tops are the challenger's live-coin part's**: a `rec-open/…`, `rec-residuals/…` or
 `rec-sparse/…` statement, whose check 5 takes the extra claims at the inner session's record's link points, is refused
 unless the verifier holds the inner transcript (`link`, `RecVStar.innerLink`, which holds those points to the ones the
-challenger's live-coin part drew); and at a circuit-table level its `out` reads the tops the challenger's live-coin part recorded (`checkOpenTops`). A
+challenger's live-coin part sampled); and at a circuit-table level its `out` reads the tops the challenger's live-coin part recorded (`checkOpenTops`). A
 RecCap statement is refused without the inner transcript, whose `root_B` (level 0) or both reps' level-`l` tops (a later
 level) its rows are held to (`RecVStar.checkTopRows`), and unless those have its `N` nodes. Any other unit passes. -/
 def checkLink (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Source)
@@ -819,7 +819,7 @@ def NO_INNER_COINS : String :=
     "--rec-inner-public, --rec-inner-partition, --rec-inner-session)"
 
 /-- **`--rec-inner-coins` is refused**, given a value or not: a record of what check 5 reads (`Source.coins`) is bound
-only to the inner session's record (`record_sha512`), not to the coins that session drew. -/
+only to the inner session's record (`record_sha512`), not to the coins that session sampled. -/
 def refuseCoins (args : List String) : Except String Unit :=
   if args.contains "--rec-inner-coins" then .error NO_INNER_COINS else .ok ()
 

@@ -226,7 +226,7 @@ def SHARED : String :=
 /-- The groups and windows the line reads of an accepted session's record `sm` (`Session.State.summary`) and what the
 auditor saw of each of its windows (`seen`): group `t` is window `t`, its passes the record's and its times and reads
 the auditor's, and window `t`'s receipts and samples are the record's, `(Σ lengths_t, drawn_t)`. Refused unless the
-auditor saw each of the record's windows and each window drew `min(s, U_t)` of its receipts at the session's `samples`
+auditor saw each of the record's windows and each window sampled `min(s, U_t)` of its receipts at the session's `samples`
 `s`, as the verifier's sample does (`Session.samples`). -/
 def ofSummary (sm : Session.Summary) (samples : Nat) (seen : Array Seen) :
     Except String (Array Group × Array (Nat × Nat)) :=
@@ -262,7 +262,7 @@ def samplesOf (g : Nat) (ws : Array Session.WindowSummary) : Array (Nat × Nat) 
     (xs.foldl (fun a w => a + receipts w) 0, xs.foldl (fun a w => a + w.drawn) 0)
 
 /-- `ofSummary` of a record sampled `g` windows a coin (`Shared`): `ofSummary` at g = 1; above it the same groups, one a
-window, and the record's samples in place of its windows (`samplesOf`), refused unless each sample drew `min(s, U)` of
+window, and the record's samples in place of its windows (`samplesOf`), refused unless each sample sampled `min(s, U)` of
 its `U` receipts at the session's `samples` `s`, as `Shared.close`'s sample does, and has fewer than `RECEIPT_LIMIT`
 (2^64) receipts, as `receive` holds each window to: the memory model's sample reads at most `2^64 − 1` receipts a sample
 (`Properties.Poub.Line.receiptMax`), and a sample's windows' receipts, each below the limit, need not be. -/

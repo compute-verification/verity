@@ -31,7 +31,7 @@ theorem getD_sample_closure (sample ns ks : Array ℕ) (m : ℕ) (units : Array 
     getD (Json.mkObj ((entries (Select.secondSamplingDesign sample ns ks)).toList ++
       [("population", Lean.toJson m), ("units", natsJson units)])) "closure" = Json.null := (rfl)
 
-/-- **An accepted second stage's sample object**: it passed `secondProblem`, drew `units` under `secondSamplingDesign`'s Flock sampling design
+/-- **An accepted second stage's sample object**: it passed `secondProblem`, sampled `units` under `secondSamplingDesign`'s Flock sampling design
 over the `|sample|·Σ n_t` proof blocks, and carries those units and no closure. -/
 theorem selectSecond_units {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :

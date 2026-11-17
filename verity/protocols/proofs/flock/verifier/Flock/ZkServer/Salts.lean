@@ -311,7 +311,7 @@ structure Opened where
 def Opened.key (k : ByteArray) (o : Opened) : ByteArray := o.own.getD k
 
 /-- **The value service's epoch**: the commit sessions it opened since its last registration, or since it started, in the
-order it drew them, one at most where it numbers registrations (`Values.answer`). A registration closes it, so a session
+order it sampled them, one at most where it numbers registrations (`Values.answer`). A registration closes it, so a session
 registers only in the epoch that opened it, and only once. -/
 structure Epoch where
   opened : Array Opened := #[]
@@ -325,7 +325,7 @@ def recordTagOf (k : ByteArray) (n m T : Nat) (trefs : ByteArray) : ByteArray :=
 /-- **The tag of an interior session's own key** `ks`, beside its registration's record `record` on the ZK server's
 record, under the key `k`: `SHA-512(k ‖ L ‖ ks ‖ record)`, `L = SHA-512("verity/zk-server/interior-key-tag/v1\0")`,
 `ks` of `KEY_BYTES` bytes, so the message splits into key and record one way only. By it the release side knows the key
-the record's tags are under is one the service drew; it stays on the ZK server's record, and nothing released reads
+the record's tags are under is one the service sampled; it stays on the ZK server's record, and nothing released reads
 it. -/
 def keyTagOf (k ks record : ByteArray) : ByteArray := Sha512.hash (k ++ KEY_TAG_LABEL ++ ks ++ record)
 
