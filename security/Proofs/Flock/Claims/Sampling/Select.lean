@@ -9,7 +9,6 @@ public import Proofs.Flock.Claims.Sampling.Select.Misses
 public import Proofs.Flock.Claims.Sampling.Select.SampleDesign
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Flock.Claims.Sampling.Select.Scope
-public import Proofs.Flock.Claims.Sampling.Select.Refusals
 public import Proofs.Flock.Claims.Sampling.Select.Code
 public import Proofs.Flock.Claims.Sampling.Select.OS
 public import Proofs.Flock.Claims.Sampling.Select.Second
