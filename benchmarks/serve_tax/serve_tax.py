@@ -78,7 +78,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
   nowhere else: a job that serves the two-stage audit serves this arm.
 - ``two-stage-tick``: that launch line admitting on the certified tick, as ``tick`` does: the arm whose schedule is a
   function of the certified arrivals, so its windows' advice holds no decision. It is made of ``two-stage``'s data,
-  and like every tick arm but the next the corpus's client serves it, standing in for the network attester.
+  and the corpus's client serves it, standing in for the network attester.
 - ``tick-certifier``: ``tick`` with the network attester itself in front, and vLLM's client behind it. The engine
   admits on the certified tick from the network attester's own releases and watermark, and every request and every answer
   crosses the network attester's cells. It is served by two commands (``--side``, `certified`): the server's on the node,
@@ -106,6 +106,17 @@ The arms, each one engine configuration; each adds its change to the arm it name
   accepted among them: ``prod-seeded`` against ``prod`` is the seed, ``prod-record`` against ``prod-trace`` the
   canonical top-k, and ``prod-trace`` against ``prod-seeded`` the record and its ids. Neither is an arm a replay is
   promised for.
+- ``prod-all-on``: ``prod-record`` with admission on the certified tick and the edge snapshot, in one server, sent by
+  vLLM's client: what the serving cost's target counts for the tick, the tie order, the snapshot and the step record,
+  on together. A stand-in release front on the node stands in for the network attester's release side
+  (`release_front`): it numbers each request as it comes and streams the watermark of its buckets, so admission is the
+  certified tick's while no answer is paced; the plugin empties the prefix cache for each pass after `IDLE_S` idle
+  (``idle_reset``). Each edge, every ``--edges-every-s`` seconds, drains, hashes every rank's KV cache where it lies
+  (its root is the snapshot's) and copies it to host memory on the ranks ``--kv-copy`` names, and is recorded with its
+  pause. What it leaves off (`Arm.off`, `parts_of`): the
+  network attester's egress pacing, useful-work kernels and commitment of values. Each pass records the counts a price
+  needs (``counts``): the requests the tick admitted and the steps each was held, and each process's canonical top-k
+  calls; the edges in a pass and each one's pause are its load's (`load_edges`).
 
 An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it turns on, the other vLLM general plugins
 its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
@@ -251,6 +262,8 @@ class Arm:
     #: whether its requests come through the network attester, which runs on another host than the engine: the arm
     #: is served by two commands, a side each (`certified`)
     certifier: bool = False
+    #: what of a served deployment the arm leaves off, in words (`parts_of`)
+    off: tuple[str, ...] = ()
 
 
 BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
@@ -327,6 +340,12 @@ ARMS = {
                        "what a seed moves in vLLM's sampling, read apart", published=True, seeds=True),
     "prod-trace": Arm("prod", "+ the step trace and each request's ids, prod-record with the canonical top-k off: what "
                       "the canonical top-k moves, read apart", plugin=("record", "ids"), published=True),
+    "prod-all-on": Arm("prod-record", "+ admission on the certified tick, its releases and watermark from a stand-in "
+                       "release front on the node (`release_front`: admission real, no answer paced), and the edge "
+                       "snapshot every --edges-every-s seconds as a server would take it, every rank's KV cache hashed "
+                       "and copied", plugin=("record", "ids", "idle_reset"), env=TOPK_ENV, general=TOPK, published=True,
+                       tick=True, edges=True, edge_dump=False, edge_busy=False,
+                       off=("the network attester's egress pacing", "useful-work kernels", "commitment of values")),
 }
 ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
 ARMS["tick-certifier"] = replace(ARMS["tick"], parent="tick", what="+ the network certifier in front: every request "
@@ -363,6 +382,26 @@ def changes_of(arm: str) -> list[str]:
     """The changes (`CHANGES`) an arm's engine has on. An arm this file doesn't define has none it can be read to
     have."""
     return [name for name, on in CHANGES.items() if on(ARMS[arm])] if arm in ARMS else []
+
+
+#: the edge period the cost model prices the edge snapshot at (`benchmarks/spot_figures/total_cost.py`'s window), s
+PRICED_EDGE_S = 600.0
+
+
+def parts_of(arm: str, edges: dict | None = None) -> list[str]:
+    """What an arm's serving has on and what it leaves off, in words: each change (`changes_of`) on, the edge snapshot
+    with its period where it is taken every ``edges["every_s"]`` seconds and how far that errs from `PRICED_EDGE_S`, then
+    `Arm.off`."""
+    every = (edges or {}).get("every_s")
+
+    def on(change: str) -> str:
+        if change != "the edge snapshot" or not every:
+            return f"{change}: on"
+        k = PRICED_EDGE_S / every
+        errs = "high" if k > 1 else "low"
+        return (f"{change}: on, every {every:g} s against the cost model's {PRICED_EDGE_S:g} s, so its cost errs {errs} "
+                f"by {max(k, 1 / k):g}×")
+    return [*map(on, changes_of(arm)), *(f"{o}: off" for o in ARMS[arm].off)] if arm in ARMS else []
 
 
 #: what a part's points rest on: a cost model's share, a simulation's, or a measurement's
@@ -1687,6 +1726,17 @@ def run(a: argparse.Namespace) -> int:
         return serve(a, outside(Path(d).resolve()))
 
 
+def corpus_only(arm: Arm) -> str | None:
+    """Why vLLM's client can't send ``arm``'s passes, None where it can. Under it a tick arm's requests come through a
+    `release_front`, and its server refuses ``/reset_prefix_cache``, so its engine must empty its prefix cache when idle."""
+    if arm.sampling != "greedy" or arm.logprobs:
+        return "its sampling is the corpus client's"
+    if arm.tick and "idle_reset" not in arm.plugin:
+        return ("it is on the certified tick, whose server refuses /reset_prefix_cache, and its engine does not empty "
+                "its prefix cache when idle (plugin idle_reset)")
+    return None
+
+
 def serve(a: argparse.Namespace, private: Path | None) -> int:
     termed: list[int] = []
 
@@ -1704,9 +1754,8 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     bench = a.client == BENCH
     given = published_context(a.arm, a.model_id, a.max_model_len) if arm.published else a.max_model_len
     if bench:
-        if arm.tick or arm.sampling != "greedy" or arm.logprobs:
-            raise SystemExit(f"arm {a.arm} needs the corpus client (the certifier's stand-in feed, or its sampling): "
-                             f"--client {CORPUS}")
+        if why := corpus_only(arm):
+            raise SystemExit(f"arm {a.arm} needs the corpus client, not vLLM's: {why} (--client {CORPUS})")
         if not a.loads:
             raise SystemExit(f"--client {BENCH} serves --loads NAME[=RUNG+RUNG...],... ({', '.join(sorted(LOADS))})")
         loads = parse_loads(a.loads)
@@ -1773,18 +1822,26 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             "plan_sha256": file_digest(Path(a.plan)) if a.plan and Path(a.plan).is_file() else None,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "sampled": SAMPLED if a.sampled else None,
             "seeded": a.sampled and sends_seed(arm), "end_of_text_ids": end_of_text_ids(checkpoint),
-            "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges,
+            "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges, "parts": parts_of(a.arm, edges),
             "gpu_busy": lib is not None, "no_gpu_busy": no_nvml, "versions": versions(), "host": os.uname().nodename,
             "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     t = time.monotonic()
     with open(srv / "server.log", "wb") as log:
         server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
-    rc = 0
+    rc, front, sends_to = 0, None, port
+    topk_log = Path(env["VERITY_DSA_TOPK_LOG"]) if env.get("VERITY_DSA_TOPK_LOG") else None
+    tick_at: dict[str, int] = {}
+    resets_at: dict[str, int] = {}
     try:
         wait_ready(server, port, a.startup_s)
         meta["startup_s"] = round(time.monotonic() - t, 1)
         print(f"[serve-tax] {a.arm}: up in {meta['startup_s']} s", flush=True)
+        if bench and arm.tick:
+            import release_front
+
+            front = release_front.Running(port, tick["bucket_us"] / 1e6)
+            sends_to = front.port
         finished = 0
 
         def send(name: str, tag: str, d: Path, busy: object | None, warm: bool = False) -> dict:
@@ -1793,7 +1850,9 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
                                   a.warm_s if warm else a.span_s, tag, d, a.drain_s, tick,
                                   None if warm else a.requests, arm.sampling, busy)
             n, c = passes[name]
-            return drive_bench(port, model, checkpoint, LOADS[n], c, tag, d, sent.get(n), a.seed, busy,
+            if front is not None:
+                time.sleep(IDLE_S)
+            return drive_bench(sends_to, model, checkpoint, LOADS[n], c, tag, d, sent.get(n), a.seed, busy,
                                pass_prompts(LOADS[n], c, lines.get(n), a.warm_s if warm else None, sizes.get(n)),
                                a.sampled, a.sampled and sends_seed(arm), a.lifetime)
 
@@ -1808,13 +1867,21 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
                 print(f"[serve-tax] {a.arm}: stopped before {name} rep {rep}: the pass and the server's stop need "
                       f"{need:.0f} s, more than is left to --stop-at {a.stop_at}", flush=True)
                 break
-            ok = reset_prefix_cache(port)
+            ok = None if front is not None else reset_prefix_cache(port)
             d = out / name / f"rep-{rep}"
-            before = scrape(port)
+            for pattern, at in (("tick.*.jsonl", tick_at), (RESETS, resets_at)):
+                tail_records(srv, pattern, at)
+            before, calls = scrape(port), topk_calls(topk_log)
             m = send(name, load_tag(name, rep, bench), d, lib)
             after = scrape(port)
+            if front is not None:
+                resets = tail_records(srv, RESETS, resets_at)
+                ok = bool(resets) and all(r["reset"] for r in resets)
             m |= {"load": name, "rep": rep, "prefix_cache_reset": ok,
-                  "schedule": {k: after[k] - before[k] for k in after}}
+                  "schedule": {k: after[k] - before[k] for k in after},
+                  "counts": {**({"tick": tick_counts(tail_records(srv, "tick.*.jsonl", tick_at))} if arm.tick else {}),
+                             **({"topk_calls": {p: n - calls.get(p, 0) for p, n in topk_calls(topk_log).items()}}
+                                if topk_log else {})}}
             (d / "meta.json").write_text(json.dumps(m, indent=1))
             meta["loads"].append({k: m[k] for k in ("load", "rep", "rate", "requests", "unfinished", "wall_s", "t0_unix")})
             (out / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -1830,11 +1897,61 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         print(f"[serve-tax] {a.arm}: FAILED {meta['error']}", flush=True)
         rc = 1
     finally:
+        if front is not None:
+            meta["release_front"] = front.stop()
         meta["server_stop"] = stop(server, TERM_GRACE_S if termed else 120.0)
         meta["server_rc"] = server.returncode
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
         shutil.rmtree(out / ".site", ignore_errors=True)
     return rc
+
+
+#: the server's records of the prefix cache emptied by its engine once idle (`servetax_plugin.IdleReset`)
+RESETS = "prefix_resets.*.jsonl"
+
+
+def tail_records(d: Path, pattern: str, at: dict[str, int]) -> list[dict]:
+    """The JSON lines appended to ``d``'s files of ``pattern`` since ``at`` (each file's whole lines read by then), and
+    ``at`` moved past them."""
+    out = []
+    for f in sorted(d.glob(pattern)):
+        with open(f, "rb") as fh:
+            fh.seek(at.get(f.name, 0))
+            data = fh.read()
+        whole = data[:data.rfind(b"\n") + 1]
+        at[f.name] = at.get(f.name, 0) + len(whole)
+        out += [json.loads(x) for x in whole.splitlines() if x.strip()]
+    return out
+
+
+def tick_counts(recs: list[dict]) -> dict:
+    """What the certified tick's gate logged over a pass (`serve_admit.TickGate`): the requests it admitted, how many it
+    deferred by one step or more, how many steps each was held (steps: requests), the steps that admitted any, and its
+    events by kind (an ``opened`` gate ordered nothing after it)."""
+    held = [k for r in recs if "admitted" in r for k in r.get("held_steps", ())]
+    events: dict[str, int] = {}
+    for r in recs:
+        if "event" in r:
+            events[r["event"]] = events.get(r["event"], 0) + 1
+    by = {}
+    for k in sorted(held):
+        by[str(k)] = by.get(str(k), 0) + 1
+    return {"admitted": len(held), "deferred": sum(k > 0 for k in held), "held_steps": by,
+            "admitting_steps": sum("admitted" in r for r in recs), "events": events}
+
+
+def topk_calls(d: Path | None) -> dict[str, int]:
+    """Each process's canonical top-k calls so far, by its pid (`dsa_topk.log_to`'s records in ``d``): a process a card
+    at tensor parallelism."""
+    out = {}
+    for f in sorted(d.glob("dsa_topk.*.json")) if d is not None and d.is_dir() else ():
+        for _ in range(3):              # a read may meet the process rewriting its record in place
+            try:
+                out[f.name.split(".")[1]] = sum(json.loads(f.read_text())["calls"].values())
+                break
+            except ValueError:
+                continue
+    return out
 
 
 # ------------------------------------------------------------------------------ an arm behind the network attester
@@ -2436,14 +2553,15 @@ def gpu_metrics(m: dict, output_tokens: int | None) -> dict:
 
 
 def load_edges(edges: list[dict], m: dict) -> dict:
-    """The edges that fell in a load (from its first send to its wall time's end): how many, and the engine's stall at
-    each, the drain to an empty batch queue plus the pause after it, at its median and longest."""
+    """The edges that fell in a load (from its first send to its wall time's end): how many, the engine's stall at
+    each, the drain to an empty batch queue plus the pause after it, at its median and longest, and each one's pause."""
     t0 = m.get("t0_unix")
     if not edges or t0 is None:
         return {}
-    stall = [r["drain_s"] + r["pause_s"] for r in edges if t0 <= r["drained_unix"] <= t0 + m["wall_s"]]
+    ins = [r for r in edges if t0 <= r["drained_unix"] <= t0 + m["wall_s"]]
+    stall = [r["drain_s"] + r["pause_s"] for r in ins]
     return {"edges": len(stall), "edge_stall_p50_s": pct(stall, 0.5), "edge_stall_max_s": max(stall, default=None),
-            "edge_stall_s": sum(stall)}
+            "edge_stall_s": sum(stall), "edge_pause_s": [r["pause_s"] for r in ins]}
 
 
 def edge_summary(edges: list[dict]) -> dict | None:
@@ -2535,8 +2653,10 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
                                                "unfinished": m.get("unfinished"), **lm,
                                                **schedule_metrics(m.get("schedule")),
                                                **gpu_metrics(m, lm.get("output_tokens")), **load_edges(edges, m),
+                                               **({"counts": m["counts"]} if m.get("counts") else {}),
                                                **ended.get(rep, {})})
     return {"schema": SCHEMA + "/metrics", "arm": meta["arm"], "parent": meta.get("parent"), "what": meta.get("what"),
+            "parts": meta.get("parts"),
             "run_id": meta.get("run_id"), "commit": meta.get("commit"), "vllm": (meta.get("versions") or {}).get("vllm"),
             "model_id": meta["model_id"], "slo": {"ttft_s": slo[0], "tpot_s": slo[1]},
             "startup_s": meta.get("startup_s"), "error": meta.get("error"), "tick": meta.get("tick"), "loads": loads,
@@ -3207,7 +3327,8 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
             "metric": SESSION_COST, "better": "lower", "target": target, "target_basis": "given",
             "ci95": _cost(over)["ci95"], "verdict": told,
             "same_work": same, "model": MODELS[by[arm]["model_id"]].served, "arm": arm, "reference": reference,
-            "load": load, "what": LOADS[load].what, "users": rung, "reps": c["reps"], "lifetimes": len(lives),
+            "parts": by[arm].get("parts"), "load": load, "what": LOADS[load].what, "users": rung, "reps": c["reps"],
+            "lifetimes": len(lives),
             "passes": {**_cost(c), "reps": c["reps"]},
             "spread": {"between": _pct(over.get("between")), "within": _pct(over.get("within"))},
             "readings": {"busy_gpu_s": reading(per("busy_gpu_s")), "users_s": reading(per("users_s")),
@@ -3692,7 +3813,7 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     if r["metric"] == SESSION_COST:
         entry = {"name": r["load"], **{key: r[key] for key in ("value", "unit", "target", "target_basis", "better", "commit",
                                                               "run", "ci95", "verdict", "what", "reps", "users",
-                                                              "lifetimes")}}
+                                                              "lifetimes")}, **({"parts": r["parts"]} if r.get("parts") else {})}
         what = {"benchmark": "serve_tax", "model": r["model"], "arm": r["arm"], "reference": r["reference"],
                 "loads": [r["load"]], "vllm": r["vllm"]}
         return r["value"] is not None and r["same_work"], session_text(r).splitlines()[0], what, [entry]
@@ -4049,8 +4170,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit(f"--arms: {name!r} is not an arm ({', '.join(ARMS)})")
             if arm.certifier:
                 certified_loads(name, a.loads)
-            elif arm.tick or arm.sampling != "greedy" or arm.logprobs:
-                raise SystemExit(f"--arms: {name} needs the corpus client, not vLLM's")
+            elif why := corpus_only(arm):
+                raise SystemExit(f"--arms: {name} needs the corpus client, not vLLM's: {why}")
             if ("boundary_rows" in arm.plugin and not (a.boundary_rows or {}).get("check")
                     and not (a.model_id and MODELS[a.model_id].check)):
                 raise SystemExit(f"--arms: {name}'s boundary commitment needs a check template, and "

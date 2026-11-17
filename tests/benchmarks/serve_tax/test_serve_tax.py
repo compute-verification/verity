@@ -264,6 +264,29 @@ def test_the_two_stage_tick_arm_is_the_launch_line_with_the_tick_on(tmp_path: Pa
         S.main(["passes", "--loads", "chat", "--arms", "two-stage-tick", "--model-id", "glm53"])
 
 
+def test_prod_all_on_is_prod_record_with_the_tick_and_the_edge_snapshot_and_says_what_it_leaves_off():
+    """The arm is ``prod-record`` with the tick and the edge snapshot on, so of GLM-5.3's target it leaves off the parts
+    of the commitment of values alone; its words name what it leaves off and how its edge period errs from the cost
+    model's. vLLM's client sends it, and no tick arm whose engine keeps its prefix cache across passes."""
+    glm = S.MODELS["glm53"]
+    assert S.stock_of("prod-all-on") == "prod" and S.ARMS["prod-all-on"].parent == "prod-record"
+    assert S.changes_of("prod-all-on") == [*S.changes_of("prod-record"), "admission on the certified tick",
+                                           "the edge snapshot"]
+    assert [(x["name"], x["off"]) for x in S.target_parts(glm, "prod-all-on")] == [
+        ("the certified tick", []), ("the tie order", []), ("the snapshot bundle", []), ("the step record", []),
+        ("the boundary commitment", ["the two-stage boundary commitment"]), ("the history tables", ["the history tables"])]
+    assert S.not_in_target(glm, "prod-all-on") == ["the served ids"]
+    assert S.parts_of("prod-all-on")[3:] == [
+        "admission on the certified tick: on", "the edge snapshot: on", "the network attester's egress pacing: off",
+        "useful-work kernels: off", "commitment of values: off"]
+    assert S.parts_of("prod-all-on", {"every_s": 1200.0})[4] == (
+        "the edge snapshot: on, every 1200 s against the cost model's 600 s, so its cost errs low by 2×")
+    assert S.parts_of("prod-record") == ["the step record: on", "the served ids: on", "the canonical top-k: on"]
+    assert S.corpus_only(S.ARMS["prod-all-on"]) is None
+    with pytest.raises(SystemExit, match="--arms: tick needs the corpus client, not vLLM's: .*plugin idle_reset"):
+        S.main(["passes", "--loads", "chat", "--arms", "tick", "--model-id", "glm53"])
+
+
 def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_its_object(tmp_path: Path):
     m = S.MODELS["glm53"]
     argv = S.server_argv(S.ARMS["boundary-rows"], m, Path("/ck"), 8000)
@@ -554,7 +577,7 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     for name, m in S.MODELS.items():
         assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
     assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record", "prod-seeded",
-                                                             "prod-trace"]
+                                                             "prod-trace", "prod-all-on"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
 
 

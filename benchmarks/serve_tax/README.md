@@ -32,6 +32,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled`; each request's prompt ids and served ids, which a replay of a pass sent by vLLM's client is given and compared with; and the canonical DSA top-k, as `two-stage` has it (its counters kept on the node), which that replay runs under too | `prod` |
 | `prod-seeded` | nothing on the server: `prod`, a sampled pass's client sending each user's seed as `prod-record`'s does | `prod` |
 | `prod-trace` | the step trace and each request's ids on that server: `prod-record` with the canonical top-k off; its client sends seeds, as `prod-record`'s does | `prod` |
+| `prod-all-on` | admission on the certified tick fed by a stand-in release front on the node (the network attester's egress pacing: off), and the edge snapshot, every rank's KV cache hashed and copied; useful-work kernels: off; commitment of values: off (below) | `prod-record` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -254,9 +255,10 @@ an engine of another limit than the two loads', so its number waits for no row (
   verdict is `not comparable`, a fourth value, and the output names the changes that are off with their parts and
   the changes the target has no part for: the cost is not of what the target is of, so it neither meets nor misses
   it, and no target is made of the parts that are on. The `two-stage` arm leaves off admission on the certified
-  tick and the edge snapshot, which need the corpus's client, and turns on prefix caching off, which GLM-5.3's
+  tick and the edge snapshot, and turns on prefix caching off, which GLM-5.3's
   target has no part for, so its cost against the model's target is not comparable. `two-stage-tick` is that line with the tick on, and no cost
-  here is of it: vLLM's own client can't drive a tick arm whose certifier the corpus's client stands in for.
+  here is of it: vLLM's own client sends a tick arm only where its engine empties its prefix cache when idle
+  (`serve_tax.corpus_only`), and that arm's doesn't.
   `tick-certifier` is not comparable either (below). A target given with `--target` has no parts.
 - **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and so does
   `boundary-rows`: a request's boundary is its own prompt ids and the ids it was served, whichever KV pages its
@@ -281,8 +283,8 @@ an engine of another limit than the two loads', so its number waits for no row (
   tables on a tree whose boundary commitment builds none commits without them, and the line says the cost is without
   them.
 - **What it leaves out.** `serve_tax.NO_ARM` lists what a served engine of ours changes that no arm turns on; the output
-  prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's fed by the
-  stand-in certifier, and the restore arms' seeded sampling) aren't served by vLLM's.
+  prints it under the number, which counts none of it. The arms that need the corpus's client (the tick arms whose
+  engine keeps its prefix cache across passes, and the restore arms' seeded sampling) aren't served by vLLM's.
 - **The arm behind the network attester,** `tick-certifier`, is the tick arm with the network attester itself in front
   (`serve_tax.CERTIFIER`), which vLLM's client drives through a shim (`cell_shim`). Two commands serve it, since the
   network attester never runs on the node it certifies: `--side server` there, `--side client` on the network attester's host.
@@ -404,6 +406,44 @@ served. Two lifetimes an arm are the fewest that give the cost an interval, and 
 
 ~~~text
 LIFETIMES=6 LEAVE_OUT=1 WARM_S=0 bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record" --loads agentic=4 --reps 6
+~~~
+
+## Everything on at the recipe's line
+
+`prod-all-on` is `prod-record` with admission on the certified tick and the edge snapshot on, in one server that
+vLLM's client sends, costed over `prod` as `prod-record` is. Of GLM-5.3's target it has every part's changes on but
+the commitment of values' (the two-stage boundary commitment and the history tables), and the served ids, which no
+part counts, so its verdict against the model's target is `not comparable`. What it has on and what it leaves off is
+said in words in its record, its cost's points and its metrics (`parts`, `serve_tax.parts_of`), so no figure of it
+reads as more than it is:
+
+- **The network attester's egress pacing: off.** A stand-in release front on the node (`release_front`) stands
+  between vLLM's client and the server: it numbers each completion as it comes, puts it in the 100 ms bucket of its
+  arrival, and streams the watermark of those buckets to the server's tick for the server's whole lifetime. Admission
+  is the certified tick's, as with the network attester in front, and no answer is paced: the arm measures the
+  engine's cost of the tick and none of the network attester's schedule, which `tick-certifier` serves behind the
+  network attester itself. Each request reaches the server on a connection of its own.
+- **Useful-work kernels: off**, and **commitment of values: off**: no token commits, no boundary commitment, no
+  history tables.
+- **τ.** The tick's bucket is the network attester's 100 ms; τ_sat and τ_free are 0.9 and 1.1 times the mean engine
+  cycle of a `prod-record` step trace on the agentic load at four users (`serve_tax.py tick OUT/prod-record.1 --load
+  agentic@4`, which prints them), given as `TICK_MS`.
+- **The edge snapshot** is taken every `EDGES_EVERY_S` seconds of server time: the engine drains, every rank's KV
+  cache is hashed where it lies (its root is part of the snapshot) and copied to host memory on every rank
+  (`KV_COPY=all`). The cost model prices an edge every 600 s (`serve_tax.PRICED_EDGE_S`); at 60 s a run takes ten
+  times as many edges, and its parts say its cost errs high by 10×. Each edge's record holds its pause and each
+  load's metrics the edges in it and each one's pause (`edge_pause_s`), so the snapshot's cost at 600 s is priced from
+  the measured pause.
+- **Counts.** Each pass's `meta.json` holds `counts`: the requests the tick admitted, how many it deferred by a step or
+  more and how many steps each was held, the steps that admitted any and the gate's events (an `opened` gate orders
+  nothing after it), and each process's canonical top-k calls, a process a card. The engine's steps are in its
+  `schedule`.
+- Its server refuses `/reset_prefix_cache`, so each pass first waits `serve_tax.IDLE_S` and the engine empties its
+  prefix cache at the pass's first request (`idle_reset`); the pass's `prefix_cache_reset` says whether it did.
+
+~~~text
+SAMPLED=1 PASS_PROMPTS=agentic=4 TICK_MS=SAT,FREE EDGES_EVERY_S=60 LIFETIMES=8 LEAVE_OUT=1 WARM_S=0 \
+  bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-all-on" --loads agentic=4 --reps 2
 ~~~
 
 ## Running it
