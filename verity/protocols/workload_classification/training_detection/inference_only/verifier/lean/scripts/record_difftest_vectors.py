@@ -1,17 +1,17 @@
 """The record form's difftest data: execution phases' circuit records with their Programs, registration logs and limits,
-for `InferenceOnlyVerifier/RecordDifftestMain.lean`.
+for `InferenceOnlyCheck/RecordDifftestMain.lean`.
 
     python scripts/record_difftest_vectors.py <verity checkout> --out DIR [--count N]
 
 Writes two files under `DIR/record_difftest/`, one line per case: `cases.jsonl`, `{"instance", "trusted", "spot",
-"rows", "count", "block_rows"}`: the instance and the trusted input as `InferenceOnlyVerifier.Record.check` reads them (`Record`'s
+"rows", "count", "block_rows"}`: the instance and the trusted input as `InferenceOnlyCheck.Record.check` reads them (`Record`'s
 docstring), the record's wires as SPOT's `wires` piece reads them (`spot_of`, each template's rows and outputs
 Python's own layout of it; `null` where the reference refuses the case before its wires, or that layout has no row
 for a port: leaves of two widths, or an output past a word that is not whole words), some input rows of its units (`[template, port, unit, row]` each), the count's limits
 (`{"table", "c", "k", "n"}`) and the rows rule's (`{"table", "gamma", "alpha"}`, `rows_limits`); and `python.jsonl`,
 `{"detail", "public", "kinds", "exported", "count", "closed", "block_rows", "chosen"}`:
 `inference_only_record_reference`'s `check_detail`, `check`, `kinds` and `exported` of those rows, `count`, each
-template's closed rows (`closed`), `block_rows` and `chosen`. The Lean audit runs `InferenceOnlyVerifier/RecordDifftestMain.lean` on the two (`runs` in
+template's closed rows (`closed`), `block_rows` and `chosen`. The Lean audit runs `InferenceOnlyCheck/RecordDifftestMain.lean` on the two (`runs` in
 `lean-audit.json`).
 
 Case `seed`, for the first `COUNT`, is a random circuit (`random_circuit`): one to four templates of a few gates, each

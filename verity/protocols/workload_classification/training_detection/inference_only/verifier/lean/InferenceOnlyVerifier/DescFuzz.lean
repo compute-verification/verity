@@ -6,7 +6,7 @@ public import Std.Data.HashSet
 /-!
 # The desc fuzzer: the statements behind `DescAgrees`, decided on generated Programs
 
-`InferenceOnlyVerifier.Properties.DescAgrees` (`Desc.check` agrees with the unrolled `InferenceOnlyVerifier.evaluate`) follows from three
+`InferenceOnlyCheck.Properties.DescAgrees` (`Desc.check` agrees with the unrolled `InferenceOnlyCheck.evaluate`) follows from three
 statements (`Fresh.descAgrees_of_open`), each proved in `security/Proofs/Properties/InferenceOnly/` (`Resolve.bodiesOk`,
 `OperandsResolve.operandsResolve_of`, `Fresh.readsExact`), so `DescAgrees` is proved (`SecurityProofs.DescAgrees`), and
 the fuzzer decides the statements as a cross-check of those proofs. Each is a `∀` over Programs that pass
@@ -23,18 +23,18 @@ the fuzzer decides the statements as a cross-check of those proofs. Each is a `�
 * `s2`, `Resolve.BodiesOk`: every Definition a `Good` activation runs (the root, and each composite callee of a node with
   members, `goodDefs`) is `BodyOk`: `RefOk` for every argument and return reference, `UpOk`, `DownOk`, and `OpOk` for a
   primitive callee.
-* `s3`, `Fresh.ReadsExact`: on `InferenceOnlyVerifier.circuitOf`'s circuit `c`, every gate a segment of `Desc.analyze`'s reads of root
+* `s3`, `Fresh.ReadsExact`: on `InferenceOnlyCheck.circuitOf`'s circuit `c`, every gate a segment of `Desc.analyze`'s reads of root
   node `k` names (of positive count) is a natural `a` of width `c.w[a]` in the root node `Desc.nodeOf` finds for the
   segment's first piece (clause a), and those gates are exactly the gates outside node `k` that its gates read (clause b).
   `circuitOf` runs only where `s1prim`'s walk resolved every operand under the step cap, so it never runs `Steps.FUEL`
   steps.
 * `agree`, `DescAgrees` itself, on instances of the Program (`instanceOf`) and on any its line gives (`θ`, owners, `Γ`
   and `α` chosen with the Program, as the shared family chooses its inference blocks): wherever `Desc.evaluate` gives a verdict,
-  `InferenceOnlyVerifier.evaluate` gives the same one on the instance expanded gate by gate (`expand`, `InferenceOnlyVerifier.Properties.Expands`).
+  `InferenceOnlyCheck.evaluate` gives the same one on the instance expanded gate by gate (`expand`, `InferenceOnlyCheck.Properties.Expands`).
 
 Each `∀` over members, leaves or references enumerates all of them up to `Caps.enum`, else endpoints (every bound in
 `UpOk`, `DownOk` and `OpOk` is monotone in the member and the leaf, or periodic in a leaf block shorter than the
-sample). `scripts/desc_fuzz_programs.py` writes the Programs and `InferenceOnlyVerifier/DescFuzzMain.lean` fails unless no statement
+sample). `scripts/desc_fuzz_programs.py` writes the Programs and `InferenceOnlyCheck/DescFuzzMain.lean` fails unless no statement
 fails on any of them. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
 
@@ -316,7 +316,7 @@ def instanceOf (text : String) (gates : Nat) (inp reg held : Array Bool) (seed :
   Json.mkObj [("program", Json.str text), ("theta", Json.arr theta), ("owner", Json.arr owner),
     ("gamma", toJson (gates / 2 + v)), ("alpha", Json.arr #[toJson (1 + v % 3), toJson 2])]
 
-/-- `InferenceOnlyVerifier.Properties.Expands`: θ and the owners by root node, gate by gate. -/
+/-- `InferenceOnlyCheck.Properties.Expands`: θ and the owners by root node, gate by gate. -/
 def expand (P : Prog) (j : Json) : Json := Id.run do
   let offs := (P.defs[P.root]!).body.offsets
   let gs (k : Nat) := (Array.range (offs[k + 1]! - offs[k]!)).map (offs[k]! + ·)
@@ -408,7 +408,7 @@ def failing (r : Json) : List String :=
 /-- Whether `check` decided statement `s`: it holds or fails, neither skipped nor refused a precondition. -/
 def decided (r : Json) (s : String) : Bool := ((r.getObjValD s).getObjVal? "fail").isOk
 
-/-- `lake env lean --run InferenceOnlyVerifier/DescFuzzMain.lean PROGRAMS N`: `PROGRAMS` has `N` lines, `{"id", "family",
+/-- `lake env lean --run InferenceOnlyCheck/DescFuzzMain.lean PROGRAMS N`: `PROGRAMS` has `N` lines, `{"id", "family",
 "program", "agree"}` each, and `"instances"` on some (`agree`: how many instances of its own `agrees` checks, beside
 `instances`, each `{"theta", "owner", "gamma", "alpha"}`; every instance costs two decodes of the Program), and the run
 fails unless no statement fails on any of them and each statement is decided on some. -/

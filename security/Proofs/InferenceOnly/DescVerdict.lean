@@ -25,7 +25,7 @@ import Proofs.Properties.InferenceOnly.DescVerdict
 # A verdict of compliance of the description-sized check carries the thread bound
 
 Each thread bound of `Properties.InferenceOnly.Desc.Verdict`, from `DescAgrees` (`SecurityProofs.DescAgrees`,
-`Proofs.Properties.InferenceOnly.Agrees`) and the bound of a verdict of `InferenceOnlyVerifier.evaluate` (`Throttles` and its forms,
+`Proofs.Properties.InferenceOnly.Agrees`) and the bound of a verdict of `InferenceOnlyCheck.evaluate` (`Throttles` and its forms,
 `Proofs.InferenceOnly.Verdict`), through `Proofs.Properties.InferenceOnly.DescVerdict`.
 -/
 

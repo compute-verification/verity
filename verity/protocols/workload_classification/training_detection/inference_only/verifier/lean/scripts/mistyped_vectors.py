@@ -3,10 +3,10 @@
 (`tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py`).
 
 The Python codec refuses such a Program as it decodes it (`defs.Builder.finish`), and so does Flock's decoder, which
-`InferenceOnlyVerifier` decodes with (`Flock.Program.Widths`), with the codec's message. The descriptors here are written as JSON, since
-the Builder refuses to build them. `cases()` holds, as `InferenceOnlyVerifier.Desc` reads an instance (θ and the owners per root node):
+`InferenceOnlyCheck` decodes with (`Flock.Program.Widths`), with the codec's message. The descriptors here are written as JSON, since
+the Builder refuses to build them. `cases()` holds, as `InferenceOnlyCheck.Desc` reads an instance (θ and the owners per root node):
 
-* `shapes()`: the five shapes on which a draft of the liveness test gave `InferenceOnlyVerifier` mistyped Programs
+* `shapes()`: the five shapes on which a draft of the liveness test gave `InferenceOnlyCheck` mistyped Programs
   (`swap`, `exit_xs`, `carry_read` with and without `xs`, `xs_part`, each with inputs of 8, 16, 32 and 64 bits a carry or a
   batch reads as 8), at a small `n` and at one past anything walked (2^40 to 2^52), and `exit-xs` at `n = 2`;
 * `pairs()`: an `Array<N, (V8, V16)>` read by a strided part (leaf 0 or leaf 1 of every pair), by an affine one shifted by
@@ -259,7 +259,7 @@ def pairs(N: int, how: str) -> dict:
 PAIR_HOWS = ("leaf0", "leaf1", "swapped", "shifted", "quads", "quads-off", "param", "param-ok", "explicit",
              "explicit-ok", "ret", "later")
 WELL_TYPED = ("leaf0", "swapped", "quads", "param-ok", "explicit-ok")
-#: the refused ones at `2^20`; the well-typed ones at `2^14`, since `InferenceOnlyVerifier.Desc` reads a primitive's operands one by
+#: the refused ones at `2^20`; the well-typed ones at `2^14`, since `InferenceOnlyCheck.Desc` reads a primitive's operands one by
 #: one, and does so in seconds past it
 PAIR_SIZES = {False: (4, 2 ** 20), True: (4, 2 ** 14)}
 

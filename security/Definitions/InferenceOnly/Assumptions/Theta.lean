@@ -31,7 +31,7 @@ gates `S` read from outside `S` (`c.D.into M.S`: a dark gate of `c`, or an input
 when it is in `c`'s `θ`. A dark value, or a fresh input of `c`, that `d` listed in `θ` would be read for free, and an
 inference block could then thread `c`'s counted multiplications on it without paying for the read.
 
-The inference-only check (`InferenceOnlyVerifier.Theta`) enforces the provenance form: each `θ` entry cites the first entry of the
+The inference-only check (`InferenceOnlyCheck.Theta`) enforces the provenance form: each `θ` entry cites the first entry of the
 deployment's registration log (`theta-record-unknown`, `theta-not-at-deployment-start`), which is at or before every
 run's own entry, and the root that entry registers the value under (`theta-root`), of the `registered` kind only
 (`theta-provenance`), and the run's own entry holds the θ entry's parameter to that root (`theta-unbound`). What stays a

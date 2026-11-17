@@ -1,12 +1,12 @@
-"""The desc fuzzer's data: generated descriptor v1 Programs for `InferenceOnlyVerifier/DescFuzzMain.lean`.
+"""The desc fuzzer's data: generated descriptor v1 Programs for `InferenceOnlyCheck/DescFuzzMain.lean`.
 
     python scripts/desc_fuzz_programs.py <verity checkout> --out DIR
 
 Writes `DIR/desc_fuzz/programs.jsonl`, one `{"id", "family", "program", "agree"}` object per line, from fixed seeds
 (`FAMILIES`), with `"instances"` (inference-block assignments, each `{"theta", "owner", "gamma", "alpha"}`) on the shared families'
-(`agree`: how many instances of its own `InferenceOnlyVerifier.DescFuzz.agrees` checks beside them).
-The Lean audit runs `InferenceOnlyVerifier/DescFuzzMain.lean` on it (`runs` in `lean-audit.json`, which pins its SHA-256), which
-decides the statements behind `DescAgrees` on each Program (`InferenceOnlyVerifier.DescFuzz`'s docstring) and fails if one fails;
+(`agree`: how many instances of its own `InferenceOnlyCheck.DescFuzz.agrees` checks beside them).
+The Lean audit runs `InferenceOnlyCheck/DescFuzzMain.lean` on it (`runs` in `lean-audit.json`, which pins its SHA-256), which
+decides the statements behind `DescAgrees` on each Program (`InferenceOnlyCheck.DescFuzz`'s docstring) and fails if one fails;
 `tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_desc_fuzz.py` checks that this script still writes it. The search itself,
 at millions of Programs, runs outside this tree; this is a seeded sample of it at a size the audit runs on every change to
 the package.
@@ -28,7 +28,7 @@ argument), each with the variant its callee reads, and gates reading the carry o
 iterations. `seeds` and `shared` are the search's shared-members family, ported as it is: whole members of a batch
 returning leaves of arguments they share, each another root node's output, read by a gate.
 `desc_difftest_vectors.shared()`'s six declarations first (`shared-seed`, each with its two instances), which
-`InferenceOnlyVerifier.Desc` once attributed to their first piece's node alone, then `decl` on parameters picked at random
+`InferenceOnlyCheck.Desc` once attributed to their first piece's node alone, then `decl` on parameters picked at random
 (`pick`): two or three shared arguments, each made by a root node of its own (a primitive on an input, a call of a
 composite of two gates, one member of a batch of primitives, or the input itself, registered or bound per run); the
 members' return, each argument's leaves in any order and repeated, now and then with a gate of the member's own; two to
