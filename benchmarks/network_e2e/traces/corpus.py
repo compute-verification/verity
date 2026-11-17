@@ -160,7 +160,7 @@ TRACES |= {name: (TRACES["honest"][0], f"{TRACES['honest'][1]}, cut at every win
 #: D doesn't cover fails its connection late, which the summary counts (`summary.network_attester_summary`'s ``failed``), so it
 #: can't pass unseen.
 NETWORK_CERTIFIER = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv", 1200)}
-NETWORK_CERTIFIER_WHERE = "network certifier beside the server, not on the auditor device"
+NETWORK_CERTIFIER_WHERE = "network attester beside the server, not on the auditor device"
 #: a stall of the client's event loop it records (`drive_network_attester`), in seconds: a fifth of a bucket
 LOOP_LAG_S = 0.02
 #: the descriptors the client holds beside its connections' (the server's and network attester's pipes, the loop's, the logs')
@@ -175,7 +175,7 @@ NETWORK_CERTIFIER_TAIL_S = 60.0
 #: seconds the trace waits for the network attester past its last window: a spawned publisher may still be committing the last
 #: windows' records (`network_attester_probe`'s `publisher`)
 NETWORK_CERTIFIER_END_S = 900.0
-TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active network certifier, D = {d} buckets of 100 ms "
+TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active network attester, D = {d} buckets of 100 ms "
                                    f"({NETWORK_CERTIFIER_WHERE})")
            for name, (base, d) in NETWORK_CERTIFIER.items()}
 #: the certified tick (``--admit tick``): the network attester's bucket τ_b in ms, and τ_sat, τ_free as multiples of a
@@ -841,7 +841,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
             if tick:
                 meta["tick"] = {**tick, "hold_ms": TICK_HOLD_MS, "origin_unix": meta["t0_unix"],
                                 "run": meta.pop("tick_run"), "watermark": meta.pop("watermark"),
-                                "where": "the client's stand-in network certifier (corpus.StandIn)"}
+                                "where": "the client's stand-in network attester (corpus.StandIn)"}
         else:
             wenv = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
             network_attester, dep = start_network_attester(d, port, delay, arr[-1], key, wenv, cpus and cpus["warden"], watermark=bool(tick))
