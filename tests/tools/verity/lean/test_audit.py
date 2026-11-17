@@ -9820,16 +9820,16 @@ def test_the_replay_reads_a_modules_private_part_and_a_plain_files_olean_alone(t
 
 
 #: {fixture: `control_clean`'s copy}, built once a worker by the first control case that needs it
-CLEAN: dict[str, tuple[Path | None, list[str]]] = {}
+CONTROL_CLEAN: dict[str, tuple[Path | None, list[str]]] = {}
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 @pytest.mark.parametrize("fixture,name", [(f, n) for f in A.CONTROLS for n in A.control_cases(f)])
 def test_the_controls(tmp_path_factory, fixture, name):
-    if fixture not in CLEAN:
+    if fixture not in CONTROL_CLEAN:
         toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()
-        CLEAN[fixture] = A.control_clean(fixture, toolchain, tmp_path_factory.mktemp("controls"))
-    work, fails = CLEAN[fixture]
+        CONTROL_CLEAN[fixture] = A.control_clean(fixture, toolchain, tmp_path_factory.mktemp("controls"))
+    work, fails = CONTROL_CLEAN[fixture]
     assert fails == []
     assert A.control_case(work, fixture, name) == []
 
