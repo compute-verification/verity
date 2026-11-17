@@ -632,7 +632,7 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
                    "registered.")
     if served:
         out.append("Advice in the clear: the rehearsal opens each Commit window's advice to its report, where only its "
-                   "registration is public; the compile unit, which takes it hidden, isn't run here.")
+                   "registration is public; the compile slice's proof block, which takes it hidden, isn't run here.")
     out.append("Coded bits: the chain doesn't run the advice code (encodings/code_v1.py).")
     p = c.get("prove_path")
     if p is None:
