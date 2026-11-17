@@ -3063,11 +3063,16 @@ def test_an_honest_witness_bounded_by_an_error_needs_it_below_one_at_its_own_ins
     witness at `paramsA`, or `paramsA` for one at every θ), at some parameters (`∃ θ`), as a disjunct, at some game where
     the witness fixes it, or at another commitment (`c`, of the parameters' type: the second argument of that type), one
     concluding only that the error is not top (`ErrorNotTop`), and one whose `ErrorBelowOne` is not the one of
-    `BELOW_ONE_MODULE`. A witness whose error lies past the walk's depth (`Deep9`) fails as unread, not as none."""
+    `BELOW_ONE_MODULE`. A witness whose error lies past the walk's depth (`Deep9`) fails as unread, not as none; one
+    past a chain as deep in a module that cannot apply the error (`Plain9`) is read whole, the chain not unfolded."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     deep = "".join(f"def Deep{i + 1} (V : Vocab) : Prop := Deep{i} V\n" for i in range(9))
+    (pkg / "Control" / "Plain.lean").write_text(
+        "namespace Verity\ndef Plain0 : Prop := True\n"
+        + "".join(f"def Plain{i + 1} : Prop := Plain{i}\n" for i in range(9)) + "end Verity\n")
     (pkg / "Control" / "Errors.lean").write_text(
+        "import Control.Plain\n"
         "namespace Verity\ninductive Sub where | pouw | wipe\nstructure Params where n : Nat\n"
         "def paramsA : Params := ⟨1⟩\ndef paramsB : Params := ⟨2⟩\nstructure Files where n : Nat\n"
         "def filesA : Files := ⟨1⟩\n"
@@ -3097,6 +3102,7 @@ def test_an_honest_witness_bounded_by_an_error_needs_it_below_one_at_its_own_ins
         "theorem honest_coupled : Coupled exact := ⟨trivial, fun _ _ _ => Nat.le_refl _⟩\n"
         "theorem honest_fixed : exact.TargetFixed .pouw := fun _ => Nat.le_refl _\n"
         "theorem honest_deep : Deep9 exact := fun _ _ _ _ => Nat.le_refl _\n"
+        "theorem honest_plain : Plain9 ∧ Ok exact := ⟨trivial, fun _ _ _ _ => Nat.le_refl _⟩\n"
         "theorem below_exact : ∀ θ F c, exact.ErrorBelowOne θ F c .pouw := fun _ _ _ => Nat.zero_lt_one\n"
         "theorem below_some_game : ∀ θ, ∃ F c, exact.ErrorBelowOne θ F c .pouw :=\n"
         "  fun _ => ⟨filesA, paramsA, Nat.zero_lt_one⟩\n"
@@ -3111,9 +3117,10 @@ def test_an_honest_witness_bounded_by_an_error_needs_it_below_one_at_its_own_ins
         "theorem below_fixed_other : exact.ErrorBelowOne paramsA filesA paramsA .pouw := Nat.zero_lt_one\n"
         "theorem not_top : ∀ θ F c, top.ErrorNotTop θ F c .pouw := fun _ _ _ => Nat.lt_succ_self 1000\n"
         "end Verity\n")
-    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Errors\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Plain\nimport Control.Errors\n")
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    lemmas = ("honest_top", "honest_exact", "honest_at", "honest_coupled", "honest_fixed", "honest_deep", "below_exact",
+    lemmas = ("honest_top", "honest_exact", "honest_at", "honest_coupled", "honest_fixed", "honest_deep", "honest_plain",
+              "below_exact",
               "below_some_game", "below_at_a", "below_at_b", "below_wipe", "below_some_params", "below_or", "below_fixed",
               "below_fixed_some", "below_fixed_other", "not_top")
     names = ["Verity.sound", *(f"Verity.{n}" for n in lemmas)]
@@ -3150,6 +3157,7 @@ def test_an_honest_witness_bounded_by_an_error_needs_it_below_one_at_its_own_ins
         assert targets("honest_fixed", other) == ([(*fixed, False)], refused), other
     pin, codes = read("honest_deep", "below_exact")
     assert (pin["targets"], codes) == ([], ["witnesses.targets-unread"]) and "Verity.Deep" in pin["targets_unread"]
+    assert targets("honest_plain", "below_exact") == ([("Verity.exact", None, bound, pouw, True)], [])
     monkeypatch.setattr(A, "BELOW_ONE_MODULE", "Properties.Verity.Game")
     assert targets("honest_exact", "below_exact") == ([("Verity.exact", None, bound, pouw, False)], refused)
 

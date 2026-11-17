@@ -1169,16 +1169,30 @@ partial def errorApps (errors : Array Name) : Expr → Array Expr
   | .mdata _ e => errorApps errors e
   | _ => #[]
 
+/-- The modules whose declarations can apply one of `errors`: those declaring one and those importing one of them, at any
+depth. -/
+def errorModules (env : Environment) (moduleOf : Name → Option Name) (errors : Array Name) : NameSet := Id.run do
+  let mut out : NameSet := errors.foldl (fun s e => ((moduleOf e).map s.insert).getD s) {}
+  let mut changed := true
+  while changed do
+    changed := false
+    for (m, d) in env.header.moduleNames.zip env.header.moduleData do
+      if !out.contains m && d.imports.any (out.contains ·.module) then
+        out := out.insert m
+        changed := true
+  return out
+
 /-- What `visit` makes of each error (an application of one of `errors`) a statement is bounded by: past its `∀` and
 `∃` binders and through `∧`, `∨` and `↔`, read where it stands; a part that applies none, when its head is a definition
-of a module under `meaning` or one this repository builds, outside an assumptions module, read again unfolded, and when
-its head is such a structure, each of its `Prop` fields read; at most `fuel` unfoldings deep and `budget` in all. A part
-it would read again with none of either left is not read, and `short` says where. -/
-partial def errorsOf (env : Environment) (meaning : Array Name) (built : NameSet) (moduleOf : Name → Option Name)
+of a module under `meaning` or one this repository builds, outside an assumptions module, and of one of `reach` (none
+other can apply an error, `errorModules`), read again unfolded, and when its head is such a structure, each of its
+`Prop` fields read; at most `fuel` unfoldings deep and `budget` in all. A part it would read again with none of either
+left is not read, and `short` says where. -/
+partial def errorsOf (env : Environment) (meaning : Array Name) (built reach : NameSet) (moduleOf : Name → Option Name)
     (errors : Array Name) (visit : Expr → MetaM (Option Json)) (short : IO.Ref (Option String)) (budget : IO.Ref Nat)
     (fuel : Nat) (t : Expr) : MetaM (Array Json) :=
   forallTelescope t fun _ b => do
-    let go := errorsOf env meaning built moduleOf errors visit short budget
+    let go := errorsOf env meaning built reach moduleOf errors visit short budget
     let b := b.consumeMData
     if b.isAppOfArity ``And 2 || b.isAppOfArity ``Or 2 || b.isAppOfArity ``Iff 2 then
       return (← go fuel b.appFn!.appArg!) ++ (← go fuel b.appArg!)
@@ -1189,7 +1203,7 @@ partial def errorsOf (env : Environment) (meaning : Array Name) (built : NameSet
     if !here.isEmpty then return ← here.filterMapM visit
     let .const c us := b.getAppFn | return #[]
     let mine := ((moduleOf c).map fun m =>
-      (under meaning m || built.contains m) && !m.components.contains `Assumptions).getD false
+      (under meaning m || built.contains m) && !m.components.contains `Assumptions && reach.contains m).getD false
     if !mine then return #[]
     if fuel == 0 || (← budget.get) == 0 then
       if (← short.get).isNone then
@@ -1240,6 +1254,7 @@ def targetsOf (env : Environment) (meaning : Array Name) (built : NameSet) (modu
   let text (x : Expr) : MetaM String := do
     return " ".intercalate ((((toString (← ppExpr x)).replace "\n" " ").splitOn " ").filter (· ≠ ""))
   let game := (List.range n).filter fun j => 1 < j && j + 1 < n
+  let reach := errorModules env moduleOf errors
   let budget ← IO.mkRef 64
   let short ← IO.mkRef (none : Option String)
   let unread (why : String) : MetaM (Option Json) := do
@@ -1275,7 +1290,7 @@ def targetsOf (env : Environment) (meaning : Array Name) (built : NameSet) (modu
         ("head", toJson ((e.getAppFn.constName?.map toString).getD "")), ("vocab", toJson (← text v)),
         ("params", ← shown (some θ)), ("game", toJson (← game.mapM fun j => shown xs[j]!)),
         ("subprotocol", toJson (← text a)), ("below_one", toJson covered)]
-    let ts ← tryCatchRuntimeEx (errorsOf env meaning built moduleOf errors visit short budget 8 wi.type) fun ex => do
+    let ts ← tryCatchRuntimeEx (errorsOf env meaning built reach moduleOf errors visit short budget 8 wi.type) fun ex => do
       let _ ← unread s!"its walk of {w} raised: {(← ex.toMessageData.toString).take 200}"
       return #[]
     for t in ts do
