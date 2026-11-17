@@ -42,8 +42,8 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   hardware's use; and nothing states the verdict's time `Δ` after the detected block.
 * **The inference-only policy**: each day `i` of the period declares `d_i`, and the statement takes the day's verdict
   exactly, `CompliesAtMost c k n_i`, at most `n_i` proof blocks of a `(c, k)`-partition at the day's public block count
-  `n_i`: what a published `complies` of the count of `(c, k)`-inference blocks (`InferenceOnlyCheck.Count.check`) gives the Boolean
-  declaration its Program lowers to (`InferenceOnlyCheck.Properties.DescCountsCK`, stated in `security/Properties` and not yet
+  `n_i`: what a published `complies` of the count of `(c, k)`-inference blocks (`InferenceOnlyVerifier.Count.check`) gives the Boolean
+  declaration its Program lowers to (`InferenceOnlyVerifier.Properties.DescCountsCK`, stated in `security/Properties` and not yet
   proved). Reading the check itself needs the code (package `security_properties`), so the statement takes its verdict.
   The day's charged work meets (H) and (E) (`Slowdown.Cut.Assumptions.Hardness`, `Exports`), and `Slowdown.Cut.Guarantees.CountHE`
   bounds its MACs by `n_i (k + α) + (k/2) √(n_i O_i / (β_w β_x))` (`Slowdown.Cut.workHE`). No rate form, padding or other

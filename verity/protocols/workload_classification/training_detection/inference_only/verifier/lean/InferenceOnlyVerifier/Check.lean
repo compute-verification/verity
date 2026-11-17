@@ -49,7 +49,7 @@ then gate by gate `owner-entry`: neither `"input"` nor a natural, `input-in-iu`,
 
 @[expose] public section
 
-namespace InferenceOnlyCheck
+namespace InferenceOnlyVerifier
 
 open Lean (Json toJson)
 open Flock.Program (GateTable)
@@ -247,4 +247,4 @@ def check (j : Json) : Json :=
   | .ok r => r
   | .error code => refusalOf j code
 
-end InferenceOnlyCheck
+end InferenceOnlyVerifier

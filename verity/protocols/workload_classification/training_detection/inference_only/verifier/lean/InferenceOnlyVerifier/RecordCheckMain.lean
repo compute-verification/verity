@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.RecordCount
+public import InferenceOnlyVerifier.RecordCount
 
 /-! `inference-only-record-check CASE`: the record form's two verdicts on one case, a line of the record difftest's
 cases (`{instance, trusted, count}`; `scripts/served_record_case.py` writes one from a served run's files). It prints
@@ -12,7 +12,7 @@ the form does not: not the values the record commits, nor SPOT's openings of its
 
 @[expose] public section
 
-open InferenceOnlyCheck in
+open InferenceOnlyVerifier in
 def main (args : List String) : IO UInt32 := do
   let [path] := args | IO.eprintln "usage: inference-only-record-check CASE"; return 2
   let t0 ← IO.monoMsNow

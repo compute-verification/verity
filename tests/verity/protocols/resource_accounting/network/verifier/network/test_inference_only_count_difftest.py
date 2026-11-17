@@ -1,11 +1,11 @@
-"""The count of `(c, k)`-inference blocks (`InferenceOnlyCheck.Count`) against the Python reference: the Python half.
+"""The count of `(c, k)`-inference blocks (`InferenceOnlyVerifier.Count`) against the Python reference: the Python half.
 
 `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/count_difftest_vectors.py` writes 1,687 instances of the count (1,500
 random, 6 on each distinct descriptor of the circuits fixtures, 7 worked by hand) and, on each,
 `scripts/inference_only_reference.py`'s `check_count_detail` (the whole verdict, for the private record) and `check_count` (what
 the count publishes, the judgment against n). `check` runs the Lean half in its Lean audit (`runs` in that package's
-`lean-audit.json`): `InferenceOnlyCheck/CountDifftestMain.lean` fails unless `InferenceOnlyCheck.Count.checkDetail` and
-`InferenceOnlyCheck.Count.check` give Python's results on every instance. The audit checks the data against the record's SHA-256
+`lean-audit.json`): `InferenceOnlyVerifier/CountDifftestMain.lean` fails unless `InferenceOnlyVerifier.Count.checkDetail` and
+`InferenceOnlyVerifier.Count.check` give Python's results on every instance. The audit checks the data against the record's SHA-256
 and caches its pass on the Lean package's files alone, so the first test is what says the data is still what the
 generator and the reference write. The second checks that the generator reaches what its docstring says and that the
 published result is the judgment alone, the third the hand-worked rows, and the fourth that what the count gives bounds
@@ -34,7 +34,7 @@ def _load(name: str):
 
 vectors = _load("count_difftest_vectors")
 reference = vectors.reference
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.CountDifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyVerifier.CountDifftestMain"]
 
 
 @pytest.mark.slow

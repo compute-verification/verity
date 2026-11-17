@@ -4,7 +4,7 @@ The inference-only policy is the part of Verity that tells serving from training
 divide into inference blocks, each of at most c gates and each reading at most k bits of fresh input: bits from outside
 the registered information θ, the models, code and data fixed before the monitoring period.
 
-This directory is the policy's check, in Lean only (`lean/`, the Lake package `inference_only_check`). Its one Python
+This directory is the policy's check, in Lean only (`lean/`, the Lake package `inference_only_verifier`). Its one Python
 file is its manifest, `parties.py`: one party, the verifier, with no channel. Both composites, onsite and remote,
 compose the check as the core protocol `verity/inference-only/v0`.
 
@@ -28,7 +28,7 @@ Each is a `lake exe` in `lean/`.
 | --- | --- |
 | `inference-only id \| check \| serve` | the core protocol `verity/inference-only/v0`, which both composites compose |
 | `inference-only-rows id \| check \| serve` | the core protocol `verity/inference-only/rows/v1`, which no system lists |
-| `inference-only-check INSTANCE TRUSTED` | the verdict on one instance, as JSON; `--count` the count of (c, k)-inference blocks, `--policy` the policy alone |
+| `inference-only-verifier INSTANCE TRUSTED` | the verdict on one instance, as JSON; `--count` the count of (c, k)-inference blocks, `--policy` the policy alone |
 | `inference-only-record-check CASE` | the record form on one case written from a served run's files, for the private record only |
 
 The benchmark [`benchmarks/inference_only`](../../../../../../benchmarks/inference_only/README.md) runs the count on the
