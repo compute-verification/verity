@@ -6,19 +6,8 @@ import Mathlib.Data.Sym.Sym2.Init
 import Mathlib.Tactic.ContinuousFunctionalCalculus
 import Mathlib.Tactic.NormNum.GCD
 
-/-!
-# The chain's satisfiability witness (a later bundle; outside the 36 merged pins)
-
-The honest one-gate program meets `tile_cost_ge_of_gates`' whole three-input hypothesis on one live pair. This module
-proves it:
-* `oneGateP` and `oneGateQ` carry `(e_(0,0), 0)` and `(0, e_(0,0))`, and are exact on all 128 words (`decide +kernel`);
-* `oneGateProg_eval`: the honest one-gate program computes `X·Y` at every input;
-* `oneGateProg_gates` is the hypothesis `hg` of `tile_cost_ge_of_gates` for `oneGateProg`, with live entries
-  `x = (0, 0)` and `y = (0, 0)`;
-* `tile_chain_satisfiable` (the pin) packages it: some representable tile program meets the chain's hypothesis on
-  one live product, so the chain covers a real program. The pin states it existentially, so that it reads only
-  `Defs.lean`.
--/
+/-! A satisfiability witness for `tile_cost_ge_of_gates`: the honest one-gate program meets its three-input hypothesis
+on one live pair. -/
 
 @[expose] public section
 
@@ -62,7 +51,6 @@ theorem oneGateQ_p : ∀ i l, elemValue (oneGateQ.p i l) (oneGateQ.ps i (scaleId
 theorem oneGateQ_q : ∀ l j, elemValue (oneGateQ.q l j) (oneGateQ.qs j (scaleIdx l)) =
     if (l, j) = ((0 : Fin 64), (0 : Fin 8)) then 1 else 0 := by decide +kernel
 
-/-- The honest one-gate program computes `X·Y` at every input. -/
 theorem oneGateProg_eval (X : Fin 16 × Fin 64 → ℚ) (Y : Fin 64 × Fin 8 → ℚ) (o : Fin 16 × Fin 8) :
     oneGateProg.toBilin.toQuad.eval X Y o = matMul X Y o := by
   obtain ⟨o1, o2⟩ := o
@@ -85,9 +73,6 @@ theorem oneGateProg_realizesAt_Q :
   · rw [oneGateQ_p]; simp [oneGateProg]
   · rw [oneGateQ_q]; simp only [oneGateProg, sum_unitForm_mul]
 
-/-- **The chain's hypothesis holds for a real program.** `tile_cost_ge_of_gates`' three-input hypothesis `hg` for the
-honest one-gate program, with live entries `x = (0, 0)` and `y = (0, 0)`: exact `sm120Nvf4` firings realize it at
-`(e_x, e_y)`, `(e_x, 0)` and `(0, e_y)`, and output `X·Y` there. -/
 theorem oneGateProg_gates : ∀ x : Fin 16 × Fin 64, x = (0, 0) → ∀ y : Fin 64 × Fin 8, y = (0, 0) →
     ∃ g11 g10 g01 : Fin 1 → Firing,
       oneGateProg.RealizesAt g11 (unitForm x) (unitForm y) ∧ oneGateProg.RealizesAt g10 (unitForm x) 0 ∧
@@ -102,7 +87,6 @@ theorem oneGateProg_gates : ∀ x : Fin 16 × Fin 64, x = (0, 0) → ∀ y : Fin
   · rw [realizes_out_at _ _ _ _ oneGateProg_realizesAt_P, oneGateProg_eval]
   · rw [realizes_out_at _ _ _ _ oneGateProg_realizesAt_Q, oneGateProg_eval]
 
-/-- The chain on the honest one-gate program (a lemma; the pinned form is `tile_chain_satisfiable`). -/
 theorem tile_cost_ge_of_gates_witness :
     price .fp4 * nLive (m := 16) (k := 64) (n := 8) (fun x => x = (0, 0)) (fun y => y = (0, 0)) ≤
       oneGateProg.cost :=
@@ -110,7 +94,6 @@ theorem tile_cost_ge_of_gates_witness :
     oneGateProg_gates
 
 omit [Fintype τ] [Fintype β] [Fintype γ] in
-/-- One live X-entry and one live Y-entry that meet: one live product. -/
 theorem nLive_pair {m k n : ℕ} (a : Fin m × Fin k) (b : Fin k × Fin n) (h : a.2 = b.1) :
     nLive (fun x => x = a) (fun y => y = b) = 1 := by
   unfold nLive
@@ -126,9 +109,7 @@ omit [Fintype τ] [Fintype β] [Fintype γ] in
 theorem nLive_single : nLive (m := 16) (k := 64) (n := 8) (fun x => x = (0, 0)) (fun y => y = (0, 0)) = 1 :=
   nLive_pair _ _ rfl
 
-/-- **The chain's hypotheses are satisfiable, non-vacuously.** Some tile program is representable on NVFP4's blocks
-and meets `tile_cost_ge_of_gates`' three-input hypothesis on a live pair, and that pair is one live product. So the
-chain from exact `sm120Nvf4` firings to the cost bound applies to a real program. -/
+/-- Stated existentially so that it reads only `Defs.lean`. -/
 theorem tile_chain_satisfiable : ∃ P : TileProg ℚ 16 64 8 1, P.Representable (nvfp4X 16 64) ∧
     (∀ x : Fin 16 × Fin 64, x = (0, 0) → ∀ y : Fin 64 × Fin 8, y = (0, 0) →
       ∃ g11 g10 g01 : Fin 1 → Firing,
