@@ -24,7 +24,7 @@
 // C u32[128][32], enable u8, D u32[128][32].  The instruction descriptor is a runtime argument (the type pair lives in it).
 // Build: nvcc -O2 -gencode arch=compute_100a,code=sm_100a -Xcompiler -fPIC -shared -o libtcgen05_f8.so tcgen05_f8.cu
 //
-// Instruction descriptors, PTX ISA 9.7.18.4 (cross-checked with benchmarks/pouw/dc/dc.cuh, whose kind::f8f6f4 E4M3 descriptor
+// Instruction descriptors, PTX ISA 9.7.18.4 (cross-checked with calibration/pouw/dc/dc.cuh, whose kind::f8f6f4 E4M3 descriptor
 // LOWBIT-DC's fpx ran, and with tcgen05_fp4.cu's block-scaled one):
 //   kind::f8f6f4:   D format [4,6) (F32 = 1), A format [7,10), B format [10,13) (E4M3 0, E5M2 1, E2M3 3, E3M2 4, E2M1 5),
 //                   K-major, N >> 3 at [17,23), M >> 4 at [24,29).
