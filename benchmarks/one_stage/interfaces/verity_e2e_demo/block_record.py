@@ -15,7 +15,9 @@ steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive
   ``⌊ρ·|C|⌋``, which a record may carry as ``S_cert``, read and never written); ``error`` the probability over the subprotocol's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound SPOT's Lean ``countBound`` gives), else not established. The sample is the answer's own sampling design: where its
+  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound SPOT's Lean ``countBound`` gives), else not established. A per-member sample that missed a member has no integrity bound
+  (``value`` null) and holds at no δ: its ``why`` gives each sampled member's bound over that member's own proof blocks,
+  beside ``members`` (sampled, registered). The sample is the answer's own sampling design: where its
   profile samples each stratum on its own, the quantity carries the ``strata`` (``[{name, size, k}]``) and the bound is
   the stratified design's, the most incorrect proof blocks that some placement over the strata hides with probability
   at least δ, which a uniform sample of as many units understates. ``named_terms``, which a subprotocol of
@@ -58,6 +60,9 @@ from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 FORMAT = "verity/block-record/v2"
 EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
 SUBPROTOCOLS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
+#: keys and a label stored records hold under their older words: a record's subprotocols, an integrity quantity's (and
+#: a member's) count of sampled proof blocks, and the integrity bound's unit
+BY_SUBPROTOCOL, SAMPLED, INTEGRITY_UNIT = "legs", "drawn", "wrong units"
 #: the runner's protocol keys, by subprotocol
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
 #: the subprotocols each product composes: onsite every subprotocol, remote those that need no hardware of the auditor's at the site
@@ -99,6 +104,11 @@ def integrity_bound(n: int, kd: int, delta: Fraction, strata: Sequence[Mapping[s
     return design.count_bound(delta)
 
 
+def member_bounds(by_member: Sequence[Mapping[str, Any]], delta: Fraction) -> list[str]:
+    return [f"at most {integrity_bound(m['of'], m[SAMPLED], delta)} incorrect of member {m['member']}'s {m['of']} "
+            f"proof block{'' if m['of'] == 1 else 's'} at δ {delta}" for m in by_member]
+
+
 def _sample(answer: Mapping[str, Any]) -> dict[str, Any]:
     """The sample of an integrity answer's checked level, as its quantity carries it: the level's size, the units
     sampled, and the ``strata`` of a stratified sampling design (`Stratified.to_json`); another design has none, and
@@ -107,10 +117,10 @@ def _sample(answer: Mapping[str, Any]) -> dict[str, Any]:
     n, kd = int(level["size"]), int(answer["profile"]["drawn"][level["name"]])
     design = level.get("draw")
     if not isinstance(design, Mapping) or design.get("law") != "stratified":
-        return {"of": n, "drawn": kd}
+        return {"of": n, SAMPLED: kd}
     strata = [{"name": str(s["name"]), "size": int(s["size"]), "k": int(s["k"])} for s in design["strata"]]
     integrity_bound(n, kd, DELTAS[0], strata)
-    return {"of": n, "drawn": kd, "strata": strata}
+    return {"of": n, SAMPLED: kd, "strata": strata}
 
 
 def named_terms_bad(named: Any) -> str | None:
@@ -141,7 +151,11 @@ def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any],
     q, a = row.get("quantity") or {}, row["answer"]
     pub = a.get("public") or {}
     if subprotocol == "integrity":
-        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", **_sample(a)},
+        members = row.get("members") or {}
+        if members.get("sampled", 0) < members.get("registered", 0):
+            return ({"symbol": "integrity bound", "value": None, "unit": INTEGRITY_UNIT, **_sample(a),
+                     "members": dict(members), "by_member": list(row["by_member"])}, frac(row["delta"]), "delta")
+        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": INTEGRITY_UNIT, **_sample(a)},
                 frac(row["delta"]), "delta")
     if subprotocol == "pouw":
         w = q["work"]
@@ -166,8 +180,13 @@ def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction) ->
     """The subprotocol's certificate at each δ of `DELTAS` (module docstring)."""
     out: dict[str, Any] = {}
     for d in DELTAS:
-        if subprotocol == "integrity":
-            b = integrity_bound(quantity["of"], quantity["drawn"], d, quantity.get("strata"))
+        if subprotocol == "integrity" and "members" in quantity:
+            m = quantity["members"]
+            out[str(d)] = {"holds": False, "why": f"the sample reached {m['sampled']} of {m['registered']} members, so "
+                           f"no bound over the workload's {quantity['of']} proof blocks holds; "
+                           f"{'; '.join(member_bounds(quantity['by_member'], d))}"}
+        elif subprotocol == "integrity":
+            b = integrity_bound(quantity["of"], quantity[SAMPLED], d, quantity.get("strata"))
             out[str(d)] = {"holds": True, "value": b, "epsilon": str(Fraction(b, quantity["of"])), "by": "draw"}
         elif error <= d:
             out[str(d)] = {"holds": True, "value": quantity["value"], "epsilon": None, "by": "run"}
@@ -222,7 +241,7 @@ def compose(server: str, subprotocols: Mapping[str, Any], product: str = "onsite
                           "not_established": sorted(k for k in accepted if not here[k]["at"][str(d)]["holds"])}
                  for d in DELTAS}}
     named = {} if product == "onsite" else {"product": product, "dropped": sorted(k for k in SUBPROTOCOLS if k not in composes)}
-    return {"legs": verdicts, "missing": missing, "elsewhere": elsewhere, "joint_horizon": jh, **named}
+    return {BY_SUBPROTOCOL: verdicts, "missing": missing, "elsewhere": elsewhere, "joint_horizon": jh, **named}
 
 
 def answer_of(answer: Mapping[str, Any] | None, product: str = "onsite") -> dict[str, Any] | None:
@@ -292,7 +311,7 @@ def from_period(report: Mapping[str, Any], *, steps: tuple[int, int], deployment
     c = composed(server, subprotocols, answer, product)
     which = {"period": report["period"]} if "period" in report else {"window": report["window"]}
     return {"format": FORMAT, "extends": report["format"], "run": report["run"], **which, "server": server,
-            "server_time": [{"server": server, "steps": [lo, hi]}], "legs": subprotocols, "composed": c,
+            "server_time": [{"server": server, "steps": [lo, hi]}], BY_SUBPROTOCOL: subprotocols, "composed": c,
             "monitoring_period": monitoring_period(deployment, frac(c["joint_horizon"]["error_sum"]))}
 
 
@@ -305,10 +324,10 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
     if record["server_time"] != [{"server": server, "steps": record["server_time"][0]["steps"]}] or not (
             0 <= record["server_time"][0]["steps"][0] < record["server_time"][0]["steps"][1]):
         bad["server_time"] = "not one nonempty block [lo, hi) of the record's server"
-    if sorted(record["legs"]) != sorted(SUBPROTOCOLS):
-        bad["legs"] = f"not the subprotocols {SUBPROTOCOLS}"
+    if sorted(record[BY_SUBPROTOCOL]) != sorted(SUBPROTOCOLS):
+        bad[BY_SUBPROTOCOL] = f"not the subprotocols {SUBPROTOCOLS}"
         return bad
-    for name, lg in record["legs"].items():
+    for name, lg in record[BY_SUBPROTOCOL].items():
         if lg is None:
             continue
         key = f"subprotocol:{name}"
@@ -316,6 +335,9 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
             bad[key] = "its source is neither real nor fixture"
         if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"])):
             bad[key] = "its certificates at the deltas are not its quantity's at its error"
+        m = lg["quantity"].get("members") or {}
+        if (lg["quantity"]["value"] is None) != (name == "integrity" and m.get("sampled", 0) < m.get("registered", 0)):
+            bad[key] = "its quantity's value is null exactly when it is integrity's and its sample missed a member"
         if "named_terms" not in lg:
             if name in NAMES_TERMS:
                 bad[key] = f"it names no term its error leaves out; {NAMES_TERMS_FIX}, and the record is built from that"
@@ -325,10 +347,10 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
     if product not in PRODUCTS:
         bad["composed:product"] = f"not one of {sorted(PRODUCTS)}"
         return bad
-    if ran := dropped_ran(record["legs"], product):
-        bad["legs"] = f"{', '.join(ran)}: subprotocols the {product} product drops, which the block ran"
+    if ran := dropped_ran(record[BY_SUBPROTOCOL], product):
+        bad[BY_SUBPROTOCOL] = f"{', '.join(ran)}: subprotocols the {product} product drops, which the block ran"
     try:
-        want = composed(server, record["legs"], record["composed"].get("answer"), product)
+        want = composed(server, record[BY_SUBPROTOCOL], record["composed"].get("answer"), product)
     except ValueError as e:
         bad["composed:answer"] = str(e)
         return bad

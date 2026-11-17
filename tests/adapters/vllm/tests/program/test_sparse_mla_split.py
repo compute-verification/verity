@@ -5,8 +5,6 @@ twins are the word Definitions word for word; a split head is softmax attention 
 FFMA and the splits' logsumexp within rounding; the Boolean versions agree with their word views."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import hashlib
 import re
 

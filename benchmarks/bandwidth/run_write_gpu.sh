@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# The write ceilings' GPU half (cwd = the source tree): builds write.cu (bwwrite) and runs every arm on one RTX PRO 6000,
-# the queue's GPU (GPU_LEASE_UUID) or one it leases, with the card's clocks, PCIe link and ECC mode before and after and
-# nvidia-smi dmon beside it. Outputs in $OUT: build.txt, sass.txt, gpu.txt, dmon.txt, write.jsonl, rc.txt. ARGS go to
+# The write ceilings' GPU half (cwd = the source tree): builds write.cu (bwwrite) for ARCH (90a, 120a; where it isn't
+# given, the node's first card's name tells it) and runs every arm on one card, the queue's GPU (GPU_LEASE_UUID) or one
+# it leases, with the card's clocks, PCIe link and ECC mode before and after and nvidia-smi dmon beside it. Outputs in $OUT: build.txt, sass.txt, gpu.txt, dmon.txt, write.jsonl, rc.txt. ARGS go to
 # bwwrite (default: 32 GiB on the card, 8 GiB pinned on the host, 7 reps).
 #
 #   research run --queue --gpus 1 --max-min 30 --cpus 8 --mem-gb 32 --project verity --source . --cwd source \
@@ -11,7 +11,15 @@ export O=${OUT:?run under research run}; mkdir -p "$O"
 BW=$PWD/benchmarks/bandwidth
 export B=$(mktemp -d /tmp/bwwrite.XXXXXX); trap 'rm -rf "$B"' EXIT
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-if ! "$NVCC" -O3 -std=c++17 -arch=sm_120 -o "$B/bwwrite" "$BW/write.cu" > "$O/build.txt" 2>&1; then
+if [ -z "${ARCH:-}" ]; then
+  case $(nvidia-smi --query-gpu=name --format=csv,noheader -i 0 2> /dev/null || true) in
+    *H200* | *H100*) ARCH=90a ;;
+    *"RTX PRO 6000"*) ARCH=120a ;;
+    *) echo "write_gpu: ARCH (90a, 120a) is not given and the card's name does not tell it" >&2; echo 3 > "$O/rc.txt"; exit 3 ;;
+  esac
+fi
+# write.cu is built for the plain architecture: sm_120 on an RTX PRO 6000, sm_90 on Hopper
+if ! "$NVCC" -O3 -std=c++17 -arch="sm_${ARCH%a}" -o "$B/bwwrite" "$BW/write.cu" > "$O/build.txt" 2>&1; then
   cat "$O/build.txt"; echo 4 > "$O/rc.txt"; exit 4
 fi
 { "$NVCC" --version; sha256sum "$B/bwwrite" "$BW/write.cu"; } >> "$O/build.txt"

@@ -6,8 +6,6 @@ at GLM-5.3's H and the route batch invariance pins at TP4, keyed on the device a
 their word Definitions, are pinned by gate count and program digest, and pass `Q_word_v1{X=16, W=32}`'s cut check."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import itertools
 import json
 
