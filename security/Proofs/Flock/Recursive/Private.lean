@@ -21,31 +21,7 @@ import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 
-/-!
-# Proofs of the recursive audit's circuit privacy, and that it ran the registered private circuit
-
-* `recursiveCircuitPrivate_le`, with `RecursiveZK` as the step: at each
-  registration salt `r`, `RecursiveZK` at an hm96 hiding bound `δ` (`recursiveZK_le`; and, for the other way, the same
-  on the event's complement) moves
-  the ZK server's commitments and V*'s sessions to the ideal leaves and V*'s simulator, which read `r` only through the
-  registration's view `reg P r`; then the registration's hiding, as a test with values in `[0, 1]` (`Hides.avg_le`),
-  moves `reg P r` to `reg p₀ r`. `Flock.SecurityProofs.RecursiveCircuitPrivate` is it at the pinned key's hiding gap
-  (`CROnly.hm96Hiding_gap`).
-* `RecursiveCircuitIndist` is the two ways of `recursiveCircuitPrivate_le` through the simulator at `p₀ = P`, at the gap.
-* `regLeaves_hides`: a registration by hm96 leaves hides at `2·n_r·δ`, `ideal_leaves_swap` from each private circuit to the
-  ideal leaves and back (on the complement); `recursiveCircuitPrivateLeaves_le` is `recursiveCircuitPrivate_le` with it,
-  `RecursiveCircuitPrivateLeaves` that at the gap, and `RecursiveAudit`'s (ii) the same at the ZK server, at the gap
-  (`Proofs.Flock.Recursive.ZkServerZK`).
-* `RanRegisteredRun`: an accepted outcome off the registered program is, by the binding, one whose opening and the
-  registrant's collide; with no such outcome reached (`prob_mono_outcome`), accepting off `p` adds nothing to `B`.
-* `RecursiveRanRegistered`: `RecursiveSound`'s three cases; in its bound's, the same argument at each row the run read
-  (its opening and the developer's) gives that the registered private circuit has the rows the run read, so the hidden statement
-  is `p`'s (`_hx`).
-* `regRowCommit_binding`: `RecursiveRanRegistered`'s `_hbind` for the executable's registered rows. An opening of row
-  `i` is the verifier's check of a registered read (`regRowCommit_opens`: `Flock.Registered.opens` of the row's commit
-  string), and two of one port at `i` to different rows collide, in hm96's leaf (`ExplicitLeaf.hm96`) or along the
-  registered path (`Flock.Registered.opensLeaf_binding`).
--/
+/-! Proofs of the recursive audit's circuit privacy (`RecursiveCircuitPrivate`) and that it ran the registered private circuit (`RecursiveRanRegistered`). -/
 
 @[expose] public section
 
@@ -69,7 +45,6 @@ theorem prCoin_add_compl {C : Type} [Fintype C] [Nonempty C] (P : C → Prop) :
         by_cases hc : P c <;> simp [hc]
     _ = 1 := avg_const _
 
-/-- **A bound on every complement is a bound the other way**: `Pr_A[¬f] ≤ Pr_B[¬g] + δ` gives `Pr_B[g] ≤ Pr_A[f] + δ`. -/
 theorem prCoin_flip {A B : Type} [Fintype A] [Nonempty A] [Fintype B] [Nonempty B] (f : A → Prop) (g : B → Prop)
     {δ : ℝ≥0∞} (h : prCoin (fun x => ¬ f x) ≤ prCoin (fun y => ¬ g y) + δ) : prCoin g ≤ prCoin f + δ := by
   have a1 := prCoin_add_compl f
@@ -85,14 +60,12 @@ theorem prCoin_flip {A B : Type} [Fintype A] [Nonempty A] [Fintype B] [Nonempty 
 variable {Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr] [Nonempty Rr] [Fintype Ωa] [Nonempty Ωa]
   [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs]
 
-/-- The simulated view's probability of `E` at the registration's view `v`: ideal commitments and V*'s simulator. -/
 noncomputable def idealAt (nh : ℕ) (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) (o : Out)
     (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) (v : Rv) : ℝ≥0∞ :=
   prCoin fun z : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
     E (v, z.1.1, (fun i => Flock.Guarantees.idealLeaf (z.1.2 i)),
       sim o v z.1.1 (fun i => Flock.Guarantees.idealLeaf (z.1.2 i)) z.2)
 
-/-- The real view's probability of `E` at the registration's randomness `r`. -/
 noncomputable def realAt (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (P : Prog) (w : Wit) (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) (r : Rr) : ℝ≥0∞ :=
@@ -102,7 +75,6 @@ noncomputable def realAt (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → 
         z.1.1.2 z.1.2 z.2)
 
 omit [Fintype Rr] [Nonempty Rr] in
-/-- **`RecursiveZK` at one registration salt, both ways**, at any hm96 hiding bound `δ` (`recursiveZK_le`). -/
 theorem recZK_at (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞} (o : Out) (P : Prog) (w : Wit) (r : Rr)
@@ -118,8 +90,6 @@ theorem recZK_at (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → Wit → 
   refine ⟨(zk fun t => E (reg P r, t.1, t.2.1, t.2.2)).trans (le_of_eq (add_assoc _ _ _)), ?_⟩
   refine prCoin_flip _ _ ((zk fun t => ¬ E (reg P r, t.1, t.2.1, t.2.2)).trans (le_of_eq (add_assoc _ _ _)))
 
-/-- **`RecursiveCircuitPrivate` at any hm96 hiding bound**: `Flock.Guarantees.RecursiveCircuitPrivate` with
-`Claims.Hm96Hiding` at `δ` taken as a hypothesis, and `nh·δ` in place of `nh·hidingGap My saltHash`. -/
 theorem recursiveCircuitPrivate_le (reg : Prog → Rr → Rv) {ε : ℝ≥0∞} (hreg : Hides reg ε)
     (honest : Out → Prog → Wit → Prop) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
@@ -175,15 +145,12 @@ theorem RecursiveCircuitIndist : Flock.Guarantees.RecursiveCircuitIndist := by
           (ε + εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) := add_le_add h' le_rfl
     _ = _ := by ring
 
-/-- The unit, dropped from an experiment's randomness. -/
 def unitProd (T : Type) : Unit × T ≃ T where
   toFun p := p.2
   invFun x := ((), x)
   left_inv _ := rfl
   right_inv _ := rfl
 
-/-- **T1 for a private circuit's rows**: the leaves of `Q`'s rows under fresh salts are within `n_r·δ` of ideal leaves, at
-every event `G` of the leaves, at any hm96 hiding bound `δ`. -/
 theorem rowLeaves_swap {nr : ℕ} (rows : Prog → Fin nr → ByteArray)
     {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ) (Q : Prog)
     (G : (Fin nr → ByteArray) → Prop) :
@@ -202,8 +169,6 @@ theorem rowLeaves_swap {nr : ℕ} (rows : Prog → Fin nr → ByteArray)
         congrArg (· + nr * δ) (prCoin_congr_equiv (unitProd _)
           (fun u : Fin nr → ZkView.Bits × ZkView.Salt => G fun i => Flock.Guarantees.idealLeaf (u i)))
 
-/-- **A registration by hm96 leaves hides**, at `2·n_r·δ` at any hm96 hiding bound `δ`: each private circuit's leaves
-are within `n_r·δ` of ideal ones (`rowLeaves_swap`), the second way on the complement. -/
 theorem regLeaves_hides {nr : ℕ} (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
     {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ) :
     Hides (Flock.Guarantees.regLeaves rows pub) (2 * nr * δ) := by
@@ -216,8 +181,6 @@ theorem regLeaves_hides {nr : ℕ} (rows : Prog → Fin nr → ByteArray) (pub :
     _ ≤ (prCoin (fun r => E (Flock.Guarantees.regLeaves rows pub P' r)) + nr * δ) + nr * δ := add_le_add h2 le_rfl
     _ = prCoin (fun r => E (Flock.Guarantees.regLeaves rows pub P' r)) + 2 * nr * δ := by ring
 
-/-- **`RecursiveCircuitPrivateLeaves` at any hm96 hiding bound**: `Flock.Guarantees.RecursiveCircuitPrivateLeaves` with
-`Claims.Hm96Hiding` at `δ` taken as a hypothesis, and `δ` in place of `hidingGap My saltHash`. -/
 theorem recursiveCircuitPrivateLeaves_le (nr : ℕ) (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
     (honest : Out → Prog → Wit → Prop)
     (nh : ℕ) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
@@ -245,8 +208,6 @@ theorem RecursiveCircuitPrivateLeaves : Flock.Guarantees.RecursiveCircuitPrivate
 
 end Private
 
-/-- **A bound at every outcome the strategy reaches is a bound**: if every reached outcome with `E` has `F`, then
-`Pr[E] ≤ Pr[F]`. -/
 theorem prob_mono_outcome {α : Type} {E F : α → Prop} :
     ∀ (g : Game α) (s : Strategy g), (∀ a, Game.Outcome g s a → E a → F a) → prob E g s ≤ prob F g s
   | .ret a, _, h => by
@@ -302,7 +263,6 @@ section Rows
 
 open FlockSoundness.Binding Refine
 
-/-- A collision on byte arrays is one on their byte lists. -/
 theorem collides_of_bytes {x : ByteArray × ByteArray} (h : Flock.Registered.Collides x) :
     Binding.Collides (x.1.data.toList, x.2.data.toList) := by
   refine ⟨fun e => h.1 ?_, Subtype.ext ?_⟩
@@ -332,8 +292,6 @@ noncomputable def regRowCommit {Val : Type} (enc : Val → List UInt8) (hinj : F
         (Flock.Registered.openPair op.1 i ((ExplicitLeaf.hm96 enc hinj).leaf op.2.1 op.2.2.1.data.toList).1 op.2.2.2
           ((ExplicitLeaf.hm96 enc hinj).leaf op'.2.1 op'.2.2.1.data.toList).1 op'.2.2.2).2.data.toList)
 
-/-- **An opening of row `i` is the verifier's registered read**: `Flock.Registered.opens` of the row's commit string
-`b ‖ c` (`Hm96.Default512.commitString` of the row's SHA-512 digest under the salt) at `i` through the path. -/
 theorem regRowCommit_opens {Val : Type} (enc : Val → List UInt8) (hinj : Function.Injective enc) (i : ℕ)
     (reg : Flock.Registered.Port) (v : Val) (salt path : ByteArray) :
     (regRowCommit enc hinj i).Opens reg v (reg, v, salt, path) ↔
@@ -343,9 +301,6 @@ theorem regRowCommit_opens {Val : Type} (enc : Val → List UInt8) (hinj : Funct
   rw [hm96_treeLeaf enc hinj v salt]
   simp only [Flock.Registered.opens, true_and]
 
-/-- **The registration binds each row**, `RecursiveRanRegistered`'s `_hbind` for the executable's registered rows: two
-openings of one port at `i` to different rows give a SHA-512 collision, hm96's (`ExplicitLeaf.hm96`) when their leaves
-agree, else the registered path's (`Flock.Registered.opensLeaf_binding`). -/
 theorem regRowCommit_binding {Val : Type} (enc : Val → List UInt8) (hinj : Function.Injective enc) (i : ℕ) :
     (regRowCommit enc hinj i).Binding := by
   rintro reg v v' ⟨r1, w1, y1, p1⟩ ⟨r2, w2, y2, p2⟩ ⟨h1r, h1v, h1⟩ ⟨h2r, h2v, h2⟩ hne

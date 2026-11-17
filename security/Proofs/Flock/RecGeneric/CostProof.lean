@@ -4,25 +4,7 @@ public import Proofs.Flock.RecGeneric.Cost
 public import Proofs.Flock.RecGeneric.PlansProof
 public import Proofs.Flock.RecGeneric.AtFlockBits
 
-/-!
-# The plans' expected costs from one run's
-
-Each of Flock's plans meets `RunFinder.CostLe` at its count (`Cost.lean`): in every model whose runs cost at most `c`
-calls on average, its expected cost is at most
-
-* `forkPlan`'s `2c` (`forkPlanCost`): `u₀`, and its fork at the round guess, which averages a run's cost since the
-  round is fixed before either run (`Ex_fork_slot`);
-* `capPlan`'s `2c` (`capPlanCost`): `u₀`, and its caps' loop where `u₀` passes the loop's own gate, which Wald's bound
-  over forks holds to one run (`Claims.Recursion.Ex_gate_loop_fork_le`);
-* `conflictPlan`'s `(k + 1)c` (`conflictPlanCost`): `u₀`, and each of its `k` waits where `u₀` is accepted, each on
-  its own fresh runs (`waitEmb`) and held to one run by Wald's bound (`Claims.Recursion.Ex_gate_loopCost_le`);
-* `linkPlan`'s `2c` (`linkPlanCost`, `linkPlan_ExCost_two`).
-
-At a selector value, tape and fresh runs, a plan's cost is at most its asks' (`dedup_append_sum_le`), since it looks at
-and searches only runs it asked about or `u₀`: the caps' loop (`capLoop_cost`) and the waits (`waitLoop_cost`,
-`waitsPlan_cost`) ask their runs up to the first that stops them, at `loopCost`. A finder whose plan meets `CostLe e`
-and `ExpectedCR` finds a collision with probability at most `e(x)·c/2^256` (`RunFinder.PrAt_le_costLe`).
--/
+/-! Each of Flock's plans meets `RunFinder.CostLe` at its count, so its finder finds a collision with probability at most `e(x)·c/2^256`. -/
 
 @[expose] public section
 
@@ -33,19 +15,16 @@ open Claims.Recursion (fork loopCost)
 
 variable {Coin : Type}
 
-/-- A deduplicated list costs at most the list. -/
 theorem dedup_sum_le {α : Type} [DecidableEq α] (f : α → ℕ) (l : List α) :
     ((l.dedup).map f).sum ≤ (l.map f).sum := by
   have h := dedup_append_sum_le f l [] (by simp)
   rwa [List.append_nil] at h
 
-/-- A plan's cost is at most its asks' where every run it looks at or searches is one it asked about. -/
 theorem cost_le_asks {α : Type} [DecidableEq α] (f : α → ℕ) (A B S : List α) (h : ∀ e ∈ B ++ S, e ∈ A) :
     (((A ++ B ++ S).dedup).map f).sum ≤ (A.map f).sum := by
   rw [List.append_assoc]
   exact dedup_append_sum_le f A (B ++ S) h
 
-/-- An average over runs of a function of the first is the function's average. -/
 theorem Ex_first {U : Type} [Fintype U] [Nonempty U] (K : ℕ) (f : U → ℝ) :
     Ex (fun us : Fin (K + 1) → U => f (us 0)) = Ex f :=
   calc Ex (fun us : Fin (K + 1) → U => f (us 0)) = Ex fun u : U => Ex fun _ : Fin K → U => f u :=
@@ -55,7 +34,6 @@ theorem Ex_first {U : Type} [Fintype U] [Nonempty U] (K : ℕ) (f : U → ℝ) :
         funext u
         exact Ex_const _
 
-/-- `K + 1` uniform runs are a uniform pair of the first and the rest. -/
 theorem Ex_head_tail {U : Type} [Fintype U] (K : ℕ) (F : U → (Fin K → U) → ℝ) :
     Ex (fun us : Fin (K + 1) → U => F (us 0) fun i => us i.succ) = Ex (fun p : U × (Fin K → U) => F p.1 p.2) :=
   (Claims.Ex_cons K F).trans (Claims.Ex_prod fun p : U × (Fin K → U) => F p.1 p.2).symm
@@ -69,8 +47,6 @@ section Loops
 
 variable {Ω C : Type} {n : ℕ} (m : RunModel Coin Ω n C) (ω : Ω) (us : ℕ → (Fin n → Coin) × C)
 
-/-- **The caps' loop looks only at runs it asked about and searches `u₀` and those**; the runs it asks cost
-`loopCost` over the slots it reads, the loop stopping at the first fork that passes the caps' gate. -/
 theorem capLoop_cost (j : ℕ) (op : (ℕ → Coin) → Bool) :
     ∀ (N i : ℕ) (vs : Fin N → (Fin n → Coin) × C), (∀ t : Fin N, us (i + t.val) = vs t) →
       (∀ e ∈ ((capLoop (Coin := Coin) j op N i).exec m ω us).2.1,
@@ -141,8 +117,6 @@ theorem capLoop_cost (j : ℕ) (op : (ℕ → Coin) → Bool) :
       rw [List.map_cons, List.sum_cons, h3, hc]
       simp only [loopCost, hg, ↓reduceIte]
 
-/-- **A wait asks its runs up to the first accepted one and then goes on as `cont` with it**: the runs it asks cost
-`loopCost` over the slots it reads, and the run it hands on is one it asked. -/
 theorem waitLoop_cost (cont : Option RunExp → Plan Coin) :
     ∀ (N i : ℕ) (vs : Fin N → (Fin n → Coin) × C), (∀ t : Fin N, us (i + t.val) = vs t) →
       ∃ (A : List RunExp) (o : Option RunExp),
@@ -172,8 +146,6 @@ theorem waitLoop_cost (cont : Option RunExp → Plan Coin) :
       · rw [List.map_cons, List.sum_cons, hs]
         simp only [RunModel.named, loopCost, ← hv0, ha, ↓reduceIte]
 
-/-- **`w` waits of `R` runs look at nothing, search `found` and runs they asked**, and the runs they ask cost each
-wait's `loopCost` over its own block of fresh runs, `base + t·R, …, base + t·R + R - 1`. -/
 theorem waitsPlan_cost (R : ℕ) :
     ∀ (w base : ℕ) (found : List RunExp),
       ((waitsPlan (Coin := Coin) R w base found).exec m ω us).2.1 = [] ∧
@@ -213,7 +185,6 @@ section Plans
 
 variable [Fintype Coin] [Nonempty Coin] {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ}
 
-/-- **`forkPlan`'s cost at a round guess, tape and runs** is at most `u₀`'s and its fork's. -/
 theorem forkPlan_cost_le (k : Msg → ℕ) (m : RunModel Coin Ω n C) (x : Msg)
     (h : 0 < (forkPlan (Coin := Coin) k).sel x) (j : Fin (k x)) (ω : Ω) (us : Fin (1 + 1) → (Fin n → Coin) × C) :
     ((forkPlan (Coin := Coin) k).finder m x h).cost (j, ω, us) ≤
@@ -228,8 +199,6 @@ theorem forkPlan_cost_le (k : Msg → ℕ) (m : RunModel Coin Ω n C) (x : Msg)
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, RunModel.named, hs0, hs1]
 
 open Classical in
-/-- **`capPlan`'s cost at a cap position, tape and runs** is at most `u₀`'s and, where `u₀` passes the caps' gate,
-the caps' loop's over the forks of `u₀`. -/
 theorem capPlan_cost_le (Cp : Claims.Recursion.Caps Coin) (M : ℕ) (m : RunModel Coin Ω n C) (x : Msg)
     (h : 0 < (capPlan Cp M).sel x) (q : Fin ((capPlan Cp M).sel x)) (ω : Ω)
     (us : Fin (M + 1) → (Fin n → Coin) × C) :
@@ -293,8 +262,6 @@ theorem capPlan_cost_le (Cp : Claims.Recursion.Caps Coin) (M : ℕ) (m : RunMode
     exact_mod_cast hle
 
 open Classical in
-/-- **`conflictPlan`'s cost at a tape and runs** is at most `u₀`'s and, where `u₀` is accepted, each wait's over its
-own block of runs. -/
 theorem conflictPlan_cost_le (k : Msg → ℕ) (R : ℕ) (m : RunModel Coin Ω n C) (x : Msg)
     (h : 0 < (conflictPlan (Coin := Coin) k R).sel x) (q : Fin ((conflictPlan (Coin := Coin) k R).sel x)) (ω : Ω)
     (us : Fin (k x * R + 1) → (Fin n → Coin) × C) :
@@ -343,13 +310,10 @@ theorem conflictPlan_cost_le (k : Msg → ℕ) (R : ℕ) (m : RunModel Coin Ω n
 
 end Plans
 
-/-! ## The plans' costs -/
-
 section Costs
 
 variable [Fintype Coin] [Nonempty Coin]
 
-/-- **`forkPlan` names two runs**: `u₀`, and its fork at the round guess, which averages a run's cost. -/
 theorem forkPlanCost : ForkPlanCost Coin := by
   intro k Ω _ _ n C _ _ m x c hrun
   have hc : 0 ≤ c := (Ex_nonneg fun _ => Nat.cast_nonneg _).trans (hrun (Classical.arbitrary Ω))
@@ -394,8 +358,6 @@ theorem forkPlanCost : ForkPlanCost Coin := by
   · exact mul_nonneg (Nat.cast_nonneg _) hc
 
 open Classical in
-/-- **`capPlan` names two runs in expectation**: `u₀`, and its caps' loop gated by `u₀`'s passing the loop's own
-gate, which Wald's bound over forks counts once. -/
 theorem capPlanCost : CapPlanCost Coin := by
   intro Cp M Ω _ _ n C _ _ m x c hrun
   have hc : 0 ≤ c := (Ex_nonneg fun _ => Nat.cast_nonneg _).trans (hrun (Classical.arbitrary Ω))
@@ -429,8 +391,6 @@ theorem capPlanCost : CapPlanCost Coin := by
   · exact mul_nonneg (Nat.cast_nonneg _) hc
 
 open Classical in
-/-- **`conflictPlan` names `k + 1` runs in expectation**: `u₀`, and each of its `k` waits gated by `u₀`'s acceptance,
-each on its own fresh runs, which Wald's bound counts once. -/
 theorem conflictPlanCost : ConflictPlanCost Coin := by
   intro k R Ω _ _ n C _ _ m x c hrun
   have hc : 0 ≤ c := (Ex_nonneg fun _ => Nat.cast_nonneg _).trans (hrun (Classical.arbitrary Ω))
@@ -506,7 +466,6 @@ theorem conflictPlanCost : ConflictPlanCost Coin := by
           ring
   · exact mul_nonneg (Nat.cast_nonneg _) hc
 
-/-- **The link's plan names two runs in expectation** (`linkPlan_ExCost_two`). -/
 theorem linkPlanCost : LinkPlanCost Coin := by
   intro k M Ω _ _ n C _ _ m x c hrun
   refine (linkPlan_ExCost_two k M m x c hrun).trans_eq ?_
@@ -514,8 +473,6 @@ theorem linkPlanCost : LinkPlanCost Coin := by
 
 end Costs
 
-/-- **A finder whose plan names at most `e` runs in expectation** finds a collision with probability at most
-`e(x)·c/2^256` in a model whose runs cost at most `c` calls on average, where it meets `ExpectedCR`. -/
 theorem RunFinder.PrAt_le_costLe [Fintype Coin] [Nonempty Coin] {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C]
     [Nonempty C] {n : ℕ} (H : Msg → Msg) (F : RunFinder Coin) (e : Msg → ℕ) (hF : F.CostLe e)
     (m : RunModel Coin Ω n C) (x : Msg) (c : ℝ) (hrun : ∀ ω, Ex (fun u => (m.cost ω u : ℝ)) ≤ c)

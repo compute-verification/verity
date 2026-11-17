@@ -4,28 +4,7 @@ public import Proofs.Flock.RecGeneric.AtFlockCounts
 public import Proofs.Flock.Claims.Recursion.AcceptedScope
 public import Proofs.Flock.Claims.Recursion.DeployedR
 
-/-!
-# The calls V\*'s parts record at Flock's deployment, within the verifier's cap
-
-At V\*'s deployed bound layout (`RecDeploy.DeployedR.layR`), part `s` records the hm96 calls `shaAt x s` lists, and
-`w`, the calls `E_O`'s witnesses record, is `W(x) = ∑_{s < nS(x)} |shaAt x s|` (`calls_length_recBoundAt`). Each
-part's are its statement's at the verifier's inner shape, two an hm96 slot, at most `RecBudget.recordedAt` of them
-(`shaAt_layR_le`):
-
-* the rows its message-round ports read (`heldRows`, at most their registered reads, `heldRows_length_le`);
-* RecCap's `top` at each of its `N` nodes (`capsCalls`), the `out` rows of a level's openings and of RecCap's nodes
-  (`outsCalls`), check 5's `v` and `out` at an algebra part's two instances and `coef` and `dirs` at each of a level's
-  openings (`valCalls`);
-* the `rec-acc` chain's rows (`accCalls`): `acc0` and `acc1` at an algebra part's two instances, and at each row a
-  level's units read (`RecVStar.accReads`), the unit's `acc` and its `acc_out`.
-
-So `W(x)` is at most `RecBudget.recordedCalls` at the verifier's inner shape and V\*'s list there (`layR_W_le`), which
-the recursive setup refuses past `2^32` (`RecBudget.recorded`, `budget_recorded_ok`): wherever one staged part sets up,
-`W(x) ≤ 2^32` (`layR_W_le_staged`), and so on every statement a run of the compiled verifier accepts
-(`layR_W_le_of_acc`). There `w ≤ v` holds at every `v ≥ 2^32` (`calls_le_layR_of_acc`), the form `ksLinkOn_tight`
-takes, and at `v' = max(v, W(x))` at every statement (`calls_le_layR_max`). The bound is an upper bound, not an
-equality: a part whose circuit lacks a port its statement names records fewer.
--/
+/-! The hm96 calls V\*'s parts record at Flock's deployment number at most `2^32` on every statement the compiled verifier accepts, an upper bound: a part whose circuit lacks a port its statement names records fewer. -/
 
 @[expose] public section
 
@@ -34,8 +13,6 @@ namespace RecDeploy.DeployedR
 open Flock
 open Claims (Msg)
 open FlockDeploy (Coin)
-
-/-! ## Lengths -/
 
 theorem sum_map_le_sum_map {α : Type} (l : List α) (f g : α → ℕ) (h : ∀ a ∈ l, f a ≤ g a) :
     (l.map f).sum ≤ (l.map g).sum := by
@@ -66,7 +43,6 @@ theorem getD_length_le {α : Type} {o : Option (List α)} {B : ℕ} (h : ∀ l, 
   | none => exact Nat.zero_le _
   | some l => exact h l rfl
 
-/-- An indexed sum over a list's positions, termwise at most a map over its elements, is at most the map's sum. -/
 theorem sum_range_le_sum_map {α : Type} (f : α → ℕ) :
     ∀ (l : List α) (g : ℕ → ℕ), (∀ s (h : s < l.length), g s ≤ f l[s]) →
       ((List.range l.length).map g).sum ≤ (l.map f).sum
@@ -76,10 +52,6 @@ theorem sum_range_le_sum_map {α : Type} (f : α → ℕ) :
     exact Nat.add_le_add (h 0 (by simp))
       (sum_range_le_sum_map f t (g ∘ Nat.succ) fun s hs => h (s + 1) (by simpa using hs))
 
-/-! ## Each part's calls -/
-
-/-- **Part `s`'s calls at `layR`**: `layoutBDeployed`'s (its held rows'), every cap's, and the output rows', check 5's
-and the chain's (`moreCalls`). -/
 theorem shaAt_layR_length (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {x : Msg} {r : XR} (hr : readX x = some r) (s : ℕ) :
     ((layR elem).shaAt x s).length = (layoutBDeployed.shaAt x s).length + (capsCalls r s).length +
@@ -196,7 +168,6 @@ theorem accCalls_length_le_sum (r : XR) (s : ℕ) :
     rw [List.length_flatMap]
     exact sum_map_le_sum_map _ _ _ fun h _ => accPortCalls_length_le c h
 
-/-- Off an algebra part, the chain is read only at port `acc`. -/
 theorem accRead_ne_acc {r : XR} {st : VStar.Stmt} (hni : ∀ j nm p, st ≠ .inner j nm p) {nm : String}
     (hnm : nm ≠ "acc") (u : ℕ) : accRead r st nm u = none := by
   cases st
@@ -249,8 +220,6 @@ theorem accCalls_length_le {r : XR} {s : ℕ} {st : VStar.Stmt}
   case inner j nm p => exact (accCost_inner hst).trans (Nat.le_add_right _ _)
   all_goals exact (accCost_other hst fun _ _ _ h => by cases h).trans (Nat.le_add_left _ _)
 
-/-- **Part `s` records at most `RecBudget.recordedAt` hm96 calls at `layR`**, at its statement in V\*'s list at the
-verifier's inner shape. -/
 theorem shaAt_layR_le (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {st : VStar.Stmt}
     (hst : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some st) :
@@ -265,9 +234,6 @@ theorem shaAt_layR_le (elem : (r : XR) → List (Fin r.w.parts.length × List (M
   unfold RecBudget.recordedAt
   cases st <;> (try simp only at h3 h4 h5 h6 ⊢) <;> omega
 
-/-! ## The statement's calls -/
-
-/-- **`W(x)` at `layR` is at most `RecBudget.recordedCalls`** at the verifier's inner shape and V\*'s list there. -/
 theorem layR_W_le (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg} {r : XR}
     (hr : readX x = some r) {vs : Array VStar.Stmt} (hvs : RecVStar.statements r.shape = .ok vs)
     (hlen : r.w.parts.length = vs.size) :
@@ -282,8 +248,6 @@ theorem layR_W_le (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg �
     simp [Except.toOption, hs']
   exact shaAt_layR_le elem hr hst
 
-/-- **`W(x) ≤ 2^32` wherever one staged part sets up**: V\*'s list at the setup's inner shape, `x`'s (`insO_staged`),
-records at most `2^32` calls (`RecBudget.recorded`, `budget_recorded_ok`). -/
 theorem layR_W_le_staged (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} {j : ℕ} {i : RecIns} {spec : SessionSpec}
     {sts : Array Stmt} (hs : setupO (staged st x ms j) = some (i, spec, sts)) :
@@ -295,7 +259,6 @@ theorem layR_W_le_staged (elem : (r : XR) → List (Fin r.w.parts.length × List
   rw [hinner] at hB
   exact (layR_W_le elem hr hvs hlen).trans (budget_recorded_ok hB hvs)
 
-/-- **`W(x) ≤ 2^32` where every staged part is in scope** (`PartIn`), as at an accepted statement. -/
 theorem layR_W_le_of_partIn (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {st : Stage} {x : Msg}
     (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged st x (pick st x j) j) i spec' sts') :
@@ -305,7 +268,6 @@ theorem layR_W_le_of_partIn (elem : (r : XR) → List (Fin r.w.parts.length × L
   · obtain ⟨i, spec', sts', hp⟩ := hO 0 hpos
     exact layR_W_le_staged elem hp.setup
 
-/-- **`W(x) ≤ 2^32` on every statement a run of the compiled verifier accepts** (`partIn_of_run_acc`). -/
 theorem layR_W_le_of_acc (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {H : Msg → Msg} {IV : Claims.Verifier Coin} {st : Stage} {x : Msg} {Ω : Type} {P : Claims.Prover Ω} {ω : Ω}
     {r : Fin ((V IV st).k x) → Coin} (hacc : (Claims.run H P (V IV st) x ω r).out = .acc) :
@@ -324,9 +286,6 @@ open FlockDeploy (Coin)
 
 variable {Col T Col' T' : Type} [DecidableEq Col] [DecidableEq Col']
 
-/-- **`w ≤ v` at the deployment's layout, at every `v ≥ 2^32`, wherever a run of the composite's verifier accepts**:
-there `W(x) ≤ 2^32` (`layR_W_le_of_acc`, the composite's verifier being the compiled record's), and `E_O`'s
-witnesses record `W(x)` calls (`calls_le_recBoundAt`). This is `ksLinkOn_tight`'s `hW`. -/
 theorem calls_le_layR_of_acc (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : RecDeploy.Brings)
     (elem : (r : RecDeploy.XR) → List (Fin r.w.parts.length × List (Msg × List _root_.Flock.HmNets.Lin)))
@@ -344,7 +303,6 @@ theorem calls_le_layR_of_acc (rel : _root_.Flock.Readable.Parsed → _root_.Floc
   have hW := RecDeploy.DeployedR.layR_W_le_of_acc elem hacc'
   exact fun ω u ws h => calls_le_recBoundAt rel b _ Bd DO H P x v (hW.trans hv) ω u ws h
 
-/-- **`w ≤ v'` at the deployment's layout at `v' = max(v, W(x))`**, at every statement. -/
 theorem calls_le_layR_max (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : RecDeploy.Brings)
     (elem : (r : RecDeploy.XR) → List (Fin r.w.parts.length × List (Msg × List _root_.Flock.HmNets.Lin)))
@@ -359,8 +317,6 @@ theorem calls_le_layR_max (rel : _root_.Flock.Readable.Parsed → _root_.Flock.R
             ((RecDeploy.DeployedR.layR elem).shaAt x s).length).sum :=
   fun ω u ws h => calls_le_recBoundAt rel b _ Bd DO H P x _ (le_max_right _ _) ω u ws h
 
-/-- **`max(v, W(x)) = v` on every statement a run accepts, at `v ≥ 2^32`**: so the bound at `v'` is the bound at `v`
-there. -/
 theorem max_layR_W_of_acc
     (elem : (r : RecDeploy.XR) → List (Fin r.w.parts.length × List (Msg × List _root_.Flock.HmNets.Lin)))
     {H : Msg → Msg} {IV : Verifier Coin} {st : RecDeploy.Stage} {x : Msg} {Ω : Type} {P : Prover Ω} {ω : Ω}

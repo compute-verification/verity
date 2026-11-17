@@ -3,15 +3,7 @@ module
 public import Definitions.Claims.RecursionGeneric.Server
 public import Proofs.Flock.Claims.Recursion.BoundBridge
 
-/-!
-# `Open(V, S)`'s runs
-
-`Server.IVStar` answers every round before its last with that round's coin and decides at its last, so its run on
-replayed messages has a closed form (`Server.run_ivstar`): the messages before the last, each answered by its coin, then
-the last message answered by the decision on all of them (`Server.decAt`), whose oracle calls are the run's. A run it
-accepts opens, round by round, to messages the inner verifier accepts at the run's coins, answering as `Open(V, S)` does
-(`Server.accFacts`). These are `Claims.Recursion.Bound`'s lemmas (`Bound.run_ivstar`, `Bound.accFacts`) at any server.
--/
+/-! `Open(V, S)`'s runs on replayed messages in closed form, and what a run it accepts checks, at any server. -/
 
 @[expose] public section
 
@@ -23,7 +15,6 @@ namespace Server
 
 variable {Coin : Type} [Inhabited Coin]
 
-/-- **`Open(V, S)` decides at its last round**: from its last round on, its answer is never a message. -/
 theorem ivstar_eval_ne_msg (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg) (x : Msg)
     (as : List Msg) (cs : List Coin) (h : ¬ as.length < V.k x) (m : Msg) :
     (((S.IVStar V ans).next x as cs).eval H).1 ≠ .msg m := by
@@ -38,12 +29,10 @@ theorem ivstar_eval_ne_msg (S : Server) (V : Verifier Coin) (ans : Coin → Msg)
       · simp [OC.eval]
     · simp [OC.eval]
 
-/-- `Open(V, S)`'s steps at the coins `r`. -/
 def vnAt (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (x : Msg) (r : Fin ((S.IVStar V ans).k x) → Coin) :
     List Msg → OC Out :=
   fun as => (S.IVStar V ans).next x as ((List.range as.length).map (coinSeq r))
 
-/-- `Open(V, S)`'s decision on the first `k` replayed messages at the coins `r`. -/
 def decAt (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin ((S.IVStar V ans).k x) → Coin) : Out × List (Msg × Msg) :=
   ((S.IVStar V ans).next x ((List.range (V.k x)).map fun i => ms.getD i [])
@@ -107,8 +96,6 @@ theorem stepWith_ivstar (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H
     · simp only [List.length_append, List.length_singleton, List.append_nil, List.range'_succ, List.map_cons,
         List.append_assoc, List.cons_append, List.nil_append]
 
-/-- **`Open(V, S)`'s run on replayed messages, in closed form**: at `k ≥ 1` rounds, each message before the last
-answered by its coin, then the last answered by the decision on all `k` (`decAt`), whose calls are the run's. -/
 theorem run_ivstar (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin ((S.IVStar V ans).k x) → Coin) (hk : 0 < V.k x) :
     run H (replay ms) (S.IVStar V ans) x () r =
@@ -125,7 +112,6 @@ theorem run_ivstar (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Ms
   simp only [List.length_nil, List.nil_append, ← List.range_eq_range', Server.decAt, Server.vnAt, List.length_map,
     List.length_range, hn, Nat.add_sub_cancel]
 
-/-- With no rounds, the run rejects with no message. -/
 theorem run_ivstar_zero (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg) (x : Msg)
     (ms : List Msg) (r : Fin ((S.IVStar V ans).k x) → Coin) (hk : V.k x = 0) :
     run H (replay ms) (S.IVStar V ans) x () r = ⟨[], [], [], .rej⟩ := by
@@ -133,9 +119,6 @@ theorem run_ivstar_zero (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H
   rw [hk]
   rfl
 
-/-! ## What `Open(V, S)` checks when it accepts -/
-
-/-- **A round message that opens**: it is the rows' count of commit strings, each opening to its row. -/
 theorem opensRound_true (S : Server) (H : Msg → Msg) {a : Msg} {os : List (Msg × S.Salt)}
     (h : ((S.opensRound a os).eval H).1 = true) :
     a.length = S.width * os.length ∧ ∀ (i : ℕ) (hi : i < os.length),
@@ -155,8 +138,6 @@ theorem opensRound_true (S : Server) (H : Msg → Msg) {a : Msg} {os : List (Msg
   · rw [ite_eq_right hl] at h
     simp [OC.eval] at h
 
-/-- **The inner verifier accepts the opened messages**: at each round it answers as `Open(V, S)` does (the round's coin
-before the last, acceptance at the last), its calls among `agrees`'. -/
 theorem agrees_true (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg) (x : Msg) {ms : List Msg}
     {cs : List Coin} (h : ((Server.agrees V ans x ms cs).eval H).1 = true) (j : ℕ) (hj : j < ms.length) :
     ((V.next x (ms.take (j + 1)) (cs.take (j + 1))).eval H).1 =
@@ -173,9 +154,6 @@ theorem agrees_true (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg) (
   simp only [OC.eval, decide_eq_true_eq, List.append_nil] at h1 h2
   exact ⟨h1, h2⟩
 
-/-- **What `Open(V, S)` checks when it accepts at its last round**: `final` reads the last message, the schedule's
-counts hold, each earlier round opens and the inner verifier accepts the opened messages, each check's calls among the
-decision's. -/
 theorem ivstar_acc (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg) (x : Msg) (as : List Msg)
     (cs : List Coin) (hl : ¬ as.length < V.k x) (h : (((S.IVStar V ans).next x as cs).eval H).1 = .acc) :
     ∃ os last, S.final (as.getLastD []) = some (os, last) ∧ os.length + 1 = as.length ∧
@@ -217,7 +195,6 @@ theorem ivstar_acc (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Ms
       rw [this] at h
       simp [OC.eval] at h
 
-/-- **What `Open(V, S)`'s decision on replayed messages checks when it accepts**, round by round. -/
 theorem decAt_acc (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin ((S.IVStar V ans).k x) → Coin) (hk : 0 < V.k x) (h : (S.decAt V ans H x ms r).1 = .acc) :
     ∃ os last, S.final (ms.getD (V.k x - 1) []) = some (os, last) ∧ os.length + 1 = V.k x ∧
@@ -249,15 +226,9 @@ theorem coinSeq_iv (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (x : Ms
     (r : Fin ((S.IVStar V ans).k x) → Coin) : @coinSeq Coin _ ((S.IVStar V ans).k x) r = @coinSeq Coin _ (V.k x) r :=
   rfl
 
-/-- `Open(V, S)`'s answer at round `j` of a run it accepts at the coins `r`: the round's coin before the last, then
-acceptance. -/
 def ansAt (V : Verifier Coin) (ans : Coin → Msg) (x : Msg) {k : ℕ} (r : Fin k → Coin) (j : ℕ) : Out :=
   if j + 1 < V.k x then .msg (ans (coinSeq r j)) else .acc
 
-/-- **A run `Open(V, S)` accepts**, at any prover: it has rounds; `final` reads its last message; each earlier round
-opens to as many rows as the schedule fixes, its calls the run's; the inner verifier answers the opened messages as
-`Open(V, S)` does, its calls the run's; and the run, opened, is the opened messages with `Open(V, S)`'s answers,
-accepted. -/
 theorem accFacts (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg) (x : Msg) {Ω : Type}
     (P : Prover Ω) (ω : Ω) (r : Fin ((S.IVStar V ans).k x) → Coin)
     (hacc : (run H P (S.IVStar V ans) x ω r).out = .acc) :

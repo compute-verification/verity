@@ -6,34 +6,7 @@ public import Proofs.Flock.Recursive.ZkServerZK
 public import Proofs.Flock.Recursive.Loads
 public import Proofs.Flock.Recursive.ForkInnerC
 
-/-!
-# The recursive audit's property: its proof and what it rests on
-
-`Flock.SecurityProofs.RecursiveAudit : Flock.Guarantees.RecursiveAudit`, from `zk_sessions_recursive_fork_innerC` at
-the compiled table (which, as its pick, ignores the last round's coin), the description's binding of the hidden
-statement to the registered rows (`Recursion.ofRows_eq_or_collides`), and `RecursiveZkServerPrivate`
-(`Proofs.Flock.Recursive.ZkServerZK`). Its premises are `Proofs.Flock.Recursive.Premises`'.
-
-In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`, `Proofs.Flock.Recursive.Loads`):
-* where some index has no session that types, the event is empty: a session that verifies as V*'s statement of its
-  index loads it (`loads_of_verifiesV`, at the obligations `VStarParses` and `TagsFound`) and so types
-  (`typable_of_accepts`), so at that index none verifies (`prob_sessionsR_untypable`);
-* at a statement Lean's verifier refuses, or whose description it refuses, the event is empty (`AcceptsStmt` and
-  `AcceptsDescription` are its first conjuncts);
-* at one whose description it accepts, the hidden statement at `st`'s rows (`hiddenAt`) is the statement at the
-  registered strings `p`, or SHA-512 collides at a row (`Recursion.ofRows_eq_or_collides`, which reads only the rows
-  below `rt.leaves`: `readsBelow_stmtAt`);
-* at one it accepts, the class checks pass (`classOk_of_accepts`), and the compile premise holds at `execClassAt st`
-  (`compiledForkSound_execClassAt`, from `flock_inner_sound_compiled`);
-* the raw event bounded by the typed sessions' at the transported prover (`prob_recT_le`, `verifies_zsOf`).
-
-(i) is at the sampling design of the registration's samples (`sampleDesign`), nonempty by the element its space comes with. Still taken by
-the property, each to become a lemma at the executable or a refusal of the verifier: in (ii) the honest witnesses
-(`honest`) and the obligations on the ZK server's code and V*'s staging (`ZkServerSends`, `SessionsPublic`,
-`SessionsCoined`, `SessionsHonest`, `OuterZK.Sessions`' `hz`, `hR`, `hS`); in (i) the obligation that V*'s statements'
-files parse to `Vs` (`VStarParses`, until gap 4), and the obligation on our code that every session's inputs carry the
-tags their name names (`TagsFound`, `_hF`), which with refusal (5)'s name equation makes them V*'s (`find?_circuit`).
--/
+/-! The recursive audit's proof (`RecursiveAudit`), which takes as premises the obligations on the ZK server's code, V*'s staging, V*'s files' parsing and the sessions' tags. -/
 
 @[expose] public section
 
@@ -44,12 +17,10 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **A statement of the registration's rows reads a list's first `rt.leaves` commit strings only.** -/
 theorem readsBelow_stmtAt {Ω H : Type} (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → Ω → H) :
     ReadsBelow rt.leaves (Flock.Guarantees.stmtAt rt stmt) :=
   fun _ _ h ω => congrArg (fun f : Fin rt.leaves → ByteArray => stmt f ω) (funext fun r => h r r.2)
 
-/-- **The recursive audit, as the verifier runs it.** -/
 theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   refine And.intro ?_ ?_
   swap

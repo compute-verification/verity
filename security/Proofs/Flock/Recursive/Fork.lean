@@ -4,31 +4,7 @@ public import Proofs.Flock.Recursive.Defs
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: binding a stage to a reference opening fixed before its coin
-
-The stage-`k` commitment `c_k` is a vector of hiding commitments, one digest per position `pos`. The outer session's
-extraction reads openings of them (a **trial** at each leaf, `T t s pos`, which outputs the openings it read at `pos`).
-The binding hypothesis Flock proves is a **transfer**: for every candidate value vector `v`, the decoded round-`k` message
-differs from `msg v` with probability at most a term `εtr` plus, at each position, `κ pos` times the probability that the
-trial reads an opening of `c_k`'s digest at `pos` to a value other than `v pos`.
-
-The reference opening has to be a function of the prover's state when it sends `c_k`, so that the simulated inner prover
-fixes its round-`k` message before `ρ_k`. A plurality over the extraction's openings at the leaf is not one: it depends on
-`ρ_k`. This file fixes it at the node instead:
-
-* `refv p c pos` is the value the rest of the run from the node (`contF`: the remaining coins, then the trial) reads
-  **alone** at `pos` most often, the readings `A ⊆ V` counted when `A = {v}` (`alone_plurality_sq`);
-* off that value, two independent continuations from the node conflict: if a run reads some `u ∈ A`, every run whose
-  readings are nonempty and not `{u}` reads a value other than `u`, and by plurality those runs weigh at least the
-  off-reference mass `b`; so `b² ≤ Pr₂[conflict]`;
-* a conflict is two openings of one digest to different values, a collision of `H` that the **fork finder** (`forkF`:
-  the coins to the node, then two continuations) outputs (`Openings.collide`);
-* `(Σ b_node)² ≤ Σ b_node²` over the coins to the node (Cauchy–Schwarz), so with `cr/sha-512` for the fork finder at
-  budget `q` the off-reference mass is at most `√(q²/2^513) = q/2^256.5`: the rewinding costs a square root.
-
-`stage_bind` puts the two together: the stage's binding error is `leafAvg εtr + (Σ_pos κ pos)·√(q²/2^513)`.
--/
+/-! Binding a stage to a reference opening fixed at the node where its commitment is sent, not at the leaf, whose plurality depends on the coin (`stage_bind`). -/
 
 @[expose] public section
 
@@ -51,7 +27,6 @@ structure Openings {D : Type} (H : List UInt8 → D) (V : Type) : Type 1 where
 
 variable {D : Type} {H : List UInt8 → D} {V : Type} (ob : Openings H V)
 
-/-- The openings `os` open the digest `d` to a value other than `v`. -/
 def OffAt (d : ob.Dg) (v : V) (os : Finset ob.Op) : Prop := ∃ o ∈ os, ob.com o = d ∧ ob.val o ≠ v
 
 variable {Cm C Pos β γ : Type} [Fintype C] [Nonempty C]
@@ -76,7 +51,6 @@ noncomputable def forkF (cmt : Cm → Pos → ob.Dg) (pos : Pos) : (k r : ℕ) �
       ⟨.coin C fun ρ => (forkF cmt pos k r (fun t => f ((s.1, ρ) :: t)) (fun t => T ((s.1, ρ) :: t)) (s.2 ρ)).g,
         fun ρ => (forkF cmt pos k r (fun t => f ((s.1, ρ) :: t)) (fun t => T ((s.1, ρ) :: t)) (s.2 ρ)).s⟩
 
-/-- **The probability, at a leaf, that the trial at `pos` reads `c_k`'s digest off the reference value.** -/
 noncomputable def offProb (cmt : Cm → Pos → ob.Dg) (k : ℕ) (refv : List (Cm × C) → Cm → Pos → V)
     {f : List (Cm × C) → Game β} (T : (t : List (Cm × C)) → Strategy (f t) → Pos → Finder (Finset ob.Op))
     (t : List (Cm × C)) (s : Strategy (f t)) (pos : Pos) : ℝ≥0∞ :=
@@ -92,7 +66,6 @@ theorem prob_contF (p : γ → Prop) : ∀ (r : ℕ) (f : List (Cm × C) → Gam
       prob_contF p r (fun t => f ((s.1, ρ) :: t)) (fun t => T ((s.1, ρ) :: t)) (s.2 ρ))
 
 open Classical in
-/-- The values the openings `os` open the digest `d` to. -/
 noncomputable def Aof (d : ob.Dg) (os : Finset ob.Op) : Finset V := (os.filter fun o => ob.com o = d).image ob.val
 
 theorem offAt_iff (d : ob.Dg) (v : V) (os : Finset ob.Op) : OffAt ob d v os ↔ ∃ x ∈ Aof ob d os, x ≠ v := by
@@ -112,7 +85,6 @@ theorem ind_offAt (d : ob.Dg) (v : V) :
     · rw [ite_eq_left h, ite_eq_left ((offAt_iff ob d v os).1 h)]
     · rw [ite_eq_right h, ite_eq_right fun h' => h ((offAt_iff ob d v os).2 h')]
 
-/-- **A conflict of two runs is a collision** the fork outputs. -/
 theorem ind_le_forkPick (d : ob.Dg) (os os' : Finset ob.Op) :
     ind (fun os' => ∃ x ∈ Aof ob d os, ∃ y ∈ Aof ob d os', x ≠ y) os' ≤ ind (IsColl H) (forkPick ob d os os') := by
   classical
@@ -134,10 +106,6 @@ theorem ind_le_forkPick (d : ob.Dg) (os os' : Finset ob.Op) :
     split_ifs <;> norm_num
 
 open Classical in
-/-- **The alone plurality**: for readings `A` of a run, some value `vs` is read off (some reading other than `vs`) with a
-mass `b` whose square is at most the probability that two independent runs read different values. `vs` is the value
-read alone most often: a run reading `u` conflicts with every run whose readings are nonempty and not `{u}`, and those
-weigh at least `b`. -/
 theorem alone_plurality_sq {α W : Type} [Fintype W] [Nonempty W] (g : Game α) (s : Strategy g)
     (A : α → Finset W) :
     ∃ vs : W, expect (ind fun a => ∃ x ∈ A a, x ≠ vs) g s ^ 2 ≤
@@ -197,7 +165,6 @@ theorem alone_plurality_sq {α W : Type} [Fintype W] [Nonempty W] (g : Game α) 
         rw [expect_const_mul, sq]
     _ ≤ _ := expect_mono hin g s
 
-/-- **Cauchy–Schwarz over a coin**: the square of an average is at most the average of the squares. -/
 theorem avg_toReal_sq_le {D : Type} [Fintype D] [Nonempty D] (f : D → ℝ≥0∞) (hf : ∀ c, f c ≠ ⊤) :
     (avg f).toReal ^ 2 ≤ (∑ c, (f c).toReal ^ 2) / Fintype.card D := by
   have hN : (0 : ℝ) < Fintype.card D := by exact_mod_cast Fintype.card_pos
@@ -230,7 +197,6 @@ theorem leafAvg_zero_offProb {cmt : Cm → Pos → ob.Dg} {k : ℕ} {refv : List
   show offProb ob cmt k refv T [] s pos = 0
   simp [offProb]
 
-/-- The reference values one level down, after the coin `ρ`. -/
 noncomputable def consRef [Nonempty V] (rv : C → List (Cm × C) → Cm → Pos → V) : List (Cm × C) → Cm → Pos → V
   | [], _, _ => Classical.arbitrary V
   | (_, ρ) :: p, c, pos => rv ρ p c pos
@@ -244,8 +210,6 @@ theorem offProb_cons [Nonempty V] (cmt : Cm → Pos → ob.Dg) (k : ℕ) (rv : C
   unfold offProb
   simp only [List.getElem?_cons_succ, List.take_succ_cons, consRef]
 
-/-- **The plurality reference and its fork**: some reference values, fixed at the node where each stage-`k` commitment is
-sent, are read off by the trials with a mass whose square is at most the fork finder's success. -/
 theorem fork_ref [Fintype V] [DecidableEq V] [Nonempty V] (cmt : Cm → Pos → ob.Dg) :
     ∀ (k r : ℕ) (f : List (Cm × C) → Game β)
       (T : (t : List (Cm × C)) → Strategy (f t) → Pos → Finder (Finset ob.Op)) (s : Strategy (rounds Cm C r f)),
@@ -299,9 +263,6 @@ theorem fork_ref [Fintype V] [DecidableEq V] [Nonempty V] (cmt : Cm → Pos → 
           gcongr with ρ
           exact hrv ρ pos
 
-/-- **Stage binding.** Given the transfer `htr` at stage `k` and `cr/sha-512` for the fork finders at budget `q`, some
-reference values fixed at the stage's nodes bind the decoded round-`k` message: `E t s m` is the leaf's probability that
-the decoded message is not `m`. -/
 theorem stage_bind [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos] {Msg : Type}
     (cmt : Cm → Pos → ob.Dg) (msg : (Pos → V) → Msg) {k r : ℕ} (hk : k < r) (f : List (Cm × C) → Game β)
     (T : (t : List (Cm × C)) → Strategy (f t) → Pos → Finder (Finset ob.Op)) (s : Strategy (rounds Cm C r f))

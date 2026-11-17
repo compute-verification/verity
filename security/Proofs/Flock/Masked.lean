@@ -38,16 +38,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Proofs of Flock's masked guarantees
-
-* `Flock.SecurityProofs.MaskedKS : Flock.Guarantees.MaskedKS` is `FlockDeploy.KS.zk_KS_untrim` (G1).
-* `Flock.SecurityProofs.MaskedKSTable : Flock.Guarantees.MaskedKSTable` is `FlockDeploy.KS.zk_KSTable_untrim`, with its
-  two witnesses: the deployed decoder meets the list-decoding spec the statement asks of a decoder
-  (`MaskedKSTable_honest`), and the claim fails at a toy record (`MaskedKSTable_nontrivial`).
-* `Flock.SecurityProofs.MaskedZK : Flock.Guarantees.MaskedZK` is `Claims.ZKMal.Flock.zk_deployZk_masked_exe_split` at
-  `FlockDeploy.sha512`, whose `hOf` is SHA-512 (`FlockDeploy.hOf_sha512`) (G2).
--/
+/-! Proofs of Flock's masked guarantees `MaskedKS`, `MaskedKSTable` and `MaskedZK`. -/
 
 @[expose] public section
 

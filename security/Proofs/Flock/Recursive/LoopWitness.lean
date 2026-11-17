@@ -20,33 +20,7 @@ import all Init.Data.String.Legacy
 import all Init.Data.ToString.Basic
 import all Lean.Data.Json.Basic
 
-/-!
-# `RecursiveZKLoop` and `RecursiveZKLoopAnySum` say something
-
-Each guarantee's honest lemma concludes its premises at one instance, and its nontrivial lemma states that its bound
-fails at another.
-
-The instance:
-* the ZK server's schedule `sched`: one root table `t` of one node, no rounds, a Hello that links nothing. It is
-  canonical (`sched_canonical`), and the honest worker at it, `hon`, fits it (`hon_fits`), so the ZK server sends its
-  transcript on the worker's requests and finishes (`sends`: `ZkServerSends`, from `honestReqs_accepts`);
-* the same requests as a worker of the adaptive zk_server (`wAny`): it finishes at every salt (`wAny_finishes`), by
-  one kernel evaluation at the zero salt (`hon_finishes0`) and `liveFinished_chopReqs`;
-* one statement of V* (`m = 1`): the honest fixture's (`RecDeploy.BaseParses.fixture_stmt`), whose statement and
-  witness are in the claims' relation at the deployed masked parser, `deployZk Readable.relation`;
-* the deployed tables, through `TablesSide`'s `_dataE` theorems, with `SwCausalOn (Loop.SwOk Masked.dataE)` at the
-  honest values (`swCausalOn_honestVals_dataE`); and the deployed release, which reads no stop
-  (`LoopAny.releaseReadsNoStop_loopRelease`).
-
-The nontrivial lemmas take no request and no statement of V* (`m = 0`, so the error terms are `0`), so the real view
-never finishes, and a release that reads whether the inner session finished. The bound fails where the ZK server never
-finishes (`RecursiveZKLoop`: the simulated view always finishes), and where the release reads the stop of a session
-that didn't finish (`RecursiveZKLoopAnySum`, at no holes: the real view is released unfinished at the stop `true`, and
-the simulated view is unfinished only at the stop `false`).
-
-* `Flock.SecurityProofs.RecursiveZKLoop_honest`, `Flock.SecurityProofs.RecursiveZKLoop_nontrivial`.
-* `Flock.SecurityProofs.RecursiveZKLoopAnySum_honest`, `Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial`.
--/
+/-! `RecursiveZKLoop`'s and `RecursiveZKLoopAnySum`'s honest and nontrivial witnesses, at one canonical one-table schedule. -/
 
 @[expose] public section
 
@@ -58,8 +32,6 @@ open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
-
-/-! ## The schedule and its honest worker -/
 
 /-- **One root table, `t`, of one node, and no rounds**: Hello links nothing, and there is no link `y` and no coin. -/
 def sched : Schedule where
@@ -116,8 +88,8 @@ theorem hon_fits : ZkServerHonest.Fits sched hon where
     cases hr
   proofs := by intro p hp; cases hp
 
-/-- **Hello is plain**: its one key, `link`, a plain string, and its value an empty object. `plainStr` reads its string
-through `String.all`, which the kernel doesn't evaluate, so `simp` decides it, and the kernel the rest. -/
+/-- `plainStr` reads its string through `String.all`, which the kernel doesn't evaluate, so `simp` decides it, and the
+kernel the rest. -/
 theorem plain_hello : plain sched.hello = true := by
   have hs : plainStr "link" = true := by simp [plainStr]
   show (plainObj .leaf && plainStr "link" && plain (Json.obj ⟨⟨.leaf⟩⟩) && plainObj .leaf) &&
@@ -125,7 +97,6 @@ theorem plain_hello : plain sched.hello = true := by
   rw [hs]
   decide +kernel
 
-/-- **The ZK server holds a session to `sched`**: `Schedule.canonical`, by evaluation once Hello is plain. -/
 theorem sched_canonical : ZkServerHonest.Canonical sched := by
   unfold ZkServerHonest.Canonical Schedule.canonical
   rw [plain_hello]
@@ -138,7 +109,6 @@ abbrev nhS : ℕ := ZkServerHonest.rowCount sched
 def honD : Unit → Unit → Unit → Unit → Unit → (Fin nhS → ByteArray) → Flock.ZkServer.Honest :=
   fun _ _ _ _ _ _ => hon
 
-/-- **The ZK server sends `sched`'s transcript on the honest worker's requests, and finishes.** -/
 theorem sends : Flock.Guarantees.ZkServerSends (Prog := Unit) (Wit := Unit) (Rr := Unit) sched
     (fun _ _ _ => fun (_ : Unit) (_ : Unit) (_ : Fin nhS → ByteArray) => Flock.ZkServer.honestReqs sched hon)
     (fun _ _ _ => ZkServerHonest.honestMsgs sched honD () () ())
@@ -147,11 +117,8 @@ theorem sends : Flock.Guarantees.ZkServerSends (Prog := Unit) (Wit := Unit) (Rr 
     (Flock.SecurityProofs.honestReqs_accepts sched sched_canonical honD (fun _ _ _ _ _ _ => hon_fits)
       (by unfold ZkServerHonest.Causal; intros; rfl))
 
-/-! ## The adaptive zk_server finishes at every salt -/
-
 theorem fwHoles_sched : Flock.Guarantees.fwHoles sched = 1 := by decide +kernel
 
-/-- **At the zero salt, the live session on the honest worker's requests finishes**, by evaluation. -/
 theorem hon_finishes0 :
     liveFinished sched (chopReqs (Flock.ZkServer.honestReqs sched hon) [Flock.Guarantees.zeroSalt]) = true := by
   decide +kernel
@@ -163,7 +130,6 @@ def wAny : Unit → Unit → Worker := fun _ _ h => (Flock.ZkServer.honestReqs s
 /-- Its request count. -/
 abbrev nA : ℕ := (Flock.ZkServer.honestReqs sched hon).length
 
-/-- **It finishes at every salt.** -/
 theorem wAny_finishes (b : Fin (Flock.Guarantees.fwHoles sched + 0) → Fin 192 → Fin 256) :
     adaptFinished sched (wAny () ()) nA (Flock.Guarantees.saltsOf b) = true := by
   have hl : (Flock.Guarantees.saltsOf b).length = [Flock.Guarantees.zeroSalt].length := by
@@ -173,8 +139,6 @@ theorem wAny_finishes (b : Fin (Flock.Guarantees.fwHoles sched + 0) → Fin 192 
     (Flock.ZkServer.honestReqs sched hon).length (Flock.Guarantees.saltsOf b) = true
   rw [adaptFinished_fixed, liveFinished_chopReqs _ _ hl]
   exact hon_finishes0
-
-/-! ## The nontrivial lemmas' instance -/
 
 /-- A release that releases nothing. -/
 def rel0 : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp where

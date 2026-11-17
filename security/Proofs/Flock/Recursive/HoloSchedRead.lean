@@ -2,17 +2,7 @@ module
 
 public import Proofs.Flock.Recursive.HoloSched
 
-/-!
-# Where `fixedRow` reads, by the schedule
-
-`fixedRow_valueRound`: where the verifier holds row `x` of a value `RecVStar.fixedRow` names, `valueRound` names the
-stream and round of the `c_k` (or top) it read, at streams whose held `c_k` sit at their schedules' message rounds
-(`CommitsAt`) and, for R, whose held tops are its schedule's (`TopsAt`). The verifier checks both of R's stream round by
-round (`checkStackedShape` holds each round's `schedOf`, its tops' sizes and whether it commits, to `stackedRounds`'), and
-neither of the reps' or the sparse phases': `innerCommits` holds the reps' rounds to the record's coins, and `sparseRow`
-checks only a sparse stream's count of `c_k`. `RepsCommitsAt`, `SparseCommitsAt` and `StackedAt` name what the
-verifier's checks of the three give, and `ClaimReadsAt` what its check of the claim ports' reads gives.
--/
+/-! Where `fixedRow` reads, by the schedule (`fixedRow_valueRound`), at streams whose held `c_k` and tops sit at their schedules' rounds. -/
 
 @[expose] public section
 
@@ -20,33 +10,21 @@ namespace Flock.Guarantees
 
 open Flock Flock.RecVStar
 
-/-- **Hypothesis on a stream's held `c_k`: they sit at its schedule's message rounds**, in order: the `i`-th's round is
-`rs`' `i`-th message round. -/
 def CommitsAt (cm : Array (Nat × ByteArray)) (rs : Array SchedRound) : Prop :=
   cm.toList.map (·.1) = msgRounds rs
 
-/-- **Hypothesis on R's held tops: they are the tops its schedule commits**, in order, each of its node count. -/
 def TopsAt (tops : Array (Array ByteArray)) (rs : Array SchedRound) : Prop :=
   tops.toList.map (·.size) = (topRounds rs).map (·.2)
 
-/-- **What the verifier's check of the reps' `c_k` gives** (`CommitsAt`'s verifier half): it holds two reps, each's
-`c_k` at the reps' schedule's message rounds. -/
 def RepsCommitsAt (cs : InnerCommits) (rep : Array SchedRound) : Prop :=
   ∀ y cm, cs.reps[y]? = some cm → y < 2 ∧ CommitsAt cm rep
 
-/-- **What the verifier's check of the sparse phases' `c_k` gives**: each sparse stream it holds is a rep's, its `c_k` at
-`sparseRounds` of the verifier's RecSparse shape. -/
 def SparseCommitsAt (cs : InnerCommits) (sparse : Option RecSparse.Shape) : Prop :=
   ∀ y st sh, cs.stream? s!"{SPARSE}/rep{y}" = some st → sparse = some sh → y < 2 ∧ CommitsAt st.commits (sparseRounds sh)
 
-/-- **R's held stream is at R's schedule**: its `c_k` at the schedule's message rounds and its tops the schedule's. -/
 def StackedAt (cs : InnerCommits) (stacked : Option (Array SchedRound)) : Prop :=
   ∀ st, cs.stream? s!"{STACKED}/rep0" = some st → ∃ rs, stacked = some rs ∧ CommitsAt st.commits rs ∧ TopsAt st.tops rs
 
-/-- **What the verifier's check of the claim ports' reads gives** (`checkOwn` at the claim ports): a port of the
-verifier's registered reads `own` of statement `s` that reads `rec-claim` is a rec-sparse statement's `claim`, read at
-rows 0 and 1 (rep `x`'s instance at row `x`), or an R opening statement's `claim<k>`, read at row `k`; no other statement
-reads it. -/
 def ClaimReadsAt (s : VStar.Stmt) (own : Array Registered.Port) : Prop :=
   ∀ reg ∈ own, reg.value = CLAIM_VALUE →
     match s with
@@ -54,15 +32,11 @@ def ClaimReadsAt (s : VStar.Stmt) (own : Array Registered.Port) : Prop :=
     | .opening .. => ∃ k : Nat, reg.name = s!"claim{k}" ∧ reg.reads = #[some k]
     | _ => False
 
-/-- The `c_k` the verifier holds of stream `s`, each with its round: a rep's from the prover's record
-(`InnerCommits.reps`), a sparse phase's and R's from the challenger's live-coin part's (`InnerCommits.streams`). -/
 def heldCommits (cs : InnerCommits) : HoloStream → Option (Array (Nat × ByteArray))
   | .rep x => cs.reps[x.val]?
   | .sparse x => (cs.stream? s!"{SPARSE}/rep{x.val}").map (·.commits)
   | .stacked => (cs.stream? s!"{STACKED}/rep0").map (·.commits)
 
-/-- `c` is what the verifier holds at stream `s`'s round `k`, node `x` where the round commits a top: a `c_k` it holds at
-round `k`, or node `x` of R's `l`-th top, which R's round `k` commits. -/
 def HeldAt (cs : InnerCommits) (stacked : Option (Array SchedRound)) (s : HoloStream) (k x : Nat) (c : ByteArray) :
     Prop :=
   (∃ (cm : Array (Nat × ByteArray)) (i : Nat), heldCommits cs s = some cm ∧ cm[i]? = some (k, c)) ∨
@@ -99,7 +73,6 @@ theorem claim_or_sparse (cs : InnerCommits) (sh : RecSparse.Shape) (p : String) 
     rfl
   next => rfl
 
-/-- **What `sparseRow` reads**: the `i`-th `c_k` `sparse/rep<x>` holds, `i` `p`'s place in `sparseMessages`. -/
 theorem sparseRow_ok {cs : InnerCommits} {sh : RecSparse.Shape} {p : String} {x : Nat} {d : String} {c : ByteArray}
     (h : sparseRow cs sh p x = .ok (d, c)) :
     ∃ i st k, (sparseMessages sh).idxOf? p = some i ∧ cs.stream? s!"{SPARSE}/rep{x}" = some st ∧
@@ -235,11 +208,6 @@ theorem fixedRow_sparseRound {p : String} (hci : cIndex v = none) (hoi : opening
 
 end cases
 
-/-- **Where the verifier holds row `x` of a value `fixedRow` names, `valueRound` names the round it read**: at streams
-whose held `c_k` sit at their schedules' message rounds (the reps' at `rep`, the sparse phases' at `sparseRounds` of the
-verifier's RecSparse shape, R's at `stacked`) and whose held tops are R's schedule's, the `b ‖ c` `c` the verifier holds
-there is what it holds at the stream and round `valueRound` names (`HeldAt`): the `c_k` it holds at that round, or node
-`x` of the top R commits there. -/
 theorem fixedRow_valueRound {cs : InnerCommits} {rep : Array SchedRound} {sparse : Option RecSparse.Shape}
     {stacked : Option (Array SchedRound)} {v : String} {x : Nat} {d : String} {c : ByteArray}
     (hrep : RepsCommitsAt cs rep) (hsp : SparseCommitsAt cs sparse) (hst : StackedAt cs stacked)

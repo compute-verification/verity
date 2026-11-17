@@ -3,22 +3,7 @@ module
 public import Proofs.Flock.Recursive.HoloSchedRead
 import all Init.Data.Nat.ToString
 
-/-!
-# What the verifier's checks of the held `c_k` and the claim ports give
-
-`fixedRow_valueRound` reads three hypotheses on the streams the verifier holds. Two of them are what its checks give:
-
-* `repsCommitsAt_of_check`: `checkCommitRounds` (the end of `checkCovers`) holds two reps, each's `c_k` at the reps'
-  schedule's message rounds (`holoRepRounds` under `Inner.holo`, which is `holoRounds`): `RepsCommitsAt`.
-* `sparseCommitsAt_of_check`: it holds `sparse/rep0`'s and `sparse/rep1`'s `c_k` at `sparsePhaseRounds` of the verifier's
-  RecSparse shape (`sparseRounds`) and refuses any other held stream named `sparse/…`, so a held `sparse/rep<y>` has
-  `y < 2` (`sparse_lt_two`): `SparseCommitsAt`.
-* `claimReadsAt_of_checkOwn`: `checkOwn` holds the reads file's `rec-claim` ports to the statement's (`ownPorts`):
-  `ClaimReadsAt`. No part's or opening's message-round value is `rec-claim` (`recC_ne_claim`, `recOpeningC_ne_claim`),
-  and an opening's `claim<k>` is named as `claimIndex` reads it back (`claimIndex_some`).
-* `stackedAt_of_check`: it holds `stacked/rep0`'s `c_k` at the message rounds of `stackedRounds` of the verifier's R
-  shape and its tops' node counts at the ones those rounds commit (`topCounts`, `topCounts_eq`): `StackedAt`.
--/
+/-! What the verifier's checks of the held `c_k` and the claim ports give (`RepsCommitsAt`, `SparseCommitsAt`, `StackedAt`, `ClaimReadsAt`). -/
 
 @[expose] public section
 
@@ -60,10 +45,7 @@ theorem topCounts_eq (rs : Array SchedRound) : topCounts rs = (topRounds rs).map
   rw [List.map_map]
   exact (List.map_id _).symm
 
-/-- **`checkCommitRounds` accepting**: two reps, each's `c_k` rounds the reps' schedule's message rounds,
-`sparse/rep0`'s and `sparse/rep1`'s the sparse phase's, and `stacked/rep0`'s those of `stackedRounds` of the
-verifier's R shape, its tops of the node counts those rounds commit, and no other held stream named `sparse/…`. Its
-refusal of a stream off the reps' rounds comes first, and is not read here. -/
+/-- Its refusal of a stream off the reps' rounds comes first, and is not read here. -/
 theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
     (h : checkCommitRounds i cs = .ok ()) :
@@ -210,7 +192,6 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
             refine ⟨rs, by first | rfl | exact hb, ?_, by simpa using hne⟩
             exact hall _ (List.mem_append_right _ hmr)
 
-/-- **The verifier's check of the reps' `c_k` gives `RepsCommitsAt`** at the hidden-unit schedule `holoRounds`. -/
 theorem repsCommitsAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (h : checkCommitRounds i cs = .ok ()) (hholo : i.holo = true)
     (hrep : holoRounds i.m i.kLog i.claims = some rep) : RepsCommitsAt cs rep := by
@@ -234,8 +215,6 @@ theorem repsCommitsAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sche
 theorem digits_eq {y : Nat} {d : Char} (h : Nat.toDigits 10 y = [d]) : y = Nat.ofDigitChars 10 [d] 0 := by
   rw [← h, Nat.ofDigitChars_ten_toDigits]
 
-/-- **A held `sparse/rep<y>` is a rep's** (`y < 2`) where no held stream named `sparse/…` is other than `sparse/rep0`
-and `sparse/rep1`, as `checkCommitRounds` refuses. -/
 theorem sparse_lt_two {cs : InnerCommits}
     (hn : cs.streams.find? (fun st => st.name.startsWith s!"{SPARSE}/" &&
       st.name != s!"{SPARSE}/rep0" && st.name != s!"{SPARSE}/rep1") = none) :
@@ -260,8 +239,6 @@ theorem sparse_lt_two {cs : InnerCommits}
   simp only [String.toList_append, toString]
   exact ⟨"rep".toList ++ Nat.toDigits 10 y, by simp [List.append_assoc]⟩
 
-/-- **The verifier's check of the sparse phases' `c_k` gives `SparseCommitsAt`**: `checkCommitRounds` holds
-`sparse/rep0`'s and `sparse/rep1`'s at the sparse phase's rounds and refuses any other held `sparse/…` stream. -/
 theorem sparseCommitsAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
     (h : checkCommitRounds i cs = .ok ()) : SparseCommitsAt cs i.sparse := by
@@ -273,7 +250,6 @@ theorem sparseCommitsAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sc
   rw [msgRounds_eq, sparseRounds_eq]
   exact hsp sh hsh y st hy hst
 
-/-- **The verifier's check of R's stream gives `StackedAt`** at `stackedRounds` of the verifier's R shape. -/
 theorem stackedAt_of_check {i : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (hsch : (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims = some rep)
     (h : checkCommitRounds i cs = .ok ()) : StackedAt cs (i.stacked.bind stackedRounds) := by
@@ -318,7 +294,6 @@ theorem mem_msgPorts_claim {own : Array Registered.Port} {reg : Registered.Port}
   unfold msgPorts
   exact List.mem_map.2 ⟨reg, List.mem_filter.2 ⟨Array.mem_toList_iff.2 hreg, by simp [hv]⟩, rfl⟩
 
-/-- **`checkOwn` accepting**: each message-round port of the reads file is one of the statement's. -/
 theorem mem_ownPorts_of_checkOwn {s : VStar.Stmt} {own : Array Registered.Port} (h : checkOwn s own = .ok ()) :
     ∀ q ∈ msgPorts own, q ∈ ownPorts s := by
   unfold checkOwn at h
@@ -341,7 +316,6 @@ theorem mem_ownPorts_of_checkOwn {s : VStar.Stmt} {own : Array Registered.Port} 
     have hc := List.find?_eq_none.1 hfind q hq
     simpa using hc
 
-/-- **The verifier's check of the reads file's message-round ports gives `ClaimReadsAt`.** -/
 theorem claimReadsAt_of_checkOwn {s : VStar.Stmt} {own : Array Registered.Port} (h : checkOwn s own = .ok ()) :
     ClaimReadsAt s own := by
   intro reg hreg hv

@@ -36,24 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Flock's masked knowledge soundness and zero knowledge at the deployed record (trusted)
-
-`MaskedKS` and `MaskedZK` are `def G : Prop`s in the form of `Flock.Guarantees.EndToEnd`: two claims of
-`Definitions.Claims`, `Claims.Flock.KS` and `Claims.Flock.ZK`, at the deployed masked record of the deployed relation
-(`Flock.Readable.relation`), with SHA-512 as the oracle (`FlockDeploy.sha512`). Their proofs are
-`Flock.SecurityProofs.MaskedKS : Flock.Guarantees.MaskedKS` and
-`Flock.SecurityProofs.MaskedZK : Flock.Guarantees.MaskedZK`. `MaskedZK` holds `Claims.Flock.ZK`'s text in the lock in
-place of `Flock.Guarantees.ClaimsStated`.
-
-`MaskedKSTable` is a third, beside `MaskedKS`: `Claims.Flock.KSTable`, knowledge soundness at one table of a session,
-at the same record and oracle, at each table's own word length and error. Its proof is
-`Flock.SecurityProofs.MaskedKSTable : Flock.Guarantees.MaskedKSTable`.
-
-Flock's deployed records (`FlockDeploy.deployZk`, `Claims.ZKMal.zkDeployed` at the deployed plan) are still in its
-proofs package, so this module imports them from `Proofs.Flock.Claims`, and `Definitions.lean`, which the `security`
-package builds without `security_proofs`, does not import it: `Proofs.Flock.Masked` does.
--/
+/-! Flock's masked knowledge soundness and zero knowledge at the deployed masked record, with SHA-512 as the oracle (trusted). -/
 
 @[expose] public section
 

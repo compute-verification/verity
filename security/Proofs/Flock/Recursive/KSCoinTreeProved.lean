@@ -35,13 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Recursive.KSProved
 
-/-!
-# `RecursiveKSDeployed`, proved
-
-`RecursiveKS` at Hello-committed coins (`Flock.Guarantees.RecursiveKSDeployed`): `Claims.Recursion.ksLin2OnC_of_ksLin2On`
-at `RecursiveKS`, whose compiled verifier answers each round with its coin's bytes or with nothing
-(`RecDeploy.answersCoinOrNil_V`), and the bytes determine the coin (`Claims.Bridge.coin_bytes_injective`).
--/
+/-! `RecursiveKSDeployed`, `RecursiveKS` at Hello-committed coins, proved from `RecursiveKS`. -/
 
 @[expose] public section
 

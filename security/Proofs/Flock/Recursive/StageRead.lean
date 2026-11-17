@@ -17,20 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: V*'s stages at the wires V* reads
-
-`VFull` and `VDecodes` constrain every wire of the stages' commit strings. V*'s message rows have wires no unit reads
-(`InnerRepCheck` pads a row port of `n` elements to `64 ⌈8 n / 64⌉` words and reads its first `128 n` bits), in no
-unit's `io`, so `VFull` fails there. `VFullR` and `VDecodesR` are the two at the wires some unit reads (`ReadW`). The
-transfer reads a commit string only at a wire where the layer disagrees with the openings' values, and a layer that
-agrees with them on the read wires decodes alike (`VDecodesR`), so that wire is read, and the full sample samples its unit:
-
-* `sessions_stage_le_read`, `outerV_stage_le_read`, `zk_sessions_recursive_read`, `zk_sessions_recursive_fork_read`:
-  `sessions_stage_le`, `outerV_stage_le`, `zk_sessions_recursive_full` and `zk_sessions_recursive_fork` at `VFullR` and
-  `VDecodesR`, with the same bounds;
-* `vFullR_of_vFull`, `vDecodes_of_vDecodesR`: `VFull` gives `VFullR`, and `VDecodesR` gives `VDecodes`.
--/
+/-! V*'s stages at the wires some unit reads (`VFullR`, `VDecodesR`), since V*'s padded message rows have wires no unit reads, where `VFull` fails. -/
 
 @[expose] public section
 
@@ -42,9 +29,6 @@ open scoped ENNReal
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
 
-/-- **A stage's transfer at V*'s sessions, at the read wires**: `sessions_stage_le` where every layer agreeing with the
-values `wv` on the read wires of the commit strings `Sk j` satisfies `Q`, and each read wire of `Sk j` is a wire of
-some unit. A layer failing `Q` disagrees with `wv` at a read wire, which every sample reads. -/
 theorem sessions_stage_le_read
     (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -129,8 +113,6 @@ theorem sessions_stage_le_read
 
 variable {Reg₂ : Type}
 
-/-- **A stage's transfer at V*'s outer proof, at the read wires**: `sessions_stage_le_read` at the registration the
-prover sends (`outerV_stage_le`'s proof). -/
 theorem outerV_stage_le_read
     (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -170,8 +152,6 @@ theorem vDecodes_of_vDecodesR {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.M
     (h : VDecodesR wmsg same Sk msg) : VDecodes wmsg same Sk msg :=
   fun i hi ρs Xt v hX => h i hi ρs Xt v fun j g hg _ => hX j g hg
 
-/-- **The recursive audit is sound at the read wires**: `zk_sessions_recursive_full` at `VDecodesR` and `VFullR`, its
-transfer from `outerV_stage_le_read`, with the same bound. -/
 theorem zk_sessions_recursive_read
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -214,8 +194,6 @@ theorem zk_sessions_recursive_read
   exact Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun p _ =>
     mul_le_mul' le_rfl (trialS_le (zs σ.1 ω t _) dg N k Rw _ j p _ _)
 
-/-- **The recursive audit is sound at the read wires, in fork form**: `zk_sessions_recursive_fork` at `VDecodesR` and
-`VFullR`, from `zk_sessions_recursive_read` at no finder budgets, with the same disjuncts and bound. -/
 theorem zk_sessions_recursive_fork_read
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)

@@ -3,28 +3,7 @@ module
 public import Proofs.Flock.RecGeneric.AtFlockReruns
 public import Proofs.Flock.Claims.Recursion.HresAsm
 
-/-!
-# L1 at Flock: the compiler's contract at the deployment's dense statements
-
-At today's compiled record over the bound record, each of `Comp.Contract`'s fields at a statement `x` is a fact
-`Claims.Recursion` states about the record `D.record Bd.IVStar`, read on an accepted run at witnesses in the outer
-relation at the run's V\* statements (`OuterHolds`), whichever extractor gave them (`RecFacts`):
-
-* `refuses`, `rounds`, `margin`: `Claims.Recursion.Refuses`, `InnerRounds`, `RoundsMargin`;
-* `callsTrue`: the witnesses' recorded calls are true; `ownTrue` is `setupCalls_true`;
-* `callsLog`: the inner view's run's calls are among those `callsAt` lists, off a collision;
-* `accepts`: V\*'s inner check, off a collision with the compiled verifier's own evaluations;
-* `forks`: `Bound.LastBindsEC` at the last inner round and void before it (`forks_of`): two accepted views at a fork
-  at round `j` agree before the last round, where the readers' messages are a choice of the run's
-  (`RecFacts.readers`), which the fork keeps. The inner extractor reads a view as `DE`'s columns of the view opened,
-  so two readings that differ, or two call sets that differ, are `LastBindsEC`'s premise as it stands.
-
-`Comp.ofRec`'s `E_O` (`Claims.Recursion.EO`) gives witnesses only there (`eoGives_outerHolds`), so `RecFacts` gives the
-contract at `compAt` (`contract_compAt`); `Compiled.EO` does too, and the same facts give L2's contract
-(`Proofs.Flock.RecGeneric.AtFlockCompiledContract`). At the deployment (`RecDeploy.recBoundAt`,
-`RecDeploy.bdDeployed`) `RecFacts` holds at each dense statement from what `ksLin2_route_stagedVS` derives
-(`RecDeploy.facts_route_stagedVS`), from the suppliers `RecursiveKS`'s proof reads (`RecDeploy.facts_deployed`).
--/
+/-! L1 at Flock: the compiler's contract at the deployment's dense statements, from the facts `Claims.Recursion` states about today's compiled record (`RecFacts`). -/
 
 @[expose] public section
 
@@ -45,8 +24,6 @@ theorem coll_of_mem {H : Msg → Msg} {L l : List (Msg × Msg)} (hL : ∀ p ∈ 
     exact List.mem_map.2 ⟨e, hsub e he, rfl⟩
   exact findColl_of_coll H hL (hm q hq) (hm q' hq') hc
 
-/-! ## A rerun's inner view at today's compiled record -/
-
 section Bridge
 
 variable {Coin W Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col']
@@ -56,16 +33,12 @@ variable {Coin W Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 theorem replays_ofRec (IV : Verifier Coin) : (Comp.ofRec D IV I DO decO).Replays H x :=
   fun _ P ω r c _ h => EO_some_acc H (D.record IV) I DO decO P x ω r c h
 
-/-- **The inner view the witnesses give is the record's** (`RecAt.runs`), where the record's inner statement is the
-compiled one's. -/
 theorem view_ofRec (IV : Verifier Coin) (hxI : D.xI x = xI (D.record IV) x) (r : Fin ((D.record IV).V.k x) → Coin)
     (ws : List Claims.Flock.Wit) :
     (run H (replay (D.msgs x ws)) IV (xI (D.record IV) x) () fun i => coinSeq r i.val).seen =
       (D.record IV).innerView H x r ws := by
   rw [D.runs IV H x r ws, hxI]
 
-/-- **The inner view's run is the record's** (`RecAt.runs`): the inner verifier's run of the inner messages the
-witnesses give. -/
 theorem innerRun_ofRec (hxI : D.xI x = xI (D.record I.V) x) (r : Fin ((D.record I.V).V.k x) → Coin)
     (ws : List Claims.Flock.Wit) :
     innerRun H (D.record I.V) I x r ws =
@@ -76,19 +49,11 @@ theorem innerRun_ofRec (hxI : D.xI x = xI (D.record I.V) x) (r : Fin ((D.record 
 
 end Bridge
 
-/-! ## The record's facts, at witnesses in the outer relation -/
-
 section Facts
 
 variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
   [DecidableEq Col']
 
-/-- **Today's compiled record's facts at `x`, at any witnesses**, over the bound record `Bd`, the element-level Flock
-at the inner decoder `decI` and the outer record `DO`: the inner statement is the record's; the record's refusal,
-rounds and margin; the last message binds (`LastBindsEC`); the inner view's run's calls are among those `callsAt`
-lists, off a collision; and on an accepted run, at witnesses in the outer relation at the run's V\* statements
-(`OuterHolds`), their recorded calls are true, V\* proves the inner check off a collision with the compiled verifier's
-own evaluations, and the readers' messages before the last inner round are `pk` of the run's, off a collision. -/
 structure RecFacts (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
     (DO : Claims.Flock.Deploy Coin Col' T') (pk : ℕ → Msg → Msg) (x : Msg) : Prop where
   xI_eq : D.xI x = Claims.Recursion.xI (D.record Bd.IVStar) x
@@ -122,8 +87,6 @@ structure RecFacts (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T) (d
 
 end Facts
 
-/-! ## The forks bind over the bound record -/
-
 section Forks
 
 variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
@@ -131,11 +94,6 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
   (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {H : Msg → Msg} {x : Msg}
   {pk : ℕ → Msg → Msg}
 
-/-- **Two accepted runs forked at an inner round bind**, at witnesses in the outer relation at each run's V\*
-statements, where the inner extractor reads a view as `DE`'s columns of the view opened: before the last inner round
-the two views' messages agree (the readers' messages are `pk` of the run's, `RecFacts.readers`, which the fork keeps),
-and at the last, two readings or call sets that differ are `LastBindsEC`'s premise, both views accepting
-(`RecFacts.accepts`), so `IVStar`'s calls collide, and they are among those `callsAt` lists (`RecFacts.callsLog`). -/
 theorem forks_of (hF : RecFacts H D Bd decI DO pk x) {Ω : Type} (P : Prover Ω) (j : ℕ) (ω : Ω)
     (r r' : Fin ((D.record Bd.IVStar).V.k x) → Coin) (w w' : List Claims.Flock.Wit)
     (hj : j < Bd.IVStar.k (xI (D.record Bd.IVStar) x))
@@ -283,9 +241,6 @@ theorem forks_of (hF : RecFacts H D Bd decI DO pk x) {Ω : Type} (P : Prover Ω)
     (fun h => List.mem_append_left _ (List.mem_append_left _ (hlog r w hl₁ e h)))
     (fun h => List.mem_append_right _ (List.mem_append_left _ (hlog _ w' hl₂ e h)))) hq hq' hc
 
-/-- **The contract at today's compiled record over the bound record**, at the statement `x`, from the record's facts
-there (`RecFacts`): `Claims.Recursion.EO` gives witnesses only on an accepted run, in the outer relation at its V\*
-statements (`eoGives_outerHolds`). -/
 theorem contract_compAt (hF : RecFacts H D Bd decI DO pk x) :
     (compAt D Bd decI DO decO).Contract H Bd.IVStar (fun v => [Bd.DE.cols (Bd.openView v)]) x where
   replays := replays_ofRec D (Inner.ofFlock Bd.deploy decI) DO decO Bd.IVStar
@@ -304,9 +259,6 @@ theorem contract_compAt (hF : RecFacts H D Bd decI DO pk x) :
       (callsAt_true_of (hF.callsTrue Ω P ω r w hg.1 (eoGives_outerHolds hg)) e) (setupCalls_true H _ _ e))
       (fun _ hp => mem_callsAt_append hp))
 
-/-- **The contract at the server's `Open(DE, hm96)` and its reading of opened views**, which `RecoversLinkOn` reads,
-is the contract at the bound record's `IVStar` and opened views (`IVStarOfBound`, `OpenViewOfBound`): the element-level
-Flock's opening of a view is `DE`'s columns of it. -/
 theorem contract_ofBound (Cp : Caps Coin) (hIV : IVStarOfBound Bd) (hOV : OpenViewOfBound Bd)
     (h : (compAt D Bd decI DO decO).Contract H Bd.IVStar (fun v => [Bd.DE.cols (Bd.openView v)]) x) :
     (compAt D Bd decI DO decO).Contract H ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)
@@ -318,8 +270,6 @@ end Forks
 
 end Claims.RecGeneric
 
-/-! ## At the deployment -/
-
 namespace RecDeploy
 
 open Claims (Msg Out Prover run coinSeq replay findColl Collision)
@@ -330,8 +280,6 @@ section Witnesses
 
 variable {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool) (b : Brings)
 
-/-- **The recorded calls are true on an accepted run** at witnesses in the outer relation at the run's V\* statements,
-from the readers' facts (`ReadersTrue`), as `callsTrue` reads them at `E_O`'s. -/
 theorem callsTrue_holds (DO : Claims.Flock.Deploy Coin Col T) (hT : ReadersTrue H I.V b DO) (x : Msg) (Ω : Type)
     (P : Prover Ω) (ω : Ω) (r : Fin ((deployRec I.V ivScope b).V.k x) → Coin) (ws : List Claims.Flock.Wit)
     (hacc : (run H P (deployRec I.V ivScope b).V x ω r).out = .acc)
@@ -343,8 +291,6 @@ theorem callsTrue_holds (DO : Claims.Flock.Deploy Coin Col T) (hT : ReadersTrue 
   have hc : (runCs (I.V.k (xIOf x) + kS x) r).length = _ := (runCs_length I.V b x r).trans hl.symm
   exact hT x _ _ ws hl hc (stagedAll_run H I.V b x P ω r hacc) ho
 
-/-- **An inner run's calls are among those `callsAt` lists**, at any witnesses: the inner verifier's own at the run's
-coins, each with `H`'s answer (`Claims.run_logs`), as `callsLogCollAt_deployRec` reads them at `E_O`'s. -/
 theorem innerRun_calls (x : Msg) (r : Fin ((deployRec I.V ivScope b).V.k x) → Coin) (ws : List Claims.Flock.Wit) :
     ∀ e ∈ (Claims.Recursion.innerRun H (deployRec I.V ivScope b) I x r ws).vLog,
       e ∈ (deployRec I.V ivScope b).callsAt H x r ws := by
@@ -355,11 +301,6 @@ theorem innerRun_calls (x : Msg) (r : Fin ((deployRec I.V ivScope b).V.k x) → 
 
 end Witnesses
 
-/-- **The record's facts at the deployed records' dense statements**, from the premises of `ksLin2_route_stagedVS` that
-its V\* facts read: the calls of no witnesses are true (`callsNil`), and at every inner decoder the compiled record's
-refusal (`refuses`), rounds (`innerRounds`, `roundsMargin_deployRec`), true calls (`callsTrue_holds`), searched inner
-calls (`innerRun_calls`), V\*'s inner check at a dense statement (`vstarAcceptsV_boundVS`), the readers' messages before
-the last round (`readers_run`) and `LastBindsEC`. -/
 theorem facts_route_stagedVS (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) (hHW : L.HeldWhole)
     (ok : Msg → List Msg → List Claims.Flock.Wit → Prop) :
@@ -413,8 +354,6 @@ section LayR
 
 open Flock
 
-/-- **The facts at `showsDec`** (`facts_route_stagedVS` as `ksLin2_stepsC_atVD` reaches `ksLin2_route_stagedVS`):
-`StagedB` from `stagedB_deployRec_dec`, the openings at `showsPart`, `LastBindsEC` from `StepsBaseC`. -/
 theorem facts_stepsC_atVD (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -454,7 +393,6 @@ theorem facts_stepsC_atVD (nextE : Msg → List Msg → List Coin → Claims.OC 
     fun decI => okRuns_deployRec FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
       (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck { bR with rd := L.readers } _, hD _ hsh⟩
 
-/-- **`facts_stepsC_atVD` at `layR`**, as `ksLin2_stepsC_layRVD`. -/
 theorem facts_stepsC_layRVD (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -480,7 +418,6 @@ theorem facts_stepsC_layRVD (nextE : Msg → List Msg → List Coin → Claims.O
     (heldWhole_layR elem) wE join final w hB (readersTrue_layR elem _ _ _ hmSlotsCommit_of_full hM)
     (heldB_dense_layR elem nextE colsE _ wE join final w) (partOpensB_dense_layR elem _ _) hD
 
-/-- **`facts_stepsC_layRVD` at the deployed reader's steps** (`stepsBase_R`), as `ksLin2_deployedR_layRVD`. -/
 theorem facts_deployedR_layRVD (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -510,11 +447,6 @@ section Deployed
 
 open RecDeploy.DecompBR RecDeploy.RestLow
 
-/-- **The record's facts at the deployment's dense statements**, at every inner decoder: `facts_deployedR_layRVD` at
-the deployed reader `DeployedR.rdR`, its last message's reading `DeployedR.finalR`, the elements `OpenRows.elemR`, the
-deployed weights and brings, with `DecompBVS` from chain B's leaves as `Flock.SecurityProofs.recursiveKSAt_of_leaves`
-discharges them, at the residual leaf `ResLower.hres_deployed` (any key), the setup's listing `resSetup_deployedB` and
-the last message's reading `RestRead.finalReads`, `RestElem.readsAt_elemR_closed`. It takes no hypothesis. -/
 theorem facts_deployed (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) :
@@ -597,11 +529,6 @@ namespace Claims.RecGeneric
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **The contract at the deployment's dense statements, as `RecoversLinkOn` reads it**: at the deployed bound record
-and every compiled record `Flock.Guarantees.RecursiveKSEvery` reads, at every statement `RecDeploy.DenseAt` admits, the
-calls of no witnesses are true, and at every inner and outer decoder the composite meets the compiler's contract at
-the server's `Open(DE, hm96)` and the element-level Flock's openings (`RecDeploy.facts_deployed`, `contract_compAt`,
-`contract_ofBound`). It takes F1's `IVStarOfBound` and `OpenViewOfBound` at the deployed bound. -/
 theorem contractDenseOn
     (hIV : IVStarOfBound (RecDeploy.bdDeployed _root_.Flock.Readable.relation
       (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
@@ -632,8 +559,6 @@ theorem contractDenseOn
     contract_ofBound D Bd decI (RecDeploy.deployZkRec _root_.Flock.Readable.relation) decO FlockDeploy.KS.CpDep
       hIV hOV (contract_compAt D Bd decI _ decO (h.2 decI))⟩
 
-/-- **F7 at the deployment** (`ContractDense`): `contractDenseOn`, whose contract holds at every decoder, so at those
-meeting `decOK`. It takes F1's `IVStarOfBound` and `OpenViewOfBound` at the deployed bound. -/
 theorem contractDense
     (hIV : IVStarOfBound (RecDeploy.bdDeployed _root_.Flock.Readable.relation
       (FlockDeploy.nextR RecDeploy.DeployedR.rdR)

@@ -34,12 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.HresAsm
 
-/-!
-# `RecursiveKS`, proved
-
-The recursive verifier's knowledge soundness at the deployed reader (`Flock.Guarantees.RecursiveKS`), from KS's residual
-leaf at the deployed readers (`RecDeploy.ResLower.recursiveKS_deployed`, which takes no hypothesis).
--/
+/-! `RecursiveKS`, proved from KS's residual leaf at the deployed readers, which takes no hypothesis. -/
 
 @[expose] public section
 

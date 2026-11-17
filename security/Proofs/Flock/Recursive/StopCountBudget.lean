@@ -4,28 +4,7 @@ public import Proofs.Flock.Recursive.StopCountStream
 public import Mathlib.Data.Fin.VecNotation
 import all Init.Data.Repr
 
-/-!
-# A stream's sessions left unreleased, at most its failure budget
-
-`StopCountStream` counts a stream's joint stops where at most `B` of its sessions are left with a statement not
-released. Here `B` is the stream's failure budget `b`, at every order of the record's ops (`RecOp`), and so at every run
-(`StopCount.run`): `openSession` refuses an open while the stream's failures and its unended recursive sessions reach
-`b`, a session left with a statement not released is unended or stopped, a stop is recorded only of an opened session
-(`stop`, and `slot`'s for the slot's orphan), so each stop of one of the stream's sessions is one of its failures (rule
-4's count, `failures`).
-
-* `unrel`, `unrelStopped`: the stream's sessions with a statement not released, and those of them that stopped.
-* `RecOk`: the record's invariant (every stop of an opened session, the stream's stopped sessions not released at most
-  its failures, its sessions not released at most its budget), kept by each of the record's ops (`RecOk.apply`).
-* `card_unrel_le_budget`: at every order of the record's ops, at most `b` of a stream's sessions have a statement not
-  released.
-* `card_unreleased_le_budget`: the same at every run.
-* `streamStopBudget`: the stream's joint stop as a `Pattern` at its budget, which `card_streamStops` counts.
-* `Flock.SecurityProofs.UnrelLeBudget`, `UnreleasedLeBudget`, `StreamStopBudget`: the three as the lock states them
-  (`UnrelWithin`, `UnreleasedWithin`, `StreamStopWithin`), each with an honest witness, a stream at budget 1 whose
-  first session runs through before its second opens, and a nontrivial one, a ZK server without rule 4's refusals
-  (`Witness.openMade`), where a stream at budget 1 leaves two sessions unreleased.
--/
+/-! At every run, at most a stream's failure budget of its sessions are left with a statement not released (`card_unreleased_le_budget`), since `openSession` refuses an open once its failures and unended sessions reach it. -/
 
 @[expose] public section
 
@@ -33,9 +12,6 @@ namespace Flock.StopCount
 
 open Core.ZkServer Finset
 
-/-! ## The stream's sessions not released -/
-
-/-- The stream's first open. -/
 def firstOn (evs : Events) (t : String) : Option Open :=
   evs.findSome? fun | .opened o => if o.stream == t then some o else none | _ => none
 
@@ -53,7 +29,6 @@ def openedSet (evs : Events) : Finset String := (openedSessions evs).toFinset
 /-- **The stream's sessions with a statement not released.** -/
 def unrel (evs : Events) (t : String) : Finset String := (openedSet evs).filter fun s => unrelOn evs t s = true
 
-/-- Those of them that stopped. -/
 def unrelStopped (evs : Events) (t : String) : Finset String :=
   (unrel evs t).filter fun s => (stopOf evs s).isSome = true
 
@@ -95,7 +70,6 @@ theorem mem_unrel {evs : Events} {t s : String} :
 theorem mem_unrelStopped {evs : Events} {t s : String} :
     s ∈ unrelStopped evs t ↔ s ∈ unrel evs t ∧ (stopOf evs s).isSome = true := mem_filter
 
-/-- The stream's sessions not released are its unended ones and its stopped ones. -/
 theorem card_unrel_le (evs : Events) (t : String) : (unrel evs t).card ≤ unended evs t + (unrelStopped evs t).card := by
   have hsub : ((unrel evs t).filter fun s => ¬(stopOf evs s).isSome = true) ⊆
       ((openedSessions evs).filter (unendedOn evs t)).toFinset := by
@@ -113,8 +87,6 @@ theorem card_unrel_le (evs : Events) (t : String) : (unrel evs t).card ≤ unend
   have hs := card_filter_add_card_filter_not (s := unrel evs t) (fun s => (stopOf evs s).isSome = true)
   unfold unrelStopped
   omega
-
-/-! ## One more event -/
 
 theorem firstOn_push_ne {evs : Events} {e : Event} (he : ∀ o, e ≠ .opened o) (t : String) :
     firstOn (evs.push e) t = firstOn evs t := by
@@ -146,7 +118,6 @@ theorem isSome_openOf_push {evs : Events} {s : String} (e : Event) (h : (openOf 
   rw [openOf_push_some e ho]
   rfl
 
-/-- A statement released stays released. -/
 theorem nextOf_isSome_of_push {evs : Events} {e : Event} {o : Open} (h : (nextOf (evs.push e) o).isSome = true) :
     (nextOf evs o).isSome = true := by
   cases hn : nextOf evs o with
@@ -195,8 +166,6 @@ theorem mem_unrel_push_open {evs : Events} {o' : Open} {t s : String} (h : s ∈
       exact Or.inr ⟨rfl, rfl, hst⟩
     · simp [hs] at ho
 
-/-! ## The stream's failures -/
-
 theorem Tally.n_le_step (stream : String) (b : Option ℕ) (T : Tally) (e : Event) :
     T.n ≤ (Tally.step stream b T e).n := by
   cases e <;> simp only [Tally.step] <;> (repeat' split) <;> simp
@@ -240,7 +209,6 @@ theorem foldl_tally_none {t : String} {b : Option ℕ} :
     rw [this]
     exact foldl_tally_none l (fun e he => h e (List.mem_cons_of_mem _ he))
 
-/-- A stream's failures only grow. -/
 theorem failures_le_push (evs : Events) (e : Event) (t : String) : failures evs t ≤ failures (evs.push e) t := by
   cases hf : firstOn evs t with
   | none =>
@@ -264,7 +232,6 @@ theorem failures_le_push (evs : Events) (e : Event) (t : String) : failures evs 
     rw [hb, Array.foldl_push]
     exact Tally.n_le_step _ _ _ _
 
-/-- **A stop of one of the stream's sessions is one of its failures.** -/
 theorem failures_push_stop {evs : Events} {s : String} {o : Open} (ho : openOf evs s = some o) (p w : String) :
     failures (evs.push (.stop s p w)) o.stream = failures evs o.stream + 1 := by
   have hmem : Event.opened o ∈ evs ∧ o.session = s := by
@@ -284,10 +251,6 @@ theorem failures_push_stop {evs : Events} {s : String} {o : Open} (ho : openOf e
   rw [budgetOf_push_ne (fun _ h => by cases h), Array.foldl_push]
   simp only [Tally.step, hl, ↓reduceIte]
 
-/-! ## The record's invariant -/
-
-/-- **The record's invariant**: a stop is of an opened session; a stream's stopped sessions not released are at most
-its failures; its sessions not released are at most its budget. -/
 structure RecOk (evs : Events) : Prop where
   stopOpened : ∀ s, (stopOf evs s).isSome = true → (openOf evs s).isSome = true
   stopped : ∀ t, (unrelStopped evs t).card ≤ failures evs t
@@ -303,7 +266,6 @@ theorem RecOk.init : RecOk #[] where
     exact Nat.zero_le _
   within t b hb := by simp [budgetOf] at hb
 
-/-- An event other than an open or a stop. -/
 theorem RecOk.pushPlain {evs : Events} (h : RecOk evs) {e : Event} (h1 : ∀ o, e ≠ .opened o)
     (h2 : ∀ s p w, e ≠ .stop s p w) : RecOk (evs.push e) where
   stopOpened s hs := by
@@ -319,7 +281,6 @@ theorem RecOk.pushPlain {evs : Events} (h : RecOk evs) {e : Event} (h1 : ∀ o, 
     rw [budgetOf_push_ne h1] at hb
     exact (card_le_card (unrel_push_sub h1 t)).trans (h.within t b hb)
 
-/-- A stop of an opened session. -/
 theorem RecOk.pushStop {evs : Events} (h : RecOk evs) {s' : String} (ho : (openOf evs s').isSome = true)
     (p w : String) : RecOk (evs.push (.stop s' p w)) where
   stopOpened s hs := by
@@ -355,8 +316,6 @@ theorem RecOk.pushStop {evs : Events} (h : RecOk evs) {s' : String} (ho : (openO
     rw [unrel_push_eq (fun _ h => by cases h) (fun _ _ h => by cases h)]
     exact h.within t b hb
 
-/-- **An open the budget lets through**: the stream's budget is the open's, and its failures and unended sessions are
-fewer than it. -/
 theorem RecOk.pushOpen {evs : Events} (h : RecOk evs) (o' : Open)
     (hb : budgetOf (evs.push (.opened o')) o'.stream = o'.budget)
     (hg : ∀ b, o'.budget = some b → failures evs o'.stream + unended evs o'.stream < b) :
@@ -393,9 +352,6 @@ theorem RecOk.pushOpen {evs : Events} (h : RecOk evs) (o' : Open)
       · exact hu
       · exact absurd hst ht
 
-/-! ## Each of the record's ops keeps its invariant -/
-
-/-- `admit` refusing records the refusal, after a stop of the session, opened, if the part was asked out of turn. -/
 theorem admit_error_open {evs : Events} {s part why : String} {evs' : Events}
     (h : admit evs s part = (.error why, evs')) :
     evs' = evs.push (.refused s part) ∨
@@ -412,7 +368,6 @@ theorem admit_error_open {evs : Events} {s part why : String} {evs' : Events}
     · exact Or.inl h'
     · exact Or.inr ⟨p, w, rfl, h'⟩
 
-/-- An open the ZK server makes: its budget the stream's, and the stream's failures and unended sessions fewer than it. -/
 theorem openSession_guard (evs : Events) (stream : String) (parts : Array String) (budget : Option ℕ)
     (release : Option Core.ZkServer.Schedule) :
     (openSession evs stream parts budget release).2 = evs ∨
@@ -460,7 +415,6 @@ theorem openSession_guard (evs : Events) (stream : String) (parts : Array String
       rw [budgetOf_eq, firstOn_push_open, hf']
       simp
 
-/-- `stop`: a stop only of an opened session, or nothing. -/
 theorem RecOk.afterStop {evs : Events} (h : RecOk evs) (s p w : String) : RecOk (Core.ZkServer.stop evs s p w).2 := by
   rw [stop_evs]
   split
@@ -472,7 +426,6 @@ theorem RecOk.afterStop {evs : Events} (h : RecOk evs) (s p w : String) : RecOk 
       | some _ => rfl
     exact h.pushStop ho p w
 
-/-- `slot`: the slot's orphan's stop only if it was opened, then the slot. -/
 theorem RecOk.afterSlot {evs : Events} (h : RecOk evs) (s part : String) : RecOk (Core.ZkServer.slot evs s part) := by
   rcases (slot_evs evs s part).1 with he | ⟨k, s', p', w, hor, hos, -, he⟩
   · rw [he]
@@ -480,7 +433,6 @@ theorem RecOk.afterSlot {evs : Events} (h : RecOk evs) (s part : String) : RecOk
   · rw [he]
     exact (h.pushStop hos p' w).pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
 
-/-- `admit`: nothing when it admits; a refusal when it refuses, after a stop of the session, opened, if out of turn. -/
 theorem RecOk.afterAdmit {evs : Events} (h : RecOk evs) (s part : String) :
     RecOk (Core.ZkServer.admit evs s part).2 := by
   cases hadm : Core.ZkServer.admit evs s part with
@@ -497,7 +449,6 @@ theorem RecOk.afterAdmit {evs : Events} (h : RecOk evs) (s part : String) :
       · rw [he]
         exact (h.pushStop hos p w).pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
 
-/-- `openSession`: an open the budget lets through, or nothing. -/
 theorem RecOk.afterOpen {evs : Events} (h : RecOk evs) (stream : String) (parts : Array String)
     (budget : Option ℕ) (release : Option Core.ZkServer.Schedule) :
     RecOk (openSession evs stream parts budget release).2 := by
@@ -540,7 +491,6 @@ theorem RecOk.apply {evs : Events} (h : RecOk evs) : ∀ op, RecOk (RecOp.apply 
   | .admit s part => h.afterAdmit s part
   | .wait _ _ => h.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
 
-/-- **Every order of the record's ops keeps its invariant.** -/
 theorem RecOk.ofOps (ops : List RecOp) : RecOk (opsRun ops) := by
   have : ∀ (l : List RecOp) evs, RecOk evs → RecOk (l.foldl RecOp.apply evs) := by
     intro l
@@ -549,17 +499,12 @@ theorem RecOk.ofOps (ops : List RecOp) : RecOk (opsRun ops) := by
     | cons op rest ih => intro evs h; exact ih _ (h.apply op)
   exact this ops _ RecOk.init
 
-/-- **At most `b` of a stream's sessions are left with a statement not released**, at every order of the record's ops,
-`b` the stream's failure budget. -/
 theorem card_unrel_le_budget (ops : List RecOp) {t : String} {b : ℕ} (hb : budgetOf (opsRun ops) t = some b) :
     (unrel (opsRun ops) t).card ≤ b :=
   (RecOk.ofOps ops).within t b hb
 
-/-! ## A run's record -/
-
 variable {M : String → ℕ → ℕ}
 
-/-- Each step of a run leaves the record as it was or applies the record's ops to it, so keeps its invariant. -/
 theorem RecOk.next {σ : St} (hR : RecOk σ.evs) : ∀ st, RecOk (step M σ st).evs
   | .openRec stream parts budget release => by
     dsimp only [step]
@@ -646,7 +591,6 @@ theorem RecOk.next {σ : St} (hR : RecOk σ.evs) : ∀ st, RecOk (step M σ st).
     · exact hR
   | .die => hR
 
-/-- **Every run keeps the record's invariant.** -/
 theorem RecOk.ofRun (M : String → ℕ → ℕ) (steps : List Step) : RecOk (run M steps).evs := by
   have : ∀ (l : List Step) σ, RecOk σ.evs → RecOk (l.foldl (step M) σ).evs := by
     intro l
@@ -655,10 +599,6 @@ theorem RecOk.ofRun (M : String → ℕ → ℕ) (steps : List Step) : RecOk (ru
     | cons st rest ih => intro σ h; exact ih _ (h.next st)
   exact this steps _ RecOk.init
 
-/-! ## The stream's sessions not released, at most its budget -/
-
-/-- **At most `b` of a stream's sessions are left with a statement not released**, at every run, `b` the stream's
-failure budget: of sessions `ss i`, distinct, each opened on the stream if opened at all. -/
 theorem card_unreleased_le_budget (M : String → ℕ → ℕ) (steps : List Step) {m : ℕ} (ss : Fin m → String)
     (hinj : Function.Injective ss) {t : String}
     (hs : ∀ i o, openOf (run M steps).evs (ss i) = some o → o.stream = t) {b : ℕ}
@@ -678,16 +618,12 @@ theorem card_unreleased_le_budget (M : String → ℕ → ℕ) (steps : List Ste
     rw [ho] at hi
     exact ⟨o, rfl, hs i o ho, hi⟩
 
-/-- **A stream's joint stop at its budget `b`**: at most `b` of its sessions stop, so its joint stop is a `Pattern` at
-`b`, of which `card_streamStops` counts `Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1)`. -/
 def streamStopBudget {m : ℕ} (N : Fin m → ℕ) (M : String → ℕ → ℕ) (steps : List Step) (ss : Fin m → String)
     (hinj : Function.Injective ss) {t : String}
     (hs : ∀ i o, openOf (run M steps).evs (ss i) = some o → o.stream = t) {b : ℕ}
     (hb : budgetOf (run M steps).evs t = some b) :
     Pattern (fun i => Σ p : Fin (N i), Fin (M (ss i) p + 1)) b :=
   streamStopIn N M steps ss b (card_unreleased_le_budget M steps ss hinj hs hb)
-
-/-! ## The bounds as the lock states them -/
 
 /-- **At most `b` of the stream `t`'s sessions are left with a statement not released** on the record `evs`, `b` its
 failure budget. -/

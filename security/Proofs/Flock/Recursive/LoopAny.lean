@@ -39,42 +39,13 @@ import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.ZK.Hiding
 import Proofs.Flock.Soundness.ZK.RealLeaves
 
-/-!
-# `RecursiveZKLoop` at any worker that reads its answers
-
-`Flock.Guarantees.RecursiveZKLoopAnySum` is `RecursiveZKLoop` with no premise on the inner worker: its next request is
-any function of what `flock-zk-server live` answered it so far, the salts it drew included (`ZkServerAdaptive.Worker`),
-so it takes no `ZkServerSends`. The live zk_server then sends the schedule's transcript filled with commit strings whose
-digests read only the salts before them, cut at a stop (`Flock.SecurityProofs.adaptOut_any`); V*'s statements read the
-commitments the ZK server sent, and run only when the inner session finished. The view is released at one stop of the
-inner session or of V*'s statements.
-
-* `LoopAny.holes_fillAll`, `LoopAny.fillAll_take_holes`: a template filled from a list holds the list's first commit
-  strings, and reads no more of it than its holes.
-* `LoopAny.strs_take`: the live ZK server's commit strings at the salts' bytes are `ZkServerZK.encSalted`'s at the
-  salts, `ZkView.commitString_split` one string at a time.
-* `OuterZK.anySent_le`: the whole view at commit strings whose digests read the salts before them, V*'s statements run
-  where their witnesses satisfy their circuits and simulated elsewhere: `ZkServerZK.recursiveZK_salted` over
-  `LoopSessions.view_le` at `OuterZK.loop_zkmalR`.
-* `LoopAny.anyReal_eq`, `LoopAny.prCoin_anyReal`: the real view is that view cut at the session's stop, at every coin
-  and so in distribution at the split coins (`LoopAny.splitSalts`), the two stops joined (`LoopAny.anyStop`).
-* `LoopAny.sumCut_toSum`, `LoopAny.prCoin_anyReal_sum`: where the release reads no stop at an unfinished session's
-  view (`ReleaseReadsNoStop`), the joined stop is one of the inner session's or one of the audit's (`LoopAny.toSum`),
-  a finished session stopping after its last send (`LoopAny.anyStop_last`).
-* `Flock.SecurityProofs.RecursiveZKLoopAnySum`: `prCoin_cut_le` over `anySent_le` at that stop.
-* `LoopAny.releaseReadsNoStop_loopRelease`: the deployed release (`loopRelease`), V*'s statements' view truncated at
-  the stop, reads no stop at an unfinished session's view, whose statements' view is empty.
-* `LoopAny.card_loopStops`: at the deployed release the stops are `RecStops`' over every statement, the inner session
-  statement `0` with the transcript's messages: `1 + Σ_p (M p + 1)`.
--/
+/-! `RecursiveZKLoop` at any worker that reads its answers (`RecursiveZKLoopAnySum`), with no premise on the inner worker and no `ZkServerSends`. -/
 
 @[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.LoopAny
 
 open Flock Flock.ZkServer ZkServerRun ZkServerTemplate ZkServerAdaptive
-
-/-! ## A template filled from a list -/
 
 theorem length_fillAll : ∀ (ms : List Sent) (cs : List ByteArray), (fillAll ms cs).length = ms.length
   | [], _ => rfl
@@ -102,7 +73,6 @@ theorem holes_fill (cs : List ByteArray) (m : Sent) : holes (fill cs m) = cs.tak
     simp only [fill, holes, h1, h2, List.length_append, List.take_add]
   | _ => simp [fill, holes]
 
-/-- **A template filled from `cs` holds `cs`'s first commit strings**, as many as its holes. -/
 theorem holes_fillAll : ∀ (ms : List Sent) (cs : List ByteArray),
     (fillAll ms cs).flatMap holes = cs.take (ms.flatMap holes).length
   | [], _ => by simp [fillAll]
@@ -143,7 +113,6 @@ theorem fill_take (cs : List ByteArray) (m : Sent) (k : Nat) (hk : (holes m).len
       Nat.min_eq_left (show rows.length ≤ k - tops.flatten.length by omega)]
   | _ => rfl
 
-/-- **A template filled from `cs` reads no more of `cs` than its holes.** -/
 theorem fillAll_take_holes : ∀ (ms : List Sent) (cs : List ByteArray) (k : Nat), (ms.flatMap holes).length ≤ k →
     fillAll ms (cs.take k) = fillAll ms cs
   | [], _, _, _ => rfl
@@ -297,20 +266,14 @@ statements' `RecStops`, and `|T| + 1 + |St|` is `1 + Σ_p (M p + 1)` over every 
 def RecursiveZKLoopAnySum : Prop :=
   ∀ {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype St] [Nonempty St]
     [Fintype Ωk] [Nonempty Ωk]
-    -- the loop's session: the workers' values, the simulator's rewinds, the release and the frames' source
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    -- the ZK server: the pinned schedule, the inner worker at the tape and its randomness, its most requests, and the
-    -- salts beyond the transcript's
     (s : Flock.ZkServer.Schedule) (w : Ωa → Ωp → ZkServerAdaptive.Worker) (N r : ℕ)
-    -- V*'s statements at the tape and the commitments, their witnesses at the worker's context, and the simulator's
-    -- coins
     (m : ℕ) (stmt : ℕ → Ωa × (Fin (fwHoles s) → ByteArray) → Claims.Msg)
     (wit : ℕ → OuterZK.WCtx Ωa Ωp (fwHoles s) → Claims.Flock.Wit) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
     [∀ j, Nonempty (CB j)]
-    -- the auditor and its tape
     (Vs : Claims.VStar Θ) (θ : Ωa → (Fin (fwHoles s) → ByteArray) → Θ),
     0 < t →
     Claims.ZKServer.Loop.finS.Tables →
@@ -324,7 +287,6 @@ def RecursiveZKLoopAnySum : Prop :=
           ZkServerAdaptive.adaptFinished s (w u.1.1 u.1.2) N (saltsOf u.2) = true} =>
         anyCtx s w N r u.1.1.1 u.1.1.2 u.1.2) →
     (OuterZK.LoopSessions.atWorker m stmt wit).Sized (OuterZK.loopSim L₀ src t) CB →
-    -- the release at the audit's stops, and the stop it is at where the inner session didn't finish
     ∀ (cut : St → Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) (s₀ : St),
       ReleaseReadsNoStop cut s₀ →
     ∀ (stop : (((Ωa × Ωp) × (Fin (fwHoles s + r) → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
@@ -346,11 +308,6 @@ namespace FlockSoundness.Discharge.Recursion.LoopAny
 
 open Flock Flock.ZkServer ZkServerRun ZkServerTemplate ZkServerAdaptive
 
-/-! ## The live ZK server's commit strings at the salts -/
-
-/-- **The live ZK server's commit strings at the salts' bytes are `encSalted`'s at the salts**: string `i`, the commit
-string of digest `dg i` at the salts before `i` under salt `i`, is `commitBytes` of its two halves at the salt
-`saltOfBytes (b i)` (`ZkView.commitString_split`), its digest reading those salts' bytes. -/
 theorem strs_take {nh r : ℕ} (dg : ℕ → List ByteArray → ByteArray) (b : Fin (nh + r) → Fin 192 → Fin 256) :
     (strs dg (Flock.Guarantees.saltsOf b)).take nh = List.ofFn (ZkServerZK.encSalted Flock.Guarantees.commitBytes
       (fun i pre => dg i (List.ofFn fun j => ZkView.saltBytes (pre j)))
@@ -380,7 +337,6 @@ theorem strs_take {nh r : ℕ} (dg : ℕ → List ByteArray → ByteArray) (b : 
       List.getElem_ofFn]
     rfl
 
-/-- **The commitments in the filled transcript** are the leaves of the commit strings it was filled with. -/
 theorem sentCommits_filled (s : Flock.ZkServer.Schedule) (l : Fin (Flock.Guarantees.fwHoles s) → ByteArray) :
     Flock.Guarantees.sentCommits s (fillAll (tmpl s s.tables) (List.ofFn l)) =
       fun i => Hm96.Default512.treeLeaf (l i) := by
@@ -389,8 +345,6 @@ theorem sentCommits_filled (s : Flock.ZkServer.Schedule) (l : Fin (Flock.Guarant
   rw [holes_fillAll, List.take_of_length_le (le_of_eq List.length_ofFn),
     ← List.getElem_eq_getD (h := by rw [List.length_ofFn]; exact i.isLt) ByteArray.empty, List.getElem_ofFn]
 
-/-- **The salts' bytes as the transcript's salts and the rest**, beside the other coins: the first `n` byte strings as
-salts (`ZkView.saltsEquiv`), the last `r` beside the further coins. -/
 noncomputable def splitSalts (A Q K S : Type) (n r : ℕ) :
     (((A × (Fin (n + r) → Fin 192 → Fin 256)) × Q) × K) × S ≃
       ((A × (Fin n → ZkView.Salt)) × (Q × S)) × ((Fin r → Fin 192 → Fin 256) × K) where
@@ -407,12 +361,9 @@ theorem splitSalts_fst (A Q K S : Type) (n r : ℕ) (x : (((A × (Fin (n + r) �
       ((x.1.1.1.1, fun i => ZkView.saltOfBytes (x.1.1.1.2 (Fin.castAdd r i))), (x.1.1.2, x.2)) :=
   rfl
 
-/-- A stop `(k, f)` of the live session, `k` taken at most `K`. -/
 def clampStop {K : ℕ} (c : ℕ × Bool) : Fin (K + 1) × Bool :=
   (⟨min c.1 K, Nat.lt_succ_of_le (Nat.min_le_right _ _)⟩, c.2)
 
-/-- **The stop at the split coins** `y`: at the coins `y` comes from (`splitSalts`), the audit's stop `stop` and the
-live session's, `σ` at the worker and the salts' bytes, `k` taken at most `K`. -/
 noncomputable def anyStop {Ωa Ωp Q Ωk S St : Type} {K nh r : ℕ}
     (stop : (((Ωa × Ωp) × (Fin (nh + r) → Fin 192 → Fin 256)) × Q) × Ωk → St)
     (σ : Ωa → Ωp → List ByteArray → ℕ × Bool)
@@ -429,12 +380,9 @@ theorem anyStop_split {Ωa Ωp Q Ωk S St : Type} {K nh r : ℕ}
       (stop x.1, clampStop (σ x.1.1.1.1.1 x.1.1.1.1.2 (Flock.Guarantees.saltsOf x.1.1.1.2))) := by
   simp only [anyStop, Equiv.symm_apply_apply]
 
-/-- A joined stop `(c, (k, f))` as one of `sumCut`'s: the inner session's `k` where it didn't finish, the audit's `c`
-where it did. -/
 def toSum {St : Type} {K : ℕ} (c : St × (Fin (K + 1) × Bool)) : Fin (K + 1) ⊕ St :=
   bif c.2.2 then .inr c.1 else .inl c.2.1
 
-/-- **A finished session stops after its last send**, where `σ` does. -/
 theorem anyStop_last {Ωa Ωp Q Ωk S St : Type} {K nh r : ℕ}
     (stop : (((Ωa × Ωp) × (Fin (nh + r) → Fin 192 → Fin 256)) × Q) × Ωk → St)
     (σ : Ωa → Ωp → List ByteArray → ℕ × Bool)
@@ -446,8 +394,6 @@ theorem anyStop_last {Ωa Ωp Q Ωk S St : Type} {K nh r : ℕ}
   dsimp only [anyStop, clampStop] at hf ⊢
   exact Fin.ext ((congrArg (min · K) (hσ _ _ _ hf)).trans (Nat.min_self K))
 
-/-- **`sumCut` at the joined stop is the cut at it**, where the release reads no stop at an unfinished session's view
-and a finished session stops after its last send. -/
 theorem sumCut_toSum {Ωa St W : Type} {K : ℕ} (s₀ : St)
     (cut : St → Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → W)
     (hcut : Flock.Guarantees.ReleaseReadsNoStop cut s₀)
@@ -462,15 +408,10 @@ theorem sumCut_toSum {Ωa St W : Type} {K : ℕ} (s₀ : St)
     subst hk
     rfl
 
-/-- **The deployed release reads no stop where the inner session didn't finish**: V*'s statements' view is empty
-there, and so is every truncation of it. -/
 theorem releaseReadsNoStop_loopRelease {Ωa : Type} {n : ℕ} (M : Fin n → ℕ) :
     Flock.Guarantees.ReleaseReadsNoStop (Flock.Guarantees.loopRelease (Ωa := Ωa) M) none := by
   rintro (_ | ⟨q, k⟩) a sent <;> simp [Flock.Guarantees.loopRelease]
 
-/-- **The stops at the deployed release are `RecStops`' over every statement**: the inner session's `K + 1` where it
-didn't finish and V*'s statements' `RecStops M` where it did are as many as the stops of every statement, the inner
-session statement `0` with its `K` messages, `1 + Σ_p (M p + 1)` (`card_recStops`). -/
 theorem card_loopStops {n : ℕ} (K : ℕ) (M : Fin n → ℕ) :
     Fintype.card (Fin (K + 1) ⊕ Flock.SecurityProofs.RecStops M) =
       Fintype.card (Flock.SecurityProofs.RecStops (Fin.cons K M : Fin (n + 1) → ℕ)) := by
@@ -494,9 +435,6 @@ theorem prCoin_snd {C D : Type} [Fintype C] [Nonempty C] [Fintype D] (P : D → 
   (ZK.prCoin_congr_equiv (Equiv.prodComm C D) (fun p : D × C => P p.1)).trans (ZK.prCoin_fst P)
 
 open Classical in
-/-- **V*'s statements at one worker's commit strings `l`, where their witnesses satisfy their circuits**: run in turn by
-the loop's switched prover at the worker's context, on the tape `q.1`, if each statement's witness is in `R` at it;
-elsewhere their public statements' simulator on the coins `q.2`. -/
 noncomputable def anyOuter {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
@@ -517,8 +455,6 @@ noncomputable def anyOuter {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.
       loopK (loopSim L₀ src t) CB Vs (a, fun i => _root_.Flock.Hm96.Default512.treeLeaf (l i))
       (θ a fun i => _root_.Flock.Hm96.Default512.treeLeaf (l i)) q.2
 
-/-- **`anyOuter` is close to V*'s public statements' simulator**: where the witnesses satisfy their circuits,
-`LoopSessions.view_le` at `loop_zkmalR`; elsewhere it is that simulator. -/
 theorem anyOuter_le {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t)
     (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete
@@ -565,9 +501,6 @@ theorem anyOuter_le {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.fi
         (a, fun i => _root_.Flock.Hm96.Default512.treeLeaf (l i))
         (θ a fun i => _root_.Flock.Hm96.Default512.treeLeaf (l i)) s))).trans_le le_self_add
 
-/-- **The whole view at commit strings whose digests read the salts before them**, at `u = (((a, p), y), q)`: the tape
-`a`; the transcript `T` at the commit strings of the digests `dg a p` under the salts `y` (`ZkServerZK.encSalted` at
-`commitBytes`), finished; and `anyOuter` at them. -/
 noncomputable def anySent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
@@ -584,8 +517,6 @@ noncomputable def anySent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.L
     anyOuter vs t L₀ src m stmt wit CB Vs θ u.1.1.1
       (ZkServerZK.encSalted _root_.Flock.Guarantees.commitBytes (dg u.1.1.1 u.1.1.2) u.1.2) u.1.1.2 u.1.2 u.2)
 
-/-- **That view is close to the simulated one** (`loopIdeal` at `T`): `anyOuter_le` at the commitments, then T1 once
-per commitment, the last first, each digest reading the salts before it (`ZkServerZK.recursiveZK_salted`). -/
 theorem anySent_le {Ωa Ωp Θ : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] {nh : ℕ}
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t) (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete
@@ -628,10 +559,6 @@ open Game
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **The real view is `anySent`'s cut at the session's stop**: where the live session sends the schedule's transcript
-filled with `strs (dg a p)`, cut at `σ`, its commit strings are `encSalted`'s at the first `fwHoles s` salts
-(`strs_take`), so it sends `anySent`'s transcript cut at `σ`; where it finished, it sent it all, the commitments V*'s
-statements read are those strings' leaves (`sentCommits_filled`), and their witnesses satisfy their circuits. -/
 theorem anyReal_eq {Ωa Ωp Θ : Type} (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
@@ -697,8 +624,6 @@ theorem anyReal_eq {Ωa Ωp Θ : Type} (vs : Claims.ZKServer.Loop.finS.SwVals) (
     unfold OuterZK.anyOuter
     rw [ite_eq_left hh]
 
-/-- **The real view's sampling design is `anySent`'s cut at the joint stop**: `anyReal_eq` at every coin, read at the split coins
-(`splitSalts`), the stop at them `anyStop`. -/
 theorem prCoin_anyReal {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Fintype Ωp] [Fintype Ωk]
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
@@ -746,8 +671,6 @@ theorem prCoin_anyReal {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Fintype Ωp] 
     x.1.1.1.1.1 x.1.1.1.1.2 x.1.1.1.2 x.1.1.2 x.2 (hσ x.1.1.1.1.1 x.1.1.1.1.2 x.1.1.1.2)
     fun hf _ => hH ⟨x.1.1.1, hf⟩)
 
-/-- **The same at one stop of the inner session or the audit**, where the release reads no stop at an unfinished
-session's view: `prCoin_anyReal`, the joined stop read as `sumCut`'s (`sumCut_toSum`). -/
 theorem prCoin_anyReal_sum {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Fintype Ωp] [Fintype Ωk]
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)

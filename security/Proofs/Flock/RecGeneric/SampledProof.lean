@@ -4,14 +4,7 @@ public import Proofs.Flock.RecGeneric.Sampled
 public import Proofs.Flock.SampledGeneric.JointTransfers
 public import Proofs.Flock.Claims.Bridge.Transport
 
-/-!
-# B1's proof
-
-`jointOf` is judged (`jointOf_judged`: its verdict is the judged run's, and `E`'s coins are unread there) and knowledge
-sound at `err` (`jointOf_knowledgeSound`: acceptance with a failed extraction is `PrBad`'s event at the claims prover
-the strategy plays). With these, `GenericSampledKSJoint` gives B1 (`Flock.SecurityProofs.GenericSampledKSClaims`). The
-recursive audit is B1 at `Comp.err` once L1 holds (`recursiveSampledKS_of_L1`).
--/
+/-! Proof of the sampled compiler's bridge `GenericSampledKSClaims`, and the recursive audit from L1 (`recursiveSampledKS_of_L1`). -/
 
 @[expose] public section
 
@@ -38,7 +31,6 @@ theorem ind_congr_iff {α β : Type} {p : α → Prop} {q : β → Prop} {a : α
   · have hq : ¬ q b := fun hq => hp (h.2 hq)
     simp [FlockSoundness.Game.ind, hp, hq]
 
-/-- **`jointOf`'s verdict is the judged session's**: it accepts as often as the session, `E`'s coins unread. -/
 theorem jointOf_judged (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E : Claims.Extractor Coin W V)
     (stmt : Finset (Fin n) → Reg → Msg) (B : FlockSoundness.SampledGeneric.Binding Reg Hc)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening) :
@@ -52,8 +44,6 @@ theorem jointOf_judged (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E : C
     exact ENNReal.mul_inv_cancel (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
   · simp only [h, decide_false, Bool.false_eq_true, ↓reduceIte, mul_zero, Finset.sum_const_zero]
 
-/-- **`jointOf` is knowledge sound at `err`**: at a sampled proof block, acceptance with a failed extraction is
-`PrBad`'s event at the claims prover the strategy plays, so its probability is at most `err` there. -/
 theorem jointOf_knowledgeSound (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E : Claims.Extractor Coin W V)
     (stmt : Finset (Fin n) → Reg → Msg) (B : FlockSoundness.SampledGeneric.Binding Reg Hc)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening)
@@ -79,8 +69,6 @@ theorem jointOf_knowledgeSound (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W
 end Claims.RecGeneric
 
 open Claims Claims.RecGeneric FlockSoundness FlockSoundness.Game in
-/-- **B1** (`Flock.Guarantees.GenericSampledKSClaims`): `GenericSampledKSJoint` at `jointOf`, judged and knowledge
-sound at `err`, its cost a count. -/
 theorem Flock.SecurityProofs.GenericSampledKSClaims : Flock.Guarantees.GenericSampledKSClaims := by
   intro Coin W _ _ _ V Rl E H err n Reg Dh Hc L B Correct stmt reads opens M hks hS hM σ hCR
   exact Flock.SecurityProofs.GenericSampledKSJoint n Reg Dh Hc L (proofSystemOf H V stmt) B Correct
@@ -90,8 +78,6 @@ theorem Flock.SecurityProofs.GenericSampledKSClaims : Flock.Guarantees.GenericSa
 
 namespace Claims.RecGeneric
 
-/-- **The recursive audit through the sampled compiler, from L1**: L1 at every sampled statement bounds `PrBad` at
-`Comp.err` on every claims prover, which is B1's hypothesis. -/
 theorem recursiveSampledKS_of_L1 (hL1 : CompositionKS) : Flock.Guarantees.RecursiveSampledKS := by
   intro Coin W _ _ _ H I Sv K mI Mo n Reg Dh Hc L B Correct stmt reads opens M hWF hKS hLC hBd hAt hS hM σ hCR
   exact Flock.SecurityProofs.GenericSampledKSClaims Coin W K.V (K.R I) (K.E I Sv) H
