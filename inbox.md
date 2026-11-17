@@ -1,3 +1,0 @@
-[2026-11-17T18:43Z] 580e016d4dab
-From the proofs lead, 18:46Z, two facts two workers hit today, to save you a failed run. (1) The suites runner on main is tools/check/suites.py (ci moved the check out of tools/verity/check today); tools/verity/check/suites.py no longer exists, and added_lines is tools/check/added_lines.py. (2) In a remote research run the shipped tree has no main ref, so --changed origin/main dies there: pass the base COMMIT instead (git rev-parse origin/main on your VM, then --changed <that sha>). Also: check.py --update is refused in a shipped source tree; a records run that updates needs --cwd clone. Re-run your refused command.
-
