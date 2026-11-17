@@ -11,6 +11,7 @@ import functools
 import json
 import os
 import sys
+import tarfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -786,3 +787,177 @@ def test_the_table_holds_what_the_listed_components_need():
     assert live == set(D.ROLES)
     decided_live = {c for c, ps in D.PARTIES.items() if ps.get("verifier") == D.LIVE}
     assert decided_live - {"sampled-proofs"} == set(D.CHECKS)
+
+
+GATE = {"certifier": {"gate": "bash gate.sh", "peer": "local"}}
+
+
+def starting_first(events: list, writes: dict | None = GATE, reg: R.Registry | None = None, within: int = 600
+                   ) -> R.Registry:
+    reg = reg or registry()
+    attester = reg.parties["certifier"]["network-certifier"]
+
+    def serve(cfg, state):
+        events.append("serve")
+        attester(cfg, state, True)
+        if writes is not None:
+            (state / "public" / "network-certifier").mkdir(parents=True, exist_ok=True)
+            (state / "public" / "network-certifier" / "bindings.json").write_text(json.dumps(writes))
+
+    def stop(cfg, state):
+        events.append("stop")
+        (state / "public" / "network-certifier" / "ledger.jsonl").write_text("{}\n")
+
+    def live(cfg, state, here):
+        events.append(("live", sorted(here), json.loads((state / R.BINDINGS).read_text())))
+        return reg.live(cfg, state, here)
+
+    start = R.Start({"certifier": ("gate", "peer")}, serve, stop, within)
+    return dataclasses.replace(reg, live=live, starts={"network-certifier": start})
+
+
+def test_a_party_the_table_starts_first_runs_before_every_other_and_is_stopped_once_the_run_ends(tmp_path, capsys,
+                                                                                                monkeypatch):
+    events: list = []
+    monkeypatch.setattr(R, "archive", lambda state, commit: "tree.tar")
+    rc, lines = run(tmp_path, starting_first(events))
+    out = capsys.readouterr().out
+    assert rc == 0 and [x["verdict"] for x in lines] == ["accept"]
+    assert events == ["serve", ("live", ["challenger", "firewall", "verifier", "workers"],
+                                {"network-certifier": GATE}), "stop"]
+    assert said(out, "STARTED") == [{"party": "network-certifier", "writes": {"certifier": ["gate", "peer"]}}]
+    assert said(out)[-1] == {"party": "network-certifier", "exit": 0}
+    assert out.index("VERDICT ") < out.rindex("PARTY ")
+    transcript = (tmp_path / "state" / "record" / "transcripts" / "network-certifier.jsonl").read_text()
+    assert {json.loads(x)["file"] for x in transcript.splitlines()} >= {"public/network-certifier/bindings.json",
+                                                                        "public/network-certifier/ledger.jsonl"}
+    assert json.loads((tmp_path / "state" / "run.json").read_text())["tree"] == "tree.tar"
+
+
+def test_a_party_started_first_that_writes_no_bindings_in_time_is_refused_and_stopped(tmp_path, capsys, monkeypatch):
+    events: list = []
+    now = iter(range(0, 10_000, 100))
+    monkeypatch.setattr(R, "archive", lambda state, commit: "tree.tar")
+    monkeypatch.setattr(R, "wait_bindings", functools.partial(R.wait_bindings, clock=lambda: next(now),
+                                                              pause=lambda s: None))
+    rc, lines = run(tmp_path, starting_first(events, writes=None))
+    captured = capsys.readouterr()
+    assert rc == 2 and lines == [] and events == ["serve", "stop"]
+    assert said(captured.out) == [{"party": "network-certifier", "exit": 0}]
+    assert "verity run: refused bindings: network-certifier wrote no " in captured.err
+    assert "within 600 s, so no party that reads it starts" in captured.err
+
+
+def test_a_party_started_first_is_stopped_when_a_later_party_fails(tmp_path, capsys, monkeypatch):
+    events: list = []
+    monkeypatch.setattr(R, "archive", lambda state, commit: "tree.tar")
+    reg = starting_first(events)
+
+    def failing(cfg, state, here):
+        events.append("live")
+        raise Refused("unbound", "a party that reads the bindings refused")
+
+    rc, lines = run(tmp_path, dataclasses.replace(reg, live=failing))
+    assert rc == 2 and lines == [] and events == ["serve", "live", "stop"]
+    assert said(capsys.readouterr().out) == [{"party": "network-certifier", "exit": 0}]
+
+
+@pytest.mark.parametrize("wrote, why", [
+    (None, "network-certifier ended before it wrote"),
+    ("{", "isn't JSON"),
+    ({"certifier": {"gate": "g"}}, "not a table per subprotocol of strings and integers keyed"),
+    ({"certifier": {"gate": "g", "peer": 1.5}}, "not a table per subprotocol of strings and integers keyed"),
+    ({"pouw": {"gate": "g", "peer": "p"}}, "not a table per subprotocol of strings and integers keyed"),
+])
+def test_bindings_a_party_ends_before_writing_or_writes_other_than_it_declares_are_refused(tmp_path, wrote, why):
+    start = R.Start({"certifier": ("gate", "peer")}, lambda c, s: None, lambda c, s: None)
+    if wrote is not None:
+        (tmp_path / "public" / "network-certifier").mkdir(parents=True)
+        (tmp_path / "public" / "network-certifier" / "bindings.json").write_text(
+            wrote if isinstance(wrote, str) else json.dumps(wrote))
+    with pytest.raises(Refused) as e:
+        R.wait_bindings(tmp_path, "network-certifier", start, lambda: False)
+    assert e.value.name == "bindings" and why in e.value.detail
+
+
+def test_bindings_that_give_all_a_party_writes_run_it_where_they_say_and_some_are_refused():
+    reg = starting_first([])
+    chosen = ["network-certifier", "workers"]
+    assert R.starting(reg, chosen, {}) == ["network-certifier"]
+    assert R.starting(reg, chosen, {"network-certifier": GATE}) == []
+    with pytest.raises(Refused) as e:
+        R.starting(reg, chosen, {"network-certifier": {"certifier": {"gate": "g"}}})
+    assert e.value.name == "binding" and "gives network-certifier.certifier.gate of what network-certifier writes" \
+        in e.value.detail
+
+
+def test_a_dry_run_says_what_a_party_started_first_writes(tmp_path, capsys):
+    assert run(tmp_path, starting_first([]), "--dry-run")[0] == 0
+    out = capsys.readouterr().out
+    plans = {x["party"]: x for x in said(out, "PLAN")}
+    assert plans["network-certifier"]["writes"] == {"certifier": ["gate", "peer"]}
+    assert all("writes" not in x for p, x in plans.items() if p != "network-certifier")
+
+
+def test_a_start_process_serves_until_verity_run_stops_it_then_calls_its_stop(tmp_path, monkeypatch):
+    events: list = []
+
+    def serve(cfg, state):
+        events.append("serve")
+        os.kill(os.getpid(), R.signal.SIGTERM)
+
+    reg = dataclasses.replace(REG, starts={"network-certifier": R.Start({}, serve, lambda c, s: events.append("stop"))})
+    monkeypatch.setattr(R, "registry", lambda *a: reg)
+    path = tmp_path / "config.toml"
+    path.write_text(K.render(config()))
+    handler = R.signal.getsignal(R.signal.SIGTERM)
+    try:
+        assert R.main(["start", str(path), str(tmp_path), "network-certifier", "local"]) == 0
+    finally:
+        R.signal.signal(R.signal.SIGTERM, handler)
+    assert events == ["serve", "stop"]
+
+
+def test_a_spawned_party_is_stopped_by_sigterm_and_gives_its_exit_code(tmp_path):
+    p = R.subprocess.Popen([sys.executable, "-c", "import signal, sys, threading\ne = threading.Event()\n"
+                            "signal.signal(signal.SIGTERM, lambda *a: e.set())\nprint('up', flush=True)\ne.wait()\n"
+                            "sys.exit(7)\n"], stdout=R.subprocess.PIPE, text=True)
+    spawned = R.Spawned(p)
+    assert p.stdout.readline() == "up\n" and spawned.alive()
+    assert spawned.stop() == 7 and not spawned.alive()
+
+
+def test_each_party_here_gets_a_key_made_for_the_run(tmp_path):
+    rc, _ = run(tmp_path, registry())
+    s = tmp_path / "state"
+    assert rc == 0
+    for p in ("challenger", "firewall", "network-certifier", "verifier", "workers"):
+        mine = json.loads((s / "parties" / p / "key.json").read_text())
+        public = json.loads((s / "public" / p / "key.json").read_text())
+        half = R.lms.public_key(R.lms.keygen(R.lms.Params(*mine["params"]), bytes.fromhex(mine["seed"])))
+        assert (public["public_key"], public["sha512"]) == (half.hex(), R.hashlib.sha512(half).hexdigest())
+        assert (s / "parties" / p / "key.json").stat().st_mode & 0o077 == 0
+    assert not any("parties/" in f.read_text() for f in (s / "transcripts").glob("*.jsonl"))
+
+
+def test_the_runs_tree_is_its_commits_archive_under_the_commits_name(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", str(repo)]
+    R.subprocess.run([*git, "init", "-q"], check=True)
+    (repo / "a.txt").write_text("a\n")
+    R.subprocess.run([*git, "add", "a.txt"], check=True)
+    R.subprocess.run([*git, "commit", "-qm", "a"], check=True)
+    commit = R.subprocess.run([*git, "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    (repo / "a.txt").write_text("not committed\n")
+    assert R.archive(tmp_path, commit, root=repo) == "tree.tar"
+    with tarfile.open(tmp_path / "tree.tar") as t:
+        assert t.extractfile(f"{commit}/a.txt").read() == b"a\n"
+
+
+@pytest.mark.parametrize("machines, on", [(["auditor-1"], "auditor-1"), (["auditor-1", "local"], "local")])
+def test_the_record_says_on_which_machine_each_subprotocols_coins_were_flipped(tmp_path, machines, on):
+    cfg = config(**AUDITOR)
+    rc, lines = run(tmp_path, verifier_says(accepting(cfg, "verity/onsite/v0")),
+                    *(x for m in machines for x in ("--on", m)), cfg=cfg)
+    assert rc == 0 and "sampled-proofs" in lines[0]["coins_on"] and set(lines[0]["coins_on"].values()) == {on}
