@@ -33,7 +33,7 @@ name = "verity_difftest"
 path = "../../../../../../circuits/difftest"
 
 [[require]]
-name = "core_memory_challenger"
+name = "core_memory_attester"
 path = "../../attester/lean"
 
 [[lean_lib]]

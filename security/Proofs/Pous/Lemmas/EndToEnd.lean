@@ -17,7 +17,7 @@ with the proofs: no record pins it.
 
 @[expose] public section
 
-open MemoryChallenger MemoryChallenger.Properties
+open MemoryAttester MemoryAttester.Properties
 open PousCheck PousCheck.Properties
 
 namespace Pous.EndToEnd

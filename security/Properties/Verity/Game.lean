@@ -208,7 +208,7 @@ def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → B
   | .pous, _ => PousCheck.RunProtocol.protocol
   | .poub, _ => Poub.P2Protocol.protocol
   | .network, _ => NetworkCheck.Period.protocol
-  | .wipe, _ => MemoryChallenger.WipeProtocol.protocol
+  | .wipe, _ => MemoryAttester.WipeProtocol.protocol
 
 /-- **Subprotocol `a`'s protocol id in composite `k`**, its compiled check's there, which `k` lists it by. -/
 def Subprotocol.idAt (a : Subprotocol) (k : Verity.Registration.Composite) : String := (a.protocolAt k).id

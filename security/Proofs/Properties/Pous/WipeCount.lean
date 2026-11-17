@@ -29,9 +29,9 @@ holds.
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SecurityProofs
+namespace MemoryAttester.Properties.SecurityProofs
 
-open MemoryChallenger Flock
+open MemoryAttester Flock
 
 /-- An egress of `b` bits that is at most `m` in the wipe's unit, with `m` below the saturated count, is at most `m`
 units in bits: `egressUnits` rounds up and saturates, so a count below the saturated one is `⌈b / 2^23⌉`. -/
@@ -111,4 +111,4 @@ theorem wipeCountTied_nontrivial :
   · exact absurd ha (by simp [idleDevice])
   · exact h
 
-end MemoryChallenger.Properties.SecurityProofs
+end MemoryAttester.Properties.SecurityProofs

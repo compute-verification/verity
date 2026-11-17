@@ -39,7 +39,7 @@ import VCVio.Prelude.Core
 
 namespace Pous.EndToEnd.SecurityProofs
 
-open MemoryChallenger
+open MemoryAttester
 open scoped ENNReal
 
 /-! ### The code's sampler at any block count -/

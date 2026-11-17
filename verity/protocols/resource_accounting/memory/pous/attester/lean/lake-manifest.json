@@ -64,6 +64,6 @@
    "inherited": true,
    "dir": "../../../../../../commitments/lean",
    "configFile": "lakefile.toml"}],
- "name": "core_memory_challenger",
+ "name": "core_memory_attester",
  "lakeDir": ".lake",
  "fixedToolchain": false}

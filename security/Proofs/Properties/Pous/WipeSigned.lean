@@ -47,8 +47,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Properties.Hash.Lms
 import Proofs.Properties.Hash.Lms
-import Proofs.Properties.Pous.MemoryChallenger
-import Proofs.Properties.Pous.MemoryChallenger.Inputs
+import Proofs.Properties.Pous.MemoryAttester
+import Proofs.Properties.Pous.MemoryAttester.Inputs
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
@@ -84,9 +84,9 @@ conclusion.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace MemoryChallenger.Properties.SecurityProofs
+namespace MemoryAttester.Properties.SecurityProofs
 
-open MemoryChallenger Flock
+open MemoryAttester Flock
 open Tree (CF)
 
 namespace Wipe
@@ -136,7 +136,7 @@ private def wtail (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : 
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ (p.limitNs : Int)) then
       reasons := reasons.push s!"batch {b} is past its deadline of {p.limitNs} ns"
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
-  return (MemoryChallenger.StreamedWipe.Findings.mk reasons, MemoryChallenger.acceptIf reasons.isEmpty)
+  return (MemoryAttester.StreamedWipe.Findings.mk reasons, MemoryAttester.acceptIf reasons.isEmpty)
 
 private theorem wverdict_eq (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
     (c : StreamedWipe.Commitment) :
@@ -171,8 +171,8 @@ private def WGood (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (b : N
         false ∧
       (b == 0 && decide (s.batches[b].sendNs < s.fillEndNs)) = false
 
-private theorem waccepted_acceptIf (f : MemoryChallenger.StreamedWipe.Findings) (b : Bool) :
-    MemoryChallenger.StreamedWipe.Verdict.accepted (f, MemoryChallenger.acceptIf b) = b := by
+private theorem waccepted_acceptIf (f : MemoryAttester.StreamedWipe.Findings) (b : Bool) :
+    MemoryAttester.StreamedWipe.Verdict.accepted (f, MemoryAttester.acceptIf b) = b := by
   cases b <;> rfl
 
 private theorem wtail_accepted (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
@@ -310,7 +310,7 @@ theorem pous_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : Run} (hr
 that wipe's commitment, ending, start mark, fill readings and batches. -/
 theorem same_run {s : StreamedWipe.Signed} {dev : SignedWipeParty} (cf : CF (wipeRunStrings s dev)) {m M : ByteArray}
     (hm : s.message = .ok m)
-    (hM : memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session m = .ok M)
+    (hM : memoryAttesterMessage (s.publicKey.extract 0 16) s.commitment.session m = .ok M)
     (hsig : dev.Signed s.publicKey M) :
     ∃ r ∈ dev.wipes s.publicKey, r.commitment = s.commitment ∧ r.recorded.ended = some s.ended ∧
       r.startMark = s.startMark ∧ r.fillStartNs = s.fillStartNs ∧ r.fillEndNs = s.fillEndNs ∧
@@ -429,7 +429,7 @@ private theorem forIn'_keep {α σ : Type} (l : List α) (f : (a : α) → a ∈
 /-- `wtail` keeps its reasons when every batch passes. -/
 private theorem wtail_keep (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
     (hg : ∀ b < s.batches.size, WGood s c b) :
-    wtail s c r0 = (MemoryChallenger.StreamedWipe.Findings.mk r0, MemoryChallenger.acceptIf r0.isEmpty) := by
+    wtail s c r0 = (MemoryAttester.StreamedWipe.Findings.mk r0, MemoryAttester.acceptIf r0.isEmpty) := by
   unfold wtail
   simp only [Id.run]
   rw [Std.Legacy.Range.forIn'_eq_forIn'_range', forIn'_keep]
@@ -486,7 +486,7 @@ private theorem check_accepts (p : WipeProtocol.Params) (c : StreamedWipe.Commit
     WipeProtocol.protocol.check p c e =
       .accept (WipeProtocol.certify c.params StreamedWipe.EGRESS_MAX_UNITS) (c.params, e.egress) := by
   have hv : StreamedWipe.verdict SCHEMES p.trusted.toList s c =
-      (MemoryChallenger.StreamedWipe.Findings.mk #[], Core.Verdict.accept) := by
+      (MemoryAttester.StreamedWipe.Findings.mk #[], Core.Verdict.accept) := by
     rw [wverdict_eq, wpre_nil _ _ s c hk hcm hcov hend hsize,
       wtail_keep s c _ fun b _ => wgood_of s c b (hb b)] <;> rfl
   have hs : ¬ ((c.server != p.server || c.session != p.session) = true) := by simp [hsv, hss]
@@ -595,8 +595,8 @@ theorem measured_accepts (digest : Nat → ByteArray) {I seed : ByteArray} {k : 
     simp only [Lms.PrivateKey.publicKey, ByteArray.size_append, hIs, hroot]
   have hI : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
   obtain ⟨m, hm⟩ := measured_message digest k.publicKey .empty
-  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I MEASURED_SESSION m = .ok M := by
-    unfold memoryChallengerMessage
+  obtain ⟨M, hM⟩ : ∃ M, memoryAttesterMessage k.I MEASURED_SESSION m = .ok M := by
+    unfold memoryAttesterMessage
     simp [hIs]
     exact ⟨_, rfl⟩
   obtain ⟨sig, hsig⟩ :=
@@ -677,7 +677,7 @@ theorem wipeSigned : WipeSigned := by
   cases hd : Lms.Signature.decode q s.signature with
   | error _ => simp [hd, bind, Except.bind] at hv
   | ok σ =>
-    cases hM : memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session m with
+    cases hM : memoryAttesterMessage (s.publicKey.extract 0 16) s.commitment.session m with
     | error _ => simp [hd, hM, bind, Except.bind] at hv
     | ok M =>
       simp only [hd, hM, bind, Except.bind] at hv
@@ -740,4 +740,4 @@ theorem wipeSigned_acceptAll
   obtain ⟨out, prof, hc⟩ := hall unencodedParams measuredCommitment ⟨some unencoded, none⟩
   exact wipeSigned_nontrivial (h _ _ _ out prof idleChallenger hc)
 
-end MemoryChallenger.Properties.SecurityProofs
+end MemoryAttester.Properties.SecurityProofs

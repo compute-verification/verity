@@ -1418,7 +1418,7 @@
   "tests/verity/commitments/randomness/vectors.json": "70fd524498edf905cfed705b94f6eb84037ce5f46e15ede6dbb9094c9122b442",
   "verity/commitments/randomness/Randomness.lean": "b94f89b4970d03d8fd7140b0989f4262c13c08c3afa91b7522d9db92a8234cf9",
   "security/Proofs/Flock/Soundness/PlanDraw.lean": "13caf906f43a3a3bc8a6aa31edbd9b647a8f86106c7be672649e48117dec3940",
-  "security/Proofs/lake-manifest.json": "e80d12ad7aadbbf15d4bd4539e723ca55840743e458f0a840ea26e703e3570be",
+  "security/Proofs/lake-manifest.json": "6baa3183599cb9c79e111fd489109ffdecf700eb2a077c36a13f220117b88e5a",
   "security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632",
   "verity/circuits/base/Base/Hash.lean": "5c0a1aab9d43cdab5c18c0d03f6fca0c559200cd727dcb75d73557d2d892aacc",
   "verity/commitments/lean/Commitments/Draw.lean": "f2d3b39f0706f3507e767617562172b198b81a7a93816b88308573c80ca9ca7d"

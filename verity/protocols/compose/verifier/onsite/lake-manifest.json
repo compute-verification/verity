@@ -10,7 +10,7 @@
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
-   "name": "core_memory_challenger",
+   "name": "core_memory_attester",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
    "dir": "../../../resource_accounting/memory/pous/attester/lean",
