@@ -40,6 +40,14 @@ verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] 
 
 `run.sh`'s header says what each option does.
 
+On Llama 3.2 1B and one H200, the job that writes its cost and its replay match, as points of the same two metric
+ids (`record-ids` stands in for `record`: it keeps each request's ids, which a replay under vLLM's client reads):
+
+~~~text
+research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model llama32-1b \
+  --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4
+~~~
+
 ## What is not yet true
 
 - **The advice line's serve is not under the network attester.** No arm of this command is served under the
@@ -52,9 +60,10 @@ verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] 
 - **The context limit is not the model's own.** At the recipe's settings it is the recipe's number for the cards,
   given outright: with the limit left to it and the recipe's other flags as they are, vLLM at the benchmark's pin does
   not start this model on them (`limits.json`). The report prints the limit beside the model's own.
-- **`prod` is not the recipe's line whole.** It is behind vLLM's Python front end, with the engine's seed set, and
-  its requests are token ids sent to the completions endpoint (`benchmarks/serve_tax/README.md` lists each
-  departure). Every engine, stock too, starts with Python's hash seed and Inductor's block choice pinned.
+- **`prod` is not the recipe's line whole.** It is behind vLLM's Python front end (serve_tax's `run.sh`:
+  `PUBLISHED_FRONTEND=rust` serves the recipe's Rust one on a build that has it), with the engine's seed set
+  (`serve_tax.BASE_ARGS`), and its requests are token ids sent to the completions endpoint. Every engine, stock too,
+  starts with Python's hash seed and Inductor's block choice pinned.
 - **No circuit is compiled.** Nothing here compiles the settings' circuit ahead of serving or checks a served
   request against it.
 - **The replayed window is not sampled by an audit.** It is every request of one rep, named by the command.
