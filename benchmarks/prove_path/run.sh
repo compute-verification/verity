@@ -91,6 +91,8 @@
 #   node, as the gate's /etc/vy/peers names it), under the key record PP_CHALLENGER_KEY (challenger-key/v1). The gate opens a
 #   root once, and both arms register under the window's one run root: with the gate, run one arm (PP_ONLY). PP_MAIN (a
 #   file, `git rev-list --first-parent` of the gate's pin) is that history instead, for a gate pinned on `next`.
+#   PP_CHALLENGER=command:WORDS: a gate this machine runs (vllm's local_gate.py), its peer PP_PEER, one arm (PP_ONLY):
+#   simulated coins, which ran_with.txt says.
 # From a clone of the tree, with 64 GB of memory, the outputs in $OUT (default $RESEARCH_RUN_DIR/out, outside a research run
 # out/prove_path under the clone); $OUT/ran_with.txt is the line naming the run's coins and parameters (prove_path.py ran-with):
 #   PP_LLAMA=DIR bash benchmarks/prove_path/run.sh
@@ -173,11 +175,14 @@ elif [ -n "${PP_CHALLENGER:-}" ]; then   # the verifier's own copy of main's fir
     && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $O/fetch-main.log; exit 4; }
 fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
-  CH=(--challenger $PP_CHALLENGER --main $O/main.txt)
+  CH=(--challenger "$PP_CHALLENGER" --main $O/main.txt)
   case $PP_CHALLENGER in gate:*)
     [ -n "${PP_PEER:-}" ] && [ -n "${PP_CHALLENGER_KEY:-}" ] || { echo "PP_CHALLENGER=gate:… needs PP_PEER and PP_CHALLENGER_KEY"; exit 4; }
     [ -n "${PP_ONLY:-}" ] || { echo "PP_CHALLENGER=gate:… opens the window's root once: run one arm, PP_ONLY=honest|forged"; exit 4; }
     CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
+  command:?*)
+    [ -n "${PP_PEER:-}" ] && [ -n "${PP_ONLY:-}" ] || { echo "PP_CHALLENGER=command:… needs PP_PEER and one arm, PP_ONLY"; exit 4; }
+    CH+=(--peer $PP_PEER);;
   esac
 fi
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
