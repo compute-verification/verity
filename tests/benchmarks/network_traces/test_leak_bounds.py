@@ -2,7 +2,7 @@
 rows on a network attester run's files, and `datacenter` is links × `per_link` for identical links, each link at δ /
 links.
 
-K's terms are `NetworkVerifier.Period`'s rows form's, transcribed here from the Lean (`clog2`, `capsTerm`, `rowsTerms`,
+K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lean (`clog2`, `capsTerm`, `rowsTerms`,
 `eps`) rather than from the calculator:
 - the registered free inputs are the tied audit's slot entries, NR·T / EVERY entries of `ingress_scan.entry_bits`;
 - a request's caps are charged twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉;
@@ -58,7 +58,7 @@ def _reference(name: str) -> dict:
 
 
 def clog2(x: int) -> int:
-    """`NetworkVerifier.Period.clog2`: if x ≤ 1 then 0 else Nat.log2 (x - 1) + 1."""
+    """`NetworkCheck.Period.clog2`: if x ≤ 1 then 0 else Nat.log2 (x - 1) + 1."""
     return 0 if x <= 1 else int(math.log2(x - 1)) + 1
 
 

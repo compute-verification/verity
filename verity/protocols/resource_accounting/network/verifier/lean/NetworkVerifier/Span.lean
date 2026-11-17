@@ -21,7 +21,7 @@ certified under the schedule, and how many bits can have left on the link over t
     signed digest = SHA-512("verity-network-certifier/mark/v1" ‖ salt ‖ mark)     (`markDigest`)
 
 as an egress certificate on the link's marks link name, `<link>-marks` (`marksLink`), under the message every
-certificate signs (`NetworkVerifier.certificateMessage`), which binds the key, the certifier session, the link name and
+certificate signs (`NetworkCheck.certificateMessage`), which binds the key, the certifier session, the link name and
 the execution phase. The mark and its salt are witness; the certificate is a signature over a hiding digest.
 
 **Params**, canonical JSON, all public:

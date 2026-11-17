@@ -10,7 +10,7 @@ budgets), work by proof of useful work over the period (`PouwCheck.Period.protoc
 period's execution phases credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
 by PoUB's P2 session on PoUS's store (`Poub.P2Protocol.protocol`,
 `verity/remote-bandwidth/p2/v0`), communication by the network attester over the period
-(`NetworkVerifier.Period.protocol`, `verity/certifier/v0`: the period's link-execution phases certified and proved, and the bound
+(`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-execution phases certified and proved, and the bound
 `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
 (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
 blobs: every subprotocol accepts or onsite doesn't, and any subprotocol's rejection rejects onsite whatever the others
@@ -22,7 +22,7 @@ must also be on one store (`store`): two stores reject onsite unless it rejects 
 `counted` (`verity/onsite/counted/v0`) is onsite with the wipe's count held to the network attester's: the wipe's
 subprotocol is `countedWipe` (`MemoryChallenger.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`), which certifies at
 the count its evidence gives, and beside it stands the count over the span between the wipe's two marks (`hostSpan`,
-`NetworkVerifier.Span.protocol` on the registered hardware, `verity/certifier/span/v0`). Its ties hold the two to one
+`NetworkCheck.Span.protocol` on the registered hardware, `verity/certifier/span/v0`). Its ties hold the two to one
 another: the wipe is of the host the count's link is on, and that link is the host's one link besides the memory
 challengers' (`wipeNode`, `wipeLink`); the start mark the wipe's signed message names is the count's start
 certificate's, the count's two marks open to the wipe's start and end messages, and the count the wipe's evidence gives
@@ -228,7 +228,7 @@ def wipeLink (S : Core.Site) (host : String) : Except String String := do
     throw s!"host {host}: it has {ks.length} links besides the memory challengers' \
       ({", ".intercalate (ks.map (·.id))}); a count on one of them is not of what left on the others"
 
-/-- The count's parameters as the composition takes them: the count's own (`NetworkVerifier.Span.paramsOf`), which must
+/-- The count's parameters as the composition takes them: the count's own (`NetworkCheck.Span.paramsOf`), which must
 hold the registered hardware, the link they name being its host's one link (`wipeLink`). A refusal is a refusal of the
 parameters. Nothing here holds the site to an accepted log: the parameters are the verifier's. -/
 def spanParams (j : Lean.Json) : Flock.V NetworkVerifier.Span.Params := do
@@ -239,7 +239,7 @@ def spanParams (j : Lean.Json) : Flock.V NetworkVerifier.Span.Params := do
   let _ ← wipeLink S r.host
   pure p
 
-/-- The count over the span between a wipe's two marks, on its host's one link: `NetworkVerifier.Span.protocol`
+/-- The count over the span between a wipe's two marks, on its host's one link: `NetworkCheck.Span.protocol`
 (`verity/certifier/span/v0`) on `spanParams`, the same check on parameters that hold the registered hardware. -/
 def hostSpan : Protocol := { NetworkVerifier.Span.protocol with params := spanParams }
 
@@ -251,7 +251,7 @@ def wipeNamed (k : Case) : Option MemoryAttester.WipeProtocol.Named :=
   | .ok c, .ok e => (MemoryAttester.WipeProtocol.named c e).toOption.join
   | _, _ => none
 
-/-- What the count's case names of its span (`NetworkVerifier.Span.named`); `none` unless its parameters and its commitment
+/-- What the count's case names of its span (`NetworkCheck.Span.named`); `none` unless its parameters and its commitment
 decode. -/
 def spanNamed (k : Case) : Option NetworkVerifier.Span.Named := NetworkVerifier.Span.namedOf k.params k.commitment
 
@@ -349,7 +349,7 @@ private def bare : Core.Site.Link := { id := "up1", ends := ("node0", Core.Site.
   "host node0: it has 2 links besides the memory challengers' (eth0, hh0); a count on one of them is not of what left \
     on the others"
 
-/-- The count's `#guard`s' parameters (`NetworkVerifier.Span.guardParams`) with more keys. -/
+/-- The count's `#guard`s' parameters (`NetworkCheck.Span.guardParams`) with more keys. -/
 private def spanJson (more : List (String × Lean.Json)) : Lean.Json :=
   more.foldl (fun j (k, v) => j.setObjVal! k v)
     ((Core.canonicalJson NetworkVerifier.Span.guardParams.toUTF8).toOption.getD .null)
@@ -366,7 +366,7 @@ private def onSite (S : Core.Site) : Lean.Json := spanJson [("head", .str "h"), 
 private def canonText (j : Lean.Json) : String := (Flock.canon j).toOption.getD ""
 
 /-- A mark in the count's commitment bytes that opens to `m`: the count's `#guard`s' certificate and salt
-(`NetworkVerifier.Span.guardMark`), then `m`. -/
+(`NetworkCheck.Span.guardMark`), then `m`. -/
 private def markOf (phase fill : UInt8) (m : ByteArray) : ByteArray :=
   (NetworkVerifier.Span.guardMark phase fill).extract 0 175 ++ m
 

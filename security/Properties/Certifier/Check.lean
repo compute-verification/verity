@@ -4,9 +4,9 @@ public import NetworkVerifier.Check
 public import Properties.Hash.Identity
 
 /-!
-# The network certificate check: what its Lean code (`NetworkVerifier.Check`) does
+# The network certificate check: what its Lean code (`NetworkCheck.Check`) does
 
-The properties of `NetworkVerifier.protocol` (`verity/network-certificate/v4`, the port of `audit.py`'s `Audit`), stated
+The properties of `NetworkCheck.protocol` (`verity/network-certificate/v4`, the port of `audit.py`'s `Audit`), stated
 against its functions as they run, each in one shape: for every input, if the function accepts (or, for a refusal,
 doesn't reject; for the undecided outcome, is undecided), its named conclusion holds. They say what `answer` and the
 check refuse, what an acceptance establishes about each execution phase and what an undecided outcome means.

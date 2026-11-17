@@ -16,7 +16,7 @@ meta import Std.Data.HashMap
 
 The one layout of a sampled statement's gates, as code: the Boolean-profile program a registered Flock circuit file
 describes, where each of its gates sits, and each unit's gates and inputs. The sampled subprotocol's bridge,
-`Properties.NetworkScan.Flattens` and NetworkVerifier read these definitions and hold no second copy of them.
+`Properties.NetworkScan.Flattens` and NetworkCheck read these definitions and hold no second copy of them.
 
 * `Src`, `Index`, `srcAt`, `srcKey`, `keyIdx`: Δ's source keys (`Aliased.srcKey`), the one definition of them in the
   code: the column Δ copies into each unit input, read through the circuit's `Index` of row ports, leaf cuts and wires,
