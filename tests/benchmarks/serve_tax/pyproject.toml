@@ -53,5 +53,5 @@ inputs = ["benchmarks/serve_tax", "verity/errors.py",
     "adapters/vllm/verity_vllm/settings.py",
     # a point's member carries its card's record's `short`, the record found by the name nvidia-smi gives the card
     "verity/device.py",
-    "hardware/cards",
+    "calibration/hardware/cards",
 ]

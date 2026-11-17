@@ -204,7 +204,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 TRACES = ROOT / "benchmarks/network_e2e/traces"
-CARD_FILES = ROOT / "hardware/cards"
+CARD_FILES = ROOT / "calibration/hardware/cards"
 sys.path.insert(0, str(ROOT / "tools" / "config"))
 sys.path.append(str(ROOT))
 from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
