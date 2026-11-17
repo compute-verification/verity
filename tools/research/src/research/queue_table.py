@@ -673,11 +673,13 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
     heads = defaultdict(set, {pr: set(hs) for pr, hs in others.items()})
     for pr, head in counted:
         heads[pr].update(chain(doc["restacks"], head))
-    doc["own"], unread = own_changes({pr: (bases[pr], sorted(hs)) for pr, hs in heads.items() if pr in bases})
-    doc["errors"] += unread
     pairs = sorted(built | counted | {(pr, old) for pr, head in counted for old in chain(doc["restacks"], head)[1:]}
                    | {(pr, h) for pr, hs in others.items() for h in hs})
-    labels = _labels(store_root, [label_target(int(pr), head) for pr, head in pairs])
+    with ThreadPoolExecutor(1) as ex:
+        own = ex.submit(own_changes, {pr: (bases[pr], sorted(hs)) for pr, hs in heads.items() if pr in bases})
+        labels = _labels(store_root, [label_target(int(pr), head) for pr, head in pairs])
+        doc["own"], unread = own.result()
+    doc["errors"] += unread
     doc["labels"] = {f"{pr}@{head}": labels[label_target(int(pr), head)] for pr, head in pairs}
     if until is not None:
         cut(doc, until)
