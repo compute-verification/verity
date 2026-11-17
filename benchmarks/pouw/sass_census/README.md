@@ -1,17 +1,18 @@
 # sass_census: every SASS opcode a device runs, against what the model prices
 
-The opcode census of a device family (sm_90: the H200, sm_100: the B200, sm_120: the RTX PRO 6000): every binary with
-device code on a node, disassembled and its dotted opcodes counted, then diffed against the menu the ACCEL model
-prices. An opcode the menu doesn't price is a row a person reads: can it head a committed word, and by which route.
-The probes beside it answer what the diff raises: the rate of a class the census leaves unpriced, what ptxas lowers a
-PTX form to, and what `multimem` does on a card with no NVLink. The opcode table's rows
-(`../../machine_model/data/cover/rows.toml`) cite these probes.
+Does the ACCEL model price every instruction a GPU can run? The model, which PoUW's ε is computed from, prices a menu of
+instructions. This directory takes the census of a device family (sm_90: the H200, sm_100: the B200, sm_120: the RTX PRO
+6000): every binary with device code on a node, disassembled and its opcodes counted, then diffed against the menu. An
+opcode the menu does not price is a row a person reads: can it head a committed word, and by which route.
 
-## Jobs
+The probes beside the census answer what the diff raises: the rate of a class the census leaves unpriced, what ptxas
+lowers a PTX form to, and what `multimem` does on a card with no NVLink. The opcode table's rows
+(`../../machine_model/data/cover/rows.toml`) cite them.
 
-Each is the command of a `research run`, from a pushed commit; its header has the full command and its knobs.
-`run.sh JOB [ARGS...]` is the directory's runner: it starts the job's script, named without `.sh`, with the rest of
-its arguments and the environment as they are.
+## Run it
+
+Each job is the command of a `research run` from a pushed commit. `run.sh JOB [ARGS...]` starts the job's script, named
+without `.sh`, with the rest of its arguments:
 
 | Job | Runs on | What it does | Writes under `$OUT` |
 | --- | --- | --- | --- |
@@ -21,6 +22,8 @@ its arguments and the environment as they are.
 | `multimem.sh` | one RTX PRO 6000 | `multimem.cu`: the device's multicast attribute, what `cuMulticastCreate` answers, and what `multimem.ld_reduce` and `multimem.red` do on ordinary memory, each in its own child process | `multimem.txt` (its last line the verdict), `multimem.sass` |
 | `eps_counts.sh` | a CPU node with the CUDA toolkit | builds the kernels ε_skip's per-instruction counts came from, out of the source trees sent with the run (`src-TAG.tar`), for sm_120a, sm_90a and sm_100a with line info, and dumps each cubin's SASS for `eps_counts.py` | `toolkit.txt`, `TAG/ARCH/`: `build.log`, `apv.gi.sass.gz`, `apv.sass.gz`, `lineinfo.txt` |
 
+The census itself needs a CPU node with the CUDA toolkit, and the rates a B200 or an H200:
+
 ~~~text
 research run --on MACHINE --cwd source -- bash benchmarks/pouw/sass_census/run.sh dump [ROOT ...]
 research run --on MACHINE --cwd source -- bash benchmarks/pouw/sass_census/dump.sh [ROOT ...]     # the same job
@@ -28,7 +31,9 @@ research run --on MACHINE --project verity --source <tree> --cwd source --timeou
   --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/sass_census/rates.sh
 ~~~
 
-## Reading a census
+## Read a census
+
+The readers are plain Python and need no GPU:
 
 ~~~text
 cuobjdump -sass lib.so | python3 sass_count.py count --source NAME > NAME.json   # one binary's opcodes, by architecture
@@ -37,23 +42,3 @@ python3 sass_count.py summary census.json
 python3 diff_menu.py FAMILY census.json [--out diff.json] [--unused]              # FAMILY: sm_90, sm_100 or sm_120
 python3 eps_counts.py OUT --src TAG=APV_CU [--src ...] [--json FILE]              # an eps_counts.sh run's counts
 ~~~
-
-- `sass_count.py` is stdlib only, so it runs on a node's own Python beside the toolkit.
-- `diff_menu.py` buckets every opcode of the census and of NVIDIA's instruction-set table for the architecture
-  (`../../machine_model/data/cover/sass_isa_tables.json`, a fetched fixture:
-  `uv run research data fetch-fixtures benchmarks/machine_model/data/cover`): priced on a lane, tensor or side route, a mover, harmless, or a
-  gap (a tensor form with no rate, a product on no route, a paired multiply counted as one, a word the model prices at
-  nothing), and flags where its own table and the model's classifier (`../facet_break/loads.py`'s `class_of`) disagree.
-  Its module docstring defines each bucket.
-- `sass_semantics.py` is the table `diff_menu.py` ranks by: for each SASS base opcode, whether it can form a product,
-  whether it writes a word, and which route prices it.
-- `eps_counts.py` counts, from each architecture's SASS, the instruction differences ε_skip is priced with, placed by
-  the source lines each instruction's inline chain passes through.
-
-Nothing outside the directory reads its Python. `sass_semantics.py` offers `classify` to `diff_menu.py`. The
-`unpriced*.cu` probes include `../opcode_probe/probe.cuh` and are started by its `probe.py`; `unpriced.cuh`, which
-all three include, holds the lane and mma.sync chains `unpriced.cu` and `unpriced90.cu` time (each op on 8
-independent chains a thread, alone or alternating with another op). `dump.sh`, `lowering.sh` and `eps_counts.sh`
-never take a GPU.
-
-The tests are `../../../tests/benchmarks/pouw/test_sass_census.py` and `../../../tests/benchmarks/pouw/test_eps_counts.py`.

@@ -22,7 +22,7 @@ pod's job tree) reaches this tree's index with `pull`: the entry is rebuilt from
 
 A checkpoint's staging is the label `staged` on `ckpt:<repo>@<revision>`: when a host finished staging its weights and checking every
 shard's sha256, its ref the evidence (`staged`).  The step that stages weights writes it (`ops/pod_bootstrap.sh`, through its run's
-custody key); `glue` reads it as the start of a model's hours to record.
+custody key).
 
 A `research run` job has no store (its custody key stays with the runner): the launcher writes the row's record and the descriptors
 the job reads into one file (`bundle`), ships it (`research run --send FILE`), and the job decodes them from it (`programs(row,
@@ -164,6 +164,7 @@ def programs(row: str, ranks: list[int] | None = None, *, part: list[str] | None
     (`evidence.build`, only the descriptors asked for) or read from a `bundle` (`records fetch`), and decoded through the registry
     (`program.boolean.load_program`).  A descriptor whose digest is not the record's is refused."""
     from verity.circuits.ops.boolean.versions import load_program
+
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     rec = record(row, bundle)
     want = selected(rec, ranks, part)

@@ -1,6 +1,6 @@
 """PoUS's session verdict (`pous.verdict_circuit`): its gates are `gates`' list, the list `PousVerdict.verdictProg`
 restates and proves of; it agrees with the reference `verdict_value` on rounds that hit and that miss each way, and at
-M = 0 with `memory_challenger.verdict` on a signed session; its AND count at the audit's 132 challenges."""
+M = 0 with `memory_attester.verdict` on a signed session; its AND count at the audit's 132 challenges."""
 from __future__ import annotations
 
 import hashlib
@@ -16,7 +16,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB
 from verity.circuits.evaluation.reference import standalone_call
 from verity.commitments import rowleaf
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import verdict_circuit as V
 
 RNG = random.Random(27)
@@ -113,14 +113,14 @@ def _expected(i: int) -> bytes:
 
 
 @pytest.mark.parametrize("wrong", [(), (2,), (0, 5)])
-def test_m0_is_the_memory_challengers_verdict(wrong):
-    """On a signed session, M = 0 accepts exactly when `memory_challenger.verdict` does: every answer its label, on time."""
+def test_m0_is_the_memory_attesters_verdict(wrong):
+    """On a signed session, M = 0 accepts exactly when `memory_attester.verdict` does: every answer its label, on time."""
     clock = Clock(1_000_000)
     signer = ts.TestSigner(b"challenger key", height=2)
     session = hashlib.sha512(b"verdict session %r" % (wrong,)).digest()[:32]
     coins = mc.CoinTree.draw(b"secret", session, BLOCKS, ROUNDS, key=mc.HM96.key_from_label(b"coin key"),
                              salts=[hashlib.sha512(b"salt%d" % j).digest() * 3 for j in range(ROUNDS)])
-    c = mc.MemoryChallenger(coins, signer, log=ts.session_log(), limit_ns=LIMIT_NS, block_bytes=BLOCK_BYTES,
+    c = mc.MemoryAttester(coins, signer, log=ts.session_log(), limit_ns=LIMIT_NS, block_bytes=BLOCK_BYTES,
                             binding=hashlib.sha512(b"root").digest(), clock=clock)
     j = 0
 

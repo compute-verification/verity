@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.EndToEndRegisteredRows
-public import Proofs.Flock.SoundAtBridge.NonVacuous
 public import Proofs.Flock.SoundAtBridge.Reduce
 public import Proofs.Flock.SoundAtBridge.Served
 public import Proofs.Flock.SoundAtBridge.ServedProof
