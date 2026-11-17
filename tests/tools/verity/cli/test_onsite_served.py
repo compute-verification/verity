@@ -498,6 +498,12 @@ def stand_in(tmp: Path, name: str, body: str) -> str:
     return str(f)
 
 
+@pytest.fixture(autouse=True)
+def no_node_settings(tmp_path, monkeypatch):
+    """The adapter's `run.sh settings MODEL -- CMD` reads node A's files; here CMD runs under no settings."""
+    monkeypatch.setattr(T, "SETTINGS", stand_in(tmp_path, "settings.sh", 'shift 3\nexec "$@"\n'), raising=False)
+
+
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
 RUNNER = """mkdir -p "$OUT"
 /usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+)=' \
@@ -664,6 +670,29 @@ def test_a_set_no_lean_verifier_takes_is_its_rows_combined_in_python_and_says_so
     assert (line["verdict"], line["reason"], line["product"]) == (verdict, reason, "verity/onsite-network/v0")
     assert line["combined_by"].startswith("python: no Lean verifier takes verity/onsite-network/v0")
     assert line["combined_by"].endswith("not a Lean verifier's")
+
+
+#: a node's settings as the adapter gives them: each where the environment sets none, then the command after ``--``
+NODE_SETTINGS = """printf '%s\\n' "$@" > "$OUT.settings"
+shift 3
+export VENV=${VENV:-/node/venv} SLOTS=${SLOTS:-9}
+exec "$@"
+"""
+
+
+def test_the_runner_runs_under_the_nodes_settings_for_the_workloads_model_and_the_hooks_win(tmp_path, capsys,
+                                                                                               monkeypatch):
+    runner = stand_in(tmp_path, "runner.sh", 'mkdir -p "$OUT"\necho "$VENV|$SLOTS" > "$OUT/node.txt"\n')
+    monkeypatch.setattr(T, "RUNNER", runner)
+    monkeypatch.setattr(T, "SETTINGS", stand_in(tmp_path, "settings.sh", NODE_SETTINGS))
+    monkeypatch.delenv("VENV", raising=False)
+    state = tmp_path / "state"
+    assert R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path),
+                       "--state", str(state)], REG) == 0, capsys.readouterr().err
+    model = K.parse(CONFIG.read_text())["workload"]["params"]["model"]
+    assert (state / "out.settings").read_text().splitlines() == ["settings", model, "--", "bash", runner]
+    assert (state / "out" / "node.txt").read_text() == "/node/venv|4\n"
+    assert "adapters/vllm/tools/served_run/run.sh" in T.SERVE.scripts
 
 
 def test_the_workloads_bindings_are_the_runners_settings_under_the_pieces_hooks(tmp_path, capsys, monkeypatch):
