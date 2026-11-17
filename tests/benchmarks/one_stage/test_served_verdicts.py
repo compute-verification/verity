@@ -5140,6 +5140,7 @@ sys.exit(''' + repr(S.RECORD_EXIT) + '''[composed])
 #: `served_composite.sh`, its product's Lean answering $LEAN (no answer when unset) in its public composite.json
 FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
 printf "%s\\n" "$SERVED_NODE" "$@" > "$ORDER.composite"
+printf "%s\\n" "${COINS_ON:-}" > "$ORDER.coins_on"
 if [ -n "${LEAN:-}" ]; then
   mkdir -p "$2/composite/remote-v1"
   echo "{\\"product\\": \\"verity/remote/v1\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v1\\", \\"verdict\\": \\"$LEAN\\"}}" \\
@@ -5492,6 +5493,30 @@ def test_a_follow_on_of_a_deferral_of_record_samples_on_the_challenger_it_record
     assert _audited(tmp_path, COIN_FLAGS) == {
         "--challenger": LIVE, "--peer": "cpu-6", "--challenger-key": str(tmp_path / "challenger-key.json"),
         "--gate-key": str(tmp_path / "gate_ed25519")}
+
+
+#: a documentation address (RFC 5737) for the gate, which no line, argument or output may hold
+GATE_ADDRESS = "192.0.2.7"
+
+
+@pytest.mark.parametrize("gate", [f"gate:research@{GATE_ADDRESS}", "gate:research@${VY_CHALLENGER_1_HOST}"],
+                         ids=["filled", "as-placed"])
+def test_a_gates_coins_are_on_its_machine_by_name_and_no_line_argument_or_output_holds_its_address(tmp_path, gate):
+    """The machine a gate's coins are flipped on, which the record and the composite take (`coins_on`), is named by the
+    NAME_HOST variable that holds the gate's address, whether the setting comes filled or as placement.toml gives it;
+    the address reaches no verdict line, no argument of the record or the composite, and no output."""
+    assert _deferred(tmp_path, DEVELOPMENT=None, PP_CHALLENGER=gate, PP_PEER="vy-dc-h200", COMPOSE_OFF_NODE="0",
+                     VY_CHALLENGER_1_HOST=GATE_ADDRESS).returncode == 0
+    env = {**_live(tmp_path, [LEDGER_LINE], hosts=True), "PP_CHALLENGER": None, "PP_PEER": "cpu-6", "V3C_PEER": "cpu-6",
+           "VY_CHALLENGER_1_HOST": GATE_ADDRESS}
+    rc, lines, order, _limits = _follow(tmp_path, **env)
+    assert order[-2:] == ["composite", "record"], (rc, lines, order)
+    argv = json.loads((tmp_path / "order.record").read_text())
+    assert argv[argv.index("--coins-on") + 1] == "vy-challenger-1"
+    assert (tmp_path / "order.coins_on").read_text().split() == ["vy-challenger-1"]
+    said = [*lines, *argv, (tmp_path / "order.composite").read_text(),
+            *(p.read_text(errors="replace") for p in (tmp_path / "out").rglob("*") if p.is_file())]
+    assert not [x for x in said if GATE_ADDRESS in x], said
 
 
 @pytest.mark.parametrize("extra, line", [
