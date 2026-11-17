@@ -2,8 +2,8 @@
 Python (`TransferBlocks.python_verdict`), the reference that keeps running beside it: the same accept bit, public outputs
 and digest on a network attester's execution phases, honest and tampered (the session refused, rejected, naming another
 Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or in a
-shared-row layout; the salts and the output word forged; each certificate's fields edited, the certificates swapped,
-missing or not certificates; the link under another digest). The Lean's other kinds of link (`Kind.plain`,
+shared-row layout; the salts and the output word forged; each attestation's fields edited, the attestations swapped,
+missing or not attestations; the link under another digest). The Lean's other kinds of link (`Kind.plain`,
 `Kind.served`) are cases the Python never makes.
 And what `verify` does with the two: the switch (`OF_RECORD`) names the verdict of record, a disagreement or a case the
 Lean can't state (a key other than an `LmsKey`) rejects."""
@@ -30,7 +30,7 @@ def lean(monkeypatch):
 
 
 class Case:
-    """One execution phase's sample, certificates, syncs and delivered proof, with the findings of the stand-in Lean run
+    """One execution phase's sample, attestations, syncs and delivered proof, with the findings of the stand-in Lean run
     on the honest proof."""
 
     def __init__(self, lw, opening, sample, syncs, tmp):
@@ -59,7 +59,7 @@ class Case:
 
 
 def _network_attester(tmp):
-    """The network attester's link: both records certified under its parameters digest, no occupancy profile."""
+    """The network attester's link: both records attested under its parameters digest, no occupancy profile."""
     run = plain.Run(tmp)
     opening = run.honest(0)
     return Case(run.lw, opening, run.stream.select(run.register(opening)), plain.SYNCS, tmp)

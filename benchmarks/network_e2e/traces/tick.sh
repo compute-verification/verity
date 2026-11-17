@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# The certified tick's load point (corpus.py's --admit tick) for GLM-5.3 at TP8 on a whole 8-GPU H200 node, from the shipped
+# The attested tick's load point (corpus.py's --admit tick) for GLM-5.3 at TP8 on a whole 8-GPU H200 node, from the shipped
 # tree's root, as a job whose input is the C4 shard benchmarks/ppl/datasets.json pins (--send it, or C4=PATH):
 #   RATE=R [REQUESTS=N] [TRACE=heavy] [VARIANT=greedy] [TICK_FROM=DIR] [MAX_MIN=180] bash benchmarks/network_e2e/traces/tick.sh
 # One plan at RATE requests/s on TRACE's server (corpus.TRACES), served twice, each a corpus of its own: OUT/corpus/arrival,
-# vLLM adding each request as it comes, then OUT/corpus/tick under the certified tick, τ_sat and τ_free calibrated on
+# vLLM adding each request as it comes, then OUT/corpus/tick under the attested tick, τ_sat and τ_free calibrated on
 # arrival's trace (corpus.py tick). TICK_FROM, a summarized trace of the same server on this node, serves the tick alone,
 # calibrated on it. REQUESTS is 1,300 for each request/s of RATE and at least 1,000 unless given, so that the arrivals span
 # about 20 minutes, two 600 s windows; a corpus of the same REQUESTS serves the same plan. After the GPUs are given back the

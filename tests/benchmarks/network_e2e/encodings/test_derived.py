@@ -213,7 +213,7 @@ def test_the_tie_refuses_witness_that_disagrees(case) -> None:
 
 
 def test_requests_out_of_ingress_order_send_it(case) -> None:
-    """The engine taking requests out of the certified admission order: the steps whose new requests the walk mispredicts
+    """The engine taking requests out of the attested admission order: the steps whose new requests the walk mispredicts
     are sent, and nothing else."""
     _, cfg, adv, order, held, res = case
     assert res.order == ()
@@ -420,7 +420,7 @@ def _v2(s):
 
 def test_prefills_by_size_take_the_budget_in_arrival_order(tmp_path) -> None:
     """Model Runner V2's batch on the GPU (the trace corpus's): decodes first, then the prefill
-    rows by size, so a step's new requests leave arrival order. vLLM admits them in arrival order, the certified ingress
+    rows by size, so a step's new requests leave arrival order. vLLM admits them in arrival order, the attested ingress
     order, so the walk takes them so, only the last arrival is cut short, and their I1 numbers follow from their n, at no
     cost. A trace whose new requests of a step arrived the other way round is refused."""
     def by_size(s):

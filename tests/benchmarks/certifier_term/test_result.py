@@ -274,7 +274,7 @@ def test_capacity_is_read_from_the_registered_uplink_and_verified_is_capacity_le
         for period, seconds in LB.PERIODS.items():
             name = f"certifier_term/modeled/{scope.name}/{period}"
             capacity, free, verified = (got[f"{name}/{amount}"] for amount in ("capacity", "free", "verified"))
-            # each machine's one certified boundary link, the host's side of its uplink, over the period's seconds
+            # each machine's one attested boundary link, the host's side of its uplink, over the period's seconds
             assert capacity["value"] == scope.machines * BETA * seconds and type(capacity["value"]) is int
             assert verified["value"] == capacity["value"] - free["value"]
             assert verified["inputs"] == ["modeled", f"{name}/capacity", f"{name}/free", *basis]

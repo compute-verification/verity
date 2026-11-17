@@ -1,4 +1,4 @@
-"""A gate run's files for the leak guard's tests: its witness (the certified lines, the cells' salts, a certificate
+"""A gate run's files for the leak guard's tests: its witness (the attested lines, the cells' salts, an attestation
 indented, a deployment equal to the public one) beside its public files, and the archives and run dirs that hold them."""
 from __future__ import annotations
 
@@ -25,13 +25,13 @@ def _sig_piece() -> tuple[bytes, int]:
     return CERTIFIED[o:o + LG.TEXT], o
 
 
-#: A witness file holding a public certificate as a verifier writes it, indented: public only through `reprinted`.
+#: A witness file holding a public attestation as a verifier writes it, indented: public only through `reprinted`.
 INDENTED = json.dumps({"window": LINES[0]["window"], "head": LINES[0]["head"]}, indent=1).encode()
 
 
 def _gate(root: Path) -> Path:
-    """A gate run: its witness (the certified lines, the cells' salts, a certificate indented, a deployment equal to the
-    public one) beside its public files (the certificates, each line's window and head, the deployment, end.json and
+    """A gate run: its witness (the attested lines, the cells' salts, an attestation indented, a deployment equal to the
+    public one) beside its public files (the attestations, each line's window and head, the deployment, end.json and
     request.json)."""
     g = root / GATE
     for name, b in {"witness/certified.jsonl": CERTIFIED, "witness/cells.salts": SALTS, "witness/check.json": INDENTED,

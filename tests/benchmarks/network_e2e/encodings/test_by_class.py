@@ -1,6 +1,6 @@
 """Advice v1's charge by class (`verity_vllm.pipeline.advice_code.by_class`, and `by_class.py`'s report over a trace).
 Each window's parts sum to its charge, and its segment's parts are the arithmetic decoder's own shifts, under the
-tick and without it, under the uniform book and a fit one. Under the certified tick, with the prefix cache on and
+tick and without it, under the uniform book and a fit one. Under the attested tick, with the prefix cache on and
 prompts that share prefixes, every field but the lengths is 0 by construction, each by rules whose lines are in the
 code; without the tick the admission is charged and the hits still aren't. The observer reads off the replay the
 evictions, the lookups they cut short, the waits with what held them, and the preemptions. The report counts each
@@ -509,7 +509,7 @@ MTP = ("--speculative-config.method", "mtp", "--speculative-config.num_speculati
 
 
 def drafted(asy: bool, seed: int = 11):
-    """The plan under the certified tick on an engine that drafts `K` tokens a row: the engine, the plan's requests,
+    """The plan under the attested tick on an engine that drafts `K` tokens a row: the engine, the plan's requests,
     each with the drafts its emitting rows kept, their release times, and the tokens each executed step's rows
     emitted. A row's kept count is random, seeded by `seed`, up to the drafts it carries and the outputs its request
     still lacks, as an accept rule might give; each is chosen as the tick's replay asks for it."""
@@ -562,7 +562,7 @@ def with_draft(d: Path, ios, emitted, *argv: str) -> Path:
 
 @pytest.mark.parametrize("asy", (False, True), ids=("sync", "async"))
 def test_a_serve_with_a_draft_is_read_and_charged_by_class(tmp_path, capsys, asy):
-    """The plan served under the certified tick with a draft, as a trace-corpus directory. The reader takes the draft
+    """The plan served under the attested tick with a draft, as a trace-corpus directory. The reader takes the draft
     from the server's arguments, given as dotted settings (a setting turned off among them) or as JSON, and each
     row's kept count from the tokens the model runner sampled for it, cut where the request ends. The report is of
     the serve's schedule: the string decodes back to its steps and its rows' kept counts, the replay on those counts
