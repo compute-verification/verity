@@ -2,23 +2,7 @@ module
 
 public import Proofs.Flock.SampledGeneric.Statements
 
-/-!
-# The sampled audit as a compiler, generic in the proof system (proved)
-
-The proof is the one-stage audit with a randomized extractor (`Audit.extraction_audit_le`), whose sampling term is the
-sampling design's alone, at the analysis the extractor defines (`Extractor.analysis`):
-
-* `Extractor.analysis`: the committed transcript is the registration and the committed trace, "wrong" is the
-  incorrect set, and the binding error is the extractor's at the committed registration (`⊤` at any other, which no
-  committed transcript reaches);
-* `Extractor.knowledgeSound_analysis`: the knowledge term at the proof block a rule picks is at most the largest over
-  the sample (`Extractor.ksAvg`);
-* `Trials.errOf_plur_le`: at the plurality, a trial's binding error is at most its finder's collision term,
-  `2·E[cost]/2^256 + 1/(eM)` (`LinkFinder.link_mass_le`, with the finder's output from two openings,
-  `LinkFinder.outOf_spec`);
-* `Trials.link_le_bindErr`: so the binding error at the committed trace is at most `ε_bind` (`Trials.Transfers`);
-* `GenericSampledKS`, `GenericSampledKSPa`, `GenericSampledKSEscape`, `GenericSampledKSCount`.
--/
+/-! Proof of the sampled audit's knowledge soundness, generic in the proof system, through the one-stage audit with a randomized extractor. -/
 
 @[expose] public section
 
@@ -41,9 +25,6 @@ variable (Ex : Extractor PS B) (Correct : Reg → B.Trace → Fin n → Prop)
   (Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace)
 
 open Classical in
-/-- **The extraction analysis of the compiled audit**: the committed transcript is the registration and the committed
-trace, "wrong" is the incorrect set at the registration, and the binding error is the extractor's at the committed
-registration and `⊤` at any other. -/
 noncomputable def analysis (h : Ex.Covers Correct) : ExtractionAnalysis L Reg PS.session where
   Tr := Reg × B.Trace
   incorrect Xt := incorrect B Correct Xt.1 Xt.2
@@ -81,8 +62,6 @@ namespace Trials
 
 variable (Tr : Trials L PS B)
 
-/-- **The binding error at the plurality**: at every position, the trial's binding error against the committed trace is
-at most its finder's collision term, under ecr/sha-512 at the finder. -/
 theorem errOf_plur_le {Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace} (hX : Tr.Plurality Xc)
     (hwf : Tr.WellFormed) (hop : Tr.Opens) {M : ℕ} (hM : 1 ≤ M) (R : Reg) (τ : Cont L Reg PS.session R)
     (hCR : Tr.CR R τ M) (c : B.Pos) :
@@ -97,7 +76,6 @@ theorem errOf_plur_le {Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace} (
   · simp only [mul_zero, zero_div, zero_add]
     positivity
 
-/-- **The binding error at the committed trace is at most `ε_bind`**, at a prover whose link finders satisfy ecr/sha-512. -/
 theorem link_le_bindErr {Ex : Extractor PS B} (hT : Tr.Transfers Ex)
     {Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace} (hX : Tr.Plurality Xc) (hwf : Tr.WellFormed)
     (hop : Tr.Opens) {M : ℕ} (hM : 1 ≤ M) (R : Reg) (τ : Cont L Reg PS.session R) (hCR : Tr.CR R τ M)
@@ -115,9 +93,6 @@ end Trials
 end FlockSoundness.SampledGeneric
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
-/-- **The sampled audit's knowledge soundness, generic in the proof system** (`Flock.Guarantees.GenericSampledKS`):
-`Audit.extraction_audit_le` at `Extractor.analysis`, with the knowledge term `Extractor.ksAvg` and the binding error
-`ε_bind` at every prover whose link finders satisfy ecr/sha-512 (`⊤` at any other). -/
 theorem Flock.SecurityProofs.GenericSampledKS : Flock.Guarantees.GenericSampledKS := by
   intro n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ E hCR
   classical
@@ -132,8 +107,6 @@ theorem Flock.SecurityProofs.GenericSampledKS : Flock.Guarantees.GenericSampledK
   exact h
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
-/-- **`Pr[accept] ≤ P_a(F) + ε_ks + ε_bind`** (`Flock.Guarantees.GenericSampledKSPa`): `GenericSampledKS` at the sure
-event. -/
 theorem Flock.SecurityProofs.GenericSampledKSPa : Flock.Guarantees.GenericSampledKSPa := by
   intro n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ hCR
   refine (prob_mono (p := fun o : Bool × Finset (Fin n) => o.1 = true) (q := fun o => o.1 = true ∧ True)
@@ -144,8 +117,6 @@ theorem Flock.SecurityProofs.GenericSampledKSPa : Flock.Guarantees.GenericSample
   exact prCoin_mono fun ω h => h.2
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
-/-- **The escape bound at a set of proof blocks** (`Flock.Guarantees.GenericSampledKSEscape`): `GenericSampledKS` at
-`W ⊆ F`, whose sampling term is at most `P_a(W)`: a sample that misses `F` misses `W`. -/
 theorem Flock.SecurityProofs.GenericSampledKSEscape : Flock.Guarantees.GenericSampledKSEscape := by
   intro n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM W σ hCR
   refine (Flock.SecurityProofs.GenericSampledKS n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ
@@ -154,8 +125,6 @@ theorem Flock.SecurityProofs.GenericSampledKSEscape : Flock.Guarantees.GenericSa
   exact prCoin_mono fun ω h => h.2.mono_right h.1
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
-/-- **The count curve** (`Flock.Guarantees.GenericSampledKSCount`): `GenericSampledKS` at `|F| ≥ K`, whose sampling
-term is at most `miss(K)` (`Audit.SamplingDesign.escape_le_miss`). -/
 theorem Flock.SecurityProofs.GenericSampledKSCount : Flock.Guarantees.GenericSampledKSCount := by
   intro n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM K σ hCR
   refine (Flock.SecurityProofs.GenericSampledKS n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ

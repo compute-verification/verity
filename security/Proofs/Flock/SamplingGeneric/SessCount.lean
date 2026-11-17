@@ -6,18 +6,7 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Data.Fin.Embedding
 import Mathlib.Data.List.GetD
 
-/-!
-# The sessions' weights at the gates their blocks need, counted by block (`sum_sessions_le`)
-
-A run's extractions at gate `g` run each session some block of which needs `g`, once, at the session's first slot
-(`sessSlots`). Two sessions' first slots with one key are one slot (`first_eq_of_key`), so distinct sessions hold
-disjoint slots. A weight `e_s ≤ e_max` on each session, summed over a set of gates and, at each gate, over the sessions
-some block of which needs it, is then at most `e_max` times the sample's blocks' needs, summed:
-`Σ_g Σ_{s ∋ g} e_s = Σ_s e_s·|needs(s)| ≤ e_max·Σ_{u sampled} |needs u|`. At `e = 1` over the first slots among the
-proof blocks and every gate, the sessions' needs summed are at most the blocks' (`sum_first_sessNeeds_le`), and so are
-the gates the sample needs (`card_filter_needs_le`); the sessions are at most the sample's slots
-(`card_firstSlots_le`).
--/
+/-! The sessions' weights at the gates their blocks need, counted by block (`sum_sessions_le`). -/
 
 @[expose] public section
 
@@ -38,7 +27,6 @@ theorem sum_range_getD_map (l : List ℕ) (f : ℕ → ℕ) :
     simp only [List.getD_cons_succ, List.getD_cons_zero, ih]
     omega
 
-/-- The gates of `G` some block of session `i` needs are at most the needs of the blocks at its slots, summed. -/
 theorem card_filter_sess_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (needs : ℕ → Finset ℕ) (i : ℕ) {N : ℕ}
     (G : Finset (Fin N)) :
     (G.filter fun g => ∃ u ∈ L.sessBlocks x l i, g.val ∈ needs u).card ≤
@@ -58,7 +46,6 @@ theorem card_filter_sess_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (need
     _ ≤ ((L.sessSlots x l i).toFinset.biUnion fun j => needs (l.getD j 0)).card := Finset.card_le_card hsub
     _ ≤ ∑ j ∈ (L.sessSlots x l i).toFinset, (needs (l.getD j 0)).card := Finset.card_biUnion_le
 
-/-- Distinct sessions' first slots hold disjoint slots. -/
 theorem sessSlots_disjoint (L : Compiled Coin A) (x : Msg) (l : List ℕ) (F : Finset ℕ)
     (hF : ∀ i ∈ F, (L.sessSlots x l i).head? = some i) :
     (F : Set ℕ).PairwiseDisjoint fun i => (L.sessSlots x l i).toFinset := by
@@ -69,10 +56,6 @@ theorem sessSlots_disjoint (L : Compiled Coin A) (x : Msg) (l : List ℕ) (F : F
   obtain ⟨u', -, -, hk'⟩ := mem_sessSlots.1 (List.mem_toFinset.1 hj')
   exact hne (first_eq_of_key (hF i (Finset.mem_coe.1 hi)) (hF i' (Finset.mem_coe.1 hi')) (hk.symm.trans hk'))
 
-/-- **The sessions' weights at the gates their blocks need, counted by block**: for sessions named by their first
-slots `F` in the sample `l`, a weight `e i ≤ e_max` on each, and gates `G`, summing over `G` the weights of each gate's
-sessions (those some block of which needs it, as a run's extractions at the gate run them) gives at most `e_max` times
-the sample's blocks' needs, summed. -/
 theorem sum_sessions_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (needs : ℕ → Finset ℕ) (F : Finset ℕ)
     (hF : ∀ i ∈ F, (L.sessSlots x l i).head? = some i) (e : ℕ → ℕ) (emax : ℕ) (he : ∀ i ∈ F, e i ≤ emax)
     {N : ℕ} (G : Finset (Fin N)) :
@@ -100,8 +83,6 @@ theorem sum_sessions_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (needs : 
     _ = emax * (l.map fun u => (needs u).card).sum := by
         rw [sum_range_getD_map l (fun u => (needs u).card), Nat.mul_comm]
 
-/-- **The sessions' needs, counted by block**: over the sessions' first slots among the `n` proof blocks, the gates
-below `N` some block of each session needs, summed, are at most the sample's blocks' needs, summed. -/
 theorem sum_first_sessNeeds_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (needs : ℕ → Finset ℕ) (n N : ℕ) :
     ∑ i ∈ Finset.univ.filter (fun i : Fin n => (L.sessSlots x l i.val).head? = some i.val),
         (Finset.univ.filter fun g : Fin N => decide (∃ u ∈ L.sessBlocks x l i.val, g.val ∈ needs u)).card ≤
@@ -117,8 +98,6 @@ theorem sum_first_sessNeeds_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (n
   refine Finset.sum_congr rfl fun g _ => ?_
   by_cases hg : ∃ u ∈ L.sessBlocks x l i.val, g.val ∈ needs u <;> simp [hg]
 
-/-- **The sessions, counted by slot**: the sessions' first slots among the `n` proof blocks are at most the sample's
-slots. -/
 theorem card_firstSlots_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (n : ℕ) :
     (Finset.univ.filter fun i : Fin n => (L.sessSlots x l i.val).head? = some i.val).card ≤ l.length := by
   have hsub : (Finset.univ.filter fun i : Fin n => (L.sessSlots x l i.val).head? = some i.val).map Fin.valEmbedding ⊆
@@ -134,8 +113,6 @@ theorem card_firstSlots_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (n : �
     _ ≤ (Finset.range l.length).card := Finset.card_le_card hsub
     _ = l.length := Finset.card_range _
 
-/-- **The sample's needs, counted by block**: the gates below `N` some block of `l` needs are at most its blocks'
-needs, summed. -/
 theorem card_filter_needs_le (l : List ℕ) (needs : ℕ → Finset ℕ) (N : ℕ) :
     (Finset.univ.filter fun g : Fin N => decide (∃ u ∈ l, g.val ∈ needs u)).card ≤
       (l.map fun u => (needs u).card).sum := by

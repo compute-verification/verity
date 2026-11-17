@@ -3,23 +3,7 @@ module
 public import Definitions.Claims.SamplingTwo
 public import Proofs.Flock.Claims.KS.Finds
 
-/-!
-# The proof system with one wait, and a compiled verifier over it
-
-A proof system's extractor makes `waits` waits (`Arg.waits`), which only the extractor and its cost read: the
-verifier, the relation, what a witness reveals and the errors don't. So the proof system with one wait
-(`Arg.oneWait`) has the same verifier, relation and errors, and a compiled verifier over `A` is one over
-`A.oneWait` as it stands (`Compiled.oneWait`, `CompiledTwo.oneWait`): the same verifier, sample, sessions,
-commitment and reveals, so the same accepted runs, and each contract's clauses as they are
-(`Compiled.Sessions.oneWait`, `CompiledTwo.Sessions.oneWait`). What differs is the extraction: a session's is one wait
-where `L`'s is `A.waits`, so a run's extractions (`Compiled.runExt`) and every trace read off them (`Compiled.regValX`,
-`CompiledTwo.iregVal`) are the one-wait extraction's, and its cost per session reads `1 + k` reruns for
-`1 + waits·k`.
-
-`Arg.OneWaitFinds` is the property of `A` the one-wait trace's bound reads beside `Arg.KS`: what `A`'s extractor
-returns with a property of the run's coins, the one-wait extractor returns at half the rate, up to `2·κ + √(γ·Pr[B])`
-(`Claims.Finds`).
--/
+/-! The proof system with one wait, and a compiled verifier over it, which accepts the same runs. -/
 
 @[expose] public section
 
@@ -32,9 +16,6 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 /-- **The proof system with one wait**: `A` with its extractor's waits one at every shape. -/
 @[reducible] def Arg.oneWait (A : Arg Coin) : Arg Coin := { A with waits := fun _ => 1 }
 
-/-- **What the extractor finds, its one wait finds at half the rate**: on an accepted run, `A`'s extractor returns a
-witness with a property `G` of the run's coins with probability at most twice the one-wait extractor's, plus
-`2·κ + √(γ·Pr[B])` (`Claims.Finds` at `A.E` and `A.oneWait.E`). -/
 def Arg.OneWaitFinds (H : Msg → Msg) (A : Arg Coin) : Prop := Claims.Finds H A.V A.E A.oneWait.E A.κ A.γ
 
 variable {A : Arg Coin}
@@ -84,20 +65,17 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem Compiled.oneWait_γs (L : Compiled Coin A) (x : Msg) : L.oneWait.γs x = L.γs x := rfl
 
 omit [Nonempty Coin] in
-/-- **The contract at the one-wait proof system is the contract**: no clause reads the extractor's waits. -/
 theorem Compiled.Sessions.oneWait {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) :
     L.oneWait.Sessions H :=
   ⟨hS.draws, hS.slots, hS.shared, hS.keys, hS.unions, hS.refuses, hS.interior, hS.fixed, hS.runs, hS.opens⟩
 
 omit [Nonempty Coin] in
-/-- **The two-stage contract at the one-wait proof system is the contract.** -/
 theorem CompiledTwo.Sessions.oneWait {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) :
     L.oneWait.Sessions H :=
   ⟨hS.replaySamples, hS.secondSamples, hS.slots, hS.shared, hS.unions, hS.refuses, hS.interior, hS.fixed, hS.runs,
     hS.opens, hS.keys⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- The opening checks' count is the same: it reads the commitment and the reveals. -/
 theorem Compiled.OpenCallsLe.oneWait {H : Msg → Msg} {L : Compiled Coin A} (h : L.OpenCallsLe H) :
     L.oneWait.OpenCallsLe H := h
 

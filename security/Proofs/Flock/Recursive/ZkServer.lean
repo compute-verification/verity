@@ -17,29 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# (ii) at the ZK server and V*'s code
-
-`RecursiveZkServerPrivate` is (ii) of `RecursiveAudit`, zero knowledge with circuit privacy, stated about the code that
-sends the auditor its view: the ZK server (`Flock.ZkServer.run`), which salts every message and tree top the worker
-sends it with 192 bytes of its own and sends the auditor the salted commit strings, and V*'s outer sessions run by the
-honest prover's code (`OuterZK.proverExe`). The inner coins are live: the auditor samples each after the commit strings
-before it, so the worker's later messages and requests may read those strings. It takes no zero knowledge of V*'s
-sessions, no acceptance and no premise: its bound is at the hiding gap of hm96-sha512's pinned key
-(`hidingGap My saltHash`), and what it takes of the code is named, each an obligation:
-
-* `ZkServerSends`: the honest worker's requests run through the ZK server to the pinned schedule's transcript, its
-  holes the salted commit strings of the messages in salt order (`zkServerStrings`), and finish.
-* `SessionsPublic`, `SessionsCoined`, `SessionsHonest`: V*'s staging. The simulator's public context is the honest
-  one's, each session's table is one of `verify --zk`'s hidden-output tables at its data and a sample, where it sets that
-  table up, and the honest witnesses are valid with public registered values; V*'s sizes are `OuterZK.Sessions`' `hz`,
-  `hR`, `hS`.
-
-`fwRealPr` is the auditor's real view, `fwSimPr` the simulated one; `zkServerStrings` is the commit strings the
-ZK server sends, message `i` reading the strings before it (`commitBytes`, `zkServerCommits`: a commit string from its
-two halves, and the commitments V*'s sessions read).
-Its proof is `Flock.SecurityProofs.RecursiveZkServerPrivate` (`Proofs.Flock.Recursive.ZkServerZK`).
--/
+/-! (ii) of `RecursiveAudit`, zero knowledge with circuit privacy, stated about the ZK server's and V*'s code, at the hiding gap of hm96-sha512's pinned key and no premise but its named obligations. -/
 
 @[expose] public section
 

@@ -3,23 +3,11 @@ module
 public import Definitions.Claims.SamplingTwo
 import Mathlib.Data.List.Nodup
 
-/-!
-# Replay partitions
-
-- **What reads only a partition's shape**, its classes' strata sizes: a design's acceptance probability
-  (`Design.Pa_shape`), its well-formedness (`Design.wellFormed_shape`) and the number of blocks
-  (`Partition.length_blocks_shape`), so a replay partition may be any partition of the replay layout's shape.
-- **Replay blocks that are unions of proof blocks**: a replay partition `Pρ` whose block `ρ` is the proof blocks of `Pt`
-  at the indices `I ρ` together, the index sets disjoint, over a proof-block partition `Pt` whose gates are distinct and
-  whose proof blocks are not empty: proof block `v` lies in replay block `ρ` (`replayOf`) exactly when `v ∈ I ρ`
-  (`replayOf_eq_some_iff_union`), so cell `(ρ, t)` is the indices of `I ρ` in stratum `t` (`cell_eq_union`).
--/
+/-! Replay partitions: what reads only a partition's shape, and replay blocks that are unions of proof blocks. -/
 
 @[expose] public section
 
 namespace Claims.Sampling
-
-/-! ## What reads only a partition's shape -/
 
 theorem length_flatten_strata (c : List (List (List ℕ))) : c.flatten.length = (strataSizes c).sum := by
   simp [strataSizes, List.length_flatten]
@@ -35,7 +23,6 @@ theorem classesPa_shape : ∀ (rs : List OneStage) {cs cs' : List (List (List (L
     have hl : c.flatten.length = c'.flatten.length := by rw [length_flatten_strata, length_flatten_strata, h.1]
     simp only [classesPa, h.1, hl, classesPa_shape rs (o + c'.flatten.length) B h.2]
 
-/-- **A design's acceptance probability reads only the partition's shape.** -/
 theorem Design.Pa_shape (d : Design) {P Q : Partition} (h : P.classes.map strataSizes = Q.classes.map strataSizes)
     (B : Finset ℕ) : d.Pa P B = d.Pa Q B :=
   classesPa_shape d.rules 0 B h
@@ -50,14 +37,12 @@ theorem forall_zip_strataSizes (rs : List OneStage) (cs : List (List (List (List
   · intro h p hp
     exact h _ (List.mem_map.2 ⟨p, hp, rfl⟩)
 
-/-- **A design's well-formedness reads only the partition's shape.** -/
 theorem Design.wellFormed_shape (d : Design) {P Q : Partition}
     (h : P.classes.map strataSizes = Q.classes.map strataSizes) : d.WellFormed P ↔ d.WellFormed Q := by
   have hlen : P.classes.length = Q.classes.length := by simpa using congrArg List.length h
   unfold Design.WellFormed
   rw [forall_zip_strataSizes, forall_zip_strataSizes, h, hlen]
 
-/-- **The number of blocks reads only the partition's shape.** -/
 theorem Partition.length_blocks_shape {P Q : Partition} (h : P.classes.map strataSizes = Q.classes.map strataSizes) :
     P.blocks.length = Q.blocks.length := by
   suffices e : ∀ cs : List (List (List (List ℕ))), cs.flatten.flatten.length = ((cs.map strataSizes).map List.sum).sum by
@@ -69,11 +54,8 @@ theorem Partition.length_blocks_shape {P Q : Partition} (h : P.classes.map strat
     rw [List.flatten_cons, List.flatten_append, List.length_append, ih, length_flatten_strata]
     simp only [List.map_cons, List.sum_cons]
 
-/-! ## Replay blocks that are unions of proof blocks -/
-
 variable {Pt Pρ : Partition} {I : ℕ → List ℕ}
 
-/-- Two proof blocks of a partition whose gates are distinct share no gate. -/
 theorem Partition.disjoint_blocks (hnd : Pt.gates.Nodup) {v w : ℕ} (hvw : v ≠ w) {a b : List ℕ}
     (ha : Pt.blocks[v]? = some a) (hb : Pt.blocks[w]? = some b) : a.Disjoint b := by
   have hp := (List.nodup_flatten.1 (show Pt.blocks.flatten.Nodup from hnd)).2
@@ -88,7 +70,6 @@ section Union
 variable (hnd : Pt.gates.Nodup) (hne : ∀ u ∈ Pt.blocks, u ≠ [])
 include hnd hne
 
-/-- A proof block not at the indices `I ρ` has a gate outside replay block `ρ`. -/
 theorem exists_not_mem_union {v ρ : ℕ} (hv : v < Pt.blocks.length) (hvI : v ∉ I ρ) :
     ∃ g ∈ Pt.blocks[v], g ∉ (I ρ).flatMap fun w => Pt.blocks.getD w [] := by
   obtain ⟨g, hg⟩ := List.exists_mem_of_ne_nil _ (hne _ (List.getElem_mem hv))
@@ -104,7 +85,6 @@ theorem exists_not_mem_union {v ρ : ℕ} (hv : v < Pt.blocks.length) (hvI : v �
 variable (hρ : ∀ ρ, ρ < Pρ.blocks.length → Pρ.blocks[ρ]? = some ((I ρ).flatMap fun w => Pt.blocks.getD w []))
 include hρ
 
-/-- **A proof block lies in the replay block whose indices hold it**, the index sets disjoint. -/
 theorem replayOf_eq_some_iff_union
     (hdisj : ∀ ρ ρ', ρ < Pρ.blocks.length → ρ' < Pρ.blocks.length → ρ ≠ ρ' → ∀ w ∈ I ρ, w ∉ I ρ')
     {v ρ : ℕ} (hv : v < Pt.blocks.length) (hρl : ρ < Pρ.blocks.length) :
@@ -129,7 +109,6 @@ theorem replayOf_eq_some_iff_union
       simp only [hb, hρ j hjl, Bool.not_eq_eq_eq_not, Bool.not_true, List.all_eq_false, List.contains_iff_mem]
       exact ⟨g, hg, hgn⟩
 
-/-- **Cell `(ρ, t)` is the indices of `I ρ` in stratum `t`**, every index a proof block. -/
 theorem cell_eq_union
     (hdisj : ∀ ρ ρ', ρ < Pρ.blocks.length → ρ' < Pρ.blocks.length → ρ ≠ ρ' → ∀ w ∈ I ρ, w ∉ I ρ')
     (hI : ∀ ρ, ρ < Pρ.blocks.length → ∀ w ∈ I ρ, w < Pt.blocks.length) {ρ t : ℕ} (hρl : ρ < Pρ.blocks.length) :

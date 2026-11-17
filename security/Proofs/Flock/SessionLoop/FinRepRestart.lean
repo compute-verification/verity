@@ -3,18 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.FinRepRows
 public import Proofs.Flock.Claims.ZK.FinishFwRestart
 
-/-!
-# `FinRepRestart`: level 0's restart is `Σ y₁'·bFold`
-
-At a `Finish` `FinishIs` reads, the ZK server's rep stream `2j + r` (`Loop.RepRun`) runs its Ligerito on the session's
-table and packed table, with the tape's extra lanes (`Loop.finRepTab`, `Loop.Level0Src.realOf`), and the request's
-extra claims at the region points of the view's link points (`Loop.linkPoints_wordsAt`). There `Masked.fwRestart_at`
-reads the proof's level-0 restart `t'` as `Σ_col y₁'(col)·bFold(col)`.
-
-**`Loop.finRepRestart`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 the source
-samples from the tape, `FinRepRestart` holds. It reads the ZK server's run, its coins, the tape and the witness, never the
-workers' clear values or the rows: `y₁'` reads the witness lanes, the mask slot and the extra lanes.
--/
+/-! `FinRepRestart`: level 0's restart is `Σ y₁'·bFold`, read off the ZK server's run, never the workers' clear values or the rows. -/
 
 @[expose] public section
 
@@ -26,7 +15,7 @@ open FlockSoundness.Refine (fOf gOf)
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
@@ -35,10 +24,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **`FinRepRestart` at a served statement**: at table `j`'s rep `r`'s run, the run is on the session's table and
-packed table with the tape's extra lanes (`finRepTab`, `schedsPZk_live`, `Level0Src.realOf`), and the request's extra
-coordinates are the statement's region points at the view's link points (`linkPoints_wordsAt`), so
-`Masked.fwRestart_at` gives `t' = Σ y₁'·bFold`. -/
 theorem finRepRestart (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
     (hS : Loop.Level0Src src x w) :
@@ -63,13 +48,11 @@ theorem finRepRestart (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     have := r.isLt
     omega
   obtain ⟨schs, hschs, hschZ⟩ := Masked.schedsPZk_live hx
-  -- the session's table, schedule, packed table and extra lanes
   obtain ⟨htb, hsb⟩ := finRepTab (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hschs hk hRep
   rw [hk2] at htb hsb
   have hst : tb.st = _root_.Flock.Setup.ofCircuit (Masked.stAt x j) := htb.symm.trans (Masked.tabsOf_stAt x j)
   have hsch : tb.sch = (Masked.zkTab x j).sch := (Prod.mk.inj (hsb.symm.trans (hschZ j))).1
   obtain ⟨-, hext, -, hg⟩ := hS.realOf ν t j r hRep.1
-  -- the extra claims sit at the region points of the view's link points
   have hqx : q.xs = _root_.Flock.ZkServer.Drive.extras (Masked.stAt x j) (viewPoints x ops spec) := by
     have hq := hRep.2.1
     unfold repInOf at hq

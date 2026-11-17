@@ -15,19 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# Recursion: every outcome of V*'s sessions is written
-
-`Game.Leaves P g`: every leaf of `g` satisfies `P`, whatever the prover sends and the coins, so every outcome a strategy
-reaches does (`Leaves.outcome`). It passes through `bind`, `map`, `play` and `seqC` (`leaves_seqC`), so:
-
-* `ZkOuter.leaves_game`: every outcome of a session of V* is a transcript it writes at the registration it records
-  (`ZkOuter.Writes`);
-* `leaves_sessions`: every outcome of V*'s sessions in a row is, at each session, a transcript that session writes.
-
-`prob_recT_le` reads `leaves_sessions` at the outcomes the transported prover reaches, so the checked sessions' gate
-(`Flock.Guarantees.keepOwn`, a written, accepted transcript) holds where the event's does (`acceptsV_checked`).
--/
+/-! Every outcome of V*'s sessions is a transcript that session writes. -/
 
 @[expose] public section
 
@@ -35,7 +23,6 @@ namespace FlockSoundness.Game
 
 variable {α β : Type}
 
-/-- **Every leaf of `g` satisfies `P`**, whatever the prover sends and the coins. -/
 def Leaves (P : α → Prop) : Game α → Prop
   | .ret a => P a
   | .send _ k => ∀ m, Leaves P (k m)
@@ -58,7 +45,6 @@ theorem Leaves.map {P : α → Prop} {Q : β → Prop} {f : α → β} (hf : ∀
     (h : Leaves P g) : Leaves Q (g.map f) :=
   Leaves.bind (Q := Q) (f := fun a => .ret (f a)) hf h
 
-/-- Every leaf of `g.map f` is in `f`'s image. -/
 theorem Leaves.map_true {Q : β → Prop} {f : α → β} (hf : ∀ a, Q (f a)) : ∀ g : Game α, Leaves Q (g.map f)
   | .ret a => hf a
   | .send _ k => fun m => Leaves.map_true hf (k m)
@@ -77,8 +63,6 @@ theorem leaves_play {P : α → Prop} : ∀ {g : Game α} (τ : Strategy g), Lea
   | .send _ k, τ, h => leaves_play (g := k τ.1) τ.2 (h τ.1)
   | @Game.coin _ _ _ _ k, τ, h => fun c => leaves_play (g := k c) (τ c) (h c)
 
-/-- **Every leaf of games in a row satisfies each game's predicate at its outcome**, where every leaf of each game
-does. -/
 theorem leaves_seqC : ∀ (S : ℕ) {T α : Fin S → Type} {gs : (j : Fin S) → Game (α j)}
     {of : (j : Fin S) → T j → Strategy (gs j)} {Q : (j : Fin S) → α j → Prop},
     (∀ j, Leaves (Q j) (gs j)) → Leaves (fun b => ∀ j, Q j (b j).2) (seqC S gs of)
@@ -97,7 +81,6 @@ namespace ZkOuter
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv}
 
-/-- **Every outcome of a session of V* is a transcript it writes** at the registration the outcome records. -/
 theorem leaves_game (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ) :
     Leaves (fun o => zo.Writes o.1 o.2.2) (zo.game dg N) := fun R ω =>
   Leaves.map (P := fun t => ∃ x, t = zo.wr (Lv.draw ω) R x) (Q := fun o => zo.Writes o.1 o.2.2)
@@ -106,7 +89,6 @@ theorem leaves_game (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (dg : ByteArray
 
 end ZkOuter
 
-/-- **Every outcome of V*'s sessions in a row is, at each session, a transcript it writes.** -/
 theorem leaves_sessions {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} (zs : (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ) :
     Leaves (fun b => ∀ j, (zs j).Writes (b j).2.1 (b j).2.2.2) (sessions zs dg N) :=

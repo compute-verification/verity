@@ -13,51 +13,12 @@ import Proofs.Flock.Claims.Sampling.Extract
 import Proofs.Flock.SamplingGeneric.Assemble
 import Proofs.Flock.Soundness.Rewinding
 
-/-!
-# The two-stage committed form's event
-
-The primary conjunct of `CompiledTwo.KSRegTwo`, from the sessions' bound at `CompilerKSTwo`'s premises: an accepted
-run whose sample holds a proof block of the committed incorrect set (`CompiledTwo.FregTwo`) has that block's session
-unfound at its first slot, or its extractions disagree with themselves or open a gate off the committed boundary trace
-(the one-stage form's events at `L.toCompiled`: `Compiled.InConf`, `Compiled.OffReg`), or open a gate off its replay
-block's committed interior (`OffIreg`).
-
-* `correct_refIn_congr`: a proof block's correctness on its replay block's values reads the boundary values only below
-  the program's gates and the interior values only at the replay block's gates.
-* `iopensAt_some`, `iopensAt_of_mem`: what a run's extractions open under a replay block's interior roots is a kept
-  opening that passes, and, at a run that doesn't disagree with itself, every such opening.
-* `iop`, `iplur`, `OffIreg`, `IConflict`: at a tape and first-stage coins, the second stages' openings of the program's
-  gates, each under the interior roots of the replay block that holds it (`gateBlock`); the committed interiors as their
-  plurality; a run off them; and two second stages that open a gate two ways.
-* `pr_offIreg_le`: **the rewinding lemma at the committed interior**: at a tape and first-stage coins, a second stage's
-  extractions open a gate off the committed interior with probability at most `N·√Pr[two second stages conflict]`.
-* `pr_iconflict_le`, `ex_offIreg_le`: two second stages at shared first-stage coins see one interior root per replay
-  block (`Sessions.interior`), so their conflict is a collision `B_conf,2` finds (`CompiledTwo.BconfTwo`); averaged,
-  the run is off the committed interior with probability at most `N·√Pr[B_conf,2]`.
-* `regTwo_split`: **the deterministic half**, at any boundary trace: at an accepted run that samples a proof block
-  incorrect at the boundary trace and its replay block's committed interior, the first such block's session is unfound
-  at its first slot, or the run disagrees with itself, or is off the boundary trace or the committed interior;
-  otherwise `Sessions.opens` at the block's replay block makes it correct at those traces.
-* `Compiled.pr_unfound_le_at`, `Compiled.ex_offReg_le`: the sessions' bound at a selection that reads the run's coins
-  off the second stage only, and the rewinding lemma at the committed boundary trace averaged over the tape.
-* `eventTwo_split`, `eventTwo_le`: the event at a tape and a boundary trace as the union of those four, and, at the
-  committed boundary trace, **the primary conjunct of `CompiledTwo.KSRegTwo`**, at most `ε_reg,2`.
-
-The deterministic half and the event's union read the boundary trace as a parameter, so the form at the boundary trace
-read at the statement (`SamplingGeneric/TwoRegX.lean`) takes them as they are.
-
-The committed interior and the committed incorrect set read no second-stage coin (`CompiledTwo.iregVal_forkOn`,
-`CompiledTwo.FregTwo_forkOn`), and the incorrect set is the grid's incorrect proof blocks at the committed traces
-(`CompiledTwo.FregTwo_eq`), all in `SamplingGeneric/TwoCap.lean`.
--/
+/-! The two-stage committed form's event, the primary conjunct of `CompiledTwo.KSRegTwo`, from the sessions' bound. -/
 
 @[expose] public section
 
 namespace Claims.Sampling
 
-/-- **What a proof block's correctness reads of its replay block's values**: on a topological program that `Pt`
-partitions, a proof block of `Pt` is correct at `refIn rb val ι` exactly when it is at `refIn rb val' ι'`, for boundary
-values that agree below the program's gates and interior values that agree at `rb`'s gates below them. -/
 theorem correct_refIn_congr {C : Prog} {Pt : Partition} (htop : C.Topological) (hP : Pt.Partitions C) {v : ℕ}
     {u : List ℕ} (hu : Pt.blocks[v]? = some u) (rb : List ℕ) {val val' : ℕ → Option Bool} {ι ι' : ℕ → Bool}
     (hval : ∀ g < C.gates.length, val g = val' g) (hι : ∀ g < C.gates.length, g ∈ rb → ι g = ι' g) :
@@ -84,9 +45,6 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The sessions' bound at a selection that reads the first stage's coins**, averaged over the tape: the run accepts
-and the proof block at the picked slot is not found at the slot's coins with probability at most
-`κ_s + √(k(x)·γ_s·Pr[B])`, for a selection that reads the run's coins off the second stage only. -/
 theorem pr_unfound_le_at (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (β : Ω → (Fin (L.V.k x) → Coin) → ℝ) (hβ0 : ∀ ω r, 0 ≤ β ω r)
     (hβ : Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x)
@@ -123,8 +81,6 @@ theorem pr_unfound_le_at (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω :
         rw [Ex_mul_left]
         exact mul_le_mul_of_nonneg_left hβ hγ0
 
-/-- **The rewinding lemma at the committed trace, averaged over the tape**: at most `N·√Pr[B_conf]` (Jensen's
-inequality). -/
 theorem ex_offReg_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) ≤
@@ -140,10 +96,6 @@ namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## A run's interior openings -/
-
-/-- What a run's extractions open under replay block `ρ`'s interior roots at gate `g` is a kept opening there that
-passes. -/
 theorem iopensAt_some {H : Msg → Msg} {L : CompiledTwo Coin A} {Ω : Type} {P : Prover Ω} {x : Msg} {ω : Ω}
     {s : AuditStatement} (hs : L.parse x = some s) {r : Fin (L.V.k x) → Coin} {c : L.SlotEC x} {ρ g : ℕ} {b : Bool}
     (h : L.iopensAt H P x ω r c ρ g = some b) :
@@ -155,8 +107,6 @@ theorem iopensAt_some {H : Msg → Msg} {L : CompiledTwo Coin A} {Ω : Type} {P 
   simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hp
   exact ⟨q, List.mem_of_find?_eq_some hq, hp.1.1, hp.1.2, rfl, hp.2⟩
 
-/-- At a run whose kept openings agree with themselves, each kept opening under `ρ`'s interior roots that passes is
-what the run's extractions open there. -/
 theorem iopensAt_of_mem {H : Msg → Msg} {L : CompiledTwo Coin A} {Ω : Type} {P : Prover Ω} {x : Msg} {ω : Ω}
     {s : AuditStatement} (hs : L.parse x = some s) {r : Fin (L.V.k x) → Coin} {c : L.SlotEC x}
     (hagree : ∀ q ∈ L.kept H P x s ω r c, ∀ q' ∈ L.kept H P x s ω r c, q.1 = q'.1 → q.2.pos = q'.2.pos →
@@ -172,8 +122,6 @@ theorem iopensAt_of_mem {H : Msg → Msg} {L : CompiledTwo Coin A} {Ω : Type} {
   rw [hb, ← h3']
   exact congrArg some (hagree q' hq' q hq (h1'.trans h1.symm) h2')
 
-/-! ## The rewinding lemma at the committed interior -/
-
 /-- At a tape and first-stage coins `r`, a second stage's and the extractor's coins `ec` open gate `g` under the
 interior roots of the replay block of `Pρ` that holds it; `none` at a gate no replay block holds. -/
 noncomputable def iop (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
@@ -186,28 +134,21 @@ noncomputable def iopTable (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type
     Option Bool :=
   L.iop H P x ω Pρ r ec g
 
-/-- The committed interior of the replay block of `Pρ` that holds gate `g`; `true` at a gate no replay block holds. -/
+/-- `true` at a gate no replay block holds. -/
 noncomputable def iplur (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Pρ : Partition) (r : Fin (L.V.k x) → Coin) (g : ℕ) : Bool :=
   ((gateBlock Pρ g).map fun ρ => L.iregVal H P x ω r ρ g).getD true
 
-/-- A run's extractions open a gate of the program, under the interior roots of the replay block of `Pρ` that holds it,
-off that block's committed interior. -/
 def OffIreg (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (Pρ : Partition)
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) : Prop :=
   ∃ g < L.nG x, ∃ ρ, gateBlock Pρ g = some ρ ∧ ∃ b, L.iopensAt H P x ω r c ρ g = some b ∧ L.iregVal H P x ω r ρ g ≠ b
 
-/-- Two second stages on one tape and one first stage open a gate of the program two ways, each under the interior
-roots of the replay block of `Pρ` that holds it. -/
 def IConflict (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (Pρ : Partition)
     (r : Fin (L.V.k x) → Coin)
     (ee : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) : Prop :=
   ∃ g : Fin (L.nG x), (L.iopTable H P x ω Pρ r ee.1 g).isSome ∧ (L.iopTable H P x ω Pρ r ee.2 g).isSome ∧
     L.iopTable H P x ω Pρ r ee.1 g ≠ L.iopTable H P x ω Pρ r ee.2 g
 
-/-- **The rewinding lemma at the committed interior**: at a tape and first-stage coins, a second stage's extractions
-open a gate of the program off the committed interior with probability at most `N·√Pr[conflict]`, `N` the program's
-gates (`FlockSoundness.Rewinding.prBad_le`, the committed interior being the second stages' openings' plurality). -/
 theorem pr_offIreg_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Pρ : Partition) (r : Fin (L.V.k x) → Coin) :
     Pr (fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω Pρ (forkOn (L.secondStage x) r ec.1) ec.2) ≤
@@ -282,10 +223,6 @@ theorem pr_offIreg_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P 
       rw [Fintype.card_fin, hconf, Real.sqrt_mul (mul_self_nonneg (L.nG x : ℝ)),
         Real.sqrt_mul_self (Nat.cast_nonneg _)]
 
-/-! ## Binding: two second stages' conflicts are `B_conf,2`'s collisions -/
-
-/-- An event of a tape, first-stage coins and two second stages on them that gives a collision `B_conf,2`'s output is
-at most `Pr[B_conf,2]`. -/
 theorem le_bconfTwo (H : Msg → Msg) (L : CompiledTwo Coin A) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     {Q : Ω × (Fin (L.V.k x) → Coin) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
@@ -300,8 +237,6 @@ theorem le_bconfTwo (H : Msg → Msg) (L : CompiledTwo Coin A) {x : Msg} {s : Au
   simp only [BconfTwo, hs]
   exact Pr_mono hQ
 
-/-- **Two second stages' conflict at the committed interior**: at most `Pr[B_conf,2]`. Both read gate `g` under the
-interior roots of one replay block, which the two second stages share (`Sessions.interior`). -/
 theorem pr_iconflict_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
     {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
@@ -332,8 +267,6 @@ theorem pr_iconflict_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.co
     (forkOn (L.secondStage x) q.2.1 q.2.2.2.1, q.2.2.2.2) (Or.inl ha) (Or.inr ha') hroots (ha2.trans ha2'.symm)
     (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
 
-/-- **The rewinding lemma at the committed interior, averaged over the tape and the first stage**: at most
-`N·√Pr[B_conf,2]` (Jensen's inequality). -/
 theorem ex_offIreg_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
     {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
@@ -358,18 +291,7 @@ theorem ex_offIreg_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.comm
         mul_le_mul_of_nonneg_left ((Ex_sqrt_le _ fun _ => Pr_nonneg _).trans
           (Real.sqrt_le_sqrt (pr_iconflict_le hbind hS hs Pρ P))) (Nat.cast_nonneg _)
 
-/-! ## The deterministic half -/
-
 set_option synthInstance.maxSize 1024 in
-/-- **The deterministic half, at a boundary trace**: at an accepted run whose sample holds, at slot `i`, a proof block
-`u` incorrect at the boundary trace `tr` and its replay block's committed interior (`incorrectAllAt`), the session of `i`
-is not extracted at its first slot `i₀`'s coins, or the run's extractions disagree with themselves, or open a gate off
-`tr` or off a replay block's committed interior. Otherwise the boundary values that are `tr` on the program's gates and
-the kept openings elsewhere, and the interior values that are `u`'s replay block's committed interior on its gates and
-the kept openings elsewhere, agree with every opening the session's witness reveals at `u` that passes, so they make
-`u` correct (`Sessions.opens`); and `tr` and the committed interior agree with them where `u`'s correctness reads
-(`correct_refIn_congr`), so `u` is correct at them, which `u ∈ incorrectAllAt` denies. The boundary trace is the reader's:
-the committed trace at the run's tape (`FregTwo_eq`), or one read at the statement. -/
 theorem regTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
     {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
     (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω) (ω : Ω)
@@ -447,12 +369,7 @@ theorem regTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions
   exact hnot ⟨b, rb, hb, hrb, (correct_refIn_congr hin.1 hin.2.1 hb rb (fun g hg => by rw [hV, ite_eq_left hg])
     fun g hg hgr => by rw [hI, ite_eq_left ⟨hg, hgr⟩]).1 hc'⟩
 
-/-! ## The event -/
-
 set_option synthInstance.maxSize 1024 in
-/-- **The event at a tape, at a boundary trace**: an accepted run that samples a proof block incorrect at the boundary
-trace `tr` and its replay block's committed interior has the first such block's session unfound at its first slot (at
-`leadSel (selOf …)`), or disagrees with itself, or is off `tr` or off the committed interior (`regTwo_split`). -/
 theorem eventTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
     {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
     (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω) (ω : Ω) (tr : ℕ → Option Bool) :
@@ -489,12 +406,6 @@ theorem eventTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessio
   · exact Or.inr (Or.inr (Or.inl h))
   · exact Or.inr (Or.inr (Or.inr h))
 
-/-- **The primary conjunct of `KSRegTwo`, from the sessions' bound**: at each tape, an accepted run that samples a
-proof block of `FregTwo` has the first such block's session unfound at its first slot (the sessions' bound at
-`leadSel (selOf …)`, which reads the run's coins off the second stage only), or its extractions disagree with
-themselves (`B_conf`), open a gate off the committed boundary trace (the rewinding lemma at the tape), or open a gate
-off a replay block's committed interior (the rewinding lemma at the tape and the first stage, and `B_conf,2`):
-`eventTwo_split` at the committed boundary trace. -/
 theorem eventTwo_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
     (hS : L.Sessions H) :
     ∀ x, L.Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),

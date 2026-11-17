@@ -4,24 +4,7 @@ public import Proofs.Flock.SessionLoop.FinInnerRec
 public import Proofs.Flock.SessionLoop.FinRepTau
 public import Proofs.Flock.Claims.ZK.FinishTrunc
 
-/-!
-# The finish's live inner proof at the session's cut
-
-`Loop.finInner` runs a rep's `repCons` and its inner proof answered by the request's coins and then ones
-(`Loop.asksPad`). Its `τ` commitment is read here, in parts:
-
-* **`Finish.repConsC`**: `repCons` in the analysis's terms, `repFwC` up to its inner proof (`repCons_eqC`, at the
-  ZK server's commitment and `hm96-sha512/v1`). **`Finish.repCons_cut`**: where `repCons` answered by the rep's coins
-  (`asksOf`) returns from round `0`, `repConsC` answered by the session's cut from the rep's base returns the same, at
-  any coins that agree with the rep's below each round's count (`repConsC_br`, on `FinishTrunc`'s bridge).
-* **`Loop.repCons_ofPad`**: `repCons` answered by `asksPad C` returns as answered by `asksOf C`, where it takes no more
-  rounds than `C` holds (`asksPad_relOf`).
-* **`Loop.innerP_pad_tau`**: the inner proof answered by `asksPad C` from round `k` squeezes one coin and then
-  `|cons| + 3`, and commits to `InZ.tau` at the coins `padCoin C k` and `padCoin C (k + 1)` (`tau_congr`: `InZ.tau`
-  reads only those).
-* **`Masked.repConsC_rows`**: where `repConsC` on table `j`'s rep `r`, answered by the opened coins from the rep's base,
-  returns, its constraints are the worker's view's first seven rows (`SwRows`), as `fwTau_at` reads them.
--/
+/-! The finish's live inner proof at the session's cut, and its `τ` commitment. -/
 
 @[expose] public section
 
@@ -36,8 +19,6 @@ section
 
 variable {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT V M]
 
-/-- **`repCons` in the analysis's terms**: `repFwC` up to its inner proof, returning the proof, level 0's hiding messages
-and the constraints the inner proof batches. -/
 def repConsC (io : FlockComplete.Asks M) (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array F128) (cm0 : FlockComplete.Commit) (extras : Array Claim) (pads : FlockComplete.PadsZk)
     (ic : FlockComplete.InnerCommit) (vals : Array F128) (extra lanePad : ℕ → ℕ → F128)
@@ -61,7 +42,6 @@ def repConsC (io : FlockComplete.Asks M) (st : Setup) (sch : Flock.Schedule) (tP
   return (p, zl, rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++
     lgc)
 
-/-- **The ZK server's `repCons` is `repConsC`** at its own commitment and `hm96-sha512/v1`. -/
 theorem repCons_eqC (io : Asks M) (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512) (sch : Flock.Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk)
     (ic : InnerCommit) (vals : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) :
@@ -84,8 +64,6 @@ variable (coins : Array (Array F128)) (base N : ℕ) (coin : ℕ → ℕ → F12
 
 include hn hc
 
-/-- **`repConsC` is related**, at the port's coins and at the session's coins from round `base`, given `m − 13`, `n + 1`
-and every level's `q + 1` at most `65536` and the claims below `2^64`: `repFwC_br` up to the inner proof. -/
 theorem repConsC_br (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128)
     (cm0 : FlockComplete.Commit) (extras : Array Claim) (pads : FlockComplete.PadsZk)
     (ic : FlockComplete.InnerCommit) (vals : Array F128) (extra lanePad : ℕ → ℕ → F128)
@@ -107,10 +85,6 @@ theorem repConsC_br (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : 
   refine bridgeT_liftV_bind _ fun lgc _ => ?_
   exact With.Sim.pure _ _
 
-/-- **The ZK server's `repCons` is the session's rounds from `base`**: where `repCons` at `commitFw`, answered by the
-rep's coins from round `0`, returns the proof, messages and constraints `r` and the transcript `t` at round `k'`,
-`repConsC` answered by `asksCut` at any coins that agree with the rep's below each round's count, from a log of `base`
-sends, returns the same with a log of `base + k'`, wherever the cut is past the rep's last round. -/
 theorem repCons_cut (st : Setup) (hms : st.merkle = MerkleScheme.hm96Sha512) (sch : Flock.Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
     (vals : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (hm : st.m - 13 ≤ 65536)
@@ -139,7 +113,6 @@ open _root_.Flock.ZkServer.Finish (Asks)
 
 namespace Loop
 
-/-- Where `asksPad C` answers round `k` inside `C`, the round's coins number its squeeze's count. -/
 theorem asksPad_round_size (C : Array (Array F128)) (c : ByteArray) {k : ℕ} {coin : ℕ → F128} {k' : ℕ}
     (h : ((asksPad C).round c).run k = .ok (coin, k')) {cs : Array F128} (hk : C[k]? = some cs) :
     cs.size = (_root_.Flock.u64OfLE c (c.size - 8)).toNat := by
@@ -151,7 +124,6 @@ theorem asksPad_round_size (C : Array (Array F128)) (c : ByteArray) {k : ℕ} {c
   · rename_i hne
     simpa using hne
 
-/-- `asksPad C` and `asksOf C` answer each round below `C.size` alike. -/
 theorem asksPad_relOf (C : Array (Array F128)) :
     _root_.Flock.ZkServer.Finish.AsksRel (padSim C.size) (asksPad C).toC
       (_root_.Flock.ZkServer.Finish.asksOf C).toC where
@@ -173,8 +145,6 @@ theorem asksPad_relOf (C : Array (Array F128)) :
       Bool.false_eq_true, ↓reduceIte, StateT.run_set, StateT.run_pure]
     all_goals rfl
 
-/-- **`repCons` answered by `asksPad C`** returns as answered by `asksOf C`, where it takes no more rounds than `C`
-holds. -/
 theorem repCons_ofPad (C : Array (Array F128)) (st : _root_.Flock.Setup)
     (hm : st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (sch : _root_.Flock.Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (g : Array F128) (cm0 : _) (extras : Array _root_.Flock.Claim) (pads : _) (ic : _)
@@ -190,7 +160,6 @@ theorem repCons_ofPad (C : Array (Array F128)) (st : _root_.Flock.Setup)
   ((_root_.Flock.ZkServer.Finish.repCons_rel (padSim C.size) (asksPad_relOf C) st hm sch tPad rep dom g cm0 extras
     pads ic vals extra lanePad salt tr 0 (r, tr') k' h).2 hk)
 
-/-- A verifier action lifted to the rep's rounds keeps the round. -/
 theorem liftTM_k {α : Type} {x : _root_.Flock.Transcript.TM α} {t : Flock.Transcript} {k : ℕ} {a : α} {t' : Flock.Transcript}
     {k' : ℕ} (h : ((liftTM x : TMW (StateT ℕ V) α).run t).run k = .ok ((a, t'), k')) : k' = k := by
   change (monadLift (x t) : StateT ℕ V _).run k = _ at h
@@ -200,8 +169,6 @@ theorem liftTM_k {α : Type} {x : _root_.Flock.Transcript.TM α} {t : Flock.Tran
     cases h
     rfl
 
-/-- **A squeeze answered by `asksPad C`** from round `k`, of `0 < n < 2^64` coins, returns round `k`'s coins and moves
-to round `k + 1`; inside `C`, round `k` holds `n` coins. -/
 theorem squeezeP_pad (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) (hn64 : n < 2 ^ 64)
     {t : Flock.Transcript} {k : ℕ} {v : Array F128} {t' : Flock.Transcript} {k' : ℕ}
     (h : ((_root_.Flock.ZkServer.Finish.squeezeP (asksPad C) kind n).run t).run k = .ok ((v, t'), k')) :
@@ -217,7 +184,6 @@ theorem squeezeP_pad (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : n �
   rw [asksPad_round_size C _ h1 hcs]
   exact Claims.ZKServer.Count.framed_count t kind hn64
 
-/-- A coin answered by `asksPad C` from round `k` is round `k`'s first, which inside `C` holds one coin. -/
 theorem sampleP_pad (C : Array (Array F128)) {t : Flock.Transcript} {k : ℕ} {a : F128} {t' : Flock.Transcript} {k' : ℕ}
     (h : ((_root_.Flock.ZkServer.Finish.sampleP (asksPad C)).run t).run k = .ok ((a, t'), k')) :
     a = padCoin C k 0 ∧ k' = k + 1 ∧ ∀ cs, C[k]? = some cs → cs.size = 1 := by
@@ -231,7 +197,6 @@ theorem tauCommitmentWith_sv (hh : ByteArray → ByteArray) (tau : F128) (salt :
     _root_.Flock.Zk.tauCommitmentWith (_root_.Flock.Hashes.ofSha512 hh : _root_.Flock.Hashes (StateT ℕ V)) tau salt =
       pure (FlockComplete.Replay.InZ.tcOf hh tau salt) := rfl
 
-/-- `τ`'s commitment through SHA-512, lifted to the transcript, is `InZ.tcOf` and keeps the transcript and round. -/
 theorem tauLift_ok {hh : ByteArray → ByteArray} {tau : F128} {salt : ByteArray} {t : Flock.Transcript} {k : ℕ}
     {tc : ByteArray} {t' : Flock.Transcript} {k' : ℕ}
     (h : ((StateT.lift (_root_.Flock.Zk.tauCommitmentWith
@@ -248,9 +213,6 @@ theorem tauLift_ok {hh : ByteArray → ByteArray} {tau : F128} {salt : ByteArray
   obtain ⟨⟨h1, h2⟩, h3⟩ := e'
   exact ⟨h1, h2, h3⟩
 
-/-- **The inner proof answered by `asksPad C` from round `k`**: where it returns, round `k` held one coin inside `C` and
-round `k + 1` held `|cons| + 3`, and its `τ` commitment is `InZ.tau` at the coins `padCoin C k` and `padCoin C (k + 1)`,
-committed through SHA-512 under the pads' `τ` salt. -/
 theorem innerP_pad_tau (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout)
     (p : _root_.Flock.ZkServer.Finish.PadsZk) (ic : _root_.Flock.ZkServer.Finish.InnerCommit) (finalC : F128)
     (cons : Array (String × _root_.Flock.Zk.Lin)) (hcs : cons.size + 3 < 2 ^ 64) {t : Flock.Transcript} {k : ℕ}
@@ -292,7 +254,6 @@ theorem innerP_pad_tau (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout
     htc]
   rfl
 
-/-- **`InZ.tau` reads the coins of its first two rounds alone**, the second's below `|cons| + 3`. -/
 theorem tau_congr (lay : _root_.Flock.Zk.PadLayout) (p : FlockComplete.PadsZk)
     (cons : Array (String × _root_.Flock.Zk.Lin)) {cs cs' : FlockComplete.Replay.InZ.Challenges}
     (he : cs.ce 0 = cs'.ce 0) (hg : ∀ i < cons.size + 3, cs.cg i = cs'.cg i) :
@@ -326,12 +287,6 @@ open FlockSoundness.Refine (fOf gOf)
 
 namespace Masked
 
-/-- **A deployed rep's constraints from the ZK server's run**: where `repConsC` on table `j`'s rep `r`, answered by the
-opened coins from the rep's base at the packed table of the witness's trace (`hg`) with an extra claim per link point
-and region (`hxs`), returns, and below `zp 64` the passed
-values plus the pads are the switched source's masked values (`hmk`), its constraints are the worker's view's first seven
-rows at the clear values `v` (`SwRows`), wherever table `j`'s rows hold at its base there (`hrows`): `fwTau_at`'s reading
-of the run up to its inner proof (`tauFw_at_coef`, `swRows_coef`). -/
 theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hnr : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
@@ -360,7 +315,6 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
   have hfk : (stAt x j).circuitFold.kLog = (stAt x j).c.kLog := rfl
   have hj : j.val < (stsOf x).size := lt_of_jOf j
   have hstj : (stsOf x)[j.val]! = stAt x j := getElem!_pos (stsOf x) j.val hj
-  -- the setup is the statement's
   have hSm : st.m = (stAt x j).m := by
     subst hst
     rfl
@@ -384,7 +338,6 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
     have h := innerLayE_len x j
     rw [innerLayE_layE] at h
     exact h
-  -- the coins from the rep's base are `czExe`'s
   have ez : ligCoin c (l.size + 2) 0 = Composed.zcF (zkTab x j).table (stAt x j) (czExe PE x c j) r := by
     rw [hl]
     rfl
@@ -421,12 +374,10 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
     subst hst
     rw [hl]
     rfl
-  -- the masked values below `zp 64` are the view's
   have hmk' : ∀ k < (Composed.layOf (zkTab x j).table (stAt x j)).zp 64,
       (Composed.msgAt ((swViewE x c w v τ j).pre.2.1 r) k).val = vals[k]! + pads.h[k]! := fun k hk => by
     rw [swViewMasked x c w v τ j r hrows k]
     exact hmk k hk
-  -- the ring switch's `ŝ`s for claims `0` and `1` are the view's
   have hsw : ∀ zp zc t₁ l₁ lp lc t₂ l₂ ss T sws t₃ l₃,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut (ligCoin c) n) st.m st.digest (FlockComplete.flat cm0.cap)
           ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -454,7 +405,6 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
       unfold rankSlot
       rw [hstj]
       omega
-    -- the switched source's switched vectors are the ZK server's
     have hsv : ∀ k < 2,
         ((swSrcE x c w v τ j.val).rep r.val).sv k =
           _root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j)
@@ -524,7 +474,6 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
     have e0 := e 0 (by norm_num)
     rw [Nat.add_zero] at e0
     exact ⟨e0, e 1 (by norm_num)⟩
-  -- the run: the PIOP, Ligerito, the replay and level 0's constraints, then the inner proof
   dsimp only [_root_.Flock.ZkServer.Finish.repConsC] at h
   obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
@@ -550,7 +499,6 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
   try dsimp only at hc
   simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hc
   obtain ⟨⟨rfl, -⟩, -⟩ := hc
-  -- the PIOP's sends, then Ligerito's
   have hl0 := (FlockComplete.RankAt.zerocheckCut_round1 (ligCoin c) n hm14 _ _ _ _ _ h₁).1
   obtain ⟨hl1, hl1n, -⟩ := (FlockComplete.CutEq.zerocheckCut_eqAt (ligCoin c) n hm14 st.digest
     (FlockComplete.flat cm0.cap) ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -580,7 +528,6 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
     rw [repSlot_eq hs hzq, stsOf_half, ← repBase_eq hs (2 * j.val + r.val), ← hl]
     unfold FlockComplete.piopRoundsZk
     omega
-  -- level 0's record holds the rep's coins at its slots (`ligeritoPZk_lanes`), `czExe`'s
   have hrec := (FlockComplete.L0.ligeritoPZk_lanes (respE c) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (by omega) hk0 hS4).record
   have hLC : LaneCoins (zkTab x j).table (stAt x j) (czExe PE x c j) r rec := by
     refine ⟨fun i => ?_, fun i hi => ?_, ?_⟩
@@ -601,7 +548,6 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
       simp only [FlockComplete.coinKOf, coinOf_respE, hslot]
       rw [show l₃.size + 2 + (zkTab x j).sch.k0 = l₃.size + ((zkTab x j).sch.k0 + 2) by omega,
         show l₃.size + 3 + (zkTab x j).sch.k0 = l₃.size + ((zkTab x j).sch.k0 + 2) + 1 by omega]
-  -- the run's constraints are the view's first seven rows
   obtain ⟨hlsz, hlasz, hrow⟩ := Composed.tauFw_at_coef (zkTab x j).table (stAt x j) (czExe PE x c j) r
     ((swViewE x c w v τ j).pre.2.1 r) (swViewE x c w v τ j).pre.1
     ((swViewE x c w v τ j).pre.2.2.2.2.2 r).1 ((swViewE x c w v τ j).pre.2.2.2.2.1 r)

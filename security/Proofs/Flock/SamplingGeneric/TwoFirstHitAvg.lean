@@ -8,38 +8,7 @@ import Proofs.Flock.Claims.Sampling.Bext
 import Proofs.Flock.Claims.Sampling.Cost
 import Proofs.Flock.Claims.Sampling.Extract
 
-/-!
-# The first-hit bound at the prover's expected calls
-
-`Compiled.ex_calls_le_at_cls` bounds the expectation a by-class first-hit finder's cost reads, of a run's calls with
-every session extracted and, for each class of gates its sample needs, its calls with only the sessions needing the
-class extracted, where **every** run calls SHA-512 at most `T` times. A prover whose runs call it `T` times on
-average and far more on a few is charged there at its largest run. This file bounds the same expectation from
-averages alone (`Compiled.ex_calls_le_avg_cls`):
-
-`E[c + Σ_{classes of the sample} c_q] ≤ T + e_s·A_s + A_k + e_s·A_m + (1 + K_s)·n_PU·openCalls`,
-
-* `T` at least a run's expected calls, both parties' (`Compiled.partiesCalls`);
-* `A_s` at least the expected product of the number of sessions in a run's sample and the run's calls, `A_k` of the
-  number of classes of the gates the sample needs and the run's calls, `A_m` of the number of the classes'
-  representatives the sample's sessions need, session by session (`Compiled.sessCountIn`), and the run's calls;
-* `K_s` at least the expected number of classes of the gates the sample needs.
-
-Where the three counts are at most `N_s`, `K_s` and `K_m` at every sample, `A_s ≤ N_s·T`, `A_k ≤ K_s·T` and
-`A_m ≤ K_m·T`, and the bound is `Compiled.firstHitCost`'s expression at the expected calls
-(`Compiled.ex_calls_le_exp_cls`): `T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls`.
-
-Why the averages suffice. A run's calls are its parties', its extractions' own, and its parties' in each rerun of
-its extractions (`calls_eq_own`). A session's extraction reruns the run with the session's rounds replaced by each
-sample `A`'s extractor reruns at (`sessExt_rerunsAt`), and by Wald's identity those reruns' calls average at most
-`e_s` times the calls of the run with the session's rounds fresh (`Arg.rerunsCostExp_le`). Resampling a session's
-rounds keeps the sample (`RunsFixed.fixed`), so over the run's coins that is `e_s` times the run's own calls, beside
-any weight of the sample (`slot_cost_le_weighted`, `Ex_resample` on both sides). So each rerun is charged at the
-average run's calls, not at a budget on every run.
-
-`B_conf,X`'s cost is its two runs' calls, so under the linear expected-time bound at it
-`Pr[B_conf,X] ≤ 2·(T + e_s·A_s + n_PU·openCalls)/2^256` (`Compiled.runCostAvg`, `Compiled.bconfX_le_avg`).
--/
+/-! The first-hit bound's expected calls from the prover's average calls, not a budget on every run. -/
 
 @[expose] public section
 
@@ -47,19 +16,15 @@ namespace Claims.SamplingGeneric
 
 open Claims Claims.Sampling
 
-/-- An average over a tape, coins and further coins of a function of the tape and the coins is the average over
-the tape and the coins. -/
 theorem Ex_tape_coins {Ω R C : Type} [Fintype Ω] [Fintype R] [Fintype C] [Nonempty C] (f : Ω → R → ℝ) :
     Ex (fun q : Ω × (R × C) => f q.1 q.2.1) = Ex fun q : Ω × R => f q.1 q.2 := by
   rw [Verity.FirstHit.ex_tape fun (ω : Ω) (rc : R × C) => f ω rc.1, Verity.FirstHit.ex_tape f]
   exact congrArg Ex (funext fun ω => Ex_fst (f ω))
 
-/-- An average of four terms is the four averages' sum. -/
 theorem Ex_add_four {α : Type} [Fintype α] (f₁ f₂ f₃ f₄ : α → ℝ) :
     Ex (fun a => f₁ a + f₂ a + f₃ a + f₄ a) = Ex f₁ + Ex f₂ + Ex f₃ + Ex f₄ := by
   rw [Ex_add (fun a => f₁ a + f₂ a + f₃ a) f₄, Ex_add (fun a => f₁ a + f₂ a) f₃, Ex_add f₁ f₂]
 
-/-- **A count at most `N` at every sample, times a weight averaging at most `T`, averages at most `N·T`.** -/
 theorem Ex_mul_le_of_le {Q : Type} [Fintype Q] [Nonempty Q] {cnt pc : Q → ℝ} {N T : ℝ} (hc0 : ∀ q, 0 ≤ cnt q)
     (hc : ∀ q, cnt q ≤ N) (hp : ∀ q, 0 ≤ pc q) (hT : Ex pc ≤ T) : Ex (fun q => cnt q * pc q) ≤ N * T := by
   have hN : 0 ≤ N := (hc0 (Classical.arbitrary Q)).trans (hc _)
@@ -70,30 +35,17 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## A run's calls, rerun by rerun -/
-
-/-- **A run's own calls**: both parties' SHA-512 calls in the run at the tape `ω` and the coins `r`. Its
-extractions' calls are not counted. -/
+/-- Its extractions' calls are not counted. -/
 def partiesCalls (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin (L.V.k x) → Coin) : ℕ :=
   (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length
 
-/-- **A run's expected calls at the prover's expected calls**, in closed form: `T + e_s·A_s + n_PU·openCalls`, the
-run with every session of its sample extracted, where `T` bounds a run's expected calls, both parties', and `A_s`
-the expected product of the number of sessions in a run's sample and the run's calls. -/
 noncomputable def runCostAvg (L : Compiled Coin A) (x : Msg) (T As : ℝ) : ℝ :=
   T + L.es x * As + (L.nPU x : ℝ) * L.openCalls x
 
-/-- **The first-hit bound's calls at the prover's expected calls**, in closed form:
-`T + e_s·A_s + A_k + e_s·A_m + (1 + K_s)·n_PU·openCalls`, where `T` bounds a run's expected calls, both parties',
-`A_s`, `A_k` and `A_m` the expected products of the run's calls and the number of sessions in its sample, of gates a
-finder pays for and of those gates its sessions need, session by session, and `K_s` the expected number of gates a
-finder pays for. -/
 noncomputable def firstHitCostAvg (L : Compiled Coin A) (x : Msg) (T As Ak Am Ks : ℝ) : ℝ :=
   T + L.es x * As + Ak + L.es x * Am + (1 + Ks) * ((L.nPU x : ℝ) * L.openCalls x)
 
-/-- **A run's calls, exactly**: both parties', its extractions' own, and both parties' in each rerun of its
-extractions. -/
 theorem callsAt_eq (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement)
     (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
     L.callsAt H P x s ω r c = L.partiesCalls H P x ω r +
@@ -105,8 +57,6 @@ theorem callsAt_eq (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prov
   rw [h, ← Nat.add_assoc]
   rfl
 
-/-- **A run's calls at one gate, exactly**: both parties', its extractions' own at the gate, and both parties' in
-each rerun of its extractions at the gate. -/
 theorem callsBy_eq (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement)
     (needs : ℕ → Finset ℕ) (g : ℕ) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
     L.callsBy H P x s needs g ω r c = L.partiesCalls H P x ω r +
@@ -118,11 +68,6 @@ theorem callsBy_eq (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prov
   rw [h, ← Nat.add_assoc]
   rfl
 
-/-! ## A slot's reruns, weighed -/
-
-/-- Slot `i`'s extraction's reruns at the run `r` on the slot's coins `ρ`, weighed by `W`: the weights of the
-samples its session's extraction reruns at, summed, when it is the session's first slot; `0` otherwise, and when
-fewer blocks are sampled. At the weight `1` it is `slotRuns`. -/
 noncomputable def slotCost (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Transcript) (W : (Fin (L.V.k x) → Coin) → ℕ) (i : Fin (L.nPU x))
     (r : Fin (L.V.k x) → Coin) (ρ : L.BlockEC x) : ℝ :=
@@ -132,7 +77,6 @@ noncomputable def slotCost (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s 
         run').map W).sum : ℝ)
     else 0).getD 0
 
-/-- The weights of the samples a run's extractions rerun at are its slots', summed. -/
 theorem runExt_cost_eq (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Transcript) (W : (Fin (L.V.k x) → Coin) → ℕ) (r : Fin (L.V.k x) → Coin)
     (c : L.SlotEC x) :
@@ -178,9 +122,6 @@ theorem slotCost_some (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : Aud
   rw [h, Option.map_some, Option.getD_some]
   exact dite_eq_left ⟨u.isLt, hf⟩
 
-/-- **The weights of the samples a run's extractions rerun at, at the gates of a set, summed**: each slot's
-(`slotCost`), once for each gate of the set that its session's proof blocks need. `sum_runExtAt_runs_le_in` is
-this at the weight `1`. -/
 theorem sum_runExtAt_cost_le_in (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Transcript) (W : (Fin (L.V.k x) → Coin) → ℕ) (needs : ℕ → Finset ℕ)
     (S : Finset (Fin (L.nG x))) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
@@ -231,18 +172,8 @@ theorem sum_runExtAt_cost_le_in (H : Msg → Msg) (L : Compiled Coin A) (x : Msg
       · exact Nat.cast_nonneg _
       · exact le_rfl
 
-/-! ## A session's expected reruns' weight, beside a weight of the sample -/
-
 variable {H : Msg → Msg} {L : Compiled Coin A}
 
-/-- **Slot `i`'s expected reruns' weight, beside a weight of the sample**: over the second stage `d` at `r`, the
-weights `W` of the samples slot `i`'s extraction reruns at sum, in expectation, to at most `e_s` times the weight of
-the run itself where slot `i` is its session's first, and to nothing elsewhere; a weight `w` of the sample stands
-on both sides. Resampling the slot's session's rounds keeps the sample (`RunsFixed.fixed`), so `w` and "first slot"
-are the same at every resampled run (`Ex_resample`, on both sides). On those rounds the session's extraction is
-`A`'s extractor against one prover, whose reruns' weights average at most `e_s` times the weight of the run with
-the session's rounds fresh (`Arg.rerunsCostExp_le`, `sessExt_rerunsAt`, `place_emb`). At the weight `W = 1` this is
-`slot_exp_le_weighted`. -/
 theorem slot_cost_le_weighted (hS : L.CostContract H) {x : Msg} (s : AuditStatement) {Ω : Type} (P : Prover Ω)
     (ω : Ω) (W : (Fin (L.V.k x) → Coin) → ℕ) (i : Fin (L.nPU x)) (w : List ℕ → ℝ) (hw : ∀ l, 0 ≤ w l)
     (r : Fin (L.V.k x) → Coin) :
@@ -360,10 +291,6 @@ theorem slot_cost_le_weighted (hS : L.CostContract H) {x : Msg} (s : AuditStatem
             (le_maxBelow (fun v => 1 + (A.waits (L.sh x v) : ℝ) * A.k (L.sh x v)) u.isLt)
             (Ex_nonneg fun _ => Nat.cast_nonneg _)
 
-/-- **Expected weight of the samples a run's extractions rerun at, each slot beside a weight of the sample**: over
-the run's coins and the extractor's, at most `e_s` times the expectation of the weight of the run itself times the
-weights of the sample's first slots (`slot_cost_le_weighted`, the second stage's coins fresh at uniform coins,
-`Ex_forkOn`). At the weight `W = 1` this is `ex_weighted_runs_le`. -/
 theorem ex_weighted_cost_le (hS : L.CostContract H) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) (s : AuditStatement)
     (W : (Fin (L.V.k x) → Coin) → ℕ) (w : Fin (L.nPU x) → List ℕ → ℝ) (hw : ∀ i l, 0 ≤ w i l) :
     Ex (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
@@ -417,10 +344,6 @@ theorem ex_weighted_cost_le (hS : L.CostContract H) {x : Msg} {Ω : Type} (P : P
         · exact mul_zero _
     _ = _ := Ex_mul_left _ _
 
-/-! ## The bound's expectation from averages -/
-
-/-- **A run's calls with every session of its sample extracted**: at most both parties', `n_PU·openCalls` for its
-extractions' own, and the slots' reruns' calls (`callsAt_eq`, `runExt_own_le`, `runExt_cost_eq`). -/
 theorem callsAt_le_cost (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
     (L.callsAt H P x s ω r c : ℝ) ≤ ((L.partiesCalls H P x ω r : ℝ) + (L.nPU x : ℝ) * L.openCalls x) +
@@ -431,9 +354,6 @@ theorem callsAt_le_cost (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : M
     runExt_cost_eq H L x s (run H P L.V x ω) (L.partiesCalls H P x ω) r c]
   linarith
 
-/-- **A run's calls at one gate**: at most both parties', `n_PU·openCalls` for its extractions' own at every gate,
-and both parties' calls in each rerun of its extractions at the gate (`callsBy_eq`, `runExtAt_own_le`,
-`runExt_own_le`). -/
 theorem callsBy_le_cost (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (needs : ℕ → Finset ℕ) (g : ℕ) (ω : Ω)
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
@@ -445,9 +365,6 @@ theorem callsBy_le_cost (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : M
     ((L.runExtAt_own_le H x (run H P L.V x ω) s needs g r (run H P L.V x ω r).seen c).trans
       (runExt_own_le hS hopen hs P ω r c)) _) _
 
-/-- **Expected calls in the reruns of a run's extractions**: over the tape, the run's coins and the extractor's, at
-most `e_s·A_s`, where `A_s` bounds the expected product of the number of sessions in a run's sample and the run's
-calls (`ex_weighted_cost_le` at the weight `1` of the sample). -/
 theorem ex_runExt_cost_le (hS : L.CostContract H) {x : Msg} (s : AuditStatement) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) {As : ℝ}
     (hAs : Ex (fun q : Ω × (Fin (L.V.k x) → Coin) =>
@@ -469,9 +386,7 @@ theorem ex_runExt_cost_le (hS : L.CostContract H) {x : Msg} (s : AuditStatement)
     unfold firstSlots
     rw [Finset.sum_const, nsmul_eq_mul, mul_one]
 
-/-- **A run's expected calls at the prover's expected calls**, with every session of its sample extracted: at most
-`runCostAvg`, `T + e_s·A_s + n_PU·openCalls`, where a run's calls average at most `T`, both parties', and the
-number of sessions in its sample times its calls at most `A_s`. No bound on any one run's calls is read. -/
+/-- No bound on any one run's calls is read. -/
 theorem ex_callsAt_le_avg (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) {T As : ℝ}
     (hT : Ex (fun q : Ω × (Fin (L.V.k x) → Coin) => (L.partiesCalls H P x q.1 q.2 : ℝ)) ≤ T)
@@ -494,8 +409,6 @@ theorem ex_callsAt_le_avg (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x :
   unfold runCostAvg
   ring
 
-/-- **`B_conf,X`'s expected cost at the prover's expected calls**: its two runs' calls, each run's at most
-`runCostAvg` in expectation (`ex_callsAt_le_avg`), so at most `2·(T + e_s·A_s + n_PU·openCalls)`. -/
 theorem ex_bconfX_cost_le_avg (hS : L.CostContract H) (hopen : L.OpenCallsLe H) (x : Msg) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) {T As : ℝ}
     (hT : Ex (fun q : Ω × (Fin (L.V.k x) → Coin) => (L.partiesCalls H P x q.1 q.2 : ℝ)) ≤ T)
@@ -525,8 +438,6 @@ theorem ex_bconfX_cost_le_avg (hS : L.CostContract H) (hopen : L.OpenCallsLe H) 
         (L.callsAt H P x s q'.1 q'.2.1 q'.2.2 : ℝ)).trans_le
           (mul_le_mul_of_nonneg_left (ex_callsAt_le_avg hS hopen hs P hT hAs) zero_le_two)
 
-/-- **`B_conf,X` at the prover's expected calls**: under the linear expected-time bound at `B_conf,X`, it finds a
-collision with probability at most `2·(T + e_s·A_s + n_PU·openCalls)/2^256` (`ex_bconfX_cost_le_avg`). -/
 theorem bconfX_le_avg (hS : L.CostContract H) (hopen : L.OpenCallsLe H) (x : Msg) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) {T As : ℝ}
     (hT : Ex (fun q : Ω × (Fin (L.V.k x) → Coin) => (L.partiesCalls H P x q.1 q.2 : ℝ)) ≤ T)
@@ -537,16 +448,6 @@ theorem bconfX_le_avg (hS : L.CostContract H) (hopen : L.OpenCallsLe H) (x : Msg
   unfold ExpectedCR at hB
   exact hB.trans (div_le_div_of_nonneg_right (ex_bconfX_cost_le_avg hS hopen x P hT hAs) (by positivity))
 
-/-- **The first-hit bound's expected calls at any set of gates of the sample, from averages.** The expectation of a
-run's calls with every session extracted and, for each gate of the set `G` of the run's sample, its calls with only
-the sessions needing the gate extracted, is at most `firstHitCostAvg`:
-
-`T + e_s·A_s + A_k + e_s·A_m + (1 + K_s)·n_PU·openCalls`,
-
-at any `T` at least a run's expected calls, both parties'; any `A_s`, `A_k` and `A_m` at least the expected
-products of the run's calls and the number of sessions in its sample, of gates in `G`, and of gates of `G` its
-sessions need, session by session (`sessCountIn`); and any `K_s` at least the expected number of gates in `G`.
-`ex_calls_le_at_in` reads a bound on every run's calls where this reads their average. -/
 theorem ex_calls_le_avg_in (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
     (G : List ℕ → Finset (Fin (L.nG x))) {T As Ak Am Ks : ℝ}
@@ -640,10 +541,6 @@ theorem ex_calls_le_avg_in (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x 
   unfold firstHitCostAvg
   ring
 
-/-- **The first-hit bound's expected calls by class of gates, from averages**: `ex_calls_le_avg_in` at the
-representatives of the classes of the gates a run's sample needs, the set a by-class first-hit finder pays for at a
-further run. `A_k` and `K_s` read the number of classes of the gates the sample needs, and `A_m` the number of
-their representatives its sessions need, session by session. -/
 theorem ex_calls_le_avg_cls (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
     (cls : Fin (L.nG x) → Fin (L.nG x)) {T As Ak Am Ks : ℝ}
@@ -665,15 +562,6 @@ theorem ex_calls_le_avg_cls (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x
             L.callsBy H P x s needs c.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) ≤ L.firstHitCostAvg x T As Ak Am Ks :=
   ex_calls_le_avg_in hS hopen hs P needs (fun l => (L.sampleNeeds x needs l).image cls) hT hAs hAk hAm hKs
 
-/-- **The first-hit bound's expected calls by class of gates, at the prover's expected calls and counts at every
-sample.** Where a run's calls average at most `T`, both parties', and at every sample the sessions are at most
-`N_s`, the classes of the gates the sample needs at most `K_s` and their representatives the sessions need, session
-by session, at most `K_m`, the expectation is at most
-
-`T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls`:
-
-`firstHitCost`'s expression, with the prover's expected calls where it has a bound on every run's
-(`ex_calls_le_avg_cls`, each product's average at most the count's bound times `T`). -/
 theorem ex_calls_le_exp_cls (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
     (cls : Fin (L.nG x) → Fin (L.nG x)) {T Ns Ks Km : ℝ}

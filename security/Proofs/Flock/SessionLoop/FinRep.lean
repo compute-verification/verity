@@ -45,33 +45,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.VBridge.Family.Lig
 
-/-!
-# `FinishParts`' (c), the reps' proof files, in parts
-
-`Loop.FinRepProofs` asks that rep stream `k`'s run from the views (`Loop.viewRep`) return a proof whose file is the loop's
-`k`-th, `Finish.proofFile` on the loop's table (`Loop.realOf`) and request (`Loop.repInOf`). `proofFile` runs the
-ZK server's rep (`repFw`, answered by the request's coins from round `0`) and encodes its proof (`proofFile_ok`). So (c) is
-two parts, each named here, none a premise of a guarantee:
-
-* **`Loop.FinRepCut`**: where the ZK server's rep on the loop's table and request returns a proof, the session's rep
-  (`repFwC`) answered by the opened coins (`asksCut`), from a history at the rep's first round, returns the same.
-* **(c.3) `Loop.FinRepFwView`**: where that session's rep returns a proof, the rep from the views returns a proof whose
-  file at the session's shape is the ZK server's at the table's.
-
-**`Loop.finRepProofs_of_parts`**: they give `FinRepProofs`.
-
-`FinRepCut` is `repFw_cut` at the opened coins, which agree with the request's only below each round's count: an opening
-carries the round's `n` coins, then `T_n`, its salt and its path (`CoinLayer.openOf`), and the session's coin is all of it
-(`CoinLayer.rd`), where the ZK server answers `0` past `n` (`asksOf`). A squeeze reads only its first `n` coins
-(`squeezeP`), and the ZK server checks `n` against the request's (`asksOf`), so the two runs agree, given every squeeze's
-count below `2^64` (the round header's `u64`, `Finish.repFwC_br`). It holds in the masked scope (`Loop.finRepCut`), where
-the table's `m`, its schedule and the extra claims are small enough (`Loop.finRepBounds`). Its premises, stated here:
-
-* **(c.1) `Loop.FinRepCoins`**: the request's coins are the opened coins from the rep's first round (`Masked.repBase`),
-  below each round's count, and the rep ends by the last opening. It holds in the masked scope (`Loop.finRepCoins`).
-* **(c.2) `Loop.FinRepPads`**: the rep's table commits under `hm96-sha512`, and the request's pads have the layout's
-  length, `h_ab = h_a·h_b` and `w = x·y` (`repFw_eq`'s premises). It holds in the masked scope (`Loop.finRepPads`).
--/
+/-! `FinishParts`' (c), the reps' proof files, in parts, none a premise of a guarantee. -/
 
 @[expose] public section
 
@@ -79,8 +53,6 @@ namespace Flock.ZkServer.Finish
 
 open Flock With Transcript
 
-/-- **A proof file that `proofFile` returns**: the request's pads commitment returned, the ZK server's rep answered by
-the request's coins returned at its last coin, and the file is its proof's `encZk` at `shapeZk`. -/
 theorem proofFile_ok {t : Tab} {rep : ℕ} {dom : ByteArray} {q : RepIn} {f : ByteArray}
     (h : proofFile t rep dom q = .ok f) :
     ∃ ic p tr, (innerCommitP (Hashes.ofSha512 Sha512.hash) (padsOf q.draws) (saltAt q.draws.salts) : V InnerCommit) =
@@ -114,7 +86,6 @@ namespace Claims.ZKMal.Masked
 open Claims FlockSoundness.ZK FlockSoundness.Discharge CoinLayer
 
 open _root_.Flock FlockDeploy FlockComplete in
-/-- **In the masked scope every table has at most 1,024 regions** (the scope check's `checkInRange`, as `live_bounds`). -/
 theorem scope_regions {x : Msg} (hsc : Claims.Flock.Scope (deployZk Readable.relation) x) {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hsx : setupOf true x = some (s, spec, sts)) :
     ∀ j (hj : j < sts.size), sts[j].regions.size ≤ 1024 := by
@@ -147,12 +118,10 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
-/-- **Rep stream `k`'s proof file, as the loop's `Finish` makes it**: its table and salts for levels ≥ 1 (`realOf`), its
-request (`repInOf`, at the frame's samples) and the file `proofFile` returns. -/
 def RepAt {R : Type} (draws : R → ℕ → ByteArray)
     (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)) (x : Msg) (w : Flock.Wit) (ρ : R)
     (h : List (Msg × Msg)) (spec : SessionSpec) (k : ℕ) (tb : _root_.Flock.ZkServer.Finish.Tab)
@@ -160,7 +129,6 @@ def RepAt {R : Type} (draws : R → ℕ → ByteArray)
   realOf src x w ρ k = .ok (tb, hi) ∧ repInOf x h spec (Masked.stsOf x) k (draws ρ k) hi = .ok q ∧
     _root_.Flock.ZkServer.Finish.proofFile tb (k % 2) (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 q = .ok f
 
-/-- **`proofsOf`'s `k`-th file is the loop's rep stream `k`'s** (`RepAt`). -/
 theorem proofsOf_at {R : Type} {draws : R → ℕ → ByteArray}
     {src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit} {ρ : R}
     {h : List (Msg × Msg)} {spec : SessionSpec} {files : Array ByteArray}
@@ -186,8 +154,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **(c.1) The request's coins**: at a `Finish` `FinishIs` reads, rep stream `k`'s request's coins are the opened coins
-from the rep's first round (`Masked.repBase`), below each round's count, and the rep's rounds end by the last opening. -/
 def FinRepCoins : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -204,10 +170,6 @@ theorem take_map_range (f : ℕ → ℕ) {k N : ℕ} (h : k ≤ N) :
   · intro i h1 h2
     simp
 
-/-- **(c.1) holds in the masked scope**: the request's coins are `seenRounds`', rep stream `k`'s round `k'` the
-history's entry `repBase x k + k'` past `Hello` (`streamAt` is `repStartZk` less the link's round), whose words below the
-round's count are the opened coin's (`CoinLayer.rd`), and the rep's last round is before `repStartZk` of the last
-stream, `refK x` (`repStart_last`, `refK_eq`). -/
 theorem finRepCoins (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) :
     FinRepCoins L₀ src real wk x w := by
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
@@ -272,8 +234,6 @@ theorem finRepCoins (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock
   show ((ops.map fun p => CoinLayer.rd p.2).getD (Masked.repBase x k + k') default).at i = _
   rw [List.getD_eq_getElem _ _ (by simpa using hQ), List.getElem_map]
 
-/-- **(c.2) The rep's table and pads**: at a `Finish` `FinishIs` reads, rep stream `k`'s table commits under
-`hm96-sha512`, and its request's pads have the layout's length, `h_ab = h_a·h_b` and `w = x·y`. -/
 def FinRepPads : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -288,8 +248,6 @@ def FinRepPads : Prop :=
         (_root_.Flock.ZkServer.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).tx]! *
         (_root_.Flock.ZkServer.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).ty]!
 
-/-- **A rep's samples are pads `repFw_cut` takes**: `Draws.ofBytes` reads `h` at the layout's length and sets `h_ab := h_a·h_b`
-and `w := x·y`, no index of which the other set moves. -/
 theorem samplesOfBytes_pads (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
     (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h.size = lay.len ∧
       (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h[lay.hab]! =
@@ -367,9 +325,6 @@ theorem samplesOfBytes_pads (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
   | exact key _ hs
   | (unfold _root_.Flock.ZkServer.Frame.Draws.ofBytes; dsimp only; exact key _ hs)
 
-/-- **(c.2) holds in the masked scope**: there every table commits with `hm96-sha512` (`ZkTables.tables_of_setup`), rep
-stream `k`'s table is `tabOfLevel0` at table `k / 2`'s statement (`Count.tabOfLevel0_sched`), whose `--zk` schedule is
-the frame's (`Drive.start`), and the request's samples are `Draws.ofBytes` at that layout (`samplesOfBytes_pads`). -/
 theorem finRepPads (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) :
     FinRepPads L₀ src real wk x w := by
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
@@ -415,10 +370,6 @@ theorem finRepPads (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.
   rw [getElem!_pos (Masked.stsOf x) (k / 2) hj]
   exact (hall (k / 2) hj).2.2
 
-/-- **The session's rep at the opened coins is the ZK server's**: at a `Finish` `FinishIs` reads, where the ZK server's rep
-on rep stream `k`'s table and request (`RepAt`), answered by the request's coins from round `0`, returns a proof and
-transcript at its last coin (`proofFile_ok`), `repFwC` on the same inputs answered by the opened coins (`asksCut`), from a
-history at the rep's first round, returns the same. -/
 def FinRepCut : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -461,9 +412,6 @@ theorem wordsAt_size_le (x : Msg) (cs : List FlockDeploy.Coin) (q : ℕ) : (word
     exact Nat.min_le_right _ _
   · simp
 
-/-- **A rep's sizes in the masked scope**: rep stream `k`'s table has `25 ≤ m ≤ 35` and its `--zk` schedule
-(`tables_of_setup`, `Count.tabOfLevel0_sched`), and its request's extra claims, a region's point at each link point, are
-at most `1024 · 65536` (`scope_regions`, `wordsAt_size_le`). -/
 theorem finRepBounds (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) {s0 spec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {k : ℕ} (hk : k < 2 * spec.tables.size)
     {ρ h tb hi q f} (hR : RepAt L₀.draws src x w ρ h spec k tb hi q f) :
@@ -518,10 +466,6 @@ theorem finRepBounds (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
   simp only [_root_.Flock.ZkServer.Finish.claimsOf, Array.size_map]
   exact lt_of_le_of_lt (Nat.add_le_add_right hx 2) (by norm_num)
 
-/-- **`FinRepCut` holds in the masked scope**: the ZK server's rep is `repFwC` at the request's coins (`repFw_eq`, at the
-table and pads (c.2) gives), and `repFwC` at those coins and at the opened coins from the rep's first round, which agree
-with them below each round's count and run past none (c.1), is related (`repFwC_br`), every squeeze below `2^64` coins
-(`finRepBounds`, `zkSchedule_small`). -/
 theorem finRepCut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) :
     FinRepCut L₀ src real wk x w := by
   intro ν t κ m₀ ρ₀ ops hctx s0 spec hsx k hk tb hi q f hR ic' p tr hic' hrun l hl
@@ -535,10 +479,6 @@ theorem finRepCut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
     (fun k i => Masked.slotAt (finCoins x ops) k i) hend hcoin tb.st tb.sch tb.tPad (k % 2) _ tb.g tb.cm0.toC _ _ _
     q.vals tb.extra tb.lanePad _ (by omega) hxs hn hq _ 0 l (by omega) (p, tr) q.coins.size hrun).1
 
-/-- **(c.3) The ZK server's rep at the views**: at a `Finish` `FinishIs` reads, at the schedules and level 0's
-commitments (a) gives, rep stream `k`'s extra claims and pads commitment from the views, and a history at its first
-round, where the session's rep on the loop's table and request (`RepAt`), answered by the opened coins, returns a proof
-`p`, rep stream `k`'s run from the views returns a proof whose file at the session's shape is `p`'s at the table's. -/
 def FinRepFwView : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -565,10 +505,6 @@ def FinRepFwView : Prop :=
         _root_.Flock.ZkServer.Finish.encZk
           (_root_.Flock.ZkServer.Finish.shapeZk tb.st tb.sch (_root_.Flock.ZkServer.Finish.claimsOf q.xs).size) p
 
-/-- **`FinRepCut` and (c.3) give (c).** Rep stream `k`'s file is `proofFile`'s on the loop's table and request
-(`proofsOf_at`), the ZK server's rep answered by the request's coins and its proof encoded (`proofFile_ok`); answered by
-the opened coins from the rep's first round instead, it returns the same proof (`FinRepCut`), and the rep from the views
-returns a proof of the same file (c.3). -/
 theorem finRepProofs_of_parts (h : FinRepCut L₀ src real wk x w ∧ FinRepFwView vs L₀ src real wk x w) :
     FinRepProofs vs L₀ src real wk x w := by
   obtain ⟨hCut, hFV⟩ := h

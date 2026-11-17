@@ -35,13 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.KS
 
-/-!
-# The sampled compiler's count form
-
-`KSCount` from `KS` at any compiled sampled verifier (`Compiled.ksCount_of_ks`): `KS` at `δ = max(0, miss(t))`
-(`missAt`), an incorrect set in `M_δ` having fewer than `t` proof blocks (`Sampling.Pa_le_miss`).
-So `CompilerKS` gives `CompilerKSCount` (`compilerKSCount_of`).
--/
+/-! `KSCount` from `KS` at any compiled sampled verifier. -/
 
 @[expose] public section
 

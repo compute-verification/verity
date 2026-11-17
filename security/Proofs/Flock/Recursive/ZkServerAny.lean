@@ -4,27 +4,7 @@ public import Proofs.Flock.Recursive.ZkServerTemplate
 public import Proofs.Flock.Recursive.ZkServerLive
 import all Lean.Data.Json.Basic
 
-/-!
-# The live zk_server at any requests
-
-`rec_live --lean` relays every request of an inner session to `flock-zk-server live` (`Flock.ZkServer.liveWith`), and the
-challenger's live-coin part receives only what it sends. `liveSends_of_accepts` is about the honest worker's requests; here they are any
-bytes at all. Whatever the inner worker sends, the live zk_server sends the challenger's live-coin part the pinned schedule's transcript
-(`ZkServerTemplate.tmpl s s.tables`, Commit naming the schedule's tables in its order, the only order `step` takes),
-filled with the commit strings of 64-byte digests under the salts it read, in order, and cut after one of its messages:
-the whole transcript when the session finishes, else the place where it stopped. The digests, the place and how the
-session ends read the requests and how many salts were read for each, never a salt's value.
-
-* `liveOut`: the live loop (`liveWith`'s, over `liveStep`) at any requests: what it sends until the first refusal, and
-  how it ends.
-* `run_any`: the same of `Flock.ZkServer.run` at any requests and any salts of one length.
-* `Flock.SecurityProofs.liveOut_any`: the theorem.
-
-The proof reads one live session as `run` on the requests it took (`liveOut_liveRun`, `ZkServerLive.run_live`), where
-`ZkServerTemplate.Inv` says what it sent is the schedule's transcript so far (`sofar`, a prefix of `tmpl s s.tables`).
-Two live sessions on requests of one shape refuse at the same request and send the same messages but for their commit
-strings, those of the same digests (`liveOut_rel`, from `ZkServerRun.stepOf_rel` one request at a time).
--/
+/-! The live zk_server at any requests sends the pinned schedule's transcript, its commit strings' digests and its stop read from the requests alone. -/
 
 @[expose] public section
 
@@ -32,10 +12,6 @@ namespace FlockSoundness.Discharge.Recursion.ZkServerAny
 
 open Flock Flock.ZkServer ZkServerRun ZkServerTemplate ZkServerLive
 
-/-- **A live session at any requests** (`liveWith`'s loop over `liveStep`): from the state `st`, each request with the
-fresh salts read for it, what the ZK server sends the challenger's live-coin part, in order, up to the first refusal, and how the session
-ends: `some t` at the state `t` after the last request when nothing was refused, `none` at a refusal, after which
-`liveWith` answers every request with the stop and sends nothing. A line that is not hex stops it the same way. -/
 def liveOut (s : Schedule) : State → List (ByteArray × List ByteArray) → List Sent × Option State
   | st, [] => ([], some st)
   | st, (b, fresh) :: rest =>
@@ -43,16 +19,12 @@ def liveOut (s : Schedule) : State → List (ByteArray × List ByteArray) → Li
     | .ok (sent, _, st') => (sent ++ (liveOut s st' rest).1, (liveOut s st' rest).2)
     | .error _ => ([], none)
 
-/-- **The session finished**: no request was refused and `Finish` was taken. Otherwise it stopped (`end: stop`). -/
 def liveFinished (s : Schedule) (L : List (ByteArray × List ByteArray)) : Bool :=
   match (liveOut s { salts := [] } L).2 with
   | some t => t.finished
   | none => false
 
-/-- **What a live session's requests fix**: each request, and how many fresh salts were read for it. -/
 def shape (L : List (ByteArray × List ByteArray)) : List (ByteArray × Nat) := L.map fun x => (x.1, x.2.length)
-
-/-! ## The live loop, one request at a time -/
 
 theorem liveStep_eq (s : Schedule) (st : State) (b : ByteArray) (fresh : List ByteArray) :
     liveStep s st b fresh = match (stepOf s b).run { st with salts := st.salts ++ fresh, sent := #[] } with
@@ -74,8 +46,6 @@ theorem liveOut_error {s : Schedule} {st : State} {b : ByteArray} {fresh : List 
     liveOut s st ((b, fresh) :: rest) = ([], none) := by
   simp only [liveOut, liveStep_eq, h]
 
-/-- **A live session is a live run of the requests it took**: what it sent is what `ZkServerLive.liveRun` sends on some
-requests, ending at the state the session ended at when it didn't stop. -/
 theorem liveOut_liveRun (s : Schedule) : ∀ (L : List (ByteArray × List ByteArray)) (st : State),
     ∃ P t, liveRun s st P = .ok ((liveOut s st L).1, t) ∧
       ((liveOut s st L).2 = some t ∨ (liveOut s st L).2 = none)
@@ -96,8 +66,6 @@ theorem liveFinished_eq (s : Schedule) (L : List (ByteArray × List ByteArray)) 
     liveFinished s L = ((liveOut s { salts := [] } L).2.map State.finished).getD false := by
   unfold liveFinished
   rcases (liveOut s { salts := [] } L).2 with _ | t <;> rfl
-
-/-! ## What was sent is a prefix of the schedule's transcript -/
 
 theorem roundT_null (s : Schedule) {i : Nat} (h : s.rounds.size ≤ i) : roundT s i = [] := by
   have e : s.rounds.getD i .null = .null := by
@@ -131,7 +99,6 @@ theorem roundsT_prefix (s : Schedule) (r : Nat) : roundsT s r <+: roundsT s s.ro
   · rw [roundsT_stable s r h]
     exact List.prefix_refl _
 
-/-- **What the schedule has had so far is a prefix of its transcript.** -/
 theorem sofar_prefix {s : Schedule} {v : State} (hv : Inv s v) : sofar s v <+: tmpl s s.tables := by
   cases hh : v.hello
   · obtain ⟨hc, hl, hr, hf⟩ := hv.fresh hh
@@ -159,8 +126,6 @@ theorem sofar_finished {s : Schedule} {v : State} (hv : Inv s v) (hf : v.finishe
   have hc := hv.committed hl
   simp [sofar, tmpl, hv.hello hc, hc, hl, hr, hf]
 
-/-! ## Two live sessions of one shape -/
-
 theorem zipWith_append_of_le {α β γ : Type} (f : α → β → γ) :
     ∀ (a : List α) (b c : List β), a.length ≤ b.length → List.zipWith f a (b ++ c) = List.zipWith f a b
   | [], _, _, _ => by simp
@@ -169,9 +134,6 @@ theorem zipWith_append_of_le {α β γ : Type} (f : α → β → γ) :
     simp only [List.cons_append, List.zipWith_cons_cons, List.length_cons] at h ⊢
     rw [zipWith_append_of_le f a b c (by omega)]
 
-/-- **Two live sessions of one shape**, from states equal but for salts of one length: they send the same messages but
-for their commit strings, refuse at the same request or finish alike, and their commit strings are those of the same
-64-byte digests under each session's salts, the state's then those read, in order. -/
 theorem liveOut_rel (s : Schedule) : ∀ (L L' : List (ByteArray × List ByteArray)) (st : State) (z' : List ByteArray),
     shape L = shape L' → st.salts.length = z'.length →
     (liveOut s st L).1.map blank = (liveOut s { st with salts := z' } L').1.map blank ∧
@@ -241,7 +203,6 @@ theorem liveOut_rel (s : Schedule) : ∀ (L L' : List (ByteArray × List ByteArr
       · rw [List.flatMap_append, hh₁', hh₂', List.flatMap_cons, ← List.append_assoc, zipWith_append_left,
           zipWith_append_of_le _ _ _ _ hl₁', List.drop_append_of_le_length hl₁']
 
-/-- **Digests under one salt list are fixed by their commit strings**, at most as many as the salts. -/
 theorem digests_eq {ds ds' ys : List ByteArray} (h : ∀ d ∈ ds, d.size = 64) (h' : ∀ d ∈ ds', d.size = 64)
     (hl : ds.length ≤ ys.length) (hl' : ds'.length ≤ ys.length)
     (e : List.zipWith Hm96.Default512.commitString ds ys = List.zipWith Hm96.Default512.commitString ds' ys) :
@@ -256,16 +217,12 @@ theorem digests_eq {ds ds' ys : List ByteArray} (h : ∀ d ∈ ds, d.size = 64) 
   simp only [List.getElem_zipWith] at this
   exact commitString_inj (h _ (List.getElem_mem _)) (h' _ (List.getElem_mem _)) this
 
-/-! ## Filling a prefix -/
-
 theorem fillAll_take : ∀ (l : List Sent) (k : Nat) (cs : List ByteArray),
     fillAll (l.take k) cs = (fillAll l cs).take k
   | [], _, _ => by simp [fillAll]
   | _ :: _, 0, _ => by simp [fillAll]
   | m :: ms, k + 1, cs => by
     simp only [List.take_succ_cons, fillAll, fillAll_take ms k]
-
-/-! ## Shapes -/
 
 theorem length_salts : ∀ L : List (ByteArray × List ByteArray),
     (L.flatMap (·.2)).length = ((shape L).map (·.2)).sum
@@ -282,12 +239,6 @@ theorem shape_canon (R : List (ByteArray × Nat)) :
     simp only [shape, List.map_cons, List.length_replicate] at ih ⊢
     rw [ih]
 
-/-! ## The ZK server at any requests -/
-
-/-- **The ZK server at any requests**: for any requests and any number `n` of salts, there are 64-byte digests `ds`, a
-place `k` of the schedule's transcript and an end `fin` such that at every salt list of length `n`, `run` sends the
-schedule's transcript (`tmpl s s.tables`), filled with the commit strings of `ds` under the salts in order, cut after its
-first `k` messages, and finishes exactly when `fin`; a session that finishes sends the whole transcript. -/
 theorem run_any (s : Schedule) (reqs : List ByteArray) (n : Nat) :
     ∃ (ds : List ByteArray) (k : Nat) (fin : Bool),
       (∀ d ∈ ds, d.size = 64) ∧ ds.length ≤ n ∧ k ≤ (tmpl s s.tables).length ∧
@@ -328,8 +279,6 @@ theorem run_any (s : Schedule) (reqs : List ByteArray) (n : Nat) :
     rw [List.append_nil, hb, hI.sent, List.prefix_iff_eq_take.mp (sofar_prefix hI), hh'', fillAll_take] at e3
     rw [hx, e3, Array.toArray_toList]
 
-/-- **What a live session sent is the schedule's transcript so far but for its commit strings**: its first `k`
-messages, all of them when the session finished. -/
 theorem liveOut_blank (s : Schedule) (L : List (ByteArray × List ByteArray)) :
     ∃ k : Nat, k ≤ (tmpl s s.tables).length ∧ (liveFinished s L = true → k = (tmpl s s.tables).length) ∧
       (liveOut s { salts := [] } L).1.map blank = (tmpl s s.tables).take k := by
@@ -359,14 +308,6 @@ namespace Flock.SecurityProofs
 open Flock.ZkServer FlockSoundness.Discharge.Recursion
 open ZkServerRun ZkServerTemplate ZkServerAny
 
-/-- **The live zk_server at any requests sends the schedule's transcript, filled at the strings it accepted, or stops at
-a public place.** For any requests, each with how many fresh salts are read for it (`R`), there are 64-byte digests
-`ds`, a place `k` of the schedule's transcript and an end `fin` such that every live session on those requests
-(`liveOut`, `flock-zk-server live`'s loop), whatever salts it reads (`shape L = R`), sends the challenger's live-coin part the schedule's
-transcript (`tmpl s s.tables`, Commit naming the schedule's tables in its order, the only order `step` takes), filled
-with the commit strings of `ds` under the salts read, in order, and cut after its first `k` messages, and finishes exactly
-when `fin`. A session that finishes sends the whole transcript; one that stops has sent its first `k` messages. No
-condition on the requests: they are the inner worker's, whatever it is. -/
 theorem liveOut_any (s : Schedule) (R : List (ByteArray × Nat)) :
     ∃ (ds : List ByteArray) (k : Nat) (fin : Bool),
       (∀ d ∈ ds, d.size = 64) ∧ ds.length ≤ (R.map (·.2)).sum ∧ k ≤ (tmpl s s.tables).length ∧

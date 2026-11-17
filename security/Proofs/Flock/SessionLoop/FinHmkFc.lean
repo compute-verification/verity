@@ -47,21 +47,7 @@ import Proofs.Flock.Claims.ZK.L0PinLoop
 import Proofs.Flock.SessionLoop.FinRepView
 import Proofs.Flock.SessionLoop.FinRounds
 
-/-!
-# `final_c` from the history: the views' masked `final_c`, read off the inner proof's round 0
-
-`Loop.swSrcE_hmk_cut` reads the views' source's masked values below `zp 64` off the history's PIOP rounds, all but
-`final_c`'s, which no PIOP round carries. Rep `2j + r` absorbs it first in the inner proof's round 0, after its PIOP and
-Ligerito opening: where the rep from the views' source, cut there, stops at that round (`hin`), the history's message
-there is the cut session's body (`msg_runCut`, `Masked.runCut_cutRep_of_ret`), which is the inner proof's label frame and
-the source's masked `final_c` between their headers (`finalCOf_inner`, the Ligerito opening having ended on a squeeze).
-The loop's frame reads `final_c'` there (`finalCOf`) and adds its pad (`valsOf_fc`), so the pads cancel.
-
-* **`Masked.runCut_cutRep`**, **`Masked.runCut_cutRep_of_ret`**: the cut session stopped at `n` in rep `2j + r` sent at
-  `n` what the rep, cut at `n`, sent there.
-* **`finalCOf_inner`**: `final_c'` of the inner proof's round 0 is its `final_c`, from no pending bytes.
-* **`Loop.swSrcE_hmk_cut_fc`**: the views' masked `final_c` is the request's plus its pad.
--/
+/-! `final_c` from the history: the views' masked `final_c`, read off the inner proof's round 0. -/
 
 @[expose] public section
 
@@ -76,9 +62,6 @@ open CoinLayer
 namespace Masked
 
 set_option maxHeartbeats 1000000 in
-/-- **The cut session at rep `2j + r`'s stop**: as `runCut_cutPiop`, where rep `2j + r` itself, answered by the cut at
-`n` from a history `l` at its first round, stops with log `L` (`hR`), the cut session stopped at `n` (from rep `2j + r`'s
-first round, `n ≤ refK x`) sent at `n` what that rep sent there. -/
 theorem runCut_cutRep {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin)
     (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -143,7 +126,6 @@ theorem runCut_cutRep {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.
   have hmono : ∀ a b, a ≤ b → repBase x a ≤ repBase x b := fun a b hab => by
     rw [repBase_eq hsx, repBase_eq hsx]
     exact FlockComplete.ZkTables.repStart_mono _ _ hab
-  -- rep `k`'s earlier claim points, read from the streams so far
   have hpri : ∀ (k : ℕ) (streams : Array (Array _root_.Flock.Round)),
       (k % 2 = 1 → FlockComplete.MaskRank.roundPoints (FlockDeploy.tabsOf (stsOf x))[k / 2]!.m
         (FlockDeploy.tabsOf (stsOf x))[k / 2]!.kLog streams.back! = ptsOpen c (stsOf x)[k / 2]! (2 * (k / 2))) →
@@ -171,7 +153,7 @@ theorem runCut_cutRep {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.
       FlockComplete.MaskRank.roundPoints (FlockDeploy.tabsOf (stsOf x))[k / 2]!.m
         (FlockDeploy.tabsOf (stsOf x))[k / 2]!.kLog b.1.back! = ptsOpen c (stsOf x)[k / 2]! (2 * (k / 2))))
     (2 * j.val + r.val) (by simpa using hk) ?_ ⟨?_, fun h => absurd h (by norm_num)⟩ ?_
-  · -- the reps before `2j + r` return by `n`, as at the ZK server's stop
+  ·
     rintro k hk' ⟨streams, proofs⟩ ls ⟨hls, hpts⟩
     obtain ⟨extras', hxe'⟩ := hexts k hk'
     obtain ⟨ic', hic'⟩ := padsTreeCut_go
@@ -207,7 +189,7 @@ theorem runCut_cutRep {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.
       exact hrp (by omega)
   · rw [repBase_eq hsx]
     simp [FlockComplete.repStartZk]
-  · -- rep `2j + r` stops at `n`
+  ·
     rintro ⟨streams, proofs⟩ l₀ ⟨hl₀, hpts⟩
     have hp := hpri (2 * j.val + r.val) streams hpts
     have e2 : (2 * j.val + r.val) / 2 = j.val := by omega
@@ -232,8 +214,6 @@ theorem runCut_cutRep {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.
     · rw [hbs]
       exact Claims.ZKServer.Loop.getElem!_append_shift (hl₀.trans hl.symm) (by omega)
 
-/-- **The cut session at rep `2j + r`'s stop, from the earlier reps' returns alone**: `runCut_cutRep` with rep `0`'s
-claim points at the opened coins read off its return (`repCut_points`). -/
 theorem runCut_cutRep_of_ret {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin)
     (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -296,7 +276,6 @@ open _root_.Flock (V F128)
 open FlockSoundness.Refine (Frame encs)
 open Claims.ZKMal (dropDom)
 
-/-- **The inner proof's round 0 from no pending bytes**: its label frame, `final_c`'s, then the squeeze. -/
 theorem innerBody_enc (v : F128) {t : _root_.Flock.Transcript} (hp : t.pending = ByteArray.empty) :
     Claims.toMsg (_root_.Flock.Transcript.framed (FlockComplete.Replay.InZ.t₁ v t) 1 1) =
       encs [.label _root_.Flock.Zk.LABEL_INNER.toUTF8, .one v] ++ (Frame.sq 1 1).enc := by
@@ -307,8 +286,6 @@ theorem innerBody_enc (v : F128) {t : _root_.Flock.Transcript} (hp : t.pending =
     FlockSoundness.Refine.label_enc, hp]
   simp [encs]
 
-/-- **`final_c'` of the inner proof's round 0 is its `final_c`**: past its label frame and `final_c`'s header, where it
-began with no pending bytes. -/
 theorem finalCOf_inner (v : F128) {t : _root_.Flock.Transcript} (hp : t.pending = ByteArray.empty) :
     Loop.finalCOf ⟨(dropDom (0 :: Claims.toMsg
       (_root_.Flock.Transcript.framed (FlockComplete.Replay.InZ.t₁ v t) 1 1))).tail.toArray⟩ = v := by
@@ -331,7 +308,6 @@ theorem finalCOf_inner (v : F128) {t : _root_.Flock.Transcript} (hp : t.pending 
     simp [encs, Frame.enc, Frame.op, Frame.kind, Frame.len, Frame.pay]
   rw [e, List.drop_left]
 
-/-- **The value a rep's frame took at `final_c`'s pad** (`valsOf`): `final_c'` plus its pad. -/
 theorem valsOf_fc (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.ZkServer.Frame.MaskSlot)
     (M : Array F128) (fc : F128) :
     (Loop.valsOf (_root_.Flock.ZkServer.Frame.Cfg.ofSamples lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms) M fc)[lay.fc]! =
@@ -369,14 +345,6 @@ theorem getElem!_push_size {L : Array Msg} (b : Msg) : (L.push b)[L.size]! = b :
   rw [getElem!_pos (L.push b) L.size (by simp), Array.getElem_push_eq]
 
 set_option maxHeartbeats 4000000 in
-/-- **`swSrcE_hmk_cut_fc`: the views' masked `final_c` is the request's plus its pad, from the history**: at
-(c.3)'s context on the loop's tables, where the earlier reps return from the views' source cut at the opened coins
-(`swSrcE_hmk_cut`'s premises) and table `j`'s rep `r` from that source, cut at its inner proof's round 0
-(`repSlot … (innerOff 0)`, the rep's scheduled rounds past its first), stops there, after a Ligerito opening that left
-no pending bytes, with that round's body (`hin`), the masked `final_c` of the views' source is the request's
-`final_c` plus its pad. The history's message at that round is the cut session's body (`msg_runCut`,
-`runCut_cutRep_of_ret`), which carries the source's masked `final_c` past the inner proof's label frame
-(`finalCOf_inner`); the loop's frame took it as `final_c'` and added its pad (`valsOf_fc`). -/
 theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
@@ -458,7 +426,6 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
     exact (Masked.zkTab x j).hz
   have htab : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]! = _root_.Flock.Setup.ofCircuit (Masked.stAt x j) :=
     Masked.tabsOf_stAt x j
-  -- the loop's table and schedule are the session's
   obtain ⟨schs', hschs', hschj⟩ := Masked.schedsPZk_live hx
   obtain ⟨htabst, hschtb⟩ := finRepTab (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hschs' hq hRep
   rw [hjj] at htabst hschtb
@@ -467,7 +434,6 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
     simp only [Prod.mk.injEq] at e
     exact e.1
   have hts : tb.st = _root_.Flock.Setup.ofCircuit (Masked.stAt x j) := htabst.symm.trans htab
-  -- the request
   have hq' := hRep.2.1
   unfold repInOf at hq'
   obtain ⟨⟨lay, msk⟩, hds, hq'⟩ := bok hq'
@@ -483,7 +449,6 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
     rw [hlay, htab]; rfl
   rw [hlayG]
   rw [hlayP] at hrun
-  -- where the inner proof's round 0 sits
   have h1 : 1 ≤ Masked.repBase x (2 * j.val + r.val) := by
     rw [Masked.repBase_eq hsx]
     unfold FlockComplete.repStartZk
@@ -500,7 +465,6 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
   rw [FlockComplete.ZkTables.repStart_last, ← Masked.repBase_eq hsx] at hlastR
   have hK := Masked.refK_eq hsx
   have hLN : L.size < refK x := by omega
-  -- the cut session's body there
   have hW := Masked.runCut_cutRep_of_ret hx (finCoins x ops)
     (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t) hsx hs hcms j r hexts hprev hext hic hl hrun
     (by omega) hLN.le
@@ -516,7 +480,6 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
   rw [hsx] at hsx'
   cases hsx'
   rw [← hsrc, Nat.add_sub_cancel, hW] at hm
-  -- the round the loop read `final_c'` from
   have hrk : (roundsOf spec (Masked.stsOf x)).getD (2 * j.val + r.val) 0 =
       FlockDeploy.repRounds true spec (Masked.stsOf x)[(2 * j.val + r.val) / 2]! := by
     unfold roundsOf

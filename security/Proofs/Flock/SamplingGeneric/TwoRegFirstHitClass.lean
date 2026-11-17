@@ -15,48 +15,7 @@ import Proofs.Flock.Claims.Sampling.Wait
 import Proofs.Flock.SamplingGeneric.Assemble
 import Proofs.Flock.SamplingGeneric.Two
 
-/-!
-# The first-hit finder at two stages, by class of gates
-
-The by-position finders (`Compiled.finderXAt`, `CompiledTwo.finderIAt`) pay, at a further run, one run with the
-sessions that can open a gate extracted (`callsBy`) for each gate they still wait for, so the event of `KSRegTwoX` is
-bounded with `4·E[c + Σ_{g ∈ sample} c_g]/2^256`: one term for each gate the proof blocks of a run's sample need.
-
-One extraction of a session opens every gate its openings reach, and a finder that waits for several of them needs
-it once. Here the gates fall in classes: `cls` sends a gate to its class's representative gate, and a run's
-extractions open a class whole or not at all, under the statement's roots (`hallX`) and under a replay block's
-interior roots (`hallI`). The finders that pay once for each class of gates they still wait for
-(`Compiled.finderXCls`, `CompiledTwo.finderICls`) give
-
-  `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[c + Σ_{q ∈ classes of the sample} c_q]/2^256`
-
-for the event of `KSRegTwoX` (`CompiledTwo.eventTwoX_le_firstHit_cls`, and `_cls_cap` at one cap for each finder):
-`c` a run's calls with every session of its sample extracted (`callsAt`), the sum over the representatives of the
-classes of the gates the proof blocks of the run's sample need, and `c_q` the run's calls with only the sessions that
-have a proof block needing the representative `q` extracted (`callsBy`).
-
-* **The two hypotheses on the classes.** `hallX` and `hallI` are statements about what a run's extractions open
-  (`Compiled.opensAt`, `CompiledTwo.iopTable`), for every prover: a run whose extractions open a gate open every gate
-  of its class.
-* **From what the extractions keep.** Both follow where what a run's extractions keep holds classes whole
-  (`Compiled.ClassWhole`: an opening they keep comes with one they keep, under the same roots, at each gate of its
-  class; `Compiled.opensAt_isSome_cls`), and, for the interiors, a class lies in one replay block
-  (`CompiledTwo.iopTable_isSome_cls`): `CompiledTwo.eventTwoX_le_firstHit_kept`.
-* **From what the extracted witnesses reveal.** The extractions keep classes whole where what each witness they
-  extract reveals at each proof block of its session does (`Compiled.kept_classWhole_of_wit`,
-  `CompiledTwo.eventTwoX_le_firstHit_wit`). That is for the code that instantiates `reveal`, `commit` and the sessions
-  to show; a witness no extraction returns is not asked about.
-* **At the classes of a key** (`CompiledTwo.eventTwoX_le_firstHit_key`): where the classes are those of a key of the
-  gates (`Verity.FirstHit.clsOf`), and gates of one key are needed by the same proof blocks and lie in the same replay
-  block, the hypotheses on the representatives hold by the key.
-* **What the finders read.** The seed, the sample, the waits and the output are the by-position finders'. At a further
-  run the output reads the extraction of the sessions with a proof block needing the gate it compares
-  (`Compiled.collBy`), and the finder is charged the sessions with a proof block needing that gate's representative.
-  The charge covers what is read where every proof block that needs a gate needs its representative (`hrep`, which the
-  proofs don't read; `Compiled.callsBy_le_of_needs`).
-* **The premises** are `eventTwoX_le_firstHit_at`'s with the linear expected-time bound (`ExpectedCR`) at these two
-  finders in place of the two by-position ones. No statement of the definitions tree changes.
--/
+/-! The first-hit finders at two stages by class of gates, paying once for each class they still wait for. -/
 
 @[expose] public section
 
@@ -65,7 +24,6 @@ namespace Claims.SamplingGeneric
 open Claims Finset
 open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn incorrectAllAt incorrectAllAt_subset gateBlock flatMapRP)
 
-/-- Filtering what a weaker filter keeps by a stronger one is filtering by the stronger one. -/
 theorem filter_filter_of_imp {β : Type} (k1 k2 : β → Bool) (h : ∀ b, k1 b = true → k2 b = true) (l : List β) :
     (l.filter k2).filter k1 = l.filter k1 := by
   rw [List.filter_filter]
@@ -74,8 +32,6 @@ theorem filter_filter_of_imp {β : Type} (k1 k2 : β → Bool) (h : ∀ b, k1 b 
   | false => rfl
   | true => rw [h b h1]; rfl
 
-/-- Over the part of a list a filter keeps, a rerun program calls `H` at most as often as over the part a weaker
-filter keeps. -/
 theorem flatMapRP_hashes_filter_le_of_imp {R β γ : Type} (H : Msg → Msg) (run : R → Transcript)
     (f : β → RP R (List γ)) (k1 k2 : β → Bool) (h : ∀ b, k1 b = true → k2 b = true) (l : List β) :
     ((flatMapRP f (l.filter k1)).eval H run).2.1 ≤ ((flatMapRP f (l.filter k2)).eval H run).2.1 := by
@@ -86,18 +42,11 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## A run's extractions keep a class whole -/
-
-/-- **A list of openings holds classes whole**: an opening of it that passes its opening check has, for each gate of
-its gate's class, an opening in the list, under the same roots, that passes too. `cls` sends a gate of the program to
-its class's representative. -/
 def ClassWhole (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (cls : Fin (L.nG x) → Fin (L.nG x))
     (rs : List (List Msg × Sampling.Opening Bool)) : Prop :=
   ∀ p ∈ rs, L.commit.Opens H p.1 p.2 = true → ∀ g g' : Fin (L.nG x), p.2.pos = g.val → cls g = cls g' →
     ∃ p' ∈ rs, p'.1 = p.1 ∧ p'.2.pos = g'.val ∧ L.commit.Opens H p'.1 p'.2 = true
 
-/-- What a session's extraction keeps is an opening of what its witness reveals at one of the session's proof blocks,
-which passes its opening check. -/
 theorem sessExt_reveal_of_mem (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {s : AuditStatement}
     {run' : (Fin (L.V.k x) → Coin) → Transcript} {us : List ℕ} {u : ℕ} {r : Fin (L.V.k x) → Coin} {v : Seen}
     {c : A.EC (L.sh x u)} {q : List Msg × Sampling.Opening Bool}
@@ -119,8 +68,6 @@ theorem sessExt_reveal_of_mem (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} 
     obtain ⟨hmem, hok, -⟩ := Sampling.checkRevealed_mem H run' L.commit _ q hu'
     exact ⟨w, rfl, u', hu'm, hmem, hok⟩
 
-/-- An opening that the session's witness reveals at one of the session's proof blocks, and that passes its opening
-check, is kept by the session's extraction. -/
 theorem mem_sessExt_of_reveal (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {s : AuditStatement}
     {run' : (Fin (L.V.k x) → Coin) → Transcript} {us : List ℕ} {u : ℕ} {r : Fin (L.V.k x) → Coin} {v : Seen}
     {c : A.EC (L.sh x u)} {w : A.W} (hw : ((L.sessWit x u r v c).eval H run').1 = some w) {u' : ℕ} (hu' : u' ∈ us)
@@ -134,7 +81,6 @@ theorem mem_sessExt_of_reveal (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} 
   rw [(Claims.RP.eval_bind H run' _ _).1, hw]
   exact h
 
-/-- What a session's extraction keeps at a first slot of the run's sample is among what the run's extractions keep. -/
 theorem mem_kept_of_sessExt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) {iu : Fin (L.nPU x) × ℕ}
     (hiu : iu ∈ (List.finRange (L.nPU x)).zip (L.checked x r))
@@ -152,9 +98,6 @@ theorem mem_kept_of_sessExt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} 
   · rename_i hn
     exact absurd hu hn
 
-/-- **A run's extractions keep classes whole, where the witnesses they extract reveal classes whole**: for each
-session of the run's sample, extracted at its first slot, each witness `w` its extraction returns and each proof block
-`u'` of the session, what `w` reveals at `u'` holds classes whole (`hwit`). -/
 theorem kept_classWhole_of_wit (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (ω : Ω) (cls : Fin (L.nG x) → Fin (L.nG x)) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x)
     (hwit : ∀ iu ∈ (List.finRange (L.nPU x)).zip (L.checked x r),
@@ -176,7 +119,6 @@ theorem kept_classWhole_of_wit (H : Msg → Msg) (L : Compiled Coin A) {Ω : Typ
     exact ⟨p', L.mem_kept_of_sessExt H P x s ω r c hium hu (L.mem_sessExt_of_reveal H hw hu' hp' h3), h1, h2, h3⟩
   · simp [RP.eval] at hiu
 
-/-- A kept opening under the statement's roots that passes opens its gate. -/
 theorem opensAt_isSome_of_kept (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     {s : AuditStatement} (hs : L.parse x = some s) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x)
     {q : List Msg × Sampling.Opening Bool} (hq : q ∈ L.kept H P x s ω r c) (h1 : q.1 = s.roots)
@@ -187,8 +129,6 @@ theorem opensAt_isSome_of_kept (H : Msg → Msg) (L : Compiled Coin A) {Ω : Typ
   refine List.find?_isSome.2 ⟨q.2, ?_, by simp [hok]⟩
   exact List.mem_filterMap.2 ⟨q, hq, by simp [h1]⟩
 
-/-- **A run's extractions open a class whole under the statement's roots**, where they keep classes whole: the
-by-class finder's hypothesis at the boundary (`hallX`). -/
 theorem opensAt_isSome_cls (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     {s : AuditStatement} (hs : L.parse x = some s) (cls : Fin (L.nG x) → Fin (L.nG x))
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) (hkept : L.ClassWhole H x cls (L.kept H P x s ω r c))
@@ -205,8 +145,6 @@ theorem opensAt_isSome_cls (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (
   rw [h2'] at h
   exact h
 
-/-- **A run's calls at one gate are at most its calls at a gate that every proof block needing the first needs**: the
-sessions extracted for the first are among those extracted for the second. -/
 theorem callsBy_le_of_needs (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (needs : ℕ → Finset ℕ) {g g' : ℕ} (h : ∀ u, g ∈ needs u → g' ∈ needs u) (ω : Ω)
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
@@ -217,8 +155,6 @@ theorem callsBy_le_of_needs (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} 
   simp only [decide_eq_true_eq] at hiu ⊢
   obtain ⟨u, hu, hg⟩ := hiu
   exact ⟨u, hu, h u hg⟩
-
-/-! ## The boundary, by class -/
 
 /-- **The by-class first-hit finder at the boundary trace read at the statement**, at cap `K`. Its seed, its sample,
 its waits, its first run and its output are `finderXAt`'s. At a further run it pays, for each class that holds a gate
@@ -241,12 +177,6 @@ noncomputable def finderXCls (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type}
         (fun (a a' : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
           L.collBy H P x s needs a a' g.val) K q.2.1 q.2.2
 
-/-- **The mass off the boundary trace read at the statement, by class, at one cap**:
-`2·E[c + Σ_{q ∈ classes of the sample} c_q]/2^256 + N/(K + 1)`, under `ExpectedCR` at the by-class finder of the cap
-`K`, where a run's extractions open a class of gates whole or not at all under the statement's roots (`hallX`): `c` a
-run's calls with every session extracted (`callsAt`), the sum over the representatives of the classes of the gates
-the run's sample needs, `c_q` the run's calls with only the sessions that have a proof block needing `q` extracted
-(`callsBy`), `N` the program's gates. -/
 theorem pr_offRegX_le_cls_cap {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u)
@@ -304,9 +234,6 @@ theorem pr_offRegX_le_cls_cap {H : Msg → Msg} {L : Compiled Coin A} (hbind : L
   exact (hoff.trans (hP.symm.le.trans h)).trans_eq
     (congrArg (fun e : ℝ => 2 * e / 2 ^ (256 : ℝ) + (L.nG x : ℝ) / ((K : ℝ) + 1)) hE)
 
-/-- **The by-class expectation is at most the by-position one**, where every proof block that needs a gate needs its
-class's representative: each class of the sample's gates is paid once, at its representative, which is a gate of the
-sample. -/
 theorem ex_callsCls_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (needs : ℕ → Finset ℕ) (cls : Fin (L.nG x) → Fin (L.nG x))
     (hrep : ∀ u (g : Fin (L.nG x)), g.val ∈ needs u → (cls g).val ∈ needs u) :
@@ -330,8 +257,6 @@ namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## The interior, by class -/
-
 /-- **The by-class first-hit finder at the committed interiors**, at cap `K`. Its seed, its sample, its waits, its
 first run and its output are `finderIAt`'s. At a further run, at the kept tape and first stage, it pays, for each
 class that holds a gate still waited for in the run's sample, a run at those coins with only the sessions that have a
@@ -354,12 +279,6 @@ noncomputable def finderICls (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Ty
           L.toCompiled.collBy H P x s needs (q.1.1, (forkOn (L.secondStage x) q.1.2 ec.1, ec.2))
             (q.1.1, (forkOn (L.secondStage x) q.1.2 ec'.1, ec'.2)) g.val) K q.2.1 q.2.2
 
-/-- **The mass off the committed interiors, by class, at one cap**:
-`2·E[c + Σ_{q ∈ classes of the sample} c_q]/2^256 + N/(K + 1)`, under `ExpectedCR` at the by-class finder of the cap
-`K`, where a second stage's extractions open a class of gates whole or not at all under a replay block's interior
-roots (`hallI`): `c` a run's calls with every session extracted (`callsAt`), the sum over the representatives of the
-classes of the gates the run's sample needs, `c_q` the run's calls with only the sessions that have a proof block
-needing `q` extracted (`callsBy`), `N` the program's gates. The contract's clause it reads is `Sessions.interior`. -/
 theorem pr_offIreg_le_cls_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
@@ -408,26 +327,8 @@ theorem pr_offIreg_le_cls_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind 
   exact (hP.symm.le.trans (hoff.trans h)).trans_eq
     (congrArg (fun e : ℝ => 2 * e / 2 ^ (256 : ℝ) + (L.nG x : ℝ) / ((K : ℝ) + 1)) hE)
 
-/-! ## The event, by class -/
-
-/-- **The event of `KSRegTwoX` with the by-class finders' terms, at one cap for each finder.** On a statement in
-scope, where a reveal for proof block `u` opens only gates of `needs u`, a run's extractions open a class of gates
-whole or not at all under the statement's roots (`hallX`) and under a replay block's interior roots (`hallI`), and the
-boundary's by-class first-hit finder of the cap `KX` (`Compiled.finderXCls`) and the interior's of the cap `KI`
-(`finderICls`) meet the linear expected-time bound, an accepted run samples a proof block of `FregTwoX` with
-probability at most
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[c + Σ_{q ∈ classes of the sample} c_q]/2^256 + N/(KX + 1) + N/(KI + 1)`.
-
-* `c` is a run's calls with every session of its sample extracted (`callsAt`): each finder's first run. The sum is
-  over the representatives of the classes of the gates the proof blocks of the run's coins' sample need, and `c_q` is
-  the run's calls with only the sessions that have a proof block needing the representative `q` extracted
-  (`callsBy`): what a further run at those coins costs a finder for a class it waits for.
-* Every proof block that needs a gate needs its class's representative (`hrep`, which the proof doesn't read): under
-  it a finder's charge for a class covers the extraction its output reads at a gate of the class
-  (`Compiled.callsBy_le_of_needs`), and the expectation is at most the by-position one (`Compiled.ex_callsCls_le`).
-* The expectation is over the prover's tape, the run's coins and the extractor's, joint in the sample and the calls.
-* The premises the bound is small under are `eventTwoX_le_firstHit_at_cap`'s, with the linear expected-time bound at
-  these two finders in place of those two. -/
+/-- The proof doesn't read `hrep`; under it a finder's charge for a class covers the extraction its output reads at a
+gate of the class. -/
 theorem eventTwoX_le_firstHit_cls_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
@@ -462,10 +363,6 @@ theorem eventTwoX_le_firstHit_cls_cap {H : Msg → Msg} {L : CompiledTwo Coin A}
   rw [← h4]
   linarith
 
-/-- **The event of `KSRegTwoX` with the by-class finders' terms** where `ε_reg,2,X` has its two square roots:
-`eventTwoX_le_firstHit_cls_cap` under the linear expected-time bound at the two by-class finders of every cap, with
-nothing left of the caps' terms: at most
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[c + Σ_{q ∈ classes of the sample} c_q]/2^256`. -/
 theorem eventTwoX_le_firstHit_cls {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
@@ -508,11 +405,6 @@ theorem eventTwoX_le_firstHit_cls {H : Msg → Msg} {L : CompiledTwo Coin A} (hA
     exact h
   exact Verity.FirstHit.le_of_forall_cap hcap
 
-/-! ## From what the extractions keep, and from what the extracted witnesses reveal -/
-
-/-- **A run's extractions open a class whole under a replay block's interior roots**, where they keep classes whole
-and a class lies in one replay block (`hblock`): the by-class finder's hypothesis at the committed interiors
-(`hallI`). -/
 theorem iopTable_isSome_cls (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) (cls : Fin (L.nG x) → Fin (L.nG x))
     (hblock : ∀ g g' : Fin (L.nG x), cls g = cls g' → gateBlock Pρ g.val = gateBlock Pρ g'.val)
@@ -534,13 +426,6 @@ theorem iopTable_isSome_cls (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Typ
   have hρ' : gateBlock Pρ g'.val = some ρ := (hblock g g' hgg).symm.trans hρ
   exact Option.isSome_iff_exists.2 ⟨b', Option.bind_eq_some_iff.2 ⟨ρ, hρ', hb''⟩⟩
 
-/-- **The event of `KSRegTwoX` with the by-class finders' terms, from what the extractions keep**:
-`eventTwoX_le_firstHit_cls` with its two hypotheses on what a run's extractions open derived from one on what they
-keep. Where what a run's extractions keep holds classes whole (`hkept`: an opening they keep comes with one they keep,
-under the same roots, at each gate of its class) and a class lies in one replay block of the first stage's partition
-(`hblock`), an accepted run samples a proof block of `FregTwoX` with probability at most
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[c + Σ_{q ∈ classes of the sample} c_q]/2^256`,
-under the linear expected-time bound at the two by-class finders of every cap. -/
 theorem eventTwoX_le_firstHit_kept {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
@@ -567,12 +452,7 @@ theorem eventTwoX_le_firstHit_kept {H : Msg → Msg} {L : CompiledTwo Coin A} (h
     (fun t ec g g' hgg hg =>
       L.iopTable_isSome_cls H P x t.1 hs d.part cls hblock t.2 ec (hkept t.1 _ ec.2) g g' hgg hg) hX hI
 
-/-- **The event of `KSRegTwoX` with the by-class finders' terms, from what the extracted witnesses reveal**:
-`eventTwoX_le_firstHit_kept` where, at every run, for each session of the run's sample, extracted at its first slot,
-each witness `w` its extraction returns and each proof block `u'` of the session, what `w` reveals at `u'` holds
-classes whole (`hwit`: an opening of that reveal that passes its opening check has, for each gate of its class, an
-opening in the same reveal, under the same roots, that passes too). The run need not accept, and a witness no
-extraction returns is not asked about. -/
+/-- The run need not accept, and a witness no extraction returns is not asked about. -/
 theorem eventTwoX_le_firstHit_wit {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
@@ -601,11 +481,6 @@ theorem eventTwoX_le_firstHit_wit {H : Msg → Msg} {L : CompiledTwo Coin A} (hA
   eventTwoX_le_firstHit_kept hA hbind hS hs hPt hd hin P needs hpos cls hrep hblock
     (fun ω r c => L.toCompiled.kept_classWhole_of_wit H P x s ω cls r c (hwit ω r c)) hX hI
 
-/-- **The event of `KSRegTwoX` with the by-class finders' terms, at the classes of a key**:
-`eventTwoX_le_firstHit_wit` at the classes a key of the gates gives (`Verity.FirstHit.clsOf`: a gate's class is named
-by the least gate with its key). Where gates of one key are needed by the same proof blocks (`hneeds`) and lie in the
-same replay block of the first stage's partition (`hblock`), the two hypotheses on the representatives hold, and what
-is left to show is that what the extracted witnesses reveal holds those classes whole (`hwit`). -/
 theorem eventTwoX_le_firstHit_key {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)

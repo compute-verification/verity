@@ -4,20 +4,7 @@ public import Proofs.Flock.SessionLoop.FinInnerParts
 public import Proofs.Flock.SessionLoop.FinInnerRet
 public import Proofs.Flock.SessionLoop.InnerUnrefused
 
-/-!
-# The loop's finish returns at a rep's inner rounds on the worker's own histories
-
-`Loop.finInner_returns_own`: at a history `LiveInnerOwn` reads at rep `2j + r`'s inner round `e` (`Loop.InnerHist`), the
-finish's live inner proof (`finInner`) returns at the request with `final_c` `vs`'s, by `Loop.finInner_ok_at`:
-
-* the request's coins of the rep's rounds before the history's next count the rep's plan (`loopNr_rep`), which is
-  `repCons`'s counts and then the inner proof's four (`repPlan_cons`), so they start with `repCons`'s;
-* its pair's coins (`ρ₀, ρ₁`, the plan's two-coin rounds `Count.repPlan_rho`) are the opened coins', which no refusal
-  shows dependent (`innerAt_unrefused`), and its `β` is the opened coin, which none shows zero, where the request holds
-  it, and past the request's coins a one;
-* its value at `final_c` is `vs`'s, which where no outer coin is `1` is the c_eval of its round-1c values, `vs`'s
-  (`innerReq_own`), at the opened coins' zerocheck point (`Loop.FinalCFixed`).
--/
+/-! The loop's finish returns at a rep's inner rounds on the worker's own histories, its pair's coins and `β` the opened coins', which no refusal shows dependent or zero. -/
 
 @[expose] public section
 
@@ -29,7 +16,7 @@ open _root_.Flock.ZkServer.Frame (INNER_ROUNDS)
 open _root_.Flock.ZkServer.Finish (Tab RepIn)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, as in `Statement`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
@@ -38,11 +25,6 @@ variable (L₁ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray))
 
 set_option maxHeartbeats 2000000 in
-/-- **The finish returns at the request with `vs`'s `final_c`**: at a history `InnerHist` holds at with `e < 4`,
-`finInner` returns at the request with `final_c` `vs`'s (`finInner_ok_at`). The request's coins before the history's
-next count the rep's plan, `repCons`'s rounds then the inner proof's; its pair's coins and `β` are the opened coins',
-not refused (`innerAt_unrefused`); and its value at `final_c` is the c_eval of its round-1c values at the opened coins'
-zerocheck point (`Loop.FinalCFixed`, `innerReq_own`). -/
 theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -77,7 +59,6 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
   have hkk : 2 * j.val + r.val < spec.repStreams.size := by omega
   have hm25 : 25 ≤ (Masked.stAt x j).m := (htabs j.val hjs).1
   have hm35 : (Masked.stAt x j).m ≤ 35 := (htabs j.val hjs).2.1
-  -- the table is table `j`'s, at its `--zk` schedule
   have hRT : Count.RealTabs (Masked.stsOf x) (real x w (ν, t)) := by
     subst hreal
     exact realTabs_of src x w (ν, t) hs
@@ -105,7 +86,6 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
   have e7 : tr.st.m = (Masked.stAt x j).m := congrArg (fun s : _root_.Flock.Setup => s.m) htst
   have e6 : tr.st.fold.kLog = (Masked.stAt x j).c.kLog := congrArg (fun s : _root_.Flock.Setup => s.fold.kLog) htst
   have e8 : tr.st.kLog = (Masked.stAt x j).c.kLog := congrArg (fun s : _root_.Flock.Setup => s.kLog) htst
-  -- the table's statement is a parsed one: its fold returns
   obtain ⟨⟨hwf, -⟩, hslotT⟩ : FlockComplete.ZkTables.StmtT (Masked.stAt x j) :=
     _root_.Flock.Readable.stmtT_of_scope hsc hs hjs
   have hk6 : 6 ≤ (Masked.stAt x j).c.kLog := hwf.hk6
@@ -122,7 +102,6 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
       ∃ y, tr.st.fold.fold a lw ρ = .ok y := by
     rw [htst]
     exact fun a lw ρ hlw hρ => FlockComplete.JsonRT.fold_ok _ hk6 hslotT a hlw hρ
-  -- the request: its values but `final_c`'s are `vs`'s, its coins the opened ones from the rep's base
   obtain ⟨hvsz, hvals, -⟩ := innerReq_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch he hH hs hr hq
   obtain ⟨-, hnc, hcoins⟩ := innerReq_coins L₁ src real x w wk he hH hs hq
   rw [show finCoins x ops = finS.pad (K := refK x) (ops.map fun (p : Msg × Msg) => finS.decOf p.2) from rfl]
@@ -158,7 +137,6 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     intro k hk
     rw [hQc]
     exact padCoin_extract hk (by omega)
-  -- as many extra claims as the statement's regions at each link point, below `2^64`
   have hxs : (_root_.Flock.ZkServer.Finish.claimsOf Q.xs).size = spec.points * (Masked.stAt x j).regions.size := by
     simp only [_root_.Flock.ZkServer.Finish.claimsOf, Array.size_map]
     rw [hQx]
@@ -170,7 +148,6 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     omega
   have hxb : (_root_.Flock.ZkServer.Finish.claimsOf Q.xs).size + 2 < 2 ^ 64 :=
     lt_of_le_of_lt (by rw [hxs, hpts]; omega) (by norm_num : (2050 : ℕ) < 2 ^ 64)
-  -- the rep's plan: `repCons`'s rounds, `nSched` of them, then the inner proof's four
   have hPsz : (_root_.Flock.ZkServer.Session.repPlan spec (Masked.stAt x j)).size =
       ((Masked.stAt x j).m + ((Masked.stAt x j).c.kLog - 6)) +
         ((2 + spec.points * (Masked.stAt x j).regions.size) + 1) +
@@ -210,7 +187,6 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
   have hpre : Count.consCounts tr.st tr.sch (_root_.Flock.ZkServer.Finish.claimsOf Q.xs).size <+:
       Q.coins.toList.map Array.size :=
     prefix_of_sizes hP' (by rw [hcl, hQsz]; omega) fun k hk => hsize k (by rw [hcl] at hk; omega)
-  -- the pair's coins: the plan's two-coin rounds, the opened coins at the rep's `ρ₀, ρ₁` rounds, independent
   obtain ⟨L, hL⟩ : ∃ L, L = FlockComplete.CutEq.ligAt 0 tr.st (_root_.Flock.ZkServer.Finish.claimsOf Q.xs) :=
     ⟨_, rfl⟩
   have hLig : L = 3 + ((Masked.stAt x j).m - 6) + (3 + ((Masked.stAt x j).c.kLog - 6)) +
@@ -272,7 +248,6 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
             tr.sch.k0]!)[1]!⟩ : _root_.Flock.F256)) = true := by
     rw [← hL, hA 0 (by norm_num), hA 1 (by norm_num), hB 0 (by norm_num), hB 1 (by norm_num)]
     exact hρ'
-  -- the value at `final_c`: `vs`'s, the c_eval of the round-1c values at the opened coins' zerocheck point
   have hfcz : (Masked.layE x j).fc < (Masked.layE x j).zp 64 := by
     unfold _root_.Flock.Zk.PadLayout.zp _root_.Flock.Zk.PadLayout.lc
     omega
@@ -309,7 +284,6 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
           Q.vals[(_root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0).r1c i]!) := by
     rw [hLayT, hfa, hR1, hz2]
     exact hC ν (finS.pad (K := refK x) (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) t j hout r
-  -- the inner proof's rounds the request holds count the plan's
   have hpl : ∀ i < 4, (_root_.Flock.ZkServer.Session.repPlan spec (Masked.stAt x j)).getD
       (nSched spec (Masked.stsOf x) (2 * j.val + r.val) + i) 0 =
       [1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].getD i 0 := by
@@ -340,7 +314,6 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     hIn 2 (by norm_num)
   have h3 : ∀ cs, Q.coins[nSched spec (Masked.stsOf x) (2 * j.val + r.val) + 3]? = some cs →
       cs.size = _root_.Flock.Zk.Q := hIn 3 (by norm_num)
-  -- `β`: the opened coin at the rep's `β` round, not zero, where the request holds it, and a one past it
   have eβ : Masked.betaSlot x j.val r.val =
       Masked.repBase x (2 * j.val + r.val) + (nSched spec (Masked.stsOf x) (2 * j.val + r.val) + 2) := by
     have h1 : Masked.betaSlot x j.val r.val = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff 2) := rfl

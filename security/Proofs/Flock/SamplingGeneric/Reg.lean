@@ -43,42 +43,7 @@ import Proofs.Flock.Claims.Sampling.Extract
 import Proofs.Flock.SamplingGeneric.Assemble
 import Proofs.Flock.Soundness.Rewinding
 
-/-!
-# The sampled compiler's committed form
-
-What `CompilerKSReg` is proved from, given the sessions' bound (`Compiled.SessionKS`): the knowledge soundness of a
-compiled sampled verifier against the committed trace's incorrect set (`Compiled.Freg` at the plurality
-`Compiled.regVal`, which the prover's tape fixes before the window's coins), so its sampling term is the acceptance
-probability `P_a(Freg)` of a set fixed at registration. The committed form itself is in `SamplingGeneric/RegTrace.lean`.
-
-* `plurAt`, `pr_off_le`: **the rewinding lemma at a table's plurality** (`FlockSoundness.Rewinding.prBad_le`), over
-  any finite space: a point opens a position off a trace that is the table's plurality wherever a point opens, with
-  probability at most `N·√Pr[conflict]`. The committed trace reads it over the runs at one tape; a trace read at the
-  statement reads it over the tapes and the runs together (`SamplingGeneric/RegX.lean`).
-* `kept`, `opensAt_eq`: what a run's extractions keep (`runExt`, session by session of the sample); `opensAt` is the
-  assembled witness's value there.
-* `InConf`, `OffReg`, `Conflict`: a run's extractions keep two openings of one position that disagree; they open a gate
-  of the program off the committed trace; two runs' extractions open one gate two ways.
-* `selOf`, `selOf_some`: the first slot of a sample whose block is in a set; `selReg` is it at `Freg`.
-* `trace_split`: **the deterministic half**, at any trace. At an accepted run that samples a proof block no values
-  agreeing with the trace make correct, the block's session is not extracted at its first slot, or the run's
-  extractions disagree with themselves or open a gate off the trace: otherwise the trace on the gates, the kept
-  openings elsewhere, makes the block correct (`Sessions.opens`). `reg_split` is it at the committed trace and `Freg`.
-* `bconfX_of_disagree`, `bconf_of_disagree`: two kept openings of one position under one roots that disagree are a
-  collision among the two runs' extractions' own calls, at two tapes and at one.
-* `pr_inConf_le`, `pr_conflict_le`: a disagreement within one run, or between two runs at one tape, is a collision
-  `B_conf` finds (`CommitmentScheme.Binds`).
-* `pr_offReg_le`: the rewinding lemma at one tape's runs' openings of the program's gates, the committed trace being
-  their plurality (`plur`, `regVal_eq_plur`): a run opens a gate off it with probability at most `N·√Pr[conflict]`.
-* `pr_unfound_le`: the sessions' bound at the selection `leadSel selReg` (the first slot of the session of the first
-  slot of the sample whose block is in `Freg`), averaged by Jensen's inequality.
-* `pr_miss_le`, `miss_of_event`: a set of proof blocks refused at `δ` is missed with probability at most `P_a ≤ δ`
-  (`Sessions.draws`), so the event's bound at a family of sets gives the bound on an accepted run whose set is outside
-  `M_δ`.
-
-`SamplingGeneric/RegTrace.lean` puts them together once, at any table of the statement (`event_le_of_off`), and
-`KSReg` is that at the committed trace (`ksReg_of_sessionKS`, `compilerKSReg_of`).
--/
+/-! The parts `CompilerKSReg` is proved from, given the sessions' bound. -/
 
 @[expose] public section
 
@@ -101,7 +66,6 @@ theorem Pr_pos_of {α : Type} [Fintype α] {p : α → Prop} (a : α) (h : p a) 
   have hc : 0 < #(univ.filter p) := card_pos.2 ⟨a, mem_filter.2 ⟨mem_univ _, h⟩⟩
   exact div_pos (Nat.cast_pos.2 hc) (Nat.cast_pos.2 Fintype.card_pos)
 
-/-- Coins fresh on `I`, an event's probability as the average over the coins off `I`. -/
 theorem Pr_forkOn {k : ℕ} {Coin : Type} [Fintype Coin] [Nonempty Coin] (I : Finset (Fin k))
     (p : (Fin k → Coin) → Prop) : Pr p = Ex fun r => Pr fun d : Fin k → Coin => p (forkOn I r d) := by
   classical
@@ -128,7 +92,6 @@ theorem Pr_forkOn_prod {k : ℕ} {Coin C : Type} [Fintype Coin] [Nonempty Coin] 
         funext r
         exact (Sampling.Pr_prod_eq_Ex fun q : (Fin k → Coin) × C => p (forkOn I r q.1) q.2).symm
 
-/-- What the assembled witness opens is a kept opening under the statement's roots that passes. -/
 theorem val_some_mem {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement}
     {found : List (List Msg × Opening Bool)} {g : ℕ} {b : Bool} (h : (assemble s found).val H Cm s g = some b) :
     ∃ q ∈ found, q.1 = s.roots ∧ q.2.pos = g ∧ q.2.val = b ∧ Cm.Opens H s.roots q.2 = true := by
@@ -143,7 +106,7 @@ theorem val_some_mem {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditSt
     exact ⟨a, ha, har, hpo.1, rfl, hpo.2⟩
   · simp [har] at hao
 
-/-- The value of a two-valued table with the larger weight (`true` on a tie) has the largest weight. -/
+/-- `true` on a tie. -/
 theorem le_plur (f : Bool → ℝ) (v : Bool) : f v ≤ f (decide (f false ≤ f true)) := by
   by_cases h : f false ≤ f true
   · rw [decide_eq_true h]
@@ -155,15 +118,10 @@ theorem le_plur (f : Bool → ℝ) (v : Bool) : f v ≤ f (decide (f false ≤ f
     · exact le_rfl
     · exact (not_le.1 h).le
 
-/-- The value most points of a table of optional bits open at a position (`true` on a tie). -/
+/-- `true` on a tie. -/
 noncomputable def plurAt {S : Type} [Fintype S] (op : S → ℕ → Option Bool) (g : ℕ) : Bool :=
   decide (Pr (fun a : S => op a g = some false) ≤ Pr fun a : S => op a g = some true)
 
-/-- **The rewinding lemma at a table's plurality** (`FlockSoundness.Rewinding.prBad_le`): for a table `op` of optional
-bits over a finite space and a trace `tr` that is, at each position a point opens, the value most points open there
-(`plurAt`), a point opens a position below `N` off `tr` with probability at most `N·√Pr[conflict]`, a conflict being
-two points that open one position below `N` two ways. The space is the reader's: the runs at one tape
-(`Compiled.pr_offReg_le`), or the tapes and the runs together. -/
 theorem pr_off_le {S : Type} [Fintype S] [Nonempty S] (N : ℕ) (op : S → ℕ → Option Bool) (tr : ℕ → Option Bool)
     (htr : ∀ a g b, op a g = some b → tr g = some (plurAt op g)) :
     Pr (fun a : S => ∃ g < N, ∃ b, op a g = some b ∧ tr g ≠ some b) ≤
@@ -224,9 +182,6 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## A run's extractions -/
-
-/-- **What a run's extractions keep**, at the prover's run `(ω, r)` and `A`'s extractor's coins `c` (`runExt`). -/
 noncomputable def kept (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) : List (List Msg × Opening Bool) :=
   ((L.runExt x s r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).1
@@ -236,30 +191,23 @@ theorem opensAt_eq (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prov
     L.opensAt H P x ω r c g = (assemble s (L.kept H P x s ω r c)).val H L.commit s g := by
   simp only [opensAt, kept, hs]
 
-/-! ## The three events -/
-
-/-- A run's extractions keep two openings under one roots at one position, of different values. -/
 def InConf (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement) (ω : Ω)
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) : Prop :=
   ∃ q ∈ L.kept H P x s ω r c, ∃ q' ∈ L.kept H P x s ω r c, q.1 = q'.1 ∧ q.2.pos = q'.2.pos ∧ q.2.val ≠ q'.2.val
 
-/-- A run's extractions open a gate of the program off the committed trace. -/
 def OffReg (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) : Prop :=
   ∃ g < L.nG x, ∃ b, L.opensAt H P x ω r c g = some b ∧ L.regVal H P x ω g ≠ some b
 
-/-- Two runs' extractions, at one tape, open a gate of the program two ways (`FlockSoundness.Rewinding.ConflictAt`). -/
 def Conflict (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) : Prop :=
   ∃ g : Fin (L.nG x), (L.opensAt H P x ω rr.1.1 rr.1.2 g).isSome ∧ (L.opensAt H P x ω rr.2.1 rr.2.2 g).isSome ∧
     L.opensAt H P x ω rr.1.1 rr.1.2 g ≠ L.opensAt H P x ω rr.2.1 rr.2.2 g
 
-/-- The first slot of a sample whose proof block is in `F`. -/
 def selOf (L : Compiled Coin A) (x : Msg) (F : Finset ℕ) (l : List ℕ) : Option (Fin (L.nPU x)) :=
   (List.finRange (L.nPU x)).find? fun i => (l[i.val]?).any fun v => decide (v ∈ F)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- A sample of at most `n_PU` slots with a block in `F` has a first such slot, its block below `n_PU`. -/
 theorem selOf_some (L : Compiled Coin A) (x : Msg) {F : Finset ℕ} {l : List ℕ} (hlen : l.length ≤ L.nPU x)
     (hFlt : ∀ v ∈ F, v < L.nPU x) {v : ℕ} (hvl : v ∈ l) (hvF : v ∈ F) :
     ∃ i, L.selOf x F l = some i ∧ ∃ u : Fin (L.nPU x), l[i.val]? = some u.val ∧ u.val ∈ F := by
@@ -282,28 +230,17 @@ theorem selOf_some (L : Compiled Coin A) (x : Msg) {F : Finset ℕ} {l : List �
     have hwF := of_decide_eq_true hpi
     exact ⟨⟨w, hFlt w hwF⟩, rfl, hwF⟩
 
-/-- The first slot of the sample whose proof block is in the committed trace's incorrect set (`selOf` at `Freg`). -/
 noncomputable def selReg (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (l : List ℕ) : Option (Fin (L.nPU x)) :=
   L.selOf x (L.Freg H P x ω) l
 
-/-- A sample of at most `n_PU` slots with a block in `Freg` has a first such slot, its block below `n_PU`. -/
 theorem selReg_some (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     {l : List ℕ} (hlen : l.length ≤ L.nPU x) (hFlt : ∀ v ∈ L.Freg H P x ω, v < L.nPU x) {v : ℕ} (hvl : v ∈ l)
     (hvF : v ∈ L.Freg H P x ω) :
     ∃ i, L.selReg H P x ω l = some i ∧ ∃ u : Fin (L.nPU x), l[i.val]? = some u.val ∧ u.val ∈ L.Freg H P x ω :=
   L.selOf_some x hlen hFlt hvl hvF
 
-/-! ## The deterministic half -/
-
 set_option synthInstance.maxSize 1024 in
-/-- **The deterministic half, at a trace**: at an accepted run whose sample holds, at slot `i`, a proof block `u` that
-no values agreeing with the trace `tr` on the program's gates make correct, the session of `i` is not extracted at its
-first slot `i₀`'s coins, or the run's extractions disagree with themselves or open a gate off `tr`. Otherwise the values
-that are `tr` on the program's gates and the kept openings elsewhere, with the interior values the kept openings give,
-agree with every opening the session's witness reveals at `u` that passes (`u`'s slot shows `i₀`'s session,
-`Sessions.shared`), so they make `u` correct (`Sessions.opens`). The trace is the reader's: the committed trace at the
-run's tape (`reg_split`), or one read at the statement. -/
 theorem trace_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
     {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hin : InScope Pt s)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x)
@@ -363,10 +300,6 @@ theorem trace_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) 
       exact ιOf_eq hagree hqk
 
 set_option synthInstance.maxSize 1024 in
-/-- **The deterministic half**: at an accepted run whose sample holds proof block `u` of the committed trace's
-incorrect set at slot `i`, the session of `i` is not extracted at its first slot `i₀`'s coins, or the run's extractions
-disagree with themselves or open a gate off the committed trace: `u ∈ Freg` says no values agreeing with the committed
-trace make `u` correct (`trace_split` at `regVal`). -/
 theorem reg_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
     {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hin : InScope Pt s)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x)
@@ -379,11 +312,7 @@ theorem reg_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x
   rw [hpart] at hF
   exact trace_split hS hs hPt hin P ω r c hacc i u hiu (L.regVal H P x ω) hF.2 i₀ u₀ hlead hu₀
 
-/-! ## Binding: disagreements are `B_conf`'s collisions -/
-
-/-- Two openings that two runs' extractions keep, at two tapes, under one roots at one position, of different values,
-are a collision among the two runs' extractions' own calls, which `findColl` finds. The tapes need not be one: an
-opening binds under its roots, whichever tape opened it. -/
+/-- The tapes need not be one: an opening binds under its roots, whichever tape opened it. -/
 theorem bconfX_of_disagree {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     (s : AuditStatement) {Ω : Type} (P : Prover Ω) (ω ω' : Ω)
     (rc rc' : (Fin (L.V.k x) → Coin) × L.SlotEC x) {q q' : List Msg × Opening Bool}
@@ -413,8 +342,6 @@ theorem bconfX_of_disagree {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.co
   obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 (Sampling.findColl_isSome _ hc)
   exact ⟨u, v, huv, findColl_spec H _ hvalid u v huv⟩
 
-/-- Two openings that two runs' extractions keep at one tape, under one roots at one position, of different values, are
-a collision among the two runs' extractions' own calls, which `findColl` finds (`bconfX_of_disagree` at one tape). -/
 theorem bconf_of_disagree {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     (s : AuditStatement) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (rc rc' : (Fin (L.V.k x) → Coin) × L.SlotEC x) {q q' : List Msg × Opening Bool}
@@ -426,7 +353,6 @@ theorem bconf_of_disagree {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.com
       Collision H u v :=
   bconfX_of_disagree hbind s P ω ω rc rc' hq hq' h1 h2 h3
 
-/-- An event of a tape and two runs at it that gives a collision `B_conf`'s output is at most `Pr[B_conf]`. -/
 theorem le_bconf (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     {Q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) → Prop}
@@ -438,7 +364,6 @@ theorem le_bconf (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {s : AuditSta
   simp only [Bconf, hs]
   exact Pr_mono hQ
 
-/-- **One run's disagreement**: at most `Pr[B_conf]`, its first run. -/
 theorem pr_inConf_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) ≤
@@ -455,7 +380,6 @@ theorem pr_inConf_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.B
           obtain ⟨a, ha, b, hb, h1, h2, h3⟩ := hq
           exact bconf_of_disagree hbind s P q.1 q.2.1 q.2.2 (Or.inl ha) (Or.inl hb) h1 h2 h3
 
-/-- **Two runs' conflict**: at most `Pr[B_conf]`. -/
 theorem pr_conflict_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Ex (fun ω : Ω => Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
@@ -474,15 +398,11 @@ theorem pr_conflict_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit
   exact bconf_of_disagree hbind s P q.1 q.2.1 q.2.2 (Or.inl ha) (Or.inr ha') (ha1.trans ha1'.symm)
     (ha2.trans ha2'.symm) (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
 
-/-! ## The rewinding lemma at the committed trace -/
-
-/-- The committed trace's value at a gate some run opens. -/
 noncomputable def plur (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (g : ℕ) : Bool :=
   decide (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.opensAt H P x ω rc.1 rc.2 g = some false) ≤
     Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.opensAt H P x ω rc.1 rc.2 g = some true))
 
-/-- At a gate some run's extractions open, the committed trace is the plurality's value. -/
 theorem regVal_eq_plur (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     {r : Fin (L.V.k x) → Coin} {c : L.SlotEC x} {g : ℕ} {b : Bool} (h : L.opensAt H P x ω r c g = some b) :
     L.regVal H P x ω g = some (L.plur H P x ω g) := by
@@ -495,9 +415,6 @@ theorem regVal_eq_plur (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : 
     · exact absurd h0.1 hpos.ne'
   · exact congrArg some (decide_eq_decide.2 Iff.rfl)
 
-/-- **The rewinding lemma at the committed trace**: at each tape, a run's extractions open a gate of the program off
-the committed trace with probability at most `N·√Pr[conflict]`, `N` the program's gates (`pr_off_le` at the tape's
-runs' openings, the committed trace being their plurality). -/
 theorem pr_offReg_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
     Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) ≤
       L.nG x * Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
@@ -505,10 +422,6 @@ theorem pr_offReg_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Pr
   pr_off_le (L.nG x) (fun (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : ℕ) => L.opensAt H P x ω rc.1 rc.2 g)
     (L.regVal H P x ω) fun _ _ _ h => L.regVal_eq_plur H P x ω h
 
-/-! ## The sessions' bound at the selection -/
-
-/-- **The sessions' bound at a selection**, averaged over the tape: the run accepts and the proof block at the picked
-slot is not found at the slot's coins with probability at most `κ_s + √(k(x)·γ_s·Pr[B])` (Jensen's inequality). -/
 theorem pr_unfound_le (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (β : Ω → (Fin (L.V.k x) → Coin) → ℝ) (hβ0 : ∀ ω r, 0 ≤ β ω r)
     (hβ : Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x)
@@ -543,10 +456,6 @@ theorem pr_unfound_le (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Ty
         rw [Ex_mul_left]
         exact mul_le_mul_of_nonneg_left hβ hγ0
 
-/-! ## The sample's miss -/
-
-/-- **A set refused at `δ` is missed with probability at most `δ`**: for a set `F` of proof blocks below `n_PU`, the
-sample holds no block of `F` while `F` is outside `M_δ` with probability at most `P_a(F) ≤ δ` (`Sessions.draws`). -/
 theorem pr_miss_le {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
     {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hin : InScope Pt s)
     (F : Finset ℕ) (hFlt : ∀ v ∈ F, v < L.nPU x) {δ : ℝ} (hδ : 0 ≤ δ) :
@@ -566,9 +475,6 @@ theorem pr_miss_le {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {
       _ ≤ Ex esc := Ex_mono hesc
       _ ≤ δ := hEesc.trans (not_lt.1 hM')
 
-/-- **The second conjunct from the first**, at any family `F` of sets of proof blocks below `n_PU`, one a tape: if the
-run accepts with a sampled block in its tape's set with probability at most `ε`, it accepts with that set outside `M_δ`
-with probability at most `δ + ε` (`pr_miss_le` at each tape). -/
 theorem miss_of_event {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
     {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hin : InScope Pt s)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (F : Ω → Finset ℕ) (hFlt : ∀ ω, ∀ v ∈ F ω, v < L.nPU x)

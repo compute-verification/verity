@@ -4,26 +4,7 @@ public import Proofs.Flock.SessionLoop.SampledRelay
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Flock.Claims.Bridge.Hm96Tree
 
-/-!
-# The session loop's error per outcome as a number, and the sampled audit at it
-
-`Loop.anyErr` reads three things that are not numbers: the session's leaf count, hm96's hiding gap at the pinned key,
-and the go and unswitched provers' collision finders' success (`Fork`). Each is bounded here by a parameter: a leaf cap
-`L`, the bound `δ₁` at which hm96 hides (`Claims.Hm96Hiding`), and the SHA-512 calls per run `q`, the prover's and
-`V*`'s together, at which `ecr/sha-512` (`ExpectedCR`) bounds each finder's success by `2q/2^256`.
-
-* `CROnly.hidingGap_le_of_hiding`: where hm96 hides at a finite `δ₁`, its gap is at most `δ₁`, at the event where the
-  real pair is no less likely than the ideal one (`CROnly.half_sum_abs_eq`).
-* `Fork.pr_le`: `Fork`'s success is at most `2q/2^256` where it meets `ExpectedCR` and each of its runs makes at most
-  `q` calls, the prover's and the verifier's together.
-* `Loop.Budget`: that at the go and unswitched provers.
-* `Loop.errAt`: `Loop.anyErr` at the leaf cap, a bound on the gap and the calls, a number.
-* `Loop.anyErr_le`: `anyErr ≤ errAt` at those bounds.
-* **`Flock.SecurityProofs.SampledAuditAnyDeployedAt`** and **`SampledAuditAnyRelayDeployedAt`**:
-  `SampledAuditAnyDeployed` and `SampledAuditAnyRelayDeployed` with `errAt` at each session's verdict in place of the
-  premise `εS`, taking hm96's hiding at `δ₁`, the leaf cap at every statement a session may take and `Loop.Budget` at
-  every session.
--/
+/-! The session loop's error per outcome as a number, and the sampled audit at it. -/
 
 @[expose] public section
 
@@ -32,8 +13,6 @@ namespace FlockSoundness.CROnly
 open Finset
 open scoped ENNReal
 
-/-- **Half the ℓ¹ distance of two masses of equal total is one event's advantage**: the event where the first is no
-less than the second. -/
 theorem half_sum_abs_eq {V : Type} (S : Finset V) (μ ν : V → ℝ) (h : ∑ v ∈ S, μ v = ∑ v ∈ S, ν v) :
     1 / 2 * ∑ v ∈ S, |μ v - ν v| =
       ∑ v ∈ S, (if ν v ≤ μ v then (1 : ℝ) else 0) * μ v - ∑ v ∈ S, (if ν v ≤ μ v then (1 : ℝ) else 0) * ν v := by
@@ -45,8 +24,6 @@ theorem half_sum_abs_eq {V : Type} (S : Finset V) (μ ν : V → ℝ) (h : ∑ v
   rw [sum_congr rfl hpt, sum_sub_distrib, sum_sub_distrib, sum_sub_distrib, ← mul_sum, ← mul_sum, h]
   ring
 
-/-- **hm96's gap is at most any finite bound it hides at**: `Hm96Hiding My c δ₁` at the event where `(My y, c y)` is
-no less likely than `(U, c y)` bounds the gap, half their ℓ¹ distance (`half_sum_abs_eq`). -/
 theorem hidingGap_le_of_hiding {A B C : Type} [Fintype A] [Fintype B] [DecidableEq B] [DecidableEq C] [Nonempty A]
     [Nonempty B] {My : A → B} {c : A → C} {δ₁ : ℝ≥0∞} (h : Claims.Hm96Hiding My c δ₁) (hδ : δ₁ ≠ ⊤) :
     hidingGap My c ≤ δ₁.toReal := by
@@ -73,9 +50,6 @@ end FlockSoundness.CROnly
 
 namespace Claims
 
-/-- **`Fork`'s success at a call budget**: where `Fork` meets `ExpectedCR` and each run of the prover against `V*`
-makes at most `q` SHA-512 calls, the prover's and `V*`'s together, it finds a collision with probability at most
-`2q/2^256`: its cost is two runs'. -/
 theorem Fork.pr_le {N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg}
     {P : Prover (N × Ω)} {Vs : VStar Θ} {θ : Θ} {x : Msg} {q : ℕ} (hF : ExpectedCR H (Fork H P Vs θ x))
     (hq : ∀ ω, (runStar H P Vs x ω θ).pLog.length + (runStar H P Vs x ω θ).vLog.length ≤ q) :
@@ -97,9 +71,6 @@ namespace Claims.ZKServer.Loop
 open Claims Claims.ZKMal Claims.ZKServer
 open FlockSoundness.Discharge FlockSoundness.CROnly
 
-/-- **The provers' calls at a budget**, at the statement `x`, witness `w`, `V*` and its tape `θ`: at the go and the
-unswitched prover, each run against `V*` makes at most `q` SHA-512 calls, the prover's and `V*`'s together (as the
-finders' bounds count a run's calls), and the prover's `Fork` meets `ExpectedCR` (`ecr/sha-512`). -/
 def Budget (T : CoinLayer.TableData) (vs : (CoinLayer.session loopNr T).SwVals)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
@@ -112,14 +83,9 @@ def Budget (T : CoinLayer.TableData) (vs : (CoinLayer.session loopNr T).SwVals)
     ∀ ω, (runStar CoinOpen.shaH (((anyStops T L₀ real).unP vs).prover w) Vs x ω θ).pLog.length +
       (runStar CoinOpen.shaH (((anyStops T L₀ real).unP vs).prover w) Vs x ω θ).vLog.length ≤ q)
 
-/-- **The error per outcome as a number**, at `t` repetitions, a leaf cap `L`, `q` SHA-512 calls per run and a bound
-`δ₁` on hm96's gap: where the release goes on, `8Lδ₁ + 24tLδ₁ + 2·3^{-t} + 4t·3^t·2q/2^256`; where it stops, the same
-with `8t` in place of `24t`. -/
 noncomputable def errAt (t L q : ℕ) (δ₁ : ℝ) (o : Bool) : ℝ :=
   8 * L * δ₁ + (if o then 24 else 8) * t * L * δ₁ + 2 * (1 / 3) ^ t + 4 * t * 3 ^ t * (2 * q / 2 ^ (256 : ℝ))
 
-/-- **`anyErr` is at most `errAt`** where the session has at most `L` leaves, hm96's hiding gap is at most `δ₁`, and
-the provers' calls are at the budget (`Budget`). -/
 theorem anyErr_le (T : CoinLayer.TableData) (vs : (CoinLayer.session loopNr T).SwVals)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
@@ -158,13 +124,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **A sampled audit's view at any values, at the deployed session loop, its error a number.**
-`SampledAuditAnyDeployed` with its premise `εS` replaced by `Loop.errAt` at a leaf cap `L`, a hiding bound `δ₁` and
-`q` SHA-512 calls per run, the prover's and `V*`'s together. In place of that premise it takes that hm96 hides at the pinned key
-at a finite `δ₁` (`Claims.Hm96Hiding`), that every statement a session may take has at most `L` leaves, and that at
-each session the go and unswitched provers' runs against its `V*` are at the budget, each prover's `Fork` meeting
-`ExpectedCR` (`Loop.Budget`). Then the bound is `SampledAuditAnyDeployed`'s with `N·2δ₁` for the record and `errAt` at
-each session's verdict, at `δ₁` in reals. -/
 def _root_.Flock.Guarantees.SampledAuditAnyDeployedAt : Prop :=
   ∀ {K S V O T R Xs Θ D : Type} [Fintype K] [Fintype S] [Fintype T] [Fintype R] [Nonempty S] [Nonempty T] [Nonempty R]
     [Fintype Xs] {N : ℕ} {CB : ℕ → Type} [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
@@ -239,9 +198,6 @@ theorem SampledAuditAnyDeployedAt : Flock.Guarantees.SampledAuditAnyDeployedAt :
     (ENNReal.ofReal_le_iff_le_toReal hδ₁).2 hδ
   gcongr
 
-/-- **A sampled audit's view at any values, at the deployed held relay's frames, its error a number.**
-`SampledAuditAnyRelayDeployed` with its premise `εS` replaced by `Loop.errAt`, at the premises
-`SampledAuditAnyDeployedAt` takes in its place. -/
 def _root_.Flock.Guarantees.SampledAuditAnyRelayDeployedAt : Prop :=
   ∀ {K S V O T R Xs Θ D : Type} [Fintype K] [Fintype S] [Fintype T] [Fintype R] [Nonempty S] [Nonempty T] [Nonempty R]
     [Fintype Xs] {N : ℕ} {CB : ℕ → Type} [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]

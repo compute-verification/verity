@@ -3,22 +3,7 @@ module
 public import Proofs.Flock.Soundness.ZK.RealLeaves
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Leaf
 
-/-!
-# hm96's hiding commitment to `N` leaves: the hybrid over the leaves
-
-The trace is a digest at each of `N = |ι|` hiding leaves, and the prover's coins are a uniform salt per leaf. Leaf `i`
-of the commitment to the trace `X` under the salts `y` is `H(X i + My (y i), c (y i))`: hm96's
-`H(p_leaf ‖ x ⊕ Φy ‖ H(p_salt ‖ y))`, with XOR the addition of the group `B`. Leaf `i` of the ideal commitment is
-`H(U i, c (y i))` with `U i` fresh and uniform; it reads no trace. A test is a function of the `N` leaves with values in
-`[0,1]`: whatever runs on the commitment, as its probability of an event given the leaves.
-
-* `hm96_commit_ideal_close`: from `Claims.Hm96Hiding` at `δ₁` per leaf, the commitment to any trace and the ideal
-  commitment give every test expectations within `N·δ₁` of each other, both ways (`ideal_leaves_swap_fintype` and
-  `real_leaves_swap_fintype` on events, lifted to tests by `avg_le_of_prCoin`);
-* `hm96_commit_two_traces`: the commitments to two traces are within `2·N·δ₁`, through the ideal one;
-* `hm96_commit_two_traces_not_card`: the `2` is needed. One leaf with a constant mask satisfies `Hm96Hiding` at
-  `δ₁ = 1/2`, yet its commitment is the trace itself, `1` apart between two traces.
--/
+/-! hm96's hiding commitment to `N` leaves, by a hybrid over the leaves. -/
 
 @[expose] public section
 
@@ -33,9 +18,6 @@ theorem prCoin_unit_prod {Ω : Type} [Fintype Ω] (P : Ω → Prop) :
 
 variable {ι Y B C D : Type} [Fintype ι] [DecidableEq ι] [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
 
-/-- **hm96's commitment to `N` leaves hides, as a hybrid over the leaves**: from `Claims.Hm96Hiding` at `δ₁` per leaf,
-for every trace `X` and every test `Γ` of the `N = |ι|` leaves with values in `[0,1]`, the commitment to `X` and the
-ideal commitment, which reads no trace, give `Γ` expectations within `N·δ₁` of each other, both ways. -/
 theorem hm96_commit_ideal_close (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁)
     (H : B × C → D) (X : ι → B) (Γ : (ι → D) → ℝ≥0∞) (hΓ : ∀ d, Γ d ≤ 1) :
     avg (fun y : ι → Y => Γ fun i => H (X i + My (y i), c (y i))) ≤
@@ -65,8 +47,7 @@ theorem hm96_commit_ideal_close (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞
       _ = prCoin (fun y => P (g y)) + Fintype.card ι * δ₁ := by rw [prCoin_unit_prod fun y => P (g y)]
   exact ⟨avg_le_of_prCoin g g' S hS hS' toIdeal Γ hΓ, avg_le_of_prCoin g' g S hS' hS toReal Γ hΓ⟩
 
-/-- **The commitments to two traces are within `2·N·δ₁`**: `N·δ₁` from the first to the ideal commitment and `N·δ₁`
-from it to the second (`hm96_commit_ideal_close`). The `2` is needed (`hm96_commit_two_traces_not_card`). -/
+/-- The `2` is needed (`hm96_commit_two_traces_not_card`). -/
 theorem hm96_commit_two_traces (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁)
     (H : B × C → D) (X X' : ι → B) (Γ : (ι → D) → ℝ≥0∞) (hΓ : ∀ d, Γ d ≤ 1) :
     avg (fun y : ι → Y => Γ fun i => H (X i + My (y i), c (y i))) ≤
@@ -80,7 +61,6 @@ theorem hm96_commit_two_traces (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞}
     _ = avg (fun y : ι → Y => Γ fun i => H (X' i + My (y i), c (y i))) + 2 * Fintype.card ι * δ₁ := by
         rw [add_assoc, ← two_mul, ← mul_assoc]
 
-/-- A constant mask hides at `δ₁ = 1/2`: the point `0` is `1/2` from uniform on `ZMod 2`. -/
 theorem hm96Hiding_const_half : Claims.Hm96Hiding (fun _ : Unit => (0 : ZMod 2)) (fun _ : Unit => ()) (1 / 2) := by
   intro E
   by_cases hE : E (0, ())
@@ -100,10 +80,6 @@ theorem hm96Hiding_const_half : Claims.Hm96Hiding (fun _ : Unit => (0 : ZMod 2))
         = 0 := by simp [Claims.PrENNReal, hE]
       _ ≤ _ := zero_le
 
-/-- **Two traces' commitments need not be within `N·δ₁`**: `hm96_commit_two_traces` at `N·δ₁` in place of `2·N·δ₁`
-is false. One leaf with a constant mask satisfies `Hm96Hiding` at `δ₁ = 1/2` (`hm96Hiding_const_half`), but its
-commitment is the trace itself, so the test "the leaf is `0`" is `1` at the trace `0` and `0` at the trace `1`, more
-than `N·δ₁ = 1/2` apart. -/
 theorem hm96_commit_two_traces_not_card :
     ¬ ∀ (ι Y B C D : Type) [Fintype ι] [DecidableEq ι] [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
       (My : Y → B) (c : Y → C) (δ₁ : ℝ≥0∞), Claims.Hm96Hiding My c δ₁ →

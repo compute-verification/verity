@@ -17,22 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.PartS
 
-/-!
-# The verifier's own rows as `valueFinder`'s source
-
-`valueSrcC3`: at a read `(j, u, q)` of a history `t`, the rows check 5 registers itself at port `q` of V*'s statement
-`j` (`valueRows`, at the verifier's candidate-3 inputs `c3 t`), under `RecCoins.verifierSalt` of META's
-`program_sha512` and the value's name. `valueRows` computes the rows as the check does: a level of R's openings
-(`rec-open-stacked`, `RecCoins.checkStackedLevel`: `coef`, `dirs`) and a part of R's opening (`rec-opening`,
-`RecCoins.checkOpening`: `v`, and `out`'s one zero row, which `checkZero` holds under `zeroSalt`, `valueSrcAll`'s salt
-there), and none elsewhere. The finder's budget counts each row's words once and each salt's
-three SHA-512 (`RecCoins.saltOf`) once. The definitions are in `Recursive/ValueSrc.lean`, below `RecursiveAuditC3At`, which reads them; here
-are their ties:
-
-* `stacked_of_check`, `opening_of_check`: an accepted unit's `checkValue`s are at `valueRows`' rows
-  (`valueRows_coef`, `valueRows_dirs`, `valueRows_v`), so `valueSrcC3_eq` gives `value_tie_coll`'s `hsrc`;
-* `stackedLevel_of_check`, `openingCheck_of_check`: `RecCoins.check` runs those checks at those units.
--/
+/-! The ties of the verifier's own rows (`valueSrcC3`) to what check 5 accepted. -/
 
 @[expose] public section
 
@@ -50,8 +35,6 @@ theorem valueSrcC3_eq {c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3} {R
       some (rows, Flock.RecCoins.verifierSalt prog value) := by
   simp only [valueSrcC3, hv, hprog]
 
-/-- **What an accepted `rec-open-stacked` unit checked**: R's opening `o`, the one level `l` of its parameters, and
-its `coef` and `dirs` at that level's rows. -/
 theorem stacked_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public} {own : Array Flock.Registered.Port}
     {LANES H : ℕ} (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ()) :
     ∃ o l, Flock.RecCoins.opening c3 c.unit.name = .ok o ∧ stackedLevels o LANES H = [l] ∧
@@ -69,8 +52,6 @@ theorem stacked_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flo
       exact ⟨o, l, hop, hls, ⟨_, hcv⟩, _, hdv⟩
   · cases h
 
-/-- **What an accepted `rec-opening` unit checked**: R's opening `o`, its `v` at part `j`'s row, and its `out` at one
-zero row. -/
 theorem opening_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public} {own : Array Flock.Registered.Port}
     {m cl j : ℕ} (h : Flock.RecCoins.checkOpening c3 c pub own m cl j = .ok ()) :
     ∃ o rows what, Flock.RecCoins.opening c3 c.unit.name = .ok o ∧ openingVRows o j = some rows ∧
@@ -122,7 +103,6 @@ theorem valueRows_out {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {m cl j : ℕ
     valueRows (some c3) c "out" = some (Flock.RecCoins.zeroRows 1 Flock.RecCoins.OUT_WORDS, Flock.RecCoins.ZERO_VALUE) := by
   simp only [valueRows, hop, hso, hp] <;> rfl
 
-/-- **Check 5 at a `rec-open-stacked` unit runs `checkStackedLevel`** at its parameters. -/
 theorem stackedLevel_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Port} {files : Option Flock.RecCoins.Source}
     {c3 : Flock.RecCoins.C3} {LANES H : ℕ} (h : Flock.RecCoins.check st (some own) files (some c3) = .ok ())
     (hso : Flock.RecCoins.stackedParams st.c.unit.name = some (LANES, H)) :
@@ -131,7 +111,6 @@ theorem stackedLevel_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Po
   unfold Flock.RecCoins.check
   simp [hso]
 
-/-- **Check 5 at a `rec-opening` unit runs `checkOpening`** at its parameters. -/
 theorem openingCheck_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Port} {files : Option Flock.RecCoins.Source}
     {c3 : Flock.RecCoins.C3} {m cl j : ℕ} (h : Flock.RecCoins.check st (some own) files (some c3) = .ok ())
     (hso : Flock.RecCoins.stackedParams st.c.unit.name = none) (hp : Flock.RecOpening.params st.c.unit.name = some (m, cl, j)) :

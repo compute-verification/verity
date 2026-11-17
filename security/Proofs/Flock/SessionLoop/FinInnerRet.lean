@@ -12,28 +12,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
 public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 
-/-!
-# The loop's finish at a rep's inner rounds, run forward
-
-What makes the finish's live inner proof (`Loop.finInner`) return: its pads commitment returns, its `repCons` returns at
-the request's rounds, `consWhy` passes, and its inner proof, answered by the request's coins and past them by ones
-(`asksPad`), returns where each of its four rounds is past the coins or holds the count it squeezes, and its `β` is not
-`0`. Each part is named here, none a premise of a guarantee:
-
-* `Loop.OkAt`: a run that returns, from a transcript and a round.
-* `Loop.squeezeP_pad_ok`, `Loop.sampleP_pad_ok`, `Loop.sampleVecP_pad_ok`: a squeeze answered by `asksPad` returns
-  round `k`'s coins, where round `k` is past the coins or holds the squeeze's count.
-* `Loop.innerP_pad_ok`: the inner proof answered by `asksPad` returns.
-* `Loop.innerCommitP_fw_ok`: the pads commitment returns.
-* `Loop.finInner_ok_of`: `finInner` returns where its parts do.
-* `Loop.repPlan_le`: each round of a rep's plan at a `--zk` schedule of `m ≤ 35`, at most `65,534` claims, counts at
-  most `COIN_MAX` coins; `Loop.repPlan_cons`: the plan is `repCons`'s rounds (`Count.consCounts`), then the inner
-  proof's four.
-* `Loop.prefix_of_sizes`: coins whose counts are a plan's, over its first rounds, start with those rounds' counts.
-* **`Loop.finInner_ok_at`**: `finInner` returns at a request whose coins `repCons` takes (`Finish.repCons_asksOf`,
-  `repCons_asksPad`), whose pair's coins are independent, whose value at `final_c` is the c_eval of its round-1c values
-  at its round-2 coin, whose inner proof's rounds are past its coins or hold their counts, and whose `β` is not `0`.
--/
+/-! What makes the finish's live inner proof return, each part named and none a premise of a guarantee. -/
 
 @[expose] public section
 
@@ -48,7 +27,6 @@ set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
-/-- **A run that returns**: `x` from the transcript `t` at round `k` returns some value, transcript and round. -/
 def OkAt {α : Type} (x : TMW (StateT ℕ V) α) (t : Flock.Transcript) (k : ℕ) : Prop :=
   ∃ a t' k', (x.run t).run k = .ok ((a, t'), k')
 
@@ -70,7 +48,6 @@ theorem liftTM_run {α : Type} {x : _root_.Flock.Transcript.TM α} {t : Flock.Tr
   rw [h]
   rfl
 
-/-- Where round `k` is past `C` or holds the count `c` frames, `asksPad C` answers it with `padCoin C k`. -/
 theorem asksPad_round_ok (C : Array (Array F128)) (c : ByteArray) {k : ℕ}
     (hC : ∀ cs, C[k]? = some cs → cs.size = (_root_.Flock.u64OfLE c (c.size - 8)).toNat) :
     ((asksPad C).round c).run k = .ok (padCoin C k, k + 1) := by
@@ -84,8 +61,6 @@ theorem asksPad_round_ok (C : Array (Array F128)) (c : ByteArray) {k : ℕ}
       simp [hC cs hk] at hne
     · rfl
 
-/-- **A squeeze answered by `asksPad C`** of `0 < n < 2^64` coins from round `k`, where round `k` is past `C` or holds
-`n` coins, returns round `k`'s coins and moves to round `k + 1`. -/
 theorem squeezeP_pad_ok (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) (hn64 : n < 2 ^ 64)
     (t : Flock.Transcript) {k : ℕ} (hC : ∀ cs, C[k]? = some cs → cs.size = n) :
     ∃ t', ((_root_.Flock.ZkServer.Finish.squeezeP (asksPad C) kind n).run t).run k =
@@ -104,7 +79,6 @@ theorem sampleVecP_pad_ok (C : Array (Array F128)) {n : ℕ} (hn : n ≠ 0) (hn6
       .ok (((Array.range n).map (padCoin C k), t'), k + 1) :=
   squeezeP_pad_ok C 2 hn hn64 t hC
 
-/-- A coin answered by `asksPad C` from round `k`, where round `k` is past `C` or holds one coin, is round `k`'s first. -/
 theorem sampleP_pad_ok (C : Array (Array F128)) (t : Flock.Transcript) {k : ℕ} (hC : ∀ cs, C[k]? = some cs → cs.size = 1) :
     ∃ t', ((_root_.Flock.ZkServer.Finish.sampleP (asksPad C)).run t).run k = .ok ((padCoin C k 0, t'), k + 1) := by
   obtain ⟨t₁, h1⟩ := squeezeP_pad_ok C 1 (by decide) (by norm_num) t hC
@@ -122,9 +96,6 @@ theorem tauLift_run {hh : ByteArray → ByteArray} {tau : F128} {salt : ByteArra
   rw [tauCommitmentWith_sv]
   rfl
 
-/-- **The inner proof answered by `asksPad C` from round `k` returns**, where each of its rounds `k`, `k + 1`, `k + 2`
-and `k + 3` is past `C` or holds the count it squeezes (one, `|cons| + 3`, one and `Zk.Q`) and its `β`, round `k + 2`'s
-first coin, is not `0`. -/
 theorem innerP_pad_ok (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout)
     (p : _root_.Flock.ZkServer.Finish.PadsZk) (ic : _root_.Flock.ZkServer.Finish.InnerCommit) (finalC : F128)
     (cons : Array (String × _root_.Flock.Zk.Lin)) (hcs : cons.size + 3 < 2 ^ 64) (t : Flock.Transcript) {k : ℕ}
@@ -165,7 +136,6 @@ theorem innerP_pad_ok (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout)
     refine okAt_bind (sampleVecP_pad_ok C (by decide) (by decide) t₉ h3) fun t₁₀ => ?_
     exact okAt_pure _ _ _
 
-/-- **The pads commitment returns** through SHA-512 (`JsonRT.innerCommitP_ok`, through `Finish.innerCommitP_eq`). -/
 theorem innerCommitP_fw_ok (p : _root_.Flock.ZkServer.Finish.PadsZk) (salt : ℕ → ByteArray) :
     ∃ ic, (_root_.Flock.ZkServer.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) p salt :
       V _root_.Flock.ZkServer.Finish.InnerCommit) = .ok ic := by
@@ -193,8 +163,6 @@ theorem tmw_bind_run {α β : Type} {x : TMW (StateT ℕ V) α} {f : α → TMW 
 theorem getThe_bind_run {β : Type} (f : ℕ → TMW (StateT ℕ V) β) (t : Flock.Transcript) (k : ℕ) :
     ((getThe ℕ >>= f : TMW (StateT ℕ V) β).run t).run k = ((f k).run t).run k := rfl
 
-/-- **`consWhy` passes** where the rep took the request's rounds and its `zerocheck c_eval` constraints vanish on the
-pads (`consWhy_none`'s converse). -/
 theorem consWhy_none_of {n : ℕ} {cons : Array (String × _root_.Flock.Zk.Lin)} {h : Array F128}
     (hz : ∀ q ∈ cons, q.1 = "zerocheck c_eval" → _root_.Flock.ZkServer.Finish.linAt q.2 h = 0) :
     _root_.Flock.ZkServer.Finish.consWhy n n cons h = none := by
@@ -205,9 +173,6 @@ theorem consWhy_none_of {n : ℕ} {cons : Array (String × _root_.Flock.Zk.Lin)}
   unfold _root_.Flock.ZkServer.Finish.consWhy
   simp [he]
 
-/-- **`finInner` returns where its parts do**: its pads commitment returns, its `repCons`, answered by `asksPad` from
-round `0` and a transcript with no rounds, returns at the request's round `n`, `consWhy` passes, and its inner proof
-returns from there. -/
 theorem finInner_ok_of {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : RepIn}
     {ic : _root_.Flock.ZkServer.Finish.InnerCommit}
     (hic : (_root_.Flock.ZkServer.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
@@ -241,8 +206,6 @@ theorem finInner_ok_of {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
   rw [tmw_bind_run hip]
   rfl
 
-/-! ## A rep's plan, bounded -/
-
 theorem all_append {a b : Array ℕ} {B : ℕ} (ha : ∀ c ∈ a, c ≤ B) (hb : ∀ c ∈ b, c ≤ B) : ∀ c ∈ a ++ b, c ≤ B :=
   fun c hc => (Array.mem_append.1 hc).elim (ha c) (hb c)
 
@@ -262,7 +225,6 @@ theorem queryCoins_le {sch : _root_.Flock.Schedule} (hq : ∀ i, (sch.levels.get
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
   omega
 
-/-- Each round of Ligerito's plan counts at most `65,536` coins, where its `n` and each level's `q` are below. -/
 theorem ligeritoCoins_le {sch : _root_.Flock.Schedule} (hn : sch.n + 1 ≤ 65536)
     (hq : ∀ i, (sch.levels.getD i default).q + 1 ≤ 65536) :
     ∀ c ∈ _root_.Flock.ZkServer.Session.ligeritoCoins sch, c ≤ 65536 := by
@@ -293,8 +255,6 @@ theorem ligeritoCoins_le {sch : _root_.Flock.Schedule} (hn : sch.n + 1 ≤ 65536
       omega
     · exact queryCoins_le hq _
 
-/-- **Each round of a rep's plan counts at most `COIN_MAX` coins**, at a `--zk` schedule of `m ≤ 35` whose `n` and
-levels' `q` are below `65,536`, with at most `65,536` claims. -/
 theorem repPlan_le {spec : SessionSpec} {st : Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
     (hz : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) (h35 : st.m ≤ 35) (hn : sch.n + 1 ≤ 65536)
     (hq : ∀ i, (sch.levels.getD i default).q + 1 ≤ 65536) (hc : 2 + spec.points * st.regions.size ≤ 65536) (i : ℕ) :
@@ -327,8 +287,6 @@ theorem repPlan_le {spec : SessionSpec} {st : Stmt} {sch : _root_.Flock.Schedule
     simp only [_root_.Flock.ZkServer.Session.repPlan, repCoins_ok hz, Except.toOption, Option.getD_some] at hmem
     exact hall c (Array.mem_filter.1 hmem).1
 
-/-- **A rep's plan is `repCons`'s rounds, then the inner proof's four**, at the statement's setup and `--zk`
-schedule. -/
 theorem repPlan_cons {spec : SessionSpec} {st : Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
     (hz : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) :
     (_root_.Flock.ZkServer.Session.repPlan spec st).toList =
@@ -337,8 +295,6 @@ theorem repPlan_cons {spec : SessionSpec} {st : Stmt} {sch : _root_.Flock.Schedu
   rw [Count.repPlan_list hz]
   rfl
 
-/-- **Coins whose counts are a plan's start with its first rounds' counts**: where the plan is `cc` then more, and
-each of the coins' first `|cc|` rounds counts the plan's coins. -/
 theorem prefix_of_sizes {C : Array (Array F128)} {cc I : List ℕ} {P : Array ℕ} (hP : P.toList = cc ++ I)
     (hlen : cc.length ≤ C.size) (hs : ∀ k < cc.length, (C[k]!).size = P.getD k 0) :
     cc <+: C.toList.map Array.size := by
@@ -348,13 +304,7 @@ theorem prefix_of_sizes {C : Array (Array F128)} {cc I : List ℕ} {P : Array �
     Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, hP, List.getElem?_append_left h1,
     List.getElem?_eq_getElem h1, Option.getD_some]
 
-/-! ## `finInner` returns -/
-
 set_option maxHeartbeats 1000000 in
-/-- **`finInner` returns** at a request whose coins' counts start with `repCons`'s rounds, `n` of them
-(`Finish.repCons_asksOf`, `repCons_asksPad`), whose pair's coins are independent, whose value at `final_c` is the c_eval
-of its round-1c values at its round-2 coin (so `consWhy`'s `zerocheck c_eval` holds on the pads: `c_eval_eval`), whose
-inner proof's four rounds are past its coins or hold their counts, and whose `β` is not `0` (`finInner_ok_of`). -/
 theorem finInner_ok_at {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : RepIn} {tp : ℕ}
     (h25 : 25 ≤ t.st.m) (h35 : t.st.m ≤ 35) (hkm : t.st.fold.kLog ≤ t.st.m) (hkk : t.st.kLog = t.st.fold.kLog)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512)
@@ -414,7 +364,7 @@ theorem finInner_ok_at {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
     · obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hq
       have hi3 : i < 3 := hsz3 ▸ hi
       obtain rfl | rfl | rfl : i = 0 ∨ i = 1 ∨ i = 2 := by omega
-      · -- the c_eval: the request's value at `final_c` is the c_eval of its round-1c values at the round-2 coin
+      ·
         rw [← getElem!_pos rp.cons 0 hi, hzc.1]
         dsimp only
         have hMk : FlockSoundness.Discharge.Composed.ZerocheckMasked.Masks

@@ -2,18 +2,7 @@ module
 
 public import Proofs.Flock.SampledGeneric.Compose
 
-/-!
-# The textbook form's hypotheses
-
-An extractor that is a game after the judged session (`JointExtractor`) gives the generic theorem's hypotheses but the
-transfer:
-
-* `JointExtractor.toExtractor_covers`: acceptance at an incorrect sampled proof block either fails to extract or
-  extracts a witness whose openings disagree with the trace (`JointExtractor.Sound`);
-* `JointExtractor.toTrials_opens`: what the trials read comes with openings of the registered commitment;
-* `JointExtractor.toTrials_wellFormed`: the trials' numbers are in range, with no slack;
-* `Trials.plurality_plur`: the plurality is a plurality.
--/
+/-! An extractor that is a game after the judged session gives the generic theorem's hypotheses but the transfer. -/
 
 @[expose] public section
 

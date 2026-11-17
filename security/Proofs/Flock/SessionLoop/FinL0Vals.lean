@@ -46,23 +46,7 @@ import Proofs.Flock.Claims.ZK.FrameRankFault
 import Proofs.Flock.Claims.ZK.PrefixLive
 import Proofs.Flock.SessionLoop.FinRounds
 
-/-!
-# Level 0's values at the views' source
-
-At (c.3)'s context, the views' source (`Masked.swSrcE` at the workers' values `vs`) holds, from `zp 64` to `h_ab`, level
-0's clear values at the opened coins plus the request's pads (`Finish.padsOf q.draws`): the OOD reply, each lane round's
-pair and the folded weight's products with the extra lanes (`l0Clear`), at their layout positions.
-
-* **The loop's level 0** (`Loop.l0_loop`): table `j`'s rep `r`'s rounds past its binding send, tagged `0`, level 0's
-  bodies at the opened coins from `ligP0`, the request's pads and the basis of its switched vectors at those coins
-  (`Masked.ligBasis`): `LeanRelease.ofLoop_l0` at the loop's table (`realOf`), its coins the opened coins
-  (`l0Body_shift`, `words_slot`, `loopNr_l0`) and its switched vectors the session's (`sws_of_pts`, `loopNr_piop`).
-* **`Loop.swSrcE_l0_of_cut`**: where the cut session's bodies there are the cut opening's from the views' source, that
-  source's masked values are `l0Clear` plus the pads (`masked_of_cutL0`): the history's messages are the cut session's
-  (`msg_runCut`), round messages without a domain frame (`dropDom_l0Body`).
-* **`Loop.swSrcE_l0_live`**: the same with the cut opening's bodies from the earlier reps' returns
-  (`Masked.runCut_cutL0_of_ret`).
--/
+/-! Level 0's values at the views' source: level 0's clear values at the opened coins plus the request's pads. -/
 
 @[expose] public section
 
@@ -72,11 +56,10 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
-/-- **Level 0's round messages carry no domain frame**: bodies `1` to `k₀ + 2` lead with the OOD reply or a pair. -/
 theorem dropDom_l0Body {coin : ℕ → ℕ → F128} {p0 : ℕ} {P : List UInt8} {T : F128} {cap : ByteArray}
     {sch : _root_.Flock.Schedule} {t b : Array F128} {lay : _root_.Flock.Zk.PadLayout} {h : Array F128} {rep : ℕ}
     {extra : ℕ → ℕ → F128} {nonce : ℕ → ℕ → UInt64} {i : ℕ} (h1 : 1 ≤ i) (h2 : i ≤ sch.k0 + 2) :
@@ -100,7 +83,6 @@ theorem dropDom_l0Body {coin : ℕ → ℕ → F128} {p0 : ℕ} {P : List UInt8}
         simp only [pairFr, List.mem_cons, List.not_mem_nil, or_false] at hf
         rcases hf with rfl | rfl <;> exact True.intro
 
-/-- **The loop's words are the opened coins** below the round's count. -/
 theorem words_slot {x : Msg} {ops : List (Msg × Msg)} (hl : ops.length = refK x) {p e : ℕ} (hp : p < ops.length)
     (he : e < loopNr x p) (hc : e < 65536) :
     (wordsAt x (ops.map fun q => ZKMal.CoinLayer.rd q.2) p)[e]! = Masked.slotAt (finCoins x ops) p e := by
@@ -111,7 +93,6 @@ theorem words_slot {x : Msg} {ops : List (Msg × Msg)} (hl : ops.length = refK x
   rw [List.take_length] at h
   exact h
 
-/-- **The loop asks rep `q`'s rounds through level 0 for its plan's counts.** -/
 theorem loopNr_plan {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) {q : ℕ} (hq : q < spec.repStreams.size)
     {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok (sch, tp))
@@ -131,7 +112,6 @@ theorem loopNr_plan {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : 
   rw [hrR]
   omega
 
-/-- **The loop's counts in level 0**: `z`'s `n`, then one, then two for each lane round and the extra lanes. -/
 theorem loopNr_l0 {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) {q : ℕ} (hq : q < spec.repStreams.size)
     {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok (sch, tp))
@@ -145,8 +125,6 @@ theorem loopNr_l0 {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Ar
       ((2 + spec.points * sts[q / 2]!.regions.size) + 1 + i) by unfold FlockComplete.piopRoundsZk; omega]
   exact Count.repPlan_l0 hz hi
 
-/-- **The loop's counts in the algebraic phase and ring switch**: the zerocheck's `m − 13` and ones, the lincheck's
-ones, each claim's `7` and the claims' batching. -/
 theorem loopNr_piop {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) {q : ℕ} (hq : q < spec.repStreams.size)
     {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok (sch, tp))
@@ -184,8 +162,6 @@ theorem loopNr_piop {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : 
         (2 + spec.points * sts[q / 2]!.regions.size)) by omega, hP _ (by omega)]
     exact hN
 
-/-- **Level 0's bodies at shifted coins**: the bodies at the coins from round `R₀` read as from `0` are the bodies at
-the coins `C` from `R₀`, where the two agree below each level-0 round's count. -/
 theorem l0Body_shift {W C : ℕ → ℕ → F128} {R0 R1 : ℕ} (hR : R0 = R1) {P : List UInt8} {T : F128} {cap : ByteArray}
     {sch : _root_.Flock.Schedule} {t b : Array F128} {lay : _root_.Flock.Zk.PadLayout} {h : Array F128} {rep : ℕ}
     {extra : ℕ → ℕ → F128} {nonce : ℕ → ℕ → UInt64}
@@ -200,7 +176,6 @@ theorem l0Body_shift {W C : ℕ → ℕ → F128} {R0 R1 : ℕ} (hR : R0 = R1) {
     rw [show R0 + (0 + 2 + j) = R0 + (2 + j) by omega, show R0 + 2 + j = R0 + (2 + j) by omega]
     exact hW (2 + j) i (by omega) (by rw [if_neg (by omega)]; unfold l0Nc; split <;> omega)
 
-/-- `claimsOf`'s coordinates are the claims'. -/
 theorem claimsOf_x {e : Array _root_.Flock.Claim} {xs : Array (Array F128)} (h : e.map (·.x) = xs) (k : ℕ) :
     (_root_.Flock.ZkServer.Finish.claimsOf xs)[k]!.x = e[k]!.x := by
   subst h
@@ -209,10 +184,6 @@ theorem claimsOf_x {e : Array _root_.Flock.Claim} {xs : Array (Array F128)} (h :
     simp [_root_.Flock.ZkServer.Finish.claimsOf]
   · rw [getElem!_neg _ k (by simp [_root_.Flock.ZkServer.Finish.claimsOf, hk]), getElem!_neg e k hk]
 
-/-- **The switched vectors at the loop's coins are the session's**: the ring switch on the zerocheck's and lincheck's
-claims at the points of `W` from `R`, then `claimsOf xs`, at `W`'s ring-switch coins from `L₁`, is the ring switch on
-the closed-form PIOP's claims at the coins `C` from `R`, then claims at `xs`, at `C`'s coins, where `W` and `C` agree
-on what each round reads. -/
 theorem sws_of_pts {st : _root_.Flock.Setup} {W C : ℕ → ℕ → F128} {R L₁ L₂ : ℕ} {zc : _root_.Flock.ZcOut}
     {lc : _root_.Flock.LcOut} {xs : Array (Array F128)} {extras : Array _root_.Flock.Claim} (tr : FlockComplete.Trace)
     (hpts : FlockComplete.LigLock.Fed.PtsAt st.m st.fold.kLog W R zc lc)
@@ -247,7 +218,6 @@ theorem sws_of_pts {st : _root_.Flock.Setup} {W C : ℕ → ℕ → F128} {R L�
     exact hg k hk
   · rw [hcs, Array.size_append, FlockComplete.abcClaims_size, hsz]
 
-/-- The loop's own tables are `RealTabs` (`realTabs_realOf`'s proof). -/
 theorem realTabs_of {R : Type}
     (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
@@ -275,10 +245,6 @@ variable (L₀ : LeanRelease Flock.Wit Tp)
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 set_option maxHeartbeats 1000000 in
-/-- **The loop's level 0 at the opened coins**: at (c.3)'s context on the loop's tables, table `j`'s rep `r`'s rounds
-`ligP0 + 1 + i` (`1 ≤ i ≤ k₀ + 2`) send, tagged `0`, level 0's bodies at the opened coins from `ligP0`, its table, the
-basis of its switched vectors at the opened coins (`Masked.ligBasis`), its layout (`Masked.layE`) and its request's
-pads. -/
 theorem l0_loop (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w)
@@ -329,7 +295,6 @@ theorem l0_loop (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Rea
     have := hregs j.val hj
     exact Nat.le_trans (Nat.mul_le_mul_left 2 this) (by norm_num)
   have hn64 := Count.sched_n hz
-  -- the loop's level 0
   have hP := LeanRelease.ofLoop_progChecks_sizes Masked.dataE
     (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (realOf src) x w (Loop.sizesOk_of_serves hServe)
     (fun ρ _ _ _ hs => realTabs_of src x w ρ hs) hL0
@@ -339,7 +304,6 @@ theorem l0_loop (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Rea
       r.isLt rfl
   rw [hRep.1, Except.ok.injEq, Prod.mk.injEq] at hreal
   obtain ⟨rfl, rfl⟩ := hreal
-  -- its table, schedule and layout are the session's
   obtain ⟨schs, hschs, hschj⟩ := Masked.schedsPZk_live hx
   obtain ⟨htabst, hschtb⟩ := finRepTab (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hschs hq hRep
   rw [hjj] at htabst hschtb
@@ -364,11 +328,9 @@ theorem l0_loop (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Rea
   have hPR : FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j.val + r.val) / 2]! =
       (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m + (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.c.kLog - 6 +
         (2 + spec.points * (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.regions.size + 1) := rfl
-  -- the opened coins
   have hWC : ∀ p e, p < ops.length → e < loopNr x p → e < 65536 →
       (wordsAt x (ops.map fun q => ZKMal.CoinLayer.rd q.2) p)[e]! = Masked.ligCoin (finCoins x ops) p e :=
     fun p e hp he hc => words_slot hF.1 hp he hc
-  -- the samples
   have hdraws : ((LeanRelease.ofLoop Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src)
       (realOf src)).samplesAt x (ν, t) (2 * j.val + r.val)) = q.draws := by
     obtain ⟨-, hq', -⟩ := hRep
@@ -383,7 +345,6 @@ theorem l0_loop (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Rea
       (((startOf x (2 * j.val + r.val)).toOption.map (·.1)).getD default) (L₀.draws (ν, t) (2 * j.val + r.val)) = _
     rw [hso]
     rfl
-  -- the extra claims' coordinates
   have hqx : q.xs = _root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
       (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
         (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)) := by
@@ -397,7 +358,6 @@ theorem l0_loop (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Rea
   have hxs := finRepXs L₀ src (realOf src) wk x w hsc hR ν t κ m₀ ρ₀ ops hF s0 spec hsx _ hq extras hext' tb hi q f
     hRep
   rw [hqx] at hxs
-  -- the switched vectors
   obtain ⟨hp1, hp3, hp5, hp7, hpN⟩ := loopNr_piop hsx hq2 hz (by omega) hk6
   simp only [hm1, hk1] at hp1 hp3 hp5 hp7 hpN
   obtain ⟨Rz, hRz⟩ : ∃ Rz, FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j.val + r.val) = Rz := ⟨_, rfl⟩
@@ -457,7 +417,6 @@ theorem l0_loop (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Rea
     refine Eq.trans ?_ (e.trans ?_)
     · with_reducible rfl
     · with_reducible rfl
-  -- level 0's bodies
   refine ⟨T₁, by rw [hP0, ← htbsch]; omega, fun i h1 h2 => ?_⟩
   rw [hP0, hbody i h1 (by rw [htbsch]; exact h2)]
   refine congrArg some (congrArg (List.cons 0) ?_)
@@ -487,11 +446,6 @@ theorem l0_loop (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Rea
     exact he
 
 set_option maxHeartbeats 1000000 in
-/-- **Level 0's values at the views' source, from the cut session's bodies**: at (c.3)'s context on the loop's tables,
-where the cut session's bodies `ligP0 + i` (`1 ≤ i ≤ k₀ + 2`) from the views' source are the cut opening's from that
-source at the opened coins, table `j`'s rep `r`'s masked values from `zp 64` to `h_ab` are level 0's clear values
-(`l0Clear`) plus the request's pads (`masked_of_cutL0`): the history's messages there are the cut session's bodies
-(`msg_runCut`) and the loop's (`l0_loop`). -/
 theorem swSrcE_l0_of_cut (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
@@ -551,11 +505,6 @@ theorem swSrcE_l0_of_cut (vs : finS.SwVals)
   exact (List.cons.inj (hm.symm.trans hb)).2
 
 set_option maxHeartbeats 1000000 in
-/-- **Level 0's values at the views' source** (`Loop.swSrcE_l0_live`): at (c.3)'s context on the loop's tables, where
-the earlier reps return from the views' source cut at the opened coins and table `j`'s rep `r`'s PIOP returns
-(`Masked.runCut_cutL0_of_ret`'s premises), its masked values from `zp 64` to `h_ab` are level 0's clear values at the
-opened coins (`l0Clear`: the OOD reply, each lane round's pair and the folded weight's products with the extra lanes)
-plus the request's pads. -/
 theorem swSrcE_l0_live (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)

@@ -7,34 +7,13 @@ public import Proofs.Flock.Claims.KS.FnFork
 public import Proofs.Flock.Claims.KS.Wait
 public import Proofs.Flock.Claims.Sampling.Wait
 
-/-!
-# The sampled compiler is zero knowledge (`CompilerZK`)
-
-The masked compiled verifier's transcript is the framing's rounds, then `M` sessions in turn, each `A`'s prover against
-`V*` after the run's messages before it (`ZkCompiled.residual`). The proof is a hybrid over the sessions, last first:
-hybrid `j` runs the honest prover for the first `j` sessions and simulates the rest (`hyb`). Going from hybrid `j + 1`
-to hybrid `j` resamples slot `j`'s tape and simulator coins (`Pr_resample`): with the earlier sessions' tapes fixed,
-session `j` is `A`'s run at the statement its history routes to, so `A`'s zero knowledge there, at the outcome the
-audit's outcome gives it and the event that runs the later sessions' simulators after it, costs `A`'s error at
-`residual` where the honest run reaches the session (`step_le`). Hybrid `M` is the honest run (`hyb_M`), and hybrid `0`
-the composed simulator (`hyb_zero`), since the framing's messages are functions of the statement and the history.
-
-* `Ex_resample`, `Pr_resample`: resampling one coordinate keeps the sampling design; `Pr_le_resample`: a hybrid step from two
-  resamplings.
-* `pre`, `pre_succ`: the honest run's first sessions; where it goes on after session `j`'s start, the next session is
-  `A`'s run against `residual`. `pre_congr`: the first `j` sessions read only the first `j` slots.
-* `hyb`, `step_le`, `hyb_M`, `hyb_zero`: the hybrids, hybrid `j` with each of the first `j` sessions showing its
-  outcome; `errAt`: `err`'s term at a session.
-* **`compilerZK : CompilerZK`**.
--/
+/-! The sampled compiler is zero knowledge (`CompilerZK`), by a hybrid over the sessions, last first. -/
 
 @[expose] public section
 
 namespace Claims.SamplingGeneric
 
 open Claims
-
-/-! ## Transcripts and simulator programs -/
 
 theorem histOf_eq (ms : List (Msg × Out)) : histOf ms = Claims.histOf ms := by
   unfold histOf Claims.histOf
@@ -48,7 +27,6 @@ theorem recGoesOn_cons_msg (a m : Msg) (τ : List (Msg × Out)) :
     obtain ⟨b, o⟩ := p
     rw [← List.cons_append, ZKMal.recGoesOn_snoc, ZKMal.recGoesOn_snoc]
 
-/-- An honest run's transcript goes on, in the claims' sense, exactly where it has all its rounds, each a message. -/
 theorem recGoesOn_interact (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)),
       Recursion.goesOn (Claims.interact ask pm n hist) = ZKMal.goesOn n (Claims.interact ask pm n hist)
@@ -77,10 +55,6 @@ theorem simAt_of {St : Type} {S : SimOut St} {C : Type} {xS : Msg} (h : Nonempty
   · rfl
   · contradiction
 
-/-! ## Resampling one coordinate -/
-
-/-- **Resampling keeps the sampling design**: where `(a, b) ↦ (u a b, v a)` is an involution, sampling `a`, then `b` fresh in place
-of `v a`, samples `u a b` uniformly. -/
 theorem Ex_resample {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (u : α → β → α) (v : α → β)
     (h1 : ∀ a b, u (u a b) (v a) = a) (h2 : ∀ a b, v (u a b) = b) (f : α → ℝ) :
     (Ex fun a => Ex fun b => f (u a b)) = Ex f := by
@@ -119,8 +93,6 @@ theorem Ex_fst {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (f : α �
   funext a
   exact Ex_const (α := β) (f a)
 
-/-! ## The masked compiled verifier's honest run -/
-
 namespace ZkCompiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : ZkArg Coin} (L : ZkCompiled Coin A)
@@ -139,7 +111,6 @@ theorem start_mono (x : Msg) {i j : ℕ} (h : i ≤ j) : L.start x i ≤ L.start
   | step _ ih => rw [L.start_succ]; omega
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- A round after the first part and before session `j` is in some earlier session. -/
 theorem locate (x : Msg) (len : ℕ) :
     ∀ j, L.k₀ x ≤ len → len < L.start x j → ∃ i < j, L.start x i ≤ len ∧ len < L.start x (i + 1)
   | 0, h0, h => by rw [start_zero] at h; omega
@@ -149,17 +120,13 @@ theorem locate (x : Msg) (len : ℕ) :
       exact ⟨i, by omega, h1, h2⟩
     · exact ⟨j, by omega, by omega, h⟩
 
-/-- The tape at `x`: a nonce and a rest per session. -/
 abbrev Tp (x : Msg) := (Fin (L.M x) → A.Nonce) × (Fin (L.M x) → A.Rest)
 
-/-- The composed prover's message at a history. -/
 def pm (H : Msg → Msg) (w : Sampling.Wit) (x : Msg) (t : L.Tp x) (hist : List (Msg × Msg)) : Msg :=
   (((L.composed w x).next x hist t).eval H).1
 
-/-- Session `j`'s witness at its statement. -/
 def wS (H : Msg → Msg) (w : Sampling.Wit) (x xS : Msg) : A.W := ((L.wit w x xS).eval H).1
 
-/-- Slot `j`'s nonce and rest. -/
 def slot {x : Msg} (t : L.Tp x) (j : Fin (L.M x)) : A.Nonce × A.Rest := (t.1 j, t.2 j)
 
 variable {L} {H : Msg → Msg}
@@ -195,7 +162,6 @@ theorem pm_at (w : Sampling.Wit) (t : L.Tp x) {i : ℕ} (hi : i < L.M x) {hist :
   pm_session t ((hS.routed x s hs).2 i hi hist h1 h2) hi
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The first `j` sessions read only the first `j` slots.** -/
 theorem pm_congr (w : Sampling.Wit) {t t' : L.Tp x} {j : ℕ} (hj : j ≤ L.M x)
     (ht : ∀ i : Fin (L.M x), i.val < j → L.slot t i = L.slot t' i) {hist : List (Msg × Msg)}
     (hl : hist.length < L.start x j) : L.pm H w x t hist = L.pm H w x t' hist := by
@@ -206,14 +172,9 @@ theorem pm_congr (w : Sampling.Wit) {t t' : L.Tp x} {j : ℕ} (hj : j ≤ L.M x)
 
 end ZkCompiled
 
-/-! ## The hybrid argument -/
-
-/-- `V*`'s answer at `x` and `θ` to the prover messages `as`. -/
 abbrev askOf {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (x : Msg) (θ : Θ) (as : List Msg) : Out :=
   ((Vs.next x as θ).eval H).1
 
-/-- **One hybrid step**: where resampling one coordinate keeps the sampling design on each side, a bound at each fixed rest of the
-coordinates is a bound on average. -/
 theorem Pr_le_resample {α β γ : Type} [Fintype α] [Fintype β] [Nonempty β] [Fintype γ] [Nonempty γ]
     (u : α → β → α) (v : α → β) (h1 : ∀ a b, u (u a b) (v a) = a) (h2 : ∀ a b, v (u a b) = b)
     (u' : α → γ → α) (v' : α → γ) (h1' : ∀ a c, u' (u' a c) (v' a) = a) (h2' : ∀ a c, v' (u' a c) = c)
@@ -231,7 +192,6 @@ theorem Pr_le_of_imp {α β : Type} [Fintype α] [Nonempty α] [Fintype β] [Non
       _ = 0 := Pr_false
       _ ≤ Pr Q := Pr_nonneg Q
 
-/-- `simRounds` from nothing, where each message is a function of the history, is the run of that function. -/
 theorem simRounds_said (H : Msg → Msg) (ask : List Msg → Out) (f : List (Msg × Out) → SP Msg)
     (g : List (Msg × Msg) → Msg) (hf : ∀ ms, f ms = .ret (g (Claims.histOf ms))) (n : ℕ) :
     (SP.eval H ask (Recursion.simRounds f n [])).1 = Claims.interact ask g n [] := by
@@ -262,38 +222,30 @@ namespace ZkCompiled
 
 variable {Coin : Type} {A : ZkArg Coin}
 
-/-- The honest run's messages before session `j`. -/
 def pre (L : ZkCompiled Coin A) (H : Msg → Msg) (w : Sampling.Wit) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ)
     (t : L.Tp x) (j : ℕ) : List (Msg × Out) :=
   (runStar H (L.prover w x) Vs x t θ).msgs.take (L.start x j)
 
-/-- Session `j` of the honest run shows `os`'s `j`-th outcome. -/
 def okAt (L : ZkCompiled Coin A) (H : Msg → Msg) (w : Sampling.Wit) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ)
     (os : List A.St) (t : L.Tp x) (j : ℕ) : Prop :=
   os[j]? = some (A.out (L.step x (histOf (L.pre H w x Vs θ t j))).stmt
     ((L.pre H w x Vs θ t (j + 1)).drop (L.start x j)))
 
-/-- The tape `t` with slot `i` replaced by `a`. -/
 def upd (L : ZkCompiled Coin A) {x : Msg} (t : L.Tp x) (i : Fin (L.M x)) (a : A.Nonce × A.Rest) : L.Tp x :=
   (Function.update t.1 i a.1, Function.update t.2 i a.2)
 
-/-- The sessions `js` simulated after the transcript `ms` against `V*`, given the outcomes `os`, on the coins `c`. -/
 noncomputable def simEval (L : ZkCompiled Coin A) (H : Msg → Msg) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ)
     (os : List A.St) (c : (j : Fin (L.M x)) → L.CB x j) (js : List (Fin (L.M x))) (ms : List (Msg × Out)) :
     List (Msg × Out) :=
   (SP.eval H (askOf H Vs x θ) (L.simSessions x os c js ms)).1
 
-/-- A tape and the simulator's coins. -/
 abbrev HC (L : ZkCompiled Coin A) (x : Msg) := L.Tp x × ((j : Fin (L.M x)) → L.CB x j)
 
-/-- **Hybrid `i`**: the honest run through its first `i` sessions, each showing its outcome in `os`, then the sessions
-from `i` on simulated given their outcomes, on the event `Ev`. -/
 noncomputable def hyb (L : ZkCompiled Coin A) (H : Msg → Msg) (w : Sampling.Wit) (x : Msg) {Θ : Type} (Vs : VStar Θ)
     (θ : Θ) (os : List A.St) (Ev : List (Msg × Out) → Prop) (i : ℕ) : ℝ :=
   Pr fun p : L.HC x => (∀ j < i, L.okAt H w x Vs θ os p.1 j) ∧
     Ev (L.simEval H x Vs θ os p.2 ((List.finRange (L.M x)).drop i) (L.pre H w x Vs θ p.1 i))
 
-/-- `err`'s term at session `j` on the tape `t`. -/
 noncomputable def errAt (L : ZkCompiled Coin A) (H : Msg → Msg) (w : Sampling.Wit) (x : Msg) (Θ : Type) (Vs : VStar Θ)
     (θ : Θ) (os : List A.St) (t : L.Tp x) (j : ℕ) : ℝ :=
   match os[j]?, decide ((L.pre H w x Vs θ t j).length = L.start x j) && Recursion.goesOn (L.pre H w x Vs θ t j) with
@@ -368,7 +320,6 @@ theorem simEval_congr (L : ZkCompiled Coin A) (H : Msg → Msg) (x : Msg) {Θ : 
   unfold simEval
   rw [simSessions_congr L x os c c' js ms h]
 
-/-- The composed simulator's transcript: the framing's rounds, then the sessions simulated after them. -/
 theorem sim_out (L : ZkCompiled Coin A) (H : Msg → Msg) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ)
     (o : List Msg × List A.St) (c : L.sim.C x) :
     (L.sim.given o).out H Vs θ x c =
@@ -401,7 +352,6 @@ variable {L : ZkCompiled Coin A} {H : Msg → Msg} (hS : L.ZkSessions H) {x : Ms
   (hs : L.parse x = some s)
 include hS hs
 
-/-- Within session `i`, the composed prover is `A`'s at the session's own history. -/
 theorem pm_in (w : Sampling.Wit) (t : L.Tp x) {i : ℕ} (hi : i < L.M x) {hist h' : List (Msg × Msg)}
     (hl : hist.length = L.start x i) (hh : h'.length < L.n x i) :
     L.pm H w x t (hist ++ h') =
@@ -409,7 +359,6 @@ theorem pm_in (w : Sampling.Wit) (t : L.Tp x) {i : ℕ} (hi : i < L.M x) {hist h
   rw [pm_at hS hs w t hi (hist := hist ++ h') (by rw [List.length_append, hl]; omega)
     (by rw [List.length_append, hl, L.start_succ]; omega), List.take_left' hl, List.drop_left' hl]
 
-/-- The honest run before session `j` is the composed prover's. -/
 theorem pre_eq (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = L.V.k x) (t : L.Tp x) {j : ℕ}
     (hj : j ≤ L.M x) :
     L.pre H w x Vs θ t j = Claims.interact (askOf H Vs x θ) (L.pm H w x t) (L.start x j) [] := by
@@ -423,7 +372,6 @@ theorem pre_eq (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs
   rw [hm]
   exact ZKMal.interact_take _ _ _ (L.start_mono x hj)
 
-/-- Before the sessions, the honest run says what the framing fixes. -/
 theorem pre_zero (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = L.V.k x) (t : L.Tp x) :
     L.pre H w x Vs θ t 0 = Claims.interact (askOf H Vs x θ) (fun h => (L.step x h).said) (L.k₀ x) [] := by
   rw [pre_eq hS hs w Vs θ hk t (Nat.zero_le _), L.start_zero]
@@ -431,8 +379,6 @@ theorem pre_zero (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : 
   rw [List.nil_append, ZKMal.histOf_length, List.length_take]
   exact lt_of_le_of_lt (min_le_left _ _) (lt_of_lt_of_le hi (ZKMal.interact_length_le _ _ _ _))
 
-/-- **Session `i` of the honest run**: where the run goes on at the session's start, the session is `A`'s run at the
-statement its history routes to, against `residual`, on slot `i`. -/
 theorem pre_succ (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = L.V.k x) (t : L.Tp x) {i : ℕ}
     (hi : i < L.M x) (hg : Recursion.goesOn (L.pre H w x Vs θ t i) = true) :
     (L.pre H w x Vs θ t i).length = L.start x i ∧
@@ -459,7 +405,6 @@ theorem pre_succ (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : 
   exact pm_in hS hs w t hi (by rw [ZKMal.histOf_length]; exact hlen)
     (by rw [ZKMal.histOf_length, List.length_take]; exact lt_of_le_of_lt (min_le_left _ _) hl)
 
-/-- Where the honest run stops before session `i`, it shows nothing more. -/
 theorem pre_stop (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = L.V.k x) (t : L.Tp x) {i : ℕ}
     (hi : i < L.M x) (hg : Recursion.goesOn (L.pre H w x Vs θ t i) = false) :
     L.pre H w x Vs θ t (i + 1) = L.pre H w x Vs θ t i := by
@@ -468,7 +413,6 @@ theorem pre_stop (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : 
   rw [e, pre_eq hS hs w Vs θ hk t (show i + 1 ≤ L.M x from hi), L.start_succ, ZKMal.interact_add, ZKMal.cont]
   exact ite_eq_right fun hz => by simp [hz] at hg
 
-/-- **The first `j` sessions read only the first `j` slots**: of the honest run. -/
 theorem pre_congr (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = L.V.k x) (t : L.Tp x)
     (i : Fin (L.M x)) (a : A.Nonce × A.Rest) {j : ℕ} (hj : j ≤ i.val) :
     L.pre H w x Vs θ (L.upd t i a) j = L.pre H w x Vs θ t j := by
@@ -489,7 +433,6 @@ theorem pre_all (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : V
   rw [hk, hS.rounds x s hs] at this
   exact this
 
-/-- `A`'s error is nonnegative wherever `err` reads it: its zero knowledge at the empty event. -/
 theorem errAt_nonneg (hA : A.ZK H) (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ)
     (hR : Sampling.Rhon H L.commit L.parse L.partition x w) (os : List A.St) (t : L.Tp x) {j : ℕ} (hj : j < L.M x) :
     0 ≤ L.errAt H w x Θ Vs θ os t j := by
@@ -509,8 +452,6 @@ theorem errAt_nonneg (hA : A.ZK H) (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ
       simp only [and_false, Pr_false, zero_add] at h
       exact h
 
-/-- **One hybrid step at fixed other slots**: replacing session `i`'s honest run, on slot `i`'s tape, by `A`'s simulator
-given the session's outcome, on slot `i`'s coins, costs `A`'s error where the run reaches the session. -/
 theorem step_le (hA : A.ZK H) (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = L.V.k x)
     (hR : Sampling.Rhon H L.commit L.parse L.partition x w) (os : List A.St) (Ev : List (Msg × Out) → Prop) {i : ℕ}
     (hi : i < L.M x) (t : L.Tp x) (c : (j : Fin (L.M x)) → L.CB x j) :
@@ -588,7 +529,6 @@ theorem step_le (hA : A.ZK H) (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ
               omega) b c]
         exact ⟨fun h => ⟨hprev, h⟩, fun h => h.2⟩
 
-/-- **Hybrid `i + 1` is within session `i`'s error of hybrid `i`.** -/
 theorem hyb_succ (hA : A.ZK H) (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = L.V.k x)
     (hR : Sampling.Rhon H L.commit L.parse L.partition x w) (os : List A.St) (Ev : List (Msg × Out) → Prop) {i : ℕ}
     (hi : i < L.M x) :
@@ -616,7 +556,6 @@ theorem hyb_le (hA : A.ZK H) (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ 
     rw [Finset.sum_range_succ]
     linarith
 
-/-- **Hybrid `M` is the honest run**, at the outcome. -/
 theorem hyb_M (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = L.V.k x)
     (o : List Msg × List A.St) (Ev : List (Msg × Out) → Prop) :
     Pr (fun t : L.Tp x => L.outOf x (runStar H (L.prover w x) Vs x t θ).msgs = o.2 ∧
@@ -627,7 +566,6 @@ theorem hyb_M (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.
   rw [List.drop_of_length_le List.length_finRange.le, pre_all hS hs w Vs θ hk p.1, simEval_nil]
   exact h.2
 
-/-- **Hybrid `0` is the composed simulator.** -/
 theorem hyb_zero (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = L.V.k x)
     (o : List Msg × List A.St) (Ev : List (Msg × Out) → Prop) :
     L.hyb H w x Vs θ o.2 Ev 0 = Pr (fun c : L.sim.C x => Ev ((L.sim.given o).out H Vs θ x c)) := by

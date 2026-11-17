@@ -2,19 +2,7 @@ module
 
 public import Proofs.Flock.Recursive.ZkServerAdaptive
 
-/-!
-# The live zk_server at a worker whose requests are fixed
-
-A worker that sends a fixed list of requests, its `i`-th request the list's `i`-th whatever the ZK server answered
-(`fun h => reqs[h.length]?`), runs the live session (`ZkServerAny.liveOut`) on those requests, each with the next salts
-it reads from the list. By `ZkServerAny.liveOut_any`, whether that session finishes depends on the requests and how many
-salts each reads, never on the salts' values, so one evaluation at one salt list decides it at every list of that
-length.
-
-* `chopReqs reqs ys`: the requests `reqs`, each with the salts `liveWith` reads for it from `ys` in turn.
-* `adaptOut_fixed`, `adaptFinished_fixed`: the session at the fixed worker is the live session on `chopReqs reqs ys`.
-* `liveFinished_chopReqs`: that session finishes at `ys` exactly when it finishes at any `ys'` of the same length.
--/
+/-! The live zk_server at a worker whose requests are fixed finishes at one salt list exactly when it finishes at every list of that length. -/
 
 @[expose] public section
 
@@ -22,12 +10,10 @@ namespace FlockSoundness.Discharge.Recursion.ZkServerAdaptive
 
 open Flock Flock.ZkServer ZkServerRun ZkServerAny
 
-/-- **The requests `reqs`, each with the salts it reads**: `reads b` of them from `ys` in turn, as `adaptOut` takes them. -/
 def chopReqs : List ByteArray → List ByteArray → List (ByteArray × List ByteArray)
   | [], _ => []
   | b :: rest, ys => (b, ys.take (reads b)) :: chopReqs rest (ys.drop (reads b))
 
-/-- Salt lists of one length give the requests the same shape. -/
 theorem shape_chopReqs : ∀ (reqs ys ys' : List ByteArray), ys.length = ys'.length →
     shape (chopReqs reqs ys) = shape (chopReqs reqs ys')
   | [], _, _, _ => rfl
@@ -37,7 +23,6 @@ theorem shape_chopReqs : ∀ (reqs ys ys' : List ByteArray), ys.length = ys'.len
       (b, (ys'.take (reads b)).length) :: shape (chopReqs rest (ys'.drop (reads b)))
     rw [ih, List.length_take, List.length_take, h]
 
-/-- **The fixed worker's session is the live session on its requests**: from the requests left, `rest`, on. -/
 theorem adaptOut_fixed (s : Schedule) (reqs : List ByteArray) :
     ∀ (rest : List ByteArray) (st : State) (h : History) (ys : List ByteArray), reqs.drop h.length = rest →
       adaptOut s (fun h => reqs[h.length]?) rest.length st h ys = liveOut s st (chopReqs rest ys)
@@ -57,14 +42,12 @@ theorem adaptOut_fixed (s : Schedule) (reqs : List ByteArray) :
     · rw [adaptOut_ok hW hm, liveOut_ok hm, ih]
       simp
 
-/-- **The fixed worker finishes exactly when the live session on its requests does.** -/
 theorem adaptFinished_fixed (s : Schedule) (reqs ys : List ByteArray) :
     adaptFinished s (fun h => reqs[h.length]?) reqs.length ys = liveFinished s (chopReqs reqs ys) := by
   unfold adaptFinished
   rw [adaptOut_fixed s reqs reqs { salts := [] } [] ys rfl]
   rfl
 
-/-- **Whether it finishes reads only how many salts there are** (`Flock.SecurityProofs.liveOut_any`). -/
 theorem liveFinished_chopReqs (s : Schedule) (reqs : List ByteArray) {ys ys' : List ByteArray}
     (hl : ys.length = ys'.length) : liveFinished s (chopReqs reqs ys) = liveFinished s (chopReqs reqs ys') := by
   obtain ⟨_, _, fin, -, -, -, -, hL⟩ := Flock.SecurityProofs.liveOut_any s (shape (chopReqs reqs ys'))
