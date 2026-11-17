@@ -1012,9 +1012,9 @@ def with_state_held(lock: Path, digests: dict[str, str | None], reader: str = OR
     ("its proof stands over the activations entry", {}),
     ("not in the lock", {g: None for g in STATE_TOY}),
     ("restated", {OR.STATE_HELD: "ab" * 32}),
-    ("over the registered entries alone", {"NetworkCheck.Period.auditStateEntries": None}),
-    ("over another stateHeldIn", {"NetworkCheck.Period.stateHeldIn": "cd" * 32}),
-    ("over another stateEntries", {"NetworkCheck.Period.stateEntries": "ef" * 32}),
+    ("over the registered entries alone", {"NetworkVerifier.Period.auditStateEntries": None}),
+    ("over another stateHeldIn", {"NetworkVerifier.Period.stateHeldIn": "cd" * 32}),
+    ("over another stateEntries", {"NetworkVerifier.Period.stateEntries": "ef" * 32}),
     ("its definitions another guarantee's", {g: None for g in STATE_TOY if g != OR.STATE_HELD}),
 ])
 def test_the_figure_says_its_charge_was_state_free_only_where_rows_state_held_stands_over_the_activations_entry(
@@ -1499,7 +1499,7 @@ def test_the_published_form_which_drops_windows_gives_the_same_record(tmp_path):
 
 @pytest.mark.parametrize("public, why", [
     (dict(PUBLIC, K=K + 1), f"K is {K + 1}, and its terms sum to {K}"),
-    ({k: v for k, v in PUBLIC.items() if k != "scans"}, "not NetworkCheck.Period's rows form"),
+    ({k: v for k, v in PUBLIC.items() if k != "scans"}, "not NetworkVerifier.Period's rows form"),
     (dict(PUBLIC, scans=[{k: v for k, v in SCAN.items() if k != "faulty_entries"}]),
      "the rows form's public lacks a term: KeyError: 'faulty_entries'"),
     (dict(PUBLIC, windows=2), "1 scans for the period's 2 execution phases"),
@@ -1814,7 +1814,7 @@ def test_auditor_record_holds_the_key_and_session_of_the_entry_whose_stretch_hol
     """A rows-form period's parameters list each session of the network attester from its start on (the period
     check's accepted case with two sessions is this shape): with two listed and the period's execution phase in the
     second's stretch, auditor-record holds the second's key and session to the auditor's record, the entry
-    NetworkCheck.Period.entryAt picks, so it holds against a record of the second and not against one of the first."""
+    NetworkVerifier.Period.entryAt picks, so it holds against a record of the second and not against one of the first."""
     first = {"key": ANOTHER, "session": "6f" * 32, "start": 0}
     params = dict(CERTIFIER, first=4, keys=[first, dict(ENTRY, start=3)])
     a = auditor_files(tmp_path / "second")
@@ -1933,7 +1933,7 @@ def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no
 
 
 #: the scan's state as V3c's audit's window commits it in its activations, the entry the period holds to the scan's
-#: state (`NetworkCheck.Period.auditStateEntries`), and V3c's audit's docket whose window commits it
+#: state (`NetworkVerifier.Period.auditStateEntries`), and V3c's audit's docket whose window commits it
 STATE_ENTRY = {"value": OR.SCAN_STATE, "root": "5a" * 64, "domain": "d5" * 64, "leaves": 64, "words": 8}
 STATED = {**NO_ADVICE, "window": {**NO_ADVICE["window"],
                                   "activations": {"program": "ab" * 64, "values": {OR.SCAN_STATE: STATE_ENTRY}}}}

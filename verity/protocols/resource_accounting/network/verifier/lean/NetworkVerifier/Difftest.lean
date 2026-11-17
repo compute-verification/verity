@@ -1,13 +1,13 @@
 module
 
-public import NetworkCheck.Certificate
+public import NetworkVerifier.Certificate
 public import Lean.Data.Json.Parser
 
 /-!
 # The difftest: the network certificate's encodings against `certificate.py`, on generated instances
 
-`scripts/difftest_vectors.py` writes instances and the Python's results on each. `NetworkCheck/DifftestMain.lean` reads
-both files and fails unless `evaluate`, which computes the same results with `NetworkCheck.Certificate`'s definitions,
+`scripts/difftest_vectors.py` writes instances and the Python's results on each. `NetworkVerifier/DifftestMain.lean` reads
+both files and fails unless `evaluate`, which computes the same results with `NetworkVerifier.Certificate`'s definitions,
 gives every one of them, byte for byte. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test
 and not a proof.
 
@@ -27,7 +27,7 @@ to open, `verify_frame` queries, record heads given field by field, signed diges
 
 @[expose] public section
 
-namespace NetworkCheck.Difftest
+namespace NetworkVerifier.Difftest
 
 open Lean Flock
 
@@ -76,7 +76,7 @@ def headJson (h : Except String RecordHead) : Json :=
     let h ← h
     pure (.arr #[hexJson (← h.encode), hexJson (← h.digest)])
 
-/-- What `NetworkCheck.Certificate`'s definitions give on an instance, in the shape of the Python's results. -/
+/-- What `NetworkVerifier.Certificate`'s definitions give on an instance, in the shape of the Python's results. -/
 def evaluate (j : Json) : Except String Json := do
   let p ← paramsOf (← j.getObjVal? "params")
   let ss ← syncSetOf (← j.getObjVal? "sync_set")
@@ -136,10 +136,10 @@ def differences (i : Nat) (inst python : String) : List String :=
       if a == b then none else some s!"instance {i}: {k}: Lean {a.compress}, Python {b.compress}"
     if found.isEmpty && lean != py then [s!"instance {i}: Python's results have fields Lean doesn't give"] else found
 
-/-- `lake env lean --run NetworkCheck/DifftestMain.lean INSTANCES PYTHON N`: every instance line of `INSTANCES` evaluated,
+/-- `lake env lean --run NetworkVerifier/DifftestMain.lean INSTANCES PYTHON N`: every instance line of `INSTANCES` evaluated,
 each compared with the same line of `PYTHON`. Fails unless both files have `N` lines and none differs. -/
 def main (args : List String) : IO UInt32 := do
-  let [insts, py, n] := args | IO.eprintln "usage: NetworkCheck/DifftestMain.lean INSTANCES PYTHON N"; return 2
+  let [insts, py, n] := args | IO.eprintln "usage: NetworkVerifier/DifftestMain.lean INSTANCES PYTHON N"; return 2
   let lines (p : String) : IO (Array String) := do
     return ((← IO.FS.readFile p).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   let a ← lines insts
@@ -153,4 +153,4 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"difftest: {a.size} instances compared, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
-end NetworkCheck.Difftest
+end NetworkVerifier.Difftest

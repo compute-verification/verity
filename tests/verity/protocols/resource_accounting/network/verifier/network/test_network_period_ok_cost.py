@@ -20,7 +20,7 @@ import period_case as PC
 from verity.commitments import scheme
 from verity.protocols.resource_accounting.network.verifier import scan_ok
 
-LEAN = Path(__file__).resolve().parents[7] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean" / "NetworkCheck"
+LEAN = Path(__file__).resolve().parents[7] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean" / "NetworkVerifier"
 #: `/- … -/` and `-- …`, and string literals: what a definition's text says and doesn't run
 SILENT = re.compile(r'/-.*?-/|--[^\n]*|"(?:\\.|[^"\\])*"', re.S)
 #: where a top-level declaration starts
@@ -36,13 +36,13 @@ COMPARES = {"held", "entryHeld", "rootsOf", "named", "counted", "okPort", "PORT"
 
 
 def code(module: str, *defines: str) -> str:
-    """The code that runs of the check's module `NetworkCheck.<module>`: comments and strings blanked, its guards cut.
+    """The code that runs of the check's module `NetworkVerifier.<module>`: comments and strings blanked, its guards cut.
     The module is named, not found by a definition's name, because two modules may each define one (`ScanOk.held`
     holds a registration to the constants; the period check's own `held` holds the class circuit). It opens the one
     namespace of its name, so `<module>.<name>` in another module is its definition `name`, and it defines each of
     `defines` once."""
     text = GUARD.sub("", SILENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), (LEAN / f"{module}.lean").read_text()))
-    assert re.findall(r"^namespace (\S+)", text, re.M) == [f"NetworkCheck.{module}"], module
+    assert re.findall(r"^namespace (\S+)", text, re.M) == [f"NetworkVerifier.{module}"], module
     for name in defines:
         assert len(re.findall(rf"^def {re.escape(name)}\b", text, re.M)) == 1, (module, name)
     return text

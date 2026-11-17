@@ -1,5 +1,5 @@
 """The network attester's link and key read from the registered hardware (`registered.py`): the accepting case, each
-refusal by its message, a site that is no site, and the Python held to the Lean (`NetworkCheck.Registered`) on the same
+refusal by its message, a site that is no site, and the Python held to the Lean (`NetworkVerifier.Registered`) on the same
 vectors: the cases below and seeded sites around them, each answered by `tests/lean/RegisteredVectors.lean` in network
 attestation's check's Lake package and by the Python, which agree on the registered link, on each refusal's message
 and on which sites are malformed."""
@@ -331,13 +331,13 @@ def python(vector: dict) -> dict:
 
 
 def lean(file: Path) -> list[dict]:
-    """The Lean's answers on a file of vectors: `NetworkCheck.Registered` built in its package, one build at a time,
+    """The Lean's answers on a file of vectors: `NetworkVerifier.Registered` built in its package, one build at a time,
     then the script run against that build."""
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        built = subprocess.run(["lake", "build", "NetworkCheck.Registered"], cwd=PACKAGE, capture_output=True, text=True)
-    assert built.returncode == 0, f"lake build NetworkCheck.Registered in {PACKAGE} failed:\n{built.stdout}{built.stderr}"
+        built = subprocess.run(["lake", "build", "NetworkVerifier.Registered"], cwd=PACKAGE, capture_output=True, text=True)
+    assert built.returncode == 0, f"lake build NetworkVerifier.Registered in {PACKAGE} failed:\n{built.stdout}{built.stderr}"
     ran = subprocess.run(["lake", "env", "lean", "--run", str(SCRIPT), str(file)], cwd=PACKAGE, capture_output=True,
                          text=True, encoding="utf-8")
     assert ran.returncode == 0, f"{SCRIPT.name} failed ({ran.returncode}):\n{ran.stdout}{ran.stderr}"
