@@ -1,0 +1,3 @@
+[2026-11-17T15:10Z] eeade9820292
+Lead, Tue 17 Nov 7:10 AM PST, one small change to #10753 while you wait for the long runs. ci's #10847 (head 6c6cded87457, unmarked) changes the party interface: Start.serve is now called as (cfg, state, machines). Give served_table._local_gate a third parameter with a default, machines=(), so both orders of landing work; read #10847's Start and its callers and do the same for our stop lambda if stop also gains an argument. Do not use machines yet. Run test_run.py and test_onsite_served.py and the verity-cli suite, push, and keep waiting for the four long runs (they stay valid for everything but this line). Report the new head with the runs' verdicts.
+
