@@ -35,22 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width
 
-/-!
-# An accepted run of the deployed `--zk` verifier is verity-verify-proof `--zk`'s acceptance
-
-The claims form's Flock verifier is `V true` (`deployZk`'s and `deployZkTrim`'s `V`, and so the sessions' verifier of
-the sampling record `SamplingDeploy.deploy`). Where its run accepts against SHA-512 (`zkAccepts_of_run`), it decided
-at the statement's inputs `s` (`insOf true x = some s`, what verity-verify-proof reads of the statement), on the last message's
-record and proof files `f`, and:
-
-* the record's sample is the statement's as a value (`Custody.recordSample_of_checks`: the verifier rebuilds both,
-  `Flock.norm`);
-* verity-verify-proof `--zk` accepts that transcript at the statement's inputs (`AcceptsZK s.read.I ⟨f.record, f.proofs⟩`, and
-  so `LiveAcceptsZK` at every outcome carrying it).
-
-This is the `--zk` side of `plainVerdict_of_run`. Equality of the sample as a value is what the setup reads: `Exec.setupOf`
-sets the record up at the record's own sample (`Custody.setupOf_record`).
--/
+/-! An accepted run of the deployed `--zk` verifier is verity-verify-proof `--zk`'s acceptance. -/
 
 @[expose] public section
 
@@ -65,9 +50,6 @@ theorem deployZkTrim_V (rel : Readable.Parsed → Readable.Relation) : (FlockDep
 theorem deploy_flock_V (rel : Readable.Parsed → Readable.Relation) (c : SamplingDeploy.Code) :
     (SamplingDeploy.deploy rel c).flock.V = V true := rfl
 
-/-- **An accepted run of `V true` is verity-verify-proof `--zk`'s acceptance**: against SHA-512, the run decided at the
-statement's inputs `s` on its last message's record and proof files `f`; the record's sample is the statement's, and
-`verify --zk` accepts `⟨f.record, f.proofs⟩` at `s.read.I`. -/
 theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,
@@ -90,8 +72,6 @@ theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
   exact ⟨spec, sts, Claims.Bridge.Custody.setupOf_zkInputs (Ins.setup_read hs) hzk
     (Claims.Bridge.Custody.publicInputs_none_of_checks hc) hdraw, Claims.Bridge.Custody.setup_shapeOk hs hzk, hv⟩
 
-/-- **`zkAccepts_of_run` as the live event**: `LiveAcceptsZK` at the statement's inputs, at every outcome whose
-transcript is the last message's record and proof files. -/
 theorem liveAcceptsZK_of_run {n : ℕ} {Reg : Type} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
     ∃ (s : FlockDeploy.Ins) (f : FlockDeploy.Final), insOf true x = some s ∧

@@ -42,19 +42,7 @@ import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Claims.ZkQueryRound
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Every table of the masked record
-
-`JointJ` at the deployed masked (`--zk`) record, whose scope admits several tables. Table `j`'s word is its level-0
-codeword (`wordLenJ`), the words together no longer than `N₀` (`sum_wordLenJ_le`), and its columns have its level-0
-witness lanes (`wideJ`). An accepted run's columns at table `j` are read at the statement's table `j` (`acc_colsJ`), so
-they have its width (`zk_colsOkJ`); and each is the witness lanes of an opened row whose level-0 opening against table
-`j`'s `root_B` in the link passed (`zk_openingJ`, `zk_opening` at table `j`), so two accepted runs at one tape that
-open one position of table `j` to two columns collide (`zk_conflictTiedJ`). The statement parses and its relation
-splits by table wherever some run accepts (`zk_parses`, `zk_splits`). So `Flock.KS` at the masked record follows from
-every table's bound alone (`zk_KS_of_tableBoundJ`), and that bound at tables with unopened positions from the bound at
-full-width tables and `ExtendJ` (`zk_tableBoundJ_of_extend`).
--/
+/-! Every table of the masked record. -/
 
 @[expose] public section
 
@@ -65,8 +53,6 @@ open FlockSoundness.Refine (ebind_ok entries_eq_of_flat flat_data merkleCheck_ca
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## Table `j`'s word -/
-
 /-- **Table `j`'s word's length**: its level-0 codeword length `2^d`; `0` past the statement's tables. -/
 def wordLenJ (zk : Bool) (x : Claims.Msg) (j : ℕ) : ℕ :=
   match (tables zk x)[j]? with
@@ -77,7 +63,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **Table `j`'s word's length**: its level-0 codeword length `2^d`; `0` past the statement's tables. -/
+/-- `0` past the statement's tables. -/
 def wordLenJ (zk : Bool) (x : Claims.Msg) (j : ℕ) : ℕ :=
   match (tables zk x)[j]? with
   | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).d
@@ -85,8 +71,7 @@ def wordLenJ (zk : Bool) (x : Claims.Msg) (j : ℕ) : ℕ :=
 
 end Gen
 
-/-- **A column of table `j`'s code's width**: table `j`'s level-0 witness lanes (under `--zk`, without the extra
-lanes). -/
+/-- Under `--zk`, without the extra lanes. -/
 def wideJ (zk : Bool) (x : Claims.Msg) (j : ℕ) (u : List 𝔽) : Prop :=
   match (tables zk x)[j]? with
   | some (_, st) => u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes
@@ -96,8 +81,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A column of table `j`'s code's width**: table `j`'s level-0 witness lanes (under `--zk`, without the extra
-lanes). -/
+/-- Under `--zk`, without the extra lanes. -/
 def wideJ (zk : Bool) (x : Claims.Msg) (j : ℕ) (u : List 𝔽) : Prop :=
   match (tables zk x)[j]? with
   | some (_, st) => u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes
@@ -120,7 +104,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The words together are no longer than `N₀`**, the tables' level-0 codeword lengths summed. -/
 theorem sum_wordLenJ_le (zk : Bool) (x : Claims.Msg) (n : ℕ) :
     ((∑ j : Fin n, wordLenJ zk x j : ℕ) : ℝ) ≤ N₀ zk x := by
   set g : SessionSpec × Stmt → ℕ :=
@@ -141,7 +124,6 @@ theorem sum_wordLenJ_le (zk : Bool) (x : Claims.Msg) (n : ℕ) :
 
 end Gen
 
-/-- **The words together are no longer than `N₀`**, the tables' level-0 codeword lengths summed. -/
 theorem sum_wordLenJ_le (zk : Bool) (x : Claims.Msg) (n : ℕ) :
     ((∑ j : Fin n, wordLenJ zk x j : ℕ) : ℝ) ≤ N₀ zk x :=
   Gen.sum_wordLenJ_le (S := S₀) (zk := zk) (x := x) (n := n)
@@ -163,8 +145,6 @@ end Gen
 theorem wideJ_ne_zero (zk : Bool) (x : Claims.Msg) (j : ℕ) (u : List 𝔽) (_ : 0 < wordLenJ zk x j)
     (h : wideJ zk x j u) : u ≠ 0 :=
   Gen.wideJ_ne_zero (S := S₀) (zk := zk) (x := x) (j := j) (u := u) ‹_› (h := h)
-
-/-! ## `ColsOkJ` -/
 
 namespace Gen
 
@@ -189,8 +169,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **An accepted run opens columns of the reader's table `j`**: each has the statement's table `j`'s level-0
-width. -/
 theorem acc_colsJ {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
     {ω : Ω} {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) {j q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols zk (Claims.run H P (V zk) x ω r).seen j) q = some u) :
@@ -216,8 +194,6 @@ theorem acc_colsJ {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : C
 
 end Gen
 
-/-- **An accepted run opens columns of the reader's table `j`**: each has the statement's table `j`'s level-0
-width. -/
 theorem acc_colsJ {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
     {ω : Ω} {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) {j q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols zk (Claims.run H P (V zk) x ω r).seen j) q = some u) :
@@ -230,7 +206,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **`ColsOkJ` at the masked record**: an accepted run opens only columns of table `j`'s width at table `j`. -/
 theorem zk_colsOkJ (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ColsOkJ H (deployZk rel) (wordLenJ true) (wideJ true) := by
   intro x Ω P ω r j q u hacc _ _ hu
@@ -241,19 +216,14 @@ theorem zk_colsOkJ (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
 
 end Gen
 
-/-- **`ColsOkJ` at the masked record**: an accepted run opens only columns of table `j`'s width at table `j`. -/
 theorem zk_colsOkJ (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ColsOkJ H (deployZk rel) (wordLenJ true) (wideJ true) :=
   Gen.zk_colsOkJ (S := S₀) (H := H) (rel := rel)
-
-/-! ## `ConflictTiedJ` -/
 
 namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The reader's table `j` at a decided run**: what `runOf` takes, read off the decision's final message, setup
-and live session. -/
 theorem runOf_eqJ {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {rr : Claims.Flock.ZkRun} {j : ℕ} (hf : lastFinal seen = some f)
     (hx : f.stmt = x) (hs : setupOf zk x = some (s, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
@@ -280,8 +250,6 @@ theorem runOf_eqJ {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} 
 
 end Gen
 
-/-- **The reader's table `j` at a decided run**: what `runOf` takes, read off the decision's final message, setup
-and live session. -/
 theorem runOf_eqJ {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {rr : Claims.Flock.ZkRun} {j : ℕ} (hf : lastFinal seen = some f)
     (hx : f.stmt = x) (hs : setupOf zk x = some (s, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
@@ -299,10 +267,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **An accepted masked run opens a column of table `j` only as a Merkle opening** of table `j`'s level 0 in its
-own log: at the statement's setup, table `j`'s `--zk` schedule and the link of the tape's first message, a column `u`
-the run's reader opens at `q` is the witness lanes of an opened row whose opening against `root_B[j]` of the link
-passed, every SHA-512 input of it in the run's verifier log. -/
 theorem zk_openingJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
     {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) q = some u) :
@@ -411,10 +375,6 @@ theorem zk_openingJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
 
 end Gen
 
-/-- **An accepted masked run opens a column of table `j` only as a Merkle opening** of table `j`'s level 0 in its
-own log: at the statement's setup, table `j`'s `--zk` schedule and the link of the tape's first message, a column `u`
-the run's reader opens at `q` is the witness lanes of an opened row whose opening against `root_B[j]` of the link
-passed, every SHA-512 input of it in the run's verifier log. -/
 theorem zk_openingJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
     {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) q = some u) :
@@ -432,8 +392,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **`ConflictTiedJ` at the deployed masked (`--zk`) record**: two accepted runs at one tape that open different
-columns at one position of one table collide in their joined verifier logs, at SHA-512. -/
 theorem zk_conflictTiedJ (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ConflictTiedJ sha512 (deployZk rel) (wordLenJ true) := by
   intro x Ω P ω r r' j q u v hacc hacc' _ _ hu hv huv
@@ -453,19 +411,14 @@ theorem zk_conflictTiedJ (rel : Readable.Parsed → Readable.Relation) :
 
 end Gen
 
-/-- **`ConflictTiedJ` at the deployed masked (`--zk`) record**: two accepted runs at one tape that open different
-columns at one position of one table collide in their joined verifier logs, at SHA-512. -/
 theorem zk_conflictTiedJ (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ConflictTiedJ sha512 (deployZk rel) (wordLenJ true) :=
   Gen.zk_conflictTiedJ (S := S₀) (rel := rel)
-
-/-! ## KS from every table's bound -/
 
 namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The masked statement parses wherever some run accepts.** -/
 theorem zk_parses (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     (∃ s, (deployZk rel).parse x = some s) ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x := by
   by_cases hno : Claims.Flock.NoAcc sha512 (V true) x
@@ -475,7 +428,6 @@ theorem zk_parses (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg)
 
 end Gen
 
-/-- **The masked statement parses wherever some run accepts.** -/
 theorem zk_parses (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     (∃ s, (deployZk rel).parse x = some s) ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x :=
   Gen.zk_parses (S := S₀) (rel := rel) (x := x)
@@ -484,8 +436,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The masked relation splits by table wherever some run accepts**: the statement is in scope there
-(`acc_inScope`, `splits_of_inScope`). -/
 theorem zk_splits (x : Claims.Msg) :
     Claims.Flock.Splits (deployZk Readable.relation) x ∨
       Claims.Flock.NoAcc sha512 (deployZk Readable.relation).V x := by
@@ -496,15 +446,11 @@ theorem zk_splits (x : Claims.Msg) :
 
 end Gen
 
-/-- **The masked relation splits by table wherever some run accepts**: the statement is in scope there
-(`acc_inScope`, `splits_of_inScope`). -/
 theorem zk_splits (x : Claims.Msg) :
     Claims.Flock.Splits (deployZk Readable.relation) x ∨
       Claims.Flock.NoAcc sha512 (deployZk Readable.relation).V x :=
   Gen.zk_splits (S := S₀) (x := x)
 
-/-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from every table's bound alone, at every number of
-tables. -/
 theorem zk_KS_of_tableBoundJ
     (htab : Claims.Flock.TableBoundJ sha512 (deployZk Readable.relation) (wordLenJ true)
       (Claims.Flock.orZeroJ (wideJ true))) :
@@ -515,8 +461,6 @@ theorem zk_KS_of_tableBoundJ
       (zk_parses _) _ (fun _ _ => .inl rfl) (Claims.Flock.colsOkJ_orZero _ _ _ _ (zk_colsOkJ sha512 _))
       (zk_conflictTiedJ _) htab)
 
-/-- **Every masked table's bound at tables with unopened positions**, from the bound at full-width tables and
-`ExtendJ`. -/
 theorem zk_tableBoundJ_of_extend (rel : Readable.Parsed → Readable.Relation)
     (hext : Claims.Flock.ExtendJ (deployZk rel) (wordLenJ true) (wideJ true))
     (htab : Claims.Flock.TableBoundJ sha512 (deployZk rel) (wordLenJ true) (wideJ true)) :

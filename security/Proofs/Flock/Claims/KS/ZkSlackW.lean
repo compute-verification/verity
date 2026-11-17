@@ -3,35 +3,12 @@ module
 public import Proofs.Flock.Claims.KS.ZkFitsW
 public import Proofs.Flock.Claims.KS.ForkSlack
 
-/-!
-# The masked weight's room for one more event per round, and the slack's escapes
-
-The fork bound's slack (`Claims.Flock.forkSlack`) adds one fork event per round. The plain weight pays for it with
-level 0's unused `2·2^{d₀}·Q₀` (`FlockDeploy.KS.plain_fork_room`). The masked weight already spends level 0's on its
-fork event (`Claims.Flock.cZW`), but counted per round (`Claims.Escapes.FitsForkR`) only round `0`'s events are charged
-twice, and where round `0` holds only level 0's event of each table (`hr0`: the deployed level caps, pads and `τ` are
-absorbed after the link message), the weight's room past the joined escapes (`Claims.Flock.joinCW`) and the fork of
-weight `k` is every level cap's and both pads roots' weight once more (`Claims.Flock.roomW`, `zk_fork_room`): each
-table's weight pays twice for its fork events but `τ`'s `2` and level 0's, and `k`'s ceiling fits in the `2` per table.
-
-The slack's events (`Claims.Flock.slackG`) merge with the joined escapes by round (`Claims.Flock.slackEscW`): round
-`t`'s event is the tables' fork events there or the slack's, of weight `(√J_t + √S_t)²` (`Claims.Flock.mergeCW`), `J_t`
-the joined weight and `S_t` every table's slack weight (`Claims.Flock.slackTW`, `slackCW`), since
-`√(J·p) + √(S·q) ≤ (√J + √S)·√Pr[E ∨ G]` when `p, q ≤ Pr[E ∨ G]`. Each table's fork terms at the slack are at most the
-merged escapes' term (`Claims.Flock.slackEscW_term`, from `forkSlack_le` and `sum_sqrt_slack_le`), and the merged
-weights exceed the joined ones by at most `4·√(Σ J·Σ S) + 2·Σ S` (`Claims.Flock.mergeCW_le`, Cauchy–Schwarz), so where
-that fits the room (`Claims.Flock.SlackFitW`) the merged escapes fit the deployed weight per round
-(`slackEscW_fitsForkR_zk`). A slack event is an accepting fork or an accepting run with a collision, so the merged
-escapes are on accepted first runs, the fork accepting or the first run alone colliding (`Claims.Escapes.OnAcc₁`,
-`Claims.Flock.slackEscW_onAcc₁`).
--/
+/-! The masked weight's room for one more event per round, and the slack's escapes. -/
 
 @[expose] public section
 
 namespace Claims
 
-/-- **Escapes on accepted first runs**: each fork event holds only where its first run accepts and its fork accepts or
-the first run alone has a collision among the verifier's calls, and each one-run event only where its run accepts. -/
 def Escapes.OnAcc₁ {Ω Coin : Type} [Inhabited Coin] {H : Msg → Msg} {V : Verifier Coin} {P : Prover Ω} {x : Msg}
     (e : Escapes H V P x) : Prop :=
   (∀ i ω r r', e.ev i ω r r' → (run H P V x ω r).out = .acc ∧
@@ -46,7 +23,6 @@ end Claims
 
 namespace Claims.Flock
 
-/-- **The joined masked weight at round `r`**: every table's fork events there (`joinEscW`'s weights). -/
 noncomputable def joinCW {K : ℕ} (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → IZW (sch j).levels.length → Fin K) (r : Fin K) : ℝ :=
   ∑ j ∈ Finset.range n, ∑ i ∈ Finset.univ.filter (fun i => rd j i = r), cZW (sch j) (Np j) i
@@ -55,8 +31,6 @@ theorem joinCW_nonneg {K : ℕ} (n : ℕ) (sch : ℕ → FlockSoundness.Accounti
     (rd : (j : ℕ) → IZW (sch j).levels.length → Fin K) (r : Fin K) : 0 ≤ joinCW n sch Np rd r :=
   Finset.sum_nonneg fun _ _ => Finset.sum_nonneg fun _ _ => cZW_nonneg _ _ _
 
-/-- **The masked weight's room**: every table's level caps' weights `Σ_{r,ℓ} 2^{d_{ℓ+1}}·Q_{ℓ+1}` and pads roots'
-`2·N_p²`. -/
 noncomputable def roomW (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ → ℕ) : ℝ :=
   ∑ j ∈ Finset.range n,
     ((∑ a : Fin 2 × Fin (sch j).levels.length, cOf (sch j) (a.2.val + 1)) + 2 * ((Np j : ℝ) * Np j))
@@ -64,7 +38,6 @@ noncomputable def roomW (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Sched
 theorem roomW_nonneg (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ → ℕ) : 0 ≤ roomW n sch Np :=
   Finset.sum_nonneg fun _ _ => add_nonneg (Finset.sum_nonneg fun _ _ => cOf_nonneg _ _) (by positivity)
 
-/-- **The joined weights are every table's.** -/
 theorem joinCW_sum {K : ℕ} (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → IZW (sch j).levels.length → Fin K) :
     ∑ r, joinCW n sch Np rd r = ∑ j ∈ Finset.range n, ∑ i, cZW (sch j) (Np j) i := by
@@ -72,8 +45,6 @@ theorem joinCW_sum {K : ℕ} (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.
   rw [Finset.sum_comm]
   exact Finset.sum_congr rfl fun j _ => Finset.sum_fiberwise _ _ _
 
-/-- **Round `0`'s joined weight is at most level 0's events'**, where only level 0's event of a table is at round
-`0`. -/
 theorem joinCW_zero_le {K : ℕ} (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → IZW (sch j).levels.length → Fin K) (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ())
     (r : Fin K) (hr : r.val = 0) :
@@ -85,7 +56,6 @@ theorem joinCW_zero_le {K : ℕ} (n : ℕ) (sch : ℕ → FlockSoundness.Account
   refine (Finset.sum_le_sum_of_subset_of_nonneg hsub fun i _ _ => cZW_nonneg _ _ i).trans ?_
   rw [Finset.sum_singleton]
 
-/-- **The room and level 0's events are every table's weight but `2`.** -/
 theorem roomW_add (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ → ℕ) :
     roomW n sch Np + ∑ j ∈ Finset.range n, cZW (sch j) (Np j) (.inr ()) =
       ∑ j ∈ Finset.range n, ∑ i, cZW (sch j) (Np j) i - 2 * n := by
@@ -106,14 +76,11 @@ theorem sum_sqrt_mul_le {ι : Type} [Fintype ι] (f g : ι → ℝ) (hf : ∀ i,
   exact (le_of_eq (Finset.sum_congr rfl fun i _ => Real.sqrt_mul (hf i) (g i))).trans
     (Real.sum_sqrt_mul_sqrt_le Finset.univ hf hg)
 
-/-! ## The slack's weights, merged with the joined ones -/
-
 section Slack
 
 variable {K : ℕ} (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ → ℕ)
   (rd : (j : ℕ) → IZW (sch j).levels.length → Fin K) (δ : ℕ → ℝ)
 
-/-- **A fork event's weight is at most the joined weight at its round.** -/
 theorem cZW_le_joinCW {j : ℕ} (hj : j < n) (i : IZW (sch j).levels.length) :
     cZW (sch j) (Np j) i ≤ joinCW n sch Np rd (rd j i) := by
   have h1 : cZW (sch j) (Np j) i ≤
@@ -123,12 +90,9 @@ theorem cZW_le_joinCW {j : ℕ} (hj : j < n) (i : IZW (sch j).levels.length) :
   exact h1.trans (Finset.single_le_sum (f := fun j' => ∑ i' ∈ Finset.univ.filter (fun i' => rd j' i' = rd j i),
       cZW (sch j') (Np j') i') (fun j' _ => Finset.sum_nonneg fun i' _ => cZW_nonneg _ _ i') (Finset.mem_range.2 hj))
 
-/-- **Table `j`'s slack weight at round `t`**: `(Σ_i √(c_i·w_{i,t}))²`, `w_{i,t}` the slack's weight at round `t` of
-the fork at `i`'s round (`slackW`). -/
 noncomputable def slackCW (j : ℕ) (t : Fin K) : ℝ :=
   (∑ i, Real.sqrt (cZW (sch j) (Np j) i * slackW K δ (rd j i).val t.val)) ^ 2
 
-/-- **The slack weight at round `t`**: every table's. -/
 noncomputable def slackTW (t : Fin K) : ℝ :=
   ∑ j ∈ Finset.range n, slackCW sch Np rd δ j t
 
@@ -138,7 +102,6 @@ theorem slackTW_nonneg (t : Fin K) : 0 ≤ slackTW n sch Np rd δ t :=
 theorem slackCW_le_slackTW {j : ℕ} (hj : j < n) (t : Fin K) : slackCW sch Np rd δ j t ≤ slackTW n sch Np rd δ t :=
   Finset.single_le_sum (f := fun j => slackCW sch Np rd δ j t) (fun _ _ => sq_nonneg _) (Finset.mem_range.2 hj)
 
-/-- **The merged weight at round `t`**: `(√J_t + √S_t)²`, the joined weight's and the slack's. -/
 noncomputable def mergeCW (t : Fin K) : ℝ :=
   (Real.sqrt (joinCW n sch Np rd t) + Real.sqrt (slackTW n sch Np rd δ t)) ^ 2
 
@@ -149,13 +112,10 @@ theorem mergeCW_eq (t : Fin K) : mergeCW n sch Np rd δ t = joinCW n sch Np rd t
     Real.sq_sqrt (slackTW_nonneg n sch Np rd δ t)]
   ring
 
-/-- **The slack fits the masked weight's room**: `4·√(Σ_t J_t · Σ_t S_t) + 2·Σ_t S_t ≤` the room. -/
 def SlackFitW : Prop :=
   4 * Real.sqrt ((∑ t, joinCW n sch Np rd t) * ∑ t, slackTW n sch Np rd δ t) + 2 * ∑ t, slackTW n sch Np rd δ t ≤
     roomW n sch Np
 
-/-- **The merged weights exceed the joined ones by at most `4·√(Σ J·Σ S) + 2·Σ S`**, a round `t₀` counted twice:
-`(√J + √S)² = J + 2√(J·S) + S` and Cauchy–Schwarz. -/
 theorem mergeCW_le (t₀ : Fin K) :
     mergeCW n sch Np rd δ t₀ + ∑ t, mergeCW n sch Np rd δ t ≤
       joinCW n sch Np rd t₀ + ∑ t, joinCW n sch Np rd t +
@@ -180,14 +140,10 @@ theorem mergeCW_le (t₀ : Fin K) :
 
 end Slack
 
-/-! ## The joined escapes and the slack's events, merged by round -/
-
 section SlackEsc
 
 variable {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
 
-/-- **The joined escapes and the slack's events, merged by round**: round `t`'s event is the tables' fork events there
-(`joinEscW`'s) or the slack's (`slackG`), of the merged weight (`mergeCW`). -/
 noncomputable def slackEscW (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → IZW (sch j).levels.length → Fin (V.k x))
     (ev : (j : ℕ) → IZW (sch j).levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
@@ -224,8 +180,6 @@ variable (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ 
     TiedColl H ((run H P V x ω s).vLog ++ (run H P V x ω (forkCoins (rd j i) s s')).vLog))
   (tied₁ : ∀ j ω s, ev₁ j ω s → TiedColl H (run H P V x ω s).vLog) (δ : ℕ → ℝ)
 
-/-- **The merged escapes fit `C` with the fork event of weight `c`, counted per round**, when the slack fits the room
-and `2·c`, round `0`'s joined weight, every round's and the room are at most `2C` (`mergeCW_le`). -/
 theorem slackEscW_fitsForkR (hfit : SlackFitW n sch Np rd δ) (C c : ℝ) (hk : 0 < V.k x)
     (h : 2 * c + joinCW n sch Np rd ⟨0, hk⟩ + ∑ t, joinCW n sch Np rd t + roomW n sch Np ≤ 2 * C) :
     (slackEscW H V P x n sch Np rd ev ev₁ tied tied₁ δ).FitsForkR C c := by
@@ -239,8 +193,6 @@ theorem slackEscW_fitsForkR (hfit : SlackFitW n sch Np rd δ) (C c : ℝ) (hk : 
     rw [Fintype.sum_unique]
     exact_mod_cast hk
 
-/-- **The merged escapes are on accepted first runs** where every table's events are on accepted runs: a slack event
-is an accepting fork with a collision, or an accepting run with one. -/
 theorem slackEscW_onAcc₁
     (hacc : ∀ j i ω s s', ev j i ω s s' →
       (run H P V x ω s).out = .acc ∧ (run H P V x ω (forkCoins (rd j i) s s')).out = .acc)
@@ -254,10 +206,6 @@ theorem slackEscW_onAcc₁
   · rintro - ω s ⟨j, -, h⟩
     exact hacc₁ j ω s h
 
-/-- **Each table's fork terms at the slack are at most the merged escapes' term**, at a table whose fork events are
-at distinct rounds, where each fork event's bound `b i` is at most its probability and the slack of the fork at its
-round: the slack is at most the slack's events at their weights (`forkSlack_le`), folding into one root per round
-(`sum_sqrt_slack_le`), and at each round the table's joined root and slack root are at most the merged one. -/
 theorem slackEscW_term [Fintype Coin] [Nonempty Coin] (hδ : ∀ t, 0 ≤ δ t) {j : ℕ} (hj : j < n)
     (hinj : Function.Injective (rd j)) (ω : Ω) (b : IZW (sch j).levels.length → ℝ)
     (hb : ∀ i, b i ≤ (Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev j i ω s.1 s.2) +
@@ -332,12 +280,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The masked weight's room for one more event per round**: at a statement whose tables `st j` are Flock ZK's,
-when each table's pads' weight is at most its deployed pads' domain and only level 0's event of a table is at round
-`0`, the fork of weight `k` and the joined escapes, round `0`'s charged twice, leave every table's level caps' and pads
-roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's weight pays for its events
-(`cZW_sum_le_tableWeight`), round `0` holds at most level 0's, the room and level 0's are every table's but `2`
-(`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
 theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
@@ -384,12 +326,6 @@ theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.M
 
 end Gen
 
-/-- **The masked weight's room for one more event per round**: at a statement whose tables `st j` are Flock ZK's,
-when each table's pads' weight is at most its deployed pads' domain and only level 0's event of a table is at round
-`0`, the fork of weight `k` and the joined escapes, round `0`'s charged twice, leave every table's level caps' and pads
-roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's weight pays for its events
-(`cZW_sum_le_tableWeight`), round `0` holds at most level 0's, the room and level 0's are every table's but `2`
-(`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
 theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
@@ -409,10 +345,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The merged escapes fit the deployed masked weight with the fork event of weight `k`, counted per round**, at a
-statement whose tables `st j` are Flock ZK's, when each table's pads' weight is at most its deployed pads' domain,
-only level 0's event of a table is at round `0` and the slack fits the room (`zk_fork_room`,
-`Claims.Flock.slackEscW_fitsForkR`). -/
 theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
@@ -437,10 +369,6 @@ theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω
 
 end Gen
 
-/-- **The merged escapes fit the deployed masked weight with the fork event of weight `k`, counted per round**, at a
-statement whose tables `st j` are Flock ZK's, when each table's pads' weight is at most its deployed pads' domain,
-only level 0's event of a table is at round `0` and the slack fits the room (`zk_fork_room`,
-`Claims.Flock.slackEscW_fitsForkR`). -/
 theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))

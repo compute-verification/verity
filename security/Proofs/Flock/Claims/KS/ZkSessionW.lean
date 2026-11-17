@@ -36,23 +36,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ZkSessionSC
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Off the masked table on a witness lane
-
-`session_sound_of_table_accZ_sc` compares an opened level-0 row with the oracle on all `width₀` lanes, while a table of
-`Flock.KS`'s masked columns fixes only the witness lanes (`ZkPads`). Here the extra lanes are the plurality of the
-openings whose witness lanes are `C`'s (`Rewinding.exists_pluralityE`), at the cost the old single-table bound paid at
-level 0 (`bad_leL`, by `Rewinding.expect_bad_le`). For an event `Acc` of the session's outputs that implies the table
-accepts and any level-0 oracle `C`, `Acc` holds with `C` uncommitted with probability at most `ε_c⁻`, plus
-`√(2^{d₀}·2Q₀·Adv₀)`, plus that of `Acc` in a run that does not self-clash and opens a level-0 position off `C` on a
-witness lane (`session_sound_of_table_accZ_w`). `Adv₀` is two independent runs after `Commit` opening one level-0
-position against the witness cap to different rows (`adv₀SZ`). Being committed reads only the witness lanes
-(`FlockDeploy.KS.committed_congr_lanes`), so the oracle the session's bound is read at is committed as `C` is.
-
-The fork events `Flock.joinEscZ` joins have no level-0 term. The weight `C` lists level 0's `2·2^{d₀}·Q₀`, but the
-masked tables' weight spends it as the `2` that covers `k`'s ceiling (`FlockDeploy.KS.cZ_sum_le_tableWeight`, the pads'
-weight at the deployed pads' domain), so a level-0 event needs the weight to grow.
--/
+/-! Off the masked table on a witness lane, at the cost of the level-0 term `√(2^{d₀}·2Q₀·Adv₀)`, which the fork
+events `Flock.joinEscZ` joins do not cover. -/
 
 @[expose] public section
 
@@ -64,14 +49,11 @@ open scoped ENNReal
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type}
 
-/-- **A masked output opens a level-0 position off `C` on a witness lane**: a verifying row at `p` whose lane
-`i < 2^k0` is not `C`'s. -/
 def OffW₀Z (Hs : Hashes F D Sl) (T : TabZK F mPts) (cap₀ : Cap D) (C : Oracle F) (out : OutZC F D Sl) : Prop :=
   ∃ p v, op₀Z Hs.H Hs.E Hs.Lf T cap₀ out p = some v ∧
     ∃ i : Fin (width₀ T), i.val < 2 ^ T.sch.k0 ∧ v i ≠ C i.val p.val
 
 open Classical in
-/-- The level-0 openings whose witness lanes are `C`'s. -/
 noncomputable def opW₀Z (Hs : Hashes F D Sl) (T : TabZK F mPts) (cap₀ : Cap D) (C : Oracle F) (out : OutZC F D Sl)
     (p : Fin (2 ^ (lvOf T.sch 0).logLen)) : Option (Fin (width₀ T) → F) :=
   (op₀Z Hs.H Hs.E Hs.Lf T cap₀ out p).filter fun v =>
@@ -99,7 +81,6 @@ theorem opW₀Z_of_op₀Z {Hs : Hashes F D Sl} {T : TabZK F mPts} {cap₀ : Cap 
   simpa [Option.filter] using hw
 
 open Classical in
-/-- **A masked output opens at most both reps' `Q₀` level-0 positions.** -/
 theorem op₀Z_count (Hs : Hashes F D Sl) (T : TabZK F mPts) (cap₀ : Cap D) (out : OutZC F D Sl) :
     (Finset.univ.filter fun p => (op₀Z Hs.H Hs.E Hs.Lf T cap₀ out p).isSome).card ≤
       2 * (lvOf T.sch 0).queries := by
@@ -125,11 +106,6 @@ theorem op₀Z_count (Hs : Hashes F D Sl) (T : TabZK F mPts) (cap₀ : Cap D) (o
         omega
 
 open Classical in
-/-- **Compiled soundness of a `--zk` table in a batched session, off the table on a witness lane.** For every event
-`Acc` of the session's outputs that implies the table and every table before it accept, every session strategy after `Commit` and every
-level-0 oracle `C`: `Acc` holds with `C` uncommitted with probability at most `ε_c⁻`, plus the level-0 term
-`√(2^{d₀}·2Q₀·Adv₀)`, plus the probability that `Acc` holds in a run that does not self-clash and opens a level-0
-position off `C` on a witness lane. -/
 theorem session_sound_of_table_accZ_w [Inhabited D] [Inhabited Sl] (A : Arith F K) (hA : A.Correct)
     (Hs : Hashes F D Sl) (T : TabZK F mPts) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl)))
     (cap₀ : Cap D) (Acc : List (OutZC F D Sl) → Prop)

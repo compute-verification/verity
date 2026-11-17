@@ -44,33 +44,7 @@ import Proofs.Flock.Claims.KS.ZkStep
 import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The masked simulated fork's alignment at `τ`
-
-`ZkTauAlign` compares the fork at rep `r`'s `τ` node (`advTauSZ`, slot `2 + r`) against the simulated strategy after
-`Commit` with the fork after `zkRd j i` coins of `TauForkEvZ`. `τ`'s commitment is the inner proof's second message,
-after the masked phase and the inner proof's two first coins. The masked phase's shape is fixed only on the runs whose
-opening can end well (`repMaskedZC_on`): a run whose opening rejects returns early, and then meets `τ` sooner. Its
-Ligerito part is `PendL.reject`, so the table's output there is not accepted, and an output that is not accepted opens
-no `τ` (`opTauZ`). So the distance holds on the paths that can end well (`Lock.DistOn`), the rest `Dead`:
-
-* `SlotAtD.batchLock_sched_inv`: `SlotAtD.batchLock_sched` with an invariant on the dead runs, carried past the tables
-  in front, here that a run whose table `j` is not accepted is dead;
-* `noSlot_reindex_off`, `dist_lockInnerZ_tau`, `distOn_lockRepZ_tau`: a rep's `τ` is two coins into the inner proof,
-  and its masked phase's coins in on the runs that can end well, the others' Ligerito part `PendL.reject`;
-* `outZC_accepted_reject₀`, `outZC_accepted_reject₁`, `slotAtD_lockAfterZ_tau`: an output with a rejected rep is not
-  accepted, so the session's table meets rep `r`'s `τ` past rep 0's `n` coins if `r = 1`, or reaches only outcomes
-  that are not accepted;
-* `DeadTZ`, `deadTZ_depAt`, `ind_conflictTau_deadT`: a run whose table opens nothing or is not accepted, read at the
-  table alone, at which the `τ` conflict is `0`;
-* `SlotTauZ`, `advTauSZ_le_forkC`, `slotTauZ_of_batch`: where the primed prover reaches the `τ` node after `t` coins,
-  `advTauSZ` is at most the fork after `t` coins of `TauForkEvZ`, and `SchedZ` at `r · n₀ + c` gives it;
-* `coinsK_recShape`, `coinsK_tailShape`, `coinsK_ligPadShape`, `coinsK_maskedZ`, `zkTau_dist`: the masked phase's
-  coins at the deployed tables are `zkPre + zkLig`, so `τ` is `zkPre + zkLig + 2` coins into a rep;
-* `zkTauAlign`: `ZkTauAlign` holds at every message, the simulated strategy following `SchedC` short of `DeadTZ`
-  (`schedC_simAtJZ_dead`), so the `τ` fork bound holds outright (`zkSimForkLeTau`), and with it masked knowledge
-  soundness (`zk_KS`).
--/
+/-! The masked simulated fork's alignment at `τ`. -/
 
 @[expose] public section
 
@@ -80,8 +54,6 @@ section Batch
 
 variable {T D I ζ : Type} {get : I → ℕ → Option (T × D)} {R : I → ζ → ζ → Prop}
 
-/-- **`SlotAtD.batchLock_sched` with an invariant on the dead runs**: `Inv m Dead` at the tables in front, kept as each
-game in front moves the dead runs one place down, holds of the dead runs `Q` sees. -/
 theorem SlotAtD.batchLock_sched_inv (d : ζ) {i : I} {g g' : Game ζ} (L : Lock T D get R i g g')
     (post : List (Game ζ)) {slot k : ℕ} {Q : (List ζ → Prop) → Strategy (batch (g' :: post)) → Prop}
     (Inv : ℕ → (List ζ → Prop) → Prop)
@@ -122,7 +94,6 @@ variable {α β T Dd I J : Type} {getI : I → ℕ → Option (T × Dd)} {getJ :
   {R : I → α → β → Prop} (emb : I → J) (sl : ℕ → ℕ) (hget : ∀ i s, getJ (emb i) (sl s) = getI i s)
   (hoff : ∀ i i' s, (∀ s', sl s' ≠ s) → getJ (emb i) s = getJ (emb i') s)
 
-/-- **A slot off the moved ones has no table node** in a moved lockstep. -/
 theorem noSlot_reindex_off {slot : ℕ} (hsl : ∀ s, sl s ≠ slot) :
     ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T Dd getI R i g g'),
       Lock.NoSlot slot (lockReindex emb sl hget hoff L)
@@ -135,7 +106,6 @@ end Reindex
 
 section Shapes
 
-/-- **The recursive levels' coins**, four lanes at each: seven at the last, eleven at each before it. -/
 theorem coinsK_recShape (F K D : Type) (ext : ℕ) :
     ∀ (lv : Level) (levs : List Level), (∀ l ∈ lv :: levs, l.lanes = 4) →
       Lock.coinsK (recShape F K D ext (lv :: levs)) = 7 + 11 * levs.length
@@ -150,7 +120,6 @@ theorem coinsK_recShape (F K D : Type) (ext : ℕ) :
         List.length_cons]
       omega
 
-/-- **Levels 1+ of the masked level 0's coins**, with a further level and four lanes at each. -/
 theorem coinsK_tailShape (F K D : Type) (sch : Schedule) (lv₀ lv₁ : Level) (rest : List Level)
     (hl : ∀ l ∈ lv₁ :: rest, l.lanes = 4) :
     Lock.coinsK (tailShape F K D sch lv₀ (lv₁ :: rest)) = 14 + 11 * rest.length := by
@@ -158,7 +127,6 @@ theorem coinsK_tailShape (F K D : Type) (sch : Schedule) (lv₀ lv₁ : Level) (
   simp only [tailShape, Lock.coinsK, Lock.coinsK_append, coinsK_oodShape, coinsK_qbShape, this]
   omega
 
-/-- **The masked level 0's coins**: its two first coins, its `k0` lane rounds, its `e` extra samples and levels 1+. -/
 theorem coinsK_ligPadShape (F K D : Type) (sch : Schedule) (e t : ℕ) (lv₀ lv₁ : Level) (rest : List Level)
     (hlevs : sch.levels = lv₀ :: lv₁ :: rest) (hl : ∀ l ∈ lv₁ :: rest, l.lanes = 4) :
     Lock.coinsK (ligPadShape F K D sch e t) = sch.k0 + e + 16 + 11 * rest.length := by
@@ -167,8 +135,6 @@ theorem coinsK_ligPadShape (F K D : Type) (sch : Schedule) (e t : ℕ) (lv₀ lv
     this]
   omega
 
-/-- **A masked rep's masked phase's coins**: the zerocheck's, the lincheck's, the opening's of its `nExtra + 2` claims
-and the masked level 0's. -/
 theorem coinsK_maskedZ {F : Type} [Field F] [Fintype F] [DecidableEq F] (K D : Type) {mPts : ℕ} (T : TabZK F mPts)
     (nExtra : ℕ) (lv₀ lv₁ : Level) (rest : List Level) (hlevs : T.sch.levels = lv₀ :: lv₁ :: rest)
     (hl : ∀ l ∈ lv₁ :: rest, l.lanes = 4) :
@@ -184,14 +150,12 @@ end Shapes
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type}
 
-/-- **`τ`'s commitment is two coins into the inner proof.** -/
 theorem dist_lockInnerZ_tau (Hs : Hashes F D Sl) (r : ℕ) (hr : r < 2) {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ)
     (pos : F → Fin N) {nA : ℕ} (rows : Fin nA → Lin F s) (tr : Triple s) (lev : IRep F D) (O : Oracle F)
     (c : Cap D) : Lock.Dist (2 + r) 2 (lockInnerZ Hs r hr dom s nP q pos rows tr lev O c) :=
   .coin _ fun _ => .send _ fun _ => .coin _ fun _ => .here
 
-/-- **A rep's `τ` commitment is the masked phase's coins and two in, on the runs whose opening can end well**; the
-others' Ligerito part is `PendL.reject`. -/
+/-- A run whose opening rejects returns early and meets `τ` sooner; its Ligerito part is `PendL.reject`. -/
 theorem distOn_lockRepZ_tau (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (r : ℕ) (hr : r < 2)
     (C₀ : Oracle F) (extra : List (Claim F T.S.m)) (c : ℕ)
     (hc : c = 2 + Lock.coinsK (zcShape F T.S.m ++ (lcShape F T.S.kLog ++ (opShape F (extra.length + 2) ++
@@ -220,13 +184,11 @@ theorem distOn_lockRepZ_tau (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mP
     cases hv
     exact not_not.mp hb
 
-/-- An output whose rep `0`'s Ligerito part rejects is not accepted. -/
 theorem outZC_accepted_reject₀ (Hs : Hashes F D Sl) (T : TabZK F mPts) (cap₀ : Cap D)
     (pend : PendZ F D Sl × PendZ F D Sl) (os : OpensZ F D Sl) (h : pend.1.lig = PendL.reject) :
     (outZC Hs T cap₀ pend os).accepted = false := by
   simp [outZC, h, PendL.reject]
 
-/-- An output whose rep `1`'s Ligerito part rejects is not accepted. -/
 theorem outZC_accepted_reject₁ (Hs : Hashes F D Sl) (T : TabZK F mPts) (cap₀ : Cap D)
     (pend : PendZ F D Sl × PendZ F D Sl) (os : OpensZ F D Sl) (h : pend.2.lig = PendL.reject) :
     (outZC Hs T cap₀ pend os).accepted = false := by
@@ -246,9 +208,6 @@ section Session
 
 variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl] {mPts : ℕ}
 
-/-- **The session's table meets rep `r`'s `τ` past rep 0's `n` coins if `r = 1`, at every table choice**, where its
-strategy plays rep 0 first, which ends after `n` coins, or reaches only `Dead` outcomes, every output that is not
-accepted `Dead` (`Lock.SlotAtD.lead_fst_on`, `Lock.SlotAtD.lead_snd_on`). -/
 theorem slotAtD_lockAfterZ_tau (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (C₀ : Model.Oracle 𝔽)
     (cap₀ : Model.Cap D) (pts : Fin 2 → Fin mPts → 𝔽) (r : ℕ) (hr : r < 2) (n c : ℕ) (Dead : OutZC 𝔽 D Sl → Prop)
     (hacc : ∀ x : OutZC 𝔽 D Sl, x.accepted = false → Dead x)
@@ -283,8 +242,6 @@ theorem slotAtD_lockAfterZ_tau (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) 
           exact hacc _ (outZC_accepted_reject₁ Hs T cap₀ b os hb)) hS _ _
       (Lock.noSlot_of_get_none (fun i => by simp [getZ]) _) hD
 
-/-- **The primed prover reaches rep `r`'s `τ` node after `t` coins** in the session after `Commit`: `Lock.SlotAt` at
-`advTauSZ`'s chooser, slot, fork event and lockstep. -/
 def SlotTauZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r t : ℕ)
     (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Prop :=
@@ -293,8 +250,6 @@ def SlotTauZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mP
       (fun outs : List (OutZC 𝔽 D Sl) => opTauZ Hs r d (outs.getD pre.length dfltOutZC)) x p) (b, b'))
     t (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
-/-- **`Adv^τ_r` in the session is at most the fork after `t` coins of `TauForkEvZ`** where the primed prover reaches
-rep `r`'s `τ` node after `t` coins: the node's conflict at its cap is `TauForkEvZ`'s at that cap. -/
 theorem advTauSZ_le_forkC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r t : ℕ)
     (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) (h : SlotTauZ A Hs T pre post cap₀ r t σ) :
@@ -305,12 +260,10 @@ theorem advTauSZ_le_forkC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : 
     (fun _ d _ _ _ _ _ _ _ _ _ _ => ind_le_indZ fun ⟨_, hc⟩ => ⟨d, hc⟩) h).trans
     (le_of_eq (forkC_pushStrat A Hs T cap₀ pre post _ t σ))
 
-/-- **Table `n` opens nothing or is not accepted.** -/
 def DeadTZ (n : ℕ) (outs : List (OutZC 𝔽 D Sl)) : Prop :=
   DeadZ n outs ∨ (outs.getD n dfltOutZC).accepted = false
 
 omit [Inhabited D] [Inhabited Sl] in
-/-- **Table `n` opening nothing or not accepted is read at position `n` alone.** -/
 theorem deadTZ_depAt {D Sl : Type} [Inhabited D] [Inhabited Sl] (n : ℕ) :
     Lock.DepAt n (DeadTZ (D := D) (Sl := Sl) n) :=
   fun l l' e h => by
@@ -318,8 +271,6 @@ theorem deadTZ_depAt {D Sl : Type} [Inhabited D] [Inhabited Sl] (n : ℕ) :
     rw [List.getD_eq_getElem?_getD] at h ⊢
     rwa [← e]
 
-/-- **The `τ` conflict is `0` between runs whose table `n` opens nothing or is not accepted**: an output that is not
-accepted opens no `τ`, and two that open nothing open the same `τ` value. -/
 theorem ind_conflictTau_deadT (Hs : Hashes 𝔽 D Sl) (n r : ℕ) (d : Model.Cap D) {b b' : List (OutZC 𝔽 D Sl)}
     (hb : DeadTZ n b) (hb' : DeadTZ n b') :
     ind (fun x : List (OutZC 𝔽 D Sl) × List (OutZC 𝔽 D Sl) => ∃ p, Rewinding.ConflictAt
@@ -347,11 +298,6 @@ theorem ind_conflictTau_deadT (Hs : Hashes 𝔽 D Sl) (n r : ℕ) (d : Model.Cap
       simp at h₁
   · rfl
 
-/-- **The `τ` slot from a schedule whose tables pause**: `SlotTauZ` after `n + (r · n₀ + c) + 1` coins, `c` rep `r`'s
-`τ` distance on the runs that can end well, where the primed prover follows `SchedZ` with `r · n₀ + c` coins of the
-session's table before the tables after it flip any, short of runs `Dead` at which the `τ` conflict is `0`, every run
-whose table is not accepted `Dead` (`Lock.SlotAtD.batchLock_sched_inv`, `Lock.SlotAtD.batchLock_nil_followL`,
-`slotAtD_lockAfterZ_tau`). -/
 theorem slotTauZ_of_batch (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r : ℕ) (hr : r < 2)
     (n n₀ c : ℕ) (Dead : List (OutZC 𝔽 D Sl) → Prop)
@@ -375,10 +321,6 @@ theorem slotTauZ_of_batch (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : 
 
 end Session
 
-/-! ## At the masked simulator -/
-
-/-- **A rep's `τ` is `zkPre + zkLig + 2` coins in at the deployed tables**, on the runs whose opening can end well:
-the masked phase's coins (`coinsK_maskedZ`) at two link points per region and four lanes after level 0. -/
 theorem zkTau_dist {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {spec : SessionSpec} {sts : Array Stmt}
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
@@ -413,11 +355,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **`ZkTauAlign` holds at every message**: the `τ` fork round is the tables in front's coins, rep 0's if `r = 1`,
-the link coin and `zkPre + zkLig + 2` (`zkTau_dist`); the simulated strategy follows `SchedC` at `r · repRounds` and
-that count short of `DeadTZ` (`schedC_simAtJZ_dead` on `zkStreams`, as `zkPadsAlign`), so it reaches the `τ` node
-there (`slotTauZ_of_batch`), and `advTauSZ_le_forkC` gives the alignment, table `j`'s position in the session being
-`j` (`take_gamesZC_length`). -/
 theorem zkTauAlign (x : Claims.Msg) : ZkTauAlign x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r u
   have hjS : j < sts.size := by rw [← zk_tables_length hset]; exact hj
@@ -469,11 +406,6 @@ theorem zkTauAlign (x : Claims.Msg) : ZkTauAlign x := by
 
 end Gen
 
-/-- **`ZkTauAlign` holds at every message**: the `τ` fork round is the tables in front's coins, rep 0's if `r = 1`,
-the link coin and `zkPre + zkLig + 2` (`zkTau_dist`); the simulated strategy follows `SchedC` at `r · repRounds` and
-that count short of `DeadTZ` (`schedC_simAtJZ_dead` on `zkStreams`, as `zkPadsAlign`), so it reaches the `τ` node
-there (`slotTauZ_of_batch`), and `advTauSZ_le_forkC` gives the alignment, table `j`'s position in the session being
-`j` (`take_gamesZC_length`). -/
 theorem zkTauAlign (x : Claims.Msg) : ZkTauAlign x :=
   Gen.zkTauAlign (S := S₀) (x := x)
 
@@ -481,13 +413,11 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The masked simulator's fork bound at `τ` holds at every message.** -/
 theorem zkSimForkLeTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsTauZ i :=
   zkSimForkLeTauZ_of_align (zkTauAlign x)
 
 end Gen
 
-/-- **The masked simulator's fork bound at `τ` holds at every message.** -/
 theorem zkSimForkLeTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsTauZ i :=
   Gen.zkSimForkLeTau (S := S₀) (x := x)
 
@@ -495,13 +425,11 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **Masked knowledge soundness**, at every message: `zk_KS_of_tauAlign` with `τ`'s alignment (`zkTauAlign`). -/
 theorem zk_KS : Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
   zk_KS_of_tauAlign fun x _ => zkTauAlign x
 
 end Gen
 
-/-- **Masked knowledge soundness**, at every message: `zk_KS_of_tauAlign` with `τ`'s alignment (`zkTauAlign`). -/
 theorem zk_KS : Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
   Gen.zk_KS (S := S₀)
 

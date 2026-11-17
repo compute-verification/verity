@@ -38,21 +38,7 @@ import Proofs.Flock.Claims.KS.ZkStep
 import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
-/-!
-# The masked fork round of a cap, split at the schedule
-
-`ZkSlotAlign` asks that the primed simulated strategy reach rep `r`'s level-`ℓ + 1` table node after `zkRd j i` coins.
-The masked simulator submits the rounds stream by stream, table by table and in each rep 0 first (`zkStream`), so that
-node comes after the tables in front's coins, rep 0's if `r = 1`, and a distance of rep `r`'s cap (as
-`slotRSZ_of_sched` counts it). With four lanes after level 0, as `Zk.schedule` has (`DimSeam`), that distance is
-`capRound`'s count (as at plain, `ligSlotDist_capRound`) and the three add up to `zkRd`'s:
-
-* `dist_lockRepZ_capRound`, `dist_lockRepZ_zkCap`: a masked rep's level-`ℓ + 1` cap is `zkCapDist` coins in, at every
-  level (past the last there is no cap, `noSlot_lockRepZ_ge`);
-* `schedOf_lanes`, `zkTabs_facts`, `zkRdAt_cap`: at the deployed tables, the tables in front's coins (`zkFront`), rep
-  0's (`repRounds`) and `zkCapDist` add up to `zkRdAt`;
-* `ZkFrontAlign`, `zkSlotAlign_of_front`: so `ZkSlotAlign` is the slot at that split count.
--/
+/-! The masked fork round of a cap, split at the schedule. -/
 
 @[expose] public section
 
@@ -64,15 +50,9 @@ open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.ZkLink Fl
 open FlockSoundness.Discharge
 open Claims.Bridge.Live
 
-/-! ## A masked rep's caps at `capRound` -/
-
-/-- A masked rep's coins to its level-`ℓ + 1` cap, with four lanes after level 0: the zerocheck's, the lincheck's, the
-opening's of its `2 · regions + 2` claims, level 0's two first coins and `e` extra samples, then `capRound`. -/
 def zkCapDist {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ} (T : TabZK F mPts) (ℓ : ℕ) : ℕ :=
   capRound T.sch.k0 (ℓ + 1) + T.e + (2 * T.S.regions.length + 2 + 1) + (T.S.kLog - 6 + 3) + (T.S.m - 6 + 3)
 
-/-- **A masked rep's level-`ℓ + 1` cap is `capRound`'s count in**, with four lanes after level 0, at every level
-(`dist_lockRepZ`, `ligSlotDist_capRound`; past the last cap there is no such node, `noSlot_lockRepZ_ge`). -/
 theorem dist_lockRepZ_capRound {F K D Sl : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] {mPts : ℕ} (A : Model.Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (r : ℕ) (hr : r < 2)
     (C₀ : Model.Oracle F) (extra : List (Model.Claim F T.S.m)) (hl : ∀ lv ∈ T.sch.levels.tail, lv.lanes = 4)
@@ -92,7 +72,6 @@ theorem dist_lockRepZ_capRound {F K D Sl : Type} [Field F] [Fintype F] [Decidabl
     exact h
   · exact .noSlot (noSlot_lockRepZ_ge A Hs T r hr C₀ extra ℓ (by rw [List.length_tail] at hlt; omega))
 
-/-- **Every rep's level-`ℓ + 1` cap is `zkCapDist` coins in**, at every link point, with four lanes after level 0. -/
 theorem dist_lockRepZ_zkCap {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (hl : ∀ lv ∈ T.sch.levels.tail, lv.lanes = 4) (r : ℕ) (hr : r < 2) (C₀ : Model.Oracle 𝔽) (ℓ : ℕ)
@@ -102,9 +81,6 @@ theorem dist_lockRepZ_zkCap {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K
   have h := dist_lockRepZ_capRound A Hs T r hr C₀ (Model.extraClaims T.S T.ptLocal mPts pts) hl ℓ
   rwa [FlockSoundness.extraClaims_length] at h
 
-/-! ## At the deployed tables -/
-
-/-- **`DimSeam`'s schedule folds four lanes at every level after level 0**, read as the model's. -/
 theorem schedOf_lanes {s : Flock.Schedule} (hd : Refine.DimSeam s) :
     ∀ lv ∈ (Refine.schedOf s).levels.tail, lv.lanes = 4 := by
   obtain ⟨-, -, -, -, hl4, -, -⟩ := hd
@@ -116,8 +92,6 @@ theorem schedOf_lanes {s : Flock.Schedule} (hd : Refine.DimSeam s) :
   simp only [Refine.schedOf, List.getElem_tail, List.getElem_map, Array.getElem_toList, Refine.levelOf]
   exact h4
 
-/-- **A deployed table's numbers**: its extra samples, its statement's `m`, `kLog` and regions, its schedule's `k0`, and
-four lanes after level 0. -/
 theorem zkTabs_facts {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
@@ -143,12 +117,9 @@ theorem zkTabs_facts {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
     show (Refine.regionsOf sts[0]).length = sts[0].regions.size
     simp [Refine.regionsOf]
 
-/-- The coins of the tables in front of table `j`'s place: two reps of each. -/
 def zkFront (spec : SessionSpec) (sts : Array Stmt) (j : ℕ) : ℕ :=
   ((List.range (zkTbl sts j)).map fun i => 2 * repRounds true spec sts[i]!).sum
 
-/-- **The masked fork round of a cap, split at the schedule**: the link coin, the tables in front's coins, rep 0's if
-`r = 1`, then `zkCapDist`, at two link points per region. -/
 theorem zkRdAt_cap {spec : SessionSpec} {sts : Array Stmt} (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
@@ -165,8 +136,6 @@ theorem zkRdAt_cap {spec : SessionSpec} {sts : Array Stmt} (h0 : 0 < sts.size)
   rcases zkB2_cases (zkBase spec sts (zkTbl sts j)) (repRounds true spec sts[zkTbl sts j]!) r with ⟨a, e⟩ | ⟨a, e⟩ <;>
     rw [e, a] <;> unfold zkBase zkFront zkCapDist zkPre <;> rw [hk0, hp] <;> omega
 
-/-- **The simulated fork reaches each cap's slot at the schedule's count**: `ZkSlotAlign` with `zkRd j i` split as
-`zkRdAt_cap` splits it, the tables in front's coins (`zkFront`), rep 0's if `r = 1` (`repRounds`), and `zkCapDist`. -/
 def ZkFrontAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
@@ -187,8 +156,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The simulated fork reaches each cap's slot at the schedule's count**: `ZkSlotAlign` with `zkRd j i` split as
-`zkRdAt_cap` splits it, the tables in front's coins (`zkFront`), rep 0's if `r = 1` (`repRounds`), and `zkCapDist`. -/
 def ZkFrontAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
@@ -210,7 +177,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The slot alignment at the schedule's count** (`zkRdAt_cap`, two link points per region by `zk_points`). -/
 theorem zkSlotAlign_of_front {x : Claims.Msg} (h : ZkFrontAlign x) : ZkSlotAlign x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u
   have hv : (zkRd hset h0 L hz hk hlay j (.inl (.inl (r, ℓ)))).val = zkRdAt spec sts j (.inl (.inl (r, ℓ))) := rfl
@@ -219,7 +185,6 @@ theorem zkSlotAlign_of_front {x : Claims.Msg} (h : ZkFrontAlign x) : ZkSlotAlign
 
 end Gen
 
-/-- **The slot alignment at the schedule's count** (`zkRdAt_cap`, two link points per region by `zk_points`). -/
 theorem zkSlotAlign_of_front {x : Claims.Msg} (h : ZkFrontAlign x) : ZkSlotAlign x :=
   Gen.zkSlotAlign_of_front (S := S₀) (x := x) (h := h)
 

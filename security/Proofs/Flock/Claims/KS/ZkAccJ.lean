@@ -41,36 +41,12 @@ import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Every masked table's bound with escapes on accepted runs
-
-`Escapes` and `PlainAcc` at the masked record, at every number of tables. An output at the empty masked openings
-(`nulOpZ`, which the simulation's dead branches send) never self-clashes (`not_selfClashZ_nul`): its rows are empty, so
-none verifies at level 0's width (`width₀_pos`) or a level's `2^lanes`, and its pads pairs are all `(0, 0)`. So at the
-masked session, an event no outputs at the empty openings satisfy is no likelier against the simulated strategy than
-on accepted live runs whose decoded outputs satisfy it (`sessionZC_le_decoded`, from `Claims.Bridge.prob_le_decoded`),
-and table `j`'s self-clash after `Commit` (`simAtJZ`) is no likelier than a decoded self-clash of table `j` on an
-accepted live run (`LiveSelfClashZ`, `selfClash_le_liveJZ`, `mean_selfClash_le_liveJZ`).
-
-`TableBoundJAccAt` is `TableBoundJAt` with escapes on accepted runs (`Claims.Escapes.OnAcc`), so it gives
-`TableBoundJAt` (`TableBoundJAccAt.tableBoundJAt`), and where no run accepts it holds with none
-(`tableBoundJAccAt_of_noAcc`); the old masked escapes joined by round are on accepted runs where every table's are
-(`joinEscZ_onAcc`). `ZkLiveAccAtJ` is `ZkLiveAtJ` with every table's events on accepted deployed runs and the
-self-clash read on accepted live runs; it gives `ZkLiveAtJ` (`zkLiveAtJ_of_acc`) and every table's bound with escapes on
-accepted runs (`zk_tableBoundJAccAt_of_liveJ`, through `zk_le_sessionsJ`). At the deployed masked record that is
-`zk_tableBoundJAccAt_live` (at `zk_atTabs`), and at every statement, from `ZkLiveAccJ` where some run accepts,
-`zk_tableBoundJAccAt`. `zk_KS_of_liveAccJ` is `zk_KS_of_liveJ` from it. At a statement with a table, every table's bound
-gives table 0's, `TableBoundθAccAt` with the same escapes (`TableBoundJAccAt.tableBoundθAccAt`), so the masked
-`plain_tableBoundθAccAt` follows from `ZkLiveAccJ` where some run accepts (`zk_tableBoundθAccAt`).
--/
+/-! Every masked table's bound with escapes on accepted runs. -/
 
 @[expose] public section
 
 namespace Claims.Flock
 
-/-! ## Escapes on accepted runs, at every table -/
-
-/-- **The old masked escapes joined by round are on accepted runs** where every table's events are. -/
 theorem joinEscZ_onAcc {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω)
     (x : Msg) (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → IZ (sch j).levels.length → Fin (V.k x))
@@ -93,7 +69,6 @@ section At
 
 variable {Coin Col T : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **`TableBoundJAt` with escapes on accepted runs.** -/
 def TableBoundJAccAt (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop)
     (x : Msg) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x, e.OnAcc ∧
@@ -109,8 +84,6 @@ theorem TableBoundJAccAt.tableBoundJAt {H : Msg → Msg} {D : Deploy Coin Col T}
   obtain ⟨e, -, hf, hb⟩ := h Ω P
   exact ⟨e, hf, hb⟩
 
-/-- **Where the verifier accepts no run**, `TableBoundJAccAt` holds with no escapes, when the weight covers `k` and
-`ε_table ≥ 0`. -/
 theorem tableBoundJAccAt_of_noAcc (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (Ok : Msg → ℕ → Col → Prop) (x : Msg) (hno : NoAcc H D.V x) (hk : (D.k x : ℝ) ≤ 2 * D.weight x)
     (hε : 0 ≤ D.εtable x) : TableBoundJAccAt H D N Ok x := by
@@ -125,8 +98,6 @@ theorem tableBoundJAccAt_of_noAcc (H : Msg → Msg) (D : Deploy Coin Col T) (N :
     ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen j) p.val = some u ∧ u ≠ C p
   linarith
 
-/-- **Table 0's bound from every table's**: at a statement with a table, `TableBoundJAccAt` is `TableBoundθAccAt` at
-table 0's word length with the same escapes, at columns whose check gives table 0's. -/
 theorem TableBoundJAccAt.tableBoundθAccAt [Nonempty Coin] {H : Msg → Msg} {D : Deploy Coin Col T}
     {N : Msg → ℕ → ℕ} {Ok : Msg → ℕ → Col → Prop} {Ok₀ : Msg → Col → Prop} {x : Msg} (h : TableBoundJAccAt H D N Ok x)
     (hn : 0 < nTab D x) (hok : ∀ u, Ok₀ x u → Ok x 0 u) : TableBoundθAccAt H D (fun x => N x 0) Ok₀ x := by
@@ -146,9 +117,6 @@ open FlockSoundness.Discharge.Composed (outJ repJ sessionZC_eq_modelSession)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## Outputs at the empty masked openings -/
-
-/-- **An output at the empty masked openings opens every slot with an empty row.** -/
 theorem slotOpensZ_row_nil {D Sl : Type} [Inhabited D] [Inhabited Sl] {out : OutZC 𝔽 D Sl}
     (h : out.opens = nulOpZ) {r ℓ Q : ℕ} {x : ℕ × List 𝔽 × Sl × List D} (hx : x ∈ slotOpensZ out r ℓ Q) :
     x.2.1 = [] := by
@@ -160,7 +128,6 @@ theorem slotOpensZ_row_nil {D Sl : Type} [Inhabited D] [Inhabited Sl] {out : Out
     rw [h]
     rfl
 
-/-- **An empty row never verifies at a positive width.** -/
 theorem not_verifiedZ_nil {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (cap : Model.Cap D) {w : ℕ} (hw : 0 < w) (depth : ℕ)
     {x : ℕ × List 𝔽 × Sl × List D} (hx : x.2.1 = []) : ¬ VerifiedZ H E Lf cap w depth x := by
@@ -168,14 +135,11 @@ theorem not_verifiedZ_nil {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (
   rw [hx, List.length_nil] at hlen
   omega
 
-/-- Level 0's row width under `--zk` is positive. -/
 theorem width₀_pos {mPts : ℕ} (T : TabZK 𝔽 mPts) : 0 < width₀ T := by
   unfold width₀
   have := Nat.two_pow_pos T.sch.k0
   omega
 
-/-- **An output at the empty masked openings never self-clashes**: its rows are empty, so none verifies at level 0's
-width or at a level's `2^lanes`, and its pads pairs are all `(0, 0)`. -/
 theorem not_selfClashZ_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : ℕ} (Hs : Hashes 𝔽 D Sl)
     (T : TabZK 𝔽 mPts) {out : OutZC 𝔽 D Sl} (h : out.opens = nulOpZ) : ¬ SelfClashZ Hs T out := by
   rintro (⟨x, hx, -, -, -, hv, -⟩ | ⟨r, -, ℓ, -, cap, -, hc⟩ | ⟨r, -, root, jj, -, jj', -, p, -, -, -, -, hne⟩)
@@ -188,15 +152,10 @@ theorem not_selfClashZ_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : �
   · rw [h] at hne
     exact hne rfl
 
-/-! ## The masked self-clash on accepted live runs -/
-
 section Sim
 
 variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl] {mPts : ℕ}
 
-/-- **The masked session's escapes arise only on accepted live runs**: an event `Q` of the tables' outputs that no
-outputs at the empty openings satisfy is, against the simulated strategy (`simSessZV`), no likelier than a live
-outcome the live verdict accepts whose decoded outputs are in `Q` (`Claims.Bridge.prob_le_decoded`). -/
 theorem sessionZC_le_decoded (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -214,9 +173,6 @@ theorem sessionZC_le_decoded (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (t
   rw [FlockSoundness.Discharge.Exec.prob_cast]
   exact Claims.Bridge.prob_le_decoded _ _ dfltOutZC pL opn dg dec one fin capOf N _ _ hdec _ hQ Pr
 
-/-- **A decoded masked self-clash on an accepted live run**: the live verdict `pL` holds at the outcome, and table
-`j`'s output, at the reps' pendings on their runs of their whole decoded tapes, the caps the roots decode to and the
-openings the proof files decode to (`Claims.Bridge.RetOK`), self-clashes at table `T`. -/
 def LiveSelfClashZ {J : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (out : Fin J → Model.Cap D → PendZ 𝔽 D Sl × PendZ 𝔽 D Sl → OpensZ 𝔽 D Sl → OutZC 𝔽 D Sl)
     (pL : LiveOutJ J mPts → Prop) (opn : Array ByteArray → Fin J → OpensZ 𝔽 D Sl)
@@ -233,9 +189,6 @@ theorem prob_sessionZC_toReal (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (
   prob_toReal Q _ τ
 
 open Classical in
-/-- **Table `j`'s self-clash after `Commit` arises only on accepted live runs**: against the simulated strategy at the
-caps the live prover's roots decode to, table `j`'s self-clash is no likelier than a decoded self-clash of table `j`
-on a live run the live verdict accepts (`LiveSelfClashZ`). -/
 theorem selfClash_le_liveJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -257,9 +210,6 @@ theorem selfClash_le_liveJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts
   exact not_selfClashZ_nul Hs T rfl hq
 
 open Classical in
-/-- **Over a mixture of live strategies with common roots `rootB₀`**: the mean self-clash of table `j` after `Commit`,
-over the simulated strategies, is at most the mean probability of a decoded self-clash of table `j` on an accepted
-live run. -/
 theorem mean_selfClash_le_liveJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -278,13 +228,7 @@ theorem mean_selfClash_le_liveJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl
 
 end Sim
 
-/-! ## The live sessions' bound at every table, with escapes on accepted runs -/
-
 open Classical in
-/-- **The live sessions' bound at the masked tables, with escapes on accepted runs**: `ZkLiveAtJ` with every table's
-fork events only where both forked deployed runs accept and its one-run event only where its run accepts, and with
-table `j`'s one-run event bounding the live strategies' decoded self-clashes of table `j` on accepted live runs
-(`LiveSelfClashZ`). -/
 def ZkLiveAccAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
     (T : ℕ → TabZK 𝔽 mPts) : Prop :=
@@ -344,8 +288,6 @@ def ZkLiveAccAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabite
             (liveSession dg (tabsJ (tables true x).length T).length mPts N) (σL u)).toReal) / Fintype.card τ ≤
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
-/-- **`ZkLiveAccAtJ` gives `ZkLiveAtJ`**: the decoded self-clashes of table `j` on accepted live runs bound the
-simulated strategies' self-clash of table `j` after `Commit` (`mean_selfClash_le_liveJZ`). -/
 theorem zkLiveAtJ_of_acc {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     {A : Model.Arith 𝔽 K} {Hs : Hashes 𝔽 D Sl} {Ok : Claims.Msg → ℕ → List 𝔽 → Prop} {x : Claims.Msg} {mPts : ℕ}
     {T : ℕ → TabZK 𝔽 mPts} (hl : ZkLiveAccAtJ A Hs Ok x T) : ZkLiveAtJ A Hs Ok x T := by
@@ -358,9 +300,6 @@ theorem zkLiveAtJ_of_acc {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
     htr, hadv, hP, hTau, le_trans (mean_selfClash_le_liveJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ σL hσ
       (finJ T hj) (tabsJ_get _ T _)) hsc⟩
 
-/-- **Every masked table's bound at a statement with escapes on accepted runs, from the live sessions' bound** at the
-masked tables `T j`: the tables' old escapes joined by round (`joinEscZ`), on accepted runs (`joinEscZ_onAcc`), with
-`zk_le_sessionsJ` at the simulated strategies after `Commit` at table `j` (`simAtJZ`). -/
 theorem zk_tableBoundJAccAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
     (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
@@ -402,10 +341,6 @@ theorem zk_tableBoundJAccAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [Deci
     exact le_trans (mean_selfClash_le_liveJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ σL hσ
       (finJ T hj) (tabsJ_get _ T _)) hsc
 
-/-! ## The deployed masked tables -/
-
-/-- **The live sessions' bound at a masked statement of any number of tables, with escapes on accepted runs**:
-`ZkLiveAccAtJ` where `ZkLiveJ` reads `ZkLiveAtJ`. -/
 def ZkLiveAccJ (x : Claims.Msg) : Prop :=
   ∀ (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -417,9 +352,6 @@ def ZkLiveAccJ (x : Claims.Msg) : Prop :=
 theorem zkLiveJ_of_acc {x : Claims.Msg} (hl : ZkLiveAccJ x) : ZkLiveJ x :=
   fun ins spec sts hset h0 L hz hk hlay => zkLiveAtJ_of_acc (hl ins spec sts hset h0 L hz hk hlay)
 
-/-- **Every masked table's bound at a statement in scope, with escapes on accepted runs**: at tables of full-width
-columns, where the statement parses in scope and sets up at least one table, `zk_tableBoundJAccAt_of_liveJ` at
-Flock ZK's padded tables (`zk_atTabs`). -/
 theorem zk_tableBoundJAccAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -432,9 +364,6 @@ theorem zk_tableBoundJAccAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
       Readable.relation (wideJ true) hn (stJ h0) hst T hT hnc
   exact hb (hl ins spec sts hset h0 L hz hk hlay)
 
-/-- **Every masked table's bound at every statement, with escapes on accepted runs**, at full-width columns, from
-`ZkLiveAccJ` at the statements some run accepts: they parse in scope and set up at least one table, and elsewhere no
-run accepts and `k ≤ 2·weight` (`zk_k_le`). -/
 theorem zk_tableBoundJAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccJ x) (x : Claims.Msg) :
     Claims.Flock.TableBoundJAccAt sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) x := by
   by_cases hno : Claims.Flock.NoAcc sha512 (V true) x
@@ -455,9 +384,6 @@ theorem wideJ_zero_of_wide {zk : Bool} {x : Claims.Msg} (hx : tables zk x ≠ []
   rw [hl] at h ⊢
   simpa using h
 
-/-- **Table 0's masked bound at every statement, with escapes on accepted runs**, at full-width columns, from
-`ZkLiveAccJ` at the statements some run accepts: there the statement sets up at least one table and it is
-`zk_tableBoundJAccAt` at table 0, and elsewhere no run accepts. The masked `plain_tableBoundθAccAt`. -/
 theorem zk_tableBoundθAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccJ x) (x : Claims.Msg) :
     Claims.Flock.TableBoundθAccAt sha512 (deployZk Readable.relation) (wordLen true) (wide true) x := by
   by_cases hno : Claims.Flock.NoAcc sha512 (V true) x
@@ -476,9 +402,6 @@ theorem zk_tableBoundθAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) 
     exact (zk_tableBoundJAccAt hl x).tableBoundθAccAt (by omega)
       fun u hu => wideJ_zero_of_wide (List.ne_nil_of_length_pos (by omega)) hu
 
-/-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the live
-sessions' bound with escapes on accepted runs at the statements some run accepts (`ZkLiveAccJ`) and `ExtendJ` at
-full-width columns. -/
 theorem zk_KS_of_liveAccJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccJ x)
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=

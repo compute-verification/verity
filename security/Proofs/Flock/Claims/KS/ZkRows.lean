@@ -56,30 +56,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
-/-!
-# The masked reader's opened rows at a rep's run
-
-`ZkEntries` and `ZkSampleJ` with each opened row whole: at level 0 its witness lanes and both reps' extra lanes, and past
-level 0 every level's. A masked self-clash (`ClashW`, `ClashL`) compares whole rows, so where `OpensEntries` reads an
-output's level-0 openings as the reader's entries on the witness lanes, `OpensRows` reads each level's openings as the
-rep's opened rows, row by row:
-
-* `Claims.Flock.zkRepRowsOf`, `Claims.Flock.zkRepRowsOf_ok`, `Claims.Flock.slotOpensZ_rows`: `zkRepColsOf`,
-  `zkRepColsOf_ok` and `slotOpensZ_entries` with no row cut; `Claims.Flock.slotOpensZ_rowsAt` at any level.
-* `FlockSoundness.Discharge.ZkExec.zk_rep_rows`, `FlockSoundness.Discharge.ZkExec.zk_table_rows₀Z`: a rep's, and an
-  accepted table's, level-0 openings are its reps' `zkRepRowsOf` rows (`zk_rep_entries`, `zk_table_opens₀Z`);
-  `FlockSoundness.Discharge.ZkExec.zk_rep_rowsL`, `FlockSoundness.Discharge.ZkExec.zk_table_rowsLZ`: their level-`ℓ`
-  openings past level 0 are their reps' `zkLevelRowsOf` rows (`zk_rep_reqsL`).
-* `FlockSoundness.Discharge.ZkExec.zk_table_capsZ`: an accepted table's reps record their proof files' recursive caps
-  (`zk_rep_reqs`).
-* `OpensRows`, `runsAtZCJ_live_rows`, `runsAtZCJH_live_rows`: at public and hidden outputs, each accepted output's
-  openings at every level are the reps' rows, and its recorded caps their proofs' (`runsAtZCJ_live_entries`,
-  `runsAtZCJH_live_entries` at `OpensRows`).
-* `decodesTableR_zkTabs`, `decodesTableHR_zkTabs`, `decodesTableR_deploy`: the deployed `opnD` and `decD` at `zkTabs`
-  are right at `OpensRows` at one live outcome `o₀`, on `o₀` where `verify --zk` accepts what `wrS` writes for it, at
-  public and hidden outputs and at a masked statement in scope (`decodesTableW_zkTabs`, `decodesTableHW_zkTabs`,
-  `decodesTableW_deploy`). The verdict reads `o₀`'s transcript, so the outcome is pinned.
--/
+/-! The masked reader's opened rows at a rep's run. -/
 
 @[expose] public section
 
@@ -89,8 +66,7 @@ open FlockSoundness FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkS
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A rep's opened level-0 rows** from its recorded rounds and proof bytes: `zkRepColsOf` with each row whole, none
-if the proof does not decode. -/
+/-- Empty where the proof does not decode. -/
 def zkRepRowsOf (sh : _root_.Flock.Shape) (rounds : Array _root_.Flock.Round) (bytes : ByteArray) :
     List (ℕ × List 𝔽) :=
   match _root_.Flock.Zk.decode sh bytes with
@@ -100,8 +76,6 @@ def zkRepRowsOf (sh : _root_.Flock.Shape) (rounds : Array _root_.Flock.Round) (b
       zp.proof.ligerito.initialProof.rows
   | .error _ => []
 
-/-- The rows at a proof that decodes: `zkRepCols` at level 0, the coins of round `zkQueryRound` and the proof's
-level-0 rows. -/
 theorem zkRepRowsOf_ok {sh : _root_.Flock.Shape} {rounds : Array _root_.Flock.Round} {bytes : ByteArray}
     {zp : _root_.Flock.Zk.ZkProof} (h : _root_.Flock.Zk.decode sh bytes = .ok zp) :
     zkRepRowsOf sh rounds bytes = zkRepCols (sh.sched.levels.getD 0 default)
@@ -109,7 +83,6 @@ theorem zkRepRowsOf_ok {sh : _root_.Flock.Shape} {rounds : Array _root_.Flock.Ro
   unfold zkRepRowsOf
   rw [h, coins_getElem!]
 
-/-- **A masked rep's level-0 openings are its rows**: `slotOpensZ_entries` with each row whole. -/
 theorem slotOpensZ_rows {D Sl : Type} (out : OutZC 𝔽 D Sl) (r : ℕ) (lv : _root_.Flock.Level)
     (coins : Array _root_.Flock.F128) (rows : Array (Array _root_.Flock.F128)) (R : Model.Req)
     (rest : List Model.Req) (hreqs : (if r = 0 then out.pend.1 else out.pend.2).lig.reqs = R :: rest)
@@ -127,8 +100,6 @@ theorem slotOpensZ_rows {D Sl : Type} (out : OutZC 𝔽 D Sl) (r : ℕ) (lv : _r
     simp only [List.length_map, List.length_zipIdx] at h1
     simp [hop, hrows, h1]
 
-/-- **A masked rep's openings at a level are its rows there**: `slotOpensZ_rows` at the rep's first request of any
-level `ℓ`. -/
 theorem slotOpensZ_rowsAt {D Sl : Type} (out : OutZC 𝔽 D Sl) (r ℓ : ℕ) (lv : _root_.Flock.Level)
     (coins : Array _root_.Flock.F128) (rows : Array (Array _root_.Flock.F128)) (R : Model.Req)
     (hfind : ((if r = 0 then out.pend.1 else out.pend.2).lig.reqs.find? fun req => req.level == ℓ) = some R)
@@ -154,7 +125,6 @@ open Flock Refine Exec Game Model
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A masked rep's level-0 openings are its deployed rows**: `zk_rep_entries` with each row whole. -/
 theorem zk_rep_rows {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
@@ -187,9 +157,6 @@ theorem zk_rep_rows {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
   exact Claims.Flock.slotOpensZ_rows out r.val _ _ _ R rest (by rw [he]; exact hR) hl hpos
     (by rw [hpos, Array.length_toList, positions_size _ hseam0]) hrows ho
 
-/-- **A masked rep's openings past level 0 are its deployed rows**: at a level `1 ≤ ℓ` of the schedule, rep `r`'s
-first level-`ℓ` request is the `ℓ`-th after level 0's, at the positions of round `zkLevelRound`'s coins (`zk_rep_reqsL`,
-`find?_later`), so its openings there are the rep's `zkLevelRowsOf` rows; past the last level it has none. -/
 theorem zk_rep_rowsL {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
@@ -255,8 +222,6 @@ theorem zk_rep_rowsL {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (
     rw [hnone]
     rfl
 
-/-- **At `verify --zk`'s acceptance of a table, its level-0 openings are its reps' rows**: `zk_table_opens₀Z`'s
-entries with each row whole (`zk_rep_rows`), rep 0's then rep 1's. -/
 theorem zk_table_rows₀Z {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
@@ -311,8 +276,6 @@ theorem zk_table_rows₀Z {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Re
   rw [List.map_append]
   exact congrArg₂ (· ++ ·) he₀ he₁
 
-/-- **At `verify --zk`'s acceptance of a table, its openings past level 0 are its reps' rows**: at every level `ℓ ≥ 1`,
-rep 0's and rep 1's openings are their `zkLevelRowsOf` rows (`zk_rep_rowsL`). -/
 theorem zk_table_rowsLZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
@@ -367,17 +330,11 @@ theorem zk_table_rowsLZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg 
   rw [hsh] at he₀ he₁
   exact ⟨he₀, he₁⟩
 
-/-- **A rep's pads at an output**: its inner openings are those of the inner proof its proof file decodes to, and it
-recorded at inner query `jj` the position `Zk.verifyInner` reads there: its stream's last round's coin `jj`, `lo` mod
-`innerN`. -/
 def PadsRep (st : Setup) (sch : Flock.Schedule) (n : ℕ) (s : StreamRec) (bytes : ByteArray)
     (io : ZkLink.InnerOpens 𝔽 Dig (List UInt8)) (qpos : ℕ → ℕ) : Prop :=
   ∃ zp : Zk.ZkProof, Zk.decode (shapeZKn st sch n) bytes = .ok zp ∧ io = innerOpensOf zp.inner ∧
     ∀ jj < Zk.Q, qpos jj = ((s.rounds[s.rounds.size - 1]!).coins[jj]!).lo.toNat % innerN (layZ st sch)
 
-/-- **At `verify --zk`'s acceptance of a table, its reps' pads are their proof files' at their streams' query words**:
-each rep's inner openings are its decoded inner proof's (`opnZ_pair`), and the positions it recorded are its last
-round's coins, through the table's `pos` (`zk_qpos_of_rep`, `ZkTabLay.hpos`). -/
 theorem zk_table_padsZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
@@ -432,9 +389,6 @@ theorem zk_table_padsZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg �
     rw [hq₁ jj hjj, htab.hpos, htab.hN]
     rfl
 
-/-- **At `verify --zk`'s acceptance of a table, its reps record their proof files' recursive caps**: each rep's
-pending's caps are its decoded proof's recursive caps, one per level past level 0, through `capDig`
-(`zk_rep_reqs`). -/
 theorem zk_table_capsZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
@@ -491,10 +445,6 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **An output's openings are its reps' rows at table `j`**: `OpensEntries` with each row whole, at the setup at
-the sample `d`, table `j`'s `Zk.schedule` schedule and the session's two rep streams of table `j`, at `2·|regions|` extra
-claims on the streams' rounds and table `j`'s proof files; each rep's pads are its proof file's, recorded at its
-stream's query words (`PadsRep`); and each rep's recorded caps are its decoded proof file's recursive caps. -/
 def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : TabZK 𝔽 mPts)
     (out : OutZC 𝔽 Dig (List UInt8)) : Prop :=
   ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord) (sch : Flock.Schedule) (tPad : ℕ)
@@ -525,8 +475,6 @@ def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : 
       (if r = 0 then out.pend.1 else out.pend.2).lig.caps =
         (List.range (sch.levels.size - 1)).map (fun i => capDig zp.proof.ligerito.recursiveCaps[i]!)
 
-/-- **`runsZCJ_live` at the setup at each sample, with the rows**: `runsAtZCJ_live_entries` at `OpensRows`
-(`zk_table_rows₀Z`). -/
 theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
@@ -699,8 +647,6 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`runsZCJH_liveI` at the setup at each sample, with the rows**: `runsAtZCJH_live_entries` at `OpensRows`
-(`zk_table_rows₀Z`). -/
 theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
@@ -870,10 +816,6 @@ open FlockSoundness.Discharge.Tables (DecodesTable LiveOutJ)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The deployed `--zk` decoders are right at `zkTabs` at the rows, at one outcome**: where `verify --zk` sets its
-session up at the empty sample `dj ∅`, on untyped inputs under `TagsOkZJ`, the openings `opnD` and decoder `decD` at
-`tabsJ` of `zkTabs` are right at `OpensRows` of `o₀`'s transcript at `wrS`, on `o₀` where `verify --zk` accepts that
-transcript (`decodesTableW_zkTabs` with `runsAtZCJ_live_rows`). -/
 theorem decodesTableR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : Composed.TagsOkZJ I) {n : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts))
@@ -902,8 +844,6 @@ theorem decodesTableR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT :
   intro o₀ i
   exact h _ _ (fun o ho => by obtain ⟨ha, rfl⟩ := ho; exact ⟨ha, fun _ _ hw => ⟨hw.1, hw⟩⟩) i
 
-/-- **The deployed hidden-output `--zk` decoders are right at `zkTabs` at the rows, at one outcome**
-(`decodesTableHW_zkTabs` with `runsAtZCJH_live_rows`). -/
 theorem decodesTableHR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : TagsOkZHJ I) {n : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts)) (hshape : sts.forM Flock.Zk.shapeOk = .ok ())
@@ -937,8 +877,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The deployed `--zk` decoders are right at `zkTabs` at the rows at a masked statement in scope, at one outcome**:
-`decodesTableR_zkTabs` at public outputs, `decodesTableHR_zkTabs` at hidden outputs (`decodesTableW_deploy`). -/
 theorem decodesTableR_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -974,8 +912,6 @@ theorem decodesTableR_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 end Gen
 
-/-- **The deployed `--zk` decoders are right at `zkTabs` at the rows at a masked statement in scope, at one outcome**:
-`decodesTableR_zkTabs` at public outputs, `decodesTableHR_zkTabs` at hidden outputs (`decodesTableW_deploy`). -/
 theorem decodesTableR_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)

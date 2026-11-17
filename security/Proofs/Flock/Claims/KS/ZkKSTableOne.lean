@@ -38,14 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Flock at one table of a session: the masked verifier at a statement of one table
-
-At a masked statement of one table, table `0`'s error and word are the session's (`one_table_numbers`), the
-probability `Flock.KSTable` bounds at table `0` is the one `Flock.KS` bounds (`prBad_zero_eq_zk`), and the table
-statement proved there (`zk_KSTable_untrim`) gives `Flock.KS`'s inequality with the session's own `κ` and `γ`
-(`ks_one_table_zk`).
--/
+/-! Flock at one table of a session: the masked verifier at a statement of one table. -/
 
 @[expose] public section
 
@@ -53,7 +46,6 @@ namespace FlockDeploy.KS
 
 open Flock
 
-/-- At a statement of one table, table `0`'s error and word are the session's. -/
 theorem one_table_numbers {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) :
     tableErrJ true x 0 = εtable true x ∧ (wordLenJ true x 0 : ℝ) = N₀ true x := by
   have h0 : (tables true x)[0]? = some (spec, st) := by simp [h]
@@ -67,7 +59,6 @@ theorem one_table_numbers {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h :
     rw [h]
     simp
 
-/-- A statement that parses to one table and sets up has one table in the records. -/
 theorem tables_one {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true rel x = some s) (h1 : s.tables = 1) (hx : (setupOf true x).isSome) :
     ∃ spec st, tables true x = [(spec, st)] := by
@@ -76,8 +67,6 @@ theorem tables_one {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg
   obtain ⟨⟨a, b⟩, hp⟩ := he
   exact ⟨a, b, hp⟩
 
-/-- **The probability the table statement bounds at table `0` of a masked statement of one table is the one the
-session's statement bounds.** -/
 theorem prBad_zero_eq_zk (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Claims.Flock.Stmt}
     {spec : SessionSpec} {st : Stmt} (hs : parse true rel x = some s) (h1 : s.tables = 1)
     (h : tables true x = [(spec, st)]) (decode : _) {Ω : Type} [Fintype Ω] (P : Claims.Prover Ω) :
@@ -90,8 +79,6 @@ theorem prBad_zero_eq_zk (rel : Readable.Parsed → Readable.Relation) {x : Clai
   have hN : (wordLenJ true x 0 : ℝ) = (deployZk rel).N₀ x := (one_table_numbers h).2
   exact Claims.Flock.prBad_zero_eq sha512 (deployZk rel) (wordLenJ true) decode x hp h1 ht hN P
 
-/-- **At a masked statement of one table the table statement gives the session's**: `Flock.KS`'s inequality there, with
-the session's `κ` and `γ`, from `zk_KSTable_untrim`. -/
 theorem ks_one_table_zk {x : Claims.Msg} {s : Claims.Flock.Stmt} {spec : SessionSpec} {st : Stmt}
     (hs : parse true Readable.relation x = some s) (h1 : s.tables = 1) (h : tables true x = [(spec, st)])
     (decode : _)

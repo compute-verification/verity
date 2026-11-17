@@ -38,28 +38,7 @@ import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Every masked table's bound from the live sessions' bound at the deployed tables
-
-`ZkKS` at every number of tables. The masked transfer at a verdict on each table's output (`simSessZV`,
-`live_le_sessionZV`): a live verdict is no likelier than every table's output passing its own verdict against the
-simulated strategy. After `Commit`, table `j` is at position `j` of the batch (`sessAfterZC_split`), so the simulated
-strategy after `Commit` at table `j` (`afterJZ`, `simAtJZ`), at the cap the live roots decode to, passes table `j`'s
-verdict at least as often as the live verdict holds (`live_le_simAtJZ`, `mean_live_le_simAtJZ`). The masked session's
-tables are `T 0, …, T (n - 1)` (`tabsJ`), and the strategy after `Commit` is at `T j` itself.
-
-`ZkLiveAtJ` is `ZkLiveAt` at every table: the escapes at injective fork rounds of every table, and at each tape, table
-`j` and table `C` of its word, live strategies with common roots whose verdict bounds the deployed runs accepting with
-no column of table `j` off `C`, a verdict on each table's output the decoder is right for, each implying acceptance
-and table `j`'s no level-0 opening off `C` unless it self-clashes, and table `j`'s events bounding its `Adv`s and
-self-clash. It gives `ZkSessJ` (`zkSessJ_of_liveJ`), so every table's bound (`zk_tableBoundJAt_of_liveJ`).
-
-At the deployed masked record, `T j` is Flock ZK's padded table of the statement's table `j` (`zkTabs`, `zkTab` at
-table `j`'s layout, link layout and `Zk.schedule`'s schedule), at Flock ZK's parameters (`zkTab_m1`) and
-committed to table `j`'s model statement (`zkTab_committed`; together, `zk_atTabs`). `ZkLiveJ x` is `ZkLiveAtJ` there
-at every layout, and `Flock.KS` at the deployed relation follows from it at every statement some run accepts and
-`ExtendJ` (`zk_KS_of_liveJ`), at every number of tables.
--/
+/-! Every masked table's bound from the live sessions' bound at the deployed tables. -/
 
 @[expose] public section
 
@@ -76,8 +55,6 @@ section Sim
 variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 
 omit [Fintype K] in
-/-- **The strategy after `Commit` at table `j`** of a strategy of the masked session whose `Commit` sends `caps`, at a
-table `T` that is table `j`. -/
 noncomputable def afterJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (τ : Strategy (sessionZC A Hs ts)) {caps : Fin ts.length → Model.Cap D} (hc : τ.1 = caps) (j : Fin ts.length)
     {T : TabZK 𝔽 mPts} (hT : ts.get j = T) :
@@ -97,7 +74,6 @@ variable [Inhabited D] [Inhabited Sl]
 
 open Classical in
 omit [Fintype K] in
-/-- **Every table passing its verdict** has the same probability after `Commit`, read at table `j`. -/
 theorem prob_sessionZC_leJ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (τ : Strategy (sessionZC A Hs ts))
     {caps : Fin ts.length → Model.Cap D} (hc : τ.1 = caps) (j : Fin ts.length) {T : TabZK 𝔽 mPts}
@@ -107,14 +83,11 @@ theorem prob_sessionZC_leJ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts 
   rw [prob_toReal, expect_afterJZ]
   exact le_rfl
 
-/-- **Verdicts that imply acceptance, passed at every table, accept every table up to `j`.** -/
 theorem accUpTo_of_okAll {n : ℕ} (ok : Fin n → OutZC 𝔽 D Sl → Prop)
     (hacc : ∀ i o, ok i o → o.accepted = true) {j : ℕ} (hj : j < n) {outs : List (OutZC 𝔽 D Sl)}
     (h : ∀ i : Fin n, ok i (outs.getD i dfltOutZC)) : AccUpTo j outs :=
   fun i hi => hacc _ _ (h ⟨i, by omega⟩)
 
-/-- The simulated strategy of the masked session (`simSessZG`) at a verdict `ok i` on each table `i`'s output, its
-dead branches sending empty openings (`nulOpZ`). -/
 noncomputable def simSessZV (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -127,7 +100,6 @@ noncomputable def simSessZV (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts
       (simSession (outJ Hs ts) ok dfltOutZC pL opn dg dec one fin capOf N (repJ A Hs ts)
         (fun j pts r => allInh_repZCAt A Hs (ts.get j) pts r) hdec)).strategy Pr
 
-/-- The simulated strategy's `Commit` sends the caps the live prover's roots decode to. -/
 theorem simSessZV_fst (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -139,9 +111,6 @@ theorem simSessZV_fst (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : Lis
   unfold simSessZV
   exact fst_rec_send (sessionZC_eq_modelSession A Hs ts) _
 
-/-- **The masked transfer at a verdict on each table** (`live_le_sessionZG` table by table): the live verdict is no
-likelier than every table's output passing its verdict against the simulated strategy, when every table's decoder is
-right for the verdicts. -/
 theorem live_le_sessionZV (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -156,8 +125,6 @@ theorem live_le_sessionZV (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts :
   rw [FlockSoundness.Discharge.Exec.prob_cast]
   exact Claims.Bridge.Sim.prob_le_mapDead _ _ Pr
 
-/-- **The simulated masked strategy after `Commit` at table `j`** of a live prover whose roots are `rootB₀`, at the
-caps they decode to, at a table `T` that is table `j`. -/
 noncomputable def simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -171,8 +138,6 @@ noncomputable def simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts :
   afterJZ A Hs ts (simSessZV A Hs ts ok pL opn dg dec one fin capOf N hdec Pr) (by rw [simSessZV_fst, hP]) j hT
 
 open Classical in
-/-- **A live verdict is no likelier than every table's verdict after `Commit`**, read at table `j`, at the caps the
-prover's roots decode to. -/
 theorem live_le_simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -189,9 +154,6 @@ theorem live_le_simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : L
     (prob_sessionZC_leJ A Hs ts ok _ _ j hT)
 
 open Classical in
-/-- **Over a mixture of live strategies with common roots `rootB₀`**: the mean live verdict is at most the mean
-probability of every table's verdict after `Commit` at table `j`, over the simulated strategies at the caps the roots
-decode to. -/
 theorem mean_live_le_simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -208,9 +170,6 @@ theorem mean_live_le_simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (t
 
 end Sim
 
-/-! ## The live sessions' bound at every table -/
-
-/-- **The masked session's tables** `T 0, …, T (n - 1)`. -/
 def tabsJ {mPts : ℕ} (n : ℕ) (T : ℕ → TabZK 𝔽 mPts) : List (TabZK 𝔽 mPts) :=
   List.ofFn fun i : Fin n => T i
 
@@ -221,18 +180,10 @@ theorem tabsJ_get {mPts : ℕ} (n : ℕ) (T : ℕ → TabZK 𝔽 mPts) (j : Fin 
     (tabsJ n T).get j = T j :=
   List.get_ofFn (fun i : Fin n => T i) j
 
-/-- Table `j`'s position in the masked session's tables. -/
 def finJ {mPts : ℕ} {n : ℕ} (T : ℕ → TabZK 𝔽 mPts) {j : ℕ} (hj : j < n) : Fin (tabsJ n T).length :=
   ⟨j, by rw [tabsJ_length]; exact hj⟩
 
 open Classical in
-/-- **The live sessions' bound at the masked tables** `T j` (`ZkLiveAt` at every table): `zkSessJ_of_liveJ`'s
-hypothesis on the deployed prover, the masked session's tables `T 0, …` up to the statement's number of tables. Every
-prover has escapes at every table `j`'s fork rounds `rd j`, no two one, such that, at each tape, each table `j` and
-each table `C` of its word `Ok` allows, live strategies `σL` whose roots agree bound the deployed runs accepting with
-no column of table `j` off `C` by their verdict `pL`, the decoder is right for a verdict `ok` on each table's output,
-each implying its table accepted and table `j`'s also no level-0 opening off `C` unless it self-clashes, and table `j`'s events bound
-the simulated strategies' `Adv`s and self-clash after `Commit` at table `j` (`simAtJZ`). -/
 def ZkLiveAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
     (T : ℕ → TabZK 𝔽 mPts) : Prop :=
@@ -289,8 +240,6 @@ def ZkLiveAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D
                 (tabsJ_get _ T _))) / Fintype.card τ ≤
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
-/-- **The live sessions' bound gives the masked sessions' after `Commit`** (`ZkSessJ`), the mixture at table `j` the
-simulated strategies after `Commit` there (`simAtJZ`) of live strategies whose roots agree. -/
 theorem zkSessJ_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     {A : Model.Arith 𝔽 K} {Hs : Hashes 𝔽 D Sl} {Ok : Claims.Msg → ℕ → List 𝔽 → Prop} {x : Claims.Msg} {mPts : ℕ}
     {T : ℕ → TabZK 𝔽 mPts} (hl : ZkLiveAtJ A Hs Ok x T) : ZkSessJ A Hs Ok x T := by
@@ -312,8 +261,6 @@ theorem zkSessJ_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
   · rw [hlen]
     exact hsc
 
-/-- **Every masked table's bound at a statement, from the live sessions' bound** at the masked tables `T j`
-(`zk_tableBoundJAt_of_sessions` at `zkSessJ_of_liveJ`). -/
 theorem zk_tableBoundJAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
     (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
@@ -331,10 +278,7 @@ theorem zk_tableBoundJAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [Decidab
     Claims.Flock.TableBoundJAt sha512 (deployZk rel) (wordLenJ true) Ok x :=
   zk_tableBoundJAt_of_sessions A hA Hs rel Ok hn st hst T hT hnc (zkSessJ_of_liveJ hl)
 
-/-! ## The deployed masked tables -/
-
-/-- **Flock ZK's padded tables of a setup** `sts`: at each table `j`, `zkTab` at its layout `L j`, link layout at
-`PT_LOCAL` and `Zk.schedule`'s schedule (past the last table, table 0's). -/
+/-- Past the last table, table 0's. -/
 noncomputable def zkTabs {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
@@ -352,13 +296,10 @@ theorem zkTabs_of_lt {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
     (h : j < sts.size) : zkTabs h0 L hz hk hlay j = zkTab (L j h) (hz j h) (hk j h) (hlay j h) :=
   dite_eq_left h
 
-/-- The setup's table `j` (past the last table, table 0). -/
+/-- Past the last table, table 0. -/
 def stJ {sts : Array Stmt} (h0 : 0 < sts.size) (j : ℕ) : Stmt :=
   if h : j < sts.size then sts[j] else sts[0]
 
-/-- **The live sessions' bound at a masked statement of any number of tables**: `ZkLiveAtJ` at the deployed hashes
-(`hs512`) and tables of full-width columns, at Flock ZK's padded tables of the setup (`zkTabs`), wherever the
-verifier sets up the tables `sts`, at their every layout and link layout at `PT_LOCAL`. -/
 def ZkLiveJ (x : Claims.Msg) : Prop :=
   ∀ (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -371,12 +312,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **Flock ZK's padded tables at a statement in scope**: where the statement parses in scope and sets up at least
-one table, each table `j` has Flock ZK's `m`, `k_log`, a layout and a link layout (`zk_scopeJ`), and `Zk.schedule`
-accepts its `m` (`zk_schedule_ok`), so `zkTabs` there has every property `zk_tableBoundJAt_of_liveJ` asks of the
-masked tables: table `j` of the setup is `stJ h0 j`, `zkTab` is at Flock ZK's parameters (`zkTab_m1`), and a table
-of full-width columns that does not extract table `j` is not committed to it (`zk_not_committedJ`,
-`zkTab_committed`). -/
 theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -426,12 +361,6 @@ theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 end Gen
 
-/-- **Flock ZK's padded tables at a statement in scope**: where the statement parses in scope and sets up at least
-one table, each table `j` has Flock ZK's `m`, `k_log`, a layout and a link layout (`zk_scopeJ`), and `Zk.schedule`
-accepts its `m` (`zk_schedule_ok`), so `zkTabs` there has every property `zk_tableBoundJAt_of_liveJ` asks of the
-masked tables: table `j` of the setup is `stJ h0 j`, `zkTab` is at Flock ZK's parameters (`zkTab_m1`), and a table
-of full-width columns that does not extract table `j` is not committed to it (`zk_not_committedJ`,
-`zkTab_committed`). -/
 theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -455,9 +384,6 @@ theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
   Gen.zk_atTabs (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
     (hset := hset) (h0 := h0) (B := B) (hB := hB)
 
-/-- **Every masked table's bound at a statement in scope, from the live sessions' bound**: at tables of full-width
-columns, where the statement parses in scope and sets up at least one table, `zk_tableBoundJAt_of_liveJ` at Flock
-ZK's padded tables (`zk_atTabs`). -/
 theorem zk_tableBoundJAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -470,16 +396,11 @@ theorem zk_tableBoundJAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
       Readable.relation (wideJ true) hn (stJ h0) hst T hT hnc
   exact hb (hl ins spec sts hset h0 L hz hk hlay)
 
-/-- **Every masked table's bound at full-width columns, from the live sessions' bound** at the statements some run
-accepts, at every number of tables. -/
 theorem zk_tableBoundJ_live (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveJ x) :
     Claims.Flock.TableBoundJ sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) :=
   zk_tableBoundJ_of_acc Readable.relation (wideJ true) fun x _ _ _ _ hno hs hin hset h0 =>
     zk_tableBoundJAt_live hs hin hset h0 (hl x hno)
 
-/-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the live
-sessions' bound at Flock ZK's padded tables at the statements some run accepts (`ZkLiveJ`) and `ExtendJ` at
-full-width columns. -/
 theorem zk_KS_of_liveJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveJ x)
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=
