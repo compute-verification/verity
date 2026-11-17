@@ -30,3 +30,13 @@ axis = "Time per output token of vLLM committing every value, over stock vLLM's,
 better = "lower"
 command = "research run --on NODE --project verity --source . --cwd source --gpus 1 -- env SPEC=llama32-1b-bf16-rtx-served-arm bash benchmarks/served_commit/run.sh"
 every = "7d"
+
+[[metric]]
+id = "circuits/commitment-hash-rate"
+title = "Commitment hashing rate"
+owner = "circuits"
+unit = "GB/s"
+axis = "Gigabytes a second the committing kernels hash into one window's rows-sha512 leaves and tree on one card, alone, each point naming its card and row size."
+better = "higher"
+command = "research run --on NODE --project verity --source . --cwd source --gpus 1 -- bash benchmarks/served_commit/rows_floor.sh"
+every = "7d"

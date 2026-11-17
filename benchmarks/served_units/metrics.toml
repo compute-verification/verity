@@ -13,6 +13,16 @@ every = "7d"
 goal = "circuits/proof-block-benchmark-on-dashboard"
 
 [[metric]]
+id = "circuits/proof-block-kinds-without-statement"
+title = "Proof block kinds without statement"
+owner = "circuits"
+unit = "kinds"
+axis = "Kinds of proof block of a workload's sampling plan with no statement the Lean verifier accepted, recounted from a stored cover record, each point naming its model and the kinds on its card."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu bash benchmarks/served_units/run.sh --cover art:75fe45105effc452bd0868f28bfda0d946056d81924d82fedca0fecd44cb956a"
+every = "7d"
+
+[[metric]]
 id = "circuits/proof-block-peak-memory"
 title = "Proof block prover memory"
 owner = "circuits"
