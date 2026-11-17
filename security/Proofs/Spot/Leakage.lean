@@ -11,40 +11,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Fintype.BigOperators
 import Proofs.Spot.Determinacy
 
-/-!
-# Leakage is the incorrect proof blocks' cone egress
-
-The prover knows the secrets `s` (the weights), and commits an assignment `σ s` with at most `m` incorrect proof blocks;
-the observer sees its egress. Over a set `Cl` of secrets (for instance those the honest egress cannot tell apart), the
-number of egress values the observer can tell apart is the leakage, in bits its logarithm.
-
-* `card_leak_le_cone`, **leakage beyond the honest egress is the incorrect proof blocks' cone egress**: in a population
-  with single assignment and acyclicity, the egress off the cone of the incorrect set `B` is the honest egress, and which
-  egress slots lie in the cone is fixed by `B` and the wiring. So the egress takes at most `#honest · Σ_B |V| ^ E(B)`
-  values, `E(B)` the egress slots in `B`'s cone (`coneEgress`), and `E(B) ≤ Σ_{u ∈ B} E(u)` (`card_coneEgress_le`).
-  `card_leak_le_coneEgress` is the uniform form: at most `m` incorrect proof blocks and `E(u) ≤ E_max` give
-  `#honest · C(|U|, m) · |V| ^ (m E_max)`, that is `log₂ C(|U|, m) + m · E_max · log₂ |V|` bits beyond the honest egress.
-  `card_leak_le_coneEgress_sum` is the weighted form: a sample that bounds `Σ_{u ∈ B} E(u) ≤ M` gives `|V| ^ M` times the
-  number of incorrect sets within that budget.
-  Amplification needs no hypothesis: a correct unit that routes secrets to the egress does so inside the cone, which
-  `E` prices. `scale_coneEgress` and `scale_amp` show the bound is attained, and `vmStatic_coneEgress` that a machine's
-  step reaches the whole egress, where the bound says nothing.
-* **Bounded reach.** With every input fixed, the adversary's choice over the egress at the incorrect set `B` (its control
-  reach) is at most `min(|W(B)|, |O ∩ cone(B)|)` slots (`card_egress_le_reach`), so with at most `m` incorrect proof
-  blocks `Reach_ctl(O) ≤ min(m w, Reach_inf(O)) + log C(|U|, ≤ m)` (`card_egressAt_le_reach`). Leakage about the secrets
-  beyond the honest egress is at most `Reach_inf(O) + log C(|U|, ≤ m)` (`card_leak_le_reach`), with no `m w` term, since
-  inside the cone a value may be any function of the secrets.
-* `card_leak_le`, **control times amplification**: at most `K · α` egress values, `K = (∑_{j ≤ m} C(n, j)) |V| ^ (m w)`
-  the control count of `Egress.card_egressAt_le` and `α` a bound on every amplification set (`amp`): the egress values
-  the rest of the population makes of the secrets once the incorrect proof blocks and their writes are fixed. The count
-  needs no structure; the structure is what bounds `α`.
-* `card_amp_le_one`: in a population with single assignment and acyclicity, when no secret is upstream of the egress,
-  every amplification set has at most one value, so `card_leak_le_of_not_up`: the leakage is at most the control.
-* `scale_amp`, **fixed arithmetic amplifies**: a checked population whose unit `i` multiplies secret word `i` by a
-  scalar, reading both at fixed slots. Its honest egress is zero whatever the secrets (`scale_honest`), yet with the
-  one-bit scalar unit incorrect the amplification set over all secrets has `2 ^ N` values: one incorrect bit of control, `N`
-  secret bits out. Reading weights only at fixed indices by fixed arithmetic does not bound amplification.
--/
+/-! Leakage is the incorrect proof blocks' cone egress. -/
 
 @[expose] public section
 
@@ -58,8 +25,6 @@ theorem card_writesOf_le (B : Finset U) : (P.writesOf B).card ≤ ∑ u ∈ B, (
   classical
   exact card_biUnion_le
 
-/-- **Leakage is at most control times amplification**: whatever the prover commits for each secret, with at most `m`
-incorrect proof blocks, the egress takes at most `K · α` values over the secrets `Cl`. -/
 theorem card_leak_le [Fintype U] [Fintype S] [DecidableEq S] {V : Type} [Fintype V] [DecidableEq V] [Nonempty V]
     (f : P.Fns V) (a : S → V) (X O : Finset S) (Cl : Finset (S → V)) (m w α : ℕ) (hw : ∀ u, (P.writes u).card ≤ w)
     (hα : ∀ B : Finset U, B.card ≤ m → ∀ b, (P.amp f a X O Cl B b).card ≤ α)
@@ -106,8 +71,6 @@ theorem card_leak_le [Fintype U] [Fintype S] [DecidableEq S] {V : Type} [Fintype
         rw [← Nat.mul_assoc]
         exact Nat.mul_le_mul_right _ (Nat.mul_le_mul_right _ hsmall)
 
-/-- **No amplification outside the egress's cone**: when no secret is upstream of the egress, fixing the incorrect proof
-blocks and their writes fixes the egress. -/
 theorem card_amp_le_one [Fintype U] [Fintype S] [DecidableEq S] (hc : P.Covered) (ha : P.Acyclic) {V : Type}
     [Fintype V] [DecidableEq V] (f : P.Fns V) (a : S → V) {X O : Finset S} (hX : ∀ s ∈ X, s ∉ P.up O)
     (Cl : Finset (S → V)) (B : Finset U) (b : P.writesOf B → V) : (P.amp f a X O Cl B b).card ≤ 1 := by
@@ -127,7 +90,6 @@ theorem card_amp_le_one [Fintype U] [Fintype S] [DecidableEq S] (hc : P.Covered)
     exact ⟨u, hu, ht⟩
   exact (hpb ⟨t, htB⟩).trans (hqb ⟨t, htB⟩).symm
 
-/-- **With the secrets outside the egress's cone, leakage is at most the control.** -/
 theorem card_leak_le_of_not_up [Fintype U] [Fintype S] [DecidableEq S] (hc : P.Covered) (ha : P.Acyclic) {V : Type}
     [Fintype V] [DecidableEq V] [Nonempty V] (f : P.Fns V) (a : S → V) {X O : Finset S} (hX : ∀ s ∈ X, s ∉ P.up O)
     (Cl : Finset (S → V)) (m w : ℕ) (hw : ∀ u, (P.writes u).card ≤ w) (σ : (S → V) → S → V)
@@ -136,10 +98,6 @@ theorem card_leak_le_of_not_up [Fintype U] [Fintype S] [DecidableEq S] (hc : P.C
       (∑ j ∈ range (m + 1), (Fintype.card U).choose j) * Fintype.card V ^ (m * w) := by
   simpa using P.card_leak_le f a X O Cl m w 1 hw (fun B _ b => P.card_amp_le_one hc ha f a hX Cl B b) σ hσ hm
 
-/-! ## Leakage is the incorrect proof blocks' cone egress -/
-
-/-- Assignments that hold the same inputs and whose incorrect proof blocks lie in `B` agree on every slot outside the
-writes of `B`'s cone. -/
 theorem eq_off_cone [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
     {σ τ : S → V} (hin : ∀ t ∈ P.input, σ t = τ t) (hσ : P.incorrect f σ ⊆ B) (hτ : P.incorrect f τ ⊆ B) {s : S}
     (hs : s ∉ P.writesOf (P.down B)) : σ s = τ s := by
@@ -156,7 +114,6 @@ theorem mem_coneEgress [Fintype U] {O : Finset S} {B : Finset U} {s : S} :
   classical
   exact mem_inter
 
-/-- **`E(B) ≤ Σ_{u ∈ B} E(u)`**: the egress in a set's cone is at most the sum of its units' cone egress. -/
 theorem card_coneEgress_le [Fintype U] (O : Finset S) (B : Finset U) :
     (P.coneEgress O B).card ≤ ∑ u ∈ B, (P.coneEgress O {u}).card := by
   classical
@@ -167,11 +124,6 @@ theorem card_coneEgress_le [Fintype U] (O : Finset S) (B : Finset U) :
   obtain ⟨u', hu', huv⟩ := (P.mem_down).1 hv
   exact ⟨u', hu', hsO, v, (P.mem_down).2 ⟨u', mem_singleton_self u', huv⟩, hsv⟩
 
-/-- **Leakage is at most the honest egress times the incorrect proof blocks' cone egress**: for every index `i ∈ Cl` (a
-secret, or a secret with the prover's coins), let the prover commit `σ i`, holding the inputs of the honest assignment
-`honest i`, with its incorrect proof blocks inside some `B ∈ 𝓑`. The egress then takes at most
-`#honest · Σ_{B ∈ 𝓑} |V| ^ E(B)` values: off the cone of `B` it is the honest egress, and the cone's egress slots are
-fixed by `B` and the wiring. -/
 theorem card_leak_le_cone [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V] [DecidableEq V]
     (f : P.Fns V) (O : Finset S) (𝓑 : Finset (Finset U)) {ι : Type} (Cl : Finset ι) (σ honest : ι → S → V)
     (hin : ∀ i ∈ Cl, ∀ t ∈ P.input, σ i t = honest i t) (hh : ∀ i ∈ Cl, ∀ u, P.Correct f (honest i) u)
@@ -200,9 +152,6 @@ theorem card_leak_le_cone [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Typ
         rw [card_product, card_univ, Fintype.card_fun, Fintype.card_coe]
     _ = _ := by rw [mul_sum]
 
-/-- **The uniform form**: with at most `m` incorrect proof blocks and every unit's cone egress `E(u) ≤ E`, the egress
-takes at most `#honest · C(|U|, m) · |V| ^ (m E)` values, so the leakage beyond the honest egress is at most
-`log₂ C(|U|, m) + m · E · log₂ |V|` bits. -/
 theorem card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [DecidableEq V] [Nonempty V] (f : P.Fns V) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
     (hE : ∀ u, (P.coneEgress O {u}).card ≤ E) {ι : Type} (Cl : Finset ι) (σ honest : ι → S → V)
@@ -229,9 +178,6 @@ theorem card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V
         rw [sum_const, card_powersetCard, card_univ]
         simp
 
-/-- **Weighted by cone egress**: when the sample bounds the incorrect proof blocks' total cone egress `Σ_{u ∈ B} E(u) ≤ M`
-instead of their number, the egress takes at most `#honest · #𝓑 · |V| ^ M` values, `𝓑` the incorrect sets within that
-budget. -/
 theorem card_leak_le_coneEgress_sum [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [DecidableEq V] [Nonempty V] (f : P.Fns V) (O : Finset S) (M : ℕ) {ι : Type} (Cl : Finset ι)
     (σ honest : ι → S → V) (hin : ∀ i ∈ Cl, ∀ t ∈ P.input, σ i t = honest i t)
@@ -250,14 +196,6 @@ theorem card_leak_le_coneEgress_sum [Fintype U] (hc : P.Covered) (ha : P.Acyclic
   rw [sum_const]
   simp
 
-/-! ## Bounded reach
-
-With every input fixed (the weights included), `egress f a ∅ O B` is what the adversary can choose over `O` at the incorrect
-set `B`: its control reach is the logarithm of its size. The influence reach is `|O ∩ cone(B)|`, the slots of `O` the
-incorrect proof blocks can touch at all (`coneEgress`). -/
-
-/-- **Control reach is at most influence reach**: with the inputs fixed, the egress at the incorrect set `B` takes at most
-`|V| ^ |O ∩ cone(B)|` values. -/
 theorem card_egress_le_coneEgress [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     (f : P.Fns V) (a : S → V) (O : Finset S) (B : Finset U) :
     (P.egress f a ∅ O B).card ≤ Fintype.card V ^ (P.coneEgress O B).card := by
@@ -283,7 +221,6 @@ theorem card_egress_le_coneEgress [Fintype U] [Fintype S] (hc : P.Covered) (ha :
     _ ≤ Fintype.card (P.coneEgress O B → V) := Fintype.card_le_of_injective g hg
     _ = Fintype.card V ^ (P.coneEgress O B).card := by rw [Fintype.card_fun, Fintype.card_coe]
 
-/-- **Control reach at an incorrect set**: `min(|W(B)|, |O ∩ cone(B)|)` slots' worth of choice. -/
 theorem card_egress_le_reach [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     (f : P.Fns V) (a : S → V) (O : Finset S) (B : Finset U) :
     (P.egress f a ∅ O B).card ≤ Fintype.card V ^ min (P.writesOf B).card (P.coneEgress O B).card := by
@@ -293,10 +230,7 @@ theorem card_egress_le_reach [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Ac
   · rw [min_eq_right h]
     exact P.card_egress_le_coneEgress hc ha f a O B
 
-/-- **Control reach with at most `m` incorrect proof blocks**: with the inputs fixed, every unit writing at most `w`
-slots and every incorrect set of at most `m` units touching at most `R` slots of `O`, the egress takes at most
-`(∑_{j ≤ m} C(|U|, j)) · |V| ^ min(m w, R)` values: `Reach_ctl(O) ≤ min(m w, Reach_inf(O)) + log C(|U|, ≤ m)`. This
-bounds what any information, not only the secrets, can put on the egress. -/
+/-- This bounds what any information, not only the secrets, can put on the egress. -/
 theorem card_egressAt_le_reach [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [Nonempty V] (f : P.Fns V) (a : S → V) (O : Finset S) (m w R : ℕ) (hw : ∀ u, (P.writes u).card ≤ w)
     (hR : ∀ B : Finset U, B.card ≤ m → (P.coneEgress O B).card ≤ R) :
@@ -334,10 +268,8 @@ theorem card_egressAt_le_reach [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.
     _ = small.card * Fintype.card V ^ min (m * w) R := by simp
     _ ≤ _ := Nat.mul_le_mul_right _ hsmall
 
-/-- **Leakage about the secrets is at most influence reach**: with at most `m` incorrect proof blocks, each incorrect
-set touching at most `R` slots of `O`, the egress takes at most `#honest · (∑_{j ≤ m} C(|U|, j)) · |V| ^ R` values, so
-the leakage beyond the honest egress is at most `Reach_inf(O) + log C(|U|, ≤ m)`. Inside the cone a value may be any
-function of the secrets (`scale_amp`), so the incorrect proof blocks' own width `m w` does not bound it. -/
+/-- Inside the cone a value may be any function of the secrets (`scale_amp`), so the incorrect proof blocks' own
+width `m w` does not bound it. -/
 theorem card_leak_le_reach [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V] [DecidableEq V]
     [Nonempty V] (f : P.Fns V) (O : Finset S) (m R : ℕ)
     (hR : ∀ B : Finset U, B.card ≤ m → (P.coneEgress O B).card ≤ R) {ι : Type} (Cl : Finset ι)
@@ -368,10 +300,6 @@ namespace Population
 
 open Finset
 
-/-! ## Fixed arithmetic amplifies -/
-
-/-- Secret word `i` times a scalar: unit `none` writes the scalar (honestly zero) and unit `some i` reads the scalar and
-secret word `i`, at fixed slots, and writes their product to output word `i`. -/
 def scale (N : ℕ) : Dataflow (Option (Fin N)) (Slot N) where
   input := univ.filter fun s => s.isInput
   reads
@@ -381,7 +309,6 @@ def scale (N : ℕ) : Dataflow (Option (Fin N)) (Slot N) where
     | none => {.ptr}
     | some i => {.out i}
 
-/-- The units' functions: the scalar is zero, and output word `i` is secret word `i` times the scalar. -/
 def scaleFns (N : ℕ) : (scale N).Fns Bool
   | none => fun _ _ => false
   | some i => fun r _ => r ⟨.secret i, by simp [scale]⟩ && r ⟨.ptr, by simp [scale]⟩
@@ -406,15 +333,12 @@ theorem scale_checked (N : ℕ) : (scale N).Checked := by
       subst this
       cases c <;> simp [scale] at htr
 
-/-- **The honest egress is zero, whatever the secrets.** -/
 theorem scale_honest (N : ℕ) {σ : Slot N → Bool} (hσ : ∀ u, (scale N).Correct (scaleFns N) σ u) (i : Fin N) :
     σ (.out i) = false := by
   have hp : σ .ptr = false := hσ none ⟨.ptr, by simp [scale]⟩
   have := hσ (some i) ⟨.out i, by simp [scale]⟩
   simpa [scaleFns, hp] using this
 
-/-- **One incorrect bit of control, `N` secret bits out**: with the scalar unit incorrect and the scalar one, the egress over
-all secrets takes `2 ^ N` values. -/
 theorem scale_amp (N : ℕ) :
     2 ^ N ≤ ((scale N).amp (scaleFns N) (fun _ => false) (univ.filter fun s => s.isSecret)
       (univ.filter fun s => s.isOut) univ {none} fun _ => true).card := by
@@ -456,8 +380,6 @@ theorem scale_amp (N : ℕ) :
   have := card_le_card_of_injOn _ (s := univ) (fun x _ => hmem x) hinj.injOn
   simpa using this
 
-/-- **The cone egress prices the amplification**: the scalar unit's cone holds the whole egress, so
-`card_leak_le_cone` allows `2 ^ N` egress values at the incorrect set `{none}`, which `scale_amp` attains. -/
 theorem scale_coneEgress (N : ℕ) :
     (scale N).coneEgress (univ.filter fun s => s.isOut) {none} = univ.filter fun s => s.isOut := by
   ext s
@@ -472,8 +394,6 @@ theorem scale_coneEgress (N : ℕ) :
     exact ⟨some i, (scale N).mem_down.2 ⟨none, mem_singleton_self _,
       .single ⟨.ptr, by simp [scale], by simp [scale]⟩⟩, by simp [scale]⟩
 
-/-- **A machine's step reaches the whole egress**: in the pointer machine declared statically, the pointer step's
-cone holds every output word, so `E_max = |E|` and the cone bound says nothing. -/
 theorem vmStatic_coneEgress (N : ℕ) :
     (vmStatic N).coneEgress (univ.filter fun s => s.isOut) {none} = univ.filter fun s => s.isOut := by
   ext s

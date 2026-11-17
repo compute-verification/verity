@@ -2,15 +2,7 @@ module
 
 public import Properties.Pous.Period.Audits
 
-/-!
-# PoUS's instantiation in the ring model
-
-`Instantiates P τ`, the named assumption `pous-ring-instantiation` PoUS's per-run guarantees take: on a certified
-capacity coin, the memory challenger's sample is the ring game's and the prover's strategy answers, in the ring model,
-the challenged blocks of `C`. It is stated over the deployed check's record (`Audits`), which the spec can't import, so
-it is a named assumption under `Properties.Assumptions`, in a module of its own that reads only that audit and the
-ring game.
--/
+/-! PoUS's instantiation in the ring model: `Instantiates P τ`, the named assumption `pous-ring-instantiation`. -/
 
 @[expose] public section
 

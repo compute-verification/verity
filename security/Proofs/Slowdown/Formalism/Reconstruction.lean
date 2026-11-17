@@ -3,18 +3,7 @@ module
 public import Definitions.Slowdown.Formalism
 public import Proofs.Core.Circuit
 
-/-!
-# The training formalism v2: reconstruction, and the three kinds of a block's inputs
-
-Two lemmas of the formalism (`Definitions.Slowdown.Formalism`), which its theorems rest on:
-
-* `reconstruction` (§1): for a set of gates `S` and any `x` that holds the values of `in(S)`, the reconstruction of `S`
-  from `x` evaluates `|S|` gates, one each, and holds every value `S` computes. It is `foldl_update_eval`'s case of all
-  of `S`, sorted: evaluating gates of `S` in increasing order, each on what the earlier ones left, from values that are
-  the circuit's on `in(S)` and on the gates of `S` not yet evaluated, leaves the circuit's value at every gate of `S`;
-* `reads_split` (§2): `in(I)` is a block's registered values, its data and its computed values, and `in(I) \ θ`, what
-  `k` bounds, is the last two. `mem_inputs_of_mem_θ`, a registered value is an input, makes it set algebra.
--/
+/-! The training formalism v2: reconstruction, and the three kinds of a block's inputs. -/
 
 @[expose] public section
 
@@ -64,13 +53,10 @@ theorem foldl_update_eval {C : Circuit} (S : Finset (Fin C.N)) (hS : GateSet C S
         · exact hwg h
         · exact h2 h
 
-/-- A registered value is an input. -/
 theorem mem_inputs_of_mem_θ {d : RegisteredCircuit} {v : Fin d.D.N} (hθ : v ∈ d.θ) : v ∈ inputs d.D := by
   simp only [inputs, Finset.mem_filter, Finset.mem_univ, true_and]
   exact d.θ_input v hθ
 
-/-- **Reconstruction**: for a set of gates `S` and any `x` that holds the values of `in(S)`, the reconstruction of `S`
-from `x` evaluates `|S|` gates, one each, and holds every value `S` computes. -/
 theorem reconstruction (C : Circuit) (S : Finset (Fin C.N)) (a x : C.Trace) (hS : GateSet C S)
     (hx : AgreesOn C x (C.eval a) (C.into S)) :
     (S.sort (· ≤ ·)).length = S.card ∧ AgreesOn C (reconstruct C S x) (C.eval a) S := by
@@ -79,8 +65,6 @@ theorem reconstruction (C : Circuit) (S : Finset (Fin C.N)) (a x : C.Trace) (hS 
   exact foldl_update_eval S hS a _ (Finset.sortedLT_sort S).pairwise (fun g' hg' => (Finset.mem_sort _).1 hg') x
     (fun v hv => hv.elim (hx v) fun h => absurd ((Finset.mem_sort _).2 h.1) h.2) g hg
 
-/-- **A block's reads split three ways**: for a set of gates `I`, `in(I)` is its registered values, its data and its
-computed values, and `in(I) \ θ`, what `k` bounds, is the last two. -/
 theorem reads_split (d : RegisteredCircuit) (I : Finset (Fin d.D.N)) :
     d.D.into I = registeredReads d I ∪ dataReads d I ∪ computedReads d I ∧
       d.unregistered I = dataReads d I ∪ computedReads d I := by

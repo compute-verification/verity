@@ -1,9 +1,4 @@
-/-
-The read's check accepts its own template: `Flock.ReadNet.check V H (readTmpl V H)` for every vocabulary of `2 ≤ V < 2³²`
-rows of `1 ≤ H ≤ 2¹⁶` words (`check_readTmpl`). Its runs write fresh variables (`Accepts/Fresh.lean`), and its root has at
-most `2³²` columns: each part's Definition has at most `partColsMax H` (`Accepts/Parts.lean`, over `Accepts/Cost.lean`) and
-the root lays out its calls' columns past its inputs and before its outputs.
--/
+/- The read's check accepts its own template at every `2 ≤ V < 2³²` and `1 ≤ H ≤ 2¹⁶`. -/
 module
 
 public import Proofs.ResourceAccounting.ReadUnit.Accepts.Fresh
@@ -79,7 +74,6 @@ theorem check_of_checked {V H : ℕ} {t : Flock.Tmpl.Tmpl} (h : Checked V H t) :
   simp only [check, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq]
   exact ⟨⟨⟨⟨⟨⟨⟨⟨⟨h.hV, h.hV32⟩, h.hH⟩, h.hH64⟩, h.ok⟩, h.root⟩, h.inG⟩, h.outG⟩, h.defs⟩, h.log⟩
 
-/-- **The read's check accepts its template** for every `2 ≤ V < 2³²` and `1 ≤ H ≤ 2¹⁶`. -/
 theorem check_readTmpl {V H : ℕ} (hV : 2 ≤ V) (hV32 : V < 2 ^ 32) (hH : 1 ≤ H) (hH16 : H ≤ 2 ^ 16) :
     check V H (readTmpl V H) = true := by
   refine check_of_checked ⟨hV, hV32, hH, lt_of_le_of_lt (Nat.mul_le_mul_left 16 hH16) (by norm_num),

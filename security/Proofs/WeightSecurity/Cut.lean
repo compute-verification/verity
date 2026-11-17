@@ -3,23 +3,7 @@ module
 public import Definitions.WeightSecurity.Cut
 public import Proofs.WeightSecurity.Served
 
-/-! `theft_cut`: `Theft` at an honest cut's channel. On a run whose datacenter faults only within a class that a cut `κ`
-cuts, and within the budget, the outsider's view is its view against the datacenter deviating through `κ.channel` with
-the hints the cut gives each round's pattern (`view_eq_cut`). So `LeaksThrough` holds with `ε` the chance the run faults
-outside the class or past the budget (`leaksThrough_cut`), and the outsider steals with probability at most
-`|S| · p + ε`, where `S` is the channel's hint strings, not the patterns. `faultedUseHard_of_cut` is the per-party form:
-a party that queries the faulted function within the class and the budget is, with its patterns dropped
-(`Outsider.dropFaults`), an outsider against the datacenter that faults where it would (`dropFaults_model`), so honest
-use's hardness at `p` gives faulted use's at `|S| · p`. `TheftFaulted` takes the conversion at the channel instead,
-where the fault channel carries a cut window's hint in place of its pattern: the per-party form charges `|S|` on top of
-the pattern count the fault channel already pays. `not_interior_of_cuts`: a pattern a cut cuts is not interior, so
-`TheftFaulted` takes no `FaultedUseHard` there, and `cuts_map` carries a cut on token lists to its release `O → V`.
-
-The instances cut autoregressive decoding (`decode`). `cuts_forced` is the dominator lemma: a faulted run that decodes
-the honest next token at every position outside a set no larger than its pattern is the forced-token query's with its
-own tokens forced on that set. Position-local blocks (`cuts_tokenGate`) and one-token requests (`cuts_oneToken`) are its
-instances, and the reach (`cuts_release`) is the release cut's. `card_forcedChannel_le` and `card_releaseChannel_le`
-count the two channels' covert strings. -/
+/-! `theft_cut`: `Theft` at an honest cut's channel. -/
 
 @[expose] public section
 
@@ -29,8 +13,6 @@ open Finset WeightSecurity WeightSecurity.Assumptions
 
 variable {Ω R X Y Y' Θ Θ' F V : Type}
 
-/-- **On a run that faults within the class, the outsider's view is the cut channel's**, at the hints the cut gives
-each round's pattern. -/
 theorem view_eq_cut (κ : Cut X Y) {C : Θ → X → Y} {Cf : Θ → X × F → Y} {size : F → ℕ} {inClass : F → Prop}
     (hcut : κ.Cuts C Cf size inClass) (real : Θ → R → List (X × Y) → X → Y) (O : Outsider R X Y Θ') (q M : ℕ)
     (θ : Θ) (r : R) (hw : FaultsWithin real Cf size inClass O q M θ r) :
@@ -65,8 +47,6 @@ theorem view_eq_cut (κ : Cut X Y) {C : Θ → X → Y} {Cf : Θ → X × F → 
     simp only [Outsider.view_length] at this ⊢
     exact this
 
-/-- **A cut makes a faulted datacenter a channel of main's kind**: `LeaksThrough` holds for the cut's channel, except
-where the datacenter doesn't fault within the class. -/
 theorem leaksThrough_cut [Fintype Ω] [Fintype R] (κ : Cut X Y) {C : Θ → X → Y} {Cf : Θ → X × F → Y}
     {size : F → ℕ} {inClass : F → Prop} (hcut : κ.Cuts C Cf size inClass) (gen : Ω → Θ)
     (real : Θ → R → List (X × Y) → X → Y) (O : Outsider R X Y Θ') (q M : ℕ) :
@@ -74,7 +54,6 @@ theorem leaksThrough_cut [Fintype Ω] [Fintype R] (κ : Cut X Y) {C : Θ → X �
       (Claims.Pr fun z : Ω × R => ¬ FaultsWithin real Cf size inClass O q M (gen z.1) z.2) :=
   Pouw.pr_mono fun z hno hw => hno (view_eq_cut κ hcut real O q M (gen z.1) z.2 hw)
 
-/-- **Theft through a cut**: `Theft` at the cut's channel. -/
 theorem theft_cut [Fintype Ω] [Fintype R] (κ : Cut X Y) {C : Θ → X → Y} {Cf : Θ → X × F → Y}
     {size : F → ℕ} {inClass : F → Prop} (hcut : κ.Cuts C Cf size inClass) (gen : Ω → Θ)
     (Stolen : Θ → Θ' → Prop) (q : ℕ) (A : Set (Outsider R X Y Θ')) (p : ℝ)
@@ -89,8 +68,6 @@ theorem theft_cut [Fintype Ω] [Fintype R] (κ : Cut X Y) {C : Θ → X → Y} {
 theorem dropFaults_query (P : Outsider R (X × F) Y Θ') (r : R) (h : List (X × Y)) :
     P.dropFaults.query r h = (P.query r (P.relift r h)).1 := rfl
 
-/-- The party with its patterns dropped, against the datacenter that faults where it would, rebuilds its view of
-faulted use. -/
 theorem relift_view (P : Outsider R (X × F) Y Θ') (Cf : Θ → X × F → Y) (θ : Θ) (r : R) :
     ∀ n, P.relift r (P.dropFaults.view r (faultingAs P Cf θ r) n) = P.view r (honest Cf θ) n
   | 0 => rfl
@@ -118,8 +95,6 @@ theorem sum_view (O : Outsider R X Y Θ') (r : R) (resp : List (X × Y) → X �
     simp only [Outsider.view, List.map_cons, List.sum_cons]
     omega
 
-/-- **`faultedUseHard_of_cut`**: a cut converts honest use's hardness into faulted use's, for the parties that fault
-only within the class and the budget (`FaultBudget`), at the cut channel's count of covert strings. -/
 theorem faultedUseHard_of_cut [Fintype Ω] [Fintype R] (κ : Cut X Y) {C : Θ → X → Y} {Cf : Θ → X × F → Y}
     {size : F → ℕ} {inClass : F → Prop} (hcut : κ.Cuts C Cf size inClass) (gen : Ω → Θ)
     (Stolen : Θ → Θ' → Prop) (q M : ℕ) (A : Set (Outsider R X Y Θ')) (Af : Set (Outsider R (X × F) Y Θ')) (p : ℝ)
@@ -149,10 +124,7 @@ theorem faultedUseHard_of_cut [Fintype Ω] [Fintype R] (κ : Cut X Y) {C : Θ �
           Pouw.pr_eq_zero fun z h => h (hw z)
         rw [h0, add_zero]
 
-/-- **A pattern the cut cuts is not interior**: where `κ` cuts a class from the faulted function at the empty pattern,
-each pattern of the class but the empty one is outside `κ.Interior`, so `TheftFaulted` charges it `κ`'s hint and takes
-no `FaultedUseHard` there. With `cuts_tokenGate`, `cuts_oneToken` and `cuts_release` at `C = (Cf · φ₀)`, these are the
-position-local blocks, the faults of a one-token request, and the reach. -/
+/-- So `TheftFaulted` charges such a pattern `κ`'s hint and takes no `FaultedUseHard` there. -/
 theorem not_interior_of_cuts (κ : Cut X Y) {Cf : Θ → X × F → Y} {size : F → ℕ} {inClass : F → Prop} {φ₀ φ : F}
     (hcut : κ.Cuts (fun θ x => Cf θ (x, φ₀)) Cf size inClass) (hφ : inClass φ) (hne : φ ≠ φ₀) :
     ¬ κ.Interior Cf size φ₀ φ := by
@@ -162,8 +134,6 @@ theorem not_interior_of_cuts (κ : Cut X Y) {Cf : Θ → X × F → Y} {size : F
     subst hφ'
     exact hcut θ x _ hφ
 
-/-- **A cut survives an encoding of the answers** that `g` decodes at the honest answers: `κ.map f g` cuts the class
-from the encoded functions. It carries a cut on token lists to the release `O → V` that `TheftFaulted`'s cut reads. -/
 theorem cuts_map (κ : Cut X Y) {C : Θ → X → Y} {Cf : Θ → X × F → Y} {size : F → ℕ} {inClass : F → Prop}
     (f : Y → Y') (g : Y' → Y) (hgf : ∀ θ x, g (f (C θ x)) = C θ x) (hcut : κ.Cuts C Cf size inClass) :
     (κ.map f g).Cuts (fun θ x => f (C θ x)) (fun θ x => f (Cf θ x)) size inClass := by
@@ -173,8 +143,6 @@ theorem cuts_map (κ : Cut X Y) {C : Θ → X → Y} {Cf : Θ → X × F → Y} 
   show f (Cf θ (x, φ)) = f (κ.sim x h (g (f (C θ (κ.ask x h)))))
   rw [hgf, he]
 
-/-- Two decoders that pick the same token at each position `n < N` from the first's tokens before it decode the same
-`N` tokens. -/
 theorem decode_congr {a b : ℕ → List V → V} {N : ℕ} (h : ∀ n < N, a n (decode a n) = b n (decode a n)) :
     ∀ m ≤ N, decode a m = decode b m := by
   intro m
@@ -185,9 +153,6 @@ theorem decode_congr {a b : ℕ → List V → V} {N : ℕ} (h : ∀ n < N, a n 
     simp only [decode]
     rw [← ih (Nat.le_of_succ_le hm), h m hm]
 
-/-- **The forced-token cut cuts faults that change the decoder only at few positions**: if, at a pattern of the class,
-the faulted run decodes at every position outside `P` (at most the pattern's size of them) the honest next token of
-the tokens before it, then its release is the forced-token decode with the faulted run's own tokens forced on `P`. -/
 theorem cuts_forced [Fintype V] {C : Θ → X → List V} {Cf : Θ → X × F → List V} {size : F → ℕ}
     {inClass : F → Prop} {step : Θ → X → List V → V} {N : ℕ} {force : X → (Fin N → Option V) → X}
     (hC : ForcedServing C step N force) (P : Θ → X → F → Finset ℕ)
@@ -217,11 +182,6 @@ theorem cuts_forced [Fintype V] {C : Θ → X → List V} {Cf : Θ → X × F �
     · simp [hnP]
     · simp [hnP, hagree n hn hnP]
 
-/-- **Position-local blocks: the token gate cuts them.** A pattern of the class faults blocks at the positions `pos φ`,
-at most one position a faulted block, each after its position's last write to what later positions read (the sampler,
-the logits, the LM head, the final norm, the last layer after its key and value writes). So the faulted run decodes
-every other position's token from the tokens before it as honest serving does, and its release is the forced-token
-query's with the faulted tokens forced at their positions: a hint of a token and its position a faulted block. -/
 theorem cuts_tokenGate [Fintype V] {C : Θ → X → List V} {Cf : Θ → X × F → List V} {size : F → ℕ}
     {inClass : F → Prop} {step : Θ → X → List V → V} {N : ℕ} {force : X → (Fin N → Option V) → X}
     (hC : ForcedServing C step N force) (pos : F → Finset ℕ) (hpos : ∀ φ, inClass φ → (pos φ).card ≤ size φ)
@@ -230,9 +190,6 @@ theorem cuts_tokenGate [Fintype V] {C : Θ → X → List V} {Cf : Θ → X × F
     (forcedCut X V N force).Cuts C Cf size inClass :=
   cuts_forced hC (fun _ _ φ => pos φ) (fun _ _ φ hφ => hpos φ hφ) hloc
 
-/-- **One-token requests: their one token cuts every fault.** A request that serves one token releases that token
-whatever its pattern faults, interior blocks included, and the empty pattern releases the honest one. So the release is
-the forced-token query's with the faulted token forced: a hint of one token a faulted request. -/
 theorem cuts_oneToken [Fintype V] {C : Θ → X → List V} {Cf : Θ → X × F → List V} {size : F → ℕ}
     {inClass : F → Prop} {step : Θ → X → List V → V} {force : X → (Fin 1 → Option V) → X}
     (hC : ForcedServing C step 1 force)
@@ -249,10 +206,7 @@ theorem cuts_oneToken [Fintype V] {C : Θ → X → List V} {Cf : Θ → X × F 
       simp [h0] at hnP
       omega
 
-/-- **The reach: the release cuts every fault.** At a pattern of the class the faulted run releases `N` tokens, and the
-empty pattern releases the honest ones. So the release is the simulator's with the faulted release as the hint: the
-reached tokens, all of the request's, a faulted request. For a wide block, whose output is at least the `N` tokens'
-bits, the hint is no longer than the fault. -/
+/-- For a wide block, whose output is at least the `N` tokens' bits, the hint is no longer than the fault. -/
 theorem cuts_release [Fintype V] {C : Θ → X → List V} {Cf : Θ → X × F → List V} {size : F → ℕ}
     {inClass : F → Prop} {N : ℕ}
     (hlen : ∀ θ x φ, inClass φ → (Cf θ (x, φ)).length = N)
@@ -263,8 +217,6 @@ theorem cuts_release [Fintype V] {C : Θ → X → List V} {Cf : Θ → X × F �
   · exact ⟨none, Nat.zero_le _, by simp [releaseCut, hempty θ x φ hφ h0]⟩
   · exact ⟨some ⟨_, hlen θ x φ hφ⟩, show 1 ≤ size φ by omega, rfl⟩
 
-/-- **The forced-token channel's covert strings**: at most `M` of the `q · N` positions forced, each to one of `|V|`
-tokens, so at most `(|V| · (q · N + 1))^M`: a token and its position among the run's `q · N` a forced token. -/
 theorem card_forcedChannel_le [Fintype V] [Nonempty V] (N : ℕ) (force : X → (Fin N → Option V) → X) (R : Type)
     (q M : ℕ) : Fintype.card ((forcedCut X V N force).channel R q M).S ≤ (Fintype.card V * (q * N + 1)) ^ M := by
   classical
@@ -288,8 +240,6 @@ theorem card_forcedChannel_le [Fintype V] [Nonempty V] (N : ℕ) (force : X → 
     _ ≤ (q * N + 1) ^ M * Fintype.card V ^ M := Nat.mul_le_mul_right _ (sum_choose_le_pow _ _)
     _ = (Fintype.card V * (q * N + 1)) ^ M := by rw [mul_pow, Nat.mul_comm]
 
-/-- **The release channel's covert strings**: at most `M` of the `q` rounds hinted, each with one of `|V|^N`
-releases, so at most `(|V|^N · (q + 1))^M`: a release and its round among the run's `q` a hinted round. -/
 theorem card_releaseChannel_le [Fintype V] [Nonempty V] (N : ℕ) (R : Type) (q M : ℕ) :
     Fintype.card ((releaseCut X V N).channel R q M).S ≤ (Fintype.card V ^ N * (q + 1)) ^ M := by
   classical

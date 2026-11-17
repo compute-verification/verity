@@ -1,10 +1,3 @@
-/-
-The bytes the frame-v3 read's words hold, and its SHA-512s: words holding a byte string (`HoldsBytes`) hold it in leaf
-order (`wordsBytes_of_holds`) and, eight of them holding a digest's bytes, that digest (`wordsDigest_of_holds`); a byte
-string's byte forms (`bytesW`) hold its words' bytes (`bytesV_bytesW`); a framed message's words hold the frame and
-SHA-512's padding (`holds_message`); and `shaW` from the IV over a padded message's words returns the message's SHA-512
-(`sound_sha512W`, from `Gates.sound_shaW` and `Gates.hash_chainW`).
--/
 module
 
 public import Proofs.ResourceAccounting.ReadUnit.Frame.Gadgets
@@ -21,7 +14,7 @@ open FlockSoundness.Discharge.Hm
 open Flock.ReadNet Flock.ReadNet.Frame
 open ResourceAccounting.ReadUnit.Gates
 
-/-! ## Lists -/
+/-! The bytes the frame-v3 read's words hold, and its SHA-512s. -/
 
 theorem getD_take_drop {α : Type} (l : List α) (s k q : ℕ) (d : α) (hq : q < k) :
     ((l.drop s).take k).getD q d = l.getD (s + q) d := by
@@ -49,8 +42,6 @@ theorem length_flatMap_range {γ : Type} (N k : ℕ) (g : ℕ → ℕ → γ) :
   have := length_flatMap_const (fun w => (List.range k).map (g w)) k (List.range N) fun a _ => by simp
   rwa [List.length_range] at this
 
-/-! ## Words as bytes -/
-
 theorem length_flatten_words64 : ∀ {ws : List Word}, Words64 ws → ws.flatten.length = 64 * ws.length
   | [], _ => rfl
   | w :: ws, h => by
@@ -71,7 +62,6 @@ theorem length_wordsBytes' (z : Var → Bool) {ws : List Word} (hw : Words64 ws)
   simp only [evs, List.length_map, length_flatten_words64 hw]
   omega
 
-/-- **Words holding bytes hold them in leaf order.** -/
 theorem wordsBytes_of_holds {z : Var → Bool} {ws : List Word} {bs : List UInt8} (h : HoldsBytes z ws bs) :
     wordsBytes z ws = bs := by
   obtain ⟨hw, hlen, hb⟩ := h
@@ -102,7 +92,6 @@ theorem wordsBytes_of_holds {z : Var → Bool} {ws : List Word} {bs : List UInt8
     show (8 * (7 - m) + q) / 8 = 7 - m by omega, show (8 * (7 - m) + q) % 8 = q by omega,
     show 8 * i + 7 - (7 - m) = 8 * i + m by omega]
 
-/-- **Words holding a digest's bytes hold the digest.** -/
 theorem wordsDigest_of_holds {z : Var → Bool} {ws : List Word} {d : Verity.Digest} (h : HoldsBytes z ws d.bytes) :
     wordsDigest z ws = d := by
   funext i
@@ -145,13 +134,9 @@ theorem holds_bytesW (z : Var → Bool) {ws : List Word} (hw : Words64 ws) : Hol
   rw [testBit_byteV z hl8 (Nat.mod_lt _ (by norm_num)), getD_take_drop _ _ _ _ _ (Nat.mod_lt _ (by norm_num)),
     Nat.div_add_mod]
 
-/-- **A byte string's byte forms hold its words' bytes.** -/
 theorem bytesV_bytesW (z : Var → Bool) {ws : List Word} (hw : Words64 ws) : bytesV z (bytesW ws) = wordsBytes z ws :=
   (wordsBytes_of_holds (holds_bytesW z hw)).symm
 
-/-! ## Framed messages -/
-
-/-- `frame_v3._message`'s bytes before SHA-512's padding: the frame of `parts` under `tag`. -/
 def msgData (tag : List UInt8) (parts : List (List Byte)) : List Byte :=
   constBytes (FRAME ++ beBytes 4 tag.length ++ tag) ++ parts.flatMap fun p => constBytes (beBytes 8 p.length) ++ p
 
@@ -163,7 +148,6 @@ theorem bytesV_flatMap {α : Type} (z : Var → Bool) (f : α → List Byte) (l 
   rw [bytesV, List.map_flatMap]
   rfl
 
-/-- **A framed message's bytes**: the frame of the parts' bytes. -/
 theorem bytesV_msgData (z : Var → Bool) (tag : List UInt8) (parts : List (List Byte)) :
     bytesV z (msgData tag parts) =
       FRAME ++ beBytes 4 tag.length ++ tag ++ (parts.map (bytesV z)).flatMap fun p => beBytes 8 p.length ++ p := by
@@ -196,15 +180,12 @@ theorem length_message (tag : List UInt8) (parts : List (List Byte)) :
   unfold zeroPad
   omega
 
-/-- **A framed message's words** hold the frame's bytes and SHA-512's padding. -/
 theorem holds_message (z : Var → Bool) (tag : List UInt8) {parts : List (List Byte)} (h : ∀ p ∈ parts, Bytes8 p) :
     HoldsBytes z (message tag parts) (bytesV z (msgData tag parts) ++ padTail (msgData tag parts).length) := by
   have := holds_wordsB z (data := msgData tag parts ++ constBytes (padTail (msgData tag parts).length))
     (bytes8_append (bytes8_msgData tag h) (bytes8_constBytes _))
     (by rw [List.length_append, length_constBytes, length_padTail]; unfold zeroPad; omega)
   rwa [bytesV_append, bytesV_constBytes] at this
-
-/-! ## SHA-512 -/
 
 theorem length_ivW : ivW.length = 8 := by simp [ivW, Flock.Sha512.iv]
 
@@ -214,12 +195,10 @@ theorem words64_ivW : Words64 ivW := by
   obtain ⟨v, _, rfl⟩ := hw
   exact length_constW _
 
-/-- The IV's words are the chaining value after no blocks. -/
 theorem map_bv_ivW (z : Var → Bool) (data : ByteArray) : ivW.map (bv z) = chainV data 0 := by
   rw [chainV, map_range_eq_toBV _ (by simp [chain, Flock.Sha512.iv])]
   simp [ivW, List.map_map, Function.comp_def, bv_constW, toBV, chain]
 
-/-- Words holding a byte string are its big-endian words. -/
 theorem map_bv_of_holds {z : Var → Bool} {ws : List Word} {bs : List UInt8} (h : HoldsBytes z ws bs) :
     ws.map (bv z) = wordsBE bs := by
   obtain ⟨hw, hlen, hbits⟩ := h
@@ -235,8 +214,6 @@ theorem map_bv_of_holds {z : Var → Bool} {ws : List Word} {bs : List UInt8} (h
     rw [List.getD_eq_getElem?_getD (l := ws), List.getElem?_eq_getElem h1, Option.getD_some] at this
     rw [this, show 8 * i + 7 - p / 8 = 0 + 8 * i + (7 - p / 8) by omega]
 
-/-- **SHA-512 of a padded message**: on words holding `m` and SHA-512's padding, the chain of compressions from the IV
-(`shaW` from `ivW`) returns 8 words holding `m`'s SHA-512. -/
 theorem sound_sha512W (ws : List Word) : Sound (shaW ((ws.length + 15) / 16) ivW ws) fun z out => ∀ m : List UInt8,
     HoldsBytes z ws (m ++ padTail m.length) → Shaped 8 out ∧ wordsDigest z out = Verity.sha512 m := by
   refine Sound.mono (sound_shaW _ ivW ws) fun z out h m hm => ?_

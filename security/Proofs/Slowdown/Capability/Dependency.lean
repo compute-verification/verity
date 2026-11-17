@@ -5,17 +5,7 @@ public import Proofs.Slowdown.Capability.Items
 public import Mathlib.Algebra.BigOperators.Ring.Finset
 public import Mathlib.Tactic.Linarith
 
-/-!
-# Local bounds: proofs of the caps from dependency
-
-* `FeedsWithin.exists_into`: a path inside a region from a gate outside `S` to a gate `S` reads crosses into `S` at a gate
-  of the region, which lies in `in(S)`;
-* `ImportOrRecompute`: a finished consumer whose required gates are not all in the block has a required gate outside it,
-  whose path to the finishing set enters the block at a gate of `in(S) ∩ A c`, unregistered since `A c` misses `θ`; each
-  such consumer is charged to those gates, and the overlap weights bound what one gate carries by 1;
-* `RecomputeByGates`: `g Σ ω ≤ Σ_c |G c| ω_c = Σ_{x ∈ S} Σ_{c ∋ x} ω_c ≤ |S|`;
-* `RecomputeByState`: the state a recomputation needs lies among what the block holds, so it is within the budget.
--/
+/-! Local bounds: proofs of the caps from dependency. -/
 
 @[expose] public section
 

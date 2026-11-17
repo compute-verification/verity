@@ -4,33 +4,7 @@ public import Properties.InferenceOnly
 public import Definitions.InferenceOnly.Assumptions.Theta
 public import Definitions.Slowdown.Assumptions.Threads
 
-/-!
-# A verdict of compliance carries the thread bound
-
-`Witnesses` (`Properties.InferenceOnly`) says that a verdict of `InferenceOnlyCheck.evaluate` whose `complies` is `true` means every
-declaration the Program lays out, with the registered information `theta` names, complies with the inference-only policy
-at its rate, `InferenceOnly.CompliesRate c α`, at the gate budget `c = gamma` and the rate `α = num / den`. The thread
-bounds, `Slowdown.Guarantees.ThreadedThrottled`, `ThreadedThrottledDark` and their `Slots` forms
-(`Definitions/Slowdown/Guarantees/Threads.lean`), bound a complying declaration that contains a reference training
-circuit. The statements here join the two, so that the check's verdict carries the bound: on every instance with a
-verdict whose `complies` is `true`, every such declaration `d` meets the bound's conclusion at `c` and the fresh-input
-budget `k = α c`, for every reference training circuit `r` it contains, under the bound's premises.
-
-* `Throttles`: `ThreadedThrottled`'s conclusion, for every `r` that `d` contains, `(dd, e)`-threaded at fresh-input
-  budget `k` with its weights incompressible (`WeightsIncompressible`), with no fresh input of `r` in the registered
-  information `theta` names (`ThetaRegistered`), which the check does not see.
-* `ThrottlesDark`: `ThreadedThrottledDark`'s, for every `r` that `d` contains partly (`PartialContainment`), with no
-  dark value or fresh input of `r` in the registered information `theta` names (`ThetaRegistered`), which the check
-  does not see.
-* `ThrottlesSlots`, `ThrottlesDarkSlots`: the same with the weights charged per parameter slot
-  (`WeightsIncompressibleSlots`).
-
-`k` need not be a natural here, since the check's rate is any `num / den`: the bounds are stated at the rate
-(proved as `Slowdown.SecurityProofs.ThreadedThrottled_rate` and its forms), and their `0 ≤ α` is no premise: `num / den` of
-naturals is nonnegative. Each statement is proved as `InferenceOnlyCheck.Properties.SecurityProofs.X : InferenceOnlyCheck.Properties.X` in
-`Proofs.InferenceOnly.Verdict` (package `security_proofs`), from `Witnesses` and the bound's proof: a property whose
-proof needs `security_proofs` is stated here and proved there.
--/
+/-! A verdict of compliance carries the thread bound, under premises the check does not see. -/
 
 @[expose] public section
 

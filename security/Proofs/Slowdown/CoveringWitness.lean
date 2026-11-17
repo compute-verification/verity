@@ -5,16 +5,7 @@ public import Mathlib.Data.Fin.VecNotation
 public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Tactic.NormNum
 
-/-!
-# The covering bound is not vacuous
-
-One circuit where every hypothesis of `Slowdown.Guarantees.CoveringBound` holds and `𝓜*` is nonempty
-(`coveringBound_nonvacuous`), at `c = r · b = 1`, `D = 3`, `k = 2` and `s = 3`. Weights `w₀ … w₃` (gates 0–3) and a token
-input `x` (gate 4) are unregistered inputs (`θ = ∅`). The products `pᵢ = wᵢ · x` (gates 5–7) feed the activation
-`a = (p₀ + p₁) + p₂` (gates 8, 9), and `p₃ = w₃ · a` (gate 10) is chained through `a` by the weights 0, 1 and 2. A block
-that completes a product holds its weight as an input, so the circuit is parameter-hard at every `s`, and six blocks of
-three gates, each with two inputs, cover it.
--/
+/-! The covering bound is not vacuous. -/
 
 @[expose] public section
 
@@ -22,11 +13,9 @@ namespace Slowdown.SecurityProofs.Covering
 
 open Verity Finset Slowdown.Covering
 
-/-- The gates each gate reads. -/
 def exReads : Fin 11 → Finset (Fin 11) :=
   ![∅, ∅, ∅, ∅, ∅, {0, 4}, {1, 4}, {2, 4}, {5, 6}, {8, 7}, {3, 9}]
 
-/-- The witness circuit, one bit a gate. -/
 abbrev exCircuit : Circuit where
   N := 11
   w := fun _ => 1
@@ -38,13 +27,10 @@ abbrev exCircuit : Circuit where
   op_congr := fun _ _ _ _ => rfl
   outputs := {10}
 
-/-- The witness declaration: nothing registered. -/
 abbrev exDecl : RegisteredCircuit := .ofCircuit exCircuit ∅ (by simp)
 
-/-- The product gate of weight `i`. -/
 def exProd : Fin 4 → Fin 11 := ![5, 6, 7, 10]
 
-/-- One multiplication block per weight, at one token, whose computation is every computed gate. -/
 abbrev exBlocks : MulBlocks exDecl where
   nw := 4
   nt := 1
@@ -62,13 +48,11 @@ abbrev exBlocks : MulBlocks exDecl where
   T_disjoint := fun j j' h => absurd (Subsingleton.elim j j') h
   T_θ := fun _ => disjoint_empty_right _
 
-/-- A subcircuit of the witness, its conditions decided. -/
 def exSub (gs is : Finset (Fin 11))
     (h : is ⊆ gs ∧ (∀ g ∈ gs, g ∉ is → exCircuit.reads g ⊆ gs) ∧ ∀ g ∈ gs, g ∈ sources exCircuit → g ∈ is) :
     Subcircuit exDecl.D :=
   ⟨gs, is, h.1, h.2.1, h.2.2⟩
 
-/-- Six blocks of three gates, two of them inputs: the products, the two additions, and the last product. -/
 def exCover : Fin 6 → Subcircuit exDecl.D :=
   ![exSub {0, 4, 5} {0, 4} (by decide), exSub {1, 4, 6} {1, 4} (by decide), exSub {2, 4, 7} {2, 4} (by decide),
     exSub {5, 6, 8} {5, 6} (by decide), exSub {7, 8, 9} {7, 8} (by decide), exSub {3, 9, 10} {3, 9} (by decide)]
@@ -80,7 +64,6 @@ theorem ex_covers : Covers exDecl 3 2 exCover := by
   · unfold Subcircuit.inner
     decide
 
-/-- The input gate of weight `i`. -/
 def exWeight : Fin 4 → Fin 11 := ![0, 1, 2, 3]
 
 theorem ex_parameterHard : Assumptions.ParameterHard exDecl exBlocks 3 1 1 := by
@@ -127,8 +110,7 @@ theorem ex_mem : ((3, 0) : Fin 4 × Fin 1) ∈ Assumptions.chainedBlocks exDecl 
   simp only [Assumptions.chainedBlocks, mem_filter]
   exact ⟨mem_univ _, ex_chained⟩
 
-/-- **The covering bound is not vacuous**: one declaration, its multiplication blocks and a covering satisfy every
-hypothesis of `CoveringBound`, with a chained multiplication block. -/
+/-- The witness is at `c = r · b = 1`, `D = 3`, `k = 2` and `s = 3`, with a chained multiplication block. -/
 theorem coveringBound_nonvacuous :
     ∃ (d : RegisteredCircuit) (B : MulBlocks d) (s k D : ℕ) (r b : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
       (k : ℝ) < r * b * D ∧ Assumptions.ParameterHard d B s r b ∧ Covers d s k I ∧

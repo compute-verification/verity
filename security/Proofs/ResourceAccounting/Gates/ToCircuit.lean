@@ -4,15 +4,8 @@ public import Definitions.ResourceAccounting.Gates.Circuit
 public import Proofs.ResourceAccounting.Gates
 public import Proofs.Core.Circuit
 
-/-!
-# The circuit model is a core circuit
-
-`toCircuit_eval`: on an input `x` in its window, `C.toCircuit` evaluated on `x`'s words (`IntDag.inputWords`) reads
-back, at every gate, as the gate's value. By strong induction over the gates: an input gate holds its slot's word, and
-a computed gate applies its operation to its operands' values, which the gates below it hold (`getD_values_take`,
-`val_eq`; an operand at or past it reads `0` on both sides), and reads no input slot (`raw_of_not_input`). In the
-window every value lies in its declared interval (`value_eq_raw`), whose words read back (`dec_enc`).
--/
+/-! The circuit model is a core circuit: on an input in its window, `C.toCircuit` reads back as `C`'s values, gate by
+gate. -/
 
 @[expose] public section
 
@@ -22,7 +15,6 @@ open ResourceAccounting.Gates
 
 variable {ι : Type}
 
-/-- A value in a gate's declared interval reads back from its word. -/
 lemma dec_enc (g : IntGate ι) {z : ℤ} (h1 : g.lo ≤ z) (h2 : z ≤ g.hi) : g.dec (g.enc z) = z := by
   have hsz : (z - g.lo).toNat < g.size := by
     unfold IntGate.size
@@ -32,13 +24,10 @@ lemma dec_enc (g : IntGate ι) {z : ℤ} (h1 : g.lo ≤ z) (h2 : z ≤ g.hi) : g
   rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hs, Int.toNat_of_nonneg (by omega)]
   omega
 
-/-- An operation that is not an input reads no input slot. -/
 lemma raw_of_not_input (o : IntOp ι) (h : o.isInput = false) (x x' : ι → ℤ) (v : List ℤ) :
     o.raw x v = o.raw x' v := by
   cases o <;> simp_all [IntOp.isInput, IntOp.raw]
 
-/-- **The model is a core circuit**: on an input `x` in its window, `C.toCircuit` evaluated on `x`'s words reads back
-as `C`'s values, gate by gate. -/
 theorem toCircuit_eval (C : IntDag ι) (x : ι → ℤ) (hw : InWindow C x) :
     ∀ i (h : i < C.length), C[i].dec (C.toCircuit.eval (C.inputWords x) ⟨i, h⟩) = val C x i := by
   intro i

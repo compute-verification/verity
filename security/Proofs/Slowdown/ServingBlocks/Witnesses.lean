@@ -3,14 +3,8 @@ module
 public import Proofs.Slowdown.ServingBlocks
 public import Definitions.Slowdown.Guarantees.ServingBlocks.Witnesses
 
-/-!
-# The serving-block bound: honest and nontrivial lemmas
-
-The proofs of `security/Definitions/Slowdown/Guarantees/ServingBlocks/Witnesses.lean`, at the instances of
-`security/Definitions/Slowdown/ServingBlocks/Instances.lean`. Every instance weighs each counted operation 1, so each
-count is a number of operations, which `decide` computes. The `example`s at the end apply each guarantee to its lemmas,
-so the lemmas are the premises as the guarantee states them.
--/
+/-! The serving-block bound's honest and nontrivial lemmas, at the instances of
+`Definitions/Slowdown/ServingBlocks/Instances.lean`. -/
 
 @[expose] public section
 
@@ -22,8 +16,6 @@ namespace Counted
 
 variable {C : Circuit} (J : Counted C)
 
-/-- With every weight at most 1, a set of gates computes at most its number of gates wholly inside itself: each
-operation's body holds its representative. -/
 theorem inside_le_card (hω : ∀ v ∈ J.V, J.ω v ≤ 1) (I : Finset (Fin C.N)) : J.inside I ≤ I.card := by
   unfold Counted.inside
   refine (Finset.sum_le_card_nsmul _ _ 1 fun v h => hω v (Finset.mem_of_mem_filter v h)).trans ?_
@@ -32,32 +24,27 @@ theorem inside_le_card (hω : ∀ v ∈ J.V, J.ω v ≤ 1) (I : Finset (Fin C.N)
   rw [Finset.mem_filter] at h
   exact h.2 (J.rep_mem v h.1)
 
-/-- With every weight 1, what the blocks `B` leave of `R` is the number of such operations. -/
 theorem outside_eq (h1 : ∀ v ∈ J.V, J.ω v = 1) (R : Finset (Fin C.N)) {ι : Type*} [Fintype ι]
     (B : ι → Finset (Fin C.N)) :
     J.outside R B = ((J.V.filter fun v => v ∈ R ∧ ∀ i, ¬ J.body v ⊆ B i).card : ℝ) := by
   unfold Counted.outside
   rw [Finset.sum_congr rfl fun v hv => h1 v (Finset.mem_of_mem_filter v hv), Finset.sum_const, nsmul_one]
 
-/-- With every weight 1, the operations split between a block `B i` and gates outside it are as many as their number. -/
 theorem split_eq (h1 : ∀ v ∈ J.V, J.ω v = 1) (R : Finset (Fin C.N)) {ι : Type*} [Fintype ι]
     (B : ι → Finset (Fin C.N)) :
     J.split R B = ((J.V.filter fun v => v ∈ R ∧ (∃ i, v ∈ B i) ∧ ∀ i, ¬ J.body v ⊆ B i).card : ℝ) := by
   unfold Counted.split
   rw [Finset.sum_congr rfl fun v hv => h1 v (Finset.mem_of_mem_filter v hv), Finset.sum_const, nsmul_one]
 
-/-- With every weight 1, a set of gates computes as much wholly inside itself as the number of such operations. -/
 theorem inside_eq (h1 : ∀ v ∈ J.V, J.ω v = 1) (I : Finset (Fin C.N)) :
     J.inside I = ((J.V.filter fun v => J.body v ⊆ I).card : ℝ) := by
   unfold Counted.inside
   rw [Finset.sum_congr rfl fun v hv => h1 v (Finset.mem_of_mem_filter v hv), Finset.sum_const, nsmul_one]
 
-/-- With every weight 1, the counted weight is the number of counted operations. -/
 theorem total_eq (h1 : ∀ v ∈ J.V, J.ω v = 1) : J.total = J.V.card := by
   unfold Counted.total
   rw [Finset.sum_congr rfl h1, Finset.sum_const, nsmul_one]
 
-/-- No block of at most `c` gates computes wholly an operation whose body has more than `c` gates. -/
 theorem inside_eq_zero {c : ℕ} (hbig : ∀ v ∈ J.V, c < (J.body v).card) {I : Finset (Fin C.N)} (hI : I.card ≤ c) :
     J.inside I = 0 := by
   unfold Counted.inside
@@ -204,10 +191,8 @@ theorem ServingBlockBound_nontrivial : Guarantees.ServingBlocks.ServingBlockBoun
     rw [Counter.total_eq]
     norm_num [Counter.q]
 
-/-- **The serving-block bound is false without operation bodies**: at `Detached`, whose operation takes in gate 1 though
-no gate of it reads gate 1, with `(c_S, k_S) = (c, k) = (1, 0)`, the serving blocks as their own inference blocks,
-`ω_max = μ = 1`, `q_U(u) = 1` and `q_U(L_dark) = 0`, every other premise holds and the counted weight `1` is above the
-right-hand side `0`: the serving block after the wipe reads no unregistered bit, yet the operation is assigned to it. -/
+/-- At `Detached`, whose operation takes in gate 1 though no gate of it reads gate 1, every other premise holds and
+the bound fails, so it needs operation bodies. -/
 theorem ServingBlockBound_nontrivial_bodies :
     ServingSizes Detached.d Detached.P Detached.S (fun _ => 1) (fun _ => 0) ∧
     (∀ u ∈ Detached.S, PerBlockCap Detached.d Detached.J Detached.q 1 0) ∧ Detached.P.IsCK Detached.d 1 0 ∧
@@ -227,11 +212,8 @@ theorem ServingBlockBound_nontrivial_bodies :
     rw [Detached.total_eq]
     norm_num [Detached.q]
 
-/-- **The serving-block bound is false without overlap, and so without its boundary term**: at `Straddle`, whose
-operation is split across the wipe, with `(c_S, k_S) = (c, k) = (1, 1)`, the serving blocks as their own inference
-blocks, `ω_max = 1`, `μ = 0`, `q_U(u) = 1` and `q_U(L_dark) = 0`, every other premise holds, no gate is in at most `0`
-bodies, and the counted weight `1` is above the right-hand side `0`. At `μ = 0` the boundary term `ω_max μ k_S`
-vanishes: the bound without it is false where every premise holds at `μ = 1`. -/
+/-- At `Straddle`, whose operation is split across the wipe, every other premise holds at `μ = 0` and the bound
+fails, so it needs overlap and its boundary term. -/
 theorem ServingBlockBound_nontrivial_overlap :
     ServingSizes Straddle.d Straddle.P Straddle.S (fun _ => 1) (fun _ => 1) ∧
     (∀ u ∈ Straddle.S, PerBlockCap Straddle.d Straddle.J Straddle.q 1 1) ∧ Straddle.P.IsCK Straddle.d 1 1 ∧
@@ -273,11 +255,6 @@ theorem UncertifiedElementary_nontrivial : Guarantees.ServingBlocks.UncertifiedE
     norm_cast
   · rw [UncertifiedCap, Counted.outside_eq Straddle.J Straddle.ω_one] at h
     norm_cast at h
-
-/-! Each lemma is its guarantee's premises as the guarantee states them: the guarantee applies at the honest instance,
-and at a counter-example the dropped premise would give the bound the lemma's last conjunct negates.
-`UncertifiedElementary` takes no premise: at `Honest` it gives the cap at `1`, and at `Straddle` it holds at the split
-weight while every smaller right-hand side fails. -/
 
 example : Honest.J.total ≤ ∑ u ∈ Honest.S, min (Honest.q 1 1 + 1 * (1 : ℕ) * (1 : ℕ))
     (((univ.filter fun i => Honest.r.parent i = u).card : ℝ) * Honest.q 1 1 + 1) + 1 := by

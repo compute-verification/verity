@@ -6,24 +6,7 @@ public import Properties.Flock.Circuit.Outs
 import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
 
-/-!
-# The registered circuit file as core's circuit
-
-The circuit a Flock session checks is defined from its circuit file: the descriptor `D` the verifier parses
-(`Flock.Desc.parse`), the unit's rows built from it (`hU : Built D.unroll.unit`) and the population `n` (the public
-file's `pub.n`) give the key program `keyProg D.unroll hU n`, whose circuit and partition (`keyCircuit`,
-`keyPartition`) the session's game is stated over. Here that circuit is core's:
-
-* `Verity.Circuit.ofAudit C`: a game circuit (`Verity.Boolean.Circuit`) as core's (`Verity.Circuit`), the same
-  gates, one bit each; `Verity.Partition.ofAudit P`, the same partition.
-* `circuitOf D hU n := .ofAudit (keyCircuit D hU n)` and `partsOf D hU n := .ofAudit (keyPartition D hU n)`: the
-  parsed file as core's circuit and its `n` units.
-* `circuitOfFile tags cf tables pf`, `unitsOfFile` and `partsOfFile`: the same at the committed files themselves, the
-  circuit file `cf` and the public file `pf` the prover sends before any coin, read as the verifier reads them
-  (`parsedOf`), and the empty circuit (`Verity.Circuit.empty`) when they don't read.
-
-The lemmas about them are `Proofs.Flock.Bridge.CircuitOf`'s.
--/
+/-! The registered circuit file as core's circuit. -/
 
 @[expose] public section
 
@@ -94,8 +77,6 @@ end Verity
 
 namespace Flock.Bridge
 
-/-! ## The parsed file's circuit -/
-
 /-- The key program's circuit at the descriptor `D`, its unit's rows `hU` and the population `n`. -/
 noncomputable abbrev keyCircuit (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) :
     Verity.Boolean.Circuit :=
@@ -116,8 +97,6 @@ noncomputable def circuitOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll
 noncomputable def partsOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) :
     Verity.Partition (circuitOf D hU n) n :=
   .ofAudit (keyPartition D hU n)
-
-/-! ## The committed files' circuit -/
 
 /-- **A registered circuit file, parsed**: the descriptor the verifier reads from it, its unit's rows built, and the
 population its public file states. -/

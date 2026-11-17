@@ -6,19 +6,8 @@ public import Proofs.InferenceOnly.ReadsIn
 import Mathlib.Data.NNRat.Floor
 import Proofs.ResourceAccounting.Actual.Split
 
-/-!
-# The capacity form: the windows divide the developer's region
-
-`ServerBlocksAt`: a computed gate of the developer's region over `[0, t)` lies at exactly one location `X i` (they are
-disjoint) and, for cuts `τ` of `[0, t)`, in exactly one window `[τ j, τ (j + 1))` (`cuts_exists_mem`, `cuts_eq_of_mem`),
-which names its unit `(i, j)`. Compute rate bounds a window's gates by `Φ_{X i} (τ (j + 1) − τ j)`; what it reads in the
-cut is what it reads in `A`, and the split in `G` (`width_into_region_inter_le`) and links bound its reads in `G` by
-`stateIn_{X i}(τ j, G) + β_{X i} (τ (j + 1) − τ j)`. No memory constraint is used.
-
-`ServerBlocks` is `ServerBlocksAt` at the cuts `min(kω, t)` (`uniformCuts`) and `G = univ`: a window of them is
-`A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, at most `ω` long, its fresh input bits are at most its reads
-(`InferenceOnly.SecurityProofs.freshInput_le_readsIn`), and memory bounds the state at its start by `M_{X i}`.
--/
+/-! `ServerBlocksAt`, the capacity form: at any cuts, the windows divide the developer's region into inference
+blocks. -/
 
 @[expose] public section
 
@@ -65,13 +54,11 @@ theorem div_eq_iff_mem {a k ω : ℕ} (hω : 0 < ω) : a / ω = k ↔ a ∈ Set.
   rw [Set.mem_Ico, ← Nat.le_div_iff_mul_le hω, ← Nat.div_lt_iff_lt_mul hω]
   omega
 
-/-- A window below `⌈t/ω⌉` starts before `t`. -/
 theorem mul_lt_of_lt_ceil {k t ω : ℕ} (hω : 0 < ω) (hk : k < (t + ω - 1) / ω) : k * ω < t := by
   have h := (Nat.le_div_iff_mul_le hω).1 (Nat.lt_iff_add_one_le.1 hk)
   rw [add_one_mul] at h
   omega
 
-/-- Every tick before `t` lies in a window of the cuts. -/
 theorem cuts_exists_mem {t : ℕ} (κ : Cuts t) {s : ℕ} (hs : s < t) :
     ∃ j : Fin κ.J, s ∈ Set.Ico (κ.τ j.castSucc) (κ.τ j.succ) := by
   classical
@@ -89,7 +76,6 @@ theorem cuts_exists_mem {t : ℕ} (κ : Cuts t) {s : ℕ} (hs : s < t) :
     rw [Fin.val_succ, Fin.coe_castPred] at h2
     omega
 
-/-- A tick lies in at most one window of the cuts. -/
 theorem cuts_eq_of_mem {t : ℕ} (κ : Cuts t) {s : ℕ} {j j' : Fin κ.J}
     (h : s ∈ Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) (h' : s ∈ Set.Ico (κ.τ j'.castSucc) (κ.τ j'.succ)) : j = j' := by
   have key : ∀ a b : Fin κ.J, a < b → κ.τ a.succ ≤ κ.τ b.castSucc := fun a b hab =>
@@ -102,8 +88,6 @@ theorem cuts_eq_of_mem {t : ℕ} (κ : Cuts t) {s : ℕ} {j j' : Fin κ.J}
 variable [DecidableEq L] {n : ℕ} (X : Fin n → Finset L)
 
 open Classical in
-/-- The window of each gate under the cuts `κ`: its location and the window of its tick, for the gates of `S` at the
-locations. -/
 noncomputable def cutServerBlock (S : Finset (Fin A.N)) {t : ℕ} (κ : Cuts t) (g : Fin A.N) : Option (Fin (n * κ.J)) :=
   if h : g ∈ S ∧ (∃ i, A.x g ∈ X i) ∧ ∃ j : Fin κ.J, A.t g ∈ Set.Ico (κ.τ j.castSucc) (κ.τ j.succ) then
     some (finProdFinEquiv (Classical.choose h.2.1, Classical.choose h.2.2))
@@ -176,7 +160,6 @@ theorem ServerBlocksAt : Guarantees.Actual.ServerBlocksAt := by
     exact (width_into_region_inter_le A _ _ _ G (forward_of_causal A hC _)).trans
       (Nat.add_le_add_left (ingress_le A hL _ _ _) _)
 
-/-- **The uniform cuts** of `[0, t)` at the window `ω`: `τ k = min(kω, t)` for `k ≤ ⌈t/ω⌉`. -/
 def uniformCuts (t ω : ℕ) (hω : 0 < ω) : Cuts t where
   J := (t + ω - 1) / ω
   τ k := min ((k : ℕ) * ω) t

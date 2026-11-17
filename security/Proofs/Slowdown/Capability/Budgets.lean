@@ -7,18 +7,7 @@ public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Mathlib.Probability.ProbabilityMassFunction.Constructions
 public import Mathlib.Tactic.Linarith
 
-/-!
-# Local bounds: proofs of the budgets
-
-* `HeldBudget`: Lemma 1 (`Verity.SecurityProofs.BlockDescription`) on the extraction that reads the held selection in
-  one proof block and nothing in the others, at the registered run, bounds the selection's description length by
-  `k + ⌈log₂ B⌉ + a_blk`, and description hardness bounds it below by its price minus `Λ`;
-* `RecoveredBudget`: the proof block's program followed by the recovery's complement is a description of the source, of
-  at most `a_blk + ⌈log₂ B⌉ + k + ℓz − βv J + amb` bits, and source hardness bounds it below by `ℓz − δ`;
-* `StatHeldBudget`: in an honest run a proof block's held values are a function of its unregistered input bits
-  (`Committed.recompute_congr`), at most `2^k` views, so one view, and the held value it gives, has probability at
-  least `2^-k`, which min-entropy hardness bounds by `2^(Λ − price)`.
--/
+/-! Local bounds: proofs of the budgets. -/
 
 @[expose] public section
 
@@ -62,7 +51,6 @@ theorem RecoveredBudget : Guarantees.RecoveredBudget := by
   push_cast
   linarith
 
-/-- In an honest run, what a proof block holds is determined by its unregistered inputs. -/
 theorem eval_eq_of_unregistered (R : Committed) {u : Fin R.d.n} {a a' : R.d.D.Trace} (ha : R.Honest a)
     (ha' : R.Honest a') (h : ∀ g ∈ R.d.unregistered (R.d.𝓘.gates u), R.d.D.eval a g = R.d.D.eval a' g) :
     ∀ g ∈ holds R.d.D (R.d.𝓘.gates u), R.d.D.eval a g = R.d.D.eval a' g := by

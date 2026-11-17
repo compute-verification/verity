@@ -9,15 +9,7 @@ public import Proofs.ResourceAccounting.ReadUnit.Frame
 public import Proofs.Flock.Soundness.TmplSpec
 public import Properties.Flock.Circuit.Outs
 
-/-!
-# The read's template: each copy holds its part's run
-
-The check makes the template `readTmpl V H`. Each part's Definition holds its generator's run at every copy whose rows
-hold (`partHolds_of_rows`, from `stHolds_of_realizes` and `outs_of_realizes`), so the template's Definitions meet
-`readSpec` (`steps_read`), and `unrolled_spec` gives the root's facts wherever the unrolled unit's rows hold with the
-constant set (`root_facts`): the zero and constant columns, the output columns, and each call's copy holding its part's
-run on the values its inputs bind.
--/
+/-! The read's template: each copy holds its part's run. -/
 
 @[expose] public section
 
@@ -27,19 +19,12 @@ open FlockSoundness FlockSoundness.TmplSpec FlockSoundness.Discharge.Hm Flock.Re
 open Flock.HmNets hiding and
 open Flock.Tmpl (Def Call Seg canon dropPairs)
 
-/-! ## A part's Definition holds its run -/
-
-/-- Where a part's Definition reads variable `x` (`defOf`'s `col`): input `x` past its columns, else own column
-`x - ins`. -/
 def colOf (ins : ℕ) (r : List Lin × St) (x : Var) : ℕ :=
   if x < ins then (defOf ins r).cols + x else x - ins
 
-/-- The value a copy of a part's Definition (own columns `v`, inputs `inp`) gives its run's variable `x`. -/
 def partVal (ins : ℕ) (r : List Lin × St) (v : ℕ → Bool) (inp : List Bool) (x : Var) : Bool :=
   (defOf ins r).refV v inp true (colOf ins r x)
 
-/-- **A part's run holds at a copy**: its rows hold at the copy's values, and each form it returns is the copy's own
-column that commits it. -/
 def PartHolds (ins : ℕ) (r : List Lin × St) (v : ℕ → Bool) (inp : List Bool) : Prop :=
   stHolds (partVal ins r v inp) r.2 ∧
     ∀ j (hj : j < r.1.length), v (r.2.next - ins + j) = ev (partVal ins r v inp) r.1[j]
@@ -51,8 +36,6 @@ theorem defOf_ins (ins : ℕ) (r : List Lin × St) : (defOf ins r).ins = ins := 
 theorem canon_single (x : ℕ) : canon #[x] = #[x] := by
   simp [canon, dropPairs]
 
-/-- **A part's Definition holds its run** at every copy whose own rows hold, the constant 1, where each of the run's
-rows writes a fresh variable (`runOk`). -/
 theorem partHolds_of_rows {ins : ℕ} {r : List Lin × St} (hok : runOk ins r = true) {v : ℕ → Bool} {inp : List Bool}
     (hrows : ∀ w ∈ (defOf ins r).rows.toList, v w.1 = Flock.Tmpl.rowVal ((defOf ins r).refV v inp true) w) :
     PartHolds ins r v inp := by
@@ -89,7 +72,6 @@ theorem partHolds_of_rows {ins : ℕ} {r : List Lin × St} (hok : runOk ins r = 
     have := List.getElem_mem hj'
     rwa [List.getElem_mapIdx] at this
 
-/-- The read's specification of Definition `d`: a copy of a part holds the part's run. -/
 def readSpec (V H d : ℕ) (v : ℕ → Bool) (inp : List Bool) : Prop :=
   ∀ p ∈ (parts V H)[d]?, PartHolds p.ins p.run v inp
 
@@ -100,8 +82,6 @@ theorem partDefs_size (V H : ℕ) : (partDefs V H).size = 11 := by simp [partDef
 theorem readTmpl_defs (V H : ℕ) :
     (readTmpl V H).defs = (partDefs V H).push (rootDef V H (partDefs V H)) := rfl
 
-/-- **Every Definition of the read's template meets `readSpec`** (`Steps`), where every part's run writes fresh
-variables. -/
 theorem steps_read {V H : ℕ} (hok : (parts V H).all (fun p => runOk p.ins p.run) = true) :
     Steps (readTmpl V H).defs (readSpec V H) := by
   intro d _ v inp _ hrows _ _ p hp
@@ -112,8 +92,6 @@ theorem steps_read {V H : ℕ} (hok : (parts V H).all (fun p => runOk p.ins p.ru
     simp [partDefs, hpd]
   rw [hdef] at hrows
   exact partHolds_of_rows (by have := Array.all_eq_true.1 hok d hd; rwa [hpd] at this) hrows
-
-/-! ## The root, through `unrolled_spec` -/
 
 theorem readTmpl_root (V H : ℕ) : (readTmpl V H).defs.getD ROOT default = rootDef V H (partDefs V H) := by
   rw [readTmpl_defs, show ROOT = (partDefs V H).size by rw [partDefs_size]; rfl]
@@ -128,7 +106,6 @@ theorem boundV_single {c : Call} {l : List ℕ}
   | nil => rfl
   | cons a l ih => simp [ih]
 
-/-- What `check V H t` establishes. -/
 structure Checked (V H : ℕ) (t : Flock.Tmpl.Tmpl) : Prop where
   hV : 2 ≤ V
   hV32 : V < 2 ^ 32
@@ -147,7 +124,6 @@ theorem checked_of_check {V H : ℕ} {t : Flock.Tmpl.Tmpl} (h : Flock.ReadNet.ch
   obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h0⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩ := h
   exact ⟨h1, h2, h3, h0, h4, h5, h6, h7, h8, h9⟩
 
-/-- The read's ports' bits: `readIn`. -/
 theorem portBits_sum (V H : ℕ) : 2592 + 16 * H + 512 * depth V = readIn H (depth V) := by
   unfold readIn; omega
 
@@ -157,10 +133,8 @@ section layout
 
 variable (V H : ℕ)
 
-/-- The root's layout. -/
 abbrev lay : Layout := layout V H (partDefs V H)
 
-/-- The root's references' values at the root's columns `z`. -/
 abbrev rootVal (z : ℕ → Bool) : ℕ → Bool := (rootDef V H (partDefs V H)).refV z [] true
 
 theorem lay_zero : (lay V H).zero = (lay V H).inW * Flock.WORD := rfl
@@ -213,8 +187,6 @@ theorem lay_oStart_ge : (lay V H).base (nCalls V H) ≤ (lay V H).oStart := by
 
 end layout
 
-/-! ## The root's facts -/
-
 theorem unrolled_one {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
     (hsz : ct.unitNet < ct.nets.size) (hB : Built (Flock.HmOut.unrolled ct).unit) :
     (Rows.ofNet hB).one.val = tu.t.constPos := by
@@ -254,7 +226,6 @@ theorem checked_constPos {V H : ℕ} {t : Flock.Tmpl.Tmpl} (hc : Checked V H t) 
   rw [hc.defs, hc.root, readTmpl_root, rootDef_cols]
   rfl
 
-/-- The unrolled unit has at most `2^32` rows: its slot is its root's columns', which the check bounds. -/
 theorem unrolled_unitLog {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
     (hsz : ct.unitNet < ct.nets.size) (hc : Checked V H tu.t) : (Flock.HmOut.unrolled ct).unit.unitLog ≤ 32 := by
   obtain ⟨-, n, -, -, -, hun⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
@@ -265,9 +236,6 @@ theorem unrolled_unitLog {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} 
   rw [(Flock.Net.ofRows_ok hn).1]
   exact Nat.max_le.2 ⟨by decide, hc.log⟩
 
-/-- **The root's facts** wherever the unrolled unit's rows hold with the constant 1, at the root's references' values
-`rootVal z`: the zero column is 0 and the constant 1, each output column is the select copy's, and each call's copy holds
-its part's run, bound to its inputs. -/
 theorem root_facts {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
     (hsz : ct.unitNet < ct.nets.size) (hc : Checked V H tu.t) (hB : Built (Flock.HmOut.unrolled ct).unit)
     {z : ℕ → Bool} (hs : (Rows.ofNet hB).Sat fun c => z c.val)
@@ -328,8 +296,6 @@ theorem root_facts {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : 
     rw [boundV_single rfl] at this
     exact this hp
 
-/-- `gatesRefine_of_vals`'s `hsound` for `hr`: wherever `R`'s rows hold with the constant set, the run's outputs are the
-read's row and, where its verdict is set, an opening of it under `key`. -/
 def ReadSound (key : Hash.Msg) (V H : ℕ) {R : FlockSoundness.Rows} {run : (List Lin × Lin) × St}
     (hr : HoldsRead R (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2])) : Prop :=
   ∀ z : Fin R.w → Bool, R.Sat z → z R.one = true →

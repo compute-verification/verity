@@ -7,19 +7,8 @@ import Proofs.Core.Game.Basic
 import Proofs.Flock.Claims.Witnesses.SamplingTwoReg
 import Proofs.Flock.Claims.Witnesses.SamplingTwoRegMiss
 
-/-!
-# The two-stage period's statements say something
-
-`CompilerMonitoringPeriodTwoReg`'s premises hold together, and `MonitoringPeriodTwoReg` fails where they don't.
-
-* `monitoringPeriodTwoReg_honest`: at `twoLTwo`'s windows every window meets `CompilerKSTwo`'s premises (`compilerKSTwo_honest`),
-  and the design `twoTwo` catches each replay block at rate `1` and samples each cell at rate `1` (`twoTwo_firstRate`,
-  `twoTwo_secondRate`).
-* `monitoringPeriodTwoReg_nontrivial`: at `sksLTwo`'s windows, which accept after one round and sample nothing, `MonitoringPeriodTwoReg`
-  fails at both rates `1`. One window, played by `twoStrat` at the silent prover, leaves its replay block, wrong at the
-  committed boundary (`toy_incorrectAtBoundaryAt`), undetected surely, while the bound is `0`: `ε_reg,2` is `0` at every
-  prover.
--/
+/-! The two-stage period's statements say something: `CompilerMonitoringPeriodTwoReg`'s premises hold together, and
+`MonitoringPeriodTwoReg` fails where they don't. -/
 
 @[expose] public section
 
@@ -34,22 +23,18 @@ open scoped ENNReal
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
 
-/-- **One two-stage window's strategy**: release `m`, then send the statement `x` and the prover `P`. -/
 def twoStrat (L : CompiledTwo Coin A) {Rls : Type} (m : Rls) (x : Msg) (P : Prover Unit) :
     Verity.Game.Strategy (monitoringPeriodG (fun _ : ℕ => twoGame L Rls) 0 1) :=
   ⟨m, (x, P), fun _ => PUnit.unit⟩
 
-/-- **A period of one two-stage window**, played by `twoStrat`: the run flips the window's coins and records the
-window at the count its statement and prover fix. -/
 theorem twoRegRun_twoStrat (H : Msg → Msg) (L : CompiledTwo Coin A) (m : (O → V) × Tick × Adv) (x : Msg)
     (P : Prover Unit) :
     twoRegRun H (fun _ => L) 1 (twoStrat L m x P) =
       .coin (Fin (L.V.k x) → Coin) fun r => .ret [twoRegRec H L (regCount H L x P) (m, ⟨x, P, r⟩)] :=
   rfl
 
-/-- **`CompilerMonitoringPeriodTwoReg`'s premises hold together** at `twoLTwo`'s windows and both rates `1`: `twoA` is knowledge
-sound, each window's commitment binds and its sessions meet the two-stage contract (`compilerKSTwo_honest`), and its
-one statement's design is `twoTwo`, whose stages catch each replay block and sample each cell surely. -/
+/-- The witness is `twoLTwo`'s windows at both rates `1` (`compilerKSTwo_honest`), whose design `twoTwo` catches each
+replay block and samples each cell surely. -/
 theorem monitoringPeriodTwoReg_honest :
     (twoA Bool).KS FlockDeploy.sha512 ∧
       (∀ _t : ℕ, (twoLTwo Bool).commit.Binds FlockDeploy.sha512 ∧ (twoLTwo Bool).Sessions FlockDeploy.sha512) ∧
@@ -64,8 +49,8 @@ theorem monitoringPeriodTwoReg_honest :
   exact ⟨twoTwo_firstRate, twoTwo_secondRate⟩
 
 open Classical in
-/-- **`MonitoringPeriodTwoReg` fails** at `sksLTwo`'s windows and both rates `1`: one window, at the empty statement and the
-silent prover, leaves its replay block wrong at the committed boundary undetected surely, while the bound is `0`. -/
+/-- At `sksLTwo`'s windows and both rates `1`, one window at the empty statement and the silent prover leaves its
+replay block wrong at the committed boundary undetected surely. -/
 theorem monitoringPeriodTwoReg_nontrivial :
     ¬ MonitoringPeriodTwoReg (O := Unit) (V := Unit) (Tick := Unit) (Adv := Unit) FlockDeploy.sha512 (fun _ => sksLTwo Bool)
       1 1 := by

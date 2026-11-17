@@ -38,25 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.ResourceAccounting.Actual.Confidence
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A location as a transducer over what reaches it
-
-In a strategy causal from every tick, as the actual-circuit model defines it, what a location `X` does during
-`[t, t + n)` is a function of its state's content at `t` and of what crosses into it at each tick of `[t, t + n)`
-(`transducer`), read through any per-tick observation that fixes what crosses in. What crosses in at a tick is fixed by
-the signals the links deliver to `X`'s leaves then (`crossing_of_signals`). So `X` is a transducer whose state is its
-content and whose input at each tick is its links' signals: the step "`X` is the prover of the protocol's model" of B2
-and B3, and the split of I. `Recall` is the case where nothing that crosses in depends on the coins. With `X`'s state at
-most `M` bits, the content padded to `M + 1` bits (`pad`, injective on such strings) serves as the state
-(`transducer_bits`): the model prover with a state of `Bits (M + 1)`, as B2's responder and B3's `Ticked.Chip` take it.
-
-Counting (`acts_encard_le`): with `mem X t ≤ M` in every run and at most `2^β` observations a tick, what `X` does during
-`[t, t + n)` takes at most `2^{M + 1 + β n}` values across the coins. The `+ 1` is the content's length: a state of at
-most `M` bits is one of `2^{M + 1} − 1` strings, since holding nothing differs from holding a 0 (`lists_encard_le`), so a
-location of memory `M` carries `M + 1` bits across a tick, not `M`. With the links as alphabets (`Alphabet`) and every wire
-into `X` on one of its ports, the observation is the ports' signals (`portSignals`), and what `X` does during
-`[t, t + n)` takes at most `2^{M + 1 + β_X n}` values, `β_X` the ports' capacities summed (`acts_encard_le_links`).
--/
+/-! A location as a transducer over what reaches it, in a strategy causal from every tick. -/
 
 @[expose] public section
 
@@ -64,7 +46,6 @@ namespace ResourceAccounting.SecurityProofs.Actual
 
 variable {Ω L : Type*}
 
-/-- A wire read during `I` is one read at its own arrival tick. -/
 theorem mem_crossing_iff (R : Actual.Run L) (X Y : Set L) (I : Set ℕ) (p : ℕ × L × ℕ × L × ℕ × ℕ × ℕ) :
     p ∈ R.crossing X Y I ↔ p.1 ∈ I ∧ p ∈ R.crossing X Y {p.1} := by
   constructor
@@ -73,7 +54,6 @@ theorem mem_crossing_iff (R : Actual.Run L) (X Y : Set L) (I : Set ℕ) (p : ℕ
   · rintro ⟨hI, g, a, hr, ha, hg, -, rfl⟩
     exact ⟨g, a, hr, ha, hg, hI, rfl⟩
 
-/-- Runs alike in what crosses at each tick of `[t, t + n)` are alike in what crosses during it. -/
 theorem crossing_Ico_congr {R R' : Actual.Run L} {X Y : Set L} {t n : ℕ}
     (h : ∀ i < n, R.crossing X Y {t + i} = R'.crossing X Y {t + i}) :
     R.crossing X Y (Set.Ico t (t + n)) = R'.crossing X Y (Set.Ico t (t + n)) := by
@@ -89,7 +69,6 @@ theorem crossing_Ico_congr {R R' : Actual.Run L} {X Y : Set L} {t n : ℕ}
   · rintro ⟨hI, hp⟩
     exact ⟨hI, by rwa [key _ hI]⟩
 
-/-- What crosses into `X` at tick `u` is what the links deliver to `X`'s leaves then, from outside `X`. -/
 theorem mem_crossing_signal {E : Type*} (R : Actual.Run L) (link : Fin R.A.N → Fin R.A.N → E) (X : Finset L) (u : ℕ)
     (p : ℕ × L × ℕ × L × ℕ × ℕ × ℕ) :
     p ∈ R.crossing (↑X)ᶜ ↑X {u} ↔ p.1 = u ∧ p.2.1 ∈ X ∧ p.2.2.2.1 ∉ X ∧ ∃ e, p.2.2 ∈ R.signal link e p.2.1 u := by
@@ -102,8 +81,6 @@ theorem mem_crossing_signal {E : Type*} (R : Actual.Run L) (link : Fin R.A.N →
   · rintro ⟨rfl, hy, hx, e, g, a, hr, -, -, hxg, htg, rfl⟩
     exact ⟨g, a, hr, hx, hxg ▸ hy, htg, by rw [hxg, htg]⟩
 
-/-- **What crosses in is fixed by the links' signals**: runs alike in what each link delivers to each of `X`'s leaves at
-`u` are alike in what crosses into `X` at `u`. -/
 theorem crossing_of_signals {E : Type*} {R R' : Actual.Run L} (link : Fin R.A.N → Fin R.A.N → E)
     (link' : Fin R'.A.N → Fin R'.A.N → E) (X : Finset L) (u : ℕ)
     (h : ∀ e, ∀ y ∈ X, R.signal link e y u = R'.signal link' e y u) :
@@ -116,7 +93,6 @@ theorem crossing_of_signals {E : Type*} {R R' : Actual.Run L} (link : Fin R.A.N 
   · rintro ⟨h1, h2, h3, e, he⟩
     exact ⟨h1, h2, h3, e, by rwa [h e _ h2]⟩
 
-/-- When every wire into `X` runs on one of the ports, the ports' signals at `u` fix what crosses into `X` at `u`. -/
 theorem crossing_of_ports {E : Type*} (S : Ω → Actual.Run L) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
     (X : Finset L) (ports : List (E × L))
     (hports : ∀ r g, ∀ a ∈ (S r).A.reads g, (S r).A.x a ∉ X → (S r).A.x g ∈ X → (link r g a, (S r).A.x g) ∈ ports)
@@ -136,7 +112,6 @@ theorem crossing_of_ports {E : Type*} (S : Ω → Actual.Run L) (link : ∀ r, F
     exact ⟨g, a, hr, fun hx => ha (hx ▸ hg), rfl, rfl, hq.1, rfl⟩
   exact (key hp).antisymm (key fun p hm => (hp p hm).symm)
 
-/-- With each link an alphabet, the ports' signals at a tick take at most `2^{∑ β}` values. -/
 theorem portSignals_encard_le {E : Type*} (S : Ω → Actual.Run L) (β : E → ℕ)
     (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) (hα : Alphabet S β link) (u : ℕ) :
     ∀ ports : List (E × L), (Set.range fun r => portSignals S link ports r u).encard ≤
@@ -158,7 +133,6 @@ theorem portSignals_encard_le {E : Type*} (S : Ω → Actual.Run L) (β : E → 
           mul_le_mul' (hα p.1 p.2 u) (portSignals_encard_le S β link hα u ps)
       _ = _ := by simp [List.map_cons, List.sum_cons, pow_add]
 
-/-- A string of at most `M` bits as exactly `M + 1`: `M − |c|` zeros, a one, then `c`. -/
 def pad (M : ℕ) (c : List Bool) : Fin (M + 1) → Bool := fun i =>
   (List.replicate (M - c.length) false ++ true :: c).getD i false
 
@@ -169,7 +143,6 @@ theorem replicate_cancel : ∀ (a a' : ℕ) (c c' : List Bool),
   | a + 1, 0, c, c', h => by simp [List.replicate_succ] at h
   | a + 1, a' + 1, c, c', h => replicate_cancel a a' c c' (by simpa [List.replicate_succ] using h)
 
-/-- Padding is injective on strings of at most `M` bits. -/
 theorem pad_inj {M : ℕ} {c c' : List Bool} (hc : c.length ≤ M) (hc' : c'.length ≤ M) (h : pad M c = pad M c') :
     c = c' := by
   refine replicate_cancel (M - c.length) (M - c'.length) c c'
@@ -183,9 +156,6 @@ theorem pad_inj {M : ℕ} {c c' : List Bool} (hc : c.length ≤ M) (hc' : c'.len
 
 variable [LinearOrder L]
 
-/-- **A location is a transducer over what reaches it**: in a strategy causal from every tick, if what crosses into `X`
-at each tick `u` is fixed by an observation `obs r u`, then what `X` does during `[t, t + n)` is a function `F n` of its
-state's content at `t` (at most `mem X t` bits) and of its first `n` observations from `t`. -/
 theorem transducer {Ob : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom S) (X : Finset L) (t : ℕ) (obs : Ω → ℕ → Ob)
     (hobs : ∀ u r r', obs r u = obs r' u → (S r).crossing (↑X)ᶜ ↑X {u} = (S r').crossing (↑X)ᶜ ↑X {u}) :
     ∃ F : ℕ → List Bool → List Ob →
@@ -202,9 +172,6 @@ theorem transducer {Ob : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom S) (X
     (fun r => (S r).acts ↑X (Set.Ico t (t + n))) (fun _ => (∅, ∅, ∅)) (c, os),
     fun r n => ((hf n).extend_apply _ r).symm⟩
 
-/-- **The transducer with an `(M + 1)`-bit state**: with `X`'s state at `t` at most `M` bits in every run, what `X` does
-during `[t, t + n)` is a function of its content padded to `M + 1` bits and of its first `n` observations from `t`. This
-is the model prover with a state of `Bits (M + 1)` that B2's responder and B3's `Ticked.Chip` take. -/
 theorem transducer_bits {Ob : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom S) (X : Finset L) (t : ℕ)
     (obs : Ω → ℕ → Ob)
     (hobs : ∀ u r r', obs r u = obs r' u → (S r).crossing (↑X)ᶜ ↑X {u} = (S r').crossing (↑X)ᶜ ↑X {u})
@@ -225,7 +192,6 @@ theorem transducer_bits {Ob : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom 
     (fun r => (S r).acts ↑X (Set.Ico t (t + n))) (fun _ => (∅, ∅, ∅)) (b, os),
     fun r n => ((hf n).extend_apply _ r).symm⟩
 
-/-- Bit strings of length at most `M` number `2^{M + 1} − 1`. -/
 theorem lists_encard_le (M : ℕ) : {l : List Bool | l.length ≤ M}.encard + 1 ≤ 2 ^ (M + 1) := by
   induction M with
   | zero =>
@@ -252,7 +218,6 @@ theorem lists_encard_le (M : ℕ) : {l : List Bool | l.length ≤ M}.encard + 1 
       _ ≤ 2 * 2 ^ (M + 1) := by gcongr
       _ = 2 ^ (M + 1 + 1) := by ring
 
-/-- `n` observations, at most `2^β` a tick, are one of at most `2^{β n}` lists. -/
 theorem obs_encard_le {Ob : Type*} (obs : Ω → ℕ → Ob) (t β : ℕ)
     (hα : ∀ u, (Set.range fun r => obs r u).encard ≤ ((2 ^ β : ℕ) : ℕ∞)) (n : ℕ) :
     (Set.range fun r => (List.range n).map fun i => obs r (t + i)).encard ≤ ((2 ^ (β * n) : ℕ) : ℕ∞) := by
@@ -273,9 +238,6 @@ theorem obs_encard_le {Ob : Type*} (obs : Ω → ℕ → Ob) (t β : ℕ)
     calc _ ≤ ((2 ^ (β * n) : ℕ) : ℕ∞) * ((2 ^ β : ℕ) : ℕ∞) := mul_le_mul' ih (hα _)
       _ = _ := by push_cast; ring
 
-/-- **What a location does takes at most `2^{M + 1 + β n}` values**: in a strategy causal from every tick, with what
-crosses into `X` at each tick fixed by an observation of at most `2^β` values and `X`'s state at `t` at most `M` bits in
-every run, what `X` does during `[t, t + n)` takes at most `2^{M + 1 + β n}` values across the coins. -/
 theorem acts_encard_le {Ob : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom S) (X : Finset L) (t : ℕ)
     (obs : Ω → ℕ → Ob)
     (hobs : ∀ u r r', obs r u = obs r' u → (S r).crossing (↑X)ᶜ ↑X {u} = (S r').crossing (↑X)ᶜ ↑X {u})
@@ -294,9 +256,6 @@ theorem acts_encard_le {Ob : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom S
   calc _ ≤ (2 : ℕ∞) ^ (M + 1) * ((2 ^ (β * n) : ℕ) : ℕ∞) := mul_le_mul' h1 (obs_encard_le obs t β hα n)
     _ = _ := by push_cast; ring
 
-/-- **What a location does over `n` ticks carries at most `M + 1 + β_X n` bits**: in a strategy causal from every tick
-whose links are alphabets, with every wire into `X` on one of its ports (`β_X` their links' capacities summed) and `X`'s
-state at `t` at most `M` bits in every run, what `X` does during `[t, t + n)` takes at most `2^{M + 1 + β_X n}` values. -/
 theorem acts_encard_le_links {E : Type*} {S : Ω → Actual.Run L} (hc : CausalFrom S) (β : E → ℕ)
     (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) (hα : Alphabet S β link) (X : Finset L) (ports : List (E × L))
     (hports : ∀ r g, ∀ a ∈ (S r).A.reads g, (S r).A.x a ∉ X → (S r).A.x g ∈ X → (link r g a, (S r).A.x g) ∈ ports)

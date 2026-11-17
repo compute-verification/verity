@@ -7,20 +7,7 @@ public import Properties.Verity.Game
 public import Proofs.Flock.Bridge.UnitRows
 public import Proofs.Flock.Soundness.ParseStmt
 
-/-!
-# A table read the read's template check accepts binds (trusted)
-
-A served unit's table read is a copy of the read's template (`EmbeddingRead_v1{V, H}`, `Flock.ReadNet.readTmpl`) in a
-templated circuit file: the verifier parses the file (`Flock.HmOut.parseTmpl`), and `Flock.ReadNet.check V H` accepts its
-unit's template only if it is the read's. `TableReadBinding` is a property of that check: where it accepts, every read at
-a copy of the parsed file's unit, its ports the copy's gates at the template's columns (`ReadUnit.portsAt`), returns its
-table's committed row at the index its token picks, except with probability at most the sampling layer's bound plus the
-collision finder's expected SHA-512 calls over `2^256` (`ReadUnit.BindsAt`). Nothing is assumed of the read's gates:
-the check fixes them, and the gate refinement and the rows' run are proved of every template it accepts.
-
-Flock's unit rows (`Flock.Bridge.copyGate`, `constGate`, `FlockSoundness.Rows.ofNet`) are still in its proofs package, so
-this module imports them.
--/
+/-! A table read the read's template check accepts binds (`TableReadBinding`), a property of `Flock.ReadNet.check`. -/
 
 @[expose] public section
 

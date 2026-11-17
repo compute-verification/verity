@@ -2,18 +2,7 @@ module
 
 public import Definitions.Spot.Dataflow
 
-/-!
-# Integrity: robust determinacy from single assignment and acyclicity
-
-* `wellFounded_dep`: on finitely many units, an acyclic population's dependency relation is well-founded.
-* `eq_of_writes`, **robust determinacy**: in a covered acyclic population, two assignments that hold the same inputs,
-  whose incorrect proof blocks lie in `B`, and that agree on the slots `B` writes, are equal. An assignment is determined by its
-  inputs and its incorrect proof blocks' writes. With `B = ∅` it is determinacy.
-* `eq_off_down`, **the cone**: two assignments that hold the same inputs and whose incorrect proof blocks lie in `B` agree on every
-  slot written by a unit outside `B`'s downstream cone. `eq_honest_off_down` reads it against the honest evaluation.
-* `exists_correct`: a checked population has, on every input, an assignment in which every unit is correct
-  (`eval`, by well-founded recursion over the slots).
--/
+/-! Integrity: robust determinacy from single assignment and acyclicity. -/
 
 @[expose] public section
 
@@ -44,7 +33,6 @@ theorem incorrect_eq_empty [Fintype U] {V : Type} {f : P.Fns V} {σ : S → V} (
   ext u
   simp [incorrect, h u]
 
-/-- A correct unit's writes are its function of its reads; equal reads give equal writes. -/
 theorem write_eq_of_reads {V : Type} {f : P.Fns V} {σ τ : S → V} {u : U} (hσ : P.Correct f σ u)
     (hτ : P.Correct f τ u) (hr : ∀ r ∈ P.reads u, σ r = τ r) : ∀ s ∈ P.writes u, σ s = τ s := by
   intro s hs
@@ -55,8 +43,6 @@ theorem write_eq_of_reads {V : Type} {f : P.Fns V} {σ τ : S → V} {u : U} (h�
         exact hr r.1 r.2
     _ = τ s := (hτ ⟨s, hs⟩).symm
 
-/-- **Robust determinacy**: an assignment is determined by its inputs and the writes of a set containing its incorrect
-proof blocks. -/
 theorem eq_of_writes [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
     {σ τ : S → V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.incorrect f σ ⊆ B) (hτ : P.incorrect f τ ⊆ B)
     (hB : ∀ u ∈ B, ∀ s ∈ P.writes u, σ s = τ s) : σ = τ := by
@@ -79,7 +65,6 @@ theorem eq_of_writes [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f
   · obtain ⟨v, hv⟩ := hc s hs
     exact key v s hv
 
-/-- **Determinacy**: with no incorrect proof block, an assignment is determined by its inputs. -/
 theorem eq_of_correct [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {σ τ : S → V}
     (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : ∀ u, P.Correct f σ u) (hτ : ∀ u, P.Correct f τ u) : σ = τ :=
   P.eq_of_writes hc ha f (B := ∅) hin (by simp [P.incorrect_eq_empty hσ]) (by simp [P.incorrect_eq_empty hτ])
@@ -90,8 +75,6 @@ theorem mem_down [Fintype U] {B : Finset U} {v : U} :
   classical
   simp [down]
 
-/-- **The cone**: assignments that hold the same inputs and whose incorrect proof blocks lie in `B` agree on every slot that a
-unit outside `B`'s downstream cone writes. -/
 theorem eq_off_down [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
     {σ τ : S → V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.incorrect f σ ⊆ B) (hτ : P.incorrect f τ ⊆ B) :
     ∀ v, v ∉ P.down B → ∀ s ∈ P.writes v, σ s = τ s := by
@@ -112,13 +95,10 @@ theorem eq_off_down [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f 
       obtain ⟨u, hu, huw⟩ := (P.mem_down).1 hwd
       exact hv ((P.mem_down).2 ⟨u, hu, huw.tail hd⟩)
 
-/-! ## The honest evaluation -/
-
 section Eval
 
 variable {P}
 
-/-- The writer of a non-input slot. -/
 noncomputable def writer (hsa : P.SingleAssignment) (s : S) (h : s ∉ P.input) : U := ((hsa s).2 h).exists.choose
 
 theorem writer_spec (hsa : P.SingleAssignment) (s : S) (h : s ∉ P.input) : s ∈ P.writes (writer hsa s h) :=
@@ -128,7 +108,6 @@ theorem writer_eq (hsa : P.SingleAssignment) {s : S} (h : s ∉ P.input) {u : U}
     writer hsa s h = u :=
   ((hsa s).2 h).unique (writer_spec hsa s h) hu
 
-/-- `r` comes before `s`: `s`'s writer reads `r`. -/
 def Before (hsa : P.SingleAssignment) (r s : S) : Prop := ∃ h : s ∉ P.input, r ∈ P.reads (writer hsa s h)
 
 theorem wellFounded_before [Finite U] (hsa : P.SingleAssignment) (ha : P.Acyclic) : WellFounded (Before hsa) := by
@@ -149,8 +128,6 @@ theorem wellFounded_before [Finite U] (hsa : P.SingleAssignment) (ha : P.Acyclic
   exact ⟨fun s => if h : s ∈ P.input then hin s h else key _ s h rfl⟩
 
 open Classical in
-/-- **The honest evaluation**: an input slot holds its input, and every other slot its writer's function of the slots
-that writer reads, evaluated first. -/
 noncomputable def eval [Finite U] (hsa : P.SingleAssignment) (ha : P.Acyclic) {V : Type} (f : P.Fns V)
     (a : S → V) : S → V :=
   (wellFounded_before hsa ha).fix fun s rec =>
@@ -177,14 +154,10 @@ theorem eval_correct [Finite U] (hsa : P.SingleAssignment) (ha : P.Acyclic) {V :
 
 end Eval
 
-/-- A checked population has, on every input, an assignment in which every unit is correct. -/
 theorem exists_correct [Finite U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) :
     ∃ σ : S → V, (∀ s ∈ P.input, σ s = a s) ∧ ∀ u, P.Correct f σ u :=
   ⟨eval h.1 h.2 f a, fun _ hs => eval_input h.1 h.2 f a hs, eval_correct h.1 h.2 f a⟩
 
-/-- **Integrity against the honest run**: in a checked population, an assignment that holds the inputs agrees with
-the honest one (every unit correct, the same inputs) on every slot written by a unit outside its incorrect proof blocks'
-downstream cone. -/
 theorem eq_honest_off_down [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest σ : S → V}
     (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) (hσ : ∀ s ∈ P.input, σ s = a s) :
     ∀ v, v ∉ P.down (P.incorrect f σ) → ∀ s ∈ P.writes v, σ s = honest s :=

@@ -3,14 +3,7 @@ module
 public import Definitions.Slowdown.Capability
 public import Proofs.Core.Formalism
 
-/-!
-# Local bounds: what a block holds
-
-* `holds_mono`: more gates hold more;
-* `Committed.recompute_congr`: a proof block's recomputation, on what it holds, reads only `X`'s values on its
-  unregistered inputs;
-* `Circuit.bits_congr`: two runs agreeing on a bundle's gates give it the same bits.
--/
+/-! Local bounds: what a block holds. -/
 
 @[expose] public section
 

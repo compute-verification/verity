@@ -6,26 +6,8 @@ public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 public import Mathlib.Data.Fintype.Fin
 public import Proofs.Slowdown.Cover.Paths
 
-/-!
-# A declaration's circuit, bit by bit: blocks of word gates
-
-The block of a set `R` of a declaration's gates (`block`) is the bits of `R` and of the gates `R` reads from outside,
-`in(R)`, in the bit view (`Circuit.ofDecl`). The translation (`translation`) is what the cover theorem needs of it:
-
-* (T1) the block computes every bit of `R` that reads something (`computed_block`): such a bit reads only bits of its
-  gate's reads, which lie in `R ∪ in(R)`;
-* (T2) the bits the block is handed outside the free bits are bits of `in(R) \ θ` (`inputs_block_subset`), so they are
-  at most `freshInput R`: a bit of `R` is handed only when it reads nothing, and then it is free, and a bit of a baseline
-  gate is free;
-* (T3) the block has `width(R ∪ in(R))` bits (`card_block`), at most `w₀ #R + freshInput R + width(θ)` when every gate is
-  at most `w₀` bits wide (`card_block_le`).
-
-Every bit that reads something is a real bit of a computed gate (`computed_of_pred`), so the blocks of a division of the
-computed gates cover the bit view (`mem_computed_block_of_pred`).
-
-`width_aligned`: a block of whole words that is handed a bit of a region of whole words, each at least `f` bits wide,
-is handed at least `f` of the region's bits, since all bits of one gate read the same bits.
--/
+/-! A declaration's circuit, bit by bit: the block of a set of word gates, and the translation the cover theorem
+needs. -/
 
 @[expose] public section
 
@@ -63,7 +45,6 @@ theorem card_bits (S : Finset (Fin C.N)) : (bits C S).card = C.width S := by
   show ∑ i : Fin (W C), (if (i : ℕ) < C.w g then 1 else 0) = C.w g
   rw [← card_filter, Fin.card_filter_val_lt, min_eq_right (w_le_W C g)]
 
-/-- All real bits of one gate read the same bits. -/
 theorem bitPred_eq {x y : Bit C} (hx : (x.2 : ℕ) < C.w x.1) (hy : (y.2 : ℕ) < C.w y.1) (h : x.1 = y.1) :
     bitPred C x = bitPred C y := by
   obtain ⟨x1, x2⟩ := x
@@ -78,7 +59,6 @@ section Blocks
 
 variable (d : Verity.RegisteredCircuit)
 
-/-- The numbering of `d`'s bits (`enc`), as the bit view's gates. -/
 def benc : Bit d.D ≃ Fin (Circuit.ofDecl d).N := enc d.D
 
 theorem ofDecl_pred (x : Bit d.D) :
@@ -91,13 +71,11 @@ theorem mem_ofDecl_θ {x : Bit d.D} : benc d x ∈ (Circuit.ofDecl d).θ ↔ x �
   change (enc d.D).toEmbedding x ∈ (free d.D d.θ).map (enc d.D).toEmbedding ↔ _
   exact mem_map' _
 
-/-- **The block of a set `R` of gates**: the bits of `R` and of the gates `R` reads from outside. -/
 def block (R : Finset (Fin d.D.N)) : Finset (Fin (Circuit.ofDecl d).N) :=
   (bits d.D (R ∪ d.D.into R)).map (benc d).toEmbedding
 
 variable {d}
 
-/-- A real bit of `R` reads only bits of `R`'s block. -/
 theorem pred_subset_block {R : Finset (Fin d.D.N)} {x : Bit d.D} (hx : x.1 ∈ R) :
     (Circuit.ofDecl d).pred (benc d x) ⊆ block d R := by
   intro y hy
@@ -108,7 +86,6 @@ theorem pred_subset_block {R : Finset (Fin d.D.N)} {x : Bit d.D} (hx : x.1 ∈ R
   · exact mem_map_of_mem _ (bits_mono (reads_subset hx) hx')
   · exact absurd hx' (notMem_empty _)
 
-/-- **(T1) The block computes `R`**: every real bit of `R` that reads something is computed by `R`'s block. -/
 theorem computed_block (R : Finset (Fin d.D.N)) (x : Bit d.D) (hx : x ∈ bits d.D R)
     (hne : ((Circuit.ofDecl d).pred (benc d x)).Nonempty) :
     benc d x ∈ (Circuit.ofDecl d).computed (block d R) := by
@@ -119,8 +96,6 @@ theorem computed_block (R : Finset (Fin d.D.N)) (x : Bit d.D) (hx : x ∈ bits d
   · exact hne.ne_empty h
   · exact h (pred_subset_block hxR)
 
-/-- **(T2) The block is handed at most `R`'s fresh input bits**: for `R` of computed gates, the bits its block is handed
-outside the free bits are bits of `in(R) \ θ`. -/
 theorem inputs_block_subset (R : Finset (Fin d.D.N)) (hR : R ⊆ d.D.computed) :
     (Circuit.ofDecl d).inputs (block d R) \ (Circuit.ofDecl d).θ ⊆
       (bits d.D (d.D.into R \ d.θ)).map (benc d).toEmbedding := by
@@ -131,7 +106,7 @@ theorem inputs_block_subset (R : Finset (Fin d.D.N)) (hR : R ⊆ d.D.computed) :
   obtain ⟨hx1, hxr⟩ := mem_bits.1 hx
   have hfree : x ∈ free d.D d.θ → False := fun hf => hyθ (mem_ofDecl_θ d |>.2 hf)
   rcases mem_union.1 hx1 with hxR | hxI
-  · -- a bit of `R` that is handed reads nothing, and its gate is computed, so it is free
+  ·
     have hnil : bitPred d.D x = ∅ := by
       rcases hyc with h | h
       · change (Circuit.ofDecl d).pred (benc d x) = ∅ at h
@@ -145,12 +120,9 @@ theorem inputs_block_subset (R : Finset (Fin d.D.N)) (hR : R ⊆ d.D.computed) :
       exact (hfree (mem_filter.2 ⟨mem_univ _, hnil, Or.inl hxθ⟩)).elim
     · exact mem_map_of_mem _ (mem_bits.2 ⟨mem_sdiff.2 ⟨hxI, hxθ⟩, hxr⟩)
 
-/-- **(T3) The block's size** is the width of `R` and of what it reads. -/
 theorem card_block (R : Finset (Fin d.D.N)) : (block d R).card = d.D.width (R ∪ d.D.into R) := by
   rw [block, card_map, card_bits]
 
-/-- **The translation**: the block of `R` has `width(R ∪ in(R))` bits, computes every bit of `R` that reads something,
-and is handed at most `freshInput R` bits outside the free bits. -/
 theorem translation (R : Finset (Fin d.D.N)) (hR : R ⊆ d.D.computed) :
     (block d R).card = d.D.width (R ∪ d.D.into R) ∧
     (∀ x ∈ bits d.D R, ((Circuit.ofDecl d).pred (benc d x)).Nonempty →
@@ -161,7 +133,6 @@ theorem translation (R : Finset (Fin d.D.N)) (hR : R ⊆ d.D.computed) :
       ≤ ((bits d.D (d.D.into R \ d.θ)).map (benc d).toEmbedding).card := card_le_card (inputs_block_subset R hR)
     _ = freshInput d R := by rw [card_map, card_bits]; rfl
 
-/-- A bit that reads something is a real bit of a computed gate. -/
 theorem real_of_pred {y : Fin (Circuit.ofDecl d).N} (hne : ((Circuit.ofDecl d).pred y).Nonempty) :
     (((benc d).symm y).2 : ℕ) < d.D.w ((benc d).symm y).1 ∧ ((benc d).symm y).1 ∈ d.D.computed := by
   obtain ⟨x, rfl⟩ := (benc d).surjective y
@@ -180,7 +151,6 @@ theorem real_of_pred {y : Fin (Circuit.ofDecl d).N} (hne : ((Circuit.ofDecl d).p
 theorem computed_of_pred {y : Fin (Circuit.ofDecl d).N} (hne : ((Circuit.ofDecl d).pred y).Nonempty) :
     ((benc d).symm y).1 ∈ d.D.computed := (real_of_pred hne).2
 
-/-- **Blocks cover the bits that read something**: such a bit is computed by the block of any `R` holding its gate. -/
 theorem mem_computed_block_of_pred {R : Finset (Fin d.D.N)} {y : Fin (Circuit.ofDecl d).N}
     (hne : ((Circuit.ofDecl d).pred y).Nonempty) (hR : ((benc d).symm y).1 ∈ R) :
     y ∈ (Circuit.ofDecl d).computed (block d R) := by
@@ -189,8 +159,6 @@ theorem mem_computed_block_of_pred {R : Finset (Fin d.D.N)} {y : Fin (Circuit.of
   rw [Equiv.symm_apply_apply] at hR hr
   exact computed_block R x (mem_bits.2 ⟨hR, hr⟩) hne
 
-/-- **The block's size, bounded**: when every gate is at most `w₀` bits wide, `R`'s block has at most
-`w₀ #R + freshInput R + width(θ)` bits. -/
 theorem card_block_le {w₀ : ℕ} (hw : ∀ g, d.D.w g ≤ w₀) (R : Finset (Fin d.D.N)) :
     (block d R).card ≤ w₀ * R.card + freshInput d R + d.D.width d.θ := by
   rw [card_block]
@@ -212,8 +180,6 @@ theorem card_block_le {w₀ : ℕ} (hw : ∀ g, d.D.w g ≤ w₀) (R : Finset (F
     _ ≤ w₀ * R.card + (freshInput d R + d.D.width d.θ) := Nat.add_le_add hR hI
     _ = w₀ * R.card + freshInput d R + d.D.width d.θ := by rw [Nat.add_assoc]
 
-/-- **Width on word-aligned blocks**: a block made of whole words that is handed any bit of a region made of whole
-words, each at least `f` bits wide, is handed at least `f` of the region's bits. -/
 theorem width_aligned (X Aw : Finset (Fin d.D.N)) (f : ℕ) (hf : ∀ a ∈ Aw, f ≤ d.D.w a)
     (hne : ((Circuit.ofDecl d).inputs ((bits d.D X).map (benc d).toEmbedding) ∩
       (bits d.D Aw).map (benc d).toEmbedding).Nonempty) :

@@ -6,23 +6,8 @@ public import Definitions.Slowdown.Assumptions.Cover
 public import InferenceOnlyCheck.Theta
 public import Properties.InferenceOnly.Desc.Verdict
 
-/-!
-# A verdict of compliance of the check of record carries the cover theorem's factor
-
-`CoverTrained` is `Slowdown.Cover.Guarantees.CoverTraining`'s conclusion on a verdict, multiplied out by the gate budget
-`c = gamma`, at the fresh-input budget `k = α c`, `α = num / den`, in the shape of `Properties.InferenceOnly.Threads`'s
-statements: its premises on the reference training circuit's bit view (`UpdateHardness`, the upstream certificate
-`MulBlocks.Upstream`) and on the registered information (`ThetaRegistered`) are named assumptions, which the check
-does not see.
-
-The check of record is `InferenceOnlyCheck.Theta.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's
-provenance, its verdict `Desc.evaluate`'s. `CheckedCoverTraining` states the cover theorem's factor of every verdict of
-the check of record, on every expansion of the instance gate by gate (`OnExpansions`), of which there is one.
-
-`SecurityProofs.CheckedCoverTraining` (`Proofs.InferenceOnly.Cover.Checked`, package `security_proofs`, whose proof needs
-`Slowdown.Cover.SecurityProofs.CoverTraining`) proves it from `DescAgrees` (`SecurityProofs.DescAgrees`,
-`Proofs.Properties.InferenceOnly.Agrees`).
--/
+/-! A verdict of compliance of the check of record carries the cover theorem's factor, under named assumptions the
+check does not see. -/
 
 @[expose] public section
 

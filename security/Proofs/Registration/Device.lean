@@ -4,14 +4,8 @@ public import Definitions.Compose.Joint
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
-/-!
-# The device's limits over a window
-
-A schedule that fits the device charges, over a window, at most the device's limit per tick times the window's length
-to all accounts together. So the accounts of any set of distinct accounts are, together, within that bound (no double
-counting, `Schedule.sum_work_le_of_subset`), and an account's charge plus every other account's is
-(`Run.work_add_othersWork` and the two beside it).
--/
+/-! Over a window, a schedule that fits the device charges all accounts together at most the device's limit per tick
+times the window's length. -/
 
 @[expose] public section
 
@@ -40,8 +34,6 @@ theorem sum_work_le (h : sc.Fits d) (w : Window) (p : Price) : ∑ a, sc.work w 
   rw [← Finset.mul_sum, mul_assoc]
   exact Nat.mul_le_mul_left _ (sum_ops_le h w o)
 
-/-- No double counting: the work of distinct accounts over a window is, together, at most the device's priced work
-over it. -/
 theorem sum_work_le_of_subset (h : sc.Fits d) (w : Window) (p : Price) (s : Finset α) :
     ∑ a ∈ s, sc.work w a p ≤ d.priced p * w.len :=
   (Finset.sum_le_sum_of_subset (Finset.subset_univ s)).trans (sum_work_le h w p)

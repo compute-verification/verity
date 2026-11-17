@@ -5,20 +5,8 @@ public import Proofs.Compose.Compose.ServiceBudget
 public import Proofs.Flock.Claims.Sampling.Select.Bounds
 public import Proofs.ResourceAccounting.Lemmas.Compose
 
-/-!
-# The served window's sample misses a set no more often than a uniform permutation's subset (`SampleMissesSubset`)
-
-`Properties.Served.SampleMissesSubset` from two bounds that meet at `C(N − |B|, K)/C(N, K)`, `B` the tiles of `U` below
-`N`:
-
-* **the code** (`Properties.Spot.SecurityProofs.one_bound`): `sampleUnits (.subset K) N` from `L` uniform bytes
-  misses `B`'s numbers, and so `U`, with probability at most that ratio;
-* **the model** (`miss_ge`): a uniform permutation's `K`-subset misses `B` with probability at least that ratio (it is
-  exactly it), by induction on `K` through `Equiv.Perm.decomposeFin`, as `Budget.miss_le` bounds it from above: the
-  first image is uniform and misses `B` with probability `1 − |B|/N`, the rest is a uniform permutation of `N − 1`
-  tiles that must miss a set of at most `|B|` of them (`card_rest_le`), and `(m + 1)·C(m, K) = C(m + 1, K + 1)·(K + 1)`
-  (`Nat.add_one_mul_choose_eq`) turns the product into the ratio.
--/
+/-! `Properties.Served.SampleMissesSubset`: the served window's sample misses a set no more often than a uniform
+permutation's subset. -/
 
 @[expose] public section
 
@@ -38,8 +26,6 @@ theorem card_rest_le {n : ℕ} (B : Finset (Fin (n + 1))) (p : Fin (n + 1)) : (r
   Finset.card_le_card_of_injOn (fun z => Equiv.swap 0 p z.succ) (fun z hz => by simpa [rest] using hz)
     (fun a _ b _ h => Fin.succ_injective _ ((Equiv.swap 0 p).injective h))
 
-/-- **The miss bound from below**: a uniform permutation's `K`-subset of `N ≥ K` tiles misses `B` with probability at
-least `C(N − |B|, K)/C(N, K)`. -/
 theorem miss_ge : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
     ((N - B.card).choose K : ℝ) / (N.choose K : ℝ) ≤
       prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ Pouw.Window.subsetDraw K π, v ∉ B)
@@ -123,15 +109,11 @@ theorem miss_ge : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
       rw [hm, hnb, hsub, div_mul_div_comm, div_le_div_iff₀ hCn1 (mul_pos hCn hn1)]
       exact_mod_cast key.le
 
-/-- The tiles of `Fin N` whose numbers are in `U`. -/
 def tilesOf (N : ℕ) (U : Finset ℕ) : Finset (Fin N) := Finset.univ.filter fun t => t.val ∈ U
 
 theorem mem_tilesOf {N : ℕ} {U : Finset ℕ} {t : Fin N} : t ∈ tilesOf N U ↔ t.val ∈ U := by
   simp [tilesOf]
 
-/-- **`SampleMissesSubset`**: the code's subset sample misses `U` with probability at most `C(N − |B|, K)/C(N, K)`, `B`
-the tiles of `U` (`one_bound` on `B`'s numbers), which the permutation's subset misses `B` with at least
-(`miss_ge`). -/
 theorem sampleMissesSubset : SampleMissesSubset := by
   intro K N L U hK
   classical

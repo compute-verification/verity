@@ -5,22 +5,7 @@ public import Proofs.Slowdown.Slowdown
 public import Proofs.Slowdown.Escape
 public import Proofs.Slowdown.Cut
 
-/-!
-# Proofs of the slowdown, remote protocol
-
-`CertificateSlack` is Markov's inequality on a finite outcome space (`markov`), applied to the incorrect windows' capacity,
-whose expectation `expected_incorrect` swaps into the windows' marginals. `VerdictLag` splits off the escaped blocks
-(`Finset.sum_sdiff`) and sums the rest by identity (`Finset.sum_fiberwise_of_maps_to`): under `TerminalDetection` one
-identity's faulty blocks at or after its first detected one all lie within `Δ` of it, so they skip at most `Φ Δ`.
-`escape_slack` is Markov's inequality again, on the escaped blocks' skipped work, whose expectation `expected_escaped`
-sums the per-identity bound `sampled_escape` derives from `SampledDetection`. `SlowdownRemote` reads the residual's
-hypothesis outside both events as `SlowdownThreaded`'s at `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, bounds the
-declared computation by its count verdict (`Slowdown.Cut.SecurityProofs.CountHE`, read at `ρ = C/X`: `declaredShare_div`),
-and sums the sources with no memory cap (`sources_le_at`, unmonitored compute at efficiency `MFU₀`) into both the efficiency and the
-hardware-multiple forms (`remote_core`); the union of the two events has probability at most the sum of theirs
-(`prob_or_le`), so the complement has probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)` (`prob_ge_of_not`), `μ`
-summing to 1 (`prob_add_not`).
--/
+/-! Proofs of the slowdown, remote protocol. -/
 
 @[expose] public section
 
@@ -30,7 +15,6 @@ namespace Slowdown.SecurityProofs
 
 open Verity Slowdown.Slowdown
 
-/-- `prob` is monotone in the event. -/
 theorem prob_mono {Ω : Type} [Fintype Ω] (μ : PMF Ω) {E F : Ω → Prop} (h : ∀ ω, E ω → F ω) :
     prob μ E ≤ prob μ F := by
   simp only [prob_eq_sum]
@@ -39,7 +23,6 @@ theorem prob_mono {Ω : Type} [Fintype Ω] (μ : PMF Ω) {E F : Ω → Prop} (h 
   · simp [hE, h ω hE]
   · by_cases hF : F ω <;> simp [hE, hF]
 
-/-- An event's probability and its complement's sum to 1. -/
 theorem prob_add_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) :
     prob μ E + prob μ (fun ω => ¬ E ω) = 1 := by
   have h0 : ∑ ω, μ ω = 1 := by
@@ -54,7 +37,6 @@ theorem prob_add_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) :
   refine Finset.sum_congr rfl fun ω _ => ?_
   by_cases h : E ω <;> simp [h]
 
-/-- The union bound: `P(E ∨ F) ≤ P(E) + P(F)`. -/
 theorem prob_or_le {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E F : Ω → Prop) :
     prob μ (fun ω => E ω ∨ F ω) ≤ prob μ E + prob μ F := by
   simp only [prob_eq_sum]
@@ -63,14 +45,12 @@ theorem prob_or_le {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E F : Ω → Prop) :
   have hq : 0 ≤ (μ ω).toReal := ENNReal.toReal_nonneg
   by_cases hE : E ω <;> by_cases hF : F ω <;> simp [hE, hF] <;> linarith
 
-/-- An event whose complement lies inside an event of probability at most `δ` has probability at least `1 − δ`. -/
 theorem prob_ge_of_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) {G F : Ω → Prop} {δ : ℝ} (hGF : ∀ ω, ¬ G ω → F ω)
     (hF : prob μ F ≤ δ) : 1 - δ ≤ prob μ G := by
   have h1 := prob_add_not μ G
   have h2 := prob_mono μ hGF
   linarith
 
-/-- **Markov's inequality** on a finite outcome space: for `Z ≥ 0`, `a · P(a < Z) ≤ E[Z]`. -/
 theorem markov {Ω : Type} [Fintype Ω] (μ : PMF Ω) (Z : Ω → ℝ) (hZ : ∀ ω, 0 ≤ Z ω) (a : ℝ) :
     a * prob μ (fun ω => a < Z ω) ≤ ∑ ω, (μ ω).toReal * Z ω := by
   simp only [prob_eq_sum]
@@ -83,8 +63,6 @@ theorem markov {Ω : Type} [Fintype Ω] (μ : PMF Ω) (Z : Ω → ℝ) (hZ : ∀
   · rw [if_neg h, mul_zero]
     exact mul_nonneg hq (hZ ω)
 
-/-- The expected capacity of the incorrect windows is the sum of each window's capacity times its probability of being
-incorrect. -/
 theorem expected_incorrect {Ω : Type} [Fintype Ω] (μ : PMF Ω) {N : ℕ} (c : Fin N → ℝ) (incorrect : Ω → Fin N → Prop) :
     ∑ ω, (μ ω).toReal * incorrectCapacity c (incorrect ω) = ∑ i, c i * prob μ (fun ω => incorrect ω i) := by
   unfold incorrectCapacity
@@ -111,7 +89,6 @@ theorem CertificateSlack : Guarantees.CertificateSlack := by
   rw [le_div_iff₀ hε]
   exact le_of_mul_le_mul_right (by linarith) hC
 
-/-- A block is escaped when it is faulty and no detected faulty block of its identity runs at or before it. -/
 theorem mem_escaped {β ι : Type} {bad detected : Finset β} {ident : β → ι} {τ : β → ℝ} {b : β} :
     b ∈ escaped bad detected ident τ ↔ b ∈ bad ∧ ∀ b' ∈ bad, b' ∈ detected → ident b' = ident b → τ b < τ b' := by
   simp only [escaped, Finset.mem_filter]
@@ -178,8 +155,6 @@ theorem VerdictLag : Guarantees.VerdictLag := by
   have hsplit := Finset.sum_sdiff hEsub (f := w)
   linarith
 
-/-- The expected work the escaped blocks skip is at most `J ((1 − q)/q) B`: `sampled_escape`'s bound, summed over the
-identities. -/
 theorem expected_escaped {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF Ω) (bad detected : Ω → Finset β)
     (I : Finset ι) (ident : β → ι) (τ w : β → ℝ) (q B : ℝ) (hI : ∀ ω, ∀ b ∈ bad ω, ident b ∈ I) (hq : 0 < q)
     (hq1 : q ≤ 1) (hB : 0 ≤ B) (hw : ∀ b, 0 ≤ w b) (hwB : ∀ ω, ∀ b ∈ bad ω, w b ≤ B)
@@ -196,8 +171,6 @@ theorem expected_escaped {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : P
         Finset.sum_le_sum fun j _ => sampled_escape μ bad detected ident τ w q B hq hq1 hB hw hwB hS j
     _ = I.card * ((1 - q) / q * B) := by rw [Finset.sum_const, nsmul_eq_mul]
 
-/-- **The escape slack**: under `SampledDetection`, the faulty blocks accepted before their identity's first detection
-skip more than `θ C` with probability at most `J ((1 − q)/q) B/(θ C)`, by Markov's inequality. -/
 theorem escape_slack {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF Ω) (bad detected : Ω → Finset β)
     (I : Finset ι) (ident : β → ι) (τ w : β → ℝ) (q B θ C : ℝ) (hθ : 0 < θ) (hC : 0 < C) (hw : ∀ b, 0 ≤ w b)
     (hI : ∀ ω, ∀ b ∈ bad ω, ident b ∈ I) (hq : 0 < q) (hq1 : q ≤ 1) (hB : 0 ≤ B) (hwB : ∀ ω, ∀ b ∈ bad ω, w b ≤ B)
@@ -213,8 +186,6 @@ theorem escape_slack {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF �
   rw [le_div_iff₀ (mul_pos hθ hC)]
   linarith
 
-/-- **The sources, summed with no memory cap**, unmonitored compute at efficiency `a` (`M_U ≤ a κ U/2`):
-`η ≤ a s + (1 − s) r + ν + χ`. At `a = 1` it is `sources_le` with a memory cap that never binds. -/
 theorem sources_le_at {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 0 < C) (hU : 0 ≤ U)
     (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ a * κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ)
     (hx : Mx ≤ κ * χ * (C + U) / 2) :
@@ -239,8 +210,6 @@ theorem sources_le_at {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC 
   have hfac : 0 ≤ 2 / κ / (C + U) := div_nonneg (div_nonneg zero_le_two hκ.le) hS.le
   linarith [mul_nonneg hfac hB]
 
-/-- **From an efficiency bound to the hardware multiple**: `η ≤ MFU₀ s + x` gives
-`max(1, 1/(s + x/MFU₀)) ≤ max(1, MFU₀/η)`. -/
 theorem multiple_le {a s x η : ℝ} (ha : 0 < a) (hη : 0 < η) (h : η ≤ a * s + x) :
     max 1 (1 / (s + x / a)) ≤ max 1 (a / η) := by
   refine max_le_max le_rfl ?_
@@ -254,9 +223,6 @@ theorem multiple_le {a s x η : ℝ} (ha : 0 < a) (hη : 0 < η) (h : η ≤ a *
     rw [div_le_div_iff₀ h0 hη, one_mul, e]
     exact h
 
-/-- **The remote slowdown's arithmetic core**: the sources summed with no memory cap and unmonitored compute at
-`MFU₀ ≤ 1` bound both the efficiency, `η ≤ s + (1 − s) r + ν + χ`, and the hardware multiple,
-`max(1, 1/(s + ((1 − s) r + ν + χ)/MFU₀)) ≤ max(1, MFU₀/η)`. -/
 theorem remote_core {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 0 < C) (hU : 0 ≤ U) (ha : 0 < a)
     (ha1 : a ≤ 1) (hM0 : 0 < M) (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ a * κ * U / 2)
     (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ) (hx : Mx ≤ κ * χ * (C + U) / 2) :
@@ -276,16 +242,12 @@ theorem remote_core {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 
     exact div_pos (mul_pos (div_pos two_pos hκ) hM0) hS
   exact ⟨by linarith, multiple_le ha hη (by linarith)⟩
 
-/-- The residual read at the work certified correctly and run, `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, is
-`r̂ + ε_W W_cert/C + ε' + JΔ/H + θ`. -/
 theorem residualShare_sub {W C εW ε L θ : ℝ} (hC : 0 < C) :
     residualShare ((1 - εW) * W - ε * C - L * C - θ * C) C = residualShare W C + εW * W / C + ε + L + θ := by
   have hCi : C * C⁻¹ = 1 := mul_inv_cancel₀ hC.ne'
   unfold residualShare
   linear_combination (ε + L + θ) * hCi
 
-/-- The declared share at `ρ = C/X` gates a counted multiplication is `X`'s share of all compute at peak,
-`(2/κ) X/(C + U)`. -/
 theorem declaredShare_div {κ C U X : ℝ} (hC : 0 < C) (hU : 0 ≤ U) :
     declaredShare κ (C / X) C U = efficiency κ X C U := by
   have hS : C + U ≠ 0 := (by linarith : 0 < C + U).ne'
@@ -298,7 +260,6 @@ theorem declaredShare_div {κ C U X : ℝ} (hC : 0 < C) (hU : 0 ≤ U) :
   field_simp
   ring
 
-/-- The declared counted multiplications against a bound `X`, in the form `remote_core` reads: `M_d ≤ C/(C/X)`. -/
 theorem declared_le_div {C X Md : ℝ} (hC : 0 < C) (h : Md ≤ X) : Md ≤ C / (C / X) := by
   rwa [div_div_cancel₀ hC.ne']
 

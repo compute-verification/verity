@@ -4,30 +4,7 @@ public import Definitions.WeightSecurity.Guarantees
 public import Proofs.Spot.Necessity
 public import Proofs.WeightSecurity.Served
 
-/-! `WeightSecurity.SecurityProofs.TheftFaulted : WeightSecurity.Guarantees.TheftFaulted`, `TheftServed` with faults as
-inputs to the served circuit. On a run whose accepted releases are faulted runs and whose audit leaves fewer than `M`
-incorrect proof blocks undetected, the outsider's view is its view against the datacenter that deviates through the
-fault channel with the run's own covert string (`Served.view_eq_faultResp`): the patterns of the windows accepted before
-the first rejection, or the cut's hint in place of a pattern it cuts, whose sizes sum to at most `lead < M`; each
-window's advice and bucket; the values the windows from the first rejection to the halt released, at most
-`(L + 1) · |O|` (`Served.card_tailOverwrite_le`); and the halt. That deviation is honest use of the faulted function by
-the outsider with the empty pattern beside each query (`Outsider.withFaults_model`), and that party with each covert
-string written in sets at most `M` faults (`withString_mem_faultBudget`), all at patterns the cut doesn't cut
-(`Cut.Interiors`). So the outsider steals a typical weight only where the run leaves `M` undetected, a release isn't
-faithful, or some faulted-use party steals it, which `FaultedUseHard` at the interior patterns bounds by
-`N^(λ - 1) · p` each, `N` counting only them.
-
-The fault model's facts about populations (`Population.Dataflow`). In a checked population the run with some units'
-writes fixed is unique (`runOf_unique`, from `determinate_of_checked`), and any assignment is the run with its own
-incorrect proof blocks' writes fixed (`runOf_faultsOf`), whose pattern names exactly its incorrect proof blocks (`faultSet_faultsOf`).
-So a release the network attester ties to a trace is a faulted run of the population's faulted function
-(`Served.faithful_of_tie`). When every unit reads each slot through an idempotent clamp fixed in advance, the run with a
-pattern differs from the run with the pattern clamped only on the faulted slots, each by its clamp (`runOf_clamp`). With
-the clamp the identity on the egress, every pattern releases what an in-range one does (`runOf_clamp_egress`): the
-faulted function at a pattern is the faulted function at its clamp, which names the same units (`faultedOut_clamp`), so
-`FaultedUseHard` need cover only in-range faults.
-
-The witnesses are proved at the toy deployment with faults. -/
+/-! `TheftFaulted`: `TheftServed` with faults as inputs to the served circuit. -/
 
 @[expose] public section
 
@@ -37,13 +14,10 @@ open Finset
 
 variable {U S : Type} (P : Dataflow U S) {V : Type}
 
-/-- **A run with faults**: `σ` holds the inputs `a`, each unit the pattern `φ` names writes `φ`'s values, and every
-other unit is correct. -/
 def RunOf (f : P.Fns V) (a : S → V) (φ : (u : U) → Option (P.writes u → V)) (σ : S → V) : Prop :=
   (∀ s ∈ P.input, σ s = a s) ∧ (∀ u w, φ u = some w → ∀ t : P.writes u, σ t = w t) ∧
     ∀ u, φ u = none → P.Correct f σ u
 
-/-- The unit functions with each unit the pattern `φ` names writing `φ`'s values whatever it reads. -/
 def fixFns (f : P.Fns V) (φ : (u : U) → Option (P.writes u → V)) : P.Fns V :=
   fun u x => (φ u).getD (f u x)
 
@@ -59,8 +33,6 @@ theorem runOf_iff (f : P.Fns V) (a : S → V) (φ : (u : U) → Option (P.writes
     P.RunOf f a φ σ ↔ (∀ s ∈ P.input, σ s = a s) ∧ ∀ u, P.Correct (P.fixFns f φ) σ u := by
   simp only [RunOf, correct_fixFns_iff, forall_and]
 
-/-- **A checked population has one run per inputs and fault pattern**: `determinate_of_checked`, with each unit the
-pattern names made to write what the pattern says. -/
 theorem runOf_unique [Finite U] (h : P.Checked) {f : P.Fns V} {a : S → V} {φ : (u : U) → Option (P.writes u → V)}
     {σ τ : S → V} (hσ : P.RunOf f a φ σ) (hτ : P.RunOf f a φ τ) : σ = τ :=
   (P.determinate_of_checked h V (P.fixFns f φ) a).unique ((P.runOf_iff f a φ σ).1 hσ) ((P.runOf_iff f a φ τ).1 hτ)
@@ -71,11 +43,9 @@ theorem runOf_exists [Finite U] (h : P.Checked) (f : P.Fns V) (a : S → V) (φ 
   exact ⟨σ, (P.runOf_iff f a φ σ).2 hσ⟩
 
 open Classical in
-/-- **An assignment's fault pattern**: what each incorrect proof block wrote, and nothing at a correct one. -/
 noncomputable def faultsOf (f : P.Fns V) (σ : S → V) : (u : U) → Option (P.writes u → V) :=
   fun u => if P.Correct f σ u then none else some fun t => σ t
 
-/-- **Every assignment is the run with its own incorrect proof blocks' writes fixed**, at its own inputs. -/
 theorem runOf_faultsOf (f : P.Fns V) (σ : S → V) : P.RunOf f σ (P.faultsOf f σ) σ := by
   refine ⟨fun _ _ => rfl, fun u w hw t => ?_, fun u hu => ?_⟩
   · unfold faultsOf at hw
@@ -86,11 +56,9 @@ theorem runOf_faultsOf (f : P.Fns V) (σ : S → V) : P.RunOf f σ (P.faultsOf f
     exact hc
 
 open Classical in
-/-- The units a fault pattern names. -/
 noncomputable def faultSet [Fintype U] (φ : (u : U) → Option (P.writes u → V)) : Finset U :=
   univ.filter fun u => (φ u).isSome
 
-/-- **An assignment's fault pattern names exactly its incorrect proof blocks.** -/
 theorem faultSet_faultsOf [Fintype U] (f : P.Fns V) (σ : S → V) : P.faultSet (P.faultsOf f σ) = P.incorrect f σ := by
   ext u
   have key : (P.faultsOf f σ u).isSome = true ↔ ¬ P.Correct f σ u := by
@@ -98,8 +66,6 @@ theorem faultSet_faultsOf [Fintype U] (f : P.Fns V) (σ : S → V) : P.faultSet 
     split_ifs with hc <;> simp [hc]
   simpa [faultSet, incorrect] using key
 
-/-- **A checked population's faulted function**: the values on the slots `eg` of its run at the inputs `a` with the
-fault pattern `φ`. -/
 noncomputable def faultedOut [Finite U] (h : P.Checked) (f : P.Fns V) {O : Type} (eg : O → S) (a : S → V)
     (φ : (u : U) → Option (P.writes u → V)) : O → V :=
   fun o => Classical.choose (P.runOf_exists h f a φ) (eg o)
@@ -111,10 +77,8 @@ theorem faultedOut_eq [Finite U] (h : P.Checked) (f : P.Fns V) {O : Type} (eg : 
   unfold faultedOut
   rw [P.runOf_unique h (Classical.choose_spec (P.runOf_exists h f a φ)) hσ]
 
-/-- **Readers that clamp**: the unit functions `f` with every read slot `t` read through `κ t`. -/
 def clampFns (f : P.Fns V) (κ : S → V → V) : P.Fns V := fun u x => f u fun t => κ t (x t)
 
-/-- A fault pattern clamped: each faulted unit's value `v` at its slot `t` replaced by `κ t v`. -/
 def clampFaults (κ : S → V → V) (φ : (u : U) → Option (P.writes u → V)) : (u : U) → Option (P.writes u → V) :=
   fun u => (φ u).map fun w t => κ t (w t)
 
@@ -124,9 +88,6 @@ theorem faultSet_clampFaults [Fintype U] (κ : S → V → V) (φ : (u : U) → 
   simp [faultSet, clampFaults]
 
 open Classical in
-/-- **Clamped readers make every fault pattern an in-range one.** In a checked population whose units read every slot
-`t` through an idempotent clamp `κ t` fixed before the run, the run with the pattern `φ` and the run with `φ` clamped
-agree on every slot no faulted unit writes, and on a faulted unit's slot the second holds the first's value clamped. -/
 theorem runOf_clamp [Finite U] (h : P.Checked) (f : P.Fns V) (κ : S → V → V) (hκ : ∀ t v, κ t (κ t v) = κ t v)
     {a : S → V} {φ : (u : U) → Option (P.writes u → V)} {σ τ : S → V}
     (hσ : P.RunOf (P.clampFns f κ) a φ σ) (hτ : P.RunOf (P.clampFns f κ) a (P.clampFaults κ φ) τ) :
@@ -154,7 +115,6 @@ theorem runOf_clamp [Finite U] (h : P.Checked) (f : P.Fns V) (κ : S → V → V
     · simp only [hr, ↓reduceIte, hκ]
     · simp only [hr, ↓reduceIte]
 
-/-- **With the clamp the identity on a slot, every fault pattern releases there what its clamp does.** -/
 theorem runOf_clamp_egress [Finite U] (h : P.Checked) (f : P.Fns V) (κ : S → V → V) (hκ : ∀ t v, κ t (κ t v) = κ t v)
     {a : S → V} {φ : (u : U) → Option (P.writes u → V)} {σ τ : S → V}
     (hσ : P.RunOf (P.clampFns f κ) a φ σ) (hτ : P.RunOf (P.clampFns f κ) a (P.clampFaults κ φ) τ) {t : S}
@@ -164,10 +124,7 @@ theorem runOf_clamp_egress [Finite U] (h : P.Checked) (f : P.Fns V) (κ : S → 
   dsimp only
   split_ifs <;> simp [ht]
 
-/-- **The reduction to in-range faults.** In a checked population whose units read through the clamp `κ`, with `κ` the
-identity on the egress slots, the faulted function at any fault pattern is the faulted function at its clamp, which
-names the same units (`faultSet_clampFaults`) and writes only clamped values: a model claim about the faulted circuit
-need only cover in-range faults. -/
+/-- A model claim about the faulted circuit need only cover in-range faults. -/
 theorem faultedOut_clamp [Finite U] (h : P.Checked) (f : P.Fns V) (κ : S → V → V) (hκ : ∀ t v, κ t (κ t v) = κ t v)
     {O : Type} (eg : O → S) (heg : ∀ o v, κ (eg o) v = v) (a : S → V) (φ : (u : U) → Option (P.writes u → V)) :
     P.faultedOut h (P.clampFns f κ) eg a φ = P.faultedOut h (P.clampFns f κ) eg a (P.clampFaults κ φ) := by
@@ -187,14 +144,11 @@ section Lift
 
 variable {R X M Θ' F : Type}
 
-/-- A view with the pattern `φ₀` beside each query. -/
 def liftView (φ₀ : F) (h : List (X × M)) : List ((X × F) × M) := h.map fun e => ((e.1, φ₀), e.2)
 
 theorem unlift_liftView (φ₀ : F) (h : List (X × M)) : (liftView φ₀ h).map (fun e => (e.1.1, e.2)) = h := by
   simp [liftView, Function.comp_def]
 
-/-- **The outsider asking the faulted function sees the outsider's view, lifted**, against the responder that answers
-each query with the empty pattern beside it. -/
 theorem Outsider.withFaults_view (O : Outsider R X M Θ') (φ₀ : F) (r : R) (resp : List ((X × F) × M) → X × F → M) :
     ∀ n, (O.withFaults φ₀).view r resp n = liftView φ₀ (O.view r (fun h x => resp (liftView φ₀ h) (x, φ₀)) n)
   | 0 => rfl
@@ -209,7 +163,6 @@ theorem Outsider.withFaults_view (O : Outsider R X M Θ') (φ₀ : F) (r : R) (r
     rw [ih, hq]
     rfl
 
-/-- **The outsider asking the faulted function outputs the outsider's model.** -/
 theorem Outsider.withFaults_model (O : Outsider R X M Θ') (φ₀ : F) (r : R) (resp : List ((X × F) × M) → X × F → M)
     (q : ℕ) : (O.withFaults φ₀).model r resp q = O.model r (fun h x => resp (liftView φ₀ h) (x, φ₀)) q := by
   show O.out r (((O.withFaults φ₀).view r resp q).map fun e => (e.1.1, e.2)) = O.out r (O.view r _ q)
@@ -230,7 +183,6 @@ variable {R Q Adv O V Tick F Θ' : Type} [Fintype Adv] [Fintype O] [DecidableEq 
 open WeightSecurity.Assumptions
 
 open Classical in
-/-- **The fault channel's covert strings**: each window's pattern or hint, then the served channel's strings. -/
 theorem card_faultChannel (κ : Cut (Q × Adv) (O → V)) (size : F → ℕ) (φ₀ : F) (T M K : ℕ) :
     Fintype.card (faultChannel R Q Adv O V Tick F κ size φ₀ T M K).S =
       Fintype.card {w : Fin T → F ⊕ κ.H // ∑ t, Sum.elim size κ.size (w t) ≤ M} *
@@ -242,8 +194,6 @@ theorem card_faultChannel (κ : Cut (Q × Adv) (O → V)) (size : F → ℕ) (φ
         Fintype.card_congr' rfl
     _ = _ := Fintype.card_prod _ _
 
-/-- The fault channel's query at a history of length `n < T` carries its string's `n`-th pattern, or the empty pattern
-at a hint. -/
 theorem faultChannel_ask_snd (κ : Cut (Q × Adv) (O → V)) (size : F → ℕ) (φ₀ : F) (T M K : ℕ)
     (s : (faultChannel R Q Adv O V Tick F κ size φ₀ T M K).S) (r : R)
     (hist : List (((Q × Adv) × F) × Option ((O → V) × Tick))) (x : (Q × Adv) × F) :
@@ -254,8 +204,6 @@ theorem faultChannel_ask_snd (κ : Cut (Q × Adv) (O → V)) (size : F → ℕ) 
   · cases s.1.val ⟨hist.length, hn⟩ <;> rfl
   · rfl
 
-/-- **The outsider with a fault channel string written in sets at most `M` faults**: its `n`-th query carries the
-string's `n`-th pattern, or the empty pattern at a hint, and their sizes sum to at most the string's. -/
 theorem withString_mem_faultBudget (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (κ : Cut (Q × Adv) (O → V)) (size : F → ℕ) (φ₀ : F) (hφ₀ : size φ₀ = 0) (T M K : ℕ)
     (s : (faultChannel R Q Adv O V Tick F κ size φ₀ T M K).S) :
@@ -295,8 +243,6 @@ namespace Served
 
 variable {O V Tick Adv R Q Θ Θ' F : Type}
 
-/-- The values a run released from the first rejection through the halt, by window and slot: the fault channel's
-overwrite. -/
 noncomputable def tailOverwrite (L : ℕ) (l : List (Served O V Tick Adv)) (T : ℕ) : Fin T × O → Option V :=
   fun p => if accLen l ≤ p.1.val ∧ p.1.val < count L l then l[p.1.val]?.map (·.egress p.2) else none
 
@@ -319,10 +265,6 @@ theorem card_tailOverwrite_le [Fintype O] (L : ℕ) (l : List (Served O V Tick A
 variable [Fintype O] [DecidableEq O] [Fintype V] [Fintype Adv] [Inhabited Adv] [Fintype Tick] [Inhabited Tick]
   [Fintype F]
 
-/-- **A faithful run that leaves fewer than `M` incorrect proof blocks undetected is the fault channel's deviation with
-its own covert string**, at the patterns `κ` doesn't cut: for each window accepted before the first rejection its
-pattern, or `κ`'s hint where `κ` cuts it; each window's advice and bucket; the values released from the first rejection
-through the halt; and the halt. -/
 theorem view_eq_faultResp (Cf : Θ → (Q × Adv) × F → O → V) (size : F → ℕ) (φ₀ : F) (hφ₀ : size φ₀ = 0)
     (κ : Cut (Q × Adv) (O → V)) (M : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L : ℕ) (θ : Θ)
     (r : R) (l : List (Served O V Tick Adv)) (hfa : Faithful Cf size Ou L θ r l) (hesc : ¬ Undetected M l) :
@@ -405,10 +347,6 @@ theorem view_eq_faultResp (Cf : Θ → (Q × Adv) × F → O → V) (size : F �
   · rw [if_neg hnc, dif_neg fun h => hnc (lt_of_lt_of_le h.1 (min_le_left _ _))]
 
 omit [Fintype O] in
-/-- **`Faithful` from the dataflow.** If each accepted window that releases released, on the egress slots `eg`, a trace
-`σ` of a checked population at the inputs `inp θ x` of the outsider's query `x` served with the window's advice, with at
-most the window's count of incorrect proof blocks (the network attester's tie), then its releases are faulted runs of the
-population's faulted function, each at its trace's own fault pattern. -/
 theorem faithful_of_tie {U S : Type} [Fintype U] (P : Population.Dataflow U S) (h : P.Checked) (f : P.Fns V)
     (inp : Θ → Q × Adv → S → V) (eg : O → S) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (L : ℕ)
     (θ : Θ) (r : R) (l : List (Served O V Tick Adv))
@@ -497,13 +435,10 @@ namespace ToyFaulted
 
 open WeightSecurity.ToyServed
 
-/-- The toy's faulted function at the patterns no cut covers. -/
 abbrev CfI : W → (Unit × Unit) × FaultI → Unit → Fin 16 := fun θ x => Cf θ (x.1, x.2.1)
 
 theorem honest_Cf (θ : W) : honest CfI θ = honest CfI (0, 0) := rfl
 
-/-- Faulted use of the toy reveals nothing: the faulted function reads no weight, so every party's output is one fixed
-guess. -/
 theorem guess_le (P : Outsider Unit ((Unit × Unit) × FaultI) (Unit → Fin 16) W) :
     Claims.Pr (fun z : W × Unit => gen z.1 ∈ Set.univ ∧ Stolen (gen z.1)
       (P.model z.2 (honest CfI (gen z.1)) 2)) ≤ 1 / 256 := by
@@ -520,13 +455,10 @@ theorem guess_le (P : Outsider Unit ((Unit × Unit) × FaultI) (Unit → Fin 16)
           card_singleton, ToyServed.card_W]
         norm_num
 
-/-- The party that asks twice and outputs `(0, 0)`. -/
 def guesser : Outsider Unit (Unit × Unit) (Unit → Fin 16) W where
   query _ _ := ((), ())
   out _ _ := (0, 0)
 
-/-- **Every honest-use bound at the toy is at least `1/256`**: the party that outputs `(0, 0)` steals the weights on
-one coin in `256`. -/
 theorem le_of_hard {p : ℝ}
     (hp : HonestUseHard C gen (fun θ θ' => θ ∈ Set.univ ∧ Stolen θ θ') 2 anyone p) : 1 / 256 ≤ p := by
   have he : Pouw.pr (fun z : W × Unit => (fun θ θ' => θ ∈ Set.univ ∧ Stolen θ θ') (gen z.1)
@@ -544,8 +476,6 @@ theorem le_of_hard {p : ℝ}
   rw [← he]
   exact hp guesser (Set.mem_univ _)
 
-/-- At the budget `0` the toy's fault channel has one string of patterns and hints: the empty pattern in each window,
-since every other pattern has size `1` and `Cut.none` has no hints. -/
 theorem strings_subsingleton :
     Subsingleton {w : Fin 2 → FaultI ⊕ (Cut.none (Unit × Unit) (Unit → Fin 16)).H //
       ∑ t, Sum.elim (fun φ : FaultI => size φ.1) (Cut.none (Unit × Unit) (Unit → Fin 16)).size (w t) ≤ 0} := by

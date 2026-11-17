@@ -10,17 +10,7 @@ public import Mathlib.Tactic.Positivity
 public import Mathlib.Tactic.Ring
 public import Proofs.ResourceAccounting.Lemmas.GatesBitwise
 
-/-!
-# Bits for free, proved
-
-`EncodeChainRefuted` by construction. Gates `0` and `1` are the constants `0` and `1`; each coin byte of the codec's
-sample (its round constants', its mask's and word 1's tweak's, `slotOf`) is a coin input, and each of its bits a table
-read (`bitG`, a gather of the byte's low 8 bits over a constant `0`/`1` column) whose derived interval is `[0, 1]`.
-Over those bits any Boolean formula (`BF`) compiles to free gates (`compile`): NOT is the affine map `1 − u` and AND
-the u8 s8-family step `0 + u·v`, each derived `[0, 1]`. An output byte is its 8 bits' formulas summed by affine maps
-(`buildSum`, derived `[0, 2^t − 1]` after `t` bits). Every function of the sample's bits has a formula (`shannon`), so
-every target byte of every word does, and the circuit's only units are its table reads' (`ubG`, at most `9` a bit).
--/
+/-! `EncodeChainRefuted` by construction: any Boolean function of the coin bytes' bits compiles to free gates. -/
 
 @[expose] public section
 
@@ -29,8 +19,6 @@ namespace ResourceAccounting.SecurityProofs.GatesBitwise
 open ResourceAccounting.Gates
 
 variable {ι : Type}
-
-/-! ## Values and intervals of a circuit extended at its end -/
 
 lemma foldl_snoc {α β : Type} (f : List α → β → α) :
     ∀ (L : List β) (vs : List α), ∃ t, L.foldl (fun vs g => vs ++ [f vs g]) vs = vs ++ t
@@ -53,7 +41,6 @@ lemma values_length (C : IntDag ι) (x : ι → ℤ) : (values C x).length = C.l
 lemma intervals_length (C : IntDag ι) : (intervals C).length = C.length :=
   (foldl_snoc_length (fun ivs (g : IntGate ι) => g.derive ivs) C []).trans (by simp)
 
-/-- Gate `j`'s derived interval. -/
 def ivOf (C : IntDag ι) (j : ℕ) : Iv := (intervals C).getD j (0, 0)
 
 lemma val_append (C E : IntDag ι) (x : ι → ℤ) (j : ℕ) (h : j < C.length) : val (C ++ E) x j = val C x j := by
@@ -108,9 +95,6 @@ lemma iv_gate (C : IntDag ι) (i : ℕ) (h : i < C.length) : ivOf C i = C[i].der
   rw [List.length_take, min_eq_left h.le] at this
   exact this
 
-/-! ## The proven window, gate by gate -/
-
-/-- What `Proven` asks of one gate, from the derived intervals `ivs` of the gates before it. -/
 def GateOk (ivs : List Iv) (g : IntGate ι) : Prop :=
   (g.op.IsDerived → (g.derive ivs).Within g.lo g.hi) ∧
     (∀ c₀ cs, g.op = .affine c₀ cs → s32Min ≤ g.lo ∧ g.hi ≤ s32Max) ∧
@@ -132,14 +116,10 @@ lemma proven_snoc (D : IntDag ι) (g : IntGate ι) (hD : Proven D) (hg : GateOk 
     rw [List.getElem_append_right le_rfl, List.take_left]
     simpa using hg
 
-/-! ## Free gates, and extending a circuit by them -/
-
-/-- A free operation: a constant, an affine map or an s8-family step. -/
 def FreeOp : IntOp ι → Prop
   | .const _ | .affine .. | .mma .. => True
   | _ => False
 
-/-- `D` is `C` followed by free gates. -/
 def Ext (C D : IntDag ι) : Prop := ∃ E, D = C ++ E ∧ ∀ g ∈ E, FreeOp g.op
 
 lemma Ext.refl (C : IntDag ι) : Ext C C := ⟨[], by simp, by simp⟩
@@ -163,9 +143,6 @@ lemma Ext.iv {C D : IntDag ι} (h : Ext C D) (j : ℕ) (hj : j < C.length) : ivO
   obtain ⟨E, rfl, -⟩ := h
   exact ivOf_append C E j hj
 
-/-! ## Intervals of bits and of partial sums -/
-
-/-- Both ends in `[0, 1]`. -/
 def BitIv (a : Iv) : Prop := 0 ≤ a.1 ∧ a.1 ≤ 1 ∧ 0 ≤ a.2 ∧ a.2 ≤ 1
 
 lemma bit00 : BitIv (0, 0) := by norm_num [BitIv]
@@ -198,7 +175,6 @@ lemma bitIv_mul {a b : Iv} (ha : BitIv a) (hb : BitIv b) : BitIv (Iv.mul a b) :=
   exact ⟨le_min (le_min p1 p2) (le_min p3 p4), min_le_of_left_le (min_le_of_left_le q1),
     le_max_of_le_left (le_max_of_le_left p1), max_le (max_le q1 q2) (max_le q3 q4)⟩
 
-/-- A partial sum of `t` bits: in `[0, 2^t − 1]`. -/
 def AccIv (t : ℕ) (a : Iv) : Prop := 0 ≤ a.1 ∧ a.2 ≤ 2 ^ t - 1
 
 lemma accStep {t : ℕ} {ia ir : Iv} (ha : AccIv t ia) (hr : BitIv ir) :
@@ -213,30 +189,20 @@ lemma accStep {t : ℕ} {ia ir : Iv} (ha : AccIv t ia) (hr : BitIv ir) :
   · nlinarith
   · rw [pow_succ]; nlinarith
 
-/-! ## The gates -/
-
-/-- A gate of no step, primitive or place. -/
 def mk (op : IntOp ι) (args : List ℕ) (lo hi : ℤ) : IntGate ι := ⟨op, args, lo, hi, 0, "", .other, false⟩
 
-/-- The constant `c`. -/
 def cG (c : ℤ) : IntGate ι := mk (.const c) [] c c
 
-/-- A coin byte. -/
 def inG (s : ι) : IntGate ι := mk (.input .coin s) [] 0 255
 
-/-- Bit `t`'s column over the gates `0` and `1` (the constants `0` and `1`): entry `u` is `u`'s bit `t`. -/
 def col (t : ℕ) : List ℕ := (List.range 256).map fun u => if u / 2 ^ t % 2 = 1 then 1 else 0
 
-/-- Bit `t` of gate `j`'s value: a table read of its low 8 bits over `col t`. -/
 def bitG (j t : ℕ) : IntGate ι := mk (.gather (some 8) 0) (j :: col t) 0 1
 
-/-- NOT: `1 − u`. -/
 def notG (a : ℕ) : IntGate ι := mk (.affine 1 [-1]) [a] 0 1
 
-/-- AND: the u8 step `0 + u·v`, its accumulator gate `0`. -/
 def andG (a b : ℕ) : IntGate ι := mk (.mma .u8 .u8 1 true) [0, a, b] 0 1
 
-/-- A partial sum's next bit: `a + 2^t · r`. -/
 def accG (t a r : ℕ) : IntGate ι := mk (.affine 0 [1, 2 ^ t]) [a, r] 0 255
 
 lemma notG_derive (ivs : List Iv) (a : ℕ) :
@@ -339,9 +305,6 @@ lemma andG_value (a b : ℕ) (x : ι → ℤ) (vs : List ℤ) (h0 : vs.getD 0 0 
   · rcases ha with ha | ha <;> rcases hb with hb | hb <;> rw [ha, hb] <;> norm_num [s32Min]
   · rcases ha with ha | ha <;> rcases hb with hb | hb <;> rw [ha, hb] <;> norm_num [s32Max]
 
-/-! ## Boolean formulas, compiled to free gates -/
-
-/-- A Boolean formula over variables `ℕ`. -/
 inductive BF
   | var (v : ℕ)
   | tt
@@ -349,7 +312,6 @@ inductive BF
   | not (f : BF)
   | and (f g : BF)
 
-/-- A formula's value under an assignment. -/
 def BF.eval (β : ℕ → Bool) : BF → Bool
   | .var v => β v
   | .tt => true
@@ -357,14 +319,12 @@ def BF.eval (β : ℕ → Bool) : BF → Bool
   | .not f => !f.eval β
   | .and f g => f.eval β && g.eval β
 
-/-- A bit as an integer. -/
 def bitv (b : Bool) : ℤ := if b then 1 else 0
 
 lemma bitv01 (b : Bool) : bitv b = 0 ∨ bitv b = 1 := by cases b <;> simp [bitv]
 
 lemma bitv_eq (b : Bool) : bitv b = (b.toNat : ℤ) := by cases b <;> rfl
 
-/-- `f` compiled onto `C` over variable wires `w`: the extended circuit and the gate holding `f`'s value. -/
 def compile (w : ℕ → ℕ) : BF → IntDag ι → IntDag ι × ℕ
   | .var v, C => (C, w v)
   | .tt, C => (C, 1)
@@ -377,10 +337,8 @@ def compile (w : ℕ → ℕ) : BF → IntDag ι → IntDag ι × ℕ
     let q := compile w g p.1
     (q.1 ++ [andG p.2 q.2], q.1.length)
 
-/-- The assignment the base circuit's wires hold on input `x`. -/
 def asg (C0 : IntDag ι) (w : ℕ → ℕ) (x : ι → ℤ) (v : ℕ) : Bool := decide (val C0 x (w v) = 1)
 
-/-- What compiling asks of the base circuit: gates `0` and `1` the constants `0` and `1`, and every wire a bit. -/
 structure BaseOk (C0 : IntDag ι) (w : ℕ → ℕ) : Prop where
   len : 2 ≤ C0.length
   iv0 : ivOf C0 0 = (0, 0)
@@ -391,7 +349,6 @@ structure BaseOk (C0 : IntDag ι) (w : ℕ → ℕ) : Prop where
   wiv : ∀ v, BitIv (ivOf C0 (w v))
   wval : ∀ x v, val C0 x (w v) = 0 ∨ val C0 x (w v) = 1
 
-/-- `D` extends `C` by free gates, is proven, and its gate `r` holds `f`'s value, a bit. -/
 def Spec (C0 : IntDag ι) (w : ℕ → ℕ) (C : IntDag ι) (f : BF) (D : IntDag ι) (r : ℕ) : Prop :=
   Ext C D ∧ Proven D ∧ r < D.length ∧ BitIv (ivOf D r) ∧ ∀ x, val D x r = bitv (f.eval (asg C0 w x))
 
@@ -479,14 +436,10 @@ lemma compile_spec (C0 : IntDag ι) (w : ℕ → ℕ) (hB : BaseOk C0 w) :
       simp only [BF.eval]
       cases f.eval (asg C0 w x) <;> cases g.eval (asg C0 w x) <;> simp [bitv]
 
-/-! ## Bytes from bits -/
-
-/-- `Σ b_j · 2^(t + j)`. -/
 def bitsVal : List Bool → ℕ → ℕ
   | [], _ => 0
   | b :: bs, t => b.toNat * 2 ^ t + bitsVal bs (t + 1)
 
-/-- Formulas `fs` compiled onto `C` and summed, bit `j` weighted `2^(t + j)`, onto the partial sum at gate `a`. -/
 def buildSum (w : ℕ → ℕ) : List BF → ℕ → ℕ → IntDag ι → IntDag ι × ℕ
   | [], _, a, C => (C, a)
   | f :: fs, t, a, C =>
@@ -533,7 +486,6 @@ lemma buildSum_spec (C0 : IntDag ι) (w : ℕ → ℕ) (hB : BaseOk C0 w) :
     push_cast
     ring
 
-/-- Each list of formulas summed into one gate, on circuits extending one another. -/
 def buildAll (w : ℕ → ℕ) : List (List BF) → IntDag ι → IntDag ι × List ℕ
   | [], C => (C, [])
   | fs :: Φ, C =>
@@ -574,9 +526,6 @@ lemma buildAll_spec (C0 : IntDag ι) (w : ℕ → ℕ) (hB : BaseOk C0 w) :
       simp only [List.getD_cons_succ]
       exact hv2 o (by simp at ho; omega) x
 
-/-! ## Every function of finitely many bits has a formula -/
-
-/-- `β` on the variables below `M`, `false` above. -/
 def trunc (M : ℕ) (β : ℕ → Bool) (v : ℕ) : Bool := if v < M then β v else false
 
 lemma trunc_succ (M : ℕ) (β : ℕ → Bool) : (fun v => if v = M then β M else trunc M β v) = trunc (M + 1) β := by
@@ -607,17 +556,12 @@ theorem shannon : ∀ (M : ℕ) (ψ : (ℕ → Bool) → Bool), ∃ f : BF, ∀ 
       rw [← h1']
       simp [BF.eval, hb]
 
-/-! ## The base circuit: the constants, the coin bytes and their bits -/
-
-/-- Gate `i` of the base circuit over `N` coin bytes in slots `sl`: `0` and `1`, the bytes, then their bits. -/
 def baseGate (N : ℕ) (sl : ℕ → ι) (i : ℕ) : IntGate ι :=
   if i = 0 then cG 0 else if i = 1 then cG 1 else if i < 2 + N then inG (sl (i - 2))
   else bitG (2 + (i - 2 - N) / 8) ((i - 2 - N) % 8)
 
-/-- The base circuit. -/
 def C0 (N : ℕ) (sl : ℕ → ι) : IntDag ι := (List.range (2 + N + 8 * N)).map (baseGate N sl)
 
-/-- Variable `v`'s wire: bit `v % 8` of byte `v / 8`, and the constant `0` past the bytes. -/
 def wire (N v : ℕ) : ℕ := if v < 8 * N then 2 + N + v else 0
 
 section Base
@@ -735,9 +679,6 @@ lemma trunc_asg (x : ι → ℤ) : trunc (8 * N) (asg (C0 N sl) (wire N) x) = as
 
 end Base
 
-/-! ## Units -/
-
-/-- A gate's most units: one a budgeted gate, its index bits and one a gather, none any other. -/
 def ubG (g : IntGate ι) : ℕ :=
   match g.op with
   | .budgeted _ _ => 1
@@ -801,9 +742,6 @@ lemma C0_ub (N : ℕ) (sl : ℕ → ι) : ((C0 N sl).map ubG).sum ≤ 72 * N := 
     simpa using this
   omega
 
-/-! ## Which gates the circuit has -/
-
-/-- A gate of the construction: a coin byte declared `[0, 255]`, or no input and no budgeted gate. -/
 def GoodG (g : IntGate ι) : Prop :=
   match g.op with
   | .input b _ => b = .coin ∧ g.lo = 0 ∧ g.hi = 255
@@ -837,18 +775,13 @@ lemma declared_of_good (C : IntDag ι) (x : ι → ℤ) (hC : ∀ g ∈ C, GoodG
   | budgeted cls f => rw [hop] at hg; exact hg.elim
   | _ => rw [hop] at hnd; exact absurd trivial hnd
 
-/-! ## The codec's sample, read back from the coin bytes' bits -/
-
-/-- The coin bytes: the `k` round constants', the mask's and word 1's tweak's, `n/8` each. -/
 def NN (F : Field) (k : ℕ) : ℕ := (k + 2) * F.bytes
 
-/-- Coin byte `j`'s slot. -/
 def slotOf (F : Field) (k j : ℕ) : Slot :=
   if j < k * F.bytes then .const (j / F.bytes) (j % F.bytes)
   else if j < (k + 1) * F.bytes then .mask (j - k * F.bytes)
   else .tweak 1 (j - (k + 1) * F.bytes)
 
-/-- The coin inputs on sample `d`: each slot's byte. -/
 def xd (F : Field) (k : ℕ) (d : Sample k) (s : Slot) : ℤ := s.value F d (fun _ => 0)
 
 lemma byte_le (N l : ℕ) : byte N l ≤ 255 := by
@@ -879,17 +812,13 @@ lemma bits_byte (T : ℕ) (hT : T < 256) :
   norm_num
   omega
 
-/-- Byte `j`'s value, read back from its 8 bits. -/
 def svN (β : ℕ → Bool) (j : ℕ) : ℕ := bitsVal ((List.range 8).map fun t => β (8 * j + t)) 0
 
-/-- `n/8` bytes from `base`, read back as a number. -/
 def decN (F : Field) (β : ℕ → Bool) (base : ℕ) : ℕ := ∑ l ∈ Finset.range F.bytes, 256 ^ l * svN β (base + l)
 
-/-- The key the bits hold. -/
 def keyOf (F : Field) (k : ℕ) (β : ℕ → Bool) : Key :=
   ⟨List.ofFn fun r : Fin k => decN F β (r.1 * F.bytes), decN F β (k * F.bytes)⟩
 
-/-- The tweak multiplier the bits hold. -/
 def tauOf (F : Field) (k : ℕ) (β : ℕ → Bool) : ℕ := decN F β ((k + 1) * F.bytes)
 
 lemma asg_bit (N : ℕ) (sl : ℕ → ι) (x : ι → ℤ) (hx : ∀ s, 0 ≤ x s ∧ x s ≤ 255) (j t : ℕ) (hj : j < N)
@@ -990,13 +919,9 @@ lemma key_decode (F : Field) (k : ℕ) (d : Sample k) (hd : d ∈ samples F k) (
     rw [mul_one, Nat.mod_eq_of_lt hτ]
     simp
 
-/-! ## The targets' formulas -/
-
-/-- Bit `t` of byte `l` of word `i`'s target, as a function of the bits. -/
 def target (F : Field) (k : ℕ) (β : ℕ → Bool) (i l t : ℕ) : Bool :=
   decide (byte (lessParity (encodeWord F.p (keyOf F k β) (tauOf F k β * i % F.p) 0)) l / 2 ^ t % 2 = 1)
 
-/-- Its formula over the coin bytes' bits. -/
 noncomputable def fml (F : Field) (k i l t : ℕ) : BF :=
   Classical.choose (shannon (8 * NN F k) fun β => target F k β i l t)
 
@@ -1004,7 +929,6 @@ lemma fml_eval (F : Field) (k i l t : ℕ) (β : ℕ → Bool) :
     (fml F k i l t).eval β = target F k (trunc (8 * NN F k) β) i l t :=
   Classical.choose_spec (shannon (8 * NN F k) fun β => target F k β i l t) β
 
-/-- Output `o = i·(n/8) + l`'s 8 bits' formulas: byte `l` of word `i`'s target, for `q` words. -/
 noncomputable def phis (F : Field) (k q : ℕ) : List (List BF) :=
   (List.range (q * F.bytes)).map fun o => (List.range 8).map fun t => fml F k (o / F.bytes) (o % F.bytes) t
 
