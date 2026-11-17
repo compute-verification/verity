@@ -3,59 +3,8 @@ module
 public import Poub.Protocol
 public import Properties.Poub.Remote.Line
 
-/-!
-# The bandwidth component accepts only what the memory line is stated on (`Poub.Protocol`)
-
-The bandwidth component here is `Poub.Protocol.protocol` (`verity/remote-bandwidth/v0`), which no composite lists
-(onsite's is `Poub.P2Protocol.protocol`, `verity/remote-bandwidth/p2/v0`), and the properties below are stated on
-v0. Its check replays the verifier's log of a session through `Shared.run g` at the session's windows a sample g
-(`groups_per_coin`; `Session.run` at g = 1) and accepts once the session does, publishing `certify` of the run's record
-at the session's parameters and g. The composition reads of it that the check accepts three byte strings
-(`Properties.Composition.DecodedAccepted` at the component, which `Verity.ComponentAccepts` reads); PoUB's guarantees
-are stated on `Shared.run` at the node's g accepting a record's session (`Properties.Poub.Line.Verified`). The
-three properties join them, each stated here as a form over the verifier and, at the deployed one, as a closed
-statement in `Properties.Poub.Remote.SubprotocolDeployed`:
-
-* **AcceptIsVerified**, the refinement: what the component's check accepts is a session the parameters and the log
-  decode to (`Poub.Protocol.sessionOf`: its parameters, its g, coins, append coins, clock floor and events),
-  which `Shared.run g` runs from `State.init` to an accepted state with a record `sm`, and the public outputs are
-  `certify params g sm`'s, the reads that record's openings certify and their error. The check refuses what
-  `sessionOf` refuses, so what it accepts is `Shared.run g`'s, never `Flight.run`'s at one window in flight, which no
-  property covers.
-* **LineHeldAtSubprotocol**: `Properties.Poub.Line.LineHeld` with the component's acceptance in the event in place
-  of `Verified`. On the same node, trace, records and premises, and the bytes `a ω`, `b ω` and `e ω` the component is
-  given at each outcome (the parameters, the commitment and the evidence), the probability that the component accepts
-  bytes that play the record of `ω` on the node (`Plays`) while the network attesters sign nothing but the verifier's
-  messages entering the node and the record's line credits more bits read than the trace's passes read is at most
-  `LineHeld`'s bound, term for term.
-* **PublishedEps**: what the component publishes as `eps` on acceptance is `δ + Σ_c s/2^64` over the session's `⌈W/g⌉`
-  samples at its `samples` s, at the component's δ (`Poub.Protocol.DELTA`), at least that bound's sample term
-  `δ + Σ_c s/2^256`, or nothing certified at all.
-* **QBytesAtSubprotocol** and **PublishedQBytes**: what the subprotocol publishes as `q_bytes` on acceptance. The first
-  bounds, except with the samples' part of `LineHeldAtSubprotocol`'s bound at `DELTA`, the trace's wrong receipts among
-  the verifier's own count `U`; the second is what the check itself gives of a record it accepts, with no premise.
-  Neither says that `q_bytes` bytes were read on the node: bits read are `LineHeldAtSubprotocol`'s.
-
-`Plays` is the component's acceptance (`DecodedAccepted` unfolded at `Poub.Protocol.protocol`, whose decoders
-are `decodeParams`, `decodeCommitment` and `decodeEvidence`) with what picks out the record the line reads: the
-commitment decodes to the node's registration, and the parameters and the log to the node's session parameters and
-windows a sample and the record's coins, append coins, clock floor and events. It is in the event, not a hypothesis: a
-log that is not the record's is an outcome the bound counts nothing for, not one the statement assumes away.
-
-Each property is its verifier's instance of a form over the verifier, so that its witnesses can say what the verifier
-contributes. `AcceptIsVerifiedFor chk` and `PublishedEpsFor chk` are `AcceptIsVerified` and `PublishedEps` at a check
-`chk`, and `LineHeldAtSubprotocolBy acc ver sum` is `LineHeldAtSubprotocol` at an acceptance `acc` in the event, a verdict
-`ver` the trace reads and a record `sum` the line reads: at `Poub.Protocol.check`, and at `Plays`, `Verified`
-and `Record.summary`, they are the three properties, which `SubprotocolDeployed` states. `QBytesAtSubprotocolBy acc ver
-sum` is `QBytesAtSubprotocol` at an acceptance `acc` that names the public outputs (`Publishes` at the deployed one, which
-is `Plays` with them named), a verdict `ver` and a record `sum` the receipts are read off. `LineHeldBy ver sum` is
-`LineHeld` at a verdict `ver` in the event and the trace and a record `sum`: at `Verified` and `Record.summary` it is
-`LineHeld`, which `Properties.Poub.Remote.Line` states. The honest instance the witnesses
-read is the deployed period's parameters with no event yet (`honestParams`, `honestEvidence`) and a node that holds its
-whole store in memory throughout (`honestTrace`), with no outside device (`noOutside`) and nothing but the verifier's
-messages entering it, as its certifiers count (`quietIngress`), on a schedule that runs each pass inside its window
-(`HonestSchedule`).
--/
+/-! The properties of PoUB's bandwidth component `Poub.Protocol.protocol` (v0, which no composite lists), each a form
+over the verifier. -/
 
 @[expose] public section
 
@@ -77,12 +26,8 @@ def Plays (node : Node) (rec : Record) (a b e : ByteArray) : Prop :=
       .ok (node.params, node.groupsPerCoin, rec.coins, rec.appendCoins, rec.notBeforeNs, rec.events) ∧
     ∃ pub prof, Poub.Protocol.check p node.reg ev = .accept pub prof
 
-/-- **The subprotocol accepts bytes that play the record on the node, publishing `pub`.** `Plays` with the public
-outputs named: the parameters `a`, the commitment `b` and the evidence `e` decode under the subprotocol's decoders, the
-commitment is the node's registration, the run the parameters and the log decode to (`Poub.Protocol.sessionOf`)
-is the node's parameters and windows a sample with the record's coins, append coins, clock floor and events, and the
-subprotocol's check accepts them with public outputs `pub`. `Plays` holds exactly where `Publishes` does at some
-`pub`. -/
+/-- **The subprotocol accepts bytes that play the record on the node, publishing `pub`**: `Plays` with the public
+outputs named, so `Plays` holds exactly where `Publishes` does at some `pub`. -/
 def Publishes (node : Node) (rec : Record) (a b e : ByteArray) (pub : Poub.Protocol.Public) : Prop :=
   ∃ (p : Poub.Protocol.Params) (ev : Poub.Protocol.Evidence),
     (Core.canonicalJson a >>= Poub.Protocol.decodeParams) = .ok p ∧

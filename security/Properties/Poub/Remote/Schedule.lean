@@ -4,40 +4,8 @@ public import Definitions.ResourceAccounting.Schedule
 public import Poub.Schedule
 public import Properties.Poub.Remote
 
-/-!
-# The schedule check fixes each credited pass's plan (`Poub.Schedule`)
-
-`Poub.Schedule.check` (`verity/protocols/accounting/poub/verifier/lean/Poub/Schedule.lean`, which
-`schedule.py` is held to by the difftest, and without whose acceptance `audit.ledger` credits nothing after the seed)
-holds a session's passes and appends to the schedule the prover publishes, at the cap on the schedule's bits the
-prover committed before the session's first coin, and returns the schedule's bits.
-
-* `ScheduleChecked`: whenever the check accepts, the schedule is well formed, the passes are at its steps, each pass's
-  plan is the schedule's plan at the pass's step (`Schedule.plan`, computed by the verifier), the appends are the
-  schedule's (`Schedule.appendRuns`), and the bits returned are its encoding's (`Schedule.bits`), at most the cap.
-* `ScheduleFixesLayout`: so the schedule fixes them: two sessions the check accepts on one schedule have the same
-  passes and the same appends. A layout that follows a coin at a schedule the verifier counted is refused.
-
-They take no premise. The schedule's bits (`scheduleBits`) are one-to-one on well-formed schedules
-(`ScheduleCode.scheduleBits_injective` in `Proofs.Properties.Poub.Remote.Schedule`: LEB128 is prefix-free, and each
-list comes after its length).
-
-The model's layout (`ResourceAccounting.ScheduleDeterministic`, `ResourceAccounting.Assumptions.SteeredLayout`) is the verifier's:
-`runLayout`, `codeLayout` of the session's appends and the runs the pass sent, tile `i` at `tileAt`, the
-`position` at which `checkOpening` checks the block at position `i` of the pass's plan (`runBlocks`). Three properties
-of the code tie it there: `PlanBlocks` (`Plan.block` is the runs' blocks in order), `CodeLayoutTiles` (a plan of `N`
-blocks with positions in range is laid out at them) and `OpensAtPosition` (an accepted opening is checked at its
-block's position, in that tree). `ScheduleLayoutGap`, that the layout is a map of the appends and the runs, holds of it
-(`scheduleLayoutGap_code`), so the check's acceptance at the cap `a` at every coin gives `ScheduleDeterministic` at
-`a` and `SteeredLayout` at `a + 1` (`scheduleDeterministic_of_checked`, `steered_of_checked`). The cap is fixed
-before the coins, so it is one `a` at every coin, where the bits of the schedule published after them can follow the
-coins.
-
-Each property's premises hold at the deployed shape (`planBlocks_honest`, `codeLayoutTiles_honest`,
-`opensAtPosition_honest`, `steered_of_checked_honest`), and each conclusion fails for an input an accept-all verifier
-would take (`planBlocks_nontrivial`, `codeLayoutTiles_nontrivial`, `opensAtPosition_nontrivial`,
-`steered_of_checked_nontrivial`), in `Proofs.Properties.Poub.Remote.Schedule`.
--/
+/-! The schedule check fixes each credited pass's plan and the session's layout, and the model's layout of a pass is
+the verifier's. -/
 
 @[expose] public section
 
@@ -69,10 +37,8 @@ def ScheduleFixesLayout : Prop :=
 def scheduleBits (sc : Schedule.Schedule) : List Bool :=
   (Schedule.encode sc).flatMap fun b => List.ofFn fun i : Fin 8 => b.toNat.testBit i
 
-/-- **The model's layout of a pass is a map of the session's appends and the pass's plan.** At each prefix `c` of the
-session's coins and each codec and append coins `y`, the model's layout of the pass is `pos c` of the session's appends
-`appended c y` and the runs `sent c y` the pass's plan sent. At the verifier's own layout (`runLayout`, `pos c`
-its `codeLayout`) it holds of the code (`scheduleLayoutGap_code`). -/
+/-- **The model's layout of a pass is a map of the session's appends and the pass's plan**: at each coin prefix `c`
+and append coins `y`, it is `pos c` of the appends `appended c y` and the runs `sent c y`. -/
 def ScheduleLayoutGap {Pfx Y : Type} {N T M : ℕ} (pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M)
     (appended sent : Pfx → Y → Array (ℕ × ℕ)) (layout : Pfx → Y → Fin N ↪ Fin T × Fin M) : Prop :=
   ∀ c y, layout c y = pos c (appended c y) (sent c y)

@@ -2,22 +2,8 @@ module
 
 public import PouwCheck.Protocol
 
-/-!
-# PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
-
-The properties of the executable check (`verity/protocols/accounting/pouw/verifier/lean/check/`, the port of
-`verity/protocols/accounting/pouw/verifier/core_check.py`), stated against `protocol.check` as it runs, for every input of
-the types its decoders produce. Each is a `Prop`, and `Proofs.Properties.Pouw.Check` proves every one.
-
-`AcceptMeans` is the check's whole meaning: what it accepts is a window commitment record that keeps PoUW's rule
-(`RecordKeeps`), which the service accepted with the profile and sample the rule fixes (`ServiceAccepted`), with a
-live window's salt its live coin's and a seeded window's answer carrying none (`SaltKept`), and it then publishes the window's items at the verifier's values and the service's sample. The rest are its consequences a reader
-checks first, and what the other verdicts mean. That the check accepts every such record is completeness,
-`Proofs.Properties.Pouw.Check.acceptMeans_complete`.
-
-What the window's sample guarantees (`Properties.Pouw.Window.DrawMisses`) is the window's property, not the check's: the
-check establishes that the service drew exactly `K′ = kPrime ε δ` distinct units of the registered `N`, all passed.
--/
+/-! The properties of PoUW's executable window check (`PouwCheck.protocol`), each proved in
+`Proofs.Properties.Pouw.Check`. -/
 
 @[expose] public section
 
@@ -25,8 +11,6 @@ namespace Properties.Pouw.Check
 
 open PouwCheck
 open PouwWindow (Work point level floorPoint)
-
-/-! ## Acceptance -/
 
 /-- The window commitment record keeps PoUW's rule, with `f` the level, sampling item and `root_W` it fixes: a served window in the
 verifier's context registering exactly `window.REGISTERED`; its `length` item a fixed-length window's at the verifier's
@@ -107,8 +91,6 @@ def PublishesPublic : Prop := ∀ pub : Public, pub.entries.map (·.1) = PouwWin
 def NeverNull : Prop :=
   ∀ (pub : Public) (prof : Core.Integrity), protocol.publicJson pub ≠ .null ∧ protocol.profileJson prof ≠ .null
 
-/-! ## The other verdicts -/
-
 /-- The check is undecided only when the service is, on a record that keeps PoUW's rule and an answer for it;
 the reason is the service's. -/
 def UndecidedOnlyFromService : Prop :=
@@ -116,8 +98,6 @@ def UndecidedOnlyFromService : Prop :=
     protocol.check p c e = .undecided r →
       (∃ f, RecordKeeps p c f) ∧ e.protocol = oneStage ∧ e.commitment = some (Flock.hexOf c.digest) ∧
         ∃ r₀, e.said = .undecided r₀ ∧ r = "service: " ++ r₀
-
-/-! ## The commitment -/
 
 /-- The digest is one-stage's window record digest (`Flock.WindowRecord.digestOf`), SHA-512 of the format, a zero byte
 and the canonical record. -/

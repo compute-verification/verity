@@ -3,20 +3,8 @@ module
 public import Definitions.ResourceAccounting.Requirement
 public import CircuitRequirement
 
-/-!
-# The requirement's code: each function is the definition it computes
-
-`CircuitRequirement` (`verity/circuits/requirement/`, package `core_requirement`) is code, so it requires nothing
-of `security/`: on one instance it computes `ResourceAccounting.Requirement`'s definitions, a set as a list. These are those
-equalities, each a `Prop` stated against the code's function and the definition it computes, on the wiring, execution,
-layout, store and placement the instance denotes (`wiring`, `execution`, `layout`, `store`, `placement`), and
-`Proofs.Properties.ResourceAccounting.Requirement` proves every one. The code's difftest holds it to
-`verity.circuits.requirement`, so these carry the Python requirement to the definitions that
-`Definitions/ResourceAccounting/Guarantees/Requirement.lean`'s guarantees are stated over.
-
-An instance's values are the natural numbers, of which it describes `0 … n - 1`, and a gate uses, at any circuit's
-values, the operands it uses at the execution's: the definitions read `uses` only at `Execution.value`.
--/
+/-! The requirement's code (`CircuitRequirement`) computes `ResourceAccounting.Requirement`'s definitions, each
+equality a `Prop` stated against the code's function. -/
 
 @[expose] public section
 

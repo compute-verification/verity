@@ -34,25 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# SPOT's sample in the claims' slots: it misses proof blocks no more often than `P_a` (`Spot.Slots.select`)
-
-The property of the challenger's sample as the claims read it (`Deploy.checked`, `Claims.Sampling.SampleDesign`): the
-sample `Slots.select` makes from `L` uniform bytes under a Spec's selection rule, over the verifier's own program and query,
-checks no proof block at a slot of `B` with probability at most the claims' acceptance probability
-`P_a(B)` of the design it samples, on the partition it samples over. It takes no premise: the sample is a function of its inputs
-and its bytes, and every input is in it, the `L` bytes included, however few.
-
-* **The partition** (`slotPartition`) is `Slots.layout`'s, its classes the population's strata and the input class, each
-  proof block its gates.
-* **The design** (`slotDesign`) is the one the sample runs: the first class's design the Flock sampling design it samples
-  (`Select.select`'s, `oneStageOf`), `all` for the `All` rule; the input class sampled `all`. The bound is `0` where the
-  sample is refused before it samples (`missBound`).
-* **The bytes** are `src`'s, in order (`bytesOf`): a sample that would read past them is refused, so it misses nothing.
-
-`DesignWellFormed`: that design is well formed on that partition (the claims' `Design.WellFormed`), so its `P_a` is a
-probability, wherever both are given; the sample's own refusals make it so, and it takes no premise either.
--/
+/-! SPOT's sample in the claims' slots misses proof blocks no more often than `P_a`, with no premise
+(`Spot.Slots.select`). -/
 
 @[expose] public section
 

@@ -4,135 +4,8 @@ public import Definitions.Compose.ComposeMonitoringPeriod
 public import Definitions.Compose.Assumptions.Compose
 public import PouwCheck
 
-/-!
-# A period's work over the windows PoUW's deployed check accepts (`PouwCheck.protocol.check`)
-
-PoUW's per-period statement about its deployed Lean code, for the all-protocols period (one loop audited every period by
-each protocol, composed in the causal game, `ResourceAccounting.Guarantees.JointPeriodLive`). `ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod`
-is stated over the accounting model's abstract proofs (`Outcomes`): whether window `w`'s proof of its `i`-th sampled tile
-was accepted is a parameter. Here it is the deployed check's verdict on the window: `protocol.check` (`verity/pouw/v1`,
-`core_check.py`'s port, the `Core.Protocol` that `CoreRemote` composes; onsite composes the period's,
-`PouwCheck.Period.protocol`) on the window's registration and the proof
-system's answer. The check gives no partial credit (`Properties.Pouw.Check.AcceptMeans`: it accepts only when one-stage
-accepted the window's every sampled proof block), so its verdict is every sampled proof's (`checkedRun`). The period is credited up
-to its first window the check refuses (`Executions.prefixLen`), on those windows' live words (`checkedLive`).
-
-It is parametric in the deployed unit and names no device: the scheme `Sc`, the registered circuit `Cd`, the population
-`N_p` and the sample size `K_d` are arguments, as are the check's parameters `prm` (its check item names the scheme and its
-tile work), and the relation `rel` is the statement the service proves of each unit, whatever it is. An instance fixes
-them: `H1CheckedCreditMonitoringPeriod` is H1's tile unit on the torch loop (below).
-
-* `Accepts`: the check accepts the window.
-* `Executions`, `Executions.AcceptedUpTo`, `Executions.prefixLen`, `checkedLive`: each window's registration and the
-  service's answer on the period's coins; it and every earlier window accepted; the number of such windows, the
-  windows before the first refusal; their live tiles' words.
-* `checkedRun`, `checkedLayer`: the period's proofs with the check's verdict as every sampled proof's acceptance, each
-  sampled tile's opening the service's opening of that unit; `Declared.monitoringPeriodLayer` at that run.
-* `SampleIsCoin`, `ServiceSound`: on every window the check accepts, the units it publishes as sampled (`Public.drawn`) are
-  the model's sample at the window's sampling coin (`drawOf`), of the population `N_p`, `K_d` of them; and the service's
-  soundness against the check: a window is accepted with a published unit whose opening fails its relation with
-  probability at most `δ_ks`.
-* `RegisteredBeforeDraw`: each window's registration is fixed before the window's sampling coin.
-* `CheckedWorkMonitoringPeriod`, `CheckedCreditMonitoringPeriod`: `CircuitWorkMonitoringPeriod`'s and `CircuitCreditMonitoringPeriod`'s conclusions at the
-  check's accepted prefix, under their premises at `checkedRun`, with `JointSound` replaced by `SampleIsCoin` and
-  `ServiceSound`, and with `RegisteredBeforeDraw`.
-* `SaltIsLiveCoin`, `StagedPins`, `stagedAt`, `flatAtCoin`, `H1CheckedCreditMonitoringPeriod`: H1's instance. Each window's salt
-  is its round's live coin; the staged statement the subprotocol proves pins the pinned flat tile at one salt; the unit's
-  relation, the staged statement at the window's salt; its rightness, the flat tile's at the window's coin; and
-  `CheckedCreditMonitoringPeriod` at the torch loop's counts with those two in place of `Pins`.
-
-*What the check discharges.* The accepted prefix (`Outcomes.Credited`, `prefixLen`) and the credited words are the
-check's, defined from `protocol.check` and nothing else. `JointSound` at the checked run is about the model's sampled
-tiles; the service proves the units the check publishes, so it follows from `ServiceSound` about those units and
-`SampleIsCoin`, which says they are the model's. Every other premise is `CircuitWorkMonitoringPeriod`'s at the checked run, and the
-check doesn't discharge it:
-
-* `Scope Sc Cd δs` and the static numbers (`ρ`, `w_max`, the lucks `p, p0`, `SplitRate`), and `DeadConeDead`: facts of the
-  registered circuit and the scheme. They need a `Declared` built from the registered Program, which nothing builds yet
-  (`Properties.Compose.UnitsOfLayout`, `Properties.Served.IsServed`, the extractor). `Scope`'s `LayerCommitted` also needs
-  the live schedule, a coin a round after its root (`PouwCheck.roundsCheck`, `PouwCheck.saltCheck`), which
-  `protocol.check` doesn't read: under PoUW's seeded salt-and-draw schedule it fails on every circuit an activation
-  feeds (`Properties.Served.SeededScheduleNotLive`, proved).
-* The game identity (`Pl.game = monitoringPeriodGame …`) and `PrefixOf`: protocol structure, the play's ideal game and its pass at
-  the sampled tiles' rightness, held by construction of the play.
-* `MovedIn ≤ δ_bind` in each window: binding of the service's openings to the values committed before each position's
-  cut, which the proof reads. It is SHA-512's binding at the trees' sizes (`ResourceAccounting.Guarantees.Compose.BindingOfECR`)
-  only when the window's rows are committed by its registration, under roots the openings are checked against, and the
-  registration is fixed before the window's sampling coin (`RegisteredBeforeDraw`, which states the order; the commitment
-  is the roots'). On today's path the registered roots are tags, not the rows' commitments (below): the loop's
-  registration has `anchors []` and `wires []`, so nothing commits the rows before the sample. Its discharge path is
-  to commit the loop's `x`, `sx`, weight rows and `sw` as anchors (hm96 rows in frame-v3-sha512 trees) before the
-  window's sampling coin, and to bind the H1 tiles' rows to those anchors.
-* `RegisteredBeforeDraw`: protocol structure. The check reads only that the service's answer cites the registration's
-  digest (`Evidence.commitment`), not when the sampling coin was released against it, so it doesn't discharge it.
-* `ServiceSound δks`: Flock's soundness at each sampled proof block under live coins (`Flock.Guarantees.EndToEndRegisteredRows`
-  for one session) with one-stage's acceptance (`Properties.Spot.AcceptMeans`) and the check's
-  (`Properties.Pouw.Check.AcceptMeans`), both proved; `rel` the relation of the statement the service proves (H1's
-  subprotocol: the window's staged statement, `stagedAt`).
-* `SampleIsCoin`: the service's `subset:K′` sample from the challenger's sampling coin (`Spot.Select.select`) read as
-  the model's uniform permutation coin, with `K′ = K_d` and `N = N_p` (`Properties.Pouw.Check.AcceptedDraw` gives the
-  published sample `K′` distinct units below `N`; `Properties.Served.SampleMissesSubset` bounds its misses by the model's).
-* `Pins` (`rel` gives `right`): the relation of the statement the service proves pins the declared tile's rightness, a
-  fact of that statement and the tile's Definition, with `UnitsOfLayout`'s tie of `Cd` to it. Where the service proves
-  a statement other than the registered tile's (H1's subprotocol proves the window's staged statement), this is the link
-  between the two, and H1's instance splits it into `StagedPins` and `SaltIsLiveCoin`.
-* `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` per live tile, and `UnitFixed` at `monitoringPeriodMode`: the named claims, as in
-  `CircuitWorkMonitoringPeriod`. On H1's unit they are (H-μ) at `μ = 3/4`, B′ at `r_B = 1/2` and the guess bound at
-  `1/2`; ncp-v2 has no Compose `Scheme`, and its receipt bound is a time-tradeoff form
-  (`ResourceAccounting.Guarantees.TileUnpredictableOfNCPU`), not lucks.
-
-`PouwCheck.Credit.periodCredit`, served H1's period credit, is another verdict: its windows' (`PouwCheck.Credit.window`),
-refusing the whole period on any refused window. A loop credited through it takes these statements with `Accepts` at
-`Credit.window`'s verdict; a period it credits is one whose windows are all accepted, `Executions.prefixLen = n`.
-
-*H1's tile unit on the torch loop* (`H1CheckedCreditMonitoringPeriod`, PoUW's subprotocol of the period above). The loop's W8A8
-two-layer MLP at `H = 128` serves 4 requests × 2 decode steps a window, and each linear's `K = 128` is two pinned H1
-tiles `PouwH1Tile_v1` (`K = 64`, `R = 4`, `C = 8`, `core_check.TILES`): 2 steps × 2 linears × 16 column blocks × 2
-halves of `K` = 128 real tiles a window, in a population of `N_p = 144` (the grid's 16 fillers, of zero rows and no
-words, so `ρ = 128/144 = 8/9`), `K_d = 24` of them sampled at the subprotocol's check (`ε = 1/2`, `δ = 10⁻⁶`, `window.k_prime`).
-Every tile's noise reads the window's one salt (its public row, `PouwCheck.publicBc`), so the window is one round
-(`Cd.rounds = 1`, `w_max = 1`): a coin a decode step would need a salt a step, which the pinned tile and the check don't
-take. At H1's lucks (`p = 7/8`, `p0 = ½`, the floors `OperandHMu`, `ReceiptLuckAt` and `GuessLuckAt` claim), `a = b = 1`
-and `SplitRateClosed`'s rate there, `Λ = max(67/8, 67/32) = 67/8`, an accepted period is credited `(1 − ε(j))₊` of its
-prefix's live words with `ε(j) = Λ·ln(1/δ_s)/j` (`D₀ = 0`, every real tile live): `ε(j) ≥ 1` through 38 accepted windows
-at `δ_s = 1%` and through 115 at `10⁻⁶`, and `ε(j) < 1%` from 3,857 and 11,571 windows (`SplitRateExp`'s sharp
-`Λ = 7.489`: 34, 103, 3,449 and 10,347). Pooled over a monitoring period of any length, the uncredited words are at most
-`Λ·ln(1/δ_s)` windows' worth, 38.6 at `1%` and 115.7 at `10⁻⁶`.
-
-What H1's instance takes that the deployed path doesn't give, each a named premise:
-* `RegisteredBeforeDraw`, with the window's rows committed by its registration: the binding premise reads both. The
-  tiles' registered roots are tags (below), so the registration commits no row (`anchors []`, `wires []`), and an
-  opening the service gives is bound to nothing fixed before the sample. Discharge path: the loop's anchors
-  committed before the sampling coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
-* `SaltIsLiveCoin`: each window's salt is its round's live coin. The check reads it: a live window (`coins` live in its
-  check item) carries its salt in its service answer, and `PouwCheck.executionPhaseSaltReason`
-  (`Properties.Pouw.Check.SaltKept`) accepts it only as the round-0 salt of a salt-only live session's coin, opened on
-  the salt epoch's root `anchoredEpochRoot W X k` of the registration's weights' root `W` and the root `X` of the
-  activations its window committed before the salt (`executionPhaseAnchors`). That session counts as a live Pearl-C pass's
-  does (`PouwCheck.liveSaltCheck`, `Properties.Pouw.LiveSalt`). A window whose check item names no coin mode is seeded,
-  its answer carries no salt, and `Scope`'s `Declared.Live` and `LayerCommitted` fail of the circuit it runs. No path
-  that serves H1 windows takes its salt from such a session yet: `window_salt.issue` opens one, on the auditor's
-  challenger (a `trusted-device` machine) or on a development gate on the issuing machine, and the H200 per-call tiles
-  still stand in a SHA-512 of the step's salt key for the salt. What remains: the served windows' salt from the
-  auditor's challenger, and a tie of the proved tiles to that salt (their salt port is still a value the prover
-  records).
-* `StagedPins`: the subprotocol's proofs are of the window's staged statement, not the pinned flat circuit `core_check.opening`
-  reads. The bridge is stated over the staged statement (`ServiceSound` is the service's soundness for it, `stagedAt`),
-  and `StagedPins` is what links it to the flat tile's rightness, which the lucks are claims of (`flatAtCoin`). No Lean
-  function of either side exists yet, so both are parameters.
-
-What it doesn't give: any link from the H1 window to the values integrity's window commits. The tiles' roots are tags
-(SHA-512 of the run root and of the layer's weights), not the rows' commitments, and that the tiles' A rows are the
-loop's activations rests on the loop's own assertion (`H1Loop.run`). Its credit is the H1 window's committed tiles' words;
-tying them to integrity's values is the joint statement's.
-
-The proofs are in `Proofs.Pouw.MonitoringPeriod`: `CircuitWorkMonitoringPeriod` at `checkedRun`, `Credited` there being `AcceptedUpTo` at
-`K_d > 0`, and `JointSound` from `ServiceSound` and `SampleIsCoin` by monotonicity; H1's instance is `CheckedCreditMonitoringPeriod`
-at its numbers with `SplitRateClosed` for `SplitRate` and `Pins` from `SaltIsLiveCoin` and `StagedPins`.
-`Proofs.Pouw.MonitoringPeriod.Accept` runs the deployed check to an accept at H1's parameters (`N_p = 144`, `K_d = 24` on every
-accepted window), and `Proofs.Pouw.MonitoringPeriod.Honest` is a live-salt period of those windows meeting every premise of
-`H1CheckedCreditMonitoringPeriod`.
--/
+/-! PoUW's per-period work and credit over the windows its deployed check accepts, with H1's tile unit on the torch
+loop as its instance. -/
 
 @[expose] public section
 
@@ -175,8 +48,6 @@ noncomputable def checkedLive {ι K C B : Type} (Sc : Scheme K) (Cd : Declared �
     (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (p : Params)
     (ws : Executions (Paths C Cd.rounds × B) n) (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo p x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0
-
-/-! ## The period's proofs under the check -/
 
 /-- **The period's proofs with the check's verdict**: window `w`'s proof of each sampled tile is accepted exactly when the
 check accepts window `w`, since it accepts only when every sampled proof block's proof was (`Properties.Pouw.Check.AcceptMeans`,
@@ -235,8 +106,6 @@ anchors (hm96 rows in frame-v3-sha512 trees) before the window's sampling coin, 
 named assumption in the lock: a protocol-code fact to prove. -/
 def RegisteredBeforeDraw {C Ξ : Type} {m Np n : ℕ} (ws : Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) : Prop :=
   ∀ (x z : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) (w : Fin n), ws.reg (spliceAt w.val m x z) w = ws.reg x w
-
-/-! ## The period's conclusion at the check's accepted prefix -/
 
 /-- **(L) The circuit's work on its live tiles over the windows PoUW's deployed check accepts, live coins.** For every
 registered circuit `Cd` and scheme `Sc` run as a period of at most `n ≥ 1` windows, each window's registration and the
@@ -311,8 +180,6 @@ def CheckedCreditMonitoringPeriod : Prop :=
       (monitoringPeriodMode Cd Wp (checkedRun hK prm ws opened rel right)) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd Np (ws.prefixLen prm x) (checkedLive Sc Cd Wp prm ws x) a b Λ δs) ≤ δs + n * (δbind + δks)
-
-/-! ## H1's tile unit on the torch loop -/
 
 /-- **Each window's salt is its live coin** (H1's instance). On every path, window `w`'s salt (`salt x w`: the 64-byte
 salt the verifier holds for the window, which every tile's noise reads through its public row, `PouwCheck.publicBc`, and

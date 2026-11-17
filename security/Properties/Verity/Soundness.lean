@@ -33,37 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Soundness at the verifier, composed from its subprotocols' targets
-
-The verdicts are not free fields: in the causal game after the parameters, the committed files and the commitment
-(`Vocab.game`), subprotocol `a` accepts at composite `k` when the files pass the commit phase's check, `k` accepted what
-the prover sent as a `same` composition, and `a`'s compiled check accepts its own case in it (`Vocab.Verdict`). The
-event is the verifier's acceptance (`Accepts k`) while the claim of one of `k`'s subprotocols fails
-(`Vocab.Holds`, SPOT's on the fixed extractor's transcript), with no break in it: each subprotocol's error at a
-strategy is its published `δ` plus its collision term at the probability that its fixed finder outputs a SHA-512
-collision (`Vocab.error`).
-
-`SoundnessOf` is the one statement, at every composite, a list of its subprotocols' ids: each of its subprotocols'
-targets gives `Vocab.SoundnessAt`, with the errors summed over its subprotocols. `Soundness` is it at onsite's list,
-with its seven targets taken by name (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`,
-`BandwidthAuditSound`, `NetworkAttesterSound`, `WipeSound`), and `RemoteSoundness` the same conclusion at remote's
-composite of record (`Core.Remote.V1.protocol`, `verity/remote/v1`), from two targets (SPOT, and PoUW, which
-at remote is Pearl+'s run verdict and its claim in MACs at the credit its check published) and the two statements that
-tie the inference-only policy's clause to the committed files (`Vocab.WiresSound` and `GateARow`,
-`Properties.Verity.Committed`). `PlainSoundness` is it at remote's plain sibling, whose inference-only policy is the
-rows check, with its three. They are proved by `Properties.Composition` (a composite's acceptance is its
-subprotocols' and its record's) and the union bound over one strategy in one game.
-
-Each target is a hypothesis until its subprotocol's piece proves it at its compiled check, and `Vocab`'s fields are given
-until each piece defines its own: v2's reading of the committed files, the positions, the coin commitment's families and
-the device's log each subprotocol read, the extractor and the finders, the gates computed, the world, the wipe and the
-play read at its boundary, and the published certificates, thresholds, errors and collision terms. The inference-only
-policy's target reads none of them: its claim is on its own case in the play's messages, and
-`Proofs.Properties.Verity.InferenceOnly` proves it of the case as sent. The link from that case to the committed files is
-two checks the verifier lacks (`Vocab.Holds` names them). At remote the two statements they would establish are
-hypotheses in the target's place, each stated and not proved; at onsite the target stays a hypothesis.
--/
+/-! Soundness at the verifier, composed from its subprotocols' targets (`SoundnessOf`), which it takes as hypotheses. -/
 
 @[expose] public section
 
