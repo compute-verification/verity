@@ -87,7 +87,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/resource_accounting/network",
           "tools/difftest", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/circuits/kernels", "verity/commitments/randomness", "verity/protocols/proofs/flock/prover/python", "verity/commitments/periods",
-          "hardware/cards",
+          "calibration/hardware/cards",
           "tools/config/verity_config",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/commit/__init__.py", "verity/commitments/periods/hiding.py",
@@ -220,7 +220,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_dc.py"]
-paths = ["benchmarks/pouw/opcode_probe"]
+paths = ["calibration/pouw/opcode_probe"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -238,7 +238,7 @@ paths = ["security/Definitions/Pouw", "security/Proofs/Pouw", "security/Proofs/P
 
 [[tool.verity.tests.reads]]
 tests = ["test_facet_break.py"]
-paths = ["benchmarks/machine_model/verity_machine_model", "benchmarks/pouw/opcode_probe"]
+paths = ["benchmarks/machine_model/verity_machine_model", "calibration/pouw/opcode_probe"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_ffill.py"]
