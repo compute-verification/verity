@@ -3,24 +3,8 @@ module
 public import Proofs.Flock.Soundness.Types.Dag
 import Proofs.Flock.Soundness.Audit.Circuit
 
-/-!
-# A type DAG's Boolean circuit (phase 1 S4a: `flatten`, `flatten_eval`)
-
-`flatten` lays a circuit type out as a Boolean circuit, its calls inlined to a depth: an array of gates (`input`, `and`,
-`xor`, `not`), each over earlier gates by index, evaluated in order (`evalG`, `gval`):
-* gates `0 … inBits − 1` are the type's inputs, gate `inBits` the input `one` (fed 1), gate `inBits + 1` its NOT, `zero`;
-* a form is its wires' XOR chain, with a NOT when its constant is 1 (`formGate`): the Boolean export's convention;
-* an AND item is an AND gate over its forms' gates; a call inlines its callee on its input forms' gates (at the depth
-  `evalT` runs it); a read is `table/v2`'s gates (`readGates`): its index forms' gates split at `loOf n` into two
-  decoders (`decodeGates`, one-hot), and each value bit the XOR of its products, a high minterm AND the XOR of the low
-  minterms whose word has the bit set (`bitsGates`), every value bit gated.
-
-**`flatten_eval`**: on inputs `x`, output `o`'s gate carries `evalT`'s output `o`, for every type, table and depth. So the
-type semantics the rows' theorems are stated in (`Types.Dag.evalT`) is the Boolean circuit's.
-
-`GateRows.Gate` is RoPE's earlier gate model; this one keeps the constants as gates so that a callee's gates embed
-unchanged.
--/
+/-! A type DAG's Boolean circuit, its calls inlined to a depth (`flatten`), computes the type's `evalT`
+(`flatten_eval`). -/
 
 @[expose] public section
 
@@ -28,9 +12,7 @@ namespace FlockSoundness.Types.Flatten
 
 open Flock Flock.DeriveAll Audit Types Types.Dag
 
-/-! ## Gates -/
-
-/-- A gate over earlier gates, by index; an input gate reads the input at its own index. -/
+/-- A gate over earlier gates, by index. Constants are gates, so that a callee's gates embed unchanged. -/
 inductive Gate where
   | input
   | and (a b : Nat)
@@ -38,14 +20,12 @@ inductive Gate where
   | not (a : Nat)
   deriving Inhabited
 
-/-- A gate's value, after the gates before it took the values `vals`. -/
 def Gate.step (inp : Nat → Bool) (vals : Array Bool) : Gate → Bool
   | .input => inp vals.size
   | .and a b => vals.getD a false && vals.getD b false
   | .xor a b => Bool.xor (vals.getD a false) (vals.getD b false)
   | .not a => !vals.getD a false
 
-/-- Every gate's value, in order. -/
 def evalG (inp : Nat → Bool) (gs : Array Gate) : Array Bool :=
   gs.foldl (fun vals g => vals.push (g.step inp vals)) #[]
 
@@ -65,7 +45,6 @@ theorem evalG_size (inp : Nat → Bool) (gs : Array Gate) : (evalG inp gs).size 
   rw [← Array.foldl_toList, foldl_step_size]
   simp
 
-/-- The value of gate `i`. -/
 def gval (inp : Nat → Bool) (gs : Array Gate) (i : Nat) : Bool := (evalG inp gs).getD i false
 
 theorem gval_push_lt (inp : Nat → Bool) (gs : Array Gate) (g : Gate) {i : Nat} (hi : i < gs.size) :
@@ -81,7 +60,6 @@ theorem gval_push_new (inp : Nat → Bool) (gs : Array Gate) (g : Gate) :
   rw [evalG_push, ← evalG_size inp gs]
   simp [Array.getD]
 
-/-- The gates a gate reads. -/
 def Gate.args : Gate → List Nat
   | .input => []
   | .and a b => [a, b]
@@ -92,8 +70,6 @@ theorem foldl_push_size : ∀ (more : List Gate) (gs : Array Gate), (more.foldl 
   | [], gs => rfl
   | g :: more, gs => by rw [List.foldl_cons, foldl_push_size more, Array.size_push, List.length_cons]; omega
 
-/-- `gs'` extends `gs`: the same gates first, so the same values there, then gates that each read only gates before
-them. -/
 def Ext (gs gs' : Array Gate) : Prop :=
   ∃ more : List Gate, gs' = more.foldl Array.push gs ∧ ∀ k (hk : k < more.length), ∀ a ∈ more[k].args, a < gs.size + k
 
@@ -142,7 +118,6 @@ theorem args_and {a b n : Nat} (ha : a < n) (hb : b < n) : ∀ x ∈ (Gate.and a
   simp only [Gate.args, List.mem_cons, List.not_mem_nil, or_false] at hx
   rcases hx with rfl | rfl <;> assumption
 
-/-- Every gate reads only gates before it. -/
 def Topo (gs : Array Gate) : Prop := ∀ i (hi : i < gs.size), ∀ a ∈ gs[i].args, a < i
 
 theorem Topo.ext {gs gs' : Array Gate} (h : Topo gs) (he : Ext gs gs') : Topo gs' := by
@@ -162,15 +137,11 @@ theorem Topo.ext {gs gs' : Array Gate} (h : Topo gs) (he : Ext gs gs') : Topo gs
     · have := hm (k + 1) (by simp; omega) a (by simpa using ha)
       simp; omega
 
-/-! ## Forms as gates -/
-
-/-- An XOR chain from gate `acc` over gates `rest`. -/
 def xorChain : Array Gate → Nat → List Nat → Array Gate × Nat
   | gs, acc, [] => (gs, acc)
   | gs, acc, g :: rest => xorChain (gs.push (.xor acc g)) gs.size rest
 
-/-- A form over the wires' gates `wg`, as a gate: its wires' XOR chain, with a NOT when its constant is 1. A form of no
-wires is gate `one` or gate `zero`; a wire past `wg` reads `zero`. -/
+/-- A form of no wires is gate `one` or gate `zero`; a wire past `wg` reads `zero`. -/
 def formGate (one zero : Nat) (wg : Array Nat) (gs : Array Gate) (f : Form) : Array Gate × Nat :=
   match f.ws.toList.map (wg.getD · zero) with
   | [] => if f.c = 1 then (gs, one) else (gs, zero)
@@ -197,8 +168,6 @@ theorem xorChain_spec (inp : Nat → Bool) :
     rw [e1, e2, Verity.Boolean.xorSum_congr (fun g' hg' => gval_push_lt inp gs _ (hrest g' (List.mem_cons_of_mem _ hg'))),
       Bool.xor_assoc]
 
-/-- The wires' gates carry the wire values: wire `w`'s gate (`zero` past the wires) is a gate whose value is wire `w`'s,
-gate `one` is 1 and gate `zero` is 0. -/
 structure WInv (inp : Nat → Bool) (one zero : Nat) (gs : Array Gate) (wg : Array Nat) (vals : List Bool) : Prop where
   size : wg.size = vals.length
   lt : ∀ w, wg.getD w zero < gs.size
@@ -263,7 +232,6 @@ theorem formGate_spec (inp : Nat → Bool) {one zero : Nat} {wg : Array Nat} {gs
       unfold formVal
       simp [hc]
 
-/-- The gates of forms `fs`, pushed onto `acc`. -/
 def formsGates (one zero : Nat) (wg : Array Nat) : Array Gate → List Form → Array Nat → Array Gate × Array Nat
   | gs, [], acc => (gs, acc)
   | gs, f :: rest, acc =>
@@ -301,16 +269,11 @@ theorem formsGates_spec (inp : Nat → Bool) {one zero : Nat} {wg : Array Nat} {
         rw [show acc.size + (m + 1) = (acc.push (formGate one zero wg gs f).2).size + m by simp; omega, this]
         rfl
 
-/-! ## Reads as gates: the decoders -/
-
-/-- Minterms `i, i + 1, …`: minterm `i` is `lo[i mod 2^h] AND hi[i / 2^h]`. -/
 def minterms (lo hi : Array Nat) (h : Nat) : Array Gate → Nat → Nat → Array Nat → Array Gate × Array Nat
   | gs, 0, _, acc => (gs, acc)
   | gs, cnt + 1, i, acc =>
     minterms lo hi h (gs.push (.and (lo.getD (i % 2 ^ h) 0) (hi.getD (i / 2 ^ h) 0))) cnt (i + 1) (acc.push gs.size)
 
-/-- One-hot minterms of the leaf gates `bs` (least significant first), as `table/v2`'s decoders lay them out: no leaf
-gives gate `one`; one leaf its NOT and itself; more the halves' minterms combined (`minterms`), `h` half the leaves. -/
 def decodeGates (one : Nat) (gs : Array Gate) (bs : Array Nat) : Array Gate × Array Nat :=
   if _hs : bs.size ≤ 1 then
     if bs.size = 0 then (gs, #[one]) else (gs.push (.not (bs.getD 0 0)), #[gs.size, bs.getD 0 0])
@@ -381,7 +344,6 @@ theorem getD_extract_lt (a : Array Nat) (s e : Nat) (he : e ≤ a.size) {n : Nat
 theorem getD_pair0 (a b d : Nat) : (#[a, b] : Array Nat).getD 0 d = a := rfl
 theorem getD_pair1 (a b d : Nat) : (#[a, b] : Array Nat).getD 1 d = b := rfl
 
-/-- **The decoders' minterms are one-hot** at the index their leaf gates spell. -/
 theorem decodeGates_spec (inp : Nat → Bool) (one : Nat) :
     ∀ (n : Nat) (bs : Array Nat) (gs : Array Gate), bs.size = n → (∀ a, bs.getD a 0 < gs.size) → one < gs.size →
       gval inp gs one = true →
@@ -479,19 +441,13 @@ theorem decodeGates_spec (inp : Nat → Bool) (one : Nat) :
       rw [split_idx (Nat.two_pow_pos _) hlt, toList_split_nat bs (bs.size / 2), List.map_append, bitsIdx_append]
       simp [Nat.min_eq_left (Nat.le_of_lt hh2)]
 
-/-! ## Reads as gates: the value bits -/
-
-/-- The XOR of gates `xs` as one gate: `zero` for none. -/
 def xorGates (zero : Nat) (gs : Array Gate) : List Nat → Array Gate × Nat
   | [] => (gs, zero)
   | g :: rest => xorChain gs g rest
 
-/-- The low minterms whose word, at high minterm `h`, has bit `j` set. -/
 def sel (ws : Array Nat) (lo nl h j : Nat) : List Nat :=
   (List.range nl).filter fun l => (ws.getD (h * 2 ^ lo + l) 0).testBit j
 
-/-- Value bit `j`'s products, high minterms `h, h + 1, …`: the AND of `hi[h]` with the XOR of `sel`'s low minterms, when
-`sel` is not empty. -/
 def prodGates (zero : Nat) (ws : Array Nat) (lo : Nat) (loM hiM : Array Nat) (j : Nat) :
     Array Gate → Nat → Nat → List Nat → Array Gate × List Nat
   | gs, 0, _, acc => (gs, acc)
@@ -502,7 +458,6 @@ def prodGates (zero : Nat) (ws : Array Nat) (lo : Nat) (loM hiM : Array Nat) (j 
       let r := xorChain gs (loM.getD l 0) (ls.map (loM.getD · 0))
       prodGates zero ws lo loM hiM j (r.1.push (.and (hiM.getD h 0) r.2)) cnt (h + 1) (acc ++ [r.1.size])
 
-/-- Value bits `j, j + 1, …`: each the XOR of its products. -/
 def bitsGates (zero : Nat) (ws : Array Nat) (lo : Nat) (loM hiM : Array Nat) :
     Array Gate → Nat → Nat → Array Nat → Array Gate × Array Nat
   | gs, 0, _, acc => (gs, acc)
@@ -576,8 +531,6 @@ theorem prodGates_spec (inp : Nat → Bool) (zero : Nat) (ws : Array Nat) (lo : 
           gval inp gs (loM.getD l 0) := fun l _ => e0.gval inp (hlo l)
       rw [e0.gval inp (hhi h'), Verity.Boolean.xorSum_congr hsel']
 
-/-- **A read's value bits**: with the decoders' minterms one-hot at `loIdx` and `hiIdx`, bit `j + m`'s gate carries bit
-`j + m` of word `hiIdx · 2^lo + loIdx`. -/
 theorem bitsGates_spec (inp : Nat → Bool) (zero : Nat) (ws : Array Nat) (lo : Nat) (loM hiM : Array Nat) {loIdx hiIdx : Nat}
     (hloI : loIdx < loM.size) (hhiI : hiIdx < hiM.size) :
     ∀ cnt (gs : Array Gate) j acc, (∀ a, loM.getD a 0 < gs.size) → (∀ a, hiM.getD a 0 < gs.size) → zero < gs.size →
@@ -599,7 +552,6 @@ theorem bitsGates_spec (inp : Nat → Bool) (zero : Nat) (ws : Array Nat) (lo : 
       (by rw [p1.gval inp hz, hzv]) p2
     generalize hX : xorGates zero P.1 P.2 = X at x1 x2 x3
     have e : Ext gs X.1 := p1.trans x1
-    -- bit `j`'s value
     have hbit : gval inp X.1 X.2 = (ws.getD (hiIdx * 2 ^ lo + loIdx) 0).testBit j := by
       rw [x3, p3, xorSum_nil, Bool.false_xor, List.range'_eq_map_range, xorSum_map]
       simp only [Nat.zero_add]
@@ -640,7 +592,6 @@ theorem bitsGates_spec (inp : Nat → Bool) (zero : Nat) (ws : Array Nat) (lo : 
         have := h5 m (by omega)
         rw [show acc.size + (m + 1) = (acc.push X.2).size + m by simp; omega, this, show j + 1 + m = j + (m + 1) by omega]
 
-/-- A read's gates: its index forms' gates, split at `lo` into the two decoders, then its value bits `0 … vb − 1`. -/
 def readGates (one zero : Nat) (wg : Array Nat) (gs : Array Gate) (idx : Array Form) (ws : Array Nat) (lo vb : Nat) :
     Array Gate × Array Nat :=
   let ri := formsGates one zero wg gs idx.toList #[]
@@ -665,7 +616,6 @@ theorem getD_extract_lt' (a : Array Nat) (s e : Nat) {n : Nat} (h : ∀ x, a.get
     simp only [Array.getD, Array.size_extract, hx2, dite_false]
     exact h0
 
-/-- **A read's gates carry the table's bits** at the index its forms spell. -/
 theorem readGates_spec (inp : Nat → Bool) {one zero : Nat} {wg : Array Nat} {gs : Array Gate} {vals : List Bool}
     (hI : WInv inp one zero gs wg vals) (idx : Array Form) (ws : Array Nat) (lo vb : Nat) :
     Ext gs (readGates one zero wg gs idx ws lo vb).1 ∧ (readGates one zero wg gs idx ws lo vb).2.size = vb ∧
@@ -678,7 +628,6 @@ theorem readGates_spec (inp : Nat → Bool) {one zero : Nat} {wg : Array Nat} {g
   generalize hRI : formsGates one zero wg gs idx.toList #[] = RI at f1 f2 f4 f5 ⊢
   simp only [Array.size_empty, Nat.zero_add, Array.length_toList] at f2 f5
   have hI1 := hI.ext f1
-  -- the index bits' gates, as leaves
   have hleaf : ∀ a, RI.2.getD a 0 < RI.1.size := by
     intro a
     by_cases ha : a < RI.2.size
@@ -701,7 +650,6 @@ theorem readGates_spec (inp : Nat → Bool) {one zero : Nat} {wg : Array Nat} {g
     (fun a => Nat.lt_of_lt_of_le (getD_extract_lt' RI.2 lo RI.2.size hleaf a) l1.size_le) hI2.one_lt hI2.one_val
   generalize hRH : decodeGates one RL.1 (RI.2.extract lo RI.2.size) = RH at r1 r2 r3 r4 ⊢
   have hI3 := hI2.ext r1
-  -- the two halves' indices
   obtain ⟨loIdx, hloDef⟩ : ∃ x, bitsIdx ((RI.2.extract 0 lo).toList.map (gval inp RI.1)) = x := ⟨_, rfl⟩
   obtain ⟨hiIdx, hhiDef⟩ : ∃ x, bitsIdx ((RI.2.extract lo RI.2.size).toList.map (gval inp RI.1)) = x := ⟨_, rfl⟩
   have hloI : loIdx < RL.2.size := by
@@ -730,8 +678,6 @@ theorem readGates_spec (inp : Nat → Bool) {one zero : Nat} {wg : Array Nat} {g
     rw [Nat.mul_comm, Nat.add_comm]
   refine ⟨f1.trans (l1.trans (r1.trans b1)), b2, b4, fun j hj => ?_⟩
   rw [b5 j hj, hidx]
-
-/-! ## Items as gates -/
 
 theorem getD_append_nat (a b : Array Nat) (w d : Nat) :
     (a ++ b).getD w d = if w < a.size then a.getD w d else b.getD (w - a.size) d := by
@@ -784,7 +730,6 @@ theorem WInv.push {inp : Nat → Bool} {one zero : Nat} {gs : Array Gate} {wg : 
 
 theorem formVal_default (v : Nat → Bool) : formVal v default = false := rfl
 
-/-- A callee's output `o` as `evalT` gives it: its output form's value, false past its outputs. -/
 theorem evalT_getD_outputs (types : String → Option CircuitType) (words : String → Option (Array Nat)) (F : Nat)
     (u : CircuitType) (x : Nat → Bool) (o : Nat) :
     (evalT types words (F + 1) u x).getD o false = formVal ((runT types words (fun u y => evalT types words F u y) u
@@ -794,9 +739,6 @@ theorem evalT_getD_outputs (types : String → Option CircuitType) (words : Stri
   · simp [ho, Array.getD]
   · simp [ho, Array.getD, formVal_default]
 
-/-- Items of type `t` as gates, from the wires' gates `wg`: an AND's gate over its forms' gates; a call's callee inlined on
-its input forms' gates (at depth `F`, as `evalT` runs it: none left gives zero outputs); a read's `readGates`, split at
-`loOf n` for an `n`-bit index. Returns the gates and the wires' gates. -/
 def flatItems (types : String → Option CircuitType) (words : String → Option (Array Nat)) (loOf : Nat → Nat)
     (one zero : Nat) : Nat → CircuitType → Array Gate → Array Nat → List Item → Array Gate × Array Nat
   | _, _, gs, wg, [] => (gs, wg)
@@ -944,11 +886,6 @@ theorem flatItems_spec (types : String → Option CircuitType) (words : String �
       simp only [flatItems, runT, itemOut, List.append_nil]
       exact ⟨r1, r2⟩
 
-/-! ## The flattened circuit -/
-
-/-- **Type `t`'s Boolean circuit**, calls inlined to depth `F` (`evalT`'s fuel): gates `0 … inBits − 1` are its inputs,
-gate `inBits` the input `one` (fed 1) and gate `inBits + 1` its NOT, `zero`; then its items' gates. Returns the gates and
-its outputs' gates. -/
 def flatten (types : String → Option CircuitType) (words : String → Option (Array Nat)) (loOf : Nat → Nat) (F : Nat)
     (t : CircuitType) : Array Gate × Array Nat :=
   let gs0 := (Array.replicate (t.inBits + 1) Gate.input).push (.not t.inBits)
@@ -968,8 +905,6 @@ theorem gval_inputs (inp : Nat → Bool) : ∀ m i, i < m → gval inp (Array.re
       rw [this]
       simp [Gate.step, evalG_size]
 
-/-- **`flatten_eval`: the flattened circuit computes the type.** On inputs `x`, with `one` fed 1, output `o`'s gate carries
-`evalT`'s output `o`, at any depth: the program's Boolean circuit and its types say the same thing. -/
 theorem flatten_eval (types : String → Option CircuitType) (words : String → Option (Array Nat)) (loOf : Nat → Nat)
     (F : Nat) (t : CircuitType) (x : Nat → Bool) (o : Nat) (ho : o < t.outputs.size) :
     gval (fun i => if i < t.inBits then x i else true) (flatten types words loOf F t).1
@@ -1030,7 +965,6 @@ theorem Topo.ext_whole {gs : Array Gate} (h : Topo gs) {k : Nat} (hk : k ≤ gs.
   have := h.prefix_ext gs.size hk (Nat.le_refl _)
   rwa [Array.extract_size] at this
 
-/-- In a circuit whose gates read only earlier gates, gate `i`'s value is its step on the gates before it. -/
 theorem gval_step {gs : Array Gate} (h : Topo gs) (inp : Nat → Bool) {i : Nat} (hi : i < gs.size) :
     gval inp gs i = gs[i].step inp (evalG inp (gs.extract 0 i)) := by
   have e := h.ext_whole (k := i + 1) (by omega)
@@ -1045,7 +979,6 @@ theorem gval_prefix {gs : Array Gate} (h : Topo gs) (inp : Nat → Bool) {i a : 
   rw [(h.ext_whole hi).gval inp (by simp [Array.size_extract]; omega)]
   rfl
 
-/-- **The flattened circuit's gates read only earlier gates**, and its outputs are gates of it. -/
 theorem flatten_topo (types : String → Option CircuitType) (words : String → Option (Array Nat)) (loOf : Nat → Nat)
     (F : Nat) (t : CircuitType) :
     Topo (flatten types words loOf F t).1 ∧ ∀ o, (flatten types words loOf F t).2.getD o 0 < (flatten types words loOf F t).1.size := by
@@ -1058,7 +991,6 @@ theorem flatten_topo (types : String → Option CircuitType) (words : String →
       subst this
       simp [Array.getElem_push, Gate.args] at ha
       omega
-  -- any valuation gives the invariant, and so the extension
   let inp : Nat → Bool := fun i => if i < t.inBits then false else true
   have hin : ∀ i < t.inBits + 1, gval inp (Array.replicate (t.inBits + 1) Gate.input) i = inp i := fun i hi =>
     gval_inputs inp _ i hi
@@ -1103,10 +1035,7 @@ theorem flatten_topo (types : String → Option CircuitType) (words : String →
       (c1.trans f1).size_le
     simpa [Array.getD, ho] using this
 
-/-! ## As a `Verity.Boolean.Circuit` -/
-
-/-- Gate `g` as a `Verity.Boolean.Op`: its arguments as gates of the array (below it, when `Topo` holds; an argument past the
-array reads `g` itself, which `Topo` rules out). -/
+/-- An argument past the array reads `g` itself, which `Topo` rules out. -/
 def toOp (gs : Array Gate) (g : Fin gs.size) : Verity.Boolean.Op gs.size :=
   let fin := fun a : ℕ => if ha : a < gs.size then (⟨a, ha⟩ : Fin gs.size) else g
   match gs[g.val]'g.isLt with
@@ -1160,14 +1089,12 @@ theorem toOp_args {gs : Array Gate} (h : Topo gs) (g : Fin gs.size) : ∀ a ∈ 
     subst ha
     exact hx
 
-/-- **A gate array as a `Verity.Boolean.Circuit`**: the same gates, each over gates below it (`Topo`). -/
 def toCircuit (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.size)) : Verity.Boolean.Circuit where
   N := gs.size
   op := toOp gs
   topo := toOp_args h
   outputs := outs
 
-/-- **The circuit computes the gate array**: on inputs `inp`, gate `g`'s value in `Verity.Boolean.Circuit.eval` is `gval`'s. -/
 theorem toCircuit_eval (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.size)) (inp : ℕ → Bool)
     (g : Fin gs.size) : (toCircuit gs h outs).eval (fun g => inp g.val) g = gval inp gs g.val := by
   suffices ∀ n (hn : n < gs.size), (toCircuit gs h outs).eval (fun g => inp g.val) ⟨n, hn⟩ = gval inp gs n from
@@ -1209,14 +1136,11 @@ theorem toCircuit_eval (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.si
     simp only [Verity.Boolean.Op.apply, Gate.step]
     rw [ih x hx (by omega), gval_prefix h inp (Nat.le_of_lt hn) hx]
 
-/-- **Type `t`'s Boolean circuit**, as a `Verity.Boolean.Circuit`: `flatten`'s gates, its outputs' gates as outputs. -/
 def flatCircuit (types : String → Option CircuitType) (words : String → Option (Array ℕ)) (loOf : ℕ → ℕ) (F : ℕ)
     (t : CircuitType) : Verity.Boolean.Circuit :=
   toCircuit (flatten types words loOf F t).1 (flatten_topo types words loOf F t).1
     (Finset.univ.filter fun g => g.val ∈ (flatten types words loOf F t).2)
 
-/-- **`flatCircuit_eval`**: on inputs `x` (and `one` fed 1), the gate of type `t`'s output `o` carries `evalT`'s
-output `o`, in `Verity.Boolean.Circuit.eval`. -/
 theorem flatCircuit_eval (types : String → Option CircuitType) (words : String → Option (Array ℕ)) (loOf : ℕ → ℕ)
     (F : ℕ) (t : CircuitType) (x : ℕ → Bool) (o : ℕ) (ho : o < t.outputs.size) :
     (flatCircuit types words loOf F t).eval (fun g => if g.val < t.inBits then x g.val else true)

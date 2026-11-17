@@ -9,19 +9,7 @@ import Proofs.Flock.Level3.LookupRows
 import Proofs.Flock.Soundness.Refine.Arith
 import VCVio.Prelude.Core
 
-/-!
-# The final check refines the model's (`Flock.Ligerito`)
-
-`final_refines`: when the executable's final check (`finalProg`, the verifier's last step) passes, the model's
-`finalCheck` holds on the images of its state, given that the executable's basis at the original point is the model's
-`bHat` there (`hbasis`); and the final check touches no rounds.
-
-The two compute the same sum term by term:
-
-* the subspace polynomials: the executable's `whats` is the model's `What` at `omega` (`whats_get`);
-* the executable's out-of-domain and consistency loops are folds (`forIn_yield_fold`), whose words are the model's
-  sums (`oodFold_get`, `consFold_get`).
--/
+/-! The executable's final check refines the model's `finalCheck` (`final_refines`). -/
 
 @[expose] public section
 
@@ -31,8 +19,6 @@ open Flock FlockLevel3 Game Transcript Model Accounting
 
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
-
-/-! ## The subspace polynomials (`Flock.Ligerito`) -/
 
 theorem whatsGo_get (sv : Array F128) (ω : F128) : ∀ (fuel i : ℕ) (s : F128) (out : Array F128),
     (∀ j < i + fuel, fOf sv[j]! = (sPoly j).eval (beta j)) → fOf s = (sPoly i).eval (fOf ω) →
@@ -60,8 +46,6 @@ theorem whatsGo_get (sv : Array F128) (ω : F128) : ∀ (fuel i : ℕ) (s : F128
             show i + 1 + k = i + (k + 1) by omega] at this
           exact this
 
-/-- **The subspace polynomials** (`Flock.Ligerito`): the executable's `whats (svTable m) q n` at `k < n ≤ m` is the model's
-`Ŵ_k(ω_q)`. -/
 theorem whats_get (m q n k : ℕ) (hn : n ≤ m) (hk : k < n) :
     fOf (whats (svTable m) q n)[k]! = What k (FlockLevel3.omega q) := by
   have := (whatsGo_get (svTable m) ⟨q.toUInt64, 0⟩ n 0 ⟨q.toUInt64, 0⟩ #[]
@@ -69,24 +53,18 @@ theorem whats_get (m q n k : ℕ) (hn : n ≤ m) (hk : k < n) :
   rw [Nat.zero_add, Array.size_empty, Nat.zero_add] at this
   exact this
 
-/-! ## The executable's final check, as folds -/
-
-/-- The original point (`Flock.Ligerito`): the level-0 challenges, then each later level's challenges after its first. -/
 def origE (initCh : Array F256) (levels : Array (Array F256)) : Array F256 :=
   levels.foldl (fun acc l => acc ++ l.extract 1 l.size) initCh
 
-/-- `Π_{s ≥ a} cff(levels[s][0])`, as the executable folds it. -/
 def prodFromE (levels : Array (Array F256)) (a : ℕ) : F256 :=
   ((levels.map fun l => l[0]!).extract a (levels.map fun l => l[0]!).size).foldl (fun acc c => acc * Flock.cff c) 1
 
-/-- An out-of-domain sample's fixed coordinates and scale. -/
 def oodFixed (levels : Array (Array F256)) (orig : Array F256) (o : Flock.OodCtx) : Array F256 × F256 :=
   match o.split with
   | none => (orig, prodFromE levels 0)
   | some s => ((levels.extract s levels.size).foldl (fun acc l => if acc.isEmpty then l else acc ++ l.extract 1 l.size)
       #[], prodFromE levels (s + 1))
 
-/-- One out-of-domain sample's contribution to the residual weights. -/
 def oodStep (ext : ℕ) (fs : Array F256 × F256) (o : Flock.OodCtx) (res : Array F256) : Array F256 :=
   (Array.range (2 ^ ext)).map fun y =>
     res[y]! + F256.smul (F256.smul ((Array.range fs.1.size).foldl
@@ -94,11 +72,9 @@ def oodStep (ext : ℕ) (fs : Array F256 × F256) (o : Flock.OodCtx) (res : Arra
       ((Array.range ext).foldl (fun acc j =>
         acc * (if (y >>> j) % 2 == 1 then o.z[fs.1.size + j]! else (1 : F128) + o.z[fs.1.size + j]!)) (1 : F128))
 
-/-- A consistency context's fixed coordinates. -/
 def consFixed (levels : Array (Array F256)) (start : ℕ) : Array F256 :=
   (levels.extract start levels.size).foldl (fun acc l => acc ++ l.extract 1 l.size) #[]
 
-/-- A consistency context's per-residual sum over its queries. -/
 def consAdd (sv : Array F128) (ext : ℕ) (fixed : Array F256) (cs : Flock.ConsCtx) : Array F256 :=
   (List.range' 0 cs.pos.size).foldl (fun add j =>
     (Array.range (2 ^ ext)).map fun y =>
@@ -108,24 +84,20 @@ def consAdd (sv : Array F128) (ext : ℕ) (fixed : Array F256) (cs : Flock.ConsC
             if (y >>> i) % 2 == 1 then acc * (Flock.whats sv cs.pos[j]! cs.cols)[fixed.size + i]! else acc) (1 : F128)))
     (Array.replicate (2 ^ ext) 0)
 
-/-- One consistency context's contribution to the residual weights. -/
 def consStep (sv : Array F128) (ext : ℕ) (levels : Array (Array F256)) (res : Array F256) (cs : Flock.ConsCtx) :
     Array F256 :=
   (Array.range (2 ^ ext)).map fun y =>
     res[y]! + ((consAdd sv ext (consFixed levels cs.start) cs)[y]! * prodFromE levels cs.start).smul cs.beta
 
-/-- The residual weights after both loops. -/
 def resE (basisAt : Array F256 → ℕ → Array F256) (n : ℕ) (initCh : Array F256) (levels : Array (Array F256))
     (ext : ℕ) (st : LState) : Array F256 :=
   st.conss.toList.foldl (consStep (svTable (n + 1)) ext levels)
     (st.oods.toList.foldl (fun res o => oodStep ext (oodFixed levels (origE initCh levels) o) o res)
       ((basisAt (origE initCh levels) ext).map (· * prodFromE levels 0)))
 
-/-- The final check's left-hand side, `Σ_y res[y]·(yr[2y] + yr[2y + 1]·u)`. -/
 def lhsE (yr : Array F128) (ext : ℕ) (res : Array F256) : F256 :=
   (Array.range (2 ^ ext)).foldl (fun acc y => acc + res[y]! * ⟨yr[2 * y]!, yr[2 * y + 1]!⟩) (0 : F256)
 
-/-- A loop whose every step yields a function of the step, touching neither state, is a fold. -/
 theorem forIn_yield_fold {α σ : Type} (body : α → σ → LM (ForInStep σ)) (g : σ → α → σ) (P : α → Prop)
     (hb : ∀ a s st tr b st' tr', body a s st tr = .ok ((b, st'), tr') →
       b = .yield (g s a) ∧ st' = st ∧ tr' = tr ∧ P a) :
@@ -210,20 +182,16 @@ theorem finalProg_ok {p : LigeritoProof} {basisAt : Array F256 → ℕ → Array
   rw [← c3, hres₂, hres₁]
   rfl
 
-/-! ## The final check's words, as the model's -/
-
 theorem getElem!_range_map {α : Type} [Inhabited α] (f : ℕ → α) {N y : ℕ} (hy : y < N) :
     ((Array.range N).map f)[y]! = f y := by
   rw [getElem!_pos _ y (by simpa using hy), Array.getElem_map, Array.getElem_range]
 
-/-- One out-of-domain sample's term in residual word `y`. -/
 def oodTerm (ext : ℕ) (fs : Array F256 × F256) (o : Flock.OodCtx) (y : ℕ) : F256 :=
   F256.smul (F256.smul ((Array.range fs.1.size).foldl
       (fun acc t => acc * ((1 : F256) + F256.ofF o.z[t]! + fs.1[t]!)) (1 : F256) * fs.2) o.beta)
     ((Array.range ext).foldl (fun acc j =>
       acc * (if (y >>> j) % 2 == 1 then o.z[fs.1.size + j]! else (1 : F128) + o.z[fs.1.size + j]!)) (1 : F128))
 
-/-- One consistency context's term in residual word `y`. -/
 def consTerm (sv : Array F128) (ext : ℕ) (levels : Array (Array F256)) (cs : Flock.ConsCtx) (y : ℕ) : F256 :=
   ((consAdd sv ext (consFixed levels cs.start) cs)[y]! * prodFromE levels cs.start).smul cs.beta
 
@@ -263,7 +231,6 @@ theorem gOf_cff (c : F256) : gOf (Flock.cff c) = Model.cff execArith (gOf c) := 
   rw [gOf_add, gOf_one, gOf_mul, gOf_add, gOf_one, gOf_u]
   rfl
 
-/-- The model's levels, from the executable's. -/
 abbrev levelsOf (levels : Array (Array F256)) : List (List 𝕂) := levels.toList.map fun l => l.toList.map gOf
 
 theorem tail_map_gOf (l : List F256) : (l.map gOf).tail = l.tail.map gOf := by cases l <;> rfl
@@ -386,7 +353,6 @@ theorem getD_map_fOf (a : Array F128) (i : ℕ) (hi : i < a.size) : (a.toList.ma
 theorem getD_map_gOf (a : Array F256) (i : ℕ) (hi : i < a.size) : (a.toList.map gOf).getD i 0 = gOf a[i]! := by
   rw [List.getD_eq_getElem _ _ (by simpa using hi), List.getElem_map, Array.getElem_toList, getElem!_pos a i hi]
 
-/-- **One out-of-domain term** (`Flock.Ligerito`): the executable's, in residual word `y`, is the model's. -/
 theorem gOf_oodTerm (ext : ℕ) (fs : Array F256 × F256) (o : Flock.OodCtx) (y : ℕ)
     (hz : o.z.size = fs.1.size + ext) :
     gOf (oodTerm ext fs o y) = execArith.embed (fOf o.beta) * gOf fs.2 *
@@ -428,7 +394,6 @@ theorem gOf_oodTerm (ext : ℕ) (fs : Array F256 × F256) (o : Flock.OodCtx) (y 
   ring
 
 
-/-- One query's term in a consistency context's sum. -/
 def consAddTerm (sv : Array F128) (ext : ℕ) (fixed : Array F256) (cs : Flock.ConsCtx) (y j : ℕ) : F256 :=
   F256.smul (F256.smul ((Array.range fixed.size).foldl (fun acc i =>
       acc * ((1 : F256) + fixed[i]! * F256.ofF ((1 : F128) + (Flock.whats sv cs.pos[j]! cs.cols)[i]!))) (1 : F256))
@@ -450,9 +415,6 @@ theorem consAdd_get (sv : Array F128) (ext : ℕ) (fixed : Array F256) (cs : Flo
   refine (hgen _ _).trans ?_
   rw [getElem!_pos _ y (by simpa using hy), Array.getElem_replicate]
 
-/-- **One consistency term** (`Flock.Ligerito`): the executable's, in residual word `y`, is the model's, when the context's
-columns are its fixed coordinates and the residual (`hcols`), within the subspace table (`hm`), and its queries within
-its batching table (`hpos`). -/
 theorem gOf_consTerm (m ext : ℕ) (levels : Array (Array F256)) (hl : ∀ l ∈ levels.toList, l.size = 4)
     (cs : Flock.ConsCtx) (y : ℕ) (hy : y < 2 ^ ext) (hcols : (consFixed levels cs.start).size + ext = cs.cols)
     (hm : cs.cols ≤ m) (hpos : cs.pos.size ≤ 2 ^ cs.alpha.size) :
@@ -527,7 +489,6 @@ theorem consFixed_size_le (initCh : Array F256) (levels : Array (Array F256)) (s
   simp only [List.map_append, List.flatten_append, List.length_append] at e
   omega
 
-/-- The final check's left-hand side, as the model's sum. -/
 theorem gOf_lhsE (yr : Array F128) (ext : ℕ) (res : Array F256) :
     gOf (lhsE yr ext res) = ∑ y ∈ Finset.range (2 ^ ext),
       gOf res[y]! * (execArith.embed (fOf yr[2 * y]!) + execArith.embed (fOf yr[2 * y + 1]!) * execArith.u) := by
@@ -597,10 +558,6 @@ theorem final_refines {p : LigeritoProof} {basisAt : Array F256 → ℕ → Arra
     rw [gOf_consTerm (n + 1) ext levels hl cs y hy hc (by omega) (hpos cs hcs')]
     simp only [consOf]
 
-/-- **Ligerito refines the model's** (`Flock.Ligerito`). When the executable's Ligerito verifier accepts, and its basis
-`basisAt` is the model's `bHat` of `b` at every original point with the schedule's residual (`hbasis`), the model's
-compiled Ligerito, played with the proof's messages and the rounds consumed, accepts at the openings `o`: its verdict
-there is true, its caps are the proof's, and every request passed the executable's Merkle check. -/
 theorem ligerito_accepts {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (r : ℕ) (b : ℕ → 𝔽)
     (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)

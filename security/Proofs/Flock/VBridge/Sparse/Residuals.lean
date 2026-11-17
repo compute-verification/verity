@@ -8,14 +8,7 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Regions
 import Proofs.Flock.VBridge.Algebra.Build
 
-/-!
-# `RecSparse_v1`'s residuals and verifier row over the model's field
-
-On ports of the sizes `sparseS` wants, `residuals` succeeds (`residuals_sparseS`) and residual `nm` is its `spec`
-evaluated (`rget_eq`): its added terms plus its products, read through `fOf`; `specVal_*` spell each one out. The
-verifier row's parts are the model's values at the coins (`v_*`): the equality tables are `eqAt` at the coins they
-slice, the rounds' slots are `r` and `r^k + r`, and the two dots are `ŵ(ζ_r)` and `Ũ(r_s)`.
--/
+/-! `RecSparse_v1`'s residuals and verifier row over the model's field (`residuals_sparseS`, `rget_eq`). -/
 
 @[expose] public section
 
@@ -29,8 +22,6 @@ noncomputable section
 
 variable (sh : SparseShape)
 
-/-! ## Sums -/
-
 theorem fOf_foldl_sum {β : Type} (f : β → F128) : ∀ (l : List β) (x : F128),
     fOf (l.foldl (fun x b => x + f b) x) = fOf x + (l.map fun b => fOf (f b)).sum
   | [], x => by simp
@@ -43,9 +34,6 @@ theorem sum_range_list {M : Type} [AddCommMonoid M] (f : ℕ → M) :
       rw [List.range_succ, List.map_append, List.sum_append, sum_range_list f n, Finset.sum_range_succ]
       simp
 
-/-! ## The residuals -/
-
-/-- A residual's value from its spec: its added terms plus its products. -/
 def specVal (w v : Array F128) (s : List (Term × Term) × List Term) : 𝔽 :=
   (s.2.map fun t => fOf (termValue w v t)).sum +
     (s.1.map fun ab => fOf (termValue w v ab.1) * fOf (termValue w v ab.2)).sum
@@ -83,7 +71,6 @@ theorem fOf_resOf (w v : Array F128) {nm : RName} (hnm : nm ∈ names sh) :
   obtain ⟨h1, h2⟩ := mem_opTerms sh hnm hab
   simp only [Function.comp_apply, opValue_opIx sh w v h1, opValue_opIx sh w v h2]
 
-/-- The residuals `residuals_sparseS` gives. -/
 abbrev resArr (w v : Array F128) : Array F128 := ((names sh).map (resOf sh)).toArray.map (resValue (sparseS sh) w v)
 
 theorem residuals_sparseS (w v : Array F128) (hw : w.size = nw sh) (hv : v.size = nv sh) :
@@ -98,8 +85,6 @@ theorem rget_eq (w v : Array F128) {nm : RName} (hnm : nm ∈ names sh) :
   rw [getElem!_pos _ _ (by simpa [resArr] using hl)]
   simp only [resArr, Array.getElem_map, List.getElem_toArray, List.getElem_map, List.getElem_idxOf hl]
   exact fOf_resOf sh w v hnm
-
-/-! ## Each residual -/
 
 theorem mem_h1 : RName.h1 ∈ names sh := by simp [names]
 theorem mem_pre {j : ℕ} (hj : j < 6) : RName.pre j ∈ names sh := by simp [names, hj]
@@ -153,8 +138,6 @@ theorem specVal_claim : specVal w v (spec sh .claim) = fOf w[wClaim sh]! +
     Function.comp_def, termValue]
   rw [sum_range_list]
 
-/-! ## The rounds' slots -/
-
 theorem degSum_succ (j : ℕ) : degSum sh (j + 1) = degSum sh j + deg sh j := by
   unfold degSum deg
   have e0 : (j + 1) * (2 * sh.ell + 1) = j * (2 * sh.ell + 1) + (2 * sh.ell + 1) := by ring
@@ -192,8 +175,6 @@ theorem roundOf_degSum {j k : ℕ} (hk : k < deg sh j) : roundOf sh (degSum sh j
 theorem fOf_powN (r : F128) : ∀ n, fOf (powN r n) = fOf r ^ n
   | 0 => fOf_one
   | n + 1 => by rw [powN, fOf_mul, fOf_powN r n, pow_succ]
-
-/-! ## The verifier's row -/
 
 variable (c : SCoins)
 
@@ -315,7 +296,6 @@ theorem v_ur (hc : 12 + nR sh ≤ c.cs.size) : fOf (verifierRow sh c)[vUr sh]! =
   refine Finset.sum_congr rfl fun σ _ => ?_
   rw [eqTable_slice c (12 + sh.nu) sh.sLog hn σ.val σ.isLt]
 
-/-- Past `vEqp`, `vAt` reads the last three tables. -/
 theorem vAt_tail {i : ℕ} (hi : vEqp sh ≤ i) : vAt sh c i =
     if i < vEqs sh then (eqTable (slice c (12 + nR sh) sh.pLog))[i - vEqp sh]!
     else if i < vEqt sh then (eqTable (slice c (12 + sh.nu) sh.sLog))[i - vEqs sh]!

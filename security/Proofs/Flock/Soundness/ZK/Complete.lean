@@ -8,27 +8,8 @@ public import Proofs.Flock.Soundness.ZK.Masking
 import Proofs.Flock.Soundness.NovelBasis
 import VCVio.Prelude.Core
 
-/-!
-# Zero knowledge: the reference prover is complete, and Flock ZK's level-0 padding is onto
-
-What masking adds to a table keeps the verifier accepting:
-
-* **`padColumn_honest`, against the model verifier.** `Model.ligeritoPad` checks rep `r`'s level-0 rows through
-  `Model.padColumn`: the witness lanes folded by the lane-round coins, the extra lanes weighted by `ρ`, and the padding
-  correction for `ȳ`. On the honest padded table, that column is the codeword of the restarted table `y₁'`, at every
-  position: the padding cancels (characteristic 2), so level 0's check sees what the unpadded Ligerito would on `y₁'`.
-  This is the identity (★) of §4.3 at every position, in the model's own terms.
-* **`inner_complete`, the masked verifier's inner check.** On the reference prover's output, `⟨λ, Y₁⟩ = θ + β·τ`, and at
-  every opened pads position `Code(Y)_k = C_h[k] + β·C_μ[k]`; every opened leaf is the leaf of its opened content.
-* **`padOnto_M1`.** Lemma B's row (ii) for Flock ZK's code (`zk::lane_codeword`): at distinct opened positions, no
-  more than `t_pad` of them, a padding `(X_L + κ)·μ` over the first `t_pad` novel-basis polynomials reaches every vector
-  of values, given `X_L + κ ≠ 0` there (`Assumptions.PadNonvanishing`, §1.2).
-* **`padsOnto_monomial`.** Row (viii) for the pads code: at distinct nonzero points, no more than the padding's length,
-  the padding `x^s·Σ_j pad_j·x^j` reaches every vector of values.
-
-What the clear protocol needs for completeness (the zerocheck, lincheck and ring-switch rounds, Ligerito from `y₁'` on) is
-the unmasked protocol's own completeness, which masking doesn't change and this file doesn't prove.
--/
+/-! What masking adds to a table keeps the verifier accepting; the clear protocol's own completeness, which masking
+doesn't change, is not proved here. -/
 
 @[expose] public section
 
@@ -38,10 +19,7 @@ open Finset Model Polynomial
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-! ## Level 0 against `Model.padColumn` -/
-
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
-/-- Folding columns and then encoding is encoding the folded messages. -/
 theorem sum_embed_swap {α : Type} (s : Finset α) {n : ℕ} (A : Arith F K) (a : α → K) (M : α → Fin n → F)
     (b : Fin n → F) :
     ∑ j, (∑ ℓ ∈ s, a ℓ * A.embed (M ℓ j)) * A.embed (b j) = ∑ ℓ ∈ s, a ℓ * A.embed (∑ j, M ℓ j * b j) := by
@@ -50,11 +28,6 @@ theorem sum_embed_swap {α : Type} (s : Finset α) {n : ℕ} (A : Arith F K) (a 
   exact Finset.sum_congr rfl fun ℓ _ => Finset.sum_congr rfl fun j _ => by ring
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
-/-- **Level 0's padded column is the codeword of the restarted table** (§4.3 (★), completeness of Flock ZK's level-0
-row check against `Model.padColumn`). Lane `ℓ < 2^|ch|` of the committed table holds `Enc(P_ℓ) + Pad(μ_ℓ)` at position
-`p`, and extra lane `xl i` holds `Enc(R_i) + Pad(μR_i)`, where `Pad(μ)(p) = Σ_j μ_j·(c₀·X̂_j + X̂_{2^cols+j})(ω_p)` is
-Flock ZK's padding and the code has `d = cols + 1` bits. With `ȳ = Σ_ℓ eq(ch, ℓ)·μ_ℓ + Σ_i ρ_i·μR_i`, the verifier's
-column is `Σ_c y₁'[c]·X̂_c(ω_p)`, `y₁' = Σ_ℓ eq(ch, ℓ)·P_ℓ + Σ_i ρ_i·R_i`. -/
 theorem padColumn_honest [CharP K 2] (A : Arith F K) (cols t : ℕ) (c₀ : F) (ch : List K) {e : ℕ} (ρ : Fin e → K)
     (xl : Fin e → ℕ) (C : Oracle F) (P : ℕ → Fin (2 ^ cols) → F) (μ : ℕ → Fin t → F) (R : Fin e → Fin (2 ^ cols) → F)
     (μR : Fin e → Fin t → F) (p : ℕ)
@@ -97,12 +70,6 @@ theorem padColumn_honest [CharP K 2] (A : Arith F K) (cols t : ℕ) (c₀ : F) (
   linear_combination two (∑ ℓ ∈ Finset.range (2 ^ ch.length), eqList ch ℓ * A.embed (∑ j, μ ℓ j * Gc j))
     + two (∑ i, ρ i * A.embed (∑ j, μR i j * Gc j))
 
-/-! ## Flock ZK's level-0 padding is onto the opened positions -/
-
-/-- **Lemma B's row (ii) for Flock ZK's code**: when the table's level-0 code at its opened positions `pos` is Flock ZK's (message in
-`[0, 2^cols)`, padding `c₀·X̂_j + X̂_{2^cols+j}` at `cols + 1` bits), the positions are distinct, there are at most
-`t_pad ≤ 2^cols` of them, and `X_L + κ` vanishes at none (`PadNonvanishing`), the padding reaches every vector of values
-there. -/
 theorem padOnto_M1 {W Salt Seed D Hi VL : Type} (T : Table F K W Salt Seed D Hi VL) (A : Arith F K) (hA : A.Correct)
     (cols : ℕ) (hL : cols ≤ 40) (ht : T.tpad ≤ 2 ^ cols) (hS : T.nS ≤ T.tpad) (κ : F) (pos : Fin T.nS → ℕ)
     (hpos : Function.Injective pos) (hlt : ∀ q, pos q < 2 ^ (cols + 1))
@@ -138,10 +105,6 @@ theorem padOnto_M1 {W Salt Seed D Hi VL : Type} (T : Table F K W Salt Seed D Hi 
   exact Finset.sum_congr rfl fun j _ => by rw [e]; ring
 
 omit [Fintype F] [Fintype K] [DecidableEq K] in
-/-- **Lemma B's row (viii) for the pads code** (§2.4 line 0, `Code(m) = Σ_i m_i·X^i` at the points of the pads tree): when
-rep `r`'s opened pads positions are distinct nonzero points `x r k`, at most `nPad` of them, and the padding's
-coefficient at position `k` is `x^(s + j)` (the padding follows the `s` pads), the padding reaches every vector of values
-there. This is T4 with the monomials and `g(x) = x^s`. -/
 theorem padsOnto_monomial {W Salt Seed D Hi VL : Type} (T : Table F K W Salt Seed D Hi VL) (s : ℕ) (x : Fin 2 → Fin T.nQ → F)
     (hx : ∀ r, Function.Injective (x r)) (h0 : ∀ r k, x r k ≠ 0) (hQ : T.nQ ≤ T.nPad)
     (hCp : ∀ r k j, T.Cp r k j = x r k ^ (s + j.val)) : T.PadsOnto := by
@@ -164,16 +127,11 @@ theorem padsOnto_monomial {W Salt Seed D Hi VL : Type} (T : Table F K W Salt See
   rw [← this, Finset.mul_sum]
   exact Finset.sum_congr rfl fun j _ => by rw [hCp, pow_add]; ring
 
-/-! ## The masked verifier's inner check -/
-
 namespace Table
 
 variable {W Salt Seed D Hi VL : Type} (T : Table F K W Salt Seed D Hi VL) [CharP F 2]
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
-/-- **The inner proof is complete** (§2.4 line 16): on the reference prover's output, for a witness whose pads satisfy
-the constraint, the masked verifier's checks hold: `⟨λ, Y₁⟩ = θ + β·τ`, `Code(Y)_k = C_h[k] + β·C_μ[k]` at every opened
-pads position, and every opened leaf (level 0, the pads tree, `τ`'s commitment) is the leaf of its opened content. -/
 theorem inner_complete (w : W) (hinner : T.InnerHolds w) (ω : T.Rand) (r : Fin 2) :
     let v := T.view w ω
     ∑ i, T.lam r v.pre i * v.Y1 r i = T.theta r v.pre + T.β r * v.tau r

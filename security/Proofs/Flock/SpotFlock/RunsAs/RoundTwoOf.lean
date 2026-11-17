@@ -3,13 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.RunsAs.Statement
 public import Proofs.Flock.SpotFlock.RunsAs.Round2
 
-/-!
-# Round 2's hand-off to the run
-
-`RunsAs.RoundTwo h`, the part of `Run.run`'s proof that round 2 gives, at every held copy `h`
-(`stmtOk_of_check`): it is `RunsAs.Round2.stmtOk_of_check` at `h`, with round 1's record registering no value
-(`RegistersNone`) for the inputs premise round 2 does not give (`Round2.inputsNone_of_registersNone`).
--/
+/-! `RunsAs.RoundTwo` at every held copy (`stmtOk_of_check`), with `RegistersNone` for the inputs premise. -/
 
 @[expose] public section
 

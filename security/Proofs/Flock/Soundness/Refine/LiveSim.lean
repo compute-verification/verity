@@ -9,30 +9,13 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# The table's simulation (the transfer, R11c)
-
-A live prover for one table's session (`liveTable`) is simulated in the model's table (`modelTable`, which `tableC` is,
-`tableC_eq_modelTable`). The simulated prover sends the cap `root_B` decodes to, shares the link points, and follows the
-rounds: for a round on rep `r`'s stream, the model's rep `r` takes the messages decoded from the round's bytes, then
-flips its coins with the live round's. At the end it takes the reps' final messages and the openings, decoded from the
-proof files. Wherever the model's game doesn't fit what was decoded, no accepted live run goes on, and the model plays
-any strategy.
-
-* `PlaysT g ts a`: `g`, played with the typed steps `ts` (messages and coins, in order), ends with `a`.
-* `Decodes`: on every accepted live outcome, each rep's model game runs on the tape decoded from its stream and its
-  proof file (`repTape`), and the model accepts those runs. This is what the refinement and framing (the decoder premise) provide.
-* `live_le`: against any live prover, the live verdict's probability is at most the model's against the simulated
-  prover.
--/
+/-! A live prover for one table's session simulated in the model's table, for the transfer (`live_le`). -/
 
 @[expose] public section
 
 namespace FlockSoundness.Game
 
 variable {α β A B : Type}
-
-/-! ## Runs on one typed tape -/
 
 /-- A step of a run: a message (`inl`) or a coin (`inr`), each as its type and value. -/
 abbrev Step := Msg ⊕ Msg
@@ -62,7 +45,6 @@ theorem PlaysT.coin_inv {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C →
 theorem PlaysT.nil_inv {g : Game α} {a : α} (h : PlaysT g [] a) : g = .ret a := by
   cases h; rfl
 
-/-- A message step at a node of its type continues with that message. -/
 theorem PlaysT.send_msg {M : Type} {k : M → Game α} {m : M} {ts : List Step} {a : α}
     (h : PlaysT (.send M k) (.inl ⟨M, m⟩ :: ts) a) : PlaysT (k m) ts a := by
   obtain ⟨m', hm, h⟩ := h.send_inv
@@ -74,8 +56,6 @@ theorem PlaysT.coin_val {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C →
   obtain ⟨x', hx, h⟩ := h.coin_inv
   cases hx
   exact h
-
-/-! ## Every message type inhabited -/
 
 /-- Every message node of `g` has a nonempty type, so a prover can always answer. -/
 inductive AllInh : {α : Type} → Game α → Prop
@@ -128,8 +108,6 @@ theorem AllInh.interleave : ∀ {g₁ : Game A} {g₂ : Game B}, AllInh g₁ →
       AllInh.interleaveWith (adv := fun g₂ => @Game.coin _ C iF iN fun c => Game.interleave (k c) g₂)
         (fin := fun b => (@Game.coin _ C iF iN k).map fun a => (a, b))
         (fun _ h => .coin fun c => AllInh.interleave (hk c) h) (fun _ => h₁.map _) h₂
-
-/-! ## The model's moves in an interleave -/
 
 namespace Sim
 
@@ -639,9 +617,6 @@ noncomputable def simTable (N : ℕ) (G : (Fin 2 → Fin mPts → 𝔽) → Fin 
         rw [hr] at c
         exact ⟨pend, by simpa [restTape, repTape, pick] using a, by simpa [restTape, repTape, pick] using b, c⟩))
 
-/-- **The transfer, for one table.** Against any live prover, the executable's verdict on the live session holds with
-probability at most the model table's verdict against the simulated prover, whenever the decoder is right on accepted
-sessions. -/
 theorem live_le (N : ℕ) (G : (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P) (hinh : ∀ pts r, AllInh (G pts r))
     (hdec : Decodes out pL pg opn dec one fin capOf G) (Pr : Strategy (liveTable dg mPts N)) :
     prob pL (liveTable dg mPts N) Pr ≤
@@ -651,7 +626,6 @@ theorem live_le (N : ℕ) (G : (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game 
 end Sim
 
 open Classical in
-/-- `tableC` is the model table with the compiled reps and its verdict. -/
 theorem tableC_eq_modelTable {K D : Type} [Field K] [Fintype K] [DecidableEq K] (A : Model.Arith 𝔽 K)
     (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) :

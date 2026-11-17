@@ -3,16 +3,8 @@ module
 public import Proofs.Flock.SpotFlock.RunsAs.OwnReadsOut
 public import Proofs.Flock.SpotFlock.RunsAs.OfCheck
 
-/-!
-# At the form's accept, the reads the interior record's checks leave out are reads the statement check held
-
-The two-stage form's check, accepting, accepted a two-stage run of record (`acceptedTwo_of_check`). That run
-hands the interior record's checks (`Spot.Record.checks`) the reads the verdicts of record report for the
-registration's own values, less the reads of its own ports at their own roots (`Spot.Record.lessOwnReads`), and each
-read so left out is one the run's second-stage statement check held (`accepted_leftOut`). The form's own last
-step calls `Spot.Record.checks` at the same reads of the interior record's canonical text and of the verdicts before
-`stamped` names their sessions; this file states the fact at the run of record's input.
--/
+/-! At the form's accept, the reads the interior record's checks leave out are reads the statement check held
+(`leftOut_of_check`). -/
 
 @[expose] public section
 
@@ -20,10 +12,6 @@ namespace SpotFlock.RunsAs
 
 open Lean (Json)
 
-/-- **At the form's accept, each read the interior record's checks leave out is one the second-stage statement check
-held**: the run of record `inputAt` built the input of is an accepted two-stage run, and each read
-`Record.lessOwnReads` takes out of the verdicts' own for its interior record names one of that record's ports at that
-port's root and is `HeldRead`, unless that port's root prints as null (`accepted_leftOut`). -/
 theorem leftOut_of_check {form : Bool} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence} {bs pub prof}
     (hp : ∃ grain replay k, p.rule = .twoStage grain replay k)

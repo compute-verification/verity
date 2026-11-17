@@ -18,16 +18,7 @@ import Proofs.Flock.Soundness.Refine.Plays
 import Proofs.Flock.Soundness.Refine.Zerocheck
 import VCVio.Prelude.Core
 
-/-!
-# Ring switching and batching refine the model's opening (`Flock.Opening`)
-
-`opening_refines`: if the executable's `ringSwitch` succeeds on claims that are the model's (`ClaimRel`), the model's
-`opening`, played with the proof's ring switches (`opMsgs`) and the coins of the rounds consumed, returns `some op`,
-and `op` is the executable's batched value and batched basis (`OpenRel`).
-
-The executable transposes each switched claim's bits (`tOf`: bit `v` of `t[u]` is bit `u` of `s[v]`) with `F128.bit` and
-monomials; the model reads them through `unpack` and `pack` (`recombine`). `unpack_fOf` and `pack_eq_sum` are the seam.
--/
+/-! Ring switching and batching refine the model's opening (`opening_refines`). -/
 
 @[expose] public section
 
@@ -37,13 +28,10 @@ open Flock FlockLevel3 Game Transcript
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- `Game` is a lawful monad: its `bind` is associative and `ret` is its unit. -/
 instance instLawfulMonadGame : LawfulMonad Game := LawfulMonad.mk'
   (id_map := fun x => Game.bind_ret_right x)
   (pure_bind := fun _ _ => rfl)
   (bind_assoc := fun x f g => Game.bind_assoc x f g)
-
-/-! ## Bits -/
 
 theorem uint_bit (x : UInt64) (k : ℕ) (hk : k < 64) : ((x >>> k.toUInt64) &&& 1 == 1) = x.toNat.testBit k := by
   have h1 : ((x >>> k.toUInt64) &&& 1 = 1) ↔ x.toNat.testBit k = true := by
@@ -58,7 +46,6 @@ theorem uint_bit (x : UInt64) (k : ℕ) (hk : k < 64) : ((x >>> k.toUInt64) &&& 
     rw [h] at this
     cases this
 
-/-- Bit `u` of an `F128` is bit `u` of its 128-bit word. -/
 theorem bit_testBit (a : F128) (u : ℕ) (hu : u < 128) : a.bit u = (w128 a.lo a.hi).testBit u := by
   rw [h_bit]
   unfold F128.bit
@@ -66,7 +53,6 @@ theorem bit_testBit (a : F128) (u : ℕ) (hu : u < 128) : a.bit u = (w128 a.lo a
   · exact uint_bit a.lo u h
   · exact uint_bit a.hi (u - 64) (by omega)
 
-/-- **Bits are the packing basis's coordinates** (`Flock.Opening`): `unpack` reads bit `u` of the word. -/
 theorem unpack_fOf (a : F128) (u : Fin 128) : unpack (fOf a) u = if a.bit u.val then 1 else 0 := by
   show (F128.poly a).coeff u = _
   rw [F128.poly, coeff_natPoly, ← bit_testBit a u u.isLt]
@@ -76,7 +62,6 @@ theorem sum_unpack (f : Fin 128 → 𝔽) (i : Fin 128) : unpack (∑ v, f v) i 
   have := map_sum FlockLevel3.unpackHom f Finset.univ
   exact congrFun this i |>.trans (Finset.sum_apply i Finset.univ fun v => FlockLevel3.unpackHom (f v))
 
-/-- **`pack` is the sum of the monomials `x^v` of the set bits** (`Flock.Opening`). -/
 theorem pack_eq_sum (b : Fin 128 → ZMod 2) :
     pack b = ∑ v : Fin 128, if b v = 1 then fOf (F128.monomial v) else 0 := by
   have h : unpack (∑ v : Fin 128, if b v = 1 then fOf (F128.monomial v) else 0) = b := by
@@ -92,7 +77,6 @@ theorem pack_eq_sum (b : Fin 128 → ZMod 2) :
   rw [h] at e
   exact e
 
-/-- The executable's bit transpose (`Flock.Opening`): bit `v` of `t[u]` is bit `u` of `s[v]`. -/
 def tOf (s : Array F128) : Array F128 :=
   (Array.range 128).map fun u =>
     (Array.range 128).foldl (fun acc v => if s[v]!.bit u = true then acc + F128.monomial v else acc) 0
@@ -112,7 +96,6 @@ theorem fOf_foldl_bits (s : Array F128) (u : ℕ) : ∀ (k : ℕ) (acc : F128),
       · rw [fOf_add, ih, add_assoc]
       · rw [ih, add_zero]
 
-/-- **The bit transpose is the model's recombination's inner term:** `t[u] = pack (bit u of s[·])`. -/
 theorem fOf_tOf (s : Array F128) (u : Fin 128) :
     fOf (tOf s)[u.val]! = pack fun v => unpack (vecOf 128 s v) u := by
   rw [pack_eq_sum]
@@ -123,7 +106,6 @@ theorem fOf_tOf (s : Array F128) (u : Fin 128) :
   simp only [vecOf, unpack_fOf]
   split_ifs <;> simp_all
 
-/-- The executable's equality tensor at `b` is the model's `eqAt` on the point's coordinates. -/
 theorem eqTable_vecOf (r : Array F128) (n : ℕ) (hn : r.size = n) (b : ℕ) (hb : b < 2 ^ n) :
     fOf (eqTable r)[b]! = Model.eqAt (vecOf n r) b := by
   subst hn
@@ -131,7 +113,6 @@ theorem eqTable_vecOf (r : Array F128) (n : ℕ) (hn : r.size = n) (b : ℕ) (hb
   rw [eqTable_eqAt r b hb]
   rfl
 
-/-- **The recombined value** (`Flock.Opening`): `β = Σ_u eq(r'', u)·t[u]` is the model's `recombine`. -/
 theorem recombine_eq (s rpp : Array F128) (hrpp : rpp.size = 7) :
     fOf (dot (eqTable rpp) (tOf s)) = Model.recombine execArith (vecOf 128 s) (vecOf 7 rpp) := by
   rw [fOf_dot _ _ 128 (by rw [eqTable_size, hrpp]; rfl)]
@@ -140,9 +121,6 @@ theorem recombine_eq (s rpp : Array F128) (hrpp : rpp.size = 7) :
   rw [eqTable_vecOf rpp 7 hrpp u.val (by simp), fOf_tOf]
   rfl
 
-/-! ## The per-claim check (O4) -/
-
-/-- The executable's weights of a claim on the 128 packed positions (`Flock.Opening`). -/
 def wOf (c : Flock.Claim) : Array F128 :=
   Array.map (fun v => c.skip[v % 64]! * if (v / 64 == 1) = true then c.x[0]! else (1 : F128) + c.x[0]!)
     (Array.range 128)
@@ -157,9 +135,6 @@ theorem packedWeight_eq {m : ℕ} (hm : 7 ≤ m) (c : Flock.Claim) (c' : Model.C
   simp only [beq_iff_eq]
   split_ifs <;> simp only [fOf_add, fOf_one]
 
-/-! ## The loops -/
-
-/-- `forIn_rounds`, and every step's check `Q i` passed. -/
 theorem forIn_roundsQ {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (step : ℕ → σ → Array F128 → σ) (N : ℕ)
     (Q : ℕ → Prop)
     (hbody : ∀ i s t b t', body i s t = .ok (b, t') →
@@ -190,7 +165,6 @@ theorem forIn_roundsQ {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (ste
         · rw [← hr₁]; exact hNs i hi
       · rw [hout, hr₁, List.range'_succ, List.foldl_cons, hk]
 
-/-- One ring switch (O3–O5) as the executable records it: the recombined value, and the coins with the suffix point. -/
 def oStep (claims : Array Flock.Claim) (rs : Array (Array F128)) (k : ℕ)
     (s : Array F128 × Array (Array F128 × Array F128)) (c : Array F128) :
     Array F128 × Array (Array F128 × Array F128) :=
@@ -211,7 +185,6 @@ theorem oStep_fold (claims : Array Flock.Claim) (rs : Array (Array F128)) (C : �
       rw [List.foldl_cons, h1, h2]
       simp [oStep]
 
-/-- **The model's ring switches** (O3, O5): claim by claim, receive `ŝ` and sample `r''`. -/
 theorem mapM_plays {m : ℕ} (rs : Array (Array F128)) (C : ℕ → Array F128) :
     ∀ (cs' : List (Model.Claim 𝔽 m)) (a : ℕ), (∀ i ∈ List.range' a cs'.length, (C i).size = 7) →
       Plays fOf (cs'.mapM fun c => do
@@ -246,7 +219,6 @@ theorem mapM_plays {m : ℕ} (rs : Array (Array F128)) (C : ℕ → Array F128) 
       · simp [List.range'_succ]
       · simp [List.range'_succ]
 
-/-- The check of one ring switch (O4): `Σ_v w[v]·ŝ[v] = value`. -/
 def RsCheck (claims : Array Flock.Claim) (rs : Array (Array F128)) (k : ℕ) : Prop :=
   (dot (wOf claims[k]!) rs[k]! == claims[k]!.value) = true
 
@@ -254,9 +226,6 @@ theorem getD_zipIdx_map {α β : Type} (l : List α) (f : α × ℕ → β) (k :
     ((l.zipIdx 0).map f).getD k d = f (l[k], k) := by
   rw [List.getD_eq_getElem _ _ (by simpa using hk), List.getElem_map, List.getElem_zipIdx, Nat.zero_add]
 
-/-- **Ring switching and batching refine the model's opening** (`Flock.Opening`). If the executable's `ringSwitch`
-succeeds from `t` to `t'` on claims that are the model's `cs'`, the model's opening of `cs'`, played with the proof's
-ring switches and the coins of the rounds consumed, returns the executable's batched value and basis. -/
 theorem opening_refines (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (cs' : List (Model.Claim 𝔽 m))
     (hlen : claims.size = cs'.length) (hcs : ∀ (k : ℕ) (hk : k < cs'.length), ClaimRel m claims[k]! cs'[k])
     (hn : 0 < claims.size) (hn1 : claims.size ≠ 1) (rs : Array (Array F128)) (t t' : Transcript) (T : F128)
@@ -355,7 +324,6 @@ theorem opening_refines (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (c
         rw [extract_get! _ 1 _ j (by have := (hcs k.val k.isLt).x_size; omega) le_rfl, Nat.add_comm]
       rw [hx]
 
-/-- **The ring switch's rounds**: `claims + 1` (one per claim and the batching coin). -/
 theorem ringSwitch_moves (m : ℕ) (claims : Array Flock.Claim) (rs : Array (Array F128)) {t t' : Transcript}
     {T : F128} {sws : Array Switched} (hn : 0 < claims.size) (h : ringSwitch m claims rs t = .ok ((T, sws), t')) :
     t'.rounds = t.rounds ∧ t'.k = t.k + claims.size + 1 := by

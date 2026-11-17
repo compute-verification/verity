@@ -9,20 +9,8 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.VBridge.Algebra.Zerocheck
 import VCVio.Prelude.Core
 
-/-!
-# V*'s ring-switch residuals are zero only when ring switching's checks pass
-
-`ringSwitch_checks`: when `ringSwitch`'s residuals (one per claim, `Σ_v w[v]·ŝ[v] + value`, rec_algebra.py:620–636)
-are zero over F, each claim passes the verifier's value check (`dot w s == c.value`, Opening.lean:78) on the ring
-switches `ringSwitch` read, and the batched sum `ringSwitch` returns is the verifier's `T = Σ_k γ_k·β_k`
-(Opening.lean:81–86) with `β_k = Σ_u eq(r''_k, u)·t_k[u]`, when the transposes `ringSwitch` read are the verifier's bit
-transposes (`Refine.tOf`) of the ring switches.
-
-`wi_rs` lays out w: claim `k`'s ring switch is 128 consecutive elements, so the transposes V*'s S computes from w
-(`.wt` terms) are the verifier's of the decoded ring switches (`decoded_rsT`). `ringSwitch_of_residuals` is the stage at
-a rep: each claim's value check, and Ligerito's `T` (the one w holds, which V*'s last residual compares with the batched
-sum) the verifier's `T` at the rep's coins.
--/
+/-! V*'s ring-switch residuals are zero only when ring switching's checks pass (`ringSwitch_checks`,
+`ringSwitch_of_residuals`). -/
 
 @[expose] public section
 
@@ -30,16 +18,11 @@ namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
-/-! ## Where the ring switches are in w -/
-
-/-- The rounds before the ring switches (`rounds`, rec_algebra.py:748–772): zerocheck's, then lincheck's, then a holo
-shape's `h` (`hRound`). -/
 def preRounds (sh : Shape) : Array (Array Key) :=
   #[(Array.range 64).map .ab ++ (Array.range 64).map .c] ++
     (Array.range (sh.m - 6)).map (fun i => #[.g1 i, .ginf i]) ++ #[#[.fa, .fb]] ++
     (Array.range (sh.kLog - 6)).map (fun j => #[.q1 j, .qinf j]) ++ #[(Array.range 64).map .zp] ++ hRound sh
 
-/-- The ring switches' rounds: `c` blocks of 128, block `k` entry `v` being `g k v`. -/
 def blocks (g : Nat → Nat → Key) (c : Nat) : Array Key :=
   ((Array.range c).map fun k => (Array.range 128).map (g k)).flatten
 
@@ -78,8 +61,6 @@ theorem idxOf?_of {xs : Array Key} {a : Key} {i : Nat} (hi : xs[i]? = some a) (h
   refine ⟨h, he, fun j hj hje => hlt j hj ?_⟩
   rw [List.getElem?_eq_getElem (by omega), hje]
 
-/-- **Where claim `k`'s ring switch is in w** (`_w_names`, rec_algebra.py:812–813): its 128 elements are consecutive,
-after the zerocheck's and lincheck's and the claims before it. -/
 theorem wi_rs (sh : Shape) {k v : Nat} (hk : k < sh.claims) (hv : v < 128) :
     wi sh (.rs k v) = some ((preRounds sh).flatten.size + 128 * k + v) := by
   unfold wi wNames
@@ -108,8 +89,6 @@ theorem wi_rs (sh : Shape) {k v : Nat} (hk : k < sh.claims) (hv : v < 128) :
     · rw [Array.getElem?_append_right (by omega), hget _ (by omega)] at he
       simp only [Option.some.injEq, Key.rs.injEq] at he
       omega
-
-/-! ## The decoded ring switches and their transposes -/
 
 theorem foldl_range_congr {β : Type} {f g : β → Nat → β} {n : Nat} (h : ∀ b, ∀ v < n, f b v = g b v) (init : β) :
     (Array.range n).foldl f init = (Array.range n).foldl g init := by
@@ -142,8 +121,6 @@ theorem decoded_rs_size (sh : Shape) (w comb : Array F128) (cons : Nat → Nat �
   rw [decoded_rs sh w comb cons hk]
   simp
 
-/-- **The decoded transposes.** The transposes V*'s S computes from w are the verifier's bit transposes of the decoded
-ring switches. -/
 theorem decoded_rsT (sh : Shape) (w comb : Array F128) (cons : Nat → Nat → F128) {k : Nat} (hk : k < sh.claims) :
     (decoded sh w comb cons).rsT[k]! = tOf (decoded sh w comb cons).rs[k]! := by
   rw [decoded_rs sh w comb cons hk]
@@ -159,13 +136,10 @@ theorem decoded_rsT (sh : Shape) (w comb : Array F128) (cons : Nat → Nat → F
     rw [getElem!_pos _ v (by simpa using hv)]
     simp only [Array.getElem_map, Array.getElem_range, Nat.add_assoc]
 
-/-! ## Ring switching over values -/
-
 section Values
 
 variable {α : Type} [Val α]
 
-/-- A claim's weights on the 128 packed positions (rec_algebra.py:624–630; `Refine.wOf`). -/
 def wvOf (cl : AClaim α) : Array F128 :=
   (Array.range 128).map fun v => cl.skip[v % 64]! * (if v / 64 == 1 then cl.x[0]! else (1 : F128) + cl.x[0]!)
 
@@ -201,8 +175,6 @@ theorem rsClaims_spec (M : Messages α) :
       · rw [Array.getElem?_append_right (by simp), show k + (j + 1) = k + 1 + j by omega]; simpa using h2
       · rw [Array.getElem?_append_right (by simp)]; simpa using h3
 
-/-- **Ring switching's coins.** The rounds `ringSwitch` samples from: `r''_k` for each claim, then the batching coins
-`γ`; and what it returns. -/
 theorem ringSwitch_spec {M : Messages α} {claims : Array (AClaim α)} (hn : claims.size ≠ 0) {k k' : Nat}
     {src : RoundCoins} {rsr : Array α} {rs : RsPts α} (h : ringSwitch M claims k src = .ok ((rsr, rs), k')) :
     ∃ betas : Array α, rsr.size = claims.size ∧ betas.size = claims.size ∧
@@ -233,14 +205,8 @@ theorem ringSwitch_spec {M : Messages α} {claims : Array (AClaim α)} (hn : cla
 
 end Values
 
-/-! ## Ring switching over F -/
-
-/-- A claim over F as the verifier's (`Piop.Claim`). -/
 def AClaim.toClaim (c : AClaim F128) : Claim := ⟨c.value, c.skip, c.x⟩
 
-/-- **Ring switching's checks.** When `ringSwitch` over F returns residuals all zero, each claim passes the verifier's
-value check (Opening.lean:78) on the ring switches it read, and its batched sum is `Σ_k γ_k·β_k` with
-`β_k = Σ_u eq(r''_k, u)·t_k[u]` for the transposes it read (Opening.lean:81–86). -/
 theorem ringSwitch_checks {M : Messages F128} {claims : Array (AClaim F128)} (hn : claims.size ≠ 0) {k k' : Nat}
     {src : RoundCoins} {rsr : Array F128} {rs : RsPts F128} (h : ringSwitch M claims k src = .ok ((rsr, rs), k'))
     (hz : ∀ x ∈ rsr, x = 0) :
@@ -266,9 +232,6 @@ theorem ringSwitch_checks {M : Messages F128} {claims : Array (AClaim F128)} (hn
       rw [Array.getElem?_eq_getElem (by omega), Option.some.injEq] at h4
       rw [h4]
 
-/-! ## Ring switching at a rep -/
-
-/-- The claims V* hands to the opening, over F, as the verifier's. -/
 def claimsF (sh : Shape) (val : Key → F128) (info : Info Lin) (extras : Array Claim) : Array Claim :=
   (claimsOf sh.m sh.kLog (info.zc.map (Lin.eval val)) (info.lc.map (Lin.eval val)) extras).map AClaim.toClaim
 
@@ -276,10 +239,6 @@ theorem claimsF_size (sh : Shape) (val : Key → F128) (info : Info Lin) (extras
     (claimsF sh val info extras).size = 2 + extras.size := by
   simp [claimsF, claimsOf]
 
-/-- **Ring switching at a rep.** When `GfResiduals`' residuals at w, on the S `structureOf` builds and the v
-`verifierRows` gives at the rep's coins, are all zero, each claim V* hands to the opening passes the verifier's value
-check on the ring switches w holds (`decoded`), and the `T` w holds, Ligerito's, is the verifier's batched sum
-(Opening.lean:81–86) at the coins `verifierRows` returns. -/
 theorem ringSwitch_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
     {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}

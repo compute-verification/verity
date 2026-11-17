@@ -7,21 +7,8 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 public import Proofs.Flock.Soundness.Discharge.Placed.Setup
 
-/-!
-# The copy at a written bit
-
-`copiesRef_out`: `CopiesAt`'s written half where the second stage's design evaluates and each member names its ports
-once. At a written bit of member `t`'s unit `u`, the column `pickAny` chooses is the returned output's computed column
-(`OutRef`, the output case of `CopiesRef`), and the bit's port bit is the output word's.
-
-A written bit is Bits' commitment position of the key program's gate on bit `b` of returned output leaf `j` of unit
-`u`'s instance `k` (`Spot.Bits.outGate`). The circuit's program puts a unit's computed column on its own gate past the
-earlier units' (`Flock.Bridge.rowsWireC_keyProg_comp`), so that gate is the unit's column `OutColAt` names
-(`outGate_wire`), and no other column of the unit is on it (`RowsWire.shared`). The design evaluates only where every
-member's circuit is in `scopeOkH`'s scope (`membersScoped`): its outputs come from the unit net, and each output row
-holds one output port (`OutRowsS`), so Bits' output row of the leaf's word is the word's output port and its bit the
-word's bit (`outRowBit_ref`).
--/
+/-! `CopiesAt`'s written half where the second stage's design evaluates and each member names its ports once
+(`copiesRef_out`). -/
 
 @[expose] public section
 
@@ -29,10 +16,6 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy FlockSoundness FlockSoundness.Discharge
 
-/-! ## A returned output's gate -/
-
-/-- **What the key program's gate on a returned output's bit says**: the unit, instance, leaf and bit are in range, the
-leaf's column is a computed row of the unit net, and the gate is the instance's row on it (`Spot.Bits.rowGate`). -/
 theorem outGate_spec {c : _root_.Flock.Circuit} {n u k j b g : ℕ} (hg : Spot.Bits.outGate c n u k j b = some g) :
     u < n ∧ k < c.upv ∧ j < (c.leavesOut.getD k #[]).size ∧ b < 16 ∧
       (Spot.Bits.Rows.ofNet c.unit).nIn ≤ Spot.Bits.outCol c j b ∧
@@ -48,8 +31,6 @@ theorem outGate_spec {c : _root_.Flock.Circuit} {n u k j b g : ℕ} (hg : Spot.B
     exact ⟨h1, h2, h3, h4, h5, h6, (Option.some.inj hg).symm⟩
   · cases hg
 
-/-- **A returned output's gate is its unit's column `OutColAt` names**: unit `u`'s computed column of instance `k`'s
-leaf `j`, bit `b`, is on the gate `Spot.Bits.outGate` gives. -/
 theorem outGate_wire {c : _root_.Flock.Circuit} (hU : FlockSoundness.Built c.unit) (hu : c.unit.unitLog ≤ 32)
     {n u k j b g : ℕ} (outs : Finset (Fin (Layout.keyN c hU n))) (hg : Spot.Bits.outGate c n u k j b = some g) :
     ∃ hun : u < n, ∃ x : Fin ((Placed.keyProg c hU n).rows ⟨u, hun⟩).w,
@@ -89,9 +70,6 @@ theorem outGate_wire {c : _root_.Flock.Circuit} (hU : FlockSoundness.Built c.uni
         (1 + (Spot.Bits.outCol c j b - (Spot.Bits.Rows.ofNet c.unit).nIn)))
   omega
 
-/-! ## A returned output's port -/
-
-/-- A word some output row holds is an output word, where each output row holds one output port. -/
 theorem outPos_lt {c : _root_.Flock.Circuit} (hrep : c.outRowPorts = Array.replicate c.outPorts.size 1)
     {u x b : ℕ} {r : Spot.Bits.RowPos} (ho : Spot.Bits.outPos c u x b = some r) : x < c.outWords := by
   unfold Spot.Bits.outPos at ho
@@ -111,8 +89,6 @@ theorem outPos_lt {c : _root_.Flock.Circuit} (hrep : c.outRowPorts = Array.repli
     rw [getElem!_pos c.outPorts o ho', Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem ho', Option.getD_some]
   omega
 
-/-- **Bits' position of a returned output's bit is its output port's bit**, where each output row holds one output
-port: bit `16 k' + b` of output row `nIn + jo`, the leaf's word being word `k'` of output port `jo`. -/
 theorem outRowBit_ref {c : _root_.Flock.Circuit} (hrep : c.outRowPorts = Array.replicate c.outPorts.size 1)
     {u k j b : ℕ} {r : Spot.Bits.RowPos} (hj : j < (c.leavesOut.getD k #[]).size)
     (hr : Spot.Bits.outRowBit c u k j b = some r) :
@@ -127,11 +103,8 @@ theorem outRowBit_ref {c : _root_.Flock.Circuit} (hrep : c.outRowPorts = Array.r
   rw [_root_.Flock.Bridge.outPos_eq hrep hwlt] at hr
   exact ⟨_, _, hlt, hk, by omega, (Option.some.inj hr).symm⟩
 
-/-! ## The members' scope -/
-
 variable {h : Held}
 
-/-- Where the design evaluates, each member's circuit is in `scopeOkH`'s scope. -/
 theorem scopeOkH_member {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
     (ht : t < h.ms.length) : FlockSoundness.Discharge.Layout.scopeOkH (memberCircuit h t) = true := by
   rw [← FlockSoundness.Discharge.FailClosed.scopeOkH_eq]
@@ -139,8 +112,6 @@ theorem scopeOkH_member {s : AuditStatement} {d : Design.Two} (hd : two h s = so
   unfold membersScoped at h1
   exact List.all_eq_true.1 h1 t (List.mem_range.2 ht)
 
-/-- **Where the design evaluates, each member's circuit is a committed circuit unrolled**: its reference statement
-reads (`templateOk`) untyped, under hidden outputs, and its circuit file parses (`HmOut.parseCommit`) to `c`. -/
 theorem member_commit {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
     (ht : t < h.ms.length) :
     ∃ (r : _root_.Flock.Readable.Read) (c : _root_.Flock.Circuit), r.tags.typed = false ∧
@@ -177,8 +148,6 @@ theorem member_commit {s : AuditStatement} {d : Design.Two} (hd : two h s = some
     rw [hm, ← hcirc]
     rfl
 
-/-- **Where the design evaluates, each member's rows are covered** (`RowsFitS`): its statement circuit is a committed
-circuit unrolled, in `scopeOkH`'s scope (`HiddenExec.rowsFit_of_committed`). -/
 theorem rowsFit_member {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
     (ht : t < h.ms.length) : FlockSoundness.Discharge.Hidden.Any.RowsFitS (memberCircuit h t) := by
   obtain ⟨r, c, hty, hc, hm⟩ := member_commit hd ht
@@ -191,9 +160,6 @@ theorem rowsFit_member {s : AuditStatement} {d : Design.Two} (hd : two h s = som
     (FlockSoundness.Discharge.HiddenExec.rowsFit_of_committed hty
       (FlockSoundness.Discharge.Hidden.committed_of_commit hc) hrb)
 
-/-! ## The copy -/
-
-/-- A written bit is a returned output's gate with Bits' commitment position, at the gate's position. -/
 theorem writtenBits_mem {i t : ℕ} {r : Spot.Bits.RowPos} (hy : (i, t, r) ∈ writtenBits h.ms) :
     ∃ ht : t < h.ms.length, ∃ u k j b g, Spot.Bits.outGate h.ms[t].1 h.ms[t].2.size u k j b = some g ∧
       Spot.Bits.outRowBit h.ms[t].1 u k j b = some r ∧
@@ -224,9 +190,6 @@ theorem writtenBits_mem {i t : ℕ} {r : Spot.Bits.RowPos} (hy : (i, t, r) ∈ w
       obtain ⟨h1, rfl, rfl⟩ := hy
       exact ⟨hm', u, k, j, b, g, hg, hr, h1.symm⟩
 
-/-- **`CopiesAt`'s written half**: where the design evaluates and each member names its ports once, at a written bit
-of member `t`'s unit `k` the column `pickAny` chooses is the returned output's computed column, its port bit the
-bit's. -/
 theorem copiesRef_out {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (hO : PortsOnce h)
     {i t k : ℕ} {rp : Spot.Bits.RowPos} (hy : (i, t, rp) ∈ writtenBits h.ms) (hleaf : rp.leaf = k) :
     ∃ m, h.ms[t]? = some m ∧ CopiesRef m.1 (pickAny h t k i) (portNamed h t rp.row) rp.bit := by
@@ -272,22 +235,16 @@ theorem copiesRef_out {s : AuditStatement} {d : Design.Two} (hd : two h s = some
   exact Or.inr ⟨hon, hU, kk, j, b, jo, k', hoc.1, hoc.2.1, hoc.2.2.1, hoc.2.2.2.1, hoc.2.2.2.2.1, hoc.2.2.2.2.2,
     hjo, hk', hsum, rfl, rfl⟩
 
-/-- **`CopiesAt` where the design evaluates and each member names its ports once**: a unit's bit is a source bit
-(`copiesRef_src`) or a written bit (`copiesRef_out`). -/
 theorem copiesAt_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (hO : PortsOnce h) :
     CopiesAt h := by
   rintro t k i rp ⟨hleaf, ⟨hf, -⟩ | ⟨-, hf, -, -⟩⟩
   · exact copiesRef_src hd hO (List.mem_of_find?_eq_some hf) hleaf
   · exact copiesRef_out hd hO (List.mem_of_find?_eq_some hf) hleaf
 
-/-- **The width at the address map** where the design evaluates, each member names its ports once and the wiring
-holds. -/
 theorem widthFact_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (hO : PortsOnce h)
     (W : Wiring h) : WidthFact h (addressOf h) :=
   widthFact_of_wiring W (bitsInPorts_of_once hd hO)
 
-/-- **The copy at the address map** where the design evaluates, each member names its ports once, the wiring holds
-and each counted gate's row is the address map's. -/
 theorem copyFact_of_two {s : AuditStatement} {d : Design.Two} {ω : ℕ → ℕ} {keep : ℕ → Bool}
     (hd : two h s = some d) (hO : PortsOnce h) (W : Wiring h) (hrow : RowFact h ω keep (addressOf h)) :
     CopyFact h (addressOf h) :=

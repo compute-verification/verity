@@ -17,32 +17,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Registered.Binding
 
-/-!
-# VBridge G at V*'s family: `rec-acc`'s rows keyed by their registration, and the openings' tops
-
-`Ends.lean` keys every read of `rec-acc`'s rows by one registered port `pa` (`EndKeys`, `OpenKeys`), the whole
-`Registered.Port`, name and positions included. V*'s reads files name `rec-acc` once per row port, each entry with its
-own name and positions (rec_outer.py:235-238: `acc` and `acc_out`, each `chain.reg.entry()` with the level's positions;
-rec_vstage.py:357: `acc0`, `acc1`), and at a sampled proof block `OwnReads` ties a registered read's port to the circuit's port
-of its name. So:
-
-* `eq_of_port_eq`: two registered reads of one sampled proof block at one registered port are reads of one port of the circuit;
-  `not_colKeyed_pair`, `not_endKeys`: `EndKeys` fails at a sampled algebra unit whose `acc0` and `acc1` columns are keyed
-  by two ports (rec_residuals.py:101), as V*'s are;
-* `colKeyed_sampled`: a keyed column of a sampled proof block names its port in `own` and its position in the port's reads, so
-  `OpenKeys` puts one port, with one name and one list of positions, in every level's reads file (`openKeys_sampled`),
-  which V*'s files are not (each level's `acc` reads that level's positions).
-
-The restatement keys a read by its registration (`site`: value, root, leaf count, row width, domain, leaf schema; not its
-name or positions): `ColKeyedS`, `SiteRowsShared` (implies `RowsShared`, `rowsShared_of_site`; from `SharedRowsS`, and that
-from `NoRegistrantCollisionS`, since the verifier's leaf check reads only a port's registration, `opensLeaf_site`;
-all three hold where no read is segmented, `siteRowsShared` at `ReadsUnsegmented`, since `Accepted` excludes `RegColl`),
-`AccRowsAreS` at `accRegS` (`accRowsAreS_of_shared`), `EndKeysS`, `OpenKeysS`, and `hEnds_of_partS`,
-`hAccRows_of_keysS` as in `Ends.lean`.
-
-`hTopsL_of_out` gives `HTopsL` from `TopsOutL`, the openings' `out` columns registered bits of the cap's entry, as
-`AccOutL` gives `acc_out`.
--/
+/-! `rec-acc`'s rows keyed by their registration (`site`) rather than by one port, because `EndKeys` and `OpenKeys`
+fail at V*'s family (`not_endKeys`, `openKeys_sampled`). -/
 
 @[expose] public section
 
@@ -58,22 +34,15 @@ open FlockVBridge.AccChain (levelLanes)
 open FlockSoundness.Discharge.Hm (bitL)
 open FlockSoundness.Discharge.ZkReg (LiveAcceptsZKR)
 
-/-- The registration a registered port reads: its value, root, leaf count, row width, domain and leaf schema, all its
-fields but its name and its read positions (`Registered.Port`; rec_outer.py:235, `read(chain.reg.entry(), …)`). -/
 abbrev RegFields := String × ByteArray × ℕ × Option ℕ × ℕ × ByteArray × String
 
-/-- A port's registration (`RegFields`). -/
 def site (p : Flock.Registered.Port) : RegFields := (p.value, p.root, p.leaves, p.words, p.wordBits, p.domain, p.schema)
-
-/-! ## A sampled proof block's registered reads -/
 
 section Drawn
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **Two registered reads of a sampled proof block at one registered port read one port of the circuit** (`hown`: each read's
-port is the circuit's port of its name, `OwnReads`). -/
 theorem eq_of_port_eq {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv} (hu : u ∈ Lv.draw ω)
     {q q' : Fin c.ports.size} (hr : zo.rd.isRead (.inl (u, q))) (hr' : zo.rd.isRead (.inl (u, q')))
@@ -86,8 +55,6 @@ theorem eq_of_port_eq {ω : Lv.Ω} {R' : Reg'} {o}
   rw [hp] at hf₁
   exact Fin.ext (Option.some.inj (hf₁.symm.trans hf₂))
 
-/-- **Two columns of a sampled proof block keyed by two ports of the circuit are not keyed at one registered port**: `ColKeyed`
-at one `pa` makes the ports' registered reads one port's (`eq_of_port_eq`). -/
 theorem not_colKeyed_pair {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv} (hu : u ∈ Lv.draw ω)
     (hread : ∀ q : Fin c.ports.size, (∃ pt ∈ zo.own, pt.name = c.ports[q].name) → zo.rd.isRead (.inl (u, q)))
@@ -105,8 +72,6 @@ theorem not_colKeyed_pair {ω : Lv.Ω} {R' : Reg'} {o}
   subst e
   exact hne (h₁.trans h₂.symm)
 
-/-- **A keyed column of a sampled proof block names its registered port in `own`, by the name of its key's port, and its
-position among the port's reads** (`hown`, `OwnReads`). -/
 theorem colKeyed_sampled {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv} (hu : u ∈ Lv.draw ω)
     (hread : ∀ q : Fin c.ports.size, (∃ pt ∈ zo.own, pt.name = c.ports[q].name) → zo.rd.isRead (.inl (u, q)))
@@ -123,9 +88,6 @@ theorem colKeyed_sampled {ω : Lv.Ω} {R' : Reg'} {o}
   rw [hat] at hpos
   exact ⟨hmem, ⟨q, hkey, hf⟩, _, hpos⟩
 
-/-- **A column keyed at the registration `s`** (`ColKeyed`, the read's port's `site` `s` in place of the port): its Δ
-key is bit `k` of row port `q`, the session's reads file names `q`, and unit `u`'s row `q` is read at a port of
-registration `s`, position `pos`. -/
 def ColKeyedS (u : Fin nv) (col k : ℕ) (s : RegFields) (pos : ℕ) : Prop :=
   ∃ (_ : col < (Rows.ofNet hU).nIn) (q : Fin c.ports.size) (_ : k < Layout.portRowW c q),
     Aliased.srcKey c (0 * (Rows.ofNet hU).nIn + col) = .msg q.val (k / 8) (k % 8) ∧
@@ -137,7 +99,6 @@ theorem colKeyedS_of {u : Fin nv} {col k pos : ℕ} {pa : Flock.Registered.Port}
   obtain ⟨hc, q, hk, hkey, hown, hport, hat⟩ := h
   exact ⟨hc, q, hk, hkey, hown, by rw [hport], hat⟩
 
-/-- **A column keyed at a registration is a registered bit of the registrant's row** (`regBit_of_colKeyed`). -/
 theorem regBit_of_colKeyedS {u : Fin nv} {col k : ℕ} {s : RegFields} {pos : ℕ} {K : ℕ} (hkK : k < K)
     (hread : ∀ q : Fin c.ports.size, (∃ pt ∈ zo.own, pt.name = c.ports[q].name) → zo.rd.isRead (.inl (u, q)))
     (row : ℕ → ℕ → Bool)
@@ -153,8 +114,6 @@ theorem regBit_of_colKeyedS {u : Fin nv} {col k : ℕ} {s : RegFields} {pos : �
   rw [hval q hr hport k hkK hk, hat]
 
 end Drawn
-
-/-! ## Two registrants' records at one registration and position -/
 
 section Two
 
@@ -172,7 +131,6 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partit
   {decode' : FlockSoundness.Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
   {lay' : FlockSoundness.Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
-/-- The verifier's leaf check reads a port's registration only (`opensLeaf`: its leaf count, domain, schema and root). -/
 theorem opensLeaf_site {p p' : Flock.Registered.Port} (h : site p = site p') :
     Flock.Registered.opensLeaf p = Flock.Registered.opensLeaf p' := by
   simp only [site, Prod.mk.injEq] at h
@@ -181,8 +139,6 @@ theorem opensLeaf_site {p p' : Flock.Registered.Port} (h : site p = site p') :
   unfold Flock.Registered.opensLeaf
   rw [hr, hl, hd, hs]
 
-/-- **`registrants_eq_or_collides` at one registration**: two registered reads of one registration (`site`) at one
-position carry one row's bytes, or their openings collide, or hm96's leaves do (`opensLeaf_site`). -/
 theorem registrants_eq_or_collides_site (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') {p : lay.Pos} {p' : lay'.Pos}
     (hp : rd.isRead p) (hp' : rd'.isRead p') (hsite : site (rd.port p) = site (rd'.port p'))
     (hat : rd.readAt p = rd'.readAt p') :
@@ -200,14 +156,10 @@ theorem registrants_eq_or_collides_site (rd : ReadsX lay rs) (rd' : ReadsX lay' 
 
 end Two
 
-/-! ## The openings' tops -/
-
 section Tops
 
 variable {Q : VStmt} {Reg' : Type} (zo : Q.Outer Reg')
 
-/-- **An opening's `out`, from its registered output columns** (`copyVal_regOut`, as `accOut_of_regOut`): in a `Good`
-layer, when the first `8 · |B|` output columns of copy 0 are registered bits of `B`, the bytes there are `B`. -/
 theorem bytesAt_of_regOut {bits : Q.Bits} (hG : zo.Good bits) {u : Fin Q.nv} (hj : 0 < Q.c.upv) {LANES H : ℕ}
     (hp : Flock.RecOpen.params Q.c.unit.name = some (LANES, H)) {B : ByteArray}
     (h : ∀ t < 8 * B.size, AccChain.RegOut zo u hj (outCol LANES H + t) (bitL B.data.toList t)) :
@@ -233,12 +185,6 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 
-/-! ## `EndKeys` and `OpenKeys` at one registered port -/
-
-/-- **`EndKeys` fails at a sampled algebra unit whose `acc0` and `acc1` columns are keyed by two ports**: at an accepted
-outer proof whose algebra session `sA r` accepts at a sample holding `uA r` (`hlive`, `hu`), where bit 0 of `acc0 0` and
-of `acc1 0` are keyed by ports `q₀ ≠ q₁` (V*'s `acc0`, `acc1`, rec_residuals.py:101), `EndKeys` reads both at one
-port, so one port of the circuit (`not_colKeyed_pair`). -/
 theorem not_endKeys {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port}
     {sA : Fin 2 → Fin F.stmts.size} {uA : (r : Fin 2) → Fin (F.Vs (sA r)).nv} {col0 col1 : Fin 2 → ℕ → ℕ → ℕ}
     (hk : F.EndKeys dg N k Rw pa sA uA col0 col1) (hreg : F.RowsRegistered dg N k Rw) {R : Reg} {ω : L.Ω}
@@ -253,11 +199,6 @@ theorem not_endKeys {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
   not_colKeyed_pair _ hlive hu (hreg R ω t R₂ τ o h (sA r) (uA r)) hne hk₀ hk₁
     (hk R ω t R₂ τ o h r 0 (by omega) 0 (by omega)).1 (hk R ω t R₂ τ o h r 0 (by omega) 0 (by omega)).2
 
-/-- **`OpenKeys` puts its port in every level's reads file, with every opening's position among its reads**: at an
-accepted outer proof whose level-`ℓ` session accepts at a sample holding opening `j`'s unit, `pa` is one of the
-session's `own`, by the name of the `acc` column's port, and reads the opening's chain position
-(`colKeyed_sampled`). V*'s level files name `rec-acc` as `acc` with that level's positions only (rec_outer.py:236), so no
-one port is in two levels' files with both levels' positions. -/
 theorem openKeys_sampled {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port}
     (hk : F.OpenKeys dg N k Rw pa) (hreg : F.RowsRegistered dg N k Rw) {R : Reg} {ω : L.Ω}
     {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o} (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (r : Fin 2)
@@ -273,13 +214,7 @@ theorem openKeys_sampled {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
     (hk R ω t R₂ τ o h r ℓ hℓ j hj 0 (by omega)).1
   exact ⟨hmem, hpos⟩
 
-/-! ## `rec-acc`'s rows keyed by their registration -/
-
-/-- Obligation: discharged by `SharedRowsS` (`siteRowsShared_of_sharedRowsS`, `siteRowsShared`), as `RowsShared` by
-`SharedRows`; the transfer's `cr/sha-512` term does not price it.
-**One registrant row per registration and position** (`RowsShared` at `site`): at every accepted outer proof, two
-sessions' registered reads of one registration (`site`: value, root, leaf count, row width, domain) at one position
-carry the same registrant bits, whatever the ports' names and read positions. -/
+/-- Discharged by `SharedRowsS` (`siteRowsShared`); the transfer's `cr/sha-512` term does not price it. -/
 def SiteRowsShared : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (s s' : Fin F.stmts.size)
     (u : Fin (F.Vs s).nv) (u' : Fin (F.Vs s').nv) (q : Fin (F.Vs s).c.ports.size) (q' : Fin (F.Vs s').c.ports.size),
@@ -292,7 +227,6 @@ def SiteRowsShared : Prop :=
         (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))).2
           ⟨b, lt_of_lt_of_le hb' ((Finset.le_sup (Finset.mem_univ q')).trans (Nat.le_succ _))⟩
 
-/-- **`RowsShared` from one registrant row per registration and position**: one port is one registration. -/
 theorem rowsShared_of_site (h : F.SiteRowsShared dg N k Rw) : F.RowsShared dg N k Rw := by
   intro R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat b hb hb'
   exact h R ω t R₂ τ o ha s s' u u' q q' hr hr' (congrArg site hport) hat b hb hb'
@@ -303,10 +237,8 @@ open FlockSoundness.Registered (TwoOpenings)
 open FlockSoundness.Binding (Collides hm96Pair)
 open FlockSoundness.Discharge.HiddenExec (encPortH)
 
-/-- Obligation: discharged, as `NoRegistrantCollision`, by `Accepted`'s `¬ RegColl` (`noRegistrantCollisionS`); no
-finder behind the transfer's `cr/sha-512` term prices it.
-**No two sessions' registrant records collide at one registration and position** (`NoRegistrantCollision` at
-`site`). -/
+/-- Discharged by `Accepted`'s `¬ RegColl` (`noRegistrantCollisionS`); no finder behind the transfer's `cr/sha-512`
+term prices it. -/
 def NoRegistrantCollisionS : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (s s' : Fin F.stmts.size)
     (u : Fin (F.Vs s).nv) (u' : Fin (F.Vs s').nv) (q : Fin (F.Vs s).c.ports.size) (q' : Fin (F.Vs s').c.ports.size),
@@ -322,9 +254,6 @@ def NoRegistrantCollisionS : Prop :=
         (encPortH (F.Vs s').c.ports[q'.val]! (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))))
         ((F.zs R ω t R₂ s').rd.ws (.inl (u', q'))))
 
-/-- Obligation: discharged by `NoRegistrantCollisionS` (`sharedRowsS`).
-**Two sessions' registrant records at one registration and position hold one row's bytes** (`SharedRows` at
-`site`). -/
 def SharedRowsS : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (s s' : Fin F.stmts.size)
     (u : Fin (F.Vs s).nv) (u' : Fin (F.Vs s').nv) (q : Fin (F.Vs s).c.ports.size) (q' : Fin (F.Vs s').c.ports.size),
@@ -334,7 +263,6 @@ def SharedRowsS : Prop :=
     encPortH (F.Vs s).c.ports[q.val]! (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))) =
       encPortH (F.Vs s').c.ports[q'.val]! (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q')))
 
-/-- **`SharedRowsS` where no two registrant records collide** (`registrants_eq_or_collides_site`). -/
 theorem sharedRowsS_of (h : F.NoRegistrantCollisionS dg N k Rw) : F.SharedRowsS dg N k Rw := by
   intro R ω t R₂ τ o ha s s' u u' q q' hr hr' hsite hat
   obtain ⟨h1, h2⟩ := h R ω t R₂ τ o ha s s' u u' q q' hr hr' hsite hat
@@ -343,32 +271,24 @@ theorem sharedRowsS_of (h : F.NoRegistrantCollisionS dg N k Rw) : F.SharedRowsS 
   · exact absurd hc h1
   · exact absurd hc h2
 
-/-- **`SiteRowsShared` from one row's bytes at unsegmented reads** (`SharedRowsS`, `ReadsUnsegmented`,
-`bits_of_encPortH`). -/
 theorem siteRowsShared_of_sharedRowsS (h : F.SharedRowsS dg N k Rw) (hu : F.ReadsUnsegmented dg N k Rw) :
     F.SiteRowsShared dg N k Rw := by
   intro R ω t R₂ τ o ha s s' u u' q q' hr hr' hsite hat b hb hb'
   exact bits_of_encPortH (hu R ω t R₂ τ o ha s u q hr) (hu R ω t R₂ τ o ha s' u' q' hr')
     (h R ω t R₂ τ o ha s s' u u' q q' hr hr' hsite hat) b _ _
 
-/-- **No two sessions' registrant records collide at one registration and position** (`NoRegistrantCollisionS`): both
-collisions are `RegColl`'s, which `Accepted` excludes. -/
 theorem noRegistrantCollisionS : F.NoRegistrantCollisionS dg N k Rw := by
   intro R ω t R₂ τ o ha s s' u u' q q' hr hr' _ _
   exact ⟨fun hc => ha.2.1 ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inl hc⟩,
     fun hc => ha.2.1 ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inr hc⟩⟩
 
-/-- **`SharedRowsS`** (`noRegistrantCollisionS`). -/
 theorem sharedRowsS : F.SharedRowsS dg N k Rw := F.sharedRowsS_of dg N k Rw (F.noRegistrantCollisionS dg N k Rw)
 
-/-- **`SiteRowsShared` where no read is segmented** (`sharedRowsS`). -/
 theorem siteRowsShared (hu : F.ReadsUnsegmented dg N k Rw) : F.SiteRowsShared dg N k Rw :=
   F.siteRowsShared_of_sharedRowsS dg N k Rw (F.sharedRowsS dg N k Rw) hu
 
 end Shared
 
-/-- **The registrant's rows of registration `s` are `V`'s** (`AccRowsAre` at `site`). It holds at `V := accRegS s`
-from `SiteRowsShared` (`accRowsAreS_of_shared`). -/
 def AccRowsAreS (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
     (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
@@ -379,7 +299,6 @@ def AccRowsAreS (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ
             ⟨b, lt_of_lt_of_le hb ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _))⟩ =
           bitL (MerkleScheme.rowBytes (V R ω t R₂ ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q))))).data.toList b
 
-/-- A registered read of registration `s` at position `p`, in some session, whose row has bit `b`. -/
 def AccReadS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (R : Reg) (ω : L.Ω)
     (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (p b : ℕ)
     (x : Σ j : Fin F.stmts.size, Fin (F.Vs j).nv × Fin (F.Vs j).c.ports.size) : Prop :=
@@ -388,8 +307,6 @@ def AccReadS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFie
     (F.zs R ω t R₂ x.1).rd.readAt (.inl (x.2.1, x.2.2)) = p ∧ b < Layout.portRowW (F.Vs x.1).c x.2.2
 
 open Classical in
-/-- Bit `b` of the registrant's row of registration `s` at position `p`: its bit at some registered read there
-(`AccReadS`), `false` if there is none. -/
 noncomputable def accBitS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (R : Reg) (ω : L.Ω)
     (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (p b : ℕ) : Bool :=
   if h : ∃ x, F.AccReadS s R ω t R₂ p b x then
@@ -398,8 +315,6 @@ noncomputable def accBitS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
         ⟨b, lt_of_lt_of_le (Classical.choose_spec h).2.2.2 ((Finset.le_sup (Finset.mem_univ _)).trans (Nat.le_succ _))⟩
   else false
 
-/-- **`rec-acc`'s rows as registered at registration `s`**: row `p`'s first two elements are the registrant's
-(`accBitS`). -/
 noncomputable def accRegS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (R : Reg) (ω : L.Ω)
     (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (p : ℕ) : Array F128 :=
   #[ofBits fun e => F.accBitS s R ω t R₂ p e, ofBits fun e => F.accBitS s R ω t R₂ p (128 + e)]
@@ -418,8 +333,6 @@ theorem bitL_accRegS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
   · simp only [h0, List.getD_cons_succ, List.getD_cons_zero]
     rw [bitOf_ofBits _ hm, show 128 + b % 128 = b by omega]
 
-/-- **`AccRowsAreS` at `rec-acc`'s rows as registered** (`accRegS`), from one registrant row per registration and
-position (`SiteRowsShared`). -/
 theorem accRowsAreS_of_shared (hshared : F.SiteRowsShared dg N k Rw)
     (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) :
     F.AccRowsAreS dg N k Rw (F.accRegS s) s := by
@@ -432,24 +345,18 @@ theorem accRowsAreS_of_shared (hshared : F.SiteRowsShared dg N k Rw)
   have hx := Classical.choose_spec hex
   exact (hshared R ω t R₂ τ o h _ j _ u _ q hx.1 hread (hx.2.1.trans hsite.symm) hx.2.2.1 b hx.2.2.2 hb).symm
 
-/-- **`AccRowsAreS` at `rec-acc`'s rows as registered** (`accRegS`; `siteRowsShared`), where no read is segmented. -/
 theorem accRowsAreS (hu : F.ReadsUnsegmented dg N k Rw) (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) :
     F.AccRowsAreS dg N k Rw (F.accRegS s) s :=
   F.accRowsAreS_of_shared dg N k Rw (F.siteRowsShared dg N k Rw hu) s
 
-/-- Obligation: discharged by the parse of the part's circuit (its keys), the session's reads file (`acc0`, `acc1`
-read `rec-acc` at the rep's ends, rec_vstage.py:355-357) and a verifier check that every session's `rec-acc` entry is
-one registration.
-**The algebra unit's end columns are keyed by `rec-acc`'s rows at the rep's ends, at registration `s`** (`EndKeys`
-at `site`): bit `b` of `acc0 i` and of `acc1 i` at rep `r`'s algebra unit is bit `128 i + b` of a row `own` names,
-read at a port of registration `s` at the rep's first row `r · nOpen` and its last `r · nOpen + nOpen`. -/
+/-- Discharged by the parse of the part's circuit (its keys), the session's reads file and a verifier check that
+every session's `rec-acc` entry is one registration. -/
 def EndKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (sA : Fin 2 → Fin F.stmts.size)
     (uA : (r : Fin 2) → Fin (F.Vs (sA r)).nv) (col0 col1 : Fin 2 → ℕ → ℕ → ℕ) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2, ∀ i < 2, ∀ b < 128,
     ColKeyedS (F.zs R ω t R₂ (sA r)) (uA r) (col0 r i b) (128 * i + b) (s R ω t R₂) (r.val * F.nOpen) ∧
       ColKeyedS (F.zs R ω t R₂ (sA r)) (uA r) (col1 r i b) (128 * i + b) (s R ω t R₂) (r.val * F.nOpen + F.nOpen)
 
-/-- **`HEnds` from the registrant's rows at a registration** (`hEnds_of_regs` at `regBit_of_colKeyedS`). -/
 theorem hEnds_of_regsS (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
     (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (sA : Fin 2 → Fin F.stmts.size)
     (uA : (r : Fin 2) → Fin (F.Vs (sA r)).nv) (col0 col1 : Fin 2 → ℕ → ℕ → ℕ)
@@ -474,7 +381,6 @@ theorem hEnds_of_regsS (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ 
       (fun p b => bitL (MerkleScheme.rowBytes (V R ω t R₂ p)).data.toList b) (hacc R ω t R₂ τ o h (sA r) (uA r))
       (hkeys R ω t R₂ τ o h r i hi b hb).2)
 
-/-- **`HEnds` from `HResL` and the registrant's rows at a registration** (`hEnds_of_part` at `EndKeysS`). -/
 theorem hEnds_of_partS {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hst : F.HStruct GS gs) (hres : F.HResL dg N k Rw gs) (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
     (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) {pA : ℕ} {a0 a1 : ℕ → ℕ}
@@ -494,11 +400,8 @@ theorem hEnds_of_partS {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Arr
       exact F.regBit_of_hResL dg N k Rw hst hres h r hin.1 ha hb (hrd b hb).2)
     hreg hacc hkeys
 
-/-- Obligation: discharged by the parse of the open circuit (its keys, `Flock.RecOpen`), the level's reads file (`acc`
-reads `rec-acc` at the level's chain positions, rec_outer.py:236) and a verifier check that every session's `rec-acc`
-entry is one registration.
-**Each opening's `acc` columns are keyed by `rec-acc`'s row at its chain position, at registration `s`** (`OpenKeys`
-at `site`). -/
+/-- Discharged by the parse of the open circuit (its keys, `Flock.RecOpen`), the level's reads file and a verifier
+check that every session's `rec-acc` entry is one registration. -/
 def OpenKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, ∀ b < 256,
@@ -506,8 +409,6 @@ def OpenKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFi
           (r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j) ∧
         ReadCol (Rows.ofNet (F.Vs (F.sessO ℓ)).hU) (accCol (levelLanes F.sh ℓ) (F.depth ℓ) + b)
 
-/-- **`HAccRows` from the registrant's rows at a registration and the openings' outputs** (`hAccRows_of_keys` at
-`OpenKeysS`, `AccRowsAreS`). -/
 theorem hAccRows_of_keysS (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
     (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (hreg : F.RowsRegistered dg N k Rw)
     (hacc : F.AccRowsAreS dg N k Rw V s) (hk : F.OpenKeysS dg N k Rw s) (hout : F.AccOutL dg N k Rw V) :
@@ -524,18 +425,11 @@ theorem hAccRows_of_keysS (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × 
   · obtain ⟨⟨hc', -⟩, hrd⟩ := hk R ω t R₂ τ o h r ℓ hℓ j hj b hb
     exact ioColAt_of_readCol (F.unO ℓ r j) hc' hrd hup hc
 
-/-! ## The openings' tops -/
-
 variable (cap : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray)
     (lig : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Fin 2 → LigeritoProof)
 
-/-- Obligation: to be discharged by acceptance, now that the layout keys a returned output gate to its output row
-(`HiddenExec.rowOfH`), with each level's `out` a read of the
-tops registration at the opening's cap index whose rows are the cap message's entries (rec_outer.py:226-228, 236: the
-prover checks `out_rows` against `R.expected(q.cap_node)`; the cap message, `MsgsRead`'s).
-**The openings' `out` columns are registered bits of the cap's entry**: at every accepted outer proof, the cap entry
-`HTopsL` names is 64 bytes, and the first 512 output columns of rep `r`'s opening `j` of level `ℓ` are registered bits
-of it (`RegOut`). -/
+/-- No check discharges it; acceptance would, with each level's `out` a read of the tops registration at the
+opening's cap index whose rows are the cap message's entries. -/
 def TopsOutL : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ,
@@ -548,7 +442,6 @@ def TopsOutL : Prop :=
               ((F.posOf R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r ℓ)[j]! >>> F.depth ℓ)
                 ByteArray.empty).data.toList t')
 
-/-- **`HTopsL` from the openings' registered `out` columns** (`TopsOutL`, `bytesAt_of_regOut`). -/
 theorem hTopsL_of_out (hU : F.HOpenUnits) (hout : F.TopsOutL dg N k Rw cap lig) : F.HTopsL dg N k Rw cap lig := by
   intro R ω t R₂ τ o h r ℓ hℓ j hj
   obtain ⟨hup, -, H, hp⟩ := hU ℓ hℓ

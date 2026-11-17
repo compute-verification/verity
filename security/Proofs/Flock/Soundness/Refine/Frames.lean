@@ -7,21 +7,7 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Verifier.Transcript
 import VCVio.Prelude.Core
 
-/-!
-# The transcript's frames (framing, for the decoder premise)
-
-The replay transcript (`Flock.Transcript`) appends one frame per domain, label, absorb or zero-coin squeeze to its pending
-bytes, and a squeeze answers the pending bytes and its own header; on the unsalted path the server retained each round's
-bytes, and the replay compares them exactly. This file models those bytes.
-
-* `Frame`, `Frame.enc`: a frame and its bytes, as the executable writes them (a 16-byte header naming its kind and
-  length, then its payload).
-* `encs_inj`: a list of frames is recoverable from its bytes, so a round's retained bytes determine what was absorbed.
-* `label_enc`, `absorbF_enc`, `absorbSlice_enc`, `absorbBytes_enc`, `framed_enc`, `init_enc`: each step of the
-  transcript appends its frame's bytes.
-* `squeeze_bindA`, `sample_bindA`, `sampleVec_bindA`, `sampleK_bindA`, `forIn_answers`: a squeeze, or a loop of them,
-  consumes rounds that retained the pending bytes and the squeeze's header.
--/
+/-! The replay transcript's frames as bytes, recoverable from them (`encs_inj`), for the decoder premise. -/
 
 @[expose] public section
 
@@ -126,7 +112,6 @@ theorem pay_length (f : Frame) : f.pay.length = f.payLen := by
 theorem header_length (op kind : UInt8) (n : ℕ) : (Transcript.header op kind n).data.toList.length = 16 := by
   rw [header_data, List.length_append, le64_data]; simp
 
-/-- The header determines the frame's kind and length. -/
 theorem header_inj {op kind op' kind' : UInt8} {n n' : ℕ} (hn : n < 2 ^ 64) (hn' : n' < 2 ^ 64)
     (h : (Transcript.header op kind n).data.toList = (Transcript.header op' kind' n').data.toList) :
     op = op' ∧ kind = kind' ∧ n = n' := by
@@ -169,7 +154,6 @@ theorem eq_of_parts : ∀ {f f' : Frame}, f.op = f'.op → f.kind = f'.kind → 
   | .sq _ _, .vec _, h, _, _, _ | .sq _ _, .bytes _, h, _, _, _ => by simp [op] at h
   | .one _, .vec _, _, h, _, _ | .vec _, .one _, _, h, _, _ => by simp [kind] at h
 
-/-- **A frame is its bytes.** -/
 theorem eq_of_enc {f f' : Frame} (hw : f.WF) (hw' : f'.WF) (h : f.enc = f'.enc) : f = f' := by
   unfold enc at h
   have hsplit := List.append_inj h (by rw [header_length, header_length])
@@ -179,7 +163,6 @@ theorem eq_of_enc {f f' : Frame} (hw : f.WF) (hw' : f'.WF) (h : f.enc = f'.enc) 
 theorem enc_length (f : Frame) : f.enc.length = 16 + f.payLen := by
   unfold enc; rw [List.length_append, header_length, pay_length]
 
-/-- **Frames delimit themselves:** a frame's header fixes its length. -/
 theorem enc_append_inj {f f' : Frame} {r r' : List UInt8} (hw : f.WF) (hw' : f'.WF) (h : f.enc ++ r = f'.enc ++ r') :
     f = f' ∧ r = r' := by
   have h₀ := h
@@ -195,7 +178,6 @@ end Frame
 /-- The bytes of a list of frames. -/
 def encs (fs : List Frame) : List UInt8 := fs.flatMap Frame.enc
 
-/-- **Frames are recoverable from their bytes.** -/
 theorem encs_inj : ∀ {fs fs' : List Frame}, (∀ f ∈ fs, f.WF) → (∀ f ∈ fs', f.WF) → encs fs = encs fs' → fs = fs'
   | [], [], _, _, _ => rfl
   | [], f' :: _, _, _, h => by
@@ -210,8 +192,6 @@ theorem encs_inj : ∀ {fs fs' : List Frame}, (∀ f ∈ fs, f.WF) → (∀ f �
       simp only [encs, List.flatMap_cons] at h
       obtain ⟨rfl, hr⟩ := Frame.enc_append_inj (hw f (by simp)) (hw' f' (by simp)) h
       rw [encs_inj (fun g hg => hw g (by simp [hg])) (fun g hg => hw' g (by simp [hg])) hr]
-
-/-! ## What the transcript's steps append -/
 
 open Transcript
 
@@ -248,22 +228,17 @@ theorem init_enc (rounds : Array Round) (domain : ByteArray) :
     (Transcript.init rounds domain).pending.data.toList = (Frame.dom domain).enc := by
   simp [Transcript.init, Frame.enc, Frame.op, Frame.kind, Frame.len, Frame.pay]
 
-/-- A round whose bytes the server retained answers exactly them. -/
 theorem answers_retained {r : Round} {B c : ByteArray} (hb : r.bytes = some B) (h : r.answers c) : c = B := by
   unfold Round.answers at h
   rw [hb] at h
   exact h
 
-/-- Round `r` retained the bytes `L`. -/
 def Retains (r : Round) (L : List UInt8) : Prop := r.bytes.map (fun B => B.data.toList) = some L
 
-/-- Every round of `rs` retained its bytes, as on the unsalted path's server. -/
 def AllRetained (rs : Array Round) : Prop := ∀ i < rs.size, ∃ B, (rs[i]!).bytes = some B
 
 variable {β : Type}
 
-/-- A squeeze of `n ≠ 0` coins then `f`: round `t.k` issued `n` coins and retained the pending bytes and the squeeze's
-header; `f` continues with its coins and nothing pending. -/
 theorem squeeze_bindA {kind : UInt8} {n : ℕ} (hn : n ≠ 0) {f : Array F128 → TM β} {t t' : Transcript} {b : β}
     (h : (squeeze kind n >>= f) t = .ok (b, t')) (hret : AllRetained t.rounds) :
     t.k < t.rounds.size ∧ (t.rounds[t.k]!).n = n ∧
@@ -308,9 +283,6 @@ theorem sampleK_bindA {f : F256 → TM β} {t t' : Transcript} {b : β} (h : (sa
   obtain ⟨rfl, rfl⟩ := pure_ok h₁
   exact ⟨hlt, hn, hR, h₂⟩
 
-/-- **A loop answering one round per step.** If every step of the body, with nothing pending, consumes the next round,
-which retained `F i`, and leaves nothing pending, then the loop over `a, …, a + n − 1` consumes `n` rounds, which
-retained `F a, …, F (a + n − 1)`. -/
 theorem forIn_answers {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (F : ℕ → List UInt8)
     (hbody : ∀ i s t b t', AllRetained t.rounds → t.pending = ByteArray.empty → body i s t = .ok (b, t') →
       ∃ s', b = ForInStep.yield s' ∧ t'.rounds = t.rounds ∧ t'.k = t.k + 1 ∧ t'.pending = ByteArray.empty ∧

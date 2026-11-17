@@ -2,16 +2,8 @@ module
 
 public import Proofs.Flock.SpotFlock.AddressFacts.WidthOf
 
-/-!
-# Each position's bit inside its port's row
-
-`bitsInPorts_of`: `BitsInPorts`, which the width and the copy at the address map ask, from two conditions:
-
-* `PortsOnce` (`WiringOk`): each member circuit names each of its ports once. The address map's port is the first
-  port of a row's name (`portNamed`), so only then is it the port the position's row is.
-* `BitsOwn`: each source bit's and each written bit's row is a port of its member's circuit and its bit is inside
-  that port's `16 w` bits, a fact of the members' programs alone.
--/
+/-! `BitsInPorts` from each member naming its ports once and each position's bit inside its own port
+(`bitsInPorts_of`). -/
 
 @[expose] public section
 
@@ -21,8 +13,6 @@ open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
 
-/-- **Each commitment position's bit is inside a port of its row's name**: each source bit's and each written bit's
-row names a port of its member's circuit, and its bit is inside that port's `16 w` bits. -/
 def BitsOwn : Prop :=
   (∀ s ∈ sourceBits h.ms, ∃ q, q < (memberCircuit h s.2.1).ports.size ∧
       (memberCircuit h s.2.1).ports[q]!.name = s.2.2.row ∧
@@ -33,7 +23,6 @@ def BitsOwn : Prop :=
 
 variable {h}
 
-/-- **Where a member names each port once, the address map's port of a port's name is that port.** -/
 theorem portNamed_eq {t q : ℕ} {name : String} (hO : ((memberCircuit h t).ports.toList.map (·.name)).Nodup)
     (hq : q < (memberCircuit h t).ports.size) (hname : (memberCircuit h t).ports[q]!.name = name) :
     portNamed h t name = q := by
@@ -46,7 +35,6 @@ theorem portNamed_eq {t q : ℕ} {name : String} (hO : ((memberCircuit h t).port
     rw [hn, hname]
   exact (List.Nodup.getElem_inj_iff hO).1 e1
 
-/-- A position's bit inside a port of its row's name is inside the address map's port of that name. -/
 theorem bit_lt_portNamed {t : ℕ} {r : Spot.Bits.RowPos} (hO : ((memberCircuit h t).ports.toList.map (·.name)).Nodup)
     (hq : ∃ q, q < (memberCircuit h t).ports.size ∧ (memberCircuit h t).ports[q]!.name = r.row ∧
       r.bit < 16 * (memberCircuit h t).ports[q]!.words) :
@@ -55,7 +43,6 @@ theorem bit_lt_portNamed {t : ℕ} {r : Spot.Bits.RowPos} (hO : ((memberCircuit 
   rw [portNamed_eq hO hlt hname]
   exact hbit
 
-/-- **`BitsInPorts` from each member naming its ports once and each position's bit inside its own port.** -/
 theorem bitsInPorts_of (hO : PortsOnce h) (hB : BitsOwn h) : BitsInPorts h := by
   refine ⟨fun s hs => ?_, fun y hy => ?_⟩
   · obtain ⟨x, t, r⟩ := s

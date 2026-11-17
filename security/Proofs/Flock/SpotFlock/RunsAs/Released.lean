@@ -5,18 +5,8 @@ public import Proofs.Flock.Claims.Sampling.Select.Prefix
 import Proofs.Flock.Claims.Sampling.Select.Take
 import Proofs.Flock.Claims.Sampling.Select.Steps
 
-/-!
-# A sample reads only the bytes it reports reading
-
-A sample reads its source in order (`Draw.take`), from position `0`, and throws where the source runs out, so the
-position only grows and a sample that ends at position `R` read only the source's first `R` bytes. It samples the same from
-any source that starts with those `R` bytes (`AgreesTo`): `sampleUnits_read`, and through the stages' samples,
-`select_read` and `selectSecond_read`. The `R` a stage reports is the `read` `Run.coinsCode` holds to the challenger's
-released coins, so a stage's sample depends on its coins only through the bytes the challenger released.
-
-Each step is stated as one fact of a successful run from position `p` to `x.2`: `p ≤ x.2`, and where `x.2 ≤ R`, the
-run on a source agreeing up to `R` is the same.
--/
+/-! A sample reads only the bytes it reports reading, so a stage's sample depends on its coins only through the bytes
+the challenger released (`sampleUnits_read`). -/
 
 @[expose] public section
 
@@ -67,8 +57,6 @@ theorem take_read {ξ ξ' : ByteArray} {R need p : ℕ} (hA : AgreesTo ξ ξ' R)
       rw [ByteArray.extract_extract, Nat.zero_add, Nat.zero_add, Nat.min_eq_left hR']
     rw [← e ξ', hA.extract_eq, e ξ]
 
-/-- A `repeat` loop whose body, on `f`, moves the position up and returns the same on `g` where it ends by `R`, and whose
-every `yield` on `f` moves the position up, to at most `B`, does so too. -/
 theorem loop_read {β : Type} (f g : Unit → β → StateT ℕ (Except String) (ForInStep β)) (B R : ℕ)
     (hfg : ∀ b s x, (f () b).run s = .ok x → s ≤ x.2 ∧ (x.2 ≤ R → (g () b).run s = .ok x))
     (hy : ∀ b s b' s', (f () b).run s = .ok (.yield b', s') → s < s' ∧ s' ≤ B) :
@@ -102,7 +90,6 @@ theorem loop_read {β : Type} (f g : Unit → β → StateT ℕ (Except String) 
         rw [hg (show s₁ ≤ R from Nat.le_trans h1 hR)]
         exact h2 hR
 
-/-- A `for` loop over a list whose body does as `loop_read`'s does so too. -/
 theorem forIn_read {α β : Type} (f g : α → β → StateT ℕ (Except String) (ForInStep β)) (R : ℕ)
     (hfg : ∀ a b s x, (f a b).run s = .ok x → s ≤ x.2 ∧ (x.2 ≤ R → (g a b).run s = .ok x)) :
     ∀ (l : List α) (b : β) (s : ℕ) (x : β × ℕ), (forIn l b f).run s = .ok x →
@@ -183,8 +170,6 @@ theorem sampleWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) 
     dsimp only at h ⊢
     exact bind_read h (fun r hr => stratifiedWith_read hA hr) (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
 
-/-- **A sample reads only the bytes it reports reading**: the units a sampling design samples from `ξ`, having read `r.2` bytes, are
-the same from any source that starts with `ξ`'s first `r.2` bytes. -/
 theorem sampleUnits_read {ξ ξ' : ByteArray} {samplingDesign : Flock.Draw.SamplingDesign} {n : ℕ} {r : Array ℕ × ℕ}
     (h : Spot.Draw.sampleUnits samplingDesign n ξ = .ok r) (hA : AgreesTo ξ ξ' r.2) : Spot.Draw.sampleUnits samplingDesign n ξ' = .ok r := by
   unfold Spot.Draw.sampleUnits at h ⊢
@@ -212,7 +197,6 @@ theorem sampleFirstRead_read {samplingDesign : Json} {n : ℕ} {ξ ξ' : ByteArr
   rw [hp, bind_ok, sampleUnits_read hu hA', bind_ok]
   exact h
 
-/-- **The second stage reads only the bytes it reports reading.** -/
 theorem selectSecond_read {sample ns ks : Array ℕ} {ξ ξ' : ByteArray} {r : Json × ℕ}
     (h : Spot.Select.selectSecond sample ns ks ξ = .ok r) (hA : AgreesTo ξ ξ' r.2) :
     Spot.Select.selectSecond sample ns ks ξ' = .ok r := by
@@ -241,7 +225,6 @@ theorem selectSecond_read {sample ns ks : Array ℕ} {ξ ξ' : ByteArray} {r : J
     rw [sampleFirstRead_read hd hA', bind_ok]
     exact h
 
-/-- **The first stage reads only the bytes it reports reading**, with no closure map. -/
 theorem select_read {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} {table : Option Json}
     {ξ ξ' : ByteArray} {r : Json × Array ℕ × ℕ}
     (h : Spot.Select.select rule p query table none ξ = .ok r) (hA : AgreesTo ξ ξ' r.2.2) :
@@ -289,8 +272,6 @@ theorem select_read {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} 
     rw [hp, bind_ok, sampleUnits_read hu hA', bind_ok]
     exact h
 
-/-- **Part 1, at the released bytes**: where the registration has no closure map and the first stage accepted on `ξ`
-having read `read` bytes, the replay sample on any source that starts with those bytes is the stage's units. -/
 theorem sample_read {g : SamplingDeploy.RegTwo} {ξ ξ' : ByteArray} {draw : Json} {proved : Array ℕ} {read : ℕ}
     (hc : g.first.closure = none)
     (h : Spot.Select.select g.first.rule g.first.program g.first.query g.first.table g.first.closure ξ =
@@ -299,8 +280,6 @@ theorem sample_read {g : SamplingDeploy.RegTwo} {ξ ξ' : ByteArray} {draw : Jso
   rw [hc] at h
   simp only [SamplingDeploy.RegTwo.sample, hc, select_read h hA]
 
-/-- **Part 2, at the released bytes**: where the second stage accepted on `ξ` over the model's replay sample, having
-read `read` bytes, and the second stage's coins start with those bytes, the model's second sample is the run's. -/
 theorem secondSample_read (h : Held) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) {ξ : ByteArray} {draw : Json} {read : ℕ}
     (hs : Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks ξ = .ok (draw, read))
     (hA : AgreesTo ξ (stageSrc c₁) read) :

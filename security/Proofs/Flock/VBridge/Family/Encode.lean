@@ -23,29 +23,8 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The inner proof file's bytes: `encodeProof`, and `TableSrc.Encodes`
-
-`encodeProof sh p` is the file the prover writes for the proof `p` at shape `sh`: `bincode 1.3` of the commitment and
-`R1csProofLigerito` (`Flock.Proof`), each `Vec` as its `u64` length then its elements, each `F128` as
-`le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty (`matrix_evals`, the grinding nonces but the query, claim
-and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`, then the zk patch's
-`zk_level0 = None` tag, as every deployed prover writes it: the verifier's `Flock.Wire.proofFile`, the one file
-`decodeProof` accepts for `p`. Its pair is `--zk`'s `wProof` (ZkView/Wire.lean), the pair that file's proof starts
-with.
-
-* `decodeProof_encodeProof`: `decodeProof sh (encodeProof sh p) = .ok p` for every `p` of the shape (`ProofShaped`):
-  every length `decodeProof` checks (`decodeRead`) at its value, a schedule of at least two levels (at one level
-  `recursive_proofs`' length check refuses every file), digests of positive width, and a file that fits a `u64`.
-* `encodeProof_size_le`: the file is at most `fileBound sh` bytes (the pair's bound and the tag's byte); at hm96-sha512 and a `fast100` schedule that is at
-  most `2^32` bytes and `2064` per ring switch (`fast100_file`), and at the inner statement's unsalted SHA-512, whose
-  salts are no larger, too (`shapeOf_plain`, `schedPart_plain`).
-* `TableSrc.encodes_of`: `TableSrc.Encodes` at `bytes r := encodeProof (shapeOf …) (proof r)`, from the setup
-  (`SetupRealizes`), V*'s shape (`ShapeIs`, and its claims `2 + n`: `ClaimsAre`, from `HFit` and `ExtrasAre` by
-  `claimsAre_of`), the shapes of the level-0 cap and the Ligerito openings the proof files carry (`CapShaped`,
-  `LigShaped`), and fewer than `2^48` regions (`RegionsFit`). `hEnc_of` is it at the family; `hdec_filesAt` is
-  `hdec` at the table files.
--/
+/-! The inner proof file's bytes `encodeProof`, which `decodeProof` inverts (`decodeProof_encodeProof`), and
+`TableSrc.Encodes` (`TableSrc.encodes_of`). -/
 
 @[expose] public section
 
@@ -90,7 +69,6 @@ theorem ok_of_reads {m : Reader.M Proof} {b : ByteArray} {x : Proof} {what : Str
   rw [ByteArray.empty_append] at e
   exact Reader.runPlain_of_run_tag e (Nat.zero_add b.size)
 
-/-- **`decodeProof` inverts `encodeProof`** at every proof of the shape. -/
 theorem decodeProof_encodeProof (sh : Shape) (p : Proof) (hp : ProofShaped sh p) :
     decodeProof sh (encodeProof sh p) = .ok p := by
   obtain ⟨cap, ⟨m, lir, lbs, prof, nl, mh⟩, ⟨r1ab, r1c, rounds, fa, fb, fc⟩, ⟨lr, zp⟩, rs,
@@ -188,16 +166,9 @@ theorem decodeProof_encodeProof (sh : Shape) (p : Proof) (hp : ProofShaped sh p)
     refine ZkView.Reads.bind (ZkView.Reads.zeros cbn _ _ hcbn hzc) ?_
     exact ZkView.Reads.last (ZkView.Reads.zeros con _ _ hcon hzk) rfl
 
-/-! ## The table's proof files -/
-
-/-- **The level-0 cap has the schedule's shape**: `2^cap` digests of the scheme's width (`decodeProof`'s `cap` and
-`initial_cap`, Proof.lean:94, 119). The cap V*'s layers hold (`cap`, defined by the join). -/
 def CapShaped (st : Setup) (sch : Flock.Schedule) (cap : Array ByteArray) : Prop :=
   ZkView.CapOk (shapeOf st sch 0) (sch.levels.getD 0 default) cap
 
-/-- **The Ligerito openings have the schedule's shape**: each level's openings, the recursive caps and the three nonce
-vectors at the lengths `decodeProof` checks (Proof.lean:120-151), every nonce `0`. The openings V*'s layers hold (`lig`,
-defined by the join). -/
 def LigShaped (st : Setup) (sch : Flock.Schedule) (lig : LigeritoProof) : Prop :=
   let sh := shapeOf st sch 0
   let R := sch.levels.size - 1
@@ -214,8 +185,6 @@ def LigShaped (st : Setup) (sch : Flock.Schedule) (lig : LigeritoProof) : Prop :
 theorem shl_two (e : ℕ) : 2 <<< e = 2 ^ (e + 1) := by
   rw [Nat.shiftLeft_eq, Nat.pow_succ, Nat.mul_comm]
 
-/-- **A proof file at V*'s shape has the decoder's lengths**: `proofOf`'s messages are `decoded`'s, whose lengths are
-the shape's, and its cap and Ligerito openings have the schedule's shape. -/
 theorem proofOf_lengths {st : Setup} {sch : Flock.Schedule} {sh : Shape} {n : ℕ} {params : PcsParams}
     {cap : Array ByteArray} {lig : LigeritoProof} {d : RepData} (hsh : ShapeIs sh st sch) (hcl : sh.claims = 2 + n)
     (hcap : CapShaped st sch cap) (hlig : LigShaped st sch lig) :
@@ -224,8 +193,6 @@ theorem proofOf_lengths {st : Setup} {sch : Flock.Schedule} {sh : Shape} {n : �
   obtain ⟨hl0, hrcs, hrc, hrps, hrp, hfin, hqn, hcbn, hcon, hz⟩ := hlig
   refine ⟨hcap, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hcap, hl0, hrcs, hrc, hrps, hrp, ?_, hfin, ?_, hqn, ?_, hcbn, hcon, hz⟩
   all_goals simp [proofOf, decoded, RecAlgebra.Messages.map, RecAlgebra.symbolic, shapeOf, hm, hk, hcl, shl_two]
-
-/-! ## The file's length -/
 
 theorem catL_size {α : Type} (f : α → ByteArray) (l : List α) :
     (ZkView.catL f l).size = (l.map fun x => (f x).size).sum := by
@@ -252,7 +219,6 @@ theorem wVec_size_const {α : Type} (f : α → ByteArray) (xs : Array α) (k : 
   rw [wVec_size_idx f xs (fun _ => k) fun i hi => h _ (Array.getElem_mem hi)]
   simp
 
-/-- A level's `opened_salts` length for `q` opened rows. -/
 def saltsSize (sl : Option ℕ) (q : ℕ) : ℕ :=
   match sl with
   | none => 0
@@ -271,7 +237,6 @@ theorem wSalts_size {sh : Shape} {q : ℕ} {xs : Array ByteArray} (h : ZkView.Sa
   · simp only [hs] at h ⊢
     rw [wVec_size_const id xs (n + 1) h.2, h.1]
 
-/-- A level's openings' length: `q` rows of `w` elements, `q·(d − cap)` digests of `H` bytes, the salts. -/
 def levelSize (H : ℕ) (sl : Option ℕ) (l : Level) (w : ℕ) : ℕ :=
   8 + l.q * (8 + w * 16) + (8 + l.q * (l.d - l.cap) * H) + saltsSize sl l.q
 
@@ -293,8 +258,6 @@ theorem wParams_size_le (p : PcsParams) : (ZkView.wParams p).size ≤ 41 := by
   rcases e with _ | e <;>
     simp [ZkView.wParams, ByteArray.size_append, ZkView.le64_size, ZkView.le32_size, h0, h1]
 
-/-- The part of a file's length its schedule fixes, at digest width `H` and salts `sl`: the commitment (its parameters
-at most 41 bytes), the fixed vectors and empty ones, each vector's length, and Ligerito's openings and messages. -/
 def schedPart (s : Flock.Schedule) (H : ℕ) (sl : Option ℕ) : ℕ :=
   let R := s.levels.size - 1
   let lvl := fun (i : Nat) => s.levels.getD i default
@@ -305,8 +268,6 @@ def schedPart (s : Flock.Schedule) (H : ℕ) (sl : Option ℕ) : ℕ :=
     (8 + 2 ^ (s.ext + 1) * 16) + levelSize H sl (lvl R) 16 + 8 + (8 + (s.k0 + 8 + 7 * (R - 1)) * 64) +
     (8 + (R + 1) * 8) + (8 + (1 + 2 * R) * 16) + 8 + (8 + (3 * R + 2) * 8) + (8 + (R + 1) * 8)
 
-/-- **A bound on a file's length at shape `sh`**: the schedule's part, the zerocheck's and lincheck's rounds,
-`2064` bytes per ring switch, and the `zk_level0` tag's byte. -/
 def fileBound (sh : Shape) : ℕ :=
   schedPart sh.sched sh.hashLen sh.saltLen + 32 * (sh.m - 6) + 32 * (sh.kLog - 6) + 2064 * sh.claims + 1
 
@@ -367,10 +328,6 @@ theorem encodeProof_size_le (sh : Shape) (p : Proof) (hp : Lengths sh p) : (enco
   simp only [fileBound, schedPart]
   omega
 
-/-! ## At the verifier's schedules -/
-
-/-- Every executable `fast100` schedule has at least two levels and fixes at most `2^32` bytes of a file at
-hm96-sha512's digests and salts, and is for an `m` of at most 35. -/
 theorem fast100_file (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) :
     2 ≤ s.levels.size ∧ schedPart s 64 (some 192) ≤ 2 ^ 32 ∧ m ≤ 35 := by
   by_cases hm : m < 40
@@ -385,7 +342,6 @@ theorem sum_map_le {l : List ℕ} {f g : ℕ → ℕ} (h : ∀ i, f i ≤ g i) :
   | nil => simp
   | cons a l ih => simp only [List.map_cons, List.sum_cons]; exact Nat.add_le_add (h a) ih
 
-/-- A file's schedule part grows with its salts. -/
 theorem schedPart_le {s : Flock.Schedule} {H : ℕ} {sl sl' : Option ℕ} (h : ∀ q, saltsSize sl q ≤ saltsSize sl' q) :
     schedPart s H sl ≤ schedPart s H sl' := by
   have hl : ∀ l w, levelSize H sl l w ≤ levelSize H sl' l w := fun l w => by
@@ -398,8 +354,6 @@ theorem schedPart_le {s : Flock.Schedule} {H : ℕ} {sl sl' : Option ℕ} (h : �
   simp only [schedPart]
   omega
 
-/-- **The inner statement's shape** at `flock-leaf/sha512-unsalted`: 64-byte digests and no salts (`none`, or `some 0`
-when the setup opens salts). -/
 theorem shapeOf_plain {st : Setup} {sch : Flock.Schedule} {n : ℕ}
     (h : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") :
     (shapeOf st sch n).hashLen = 64 ∧ ((shapeOf st sch n).saltLen = none ∨ (shapeOf st sch n).saltLen = some 0) := by
@@ -414,24 +368,16 @@ namespace TableSrc
 
 variable (s : TableSrc)
 
-/-- **V*'s shape has the statement's claims**: `2` and the setup's `2 · |regions|` extra claims. `verifierRows`
-accepting a rep's coins at V*'s shape gives `claims = 2 + |extras|` (`claims_of`), and the rep's extras are the setup's
-(`ExtrasAre`, `PointsOK`). -/
 def ClaimsAre : Prop := s.sh.claims = 2 + 2 * s.S.regions.length
 
 theorem claims_of {r : Fin 2} {x} (hrows : RecAlgebra.verifierRows s.sh (s.d r).rounds (s.d r).extras (s.d r).comb = .ok x)
     (hxs : (s.d r).extras.size = 2 * s.S.regions.length) : s.ClaimsAre := by
   rw [ClaimsAre, RecAlgebra.verifierRows_claims hrows, hxs]
 
-/-- **The statement has fewer than `2^48` regions**, so that each rep's proof file, with its `2 + 2·|regions|` ring
-switches of 2064 bytes each, fits a `u64` (`decodeProof` reads every length as a `u64`, Proof.lean:94-151). The
-verifier's setup refuses more than 1,024 (`checkInRange`, Statement.lean:114), so it holds at a statement with a setup's
-regions (`regionsFit_of_setupH`, Lig.lean). -/
+/-- So that each rep's proof file, with its `2 + 2·|regions|` ring switches of 2064 bytes each, fits a `u64`; the
+verifier's setup refuses more than 1,024 (`regionsFit_of_setupH`). -/
 def RegionsFit : Prop := s.S.regions.length < 2 ^ 48
 
-/-- **`Encodes`** at `bytes r := encodeProof (shapeOf …) (proof r)`: the setup's (`SetupRealizes`: plain SHA-512 and a
-`fast100` schedule), V*'s shape (`ShapeIs`, `ClaimsAre`), the cap's and the Ligerito openings' shapes, and the
-statement's region count. -/
 theorem encodes_of {ptLocal mPts : ℕ} (hset : SetupRealizes s.st s.S s.sch ptLocal mPts) (hsh : ShapeIs s.sh s.st s.sch)
     (hcl : s.ClaimsAre) (hcap : CapShaped s.st s.sch s.cap) (hlig : ∀ r, LigShaped s.st s.sch (s.lig r))
     (hreg : s.RegionsFit) : s.Encodes := by
@@ -455,8 +401,6 @@ theorem encodes_of {ptLocal mPts : ℕ} (hset : SetupRealizes s.st s.S s.sch ptL
     omega
   exact ⟨encodeProof _ (s.proof r), decodeProof_encodeProof _ _ ⟨by rw [hH]; omega, show 1 ≤ s.sch.levels.size - 1 by omega, hfit, hlen⟩⟩
 
-/-- **`hdec`** at the table files: each rep's bytes decode to its proof file at the shape `verifyRep` decodes
-with (Verify.lean:40-41), whenever the files have encodings (`Encodes`). -/
 theorem hdec_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → FlockLevel3.GF128)
     (hset : SetupRealizes s.st s.S s.sch cls.ptLocal cls.mPts) (henc : s.Encodes) (r : ℕ) :
     decodeProof (shapeOf (s.filesAt cls pts).st (s.filesAt cls pts).sch (s.filesAt cls pts).extras.size)
@@ -477,8 +421,6 @@ section claims
 
 variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) {cls : HClass}
 
-/-- **`ClaimsAre` from `verifierRows` accepting rep 0's coins** (`HFit`) and the reps' extra claims being the
-setup's at the inner transcript's link points (`ExtrasAre`). -/
 theorem TableSrc.claimsAre_of (s : TableSrc) (tr : List (List (SMsg T) × ((k : Fin nR) → CT k)))
     (hset : SetupRealizes s.st s.S s.sch cls.ptLocal cls.mPts) (hxs : s.ExtrasAre T CT cls tr)
     (hrows : ∃ x, RecAlgebra.verifierRows s.sh (s.d 0).rounds (s.d 0).extras (s.d 0).comb = .ok x) :
@@ -511,10 +453,6 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
     (cap : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray)
     (lig : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Fin 2 → LigeritoProof)
 
-/-- **`henc`** of `hFiles_of` and `hRuns_of`: at every accepted outer proof, each rep's proof file has an encoding
-(`encodeProof`), from the setup (`SetupRealizes`), V*'s shape (`ShapeIs`), `verifierRows` accepting the reps' coins
-(`HFit`) and the reps' extra claims (`ExtrasAre`), the shapes of the cap and openings V*'s layers hold (`CapShaped`,
-`LigShaped`), and the statement's region count (`RegionsFit`). -/
 theorem hEnc_of (hset : ∀ R ω, SetupRealizes (st R ω) ((F.x R ω).toStatement regs) sch cls.ptLocal cls.mPts)
     (hsh : ∀ R ω, ShapeIs F.sh (st R ω) sch) (hfit : F.HFit dg N k Rw)
     (hxs : F.AtAccepted dg N k Rw fun R ω t l =>

@@ -5,13 +5,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Registered.Binding
 
-/-!
-# The registered reads' term at the outcome's registration
-
-`ReadsX.prob_off_le` bounds accepting while a registered read is off at one fixed registration. In the live audit the
-registration is the outcome's first component, so `ReadsX.prob_off_le_at` takes it from the outcome (`reg`), with the
-same finder: one play of the game, and the extractor's pair at the off read.
--/
+/-! The registered reads' term at the registration the outcome carries (`ReadsX.prob_off_le_at`). -/
 
 @[expose] public section
 
@@ -29,10 +23,6 @@ namespace ReadsX
 
 variable {lay : Layout P plan tab decode} {rs : HmRowsX lay} (rd : ReadsX lay rs)
 
-/-- **`prob_off_le` at the outcome's registration** (`cr/sha-512`, `SHA512CRStrict`): in a game `G` played by `σ` whose
-accepted outcomes the verifier's registered check holds on at the registration `reg o`, through the outcome's paths, the
-probability of accepting while some registered read's leaf under `reg o` is not the registrant's is at most
-`qR²/2^513`, for the finder that plays `G` once and outputs the extractor's pair (`pick`) at `reg o`. -/
 theorem prob_off_le_at {β : Type} (G : Game β) (σ : Strategy G) (reg : β → Reg) (accept : β → Prop)
     (path : β → lay.Pos → ByteArray) (hchk : ∀ o, accept o → rd.Checked (reg o) (path o)) {qR : ℝ}
     (hR : (StrictCR.oneRun G σ fun o => rd.pick (reg o) (path o)).CR H512 qR) :

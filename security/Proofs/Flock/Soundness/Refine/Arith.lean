@@ -8,15 +8,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# Element seams: the executable's arithmetic is the model's
-
-The model computes in the fields of `execArith` (`GF128`, `GF256`); the executable computes on their words (`F128`,
-`F256`) and arrays. `fOf` (`GF128.of`) maps a word to its field element, and it is a ring homomorphism on the operations
-the verifier uses (`fOf_add`, `fOf_mul`, `fOf_inv`). This file adds what the phases need on top: the executable's `dot`
-is a sum (`fOf_dot`), the weight arrays have 64 entries, reading a coin as `getD` or `!` agrees, and the zerocheck
-vector `pinned ++ r_outer` is the model's `zcVector`.
--/
+/-! The executable's arithmetic on `F128` and `F256` words is the model's in the fields of `execArith`. -/
 
 @[expose] public section
 
@@ -32,7 +24,6 @@ theorem fOf_zero : fOf 0 = 0 := GF128.zero_eq.symm
 
 theorem fOf_injective : Function.Injective fOf := fun _ _ h => h
 
-/-- An out-of-range read is the default word, zero. -/
 theorem getElem!_eq_getD (c : Array F128) (i : ℕ) : c[i]! = c.getD i 0 := by
   by_cases hi : i < c.size
   · rw [getElem!_pos c i hi, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi]; rfl
@@ -56,7 +47,6 @@ theorem fOf_foldl_dot (a b : Array F128) :
       rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil, fOf_add, ih, fOf_mul,
         Finset.sum_range_succ, add_assoc]
 
-/-- **`dot` is a sum** over the first array's entries; the second array's missing entries read as zero. -/
 theorem fOf_dot (a b : Array F128) (n : ℕ) (ha : a.size = n) :
     fOf (dot a b) = ∑ i : Fin n, fOf a[i.val]! * fOf b[i.val]! := by
   rw [dot_eq_foldl, fOf_foldl_dot, fOf_zero, zero_add, Fin.sum_univ_eq_sum_range (fun i => fOf a[i]! * fOf b[i]!) n]
@@ -84,8 +74,6 @@ theorem combWeights_size (z : F128) : (combWeights z).size = 64 := by
   unfold combWeights
   split <;> simp
 
-/-- The zerocheck vector (`Flock.Piop`): the executable's `pinned ++ r_outer` is the model's `zcVector` on the coins
-`r_outer`. -/
 theorem zcVector_eq {m : ℕ} (c : Array F128) (hc : c.size = m - 13) (hm : 13 ≤ m) (j : Fin (m - 6)) :
     Model.zcVector execArith (vecOf (m - 13) c) j = fOf ((pinned ++ c)[j.val]!) := by
   unfold Model.zcVector

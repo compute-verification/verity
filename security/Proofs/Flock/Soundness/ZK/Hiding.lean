@@ -7,22 +7,7 @@ public import Proofs.Flock.Soundness.Assumptions
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Zero knowledge: T1, an hm96 leaf swapped for an ideal one
-
-`docs/zk-proof-public.md` §4.1's T1: take any experiment in which a leaf's salt `y` is fresh, used for nothing else and
-never revealed, while its digest `x` may depend on everything else the experiment samples. Replacing the leaf by an ideal
-one changes the probability of any event by at most `δ₁`.
-
-An hm96 leaf is a function of the pair `(b, c) = (x ⊕ M·y, H(sp ‖ y))`, and an ideal one of `(U, H(sp ‖ y))` with `U` fresh
-and uniform. `Claims.Hm96Hiding` bounds the distance of `(M·y, c)` from `(U, c)` by `δ₁`. XOR by `x` is a bijection
-that maps uniform to uniform, so for each value of the other randomness the two leaves are `δ₁` apart, and averaging keeps
-the bound. Here XOR is the addition of the group `B`, so the proof holds for any group of digests.
-
-`ideal_leaves_swap` is T1 applied once per leaf, the hybrid of Lemma B's proof: `n` leaves cost `n·δ₁`. `Table.view` has
-every leaf the final message doesn't open ideal (world `W₁`); with `|Hid|` such leaves on each side, the hybrid is Lemma B's
-bound `2·|Hid|·δ₁`, at most the paper's `2·δ₁·N_hid` (`RealLeaves.table_shvzk_hm96`).
--/
+/-! Zero knowledge, T1: an hm96 leaf swapped for an ideal one moves any event by at most `δ₁` (`ideal_leaf_swap`). -/
 
 @[expose] public section
 
@@ -50,9 +35,6 @@ theorem prCoin_equiv {C : Type} [Fintype C] (e : C ≃ C) (P : C → Prop) : prC
   unfold prCoin avg
   exact Fintype.sum_equiv e _ _ (fun _ => rfl)
 
-/-- **T1** (§4.1): in an experiment on uniform `(ω, y)` whose leaf is `H(x(ω) + M·y, c(y))`, replacing the leaf by the ideal
-`H(U, c(y))` with a fresh uniform `U` changes the probability of any event `G` by at most `δ₁`. The digest `x` may depend on
-anything in `ω`; the salt `y` is used only by this leaf. -/
 theorem ideal_leaf_swap {Ω Y B C D : Type} [Fintype Ω] [Nonempty Ω] [Fintype Y] [AddCommGroup B] [Fintype B]
     (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D) (x : Ω → B)
     (G : Ω → D → Prop) :
@@ -76,11 +58,6 @@ theorem prCoin_congr_equiv {C D : Type} [Fintype C] [Fintype D] (e : C ≃ D) (P
   rw [Fintype.card_congr e]
   exact Fintype.sum_equiv e _ _ (fun _ => rfl)
 
-/-- **T1 over `n` leaves** (the hybrid of Lemma B's proof): in an experiment on uniform `(ω, y₀ … y_{n−1})` whose `n` leaves
-are `H(x_i(ω) + M·y_i, c(y_i))`, replacing every one of them by an ideal leaf `H(U_i, c(y_i))` with fresh uniform `U_i`
-changes the probability of any event by at most `n·δ₁`. Each digest may depend on anything in `ω`; each salt is used only
-by its leaf. One leaf at a time: the first by `ideal_leaf_swap`, with the other salts part of the experiment, then the
-rest by induction, with the first leaf's ideal seed part of it. -/
 theorem ideal_leaves_swap {Y B C D : Type} [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
     (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D) :
     ∀ (n : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] (x : Ω → Fin n → B) (G : Ω → (Fin n → D) → Prop),
@@ -118,10 +95,8 @@ theorem ideal_leaves_swap {Y B C D : Type} [Fintype Y] [Nonempty Y] [AddCommGrou
         invFun := fun q => ((q.1, q.2 0), Fin.tail q.2)
         left_inv := fun p => by simp
         right_inv := fun q => by simp [Fin.cons_self_tail] }
-    -- the first leaf, with the other `n` salts part of the experiment
     have step₁ := ideal_leaf_swap My c hT1 H (fun q : Ω × (Fin n → Y) => x q.1 0)
       (fun q d => G q.1 (Fin.cons d fun i => H (x q.1 i.succ + My (q.2 i), c (q.2 i))))
-    -- the other `n`, with the first leaf's ideal seed part of the experiment
     have step₂ := ih (Ω := Ω × (B × Y)) (fun q i => x q.1 i.succ)
       (fun q ds => G q.1 (Fin.cons (H (q.2.1, c q.2.2)) ds))
     have hA : prCoin (fun p : Ω × (Fin (n + 1) → Y) => G p.1 fun i => H (x p.1 i + My (p.2 i), c (p.2 i)))

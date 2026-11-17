@@ -3,19 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.EntriesAt
 public import Proofs.Flock.SpotFlock.AddressFacts.Row
 
-/-!
-# Flock's parse of a registered-reads file keeps each port's reads
-
-`Flock.Registered.portsOf` reads a port's `reads_from` (0 where the entry names none) and its `reads` into the port's
-`readsFrom` and `readsRel`, and `Port.readAt` reads one label of them. The second stage reads the same entry by
-`readsAt`. `portsOf_reads` is `portsOf_entries` with one clause more: at each label a port reads a position
-(`readAt u = some (some pos)`), the port's entry of the file reads the same position (`readsAt e u = some pos`).
-
-The parser reads `reads_from` through an `if` whose two arms meet again, so the walk of `portsOf_entries` (`ret_walk`)
-passes the rest of the entry once, for every first label, and forgets which the `if` returned. `ret_join` takes that
-one step by hand and keeps the `if`'s equation; `ret_guard` passes the two checks before it. The rest is the same
-walk, with the equations of `reads` kept.
--/
+/-! Flock's parse of a registered-reads file keeps each port's reads (`portsOf_reads`). -/
 
 @[expose] public section
 
@@ -29,24 +17,19 @@ namespace AddressRow
 theorem nat_num (n : ℕ) : Spot.nat? (Json.num ⟨Int.ofNat n, 0⟩) = some n := by
   simp [Spot.nat?, Spot.int?]
 
-/-- A value Flock reads as the natural number `pos` is one the second stage reads as `pos`. -/
 theorem nat_of_asNat {x : Json} {c : String} {pos : ℕ} (h : _root_.Flock.J.asNat x c = .ok pos) :
     Spot.nat? x = some pos :=
   (congrArg Spot.nat? (FlockComplete.JsonRT.asNat_ok h)).trans (nat_num pos)
 
-/-- A key an object does not hold reads as null. -/
 theorem getD_of_not_has {j : Json} {k : String} (h : _root_.Flock.J.has j k = false) : Spot.getD j k = .null := by
   cases hg : j.getObjVal? k with
   | ok v => simp [_root_.Flock.J.has, hg] at h
   | error err => simp only [Spot.getD, Spot.field?, hg, Except.toOption, Option.getD_none]
 
-/-- A check of the parser, an `if` that throws, before the rest `k`. -/
 theorem ret_guard {γ : Type} (c : Prop) [Decidable c] (msg : String) (k : Unit → _root_.Flock.V γ) (Q : γ → Prop)
     (h : Ret (k ()) Q) : Ret (if c then (throw msg : _root_.Flock.V Unit) >>= fun r => k r else k ()) Q :=
   ret_ite c _ _ Q (ret_bind' _ _ Q fun _ => h) h
 
-/-- A value the parser reads by an `if`, before the rest `k`: the rest at each value the `if` returns, with the `if`'s
-equation. -/
 theorem ret_join {α γ : Type} (c : Prop) [Decidable c] (a b : _root_.Flock.V α) (k : α → _root_.Flock.V γ)
     (Q : γ → Prop) (h : ∀ x, (if c then a else b) = .ok x → Ret (k x) Q) :
     Ret (if c then a >>= fun y => k y else b >>= fun y => k y) Q := by
@@ -56,9 +39,6 @@ theorem ret_join {α γ : Type} (c : Prop) [Decidable c] (a b : _root_.Flock.V �
   · rw [ite_eq_right hc]
     exact ret_bind b _ Q fun x hx => h x (by rw [ite_eq_right hc]; exact hx)
 
-/-- **The read of a slot, from the entry's two fields**: where the entry's `reads_from` is null or the number `first`
-(`first` 0 where null), its `reads` is the array `rs`, and `rs` holds the number `pos` at `u - first`, the read of
-slot `u` is `pos`. -/
 theorem readsAt_of_fields {e : Json} {rs : Array Json} {first u pos : ℕ} {x : Json}
     (hF : (Spot.getD e "reads_from" = .null ∧ first = 0) ∨
       Spot.getD e "reads_from" = .num ⟨Int.ofNat first, 0⟩)
@@ -73,9 +53,6 @@ theorem readsAt_of_fields {e : Json} {rs : Array Json} {first u pos : ℕ} {x : 
     simp only [readsAt, hF, hR, hfst]
     simp [hle, hx, hn]
 
-/-- **The read of a slot, from what the parser read**: where the parser read the entry's first label into
-`reg.readsFrom` and each value of its `reads` into `reg.readsRel` by `f`, and `f` returns a position only at a number
-the second stage reads as that position, a position the port reads at label `u` is the entry's read of slot `u`. -/
 theorem readsAt_of_parse {e : Json} {c : String} {rs : Array Json} {reg : _root_.Flock.Registered.Port}
     {f : Json → _root_.Flock.V (Option ℕ)}
     (hfirst : (if _root_.Flock.J.has e _root_.Flock.Registered.READS_FROM_KEY = true then
@@ -108,9 +85,6 @@ theorem readsAt_of_parse {e : Json} {c : String} {rs : Array Json} {reg : _root_
     rw [hget] at hfx
     exact readsAt_of_fields hF hR (Nat.le_of_not_lt hlt) (Array.getElem?_eq_getElem hk') (hf _ _ hfx)
 
-/-- **A `ports` file's ports keep their entries' reads**: each port is an entry of the file's `ports` object under
-the port's name, with the port's fields (`PortFields`), and at each label the port reads a position, the entry reads
-the same position (`readsAt`). -/
 theorem portsOf_reads {j : Json} {own : Array _root_.Flock.Registered.Port}
     (h : _root_.Flock.Registered.portsOf j = .ok own) :
     ∃ kvs, j.getObjVal? "ports" = .ok (.obj kvs) ∧

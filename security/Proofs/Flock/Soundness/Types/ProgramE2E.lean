@@ -4,26 +4,9 @@ public import Proofs.Flock.Soundness.Types.ProgramPlaces
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The end-to-end theorem on a program of units, carried to its Boolean circuit (verified-lowering phase 1, S4d)
-
-`flock_e2e_count` and `flock_e2e_sampled` (`E2E.lean`) on a program of units (`Types.Program`):
-- the committed circuit is the program's rows circuit, `p.C`, where those theorems measure "wrong"; these forms measure it
-  on its Boolean circuit, `p.CB`, read off the rows through `p.mapG`;
-- `UProg.rowsL1` (proved) carries one to the other: at values 1 on the constant's gate `one`, a unit incorrect on the Boolean
-  circuit is incorrect on its rows. The committed values are 1 on `one` and the plurality elsewhere (`Xpub`), and `hConst`
-  says that only a unit's constant column sits on `one`.
-
-The other gaps stay named, as in `E2E.lean`: `hExec`, `dp` and `vb`. The `_classes` forms build `dp` from each sampled
-proof block's table class (`UProg.derivedPlaces_of_classes`), what 1d and 1e give for an accepted statement, and discharge
-`hConst` (`UProg.constCols_of_classes`): each unit's constant column is wired to `one` (`pairs_oneGate`).
-
-The statement's zero is a program input like `one`. The `_classes` forms leave it at the plurality (`zeros = ∅`),
-so no claim may read their profile as being about the zero padding. The `_classes_zero` forms make the program input
-`zer` public at 0 and discharge `hZero` (`UProg.zeroCols_of_classes`) when each slot input that reads `zer` copies a
-forced-zero row of its class (`hzr`, what 1d and 1e give from the verifier's Δ): a column on `zer` is an input column,
-since computed columns are the unit's own gates and the constant's is on `one`.
--/
+/-! The end-to-end theorems on a program of units carried to its Boolean circuit; `hExec`, `dp` and `vb` stay
+premises, and the `_classes` forms leave the statement's zero at the plurality, so they say nothing about the
+zero padding. -/
 
 @[expose] public section
 
@@ -32,10 +15,8 @@ namespace FlockSoundness.Audit
 open Game Model Accounting Extract LinkFinder
 open scoped ENNReal
 
-/-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A program input is no unit's gate** in the program's rows circuit. -/
 theorem _root_.FlockSoundness.UProg.toRows_unit_of_lt {k one : ℕ} (hk : one < k) :
     ∀ {outs : List ℕ} (p : FlockSoundness.UProg k one outs) (g : Fin p.rowsN), g.val < k → (p.toRows hk).unit g = none
   | _, .inputs, _, _ => rfl
@@ -53,10 +34,6 @@ variable {kIn one : ℕ} (hone : one < kIn) {outs : List ℕ} (p : FlockSoundnes
   (tab : (S : Finset (Fin p.n)) → (R : Reg) → Fin p.n → Fin (plan S R).length)
   {L : SamplingDesign p.n}
 
-/-- **The end-to-end count curve on a program of units.** `flock_e2e_count`, carried by `UProg.rowsL1`:
-if `execAccept` holds, the probability that at least `K` units are incorrect on the program's Boolean circuit, at the
-committed values read through `mapG`, is at most `miss_L(K) + ε_ks(σ) + ε_bind`, when only a unit's constant column sits
-on the constant's gate. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_count
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin p.n → FlockSoundness.Rows} (dp : (p.P hone).DerivedPlaces plan tab unitRows)
@@ -77,9 +54,6 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count
     ((p.P hone).flock_e2e_count H E plan tab hExec dp {p.oneOf hone} hConst ∅
       (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht K σ hCR)
 
-/-- **The end-to-end drawn-unit bound on a program of units.** `flock_e2e_sampled`, carried by
-`UProg.rowsL1`: if `execAccept` holds, the probability that a sampled proof block is incorrect on the program's Boolean circuit is at
-most `ε_ks(σ) + ε_bind`, when only a unit's constant column sits on the constant's gate. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_sampled
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin p.n → FlockSoundness.Rows} (dp : (p.P hone).DerivedPlaces plan tab unitRows)
@@ -100,8 +74,6 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_sampled
     ((p.P hone).flock_e2e_sampled H E plan tab hExec dp {p.oneOf hone} hConst ∅
       (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht σ hCR)
 
-/-- **Only a unit's constant column sits on `one`**, at the places built from the tables' classes: each unit's instance
-wires its constant column to `one` (`pairs_oneGate`). -/
 theorem _root_.FlockSoundness.UProg.constCols_of_classes
     (cls : ∀ S R u, u ∈ S → TableClass (tabOf plan tab S R u).S)
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
@@ -112,9 +84,6 @@ theorem _root_.FlockSoundness.UProg.constCols_of_classes
       {p.oneOf hone} :=
   (p.P hone).constCols_singleton plan tab _ _ fun _ _ u _ => Fin.ext (p.pairs_oneGate hone u)
 
-/-- **The zero's columns carry 0**, at the places built from the tables' classes, for a program input `zer` other than
-the constant: each slot input that reads `zer` copies a forced-zero row of its class (`hzr`), and only input columns sit on
-a program input. -/
 theorem _root_.FlockSoundness.UProg.zeroCols_of_classes
     (cls : ∀ S R u, u ∈ S → TableClass (tabOf plan tab S R u).S)
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
@@ -163,10 +132,6 @@ theorem _root_.FlockSoundness.UProg.zeroCols_of_classes
       rw [UProg.toRows_unit_of_lt hone p ⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩ hzk] at hm
       cases hm
 
-/-- **The end-to-end count curve on a program of units, from its tables' classes.** `UProg.flock_e2e_count` with `dp`
-built from each sampled proof block's table class: unit `u`, sampled in `S` under `R`, sits at slot `slot` of block `blk` of its
-table's class `cls`, whose derivation inputs it reads, and the slot's inputs that read one of its sources copy one
-position, or forced-zero rows (`hcp`). -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (tabOf plan tab S R u).S)
@@ -189,8 +154,6 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes
   UProg.flock_e2e_count hone p H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
     (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) vb hk hRw hM hρ hr ht K σ hCR
 
-/-- **The end-to-end drawn-unit bound on a program of units, from its tables' classes.** `UProg.flock_e2e_sampled` with
-`dp` built from each sampled proof block's table class, as in `UProg.flock_e2e_count_classes`. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_sampled_classes
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (tabOf plan tab S R u).S)
@@ -213,10 +176,6 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_sampled_classes
   UProg.flock_e2e_sampled hone p H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
     (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) vb hk hRw hM hρ hr ht σ hCR
 
-/-- **The end-to-end count curve on a program of units, from its tables' classes, with its zero public.**
-`UProg.flock_e2e_count_classes` with the program input `zer` (the statement's zero) public at 0: the committed values
-are 1 on `one`, 0 on `zer` and the plurality elsewhere. `hZero` is discharged by `UProg.zeroCols_of_classes`, when each
-slot input that reads `zer` copies a forced-zero row of its class (`hzr`). -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes_zero
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (tabOf plan tab S R u).S)
@@ -245,8 +204,6 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes_zero
       {p.oneOf hone} (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) _
       (p.zeroCols_of_classes hone plan tab cls slot blk hrd hcp hzk hz1 hzr) vb hk hRw hM hρ hr ht K σ hCR)
 
-/-- **The end-to-end drawn-unit bound on a program of units, from its tables' classes, with its zero public.**
-`UProg.flock_e2e_sampled_classes` with the program input `zer` public at 0, as in `UProg.flock_e2e_count_classes_zero`. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_sampled_classes_zero
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (tabOf plan tab S R u).S)

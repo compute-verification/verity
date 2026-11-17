@@ -62,18 +62,7 @@ import all Init.Data.String.Termination
 import all Init.Data.Array.Attach
 import all Init.WF
 
-/-! # The two-instance statement's checks: `Ins.setup`
-
-`shapeOk_stX` is `Zk.shapeOk` at the statement `stX`. Its Δ is `HmOut.delta`'s: `HmRow.delta`'s arrays, which
-`FlockDeploy.Concrete.all_dA` and `all_dB` read through `HmRow.deltaL`, then the output rows' pairs (`outPairs`) and the
-pinned outputs' (`HmOut.pinPairs`), whose loops the kernel reads over their lists
-(`Std.Legacy.Range.forIn_eq_forIn_range'`). `setup_X` walks `Ins.setup` to `setX` at the reading's tags and setup
-(`tags_rX`, `setup_rX`): the registered reads (`Registered.check`, on the units the setup derived from the program), the
-full-sample check, the statement checks without an inner shape, the zero-knowledge shape (`shapeOk_stX`), the
-recursion's coins and public rows (none at unit `copy16`) and the sampling design. `setupOf_x` is
-`FlockDeploy.setupOf true` at the statement `x r`: its inputs `ins r` and its setup `tabAt r`, where the verifier's two
-fixed nets build.
--/
+/-! The two-instance statement's checks, `Ins.setup` (`setup_X`, `setupOf_x`). -/
 
 @[expose] public section
 open Flock RecDeploy.VStarNets
@@ -88,9 +77,6 @@ set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt
 
-/-! ## The zero-knowledge shape -/
-
-/-- `HmOut.delta`'s pairs on the output rows' message bits, its loop as it pushes them. -/
 def outPairs (c : Circuit) : Array (Nat × Nat) := Id.run do
   let (_, where_) := HmRow.rowSlots c.ports
   let sin := portCols (c.nets.getD c.shaNet default).2.inGroups
@@ -131,8 +117,6 @@ theorem shapeOk_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B'
     outPairs, HmOut.pinPairs, Std.Legacy.Range.forIn_eq_forIn_range']
   kernel_rfl'
 
-/-! ## The checks -/
-
 theorem cO_name (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
     (cO ls lh H C A B A' B' s1).unit.name = "copy16" := by kernel_rfl'
 
@@ -152,9 +136,6 @@ fwd_def setX setup_X (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B
     HmRow.loadPublic, Stmt.setupHidden, Stmt.setupTables, Zk.maskLogOf, Zk.shapeOk, HmIn.delta]
   shallow [metaText]
 
-/-! ## At the fixed nets -/
-
-/-- **The statement's inputs and setup**, where the verifier's two fixed nets build. -/
 theorem setupOf_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
     FlockDeploy.setupOf true (x r) = some (ins r, tabAt r) := by
   have hs := setup_X r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X

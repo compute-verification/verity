@@ -6,22 +6,7 @@ import all Lean.Data.Json.Basic
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 
-/-!
-# The reads the verdicts report are the same before and after `stamped` names their sessions
-
-The two-stage form runs its sessions (`Spot.OneStageZk.membersRun`, verdicts `r.out`), then `stamped` sets five keys
-on each verdict (`sessions`, `public_header_sha512`, `session_tables`, and where they apply `registered_sha512` and
-`unit_draw`) and hands the result to the run of record as its verdicts. The form's last step reads `r.out`; the run of
-record reads the stamped verdicts. `Spot.Record.sessionRegistered` reads three keys of a verdict, `of_record`,
-`accepted` and `registered` (`reads3`), none of which `stamped` sets, so it returns the same reads on both
-(`inputAt_reported`): the premise `VerdictsReadSame` holds (`verdictsReadSame`).
-
-* `sessionRegistered_congr`: `sessionRegistered` is a function of the verdicts' three reads, in order.
-* `getD_setObjVals`, `reads3_stamp`: setting other keys on an object over a well-formed map leaves the three reads.
-* `stamped_reads`: where `stamped` returns, on verdicts that are objects (`OutWf`), it returns verdicts with the same
-  three reads, in the same order.
-* `ownReads_form_of_record`: `accepted_ownReads_form` with the verdicts' premise discharged.
--/
+/-! The reads the verdicts report are the same before and after `stamped` names their sessions (`verdictsReadSame`). -/
 
 @[expose] public section
 
@@ -47,8 +32,6 @@ private theorem map_ok' {ε α β : Type} {x : Except ε α} {f : α → β} {b 
 private theorem size_of_not_bne {a b : Nat} (h : ¬(a != b) = true) : a = b :=
   Decidable.byContradiction fun hne => h (bne_iff_ne.2 hne)
 
-/-- The three reads `Spot.Record.sessionRegistered` makes of a verdict: its `of_record`, `accepted` and
-`registered`. -/
 def reads3 (x : String × Json) : Json × Json × Json :=
   (Spot.getD x.2 "of_record", Spot.getD x.2 "accepted", Spot.getD x.2 "registered")
 
@@ -71,8 +54,6 @@ theorem forIn_reads {β : Type} (f : String × Json → β → Id (ForInStep β)
       | done b' => rfl
       | yield b' => exact ih l₂ b' h.2
 
-/-- **`sessionRegistered` is a function of the verdicts' three reads, in order**: verdicts with the same
-`of_record`, `accepted` and `registered`, one for one, report the same reads. -/
 theorem sessionRegistered_congr {a b : Array (String × Json)} (h : a.toList.map reads3 = b.toList.map reads3) :
     Spot.Record.sessionRegistered a = Spot.Record.sessionRegistered b := by
   have key : ∀ {β : Type} (b0 : β) (F : String × Json → β → Id (ForInStep β)),
@@ -89,7 +70,6 @@ theorem sessionRegistered_congr {a b : Array (String × Json)} (h : a.toList.map
   funext r
   simp only [h1, h2, h3]
 
-/-- Setting keys other than `key` on an object over a well-formed map leaves its entry at `key`. -/
 theorem getD_setObjVals {key : String} (F : Json → String × Json → Json)
     (hF : ∀ acc p, F acc p = acc.setObjVal! p.1 p.2) (fields : List (String × Json))
     (m : Std.TreeMap.Raw String Json compare) (hm : m.WF) (hk : ∀ p ∈ fields, p.1 ≠ key) :
@@ -102,7 +82,6 @@ theorem getD_setObjVals {key : String} (F : Json → String × Json → Json)
       Std.TreeMap.Raw.getElem?_insert hm]
     simp only [cmp_ne (hk p (List.mem_cons.2 (Or.inl rfl))), ↓reduceIte]
 
-/-- Setting keys other than `of_record`, `accepted` and `registered` on a verdict leaves its three reads. -/
 theorem reads3_stamp {k : String} (F : Json → String × Json → Json) (hF : ∀ acc p, F acc p = acc.setObjVal! p.1 p.2)
     (fields : List (String × Json)) (m : Std.TreeMap.Raw String Json compare) (hm : m.WF)
     (hk : ∀ p ∈ fields, p.1 ≠ "of_record" ∧ p.1 ≠ "accepted" ∧ p.1 ≠ "registered") :
@@ -131,8 +110,6 @@ theorem mapM_reads {α : Type} (G : α × (String × Json) → Flock.V (String �
     rw [List.map_cons, List.map_cons, List.map_cons, hG z (List.mem_cons.2 (Or.inl rfl)) y hy,
       mapM_reads G l ys' hys fun z' hz' => hG z' (List.mem_cons.2 (Or.inr hz'))]
 
-/-- **`stamped` leaves the three reads of each verdict**: where it returns, on verdicts that are objects over
-well-formed maps, the verdicts it returns have the same `of_record`, `accepted` and `registered`, one for one. -/
 theorem stamped_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {bs : Core.Blobs} {out vs : Array (String × Json)}
     (h : VStar.Recursive.SampledTwo.stamped p e bs out = .ok vs) (hw : OutWf out) :
@@ -169,13 +146,10 @@ theorem stamped_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursi
     · exact absurd hy (throw_ne' _ _)
   · exact absurd hy (throw_ne' _ _)
 
-/-- The run of record's verdicts are the ones the form hands it. -/
 theorem inputOf_verdicts (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment) (ξ ξ₂ : ByteArray)
     (e : VStar.Recursive.SampledTwo.Evidence) (received₂ : String) (vs : Array (String × Json)) :
     (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).verdicts = vs := rfl
 
-/-- **The run of record's verdicts report the reads the sessions' own verdicts report**: `inputAt`'s input carries
-the verdicts `stamped` returned on `r.out`, and `sessionRegistered` reads the same of both. -/
 theorem inputAt_reported {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
     {e : VStar.Recursive.SampledTwo.Evidence} {bs : Core.Blobs} {c₂ : Spot.OneStage.Commitment} {ξ₂ : ByteArray}
     {r : Spot.OneStageZk.Run} {i : Spot.Run.Input}
@@ -185,12 +159,8 @@ theorem inputAt_reported {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneSt
   rw [inputOf_verdicts]
   exact sessionRegistered_congr (stamped_reads hst (membersRun_wf hrun))
 
-/-- The verdicts' premise of `accepted_ownReads_form` holds. -/
 theorem verdictsReadSame : VerdictsReadSame := fun _ _ _ _ _ _ _ _ _ h => inputAt_reported h
 
-/-- **At the form's accept, each read its last step's record checks leave out is one the second-stage statement
-check held**, given that the interior record the run of record reads is the record the form parsed
-(`RecordReadSame`): `accepted_ownReads_form` with the verdicts' premise discharged. -/
 theorem ownReads_form_of_record (hrec : RecordReadSame) {form : Bool} {p : VStar.Recursive.SampledTwo.Params}
     {c : Spot.OneStage.Commitment} {ξ : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence} {bs pub prof}
     (hp : ∃ grain replay k, p.rule = .twoStage grain replay k)

@@ -9,16 +9,8 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
 import VCVio.Prelude.Core
 
-/-!
-# What V*'s residuals compute
-
-`residuals_eq_run`: on the S `structureOf` builds and the v `verifierRows` gives at the rep's coins, `GfResiduals`'
-residuals at a w are `run` over F, at those coins, on the messages w holds (`decoded`), when the running sums w holds
-differ by the consistency sums weighted by `kappa`.
-
-* `build_eval`: the residuals of a built S are the symbolic residuals evaluated (`Lin.eval`), each consistency sum
-  read through the running sums.
--/
+/-! On the S `structureOf` builds and the v `verifierRows` gives at the rep's coins, `GfResiduals`' residuals at w
+are `run` over F on the messages w holds (`residuals_eq_run`). -/
 
 @[expose] public section
 
@@ -42,8 +34,6 @@ theorem kapSum_init (lvs : Array Level) (r : Nat) :
   · simp only [Array.getElem?_replicate, show ¬b < 2 by omega, ite_false] at hc
     exact absurd hc (Nat.not_lt_zero _)
 
-/-- The residuals of a built S at w, the coefficient slots and the comb are the symbolic residuals evaluated at the
-message elements they hold, each consistency sum read through the running sums (`hacc`). -/
 theorem build_eval {lins : Array Lin} {b : Built} (hb : build sh lins = .ok b)
     (hw : w.size = b.S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum b.kappa r cons) :
@@ -96,14 +86,9 @@ theorem build_eval {lins : Array Lin} {b : Built} (hb : build sh lins = .ok b)
         simp only [Nat.sub_zero] at hf
         rw [← hf]
 
-/-- The messages w holds (`symbolic`'s elements at `valOf`): its elements, the comb, and the levels' consistency
-sums `cons`. -/
 def decoded (sh : Shape) (w comb : Array F128) (cons : Nat → Nat → F128) : Messages F128 :=
   (symbolic sh).map (Lin.eval (valOf sh w comb cons))
 
-/-- `GfResiduals` on the S `structureOf` builds and the v `verifierRows` gives at the rep's coins computes `run` over
-F at those coins, on the messages w holds, when the running sums w holds differ by the consistency sums weighted by
-`kappa` (`hacc`). At a holo shape each comb element also carries w's `h` (`valOf`, `hOf`). -/
 theorem residuals_eq_run {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
     {kappa : Array (Array (Array F128))} {S : GfS}
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)

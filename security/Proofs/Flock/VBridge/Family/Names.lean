@@ -36,25 +36,12 @@ import Proofs.Flock.Soundness.ExecCircuit
 import Proofs.Flock.Soundness.ExecParse
 import Proofs.Flock.Soundness.ExecRows
 
-/-!
-# The circuit file's unit name, emitted and parsed
-
-`circuitFile` (`Family.lean`) writes `flock-circuit <unit>`, the `META` line, then `CIRCUIT unit <n>` and the unit's
-net, whose header line is `flock-ir-unit/v2 <unit> …` (`VStar.emitNet`, `Unit.lean:94`). `HmRow.parse`
-(`HmRow.lean:550`) splits the text at `\n`, takes the first `CIRCUIT unit` section's net (`Net.parse`, `Net.lean:200`),
-and that net's name is the second token of its header line. The legacy `String.splitOn "\n"` is `List.splitOn '\n'` on
-the characters (`splitOn_nl`, as at any one-byte separator: `splitOn_sep`), `Flock.tokens` reads a line's second word
-(`tokens_second`), `pyDumps` writes one line (`pyDumps_noNl`), and the unit names are one word (`recOpen_name`,
-`residuals_name`). `UnitName.lean` puts these together at a statement's circuit file.
--/
+/-! The circuit file's unit name, as `circuitFile` emits it and `HmRow.parse` parses it. -/
 
 @[expose] public section
 
 namespace FlockVBridge.Names
 
-/-! ## `String.splitOn "\n"` -/
-
-/-- The UTF-8 bytes of a character list. -/
 def ulen (l : List Char) : ℕ := (l.map Char.utf8Size).sum
 
 theorem ulen_append (a b : List Char) : ulen (a ++ b) = ulen a + ulen b := by
@@ -140,8 +127,6 @@ theorem extract_at (s : String) (pre mid post : List Char) (hs : s.toList = pre 
     simp only [Nat.zero_add] at h1
     rw [show (0 : String.Pos.Raw) = ⟨0⟩ from rfl, h1, ulen_append, go₂_at]
 
-/-- The legacy `String.splitOnAux` at a one-byte separator `sep`, the character `ch`, inside a field `mid` that holds no
-`ch`: the fields before it, then `List.splitOn ch` of the rest. -/
 theorem splitOnAux_sep (sep : String) (ch : Char) (hg : String.Pos.Raw.get sep 0 = ch)
     (hn : String.Pos.Raw.next sep 0 = ⟨1⟩) (he : String.Pos.Raw.atEnd sep ⟨1⟩ = true) (hz : ch.utf8Size = 1)
     (s : String) (pre mid post : List Char) (hs : s.toList = pre ++ mid ++ post) (hmid : ch ∉ mid) (r : List String) :
@@ -207,7 +192,6 @@ theorem splitOnAux_sep (sep : String) (ch : Char) (hg : String.Pos.Raw.get sep 0
         simp only [List.mem_append, List.mem_singleton, not_or]; exact ⟨hmid, fun h => hc h.symm⟩) r]
       simp
 
-/-- **The legacy `String.splitOn` at a one-byte separator is `List.splitOn` of its character on the characters.** -/
 theorem splitOn_sep (sep : String) (ch : Char) (hg : String.Pos.Raw.get sep 0 = ch)
     (hn : String.Pos.Raw.next sep 0 = ⟨1⟩) (he : String.Pos.Raw.atEnd sep ⟨1⟩ = true) (hz : ch.utf8Size = 1)
     (hne : sep ≠ "") (s : String) : s.splitOn sep = (s.toList.splitOn ch).map String.ofList := by
@@ -215,7 +199,6 @@ theorem splitOn_sep (sep : String) (ch : Char) (hg : String.Pos.Raw.get sep 0 = 
   rw [if_neg (by simpa using hne)]
   exact splitOnAux_sep sep ch hg hn he hz s [] [] s.toList (by simp) (by simp) []
 
-/-- **The legacy `String.splitOn "\n"` is `List.splitOn '\n'` on the characters.** -/
 theorem splitOn_nl (s : String) : s.splitOn "\n" = (s.toList.splitOn '\n').map String.ofList :=
   splitOn_sep "\n" '\n' rfl rfl rfl rfl (by decide) s
 
@@ -224,9 +207,6 @@ theorem fromUTF8?_toUTF8 (s : String) : String.fromUTF8? s.toUTF8 = some s := by
   rw [dif_pos (by rw [String.toUTF8_eq_toByteArray]; exact s.isValidUTF8)]
   rfl
 
-/-! ## `Flock.tokens` -/
-
-/-- `tokens`' loop step: a whitespace character ends the current word, any other extends it. -/
 def tstep (p : Array String × String) (c : Char) : Array String × String :=
   if c.isWhitespace then (if p.2 != "" then (p.1.push p.2, "") else p) else (p.1, p.2.push c)
 
@@ -251,7 +231,6 @@ theorem tokens_eq (s : String) :
   rw [e]
   rfl
 
-/-- No character of `s` is whitespace. -/
 def NoWs (s : String) : Prop := ∀ c ∈ s.toList, c.isWhitespace = false
 
 theorem foldl_word (l : List Char) (hl : ∀ c ∈ l, c.isWhitespace = false) (o : Array String) (cur : String) :
@@ -283,7 +262,6 @@ theorem foldl_prefix (l : List Char) (p : Array String × String) : ∃ ys, (l.f
       rw [e] at hys ⊢
       exact ⟨ys, hys⟩
 
-/-- **A line's second token**: `w₀ w₁ rest` with two nonempty words of no whitespace has `w₁` as its token 1. -/
 theorem tokens_second (w₀ w₁ rest : String) (h₀ : w₀ ≠ "") (h₁ : w₁ ≠ "") (n₀ : NoWs w₀) (n₁ : NoWs w₁) :
     (Flock.tokens (w₀ ++ " " ++ w₁ ++ " " ++ rest)).getD 1 "" = w₁ := by
   have hF : ∃ ys, (List.foldl tstep (#[], "") (w₀ ++ " " ++ w₁ ++ " " ++ rest).toList).1 = #[w₀, w₁] ++ ys := by
@@ -301,17 +279,12 @@ theorem tokens_second (w₀ w₁ rest : String) (h₀ : w₀ ≠ "") (h₁ : w�
   dsimp only
   split <;> simp [hys, Array.getD_eq_getD_getElem?, Array.getElem?_append]
 
-/-! ## `HmRow.parse`'s unit net -/
-
 open Flock FlockSoundness
 
-/-- The lines `HmRow.parse` reads (`HmRow.lean:556-557`): the text split at `\n`, without a last empty line. -/
 def linesOf (text : String) : Array String :=
   let lines0 := (text.splitOn "\n").toArray
   if lines0.back? == some "" then lines0.pop else lines0
 
-/-- A `while` loop in `Except` ends in `Q` when each step keeps `P`, a continuing step lowers a measure, and a stopping
-step ends in `Q` (`loop_inv` with the final state's own predicate). -/
 theorem loop_inv' {β : Type} (P Q : β → Prop) (μ : β → ℕ) {f : Unit → β → Except String (ForInStep β)}
     (hf : ∀ b, P b → ∀ s, f () b = .ok s →
       (∃ b', s = .done b' ∧ Q b') ∨ ∃ b', s = .yield b' ∧ P b' ∧ μ b' < μ b) :
@@ -349,8 +322,6 @@ theorem toNat_empty : ("" : String).toNat? = none := by
     String.isNat_iff]
   simp
 
-/-- **`HmRow.tmplLines` passes over nothing** unless line 2 is two tokens, the second a numeral (`TEMPLATE n`): the
-sections then start right after META. -/
 theorem tmplLines_eq_zero {tags : Tags} {lines : Array String}
     (h : (tokens (lines.getD 2 "")).size ≠ 2 ∨ ((tokens (lines.getD 2 "")).getD 1 "").toNat? = none) :
     HmRow.tmplLines tags lines = 0 := by
@@ -362,14 +333,11 @@ theorem tmplLines_eq_zero {tags : Tags} {lines : Array String}
   · rw [getElem!_str t 1, h]
     simp
 
-/-- The first net read is the `Net.parse` of the lines after line 2, under line 2's second token. -/
 def FirstNet (lines : Array String) (nets : Array (String × Net)) : Prop :=
   ∃ n net, 3 + n ≤ lines.size ∧ Net.parse (lines.extract 3 (3 + n)) = .ok net ∧
     nets.toList.head? = some ((tokens (lines.getD 2 "")).getD 1 "", net)
 
 set_option maxHeartbeats 4000000 in
-/-- **`HmRow.parse`'s unit is the first section's net** when line 2 (`CIRCUIT unit <n>`) names it `unit`: the
-`Net.parse` of the `n` lines after it (`HmRow.lean:580-590`, `615`). -/
 theorem parse_unit {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit} {text : String}
     (h : HmRow.parse tags bytes tables = .ok c) (htext : String.fromUTF8? bytes = some text)
     (hu : (tokens ((linesOf text).getD 2 "")).getD 1 "" = "unit") :
@@ -614,9 +582,6 @@ theorem parse_unit {tags : Tags} {bytes : ByteArray} {tables : List (String × B
   simp only [Circuit.unit, c0, h0, e]
   exact hp
 
-/-! ## Lines without a newline -/
-
-/-- `s` holds no `\n`. -/
 def NoNl (s : String) : Prop := '\n' ∉ s.toList
 
 theorem noNl_append {a b : String} : NoNl (a ++ b) ↔ NoNl a ∧ NoNl b := by
@@ -660,7 +625,6 @@ theorem foldl_noNl {β : Type} (g : String → β → String) (hg : ∀ o c, NoN
   | c :: l, o, ho => foldl_noNl g hg l _ (hg o c ho)
 
 set_option maxRecDepth 100000 in
-/-- **`pyStr` escapes every newline** (`PyJson.lean:20-34`). -/
 theorem pyStr_noNl (s : String) : NoNl (VStar.pyStr s) := by
   unfold VStar.pyStr
   simp only [Id.run]
@@ -672,7 +636,6 @@ theorem pyStr_noNl (s : String) : NoNl (VStar.pyStr s) := by
   split <;> (repeat' split) <;> simp_all [String.toList_append]
   all_goals exact fun h => by subst h; contradiction
 
-/-- **`pyDumps` writes one line** (`PyJson.lean:37-51`): strings through `pyStr`, the rest digits and punctuation. -/
 theorem pyDumpsAt_noNl : ∀ (k : ℕ) (j : Lean.Json) (d : String), VStar.pyDumpsAt k j = .ok d → NoNl d
   | 0, _, _, h => by cases h
   | k + 1, .null, d, h => by cases h; simp [NoNl]
@@ -724,13 +687,11 @@ theorem append_ne_empty {a b : String} (ha : a ≠ "") : a ++ b ≠ "" := by
   simp only [String.toList_append, String.toList_empty, List.append_eq_nil_iff] at this
   exact ha (String.toList_eq_nil_iff.1 this.1)
 
-/-- **An opening statement's unit name is one word.** -/
 theorem recOpen_name (L H : ℕ) : NoWs (Flock.RecOpen.unitName L H) ∧ Flock.RecOpen.unitName L H ≠ "" := by
   show NoWs ("rec-open/l" ++ toString L ++ "-h" ++ toString H) ∧ "rec-open/l" ++ toString L ++ "-h" ++ toString H ≠ ""
   refine ⟨noWs_append.2 ⟨noWs_append.2 ⟨noWs_append.2 ⟨by simp [NoWs], nat_noWs _⟩, by simp [NoWs]⟩, nat_noWs _⟩,
     append_ne_empty (append_ne_empty (append_ne_empty (by decide)))⟩
 
-/-- **A part statement's unit name is one word.** -/
 theorem residuals_name (m k c j : ℕ) :
     NoWs (Flock.RecResiduals.unitName m k c j) ∧ Flock.RecResiduals.unitName m k c j ≠ "" := by
   show NoWs ("rec-residuals/m" ++ toString m ++ "-k" ++ toString k ++ "-c" ++ toString c ++ "-p" ++ toString j) ∧
@@ -740,12 +701,8 @@ theorem residuals_name (m k c j : ℕ) :
     append_ne_empty (append_ne_empty (append_ne_empty (append_ne_empty (append_ne_empty (append_ne_empty
       (append_ne_empty (by decide)))))))⟩
 
-/-! ## The emitted text -/
-
-/-- A `StateM String` program that only appends to its state. -/
 def Ext {α : Type} (p : StateM String α) : Prop := ∀ s, ∃ x, (p.run s).2 = s ++ x
 
-/-- A `StateM String` program that appends `w` and then more. -/
 def Pre {α : Type} (w : String) (p : StateM String α) : Prop := ∀ s, ∃ x, (p.run s).2 = s ++ w ++ x
 
 theorem ext_put (x : String) : Ext (modify (fun s : String => s ++ x)) := fun _ => ⟨x, rfl⟩
@@ -804,8 +761,6 @@ theorem pre_ext {α : Type} {p : StateM String α} (hp : Ext p) : Pre "" p := fu
   obtain ⟨x, hx⟩ := hp s
   exact ⟨x, by rw [hx, String.append_empty]⟩
 
-/-- **The sections start with the unit's**: `CIRCUIT unit <lines>`, then the unit's header line
-(`Compose.lean:233-237`, `Unit.lean:94-100`). -/
 theorem sections_text (u : VStar.UnitC) (l : Flock.HmNets.Laid) :
     Pre (("CIRCUIT unit " ++ toString (VStar.netLines l) ++ "\n") ++ (VStar.header u.name l ++ "\n"))
       (VStar.emitSections (m := StateM String) (fun x => modify (· ++ x)) u l) := by
@@ -827,7 +782,6 @@ theorem sections_text (u : VStar.UnitC) (l : Flock.HmNets.Laid) :
       obtain ⟨nm, net, lay⟩ := a
       exact ext_bind (ext_put _) fun _ => ext_bind (ext_emitNet _ _ _) fun _ => ext_pure _
 
-/-- **The file's first two lines** (`Compose.lean:187-230`): `flock-circuit <unit>` and `META ` with `pyDumps`'s text. -/
 theorem metaHead_ok {u : VStar.UnitC} {l : Flock.HmNets.Laid} {sub : VStar.Sub} {b : VStar.Bindings}
     {sha head : String} (h : VStar.metaHead u l sub b sha = .ok head) :
     ∃ j d, VStar.pyDumps j = .ok d ∧ head = s!"{VStar.FORMAT_CIRCUIT} {u.name}\nMETA " ++ d ++ "\n" := by
@@ -877,8 +831,6 @@ theorem innerUnit_name {S : VStar.RepS} {nm : String} {u : VStar.UnitC} (h : VSt
   cases h
   rfl
 
-/-! ## The split lines -/
-
 theorem splitOn_line (a rest : String) (ha : NoNl a) : (a ++ "\n" ++ rest).splitOn "\n" = a :: rest.splitOn "\n" := by
   rw [splitOn_nl, splitOn_nl, String.toList_append, String.toList_append, show "\n".toList = ['\n'] by decide,
     List.append_assoc, List.singleton_append, List.splitOn_eq_splitOnP,
@@ -906,8 +858,6 @@ theorem linesOf_four {text a b c d : String} {r : List String} (h : text.splitOn
     · rw [Array.getD_eq_getD_getElem?, Array.getElem?_pop, ite_eq_left (by omega), ← Array.getD_eq_getD_getElem?, h3]
   · exact ⟨h2, h3, by omega⟩
 
-/-! ## The parsed unit's name -/
-
 theorem ofRows_name {name : String} {useful constPos : ℕ} {ig og : Array Group} {ra rb : Array (Array ℕ)} {n : Net}
     (h : Net.ofRows name useful constPos ig og ra rb = .ok n) : n.name = name := by
   unfold Net.ofRows at h
@@ -915,7 +865,6 @@ theorem ofRows_name {name : String} {useful constPos : ℕ} {ig og : Array Group
   repeat' (first | split at h | (injection h with h; subst h))
   all_goals first | exact absurd h (by simp) | rfl
 
-/-- **`Net.parse`'s name is its header line's second token** (`Net.lean:200-204`, `ofRows`). -/
 theorem parse_name {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
     (tokens (lines.getD 0 ""))[0]? = some "flock-ir-unit/v2" ∧ net.name = (tokens (lines.getD 0 "")).getD 1 "" := by
   unfold Net.parse at h

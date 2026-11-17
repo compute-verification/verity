@@ -27,13 +27,7 @@ import all Std.Data.DTreeMap.Internal.Queries
 import all Std.Data.DTreeMap.Internal.Balancing
 import all Std.Data.DTreeMap.Internal.Def
 
-/-! # The program's and the partition's digests
-
-`progHex` and `partHex` are literals, so that the walks over META read them; here they are what Flock computes: the
-program's SHA-512 as `TemplateQuery.Desc.parse` reads the program (`progHex_eq`), and the partition's as
-`HmRow.partitionDigest` writes it (`partHex_eq`). `canon` recurses by well-founded recursion, which the kernel does not
-unfold, so each proof evaluates its fuelled twin (`canon_fuel`).
--/
+/-! The literals `progHex` and `partHex` are the digests Flock computes (`progHex_eq`, `partHex_eq`). -/
 
 @[expose] public section
 
@@ -53,20 +47,17 @@ theorem fjnorm_progJ : FlockSoundness.Discharge.Recursion.ZkServerJson.norm prog
 theorem parse_prog : JsonParse.parse progText = .ok progJ := by
   rw [progText, parse_printJson plain_progJ, fjnorm_progJ]
 
-/-- **The program's digest is `progHex`.** -/
 theorem progHex_eq : ((fun d => hexOf d.sha512) <$> TemplateQuery.Desc.parse progBytes).toOption = some progHex := by
   unfold TemplateQuery.Desc.parse TemplateQuery.Desc.parseWith progBytes
   simp only [fromUTF8?_toUTF8, parse_prog, canon_fuel 12]
   decide +kernel
 
-/-- **The partition's digest is `partHex`.** -/
 theorem partHex_eq : (hexOf <$> HmRow.partitionDigest partObj).toOption = some partHex := by
   unfold HmRow.partitionDigest
   simp only [canon_fuel 8]
   decide +kernel
 
-/-- `isSha512Hex` through `toList`: the kernel does not run `String.all`, so no walk decides it on a digest by itself
-(META's two, `prog_hex` and `part_hex`, and the partition's program, `program_hex`). -/
+/-- The kernel does not run `String.all`, so no walk decides `isSha512Hex` on a digest by itself. -/
 theorem sha512Hex_of (s : String)
     (h : (s.toList.length == 128 && s.toList.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) = true) :
     HmRow.isSha512Hex s = true := by

@@ -4,21 +4,7 @@ public import Proofs.Flock.Soundness.Refine.Regions
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The salted scheme `hm96-sha512/v1` refines the model's salted leaves (R7 and R8 for hm96; `Flock.Merkle`)
-
-`MerkleScheme.hm96Sha512` hashes an opened row's leaf as `SHA-512(leaf_prefix ‖ b ‖ c)`, with `x = SHA-512(row)`,
-`b = x ⊕ M·y` and `c = SHA-512(salt_prefix ‖ y)` for the opening's 192-byte salt `y` (`Hm96.Default512`). Its nodes are
-SHA-512 of the pair, as the unsalted scheme's are. The compiled model's `Merkle.Leaf.hm96 K` is that leaf for a key `K`.
-`K512` is the executable's own key: its prefixes and its mask are `Hm96.Default512`'s, so the two leaves are equal
-(`hm96_leaf`).
-
-* **R7:** a passed hm96 Merkle check is the model's salted path check (`merkleCheck_verifiesL`), and a rep whose requests
-  passed it is `OpensOKL` at the proof's rows and salts (`opensOKL_of`).
-* **R8:** `verify_refines_hm96` is `verify_refines` for the salted scheme, with `OpensOKL` at the proofs' salts.
-* **R9:** `verify_refines_ofCircuit_hm96`, for the verifier's own statements. For `Stmt.setupH`'s, `setupH_wf` gives its
-  layout and region hypotheses.
--/
+/-! The salted scheme `hm96-sha512/v1` refines the model's salted leaves (`hm96_leaf`, `verify_refines_hm96`). -/
 
 @[expose] public section
 
@@ -27,8 +13,6 @@ namespace FlockSoundness.Refine
 open Flock FlockLevel3 Game Transcript Model Accounting
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## The executable's key -/
 
 theorem foldl_size {α : Type} (g : ByteArray → α → ByteArray) (c : ℕ) (hg : ∀ r x, (g r x).size = r.size + c) :
     ∀ (l : List α) (r : ByteArray), (l.foldl g r).size = r.size + c * l.length
@@ -48,7 +32,6 @@ theorem mask_out_size (acc : Array UInt64) :
   rw [foldl_size _ 8 (fun r k => by rw [foldl_size _ 1 (fun r j => ByteArray.size_push ..)]; simp)]
   rfl
 
-/-- The mask `M·y` is 64 bytes, whatever the salt. -/
 theorem mask_size (salt : ByteArray) : (Hm96.Default512.mask salt).size = 64 :=
   mask_out_size _
 
@@ -88,7 +71,6 @@ theorem get!_data (a : ByteArray) (i : ℕ) (hi : i < a.size) :
   rw [Array.getElem_toList]
   simp [ByteArray.get!, getElem!_pos a.data i (by rw [ByteArray.size_data]; exact hi)]
 
-/-- The executable's bytewise xors of two `n`-byte strings are the model's `xorBytes`. -/
 theorem xor_range (a b : ByteArray) (n : ℕ) (ha : a.size = n) (hb : b.size = n) :
     (ByteArray.mk ((Array.range n).map fun i => a.get! i ^^^ b.get! i)).data.toList =
       Merkle.xorBytes a.data.toList b.data.toList := by
@@ -114,8 +96,6 @@ theorem leaf512_leaf (c : List F128) (y : List UInt8) :
 
 theorem K512_mask (y : List UInt8) : K512.mask y = (Hm96.Default512.mask ⟨y.toArray⟩).data.toList := rfl
 
-/-- **The executable's salted leaf is the model's** at the executable's key: for an opened row and its salt,
-`hm96Sha512.leaf` is `Leaf.hm96 K512`'s leaf of the row's words under the salt's bytes. -/
 theorem hm96_leaf (row : Array F128) (salt : ByteArray) :
     (leaf512.leaf row.toList salt.data.toList).1 = MerkleScheme.hm96Sha512.leaf row salt := by
   rw [leaf512_leaf, H512_val, dig_eq, dig_eq, H512_val, H512_val, col_eq, ← rowBytes_data, bytes_of_list, K512_mask,
@@ -126,9 +106,6 @@ theorem hm96_leaf (row : Array F128) (salt : ByteArray) :
   rw [← data_append Hm96.Default512.saltPrefix salt, bytes_of_list, ← data_append, ← data_append, bytes_of_list]
   rfl
 
-/-! ## A passed hm96 check is the model's salted path check -/
-
-/-- hm96's tree climbs as the unsalted SHA-512 tree does: the node hashes are equal. -/
 theorem climb_hm96 (msId : String) : ∀ (sibs : List ByteArray) (idx : ℕ) (acc : ByteArray),
     climb MerkleScheme.hm96Sha512 acc idx sibs = climb (MerkleScheme.sha512 msId) acc idx sibs
   | [], _, _ => rfl
@@ -136,8 +113,6 @@ theorem climb_hm96 (msId : String) : ∀ (sibs : List ByteArray) (idx : ℕ) (ac
       simp only [climb]
       exact climb_hm96 msId rest _ _
 
-/-- **A passed Merkle check is the model's salted path check** (`Flock.Merkle`), for `hm96-sha512/v1`: every query's row has the lane
-count, and its path verifies from the row's leaf under its salt against the cap. -/
 theorem merkleCheck_verifiesL {cap : Array ByteArray} {c d : ℕ} {pos : Array ℕ}
     {rows : Array (Array F128)} {sibs salts : Array ByteArray} {lanes : ℕ}
     (h : merkleCheck MerkleScheme.hm96Sha512 cap c d pos rows sibs salts lanes = .ok ()) (j : ℕ) (hj : j < pos.size) :
@@ -182,15 +157,10 @@ theorem merkleCheck_verifiesL {cap : Array ByteArray} {c d : ℕ} {pos : Array �
     exact climb_size "" _ _ _ (sha512_size _)
   exact (toDig_val h64).symm
 
-/-! ## The proof's openings, with their salts, pass the model's salted path checks -/
-
 /-- The proof's salt at level `ℓ`, query `j`, as bytes. -/
 def saltRow (p : LigeritoProof) (sch : Flock.Schedule) (ℓ j : ℕ) : List UInt8 :=
   ((openAt p (sch.levels.size - 1) ℓ).2.2.getD j ByteArray.empty).data.toList
 
-/-- **The proof's openings pass the model's salted path checks** (`Flock.Merkle`): for `hm96-sha512/v1`, a rep whose requests passed
-the executable's Merkle checks (`ReqOK`) and whose caps are the proof's is `OpensOKL` at openings and salts that are the
-proof's rows, siblings and salts. -/
 theorem opensOKL_of (sch : Flock.Schedule) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (cap : Array ByteArray) (p : LigeritoProof) (r : ℕ) (pend : PendL 𝔽 Dig) (o : Opens 𝔽 Dig)
     (sl : Salts (List UInt8))
@@ -227,14 +197,6 @@ theorem opensOKL_of (sch : Flock.Schedule) (hlv : ∀ i < sch.levels.size, Level
 def saltsOf (p₀ p₁ : Proof) (sch : Flock.Schedule) : Salts (List UInt8) :=
   fun r ℓ j => if r = 0 then saltRow p₀.ligerito sch ℓ j else saltRow p₁.ligerito sch ℓ j
 
-/-! ## The verifier refines the model's salted table -/
-
-/-- **The verifier refines the model's table, for `hm96-sha512/v1`** (§3, §5, §9–§14). `verify_refines` for the salted
-scheme: when `Flock.verify` accepts a one-table session record and its two proof files under `hm96Sha512`, on a statement
-whose `m`, `k_log`, circuit fold and extra claims are the model's `S` and `extra`, the record and both proofs decode.
-Then at the proofs' openings, each rep's compiled game, played with its proof's messages and every coin of its stream,
-accepts, and both reps' paths verify from their rows' salted leaves, under the proofs' salts, against the one level-0
-cap. -/
 theorem verify_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : RunRecord → List (Model.Claim 𝔽 S.m))
@@ -285,11 +247,6 @@ theorem verify_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Stateme
     hok₁⟩
 
 open Game Model in
-/-- **The verifier refines the model's reps, for the statements it is set up with, under `hm96-sha512/v1`** (§3, §5, §10,
-§14, §16). `verify_refines_ofCircuit` for the salted scheme: when `Flock.verify` accepts a one-table session under
-`hm96Sha512`, with the setup `Setup.ofCircuit st` of a statement whose layout and regions are well formed, the conclusion
-of `verify_refines_hm96` holds for the model statement `stmtOf st` read off the layout, with the extra claims the model's
-`extraClaims` at the record's link points. -/
 theorem verify_refines_ofCircuit_hm96 (st : Flock.Stmt) (hwf : StmtWF st) (hr : RegionsWF st) (hm : 13 ≤ st.m)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (record : String) (proofs : Array ByteArray)
     (h : Flock.verify st.spec #[Setup.ofCircuit st] record proofs = .ok ()) :

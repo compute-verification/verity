@@ -4,19 +4,7 @@ public import Proofs.Flock.Soundness.Game.LockLin
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Off the chosen table, per position, at the slot's node
-
-`Lock.leafE_off_le` and `Lock.leafE_off_le_link` bound a slot's off-table mass by a fork or link finder at the slot's
-node. Here it is left raw, as a functional of the node's continuation, so a caller can compare it, node by node, with
-the mass off any other table:
-
-* `Rewinding.expect_off_le_sum`: a run opens some position off a table at most as often as the sum over the positions
-  (the union bound);
-* `Rewinding.expect_off_le_of_pluralityE`: at each position, a plurality table's off mass is at most any table's;
-* `Lock.leafE_off_le_nodeOff`: per slot, the mass off the table chosen there is at most `nodeE` of the per-position
-  off mass at that table (`nodeOff`).
--/
+/-! A slot's off-table mass left raw, as the per-position off mass at the slot's node (`Lock.leafE_off_le_nodeOff`). -/
 
 @[expose] public section
 
@@ -28,7 +16,6 @@ open Game
 
 variable {α P V : Type} [Fintype P] (op : α → P → Option V)
 
-/-- **The union bound over positions.** -/
 theorem expect_off_le_sum (g : Game α) (s : Strategy g) (vstar : P → V) :
     expect (ind fun a => ∃ p, Off op vstar a p) g s ≤ ∑ p, expect (ind fun a => Off op vstar a p) g s := by
   rw [← expect_sum]
@@ -44,8 +31,6 @@ theorem expect_off_le_sum (g : Game α) (s : Strategy g) (vstar : P → V) :
     exact Finset.sum_nonneg fun p _ => ind_nonneg _ _
 
 omit [Fintype P] in
-/-- **A plurality table is off least**: at each position, the mass a run opens off a plurality table is at most the
-mass it opens off any table `w`. -/
 theorem expect_off_le_of_pluralityE [Fintype V] [DecidableEq V] (g : Game α) (s : Strategy g) (vstar : P → V)
     (hv : IsPluralityE op g s vstar) (w : P → V) (p : P) :
     expect (ind fun a => Off op vstar a p) g s ≤ expect (ind fun a => Off op w a p) g s := by
@@ -60,14 +45,10 @@ namespace Lock
 
 variable {α β : Type} {T D I : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
 
-/-- **The per-position off mass at the slot's node**: with the cap `d`, the sum over the positions of the mass the
-continuation opens off the table chosen there. -/
 noncomputable def nodeOff {P V : Type} [Fintype P] (op : D → β → P → Option V) (row : T → P → V)
     (plur : Chooser T D β) (slot : ℕ) (d : D) (g'' : Game β) (σ'' : Strategy g'') : ℝ :=
   ∑ p, expect (ind fun b => Rewinding.Off (op d) (row (plur slot d g'' σ'')) b p) g'' σ''
 
-/-- **Off the chosen table, raw**: the probability that a run opens a position off the table fixed at `slot` is at
-most the per-position off mass at the slot's node, over the prefixes. -/
 theorem leafE_off_le_nodeOff {P V : Type} [Fintype P] (op : D → β → P → Option V) (row : T → P → V) (slot : ℕ)
     (plur : Chooser T D β) :
     ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
@@ -100,8 +81,6 @@ theorem leafE_off_le_nodeOff {P V : Type} [Fintype P] (op : D → β → P → O
       · rw [ite_eq_right hs]
         exact leafE_off_le_nodeOff op row slot plur _ σ'.2 (by rw [hkeep _ _ slot (Ne.symm hs), hi])
 
-/-- **At a plurality chooser, the node's off mass is at most any table's**: where the table chosen at `slot` reads as
-a plurality of the slot's openings, the per-position off mass at the node is at most that off any `w`. -/
 theorem nodeOff_le_of_plurality {P V : Type} [Fintype P] [Fintype V] [DecidableEq V] (op : D → β → P → Option V)
     (row : T → P → V) (plur : Chooser T D β) (slot : ℕ) (d : D) (g'' : Game β) (σ'' : Strategy g'')
     (hplur : Rewinding.IsPluralityE (op d) g'' σ'' (row (plur slot d g'' σ''))) (w : P → V) :

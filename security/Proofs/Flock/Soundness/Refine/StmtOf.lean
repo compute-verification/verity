@@ -13,21 +13,8 @@ import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.Folded
 import VCVio.Prelude.Core
 
-/-!
-# The statement decoding, part 1: the executable's layout is a block R1CS (`Flock.Piop`, `Flock.Statement`)
-
-The executable never holds `A₀` and `B₀`: its lincheck fold (`Stmt.fold`) reads them off the circuit's layout. `stmtOf st`
-is the model statement those matrices make. Entry `(i, c)` of `A₀` or `B₀` counts, mod 2:
-* the covering range's slot matrix at `(i mod 2^sl, c mod 2^sl)`, when row `i` is in column `c`'s slot. The covering
-  range is the last in the layout that covers `c`, since the fold overwrites (`lastCover`). A mask slot is the identity
-  on both sides;
-* for a lookup slot, on the B side, the product rows its table's words send to `c` (`lkCnt`);
-* the pairs `(i, c)` of Δ_A or Δ_B.
-
-`ofCircuit_fold`: the fold `Setup.ofCircuit` hands the verifier realizes `stmtOf st` (`FoldRealizes`, R3), given the
-layout facts `StmtWF`: `6 ≤ k_log ≤ m`, the pin inside the block, and every range's slots between 2^6 and 2^k_log. The
-regions are a parameter here.
--/
+/-! The statement decoding, part 1: the executable's layout read as a block R1CS (`stmtOf`), which its fold realizes
+(`ofCircuit_fold`). -/
 
 @[expose] public section
 
@@ -36,8 +23,6 @@ namespace FlockSoundness.Refine
 open Flock FlockLevel3
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ### The matrices -/
 
 /-- The occurrences of column `c` in row `i` of a sparse matrix: what `foldT` adds at `c` (none past its rows or its
 width). -/
@@ -111,8 +96,6 @@ theorem lastCover_spec : ∀ (rs : List Range) (c : ℕ) (r : Range), lastCover 
             exact ⟨List.mem_cons_self, hc⟩
           · simp [hc] at h
 
-/-! ### Counting in characteristic 2 -/
-
 theorem cast_zmod (n : ℕ) : (((n : ZMod 2).val : ℕ) : 𝔽) = (n : 𝔽) := by
   rw [ZMod.val_natCast, CharP.cast_eq_mod 𝔽 2 n]
 
@@ -120,7 +103,6 @@ theorem sum_ite_card (s : Finset ℕ) (p : ℕ → Prop) [DecidablePred p] (x : 
     (∑ t ∈ s, if p t then x else 0) = ((s.filter p).card : 𝔽) * x := by
   rw [Finset.sum_ite, Finset.sum_const_zero, add_zero, Finset.sum_const, nsmul_eq_mul]
 
-/-- Δ's pairs at column `c`, as a sum over rows of their counts. -/
 theorem delta_sum (f : ℕ → 𝔽) (N c : ℕ) (hf : ∀ i, N ≤ i → f i = 0) : ∀ L : List (ℕ × ℕ),
     (L.map fun ic => if ic.2 = c then f ic.1 else 0).sum = ∑ i ∈ Finset.range N, (L.count (i, c) : 𝔽) * f i
   | [] => by simp
@@ -139,8 +121,6 @@ theorem delta_sum (f : ℕ → 𝔽) (N c : ℕ) (hf : ∀ i, N ≤ i → f i = 
         simp
       · simp [hb]
 
-/-! ### One slot -/
-
 theorem foldBHigh_size (lk : LookupTable) (nh nlo wmask : ℕ) (e : Array F128) :
     ∀ (fuel h : ℕ) (acc : Array F128), (Lookup.foldBHigh lk nh nlo wmask e fuel h acc).size = acc.size := by
   intro fuel; induction fuel with
@@ -153,7 +133,6 @@ theorem foldB_size (lk : LookupTable) (e acc0 : Array F128) : (Lookup.foldB lk e
 theorem of_getElem!_oob {a : Array F128} {i : ℕ} (h : a.size ≤ i) : GF128.of a[i]! = 0 := by
   rw [getElem!_neg a i (by omega)]; exact of_zero
 
-/-- A slot's base at any column: each side is zero past its matrix's width. -/
 theorem baseOf_get' (α : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupTable) (sl c : ℕ)
     (hc : c < 2 ^ sl) :
     GF128.of (Stmt.baseOf α eLo a b lk sl)[c]! =
@@ -176,7 +155,6 @@ theorem baseOf_get' (α : F128) (eLo : Array F128) (a b : Sparse) (lk : Option L
     | none => dsimp only; exact of_getElem!_oob (by rw [foldT_size]; omega)
     | some t => dsimp only; exact of_getElem!_oob (by rw [foldB_size, foldT_size]; omega)
 
-/-- When the fold succeeds, every range's slot type folds: `baseFor` is its `slotBase`. -/
 theorem foldRanges_slotBase (st : Stmt) (α : F128) (lw ρ : Array F128) : ∀ (rs : List Range)
     (bases : Array ((Kind × ℕ) × Array F128)) (out res : Array F128),
     st.foldRanges α lw ρ rs bases out = .ok res →
@@ -221,19 +199,16 @@ theorem eqAt_vecOf (n : ℕ) (ρ : Array F128) (h : ρ.size = n) (b : ℕ) :
 theorem pow_K (K : ℕ) (hK : 6 ≤ K) : 2 ^ K = 2 ^ (K - 6) * 64 := by
   rw [show (64 : ℕ) = 2 ^ 6 from rfl, ← pow_add]; congr 1; omega
 
-/-- The model's weight of row `i` is the executable's `e(i)`. -/
 theorem e_model (lw ρ : Array F128) (K : ℕ) (hK : 6 ≤ K) (hρ : ρ.size = K - 6) (i : ℕ) (hi : i < 2 ^ K) :
     fOf lw[i % 64]! * Model.eqAt (vecOf (K - 6) ρ) (i / 64) = GF128.of (eIn lw ρ i) := by
   rw [eIn, of_mul, eqAt_vecOf (K - 6) ρ hρ, ← eqTable_eqAt ρ (i / 64) ?_]
   rw [hρ, Nat.div_lt_iff_lt_mul (by norm_num), ← pow_K K hK]; exact hi
 
-/-- Past the block, `e` is zero. -/
 theorem eIn_oob (lw ρ : Array F128) (K : ℕ) (hK : 6 ≤ K) (hρ : ρ.size = K - 6) (i : ℕ) (hi : 2 ^ K ≤ i) :
     GF128.of (eIn lw ρ i) = 0 := by
   rw [eIn, of_mul, of_getElem!_oob (a := eqTable ρ) ?_, mul_zero]
   rw [eqTable_size, hρ, Nat.le_div_iff_mul_le (by norm_num), ← pow_K K hK]; exact hi
 
-/-- The rows of one slot: `i = q·2^sl + i'`. -/
 theorem sum_slot {M : Type} [AddCommMonoid M] (K sl q : ℕ) (hsl : sl ≤ K) (hq : q < 2 ^ (K - sl)) (g : ℕ → M) :
     ∑ i ∈ Finset.range (2 ^ K), (if i / 2 ^ sl = q then g i else 0) =
       ∑ i' ∈ Finset.range (2 ^ sl), g (q * 2 ^ sl + i') := by
@@ -262,7 +237,6 @@ theorem sum_slot {M : Type} [AddCommMonoid M] (K sl q : ℕ) (hsl : sl ≤ K) (h
 theorem range_min (a b : ℕ) : Finset.range (min a b) = (Finset.range b).filter (· < a) := by
   ext i; simp only [Finset.mem_range, Finset.mem_filter]; omega
 
-/-- A slot matrix's side at column `c`, scaled into the block: `Σ_{i'} cnt(i', c)·e(q·2^sl + i')`. -/
 theorem sp_scale (lw ρ : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 6 ≤ sl) (hslr : sl - 6 ≤ ρ.size)
     (q : ℕ) (hq : q < 2 ^ (ρ.size - (sl - 6))) (m : Sparse) (c : ℕ) :
     GF128.of (eqTable (ρ.extract (sl - 6) ρ.size))[q]! *
@@ -286,7 +260,6 @@ theorem getD_of_lt {a : Array F128} {i : ℕ} (h : i < a.size) : a.getD i 0 = a[
 theorem getD_of_ge {a : Array F128} {i : ℕ} (h : a.size ≤ i) : a.getD i 0 = 0 := by
   simp [Array.getD, show ¬ i < a.size by omega]
 
-/-- A lookup slot's table rows at column `c`, scaled into the block. -/
 theorem lk_scale (lw ρ : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 6 ≤ sl) (hslr : sl - 6 ≤ ρ.size)
     (q : ℕ) (hq : q < 2 ^ (ρ.size - (sl - 6))) (b : Sparse) (lk : Option LookupTable) (c : ℕ) :
     GF128.of (eqTable (ρ.extract (sl - 6) ρ.size))[q]! *
@@ -349,7 +322,6 @@ theorem lk_scale (lw ρ : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 6 �
         simpa using (Finset.mem_filter.1 hx).2.2), Finset.sum_filter]
     · simp [lkSide, hc]
 
-/-- A unit or compression slot's base at column `c`, scaled into the block: its rows' counts times their weights. -/
 theorem slot_sides (lw ρ : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 6 ≤ sl) (hslr : sl - 6 ≤ ρ.size)
     (q : ℕ) (hq : q < 2 ^ (ρ.size - (sl - 6))) (α : F128) (a b : Sparse) (lk : Option LookupTable) (c : ℕ)
     (hc : c < 2 ^ sl) :
@@ -372,7 +344,6 @@ theorem slot_sides (lw ρ : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 6
   refine Finset.sum_congr rfl fun i _ => ?_
   push_cast; ring
 
-/-- The covering range's slot at column `c`, for each slot type. -/
 theorem slot_part (st : Stmt) (α : F128) (lw ρ : Array F128) (hlw : lw.size = 64) (r : Range)
     (hsl : 6 ≤ r.slotLog) (hslr : r.slotLog - 6 ≤ ρ.size) (c : ℕ)
     (hq : c / 2 ^ r.slotLog < 2 ^ (ρ.size - (r.slotLog - 6)))
@@ -412,7 +383,6 @@ theorem slot_part (st : Stmt) (α : F128) (lw ρ : Array F128) (hlw : lw.size = 
 theorem div_lt_block (K sl c : ℕ) (hsl : sl ≤ K) (hc : c < 2 ^ K) : c / 2 ^ sl < 2 ^ (K - sl) := by
   rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), ← pow_add, Nat.sub_add_cancel hsl]; exact hc
 
-/-- The ranges' share of the fold at column `c`: the covering range's slot, on the rows of `c`'s slot. -/
 theorem ranges_part (st : Stmt) (hk6 : 6 ≤ st.c.kLog)
     (hslots : ∀ r ∈ st.c.ranges.toList, 6 ≤ r.slotLog ∧ r.slotLog ≤ st.c.kLog)
     (α : F128) (lw ρ v : Array F128) (hlw : lw.size = 64) (hρ : ρ.size = st.c.kLog - 6)
@@ -456,8 +426,6 @@ theorem ranges_part (st : Stmt) (hk6 : 6 ≤ st.c.kLog)
       rw [Finset.mem_range] at hi
       rw [Nat.mul_add_mod', Nat.mod_eq_of_lt hi]
 
-/-! ### The statement -/
-
 /-- The pairs `(i, c)` of Δ. -/
 def dCnt (d : Array (ℕ × ℕ)) (i c : ℕ) : ℕ := d.toList.count (i, c)
 
@@ -487,8 +455,6 @@ def stmtOf (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st.c.kLog (
   B₀ := fun i c => matB st i.val c.val
   regions := regions
 
-/-- **The circuit fold realizes `stmtOf`** (`Flock.Piop`'s lincheck, `Flock.Statement`). When the executable's fold succeeds on `α`, `lw` and `ρ`, entry
-`c` is `Σ_i e_i·(α·A₀[i, c] + B₀[i, c])` for the matrices `stmtOf` reads off the layout. -/
 theorem stmtOf_fold (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
     FoldRealizes st.circuitFold (stmtOf st h regions) where
   kLog := rfl
@@ -521,7 +487,6 @@ theorem stmtOf_fold (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st
     obtain ⟨v, hv, hw'⟩ := folded_eq st α β lw ρ ts w hw
     exact ⟨v, hv, fold_size st α lw ρ v hv, hw'⟩
 
-/-- The fold `Setup.ofCircuit` hands the verifier realizes `stmtOf`. -/
 theorem ofCircuit_fold (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
     FoldRealizes (Setup.ofCircuit st).fold (stmtOf st h regions) :=
   stmtOf_fold st h regions

@@ -9,22 +9,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# One rep accepts when its stages' checks hold (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`)
-
-`verifyRep_of_checks` is `rep_refines`' converse on the executable's side: the verifier's per-rep check `verifyRep`
-(Verify.lean:37–55) returns the proof's cap when the record carries the rep's stream, the statement's extra claims and
-the proof decode, the PCS parameters are the pinned ones, the rep's transcript program (`repProg`, Verify.lean:46–50)
-returns on the stream's replay transcript, every recorded round was consumed, and the cap is the committed `root_B`.
-
-`prog_of_checks` gives the program's run from the stages' converses, each from the transcript the stage before left:
-`RecAlgebra.bindAndZerocheck_of_checks`, `lincheck_of_checks` (with the zerocheck's final values pending) and
-`ringSwitch_run`. Ligerito's run enters as one hypothesis, at the batched value, basis and transcript ring switching
-returns (`rsT`, `rsSws`).
-
-`roundsOf` builds a record's rounds from their coin counts, coins and retained bytes; each round retains its bytes
-(`roundsOf_retains`), so the stages' frame hypotheses hold by construction at the bytes the stages frame.
--/
+/-! One rep accepts when its stages' checks hold (`verifyRep_of_checks`, `prog_of_checks`). -/
 
 @[expose] public section
 
@@ -32,41 +17,26 @@ namespace FlockSoundness.Refine
 
 open Flock Transcript
 
-/-- The rep's transcript program (Verify.lean:46–50). -/
 def repProg (st : Setup) (sch : Flock.Schedule) (p : Proof) (extras : Array Claim) : TM Unit := do
   let zc ← Flock.bindAndZerocheck st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck
   let lc ← Flock.lincheck st.fold zc p.lincheck
   let (T, sws) ← Flock.ringSwitch st.m (Flock.abcClaims st.m st.kLog zc lc ++ extras) p.ringSwitches
   Flock.ligerito st.merkle sch T p.cap p.ligerito (Flock.basis sws)
 
-/-- The zerocheck's output at points `r`, `z`, `ρ` (Piop.lean:102). -/
 abbrev zcOf (p : ZerocheckProof) (r : Array F128) (z : F128) (rho : Array F128) : Flock.ZcOut :=
   { z := z, rho := rho, rRest := r, vA := p.finalA, vB := p.finalB, vC := p.finalC }
 
-/-- The lincheck's output at `r'` and challenges `ts` (Piop.lean:151). -/
 abbrev lcOf (p : LincheckProof) (rp : F128) (ts : Array F128) : Flock.LcOut :=
   { w := dot (skipWeights rp) p.zPartial, rPrime := rp, rIn := ts.reverse }
 
-/-- Ring switching's batched value `T = Σ_k γ_k·β_k` (Opening.lean:86). -/
 abbrev rsT (claims : Array Claim) (rs : Array (Array F128)) (rpp : ℕ → Array F128) (gamma : Array F128) : F128 :=
   dot gamma ((List.range claims.size).map fun k => dot (eqTable (rpp k)) (tOf rs[k]!)).toArray
 
-/-- Ring switching's switched claims (Opening.lean:87). -/
 abbrev rsSws (claims : Array Claim) (rpp : ℕ → Array F128) (gamma : Array F128) : Array Switched :=
   (Array.range claims.size).map fun k => ({ gamma := gamma[k]!, rpp := rpp k, z := claims[k]!.x.extract 1 } : Switched)
 
-/-- **The rep's program returns when its stages' checks hold** (Verify.lean:46–50). From `t`:
-* the zerocheck's rounds, messages and checks, as `RecAlgebra.bindAndZerocheck_of_checks` takes them, on the digest,
-  the flattened cap and `p.zerocheck`, at points `r`, `z`, `ρ`;
-* from round `k₁ = t.k + 3 + (m − 6)`, with the zerocheck's `final_a`, `final_b` pending, the lincheck's rounds and
-  checks, as `lincheck_of_checks` takes them, at the zerocheck's output;
-* from round `k₂ = k₁ + 2 + (k_log − 6) + 1`, with nothing pending, ring switching's rounds and checks, as
-  `ringSwitch_run` takes them, on the claims `abcClaims m k_log zc lc ++ extras`;
-* Ligerito's run from round `k₂ + n + 1` (`n` the claims), at ring switching's `T` and switched claims.
-Then the program returns, at the transcript Ligerito's run leaves. -/
 theorem prog_of_checks (st : Setup) (sch : Flock.Schedule) (p : Proof) (extras : Array Claim) (t : Transcript)
     (hm : 14 ≤ st.m)
-    -- the zerocheck, from `t`
     (hn₀ : (t.rounds[t.k]!).n = 6) (hn₁ : (t.rounds[t.k + 1]!).n = st.m - 13) (hn₂ : (t.rounds[t.k + 2]!).n = 1)
     (hnr : ∀ i < st.m - 6, (t.rounds[t.k + 3 + i]!).n = 1)
     (ha₀ : RecAlgebra.AnswersL (t.rounds[t.k]!) (t.pending.data.toList ++ encs [.label "flock-r1cs-v0".toUTF8,
@@ -82,7 +52,6 @@ theorem prog_of_checks (st : Setup) (sch : Flock.Schedule) (p : Proof) (extras :
     (hpc : dot (lagrange nodesL den6Inv z) p.zerocheck.round1c = p.zerocheck.finalC)
     (hfold : RecAlgebra.zcFold r p.zerocheck C (st.m - 6) (RecAlgebra.zcStart p.zerocheck z) =
       (p.zerocheck.finalA * p.zerocheck.finalB, rho))
-    -- the lincheck, from round `k₁`
     {k₁ : ℕ} (hk₁ : k₁ = t.k + 3 + (st.m - 6))
     (hlc : LcAnswered ⟨t.rounds, k₁, ⟨(encs [.one p.zerocheck.finalA, .one p.zerocheck.finalB]).toArray⟩⟩
       st.fold.kLog p.lincheck)
@@ -95,7 +64,6 @@ theorem prog_of_checks (st : Setup) (sch : Flock.Schedule) (p : Proof) (extras :
     (hcomb : st.fold.folded ((t.rounds[k₁]!).coins.getD 0 0) ((t.rounds[k₁ + 1]!).coins.getD 0 0) (skipWeights z)
       (rho.extract 0 (st.fold.kLog - 6)) ts = .ok comb)
     (hsize : comb.size = 64)
-    -- ring switching, from round `k₂`
     {k₂ : ℕ} (hk₂ : k₂ = k₁ + 2 + (st.fold.kLog - 6) + 1)
     {claims : Array Claim}
     (hcl : claims = Flock.abcClaims st.m st.kLog (zcOf p.zerocheck r z rho)
@@ -105,7 +73,6 @@ theorem prog_of_checks (st : Setup) (sch : Flock.Schedule) (p : Proof) (extras :
       p.ringSwitches[k]!.size = 128 ∧ claims[k]!.skip.size = 64 ∧ claims[k]!.x.size = st.m - 6)
     (hval : ∀ k < claims.size, dot (wOf claims[k]!) p.ringSwitches[k]! = claims[k]!.value)
     (hR : RsRounds ⟨t.rounds, k₂, ByteArray.empty⟩ p.ringSwitches claims.size rpp gamma)
-    -- Ligerito, from round `k₂ + n + 1`
     {t₄ : Transcript}
     (hlg : Flock.ligerito st.merkle sch (rsT claims p.ringSwitches rpp gamma) p.cap p.ligerito
       (Flock.basis (rsSws claims rpp gamma)) ⟨t.rounds, k₂ + claims.size + 1, ByteArray.empty⟩ = .ok ((), t₄)) :
@@ -130,11 +97,6 @@ theorem prog_of_checks (st : Setup) (sch : Flock.Schedule) (p : Proof) (extras :
   refine Eq.trans (bind_run (ringSwitch_run st.m _ p.ringSwitches _ rpp gamma hn hrs hshape hval hR)) ?_
   exact hlg
 
-/-- **One rep accepts when its stages' checks hold** (Verify.lean:37–55). When the record carries table `i`'s rep `r`
-stream, the statement's extra claims at the link points are `extras`, the proof decodes to `p` at the shape
-`verifyRep` decodes with, its PCS parameters are the pinned ones, the rep's program returns from the stream's replay
-transcript at `t₄` (`prog_of_checks`), `t₄` consumed every recorded round, and the proof's cap is the committed
-`root_B`, then `verifyRep` returns that cap. -/
 theorem verifyRep_of_checks (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes : ByteArray) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
     (hs : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) =
@@ -162,9 +124,6 @@ theorem verifyRep_of_checks (spec : SessionSpec) (st : Setup) (sch : Flock.Sched
   rw [ite_eq_right (by simp [bne, hcap])]
   rfl
 
-/-! ## A record's rounds from their coins and bytes -/
-
-/-- The rounds whose coin counts, coins and retained bytes are `l`'s, in order. -/
 def roundsOf (l : List (ℕ × Array F128 × List UInt8)) : Array Round :=
   (l.map fun x => ({ n := x.1, sha := ByteArray.empty, coins := x.2.1, bytes := some ⟨x.2.2.toArray⟩ } : Round)).toArray
 
@@ -184,13 +143,11 @@ theorem roundsOf_coins (l : List (ℕ × Array F128 × List UInt8)) {i : ℕ} (h
     ((roundsOf l)[i]!).coins = l[i].2.1 := by
   rw [roundsOf_get l h]
 
-/-- Each round retains its bytes. -/
 theorem roundsOf_retains (l : List (ℕ × Array F128 × List UInt8)) {i : ℕ} (h : i < l.length) :
     Retains ((roundsOf l)[i]!) l[i].2.2 := by
   rw [roundsOf_get l h]
   simp [Retains]
 
-/-- Each round answers the framed bytes whose bytes it retained. -/
 theorem roundsOf_answers (l : List (ℕ × Array F128 × List UInt8)) {i : ℕ} (h : i < l.length) {c : ByteArray}
     (hc : c.data.toList = l[i].2.2) : ((roundsOf l)[i]!).answers c :=
   RecAlgebra.answersL_of_retains (roundsOf_retains l h) c hc
@@ -199,7 +156,6 @@ theorem roundsOf_oneCoin (l : List (ℕ × Array F128 × List UInt8)) {i : ℕ} 
     OneCoin ((roundsOf l)[i]!) l[i].2.2 :=
   ⟨by rw [roundsOf_n l h, hn], answers_of_retains (roundsOf_retains l h)⟩
 
-/-- Rounds whose coin arrays have their coin counts are well formed. -/
 theorem roundsOf_wf (l : List (ℕ × Array F128 × List UInt8)) (h : ∀ x ∈ l, x.2.1.size = x.1) :
     RoundsWF (roundsOf l) := by
   intro i hi

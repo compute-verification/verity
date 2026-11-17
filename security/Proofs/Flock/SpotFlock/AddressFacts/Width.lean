@@ -2,24 +2,8 @@ module
 
 public import Proofs.Flock.SpotFlock.AddressFacts
 
-/-!
-# The width fact of an address
-
-`RowAt`'s first fact (`CheckedRun.RowAt`): an address's place is as wide as the row of its port in the unit's session's
-first table, `16 w` bits for a port of `w` words. `Addresses` asks it at every accepted run's checked unit that needs
-the gate, with one place for all of them (`WidthHolds`).
-
-`CheckedRun.ports_member`: at a checked unit of an accepted run, the session's first table has its template's member
-circuit's ports, since the pin holds the session's circuit to its template's reference statement's
-(`pin_of_stmtOkAt`, `stmt_of_pin`), whose statement circuit is the member's (`templateOk_facts`). So a session port's
-width is fixed before the run, by the template and the port alone (`portWords`), and the width fact is a property of
-the registration and the address (`WidthRef`): every unit that needs the gate names, in its template's member circuit,
-a port of the place's width. `widthHolds_of_ref` gives `WidthHolds` from it.
-
-No check of the verifier's decides `WidthRef` today. It reads only the members and the address, so a check can.
-
-`widthFact_of_ref`: `WidthRef` at each gate's address gives `AddressFacts`' `WidthFact`.
--/
+/-! The width fact of an address (`widthFact_of_ref`), from `WidthRef`, a condition on the registration that no check
+of the verifier's decides. -/
 
 @[expose] public section
 
@@ -29,17 +13,12 @@ open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
 
-/-- **Port `q`'s words in template `t`'s member circuit**; `0` past the members or the ports. -/
 def portWords (t q : ℕ) : ℕ := ((h.ms[t]?).map fun m => (m.1.ports[q]!).words).getD 0
 
-/-- **The width fact at gate `g`'s address `S`**: at every accepted run's checked unit that needs `g`, the address's place
-is as wide as its port's row in the unit's session's first table (`CheckedRun.RowAt`'s first fact). -/
 def WidthHolds (S : Address) (g : ℕ) : Prop :=
   ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g →
     S.place.1 = 16 * (r.sts[0]!.c.ports[S.port r.u]!).words
 
-/-- **The width fact as the registration states it**, over a set `U` of units: at each unit of `U`, the address's place is
-as wide as its port in the unit's template's member circuit (`portWords`). -/
 def WidthRef (S : Address) (U : ℕ → Prop) : Prop :=
   ∀ u, U u → S.place.1 = 16 * portWords h (templateOf h.ms u) (S.port u)
 
@@ -47,9 +26,6 @@ namespace CheckedRun
 
 variable {h} {r : CheckedRun h.stage}
 
-/-- **An accepted run's checked unit's session's statement circuit is its template's member circuit**: the pin holds the
-session statement to its template's reference statement but for its run's fields (`pin_of_stmtOkAt`), so their
-statement circuits are one (`stmt_of_pin`), and the reference statement's is the member's (`templateOk_facts`). -/
 theorem stmt_member (hr : r.Ok h) :
     ∃ m, h.ms[templateOf h.ms r.u]? = some m ∧ r.p.toRead.stmt = m.1 := by
   obtain ⟨Pt, d, _, hx, hP, h2, hin, hok, hu, hck, hb, hρ, -, hset⟩ := hr
@@ -75,9 +51,6 @@ theorem stmt_member (hr : r.Ok h) :
       have hm : r₀.stmt = h.ms[t].1 := by simpa using hst₀
       exact ⟨h.ms[t], List.getElem?_eq_getElem ht, (stmt_of_pin hw hw₀ he (readOf_of_parseBytes hpb) hr₀).trans hm⟩
 
-/-- **An accepted run's checked unit's session has its template's member circuit's ports** in its first table: the
-table's circuit is the one the scope check parses (`accepted_check`), which unrolls, ports and all (`unrolled_ports`), to
-the session's statement circuit, the member's (`stmt_member`). -/
 theorem ports_member (hr : r.Ok h) :
     ∃ m, h.ms[templateOf h.ms r.u]? = some m ∧ r.sts[0]!.c.ports = m.1.ports := by
   have hj := sts_pos hr
@@ -96,7 +69,6 @@ theorem ports_member (hr : r.Ok h) :
         rw [← hcirc]
         exact congrArg _root_.Flock.Circuit.ports hs
 
-/-- **A session port's words are its template's member circuit's** (`ports_member`). -/
 theorem words_eq (hr : r.Ok h) (q : ℕ) :
     (r.sts[0]!.c.ports[q]!).words = portWords h (templateOf h.ms r.u) q := by
   obtain ⟨m, hm, hp⟩ := ports_member hr
@@ -105,17 +77,12 @@ theorem words_eq (hr : r.Ok h) (q : ℕ) :
 
 end CheckedRun
 
-/-- **The width fact from the registration's**: where every accepted run's checked unit that needs `g` is in `U`, and the
-address's place is as wide as its port in each unit of `U`'s template's member circuit, it is as wide as its port's row
-in every such unit's session (`CheckedRun.words_eq`). -/
 theorem widthHolds_of_ref {S : Address} {g : ℕ} {U : ℕ → Prop}
     (hU : ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → U r.u) (hw : WidthRef h S U) :
     WidthHolds h S g := by
   intro r hr hg
   rw [hw r.u (hU r hr hg), CheckedRun.words_eq hr]
 
-/-- **`WidthFact` from the registration's width** at each gate `i`'s address, over the units `U i` whose proof
-blocks need `i` at an accepted run. -/
 theorem widthFact_of_ref {addr : ℕ → Address} {U : ℕ → ℕ → Prop}
     (hU : ∀ r : CheckedRun h.stage, r.Ok h → ∀ i, r.s.prog.Needs r.b i → U i r.u)
     (hw : ∀ i, WidthRef h (addr i) (U i)) : WidthFact h addr :=

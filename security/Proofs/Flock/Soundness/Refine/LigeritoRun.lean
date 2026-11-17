@@ -8,20 +8,8 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Plays
 import VCVio.Prelude.Core
 
-/-!
-# A run of the executable's Ligerito is a run of the model's (`Flock.Ligerito`)
-
-`ligerito_refines`: when the executable's Ligerito verifier accepts, the model's compiled Ligerito (`ligeritoC`), played
-with the proof's messages (`ligMsgs`) and the rounds the executable consumed, ends in a result
-
-* whose caps are the proof's recursive caps, decoded by `capD`;
-* whose every request is a query level whose Merkle check the executable passed (`ReqOK`);
-* whose verdict at the openings `o` is the model's final check (`Flock.Ligerito`) on the executable's final state, where the
-  executable's own final check (`finalProg`, the verifier's last step, verbatim) passed.
-
-That the executable's final check makes the model's hold, and that a passed Merkle check is the model's path check
-(`Flock.Merkle`), are separate steps.
--/
+/-! A run of the executable's Ligerito is a run of the model's (`ligerito_refines`); that the executable's final
+check makes the model's hold, and that a passed Merkle check is the model's path check, are not proved here. -/
 
 @[expose] public section
 
@@ -33,8 +21,6 @@ local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
 variable {D : Type}
-
-/-! ## The executable's final check, verbatim -/
 
 section
 open Flock
@@ -85,17 +71,10 @@ def finalProg (p : LigeritoProof) (basisAt : Array F256 → Nat → Array F256) 
         || st.cbn != p.claimNonces.size then throw "ligerito: leftover proof lists"
 end
 
-/-! ## Tapes, requests and the loop's invariant -/
-
-/-- An executable consistency context as the model's. -/
 def consOf (c : Flock.ConsCtx) : Model.ConsCtx 𝔽 := ⟨c.cols, c.pos.toList, c.alpha.toList.map fOf, fOf c.beta, c.start⟩
 
-/-- The proof's clear residual as the model's last message (`Flock.Ligerito`). -/
 def yrOf (p : LigeritoProof) (ext : ℕ) : Fin (2 ^ (ext + 1)) → 𝔽 := fun i => fOf p.finalProof.yr[i.val]!
 
-/-- The messages of the level loop's iterations `i, …, i + left − 1` (`Flock.Ligerito`): each folds with four messages; a non-last
-iteration then sends the next level's cap, two out-of-domain values with their intro messages, and the queries'
-message; the last sends the clear residual. `msg` and `ood` are the cursors into the proof's lists. -/
 def recMsgs (p : LigeritoProof) (capD : Array ByteArray → Cap D) (ext : ℕ) : ℕ → ℕ → ℕ → ℕ → List Msg
   | 0, _, _, _ => []
   | 1, _, msg, _ => kMsgs p msg 4 ++ [⟨Fin (2 ^ (ext + 1)) → 𝔽, yrOf p ext⟩]
@@ -103,15 +82,11 @@ def recMsgs (p : LigeritoProof) (capD : Array ByteArray → Cap D) (ext : ℕ) :
       [fMsg p.oodValues[ood]!, kMsg p.messages[msg + 4]!, fMsg p.oodValues[ood + 1]!, kMsg p.messages[msg + 5]!] ++
       [kMsg p.messages[msg + 6]!] ++ recMsgs p capD ext (left + 1) (i + 1) (msg + 7) (ood + 2)
 
-/-- **The messages of a Ligerito run** (`Flock.Ligerito`): the level-0 out-of-domain value, the first message and the `k0` folding
-messages, the level-1 cap, two out-of-domain values with their intro messages, the level-0 queries' message, and the
-level loop's. -/
 def ligMsgs (p : LigeritoProof) (capD : Array ByteArray → Cap D) (sch : Flock.Schedule) : List Msg :=
   fMsg p.oodValues[0]! :: kMsg p.messages[0]! :: kMsgs p 1 sch.k0 ++ ⟨Cap D, capD p.recursiveCaps[0]!⟩ ::
     [fMsg p.oodValues[1]!, kMsg p.messages[sch.k0 + 1]!, fMsg p.oodValues[2]!, kMsg p.messages[sch.k0 + 2]!] ++
     [kMsg p.messages[sch.k0 + 3]!] ++ recMsgs p capD sch.ext (sch.levels.size - 1) 0 (sch.k0 + 4) 3
 
-/-- Level `ℓ`'s cap in the executable: the table's at level 0, the proof's `(ℓ − 1)`-th recursive cap above. -/
 def capAt (cap : Array ByteArray) (p : LigeritoProof) (ℓ : ℕ) : Array ByteArray :=
   if ℓ = 0 then cap else p.recursiveCaps[ℓ - 1]!
 
@@ -122,8 +97,6 @@ def openAt (p : LigeritoProof) (R ℓ : ℕ) : Array (Array F128) × Array ByteA
     ((p.recursiveProofs[ℓ - 1]!).rows, (p.recursiveProofs[ℓ - 1]!).siblings, (p.recursiveProofs[ℓ - 1]!).salts)
   else (p.finalProof.rows, p.finalProof.siblings, p.finalProof.salts)
 
-/-- A model request whose Merkle check the executable passed (`Flock.Merkle`): the request is level `ℓ`'s queries, it folds the
-level's lanes, its paths have the level's length, and the rows the proof opens there verify against the level's cap. -/
 def ReqOK (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof) (req : Req) : Prop :=
   req.level < sch.levels.size ∧ req.lanes = (sch.levels.getD req.level default).lanes ∧
     req.depth = pathLen (levelOf (sch.levels.getD req.level default)) ∧
@@ -132,9 +105,6 @@ def ReqOK (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p 
       (openAt p (sch.levels.size - 1) req.level).2.1 (openAt p (sch.levels.size - 1) req.level).2.2
       (2 ^ req.lanes) = .ok ()
 
-/-- **The level loop's invariant** before iteration `i` (`Flock.Ligerito`): the loop's variables `v = (splitDim, prevCap, levels,
-ext)`, the executable's state `stE` and transcript `t`, and the model's state `stM`, which at the openings `o` has the
-executable's claim and polynomial. -/
 structure LoopRel (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof)
     (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (i : ℕ) (v : ℕ × Array ByteArray × Array (Array F256) × ℕ)
     (stE : LState) (t : Transcript) (stM : LigStateC 𝔽 𝕂 D) : Prop where
@@ -153,9 +123,6 @@ structure LoopRel (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteAr
   caps : stM.caps = (List.range (i + 1)).map fun j => capD p.recursiveCaps[j]!
   reqs : ∀ req ∈ stM.reqs, ReqOK ms sch cap p req
 
-/-- What the level loop ends with (`Flock.Ligerito`): `R` levels of four challenges, `ext` the schedule's, the clear
-residual's length checked, and the model's result: the final check on the executable's final state, the proof's caps,
-and requests that passed. -/
 structure LoopFinal (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof)
     (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (b : ℕ → 𝔽) (ini : List 𝕂)
     (v : ℕ × Array ByteArray × Array (Array F256) × ℕ) (stE : LState) (pend : PendL 𝔽 D) : Prop where
@@ -169,8 +136,6 @@ structure LoopFinal (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array Byte
   caps : pend.caps = (List.range (sch.levels.size - 1)).map fun j => capD p.recursiveCaps[j]!
   reqs : ∀ req ∈ pend.reqs, ReqOK ms sch cap p req
   pos : ∀ cs ∈ stE.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size
-
-/-! ## Helpers -/
 
 theorem sampleVec_ok {n : ℕ} (hn : n ≠ 0) {t t₁ : Transcript} {cs : Array F128} (h : sampleVec n t = .ok (cs, t₁)) :
     (t.rounds[t.k]!).n = n ∧ cs = (t.rounds[t.k]!).coins ∧ t₁.rounds = t.rounds ∧ t₁.k = t.k + 1 := by
@@ -194,7 +159,6 @@ theorem lforIn_range_eq {σ : Type} (n : ℕ) (s : σ) (g : ℕ → σ → LM (F
     (forIn [:n] s g : LM σ) = forIn (List.range' 0 n) s g := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range', range_size]
 
-/-- A passed Merkle check opened one row per position, of the level's lane count. -/
 theorem merkleCheck_rows {ms : MerkleScheme} {cap : Array ByteArray} {c d : ℕ} {pos : Array ℕ}
     {rows : Array (Array F128)} {sibs salts : Array ByteArray} {lanes : ℕ}
     (h : merkleCheck ms cap c d pos rows sibs salts lanes = .ok ()) :
@@ -250,7 +214,6 @@ theorem consValueO_congr (α : List 𝔽) (ch : List 𝕂) (rows rows' : ℕ →
   simp only at this ⊢
   rw [h j (by omega)]
 
-/-- A level's queries fit its consistency coins' table: `q ≤ 2^(⌊log2 (q − 1)⌋ + 1)`. -/
 theorem pos_le_alpha (lv : Flock.Level) (hl : LevelSeam lv) (cw cα : Array F128)
     (hcα : cα.size = Nat.log2 (lv.q - 1) + 1) : (Flock.positions lv cw).size ≤ 2 ^ cα.size := by
   rw [positions_size lv hl cw, hcα]
@@ -267,8 +230,6 @@ theorem conss_push_pos {cs : Array Flock.ConsCtx} {c : Flock.ConsCtx}
   · exact h x hx
   · exact hc
 
-/-- **The consistency value at the openings** (`Flock.Ligerito` step 10): the model's, reading the openings of level `ℓ`, is the
-executable's `consE` on the proof's rows, when the openings are those rows and the Merkle check passed. -/
 theorem qbE_eq (r ℓ : ℕ) (lv : Flock.Level) (hl : LevelSeam lv) (ch : Array F256) (hch : ch.size = lv.lanes)
     (o : Opens 𝔽 D) (rows : Array (Array F128)) (hrows : ∀ j < lv.q, rows[j]!.size = 2 ^ lv.lanes)
     (ho : ∀ j < lv.q, (o r ℓ j).1 = rows[j]!.toList.map fOf) (cw cα : Array F128)
@@ -304,7 +265,6 @@ theorem consumed_add (rs : Array Round) (k n : ℕ) :
   rw [show k + n - k = n by omega, List.range'_eq_map_range, List.map_map]
   rfl
 
-/-- Absorbing words keeps the rounds and the Ligerito state. -/
 theorem forIn_absorbF_keeps : ∀ (ws : List F128) {st st' : LState} {t t' : Transcript} {u : PUnit},
     forIn ws PUnit.unit (fun w (_ : PUnit) => lift (absorbF w) >>= fun _ => pure (ForInStep.yield PUnit.unit)) st t =
       .ok ((u, st'), t') → st' = st ∧ Keeps t t'
@@ -327,9 +287,6 @@ theorem drop_levels (sch : Flock.Schedule) (i : ℕ) (hi : i < sch.levels.size) 
   rw [List.drop_eq_getElem_cons (by simpa using hi)]
   simp [Array.getD, hi]
 
-/-- **One level's queries** (`Flock.Ligerito` steps 7–11 and the recursive rounds): the model's `qbOut` on the executable's coins
-has, at the openings, the executable's claim and polynomial updates; it records the executable's consistency context,
-and a request that passed the executable's Merkle check. -/
 theorem qbOut_rel (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof) (r ℓ : ℕ)
     (hℓ : ℓ < sch.levels.size) (hl : LevelSeam (sch.levels.getD ℓ default)) (ch : Array F256)
     (hch : ch.size = (sch.levels.getD ℓ default).lanes) (start : ℕ) (stM : LigStateC 𝔽 𝕂 D)
@@ -399,12 +356,6 @@ theorem qbOut_rel (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteAr
       simp only [hlevel, List.length_map, Array.length_toList, hch, Array.toArray_toList]
       exact hmc
 
-/-! ## The model's prefix -/
-
-/-- **The model's Ligerito before the level loop** (`Flock.Ligerito` steps 2–11), composed from its parts: the level-0
-out-of-domain sample, the first message and the `k0` folds (`hfold`), the level-1 cap, its two out-of-domain samples
-(`htwo`), the level-0 queries with their message, and any run of the recursive rounds from the resulting state
-(`hrec`). -/
 theorem ligeritoC_model (r : ℕ) (sch : Accounting.Schedule) (T : 𝔽) (b : ℕ → 𝔽) (lv₀ lv₁ : Accounting.Level)
     (rest : List Accounting.Level) (hl : sch.levels = lv₀ :: lv₁ :: rest)
     (z₀ c₀ : Array F128) (hz₀ : z₀.size = sch.m - 7) (hm7 : sch.m - 7 ≠ 1) (hc₀ : c₀.size = 1) (y₀ : F128)
@@ -448,15 +399,7 @@ theorem ligeritoC_model (r : ℕ) (sch : Accounting.Schedule) (T : 𝔽) (b : �
   refine Plays.bind' (ms₂ := [kMsg mq] ++ msR) (cs₂ := [cw, cα, cβ] ++ csR) htwo ?_ (by simp) (by simp)
   exact Plays.bind' hqb hrec rfl rfl
 
-/-! ## The run -/
-
 set_option maxHeartbeats 4000000 in
-/-- **Ligerito's rounds refine the model's** (`Flock.Ligerito`). When the executable's Ligerito verifier accepts, from a transcript
-whose rounds are well formed, on a schedule whose dimensions and levels are the model's (`DimSeam`, `LevelSeam`) and
-whose levels' consistency coins are not one word (`ceilLog2 q ≠ 1`, which `fast100_alpha` gives), the model's compiled
-Ligerito, played with the proof's messages and the rounds consumed, ends in a result whose caps are the proof's, whose
-requests passed their Merkle checks, and whose verdict at the openings `o` (the proof's opened rows, `ho`) is the
-model's final check on the executable's final state; and the executable's final check passed on that state. -/
 theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (r : ℕ) (b : ℕ → 𝔽)
     (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)

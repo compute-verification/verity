@@ -58,22 +58,8 @@ import all Init.Data.String.Termination
 import all Init.Data.Array.Attach
 import all Init.WF
 
-/-! # The two-instance statement in Flock's scope, and as a template's reference statement
-
-`scopeCheck_x` is `FlockDeploy.scopeCheck true` at the statement `x r`, as `FlockDeploy.concreteStmt_scope` is the
-concrete statement's: the verifier parses it to its one table `stX` (`parse_rX`: `setup_rX`, then `shapeOk_stX`), and
-its scope refusal passes (`scope_rX`). That refusal is `ProvedScope.check` (`check_rX`) at the reading's masked tags
-`tz`, which hide the outputs: the circuit is `HmOut.parse`'s (`circuitOf_cO`), the public file `HmOut.loadPublic`'s
-(`load_pubO`), and the two pass `check`'s circuit rules (`circuitRules_cO`); then `sizesOk` at the table's `m`
-(`sizes_stX`).
-
-`zkOk_x` is `zkOk` at the statement, from its setup (`setupOf_x`) and its table's sizes (`zkBody_tabX`).
-`templateOk_x` is `templateOk` at a registration whose reference statement is `x r`: its reading's tags hide the outputs
-and are untyped, its circuit file reads as the flat circuit `cF` (`parseStmt_x`), whose unit has at most `2^32` rows and
-whose ports are `sha512/row/v2` rows (`unitLog_cO`, `v2_cO`), and it sets up in one table (`shape_x`). `stmtOf_x` is the
-members' reading of its circuit, `cF`. `sessionOk_x` is `sessionOk` at a session statement that is the reference
-statement: `zkOk`, the same tables, the scope and hidden outputs (`hiddenOf_x`).
--/
+/-! The two-instance statement in Flock's scope and as a template's reference statement (`scopeCheck_x`, `zkOk_x`,
+`templateOk_x`). -/
 
 @[expose] public section
 open Flock Flock.ZkServer RecDeploy.VStarNets
@@ -91,8 +77,6 @@ theorem hidden_tzX : tz.hiddenOutputs = true := by decide +kernel
 theorem typed_tzX : tz.typed = false := by decide +kernel
 theorem tmpl_tzX : tz.isTmpl = false := by decide +kernel
 theorem rules_tzX : ProvedScope.firstFailure (ProvedScope.statementRules tz true 1 false) = none := by kernel_rfl'
-
-/-! ## The circuit and the public file, as the scope check reads them -/
 
 theorem circuitOf_cO (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String)
     (hH : Sha512.hash (bytesOf ls lh) = H)
@@ -129,16 +113,11 @@ theorem publicOf_cO (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B'
   rewrite [ProvedScope.publicOf, ite_eq_left hidden_tzX]
   exact load_pubO r ls lh H C A B A' B' s1 s3 s4 hr hCe hu1 hu2 hd
 
-/-- **The circuit and public file pass `check`'s circuit rules**: a shared-row public file under the verifier's own
-registered reads, no template, wires that feed neither the unit nor the outputs, and `scopeOkI`. -/
 theorem circuitRules_cO (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 : String) :
     ProvedScope.circuitRules tz true 1 true (cO ls lh H C A B A' B' s1) (pubO r ls lh H C A B A' B' s1 s3 s4) =
       .ok () := by
   kernel_rfl'
 
-/-! ## The scope refusal -/
-
-/-- **`verify`'s scope check passes the statement** (`ProvedScope.check`, as `Read.check` calls it). -/
 theorem check_rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 : String)
     (hr : r.Plain)
     (hH : Sha512.hash (bytesOf ls lh) = H)
@@ -165,7 +144,6 @@ theorem check_rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : 
   dsimp only
   exact circuitRules_cO r ls lh H C A B A' B' s1 s3 s4
 
-/-- **The table's size is one `--zk` takes.** -/
 theorem sizes_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s5 s6 : String)
     (hello : ByteArray → Nat → String) :
     ProvedScope.sizesOk true
@@ -173,7 +151,6 @@ theorem sizes_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' :
       .ok () := by
   kernel_rfl'
 
-/-- **The verifier parses the statement** to its one table, `stX`. -/
 theorem parse_rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s5 s6 : String)
     (hello : ByteArray → Nat → String)
     (hr : r.Plain)
@@ -203,7 +180,6 @@ theorem parse_rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : 
     (shapeOk_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello)]
   rfl
 
-/-- **The parsed statement passes `verify`'s scope refusal.** -/
 theorem scope_rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s5 s6 : String)
     (hello : ByteArray → Nat → String)
     (hr : r.Plain)
@@ -225,8 +201,6 @@ theorem scope_rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : 
     (check_rX r ls lh H C A B A' B' s1 s3 s4 hr hH hcl hls hlh hps hph hc1 hc2 hck hCe hu1 hu2 hd)
     (sizes_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello)
 
-/-- **The statement is in the scope Flock's soundness proof covers**, where the verifier's two fixed nets build: the
-verifier parses it and its scope refusal passes. -/
 theorem scopeCheck_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : FlockDeploy.scopeCheck true (x r) = true := by
   have hp := FlockDeploy.fixedNets_parse hn
   have hCe : classHash.isEmpty = false := classOfB_isEmpty (HmNets.shaLaid ()) (HmNets.hmLaid ())
@@ -246,9 +220,6 @@ theorem scopeCheck_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : FlockDeplo
   rewrite [readOf_x hn hr, Option.bind_some, show Read.parse (ins r).read = _ from hpar]
   exact (congrArg Except.isOk hsc).trans rfl
 
-/-! ## The masked scope -/
-
-/-- What `zkOk` asks of a setup's session and tables. -/
 def zkBody (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt) : Bool :=
   0 < sts.size && sts.size ≤ 200 && spec.points ≤ 2 &&
     sts.toList.all fun st => 25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
@@ -265,11 +236,8 @@ theorem zkBody_tabX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B'
       true := by
   kernel_rfl'
 
-/-- **The statement is in Flock's masked scope**, where the verifier's two fixed nets build. -/
 theorem zkOk_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : SpotFlock.zkOk (x r) = true :=
   zkOk_of (setupOf_x hn hr) (zkBody_tabX r _ _ _ _ _ _ _ _ _ _ _ _ _ _)
-
-/-! ## The statement as a template's reference statement -/
 
 theorem parseOut_x (hn : FixedNetsBuild) :
     HmOut.parse tz (bytesOf (HmNets.shaLaid ()) (HmNets.hmLaid ())) [] = .ok cF := by
@@ -298,7 +266,6 @@ theorem stmt_ins (hn : FixedNetsBuild) (r : Run) : Read.stmt (ins r).read = cF :
   rewrite [circ_x hn r]
   exact unrolled_cO _ _ _ _ _ _ _ _ _
 
-/-- **The members' reading of the statement's circuit** (`stmtOf`) is the flat circuit `cF`. -/
 theorem stmtOf_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : SpotFlock.stmtOf (x r) = cF := by
   unfold SpotFlock.stmtOf
   rewrite [readOf_x hn hr]
@@ -325,7 +292,6 @@ theorem shape_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : (SpotFlock.shap
   rewrite [List.length_map]
   rfl
 
-/-- **The statement reads as a member's** (`templateOk`) at a registration whose reference statement it is. -/
 theorem templateOk_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) (h : SpotFlock.Held) (h0 : h.xS₀ 0 = x r) :
     SpotFlock.templateOk h 0 = true := by
   unfold SpotFlock.templateOk
@@ -333,8 +299,6 @@ theorem templateOk_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) (h : SpotFlo
   simp only [tags_ins, stmt_ins hn r, parseStmt_x hn r, hidden_tzX, typed_tzX, unitLog_cO, v2_cO, beq_self_eq_true,
     Bool.not_false, Bool.and_self]
 
-/-- **A session statement that is the reference statement is in scope** (`sessionOk`), at a registration whose reference
-statement is `x r`. -/
 theorem sessionOk_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) (h : SpotFlock.Held) (h0 : h.xS₀ 0 = x r) :
     SpotFlock.sessionOk h 0 (x r) = true := by
   unfold SpotFlock.sessionOk

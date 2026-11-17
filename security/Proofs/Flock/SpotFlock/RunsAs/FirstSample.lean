@@ -4,15 +4,8 @@ public import Proofs.Flock.SpotFlock.RunsAs.Top
 import Proofs.Flock.Claims.Sampling.Select.Take
 import Proofs.Flock.Claims.Sampling.Select.Steps
 
-/-!
-# The run's `draw` is the first stage's sample, and the second stage is sampled over it
-
-At a two-stage run `Run.run` accepts, the answer's `draw` is the sample object the first stage's select returned
-(`answer_sample`), the units it proves are the select's units, and the second stage's `selectSecond` is handed exactly
-those units, at the replay block's cells and the rule's counts (`firstSample`). `selectSecond` samples under the sampling design
-`Select.secondSamplingDesign` computes from them (`selectSecond_samplingDesign`). So a second-stage sampling design computed from the answer's `draw` is
-the sampling design the run's second stage drew under.
--/
+/-! At an accepted two-stage run, the answer's `draw` is the first stage's sample, and the second stage is sampled
+over its units (`firstSample`). -/
 
 @[expose] public section
 
@@ -21,10 +14,6 @@ namespace SpotFlock.RunsAs
 open Lean (Json)
 open Properties.Spot.SecurityProofs (bind_eq_ok throw_bind_ne)
 
-/-- **The first stage's sample, as the run's answer holds it.** At a two-stage run `Run.run` accepts, with the form
-allowed or not: the first stage's select, with no closure map, returned the answer's `draw` with the units `rest`; the
-units `draw` proves are `rest`; and the second stage's `selectSecond` ran over those units, at the replay block's cells
-`ns` and the rule's counts `ks` over the check's templates. -/
 theorem firstSample {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
     ∃ (grain : Json) (replay : String) (k : Spot.Select.Counts) (resolved : Spot.Select.Rule)
       (workTable : Option Json) (rest : Array ℕ) (read : ℕ) (ns : Array ℕ) (ids : Array String) (ks : Array ℕ)
@@ -52,9 +41,6 @@ theorem firstSample {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha
   exact ⟨_, _, _, _, _, _, _, _, _, _, _, _, hrule, hcl, hres, ht, hsel,
     proved_select (resolve_ne_all hrule hres) hsel, hns, hids, hks, hss⟩
 
-/-- **The second stage samples under `secondSamplingDesign`**: where `selectSecond` accepts a replay sample, its sample and the bytes
-it read are `sampleFirstRead`'s under `Select.secondSamplingDesign` of that sample, the cells and the counts, over the sample's
-cells. -/
 theorem selectSecond_samplingDesign {sample ns ks : Array ℕ} {src : ByteArray} {d : Json} {r : ℕ}
     (h : Spot.Select.selectSecond sample ns ks src = .ok (d, r)) :
     Spot.Draw.sampleFirstRead (Spot.Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) src =
