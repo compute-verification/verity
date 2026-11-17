@@ -147,8 +147,8 @@ def test_a_head_with_no_cut_past_the_grains_rows_is_refused_by_name():
 def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     """int8 Llama-3.2-1B's window circuit on the H200 (exact-int8 linears, FA3's heads at D 64 and kBlockN 192) at the default
     grain and 4,32,4 lowers with every unit within 256 rows: each first block reads its values a slice a row of the value
-    projection (`AttnBlockFirst_v2{VS=32}`), and the norm after down_proj, whose x down_proj's slices write as 512 rows where
-    o_proj's write 128, is cut at its residual add (8 parts of 256 and the tail). Every unit is a proof block Flock's
+    projection (`AttnBlockFirst_v2{VS=32}`), and the norm after down_proj, whose x down_proj's slices write as 256 rows where
+    o_proj's write 64, is cut at its residual add (8 parts of 256, each 32 rows, and the tail). Every unit is a proof block Flock's
     composer takes (`interface.check_proof_block`, which the lowering runs): at 4 outputs a collector's rows and an entry's
     are under 112 bytes, so each is its position's combine's (`SelectCollect_v1`, the last's `SelectEntry_v1`), which reads
     its group units' bests and indices as rows of 334 and 668 bytes. Its heads are `Attention_v20`'s Calls (no whole `AttentionHead_v4`, no guarded full
@@ -174,4 +174,4 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     assert not {lab.split("{")[0] for lab in n} & {"TokenSelectCombine_v2", "OutCollect_v1", "SlotEntry_v1"}
     assert set(heads) <= {"AttnBlockFirst_v2", "AttnBlock_v4{CHECK=false}", "AttnHeadEnd_v1"}
     tail = n["RMSNormFusedCudaTail_v1{N=2048}"]
-    assert tail and [n[f"RMSNormFusedCudaAdd_v1{{N=2048,C=256,AT={at}}}"] for at in range(8)] == [tail] * 8
+    assert tail and [n[f"RMSNormFusedCudaAdd_v2{{N=2048,C=256,AT={at},R=32}}"] for at in range(8)] == [tail] * 8
