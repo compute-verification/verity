@@ -357,11 +357,12 @@ def test_the_chain_refuses_a_window_that_starts_at_another_clock() -> None:
     RC.commit_window(CT.PROGRAM, honest[1].rows, honest[1].win, Sc, CT.REGISTRATION, carry=v0)
     with pytest.raises(ValueError, match="ended in"):
         RC.commit_window(CT.PROGRAM, restarted[1].rows, restarted[1].win, Sc, CT.REGISTRATION, carry=v0)
-    salts = [v0.state.salts[-1]] + [bytes([k]) * 64 for k in range(Sc.P + 1)]
+    n = len(v0.state.salts[-1])
+    salts = [v0.state.salts[-1]] + [bytes([k + 1]) * n for k in range(len(restarted[1].rows) - 1)]
     state = produced.commit(CT.PROGRAM, RC.VALUE, [RC.row(RC.encode(r, Sc)) for r in restarted[1].rows],
                             CT.REGISTRATION, salts, RC.WORD_BITS, RC.SCHEMA)
     window = produced.commit(CT.PROGRAM, RC.WINDOW, [v0.window.rows[-1], RC.row(RC.encode_window(restarted[1].win, Sc))],
-                             CT.REGISTRATION, [v0.window.salts[-1], bytes(64)], RC.WORD_BITS, RC.SCHEMA)
+                             CT.REGISTRATION, [v0.window.salts[-1], bytes(n)], RC.WORD_BITS, RC.SCHEMA)
     forged = RC.Committed(state, window)
     assert bytes(forged.state.bcs[0]) != bytes(v0.state.bcs[-1]) and bytes(forged.window.bcs[0]) == bytes(v0.window.bcs[-1])
     assert RC.check_chain([RC.openings(v0), RC.openings(forged)], CT.PROGRAM, Sc).startswith("C-carry")
