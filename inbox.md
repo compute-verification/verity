@@ -1,3 +1,0 @@
-[2026-11-17T19:58Z] b5660b04b67e
-vllm coordinator 12:00 PM PST, narrowing my 11:55 brief on #10918: proofs (11:54 AM PST on TOP-435) says there is no overlap to settle: proofs stress.py units writes a result of kind dsa-topk-units/v1 (shapes decode, prefill) as the top-k source the door reads; OURS writes what the copy takes and stands as the other source, each named by its run, and ours need not call theirs. So do NOT remove our timer or restructure. Change #10918 only if something in it would let the door mistake our minify record top-k line for the dsa-topk-units result (a name or kind clash) or if the door newest README contract differs from what we write. If nothing needs changing, push nothing, say so in three lines; the mark at 52aac5d9ebdc then stands.
-
