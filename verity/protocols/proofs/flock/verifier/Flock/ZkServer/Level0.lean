@@ -12,7 +12,7 @@ table is one `Level0`, from which everything of level 0 that leaves is read: the
 `Finish`'s level-0 openings (`ZkServer.Finish`, ZKFIN's).
 
 * `Level0`: the table's `m`, level 0 of its `--zk` schedule and its `t_pad`, the packed witness `g`, the hiding the loop
-  sampled (the four extra lanes, every lane's padding, a salt per tree position), the padded codeword's rows, the Merkle
+  drew (the four extra lanes, every lane's padding, a salt per tree position), the padded codeword's rows, the Merkle
   tree's layers from the leaves to the cap, and the root.
 * `ofSamples`: a table's `Level0` from its witness and the samples' bytes, in `Link.parse`'s layout after the witness: the
   extra lanes, the paddings, the salts. `draw` reads those bytes from the OS in one read.
@@ -22,7 +22,7 @@ table is one `Level0`, from which everything of level 0 that leaves is read: the
   `Slots.draw`) all at once, on every table's witness, and once: a second sample for the session, or one whose witnesses
   are not one for each of its tables, is refused. So no table's witness is handed after any of the session's samples. Each
   is gone when that session ends (`Slots.close`). A session's `Commit` is held to them: the root it carries for its table
-  `i` must be the `Level0` the loop sampled for that session's table `i`, at that table's own `m`. So the level 0 a session
+  `i` must be the `Level0` the loop drew for that session's table `i`, at that table's own `m`. So the level 0 a session
   binds is the one sample the loop made for the table, and the prover has no choice among samples.
 
 The prover gets the samples back (`drawsOf`), and the mask slot's words, to run its own commitment over the same codeword;
@@ -34,7 +34,7 @@ what leaves is the loop's.
 namespace Flock.ZkServer.Level0
 
 /-- **A table's level 0**: its `m`, level 0 of its `--zk` schedule (`lv`) and `t_pad`; the host's packed witness `g`
-(`2^(lanes + cols)` words); the hiding the loop sampled: the four extra lanes (`extra`, `2^cols` words each), every lane's
+(`2^(lanes + cols)` words); the hiding the loop drew: the four extra lanes (`extra`, `2^cols` words each), every lane's
 padding coefficients (`pads`, `t_pad` each, the witness lanes' then the extra lanes'), and the salts (`salts`, 192 bytes
 for each of the `2^d` tree positions, `salt q`); and what level 0 commits of them (`build`, `ofSamples_ok`): the padded
 codeword's `2^d` rows (`Link.rows`), the Merkle tree's layers from the leaves (`layers[0]`) to the cap
@@ -254,11 +254,11 @@ def nameOf (id : ByteArray) : String := hexOf id
 def Slots.name (R : Slots) (name : String) (sid n : Nat) : Slots :=
   { R with sessions := R.sessions.push (name, sid), tables := R.tables.push (sid, n) }
 
-/-- Whether the loop sampled session `sid`'s tables' level 0. -/
+/-- Whether the loop drew session `sid`'s tables' level 0. -/
 def Slots.drawn (R : Slots) (sid : Nat) : Bool := R.slots.any (·.owner == sid)
 
 /-- **The session named `name` may have its tables' level 0 sampled on `k` witnesses**: its number; else why not: a name no
-live session has, a session the loop already sampled level 0 for (whatever witnesses come after the sample), or `k` other
+live session has, a session the loop already drew level 0 for (whatever witnesses come after the sample), or `k` other
 than its count of tables. -/
 def Slots.admit (R : Slots) (name : String) (k : Nat) : Except String Nat :=
   match R.sessions.find? (·.1 == name) with
@@ -285,7 +285,7 @@ def Slots.close (R : Slots) (sid : Nat) : Slots :=
     tables := R.tables.filter (·.1 != sid) }
 
 /-- **Session `sid`'s `Commit`**, of the session's tables `tables` (each with its statement's `m`), carrying `roots`: the
-root of table `i`, in table order, the `Level0` the loop sampled for this session's table `i`, at its table's `m`, which the
+root of table `i`, in table order, the `Level0` the loop drew for this session's table `i`, at its table's `m`, which the
 session then owns; else why it does not leave. -/
 def commit (R : Slots) (sid : Nat) (tables : Array (String × Nat)) (roots : List (String × ByteArray)) :
     Except String Slots := do

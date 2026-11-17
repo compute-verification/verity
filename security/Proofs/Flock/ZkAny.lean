@@ -114,7 +114,7 @@ its schedule so far gives and the frame after it keeping that schedule; and `Env
 the deployed loop against the model's run, the model's messages the slots took one more than the openings the
 auditor answered, given its step at the `Commit`, each frame round and the `Finish` and an invariant of the loop kept
 at every other slot, the step at the `Hello` and at every other slot proved; and the step at the `Commit`, where the
-ZK server's own link is at the level 0 the loop sampled for the session, and at the `Finish`, where the session's stop is
+ZK server's own link is at the level 0 the loop drew for the session, and at the `Finish`, where the session's stop is
 whether an earlier round of the model's run failed; and a frame round at its slot before a stop, which the session
 lets through, and the step at it, given what the loop's frames and the model hold there and the invariant kept; and
 the session's reps and labels the setup's rep streams' once its `Hello` left, so a round's rep its stream's own and no
