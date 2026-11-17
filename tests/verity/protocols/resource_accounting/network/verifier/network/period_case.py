@@ -4,11 +4,11 @@ that runs it: its mirror, `answer` (as `reference`), and its cases, `build` and 
 `answer(case)` is the outcome of one `serve` line in the core interface's answer format
 (`verity_difftest.protocol.answer`): it decodes the protocol's formats (`NetworkCheck/Period.lean`'s module docstring)
 and checks a period with the Python the period's pieces already have: one-stage's answers and integrity profiles as PoUW
-reads them (`pouw.core_check.answer_of` and `integrity`), the network attester's certificates, each under the listed
-entry its execution phase picks (`certifier.certificate`, `_entry_at`: the entry's LMS key, its session, and that
+reads them (`pouw.core_check.answer_of` and `integrity`), the network attester's attestations, each under the listed
+entry its execution phase picks (`attester.certificate`, `_entry_at`: the entry's LMS key, its session, and that
 session's own number for the execution phase, the period's less the entry's start; a signer that is another listed key,
 outside its stretch, or that the parameters don't list is refused by name, `OUTSIDE`, `UNLISTED`), each listed entry's
-session's signed start (`certifier.certificate`'s `CertifiedStart.refusal`, under the entry's key in its session;
+session's signed start (`attester.certificate`'s `CertifiedStart.refusal`, under the entry's key in its session;
 `_start_check`: an entry whose start is not where its session's signed base puts it after its key's first listed entry
 is refused by name, `NOT_SIGNED`, and one whose shown start its session did not certify, `UNCERTIFIED`), one-stage's
 `registration.digest` (a registration record is ASCII-only, where its canonical JSON is Lean's), the schedule
@@ -28,7 +28,7 @@ start of its stretch, at or before `first`, so the signer's numbers are the peri
 small period and otherwise among up to two more whose stretches hold none of the period's execution phases; `second-key`
 lists the signer second of two, and `two-stretches` two entries, the period's one execution phase the second's
 stretch's first, signed by that entry at its number 0. Refused: two listed entries that sign in turn,
-each in its own session at its own number, in a period one entry's stretch holds (`two-signers`); a certificate or a
+each in its own session at its own number, in a period one entry's stretch holds (`two-signers`); an attestation or a
 rows registration under the other listed entry, outside its stretch (`cert-outside-stretch`, `reg-outside-stretch`),
 under a key that isn't listed (`cert-unlisted`, `reg-unlisted`), under the picked key in the other entry's session
 (`cert-other-session`, `reg-other-session`), or at the period's number where the session's belongs
@@ -42,12 +42,12 @@ one execution phase in the second's stretch, and is accepted. Refused: that list
 another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`); a period of two execution phases,
 one in each of the two sessions' stretches (`restart`), as a period is one execution phase (`startCarriedRefusal`);
 a shown start that is not its session's
-certified start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); and evidence that
+attested start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); and evidence that
 shows a start too few or too many, or none (`start-count`). The execution phases of one link from the execution phase
 `first`, each execution phase's ingress and egress rows committed and registered under a small sampled schedule
 (`network_attester_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network attester session;
 `capped`: a schedule with a response cap, and
-`cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
+`cap-schedule` the parameters or a registration under it with another cap or none), its three records attested
 (`past-slots`: none of them and neither registration, as the network attester leaves a window in which it refused a
 connection), and
 the scan's registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root
@@ -176,14 +176,14 @@ NO_ENTRY = "keys: an entry is not an object"
 KEY_NOT_KEYS = 'key: write "keys"'
 SESSION_IN_ENTRY = "session: write each key's session in its entry"
 SESSIONS_IN_ENTRY = "sessions: write each key's session in its entry"
-#: What a refusal says, as Lean's does (`unlisted`), of a certificate or a rows registration whose signer the
+#: What a refusal says, as Lean's does (`unlisted`), of an attestation or a rows registration whose signer the
 #: parameters don't list, of one whose signer is a listed key outside its stretch, and of an execution phase no listed
 #: entry's stretch holds
 UNLISTED = "a signer that is not one of the listed keys"
 OUTSIDE = "a listed key outside its stretch"
 NO_STRETCH = "no listed entry's stretch holds execution phase"
 #: What a refusal says, as Lean's does (`startCheck`, `startChecks`), of a listed entry's start: a start shown for it
-#: that is not its session's certified start, then why, by `CertifiedStart.refusal`'s code; an entry that does not
+#: that is not its session's attested start, then why, by `CertifiedStart.refusal`'s code; an entry that does not
 #: start where its key's first listed entry and their sessions' signed bases put it; an entry whose session's ordinal
 #: is not the next after that of its key's entry listed before it (`follows`); and evidence that does not show a start
 #: for each listed entry
@@ -198,7 +198,7 @@ OPTIONAL_SCHEDULE_KEYS = sorted(OPTIONAL_FIELDS)
 #: what the check says of a schedule with connection rows (`connectionRowsRefusal`)
 CONNECTION_ROWS = ("schedule: connection rows: the check reads no connection rows' registration, so it refuses a "
                    "schedule with lengths rows, content rows or request words (connectionRowsCheck)")
-CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
+ATTESTATION_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 ROWS_WINDOW_KEYS = ["answer", "certificates", "registrations"]
 #: `paramsOf`'s refusal of parameters naming a `sync_set`, the clock form's, which the check doesn't read
 CLOCK_FORM = "sync_set: the clock form is not one this check reads"
@@ -876,7 +876,7 @@ def _answer(j, ctx: str) -> dict:
 
 
 def _certificate(j, ctx: str) -> Certificate:
-    _exactly(j, CERTIFICATE_KEYS, ctx)
+    _exactly(j, ATTESTATION_KEYS, ctx)
     try:
         direction = Direction(_of(j["direction"], str, ctx))
     except ValueError:
@@ -887,7 +887,7 @@ def _certificate(j, ctx: str) -> Certificate:
 
 
 def _rows(j, ctx: str) -> dict:
-    """`rowsOf`: a row registration with exactly its keys (and its layout's and certificate's), its numbers naturals,
+    """`rowsOf`: a row registration with exactly its keys (and its layout's and attestation's), its numbers naturals,
     its strings strings and its byte fields lowercase hex."""
     _exactly(j, ROWS_KEYS, ctx)
     _exactly(j["layout"], LAYOUT_KEYS, f"{ctx}.layout")
@@ -942,7 +942,7 @@ class Finding(Exception):
 
 def _entry_at(p: Params, w: int) -> Entry | None:
     """`entryAt`: the entry execution phase `w` picks, the last listed one whose start is at most `w`, whose stretch
-    holds `w`; none before the first entry's start. The execution phase alone picks it, and nothing a certificate names
+    holds `w`; none before the first entry's start. The execution phase alone picks it, and nothing an attestation names
     does."""
     held = [e for e in p.entries if e.start <= w]
     return held[-1] if held else None
@@ -960,7 +960,7 @@ def _unlisted(p: Params, w: int, key_ids: list[bytes]) -> str:
 
 
 def _certifies_on(p: Params, link: str, d: Direction, w: int, c: Certificate) -> bool:
-    """`certifiesOn`: a certificate of `link`'s end `d` for the period's execution phase `w`, under the entry `w` picks:
+    """`certifiesOn`: an attestation of `link`'s end `d` for the period's execution phase `w`, under the entry `w` picks:
     its key, its session, and that session's number for the execution phase, `w` less the entry's start."""
     e = _entry_at(p, w)
     return (e is not None and c.direction is d and c.link == link and c.window == w - e.start
@@ -982,7 +982,7 @@ def _follows(xb: CertifiedStart, x: CertifiedStart) -> bool:
 
 def _start_check(p: Params, starts: list[CertifiedStart], i: int, e: Entry, x: CertifiedStart) -> Finding | None:
     """`startCheck`: listed entry `i`'s start's finding. The start shown for it is its session's
-    certified start, read as the network attester's own verifier reads it (`CertifiedStart.refusal`: under the
+    attested start, read as the network attester's own verifier reads it (`CertifiedStart.refusal`: under the
     entry's key, in its session, for the link, under the period's schedule's parameters digest); the entry starts
     where its key's first listed entry puts it (`_held_to`), a key's first listed entry being held to itself; and its
     session is the one right after that of its key's entry listed before it (`_follows`)."""
@@ -1315,7 +1315,7 @@ def _tied_in(audits: list[dict], windows: list[dict], i: int) -> bool:
 
 
 def records(link: str) -> tuple[tuple[str, Direction], ...]:
-    """The rows form's certified records of an execution phase (`relay_check.CERTIFIED`): requests, responses,
+    """The rows form's attested records of an execution phase (`relay_check.CERTIFIED`): requests, responses,
     fails."""
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
 
@@ -1664,7 +1664,7 @@ MUTATIONS = list(EXPECT)
 #: The changes to which entries the parameters list and which of them sign (`rows-…`). Accepted: the
 #: signer's entry the second of two, and two entries whose stretches each hold some of the period's execution phases,
 #: each execution phase signed by its own entry at its own number. Refused: two listed entries that sign in turn, each
-#: in its own session at its own number, in a period the second's stretch holds; a certificate or a rows registration
+#: in its own session at its own number, in a period the second's stretch holds; an attestation or a rows registration
 #: under a key that isn't listed, under the picked key in the other entry's session, under the other listed entry,
 #: outside its stretch, and at the period's number where the session's belongs. The check reads each session's
 #: signed start: accepted, one key listed in two sessions, the period's one execution phase in the second's stretch, the
@@ -1679,8 +1679,8 @@ LISTS = ("second-key", "two-stretches", "two-signers", "cert-unlisted", "reg-unl
 #: The changes whose parameters list the signer's key in two sessions, the period's one execution phase in the second's
 #: stretch, the signer's; `restart` lists it so too, its period two execution phases, one in each stretch
 RESTARTS = ("two-sessions", "start-not-signed", "start-skipped")
-#: How a shown start fails to be its session's certified start (`start-uncertified`), by `CertifiedStart.refusal`'s
-#: code: signed under the link's own name, as an ingress certificate or for window 1; by a key that isn't listed;
+#: How a shown start fails to be its session's attested start (`start-uncertified`), by `CertifiedStart.refusal`'s
+#: code: signed under the link's own name, as an ingress attestation or for window 1; by a key that isn't listed;
 #: under another schedule's digest; shown with another base than the one signed, or naming the period's schedule over
 #: a digest signed for another; and with a signature changed, or signed in another session
 UNCERTIFIED_BY = {"start": ("link", "direction", "window"), "key": ("key",), "schedule": ("schedule",),
@@ -1732,7 +1732,7 @@ def _refused(answer: dict, verdict: str) -> dict:
 
 #: The schedule's fields that leave its rows' shape (B, S, T) as it is: a change to one changes only its digest.
 SAME_SHAPE = ("bucket_ms", "delay", "egress_cells", "ingress_buckets", "ingress_cells", "queue")
-#: The orders of an execution phase's three records' certificates other than their own.
+#: The orders of an execution phase's three records' attestations other than their own.
 SWAPS = ((0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
 
 
@@ -2497,7 +2497,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     def sign(link: str, d: Direction, w: int, digest: bytes, k: lms.PrivateKey | None = None,
              s: bytes | None = None, n: int | None = None, e: Stretch | None = None,
              num: int | None = None) -> Certificate:
-        """A certificate for the period's execution phase `w` under the entry `e`, or the one whose turn it is: under
+        """An attestation for the period's execution phase `w` under the entry `e`, or the one whose turn it is: under
         its key, or `k`, in its session, or `s`, naming that session's number for the execution phase, `w` less the
         entry's start, or `num`."""
         n = next(signed) if n is None else n
@@ -2848,7 +2848,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     def signed_start(i: int, how: str | None = None) -> dict:
         """Listed entry `i`'s session's signed start, as a run's `deployment.json` holds it: its base, its ordinal and
         the period's schedule's digest, signed for the link's start name, egress, window 0; or one that is not its
-        session's certified start, as `how` says (`UNCERTIFIED_BY`)."""
+        session's attested start, as `how` says (`UNCERTIFIED_BY`)."""
         e = listed[i]
         named = bound.digest
         named = _flip(named, seed) if how == "schedule" else named

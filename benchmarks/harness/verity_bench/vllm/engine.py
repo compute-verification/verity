@@ -165,9 +165,9 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
         engine["quantization"], engine["attention_backend"] = INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND
     elif precision != "bfloat16":
         engine["dtype"] = precision
-    if settings.get("serving_defaults"):
+    if settings.get("serving_defaults") or settings.get("batch_invariant") is False:
         engine["execution"] = "eager" if eager else "compiled"
-    elif not eager:
+    if not settings.get("serving_defaults") and not eager:
         engine["compilation_config"] = {
             "mode": 0,
             "cudagraph_mode": "FULL_DECODE_ONLY",

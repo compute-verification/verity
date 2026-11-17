@@ -38,7 +38,7 @@ from pathlib import Path
 
 from verity.device import load_card
 
-CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 
 MINUTES, PEAK = "circuits/window-compile-minutes", "circuits/window-compile-peak-memory"
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
