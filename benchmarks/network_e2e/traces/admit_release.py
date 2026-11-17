@@ -284,7 +284,7 @@ def release_of(d: Path, ids: list[str], add_lag_s: float) -> Release:
     rank = {i: k for k, i in enumerate(sorted(ids, key=lambda i: (sends[i], i)))}
     return Release(g0, tau, [math.floor((sends[i] - g0) / tau + 1e-9) for i in ids], [rank[i] for i in ids],
                    [float(reqs[i]["arrival"]) + add_lag_s for i in ids],
-                   f"no network certifier: the client's send bucket and send order; ready = the frontend's arrival + {add_lag_s * 1000:g} ms, "
+                   f"no network attester: the client's send bucket and send order; ready = the frontend's arrival + {add_lag_s * 1000:g} ms, "
                    "kept after the last open step that passed it over and before its first scheduling")
 
 
@@ -463,7 +463,7 @@ def markdown(results: list[dict[str, Any]]) -> str:
     for r in results:
         b, h, al = r["base"], r["variants"]["hold"], r["variants"]["aligned"]
         t = b["ttft_from_add_ms"]
-        margin = "- (no network certifier)" if b["egress_margin_ms"] is None else (
+        margin = "- (no network attester)" if b["egress_margin_ms"] is None else (
             f"{fmt(b['egress_margin_ms']['min'])} -> {fmt(h['egress_margin_ms']['min'])} -> {fmt(al['egress_margin_ms']['min'])}")
         out.append(f"| {r['trace']} | {fmt(t['p50'])} / {fmt(t['p95'])} / {fmt(t['max'])} | {h['frontend_late_for_boundary']} "
                    f"| {h['held_behind_earlier_release']} | {margin} |")
