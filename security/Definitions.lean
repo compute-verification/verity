@@ -24,7 +24,6 @@ public import Definitions.InferenceOnly.Reads
 public import Definitions.Slowdown.Dark
 public import Definitions.Slowdown.Factor
 public import Definitions.Slowdown.Covering
-public import Definitions.Slowdown.Capability
 public import Definitions.Slowdown.Cut
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
@@ -79,9 +78,6 @@ public import Definitions.Slowdown.Guarantees.FitRate
 public import Definitions.Slowdown.Guarantees.Slowdown
 public import Definitions.Slowdown.Guarantees.Remote
 public import Definitions.Slowdown.Guarantees.RemoteMonitoringPeriod
-public import Definitions.Slowdown.Assumptions.Capability
-public import Definitions.Slowdown.Guarantees.Capability
-public import Definitions.Slowdown.Guarantees.Coverage
 public import Definitions.Slowdown.Guarantees.Covering
 public import Definitions.Slowdown.Guarantees.CoveringTwoCosts
 public import Definitions.Slowdown.Guarantees.Cut
