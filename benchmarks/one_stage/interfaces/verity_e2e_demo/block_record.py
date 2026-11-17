@@ -17,7 +17,8 @@ steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
   ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound SPOT's Lean ``countBound`` gives), else not established. A per-member sample that missed a member has no integrity bound
   (``value`` null) and holds at no δ: its ``why`` gives each sampled member's bound over that member's own proof blocks,
-  beside ``members`` (sampled, registered). The sample is the answer's own sampling design: where its
+  beside ``members`` (sampled, registered). So has a sample on simulated coins (the row's ``coins``, the quantity's
+  ``coins`` and ``coins_on``), its bound and each δ's only under `UNDER_AUDITOR`. The sample is the answer's own sampling design: where its
   profile samples each stratum on its own, the quantity carries the ``strata`` (``[{name, size, k}]``) and the bound is
   the stratified design's, the most incorrect proof blocks that some placement over the strata hides with probability
   at least δ, which a uniform sample of as many units understates. ``named_terms``, which a subprotocol of
@@ -75,6 +76,8 @@ NAMED_TERM = ("claim", "term", "value", "in_total", "status")
 #: `Core.Verdict`'s names
 CHECKS = {"onsite": ("verity/onsite/v0",), "remote": ("verity/remote/v1",)}
 VERDICTS = ("accept", "reject", "undecided")
+#: the only words integrity's numbers stand under on simulated coins
+UNDER_AUDITOR = "what the same sample would establish under an auditor's challenger"
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointPooledLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
@@ -149,11 +152,14 @@ def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any],
     pub = a.get("public") or {}
     if subprotocol == "integrity":
         members = row.get("members") or {}
-        if members.get("sampled", 0) < members.get("registered", 0):
-            return ({"symbol": "integrity bound", "value": None, "unit": "wrong units", **_sample(a),
-                     "members": dict(members), "by_member": list(row["by_member"])}, frac(row["delta"]), "delta")
-        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", **_sample(a)},
-                frac(row["delta"]), "delta")
+        missed = members.get("sampled", 0) < members.get("registered", 0)
+        out = {"symbol": "integrity bound", "value": None if missed else int(q["bound"]), "unit": "wrong units", **_sample(a)}
+        if missed:
+            out |= {"members": dict(members), "by_member": list(row["by_member"])}
+        if row.get("coins") == "simulated":
+            out |= {"value": None, "coins": "simulated", "coins_on": dict(row["coins_on"])}
+            out |= {} if missed else {UNDER_AUDITOR: int(q["bound"])}
+        return out, frac(row["delta"]), "delta"
     if subprotocol == "pouw":
         w = q["work"]
         return ({"symbol": "W_cert", "value": int(w["credited"]), "unit": "work", "tiles": int(w["credited_tiles"])},
@@ -177,14 +183,17 @@ def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction) ->
     """The subprotocol's certificate at each δ of `DELTAS` (module docstring)."""
     out: dict[str, Any] = {}
     for d in DELTAS:
+        simulated = (f"its coins were simulated, flipped on {', '.join(quantity['coins_on'].values())} by no auditor's "
+                     "challenger, so no bound holds") if quantity.get("coins") == "simulated" else None
         if subprotocol == "integrity" and "members" in quantity:
             m = quantity["members"]
             out[str(d)] = {"holds": False, "why": f"the sample reached {m['sampled']} of {m['registered']} members, so "
                            f"no bound over the workload's {quantity['of']} proof blocks holds; "
-                           f"{'; '.join(member_bounds(quantity['by_member'], d))}"}
+                           f"{'; '.join(member_bounds(quantity['by_member'], d))}" + (f"; and {simulated}" if simulated else "")}
         elif subprotocol == "integrity":
             b = integrity_bound(quantity["of"], quantity["drawn"], d, quantity.get("strata"))
-            out[str(d)] = {"holds": True, "value": b, "epsilon": str(Fraction(b, quantity["of"])), "by": "draw"}
+            at = {"value": b, "epsilon": str(Fraction(b, quantity["of"])), "by": "draw"}
+            out[str(d)] = {"holds": False, "why": simulated, UNDER_AUDITOR: at} if simulated else {"holds": True, **at}
         elif error <= d:
             out[str(d)] = {"holds": True, "value": quantity["value"], "epsilon": None, "by": "run"}
         else:
@@ -333,8 +342,11 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
         if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"])):
             bad[key] = "its certificates at the deltas are not its quantity's at its error"
         m = lg["quantity"].get("members") or {}
-        if (lg["quantity"]["value"] is None) != (name == "integrity" and m.get("sampled", 0) < m.get("registered", 0)):
-            bad[key] = "its quantity's value is null exactly when it is integrity's and its sample missed a member"
+        simulated = lg["quantity"].get("coins") == "simulated"
+        if (lg["quantity"]["value"] is None) != (name == "integrity" and (m.get("sampled", 0) < m.get("registered", 0)
+                                                                          or simulated)):
+            bad[key] = ("its quantity's value is null exactly when it is integrity's and its sample missed a member or "
+                        "its coins were simulated")
         if "named_terms" not in lg:
             if name in NAMES_TERMS:
                 bad[key] = f"it names no term its error leaves out; {NAMES_TERMS_FIX}, and the record is built from that"

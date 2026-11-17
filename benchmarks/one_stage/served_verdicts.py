@@ -776,8 +776,6 @@ def challenger_coins(challenger: str) -> str:
 GATES = ("gate:", "command:")
 #: SPOT's key in a record's ``coins_on``, as the served table's records name them
 SAMPLED_NAME = "sampled-proofs"
-#: the only words SPOT's row on simulated coins gives its ε at δ in
-UNDER_AUDITOR = "what the same sample would establish under an auditor's challenger"
 
 
 def sampled_coins(audit: Path, key_sha512: str | None) -> str:
@@ -794,27 +792,24 @@ def sampled_coins(audit: Path, key_sha512: str | None) -> str:
     return "live" if hashlib.sha512(bytes.fromhex(public)).hexdigest() == key_sha512.lower() else "simulated"
 
 
-def with_coins(report: dict[str, Any], rec: dict[str, Any] | None, line: dict[str, Any],
-               coins: tuple[str, str] = ("simulated", "unnamed")) -> None:
-    """`record`'s ``report``, block record ``rec`` and line ``line`` with SPOT's ``coins`` (`sampled_coins`) and
-    the machine they were flipped on: its row as `on_coins` gives it, and its integrity subprotocol's ``at`` on coins other than live
-    said to be `UNDER_AUDITOR`'s."""
-    if "integrity" not in report["protocols"]:
-        return
-    report["protocols"]["integrity"] = on_coins(report["protocols"]["integrity"], *coins)
+def with_coins(rows: Mapping[str, Any], line: dict[str, Any], coins: tuple[str, str] | None) -> dict[str, Any]:
+    """``rows`` with SPOT's row as `on_coins` gives it on ``coins`` (`sampled_coins`, and the machine they were flipped
+    on), and ``line`` saying them; ``rows`` as they are for None."""
+    if coins is None or "integrity" not in rows:
+        return dict(rows)
     line |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]}}
-    if rec is not None and (integrity := rec["legs"].get("integrity")) is not None:
-        integrity |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]},
-                      **({"at_is": UNDER_AUDITOR} if coins[0] != "live" else {})}
+    return {**rows, "integrity": on_coins(rows["integrity"], *coins)}
 
 
 def on_coins(row: Mapping[str, Any], coins: str, on: str) -> dict[str, Any]:
     """SPOT's row ``row`` with its ``coins`` and ``coins_on``; on simulated coins its ε and δ only as
-    `UNDER_AUDITOR` says them."""
+    `block_record.UNDER_AUDITOR` says them."""
+    from verity_e2e_demo import block_record as BR
+
     out = {**row, "coins": coins, "coins_on": {SAMPLED_NAME: on}}
     if coins != "live":
         said = {k: out.pop(k) for k in ("epsilon", "delta") if k in out}
-        out |= {"epsilon": None, "delta": None, UNDER_AUDITOR: said}
+        out |= {"epsilon": None, "delta": None, BR.UNDER_AUDITOR: said}
     return out
 
 
@@ -2261,7 +2256,7 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
 
 def error_said(entry: Mapping[str, Any]) -> list[str]:
     """What an accepted subprotocol's block record entry says of its error: each δ of the record's at which its quantity
-    is not established, with the error the run established it at. Where the error leaves terms out (the bandwidth
+    is not established, with the error the run established it at (a missed member's or simulated coins' own why). Where the error leaves terms out (the bandwidth
     audit's ``named_terms``) it is said with them beside it, in the terms' own words (`block_record.error_form`, which
     for PoUB's is its ledger's ``DELTA_FORM`` with the error for δ): there, and in a clause of its own where the
     quantity is established at every δ."""
@@ -2270,7 +2265,7 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
     named = entry.get("named_terms")
     error = BR.error_form(_ratio(Fraction(entry["error"]), BR.DELTAS), named)
     no = [d for d, x in entry["at"].items() if not x["holds"]]
-    if no and "members" in entry["quantity"]:
+    if no and ("members" in entry["quantity"] or "coins" in entry["quantity"]):
         return [f"at δ = {d}: {entry['at'][d]['why']}" for d in no]
     if no:
         return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
@@ -2489,7 +2484,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
            lean: str = "no composite was read", development: bool = False,
-           inference_only: Mapping[str, Any] | None = None,
+           inference_only: Mapping[str, Any] | None = None, coins: tuple[str, str] | None = None,
            ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
@@ -2521,6 +2516,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                              "development": r, **({"answer_from": r["answer_from"]} if "answer_from" in r else {})}
     if development and answer is not None:
         lean, answer = f"{lean}; {DEVELOPMENT_RUN}, so Lean's answer {answer.get('verdict')} is not the record's", None
+    if coins is not None and rows.get("integrity", {}).get("verdict") not in (None, "missing"):
+        rows["integrity"] = {**rows["integrity"], "coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]}}
     for k, r in rows.items():
         if k not in drops and "answer_from" not in r and (r.get("verdict") != "missing" or "development" in r):
             r["answer_from"] = f"{AS_WRITTEN} ({WRITTEN.get(k) or f'its piece files in {PIECES.get(k, WIPE)[1]}/'})"
@@ -2563,7 +2560,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                               "lean": lean}
         line = {"composed": composed, "by": bad, **named, "block_record": None, "reason": report["composed"]["reason"],
                 "why": "block_record carries an accepted subprotocol's certificate only"}
-        report["protocols"] = {**rows, **io}
+        report["protocols"] = {**with_coins(rows, line, coins), **io}
         return report, None, line
     extra = {subprotocols[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
@@ -2576,7 +2573,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
             "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
-    report["protocols"] = {**rows, **io}
+    report["protocols"] = {**with_coins(rows, line, coins), **io}
     return report, rec, line
 
 
@@ -2945,9 +2942,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
-                               answer=answer, lean=lean, development=a.development, inference_only=io)
+                               answer=answer, lean=lean, development=a.development, inference_only=io,
+                               coins=(sampled_coins(audit, a.key_sha512) if a.off_node else "simulated", a.coins_on))
     a.out.mkdir(parents=True, exist_ok=True)
-    with_coins(report, rec, line, (sampled_coins(audit, a.key_sha512), a.coins_on))
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:
         (a.out / "block-record.json").write_text(json.dumps(rec, separators=(",", ":"), sort_keys=True) + "\n")

@@ -777,12 +777,17 @@ def test_spot_alone_composes_to_an_undecided_block_record(tmp_path):
     assert line["elsewhere"] == {} and "unserved" not in line
 
 
+#: what a record composed on the workload's node says of SPOT's accept: its coins simulated, its bound at no δ
+ON_NODE = " (" + "; ".join(f"at δ = {d}: its coins were simulated, flipped on unnamed by no auditor's challenger, so no bound "
+                           "holds" for d in ("1/100", "1/1000000")) + ")"
+
+
 def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challenger(tmp_path):
     """SPOT's coins are live only when the audit's case names the challenger key this machine pins
     (``--key-sha512``): a gate on the prover's machine signs with its own key, so its row says ``coins`` simulated and the
     machine, gives ε at δ only as what the same sample would establish under an auditor's challenger, and so do the
-    ``RECORD`` line and the block record's integrity subprotocol (`with_coins`, which the ``record`` command always applies); told nothing
-    of the coins, it says the same."""
+    ``RECORD`` line and the block record's integrity subprotocol (`with_coins`, which the ``record`` command always
+    applies, `simulated` but off the workload's node), whose bound is null and holds at no δ, as for a missed member."""
     public = bytes(range(80))
     audit = tmp_path / "audit"
     (audit / "window").mkdir(parents=True)
@@ -792,25 +797,29 @@ def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challen
     assert S.sampled_coins(audit, pin) == "live"
     assert {S.sampled_coins(audit, "0" * 128), S.sampled_coins(audit, None), S.sampled_coins(tmp_path, pin)} == {"simulated"}
     assert S.challenger_coins("command:python3 -I local_gate.py /gate").startswith("simulated: ")
-    on = {S.SAMPLED_NAME: "vy-dc-h200"}
-    for coins in ((S.sampled_coins(audit, "0" * 128), "vy-dc-h200"), None):
+    live_report, live_rec, _ = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
+                                        run="r1", coins=("live", "vy-challenger-1"))
+    held = live_rec["legs"]["integrity"]
+    for coins in ((S.sampled_coins(audit, "0" * 128), "vy-dc-h200"), ("simulated", "unnamed")):
         report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
-                                     run="r1")
-        S.with_coins(report, rec, line, *([coins] if coins else []))
+                                     run="r1", coins=coins)
         row, sub = report["protocols"]["integrity"], rec["legs"]["integrity"]
-        assert (row["coins"], line["coins"], sub["coins"]) == ("simulated",) * 3
-        if coins:
-            assert row["coins_on"] == line["coins_on"] == sub["coins_on"] == on
+        assert (row["coins"], line["coins"], sub["quantity"]["coins"]) == ("simulated",) * 3
+        assert row["coins_on"] == line["coins_on"] == sub["quantity"]["coins_on"] == {S.SAMPLED_NAME: coins[1]}
+        assert "its coins were simulated" in line["reason"], line["reason"]
         assert (row["epsilon"], row["delta"]) == (None, None)
-        assert row[S.UNDER_AUDITOR] == {"epsilon": "1/2", "delta": "1/100"} and sub["at_is"] == S.UNDER_AUDITOR
+        assert row[BR.UNDER_AUDITOR] == {"epsilon": "1/2", "delta": "1/100"}
+        assert sub["quantity"]["value"] is None and sub["quantity"][BR.UNDER_AUDITOR] == held["quantity"]["value"]
+        for d, at in sub["at"].items():
+            assert not at["holds"] and at[BR.UNDER_AUDITOR] == {k: v for k, v in held["at"][d].items() if k != "holds"}, at
+        assert rec["composed"]["joint_horizon"]["at"]["1/100"]["not_established"] == ["integrity"]
         jsonschema.Draft202012Validator(SCHEMA).validate(rec)
         assert BR.check(rec) == {}
-    report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
-                                 run="r1")
-    S.with_coins(report, rec, line, ("live", "vy-challenger-1"))
-    row = report["protocols"]["integrity"]
-    assert (row["coins"], row["epsilon"], row["delta"]) == ("live", "1/2", "1/100") and S.UNDER_AUDITOR not in row
-    assert "at_is" not in rec["legs"]["integrity"]
+        assert "value" in BR.check({**rec, "legs": {**rec["legs"], "integrity": {
+            **sub, "quantity": {**sub["quantity"], "value": held["quantity"]["value"]}}}})["subprotocol:integrity"]
+    row = live_report["protocols"]["integrity"]
+    assert (row["coins"], row["epsilon"], row["delta"]) == ("live", "1/2", "1/100") and BR.UNDER_AUDITOR not in row
+    assert held["at"]["1/100"]["holds"] and BR.UNDER_AUDITOR not in held["quantity"] and BR.check(live_rec) == {}
 
 
 def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and_where_its_quantity_is_not_established(
@@ -1108,8 +1117,8 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("pending", [], {}, {})
         assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.SUBPROTOCOLS}
-        late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
-                                         "except with 1/100)",
+        late = {"sampled proofs": ON_NODE, "the network certifier": " (its quantity is not established at δ = 1/1000000: "
+                                                                    "the run established it except with 1/100)",
                 "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})"}
         assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
@@ -1165,7 +1174,7 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
     names = ("PoUS", "the bandwidth audit", "the network certifier", "the wipe")
     assert line["dropped"] == {n: why for n in names} and all(line["verdicts"][n] == "dropped" for n in names)
-    assert line["reason"] == "sampled proofs: accept; PoUW: accept; " + "; ".join(f"{n}: dropped, {why}" for n in names)
+    assert line["reason"] == f"sampled proofs: accept{ON_NODE}; PoUW: accept; " + "; ".join(f"{n}: dropped, {why}" for n in names)
     assert (rec["composed"]["product"], rec["composed"]["dropped"]) == ("remote", ["bandwidth", "certifier", "pous", "wipe"])
     assert rec["composed"]["legs"] == {"integrity": "accept", "pouw": "accept"} and rec["legs"]["wipe"] is None
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
@@ -1562,7 +1571,7 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
 def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_covers(tmp_path, monkeypatch, capsys):
     from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    monkeypatch.setenv(S.NODE_NAME, "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
     answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": R.digest(LEAN_RECORD)}
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
@@ -1582,9 +1591,10 @@ def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_co
     leg = json.loads((tmp_path / "record" / "block-record.json").read_text())["legs"]["integrity"]
     why = ("the sample reached 2 of 3 members, so no bound over the workload's 4 proof blocks holds; at most 1 "
            "incorrect of member m0's 2 proof blocks at δ 1/1000000; at most 0 incorrect of member m2's 1 proof block "
-           "at δ 1/1000000")
+           "at δ 1/1000000; and its coins were simulated, flipped on unnamed by no auditor's challenger, so no bound holds")
     assert leg["at"]["1/1000000"] == {"holds": False, "why": why} and not leg["at"]["1/100"]["holds"], leg
     assert leg["quantity"]["value"] is None and leg["quantity"]["members"] == {"sampled": 2, "registered": 3}, leg
+    assert (leg["quantity"]["coins"], BR.UNDER_AUDITOR in leg["quantity"]) == ("simulated", False), leg
     jsonschema.Draft202012Validator({"$defs": SCHEMA["$defs"], "$ref": "#/$defs/leg"}).validate({**leg, "runs": ["r1"]})
     assert _line["check"] == {} and f"at δ = 1/1000000: {why}" in _line["reason"], _line
 
