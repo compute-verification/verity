@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "benchmarks/census/schemas/workloads.schema.json",
+  "$id": "calibration/census/schemas/workloads.schema.json",
   "title": "Census workloads: served configurations and their template mix (proof blocks per subcircuit template and bound parameters)",
   "type": "array",
   "items": {
@@ -73,7 +73,7 @@
           },
           "datatype": {
             "type": "string",
-            "description": "a benchmarks/census/datatypes.json id"
+            "description": "a calibration/census/datatypes.json id"
           },
           "hardware_class": {
             "type": "string",
@@ -84,7 +84,7 @@
               "string",
               "null"
             ],
-            "description": "its benchmarks/census/hardware.json line, or null when the census has none (L40S)"
+            "description": "its calibration/census/hardware.json line, or null when the census has none (L40S)"
           },
           "input_len": {
             "type": "integer"
@@ -144,7 +144,7 @@
                 "string",
                 "null"
               ],
-              "description": "its benchmarks/census/subcircuits.json template, or null when the census has none yet"
+              "description": "its calibration/census/subcircuits.json template, or null when the census has none yet"
             },
             "subcircuit_parameters": {
               "type": [

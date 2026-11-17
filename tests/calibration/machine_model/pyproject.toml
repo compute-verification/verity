@@ -20,6 +20,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # them), and the Lean sheets `machine-model sheet --lean` prints. θ and the opcode table read the card files through
 # the Site's readers (`verity.device`, which imports the wire, `verity.channel`), which the workspace environment
 # brings.
-inputs = ["benchmarks/ppl/specs", "benchmarks/machine_model/README.md", "security/Definitions/Registration/Sheets",
+inputs = ["benchmarks/ppl/specs", "calibration/machine_model/README.md", "security/Definitions/Registration/Sheets",
           "verity/__init__.py", "verity/errors.py", "calibration/hardware/cards", "verity/device.py",
           "verity/channel.py"]

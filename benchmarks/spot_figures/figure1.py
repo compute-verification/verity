@@ -94,8 +94,8 @@ from verity.protocols.proofs.spot.prover.optimize import (Cell, Grain, ReplayGra
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
-ADVERSARY, DEPLOYMENTS, HARDWARE = ("benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
-                                    "benchmarks/census/hardware.json")
+ADVERSARY, DEPLOYMENTS, HARDWARE = ("calibration/census/adversary.json", "calibration/census/deployments.json",
+                                    "calibration/census/hardware.json")
 SLOWDOWN, SLOWDOWN_HARDWARE = "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml"
 WORLD, DATACENTER, CENSUS_WORLD = "world-h200", "dc-12500-machines-600s", "world-inference-2027"
 #: the H200's dense FP8 peak is the H100 SXM5's (one die, one clock)
