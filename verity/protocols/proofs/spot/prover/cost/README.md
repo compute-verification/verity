@@ -3,7 +3,7 @@
 SPOT proves only a random sample of a served workload's proof blocks. How the workload is cut into proof blocks, and how
 many are sampled, decides both what an audit establishes and what it costs to commit, replay and prove. This directory is SPOT's cost model for one served workload under Flock. Each script plans one workload's sample
 with the planner beside it (`../optimize.py`, `../candidates.py`, `../costfit.py`), from measured inputs under
-`benchmarks/sampling_plan/`, each with its source and status, measured or assumed.
+`calibration/sampling_plan/`, each with its source and status, measured or assumed.
 
 A plan gives the cost model fitted from proving measurements, the cuts the candidate generator finds, the frontier of ε
 (at δ = 2^-40, against the workload's MACs) over the verification overhead B, the break-even granularity, and how the

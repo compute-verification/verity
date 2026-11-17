@@ -6,7 +6,7 @@
 # their kernels (verity.circuits.kernels) lazily. The schemes' end-to-end tests and the epoch-coin vectors run the clear audit
 # and the work sampling design, a reference tool's.
 # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
-inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "hardware/cards", "security", "verity/protocols/resource_accounting/compute/pouw/verifier/README.md",
+inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "calibration/hardware/cards", "security", "verity/protocols/resource_accounting/compute/pouw/verifier/README.md",
           "verity/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json",
           "verity/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k32.json",
           "tests/verity/circuits/ops/fixtures/golden/ada_e4m3_m16n8k32.json", "verity/circuits",
