@@ -19,8 +19,10 @@ import pathlib
 
 from verity.device import load_card, number
 
+CARD_FILES = pathlib.Path(__file__).resolve().parents[3] / "hardware/cards"
+
 CERT_SERVING, CERT_FILLER = 0.225, 0.99
-CARD = load_card("rtx-pro-6000-server")  # the GPU psched.sh's runs are on
+CARD = load_card("rtx-pro-6000-server", directory=CARD_FILES)  # the GPU psched.sh's runs are on
 SMS, PER_SM = int(number(CARD["sm"]["count"])), int(number(CARD["rate"]["tensor"]))
 H, LAYERS, NQ, NKV, HD, INTER, VOCAB = 4096, 32, 32, 8, 128, 14336, 128256
 LIN_TOK = LAYERS * (H * (NQ + 2 * NKV) * HD + H * H + H * 2 * INTER + INTER * H)

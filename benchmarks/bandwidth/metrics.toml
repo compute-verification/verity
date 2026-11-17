@@ -1,0 +1,12 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "memory-accounting/host-write-rate"
+title = "Host memory write rate"
+owner = "memory-accounting"
+unit = "GB a second"
+axis = "The fastest a host's cores wrote its memory in one run, with no wrong byte in what was checked, each point naming its processor and core count."
+better = "higher"
+command = "research run --on auto --cpus 48 --mem-gb 64 --project verity --cwd source -- bash benchmarks/bandwidth/run_write_host.sh"
+every = "7d"

@@ -38,15 +38,15 @@ more often than not never makes it small.
 
 | Stamp | What it is | What moves it besides the network attester |
 | --- | --- | --- |
-| `process` | the observer's monotonic clock once the read that holds the interval's first byte returned | the network, the observer's kernel, and the observer's own scheduling and wake-up |
+| `process` | the observer's clock, the network attester's (`CLOCK_MONOTONIC_RAW`), once the read that holds the interval's first byte returned | the network, the observer's kernel, and the observer's own scheduling and wake-up |
 | `kernel` | the kernel's receive stamp on that read (`SO_TIMESTAMPNS`, read from `recvmsg`'s ancillary data) | the network and the observer's kernel up to where it takes a segment in |
 
 On a TCP stream the kernel returns, with each read, the stamp of the last segment the read took bytes from: its wall
 clock as its network stack took the segment in, before any socket or process saw it. Over loopback or a veth pair
 that is as the sender's write reached the device. The observer reads one interval's bytes at most a read, so a read's
-stamp is of that interval's bytes, and it moves the stamp to its monotonic clock by the two clocks' difference as it
-started. Two things are told rather than hidden: a scored interval whose read carried no stamp, or a wall clock that
-was set during the case, makes the case no measurement; and segments the kernel merged while they waited to be read
+stamp is of that interval's bytes, and it moves the stamp to its own clock by the two clocks' difference as it
+started and as it ended. Two things are told rather than hidden: a scored interval whose read carried no stamp, or a
+wall clock that was set during the case, makes the case no measurement; and segments the kernel merged while they waited to be read
 carry the last one's stamp, so an interval read that late has a later interval's, and the row counts them
 (`merged`). A host whose kernel gives no stamp leaves the `kernel` column empty and says why (a case's `unstamped`).
 A client can stamp as the kernel does, so the number is over both columns.
@@ -111,9 +111,11 @@ at every τ, since the target grows with τ as the intervals a second fall.
 - **A lower bound, of the attacks built here.** `value` is what these servers move to these observers under a
   one-threshold decoder. Nothing here bounds the channel from above: a reading of 0 says these attacks carry nothing
   the run could see, at its `ceiling`.
-- **On one host.** `run`'s three parties share a host, its cores and its monotonic clock, over loopback. A network attester
+- **On one host.** `run`'s three parties share a host, its cores and its raw monotonic clock, over loopback. A network attester
   is the auditor's hardware on a machine the developer doesn't control, so what the server does to the network attester's
   host through shared cores is more than a deployed server can do, and a loopback path is quieter than a network.
+  There the network attester's own release times (a row's `sender`, beside the observer's `process` and `kernel`
+  stamps) carry the bit through how long its write takes, while each release starts on time.
 - **`serve` and `observe`** put the observer on another host (below). The server still shares the network attester's host
   and clock.
 - **One connection.** A case's observer holds one connection. A receiver holding several of a link's sees each

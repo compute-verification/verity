@@ -1183,7 +1183,7 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
                  registrar: Any, entries: Sequence[Mapping[str, Any]] = (),
                  outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Core's ``verity/registration/v1`` record of the period, made by ``registrar`` (core's ``one_stage.docket``: its
-    ``record``, ``KINDS``): its program, query and law, the scheme, every port's root, leaves and window domain, the leaf layer,
+    ``record``, ``KINDS``): its program, query and sampling design, the scheme, every port's root, leaves and window domain, the leaf layer,
     and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
     the prover's last record; None for its first).  ``entries``: those of the values its program takes as parameters
     (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``outputs``: the registered values the period

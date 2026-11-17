@@ -11,7 +11,7 @@ appended  a block `kv_append` completes, once its step's forward and frees are d
           taken it back by then, a step's as one append by slot (``on_append``), which the session sends and the device
           encodes in place once its coin arrives (`encoded`); and a block re-keyed once its j is as old as the lifetime cap
 written   an appended block, in the line open when its append lands (`Lines.land`, in append order: its encode, the step
-          before the first whose reads see it; deferred residency, poub's ``PROTOCOL.md`` §4), uncredited
+          before the first whose reads see it; deferred residency, ``audit.Params``' ``deferred``), uncredited
           until then.  An append that would write a slot its line writes already waits a line, with every append after it
 freed     a slot's block, registered or written, in the line its caller frees it (`Lines.free`), and a written block in
           the line of its last structural reader (`Append.lasts`), or the line after its write if that is no earlier: one

@@ -62,7 +62,9 @@ research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sy
   [--tree PATH] [--staging fast|library] [--keep]` writes `OUT/unit_lowering.json`. The record holds `unit`, `k`,
   `tile`, `form`, `staging`, `peak_gib`, `wall_min`, `bytes`, `ands`, `k_log`, `sha512` and `commit`, plus each
   section's rows. It prints `UNIT-LOWERING unit=.. k=.. tile=RxC form=.. peak_gib=.. wall_min=.. ands=.. bytes=..
-  k_log=.. sha512=<16 hex>`. The circuit file is deleted once read, unless `--keep` leaves it under `--scratch`.
+  k_log=.. sha512=<16 hex>`, then the record as one line of JSON. The lane run above, from this tree at the default form
+  and staging, also writes its peak GiB as `metrics.toml`'s number, measured. The circuit file is deleted once read, unless
+  `--keep` leaves it under `--scratch`.
 - A tile is R = 4 i rows by C = 8 j columns (i j lanes, `h1tile.Layout.lanes`), at a K that is a multiple of 32 from 64. The
   1 × 1 and 4 × 4 tiles fail in `h1tile._xor`. A lane or combine also needs R to be a multiple of 16, and the combine needs
   K from 384.

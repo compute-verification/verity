@@ -1,4 +1,4 @@
-"""The ingress side of the step-indexed scan: one proof block a certifier bucket t, `IngressScanBucket`, which reads
+"""The ingress side of the step-indexed scan: one proof block a network attester bucket t, `IngressScanBucket`, which reads
 bucket t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's
 egress view, its outputs beside an ok bit (the generator form); the scan's start, `IngressScanStart`, gives the first
 bucket its S_{−1}. Every switch is computed from the state and the rows; none is witness. Nothing here is in a

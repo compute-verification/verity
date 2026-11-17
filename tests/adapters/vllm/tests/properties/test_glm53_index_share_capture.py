@@ -3,8 +3,6 @@ end with the GPU stood in for by the twin's words, through the spawned worker po
 the exit status, so a slip between the comparisons and the record shows here and not in the card's lease."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 import sys
 import types
