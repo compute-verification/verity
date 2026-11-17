@@ -1257,6 +1257,7 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
   c=$(io_class)
   [ -n "$c" ] || { say "INFERENCE-ONLY POLICY: none, since CLASSES names no class but record"; return 0; }
   [ -z "$PEARLPLUS_TIE" ] || phi=(--serve "$D/pearlplus/serve-phi.json" --pearl-tables "${PEARLPLUS_ARM#pouw:}")
+  [ ! -x "$IO_LEAN" ] || phi+=(--lean "$IO_LEAN")
   out=$(CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py policy --class "$c" --model "$REPO" \
     --revision "$REV" --lease-min "${LEASE_MIN:-60}" --tree "$(tree_sha)" "${phi[@]}" --out "$IO_POLICY" \
     2> "$D/inference-only-policy.err")

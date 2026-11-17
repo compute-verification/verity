@@ -3,7 +3,7 @@ by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/workload_classification/
 registered before it served.
 
     inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U]
-        [--serve PHI] [--pearl-tables SCHEME] --out POLICY
+        [--serve PHI] [--pearl-tables SCHEME] [--lean INFERENCE_ONLY_CHECK] --out POLICY
     inference_only.py verdict --policy POLICY --serve-run D --circuit RECORD --registration REGISTRATION
         [--pins WEIGHTS_REGISTRATION] --out VERDICT --private FULL [--lean INFERENCE_ONLY_CHECK [--lean-timeout S]] [--retroactive WHY]
 
@@ -15,15 +15,17 @@ unless ``--serve`` states φ, and fixes (c, k, n) with every input to them and i
   serve-phi`'s statement of the ``serve.json`` a serve will write, read on its card under the lease before it serves, as
   a checkpoint served in BF16 needs; with ``--pearl-tables`` cut at its linears at that PoUW scheme, Pearl+'s
   (`window_class.PearlTables`), as `prove_path.py window-circuit` records a window served under Pearl+), read from its
-  description (`class_doc`), whose one block Definition is a slot's session over every position (`block_counts.session`);
-- c, that Definition's Boolean gates by the gate table (`table_of`), and k, its fresh-input bits (`block_counts.fresh`) with
-  θ every weight parameter the circuit registers held (`weights_of_record.PARAM`), B's k (`inference_blocks.budgets`): what
-  the weights registration pins before the first request, so a run whose pins hold fewer weights reads more fresh bits
-  than k and is refused. B's own c is the templates' gates, not the table's Boolean gates the count rule reads;
-- k by kind (``k_by_kind``, `KINDS`), from the same count: ``linears``, the bits of the outputs of the linears a PoUW cut
-  leaves outside the circuit (Pearl+'s y), and ``scan_state``, the bits of the scan state row. A kind's bits are what
-  `block_counts.fresh` drops by when its registered parameters are held too (`kinds_of`), and the policy is written
-  only where the kinds sum to k;
+  description (`class_doc`), as its wired Program grouped by slot (`wired_program`), whose blocks are its slot
+  Definitions;
+- c and k, the most Boolean gates by the gate table (`table_of`) and fresh-input bits over the slot Definitions, by the
+  count's own rule (``--lean``'s `inference-only-check --count`, `wired_row`), with θ every weight parameter the circuit
+  registers held (`weights_of_record.PARAM`): what the weights registration pins before the first request, so a run
+  whose pins hold fewer weights reads more fresh bits than k and is refused. ``c_k_of`` says whether the slot
+  Definitions' rows (``session.rows``) differ;
+- k by kind (``k_by_kind``, `WIRED_KINDS`), from the same count: ``linears``, the bits of the outputs of the linears a
+  PoUW cut leaves outside the circuit (Pearl+'s y), ``scan_state``, the bits of the scan state row, and ``openings``,
+  the rows a pinned table's reads and openings fill. A kind's bits are what the worst slot's fresh bits drop by when its
+  root parameters are held too, and the policy is written only where the kinds sum to k;
 - n, the H200's capacity in sessions over the serve's registered span at the declared utilization (`capacity`):
   ⌈u·θ·T / W⌉ rounded up to the public grid (`partition_v2.grid`), θ the card's dense int8 MAC rate at its tensor clock
   (`served_shares.RHO`), T the GPU lease's limit (``--lease-min``, `served_verdicts.sh`'s LEASE_MIN, which no serve
@@ -50,16 +52,16 @@ once the serve had begun (unless ``--retroactive`` says why it's read anyway), a
 unpriced primitive, a closed window with no seal, a sealed window the class doesn't take, no ``--lean``, or a Lean
 verifier that gives no verdict, is not started on a host that gives it no memory limit, or counts other gates a block
 than the table does.
-The verdict is the Lean verifier's: `inference-only-check --count` on one window's session Program (`lean_count`),
-under the memory limit `served_cases.limits` gives a check on this host, with ``--detail`` where the binary takes it,
-as its usage says (`takes_detail`), the Program's parameters whose every row is a registered read of a pinned parameter
-bound at registration and named in θ (`held_inputs`, `count_instance`). Which parameters those are is the record's
-reading in Python: the Lean verifier's call holds none of them to its pinned root. It
-decides each block's gates against c and fresh bits against k; n is judged on the exact count, the sealed windows' blocks.
-The record's count (``record_count``: `block_counts.fresh` and the rows the record's wires and the pinned tables'
-openings fill) is carried beside it and never decides it. The session Program carries no wires,
-so the Lean verifier counts a wired row and a table opening as fresh where the record's count does not. Its whole
-verdict counts that one window's blocks, so the public verdict takes only its gates a block, fresh bits, ``complies``
+The verdict is the Lean verifier's: `inference-only-check --count` on one window's wired Program (`wired_program`:
+the record's units and wires grouped one `WiredSlot_v1` call a slot, its blocks the slot Definitions, so a row a wire
+inside a slot fills is computed in its block and only a wire between slots, a pinned table's opening or an unheld
+value is fresh), under the memory limit `served_cases.limits` gives a check on this host, with ``--detail`` where the
+binary takes it, as its usage says (`takes_detail`), the root parameters held at the pins and roots bound at
+registration and named in θ (`wired_blocks`, `wired_instance`). A class whose record doesn't build wired is refused
+by name. It decides each slot Definition's gates against c and fresh bits against k; n is judged on the exact count,
+the sealed windows' blocks. The record's count (``record_count``: `block_counts.fresh` and the rows the record's wires
+and the pinned tables' openings fill) is carried beside it and never decides it. Its whole verdict counts that one
+window's blocks, so the public verdict takes only its gates a block, fresh bits, ``complies``
 and the rule that failed, or its refusal's ``error`` and ``message`` (`lean_said`), and the private one the whole call.
 
 ``--out`` is the public verdict: the judgment against (c, k, n) and no count, of blocks or of windows, in any form. It
@@ -102,10 +104,8 @@ VERDICT_FORMAT = "verity-bench/inference-only-verdict/v5"
 COUNTS = "none published: n judged on the blocks' exact count, which only the serve dir's private verdict holds"
 RECORD_COUNT = ("the record's count: block_counts on the record's wires and declarations, beside the Lean verifier's "
                 "verdict, which it does not decide and which does not confirm it")
-THETA = ("the inputs the session Program names registered and in θ, chosen by the record's reading (held_inputs) and "
+THETA = ("the wired Program's root parameters held at the verifier's pins and the window's roots, registered and in θ, "
          "not held to a pinned root by the Lean verifier's call")
-WIRED = ("the Lean verifier counts the rows the record's wires fill and the pinned tables' openings as fresh, because "
-         "the session Program it is given carries no wires")
 INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
 INFERENCE_ONLY_REFERENCE = INFERENCE_ONLY_PACKAGE / "scripts" / "inference_only_reference.py"
 #: `prove_path.py window-circuit`'s default ``--cap``: the units a stated member holds in the class's record
@@ -126,6 +126,10 @@ BIT_AT = re.compile(r"BitAtx([1-9][0-9]*)_v1")
 #: the kinds of a block's fresh bits (``k_by_kind``): ``linears``, the outputs of the linears a PoUW cut leaves outside
 #: the circuit, and ``scan_state``, the scan state row
 KINDS = ("linears", "scan_state")
+#: the kinds of a block's fresh bits on the wired Program (`wired_row`): `KINDS` and ``openings``, the rows a pinned
+#: table's reads and openings fill, which no registered read binds
+WIRED_KINDS = (*KINDS, "openings")
+WIRING = re.compile(r"(BitOf[1-9][0-9]*x(0|[1-9][0-9]*)|WordOf[1-9][0-9]*)_v1")
 
 
 class Undecided(Exception):
@@ -176,6 +180,8 @@ def run_gates(gates: Sequence[tuple[str, int, int]], width: int, word: int, i: i
 
 def price(key: str) -> dict[str, Any] | None:
     """A primitive's gates by `PRICES`' rule, where it has one: ``{gates, by}``."""
+    if WIRING.fullmatch(key):
+        return {"gates": 0, "by": "a rewiring (population.bit_of, population.word_of): each output bit is an input bit"}
     m = BIT_AT.fullmatch(key)
     if m is None or not bit_at_makes(int(m[1])):
         return None
@@ -183,7 +189,7 @@ def price(key: str) -> dict[str, Any] | None:
             "by": f"bit_at_gates({m[1]}): an explicit circuit of it, no Boolean version circuit-check checks"}
 
 
-PRICES = ("BitAtx{W}_v1", price)
+PRICES = ("BitAtx{W}_v1, BitOf{W}x{I}_v1, WordOf{W}_v1", price)
 
 
 def table_of(fns: Sequence[Any]) -> tuple[dict[str, int], dict[str, dict[str, Any]], list[str]]:
@@ -271,48 +277,6 @@ def kind_of(param: str) -> str | None:
     return "linears" if param.split("/", 1)[0] == PWR.y_value(0, 0).split("/", 1)[0] else None
 
 
-def kinds_of(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roots: Mapping[str, str] | None,
-             fresh: int) -> dict[str, int]:
-    """A block's ``fresh`` bits at ``pins`` and ``roots`` by kind (`KINDS`): what `block_counts.fresh` drops by when the
-    record's registered parameters of that kind are held too, each at a root of its own (`kind_of`)."""
-    from verity.commitments.periods import interface as IF
-    from verity_vllm.program.predict import block_counts as BC
-
-    reg = IF.declarations(doc)[2]
-    pins, roots = dict(pins) if isinstance(pins, Mapping) else {}, dict(roots or {})
-    out = {}
-    for kind in KINDS:
-        mine = {p: "00" for p in (reg.params if reg else ()) if kind_of(p) == kind}
-        out[kind] = fresh - BC.fresh(doc, m, pins | mine, roots | mine) if mine else 0
-    return out
-
-
-def session_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: Mapping[str, str] | None) -> dict[str, Any]:
-    """A circuit record's block class: its session Definition's digest and key, m slots and positions, gates by
-    `table_of`'s table, fresh bits at ``pins`` and ``roots`` (`block_counts`) and those by kind (`kinds_of`), and the
-    table."""
-    from verity.circuits import codec, partition_v2 as PV2
-    from verity_vllm.program.predict import block_counts as BC
-
-    try:
-        fn, m, positions = BC.session(doc)
-    except (KeyError, TypeError, ValueError) as e:
-        raise Undecided(f"the record's inference blocks: {e}") from e
-    table, priced, unpriced = table_of([fn])
-    if unpriced:
-        raise Undecided(f"gate-table: no gates for {', '.join(unpriced)}, which the block computes")
-    g, miss = BC.gates(fn, table, {})
-    if miss:
-        raise Undecided(f"gate-table: no gates for {', '.join(sorted(miss))}, which the block computes")
-    try:
-        k = BC.fresh(doc, m, pins, roots)
-        by_kind = kinds_of(doc, m, pins, roots, k)
-    except (KeyError, TypeError, ValueError) as e:
-        raise Undecided(f"the record's fresh bits: {e}") from e
-    return {"definition": PV2.id_digest(fn), "key": codec.descriptor_id(fn), "slots": m, "positions": positions,
-            "gates": g, "fresh": k, "k_by_kind": by_kind, "table": table, "priced": priced}
-
-
 def session_work(cls: Any, model: str) -> dict[str, int]:
     """One session's declared MACs at the class's fixed load, one slot's rows (`served_shares.step_macs`), and the
     θ-MACs they cost: the linears once, attention and the LM head twice (`served_shares.ideal_s`)."""
@@ -351,25 +315,29 @@ def window_class(arg: str) -> Any:
 
 def policy(cls_arg: str, model: str, revision: str, lease_min: int, utilization: Fraction, source: str,
            written: str, tree: str | None, stated: Mapping[str, Any] | None = None,
-           scheme: str | None = None) -> dict[str, Any]:
+           scheme: str | None = None, lean: Path | None = None) -> dict[str, Any]:
     """The registered policy (module docstring), from the run's settings alone: φ ``stated`` (`stated_serve`), else
-    `serve_facts`', and its circuit cut at a PoUW ``scheme``'s linears."""
+    `serve_facts`', and its circuit cut at a PoUW ``scheme``'s linears, counted by the Lean verifier ``lean``."""
     cls = window_class(cls_arg)
     serve = serve_facts(model, revision) if stated is None else stated_serve(stated, model, revision)
     doc, params = class_doc(serve, cls, scheme)
     pins = weight_pins(params)
-    row = session_row(doc, pins, pins)
+    row = wired_row(doc, pins, pins, lean)
     if sum(row["k_by_kind"].values()) != row["fresh"]:
         raise ValueError(f"the class's {row['fresh']} fresh bits a block are not its kinds' {row['k_by_kind']}: a fresh "
-                         f"bit of no kind of {', '.join(KINDS)} has no k_by_kind to state it")
+                         f"bit of no kind of {', '.join(WIRED_KINDS)} has no k_by_kind to state it")
+    differ = len({(g, x) for _, g, x in row["rows"]}) > 1
     work = session_work(cls, model)
     cap = capacity(work["theta_macs"], lease_min, utilization)
     return {"format": POLICY_FORMAT, "written_utc": written, "tree": tree,
             "class": {"slots": cls.slots, "prompt": cls.prompt, "outputs": cls.outputs, "positions": cls.positions},
             "serve": serve, "pearl_tables": scheme,
-            "session": {k: row[k] for k in ("definition", "key", "slots", "positions")},
+            "session": {k: row[k] for k in ("definition", "key", "slots", "positions", "rows")},
             "c": row["gates"], "k": row["fresh"], "k_by_kind": row["k_by_kind"], "n": cap["n"],
-            "theta": f"every weight parameter the class's circuit registers ({len(pins)}), held",
+            "c_k_of": ("the most over the slot Definitions' rows (session.rows), which differ" if differ else
+                       "every slot Definition's row (session.rows), which are the same"),
+            "theta": f"every weight parameter the class's circuit registers ({len(pins)}), held "
+                     f"({len(row['held'])} of them the wired Program's root parameters)",
             "table": {"sha512": digest(row["table"]), "entries": len(row["table"]), "priced": row["priced"]},
             "n_inputs": {**cap, "utilization_source": source, "span_source": SPAN_SOURCE,
                          "work": {**work, "source": WORK_SOURCE}}}
@@ -455,15 +423,135 @@ def record_count(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None,
     return {key: v // m if v % m == 0 else v / m for key, v in bits.items()}
 
 
-def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int,
-                   held: Sequence[str] = ()) -> dict[str, Any]:
-    """`InferenceOnlyCheck.Count`'s instance on one window: its session Definition activated at its m slots (the session
-    Program, `population.population`), its parameters ``held`` bound at registration and named in θ, its block that
-    Definition."""
+def wired_program(doc: Mapping[str, Any]) -> tuple[Any, list[str]]:
+    """The record's circuit as the count reads it: its units and wires grouped one `WiredSlot_v1` call a slot
+    (`population.wired_population_program` with ``slots``), and the slot Definitions' keys, its blocks. `Undecided`, by
+    name, where the record doesn't build wired, so a class never falls back to a Program without its wires."""
+    from verity.circuits import codec
+    from verity.circuits.population import wired_population_program
+    from verity.circuits.program import is_input
     from verity_vllm.program.predict import block_counts as BC
 
-    fn, m, _ = BC.session(doc)
-    return session_instance(fn, m, table, c, k, n, held)
+    try:
+        templates = [(BC.resolve(t), int(n)) for t, n in doc["templates"]]
+        program, _ = wired_population_program(templates, doc, slots=True)
+    except (KeyError, TypeError, ValueError) as e:
+        raise Undecided(f"the class's circuit doesn't build wired (population.wired_population_program with slots), so "
+                        f"the count has no Program whose blocks hold their wires: {type(e).__name__}: {e}") from e
+    keys = [codec.descriptor_id(nd.fn) for nd in program.fn.body.nodes if not is_input(nd.fn)]
+    if not keys or any(not key.startswith("WiredSlot_v1{") for key in keys):
+        raise Undecided("the wired Program's root calls something other than its slots' WiredSlot_v1 Definitions")
+    return program.fn, list(dict.fromkeys(keys))
+
+
+def wired_instance(fn: Any, slots: Sequence[str], table: Mapping[str, int], c: int, k: int, n: int,
+                   held: Sequence[str] = ()) -> dict[str, Any]:
+    """`InferenceOnlyCheck.Count`'s instance on a wired Program (`wired_program`), its blocks the slot Definitions
+    ``slots``, so a row a wire inside a slot fills is computed in its block and only a wire between slots is fresh;
+    ``held``, root parameters, bound at registration and named in θ."""
+    from verity.circuits import codec
+    from verity.circuits.program import Program
+
+    program = Program(fn, registered=tuple(held), theta=tuple(held))
+    return {"program": codec.canonical_json(codec.encode_program(program)).decode(),
+            "theta": sorted(program.annotations.get("theta", [])), "blocks": list(slots), "table": dict(table),
+            "c": c, "k": k, "n": n}
+
+
+def wired_rows(fn: Any, slots: Sequence[str], table: Mapping[str, int], held: Sequence[str] = (),
+               lean: Path | None = None) -> dict[str, tuple[int, int, int]]:
+    """Each slot Definition's gates, fresh bits and blocks by the count's own rule: `inference-only-check --count` where
+    ``lean`` is given (`lean_count`), else its reference (`inference_only_reference.evaluate_count`, which the Lean's
+    difftest holds to `InferenceOnlyCheck.Count`), too slow for a served class."""
+    inst = wired_instance(fn, slots, table, 0, 0, 0, held)
+    if lean is None:
+        got = _reference().evaluate_count(inst)
+    else:
+        with tempfile.TemporaryDirectory() as scratch:
+            call = lean_count(lean, inst, Path(scratch))
+        if "out" not in call:
+            raise Undecided(f"the Lean verifier gave no count of the wired Program: {call['error']}")
+        got = call["out"]
+    if "blocks" not in got:
+        raise Undecided(f"the count's rule refuses the wired Program: {got.get('error')}: {got.get('message')}")
+    return {key: (g, x, m) for key, g, x, m in got["blocks"]}
+
+
+def opened(doc: Mapping[str, Any]) -> set[str]:
+    """The root parameters the wired Program names for ``doc``'s table reads (``<param>/<root or domain>``) and openings'
+    ports (``<table>/<port>``)."""
+    reg = doc.get("registered") or {}
+    tables = {t["name"]: t["param"] for t in reg.get("tables", ())}
+    return ({f"{tables[r['table']]}/{r['of']}" for r in reg.get("roots", ())}
+            | {f"{o['table']}/{p}" for o in reg.get("openings", ()) for p in o["ports"]})
+
+
+def wired_kind(param: str, doc: Mapping[str, Any]) -> str | None:
+    """A wired Program's root parameter's kind (`WIRED_KINDS`): `kind_of`'s, else ``openings`` for one `opened` names."""
+    return kind_of(param) or ("openings" if param in opened(doc) else None)
+
+
+def wired_blocks(doc: Mapping[str, Any], pins: Mapping[str, str] | None,
+                 roots: Mapping[str, str] | None) -> dict[str, Any]:
+    """A circuit record's blocks as the count reads them (`wired_program`), without counting their fresh bits: each slot
+    Definition's gates by `table_of`'s table (``rows``, ``[key, gates]``) and calls a window (``calls``), the most gates
+    (``gates``), the blocks a window (``slots``), θ the root parameters held at ``pins`` and ``roots`` (``held``) and the
+    table."""
+    from verity.circuits import codec, partition_v2 as PV2
+    from verity.circuits.program import is_input
+    from verity.commitments.periods import interface as IF
+    from verity_vllm.program.predict import block_counts as BC
+
+    fn, slots = wired_program(doc)
+    table, priced, unpriced = table_of([fn])
+    if unpriced:
+        raise Undecided(f"gate-table: no gates for {', '.join(unpriced)}, which the block computes")
+    root = [name for name, _ in fn.signature()[0]]
+    try:
+        held = sorted(IF.held_params(pins, roots) & set(root))
+    except ValueError as e:
+        raise Undecided(f"the record's fresh bits: {e}") from e
+    nodes = [nd for nd in fn.body.nodes if not is_input(nd.fn)]
+    calls: Counter = Counter()
+    for nd in nodes:
+        calls[codec.descriptor_id(nd.fn)] += nd.n if nd.form == "batch" else 1
+    memo: dict = {}
+    gates = {codec.descriptor_id(nd.fn): BC.gates(nd.fn, table, memo)[0] for nd in nodes}
+    units = {t: int(n) for t, n in doc["templates"]}
+    return {"definition": PV2.id_digest(fn), "key": codec.descriptor_id(fn), "rows": [[s, gates[s]] for s in slots],
+            "calls": {s: calls[s] for s in slots}, "slots": sum(calls.values()), "gates": max(gates.values()),
+            "positions": IF.Blocks.of(doc["blocks"], units, doc["partition"]).steps, "held": held, "table": table,
+            "priced": priced, "fn": fn, "blocks": slots, "root": root}
+
+
+def wired_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: Mapping[str, str] | None,
+              lean: Path | None = None) -> dict[str, Any]:
+    """`wired_blocks` with each slot Definition's fresh bits by the count's rule (`wired_rows`): ``rows`` ``[key, gates,
+    fresh]``, the most fresh bits (``fresh``) and those by kind (``k_by_kind``, `WIRED_KINDS`: what the worst slot's
+    fresh bits drop by when that kind's root parameters are held too). Refused where the count's gates are not the
+    table's."""
+    w = wired_blocks(doc, pins, roots)
+    fn, slots, table, held = w["fn"], w["blocks"], w["table"], w["held"]
+    rows = wired_rows(fn, slots, table, held, lean)
+    if any(rows[s][0] != g for s, g in w["rows"]):
+        raise Undecided(f"the count's gates a slot Definition {[rows[s][0] for s in slots]} are not the table's "
+                        f"{[g for _, g in w['rows']]}")
+    worst = max(slots, key=lambda s: rows[s][1])
+    k = rows[worst][1]
+    kinds = {p: wired_kind(p, doc) for p in w["root"] if p not in held}
+    by_kind = {}
+    for kind in WIRED_KINDS:
+        mine = [p for p, x in kinds.items() if x == kind]
+        by_kind[kind] = k - wired_rows(fn, slots, table, (*held, *mine), lean)[worst][1] if mine else 0
+    return {**w, "rows": [[s, *rows[s][:2]] for s in slots], "fresh": k, "k_by_kind": by_kind}
+
+
+def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int,
+                   held: Sequence[str] = ()) -> dict[str, Any]:
+    """`InferenceOnlyCheck.Count`'s instance on one window: its wired Program grouped by slot (`wired_program`), its
+    root parameters ``held`` bound at registration and named in θ, its blocks the slot Definitions."""
+    fn, slots = wired_program(doc)
+    return wired_instance(fn, slots, table, c, k, n, held)
 
 
 def session_instance(fn: Any, m: int, table: Mapping[str, int], c: int, k: int, n: int,
@@ -524,21 +612,24 @@ def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int
     return {"flags": flags, "out": out, "memory": within.memory}
 
 
-def lean_said(call: Mapping[str, Any], gates: int) -> dict[str, Any]:
+def lean_said(call: Mapping[str, Any], gates: Mapping[str, int]) -> dict[str, Any]:
     """What the public verdict takes of `lean_count`'s ``call``: why it gave no verdict, its refusal (``error`` and
-    ``message``), or its gates and fresh bits a block, whether the gates are ``gates``, ``complies`` and the rule that
-    failed. Never its rows' counts or total, nor any other text it printed."""
+    ``message``), or each slot Definition's gates and fresh bits (``rows``) and the most of each, whether each one's
+    gates are ``gates``' (by key), ``complies`` and the rule that failed. Never its rows' counts or total, nor any other
+    text it printed."""
     out = call.get("out")
     if out is None:
         return {"error": call["error"]}
     if "error" in out:
         return {key: out[key] for key in ("error", "message") if key in out}
     rows = out.get("blocks")
-    if not (isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], list) and len(rows[0]) == 4):
-        return {"error": f"inference-only-verifier {' '.join(call['flags'])} printed no row of the block"}
-    _, g, x, _ = rows[0]
+    if not (isinstance(rows, list) and all(isinstance(r, list) and len(r) == 4 for r in rows)
+            and sorted(r[0] for r in rows) == sorted(gates)):
+        return {"error": f"inference-only-verifier {' '.join(call['flags'])} printed no row of each slot Definition"}
     failure = out.get("failure")
-    return {"gates": g, "agrees_on_gates": g == gates, "fresh": x, "complies": out.get("complies") is True,
+    return {"rows": [[key, g, x] for key, g, x, _ in rows], "gates": max(r[1] for r in rows),
+            "fresh": max(r[2] for r in rows), "agrees_on_gates": all(gates[key] == g for key, g, _, _ in rows),
+            "complies": out.get("complies") is True,
             "failed": failure[1] if isinstance(failure, list) and len(failure) == 2 else None}
 
 
@@ -580,17 +671,15 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
             base["retroactive"] = retroactive
         if doc is None:
             raise Undecided("no circuit record of the run's window at the policy's class")
-        row = session_row(doc, pins, roots)
+        row = wired_blocks(doc, pins, roots)
         if "k_by_kind" in pol:
             split = pol["k_by_kind"]
-            if not (isinstance(split, Mapping) and set(split) <= set(KINDS)
+            if not (isinstance(split, Mapping) and set(split) <= set(WIRED_KINDS)
                     and all(type(bits) is int for bits in split.values())):
-                raise Undecided(f"the policy's k_by_kind {split!r} is not an object of {', '.join(KINDS)}, each an "
-                                "integer of bits")
+                raise Undecided(f"the policy's k_by_kind {split!r} is not an object of {', '.join(WIRED_KINDS)}, each "
+                                "an integer of bits")
             if sum(split.values()) != k:
                 raise Undecided(f"the policy's k_by_kind {split} doesn't sum to its k = {k}")
-            if dict(split) != row["k_by_kind"]:
-                raise Undecided(f"the policy's k_by_kind {dict(split)} is not the run's circuit's {row['k_by_kind']}")
         base["table"] = {"sha512": digest(row["table"]), "entries": len(row["table"]), "priced": row["priced"]}
         base["registered_session"] = row["definition"] == pol["session"]["definition"]
         sealed, out = class_windows(serve_dir, pol["class"])
@@ -601,39 +690,36 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
         if not sealed:
             raise Undecided("the serve sealed nothing")
         blocks = sealed * row["slots"]
-        rows = [[row["definition"], row["gates"], row["fresh"], blocks]]
-        got = judge(rows, c, k, n)
         counted = record_count(doc, row["slots"], pins, roots)
-        private |= {"blocks": rows, "total": got["total"]}
+        private["total"] = blocks
         base |= {"counts": COUNTS, "positions": row["positions"], "slots": row["slots"],
                  "record_count": {**counted, "by": RECORD_COUNT}}
         if lean is None:
             raise Undecided("no Lean verifier was given (--lean), and the verdict is the Lean verifier's")
-        held = held_inputs(doc, pins, roots)
-        base["theta"] = {"inputs": list(held), "by": THETA}
-        inst = count_instance(doc, row["table"], c, k, n, held)
+        base["theta"] = {"inputs": row["held"], "by": THETA}
+        inst = wired_instance(row["fn"], row["blocks"], row["table"], c, k, n, row["held"])
         call = lean_count(lean, inst, scratch or Path(tempfile.gettempdir()), lean_timeout_s)
         private["lean_detail"] = call
-        base["lean"] = said = lean_said(call, row["gates"])
+        base["lean"] = said = lean_said(call, dict(row["rows"]))
         if "error" in said:
             raise Undecided(f"the Lean verifier gave no verdict: {said['error']}"
                             + (f": {said['message']}" if "message" in said else ""))
         if not said["agrees_on_gates"]:
-            raise Undecided(f"the Lean verifier counts {said['gates']} gates a block, and the gate table {row['gates']}")
+            raise Undecided(f"the Lean verifier counts {said['rows']} (key, gates, fresh) a slot Definition, and the gate "
+                            f"table {row['rows']}")
+        private["blocks"] = [[key, g, x, sealed * row["calls"][key]] for key, g, x in said["rows"]]
         if not said["complies"] and said["failed"] not in ("gates", "fresh", "count"):
             raise Undecided("the Lean verifier refuses and names no rule of gates, fresh and count that failed")
-        failure = ([0, said["failed"]] if not said["complies"] and said["failed"] != "count" else
+        worst = next((i for i, (_, g, x) in enumerate(said["rows"]) if g > c or x > k), 0)
+        failure = ([worst, said["failed"]] if not said["complies"] and said["failed"] != "count" else
                    [None, "count"] if blocks > n or not said["complies"] else None)
-        base |= {"classes": [[row["definition"], said["gates"], said["fresh"]]], "complies": failure is None,
-                 "failure": failure}
+        base |= {"classes": said["rows"], "complies": failure is None, "failure": failure}
         if failure is None:
             base |= {"verdict": "accept", "reason": None}
         else:
-            beside = ("" if said["fresh"] <= counted["fresh"] else
-                      f" (the record's count is {counted['fresh']}: {WIRED})")
             base |= {"verdict": "refuse", "reason": {
                 "gates": f"the Lean verifier counts a block of {said['gates']} gates, more than c = {c}",
-                "fresh": f"the Lean verifier counts a block of {said['fresh']} fresh bits, more than k = {k}{beside}",
+                "fresh": f"the Lean verifier counts a block of {said['fresh']} fresh bits, more than k = {k}",
                 "count": f"the blocks' exact count is more than n = {n}"}[failure[1]]}
     except Undecided as e:
         base |= {"verdict": "refuse", "reason": f"{SV.UNDECIDED}{e}", "complies": False}
@@ -660,11 +746,11 @@ def line(v: Mapping[str, Any]) -> str:
     """The verdict's one public line."""
     if "classes" not in v:
         return f"{v['verdict']}: {v['reason']}"
-    (d, g, x), = v["classes"]
     r = v["record_count"]
-    return (f"{v['verdict']}{'' if v['reason'] is None else ': ' + v['reason']}: session {d[:16]}… "
+    rows = ", ".join(f"{g} gates and {x} fresh bits" for _, g, x in v["classes"])
+    return (f"{v['verdict']}{'' if v['reason'] is None else ': ' + v['reason']}: the wired Program "
             f"({'the registered one' if v.get('registered_session') else 'not the registered one'}), the Lean verifier's "
-            f"{g} gates and {x} fresh bits a block, against c {v['c']}, k {v['k']}, n {v['n']} (no count published: n is "
+            f"{rows} a block of its slot Definitions, against c {v['c']}, k {v['k']}, n {v['n']} (no count published: n is "
             f"judged on the blocks' exact count, held on the node); the record's count, which decides nothing: "
             f"{r['fresh']} fresh bits a block ({r['held']} held, {r['wired']} wired, {r['openings']} openings)")
 
@@ -685,6 +771,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "card before it serves (default: an H200 int8 serve's, serve_facts)")
     p.add_argument("--pearl-tables", metavar="SCHEME", default=None,
                    help="the class's circuit cut at its linears at this PoUW scheme, Pearl+'s (window_class.PearlTables)")
+    p.add_argument("--lean", type=Path, default=None,
+                   help="the Lean verifier, inference-only-verifier, whose --count on the class's wired Program fixes c and "
+                        "k (default: its Python reference, too slow for a served class)")
     p.add_argument("--out", type=Path, required=True)
     v = sub.add_parser("verdict", help="the run's verdict against its policy")
     v.add_argument("--policy", type=Path, required=True)
@@ -703,7 +792,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             stated = None if a.serve is None else json.loads(a.serve.read_text())
             pol = policy(a.cls, a.model, a.revision, a.lease_min, a.utilization, a.utilization_source, written, a.tree,
-                         stated, a.pearl_tables)
+                         stated, a.pearl_tables, a.lean)
         except (Undecided, ValueError, KeyError, OSError) as e:
             print(f"INFERENCE-ONLY POLICY refused: {type(e).__name__}: {e}"[:1200], flush=True)
             return 1

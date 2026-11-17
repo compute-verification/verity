@@ -84,7 +84,7 @@ def kinded() -> dict:
 
 
 #: `kinded`'s fresh bits a block by kind
-KINDED = {"linears": 16_384, "scan_state": 2_048}
+KINDED = {"linears": 16_384, "scan_state": 2_048, "openings": 0}
 
 
 @pytest.fixture(scope="module")
@@ -121,17 +121,17 @@ def test_a_block_reading_bit_at_is_priced_and_one_with_no_price_is_undecided(fee
     """`FEED`'s block counts `BitAtx32_v1` at its price, which the table names: the gate table's own, and where the gate
     table has none for it the explicit circuit's, the same count; with no price for it the block's gates are undecided
     (`gate-table`) and not guessed."""
-    row = IO.session_row(feed, None, None)
+    row = IO.wired_row(feed, None, None)
     table, unpriced = BL.gate_table([BC.session(feed)[0]])
     assert unpriced == [] and table["BitAtx32_v1"] == 147 and (row["table"], row["priced"]) == (table, {})
     assert row["gates"] == BC.gates(BC.session(feed)[0], row["table"])[0]
     bare = {key: gates for key, gates in table.items() if key != "BitAtx32_v1"}
     monkeypatch.setattr(BL, "gate_table", lambda fns: (dict(bare), ["BitAtx32_v1"]))
-    own = IO.session_row(feed, None, None)
+    own = IO.wired_row(feed, None, None)
     assert own["priced"]["BitAtx32_v1"]["gates"] == 147 and (own["table"], own["gates"]) == (table, row["gates"])
     monkeypatch.setattr(IO, "price", lambda key: None)
     with pytest.raises(IO.Undecided, match="gate-table: no gates for BitAtx32_v1"):
-        IO.session_row(feed, None, None)
+        IO.wired_row(feed, None, None)
 
 
 def test_the_verdicts_rule_is_the_count_rules_on_its_rows(small):
@@ -139,11 +139,11 @@ def test_the_verdicts_rule_is_the_count_rules_on_its_rows(small):
     a block and m blocks, and `judge` gives its verdict on its rows at each (c, k, n) at and just under them: complying at
     them, and failing on the gates, the fresh bits or the count."""
     ref = IO._reference()
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     big = 10 ** 15
     got = ref.check_count_detail(IO.count_instance(small, row["table"], big, big, big))
     (key, g, x, m), = got["blocks"]
-    assert (key, g, m) == (row["key"], row["gates"], row["slots"]) and x > 0
+    assert (key, g, m) == (row["blocks"][0], row["gates"], row["slots"]) and x > 0
     for c, k, n in ((g, x, m), (g - 1, x, m), (g, x - 1, m), (g, x, m - 1), (g - 1, x - 1, m - 1), (big, big, big)):
         want = ref.check_count_detail(IO.count_instance(small, row["table"], c, k, n))
         assert IO.judge(got["blocks"], c, k, n) == want, (c, k, n)
@@ -176,7 +176,7 @@ def test_the_policy_is_the_sessions_gates_and_fresh_bits_with_the_weights_held_a
         {"weights/a@4": "00", "weights/a@4/table": "00"}
     monkeypatch.setattr(IO, "class_doc", lambda serve, cls, scheme=None: (kinded, ["scan_state/s@1"]))
     pol = IO.policy("2,2,2", MODEL, "rev", 60, Fraction(1, 4), "the declared share", BEFORE, "abc")
-    row = IO.session_row(kinded, {}, {})
+    row = IO.wired_row(kinded, {}, {})
     work = IO.session_work(IO.window_class("2,2,2"), MODEL)
     assert (pol["c"], pol["k"], pol["n"]) == (row["gates"], row["fresh"], IO.capacity(work["theta_macs"], 60, Fraction(1, 4))["n"])
     assert pol["k_by_kind"] == row["k_by_kind"] == KINDED and sum(KINDED.values()) == pol["k"]
@@ -289,10 +289,10 @@ def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(
     public form: the judgment, the class's session, gates and fresh bits a block, slots and positions, saying that n was
     judged on the exact count, and no count of blocks or of windows and no window's number; the private one holds the
     exact counts."""
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=lean)
     assert (pub["verdict"], pub["reason"], pub["complies"], pub["failure"]) == ("accept", None, True, None)
-    assert pub["classes"] == [[row["definition"], row["gates"], row["fresh"]]] and not {"blocks", "total"} & set(pub)
+    assert pub["classes"] == [[row["blocks"][0], row["gates"], row["fresh"]]] and not {"blocks", "total"} & set(pub)
     assert (pub["slots"], pub["positions"], pub["c"], pub["k"], pub["n"]) == (2, row["positions"], row["gates"],
                                                                               row["fresh"], 6)
     assert (pub["format"], pub["counts"]) == ("verity-bench/inference-only-verdict/v5", IO.COUNTS)
@@ -302,8 +302,8 @@ def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(
     assert pub["registered_session"] is True and pub["serve_began_utc"] == "2025-11-01T12:26:40+00:00"
     assert SV.public_json(pub) == pub and not {"sealed", "outside_class", "retroactive"} & set(pub)
     assert (full["sealed"], full["blocks"], full["total"], full["outside_class"]) == (
-        3, [[row["definition"], row["gates"], row["fresh"], 6]], 6, {})
-    assert IO.line(pub).startswith("accept: session ") and IO.line(pub).endswith(
+        3, [[row["blocks"][0], row["gates"], row["fresh"], 6]], 6, {})
+    assert IO.line(pub).startswith("accept: the wired Program ") and IO.line(pub).endswith(
         "n 6 (no count published: n is judged on the blocks' exact count, held on the node); the record's count, which "
         f"decides nothing: {row['fresh']} fresh bits a block (0 held, 0 wired, 0 openings)")
 
@@ -311,14 +311,13 @@ def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(
 @pytest.mark.parametrize(("split", "why"), [
     (None, None),
     (KINDED, None),
-    ({"linears": 16_383, "scan_state": 2_049}, "is not the run's circuit's"),
-    ({"linears": 16_384, "scan_state": 2_047}, "doesn't sum to its k = 18432"),
+    ({"linears": 16_384, "scan_state": 2_047, "openings": 0}, "doesn't sum to its k = 18432"),
 ])
 def test_a_policys_k_by_kind_is_the_run_circuits_and_sums_to_its_k(kinded, tmp_path, split, why, lean):
     """The verdict recomputes the run's circuit's k by kind and accepts a policy whose ``k_by_kind`` is that and sums to
     its k, or that has none, as a policy written before the key; a split that is another, or doesn't sum to k, is
     refused."""
-    row = IO.session_row(kinded, None, None)
+    row = IO.wired_row(kinded, None, None)
     assert row["k_by_kind"] == KINDED and row["fresh"] == 18_432
     pol = _policy(row) if split is None else _policy(row, k_by_kind=split)
     pub, _ = IO.verdict(pol, kinded, _serve(tmp_path / "s", FULL), None, None, lean=lean)
@@ -339,10 +338,10 @@ def test_a_policys_k_by_kind_is_the_run_circuits_and_sums_to_its_k(kinded, tmp_p
 def test_a_policys_k_by_kind_holds_only_its_kinds_each_an_int(kinded, tmp_path, split, lean):
     """A split whose keys are not of `KINDS`, or a value that is not an integer (a string of digits, a float, a bool, a
     list), or that is no object, is refused as undecided, saying so, before any sum."""
-    row = IO.session_row(kinded, None, None)
+    row = IO.wired_row(kinded, None, None)
     pub, _ = IO.verdict(_policy(row, k_by_kind=split), kinded, _serve(tmp_path / "s", FULL), None, None, lean=lean)
     assert pub["verdict"] == "refuse" and pub["reason"].startswith("undecided: the policy's k_by_kind ")
-    assert "is not an object of linears, scan_state, each an integer of bits" in pub["reason"]
+    assert "is not an object of linears, scan_state, openings, each an integer of bits" in pub["reason"]
 
 
 @pytest.mark.parametrize(("over", "why"), [
@@ -352,7 +351,7 @@ def test_a_policys_k_by_kind_holds_only_its_kinds_each_an_int(kinded, tmp_path, 
 ])
 def test_a_run_past_its_policy_is_refused(small, tmp_path, over, why, lean):
     """Past n, c or k the run is refused, its failure the count rule's; past n its reason names n and not the count."""
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     at = {k: (row["gates"] - 1 if v == "gates-1" else row["fresh"] - 1 if v == "fresh-1" else v) for k, v in over.items()}
     pub, _ = IO.verdict(_policy(row, **at), small, _serve(tmp_path / "s", FULL), None, None, lean=lean)
     assert pub["verdict"] == "refuse" and why in pub["reason"] and pub["complies"] is False
@@ -365,12 +364,12 @@ def test_no_public_field_carries_a_count_and_n_is_judged_on_the_exact_one(small,
     one public verdict and one line at n = 64, and differ only in their private verdicts' exact counts, which the count
     rule judges. At n = 1 one window is refused; at n = 3 one window's two blocks are accepted and two windows' four
     refused, and the two public verdicts differ in their judgment alone."""
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     runs = {w: _serve(tmp_path / f"w{w}", {7 + j: [{}, {}] for j in range(w)}) for w in (1, 2, 3, 8, 17)}
     seen = {w: IO.verdict(_policy(row, n=64), small, d, None, None, lean=lean) for w, d in runs.items()}
     pubs = [pub for pub, _ in seen.values()]
     assert all(p == pubs[0] for p in pubs) and pubs[0]["verdict"] == "accept" and len({IO.line(p) for p in pubs}) == 1
-    assert [full["blocks"] for _, full in seen.values()] == [[[row["definition"], row["gates"], row["fresh"], 2 * w]]
+    assert [full["blocks"] for _, full in seen.values()] == [[[row["blocks"][0], row["gates"], row["fresh"], 2 * w]]
                                                              for w in runs]
     assert [full["total"] for _, full in seen.values()] == [2, 4, 6, 16, 34]
     for pub, full in seen.values():
@@ -400,7 +399,7 @@ def test_what_the_count_cant_decide_is_refused(small, tmp_path, windows, unseale
     """A window carrying a request across, one whose check failed, a request past the class's prompt or outputs, more
     requests than slots, a closed window with no seal, or a serve that sealed nothing: the run's blocks are undecided, and
     it is refused, the private verdict naming each window and why and the public one none."""
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", windows, unsealed), None, None, lean=lean)
     assert pub["verdict"] == "refuse" and pub["reason"].startswith("undecided: ") and why in pub["reason"]
     assert pub["complies"] is False and not {"classes", "blocks", "total"} & set(pub)
@@ -412,7 +411,7 @@ def test_a_policy_written_after_the_serve_began_is_read_only_when_said_retroacti
     """A policy written after the serve began, or with no time, is undecided; read retroactively, the verdict says why.
     A serve dir that records no start is undecided even read retroactively, and no policy, another format, or no circuit
     record is undecided too."""
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
     for written in (AFTER, "2025-11-01T12:26:40+00:00", None, "yesterday", "2025-11-01T12:26:39"):
         pub, _ = IO.verdict(_policy(row, written_utc=written), small, d, None, None, lean=lean)
@@ -432,7 +431,7 @@ def test_a_policy_written_after_the_serve_began_is_read_only_when_said_retroacti
 def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(small, tmp_path, capsys, lean):
     """`verdict` writes the public verdict to --out and the full one, 0600, to --private, `inference-only-check --count --detail`'s
     whole verdict in the private one alone, and prints the public line."""
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
     (tmp_path / "policy.json").write_text(json.dumps(_policy(row)))
     (tmp_path / "circuit.json").write_text(json.dumps(small))
@@ -450,7 +449,7 @@ def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(sma
     assert full["lean_detail"]["flags"] == ["--count", "--detail"] and full["lean_detail"]["out"]["complies"] is True
     assert "lean_detail" not in pub
     said = capsys.readouterr().out
-    assert said.startswith("INFERENCE-ONLY accept: session ") and "(no count published: n is judged on the blocks' exact " \
+    assert said.startswith("INFERENCE-ONLY accept: the wired Program ") and "(no count published: n is judged on the blocks' exact " \
         "count, held on the node)" in said and said.rstrip().endswith("(0 held, 0 wired, 0 openings)")
     assert str(COUNT) not in (tmp_path / "out" / "inference-only.json").read_text() and str(COUNT) not in said
 
@@ -458,7 +457,7 @@ def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(sma
 def test_a_lean_verifier_that_gives_no_verdict_leaves_the_run_undecided(small, tmp_path):
     """An `inference-only-check` that exits non-zero or prints no JSON object gives no verdict, so the run is refused as
     undecided, saying why; what it printed stays in the private verdict."""
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
     for body, why, said in (("echo no >&2; exit 2", "exit 2", "no"), ("echo hello", "printed no JSON object", "hello"),
                             ("echo '[7, 9]'", "printed no JSON object", "[7, 9]")):
@@ -476,7 +475,7 @@ def test_a_lean_verifier_that_gives_no_verdict_leaves_the_run_undecided(small, t
 def test_the_lean_verifier_runs_behind_the_hosts_memory_limit(small, tmp_path, monkeypatch):
     """Both of `inference-only-check`'s calls, its usage and its count, run behind the scope `served_cases.limits` gives
     a check on this host, and the private verdict says under which limit."""
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     exe = _inference_only_check(tmp_path / "lean", NEW_USAGE, {"complies": False}, _whole(row))
     scope = tmp_path / "scope"
     scope.write_text(f"""#!/bin/sh
@@ -501,7 +500,7 @@ def test_a_host_with_no_memory_limit_starts_no_lean_verifier_and_the_row_is_an_e
     monkeypatch.delenv("CHECK_SCOPE")
     monkeypatch.setattr(SC, "scope_here", lambda: False)
     monkeypatch.setattr(SC, "address_space_here", lambda: False, raising=False)
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     exe = _inference_only_check(tmp_path / "lean", NEW_USAGE, {"complies": True}, _whole(row))
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     why = f"inference-only-verifier not started: {SC.limits().refusal}"
@@ -541,7 +540,7 @@ exit 2
 
 def _whole(row: dict) -> dict:
     """`InferenceOnlyCheck.Count`'s whole verdict on the session Program: its row's fresh bits past k, and a count."""
-    return {"blocks": [[row["key"], row["gates"], row["fresh"] + 5, COUNT]], "total": COUNT, "complies": False,
+    return {"blocks": [[row["blocks"][0], row["gates"], row["fresh"] + 5, COUNT]], "total": COUNT, "complies": False,
             "failure": [0, "fresh"]}
 
 
@@ -556,18 +555,17 @@ def test_the_verdict_is_the_lean_verifiers_and_takes_its_gates_fresh_bits_and_fa
     verdict keeps whole. Where it counts more fresh bits than the record's count and than k, the run is refused on k by
     its count, the record's count beside it, and the public verdict and its line take only its gates and fresh bits a
     block, whether the gates agree, ``complies`` and the rule that failed, and none of its counts."""
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     exe = _inference_only_check(tmp_path / "lean", usage, public or _whole(row), _whole(row) if public else None)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    assert pub["lean"] == {"gates": row["gates"], "agrees_on_gates": True, "fresh": row["fresh"] + 5, "complies": False,
-                           "failed": "fresh"}
+    assert pub["lean"] == {"rows": [[row["blocks"][0], row["gates"], row["fresh"] + 5]], "gates": row["gates"],
+                           "agrees_on_gates": True, "fresh": row["fresh"] + 5, "complies": False, "failed": "fresh"}
     assert (pub["verdict"], pub["complies"], pub["failure"]) == ("refuse", False, [0, "fresh"])
-    assert pub["reason"] == (f"the Lean verifier counts a block of {row['fresh'] + 5} fresh bits, more than k = {row['fresh']} "
-                             f"(the record's count is {row['fresh']}: {IO.WIRED})")
-    assert pub["classes"] == [[row["definition"], row["gates"], row["fresh"] + 5]]
+    assert pub["reason"] == f"the Lean verifier counts a block of {row['fresh'] + 5} fresh bits, more than k = {row['fresh']}"
+    assert pub["classes"] == [[row["blocks"][0], row["gates"], row["fresh"] + 5]]
     assert pub["record_count"]["fresh"] == row["fresh"]
     assert str(COUNT) not in json.dumps(pub) and str(COUNT) not in IO.line(pub) and "lean_detail" not in pub
-    assert IO.line(pub).startswith(f"refuse: {pub['reason']}: session ")
+    assert IO.line(pub).startswith(f"refuse: {pub['reason']}: the wired Program ")
     assert full["lean_detail"] == {"flags": flags, "out": _whole(row), "memory": SC.UNLIMITED}
     calls = (tmp_path / "lean" / "args.log").read_text().splitlines()
     assert calls[0] == "" and len(calls) == 2 and calls[1].startswith(" ".join(flags) + " " + str(tmp_path))
@@ -576,11 +574,11 @@ def test_the_verdict_is_the_lean_verifiers_and_takes_its_gates_fresh_bits_and_fa
 def test_a_binary_whose_usage_hides_detail_gives_no_rows_which_is_said(small, tmp_path):
     """An `inference-only-check` that prints only ``{complies}`` for ``--count`` and whose usage names no ``--detail`` gives no row
     of the block: the run is undecided, saying so, and takes nothing from it."""
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     exe = _inference_only_check(tmp_path / "lean", OLD_USAGE, {"complies": False}, _whole(row))
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    assert pub["verdict"] == "refuse" and pub["lean"] == {"error": "inference-only-verifier --count printed no row of the block"}
-    assert pub["reason"] == "undecided: the Lean verifier gave no verdict: inference-only-verifier --count printed no row of the block"
+    assert pub["verdict"] == "refuse" and pub["lean"] == {"error": "inference-only-verifier --count printed no row of each slot Definition"}
+    assert pub["reason"] == "undecided: the Lean verifier gave no verdict: inference-only-verifier --count printed no row of each slot Definition"
     assert full["lean_detail"] == {"flags": ["--count"], "out": {"complies": False}, "memory": SC.UNLIMITED}
 
 
@@ -589,9 +587,9 @@ def test_a_binary_whose_usage_hides_detail_gives_no_rows_which_is_said(small, tm
 def test_an_inference_only_check_refusal_lands_in_lean_with_its_code_and_message_alone(small, tmp_path, usage, flags):
     """`inference-only-check`'s refusal, with or without ``--detail``, lands in ``lean`` as its ``error`` and ``message``, and
     the run is undecided, saying both; anything else it carries, a count here, stays in the private verdict."""
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     refusal = {"error": "program", "message": "E_REINTERPRET: a reference reads a leaf at another width"}
-    said = {**refusal, "blocks": [[row["key"], row["gates"], row["fresh"], COUNT]], "total": COUNT}
+    said = {**refusal, "blocks": [[row["blocks"][0], row["gates"], row["fresh"], COUNT]], "total": COUNT}
     exe = _inference_only_check(tmp_path / "lean", usage, said, said)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "refuse" and pub["lean"] == refusal
@@ -608,9 +606,9 @@ def test_inference_only_check_counts_the_verdicts_gates_on_the_session_program(s
     import served_cases as SC
 
     exe = SC.build(SC.INFERENCE_ONLY_LEAN[0], "inference-only-verifier")
-    row = IO.session_row(small, None, None)
+    row = IO.wired_row(small, None, None)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"]["agrees_on_gates"] is True and pub["lean"]["gates"] == row["gates"]
-    assert pub["lean"] == {"gates": row["gates"], "agrees_on_gates": True, "fresh": row["fresh"], "complies": True,
-                           "failed": None}
+    assert pub["lean"] == {"rows": [[row["blocks"][0], row["gates"], row["fresh"]]], "gates": row["gates"],
+                           "agrees_on_gates": True, "fresh": row["fresh"], "complies": True, "failed": None}
     assert {"blocks", "total", "failure"} <= set(full["lean_detail"]["out"])
