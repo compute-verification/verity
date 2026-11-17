@@ -7,8 +7,6 @@ the whole doesn't; the end is `dead_free.AttnHeadEnd_v1`'s function; the twin (`
 gates lower to, and at the served statics its description stays small and its Flock block under its word view's."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 from verity.circuits import evaluation as E
