@@ -4,8 +4,8 @@ the class refuses is refused with its reason; each of the plan's runs is on the 
 given, and its commands name no other node; a session through a stub gate keeps
 the session's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
-nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint runs the endpoint step on the served
-node's records in a private copy whose requests.jsonl is rebuilt from the users map and the certified I/O (moved out of
+nothing when late; io writes the kept run's attested I/O 0600 in KEEP; endpoint runs the endpoint step on the served
+node's records in a private copy whose requests.jsonl is rebuilt from the users map and the attested I/O (moved out of
 the run dir first), publishes only its report, windows.jsonl and serve.json, and writes nothing from an endpoint that
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
 seed or trace record); chain runs chain_record.sh's network attester path on the kept fetch with the endpoint's art or a dry
@@ -343,7 +343,7 @@ def _serve_dir(d: Path, ps: list[list[int]]) -> Path:
 
 
 def _certified(d: Path, ps: list[list[int]]) -> Path:
-    """io's file: the network attester run's deployment.json and its certified I/O, each prompt answered with [1,
+    """io's file: the network attester run's deployment.json and its attested I/O, each prompt answered with [1,
     2]."""
     d.mkdir(parents=True, exist_ok=True)
     (d / SS.CERTIFIED).write_text(json.dumps({
