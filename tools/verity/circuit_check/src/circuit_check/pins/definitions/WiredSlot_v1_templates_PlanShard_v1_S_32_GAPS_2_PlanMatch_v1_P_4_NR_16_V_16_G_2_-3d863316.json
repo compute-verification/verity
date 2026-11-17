@@ -1,0 +1,8 @@
+{
+ "definitions": {
+  "WiredSlot_v1{templates=('PlanShard_v1{S=32,GAPS=2}','PlanMatch_v1{P=4,NR=16,V=16,G=2,TB=8,RPB=2}'),record='a4e487b257f06b2f902f9a309b0563f4bded5c33b086248466e5821f3ad3adcf0445c813c312d55f7c754c75490e2fd0ae34005042345f14aafb0a2ea5378516',counts=(1,2),slot=0}": {
+   "and": 3670,
+   "type": "f44b7b882271491be3d5f898152073c39db713a2e2f31f758af2db947e9ccfc2cdc16f6face703b905be2ba21f0c82623f98304a0d30171c246241f0fb340855"
+  }
+ }
+}
