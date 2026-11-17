@@ -88,7 +88,7 @@ at two windows in flight, as the Lean's `session` refuses one in flight at G > 1
 its end is complete. An append past them refuses the session as `disagreement`: the books refuse it as `coin`, and
 the Lean's session, which holds only the append coins released, otherwise.
 
-Openings are checked in the clear: zero-knowledge proof blocks are not in this harness (PROTOCOL.md §8).
+Openings are checked in the clear: zero-knowledge proof blocks are not in this harness.
 
 Its process is `verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py`, which hands `main` what a verifier imports none of:
 the LMS verify a served or gate session's signatures are checked with, and the challenger's process `--challenger
