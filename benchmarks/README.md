@@ -155,7 +155,8 @@ passes `made_up=True` wherever it is reported, whatever its own files say of its
 on a stand-in model, a comparison run. Start one with `research run --env VERITY_BENCH_TRIAL=1 ...` in front of the
 registered command (the overhead, vLLM and steady doors forward the variable from the launcher's environment). Its
 writer puts every measurement in `out/trial-measurements.json` and none in `result.json`, which says `trial: true`, so no
-number of it reaches a metric's line; a trial's run is never labelled a run of record, a plan's passing run or a served row.
+number of it reaches a metric's line. It is never a plan's passing run, and every record step refuses a labelled one
+(`kit.trial_why`), naming the launch that makes it of record.
 
 `kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=..., from_run=...)` is the command's
 last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit").

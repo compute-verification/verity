@@ -251,12 +251,15 @@ def _natural(point: str) -> list[Any]:
 
 
 def _recorded(store: Any, run: str, arms: Sequence[str], record: str | None) -> tuple[str, list[Found], str | None]:
-    """A run of record's spec and points as rows, or why it can't stand: the passing rule of `PASSING`, then `_judge`'s."""
+    """A run of record's spec and points as rows, or why it can't stand: a trial (`kit.trial_why`), the passing rule of
+    `PASSING`, then `_judge`'s."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
         return "", [], "not in the store or on its remote"
     spec = spec_name(str(attempt.get("params", {}).get("spec", "")))
+    if why := kit.trial_why(run, attempt):
+        return spec, [], why
     status, source = attempt.get("status") or {}, attempt.get("source") or {}
     art = (attempt.get("outputs") or {}).get("result")
     tool = (attempt.get("tool") or {}).get("name")
@@ -357,6 +360,8 @@ def live_row(store: Any, live: Live) -> tuple[dict[str, Any], str | None]:
     attempt = store.get_attempt(live.run)
     if attempt is None:
         return row, "not in the store or on its remote"
+    if why := kit.trial_why(live.run, attempt):
+        return row, why
     status = attempt.get("status") or {}
     row.update(machine=(attempt.get("execution") or {}).get("machine"), commit=(attempt.get("source") or {}).get("commit"),
                record=(attempt.get("outputs") or {}).get("run_record"))
