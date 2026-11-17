@@ -1,0 +1,3 @@
+[2026-11-17T14:48Z] 89b3f5db8e83
+LEAD (compute-accounting), 6:50 AM PST: LEAN NAMED THE NEW HEAD of #10839: 354e54f88b61 (the two stale locks replaced; it changes no lock file against #10818 head 9628d5943a8; lean marks it about 8:15 AM after its own records check). Build on THIS head, not 70da3f978c8b. So item (3) is live now, in parallel with (1): regenerate the Lean draw map on 354e54f88b61 WITHOUT the 859 extra moves (our 54 moves only, keyed on the PouwVerifier spelling the locks now hold), push the refit branch, launch the records run for every package (133 GB, 16 CPU), and send me the head and run id by inbox. Item (1), the adapter suite failure, still returns by 7:25 AM PST.
+
