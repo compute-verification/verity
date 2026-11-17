@@ -3,23 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Charge
 public import Proofs.Properties.Verity.Sampled.MovesReachAt
 
-/-!
-# SPOT's coupling off the empty classes at their counts
-
-The coupling holds the joint distribution off each stop's empty class, and pays the class's probability in the stops' term. Off
-the empty classes themselves (`linkEmpty`, `roundEmpty`), that term is within the hiding term only where each stop's
-opening asks for the count of coins the stop releases (`couplesErr_sampleMap_le`, under `RoundCounts` and
-`LinkCounts`): at a frame of another count every class is empty, and the empty class costs 1. Off the empty classes at
-the stop's count (`linkEmptyAt`, `roundEmptyAt`), a frame of another count is never held off, and the stops' term is
-within the hiding term at every strategy (`couplesErr_sampleMap_le_at`).
-
-This file holds the coupling off those events. Its coin map's premise is `sampleMap_couples` at them
-(`sampleMap_couples_at`), its stops' term is `couplesErr_sampleMap_le_at`, and the coupling, assembled
-(`couplingTarget_assembled_at`), takes no bound on the stops' term. What moves to the moves' reach is the count match:
-`MovesReach` off the count-aware events follows from `MovesReach` off the empty classes wherever every accepted play
-reached off the first is reached off the second (`CountsReach`, `movesReach_at`), which holds at the session's layout
-(`Proofs.Properties.Verity.Sampled.CountsLayout`).
--/
+/-! SPOT's coupling off the empty classes at their counts. -/
 
 @[expose] public section
 
@@ -34,21 +18,14 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable (e : 𝔽 ≃ (Fin 128 → Bool))
 
-/-- **The link's empty class at its count**: the stop's opening, in a play that ends in `E`, asks for both link
-points' coins and none of its rounds is released as the points' bits. -/
 def linkEmptyAt (E : List Release → Game Exchange) {mPts : ℕ} : LinkHold mPts := fun g' pts =>
   EmptyAtCount E g' (mPts + mPts) (linkBits e pts)
 
-/-- **A round's empty class at its count**: the stop's opening, in a play that ends in `E`, asks for the submission's
-count of coins and none of its rounds is released as the round's coins' bits. -/
 def roundEmptyAt (E : List Release → Game Exchange) : RoundHold := fun g' _ s c =>
   EmptyAtCount E g' s.n (roundBits e c)
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
-/-- **The sample-coupled coin map's premise off the empty classes at their counts**: the joint distribution's tape off
-`linkEmptyAt` and `roundEmptyAt` is within the openings' gaps and empty classes at the stops' counts over the stops of
-the uniform tape, wherever the sample's coins are uniform (`couples_of_close`, as `sampleMap_couples`). -/
 theorem sampleMap_couples_at (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (label : String) (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
@@ -72,10 +49,6 @@ theorem sampleMap_couples_at (A : Live) (rd : Reading A.rounds) (σ : Strategy (
 variable (k : Verity.Registration.Composite)
 
 omit θ F c in
-/-- **The coupling at the projection with the sample-coupled coin maps, off the empty classes at their counts**:
-`couplingTarget_withProject` at `sampleMaps` and the cut `P` and `Q`, off `linkEmptyAt` and `roundEmptyAt`, whose coin
-map's premise holds within the stops' term (`sampleMap_couples_at`), within the hiding term at every strategy
-(`couplesErr_sampleMap_le_at`), wherever the session's coins are uniform. -/
 theorem couplingTarget_withProject_of_sample_at (rd : Readings) (K : Constructions V)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
@@ -99,10 +72,6 @@ theorem couplingTarget_withProject_of_sample_at (rd : Readings) (K : Constructio
     hD
 
 omit θ F c in
-/-- **The coupling, assembled, off the empty classes at their counts**: `couplingTarget_assembled` off `linkEmptyAt`
-and `roundEmptyAt`, with no bound on the stops' term (`couplingTarget_withProject_of_sample_at`), wherever the outcomes
-beside accepted plays on the joint distribution's support off those events are the writer's at the moves v2's files decode to
-(`hM`). -/
 theorem couplingTarget_assembled_at (K : Constructions V) (T : PinnedTables)
     (dev : Exchange → Properties.Challenger.History) (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
@@ -125,12 +94,6 @@ theorem couplingTarget_assembled_at (K : Constructions V) (T : PinnedTables)
       Binding.logged_tables_le V T k Binding.readsV2 dev θ F c σ (Binding.binds_of_prints V k dev θ hP) (hS c))
     (digestBound_of V k _ (by rfl) A θ F) (fun c σ => decodes_of_digests hA hDg (fun _ h => h.1.2) hW (hM c σ))
 
-/-! ## The count match on the moves' reach -/
-
-/-- **The count match on the moves' reach**: every outcome the projection reaches off the empty classes at their
-counts, beside an accepted play whose log v2 read meets `P`, it reaches off the empty classes. Off the first, a stop
-whose opening asks for another count than the stop releases is not held off; this says no accepted play goes through
-one whose classes are all empty. -/
 def CountsReach (P : Exchange → Prop) (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) : Prop :=
   ∀ o, ReachesOff V θ F c A rd σ D M (linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
@@ -141,8 +104,6 @@ def CountsReach (P : Exchange → Prop) (A : Live) (rd : Reading A.rounds) (σ :
       (roundEmpty e (finish (V.signer θ) θ F c σ.1)) o
 
 variable {e V θ F c k} in
-/-- **`MovesReach` off the empty classes at their counts**, from `MovesReach` off the empty classes and the count
-match on the moves' reach. -/
 theorem movesReach_at {P : Exchange → Prop} {A : Live} {rd : Reading A.rounds} {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP}
     (hM : MovesReach V θ F c k P A rd σ D M (linkEmpty e (finish (V.signer θ) θ F c σ.1))

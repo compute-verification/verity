@@ -3,24 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.RecordDraw
 public import Proofs.Properties.Composition
 
-/-!
-# v2 reads the sample's coins of one family and one digest
-
-The record's sample (`recordSample_firstStop`) and the sample-coupled coin map (`sampleMap`) take a family `label` and a
-digest `after` fixed by the parameters, the committed files, the commitment and the strategy, before any coin, and v2's
-sample in every play the sampled verdict accepts at them (`SampleNamed`). v2 samples under the challenger its parameters
-name, at the coins of its family released after the registration's digest (`source_of`):
-
-* **The family** (`sample_label`, `labelAt`): the parameters' challenger family, a function of the parameters `θ` alone,
-  since v2's case reads the parameters `θ` names for it (`params_of_case`).
-* **The digest**: SPOT's entry in the components' digests that the prover's commitment binds (`draw_after`),
-  fixed only up to the cut at the commitment, where the play's digests are the most likely ones (`SampledDigest`,
-  `afterAt`, bounded by a SHA-512 collision on `bind`'s messages).
-
-So `SampleNamed` holds at the family `labelAt θ` and the digest `after` on every accepted play that meets the clause
-that v2 samples at `after` (`sampleNamed_layout`, the form `movesReach_layout`'s `hN` takes on the coupling's cut, where
-`after` is the strategy's `afterAt`). The logged reading isn't needed.
--/
+/-! v2 reads the sample's coins of one family and one digest. -/
 
 @[expose] public section
 
@@ -30,8 +13,6 @@ open Verity.Game
 open Properties.Challenger (Draws)
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
-
-/-! ## The family -/
 
 /-- **The sample's family at the parameters `θ`**: the challenger's family v2's parameters in `θ` name (`ParamsAt`,
 `paramsOf`), or the empty string where they name none. -/
@@ -44,8 +25,6 @@ theorem labelAt_eq {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} {key} {l
     (hp : ParamsAt θ p) (hc : p.base.challenger = some (key, l)) : labelAt θ = l := by
   simp only [labelAt, paramsOf_eq hp, hc, Option.map_some, Option.getD_some]
 
-/-- **v2 samples at the parameters' family**: where composite `k` accepted what the prover sent and v2's case in it
-accepts at the sample `dr`, `dr`'s family is the one v2's parameters in what was sent name. -/
 theorem sample_label {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws}
@@ -57,10 +36,6 @@ theorem sample_label {k : Verity.Registration.Composite} {s : Verity.Sent} {a b 
   obtain ⟨key, hch, -⟩ := source_of hdr
   exact (labelAt_eq hθ hch).symm
 
-/-! ## At the cut -/
-
-/-- **`movesReach_layout`'s `hN`** at the family `labelAt θ` and a digest `after`, on the plays that meet the clause
-that v2 samples at `after` (`SampledDigest`, the cut's at `afterAt`); it reads nothing of the logged reading. -/
 theorem sampleNamed_layout {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
     {F : Array ByteArray} {c : ByteArray} {A : Live} (hA : SetsUp V θ F A) {σ : Strategy (V.game θ F c)}
     {after : ByteArray} :

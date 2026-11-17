@@ -13,23 +13,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 public import Proofs.Flock.Claims.ZK.MaskedTables
 
-/-!
-# What v2's acceptance gives of the session at the registered files (`liveOf`)
-
-The deployment's session at the parameters `θ` is `liveOf`'s on the registered files (`Instance.sessionOf`): one v2
-sets up on them but for the coin commitment's families (`LiveSpec`), where one exists, and none elsewhere, where
-SPOT's published δ is `⊤`. Each field of such a session is a value v2's check derives on an accepted play, and this file
-derives them:
-
-* **The parameters** (`program_of_paramsAt`): the verifier's program is the one a descriptor parses to, as v2's
-  parameters decode it (`Spot.OneStage.paramsParsed`).
-* **The sampling design** (`samplingDesignAt_designAt`): where v2 samples, the design `samplingDesignAt` reads off its parameters is
-  `designAt`'s at the verifier's descriptor, query, sampling design object and work table.
-* **The lookup tables** (`pinnedTables_eq`): on blobs that hold the registered circuit's lookup tables and no other
-  pinned table (`HoldsRegisteredTables`), each at its registered file (`TablesSent`), where the deployment registers a
-  file for each pinned table the blobs hold (`TablesRegistered`), the tables v2 reads are the ones the circuit file
-  registers.
--/
+/-! What v2's acceptance gives of the session at the registered files (`liveOf`). -/
 
 @[expose] public section
 
@@ -37,8 +21,6 @@ namespace Verity.Sampled
 
 open Lean (Json)
 open FlockSoundness.Refine (ebind_ok)
-
-/-! ## The parameters -/
 
 open FlockSoundness.Refine in
 theorem oneStage_paramsOfJson_program {j : Json} {p : _root_.Spot.OneStage.Params}
@@ -69,8 +51,6 @@ theorem oneStageZk_paramsOfJson_program {j : Json} {p : _root_.Spot.OneStageZk.P
     ∃ b, _root_.Spot.Program.parse b = .ok p.base.verifier.program :=
   oneStageZk_paramsParsed_program (_root_.Spot.OneStageZk.paramsOfJson_parsed h)
 
-/-- **v2's parameters in `θ` name a verifier program some descriptor parses to**: in either form their v1 part is
-parsed parameters' (`paramsEitherOfJson_base`), whose program `paramsParsed_program` parses. -/
 theorem program_of_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p) :
     ∃ desc : Claims.Msg, _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program := by
   obtain ⟨_, -, x, -, hj⟩ := hp
@@ -82,8 +62,6 @@ theorem program_of_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params}
   rw [hb]
   exact hb'
 
-/-- **v2's parameters in `θ` that name no members sample by a sampling design object of kind `subset`**: they are
-the one statement's (`paramsEitherOfJson_one`), which refuses any other kind (`paramsOfJson_subset`). -/
 theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p)
     (hm : p.members = none) :
     Properties.Spot.SecurityProofs.kindOf p.base.verifier.samplingDesign = "subset" := by
@@ -93,12 +71,6 @@ theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp
   unfold Properties.Spot.SecurityProofs.kindOf
   rw [_root_.Spot.OneStageZk.paramsOfJson_subset (_root_.Spot.OneStageZk.paramsEitherOfJson_one hr hm)]
 
-/-! ## The sampling design -/
-
-/-- **Where v2 samples, `samplingDesignAt` reads `designAt`'s design**: at a verifier whose program the descriptor `desc` parses
-to, under the sampling design object `Draw.derive` writes, a sample `sampledFrom` makes is under `sampledDesign`'s design
-(`samplesUnder_of_sampledFrom`), which is `designAt`'s there and the one `samplingDesignAt` reads: the design `deriveSamplingDesign` expands,
-else the one `flockSamplingDesign` parses from the object. -/
 theorem samplingDesignAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Docket.Verifier} {lo : Json}
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
     (hlo : _root_.Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
@@ -119,16 +91,9 @@ theorem samplingDesignAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Docket.Ve
   simp only [samplingDesignAt, hlo, hd, hpar, ok_bind]
   rfl
 
-/-! ## The lookup tables -/
-
-/-- **The deployment registers a file for each pinned table the blobs sent hold** (`PinnedTables.file`). -/
 def TablesRegistered (T : PinnedTables) (s : Verity.Sent) : Prop :=
   ∀ t ∈ Flock.MUFU_TABLES, ∀ a, tableFile t.sha512 s.blobs = some a → ∃ b, T.file t.sha512 = some b
 
-/-- **On blobs holding the registered circuit's lookup tables, each at its registered file, v2's tables are the ones the
-circuit file registers**: a pinned table the blobs hold is one the circuit looks up (`HoldsRegisteredTables`), which
-the deployment registers (`TablesRegistered`) at the file the blobs hold (`TablesSent`), and one they don't hold it
-doesn't look up. -/
 theorem pinnedTables_eq {T : PinnedTables} {s : Verity.Sent} {circuitB : ByteArray}
     (hl : _root_.Spot.OneStageZk.lookupsOf circuitB =
       .ok ((_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs)).map (·.1)))
@@ -159,11 +124,6 @@ theorem pinnedTables_eq {T : PinnedTables} {s : Verity.Sent} {circuitB : ByteArr
     obtain ⟨b, hb⟩ := hT t htm a hf
     rw [hb, ht t htm a b hf hb]
 
-/-! ## v2's statement check -/
-
-/-- **v2's statement check at the session's inputs `I`, public file `pubB` and registered reads `rd`**: `verify
---zk`'s `ProvedScope.check` on the circuit v2's checks read, then its template rule, the `scope` v2's run hands each
-session's verdict (`Spot.OneStageZk.run`). -/
 def scopeOf (I : Flock.Witness.Inputs) (pubB : ByteArray) (rd : _root_.Spot.OneStageZk.Reads) : Flock.V Unit := do
   Flock.ProvedScope.checkOf
     (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables) (Flock.Witness.zkTags I) true pubB
@@ -171,7 +131,6 @@ def scopeOf (I : Flock.Witness.Inputs) (pubB : ByteArray) (rd : _root_.Spot.OneS
   _root_.Spot.OneStageZk.templateOk
     (← Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
 
-/-- A session's verdict accepts only where its statement check (`scope`) passes. -/
 theorem verdictOf_scope {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit}
     {coinKeys : Array String} {record : String} {draw : Option Json} {st : _root_.Spot.OneStageZk.SetUp}
     {files : Flock.V (Array ByteArray)} {coinKey : Option String}
@@ -186,8 +145,6 @@ theorem verdictOf_scope {I : Flock.Witness.Inputs} {scope ksFiles population : F
   obtain ⟨⟨⟩, hs, -⟩ := ebind_ok h
   exact hs
 
-/-- **One session's `step` after a run that accepted so far, where every session accepted, passes its statement
-check** (`verdictOf_scope`). -/
 theorem step_scope {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads}
     {bs : _root_.Core.Blobs} {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
     {s : _root_.Spot.OneStageZk.RunFiles} {r : _root_.Spot.OneStageZk.Run}
@@ -202,8 +159,6 @@ theorem step_scope {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads
     exact verdictOf_scope (push_ok h hall)
   · cases h
 
-/-- **v2's run on one session hands its verdict the statement check `scopeOf`** at the session's inputs, public file
-and registered reads, as `run_event` with the check named. -/
 theorem run_scope {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.RunFiles}
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p #[s] pu bs = .ok r) :
@@ -235,9 +190,6 @@ theorem run_scope {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.R
     exact ⟨tags0, circuitB, pubB, rd, htags, hc, hp, _, _, _, _, foldlM_single hr'⟩
   · cases h
 
-/-- **Where v2's check accepts at the coins `ξ`, its session passes `verify --zk`'s statement check**
-(`ProvedScope.check`) at the statement's tags under `--zk` (`zkTags`), on the circuit and public files the parameters
-name, with no public input words of the verifier's own. -/
 theorem checkBlobsAt_scope {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
@@ -255,8 +207,6 @@ theorem checkBlobsAt_scope {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
   obtain ⟨⟨⟩, hck, -⟩ := ebind_ok hs
   exact ⟨tags0, circuitB, pubB, rd.registered.isSome, ht, hc, hp, hck⟩
 
-/-- **Where v2's check accepts at the coins `ξ`, its session sets up at the record's sample** (`setupAt`): at the
-statement's tags, the circuit and public files the parameters name on the blobs and the session's record. -/
 theorem checkBlobsAt_setup {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
@@ -274,9 +224,6 @@ theorem checkBlobsAt_setup {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
   exact ⟨tags0, circuitB, pubB, rd, record, _, ht, hc, hp, sessionRecord_eq hs hb hrec, hst⟩
 
 open FlockSoundness.Discharge.Recursion.Witness (toExec) in
-/-- **An accepted session's setup at the record's sample is its one table's**: at one table under hidden outputs,
-`setupAt`'s statements are `Exec.setupOfP`'s at `--zk`'s inputs (`setupAt_setupOfP`), one `Stmt.setupHidden` at the
-table's inputs (`setupTables_okHP`, `inputsJ` at table 0), which passes `Zk.shapeOk`. -/
 theorem setupAt_hidden {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {record : String}
     {x : Flock.SessionSpec × Array Flock.Setup × Json × Json} (hc1 : W.count = 1)
     (hh : (Flock.Witness.zkTags W).hiddenOutputs = true)
@@ -304,12 +251,6 @@ theorem setupAt_hidden {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.R
     exact hst
   · exact absurd hc (by show ¬ 1 < W.count; omega)
 
-/-! ## The session's descriptor -/
-
-/-- **Where `verify --zk`'s ports check passes at a flat untyped statement, the circuit file reads as a descriptor whose
-unit is `Built`** and the public file loads on its circuit: the check parses the circuit (`HmOut.parse`, the one
-`ProvedScope.circuitOf` reads there, `circuitOf_parse`) and loads the public file before it checks anything else
-(`PortRoots.checkWith`), and `Desc.parseStmt` of an untemplated statement is `Desc.parse` (`built_of_parseStmt`). -/
 theorem desc_of_ports {I : FlockSoundness.Discharge.Exec.Inputs}
     (hflat : (FlockSoundness.Discharge.ZkExec.zkTags I).hiddenOutputs = true ∧
       (FlockSoundness.Discharge.ZkExec.zkTags I).isTmpl = false)
@@ -342,8 +283,6 @@ theorem desc_of_ports {I : FlockSoundness.Discharge.Exec.Inputs}
   rw [if_neg (by simp [hflat.2])]
   exact hD
 
-/-- **Where `verify --zk`'s form check passes at an untemplated statement, the circuit it parses is in
-`Layout.scopeOkH`**: `KsScope.unitWhy` refuses any other (`FailClosed.scopeOkH_eq`). -/
 theorem scopeH_of_form {t : Flock.Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
     {draw : Option Json} {c : Flock.Circuit} (hc : Flock.ProvedScope.circuitOf t cf tables = .ok c)
     (hi : t.isTmpl = false) (h : Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf t cf tables) t pf count draw = .ok ()) :
@@ -367,9 +306,6 @@ theorem scopeH_of_form {t : Flock.Tags} {cf pf : ByteArray} {tables : List (Stri
           rw [← FlockSoundness.Discharge.FailClosed.scopeOkH_eq]
           cases hs : Flock.ProvedScope.scopeOkH c <;> simp [hi, hs] at hu ⊢
 
-/-! ## The record's sample -/
-
-/-- **An ascending sample is the sorted print of a sample of `Fin n`**: the units below `n` it holds, sorted. -/
 theorem printed_units {n : ℕ} {units : Array ℕ} (h : unitsAscending n units = true) :
     ∃ S : Finset (Fin n), ((S.image Fin.val).sort (· ≤ ·)).toArray = units := by
   classical
@@ -381,8 +317,6 @@ theorem printed_units {n : ℕ} {units : Array ℕ} (h : unitsAscending n units 
     exact ⟨fun ⟨i, hi, he⟩ => he ▸ hi, fun hx => ⟨⟨x, hlt x hx⟩, hx, rfl⟩⟩
   rw [himg, (List.toFinset_sort (· ≤ ·) (hp.imp ne_of_lt)).2 (hp.imp le_of_lt)]
 
-/-- **The record's subset print decodes to a sample proving its units**: the print is `printedSample`'s of the sample
-of its units (`printed_units`), which decodes to that sample (`sampleFileZK_printedSample`), with no closure. -/
 theorem proved_of_recordDrawn {m n : ℕ} {units : Array ℕ} {record : String}
     (h : recordSampled (.subset m) n units record) {D : Flock.Draw.UnitSample}
     (hD : Flock.Draw.UnitSample.ofJson (Flock.Draw.UnitSample.toJson ⟨.subset m, n, units, #[]⟩) = .ok D) :
@@ -397,8 +331,6 @@ theorem proved_of_recordDrawn {m n : ℕ} {units : Array ℕ} {record : String}
   simp only [Array.isEmpty_empty, ite_true]
   exact hS
 
-/-- **The design `designAt` reads samples `samplingDesignK` of it** wherever the registration's population is the descriptor's
-(`Live.hlaw`'s proof, at any parameters). -/
 theorem samplingDesignOn_designAt {desc : Claims.Msg} {qr lj : Json} {tb : Option Json} {n : ℕ}
     (hpop : Flock.Bridge.PopMatches desc qr n) :
     Flock.Bridge.SamplingDesignOn (Flock.Bridge.designAt desc qr lj tb n) (Flock.Bridge.nsOf desc qr)
@@ -409,9 +341,6 @@ theorem samplingDesignOn_designAt {desc : Claims.Msg} {qr lj : Json} {tb : Optio
     exact ⟨rfl, Nat.zero_le _⟩
 
 open FlockSoundness.Discharge.Composed (inputsJ nTab) in
-/-- **The session's reference setup**: at one table, the setup `verify --zk` makes at the record's subset print of
-`kd` units sets up a `--zk` table (`sampleSetupHP_of_setupHiddenI`, `sampleSetupZHJP_of`, at no sampled proof block) at
-`mPtsOf g kd` points, since the print decodes to a sample proving its `kd` units (`proved_of_recordDrawn`). -/
 theorem y₀_of_setup (n : ℕ) {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc} {kd n' : ℕ} {recS : String}
     {units : Array ℕ} {st : Flock.Stmt} (hc1 : I.count = 1) (ht : I.tags.typed = false)
     (hD : Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D)
@@ -453,11 +382,6 @@ theorem y₀_of_setup (n : ℕ) {I : FlockSoundness.Discharge.Exec.Inputs} {D : 
   exact ⟨∅, _, ⟨y⟩⟩
 
 open FlockSoundness.Discharge.Composed (inputsJ) in
-/-- **The session's circuit names no public input port, and its public file loads with none**: the setup `verify --zk`
-makes without the verifier's public inputs refuses a circuit naming one (`checkOwn_none`), so its ports are the empty
-`{}` (`parse_empty`, at the circuit `setupHidden_c_of_parse` parses), and it loads the public file with none, to the
-population the committed files' circuit reads (`loadPublic_inOut`), with no two ports of one published domain
-(`v5Files_of_checks`). -/
 theorem pub_of_setup {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc} {pubO : Flock.Public} {n : ℕ}
     {d : Json} {st : Flock.Stmt} (hc1 : I.count = 1)
     (hD : Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D)
@@ -484,17 +408,9 @@ theorem pub_of_setup {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc}
   have hn : pop.n = n := (Flock.Bridge.loadPublic_inOut hlp hpubO).1.symm.trans hnO
   exact ⟨hpp, pop, hlp, (Flock.Bridge.v5Files_of_checks hlp hn hports).1, hn⟩
 
-/-! ## An accepted play's session -/
-
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 open FlockSoundness.Discharge.Recursion.Witness (toExec) in
-/-- **What v2's acceptance of a play gives of its session**: where the sampled verdict accepts a play on the committed
-files `F` at the parameters `θ`, v2's parameters `p` in `θ` set its session up at the statement's tags on `F`'s
-circuit and public files (`checkBlobsAt_event`, `get_named`), whose lookup tables are the ones the circuit file
-registers where the blobs hold each at its registered file (`pinnedTables_eq`), and a descriptor of the verifier's
-program reads the session's sampling design off `designAt` (`samplingDesignAt_designAt`), where the parameters name no
-members (`OneStatement`). -/
 theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD : DigestsAt V T θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
     (hone : OneStatement θ)
@@ -585,11 +501,6 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
     recS, sampledBlocks ev.base.draw, rd, x, hrd, hsize, hsetup⟩
 
 open FlockSoundness.Discharge.Recursion.Witness (toExec) in
-/-- **The session's inputs, descriptor, public file and population on an accepted play** (`accepted_parts`): the inputs
-v2 hands `verity-verify-proof` on the committed files, whose tags are untyped and hidden-output with retained rounds and
-`hm96-sha512/v1` leaves (`FailClosed.check_ok` at v2's statement check under `--zk`), the descriptor and public file
-its ports check reads (`desc_of_ports`), in `Layout.scopeOkH` (`scopeH_of_form`), with the record's population, which the program's proof blocks under the
-verifier's query are in order (`popMatches_of_popOk`). -/
 theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD : DigestsAt V T θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
     (hone : OneStatement θ) (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
@@ -638,13 +549,8 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
     ((FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs _).trans hAc.flat.1) hsetup
   exact ⟨st, hrd, hsize, hst, hshape⟩
 
-/-! ## The bound -/
-
 open FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge.ZkHidden
   FlockSoundness.Discharge.Composed in
-/-- **The session's planned rate is at most `ρ` wherever `2^23 ≤ ρ·(e·k)`**: every table of the plan, a set-up one or
-the reference setup's refused one, has a schedule `Zk.schedule` returned, whose level 0's `logLen` is at most `23`
-(`zkLogLenCap_23`), as `hr_planZHJ_23` for the plan without the verifier's own words. -/
 theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteArray}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} {d₀ : Json}
     (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀) {Reg : Type} {k : ℕ} {ρ : ℝ}
@@ -660,11 +566,6 @@ theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {o
   · exact zkLogLenCap_23 _ _ _ _ (Classical.choice h).hz
   · exact zkLogLenCap_23 _ _ _ _ y₀.hz
 
-/-! ## The session at an accepted play -/
-
-/-- **The registration samples by a subset design**: at v2's parameters in `θ`, every descriptor of the verifier's
-program reads a subset sampling design off the verifier's query, sampling design and work table (`designAt`), at every
-population. -/
 def SubsetDesign (θ : ByteArray) : Prop :=
   ∀ p, ParamsAt θ p → ∀ (desc : Claims.Msg) n,
     _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program →
@@ -672,14 +573,9 @@ def SubsetDesign (θ : ByteArray) : Prop :=
       .subset (Flock.Bridge.samplingDesignK
         (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable n))
 
-/-- **v2's registration samples by a subset design** where its parameters name no members (`OneStatement`): their
-sampling design object is of kind `subset` (`kindOf_paramsAt`), under which `designAt` is a subset design
-(`designAt_subset`). -/
 theorem subsetDesign (θ : ByteArray) (hone : OneStatement θ) : SubsetDesign θ :=
   fun p hp _ n _ => Flock.Bridge.designAt_subset n (kindOf_paramsAt hp (hone p hp))
 
-/-- **The bound's parameters are in range**: `k`, `Rw` and `M` at least one, a rate below one, and `2^23 ≤ ρ·(e·k)`,
-the count curve `hr_planZHJP` reads at `Zk.schedule`'s cap. -/
 structure SessionBound.Ok (b : SessionBound) : Prop where
   k : 1 ≤ b.k
   Rw : 1 ≤ b.Rw
@@ -688,11 +584,6 @@ structure SessionBound.Ok (b : SessionBound) : Prop where
   kρ : (2 : ℝ) ^ 23 ≤ b.ρ * (Real.exp 1 * b.k)
 
 open FlockSoundness.Discharge.Composed (inputsJ nTab) in
-/-- **Wherever v2 accepts a play, a session `LiveSpec` holds of exists**: on the committed files `F` at the parameters
-`θ` the sampled verdict accepts, the inputs, descriptor, public file and design v2's session reads (`session_parts`),
-the reference setup at the record's sample (`y₀_of_setup`), the circuit with no public input port and the public file
-with none (`pub_of_setup`), the subset design v2's parameters name (`subsetDesign`), the deployed sample's bytes
-(`Live.deployed`) and the bound's parameters make a `Live`, where the bound's parameters are in range. -/
 theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBound} (hb : b.Ok) {θ : ByteArray}
     (hD : DigestsAt V T θ)
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
@@ -728,10 +619,6 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
     hread.trans (congrArg Verity.ExecutionPhaseFiles.one (readOf_eq V T hc hp (A := A) htags hcount hcirc hpubf htab)), rfl, rfl,
     rfl, rfl, rfl, rfl, rfl, rfl, hreg, hone⟩⟩
 
-/-- **The session at the files of an accepted play is set up** (`liveSpec_of_accepted`): `liveOf` is not `none`
-there, so SPOT's published δ there is the session's, not `⊤`, where the deployment registers a file for each pinned
-table the blobs hold (`TablesRegistered`, a hypothesis here) and the parameters name no members (`OneStatement`, a
-hypothesis here too). -/
 theorem liveOf_ne_none {V : Vocab d α} {T : PinnedTables} {b : SessionBound} (hb : b.Ok) {θ : ByteArray}
     (hD : DigestsAt V T θ)
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)

@@ -4,43 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Instance
 public import Lms.Sign
 public import Base.JsonParse
 
-/-!
-# The live challenger as deployed: a deployment that holds a key, flips its coins and keeps the ledger
-
-`Device.Deployment` is what fixes the device's history at a play (`Device.dev`). `Instance.Honest.deployment` is the
-idle one: no key, no coins, no ledger. This file builds the one the auditor runs (`deployment`), the SPOT live
-challenger on its auditor device, each field what the host's code does:
-
-* **The host** (`Host`): what the auditor's machine holds when an audit starts. Its LMS key over SHA-512 at the
-  deployed parameters (`Lms.deployed`, n = 64; `serve.py`'s and `auditor.py`'s `load_key` in
-  `verity/composite/device/live_challenger/`), the key's next unused leaf (`lms.LeafState`), its name (each session's
-  record signs `<name>.<session>`), the commit its tree is pinned at, the session id the gate reserves for the audit
-  (`gate_reserve`'s `s<UTC>-<token>`), the ledger's next `seq` and its last line's SHA-512, the host's clock at each entry,
-  and the body fields of its own each entry adds that the device's model doesn't compute (the pins log's seal, the coin
-  link's port, the session secret's SHA-512, the session's other files' digests, serve.py's exit code). All of it is fixed
-  before the play: none of it is the prover's.
-* **The coins** (`families`, `draws`, `run`): the coin commitment's one family is the challenger family v2's parameters
-  name, with `MAX_COINS` coins (`Instance.coins`'s count). At the close the device samples, for every position of the layout,
-  the coin's `COIN_BYTES` bytes and its hm96 salt's `SALT_BYTES` bytes, as `LiveChallenger.__init__`
-  (`verity/protocols/spot/device/challenger.py`) samples `(coin, salt)` per position; the play's released coins override
-  the sampled ones at their positions (`Device.coinAt`). The run's scheme and epoch are the reserve request's, its host
-  `<name>.<session>`, and how it ended and its lines' times are what the prover's close leaves to it (`closeJson`).
-* **The ledger** (`opens`, `closes`): the auditor's signed entries for the period's one window, each `append`'s line
-  (`auditor.py`): `period-open`, `reserve` and `open` before any coin, `end` and `period-close` at the close, chained by
-  `prev` from the host's ledger head and numbered from its `seq`, each signed at its leaf. Their bodies carry the
-  prover's request where the gate copies it (the reserve's request, the window's root) and the device's own fields
-  where the gate computes them (the layout, `pinned`, `key_sha512`, `host`, the times, the record's leaf, the run's
-  commitment, the counts released, whether the client closed the session).
-* **The signatures** (`sign`): LMS `signAt` (`Lms.Sign`, `lms.sign_at`) under the host's key, the `i`-th message of the play
-  at the host's leaf plus `i`: the ledger's three opening entries, then the run's record and close (`serve.py`'s `sign`),
-  then the ledger's two closing entries, the order the host signs them in.
-* **At it** (`signer`, `dev`, `cost`, `base`): the deployed device's signer at `families`, its history at each play, the
-  declared calls covering its reading (`costs`), and a vocabulary at it whose fields `Instance` ties to the deployment
-  (`base_signer`, `coins_families`, `costs`).
-* **The audit's own parameters** (`Holds`): v2's parameters in `θ` name a challenger whose key is the host's. There the
-  history's key is the host's (`pubOf_holds`). Whatever challenger they name, the layout gives it `MAX_COINS` coins
-  (`families_params`), the family clause of the session v2 sets up (`SetsUp.params`).
--/
+/-! The live challenger as deployed: a deployment that holds a key, flips its coins and keeps the ledger. -/
 
 @[expose] public section
 
@@ -51,14 +15,8 @@ open Lean (Json)
 open Spot Spot.Challenger
 open Verity.Sampled.Device (RunSetup Deployment pubOf)
 
-/-! ## The host -/
-
-/-- **The auditor device the live challenger runs on**, as it stands when an audit starts at the parameters `θ`: its LMS
-key at the deployed parameters (`deployed`), its name and pinned commit, and at each `θ` the session id the gate
-reserves, the key's next unused leaf, the ledger's next `seq` and its last line's SHA-512 (`prev`, `ZERO` on an empty
-ledger), its clock's UTC reading at the audit's `k`-th entry, the body fields of its own the entry of each kind
-adds (`extra`), and the files the audit registers: at each `θ` the circuit and public files, and the pinned table
-files (`circuitFile`, `publicFile`, `tables`). -/
+/-- The auditor device the live challenger runs on, as it stands when an audit starts at the parameters
+`θ`; `prev` is `ZERO` on an empty ledger. -/
 structure Host where
   key : Lms.PrivateKey
   deployed : key.params = Lms.deployed
@@ -78,7 +36,6 @@ namespace Host
 
 variable (H : Host)
 
-/-- The host's pinned table lookup, derived from the table bytes it registers. -/
 def tableFiles : PinnedTables := .ofFiles H.tables
 
 /-- The host's public key, `I ‖ T[1]` (`lms.public_key`). -/
@@ -99,10 +56,6 @@ def signAt (q : ℕ) (m : ByteArray) : ByteArray :=
 
 end Host
 
-/-! ## The coins -/
-
-/-- **The coin commitment's families at the parameters `θ`**: the challenger family v2's parameters name, with
-`MAX_COINS` coins; none where they name no challenger. -/
 def families (θ : ByteArray) : Families :=
   match paramsOf θ with
   | some p =>
@@ -111,7 +64,6 @@ def families (θ : ByteArray) : Families :=
     | none => []
   | none => []
 
-/-- **Each family samples `MAX_COINS` coins** (`Instance.coins`). -/
 theorem coins_families {θ : ByteArray} {l : String} {m : ℕ} (h : (l, m) ∈ families θ) : m = MAX_COINS := by
   unfold families at h
   split at h
@@ -124,10 +76,8 @@ theorem coins_families {θ : ByteArray} {l : String} {m : ℕ} (h : (l, m) ∈ f
 /-- The bits the device samples for one position of its layout: the coin's `COIN_BYTES` bytes and its hm96 salt's. -/
 def SLOT_BITS : ℕ := 8 * (COIN_BYTES + _root_.Spot.Challenger.SALT_BYTES)
 
-/-- **The bits the device samples at the close**: every position's coin and salt (`LiveChallenger.__init__`). -/
 def draws (θ : ByteArray) : ℕ := _root_.Spot.Challenger.total (families θ) * SLOT_BITS
 
-/-- The bytes of the `n` bits of `ρ` from bit `off` (`Lines.coinBytes`). -/
 def bytesAt (ρ : List Bool) (off n : ℕ) : ByteArray := Lines.coinBytes ((ρ.drop off).take n)
 
 /-- Bytes read as JSON, `null` where they aren't UTF-8 text that parses. -/
@@ -136,14 +86,8 @@ def jsonOf (b : ByteArray) : Json :=
   | some s => (Flock.JsonParse.parse s).toOption.getD .null
   | none => .null
 
-/-- **The prover's request**, as the gate takes it: `reserve` (its `--peer`, `--scheme`, `--families`, `--epoch`,
-`--minutes`, `--for`, `--withhold` and its `by`), `open` (the window's root and its opener) and `period` (`period-open`'s
-fields), each an object of the request's JSON. -/
 def requestPart (a : ByteArray) (k : String) : Json := getD (jsonOf a) k
 
-/-- **What the prover's close leaves to the device**: `ended` (`null` when the client closed the session, else why
-not) and `times` (each release log line's time), the parts of the run the deployed device's clock and its client's
-frames decide. -/
 def closeJson (b : ByteArray) : Json := jsonOf b
 
 /-- An object's fields, none for any other value. -/
@@ -158,9 +102,6 @@ def strOf (j : Json) : String :=
   | .str s => s
   | _ => ""
 
-/-- **The run's setup at a play** but for its key, layout and ledger, which `Deployment.setupAt` sets: the session id
-the gate reserved and the host the record signs, the reserve's scheme and epoch, each position's coin and salt sampled at
-the close, how it ended and each line's time. -/
 def run (H : Host) (θ a : ByteArray) (_ : List Release) (b : ByteArray) (ρ : List Bool) : RunSetup where
   key := H.pub
   id := H.session θ
@@ -178,26 +119,18 @@ def run (H : Host) (θ a : ByteArray) (_ : List Release) (b : ByteArray) (ρ : L
     | _ => 0
   ledger := []
 
-/-- The run's setup at a play, under the parameters' key and at `families`, before its ledger. -/
 def setup (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) : RunSetup :=
   { run H θ a log b ρ with key := pubOf θ, families := families θ }
 
-/-- The run's coin commitment (`Properties.Challenger.Run.commitment`), its layout's and its coins' and salts'. -/
 def commitmentAt (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
     Option LiveCommitment :=
   (Device.runOf (setup H θ a log b ρ) log []).commitment
 
-/-- The run's release log, its head and the lines the device printed (`Device.printLog`); none where it printed none. -/
 def releaseLog (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
     Option (List String) :=
   (Device.printLog (setup H θ a log b ρ).time Device.PrintState.init log).map
     (Device.headLine (commitmentAt H θ a log b ρ) :: ·)
 
-/-! ## The ledger -/
-
-/-- **An entry's line, as `append` writes it**: entry `seq θ + j` of `kind` for `session`, after the line whose SHA-512 is
-`prev`, its `sig` the host's signature at leaf `q` over `ledger_message` of the entry without it, in the ledger's
-canonical text (`ledger_text`). -/
 def entryLine (H : Host) (θ : ByteArray) (j q : ℕ) (prev kind : String) (session : Option String) (body : Json) :
     Json :=
   let unsigned := Json.mkObj [("body", body), ("kind", .str kind), ("prev", .str prev), ("schema", .str LEDGER_SCHEMA),
@@ -206,8 +139,6 @@ def entryLine (H : Host) (θ : ByteArray) (j q : ℕ) (prev kind : String) (sess
   let r : _root_.Core.Record := ⟨body, kind, prev, LEDGER_SCHEMA, H.seq θ + j, session, H.signAt q m⟩
   .str ((PyJson.canonical r.toJson).toOption.getD "")
 
-/-- **Consecutive entries' lines**: from entry `seq θ + j` at leaf `q`, after the line whose SHA-512 is `prev`, each
-the next one's `prev` (`Core.Record.prevOf`). -/
 def entries (H : Host) (θ : ByteArray) : ℕ → ℕ → String → List (String × Option String × Json) → List Json
   | _, _, _, [] => []
   | j, q, prev, (kind, s, body) :: es =>
@@ -227,26 +158,20 @@ def body (H : Host) (θ : ByteArray) (kind : String) (part : Json) (keep : List 
     Json :=
   Json.mkObj (H.extra θ kind ++ (fieldsOf part).filter (keep.contains ·.1) ++ own)
 
-/-- The request fields a reserve records and its open carries (`RESERVED`), and whether its session is withheld. -/
 def RESERVE_FIELDS : List String := ["by", "for", "peer", "scheme", "epoch", "minutes", "withheld"]
 
-/-- **The period's open** (`period`'s `period-open`): the request's period, the pinned commit, the key and the time. -/
 def periodOpenBody (H : Host) (θ a : ByteArray) : Json :=
   body H θ "period-open" (requestPart a "period")
     ["period", "lane", "by", "cap", "circuit", "draw_k", "rows", "weights_root", "model", "circuit_files", "length",
       "policy", "alpha", "gamma", "registration", "policy_name"]
     [("pinned", .str H.pinned), ("key_sha512", .str H.keySha512), ("opened_utc", .str (H.clock θ 0))]
 
-/-- **The window's reserve** (`reserve`): the request, the layout the session commits to, the pinned commit, the key, the
-record's host, and when it starts and expires (`later`). -/
 def reserveBody (H : Host) (θ a : ByteArray) : Json :=
   body H θ "reserve" (requestPart a "reserve") RESERVE_FIELDS
     [("families", familiesJson (families θ)), ("pinned", .str H.pinned), ("key_sha512", .str H.keySha512),
       ("host", .str (H.hostAt θ)), ("started_utc", .str (H.clock θ 1)),
       ("expires_utc", .str ((later (H.clock θ 1) ((nat? (getD (requestPart a "reserve") "minutes")).getD 0)).getD ""))]
 
-/-- **The window's open** (`admit`): the window's root the opener named, its reserve's `seq`, the reserve's request and
-layout, its opener, the pinned commit, the key, the record's host and the time. -/
 def openBody (H : Host) (θ a : ByteArray) : Json :=
   body H θ "open" (requestPart a "reserve") RESERVE_FIELDS
     [("window", Json.mkObj [("root", getD (requestPart a "open") "root")]), ("reserve", Lean.toJson (H.seq θ + 1)),
@@ -254,30 +179,22 @@ def openBody (H : Host) (θ a : ByteArray) : Json :=
       ("pinned", .str H.pinned), ("key_sha512", .str H.keySha512), ("host", .str (H.hostAt θ)),
       ("started_utc", .str (H.clock θ 2))]
 
-/-- **The ledger's entries before any coin**: the period's open, the window's reserve and its open, entries `seq θ` to
-`seq θ + 2` at the host's leaves `leaf θ` to `leaf θ + 2`, after the host's ledger head. -/
 def opens (H : Host) (θ a : ByteArray) : List Json :=
   entries H θ 0 (H.leaf θ) (H.prev θ)
     [("period-open", none, periodOpenBody H θ a), ("reserve", some (H.session θ), reserveBody H θ a),
       ("open", some (H.session θ), openBody H θ a)]
 
-/-- Whether the client closed the session: its close left no reason it ended otherwise. -/
 def closed (b : ByteArray) : Bool :=
   match getD (closeJson b) "ended" with
   | .str _ => false
   | _ => true
 
-/-- How many coins of each family the run released (`released_of`), and whether every family released all of its
-(`complete`). -/
 def releasedJson (θ : ByteArray) (log : List Release) : Json :=
   Json.mkObj ((families θ).map fun (l, _) => (l, Lean.toJson (Device.coinsOf l log).length))
 
 def complete (θ : ByteArray) (log : List Release) : Bool :=
   (families θ).all fun (l, n) => (Device.coinsOf l log).length == n
 
-/-- **The window's end** (`run`'s `end`): whether the client closed the session and how it ended, the release log's
-SHA-512 among the session's files, the coins released and whether all were, the leaf the record was signed at (the
-fourth of the play's), its commitment's root and the time. -/
 def endBody (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) : Json :=
   let files := Json.mkObj ((fieldsOf (getD (Json.mkObj (H.extra θ "end")) "files")) ++
     ((releaseLog H θ a log b ρ).map fun ls => [(LOG_FILE, Json.str (logDigest ls))]).getD [])
@@ -291,15 +208,12 @@ def endBody (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (
       ("commitment", ((commitmentAt H θ a log b ρ).map fun c => Json.str (Flock.hexOf c.root)).getD .null),
       ("ended_utc", .str (H.clock θ 3))]
 
-/-- **The period's close** (`period`'s `period-close`): its one window, `{root, session, complete}`, and the time. -/
 def periodCloseBody (H : Host) (θ a : ByteArray) (log : List Release) : Json :=
   let window := Json.mkObj [("root", getD (requestPart a "open") "root"), ("session", .str (H.session θ)),
     ("complete", .bool (complete θ log))]
   body H θ "period-close" (requestPart a "period") ["period", "lane", "by"]
     [("windows", .arr #[window]), ("complete", .bool (complete θ log)), ("closed_utc", .str (H.clock θ 4))]
 
-/-- **The ledger's entries at the close**: the window's end and the period's close, entries `seq θ + 3` and
-`seq θ + 4`, after the window's open, at the leaves after the run's record and close (`leaf θ + 5`, `leaf θ + 6`). -/
 def closes (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) : List Json :=
   entries H θ 3 (H.leaf θ + 5) (_root_.Core.Record.prevOf (strOf ((opens H θ a).getLastD .null)))
     [("end", some (H.session θ), endBody H θ a log b ρ), ("period-close", none, periodCloseBody H θ a log)]
@@ -311,11 +225,6 @@ theorem closes_length (H : Host) (θ a : ByteArray) (log : List Release) (b : By
     (closes H θ a log b ρ).length = 2 :=
   entries_length H θ _ _ _ _
 
-/-! ## The deployment -/
-
-/-- **The live challenger as deployed** on the host `H`: the run of the session the gate reserved, its coins and salts
-sampled at the close, the ledger's three entries before any coin and two at the close, and each of the play's messages
-signed with the host's key at its leaf. -/
 def deployment (H : Host) : Deployment where
   run := run H
   opens := opens H
@@ -325,27 +234,17 @@ def deployment (H : Host) : Deployment where
   draws := draws
   sign θ i m := (H.signAt (H.leaf θ + i) ⟨m.toArray⟩).data.toList
 
-/-- The deployed device's signer at the parameters `θ`, at `families`. -/
 def signer (H : Host) (θ : ByteArray) : Signer := (deployment H).signer families θ
 
-/-- The deployed device's history at each play (`Device.dev`). -/
 noncomputable abbrev dev (H : Host) : Exchange → Properties.Challenger.History :=
   Device.dev ((deployment H).setupOf families)
 
-/-- **The declared calls**: the most, over the play's tapes, of what the device's reading of what the prover sent
-hashes (`Binding.breakCalls`) and one per blob it sent. -/
 noncomputable def cost (H : Host) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (Verity.play (families θ) (signer H θ) θ F c)) : ℕ :=
   Finset.univ.sup fun t : Verity.Game.Tape (Verity.play (families θ) (signer H θ) θ F c) σ =>
     Binding.breakCalls (dev H (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
       (Verity.Game.Tape.out _ σ t).sent.blobs.size
 
-/-! ## A vocabulary at the deployment -/
-
-/-- **v2's reading at the deployed device**: `Idle.vocab δ 1` with the deployment's families, signer and signature count,
-v2's reading of the committed files at the host's pinned tables (`Host.tableFiles`) and its digests, the host's
-circuit and public files then its pinned table files as the registered files, the declared calls `cost`, and every
-name that reads a strategy of the play at them. -/
 noncomputable def base (H : Host) (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
   { Verity.Idle.vocab δ 1 with
     families := families
@@ -378,43 +277,32 @@ noncomputable def base (H : Host) (δ : ℝ≥0∞) : Vocab Verity.Idle.device U
     honest := fun θ F c =>
       Verity.requestThen (families θ) (signer H θ) θ F c .empty ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩ }
 
-/-- `Instance.signer` at `base`: its signer is the deployment's at its families. -/
 theorem base_signer (H : Host) (δ : ℝ≥0∞) (θ : ByteArray) :
     (base H δ).signer θ = (deployment H).signer (base H δ).families θ :=
   rfl
 
-/-- `Instance.coins` at `base`: each family it names samples `MAX_COINS` coins. -/
 theorem base_coins (H : Host) (δ : ℝ≥0∞) (θ : ByteArray) (l : String) (m : ℕ) (h : (l, m) ∈ (base H δ).families θ) :
     m = MAX_COINS :=
   coins_families h
 
-/-- `Instance.costs` at `base`: its declared calls cover the deployed device's reading at its history. -/
 theorem costs (H : Host) (δ : ℝ≥0∞) : CostsRead (base H δ) (Device.dev ((deployment H).setupOf (base H δ).families)) :=
   fun θ F c σ t =>
     Finset.le_sup (f := fun t : Verity.Game.Tape (Verity.play (families θ) (signer H θ) θ F c) σ =>
       Binding.breakCalls (dev H (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
         (Verity.Game.Tape.out _ σ t).sent.blobs.size) (Finset.mem_univ t)
 
-/-! ## The audit's own parameters -/
-
-/-- **The deployment holds the audit's registration at `θ`**: v2's parameters in `θ` name a challenger whose key is the
-host's, its public key and the deployed LMS parameters. -/
 def Holds (H : Host) (θ : ByteArray) : Prop :=
   ∃ p key l, ParamsAt θ p ∧ p.base.challenger = some (key, l) ∧ key.pub = H.pub ∧ key.params = Lms.deployed
 
-/-- At the audit's own parameters the layout is the parameters' family, at `MAX_COINS` coins. -/
 theorem families_holds {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} {key : ChallengerKey} {l : String}
     (hp : ParamsAt θ p) (hc : p.base.challenger = some (key, l)) : families θ = [(l, MAX_COINS)] := by
   simp only [families, paramsOf_eq hp, hc]
 
-/-- **Each challenger v2's parameters name gets `MAX_COINS` coins** from the deployment's layout: the family clause
-`SetsUp.params` reads at an `Instance` (`Instance.coins`), with no hypothesis. -/
 theorem families_params {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} {key : ChallengerKey} {l : String}
     (hp : ParamsAt θ p) (hc : p.base.challenger = some (key, l)) : (l, MAX_COINS) ∈ families θ := by
   rw [families_holds hp hc]
   exact List.mem_singleton_self _
 
-/-- The first component of SPOT's id names the parameters' challenger key (`Binding.keyOf`). -/
 theorem findSome_keyAt : ∀ {ps : List _root_.Core.Composition.Named} {x : _root_.Core.Composition.Named}
     {k : ChallengerKey}, ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = some x → Binding.keyAt x = some k →
     ps.findSome? Binding.keyAt = some k
@@ -429,8 +317,6 @@ theorem findSome_keyAt : ∀ {ps : List _root_.Core.Composition.Named} {x : _roo
       rw [List.findSome?_cons, hn']
       exact findSome_keyAt h hk
 
-/-- **At the audit's own parameters the history's key is the host's**: the key every run and ledger line of the
-deployed device's history sits under (`Deployment.setupAt`'s `pubOf`). -/
 theorem pubOf_holds {H : Host} {θ : ByteArray} (h : Holds H θ) : pubOf θ = H.pub := by
   obtain ⟨p, key, l, ⟨ps, hps, x, hx, hp⟩, hc, hpub, -⟩ := h
   have hid : x.id = VStar.Recursive.Sampled.PROTOCOL := by simpa using List.find?_some hx

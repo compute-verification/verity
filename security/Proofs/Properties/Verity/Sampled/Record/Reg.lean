@@ -13,21 +13,7 @@ public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Pouw.MonitoringPeriod.Sort
 public import Std.Data.String.ToNat
 
-/-!
-# The registration v2's parameters name, at the record
-
-* **v2's slots are two classes** (`partSlots_classes`): the population, in the registration's strata, and the input
-  class, at most one stratum. The population's strata have the sizes of the layout's first class.
-* **The registration is v2's parameters'** (`regIs_of_setsUp`): at a session v2 sets up, the statement's descriptor
-  parses as the parameters' verifier's program and its query is their verifier's (`SetsUp.params`).
-* **The population is `PopMatches`' count** (`units_of_popMatches`): where the descriptor parses and its layout under
-  the query is laid out, `Partition.units` of the program and query is the `n` of `PopMatches`.
-* **The design at the sampling design's text is the sampling design the sample reads** (`slotDesign_samplingDesignText`, `slotDesign_designSlots`): over the
-  verifier's program and query of `n` units, where `samplingDesignAt` reads the sampling design `L`, `slotDesign` under the rule
-  `samplingDesign (samplingDesignText L)` is `L`'s one-stage design and then `all`, at a subset sampling design of at least one unit. `parseDesign` names a
-  sampling design that `deriveSamplingDesign` and `flockSamplingDesign` read as they read the verifier's (`deriveSamplingDesign_congr`, `deriveSamplingDesign_none`,
-  `deriveSamplingDesign_some`, `flockSamplingDesign_subset_text`, `flockSamplingDesign_bernoulli_text`).
--/
+/-! The registration v2's parameters name, at the record. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -51,8 +37,6 @@ theorem strataSizes_slotPartition (l : _root_.Spot.Slots.SlotOrder) :
   generalize l.classes.toList = cs
   cases cs <;> simp [Function.comp_def]
 
-/-- **v2's slots are two classes**: the population in the registration's strata, whose sizes are those of the first
-class of the registration's layout `l`, and the input class, at most one stratum. -/
 theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.Slots.SlotOrder}
     (hp : _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p)
     (hl : _root_.Spot.Slots.layout p A.qr = .ok l) :
@@ -66,9 +50,6 @@ theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.
     apply List.map_splitLengths_length
     exact (Flock.Bridge.nsOf_sum A.hpop).le.trans (by simp)
 
-/-- **At a session v2 sets up, the statement's registration is v2's parameters'**: the statement's descriptor parses as
-their verifier's program and its query is their verifier's, at the parameters whose verifier's sampling design the sample reads over
-the population. -/
 theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : ResourceAccounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A) :
     ∃ p, ParamsAt θ p ∧ p.base.verifier.query = A.qr ∧ samplingDesignAt p.base.verifier A.n = .ok A.design ∧
@@ -76,10 +57,6 @@ theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : ResourceAccounting.Device �
   obtain ⟨p, hp, -, -, hl, hd, hq, -⟩ := hsu.params
   exact ⟨p, hp, hq.symm, hl, hd⟩
 
-/-! ## The population -/
-
-/-- **The population is `PopMatches`' count**: where the descriptor parses as `p` and `p`'s layout under the query is
-`l`, `PopMatches desc q n` makes `Partition.units p q` the count `n`. -/
 theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_.Spot.Program}
     {l : _root_.Spot.Slots.SlotOrder} (h : Flock.Bridge.PopMatches desc q n)
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p)
@@ -94,8 +71,6 @@ theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_
   change (pop.toList.map Array.size).sum = n at hsum
   rw [(laysOut_units _ _ hlays).2, ← length_popUnits, hperm.length_eq, List.length_range'] at hsum
   rw [hsum]
-
-/-! ## The design at the sampling design's text -/
 
 theorem sort_samplingDesign_k :
     _root_.Spot.sortStrings #["k", "law"] = _root_.Spot.sortStrings #["law", "k"] :=
@@ -128,7 +103,6 @@ theorem getD_samplingDesign_of_kindOf {samplingDesign : Json} {s : String} (h : 
     rw [hs', h]
   · exact absurd h.symm hs
 
-/-- **`deriveSamplingDesign` reads only a sampling design's kind and `k`.** -/
 theorem deriveSamplingDesign_congr (p : _root_.Spot.Program) (q : Json) (tbl : Option Json) {a b : Json}
     (hl : _root_.Spot.getD a "law" = _root_.Spot.getD b "law")
     (hn : _root_.Spot.nat? (_root_.Spot.getD a "k") =
@@ -137,7 +111,6 @@ theorem deriveSamplingDesign_congr (p : _root_.Spot.Program) (q : Json) (tbl : O
   unfold _root_.Spot.Draw.deriveSamplingDesign
   rw [hl, hn]
 
-/-- `Flock.Draw.deriveWork` refuses `k = 0`. -/
 theorem deriveWork_k {k : ℕ} {S : Array (String × Array (ℕ × ℕ))} {tab : Array (String × ℕ × ℕ)}
     {L : Flock.Draw.SamplingDesign} (h : Flock.Draw.deriveWork k S tab = .ok L) : 1 ≤ k := by
   unfold Flock.Draw.deriveWork at h
@@ -148,7 +121,6 @@ theorem deriveWork_k {k : ℕ} {S : Array (String × Array (ℕ × ℕ))} {tab :
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, Nat.not_lt] at hc
     exact hc.1
 
-/-- **`deriveSamplingDesign`'s expansion is the sampling design's kind at its `k`**, of at least one unit. -/
 theorem deriveSamplingDesign_some {p : _root_.Spot.Program} {q samplingDesign : Json} {tbl : Option Json} {L : Flock.Draw.SamplingDesign}
     (h : _root_.Spot.Draw.deriveSamplingDesign p q samplingDesign tbl = .ok (some L)) :
     ∃ k, _root_.Spot.nat? (_root_.Spot.getD samplingDesign "k") = some k ∧ 1 ≤ k ∧
@@ -243,8 +215,6 @@ theorem flockSamplingDesign_bernoulli_text (a b n : ℕ) (hb : 0 < b) (hab : a �
   simp only [bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
   rfl
 
-/-- **`samplingDesignAt`'s steps**: the verifier's sampling design's expansion, the sampling design `flockSamplingDesign` reads from its sampling design object, and the
-expansion where there is one. -/
 theorem samplingDesignAt_ok {v : _root_.Spot.Docket.Verifier} {n : ℕ} {L : Flock.Draw.SamplingDesign}
     (h : samplingDesignAt v n = .ok L) :
     ∃ derived parsed, _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable = .ok derived ∧
@@ -267,9 +237,6 @@ def samplingDesignText : Flock.Draw.SamplingDesign → String
   | .stratified k _ => "stratified" ++ ":" ++ Nat.repr k
   | .work k _ => "work" ++ ":" ++ Nat.repr k
 
-/-- **The design at the sampling design's text is the sampling design `samplingDesignAt` reads**: over the verifier's program and query of `n` units,
-where `samplingDesignAt` reads the sampling design `L`, `slotDesign` under the rule `samplingDesign (samplingDesignText L)` is `L`'s one-stage design, then `all`,
-at a subset sampling design of at least one unit. -/
 theorem slotDesign_samplingDesignText {v : _root_.Spot.Docket.Verifier} {n : ℕ} {L : Flock.Draw.SamplingDesign}
     (hu : _root_.Spot.Partition.units v.program v.query = .ok n) (hl : samplingDesignAt v n = .ok L)
     (hk : ∀ k, L = .subset k → 1 ≤ k) :
@@ -301,8 +268,6 @@ theorem slotDesign_samplingDesignText {v : _root_.Spot.Docket.Verifier} {n : ℕ
       rw [← hd]
       exact deriveSamplingDesign_congr _ _ _ (getD_samplingDesign_of_kindOf hw (by decide)).symm (by rw [hnat]; exact nat_toJson k)
 
-/-- **v2's design at the sampling design's text**: over the verifier's program and query of `A`'s population, where `samplingDesignAt` reads
-`A`'s sampling design, the design under `samplingDesign (samplingDesignText A.design)` is `designSlots A`. -/
 theorem slotDesign_designSlots (A : Live) {v : _root_.Spot.Docket.Verifier}
     (hu : _root_.Spot.Partition.units v.program v.query = .ok A.n) (hl : samplingDesignAt v A.n = .ok A.design)
     (hk : ∀ k, A.design = .subset k → 1 ≤ k) :

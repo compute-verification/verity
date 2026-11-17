@@ -4,30 +4,7 @@ public import Proofs.Properties.Verity.Sampled.RootB
 public import Proofs.Properties.Verity.Sampled.LinkFirst
 public import Proofs.Properties.Verity.Sampled.Held
 
-/-!
-# `MovesReach` at the session's layout
-
-At the readings and the decoders at the session's layout (`Live.layout`, `Live.tables`) and the sample-coupled coin map
-under `fieldEnc`, every clause of `MovesOf` holds at one witness of the joint distribution's support off the link's and the
-rounds' empty classes (`ReachesOff`): one widened sample, one set of link points and one set of rep rounds, since the
-three sit together inside the writer's output.
-
-* **The digest each opening answers** (`rep_answers`): each opening v2's read shows of a rep stream answers the
-  digest the record's round gives, the `after` of the one line opening that round (`opensRound_unique`,
-  `opening_after`), which `Record.decode` reads as the round's digest under SHA-512 digests (`decode_sha`).
-* **`MovesOf` at a witness** (`ReachesOff.movesOf`): the rep rounds (`firstStop_reps_verdict`) fix the outcome as the
-  writer's; the trace's first stop fixes a cut (`firstStop_fixes`), the link points are released after a log `L₀` in
-  order (`firstStop_order`), and that release is the log's first opening (`firstOpened_link`). Then the record decodes
-  to the session's sample file at the sample (`recordSample_firstStop`), the roots decoded at the first stop are the
-  record's `root_B` (`firstStop_rootB`), the link points are the record's (`link_pts`), and the proof files are v2's
-  (`proofs_of_sent`).
-  The order the record's sample and the first stop take, that the sample's coins precede every opening and that the first
-  opening is the session stream's, comes from v2's order refusal, which the sampled verdict passed
-  (`freshBefore_verdict`, `linkFirst_verdict`).
-* **`MovesReach`** (`movesReach_layout`): `ReachesOff.movesOf` at every outcome, at the coupling's cut (v2's read of
-  the log is the device's, and v2 samples at the digest `after`, `SampledDigest`), with what it takes of each accepted
-  play the cut holds of stated for every tape.
--/
+/-! `MovesReach` at the session's layout. -/
 
 @[expose] public section
 
@@ -44,11 +21,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## The digest each opening of a rep stream answers -/
-
-/-- **The line opening a round a tree shows opened is after the opening's bytes**: where `coinTreesOf` accepts the
-release log `lines`, a line of it opening round `k` of stream `name` of a tree `t` of its trees (`OpensRound`) is the
-one line opening that round (`opensRound_unique`), so its `after` is that of the opening `t` shows (`opened_after`). -/
 theorem opening_after {lines : List String} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     {t : LoggedTree} (ht : t ∈ trees) {name : String} {k : ℕ} {o : TreeOpening} (ho : t.opening name k = some o)
     {l : String} (hl : l ∈ lines) (hr : OpensRound l t.root name k) {d : Json} (hd : event l = .ok d) :
@@ -62,7 +34,6 @@ theorem opening_after {lines : List String} {trees : Array LoggedTree} (hT : coi
   cases hd'
   exact ha
 
-/-- Of one tree, a stream of a tree read is of that tree. -/
 theorem root_of_keyAt {trees : Array LoggedTree} (h1 : trees.size = 1) {t : LoggedTree} (ht : t ∈ trees)
     {i si : ℕ} {ρ name : String} (hk : KeyAt (heldTrees trees) i si ρ name) : ρ = t.root := by
   obtain ⟨-, sp, hg, -⟩ := hk
@@ -75,7 +46,6 @@ theorem root_of_keyAt {trees : Array LoggedTree} (h1 : trees.size = 1) {t : Logg
   rw [Array.getElem?_eq_getElem hj] at ht'
   rw [← (Prod.mk.inj he).1, ← Option.some.inj ht']
 
-/-- **What `Record.decode` reads of each round's digest**: the bytes of the round's `msg_{dk}` (S12). -/
 theorem decode_sha {spec : Flock.SessionSpec} {text : String} {sess : Flock.RunRecord}
     (h : Flock.Record.decode spec text = .ok sess) :
     ∃ j recs, Flock.JsonParse.parse text = .ok j ∧ Flock.Record.arr j "streams" = .ok recs ∧
@@ -118,13 +88,6 @@ theorem decode_sha {spec : Flock.SessionSpec} {text : String} {sess : Flock.RunR
         subst hb' h
         exact ⟨_, by assumption, by assumption⟩
 
-/-- **Each opening v2's read shows of a record's stream answers the record's round's digest** (`rep_rounds`'s
-`hans`): where v2 read the release log `lines` of one coin tree as the releases `pre ++ y :: post`, `y` opening tree
-`i`'s stream `s`, named `name` in the `Hello`s before it, the line `y` reads opens round `openedOf pre i s` of that
-stream (`readLog_round`) after the bytes `y` answers; the record `sessionTreeReason` accepts is of that tree
-(`root_of_keyAt`) and gives that round's `msg_sha512` as the `after` of the opening the tree shows (`rounds_held`),
-which is that line's (`opening_after`); and under SHA-512 digests `Record.decode` reads the round's digest as those
-bytes (`decode_sha`). -/
 theorem rep_answers {label : String} {after : ByteArray} {J : Json} {ξ : ByteArray} {lines : List String}
     {pre post : List Release} {y : Release} {trees : Array LoggedTree} {i s n : ℕ} {name : String}
     {spec : Flock.SessionSpec} {record : String} {sess : Flock.RunRecord} {st : Flock.StreamRec}
@@ -167,9 +130,6 @@ theorem rep_answers {label : String} {after : ByteArray} {J : Json} {ξ : ByteAr
   obtain rfl : aft = o.after := Lean.Json.str.inj ha
   exact Except.ok.inj (hya.symm.trans hux)
 
-/-! ## `MovesOf` at a witness -/
-
-/-- **A session v2 sets up is tied to v2's verifier** (`SetsUp`'s `params`). -/
 theorem SetsUp.popTied {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A) :
     PopTied θ A := by
   obtain ⟨p, hp, -, -, -, hdesc, hq, -⟩ := hA.params
@@ -178,20 +138,6 @@ theorem SetsUp.popTied {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
 
 -- `decodersAt`'s roots search `List.finRange A.rounds`, which unification would otherwise unfold at `A.rounds`'s value
 attribute [local irreducible] Live.rounds Live.N in
-/-- **`MovesOf` at a witness of the joint distribution's support, at the session's layout**: at the readings and the decoders at
-`Live.layout` and `Live.tables`, and at the sample-coupled coin map under `fieldEnc`, an outcome off the link's and the
-rounds' empty classes, beside a play that the sampled verdict accepts, that misses nowhere and whose log v2's check read
-is the device's, is the writer's at the widened sample, the decoded registration and an outcome whose moves are those
-v2's files decode to (`MovesOf`). It takes, for the record's sample (`recordSample_firstStop`, at the session tied to v2's
-verifier, `SetsUp.popTied`, at v2's log at its coins, `sampleReadAll_coinsRead`, and at v2's hold on the record's sample,
-`sampleHeld`), that v2 reads the sample's coins of the family `label` answering `after` (`hN`), and, for the rep rounds
-(`firstStop_reps_verdict`), that the log opens only the record's rounds. v2's order refusal, which the sampled verdict
-passed, gives that every release of that family precedes every opening (`freshBefore_verdict`) and that the device's
-log opens the session stream first (`linkFirst_verdict`). That the log has an opening and that its
-trees name their streams distinctly come from the verdict (`verdict_opens`, `verdict_nodup`), that each opening of a rep
-stream answers the record's round's digest from v2's read and the record (`rep_answers`), and the session's one link
-round and its `N` live rounds from `Live.rounds_eq`. The roots (`firstStop_rootB`) and the link points (`link_pts`) read
-the same first opening. -/
 theorem ReachesOff.movesOf {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
@@ -252,11 +198,6 @@ theorem ReachesOff.movesOf {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} 
   · exact firstStop_rootB hA rfl rfl hr hn hv hl hfirst hLA hc h₀ hrec hs hd
   · exact (link_pts hA hθ hv hl hL₀ rfl hno (hfirst L₀ _ L' hL₀ i s₀ n₀ rfl hno) rfl hrec hs hd).symm
 
-/-- **`MovesReach` at the session's layout** (`couplingTarget_assembled`'s `hM` at these readings, decoders and coin
-map, with `after` the strategy's `afterAt`): `ReachesOff.movesOf` at every outcome, at the cut that v2's check read the
-device's log and that v2 samples at `after` (`SampledDigest`), where what it takes of a play holds of every tape whose
-play the sampled verdict accepts and whose log v2's check read is the device's, and v2's family and digest (`hN`) of
-those whose sample answers `after`. -/
 theorem movesReach_layout {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)

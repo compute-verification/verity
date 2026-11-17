@@ -3,27 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Window.Draw
 public import Proofs.Properties.Verity.Sampled.CouplingAt
 
-/-!
-# SPOT's coupling over a window: the stops' term within the hiding term
-
-The window's stops' term (`executionPhaseErr`) charges each member's stops their openings' gaps and empty classes, in the
-members' order. Each is within the class error of the node the stop is at (`openErr`), the class errors along a play
-of the period's game are within the potential from no tree open (`avg_pathCharge_game_le`), and that potential is the
-hiding term however many sessions the play runs. So the one-session bound (`couplesErr_le_of_charge`) holds over a
-window as it stands:
-
-* **The sessions' error within the charge** (`avg_roundsErrK_le`, `sessionErrK_le`, `seqErr_le`): where each stop's
-  term is within `Γ` at the stop's node, a session's error, then what follows it, is within the charge along the play
-  from the session's first stop, averaged over the tapes from it; what follows a session is the next member's, so the
-  members' errors in order are too.
-* **The stops' term within the charge along a play** (`executionPhaseErr_le_of_charge`): over a start that leaves the tape
-  from the first stop fresh and is the uniform tape.
-* **Off the empty classes at their counts** (`executionPhaseSampleMap_couples_at`, `executionPhaseErr_sampleMap_le_at`): the
-  sample-coupled coin map's premise off `linkEmptyAt` and `roundEmptyAt` at every member's stops holds within the
-  stops' term, and that term is within the hiding term at every strategy.
-* **The coupling** (`executionPhaseCouplingTarget_of_sample_at`): `executionPhaseCouplingTarget_of_logged` at the sample-coupled coin
-  maps off those events, with no bound on the stops' term left.
--/
+/-! SPOT's coupling over a window: the stops' term within the hiding term. -/
 
 @[expose] public section
 
@@ -35,13 +15,6 @@ open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The sessions' error within the charge -/
-
-/-- **The rounds' error, then what follows the session, within the charge** (`avg_roundsErr_le`): where `γ` at each
-stop the projection reaches from the cuts `Ks₀`, at each submission decoded there, is within `Γ` at the stop's node,
-and what follows the session, `e`, at a position the projection reaches is within the charge from the position's next
-stop averaged over the tapes from that stop, the rounds' error from a position the projection reaches is within the
-charge from the next stop, over the tapes from the position; the play's end costs nothing. -/
 theorem avg_roundsErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Type} (D : PosDecoders g σ R Reg)
     (J : ℕ) (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
     (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g)
@@ -84,10 +57,6 @@ theorem avg_roundsErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg :
         _ ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) (p.withTape z).toStop :=
             avg_mono fun _ => Pos.add_stopCharge_consume_le Γ hret _
 
-/-- **A session's error, then what follows it, within the charge**: where `γL` at each stop the projection reaches
-and `γ` at each submission decoded there are within `Γ` at the stop's node, and what follows the session is within
-the charge from its position's next stop averaged over the tapes from that stop, so is the session's error from a
-position the projection reaches. -/
 theorem sessionErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Type} (D : PosDecoders g σ R Reg)
     (J : ℕ) (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
     (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g)
@@ -106,9 +75,6 @@ theorem sessionErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Ty
     _ ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) p.toStop :=
         avg_mono fun _ => Pos.add_stopCharge_consume_le Γ hret _
 
-/-- **What follows a stop consumed with nothing written in, within the charge**: where what follows is within the
-charge from its position's next stop averaged over the tapes from that stop, what follows past a stop the projection
-reaches, over the tapes from the stop, is within the charge from the stop, which leaves the stop's own node out. -/
 theorem resample_consume_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} (Γ : Game Exchange → ℝ≥0∞)
     (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g) {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞}
     (he : ∀ q, Pos.Reached Ks₀ q → e q ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) q.toStop)
@@ -129,9 +95,6 @@ theorem resample_consume_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} (Γ 
     _ ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) s :=
         avg_mono fun _ => Pos.add_stopCharge_consume_le Γ hret _
 
-/-- **A member's error, then what follows it, within the charge**: its session's (`sessionErrK_le`) where the sample
-holds one of its proof blocks, with what follows taken past the session's closing round's stop
-(`resample_consume_le`); else what follows, which is within the charge from the same position. -/
 theorem memberErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Type} (D : PosDecoders g σ R Reg)
     (J : ℕ) (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
     (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g)
@@ -145,10 +108,6 @@ theorem memberErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Typ
       (fun q hq => resample_consume_le Γ hret Ks₀ he q.toStop (.toStop hq)) N p hp
   | false => he p hp
 
-/-- **The sessions' error, in the members' order, within the charge**: where each member's `γL` at each stop the
-projection reaches and its `γ` at each submission decoded there are within `Γ` at the stop's node, the members'
-errors from a position the projection reaches are within the charge from the position's next stop, averaged over the
-tapes from that stop. -/
 theorem seqErr_le {g : Game Exchange} {σ : Strategy g} {Reg : Type} {R nJ : ℕ} (D : ℕ → PosDecoders g σ R Reg)
     (γ : ℕ → Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
     (γL : ℕ → (mPts : ℕ) → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (S : Finset (Fin nJ)) (Rg : Reg)
@@ -169,12 +128,6 @@ variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
-/-! ## The stops' term -/
-
-/-- **The window's stops' term within the charge along a play** (`couplesErr_le_of_charge`): where each member's
-`γL` at each stop the projection reaches and its `γ` at each submission decoded there are within `Γ` at the stop's
-node, the play's end costs nothing, the start leaves the tape from the first stop fresh and is the uniform tape, the
-stops' term over the window is within the charge along a play over a uniform tape. -/
 theorem executionPhaseErr_le_of_charge (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
     {γ : ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
@@ -202,7 +155,6 @@ theorem executionPhaseErr_le_of_charge (W : ExecutionPhase) (t : ℕ) (rd : Read
     _ = avg (pathCharge Γ (V.game θ F c) σ) := hS _
     _ ≤ b := hb
 
-/-- **From no tree open, the potential is the window's hiding term** (`treePotential_nil`). -/
 theorem ExecutionPhase.treePotential_nil (W : ExecutionPhase) : treePotential e [] = W.hidingTerm := by
   have h : ENNReal.ofReal (1 / 2 ^ 257) = ((2 : ℝ≥0∞) ^ 257)⁻¹ := by
     rw [one_div, ENNReal.ofReal_inv_of_pos (by positivity), ENNReal.ofReal_pow (by norm_num),
@@ -211,8 +163,6 @@ theorem ExecutionPhase.treePotential_nil (W : ExecutionPhase) : treePotential e 
   simp only [List.map_nil, List.sum_nil, zero_add, treeLines, Nat.sub_zero, Nat.cast_mul, div_eq_mul_inv]
   ring
 
-/-- **The sample-coupled start over the window averages any reading of the tape to its uniform average**, wherever
-the sample's coins are uniform (`avg_sampleMap_start`). -/
 theorem avg_executionPhaseSampleMap_start (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (label : String) (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H)
@@ -224,10 +174,6 @@ theorem avg_executionPhaseSampleMap_start (W : ExecutionPhase) (rd : Reading W.r
     (hκ fun κ' => avg fun t =>
       H (fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m κ' t)).symm
 
-/-- **The sample-coupled coin map's premise over the window, off the empty classes at their counts**
-(`sampleMap_couples_at`): the joint distribution's tape off `linkEmptyAt` and `roundEmptyAt` at every member's stops is within
-the openings' gaps and empty classes at the stops' counts over the stops of the uniform tape, wherever the sample's
-coins are uniform. -/
 theorem executionPhaseSampleMap_couples_at (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (label : String) (after : ByteArray) {m : ℕ}
     (κ : W.Ω → Fin m → Fin 512 → Bool)
@@ -252,10 +198,6 @@ theorem executionPhaseSampleMap_couples_at (W : ExecutionPhase) (t : ℕ) (rd : 
     (executionPhaseSampleMap_fresh e V θ F c W rd σ label after κ) (executionPhaseSampleMap_start e V θ F c W rd σ label after κ hκ)
   rwa [zero_add] at h
 
-/-- **The window's stops' term at the sample-coupled coin map, with each stop's empty class at the count of coins the
-stop releases, is within the hiding term** at every strategy (`couplesErr_sampleMap_le_at`): each stop's gap and empty
-class at its count are within its node's class error at any count the frame asks for, and the class errors along a
-play are within the potential from no tree open, however many members' sessions the play runs. -/
 theorem executionPhaseErr_sampleMap_le_at (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (label : String) (after : ByteArray) {m : ℕ}
     (κ : W.Ω → Fin m → Fin 512 → Bool)
@@ -278,11 +220,6 @@ theorem executionPhaseErr_sampleMap_le_at (W : ExecutionPhase) (t : ℕ) (rd : R
 variable (k : Verity.Registration.Composite)
 
 omit θ F c in
-/-- **The coupling at the window's projection with the sample-coupled coin maps, off the empty classes at their
-counts** (`couplingTarget_withProject_of_sample_at`): `executionPhaseCouplingTarget_of_logged` at `executionPhaseSampleMaps` and the
-cut `P` and `Q`, off `linkEmptyAt` and `roundEmptyAt` at every member's stops, whose coin map's premise holds within
-the stops' term (`executionPhaseSampleMap_couples_at`), within the hiding term at every strategy
-(`executionPhaseErr_sampleMap_le_at`), wherever the window's coins are uniform. -/
 theorem executionPhaseCouplingTarget_of_sample_at (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V)
     (D : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       ExecutionPhaseDecoders V θ F c W σ)

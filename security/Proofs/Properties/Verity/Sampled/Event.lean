@@ -5,29 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Held
 public import Proofs.Flock.Bridge.ScopeGate
 public import Proofs.Flock.Bridge.V5.Accepted
 
-/-!
-# SPOT's acceptance is in the event V5 bounds
-
-`SampledKSLiveV5` bounds an event of the live audit, that `verify --zk` accepts the files and the transcript
-(`Flock.Bridge.LiveAcceptsKSP`). The verifier is one-stage v2 (`Spot.OneStageZk.checkBlobs`), which runs
-`verify --zk`'s checks on the session's files itself. Where it accepts, every outcome whose transcript is the session's
-record and proof files is in that event:
-
-* **v2's verdict, whole** (`verdictOf_event`, `step_event`, `run_event`): a session's verdict accepts only where
-  `Zk.verify` accepts, the files' ports and roots pass (`Flock.PortRoots.checkOf`), the files' form and the record's
-  sample pass (`Flock.KsScope.checkOf`), and the population check passes.
-* **v2's circuit is the one the events read** (`circuitOf_parse`, `statement_zkTags`): V5's event reads
-  `ProvedScope.circuitOf`'s circuit, as v2's checks do, and at a statement with hidden outputs that is not templated,
-  as v2's is, that circuit is `HmOut.parse`'s, which `PortRoots.check` and `KsScope.check` read.
-* **What acceptance gives** (`Accepted`, `checkBlobsAt_event`, `checkBlobs_event`): at the session's inputs and
-  transcript, `AcceptsZK`, the ports and roots check and the form check at the record's sample, the program's proof
-  blocks under the verifier's query the record's population `n` in order (`popHeld`), and every public file the
-  session's file loads to of `n` proof blocks (`publicHeld`, `population_held`).
-* **The event** (`Accepted.liveAcceptsKSP`): at any registration and sample.
-
-It is a statement about outcomes, not probabilities: that v2's acceptance in the period's game is no likelier than an
-event of the live audit is the coupling (`CouplingTarget`), stated for V5's transcript event (`LiveAcceptsZKP`).
--/
+/-! SPOT's acceptance is in the event V5 bounds. -/
 
 @[expose] public section
 
@@ -38,11 +16,6 @@ open FlockSoundness.Discharge
 open FlockSoundness.Discharge.Recursion.Witness (toExec)
 open FlockSoundness.Refine (ebind_ok)
 
-/-! ## v2's verdict, whole -/
-
-/-- **A session's verdict accepts only where every check `verify --zk` makes accepts**: `Zk.verify` on its proof files
-at its session (`verdictOf_ok`), the files' ports and roots (`ksFiles`), the files' form and the sample `draw`
-(`Flock.KsScope.checkOf`), and the population check last. -/
 theorem verdictOf_event {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit} {coinKeys : Array String}
     {record : String} {draw : Option Json} {st : _root_.Spot.OneStageZk.SetUp}
     {files : Flock.V (Array ByteArray)} {coinKey : Option String}
@@ -70,8 +43,6 @@ theorem verdictOf_event {I : Flock.Witness.Inputs} {scope ksFiles population : F
   obtain ⟨⟨⟩, hs, h⟩ := ebind_ok h
   exact ⟨hk, hs, h⟩
 
-/-- **One session's `step` after a run that accepted so far, where every session accepted**: `step_verified`'s record,
-session and proof files, and the checks `verdictOf_event` reads at the record's own sample. -/
 theorem step_event {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads}
     {bs : _root_.Core.Blobs} {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
     {s : _root_.Spot.OneStageZk.RunFiles} {r : _root_.Spot.OneStageZk.Run}
@@ -97,8 +68,6 @@ theorem step_event {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads
     exact ⟨recB, record, spec, tabs, rest, proofs, hb, hrec, hst, hf, hv, hk, hs, hp⟩
   · cases h
 
-/-- **v2's run on one session, where it accepted**, as `run_verified` with the files' ports and roots check it runs:
-`Flock.PortRoots.checkOf` on the circuit v2's checks read and the public file. -/
 theorem run_event {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.RunFiles}
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p #[s] pu bs = .ok r) :
@@ -138,8 +107,6 @@ theorem run_event {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.R
     exact ⟨tags0, circuitB, pubB, rd, htags, hc, hp, hrd, _, _, _, foldlM_single hr'⟩
   · cases h
 
-/-- **v2's check at the coins `ξ` accepts only where the registration's population is held to the verifier's
-program** (`popHeld`). -/
 theorem checkBlobsAt_popHeld {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
@@ -161,8 +128,6 @@ theorem checkBlobsAt_popHeld {p : _root_.Spot.OneStageZk.Params}
     obtain ⟨⟨⟩, hpop, -⟩ := ebind_ok hr
     exact hpop
 
-/-- **`popHeld` passes only where the record names a population `n` that the program's proof blocks under the
-query are, in order** (`Slots.popOk`). -/
 theorem popHeld_ok {v : _root_.Spot.Docket.Verifier} {record : Json}
     (h : _root_.Spot.OneStageZk.popHeld v record = .ok ()) :
     ∃ n, _root_.Spot.nat? (_root_.Spot.getD record "population") = some n ∧
@@ -176,28 +141,16 @@ theorem popHeld_ok {v : _root_.Spot.Docket.Verifier} {record : Json}
       exact ⟨n, hn, hp⟩
     · cases h
 
-/-! ## v2's circuit is the one the events read -/
-
-/-- **At a statement with hidden outputs that is not templated, the circuit v2's checks read is `HmOut.parse`'s**,
-which `Flock.PortRoots.check` and `Flock.KsScope.check` read. -/
 theorem circuitOf_parse {t : Flock.Tags} (hh : t.hiddenOutputs = true) (ht : t.isTmpl = false) (f : ByteArray)
     (tb : List (String × ByteArray)) : Flock.ProvedScope.circuitOf t f tb = Flock.HmOut.parse t f tb := by
   simp only [Flock.ProvedScope.circuitOf, hh, ↓reduceIte, Flock.HmOut.parseCommit, ht, Bool.false_eq_true]
 
-/-- **v2's statement under `--zk`'s tags has hidden outputs and is not templated**, at any mask and table count. -/
 theorem statement_zkTags {t : Flock.Tags} (h : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some t)
     (m k : ℕ) : (Flock.Zk.tags t m k).hiddenOutputs = true ∧ (Flock.Zk.tags t m k).isTmpl = false := by
   have htg : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
   obtain rfl := Option.some.inj (htg.symm.trans h)
   exact ⟨rfl, rfl⟩
 
-/-! ## What acceptance gives -/
-
-/-- **What v2's acceptance gives of one session**, at its inputs `I` and transcript `t`, the verifier `v` and the
-population `n`: `verify --zk` accepts the transcript (`AcceptsZK`) at a statement with hidden outputs that is not
-templated; the files' ports and roots (`PortRoots.checkOf`) and their form at the record's sample (`KsScope.checkOf`)
-pass on the circuit `verify` reads (`ProvedScope.circuitOf`); the program's proof blocks under the verifier's query are
-`n` units in order (`Slots.popOk`); and every public file the session's file loads to has `n` proof blocks. -/
 structure Accepted (I : Exec.Inputs) (t : Exec.Transcript) (v : _root_.Spot.Docket.Verifier) (n : ℕ) :
     Prop where
   accepts : ZkExec.AcceptsZK I t
@@ -210,9 +163,6 @@ structure Accepted (I : Exec.Inputs) (t : Exec.Transcript) (v : _root_.Spot.Dock
   loads : ∀ {tags : Flock.Tags} {c : Flock.Circuit} {pub : Flock.Public},
     Flock.HmOut.loadPublic tags c I.publicFile = .ok pub → pub.n = n
 
-/-- **Where v2's check accepts at the coins `ξ` on parameters that name no members, its one session is `Accepted`**: at the statement's tags, the circuit
-and public files the parameters name on the blobs, the session's record and proof files (`sessionRecord`,
-`sessionProofs`), the verifier of the parameters and the population the record names. -/
 theorem checkBlobsAt_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
@@ -243,7 +193,6 @@ theorem checkBlobsAt_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
     ⟨(ZkHidden.acceptsZKP_none _ _).1 ⟨spec, sts, hset, hshape, hv⟩, hz, hk, hks, hpop,
       fun hl => population_held hph (Hidden.loadPublic_nil hl) hn⟩⟩
 
-/-- **Where v2's check accepts, its one session is `Accepted`** (`checkBlobsAt_event` at the coins it read). -/
 theorem checkBlobs_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
@@ -260,12 +209,8 @@ theorem checkBlobs_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.On
   · exact checkBlobsAt_event hm h
   · cases h
 
-/-! ## The events -/
-
 variable {I : Exec.Inputs} {t : Exec.Transcript} {v : _root_.Spot.Docket.Verifier} {n : ℕ}
 
-/-- **`Accepted` is in V5's acceptance event without public inputs** at every outcome whose transcript is the
-session's. -/
 theorem Accepted.liveAcceptsKSP (h : Accepted I t v n) {m : ℕ} {Reg : Type} (R : Reg) (S : Finset (Fin m)) :
     Flock.Bridge.LiveAcceptsKSP I none (R, S, t) :=
   ⟨h.accepts, h.ports, _, _, h.form⟩

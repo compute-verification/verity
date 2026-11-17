@@ -2,29 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.MemberForm.Run
 
-/-!
-# What the per-member form's structure holds of each session's record
-
-The per-member form's structure (`Spot.OneStageZk.membersStructure`) holds each statement's sessions to the trees
-the challenger logged (`membersTreesHeld`), each session's record to its own tree less the round that closes the
-session (`Spot.Challenger.memberTreeReason`). This module reads that off the verifier's code, below everything that
-reads the device's log, so that the proofs about v2's read (`Binding.accepted_run`) hold of an accept of either
-form:
-
-* **The structure's parts** (`membersStructure_ok`): the statements' members, the sessions' names, the trees, the
-  order, the log's lines and the sessions held to the trees.
-* **What `membersTreesHeld` names each session** (`NamedOf`, `membersTreesHeld_ok`): its name, its tables at its
-  member's own files and its record, the record parsed, and the SHA-512 of its evidence, each read from the blobs;
-  and `Spot.Challenger.membersTreeReason` accepts those, in the statements' sessions' order. At statements of one
-  session each, one a statement (`NamedAt`, `named_one`).
-* **The records v2's read reads are those** (`records_named`): `recordOn` of each statement's session is the record
-  `membersTreesHeld` parsed.
-* **The tree less its last opening** (`find_pop`, `mem_pop`, `unclosed_opening`): an opening `t.unclosed` shows is
-  one `t` shows, and the first of its stream and round there too.
-* **A member's record at its tree** (`memberTreeReason_none`, `membersTreeReason_each`, `tree_round`): what
-  `memberTreeReason` accepts, of each session `membersTreeReason` accepts; and each round the record gives coins of
-  is one its tree shows opened.
--/
+/-! What the per-member form's structure holds of each session's record. -/
 
 @[expose] public section
 
@@ -34,12 +12,6 @@ open Lean (Json)
 open Spot Spot.Challenger
 open FlockSoundness.Refine (ebind_ok)
 
-/-! ## The structure's parts -/
-
-/-- **The per-member form's structure, part by part**: where `membersStructure` passes, the statements are members'
-in order (`membersHeld`), their sessions' names are the evidence's in order, the challenger's trees read (`treesOf`),
-the order refusal passed (`orderHeld`), the evidence's log reads as lines, and the statements' sessions hold to the
-trees and those lines (`membersTreesHeld`). -/
 theorem membersStructure_ok {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member}
     {c : _root_.Spot.OneStage.Commitment} {e : _root_.Spot.OneStageZk.Evidence}
     {sts : Array _root_.Spot.OneStageZk.StatementFiles} {bs : _root_.Core.Blobs}
@@ -62,18 +34,10 @@ theorem membersStructure_ok {p : _root_.Spot.OneStageZk.Params} {ms : Array _roo
   obtain ⟨⟨⟩, hth, -⟩ := ebind_ok h
   exact ⟨held, ts, lines, hheld, Classical.byContradiction fun hc => hne (bne_iff_ne.2 hc), hts, hord, hlines, hth⟩
 
-/-! ## What `membersTreesHeld` names each session -/
-
-/-- The statements' sessions, each with its statement's member, in order. -/
 def sessionsOf (zs : List (_root_.Spot.OneStageZk.StatementFiles × _root_.Spot.OneStageZk.Member)) :
     List (_root_.Spot.OneStageZk.Member × _root_.Spot.OneStageZk.RunFiles) :=
   zs.flatMap fun z => z.1.sessions.toList.map fun s => (z.2, s)
 
-/-- **What `membersTreesHeld` names the session `z.2` of the member `z.1`**, on the blobs `bs`: the session's name,
-its tables with the `root_B` lengths its statement fixes on the member's own files and lookup tables and its record
-(`ownRootBTables`),
-the record a blob holds as UTF-8, parsed (`null` where it doesn't parse), and the SHA-512, in hex, of the session's
-evidence (`sessionEvidence`). -/
 def NamedOf (bs : _root_.Core.Blobs) (z : _root_.Spot.OneStageZk.Member × _root_.Spot.OneStageZk.RunFiles)
     (x : String × Array (String × Option ℕ) × Json × String) : Prop :=
   ∃ blob record evidence, bs.get z.2.record s!"session {z.2.name}'s record" = .ok blob ∧
@@ -81,7 +45,6 @@ def NamedOf (bs : _root_.Core.Blobs) (z : _root_.Spot.OneStageZk.Member × _root
     x = (z.2.name, _root_.Spot.OneStageZk.ownRootBTables z.1.own bs record,
       (Flock.JsonParse.parse record).toOption.getD Json.null, sha512Hex evidence)
 
-/-- **What `membersTreesHeld` names the one session of the statement `z.1`**, at its member `z.2`. -/
 def NamedAt (bs : _root_.Core.Blobs) (z : _root_.Spot.OneStageZk.StatementFiles × _root_.Spot.OneStageZk.Member)
     (x : String × Array (String × Option ℕ) × Json × String) : Prop :=
   ∃ s, z.1.sessions = #[s] ∧ NamedOf bs (z.2, s) x
@@ -91,7 +54,6 @@ theorem forall₂_append {β γ : Type} {R : β → γ → Prop} : ∀ {a₁ a�
   | _, _, _, _, .nil, h => h
   | _, _, _, _, .cons h t, h' => .cons h (forall₂_append t h')
 
-/-- Each element of the first of two lists related elementwise is related to one of the second. -/
 theorem forall₂_mem {β γ : Type} {R : β → γ → Prop} : ∀ {l₁ : List β} {l₂ : List γ}, List.Forall₂ R l₁ l₂ →
     ∀ a ∈ l₁, ∃ b ∈ l₂, R a b
   | _, _, .nil, _, ha => by cases ha
@@ -101,9 +63,6 @@ theorem forall₂_mem {β γ : Type} {R : β → γ → Prop} : ∀ {l₁ : List
     · obtain ⟨b, hb, hr⟩ := forall₂_mem t a ha
       exact ⟨b, List.mem_cons_of_mem _ hb, hr⟩
 
-/-- **The sessions `membersTreesHeld` holds to the trees**: where it passes on the trees `ts`, the lines `log` and
-the statements `sts`, each with its member, `Spot.Challenger.membersTreeReason` accepts, against the trees and the
-lines, what it names the statements' sessions in order (`NamedOf`). -/
 theorem membersTreesHeld_ok {ts : Array LoggedTree} {log : List String}
     {sts : Array (_root_.Spot.OneStageZk.StatementFiles × _root_.Spot.OneStageZk.Member)} {bs : _root_.Core.Blobs}
     (h : _root_.Spot.OneStageZk.membersTreesHeld ts log sts bs = .ok ()) :
@@ -147,7 +106,6 @@ theorem membersTreesHeld_ok {ts : Array LoggedTree} {log : List String}
         rw [List.map_append, ← List.append_assoc, Array.toList_push]
         exact forall₂_append hI'' (.cons ⟨blob, record, evidence, hb, hrec, hev, rfl⟩ .nil)
 
-/-- **At statements of one session each, `membersTreesHeld` names one session a statement.** -/
 theorem named_one {bs : _root_.Core.Blobs} :
     ∀ {zs : List (_root_.Spot.OneStageZk.StatementFiles × _root_.Spot.OneStageZk.Member)}
       {l : List (String × Array (String × Option ℕ) × Json × String)},
@@ -164,10 +122,6 @@ theorem named_one {bs : _root_.Core.Blobs} :
     cases h with
     | cons hx ht => exact .cons ⟨s, hs, hx⟩ (named_one (fun z' hz' => hone z' (List.mem_cons_of_mem _ hz')) ht)
 
-/-! ## The records v2's read reads -/
-
-/-- **The records v2's read reads of the statements' sessions are the ones `membersTreesHeld` parsed**: `recordOn`
-of each statement's one session is its record on the blobs, parsed. -/
 theorem records_named {bs : _root_.Core.Blobs} :
     ∀ {zs : List (_root_.Spot.OneStageZk.StatementFiles × _root_.Spot.OneStageZk.Member)}
       {l : List (String × Array (String × Option ℕ) × Json × String)}, List.Forall₂ (NamedAt bs) zs l →
@@ -183,16 +137,12 @@ theorem records_named {bs : _root_.Core.Blobs} :
       records_named t, hx]
     try rfl
 
-/-! ## The tree less its last opening -/
-
-/-- An array is its `pop` and what `pop` drops. -/
 theorem pop_append {β : Type} (a : Array β) : ∃ r, a = a.pop ++ r := by
   refine ⟨(a.toList.drop (a.size - 1)).toArray, ?_⟩
   apply Array.ext'
   rw [Array.toList_append, Array.toList_pop, List.dropLast_eq_take, Array.length_toList]
   exact (List.take_append_drop _ _).symm
 
-/-- What `find?` finds less the last, it finds. -/
 theorem find_pop {β : Type} {p : β → Bool} {a : Array β} {o : β} (h : a.pop.find? p = some o) :
     a.find? p = some o := by
   obtain ⟨r, hr⟩ := pop_append a
@@ -204,21 +154,15 @@ theorem mem_pop {β : Type} {a : Array β} {o : β} (h : o ∈ a.pop) : o ∈ a 
   rw [hr]
   exact Array.mem_append_left _ h
 
-/-- **An opening a tree shows less its last opening, the tree shows.** -/
 theorem unclosed_opening {t : LoggedTree} {name : String} {k : ℕ} {o : TreeOpening}
     (h : t.unclosed.opening name k = some o) : t.opening name k = some o :=
   find_pop (a := t.opened) h
 
-/-- The one tree of `#[t]`. -/
 theorem mem_one {t t' : LoggedTree} (h : t' ∈ #[t]) : t' = t := by
   simpa using h
 
-/-! ## The record at its member's tree -/
-
 variable {t : LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
 
-/-- **Each round a member's record gives coins of is one its tree shows opened**, with those coins' SHA-512
-(`Trees.round_held`, at the one tree the member's check holds the record to). -/
 theorem tree_round (h : sessionTreeReason #[t.unclosed] tables record = none) {stream : String} {k : ℕ}
     {cs : ByteArray} (hr : recordRound record stream k = some cs) :
     recordTree record = t.root ∧ ∃ o, t.opening stream k = some o ∧ o.coins = sha512Hex cs := by
@@ -226,11 +170,6 @@ theorem tree_round (h : sessionTreeReason #[t.unclosed] tables record = none) {s
   obtain rfl := mem_one ht'
   exact ⟨hroot, o, unclosed_opening ho, hc⟩
 
-/-! ## What the members' check accepts of a session -/
-
-/-- **What `memberTreeReason` accepts**: the record's tree is a logged tree, the last round the log shows opened of it
-closes the session after the evidence, and the tree less that round is the session's as `sessionTreeReason` holds
-one. -/
 theorem memberTreeReason_none {trees : Array LoggedTree} {tables : Array (String × Option ℕ)} {record : Json} {evidence : String}
     (h : memberTreeReason trees tables record evidence = none) :
     ∃ t ∈ trees, getD (getD record "coin_tree") "root" = Json.str t.root ∧ ∃ o, t.opened.back? = some o ∧
@@ -247,7 +186,6 @@ theorem memberTreeReason_none {trees : Array LoggedTree} {tables : Array (String
       · cases h
     · cases h
 
-/-- **Each session `membersTreeReason` accepts, `memberTreeReason` accepts.** -/
 theorem membersTreeReason_each {trees : Array LoggedTree} {lines : List String}
     {records : Array (String × Array (String × Option ℕ) × Json × String)}
     (h : membersTreeReason trees lines records = none) :

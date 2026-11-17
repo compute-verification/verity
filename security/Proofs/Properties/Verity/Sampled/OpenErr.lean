@@ -7,32 +7,7 @@ public import Proofs.Flock.Soundness.ZK.RealLeaves
 public import Proofs.Properties.Verity.Sampled.CoinMap
 public import Proofs.Properties.Verity.Sampled.OpenEmpty
 
-/-!
-# SPOT's coupling: one hiding swap per opened leaf
-
-An opening's node costs the coupling two terms: the opening's gap and its empty class (`openGap`, `openEmpty`, in
-`Proofs.Properties.Verity.Sampled.CoinMap`). Both are read off one partition, the rounds of the leaf's fiber
-(`TreeOpenable`) by the coins they release, and one bound covers their sum: the partition's class error (`classErr`).
-Over the sample of the leaf, the class error at the release the prover picks after seeing the leaf is within twice the
-real leaf's distance from an ideal one, so one hiding swap per opened leaf pays for both terms.
-
-* **A pick's preimages** (`pickIn_eq_iff`, `card_pickIn_eq`, `sum_tsub_card_pickIn_le`): `pickIn S` hits each element
-  of `S` from `|C| / |S|` coins, or one more.
-* **The class error** (`classNum`, `classErr`, `shortfall_pickIn_add_le`): over a uniform release `u` of `Q` and the
-  classes `S u` of `N` rounds, `J` of them nonempty, a pick's shortfall in the class of `u` plus the probability that
-  the class is empty is at most `classErr`: each class's excess `J·|S u| - N`, plus `N` per empty class, over `|Q|·N`.
-* **Within the leaf's distance** (`core_le`, `classNum_le`, `mul_classErr_le`): a fiber's class error, weighted by
-  the fiber's size, is at most the fiber's distance from the ideal fiber, whose classes are uniform.
-* **One hiding swap** (`avg_iSup_classErr_le`, `avg_iSup_classErr_le_hm96`): over the leaf's sample, the class error at
-  the worst release is at most `2·δ₁`, where `δ₁` bounds the real leaf's distance from an ideal one at every event of
-  the leaf and the rest of the sample (for hm96's leaves, `Claims.Hm96Hiding` through `ideal_leaf_swap`).
-* **At an opening's node** (`openGap_add_openEmpty_le`): the node's gap plus its empty class is at most its class
-  error, wherever every round of the fiber releases some `bits u`.
-* **At the deployed releases** (`injective_roundBits`, `injective_linkBits`, `openGap_add_openEmpty_le_round`): a
-  round's bits determine its `m` challenges and a link's bits its two rounds', at every `m`, and a sample's first `m`
-  coins are a round's release (`opened_eq_roundBits`, in `Proofs.Properties.Verity.Sampled.OpenEmpty`), so a round's
-  opening is within its class error.
--/
+/-! SPOT's coupling: one hiding swap per opened leaf. -/
 
 @[expose] public section
 
@@ -40,9 +15,6 @@ namespace Verity.Game
 
 open scoped ENNReal
 
-/-! ## A pick's preimages -/
-
-/-- **Where a pick lands**: `d` picks `e ∈ S` exactly where `d`'s index modulo `|S|` is `e`'s index in `S`. -/
 theorem pickIn_eq_iff {C : Type} [Fintype C] {S : Finset C} (h : S.Nonempty) (d : C) {e : C} (he : e ∈ S) :
     pickIn S d = e ↔ (Fintype.equivFin C d).1 % S.card = (S.equivFin ⟨e, he⟩).1 := by
   unfold pickIn
@@ -58,8 +30,6 @@ theorem pickIn_eq_iff {C : Type} [Fintype C] {S : Finset C} (h : S.Nonempty) (d 
       S.equivFin ⟨e, he⟩ from Fin.ext hd, Equiv.symm_apply_apply]
 
 open Classical in
-/-- **A pick's preimages**: `e ∈ S` is picked by `|C| / |S|` coins, and one more where `e`'s index in `S` is below
-`|C| % |S|`. -/
 theorem card_pickIn_eq {C : Type} [Fintype C] {S : Finset C} (h : S.Nonempty) {e : C} (he : e ∈ S) :
     (Finset.univ.filter fun d => pickIn S d = e).card =
       Fintype.card C / S.card + if (S.equivFin ⟨e, he⟩).1 % S.card < Fintype.card C % S.card then 1 else 0 := by
@@ -102,14 +72,12 @@ theorem card_pickIn_bounds {C : Type} [Fintype C] {S : Finset C} (h : S.Nonempty
   split_ifs <;> omega
 
 open Classical in
-/-- **Every coin picks once**: the preimages of `S`'s elements are all the coins. -/
 theorem sum_card_pickIn {C : Type} [Fintype C] {S : Finset C} (h : S.Nonempty) :
     ∑ e ∈ S, (Finset.univ.filter fun d => pickIn S d = e).card = Fintype.card C := by
   rw [← Finset.card_univ]
   exact (Finset.card_eq_sum_card_fiberwise fun d _ => pickIn_mem h d).symm
 
 open Classical in
-/-- **A pick's deficits**: the elements of `S` picked by fewer than `J` coins miss at most `J·|S| - |C|` in all. -/
 theorem sum_tsub_card_pickIn_le {C : Type} [Fintype C] {S : Finset C} (h : S.Nonempty) (J : ℕ) :
     ∑ e ∈ S, (J - (Finset.univ.filter fun d => pickIn S d = e).card) ≤ J * S.card - Fintype.card C := by
   by_cases hJ : J ≤ Fintype.card C / S.card
@@ -125,21 +93,14 @@ theorem sum_tsub_card_pickIn_le {C : Type} [Fintype C] {S : Finset C} (h : S.Non
           rw [Finset.sum_const, smul_eq_mul, sum_card_pickIn h, mul_comm]
       _ ≤ J * S.card - Fintype.card C := le_rfl
 
-/-! ## The class error -/
-
-/-- **A partition's class count**: for classes of sizes `k` over `Q`, `J` of them nonempty, of `N` elements, each
-class's excess `J·k u - N`, plus `N` per empty class. -/
 def classNum {Q : Type} [Fintype Q] (N : ℕ) (k : Q → ℕ) : ℕ :=
   ∑ u, ((Finset.univ.filter fun v => 0 < k v).card * k u - N) +
     N * (Fintype.card Q - (Finset.univ.filter fun v => 0 < k v).card)
 
-/-- **A partition's class error**: its class count over `|Q|·N`. -/
 noncomputable def classErr {Q : Type} [Fintype Q] (N : ℕ) (k : Q → ℕ) : ℝ≥0∞ :=
   (classNum N k : ℝ≥0∞) / (Fintype.card Q * N)
 
 open Classical in
-/-- **A pick in a uniform release's class**: where the classes `S u` partition `C` (`cls`), the shortfall of a pick
-in the class of a uniform `u`, plus the probability that the class is empty, is at most the class error. -/
 theorem shortfall_pickIn_add_le {Q C : Type} [Fintype Q] [Nonempty Q] [Fintype C] [Nonempty C] (S : Q → Finset C)
     (cls : C → Q) (hS : ∀ u d, d ∈ S u ↔ cls d = u) :
     shortfall (fun u => pickIn (S u)) + prCoin (fun u => ¬ (S u).Nonempty) ≤
@@ -246,8 +207,6 @@ theorem shortfall_pickIn_add_le {Q C : Type} [Fintype Q] [Nonempty Q] [Fintype C
         rw [← add_mul, ← Nat.cast_add, classNum, hJ]
     _ = classErr (Fintype.card C) (fun u => (S u).card) := hce.symm
 
-/-! ## The class error within the leaf's distance -/
-
 theorem cast_tsub (a b : ℕ) : ((a - b : ℕ) : ℝ) = max ((a : ℝ) - b) 0 := by
   rcases le_total b a with h | h
   · rw [Nat.cast_sub h, max_eq_left (sub_nonneg.2 (Nat.cast_le.2 h))]
@@ -271,8 +230,6 @@ theorem core_arith {K J W X₀ N A V T : ℝ} (hJK : J ≤ K) (hJ : 0 ≤ J) (hK
   have key : K * (W * (A + N * (K - J))) ≤ K * (V + (K - J) * X₀) := by nlinarith
   exact le_of_mul_le_mul_left key hK
 
-/-- **A partition's excess within its distance from uniform**, in the reals: for classes of weights `k` supported in
-`S`, `W` times the class count is at most the distance of `|Q|·W·k` from the constant `X₀`. -/
 theorem core_le {Q : Type} [Fintype Q] [DecidableEq Q] (S : Finset Q) (k : Q → ℝ) (hoff : ∀ u ∉ S, k u = 0)
     {W X₀ : ℝ} (hX : 0 ≤ X₀) (hN : 0 ≤ ∑ v, k v) (hK : 0 < (Fintype.card Q : ℝ)) :
     W * (∑ u, max ((S.card : ℝ) * k u - ∑ v, k v) 0 + (∑ v, k v) * ((Fintype.card Q : ℝ) - S.card)) ≤
@@ -327,7 +284,6 @@ theorem core_le {Q : Type} [Fintype Q] [DecidableEq Q] (S : Finset Q) (k : Q →
   · rw [← hTs]
     exact Finset.abs_sum_le_sum_abs _ _
 
-/-- **The class count within the distance from uniform**, in the reals. -/
 theorem classNum_cast_le {Q : Type} [Fintype Q] [Nonempty Q] (k : Q → ℕ) (z : ℕ) {X₀ : ℝ} (hX : 0 ≤ X₀) :
     ((z * classNum (∑ u, k u) k : ℕ) : ℝ) ≤ ∑ u, |(Fintype.card Q : ℝ) * z * k u - X₀| := by
   classical
@@ -341,9 +297,6 @@ theorem classNum_cast_le {Q : Type} [Fintype Q] [Nonempty Q] (k : Q → ℕ) (z 
   rw [classNum, Nat.cast_mul, Nat.cast_add, Nat.cast_sum, Nat.cast_mul, Nat.cast_sub hJK, Nat.cast_sum]
   simp only [cast_tsub, Nat.cast_mul, Nat.cast_sum]
 
-/-- **A fiber's class count within its distance from the ideal fiber**: where `Ω`'s classes `cl` are of one size,
-weights `n` summed per class have the class count, scaled by `z`, at most `|Q|` times the distance of `z·n` from the
-constant `c`. -/
 theorem classNum_le {Ω Q : Type} [Fintype Ω] [Fintype Q] [Nonempty Q] [DecidableEq Q] (cl : Ω → Q)
     (hs : ∀ u, Fintype.card Q * (Finset.univ.filter fun ω => cl ω = u).card = Fintype.card Ω) (n : Ω → ℕ)
     (z c : ℕ) :
@@ -369,8 +322,6 @@ theorem classNum_le {Ω Q : Type} [Fintype Ω] [Fintype Q] [Nonempty Q] [Decidab
   push_cast [cast_dist]
   rfl
 
-/-- **The weighted class error within a bound**: `N` times the class error is at most `S / z` wherever `z` times
-the class count is at most `|Q|·S`. -/
 theorem mul_classErr_le {Q : Type} [Fintype Q] [Nonempty Q] {N z S : ℕ} {k : Q → ℕ} (hz : z ≠ 0)
     (h : z * classNum N k ≤ Fintype.card Q * S) : (N : ℝ≥0∞) * classErr N k ≤ (S : ℝ≥0∞) / z := by
   rcases Nat.eq_zero_or_pos N with hN | hN
@@ -389,10 +340,6 @@ theorem mul_classErr_le {Q : Type} [Fintype Q] [Nonempty Q] {N z S : ℕ} {k : Q
         rw [mul_comm (Fintype.card Q : ℝ≥0∞) (S : ℝ≥0∞)]
         exact ENNReal.mul_div_mul_right _ _ hK0 (ENNReal.natCast_ne_top _)
 
-/-! ## One hiding swap -/
-
-/-- **A distance within twice a bound on every event**: where each side's mass on every event `G` is within `δ` of
-the other's, their distance is within `2·δ`. -/
 theorem sum_dist_div_le {ι : Type} (s : Finset ι) (a b : ι → ℕ) {D : ℝ≥0∞} (hD : D ≠ 0) {δ : ℝ≥0∞}
     (h₁ : ∀ (G : ι → Prop) [DecidablePred G],
       ((∑ i ∈ s.filter G, a i : ℕ) : ℝ≥0∞) / D ≤ ((∑ i ∈ s.filter G, b i : ℕ) : ℝ≥0∞) / D + δ)
@@ -418,8 +365,6 @@ theorem sum_dist_div_le {ι : Type} (s : Finset ι) (a b : ι → ℕ) {D : ℝ�
   rw [e, Nat.cast_add, ← ENNReal.div_add_div_same, two_mul]
   exact add_le_add (hpart a b h₁) (hpart b a h₂)
 
-/-- **An event's complement the other way**: a bound on the complements' probabilities bounds the events' the other
-way round. -/
 theorem prCoin_swap_back {Xs Zs : Type} [Fintype Xs] [Nonempty Xs] [Fintype Zs] [Nonempty Zs] (E₁ : Xs → Prop)
     (E₂ : Zs → Prop) {δ : ℝ≥0∞} (h : prCoin (fun x => ¬ E₁ x) ≤ prCoin (fun z => ¬ E₂ z) + δ) :
     prCoin E₂ ≤ prCoin E₁ + δ := by
@@ -430,8 +375,6 @@ theorem prCoin_swap_back {Xs Zs : Type} [Fintype Xs] [Nonempty Xs] [Fintype Zs] 
     _ ≤ prCoin E₁ + (prCoin (fun z => ¬ E₂ z) + δ) := add_le_add le_rfl h
     _ = prCoin E₁ + δ + prCoin fun z => ¬ E₂ z := by ring
 
-/-- **A pair's event, counted by its second coordinate's map**: the pairs `(ω, y)` whose `(ω, L (ω, y))` satisfies
-`G`, counted over the values `L` takes. -/
 theorem card_filter_pair {Ω Ys Λ : Type} [Fintype Ω] [Fintype Ys] [DecidableEq Λ] (L : Ω × Ys → Λ) (t : Finset Λ)
     (ht : ∀ p, L p ∈ t) (G : Ω × Λ → Prop) [DecidablePred G] :
     (Finset.univ.filter fun p : Ω × Ys => G (p.1, L p)).card =
@@ -455,8 +398,6 @@ theorem prCoin_pair_eq {Ω Ys Λ : Type} [Fintype Ω] [Fintype Ys] [DecidableEq 
         Fintype.card (Ω × Ys) := by
   rw [prCoin_eq_card, card_filter_pair L t ht G]
 
-/-- **Events of a release under its sampling design**: a map whose means are those of `bits` gives every event of it the
-probability of the event of `bits`. -/
 theorem prCoin_distribution {Ω Q R : Type} [Fintype Ω] [Fintype Q] {P : Ω → R} {bits : Q → R}
     (hlaw : ∀ g : R → ℝ≥0∞, avg (fun ω => g (P ω)) = avg fun u => g (bits u)) (A : R → Prop) :
     prCoin (fun ω => A (P ω)) = prCoin fun u => A (bits u) := by
@@ -464,8 +405,6 @@ theorem prCoin_distribution {Ω Q R : Type} [Fintype Ω] [Fintype Q] {P : Ω →
   unfold prCoin
   exact hlaw fun r => if A r then 1 else 0
 
-/-- **A mean through a map, bounded on each value**: where each value `ℓ` of `L`, weighted by its preimage's size,
-has `F ℓ` within `B ℓ`, the mean of `F ∘ L` is within the values' `B` over `|Xs|`. -/
 theorem avg_comp_le {Xs Λ : Type} [Fintype Xs] [DecidableEq Λ] (L : Xs → Λ) (F B : Λ → ℝ≥0∞)
     (h : ∀ ℓ, ((Finset.univ.filter fun x => L x = ℓ).card : ℝ≥0∞) * F ℓ ≤ B ℓ) :
     avg (fun x => F (L x)) ≤ ∑ ℓ ∈ Finset.univ.image L, (Fintype.card Xs : ℝ≥0∞)⁻¹ * B ℓ := by
@@ -479,10 +418,6 @@ theorem avg_comp_le {Xs Λ : Type} [Fintype Xs] [DecidableEq Λ] (L : Xs → Λ)
   rw [Finset.sum_congr rfl hc, Finset.sum_const, nsmul_eq_mul, mul_left_comm]
   exact mul_le_mul_right (h ℓ) _
 
-/-- **One hiding swap per leaf**: a leaf `L (ω, y)` of the sample `ω` and the salt `y`, within `δ₁` of an ideal leaf
-`LI z` at every event of the sample and the leaf (`hswap`), and releases `P i ω` of the sample, each distributed as an
-injective `bits i` of a uniform `u` (`hlaw`). Over the sample and the salt, the class error of the leaf's fiber
-partitioned by the release, at the worst release `i`, is at most `2·δ₁`. -/
 theorem avg_iSup_classErr_le {Ω Ys Zs Λ ι : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ys] [Nonempty Ys] [Fintype Zs]
     [Nonempty Zs] [DecidableEq Λ] (L : Ω × Ys → Λ) (LI : Zs → Λ) {δ₁ : ℝ≥0∞}
     (hswap : ∀ G : Ω → Λ → Prop,
@@ -606,8 +541,6 @@ theorem avg_iSup_classErr_le {Ω Ys Zs Λ ι : Type} [Fintype Ω] [Nonempty Ω] 
     exact prCoin_swap_back (fun p : Ω × Ys => G (p.1, L p)) (fun p : Ω × Zs => G (p.1, LI p.2))
       (hswap fun ω ℓ => ¬ G (ω, ℓ))
 
-/-- **One hiding swap per hm96 leaf**: `avg_iSup_classErr_le` at the leaf `H (x ω + My y, c y)` of an hm96 salt `y`,
-whose ideal leaf is `H (U, c y)` at a fresh uniform `U` (`ideal_leaf_swap`, from `Claims.Hm96Hiding`). -/
 theorem avg_iSup_classErr_le_hm96 {Ω Ys B C Λ ι : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ys] [Nonempty Ys]
     [AddCommGroup B] [Fintype B] [DecidableEq Λ] (My : Ys → B) (c : Ys → C) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → Λ) (x : Ω → B) {R : ι → Type} [∀ i, DecidableEq (R i)]
@@ -629,9 +562,6 @@ namespace Verity.Sampled
 open Verity.Game
 open scoped ENNReal
 
-/-- **An opening's gap and empty class within its class error**: at an opening's node whose canonical description
-is `o`, where every round of the fiber releases `bits u` for some `u`, the gap plus the empty class is at most the
-class error of the fiber partitioned by `bits`. -/
 theorem openGap_add_openEmpty_le {β Q : Type} [Fintype Q] [Nonempty Q] {E : List Release → Game β}
     {g' : Game β} (o : OpeningAt E g') (ho : openingOf E g' = some o) (bits : Q → List Bool)
     (hinj : Function.Injective bits) (hcov : ∀ d : o.Openable, ∃ u, TreeDraw.opened d.1 o.n = bits u) :
@@ -659,40 +589,29 @@ theorem openGap_add_openEmpty_le {β Q : Type} [Fintype Q] [Nonempty Q] {E : Lis
   rw [hG, hE]
   exact shortfall_pickIn_add_le (fun u => o.classOf (bits u)) cls hS
 
-/-! ## At the deployed releases -/
-
 local notation "𝔽" => FlockLevel3.GF128
 
 variable (e : 𝔽 ≃ (Fin 128 → Bool))
 
-/-- Each of a round's challenges is released as its 128 bits. -/
 theorem map_length_roundBits {m : ℕ} (c : Fin m → 𝔽) :
     (List.ofFn fun i => List.ofFn (e (c i))).map List.length = List.ofFn fun _ : Fin m => 128 := by
   rw [List.map_ofFn]
   exact congrArg List.ofFn (funext fun i => List.length_ofFn)
 
-/-- **A round's bits determine its challenges**, at every count `m`: each challenge is released as its 128 bits, in
-order. -/
 theorem injective_roundBits {m : ℕ} : Function.Injective (roundBits e : (Fin m → 𝔽) → List Bool) := by
   intro c c' h
   have h' := List.eq_iff_flatten_eq.2 ⟨h, (map_length_roundBits e c).trans (map_length_roundBits e c').symm⟩
   funext i
   exact e.injective (List.ofFn_injective (congrFun (List.ofFn_injective h') i))
 
-/-- A round's bits are 128 per challenge, under every encoding. -/
 theorem length_roundBits_enc {m : ℕ} (c : Fin m → 𝔽) : (roundBits e c).length = 128 * m := by
   rw [roundBits, List.length_flatten, map_length_roundBits, List.ofFn_const, List.sum_replicate_nat, Nat.mul_comm]
 
-/-- **A link's bits determine its two rounds' challenges**, at every count `m`: its first round's bits have the same
-length at every release (`length_roundBits_enc`). -/
 theorem injective_linkBits {m : ℕ} : Function.Injective (linkBits e : (Fin 2 → Fin m → 𝔽) → List Bool) := by
   intro p p' h
   obtain ⟨h0, h1⟩ := List.append_inj h ((length_roundBits_enc e (p 0)).trans (length_roundBits_enc e (p' 0)).symm)
   exact funext (Fin.forall_fin_two.2 ⟨injective_roundBits e h0, injective_roundBits e h1⟩)
 
-/-- **At a round's opening**: where the opening releases `m` coins of a block of at least `m`, its gap plus its empty
-class at a round's release is at most its class error (`openGap_add_openEmpty_le`, with `injective_roundBits` and
-`opened_eq_roundBits`). -/
 theorem openGap_add_openEmpty_le_round {β : Type} {m : ℕ} {E : List Release → Game β} {g' : Game β}
     (o : OpeningAt E g') (ho : openingOf E g' = some o) (hn : o.n = m) (hm : m ≤ o.T.spec.block) :
     openGap E g' (roundBits e : (Fin m → 𝔽) → List Bool) + openEmpty E g' (roundBits e : (Fin m → 𝔽) → List Bool) ≤

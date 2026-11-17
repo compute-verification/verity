@@ -9,32 +9,7 @@ public import Proofs.Core.Game.Prob
 public import Proofs.Properties.Verity.Sampled.Unbound
 public import Proofs.Properties.Verity.Sampled.RecursiveRefused
 
-/-!
-# SPOT's target at the deployed device, from the coupling
-
-`Verity.Vocab.SpotSound` at composite `k`, for a vocabulary whose sampled fields are the deployment's sessions
-(`Deployed`, `Covers`), from one target, a `Prop` the owning goal proves: **the coupling** (`CouplingTarget`, at each
-session): the sampled verdict in the period's game is at most as likely as Flock's `--zk` verifier's acceptance in the
-live audit at the projected strategy, plus the messages' two-continuation finders, the coin trees' hiding term, the read
-finder's collision and the forger's forgery (the sample read from the log).
-
-What the proof reads that is proved: Flock's knowledge soundness of the live session (`SampledKSLiveV5`), applied at the
-session's sample (`Live.v5_at`, along `Live.L_eq`), A3 and `live-verifier` at the deployed device (`Live.deployed`,
-`Live.hCust`), the sampling design's miss (`Flock.Bridge.pa_partOf`, `Flock.Bridge.nsOf_sum`), the bridge from the
-committed files' unbound units to the session's incorrect proof blocks (`Live.unbound_subset_faulty_part`), and, at
-parameters that don't name the one-stage form, that SPOT accepts nothing (`recursiveForm_refused`).
-
-* `Live.ks`: at a session, a strategy of the live audit whose extracted transcript fails the claim at the session's share
-  is accepted with probability at most the session's error (`Live.sessionDelta`). V5 at `B` the extracted witness's
-  incorrect set gives the live acceptance at most the sampling design's miss of `B` plus the tables', binding and roots'
-  errors; through the bridge `B` holds more than an `ε` share of the proof blocks, so its miss is at most the sample's
-  term of the session's error (`Live.sessionDelta`).
-* `spotSound_of_targets`: SPOT's target. Where `error`'s premises hold and the claim fails, the coupling bounds the
-  verdict by the live acceptance at the projected strategy and the finders' terms: `Live.ks` bounds the first, the strict
-  birthday bound (`StrictBirthday`) each two-continuation finder at `2t + 2h` calls, `FinderCR` the read finder at the
-  published bound, and `LmsUnforgeable` the forger at `ε_forge`, so the sum is at most the session's `Live.delta` plus
-  `ε_forge`, at most the published `δ` plus `ε_forge` (`Deployed.delta`, no loss term).
--/
+/-! SPOT's target at the deployed device, from the coupling. -/
 
 @[expose] public section
 
@@ -49,16 +24,11 @@ namespace Live
 
 variable (A : Live)
 
-/-- **The session's sampling statement**: the key program's at the session's constants and roots, under the sampling design's
-one-stage design (the one `Live.extract` reads). -/
 noncomputable abbrev stmt :=
   Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩ A.roots
 
-/-- **The session's sampling partition**: the key program's proof blocks at the registration's strata. -/
 noncomputable abbrev part := Flock.Bridge.partOf A.P A.κ (Flock.Bridge.nsOf A.desc A.qr)
 
-/-- **The transcript a witness opens, on the committed files' circuit**: its first passing opening at each gate's claims
-position under the deployed commitment, read at the circuit's gates with its constants (`Flock.Bridge.traceOf`). -/
 noncomputable def traceAt (w : Claims.Sampling.Wit) : A.fileRead.circuit.Trace :=
   cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
     (Flock.Bridge.traceOf A.D A.hU A.n A.κ (w.val Claims.Sampling.sha512Msg A.Cd A.stmt))
@@ -69,8 +39,6 @@ theorem extract_eq (τ : FlockSoundness.Game.Strategy A.game) :
 
 end Live
 
-/-- **The openings `op` of the committed files `r` hold at their constants**: a gate `r` fixes to `b` opens to every
-value all of whose bits are `b`, as `Vocab.Opens` reads a constant. -/
 def ConstsOpen (r : Verity.ExecutionPhaseFiles) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
   ∀ g b, r.consts g = some b → ∀ v : BitVec (r.circuit.w g), (∀ i : Fin (r.circuit.w g), v.getLsbD i.val = b) → op g v
 
@@ -81,11 +49,6 @@ namespace Live
 variable (A : Live)
 
 open Classical in
-/-- **V5 at the session, at any sample equal to V5's**: `SampledKSLiveV5` at the session's binders, the link finders
-charged `t + w` per run and the tables' finders at `2t + 2v` and `t + v`, at a sample `L` that is `Flock.Bridge.execSel`
-at the session's bytes and sampling design; at `L = A.L` (`Live.L_eq`) its simulator and extractor are the session's
-(`Live.sim`, `Live.Xr`). The session's `--zk` tags are in `TagsOkZHJ` (`Live.hTags`), so V5's bound is the one it states
-there, and `live-verifier` at the registration's sampling design is the sample file's (`Live.hsub`, `Live.hCust`). -/
 theorem v5_at (L : FlockSoundness.Audit.SamplingDesign A.n) (hL : Flock.Bridge.execSel (n := A.n) A.src A.design A.n = L) (t : ℕ)
     (B : Finset ℕ) (τ : FlockSoundness.Game.Strategy (auditLive L A.Reg (liveOfZJ A.dg (planZHJP A.dj A.y₀) A.N A.wr))) :
     let σ := simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
@@ -122,14 +85,9 @@ theorem v5_at (L : FlockSoundness.Audit.SamplingDesign A.n) (hL : Flock.Bridge.e
   rw [dif_pos A.hTags] at h
   exact h
 
-/-- The committed files' units are the session's population. -/
 theorem units_eq : A.fileRead.units = A.n :=
   (Flock.Bridge.unitsOfFile_eq (Flock.Bridge.parsedOf_eq A.hD A.hpubO A.hU)).trans A.hnO
 
-/-- **The session's knowledge soundness at a claim that fails**: a strategy of the live audit whose extracted transcript
-`tr`, on the committed files `r` the session reads, fails the claim at the session's share under openings that hold
-wherever the deployed commitment opens and at the constants, is accepted by Flock's `--zk` verifier with probability at
-most the session's error at `t` calls, where the session's per-finder premises hold at `t`. -/
 theorem ks {r : Verity.ExecutionPhaseFiles} (hr : r = Verity.ExecutionPhaseFiles.one A.fileRead)
     (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) (hop : A.OpensUnder r op) (hc : ConstsOpen r op)
     (tr : r.circuit.Trace) (τ : FlockSoundness.Game.Strategy A.game) (htr : HEq tr (A.extract τ)) (t : ℕ)
@@ -179,16 +137,10 @@ end Live
 
 variable (V : Vocab d α) (k : Verity.Registration.Composite)
 
-/-- A two-continuation finder at most `q` SHA-512 calls on every coin, under the strict birthday bound, has its term at
-most `Live.twoRun q`. -/
 theorem sqrt_le_twoRun {f : Claims.Finder} (hf : Claims.StrictBirthday Verity.sha512Msg f) {q : ℝ}
     (hq : ∀ s, (f.cost s : ℝ) ≤ q) : ENNReal.ofReal (Real.sqrt (f.Pr Verity.sha512Msg)) ≤ Live.twoRun q :=
   ENNReal.ofReal_le_ofReal (Real.sqrt_le_sqrt (hf q hq))
 
-/-- **SPOT's target at the deployed device**: soundness's vocabulary at `.sampled` reading the constructions `K`
-at the deployment's sessions `S` (`Deployed`), which cover the one-stage form (`Covers`), meets SPOT's target
-at composite `k`, from the coupling at each session (`CouplingTarget`). Off the one-stage form SPOT accepts nothing
-(`recursiveForm_refused`). -/
 theorem spotSound_of_targets {K : Constructions V} {S : ByteArray → Array ByteArray → Option Live}
     (hD : Deployed V K S) (hCov : Covers V k S) (hC : ∀ θ F A, S θ F = some A → CouplingTarget V k K A θ F) :
     V.SpotSound k := by

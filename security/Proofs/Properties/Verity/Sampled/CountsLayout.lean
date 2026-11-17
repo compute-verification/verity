@@ -4,41 +4,7 @@ public import Proofs.Properties.Verity.Sampled.CouplingAt
 public import Proofs.Properties.Verity.Sampled.Counts
 import Proofs.Flock.Claims.Complete.Json.Stmt
 
-/-!
-# The count match on the moves' reach, at the session's layout
-
-At the readings and the decoders at the session's layout (`Live.layout`, `Live.tables`) and the sample-coupled coin map
-under `fieldEnc`, every outcome the joint distribution reaches off the empty classes at their counts (`linkEmptyAt`,
-`roundEmptyAt`), beside an accepted play that misses nowhere and whose log v2 read is the device's, it reaches off the
-empty classes (`CountsReach`): each stop's opening asks for the count of coins the stop releases. It needs no verifier
-fact beyond those `MovesReach` reads: v2 reads each opening frame's count off the line that opens its round, and
-`sessionTreeReason` holds that line's count to the record's.
-
-* **The count a line opening a round shows** (`opening_count`): the line of an accepted release log opening a round a
-  tree shows opened has that opening's `n` (`opened_after`).
-* **The count the record gives a decoded round** (`nat?_of_recordNat`, `recordCount_decode`): `Trees.recordCount` reads
-  of a stream's round `k`, not the session stream's, the `n` `Record.decode` decodes there.
-* **The link's count** (`link_count`, `SetsUp.mPts_eq`): the session stream's round 0 gives a coin a 16 bytes of the
-  two link points of `spec.mPts` coordinates each (`link_coins`, `decode_points`), and the session `--zk` sets up at
-  the record's sample has `A.mP` of them (`sampleOkZKHJP_of_size`).
-* **A stop's frame** (`RoundsReach.stop_frame`, `firstOpened_noPick`): a stop where `StopOf` says and not every cut is
-  past releases, on the tape a trace from it ends on, at an opening frame its fixed rounds pick, after a log none of its
-  live rounds picks in, its cuts at the bytes that frame answers, and every description of its opening asks for that
-  frame's count (`OpeningAt.n_eq`). The first stop's log opens no round, since the link's slot picks the log's first
-  opening (`link_picks`).
-* **A trace off another hold** (`RoundsReach.weaken`): a trace off `B` is one off `B'` wherever every stop it answers
-  is off `B'`.
-* **An answered stop's count** (`stop_count`): at a stop that fixes the cut of round `k` of the first table's rep `r`
-  stream at the message `w`, under `stop_round`'s premises, the opening frame there asks for `tailCount w` coins: the
-  frame is v2's read of the line opening the round (`readLog_round`), whose count is the opening the record's tree shows
-  (`opening_count`), whose count is the record's (`Trees.round_counted`), which is `tailCount` of the round's message
-  (`rep_tailCount_accepted`), which is `w` (`RoundsReach.stop_modes_reveal`).
-* **The link's frame count** (`link_frameCount`): the log's first opening, of the session stream, asks for
-  `A.mP + A.mP` coins (`Trees.session_counted`, `link_count`, `SetsUp.mPts_eq` at the record's sample).
-* **`CountsReach`** (`ReachesOff.counts`, `countsReach_layout`, `countsReachAt`): at the first stop by
-  `link_frameCount`, and at each answered stop by `stop_count`, so the coupling at the deployment off the empty classes
-  at their counts (`couplingTargetAt_counts`) takes no bound on the stops' term.
--/
+/-! The count match on the moves' reach, at the session's layout. -/
 
 @[expose] public section
 
@@ -56,11 +22,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## The counts the release log and the record give -/
-
-/-- **The line opening a round a tree shows opened counts the opening's coins**: where `coinTreesOf` accepts the
-release log `lines`, a line of it opening round `k` of stream `name` of a tree `t` of its trees (`OpensRound`) is the
-one line opening that round (`opensRound_unique`), so its `n` is that of the opening `t` shows (`opened_after`). -/
 theorem opening_count {lines : List String} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     {t : LoggedTree} (ht : t ∈ trees) {name : String} {k : ℕ} {o : TreeOpening} (ho : t.opening name k = some o)
     {l : String} (hl : l ∈ lines) (hr : OpensRound l t.root name k) {d : Json} (hd : event l = .ok d) :
@@ -74,7 +35,6 @@ theorem opening_count {lines : List String} {trees : Array LoggedTree} (hT : coi
   cases hd'
   exact hn
 
-/-- A natural number `Record.nat` reads is the one `nat?` reads of the field. -/
 theorem nat?_of_recordNat {r : Json} {key : String} {n : ℕ} (h : Flock.Record.nat r key = .ok n) :
     _root_.Spot.nat? (_root_.Spot.getD r key) = some n := by
   unfold Flock.Record.nat at h
@@ -88,9 +48,6 @@ theorem nat?_of_recordNat {r : Json} {key : String} {n : ℕ} (h : Flock.Record.
     rw [FlockComplete.JsonRT.getNat_ok hg]
     simp [_root_.Spot.nat?, _root_.Spot.int?]
 
-/-- **The count the record gives a decoded stream's round is the decoded round's**: where `record` decodes to `sess`
-and parses as `J`, `Trees.recordCount` reads of round `k` of `J`'s stream `name`, not the session stream, the `n` of
-round `k` of `sess`'s stream so named. -/
 theorem recordCount_decode {spec : Flock.SessionSpec} {record : String} {sess : Flock.RunRecord} {J : Json}
     {name : String} {y : Flock.StreamRec} {k : ℕ} (hd : Flock.Record.decode spec record = .ok sess)
     (hJ : Flock.JsonParse.parse record = .ok J) (hn : (name == TREE_SESSION) = false)
@@ -120,8 +77,6 @@ theorem recordCount_decode {spec : Flock.SessionSpec} {record : String} {sess : 
     rw [str_getD hy''.1, hy''.1]
     rfl
 
-/-- **The link's count**: the coins the record gives the session stream's round 0, a coin a 16 bytes, are the two
-decoded link points' coordinates (`link_coins`), `spec.mPts` each (`decode_points`). -/
 theorem link_count {spec : Flock.SessionSpec} {record : String} {sess : Flock.RunRecord} {J : Json} {b : ByteArray}
     (hd : Flock.Record.decode spec record = .ok sess) (hJ : Flock.JsonParse.parse record = .ok J)
     (hp2 : spec.points = 2) (hb : recordRound J TREE_SESSION 0 = some b) : b.size / 16 = spec.mPts + spec.mPts := by
@@ -137,9 +92,6 @@ theorem link_count {spec : Flock.SessionSpec} {record : String} {sess : Flock.Ru
   rw [Lines.bitsOfBytes_length, length_chunks fieldBits, Array.length_toList, Array.size_append, hs0, hs1] at hl
   omega
 
-/-- **The session `--zk` sets up at the record's sample has `A.mP` points' coordinates**: at one table, its one
-statement is set up at the record's sample, the session's sample file at a sample, where every statement has
-`mPtsOf A.D.unroll.g (A.kd / nTab A.I)` of them (`sampleOkZKHJP_of_size`). -/
 theorem SetsUp.mPts_eq {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {record : String} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hs : Exec.setupOfP (ZkExec.zkInputs A.I) A.own record = .ok (spec, sts)) {S : Finset (Fin A.n)}
@@ -156,19 +108,11 @@ theorem SetsUp.mPts_eq {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
     exact hst
   · exact absurd h1' (by show ¬ 1 < A.I.count; omega)
 
-/-! ## A stop's frame -/
-
 section Frames
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} {D : Decoders R Reg}
   {M : CoinMap g σ Ω R mPts} {dg : ByteArray → ByteArray} {J : ℕ} {B : RoundHold}
 
-/-- **A stop's opening frame in the log**: at a position `q` that keeps the invariant at the cuts `Ks₀`, where `StopOf`
-says from the log `pre₀` and not every cut is past, where each round's reading picks only openings the device serves,
-the play on the tape any trace from `q`, any rewriting of its tape consumed, ends on has after `pre₀` and a log `L`
-none of the live rounds picks in an opening frame `.opening i s n` that some round whose cut `q` fixes picks, as every
-such round does; the cuts `q` fixes are at the bytes it answers (`CutsAt`), and every description of `q`'s opening asks
-for its `n` coins (`OpeningAt.n_eq`). -/
 theorem RoundsReach.stop_frame {P : Fin R → List Release → Frame → Prop}
     {rv : Fin R → Exchange → Option Claims.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
     {c rq : ByteArray} (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n)
@@ -209,9 +153,6 @@ theorem RoundsReach.stop_frame {P : Fin R → List Release → Frame → Prop}
   refine ⟨L, i, s, n, b, _, L', hNP, ⟨j, hjK, hj⟩, hall, hL', cutsAt_openCuts rfl hKs hL', fun o' => ?_⟩
   exact OpeningAt.n_eq (finish_recordsLog sg θ F c rq) o' (OpeningAt.ofNext (k := k) (b := b) hf'' hc hTi hp)
 
-/-- **The first stop's log opens no round**: where round `j₀`'s reading picks what the link's slot picks, the device
-serves every opening of the log `L ++ L''`, and no round picks in `L` after the empty log, `L` opens no round, since
-the link's slot picks the first opening of a log that has one (`link_picks`). -/
 theorem firstOpened_noPick {P : Fin R → List Release → Frame → Prop} (tables : Array String) {j₀ : Fin R}
     (hj₀ : ∀ pre fr, slotRound tables .link pre fr → P j₀ pre fr) {log L L'' : List Release} (hS : LogServed log)
     (hlog : log = L ++ L'') (hNP : NoPick P (fun _ => True) [] L) : firstOpened L = none := by
@@ -230,8 +171,6 @@ theorem firstOpened_noPick {P : Fin R → List Release → Frame → Prop} (tabl
     obtain ⟨L₁, r', L₂, he', hl⟩ := link_picks tables hSL _ A₁ (Nat.lt_succ_self _) r C i₁ s₁ n₁ he ho
     exact hNP j₀ trivial L₁ r' L₂ he' (hj₀ _ _ hl)
 
-/-- **A trace off `B` is one off `B'`** wherever, at every position `Q` holds of, each stop the trace answers there is
-off `B'`, and `Q` holds of each answered stop's next position. -/
 theorem RoundsReach.weaken {B' : RoundHold} {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
     {pts : Fin 2 → Fin mPts → 𝔽} {o : β × CoinTape g σ} (Q : Pos g σ Claims.Msg (Fin R) → Prop)
     (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
@@ -251,17 +190,6 @@ theorem RoundsReach.weaken {B' : RoundHold} {β : Type} {fin : LiveOutJ J mPts �
 
 end Frames
 
-/-! ## The counts at the stops -/
-
-/-- **An answered stop's frame asks for its message's count**, at the readings at a layout `L` whose round `j` is
-round `k` of the first table's rep `r` stream: where the stop `q`, keeping the invariant at the rounds' cuts, fixes
-round `j`'s cut at the most likely message `w`, the rest of the trace runs from it off every miss, and the device's log
-has the opening frame `.opening i s n` after the log `m` at which the cuts the stop fixes are at the bytes that frame
-answers and which opened that stream `k` times, under `stop_round`'s premises on v2's read and the record, `n` is
-`tailCount w`: v2 read the frame off the line opening round `k` of that stream (`readLog_round`), whose `n` is the one
-the record's tree shows opened (`opening_count`), which `sessionTreeReason` holds to the record's count
-(`Trees.round_counted`, `recordCount_decode`), `tailCount` of the round's message (`rep_tailCount_accepted`), which is
-`w` (`RoundsReach.stop_modes_reveal`). -/
 theorem stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
     {tables : Array String} {L : Fin A.rounds → Slot} {record : Exchange → Option Claims.Msg}
     {recordDigest : Claims.Msg} {rd : Reading A.rounds} (hrd : rd = readingAt tables L record recordDigest)
@@ -353,13 +281,6 @@ theorem stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
   rw [rep_tailCount_accepted hv hd hret r hst' hkR hmsg, ← hon₁]
   exact Option.some.inj (hnn.symm.trans hcnt)
 
-/-- **The link's frame asks for both points' coordinates**: where `A` is the session v2 sets up on the parameters, the
-sampled verdict accepts, the log v2's check read is the device's, and the device's first opening `r`, after releases
-`L₀` that open none, opens the stream `TREE_SESSION` of the tree it opens with the frame `.opening i s n`, `n` is
-`A.mP + A.mP`: v2 read the frame off the line opening that stream's round 0 (`readLog_round`), whose `n` is the one
-the record's tree shows opened (`opening_count`), which `sessionTreeReason` holds to a coin a 16 bytes of the record's
-link coins (`Trees.session_counted`), both points' coordinates (`link_count`), `A.mP` each at the record's sample
-(`SetsUp.mPts_eq`). -/
 theorem link_frameCount {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {A : Live} {x : Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ) (hv : V.Verdict k .sampled x)
     (hl : Binding.Logged Binding.readsV2 x) {L₀ L : List Release} {r : Release} {i s n : ℕ}
@@ -391,19 +312,8 @@ theorem link_frameCount {V : Vocab d α} {k : Verity.Registration.Composite} {θ
   rw [Option.some.inj (hnn.symm.trans hcnt), hon, link_count hd hJ (hA.setup_one hs).2.2.2.1 hcs,
     SetsUp.mPts_eq hA hs hdr]
 
-/-! ## `CountsReach` at the session's layout -/
-
 -- `decodersAt`'s roots search `List.finRange A.rounds`, which unification would otherwise unfold at `A.rounds`'s value
 attribute [local irreducible] Live.rounds Live.N in
-/-- **The count match at a witness of the joint distribution's support, at the session's layout**: at the readings and the
-decoders at `Live.layout` and `Live.tables`, and at the sample-coupled coin map under `fieldEnc`, an outcome off the
-empty classes at their counts, beside a play that the sampled verdict accepts, that misses nowhere, whose log v2's
-check read is the device's and whose blobs sent hold each pinned table at its registered file (`TablesSent`), is off the
-empty classes, under `ReachesOff.movesOf`'s premises. The first stop's frame is
-the log's first opening (`RoundsReach.stop_frame`, `firstOpened_noPick`), of the session stream (`linkFirst_verdict`),
-which asks for `A.mP + A.mP` coins (`link_frameCount`, at the record's sample, `recordSample_firstStop`); each answered
-stop's frame is round `k` of the first table's rep stream at its fixed round's slot (`stop_slot`), which asks for its
-message's count (`stop_count`). So no stop off the first events is in the second (`RoundsReach.weaken`). -/
 theorem ReachesOff.counts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
@@ -496,10 +406,6 @@ theorem ReachesOff.counts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {
     htab.symm h0 (hO _ _ hrec₀ hJ) (recordRound_isSome hJt)
     (fun hlr hy hO' _ hst hk => rep_answers (hlr ▸ hread) hct h1 hJt hy hO' hd₀ hJ h512 hst hk)
 
-/-- **`CountsReach` at the session's layout**: `ReachesOff.counts` at every outcome, at the cut that v2's check read
-the device's log and each pinned table at its registered file (`TablesSent`) and that v2 samples at `after`
-(`SampledDigest`), with what it takes of each accepted play the cut holds
-of stated for every tape, as `movesReach_layout` takes it. -/
 theorem countsReach_layout {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
@@ -523,8 +429,6 @@ theorem countsReach_layout {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} 
   fun _ h ⟨hv, hn, ⟨hl, ht⟩, hd⟩ => h.counts hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl ht
     (hN _ hv hl hd) (hO _ hv hl)
 
-/-- **`CountsReach` at the deployment**: `countsReach_layout` at `movesReachAt`'s readings, decoders, family, digest
-and coins, its premises on the sample closed as `movesReachAt` closes them. -/
 theorem countsReachAt {V : Vocab d α} {T : PinnedTables} {k : Verity.Registration.Composite} {θ : ByteArray}
     {F : Array ByteArray} {A : Live} (reg : Option Claims.Msg → A.Reg)
     (record : ByteArray → Exchange → Option Claims.Msg)
@@ -546,10 +450,6 @@ theorem countsReachAt {V : Vocab d α} {T : PinnedTables} {k : Verity.Registrati
     (κ := srcCoinsAt _root_.Spot.Challenger.MAX_COINS A) hA hDg reg (record c) (recordDigest c)
     rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA) (hO c σ)
 
-/-- **The coupling at the deployment, off the empty classes at their counts**: `couplingTarget_assembled_at` at the
-deployed device's history and `movesReachAt`'s readings, decoders, family, digest and coins, with its `hM` by
-`movesReachAt` and the count match (`countsReachAt`, `movesReach_at`). It holds wherever the vocabulary's signer at
-`θ` is the deployment's (`hD`) and `movesReachAt`'s premises hold, with no bound on the stops' term. -/
 theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
     (T : PinnedTables) (P : Device.Deployment) {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
