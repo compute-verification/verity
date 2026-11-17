@@ -74,4 +74,4 @@ EOF
 # shellcheck disable=SC2086
 "$PY" benchmarks/ppl/run.py eval --model "$MODEL" --set "$SET" --ctx "$CTX" --gpus 1 --data "$DATA" --out "$OUT" $ARMS \
   || { echo "h200.sh: the eval failed or its gates did ($OUT/results.json)" >&2; exit 1; }
-"$PY" benchmarks/ppl/run.py metrics "$OUT/results.json" --out "$OUT"
+[ "$SET" != c4 ] || "$PY" benchmarks/ppl/run.py metrics "$OUT/results.json" --out "$OUT"
