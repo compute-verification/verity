@@ -55,7 +55,8 @@ def attn_kind_for(obs: dict) -> tuple[str, dict, int | None]:
 FUSED_NORM_DISPATCH_PIN = "batch_invariant"
 
 _OBSERVED: dict = {"attention_impls": None, "export_facts": None, "target_profile": None, "launch_context": None,
-                   "allreduce_settings": None, "launch_region": None, "batched_form": False, "dsa_table_reads": False}
+                   "allreduce_settings": None, "launch_region": None, "batched_form": False, "dsa_table_reads": False,
+                   "device_name": None}
 
 
 def clear_observations() -> None:
@@ -67,6 +68,17 @@ def clear_observations() -> None:
     _OBSERVED["launch_region"] = None
     _OBSERVED["batched_form"] = False
     _OBSERVED["dsa_table_reads"] = False
+    _OBSERVED["device_name"] = None
+
+
+def observe_device_name(name: str | None) -> None:
+    """The device the Build answers for (vLLM's `current_platform.get_device_name()`: the declared one, else the host's), whose
+    cuBLAS device pin the bf16 GEMM rules read (`bf16_gemm_check.default_cublas_route`); None: the one pin of its capability."""
+    _OBSERVED["device_name"] = name
+
+
+def active_device_name() -> str | None:
+    return _OBSERVED.get("device_name")
 
 
 def observe_batched_form(batched: bool, table_reads: bool = False) -> None:

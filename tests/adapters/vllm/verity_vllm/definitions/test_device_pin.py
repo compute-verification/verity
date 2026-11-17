@@ -1,6 +1,10 @@
 """The device pins (`adapters/vllm/verity_vllm/definitions/registry/device_pins/`): the cc 9.0 device's probed cuBLAS routes are the eager Build's default routes off the
-GLM-5.3 capture's shapes, a route is never read for an M the probe did not run, and a pin is found by its device's reported name."""
+GLM-5.3 capture's shapes, a route is never read for an M the probe did not run, a pin is found by its device's reported name, a named
+device reads its own pin only, and a process is held to the route conditions of the device it reports."""
 from __future__ import annotations
+
+import json
+import shutil
 
 import pytest
 
@@ -25,3 +29,59 @@ def test_a_pin_is_found_by_the_name_its_device_reports():
         BC.device_pin("no such device")
     with pytest.raises(KeyError):
         BC.capability_pin((1, 0))
+
+
+H100 = "NVIDIA H100 80GB HBM3"
+
+
+@pytest.fixture
+def h100_pin(tmp_path, monkeypatch):
+    """The pins with a cc 9.0 H100 pin beside the H200's, its routes and conditions differing from the H200's."""
+    pins = tmp_path / "device_pins"
+    shutil.copytree(BC.DEVICE_PINS, pins)
+    h200 = BC.device_pin(BC.ROUTE_CONDITIONS["device"])
+    conditions = {**BC.ROUTE_CONDITIONS, "device": H100, "cublas_version": 120900}
+    pin = {**h200, "device": H100, "conditions": conditions, "cublas": {"1,4096,2048": {"kernel": "nosplit"}}}
+    (pins / f"{H100.replace(' ', '_')}.json").write_text(json.dumps(pin))
+    monkeypatch.setattr(BC, "DEVICE_PINS", pins)
+    BC.device_pin.cache_clear()
+    BC.capability_pin.cache_clear()
+    yield pin
+    BC.device_pin.cache_clear()
+    BC.capability_pin.cache_clear()
+
+
+def test_the_scan_device_and_an_unnamed_device_read_the_routes_of_today(h100_pin):
+    for device in (None, BC.ROUTE_CONDITIONS["device"]):
+        assert BC.default_cublas_route("linear", 1, 4096, 2048, device) == ("splitk", {"SPLIT_K": 3})
+        assert BC.default_cublas_route("linear", 1, 6144, 160, device) == ("splitk", {"SPLIT_K": 4})
+
+
+def test_a_named_device_reads_its_own_pin_and_never_the_scan(h100_pin):
+    assert BC.default_cublas_route("linear", 1, 4096, 2048, H100) == ("non_split", {})
+    assert BC.default_cublas_route("linear", 1, 6144, 160, H100) is None
+    with pytest.raises(KeyError, match="no device pin NVIDIA_B300"):
+        BC.default_cublas_route("linear", 1, 4096, 2048, "NVIDIA B300")
+
+
+def _engine(**cublas):
+    env = cublas.pop("env", BC.ROUTE_CONDITIONS["env"])
+    return {"cublas": {**{k: v for k, v in BC.ROUTE_CONDITIONS.items() if k != "env"}, "env": dict(env), **cublas}}
+
+
+def test_a_process_is_held_to_its_own_devices_route_conditions(h100_pin):
+    assert BC.route_departures(_engine()) == []
+    assert BC.route_departures(_engine(**h100_pin["conditions"])) == []
+    assert BC.route_departures(_engine(device=H100)) == ["cublas_version 120901 (pin: 120900)"]
+    assert BC.route_departures(_engine(**{**h100_pin["conditions"], "device": BC.ROUTE_CONDITIONS["device"]})) == [
+        "cublas_version 120900 (pin: 120901)"]
+
+
+def test_a_device_with_no_measured_conditions_departs_by_name(h100_pin):
+    [why] = BC.route_departures(_engine(device="NVIDIA B300"))
+    assert "'NVIDIA B300': no route pin measured on it" in why and "verity-vllm device-pin probe" in why
+    del h100_pin["conditions"]
+    (BC.DEVICE_PINS / f"{H100.replace(' ', '_')}.json").write_text(json.dumps(h100_pin))
+    BC.device_pin.cache_clear()
+    [why] = BC.route_departures(_engine(device=H100))
+    assert "no route pin measured on it" in why

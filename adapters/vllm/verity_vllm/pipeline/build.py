@@ -320,6 +320,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             declared_derived_accounting,
             observe_attention_impls,
             observe_batched_form,
+            observe_device_name,
             observe_export_facts,
             observe_launch_context,
             observe_target_profile,
@@ -334,6 +335,11 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         res["target"]["host"] = host_facts()
         t0 = time.time()
         with apply_target_profile(target):  # ONE application of the declared target for config, instantiation, export and derive
+            from vllm.platforms import current_platform
+            try:
+                observe_device_name(current_platform.get_device_name() if current_platform.is_cuda() else None)
+            except (RuntimeError, AssertionError):  # no GPU and no declared device: the bf16 GEMM rules read the scan's device's pin
+                observe_device_name(None)
             from verity_vllm.engine.build import register_int8_parts
             register_int8_parts(target)
             # `TargetProfile.engine_args()` = the attention knobs the target applies (`attention_backend`, `attention_config.flash_attn_version`)
