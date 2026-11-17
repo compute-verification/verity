@@ -2,7 +2,7 @@
 
 The challenger is auditor-trusted (`trusted-device`): it runs on a machine the prover doesn't control, and the
 prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session on the auditor device, that port is
-one of the prover machine's certifier coin link (`verity/protocols/compose/verifier/live_challenger/auditor.py`,
+one of the prover machine's attester coin link (`verity/protocols/compose/verifier/live_challenger/auditor.py`,
 the coins' path; the premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`) and `OneClock` are named in
 this package's README); in development
 (`verity/protocols/compose/verifier/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/poub_session` places
@@ -113,7 +113,7 @@ MAX_BATCH = 64
 any reply is read, so they must fit the stream's send buffer while the challenger writes its replies back."""
 RELEASE_HEAD = MAX_HEAD // 2
 """The most bytes the head of a withheld session's release frame holds (`release_frames`): half of `MAX_HEAD`, so a
-relay that pads each frame to whole cells of up to that size (the certifier's coin link, `coin_link.recut`) passes it
+relay that pads each frame to whole cells of up to that size (the network attester's coin link, `coin_link.recut`) passes it
 on."""
 SEQUENCE = ("a client's frames are hello, then open {label, index, after} per coin, tree {nonce, spec} per coin tree and "
             "tree-open {after, n, round, stream, tree} per round of one, then close")
@@ -671,7 +671,7 @@ class RemoteChallenger:
 
 
 #: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
-#: has signed its commitment, before the peer's certifier coin link carries its 127.0.0.1:PORT (live_challenger/auditor.py's
+#: has signed its commitment, before the peer's attester coin link carries its 127.0.0.1:PORT (live_challenger/auditor.py's
 #: coins' path)
 TUNNEL_WAIT_S = 120
 

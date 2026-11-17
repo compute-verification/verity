@@ -170,7 +170,8 @@ add `--allow-drop NAME` to the check. The last line restarts nothing while a con
 The loops' `ssh` (`bin/ssh`) reads `/data/watchers/ssh_config`, which the tree doesn't hold: `research deploy install
 vy-control-verity /data/watchers/ssh_config --by WHO --apply` writes it from `watchers_ssh_config` and the register of
 machines, so install it before a tree whose `bin/ssh` reads it (the block's first line puts no tree in place while it
-is missing), and again when `research deploy drift --on vy-control-verity` reads it `stale` (a node's address changed):
+is missing), and again when `research deploy drift --on vy-control-verity` reads it `stale` (a node's address changed; a
+machine `research pods stopped NAME` marks leaves `/etc/vy/peers` at the next roll and keeps its line here):
 
 ~~~sh
 git archive HEAD tools/research infra/control infra/ops/verity_ops .agents/skills/using-slack tools/check/slot.py \

@@ -44,7 +44,7 @@ strategy. Both are stated for every prover strategy, and the ring game's server 
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
 
 open scoped ENNReal
 

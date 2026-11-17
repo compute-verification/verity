@@ -52,7 +52,7 @@ AUDITOR = {"onsite": Auditor((SHEET_A, SHEET_B), TOLERANCE,
                              tuple(MEMORY.items()), tuple(HOSTS.items())),
            "remote": Auditor((SHEET_A, SHEET_B), TOLERANCE, (), tuple(MEMORY.items()), tuple(HOSTS.items()))}
 """The auditor's data sheets for the simulated SKUs, 1 GHz clocks at 64 and 128 MACs a nanosecond in every operand class,
-its 5% tolerance around them, its own devices' keys, each with its scheme (onsite a certifier and a challenger), and
+its 5% tolerance around them, its own devices' keys, each with its scheme (onsite a network attester and a challenger), and
 its figures for the hosts and their leaves. The node registers the auditor's own sheets."""
 
 
@@ -101,7 +101,7 @@ ENTRIES = {
     "over-hbm": ("capacity", Entry("", locs=(Loc("gpu9", "device", "node0", sheet=A),
                                              Loc("hbm9", "memory", "gpu9", tier="hbm", bytes=(64 << 30) + 1)))),
     "empty-memory": ("capacity", Entry("", locs=(Loc("hbm9", "memory", "gpu0", tier="hbm"),))),
-    "foreign-certifier": ("owner", Entry("", locs=(Loc("cert9", "certifier", "site0", "auditor", key="00"),),
+    "foreign-attester": ("owner", Entry("", locs=(Loc("cert9", "certifier", "site0", "auditor", key="00"),),
                                          links=UPLINK9)),
     "auditor-owned-host": ("owner", Entry("", locs=(replace(host("node9"), owner="auditor"),))),
     "keyed-host": ("owner", Entry("", locs=(replace(host("node9"), scheme=SCHEME),))),
@@ -115,7 +115,7 @@ figures; `unrated-leaf`, `second-clock` and `chipless-host`, a host's leaf with 
 of time and a host with no on-chip state, each refused by `figures`; `keyed-host`, a prover's location stating a
 scheme; and `unrated-link`, a link that states no capacity and no reason."""
 REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
-"""The entries a remote site accepts: it has no certifier and no memory attester to hold its links to."""
+"""The entries a remote site accepts: it has no attester and no memory attester to hold its links to."""
 
 
 def first(composite: str) -> Registration:
@@ -439,7 +439,7 @@ def test_a_nodes_entry_from_its_files() -> None:
 
 def test_a_nodes_interfaces_are_its_own_boundary_links() -> None:
     """Each interface that states a rate is a link from the host to the outside at its rate, at latency 0, saying no
-    reason: a boundary link with no certifier at an end, which remote accepts and onsite refuses by `uncertified`,
+    reason: a boundary link with no attester at an end, which remote accepts and onsite refuses by `uncertified`,
     with a challenger reaching the host or without one. An interface whose table states no rate is a link that states
     no capacity and says why no certifier splits it, which onsite takes: it names only the rated interface. A site
     with that link is not mediated."""
@@ -461,14 +461,14 @@ def test_a_nodes_interfaces_are_its_own_boundary_links() -> None:
             assert refused.value.name == "uncertified" and bare in refused.value.detail, refused.value
 
 
-def test_a_stand_in_certifier_is_registered_beside_the_nodes_own_links() -> None:
+def test_a_stand_in_attester_is_registered_beside_the_nodes_own_links() -> None:
     """With a network attester's id and key the entry also holds the network attester under the site and a certified way out, host
-    to certifier and certifier to outside, each at the interfaces' rates summed. The interfaces' own links stay, so
+    to attester and attester to outside, each at the interfaces' rates summed. The interfaces' own links stay, so
     onsite still refuses the entry by `uncertified`, naming them and not the certified link."""
     node = NODE_FILE
     auditor = _audit(NODE_FILE, _ways(), cert0="dummy-cert0-key", chal0="")
     plain = _entry_of(Registration("remote"), node, "n0", "site0", ways=_ways())
-    entry = _entry_of(Registration("remote"), node, "n0", "site0", certifier=("cert0", "dummy-cert0-key", SCHEME),
+    entry = _entry_of(Registration("remote"), node, "n0", "site0", attester=("cert0", "dummy-cert0-key", SCHEME),
                                               ways=_ways())
     assert entry.locs == (*plain.locs, Loc("cert0", "certifier", "site0", "auditor", key="dummy-cert0-key",
                                            scheme=SCHEME))
@@ -479,7 +479,7 @@ def test_a_stand_in_certifier_is_registered_beside_the_nodes_own_links() -> None
         ("n0/eth0", False), ("n0/eth1", False), ("n0/cert0", True)]
     assert site.mediated
     onsite = Registration("onsite")
-    stood = _entry_of(onsite, node, "n0", "site0", certifier=("cert0", "dummy-cert0-key", SCHEME), ways=_ways())
+    stood = _entry_of(onsite, node, "n0", "site0", attester=("cert0", "dummy-cert0-key", SCHEME), ways=_ways())
     reached = _reached(stood, "site0")
     with pytest.raises(Refused) as refused:
         check_registration(onsite, reached, auditor)
@@ -489,10 +489,10 @@ def test_a_stand_in_certifier_is_registered_beside_the_nodes_own_links() -> None
     assert refusal(onsite, certified, auditor) is None
 
 
-def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> None:
+def test_a_nodes_storage_path_is_a_boundary_link_no_attester_is_linked_to() -> None:
     """A file that states a storage path registers it as a link from the host to the outside, after the interfaces',
     at the path's rate, saying why no certifier splits it. A network attester's two links stay at the interfaces' rates
-    summed: the path's rate is not in the sum, and no certifier is at an end of its link. So onsite refuses the entry
+    summed: the path's rate is not in the sum, and no attester is at an end of its link. So onsite refuses the entry
     by `uncertified` with the interfaces' bare links, naming them and not the path's, and accepts it without them,
     the path's link and all; the site is then not mediated, and the log is refused at its end by `inventory`, since
     the auditor's figures list the interfaces the entry left out. Where the file's one interface has no rate, the entry's
@@ -502,7 +502,7 @@ def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> 
     plain = _entry_of(Registration("remote"), node, "n0", ways=_ways(storage=DISKS))
     assert plain.links == (ETH0, ETH1, PATH)
     assert plain.locs == _entry_of(Registration("remote"), NODE_FILE, "n0", ways=_ways()).locs
-    entry = _entry_of(Registration("remote"), node, "n0", certifier=("cert0", "dummy-cert0-key", SCHEME),
+    entry = _entry_of(Registration("remote"), node, "n0", attester=("cert0", "dummy-cert0-key", SCHEME),
                                               ways=_ways(storage=DISKS))
     assert entry.links == (*plain.links, Link("n0/cert0", ("n0", "cert0"), 26_000_000_001, 0),
                            Link("cert0/outside", ("cert0", OUTSIDE), 26_000_000_001, 0))
@@ -511,7 +511,7 @@ def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> 
         ("n0/eth0", False), ("n0/eth1", False), ("n0/storage", False), ("n0/cert0", True)]
     assert site.far("cert0") == ["n0", OUTSIDE] and not site.mediated
     onsite = Registration("onsite")
-    reached = _reached(_entry_of(onsite, node, "n0", certifier=("cert0", "dummy-cert0-key", SCHEME),
+    reached = _reached(_entry_of(onsite, node, "n0", attester=("cert0", "dummy-cert0-key", SCHEME),
                                          ways=_ways(storage=DISKS)))
     with pytest.raises(Refused) as refused:
         check_registration(onsite, reached, auditor)
@@ -526,11 +526,11 @@ def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> 
     lone = _entry_of(Registration("remote"), one, "n0", ways=alone)
     assert lone.links == (QUIET, PATH)
     assert refusal(onsite, _reached(_entry_of(onsite, one, "n0", ways=alone)), auditor) is None
-    with pytest.raises(Malformed, match=r"network certifier 'cert0': the interfaces \['n0/eth0'\].*takes no certifier"):
-        _entry_of(Registration("remote"), one, "n0", certifier=("cert0", "dummy-cert0-key", SCHEME), ways=alone)
+    with pytest.raises(Malformed, match=r"network attester 'cert0': the interfaces \['n0/eth0'\].*takes no attester"):
+        _entry_of(Registration("remote"), one, "n0", attester=("cert0", "dummy-cert0-key", SCHEME), ways=alone)
     mixed = {**node, "interface": {**PORTS, "eth2": UNRATED["eth0"]}}
-    with pytest.raises(Malformed, match=r"network certifier 'cert0': the interfaces \['n0/eth2'\].*takes no certifier"):
-        _entry_of(Registration("remote"), mixed, "n0", certifier=("cert0", "dummy-cert0-key", SCHEME),
+    with pytest.raises(Malformed, match=r"network attester 'cert0': the interfaces \['n0/eth2'\].*takes no attester"):
+        _entry_of(Registration("remote"), mixed, "n0", attester=("cert0", "dummy-cert0-key", SCHEME),
                   ways=(*_ways()[:2], ("n0/eth2", None, True), ("n0/storage", DISKS, False)))
 
 
@@ -575,13 +575,13 @@ def test_a_links_encoding_is_pinned() -> None:
         assert Link.of_json(k.to_json()) == k
 
 
-def _node_entry(certifier: tuple[str, str, str] | None = None, ways: object = None, leaves: object = None,
+def _node_entry(attester: tuple[str, str, str] | None = None, ways: object = None, leaves: object = None,
                 host_card: object = None, **tables: object) -> Entry:
     """The entry of `NODE_FILE` with these tables in place of its own, and its ways out, its leaves and its host card
     unless others are given."""
     node = {**NODE_FILE, **tables}
     return Registration("remote").node_entry(
-        node, CARD_FILE, "n0", certifier=certifier, ways=_ways() if ways is None else ways,
+        node, CARD_FILE, "n0", attester=attester, ways=_ways() if ways is None else ways,
         leaves=_leaves(memory=node.get("memory")) if leaves is None else leaves,
         host_card=HOST_CARD if host_card is None else host_card)
 
@@ -612,7 +612,7 @@ AUDITOR_JSON = {
     "keys": [{"id": "cert0", "key": "k0", "scheme": "lms-sha512/n64-w1-h20/v0"}],
     "memory": [{"bw": 6554, "bytes": 2147483648, "host": "node0", "id": "dram0"}], "sheets": [],
     "timebases": [{"id": "vm0", "sku": "tb0"}], "tolerance": "0"}
-"""`SiteV2Guards.lean`'s auditor: a certifier's key and scheme, a host's figures and a leaf's, and the drift and the
+"""`SiteV2Guards.lean`'s auditor: a network attester's key and scheme, a host's figures and a leaf's, and the drift and the
 time base of a host of its own."""
 
 
@@ -739,7 +739,7 @@ def _sheet_json(**f: object) -> Sheet:
     (lambda: _node_entry(interface={}, ways=()), "states no interface, so its entry would not say how.*ip route"),
     (lambda: _node_entry(interface={}, storage=STORAGE, ways=[("n0/storage", DISKS, False)]), "states no interface"),
     (lambda: _node_entry(("cert0", "k", SCHEME), interface=UNRATED, storage=STORAGE,
-                         ways=[("n0/eth0", None, True), ("n0/storage", DISKS, False)]), "takes no certifier"),
+                         ways=[("n0/eth0", None, True), ("n0/storage", DISKS, False)]), "takes no attester"),
     (lambda: _node_entry(ways=()), r"the ways out given are \[\].*give `ways_out\(node, host\)`"),
     (lambda: _node_entry(ways=_ways()[:1]), "the ways out given are"),
     (lambda: _node_entry(ways=_ways(eth0=None)),
@@ -886,7 +886,7 @@ def test_a_site_states_the_sites_unit_of_time() -> None:
     assert Site(locs=(G_ROOT,)).over(1310000, 1) == 1 and Site().over(1, 1) is None
 
 
-def test_a_link_says_why_no_certifier_splits_it() -> None:
+def test_a_link_says_why_no_attester_splits_it() -> None:
     """`Covered` and `Kinds`: a bare boundary link is refused onsite and taken where it says why or remote; a link
     states no capacity only where it says why, and never a capacity of 0; a site with a reason is not mediated."""
     bare = Link("eth0", ("node0", OUTSIDE), 1_000_000_000, 0)
@@ -942,8 +942,8 @@ G_IN_VM = replace(G_CERT, parent="vm0")
 G_UPLINKS = (Link("up0", ("node0", "cert0"), 1, 0), Link("up1", ("cert0", OUTSIDE), 1, 0))
 G_KEYED = replace(G_AUDITOR, keys=(("cert0", "k0", ROOT2),))
 VM_KEYED = replace(G_KEYED, keys=(*G_KEYED.keys, ("vm0", "k1", ROOT2)), timebases=(("vm0", "tb0"),))
-"""`SiteV2Guards.lean`'s certifier, at the site and in the auditor's device `vm0`, its two uplinks, and the auditors
-that hold the certifier's key and, beside it, the host's key and time base."""
+"""`SiteV2Guards.lean`'s attester, at the site and in the auditor's device `vm0`, its two uplinks, and the auditors
+that hold the network attester's key and, beside it, the host's key and time base."""
 
 
 def g_vm(parent: str = "site0") -> Loc:

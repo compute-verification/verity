@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.RecordsGrid
+public import NetworkVerifier.RecordsGrid
 public import Proofs.Properties.Certifier.Check.Bytes
 
 /-!
@@ -12,7 +12,7 @@ public import Proofs.Properties.Certifier.Check.Bytes
 
 @[expose] public section
 
-open NetworkCheck.Check (bytesOfBits bytesOfBitsList)
+open NetworkVerifier.Check (bytesOfBits bytesOfBitsList)
 
 set_option maxRecDepth 20000
 
