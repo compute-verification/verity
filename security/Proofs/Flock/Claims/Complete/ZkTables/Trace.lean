@@ -38,21 +38,8 @@ import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.Sizes
 
-/-!
-# Each table's honest trace at the deployed relation
-
-`Replay/Trace.lean` per table. At the deployed relation (`Readable.relation`) a witness satisfies a statement of `J`
-tables exactly when each table's share (`Readable.tableWit J w j`, its bit `a` the witness's bit `a·J + j`) satisfies
-that table alone (`Readable.relS_only`). `traces` runs table `j` on its share from bit `0`, so each table's trace is
-a one-table trace of a witness of a one-table statement, and satisfies the block R1CS.
-
-* `Case.parsed`: the statement the verifier parsed at a good case is untyped, has no public input ports, has the case's
-  tables, and the witness satisfies it.
-* `holds_only`: a witness of a one-table statement satisfies its table's rows in every block.
-* `traceOf_r1cs`: on such a witness the trace from bit `0` satisfies the block R1CS.
-* `Case.traceR1CS`, `traceR1CS_goal`: each table's trace (`traces`) satisfies its block R1CS, at every number of
-  tables (`TraceR1CS` at `traces`).
--/
+/-! Each table's honest trace satisfies its block R1CS at the deployed relation, because each table's share satisfies
+that table alone (`traceR1CS_goal`). -/
 
 @[expose] public section
 
@@ -62,8 +49,6 @@ namespace FlockComplete.ZkTables
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The statement the verifier parsed** at a good case: it parses, is untyped, has no public input ports, its tables
-are the case's, and the witness satisfies it. -/
 theorem Case.parsed (c : Case H rel) :
     ∃ p : Readable.Parsed, Readable.Parses p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧ p.sts = c.sts ∧
       Claims.Flock.RelS (Readable.toReadable rel p) c.w := by
@@ -92,8 +77,6 @@ theorem Case.parsed (c : Case H rel) :
     exact this.2
   exact ⟨p, hps, hR.2.1, hpi, hpe, hR'⟩
 
-/-- **A witness of a one-table statement** at the deployed relation: the table fits its blocks, and in every block
-`b` its rows hold on the witness's bits from `b·2^kLog`. -/
 theorem holds_only {p : Readable.Parsed} {st : Stmt} (hpe : p.sts = #[st]) {w : Claims.Flock.Wit}
     (hR : Claims.Flock.RelS (Readable.toReadable Readable.relation p) w) :
     (Readable.Tab.ofStmt st).Fits st.m st.c.kLog ∧
@@ -118,8 +101,6 @@ theorem holds_only {p : Readable.Parsed} {st : Stmt} (hpe : p.sts = #[st]) {w : 
   rw [e] at hsys
   exact (Replay.holds_one hf (hsys b hb)).1
 
-/-- **The trace from bit `0` satisfies the block R1CS** on a witness whose bits satisfy the table's rows in every
-block. -/
 theorem traceOf_r1cs {st : Stmt} {w : Claims.Flock.Wit} (hf : (Readable.Tab.ofStmt st).Fits st.m st.c.kLog)
     (hb : ∀ b < 2 ^ (st.m - st.c.kLog), ∀ i < 2 ^ st.c.kLog,
       (Readable.xsum ((Readable.Tab.ofStmt st).a i) (fun j => w.hid.getD (b * 2 ^ st.c.kLog + j) false)
@@ -152,15 +133,12 @@ theorem traceOf_r1cs {st : Stmt} {w : Claims.Flock.Wit} (hf : (Readable.Tab.ofSt
   rw [Nat.mul_comm (x / N) N] at this ⊢
   rwa [Nat.div_add_mod] at this
 
-/-- Table `i`'s trace is the one-table trace of its share. -/
 theorem traces_getElem (sts : Array Stmt) (w : Claims.Flock.Wit) {i : ℕ} (hi : i < sts.size) :
     (traces sts w)[i]! = traceOf sts[i] (Readable.tableWit sts.size w i).hid.toArray 0 := by
   unfold traces
   rw [getElem!_pos _ i (by simpa using hi)]
   simp [getElem!_pos sts i hi]
 
-/-- **Each table's honest trace satisfies its block R1CS** at the deployed relation, at a good case of any number of
-tables: table `i`'s share satisfies table `i` alone (`Readable.relS_only`). -/
 theorem Case.traceR1CS (c : Case H Readable.relation) {i : ℕ} (hi : i < c.sts.size) {x : ℕ}
     (hx : x < 2 ^ c.sts[i].m) :
     (((traces c.sts c.w)[i]!).az[x]! && ((traces c.sts c.w)[i]!).bz[x]!) = ((traces c.sts c.w)[i]!).z[x]! := by
@@ -174,8 +152,6 @@ theorem Case.traceR1CS (c : Case H Readable.relation) {i : ℕ} (hi : i < c.sts.
   rw [traces_getElem c.sts c.w hi]
   exact traceOf_r1cs hf hb hx
 
-/-- **Each table's honest trace satisfies its block R1CS** (`TraceR1CS` at `traces`), at every honest masked run of
-the deployed relation of any number of tables. -/
 theorem traceR1CS_goal (H : Claims.Msg → Claims.Msg) :
     ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ x < 2 ^ o.tabs[i]!.m,
       (((traces o.sts o.w)[i]!).az[x]! && ((traces o.sts o.w)[i]!).bz[x]!) = ((traces o.sts o.w)[i]!).z[x]! := by

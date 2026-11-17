@@ -17,28 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The honest prover's session: the reps, the proof files and the record
-
-`Flock.Tags`, `Flock.Record`, `Flock.Transcript`, `Flock.Draw`, `Flock.Proof`, `Flock.Statement` from the prover's side, for the plain verifier (`verifyWithM`).
-
-* **A rep** (`repP`): zerocheck, lincheck, the ring switch on `abcClaims ++ extras`, then Ligerito on the table's
-  level-0 commitment for the batched claim `T`, from the rep's own transcript (`Transcript.init #[] domain`). The proof
-  file is `FlockVBridge.Family.encodeProof` at the shape `verifyRepWith` reads (`shapeOf`), the encoder whose inverse
-  `decodeProof_encodeProof` proves.
-* **The session** (`sessionP`): each table's level-0 commitment (`commitP` of the packed table, salted from the tape's
-  level `0`), the link message (each `root_B`, no public words), the link's points from its coin, then the rep streams in
-  `spec.repStreams` order.
-* **The record** (`recordJson`): the `flock-live-session/v1` record `Record.decodeWith` and `FlockDeploy.liveOf` read:
-  `hello` (the statement's, or under a keyed coin tree its `Hello` with a zero nonce, canonical, and a `coin_tree` of a
-  zero key and root), `config.require_link`, the exchange link (`Σ` as `root_F`, each `root_B`, the points, `y = 0`),
-  the statement's `unit_draw`, every rep stream's rounds with their coins and retained bytes, and every digest the
-  record binds (`root_b_*`, `root_f_*`, `msg_*`, `root_*`, `link_*`, `proof_*`) through the hashes, printed by the
-  total `printJ` (the bytes `Json.compress` prints).
-
-In deployment the challenger's live-coin part writes the record and flips the coin tree's key; here the prover writes what the server
-would, so the record is the honest server's.
--/
+/-! The honest prover's session for the plain verifier: the reps, the proof files and the record. -/
 
 @[expose] public section
 

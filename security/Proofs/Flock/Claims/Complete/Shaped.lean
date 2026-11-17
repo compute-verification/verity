@@ -48,19 +48,7 @@ import Proofs.Flock.VBridge.Family.Lig
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest rep's proof fits its shape
-
-`repShaped` proves the goal `RepShaped` at an oracle of 64-byte outputs (`Claims.Out64`): each proof the honest rep
-returns is `ProofShaped` at the shape the verifier decodes it at, so `decodeProof_encodeProof` reads it back.
-
-`repP_shape` composes the phases' lengths (`Shaped.Piop`, and Ligerito's `ligeritoP_shape`) into `Lengths`, at a
-statement whose fold returns (`fold_ok`), a schedule the walk follows (`LigSched`, every `fast100` schedule's by
-`fast100_lig`) and a level-0 commitment of the shape the opening reads (`commitP_shape`). The encoding's size bound
-is `fileBound_lt`: the file of a statement of `m ≤ 35` with at most 2,050 claims (two, and the regions' extra claims,
-`extraClaims_size`, at most 1,024 regions by `Case.scheme`) is under `2^64` bytes, since a registered scheme's digests
-and salts are within SHA-512's (`scheme_sizes`, `schedPart_mono`) and `fast100`'s file part at those is under `2^32`.
--/
+/-! The honest rep's proof fits the shape the verifier decodes it at (`repShaped`), at an oracle of 64-byte outputs. -/
 
 @[expose] public section
 
@@ -111,7 +99,6 @@ theorem repP_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st
   rw [hr.1, Array.size_append]
   simp [abcClaims, shapeOf]
 
-/-- **A table's setup has a registered scheme and at most 1,024 regions** (`checkInRange`). -/
 theorem setupOne_scheme {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st) :
@@ -129,7 +116,6 @@ theorem scheme_sizes {ms : MerkleScheme} (h : ms ∈ MerkleScheme.all) :
   simp only [MerkleScheme.all, List.mem_cons, List.not_mem_nil, or_false] at h
   rcases h with rfl | rfl | rfl | rfl <;> simp [MerkleScheme.sha256, MerkleScheme.sha512, MerkleScheme.hm96Sha512]
 
-/-- **The walk follows every executable `fast100` schedule.** -/
 theorem fast100_lig (m : ℕ) (s : Schedule) (hs : fast100 m = some s) : LigSched s ∧ s.m = m := by
   obtain ⟨⟨-, h2, -, -, hl4, -, -⟩, hm⟩ := fast100_dims m s hs
   have hlv := fast100_level m s hs
@@ -152,7 +138,6 @@ theorem fast100_lig (m : ℕ) (s : Schedule) (hs : fast100 m = some s) : LigSche
 
 theorem packed_size (tr : Trace) (m : ℕ) : (packed tr m).size = 2 ^ (m - 7) := by simp [packed]
 
-/-- A file's schedule part grows with its digests and salts. -/
 theorem schedPart_mono {s : Schedule} {H H' : ℕ} {sl sl' : Option ℕ} (hH : H ≤ H')
     (h : ∀ q, FlockVBridge.Family.saltsSize sl q ≤ FlockVBridge.Family.saltsSize sl' q) :
     FlockVBridge.Family.schedPart s H sl ≤ FlockVBridge.Family.schedPart s H' sl' := by
@@ -194,9 +179,6 @@ theorem extraClaims_size {st : Stmt} {pts : Array (Array F128)} {e : Array Claim
       ring
   rw [← Array.length_toList, heq, key _ _ hess, Array.length_toList]
 
-/-- **The honest rep proof fits its shape**: at every good case, on its table's trace, the trace's packed table
-committed at the schedule's first level (`cm`, under any salts), and the table's extra claims at the link's points
-(`e`), each proof a rep returns is `ProofShaped` at the shape the verifier decodes it at. -/
 def RepShaped (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, ∀ st sch cm e, c.sts = #[st] → fast100 (Setup.ofCircuit st).m = some sch →
     ∀ salt₀, commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
@@ -206,14 +188,12 @@ def RepShaped (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readabl
       (tracesOf c.sts c.w)[0]! (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) cm e salt nonce).run
       (Transcript.init #[] d)) fun pt => FlockVBridge.Family.ProofShaped (shapeOf (Setup.ofCircuit st) sch e.size) pt.1
 
-/-- **The case's table has a registered scheme and at most 1,024 regions.** -/
 theorem _root_.FlockComplete.Case.scheme {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (c : Case H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ st.merkle ∈ MerkleScheme.all ∧ st.regions.size ≤ 1024 := by
   obtain ⟨st, h1, h2, h3⟩ := c.one
   exact ⟨st, h1, h2, setupOne_scheme h3⟩
 
-/-- **The honest rep proof fits its shape**: the goal `RepShaped`, at an oracle of 64-byte outputs. -/
 theorem repShaped {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (h64 : Claims.Out64 H) :
     RepShaped H rel := by
   intro c st sch cm e hst hsch salt₀ hcm he salt nonce d

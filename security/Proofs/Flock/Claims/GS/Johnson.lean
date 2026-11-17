@@ -40,26 +40,12 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Johnson's bound for a set family
-
-Sets `A i ⊆ Fin N` (`i ∈ S`), each of at least `t` elements and pairwise meeting in at most `a`, number at most `N`
-once `(a + 2)·N < t²` and `t ≤ N` (`johnson_card_le`). For the decoder, `A i` is where a candidate prefix of rows agrees
-with the opened columns: two distinct prefixes differ in a row, two polynomials of degree below `k` agree at at most
-`k − 1` distinct points, and the regime `(k + 1)·N < t²` is this one at `a = k − 1`.
-
-The proof counts incidences: with `c x` the number of sets holding `x`, `Σ c x = Σ |A i| =: Z` and
-`Σ c x² = Σ_{i,j} |A i ∩ A j| ≤ Z + n²a` at `n = |S|`, so Cauchy–Schwarz gives `Z² ≤ N·(Z + n²a)`. With `Z ≥ n·t` and
-`2nt > N` this is `n·t² ≤ N·n·a + N·t`, which the regime contradicts unless `n ≤ N`; and `2nt ≤ N` gives `n ≤ N` at
-once.
--/
+/-! Johnson's bound for a set family (`johnson_card_le`), which caps the decoder's kept prefixes at `N`. -/
 
 @[expose] public section
 
 namespace Claims.GS
 
-/-- **Johnson's bound**: at most `N` sets of at least `t` elements of `Fin N`, pairwise meeting in at most `a`, when
-`(a + 2)·N < t²` and `t ≤ N`. -/
 theorem johnson_card_le {ι : Type} [DecidableEq ι] (S : Finset ι) {N t a : ℕ} (A : ι → Finset (Fin N))
     (hA : ∀ i ∈ S, t ≤ (A i).card) (hI : ∀ i ∈ S, ∀ j ∈ S, i ≠ j → (A i ∩ A j).card ≤ a)
     (hreg : (a + 2) * N < t * t) (htN : t ≤ N) : S.card ≤ N := by

@@ -37,25 +37,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 
-/-!
-# The masked replay's rows vanish wherever the plain checks pass at its coins
-
-`Zk.replay` hands `verifyInner` five message-dependent rows: its own three (`zerocheck c_eval`,
-`zerocheck final a·b`, `lincheck final`) and the opening's two (`ring switch ab`, `ring switch c`, `Zk.verify`'s
-`abValue + ⟨w_ab, ŝ_ab⟩` and `cValue + ⟨w_c, ŝ_c⟩`). Live coins make the masked run flip plain's coins at plain's
-sends, so each row is a plain check on the clear proof at the replay's coins, moved by the pads:
-
-* `replay_rows_zero`: on a proof that is the clear one masked by the pads (`ZerocheckMasked.Masks`, `LcMasks`) at
-  `h_ab = h_a·h_b`, the five rows evaluate to `0` wherever the clear proof passes the plain checks at the replay's
-  coins: `P_c(z) = final_c`, the residual claim `= final_a·final_b`, the lincheck fold `= ⟨comb, z_partial⟩`, and the
-  two claim checks `⟨w, ŝ⟩` meeting the clear `ab` and `c` values.
-* `replay_rows_zero_honest`: the same at the honest masked prover (`ZcZ.proof`, `LcZ.proof`), from the plain lemmas'
-  conclusions verbatim (`Zc.fold_final`, `Lc.lcAlgebra_of`, `claims_switch`) and seven coin identities: the replay's
-  `z`, `r_outer`, `ρ`, `α`, `β`, `t_j` and `r′` are the prover's.
-
-It is `replay_zerocheck` and `replay_lincheck` (the rows' shapes) composed with the transfer's evaluation lemmas
-(`c_eval_eval`, `final_eval`, `lcFinal_eval`, `lcAbValue_eval`); no row needs its own walk of the masked run.
--/
+/-! The masked replay's five rows vanish at the pads wherever the plain checks pass at its coins
+(`replay_rows_zero`). -/
 
 @[expose] public section
 
@@ -65,7 +48,6 @@ open Flock FlockLevel3 FlockSoundness FlockSoundness.Refine FlockSoundness.Disch
 open ZerocheckMasked (evalL zAt rOuterAt rhoAt)
 open Lincheck (coinAt rhoOf tsOf)
 
-/-- **`Zk.replay`'s five rows vanish at the pads wherever the clear proof passes the plain checks at its coins.** -/
 theorem replay_rows_zero (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (p : Proof) (root : ByteArray)
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t'))
     (zc : ZerocheckProof) (lc : LincheckProof)
@@ -106,8 +88,6 @@ theorem replay_rows_zero (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (p :
       claimCheck_eq _ _ rfl rfl, hRc]
     exact ZerocheckMasked.add_self' _
 
-/-! ## At the honest masked prover -/
-
 theorem arr_eq_of_get {a b : Array F128} (n : ℕ) (ha : a.size = n) (hb : b.size = n)
     (h : ∀ i < n, a[i]! = b[i]!) : a = b :=
   Array.ext (ha.trans hb.symm) fun i h1 h2 => by
@@ -135,10 +115,6 @@ theorem tsOf_eq (m kLog : ℕ) (t : Transcript) (f : ℕ → F128)
 theorem wOf_congr (c c' : Claim) (hs : c.skip = c'.skip) (hx : c.x[0]! = c'.x[0]!) : wOf c = wOf c' := by
   simp only [wOf, hs, hx]
 
-/-- **At the honest masked prover, `Zk.replay`'s five rows vanish wherever its coins are the prover's.** The masked
-proof is the plain one masked by the pads (`ZcZ.proof`, `LcZ.proof`); the plain facts are `Zc.fold_final`'s,
-`Lc.lcAlgebra_of`'s and `claims_switch`'s conclusions verbatim; and the seven coin identities say the replay's rounds
-carry the prover's coins at plain's sends, which live coins give (the coin at a send is the send's reply). -/
 theorem replay_rows_zero_honest (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (p : Proof) (root : ByteArray)
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t'))
     (c : CircuitFold) (tr : Trace) (zcs : Zc.Challenges) (cs : Lc.Challenges) (full : Array F128)

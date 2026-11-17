@@ -39,20 +39,7 @@ import Proofs.Flock.Level3.LookupRows
 import Proofs.Flock.Soundness.Refine.Arith
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Level 0's lane rows vanish at the honest pads
-
-`lanes_hold`: where the masked prover's lane phase is in closed form (`Level0.LaneForm`), the two rows level 0 hands
-the inner proof (`Zk.ligeritoConstraints`) vanish at its pads. Read in `K` (`ev2`), a row is the lane phase's claim
-`target + β·y` through the `k_0` lane rounds, plus `ρ_0·e_0 + ρ_1·e_1 + T'`. Each masked value read at the pads is the
-clear one (characteristic 2), so the lane rounds keep the sumcheck invariant `claim = Σ f_j·W_j` (`claim_inv`, from
-the round lemma `step_sum`), and the closing sum `⟨W, f⟩ + ρ_0⟨W, R_0⟩ + ρ_1⟨W, R_1⟩ + ⟨W, f + ρ_0 R_0 + ρ_1 R_1⟩` is
-twice a value (`lane_close`).
-
-* `ev2_add`, `ev2_scale`, `ev2_masked`, `ev2_konst`, `ev2_lift`: `Lin2`'s operations read in `K` (`l2scale` by a `K`
-  coin is multiplication by it).
-* `ev2_claim0`: the first claim `T + β·y₀` is `Σ t·(b + β·eq(z))` where `T = ⟨t, b⟩`.
--/
+/-! Level 0's lane rows vanish at the honest pads where the lane phase is in closed form (`lanes_hold`). -/
 
 @[expose] public section
 
@@ -65,13 +52,9 @@ open Lg (gv)
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-! ## `Lin2` read in `K` -/
-
-/-- A `Lin2`'s value at the pads `h`, as an element of `K`: `x₀(h) + x₁(h)·u`. -/
 noncomputable def ev2 (x : Zk.Lin2) (h : Array F128) : 𝕂 :=
   embed (fOf (evalL x.1 h)) + embed (fOf (evalL x.2 h)) * u
 
-/-- Both coordinates of a `Lin2` over `s` pads. -/
 def S2 (x : Zk.Lin2) (s : ℕ) : Prop := x.1.a.size = s ∧ x.2.a.size = s
 
 theorem evalL_konst (c : F128) (s : ℕ) (h : Array F128) : evalL (Zk.Lin.konst c s) h = c := by
@@ -124,7 +107,6 @@ theorem ev2_lift (x : Zk.Lin) (s : ℕ) (h : Array F128) : ev2 (x, Zk.Lin.konst 
   simp only [ev2]
   rw [evalL_konst, fOf_zero, map_zero, zero_mul, add_zero]
 
-/-- **A `Lin2` that reads `0` in `K` has both coordinates `0`.** -/
 theorem ev2_eq_zero {x : Zk.Lin2} {h : Array F128} (hz : ev2 x h = 0) : evalL x.1 h = 0 ∧ evalL x.2 h = 0 := by
   have e : (fun w : 𝔽 × 𝔽 => execArith.ofLimbs w.1 w.2) (fOf (evalL x.1 h), fOf (evalL x.2 h)) =
       (fun w : 𝔽 × 𝔽 => execArith.ofLimbs w.1 w.2) (fOf 0, fOf 0) := by
@@ -135,17 +117,13 @@ theorem ev2_eq_zero {x : Zk.Lin2} {h : Array F128} (hz : ev2 x h = 0) : evalL x.
   simp only [Prod.mk.injEq] at this
   exact ⟨fOf_injective this.1, fOf_injective this.2⟩
 
-/-- A masked value read at its own pads is the clear value. -/
 theorem ev2_unmask (m : F256) {i₀ i₁ s : ℕ} (h₀ : i₀ < s) (h₁ : i₁ < s) (h : Array F128) :
     ev2 (Zk.l2masked (m + ⟨h[i₀]!, h[i₁]!⟩) i₀ i₁ s) h = gOf m := by
   rw [ev2_masked _ h₀ h₁, gOf_add]
   linear_combination (gOf ⟨h[i₀]!, h[i₁]!⟩) * (CharTwo.two_eq_zero : (2 : 𝕂) = 0)
 
-/-! ## The executable's lane rows -/
-
 open FlockSoundness.Discharge.ZkExec (laneStepE laneLhs)
 
-/-- **Level 0's two lane rows**, exactly: the coordinates of `laneLhs`. -/
 theorem lanes_eq {lay : Zk.PadLayout} {rec : Zk.L0Rec} {lg : LigeritoProof} {msgs : Zk.Level0Msgs}
     {v : Array (String × Zk.Lin)} (h : Zk.ligeritoConstraints lay rec lg msgs = .ok v) (h1 : lay.nOod0 = 1) :
     v = #[("ligerito lane phase (c0)", (laneLhs lay rec lg msgs).1),
@@ -166,7 +144,6 @@ theorem s2_laneStep (lay : Zk.PadLayout) (lg : LigeritoProof) (ch : Array F256) 
     (j : ℕ) : S2 (laneStepE lay lg ch x j) lay.len :=
   s2_add (s2_add (s2_masked _ _ _ _) (s2_scale (s2_add hx (s2_masked _ _ _ _)) _)) (s2_scale (s2_masked _ _ _ _) _)
 
-/-- **A lane round read in `K`**: `u₀ + r·(claim + u₂) + r²·u₂` on the masked message's values. -/
 theorem ev2_laneStep (lay : Zk.PadLayout) (lg : LigeritoProof) (ch : Array F256) {x : Zk.Lin2} (hx : S2 x lay.len)
     (j : ℕ) (h : Array F128) :
     ev2 (laneStepE lay lg ch x j) h =
@@ -179,10 +156,6 @@ theorem ev2_laneStep (lay : Zk.PadLayout) (lg : LigeritoProof) (ch : Array F256)
     ev2_add (s2_masked _ _ _ _) (s2_scale (s2_add hx (s2_masked _ _ _ _)) _), ev2_scale (s2_add hx (s2_masked _ _ _ _)),
     ev2_add hx (s2_masked _ _ _ _), ev2_scale (s2_masked _ _ _ _), gOf_mul]
 
-/-! ## The lane rounds keep the sumcheck invariant -/
-
-/-- **The round lemma at a `K` claim**: on the message `roundPoly t w` and the claim `c = Σ t·w`, the lane step at
-`r` is the sum of the tables folded at `r`. -/
 theorem step_sum (t w : Array F256) (c : 𝕂) (n : ℕ) (ht : t.size = 2 ^ (n + 1)) (hw : w.size = t.size)
     (hs : c = ∑ x ∈ Finset.range (2 ^ (n + 1)), gv t x * gv w x) (r : F256) :
     gOf (roundPoly t w).1 + gOf r * (c + gOf (roundPoly t w).2) + gOf r * gOf r * gOf (roundPoly t w).2 =
@@ -233,10 +206,6 @@ theorem lgOod_lt (lay : Zk.PadLayout) (h1 : lay.nOod0 = 1) : lay.lgOod 0 < lay.l
   simp only [Zk.PadLayout.lgOod, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.hab]
   omega
 
-/-! ## Level 0's first claim and its closing equation -/
-
-/-- **The lane phase's first claim** `T + β·y₀` read at the pads: the out-of-domain value is `mle(t, z)` masked by its
-pad, and `T = ⟨t, b⟩`, so the claim is `Σ t·(b + β·eq(z))`. -/
 theorem ev2_claim0 {n : ℕ} {T β o : F128} {tb b z : Array F128} {lay : Zk.PadLayout} {hv : Array F128}
     (hn : n ≠ 0) (htb : tb.size = 2 ^ n) (hb : b.size = 2 ^ n) (hz : z.size = n) (hT : dot tb b = T)
     (hi : lay.lgOod 0 < lay.len) (ho : o = mleF tb z + hv[lay.lgOod 0]!) :
@@ -282,7 +251,6 @@ theorem close_sum {K : Type*} [CommRing K] (h2 : (2 : K) = 0) (N : ℕ) (f W r0 
   rw [Finset.mul_sum, Finset.mul_sum, ← Finset.sum_add_distrib, ← Finset.sum_add_distrib, ← Finset.sum_add_distrib]
   exact Finset.sum_eq_zero fun y _ => by linear_combination (f y * W y + a * W y * r0 y + b * W y * r1 y) * h2
 
-/-- **Level 0's closing equation**: `⟨f, W⟩ + ρ₀⟨W, R₀⟩ + ρ₁⟨W, R₁⟩ + ⟨W, f + ρ₀R₀ + ρ₁R₁⟩` is twice a value, so `0`. -/
 theorem lane_close (f W : Array F256) (rho : F256 × F256) (r0 r1 : Array F128) (hW : W.size = f.size)
     (h0 : r0.size = f.size) (h1 : r1.size = f.size) :
     ∑ y ∈ Finset.range f.size, gv f y * gv W y + gOf rho.1 * gOf (dotK W (embedF r0)) +
@@ -307,8 +275,6 @@ variable {resp : ℕ → Claims.Msg} {sch : Schedule} {T : F128} {tb b : Array F
   {hv : Array F128} {rep : ℕ} {extra : ℕ → ℕ → F128} {L : ℕ} {P : LigeritoProof} {zl : Zk.Level0Msgs}
   {rc : Zk.L0Rec}
 
-/-- **The lane rounds keep the sumcheck invariant**: after `j` lane rounds from a claim that is `Σ t·W_0`, the claim
-is `Σ f_j·W_j`, on the table and weights folded at the first `j` lane coins. -/
 theorem claim_inv (hLF : LaneForm resp sch T tb b lay hv rep extra L P zl rc) (hk : lay.k0 = sch.k0)
     (htb : tb.size = 2 ^ sch.n) (hb : b.size = 2 ^ sch.n) (hkn : sch.k0 ≤ sch.n) (x₀ : Zk.Lin2)
     (hx₀ : S2 x₀ lay.len)
@@ -345,7 +311,6 @@ theorem claim_inv (hLF : LaneForm resp sch T tb b lay hv rep extra L P zl rc) (h
     rw [hrc] at hE
     exact step_sum _ _ _ (sch.n - (j + 1)) hfs (hws.trans hfs.symm) hE _
 
-/-- **Level 0's two lane rows vanish at the honest pads**, where the lane phase is in closed form. -/
 theorem lanes_hold (hLF : LaneForm resp sch T tb b lay hv rep extra L P zl rc) (h1 : lay.nOod0 = 1)
     (hk : lay.k0 = sch.k0) (htb : tb.size = 2 ^ sch.n) (hb : b.size = 2 ^ sch.n) (hkn : sch.k0 ≤ sch.n)
     (hn : sch.n ≠ 0) (hT : dot tb b = T) (hsz : hv.size = lay.len) {lgc : Array (String × Zk.Lin)}

@@ -33,28 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The masked prover as `flock-circuit --zk` runs it
-
-`honestP` runs the masked session on each table's share of the witness as given. `flock-circuit --zk` differs from it in
-two places, and agrees with it in its other refusals; `honestPR` is `honestP` with the two differences made.
-
-* **The mask slot's words are the tape's** (`verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs:2738`–`2747`): table `i`'s
-  block `b`'s mask words are `h.rng.f128s(STREAM_MASK, b·mask_words, mask_words)` (`STREAM_MASK`,
-  `verity/protocols/proofs/flock/prover/live/src/zk_hooks.rs:35`), so word `k` of the slot in `maskWordsOf` order (`mask_words`,
-  `flock-circuit.rs:993`) is `STREAM_MASK`'s index `k`, the tape's `mask i k`. `maskW` puts them in the witness: table
-  `c`'s bit `a` is hidden value `a·J + c` (`Readable.tableWit`), and where `a` is in the slot's word `k` (`maskIdx`) the
-  bit is `mask c k`'s bit `a mod 128`. `maskWOf x` does it at `x`'s session.
-* **An outer coin `1` stops the prover** (`Masking::refuse_outer`, `verity/protocols/proofs/flock/prover/live/src/zk_veil.rs:329`, called on
-  every coin as it is sampled, `zk_veil.rs:393`, `403`): the zerocheck's outer coins (`outerSlotsZk`) read from the
-  verifier's replies so far (`outerHit`); at one equal to `1` the prover sends nothing more of the session (`[]`).
-* **A degenerate mask rank stops the prover** (`mask_rank_ok`, `zk_veil.rs:1087`, at the opening's label,
-  `flock-circuit.rs:1026`): already `honestP`'s, in its session (`MaskRank.rankCheckP`, in `sessionPZk`). So are the
-  other refused coins: `ρ₀, ρ₁` dependent over F128 (`ligeritoPZk`) and an inner `β = 0` (`innerP`), each a throw
-  that ends `sessionPZk` with the empty message.
-
-`honestPR w` is `honestP (maskWOf x w ω.mask)` at every history no outer coin of which is `1` (`honestPR_next`).
--/
+/-! The masked prover as `flock-circuit --zk` runs it (`honestPR`): `honestP` with the tape's mask words in every mask
+slot, stopped once an outer coin is `1`. -/
 
 @[expose] public section
 
@@ -104,15 +84,12 @@ theorem honestPR_stop {w : Claims.Flock.Wit} {x : Claims.Msg} {hist : List (Clai
     (h : outerHit x (hist.map Prod.snd) = true) : (honestPR w).next x hist ω = .ret [] := by
   simp only [honestPR, h, ↓reduceIte]
 
-/-! ## The mask witness's bits -/
-
 theorem maskW_getD (sts : Array Flock.Stmt) (w : Claims.Flock.Wit) (μ : ℕ → ℕ → F128) {p : ℕ}
     (hp : p < sts.size * (sts.toList.map fun st => 2 ^ st.m).sum) :
     (maskW sts w μ).hid.getD p false = maskBit sts w μ p := by
   simp only [maskW, List.getD_eq_getElem?_getD, List.getElem?_map,
     List.getElem?_range (lt_of_lt_of_le hp (le_max_right _ _)), Option.map_some, Option.getD_some]
 
-/-- **Off the mask slots the mask witness is `w`**: at a hidden value whose bit is in no table's mask word. -/
 theorem maskW_getD_off (sts : Array Flock.Stmt) (w : Claims.Flock.Wit) (μ : ℕ → ℕ → F128) {p : ℕ}
     (hp : maskBit sts w μ p = w.hid.getD p false) : (maskW sts w μ).hid.getD p false = w.hid.getD p false := by
   by_cases hl : p < max w.hid.length (sts.size * (sts.toList.map fun st => 2 ^ st.m).sum)
@@ -129,8 +106,6 @@ theorem maskW_lt (sts : Array Flock.Stmt) {c : ℕ} (hc : c < sts.size) {a : ℕ
     _ ≤ 2 ^ sts[c].m * sts.size := Nat.mul_le_mul_right _ ha
     _ ≤ sts.size * (sts.toList.map fun st => 2 ^ st.m).sum := by rw [Nat.mul_comm]; exact Nat.mul_le_mul_left _ hle
 
-/-- **Table `c`'s bit `a` of the mask witness**: `μ c k`'s bit `a mod 128` where `a` is in the slot's word `k`, and
-`w`'s elsewhere (`maskW_table_off`), at a bit of the table (`a < 2^m`). -/
 theorem maskW_table (sts : Array Flock.Stmt) (w : Claims.Flock.Wit) (μ : ℕ → ℕ → F128) {c : ℕ} (hc : c < sts.size)
     {a : ℕ} (ha : a < 2 ^ sts[c].m) {k : Fin (FlockSoundness.Discharge.Composed.maskWordsOf sts[c]).length}
     (hk : maskIdx sts[c] a = some k) :

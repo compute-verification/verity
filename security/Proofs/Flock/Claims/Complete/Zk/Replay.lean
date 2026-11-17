@@ -40,16 +40,8 @@ import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Proofs.Flock.Claims.Complete.Zk.Transfer
 
-/-!
-# The masked replay passes (`Replay`)
-
-The masked prover runs the verifier's own replay (`Zk.replay`) on its rounds so far, inside the rep, before its
-constraints and inner proof; a rep that returns had that replay return (`repPZk_replay`), on rounds its final rounds
-begin with: what follows adds rounds only (`innerP_rec`). At the run, rep `r`'s recorded stream is the rounds the rep
-ended at, every round retained (`RunZk.walk`), so the stream carries the rounds that replay ran on, and the verifier's
-replay at the run's oracle returns too (`replayWith_xfer`, from `Zk.replay` as `Zk.replayWith` at SHA-512,
-`zk_replayWith_std`): `replay_goal`.
--/
+/-! The masked replay passes from the rep's recorded rounds, because the prover ran it on rounds its stream carries
+(`replay_goal`). -/
 
 @[expose] public section
 
@@ -74,7 +66,6 @@ theorem liftV_ret {α : Type} (v : V α) (t : Transcript) :
   cases e2
   exact ⟨hv, rfl⟩
 
-/-- **The inner proof only adds rounds.** -/
 theorem innerP_pre (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) (t : Transcript) :
     Ret ((innerP (asksS resp) (Hashes.ofSha512 h) lay p ic finalC cons).run t) fun pt =>
@@ -83,7 +74,6 @@ theorem innerP_pre (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (la
   obtain ⟨rs, bs, hrs, -, -⟩ := JsonRT.Rec.go (JsonRT.innerP_rec resp h lay p ic finalC cons) e
   exact ⟨rs.toArray, Array.toList_inj.1 (by simp [hrs])⟩
 
-/-- **A masked rep that returns had its replay return**, on rounds its final rounds begin with. -/
 theorem repPZk_replay (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -110,7 +100,6 @@ theorem repPZk_replay (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) 
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The masked replay passes** from the rep's recorded rounds: the goal `Replay`. -/
 theorem replay_goal (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hP : JsonRT.ProverOkZk H rel) (hR : JsonRT.RepShapedZk H rel) : Replay H rel := by
   intro o i hi r hr

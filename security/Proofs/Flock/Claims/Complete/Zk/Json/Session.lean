@@ -41,21 +41,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What the one-table honest masked session returns and sends
-
-`sessionP_facts` at the masked session (`sessionPZk_facts`): at one table, with the keyed coin tree, a run of the pure
-masked session from no sends returns the printed honest masked record (`printJ` of `recordObjZk`) of a non-empty
-`root_B` under `2^64` bytes, the link's points off the first reply's coin, and one well-formed stream per rep stream;
-the table's extra claims evaluate at those points; and its sends are the link of that `root_B` and no public words,
-then the streams' rounds in order (`SessionFactsZk`).
-
-* **The rounds**: every masked prover function from the zerocheck to the rep adds rounds that are the sends it adds
-  (`zerocheckPZk_rec`, …, `repPZk_rec`), as `Session`'s plain ones; the verifier's own replay and level 0's lane phase
-  inside the rep (`StateT.lift` of a `V` computation) and the read of the transcript (`get`) add none.
-* **The quiet parts**: the masked commitment and the pads' commitment send nothing (`commitPZk_pureS`,
-  `innerCommitP_pureS`).
--/
+/-! What the one-table honest masked session returns and sends (`sessionPZk_facts`). -/
 
 @[expose] public section
 
@@ -63,8 +49,6 @@ namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete FlockDeploy With
 open Lean (Json JsonNumber)
-
-/-! ## The rounds -/
 
 theorem get_rec (resp : ℕ → Claims.Msg) : (recS resp).R (get : TMW PS Transcript) get := by
   intro t l a t' l' h
@@ -83,7 +67,6 @@ theorem liftV_rec (resp : ℕ → Claims.Msg) {α : Type} (v : V α) :
   cases e2
   exact Rec.same rfl rfl
 
-/-- A pure computation of `V`, run in `PS` and lifted to the transcript, adds no rounds and no sends. -/
 theorem liftPure_rec (resp : ℕ → Claims.Msg) {α : Type} {x : V α} {y : PS α} (hxy : pureS.R x y) :
     (recS resp).R (StateT.lift y : TMW PS α) (StateT.lift y) := by
   intro t l a t' l' e
@@ -153,7 +136,6 @@ theorem innerP_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (la
   sim_walk [sampleP_rec resp, squeezeP_rec resp, label_rec resp, absorbF_rec resp, absorbSlice_rec resp,
     absorbBytes_rec resp, tau_rec resp h]
 
-/-- **A masked rep's new rounds are its new sends.** -/
 theorem repPZk_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk)
     (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
@@ -167,12 +149,6 @@ theorem repPZk_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st
   sim_walk [zerocheckPZk_rec resp, lincheckPZk_rec resp, ringSwitchP_rec resp, ligeritoPZk_rec resp h,
     innerP_rec resp h, get_rec resp, liftV_rec resp]
 
-/-! ## The session -/
-
-/-- **What the one-table masked session returns and sends**: its record is the honest masked record of a non-empty
-`root_B`, the link's points off the first reply's coin, and one well-formed stream per rep stream; the table's extra
-claims evaluate at those points; and its sends are the link of that `root_B` and no public words, then the streams'
-rounds in order, each from index `1` on (`Recs`). -/
 def SessionFactsZk (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (st : Setup)
     (hz : String) (ct : CoinTree.Spec) (r : String × Array ByteArray) (bodies : Array Claims.Msg) : Prop :=
   ∃ rb streams, r.1 = printJ (recordObjZk spec h hz ct #[rb] (ptsOf spec (coinOf (resp 0))) streams r.2) ∧
@@ -180,8 +156,6 @@ def SessionFactsZk (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (sp
     (∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧
     ∃ bs, bodies.toList = linkBody [rb] [ByteArray.empty] :: bs ∧ Recs resp 1 (streams.toList.flatMap Array.toList) bs
 
-/-- **The one-table masked session's facts**, given a non-empty masked level-0 cap under `2^64` bytes and well-formed
-rep rounds on the table's extra claims at the link's points. -/
 theorem sessionPZk_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json}
     (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)

@@ -37,13 +37,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The honest masked run as a pure session
-
-The plain prover's simulation (`simS`, `Complete/Sim.lean`) on the masked prover: every masked prover function is
-related to its pure run (`zerocheckPZk_sim`, …, `sessionPZk_sim`), and the honest masked run's sends are the pure
-masked session's bodies (`sessionSZk`, `honestRunZk_eq`).
--/
+/-! The plain prover's simulation on the masked prover, so the honest masked run is the pure masked session's
+(`honestRunZk_eq`). -/
 
 @[expose] public section
 
@@ -123,15 +118,11 @@ theorem sessionPZk_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
   sim_walk [simS_link H resp, commitPZk_sim H resp, innerCommitP_sim H resp, repPZk_sim H resp,
     recordJson_sim H resp]
 
-/-- **The pure honest masked session** at the replies `resp`: its verdict (the record and the proof files) and its
-sends' bodies. -/
 def sessionSZk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt)
     (w : Claims.Flock.Wit) (ω : TapeZk) : Except String (String × Array ByteArray) × Array Claims.Msg :=
   (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (MaskRank.masksOf sts) (tracesOf sts w)
     ω).go #[]
 
-/-- **The honest masked run is the pure masked session's**: its sends are the session's bodies, each of tag `0`, and its
-last message the session's record and proof files after the statement. -/
 theorem honestRunZk_eq (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk) {k : ℕ}
     (r : Fin k → Coin) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}

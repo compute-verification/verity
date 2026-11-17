@@ -6,21 +6,7 @@ public import Proofs.Flock.Claims.Complete.Verdict
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
-/-!
-# The honest session record as a JSON value
-
-`recordJson` (the honest prover's record) builds one `Json` object and prints it with `printJ`. `recordObj` is that
-object, written as a pure value of the record's parts with every digest `dgOf spec h`: `recordJson` through
-`Hashes.ofSha512 h` returns `recordObj`, printed, when the statement names no keyed coin tree (`Bridge`).
-
-* **The record's parts**: a round (`roundObj`), a rep stream (`streamObj`), a proof digest (`proofObj`), the link
-  (`linkObj`, with `y = 0`, `yOf`) and the bytes `link_*` digests (`lbOf`).
-* **Printable** (`Good`): every object of the record is a tree of distinct keys and every number a natural, so the record
-  is printable when the statement's sample is (`good_recordObj`).
-* **Key lookups**: an object built from a list of distinct keys has each key's value (`getObjVal?_mkObj`) and no other
-  key (`get?_mkObj_none`); through `Same`, a parsed object's `Record.fld`, `str`, `nat`, `arr` and `isNull` read the
-  printed object's values (`fld_same`, …), and a value with no object in it parses back to itself (`Plain.same_eq`).
--/
+/-! The honest session record as a JSON value (`recordObj`), printable when the statement's sample is. -/
 
 @[expose] public section
 
@@ -28,8 +14,6 @@ namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete
 open Lean (Json JsonNumber)
-
-/-! ## The record's parts -/
 
 /-- A recorded round `k` as the record writes it (`roundJ` through `Hashes.ofSha512 h`). -/
 def roundList (spec : SessionSpec) (h : ByteArray → ByteArray) (k : Nat) (r : Round) : List (String × Json) :=
@@ -102,9 +86,6 @@ def recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array 
     (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray) : Json :=
   Json.mkObj (recordList spec h rootB points streams proofs)
 
-/-! ## Objects of distinct keys -/
-
-/-- The keys of a list are distinct. -/
 abbrev Distinct (l : List (String × Json)) : Prop := l.Pairwise fun a b => ¬ compare a.1 b.1 = .eq
 
 theorem get?_mkObj {l : List (String × Json)} (hd : Distinct l) {k : String} {v : Json} (hm : (k, v) ∈ l) :
@@ -122,7 +103,6 @@ theorem get?_mkObj_none {l : List (String × Json)} {k : String} (hk : (l.map Pr
   rw [Std.TreeMap.Raw.get?_eq_getElem?]
   exact Std.TreeMap.Raw.getElem?_ofList_of_contains_eq_false hk
 
-/-- Every value an object of distinct keys holds is one of its list's. -/
 theorem mem_of_get?_mkObj {l : List (String × Json)} (hd : Distinct l) {k : String} {v : Json}
     (hv : (Std.TreeMap.Raw.ofList l compare).get? k = some v) : (k, v) ∈ l := by
   cases hc : (l.map Prod.fst).contains k with
@@ -148,8 +128,6 @@ theorem good_arr_str (a : Array F128) : Good (Json.arr (a.map f128J)) :=
     exact .str _
 
 theorem good_arr_of {a : Array Json} (h : ∀ x ∈ a, Good x) : Good (Json.arr a) := .arr h
-
-/-! ## The record's objects have distinct keys, and the record is printable -/
 
 theorem dk_cases (spec : SessionSpec) : spec.dk = "sha512" ∨ spec.dk = "sha256" := by
   unfold SessionSpec.dk
@@ -206,7 +184,6 @@ theorem good_linkObj {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
   obtain ⟨p, -, rfl⟩ := Array.mem_map.1 hx
   exact good_arr_str _
 
-/-- **The record is printable** when the statement's sample is. -/
 theorem good_recordObj {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
     (rb : ByteArray) (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray)
     (hd : Good (spec.unitSample.getD Json.null)) : Good (recordObj spec h #[rb] points streams proofs) := by
@@ -219,9 +196,6 @@ theorem good_recordObj {spec : SessionSpec} {t : String} (ht : spec.tables = #[t
   · obtain ⟨q, -, rfl⟩ := Array.mem_map.1 hx
     exact good_proofObj _ _ _
 
-/-! ## A value with no object parses back to itself -/
-
-/-- A JSON value with no object in it. -/
 inductive Plain : Json → Prop
   | null : Plain .null
   | bool (b : Bool) : Plain (.bool b)
@@ -245,8 +219,6 @@ theorem plain_arr_str (a : Array F128) : Plain (Json.arr (a.map f128J)) :=
   .arr fun x hx => by
     obtain ⟨y, -, rfl⟩ := Array.mem_map.1 hx
     exact .str _
-
-/-! ## The decoder's reads through `Same` -/
 
 theorem fld_same {j j' : Json} (h : Same j j') {k : String} {v : Json} (hv : j.getObjVal? k = .ok v) :
     ∃ v', Record.fld j' k = .ok v' ∧ Same v v' := by
@@ -294,8 +266,6 @@ theorem isNull_none {l : List (String × Json)} {j' : Json} (h : Same (Json.mkOb
     (hk : (l.map Prod.fst).contains k = false) : Record.isNull j' k = true := by
   obtain ⟨e, he⟩ := h.getObjVal_none rfl (get?_mkObj_none hk)
   simp only [Record.isNull, he]
-
-/-! ## Byte equality -/
 
 theorem bytes_beq_self (b : ByteArray) : (b == b) = true := by
   show (b.data == b.data) = true

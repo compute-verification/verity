@@ -37,24 +37,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The masked prover's session
-
-Live PROTOCOL.md §1–§7 from the prover's side, for the masked verifier (`Zk.verifyWithM`), in `flock-circuit --zk`'s
-order (`prove_cpu_zk`, `zk_finish`).
-
-* **A rep** (`repPZk`): the masked zerocheck and lincheck (`zerocheckPZk`, `lincheckPZk`, the pads' root bound), the
-  rank check (`rankCheckP`: the prover stops at coins where the mask slot's weights at the claim points so far are
-  rank-deficient), the ring switch on the true claims' points (`ringSwitchP`; the switched vectors are sent in the
-  clear, the mask slot's words hiding them), the masked Ligerito (`ligeritoPZk`); then the constraints, as upstream
-  builds them: the verifier's own replay (`Zk.replay`) on the rep's rounds so far, the two ring-switch claims'
-  checks, and level 0's lane phase (`Zk.ligeritoConstraints` on the prover's `L0Rec`); then the inner proof
-  (`innerP`). The proof file is `ZkView.encZk` at the shape `Zk.verifyRepWith` reads (`shapeZk`).
-* **The session** (`sessionPZk`): each table's `--zk` schedule (`Zk.schedule`: level 0's `q_0` and `t_pad = 2 q_0`),
-  its masked level-0 commitment (`commitPZk`, salted from the tape's level `0`), the link message, the link's points,
-  then the rep streams in `spec.repStreams` order, each with its pads (`padsOf`) committed (`innerCommitP`) before its
-  first coin; the record is `recordJson`'s, the keyed coin tree's `hello` and `coin_tree` included.
--/
+/-! The masked prover's session (live PROTOCOL.md §1–§7 from the prover's side), in `flock-circuit --zk`'s order; the
+ring switch's switched vectors go in the clear, the mask slot's words hiding them. -/
 
 @[expose] public section
 

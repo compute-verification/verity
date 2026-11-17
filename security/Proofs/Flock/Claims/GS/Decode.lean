@@ -42,43 +42,9 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The counted Guruswami–Sudan decoder for interleaved Reed–Solomon codes
-
-`gsDecode C rf rd agree` decodes the interleaved Reed–Solomon code `C` (`IRS`: `s` rows of degree below `k`) from opened
-columns `os`, computing on coefficient lists and tables only, and `gsCost` counts its field operations (comparisons
-included) along the same computation. With `N` opened columns and threshold `t = ⌈agree·N⌉` (`IRS.threshold`):
-
-1. Each opened position's point `C.dom q` (`cols`, `dc` operations each), and a check that the points are distinct
-   (`N²` comparisons) and that `(k+1)·N < t² ∧ t ≤ N` (`Reg`); outside that, `[]`.
-2. Per row `r`: the Guruswami–Sudan interpolation `Q_r(X, Y)` through the row's `N` points with multiplicity `k + 1`
-   (`interpTab`, Gaussian elimination, at most `20·N^9` operations, `interpCost_le`), written as a table, and its
-   `Y`-roots of degree below `k` by Roth–Ruckenstein (`rr`, with the root finder `rf`) (`cands`).
-3. The rows' candidates joined row by row, keeping the prefixes that agree with at least `t` opened columns (`kept`,
-   `extendRows`), each test by Horner's rule (`jcC`). Every kept list has at most `N` prefixes
-   (`length_kept_le`): two kept prefixes differ in a row, two distinct polynomials of degree below `k` agree on at most
-   `k − 1` of the distinct points, and at `(k+1)·N < t²` Johnson's bound (`johnson_card_le`) caps the family at `N`.
-4. Each full prefix read back as a message (`Reader`, `rd.cost` operations each).
-
-On `s = 0` rows it returns the one message `rd.read []`. So it lists at most `max 1 N` messages
-(`length_gsDecode_le`).
-
-**Completeness** (`mem_gsDecode`): on opened columns at distinct points, from the Johnson count `C.nMin agree` on, at
-`agree > 0`, every message agreeing with at least `agree·N` of them is listed, the conclusion of
-`IRS.listComplete_decode` on those inputs. A message's row agrees with its row's points at least `t` times, so the
-interpolation vanishes on it (`interpPoly_eval_eq_zero`, from ArkLib's `GuruswamiSudan` multiplicity lemmas), so
-Roth–Ruckenstein finds it (`mem_rr`), and its prefixes pass every pruning (`mem_extendRows`).
-
-**Complexity** (`gsDecode_complexity`): at the input size `N·s·w` (the opened columns' field elements times the field's
-width `w` in bits: the length of the opened data, the positions apart, which reach the decoder only through `C.dom`),
-the count is at most `gsBound ρ β dc` at the size, with `ρ` the root finder's bound, `β` the reader's and `dc` the cost
-of one point:
-
-`20·X^9 + 171·X^7 + 9·X^6 + 12·X^4 + X^2 + dc·X + 1 + 3·X^2·ρ(3·X) + (X + 1)·β(X)`.
-
-The interpolation's Gaussian elimination dominates: `N·(k+1)(k+2)/2` constraints in as many unknowns plus one, so
-`O(N^3)` of each at `k < N`, cubed.
--/
+/-! The counted Guruswami–Sudan decoder for interleaved Reed–Solomon codes: it lists every message agreeing with at
+least `agree·N` opened columns (`mem_gsDecode`), at most `max 1 N` of them, within `gsBound` field operations
+(`gsDecode_complexity`); outside its regime (`Reg`) it returns `[]`. -/
 
 @[expose] public section
 
@@ -164,8 +130,6 @@ noncomputable def gsCounted {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C 
     (rd : Reader C) (agree : ℝ) (dc : ℕ) (os : List (ℕ × (Fin s → F))) : List T × ℕ :=
   (gsDecode C rf rd agree os, gsCost C rf rd agree dc os)
 
-/-! ## Structure of the pruning -/
-
 theorem extendRows_spec {α : Type} (L : ℕ → List α) (keep : List α → Bool) :
     ∀ m, ∀ ps ∈ extendRows L keep m,
       ps.length = m ∧ (∀ i (hi : i < ps.length), ps[i] ∈ L i) ∧ (m ≠ 0 → keep ps = true)
@@ -223,8 +187,6 @@ theorem nodup_kept {F : Type} [Field F] [DecidableEq F] {s : ℕ} (rf : RootFind
     (cs : List (F × (Fin s → F))) (m : ℕ) : (kept rf k t cs m).Nodup :=
   nodup_extendRows _ _ (fun i => (cands_shape rf k t cs i).1) m
 
-/-! ## Completeness -/
-
 theorem length_cols {F T : Type} [Field F] {s : ℕ} (C : IRS F T s) (os : List (ℕ × (Fin s → F))) :
     (cols C os).length = os.length := by
   simp [cols]
@@ -241,7 +203,6 @@ theorem length_rowPts {F : Type} {s : ℕ} (cs : List (F × (Fin s → F))) (r :
     (rowPts cs r).length = cs.length := by
   simp [rowPts]
 
-/-- A message's row agrees with its row's points wherever the message agrees with an opened column. -/
 theorem agreeCount_le_rowPts {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s)
     (os : List (ℕ × (Fin s → F))) (M : T) (r : Fin s) :
     C.agreeCount M os ≤ ((rowPts (cols C os) r).filter fun p => decide ((C.rows M r).eval p.1 = p.2)).length := by
@@ -252,7 +213,6 @@ theorem agreeCount_le_rowPts {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C
   rw [← hp]
   rfl
 
-/-- In the regime the table of the interpolation polynomial reads back as that polynomial. -/
 theorem tpoly_interp {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts : List (F × F)}
     (h : Reg k pts.length t) :
     tpoly (degX k t) (degY k t) (mkTab (degX k t) (degY k t) (interpTab k t pts)) = interpPoly k t pts := by
@@ -274,8 +234,6 @@ theorem tget_interp {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts : List
   · by_contra hne
     exact hij (interpTab_boxed h i j (Ne.symm hne))
 
-/-- **A message's row is among its row's candidates**, in the regime, on distinct points, when the message agrees with
-at least `t` opened columns. -/
 theorem mem_cands {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s) (rf : RootFinder F) {t : ℕ}
     (os : List (ℕ × (Fin s → F))) (hnd : (os.map fun p => C.dom p.1).Nodup) (h : Reg C.k os.length t) (M : T)
     (hM : t ≤ C.agreeCount M os) (m : ℕ) (hm : m < s) :
@@ -294,11 +252,9 @@ theorem mem_cands {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T 
     exact interpPoly_eval_eq_zero hnd' h' (C.natDegree_rows M _)
       (hM.trans (agreeCount_le_rowPts C os M ⟨m, hm⟩))
 
-/-- The prefix of a message's rows, as coefficient lists. -/
 def rowsPre {F T : Type} [Field F] {s : ℕ} (C : IRS F T s) (M : T) (i : ℕ) : List F :=
   if h : i < s then coeffList C.k (C.rows M ⟨i, h⟩) else []
 
-/-- **A message's prefixes agree with every opened column the message agrees with.** -/
 theorem agreeCount_le_jcC {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s)
     (os : List (ℕ × (Fin s → F))) (M : T) (m : ℕ) :
     C.agreeCount M os ≤ jcC ((List.range m).map (rowsPre C M)) (cols C os) := by
@@ -312,7 +268,6 @@ theorem agreeCount_le_jcC {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : 
     horner_eq, toPolyL_coeffList _ _ (C.natDegree_rows M _), ← hp]
   rfl
 
-/-- From the Johnson count on, the threshold is in the regime, when some message agrees with `agree·N` columns. -/
 theorem reg_threshold {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s) {agree : ℝ} (ha : 0 < agree)
     (os : List (ℕ × (Fin s → F))) (hN : C.nMin agree ≤ os.length) (M : T)
     (hM : agree * os.length ≤ C.agreeCount M os) : Reg C.k os.length (IRS.threshold agree os) := by
@@ -328,8 +283,6 @@ theorem reg_threshold {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS 
     nlinarith
   exact_mod_cast this
 
-/-- **The counted decoder is complete**: on opened columns at distinct points, from the Johnson count on, at
-`agree > 0`, it lists every message that agrees with at least `agree·N` of them. -/
 theorem mem_gsDecode {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s) (rf : RootFinder F)
     (rd : Reader C) {agree : ℝ} (ha : 0 < agree) (os : List (ℕ × (Fin s → F)))
     (hnd : (os.map fun p => C.dom p.1).Nodup) (hN : C.nMin agree ≤ os.length) (M : T)
@@ -362,9 +315,6 @@ theorem mem_gsDecode {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F
   · obtain ⟨i, hi, rfl⟩ := List.mem_map.1 hp
     rw [rowsPre, dite_eq_left (List.mem_range.1 hi), length_coeffList]
 
-/-! ## The pruning's lists, by Johnson's bound -/
-
-/-- Two distinct polynomials of degree below `k` agree on at most `k − 1` of distinct points. -/
 theorem card_agree_le {F : Type} [Field F] [DecidableEq F] {N : ℕ} (x : Fin N → F) (hx : Function.Injective x)
     {f g : F[X]} (hfg : f ≠ g) {k : ℕ} (hf : f.natDegree < k) (hg : g.natDegree < k) :
     (Finset.univ.filter fun j => f.eval (x j) = g.eval (x j)).card ≤ k - 1 := by
@@ -386,8 +336,6 @@ theorem lt_of_mem_cands {F : Type} [Field F] [DecidableEq F] {s : ℕ} {rf : Roo
   · exact hm
   · simp at h
 
-/-- **Every kept list has at most `N` prefixes**, in the regime, on distinct points: Johnson's bound on the kept
-prefixes' agreement sets. -/
 theorem length_kept_le {F : Type} [Field F] [DecidableEq F] {s : ℕ} (rf : RootFinder F) {k t : ℕ}
     {cs : List (F × (Fin s → F))} (h : Reg k cs.length t) (hnd : (cs.map Prod.fst).Nodup) (m : ℕ) :
     (kept rf k t cs m).length ≤ cs.length := by
@@ -440,8 +388,6 @@ theorem length_kept_le {F : Type} [Field F] [DecidableEq F] {s : ℕ} (rf : Root
     rw [List.getD_eq_getElem _ _ hi', horner_eq] at h2
     rw [h1, h2]
 
-/-- **The decoder lists at most `max 1 N` messages**: one on `s = 0` rows, else at most one per opened column
-(`length_kept_le`). -/
 theorem length_gsDecode_le {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s) (rf : RootFinder F)
     (rd : Reader C) (agree : ℝ) (os : List (ℕ × (Fin s → F))) :
     (gsDecode C rf rd agree os).length ≤ max 1 os.length := by
@@ -454,15 +400,12 @@ theorem length_gsDecode_le {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C :
     exact le_max_right _ _
   · simp
 
-/-! ## The count -/
-
 theorem degY_le_degX (k t : ℕ) : degY k t ≤ degX k t := by
   unfold degY
   split_ifs
   · exact Nat.div_le_self _ _
   · exact le_rfl
 
-/-- The `Y`-degree bound is below `3t`: `L + 1 ≤ 3t ≤ 3N`. -/
 theorem degY_succ_le {k N t : ℕ} (h : Reg k N t) : degY k t + 1 ≤ 3 * N := by
   have ht := h.pos
   have hD := degX_succ h
@@ -479,7 +422,6 @@ theorem degY_succ_le {k N t : ℕ} (h : Reg k N t) : degY k t + 1 ≤ 3 * N := b
   · have : (k + 1) * t ≤ 2 * t := Nat.mul_le_mul_right t (by omega)
     omega
 
-/-- **One row's count**: at most `20·N^9 + 171·N^7 + 9·N^6 + 3·N²·ρ(3N)` in the regime. -/
 theorem rowCost_le {F : Type} [Field F] [DecidableEq F] {s : ℕ} (rf : RootFinder F) {k t : ℕ}
     {cs : List (F × (Fin s → F))} (h : Reg k cs.length t) (r : Fin s) :
     rowCost rf k t cs r ≤ 20 * cs.length ^ 9 + 171 * cs.length ^ 7 + 9 * cs.length ^ 6 +
@@ -526,7 +468,6 @@ theorem keepCost_le {k N m s : ℕ} (hk : k + 1 < N) (hm : m < s) : keepCost k N
   have h4 : 1 ≤ N ^ 2 * s := by nlinarith
   nlinarith
 
-/-- **The pruning's count**: at most `12·N^4·s²` in the regime, on distinct points. -/
 theorem pruneCost_le {F : Type} [Field F] [DecidableEq F] {s : ℕ} (rf : RootFinder F) {k t : ℕ}
     {cs : List (F × (Fin s → F))} (h : Reg k cs.length t) (hnd : (cs.map Prod.fst).Nodup) :
     pruneCost rf k t cs ≤ 12 * cs.length ^ 4 * s ^ 2 := by
@@ -546,8 +487,6 @@ theorem pruneCost_le {F : Type} [Field F] [DecidableEq F] {s : ℕ} (rf : RootFi
   calc _ ≤ (Finset.range s).card • (12 * cs.length ^ 4 * s) := Finset.sum_le_card_nsmul _ _ _ hterm
     _ = 12 * cs.length ^ 4 * s ^ 2 := by rw [Finset.card_range, smul_eq_mul]; ring
 
-/-- **The complexity polynomial**, from the root finder's bound `ρ`, the reader's `β` and the cost `dc` of a point:
-`20·X^9 + 171·X^7 + 9·X^6 + 12·X^4 + X^2 + dc·X + 1 + 3·X^2·ρ(3·X) + (X + 1)·β(X)`. -/
 noncomputable def gsBound (ρ β : Polynomial ℕ) (dc : ℕ) : Polynomial ℕ :=
   C 20 * X ^ 9 + C 171 * X ^ 7 + C 9 * X ^ 6 + C 12 * X ^ 4 + X ^ 2 + C dc * X + 1 +
     C 3 * X ^ 2 * ρ.comp (C 3 * X) + (X + 1) * β
@@ -557,7 +496,6 @@ theorem eval_gsBound (ρ β : Polynomial ℕ) (dc Q : ℕ) :
       3 * Q ^ 2 * ρ.eval (3 * Q) + (Q + 1) * β.eval Q := by
   simp [gsBound, eval_comp]
 
-/-- **`gsCost` is at most `gsBound` at `N·s·w`**, for every input. -/
 theorem gsCost_le {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s) (rf : RootFinder F)
     (rd : Reader C) (agree : ℝ) (dc w : ℕ) (hw : 1 ≤ w) (os : List (ℕ × (Fin s → F))) :
     gsCost C rf rd agree dc os ≤ (gsBound rf.bound rd.bound dc).eval (os.length * s * w) := by
@@ -627,7 +565,6 @@ theorem gsCost_le {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T 
         s * (3 * N ^ 2 * rf.bound.eval (3 * N)) := by ring
   omega
 
-/-- **The counted decoder's complexity**: its count is at most `gsBound` at the input size `N·s·w`. -/
 theorem gsDecode_complexity {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s) (rf : RootFinder F)
     (rd : Reader C) (agree : ℝ) (dc w : ℕ) (hw : 1 ≤ w) :
     DecoderComplexity (gsDecode C rf rd agree) (gsCounted C rf rd agree dc)

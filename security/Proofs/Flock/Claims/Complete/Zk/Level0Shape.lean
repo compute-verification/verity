@@ -45,21 +45,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The masked Ligerito prover's proof lengths
-
-`ligeritoPZk_shape`: a masked Ligerito prover (`ligeritoPZk`) that returns, at a schedule the walk can follow
-(`LigSched`), on a level-0 commitment of rows `2^lanes + EXTRA_LANES` wide and a table of `2^n` entries, has every
-length `Zk.decode` checks of its proof (`ZkTables.Level0.LgShaped`) and `t_pad` padding coefficients.
-
-* **Level 0's masked commitment by its shape** (`CommitOkW`, `commitRowsP_shapeW`, `openP_okW`): `CommitOk` and
-  `openP_ok` at a row width `w`; `commitPZk`'s rows are `2^lanes + EXTRA_LANES` wide (`commitPZk_shape`).
-* **The `--zk` schedule** is one the walk follows (`zkSchedule_lig`): every level's seam (`zk_schedule_seams`), and
-  its dimensions and each level's cap within its depth by the kernel's evaluation at either statement version.
-* **The lane phase** is walked on the run (`lforIn_invS`), keeping its lengths (`meas`) and, at its last coin, the
-  padding's `t_pad` coefficients. **The rest** is plain's code from the split table on, walked on `Total.H` as
-  `ligeritoP_shape` walks it and read off the run by determinism (`H_run`).
--/
+/-! The masked Ligerito prover's proof has every length `Zk.decode` checks of it (`ligeritoPZk_shape`). -/
 
 @[expose] public section
 
@@ -69,9 +55,6 @@ open Flock Transcript FlockComplete Replay Replay.Lg JsonRT FlockSoundness.Disch
 
 variable {wideLeaf : Bool}
 
-/-! ## Level 0's masked commitment, by its shape -/
-
-/-- `CommitOk` at a row width `w`. -/
 def CommitOkW (hl sb w : ℕ) (lv : Level) (cm : Commit) : Prop :=
   cm.rows.size = 2 ^ lv.d ∧ (∀ r ∈ cm.rows, r.size = w) ∧ cm.salts.size = 2 ^ lv.d ∧
     (∀ x ∈ cm.salts, x.size = sb) ∧
@@ -79,7 +62,6 @@ def CommitOkW (hl sb w : ℕ) (lv : Level) (cm : Commit) : Prop :=
       ∀ x ∈ cm.layers[h], x.size = hl) ∧
     cm.cap.size = 2 ^ lv.cap ∧ ∀ x ∈ cm.cap, x.size = hl
 
-/-- **A commitment of `2^d` rows `w` wide, by its shape** (`commitP_shape` at given rows). -/
 theorem commitRowsP_shapeW {ms : MerkleScheme} {hs : Hashes V} {hl w : ℕ}
     (hn : ∀ l r v, (ms.opsWith hs).node l r = .ok v → v.size = hl)
     (hlf : ∀ row salt v, (ms.opsWith hs).leaf row salt = .ok v → v.size = hl) {lv : Level} (hcap : lv.cap ≤ lv.d)
@@ -128,7 +110,6 @@ theorem encodeRowsZk_shape (lv : Level) (tPad : ℕ) (g : Array F128) (extra lan
   obtain ⟨_, -, rfl⟩ := hr
   simp
 
-/-- **Level 0's masked commitment, by its shape**: rows `2^lanes + EXTRA_LANES` wide. -/
 theorem commitPZk_shape {ms : MerkleScheme} {hs : Hashes V} {hl : ℕ}
     (hn : ∀ l r v, (ms.opsWith hs).node l r = .ok v → v.size = hl)
     (hlf : ∀ row salt v, (ms.opsWith hs).leaf row salt = .ok v → v.size = hl) {lv : Level} (hcap : lv.cap ≤ lv.d)
@@ -138,7 +119,6 @@ theorem commitPZk_shape {ms : MerkleScheme} {hs : Hashes V} {hl : ℕ}
   commitRowsP_shapeW hn hlf hcap (encodeRowsZk_shape lv tPad g extra lanePad).1
     (encodeRowsZk_shape lv tPad g extra lanePad).2 h
 
-/-- **An opening of a commitment `w` wide, by its shape** (`openP_ok` at a row width). -/
 theorem openP_okW {sh : Shape} {ms : MerkleScheme} {lv : Level} {w : ℕ} {cm : Commit} {pos : Array ℕ}
     (hc : CommitOkW sh.hashLen ms.saltBytes w lv cm) (hq : pos.size = lv.q) (hp : ∀ p ∈ pos, p < 2 ^ lv.d)
     (hsl : (sh.saltLen = none ∧ ms.saltBytes = 0) ∨ sh.saltLen = some ms.saltBytes) :
@@ -168,10 +148,6 @@ theorem openP_okW {sh : Shape} {ms : MerkleScheme} {lv : Level} {w : ℕ} {cm : 
         rw [← hs']
         exact hsw _ (getElem!_mem (by rw [hs]; exact hp p hpm))
 
-/-! ## The `--zk` schedule -/
-
-/-- **The walk follows the `--zk` schedule**: fast100's dimensions and levels above 0, every level's seam, and level
-0's cap within its depth. -/
 theorem zkSchedule_lig {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     LigSched v.1 := by
   obtain ⟨-, -, -, hk0, -, ⟨-, hL, -, -, hl4, -, -⟩, hseam, -, -⟩ :=
@@ -185,10 +161,6 @@ theorem zkSchedule_lig {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule �
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at hkey
   exact ⟨hk0, by omega, hkey.1, hkey.2, hseam, hl4⟩
 
-/-! ## The walk -/
-
-/-- **A `Total.H` walk, read off a run**: a computation that returns from every state `pre` holds at, with `post`,
-has `post` at whatever it returned. -/
 theorem H_run {α : Type} {y : LP PS α} {pre : LigState → Prop} {post : α → LigState → Prop}
     (hy : totT.H y pre post) {st : LigState} (hp : pre st) {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
     {st' : LigState} (h : ((y.run st).run t).go l = (.ok ((a, st'), t'), l')) : post a st' := by
@@ -199,9 +171,6 @@ theorem H_run {α : Type} {y : LP PS α} {pre : LigState → Prop} {post : α �
   exact hq
 
 open ZkTables.Level0 in
-/-- **The masked Ligerito prover's proof has its lengths**: a masked Ligerito prover that returns, at a schedule the
-walk follows, on a level-0 commitment of rows `2^lanes + EXTRA_LANES` wide and a table of `2^n` entries, has
-`LgShaped`'s lengths and `t_pad` padding coefficients. -/
 theorem ligeritoPZk_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) {sh : Shape} {ms : MerkleScheme}
     (hn : ∀ l r v, (ms.opsWith (Hashes.ofSha512 h : Hashes V)).node l r = .ok v → v.size = sh.hashLen)
     (hlf : ∀ row salt v, (ms.opsWith (Hashes.ofSha512 h : Hashes V)).leaf row salt = .ok v → v.size = sh.hashLen)

@@ -47,16 +47,8 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Gaussian elimination with a field-operation count
-
-`kernel n eqs` is a nonzero solution of the homogeneous system `eqs` (each equation `e`, the coefficients of
-`Σᵢ eᵢ vᵢ = 0`) in `n` unknowns, whenever there are fewer equations than unknowns (`kernel_ne_zero`, `kernel_mem`). It
-eliminates one pivot per equation and back-substitutes, with no choice: the pivot is the first nonzero coefficient.
-
-`kernelCost n eqs` counts the field operations it performs (each `+`, `−`, `×`, `÷`, negation and test against `0`),
-at most `r·n·(2r+1)` for `r` equations (`kernelCost_le`).
--/
+/-! Gaussian elimination with a field-operation count: a nonzero kernel vector whenever there are fewer equations than
+unknowns (`kernel_spec`), in at most `r·n·(2r+1)` operations (`kernelCost_le`). -/
 
 @[expose] public section
 
@@ -107,7 +99,6 @@ theorem pivot_some {F : Type} [Field F] [DecidableEq F] {n : ℕ} {e : Fin n →
     e j ≠ 0 := by
   simpa using List.find?_some h
 
-/-- **`kernel` solves every equation, and is nonzero**, when there are fewer equations than unknowns. -/
 theorem kernel_spec {F : Type} [Field F] [DecidableEq F] :
     ∀ (n : ℕ) (eqs : List (Fin n → F)), eqs.length < n →
       kernel n eqs ≠ 0 ∧ ∀ e ∈ eqs, ∑ i, e i * kernel n eqs i = 0
@@ -158,7 +149,6 @@ theorem kernel_mem {F : Type} [Field F] [DecidableEq F] (n : ℕ) (eqs : List (F
     (e : Fin n → F) (he : e ∈ eqs) : ∑ i, e i * kernel n eqs i = 0 :=
   (kernel_spec n eqs h).2 e he
 
-/-- **`kernel`'s cost**: at most `r·n·(2r+1)` field operations for `r` equations in `n` unknowns. -/
 theorem kernelCost_le {F : Type} [Field F] [DecidableEq F] :
     ∀ (n : ℕ) (eqs : List (Fin n → F)), kernelCost n eqs ≤ eqs.length * n * (2 * eqs.length + 1)
   | 0, _ => by simp [kernelCost]

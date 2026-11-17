@@ -37,17 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A returning masked rep, stage by stage
-
-`repPZk_split`: a masked rep (`repPZk`) that returns, run in the pure session from the bodies `l`, ran its zerocheck,
-lincheck and ring switch in closed form at the replies' coins (`zerocheckPZk_go`, `lincheckPZk_go`, `ringSwitchP_go`),
-its rank check between them keeping the transcript and the sends (`rankCheckP_go`), ending at `tPiop` with
-`|l| + piopSends` bodies sent; then its masked Ligerito from there, on the ring switch's `T` and
-batched basis; then, on the transcript the Ligerito left, the verifier's own replay of its rounds, level 0's lane
-constraints of the Ligerito's record, and its inner proof on every constraint, which returned the rep's inner proof
-and its final transcript and bodies. The rep's proof is the stages' outputs.
--/
+/-! A returning masked rep, stage by stage (`repPZk_split`). -/
 
 @[expose] public section
 
@@ -59,34 +49,26 @@ section Defs
 
 variable (resp : ℕ → Claims.Msg) (st : Setup) (tr : Trace) (L : ℕ)
 
-/-- The masked rep's zerocheck output from `L` bodies (the plain prover's). -/
 def zcR : ZcOut := Zc.out st.m (Zc.coinsAt resp L) tr
 
-/-- Its lincheck's coins, from the bodies after the zerocheck's. -/
 def lcCoinsR : Lc.Challenges := Lc.coinsAt resp (L + 3 + (st.m - 6)) (st.fold.kLog - 6)
 
-/-- Its lincheck output. -/
 def lcR : LcOut := Lc.out st.fold st.m tr (zcR resp st tr L) (lcCoinsR resp st L)
 
-/-- The claims it ring-switches: the zerocheck's and lincheck's two, then the extra claims. -/
 def claimsR (extras : Array Claim) : Array Claim :=
   abcClaims st.m st.kLog (zcR resp st tr L) (lcR resp st tr L) ++ extras
 
-/-- Its ring switch's coins, from the bodies after the lincheck's. -/
 def rsCoinsR (extras : Array Claim) : Rs.Challenges :=
   Rs.coinsAt resp (L + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6)) (2 + extras.size)
 
-/-- A masked rep's sends before its Ligerito. -/
 def piopSends (extras : Array Claim) : ℕ := 3 + (st.m - 6) + 3 + (st.fold.kLog - 6) + (2 + extras.size + 1)
 
-/-- **The masked rep's transcript after its ring switch**, from `t`, with the lincheck's fold `full`. -/
 def tPiop (lay : Zk.PadLayout) (hp : Array F128) (digest cap root : ByteArray) (full : Array F128)
     (extras : Array Claim) (t : Transcript) : Transcript :=
   Rs.tEnd tr (claimsR resp st tr L extras) (rsCoinsR resp st L extras)
     (LcZ.tEnd lay hp st.fold st.m tr (zcR resp st tr L) full (lcCoinsR resp st L)
       (ZcZ.tEnd lay hp st.m digest cap root (Zc.coinsAt resp L) tr t))
 
-/-- **The masked rep's proof before its Ligerito**, its Ligerito proof `lg`. -/
 def proofR (sch : Schedule) (lay : Zk.PadLayout) (hp : Array F128) (cm0 : Commit) (full : Array F128)
     (extras : Array Claim) (lg : LigeritoProof) : Proof :=
   { cap := cm0.cap, params := pcsParams st.merkle sch, zerocheck := ZcZ.proof lay hp st.m (Zc.coinsAt resp L) tr,
@@ -113,7 +95,6 @@ theorem liftV_bind_ok {α β : Type} {v : V α} {f : α → TMW PS β} {t : Tran
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ := e4
   exact ⟨c, hv, e2⟩
 
-/-- **A returning masked rep, stage by stage.** -/
 theorem repPZk_split (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)

@@ -43,22 +43,7 @@ import Proofs.Flock.Level3.LookupRows
 import Proofs.Flock.Soundness.Refine.Arith
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# The honest prover's weight is the verifier's residual weight
-
-The honest prover keeps a weight `w` (`LigState.w`); the verifier's final check reads the residual weights `res`
-(`resE`), which are the model's `resAt` on the verifier's lists (`gOf_resE`). At every stage the prover's weight is the
-model's weight on the lists so far:
-
-* **level 0** (`gv_w0`): the batched basis plus the first out-of-domain claim, `resAt` with no challenges;
-* **level 0's challenges** (`fold_init`): folding `resAt` with no levels at challenges `ch` is `resAt` with `ch` as the
-  original challenges;
-* **a split** (`gv_liftU_preW`): lifting the weight by `u` is `preW`, the model's weight on a split table;
-* **a claim on the split table**: an out-of-domain sample adds its term to `preW` (`gv_addOod`), and a level's
-  consistency claim, `β·u^b·V` with `V = consW`, adds its `consTerm` (`gv_addCons`): `V(c)` is the model's
-  `Σ_j eq(α)_j·X̂_c(ω_{pos_j})` (`embed_consW`, from `fOf_xhats`);
-* **the end** (`res_honest`): the residual weights are the prover's last weight plus the last consistency claim.
--/
+/-! The honest prover's weight is the verifier's residual weight at every stage (`res_honest`). -/
 
 @[expose] public section
 
@@ -71,9 +56,6 @@ local notation "𝕂" => FlockLevel3.GF256
 
 namespace Lg
 
-/-! ## The subspace products -/
-
-/-- `xhats` after `i` doublings: entry `c` is the product of `wh[k]` over the bits `k` of `c`. -/
 theorem xhats_go (wh : Array F128) : ∀ i : ℕ,
     ((List.range i).foldl (fun t k => t ++ t.map (· * wh[k]!)) #[1]).size = 2 ^ i ∧
     ∀ c < 2 ^ i, fOf ((List.range i).foldl (fun t k => t ++ t.map (· * wh[k]!)) #[1])[c]! =
@@ -103,7 +85,6 @@ theorem xhats_go (wh : Array F128) : ∀ i : ℕ,
           rw [Nat.testBit_two_pow_add_eq, Nat.testBit_eq_false_of_lt hc'']; rfl
         simp [h1, h2]
 
-/-- **The prover's subspace products are the model's** `X̂_c(ω_q)`. -/
 theorem fOf_xhats (q cols c : ℕ) (hc : c < 2 ^ cols) :
     fOf (xhats (svTable (cols + 1)) q cols)[c]! = execArith.Xhat c cols (execArith.omega q) := by
   unfold xhats Model.Arith.Xhat
@@ -112,7 +93,6 @@ theorem fOf_xhats (q cols c : ℕ) (hc : c < 2 ^ cols) :
   rw [whats_get (cols + 1) q cols k (by omega) k.isLt]
   rfl
 
-/-- **The consistency weight** at column `c` is the model's `Σ_j eq(α)_j·X̂_c(ω_{pos_j})`. -/
 theorem embed_consW (cols : ℕ) (pos : Array ℕ) (alpha : Array F128) (hpa : pos.size ≤ 2 ^ alpha.size) {c : ℕ}
     (hc : c < 2 ^ cols) :
     FlockLevel3.embed (fOf (consW cols pos alpha)[c]!) =
@@ -130,15 +110,12 @@ theorem embed_consW (cols : ℕ) (pos : Array ℕ) (alpha : Array F128) (hpa : p
     Array.getElem_toList, ← getElem!_pos pos j hj']
   rfl
 
-/-- A consistency claim made at the current stage reads the consistency weight times its coin. -/
 theorem consTerm_consOf (levels : List (List 𝕂)) (ext : ℕ) (pos : Array ℕ) (alpha : Array F128) (b : F128)
     (hpa : pos.size ≤ 2 ^ alpha.size) {y : ℕ} (hy : y < 2 ^ ext) :
     FlockSoundness.consTerm execArith levels ext (consOf ⟨ext, pos, alpha, b, levels.length⟩) y =
       FlockLevel3.embed (fOf (consW ext pos alpha)[y]!) * FlockLevel3.embed (fOf b) := by
   rw [FlockSoundness.consTerm_new execArith levels ext _ rfl y, embed_consW ext pos alpha hpa hy, mul_comm]
   rfl
-
-/-! ## Level 0 -/
 
 section Fold
 
@@ -152,8 +129,6 @@ theorem mleAt_bits [CharP K 2] (N : ℕ) (c : ℕ → K) {y : ℕ} (hy : y < 2 ^
   · intro w hw hwy
     rw [eqList_bitsK _ y w hy (Finset.mem_range.1 hw)]; simp [hwy]
 
-/-- **Folding level 0's challenges**: with no levels and no consistency claims, folding `resAt` at `ch` puts `ch`
-among the original challenges. -/
 theorem fold_init [CharP K 2] (A : Model.Arith F K) (n : ℕ) (b : ℕ → F) (ch : List K) (oods : List (Model.OodCtx F))
     (m : ℕ) (hm : ch.length ≤ m) (hood : ∀ o ∈ oods, o.split = none ∧ o.z.length = m) (y : ℕ) :
     foldLoL ch (resAt A n b [] [] oods [] m) y = resAt A n b ch [] oods [] (m - ch.length) y := by
@@ -178,7 +153,6 @@ theorem fold_init [CharP K 2] (A : Model.Arith F K) (n : ℕ) (b : ℕ → F) (c
       oodTerm_eq_mle A ch [] (m - ch.length) o y (by rw [hfx, hz]; omega), foldLoL_mul_left, hfx, hfx,
       foldLoL_mle_bits _ _ [] ch m hm, List.nil_append]
 
-/-- Level 0's weight with no challenges yet: the batched basis plus the first out-of-domain claim. -/
 theorem resAt_w0 [CharP K 2] (A : Model.Arith F K) (n : ℕ) (b : ℕ → F) (o : Model.OodCtx F) (ho : o.split = none)
     (hz : o.z.length = n) {y : ℕ} (hy : y < 2 ^ n) :
     resAt A n b [] [] [o] [] n y = A.embed (b y) + A.embed o.β * Model.eqList (o.z.map A.embed) y := by
@@ -200,10 +174,8 @@ theorem resAt_w0 [CharP K 2] (A : Model.Arith F K) (n : ℕ) (b : ℕ → F) (o 
 
 end Fold
 
-/-- The batched basis's entries as model elements. -/
 noncomputable def bOf (b : Array F128) : ℕ → 𝔽 := fun w => fOf b[w]!
 
-/-- **Level 0's weight**: the batched basis plus the first out-of-domain claim's `β·eq(z, ·)`. -/
 theorem gv_w0 (b z : Array F128) (b0 : F128) (n : ℕ) (hb : b.size = 2 ^ n) (hz : z.size = n) {y : ℕ}
     (hy : y < 2 ^ n) :
     gv (addScaled (embedF b) (embedF (eqTable z)) b0) y =
@@ -216,10 +188,6 @@ theorem gv_w0 (b z : Array F128) (b0 : F128) (n : ℕ) (hb : b.size = 2 ^ n) (hz
   rw [← map_eqList execArith, mul_comm]
   rfl
 
-/-! ## A split table's weight -/
-
-/-- **A split** lifts the weight by `u`: on a table whose weight is `resAt`, before its out-of-domain claims, the
-lifted weight is `preW`. -/
 theorem gv_liftU_preW (n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (levels : List (List 𝕂))
     (oods : List (Model.OodCtx 𝔽)) (cons : List (Model.ConsCtx 𝔽)) (ext : ℕ) (w : Array F256)
     (hw : w.size = 2 ^ ext) (hold : ∀ o ∈ oods, o.split ≠ some levels.length)
@@ -234,7 +202,6 @@ theorem gv_liftU_preW (n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (levels
   simp only [List.map_nil, List.sum_nil, add_zero]
   rfl
 
-/-- **An out-of-domain claim** on the split table adds `β·eq(z, ·)` to `preW`. -/
 theorem gv_addOod (n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (levels : List (List 𝕂))
     (oods : List (Model.OodCtx 𝔽)) (cons : List (Model.ConsCtx 𝔽)) (ext : ℕ) (w : Array F256) (z : Array F128)
     (b0 : F128) (hw : w.size = 2 ^ (ext + 1)) (hz : z.size = ext + 1)
@@ -252,8 +219,6 @@ theorem gv_addOod (n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (levels : L
   rw [← map_eqList execArith, mul_comm (FlockLevel3.embed _), add_assoc]
   rfl
 
-/-- **A level's consistency claim** on the split table adds `β·u^b·V` to `preW`: its `consTerm`, read at the split
-coordinate's other side. -/
 theorem gv_addCons (n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (levels : List (List 𝕂))
     (oods : List (Model.OodCtx 𝔽)) (cons : List (Model.ConsCtx 𝔽)) (ext : ℕ) (w : Array F256) (pos : Array ℕ)
     (alpha : Array F128) (bq : F128) (hw : w.size = 2 ^ (ext + 1)) (hpa : pos.size ≤ 2 ^ alpha.size)
@@ -273,16 +238,12 @@ theorem gv_addCons (n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (levels : 
   rw [hu]
   ring
 
-/-! ## The residual weights -/
-
 theorem gOf_map_mul (a : Array F256) (c : F256) (y : ℕ) : gOf (a.map (· * c))[y]! = gOf a[y]! * gOf c := by
   by_cases hy : y < a.size
   · rw [getElem!_pos _ y (by simpa using hy), Array.getElem_map, gOf_mul, ← getElem!_pos a y hy]
   · rw [getElem!_neg _ y (by simpa using hy), getElem!_neg a y hy, show (default : F256) = 0 from rfl, gOf_zero,
       zero_mul]
 
-/-- **The residual weights are the model's** `resAt` on the verifier's lists, when the basis at the original point is
-the model's `bHat`, the levels have four challenges, and every context has its dimensions (as `finalProg` checks). -/
 theorem gOf_resE (basisAt : Array F256 → ℕ → Array F256) (n : ℕ) (initCh : Array F256)
     (levels : Array (Array F256)) (ext : ℕ) (st : LState) (b : ℕ → 𝔽) (hl : ∀ l ∈ levels.toList, l.size = 4)
     (horig : (origE initCh levels).size + ext = n)
@@ -327,8 +288,6 @@ theorem gOf_resE (basisAt : Array F256 → ℕ → Array F256) (n : ℕ) (initCh
     rw [gOf_consTerm (n + 1) ext levels hl cs y hy hc (by omega) (hpos cs hcs')]
     simp only [FlockSoundness.consTerm, FlockSoundness.consFixed, consOf]
 
-/-- **The final residual weights** are the prover's last weight plus the last consistency claim's `β·V`, made at the
-current stage. -/
 theorem res_honest (basisAt : Array F256 → ℕ → Array F256) (n : ℕ) (initCh : Array F256)
     (levels : Array (Array F256)) (ext : ℕ) (st : LState) (b : ℕ → 𝔽) (hl : ∀ l ∈ levels.toList, l.size = 4)
     (horig : (origE initCh levels).size + ext = n)

@@ -40,18 +40,7 @@ import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
-/-!
-# What the masked Ligerito returns, by coin position
-
-`zkLigeritoWith_pos`: wherever the shipped masked Ligerito (`Zk.ligeritoWith hs`) returns from `t`, its record is the
-coins it read there, whatever the hashes and the proof: the target `T`, level 0's out-of-domain coin (round `t.k + 1`'s)
-with the proof's first out-of-domain value, the lane rounds' `K` coins and the pair `ρ`; and it ends at round
-`t.k + k0 + 7 + 11 R` of the same rounds with nothing pending. `zk_ligerito_rec` is the compiled verifier's.
-
-* The steps, with their coins and the out-of-domain list: `lsampleVecWith_eq`, `lsampleWith_eq`, `lsampleKWith_eq`,
-  `challengeWith_oods`, `oodIntroWith_oods`, `queryLevelWith_oods`, `queryLevel0With_oods`.
-* `RunZk.lg_pos`: the run's masked Ligerito, at table 0's schedule.
--/
+/-! What the masked Ligerito returns, by coin position, whatever the hashes and the proof (`zkLigeritoWith_pos`). -/
 
 @[expose] public section
 
@@ -60,8 +49,6 @@ namespace FlockComplete
 open Flock Transcript FlockSoundness.Refine FlockSoundness.Discharge.ZkExec FlockDeploy
 
 variable {β : Type}
-
-/-! ## The steps -/
 
 theorem lsampleVecWith_eq (hs : Hashes V) {n : ℕ} (hn : n ≠ 0) {f : Array F128 → LM β} {st st' : LState}
     {t t' : Transcript} {b : β} (h : (liftW (M := V) (sampleVecWith hs n) >>= f) st t = .ok ((b, st'), t')) :
@@ -199,14 +186,7 @@ theorem transcript_eq {t : Transcript} {R : Array Round} {k : ℕ} {p : ByteArra
   subst hR hk hp
   rfl
 
-/-! ## The record -/
-
--- one proof down `Zk.ligeritoWith`'s unfolded run, a `*_bind` step per bind and `omega` on the positions
 set_option maxHeartbeats 4000000 in
-/-- **What the masked Ligerito returns, by coin position**: the target, level 0's out-of-domain coin (round
-`t.k + 1`'s) with the proof's first out-of-domain value, the lane rounds' `K` coins and the pair's, and it ends at round
-`t.k + k0 + 7 + 11 R` of the same rounds with nothing pending, whatever the hashes and the proof; those rounds issued
-one coin, then two each. -/
 theorem zkLigeritoWith_pos (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0)
     (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (h2 : 2 ≤ sch.levels.size)
@@ -400,9 +380,6 @@ theorem zkLigeritoWith_pos (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) 
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The run's masked Ligerito, by coin position**, at table 0's `--zk` schedule: its record is the coins of the rounds
-the ring switch left it, and it ends `k0 + 7 + 11 R` rounds on with nothing pending; those rounds issued one coin, then
-two each. -/
 theorem RunZk.lg_pos (hLg : LigeritoZk H rel) (o : RunZk H rel) {st : Flock.Stmt}
     (htabs : o.tabs = #[Setup.ofCircuit st]) {v : Schedule × ℕ} (hv : Zk.schedule st.wideLeaf st.m = .ok v) (hsch : o.sch 0 = v.1)
     {r : ℕ} (hr : r < 2) :

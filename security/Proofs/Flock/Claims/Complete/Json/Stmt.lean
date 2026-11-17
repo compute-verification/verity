@@ -52,26 +52,7 @@ import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What the record needs of the statement, from its setup
-
-`stmtOk`: at every good case, the session spec names no keyed coin tree, a non-empty `Σ`, a printable sample that decodes
-to the statement's instances (`SampleOk`), and the statement's sample is the one it was set up at: `StmtOk`, from the case's
-setup alone, with no premise on the JSON library: the verifier keeps what it parsed rebuilt (`Flock.norm`), and the coin
-tree its coins name.
-
-* The plain verifier's coins are a seed's (`Raw.ins`: only `--zk` keys a coin tree), and the statement
-  keeps the coins' tree (`Stmt.coinTree`, `setupOne_stmt`), so it names none (`tree?_none`). The scope check
-  (`ProvedScope.check`) reads no coins, so it is `Raw.ins`, not the scope, that keeps a keyed coin tree out of the plain
-  verifier's statements.
-* `Σ` is a SHA-512 digest (`setupH_stmt`, `Hidden.setupHidden_spec'`).
-* The public header is the population's, rebuilt (`loadPublic_header`), with the sample put in (`HmRow.drawn`), so its
-  `unit_draw` is the sample (`unitSample_of`), which decodes to the statement's instances (`PublicTies.instances`).
-* The sample is the statement's parsed JSON (`jsonOf`) and stratified or, at hidden outputs, a subset (the setup's
-  `ProvedScope.sampleDesign`, `Ins.setup_sampleDesign`, `samplingDesign_of_samplingDesignWhy`), and a stratified or subset sample that decodes has exactly
-  the keys it reads, each a string, a natural number or an array of them (`good_stratified`, `good_subset`), so it is
-  printable.
--/
+/-! What the record needs of the statement (`StmtOk`) holds at every good case, from its setup alone (`stmtOk`). -/
 
 @[expose] public section
 
@@ -83,9 +64,6 @@ open FlockSoundness FlockSoundness.Refine
 
 open private stratumOfJson from Commitments.Draw
 
-/-! ## The statement's inputs -/
-
-/-- What `Raw.ins` reads: the masked verifier or not, the plain verifier's coins (a seed's), and the sample. -/
 theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
     s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .seed) ∧
       ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
@@ -97,7 +75,6 @@ theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
     | (cases h; done)
     | (cases h; exact fun hz => by simp_all)
 
-/-- The sample is well formed: the verifier rebuilt it (`Flock.norm`, `wf_norm`). -/
 theorem sample_wf {w : Raw} {draw : Option Json}
     (h : ∃ dr, w.draw.mapM (jsonOf "draw") = .ok dr ∧ draw = dr.map Flock.norm) {d : Json} (hd : draw = some d) :
     Claims.Json.Wf d := by
@@ -105,7 +82,6 @@ theorem sample_wf {w : Raw} {draw : Option Json}
   obtain ⟨d₀, -, rfl⟩ := Option.map_eq_some_iff.1 hd
   exact wf_norm d₀
 
-/-- A statement of the plain verifier decodes to inputs that `Raw.ins` read. -/
 theorem insOf_false {x : Claims.Msg} {s : Ins} (h : insOf false x = some s) :
     ∃ w : Raw, w.zk = false ∧ w.ins = .ok s := by
   unfold insOf at h
@@ -118,9 +94,6 @@ theorem insOf_false {x : Claims.Msg} {s : Ins} (h : insOf false x = some s) :
     | error e => rw [hi] at h; cases h
     | ok s' => rw [hi] at h; cases h; rfl
 
-/-! ## Objects of a known key count -/
-
-/-- An object with `L.length` keys, the keys of `L` among them, has no other key. -/
 theorem key_mem {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : List String} (hL : L.Nodup)
     (hin : ∀ k ∈ L, k ∈ m) (hs : m.size = L.length) {k : String} (hk : k ∈ m) : k ∈ L := by
   by_contra hn
@@ -155,8 +128,6 @@ theorem obj_of_getObjVal {j : Json} {k : String} {v : Json} (h : j.getObjVal? k 
   cases j with
   | obj m => exact ⟨m, rfl⟩
   | _ => cases h
-
-/-! ## The `J` readers' values -/
 
 theorem getNat_ok {j : Json} {n : ℕ} (h : j.getNat? = .ok n) : j = .num ⟨Int.ofNat n, 0⟩ := by
   unfold Json.getNat? at h
@@ -214,7 +185,6 @@ theorem arr_ok {j : Json} {k c : String} {a : Array Json} (h : J.arr j k c = .ok
     · cases hg
   · cases h
 
-/-- Every element `mapM` maps returned. -/
 theorem mapM_ok_mem {α β : Type} {f : α → V β} {a : Array α} {b : Array β} (h : a.mapM f = .ok b) :
     ∀ x ∈ a, ∃ y, f x = .ok y := by
   intro x hx
@@ -222,9 +192,6 @@ theorem mapM_ok_mem {α β : Type} {f : α → V β} {a : Array α} {b : Array �
   obtain ⟨hs, hb⟩ := Discharge.Exec.array_mapM_ok_getElem h
   exact ⟨_, hb i hi (hs ▸ hi)⟩
 
-/-! ## What the setup checked -/
-
-/-- A sampled session's setup checked its sample's sampling design (`ProvedScope.sampleDesign`). -/
 theorem Ins.setup_sampleDesign {s : Ins} {p : SessionSpec × Array Stmt} (h : s.setup = .ok p)
     (hd : s.read.draw.isSome = true) :
     ProvedScope.sampleDesign s.read.zk s.read.tags false s.read.draw = .ok () := by
@@ -245,8 +212,6 @@ theorem hmOut_loadPublic {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Publ
     assumption
 
 set_option maxHeartbeats 4000000 in
-/-- What `Stmt.setupH` set up: its public file loaded (at a sample, `HmRow.drawn` of it) and passed `HmRow.checkPublic`,
-its instances, Σ and its hello. -/
 theorem setupH_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
@@ -263,7 +228,6 @@ theorem setupH_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
       rfl, by assumption, rfl⟩
 
 set_option maxHeartbeats 4000000 in
-/-- `Stmt.setupHidden`'s statement keeps the coins' tree. -/
 theorem setupHidden_coinTree {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : st.coinTree = coins.tree? := by
@@ -275,8 +239,6 @@ theorem setupHidden_coinTree {tags : Tags} {cf pf : ByteArray} {coins : Coins} {
     rfl
 
 open Discharge in
-/-- **What a table's setup set up** (`setupOne`, either output mode): the public file a public-file load returned, at a
-sample that file's `HmRow.drawn`; the header's sample decodes to the statement's instances; a SHA-512 Σ; and the hello. -/
 theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st) :
@@ -301,10 +263,7 @@ theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
     obtain ⟨u, hu, -, hn'⟩ := T.instances d hd'
     exact ⟨u, hu, by rw [hn, hn']⟩
 
-/-! ## The public header's sample -/
-
 set_option maxHeartbeats 4000000 in
-/-- The public file's header is a rebuilt object (`Flock.norm` of what `JsonParse.parse` read). -/
 theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
     (h : HmRow.loadPublic tags c f = .ok pop) : (∃ j, pop.header = Flock.norm j) ∧ ∃ m, pop.header = .obj m := by
   unfold HmRow.loadPublic at h
@@ -320,7 +279,6 @@ theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Pub
     exact ⟨⟨_, rfl⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
 
 set_option maxHeartbeats 4000000 in
-/-- `HmRow.drawn` puts the sample in the population's header. -/
 theorem sampled_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeMap.Raw String Json compare}
     (hm : m.WF) (hp : pub.header = .obj m) (h : HmRow.drawn c pub d = .ok pub') :
     pub'.header.getObjVal? "unit_draw" = .ok d := by
@@ -340,8 +298,6 @@ theorem sampled_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.Tre
       Std.TreeMap.Raw.getElem?_insert hm]
     simp
 
-/-- **The statement's header names its sample**: a sample's statement over a loaded public file has that sample as its
-`unit_draw`. -/
 theorem unitSample_of {tags : Tags} {c : Circuit} {pf : ByteArray}
     {pop pub : Public} {d : Json} (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
     pub.header.getObjVal? "unit_draw" = .ok d := by
@@ -350,8 +306,6 @@ theorem unitSample_of {tags : Tags} {c : Circuit} {pf : ByteArray}
   rw [← hj, hm] at hw
   cases hw with
   | obj hwf _ => exact sampled_header hwf hm hd
-
-/-! ## The coins name no coin tree -/
 
 theorem good_nil : ∀ p ∈ ([] : List (String × Json)), Good p.2 := fun _ h => by cases h
 
@@ -374,12 +328,10 @@ theorem good_arr_strs (a : Array String) : Good (Json.arr (a.map Json.str)) :=
     obtain ⟨y, -, rfl⟩ := Array.mem_map.1 hx
     exact .str _
 
-/-- **The plain verifier's coins name no coin tree**: a seed's (`Coins.tree?`), which the statement keeps as its
-`coinTree`. -/
+/-- The scope check reads no coins: `Raw.ins`, not the scope, keeps a keyed coin tree out of the plain verifier's
+statements. -/
 theorem tree?_none {coins : Coins} (hc : coins = .seed) : coins.tree? = none := by
   subst hc; rfl
-
-/-! ## A stratified sample that decodes is printable -/
 
 theorem getObj_ok {j : Json} {m : Std.TreeMap.Raw String Json compare} (h : j.getObj? = .ok m) : j = .obj m := by
   cases j with
@@ -396,7 +348,6 @@ theorem isOk_ok {j : Json} {k : String} (h : (j.getObjVal? k).isOk = true) : ∃
   | ok v => exact ⟨v, rfl⟩
   | error _ => rw [e] at h; cases h
 
-/-- **An object of known keys is printable**: one with `L.length` keys, each of `L` holding a printable value. -/
 theorem good_obj_of {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : List String} (hL : L.Nodup)
     (hs : m.toArray.size = L.length) (hk : ∀ k ∈ L, ∃ v, (Json.obj m).getObjVal? k = .ok v ∧ Good v) :
     Good (.obj m) := by
@@ -417,7 +368,6 @@ theorem good_of_asNat_mapM {a : Array Json} {c : String} {b : Array ℕ} (h : a.
     obtain ⟨_, hy⟩ := mapM_ok_mem h x hx
     exact asNat_good hy
 
-/-- A stratum's `[lo, hi)` range is a pair of natural numbers. -/
 theorem good_range {p : Array Json} (hs : p.size = 2) {c₀ c₁ : String} {lo hi : ℕ} (h₀ : J.asNat p[0]! c₀ = .ok lo)
     (h₁ : J.asNat p[1]! c₁ = .ok hi) : Good (.arr p) := by
   refine .arr fun x hx => ?_
@@ -428,8 +378,6 @@ theorem good_range {p : Array Json} (hs : p.size = 2) {c₀ c₁ : String} {lo h
   · rw [← getElem!_pos p 1 hi]; exact asNat_good h₁
 
 set_option maxHeartbeats 4000000 in
-/-- **A stratum that decodes is printable**: an object of exactly `template`, `units` and `k`, a string, ranges of two
-natural numbers, and a natural number. -/
 theorem good_stratum {j : Json} (hw : Wf j) {s : Draw.Stratum} (h : stratumOfJson j = .ok s) : Good j := by
   unfold stratumOfJson at h
   dsimp only at h
@@ -470,8 +418,6 @@ theorem good_stratum {j : Json} (hw : Wf j) {s : Draw.Stratum} (h : stratumOfJso
       exact asNat_good hn
 
 set_option maxHeartbeats 4000000 in
-/-- **A stratified sample that decodes is printable**: an object of exactly `samplingDesign`, `population`, `units`, `k` and
-`strata`, a string, natural numbers, an array of them, and strata that decode. -/
 theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) {K : ℕ}
     {strata : Array Draw.Stratum} (hl : D.samplingDesign = .stratified K strata) : Good j := by
   unfold Draw.UnitSample.ofJson at h
@@ -508,8 +454,6 @@ theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitSample} (h : Draw.U
       | arr ha => exact good_stratum (ha x hx) hy
 
 set_option maxHeartbeats 4000000 in
-/-- **A subset sample that decodes is printable**: an object of exactly `samplingDesign`, `population`, `units` and `k`, a string,
-natural numbers and an array of them. -/
 theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) {k : ℕ}
     (hl : D.samplingDesign = .subset k) : Good j := by
   unfold Draw.UnitSample.ofJson at h
@@ -548,16 +492,11 @@ theorem samplingDesign_of_samplingDesignWhy {zk : Bool} {tags : Tags} {D : Draw.
   | subset k => exact fun _ => Or.inr ⟨k, rfl⟩
   | _ => simp [ProvedScope.samplingDesignWhy, hl]
 
-/-! ## The statement at a good case -/
-
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **What the record needs of the statement**, at every good case: no keyed coin tree, a non-empty `Σ`, a printable
-sample that decodes to the statement's instances, and the statement's sample the one it was set up at. -/
 def StmtOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, c.spec.coinTree = none ∧ 0 < c.spec.sigma.size ∧ SampleOk c.spec ∧ c.spec.unitSample = c.s.read.draw
 
-/-- **The case's one table**: its statement is `setupOne`'s, at the statement's tags, coins and sample. -/
 theorem _root_.FlockComplete.Case.one (c : Case H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧
       Discharge.HiddenExec.setupOne c.s.read.tags c.s.read.I.circuitFile c.s.read.I.publicFile c.s.read.coins
@@ -584,9 +523,6 @@ theorem _root_.FlockComplete.Case.one (c : Case H rel) :
     simp only [List.size_toArray, List.length_cons, List.length_nil, zero_add] at hsz
     omega
 
-/-- **What the record needs of the statement holds at every good case** (`StmtOk`): the plain verifier's coins name no
-coin tree, Σ is a SHA-512 digest, the sample is printable and decodes to
-the statement's instances, and the session's sample is the statement's. -/
 theorem stmtOk : StmtOk H rel := by
   intro c
   obtain ⟨st, -, hspec, h1⟩ := c.one

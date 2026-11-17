@@ -45,25 +45,8 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A masked session that returns passed every refusal at its slot
-
-`sessionPZk_pass`: one induction over the session's reps. Where the pure masked session at the replies `resp` returns,
-each rep `q` started at `repStartZk q` sends and passed its refusals there (`PassAt`): level 0's pair coins, the
-replies at `rhoSlotsZk`'s slot and the next, are independent; the inner `β`, the reply at `betaSlotsZk`'s slot, is
-not `0`; and the rank check passed at the claim points of the replies from the rep's first send (`ptsAt`), rep `1`'s
-after rep `0`'s. Each rep that returns sent exactly its `repRounds` (`repPZk_exact`), so the next starts where
-`repStartZk` says; its rank check read its claim points at its sends' coins (`repPZk_rank`), and its rounds carry them
-for rep `1`'s check (`repPZk_points`). Read the other way, at replies where some rep's slot refuses, the session does
-not return: it stops at that refusal or at an earlier one.
-
-`sessionPZk_reach` is that induction at a run that need not return: every rep passed, or the session stopped after
-reps `< k` passed, within rep `k`'s first send or in rep `k`'s run (`RepRanAt`; `forIn_array_bind_reach` walks the
-loop to the step that stopped). `sessionPZk_stops`: where rep `q` refuses and its run stops within `n` sends, the
-session stops within `repStartZk q + n` (an earlier rep that stops ends by rep `q`'s first send, `repRanAt_sends`).
-`sessionPZk_rho_stop`, `sessionPZk_beta_stop` and `sessionPZk_rank_stop` give `n` at each refusal: right after the
-send whose reply it refused (`repPZk_rho_stop`, `repPZk_beta_stop`, `repPZk_rank_stop`).
--/
+/-! A masked session that returns passed every refusal at its slot, and one that refuses stops right after the send
+whose reply it refused (`sessionPZk_pass`, `sessionPZk_stops`). -/
 
 @[expose] public section
 
@@ -71,9 +54,6 @@ namespace FlockComplete.ZkTables
 
 open Flock Transcript FlockComplete FlockDeploy JsonRT FlockComplete.Replay
 
-/-! ## A rep's claim points at its sends' coins -/
-
-/-- `claimPoints` reads coin `0` of its first `m + k_log − 6` rounds and the first `m − 13` coins of round `1`. -/
 theorem claimPoints_congr_lt {m kLog : ℕ} (hm : 6 ≤ m) (hk : 6 ≤ kLog) {f g : ℕ → ℕ → F128}
     (h0 : ∀ j < m + kLog - 6, f j 0 = g j 0) (h1 : ∀ e < m - 13, f 1 e = g 1 e) :
     MaskRank.claimPoints m kLog f = MaskRank.claimPoints m kLog g := by
@@ -87,7 +67,6 @@ theorem claimPoints_congr_lt {m kLog : ℕ} (hm : 6 ≤ m) (hk : 6 ≤ kLog) {f 
     Array.map_congr_left fun e he => h1 e (by rw [Array.mem_range] at he; exact he)
   simp only [hr, ht, hc]
 
-/-- **Round `1` after a masked rep's lincheck is the zerocheck's `m − 13` outer coins.** -/
 theorem lcZ_round1 {lay lay' : Zk.PadLayout} {hz hz' : Array F128} {c : CircuitFold} {m m' : ℕ}
     {digest cap root : ByteArray} {cs : Zc.Challenges} {tr tr' : Trace} {zc : ZcOut} {full : Array F128}
     {cs' : Lc.Challenges} (dom : ByteArray) :
@@ -103,8 +82,6 @@ theorem lcZ_round1 {lay lay' : Zk.PadLayout} {hz hz' : Array F128} {c : CircuitF
   rw [hC, getElem!_pos _ 1 (by simp [hs]; omega), Array.getElem_append_left (by simp [hs])]
   simp [Array.getElem_push, hs, sent]
 
-/-- **Rounds recorded from send `i` on carry their sends' coins as claim points**, where they reach the points'
-`m + k_log − 6` rounds and round `1` holds `m − 13` coins. -/
 theorem roundPoints_recs {resp : ℕ → Claims.Msg} {m kLog i : ℕ} {R : Array Round} {bs : List Claims.Msg}
     (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hrec : Recs resp i R.toList bs) (hsz : m + kLog - 6 ≤ R.size)
     (h1 : R[1]!.n = m - 13) :
@@ -124,9 +101,6 @@ theorem roundPoints_recs {resp : ℕ → Claims.Msg} {m kLog i : ℕ} {R : Array
     exact key j (by omega) 0 hn
   · exact key 1 (by omega) a (by omega)
 
-/-- **A masked rep's rank check, from its first send `l`**: the rep stopped within its zerocheck's and lincheck's
-`m + k_log − 6` sends, or its rank check passed at the claim points of its sends' coins: the rounds through the
-lincheck are its sends there (`zerocheckPZk_rec`, `lincheckPZk_rec`), round `1` the zerocheck's outer coins. -/
 theorem repPZk_rank_cases (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -177,8 +151,6 @@ theorem repPZk_rank_cases (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteA
   rw [roundPoints_recs hm hk hrec (by rw [LcZ.tEnd_size, ZcZ.tEnd_size, h0, hfk]; omega) (lcZ_round1 dom)] at hrk
   exact hrk
 
-/-- **A returning masked rep's rank check read its claim points at its sends' coins**, from its first send `l`
-(`repPZk_rank_cases`). -/
 theorem repPZk_rank (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -193,8 +165,6 @@ theorem repPZk_rank (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) 
   · cases he
   · exact h1
 
-/-- **At claim points of less than full rank a masked rep stops within `m + k_log − 6` sends**, its rank check's
-(`repPZk_rank_cases`). -/
 theorem repPZk_rank_stop (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -211,8 +181,6 @@ theorem repPZk_rank_stop (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteAr
   · rw [hbad] at h1
     cases h1
 
-/-- **A returning masked rep's rounds carry its sends' coins as claim points**, from its first send `l`
-(`repPZk_rec`), where it sent at least the points' `m + k_log − 6` rounds. -/
 theorem repPZk_points (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -232,15 +200,9 @@ theorem repPZk_points (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray
   simp only [Array.length_toList, List.length_append] at h1 h2
   omega
 
-/-! ## The session -/
-
-/-- **Table `i`'s claim points at the replies from send `repStartZk n`.** -/
 def ptsAt (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) (i n : ℕ) : Array (List F128) :=
   MaskRank.claimPoints sts[i]!.m sts[i]!.c.kLog fun j e => coinOf (resp (repStartZk spec sts n + j)) e
 
-/-- **Rep `q` passed its refusals at its slots**: at its table's `--zk` schedule, level 0's pair coins (`rhoSlotsZk`'s
-slot and the next) are independent and its inner `β` (`betaSlotsZk`'s slot) is not `0`; and its rank check passed, at
-its claim points from its first send (`ptsAt`), after rep `q − 1`'s at rep `1`, over its table's `words`. -/
 def PassAt (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) (words : Array (List ℕ))
     (q : ℕ) : Prop :=
   (∀ v : Schedule × ℕ, Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok v →
@@ -251,9 +213,6 @@ def PassAt (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Flock.S
   MaskRank.maskRankOk ((if q % 2 = 1 then ptsAt resp spec sts (q / 2) (q - 1) else #[]) ++
     ptsAt resp spec sts (q / 2) q) words[q / 2]! = true
 
-/-- **Rep `q`'s run from its first send**: at its table's `--zk` schedule `v` and `points · |regions|` extra claims,
-from send `repStartZk q`, after rep `q − 1`'s claim points at rep `1` (`ptsAt`), over its table's `words`, ending at
-`(R, L)`. -/
 def RepRanAt (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (spec : SessionSpec) (sts : Array Flock.Stmt)
     (words : Array (List ℕ)) (q : ℕ) (R : Except String (Zk.ZkProof × Transcript)) (L : Array Claims.Msg) :
     Prop :=
@@ -266,9 +225,6 @@ def RepRanAt (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (spec :
         extras pads ic extra lanePad salt nonce (if q % 2 = 1 then ptsAt resp spec sts (q / 2) (q - 1) else #[])
         words[q / 2]!).run (Transcript.init #[] dom)).go l = (R, L)
 
-/-- A `for` loop over a list, from position `k` of `s`, that ends at `(R, L)`, its every returning step keeping
-`inv`: it returned with `inv` past its last element, or some step, from a state and sends with `inv` at its position,
-stopped there with `R` its error. -/
 theorem forIn_list_reach {α β : Type} (f : α → β → PS (ForInStep β)) (inv : ℕ → β → Array Claims.Msg → Prop)
     (s : List α) (hs : ∀ k a b l r l', s[k]? = some a → inv k b l → (f a b).go l = (.ok r, l') →
       ∃ b', r = .yield b' ∧ inv (k + 1) b' l') :
@@ -297,9 +253,6 @@ theorem forIn_list_reach {α β : Type} (f : α → β → PS (ForInStep β)) (i
     · exact .inl ⟨b', rfl, by rwa [List.length_cons, show k + (xs.length + 1) = k + 1 + xs.length by omega]⟩
     · exact .inr hE
 
-/-- **A `for` loop over an array, then the rest, that ends at `(R, L)`**, its every returning step keeping `inv`:
-the loop returned with `inv` at the array's size and the rest ended there, or some step, from a state and sends with
-`inv` at its index, stopped with `R` its error. -/
 theorem forIn_array_bind_reach {α β γ : Type} (xs : Array α) (f : α → β → PS (ForInStep β)) (g : β → PS γ)
     (inv : ℕ → β → Array Claims.Msg → Prop) (hs : ∀ k a b l r l', xs[k]? = some a → inv k b l →
       (f a b).go l = (.ok r, l') → ∃ b', r = .yield b' ∧ inv (k + 1) b' l')
@@ -323,10 +276,6 @@ theorem forIn_array_bind_reach {α β γ : Type} (xs : Array α) (f : α → β 
       exact .inl ⟨b', l', by simpa using hI, h2⟩
     · cases h4
 
-/-- **Where a masked session ends**, at tables of `14 ≤ m` and `6 ≤ k_log`, one spec table per statement: every rep
-passed its refusals at its slots (`PassAt`), or the session stopped after reps `< k` passed theirs, either within rep
-`k`'s first `repStartZk k` sends or in rep `k`'s run (`RepRanAt`). Each rep that returns sent exactly its `repRounds`
-(`repPZk_exact`), so the next starts where `repStartZk` says. -/
 theorem sessionPZk_reach (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
@@ -487,8 +436,6 @@ theorem sessionPZk_reach (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
     exact .inr ⟨hk', e'', _, _, _, _, _, _, _, _, _, _, _, _, l, hv _ hi, hx, hl, e2⟩
   · simp only [go_pure, Prod.mk.injEq, reduceCtorEq, false_and] at e
 
-/-- **A masked session that returns passed every rep's refusals at their slots** (`PassAt`), at tables of `14 ≤ m`
-and `6 ≤ k_log`, one spec table per statement (`sessionPZk_reach`). -/
 theorem sessionPZk_pass (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
@@ -500,7 +447,6 @@ theorem sessionPZk_pass (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
   · exact hall
   · cases he
 
-/-- **A rep's run sends at most its `repRounds`** (`repPZk_sends`), so it ends by the next rep's first send. -/
 theorem repRanAt_sends (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ))
     (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog) {k : ℕ} (hk : k < 2 * sts.size)
@@ -521,9 +467,6 @@ theorem repRanAt_sends (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArra
   unfold repRoundsT
   omega
 
-/-- **A masked session stops at a rep that refuses**: where rep `q` does not pass its refusals (`¬ PassAt q`) and its
-run, wherever it stops, stops within `n` sends of its first, the session stops within those sends. An earlier rep
-that stops stops before rep `q`'s first send (`repRanAt_sends`); a later one is not reached. -/
 theorem sessionPZk_stops (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
@@ -554,8 +497,6 @@ theorem piopZk_ofCircuit {spec : SessionSpec} {st : Flock.Stmt} {extras : Array 
   rw [e6, e7, hx]
   omega
 
-/-- **At a dependent pair the masked session stops within rep `q`'s `piopRoundsZk + k_0 + 4` sends**: its pair
-coins are the replies at `rhoSlotsZk`'s slot and the next (`repPZk_rho_stop`). -/
 theorem sessionPZk_rho_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
@@ -589,8 +530,6 @@ theorem sessionPZk_rho_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteA
   rw [hl, hp] at this
   omega
 
-/-- **At `β = 0` the masked session stops within rep `q`'s `piopRoundsZk + (k_0 + 7 + 11 R) + 3` sends**: its `β` is
-the reply at `betaSlotsZk`'s slot (`repPZk_beta_stop`). -/
 theorem sessionPZk_beta_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
@@ -620,8 +559,6 @@ theorem sessionPZk_beta_stop (resp : ℕ → Claims.Msg) (h : ByteArray → Byte
   rw [hl, hp] at this
   omega
 
-/-- **At claim points of less than full rank the masked session stops within rep `q`'s `m + k_log − 6` sends**: its
-rank check, after rep `q − 1`'s points at rep `1`, reads the replies from its first send (`repPZk_rank_stop`). -/
 theorem sessionPZk_rank_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)

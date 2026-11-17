@@ -43,24 +43,8 @@ import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What the masked record needs of the statement, at several tables
-
-`Case.stmtAt`: at every good case of several tables, `StmtAt` holds from the case's setup alone (`Case.setupTables`: the scope's statements hold no public inputs). So
-`StmtOkJ` holds (`stmtOkJ`), and `completeJS`, `completeAllS` are `completeJO`, `completeAll` without it.
-
-* A session of several tables (`setupTables_spec`) keeps the statement's sample, which is a subset or a stratified sample
-  (the setup refuses any other sampling design at several tables) whose units are the session's instances; its `Σ` is a SHA-512
-  digest; and its `Hello` is `helloOf`'s at the tables' names.
-* A subset sample that decodes is an object of exactly `samplingDesign`, `population`, `k` and `units` (`UnitSample.ofJson`'s key
-  count), a string, natural numbers and an array of them, so it is printable and has no closure (`good_subset`); a
-  stratified one has exactly `samplingDesign`, `population`, `units`, `k` and `strata`, so it is printable
-  (`JsonRT.good_stratified`) and has no closure either (`closure_stratified`); the statement's sample is JSON that
-  `Flock.JsonParse.parse` read, so it is well formed.
-* A masked statement's coins are its keyed coin tree (`zkCoins`), so the `Hello`'s `coins` entry is the tree's spec with
-  a nonce, an object; `canon` prints the `Hello` and `parse` reads back an alike object (`hello_ok`), which stays
-  printable with the prover's nonce put in (`good_of_same`, `good_insert`).
--/
+/-! What the masked record needs of the statement at several tables, from the case's setup alone (`Case.stmtAt`,
+`stmtOkJ`). -/
 
 @[expose] public section
 
@@ -69,8 +53,6 @@ namespace FlockComplete.ZkTables
 open Flock Transcript FlockComplete FlockDeploy JsonRT
 open FlockSoundness.Refine
 open Lean (Json)
-
-/-! ## The hello -/
 
 theorem good_of_same : ∀ {a b : Json}, Same a b → Good a → Good b
   | _, _, .null, _ => .null
@@ -139,8 +121,6 @@ theorem hello_of_list {ct : CoinTree.Spec} {L : List (String × Json)} {hello : 
   rw [e]
   exact good_insert hm hgm (good_insert hkv hgk (.str _))
 
-/-- **The masked `Hello` reads back** as an object whose `coins` are an object, and the prover's version, with its
-nonce put in, is printable. -/
 theorem hello_ok {tags : Tags} {sigma : ByteArray} {mPts : ℕ} {ct : CoinTree.Spec}
     {names : Array String} {hello : String} (hh : Flock.helloOf tags sigma mPts (.tree ct) names = .ok hello) :
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
@@ -164,8 +144,6 @@ theorem hello_ok {tags : Tags} {sigma : ByteArray} {mPts : ℕ} {ct : CoinTree.S
       | exact ⟨.str _, good_toJson _, .str _, harr, hlink, good_coins ct "", .str _, .str _⟩
       | exact ⟨.str _, good_toJson _, .str _, harr, hlink, good_coins ct "", .str _⟩
       | exact ⟨.str _, good_toJson _, .str _, harr, hlink, good_coins ct ""⟩
-
-/-! ## A subset sample that decodes is printable -/
 
 private theorem key_mem {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : List String} (hL : L.Nodup)
     (hin : ∀ k ∈ L, k ∈ m) (hs : m.size = L.length) {k : String} (hk : k ∈ m) : k ∈ L := by
@@ -261,7 +239,6 @@ theorem good_of_asNat_mapM {a : Array Json} {c : String} {b : Array ℕ}
     obtain ⟨hs, hb⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem h
     exact asNat_good (hb i hi (hs ▸ hi))
 
-/-- An object with exactly the keys of `L`, each holding a printable value, is printable. -/
 theorem good_obj_of {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : List String} (hL : L.Nodup)
     (hs : m.toArray.size = L.length) (hk : ∀ k ∈ L, ∃ v, (Json.obj m).getObjVal? k = .ok v ∧ Good v) :
     Good (.obj m) := by
@@ -277,8 +254,6 @@ theorem good_obj_of {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : L
   exact hg
 
 set_option maxHeartbeats 4000000 in
-/-- **A subset sample that decodes is printable**, an object of exactly `samplingDesign`, `population`, `units` and `k`, so it has no
-closure. -/
 theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) {k : ℕ}
     (hl : D.samplingDesign = .subset k) : Good j ∧ D.closure = #[] := by
   unfold Draw.UnitSample.ofJson at h
@@ -324,8 +299,6 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitSample} (h : Draw.UnitS
         simp at this
 
 set_option maxHeartbeats 4000000 in
-/-- **A stratified sample that decodes has no closure**: an object of exactly `samplingDesign`, `population`, `units`, `k` and
-`strata`, so it holds no `closure` key. -/
 theorem closure_stratified {j : Json} (hw : Wf j) {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) {K : ℕ}
     {strata : Array Draw.Stratum} (hl : D.samplingDesign = .stratified K strata) : D.closure = #[] := by
   unfold Draw.UnitSample.ofJson at h
@@ -370,8 +343,6 @@ theorem closure_stratified {j : Json} (hw : Wf j) {D : Draw.UnitSample} (h : Dra
         have := key_mem hm hL hk (by rw [← Std.TreeMap.Raw.size_toArray hm]; simpa using hc.1.1) hcl
         simp at this
 
-/-! ## The setup of several tables -/
-
 private theorem mapM_some_ok {d : Json} {u? : Option Draw.UnitSample}
     (h : Option.mapM Draw.UnitSample.ofJson (some d) = .ok u?) : ∃ u, u? = some u ∧ Draw.UnitSample.ofJson d = .ok u := by
   simp only [Option.mapM_some] at h
@@ -380,9 +351,7 @@ private theorem mapM_some_ok {d : Json} {u? : Option Draw.UnitSample}
   | ok u => rw [hd] at h; cases h; exact ⟨u, rfl, rfl⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **The session spec of several tables**: its sample the statement's, a subset or a stratified sample whose units are its
-instances, its
-`Σ` a SHA-512 digest, and its `Hello` `helloOf`'s at the tables' names. -/
+/-- At several tables the setup refuses any sampling design but a subset or a stratified sample. -/
 theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
     {tables : List (String × ByteArray)} {draw partition : Option Json} {program : Option ByteArray}
     {work : Option (ℕ × Array (String × ℕ × ℕ))} {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))}
@@ -432,16 +401,12 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
            | exact ⟨_, hd, .inl ⟨_, ‹_ = Draw.SamplingDesign.subset _›⟩, rfl⟩
            | exact ⟨_, hd, .inr ⟨_, _, ‹_ = Draw.SamplingDesign.stratified _ _›⟩, rfl⟩)
 
-/-! ## The statement at a good case of several tables -/
-
-
 theorem ofJson_obj {j : Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) : j ≠ Json.null := by
   rintro rfl
   cases h
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **A masked statement in scope is set up** by `Stmt.setupTables` on what it reads, with no public inputs. -/
 theorem setupTables_of {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployZk rel) x) (hs : setupOf true x = some (s, spec, sts)) :
     Stmt.setupTables s.read.tags s.read.I.circuitFile s.read.I.publicFile s.read.coins s.read.I.count
@@ -463,17 +428,12 @@ theorem setupTables_of {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Ar
   rw [ht] at hset
   exact hset
 
-/-- **A good case's setup** is `Stmt.setupTables` on what the statement reads, with no public inputs. -/
 theorem Case.setupTables (c : Case H rel) :
     Stmt.setupTables c.s.read.tags c.s.read.I.circuitFile c.s.read.I.publicFile c.s.read.coins c.s.read.I.count
       c.s.read.I.tables c.s.read.draw c.s.read.I.partition c.s.read.I.program c.s.read.I.work c.s.read.I.stratified
       c.s.read.I.closure = .ok (c.spec, c.sts) :=
   setupTables_of c.scope c.setup
 
-/-- **What the masked record needs of the statement holds at every good case of several tables** (`StmtAt`), under
-the JSON library's specification: `Σ` is a SHA-512 digest, the session's sample is the statement's, a subset or a
-stratified sample that is
-printable and decodes to the session's instances, and its `Hello` reads back with `coins` an object. -/
 theorem Case.stmtAt (c : Case H rel) (hc : 1 < c.sts.size) : StmtAt c := by
   obtain ⟨hu, hsig, hd, hh⟩ := setupTables_spec c.setupTables hc
   have hzk : c.s.read.zk = true := readOf_zk (x := c.x) (by
@@ -500,17 +460,11 @@ theorem Case.stmtAt (c : Case H rel) (hc : 1 < c.sts.size) : StmtAt c := by
     rw [hn]
     simp [Draw.UnitSample.proved, hcl]
 
-/-- **`StmtOkJ` holds**, under the JSON library's specification. -/
 theorem stmtOkJ : StmtOkJ H rel := fun c hc => c.stmtAt hc
 
-/-- `StmtAt` at every good case: one table's is `StmtOkZk`'s, several's `Case.stmtAt`. -/
 theorem stmtAt_of (hS : StmtOkZk H rel) (c : Case H rel) : StmtAt c :=
   c.one_or_several.elim (fun h1 => hS (c.toZk h1)) (c.stmtAt)
 
-/-! ## Completeness without the statement's premise at several tables -/
-
-/-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
-any number of tables: `completeJO` with the statement's premise at several tables proved (`stmtOkJ`). -/
 theorem completeJS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
@@ -519,8 +473,6 @@ theorem completeJS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
     Claims.Flock.Complete H (deployZk rel) :=
   completeJO H rel h64 hS hR hPR hRS hLg hIn (stmtOkJ) hPRJ hRJ hCJ hMR hMF
 
-/-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
-any number of tables: `completeAll` with the statement's premise `StmtOkZk`'s at one table and proved at several. -/
 theorem completeAllS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hPR : ∀ c : Case H rel, ProverRunsAt c) (hR : ∀ c : Case H rel, RepShapedAt c)

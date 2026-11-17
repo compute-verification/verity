@@ -35,27 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Session
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The honest prover's Ligerito, on the model's rounds
-
-`ligeritoP_go`: the honest prover's Ligerito (`ligeritoP`), run in the pure session from a transcript at which `L + k`
-bodies have been sent (`k` its position), ends where the verifier's model (`Lg.out`) ends on the proof it returns, at
-the coins of the replies (`cfOf resp L`: position `k`'s coin is the reply to send `L + k`), and keeps `L + k` bodies
-sent. Its first cap is the commitment's.
-
-* **The relation** (`PRuns p L y c tm c' tm' Q Xb`): every run of the prover's step `y` from `L + k` bodies sent returns a
-  value with `Q`, only pushes onto its lists (`Grow`) and keeps `L + k` bodies sent; and once its lists are the first of
-  `p`'s (`Ext`) and its value has `Xb`, from the model's cursors `c` (`Cur`; the prover's are its lists' lengths,
-  `pcur`) and transcript `tm` it ends at `c'` and `tm'`. The model reads each value the prover sends from `p` at its
-  cursor, so the two agree once the prover's lists end up as `p`'s; `Xb` carries what only the rest of the run fixes:
-  the recursive caps and `y_r` the proof lists.
-* **Steps**: binds (`PRuns.bind`, and `PRuns.bindD` where the rest's value fixes what a step needs), loops
-  (`PRuns.loop`), the transcript's steps (`PRuns.absorb`, the squeezes), the state's (`PRuns.modify`, `PRuns.get`), a
-  message (`PRuns.sendMsg`), a nonce (`PRuns.powQ`, `PRuns.powC`, `PRuns.powB`), an out-of-domain value
-  (`PRuns.oodPush`) and a commitment (`PRuns.commit`); then, against the model's own steps, a challenge
-  (`PRuns.challenge`), a level's four challenges (`levelChals`), an out-of-domain intro (`PRuns.oodIntro`) and a level's
-  query (`PRuns.query`).
--/
+/-! The honest prover's Ligerito ends where the verifier's model ends on the proof it returns (`ligeritoP_go`). -/
 
 @[expose] public section
 
@@ -65,9 +45,6 @@ open Flock Transcript
 
 namespace Lg
 
-/-! ## Prefixes, cursors and the relation -/
-
-/-- `A` is the first of `B`'s entries. -/
 def Pre {α : Type} (A B : Array α) : Prop := ∃ C, B = A ++ C
 
 theorem Pre.refl {α : Type} (A : Array α) : Pre A A := ⟨#[], by simp⟩
@@ -86,8 +63,6 @@ theorem Pre.get {α : Type} [Inhabited α] {A B : Array α} {x : α} (h : Pre (A
   rw [getElem!_pos _ _ (by simp; omega), Array.getElem_append_left (by simp)]
   simp
 
-/-- The model's cursors into the proof's lists: messages, out-of-domain values, claim, query and consistency
-nonces. -/
 structure Cur where
   msg : ℕ
   ood : ℕ
@@ -95,13 +70,10 @@ structure Cur where
   qn : ℕ
   cn : ℕ
 
-/-- The verifier's cursors. -/
 def cur (s : LState) : Cur := ⟨s.msg, s.ood, s.cbn, s.qn, s.cn⟩
 
-/-- The prover's cursors: its lists' lengths. -/
 def pcur (s : LigState) : Cur := ⟨s.msgs.size, s.oods.size, s.cbn.size, s.qn.size, s.cn.size⟩
 
-/-- `b`'s lists begin with `a`'s. -/
 def Grow (a b : LigState) : Prop :=
   Pre a.msgs b.msgs ∧ Pre a.oods b.oods ∧ Pre a.cbn b.cbn ∧ Pre a.qn b.qn ∧ Pre a.cn b.cn
 
@@ -111,7 +83,6 @@ theorem Grow.trans {a b c : LigState} (h₁ : Grow a b) (h₂ : Grow b c) : Grow
   ⟨h₁.1.trans h₂.1, h₁.2.1.trans h₂.2.1, h₁.2.2.1.trans h₂.2.2.1, h₁.2.2.2.1.trans h₂.2.2.2.1,
     h₁.2.2.2.2.trans h₂.2.2.2.2⟩
 
-/-- The proof `p`'s lists begin with the prover's. -/
 def Ext (p : LigeritoProof) (s : LigState) : Prop :=
   Pre s.msgs p.messages ∧ Pre s.oods p.oodValues ∧ Pre s.cbn p.claimNonces ∧ Pre s.qn p.queryNonces ∧
     Pre s.cn p.consistencyNonces
@@ -120,12 +91,8 @@ theorem Ext.of_grow {p : LigeritoProof} {a b : LigState} (h : Grow a b) (he : Ex
   ⟨h.1.trans he.1, h.2.1.trans he.2.1, h.2.2.1.trans he.2.2.1, h.2.2.2.1.trans he.2.2.2.1,
     h.2.2.2.2.trans he.2.2.2.2⟩
 
-/-- The coins of the replies to the sends from the `L`-th on, by transcript position. -/
 def cfOf (resp : ℕ → Claims.Msg) (L : ℕ) : ℕ → ℕ → F128 := fun k => coinOf (resp (L + k))
 
-/-- **The prover's step `y` on the model's**: every run from `L + k` bodies sent (`k` the position) returns a value with
-`Q`, grows the lists and keeps `L + k` bodies sent; once the lists end up `p`'s first and the value has `Xb`, from the
-cursors `c` and the transcript `tm` it ends at `c'` and `tm'`. -/
 def PRuns (p : LigeritoProof) (L : ℕ) {β : Type} (y : LP PS β) (c : Cur) (tm : Transcript) (c' : Cur)
     (tm' : Transcript) (Q Xb : β → Prop) : Prop :=
   ∀ (st : LigState) (t : Transcript) (l : Array Claims.Msg) (b : β) (st' : LigState) (t' : Transcript)
@@ -149,7 +116,6 @@ theorem lp_bind_ok {α β : Type} {x : LP PS α} {f : α → LP PS β} {st : Lig
 
 variable {p : LigeritoProof} {L : ℕ} {α β σ : Type}
 
-/-- **A bind**, where the rest's value `b` may fix what the step's value `a` needs (`hX`). -/
 theorem PRuns.bindD {x : LP PS α} {f : α → LP PS β} {c₁ c₂ c₃ : Cur} {tm₁ tm₂ tm₃ : Transcript}
     {Qa Ya : α → Prop} {Qf Xf : α → β → Prop} {Q Xb : β → Prop} (hx : PRuns p L x c₁ tm₁ c₂ tm₂ Qa Ya)
     (hf : ∀ a, Qa a → PRuns p L (f a) c₂ tm₂ c₃ tm₃ (Qf a) (Xf a)) (hQ : ∀ a b, Qa a → Qf a b → Q b)
@@ -163,14 +129,12 @@ theorem PRuns.bindD {x : LP PS α} {f : α → LP PS β} {c₁ c₂ c₃ : Cur} 
   obtain ⟨hc₁, ht₁⟩ := hC₁ (hE.of_grow hG₂) hYa hc ht
   exact hC₂ hE hXa hc₁ ht₁
 
-/-- A bind whose step needs `Ya`, given by the rest's value. -/
 theorem PRuns.bindY {x : LP PS α} {f : α → LP PS β} {c₁ c₂ c₃ : Cur} {tm₁ tm₂ tm₃ : Transcript}
     {Qa Ya : α → Prop} {Q Xb : β → Prop} (hx : PRuns p L x c₁ tm₁ c₂ tm₂ Qa Ya)
     (hf : ∀ a, Qa a → PRuns p L (f a) c₂ tm₂ c₃ tm₃ Q Xb) (hY : ∀ a b, Qa a → Q b → Xb b → Ya a) :
     PRuns p L (x >>= f) c₁ tm₁ c₃ tm₃ Q Xb :=
   PRuns.bindD (Qf := fun _ => Q) (Xf := fun _ => Xb) hx hf (fun _ _ _ h => h) fun a b ha hb h => ⟨hY a b ha hb h, h⟩
 
-/-- **A bind** whose step needs nothing of the rest. -/
 theorem PRuns.bind {x : LP PS α} {f : α → LP PS β} {c₁ c₂ c₃ : Cur} {tm₁ tm₂ tm₃ : Transcript} {Qa : α → Prop}
     {Q Xb : β → Prop} (hx : PRuns p L x c₁ tm₁ c₂ tm₂ Qa fun _ => True)
     (hf : ∀ a, Qa a → PRuns p L (f a) c₂ tm₂ c₃ tm₃ Q Xb) : PRuns p L (x >>= f) c₁ tm₁ c₃ tm₃ Q Xb :=
@@ -201,8 +165,6 @@ theorem PRuns.ite {cond : Prop} [Decidable cond] {y z : LP PS β} {c c' : Cur} {
   · rw [ite_eq_left h]; exact hy h
   · rw [ite_eq_right h]; exact hz h
 
-/-! ## The prover's steps -/
-
 theorem liftT_go {y : TMW PS α} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
     (h : (y.run t).go l = (.ok (a, t'), l')) (st : LigState) :
     (((liftT y : LP PS α).run st).run t).go l = (.ok ((a, st), t'), l') := by
@@ -210,7 +172,6 @@ theorem liftT_go {y : TMW PS α} {t t' : Transcript} {l l' : Array Claims.Msg} {
   rw [bind_go h]
   rfl
 
-/-- A transcript action that maps the pending bytes by `g`. -/
 theorem PRuns.absorb (x : TM Unit) (g : ByteArray → ByteArray) (hx : ∀ t : Transcript, x t = .ok ((), ap g t))
     (c : Cur) (tm : Transcript) : PRuns p L (liftT (liftTM x)) c tm c (ap g tm) (fun _ => True) fun _ => True := by
   intro st t l b st' t' l' hl h
@@ -222,7 +183,6 @@ theorem PRuns.absorbF (v : F128) (c : Cur) (tm : Transcript) :
     PRuns p L (liftT (liftTM (absorbF v))) c tm c (ap (pF v) tm) (fun _ => True) fun _ => True :=
   PRuns.absorb _ _ (fun t => Flock.RecAlgebra.absorbF_eq v t) c tm
 
-/-- A cap absorbed, read by the model as `capM`: they agree once the rest of the run fixes `cap = capM`. -/
 theorem PRuns.absorbCap (cap capM : Array ByteArray) (c : Cur) (tm : Transcript) :
     PRuns p L (liftT (liftTM (absorbBytes (flat cap)))) c tm c (ap (pBytes (capBytes capM)) tm) (fun _ => True)
       fun _ => cap = capM := by
@@ -231,7 +191,6 @@ theorem PRuns.absorbCap (cap capM : Array ByteArray) (c : Cur) (tm : Transcript)
     (fun t => Flock.RecAlgebra.absorbBytes_eq (flat cap) t) c tm st t l b st' t' l' hl h
   exact ⟨hq, hg, hl', fun hE hx hc' ht => by subst hx; exact hc hE trivial hc' ht⟩
 
-/-- Each of `ws` absorbed in turn, read by the model as `wsM`'s. -/
 theorem PRuns.absorbAll (ws wsM : Array F128) (c : Cur) (tm : Transcript) :
     PRuns p L (ForIn.forIn ws PUnit.unit fun w (_ : PUnit) => do
         liftT (liftTM (Transcript.absorbF w))
@@ -273,7 +232,6 @@ theorem PRuns.get (c : Cur) (tm : Transcript) :
   obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok ((st, st), t), l) = _ from h)
   exact ⟨trivial, Grow.refl _, hl, fun _ _ hc ht => ⟨hc, ht⟩⟩
 
-/-- **A sumcheck message**, read by the model at its message cursor. -/
 theorem PRuns.sendMsg (m : F256 × F256) (c : Cur) (tm : Transcript) :
     PRuns p L (FlockComplete.sendMsg m) c tm ⟨c.msg + 1, c.ood, c.cbn, c.qn, c.cn⟩ (ap (pK p.messages[c.msg]!) tm)
       (fun _ => True) fun _ => True := by
@@ -286,7 +244,6 @@ theorem PRuns.sendMsg (m : F256 × F256) (c : Cur) (tm : Transcript) :
   show _ = ap (pK p.messages[st.msgs.size]!) t
   rw [hE.1.get]
 
-/-- **An out-of-domain value** pushed and absorbed, read by the model at its cursor. -/
 theorem PRuns.oodPush (y : F128) {k : PUnit → LP PS β} {c c' : Cur} {tm tm' : Transcript} {Q Xb : β → Prop}
     (h : PRuns p L (k ()) ⟨c.msg, c.ood + 1, c.cbn, c.qn, c.cn⟩ (ap (pF p.oodValues[c.ood]!) tm) c' tm' Q Xb) :
     PRuns p L (_root_.modify (fun st : LigState => { st with oods := st.oods.push y }) >>= fun _ =>
@@ -373,7 +330,6 @@ theorem PRuns.sampleK (resp : ℕ → Claims.Msg) (c : Cur) (tm : Transcript) :
   rw [hl]
   rfl
 
-/-- **A commitment** sends nothing and touches neither the transcript nor the lists. -/
 theorem PRuns.commit (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (g : Array F128)
     (salt : ℕ → ByteArray) (c : Cur) (tm : Transcript) :
     PRuns p L (liftT (StateT.lift (commitP (Hashes.ofSha512 h : Hashes PS) ms lv g salt))) c tm c tm (fun _ => True)
@@ -394,9 +350,6 @@ theorem PRuns.commit (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Lev
     exact ⟨trivial, Grow.refl _, hl, fun _ _ hc ht => ⟨hc, ht⟩⟩
   · cases e
 
-/-- **A loop over `[0:n]`**: step `j`, from a state with `I j`, yields one with `I (j + 1)` that `G` relates to it, from
-the model's `j`-th cursors and transcript to the next; it needs `Xs j` of the state it yields, which the last state's `Xf`
-gives (`hX`). -/
 theorem PRuns.loop (body : ℕ → σ → LP PS (ForInStep σ)) (C : ℕ → Cur) (Tm : ℕ → Transcript) (I : ℕ → σ → Prop)
     (G : σ → σ → Prop) (hGr : ∀ s, G s s) (hGt : ∀ a b c, G a b → G b c → G a c) (Xs : ℕ → σ → Prop) (Xf : σ → Prop)
     (n : ℕ)
@@ -431,9 +384,6 @@ theorem PRuns.loop (body : ℕ → σ → LP PS (ForInStep σ)) (C : ℕ → Cur
       obtain rfl : s₁ = s₃ := ForInStep.yield.inj h₃
       exact hX a (by omega) s₁ s' hI₁ (fun h => hk (by omega)) hG₂ hx
 
-/-! ## The model's steps -/
-
-/-- **A challenge**, against the model's (`chal`). -/
 theorem PRuns.challenge (resp : ℕ → Claims.Msg) (split : Bool) (sm : LState) (tm : Transcript) :
     PRuns p L (challengeP (asksS resp) split) (cur sm) tm (cur (chal p (cfOf resp L) sm tm).2.1)
       (chal p (cfOf resp L) sm tm).2.2 (fun _ => True) fun _ => True := by
@@ -444,7 +394,6 @@ theorem PRuns.challenge (resp : ℕ → Claims.Msg) (split : Bool) (sm : LState)
     fun _ => ?_
   all_goals exact (PRuns.get _ _).bind fun _ _ => (PRuns.sendMsg _ _ _).bind fun _ _ => PRuns.pure trivial _ _
 
-/-- **An out-of-domain intro**, against the model's (`ood`), at any level. -/
 theorem PRuns.oodIntro (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hdim : dim ≠ 0)
     (split : ℕ) (sm : LState) (tm : Transcript) :
     PRuns p L (oodIntroP (asksS resp) nonce g dim) (cur sm) tm (cur (ood p (cfOf resp L) dim split sm tm).1)
@@ -454,7 +403,6 @@ theorem PRuns.oodIntro (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt
   exact (PRuns.sendMsg _ _ _).bind fun _ _ => (PRuns.powB nonce _ _).bind fun _ _ =>
     (PRuns.sample resp _ _).bind fun _ _ => PRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _
 
-/-- **A level's query**, against the model's (`query`), on any opened rows and fold. -/
 theorem PRuns.query (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit)
     (hq : lv.q ≠ 0) (rows : Array (Array F128)) (fold : Array F256) (sm : LState) (tm : Transcript) :
     PRuns p L (queryP (asksS resp) nonce ms lv cm) (cur sm) tm (cur (Lg.query p (cfOf resp L) lv rows fold sm tm).2.1)
@@ -464,8 +412,7 @@ theorem PRuns.query (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64)
     (PRuns.powC nonce _ _).bind fun _ _ => (PRuns.sampleVec resp (Nat.succ_ne_zero _) _ _).bind fun _ _ =>
     PRuns.pure trivial _ _
 
-/-- **A level's four challenges**, against the model's (`chals`): the last keeps the folded table, then splits it; at
-the last level (`last`) its message is the unsplit table's. -/
+/-- At the last level (`last`) the message is the unsplit table's. -/
 theorem levelChals (resp : ℕ → Claims.Msg) (last : Bool) (sm : LState) (tm : Transcript) :
     PRuns p L (forIn [:4] (#[] : Array F256) fun i (f : Array F256) =>
         if (i + 1 == 4) = true then do
@@ -495,11 +442,6 @@ theorem levelChals (resp : ℕ → Claims.Msg) (last : Bool) (sm : LState) (tm :
       fun _ => (PRuns.challenge resp false _ _).bind fun _ _ => PRuns.pure ⟨_, rfl, trivial, trivial⟩ _ _)
     (fun _ _ _ _ _ _ _ _ => trivial) _ trivial).mono (fun _ _ => trivial) fun _ _ _ => trivial
 
-/-! ## The prover's Ligerito -/
-
-/-- **The honest prover's Ligerito ends where the model does** on the proof it returns: run from a transcript at which
-`L + k` bodies have been sent, at the replies' coins (`cfOf resp L`), its transcript ends at `out`'s and it keeps
-`L + k` bodies sent; its first cap is the commitment's. -/
 theorem ligeritoP_go (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (L : ℕ)
     (hn : sch.n ≠ 0) (hL : 2 ≤ sch.levels.size) (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0)
