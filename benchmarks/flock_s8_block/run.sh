@@ -40,6 +40,7 @@ PLAIN_STATEMENTS=${PLAIN_STATEMENTS:-}; CPU_PLAIN_STATEMENTS=${CPU_PLAIN_STATEME
 SANITY=${SANITY:-1}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS)); SM=${SM:-90}; STEPS=${STEPS:-"build stage sanity gpu cpu"}
 export FLOCK_WORK=$FW
 . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh
+CUDA_TK=${CUDA_TK:-/usr/local/cuda-13.3}
 . verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh
 export PATH=$CUDA_TK/bin:$HOME/.cargo/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
