@@ -183,7 +183,7 @@ def scenarios():
             "advice": (advised, declared), "advice-tampered": (advised_tampered, declared)}
 
 
-def test_certified_audit_matches_raw_audit_on_every_egress_scenario(tmp_path):
+def test_attested_audit_matches_raw_audit_on_every_egress_scenario(tmp_path):
     """The difftest on the test vectors: with an honest issuer, every egress scenario gets the raw audit's verdicts,
     rejections included (a status one as a `no-verdict`), and the committed (v1) audit agrees."""
     signer = signers.signer(tmp_path)
@@ -197,7 +197,7 @@ def test_certified_audit_matches_raw_audit_on_every_egress_scenario(tmp_path):
     assert seen == {None, "mismatch", "status:monitor-unavailable", "no-verdict", "duplicate", "advice"}
 
 
-def test_certified_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path):
+def test_attested_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path):
     """One clock per spatial unit: a second link with another in-set sync in window 1 is advice there, attested too."""
     signer = signers.signer(tmp_path)
     key = signer.public_key()
@@ -212,7 +212,7 @@ def test_certified_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path
         assert [(v.link, v.window, v.violation) for v in audit.violations] == [("tokens", 1, "advice")]
 
 
-def test_certified_audit_matches_raw_audit_on_ingress(tmp_path):
+def test_attested_audit_matches_raw_audit_on_ingress(tmp_path):
     """Ingress: different timings are both accepted, and a duplicate and a missing window are the raw audit's
     violations, attested; an incomplete status, attested nothing, is a `no-verdict`."""
     signer = signers.signer(tmp_path)
@@ -240,7 +240,7 @@ def test_an_honest_window_is_complete_so_the_issuer_refuses_nothing_honest(tmp_p
     assert issuer.refused == []
 
 
-def test_a_certificate_cannot_move_to_another_phase_or_key(tmp_path):
+def test_a_attestation_cannot_move_to_another_phase_or_key(tmp_path):
     """Moving an attestation to another window, link or direction, editing its head, signing with another key or
     forging the signature is a `signature` violation, and only in that window."""
     signer = signers.signer(tmp_path)
@@ -274,7 +274,7 @@ def test_a_certificate_cannot_move_to_another_phase_or_key(tmp_path):
     assert egress_verdicts(certified, key) == [None, None, None]
 
 
-def test_an_incomplete_record_gets_no_certificate_and_a_relayed_status_is_bound(tmp_path):
+def test_an_incomplete_record_gets_no_attestation_and_a_relayed_status_is_bound(tmp_path):
     """The issuer certifies only a complete record: a faulted one is listed in `refused`, with no session started and
     no leaf spent, and its window is a `no-verdict`. The status is the signed head's: a faulted head signed anyway (by
     `sign`, as a forger would have to) that a relay edits to complete breaks the attestation."""
@@ -318,7 +318,7 @@ def test_a_record_past_the_deadline_is_no_verdict_and_other_parameters_a_mismatc
     assert ingress_verdicts(egress_as_ingress, 1, key) == ["no-verdict"]
 
 
-def test_certified_records_need_the_key_and_ingress_its_parameters(tmp_path):
+def test_attested_records_need_the_key_and_ingress_its_parameters(tmp_path):
     signer = signers.signer(tmp_path)
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     certified = certify_all(Issuer(signer, SESSION), honest)
@@ -389,7 +389,7 @@ def test_a_session_already_started_is_refused_and_its_windows_fail_closed(tmp_pa
     assert signers.used(first) == [0, 1, 2, 3, 4, 5]
 
 
-def test_a_certificate_from_another_session_is_a_signature_violation(tmp_path):
+def test_a_attestation_from_another_session_is_a_signature_violation(tmp_path):
     """The cross-session replay: attestations the key signed in another session of the attester, honest ones of the
     same execution phases, are a `signature` violation in this session, every window; in their own they are accepted."""
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
@@ -404,7 +404,7 @@ def test_a_certificate_from_another_session_is_a_signature_violation(tmp_path):
     assert not other[0].verify(key, bytes(31)) and not other[0].verify(key, bytes(33))
 
 
-def test_the_certificate_signs_the_record_digest_salted_by_the_attester(tmp_path):
+def test_the_attestation_signs_the_record_digest_salted_by_the_attester(tmp_path):
     """The signed digest is SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) under 64 bytes of the attester's own coins,
     fresh per record: one record attested twice is signed under two digests, neither of them R. The host's check
     reads the attestation alone; a record handed with another salt, or a salt of another length, is refused."""
@@ -430,7 +430,7 @@ def test_the_certificate_signs_the_record_digest_salted_by_the_attester(tmp_path
         Issuer(signer, SESSION, coins=lambda n: bytes(n - 1)).certify(honest[0], EGRESS, P, PARAMS)
 
 
-def test_certificate_message_binds_key_session_link_direction_window_and_digest():
+def test_attestation_message_binds_key_session_link_direction_window_and_digest():
     d, s = bytes(64), SESSION
     base = certificate_message(b"I" * 16, s, "l", EGRESS, 0, d)
     others = [certificate_message(b"J" * 16, s, "l", EGRESS, 0, d), certificate_message(b"I" * 16, s, "m", EGRESS, 0, d),
@@ -544,7 +544,7 @@ def test_a_mark_that_is_not_bytes_is_signed_nowhere(tmp_path):
     assert (len(taken), signers.used(signer), issuer.refused, issuer.mark_salts) == (1, [0], [], {m.salt})
 
 
-def test_a_mark_certificate_is_refused_by_name(tmp_path):
+def test_a_mark_attestation_is_refused_by_name(tmp_path):
     """A mark attestation's opening is refused with why: another mark, another salt or an altered digest (`opening`);
     read as another link's mark, or an attestation on the link's own name (`link`); an ingress attestation (`egress`);
     another key's (`key`); and an attestation relabelled to another link name or another execution phase, another
@@ -636,7 +636,7 @@ def one_of_each(tmp_path):
                                          "mark": mark.certificate}
 
 
-def test_a_certificates_bytes_are_the_layout_and_decode_is_its_inverse(tmp_path):
+def test_a_attestations_bytes_are_the_layout_and_decode_is_its_inverse(tmp_path):
     """`Certificate.encode` is the layout field by field for a record's attestation at each end and a mark's, and
     `Certificate.decode` gives the attestation back, which still verifies and encodes to the same bytes. Two
     attestations that differ in one field have different bytes."""
@@ -658,7 +658,7 @@ def test_a_certificates_bytes_are_the_layout_and_decode_is_its_inverse(tmp_path)
     assert all(Certificate.decode(x.encode()) == x and x.encode() == layout(x) for x in others)
 
 
-def test_a_certificates_bytes_are_those_inside_both_record_encoders(tmp_path):
+def test_a_attestations_bytes_are_those_inside_both_record_encoders(tmp_path):
     """The commitment's leaf of an attested record (`service.encode`) is its head, its 64-byte salt and then the
     attestation, which is where the Lean reads it; the Lean audit's encoding of the record (`lean_audit.encode`) is
     a kind byte, the leaf's length and that leaf. The attestation's part of both is `Certificate.encode`, for a
@@ -676,7 +676,7 @@ def test_a_certificates_bytes_are_those_inside_both_record_encoders(tmp_path):
         assert Certificate.decode(leaf[len(head) + SALT_BYTES:]) == c
 
 
-def test_a_certificates_bytes_are_refused_by_name():
+def test_a_attestations_bytes_are_refused_by_name():
     """`Certificate.decode` refuses bytes left after the signature, bytes that end inside a fixed-width part, and a
     length that names more bytes than are left, each saying which; every proper prefix of an attestation's bytes is
     one of the last two. It refuses a direction code other than 0 and 1, a link that is not UTF-8 and anything that
