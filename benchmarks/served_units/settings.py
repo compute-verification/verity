@@ -21,7 +21,7 @@ DECLARED: dict[str, tuple[str | None, str]] = {
     "WIN_BACKFILL_DISK_GB": ("0", "stage: once one waits for disk, only stagings of at most this many GB start ahead of it"),
     "WIN_MEM_PEER": ("", "stage: another job's pid, whose process tree's RSS counts against WIN_MEM_GB too"),
     "WIN_DEVICE": ("gpu", "gpu, or cpu to build and prove on the CPU (a rehearsal off the GPU node)"),
-    "SM": ("", "the GPUs' compute capability the prover is built for (90 for H200, 120 for RTX PRO 6000); required on gpu"),
+    "SM": ("", "the GPUs' compute capability the prover is built for (90 for an H100 or H200, 120 for an RTX PRO 6000); required on gpu"),
     "WIN_GPUS": ("8", "prove: the groups, one GPU each"),
     "WIN_DEV_GIB": ("45", "prove: device memory a group's prover may hold, GiB"),
     "WIN_ALSO": ("", "prove: colon-separated FLOCK_WORKs whose staged statements are proved too"),
