@@ -3,20 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.AddressFacts.BitsOwn
 public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 
-/-!
-# Each written bit inside its own output row
-
-`writtenOwn_of_two`: `WrittenOwn` where the second stage's design evaluates (`two`), so `BitsOwn` and, with each member
-naming its ports once, `BitsInPorts` rest on the design alone (`bitsInPorts_of_once`).
-
-A written bit's commitment position is Bits' (`Spot.Bits.outPos`): bit `16 (x − lo) + t` of the output row `o` whose
-run of output ports holds output word `x`, `lo` the run's first word and `t < 16`, the row port `nIn + o`. The design
-evaluates only where every template's reference statement parses (`templateOk`), and the hidden-output parse ends in
-`HmOut.checkRows`, flat or templated (`Hidden.Committed`): output row `o` is a port of the circuit, of its run's words
-zero-padded to whole SHA-512 blocks, or of `bits` exactly `16` times its run's words (`Hidden.RowsOut`). With every port
-of `16 · words` bits (`bits_of_two`), the row holds at least its run's words either way. `RowsOut` reads no net, so it
-holds of the member's circuit, the parsed one unrolled (`Readable.Read.stmt`).
--/
+/-! `WrittenOwn` where the second stage's design evaluates (`writtenOwn_of_two`). -/
 
 @[expose] public section
 
@@ -24,8 +11,6 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
 
-/-- **A written bit is inside its output row's port**, where the output rows pass `HmOut.checkRows` and every port is
-a row of `16 · words` bits. -/
 theorem outPos_own {c : _root_.Flock.Circuit} (hR : FlockSoundness.Discharge.Hidden.RowsOut c)
     (h16 : ∀ p, p < c.ports.size → c.ports[p]!.bits = 16 * c.ports[p]!.words) {u x b : ℕ} {r : Spot.Bits.RowPos}
     (hb : b < 16) (ho : Spot.Bits.outPos c u x b = some r) :
@@ -48,7 +33,6 @@ theorem outPos_own {c : _root_.Flock.Circuit} (hR : FlockSoundness.Discharge.Hid
   · omega
   · omega
 
-/-- **`RowsOut` of a circuit is `RowsOut` of it unrolled**: unrolling changes its nets and template only. -/
 theorem rowsOut_unrolled {c : _root_.Flock.Circuit} (hR : FlockSoundness.Discharge.Hidden.RowsOut c) :
     FlockSoundness.Discharge.Hidden.RowsOut (_root_.Flock.HmOut.unrolled c) := by
   unfold _root_.Flock.HmOut.unrolled
@@ -60,7 +44,6 @@ theorem rowsOut_unrolled {c : _root_.Flock.Circuit} (hR : FlockSoundness.Dischar
 
 variable {h : Held}
 
-/-- **A written bit is a member's returned output bit with Bits' commitment position.** -/
 theorem outRowBit_of_mem {x t : ℕ} {r : Spot.Bits.RowPos} (hy : (x, t, r) ∈ writtenBits h.ms) :
     ∃ ht : t < h.ms.length, ∃ u k j b, b < 16 ∧ Spot.Bits.outRowBit h.ms[t].1 u k j b = some r := by
   unfold writtenBits at hy
@@ -81,7 +64,6 @@ theorem outRowBit_of_mem {x t : ℕ} {r : Spot.Bits.RowPos} (hy : (x, t, r) ∈ 
     exact ⟨hm', u, k, j, b, hb', by assumption⟩
   · cases hy
 
-/-- **Where the design evaluates, each member's output rows pass `HmOut.checkRows`'s row check.** -/
 theorem rowsOut_member {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ} (ht : t < h.ms.length) :
     FlockSoundness.Discharge.Hidden.RowsOut (memberCircuit h t) := by
   have hok := templateOk_of_two h hd ht
@@ -122,7 +104,6 @@ theorem rowsOut_member {s : AuditStatement} {d : Design.Two} (hd : two h s = som
     · obtain ⟨tu, c₀, -, hck, -, rfl⟩ := FlockSoundness.TmplValue.parseTmpl_cases hC
       exact fun j hj => FlockSoundness.Discharge.Hidden.rowsOut_of_checkRows hck j hj
 
-/-- **`WrittenOwn` where the design evaluates.** -/
 theorem writtenOwn_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : WrittenOwn h := by
   rintro ⟨x, t, r⟩ hy
   obtain ⟨ht, u, k, j, b, hb, ho⟩ := outRowBit_of_mem hy
@@ -132,7 +113,6 @@ theorem writtenOwn_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = 
   rw [← hm] at hx
   exact outPos_own (rowsOut_member hd ht) (fun p hp => bits_of_two hd ht hp) hb hx
 
-/-- **`BitsInPorts` where the design evaluates and each member names its ports once.** -/
 theorem bitsInPorts_of_once {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (hO : PortsOnce h) :
     BitsInPorts h :=
   bitsInPorts_of_two hd hO (writtenOwn_of_two hd)

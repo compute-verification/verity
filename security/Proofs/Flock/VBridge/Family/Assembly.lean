@@ -19,25 +19,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.Algebra.BitsOk
 
-/-!
-# VBridge G at V*'s family, assembled from its parts' definitions
-
-`assembled` is a `VStarFamily` whose every field its parts define is their definition:
-
-* `rep₀ := repOf coinFiles` (`repOf` at the history's coins, `Join.lean`), `alpha := alphaOf` (Openings.lean);
-* `rows := rowsOf`, `acc := accOf` (Openings.lean: the openings read off the layers);
-* `Sk := skOf own sel`, `cmt := cmtOf bc`, `wmsg := wmsgOf dec`, `msg := msgOf dec` (hc);
-* `files := filesOf spec st cap lig` (Files.lean).
-
-`HResL` and `HZeroL` (`Rep.lean`) read the parts' outputs in the layer, as the openings' are (`HUL`);
-`vbridgeRead_of_layers` is `vbridgeRead_of_family` at `HFilesR`: the files are valid once they run (`hFilesR_of`), so
-the runs come first.
-
-`vbridgeRead_of_lanes` is `VBridgeRead` at any family whose fields satisfy the defining equations, its obligations
-discharged by their theorems; `vbridgeRead_assembled` is `VBridgeRead` at `assembled` and the decoder `decOf`,
-every defining equation by `rfl` and `hmsg` by `msgsAre_assembled`. Their hypotheses are named facts, each a `Prop`
-whose docstring names the check or lemma that establishes it.
--/
+/-! VBridge G's read conjunct at V*'s family, assembled from its parts' definitions (`vbridgeRead_assembled`). -/
 
 @[expose] public section
 
@@ -57,8 +39,6 @@ variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
-/-- **`v-bridge` at the read wires, the parts' and openings' outputs read in the layers**: `vbridgeRead_of_family` with
-`HFilesR`, valid once they run, in place of `HFiles`. -/
 theorem vbridgeRead_of_layers (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
     (hsh : F.HShape dg N k Rw GS) (hres : F.HResL dg N k Rw gs) (hu : F.HUL dg N k Rw) (hrd : F.HReads dg N k Rw)
@@ -89,14 +69,6 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
     (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
 
-/-- **`VBridgeRead` at a family whose fields are the parts' definitions**: `rep₀` is `repOf coinFiles`, `rows` and `acc`
-the layers' (`rowsOf`, `accOf`), `files` `filesOf`'s, `Sk`, `cmt`, `wmsg` and `msg` `skOf`'s, `cmtOf`'s, `wmsgOf`'s and
-`msgOf`'s. Each obligation is a lane's theorem: `HStruct` (`hStruct_of`, at struct's `hSomePart`), `HFit` (`hFit_of`,
-`claimsIs_of`), `HShape` (`hShape_of`), `HResL` (`hResL_of`, at struct's `hCover_of` and reg's `hOne_of`,
-`hRowKeys_of`, `hRowsAgree_of` at `rowsShared` and `ReadsUnsegmented`), `HUL` (`hUL_of`, at struct's `hOpenUnits_of` and reg's `hOneOpen_of`), `HReads`
-(`hReads_of`, at struct's `nOpen_pos`), `HSch` (`hSch_of`), `HFilesR` (`hFilesR_of`, at `MsgsAre`, `HLeaf` and
-`CoinTys`), `HRuns` (`hRuns_of`, at `extrasAre_of` and `ptsOf_at`, `coins_of`, `combFolds_at`), `Encodes` (enc's
-`hEnc_of`), `HCommits` (`hCommits_of`), `VDecodesRead` (`vDecodesRead_of`), `VFullRead` (`vFullRead_of`). -/
 theorem vbridgeRead_of_lanes (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
     (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig)) (hrows : F.rows = F.rowsOf)
     (hacc : F.acc = F.accOf) (hF : F.files = F.filesOf spec st cap lig) (hSk : F.Sk = skOf F.Vs own sel)
@@ -138,9 +110,6 @@ theorem vbridgeRead_of_lanes (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j)
     (F.hCommits_of own sel bc hSk hcmt hpub) (F.vDecodesRead_of dec hw hm)
     F.vFullRead_of
 
-/-- **The family at the parts' definitions**: the coins' family (`coinFamily`: `rep₀` `repOf coinFiles`, `rows` and
-`acc` the layers', `alpha` `alphaOf`), with `Sk`, `cmt`, `wmsg` and `msg` hc's at `own`, `sel`, `bc` and the decoder
-`decOf`, then `files` `filesOf` at that `rep`. -/
 noncomputable def assembled : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂ :=
   let F₂ : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂ :=
     { F.coinFamily spec st cap lig with
@@ -150,7 +119,6 @@ noncomputable def assembled : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂
       msg := msgOf F.Vs (skOf F.Vs own sel) (F.decOf dg N k Rw spec st cap lig own sel) }
   { F₂ with files := F₂.filesOf spec st cap lig }
 
-/-- **`hmsg` at `assembled`**: one message per inner round, round `i`'s the table's (`decOf_spec`). -/
 theorem msgsAre_assembled (hread : F.MsgsRead dg N k Rw spec st cap lig own sel)
     (htys : F.MsgTys dg N k Rw spec st cap lig) :
     (F.assembled dg N k Rw spec st cap lig own sel bc).MsgsAre dg N k Rw spec st cap lig := by
@@ -165,11 +133,6 @@ theorem msgsAre_assembled (hread : F.MsgsRead dg N k Rw spec st cap lig own sel)
     rw [wmsgOf, List.getElem?_map, List.getElem?_range hi, Option.map_some]
     exact congrArg some (F.decOf_spec dg N k Rw spec st cap lig own sel hread htys h i)
 
-/-- **VBridge G's read conjunct at the parts' definitions**: `VBridgeRead` at `skOf`'s commit strings, `cmtOf`'s
-digests and `wmsgOf`'s and `msgOf`'s messages at the decoder `decOf`, at the family `assembled` (`vbridgeRead_of_lanes`,
-every defining equation by `rfl`, `hmsg` by `msgsAre_assembled`). The hypotheses that read a field `assembled` defines
-(`rep`, `coef`, `ops`, `files`, `Sk`) are read at `assembled`; the others at `F`, whose statements, sessions and
-registrations `assembled` keeps. -/
 theorem vbridgeRead_assembled
     (hne : Nonempty (Reg × L.Ω × Reg₂)) (honame : F.HOpenName) (hcount : F.HPartCount) (hname : F.HUnitName)
     (hv : (F.assembled dg N k Rw spec st cap lig own sel bc).HVCoins dg N k Rw)

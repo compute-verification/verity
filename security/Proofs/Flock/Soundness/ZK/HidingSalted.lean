@@ -13,16 +13,7 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Rewinding
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-!
-# Zero knowledge: T1 over leaves whose digests read the earlier salts
-
-`ideal_leaves_swap` swaps `n` hm96 leaves for ideal ones when each salt is read by its own leaf alone. A worker that is
-answered each salt after its commitment may read it in every later message, so digest `i` reads the salts before `i`
-(and through them every earlier leaf). The same bound `n·δ₁` holds, swapping the leaves last to first: the last salt is
-read by the last leaf alone, so `ideal_leaf_swap` replaces that leaf, with the earlier salts part of the experiment. The
-ideal leaf reads its salt only through `c(y)`, so the leaves before it form an experiment of the same shape, one leaf
-shorter.
--/
+/-! Zero knowledge: T1 over leaves whose digests read the earlier salts (`ideal_leaves_salted`). -/
 
 @[expose] public section
 
@@ -31,9 +22,6 @@ namespace FlockSoundness.ZK
 open Game
 open scoped ENNReal
 
-/-- **T1 over `n` leaves whose digests read the earlier salts**: in an experiment on uniform `(ω, y₀ … y_{n−1})` whose leaf
-`i` is `H(x_i(ω, y₀ … y_{i−1}) + M·y_i, c(y_i))`, replacing every leaf by an ideal one `H(U_i, c(y_i))` with fresh uniform
-`U_i` changes the probability of any event by at most `n·δ₁`. -/
 theorem ideal_leaves_salted {Y B C D : Type} [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
     (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D) :
     ∀ (n : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] (x : Ω → (i : Fin n) → (Fin i → Y) → B)
@@ -59,7 +47,6 @@ theorem ideal_leaves_salted {Y B C D : Type} [Fintype Y] [Nonempty Y] [AddCommGr
     simp
   | succ n ih =>
     intro Ω _ _ x G
-    -- the leaves before the last, at the first `n` salts
     let L : Ω × (Fin n → Y) → Fin n → D := fun q i =>
       H (x q.1 i.castSucc (fun j => q.2 (Fin.castLE i.isLt.le j)) + My (q.2 i), c (q.2 i))
     let e₁ : Ω × (Fin (n + 1) → Y) ≃ (Ω × (Fin n → Y)) × Y :=
@@ -77,10 +64,8 @@ theorem ideal_leaves_salted {Y B C D : Type} [Fintype Y] [Nonempty Y] [AddCommGr
         invFun := fun q => ((q.1, q.2 (Fin.last n)), Fin.init q.2)
         left_inv := fun p => by simp
         right_inv := fun q => by simp [Fin.snoc_init_self] }
-    -- the last leaf, with the earlier salts part of the experiment: no other leaf reads its salt
     have step₁ := ideal_leaf_swap My c hT1 H (fun q : Ω × (Fin n → Y) => x q.1 (Fin.last n) q.2)
       (fun q d => G q.1 (Fin.snoc (α := fun _ => D) (L q) d))
-    -- the other `n`, with the last leaf's ideal seed part of the experiment
     have step₂ := ih (Ω := Ω × (B × Y)) (fun q i => x q.1 i.castSucc)
       (fun q ds => G q.1 (Fin.snoc (α := fun _ => D) ds (H (q.2.1, c q.2.2))))
     have hA : prCoin (fun p : Ω × (Fin (n + 1) → Y) =>

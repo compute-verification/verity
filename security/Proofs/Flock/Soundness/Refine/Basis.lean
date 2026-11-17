@@ -12,17 +12,7 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Opening
 import VCVio.Prelude.Core
 
-/-!
-# The batched basis refines the model's (`Flock.Opening`)
-
-`basis_eq`: the executable's `basis sws q e` at `y < 2^e` is the model's `bHat` of the batched basis `b` (R4's
-`OpenRel.b`) at `q ‖ bits(y)`.
-
-The executable evaluates each claim's term with a width-128 branching program over bit vectors. `applyMap (mulColumns g)`
-is multiplication by `g` on a vector of bits (`applyMap_mul`). After the prefix coordinates, and then the suffix
-coordinates read as `0`/`1` points, the state is `Σ_w eq(point, w)·bits(eq(z, w))` (`bfcState`). The final
-contraction with `eq(r'')` is the model's `phi` (`Flock.Opening`).
--/
+/-! The executable's batched basis `basis sws q e` is the model's `bHat` of the batched basis (`basis_eq`). -/
 
 @[expose] public section
 
@@ -32,8 +22,6 @@ open Flock FlockLevel3 Game Transcript Model Accounting
 
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
-
-/-! ## Monomials and the multiplication columns -/
 
 theorem w128_monomial (u : ℕ) (hu : u < 128) :
     w128 (F128.monomial u).lo (F128.monomial u).hi = 1 <<< u := by
@@ -54,7 +42,6 @@ theorem w128_monomial (u : ℕ) (hu : u < 128) :
 theorem toAdj_monomial (u : ℕ) (hu : u < 128) : toAdj (F128.monomial u) = AdjoinRoot.root G ^ u := by
   rw [toAdj, F128.poly, w128_monomial u hu, natPoly_shiftLeft, natPoly_one, mul_one, map_pow, AdjoinRoot.mk_X]
 
-/-- `x^u` is the executable's `monomial u` below the field's degree. -/
 theorem fOf_monomial (u : ℕ) (hu : u < 128) : fOf (F128.monomial 1) ^ u = fOf (F128.monomial u) := by
   induction u with
   | zero =>
@@ -95,7 +82,6 @@ theorem mulColumns_fold (x : F128) : ∀ (k : ℕ) (a : ℕ) (out : Array F128) 
             ← pow_succ'] at this
           exact this
 
-/-- The executable's columns of "multiply by `g`" are `g·x^u`. -/
 theorem mulColumns_get (g : F128) (u : ℕ) (hu : u < 128) :
     fOf (mulColumns g)[u]! = fOf g * fOf (F128.monomial u) := by
   unfold mulColumns
@@ -105,9 +91,6 @@ theorem mulColumns_get (g : F128) (u : ℕ) (hu : u < 128) :
   rw [← fOf_monomial u hu]
   exact this
 
-/-! ## `applyMap`: a matrix over the columns' bits -/
-
-/-- One column's contribution: add `su` at every bit `l` of the column `c`. -/
 def colAdd (c : F128) (su : F256) (out : Array F256) : Array F256 :=
   (List.range' 0 128).foldl (fun out l => if c.bit l then out.set! l (out[l]! + su) else out) out
 
@@ -148,8 +131,6 @@ theorem isZero_gOf {a : F256} (h : (a.c0.isZero && a.c1.isZero) = true) : gOf a 
     cases a with | mk c0 c1 => cases c0; cases c1; simp_all; rfl
   rw [this, gOf_zero]
 
-/-- **`applyMap` is a matrix** (`Flock.Opening`): entry `l` of `applyMap cols s` is the sum of the `s[u]` whose column has bit
-`l`. -/
 theorem applyMap_get (cols : Array F128) (s : Array F256) (l : ℕ) (hl : l < 128) :
     gOf (applyMap cols s)[l]! = ∑ u ∈ Finset.range 128, if cols[u]!.bit l then gOf s[u]! else 0 := by
   unfold applyMap
@@ -198,9 +179,6 @@ theorem applyMap_get (cols : Array F128) (s : Array F256) (l : ℕ) (hl : l < 12
   rw [bind_pure, h, getElem!_pos _ l (by simp; omega), Array.getElem_replicate, gOf_zero, zero_add, ← List.range_eq_range',
     FlockLevel3.list_sum_range]
 
-/-! ## Bits in `K`, and multiplication on bit vectors -/
-
-/-- Bit `u` of a field element, as `0` or `1` in `K`. -/
 noncomputable def bK (a : 𝔽) (u : ℕ) : 𝕂 :=
   if h : u < 128 then ZMod.castHom (dvd_refl 2) 𝕂 (unpack a ⟨u, h⟩) else 0
 
@@ -236,7 +214,6 @@ theorem bK_ite (c : Prop) [Decidable c] (a : 𝔽) (u : ℕ) : bK (if c then a e
       simp [F128.bit, show (0 : F128) = ⟨0, 0⟩ from rfl]
     · rfl
 
-/-- **Multiplication on bit vectors** (`Flock.Opening`): the bits of `g·a` are the columns `g·x^u` of the bits of `a`. -/
 theorem bK_mul (g : F128) (a : 𝔽) (l : ℕ) (hl : l < 128) :
     ∑ u ∈ Finset.range 128, (if (mulColumns g)[u]!.bit l then bK a u else 0) = bK (fOf g * a) l := by
   have ha : a = ∑ v : Fin 128, if unpack a v = 1 then fOf (F128.monomial v) else 0 := by
@@ -253,9 +230,6 @@ theorem bK_mul (g : F128) (a : 𝔽) (l : ℕ) (hl : l < 128) :
   · rw [h0]; simp
   · rw [h1]; simp
 
-/-! ## The branching program's invariant -/
-
-/-- The state after `J` coordinates of the point `P`: `Σ_w eq(P↾J, w)·bits(eq(z↾J, w))`. -/
 noncomputable def invS (P : List 𝕂) (z : Array F128) (J : ℕ) (u : ℕ) : 𝕂 :=
   ∑ w ∈ Finset.range (2 ^ J), Model.eqList (P.take J) w * bK (Model.eqAt (vecOf J z) w) u
 
@@ -291,7 +265,6 @@ theorem eqAt_two_pow_add (z : Array F128) (J w : ℕ) :
   refine Finset.prod_congr rfl fun i _ => ?_
   rw [Nat.testBit_two_pow_add_gt i.isLt]
 
-/-- The multiplication columns act on the invariant coordinate-wise in `w`. -/
 theorem mat_invS (P : List 𝕂) (z : Array F128) (J : ℕ) (S : ℕ → 𝕂) (hS : ∀ u < 128, S u = invS P z J u)
     (c : F128) (l : ℕ) (hl : l < 128) :
     ∑ u ∈ Finset.range 128, (if (mulColumns c)[u]!.bit l then S u else 0) =
@@ -311,7 +284,6 @@ theorem mat_invS (P : List 𝕂) (z : Array F128) (J : ℕ) (S : ℕ → 𝕂) (
 theorem char2 (E z : 𝔽) : E * (1 + z) + E * z = E := by
   rw [mul_add, mul_one, add_assoc, CharTwo.add_self_eq_zero, add_zero]
 
-/-- **One coordinate** (`Flock.Opening`): the invariant after `J + 1` coordinates, from the one after `J`. -/
 theorem invS_succ (P : List 𝕂) (z : Array F128) (J : ℕ) (hJ : J < P.length) (l : ℕ) :
     invS P z (J + 1) l = ∑ w ∈ Finset.range (2 ^ J), Model.eqList (P.take J) w *
       (bK ((1 + fOf z[J]!) * Model.eqAt (vecOf J z) w) l + P[J] * bK (Model.eqAt (vecOf J z) w) l) := by
@@ -332,9 +304,6 @@ theorem invS_succ (P : List 𝕂) (z : Array F128) (J : ℕ) (hJ : J < P.length)
   rw [hsplit, mul_comm (1 + fOf z[J]!)]
   ring
 
-/-! ## The executable's loops -/
-
-/-- A prefix step (`Flock.Opening`): `s ← M_{1+z_J}·s + q_J·s`. -/
 def preStep (z : Array F128) (q : Array F256) (s : Array F256) (j : ℕ) : Array F256 :=
   (Array.range 128).map fun l => (applyMap (mulColumns (1 + z[j]!)) s)[l]! + q[j]! * s[l]!
 
@@ -352,7 +321,6 @@ theorem preStep_inv (P : List 𝕂) (z : Array F128) (q : Array F256) (J : ℕ) 
         exact congrArg (_ + ·) (Finset.mul_sum _ _ _)
     _ = _ := Finset.sum_congr rfl fun w _ => by rw [fOf_add, fOf_one]; ring
 
-/-- A suffix step (`Flock.Opening`): the coordinate is a bit of `y`, so the step is `M_{z_J}` or `M_{1+z_J}`. -/
 theorem sufStep_inv (P : List 𝕂) (z : Array F128) (J : ℕ) (hJ : J < P.length) (bit : Bool)
     (hP : P[J] = if bit then 1 else 0) (t : Array F256) (ht : ∀ u < 128, gOf t[u]! = invS P z J u) :
     ∀ l < 128, gOf (applyMap (if bit then mulColumns z[J]! else mulColumns (1 + z[J]!)) t)[l]! =
@@ -429,7 +397,6 @@ theorem sufLoop_inv (P : List 𝕂) (z : Array F128) (Q e y : ℕ) (hP : P.lengt
 theorem castHom_embed (b : ZMod 2) : ZMod.castHom (dvd_refl 2) 𝕂 b = execArith.embed ((b.val : ℕ) : 𝔽) := by
   rcases (show ∀ z : ZMod 2, z = 0 ∨ z = 1 by decide) b with h | h <;> subst h <;> simp
 
-/-- **The contraction with `eq(r'')`** (`Flock.Opening`): the program's last step is the model's `phi` on each weight. -/
 theorem contract_eq (t : Array F256) (rpp : Array F128) (hrpp : rpp.size = 7) (P : List 𝕂) (z : Array F128) (N : ℕ)
     (ht : ∀ u < 128, gOf t[u]! = invS P z N u) :
     gOf ((Array.range 128).foldl (fun acc u => acc + t[u]!.smul (eqTable rpp)[u]!) 0) =
@@ -520,8 +487,6 @@ theorem list_sum_array {α : Type} [Inhabited α] (a : Array α) (f : α → �
   simp only [List.getElem_map, Array.getElem_toList, List.getElem_range]
   rw [getElem!_pos a i (by simpa using h₁)]
 
-/-- **The batched basis** (`Flock.Opening`): the executable's `basis sws q e` at `y < 2^e` is the model's `bHat` of the opening's
-batched basis (R4's `OpenRel.b`) at `q ‖ bits(y)`, for every prefix `q` with `|q| + e = m − 7`. -/
 theorem basis_eq {m n : ℕ} {T : F128} {sws : Array Switched} {op : Model.OpenOut 𝔽} (hop : OpenRel m n T sws op)
     (q : Array F256) (e : ℕ) (hqe : q.size + e = m - 7) (y : ℕ) (hy : y < 2 ^ e) :
     gOf (basis sws q e)[y]! = Model.bHat execArith (m - 7) op.b (q.toList.map gOf ++ bitsK e y) := by
@@ -547,9 +512,6 @@ theorem basis_eq {m n : ℕ} {T : F128} {sws : Array Switched} {op : Model.OpenO
   rw [gOf_smul, bfc_get _ q e (hop.rpp_size k hk) y hy, hqe, mul_comm]
   exact Finset.mul_sum _ _ _
 
-/-- **Ligerito on the opening's output refines the model's** (`Flock.Opening`, `Flock.Ligerito`): when the executable's Ligerito accepts on
-ring switching's `T` and `basis sws`, the model's compiled Ligerito on the opening's output `op` (R4's `OpenRel`),
-played with the proof's messages and the rounds consumed, accepts at the openings `o`. -/
 theorem ligerito_accepts_opening {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (sws : Array Switched) (n : ℕ) (op : Model.OpenOut 𝔽) (hop : OpenRel sch.m n T sws op) (cap : Array ByteArray)
     (p : LigeritoProof) (r : ℕ) (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)

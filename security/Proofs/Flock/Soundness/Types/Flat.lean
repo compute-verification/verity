@@ -3,21 +3,8 @@ module
 public import Flock.Derive
 public import Proofs.Flock.Soundness.Audit.Circuit
 
-/-!
-# Derived rows compute their circuit type (flat types)
-
-`Flock.Derive.derive` is the function the verifier runs to lay a circuit type out as rows (Project doc
-`verified-lowering-design.md` §1.2). For every flat type it accepts (AND items over linear forms):
-
-* **`compose_sound`**: column values that satisfy the derived rows, with the constant at 1, carry on each output's column
-  the type's output (`eval`) on the inputs' columns.
-* **`compose_complete`**: on every input, the honest column values (`honest`) satisfy the derived rows, with the
-  constant at 1, and carry the inputs and the outputs on their columns. There are no assertion rows, so the rows ask
-  nothing an honest evaluation doesn't meet.
-
-Both are about the executed `derive`. The layout's geometry comes from `derive`'s own check (`geoOk`), so nothing here is
-about how `place` arranges groups. Calls, exported inputs and reads come later.
--/
+/-! Rows `Flock.Derive.derive` lays out compute a flat circuit type (`compose_sound`), and the honest evaluation
+satisfies them (`compose_complete`). -/
 
 @[expose] public section
 
@@ -25,29 +12,22 @@ namespace FlockSoundness.Types
 
 open Flock Flock.Derive Audit
 
-/-- A form's value: the XOR of its wires' values, and its constant. -/
 def formVal (v : ℕ → Bool) (f : Form) : Bool := Bool.xor (Verity.Boolean.xorSum f.ws.toList v) (decide (f.c = 1))
 
-/-- An item's value on the wires before it. A flat type's items are ANDs. -/
 def itemVal (v : ℕ → Bool) : Item → Bool
   | .and a b => formVal v a && formVal v b
   | _ => false
 
-/-- The wire values once the items from wire `w` on have run, each on the values before it. -/
 def run (v : ℕ → Bool) (w : ℕ) : List Item → ℕ → Bool
   | [] => v
   | it :: rest => run (fun j => if j = w then itemVal v it else v j) (w + 1) rest
 
-/-- **What a flat type computes** on inputs `x`: its output forms on its wire values. -/
 def eval (t : CircuitType) (x : ℕ → Bool) : List Bool :=
   t.outputs.toList.map (formVal (run x t.inBits t.items.toList))
 
-/-- Rows satisfied by column values `z`: row `r` is `z r = (A_r · z)(B_r · z)`. -/
 def Sat (R : List (List ℕ × List ℕ)) (z : ℕ → Bool) : Prop :=
   ∀ r p, R[r]? = some p → z r = (Verity.Boolean.xorSum p.1 z && Verity.Boolean.xorSum p.2 z)
 
-/-- **The honest column values** on inputs `x`: each input bit on its column, each AND item's value on its row, each
-output on its copy row, 1 on the constant, and 0 on every forced-zero row. -/
 def honest (t : CircuitType) (G : Geo) (x : ℕ → Bool) (r : ℕ) : Bool :=
   if r = G.const then true
   else if r < G.andBase then
@@ -59,8 +39,6 @@ def honest (t : CircuitType) (G : Geo) (x : ℕ → Bool) (r : ℕ) : Bool :=
     match bitAt G.outs r with
     | some o => formVal (run x t.inBits t.items.toList) (t.outputs[o]?.getD default)
     | none => false
-
-/-! ## Forms and wires -/
 
 theorem xorSum_append {ι : Type} (l m : List ι) (v : ι → Bool) :
     Verity.Boolean.xorSum (l ++ m) v = Bool.xor (Verity.Boolean.xorSum l v) (Verity.Boolean.xorSum m v) := by
@@ -84,7 +62,6 @@ theorem itemVal_congr {v v' : ℕ → Bool} {it : Item}
   | read _ _ => rfl
   | bad _ => rfl
 
-/-- A form's row entries, evaluated: its value on the columns' values, the constant at 1. -/
 theorem xorSum_formCols (G : Geo) (nIn : ℕ) (f : Form) (z : ℕ → Bool) (h1 : z G.const = true) :
     Verity.Boolean.xorSum (G.formCols nIn f) z = formVal (fun w => z (G.col nIn w)) f := by
   unfold Geo.formCols formVal
@@ -100,11 +77,9 @@ theorem run_lt : ∀ (items : List Item) (v : ℕ → Bool) (w j : ℕ), j < w �
     rw [run_lt rest _ (w + 1) j (by omega)]
     simp [show j ≠ w by omega]
 
-/-- Every item reads only earlier wires: item `k`'s forms read wires below `w + k`. -/
 def ReadsEarlier (w : ℕ) (items : List Item) : Prop :=
   ∀ k (hk : k < items.length), ∀ f ∈ (CircuitType.itemForms items[k]).toList, ∀ x ∈ f.ws.toList, x < w + k
 
-/-- Item `k`'s wire holds its value on the final wire values. -/
 theorem run_item : ∀ (items : List Item) (v : ℕ → Bool) (w : ℕ), ReadsEarlier w items →
     ∀ k (hk : k < items.length), run v w items (w + k) = itemVal (run v w items) items[k]
   | [], _, _, _, k, hk => absurd hk (by simp)
@@ -124,8 +99,6 @@ theorem run_item : ∀ (items : List Item) (v : ℕ → Bool) (w : ℕ), ReadsEa
       rw [show w + (k + 1) = (w + 1) + k by omega]
       exact run_item rest _ (w + 1) (fun k' hk' f hf x hx => by
         have := h (k' + 1) (by simp; omega) f (by simpa using hf) x hx; omega) k (by simpa using hk)
-
-/-! ## What `derive` checked -/
 
 theorem derive_ok {t : CircuitType} {inSplit outSplit : List ℕ} {d : Derived}
     (hd : derive t inSplit outSplit = .ok d) :
@@ -179,7 +152,6 @@ theorem flatOk_reads {t : CircuitType} (h : flatOk t = true) : ReadsEarlier t.in
   · exact ha x hx
   · exact hb x hx
 
-/-- The geometry `geoOk` checks, as facts. -/
 theorem geoOk_facts {t : CircuitType} {G : Geo} (h : geoOk t G = true) :
     G.andBase + G.nAnd ≤ G.const ∧
     (∀ i < t.inBits, ∃ c, colOf G.ins i = some c ∧ c < G.andBase ∧ bitAt G.ins c = some i) ∧
@@ -218,8 +190,6 @@ theorem geoOk_facts {t : CircuitType} {G : Geo} (h : geoOk t G = true) :
     exact this
 
 theorem geo_nAnd (t : CircuitType) (inSplit outSplit : List ℕ) : (geo t inSplit outSplit).nAnd = t.items.size := rfl
-
-/-! ## The rows, by kind -/
 
 section rows
 
@@ -266,10 +236,6 @@ theorem eval_getD (t : CircuitType) (x : ℕ → Bool) {o : ℕ} (ho : o < t.out
     (eval t x).getD o false = formVal (run x t.inBits t.items.toList) t.outputs[o] := by
   simp [eval, List.getD_eq_getElem?_getD, ho]
 
-/-! ## Soundness -/
-
-/-- **Derived rows compute their type.** If `derive` lays the flat type `t` out, column values that satisfy its rows with
-the constant at 1 carry on output `o`'s column the type's output `o` on the inputs' columns. -/
 theorem compose_sound {t : CircuitType} {inSplit outSplit : List ℕ} {d : Derived}
     (hd : derive t inSplit outSplit = .ok d) (z : ℕ → Bool) (hz : Sat d.rows z) (h1 : z d.geo.const = true)
     (o : ℕ) (ho : o < t.outputs.size) :
@@ -283,7 +249,6 @@ theorem compose_sound {t : CircuitType} {inSplit outSplit : List ℕ} {d : Deriv
   obtain ⟨V, hV⟩ : ∃ V, V = run x t.inBits t.items.toList := ⟨_, rfl⟩
   have hsat : ∀ r, r ≤ G.const → z r = (Verity.Boolean.xorSum (G.rowAt t r).1 z && Verity.Boolean.xorSum (G.rowAt t r).2 z) :=
     fun r hr => hz r _ (rows_get hr)
-  -- every wire's column holds its value
   have hw : ∀ w, w < t.inBits + t.items.size → z (G.col t.inBits w) = V w := by
     intro w
     induction w using Nat.strong_induction_on with
@@ -305,7 +270,6 @@ theorem compose_sound {t : CircuitType} {inSplit outSplit : List ℕ} {d : Deriv
         rw [← hV] at hi
         rw [hi]
         simp [hab, itemVal]
-  -- the output's copy row
   obtain ⟨hosz, hof⟩ := flatOk_outputs hflat
   obtain ⟨c, hcO, hc1, hc2, hbc⟩ := hout o (by omega)
   have hrow := hsat c (by omega)
@@ -314,10 +278,6 @@ theorem compose_sound {t : CircuitType} {inSplit outSplit : List ℕ} {d : Deriv
   simp only [Verity.Boolean.xorSum, List.map_cons, List.map_nil, List.foldr_cons, List.foldr_nil, h1, Bool.xor_false, Bool.and_true]
   rw [formVal_congr (v' := V) (fun y hy => hw y (hof o ho y hy)), eval_getD t _ ho, hV, hx]
 
-/-! ## Completeness -/
-
-/-- **The honest evaluation satisfies the derived rows.** On every input `x`, the honest column values satisfy the rows
-`derive` lays the flat type `t` out as, with the constant at 1, and carry each input bit and each output on its column. -/
 theorem compose_complete {t : CircuitType} {inSplit outSplit : List ℕ} {d : Derived}
     (hd : derive t inSplit outSplit = .ok d) (x : ℕ → Bool) :
     Sat d.rows (honest t d.geo x) ∧ honest t d.geo x d.geo.const = true ∧
@@ -335,7 +295,6 @@ theorem compose_complete {t : CircuitType} {inSplit outSplit : List ℕ} {d : De
     intro i hi c _ hclt hbc
     unfold honest
     rw [ite_eq_right (show ¬ c = G.const by omega), ite_eq_left hclt, hbc]
-  -- the honest value on each wire's column is the wire's value
   have hw : ∀ w, w < t.inBits + t.items.size → honest t G x (G.col t.inBits w) = V w := by
     intro w hwlt
     by_cases hwi : w < t.inBits
@@ -353,7 +312,7 @@ theorem compose_complete {t : CircuitType} {inSplit outSplit : List ℕ} {d : De
     rw [xorSum_formCols _ _ _ _ hconst]
     exact formVal_congr fun y hy => hw y (hf y hy)
   refine ⟨fun r p hp => ?_, hconst, fun i hi => ?_, fun o ho => ?_⟩
-  · -- each row, by kind
+  ·
     rw [List.getElem?_map] at hp
     have hr : r < G.const + 1 := by
       by_contra hr
@@ -411,13 +370,9 @@ theorem compose_complete {t : CircuitType} {inSplit outSplit : List ℕ} {d : De
       ite_eq_right (show ¬ c < G.andBase + G.nAnd by omega), hbc]
     simp only [Array.getElem?_eq_getElem ho, Option.getD_some]
 
-/-! ## The logical order -/
-
 theorem nodup_map_of_inj {l : List ℕ} {f : ℕ → ℕ} (hl : l.Nodup) (h : ∀ i ∈ l, ∀ j ∈ l, f i = f j → i = j) :
     (l.map f).Nodup := List.Nodup.map_on h hl
 
-/-- **`order` has no repeats**: the input bits, the constant, the AND rows and the output copy rows sit at distinct
-columns. -/
 theorem order_nodup {t : CircuitType} {inSplit outSplit : List ℕ} {d : Derived}
     (hd : derive t inSplit outSplit = .ok d) : d.order.Nodup := by
   obtain ⟨hflat, hgeo, rfl⟩ := derive_ok hd
@@ -465,7 +420,6 @@ theorem order_nodup {t : CircuitType} {inSplit outSplit : List ℕ} {d : Derived
       · rw [List.mem_singleton] at hx; omega
     · have := b2 x hx; omega⟩
 
-/-- **Every row that isn't forced zero sits at a column in `order`.** -/
 theorem order_covers {t : CircuitType} {inSplit outSplit : List ℕ} {d : Derived}
     (hd : derive t inSplit outSplit = .ok d) (r : ℕ) (p : List ℕ × List ℕ) (hp : d.rows[r]? = some p)
     (hne : p ≠ ([], [])) : r ∈ d.order := by

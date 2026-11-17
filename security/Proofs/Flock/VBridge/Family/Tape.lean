@@ -17,22 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 
-/-!
-# VBridge G item 5: `TableFiles.Valid`'s transcript conjuncts
-
-`TableFiles.Valid` (`Stages.lean`) asks, of each rep `r < 2`, that its stream is in the record (`Finds`), its proof file
-decodes at `verifyRep`'s shape, carries the pinned PCS parameters and the committed cap, and that its steps are a tape
-of its spine (`RepTape`); and of the inner transcript `t`, that its steps on the schedule are the level-0 cap, the link
-points, both tapes and the openings (`tableTape`). `transcript_of_runs` proves those conjuncts for every
-`G : TableFiles cls`, from the rest of `Valid`, `G.Runs`, and hypotheses on `G`'s fields:
-
-* each rep's tape is its proof file's messages and its stream's coins woven along its spine (`repSteps`). An accepting
-  rep plays its messages on its coins (`table_refines_plain`), and such a run's tape is that weave (`repTape_of_plays`:
-  `toT_exact`, `Spine.prefix`, `weave_of_prefix`), so the tape `inner_accepts_of_reps` needs is determined by the files;
-* the transcript's rounds hold the table's messages cut at its coins (`PlaysCoin.cut`), and its coins are the link
-  points then both streams' coins. A transcript whose rounds and coins are a tape's is that tape on the schedule
-  (`schedSteps_of_cut`).
--/
+/-! `TableFiles.Valid`'s transcript conjuncts (`transcript_of_runs`). -/
 
 @[expose] public section
 
@@ -45,10 +30,6 @@ open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBri
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-! ## Tapes from their kinds, messages and coins -/
-
-/-- **A tape whose kinds are a prefix of `σ` is its messages and coins woven along `σ`**: `weave` stops at the first
-kind whose list has run out, which is just past the tape. -/
 theorem weave_of_prefix {ts : List Step} {σ : List Exec.Kind} (h : ts.map kindOf <+: σ) :
     weave σ (ts.filterMap Sum.getLeft?) (ts.filterMap Sum.getRight?) = ts := by
   induction ts generalizing σ with
@@ -65,16 +46,11 @@ theorem weave_of_prefix {ts : List Step} {σ : List Exec.Kind} (h : ts.map kindO
       | inl m => exact congrArg (Sum.inl m :: ·) ih'
       | inr c => exact congrArg (Sum.inr c :: ·) ih'
 
-/-- **Rep `r`'s tape from its files**: the proof file's messages (`repMsgs`) and the stream's coin arrays (`coinArr`)
-woven along the rep's spine (`repShape`), at the statement's dimensions, `n` extra claims and the schedule. -/
 def repSteps (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (n : ℕ) (p : Proof) (s : StreamRec) :
     List Step :=
   weave (repShape 𝔽 𝕂 Dig S.m S.kLog n (schedOf sch)) (repMsgs st sch (2 + n) p capDig)
     ((s.rounds.toList.map (·.coins)).map (coinArr fOf))
 
-/-- **A rep that plays its proof file's messages on its stream's coins has `repSteps` for its tape.** The run is one on
-a tape of those messages and coin steps (`toT_exact`), whose kinds are a prefix of the rep's spine (`repC_spine`), so
-the tape is their weave along the spine. -/
 theorem repTape_of_plays (r : ℕ) (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim 𝔽 S.m)) (p : Proof) (s : StreamRec) {pend : PendL 𝔽 Dig}
     (h : Plays fOf (repC execArith r S (schedOf sch) hm extra) (repMsgs st sch (2 + extra.length) p capDig)
@@ -89,13 +65,10 @@ theorem repTape_of_plays (r : ℕ) (st : Setup) (S : Model.Statement) (sch : Flo
   rw [e]
   exact ⟨hk, h1, h2⟩
 
-/-! ## The schedule's steps from a tape's rounds and coins -/
-
 section sched
 
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type)
 
-/-- The coin steps of the rounds from round `j` on: coordinate `k` of round `k`'s coin, for `k < r`. -/
 def coinSteps : ℕ → List ((k : Fin r) → CT k) → List Msg
   | _, [] => []
   | j, ρ :: cs => (if h : j < r then [⟨CT ⟨j, h⟩, ρ ⟨j, h⟩⟩] else []) ++ coinSteps (j + 1) cs
@@ -108,7 +81,6 @@ theorem coinSteps_ge (cs : List ((k : Fin r) → CT k)) : ∀ j, r ≤ j → coi
       rw [coinSteps, dite_eq_right_of_eq_false (eq_false (show ¬ j < r by omega)), List.nil_append]
       exact ih (j + 1) (by omega)
 
-/-- A round's messages as steps' messages. -/
 def roundMsgs (e : List (SMsg T)) : List Msg := e.map fun m => ⟨T m.1, m.2⟩
 
 theorem consHead_ne_nil (m : Msg) (l : List (List Msg)) : consHead m l ≠ [] := by
@@ -121,9 +93,6 @@ theorem cut_ne_nil (σ : List Exec.Kind) (ms : List Msg) : cut σ ms ≠ [] := b
   | .msg _ :: _, [] => simp [cut]
   | .coin _ :: σ, ms => simp [cut]
 
-/-- **A transcript whose rounds and coins are a tape's is that tape on the schedule.** When round `k` of `t` from round
-`j` holds the tape's messages between its coins `k - 1` and `k` (`cut`), and the rounds' coins are the tape's coin
-steps, then `schedSteps` from round `j` is the tape. (So the tape has `r - j` coins, and `t` one round more.) -/
 theorem schedSteps_of_cut (ts : List Step) : ∀ (j : ℕ) (t : List (List (SMsg T) × ((k : Fin r) → CT k))),
     t.map (fun e => roundMsgs T e.1) = cut (ts.map kindOf) (ts.filterMap Sum.getLeft?) →
     coinSteps CT j (t.map Prod.snd) = ts.filterMap Sum.getRight? → schedSteps T CT j t = ts := by
@@ -229,8 +198,6 @@ theorem map_snd_zip {α β : Type _} : ∀ (a : List α) (b : List β), (a.zip b
   | x :: a, y :: b => by
       rw [List.zip_cons_cons, List.map_cons, map_snd_zip a b, List.length_cons, List.take_succ_cons]
 
-/-- **`schedSteps_of_cut` at messages zipped with coins**: V*'s round messages `ws`, at least as many coins `cs` as
-rounds. -/
 theorem schedSteps_zip (ts : List Step) (ws : List (List (SMsg T))) (cs : List ((k : Fin r) → CT k))
     (hlen : ws.length ≤ cs.length) (hm : ws.map (roundMsgs T) = cut (ts.map kindOf) (ts.filterMap Sum.getLeft?))
     (hc : coinSteps CT 0 cs = ts.filterMap Sum.getRight?) : schedSteps T CT 0 (ws.zip cs) = ts := by
@@ -250,12 +217,8 @@ theorem schedSteps_zip (ts : List Step) (ws : List (List (SMsg T))) (cs : List (
 
 end sched
 
-/-! ## The table's steps -/
-
 variable {cls : HClass}
 
-/-- **The table's steps on the schedule** (`TableFiles.Valid`'s last conjunct): the level-0 cap of rep 0's proof file,
-the link points, both reps' tapes in `tableTape`'s order, and the proof files' openings with their salts. -/
 def tableSteps (G : TableFiles cls) : List Step :=
   .inl ⟨Cap Dig, capDig (G.proof 0).cap⟩ :: .inr ⟨Fin 2 → Fin cls.mPts → 𝔽, G.pts⟩ ::
     tableTape (G.tape 0) (G.tape 1) (opensOf (G.proof 0) (G.proof 1) G.sch, saltsOf (G.proof 0) (G.proof 1) G.sch)
@@ -279,15 +242,12 @@ theorem firstSteps_rights (ts : List Step) : (firstSteps ts).filterMap Sum.getRi
       | inl m => exact ih
       | inr c => exact congrArg (c :: ·) ih
 
-/-- The table's coin steps: the link points, then rep 0's tape's coins, then rep 1's. -/
 theorem tableSteps_rights (G : TableFiles cls) : (tableSteps G).filterMap Sum.getRight? =
     ⟨Fin 2 → Fin cls.mPts → 𝔽, G.pts⟩ :: ((G.tape 0).filterMap Sum.getRight? ++ (G.tape 1).filterMap Sum.getRight?) := by
   show ⟨Fin 2 → Fin cls.mPts → 𝔽, G.pts⟩ :: (tableTape (G.tape 0) (G.tape 1) _).filterMap Sum.getRight? = _
   unfold tableTape
   rw [rights_append, rights_append, firstSteps_rights]
   exact congrArg (_ :: ·) (List.append_nil _)
-
-/-! ## The transcript conjuncts -/
 
 theorem pcsParams_bne_self (x : PcsParams) : (x != x) = false := by
   obtain ⟨m, l, b, p, n, h⟩ := x
@@ -298,18 +258,6 @@ theorem bytes_beq_self (b : ByteArray) : (b == b) = true := by
   show (b.data == b.data) = true
   exact beq_self_eq_true _
 
-/-- **Each rep's conjuncts of `TableFiles.Valid`.** Given the rest of `Valid` at the hidden statement `M` (the setup,
-the session's extra claims and rounds, `hmS` … `hex`), and both reps' runs (`TableFiles.Runs`), suppose of `G`'s fields:
-
-* `hfind`: each rep's stream is the record's stream `<table>/rep<r>` (`Verify.lean:40`);
-* `hdec`: each rep's proof file decodes at the shape `verifyRep` decodes with to the rep's proof (`Verify.lean:44`);
-* `hpar`: each proof carries the pinned PCS parameters (`Verify.lean:45`);
-* `hcap`: each proof's cap is the record's `root_B` of the table (`Verify.lean:53-54`);
-* `htape`: each rep's tape is `repSteps` of its proof and stream.
-
-Then each rep's stream is found, its proof file decodes, with the pinned parameters and the committed cap, and its tape
-is a tape of its spine: both reps accept (`verifyRep_of_checks`), so each plays its messages on its stream's coins
-(`table_refines_plain`), and `repTape_of_plays` gives the tape. -/
 theorem reps_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
     (hmS : G.st.m = (M.toStatement regs).m) (hkS : G.st.kLog = (M.toStatement regs).kLog)
     (hfold : FoldRealizes G.st.fold (M.toStatement regs))
@@ -364,18 +312,12 @@ theorem reps_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m -
     · exact ht₁
   exact ⟨hfind r hr, hdec r hr, hpar' r hr, hcap' r hr, hT⟩
 
-/-- On both reps' tapes, the table's coin steps are the link points, then rep 0's stream's coins, then rep 1's. -/
 theorem tableSteps_coins (G : TableFiles cls) (S : Model.Statement) (n : ℕ)
     (hT : ∀ r < 2, RepTape G.st S G.sch n (G.proof r) (G.stream r) (G.tape r)) :
     (tableSteps G).filterMap Sum.getRight? = ⟨Fin 2 → Fin cls.mPts → 𝔽, G.pts⟩ ::
       ((G.stream 0).rounds.toList.map (·.coins) ++ (G.stream 1).rounds.toList.map (·.coins)).map (coinArr fOf) := by
   rw [tableSteps_rights, (hT 0 (by omega)).2.2, (hT 1 (by omega)).2.2, List.map_append]
 
-/-- **`TableFiles.Valid`'s transcript conjuncts**: `reps_of_runs`, and the transcript's steps are the table's when, of
-the transcript `t`,
-
-* `hmsg`: round `k` holds the table's messages (`tableSteps`) between its coins `k - 1` and `k` (`PlaysCoin.cut`);
-* `hcoin`: the coins are the link points, then rep 0's stream's coins, then rep 1's (`schedSteps_of_cut`). -/
 theorem transcript_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
     {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) (t : List (List (SMsg T) × ((k : Fin nR) → CT k)))
     (hmS : G.st.m = (M.toStatement regs).m) (hkS : G.st.kLog = (M.toStatement regs).kLog)
@@ -407,7 +349,6 @@ theorem transcript_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (c
   ⟨h, schedSteps_of_cut T CT (tableSteps G) 0 t hmsg
     (hcoin.trans (tableSteps_coins G _ _ fun r hr => (h r hr).2.2.2.2).symm)⟩
 
-/-- **`TableFiles.Valid` from its file half and `transcript_of_runs`' hypotheses.** -/
 theorem valid_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
     {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) (t : List (List (SMsg T) × ((k : Fin nR) → CT k)))
     (hmS : G.st.m = (M.toStatement regs).m) (hkS : G.st.kLog = (M.toStatement regs).kLog)
@@ -433,9 +374,6 @@ theorem valid_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m 
     hcoin
   ⟨hmS, hkS, hfold, hms, hf, hext, hwf, hex, h.1, h.2⟩
 
-/-- **`TableFiles.Valid` at V*'s transcript** (`HFiles`' form: the round messages `ws` V*'s layers hold, zipped with the
-history's coins `cs`): `valid_of_runs`, with `hmsg` and `hcoin` on `ws` and `cs` themselves, given at least as many coins
-as rounds (`schedSteps_zip`). -/
 theorem valid_of_layers (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
     {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) (ws : List (List (SMsg T))) (cs : List ((k : Fin nR) → CT k))
     (hmS : G.st.m = (M.toStatement regs).m) (hkS : G.st.kLog = (M.toStatement regs).kLog)

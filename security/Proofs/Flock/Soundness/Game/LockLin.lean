@@ -3,30 +3,8 @@ module
 public import Proofs.Flock.Soundness.Game
 public import Proofs.Flock.Soundness.LinkFinder
 
-/-!
-# The compiled table bound, linearly: a link finder at each slot
-
-`Lock.leafE_off_le` bounds, per slot, the mass of compiled runs that open a position off the table chosen there by
-`√(N · Q · forkE)`: the rewinding lemma at the slot's node (`Rewinding.expect_bad_le`, Cauchy–Schwarz over the `N`
-positions) and Jensen over the prefixes. Here the same mass is bounded linearly, by the link finder (`LinkFinder`) at a
-uniform position:
-
-* `Rewinding.linkG`: at a node, a uniform position `p`, a run, then up to `M` more, stopping at the first that opens `p`
-  (`LinkFinder.finderG` at the reading `rdAt op p`). It succeeds (`LinkSucc`) when the first run opens `p` and the
-  first further run that opens `p` opens it otherwise: two runs from the node that conflict at `p`
-  (`linkSucc_conflict`).
-* `Rewinding.expect_bad_le_link`: a run opens a position off a plurality table with probability at most
-  `N · Pr[linkG succeeds] + N/(eM)` (`LinkFinder.succ_ge` at each position, then the union bound). The openings per
-  run do not enter.
-* `Rewinding.expect_linkCost_le`: `linkG` costs at most two runs in expectation, whatever the prover
-  (`LinkFinder.expect_finderCost_le` at each position); so under expected-time collision resistance at it the mass is
-  at most `N · 2·E[c]/2^256 + N/(eM)` (`expect_bad_le_ecr`).
-* `Lock.nodeE`: a functional of the slot node's continuation, averaged over the compiled prefixes (`forkE` is the
-  functional `expect₂ Φ`).
-* `Lock.leafE_off_le_link`: per slot, the mass off the chosen table is at most `N · nodeE[Pr linkG] + N/(eM)`. The bound
-  is linear, so the average over the prefixes needs no Jensen. `Lock.nodeE_linkCost_le`: over the prefixes, the finder
-  costs at most two compiled runs.
--/
+/-! The compiled table bound, linearly: a slot's off-table mass is at most `N` times the link finder's success plus
+`N/(eM)`, and the finder costs at most two runs (`Lock.leafE_off_le_link`, `Lock.nodeE_linkCost_le`). -/
 
 @[expose] public section
 
@@ -38,25 +16,18 @@ open Game
 
 variable {α P V : Type} [Fintype P] [Fintype V] [DecidableEq V] (op : α → P → Option V)
 
-/-- What a run reads at `p`: its opening there, if any. -/
 def rdAt (p : P) (a : α) : Finset V := (op a p).toFinset
 
-/-- **The link finder at a node**: a uniform position `p`, a run, then up to `M` more. -/
 def linkG (P : Type) [Fintype P] [Nonempty P] (g : Game α) (M : ℕ) : Game (P × α × List α) :=
   (Game.draw P).bind fun p => (LinkFinder.finderG g M).map fun x => (p, x)
 
-/-- `s` in every run. -/
 def linkStrat (P : Type) [Fintype P] [Nonempty P] (g : Game α) (s : Strategy g) (M : ℕ) :
     Strategy (linkG P g M) :=
   Strategy.bind (Game.draw P) _ (sampleStrat P) fun p =>
     Strategy.map (fun x => (p, x)) (LinkFinder.finderG g M) (LinkFinder.finderStrat g s M)
 
-/-- **The link finder succeeds**: its first run opens its position `p`, and the first further run that opens `p` opens
-it otherwise. -/
 def LinkSucc (x : P × α × List α) : Prop := LinkFinder.Succ (rdAt op x.1) x.2
 
-/-- **The link finder's cost**: its first run's, and when that opens `p`, the further runs' up to the first that opens
-`p`. -/
 noncomputable def linkCost (c : α → ℝ) (x : P × α × List α) : ℝ := LinkFinder.finderCost (rdAt op x.1) c x.2
 
 omit [Fintype P] [Fintype V] [DecidableEq V] in
@@ -85,7 +56,6 @@ theorem sRd_rdAt (g : Game α) (s : Strategy g) (p : P) : LinkFinder.sRd g s (rd
   rw [h, expect_const]
 
 omit [Fintype P] in
-/-- The off-table mass at `p`: every value's opening mass, less the table's. -/
 theorem expect_off_eq (g : Game α) (s : Strategy g) (vstar : P → V) (p : P) :
     expect (ind fun a => Off op vstar a p) g s =
       (∑ v, expect (ind fun a => op a p = some v) g s) - expect (ind fun a => op a p = some (vstar p)) g s := by
@@ -96,8 +66,6 @@ theorem expect_off_eq (g : Game α) (s : Strategy g) (vstar : P → V) (p : P) :
   by_cases h1 : (op a p).isSome <;> by_cases h2 : op a p = some (vstar p) <;> simp_all
 
 omit [Fintype P] [Fintype V] [DecidableEq V] in
-/-- **The finder's success is a conflict between two runs from the node**: its first run and the further run it
-stopped at open its position differently. -/
 theorem linkSucc_conflict (x : P × α × List α) (h : LinkSucc op x) :
     ∃ e ∈ x.2.2, ConflictAt op (x.2.1, e) x.1 := by
   obtain ⟨p, a, aux⟩ := x
@@ -117,7 +85,6 @@ theorem linkSucc_conflict (x : P × α × List α) (h : LinkSucc op x) :
       intro heq
       exact hne ((rdAt_eq_singleton op p e' v).2 heq.symm)
 
-/-- The link finder's expectation: the per-position finders', averaged over the positions. -/
 theorem expect_linkG [Nonempty P] (g : Game α) (s : Strategy g) (M : ℕ) (F : P × α × List α → ℝ) :
     expect F (linkG P g M) (linkStrat P g s M) =
       (∑ p, expect (fun x => F (p, x)) (LinkFinder.finderG g M) (LinkFinder.finderStrat g s M)) /
@@ -127,9 +94,6 @@ theorem expect_linkG [Nonempty P] (g : Game α) (s : Strategy g) (M : ℕ) (F : 
   congr 1
   exact Finset.sum_congr rfl fun p _ => expect_map _ _ _ _
 
-/-- **Off a plurality table, linearly**: a run opens a position off a plurality table with probability at most `N`
-times the link finder's success, plus `N/(eM)`. Where `expect_bad_le` is a root of `N · Q` times two runs' conflict,
-this is linear, and the openings per run do not enter. -/
 theorem expect_bad_le_link [Nonempty P] (g : Game α) (s : Strategy g) (vstar : P → V)
     (hv : IsPluralityE op g s vstar) (M : ℕ) (hM : 1 ≤ M) :
     expect (ind fun a => ∃ p, Off op vstar a p) g s ≤
@@ -173,7 +137,6 @@ theorem expect_bad_le_link [Nonempty P] (g : Game α) (s : Strategy g) (vstar : 
       ring
 
 omit [Fintype V] [DecidableEq V] in
-/-- **The link finder costs at most two runs** in expectation, at every position and so on average. -/
 theorem expect_linkCost_le [Nonempty P] (g : Game α) (s : Strategy g) (c : α → ℝ) (hc : ∀ a, 0 ≤ c a) (M : ℕ) :
     expect (linkCost op c) (linkG P g M) (linkStrat P g s M) ≤ 2 * expect c g s := by
   rw [expect_linkG]
@@ -184,9 +147,6 @@ theorem expect_linkCost_le [Nonempty P] (g : Game α) (s : Strategy g) (c : α �
         Finset.sum_le_sum fun p _ => LinkFinder.expect_finderCost_le g s (rdAt op p) c hc M
     _ = _ := by rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]; ring
 
-/-- **Off a plurality table under expected-time collision resistance, linearly**: where every success of the link
-finder outputs a collision of `Hc` and the finder obeys the generic bound at its cost, a run opens a position off a
-plurality table with probability at most `N · 2·E[c]/2^256 + N/(eM)`: weight `N`, two runs. -/
 theorem expect_bad_le_ecr {Dh : Type} (Hc : List UInt8 → Dh) [Nonempty P] (g : Game α) (s : Strategy g)
     (vstar : P → V) (hv : IsPluralityE op g s vstar) (M : ℕ) (hM : 1 ≤ M)
     (out : P × α × List α → Option (List UInt8 × List UInt8)) (c : α → ℝ) (hc : ∀ a, 0 ≤ c a)
@@ -215,9 +175,6 @@ namespace Lock
 
 variable {α β : Type} {T D I : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
 
-/-- **A functional of the slot node's continuation, over the compiled prefixes**: `Ψ d g'' σ''` at the slot's node,
-with the cap `d`, the continuation `g''` and its strategy `σ''`; `0` on runs that do not reach the slot. `forkE` is the
-functional `expect₂ Φ`. -/
 noncomputable def nodeE (plur : Chooser T D β) (slot : ℕ) (Ψ : D → (g : Game β) → Strategy g → ℝ) : {i : I} →
     {g : Game α} → {g' : Game β} → Lock T D get R i g g' → Strategy g' → ℝ
   | _, _, _, .ret _, _ => 0
@@ -244,8 +201,6 @@ theorem nodeE_mono (plur : Chooser T D β) (slot : ℕ) {Ψ Ψ' : D → (g : Gam
       · exact h _ _ _
       · exact nodeE_mono plur slot h _ σ'.2
 
-/-- **A continuation's expectation at the slot is at most the run's**: for a nonnegative leaf function, the node's
-continuation is the rest of the run. -/
 theorem nodeE_le_expect (plur : Chooser T D β) (slot : ℕ) (c : β → ℝ) (hc : ∀ b, 0 ≤ c b) :
     ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
       nodeE plur slot (fun _ g'' σ'' => expect c g'' σ'') L σ' ≤ expect c g' σ'
@@ -261,10 +216,6 @@ theorem nodeE_le_expect (plur : Chooser T D β) (slot : ℕ) (c : β → ℝ) (h
       · exact le_rfl
       · exact nodeE_le_expect plur slot c hc _ σ'.2
 
-/-- **Rewinding at a slot, linearly.** If the table chosen at `slot` (with cap `d`) always reads, through `row`, as a
-plurality of the slot's openings `op d` over the continuation, then the probability that a run opens a position off the
-table fixed at `slot` is at most `N` times the link finder's success at the slot's node, over the prefixes, plus
-`N/(eM)`. Where `leafE_off_le` takes a root at the node and Jensen over the prefixes, this is linear at both. -/
 theorem leafE_off_le_link {P V : Type} [Fintype P] [Nonempty P] [Fintype V] [DecidableEq V]
     (op : D → β → P → Option V) (row : T → P → V) (slot : ℕ) (plur : Chooser T D β)
     (hplur : ∀ (d : D) (g'' : Game β) (σ'' : Strategy g''),
@@ -311,8 +262,6 @@ theorem leafE_off_le_link {P V : Type} [Fintype P] [Nonempty P] [Fintype V] [Dec
         exact leafE_off_le_link op row slot plur hplur M hM _ σ'.2
           (by rw [hkeep _ _ slot (Ne.symm hs), hi])
 
-/-- **The slot's link finder costs at most two compiled runs** in expectation over the prefixes, for a nonnegative
-cost of a run's output. -/
 theorem nodeE_linkCost_le {P V : Type} [Fintype P] [Nonempty P] [Fintype V] [DecidableEq V]
     (op : D → β → P → Option V) (slot : ℕ) (plur : Chooser T D β) (c : β → ℝ) (hc : ∀ b, 0 ≤ c b) (M : ℕ)
     {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g') :

@@ -5,31 +5,8 @@ public import Proofs.Flock.Soundness.Types.Flat
 import Proofs.Flock.Soundness.Audit.Circuit
 import Std.Data.HashSet.Lemmas
 
-/-!
-# Derived rows compute their circuit type, over the type DAG
-
-`Flock.DeriveAll.deriveChecked` is the function the verifier runs to lay a statement's circuit types out as rows (Project
-doc `verified-lowering-design.md` §1.2, S3c): `deriveAll` builds every layout's rows, and its check walks each layout's type
-item by item against them. From the walk alone:
-
-* **`layout_sound`**: column values that satisfy a placed or inlined layout's rows as the verifier folds them
-  (`Flock.DeriveAll.fullRow`: a read's product rows with their table-direct side), with its constant at 1, carry on each
-  output column the layout's type's output (`evalT`: its callees by digest, its reads by the table's words) on its input
-  columns;
-* **`unit_sound`**: the same for the unit's rows as the block holds them (Δ applied, `Flock.DeriveAll.blockRow`), with the
-  block's constant at 1.
-
-The check also covers the unit's logical order (`Flock.DeriveAll.order`, the list `Rows.compose` reads), so
-**`order_sound`** and **`inputs_self`** give its facts: no column repeats, the inputs come first with self rows, each row
-after them reads only earlier columns (and `one`), and every column outside the order has a zero row or none.
-
-So all of this holds of whatever `deriveAll` builds: nothing here is about how it builds. The flat case is `compose_sound`
-(`Types/Flat.lean`), and on a flat type `evalT` is its `eval` (**`evalT_flat`**), so there the two say the same. Reads are
-checked inline (the decoders' one-hot minterms, the product rows' table-direct side, the output rows, bits constant across
-the table) and placed: a placed read's segment embeds a generated `table/v2` layout, checked the same way in its own
-coordinates, and **`genOk_sound`** gives that its output columns carry the table's bits at the index its input columns
-spell.
--/
+/-! Rows that `Flock.DeriveAll.deriveChecked` accepts compute their circuit type over the type DAG (`layout_sound`,
+`unit_sound`), whatever `deriveAll` builds. -/
 
 @[expose] public section
 
@@ -37,7 +14,6 @@ namespace FlockSoundness.Types.Dag
 
 open Flock Flock.DeriveAll Audit
 
-/-- Rows given as a function of the column, satisfied by column values `z`. -/
 def SatAt (R : ℕ → Option (List ℕ × List ℕ)) (z : ℕ → Bool) : Prop :=
   ∀ c r, R c = some r → z c = (Verity.Boolean.xorSum r.1 z && Verity.Boolean.xorSum r.2 z)
 
@@ -52,9 +28,6 @@ theorem xorSum_perm {l m : List Nat} (h : l.Perm m) (v : ℕ → Bool) : Verity.
   | swap x y l => rw [xorSum_cons, xorSum_cons, xorSum_cons, xorSum_cons, Bool.xor_left_comm]
   | trans _ _ ih1 ih2 => rw [ih1, ih2]
 
-/-! ## Column forms -/
-
-/-- A column form's value: its columns' XOR, and its constant. -/
 def cfVal (z : ℕ → Bool) (f : CF) : Bool := Bool.xor (Verity.Boolean.xorSum f.1 z) (f.2 % 2 == 1)
 
 theorem xorSum_xorCols (z : ℕ → Bool) : ∀ a b : List Nat, Verity.Boolean.xorSum (xorCols a b) z = Bool.xor (Verity.Boolean.xorSum a z) (Verity.Boolean.xorSum b z)
@@ -94,7 +67,6 @@ theorem cfVal_foldl (z : ℕ → Bool) (wire : Array CF) :
   | w :: l, acc => by
     rw [List.foldl_cons, cfVal_foldl z wire l, cfVal_xorCF, xorSum_cons, Bool.xor_assoc]
 
-/-- A form over the caller's wires, as columns, is worth the form on the wires' values. -/
 theorem cfVal_formOf (z : ℕ → Bool) (wire : Array CF) (f : Form) (hc : f.c ≤ 1) :
     cfVal z (formOf wire f) = formVal (fun w => cfVal z (wire.getD w ([], 0))) f := by
   unfold formOf formVal
@@ -117,7 +89,6 @@ theorem formOf_snd_lt (wire : Array CF) (f : Form) : (formOf wire f).2 < 2 := by
   | nil => intro acc h; exact h
   | cons w l ih => intro acc _; exact ih _ (Nat.mod_lt _ (by omega))
 
-/-- A resolved row side, with the constant's column at 1, is worth its column form. -/
 theorem xorSum_resolve (z : ℕ → Bool) (k : Nat) (hk : z k = true) (f : CF) (hf : f.2 < 2) :
     Verity.Boolean.xorSum (resolve k (ent f)) z = cfVal z f := by
   unfold resolve ent cfVal
@@ -127,15 +98,10 @@ theorem xorSum_resolve (z : ℕ → Bool) (k : Nat) (hk : z k = true) (f : CF) (
     rw [xorSum_perm (List.mergeSort_perm _ _), xorSum_append, xorSum_cons, xorSum_nil, hk]
     rfl
 
-/-! ## What a type computes -/
-
-/-- The number that bits `bs` spell, least significant first. -/
 def bitsIdx : List Bool → Nat
   | [] => 0
   | b :: bs => (if b then 1 else 0) + 2 * bitsIdx bs
 
-/-- The values an item appends to the wire values `vals`: an AND's one, a call's callee outputs (by `ev`), a read's table
-bits. -/
 def itemOut (types : String → Option CircuitType) (words : String → Option (Array Nat))
     (ev : CircuitType → (ℕ → Bool) → List Bool) (t : CircuitType) (vals : List Bool) : Item → List Bool
   | .and a b => [formVal (vals.getD · false) a && formVal (vals.getD · false) b]
@@ -152,14 +118,11 @@ def itemOut (types : String → Option CircuitType) (words : String → Option (
     | none => []
   | .bad _ => []
 
-/-- The wire values once `items` of type `t` run after `vals`. -/
 def runT (types : String → Option CircuitType) (words : String → Option (Array Nat))
     (ev : CircuitType → (ℕ → Bool) → List Bool) (t : CircuitType) : List Bool → List Item → List Bool
   | vals, [] => vals
   | vals, it :: rest => runT types words ev t (vals ++ itemOut types words ev t vals it) rest
 
-/-- **What a circuit type computes** on inputs `x`, its callees by digest in `types`, its tables' words by SHA-512 in
-`words`; `fuel` bounds the call depth. -/
 def evalT (types : String → Option CircuitType) (words : String → Option (Array Nat)) :
     Nat → CircuitType → (ℕ → Bool) → List Bool
   | 0, _, _ => []
@@ -180,12 +143,9 @@ theorem evalT_getD (types : String → Option CircuitType) (words : String → O
       ((List.range u.inBits).map x) u.items.toList).getD · false) u.outputs[o] := by
   simp [evalT, List.getD_eq_getElem?_getD, ho]
 
-/-! ## The wires' column forms carry the wire values -/
-
 theorem getD_eq (a : Array CF) (w : Nat) : a.getD w ([], 0) = a[w]?.getD ([], 0) := by
   unfold Array.getD; split <;> simp_all
 
-/-- The walk's invariant: wire `w`'s column form is worth wire `w`'s value. -/
 def Inv (z : ℕ → Bool) (wire : Array CF) (vals : List Bool) : Prop :=
   wire.size = vals.length ∧ ∀ w, cfVal z (wire.getD w ([], 0)) = vals.getD w false
 
@@ -216,16 +176,10 @@ theorem Inv.push {z : ℕ → Bool} {wire : Array CF} {vals : List Bool} (h : In
   · simp [Array.getD, hx]
   · simp [Array.getD, cfVal_nil]
 
-/-- A form over the caller's wires, as columns, is worth the form on the wire values. -/
 theorem Inv.formOf {z : ℕ → Bool} {wire : Array CF} {vals : List Bool} (h : Inv z wire vals) (f : Form) (hc : f.c ≤ 1) :
     cfVal z (DeriveAll.formOf wire f) = formVal (vals.getD · false) f := by
   rw [cfVal_formOf z wire f hc, h.vals]
 
-/-! ## What the check's row tests give -/
-
-/-- On column values `z` that satisfy a layout's rows as the verifier folds them: each tested row's equation, each
-product row's with its table-direct side, each constant copy at 1, each binding copy equal to its source once the callee's
-constant is 1, and the layout's constant at 1. -/
 structure Facts (words : String → Option (Array Nat)) (k : Chk) (z : ℕ → Bool) : Prop where
   row : ∀ c r, k.rowIs c r = true → z c = (Verity.Boolean.xorSum r.1 z && Verity.Boolean.xorSum r.2 z)
   prod : ∀ c a rec, k.prodIs c a rec = true →
@@ -316,8 +270,6 @@ theorem facts_unit {words : String → Option (Array Nat)} {d : D} {one : Nat} {
     rw [hz _ _ (oneAt_unit words hc one)]
     simp [Verity.Boolean.xorSum, h1]
 
-/-! ## A layout's check, unfolded -/
-
 theorem getD_of_getElem? {α : Type} {a : Array α} {i : Nat} {x d : α} (h : a[i]? = some x) : a.getD i d = x := by
   obtain ⟨hi, hx⟩ := Array.getElem?_eq_some_iff.mp h
   simp [Array.getD, hi, hx]
@@ -355,7 +307,6 @@ theorem checkLayout_spec {types : String → Option CircuitType} {words : String
     cases hn
   · cases h
 
-/-- A generated read layout's check: it is not the unit, and its rows pass `genOk`. -/
 theorem genLayout_spec {types : String → Option CircuitType} {words : String → Option (Array Nat)}
     {ls : Array BlockLayout} {done : Array D} {unit jj : Nat} (h : checkLayout types words ls done unit jj = true)
     {sha : String} {n vb lo : Nat} (hown : (ls.getD jj default).own = .gen sha n vb lo) :
@@ -386,9 +337,6 @@ theorem genOk_facts {words : String → Option (Array Nat)} {d : D} {u : Bool} {
   obtain ⟨⟨⟨⟨⟨⟨⟨hin, hout⟩, hone⟩, hws⟩, hlo⟩, hn⟩, hins⟩, -⟩ := h
   exact ⟨hin, hout, hone, hws, hlo, hn, hins⟩
 
-/-! ## A placed call -/
-
-/-- Layout `jj`'s rows compute its type, at every fuel past its index. -/
 def LayoutSound (types : String → Option CircuitType) (words : String → Option (Array Nat)) (ls : Array BlockLayout)
     (done : Array D) (jj : Nat) : Prop :=
   ∀ u, (ls.getD jj default).type.bind types = some u → ∀ z, SatAt (fullRow words (done.getD jj default)) z →
@@ -415,8 +363,6 @@ theorem readSide_shift (ws : Array Nat) (r : ReadRec) (base c : Nat) :
   simp only [Function.comp]
   omega
 
-/-- **A placed callee's rows, as `placedOk` embeds them**: they hold at its base, its constant is 1 there, and each bound
-input carries the call's input form. -/
 theorem placed_core {words : String → Option (Array Nat)} {k : Chk} {z : ℕ → Bool} (hf : Facts words k z) {sub : D}
     {base : Nat} {ex : List Nat} {wire : Array CF} {vals : List Bool} (hinv : Inv z wire vals) {args : Array Form}
     (hargs : ∀ i (hi : i < args.size), args[i].c ≤ 1) (hone' : Chk.oneAt ⟨sub, false⟩ sub.const = true)
@@ -430,7 +376,6 @@ theorem placed_core {words : String → Option (Array Nat)} {k : Chk} {z : ℕ �
   obtain ⟨⟨hcb, hbind⟩, hemb⟩ := hp
   have hcb1 : z (base + sub.const) = true := hf.one _ hcb
   refine ⟨?_, by rw [Nat.add_comm]; exact hcb1, ?_⟩
-  -- the callee's rows hold at its base
   · intro c r hr
     have hrows : ∃ p, sub.rows[c]? = some p := by
       unfold fullRow at hr
@@ -472,7 +417,6 @@ theorem placed_core {words : String → Option (Array Nat)} {k : Chk} {z : ℕ �
         rw [Nat.add_comm, hf.row _ _ hrow]
         simp only [shiftRow, xorSum_map]
         rfl
-  -- its inputs carry the call's input forms
   · intro i hi
     have hbi := hbind i (by omega)
     have hgi : args.getD i default = args[i] := by simp [Array.getD, hi]
@@ -517,8 +461,6 @@ theorem placed_sound {types : String → Option CircuitType} {words : String →
     exact congrArg (fun l => List.getD l o false) (evalT_congr types words F u fun i hi => hx i (by omega))
   · rw [ite_eq_right ho, ite_eq_right (by omega)]
     rfl
-
-/-! ## S3c-2: reads. The decoder -/
 
 theorem bitsIdx_append : ∀ (l m : List Bool), bitsIdx (l ++ m) = bitsIdx l + 2 ^ l.length * bitsIdx m
   | [], m => by simp [bitsIdx]
@@ -691,9 +633,6 @@ theorem chkDecode_spec (words : String → Option (Array Nat)) (k : Chk) (z : �
             bitsIdx_append]
           simp [hlsz, Nat.min_eq_left (Nat.le_of_lt hh2)]
 
-/-! ## S3c-2: reads. One-hot sums -/
-
-/-- The XOR of a one-hot family over a list without repeats is whether the hot index is in the list. -/
 theorem xorSum_onehot {v : ℕ → Bool} {x : Nat} (hv : ∀ l, v l = decide (x = l)) :
     ∀ L : List Nat, L.Nodup → Verity.Boolean.xorSum L v = decide (x ∈ L)
   | [], _ => by simp [Verity.Boolean.xorSum]
@@ -705,7 +644,6 @@ theorem xorSum_onehot {v : ℕ → Bool} {x : Nat} (hv : ∀ l, v l = decide (x 
       simp [this]
     · simp [hxa]
 
-/-- The XOR over `h < m` of `[x = h] ∧ q h` is `q x` when `x < m`. -/
 theorem xorSum_select {x m : Nat} (hx : x < m) (q : ℕ → Bool) :
     Verity.Boolean.xorSum (List.range m) (fun h => decide (x = h) && q h) = q x := by
   have key : ∀ L : List Nat, L.Nodup → Verity.Boolean.xorSum L (fun h => decide (x = h) && q h) = (decide (x ∈ L) && q x) := by
@@ -722,8 +660,6 @@ theorem xorSum_select {x m : Nat} (hx : x < m) (q : ℕ → Bool) :
       · simp [hxa]
   rw [key _ List.nodup_range]
   simp [hx]
-
-/-! ## S3c-2: reads. Product and output rows -/
 
 theorem prodRows_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ → Bool) (hf : Facts words k z)
     (rec : ReadRec) (hiM : Array CF) (nh : Nat) (hhi : ∀ a, (hiM.getD a ([], 0)).2 < 2) :
@@ -811,9 +747,6 @@ theorem outRows_spec (k : Chk) (z : ℕ → Bool) (words : String → Option (Ar
             simpa [Nat.add_assoc, Nat.add_comm 1 m] using this
       · cases ho
 
-/-! ## S3c-2: reads. The table-direct side -/
-
-/-- The table-direct side's XOR, the low minterms one-hot at `lo`: bit `j` of word `h·2^lo + lo`. -/
 theorem xorSum_readSide (ws : Array Nat) (r : ReadRec) {z : ℕ → Bool} {lo : Nat} (hlo : lo < 2 ^ r.lo)
     (hm : ∀ l, l < 2 ^ r.lo → z (r.loTop + l) = decide (lo = l)) {j h : Nat} (hh : h < 2 ^ (r.n - r.lo)) :
     Verity.Boolean.xorSum (readSide ws r (r.prod0 + j * 2 ^ (r.n - r.lo) + h)) z =
@@ -835,7 +768,6 @@ theorem xorSum_readSide (ws : Array Nat) (r : ReadRec) {z : ℕ → Bool} {lo : 
     · simp [hm l hl, show ¬ 2 ^ r.lo ≤ l by omega]
     · have : lo ≠ l := by omega
       simp [this, show 2 ^ r.lo ≤ l by omega]
-  -- only indices below 2^lo appear, where the family is one-hot at lo
   have hsub : ∀ l ∈ (List.range (2 ^ r.lo)).filter
       (fun l => (ws.getD (h * 2 ^ r.lo + l) 0).testBit j), (z ∘ (r.loTop + ·)) l = decide (lo = l) := by
     intro l hl
@@ -845,7 +777,6 @@ theorem xorSum_readSide (ws : Array Nat) (r : ReadRec) {z : ℕ → Bool} {lo : 
   rw [xorSum_onehot (v := fun l => decide (lo = l)) (fun _ => rfl) _ (List.nodup_range.filter _)]
   simp [List.mem_filter, hlo]
 
-/-- An output row's side: the XOR over the high minterms `h` of bit `j`'s product rows, one-hot at `hi`. -/
 theorem xorSum_outRow (r : ReadRec) {z : ℕ → Bool} (j : Nat) (q : ℕ → Bool) {hi : Nat}
     (hhi : hi < 2 ^ (r.n - r.lo))
     (hp : ∀ h < 2 ^ (r.n - r.lo), z (r.prod0 + j * 2 ^ (r.n - r.lo) + h) = (decide (hi = h) && q h)) :
@@ -854,8 +785,6 @@ theorem xorSum_outRow (r : ReadRec) {z : ℕ → Bool} (j : Nat) (q : ℕ → Bo
   refine (Verity.Boolean.xorSum_congr (w := fun h => decide (hi = h) && q h) fun h hh => ?_).trans (xorSum_select hhi q)
   exact hp h (List.mem_range.mp hh)
 
-/-- **A read's product rows**: with its high minterms one-hot at `hiIdx` and its low minterms (its record's columns
-`loTop + l`) one-hot at `loIdx`, bit `j`'s product rows sum to bit `j` of word `loIdx + 2^lo · hiIdx` of the table. -/
 theorem prod_sums (words : String → Option (Array Nat)) (k : Chk) (z : ℕ → Bool) (hf : Facts words k z)
     (rec : ReadRec) (ws : Array Nat) (hws : (words rec.table).getD #[] = ws) {n lo : Nat} (hrn : rec.n = n)
     (hrlo : rec.lo = lo) (loM hiM : Array CF) {loIdx hiIdx : Nat} (hloI : loIdx < 2 ^ lo)
@@ -896,8 +825,6 @@ theorem prod_sums (words : String → Option (Array Nat)) (k : Chk) (z : ℕ →
   rw [hrn, hrlo] at this
   rw [this, Nat.mul_comm hiIdx, Nat.add_comm]
 
-/-- **An inline read's outputs.** If its decoders' minterms are one-hot at `loIdx` and `hiIdx`, the read's product and
-output rows (`readOk`) carry bits `0 … vb − 1` of word `loIdx + 2^lo · hiIdx` of the table. -/
 theorem readOk_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ → Bool) (hf : Facts words k z)
     (sha : String) (n lo vb : Nat) (loM hiM : Array CF) (refs : List Ref) (outs : Array CF) (refs' : List Ref)
     (hn : lo < n) (hsize : ((words sha).getD #[]).size = 2 ^ n) {loIdx hiIdx : Nat} (hloI : loIdx < 2 ^ lo)
@@ -916,7 +843,6 @@ theorem readOk_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ �
     calc loIdx + 2 ^ lo * hiIdx < 2 ^ lo + 2 ^ lo * hiIdx := by omega
       _ = 2 ^ lo * (hiIdx + 1) := by rw [Nat.mul_add, Nat.mul_one, Nat.add_comm]
       _ ≤ 2 ^ lo * 2 ^ (n - lo) := Nat.mul_le_mul_left _ hhiI
-  -- a bit constant across the table is the bit of any word
   have hconst : ∀ j, (∀ i < ws.size, (ws.getD i 0).testBit j = (ws.getD 0 0).testBit j) →
       (ws.getD 0 0).testBit j = (ws.getD (loIdx + 2 ^ lo * hiIdx) 0).testBit j :=
     fun j h => (h _ hidx).symm
@@ -951,8 +877,6 @@ theorem readOk_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ �
         · cases hr
     · cases hr
 
-/-! ## S3c-2b: placed reads -/
-
 theorem genOuts_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ → Bool) (hf : Facts words k z)
     (rec : ReadRec) (ws : Array Nat) (vb kk nh : Nat) (q : ℕ → Bool)
     (hq : ∀ j < kk, Verity.Boolean.xorSum ((List.range nh).map (rec.prod0 + j * nh + ·)) z = q j)
@@ -975,15 +899,12 @@ theorem genOuts_spec (words : String → Option (Array Nat)) (k : Chk) (z : ℕ 
     rw [hf.row _ _ hrow, ← hconst j (by omega) hall]
     cases (ws.getD 0 0).testBit j <;> simp [Verity.Boolean.xorSum, hf.const]
 
-/-- **A generated read layout computes its table**: on column values that satisfy its rows as the verifier folds them,
-with its constant at 1, output bit `o` is bit `o` of the table's word that its input columns `0 … n − 1` index. -/
 theorem genOk_sound (words : String → Option (Array Nat)) (d : D) {sha : String} {n vb lo : Nat}
     (h : genOk words ⟨d, false⟩ sha n vb lo = true) {z : ℕ → Bool} (hz : SatAt (fullRow words d) z)
     (h1 : z d.const = true) :
     ∀ o < vb, z (d.outCols.getD o 0) = (((words sha).getD #[]).getD (bitsIdx ((List.range n).map z)) 0).testBit o := by
   have hf := facts_inner hz h1
   obtain ⟨-, -, -, hws, hlo2, hlon, -⟩ := genOk_facts h
-  -- the index: its low bits, then its high bits
   have hidx : bitsIdx ((List.range n).map z) =
       bitsIdx ((List.range lo).map z) + 2 ^ lo * bitsIdx ((List.range (n - lo)).map fun i => z (lo + i)) := by
     have hn : n = lo + (n - lo) := by omega
@@ -1053,8 +974,6 @@ theorem genOk_sound (words : String → Option (Array Nat)) (d : D) {sha : Strin
             · cases hpr
         · cases hm
 
-/-- **A placed read's outputs**: its segment embeds a generated read layout (`placedOk`, every index bit bound), so its
-output columns carry the table's bits at the index its forms spell. -/
 theorem placed_read_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)}
     {ls : Array BlockLayout} {done : Array D} {unit : Nat} {k : Chk} {z : ℕ → Bool} (hf : Facts words k z)
     {jj base : Nat} {wire : Array CF} {vals : List Bool} (hinv : Inv z wire vals) {idx : Array Form} {sha : String}
@@ -1089,8 +1008,6 @@ theorem placed_read_sound {types : String → Option CircuitType} {words : Strin
     rw [hS o (by omega), hvals]
   · rw [ite_eq_right ho, ite_eq_right (by omega)]
     rfl
-
-/-! ## The walk -/
 
 theorem inv_args {z : ℕ → Bool} {wire : Array CF} {vals : List Bool} (hinv : Inv z wire vals) {args : Array Form}
     {n : Nat} (hsz : args.size = n) (hargs : ∀ i (hi : i < args.size), args[i].c ≤ 1) :
@@ -1225,7 +1142,6 @@ theorem walk_sound {types : String → Option CircuitType} {words : String → O
                 split at h
                 · rename_i outs refs3 hro
                   generalize hlo : (l.reads.getD r default).lo = lo at *
-                  -- the index forms, as columns, carry the index bits
                   have hfs : ∀ b, cfVal z ((idx.map (formOf wire)).getD b ([], 0)) =
                       (idx.toList.map (formVal (vals.getD · false))).getD b false := by
                     intro b
@@ -1270,7 +1186,6 @@ theorem walk_sound {types : String → Option CircuitType} {words : String → O
                   obtain ⟨ro1, ro3⟩ := readOk_spec words k z hf sha n lo vb loM hiM refs2 outs refs3 hlon
                     (by simpa using hws) hloI hhiI (fun l hl => dl3 l (by rw [dl1]; exact hl))
                     (fun h hh => dh3 h (by rw [dh1]; exact hh)) dh2 hro
-                  -- the index the semantics reads is `loIdx + 2^lo · hiIdx`
                   have hindex : bitsIdx (idx.toList.map (formVal (vals.getD · false))) = loIdx + 2 ^ lo * hiIdx := by
                     rw [← hmap]
                     have hsplit := toList_split (idx.map (formOf wire)) lo
@@ -1289,10 +1204,6 @@ theorem walk_sound {types : String → Option CircuitType} {words : String → O
           · cases h
     | bad _ => unfold walk at h; cases h
 
-/-! ## Every layout -/
-
-/-- A checked layout, on column values where its row tests hold: each output column carries the type's output on its
-input columns. -/
 theorem checked_sound {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array BlockLayout}
     {done : Array D} {unit jj : Nat} (hcheck : checkLayout types words ls done unit jj = true) {t : CircuitType}
     (ht : (ls.getD jj default).type.bind types = some t) {z : ℕ → Bool}
@@ -1323,7 +1234,6 @@ theorem checked_sound {types : String → Option CircuitType} {words : String �
   rw [xorSum_cons, xorSum_nil, hc1]
   simp
 
-/-- **Every inner layout's rows compute its type.** -/
 theorem layouts_sound_of {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array BlockLayout}
     {done : Array D} {unit : Nat} (hall : ∀ jj < ls.size, checkLayout types words ls done unit jj = true) :
     ∀ jj < ls.size, jj ≠ unit → LayoutSound types words ls done jj := by
@@ -1335,8 +1245,6 @@ theorem layouts_sound_of {types : String → Option CircuitType} {words : String
   exact checked_sound (hall jj hjj) hu (by rw [hk]; exact facts_inner hz h1)
     (fun jj' hlt hne' => ⟨hall jj' (by omega), ih jj' hlt (by omega) hne'⟩) F hF o ho
 
-/-- **The unit's rows compute its type**: column values that satisfy its rows in the block (Δ applied), with the block's
-constant `one` at 1, carry on each output column the type's output on its input columns. -/
 theorem unit_sound_of {types : String → Option CircuitType} {words : String → Option (Array Nat)} {ls : Array BlockLayout}
     {done : Array D} {unit : Nat} (hall : ∀ jj < ls.size, checkLayout types words ls done unit jj = true)
     (hu : unit < ls.size) {t : CircuitType} (ht : (ls.getD unit default).type.bind types = some t) (one : Nat)
@@ -1391,8 +1299,6 @@ theorem deriveChecked_all {types : String → Option CircuitType} {ls : Array Bl
     (h : deriveChecked types ls info words unit = .ok done) :
     ∀ jj < ls.size, checkLayout types words ls done unit jj = true :=
   (deriveChecked_spec h).1
-
-/-! ## The unit's logical order -/
 
 theorem colSet_go (c : Nat) : ∀ (o : List Nat) (s : Std.HashSet Nat),
     (o.foldl (fun s c => s.insert c) s).contains c = true ↔ (s.contains c = true ∨ c ∈ o)
@@ -1507,10 +1413,6 @@ theorem inputs_self_of {types : String → Option CircuitType} {words : String �
   intro i hi
   exact rowIs_unit words (hins i (by omega)) one
 
-/-- **The unit's rows are in logical order**, as `Rows.compose` reads them. If `deriveChecked` accepts, then for `u` the
-unit's rows and `order done u`: no column repeats; each is one of `u`'s rows; the order starts with `u`'s input columns;
-each row after them reads, besides `one`, only columns before it; and every column outside the order has a zero row or
-none. -/
 theorem order_sound {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) (one : Nat) :
@@ -1540,7 +1442,7 @@ theorem order_sound {types : String → Option CircuitType} {ls : Array BlockLay
     · rename_i x s hf
       have hx : x = c := by simpa using Array.find?_some hf
       exact absurd (hx ▸ hdel _ (Array.mem_of_find?_eq_some hf)) hc
-    · -- no read covers a column outside the order, so the row is the derived one
+    ·
       have hnc : (u.reads.find? (·.covers c)).isNone = true := by
         cases hf : u.reads.find? (·.covers c) with
         | none => rfl
@@ -1550,7 +1452,6 @@ theorem order_sound {types : String → Option CircuitType} {ls : Array BlockLay
       rw [hz c hcs hc] at hp
       exact (Option.some.inj hp).symm
 
-/-- **With `one` past every row, `[one]·[one]` rows are exactly Δ's constant copies.** -/
 theorem blockRow_one_iff {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
@@ -1578,7 +1479,6 @@ theorem blockRow_one_iff {types : String → Option CircuitType} {ls : Array Blo
   have hpre : ∀ ℓ (hℓ : ℓ < (order done u).length), ℓ < u.inCols.size → (order done u)[ℓ] = u.inCols.getD ℓ 0 := by
     intro ℓ hℓ hin'
     simp [order, List.getElem_append_left (by simpa using hin' : ℓ < u.inCols.toList.length), Array.getD, hin']
-  -- a column past every row is in no row the order reads
   have hnot : ∀ ℓ (hℓ : ℓ < (order done u).length), u.inCols.size ≤ ℓ →
       one ∉ readsOf words u (order done u)[ℓ] := by
     intro ℓ hℓ hn hm
@@ -1629,8 +1529,6 @@ theorem blockRow_one_iff {types : String → Option CircuitType} {ls : Array Blo
   · intro h
     simp [blockRow, h]
 
-/-! ## The statements -/
-
 theorem lt_of_type {ls : Array BlockLayout} {types : String → Option CircuitType} {j : ℕ} {t : CircuitType}
     (ht : (ls.getD j default).type.bind types = some t) : j < ls.size := by
   by_contra hj
@@ -1638,9 +1536,6 @@ theorem lt_of_type {ls : Array BlockLayout} {types : String → Option CircuitTy
   rw [this] at ht
   cases ht
 
-/-- **The unit's derived rows compute its type**, over the type DAG. If `deriveChecked` accepts the layouts, column
-values that satisfy the unit's rows as the block holds them (Δ applied), with the block's constant `one` at 1, carry on
-each output column the unit type's output on its input columns. -/
 theorem unit_sound {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
@@ -1651,9 +1546,6 @@ theorem unit_sound {types : String → Option CircuitType} {ls : Array BlockLayo
       (evalT types words F t fun i => z ((done.getD unit default).inCols.getD i 0)).getD o false :=
   unit_sound_of (deriveChecked_all hd) (lt_of_type ht) ht one hz h1 F hF o ho
 
-/-- **Every other layout's derived rows compute its type.** If `deriveChecked` accepts the layouts, column values that
-satisfy layout `j`'s rows as the verifier folds them (a placed or inlined callee's, in its own coordinates), with its
-constant at 1, carry on each output column its type's output on its input columns. -/
 theorem layout_sound {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {j : ℕ} (hj : j ≠ unit) {t : CircuitType}
@@ -1663,7 +1555,6 @@ theorem layout_sound {types : String → Option CircuitType} {ls : Array BlockLa
       (evalT types words F t fun i => z ((done.getD j default).inCols.getD i 0)).getD o false :=
   layouts_sound_of (deriveChecked_all hd) j (lt_of_type ht) hj t ht z hz h1 F hF o ho
 
-/-- **The unit's input rows are self rows** in the block, whatever `one` is. -/
 theorem inputs_self {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {t : CircuitType}
@@ -1673,9 +1564,6 @@ theorem inputs_self {types : String → Option CircuitType} {ls : Array BlockLay
         some ([(done.getD unit default).inCols.getD i 0], [(done.getD unit default).inCols.getD i 0]) :=
   inputs_self_of (deriveChecked_all hd) (lt_of_type ht) ht one
 
-/-! ## Flat types -/
-
-/-- On AND items that read only earlier wires, `runT`'s wire list is `run`'s wire values. -/
 theorem runT_ands (types : String → Option CircuitType) (words : String → Option (Array ℕ))
     (ev : CircuitType → (ℕ → Bool) → List Bool) (t : CircuitType) :
     ∀ (items : List Item) (vals : List Bool) (v : ℕ → Bool),
@@ -1715,8 +1603,6 @@ theorem runT_ands (types : String → Option CircuitType) (words : String → Op
     rw [h2 j (by simp; omega)]
     simp [run]
 
-/-- **A flat type's `evalT` is S2's `eval`**, at any fuel past zero: for a type `flatOk` accepts (AND items over
-earlier wires, output forms over the wires), `Types.Dag`'s statements say what `Types.Flat`'s do. -/
 theorem evalT_flat (types : String → Option CircuitType) (words : String → Option (Array ℕ)) {t : CircuitType}
     (h : Flock.Derive.flatOk t = true) (F : ℕ) (x : ℕ → Bool) : evalT types words (F + 1) t x = eval t x := by
   have hlen : ((List.range t.inBits).map x).length = t.inBits := by simp

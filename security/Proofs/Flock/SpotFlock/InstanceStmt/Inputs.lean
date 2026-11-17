@@ -38,14 +38,8 @@ import all Init.Data.Range.Basic
 import all Init.Data.Int.Repr
 import all Init.Data.Repr
 
-/-! # The two-instance statement's inputs: `Raw.ins` and its reading
-
-`ins_x` walks `Raw.ins` on `rawOf r ls lh H C` to `insX r ls lh H C`: the tags `Tags.circuit`, tree coins for one table,
-the sample `sampleJ` (rebuilt by `norm`, which leaves it as it is), the partition `partObj`, the program's bytes and the
-registered reads `regPorts` (`Registered.ofJson regJ`). At the fixed nets' layouts and a run whose strings are plain,
-`x r` decodes to that `Raw` (`decode_x`), so the verifier reads it as `rX` (`readOf_x`), under the masked tags `tz`
-(`tags_rX`), whose outputs are hidden (`hiddenOf_x`).
--/
+/-! The two-instance statement's inputs, `Raw.ins`, and the verifier's reading of the statement (`ins_x`,
+`readOf_x`). -/
 
 @[expose] public section
 
@@ -61,8 +55,6 @@ open Lean (Json)
 
 set_option maxHeartbeats 100000000 -- the walk below steps through `Raw.ins` and leaves closed checks to the kernel
 set_option maxRecDepth 200000
-
-/-! ## The masked tags -/
 
 theorem bytes_split (ls lh : HmNets.Laid) : bytesOf ls lh =
     ("flock-circuit " ++ "copy16").toByteArray ++ ("\n".toByteArray ++ (("META " ++ metaText).toByteArray ++
@@ -84,8 +76,6 @@ theorem maskLog_bytes (ls lh : HmNets.Laid) : Zk.maskLogOf (bytesOf ls lh) = 14 
     (by rw [drop_meta]; exact parse_meta)]
   exact mask_meta
 
-/-! ## `Raw.ins` -/
-
 theorem byName_t0 : Tags.byName? NAME = some t0 := by kernel_rfl
 theorem plain_t0 : t0.plainLeaves = false := by decide +kernel
 
@@ -94,17 +84,14 @@ theorem part_plain : plain partObj = true := by
   plain_json
 theorem fjnorm_part : FlockSoundness.Discharge.Recursion.ZkServerJson.norm partObj = partObj := by kernel_rfl
 
-/-- **The partition file reads back** to `partObj`. -/
 theorem jsonOf_part (what : String) : jsonOf what (printJson partObj).toUTF8 = .ok partObj :=
   jsonOf_print part_plain fjnorm_part what
 
-/-- The registered reads' ports, as `Registered.ofJson` reads `regJ`. -/
 def regPorts : Array Registered.Port := (Registered.ofJson regJ).toOption.getD #[]
 
 theorem ofJson_reg : Registered.ofJson regJ = .ok regPorts := by kernel_rfl
 
-/-- `Option.mapM` of a file that is there, as `Raw.ins` reads the sample, the partition and the registered reads:
-unfolded, it is a `Functor.map` with a projection at its head, which no rule matches. Its side condition is walked. -/
+/-- Unfolded, `Option.mapM` is a `Functor.map` with a projection at its head, which no rule matches. -/
 theorem optMapM_ok {α β ε : Type} {f : α → Except ε β} {a : α} {b : β} (h : f a = .ok b) :
     (some a).mapM f = .ok (some b) := by
   rw [Option.mapM_some, h]
@@ -112,14 +99,12 @@ theorem optMapM_ok {α β ε : Type} {f : α → Except ε β} {a : α} {b : β}
 
 theorem map_norm_sample : (some sampleJ).map Flock.norm = some sampleJ := congrArg some norm_sample
 
-/-- What the verifier reads of the statement. -/
 def rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : Read :=
   { I := { tags := t0, circuitFile := bytesOf ls lh, publicFile := pubOf r (hexOf H) (hexOf C),
            coins := .tree (Zk.coinSpec (t0.tableNames 1)), count := 1, tables := [], partition := some partObj,
            program := some progBytes, work := none, stratified := none, closure := none },
     zk := true, draw := some sampleJ, publicInputs := none, registered := true }
 
-/-- The statement's inputs: its tags, the registered reads and the reading. -/
 def insX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : Ins :=
   { stmtTags := t0, registered := some regPorts, read := rX r ls lh H C }
 
@@ -136,9 +121,6 @@ theorem tags_rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : Read.tags (r
   rw [maskLog_bytes]
   rfl
 
-/-! ## The verifier's reading of `x r` -/
-
-/-- The statement's inputs at the fixed nets' layouts and the circuit file's two digests. -/
 def ins (r : Run) : Ins := insX r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash
 
 theorem insOf_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : FlockDeploy.insOf true (x r) = some (ins r) :=
@@ -148,7 +130,6 @@ theorem readOf_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
     FlockDeploy.readOf true (x r) = some (ins r).read :=
   (congrArg (Option.map Ins.read) (insOf_x hn hr)).trans rfl
 
-/-- **The statement's outputs are hidden**: it reads under the masked tags of `Tags.circuit`. -/
 theorem hiddenOf_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : SpotFlock.hiddenOf (x r) = true := by
   unfold SpotFlock.hiddenOf
   rw [readOf_x hn hr]

@@ -10,14 +10,7 @@ import Proofs.Flock.VBridge.Algebra.Ligerito
 import Proofs.Flock.VBridge.Algebra.Zerocheck
 import VCVio.Prelude.Core
 
-/-!
-# `verifierRows` reads a record's rounds only through their sizes
-
-`run` (RecAlgebra.lean:532–539) branches on the coins only through how many each round holds: the values it computes
-from them feed `finalWeights` (RecAlgebra.lean:456–496), whose checks read only sizes. So at two records whose rounds
-hold as many coins each, with as many extra claims, `run` succeeds at one exactly when at the other
-(`residualLins_sizes`), and so does `verifierRows` (`verifierRows_sizes`).
--/
+/-! `verifierRows` reads a record's rounds only through their sizes (`verifierRows_sizes`). -/
 
 @[expose] public section
 
@@ -25,7 +18,6 @@ namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
-/-- Two records whose rounds hold as many coins each. -/
 def SameSizes (r r' : Array (Array F128)) : Prop := r.toList.map Array.size = r'.toList.map Array.size
 
 theorem SameSizes.symm {r r' : Array (Array F128)} (h : SameSizes r r') : SameSizes r' r := Eq.symm h
@@ -37,7 +29,6 @@ theorem SameSizes.get {r r' : Array (Array F128)} (h : SameSizes r r') (k : Nat)
     r[k]?.map Array.size = r'[k]?.map Array.size := by
   simpa [List.getElem?_map] using congrArg (·[k]?) h
 
-/-- Two records' rounds of some coins, which `RoundCoins.ofRounds` reads, hold as many coins each when the records' do. -/
 theorem SameSizes.filter {r r' : Array (Array F128)} (h : SameSizes r r') :
     SameSizes (r.filter (·.size ≠ 0)) (r'.filter (·.size ≠ 0)) := by
   have e : ∀ l : List (Array F128), (l.filter (·.size ≠ 0)).map Array.size = (l.map Array.size).filter (· ≠ 0) :=
@@ -79,10 +70,6 @@ theorem cm_bind_of {A B : Type} {x : CM A} {f : A → CM B} {k k₁ : Nat} {src 
   rw [e, h]
   rfl
 
-/-! ## Two runs at two records of one shape -/
-
-/-- `x` at a record and `y` at any record whose rounds have the same sizes: whenever `x` succeeds, `y` does, with as
-many coins flipped and related results. -/
 def RF {A B : Type} (R : A → B → Prop) (x : CM A) (y : CM B) : Prop :=
   ∀ r r', SameSizes r r' → ∀ k a j, x k (RoundCoins.ofRounds r) = .ok (a, j) →
     ∃ b, y k (RoundCoins.ofRounds r') = .ok (b, j) ∧ R a b
@@ -160,15 +147,10 @@ theorem coinK2_rf : RF (fun _ _ => True) coinK2 coinK2 := by
   unfold coinK2
   exact RF.bind (coinVec_rf 2) fun _ _ _ => RF.pure' trivial
 
-/-! ## Ligerito's state at two records -/
-
-/-- Two OOD contexts of one dimension and split. -/
 def OodSz (o o' : OodCtx) : Prop := o.z.size = o'.z.size ∧ o.split = o'.split
 
-/-- Two consistency contexts of one width and level. -/
 def ConsSz (c c' : ConsCtx) : Prop := c.cols = c'.cols ∧ c.start = c'.start
 
-/-- Two Ligerito states alike: as many messages and OOD values read, contexts of one shape. -/
 structure SF (st st' : LSt Lin) : Prop where
   msg : st.msg = st'.msg
   ood : st.ood = st'.ood
@@ -188,8 +170,6 @@ theorem SF.conss' {st st' : LSt Lin} (h : SF st st') (cols : Nat) (pos pos' : Ar
   simp only [Array.toList_push]
   exact forall₂_append h.conss (.cons ⟨rfl, rfl⟩ .nil)
 
-/-- `x` and `y` from alike states at two records of one shape: whenever `x` succeeds, `y` does, with related results
-and alike states. -/
 def RFL {A B : Type} (R : A → B → Prop) (x : LM Lin A) (y : LM Lin B) : Prop :=
   ∀ st st', SF st st' → RF (fun p p' => R p.1 p'.1 ∧ SF p.2 p'.2) (x st) (y st')
 
@@ -233,8 +213,6 @@ theorem modify' {m m' : LSt Lin → LSt Lin} (hm : ∀ st st', SF st st' → SF 
 
 end RFL
 
-/-! ## `finalWeights` checks sizes only -/
-
 theorem foldlM_of {α β : Type} {f : β → α → Except String β} {P : α → Prop} (hf : ∀ b a, P a → ∃ r, f b a = .ok r) :
     ∀ (l : List α) (b : β), (∀ a ∈ l, P a) → ∃ r, l.foldlM f b = .ok r
   | [], b, _ => ⟨b, rfl⟩
@@ -260,7 +238,6 @@ theorem basis_size (sws : Array Switched) (q : Array F256) (e : Nat) : (basis sw
   rw [← Array.foldl_toList]
   exact foldl_size_const (fun _ _ => by simp) _ _ (by simp)
 
-/-- `finalWeights` returns when its size checks pass (RecAlgebra.lean:456–496). -/
 theorem finalWeights_of {sch : Schedule} {ext : Nat} {initCh : Array F256} {levels : Array (Array F256)}
     {oods : Array OodCtx} {conss : Array ConsCtx} {sws : Array Switched}
     (c1 : (origE initCh levels).size + ext = sch.n)
@@ -350,7 +327,6 @@ theorem forall₂_mem_right {γ δ : Type} {R : γ → δ → Prop} :
     · obtain ⟨a', ha', h'⟩ := forall₂_mem_right h b hb
       exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
 
-/-- `finalWeights` returns on any arguments of the sizes of arguments it returns on. -/
 theorem finalWeights_sizes {sch : Schedule} {ext : Nat} {initCh initCh' : Array F256}
     {levels levels' : Array (Array F256)} {oods oods' : Array OodCtx} {conss conss' : Array ConsCtx}
     {sws sws' : Array Switched} {res : Array F256} (h : finalWeights sch ext initCh levels oods conss sws = .ok res)
@@ -364,8 +340,6 @@ theorem finalWeights_sizes {sch : Schedule} {ext : Nat} {initCh initCh' : Array 
     rw [← hz, hood o hmem, oodFixed_sizes hl hq hs]
   · obtain ⟨cs, hmem, hcols, hst⟩ := forall₂_mem_right hc cs' hc'
     rw [← hcols, ← hst, ← consFixed_sizes hl, hcons cs hmem]
-
-/-! ## `run`'s stages at two records -/
 
 section Run
 
@@ -540,8 +514,6 @@ theorem run_rf (sh : Shape) {extras extras' : Array Claim} (hx : extras.size = e
 
 end Run
 
-/-- **`run` reads a record's rounds only through their sizes**, and the extra claims only through their number
-(RecAlgebra.lean:810–811, 532–539). -/
 theorem residualLins_sizes {sh : Shape} {r r' : Array (Array F128)} {extras extras' : Array Claim}
     {p : Array Lin × Info Lin} (hr : SameSizes r r') (hx : extras.size = extras'.size)
     (h : residualLins sh (RoundCoins.ofRounds r) extras = .ok p) :
@@ -554,9 +526,6 @@ theorem residualLins_sizes {sh : Shape} {r r' : Array (Array F128)} {extras extr
   rw [hp']
   rfl
 
-/-- **`verifierRows` reads a record's rounds only through their sizes** (RecAlgebra.lean:824–829): it returns at a
-record, extra claims and comb exactly when it does at any record whose rounds hold as many coins each, as many extra
-claims and any comb. -/
 theorem verifierRows_sizes {sh : Shape} {r r' : Array (Array F128)} {extras extras' : Array Claim}
     {comb comb' : Array F128} (hr : SameSizes r r') (hx : extras.size = extras'.size) :
     (∃ x, verifierRows sh r extras comb = .ok x) ↔ ∃ x, verifierRows sh r' extras' comb' = .ok x := by

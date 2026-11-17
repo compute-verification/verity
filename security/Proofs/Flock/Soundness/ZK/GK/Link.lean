@@ -13,24 +13,8 @@ import Proofs.Flock.Soundness.ZK.RealLeaves
 import Proofs.Flock.Soundness.ZK.Session
 import VCVio.Prelude.Core
 
-/-!
-# Zero knowledge: Lemmas B and C as Theorem GK's two distances
-
-`Session.adaptive_prefinal_hm96` (Lemma C) bounds, against a deterministic `V*`, every event of the real prover's
-pre-final transcript on one witness by its probability on another plus `2·|L|·δ₁`. `prefinalClose_hm96` reads it as the
-model's `PrefinalClose`: when the model's runs are the prover's runs on randomness `(ω, (y_l)_l)`, a run's view before
-`V*`'s final message being that transcript on the witness (`real`) or the dummy witness (`dummy`), `PrefinalClose` holds
-at `δ_C = 2·|L|·δ₁`, the hiding of `hm96` (`Hm96Hiding`) being the only assumption.
-`Session.session_shvzk_hm96` (Lemma B) bounds, at fixed coins that are non-degenerate for every table, every event of the
-session's view under the real prover by its probability under the tables' `S_shvzk` plus `Σ_j 2·|Hid_j|·δ₁`, both ways.
-`rewindClose_hm96` reads it as the model's `RewindClose`: the coins of a rewind are those `V*` committed to in the first
-run, so the tables are a function of that run (`T ω₀`); when they are non-degenerate for every completed first run, each
-rewind's view is the tuple of the tables' views (the simulator's on fresh dummy openings, hybrid 1's on the real
-witness), and the session has at most `N_hid` hidden leaves, `RewindClose` holds at `δ_B = 2·N_hid·δ₁`.
-`gk_simulate_hm96` is Theorem GK on the keyed coin tree with both distances discharged this way: its cryptographic
-assumptions are `Hm96Hiding` at `δ₁` and `SHA512CRStrict` for the finder, and
-`ε = 3·2|L|δ₁ + 8t·2·N_hid·δ₁ + 3^{-t} + t/M + q²/2^513`.
--/
+/-! Zero knowledge: Theorem GK on the keyed coin tree with Lemmas B and C discharged (`gk_simulate_hm96`), its
+cryptographic assumptions `Hm96Hiding` at `δ₁` and `SHA512CRStrict` for the finder. -/
 
 @[expose] public section
 
@@ -42,7 +26,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
-/-- An `ℝ≥0∞` bound between two probabilities, as reals. -/
 theorem toReal_le_add {a b ε : ℝ≥0∞} (hb : b ≠ ⊤) (hε : ε ≠ ⊤) (h : a ≤ b + ε) : a.toReal ≤ b.toReal + ε.toReal := by
   rw [← ENNReal.toReal_add hb hε]
   exact ENNReal.toReal_mono (ENNReal.add_ne_top.2 ⟨hb, hε⟩) h
@@ -53,11 +36,6 @@ variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [CharP F 2] [AddCommG
   [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B]
   [Fintype Hi] [DecidableEq Hi] {J : ℕ}
 
-/-- **Lemma C is `PrefinalClose`.** In the setting of `Session.adaptive_prefinal_hm96` (the session's tables `T c` at the
-coins `c` opens, the prover `P` given by `msgs` of its leaves, its world-`W₀` form `hI`), for witnesses `w` and `w₀` carrying
-the public region data, and a model whose runs are the prover's runs on `(ω, (y_l)_l)` against `V*`'s responder `Vr`, with
-`V*`'s view before its final message the prover's pre-final transcript on `w` (`hR`) and on `w₀` (`hD`): `PrefinalClose`
-holds at `2·|L|·δ₁`. -/
 theorem prefinalClose_hm96 {V Ωs : Type} [Fintype Ωs] [Nonempty Ωs] {n : ℕ} {Cn M Cc Ω L : Type} [Inhabited M]
     [DecidableEq M] [Fintype Ω] [Nonempty Ω] [Fintype L] [DecidableEq L]
     (T : (Fin n → Cn) → Fin J → Table F K W Salt (B × Salt) D Hi VL)
@@ -107,7 +85,6 @@ theorem prefinalClose_hm96 {V Ωs : Type} [Fintype Ωs] [Nonempty Ωs] {n : ℕ}
 
 end Real
 
-/-- Through a map whose fibers have one size, a uniform average is the average on the target. -/
 theorem avgR_comp_fiber {Ω R : Type} [Fintype Ω] [Nonempty Ω] [Fintype R] (e : Ω → R) {k : ℕ}
     (he : ∀ r, Nat.card {x // e x = r} = k) (f : R → ℝ) : avgR (fun x => f (e x)) = avgR f := by
   classical
@@ -129,13 +106,6 @@ variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B] [Cha
   [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt]
   [Fintype B] [DecidableEq B] [Fintype Hi] [DecidableEq Hi] {J : ℕ}
 
-/-- **Lemma B is `RewindClose`.** A rewind from the completed dummy run `dummy ω₀` keeps the coins `V*` committed to in it,
-so the session's tables there are a function of that run (`T ω₀`, with their hm96 leaves `Mh ω₀`, of one hiding pair
-`(My, cs)`). When they are non-degenerate for every completed first run (`hrank`, `hpad`, `hW`, `hpads`, `hβ`) and the
-witness `w` carries the public region data and satisfies the inner constraints there (`hreg`, `hinner`); the simulator's
-rewind is the tuple of the tables' `S_shvzk` on the dummy witness `w0` (`hS`) and hybrid 1's the tuple of the real
-prover's views on `w` (`hR`), each on randomness read through a map with fibers of one size (`eS`, `eR`); and the
-session has at most `nH` hidden leaves: `RewindClose` holds at `2·nH·δ₁`. -/
 theorem rewindClose_hm96 {V P Ω Ωd Ωs : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ωd] [Nonempty Ωd] [Fintype Ωs]
     [Nonempty Ωs] (m : Model V P Ω Ωd Ωs) (T : Ωd → Fin J → Table F K W Salt (B × Salt) D Hi VL) {C : Type}
     (Mh : ∀ ω₀ j, (T ω₀ j).Hm96 C) (My : Salt → B) (cs : Salt → C) (hMy : ∀ ω₀ j, (Mh ω₀ j).My = My)
@@ -197,13 +167,8 @@ theorem rewindClose_hm96 {V P Ω Ωd Ωs : Type} [Fintype Ω] [Nonempty Ω] [Fin
   rw [eSim, eReal, abs_le]
   constructor <;> linarith
 
-/-- **Theorem GK with Lemmas B and C** (`coin-tree/hm96-sha512/v2`): for a deterministic `V*` (responder `Vr`, keyed coin
-tree `CT`, session nonce `ν`, root and openings read from its view), the simulator's output is within
-`3·2|L|δ₁ + 8t·2·nH·δ₁ + 3^{-t} + t/M + q²/2^513` of `V*`'s real view on every test with values in `[0, 1]`. Its
-cryptographic assumptions are `Hm96Hiding` at `δ₁` (one pair `(My, cs)` for every hm96 leaf) and `SHA512CRStrict` for the
-finder at budget `q`; everything else is a hypothesis about the protocol's runs: Lemma C's setting with the model's
-pre-final views (`hRp`, `hDp`), Lemma B's tables at the coins `coins v₀` of each completed first run (non-degenerate there)
-with the model's rewinds (`hS`, `hR`), the coin conflict `hbad`, and the model's own fields. -/
+/-- Its cryptographic assumptions are `Hm96Hiding` at `δ₁` and `SHA512CRStrict` for the finder at budget `q`;
+everything else is a hypothesis about the protocol's runs. -/
 theorem gk_simulate_hm96 {V Ωs : Type} [Fintype Ωs] [Nonempty Ωs] {n : ℕ} {Cn M C Ω L : Type} [Inhabited M]
     [DecidableEq M] [Fintype Ω] [Nonempty Ω] [Fintype L] [DecidableEq L]
     (Tc : (Fin n → Cn) → Fin J → Table F K W Salt (B × Salt) D Hi VL) (coins : V → Fin n → Cn)

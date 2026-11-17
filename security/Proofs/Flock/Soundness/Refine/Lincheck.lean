@@ -14,18 +14,7 @@ import Proofs.Flock.Soundness.Refine.Exec
 import Proofs.Flock.Soundness.Refine.Plays
 import VCVio.Prelude.Core
 
-/-!
-# The lincheck refines the model's (`Flock.Piop`)
-
-`lincheck_refines`: if the executable's `lincheck` succeeds, on a statement whose circuit fold realizes the model
-statement `S` (`FoldRealizes`) and on the zerocheck's output, the model's `lincheck`, played with the proof's lincheck
-messages (`lcMsgs`) and the coins of the rounds consumed, returns `some ab`, and `ab` is the executable's `ab` claim
-(§11) in the model's field.
-
-After the rounds the executable takes the 64 entries left from the statement (`CircuitFold.folded`), which are the
-column vector halved at each round's challenge (`halve`, `FoldRealizes.folded`); the model folds it after the rounds
-(`foldAll`). `foldl_halve` shows the two agree on the 64 entries left.
--/
+/-! The lincheck refines the model's (`lincheck_refines`). -/
 
 @[expose] public section
 
@@ -35,14 +24,11 @@ open Flock FlockLevel3 Game Transcript
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The column fold -/
-
 theorem fOf_halve (t : F128) (comb : Array F128) (i : ℕ) (hi : i < comb.size / 2) :
     fOf (halve t comb)[i]! = Model.foldTop (fOf t) (comb.size / 2) (fun c => fOf comb[c]!) i := by
   simp only [halve, Model.foldTop]
   rw [getElem!_range_map _ _ i hi, fOf_add, fOf_mul, fOf_add]
 
-/-- `foldAll` over `len` entries reads only the first `len`. -/
 theorem foldAll_congr : ∀ (ts : List 𝔽) (len : ℕ) (v v' : ℕ → 𝔽), (∀ i < len, v i = v' i) →
     ∀ i < len / 2 ^ ts.length, Model.foldAll ts len v i = Model.foldAll ts len v' i
   | [], len, v, v', h, i, hi => by simp only [Model.foldAll]; exact h i (by simpa using hi)
@@ -53,7 +39,6 @@ theorem foldAll_congr : ∀ (ts : List 𝔽) (len : ℕ) (v v' : ℕ → 𝔽), 
         rw [h j (by omega), h (j + len / 2) (by omega)]
       · rwa [List.length_cons, pow_succ', ← Nat.div_div_eq_div_mul] at hi
 
-/-- **The column fold.** Halving at the challenges `ts` in turn gives, on the entries left, the model's `foldAll`. -/
 theorem foldl_halve : ∀ (ts : List F128) (comb : Array F128), ∀ i < comb.size / 2 ^ ts.length,
     fOf (ts.foldl (fun c t => halve t c) comb)[i]! =
       Model.foldAll (ts.map fOf) comb.size (fun c => fOf comb[c]!) i
@@ -66,9 +51,6 @@ theorem foldl_halve : ∀ (ts : List F128) (comb : Array F128), ∀ i < comb.siz
       refine foldAll_congr (ts.map fOf) (comb.size / 2) _ _ (fun j hj => fOf_halve t comb j hj) i ?_
       rw [List.length_map]; rwa [halve_size] at hi'
 
-/-! ## The rounds -/
-
-/-- One lincheck round (L3) as the executable computes it, on the claim and the challenges so far. -/
 def lStep (rounds : Array (F128 × F128)) (j : ℕ) (s : F128 × Array F128) (c : Array F128) : F128 × Array F128 :=
   let q := rounds[j]!
   let t := c.getD 0 0
@@ -92,15 +74,12 @@ theorem lStep_ts_get (s : Array F128) (l : List F128) (j : ℕ) (hj : j < l.leng
   rw [getElem!_pos _ _ (by simp; omega), Array.getElem_append_right (by omega)]
   simp
 
-/-- The model's lincheck round on the words of `lStep`. -/
 theorem lincheck_round_step (rounds : Array (F128 × F128)) (a : ℕ) (s : F128 × Array F128) (c : Array F128) :
     (pairOf rounds[a]!).2 * fOf c[0]! ^ 2 +
         (fOf s.1 + (pairOf rounds[a]!).1 + (pairOf rounds[a]!).1 + (pairOf rounds[a]!).2) * fOf c[0]! +
         (fOf s.1 + (pairOf rounds[a]!).1) = fOf (lStep rounds a s c).1 := by
   simp only [lStep, pairOf, getElem!_eq_getD c 0, fOf_add, fOf_mul, pow_two, mul_assoc]
 
-/-- **The lincheck rounds.** The model's `lincheckRounds`, fed round `i`'s messages `rounds[i]` and coins `C i`, ends
-with the challenges and the claim of the fold of `lStep`. -/
 theorem lincheckRounds_plays (rounds : Array (F128 × F128)) (C : ℕ → Array F128) :
     ∀ (n a : ℕ) (s : F128 × Array F128), (∀ i ∈ List.range' a n, (C i).size = 1) →
       Plays fOf (Model.lincheckRounds n (fOf s.1))
@@ -152,15 +131,10 @@ theorem ofFn_getElem! (n : ℕ) (a : Array F128) (l : List F128) (h : a = #[] ++
   rw [getElem!_pos _ _ (by simp at h₁ ⊢; omega)]
   simp
 
-/-- The executable's `c` claim is the model's (§11): `(P_c(z), L_s(z), r[6 … m−1])`. -/
 theorem cClaim_rel {m : ℕ} (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 m) (hzc : ZcRel m zc zc') :
     ClaimRel m { value := zc.vC, skip := skipWeights zc.z, x := zc.rRest } (Model.cClaim execArith zc') :=
   ⟨hzc.vc, skipWeights_size _, fun s => by simp only [Model.cClaim, hzc.z]; rfl, hzc.r_size, hzc.r⟩
 
-/-- **The lincheck refines the model's** (`Flock.Piop`). If the executable's lincheck succeeds from `t` to `t'`, on
-a circuit fold realizing `S` and on a zerocheck output that is the model's `zc'`, the model's lincheck on `zc'`, played
-with the proof's lincheck messages and the coins of the rounds consumed, returns the executable's `ab` claim, read in
-the model's field. -/
 theorem lincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
     (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof)
     (t t' : Transcript) (lc : LcOut) (hwf : RoundsWF t.rounds)
@@ -190,10 +164,8 @@ theorem lincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldReali
     have hk6 : 6 ≤ S.kLog := S.hk6
     have hkm : S.kLog ≤ S.m := S.hk
     rw [hkl] at hloop hw
-    -- the circuit's 64 entries: the fold, with `β` at the pin, halved at the rounds' challenges
     obtain ⟨v, hv, hvsz, hwv⟩ := hc.folded _ _ _ _ _ w hw
     rw [hc.pin] at hwv
-    -- the rounds: one round consumed per step
     rw [forIn_range_eq] at hloop
     obtain ⟨hr₅, hk₅, hn₅, hs⟩ := forIn_rounds _ (lStep p.rounds) 1 (by
         intro j st tt b tt' hb
@@ -206,7 +178,6 @@ theorem lincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldReali
         refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_⟩
         rw [← e1, ← e2]
         rfl) (S.kLog - 6) 0 t₃.k _ t₃ t₅ s (by omega) hloop
-    -- the rounds and the counter, in terms of `t`
     have hr₂ : t₂.rounds = t.rounds := by rw [r₂, k₁.2]
     have hk₂ : t₂.k = t.k + 1 := by rw [kk₂, k₁.1]
     have hr₃ : t₃.rounds = t.rounds := by rw [r₃, hr₂]
@@ -235,7 +206,6 @@ theorem lincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldReali
         consumed_succ, consumed_succ, consumed_succ, consumed_eq_map, hcα, hcβ, hcr, hC, k₁.2, k₁.1, hr₂, hk₂,
         hr₃, hk₃, hr₆, hk₆]
       simp
-    -- the loop's output
     set s₀ : F128 × Array F128 := (cα.getD 0 0 * zc.vA + zc.vB + cβ.getD 0 0, #[]) with hs₀
     have htsF := lStep_fold p.rounds C (List.range' 0 (S.kLog - 6)) s₀
     rw [← hs] at htsF
@@ -246,7 +216,6 @@ theorem lincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldReali
     have hs₀sz : (v.modify S.pin.val fun x => x + cβ.getD 0 0).size = 2 ^ S.kLog := by simp [hvsz]
     have hcombFsz : w.size = 64 := eq_of_beq hsize
     have hrho : zc.rho.size = S.m - 6 := hzc.rho_size
-    -- the column vector: the executable's is the model's `comb`
     have hcomb : ∀ col < 2 ^ S.kLog, fOf (v.modify S.pin.val fun x => x + cβ.getD 0 0)[col]! =
         Model.comb execArith S zc'.z (fOf (cα.getD 0 0)) (fOf (cβ.getD 0 0))
           (fun j => zc'.ρ ⟨j.val, by omega⟩) col := by

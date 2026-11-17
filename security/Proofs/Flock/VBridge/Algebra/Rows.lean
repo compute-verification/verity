@@ -9,16 +9,8 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
 import VCVio.Prelude.Core
 
-/-!
-# When `verifierRows` returns
-
-`verifierRows sh rounds extras comb` (RecAlgebra.lean:824–829) builds S from the symbolic residuals at the rep's coins
-and refuses unless it is `structureOf sh`'s, built at coins all zero. `build` reads a residual's elements, in order,
-whether it has a constant, and its products (with their coefficients, which must be 1); the elements' coefficients
-and the constant's value go into v and `kappa`, never into S. So S is the same at two lists of residuals of the same
-skeleton (`Lin.Skel`, `build_skel`), and `verifierRows` returns, with v the coefficient slots then the comb, whenever
-`run` at the rep's coins gives residuals of the zero coins' skeleton (`verifierRows_ok_of_skel`).
--/
+/-! `verifierRows` returns whenever `run` at the rep's coins gives residuals of the zero coins' skeleton
+(`verifierRows_ok_of_skel`). -/
 
 @[expose] public section
 
@@ -26,12 +18,8 @@ namespace Flock.RecAlgebra
 
 open Flock
 
-/-- Two symbolic values with the same elements in the same order, a constant alike present, and the same products. -/
 def Lin.Skel (f f' : Lin) : Prop := f.t.map Prod.fst = f'.t.map Prod.fst ∧ f.c.isSome = f'.c.isSome ∧ f.q = f'.q
 
-/-! ## Two `build` states alike but for v's values and `kappa`'s entries -/
-
-/-- `kappa`'s shape: its entries' sizes. -/
 def kShape (K : Array (Array (Array F128))) : Array (Array Nat) := K.map (·.map Array.size)
 
 theorem amap_modify {α β : Type} {F : α → β} {g : α → α} (hg : ∀ a, F (g a) = F a) (xs : Array α) (i : Nat) :
@@ -57,7 +45,6 @@ theorem kcond_iff (K : Array (Array (Array F128))) (level r l : Nat) :
     getElem!_map_of Array.size rfl K[level]! r
   rw [e1, e2, kShape, Array.size_map, Array.size_map]
 
-/-- Two `build` states alike: the same operands, operand table and v names, as many v values, `kappa` of one shape. -/
 structure BRel (st st' : BSt) : Prop where
   ops : st.ops = st'.ops
   opOf : st.opOf = st'.opOf
@@ -67,8 +54,6 @@ structure BRel (st st' : BSt) : Prop where
 
 theorem BRel.refl (st : BSt) : BRel st st := ⟨rfl, rfl, rfl, rfl, rfl⟩
 
-/-- `y` is `x` at an alike state: whenever `x` succeeds, `y` succeeds from an alike state with a related result and an
-alike state. -/
 def BSim {A B : Type} (R : A → B → Prop) (x : BM A) (y : BM B) : Prop :=
   ∀ st st' a st₁, BRel st st' → x st = .ok (a, st₁) → ∃ b st₁', y st' = .ok (b, st₁') ∧ R a b ∧ BRel st₁ st₁'
 
@@ -131,8 +116,6 @@ theorem ite_iff {R : A → B → Prop} {c c' : Prop} [Decidable c] [Decidable c'
 
 end BSim
 
-/-! ## `build`'s passes at alike states -/
-
 theorem filter_keys {p : Key × F128 → Bool} (hp : ∀ a b : Key × F128, a.1 = b.1 → p a = p b) :
     ∀ {l l' : List (Key × F128)}, l.map Prod.fst = l'.map Prod.fst →
       (l.filter p).map Prod.fst = (l'.filter p).map Prod.fst
@@ -172,7 +155,6 @@ theorem mapM_keys {g : Key × F128 → Except String (Nat × (Key × F128))}
   | [], _ :: _, _, h, _ => by simp at h
   | _ :: _, [], _, h, _ => by simp at h
 
-/-- Sorting by an order of the elements keeps two lists' elements alike. -/
 theorem sortBy_keys {o : Key × F128 → Except String Nat} (ho : ∀ x x' : Key × F128, x.1 = x'.1 → o x = o x')
     {xs xs' ys : List (Key × F128)} (h : xs.map Prod.fst = xs'.map Prod.fst) (hs : sortBy o xs = .ok ys) :
     ∃ ys', sortBy o xs' = .ok ys' ∧ ys.map Prod.fst = ys'.map Prod.fst := by
@@ -327,7 +309,6 @@ theorem slots_skel {fs fs' : List Lin} (hs : List.Forall₂ Lin.Skel fs fs') : f
   | nil => rfl
   | cons hf _ ih => rw [List.map_cons, List.map_cons, slotsOf_skel hf, ih]
 
-/-- `build`'s S at residuals of one skeleton is the same, and `build` succeeds at both or neither. -/
 theorem build_skel {sh : Shape} {lins lins' : Array Lin} {b : Built}
     (hs : List.Forall₂ Lin.Skel lins.toList lins'.toList) (hb : build sh lins = .ok b) :
     ∃ b', build sh lins' = .ok b' ∧ b'.S = b.S := by
@@ -361,9 +342,6 @@ theorem build_skel {sh : Shape} {lins lins' : Array Lin} {b : Built}
       rw [← hrel.vNames, ← hrel.ops, ← hres]
       try rfl
 
-/-- **`verifierRows` returns** when `run` at the rep's coins gives residuals of the skeleton those at coins all zero
-have (the ones `structureOf` builds S from): then its S is `structureOf`'s, and v is the coefficient slots, then the
-comb. -/
 theorem verifierRows_ok_of_skel {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
     {lins₀ lins : Array Lin} {info₀ info : Info Lin} {S : GfS} (hS : structureOf sh = .ok S)
     (hz : residualLins sh RoundCoins.zeros (extrasLike sh) = .ok (lins₀, info₀))

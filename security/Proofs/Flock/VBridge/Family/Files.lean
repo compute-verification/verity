@@ -20,27 +20,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Defs
 
-/-!
-# The family's table files: `HSch`, `HFiles`, `HRuns`
-
-`files` is a proof device: `vbridge_of_family` reads it only through `TableFiles.accepts`, which routes the inner
-transcript through the verifier (`verifyRep`, then `table_refines_plain`). So the files are made from what the
-family already reads, at each history and registration:
-
-* the proof file of rep `r` (`proofOf`) holds the messages w holds (`decoded`, at `F.rep`), the verifier's `final_c`
-  at the rep's coins, the PCS parameters the verifier pins (`pcsParams`) and the level-0 cap and Ligerito openings
-  V*'s layers hold (`cap`, `lig`, parameters of the definition);
-* rep `r`'s stream (`streamRounds`) has one round per coin array of `F.rep`'s rounds (the verifier's coins at `t`), each
-  issuing its coins and retaining the frames `verifyRep` absorbs before it (`frameAt`, `run_of_frames`' frames);
-* the link points are the inner transcript's first coin (`ptsOf`), and both reps' tapes the inner transcript's steps
-  after them (`Steps`).
-
-`hSch_of`, `hFiles_of` and `hRuns_of` prove the three obligations for every family whose `files` is `filesOf`, from
-named `Prop`s, one per fact no check here establishes: the inner statement's setup (`SetupRealizes`), V*'s shape
-(`ShapeIs`), the proof files' encodings (`TableSrc.Encodes`), the inner transcript V*'s layers hold
-(`TableSrc.TranscriptIs`), the rounds' coin counts (`TableSrc.Coins`), the reps' extra claims and combs
-(`TableSrc.ExtrasAre`, `CombFolds`), and the Ligerito openings (`OpenedAll`).
--/
+/-! The family's table files and the obligations `HSch`, `HFiles` and `HRuns` at them (`hSch_of`, `hFiles_of`,
+`hRuns_of`), from named premises no check here establishes. -/
 
 @[expose] public section
 
@@ -57,11 +38,6 @@ local instance lawfulBEqByteArray : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-/-! ## A rep's stream -/
-
-/-- **The bytes round `j` of a rep's stream retains** (`run_of_frames`' frames): the zerocheck's rounds from the
-stream's domain (Piop.lean), the lincheck's from the zerocheck's last messages, one ring switch per claim, the
-batching coins', then the Ligerito rounds' chunks, for `n` extra claims and the batched value `T`. -/
 def frameAt (st : Setup) (sch : Flock.Schedule) (dom : ByteArray) (n : ℕ) (p : Proof) (T : F128) (j : ℕ) :
     List UInt8 :=
   if j = 0 then (Transcript.header 1 0 dom.size ++ Transcript.padded dom).data.toList ++
@@ -86,7 +62,6 @@ def frameAt (st : Setup) (sch : Flock.Schedule) (dom : ByteArray) (n : ℕ) (p :
   else encs ((chunks (ligFrames sch T p.cap p.ligerito)).1.getD
     (j - (3 + (st.m - 6) + 2 + (st.fold.kLog - 6) + 1 + (2 + n) + 1)) [])
 
-/-- **A rep's recorded rounds**: round `j` issues the coins `coins[j]` and retains the bytes `fr j`. -/
 def streamRounds (coins : Array (Array F128)) (fr : ℕ → List UInt8) : Array Round :=
   coins.mapIdx fun j c => { n := c.size, sha := ByteArray.empty, coins := c, bytes := some ⟨(fr j).toArray⟩ }
 
@@ -121,8 +96,6 @@ theorem answers_of_retains' {r : Round} {B : ByteArray} (h : Retains r B.data.to
   have e := answers_of_retains h
   have hB : (⟨B.data.toList.toArray⟩ : ByteArray) = B := by cases B; simp
   rwa [hB] at e
-
-/-! ### `frameAt`'s cases -/
 
 section frames
 
@@ -190,17 +163,11 @@ theorem frameAt_lig {j i : ℕ} (hj : j = 3 + (st.m - 6) + 2 + (st.fold.kLog - 6
 
 end frames
 
-/-! ## The proof files -/
-
-/-- The verifier's `final_c` at a rep (`ZcProofOf.fc`): the zerocheck's `vc` at the rows `verifierRows` gives at the
-rep's coins, evaluated at the values w holds. -/
 def fcOf (sh : Shape) (d : RepData) : F128 :=
   match verifierRows sh d.rounds d.extras d.comb with
   | .ok (_, info, _) => info.zc.vc.eval (valOf sh d.w d.comb d.cons)
   | .error _ => 0
 
-/-- **A rep's proof file**: the messages w holds (`decoded`), the verifier's `final_c`, the PCS parameters `params`,
-the cap, and the Ligerito openings `lig` with w's sumcheck messages, out-of-domain values and `yr`. -/
 def proofOf (sh : Shape) (params : PcsParams) (cap : Array ByteArray) (lig : LigeritoProof) (d : RepData) : Proof :=
   { cap, params,
     zerocheck := ⟨(decoded sh d.w d.comb d.cons).ab, (decoded sh d.w d.comb d.cons).c, (decoded sh d.w d.comb d.cons).zc,
@@ -213,23 +180,15 @@ def proofOf (sh : Shape) (params : PcsParams) (cap : Array ByteArray) (lig : Lig
       oodValues := (decoded sh d.w d.comb d.cons).ood,
       finalProof := { lig.finalProof with yr := (decoded sh d.w d.comb d.cons).yr } } }
 
-/-! ## The table files -/
-
-/-- Rep `r`'s index. -/
 def fin2 (r : ℕ) : Fin 2 := if r = 0 then 0 else 1
 
-/-- Rep `r`'s stream's name, as `verifyRep` looks it up. -/
 def streamName (spec : SessionSpec) (r : ℕ) : String := toString spec.tables[0]! ++ toString "/rep" ++ toString r
 
-/-- The link points `P` of the verifier: arrays whose extra claims (§5) are well formed and realize the model's at
-`pts`. -/
 def PointsOK (st : Setup) (S : Model.Statement) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽)
     (P : Array (Array F128)) : Prop :=
   ∃ e, st.extra P = .ok e ∧ ExtraRealizes st S P (extraClaims S ptLocal mPts pts) ∧
     ∀ j < e.size, e[j]!.skip.size = 64 ∧ e[j]!.x.size = st.m - 6
 
-/-- What the table files are made from: the session's spec, the setup and schedule, V*'s shape, the hidden statement,
-the level-0 cap, each rep's Ligerito openings and each rep's values. -/
 structure TableSrc where
   spec : SessionSpec
   st : Setup
@@ -244,30 +203,23 @@ namespace TableSrc
 
 variable (s : TableSrc)
 
-/-- The link points as the verifier's arrays. -/
 noncomputable def points (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽) : Array (Array F128) :=
   Classical.epsilon (PointsOK s.st s.S ptLocal mPts pts)
 
-/-- The setup's extra claims at the link points. -/
 def extrasAt (P : Array (Array F128)) : Array Claim :=
   match s.st.extra P with
   | .ok e => e
   | .error _ => #[]
 
-/-- Rep `r`'s proof file. -/
 def proofAt (r : Fin 2) : Proof := proofOf s.sh (pcsParams s.st.merkle s.sch) s.cap (s.lig r) (s.d r)
 
-/-- Rep `r`'s proof file, as `TableFiles` indexes it. -/
 def proof (r : ℕ) : Proof := s.proofAt (fin2 r)
 
-/-- Rep `r`'s stream, for `n` extra claims. -/
 def stream (n r : ℕ) : StreamRec :=
   { name := streamName s.spec r, parent := "", label := "", at_ := 0, rootSha := none,
     rounds := streamRounds (s.d (fin2 r)).rounds (frameAt s.st s.sch (s.spec.domain s.spec.tables[0]! r).toUTF8 n
       (s.proof r) (valOf s.sh (s.d (fin2 r)).w (s.d (fin2 r)).comb (s.d (fin2 r)).cons .T)) }
 
-/-- The session record at the link points `P`, for `n` extra claims: the level-0 cap's bytes as the table's `root_B`, and
-both reps' streams. -/
 def sessAt (P : Array (Array F128)) (n : ℕ) : RunRecord where
   rootF := ByteArray.empty
   rootB := #[s.cap.foldl (· ++ ·) ByteArray.empty]
@@ -277,7 +229,6 @@ def sessAt (P : Array (Array F128)) (n : ℕ) : RunRecord where
   streams := #[s.stream n 0, s.stream n 1]
   proofSha := #[]
 
-/-- **The table files at the link points `pts`**, their tapes empty. -/
 noncomputable def filesAt (cls : HClass) (pts : Fin 2 → Fin cls.mPts → 𝔽) : TableFiles cls :=
   { spec := s.spec, st := s.st, sch := s.sch, pts, i := 0,
     extras := s.extrasAt (s.points cls.ptLocal cls.mPts pts),
@@ -293,9 +244,6 @@ section steps
 
 variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) {cls : HClass}
 
-/-- **Both reps' tapes in the inner transcript `tr`** (`TableFiles.Valid`'s last two conjuncts): each a tape of its
-rep's spine with its proof file's messages and its stream's coins, and `tr`'s steps the level-0 cap, the link points,
-the tapes in `tableTape`'s order and the openings. -/
 def Steps (b : TableFiles cls) (S : Model.Statement) (tr : List (List (SMsg T) × ((k : Fin nR) → CT k)))
     (ts : List Game.Step × List Game.Step) : Prop :=
   RepTape b.st S b.sch (extraClaims S cls.ptLocal cls.mPts b.pts).length (b.proof 0) (b.stream 0) ts.1 ∧
@@ -303,7 +251,6 @@ def Steps (b : TableFiles cls) (S : Model.Statement) (tr : List (List (SMsg T) �
     schedSteps T CT 0 tr = .inl ⟨Cap Dig, capDig (b.proof 0).cap⟩ :: .inr ⟨Fin 2 → Fin cls.mPts → 𝔽, b.pts⟩ ::
       tableTape ts.1 ts.2 (opensOf (b.proof 0) (b.proof 1) b.sch, saltsOf (b.proof 0) (b.proof 1) b.sch)
 
-/-- **The link points of the inner transcript `tr`**: its first coin. -/
 noncomputable def ptsOf (tr : List (List (SMsg T) × ((k : Fin nR) → CT k))) : Fin 2 → Fin cls.mPts → 𝔽 :=
   Classical.epsilon fun pts => ∃ a rest,
     schedSteps T CT 0 tr = a :: .inr ⟨Fin 2 → Fin cls.mPts → 𝔽, pts⟩ :: rest
@@ -316,7 +263,6 @@ theorem ptsOf_eq {tr : List (List (SMsg T) × ((k : Fin nR) → CT k))} {pts : F
   have e := (List.cons.inj (List.cons.inj (h.symm.trans h')).2).1
   exact (eq_of_heq (Sigma.mk.inj (Sum.inr.inj e)).2).symm
 
-/-- **The table files of the inner transcript `tr`**: at its link points, with the tapes `Steps` names. -/
 noncomputable def TableSrc.files (s : TableSrc) (tr : List (List (SMsg T) × ((k : Fin nR) → CT k))) :
     TableFiles cls :=
   { s.filesAt cls (ptsOf T CT tr) with
@@ -324,8 +270,6 @@ noncomputable def TableSrc.files (s : TableSrc) (tr : List (List (SMsg T) × ((k
       else (Classical.epsilon (Steps T CT (s.filesAt cls (ptsOf T CT tr)) s.S tr)).2 }
 
 end steps
-
-/-! ## What the files read -/
 
 theorem pcs_beq_self (x : PcsParams) : (x == x) = true := by
   obtain ⟨a, b, c, d, e, f⟩ := x
@@ -349,31 +293,22 @@ theorem proofOf_zc {sh : Shape} {params : PcsParams} {cap : Array ByteArray} {li
       (proofOf sh params cap lig d).zerocheck :=
   ⟨rfl, rfl, rfl, rfl, rfl, by show fcOf sh d = _; unfold fcOf; rw [h]⟩
 
-/-- **The inner statement's setup realizes the hidden statement `S`** (`TableFiles.Valid`'s first five conjuncts and
-`run_of_frames`' dimensions), and at all link points `pts` some point arrays are well formed and realize `S`'s extra
-claims at `pts` (§5). The verifier's setup of the inner circuit establishes it (`Setup.ofCircuit`, Verify.lean:29-32;
-`Refine.Regions`' `extraRealizes` gives the points' half at `ptsOf`'s arrays). -/
+/-- The verifier's setup of the inner circuit establishes it (`Setup.ofCircuit`; `Refine.Regions`' `extraRealizes`
+gives the points' half at `ptsOf`'s arrays). -/
 def SetupRealizes (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (ptLocal mPts : ℕ) : Prop :=
   st.m = S.m ∧ st.kLog = S.kLog ∧ FoldRealizes st.fold S ∧
     st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" ∧
     Flock.fast100 st.m = some sch ∧ 14 ≤ st.m ∧ st.kLog ≤ st.m ∧ st.fold.kLog = st.kLog ∧
     ∀ pts, ∃ P, PointsOK st S ptLocal mPts pts P
 
-/-- **`SetupRealizes`' scheme is the one the recursion's inner statements name**: the executable's plain leaf
-(`Tags.withPlainLeaves`, `leafSchemePlain`), as `Setup.ofCircuit` finds it (`MerkleScheme.find?`). A change to the
-executable's plain leaf fails this theorem rather than leaving G at another leaf. -/
+/-- A change to the executable's plain leaf fails this theorem rather than leaving G at another leaf. -/
 theorem setupRealizes_scheme_of_tags (t : Tags) :
     MerkleScheme.find? (Tags.withPlainLeaves t).merkleLeaf = some (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") :=
   rfl
 
-/-- **V*'s shape is the setup's** (the verifier's gap `vsh`): its `m`, `k_log` and schedule. -/
 def ShapeIs (sh : Shape) (st : Setup) (sch : Flock.Schedule) : Prop :=
   sh.m = st.m ∧ sh.kLog = st.kLog ∧ sh.sched = sch
 
-/-- **A rep's coin counts** (`run_of_frames`' counts, of the rounds `verifyRep`'s program samples, Verify.lean:43-48):
-the zerocheck's rounds sample 6,
-`m - 13`, 1 and then one coin each; the lincheck's, one each; each of the `2 + n` ring switches 7, the batching
-`2 + n`; and the `L` Ligerito rounds follow. -/
 def CoinsShaped (m kLog n L : ℕ) (coins : Array (Array F128)) : Prop :=
   3 + (m - 6) + 2 + (kLog - 6) + 1 + (2 + n) + 1 + L ≤ coins.size ∧
     (coins[0]!).size = 6 ∧ (coins[1]!).size = m - 13 ∧ (coins[2]!).size = 1 ∧
@@ -382,12 +317,10 @@ def CoinsShaped (m kLog n L : ℕ) (coins : Array (Array F128)) : Prop :=
     (∀ k < 2 + n, (coins[3 + (m - 6) + 2 + (kLog - 6) + 1 + k]!).size = 7) ∧
     (coins[3 + (m - 6) + 2 + (kLog - 6) + 1 + (2 + n)]!).size = 2 + n
 
-/-- **The comb port is the lincheck's fold** at the verifier rows' `α`, `β`, weights, `ρ` and points (`hfoldPts`). -/
 def CombFolds (st : Setup) (sh : Shape) (d : RepData) : Prop :=
   ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
     st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts = .ok d.comb
 
-/-- **Every level's openings pass** (`hopen`; Ligerito.lean:148-158) in the proof file `p`. -/
 def OpenedAll (st : Setup) (sch : Flock.Schedule) (sh : Shape) (p : Proof) (d : RepData) : Prop :=
   ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
     ∀ cs ∈ info.lg.conss.toList, RecAlgebra.Opened st.merkle sch p.cap p.ligerito (decoded sh d.w d.comb d.cons) cs
@@ -396,12 +329,9 @@ namespace TableSrc
 
 variable (s : TableSrc)
 
-/-- **Each rep's proof file has bytes** that decode to it at the shape `verifyRep` decodes with (Verify.lean:40-41). -/
 def Encodes : Prop :=
   ∀ r, ∃ b, decodeProof (shapeOf s.st s.sch (2 * s.S.regions.length)) b = .ok (s.proof r)
 
-/-- **Each rep's coin counts** (`CoinsShaped`), for the statement's `2 · |regions|` extra claims and the rep's Ligerito
-rounds, and none of its rounds empty. -/
 def Coins : Prop :=
   ∀ r : Fin 2, CoinsShaped s.st.m s.st.fold.kLog (2 * s.S.regions.length)
     (chunks (ligFrames s.sch (valOf s.sh (s.d r).w (s.d r).comb (s.d r).cons .T) (s.proofAt r).cap
@@ -416,8 +346,6 @@ theorem points_ok {ptLocal mPts : ℕ} (hset : SetupRealizes s.st s.S s.sch ptLo
 
 theorem stream_wf (n r : ℕ) : RoundsWF (s.stream n r).rounds := streamRounds_wf _ _
 
-/-- **Both reps' runs of the table files** (`TableFiles.Runs`), by `run_of_frames`: the stream's rounds issue `F.rep`'s
-coins and retain `frameAt`'s bytes. -/
 theorem runs_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → 𝔽)
     (hset : SetupRealizes s.st s.S s.sch cls.ptLocal cls.mPts) (hsh : ShapeIs s.sh s.st s.sch)
     (hpl : s.sh.holo = false) (halg : ∀ r, AlgebraHolds s.sh (s.d r) ∧ AccHolds s.sh (s.d r))
@@ -535,14 +463,9 @@ section valid
 
 variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) {cls : HClass}
 
-/-- **The inner transcript `tr` is the table files' at some link points** (`Steps`): its first steps the level-0 cap and
-the link points, then both reps' tapes, each of its spine's kinds with the proof file's messages and the stream's
-coins (`F.rep`'s rounds), then the openings. -/
 def TableSrc.TranscriptIs (s : TableSrc) (cls : HClass) (tr : List (List (SMsg T) × ((k : Fin nR) → CT k))) : Prop :=
   ∃ pts ts, Steps T CT (s.filesAt cls pts) s.S tr ts
 
-/-- **Each rep's extra claims are the setup's at `tr`'s link points** (`verifyRep`'s `st.extra sess.points`,
-Verify.lean:38): every well-formed point arrays realizing the statement's claims at `ptsOf tr` give the rep's. -/
 def TableSrc.ExtrasAre (s : TableSrc) (cls : HClass) (tr : List (List (SMsg T) × ((k : Fin nR) → CT k))) : Prop :=
   ∀ (r : Fin 2) P, PointsOK s.st s.S cls.ptLocal cls.mPts (ptsOf T CT tr) P → s.st.extra P = .ok (s.d r).extras
 
@@ -555,8 +478,6 @@ theorem TableSrc.runs (s : TableSrc) (tr : List (List (SMsg T) × ((k : Fin nR) 
     (s.files (cls := cls) T CT tr).Runs :=
   s.runs_filesAt (ptsOf T CT tr) hset hsh hpl halg hxs henc hcoins hcomb hopen
 
-/-- **The table files are valid for the inner transcript `tr`** (`TableFiles.Valid`) once `tr` is theirs at some link
-points (`TranscriptIs`). -/
 theorem TableSrc.valid (s : TableSrc) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
     (tr : List (List (SMsg T) × ((k : Fin nR) → CT k))) (hS : M.toStatement regs = s.S)
     (hset : SetupRealizes s.st s.S s.sch cls.ptLocal cls.mPts) (henc : s.Encodes) (htr : s.TranscriptIs T CT cls tr) :
@@ -605,8 +526,6 @@ theorem TableSrc.valid (s : TableSrc) (regs : List (Region cls.kLog (cls.m - cls
 
 end valid
 
-/-! ## At the family -/
-
 section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
@@ -619,15 +538,12 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂)
 
-/-- What the family's table files are made from at a history and V*'s layers: the session's `spec`, the inner
-statement's setup `st`, the level-0 cap `cap` and the Ligerito openings `lig` V*'s layers hold, and `F.rep`. -/
 def tableSrc (spec : SessionSpec) (st : Reg → L.Ω → Setup)
     (cap : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray)
     (lig : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Fin 2 → LigeritoProof)
     (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) : TableSrc :=
   ⟨spec, st R ω, sch, F.sh, (F.x R ω).toStatement regs, cap l, lig l, F.rep R ω t l⟩
 
-/-- **The family's table files**: `tableSrc`'s, at the inner transcript V*'s layers hold at the rounds' coins. -/
 noncomputable def filesOf (spec : SessionSpec) (st : Reg → L.Ω → Setup)
     (cap : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray)
     (lig : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Fin 2 → LigeritoProof)
@@ -637,8 +553,6 @@ noncomputable def filesOf (spec : SessionSpec) (st : Reg → L.Ω → Setup)
 end VStarFamily
 
 end family
-
-/-! ## The obligations -/
 
 section obligations
 
@@ -655,17 +569,12 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
     (cap : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray)
     (lig : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Fin 2 → LigeritoProof)
 
-/-- `P` at every accepted outer proof's history and layers. -/
 def AtAccepted (P : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Prop) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → P R ω t (layers F.zs dg N k Rw R ω t R₂ τ)
 
-/-- **`hsch`** for a family whose files are `filesOf`'s. -/
 theorem hSch_of (hF : F.files = F.filesOf spec st cap lig) : F.HSch :=
   fun R ω t l => (congrArg (fun f => (f R ω t l).sch) hF).trans rfl
 
-/-- **`hfiles`** for a family whose files are `filesOf`'s: at every accepted outer proof, from the inner statement's
-setup (`SetupRealizes`), the proof files' encodings (`Encodes`) and the inner transcript V*'s layers hold being the
-files' steps at some link points (`Steps`). -/
 theorem hFiles_of (hF : F.files = F.filesOf spec st cap lig)
     (hset : ∀ R ω, SetupRealizes (st R ω) ((F.x R ω).toStatement regs) sch cls.ptLocal cls.mPts)
     (henc : F.AtAccepted dg N k Rw fun R ω t l => (F.tableSrc spec st cap lig R ω t l).Encodes)
@@ -676,10 +585,6 @@ theorem hFiles_of (hF : F.files = F.filesOf spec st cap lig)
   rw [hF]
   exact TableSrc.valid T CT _ regs (F.x R ω) _ rfl (hset R ω) (henc R ω t R₂ τ o hacc) (htr R ω t R₂ τ o hacc)
 
-/-- **`hruns`** for a family whose files are `filesOf`'s: at every accepted outer proof whose reps meet E's
-preconditions, `run_of_frames` at each rep, from the setup (`SetupRealizes`), V*'s shape (`ShapeIs`), the proof files'
-encodings (`Encodes`), the reps' extra claims at the inner transcript's link points (`ExtrasAre`), their coin counts
-(`Coins`), combs (`CombFolds`) and openings (`OpenedAll`). -/
 theorem hRuns_of (hF : F.files = F.filesOf spec st cap lig)
     (hset : ∀ R ω, SetupRealizes (st R ω) ((F.x R ω).toStatement regs) sch cls.ptLocal cls.mPts)
     (hsh : ∀ R ω, ShapeIs F.sh (st R ω) sch)

@@ -3,12 +3,8 @@ module
 public import Proofs.Flock.SpotFlock.RunsAs.Top
 public import Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf
 
-/-!
-# A two-stage run `Run.run` accepts is a play `SpotFlock.V h` accepts, the second stage's hand-off proved
-
-`spotRunAcceptsPlay` with its premise that the second stage's check gives the model's statement check (`RoundTwo`)
-discharged by `RunsAs.RoundTwoOf.stmtOk_of_check` (`runAcceptsPlay`).
--/
+/-! A two-stage run `Run.run` accepts is a play `SpotFlock.V h` accepts, with the premise `RoundTwo` discharged
+(`runAcceptsPlay`). -/
 
 @[expose] public section
 
@@ -18,9 +14,6 @@ open Claims
 open Lean (Json)
 open Round2 (NamesDistinct TwoHolds RecordsHeld RegistersNone)
 
-/-- **A two-stage run `Run.run` accepts is a play `SpotFlock.V h` accepts** (`SpotRunAcceptsPlay`), at every held copy
-that agrees with what the run reads, with the second stage's check giving the model's statement check
-(`stmtOk_of_check`). Its premises are `SpotRunAcceptsPlay`'s but `RoundTwo`. -/
 theorem runAcceptsPlay (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) (h : Held) (H : Msg → Msg)
     (x m₁ m₂ : Msg) (P' : ℕ → Prover Unit)
     (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin) (c₀ : FlockDeploy.Coin)

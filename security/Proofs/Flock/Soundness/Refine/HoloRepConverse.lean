@@ -9,16 +9,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# One rep with hidden units accepts when its stages' checks hold
-
-`holoLincheck_of_checks` is `holoLincheck_refines`' converse on the executable's side, `lincheck_of_checks` with the
-lincheck's end as a holo record has it: `z_partial`'s round issued no coins and answers `z_partial` and a squeeze of
-none, and `r'`'s round issued one and answers `h` and `r'`'s squeeze (`HoloLcAnswered`). The rounds end at
-`dot (comb + h) z_partial` (`RecAlgebra.addH`). `holoProg_of_checks` gives `holoRepProg`'s run from the stages'
-converses, as `prog_of_checks` gives `repProg`'s; `holoLincheck_plays_of_checks` feeds the lincheck's run to
-`holoLincheck_refines`.
--/
+/-! One rep with hidden units accepts when its stages' checks hold (`holoProg_of_checks`). -/
 
 @[expose] public section
 
@@ -28,9 +19,6 @@ open Flock Transcript
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The lincheck's rounds with hidden units answer its frames**: `LcAnswered`'s rounds up to `z_partial`, whose
-round issued no coins and answers `z_partial` and the squeeze of none, then `r'`'s round, which issued one coin and
-answers `h` and `r'`'s squeeze. -/
 structure HoloLcAnswered (t : Transcript) (kLog : ℕ) (p : LincheckProof) (hpart : Array F128) : Prop where
   alpha : OneCoin t.rounds[t.k]! (t.pending.data.toList ++ encs [.label "flock-lincheck-v0".toUTF8, .sq 1 1])
   beta : OneCoin t.rounds[t.k + 1]! (encs [.sq 1 1])
@@ -95,11 +83,6 @@ private theorem lcForIn_range_of {σ : Type} (body : ℕ → σ → TM (ForInSte
 
 end Run
 
-/-- **The lincheck with hidden units accepts when its checks hold** (`holoLincheck_refines`' converse). From a
-transcript `t` whose rounds answer the lincheck's frames with hidden units (`HoloLcAnswered`): when the rounds from
-`α·v_A + v_B + β` end at `dot (comb + h) z_partial` with challenges `ts`, and the circuit fold at `α`, `β`, `ts` is
-`comb` of width 64, `holoLincheckT` returns `w = dot (skipWeights r') z_partial`, `r'` (the first coin of the round
-after `z_partial`'s) and `ts` reversed, having consumed its `k_log − 2` rounds with nothing left pending. -/
 theorem holoLincheck_of_checks (c : CircuitFold) (zc : Flock.ZcOut) (p : LincheckProof) (hpart : Array F128)
     (t : Transcript) (ha : HoloLcAnswered t c.kLog p hpart) {ts comb : Array F128}
     (hfold : (List.range' 0 (c.kLog - 6)).foldl (fun s j => lStep p.rounds j s (t.rounds[t.k + 2 + j]!).coins)
@@ -147,10 +130,6 @@ theorem holoLincheck_of_checks (c : CircuitFold) (zc : Flock.ZcOut) (p : Linchec
   rfl
 
 open Game FlockLevel3 in
-/-- **The lincheck's plays with hidden units from its checks.** Under `holoLincheck_of_checks`' conditions, on a
-circuit fold realizing `S` and a zerocheck output that is the model's `zc'`, the model's `holoLincheck`, played with the
-proof's lincheck messages and `h` on the coins of the rounds up to `z_partial`'s and of `r'`'s, returns the claim
-`holoLincheck_of_checks` hands on, as `ab`, and `h` (`holoLincheck_refines`). -/
 theorem holoLincheck_plays_of_checks (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
     (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof) (hpart : Array F128)
     (t : Transcript) (hwf : RoundsWF t.rounds) (ha : HoloLcAnswered t c.kLog p hpart) {ts comb : Array F128}
@@ -171,12 +150,8 @@ theorem holoLincheck_plays_of_checks (S : Model.Statement) (c : CircuitFold) (hc
   (holoLincheck_refines S c hc zc zc' hzc p hpart t _ _ hwf
     (holoLincheck_of_checks c zc p hpart t ha hfold hcomb hsize)).2.2.2
 
-/-- **The rep's program with hidden units returns when its stages' checks hold**: `prog_of_checks` with the lincheck's
-rounds and checks as `holoLincheck_of_checks` takes them, ring switching from round `k₂ = k₁ + 2 + (k_log − 6) + 2`
-(after `z_partial`'s round and `r'`'s), and `r'` the first coin of round `k₁ + 2 + (k_log − 6) + 1`. -/
 theorem holoProg_of_checks (st : Setup) (sch : Flock.Schedule) (p : Proof) (hpart : Array F128)
     (extras : Array Claim) (t : Transcript) (hm : 14 ≤ st.m)
-    -- the zerocheck, from `t`
     (hn₀ : (t.rounds[t.k]!).n = 6) (hn₁ : (t.rounds[t.k + 1]!).n = st.m - 13) (hn₂ : (t.rounds[t.k + 2]!).n = 1)
     (hnr : ∀ i < st.m - 6, (t.rounds[t.k + 3 + i]!).n = 1)
     (ha₀ : RecAlgebra.AnswersL (t.rounds[t.k]!) (t.pending.data.toList ++ encs [.label "flock-r1cs-v0".toUTF8,
@@ -192,7 +167,6 @@ theorem holoProg_of_checks (st : Setup) (sch : Flock.Schedule) (p : Proof) (hpar
     (hpc : dot (lagrange nodesL den6Inv z) p.zerocheck.round1c = p.zerocheck.finalC)
     (hfold : RecAlgebra.zcFold r p.zerocheck C (st.m - 6) (RecAlgebra.zcStart p.zerocheck z) =
       (p.zerocheck.finalA * p.zerocheck.finalB, rho))
-    -- the lincheck, from round `k₁`
     {k₁ : ℕ} (hk₁ : k₁ = t.k + 3 + (st.m - 6))
     (hlc : HoloLcAnswered ⟨t.rounds, k₁, ⟨(encs [.one p.zerocheck.finalA, .one p.zerocheck.finalB]).toArray⟩⟩
       st.fold.kLog p.lincheck hpart)
@@ -205,7 +179,6 @@ theorem holoProg_of_checks (st : Setup) (sch : Flock.Schedule) (p : Proof) (hpar
     (hcomb : st.fold.folded ((t.rounds[k₁]!).coins.getD 0 0) ((t.rounds[k₁ + 1]!).coins.getD 0 0) (skipWeights z)
       (rho.extract 0 (st.fold.kLog - 6)) ts = .ok comb)
     (hsize : comb.size = 64)
-    -- ring switching, from round `k₂`
     {k₂ : ℕ} (hk₂ : k₂ = k₁ + 2 + (st.fold.kLog - 6) + 2)
     {claims : Array Claim}
     (hcl : claims = Flock.abcClaims st.m st.kLog (zcOf p.zerocheck r z rho)
@@ -215,7 +188,6 @@ theorem holoProg_of_checks (st : Setup) (sch : Flock.Schedule) (p : Proof) (hpar
       p.ringSwitches[k]!.size = 128 ∧ claims[k]!.skip.size = 64 ∧ claims[k]!.x.size = st.m - 6)
     (hval : ∀ k < claims.size, dot (wOf claims[k]!) p.ringSwitches[k]! = claims[k]!.value)
     (hR : RsRounds ⟨t.rounds, k₂, ByteArray.empty⟩ p.ringSwitches claims.size rpp gamma)
-    -- Ligerito, from round `k₂ + n + 1`
     {t₄ : Transcript}
     (hlg : Flock.ligerito st.merkle sch (rsT claims p.ringSwitches rpp gamma) p.cap p.ligerito
       (Flock.basis (rsSws claims rpp gamma)) ⟨t.rounds, k₂ + claims.size + 1, ByteArray.empty⟩ = .ok ((), t₄)) :

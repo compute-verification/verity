@@ -8,23 +8,8 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Algebra.Zerocheck
 import VCVio.Prelude.Core
 
-/-!
-# The verifier's Ligerito runs where V*'s does
-
-The converse of `Refine.ligerito_refines`' premise: when V*'s Ligerito up to its final check (`ligeritoRun`) succeeds on
-the rounds `c`, its final check passes (`FinalOK`), the proof carries V*'s messages, the Merkle check of every level
-it queried passes and the levels' consistency sums are the openings' (`Opened`), then the verifier's `Flock.ligerito`
-(Ligerito.lean:165–277) returns `.ok` on every record whose rounds are `c`'s and retained the bytes the verifier frames
-before each coin (`Fits`, some bytes `F`).
-
-* `RunsT`, `RunsL`: a run of a verifier step on every such record; they compose (`RunsT.bind`, `RunsL.bind`), and each
-  of the transcript's and the Ligerito state's steps runs (`RunsT.squeeze`, `nextMsg_runs`, `queryLevel_runs`, …).
-* `toL`: the verifier's Ligerito state at V*'s, read in K, with its nonce cursors at V*'s counts; `Good`: what the
-  verifier needs of V*'s final state (nonces, and every level's queries pass), which holds of every earlier state (`Le`).
-* One lemma per V* step with the verifier's run beside it: `challenge_conv`, `challenges_conv`, `oodIntro_conv`,
-  `vquery`, `vqueryFold`; the level loop (`loop_runs`); `ligerito_of_run`, and `ligerito_refines_of_run`, which feeds
-  it to `Refine.ligerito_refines`.
--/
+/-! The verifier's `Flock.ligerito` returns `.ok` where V*'s Ligerito run and final check succeed, on every record
+whose rounds are V*'s (`ligerito_of_run`). -/
 
 @[expose] public section
 
@@ -32,14 +17,9 @@ namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine Transcript
 
-/-! ## Runs of the verifier on V*'s rounds -/
-
-/-- The record's rounds `k, …, k' − 1` are V*'s rounds `c`, round `j` retaining the bytes `F j`. -/
 def Fits (c : Array (Array F128)) (F : ℕ → ByteArray) (rs : Array Round) (k k' : ℕ) : Prop :=
   ∀ j, k ≤ j → j < k' → ∃ r, rs[j]? = some r ∧ r.n = (c[j]!).size ∧ r.coins = c[j]! ∧ r.bytes = some (F j)
 
-/-- `y` runs from round `k` to round `k'`, returning `b`: from any pending bytes, on every record whose rounds in
-between are V*'s rounds `c` and retained some bytes `F`, which depend on the pending bytes only. -/
 def RunsT {β : Type} (c : Array (Array F128)) (y : TM β) (k k' : ℕ) (b : β) : Prop :=
   k ≤ k' ∧ ∀ P : ByteArray, ∃ (P' : ByteArray) (F : ℕ → ByteArray),
     ∀ rs, Fits c F rs k k' → y ⟨rs, k, P⟩ = .ok (b, ⟨rs, k', P'⟩)
@@ -91,8 +71,6 @@ theorem RunsT.absorbBytes {k : ℕ} (b : ByteArray) : RunsT c (Transcript.absorb
 theorem RunsT.pow {k : ℕ} (n : UInt64) : RunsT c (Transcript.pow n) k k () :=
   RunsT.absorbBytes (le64 n)
 
-/-- A squeeze of `n ≠ 0` coins at round `k` returns V*'s round `k`, when it has `n` coins: the round retained the
-pending bytes and the squeeze's header. -/
 theorem RunsT.squeeze {kind : UInt8} {n k : ℕ} (hn : n ≠ 0) (hc : (c[k]!).size = n) :
     RunsT c (Transcript.squeeze kind n) k (k + 1) (c[k]!) := by
   refine ⟨Nat.le_succ k, fun P => ⟨ByteArray.empty, fun _ => P ++ header 4 kind n, fun rs hrs => ?_⟩⟩
@@ -117,7 +95,6 @@ theorem RunsT.sampleK {k : ℕ} (hc : (c[k]!).size = 2) :
     RunsT c Transcript.sampleK k (k + 1) (⟨(c[k]!).getD 0 0, (c[k]!).getD 1 0⟩ : F256) :=
   RunsT.bind (RunsT.squeeze (by decide) hc) (RunsT.pure _)
 
-/-- A run of a step of the verifier's Ligerito, from its state `st` to `st'`. -/
 def RunsL {β : Type} (c : Array (Array F128)) (y : Flock.LM β) (st : LState) (k k' : ℕ) (b : β) (st' : LState) : Prop :=
   RunsT c (y st) k k' (b, st')
 
@@ -150,8 +127,6 @@ theorem RunsL.cast {y : Flock.LM β} {st st₁ st₂ : LState} {k k₁ k₂ : �
     (h : RunsL c y st k k₁ b st₁) (hk : k₁ = k₂) (hb : b = b') (hs : st₁ = st₂) : RunsL c y st k k₂ b' st₂ := by
   subst hk hb hs
   exact h
-
-/-! ## The verifier's Ligerito steps -/
 
 theorem nextMsg_runs {p : LigeritoProof} {vs : LState} {k : ℕ} {m : F256 × F256}
     (hm : p.messages[vs.msg]? = some m) : RunsL c (Flock.nextMsg p) vs k k m { vs with msg := vs.msg + 1 } := by
@@ -237,8 +212,6 @@ theorem forIn_absorbF_runs : ∀ (ws : List F128) (vs : LState) (k : ℕ),
     rw [List.forIn_cons]
     exact RunsL.bind (RunsL.bind (RunsL.lift (RunsT.absorbF w)) (RunsL.pure _)) (forIn_absorbF_runs ws vs k)
 
-/-! ## V*'s Ligerito steps -/
-
 section VStar
 
 variable {A : Type} {src : RoundCoins}
@@ -323,7 +296,6 @@ end VStar
 -- V*'s rounds hold no round of no coins, so `RoundCoins.ofRounds` reads them as recorded.
 variable [hne : Fact (NoEmpty c)]
 
-/-- A round of the record that V* drew `n` coins from. -/
 theorem ofRounds_round {k n : ℕ} {v : Array F128} (h : (RoundCoins.ofRounds c).round k n = .ok v) :
     c[k]! = v ∧ v.size = n := by
   simp only [RoundCoins.ofRounds, filter_noEmpty hne.out] at h
@@ -378,8 +350,6 @@ theorem vthrow {e : String} {f : α → RecAlgebra.LM F128 β} {st : LSt F128} {
     (h : ((throw e : RecAlgebra.LM F128 α) >>= f) st k (RoundCoins.ofRounds c) = .ok r) : False := by
   cases h
 
-/-! ## V*'s state as the verifier's -/
-
 theorem getElem!_getD {γ : Type} [Inhabited γ] (a : Array γ) (i : ℕ) : a[i]! = a.getD i default := by
   rw [Array.getD_eq_getD_getElem?, getElem!_def]
   cases a[i]? <;> rfl
@@ -388,9 +358,6 @@ theorem eqTableK_size' (r : Array F256) : (eqTableK r).size = 2 ^ r.size := by
   rw [eqTableK_foldl, ← Array.foldl_toList, foldl_eqStepK_size]
   simp
 
-/-- The verifier's Ligerito state at V*'s (Ligerito.lean:74–84): the running sum and round polynomial read in K, V*'s
-cursors and contexts, a query and a consistency nonce read per consistency context (Ligerito.lean:140–142), and a claim
-nonce per OOD value and per consistency context (Ligerito.lean:112–116, 180, 194, 219, 231). -/
 def toL (st : LSt F128) : LState :=
   ⟨kv st.s, polyOf st.q, st.msg, st.ood, st.conss.size, st.conss.size, st.ood + st.conss.size, st.oods, st.conss⟩
 
@@ -407,7 +374,6 @@ theorem msg_of {M : Messages F128} {p : LigeritoProof} (hp : p.messages = M.msgs
   rw [hp, Array.getElem?_map, h]
   rfl
 
-/-- V*'s state grows: OOD values are read and consistency contexts appended. -/
 def Le (st st' : LSt F128) : Prop := st.ood ≤ st'.ood ∧ ∃ more : Array Flock.ConsCtx, st'.conss = st.conss ++ more
 
 theorem Le.refl (st : LSt F128) : Le st st := ⟨le_rfl, #[], by simp⟩
@@ -424,8 +390,6 @@ theorem Le.push {st st' : LSt F128} {x : Flock.ConsCtx} (ho : st.ood ≤ st'.ood
     Le st st' :=
   ⟨ho, #[x], by rw [hc]; apply Array.ext' ; simp⟩
 
-/-- Level `cs.start`'s queries pass (Ligerito.lean:148–158): the rows the proof opens there verify against the level's
-cap at the positions `cs.pos`, and the messages' consistency sums at `cs.alpha` are the rows'. -/
 def Opened (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof) (M : Messages F128)
     (cs : Flock.ConsCtx) : Prop :=
   merkleCheck ms (capAt cap p cs.start) (sch.levels.getD cs.start default).cap (sch.levels.getD cs.start default).d
@@ -435,7 +399,6 @@ def Opened (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p
       (Array.range (2 ^ (sch.levels.getD cs.start default).lanes)).map
         (consAt (openAt p (sch.levels.size - 1) cs.start).1 (sch.levels.getD cs.start default).q cs.alpha)
 
-/-- What the verifier needs of V*'s final state: nonces for every query and claim, and every level's queries pass. -/
 structure Good (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof)
     (M : Messages F128) (st : LSt F128) : Prop where
   qn : st.conss.size ≤ p.queryNonces.size
@@ -458,11 +421,9 @@ theorem Good.opened_push {ms : MerkleScheme} {sch : Flock.Schedule} {cap : Array
     (hc : st.conss = xs.push x) : Opened ms sch cap p M x :=
   g.opened x (by rw [hc]; simp)
 
-/-- V*'s enforced sum of a level's queries (`query`, Structure.lean:394–400). -/
 def qE (M : Messages F128) (i : ℕ) (lv : Flock.Level) (fold : Array F256) (al : Array F128) : KV F128 :=
   kaddAll (((eqTableK fold).zip (M.cons i ((eqTable al).extract 0 lv.q))).toList.map fun fa => kf fa.1 fa.2)
 
-/-- V*'s enforced sum is the verifier's (Ligerito.lean:151–158) when the level's queries pass. -/
 theorem query_e {M : Messages F128} {i : ℕ} {lv : Flock.Level} {fold : Array F256} {al : Array F128}
     {ms : MerkleScheme} {capq : Array ByteArray} {pos : Array ℕ} {rows : Array (Array F128)}
     {sibs salts : Array ByteArray} (hfold : fold.size = lv.lanes)
@@ -474,8 +435,6 @@ theorem query_e {M : Messages F128} {i : ℕ} {lv : Flock.Level} {fold : Array F
   rw [hcons]
   exact kv_e rows lv.q al fold (2 ^ lv.lanes) (by rw [eqTableK_size', hfold]) (fun j hj => hrl j (by omega)) _
     (fun _ _ => rfl)
-
-/-! ## V*'s Ligerito steps, and the verifier's beside them -/
 
 section Conv
 
@@ -623,7 +582,6 @@ theorem levelsLoop_le {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.l
 
 end Conv
 
-/-- V*'s state after the last level's queries (Structure.lean:427–429). -/
 def qPush (st : LSt F128) (b : F128) (e : KV F128) (cs : Flock.ConsCtx) : LSt F128 :=
   { st with s := kadd st.s (fk b e), conss := st.conss.push cs }
 
@@ -631,9 +589,6 @@ omit hne in
 theorem RunsL.run {y : Flock.LM β} {st st' : LState} {k k' : ℕ} {b : β} (h : RunsL c y st k k' b st') :
     RunsT c (y.run st) k k' (b, st') := h
 
-/-- The verifier's level loop (Ligerito.lean:202–233) runs where V*'s (`levelsLoop`) does, given a run of each of its
-iterations from V*'s: `hstep` for a level with a next one, `hlast` for the last; `Inv` relates the loop's variables to
-V*'s split and levels, and `fOut` is the variables the last iteration yields. -/
 theorem loop_runs {M : Messages F128} {p : LigeritoProof} {ms : MerkleScheme} {sch : Flock.Schedule}
     {cap : Array ByteArray} {σ : Type}
     (body : ℕ → σ → Flock.LM (ForInStep σ)) (R : ℕ) (hq : ∀ i ≤ R, (sch.levels.getD i default).q ≠ 0)
@@ -701,11 +656,6 @@ theorem loop_runs {M : Messages F128} {p : LigeritoProof} {ms : MerkleScheme} {s
     exact RunsL.bind hrun (loop_runs body R hq Inv fOut Hf hstep hlast (fuel + 1) (i + 1) s' _ _ _ st₄ k₄ out st' k'
       (by omega) (by omega) hinv' h hf hg)
 
-/-- **The verifier's Ligerito runs where V*'s does** (`Refine.ligerito_refines`' premise; Ligerito.lean:165–277). When
-V*'s Ligerito up to its final check succeeds from `T` on the rounds `c` and its final check passes (what
-`ligerito_of_residuals` gives), the proof carries V*'s messages, OOD values and residual, one nonce per query and claim,
-and the commitment's cap, and every level's queries pass (`Opened`), then `Flock.ligerito` returns on every record whose
-rounds `k₀, …, k' − 1` are `c`'s and retained the bytes it frames. -/
 theorem ligerito_of_run {ms : MerkleScheme} {sch : Flock.Schedule} {T : F128} {cap : Array ByteArray}
     {p : LigeritoProof} {M : Messages F128} {sws : Array Switched} {k₀ k' : ℕ} {initCh : Array F256}
     {levels : Array (Array F256)} {ext : ℕ} {stV : LSt F128}
@@ -910,9 +860,6 @@ theorem ligerito_of_run {ms : MerkleScheme} {sch : Flock.Schedule} {T : F128} {c
     finalProg_of_finalOK hfin hyr rfl rfl rfl ⟨by rw [hpo, ← hood]; rfl, hqn.symm, hcn.symm, hcbn.symm⟩⟩⟩
 
 open FlockSoundness FlockSoundness.Model FlockSoundness.Game FlockSoundness.Accounting in
-/-- **The model's plays at V*'s run** (`Refine.ligerito_refines` on `ligerito_of_run`): on every well-formed record whose
-rounds `k₀, …, k' − 1` are `c`'s and retained the bytes the verifier frames, the model's compiled Ligerito, played with
-the proof's messages and those rounds, ends as `ligerito_refines` concludes. -/
 theorem ligerito_refines_of_run {ms : MerkleScheme} {sch : Flock.Schedule} {T : F128} {cap : Array ByteArray}
     {p : LigeritoProof} {M : Messages F128} {sws : Array Switched} {k₀ k' : ℕ} {initCh : Array F256}
     {levels : Array (Array F256)} {ext : ℕ} {stV : LSt F128}

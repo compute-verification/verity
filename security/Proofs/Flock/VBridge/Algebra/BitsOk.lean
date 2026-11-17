@@ -20,15 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.Algebra.Build
 import VCVio.Prelude.Core
 
-/-!
-# The S `structureOf` builds has its `wt` bits below 128
-
-A `wt` term is `atomTerm`'s for a ring switch's transpose `rsT k u` (RecAlgebra.lean:677–679), and `symbolic`'s
-transposes have `u < 128` (RecAlgebra.lean:627). `run` makes no element: renaming the elements is a `Hom`, so `run`'s
-residuals at `symbolic`, renamed by `bump` (which fixes exactly the elements with `u < 128`), are `run`'s at the renamed
-`symbolic`, which is `symbolic` itself. Their elements are fixed by `bump` (`Lin.Good`), and `build` makes its
-operands from them and its added terms of the running sums and v (`structureOf_bitsOk`).
--/
+/-! The S `structureOf` builds has its `wt` bits below 128 (`structureOf_bitsOk`). -/
 
 @[expose] public section
 
@@ -36,14 +28,10 @@ namespace Flock.RecAlgebra
 
 open Flock
 
-/-! ## Renaming the elements -/
-
-/-- An element `run` can read: a transpose's bit is below 128. -/
 def Key.Good : Key → Prop
   | .rsT _ u => u < 128
   | _ => True
 
-/-- Moves the transposes' bits from 128 up by one, fixing exactly the good elements. -/
 def bump : Key → Key
   | .rsT k u => if u < 128 then .rsT k u else .rsT k (u + 1)
   | k => k
@@ -72,7 +60,6 @@ theorem good_of_bump {k : Key} (h : bump k = k) : k.Good := by
       omega
   all_goals trivial
 
-/-- A dict's keys renamed. -/
 def mapK {κ κ' : Type} (G : κ → κ') (l : Terms κ) : Terms κ' := l.map fun kx => (G kx.1, kx.2)
 
 theorem mapK_addAt {κ κ' : Type} [DecidableEq κ] [DecidableEq κ'] {G : κ → κ'} (hG : Function.Injective G)
@@ -103,12 +90,10 @@ theorem pair_inj {g : Key → Key} (hg : Function.Injective g) :
   simp only [Prod.mk.injEq] at h ⊢
   exact ⟨hg h.1, hg h.2⟩
 
-/-- A symbolic value with its elements renamed. -/
 def Lin.ren (g : Key → Key) (f : Lin) : Lin := ⟨mapK g f.t, f.c, mapK (fun ab => (g ab.1, g ab.2)) f.q⟩
 
 theorem ren_var (g : Key → Key) (k : Key) : Lin.ren g (Lin.var k) = Lin.var (g k) := rfl
 
-/-- An injective renaming commutes with `run`'s operations. -/
 theorem ren_hom {g : Key → Key} (hg : Function.Injective g) : Hom (Lin.ren g) where
   zero := rfl
   add := fun a b => by
@@ -130,8 +115,6 @@ theorem ren_hom {g : Key → Key} (hg : Function.Injective g) : Hom (Lin.ren g) 
       · cases h
     · cases h
   cst := fun _ => rfl
-
-/-! ## `run` at `symbolic` makes no element -/
 
 theorem lmap_fixed {α : Type} {F : α → α} : ∀ {l : List α}, (∀ x ∈ l, F x = x) → l.map F = l
   | [], _ => rfl
@@ -160,7 +143,6 @@ theorem ren_vars {n : Nat} {K : Nat → Key} (hK : ∀ i < n, bump (K i) = K i) 
   show Lin.ren bump (Lin.var (K i)) = Lin.var (K i)
   rw [ren_var, hK i hi]
 
-/-- `symbolic`'s elements are good: `bump` fixes them (RecAlgebra.lean:615–634). -/
 theorem symbolic_ren (sh : Shape) : (symbolic sh).map (Lin.ren bump) = symbolic sh := by
   simp only [symbolic, Messages.map, Messages.mk.injEq]
   and_intros
@@ -196,7 +178,6 @@ theorem residualLins_ren {sh : Shape} {coins : RoundCoins} {extras : Array Claim
     simp only [Except.ok.injEq, Prod.mk.injEq] at hs
     exact hs.1.1.symm
 
-/-- A symbolic value whose elements are good. -/
 def Lin.Good (f : Lin) : Prop := (∀ kx ∈ f.t, kx.1.Good) ∧ ∀ abx ∈ f.q, abx.1.1.Good ∧ abx.1.2.Good
 
 theorem good_of_ren {f : Lin} (h : Lin.ren bump f = f) : f.Good := by
@@ -207,9 +188,6 @@ theorem good_of_ren {f : Lin} (h : Lin.ren bump f = f) : f.Good := by
   · exact congrArg (fun p => p.1.1) (fixed_of_map hq abx hab)
   · exact congrArg (fun p => p.1.2) (fixed_of_map hq abx hab)
 
-/-! ## `build` keeps the bits -/
-
-/-- Every operand's `wt` bits are below 128. -/
 def OpsBits (ops : Array (Array Term)) : Prop := ∀ o ∈ ops, ∀ t ∈ o, t.BitOk
 
 theorem OpsBits.push {ops : Array (Array Term)} {op : Array Term} (h : OpsBits ops) (hop : ∀ t ∈ op, t.BitOk) :
@@ -404,8 +382,6 @@ theorem build_bitsOk {sh : Shape} {lins : Array Lin} {b : Built} (hb : build sh 
       have hB' : buildAll sh (2 + sh.claims) comb0 lins.toList 0 { kappa := K } = .ok (res, st) := hB
       exact buildAll_bits lins.toList 0 _ _ _ hB' (fun _ h => by simp at h) hl
 
-/-- The S the verifier's `GfResiduals` reads (`structureOf`, RecAlgebra.lean:818–820) has every `wt` bit below 128,
-so `residuals_toV` reads it as V*'s. -/
 theorem structureOf_bitsOk {sh : Shape} {S : GfS} (h : structureOf sh = .ok S) : S.BitsOk := by
   unfold structureOf at h
   cases hl : residualLins sh RoundCoins.zeros (extrasLike sh) with

@@ -9,14 +9,7 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Refine.Plays
 import VCVio.Prelude.Core
 
-/-!
-# A run of the sparse phase on `RecSparse_v1`'s ports
-
-`sparsePhase_plays`: the model's `sparsePhase` at `execArith`, with L4′'s `h` w's first 64 elements, fed w's messages
-(`phaseMsgs`) and the phase's coins one word each (`phaseCoins`, which is `coinTape cs 0 nc`), ends at `verdictOf`:
-`sparseVerdict` on the messages and coins read through `fOf`, with H2's and H3's claims the folds of `degNext` over
-the rounds (`degFold`).
--/
+/-! A run of the sparse phase on `RecSparse_v1`'s ports ends at `verdictOf` (`sparsePhase_plays`). -/
 
 @[expose] public section
 
@@ -28,12 +21,8 @@ local notation "𝔽" => FlockLevel3.GF128
 
 noncomputable section
 
-/-! ## Rounds and coins -/
-
-/-- Coins `a … a + n − 1` of `cs`, one word each. -/
 def coinTape (cs : Array F128) (a n : ℕ) : List (Array F128) := (List.range' a n).map fun j => #[cs[j]!]
 
-/-- Rounds `a … a + n − 1`'s messages: round `j` sends `msg j`. -/
 def msgTape {k : ℕ} (msg : ℕ → 𝔽 × (Fin k → 𝔽)) (a n : ℕ) : List Msg :=
   (List.range' a n).map fun j => ⟨𝔽 × (Fin k → 𝔽), msg j⟩
 
@@ -51,7 +40,6 @@ theorem msgTape_succ {k : ℕ} (msg : ℕ → 𝔽 × (Fin k → 𝔽)) (a n : �
 theorem getElem!_single (x : F128) : (#[x] : Array F128)[0]! = x := by
   simp
 
-/-- **`sampleFin`'s run**: `n` coins, one word each, read through `fOf`. -/
 theorem sampleFin_plays (cs : Array F128) : ∀ (n a : ℕ),
     Plays fOf (sampleFin (F := 𝔽) n) [] (coinTape cs a n) (fun i => fOf cs[a + i.val]!)
   | 0, a => by
@@ -71,7 +59,6 @@ theorem sampleFin_plays (cs : Array F128) : ∀ (n a : ℕ),
       refine Plays.bind' (ms₂ := []) (cs₂ := []) (sampleFin_plays cs n (a + 1)) ?_ rfl (List.append_nil _).symm
       exact Plays.pure _
 
-/-- **`degRounds`' run**: round `j`'s message `msg j` and coin `cs[o + j]`, from round `a`; the claim is `degFold`. -/
 theorem degRounds_plays (k : ℕ) (msg : ℕ → 𝔽 × (Fin k → 𝔽)) (cs : Array F128) (o : ℕ) :
     ∀ (n a : ℕ) (claim : 𝔽), Plays fOf (degRounds k n claim) (msgTape msg a n) (coinTape cs (o + a) n)
       (fun i => fOf cs[o + a + i.val]!, degFold msg (fun j => fOf cs[o + j]!) a n claim)
@@ -104,37 +91,28 @@ theorem degRounds_plays (k : ℕ) (msg : ℕ → 𝔽 × (Fin k → 𝔽)) (cs :
       refine Plays.bind' (ms₂ := []) (cs₂ := []) ih ?_ (List.append_nil _).symm (List.append_nil _).symm
       exact Plays.pure _
 
-/-! ## The phase -/
-
 variable (sh : SparseShape)
 
-/-- The public values at the coins. -/
 def pubOf (c : SCoins) : SparsePub 𝔽 sh :=
   ⟨fOf c.z, fOf c.alpha, fun i => fOf c.xRest[i.val]!, fun i => fOf c.yRest[i.val]!, fun σ => fOf c.U[σ.val]!⟩
 
-/-- H2's round `j`'s message at `pre<j>`: `(c₀, c₂)`. -/
 def msg2 (w : Array F128) (j : ℕ) : 𝔽 × (Fin 1 → 𝔽) := (fOf w[wPre j]!, fun _ => fOf w[wPre j + 1]!)
 
-/-- H3's round `j`'s message at `sc<j>`: `c₀`, then `c₂ … c_{k+1}`. -/
 def msg3 (w : Array F128) (k j : ℕ) : 𝔽 × (Fin k → 𝔽) :=
   (fOf w[wSc sh j]!, fun i => fOf w[wSc sh j + (i.val + 1)]!)
 
-/-- The planes `u`. -/
 def uOf (w : Array F128) : Fin (2 ^ sh.pLog) → 𝔽 := fun q => fOf w[wU sh + q.val]!
 
-/-- The types' values `vt` (none sent with `T = 1`). -/
 def vtOf (w : Array F128) : Fin (2 ^ sh.tLog) → 𝔽 :=
   if sh.tLog = 0 then fun _ => 0 else fun t => fOf w[wVt sh + t.val]!
 
 def vtTape (w : Array F128) : List Msg :=
   if sh.tLog = 0 then [] else [⟨Fin (2 ^ sh.tLog) → 𝔽, fun t => fOf w[wVt sh + t.val]!⟩]
 
-/-- The phase's messages, in the order the model receives them. -/
 def phaseMsgs (w : Array F128) : List Msg :=
   msgTape (msg2 w) 0 6 ++ ([⟨𝔽, fOf w[wV2]!⟩] ++ (msgTape (msg3 sh w (2 * sh.ell)) 0 sh.nu ++
     (msgTape (msg3 sh w (2 * sh.ell + 1)) sh.nu sh.sLog ++ ([⟨Fin (2 ^ sh.pLog) → 𝔽, uOf sh w⟩] ++ vtTape sh w))))
 
-/-- The phase's coins, in the order the model samples them. -/
 def phaseCoins (cs : Array F128) : List (Array F128) :=
   coinTape cs 0 6 ++ (coinTape cs 6 6 ++ (coinTape cs 12 sh.nu ++ (coinTape cs (12 + sh.nu) sh.sLog ++
     (coinTape cs (12 + nR sh) sh.pLog ++ coinTape cs (12 + nR sh + sh.pLog) sh.tLog))))
@@ -144,14 +122,11 @@ theorem phaseCoins_eq (cs : Array F128) : phaseCoins sh cs = coinTape cs 0 (nc s
   rw [coinTape_add, coinTape_add, coinTape_add, coinTape_add, coinTape_add]
   simp only [Nat.zero_add, show 6 + 6 = 12 by rfl, nR, Nat.add_assoc]
 
-/-- H1's claim at `ζ_c`. -/
 def h1Claim (w cs : Array F128) : 𝔽 :=
   ∑ s : Fin 64, eqAt (fun i : Fin 6 => fOf cs[0 + i.val]!) s.val * fOf w[s.val]!
 
-/-- H3's claim after the entries' rounds. -/
 def c3Of (w cs : Array F128) : 𝔽 := degFold (msg3 sh w (2 * sh.ell)) (fun j => fOf cs[12 + j]!) 0 sh.nu (fOf w[wV2]!)
 
-/-- **Where the run ends**: `sparseVerdict` on w's messages and the coins. -/
 def verdictOf (w : Array F128) (τ : Array ℕ) (c : SCoins) : Option (RegClaim 𝔽 sh) :=
   sparseVerdict execArith sh (pubOf sh c) (fun σ => τ[σ.val]!) (fun i => fOf c.cs[0 + i.val]!)
     (fun i => fOf c.cs[6 + i.val]!) (degFold (msg2 w) (fun j => fOf c.cs[6 + j]!) 0 6 (h1Claim w c.cs))
@@ -160,7 +135,6 @@ def verdictOf (w : Array F128) (τ : Array ℕ) (c : SCoins) : Option (RegClaim 
     (uOf sh w) (fun i => fOf c.cs[12 + nR sh + i.val]!) (vtOf sh w)
     (fun i => fOf c.cs[12 + nR sh + sh.pLog + i.val]!)
 
-/-- **A run of the sparse phase** on `RecSparse_v1`'s messages and coins, to `verdictOf`. -/
 theorem sparsePhase_plays (w : Array F128) (τ : Array ℕ) (c : SCoins) :
     Plays fOf (sparsePhase execArith sh (pubOf sh c) (fun σ => τ[σ.val]!) (fun s => fOf w[s.val]!))
       (phaseMsgs sh w) (phaseCoins sh c.cs) (verdictOf sh w τ c) := by

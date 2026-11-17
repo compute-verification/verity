@@ -6,27 +6,8 @@ import Mathlib.Algebra.CharP.Defs
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Zero knowledge: the Goldreich–Kahan simulator for Flock ZK
-
-The simulator of `backends/flock/live/PROTOCOL.md` §9 (`gk_simulate` in `backends/flock/live/src/bin/flock-circuit.rs`),
-as a finite uniform program (`Rand`). It plays one dummy run, the protocol with a dummy witness, against the verifier `V*`.
-If `V*` does not complete it (it aborts, or its coin openings fail), that view is the output. Otherwise:
-
-* **estimation** (`estimate`): fresh dummy runs until `t` of them complete, at most `M` runs; `N` is the number of runs,
-  so `p̃ = t/N` estimates the completion rate. Reaching the cap first is a failure (`Out.fail`).
-* **rewinding** (`rewinds`): at most `4N = 4t/p̃` runs from the coins `V*` opened in the first run (`rw`, which samples fresh
-  dummy openings for those coins), until one completes, whose view is the output. A rewound run in which `V*` opens a coin
-  differently from the first run (`bad`) is a break of the coin commitment, `Out.bind`; running out of rewinds is
-  `Out.fail`.
-
-`gk` counts the runs of `V*` it plays alongside its outcome. This file proves the loops' sampling designs that the hybrid argument
-(`GK/Theorem.lean`) reads: `estimate_runs` (`q·E[N] ≤ t` at completion rate `q`), `estimate_cap` (`M·Pr[cap] ≤ E[N]`),
-`estimate_abort` (`E[(1 − p)^{4N}] ≤ 3^{-t}` once `(1 − p)^4·(1 + 2q) ≤ 1`), `rewinds_close` (one run's distribution changed by
-`δ` changes `n` rewinds' by at most `n·δ`), `rewinds_couple` (two loops that agree until `bad` differ by at most the
-probability of `bind`) and `ev_rewinds_real` (rewinding with real runs reaches a completed view with probability
-`1 − (1 − p)^n`).
--/
+/-! Zero knowledge: the Goldreich–Kahan simulator for Flock ZK as a finite uniform program (`gk`), and its loops'
+sampling designs. -/
 
 @[expose] public section
 
@@ -45,17 +26,14 @@ namespace Out
 
 variable {V : Type}
 
-/-- A test's value at an outcome: `φ` at a view, `0` at `bind` and `fail`. -/
 def val (φ : V → ℝ) : Out V → ℝ
   | view v => φ v
   | _ => 0
 
-/-- The outcome is `bind` at a pair of views `bad` flags. -/
 def bindBy (bad : V → V → Bool) : Out V → Prop
   | bind v₀ v => bad v₀ v = true
   | _ => False
 
-/-- The finder's output at an outcome: `pick` at `bind`, nothing otherwise. -/
 def pickBy (pick : V → V → Pair) : Out V → Pair
   | bind v₀ v => pick v₀ v
   | _ => none
@@ -74,15 +52,11 @@ end Out
 
 variable {V : Type}
 
-/-- **Estimation**: fresh runs (coin `C`, completed when `comp`) until `k` complete, at most `b` runs. The result is the
-number of runs and whether `k` completed within the cap. -/
 def estimate (C : Type) [Fintype C] [Nonempty C] (comp : C → Bool) : ℕ → ℕ → Rand (ℕ × Bool)
   | _, 0 => .ret (0, true)
   | 0, _ + 1 => .ret (0, false)
   | b + 1, k + 1 => .coin C fun ω => (estimate C comp b (if comp ω then k else k + 1)).map fun r => (r.1 + 1, r.2)
 
-/-- **Rewinding**: at most `n` runs `rw σ` on fresh coins `σ`. A run `bad` flags is `bind` against the first view `v₀`;
-the first completed run is the output; none is `fail`. The count is the number of runs played. -/
 def rewinds (C : Type) [Fintype C] [Nonempty C] (v₀ : V) (rw : C → V) (comp bad : V → Bool) : ℕ → Rand (Out V × ℕ)
   | 0 => .ret (.fail, 0)
   | n + 1 => .coin C fun σ =>
@@ -90,10 +64,8 @@ def rewinds (C : Type) [Fintype C] [Nonempty C] (v₀ : V) (rw : C → V) (comp 
       else if comp (rw σ) then .ret (.view (rw σ), 1)
       else (rewinds C v₀ rw comp bad n).map fun o => (o.1, o.2 + 1)
 
-/-- **The Goldreich–Kahan simulator**, with completion threshold `t` and estimation cap `M`: one dummy run `dummy ω₀`;
-if it completes, the estimation on fresh dummy runs, then at most `4N` rewinds `rw (dummy ω₀)` from it. It reads `V*`
-only through its runs: `dummy`, `rw`, `comp` and `bad` are functions of `V*`'s views and of the simulator's own coins,
-with no witness. -/
+/-- It reads `V*` only through its runs: `dummy`, `rw`, `comp` and `bad` are functions of `V*`'s views and of the
+simulator's own coins, with no witness. -/
 def gk (Cd Cr : Type) [Fintype Cd] [Nonempty Cd] [Fintype Cr] [Nonempty Cr] (dummy : Cd → V) (rw : V → Cr → V)
     (comp : V → Bool) (bad : V → V → Bool) (t M : ℕ) : Rand (Out V × ℕ) :=
   .coin Cd fun ω₀ =>
@@ -103,8 +75,6 @@ def gk (Cd Cr : Type) [Fintype Cd] [Nonempty Cd] [Fintype Cr] [Nonempty Cr] (dum
           (rewinds Cr (dummy ω₀) (rw (dummy ω₀)) comp (bad (dummy ω₀)) (4 * r.1)).map fun o => (o.1, o.2 + 1 + r.1)
         else .ret (.fail, 1 + r.1)
     else .ret (.view (dummy ω₀), 1)
-
-/-! ## Unfolding -/
 
 section Unfold
 
@@ -151,13 +121,10 @@ theorem ev_gk (Cr : Type) [Fintype Cr] [Nonempty Cr] (dummy : C → V) (rw : V �
 
 end Unfold
 
-/-! ## The estimation's sampling designs -/
-
 section Estimate
 
 variable (C : Type) [Fintype C] [Nonempty C] (comp : C → Bool)
 
-/-- The completion rate of one run. -/
 noncomputable def rate : ℝ := avgR (ind fun ω => comp ω = true)
 
 omit [Nonempty C] in
@@ -165,11 +132,9 @@ theorem rate_nonneg : 0 ≤ rate C comp := avgR_nonneg fun ω => ind_nonneg _ ω
 
 theorem rate_le_one : rate C comp ≤ 1 := avgR_le_one fun ω => by unfold ind; split_ifs <;> norm_num
 
-/-- Splitting one run on whether it completes. -/
 theorem avgR_split (a b : ℝ) : (avgR fun ω => if comp ω = true then a else b) = rate C comp * a + (1 - rate C comp) * b :=
   avgR_ite _ a b
 
-/-- The estimation stays within its cap, and fails only at the cap. -/
 theorem estimate_all : ∀ b k : ℕ, Rand.All (fun r : ℕ × Bool => r.1 ≤ b ∧ (r.2 = false → r.1 = b)) (estimate C comp b k)
   | _, 0 => by simp [estimate, Rand.All]
   | 0, k + 1 => by simp [estimate, Rand.All]
@@ -179,7 +144,6 @@ theorem estimate_all : ∀ b k : ℕ, Rand.All (fun r : ℕ × Bool => r.1 ≤ b
       refine Rand.All.map _ (fun r hr => ?_) _ (estimate_all b _)
       exact ⟨Nat.succ_le_succ hr.1, fun h => by rw [hr.2 h]⟩
 
-/-- **`q·E[N] ≤ t`**: at completion rate `q`, the estimation's expected number of runs is at most `t/q`. -/
 theorem estimate_runs : ∀ b k : ℕ, rate C comp * Rand.ev (fun r => (r.1 : ℝ)) (estimate C comp b k) ≤ k
   | _, 0 => by simp [estimate]
   | 0, k + 1 => by simp [estimate]; positivity
@@ -202,7 +166,6 @@ theorem estimate_runs : ∀ b k : ℕ, rate C comp * Rand.ev (fun r => (r.1 : �
       push_cast at h2 a2 ⊢
       nlinarith
 
-/-- **`M·Pr[cap] ≤ E[N]`** (Markov): the estimation fails only after `M` runs. -/
 theorem estimate_cap (b k : ℕ) :
     (b : ℝ) * Rand.ev (fun r => if r.2 = true then 0 else 1) (estimate C comp b k) ≤
       Rand.ev (fun r => (r.1 : ℝ)) (estimate C comp b k) := by
@@ -214,8 +177,6 @@ theorem estimate_cap (b k : ℕ) :
     simp
   · simp
 
-/-- **The rewinds' abort bound**: if `a·(1 + 2q) ≤ 1` at completion rate `q`, then `E[a^N]` over a successful estimation
-is at most `3^{-k}`: the generating function of `k` geometric variables at `a`. -/
 theorem estimate_abort {a : ℝ} (ha : 0 ≤ a) (hq : a * (1 + 2 * rate C comp) ≤ 1) :
     ∀ b k : ℕ, Rand.ev (fun r => if r.2 = true then a ^ r.1 else 0) (estimate C comp b k) ≤ (1 / 3) ^ k
   | _, 0 => by simp [estimate]
@@ -246,11 +207,8 @@ theorem estimate_abort {a : ℝ} (ha : 0 ≤ a) (hq : a * (1 + 2 * rate C comp) 
 
 end Estimate
 
-/-! ## The rewinds' sampling designs -/
-
 section Rewinds
 
-/-- The rewinds stay within their budget. -/
 theorem rewinds_all (C : Type) [Fintype C] [Nonempty C] (v₀ : V) (rw : C → V) (comp bad : V → Bool) :
     ∀ n : ℕ, Rand.All (fun o : Out V × ℕ => o.2 ≤ n) (rewinds C v₀ rw comp bad n)
   | 0 => by simp [rewinds, Rand.All]
@@ -264,7 +222,6 @@ theorem rewinds_all (C : Type) [Fintype C] [Nonempty C] (v₀ : V) (rw : C → V
       · exact Rand.All.map (P := fun o : Out V × ℕ => o.2 ≤ n) (Q := fun o : Out V × ℕ => o.2 ≤ n + 1)
           (fun o => (o.1, o.2 + 1)) (fun o ho => Nat.succ_le_succ ho) _ (rewinds_all C v₀ rw comp bad n)
 
-/-- **One run's distribution changed by `δ` changes `n` rewinds' by at most `n·δ`**, for every test with values in `[0, 1]`. -/
 theorem rewinds_close {C₁ C₂ : Type} [Fintype C₁] [Nonempty C₁] [Fintype C₂] [Nonempty C₂] (v₀ : V) (rw₁ : C₁ → V)
     (rw₂ : C₂ → V) (comp bad : V → Bool) {δ : ℝ}
     (h : ∀ U : V → Prop, |avgR (fun σ => ind U (rw₁ σ)) - avgR (fun σ => ind U (rw₂ σ))| ≤ δ) :
@@ -298,9 +255,6 @@ theorem rewinds_close {C₁ C₂ : Type} [Fintype C₁] [Nonempty C₁] [Fintype
         _ ≤ δ + n * δ := add_le_add step₁ step₂
         _ = (n + 1) * δ := by ring
 
-/-- **Identical until bad**: two rewinding loops on the same coins whose runs agree whenever the first's isn't `bad`, the
-second never checking, differ on every `[0, 1]` test by at most the probability of the first's `bind` (any event `B`
-that holds at the first's `bind` outcomes). -/
 theorem rewinds_couple (C : Type) [Fintype C] [Nonempty C] (v₀ : V) (rw₁ rw₂ : C → V) (comp bad : V → Bool)
     (B : Out V → Prop) (hB : ∀ v, bad v = true → B (.bind v₀ v)) (hc : ∀ σ, bad (rw₁ σ) = false → rw₁ σ = rw₂ σ) :
     ∀ (n : ℕ) (f : Out V × ℕ → ℝ), (∀ x, 0 ≤ f x) → (∀ x, f x ≤ 1) →
@@ -330,8 +284,6 @@ theorem rewinds_couple (C : Type) [Fintype C] [Nonempty C] (v₀ : V) (rw₁ rw�
         · simp [ind_nonneg]
         · exact ih
 
-/-- **Rewinding with real runs**: if `S = p·A`, where `p` is the completion rate of `real` and `S` the average of `φ` on
-its completed runs, then `n` rewinds output a completed view with value `A·(1 − (1 − p)^n)` in expectation. -/
 theorem ev_rewinds_real (C : Type) [Fintype C] [Nonempty C] (v₀ : V) (real : C → V) (comp : V → Bool) (φ : V → ℝ)
     (A : ℝ) (hS : avgR (fun ω => if comp (real ω) = true then φ (real ω) else 0) = rate C (fun ω => comp (real ω)) * A) :
     ∀ n : ℕ, Rand.ev (fun o => Out.val φ o.1) (rewinds C v₀ real comp (fun _ => false) n) =

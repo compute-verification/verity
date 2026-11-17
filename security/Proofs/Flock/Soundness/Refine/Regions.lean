@@ -6,19 +6,8 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.LookupRows
 
-/-!
-# The statement decoding, part 2: the regions are the model's (`Flock.Piop`, `Flock.Statement`)
-
-`regionOf` reads a region of the executable's statement as the model's: its free bits, the fixed bits the executable's
-`regionPoint` sets, and bit `k` of block `b`'s bytes. `ofCircuit_extra`: at two link points of `m_pts` coordinates, the
-extra claims `Setup.ofCircuit st` hands the verifier are the model's `extraClaims` of `stmtOf st` with those regions
-(`ExtraRealizes`). It needs `RegionsWF`: `m = k_log + nbl`, `m_pts = PT_LOCAL + nbl`, and each region's free bits are
-distinct in-block bits, at most `PT_LOCAL` of them.
-
-`verify_refines_ofCircuit` composes this and `ofCircuit_fold` with `verify_refines`: for a verifier set up with
-`Setup.ofCircuit st`, its conclusion holds for `stmtOf st`, with nothing assumed of the fold or the extra claims. The
-record's link points have the configured shape because `Record.decode` checks it (S9, `decode_points`).
--/
+/-! The statement decoding, part 2: the extra claims `Setup.ofCircuit` hands the verifier are the model's
+(`ofCircuit_extra`, `verify_refines_ofCircuit`). -/
 
 @[expose] public section
 
@@ -48,9 +37,6 @@ theorem regionPoint_eq (st : Stmt) (reg : Region) (r : Array F128) :
   simp only [Id.run, bind, pure]
   rw [forIn_id_foldl, forIn_id_foldl]
 
-/-! ### `regionValue` -/
-
-/-- A loop whose steps either throw or yield a pure update: when it returns, no step threw. -/
 theorem list_forIn_guard {α σ : Type} (c : α → Bool) (e : String) (g : α → σ → σ) :
     ∀ (L : List α) (s v : σ), (forIn L s fun a r =>
         if c a = true then (throw e : V (ForInStep σ)) else pure (ForInStep.yield (g a r))) = .ok v →
@@ -73,7 +59,6 @@ theorem forIn_guard {σ : Type} (k : ℕ) (c : ℕ → Bool) (e : String) (g : �
   simp only [Std.Legacy.Range.size, Nat.add_sub_cancel, Nat.div_one, ← List.range_eq_range'] at this
   exact ⟨fun a ha => this.1 a (List.mem_range.2 ha), this.2⟩
 
-/-- The bits of a block's bytes, weighted: `Σ_{i, t : bit t of byte i} wt[8i + t]`. -/
 def bitSum (bytes : ByteArray) (wt : Array F128) : F128 :=
   (List.range bytes.size).foldl (fun s i => (List.range 8).foldl (fun s t =>
     if ((bytes.get! i >>> t.toUInt8) % 2 == 1) = true then s + wt[8 * i + t]! else s) s) 0
@@ -109,8 +94,6 @@ theorem regionValue_ok (st : Stmt) (reg : Region) (r : Array F128) (v : F128) (h
     (fun b acc => acc + (eqTable (r.extract PT_LOCAL (PT_LOCAL + st.nbl)))[b]! *
       bitSum (reg.bytes b) (eqTable (r.extract 0 reg.free.size))) 0 v' hv'
   exact ⟨fun b hb => by simpa using hc b hb, h ▸ hv⟩
-
-/-! ### The regions, as the model's -/
 
 /-- A region of the executable's statement, as the model's (`Flock.Statement`): its free bits, the fixed bits the executable's
 `regionPoint` sets, and bit `k` of block `b`'s bytes. -/
@@ -234,14 +217,11 @@ theorem regionValue_model (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Regi
     simp only [regionOf]
     split_ifs <;> simp
 
-/-! ### `regionPoint` -/
-
 theorem foldl_set!_size (f : ℕ → ℕ) (val : ℕ → F128) : ∀ (L : List ℕ) (p : Array F128),
     (L.foldl (fun p t => p.set! (f t) (val t)) p).size = p.size
   | [], _ => rfl
   | a :: L, p => by rw [List.foldl_cons, foldl_set!_size f val L]; simp [Array.set!]
 
-/-- A write at a distinct index is the last one there. -/
 theorem foldl_set_hit (f : ℕ → ℕ) (val : ℕ → F128) : ∀ (n : ℕ), (∀ a < n, ∀ b < n, f a = f b → a = b) →
     ∀ (p : Array F128) (t : ℕ), t < n → f t < p.size →
       ((List.range n).foldl (fun p t => p.set! (f t) (val t)) p)[f t]! = val t
@@ -254,7 +234,6 @@ theorem foldl_set_hit (f : ℕ → ℕ) (val : ℕ → F128) : ∀ (n : ℕ), (�
       · rw [ite_eq_right (fun h => htn (hinj n (by omega) t ht h).symm)]
         exact foldl_set_hit f val n (fun a ha b hb => hinj a (by omega) b (by omega)) p t (by omega) hf
 
-/-- An index no write reaches keeps its entry. -/
 theorem foldl_set_miss (f : ℕ → ℕ) (val : ℕ → F128) : ∀ (n : ℕ) (p : Array F128) (j : ℕ), j < p.size →
     (∀ t < n, f t ≠ j) → ((List.range n).foldl (fun p t => p.set! (f t) (val t)) p)[j]! = p[j]!
   | 0, _, _, _, _ => rfl
@@ -272,7 +251,6 @@ theorem idxOf?_filterMap_fin (kl j : ℕ) (hj : j < kl) : ∀ (L : List ℕ), (�
       rw [idxOf?_filterMap_fin kl j hj L fun x hx => h x (List.mem_cons_of_mem _ hx)]
       simp only [beq_iff_eq, Fin.mk.injEq]
 
-/-- **The region's point, entry by entry** (`Flock.Statement`): a free bit's link-point coordinate, a fixed bit, or a block bit. -/
 theorem regionPoint_get (st : Stmt) (reg : Region) (r : Array F128) (hm : st.m = st.c.kLog + st.nbl)
     (hw : RegionWF st.c.kLog reg) (j : ℕ) (hj : j < st.m) :
     (st.regionPoint reg r)[j]! =
@@ -335,7 +313,6 @@ theorem model_regionPoint_ge (S : Model.Statement) (R : Model.Region S.kLog S.nb
       if hi : ptLocal + (j - S.kLog) < mPts then rr ⟨ptLocal + (j - S.kLog), hi⟩ else 0 := by
   unfold Model.regionPoint; rw [dite_eq_right hjk]
 
-/-- **The region's point is the model's**, coordinate by coordinate (`Flock.Statement`). -/
 theorem regionPoint_model (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (reg : Region) (hw : RegionWF st.c.kLog reg) (hm : st.m = st.c.kLog + st.nbl) (r : Array F128)
     (j : ℕ) (hj : j < st.m) :
@@ -371,7 +348,6 @@ theorem regionPoint_model (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Regi
 theorem regionPoint_size (st : Stmt) (reg : Region) (r : Array F128) : (st.regionPoint reg r).size = st.m := by
   rw [regionPoint_eq, foldl_set!_size, foldl_set!_size]; simp
 
-/-- The executable's claim of region `reg` at link point `r`, with value `v` (`Stmt.extraClaims`). -/
 def regionClaimOf (st : Stmt) (reg : Region) (r : Array F128) (v : F128) : Flock.Claim :=
   ⟨v, eqTable ((st.regionPoint reg r).extract 0 6), (st.regionPoint reg r).extract 6 (st.regionPoint reg r).size⟩
 
@@ -386,8 +362,6 @@ theorem model_regionClaim_x (S : Model.Statement) (R : Model.Region S.kLog S.nbl
     (Model.regionClaim S R ptLocal mPts rr).x i =
       if h : i.val + 6 < S.m then Model.regionPoint S R ptLocal mPts rr ⟨i.val + 6, h⟩ else 0 := rfl
 
-/-- **One region claim is the model's** (`Flock.Statement`): at a link point of `m_pts` coordinates, the executable's claim of a
-well-formed region is the model's `regionClaim`. -/
 theorem regionClaim_rel (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (reg : Region) (hw : RegionWF st.c.kLog reg) (hm : st.m = st.c.kLog + st.nbl) (r : Array F128)
     (hr : r.size = PT_LOCAL + st.nbl) (v : F128) (hv : st.regionValue reg r = .ok v) :
@@ -423,8 +397,6 @@ theorem regionClaim_rel (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Region
     rw [getElem!_pos _ i.val (by rw [Array.size_extract, hpsz]; omega), Array.getElem_extract,
       show i.val + 6 = 6 + i.val from Nat.add_comm _ _, getElem!_pos _ (6 + i.val) (by omega)]
 
-/-! ### `extraClaims`: region-major, then point by point -/
-
 theorem list_forIn_push {α β γ : Type} (g : α → V γ) (mk : α → γ → β) :
     ∀ (L : List α) (out out' : Array β),
       (forIn L out fun a out => do let v ← g a; pure (ForInStep.yield (out.push (mk a v)))) = .ok out' →
@@ -459,7 +431,6 @@ theorem list_forIn_outer {α β : Type} (F : α → Array β → V (Array β)) (
       obtain ⟨ess, hess, heq'⟩ := list_forIn_outer F P hF L _ out' h
       exact ⟨es :: ess, .cons hes hess, by simp [heq', heq]⟩
 
-/-- When `extraClaims` succeeds, its claims are each region's, point by point, with the values `regionValue` gave. -/
 theorem extraClaims_ok (st : Stmt) (pts : Array (Array F128)) (extras : Array Flock.Claim)
     (h : st.extraClaims pts = .ok extras) :
     ∃ ess : List (List Flock.Claim),
@@ -475,8 +446,6 @@ theorem extraClaims_ok (st : Stmt) (pts : Array (Array F128)) (extras : Array Fl
     rw [← Array.forIn_toList] at hr
     exact list_forIn_push (st.regionValue reg) (regionClaimOf st reg) _ out out' hr) _ #[] o ho
   exact ⟨ess, hess, by simpa using heq⟩
-
-/-! ### The extra claims are the model's -/
 
 /-- The link points as the model reads them: coordinate `t` of point `k` (`Flock.Statement`). -/
 def ptsOf (mPts : ℕ) (points : Array (Array F128)) : Fin 2 → Fin mPts → 𝔽 := fun k t => fOf (points[k.val]!)[t.val]!
@@ -497,8 +466,6 @@ theorem regionClaim_rel' (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Regio
   obtain rfl : rr = fun t => fOf r[t.val]! := funext hrr
   exact regionClaim_rel st hwf regs reg hw hm r hr v hv
 
-/-- **The statement's extra claims are the model's** (`Flock.Piop`, `Flock.Statement`'s regions). At two link points of `m_pts` coordinates, the extra
-claims `Setup.ofCircuit st` hands the verifier are `extraClaims` of `stmtOf st` with the regions read off `st.regions`. -/
 theorem ofCircuit_extra (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) (points : Array (Array F128))
     (hpts : points.size = 2) (hsz : ∀ p ∈ points.toList, p.size = st.mPts) :
     ExtraRealizes (Setup.ofCircuit st) (stmtOf st hwf (regionsOf st)) points
@@ -542,8 +509,6 @@ theorem ofCircuit_extra (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) (point
   rw [getElem!_pos extras j (by simpa using hjx), ← Array.getElem_toList]
   exact hF.get hjx hj
 
-/-! ### The record's link points, and the composition -/
-
 theorem check_pts {pts : Array (Array F128)} {n k : ℕ} {why : String} {u : Unit}
     (h : Record.check (pts.size == n && pts.all fun x => x.size == k) why = .ok u) :
     pts.size = n ∧ ∀ p ∈ pts.toList, p.size = k := by
@@ -554,7 +519,6 @@ theorem check_pts {pts : Array (Array F128)} {n k : ℕ} {why : String} {u : Uni
   simpa using this.2 i (by simpa using hi)
 
 set_option maxHeartbeats 1000000 in
-/-- The record's link points have the configured shape: `Record.decode` checks it (S9). -/
 theorem decode_points {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decode spec text = .ok sess) :
     sess.points.size = spec.points ∧ ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
@@ -567,10 +531,6 @@ theorem decode_points {spec : SessionSpec} {text : String} {sess : RunRecord}
     exact check_pts (by assumption)
 
 open Game Model in
-/-- **The verifier refines the model's reps, for the statements it is set up with** (§3, §5, §10, §16). When
-`Flock.verify` accepts a one-table session under the unsalted SHA-512 scheme, with the setup `Setup.ofCircuit st` of a
-statement whose layout and regions are well formed, the conclusion of `verify_refines` holds for the model statement
-`stmtOf st` read off the layout, with the extra claims the model's `extraClaims` at the record's link points. -/
 theorem verify_refines_ofCircuit (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) (hm : 13 ≤ st.m) (msId : String)
     (hms : st.merkle = MerkleScheme.sha512 msId) (record : String) (proofs : Array ByteArray)
     (h : Flock.verify st.spec #[Setup.ofCircuit st] record proofs = .ok ()) :

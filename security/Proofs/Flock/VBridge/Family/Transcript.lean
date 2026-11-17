@@ -18,26 +18,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Defs
 
-/-!
-# `TranscriptIs` after the runs
-
-`TableSrc.TranscriptIs` asks that the inner transcript V*'s layers hold be the table files' steps at some link points,
-each rep's tape a tape of its spine (`RepTape`). A rep's tape is only known to be one once the rep runs
-(`reps_of_runs`: an accepting rep plays its messages on its coins), so `TranscriptIs` is derived after `Runs`:
-
-* `TableSrc.wovenAt`: the table files at link points `P` with each rep's tape `repSteps` of its proof file and stream,
-  so `reps_of_runs` needs no hypothesis on the tapes;
-* `TableSrc.transcriptIs_of_runs`: from the runs, the round messages (`hmsg`, round by round) and the coins (`hcoin`),
-  the transcript's steps are the woven files' (`schedSteps_zip`), at the link points the transcript's first coin
-  carries (`ptsOf_head`);
-* `coinSteps_eq_coinsOf`: `hcoin` wherever the inner protocol's coin types are V*'s (`CoinTys`; `vCT` is such a
-  schedule).
-
-At a family, `HFilesR` is `hfiles` after the runs, and `hFilesR_of` gives it from `MsgsAre` (`hmsg` at every accepted
-outer proof) and `HLeaf`. `decOf` is the decoder `wmsgOf` reads: round `i`'s message at stage `i`'s read wires is
-the table's round `i` at any accepted outer proof that reads them, so `hmsg` is a theorem (`decOf_spec`) wherever the
-table's round `i` is read from stage `i`'s commit strings (`MsgsRead`).
--/
+/-! `TranscriptIs` is derived after the runs, because a rep's tape is known to be one of its spine only once the rep
+runs (`transcriptIs_of_runs`). -/
 
 @[expose] public section
 
@@ -51,16 +33,11 @@ open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBri
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-! ## The woven table files -/
-
-/-- **The table files at link points `P`, each rep's tape woven** from its proof file's messages and its stream's coins
-along its spine (`repSteps`). -/
 noncomputable def TableSrc.wovenAt (s : TableSrc) (cls : HClass) (P : Fin 2 → Fin cls.mPts → 𝔽) : TableFiles cls :=
   { s.filesAt cls P with
     tape := fun r => repSteps s.st s.S s.sch (extraClaims s.S cls.ptLocal cls.mPts P).length (s.proof r)
       ((s.filesAt cls P).stream r) }
 
-/-- The table's first round: the level-0 cap alone. -/
 theorem cut_tableSteps_head {cls : HClass} (G : TableFiles cls) :
     (cut ((tableSteps G).map kindOf) ((tableSteps G).filterMap Sum.getLeft?))[0]? =
       some [⟨Cap Dig, capDig (G.proof 0).cap⟩] := rfl
@@ -88,8 +65,6 @@ theorem length_coinSteps_le (cs : List ((k : Fin nR) → CT k)) : ∀ j, (coinSt
 theorem length_coinSteps {cs : List ((k : Fin nR) → CT k)} (h : nR ≤ cs.length) : (coinSteps CT 0 cs).length = nR :=
   le_antisymm (by simpa using length_coinSteps_le CT cs 0) (le_length_coinSteps CT cs 0 nR h (by omega))
 
-/-- **The link points the transcript's first coin carries**: when its first round is one message and its first coin
-step is the link points `P`. -/
 theorem ptsOf_head {ws : List (List (SMsg T))} {cs : List ((k : Fin nR) → CT k)} {P : Fin 2 → Fin cls.mPts → 𝔽}
     (hw : ∃ e, ws.head? = some [e]) (hc : (coinSteps CT 0 cs).head? = some ⟨Fin 2 → Fin cls.mPts → 𝔽, P⟩) :
     ptsOf T CT (ws.zip cs) = P := by
@@ -114,11 +89,6 @@ theorem ptsOf_head {ws : List (List (SMsg T))} {cs : List ((k : Fin nR) → CT k
   rw [List.zip_cons_cons, schedSteps, dif_pos h0, hc']
   rfl
 
-/-- **`TranscriptIs` from the runs.** At link points `P` that the transcript's first coin carries (`hP`), when the
-table files run (`hruns`), each of the `r + 1` rounds holds the woven files' messages of that round (`hmsg`), and the
-coins are the link points then both reps' rounds (`hcoin`), with at least as many coins as rounds: both reps accept, so
-each woven tape is a tape of its spine (`reps_of_runs`), and the transcript's steps are the woven files' steps
-(`schedSteps_zip`). -/
 theorem TableSrc.transcriptIs_of_runs (s : TableSrc) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
     (M : Hidden cls) (hS : M.toStatement regs = s.S) (ws : List (List (SMsg T))) (cs : List ((k : Fin nR) → CT k))
     (P : Fin 2 → Fin cls.mPts → 𝔽) (hset : SetupRealizes s.st s.S s.sch cls.ptLocal cls.mPts) (henc : s.Encodes)
@@ -202,24 +172,17 @@ theorem TableSrc.transcriptIs_of_runs (s : TableSrc) (regs : List (Region cls.kL
 
 end sched
 
-/-! ## The coins at V*'s coin types -/
-
-/-- **A coin of `n` field elements, as `coinArr` types it**: one element, else a vector of `n`. -/
 def coinTy (n : ℕ) : Type := if n = 1 then 𝔽 else (Fin n → 𝔽)
 
 noncomputable instance instFintypeCoinTy (n : ℕ) : Fintype (coinTy n) := by unfold coinTy; split <;> infer_instance
 
 instance instNonemptyCoinTy (n : ℕ) : Nonempty (coinTy n) := by unfold coinTy; split <;> exact ⟨0⟩
 
-/-- **The inner protocol's coin types are V*'s** at the shape `sh`: coin `0` is the link points (`mPts` coordinates
-each, `tableTape`'s first coin), and then each of both reps' rounds in turn is a coin of the size `verifierRows` takes
-there (`roundSizes`), so there are `1 + 2 |roundSizes sh|` coins. -/
 def CoinTys (mPts : ℕ) (sh : Shape) {nR : ℕ} (CT : Fin nR → Type) : Prop :=
   nR = 1 + 2 * (roundSizes sh).length ∧ (∀ h : 0 < nR, CT ⟨0, h⟩ = (Fin 2 → Fin mPts → 𝔽)) ∧
     ∀ r < 2, ∀ j (hj : j < (roundSizes sh).length) (h : 1 + r * (roundSizes sh).length + j < nR),
       CT ⟨1 + r * (roundSizes sh).length + j, h⟩ = coinTy (roundSizes sh)[j]
 
-/-- **V*'s coin types** at the shape `sh` (`CoinTys`). -/
 noncomputable def vCT (mPts : ℕ) (sh : Shape) (k : Fin (1 + 2 * (roundSizes sh).length)) : Type :=
   if k.val = 0 then (Fin 2 → Fin mPts → 𝔽) else coinTy ((roundSizes sh).getD ((k.val - 1) % (roundSizes sh).length) 0)
 
@@ -242,7 +205,6 @@ theorem coinTys_vCT (mPts : ℕ) (sh : Shape) : CoinTys mPts sh (vCT mPts sh) :=
   show (if 1 + r * (roundSizes sh).length + j = 0 then _ else _) = _
   rw [if_neg (by omega), hk, List.getD_eq_getElem _ _ hj]
 
-/-- **Every coin of a coin type is `coinArr` of an array of its size.** -/
 theorem exists_coinArr (n : ℕ) (y : coinTy n) :
     ∃ c : Array F128, c.size = n ∧ (⟨coinTy n, y⟩ : Msg) = coinArr fOf c := by
   by_cases hn : n = 1
@@ -289,8 +251,6 @@ theorem getElem?_coinSteps : ∀ (cs : List ((k : Fin nR) → CT k)) (j k n : �
       rw [coinSteps, dif_pos (show j < nR by omega), List.singleton_append, List.getElem?_cons_succ]
       exact getElem?_coinSteps cs (j + 1) k n (by omega) h (by simpa using hk)
 
-/-- **`hcoin` at V*'s coin types**: at least as many coins as coin types, the coin steps are the link points the first
-carries (`ptsC`), then rep 0's rounds of `coinsOf`, then rep 1's. -/
 theorem coinSteps_eq_coinsOf {mPts : ℕ} {sh : Shape} (hCT : CoinTys mPts sh CT) (cs : List ((k : Fin nR) → CT k))
     (hcs : nR ≤ cs.length) :
     coinSteps CT 0 cs = ⟨Fin 2 → Fin mPts → 𝔽, ptsC CT mPts cs⟩ ::
@@ -361,18 +321,14 @@ theorem coinSteps_eq_coinsOf {mPts : ℕ} {sh : Shape} (hCT : CoinTys mPts sh CT
 
 end coins
 
-/-! ## The decoder's messages -/
-
 section msgs
 
 variable {nT : ℕ} (T : Fin nT → Type)
 
 open Classical in
-/-- A message as one of the schedule's typed messages, where some `T j` is its type. -/
 noncomputable def toS (m : Msg) : List (SMsg T) :=
   if h : ∃ j, T j = m.1 then [⟨Classical.choose h, cast (Classical.choose_spec h).symm m.2⟩] else []
 
-/-- A round's messages as the schedule's typed messages (`toS`). -/
 noncomputable def toSs (g : List Msg) : List (SMsg T) := g.flatMap (toS T)
 
 theorem roundMsgs_toSs : ∀ (g : List Msg), (∀ m ∈ g, ∃ j, T j = m.1) → roundMsgs T (toSs T g) = g
@@ -399,16 +355,10 @@ theorem eq_singleton_of_roundMsgs {w : List (SMsg T)} {m : Msg} (h : roundMsgs T
 
 end msgs
 
-/-! ## The table's message types -/
-
-/-- **The table's message types** at a schedule's extension `ext`: the level-0 cap, `tableTape`'s marker, the
-zerocheck's, lincheck's and ring switch's messages (`zcMsgs`, `lcMsgs`, `opMsgs`), the Ligerito messages (`fMsg`,
-`kMsg`, the recursive caps, the last level's `yr`, `recMsgs`), and the openings with their salts. -/
 def tableTys (ext : ℕ) : List Type :=
   [Cap Dig, Bool, (Fin 64 → 𝔽) × (Fin 64 → 𝔽), 𝔽 × 𝔽, Fin 64 → 𝔽, Fin 128 → 𝔽, 𝔽, 𝕂 × 𝕂, Fin (2 ^ (ext + 1)) → 𝔽,
     Opens 𝔽 Dig × Salts (List UInt8)]
 
-/-- Every message of `L` has one of the table's message types. -/
 def AllTys (ext : ℕ) (L : List Msg) : Prop := ∀ m ∈ L, m.1 ∈ tableTys ext
 
 theorem AllTys.nil {ext : ℕ} : AllTys ext [] := fun _ h => by simp at h
@@ -547,8 +497,6 @@ theorem mem_firstSteps {ts : List Step} {m : Msg} (h : Sum.inl m ∈ firstSteps 
     subst h
     exact Or.inr hs
 
-/-- **The woven table's messages have the table's types** (`tableTys`): the cap, the marker and the openings
-(`tableSteps`, `tableTape`), and each rep's tape's messages, its proof file's (`weave`, `repMsgs`). -/
 theorem TableSrc.wovenAt_tys (s : TableSrc) (cls : HClass) (P : Fin 2 → Fin cls.mPts → 𝔽) :
     ∀ g ∈ cut ((tableSteps (s.wovenAt cls P)).map kindOf) ((tableSteps (s.wovenAt cls P)).filterMap Sum.getLeft?),
       AllTys s.sch.ext g := by
@@ -575,18 +523,14 @@ theorem TableSrc.wovenAt_tys (s : TableSrc) (cls : HClass) (P : Fin 2 → Fin cl
     cases hx
     exact ty_opens _
 
-/-- **The inner protocol's message types include the table's** (`tableTys`): each is some `T j`. A fact of the
-instantiation's `T`, as `CoinTys` is of its `CT`; `vT` is such a list. -/
+/-- A fact of the instantiation's `T`, as `CoinTys` is of its `CT`. -/
 def TysIn {nT : ℕ} (T : Fin nT → Type) (ext : ℕ) : Prop := ∀ ty ∈ tableTys ext, ∃ j, T j = ty
 
-/-- **The table's message types, as a list `T`** (`TysIn`). -/
 def vT (ext : ℕ) (j : Fin (tableTys ext).length) : Type := (tableTys ext)[j]
 
 theorem tysIn_vT (ext : ℕ) : TysIn (vT ext) ext := fun _ h =>
   let ⟨j, hj, e⟩ := List.getElem_of_mem h
   ⟨⟨j, hj⟩, e⟩
-
-/-! ## At the family -/
 
 section family
 
@@ -603,45 +547,30 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
     (cap : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray)
     (lig : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Fin 2 → LigeritoProof)
 
-/-- **The woven table files** at a history and V*'s layers: `tableSrc`'s, at the link points of the history's first
-coin (`ptsC`), each rep's tape woven from its files (`TableSrc.wovenAt`). -/
 noncomputable def woven (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) :
     TableFiles cls :=
   (F.tableSrc spec st cap lig R ω t l).wovenAt cls (ptsC CT cls.mPts (t.map Prod.snd))
 
-/-- **The table's messages, round by round**: the woven files' steps' messages cut at their coins (`PlaysCoin.cut`). -/
 noncomputable def tableMsgs (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin))
     (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) : List (List Msg) :=
   cut ((tableSteps (F.woven spec st cap lig R ω t l)).map kindOf)
     ((tableSteps (F.woven spec st cap lig R ω t l)).filterMap Sum.getLeft?)
 
-/-- Obligation: false as `VBridge` is quantified, at every history (`t = []`: no inner message is sent, yet V*'s
-sessions can accept); discharged once `VBridge` is stated at whole histories, as `recGame` reads it, or the family's
-sessions refuse a short history.
-**V*'s sessions accept only at a whole history**: at every accepted outer proof, the history has a coin for each of
-the inner protocol's rounds. `VBridge` reads every history, and the inner transcript of a history with fewer coins than
-rounds (`zip` stops at the last coin) leaves the openings unsent, so the inner verifier cannot accept it; the recursive
-game reads `VBridge` only at its leaves, whose histories are whole (`recGame`'s `rounds … I.r`). -/
+/-- False as `VBridge` is quantified, at the empty history: no inner message is sent there, and V*'s sessions can
+accept. `VBridge` stated at whole histories, as `recGame` reads it, or sessions that refuse a short history
+discharge it. -/
 def HLeaf : Prop := ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → (ℐ).r ≤ t.length
 
-/-- **`hfiles` after the runs**: at every accepted outer proof whose table files run, they are valid for the transcript
-V*'s layers hold at the rounds' coins. `TableFiles.Valid` asks that each rep's tape be a tape of its spine, which holds
-once the rep runs (`reps_of_runs`). -/
 def HFilesR : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o →
     (F.files R ω t (layers F.zs dg N k Rw R ω t R₂ τ)).Runs →
     (F.files R ω t (layers F.zs dg N k Rw R ω t R₂ τ)).Valid regs (F.x R ω) T CT
       ((F.wmsg (layers F.zs dg N k Rw R ω t R₂ τ)).zip (t.map Prod.snd))
 
-/-- **The messages V*'s layers hold are the table's** (`hmsg`): at every accepted outer proof there is one per inner
-round, and round `i`'s is the table's round `i` (`tableMsgs`). -/
 def MsgsAre : Prop := F.AtAccepted dg N k Rw fun R ω t l =>
   (F.wmsg l).length = (ℐ).r ∧
     ∀ i < (ℐ).r, ((F.wmsg l)[i]?).map (roundMsgs T) = some ((F.tableMsgs spec st cap lig R ω t l)[i]?.getD [])
 
-/-- **The inner transcript's link points are the history's first coin's** at an accepted outer proof: its first round
-is the level-0 cap alone (`MsgsAre`, `cut_tableSteps_head`) and its first coin the link points (`coinSteps_eq_coinsOf`
-at V*'s coin types). -/
 theorem ptsOf_at (hCT : CoinTys cls.mPts F.sh CT) (hleaf : F.HLeaf dg N k Rw)
     (hmsgs : F.MsgsAre dg N k Rw spec st cap lig)
     {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
@@ -659,9 +588,6 @@ theorem ptsOf_at (hCT : CoinTys cls.mPts F.sh CT) (hleaf : F.HLeaf dg N k Rw)
   refine ptsOf_head T CT ⟨e, List.head?_eq_getElem?.trans hw⟩ ?_
   exact congrArg List.head? (coinSteps_eq_coinsOf CT hCT _ hr')
 
-/-- **`hfiles` after the runs** for a family whose files are `filesOf`'s and whose `rep₀` is `repOf coinFiles`: the
-transcript is the woven files' (`transcriptIs_of_runs`, at the history's first coin's link points, `ptsOf_at`), so the
-files are valid (`TableSrc.valid`). -/
 theorem hFilesR_of (hF : F.files = F.filesOf spec st cap lig) (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig))
     (hset : ∀ R ω, SetupRealizes (st R ω) ((F.x R ω).toStatement regs) sch cls.ptLocal cls.mPts)
     (henc : F.AtAccepted dg N k Rw fun R ω t l => (F.tableSrc spec st cap lig R ω t l).Encodes)
@@ -681,8 +607,6 @@ theorem hFilesR_of (hF : F.files = F.filesOf spec st cap lig) (hrep : F.rep₀ =
     rw [F.rep_rounds spec st cap lig hrep, F.rep_rounds spec st cap lig hrep]
     exact coinSteps_eq_coinsOf CT hCT _ (Nat.le_of_succ_le hr')
 
-/-- **The family at the coins' rep**: `F` with `rep₀` the coins' (`repOf coinFiles`), `rows` and `acc` the layers'
-(`rowsOf`, `accOf`), then `alpha` `alphaOf` at that `rep₀`. It reads no message, so the decoder is made from it. -/
 noncomputable def coinFamily : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂ :=
   let F₁ : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂ :=
     { F with rep₀ := F.repOf (F.coinFiles spec st cap lig), rows := F.rowsOf, acc := F.accOf }
@@ -690,12 +614,8 @@ noncomputable def coinFamily : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg�
 
 variable (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
 
-/-- Obligation: discharged from the stage files (`rec_vstage`'s staging): round `i`'s table messages read only stage
-`i`'s masked commit-string wires.
-**The table's round-`i` messages are read from stage `i`'s commit strings**: two accepted outer proofs whose layers
-agree on the read wires of stage `i`'s commit strings (`maskOf` at `skOf own sel`) have the same round-`i` messages
-(`tableMsgs`, at the coins' family). Round `i`'s messages are the values w, the cap and the openings hold in the rows V*
-registers for round `i` (`sel i`), which `skOf` makes stage `i`'s commit strings. -/
+/-- Discharged from the stage files (`rec_vstage`'s staging): round `i`'s table messages read only stage `i`'s masked
+commit-string wires. -/
 def MsgsRead : Prop :=
   ∀ i R ω t R₂ τ o R' ω' t' R₂' τ' o', Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o →
     Accepted (I := ℐ) F.zs dg N k Rw R' ω' t' R₂' τ' o' →
@@ -704,20 +624,15 @@ def MsgsRead : Prop :=
     ((F.coinFamily spec st cap lig).tableMsgs spec st cap lig R ω t (layers F.zs dg N k Rw R ω t R₂ τ))[i]? =
       ((F.coinFamily spec st cap lig).tableMsgs spec st cap lig R' ω' t' (layers F.zs dg N k Rw R' ω' t' R₂' τ'))[i]?
 
-/-- **The inner protocol's message types are V*'s**: at every accepted outer proof, each message of the table's
-rounds has its type among the schedule's message types `T`. -/
 def MsgTys : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o →
     ∀ g ∈ (F.coinFamily spec st cap lig).tableMsgs spec st cap lig R ω t (layers F.zs dg N k Rw R ω t R₂ τ),
       ∀ m ∈ g, ∃ j, T j = m.1
 
-/-- **`MsgTys` wherever the inner protocol's message types include the table's** (`TysIn`, `wovenAt_tys`). -/
 theorem msgTys_of (hT : TysIn T sch.ext) : F.MsgTys dg N k Rw spec st cap lig :=
   fun _ _ _ _ _ _ _ g hg m hm => hT _ (TableSrc.wovenAt_tys _ cls _ g hg m hm)
 
 open Classical in
-/-- **The decoder**: round `i`'s message at the read wires `Xs` of stage `i`'s commit strings is the table's round-`i`
-messages at any accepted outer proof whose layers read `Xs` there, typed by `T` (`toSs`), and none elsewhere. -/
 noncomputable def decOf (i : ℕ) (Xs : (j : Fin F.stmts.size) → (F.Vs j).Bits) : (ℐ).Msg :=
   if h : ∃ g : List Msg, ∃ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o ∧
       maskOf F.Vs (skOf F.Vs own sel) i (layers F.zs dg N k Rw R ω t R₂ τ) = Xs ∧
@@ -725,8 +640,6 @@ noncomputable def decOf (i : ℕ) (Xs : (j : Fin F.stmts.size) → (F.Vs j).Bits
         (layers F.zs dg N k Rw R ω t R₂ τ))[i]?.getD [] = g
   then toSs T (Classical.choose h) else []
 
-/-- **`hmsg` at the decoder**, at an accepted outer proof: round `i`'s message `decOf` reads at the layers' stage-`i`
-commit strings is the table's round `i` (`MsgsRead`, `MsgTys`). -/
 theorem decOf_spec (hread : F.MsgsRead dg N k Rw spec st cap lig own sel) (htys : F.MsgTys dg N k Rw spec st cap lig)
     {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (i : ℕ) :

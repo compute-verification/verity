@@ -2,13 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Refine.LiveSim
 
-/-!
-# The transfer for the compiled table
-
-`live_le` (`LiveSim`) needs every message the model's reps receive to have an inhabited type, so that where no accepted
-live run goes on the model can still play. `allInh_repC` proves it for the compiled reps, from `AllInh` of each game
-they are built from. `live_le_tableC` is then the transfer for `tableC` itself: its one hypothesis is `Decodes`.
--/
+/-! The transfer for the compiled table (`live_le_tableC`), whose one hypothesis is `Decodes`. -/
 
 @[expose] public section
 
@@ -186,7 +180,6 @@ theorem allInh_ligeritoC [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintyp
     | exact allInh_queryAndBatchC A _ _ _ _ _ _
     | exact allInh_recursiveRoundsC A _ _ _ _ _ _ _
 
-/-- **Every message a compiled rep receives has an inhabited type.** -/
 theorem allInh_repC [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] [Nonempty D] (A : Arith F K) (r : ℕ) (S : Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) : AllInh (repC (D := D) A r S sch hm extra) := by
   unfold repC
@@ -217,15 +210,11 @@ open FlockSoundness.Game
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical in
-/-- `tableC`'s verdict, as `modelTable`'s output. -/
 noncomputable def tableOut {D : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (cap : Model.Cap D)
     (pend : Model.PendL 𝔽 D × Model.PendL 𝔽 D) (o : Model.Opens 𝔽 D) : Model.OutC 𝔽 D :=
   ⟨pend.1.verdict o && pend.2.verdict o &&
     decide (Model.OpensOK H E cap 0 pend.1 o ∧ Model.OpensOK H E cap 1 pend.2 o), cap, pend, o⟩
 
-/-- **The transfer for the compiled table.** Against any live prover, the executable's verdict `pL` on the live
-session holds with probability at most `tableC`'s acceptance against the simulated prover, whenever the decoder is
-right on accepted sessions. -/
 theorem live_le_tableC {K D : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] (A : Model.Arith 𝔽 K)
     (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (S : Model.Statement) (sch : Accounting.Schedule)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pL : LiveOut mPts → Prop) (opn : Array ByteArray → Model.Opens 𝔽 D)

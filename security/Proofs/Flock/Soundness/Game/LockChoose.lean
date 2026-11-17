@@ -4,17 +4,8 @@ public import Definitions.Flock.Game
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Fork probabilities that do not read the chooser
-
-`forkE` reads the compiled side and the slots; a chooser enters only through the lockstep it selects below each table
-node. Two locksteps whose structure below a table node is the same whatever table is chosen there (`AlignedT`: `Aligned`
-with its table case over any two tables) have the same fork probability under any two choosers (`forkE_choose`).
-
-* `forkE_mono`: the fork probability is monotone in the event it counts;
-* `AlignedT.bind`, `.map`, `.mono`, `.mapL`, `.same`, `.leftSame`, `.rightSame`, `.batchLock`, `.embedLeft`,
-  `.embedRight`, `.lockWith`, `.interleaveLock`: the combinators that build the compiled sessions' locksteps preserve it.
--/
+/-! Fork probabilities that do not read the chooser: locksteps aligned whatever the tables (`AlignedT`) have the same
+fork probability under any two choosers (`forkE_choose`). -/
 
 @[expose] public section
 
@@ -28,8 +19,6 @@ namespace Lock
 
 variable {T D : Type}
 
-/-- **Two locksteps of one compiled game with the same slots, whatever tables are chosen**: `Aligned`, with the
-locksteps below a table node aligned for any two tables. -/
 inductive AlignedT {I : Type} {get : I → ℕ → Option (T × D)} {R₁ R₂ : I → α → β → Prop} :
     {i₁ i₂ : I} → {g₁ g₂ : Game α} → {g' : Game β} →
       Lock T D get R₁ i₁ g₁ g' → Lock T D get R₂ i₂ g₂ g' → Prop
@@ -55,7 +44,6 @@ inductive AlignedT {I : Type} {get : I → ℕ → Option (T × D)} {R₁ R₂ :
 
 variable {I : Type} {get : I → ℕ → Option (T × D)}
 
-/-- **Locksteps aligned whatever the tables have the same fork probability under any two choosers.** -/
 theorem forkE_choose (plur₁ plur₂ : Chooser T D β) (slot : ℕ) (Φ : D → β → β → ℝ)
     {R₁ R₂ : I → α → β → Prop} {i₁ i₂ : I} {g₁ g₂ : Game α} {g' : Game β}
     {L₁ : Lock T D get R₁ i₁ g₁ g'} {L₂ : Lock T D get R₂ i₂ g₂ g'} (h : AlignedT L₁ L₂) :
@@ -74,7 +62,6 @@ theorem forkE_choose (plur₁ plur₂ : Chooser T D β) (slot : ℕ) (Φ : D →
       · rfl
       · exact ih _ _ _ σ'.2
 
-/-- **The fork probability is monotone in the event it counts.** -/
 theorem forkE_mono {R : I → α → β → Prop} (plur : Chooser T D β) (slot : ℕ) {Φ Φ' : D → β → β → ℝ}
     (hΦ : ∀ d b b', Φ d b b' ≤ Φ' d b b') :
     ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
@@ -90,8 +77,6 @@ theorem forkE_mono {R : I → α → β → Prop} (plur : Chooser T D β) (slot 
       split_ifs
       · exact expect_mono (fun b => expect_mono (hΦ σ'.1 b) _ _) _ _
       · exact forkE_mono plur slot hΦ _ σ'.2
-
-/-! ## The combinators -/
 
 theorem AlignedT.bind {α₂ β₂ : Type} {R₁ R₂ : I → α → β → Prop} {R₁' R₂' : I → α₂ → β₂ → Prop}
     {f₁ f₂ : α → Game α₂} {f' : β → Game β₂}

@@ -8,19 +8,8 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Refine.Arith
 import VCVio.Prelude.Core
 
-/-!
-# What `_build`'s passes compute
-
-`buildAll_spec`: `build`'s passes over the symbolic residuals give residuals whose value (`resValue`), on any S and v
-extending the passes' operands and coefficient slots, is each symbolic residual's terms but the consistency sums
-evaluated (`noCons`), plus the running sums w holds where it has consistency sums (`resForm`); the passes add each
-residual's coefficients on the consistency sums into `kappa`, and only Ligerito's final check, residuals `fin` and
-`fin + 1`, has any.
-
-* `valOf` is a message element's value: its element of w, its ring switch's transpose of w, the comb's element (at a
-  holo shape plus w's `h`, `hOf`, as `atomOp` reads it), or the level's consistency sum.
-* `kapSum kappa r cons` is the final check's component `r` on the levels' consistency sums `cons`.
--/
+/-! What `_build`'s passes compute (`buildAll_spec`); only Ligerito's final check, residuals `fin` and `fin + 1`, has
+coefficients on the consistency sums. -/
 
 @[expose] public section
 
@@ -28,16 +17,12 @@ namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
-/-! ## Values -/
-
-/-- A holo shape's `h[l]` as w holds it, the comb operand's second term (`atomOp`); zero off a holo shape. -/
 def hOf (sh : Shape) (w : Array F128) (l : Nat) : F128 :=
   if sh.holo then match wi sh (.h l) with
     | some i => w[i]!
     | none => 0
   else 0
 
-/-- A message element's value at w, the comb and the levels' consistency sums. -/
 def valOf (sh : Shape) (w comb : Array F128) (cons : Nat → Nat → F128) : Key → F128
   | .rsT k u => match wi sh (.rs k 0) with
     | some i => termValue w comb (.wt i u)
@@ -55,21 +40,15 @@ theorem hOf_holo {sh : Shape} (hh : sh.holo = true) (w : Array F128) {l i : Nat}
     hOf sh w l = w[i]! := by
   simp [hOf, hh, hi]
 
-/-- `Σ_{i < n} f i`. -/
 def rangeSum (n : Nat) (f : Nat → F128) : F128 := (List.range n).foldl (fun acc i => acc + f i) 0
 
-/-- `Σ_level Σ_l κ[level][r][l] · cons level l`: the final check's component `r` on the consistency sums. -/
 def kapSum (kappa : Array (Array (Array F128))) (r : Nat) (cons : Nat → Nat → F128) : F128 :=
   rangeSum kappa.size fun level => rangeSum (kappa[level]!)[r]!.size fun l => ((kappa[level]!)[r]!)[l]! * cons level l
 
-/-- A symbolic value's terms on the consistency sums. -/
 def consOf (f : Lin) : Terms Key := f.t.filter (·.1.isCons)
 
-/-- A symbolic value but its terms on the consistency sums, at `val`. -/
 def noCons (val : Key → F128) (f : Lin) : F128 :=
   tEval val (f.t.filter (!·.1.isCons)) + f.c.getD 0 + tEval (fun ab => val ab.1 * val ab.2) f.q
-
-/-! ## Sums -/
 
 theorem f128_add_zero (x : F128) : x + 0 = x := by
   (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
@@ -173,7 +152,6 @@ theorem getElem!_modify_ne {γ : Type} [Inhabited γ] (xs : Array γ) {i j : Nat
     (xs.modify i g)[j]! = xs[j]! := by
   simp only [getElem!_def, Array.getElem?_modify, hij, ite_false]
 
-/-- A consistency sum added into `kappa`: component `r` gains `x · cons level l`, the others are unchanged. -/
 theorem kapSum_modify (K : Array (Array (Array F128))) (cons : Nat → Nat → F128) {level r l : Nat} (x : F128)
     (h1 : level < K.size) (h2 : r < K[level]!.size) (h3 : l < ((K[level]!)[r]!).size) (r' : Nat) :
     kapSum (K.modify level (·.modify r (·.modify l (· + x)))) r' cons =
@@ -197,8 +175,6 @@ theorem kapSum_modify (K : Array (Array (Array F128))) (cons : Nat → Nat → F
       rw [getElem!_modify_eq _ _ _ h1, getElem!_modify_ne _ _ (Ne.symm hr)]
     · rw [getElem!_modify_ne _ _ hi]
 
-/-! ## `_build`'s state -/
-
 abbrev BM := StateT BSt (Except String)
 
 theorem liftB_ok {A : Type} {e : Except String A} {st st' : BSt} {a : A} (h : liftB e st = .ok (a, st')) :
@@ -219,17 +195,13 @@ section Build
 
 variable (sh : Shape) (comb0 : Nat)
 
-/-- The op table's operands for message elements: each is the element's operand (`atomOp`); v's names and values
-align. -/
 def OpsOk (st : BSt) : Prop :=
   st.vNames.size = st.vVals.size ∧
     ∀ k i, st.opOf.lookup k = some i → ∃ op, atomOp sh comb0 k = .ok op ∧ st.ops[i]? = some op
 
-/-- Operands `F` and v values `V` extend `st`'s. -/
 def ExtTo (st : BSt) (F : Array (Array Term)) (V : Array F128) : Prop :=
   (∃ o, F = st.ops ++ o) ∧ ∃ vv, V = st.vVals ++ vv
 
-/-- `st'` extends `st`. -/
 def Ext (st st' : BSt) : Prop := ExtTo st st'.ops st'.vVals
 
 variable {sh comb0}
@@ -277,7 +249,6 @@ theorem opValue_single {S : GfS} {o : Nat} {t : Term} (v : Array F128) (h : S.op
   simp only [opValue, getElem!_def, h]
   exact afoldl_single _ _
 
-/-- The products of operand pairs, summed. -/
 def mulSum (S : GfS) (v : Array F128) (ps : Array (Nat × Nat)) : F128 :=
   ps.foldl (fun x ab => x + opValue S w v ab.1 * opValue S w v ab.2) 0
 
@@ -285,7 +256,6 @@ theorem mulSum_cons (S : GfS) (v : Array F128) (p : Nat × Nat) (ps : Array (Nat
     mulSum w S v (#[p] ++ ps) = opValue S w v p.1 * opValue S w v p.2 + mulSum w S v ps := by
   simp only [mulSum, afoldl_append, afoldl_single]
 
-/-- A message element's operand is its term, or at a holo shape a comb's term and its `h`. -/
 theorem atomOp_cases {k : Key} {op : Array Term} (h : atomOp sh comb0 k = .ok op) :
     ∃ t, atomTerm sh comb0 k = .ok t ∧ (op = #[t] ∨ sh.holo = true ∧ ∃ i, op = #[t, .w i]) := by
   unfold atomOp at h
@@ -303,14 +273,12 @@ theorem atomOp_cases {k : Key} {op : Array Term} (h : atomOp sh comb0 k = .ok op
     · cases h
       exact .inl rfl
 
-/-- Off a holo shape, a message element's operand is its term alone. -/
 theorem atomOp_plain {k : Key} {op : Array Term} (hp : sh.holo = false) (h : atomOp sh comb0 k = .ok op) :
     ∃ t, atomTerm sh comb0 k = .ok t ∧ op = #[t] := by
   obtain ⟨t, ht, h1 | ⟨h2, -⟩⟩ := atomOp_cases h
   · exact ⟨t, ht, h1⟩
   · rw [hp] at h2; cases h2
 
-/-- Off the comb, a message element's operand is its term alone. -/
 theorem atomOp_single {k : Key} {op : Array Term} (hk : ∀ l, k ≠ .comb l) (h : atomOp sh comb0 k = .ok op) :
     ∃ t, atomTerm sh comb0 k = .ok t ∧ op = #[t] := by
   obtain ⟨t, ht, h1 | ⟨-, i, h2⟩⟩ := atomOp_cases h
@@ -324,7 +292,6 @@ theorem atomOp_single {k : Key} {op : Array Term} (hk : ∀ l, k ≠ .comb l) (h
     · cases h
       simp at h2
 
-/-- At a holo shape, a comb's operand is its slot and its `h`. -/
 theorem atomOp_comb {l : Nat} {op : Array Term} (hh : sh.holo = true) (h : atomOp sh comb0 (.comb l) = .ok op) :
     ∃ i, wi sh (.h l) = some i ∧ op = #[.v (comb0 + l), .w i] := by
   unfold atomOp at h
@@ -340,7 +307,6 @@ theorem atom_val {k : Key} {t : Term} (V : Array F128) (ha : atomTerm sh comb0 k
   all_goals clear hk
   all_goals (simp only [atomTerm, valOf] at ha ⊢; (try split at ha) <;> (try cases ha) <;> (try simp_all [termValue]))
 
-/-- A message element's operand sums to its value, at either shape. -/
 theorem atomOp_val {k : Key} {op : Array Term} {V : Array F128} (h : atomOp sh comb0 k = .ok op)
     (hV : V.size = comb0) : op.foldl (fun x t => x + termValue w (V ++ comb) t) 0 = valOf sh w comb cons k := by
   by_cases hk : ∃ l, k = .comb l
@@ -465,7 +431,6 @@ theorem prodOps_spec (ri : Nat) : ∀ (l : List ((Key × Key) × F128)) (st st' 
         opValue_atom w comb cons ((h4e.trans hSV).ops? hob) hopb hV]
       (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_one]; ring)
 
-/-- A key's consistency sum, or zero. -/
 def consVal : Key → F128
   | .cons level l => cons level l
   | _ => 0
@@ -661,8 +626,6 @@ theorem buildRes_spec {fin ri : Nat} {f : Lin} {st st' : BSt} {res : Res} (hi : 
     by_cases hc : List.filter (fun x => x.1.isCons) f.t = [] <;> simp only [hc, ite_true, ite_false]
     all_goals (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
 
-/-- Residual `fi.2`'s value as `buildRes` builds it from `fi.1`: its terms but the consistency sums, and the running
-sums in their place. -/
 def resForm (val : Key → F128) (fin : Nat) (fi : Lin × Nat) : F128 :=
   noCons val fi.1 + (if consOf fi.1 = [] then 0 else val (.acc1 (fi.2 - fin)) + val (.acc0 (fi.2 - fin)))
 

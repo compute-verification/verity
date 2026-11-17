@@ -13,20 +13,7 @@ import Proofs.Flock.Soundness.Refine.Plays
 import Proofs.Flock.Soundness.Refine.Zerocheck
 import VCVio.Prelude.Core
 
-/-!
-# One rep refines the model's (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`)
-
-`rep_refines`: when the executable's `verifyRep` accepts rep `r`, the record carries the rep's stream and the proof
-decodes. Then, at the proof's openings, the model's compiled rep `repC`, played with the proof's messages (`repMsgs`) and
-the coins of every round of the stream, ends in a result:
-- whose verdict is true;
-- whose caps are the proof's;
-- whose requests passed the executable's Merkle checks.
-
-It composes the four phases: `zerocheck_refines`, `lincheck_refines`, `opening_refines` and `ligerito_accepts_opening`.
-The statement's own facts enter as `Realizes`-style hypotheses: `FoldRealizes` for the circuit fold, `ExtraRealizes`
-for the extra claims.
--/
+/-! One rep refines the model's compiled rep `repC` (`rep_refines`). -/
 
 @[expose] public section
 
@@ -42,14 +29,11 @@ def shapeOf (st : Setup) (sch : Flock.Schedule) (nExtra : ℕ) : Shape :=
   { m := st.m, kLog := st.kLog, claims := 2 + nExtra, sched := sch, hashLen := st.merkle.digestLen,
     saltLen := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes }
 
-/-- The statement's extra claims at the link points `points` are the model's `extra`, claim by claim. -/
 def ExtraRealizes (st : Setup) (S : Model.Statement) (points : Array (Array F128))
     (extra : List (Model.Claim 𝔽 S.m)) : Prop :=
   ∀ extras, st.extra points = .ok extras →
     extras.size = extra.length ∧ ∀ (j : ℕ) (hj : j < extra.length), ClaimRel S.m extras[j]! extra[j]
 
-/-- **The messages of one rep** (§9–§13): the zerocheck's, the lincheck's, one ring switch per claim, then
-Ligerito's. -/
 def repMsgs {D : Type} (st : Setup) (sch : Flock.Schedule) (nClaims : ℕ) (p : Proof)
     (capD : Array ByteArray → Cap D) : List Msg :=
   zcMsgs st.m p.zerocheck ++ lcMsgs st.kLog p.lincheck ++ opMsgs nClaims p.ringSwitches ++ ligMsgs p.ligerito capD sch
@@ -66,7 +50,6 @@ theorem consumed_all (rs : Array Round) : consumed rs 0 rs.size = rs.toList.map 
   simp only [List.getElem_map, List.getElem_range', Nat.sub_zero, Nat.zero_add, one_mul, Array.getElem_toList]
   rw [getElem!_pos rs i (by simpa using h₂)]
 
-/-- A passed Merkle check had a cap of `2^c` entries, each of the scheme's digest width. -/
 theorem merkleCheck_cap {ms : MerkleScheme} {cap : Array ByteArray} {c d : ℕ} {pos : Array ℕ}
     {rows : Array (Array F128)} {sibs salts : Array ByteArray} {lanes : ℕ}
     (h : merkleCheck ms cap c d pos rows sibs salts lanes = .ok ()) :
@@ -84,8 +67,6 @@ theorem merkleCheck_cap {ms : MerkleScheme} {cap : Array ByteArray} {c d : ℕ} 
   obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hb)
   exact h₂.1 i hi
 
-/-- **The table's cap** (`Flock.Merkle`): an accepting Ligerito run's level-0 cap has `2^c` entries of the digest width, since its
-level-0 queries passed their Merkle check. -/
 theorem ligerito_cap (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof)
     (basisAt : Array F256 → ℕ → Array F256) (hq : (sch.levels.getD 0 default).q ≠ 0) {t t' : Transcript}
     (h : Flock.ligerito ms sch T cap p basisAt t = .ok ((), t')) :
@@ -112,12 +93,6 @@ theorem ligerito_cap (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap 
   obtain ⟨-, -, hmc, -⟩ := queryLevel_bind hq h₄
   exact merkleCheck_cap hmc
 
-/-- **One rep refines the model's** (§9–§14). When the executable's `verifyRep` accepts table `i`'s rep `r`, on a statement whose
-`m`, `k_log`, circuit fold and extra claims are the model's `S` and `extra`, and on a schedule whose dimensions and
-levels are the model's and whose levels' consistency coins are not one word, the record carries the rep's stream and
-the proof decodes. Then at the proof's openings `o`, the model's compiled rep, played with the proof's messages and the
-coins of every round of the stream, accepts. Its caps are the proof's, and its requests passed the executable's Merkle
-checks. -/
 theorem rep_refines {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
     (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (extra : List (Model.Claim 𝔽 S.m)) (sess : RunRecord) (hext : ExtraRealizes st S sess.points extra)

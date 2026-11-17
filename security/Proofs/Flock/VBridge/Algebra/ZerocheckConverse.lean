@@ -7,19 +7,8 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# The zerocheck stage returns when its checks pass
-
-`bindAndZerocheck_of_checks` is `Refine.zerocheck_refines`'s converse: when the transcript's rounds from `t.k` on issue
-the zerocheck's coin counts and answer the framed bytes its squeezes frame (`AnswersL`), and the proof's messages pass the two `check`s of `bindAndZerocheck` (Piop.lean:85, 99) in the
-terms `zerocheck_of_residuals` concludes them (`zcStart`, `zcFold`) at the rounds' coins, the verifier's statement
-binding and zerocheck (Piop.lean:72–102) return `.ok`, with the points those coins give and the final values left
-pending. `zerocheck_plays_of_checks` then applies `zerocheck_refines`: the model's zerocheck plays on the consumed coins.
-
-The steps run forward one at a time: `bind_of_ok`, each absorb's state (`label_eq`, `absorbBytes_eq`, `absorbSlice_eq`,
-`absorbF_eq`), a passing `check` (`check_eq`), a squeeze whose round answers (`squeeze_of_answers`), and a loop whose
-every step does (`forIn_rounds_of`).
--/
+/-! The verifier's statement binding and zerocheck return `.ok` when the proof's messages pass the zerocheck's checks
+(`bindAndZerocheck_of_checks`). -/
 
 @[expose] public section
 
@@ -27,12 +16,10 @@ namespace Flock.RecAlgebra
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine Transcript
 
-/-- Round `r` answers every framed byte string whose bytes are `L` (Transcript.lean:64). -/
 def AnswersL (r : Round) (L : List UInt8) : Prop := ∀ c : ByteArray, c.data.toList = L → r.answers c
 
 theorem AnswersL.of_eq {r : Round} {L L' : List UInt8} (h : AnswersL r L) (e : L' = L) : AnswersL r L' := e ▸ h
 
-/-- A round that retained the bytes `L` answers them. -/
 theorem answersL_of_retains {r : Round} {L : List UInt8} (h : Retains r L) : AnswersL r L := by
   intro c hc
   unfold Retains at h
@@ -43,8 +30,6 @@ theorem answersL_of_retains {r : Round} {L : List UInt8} (h : Retains r L) : Ans
       rw [hb] at h
       have h' : B.data.toList = L := Option.some.inj (h : some B.data.toList = some L)
       exact ByteArray.ext (Array.ext' (hc.trans h'.symm))
-
-/-! ## Running forward one step -/
 
 section Steps
 
@@ -73,8 +58,6 @@ theorem absorbF_eq (v : F128) (t : Transcript) :
 theorem check_eq {c : Bool} (h : c = true) (why : String) (t : Transcript) : Flock.check c why t = .ok ((), t) := by
   subst h; rfl
 
-/-- A squeeze of `n ≠ 0` coins (Transcript.lean:75–86) whose round issued `n` coins and answers the pending bytes and
-its header returns that round's coins, with nothing pending and the next round to come. -/
 theorem squeeze_of_answers {kind : UInt8} {n : ℕ} (hn : n ≠ 0) {t : Transcript} (hN : (t.rounds[t.k]!).n = n)
     (ha : AnswersL (t.rounds[t.k]!) (t.pending.data.toList ++ (Frame.sq kind n).enc)) :
     squeeze kind n t = .ok ((t.rounds[t.k]!).coins, ⟨t.rounds, t.k + 1, ByteArray.empty⟩) := by
@@ -102,9 +85,6 @@ theorem sample_of_answers {t : Transcript} (hN : (t.rounds[t.k]!).n = 1)
   rw [bind_of_ok (squeeze_of_answers Nat.one_ne_zero hN ha)]
   rfl
 
-/-- **A loop answering one round per step, forward.** If every step of the body, with nothing pending, on a round
-meeting `Q i`, consumes it and yields `step i s c` for its coins `c`, then the loop over `a, …, a + n − 1` from round
-`base + a`, every round meeting its `Q`, returns the fold of `step` over their coins. -/
 theorem forIn_rounds_of {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (step : ℕ → σ → Array F128 → σ)
     (Q : ℕ → Round → Prop)
     (hbody : ∀ i s (t : Transcript), t.pending = ByteArray.empty → Q i (t.rounds[t.k]!) →
@@ -146,9 +126,6 @@ theorem forIn_range_of {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (st
 
 end Steps
 
-/-! ## The zerocheck stage -/
-
-/-- The residual rounds read only each round's first coin. -/
 theorem zcFold_congr (r : Array F128) (p : ZerocheckProof) {C C' : ℕ → Array F128} (n : ℕ) (claim : F128)
     (h : ∀ i < n, (C i).getD 0 0 = (C' i).getD 0 0) : zcFold r p C n claim = zcFold r p C' n claim := by
   unfold zcFold
@@ -164,14 +141,6 @@ theorem zcFold_congr (r : Array F128) (p : ZerocheckProof) {C C' : ℕ → Array
       congr 1
       simp only [zStep, h i (hl i List.mem_cons_self)]
 
-/-- **The zerocheck stage returns when its checks pass** (Piop.lean:72–102). Let the transcript's rounds from `t.k` on
-issue the zerocheck's coin counts (6, `m − 13`, 1, then 1 per residual round) and answer the framed bytes its squeezes
-frame: the pending bytes, the binding's labels, `digest` and `cap`; the second squeeze's header; the round-1 message;
-each residual round's two values. If the proof's messages pass both checks at the rounds' coins, as
-`zerocheck_of_residuals` concludes them (`P_c(z) = final_c`, and the residual rounds from `zcStart` end at
-`final_a · final_b` with challenges `ρ`, on coins `C` whose first entries are the rounds'), the statement binding and
-zerocheck return `.ok` with the points `r`, `z`, `ρ` and the final values, from `t` to a transcript on the same rounds,
-`3 + (m − 6)` rounds on, with `final_a` and `final_b` pending. -/
 theorem bindAndZerocheck_of_checks (m : ℕ) (hm : 14 ≤ m) (digest cap : ByteArray) (p : ZerocheckProof)
     (t : Transcript)
     (hn₀ : (t.rounds[t.k]!).n = 6) (hn₁ : (t.rounds[t.k + 1]!).n = m - 13) (hn₂ : (t.rounds[t.k + 2]!).n = 1)
@@ -242,9 +211,6 @@ theorem bindAndZerocheck_of_checks (m : ℕ) (hm : 14 ≤ m) (digest cap : ByteA
   · simp only [absorbF_enc]
     simp [encs]
 
-/-- **The zerocheck's plays, from its checks.** Under `bindAndZerocheck_of_checks`' hypotheses, on well-formed rounds and
-`15 ≤ m`, the stage returns, and `zerocheck_refines` gives the model's zerocheck played on the proof's zerocheck
-messages and the consumed coins, returning the stage's output read in the model's field. -/
 theorem zerocheck_plays_of_checks (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArray) (p : ZerocheckProof)
     (t : Transcript) (hwf : RoundsWF t.rounds)
     (hn₀ : (t.rounds[t.k]!).n = 6) (hn₁ : (t.rounds[t.k + 1]!).n = m - 13) (hn₂ : (t.rounds[t.k + 2]!).n = 1)

@@ -7,15 +7,7 @@ public import Proofs.Flock.Soundness.Session
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Plays
 
-/-!
-# The verifier refines the model's table (`Flock.Verify`, `Flock.Record`)
-
-`verify_refines`: when the executable's `Flock.verify` accepts a session record and its two proof files, under the
-unsalted SHA-512 scheme, the record and both proofs decode. Then at the proofs' openings (`opensOf`), each rep's
-compiled game `repC`, played with its proof's messages and its stream's coins, accepts. Both reps' paths also verify
-against the one level-0 cap. That is `tableAfter`'s verdict. `verify_tableAfter` states it as an accepting run of
-`tableAfter`, with existential messages and rep 0 first.
--/
+/-! The verifier refines the model's table (`verify_refines`, `verify_tableAfter`). -/
 
 @[expose] public section
 
@@ -36,7 +28,6 @@ theorem flat_data (L : List ByteArray) : ∀ acc : ByteArray,
       rw [List.foldl_cons, ih, ByteArray.data_append, Array.toList_append]
       simp
 
-/-- Equally many 64-byte entries that flatten to the same bytes are the same entries. -/
 theorem entries_eq_of_flat : ∀ (a b : List ByteArray), (∀ x ∈ a, x.size = 64) → (∀ x ∈ b, x.size = 64) →
     a.length = b.length → (a.map fun b => b.data.toList).flatten = (b.map fun b => b.data.toList).flatten → a = b
   | [], [], _, _, _, _ => rfl
@@ -122,7 +113,6 @@ theorem roundsWF_of {rs : Array Round} (h : ∀ r ∈ rs.toList, r.coins.size = 
   exact h _ (Array.getElem_mem_toList hi)
 
 set_option maxHeartbeats 1000000 in
-/-- The record's rounds are well formed: `Record.decode` checks every round's coin count (S12). -/
 theorem decode_roundsWF {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decode spec text = .ok sess) : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds := by
   unfold Record.decode at h
@@ -174,8 +164,6 @@ theorem forIn_range_one_ok {σ : Type} {s s' : σ} {g : ℕ → σ → V (ForInS
   obtain ⟨r, hr, -⟩ := ebind_ok (by simpa using h)
   exact ⟨r, hr⟩
 
-/-- The one-table call accepts: the record decodes, the table's schedule is `fast100`'s, and both reps' checks accept
-with equal caps. -/
 theorem verify_one_ok {spec : SessionSpec} {st : Setup} {record : String} {proofs : Array ByteArray}
     (h : Flock.verify spec #[st] record proofs = .ok ()) :
     ∃ sess sch c, Record.decode spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
@@ -218,11 +206,6 @@ theorem verify_one_ok {spec : SessionSpec} {st : Setup} {record : String} {proof
 def opensOf (p₀ p₁ : Proof) (sch : Flock.Schedule) : Opens 𝔽 Dig :=
   fun r ℓ j => if r = 0 then openRow p₀.ligerito sch ℓ j else openRow p₁.ligerito sch ℓ j
 
-/-- **The verifier refines the model's table** (§3, §5, §9–§14). When `Flock.verify` accepts a one-table session record
-and its two proof files under the unsalted SHA-512 scheme, on a statement whose `m`, `k_log`, circuit fold and extra claims are
-the model's `S` and `extra`, the record and both proofs decode. Then at the proofs' openings, each rep's compiled game,
-played with its proof's messages and every coin of its stream, accepts, and both reps' paths verify against the one
-level-0 cap. -/
 theorem verify_refines (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) (msId : String)
     (hms : st.merkle = MerkleScheme.sha512 msId) (extra : RunRecord → List (Model.Claim 𝔽 S.m))
@@ -271,11 +254,7 @@ theorem verify_refines (spec : SessionSpec) (st : Setup) (S : Model.Statement) (
     hok₁⟩
 
 open Classical in
-/-- **The verifier refines the model's table, as one run** (§5). When `Flock.verify` accepts a one-table session, with the extra claims the
-model's `extraClaims` at link points `pts` read off the record, some message list makes `tableAfter` accept. The run is
-played on the two streams' coins, rep 0's then rep 1's, and its openings are the proofs'. The messages are existential
-and the schedule is rep 0 first, while the live server may interleave the streams: a bound on the live interaction
-lifts from `verify_refines`, which names each rep's messages and coins. -/
+/-- The messages are existential and the schedule is rep 0 first, while the live server may interleave the streams. -/
 theorem verify_tableAfter (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) (msId : String)
     (hms : st.merkle = MerkleScheme.sha512 msId) (ptLocal mPts : ℕ) (pts : RunRecord → Fin 2 → Fin mPts → 𝔽)

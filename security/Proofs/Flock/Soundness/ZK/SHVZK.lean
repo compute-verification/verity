@@ -7,32 +7,7 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Tactic.Abel
 import Mathlib.Tactic.FieldSimp
 
-/-!
-# Zero knowledge of one masked table: Lemmas A and B, and `table_shvzk`
-
-For the model of `Table` (the reference prover `Table.view` and `S_shvzk` as `Table.sim`), at a fixed non-degenerate coin
-vector:
-
-* **The identity (★)** (§4.3), `star`: rep `r`'s two extra-lane entries at an opened position are determined by the
-  witness lanes' entries there, `y₁'^r` and `ȳ^r`, because `W^r` is invertible.
-* **Lemma B's rows** (§4.3), `card_realCore` and `card_simCore`: the prover's view is a public function (`psi`) of four
-  components, each of `card_seq_masked`'s form: anything computed from earlier blocks plus a surjective image of a fresh
-  block. Row (i) is the masked `ŝ` (the mask slot, onto by the rank check); rows (ii) and (iii) the witness lanes' entries
-  at the opened positions with `(y₁'^r, ȳ^r)` (the paddings, onto by T4, and the extra lanes, onto because `W^r` is);
-  rows (vi) and (vii) the masked values with `ρ_in`, `σ_in` (the pads); rows (viii)–(x) `C_h`, `Y₂`, `Y₁` (`pad_h` onto by
-  T4, `pad_μ` and `μ` scaled by `β ≠ 0`), with the salts and ideal-leaf seeds. Rows (iv), (v), (xi) and (xii) are
-  `psi`'s: the extra-lane entries by (★), levels ≥ 1 from `y₁'^r` and fresh salts, `τ` and `C_μ` from the replayed
-  constraint, the leaves.
-* **`table_shvzk`** (Lemma B in world `W₁`): the real view and `S_shvzk(x, e)` have the same distribution.
-* **Lemma A at a non-degenerate coin vector** (§4.2), `table_prefinal_translate` and `table_prefinal_indep`: in world
-  `W₀`, the pre-final views on two witnesses carrying the public region data agree along a translation of the blocks `u`,
-  `R`, `h`, `μ` that reads only earlier blocks, so by `card_fiber_eq_of_triShift` they have the same distribution.
-
-Everything here is about one table, at coins where the prover refuses nothing. The paper's lemmas are per session of `J`
-tables: the product over tables (no claim or message reads two tables' witnesses or masks) is `Session`'s; Lemma A's
-cases where the coins make the prover refuse (a failing rank check, dependent `ρ^r`, `β = 0`), with the schedule, are
-`Refusal`'s; and Lemma C, which T5 builds from them, is `AdaptivePrefinal`'s.
--/
+/-! Zero knowledge of one masked table, Lemmas A and B, at a fixed coin vector where the prover refuses nothing. -/
 
 @[expose] public section
 
@@ -50,8 +25,6 @@ namespace Table
 
 variable {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL)
 
-/-! ## The identity (★) -/
-
 theorem Winv_Wr {r : Fin 2} (hW : Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (a b : F) :
     T.Winv r (T.Wr r a b) = (a, b) :=
   Function.leftInverse_invFun hW.1 (a, b)
@@ -60,8 +33,6 @@ theorem Wr_Winv {r : Fin 2} (hW : Function.Bijective fun p : F × F => T.Wr r p.
     T.Wr r (T.Winv r x).1 (T.Winv r x).2 = x :=
   Function.rightInverse_invFun hW.2 x
 
-/-- **The identity (★)** (§4.3): at every opened position, the folded witness lanes, rep `r`'s extra lanes weighted by
-`ρ^r` and the padding of `ȳ^r` give the codeword of `y₁'^r`. Solved for the extra lanes: `W^r` of them is `xTarget`. -/
 theorem star (w : W) (u : T.Mask) (μ0 : Fin T.nL → Fin T.tpad → F) (R : T.XLanes) (μR : T.XPad) (q : Fin T.nS)
     (r : Fin 2) :
     T.Wr r (T.xrows R μR q r 0) (T.xrows R μR q r 1) = T.xTarget (T.rows w u μ0) (T.y1' w u R) (T.ybar μ0 μR) q r := by
@@ -81,10 +52,6 @@ theorem star (w : W) (u : T.Mask) (μ0 : Fin T.nL → Fin T.tpad → F) (R : T.X
   simp only [Wr, xrows, map_add, map_sum, map_mul, add_mul, Finset.sum_add_distrib, mul_add, Finset.mul_sum,
     mul_assoc]
   ring
-
-/-! ## The view as a function of four masked components -/
-
-/-! ## The masks -/
 
 theorem mask1_apply (b : (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad) :
     T.mask1 b = (fun q l => ∑ j, b.1 l j * T.Gp q j, fun r c => T.Wr r (b.2.1 r 0 c) (b.2.1 r 1 c),
@@ -145,8 +112,6 @@ theorem mask3_surjective (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0) : Func
     show T.β r * (y r i / T.β r) = y r i
     field_simp [hβ r]
 
-/-! ## Lemma B: the real view and `S_shvzk` -/
-
 variable [CharP F 2]
 
 omit [CharP F 2] in
@@ -154,8 +119,6 @@ theorem simMask3_apply (b : ((Fin 2 → Fin T.nPad → F) × (Fin 2 → Fin T.nP
       × (Fin 2 → Fin T.nQ → F) × (Fin 2 → Fin T.nPad → F) × (Fin 2 → PadIdx T.nE → F)) :
     T.simMask3 b = (b.2.1, b.2.2.1, b.2.2.2, b.1.2.2.2) := rfl
 
-/-- **The real view is `psi` of its components**: the determined rows are what the prover computes. The extra-lane
-entries by (★), `τ` by `⟨λ, h⟩ = θ`, `C_μ` by the linearity of the pads code; the region `ŝ` by H_reg. -/
 theorem psi_realCore (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hβ : ∀ r, T.β r ≠ 0)
     (w : W) (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w) (ω : T.Rand) :
     T.psi (T.realCore w ω) = T.view w ω := by
@@ -211,8 +174,6 @@ theorem psi_realCore (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.
     refine Prod.ext (funext fun k => ?_) rfl
     exact congrArg (fun c => T.leafP (_, c) (s.2.2.2.1 r k)) (hcm r k)
 
-/-- **`S_shvzk`'s output is `psi` of its components**: the kept extra-lane entries are the dummy run's, which (★) gives
-from its other entries; `τ` and `C_μ` are computed as `psi` computes them. -/
 theorem psi_simCore (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (w0 : W) (σ : T.SimRand) :
     T.psi (T.simCore w0 σ) = T.sim w0 σ := by
   obtain ⟨⟨u, s0⟩, ⟨μ0, R, μR⟩, ⟨h, fr⟩, ⟨⟨padh, padμ, μ, s⟩, ch, Y2, Y1⟩⟩ := σ
@@ -232,21 +193,6 @@ theorem psi_simCore (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1
   · refine Prod.ext (funext fun q => ?_) rfl
     exact congrArg (fun x => T.leaf0 (T.rows w0 u μ0 q, x) (s.1 q)) (congrFun hxr q)
 
-/-! ## Lemma A: the pre-final view doesn't depend on the witness -/
-
-/-- **Lemma A's translation at a non-degenerate coin vector** (§4.2), for one table: for witnesses `w`, `w'` that carry
-the public region data, a translation of the prover's randomness maps `w`'s pre-final view to `w'`'s. The coins pass
-every check the prover makes (`Rank`, `W^r` bijective, `β ≠ 0`); the cases where they don't are
-`table_prefinal_translate_cut`'s, which uses the same amounts on what is sent before the prover refuses. Block by
-block, each amount reads only earlier blocks:
-
-1. the mask slot, `u' := u + Δ` with `Φ(Δ) = ν(w) − ν(w')`, which the rank check makes solvable (step 2);
-2. the extra lanes, `R' := R + (W^r)⁻¹(y₁^r(w, u) − y₁^r(w', u'))`, so `y₁'^r` agrees (step 3); the paddings are unchanged
-   (step 1);
-3. the pads, `h'_i := h_i + v_i(w, u, V) − v_i(w', u', V')`, at level 0's hiding `V` (`Vis`) and `V'`, `V` with `R'`,
-   and `h'_tx`, `h'_ty` so that `ρ_in`, `σ_in` agree (step 4);
-4. the inner mask, `μ' := μ + (h − h')/β` over the full pad vectors, so `Y₁` agrees (step 5); `pad_h`, `pad_μ` and every
-   salt and seed are unchanged (step 1). -/
 theorem table_prefinal_translate (hrank : T.Rank)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hβ : ∀ r, T.β r ≠ 0)
     (w w' : W) (hreg : T.sReg w = T.pubReg) (hreg' : T.sReg w' = T.pubReg) :
@@ -296,13 +242,10 @@ theorem table_prefinal_translate (hrank : T.Rank)
     field_simp [hβ r]
     ring
 
-/-! ## Counting -/
-
 variable [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype Seed]
   [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
 
 omit [Fintype K] in
-/-- **Lemma B's rows (i)–(iii) and (vi)–(x)**: the prover's view takes every value of its components equally often. -/
 theorem card_realCore (hrank : T.Rank) (hpad : T.PadOnto)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
     (w : W) (v : T.Core) :
@@ -315,7 +258,6 @@ theorem card_realCore (hrank : T.Rank) (hpad : T.PadOnto)
     (fun _ _ h => (fun r k => ∑ i, T.Ch r k i * T.hFull (h r) i, 0, fun r => T.hFull (h r), 0)) v
 
 omit [CharP F 2] [Fintype K] in
-/-- **`S_shvzk` in the same form**: its output takes every value of the components equally often. -/
 theorem card_simCore (hpad : T.PadOnto) (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2)
     (w0 : W) (v : T.Core) :
     #{σ | T.simCore w0 σ = v} = #{κ : T.SimRand | AddMonoidHom.snd _ _ κ.1 = 0 ∧ T.mask1 κ.2.1 = 0 ∧
@@ -328,13 +270,8 @@ theorem card_simCore (hpad : T.PadOnto) (hW : ∀ r, Function.Bijective fun p : 
       (fun q l => ∑ c, T.lanes w0 u.1 l c * T.E q c, fun r => T.y1 w0 u.1 r, 0)) (fun _ _ => 0)
     (fun _ _ _ => 0) v
 
-/-- **Lemma B in world `W₁`** (`docs/zk-proof-public.md` §4.3; `table_shvzk`), for one table: at a fixed non-degenerate
-coin vector, for a witness `w` whose region claims send the public values (H_reg) and whose pads satisfy the inner
-proof's constraint (`InnerHolds`), the reference prover's view (`view`: the pre-final messages and the final message,
-hm96 leaves opened or ideal) and `S_shvzk(x, e)` (`sim`, on any dummy witness `w₀`) have the same distribution.
-
-Non-degenerate means the prover refuses nothing: the rank check passes (`Rank`), each `ρ^r` is independent over `F`
-(`W^r` bijective), and `β^r ≠ 0`. `PadOnto` and `PadsOnto` are T4 for the two codes at their opened positions. -/
+/-- Non-degenerate: the rank check passes (`Rank`), each `ρ^r` is independent over `F` (`W^r` bijective), and
+`β^r ≠ 0`. -/
 theorem table_shvzk (hrank : T.Rank) (hpad : T.PadOnto)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
     (w : W) (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w) (w0 : W) :
@@ -343,10 +280,7 @@ theorem table_shvzk (hrank : T.Rank) (hpad : T.PadOnto)
     (T.psi_realCore hW hβ w hreg hinner) (T.psi_simCore hW w0)
 
 omit [Fintype K] [DecidableEq K] in
-/-- **Lemma A at a non-degenerate coin vector** (§4.2, `card_fiber_eq_of_triShift` applied to its translation), for one
-table: in world `W₀`, the pre-final views on any two witnesses carrying the public region data take every value equally
-often. Lemma A needs no other property of the witnesses, so it holds for the dummy one. The coins where the prover refuses
-are `table_prefinal_indep_cut`'s. -/
+/-- Lemma A needs no other property of the witnesses, so it holds for the dummy one. -/
 theorem table_prefinal_indep (hrank : T.Rank)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hβ : ∀ r, T.β r ≠ 0)
     (w w' : W) (hreg : T.sReg w = T.pubReg) (hreg' : T.sReg w' = T.pubReg) :

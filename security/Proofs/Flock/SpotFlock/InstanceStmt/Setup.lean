@@ -60,19 +60,8 @@ import all Init.Data.String.Termination
 import all Init.Data.Array.Attach
 import all Init.WF
 
-/-! # The two-instance statement's setup: `Stmt.setupHidden` and `Stmt.setupTables`
-
-`load_pubX` walks `HmIn.loadPublic` on the public file `pubOf` to the population `popX`: its header reads back
-(`findByte_pub`, `parse_hdr`), both instances are of the circuit's class `C` (`any_bne_two`), and the header's units
-and the header itself are as `canon` and `canonUtf8` write them, which it takes as hypotheses (`hu1`, `hu2`, `hd`).
-`setup_stX` walks `Stmt.setupHidden` on the circuit and public files, the sample `sampleJ`, the partition `partObj` and
-the program `progBytes` to the statement `stX`: the partition checks (`cpo_part`, `canon_part`), the sample's header is
-`hdrD`, whose text it takes as a hypothesis (`hd2`), and Δ is kept as `oA` and `oB`, as `FlockDeploy.Concrete.setup_stW`
-keeps `HmRow.delta`'s. Its partition finding is `checkPartition_X`'s, `HmRow.checkPartition` at the statement's circuit
-and partition object, derived from the program: the sampled proof block is an instance of the circuit's template
-(`deriveTemplateUnits_X`, `HmRow.deriveTemplateUnits`), and no cut wire runs between the units (`linksCheck_X`,
-`HmLinks.check`). `setupTables_X` is `Stmt.setupTables` at one table, `tabX`.
--/
+/-! The two-instance statement's setup, `Stmt.setupHidden` and `Stmt.setupTables`, given its canonical texts as
+hypotheses (`setup_stX`, `setupTables_X`). -/
 
 @[expose] public section
 open Flock Flock.ZkServer RecDeploy.VStarNets
@@ -84,8 +73,6 @@ set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt
 
-/-! ## The public file -/
-
 theorem extract_hdr (r : Run) (circ cls : String) :
     (pubOf r circ cls).extract 0 (printJson (hdrJ r circ cls)).toUTF8.size = (printJson (hdrJ r circ cls)).toUTF8 :=
   ByteArray.extract_append_eq_left rfl
@@ -95,14 +82,12 @@ theorem extract_body (r : Run) (circ cls : String) :
   rw [pubOf, tailB, ← ByteArray.append_assoc]
   exact ByteArray.extract_append_eq_right (by rw [ByteArray.size_append]; rfl) ByteArray.size_append
 
-/-- Both instances are of class `s`: `classes.any (· != s)` is under a lambda, which a rewrite of `s != s` does not
-reach. -/
+/-- `classes.any (· != s)` is under a lambda, which a rewrite of `s != s` does not reach. -/
 theorem any_bne_two {l : Array String} {s : String} (hl : l = #[s, s]) : (l.any fun x => x != s) = false := by
   subst hl
   simp
 
-/-- `some <$>` a computation that returns, as the setup reads the partition: no rule matches a `Functor.map`. Its side
-condition is walked. -/
+/-- No rule matches a `Functor.map`, so this lemma takes the step; its side condition is walked. -/
 theorem map_some_ok {ε α : Type} {m : Except ε α} {a : α} (h : m = .ok a) : (some <$> m) = .ok (some a) := by
   rw [h]; rfl
 
@@ -117,7 +102,6 @@ theorem cO_g (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : 
 theorem cO_upv (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
     (cO ls lh H C A B A' B' s1).upv = 1 := by kernel_rfl'
 
-/-- The partition's digest in hex, as `HmRow.checkPartition` compares it with META's. -/
 theorem partDigest_hex : hexOf (Sha512.hash (HmRow.PARTITION_V1.toUTF8.push 0 ++ partText.toUTF8)) = partHex := by
   have h := partHex_eq
   unfold HmRow.partitionDigest at h
@@ -137,12 +121,9 @@ fwd_def popX load_pubX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A'
     HmRow.classOf, HmRow.parse, HmOut.parse, Flock.norm]
   shallow [metaText]
 
-/-! ## The statement -/
-
 def oA (c : Circuit) (p : Nat) : Array (Nat × Nat) := (HmOut.delta c p).1
 def oB (c : Circuit) (p : Nat) : Array (Nat × Nat) := (HmOut.delta c p).2
 
-/-- Δ of a statement without public input ports, `HmOut.delta`'s arrays kept as they are. -/
 theorem delta_in (c : Circuit) (p : Nat) : HmIn.delta c {} p = (oA c p, oB c p) := rfl
 
 fwd_def cpX checkPartition_X (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
