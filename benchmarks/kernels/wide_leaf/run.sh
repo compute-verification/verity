@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The wide level-0 commitment leaf against today's leaf on one card, on statement.toml's statement (wleaf.py):
-#   research run --on NODE --project verity --source . --cwd source -- bash benchmarks/kernels/wide_leaf/run.sh [dry]
+#   research run --on NODE --project verity --source . --cwd source --store-read -- bash benchmarks/kernels/wide_leaf/run.sh [dry]
 #
 #   card    (the default) on a GPU node, in one of its GPU slots: the prover built by the steady harness's setup
 #           (benchmarks/harness/setup/flock_prover.sh, CUDA 13.3) in FLOCK_WORK on the node's disk; the statement
@@ -71,7 +71,6 @@ dry)
   log "dry: done"; exit 0 ;;
 inside)
   END=$(( $(date +%s) + LEASE_MIN * 60 - 120 ))
-  export CARD_DRIVER; CARD_DRIVER=$(nvidia-smi --id="${CUDA_VISIBLE_DEVICES:-0}" --query-gpu=driver_version --format=csv,noheader | tr -d ' ')
   "$PY" "$HERE/wleaf.py" host 2>&1 | tee -a "$O/run.log"; [ "${PIPESTATUS[0]}" = 0 ] || { log "REFUSED: the lease is not of one card"; exit 2; }
   for s in ${STEPS//,/ }; do
     [ $(( (END - $(date +%s)) / 60 )) -ge "$STEP_MIN" ] || { log "step $s: skipped, under $STEP_MIN min left in the lease"; continue; }
@@ -87,7 +86,7 @@ card)
   setup
   export SCRATCH; SCRATCH=$(mktemp -d "$FLOCK_WORK/scratch/run-XXXXXX"); export STAGED=$SCRATCH/z
   trap 'rm -rf "$SCRATCH"' EXIT
-  rfetch "$SCRATCH/store" --to "$SCRATCH/st" --path "$ART_PATH/*" > "$O/fetch.txt" 2>&1 || { log "REFUSED: the statement's fetch failed"; exit 4; }
+  rfetch "$SCRATCH/store" --to "$SCRATCH/st" --path "$ART_PATH" > "$O/fetch.txt" 2>&1 || { log "REFUSED: the statement's fetch failed"; exit 4; }
   n=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["n"])' "$SCRATCH/st/$ART_PATH/stage.json")
   STMT=$STAGED/$NAME/c$n/stage
   mkdir -p "$(dirname "$STMT")" && mv "$SCRATCH/st/$ART_PATH" "$STMT" && rm -rf "$SCRATCH/store"

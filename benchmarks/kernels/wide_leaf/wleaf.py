@@ -62,10 +62,12 @@ def lease(a: argparse.Namespace) -> int:
 
 
 def host(a: argparse.Namespace) -> int:
-    from verity_bench import kit, steady, steady_cards, steady_node
-    out = Path(os.environ["RESEARCH_RUN_DIR"]) / "out"
-    device = os.environ.get("CUDA_VISIBLE_DEVICES", "")
-    record = {"host": kit.host_stamp(), "device": device, "cpus": sorted(os.sched_getaffinity(0)),
+    from verity_bench import kit, settings, steady, steady_cards, steady_lease, steady_node
+    out = Path(settings.RESEARCH_RUN_DIR) / "out"
+    device = settings.CUDA_VISIBLE_DEVICES or ""
+    stamp = kit.host_stamp()
+    record = {"host": stamp, "device": device, "cpus": sorted(os.sched_getaffinity(0)),
+              "versions": {"driver": stamp.get("driver"), "cuda_toolkit": steady_lease.toolkit_on_node(steady_node._ask)},
               steady.CARD_NUMA: steady_cards.card_numa_node(device, steady_node._ask)}
     (out / "host.json").write_text(json.dumps(record, indent=1))
     print(f"wleaf: {record['host'].get('card')} (device {device}, NUMA node {record[steady.CARD_NUMA]}), "
@@ -74,18 +76,18 @@ def host(a: argparse.Namespace) -> int:
 
 
 def step(a: argparse.Namespace) -> int:
-    from verity_bench import steady, steady_cards, steady_node
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"])
-    device = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+    from verity_bench import settings, steady, steady_cards, steady_node
+    run_dir = Path(settings.RESEARCH_RUN_DIR)
+    device = settings.CUDA_VISIBLE_DEVICES or ""
     if not device or "," in device:
         print(f"wleaf: a step runs under a gpu-lease of one card (CUDA_VISIBLE_DEVICES is {device!r})", file=sys.stderr)
         return 2
     sd, scratch = run_dir / "out" / "steps" / a.tag, Path(a.scratch) / f"rate-{a.tag}"
     sd.mkdir(parents=True, exist_ok=True)
     shutil.rmtree(scratch, ignore_errors=True)
-    row, run_id = {"provers": 1}, os.environ.get("RESEARCH_RUN_ID", "")
+    row, run_id = {"provers": 1}, settings.RESEARCH_RUN_ID
     steady_cards.snapshot(sd / Path(steady.card_file(row, "start")).name, run_id, device, steady_node._ask, _now)
-    argv = [sys.executable, "benchmarks/one_stage/server_rate.py", "--bin", os.environ["VERITY_BENCH_STEADY_BIN"],
+    argv = [sys.executable, "benchmarks/one_stage/server_rate.py", "--bin", steady_node.prover()["path"],
             "--staged", a.staged, "--types", a.type, "--provers", "1", "--out", str(scratch), "--device", device,
             "--sessions", str(a.sessions), "--warm", str(a.warm), "--ahead", str(a.ahead),
             *(["--wide-leaf"] if a.wide else [])]
@@ -94,7 +96,7 @@ def step(a: argparse.Namespace) -> int:
     steady_cards.snapshot(sd / Path(steady.card_file(row, "end")).name, run_id, device, steady_node._ask, _now)
     item = SimpleNamespace(row=SimpleNamespace(name=a.type, period=None), provers=1)
     node = steady_cards.card_numa_node(device, steady_node._ask)
-    read = {"driver": os.environ.get("CARD_DRIVER", ""), "cuda_toolkit": os.environ.get("CARD_TOOLKIT", "")}
+    read = json.loads((run_dir / "out" / "host.json").read_text())["versions"]
     n = steady_node.keep(scratch, sd / "rate", item, read, node)
     kept = steady_node.keep_session(scratch / f"{a.type}-k1", sd / "rate" / f"{a.type}-k1", a.pin)
     (sd / "step.json").write_text(json.dumps({"tag": a.tag, "wide": a.wide, "exit": rc, "rows": n, "kept": kept,
@@ -182,7 +184,8 @@ def record(out: Path, steps: Sequence[Mapping[str, Any]], host: Mapping[str, Any
 
 
 def finish(a: argparse.Namespace) -> int:
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"])
+    from verity_bench import settings
+    run_dir = Path(settings.RESEARCH_RUN_DIR)
     out, st = run_dir / "out", statement()
     steps = summarize(run_dir, st["name"])
     host = json.loads((out / "host.json").read_text())
