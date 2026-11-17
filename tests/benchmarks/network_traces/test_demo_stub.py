@@ -126,7 +126,7 @@ def test_what_isnt_a_network_certifiers_id_request_is_refused_and_the_models_lis
                   ws.http_request({"model": NAME, "prompt": PROMPT, "max_tokens": 24}, "h"),
                   ids_request().replace(b"POST /v1/completions", b"POST /v1/chat/completions", 1)):
         assert other != ids_request() and S.network_attester_request(other) is None
-        assert "a network certifier's id request" in refused(respond(other))
+        assert "a network attester's id request" in refused(respond(other))
     models = respond(b"GET /v1/models HTTP/1.1\r\nhost: s\r\n\r\n")
     assert models.startswith(b"HTTP/1.1 200 OK\r\n")
     assert [m["id"] for m in json.loads(models.partition(b"\r\n\r\n")[2])["data"]] == [NAME]

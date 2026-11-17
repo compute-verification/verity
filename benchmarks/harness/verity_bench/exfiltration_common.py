@@ -11,7 +11,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-SCHEMA = "exfiltration/v4"
+SCHEMA = "exfiltration/v5"
 #: the network attester's document the command reads: its `value` the term of record, its rows' `term` by jitter
 #: bound and their ε (`eps`), its inputs, and the label of what rests on a set-time card, at its top and on each row
 #: that carries it
@@ -27,7 +27,7 @@ NO_BOUND = "no bound at this period"
 AMOUNTS = ("schedules", "cells", "jitter", "term", "entries")
 #: a sum's two figures, the network attester's term and the two parts together, each with the key of its error in
 #: its scope's monitoring period
-ERRORS = {"certifier_GB": "eps", "GB": "error"}
+ERRORS = {"attester_GB": "eps", "GB": "error"}
 MODEL = "GLM-5.3"
 #: the record whose runs hold the planner's rows, and the rows' files in a run's files: the driver's default command's
 #: and its rows over the world's year alone
@@ -188,8 +188,8 @@ LEAN_BOUND = "CompiledTwo.eventTwoX_le_cls_at_budget"
 #: printed where no Lean theorem gives a number at a design's sizes
 NOT_PROVED = "not proved at these sizes"
 #: the figures a runner records under a research run (`record`), each over every monitoring period at the share: the
-#: one the command calls the headline, the compute audit's part and the network attester's
-FIGURES = ("headline", "compute_audit", "network_certifier")
+#: compute audit's part, the network attester's and the two together
+FIGURES = ("compute_audit", "network_attester", "total")
 #: the document a run's result keeps beside its measurements, relative to the run's directory
 DOCUMENT = "out/exfiltration.json"
 

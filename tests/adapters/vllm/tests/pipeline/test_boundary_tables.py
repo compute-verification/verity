@@ -20,13 +20,15 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array
 from verity.circuits.types import Value as Bits
 from verity.commitments import history as HT
 from verity.commitments.periods import rows as CS
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+
 from verity_vllm.commit import history_tables as H
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR
@@ -308,8 +310,8 @@ def test_a_bf16_launchs_hook_tables_domains_and_program_are_unchanged():
     doc = {"program": L.partition["program"], "ports": L.ports(), "provenance": L.provenance(),
            "words": [L.words(t) for t in L.tables]}
     assert hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest() == BF16_LAYOUT
-    assert "words" not in L.provenance()["tables"] and L == BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=LEAVES,
-                                                                      row_words=H.WORDS)
+    assert "words" not in L.provenance()["tables"] and BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=LEAVES,
+                                                                      row_words=H.WORDS) == L
 
 
 def test_a_layout_of_fp8_ds_mla_rows_binds_its_words_in_its_tables_domains_and_its_record():
@@ -512,7 +514,8 @@ def test_a_serve_of_ids_commits_the_ids_served_as_its_blocks_return_beside_its_t
     layout, and the class's files reopen to the same roots."""
     check = BR.check_template("GreedySelect_v1{V=160,N=8}")
     _runner, hook, _hooks = serve()
-    make, tables, lines = *built(), []
+    make, tables = built()
+    lines: list = []
     bw, sched, hooks = windows(tmp_path, hook.latents, make, lines, check=check, ids=True)
     try:
         finish(sched)

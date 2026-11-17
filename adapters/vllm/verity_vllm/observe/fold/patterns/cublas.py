@@ -10,8 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import b1, cublas_bf16
 
+from verity_vllm.definitions.registry import b1, cublas_bf16
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import (
     GeometryError,
