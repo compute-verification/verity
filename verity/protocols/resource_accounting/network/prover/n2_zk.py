@@ -18,7 +18,7 @@ the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness
 * **The run** (``--warden-run``): an active network attester's run (`network_attester_serve.py`'s, or the gate's
   ``warden-rehearse``'s), read by `network_attester_chain`: its own certified records under its key and session, on the network
   attester link (`service.NetworkAttesterProfile`: both heads at the network attester's grid and parameters digest, no sync
-  declared or charged), a certifier rehearsal's run refused by name. Which execution phases its signer refused follows
+  declared or charged), a network attester rehearsal's run refused by name. Which execution phases its signer refused follows
   what the node sent, so the public summary of a run whose signer refused any holds each member's
   ``certifier_refused`` and ``ok`` alone, nothing per window, and the members whole go to ``--witness``.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
@@ -44,11 +44,11 @@ the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness
   Lean included). Then the link's network verdict (`TransferBlocks.network_verdict`). The members' rounds run one after
   another: outer proofs go through the ZK server one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
 * **What the verifier receives**, per execution phase, kept under ``<member>/verifier/`` (`RECEIVED`): the registration
-  record (the salted root, nothing of the certificates) and the sample; the two certificates' public fields, from the certifier,
+  record (the salted root, nothing of the certificates) and the sample; the two certificates' public fields, from the attester,
   the auditor's device; the declared clock syncs; from the prover, the statement's public file (its header and each row's
   hiding commitment), its session files, and the salts of the ``pub`` and ``o0`` rows with the output word; and the
   outcome record. Its own: the circuit file's SHA-512 (its lowering, which prover and verifier share here), the Program's
-  descriptor and the partition object. Never the opening (records, heads, leaf salts, siblings, the certifier's salt)
+  descriptor and the partition object. Never the opening (records, heads, leaf salts, siblings, the attester's salt)
   nor the ``wit`` row's salt. Every file there is scanned for every piece of every head, leaf salt, sibling and
   certifier salt of the member (`a8.received`) but the pieces the public circuit or a window's ``pub`` row holds
   (`public_pieces`), which the verifier has whatever the witness, and a member fails on a ``leaked`` piece under the
@@ -188,7 +188,7 @@ def _without_clear(body: dict) -> dict:
 def network_attester_link(run: Path) -> tuple[TransferBlocks, dict, dict, list]:
     """A network attester run's link (`network_attester_chain.link`: the active network attester's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
-    the signer's refusals. A certifier rehearsal's run is refused by name (`network_attester_chain.PROXY`)."""
+    the signer's refusals. A network attester rehearsal's run is refused by name (`network_attester_chain.PROXY`)."""
     WC = proof_drivers.drivers().network_attester_chain
     lw, dep, _ = WC.link(run)
     got, refused = WC.pairs(run, dep)
@@ -231,7 +231,7 @@ def phases(run: Path, edit=None) -> SimpleNamespace:
 
 def one_count(lw: TransferBlocks, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
     """Window 0's egress head with one frame more in its first bucket that has frames and room (else its first with
-    room), the certifier's salt and certificate unchanged: what a prover that changed one count commits."""
+    room), the attester's salt and certificate unchanged: what a prover that changed one count commits."""
     if w != 0:
         return pair
     egress, ingress = pair
@@ -268,7 +268,7 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
 
 
 def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
-    """The witness pieces the verifier must not receive: each head, its leaf's salt, its siblings, the certifier's salt,
+    """The witness pieces the verifier must not receive: each head, its leaf's salt, its siblings, the attester's salt,
     and the records' leaf salts; the heads are what the prover's instance files hold as they are."""
     blobs, held = {}, set()
     for x in rd.windows:
@@ -602,7 +602,7 @@ def prove(a) -> int:
     summary["draw"] = ({"selection": "all", "k": n, "population": n, "coins": None} if not a.draw else {
         "selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": n, "delta": DELTA,
         "coins": {"source": "verifier", "by": "the verifier's own: the operating system's bytes through the Lean "
-                  "verifier of record (spot verifier.coins), read only after the period's commitment; not "
+                  "verifier (spot verifier.coins), read only after the period's commitment; not "
                   "the auditor's challenger's"}})
     summary["warden_run"] = members["honest"].plan["warden_run"]
     summary["warden"] = {"syncs": "none: the network certifier runs no shaper clock, so a window declares no sync and the link's "
@@ -698,7 +698,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("prove", help="each execution phase's proof block proved --zk and decided by N2's verifier of "
                                      "record")
     p.add_argument("--warden-run", dest="network_certifier_run", type=Path, required=True,
-                   help="an active network certifier's run (network_attester_serve.py's, or the gate's warden-rehearse's): "
+                   help="an active network attester's run (network_attester_serve.py's, or the gate's warden-rehearse's): "
                         "its own certified records, no certifier rehearsal (network_attester_chain)")
     p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")
     p.add_argument("--bin")
