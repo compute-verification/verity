@@ -10,5 +10,5 @@ def run_id() -> str:
 
 
 def hold_placement() -> bool:
-    """``VERITY_HOLD_PLACEMENT=1``: the refusals that rest only on where coins are flipped or a composite made hold."""
-    return os.environ.get("VERITY_HOLD_PLACEMENT") == "1"
+    """Unless ``VERITY_HOLD_PLACEMENT=0``, the refusals resting only on where coins or composites are made hold."""
+    return os.environ.get("VERITY_HOLD_PLACEMENT") != "0"

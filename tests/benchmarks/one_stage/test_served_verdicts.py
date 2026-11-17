@@ -1420,7 +1420,7 @@ def test_record_reads_the_inference_only_verdict_beside_it_into_its_row(tmp_path
 
 def test_the_served_nodes_run_exits_nonzero_since_its_record_reads_no_composite():
     """The main run's first record of `$OUT/pieces` takes no --composite, and the run ends on the last record's exit:
-    under VERITY_HOLD_PLACEMENT=1, where no composite on the served node is of record (under COMPOSE_OFF_NODE=0 a
+    unless VERITY_HOLD_PLACEMENT=0, where no composite on the served node is of record (under COMPOSE_OFF_NODE=0 a
     development one), that record is the last, pending, and the exit 2, or 1 where a step failed: never 0. The main run
     serves before it records, which no harness here stubs, so this reads the script."""
     script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
@@ -4147,17 +4147,20 @@ def test_v3c_reserves_no_session_on_a_run_root_the_gate_opened_or_while_its_lane
 
 def _not_development(challenger: str) -> str:
     return ("PREFLIGHT: V3c's audit is the SPOT audit of record, and V3C_CHALLENGER (default PP_CHALLENGER) is "
-            f"{challenger}, a development session, which under VERITY_HOLD_PLACEMENT=1 only a development run takes: set "
-            "PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or "
-            "VERITY_HOLD_PLACEMENT unset")
+            f"{challenger}, a development session, which unless VERITY_HOLD_PLACEMENT=0 only a development run takes: "
+            "set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or "
+            "VERITY_HOLD_PLACEMENT=0")
 
 
 @pytest.mark.parametrize("extra, line", [
     ({"DEVELOPMENT": None}, _not_development("local")),
+    ({"DEVELOPMENT": None, "VERITY_HOLD_PLACEMENT": None}, _not_development("local")),
+    ({"DEVELOPMENT": None, "VERITY_HOLD_PLACEMENT": ""}, _not_development("local")),
     ({"DEVELOPMENT": None, "V3C_CHALLENGER": "loopback:127.0.0.1:7000"}, _not_development("loopback:127.0.0.1:7000")),
     ({"DEVELOPMENT": "yes"}, "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not yes"),
-    ({"VERITY_HOLD_PLACEMENT": "yes"}, "PREFLIGHT: VERITY_HOLD_PLACEMENT is 1, which restores the refusals that rest on "
-                                       "where coins are flipped or composites made, or 0 or unset, not yes"),
+    ({"VERITY_HOLD_PLACEMENT": "yes"}, "PREFLIGHT: VERITY_HOLD_PLACEMENT is 0, which lifts the refusals that rest on "
+                                       "where coins are flipped or composites made, or 1 or unset, which keep them, not "
+                                       "yes"),
     ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or "
                                          "gate:USER@HOST, not gate:auditor"),
     ({"PP_CHALLENGER": LIVE}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} listens on its peer's 127.0.0.1, and V3C_PEER "
@@ -4168,7 +4171,7 @@ def _not_development(challenger: str) -> str:
 ])
 def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_development_run_or_a_live_one_it_cannot_hold(
         tmp_path, extra, line):
-    """Under VERITY_HOLD_PLACEMENT=1 a local or loopback session for V3c's audit, the SPOT audit of record, is refused
+    """Unless VERITY_HOLD_PLACEMENT=0 a local or loopback session for V3c's audit, the SPOT audit of record, is refused
     unless the run is a development run (DEVELOPMENT=1, which is otherwise unset); a live one with no peer for its
     session to listen on or no key record to hold it to is refused whatever it is set to; each before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
@@ -4178,28 +4181,28 @@ def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_developmen
 @pytest.mark.parametrize("challenger", [None, "loopback:127.0.0.1:7000"])
 def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a_development_run(tmp_path, challenger):
     """With V3c off step 3's audit is the SPOT audit of record, whose SPOT the compose gate's Lean
-    holds to a challenger, so under VERITY_HOLD_PLACEMENT=1 its local or loopback session is refused unless the run is
+    holds to a challenger, so unless VERITY_HOLD_PLACEMENT=0 its local or loopback session is refused unless the run is
     a development run, before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), HOST="vy-dc-h200", DEVELOPMENT=None, PP_CHALLENGER=challenger,
                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **NO_V3C)
     assert (rc, lines, order) == (3, [
-        "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER "
-        f"is {challenger or 'local'}, a development session, which under VERITY_HOLD_PLACEMENT=1 only a development run "
-        "takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or "
-        "VERITY_HOLD_PLACEMENT unset"], [])
+        "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the SPOT audit of record, and PP_CHALLENGER "
+        f"is {challenger or 'local'}, a development session, which unless VERITY_HOLD_PLACEMENT=0 only a development "
+        "run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, "
+        "or VERITY_HOLD_PLACEMENT=0"], [])
 
 
 @pytest.mark.parametrize("challenger", ["local", "loopback:127.0.0.1:7000"])
 def test_a_run_of_record_takes_a_development_sessions_coins_as_simulated_unless_placement_is_held(tmp_path, challenger):
-    """With VERITY_HOLD_PLACEMENT unset, a run of record (DEVELOPMENT unset) on a local or loopback session passes the
+    """Under VERITY_HOLD_PLACEMENT=0, a run of record (DEVELOPMENT unset) on a local or loopback session passes the
     preflight: V3c's audit runs on it and its COINS line says the coins are simulated, not the auditor's challenger's,
     and step 3's audit of record with V3c off is let through too."""
-    rc, lines, order, _limits = _v3c(tmp_path, DEVELOPMENT=None, VERITY_HOLD_PLACEMENT=None, V3C_CHALLENGER=challenger)
+    rc, lines, order, _limits = _v3c(tmp_path, DEVELOPMENT=None, VERITY_HOLD_PLACEMENT="0", V3C_CHALLENGER=challenger)
     assert rc == 0 and "audit" in order, (lines, order)
     assert lines[0] == (f"COINS V3c's audit: a development challenger session where it runs (V3C_CHALLENGER {challenger}), "
                         "simulated: not the auditor's challenger"), lines[0]
     rc, lines, order, _limits = _v3c(tmp_path / "step-3", (), HOST="vy-dc-h200", PP_PEER="vy-dc-h200", DEVELOPMENT=None,
-                                     VERITY_HOLD_PLACEMENT=None, PP_CHALLENGER=challenger, PREFLIGHT_ONLY="1",
+                                     VERITY_HOLD_PLACEMENT="0", PP_CHALLENGER=challenger, PREFLIGHT_ONLY="1",
                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'step-3' / 'bin'}:{os.defpath}", **NO_V3C)
     assert rc == 0 and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed on vy-dc-h200"), lines
 
@@ -5473,15 +5476,16 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
 
 @pytest.mark.parametrize("extra, off", [({"PRODUCT": "remote"}, False), ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "1"}, True),
                                         ({"PRODUCT": "remote", "VERITY_HOLD_PLACEMENT": "1"}, True),
-                                        ({"COMPOSITE": ""}, False), ({"COMPOSITE": "", "VERITY_HOLD_PLACEMENT": "1"}, True)])
-def test_with_placement_unset_a_composite_is_composed_off_the_node_only_where_its_caller_runs_a_composer_there(
+                                        ({"PRODUCT": "remote", "VERITY_HOLD_PLACEMENT": None}, True),
+                                        ({"COMPOSITE": ""}, False), ({"COMPOSITE": "", "VERITY_HOLD_PLACEMENT": "1"}, True),
+                                        ({"COMPOSITE": "", "VERITY_HOLD_PLACEMENT": ""}, True)])
+def test_with_placement_lifted_a_composite_is_composed_off_the_node_only_where_its_caller_runs_a_composer_there(
         tmp_path, extra, off):
-    """With VERITY_HOLD_PLACEMENT unset a composite, remote's as onsite's, is composed on the node unless its caller
-    runs a composer off it and says so (COMPOSE_OFF_NODE=1); under VERITY_HOLD_PLACEMENT=1 it is composed off the
-    node as on main."""
+    """Under VERITY_HOLD_PLACEMENT=0 a composite, remote's as onsite's, is composed on the node unless its caller
+    runs a composer off it and says so (COMPOSE_OFF_NODE=1); with it 1, empty or unset it is composed off the node."""
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                      HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", CERTIFIER_CHAIN_CMD=None,
-                                     CERTIFIER_PERIOD_CMD=None, **{"VERITY_HOLD_PLACEMENT": None, **extra})
+                                     CERTIFIER_PERIOD_CMD=None, **{"VERITY_HOLD_PLACEMENT": "0", **extra})
     assert (rc, order) == (0, []), lines
     assert ("composed off this node, on COMPOSE_NODE" in lines[0]) is off, lines
 
@@ -5491,7 +5495,7 @@ def test_with_placement_unset_a_composite_is_composed_off_the_node_only_where_it
 RUN_END = '''set -uo pipefail
 say() { echo "$*" >> "$OUT/verdicts.txt"; }
 publish_lines() { tee -a "$OUT/verdicts.txt"; }
-hold_placement() { [ "${VERITY_HOLD_PLACEMENT:-}" = 1 ]; }
+hold_placement() { [ "${VERITY_HOLD_PLACEMENT:-}" != 0 ]; }
 fixed_limits() { :; }
 handoff() { echo "HANDOFF composed off this node" >> "$OUT/verdicts.txt"; }
 rec=2 wc_ok=1 sc=0 left=0 v3c_done=1 V3C= DEFER= WT=() SC=()
@@ -5512,7 +5516,7 @@ def _run_end(tmp_path: Path, **env: str | None) -> tuple[int, list[str], list[st
     full = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOST": "vy-dc-h200", "TPY": sys.executable,
             "ORDER": str(tmp_path / "order"), "D": str(tmp_path / "serve"), "OUT": str(out), "K": "7",
             "SP": str(tmp_path / "serve" / "spot-served"), "PRODUCT": "remote", "H1_KEY_SHA512": "ab" * 64,
-            "COMPOSE_OFF_NODE": "0", **env}
+            "COMPOSE_OFF_NODE": "0", "VERITY_HOLD_PLACEMENT": "0", **env}
     run = subprocess.run(["bash", "-c", RUN_END + script[start:end]], cwd=tree, check=False, capture_output=True,
                          text=True, env={k: v for k, v in full.items() if v is not None})
     order = tmp_path / "order"
@@ -5525,15 +5529,16 @@ def _run_end(tmp_path: Path, **env: str | None) -> tuple[int, list[str], list[st
     ({"LEAN": "reject"}, 1, ["composite", "record"], "reject"),
     ({"LEAN": "accept", "PRODUCT": "onsite"}, 0, ["composite", "record"], "accept"),
     ({"LEAN": "accept", "VERITY_HOLD_PLACEMENT": "1"}, 2, ["composite"], None),
+    ({"LEAN": "accept", "VERITY_HOLD_PLACEMENT": None}, 2, ["composite"], None),
     ({"LEAN": "accept", "COMPOSE_OFF_NODE": "1"}, 2, [], None),
     ({"LEAN": "accept", "COMPOSITE": ""}, 2, [], None),
 ])
 def test_a_composite_made_on_the_served_node_is_the_records_verdict_unless_placement_is_held(
         tmp_path, env, rc, order, composed):
-    """With VERITY_HOLD_PLACEMENT unset, a composite made on the served node is of record: the record is composed again
-    after it, reading it, so the run ends on the product's Lean verdict and not pending. Under VERITY_HOLD_PLACEMENT=1,
+    """Under VERITY_HOLD_PLACEMENT=0, a composite made on the served node is of record: the record is composed again
+    after it, reading it, so the run ends on the product's Lean verdict and not pending. Unless VERITY_HOLD_PLACEMENT=0,
     under COMPOSE_OFF_NODE=1 (whose hand-off is composed off the node) or with no composite, the record stays as step 5
-    composed it, as on main."""
+    composed it."""
     got, lines, ran = _run_end(tmp_path, **env)
     assert (got, ran) == (rc, order), lines
     records = [json.loads(x.removeprefix("RECORD ")) for x in lines if x.startswith("RECORD ")]
@@ -5798,7 +5803,7 @@ def test_witness_names_each_path_a_served_run_holds_as_its_witness_and_why(tmp_p
      "or COMPOSE_OFF_NODE=0 for a development composite here"),
     ({"COMPOSITE": None, "COMPOSE_OFF_NODE": "0"}, None),
     ({}, None),
-    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) "
+    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default unless VERITY_HOLD_PLACEMENT=0) "
                                     "or 0, not yes"),
 ])
 def test_the_preflight_refuses_an_onsite_composite_off_the_node_whose_cases_only_its_card_writes(tmp_path, extra, line):
@@ -6928,20 +6933,26 @@ def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks
 
 
 @pytest.mark.parametrize("extra, first, rc", [
-    ({}, "COMPOSITE ON-NODE: composed on the served node {host}, which the prover controls", 1),
+    ({"VERITY_HOLD_PLACEMENT": "0"},
+     "COMPOSITE ON-NODE: composed on the served node {host}, which the prover controls", 1),
     ({"COMPOSE_ON_NODE": "composed by a follow-on here"}, "COMPOSITE ON-NODE: composed by a follow-on here", 1),
-    ({"PRODUCT": "remote"}, "COMPOSITE ON-NODE: composed on the served node {host}, which the prover controls", 1),
+    ({"PRODUCT": "remote", "VERITY_HOLD_PLACEMENT": "0"},
+     "COMPOSITE ON-NODE: composed on the served node {host}, which the prover controls", 1),
     ({"VERITY_HOLD_PLACEMENT": "1", "COMPOSE_OFF_NODE": "0"},
      "COMPOSITE DEVELOPMENT: composed on the served node {host}, which the prover controls: a development check, no "
      "claim of record (COMPOSE_OFF_NODE=0)", 1),
+    *[(hold, "COMPOSITE refused: this is the served node {host}, which the prover controls, so a composite here claims "
+       "no record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it "
+       "here as a development check, VERITY_HOLD_PLACEMENT=0 composes it here)", 1)
+      for hold in ({}, {"VERITY_HOLD_PLACEMENT": ""})],
     ({"VERITY_HOLD_PLACEMENT": "1"},
      "COMPOSITE refused: this is the served node {host}, which the prover controls, so a composite here claims no "
      "record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it here "
-     "as a development check, VERITY_HOLD_PLACEMENT unset composes it here)", 1),
+     "as a development check, VERITY_HOLD_PLACEMENT=0 composes it here)", 1),
 ])
 def test_a_composite_on_the_served_node_is_composed_and_says_where_unless_placement_is_held(tmp_path, extra, first, rc):
-    """With VERITY_HOLD_PLACEMENT unset a composite on the served node is composed, not as a development check, and its
-    first line says where; under VERITY_HOLD_PLACEMENT=1 it is refused, or under COMPOSE_OFF_NODE=0 a development
+    """Under VERITY_HOLD_PLACEMENT=0 a composite on the served node is composed, not as a development check, and its
+    first line says where; unless VERITY_HOLD_PLACEMENT=0 it is refused, or under COMPOSE_OFF_NODE=0 a development
     check."""
     (tmp_path / "tree").mkdir()
     (tmp_path / "out").mkdir()
@@ -6973,9 +6984,9 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
     case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and no product
     is handed a case under ``SERVE_DIR/private/pouw``, tied or not, whose period case reaches a product only as
-    served_cases.py writes it, tied to that record. On the served node (SERVED_NODE unset) under VERITY_HOLD_PLACEMENT=1 it
-    composes only under COMPOSE_OFF_NODE=0, a development check its first line and each product's composite.py say claims
-    no record. Where SERVED_NODE names
+    served_cases.py writes it, tied to that record. On the served node (SERVED_NODE unset) unless
+    VERITY_HOLD_PLACEMENT=0 it composes only under COMPOSE_OFF_NODE=0, a development check its first line and each
+    product's composite.py say claims no record. Where SERVED_NODE names
     another host it says it composed there, from the compose hand-off (COMPOSE_HANDOFF) or a deferral's prover-side copy
     of the serve dir's audit inputs."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
@@ -7136,7 +7147,7 @@ sys.exit(1)
     assert (out / "verdicts.txt").read_text().splitlines() == [
         f"COMPOSITE refused: this is the served node {host}, which the prover controls, so a composite here claims no "
         "record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it "
-        "here as a development check, VERITY_HOLD_PLACEMENT unset composes it here)"]
+        "here as a development check, VERITY_HOLD_PLACEMENT=0 composes it here)"]
     assert not (out / "composite").exists() and not p.exists()
 
 
@@ -7944,7 +7955,7 @@ def test_the_window_verb_publishes_the_execution_phase_in_a_fresh_out_or_stops(t
         assert "STOP at window (exit 21)" in run.stdout.splitlines()
 
 
-@pytest.mark.parametrize("env, held", [({}, False), ({"VERITY_HOLD_PLACEMENT": ""}, False),
+@pytest.mark.parametrize("env, held", [({}, True), ({"VERITY_HOLD_PLACEMENT": ""}, True),
                                        ({"VERITY_HOLD_PLACEMENT": "0"}, False), ({"VERITY_HOLD_PLACEMENT": "1"}, True)])
-def test_hold_placement_holds_only_under_exactly_1(env, held):
+def test_hold_placement_lifts_only_under_exactly_0(env, held):
     assert S.hold_placement(env) is held

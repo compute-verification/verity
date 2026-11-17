@@ -245,9 +245,9 @@ RECORD_EXIT = {"accept": 0, "reject": 1, "pending": 2}
 
 
 def hold_placement(env: Mapping[str, str] | None = None) -> bool:
-    """``VERITY_HOLD_PLACEMENT=1`` in ``env`` (default the process's): the holds that rest only on where coins are
-    flipped or a composite made are restored; unset, empty or anything else, they are lifted."""
-    return (os.environ if env is None else env).get("VERITY_HOLD_PLACEMENT") == "1"
+    """Unless ``VERITY_HOLD_PLACEMENT=0`` in ``env`` (default the process's), the holds that rest only on where coins
+    are flipped or a composite made stand; unset, empty or anything else, they hold."""
+    return (os.environ if env is None else env).get("VERITY_HOLD_PLACEMENT") != "0"
 #: SPOT's owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 

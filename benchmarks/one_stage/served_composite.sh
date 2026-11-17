@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Remote's and onsite's Lean verdicts on a served run's cases, with the tree as cwd (a clone: it builds Lean in it):
 # `served_verdicts.sh`'s step before its final record, which takes its product's answer from OUT/composite as the
-# record's verdict (`served_verdicts.py record --composite`); under VERITY_HOLD_PLACEMENT=1 that is only off the served
-# node, and on the served node it is the step after the record:
+# record's verdict (`served_verdicts.py record --composite`); that is only off the served node unless
+# VERITY_HOLD_PLACEMENT=0, and on the served node it is then the step after the record:
 #
 #   bash benchmarks/one_stage/served_composite.sh SERVE_DIR OUT
 #
@@ -54,7 +54,7 @@
 # lacks it none (`COMPOSITE: not run`, exit 1), else v0.
 # On the served node itself (SERVED_NODE unset or its own host), which the prover controls, it is composed and its
 # first line, COMPOSITE ON-NODE, says so; COMPOSE_ON_NODE=WHY says WHY there instead (a deferral's follow-on, on a prover
-# node). Under VERITY_HOLD_PLACEMENT=1 a composite on the served node claims no record: it is refused (COMPOSITE
+# node). Unless VERITY_HOLD_PLACEMENT=0 a composite on the served node claims no record: it is refused (COMPOSITE
 # refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its first line COMPOSITE
 # DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py --development), and the
 # follow-on sets COMPOSE_DEVELOPMENT. COMPOSE_DEVELOPMENT=WHY composes it as a development check anywhere, WHY its
@@ -76,12 +76,12 @@ if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
 elif [ -n "${COMPOSE_ON_NODE:-}" ]; then
   say "COMPOSITE ON-NODE: $COMPOSE_ON_NODE"
 elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
-  if [ "${VERITY_HOLD_PLACEMENT:-}" != 1 ]; then
+  if [ "${VERITY_HOLD_PLACEMENT:-}" = 0 ]; then
     say "COMPOSITE ON-NODE: composed on the served node $(hostname -s), which the prover controls"
   elif [ "${COMPOSE_OFF_NODE:-1}" != 0 ]; then
     say "COMPOSITE refused: this is the served node $(hostname -s), which the prover controls, so a composite here claims" \
         "no record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it" \
-        "here as a development check, VERITY_HOLD_PLACEMENT unset composes it here)"
+        "here as a development check, VERITY_HOLD_PLACEMENT=0 composes it here)"
     exit 1
   else
     dev=(--development "composed on the served node $(hostname -s), which the prover controls: a development check, no claim of record (COMPOSE_OFF_NODE=0)")
