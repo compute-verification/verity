@@ -3643,6 +3643,34 @@ def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
     assert (tmp_path / "serve" / "private" / "pieces" / "certifier" / "chain.log").exists()
 
 
+UNREAD = "so the split network attester's chain and period check, which read it, did not start"
+
+
+@pytest.mark.parametrize("cut, said", [
+    ("timeout", f"V3c's window commit at class {W63K4} did not finish within V3C_TIMEOUT=7m (exit 124), {UNREAD}: the "
+                "commit is processor work, off the GPU, that grows with the class's units; set V3C_TIMEOUT to cover it "
+                "(`served_verdicts.sh v3c` defaults to 120m)"),
+    ("refused", f"V3c's window commit at class {W63K4} refused (exit 2): prove_path.py window-commit: the row dir holds no "
+                f"window K, {UNREAD}"),
+])
+def test_a_commit_out_of_time_or_refused_leaves_the_network_attesters_row_missing_saying_which(tmp_path, cut, said):
+    """A window commit that `timeout` stops (a stub of it exiting 124) or that is refused leaves the split network
+    attester nothing to read: its chain doesn't start, and its piece's refusal says which, with the limit and what to
+    set for a timeout, so the record's row is missing with that reason rather than CERTIFIER_CMD unset."""
+    if cut == "timeout":
+        _script(tmp_path / "stops" / "timeout",
+                f'case "$*" in *window_commit.py*) exit 124 ;; esac\nexec {tmp_path}/bin/timeout "$@"')
+        extra = {"PATH": f"{tmp_path / 'stops'}:{tmp_path / 'bin'}:{os.defpath}", "V3C_TIMEOUT": "7m"}
+    else:
+        extra = {"FAIL_COMMIT": "1"}
+    rc, lines, order, _limits = _v3c(tmp_path, **extra)
+    assert rc == 16 and "chain" not in order, (lines, order)
+    pieces = tmp_path / "out" / "pieces"
+    assert (pieces / "certifier" / "refused.txt").read_text().strip() == said
+    assert S.piece_row("communication", pieces) == {"verdict": "missing", "owner": "network-accounting",
+                                                     "why": f"its piece refused to run: {said}"}
+
+
 @pytest.mark.parametrize("args, extra, line", [
     (("v3c",), {"CERTIFIER_CMD": "true", "CERTIFIER_PERIOD_CMD": None},
      "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"),

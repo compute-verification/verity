@@ -634,7 +634,7 @@ EOF
     "request by the developer (no auditor holds its digest), digest" \
     "$(grep -o '"deployment": "[0-9a-f]\{128\}"' "$log" | tail -1 | cut -d'"' -f4)"
 }
-V3C=${V3C_CLASS-4,32,4} v3c_ok=0
+V3C=${V3C_CLASS-4,32,4} v3c_ok=0 v3c_rc= v3c_why=
 [ "${1:-}" = v3c ] && V3C=${V3C:-4,32,4}
 # V3c's rule, a rate: window-commit commits the window under the sampling design it names over the class circuit, and the
 # audit states it to its stream. The defaults sample one proof block of class 4,32,4's window and, under H1_TIE, one of
@@ -821,7 +821,8 @@ v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its c
     why=$(pearl_tied) || { say "WINDOW-COMMIT class $V3C: $why"; return 1; }
     at=" in Pearl+'s piece, its registration chained right after Pearl+'s window record W before Pearl+'s coin ($why)"
   else
-    why=$(window_commit "$json" "$OUT/window-commit-$vtag.err") || { say "WINDOW-COMMIT class $V3C $why"; return 1; }
+    why=$(window_commit "$json" "$OUT/window-commit-$vtag.err") \
+      || { v3c_rc=$? v3c_why=$why; say "WINDOW-COMMIT class $V3C $why"; return 1; }
   fi
   # the commit's population and sources count the window's own values: they stay in the serve dir
   say "WINDOW-COMMIT class $V3C$at: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1])); print(json.dumps({k: c[k] for k in ("run", "circuit", "registration") if k in c}, sort_keys=True))' \
@@ -836,6 +837,18 @@ print(f"WINDOW-CIRCUIT-HELD class {sys.argv[3]}: the committed circuit.json less
 sys.exit(0 if ok else 1)
 EOF
   [ "${PIPESTATUS[0]}" = 0 ] && v3c_ok=1
+}
+commit_unread() {  # why a failed v3c_commit left the split network attester's piece nothing to read: a timeout or the failure
+  local unread="so the split network attester's chain and period check, which read it, did not start"
+  case $v3c_rc in
+    124|137) echo "V3c's window commit at class $V3C did not finish within V3C_TIMEOUT=$V3C_TIMEOUT (exit $v3c_rc), $unread: the commit is processor work, off the GPU, that grows with the class's units; set V3C_TIMEOUT to cover it (\`served_verdicts.sh v3c\` defaults to 120m)" ;;
+    *) echo "V3c's window commit at class $V3C ${v3c_why:-failed (its WINDOW-COMMIT and WINDOW-CIRCUIT-HELD lines)}, $unread" ;;
+  esac
+}
+piece_unread() {  # $1 as the split network attester's piece's refusal, which leaves its row missing, unless it answered or refused
+  mkdir -p "$OUT/pieces/certifier"
+  [ -e "$OUT/pieces/certifier/answer.json" ] || [ -e "$OUT/pieces/certifier/refused.txt" ] \
+    || echo "$1" > "$OUT/pieces/certifier/refused.txt"
 }
 # The audit's sessions listen on V3C_PORTS ports (default 16, a5's RANK_PORTS), a sample needing more refused before any
 # listens: a sample of K proof blocks opens one for each of at most K members, and records_audit's own default, a port for every
@@ -2219,7 +2232,7 @@ if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its 
   [ -f "$WREG" ] || exit 13
   # the verifier's record at the class from this tree, whatever an earlier run left in D (under H1_TIE reading H1's tables)
   v3c_circuit || exit 12
-  v3c_commit
+  v3c_commit || [ -z "$SPLIT" ] || piece_unread "$(commit_unread)"
   wait "$BUILD"; rc=$?
   [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
   [ "$v3c_ok" = 1 ] || exit 16
@@ -2327,12 +2340,11 @@ sampled_coins || stop sampled-proofs 20
 
 # 6. here with the split attester, whose period check reads V3c's period.json: its piece then reads the answer it wrote
 if [ -n "$SPLIT" ]; then
-  if ! v3c_commit; then why="V3c's window commit at class $V3C did not finish within V3C_TIMEOUT ($V3C_TIMEOUT) or failed (its WINDOW-COMMIT line), so the split network attester's chain and period check, which read it, did not run"
+  if ! v3c_commit; then why=$(commit_unread)
   elif ! v3c_proved; then why="V3c's audit of its committed window wrote no period.json, which the split network attester's period check reads (v3c-audit/ in the run's out)"
   else why=; fi
   mkdir -p "$OUT/pieces/certifier"
-  [ -z "$why" ] || [ -e "$OUT/pieces/certifier/answer.json" ] || [ -e "$OUT/pieces/certifier/refused.txt" ] \
-    || echo "$why" > "$OUT/pieces/certifier/refused.txt"
+  [ -z "$why" ] || piece_unread "$why"
   export CERTIFIER_CMD=true
 fi
 
