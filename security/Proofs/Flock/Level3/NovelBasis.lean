@@ -1,9 +1,4 @@
-/-
-`Arith.Correct.xhat_poly` (`Flock.Ligerito`): the novel basis. `s_0 = X`, `s_{j+1} = s_j² + s_j(β_j)·s_j` over `β_j = x^j`
-(monic, degree `2^j`); `Ŵ_i = s_i · s_i(β_i)⁻¹`; `X̂_c = Π_{i ∈ bits c} Ŵ_i` is a polynomial of degree exactly `c`, so the
-`X̂_c`, `c < 2^L`, are linearly independent. The executable's `sIter` and `svTable` compute these values, and the kernel
-checks `s_i(β_i) ≠ 0` for `i < 40` on `svTable 40`.
--/
+/- The novel basis `X̂_c` is a linearly independent family of polynomials of degree `c` (`Arith.Correct.xhat_poly`). -/
 module
 
 public import Flock.Ligerito
@@ -40,7 +35,6 @@ noncomputable def sPoly : ℕ → GF128[X]
 /-- `Ŵ_i(ω) = s_i(ω) · s_i(β_i)⁻¹` (the soundness model's `What`). -/
 noncomputable def What (i : ℕ) (ω : GF128) : GF128 := (sPoly i).eval ω * ((sPoly i).eval (beta i))⁻¹
 
-/-- `X̂_c(ω) = Π_{i ∈ bits(c)} Ŵ_i(ω)` (the model's `Arith.Xhat`). -/
 noncomputable def Xhat (c L : ℕ) (ω : GF128) : GF128 := ∏ i : Fin L, if c.testBit i then What i ω else 1
 
 theorem sPoly_monic_natDegree : ∀ j, (sPoly j).Monic ∧ (sPoly j).natDegree = 2 ^ j
@@ -59,7 +53,7 @@ theorem sPoly_monic_natDegree : ∀ j, (sPoly j).Monic ∧ (sPoly j).natDegree =
     show (sPoly j ^ 2 + C ((sPoly j).eval (beta j)) * sPoly j).natDegree = 2 ^ (j + 1)
     rw [natDegree_add_eq_left_of_degree_lt hlt, hsqd]
 
-/-! ### The executable computes these values -/
+/-! The executable's `sIter` and `svTable` compute the novel basis's values. -/
 
 theorem sIter_eval (sv : Array F128) (k : ℕ) (hsv : ∀ j < k, GF128.of sv[j]! = (sPoly j).eval (beta j)) (x : F128) :
     GF128.of (sIter sv k x) = (sPoly k).eval (GF128.of x) := by
@@ -167,8 +161,6 @@ theorem sPoly_beta_ne_zero (i : ℕ) (hi : i < 40) : (sPoly i).eval (beta i) ≠
   rw [← getElem!_pos svC i hi'] at h
   intro h0; exact of_decide_eq_true h h0
 
-/-! ### `X̂_c` is a polynomial of degree `c` -/
-
 noncomputable def WPoly (i : ℕ) : GF128[X] := C ((sPoly i).eval (beta i))⁻¹ * sPoly i
 
 noncomputable def Pc (L c : ℕ) : GF128[X] := ∏ i : Fin L, if c.testBit i then WPoly i else 1
@@ -229,7 +221,6 @@ theorem Pc_natDegree (L : ℕ) (hL : L ≤ 40) (c : ℕ) (hc : c < 2 ^ L) : (Pc 
 theorem Pc_ne_zero (L : ℕ) (hL : L ≤ 40) (c : ℕ) : Pc L c ≠ 0 :=
   Finset.prod_ne_zero_iff.mpr fun i _ => by split_ifs; exact WPoly_ne_zero i (by omega); exact one_ne_zero
 
-/-- The family `P_c` for `c < 2^L`, padded with `X^c` past it, as a `Polynomial.Sequence`. -/
 noncomputable def seqP (L : ℕ) (hL : L ≤ 40) : Polynomial.Sequence GF128 where
   elems' c := if c < 2 ^ L then Pc L c else X ^ c
   degree_eq' c := by
@@ -237,7 +228,6 @@ noncomputable def seqP (L : ℕ) (hL : L ≤ 40) : Polynomial.Sequence GF128 whe
     · rw [degree_eq_natDegree (Pc_ne_zero L hL c), Pc_natDegree L hL c hc]
     · exact degree_X_pow c
 
-/-- **`Arith.Correct.xhat_poly`**, for `L ≤ 40`. -/
 theorem xhat_poly : ∀ L ≤ 40, ∃ P : Fin (2 ^ L) → GF128[X], (∀ c, (P c).natDegree < 2 ^ L) ∧
     LinearIndependent GF128 P ∧ ∀ (c : Fin (2 ^ L)) ω, Xhat c.val L ω = (P c).eval ω := by
   intro L hL

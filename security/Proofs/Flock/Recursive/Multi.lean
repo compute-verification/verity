@@ -5,27 +5,7 @@ public import Proofs.Flock.Recursive.Defs
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: several outer sessions in a row
-
-The outer proof of the recursive audit may be several sessions, of different circuits, one after another. A bound on
-each session holds at the prover's strategy for it, which the prover may choose after the sessions before (their coins
-included), so the composition records each session's strategy with its outcome:
-
-* `exG F g s`: the expectation of `F` at `g`'s outcome against `s`; `prob_eq_exG`, and its rules for `map` and `bind`;
-* `play g τ`: `g` with the prover's messages fixed by `τ`, only its coins left (`exG_play`);
-* `committed g of`: the prover names a strategy (`of` reads the name as a strategy of `g`) and `g` is played by it,
-  the output the name and the outcome (`exG_committed`);
-* `seqC S gs of`: the `S` games `gs j` in a row, each `committed` at its start; a strategy of `seqC` names each
-  session's strategy as a function of everything before it, so it is any prover of the `S` sessions played in a row;
-* `exG_seqC_le`, `prob_seqC_exists_le`: a bound on session `j` at each of its strategies bounds it in the composition at
-  the strategy the prover names there, and some session's event is at most the expected sum of the sessions' bounds;
-* `outcome_play`, `outcome_committed`, `outcome_seqC`: an outcome of the composition plays each game to its recorded
-  outcome against the strategy its recorded name stands for.
-
-Names other than the strategies themselves let the output's type be one fixed type while the games, and so their
-strategies' types, vary with the history the sessions follow.
--/
+/-! Several outer sessions in a row (`seqC`), each recorded with the strategy the prover names for it after the sessions before. -/
 
 @[expose] public section
 
@@ -89,22 +69,18 @@ theorem exG_map (F : β → ℝ≥0∞) (f : α → β) : ∀ (g : Game α) (s :
   | .send _ k, s => exG_map F f (k s.1) s.2
   | @Game.coin _ _ _ _ k, s => congrArg avg (funext fun c => exG_map F f (k c) (s c))
 
-/-- On an arbitrary strategy of `g.bind f`: a bound between two expectations at every continuation bounds them on the
-composition. -/
 theorem exG_bind_le {F G : β → ℝ≥0∞} (f : α → Game β) (h : ∀ a t, exG F (f a) t ≤ exG G (f a) t) :
     ∀ (g : Game α) (s : Strategy (g.bind f)), exG F (g.bind f) s ≤ exG G (g.bind f) s
   | .ret a, s => h a s
   | .send _ k, s => exG_bind_le f h (k s.1) s.2
   | @Game.coin _ _ _ _ k, s => avg_mono fun c => exG_bind_le f h (k c) (s c)
 
-/-- An expectation that every continuation settles by the first game's output alone. -/
 theorem exG_bind_of_const {F : β → ℝ≥0∞} (f : α → Game β) (H : α → ℝ≥0∞) (h : ∀ a t, exG F (f a) t = H a) :
     ∀ (g : Game α) (s : Strategy (g.bind f)), exG F (g.bind f) s = exG H g (Strategy.ofBind f g s)
   | .ret a, s => h a s
   | .send _ k, s => exG_bind_of_const f H h (k s.1) s.2
   | @Game.coin _ _ _ _ k, s => congrArg avg (funext fun c => exG_bind_of_const f H h (k c) (s c))
 
-/-- **`Strategy.bind`'s probability**: the expectation over `g`'s outcome of the continuation's. -/
 theorem prob_bind_strat (p : β → Prop) : ∀ (g : Game α) (f : α → Game β) (s : Strategy g)
     (t : (a : α) → Strategy (f a)),
     prob p (g.bind f) (Strategy.bind g f s t) = exG (fun a => prob p (f a) (t a)) g s
@@ -118,7 +94,6 @@ theorem prob_map_strat (p : β → Prop) (f : α → β) : ∀ (g : Game α) (s 
   | .send _ k, s => prob_map_strat p f (k s.1) s.2
   | @Game.coin _ _ _ _ k, s => congrArg avg (funext fun c => prob_map_strat p f (k c) (s c))
 
-/-- `Strategy.map` undoes `Strategy.ofMap`: every strategy of `g.map f` is one of `g`'s. -/
 theorem map_ofMap (f : α → β) : ∀ (g : Game α) (s : Strategy (g.map f)), Strategy.map f g (Strategy.ofMap f g s) = s
   | .ret _, _ => rfl
   | .send _ k, s => by
@@ -163,9 +138,6 @@ def seqC : (S : ℕ) → {T α : Fin S → Type} → (gs : (j : Fin S) → Game 
         (seqC S (T := fun j => T j.succ) (fun j => gs j.succ) fun j => of j.succ).map fun rs =>
           (Fin.cons r rs : (j : Fin (S + 1)) → T j × α j)
 
-/-- **A bound on one session, at each strategy, bounds it in the composition**: when every strategy `of τ` of game `j`
-has the expectation of `F' (τ, ·)` at most `F τ`, the composition has the expectation of `F'` at session `j`'s record at
-most that of `F` at the name the prover sends there. -/
 theorem exG_seqC_le : ∀ (S : ℕ) {T α : Fin S → Type} (gs : (j : Fin S) → Game (α j))
     (of : (j : Fin S) → T j → Strategy (gs j)) (j : Fin S) (F' : T j × α j → ℝ≥0∞) (F : T j → ℝ≥0∞)
     (_ : ∀ τ, exG (fun a => F' (τ, a)) (gs j) (of j τ) ≤ F τ) (s : Strategy (seqC S gs of)),
@@ -193,9 +165,6 @@ theorem exG_seqC_le : ∀ (S : ℕ) {T α : Fin S → Type} (gs : (j : Fin S) �
           exact exG_seqC_le S (T := fun j => T j.succ) (fun j => gs j.succ) (fun j => of j.succ) j F' F hF _
 
 open Classical in
-/-- **Some session's event, against the sessions' bounds**: when every strategy `of τ` of game `j` has `E j (τ, ·)` with
-probability at most `B j τ`, the composition has some session's event at its record with probability at most the
-expected sum of each session's bound at the name the prover sends there. -/
 theorem prob_seqC_exists_le (S : ℕ) {T α : Fin S → Type} (gs : (j : Fin S) → Game (α j))
     (of : (j : Fin S) → T j → Strategy (gs j)) (E : (j : Fin S) → T j × α j → Prop) (B : (j : Fin S) → T j → ℝ≥0∞)
     (hB : ∀ j τ, prob (fun a => E j (τ, a)) (gs j) (of j τ) ≤ B j τ) (s : Strategy (seqC S gs of)) :
@@ -211,7 +180,6 @@ theorem prob_seqC_exists_le (S : ℕ) {T α : Fin S → Type} (gs : (j : Fin S) 
           (fun τ => (prob_eq_exG _ _ _).symm.trans_le (hB j τ)) s
     _ = _ := (exG_sum _ _ _ _).symm
 
-/-- **An outcome of `play g τ` is an outcome of `g` against `τ`**: fixing the messages only removes coins. -/
 theorem outcome_play : ∀ (g : Game α) (τ : Strategy g) (s : Strategy (play g τ)) {a : α},
     Outcome (play g τ) s a → Outcome g τ a
   | .ret _, _, _, _, h => h
@@ -220,16 +188,12 @@ theorem outcome_play : ∀ (g : Game α) (τ : Strategy g) (s : Strategy (play g
       obtain ⟨c, hc⟩ := h
       exact ⟨c, outcome_play (k c) (τ c) (s c) hc⟩
 
-/-- **An outcome of `committed g of` plays `g` to its recorded outcome against the strategy its recorded name stands
-for.** -/
 theorem outcome_committed {T : Type} (g : Game α) (of : T → Strategy g) (s : Strategy (committed g of))
     {r : T × α} (h : Outcome (committed g of) s r) : Outcome g (of r.1) r.2 := by
   obtain ⟨a, ha, hr⟩ := Outcome.of_map (fun a => (s.1, a)) (play g (of s.1)) s.2 h
   cases hr
   exact outcome_play g (of s.1) _ ha
 
-/-- **An outcome of `seqC` plays each game to its recorded outcome against the strategy its recorded name stands
-for.** -/
 theorem outcome_seqC : ∀ (S : ℕ) {T α : Fin S → Type} (gs : (j : Fin S) → Game (α j))
     (of : (j : Fin S) → T j → Strategy (gs j)) (s : Strategy (seqC S gs of)) {b : (j : Fin S) → T j × α j},
     Outcome (seqC S gs of) s b → ∀ j, Outcome (gs j) (of j (b j).1) (b j).2

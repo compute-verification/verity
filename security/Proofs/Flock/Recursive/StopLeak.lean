@@ -10,20 +10,7 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 import Proofs.Flock.Soundness.ZK.RealLeaves
 
-/-!
-# The recursive session's stop leak: the counting lemma and the stops
-
-A recursive session releases the auditor's whole view cut at a stop: where its first statement to stop stopped, or
-nowhere. Which stop comes may depend on anything, the witness included, so the stop is a leak. These two pieces bound it
-(`verity/protocols/proofs/flock/prover/live/PROTOCOL.md` §10.5, its first row).
-
-* `prCoin_cut_le`: where the whole view is within `ε` of an ideal one at every event, the whole view cut at a stop of
-  `St`, which may depend on everything, is within `|St|` times the ideal view cut at a uniform stop, plus `ε`. The
-  zero-knowledge bound is applied once, at the event "some stop's cut of the view is in `E`", so `ε` is not multiplied;
-  the union bound over the stops gives the factor. The stop leaks at most `log₂ |St|` bits.
-* `RecStops M`, `card_recStops`: a recursive session's stops, none or the first statement `p` to stop after its `k`-th
-  message, `k ≤ M p`, which are `1 + Σ_p (M p + 1)`.
--/
+/-! The recursive session's stop leak: a view released at a stop of `St` leaks at most `log₂ |St|` bits (`prCoin_cut_le`), and a session has `1 + Σ_p (M p + 1)` stops (`card_recStops`). -/
 
 @[expose] public section
 
@@ -33,10 +20,7 @@ open FlockSoundness FlockSoundness.ZK
 open Game
 open scoped ENNReal
 
-/-- **A view released at a stop leaks at most the stop.** The whole view is `τ ω` on the coins `ω`, within `ε` of the
-ideal view `ideal c` at every event (`hzk`). The released view is the whole view cut (`cut s`) at the stop
-`s = stop (ω, κ)`, which may depend on `ω` and on further coins `κ` in any way. Then every event of the released view is
-at most `|St|` times as likely as at the ideal view cut at a uniform stop, plus `ε`, added once. -/
+/-- The stop may depend on the coins in any way; `ε` is added once, not once per stop. -/
 theorem prCoin_cut_le {Ω Ωk C St T W : Type} [Fintype Ω] [Fintype Ωk] [Nonempty Ωk] [Fintype C] [Fintype St]
     [Nonempty St] (τ : Ω → T) (ideal : C → T) (cut : St → T → W) (stop : Ω × Ωk → St) {ε : ℝ≥0∞}
     (hzk : ∀ E : T → Prop, prCoin (fun ω => E (τ ω)) ≤ prCoin (fun c => E (ideal c)) + ε) (E : W → Prop) :
@@ -64,7 +48,7 @@ Statement `0` is the inner session and the rest are V*'s, in the order the recor
 `p`'s message count. -/
 abbrev RecStops {n : ℕ} (M : Fin n → ℕ) : Type := Option (Σ p : Fin n, Fin (M p + 1))
 
-/-- **How many stops**: `1 + Σ_p (M p + 1)`. Its `log₂` is what a recursive session's stop leaks, in bits. -/
+/-- Its `log₂` is what a recursive session's stop leaks, in bits. -/
 theorem card_recStops {n : ℕ} (M : Fin n → ℕ) : Fintype.card (RecStops M) = 1 + ∑ p, (M p + 1) := by
   rw [Fintype.card_option, Fintype.card_sigma, Nat.add_comm]
   simp only [Fintype.card_fin]

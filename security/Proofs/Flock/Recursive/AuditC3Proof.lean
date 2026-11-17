@@ -21,43 +21,7 @@ import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.RegExtract
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The recursive audit at candidate 3: its proof
-
-`Flock.SecurityProofs.RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo`, `PublicAudit`'s proof at candidate 3's
-table, and `RecursiveZkServerPrivate`.
-
-In (i), as in `PublicAudit`'s:
-* where some index has no session that types, the event is empty (`prob_sessionsR_untypable`);
-* at a statement Lean's verifier doesn't build, or inputs at candidate 3 it refuses (`AcceptsC3`: V*'s list, the inner
-  transcript against R's registration, the covers check there, check 5's sparse refusals, and check 5's inner shape,
-  the inner statement's), the event is empty (its first conjunct);
-* at one it builds, the class checks pass (`classOk_of_accepts`), and gap 2 holds at the word the prover's runs open
-  (`zk_sessions_recursive_fork_regV`, `Recursive/RegExtract.lean`: the extraction from piece (a)'s runs, off a
-  registrant's row off a value the verifier registers itself at its rows, `valueSrcAll`, else `valueFinder`, off a
-  read's leaf off the table's, else `leafFinder`, and off a read of R's level-0 top off its node's row under the held
-  salts, else `saltFinder`, and off a held top other than `bcs'`, else `topFinder`, under `_hstk`), here at
-  the checked sessions (`checkedC3`), whose games are the typed sessions', so the transported prover plays them;
-* at inputs whose inner shape check 5 refuses (`checkInnerStmt`, `AcceptsC3`'s last conjunct), the event is empty; where
-  it passes, `T_LOG` is zero, so the slots have one typing, the registered one `hp.τ` (`typing_eq_registered`), and the
-  typing `_hbr`'s existential carries is it: gap 2 runs at `holoAtτ st hp hp.τ` (`zk_sessions_recursive_fork_regVτ`),
-  whose class, regions and schedules are `holoAt st hp`'s own terms, and the event's "no hidden types" conjunct
-  (`HoloSatSome`) refutes `holds` at `hp.τ` (`holoSatSome_of_holds`);
-* the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each sample
-  (`regStmt`), and the raw event is bounded by the typed sessions' at the transported prover (`prob_recT_le`,
-  `verifies_zsOf`), where the event's checks at candidate 3 (`ChecksVR`) keep every session's own list at the whole
-  histories `recGame` plays (`acceptsV_checked`), at the transcripts the sessions write (`leaves_sessions`);
-* `_hob` is read where the event parses a session's file into scope (`loads_of_verifiesV`, `scope_of_accepts`).
-
-Candidate 3's table ignores the last round's coin, as its pick does (`schedInner_lastFree`, `clashPickHL_lastFree`), so
-gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerLV`, `innerC`'s form off
-`ValueColl ∨ LeafColl ∨ SaltColl ∨ TopColl` that `RegExtract`'s proof reads).
-
-`_hstk` is read here only as `TopColl`'s collision (`TopColl.cand`): VBridgeCOff is a premise. `vbridge_checked` and
-`vbridgeC_checked` carry VBridge and VBridgeC from the typed sessions to the checked ones.
-
-(ii) is `RecursiveZkServerPrivate`.
--/
+/-! Proof of the recursive audit at candidate 3 (`RecursiveAuditHolo`), with VBridgeCOff a premise and `_hstk` read only as `TopColl`'s collision. -/
 
 @[expose] public section
 
@@ -72,7 +36,6 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 open Classical in
-/-- **A kept session's own list is its own** where a written, accepted transcript passes `P`. -/
 theorem own_keepOwn {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
     (P : FlockSoundness.Discharge.Exec.Inputs → Array Flock.Registered.Port →
       FlockSoundness.Discharge.Exec.Transcript → Prop)
@@ -80,10 +43,6 @@ theorem own_keepOwn {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
     (Flock.Guarantees.keepOwn z P).own = z.own :=
   ite_eq_left hp
 
-/-- **The checked sessions accept what the typed sessions accept and the verifier's checks at candidate 3 pass**, at a
-whole history and an outcome whose transcripts the typed sessions write (`hw`, every outcome of their game,
-`leaves_sessions`): at typed sessions, the checks of the written, accepted transcript keep each session's own list
-(`own_keepOwn`). -/
 theorem acceptsV_checked {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B D : Type} {I : Inner} {Cm : Type}
     {ish : RecVStar.Inner} {cs : List (Cm × I.Coin) → Option Flock.RecVStar.InnerCommits}
     {coins : List (Cm × I.Coin) → Option Flock.RecCoins.Source}
@@ -112,8 +71,6 @@ theorem acceptsV_checked {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B D : Type} {I
   exact hj
 
 open Classical in
-/-- **A kept session accepts only what its session accepts**: its own list is the session's, or `freshOwn`, which
-accepts nothing (`not_acceptsZKR_fresh`). -/
 theorem acceptsZKR_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'}
     {P : FlockSoundness.Discharge.Exec.Inputs → Array Flock.Registered.Port →
       FlockSoundness.Discharge.Exec.Transcript → Prop} {t : FlockSoundness.Discharge.Exec.Transcript}
@@ -126,8 +83,6 @@ theorem acceptsZKR_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'}
     rw [hf] at h
     exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH t h).elim
 
-/-- **VBridge at the typed sessions gives it at the checked sessions**, which accept only what the typed sessions accept
-(`acceptsZKR_of_keepOwn`) and whose reads, layers and commit strings are theirs. -/
 theorem vbridge_checked {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type} {ish : RecVStar.Inner} {cs : List (Cm × I.Coin) → Option Flock.RecVStar.InnerCommits}
     {coins : List (Cm × I.Coin) → Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings}
@@ -152,7 +107,6 @@ theorem vbridge_checked {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner
       htr),
     hdec, hfull⟩
 
-/-- **VBridgeC at the typed sessions gives it at the checked sessions**, as `vbridge_checked`. -/
 theorem vbridgeC_checked {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type} {ish : RecVStar.Inner} {cs : List (Cm × I.Coin) → Option Flock.RecVStar.InnerCommits}
     {coins : List (Cm × I.Coin) → Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings}
@@ -177,8 +131,6 @@ theorem vbridgeC_checked {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inne
       htr),
     hdec, hfull⟩
 
-/-- **`holds` at a typing gives `HoloSatSome`**: the typing is the existential's witness, consumed here — the
-statement never takes it. -/
 theorem holoSatSome_of_holds {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} {hp : HoloParams} {τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)}
     {x : HoloReg FlockLevel3.GF128 Refine.Dig}
@@ -190,10 +142,6 @@ theorem holoSatSome_of_holds {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → 
   obtain ⟨R, hcl, z, hz⟩ := h'
   exact ⟨τv, R, hcl, z, hz⟩
 
-/-- **Inputs check 5 accepts leave the slots one typing, the registered one**: where its inner shape is the inner
-statement's (`checkInnerStmt`, which `AcceptsC3` carries), it names a RecSparse shape (`checkInnerStmt_ok`) of `T_LOG`
-zero (`tLog_zero_of_checkInnerStmt`), so the types' range is `Fin 1` and every typing of the slots is
-`holoParamsAt`'s. -/
 theorem typing_eq_registered {ish : Flock.RecVStar.Inner} {st : Flock.Stmt}
     (hi : (Flock.RecVStar.checkInnerStmt ish st).isOk = true)
     (τv : Fin (2 ^ (holoParamsAt ish st).sLog) → Fin (2 ^ (holoParamsAt ish st).tLog)) :
@@ -209,12 +157,10 @@ theorem typing_eq_registered {ish : Flock.RecVStar.Inner} {st : Flock.Stmt}
   exact Fin.ext ((Nat.lt_one_iff.mp (Nat.lt_of_lt_of_le (τv σ).isLt hle)).trans
     (Nat.lt_one_iff.mp (Nat.lt_of_lt_of_le ((holoParamsAt ish st).τ σ).isLt hle)).symm)
 
-/- As in `AuditC3.lean`: past `holoSatSome_of_holds` (which does project `holoAt`'s fields), everything runs at one
-typing's protocol or against the statement's literals, so `holoAt` never needs unfolding, and keeping it applied makes
-any accidental two-typings crossing (which would delta-unfold `holoTableCL`'s body) fail fast. -/
+/- As in `AuditC3.lean`, `holoAt` stays applied past `holoSatSome_of_holds`, so an accidental crossing of two typings'
+protocols, which would delta-unfold `holoTableCL`'s body, fails fast. -/
 attribute [local irreducible] holoAt
 
-/-- **The recursive audit at candidate 3's soundness half with no A3**, at every coin types `CT` and record map `im`. -/
 theorem recursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
     (CT : (st : Flock.Stmt) → (hp : HoloParams) → Fin (r st hp) → Type) [∀ st hp k, Fintype (CT st hp k)]
     [∀ st hp k, Inhabited (CT st hp k)]
@@ -292,7 +238,6 @@ theorem recursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
           (verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2).1 ho.2.2.1,
           fun hh => ho.2.2.2 (holoSatSome_of_holds hh)⟩)) hb))))))))
 
-/-- **The recursive audit at candidate 3's soundness half, at every coin types `CT` and record map `im`.** -/
 theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (CT : (st : Flock.Stmt) → (hp : HoloParams) → Fin (r st hp) → Type) [∀ st hp k, Fintype (CT st hp k)]
     [∀ st hp k, Inhabited (CT st hp k)]
@@ -305,14 +250,12 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
   exact recursiveAuditC3AtNoA3 CT im obj prog st ish reg wr coins cap salt bcs' hstk zr hCust hRC tbl bc hIC htbl bind
     rows hob hF dg N σ wmsg Sk cmt msg hk hRw hM hρ hr hbr
 
-/-- **The recursive audit at candidate 3, as the verifier runs it, with no A3.** -/
 theorem RecursiveAuditHoloNoA3 : Flock.Guarantees.RecursiveAuditHoloNoA3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveZkServerPrivate
   exact recursiveAuditC3AtNoA3 Flock.Guarantees.holoCTs Flock.Guarantees.holoMap
 
-/-- **The recursive audit at candidate 3, as the verifier runs it.** -/
 theorem RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo := by
   refine And.intro ?_ ?_
   swap

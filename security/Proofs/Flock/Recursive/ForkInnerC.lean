@@ -17,21 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# Recursion: gap 2 at the committed rounds
-
-`zk_sessions_recursive_fork_inner` for an inner protocol whose last round is not committed (candidate 3's): V*'s bridge
-as `Flock.Assumptions.VBridgeC`, which decodes the rounds before the last as `VBridge` does and at the last round holds
-some message, and the inner term `InnerAtLeavesL`'s, whose last stage term is the message the recursive prover's own
-leaf decodes. The conclusion is `zk_sessions_recursive_fork_inner`'s.
-
-* `exists_of_rel`, `zip_eq_relabelL`: a decoded transcript that holds a last message, and whose earlier messages are the
-  reference openings', is `relabelL` at that last message.
-* `InnerAtLeavesL.toZ`: `InnerAtLeavesL` as `InnerAtLeavesZ` at that reading.
-* `zk_sessions_recursive_fork_innerL`: gap 2 at `VBridgeC`, the inner term a hypothesis.
-* `zk_sessions_recursive_fork_innerC`: it for an inner verifier and a pick that ignore the last coin (`Inner.LastFree`,
-  `PickLastFree`), the inner term from `innerAtLeavesL_of_forkOn`.
--/
+/-! The inner protocol's soundness in fork form through the recursive audit, for an inner protocol whose last round is not committed (`zk_sessions_recursive_fork_innerC`). -/
 
 @[expose] public section
 
@@ -50,8 +36,6 @@ theorem exists_of_rel {α β : Type} {R : α → β → Prop} {o : Option α} {o
   | some _ => exact ⟨_, rfl⟩
   | none => exact absurd rfl h'
 
-/-- **A decoded transcript is `relabelL` at its last message** when its messages before the last are the reference
-openings'. -/
 theorem zip_eq_relabelL {N : Type} : ∀ (ref : List (M × C) → M → N) (m : N) (t : List (M × C)) (w : List N),
     w[t.length - 1]? = some m → (∀ k, k + 1 < t.length → w[k]? = (t[k]?).map fun e => ref (t.take k) e.1) →
     w.zip (t.map Prod.snd) = relabelL ref m t
@@ -108,10 +92,6 @@ open Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBi
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {I : Inner}
 
-/-- **Gap 2 at the committed rounds, the inner term given**: `zk_sessions_recursive_fork_on` at the stages' commit
-strings before the last round and messages equal there, reading the decoded transcript as `relabelL` at its own last
-message, with the inner term `InnerAtLeavesL` a hypothesis wherever the recursive prover has no inner fork, in place of
-the inner protocol's soundness. -/
 theorem zk_sessions_recursive_fork_innerL
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -165,10 +145,6 @@ open Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBi
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type}
 
-/-- **Gap 2 at the committed rounds.** `zk_sessions_recursive_fork_inner` with V*'s bridge as
-`Flock.Assumptions.VBridgeC`, for an inner verifier and a pick that ignore the last round's coin: a registrant fork, a
-round fork, a session fork, an inner fork of `σ`'s own runs, or the same bound: `zk_sessions_recursive_fork_innerL`
-with the inner term from `innerAtLeavesL_of_forkOn`. -/
 theorem zk_sessions_recursive_fork_innerC
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)

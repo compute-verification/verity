@@ -20,27 +20,7 @@ import Proofs.Flock.Recursive.Compose
 import Proofs.Flock.Recursive.StageRead
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: the inner protocol's soundness in fork form, through the recursive audit
-
-`zk_sessions_recursive_fork_inner` (`Compile`) is `zk_sessions_recursive_fork` with `InnerSoundForkOn` in place of
-`InnerSound`. The chain from `commit_and_prove_upto` to `zk_sessions_recursive_fork` reads `InnerSound` once, at the
-leaves of the recursive prover's own strategy (`commit_and_prove_upto`'s `hZle`), so here it is restated with that use
-as its hypothesis, `InnerAtLeaves`: at every sample whose statement is false, the leaves' average of the indicator that
-the relabelled transcript is accepted and that some outer outcome the leaf reaches accepts and decodes to it is at most
-`εin`.
-
-* `commit_and_prove_on`, `recursive_sound_on`, `zk_sessions_recursive_upto_on`, `zk_sessions_recursive_full_on`,
-  `zk_sessions_recursive_fork_on`: the chain at `InnerAtLeavesZ` for every choice of reference openings, at a reading
-  `rd` of the decoded transcript that holds wherever each round's message is `same` as the reference opening's: the
-  relabelled transcript with `same` equality (`InnerAtLeaves`, as `Flock.Assumptions.VBridge` has it), or with any last
-  message where the last round is not committed (`zk_sessions_recursive_fork_innerC`), on V*'s bridge off
-  an event `Bad` of the history, the registration and the sessions' outcomes (`VBridgeOffOut`), whose probability is
-  added to the outer term (as `zk_sessions_recursive_upto_off`); the fork form takes `Bad := RegColl`, with `regFinder`
-  finding a collision as one more fork (`zk_sessions_recursive_fork_read_off`).
-* `innerAtLeavesV_of_forkOn`: `InnerSoundForkOn` gives `InnerAtLeaves` at V*'s outer proof unless the recursive prover
-  has an inner fork (the body of `InnerForkRec`).
--/
+/-! The inner protocol's soundness in fork form through the recursive audit, with `InnerSound` restated as its one use at the prover's own leaves (`InnerAtLeaves`). -/
 
 @[expose] public section
 
@@ -69,10 +49,6 @@ variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
 
 open Classical in
-/-- **The inner bound at the recursive prover's own leaves**, at the reference openings `ref`: at every sample `ω`, the
-average over the round coins of the indicator that the statement `x R ω` is false, the inner verifier accepts it on the
-relabelled transcript (the simulated inner prover's, `refStrat`), and some outcome of the outer session the leaf reaches
-accepts (`Acc`) and decodes (`wmsg ∘ dec`) to that transcript, is at most `εin`. -/
 def InnerAtLeaves (σ : Strategy (recGame L Reg I Cm outer)) (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop)
     (x : Reg → L.Ω → I.Stmt) {W : Type} (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wmsg : W → List I.Msg)
     (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) (εin : ℝ≥0∞) : Prop :=
@@ -83,10 +59,6 @@ def InnerAtLeaves (σ : Strategy (recGame L Reg I Cm outer)) (Acc : Reg → L.Ω
             (t.map Prod.snd) = relabel (ref ω) t then 1 else 0) (σ.2 ω) ≤ εin
 
 open Classical in
-/-- **The inner bound at the prover's own leaves, at a reading `rd` of the decoded transcript**: at every sample, the
-leaves' average of the indicator that the statement is false and some outer outcome the leaf reaches accepts, decodes to
-a transcript `rd` holds of, and the inner verifier accepts that transcript, is at most `εin`. `InnerAtLeaves` is it at
-`rd` := the relabelled transcript (`InnerAtLeaves.toZ`). -/
 def InnerAtLeavesZ (σ : Strategy (recGame L Reg I Cm outer)) (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop)
     (x : Reg → L.Ω → I.Stmt) {W : Type} (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wmsg : W → List I.Msg)
     (rd : L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop) (εin : ℝ≥0∞) : Prop :=
@@ -111,9 +83,6 @@ theorem InnerAtLeaves.toZ {σ : Strategy (recGame L Reg I Cm outer)}
   rintro ⟨hx, b, hb, ha, hz, hq⟩
   exact ⟨hx, by rw [← hz]; exact hq, b, hb, ha, hz⟩
 
-/-- **Commit-and-prove composition, with the inner term at the prover's own leaves**: `commit_and_prove_upto` with
-`InnerAtLeavesZ` in place of `InnerSound`, at a reading `rd` that holds of the decoded transcript wherever every round's
-message is `same` as the reference opening's (`hrd`). -/
 theorem commit_and_prove_on (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
     (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
@@ -204,8 +173,6 @@ variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
   {D : Type} {H : List UInt8 → D} {V Pos : Type} (ob : Openings H V)
 
-/-- **Soundness of the recursive audit, with the inner term at the prover's own leaves**: `recursive_sound_upto` on
-`commit_and_prove_on`, with `InnerAtLeavesZ` at every choice of reference openings in place of `InnerSound`. -/
 theorem recursive_sound_on [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos]
     (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
@@ -318,8 +285,6 @@ theorem outcome_of_twoRuns {β γ : Type} (g : Game β) (s : Strategy g) (pick :
 
 variable {M C β : Type} [Fintype C] [Nonempty C]
 
-/-- **`V` at the leaf of `s` that the coins of `u` reach**, read at `u`: down the rounds, the message is the one `s`
-sends and the coin is `u`'s, and `V` sees the leaf's transcript, its strategy and `u`. -/
 def AtLeaf {N : Type} : (r : ℕ) → (f : List (M × C) → Game β) →
     ((t : List (M × C)) → Strategy (f t) → List (N × C) → Prop) → Strategy (rounds M C r f) → List (N × C) → Prop
   | 0, _, V, s, u => V [] s u
@@ -328,9 +293,6 @@ def AtLeaf {N : Type} : (r : ℕ) → (f : List (M × C) → Game β) →
       AtLeaf r (fun t => f ((s.1, ρ) :: t)) (fun t s' u' => V ((s.1, ρ) :: t) s' ((a, ρ) :: u')) (s.2 ρ) u
 
 open Classical in
-/-- **The simulation, with a predicate of the leaf**: averaged over the round coins, the indicator that the relabelled
-transcript satisfies `Q` and the leaf's `V` is the average, against the simulated inner prover, of the indicator that
-its transcript satisfies `Q` and `V` at the leaf of `s` its coins reach (`leafAvg_relabel` with `V` true). -/
 theorem leafAvg_relabel_at {N δ : Type} (Q : δ → Prop) : ∀ (r : ℕ) (f : List (M × C) → Game β)
     (ref : List (M × C) → M → N) (h : List (N × C) → δ)
     (V : (t : List (M × C)) → Strategy (f t) → List (N × C) → Prop) (s : Strategy (rounds M C r f)),
@@ -343,8 +305,6 @@ theorem leafAvg_relabel_at {N δ : Type} (Q : δ → Prop) : ∀ (r : ℕ) (f : 
         (fun p c => ref ((s.1, ρ) :: p) c) (fun t => h ((ref [] s.1, ρ) :: t))
         (fun t s' u' => V ((s.1, ρ) :: t) s' ((ref [] s.1, ρ) :: u')) (s.2 ρ))
 
-/-- **An outcome of the simulated inner prover's run that satisfies `G` is one of the recursive prover's**, when `G` of
-a transcript says `V` holds at the leaf its coins reach and `V` there says the leaf's trial reaches that transcript. -/
 theorem outcome_contF_ref {N δ : Type} (G : δ → Prop) : ∀ (r : ℕ) (f : List (M × C) → Game β)
     (ref : List (M × C) → M → N) (h : List (N × C) → δ)
     (V : (t : List (M × C)) → Strategy (f t) → List (N × C) → Prop)
@@ -364,9 +324,6 @@ theorem outcome_contF_ref {N δ : Type} (G : δ → Prop) : ∀ (r : ℕ) (f : L
         (fun t => h ((ref [] s.1, ρ) :: t)) (fun t s' u' => V ((s.1, ρ) :: t) s' ((ref [] s.1, ρ) :: u'))
         (fun t => T ((s.1, ρ) :: t)) (s.2 ρ) (fun t s' u hv => hVT _ s' _ hv) (fun u hu => hG _ hu) d hd hGd⟩
 
-/-- **A fork of the simulated inner prover on transcripts satisfying `G` is a fork of the recursive prover**: at the
-same round and coins, its two trials reach the two transcripts (`outcome_contF_ref`), so `pick` reads the same
-collision. -/
 theorem finds_forkG_ref {D N δ : Type} (H : List UInt8 → D) (pk : δ → δ → StrictCR.Pair) (G : δ → Prop) :
     ∀ (k r : ℕ) (f : List (M × C) → Game β) (ref : List (M × C) → M → N) (h : List (N × C) → δ)
     (V : (t : List (M × C)) → Strategy (f t) → List (N × C) → Prop)
@@ -409,8 +366,6 @@ open Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBi
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type}
 
-/-- **`InnerAtLeaves` at V*'s outer proof**: an outcome accepts when every session verifies (`AcceptsV`), and decodes to
-the messages `wmsg` reads from the sessions' layers. -/
 def InnerAtLeavesV (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
@@ -418,7 +373,6 @@ def InnerAtLeavesV (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j 
   InnerAtLeaves σ (fun R ω t o => AcceptsV (zs R ω t) o) x (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt)
     (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω)) (fun w => wmsg w.1) ref εin
 
-/-- **`InnerAtLeavesZ` at V*'s outer proof**, as `InnerAtLeavesV` reads its outcomes. -/
 def InnerAtLeavesVZ (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
@@ -426,32 +380,25 @@ def InnerAtLeavesVZ (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j
   InnerAtLeavesZ σ (fun R ω t o => AcceptsV (zs R ω t) o) x (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt)
     (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω)) (fun w => wmsg w.1) rd εin
 
-/-- **`zk_sessions_recursive_upto` with the inner term at the prover's own leaves** (`recursive_sound_on`). -/
 theorem zk_sessions_recursive_upto_on
-    -- V*'s sessions at each history and registration
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the count curve's parameters, and the finders' budgets
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ R ω t R₂ j S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
-    -- the recursive prover
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
-    -- the hidden circuit's statement, the messages V*'s layers hold, and V*'s bridge
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
       ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) → Prop)
     (hbr : VBridgeOffOut Bad zs dg N k Rw x wmsg) {εX : ℝ≥0∞}
     (hX : prob (fun o => Bad o.1 o.2.1 o.2.2.1 o.2.2.2.1 fun j => (o.2.2.2.2 j).2)
       (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤ εX)
-    -- what the inner verifier reads of each round's message
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
     (rd : (L.Ω → List (Cm × I.Coin) → Cm → I.Msg) → L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
     (hrd : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
       (∀ k < I.r, Option.Rel (same k (t.map Prod.snd)) l[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) →
       rd ref ω t (l.zip (t.map Prod.snd)))
-    -- the stages: commitments' openings, transfer, and cr/sha-512 for the fork finders
     {V Pos : Type} [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos] (ob : Openings H512 V)
     (cmt : Cm → Pos → ob.Dg) (msg : ℕ → (Pos → V) → I.Msg)
     (T : ℕ → ∀ R ω t, Strategy (outerV (zs R ω t) dg N) → Pos → Finder (Finset ob.Op))
@@ -462,7 +409,6 @@ theorem zk_sessions_recursive_upto_on
         εtr i σ.1 ω t s +
           ∑ pos, κ i pos * prob (OffAt ob (cmt e.1 pos) (v pos)) (T i σ.1 ω t s pos).g (T i σ.1 ω t s pos).s)
     (hCR : ∀ i < I.r, ∀ ω pos, (forkAt ob σ cmt (T i) i ω pos).CR H512 (q i))
-    -- the inner protocol
     {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesVZ zs dg N k Rw σ x wmsg (rd ref) εin) :
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
@@ -507,33 +453,25 @@ theorem zk_sessions_recursive_upto_on
     refine (leafAvg_congr_len (G := fun _ _ => 0) (fun t s _ => ?_) _).trans (leafAvg_const 0 _)
     exact le_antisymm ((prob_mono (fun b hb => hb.2 rfl) _ _).trans (prob_false _ _).le) zero_le
 
-/-- **`zk_sessions_recursive_read` with the inner term at the prover's own leaves.** -/
 theorem zk_sessions_recursive_full_on
-    -- V*'s sessions at each history and registration
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the count curve's parameters, and the finders' budgets
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ R ω t R₂ j S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
-    -- the recursive prover
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
-    -- the hidden circuit's statement, the messages V*'s layers hold, and V*'s bridge
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
       ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) → Prop)
     (hbr : VBridgeOffOut Bad zs dg N k Rw x wmsg) {εX : ℝ≥0∞}
     (hX : prob (fun o => Bad o.1 o.2.1 o.2.2.1 o.2.2.2.1 fun j => (o.2.2.2.2 j).2)
       (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤ εX)
-    -- what the inner verifier reads of each round's message
     (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
     (rd : (L.Ω → List (Cm × I.Coin) → Cm → I.Msg) → L.Ω → List (Cm × I.Coin) → List (I.Msg × I.Coin) → Prop)
     (hrd : ∀ (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) ω t (l : List I.Msg), t.length = I.r →
       (∀ k < I.r, Option.Rel (same k (t.map Prod.snd)) l[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) →
       rd ref ω t (l.zip (t.map Prod.snd)))
-    -- the stages: their commit strings, commitments and messages, V*'s registration and decoding of them, the units
-    -- they are read from, and cr/sha-512 for the fork finders
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
@@ -541,7 +479,6 @@ theorem zk_sessions_recursive_full_on
     (q : ℕ → ℝ)
     (hCR : ∀ i < I.r, ∀ ω pos,
       (forkAt (obS Vs) σ (cmtS cmt) (fun R ω t s => trialV (zs R ω t) dg N k Rw s) i ω pos).CR H512 (q i))
-    -- the inner protocol
     {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesVZ zs dg N k Rw σ x wmsg (rd ref) εin) :
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
@@ -564,7 +501,6 @@ theorem zk_sessions_recursive_full_on
   exact Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun p _ =>
     mul_le_mul' le_rfl (trialS_le (zs σ.1 ω t _) dg N k Rw _ j p _ _)
 
-/-- **`zk_sessions_recursive_fork_read` with the inner term at the prover's own leaves.** -/
 theorem zk_sessions_recursive_fork_on
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -627,14 +563,6 @@ theorem zk_sessions_recursive_fork_on
     rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul]
     exact mul_le_mul' le_rfl hsl
 
-/-- **The inner protocol's soundness in fork form bounds the inner term at the prover's own leaves**, at every choice of
-reference openings, unless the recursive prover has an inner fork (the body of `InnerForkRec`: at some sample and round,
-two continuations of `σ` whose decoded inner transcripts `pick` reads as a collision of `H`).
-
-It reads `InnerSoundForkOn` at the simulated inner prover `refStrat` and at `G` := the inner transcripts `u` such that
-the leaf of `σ` at `u`'s coins has an outer outcome that accepts and decodes to `u` (`AtLeaf`). The leaves' average is
-then `prob (accepts ∧ G)` against `refStrat` (`leafAvg_relabel_at`), and a fork of `refStrat` whose two transcripts
-satisfy `G` is a fork of `σ` at the same coins (`finds_forkG_ref`). -/
 theorem innerAtLeavesV_of_forkOn (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))

@@ -42,27 +42,7 @@ import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Recursive.BitsK
 
-/-!
-# `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement the compiled verifier accepts
-
-`recursiveBitsK_tight`: `recursiveBitsK` (`Flock.SecurityProofs.RecursiveKS` through
-`Claims.Recursion.bitsLin2KOn_of_ksLin2On`) with `kappa_eps_deployed` at the deployment's sizes, every one of them, and
-both of `BitsLin2KOn`'s call bounds read from a run the compiled verifier accepts. Where none accepts at `x`,
-`Pr[acc ∧ ¬R] = 0`. Where one does:
-
-* `x` is at the deployment's sizes (`sizesAt_of_run_acc`): the inner statement is one plain table (`plainIn_of_run_acc`,
-  `innerSetupCalls_le_acc`), each staged V\* part one `--zk` table (`partIn_of_run_acc`, `RecSetup.oneFull`), so at
-  most `RecBudget.MAX_STATEMENTS = 16` parts (`nS_le_of_partIn`), and the inner setup has at most `2^32` inputs
-  (`innerSetupIns_le_acc`);
-* the inner verifier's calls are at most `nR = 2^28 + (c_B + 2^24) ≤ 2^32` on every run (`n`, `lamLin2_R_ge_in`) and
-  the compiled verifier's own at its V\* statements at most `16 · 138543104 ≤ 2^32` (`v`,
-  `setupCalls_deployedB_le_32`), counts of the verifier's code at `RecBudget`'s caps;
-* at those sizes and `n, v ≤ 2^32`, `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` (`kappa_eps_deployed`).
-
-What is left is what the statement names: the decoders' list-decoding spec (`decOK`), the prover's calls `t ≥ 1` per
-run, and SHA-512's named collision assumptions, `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and
-`F0I`, each finder charged the verifier's own calls at `n = nR` and `v = 2^32`.
--/
+/-! `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement the compiled verifier accepts, its sizes and call bounds read from the accepting run rather than taken as premises. -/
 
 @[expose] public section
 
@@ -79,11 +59,6 @@ theorem nR_le : nR ≤ 2 ^ 32 := by
   rw [SetupCount.innerB_eq]
   norm_num
 
-/-- **Every statement the compiled verifier accepts is at the deployment's sizes**: on a run of the recursive verifier
-at the brings `b` that accepts `x`, the inner statement is one plain table, each V\* part `x` stages is one `--zk`
-table, and the inner setup has at most `2^32` inputs (`SizesAt b x`). Each is a refusal of the verifier's: the inner
-setup's lookup tables (`RecSetup.checkForm`), a part's tables past one (`RecSetup.oneFull`), and the inner public
-file's instances and shared rows past `RecBudget.MAX_INNER_ROWS` (`RecBudget.innerRows`). -/
 theorem sizesAt_of_run_acc {H : Msg → Msg} {IV : Claims.Verifier FlockDeploy.Coin} {b : Brings} {x : Msg} {Ω : Type}
     {P : Claims.Prover Ω} {ω : Ω} {r : Fin ((V IV b.st).k x) → FlockDeploy.Coin}
     (hacc : (Claims.run H P (V IV b.st) x ω r).out = .acc) : SizesAt b x := by
@@ -98,26 +73,17 @@ theorem sizesAt_of_run_acc {H : Msg → Msg} {IV : Claims.Verifier FlockDeploy.C
   rw [hinner] at hO
   exact ⟨i, spec₀, sts₀, hp, (oneFull_ok hO).1⟩
 
-/-- **The deployed bound record** `Flock.Guarantees.RecursiveKS` is stated at: the deployed reader's steps and
-trimmed columns, V\*'s last message's reader and the deployed weights. -/
 noncomputable abbrev bdKS :=
   bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR DeployedR.rdR)
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols DeployedR.wER FlockDeploy.joinR
     rowInDeployed DeployedR.finalR DeployedR.wR
 
-/-- **The compiled record** `Flock.Guarantees.RecursiveKSAt` is stated at, at the brings `b` and the challenger's live-coin part's
-record, its inner view running `bdKS`'s `IVStar`. -/
 noncomputable abbrev recKS (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) :
     Claims.Recursion.Deploy FlockDeploy.Coin :=
   (recBoundAt _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd recRest }
     (DeployedR.layR OpenRows.elemR)).record bdKS.IVStar
 
-/-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement the compiled verifier accepts**, at the brings
-`b` and the challenger's live-coin part's record (`aux`, `nOf`, `hd`, `recRest`): for every inner and outer decoder meeting the
-list-decoding spec (`decOK`), every dense statement `x`, every prover `P` making at most `t ≥ 1` SHA-512 calls per run,
-under `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, each charged `|S(x_I)|` and the
-verifier's own calls at `n = nR` and `v = 2^32`. -/
 def RecursiveBitsKTightAt (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) : Prop :=
   ∀ decI, Claims.Recursion.decOK bdKS.deploy decI →
@@ -159,10 +125,6 @@ def RecursiveBitsKTightAt (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRe
           (Claims.Recursion.Inner.ofFlock bdKS.deploy decI) (deployZkRec _root_.Flock.Readable.relation) decO) x P ≤
       2 ^ (-(167.7 : ℝ)) + t * 2 ^ (-(174.95 : ℝ))
 
-/-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement the compiled verifier accepts**, at the deployed
-brings `deployedB b`, every other field of the brings and every record the challenger's live-coin part keeps: `recursiveBitsK` at
-`n = nR` and `v = 2^32`, whose call premises `lamLin2_R_ge_in` and `setupCalls_deployedB_le_32` prove at a run the
-compiled verifier accepts, with `kappa_eps_deployed` at the sizes that run gives (`sizesAt_of_run_acc`). -/
 theorem recursiveBitsK_tight (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) :
     RecursiveBitsKTightAt (deployedB b) aux nOf hd recRest := by

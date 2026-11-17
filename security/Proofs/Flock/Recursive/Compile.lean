@@ -21,28 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Recursive.ForkRuns
 import Proofs.Flock.Soundness.Accounting.Numbers
 
-/-!
-# Recursion: the compile gap
-
-`RecursiveSound` at Flock's compiled inner protocol (`flockInnerCL`), with the inner protocol's soundness in fork form
-and the interactive table's error as its inner term. Every declaration is proved.
-
-* `ClashCL`, `clashPickCL`: two runs of the compiled table that clash (either run self-clashes, `SelfClashL`, or the two
-  open a position of the level-0 cap or of a rep's recorded cap to different rows), and the inner fork's output: on two
-  inner transcripts whose steps play the compiled table to outcomes that clash, the pair of the first of the outcomes'
-  candidates (`clashCandsCL`) whose test passes, a collision of `H` (`clashCandsCL_spec`), else nothing.
-* `flock_inner_sound_compiled` (**gap 1**, the compile lemma): `InnerSoundForkOn` at `flockInnerCL` with `clashPickCL`,
-  at `tableError`, the interactive table's error that `flock_inner_sound` gives `flockInner`.
-  `flock_inner_sound_compiled_plain` is its `InnerSoundFork`, and `flock_inner_sound_compiled_fast100` its `2^-205`.
-* `decodedV`, `InnerForkRec`: the inner transcript V*'s layers decode at an outcome of V*'s outer proof, and a fork of the
-  recursive prover's own runs after a round's commitment whose two decoded transcripts `pick` reads as a collision.
-* `zk_sessions_recursive_fork_inner` (**gap 2**): `zk_sessions_recursive_fork` with V*'s bridge as
-  `Flock.Assumptions.VBridge` and the inner protocol's soundness in fork form (`InnerSoundForkOn`), the inner fork
-  (`InnerForkRec`) a fourth beside the registrant, round and session forks.
-* `recursive_sound_compiled`: the target, from the two gaps: `RecursiveSound`'s conclusion at `I := flockInnerCL`, with
-  V*'s bridge as VBridge G (`vbridge_compiled`) concludes it, the inner fork, and the inner term the table's error;
-  `recursive_sound_compiled_fast100` at `2^-205`.
--/
+/-! `RecursiveSound` at Flock's compiled inner protocol (`flockInnerCL`), with the inner protocol's soundness in fork form and the interactive table's error as its inner term. -/
 
 @[expose] public section
 
@@ -55,8 +34,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 
-/-- **Two runs of the compiled table clash**: either run's outcome self-clashes (`SelfClashL`), or the two open a
-position of the first run's level-0 cap, or of a rep's level-`ℓ` cap the first run records, to different rows. -/
 def ClashCL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (sch : Schedule)
     (o o' : OutCL F D Sl) : Prop :=
   SelfClashL H E Lf sch o ∨ SelfClashL H E Lf sch o' ∨
@@ -78,7 +55,6 @@ noncomputable def clashCandsCL (H : List UInt8 → D) (E : Merkle.Enc (List F) D
             opRLPair H E Lf sch i (ci.2 + 1) ci.1 (o, o') p)))
 
 omit [Fintype F] [DecidableEq F] in
-/-- **A clash is a collision**: a candidate whose test passes is one. -/
 theorem clashCandsCL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {sch : Schedule} {o o' : OutCL F D Sl} {c : Prop × (List UInt8 × List UInt8)}
     (hc : c ∈ clashCandsCL H E Lf sch o o') (h : c.1) : Hash.Collision H c.2.1 c.2.2 := by
@@ -97,7 +73,6 @@ theorem clashCandsCL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf
     exact opRL_conflict_collision hw
 
 omit [Fintype F] [DecidableEq F] in
-/-- Two runs that clash have a candidate whose test passes. -/
 theorem ClashCL.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {sch : Schedule} {o o' : OutCL F D Sl} (h : ClashCL H E Lf sch o o') :
     ∃ c ∈ clashCandsCL H E Lf sch o o', c.1 := by
@@ -140,14 +115,6 @@ noncomputable def clashPickCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle
   (outCL T CT A H E Lf cls regs sch M t).bind fun o => (outCL T CT A H E Lf cls regs sch M t').bind fun o' =>
     collOf (clashCandsCL H E Lf sch o o') (fun c => c.1) fun c => c.2
 
-/-- **Gap 1, the compile lemma: Flock's compiled inner protocol is sound in fork form, at the interactive table's
-error.** On every hidden template of the class whose statement no witness satisfies, for every `G` and every prover of
-`flockInnerCL`: two continuations of the prover's own strategy after some round's message, both of whose transcripts
-satisfy `G`, play the compiled table to outcomes that clash (a collision of `H`), or the compiled table accepts a
-transcript satisfying `G` with probability at most `tableError`, which `flock_inner_sound` bounds `flockInner` by.
-
-Its proof is `compiled_runs_sound` (`CompileRuns`): two runs satisfying `G` whose outcomes clash, read as a fork of the
-prover's own strategy (`Inner.fork_of_outcomes`), or the bound. -/
 theorem flock_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) (hsch : fast100 cls.m = some sch)
@@ -184,7 +151,6 @@ theorem flock_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D
       (collOf_isColl H (fun _ hc hp => clashCandsCL_spec hc hp) hc.cand)
   · exact Or.inr hb
 
-/-- **The compile lemma as `InnerSoundFork`**: `flock_inner_sound_compiled` at `G := True`. -/
 theorem flock_inner_sound_compiled_plain (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) (hsch : fast100 cls.m = some sch)
@@ -193,7 +159,6 @@ theorem flock_inner_sound_compiled_plain (A : Arith F K) (hA : A.Correct) [Inhab
       (ENNReal.ofReal (tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩)) :=
   (flock_inner_sound_compiled T CT A hA H E Lf cls regs sch hsch hlay).plain
 
-/-- **The compile lemma with the numbers**: at most `2^-205` for `22 ≤ m ≤ 33` and a shape in range. -/
 theorem flock_inner_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) (hsch : fast100 cls.m = some sch)
@@ -235,14 +200,6 @@ def InnerForkRec (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : 
         (decodedV zs dg N k Rw wmsg σ.1 ω t))
       (σ.2 ω)).Finds H
 
-/-- **Gap 2: the recursive audit is sound with the inner protocol's soundness in fork form.**
-`zk_sessions_recursive_fork` with V*'s bridge as `Flock.Assumptions.VBridge` (the inner verifier reads each round's
-message whole) and `InnerSoundForkOn` in place of `InnerSound`: a registrant fork (`regFinder`), a round fork, a session
-fork, an inner fork of `σ`'s own runs (`InnerForkRec`), or the same bound.
-
-Its proof is `zk_sessions_recursive_fork_on` with the inner term read at the leaves of `σ`
-(`innerAtLeavesV_of_forkOn`, `ForkInner`): a fork of the reference strategy on two decoded transcripts is one of
-`σ`'s (`InnerForkRec`). -/
 theorem zk_sessions_recursive_fork_inner
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -290,13 +247,6 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : SamplingDesign n} {Reg : Type} {Cm : Type}
 
-/-- **The recursive audit is sound at Flock's compiled inner protocol.** `RecursiveSound` at `I := flockInnerCL`
-(the compiled table on the class's hidden statements, the schedule `(T, CT)` with live coins), V*'s bridge as VBridge G
-(`vbridge_compiled`) concludes it: a registrant fork, a round fork, a session fork, an inner fork of `σ`'s own runs whose decoded
-transcripts play the compiled table to outcomes that clash (`InnerForkRec` at `clashPickCL`), or the audit accepts a
-false hidden statement with probability at most V*'s sessions' expected statistical errors, `r` times their expected
-stage slack, and the interactive table's error. From `flock_inner_sound_compiled` (gap 1) and
-`zk_sessions_recursive_fork_inner` (gap 2). -/
 theorem recursive_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Accounting.Schedule)
@@ -329,8 +279,6 @@ theorem recursive_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] 
   zk_sessions_recursive_fork_inner zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr H
     (clashPickCL T CT A H E Lf cls regs sch) (flock_inner_sound_compiled T CT A hA H E Lf cls regs sch hsch hlay)
 
-/-- **`recursive_sound_compiled` with the numbers**: the inner term at most `2^-205` for `22 ≤ m ≤ 33` and a shape in
-range. -/
 theorem recursive_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Accounting.Schedule)

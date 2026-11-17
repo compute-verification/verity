@@ -4,13 +4,7 @@ public import Flock.HmRow
 public import Mathlib.Data.List.Basic
 import all Init.Data.String.Defs
 
-/-!
-`sha512/row/v2`'s bytes for a bit row (`verity.commitments.rowleaf.sha512_row_v2_digest`'s message before SHA-512's
-padding): the block `P(ℓ)` (`Flock.HmRow.rowPrefixV2`), then the bits least significant first, zero-filled to a byte
-(`Flock.HmRow.packBits`). The encoding is injective on rows shorter than `2^64` bits (`enc_inj`): `P(ℓ)` is 128 bytes and
-carries `ℓ` as a u64, and `ℓ` fixes how many bits the bytes after it hold. The soundness package's v2 `HmRows` takes its
-`enc_inj` from here.
--/
+/-! `sha512/row/v2`'s message for a bit row is injective on rows shorter than `2^64` bits (`enc_inj`). -/
 
 @[expose] public section
 
@@ -22,7 +16,6 @@ namespace FlockLevel3.RowV2
 def enc (bs : List Bool) : List UInt8 :=
   (Flock.HmRow.rowPrefixV2 bs.length).data.toList ++ Flock.HmRow.packBits bs
 
-/-- `P(ℓ)`'s bytes 21 to 28: `ℓ` as a u64 big-endian. -/
 def digits (l : ℕ) : Array UInt8 := (Array.range 8).map fun i => (l / 256 ^ (7 - i) % 256).toUInt8
 
 theorem tag_size : "verity/sha512-row/v2".toUTF8.size = 20 := by decide
@@ -64,7 +57,6 @@ theorem digits_inj {l l' : ℕ} (hl : l < 2 ^ 64) (hl' : l' < 2 ^ 64) (h : (digi
   simp only [Nat.reduceSub, Nat.reducePow, Nat.pow_zero, Nat.div_one] at h0 h1 h2 h3 h4 h5 h6 h7 hl hl'
   omega
 
-/-- `P(ℓ)` fixes `ℓ` below `2^64`. -/
 theorem rowPrefixV2_inj {l l' : ℕ} (hl : l < 2 ^ 64) (hl' : l' < 2 ^ 64)
     (h : (rowPrefixV2 l).data.toList = (rowPrefixV2 l').data.toList) : l = l' := by
   rw [prefix_data, prefix_data] at h
@@ -94,7 +86,6 @@ theorem getElem_chunk (bs : List Bool) (i : ℕ) (hi : i < bs.length) :
   simp only [List.getElem_take, List.getElem_drop]
   congr 1; omega
 
-/-- Rows of one length with the same bytes are equal: the fill bits are zero, so each byte holds its eight bits. -/
 theorem packBits_inj {bs bs' : List Bool} (hl : bs.length = bs'.length) (h : packBits bs = packBits bs') : bs = bs' := by
   apply List.ext_getElem hl
   intro i hi hi'

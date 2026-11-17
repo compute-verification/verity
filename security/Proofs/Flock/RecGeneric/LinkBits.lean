@@ -3,19 +3,7 @@ module
 public import Proofs.Flock.RecGeneric.PlansProof
 public import Proofs.Flock.Claims.ERepCost
 
-/-!
-# The binding error's bits (F9b)
-
-A run finder's collision bound reads its expected cost (`ExpectedCR`), and `RunFinder.MadeLe F e` bounds that cost by
-`e(x) · c` in every model whose runs, and forks of them, cost at most `c` calls on average. So a finder that meets
-`ExpectedCR` in a model finds a collision with probability at most `e(x) · c / 2^256` there
-(`RunFinder.PrAt_le_madeLe`).
-
-The link's plan meets `MadeLe` at `M + 1` (`linkPlanMade`): at its round guess `j` it names only the forks
-`fork_j(u₀, u_{i+1})`, `i < M + 1`, of the shared first run (`linkPlan_names`), its cost counts each once
-(`linkPlan_cost_le`), and each fork's slot `u_{i+1}` is uniform and independent of `u₀`, so each costs at most `c` on
-average (`Ex_forks_le`), whether or not the plan reaches it.
--/
+/-! The binding error's bits: the link's plan meets `RunFinder.MadeLe` at `M + 1` (`linkPlanMade`), so its finder collides with probability at most `e(x)·c/2^256`. -/
 
 @[expose] public section
 
@@ -24,7 +12,6 @@ namespace Claims.RecGeneric
 open Claims
 open Claims.Recursion (fork)
 
-/-- **An average over a selector, a tape and samples** is at most `b` where each selector value and tape's is. -/
 theorem Ex_sel_le {S Ω V : Type} [Fintype S] [Nonempty S] [Fintype Ω] [Nonempty Ω] [Fintype V]
     (F : S → Ω → V → ℝ) (b : ℝ) (h : ∀ q ω, Ex (F q ω) ≤ b) :
     Ex (fun s : S × Ω × V => F s.1 s.2.1 s.2.2) ≤ b :=
@@ -43,7 +30,6 @@ section Names
 
 variable {Ω C : Type} {n : ℕ} (m : RunModel Coin Ω n C) (ω : Ω) (us : ℕ → (Fin n → Coin) × C)
 
-/-- **The link's loop names only `first` and its forks** `fork_j(u₀, u_t)`, `i ≤ t < i + N`. -/
 theorem linkLoop_names (j : ℕ) (first : RunExp) (P : RunExp → Prop) (hf : P first) :
     ∀ (N i : ℕ), (∀ t, i ≤ t → t < i + N → P (.fork j (.fresh 0) (.fresh t))) →
       ∀ e ∈ ((linkLoop (Coin := Coin) j first N i).exec m ω us).1 ++
@@ -66,7 +52,6 @@ theorem linkLoop_names (j : ℕ) (first : RunExp) (P : RunExp → Prop) (hf : P 
       · exact hi
       · exact ih e (by simpa using he)
 
-/-- **The link's plan names only `fork_j(u₀, u_{i+1})`**, `i < M + 1`, at its round guess `j`. -/
 theorem linkPlan_names (k : Msg → ℕ) (M : ℕ) (x : Msg) (j : Fin (k x)) :
     ∀ e ∈ (((linkPlan (Coin := Coin) k M).plan x j).exec m ω us).1 ++
       (((linkPlan (Coin := Coin) k M).plan x j).exec m ω us).2.1 ++
@@ -91,8 +76,6 @@ end Names
 
 variable [Fintype Coin] [Nonempty Coin]
 
-/-- **`linkPlan`'s cost at a round guess, tape and slots** is at most its `M + 1` forks' `fork_j(u₀, u_{i+1})`, each
-named once. -/
 theorem linkPlan_cost_le {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ}
     (k : Msg → ℕ) (M : ℕ) (m : RunModel Coin Ω n C) (x : Msg) (h : 0 < (linkPlan (Coin := Coin) k M).sel x)
     (j : Fin (k x)) (ω : Ω) (us : Fin (M + 1 + 1) → (Fin n → Coin) × C) :
@@ -122,8 +105,6 @@ theorem linkPlan_cost_le {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [N
     _ = _ := Finset.sum_congr rfl fun i _ => by
         simp only [f, g, RunModel.named, h0, hs]
 
-/-- At a tape and round, `M + 1` forks of a shared first run, each with its own uniform slot, average at most
-`(M + 1) · c` where every fork averages at most `c`. -/
 theorem Ex_forks_le {Ω C : Type} [Fintype C] [Nonempty C] {n : ℕ} (M : ℕ) (m : RunModel Coin Ω n C) (ω : Ω)
     (j : ℕ) (c : ℝ) (hfork : ∀ u₀ : (Fin n → Coin) × C,
       Ex (fun v : (Fin n → Coin) × C => (m.cost ω (fork (m.cut j) u₀.1 v.1, v.2) : ℝ)) ≤ c) :
@@ -144,8 +125,6 @@ theorem Ex_forks_le {Ω C : Type} [Fintype C] [Nonempty C] {n : ℕ} (M : ℕ) (
         Ex_mono fun u₀ => mul_le_mul_of_nonneg_left (hfork u₀) (Nat.cast_nonneg _)
     _ = ((M + 1 : ℕ) : ℝ) * c := Claims.Ex_const _
 
-/-- **`linkPlan`'s expected cost** at a nonempty round guess is at most `(M + 1) · c`, where every fork averages at
-most `c`. -/
 theorem linkPlan_ExCost_le {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ}
     (k : Msg → ℕ) (M : ℕ) (m : RunModel Coin Ω n C) (x : Msg) (h : 0 < (linkPlan (Coin := Coin) k M).sel x)
     [Nonempty (Fin (k x))] (c : ℝ)
@@ -164,9 +143,6 @@ theorem linkPlan_ExCost_le {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] 
       exact_mod_cast this
   exact h1.trans (Ex_sel_le G _ fun j ω => Ex_forks_le M m ω j c (hfork ω j))
 
-/-- **F9b: the link's plan names at most `M + 1` runs, each of cost at most `c` on average**: every run it names is a
-fork `fork_j(u₀, u_{i+1})` of the shared first run at its round guess, `i < M + 1`, and the slot `u_{i+1}` it forks
-with is uniform whatever the plan saw before reaching it. -/
 theorem linkPlanMade (k : Msg → ℕ) (M : ℕ) : (linkPlan (Coin := Coin) k M).MadeLe fun _ => M + 1 := by
   intro Ω _ _ n C _ _ m x c hfork hrun
   have hc : 0 ≤ c := (Ex_nonneg fun _ => Nat.cast_nonneg _).trans (hrun (Classical.arbitrary Ω))
@@ -176,9 +152,6 @@ theorem linkPlanMade (k : Msg → ℕ) (M : ℕ) : (linkPlan (Coin := Coin) k M)
     exact linkPlan_ExCost_le k M m x h c hfork
   · exact mul_nonneg (Nat.cast_nonneg _) hc
 
-/-- **A run finder's collision bound from its expected cost**: where `F` names at most `e` runs of cost at most `c` on
-average (`MadeLe`) and meets `ExpectedCR` in the model `m`, it finds a collision with probability at most
-`e(x) · c / 2^256` there. -/
 theorem RunFinder.PrAt_le_madeLe {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ}
     (H : Msg → Msg) (F : RunFinder Coin) (e : Msg → ℕ) (hF : F.MadeLe e) (m : RunModel Coin Ω n C) (x : Msg)
     (c : ℝ) (hfork : ∀ (ω : Ω) (j : ℕ) (u₀ : (Fin n → Coin) × C),

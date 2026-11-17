@@ -35,21 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The recursive verifier's knowledge soundness at Hello-committed coins (trusted)
-
-`RecursiveKS` reads the recursive verifier's run at coins flipped after each message. Deployed, the challenger's live-coin part commits
-them at Hello in an hm96 coin tree (`coin-tree/hm96-sha512`) and opens each round's coin with its answer; a V\* session
-before the last one that accepts is answered with `[]`, and no coin is opened there: that round is the session's
-`Finish`, which Flock's live server answers with its verdict alone (it opens coins only at `Commit` and at each
-`Round`, `committed_coins`), and the ZK server's contract lets coins out only as a scheduled round's coins, none at
-`finish` (`Flock.ZkServer.Contract.step`). `RecursiveKSDeployed` is
-`RecursiveKS`'s bound at that run (`KSLin2OnC`, at `RecursiveKS`'s record, bound record, outer record, caps and
-statements): at every leaf hiding bound `δ₁ ≠ ∞`, every hm96 tree whose leaves hide at `δ₁` (`Claims.Hm96Hiding`, the
-named assumption `hash-derived-key` at the pinned key) has a simulator `S` such that, for every prover that reads the
-root and the openings, the committed run accepts at most as often as `RecursiveKS`'s extractor, run on the prover with
-`S`'s root and openings, recovers a witness, plus `RecursiveKS`'s bound at that prover and `2 · k(x) · δ₁`.
--/
+/-! The recursive verifier's knowledge soundness at coins committed at Hello in an hm96 coin tree (`RecursiveKSDeployed`), under `hash-derived-key` (trusted). -/
 
 @[expose] public section
 
