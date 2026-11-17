@@ -191,11 +191,10 @@ def listed(p: dict[str, Any]) -> list:
 def committed_pins(tree: Path, configuration: str | None) -> tuple[str, list[dict[str, Any]]] | None:
     """The path and ``[[pin]]`` entries of the configuration `tree` commits (`COMMITTED`) under hash `configuration`,
     as `tree` holds it; None when it commits none under that hash."""
-    try:
-        paths = [p for p, h in tomllib.loads((tree / COMMITTED).read_text()).items() if h == configuration]
-        return (paths[0], tomllib.loads((tree / paths[0]).read_text()).get("pin", [])) if paths else None
-    except (OSError, tomllib.TOMLDecodeError):
+    if configuration is None or not (tree / COMMITTED).is_file():
         return None
+    paths = [p for p, h in tomllib.loads((tree / COMMITTED).read_text()).items() if h == configuration]
+    return (paths[0], tomllib.loads((tree / paths[0]).read_text()).get("pin", [])) if paths else None
 
 
 def unpinned(pieces: Sequence[dict[str, Any]], path: str, pins: Sequence[dict[str, Any]]) -> list[str]:
