@@ -79,7 +79,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-import r2_population as R2  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import other_population as R2  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.prover import opening_prover  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402

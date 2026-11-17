@@ -71,7 +71,7 @@ sys.setrecursionlimit(100000)
 import a0  # noqa: E402
 import a6  # noqa: E402
 import a11_kinds as K  # noqa: E402
-import r2_population as R2  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.evaluation.reference import evaluate_region  # noqa: E402

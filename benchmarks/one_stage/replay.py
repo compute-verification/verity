@@ -70,7 +70,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity_vllm.definitions.registry import catalog
 
-import r2_population as R2
+from verity.protocols.proofs.spot.prover.audit import other_population as R2
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW = "hm96-sha512/row/v1"

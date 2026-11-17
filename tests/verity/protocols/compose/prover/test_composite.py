@@ -15,8 +15,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[5] / "benchmarks" / "one_stage")))
-import composite as C
+from verity.protocols.compose.prover import composite as C
 
 SAMPLED = "verity/sampled-proofs/v1"
 POUW = "verity/pouw/period/v1"

@@ -167,7 +167,7 @@ INFERENCE_ONLY_ROWS = "verity/inference-only/rows/v1"
 ROWS_GOAL = "network/policy-check-counts-rows"
 #: the module beside this file that says where the tree holds the policy's check: its Lean package and executable
 #: (``LEAN``) and the Python that check is held to (``reference``), which `policy` loads by name
-POLICY = "inference_only_lean"
+POLICY = "verity.protocols.compose.prover.inference_only_lean"
 PERIOD = PC.ID
 PEARL_PLUS = "verity/pouw/pearl-plus/v1"
 #: what Pearl+'s commitment's digest hashes ahead of a zero byte and the commitment (`PouwCheck.PearlPlus.Protocol`)

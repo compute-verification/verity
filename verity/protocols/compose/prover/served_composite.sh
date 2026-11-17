@@ -154,8 +154,7 @@ for x in "${products[@]}"; do
     "$D/private/compose" "$D/private/deferred" ${ONSITE_SKIP[@]+"${ONSITE_SKIP[@]}"} <<'EOF'
 import json, sys
 from pathlib import Path
-sys.path.insert(0, "benchmarks/one_stage")
-import composite as C
+from verity.protocols.compose.prover import composite as C
 root, product, skips = Path(sys.argv[1]), sys.argv[2], [Path(s) for s in sys.argv[3:]]
 ids = set(C.COMPONENTS[product])
 for f in sorted(root.rglob("case.json")):

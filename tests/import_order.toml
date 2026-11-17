@@ -452,6 +452,7 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
+    "verity/protocols/compose/prover/served_cases.py",
     "verity/protocols/proofs/flock/prover/pod/rec_inner.py",
     "verity/protocols/proofs/flock/prover/pod/rec_reprice.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/inner_registered.py",
@@ -467,6 +468,7 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstar.py",
     "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
+    "verity/protocols/proofs/spot/prover/audit/other_population.py",
     "verity/protocols/proofs/spot/prover/cost/glm53.py",
     "verity/protocols/proofs/spot/prover/cost/h200.py",
     "verity/protocols/proofs/spot/prover/cost/inputs.py",
@@ -580,6 +582,7 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
+    "verity/protocols/compose/prover/served_cases.py",
     "verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py",
     "verity/protocols/experimental/pearl_c4/prover/pc4.py",
     "verity/protocols/experimental/pearl_c4/prover/pc4_rowk.py",

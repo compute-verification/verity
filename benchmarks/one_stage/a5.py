@@ -236,7 +236,7 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger_session 
 import a5_memo as AM  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
-import r2_population as R2  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402

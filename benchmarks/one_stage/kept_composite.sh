@@ -71,7 +71,7 @@ for d in "$SRC"/pieces/*/; do
 import json, sys
 from pathlib import Path
 sys.path.insert(0, "benchmarks/one_stage")
-from composite import write_private
+from verity.protocols.compose.prover.composite import write_private
 src, out = Path(sys.argv[1]), Path(sys.argv[2])
 case = next((f for f in (src / "case.json", src / f"{src.name}.case.json") if f.is_file()), None)
 if case is None or not (src / "answer.json").is_file():

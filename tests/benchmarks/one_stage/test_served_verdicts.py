@@ -1216,8 +1216,8 @@ def _composite(public: Path, x: str, product: str, verdict: str | None, window: 
     """composite.py's public composite.json of ``product`` under ``public/x``, its Lean answering ``verdict`` (its
     ``none`` when None), its SPOT case naming ``window`` and PoUW's its period, and its commitment their
     `composite.bind`, which it returns."""
-    import composite as C
-    import served_cases as SC
+    from verity.protocols.compose.prover import composite as C
+    from verity.protocols.compose.prover import served_cases as SC
 
     out = {"id": product, "verdict": verdict or "none", **({"refusal": "components"} if verdict != "accept" else {})}
     cases = [{"id": i, "commitment": d, "params_sha512": "00" * 64, "verdict": "accept"}
@@ -1614,7 +1614,7 @@ def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_
     """A v2 case whose check this host does not start (its blob files sum past the limit, or the host makes no memory
     scope) is not handed to the Lean: the row is the audit's own, as the served node wrote it, and its ``not_started``
     and ``answer_from`` name the reason, the blob files' count and sum and the limit, in the record and on its line."""
-    import served_cases as SC
+    from verity.protocols.compose.prover import served_cases as SC
 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
@@ -7049,7 +7049,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     by an earlier run): the piece's own is composed, the other is not, and nothing is missing. No path reaches
     OUT/verdicts.txt. What onsite's Lean answers on a case that lacks a subprotocol is not shown here, where its Lean
     is the stand-in."""
-    import composite as C
+    from verity.protocols.compose.prover import composite as C
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "link", tmp_path / "out"
     (tmp_path / "serve").mkdir()
     d.symlink_to(tmp_path / "serve", target_is_directory=True)
@@ -7115,7 +7115,7 @@ def test_the_composite_takes_no_case_from_the_attester_pieces_private_directory_
     directory: no product's case has a component of it, onsite names the network attester missing (NOT_ESTABLISHED), and
     remote, which doesn't compose it, misses nothing. What reads the network attester's private case into a composite is not
     shown here."""
-    import composite as C
+    from verity.protocols.compose.prover import composite as C
     attester = "verity/certifier/v0"
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     (tmp_path / "lean").write_text(f"#!{sys.executable}\n{NO_LEAN}")

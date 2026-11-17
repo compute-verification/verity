@@ -33,7 +33,7 @@ COMPOSE = HERE.parents[1] / "benchmarks" / "one_stage" / "compose_circuit.py"
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-import r2_population as R2  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402

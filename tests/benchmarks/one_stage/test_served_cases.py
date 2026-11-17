@@ -57,7 +57,7 @@ from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
-import served_cases as SC  # noqa: E402
+from verity.protocols.compose.prover import served_cases as SC  # noqa: E402
 from v1_case import RP, v1_case  # noqa: E402
 
 ADDRESS_SPACE_HERE = SC.address_space_here

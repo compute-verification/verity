@@ -5,18 +5,12 @@ check refuses the window's record against it with an R2 code."""
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.types import Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
-
-HERE = ((Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage"))
-sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
-import r2_population as R2  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import other_population as R2
 
 XOR8 = PrimitiveDefinition("R2PopulationTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)

@@ -50,7 +50,7 @@ def main(argv: list[str]) -> int:
     rejects = "--rejects" in argv[5:]
 
     import prove_path as PP
-    import served_cases as SC
+    from verity.protocols.compose.prover import served_cases as SC
     from verity.circuits import codec
     from verity.circuits.types import type_from_json
     from verity_vllm.program.predict.window_circuit import class_circuit

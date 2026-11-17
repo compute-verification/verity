@@ -492,7 +492,7 @@ def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int
     none, and where it said something, its tail (``said``). Each call runs under ``within`` (default
     `served_cases.limits`, this host's memory limit, under which ``memory`` says it ran), and none starts where the host
     gives no limit. All of it is private; `lean_said` is what the public verdict takes."""
-    import served_cases as SC
+    from verity.protocols.compose.prover import served_cases as SC
 
     within = SC.limits() if within is None else within
     flags = ["--count"]
