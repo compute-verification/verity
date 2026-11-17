@@ -29,7 +29,7 @@ server, a process beside it on its host (``network attester beside the server, n
 (`drive_network_attester`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
 their own (`cpu_plan`), the relay under `network_attester_probe.py` (its every tick, publish and collection) and the host's load
 sampled every 100 ms (`host_sample.py`), so that a late tick can be told apart from a stalled client. DIR/<trace>/warden/
-holds what the relay published (its deployment, certified records and connection log), the probes' records and the
+holds what the relay published (its deployment, attested records and connection log), the probes' records and the
 shim's record of every connection; `summarize` runs `network_attester_serve.py check` on it first. Which relay served (its
 egress from the release a, or from the admission s) is the trace's meta.json `network_attester.egress_base`
 (`egress_base`). Every trace's server also loads `vllm_accept_stamp`, which records each request's
@@ -178,7 +178,7 @@ NETWORK_ATTESTER_END_S = 900.0
 TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active network attester, D = {d} buckets of 100 ms "
                                    f"({NETWORK_ATTESTER_WHERE})")
            for name, (base, d) in NETWORK_ATTESTER.items()}
-#: the certified tick (``--admit tick``): the network attester's bucket τ_b in ms, and τ_sat, τ_free as multiples of a
+#: the attested tick (``--admit tick``): the network attester's bucket τ_b in ms, and τ_sat, τ_free as multiples of a
 #: calibrating trace's mean busy cycle (`tick_from`)
 TICK_BUCKET_MS = 100
 TICK_SAT, TICK_FREE = 0.9, 1.1
@@ -732,7 +732,7 @@ def start_network_attester(d: Path, port: int, delay: int, span_s: float, key: P
 
 
 def check_network_attester(d: Path) -> int:
-    """`network_attester_serve.py check` of a network attester trace's d/warden (its certificates, the audit of its records and the client's
+    """`network_attester_serve.py check` of a network attester trace's d/warden (its attestations, the audit of its records and the client's
     cells against them), into d/warden/check.json."""
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
     with open(d / "warden" / "check.log", "w") as log:
@@ -761,7 +761,7 @@ def tick_args(trace: str | None, given_ms: str | None) -> dict:
 
 
 def tick_from(d: Path) -> dict:
-    """The certified tick's constants calibrated on `d`, a summarized trace of the same server on the same host: τ_b
+    """The attested tick's constants calibrated on `d`, a summarized trace of the same server on the same host: τ_b
     `TICK_BUCKET_MS`, and τ_sat and τ_free `TICK_SAT` and `TICK_FREE` times its mean busy cycle (`summary.busy_cycle`), in
     microseconds, with where they came from."""
     import summary

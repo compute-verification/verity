@@ -55,7 +55,7 @@ say so; none is computed from a run's K.
   is the clause the figure rests on.
 - `certifier_term/modeled/<scope>/<period>/free`: the term K, in bits. The check bounds the free amount from above,
   so this is the network's amount of record. It stands against the same target, in bits.
-- `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's certified boundary links carry out over
+- `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's attested boundary links carry out over
   the period, the scope's machines × a registered uplink's `beta` × the period's seconds. `beta` is bits a second each
   way (`verity.device`) and the term is egress, so one direction counts. The uplink is read from a
   registration log, `--registration FILE`
@@ -204,7 +204,7 @@ The reader holds what the rule charges below to two more things, which the rule 
 - **A negative control.** An execution phase is held only where each verifier that accepted has, at the same commit,
   a control of record that it refused: a run with the one thing changed that the verifier checks. The stop record's
   owes `stop_word` (a stop word changed, the count off by one), the response tie's `id` (a released id changed), the
-  certified read's `max_tokens` (a request word changed) and the compute audit's `output` (a committed output
+  attested read's `max_tokens` (a request word changed) and the compute audit's `output` (a committed output
   changed). A control counts only where it is refused for the reason its change aims at: its `reason` is held to
   the control's own word, `stop_word`, `id`, `max_tokens` or `output`, which the reader declares
   (`stop_verdicts.REASONS`). One control a verifier a commit serves every execution phase under that commit. A
@@ -313,7 +313,7 @@ schedules and says so. A caller that reaches the store names the runs and passes
 
 The lines print how the rows are charged, one line for each class of each head read, and each verdict read under the
 mark `run, not proved`: a verifier judged it on a run, and no proof of that verifier is read here, whatever the
-record's `proved_by` says. A head is read as its registration lists it, held to the digest its certificate names; its
+record's `proved_by` says. A head is read as its registration lists it, held to the digest its attestation names; its
 signature is not checked here, but by the offline check that writes `out/registrations.jsonl`, and that file is
 unsigned: a head is as good as the run of that check, and as the hash and the session that run was handed. The
 lines print the hash and the session each registrations' file names; the reader holds neither and compares them
@@ -378,7 +378,7 @@ with none given it moves only as the least lanes that serve them do.
   (derived from other figures), `assumed` or `simulated` (a stand-in runs in place of a device that is not deployed,
   and the figure is what that device would be charged: the set-time card, `set_time_card`, alone); the source is the
   file and key it is read from, the parameter that gave it, or for the card the clause its figures rest on. No run
-  has certified a class for GLM-5.3, so the class is assumed: the most ids a response holds
+  has attested a class for GLM-5.3, so the class is assumed: the most ids a response holds
   (`--response-ids`), an id's bits (`--id-bits`), an execution phase's buckets and their seconds
   (`--phase-buckets`, `--bucket-s`), and the schedule the count is at (`--lanes`, `--classes`, `--delay`,
   `--ingress-buckets`).
@@ -433,7 +433,7 @@ Each row holds its own `count`, in bits and GB.
 - A bucket is the network attester's default.
 
 The scaling by links (`leak_bounds.at_link_rate`, which `chain_record.py leak` reads on a run) is a different count:
-every link at the rate one run certified, whatever its scope serves.
+every link at the rate one run attested, whatever its scope serves.
 
 ## On a machine of your own
 

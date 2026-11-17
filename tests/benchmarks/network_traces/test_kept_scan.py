@@ -7,7 +7,7 @@ fourth, admitted at bucket 5 and released in execution phase 0, is anchored at 3
 Each window's state rows are the scan's state tree's for its execution phase. A window whose requests start in two
 execution phases, a request the network attester didn't certify, a class whose window isn't its execution phase or whose scan
 doesn't serve it, and a prompt past the class's prompt cap are refused by name; so are a kept run that won't read, one
-whose certified I/O isn't accepted or whose ingress execution phases aren't 0, 1, …, and certified I/O read with a request
+whose attested I/O isn't accepted or whose ingress execution phases aren't 0, 1, …, and attested I/O read with a request
 that has no END or without a request the scan starts. A serve dir with no kept run gives None, and the unpacked fetch
 is removed. Reading the run leaves ``sys.path`` and the module ``replay`` as they were, so a5's ``import replay``
 still finds one_stage's where it did before. `prove_path.place_slots` places the window's
@@ -203,7 +203,7 @@ def test_a_scan_with_no_reader_of_the_kept_run_is_refused_by_name(serve_dir, tmp
 
 def test_a_kept_run_that_wont_read_or_whose_io_or_phases_arent_whole_is_refused_by_name(serve_dir, tmp_path):
     """The kept run edited before it's packed: two kept runs, or a deployment.json whose digest isn't its parameters',
-    don't read; two requests naming one user leave its certified I/O unaccepted; and its second execution phase's ingress
+    don't read; two requests naming one user leave its attested I/O unaccepted; and its second execution phase's ingress
     record kept as execution phase 2 leaves its ingress execution phases 0 and 2."""
     two = shutil.copytree(serve_dir, tmp_path / "two")
     shutil.copytree(two / CP.PRIVATE / "RUN", two / CP.PRIVATE / "RUN2")
@@ -224,7 +224,7 @@ def test_a_kept_run_that_wont_read_or_whose_io_or_phases_arent_whole_is_refused_
 
 def test_an_accepted_ios_request_with_no_end_or_a_start_it_doesnt_hold_is_refused_by_name(serve_dir, monkeypatch):
     """A request of the window with no END, and a connection the scan starts whose request the certified I/O doesn't
-    hold. No kept run whose certified I/O `network_attester_chain.io` accepts has either: an accepted request is a whole id
+    hold. No kept run whose attested I/O `network_attester_chain.io` accepts has either: an accepted request is a whole id
     request, whose last bytes the network attester sends in an END cell (an id request never fills its last cell),
     and accepted I/O holds every connection whose cells carry a request. So it is `io`'s reading of the kept run that is
     edited."""
@@ -253,7 +253,7 @@ def test_a_windows_slots_hold_the_requests_the_scan_starts_or_are_refused_by_nam
     """`prove_path.place_slots`, window-commit's slots, without serving. With the scan's starts and rows, each slot
     holds the request the scan starts there, with the scan's row and ``max_tokens``; without them, slot k holds the
     k-th served request, with its own. Refused by name: one request started in two slots; a served request started in
-    none; a certified request started that wasn't served; and a slot whose prompt or ``max_tokens`` isn't its served
+    none; an attested request started that wasn't served; and a slot whose prompt or ``max_tokens`` isn't its served
     request's."""
     ingress = {u: {"prompt": list(p), "max_tokens": 4} for u, p in zip(USERS, PROMPTS, strict=True)}
     starts = [None, "user-0", None, "user-1", None, "user-2", None, None]

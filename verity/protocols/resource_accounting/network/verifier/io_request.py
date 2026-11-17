@@ -1,6 +1,6 @@
 """IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the network attester's own ingress:
 the proof block a bucket row that binds each request's prompt_len and arrival ordinal to the network attester's
-certified ingress cells, its reference in the clear and the Boolean Definitions it is built from. Nothing here is in a
+attested ingress cells, its reference in the clear and the Boolean Definitions it is built from. Nothing here is in a
 Spec or proved.
 
 **The cells are the network attester's** (`network_attester.NetworkAttester._ingress`, its rows as `network_attester_rows` registers them, a row a

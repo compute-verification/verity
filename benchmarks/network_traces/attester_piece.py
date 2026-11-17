@@ -47,10 +47,10 @@ the active network attester in front of serve-openai there (its ``ATTESTER_FRONT
   1. The kept network attester run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check
      passed (its ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go
      through the front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request
-     late past the network attester's D·τ, or cut) certified no served answer, so there is none for the protocol to
+     late past the network attester's D·τ, or cut) attested no served answer, so there is none for the protocol to
      reject (`rehearsed`). Its records are then audited as rows (`rows_check`): `network_attester_chain.rows_audit_case` of the
      run, checked by ``network-rows`` (``--rows``, else built in verity/protocols/resource_accounting/network/verifier/lean;
-     `NetworkCheck.RowsAudit`, `ROWS`), which holds each record to its certified head and each certificate to the
+     `NetworkCheck.RowsAudit`, `ROWS`), which holds each record to its attested head and each attestation to the
      deployment's key in its session, then runs the attester program's rows audit (`NetworkAttester.Rows.audit`):
      every egress row must be the one the schedule the records show renders, so cells cut, clocked or ordered
      otherwise are refused. It holds no egress cell to the id egress form; step 2 does (`network_attester_chain.io`, which
@@ -59,7 +59,7 @@ the active network attester in front of serve-openai there (its ``ATTESTER_FRONT
      numbers as N. The deployment is the kept
      fetch's own (`network_attester_chain.own_record`), as every check below reads it. The case's files go to a 0700 scratch
      directory beside the unpacked run, removed once the check has answered, so the records reach no hold.
-  2. The window's requests are certified ones: each window request's user names one of the network attester's certified
+  2. The window's requests are attested ones: each window request's user names one of the network attester's attested
      requests (`network_attester_chain.io`), with the same prompt and streamed ids; else reject.
   3. The chain (`served_session.py chain`: chain_record.sh's network attester path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
@@ -76,17 +76,17 @@ the active network attester in front of serve-openai there (its ``ATTESTER_FRONT
      The names are labels: the piece establishes no `trusted-device` and gives no bound on that ground (`UNMET`).
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ; never the scan's answers, the
   endpoint's report, the report's counts or a step's summary, which are private) and the execution phase's five
-  certificates (`CERTIFICATES`, `certificates`: the three records' certificates and the two row registrations' of the
+  attestations (`CERTIFICATES`, `certificates`: the three records' attestations and the two row registrations' of the
   case's evidence, each with its own fields alone). They and the answer are written to a fresh hold under
   SERVE_DIR/`PRIVATE`/held (0700) and reach DIR only through the record's leak guard (`leak_guard.py`), which reads DIR
   and the hold against the network attester run's witness, DIR declared to hold those files, the split's `CHAINED` and the logs
   alone (`PIECE_FILES`), moves what holds a piece of it or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and
   only then releases the rest. The check's three input files are the piece's case, and a case's evidence and params
-  are witness (`composite.py`), as the scan's answers are, that evidence less its certificates: neither is ever in
+  are witness (`composite.py`), as the scan's answers are, that evidence less its attestations: neither is ever in
   DIR. Before the guard reads the hold, its period files become SERVE_DIR/`CASES`/`CASE` (`write_case`; the directory
   0700, the file 0600), the case as `composite.py` reads a piece's: ``{"commitment", "evidence", "params"}``, the
   commitment and evidence hex and the params ``params.json``'s canonical JSON, all inline, since certifier/v0 reads no
-  blob (about 83 MB on a served window, nearly all of it the params); the certificates are cut from that evidence, and
+  blob (about 83 MB on a served window, nearly all of it the params); the attestations are cut from that evidence, and
   the hold's period files then go, so the case has one copy. It is there only where the step ended with its files
   released (`settle`), and no answer is beside it: the answer is DIR's. Only the protocol rejects: a step that can't
   run (no kept run, a rehearsal the gate's check didn't pass, a build, a tool or the chain failing without a report,
@@ -192,10 +192,10 @@ SESSION = "session.json"
 #: every key at its level). Each is public as the protocol's output, its sample or its structure: the chain's and each
 #: step's verdict, ε at δ (the sample's sampling design, population and size) and where it runs in the clear, what the path stubs
 #: and how its negatives came out. Everything else stays in the kept run: the scan's answers (its registration and
-#: each execution phase's answer and row registrations, the period check's evidence less its certificates: witness, as a
+#: each execution phase's answer and row registrations, the period check's evidence less its attestations: witness, as a
 #: case's evidence is), the endpoint's report (each Commit window's request, carried, step and output counts, its
 #: opening time and its advice's bits), of which only a padded count may be public, report.md and the report's other
-#: keys (the certified I/O's counts, the advice's bits as K's term), and the steps' summaries (the scan's admissions
+#: keys (the attested I/O's counts, the advice's bits as K's term), and the steps' summaries (the scan's admissions
 #: and response lengths, the tie's prompt lengths and releases, the network attester's check of its witness).
 PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed", "negatives_refused",
                                  "steps.*.verdict", "steps.*.eps_at_delta", "steps.*.in_the_clear")}
@@ -205,7 +205,7 @@ REFUSED = "refused.txt"
 #: params are witness, so it is never in DIR
 CASE = "case.json"
 CASES = Path("private") / "pieces" / "certifier"
-#: the execution phase's five certificates in DIR (`certificates`): the case's evidence's, and nothing else of it
+#: the execution phase's five attestations in DIR (`certificates`): the case's evidence's, and nothing else of it
 CERTIFICATES = "certificates.json"
 #: the scan class of V3c's default window class (`served_verdicts.sh`'s V3C_CLASS)
 V3C_SCAN_CLASS = "w63k4"
@@ -215,7 +215,7 @@ CHAINED = "chain.json"
 #: the logs `served_verdicts.sh` and `served_verdicts.py` write in DIR, which a refusal keeps
 LOGS = ("piece.log", "chain.log", "period.log")
 #: every file DIR may hold when the leak guard reads it and the hold (its ``--public``): the answer, the logs, the
-#: split's `CHAINED`, the certificates and `PUBLIC`'s
+#: split's `CHAINED`, the attestations and `PUBLIC`'s
 PIECE_FILES = ("answer.json", *LOGS, CHAINED, CERTIFICATES, *(f"chain/{rel}" for rel in PUBLIC))
 LEAN_DIR = TREE / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
@@ -525,7 +525,7 @@ class NotRun(Exception):
 
 
 class Rejected(Exception):
-    """The window isn't what the attester certified."""
+    """The window isn't what the attester attested."""
 
 
 def kept_run(serve_dir: Path) -> str:
@@ -538,8 +538,8 @@ def kept_run(serve_dir: Path) -> str:
 
 def kept_ingress(serve_dir: Path) -> tuple[object, dict, list[tuple[int, list]]] | None:
     """The network attester run the front kept under ``serve_dir`` as a served window's scan reads it
-    (`prove_path.kept_scan`, which takes this from its caller): the run's deployment parameters, its certified I/O
-    (`network_attester_chain.io`) and its certified ingress, each execution phase's number and rows (`network_attester_rows.window_rows`);
+    (`prove_path.kept_scan`, which takes this from its caller): the run's deployment parameters, its attested I/O
+    (`network_attester_chain.io`) and its attested ingress, each execution phase's number and rows (`network_attester_rows.window_rows`);
     None where the front kept no run. ValueError, naming why, where the kept run can't be read."""
     from benchmarks.network_traces import network_attester_chain as WC
     from verity.protocols.resource_accounting.network.verifier import relay_check as RC, network_attester_rows as WRW
@@ -577,7 +577,7 @@ def placement(serve_dir: Path, run: str, steps: dict[str, str] | None = None) ->
     ``steps`` (`ran_on`, this machine by default) names the machine that ran the chain's checks and samples and the one
     that ran the period check and its proofs' challenges. This piece establishes no `trusted-device` and gives no bound
     on that ground (`UNMET`), whatever the names say. ``kind`` is ``prover-node`` where the attester ran on the
-    developer's node, else ``not-placed``. ``links`` are the node's to the gate, and K counts the certified one
+    developer's node, else ``not-placed``. ``links`` are the node's to the gate, and K counts the attested one
     alone."""
     kept = serve_dir / PRIVATE / run
     if not (kept / SESSION).is_file():
@@ -647,7 +647,7 @@ def rehearsed(run: Path) -> None:
 
 
 def bind(reqs: list[dict], io: dict) -> dict[str, dict]:
-    """Each window request's certified record by its user; Rejected when one isn't the network attester's."""
+    """Each window request's attested record by its user; Rejected when one isn't the network attester's."""
     if not io["accepted"]:
         raise Rejected(f"the network certifier's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
     by, got = {r["user"]: r for r in io["records"]}, {}
@@ -961,10 +961,10 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
 
 
 def certificates(evidence: bytes) -> dict:
-    """The certificates of a case's ``evidence``, what the network attester signed where the period check accepts
+    """The attestations of a case's ``evidence``, what the network attester signed where the period check accepts
     them, each with its own fields alone (`scan_period.CERTIFICATE_KEYS`): ``records``, each execution phase's three
-    records' certificates (requests, responses, fails), and ``rows``, its two row registrations' (ingress, egress),
-    with the link, direction and window its registration names, which the certificate's message signs. Nothing else of
+    records' attestations (requests, responses, fails), and ``rows``, its two row registrations' (ingress, egress),
+    with the link, direction and window its registration names, which the attestation's message signs. Nothing else of
     the evidence is here: no registration's head, no answer and no audit."""
     from verity.protocols.resource_accounting.network.prover.scan_period import CERTIFICATE_KEYS
     windows = json.loads(evidence)["windows"]
@@ -978,7 +978,7 @@ def certificates(evidence: bytes) -> dict:
 def write_case(hold: Path, case: Path) -> None:
     """The hold's period files, the three `network-period` read, made the case ``case`` (its directory 0700, the file
     0600) and the hold's `CERTIFICATES`, and gone from the hold: the case is under no path the leak guard releases.
-    Nothing where the period check wrote none. The certificates are written compact, as the evidence holds them."""
+    Nothing where the period check wrote none. The attestations are written compact, as the evidence holds them."""
     p = hold / "period"
     commitment, evidence, params = p / "commitment.bin", p / "evidence.json", p / "params.json"
     if not all(f.is_file() for f in (commitment, evidence, params)):
@@ -1068,7 +1068,7 @@ def settle(serve_dir: Path, window: int, d: Path, limit: str,
            step: Callable[[Path], tuple[dict | None, Path | None]], chained: Path | None = None) -> dict | None:
     """``step``'s answer: its files written to a fresh hold under SERVE_DIR/`PRIVATE`/held (``step`` is given it), an
     accept's profile with its `placement` (with the machines that ran the piece's steps, `ran_on` of ``chained``), the
-    hold's period files made the case under SERVE_DIR/`CASES` and the hold's certificates (`write_case`), and the
+    hold's period files made the case under SERVE_DIR/`CASES` and the hold's attestations (`write_case`), and the
     hold then released to DIR by the leak guard; None where the split's
     chain step accepted. The case is this step's: one an earlier step left goes first, and one written here goes
     unless the step ends with its files released. `NotRun` (SIGTERM included, naming ``limit``) for a step that can't

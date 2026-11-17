@@ -1,4 +1,4 @@
-"""A run's files as a verifier reads them: a record packed, and a certificate, a certified record and the network
+"""A run's files as a verifier reads them: a record packed, and an attestation, an attested record and the network
 attester's public key as JSON."""
 from __future__ import annotations
 
@@ -84,8 +84,8 @@ def _dec(field: str, value):
 
 
 def certificate_json(c: Certificate) -> dict:
-    """A certificate's JSON, its keys in sorted order: the one order a certificate's keys are written in, the
-    published file's (the gate's ``out/certificates.jsonl``, written with its keys sorted), so a certificate's text
+    """An attestation's JSON, its keys in sorted order: the one order an attestation's keys are written in, the
+    published file's (the gate's ``out/certificates.jsonl``, written with its keys sorted), so an attestation's text
     in a witness line (`certified_json`) is its text in the public one."""
     return {f: _enc(getattr(c, f)) for f in sorted(Certificate.__slots__)}
 

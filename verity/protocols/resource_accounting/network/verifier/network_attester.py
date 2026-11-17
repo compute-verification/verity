@@ -8,7 +8,7 @@ bytes unchanged in content or not at all: no tokenizer, API, request or stop str
 addition is on the server's side (`release`): each HTTP request's place in the release order and its release bucket on
 the server's copy, and, with `watermark`, a stream that tells the server each bucket's close. What the network attester
 decides is the framing and the timing, both public functions of the schedule (`NetworkAttesterParams`), and it certifies every
-cell it sends with the attester's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
+cell it sends with the attester's grid (`grid.Certifier`) and attestations (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `link_frame.encode_frame(kind, ordinal, payload)`: the header (kind u8,
 the connection's ordinal u32, the payload's length u32), at most P = B − 9 payload bytes, zero fill. `DATA` carries
@@ -27,7 +27,7 @@ until its last bucket. Nothing admitted is dropped or reordered. A refusal is tr
 can hold (`every`: a slot stride of `every` buckets has `program_slots` = `lanes` Program slots, the scan's
 `ingress_scan.Class`), so the network attester certifies no record of a window in which it refused a connection:
 `withhold` gets that window's three records in place of `publish`, and the period check refuses an execution phase
-missing any record's certificate. Under the lengths rows' form 2 the queue's head is admitted only at a bucket from
+missing any record's attestation. Under the lengths rows' form 2 the queue's head is admitted only at a bucket from
 which it ends inside the run, and an arrival past the last such bucket is turned away, which is no refusal ("The
 lengths rows").
 
@@ -98,7 +98,7 @@ attester:
 - hands each window's releases (`Released`, to `NetworkAttester(lengths=…)`) by the slot stride of each one's `END` and in
   release order, at most K a stride. Window w's are handed once window w + 1's records are published, where each of
   their connections has ended, and only where both windows' three records were published complete: a window whose
-  cells have no certificate, or whose responses may reach into one that has none, has no lengths rows, and neither has
+  cells have no attestation, or whose responses may reach into one that has none, has no lengths rows, and neither has
   the run's last window. `connection_rows` lays them out as the lengths and fails tables, commits them and signs
   their one head. That is form 1, which says nothing of an execution phase it doesn't hand.
 
@@ -109,7 +109,7 @@ call without releases, on which the network attester signs that the execution ph
   were each published complete, their three records, none withheld. Every cell of a release of w is in those three:
   its request's cells begin at most `ingress_buckets` − 1 buckets before its `END`, and its connection ends at most
   `NetworkAttesterParams.span` buckets after its admission, each at most a window. So no hand holds a byte that left in an
-  execution phase without a certificate, which form 1's can: a request whose first cells left in the one before;
+  execution phase without an attestation, which form 1's can: a request whose first cells left in the one before;
 - ends execution phase w once execution phase w + 1's records are published, and the run's last with its own
   records, so the run's last close ends two;
 - admits a connection only at a bucket s with s + `span` inside the run, so that every release of the run's last
@@ -720,7 +720,7 @@ class NetworkAttester:
     - `publish(record, params)` receives each window's records, ingress, egress, then fails, as they close (by
       default they are kept in `records`), and `withhold(record, params)` in its place those of a window in which a
       connection was refused (`refused_windows`; by default kept in `withheld`): nothing of that window is to be
-      certified; `log` has one entry a connection once it ends, `refused` the ordinal-less refusals' count,
+      attested; `log` has one entry a connection once it ends, `refused` the ordinal-less refusals' count,
       `turned_away` that of the arrivals form 2 turned away in the run's last buckets, which are no refusals,
       `turned_away_reset` that of the links among them their clients reset after the cell, `lateness` each tick's in
       seconds;
@@ -1074,7 +1074,7 @@ class NetworkAttester:
     def _emit_lengths(self, w: int, whole: bool) -> None:
         """The lengths rows that window w's records, just published (`whole`: complete, and none withheld), were the
         last to wait on (the module docstring's "The lengths rows"). Form 1: window w − 1's, handed where it and
-        window w were published complete: a window whose cells have no certificate, or whose releases' responses
+        window w were published complete: a window whose cells have no attestation, or whose releases' responses
         reach into one that has none, gets no lengths rows. Form 2: window w − 1's, handed where window w − 2 (if
         any), it and window w were, and at the run's last window that window's own, handed where the window before
         it (if any) and it were; each one ended without releases where it isn't handed."""

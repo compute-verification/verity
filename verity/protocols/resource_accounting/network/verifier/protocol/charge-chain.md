@@ -85,7 +85,7 @@ charges only an execution phase that sends decisions alone. Advice v1 sends one 
 each arrival that deviates from release order, under the client's ingress.
 
 The other three are always 0 under v1. Every hit is the replay's block pool's, past the pool bound too, the replay
-derives preemptions and the certified O forces each lag row, so the advice code (`advice_code.codec`) refuses an execution phase
+derives preemptions and the attested O forces each lag row, so the advice code (`advice_code.codec`) refuses an execution phase
 that sends hits, resumes or lag bits. `ChargeCount_v2{N, H, O, L}` charges the whole execution phase: its decisions and the
 hits' and order entries' counts with their values, as one `window_code` segment with one count and one finish, then its
 length terms' plain tail. With H = O = L = 0 its charge, counts and run are `ChargeCount_v1{N}`'s; the tests check this
@@ -198,7 +198,7 @@ premise (`hAs` in `security/Definitions/Certifier/Guarantees/SampledCharge.lean`
   So `window_code.code_executionPhase` decodes the symbols back one by one, and no execution phase's sequence is a proper prefix of another's.
   At each step the coder splits its interval among the alphabet in proportion to the frequencies, which sum to at most
   the total: bins 0 … bitlen(S) of a count's table reach at most T.
-- *The tail is a fixed-width code given the record.* Its terms and their max_tokens are the certified record's, fixed
+- *The tail is a fixed-width code given the record.* Its terms and their max_tokens are the attested record's, fixed
   before the advice, so each term's 2^(bitlen(m) + 1) values each take exactly bitlen(m) + 1 bits: appended after the
   segment, the tail keeps the execution phase's code prefix-free and its Kraft sum unchanged.
 
@@ -214,8 +214,8 @@ session needs a pool slice (`CompileSlice_v4` on, `verity_vllm.compiler.compile_
 the length terms yet. `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no length
 terms. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`, the served execution phases' slice except under the certified
 tick) charges them with `ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its
-``a_valid``, mt its certified max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What
-holds ``cert`` to the certified record is a stand-in, the honest cert row under the network attester's salt, until max_tokens
+``a_valid``, mt its attested max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What
+holds ``cert`` to the attested record is a stand-in, the honest cert row under the network attester's salt, until max_tokens
 is read from the certified body; the circuit bounds max_tokens only from above, so a lower one the output still fits
 passes at a lower charge until then. `compile_slice_zk` checks ``cert``'s b‖c against that stand-in, as it does the
 arrivals the replay loads. A class whose execution phases send order entries or length terms (or a code's that sends hits) does
@@ -225,7 +225,7 @@ the following:
   `replay-charge`'s.
 - Its `hen`, `oen` and `qen` are the replay's, as `en` is (en_i = i < `count`): a hit slot for each hit the code sends
   (none under v1), an order slot for each arrival out of release order, a length slot for each request whose body lands in the
-  execution phase, enabled slots first, never the prover's. Its `mt` are the certified max_tokens. Nothing reads a disabled
+  execution phase, enabled slots first, never the prover's. Its `mt` are the attested max_tokens. Nothing reads a disabled
   slot's value: the charge counts only enabled slots, so a slot arrangement or a disabled value the prover chose would
   pass log2(C(H, h) · C(O, o) · C(L, l)) bits and those values uncharged
   (`test_network_attester_window_charge_slots.py`: every arrangement and disabled values past every limit give one
