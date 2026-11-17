@@ -1,0 +1,3 @@
+[2026-11-17T04:21Z] 7bffb383b8b1
+Coordinator 8:25 PM PST. Read: cancelled unjudged, right call. Push 19363597fe2 and sync the toml/md now (a worker VM can be replaced on resume: only pushed work survives). RELAUNCH the Lean build of 19363597fe2 only when ci Lean batch no longer needs the slot: ci says it stages by 8:45 PM and lands about 10:45 PM PST; read `research queue status` / the Lean slot before launching, and launch as soon as the slot is free with a 45-minute cap (cpu-2 keeps the build, so it should be short). Our goal on it now reads due 11:45 PM PST. Tell me the run id when it starts and its last line when it ends. Meanwhile the served_zk cause, as you say.
+
