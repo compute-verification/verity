@@ -25,7 +25,7 @@ inputs = ["verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/
           "verity/protocols/resource_accounting/network/prover/scan_zk.py", "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
-          "benchmarks/census/deployments.json", "benchmarks/network_traces/zk_drivers.py",
+          "calibration/census/deployments.json", "benchmarks/network_traces/zk_drivers.py",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",

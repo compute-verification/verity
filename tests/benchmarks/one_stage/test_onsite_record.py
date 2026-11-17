@@ -1238,7 +1238,7 @@ def test_a_case_whose_caps_arent_its_schedules_is_the_connections_error(tmp_path
 def census_line(name: str, *fields: str) -> dict:
     d = next(d for d in json.loads((LB.CENSUS / name).read_text()) if d["role"] == "reference")
     digest = hashlib.sha512(json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode())
-    return {"file": f"benchmarks/census/{name}", "id": d["id"], "read": {f: d[f] for f in fields},
+    return {"file": f"calibration/census/{name}", "id": d["id"], "read": {f: d[f] for f in fields},
             "sha512": digest.hexdigest()}
 
 
