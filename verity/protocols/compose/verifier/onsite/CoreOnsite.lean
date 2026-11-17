@@ -46,7 +46,7 @@ public import InferenceOnlyCheck.Protocol
 public import NetworkCheck.Period
 public import NetworkCheck.Span
 public import PousCheck.RunProtocol
-public import PouwCheck.Period
+public import PouwVerifier.Period
 public import Poub.P2Protocol
 public import Spot.OneStage
 public import Spot.OneStageZk
@@ -61,7 +61,7 @@ meta import InferenceOnlyCheck.Protocol
 meta import NetworkCheck.Period
 meta import NetworkCheck.Span
 meta import PousCheck.RunProtocol
-meta import PouwCheck.Period
+meta import PouwVerifier.Period
 meta import Poub.P2Protocol
 meta import Spot.OneStage
 meta import Spot.OneStageZk
@@ -75,7 +75,7 @@ open Composition
 
 /-- Onsite's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
-  [NetworkCheck.Period.protocol, InferenceOnlyCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
+  [NetworkCheck.Period.protocol, InferenceOnlyCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwVerifier.Period.protocol,
     Poub.P2Protocol.protocol, VStar.Recursive.Sampled.protocol, MemoryAttester.WipeProtocol.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and SPOT. -/
@@ -121,7 +121,7 @@ private def allRefused : Answer := answer (components.map refused)
 #guard (answer (components.map refused) #["not a circuit file".toUTF8]).reason == allRefused.reason
 -- a part of onsite's subprotocols is not onsite's, onsite has no policy-less, wipe-less or PoUS-less form, and neither
 -- v1's nor v2's one-stage audit alone is onsite's integrity subprotocol
-#guard (answer [refused PouwCheck.Period.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
+#guard (answer [refused PouwVerifier.Period.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/certifier/v0 is missing"
 #guard (answer ((components.filter (·.id != InferenceOnlyCheck.Protocol.protocolId)).map refused)).reason ==
   some "params: verity/inference-only/v0 is missing"
@@ -178,7 +178,7 @@ private def executionPhaseOn (r : String) : String := s!"\{\"commit\":\"{Flock.h
 private def executionPhasesOn (policy : String) (rs : List String) : List Case :=
   components.map fun P =>
     if P.id == InferenceOnlyCheck.Protocol.protocolId then { refused P with commitment := policy.toUTF8 }
-    else if P.id == PouwCheck.Period.protocolId then
+    else if P.id == PouwVerifier.Period.protocolId then
       { refused P with evidence := ("{\"pins\":[],\"windows\":[" ++ ",".intercalate (rs.map executionPhaseOn) ++ "]}").toUTF8 }
     else refused P
 

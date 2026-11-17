@@ -62,7 +62,7 @@ def live_verified(case: dict) -> dict:
     return {"refused": list(refused)} if refused is not None else {"outcomes": got}
 
 
-LIVE_PORT = D.Port("pouw-check-difftest", "credit-live-verified", live_verified, package=LEAN, need_rejects=False,
+LIVE_PORT = D.Port("pouw-verifier-difftest", "credit-live-verified", live_verified, package=LEAN, need_rejects=False,
                    of_record=V.RECORD_VERDICT,
                    inputs=st.builds(cases.live_verified_instance, st.randoms(use_true_random=False),
                                     st.sampled_from(["honest"] * (len(cases.NAMES) // 3) + cases.NAMES)))
@@ -76,7 +76,7 @@ def test_live_verified(server):
     stats = D.run(LIVE_PORT, examples=200, server=server)
     swept = Counter(D.replay(LIVE_PORT, cases.live_verified_instance(random.Random(f"{name}/{seed}"), name), server)[0]
                     for name in ["honest", *cases.NAMES] for seed in range(4))
-    print(f"pouw-check-difftest credit-live-verified: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by "
+    print(f"pouw-verifier-difftest credit-live-verified: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by "
           f"outcome: {dict(sorted(VERIFIED.items()))}")
     assert {"run", "accept"} <= set(VERIFIED)
     for part in ("circuit: the committed circuit files are not",
@@ -96,7 +96,7 @@ def committed_files(case: dict) -> dict:
     return {"refused": list(why)} if why is not None else {"files": files}
 
 
-FILES_PORT = D.Port("pouw-check-difftest", "credit-committed-files", committed_files, package=LEAN,
+FILES_PORT = D.Port("pouw-verifier-difftest", "credit-committed-files", committed_files, package=LEAN,
                     need_rejects=False, of_record=V.RECORD_VERDICT,
                     inputs=st.builds(cases.files_instance, st.randoms(use_true_random=False),
                                      st.sampled_from(cases.FILES_NAMES)))
@@ -110,7 +110,7 @@ def test_committed_files(server):
     for name in cases.FILES_NAMES:
         for seed in range(3):
             D.replay(FILES_PORT, cases.files_instance(random.Random(f"files/{name}/{seed}"), name), server)
-    print(f"pouw-check-difftest credit-committed-files: {stats}; by outcome: {dict(sorted(VERIFIED.items()))}")
+    print(f"pouw-verifier-difftest credit-committed-files: {stats}; by outcome: {dict(sorted(VERIFIED.items()))}")
     assert set(VERIFIED) == {"files: accept", "files: circuit", "files: circuit lanes"}, VERIFIED
 
 

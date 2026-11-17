@@ -27,7 +27,7 @@ and `tile`.
 
 @[expose] public section
 
-namespace PouwCheck.PearlPlus
+namespace PouwVerifier.PearlPlus
 
 open Lean PouwCommit
 open Spot.Challenger (LiveCommitment LiveOpening)
@@ -279,4 +279,4 @@ def load (coins : EpochCoins) (man : Json) : Except Refusal Pass := do
     refuse "ValueError" s!"the commitment counts {count} tiles; the workload has {p.tileCount}"
   pure p
 
-end PouwCheck.PearlPlus
+end PouwVerifier.PearlPlus

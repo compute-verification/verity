@@ -496,7 +496,7 @@ theorem auditedOpen_ok {ledger window : Json} {key : ChallengerKey} {r : Audited
   all_goals
     exact ⟨_, _, _, by assumption, by assumption, by assumption, by assumption, by assumption, by assumption, rfl, rfl⟩
 
-theorem jsonTrue_eq {j : Json} (h : PouwCheck.jsonTrue j = true) : j = .bool true := by
+theorem jsonTrue_eq {j : Json} (h : PouwVerifier.jsonTrue j = true) : j = .bool true := by
   cases j <;> (try cases ‹Bool›) <;> first | rfl | cases h
 
 theorem jsonTrue_eq' {j : Json} (h : jsonTrue j = true) : j = .bool true := by
@@ -541,10 +541,10 @@ theorem idx_root {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} (hI : L
   · exact absurd h (hI.distinct i j hi hj hij).1
 
 theorem find_mem {ledger : Json} {sid : String} {p : LedgerEntry → Bool} {x : LedgerEntry}
-    (h : List.find? p (PouwCheck.challengePhaseEntries ledger sid) = some x) :
+    (h : List.find? p (PouwVerifier.challengePhaseEntries ledger sid) = some x) :
     x ∈ entries ledger ∧ x.session = sid ∧ p x = true := by
   have hm := List.mem_of_find?_eq_some h
-  simp only [PouwCheck.challengePhaseEntries, List.mem_filter, beq_iff_eq] at hm
+  simp only [PouwVerifier.challengePhaseEntries, List.mem_filter, beq_iff_eq] at hm
   exact ⟨hm.1, hm.2, List.find?_some h⟩
 
 /-- The ledger of a session pinned on root `R` shows its reserve, its one open on `R` and its end, from the entries
@@ -552,12 +552,12 @@ theorem find_mem {ledger : Json} {sid : String} {p : LedgerEntry → Bool} {x : 
 theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {a : Audited} {R : ByteArray}
     {rv op en : LedgerEntry} (hR : Flock.hexOf R ≠ "")
     (hpin : pinnedChallengePhase ledger (Json.mkObj [("root", .str (Flock.hexOf R))]) ck pins main = .ok a)
-    (hfind : (List.find? (fun x => x.kind == "reserve") (PouwCheck.challengePhaseEntries ledger a.session),
-      List.find? (fun x => x.kind == "open") (PouwCheck.challengePhaseEntries ledger a.session),
-      List.find? (fun x => x.kind == "end") (PouwCheck.challengePhaseEntries ledger a.session)) = (some rv, some op, some en))
+    (hfind : (List.find? (fun x => x.kind == "reserve") (PouwVerifier.challengePhaseEntries ledger a.session),
+      List.find? (fun x => x.kind == "open") (PouwVerifier.challengePhaseEntries ledger a.session),
+      List.find? (fun x => x.kind == "end") (PouwVerifier.challengePhaseEntries ledger a.session)) = (some rv, some op, some en))
     (hfam : Spot.jeq (Spot.getD rv.body "families") (familiesJson PouwWindow.SALT_FAMILIES) = true)
     (hres : (Spot.int? (Spot.getD op.body "reserve") == some (rv.seq : Int)) = true)
-    (hcomp : (PouwCheck.jsonTrue (Spot.getD en.body "complete") &&
+    (hcomp : (PouwVerifier.jsonTrue (Spot.getD en.body "complete") &&
       Spot.jeq (Spot.getD en.body "released")
         (Json.mkObj [(PouwWindow.SALT, Lean.toJson (1 : Nat))])) = true) :
     LedgerShows ledger a.session R a.recordLeaf op.seq := by

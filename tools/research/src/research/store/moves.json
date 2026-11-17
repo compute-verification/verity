@@ -5159,6 +5159,12 @@
         "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger.lean": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester.lean",
         "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck.lean": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier.lean",
+        "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/"
+      }
     }
   ]
 }

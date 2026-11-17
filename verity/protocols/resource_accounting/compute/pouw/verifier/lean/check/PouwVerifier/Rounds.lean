@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Pass
+public import PouwVerifier.Pass
 
 /-!
 # A live execution phase's salt and round coins (`core_check.py`, "a live execution phase's salt and round coins")
@@ -33,7 +33,7 @@ challenger didn't receive), with Python's words.
 
 @[expose] public section
 
-namespace PouwCheck
+namespace PouwVerifier
 
 open Lean (Json)
 open Spot.Challenger (ChallengerKey LiveOpening trustedChallengePhaseOf)
@@ -78,4 +78,4 @@ def roundsCheck (key ledger pins main window session roots openings : Json) : R 
   unless (received.lookup PouwWindow.ROUND).getD [] == rs do
     throw ("rounds", "the round roots are not the roots the challenger's log shows it received, in order")
 
-end PouwCheck
+end PouwVerifier

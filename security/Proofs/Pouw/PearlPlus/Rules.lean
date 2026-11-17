@@ -29,7 +29,7 @@ acceptance event.
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus
 
 /-- **(c) The per-row rules are `RowOK`**: on a row of `k` finite FP32 words, `k` a multiple of 8 and at most `2^27`
 (`StatsAreTheRow`'s domain), whose `s5_stats` are a value, `row_passes` on its ρ and α holds exactly when the semantics'

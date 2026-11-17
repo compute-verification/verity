@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Credit
+public import PouwVerifier.Credit
 
 /-!
 # The credit check not yet written in Lean (`credit.pearl_c_period_credit`)
@@ -13,7 +13,7 @@ check is written (`compute-accounting/pouw-verdict-from-main`); the Python's ver
 
 @[expose] public section
 
-namespace PouwCheck.Credit
+namespace PouwVerifier.Credit
 
 open Lean (Json)
 
@@ -25,4 +25,4 @@ def NOT_WRITTEN : String :=
 until its check is written. -/
 def pearlCMonitoringPeriodCredit (_key _ledger _pins _main _name _passes _earlier : Json) : R Json := throw ("period", NOT_WRITTEN)
 
-end PouwCheck.Credit
+end PouwVerifier.Credit

@@ -85,9 +85,9 @@ def drawnOn (strata : Array Flock.Draw.Stratum) (g : (i : Fin strata.size) → F
 /-- The credited calls' served work: each call of `layout` in `got` at its served rows `served` is m_s·(n/C) live
 positions of C·K MACs each (`PouwCheck.Credit.servedWork`), never its M slot rows' units (`callWork`). -/
 def creditedWork (layout : Json) (got served : List ℕ) : ℕ :=
-  ∑ i ∈ (Finset.range (PouwCheck.Credit.servedWork layout served).length).filter (· ∈ got),
-    ((PouwCheck.Credit.servedWork layout served).getD i (0, 0)).1 *
-      ((PouwCheck.Credit.servedWork layout served).getD i (0, 0)).2
+  ∑ i ∈ (Finset.range (PouwVerifier.Credit.servedWork layout served).length).filter (· ∈ got),
+    ((PouwVerifier.Credit.servedWork layout served).getD i (0, 0)).1 *
+      ((PouwVerifier.Credit.servedWork layout served).getD i (0, 0)).2
 
 /-- **The work sampling design at `K ≥ K′` misses a set of work `ε·C` with probability at most `δ`**, the claim behind every ε a
 credit reports: wherever `strata` accepts a layout with strata `ss`, `samplingDesign` puts them under `work:K`, and
@@ -99,7 +99,7 @@ random-oracle model. -/
 def WorkDrawMisses : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum) (eps δ : ℚ)
     (C k' : ℕ),
-    PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
+    PouwVerifier.Credit.strata layout = .ok ss → PouwVerifier.Credit.samplingDesign ss (toJson K) = .ok strata →
       PouwWindow.kPrime eps δ C (Flock.Draw.totalWork ss) 1 = .ok k' →
       ∀ B : Finset ℕ, k' ≤ K → eps * C ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
         prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
@@ -109,7 +109,7 @@ def WorkDrawMisses : Prop :=
 `B` whose units do at least `ε·C` of the work with probability at most `δ`. -/
 def EpsAtSound : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum) (δ e : ℚ) (C : ℕ),
-    PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
+    PouwVerifier.Credit.strata layout = .ok ss → PouwVerifier.Credit.samplingDesign ss (toJson K) = .ok strata →
       PouwWindow.epsAt K δ C (Flock.Draw.totalWork ss) 1 = .ok e →
       ∀ B : Finset ℕ, e * C ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
         prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
@@ -121,10 +121,10 @@ do at least `ε` of the credited calls' served work (`creditedWork`) with probab
 def EstablishedSound : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum)
     (got served : List ℕ) (e : ℚ),
-    PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
-      PouwCheck.Credit.established layout got served K = some e →
+    PouwVerifier.Credit.strata layout = .ok ss → PouwVerifier.Credit.samplingDesign ss (toJson K) = .ok strata →
+      PouwVerifier.Credit.established layout got served K = some e →
       ∀ B : Finset ℕ, e * creditedWork layout got served ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
-        prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (PouwCheck.Credit.DELTA : ℝ)
+        prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (PouwVerifier.Credit.DELTA : ℝ)
 
 /-- **A credited window's sampling coin comes from a withheld session on its sample root** (a challenger releases its coin
 commitment only after the prover's commitment is in). Wherever `credited` accepts a window,
@@ -134,8 +134,8 @@ withheld (`withheldOn`, `remote.open_session(..., withhold=True)`): that session
 until it closed, so its commitment came after the prover's sample root. -/
 def DrawWithheld : Prop :=
   ∀ key ledger pins main salt calls served commit rounds draw got,
-    PouwCheck.Credit.Internal.credited key ledger pins main salt calls served commit rounds draw = .ok got →
-      ∃ r, PouwCheck.get draw "root" = .str r ∧ Spot.Challenger.withheldOn ledger r = true
+    PouwVerifier.Credit.Internal.credited key ledger pins main salt calls served commit rounds draw = .ok got →
+      ∃ r, PouwVerifier.get draw "root" = .str r ∧ Spot.Challenger.withheldOn ledger r = true
 
 /-- **The grouped sample at `K ≥ K′` misses a set of blocks of work `ε·C` with probability at most `δ`**: the work sampling design
 samples leaves (`drawnOn`, as in `WorkDrawMisses`), and each sampled leaf `u` is proved as its group, every block `b` with
@@ -147,7 +147,7 @@ uniform and independent, as in `WorkDrawMisses`. -/
 def GroupedDrawMisses : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum) (eps δ : ℚ)
     (C k' : ℕ),
-    PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
+    PouwVerifier.Credit.strata layout = .ok ss → PouwVerifier.Credit.samplingDesign ss (toJson K) = .ok strata →
       PouwWindow.kPrime eps δ C (Flock.Draw.totalWork ss) 1 = .ok k' →
       ∀ {β : Type} (leafOf w : β → ℕ) (Bb : Finset β), k' ≤ K →
         (∀ u, ∑ b ∈ Bb.filter (fun b => leafOf b = u), w b ≤ unitWork ss u) →

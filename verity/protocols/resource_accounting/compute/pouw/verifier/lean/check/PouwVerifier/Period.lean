@@ -2,12 +2,12 @@ module
 
 public import CoreProtocol.Account
 public import CoreProtocol.Cli
-public import PouwCheck.Credit
-public import PouwCheck.CreditOnce
+public import PouwVerifier.Credit
+public import PouwVerifier.CreditOnce
 meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
-meta import PouwCheck.Credit
-meta import PouwCheck.CreditOnce
+meta import PouwVerifier.Credit
+meta import PouwVerifier.CreditOnce
 
 /-!
 # A PoUW period as a `Core.Protocol`: `verity/pouw/period/v1`
@@ -62,7 +62,7 @@ Flock's Lean verifier run outside).
 
 @[expose] public section
 
-namespace PouwCheck.Period
+namespace PouwVerifier.Period
 
 open Lean (Json toJson)
 open Flock (V)
@@ -372,4 +372,4 @@ private def accepted : Core.Answer :=
   | .steps s _ => s.read accepted
   | _ => none) == [some (3, 8)]
 
-end PouwCheck.Period
+end PouwVerifier.Period

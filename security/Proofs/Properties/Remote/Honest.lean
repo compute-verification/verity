@@ -4,7 +4,7 @@ import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 public import Aesop.BuiltinRules
 public import InferenceOnlyCheck.Protocol
-public import PouwCheck.Period
+public import PouwVerifier.Period
 public import Properties.Composition
 public import VStarRecursive.Sampled
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
@@ -120,7 +120,7 @@ theorem acceptInferenceOnly_honest (bs : Blobs) {kI kW kS : Case} {cI : Inferenc
     (hI : InferenceOnlyCheck.Protocol.commitmentOf kI.commitment = .ok cI)
     (hS : Spot.OneStage.commitmentOf kI.commitment = .ok cS) :
     strays [InferenceOnlyCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs bs).id]
-        [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol.onBlobs bs]
+        [InferenceOnlyCheck.Protocol.protocol, PouwVerifier.Period.protocol, VStar.Recursive.Sampled.protocol.onBlobs bs]
         [kI, kW, kS] = none ∧
       Properties.Composition.digestOf InferenceOnlyCheck.Protocol.protocol kI.commitment =
         some (InferenceOnlyCheck.Protocol.protocol.digest cI) ∧

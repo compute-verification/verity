@@ -384,13 +384,13 @@ theorem establishedSound_of (htile : Properties.Pouw.Strata.StrataTile) : Establ
   intro layout ss K strata got served e hss hlaw hest B hB
   obtain ⟨-, -, -, htotal, -⟩ := htile layout ss hss
   have hok := Properties.Pouw.Strata.established_ok hest
-  have key : ((List.range (PouwCheck.Credit.servedWork layout served).length).map fun i =>
-      if i ∈ got then ((PouwCheck.Credit.servedWork layout served).getD i (0, 0)).1 *
-        ((PouwCheck.Credit.servedWork layout served).getD i (0, 0)).2 else 0).sum =
+  have key : ((List.range (PouwVerifier.Credit.servedWork layout served).length).map fun i =>
+      if i ∈ got then ((PouwVerifier.Credit.servedWork layout served).getD i (0, 0)).1 *
+        ((PouwVerifier.Credit.servedWork layout served).getD i (0, 0)).2 else 0).sum =
       creditedWork layout got served := by
     rw [← sum_range_list, creditedWork, Finset.sum_filter]
   rw [key, ← htotal] at hok
-  exact epsAtSound layout ss K strata PouwCheck.Credit.DELTA e (creditedWork layout got served) hss hlaw hok B hB
+  exact epsAtSound layout ss K strata PouwVerifier.Credit.DELTA e (creditedWork layout got served) hss hlaw hok B hB
 
 /-- **The ε a credit reports is established** (`EstablishedSound`): `strata` tiles the window's units
 (`Properties.Pouw.Strata.strataTile`), so the total work `established` passes `epsAt` is the strata's. -/
@@ -409,8 +409,8 @@ theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β
   | ok a => exact ⟨a, rfl, h⟩
 
 theorem drawChallengePhase_withheld {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
-    (h : PouwCheck.Credit.drawChallengePhase ledger k pins main session root = .ok x) : withheldOn ledger root = true := by
-  unfold PouwCheck.Credit.drawChallengePhase at h
+    (h : PouwVerifier.Credit.drawChallengePhase ledger k pins main session root = .ok x) : withheldOn ledger root = true := by
+  unfold PouwVerifier.Credit.drawChallengePhase at h
   obtain ⟨_, -, h⟩ := bind_eq_ok h
   by_cases hw : withheldOn ledger root = true
   · exact hw
@@ -418,20 +418,20 @@ theorem drawChallengePhase_withheld {ledger : Json} {k : ChallengerKey} {pins ma
     cases h
 
 theorem creditedDraw_withheld {ledger : Json} {k : ChallengerKey} {pins main draw : Json} {root : ByteArray}
-    (h : PouwCheck.Credit.Internal.creditedDraw ledger k pins main draw root = .ok ()) :
-    ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
-  unfold PouwCheck.Credit.Internal.creditedDraw at h
+    (h : PouwVerifier.Credit.Internal.creditedDraw ledger k pins main draw root = .ok ()) :
+    ∃ r, PouwVerifier.get draw "root" = .str r ∧ withheldOn ledger r = true := by
+  unfold PouwVerifier.Credit.Internal.creditedDraw at h
   dsimp only at h
   split at h
   · next hr =>
     obtain ⟨_, hx, -⟩ := bind_eq_ok h
     refine ⟨Flock.hexOf root, ?_, drawChallengePhase_withheld hx⟩
-    revert hr; cases PouwCheck.get draw "root" <;> simp [PouwCheck.str?]
+    revert hr; cases PouwVerifier.get draw "root" <;> simp [PouwVerifier.str?]
   · cases h
 
 theorem drawWithheld : DrawWithheld := by
   intro key ledger pins main salt calls served commit rounds draw got h
-  unfold PouwCheck.Credit.Internal.credited at h
+  unfold PouwVerifier.Credit.Internal.credited at h
   obtain ⟨⟨k, out, root⟩, -, h⟩ := bind_eq_ok h
   obtain ⟨u, hu, -⟩ := bind_eq_ok h
   cases u
@@ -441,13 +441,13 @@ theorem drawWithheld : DrawWithheld := by
 `trustedChallengePhaseOf` trusts, as a withheld deployment's is. -/
 theorem drawChallengePhase_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
     (ht : trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
-    (hw : withheldOn ledger root = true) : PouwCheck.Credit.drawChallengePhase ledger k pins main session root = .ok x := by
-  simp [PouwCheck.Credit.drawChallengePhase, ht, hw, Except.mapError]
+    (hw : withheldOn ledger root = true) : PouwVerifier.Credit.drawChallengePhase ledger k pins main session root = .ok x := by
+  simp [PouwVerifier.Credit.drawChallengePhase, ht, hw, Except.mapError]
 
 /-- **`DrawWithheld`'s nontrivial lemma**: its conclusion fails at the empty ledger, which opens no session, and the sample
 `{root: ""}`, for every root `r`: the empty ledger withholds no sample root. -/
 theorem drawWithheld_nontrivial :
-    ∀ r : String, ¬ (PouwCheck.get (Json.mkObj [("root", Json.str "")]) "root" = .str r ∧
+    ∀ r : String, ¬ (PouwVerifier.get (Json.mkObj [("root", Json.str "")]) "root" = .str r ∧
       withheldOn (.arr #[]) r = true) := by
   rintro r ⟨-, hw⟩
   simp [withheldOn] at hw
@@ -460,7 +460,7 @@ theorem drawWithheld_acceptAll
       ∃ got, f key ledger pins main salt calls served commit rounds draw = .ok got) :
     ¬ ∀ key ledger pins main salt calls served commit rounds draw got,
       f key ledger pins main salt calls served commit rounds draw = .ok got →
-        ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
+        ∃ r, PouwVerifier.get draw "root" = .str r ∧ withheldOn ledger r = true := by
   intro h
   obtain ⟨got, hf⟩ := hall .null (.arr #[]) .null .null .null .null .null .null .null (Json.mkObj [("root", Json.str "")])
   obtain ⟨r, hr, hw⟩ := h _ _ _ _ _ _ _ _ _ _ _ hf
@@ -523,8 +523,8 @@ at K = 2048 each proved as its 32 lanes and their combine (`lanesBlocks`, `lanes
 accept it at `K = 8`, `kPrime` answers `K′ ≤ 8` at ε = 1/2 and δ = 1/256 over its whole work, no leaf's blocks do more
 than the leaf, and the blocks do at least ε of the work. -/
 theorem groupedDrawMisses_honest :
-    ∃ k', PouwCheck.Credit.strata lanesLayout = .ok lanesStrata ∧
-      PouwCheck.Credit.samplingDesign lanesStrata (toJson lanesK) = .ok lanesSamplingDesign ∧
+    ∃ k', PouwVerifier.Credit.strata lanesLayout = .ok lanesStrata ∧
+      PouwVerifier.Credit.samplingDesign lanesStrata (toJson lanesK) = .ok lanesSamplingDesign ∧
       PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata) (Flock.Draw.totalWork lanesStrata) 1 =
         .ok k' ∧ k' ≤ lanesK ∧
       (∀ u, ∑ b ∈ lanesBlocks.filter (fun b => lanesLeaf b = u), lanesWork b ≤ unitWork lanesStrata u) ∧
