@@ -2332,11 +2332,12 @@ inference_only &  # beside SPOT, which it doesn't read; the record waits for it
 IOV=$!
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; wait "$IOV"; stop build "$rc"; }
 export PP_PARTITION PP_SETS=${PP_SETS:-}
+STEP3_OUT=$OUT/sampled-proofs STEP3_LOG=$D/sampled-proofs.log
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
   PP_CHALLENGER="$SP_CHALLENGER" PP_MAIN="${PP_MAIN:-${MAIN_FILE:-}}" PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" \
-  OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
+  OUT="$STEP3_OUT" bash benchmarks/prove_path/run.sh > "$STEP3_LOG" 2>&1
 rc=$?
-"$SAY_PY" "$SV" unhost "$D/sampled-proofs.log" "$OUT/sampled-proofs"
+"$SAY_PY" "$SV" unhost "$STEP3_LOG" "$STEP3_OUT"
 SP=$D/sampled-proofs-served
 rm -rf "$SP"; [ ! -d "$OUT/sampled-proofs/served" ] || { mv "$OUT/sampled-proofs/served" "$SP" \
   && (cd "$SP" && find . -name '*.json' | sed 's|^\./||') | "$SAY_PY" "$SV" rebase "$SP" "$OUT/sampled-proofs/served"; }

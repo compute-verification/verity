@@ -4273,12 +4273,11 @@ def test_unhost_names_each_host_variables_machine_in_a_directorys_text_files_and
 
 def test_step_3s_log_and_outputs_name_the_gate_by_its_machine_before_anything_reads_them():
     """Step 3 on the gate's coins (no V3c on a gate) keeps run.sh's whole output, ssh's refusal included, in the serve
-    dir's sampled-proofs.log and its audit's summaries in $OUT/sampled-proofs: both are unhosted before the
-    SAMPLED-PROOFS line or the served copy reads them."""
+    dir's log, and its audit's summaries under $OUT: both are unhosted before the served copy or step 3's line reads them."""
     text = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
-    run = text.index('bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1\n')
-    unhost = text.index('"$SAY_PY" "$SV" unhost "$D/sampled-proofs.log" "$OUT/sampled-proofs"\n', run)
-    assert unhost < text.index('mv "$OUT/sampled-proofs/served"', run) < text.index('say "SAMPLED-PROOFS', run)
+    run = text.index('OUT="$STEP3_OUT" bash benchmarks/prove_path/run.sh > "$STEP3_LOG" 2>&1\nrc=$?\n')
+    unhost = text.index('"$SAY_PY" "$SV" unhost "$STEP3_LOG" "$STEP3_OUT"\n', run)
+    assert unhost < text.index('"$SV" rebase', run) < text.index("sampled_coins || stop", run)
 
 
 def test_a_compose_gate_whose_ssh_refuses_is_named_by_its_machine_in_its_line_and_its_kept_stderr(tmp_path):
