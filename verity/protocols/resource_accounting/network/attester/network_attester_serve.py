@@ -223,7 +223,7 @@ from pathlib import Path
 
 
 from verity.protocols.resource_accounting.network.verifier import blob_files as bf
-from verity.protocols.resource_accounting.network.attester import certifier_key as ck
+from verity.protocols.resource_accounting.network.attester import attester_key as ck
 from verity.protocols.resource_accounting.network.verifier import record_files as RF
 from verity.protocols.resource_accounting.network.attester import runner_parts as rp
 from verity.protocols.resource_accounting.network.attester import load_relay as lr
@@ -661,7 +661,7 @@ def sign_load(issuer: Issuer, key: LmsKey, heads: Path, out: Path) -> dict:
 
 
 def make_key(directory: Path, height: int = ck.HEIGHT) -> lms.PrivateKey:
-    """The network attester's key directory, made or loaded (`certifier_key.load_key`), and with a key made here
+    """The network attester's key directory, made or loaded (`attester_key.load_key`), and with a key made here
     its device state (`DEVICE`, `certificate.DeviceState`): created once, with the key, at none of its life used. A
     key that was already there keeps its device state as it is, and one without it is given none: nothing says how
     much of its life it has used, so `serve` refuses to start under it."""

@@ -58,7 +58,7 @@ its own source (`Ties`: the tie, its stream and the release), never from what th
 names the link and its registrations, so a verdict on another link or another ingress record isn't this one's.
 
 **What it doesn't establish.** The prompt ids' values (the ingress-ids tie, `io_ids`). The release is taken in the
-clear (the named gap). That the network attester's cells are the frames the ingress certifier counted is the device's: both are
+clear (the named gap). That the network attester's cells are the frames the ingress attester counted is the device's: both are
 the auditor's device's record of the link.
 """
 from __future__ import annotations
