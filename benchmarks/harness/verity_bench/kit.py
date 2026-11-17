@@ -5,6 +5,8 @@
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `card_short(name, directory=...)`: the card's name in a measurement's member, from the one card record whose `driver`
   holds the stamp's `card` exactly.
+- `machine_properties(name, directory=...)`: a machine record's `[properties]` (what a job may do there: its toolkit, profiler,
+  clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
@@ -71,6 +73,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import tomllib
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -211,6 +214,63 @@ def card_short(name: str, *, directory: Path) -> str:
             f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
             "card's name in a measurement's member, adding its <sku>.toml there if it has none")
     return found[0]["short"]
+
+
+def _text(v: Any) -> bool:
+    return isinstance(v, str) and v != ""
+
+
+def _count(v: Any) -> bool:
+    return type(v) is int and v > 0
+
+
+def _texts(v: Any, *keys: str) -> bool:
+    return isinstance(v, dict) and all(_text(v.get(k)) for k in keys)
+
+
+#: a machine record's `[properties]`, each field with the check its value passes unless it is ``"unread"``
+MACHINE_PROPERTIES: dict[str, Any] = {
+    "kind": _text, "card": _text, "cards": _count, "cpus": _count, "threads_per_core": _count,
+    "numa": lambda v: isinstance(v, list) and all(
+        isinstance(e, dict) and set(e) == {"card", "node", "cpus"} and type(e["card"]) is int and type(e["node"]) is int
+        and _text(e["cpus"]) for e in v),
+    "toolkit": lambda v: v == "none" or _texts(v, "directory", "version", "loader") and isinstance(v.get("others", []), list)
+    and all(_texts(o, "directory", "version") for o in v.get("others", [])),
+    "compiler": lambda v: type(v) is bool, "profiler": lambda v: v in ("allowed", "needs-root", "refused"),
+    "clock_lock": lambda v: type(v) is bool, "root": lambda v: type(v) is bool, "lease": _text,
+    "launcher": lambda v: _texts(v, "start") and isinstance(v.get("sets"), list) and all(_text(s) for s in v["sets"]),
+    "python": _text, "job_cap_minutes": lambda v: v == "none" or _count(v)}
+
+
+def machine_properties(name: str, *, directory: Path) -> dict:
+    """The `[properties]` of machine `name`'s record, ``directory/<name>.toml`` (the notes' `machines.d`), as written: each
+    field of `MACHINE_PROPERTIES` ``{ value, read }``, `read` the command that read `value`, and `value` ``"unread"`` or one
+    its check takes: a `toolkit` is ``{ directory, version, loader }`` (`others`: more ``{ directory, version }``) or
+    ``"none"``, `numa` a list of ``{ card, node, cpus }``, `launcher` ``{ start, sets }``, `profiler` ``"allowed"``,
+    ``"needs-root"`` or ``"refused"``, `job_cap_minutes` minutes or ``"none"``. Refused by name otherwise."""
+
+    path = directory / f"{name}.toml"
+
+    def refuse(why: str) -> SystemExit:
+        return SystemExit(f"machine {name!r}: {path} {why}")
+
+    try:
+        table = tomllib.loads(path.read_text()).get("properties")
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        raise refuse(f"is unreadable ({type(e).__name__}: {e})") from None
+    if not isinstance(table, dict):
+        raise refuse("has no [properties] table")
+    if missing := sorted(MACHINE_PROPERTIES.keys() - table.keys()):
+        raise refuse(f"lacks {', '.join(missing)} in [properties]: give each {{ value, read }}, value \"unread\" if not read")
+    if extra := sorted(table.keys() - MACHINE_PROPERTIES.keys()):
+        raise refuse(f"has {', '.join(extra)} in [properties], which are none of {', '.join(MACHINE_PROPERTIES)}")
+    for field_, check in MACHINE_PROPERTIES.items():
+        entry = table[field_]
+        if not isinstance(entry, dict) or set(entry) != {"value", "read"} or not _text(entry["read"]):
+            raise refuse(f"gives {field_} as {entry!r}, not {{ value, read }} with read the command that read it")
+        if entry["value"] != "unread" and not check(entry["value"]):
+            raise refuse(f"gives {field_} the value {entry['value']!r}, which its check refuses (machine_properties' docstring)")
+    return table
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------

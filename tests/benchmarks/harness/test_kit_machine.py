@@ -1,0 +1,82 @@
+"""The harness kit's reader of a machine record's `[properties]`, over the records in `fixtures/machines/`."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import pytest
+from verity_bench import kit
+
+MACHINES = Path(__file__).parent / "fixtures" / "machines"
+
+
+def test_a_record_read_whole_gives_each_property_with_the_command_that_read_it():
+    props = kit.machine_properties("one-card", directory=MACHINES)
+    assert sorted(props) == sorted(kit.MACHINE_PROPERTIES)
+    assert props["toolkit"]["value"]["directory"] == "/usr/local/cuda-13.0"
+    assert props["profiler"] == {"value": "allowed", "read": "grep RmProfilingAdminOnly /proc/driver/nvidia/params"}
+    assert props["clock_lock"]["value"] is True
+    assert props["numa"]["value"] == [{"card": 0, "node": 0, "cpus": "0-15"}]
+
+
+def test_a_record_with_unread_values_and_no_register_entry_is_read():
+    props = kit.machine_properties("slurm-node", directory=MACHINES)
+    assert props["toolkit"]["value"] == "none"
+    assert props["profiler"]["value"] == "unread"
+    assert props["job_cap_minutes"]["value"] == 10080
+
+
+def _record(tmp_path: Path, old: str, new: str) -> Path:
+    text = (MACHINES / "one-card.toml").read_text()
+    assert old in text
+    (tmp_path / "m.toml").write_text(text.replace(old, new))
+    return tmp_path
+
+
+def test_a_record_with_no_file_or_no_table_is_refused_by_name(tmp_path):
+    with pytest.raises(SystemExit, match=r"^machine 'gone': .*gone\.toml is unreadable \(FileNotFoundError"):
+        kit.machine_properties("gone", directory=MACHINES)
+    (tmp_path / "m.toml").write_text('provider = "ssh"\nhost = "dummy.invalid"\n')
+    with pytest.raises(SystemExit, match=r"m\.toml has no \[properties\] table"):
+        kit.machine_properties("m", directory=tmp_path)
+
+
+def test_a_missing_or_unknown_property_is_refused_by_name(tmp_path):
+    d = _record(tmp_path, 'python = { value = "3.12.3", read = "python3 --version" }\n', "")
+    with pytest.raises(SystemExit, match=r"lacks python in \[properties\]: give each \{ value, read \}"):
+        kit.machine_properties("m", directory=d)
+    # a register key written after the table lands in it
+    d = _record(tmp_path, 'read = "no job queue" }\n', 'read = "no job queue" }\nunreachable_since = "2026-11-18T00:00:00Z"\n')
+    with pytest.raises(SystemExit, match=r"has unreachable_since in \[properties\], which are none of kind, card"):
+        kit.machine_properties("m", directory=d)
+
+
+@pytest.mark.parametrize("old, new, field", [
+    ('cards = { value = 1,', 'cards = { value = 0,', "cards"),
+    ('cards = { value = 1,', 'cards = { value = true,', "cards"),
+    ('cpus = { value = 16,', 'cpus = { value = "16",', "cpus"),
+    ('value = "allowed"', 'value = "yes"', "profiler"),
+    ('clock_lock = { value = true,', 'clock_lock = { value = "yes",', "clock_lock"),
+    ('loader = "lib64", ', "", "toolkit"),
+    ('{ directory = "/usr/local/cuda-12.9", version = "12.9" }', '{ directory = "/usr/local/cuda-12.9" }', "toolkit"),
+    ('{ card = 0, node = 0, cpus = "0-15" }', '{ card = 0, cpus = "0-15" }', "numa"),
+    ('start = "research run --on one-card", ', "", "launcher"),
+    ('value = "none", read = "no job queue"', 'value = 0, read = "no job queue"', "job_cap_minutes"),
+])
+def test_a_value_its_check_refuses_is_refused_naming_the_field(tmp_path, old, new, field):
+    d = _record(tmp_path, old, new)
+    with pytest.raises(SystemExit, match=rf"gives {field} the value .*, which its check refuses"):
+        kit.machine_properties("m", directory=d)
+
+
+@pytest.mark.parametrize("old, new", [
+    (', read = "python3 --version" }', " }"),
+    (', read = "python3 --version" }', ', read = "" }'),
+    ('python = { value = "3.12.3", read = "python3 --version" }', 'python = "3.12.3"'),
+    (', read = "python3 --version" }', ', read = "python3 --version", note = "the venv" }'),
+])
+def test_an_entry_that_is_not_a_value_and_its_read_is_refused(tmp_path, old, new):
+    d = _record(tmp_path, old, new)
+    with pytest.raises(SystemExit, match=re.escape("gives python as ") + r".*not \{ value, read \}"):
+        kit.machine_properties("m", directory=d)
