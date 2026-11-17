@@ -246,7 +246,7 @@ theorem zeroDen_parse :
       .ok (Json.arr #[Lean.toJson (0 : ℕ), Lean.toJson (0 : ℕ)]) :=
     getObjVal?_mkObj (by simp) (by simp [InferenceOnly.RowsProtocol.instanceOf, zeroDen])
   have hp : (InferenceOnly.RowsProtocol.instanceOf zeroDen ⟨"", none⟩).getObjVal? "pins" = .ok (Json.arr #[]) :=
-    getObjVal?_mkObj (by simp) (by simp [InferenceOnly.RowsProtocol.instanceOf, zeroDen])
+    getObjVal?_mkObj (by simp) (by simp [zeroDen])
   unfold InferenceOnlyVerifier.Record.parse InferenceOnlyVerifier.field
   rw [rows_instance_program, rows_instance_record, hg, ha, hp]
   rfl
@@ -266,7 +266,7 @@ theorem RowsComplies_honest (h : RowsHonestAccepted) :
 /-- **`RowsComplies` fails without `InferenceOnly.RowsProtocol.checkBlobs`.** At a case whose `α` has denominator 0,
 which a verifier that accepted every case would accept, the record check reads no record, so `RowsHeld` fails. -/
 theorem RowsComplies_nontrivial :
-    ¬ _root_.Properties.Remote.RowsHeld zeroDen ⟨"", none⟩ ⟨.null, "", .empty⟩ Core.Blobs.empty := by
+    ¬ _root_.Properties.Remote.RowsHeld zeroDen ⟨.null, "", .empty⟩ ⟨"", none⟩ Core.Blobs.empty := by
   rintro ⟨r, _, h, -⟩
   unfold InferenceOnlyVerifier.Record.read InferenceOnlyVerifier.Record.front at h
   rw [zeroDen_parse] at h
