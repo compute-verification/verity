@@ -42,7 +42,7 @@ turn says so. The launch model is the model the agent's first turn in this machi
 (`settings.launch_model`). Models are compared by family, never by effort (`settings.model_family`: `claude-fable-5-2`
 of `claude-fable-5-2-xhigh`), so a lead moved to another effort is not told. In a turn whose commands name another
 family, the first command the hook would otherwise pass is refused, once, with the turn's model, the launch model and
-the two ways on: hand the turn's job to a child started with `Task` and `claude-opus-5-5-high` (or
+the two ways on: hand the turn's job to a child started with `Task` and `claude-opus-5-5-medium` (or
 `claude-sonnet-5-5-high` for a fully specified task; never Fable 5.2), local, so that it runs on this machine and has
 the checkout; or end the turn and be
 resumed by the lead, which keeps the launch model. The rest of the turn's commands pass, so the agent can read its
@@ -55,10 +55,10 @@ or a resume put the agent on a new machine, which holds none of its earlier turn
 for the launch: the rule refuses nothing in that turn, and a refusal in a later one names the model on record and
 says to go by the brief where the brief names another.
 
-The Fable rule (`shell_hook.fable_reason`): no worker runs Fable 5.2; a worker runs `claude-opus-5-5-high`, or
+The Fable rule (`shell_hook.fable_reason`): no worker runs Fable 5.2; a worker runs `claude-opus-5-5-medium`, or
 `claude-sonnet-5-5-high` for a fully specified task. In a cloud worker's turn whose payload names Fable 5.2 at any effort
 (`claude-fable-5-2-*`), every command is refused, each time, saying to end the turn, say what started it, and be resumed
-by the lead or launched again naming `claude-opus-5-5-high`. A lead is an agent that holds a handle in the Slack registry
+by the lead or launched again naming `claude-opus-5-5-medium`. A lead is an agent that holds a handle in the Slack registry
 (a `holder`), or has the id `infra/cursor/launch_coordinator.py` gives a registered handle at a generation from 1 to 50
 (`task_hook.leads`); every other agent, a lead's child included, is a worker. Never refused: a lead's turn at any effort,
 a turn whose payload names no model, a local session, and every turn while the registry can't be read (which the hook

@@ -386,9 +386,9 @@ static void emit_reps(const std::vector<Rep>& v, double macs, double bytes, int 
   const Rep& m = s[s.size() / 2];
   const double peak = 1024.0 * sms * m.mhz * 1e6;  // int8 MACs/s at the read clock
   printf(", \"ms\": %.4f, \"ms_min\": %.4f, \"ms_max\": %.4f, \"mhz\": %.1f, \"watt\": %.1f, \"macs\": %.6e, \"bytes\": %.6e, "
-         "\"mac_per_s\": %.6e, \"share_of_peak\": %.5f, \"share_of_peak_2430\": %.5f, \"gb_per_s\": %.2f, \"reps\": [",
+         "\"mac_per_s\": %.6e, \"share_of_peak\": %.5f, \"gb_per_s\": %.2f, \"reps\": [",
          m.ms, s.front().ms, s.back().ms, m.mhz, m.watt, macs, bytes, macs / (m.ms * 1e-3), macs / (m.ms * 1e-3) / peak,
-         macs / (m.ms * 1e-3) / (1024.0 * sms * 2430e6), bytes / (m.ms * 1e-3) / 1e9);
+         bytes / (m.ms * 1e-3) / 1e9);
   for (size_t i = 0; i < v.size(); i++) printf("%s[%.4f, %.0f, %.0f]", i ? ", " : "", v[i].ms, v[i].mhz, v[i].watt);
   printf("]}\n");
   fflush(stdout);

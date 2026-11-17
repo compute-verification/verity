@@ -153,6 +153,8 @@ from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_bench.kit_report import RUN_ID
 
+CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
+
 __all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DELTA_S_MARK", "DEVELOPMENT", "EPSILON_S", "HELD_TO_W", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
            "POLICY",
            "RECORDS", "RESTS_ON", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
@@ -670,7 +672,7 @@ def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
         if (sheet := site.sheet(d)) is None:
             raise Unreadable(f"the registered device {d} names no registered sheet")
         try:
-            card = load_card(sheet.sku)
+            card = load_card(sheet.sku, directory=CARD_FILES)
         except KeyError as e:
             raise Unreadable(f"the registered device {d}'s SKU has no card file: {e}") from e
         for r in READINGS:
