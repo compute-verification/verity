@@ -7,7 +7,6 @@ public import Proofs.InferenceOnly.Rate
 public import Proofs.Slowdown.RemoteMonitoringPeriod
 public import Proofs.InferenceOnly.Verdict
 public import Proofs.InferenceOnly.DescVerdict
-public import Proofs.InferenceOnly.Cover
 public import Proofs.InferenceOnly.PartitionCovers
 public import Proofs.InferenceOnly.CompliesCK
 public import Proofs.InferenceOnly.Lemmas
