@@ -898,6 +898,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
     monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(A5, "warm", lambda *a, **kw: [])
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setattr(RA, "output_class", output_class)
     base = _audit_args(got)
@@ -1207,6 +1208,7 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
     monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(A5, "warm", lambda *a, **kw: [])
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setattr(RA, "output_class", lambda circuit, given=(), own=frozenset(): [])
     base = _audit_args(got)
@@ -1450,6 +1452,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
     """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
     `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
     ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
+    import a5 as A5
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
@@ -1474,6 +1477,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
         raise Opened
 
     monkeypatch.setattr(AC, "start", start)
+    monkeypatch.setattr(A5, "warm", lambda *a, **kw: [])
     gate = ["--challenger", "gate:research@gate", "--peer", "vy-nebius-1", "--challenger-key", "key.json", "--gate-key", "gate.key"]
     with pytest.raises(Opened):
         RA.main([*args, *gate])
@@ -1523,6 +1527,7 @@ def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_pat
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", free_ports)
     monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(A5, "warm", lambda *a, **kw: [])
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     args = ["audit", "--window", str(got.dir), "--sampling-design", _rate(got.dir), "--circuit", got.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"),
@@ -1564,6 +1569,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
     monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(A5, "warm", lambda *a, **kw: [])
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setenv("FC_ZK_SELF_CHECK", "stop")
     args = _audit_args(written)
@@ -1631,6 +1637,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
         return {"audit": {"accepted": True}, "negative_workers": {"workers": a.negative_workers}}, True
 
     monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(A5, "warm", lambda *a, **kw: [])
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     capsys.readouterr()
     argv = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", rec["window"]["circuit"], "--run", RUN,
