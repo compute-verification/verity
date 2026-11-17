@@ -4689,16 +4689,16 @@ def test_the_preflight_refuses_a_step_3_partition_it_cant_read_where_the_compile
     ({"SERVE_ARGS": "--prefix-caching"}, "PREFLIGHT: under PEARLPLUS_TIE each request's prefill computes every row of its "
      "prompt, at which the cut circuit reads Pearl+'s tables, and SERVE_ARGS turns vLLM's prefix cache on "
      "(--prefix-caching): drop it"),
-    ({"CERTIFIER_FRONT": "true"}, "PREFLIGHT: under PEARLPLUS_TIE the window is V3C_CLASS's fixed load, and "
-     "CERTIFIER_FRONT's group closes into a window of its own, which the run's pick takes on a tie in requests: unset "
-     "CERTIFIER_FRONT"),
+    ({"WINDOW": "1"}, "PREFLIGHT: under PEARLPLUS_TIE the window of record is the fixed load's, named by its requests, "
+     "and WINDOW names one by number: unset it"),
 ])
-def test_the_preflight_refuses_pearlplus_tie_off_the_bf16_row_its_class_uncounted_with_the_prefix_cache_or_a_front(
+def test_the_preflight_refuses_pearlplus_tie_off_the_bf16_row_its_class_uncounted_with_the_prefix_cache_or_a_window(
         tmp_path, extra, line):
     """PEARLPLUS_TIE serves the BF16 checkpoint, whose linears Pearl+'s FP8 product reads, and V3c's commit is held to
     V3C_CLASS's window circuit; the cut circuit reads Pearl+'s tables at every row of the class's fixed load. So another
     PRECISION or row, a V3C_CLASS CLASSES doesn't count, vLLM's prefix cache (a hit leaves a prompt's rows uncomputed) and
-    a network attester front's window of its own are each refused before anything runs."""
+    a window named by number (the window of record is the fixed load's, named by its requests) are each refused before
+    anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIED, **extra})
     assert (rc, lines, order) == (3, [line], [])
 
