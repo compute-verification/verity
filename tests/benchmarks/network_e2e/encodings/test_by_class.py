@@ -304,7 +304,7 @@ def test_the_report_splits_a_trace_by_class_and_counts_its_events(tmp_path, caps
         held = len({(a - min(buckets(times))) // 10 for a in buckets(times)})
         assert row["aborts"] == {"freed": N, "finishes": {"length": ev["ended_length"], "stop": ev["ended_stop"]}, "aborted": 0,
                                  "windows_released": held if row is t else None, "by_window": [] if row is t else None,
-                                 "released_never_freed": None, "certifier_failed": None}
+                                 "released_never_freed": None, "attester_failed": None}
         assert ev["aborted"] == 0 and row["ell"] == 1 << 23
         assert row["serve"] == {"model": None, "cards": 1, "draft": False, "vllm": None, "certifier": None}
         n, widths = row["lengths"], [io.max_tokens.bit_length() for io in ios]
@@ -375,7 +375,7 @@ def test_a_trace_with_an_abort_is_its_refusal_and_its_aborts(tmp_path, capsys):
     assert row["aborts"] == {"freed": N, "finishes": {"abort": 1, "length": N - 1 - stops, "stop": stops}, "aborted": 1,
                              "windows_released": held, "by_window": [{"window": at, "aborted": 1}],
                              "released_never_freed": 2,
-                             "certifier_failed": {"released": {"limit": 2, "late": 1}, "unreleased": {"ingress": 1}}}
+                             "attester_failed": {"released": {"limit": 2, "late": 1}, "unreleased": {"ingress": 1}}}
     text = capsys.readouterr().out
     assert text.startswith("**abort**: refused, so it has no table: request r5: finish 'abort'") and "|" not in text
     assert f"Aborts in its record: the engine freed {N} requests (1 `abort`, " in text and "1 of them aborted; 2 released" in text

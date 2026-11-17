@@ -1,4 +1,4 @@
-# certifier_timing
+# attester_timing
 
 How many bits an interval a server can move through **when** the network attester releases its bytes. It
 fixes which interval a cell leaves in, so what is left to a server is the release's time inside the interval: the
@@ -60,7 +60,7 @@ A client can stamp as the kernel does, so the number is over both columns.
 | `best` | the attack, observer and stamp `value` is of |
 | `ceiling` | the largest upper bound of any attack on either stamp: what the run shows every attack built here under |
 | `commit`, `run` | the commit measured from and the run's id |
-| `certifier`, `host` | the network attester's commit and settings; the host, its cores and its clock |
+| `attester`, `host` | the network attester's commit and settings; the host, its cores and its clock |
 | `guard`, `target` | the guard's two readings; the budget's bits an interval, and whether `ceiling` is under each end |
 | `rows` | each attack with each observer, pooled, most bits first: the `process` stamp's reading and, under `kernel`, the kernel stamp's; `halted`, how many times the network attester's host's cores entered an idle state that stops them while the row's cases ran (null where the host counts none); then the guard's cases and any control, which are no part of the number (`role`) |
 | `cases` | each run: its settings, hosts and problems, both stamps' readings (`client`, `kernel`), and the network attester's own release times scored the same way (`sender`) |
@@ -70,17 +70,17 @@ A client can stamp as the kernel does, so the number is over both columns.
 On a team machine, never an agent's VM: the number is of the host it ran on.
 
 ~~~sh
-verity bench certifier_timing run                     # this checkout's network attester, paced 50 ms into a 100 ms interval
-verity bench certifier_timing run --paced-ms 0        # the same network attester writing each interval on its loop
-verity bench certifier_timing run --tree /path/to/checkout --tree-commit SHA   # another checkout's network attester
-verity bench certifier_timing guard                   # the guard alone
-verity bench certifier_timing target --interval-ms 100
-verity bench certifier_timing score DIR               # recorded cases again, as one result
-verity bench certifier_timing table RESULT.json       # results as a table's rows
+verity bench attester_timing run                     # this checkout's network attester, paced 50 ms into a 100 ms interval
+verity bench attester_timing run --paced-ms 0        # the same network attester writing each interval on its loop
+verity bench attester_timing run --tree /path/to/checkout --tree-commit SHA   # another checkout's network attester
+verity bench attester_timing guard                   # the guard alone
+verity bench attester_timing target --interval-ms 100
+verity bench attester_timing score DIR               # recorded cases again, as one result
+verity bench attester_timing table RESULT.json       # results as a table's rows
 ~~~
 
 The network attester imports only the standard library, `verity` and numpy, so a `python3` of 3.12 or later that has numpy
-runs `benchmarks/certifier_timing/run.py` with the checkout's root on `PYTHONPATH`. Under `research run` the result and
+runs `benchmarks/attester_timing/run.py` with the checkout's root on `PYTHONPATH`. Under `research run` the result and
 every case's timestamps go to `$OUT`. `run` exits 1 when the guard fails and 2 when a case is no measurement: the
 network attester failed a connection, a tick ran past its slack, or the parties disagree on which interval is which.
 
@@ -152,15 +152,15 @@ measurement (`launch.json`, the device's queue counts).
 ## Two hosts
 
 ~~~sh
-verity bench certifier_timing serve --listen 0.0.0.0 --port 47812 --attack write --out OUT/write-spin   # the network attester's host
-verity bench certifier_timing observe HOST:47812 --observer spin --out SEEN/write-spin                   # the other host
-verity bench certifier_timing score OUT/write-spin --observer SEEN
+verity bench attester_timing serve --listen 0.0.0.0 --port 47812 --attack write --out OUT/write-spin   # the network attester's host
+verity bench attester_timing observe HOST:47812 --observer spin --out SEEN/write-spin                   # the other host
+verity bench attester_timing score OUT/write-spin --observer SEEN
 ~~~
 
 `serve` takes one connection, the case's observer, and `observe` tries the network attester until it answers. Nothing joins
 the two clocks. Which interval a chunk is comes from its bytes (interval t's are all the byte t mod 256) and from the
 network attester's record of the connection, and `step` reads through the clocks' drift. Both of the observer's stamps are
-its own host's, each counted from its first arrival. `serve --certifier relay --attack
+its own host's, each counted from its first arrival. `serve --attester relay --attack
 delay`, with and without `--ignore`, is the guard across the two hosts, and `serve --ignore` an attack's control.
 
 `pair.sh serve|observe ADDR PORT START OUT [serve's flags]` runs one side of every case: the guard's two, each

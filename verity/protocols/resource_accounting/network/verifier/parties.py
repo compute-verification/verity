@@ -13,7 +13,7 @@ network-certifier -> verifier   out-record {link, window}, the output value's re
                                 groups {}, a grouped run's requests and execution phases its body (structure)
 ~~~
 
-- **The network attester** (`NETWORK_CERTIFIER`) is the auditor's device on a server's link, one a link. Its machine
+- **The network attester** (`NETWORK_ATTESTER`) is the auditor's device on a server's link, one a link. Its machine
   gives it a clock (its grids release each bucket at a time fixed on its own clock), its own randomness (the
   capability `coins`: every salt it hides a record or a row under) and a signing key (`certificate.Signer`, whose
   one-time leaves sign each closed execution phase). Its pacer, its issuer and its link for the challenges
@@ -67,7 +67,7 @@ from . import network_attester_rows as WR
 
 ID = CERTIFIER_PROTOCOL
 VERSION = 1
-NETWORK_CERTIFIER, WORKERS, VERIFIER = "network-certifier", SP.WORKERS, SP.VERIFIER
+NETWORK_ATTESTER, WORKERS, VERIFIER = "network-certifier", SP.WORKERS, SP.VERIFIER
 OUT_OPENING, OUT_RECORD = "out-opening", "out-record"
 CERTIFICATE, REGISTRATION, RECORDS, CELLS_SALTS = "certificate", "registration", "records", "cells-salts"
 DEPLOYMENT, GROUPS = "deployment", "groups"
@@ -84,10 +84,10 @@ MAX_SALTS = MAX_PACKED // WR.WIRING_SALT_BYTES * WR.WIRING_SALT_BYTES
 _HEAD = {"link": Str(255), "window": Int(0, (1 << 64) - 1)}
 MANIFEST = Manifest(
     ID, VERSION, "network-period check PARAMS",
-    parties=(Role(NETWORK_CERTIFIER, "auditor", per="link", needs=("clock", "coins", "signing-key")),
+    parties=(Role(NETWORK_ATTESTER, "auditor", per="link", needs=("clock", "coins", "signing-key")),
              SP.MANIFEST.role(WORKERS), SP.MANIFEST.role(VERIFIER)),
-    channels=(Channel(NETWORK_CERTIFIER, WORKERS, (OUT_OPENING, RECORDS, CELLS_SALTS)),
-              Channel(NETWORK_CERTIFIER, VERIFIER, (OUT_RECORD, CERTIFICATE, REGISTRATION, DEPLOYMENT, GROUPS))),
+    channels=(Channel(NETWORK_ATTESTER, WORKERS, (OUT_OPENING, RECORDS, CELLS_SALTS)),
+              Channel(NETWORK_ATTESTER, VERIFIER, (OUT_RECORD, CERTIFICATE, REGISTRATION, DEPLOYMENT, GROUPS))),
     messages=(Schema(OUT_OPENING, 1, "private", _HEAD, Body(max=MAX_OPENING, unit=O.SALT_BYTES)),
               Schema(OUT_RECORD, 1, "commitment", _HEAD, Body(max=MAX_RECORD)),
               Schema(RECORDS, 1, "private", _HEAD | {"record": Str(9, "|".join(RECORD_NAMES))}, Body(max=MAX_PACKED)),
@@ -98,5 +98,5 @@ MANIFEST = Manifest(
               Schema(GROUPS, 1, "structure", {}, Body(max=MAX_RECORD))))
 
 __all__ = ["CELLS_SALTS", "CERTIFICATE", "DEPLOYMENT", "GROUPS", "ID", "MANIFEST", "MAX_OPENING", "MAX_PACKED",
-           "MAX_RECORD", "MAX_SALTS", "NETWORK_CERTIFIER", "OUT_OPENING", "OUT_RECORD", "RECORDS", "RECORD_NAMES", "REGISTRATION",
+           "MAX_RECORD", "MAX_SALTS", "NETWORK_ATTESTER", "OUT_OPENING", "OUT_RECORD", "RECORDS", "RECORD_NAMES", "REGISTRATION",
            "VERIFIER", "VERSION", "WORKERS"]

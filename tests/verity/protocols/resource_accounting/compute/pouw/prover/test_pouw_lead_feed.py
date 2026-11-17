@@ -212,7 +212,7 @@ def test_coins_refuse_a_wrong_shape_dtype_or_range():
         F.Feed.of(F.Call(0, 0, 0, 17, 30, 8), coins)
 
 
-def test_in_process_certifier_releases_once_after_the_root():
+def test_in_process_attester_releases_once_after_the_root():
     asked: list[int] = []
     inner = rand_of(7)
 
@@ -238,7 +238,7 @@ def test_in_process_certifier_releases_once_after_the_root():
     assert cert.release(F.Call(4, 0, 5, 9, 2048, 3072), b"\x02" * 64).call.pass_index == 4
 
 
-def test_in_process_certifier_samples_a_windows_salt_after_its_key_leaf_weights_root_and_call_count():
+def test_in_process_attester_samples_a_windows_salt_after_its_key_leaf_weights_root_and_call_count():
     """C3's order: a window's salt is sampled once, from the network attester's source, after it holds the window's key leaf,
     weights' root and call count. No coins are released before the salt, and none past the call count."""
     cert = F.InProcessCertifier(rand_of(5))

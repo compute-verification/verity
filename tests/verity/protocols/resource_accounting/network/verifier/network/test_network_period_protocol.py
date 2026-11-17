@@ -5,7 +5,7 @@ The mirror and the generator are `period_case.py`'s: `reference` (its `answer`) 
 answer format, `build` makes a period with one change (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases), and `case` a small period aimed at a verdict or at a decoding failure
 (`KINDS`). This module re-exports
-what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it samples onsite's certifier cases from
+what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it samples onsite's attester cases from
 `build` and answers them with `reference` (`tests/verity/protocols/compose/verifier/lean/reference.py`)."""
 
 from __future__ import annotations
