@@ -1,0 +1,9 @@
+[[metric]]
+id = "proofs/proof-throughput-blocks-per-second"
+title = "Proof blocks proved a second"
+owner = "proofs"
+unit = "proof blocks a second"
+axis = "Proof blocks a second Flock's prover proves, zero knowledge off, on GLM-5.3's bf16 dot products at K = 6144, 64 proof blocks a session sampled by the verifier's stratified design, counting only sessions the Lean verifier accepted; one line a prover count, as its member names it (the model, the card, then how many provers prove at once, each on a card and cores of its own on one node)."
+better = "higher"
+command = "research run --on vy-spot-glm53 --project verity --source . --cwd source --timeout 60m -- uv run --extra torch-cpu python benchmarks/proof_throughput/run.py record --B 64 --provers 1,2 --cores 32-47,80-95"
+every = "7d"

@@ -105,7 +105,7 @@ fi
 export GPU_LEASE_WHO=${GPU_LEASE_WHO:-proofs/proof_throughput/${RESEARCH_RUN_ID:-local}}
 ph lease wait
 # one point's sessions at a time on this node (their staging overlaps): two would share its host CPUs and memory bandwidth
-flock "$FLOCK_WORK/sessions.lock" "${LEASE[@]}" 1 --wait --max-min "${LEASE_MAX_MIN:-30}" -- bash -c '
+flock "${SESSIONS_LOCK:-$FLOCK_WORK/sessions.lock}" "${LEASE[@]}" 1 --wait ${LEASE_CORES:+--cores "$LEASE_CORES"} --max-min "${LEASE_MAX_MIN:-30}" -- bash -c '
   set -u; O=$1; shift
   printf "lease\tstart\t%s\n" "$(date +%s.%N)" >> "$O/phases.tsv"
   G=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-0}}
@@ -122,14 +122,15 @@ D=$(ls -d "$S"/prove/classes/*/ 2>/dev/null | head -1)
 cp "$S/prove/classes/results.jsonl" "$O/results.jsonl" 2>/dev/null
 [ -n "$D" ] && for f in prove.out prove.err serve.log sessions/index.jsonl; do [ -e "$D/$f" ] && cp "$D/$f" "$O/$(basename "$f")"; done
 PT probe --out "$O/hardware.json" --gpu-csv "$O/gpu.csv"
-printf '{"workload": "%s", "B": %s, "warm": %s, "runs": %s, "run": "%s"}\n' "$WORKLOAD" "$B" "${WARM:-1}" "${RUNS:-3}" "${RESEARCH_RUN_ID:-local}" > "$O/point.json"
+printf '{"workload": "%s", "B": %s, "warm": %s, "runs": %s, "run": "%s", "prover_node": "%s"}\n' "$WORKLOAD" "$B" "${WARM:-1}" "${RUNS:-3}" \
+  "${RESEARCH_RUN_ID:-local}" "${PT_PROVER_NODE:-vy-nebius-1}" > "$O/point.json"
 if [ "${ZK:-0}" = 1 ]; then
-  PT zk-point --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESEARCH_RUN_DIR:-$O}/result.json" | tee -a "$O/job.log" || rc=1
+  PT zk-point --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESULT:-${RESEARCH_RUN_DIR:-$O}/result.json}" | tee -a "$O/job.log" || rc=1
   log "done"; [ $rc = 0 ]; exit
 fi
 C=$(PT staged --results "$O/results.jsonl" --cache-dir 2>/dev/null)
 [ -n "$C" ] && cp "$C/rec.json" "$O/stage-rec.json"
-PT point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESEARCH_RUN_DIR:-$O}/result.json"
+PT point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESULT:-${RESEARCH_RUN_DIR:-$O}/result.json}"
 
 # the bundle verify.sh needs: the statement as the verifier builds it (circuit, public file), every session and this run's records
 if [ "${BUNDLE:-1}" = 1 ] && [ -n "$D" ] && [ -n "$C" ] && [ -s "$O/results.jsonl" ]; then
