@@ -6,7 +6,7 @@ public import Proofs.Properties.Pous.MemoryAttester.Attest
 /-!
 # An accepted run of the composed check, without evaluating SHA-512
 
-`runCheck_accepts`: `PousVerifier.Run.check` accepts a run at P2's deployed point under S1's LMS. Every block's digest in
+`runCheck_accepts`: `PousCheck.Run.check` accepts a run at P2's deployed point under S1's LMS. Every block's digest in
 the table is zero, and the setup's root is `Merkle.mth` of the table's leaves. The session is complete: its 105
 rounds each open block 0 with the table's row, on time. Each round's coin opens in a coin tree whose nodes are the
 frame-v3 nodes over their children (`nodeAt`), so a coin's siblings climb to its root whatever the hashes are
