@@ -1338,17 +1338,21 @@ print("%d/%d %d" % (d["alpha"][0], d["alpha"][1], d["gamma"]))' "$IO_LIMITS") ||
   export ALPHA=${got% *} GAMMA=${got#* }
 }
 inference_only() {  # in TREE, once step 3 counted window K's circuit at the class: its verdict against the policy
-  # the record reader reads the log from the serve's first registration record, Pearl+'s W after it under PEARLPLUS_TIE,
-  # and the window's own record last
-  local c out rc lean=() log=()
+  # the record reader reads window-commit's circuit record and its registration R, which exist here only where the window
+  # was committed before this starts (in Pearl+'s piece under PEARLPLUS_TIE), and the log before R: the serve's first
+  # registration record, then Pearl+'s W under PEARLPLUS_TIE
+  local c out rc lean=() log=() run=()
   c=$(io_class)
   [ -n "$c" ] || return 0
+  local wc=$D/v3c-w$K-${c//,/-}/window circ=$D/window-circuit-w$K-${c//,/-}.json
   [ -x "$IO_LEAN" ] && lean=(--lean "$IO_LEAN" --lean-timeout "${IO_LEAN_TIMEOUT:-3600}")
   [ -s "$DREG" ] && log=("$DREG")
   [ -n "$PEARLPLUS_TIE" ] && [ -s "$(pearl_dir)/registration.json" ] && log+=("$(pearl_dir)/registration.json")
+  [ "$c" = "$V3C" ] && [ -s "$wc/registration.json" ] && [ -s "$wc/circuit.json" ] \
+    && run=(--run-record "$wc/registration.json") circ=$wc/circuit.json
   out=$(CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py verdict --policy "$IO_POLICY" --serve-run "$D" \
-    --circuit "$D/window-circuit-w$K-${c//,/-}.json" --registration "$D/advice/w$K/registration.json" --pins "$WREG" \
-    --run-record "$D/advice/w$K/registration.json" --log "${log[@]}" "${lean[@]}" --out "$OUT/record/inference-only.json" --private "$D/private/inference-only.json" 2> "$D/inference-only.err")
+    --circuit "$circ" --registration "$D/advice/w$K/registration.json" --pins "$WREG" "${run[@]}" --log "${log[@]}" \
+    "${lean[@]}" --out "$OUT/record/inference-only.json" --private "$D/private/inference-only.json" 2> "$D/inference-only.err")
   rc=$?
   say "${out:-INFERENCE-ONLY failed (exit $rc): its log in the serve dir, on the node}"
   return "$rc"
