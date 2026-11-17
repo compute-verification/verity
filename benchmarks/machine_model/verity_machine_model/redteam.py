@@ -15,7 +15,7 @@ device's committed census alone, how much room an adversary has to beat one:
   mis-prices the tensor route, so the margin never moves it.
 - `least_filler` finds the least verified filler a word (in a class mix) that holds a margin: the cheapest add-on that
   brings the joint margin's worst core back to the design's floor.
-- `uniform_gap` bounds a device whose census has no uniform datapath (no UNI class, as sm_80 has none). A cheater that
+- `uniform_gap` bounds a device whose census has no uniform datapath (no UNI class). A cheater that
   runs the fold on the uniform datapath moves it off a bound pipe; crediting the datapath at a reference device's
   measured rates (sm_90's by default) bounds the ε this opens — the gap an adversary with a uniform-datapath filler
   exploits until the device is measured.
@@ -244,7 +244,7 @@ def uniform_gap(design: str, data: Path, q: float = 1.22, issue_cost: float = 0.
     base = E.eps(d, pi, q, data, operands=operands, credit=credit).core()
     if "UNI" in pi.c:
         return base, base, ()
-    issue_rows = [r for r in pi.rows if r == ISSUE_CEILING or r.startswith("JI") or r == "JIM"]
+    issue_rows = [r for r in pi.rows if r == ISSUE_CEILING or r.startswith("JI")]
     c = {k: {**col, "UP": 0.0} for k, col in pi.c.items()}
     c["UNI"] = {r: issue_cost * pi.c["ALU"].get(r, 0.0) for r in issue_rows}
     c["UNI"]["UP"] = 1.0 / pipe_rate

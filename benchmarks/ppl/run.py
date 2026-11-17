@@ -5,6 +5,7 @@
     run.py submit (eval's flags but --out) [--max-min M] [--dry-run]        the same as a `research run` on vy-nebius-2
                                                                             (job.sh), the datasets sent with it
     run.py report RESULTS.json...                                           the tables
+    run.py metrics RESULTS.json [--out DIR]                                 its metrics (metrics.toml), through the kit
     run.py baseline [RESULTS.json...]                                       the locked baseline (against new results)
     run.py baseline --lock RESULTS.json...                                  lock those points in baseline.json
     run.py steps | specs                                                    the registered steps; the arms in specs/
@@ -199,7 +200,7 @@ def merge(a: argparse.Namespace, arms: list[spec.Arm], seeds: tuple[int, ...], w
            "windows": [0, n - 1], "scored_tokens": methodology.scored_tokens(a.ctx), "window_digest": wrec["sha256"],
            "seeds": list(seeds), "gates": g.log, "passed": passed, "gpus": n_gpus, "seconds": seconds,
            "env": {"torch": torch.__version__, "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
-                   "run": settings.get("RESEARCH_RUN_ID")},
+                   "run": settings.get("RESEARCH_RUN_ID"), "commit": settings.get("RESEARCH_SOURCE_SHA")},
            "arms": {}}
     all_arms = [spec.BF16] + list(arms)
     for arm in all_arms:
@@ -321,6 +322,19 @@ BASELINE = tables.BASELINE
 README = HERE / "README.md"
 
 
+def cmd_metrics(a: argparse.Namespace) -> int:
+    from verity_bench import kit
+
+    r = json.loads(Path(a.results).read_text())
+    m = models.get(r["model"])
+    try:
+        text, doc, measured = report.metrics(r, m["repo"], m["revision"])
+    except ValueError as e:
+        print(f"ppl: no number: {e}", file=sys.stderr)
+        return 1
+    return kit.report("ppl", text, doc, measured, out=a.out, from_run=doc["run"])
+
+
 def cmd_baseline(a: argparse.Namespace) -> int:
     lk = json.loads(BASELINE.read_text())
     if a.lock:
@@ -388,6 +402,9 @@ def main(argv: list[str]) -> int:
     q.add_argument("--dry-run", action="store_true")
     q = sub.add_parser("report")
     q.add_argument("results", nargs="+")
+    q = sub.add_parser("metrics")
+    q.add_argument("results")
+    q.add_argument("--out", help="where ppl.json goes (default: the research run's out/)")
     q = sub.add_parser("baseline")
     q.add_argument("results", nargs="*")
     q.add_argument("--lock", action="store_true", help="lock these results' points in baseline.json")
@@ -405,7 +422,7 @@ def main(argv: list[str]) -> int:
     q.add_argument("--data", default=str(DATA))
     sub.add_parser("selftest")
     a = p.parse_args(argv)
-    return {"eval": cmd_eval, "submit": cmd_submit, "report": cmd_report, "baseline": cmd_baseline, "steps": cmd_steps,
+    return {"eval": cmd_eval, "submit": cmd_submit, "report": cmd_report, "metrics": cmd_metrics, "baseline": cmd_baseline, "steps": cmd_steps,
             "specs": cmd_specs, "tables": cmd_tables, "windows": cmd_windows, "setup": cmd_setup,
             "selftest": cmd_selftest}[a.cmd](a)
 
