@@ -219,6 +219,53 @@ def test_under_gate_verdict_apart_a_candidate_merged_again_onto_other_lean_input
     assert tier["record"]["gate"] == "check" and merged["sha"] not in loop.checked
 
 
+def test_under_gate_verdict_apart_a_candidate_merged_again_onto_a_top_adding_what_isn_t_plain_takes_the_whole_check(
+        env, monkeypatch):
+    """Merged again onto a `main` that a change drive.toml keeps off the plain path moved on since the candidate was built
+    apart, the candidate isn't `checked`: its whole check passed on a tree without that change, so its merge takes the whole
+    check in place, not the quick tier."""
+    main = env.main()
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, apart=True)
+    (apart,) = [r for r in loop.tick() if r["action"] == "build"]
+    assert apart.get("apart") and apart["base"] == main
+    runs.end(main)
+    top = _main_to(env, {"verity/core/w.py": "y = 1\n"})
+    runs.end(apart["sha"])
+    logged = loop.tick()
+    merged = next(r for r in logged if r["action"] == "build")
+    assert (merged["base"], merged["members"], merged["repairs"], "checked" in merged) == (top, [2], apart["sha"], False)
+    assert merged["why"] == (f"its whole check passed apart: its members merged again onto {top[:12]}, main's chain's top, "
+                             "which adds over its base what isn't plain: the whole check")
+    tier = next(r for r in logged if r["action"] == "slim" and r["sha"] == merged["sha"])
+    assert tier["record"]["gate"] == "check" and merged["sha"] not in loop.checked and quick.launches == []
+
+
+def test_under_gate_verdict_apart_two_candidates_merged_again_one_onto_the_other_take_the_whole_check(env, monkeypatch):
+    """Two candidates needing the whole check, each built apart on `main` while a plain one lands: the first merged again
+    onto the plain top is `checked` (the top adds only plain changes), and the second, merged again onto the first's merge,
+    isn't, since that adds the first's change, which its whole check never saw: the pair isn't landed on checks run apart."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    env.put(3, {"verity/core/w.py": "y = 1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, batch=1, depth=3, fill=3, apart=True)
+    plain, *aparts = [r for r in loop.tick() if r["action"] == "build"]
+    assert [(b["members"], b["base"], b.get("apart")) for b in (plain, *aparts)] == [
+        ([1], main, None), ([2], main, True), ([3], main, True)]
+    runs.end(main)
+    quick.end(plain["sha"])
+    assert "advance" in _acts(loop.tick()) and env.main() == plain["sha"]
+    for a in aparts:
+        runs.end(a["sha"])
+    first = next(r for r in loop.tick() if r["action"] == "build")
+    assert (first["base"], first["repairs"], first["checked"]) == (plain["sha"], aparts[0]["sha"], aparts[0]["sha"])
+    second = next(r for r in loop.tick() if r["action"] == "build")
+    assert (second["base"], second["repairs"], "checked" in second) == (first["sha"], aparts[1]["sha"], False)
+    assert second["why"].endswith("which adds over its base what isn't plain: the whole check")
+    assert first["sha"] in loop.checked and second["sha"] not in loop.checked
+
+
 def test_under_gate_verdict_apart_a_candidate_checked_apart_on_main_as_it_still_is_lands_as_built(env, monkeypatch):
     """With nothing landed since it was built, a candidate whose whole check passed apart goes onto main's chain as built,
     with a `commit` line and no build, and lands on that check the next tick."""

@@ -105,7 +105,8 @@ no such PR it reverts none, and every candidate takes the whole check until `mai
 whole check before it lands, as under `check`; unless `--no-apart`, it takes it apart (`Loop.apart`, `vqueue.Build.apart`;
 a Lean one only with no records run, else it is staged as below): built on `main` off the chain while plain candidates go on
 landing, and once it passed, its members merged again onto the chain's top, which the quick tier gates where its Lean
-inputs are those its check saw, else the whole check (`Loop._together`, `Loop._quick`).  A Lean
+inputs are those its check saw and the top adds nothing over its base that isn't plain, else the whole check
+(`Loop._together`, `Loop._quick`).  A Lean
 candidate's records run comes first under either gate: neither its graph2 check nor its check starts until that run passed,
 and both start on its records commit, or on it as built when the run regenerated nothing (`Loop._enqueue`).  A candidate built
 on another in flight, no member of it changing a Lean input against its merge base with `main` (`vqueue_slim.lean_inputs`),
@@ -243,7 +244,7 @@ from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, W
                     QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
                     label_verifier, lands_on_mark, lean_change, listed, lowrisk, merged_tree, move_of, own_files,
                     priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
-from .queue import Retired, crossed, held_below, held_waits, lacked_moves, lacks_why, merge_main
+from .queue import Retired, crossed, held_below, held_waits, lacked_moves, lacks_why, merge_main, moves_between
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, ON_MAIN, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject,
@@ -3443,8 +3444,10 @@ class Loop:
     def _together(self, a: Commit, c: Candidate, t: Tick, line: dict) -> list[dict]:
         """Put ``c``, built apart, whose whole check passed, onto main's chain at ``a.base``: on its own base as it is, which
         lands as checked; on another, its members merged again onto ``a.base``, which `repairs` ``c`` and which the quick tier
-        gates (`checked`, `_quick`) when its Lean inputs are ``c``'s (`vqueue_slim.lean_key`), else the whole check; when not
-        every member merges at the head it was checked at, ``c`` is dropped and its members built again."""
+        gates (`checked`, `_quick`) when its Lean inputs are ``c``'s (`vqueue_slim.lean_key`) and ``a.base`` adds nothing over
+        ``c``'s base that isn't plain (`_plain_over`), else the whole check, so two candidates built apart and merged again
+        onto each other aren't checked only apart; when not every member merges at the head it was checked at, ``c`` is
+        dropped and its members built again."""
         why = "its whole check passed apart"
         if a.base == c.base:
             t.committed[c.sha] = (c.sha, t.judged[c.sha].record if c.sha in t.judged else None)
@@ -3455,12 +3458,22 @@ class Loop:
                                                   "top, at the head it was checked at: its members are built again"), c, t)]
         tip, adopted = self._pushed(t, tip, a.base, merged)
         same = (key := self.slim.lean_key(self.world.repo, c.sha)) is not None and key == self.slim.lean_key(self.world.repo, tip)
-        if same:
+        over = same and self._plain_over(t, c.base, a.base)
+        if over:
             self.checked.add(tip)
-        return self._onto(t, c, recs, {**line, "sha": tip, "base": a.base, "repairs": c.sha, **({"checked": c.sha} if same else {}),
+        return self._onto(t, c, recs, {**line, "sha": tip, "base": a.base, "repairs": c.sha, **({"checked": c.sha} if over else {}),
                                        **self._moves(merged), **({"adopted": True} if adopted else {}),
                                        "why": f"{why}: its members merged again onto {a.base[:12]}, main's chain's top"
-                                              + ("" if same else ", whose Lean inputs aren't its tree's: the whole check")})
+                                              + ("" if over else ", whose Lean inputs aren't its tree's: the whole check" if not same
+                                                 else ", which adds over its base what isn't plain: the whole check")})
+
+    def _plain_over(self, t: Tick, base: str, top: str) -> bool:
+        """Whether ``top`` adds nothing over ``base`` that keeps a candidate on the whole check: no file of its change against
+        their merge base that drive.toml at `main` keeps off the plain path (`DriveFlags.plain_excludes`, as `_plain` reads a
+        PR's), and no move that ``base`` lacks (`queue.moves_between`)."""
+        files = self.world._changed(base, top)
+        return (not files or lowrisk(files, flags_at(self.world.repo, t.main).plain_excludes)) \
+            and not moves_between(self.world.repo, top, base)
 
     def _bookkeeping(self, t: Tick, c: Candidate, tip: str, told: tuple[str, tuple[str, ...]] | None) -> list[dict]:
         """Tell the bookkeeping ``c``'s records run repaired in its records commit ``tip`` (``told``:
