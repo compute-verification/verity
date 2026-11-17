@@ -1,7 +1,7 @@
 """`serve.sh`'s refusal of a run directory that already holds a record, before it touches the machine or writes a file:
 a share read after a failed run would otherwise be an earlier run's number. And its serve's card under a caller's
-gpu-lease: the lease's, with no lease of its own, as gpu-lease isn't re-entrant. And the Lean verdict's limit, which
-grows as the cores fall."""
+gpu-lease: the lease's, with no lease of its own, as gpu-lease isn't re-entrant, and the card compute-run.json names.
+And the Lean verdict's limit, which grows as the cores fall."""
 from __future__ import annotations
 
 import json
@@ -77,6 +77,29 @@ def test_under_a_callers_lease_the_serve_runs_on_its_card_and_takes_no_lease(tmp
     forever, so the serve runs on the lease's card (CUDA_VISIBLE_DEVICES, GPU its UUID for the up-front check)."""
     got = served(tmp_path, GPU_LEASE_UUID="GPU-67cd8250,GPU-099c8642", CUDA_VISIBLE_DEVICES="3,4", GPU="0")
     assert got == ["GPU=GPU-67cd8250", "served on 3,4"]
+
+
+@pytest.mark.parametrize(("listed", "card"), [("0, NVIDIA H200, 9.0", "NVIDIA H200"),
+                                              ("3, NVIDIA H100 80GB HBM3, 9.0", "NVIDIA H100 80GB HBM3")])
+def test_compute_run_names_the_card_the_preflight_checked_as_nvidia_smi_names_it(tmp_path, listed, card):
+    """serve.sh's card line and `coins` run alone, with an `nvidia-smi` on PATH that lists `listed`: compute-run.json's
+    ``card`` is the name of the card the serve runs on, not the spec's, which names an H200 whatever the card."""
+    text = SERVE.read_text()
+    line = re.search(r"^card=\$\(nvidia-smi .*?\|\| card=$", text, re.M | re.S)
+    fn = re.search(r"^coins\(\) \{.*?^\}$", text, re.M | re.S)
+    assert line and fn, "serve.sh's card line or its coins() moved: this test reads them"
+    bin_, out = tmp_path / "bin", tmp_path / "out"
+    bin_.mkdir()
+    out.mkdir()
+    (bin_ / "nvidia-smi").write_text(f'#!/bin/sh\necho "{listed}"\n')
+    (bin_ / "nvidia-smi").chmod(0o755)
+    script = (f"PY={sys.executable} OUT={out} TREE={tmp_path} COINS=in-process CLASS=4,32,4 DRAWS=459 DELTA=1/100 "
+              f"SCHEME=s REPO=unsloth/Llama-3.2-1B REV=r AUDITOR=a PIECE={out}/pieces/pouw GPU=0\n{line[0]}\n{fn[0]}\n"
+              "coins\n")
+    env = {**os.environ}
+    subprocess.run(["bash", "-c", script], env={**env, "PATH": f"{bin_}:{env['PATH']}"}, capture_output=True, text=True,
+                   check=True)
+    assert json.loads((out / "compute-run.json").read_text())["card"] == card
 
 
 @pytest.mark.parametrize(("cores", "given", "limit"), [

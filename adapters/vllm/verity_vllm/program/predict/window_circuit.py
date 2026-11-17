@@ -68,8 +68,8 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   fewest that leaves a unit within ``grain.rows`` rows; `RMSNormTriton_v5` is one unit.
 - `RMSNormFusedCuda_v2{N, EPS}` is one unit, or where an earlier node reads its template's ``x`` at another row count or one
   unit would pass ``grain.rows`` rows (down_proj's norm at Llama's grain), it is cut at its residual add: N / C units
-  `RMSNormFusedCudaAdd_v1{N, C, AT}`, C = ``grain.norm``, part AT reading x's elements [AT·C, (AT+1)·C) as their writers'
-  rows and ``res`` whole, then `RMSNormFusedCudaTail_v1{N, EPS}` reading their sums ``r`` in order of AT (its row j part
+  `RMSNormFusedCudaAdd_v2{N, C, AT, R}`, C = ``grain.norm``, part AT reading x's elements [AT·C, (AT+1)·C) as their writers'
+  R rows (so two norms whose x are written in other row counts cut into templates of their own) and ``res`` whole, then `RMSNormFusedCudaTail_v1{N, EPS}` reading their sums ``r`` in order of AT (its row j part
   AT = j's, which the wiring check holds and the tail's equality to v2 rests on) and ``w``. The tail's second output is r,
   so v2's readers read it as they read v2's.
 
@@ -135,7 +135,7 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Any
 
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import bind
 from verity.commitments.periods import interface as IF
 from verity_vllm.definitions.registry import io_shell as IO
@@ -247,7 +247,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     else:
         held = ()
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
-                        tuple(openings), values=held, formats={v: ROW_FORMAT for v in held} if layout is not None else {})
+                        tuple(openings), values=(*held, SS.SCAN_STATE),
+                        formats={v: ROW_FORMAT for v in held} if layout is not None else {})
     wires = tuple(IF.coalesce(b.wires))
     starts = {tid: [at - slot * n for at, n, slot, _step in runs] for tid, runs in b.spans.items()}
     entry_unit = progs[0].entry_unit
@@ -257,6 +258,12 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                          wires=wires, cuts=b.cuts, registered=reg, order=IF.ordered(b.units, wires, starts) if wires else None,
                          blocks=IF.Blocks(programs, cls.positions, tuple(inference(b.spans, programs))))
     return Lowered(circuit, fn, tuple(progs), b.spans)
+
+
+def population_digest(circuit: IF.Circuit) -> str:
+    """The digest of ``circuit``'s population Program, which its registered values' domains bind (`window_rows.state_value`'s
+    ``program``)."""
+    return program_digest(circuit.program()[0])
 
 
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
@@ -273,4 +280,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Row", "Tables", "WEIGHTS",
-           "WindowClass", "class_circuit", "class_program", "lower", "stop_ids", "takes", "window_circuit"]
+           "WindowClass", "class_circuit", "class_program", "lower", "population_digest", "stop_ids", "takes",
+           "window_circuit"]

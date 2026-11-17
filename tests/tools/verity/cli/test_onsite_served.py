@@ -4,15 +4,16 @@ policy's parties and channels are their manifests'; `verity run --dry-run` resol
 no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a binding the configuration
 has no place for; the runner's variables and the bindings' keys are pinned, and no gate piece names a script, a hook or
 a binding; the served window runs once with every piece's hooks, and the onsite check
-reads the record's composed verdict, the onsite composite's Lean answer where the composite ran, undecided while the
-record has no row for a listed subprotocol or takes no Lean answer. The runner, the record and the composite's public
-output are stand-ins written by each test."""
+reads the published record's composed verdict, undecided while the record has no row for a listed subprotocol. The
+runner is a stand-in and the published record is written by each test."""
 from __future__ import annotations
 
 import dataclasses
 import hashlib
 import json
+import os
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -26,7 +27,7 @@ from verity.channel import Refused
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
+from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
@@ -36,17 +37,23 @@ CONFIG = ROOT / "applications" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
 KEY = "0" * 128
+PIN = {p["protocol"]: p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"]}
+WIPE_PIN = PIN["wipe"]
 #: every binding the pieces read, on documentation addresses (RFC 5737)
 BINDINGS = {
     "challenger": {"pouw": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}},
     "memory-challenger": {"pous": {"address": "192.0.2.1:7000"}, "wipe": {"address": "192.0.2.1:7001"}},
-    "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}},
+    "bandwidth-verifier": {"bandwidth": {"host": "192.0.2.2"}},
     "network-certifier": {"certifier": {"gate": "user@gate-1", "peer": "peer-1"}},
 }
+#: `BINDINGS` with the address PoUB's runtime parties read (`runtime`)
+RUNTIME_BINDINGS = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}}}
+#: the memory attesters', which, unbound, are the run's on the workload's machine (`Piece.development`)
+ATTESTERS = ("memory-challenger", "bandwidth-verifier")
 #: the bindings the network attester's party writes where `verity run` starts it (`served_table.STARTS`)
 WRITTEN = {"network-certifier.certifier.gate", "network-certifier.certifier.peer"}
-UNBOUND = sorted(k for k in (f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c, ks in cs.items() for k in ks)
-                 if k not in WRITTEN)
+UNBOUND = sorted(k for k in (f"{p}.{c}.{k}" for p, cs in BINDINGS.items() if p not in ATTESTERS for c, ks in cs.items()
+                             for k in ks) if k not in WRITTEN)
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
     "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py chain "$@"',
@@ -57,16 +64,17 @@ VARIABLES = {
     "DEVELOPMENT": "1", "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
     "PRECISION": "verity_int8", "REPO": "verity-int8/Llama-3.2-1B-INT8",
     "REV": "15b0976d400d796ee589e7737d03a919526bf800", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
-    "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16",
+    "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16", "WIPE_ADDRESS": "192.0.2.1:7001",
+    "WIPE_CMD": f'WIPE_KEY_SHA512={WIPE_PIN} bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"',
+    "POUS_CMD": 'bash benchmarks/pous/served_piece.sh "$@"', "ONSITE_PIECES": "benchmarks/pous/onsite_pieces.sh",
+    "POUS_ARGS": f"--trusted-sha512 {PIN['pous']} --rounds 320 --challenger-address 192.0.2.1:7000 "
+                 f"--bw-trusted-sha512 {PIN['bandwidth']} --bw-host 192.0.2.2",
+    "BANDWIDTH_CMD": '"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"',
 }
-KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "memory-challenger.pous.address",
-        "bandwidth-verifier.bandwidth.address", "network-certifier.certifier.gate", "network-certifier.certifier.peer",
-        "memory-challenger.wipe.address"]
+KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "network-certifier.certifier.gate",
+        "network-certifier.certifier.peer"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
 RUNTIME = {
-    ("memory-challenger", "wipe"): ("verity/pous/streamed-wipe", "memory-challenger", "auditor-host",
-                                    "CLOCK_MONOTONIC_RAW ns"),
-    ("prover", "wipe"): ("verity/pous/streamed-wipe", "prover", "prover-node", None),
     ("memory-challenger", "pous"): ("verity/pous/memory-challenger", "memory-challenger", "auditor-host",
                                     "CLOCK_MONOTONIC ns"),
     ("prover", "pous"): ("verity/pous/memory-challenger", "prover", "prover-node", None),
@@ -74,6 +82,19 @@ RUNTIME = {
                                           "CLOCK_MONOTONIC ns"),
     ("prover", "bandwidth"): ("verity/remote-bandwidth/p2/v0", "prover", "prover-node", None),
 }
+#: PoUS's and PoUB's parties as runtime pieces of their sessions (`T.POUS`, `T.POUB`), for the runtime path of `live`
+RUNTIME_PARTIES = {
+    (c, party): T.Piece(c, party, T.RUNTIME, f"{party}'s {c} run", reaches=reaches, binds=("address",), session=s)
+    for c, s, listener in (("pous", T.POUS, T.MEMORY_ATTESTER), ("bandwidth", T.POUB, T.BANDWIDTH_VERIFIER))
+    for party, reaches in ((T.PROVER, listener), (listener, ""))}
+
+
+@pytest.fixture
+def runtime(monkeypatch):
+    """The table with PoUS's and PoUB's parties as runtime pieces, the path `live` keeps for a protocol the runtime
+    starts, which no listed piece takes now."""
+    for (c, party), piece in RUNTIME_PARTIES.items():
+        monkeypatch.setitem(T.PARTIES, c, {**T.PARTIES[c], party: piece})
 
 
 def toml(tables: dict) -> str:
@@ -225,7 +246,9 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     pieces = {(x["party"], e["component"]) for x in got["plan"] for e in x["entries"]}
     assert {c for _, c in pieces} == {*T.PROTOCOLS, T.SERVED_WINDOW}
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
-    assert not {"POUS_CMD", "POUS_ARGS", "WIPE_CMD", "BANDWIDTH_CMD"} & set(hooks)
+    assert all(hooks[k] == VARIABLES[k] for k in ("WIPE_CMD", "POUS_CMD", "BANDWIDTH_CMD"))
+    assert " ".join(e["hooks"]["POUS_ARGS"] for x in got["plan"] for e in x["entries"]
+                    if "POUS_ARGS" in e["hooks"]) == VARIABLES["POUS_ARGS"]
     assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
             if "SERVE_ARGS" in e["hooks"]} == {"certifier": T.ID_FORM}
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
@@ -233,18 +256,19 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert hooks["DEVELOPMENT"] == "1"
 
 
-def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_clock_and_channels(tmp_path, capsys):
-    """The wipe's, PoUS's rounds' and PoUB's parties are their protocols' (`Session`), each on the machine the
+def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_clock_and_channels(tmp_path, capsys,
+                                                                                              runtime):
+    """PoUS's rounds' and PoUB's parties are their protocols' (`Session`), each on the machine the
     configuration places it on, the clock its header names on the one that reads a clock, the auditor's side listening
     at the address the prover's side dials; PoUB's is ``absent`` while its halves aren't in the tree."""
-    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path))
+    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, RUNTIME_BINDINGS))
     assert rc == 0, err
     runtime = {(x["party"], e["component"]): e for x in got["plan"] for e in x["entries"] if e["runs"] == T.RUNTIME}
     assert set(runtime) == set(RUNTIME)
     for (party, component), (protocol, role, machine, clock) in RUNTIME.items():
         e, s = runtime[party, component], T.PARTIES[component][party].session
         assert (e["role"], e["machine"], e["clock"], e["raises"]) == (role, machine, clock, T.NOT_YET)
-        address = BINDINGS[s.listener][component]["address"]
+        address = RUNTIME_BINDINGS[s.listener][component]["address"]
         assert e["listens" if party == s.listener else "dials"] == address
         if e["protocol"] is None:
             assert e["absent"] and set(e["absent"]) <= {h.split(":")[0] for h in s.halves}
@@ -258,22 +282,20 @@ def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_cloc
 
 
 def test_the_runtime_sessions_are_one_manifest_with_every_configured_role_and_a_clock_where_one_is_read():
-    for s in (T.WIPE, T.POUS, T.POUB):
+    for s in (T.POUS, T.POUB):
         if s.absent():
             continue
         m = s.protocol().manifest
         assert sorted(s.roles.values()) == sorted(r.name for r in m.parties)
         assert sorted(s.clocks) == sorted(r.name for r in m.parties if "clock" in r.needs)
         assert sorted(s.protocol().parties) == sorted(s.roles.values())
-    assert T.WIPE.clocks[T.WP.CHALLENGER][1] == T.sw.CLOCK and T.WIPE.before
-    assert not T.POUS.before and not T.POUB.before
 
 
 def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
     rc, got, _ = dry(capsys)
     assert rc == 0 and got["dry"][0]["unbound"] == UNBOUND
-    assert next(e["dials"] for x in got["plan"] if x["party"] == "prover" for e in x["entries"]
-                if e["component"] == "pous") == "<memory-challenger.pous.address>"
+    assert next(e["hooks"]["POUS_ARGS"] for x in got["plan"] if x["party"] == "prover" for e in x["entries"]
+                if e["component"] == "pous") == "--run-keys --rounds 320"
 
 
 @pytest.mark.parametrize("demo", ["onsite_network", "onsite_compute"])
@@ -300,7 +322,7 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert T.variables(cfg, BINDINGS) == VARIABLES | deployed
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(set(KEYS) - WRITTEN) == UNBOUND
     unbound = T.variables(cfg, {})
-    assert set(unbound) == set(VARIABLES) | set(deployed)
+    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS"} | set(deployed)
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>' "
                                                "--peer '<network-certifier.certifier.peer>'")
     assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
@@ -315,7 +337,7 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
     gates = [e for ps in REG.parties.values() for e in ps.values() if e.runs == T.GATE]
-    assert len(gates) == 3
+    assert len(gates) == 6
     assert all((e.scripts, e.binds, e.optional, e.variables(cfg, BINDINGS)) == ((), (), (), {}) for e in gates)
     principal = {p["name"]: p["principal"] for p in cfg["party"]}
     assert all(principal[p] == "auditor" for ps in REG.parties.values() for p, e in ps.items() if e.runs == T.GATE)
@@ -403,47 +425,47 @@ def test_the_live_challenger_is_bound_only_when_given(tmp_path, capsys):
 
 
 def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_it_nothing(tmp_path, capsys,
-                                                                                         monkeypatch):
+                                                                                         monkeypatch, runtime):
     """The prover node's runtime parties need what their protocol's start reads (the served store, the card, setup's
     request), which doesn't reach the table yet: the run raises by the row's name before the served window starts."""
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
     state = tmp_path / T.PROVER_NODE
     with pytest.raises(NotImplementedError) as e:
-        R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path), "--state", str(state)], REG)
+        R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path, RUNTIME_BINDINGS), "--state",
+                    str(state)], REG)
     assert e.value.args == (T.NOT_YET,) and not (state / "out.started").exists()
 
 
 def test_the_memory_attesters_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
-                                                                                                     capsys):
+                                                                                                    capsys, runtime):
     """On the auditor's device each memory attester's start checks its key against `applications/onsite_full.toml`'s pin
     first: a state with no key is refused ``key``, and one whose key the configuration doesn't pin ``pin``, before any
     request is read or any party or the served window starts."""
     state = tmp_path / T.AUDITOR_HOST
-    run = [str(CONFIG), "--on", T.AUDITOR_HOST, "--bindings", bindings(tmp_path), "--state", str(state)]
+    run = [str(CONFIG), "--on", T.AUDITOR_HOST, "--bindings", bindings(tmp_path, RUNTIME_BINDINGS), "--state", str(state)]
     assert R.run_main(run, REG) == 2 and "refused key" in capsys.readouterr().err
     other = b"a key the auditor never pinned"
-    for component in ("pous", "wipe"):
-        mine = state / "runs" / component / T.MEMORY_ATTESTER
-        mine.mkdir(parents=True)
-        (mine / "seed").write_bytes(bytes(lms.DEPLOYED.N))
-        lms.LeafState.create(mine / onsite.KEY_STATE, other, lms.DEPLOYED.H)
+    mine = state / "runs" / "pous" / T.MEMORY_ATTESTER
+    mine.mkdir(parents=True)
+    (mine / "seed").write_bytes(bytes(lms.DEPLOYED.N))
+    lms.LeafState.create(mine / onsite.KEY_STATE, other, lms.DEPLOYED.H)
     assert R.run_main(run, REG) == 2
     err = capsys.readouterr().err
     assert "refused pin" in err and hashlib.sha512(other).hexdigest() in err
     assert not (state / "runs" / "pous" / T.MEMORY_ATTESTER / "tree.bin").exists()
 
 
-def test_the_wipes_the_rounds_and_poubs_parties_each_have_their_protocols_start():
-    for s in (T.WIPE, T.POUS, T.POUB):
+def test_the_rounds_and_poubs_parties_each_have_their_protocols_start():
+    for s in (T.POUS, T.POUB):
         assert sorted(s.protocol().starts) == sorted(s.roles.values())
 
 
-def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, monkeypatch):
+def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, monkeypatch, runtime):
     """With its start and its party key given, a runtime party still raises before it runs: the two sides' requests
     are compared nowhere yet (`request_bound`)."""
-    monkeypatch.setitem(WC.PROTOCOL.starts, WC.CHALLENGER, lambda configuration, bound, state: Start({"k": 1}))
+    monkeypatch.setitem(CP.PROTOCOL.starts, T.CS.CHALLENGER, lambda configuration, bound, state: Start({"k": 1}))
     monkeypatch.setattr(T, "held", lambda piece, role: T.Held(None, None))
-    piece, cfg = T.PARTIES["wipe"][T.MEMORY_ATTESTER], R.load(CONFIG, REG)
+    piece, cfg = T.PARTIES["pous"][T.MEMORY_ATTESTER], R.load(CONFIG, REG)
     with pytest.raises(NotImplementedError) as e:
         T.prepare(cfg, tmp_path, BINDINGS, piece)
     assert e.value.args == (T.NOT_YET,)
@@ -451,7 +473,7 @@ def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, mo
     assert callable(T.prepare(cfg, tmp_path, BINDINGS, piece))
 
 
-def test_the_onsite_lines_trusted_device_is_each_memory_attesters_placement(tmp_path, monkeypatch):
+def test_the_onsite_lines_trusted_device_is_each_memory_attesters_placement(tmp_path, monkeypatch, runtime):
     """The verifier's line carries each memory attester's `trusted-device` premise as `placement` reads it from the
     challenger's outcome here: under a committed configuration, ``holds`` for a session signed under the pinned key, and
     rehearsal for one that reports no key."""
@@ -460,19 +482,17 @@ def test_the_onsite_lines_trusted_device_is_each_memory_attesters_placement(tmp_
     cfg = {**cfg, "pin": [{**p, "key-sha512": hashlib.sha512(key).hexdigest()} if p["protocol"] == "pous" else p
                           for p in cfg["pin"]]}
     monkeypatch.setattr(mc, "committed", lambda: frozenset({K.digest(cfg)}))
-    outcomes = {"pous": {"outcome": {"public_key": key.hex()}, "refused": None},
-                "wipe": {"outcome": {"labels": 0}, "refused": None}}
+    outcomes = {"pous": {"outcome": {"public_key": key.hex()}, "refused": None}}
     monkeypatch.setattr(T, "prepare", lambda cfg, state, bindings, x: lambda: outcomes[x.component])
     monkeypatch.setattr(T, "registration", lambda cfg, state: None)
     monkeypatch.setattr(T, "onsite_check", lambda cfg, state: {"verdict": "undecided"})
     (tmp_path / T.BINDINGS).write_text(json.dumps(BINDINGS))
     line, = T.live(cfg, tmp_path, [T.MEMORY_ATTESTER, T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
-    assert set(line[mc.PREMISE]) == {"pous", "wipe"} and line["verdict"] == "undecided"
+    assert set(line[mc.PREMISE]) == {"pous"} and line["verdict"] == "undecided"
     assert line[mc.PREMISE]["pous"].startswith("holds")
-    assert line[mc.PREMISE]["wipe"].startswith(mc.REHEARSAL)
 
 
-def test_the_bandwidth_verifiers_start_reads_the_memory_attesters_run_beside_it(tmp_path, monkeypatch):
+def test_the_bandwidth_verifiers_start_reads_the_memory_attesters_run_beside_it(tmp_path, monkeypatch, runtime):
     """PoUB's verifier pins the memory attester's PoUS key, which is in that party's run on the same host: its start
     gets that run's state directory (``challenger``) beside its bindings, and its own state directory."""
     got = {}
@@ -483,8 +503,8 @@ def test_the_bandwidth_verifiers_start_reads_the_memory_attesters_run_beside_it(
 
     monkeypatch.setitem(T.POUB.starts, T.P2.VERIFIER, start)
     with pytest.raises(NotImplementedError):
-        T.prepare(R.load(CONFIG, REG), tmp_path, BINDINGS, T.PARTIES["bandwidth"][T.BANDWIDTH_VERIFIER])
-    assert got["bound"] == {**BINDINGS["bandwidth-verifier"]["bandwidth"],
+        T.prepare(R.load(CONFIG, REG), tmp_path, RUNTIME_BINDINGS, T.PARTIES["bandwidth"][T.BANDWIDTH_VERIFIER])
+    assert got["bound"] == {**RUNTIME_BINDINGS["bandwidth-verifier"]["bandwidth"],
                             "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_ATTESTER)}
     assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
 
@@ -496,9 +516,9 @@ def test_the_bandwidth_verifiers_start_is_not_yet_a_path_that_runs(tmp_path):
 
 
 def test_the_runtime_components_channels_are_their_protocols_manifests():
-    """The configuration's channels of PoUS's rounds, the wipe and PoUB are their protocols' manifests', each role
+    """The configuration's channels of PoUS's rounds and PoUB are their protocols' manifests', each role
     under the configuration's name for its party, with the channel to onsite's verifier beside them."""
-    for component, s in (("pous", T.POUS), ("wipe", T.WIPE), ("bandwidth", T.POUB)):
+    for component, s in (("pous", T.POUS), ("bandwidth", T.POUB)):
         named = {r: c for c, r in s.roles.items()}
         mine = {(c.sender, c.receiver, c.messages, c.carries_coins) for c in T.MANIFESTS[component].channels
                 if T.VERIFIER not in (c.sender, c.receiver)}
@@ -509,7 +529,7 @@ def test_the_runtime_components_channels_are_their_protocols_manifests():
 def test_a_binding_the_file_lacks_is_refused(tmp_path, capsys):
     tables = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {}}}
     rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, tables))
-    assert rc == 2 and "refused unbound" in err and "bandwidth-verifier.bandwidth.address" in err
+    assert rc == 2 and "refused unbound" in err and "bandwidth-verifier.bandwidth.host" in err
 
 
 @pytest.mark.parametrize("tables, why", [
@@ -580,7 +600,7 @@ def stand_in(tmp: Path, name: str, body: str) -> str:
 
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
 RUNNER = """mkdir -p "$OUT"
-/usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+)=' \
+/usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|ONSITE_PIECES|BANDWIDTH_CMD|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+)=' \
   | sort > "$OUT/hooks.txt"
 """
 
@@ -594,7 +614,7 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert rc == 0
     assert said(out, "PARTY") == [{"party": p, "refused": None} for p in ("firewall", "workers")]
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks["SLOTS"] == "4" and not {"POUS_CMD", "POUS_ARGS", "WIPE_CMD"} & set(hooks)
+    assert hooks["SLOTS"] == "4" and hooks["POUS_ARGS"] == VARIABLES["POUS_ARGS"]
     # the served window's rule is the configuration's, a rate: its audit states it to its stream, which takes no fixed count
     assert SamplingDesign(hooks["V3C_LAW"]).text == K.parse(CONFIG.read_text())["service"]["law"]
     kept = set(VARIABLES) - {"PRECISION", "WINDOW_STEPS", "DEVELOPMENT"}
@@ -606,7 +626,7 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert hooks["SERVE_ARGS"] == "--protocol ids --id-payload 503"
 
 
-#: the prover node's parties whose pieces are the served window's alone: its prover's are runtime parties (`live`)
+#: two of the prover node's parties, whose pieces are the served window's
 SERVED_PARTIES = ("--party", "workers", "--party", "firewall")
 
 
@@ -687,103 +707,410 @@ def test_the_served_window_with_a_binding_missing_never_starts(tmp_path, capsys,
     assert not (state / "out.started").exists()
 
 
-#: `served_verdicts.py record` as the onsite check runs it: its rows, and its verdict the Lean answer of the one onsite
-#: composite under its ``--composite`` (``pending`` without one, with a development one or one of another product, or
-#: while a row is missing; a Lean reject rejects), with ``lean`` saying where that answer was read or why none was
-#: taken, in `served_verdicts.composite_answer`'s words; its arguments go to ``argv.json`` beside its ``--out``
-RECORD = """import glob, json, sys
-from pathlib import Path
-a = sys.argv[1:]
-if a[0] == "window":
-    print(json.dumps({"window": 2, "steps": [16, 32]}))
-    sys.exit(0)
-out = Path(a[a.index("--out") + 1])
-out.mkdir(parents=True)
-(out.parent / "argv.json").write_text(json.dumps(a))
-rows = {"integrity": "accept", "work": "accept", "space": "accept", "communication": "accept", "wipe": "accept"}
-rows.update(json.loads(%r))
-said, lean = None, "no composite was read"
-if "--composite" in a:
-    public = a[a.index("--composite") + 1]
-    found = [(Path(f).parent.name, json.load(open(f))) for f in sorted(glob.glob(public + "/*/composite.json"))]
-    found = [(d, doc) for d, doc in found if doc["product"] == "verity/onsite/v0"]
-    if len(found) != 1:
-        lean = f"{len(found)} composites of the onsite check (verity/onsite/v0) in {public}, not one"
-    elif found[0][1].get("development"):
-        lean = (f"{found[0][0]}/composite.json is a development check, which claims no record: "
-                + found[0][1]["development"])
-    else:
-        said = found[0][1]["verdict"]["verdict"]
-        lean = f"verity/onsite/v0's Lean check, compiled, in {found[0][0]}/composite.json"
-missing = [] if "bandwidth" in rows else ["bandwidth"]
-composed = "reject" if said == "reject" else "accept" if said == "accept" and not missing else "pending"
-(out / "verdicts.json").write_text(json.dumps({"protocols": {k: {"verdict": v} for k, v in rows.items()}}))
-print("RECORD " + json.dumps({"composed": composed, "missing": missing, "lean": lean,
-                              "node": a[a.index("--node") + 1]}))
-"""
-ALL_ROWS = {"bandwidth": "accept", "inference-only": "accept"}
-LEAN_IN = "verity/onsite/v0's Lean check, compiled, in onsite/composite.json"
+#: the execution phase's seal digest the served window publishes
+SEAL = "5" * 128
 
 
-def onsite_composite(out: Path, product: str, verdict: str, development: str | None = None) -> None:
-    """``composite.py``'s public composite.json of ``product`` under ``out/composite``, its Lean answering
-    ``verdict``."""
-    d = out / "composite" / product.split("/")[1]
-    d.mkdir(parents=True)
-    doc = {"product": product, "verdict": {"id": product, "verdict": verdict}}
-    d.joinpath("composite.json").write_text(json.dumps({**doc, **({"development": development} if development else {})}))
+def published(state: Path, rows: dict, composed: str = "accept", reason: str = "", source: str | None = None) -> None:
+    """All the served window publishes that the onsite check reads: the execution phase by its seal's digest and the
+    record, every row but ``rows``' accepting, each row's ``answer_from`` ``source``, else as served_verdicts.py's
+    record writes it, the served node's."""
+    every = {"integrity": "accept", "work": "accept", "space": "accept", "communication": "accept", "wipe": "accept",
+             **rows}
+    for d in ("serve", "record"):
+        (state / "out" / d).mkdir(parents=True, exist_ok=True)
+    (state / "out" / "serve" / T.PHASE).write_text(json.dumps({"seal_sha512": SEAL}))
+    (state / "out" / "record" / "verdicts.json").write_text(json.dumps(
+        {"protocols": {k: {"verdict": v, "answer_from": source or f"{T.AS_WRITTEN} (its piece files in {k}/)"}
+                       for k, v in every.items()}, "composed": {"verdict": composed, "reason": reason}}))
 
 
-@pytest.mark.parametrize("rows, composite, verdict, rc, reason", [
-    ({}, None, "undecided", 2, "missing ['bandwidth']"),
-    ({}, ("verity/onsite/v0", "accept"), "undecided", 2, "missing ['bandwidth']"),
-    ({"bandwidth": "accept"}, ("verity/onsite/v0", "accept"), "undecided", 2, "no row for ['inference-only']"),
-    (ALL_ROWS, None, "undecided", 2, "no composite was read"),
-    (ALL_ROWS, ("verity/onsite/v0", "accept"), "accept", 0, None),
-    (ALL_ROWS, ("verity/onsite/v0", "reject"), "reject", 1, LEAN_IN),
-    (ALL_ROWS, ("verity/onsite/v0", "undecided"), "undecided", 2, LEAN_IN),
-    (ALL_ROWS, ("verity/onsite/v0", "accept", "composed on the served node"), "undecided", 2,
-     "onsite/composite.json is a development check, which claims no record: composed on the served node"),
-    (ALL_ROWS, ("verity/remote/v0", "accept"), "undecided", 2,
-     "0 composites of the onsite check (verity/onsite/v0) in {c}, not one"),
+def written(*components: str, composed: bool = False) -> str:
+    """The line's reason for the accepts of a record the serving node composed: its combined one and these rows'."""
+    return "not accepted: " + ", ".join(
+        f"{h} {T.AS_WRITTEN}" for h in ["the composed verdict"] * composed + sorted(components))
+
+
+#: the components of the rows `published` writes by default
+BASE = ("certifier", "pous", "pouw", "sampled-proofs", "wipe")
+#: a row's ``answer_from`` that is not `AS_WRITTEN`, which the serving node may write all the same: served_verdicts.py's
+#: ``LEAN_HERE``, and anything else
+NOT_WRITTEN = ["recomputed on this host by the Lean verifier (vstar-recursive sampled check) from the proofs and public "
+               "files of the window's sampled proofs case, not the served node's answer", "the auditor's own run"]
+
+
+def undecided(components: dict) -> dict:
+    return {c: "undecided" if v == "accept" else v for c, v in components.items()}
+
+
+@pytest.mark.parametrize("rows, composed, verdict, rc, reason", [
+    ({"bandwidth": "missing"}, "pending", "undecided", 2, "missing ['bandwidth']; " + written(*BASE)),
+    ({"bandwidth": "accept"}, "accept", "undecided", 2,
+     "no row for ['inference-only']; " + written(*BASE, "bandwidth", composed=True)),
+    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", "undecided", 2,
+     written(*BASE, "bandwidth", "inference-only", composed=True)),
+    ({"bandwidth": "accept", "inference-only": "accept", "communication": "error"}, "reject", "reject", 1,
+     "certifier error"),
+    ({"bandwidth": "accept", "communication": "error", "work": "missing"}, "reject", "reject", 1, "certifier error"),
 ])
-def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monkeypatch, rows, composite, verdict, rc,
-                                                          reason):
-    """The onsite check hands the record the composite's public output where it is there (``--composite``), so the
-    period's verdict is the compiled Lean onsite check's answer as the record takes it: an accept only where that Lean
-    accepted and the record has a row for every listed subprotocol, a reject where it rejected. With no composite, a
-    development one, one of another product or an undecided one, the line is undecided and its reason is the record's
-    ``lean``, or the row it lacks."""
-    monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(rows)))
+def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(tmp_path, capsys, rows, composed,
+                                                                              verdict, rc, reason):
+    """The serving step publishes its window's number, steps and requests to no one, so the verifier reads only the
+    published record and the execution phase's seal digest; the serving node composed that record, so a reject or an
+    error stands and each accept, a row's or the composed verdict, reads undecided."""
     state = tmp_path / "state"
-    (state / "out").mkdir(parents=True)
-    (state / "out" / "machine.txt").write_text("research\nprover-1\n")
-    if composite:
-        onsite_composite(state / "out", *composite)
+    published(state, rows, composed, "the network attester: error")
+    assert sorted(p.relative_to(state).as_posix() for p in state.rglob("*") if p.is_file()) == [
+        "out/record/verdicts.json", f"out/serve/{T.PHASE}"]
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
     out = capsys.readouterr().out
     assert {x["party"]: x["refused"] for x in said(out, "PARTY")} == {"verifier": None}
     (line,) = said(out, "VERDICT")
-    assert line["verdict"] == verdict and line["block"] == 2 and line["product"] == T.ONSITE
-    assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS},
-                                  **{c: rows.get(c, "absent") for c in ("bandwidth", "inference-only")}}
-    assert line["coins"] == "development"
-    assert line["reason"] == (reason and reason.replace("{c}", str(state / "out" / "composite")))
-    argv = json.loads((state / "record" / "argv.json").read_text())
-    assert argv[argv.index("--composite") + 1:][:1] == [str(state / "out" / "composite")] if composite else \
-        "--composite" not in argv
+    assert line["verdict"] == verdict and line["block"] == SEAL and line["product"] == T.ONSITE
+    assert line["components"] == undecided({**{c: "accept" for c in T.PROTOCOLS}, "bandwidth": "absent",
+                                            "inference-only": "absent",
+                                            **{T.RECORD_NAMES[k]: v for k, v in rows.items()}})
+    assert line["coins"] == "simulated" and line["reason"] == reason
+    assert line["coins_on"] == {**{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")},
+                                **{c: T.GATE_HOST for c in ("sampled-proofs", "pouw")}}
+    assert line["answer_from"] == {T.RECORD_NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
+                                   for k in ("integrity", "work", "space", "communication", "wipe", *rows)}
 
 
-def test_a_smaller_demos_check_reads_no_onsite_composite(tmp_path, monkeypatch):
-    """An application whose product isn't onsite's hands the record no composite: onsite's Lean answer is not its product's."""
-    monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(ALL_ROWS)))
-    cfg = T.configuration(R.load(CONFIG, REG)["program"]["commit"], "onsite_compute")
-    (tmp_path / "out").mkdir()
-    (tmp_path / "out" / "machine.txt").write_text("research\nprover-1\n")
-    onsite_composite(tmp_path / "out", "verity/onsite/v0", "accept")
-    got = T.onsite_check(cfg, tmp_path)
-    assert "--composite" not in json.loads((tmp_path / "record" / "argv.json").read_text())
-    assert got["product"] != T.ONSITE and got["verdict"] == "undecided" and got["reason"] == "no composite was read"
+@pytest.mark.parametrize("source", NOT_WRITTEN)
+def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp_path, capsys, source):
+    """``answer_from`` is the serving node's word too: a record whose every row says it was recomputed elsewhere, under
+    a composed accept, is still undecided."""
+    state = tmp_path / "state"
+    published(state, {"bandwidth": "accept", "inference-only": "accept"}, source=source)
+    assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
+    (line,) = said(capsys.readouterr().out, "VERDICT")
+    assert (line["verdict"], line["reason"]) == ("undecided", written(*T.PROTOCOLS, composed=True))
+    assert set(line["components"].values()) == {"undecided"} and set(line["answer_from"].values()) == {source}
+
+
+@pytest.mark.parametrize("left", [T.PHASE, "verdicts.json"])
+def test_the_onsite_check_without_the_published_phase_or_record_is_refused_by_name(tmp_path, capsys, left):
+    state = tmp_path / "state"
+    published(state, {})
+    next(state.rglob(left)).unlink()
+    assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
+    refused = {x["party"]: x["refused"] for x in said(capsys.readouterr().out, "PARTY")}["verifier"]
+    assert refused == ("window" if left == T.PHASE else "record")
+
+
+NETWORK = ROOT / "applications" / "onsite_network.toml"
+NETWORK_PIN = next(p["key-sha512"] for p in tomllib.loads(NETWORK.read_text())["pin"] if p["protocol"] == "wipe")
+NETWORK_BINDINGS = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
+                                                   "command": "ssh auditor-1"}},
+                    "network-certifier": {"certifier": {"gate": "user@gate-1", "peer": "peer-1"}}}
+
+
+def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party_of_it_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", RUNNER))
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / T.BINDINGS).write_text(json.dumps(NETWORK_BINDINGS))
+    got = T.live(R.load(NETWORK, REG), state, [T.WORKERS, T.PROVER]).outcomes
+    assert got[T.PROVER] == got[T.WORKERS] == {"outcome": {"served-window": 0}, "refused": None}
+    hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
+    assert hooks["WIPE_CMD"] == f'WIPE_KEY_SHA512={NETWORK_PIN} bash {T.WIPE_SCRIPT} "$1" "$2" "$3"'
+    assert (hooks["WIPE_ADDRESS"], hooks["WIPE_CHALLENGER"], hooks["WIPE_COMMAND"]) == (
+        "192.0.2.1:7001", "auditor-1", "ssh auditor-1")
+
+
+@pytest.mark.parametrize("pinned", [True, False])
+def test_served_wipe_gets_the_configurations_pin_and_no_other(tmp_path, pinned):
+    cfg = R.load(NETWORK, REG)
+    cmd = T.PARTIES["wipe"][T.PROVER].variables(cfg if pinned else {**cfg, "pin": []}, NETWORK_BINDINGS)["WIPE_CMD"]
+    env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path), "WIPE_KEY_SHA512": "f" * 128,
+           "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_COMMAND": "true", "WIPE_PROTOCOL_EXE": "true",
+           "GPU_LEASE_UUID": "no-such-card"}
+    p = subprocess.run(["bash", "-c", cmd, "_", str(tmp_path / "serve"), "all", str(tmp_path / "wipe")], cwd=ROOT,
+                       env=env, capture_output=True, text=True, check=False)
+    refused = (tmp_path / "wipe" / "refused.txt").read_text()
+    assert p.returncode == 3
+    assert ("nvidia-smi can't read the card no-such-card" in refused) == pinned
+    assert ("no challenger key is pinned" in refused) != pinned
+
+
+#: the bindings both ways of starting PoUB read, so the same file starts its runtime parties and its pieces
+BOTH = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {**BINDINGS["bandwidth-verifier"]["bandwidth"],
+                                                         **RUNTIME_BINDINGS["bandwidth-verifier"]["bandwidth"]}}}
+
+
+def test_pouss_and_poubs_parties_start_from_the_table_and_none_raises(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", RUNNER))
+    for machine, party in ((T.PROVER_NODE, T.PROVER), (T.AUDITOR_HOST, T.MEMORY_ATTESTER),
+                           (T.AUDITOR_HOST, T.BANDWIDTH_VERIFIER)):
+        state = tmp_path / party
+        assert R.run_main([str(CONFIG), "--on", machine, "--party", party, *(
+            ("--party", T.WORKERS) if party == T.PROVER else ()), "--bindings", bindings(tmp_path, BOTH), "--state",
+            str(state)], REG) == 0, capsys.readouterr().err
+        assert {"party": party, "refused": None} in said(capsys.readouterr().out, "PARTY")
+    hooks = dict(x.split("=", 1) for x in (tmp_path / T.PROVER / "out" / "hooks.txt").read_text().splitlines())
+    assert {k: hooks[k] for k in ("POUS_CMD", "POUS_ARGS", "BANDWIDTH_CMD", "ONSITE_PIECES")} == {
+        k: VARIABLES[k] for k in ("POUS_CMD", "POUS_ARGS", "BANDWIDTH_CMD", "ONSITE_PIECES")}
+
+
+#: python's stand-in for served_piece.sh: each call's arguments, one per line, then a blank line
+ARGV = """#!/usr/bin/env bash
+printf '%s\n' "$@" >> "$(dirname "$0")/argv.txt"; echo >> "$(dirname "$0")/argv.txt"
+"""
+
+
+@pytest.mark.parametrize("pins", ["configuration's", "others", "none"])
+def test_pouss_and_poubs_command_line_carries_the_configurations_pins_and_no_other_key(tmp_path, pins):
+    """served_piece.sh run as the workload runs it, under the pieces' variables, with a stand-in python: the PoUS
+    session's key and the bandwidth close's are the configuration's pins, whatever the environment or a binding says,
+    and a bound command keeps its spaces."""
+    cfg = R.load(CONFIG, REG)
+    other = {"pous": "a" * 128, "bandwidth": "b" * 128, "wipe": "c" * 128}
+    cfg = {**cfg, "pin": {"configuration's": cfg["pin"], "none": [],
+                          "others": [{**p, "key-sha512": other[p["protocol"]]} for p in cfg["pin"]]}[pins]}
+    tables = {**BINDINGS, "memory-challenger": {**BINDINGS["memory-challenger"], "pous": {
+        "address": "192.0.2.1:7000", "command": "ssh -i key auditor-1 challenger_party", "key-sha512": "d" * 128}}}
+    hooks = {k: v for x in ("pous", "bandwidth") for k, v in T.PARTIES[x][T.PROVER].variables(cfg, tables).items()
+             if k != "POUS_ARGS"}
+    hooks["POUS_ARGS"] = T.variables(cfg, tables)["POUS_ARGS"]
+    py = Path(stand_in(tmp_path, "python", ARGV))
+    py.chmod(0o755)
+    env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path), "PY": str(py),
+           "P2_LIB": str(tmp_path), "POUS_EXE": "true", "BW_CASE_EXE": "true", "GPU_LEASE_UUID": "no-such-card",
+           "VERITY_PINS": json.dumps(cfg["pin"]), "POUS_ARGS": hooks["POUS_ARGS"]}
+    p = subprocess.run(["bash", "-c", hooks["POUS_CMD"], "_", str(tmp_path / "serve"), "3", str(tmp_path / "pous")],
+                       cwd=ROOT, env=env, capture_output=True, text=True, check=False)
+    calls = [c.split("\n") for c in (tmp_path / "argv.txt").read_text().split("\n\n") if "--sessions" in c]
+    assert p.returncode == 0, p.stderr
+    argv, = calls
+    flag = {f: argv[argv.index(f) + 1] if f in argv else None
+            for f in ("--trusted-sha512", "--bw-trusted-sha512", "--challenger-command", "--bw-host")}
+    pinned = {p["protocol"]: p["key-sha512"] for p in cfg["pin"]}
+    assert (flag["--trusted-sha512"], flag["--bw-trusted-sha512"]) == (pinned.get("pous"), pinned.get("bandwidth"))
+    assert flag["--challenger-command"] == "ssh -i key auditor-1 challenger_party" and flag["--bw-host"] == "192.0.2.2"
+    assert "d" * 128 not in argv
+
+
+def test_an_inherited_or_bound_pous_args_adds_no_word_to_the_tables(tmp_path, capsys, monkeypatch):
+    """served_piece.sh evaluates POUS_ARGS as shell words, so under `verity run` it is the table's alone: the value the
+    environment carries and one a workload binding names are both replaced by the pieces' own."""
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", RUNNER))
+    monkeypatch.setenv("POUS_ARGS", f"--trusted-sha512 {'f' * 128}")
+    tables = {**BINDINGS, "workers": {"served-window": {"POUS_ARGS": f"--bw-trusted-sha512 {'f' * 128}"}}}
+    state = tmp_path / "state"
+    assert R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path, tables),
+                       "--state", str(state)], REG) == 0, capsys.readouterr().err
+    hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
+    assert hooks["POUS_ARGS"] == VARIABLES["POUS_ARGS"]
+
+
+# --- a development run: the memory attesters unbound, on the workload's machine under keys made for the run ----------
+
+#: `BINDINGS` without the memory attesters'
+NO_ATTESTERS = {p: cs for p, cs in BINDINGS.items() if p not in ATTESTERS}
+RUN_KEY = "e" * 128
+#: the tree's Python's stand-in for served_piece.sh --run-keys: the key's directory and its mode, and a key's SHA-512
+TPY = f"""#!/usr/bin/env bash
+echo "$3 $(stat -c %a "$(dirname "$3")")" > "$(dirname "$0")/keys.txt"
+echo {RUN_KEY}
+"""
+#: a program's stand-in that keeps its last call's arguments, NUL-separated
+ARGS0 = """#!/usr/bin/env bash
+printf '%s\\0' "$@" > "$(dirname "$0")/$(basename "$0").args"
+"""
+
+
+def executable(tmp: Path, name: str, body: str) -> Path:
+    f = Path(stand_in(tmp, name, body))
+    f.chmod(0o755)
+    return f
+
+
+def args0(f: Path) -> list[str]:
+    return Path(f"{f}.args").read_text().split("\0")[:-1]
+
+
+def test_unbound_the_memory_attesters_are_the_runs_and_each_piece_says_so_before_anything_starts(tmp_path, capsys):
+    cfg = R.load(CONFIG, REG)
+    got = T.variables(cfg, NO_ATTESTERS)
+    assert got["POUS_ARGS"] == "--run-keys --rounds 320"
+    assert got["WIPE_CMD"] == f'bash {T.WIPE_SCRIPT} "$1" "$2" "$3" --run-keys'
+    assert not [k for k, v in got.items() if k != "VERITY_PINS" and any(p in v for p in PIN.values())]
+    assert not {"WIPE_ADDRESS", "WIPE_CHALLENGER", "WIPE_COMMAND"} & set(got)
+    rc, plan, err = dry(capsys, "--bindings", bindings(tmp_path, NO_ATTESTERS))
+    hooks = {(x["party"], e["component"]): e["hooks"] for x in plan["plan"] for e in x["entries"]}
+    assert rc == 0, err
+    assert [hooks[T.PROVER, c]["DEVELOPMENT"] for c in ("pous", "bandwidth", "wipe")] == ["1"] * 3
+
+
+@pytest.mark.parametrize("tables, says", [
+    ({"memory-challenger": {"pous": {"host": "auditor-1"}}}, "and the deploy bindings bind memory-challenger.pous.host "
+                                                             "beside it: bind memory-challenger.pous.address too"),
+    ({"memory-challenger": {"wipe": {"command": "ssh auditor-1"}}}, "bind memory-challenger.wipe.address too"),
+    ({"bandwidth-verifier": {"bandwidth": {"host": "192.0.2.2"}}},
+     "bind bandwidth-verifier.bandwidth.host but not memory-challenger.pous.address: bind both"),
+    ({"memory-challenger": {"pous": {"address": "192.0.2.1:7000"}}},
+     "bind memory-challenger.pous.address but not bandwidth-verifier.bandwidth.host: bind both"),
+])
+def test_an_attester_bound_in_part_is_refused_by_name_with_the_fix(tmp_path, capsys, tables, says):
+    """Unbound, an attester's other bindings would be dropped, and PoUB's party signs under PoUS's key: a binding given
+    without its attester's address, and PoUS and PoUB not bound together, are refused before anything starts."""
+    rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {**NO_ATTESTERS, **tables}))
+    assert rc == 2 and "refused unbound" in err and says in err
+
+
+def served_piece(tmp: Path, pous_args: str, **env: str) -> tuple[subprocess.CompletedProcess, Path]:
+    """served_piece.sh run as the workload runs it, with stand-ins for vLLM's Python and the tree's, and Lean built."""
+    py = executable(tmp, "python", ARGV)
+    run = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp), "PY": str(py),
+           "P2_LIB": str(tmp), "POUS_EXE": "true", "BW_CASE_EXE": "true", "BW_PARTY_EXE": "/lean/poub-verifier",
+           "TPY": str(executable(tmp, "tpy", TPY)), "GPU_LEASE_UUID": "no-such-card", "VERITY_PINS": "[]",
+           "POUS_ARGS": pous_args, **env}
+    p = subprocess.run(["bash", "-c", f'bash {T.POUS_SCRIPT} "$@"', "_", str(tmp / "serve"), "3", str(tmp / "pous")],
+                       cwd=ROOT, env=run, capture_output=True, text=True, check=False)
+    return p, tmp / "argv.txt"
+
+
+def test_with_run_keys_served_piece_starts_the_attesters_here_under_one_key_made_for_the_run(tmp_path):
+    p, calls = served_piece(tmp_path, T.variables(R.load(CONFIG, REG), NO_ATTESTERS)["POUS_ARGS"])
+    assert p.returncode == 0, p.stdout + p.stderr
+    argv, = [c.split("\n") for c in calls.read_text().split("\n\n") if "--sessions" in c]
+    flag = {f: argv[argv.index(f) + 1] for f in ("--trusted-sha512", "--bw-trusted-sha512", "--challenger-host",
+                                                 "--challenger-address", "--challenger-command", "--bw-party",
+                                                 "--bw-host", "--rounds")}
+    keys = tmp_path / "serve" / "private" / "run-keys"
+    attester = f"bash {ROOT / T.ATTESTER_SCRIPT} "
+    assert flag == {"--trusted-sha512": RUN_KEY, "--bw-trusted-sha512": RUN_KEY,
+                    "--challenger-host": subprocess.run(["hostname"], capture_output=True, text=True).stdout.strip(),
+                    "--challenger-address": "127.0.0.1:47610", "--bw-host": "127.0.0.1", "--rounds": "320",
+                    "--challenger-command": f"{attester}challenger_party {tmp_path / 'tpy'} {keys}",
+                    "--bw-party": f"{attester}bw_party {tmp_path / 'tpy'} {keys} /lean/poub-verifier"}
+    assert "--run-keys" not in argv
+    assert (tmp_path / "keys.txt").read_text().split() == [str(keys / "pous"), "700"] and not keys.exists()
+
+
+@pytest.mark.parametrize("flag", ["--trusted-sha512", "--bw-trusted-sha512", "--challenger-host", "--challenger-address",
+                                  "--challenger-command", "--bw-host", "--bw-party"])
+def test_run_keys_beside_a_pin_or_an_attesters_flag_is_refused_before_the_card(tmp_path, flag):
+    p, calls = served_piece(tmp_path, f"--run-keys --rounds 320 {flag} x")
+    assert p.returncode == 2 and "POUS REFUSED: --run-keys" in p.stdout and f"names {flag}: drop {flag}" in p.stdout
+    assert not calls.exists() and not (tmp_path / "keys.txt").exists()
+
+
+def test_the_run_attesters_take_the_gates_words_and_the_runs_key(tmp_path):
+    """run_attester.sh's verbs are the gate's (host.py's party_argv) on loopback: the bandwidth party's --pous-session
+    and --session read the memory attester's device in the run's key directory, and any other word is refused."""
+    py, keys = executable(tmp_path, "python", ARGS0), tmp_path / "run-keys"
+    env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path)}
+
+    def attester(*words: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(ROOT / T.ATTESTER_SCRIPT), words[0], str(py), str(keys), *words[1:]],
+                              env=env, capture_output=True, text=True, check=False)
+
+    assert attester("challenger_party").returncode == 0
+    assert args0(py) == ["-m", "verity.protocols.resource_accounting.memory.pous.attester.challenger_party",
+                         "--device", str(keys / "pous"), "--listen", "127.0.0.1:47610"]
+    sid, session = "1" * 64, "2" * 64
+    assert attester("bw_party", "/lean/poub-verifier", "--minutes", "1", "--pous-session", sid, "--session", session,
+                    "--trusted-sha512", RUN_KEY).returncode == 0
+    assert args0(py)[2:] == ["--device", str(keys / "bw"), "--listen", "127.0.0.1:0", "--lean-exe", "/lean/poub-verifier",
+                             "--pous-record", str(keys / "pous"), "--pous-session", sid, "--challenger",
+                             str(keys / "pous"), "--session", session, "--trusted-sha512", RUN_KEY]
+    refused = attester("bw_party", "/lean/poub-verifier", "--minutes", "1", "--fixture")
+    assert refused.returncode == 2 and "got --fixture" in refused.stderr
+
+
+@pytest.mark.parametrize("tables, on, coins", [({}, T.PROVER_NODE, "simulated"),
+                                               (BINDINGS, T.AUDITOR_HOST, "development")])
+def test_the_onsite_line_names_the_machine_each_memory_attesters_key_and_coins_were_made_on(tmp_path, monkeypatch,
+                                                                                         tables, on, coins):
+    state = tmp_path / "state"
+    published(state, {})
+    (state / T.BINDINGS).write_text(json.dumps(tables))
+    line = T.onsite_check(R.load(CONFIG, REG), state)
+    assert line["coins_on"] == {"pous": on, "bandwidth": on, "wipe": on} and line["coins"] == coins
+
+
+#: nvidia-smi's stand-in: an idle card
+IDLE = """#!/usr/bin/env bash
+case "$*" in *memory.used*) echo 0 ;; esac
+"""
+#: demo.sh's stand-in: its arguments, and the directory its scratch is made in with that directory's mode
+DEMO = ARGS0 + """echo "$TMPDIR $(stat -c %a "$TMPDIR")" > "$(dirname "$0")/tmpdir.txt"
+"""
+
+
+def served_wipe(tmp: Path, bindings_: dict, **env: str) -> tuple[subprocess.CompletedProcess, Path]:
+    """served_wipe.sh run as the workload runs it on an idle card, with demo.sh's stand-in, its Lean built."""
+    cfg = R.load(CONFIG, REG)
+    hooks = T.PARTIES["wipe"][T.PROVER].variables(cfg, bindings_)
+    executable(tmp, "nvidia-smi", IDLE)
+    demo = executable(tmp, "demo.sh", DEMO)
+    run = {"PATH": os.pathsep.join([str(tmp), str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp),
+           "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_PROTOCOL_EXE": "true", "GPU_LEASE_UUID": "card-0",
+           "WIPE_DEMO": str(demo), **{k: v for k, v in hooks.items() if k != "WIPE_CMD"}, **env}
+    p = subprocess.run(["bash", "-c", hooks["WIPE_CMD"], "_", str(tmp / "serve"), "all", str(tmp / "wipe")], cwd=ROOT,
+                       env=run, capture_output=True, text=True, check=False)
+    return p, demo
+
+
+@pytest.mark.parametrize("bound", [True, False])
+def test_the_wipes_key_is_the_pin_when_bound_and_the_runs_otherwise_and_served_json_says_which(tmp_path, bound):
+    tables = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
+                                             "command": "ssh auditor-1"}}} if bound else {}
+    p, demo = served_wipe(tmp_path, tables)
+    argv, keys = args0(demo), tmp_path / "serve" / "private" / "run-keys" / "wipe"
+    pinned = argv[argv.index("--trusted-sha512") + 1] if "--trusted-sha512" in argv else None
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert json.loads((tmp_path / "wipe" / "served.json").read_text())["key_pin"] == ("configuration" if bound else "run")
+    assert "--run-keys" not in argv and argv[argv.index("--reads") + 1] == "5500"
+    if bound:
+        assert pinned == WIPE_PIN and argv[argv.index("--challenger") + 1] == "auditor-1"
+    else:
+        assert pinned is None and not {"--challenger", "--challenger-address", "--challenger-command"} & set(argv)
+        assert (tmp_path / "tmpdir.txt").read_text().split() == [str(keys), "700"] and not keys.exists()
+
+
+@pytest.mark.parametrize("name", ["WIPE_KEY_SHA512", "WIPE_ADDRESS", "WIPE_CHALLENGER", "WIPE_COMMAND"])
+def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_card(tmp_path, name):
+    p, demo = served_wipe(tmp_path, {}, **{name: ""})
+    assert p.returncode == 3 and not Path(f"{demo}.args").exists()
+    assert f"and {name} is set: unset {name}" in (tmp_path / "wipe" / "refused.txt").read_text()
+
+
+@pytest.mark.parametrize("rows, composed, source, verdict, reason", [
+    ({}, "accept", None, "undecided", written("certifier", "sampled-proofs", "wipe", composed=True)),
+    ({}, "accept", NOT_WRITTEN[0], "undecided", written("certifier", "sampled-proofs", "wipe", composed=True)),
+    ({"communication": "reject"}, "reject", None, "reject", "certifier reject"),
+])
+def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_verdict(tmp_path, rows, composed,
+                                                                                      source, verdict, reason):
+    state = tmp_path / "state"
+    published(state, rows, composed, source=source)
+    line = T.onsite_check(R.load(NETWORK, REG), state)
+    assert (line["verdict"], line["reason"], line["product"]) == (verdict, reason, "verity/onsite-network/v0")
+    assert "combined_by" not in line
+
+
+@pytest.mark.parametrize("rows, composed, reason", [
+    ({}, "accept", written("certifier", "sampled-proofs", "wipe", composed=True)),
+    ({"communication": "reject"}, "reject", "certifier reject"),
+])
+def test_a_set_no_lean_verifier_takes_is_undecided_under_its_own_id(tmp_path, capsys, rows, composed, reason):
+    state = tmp_path / "state"
+    published(state, rows, composed)
+    assert R.run_main([str(NETWORK), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
+    (line,) = said(capsys.readouterr().out, "VERDICT")
+    assert (line["product"], line["verdict"], line["reason"]) == ("verity/onsite-network/v0", "undecided", reason)
+
+
+def test_the_workloads_bindings_are_the_runners_settings_under_the_pieces_hooks(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", 'mkdir -p "$OUT"\necho "$VENV|$SLOTS" > "$OUT/node.txt"\n'))
+    tables = {**BINDINGS, "workers": {"served-window": {"VENV": "/workspace/venv312", "SLOTS": "9"}}}
+    state = tmp_path / "state"
+    assert R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path, tables),
+                       "--state", str(state)], REG) == 0, capsys.readouterr().err
+    assert (state / "out" / "node.txt").read_text() == "/workspace/venv312|4\n"
 
 
 def test_pouws_piece_hands_the_runner_the_main_file_its_challenger_writes():

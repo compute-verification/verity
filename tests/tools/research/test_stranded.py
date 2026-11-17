@@ -13,6 +13,7 @@ from research import monitors as M
 T0 = 1_794_508_500.0
 A, B, C = "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"
 CPUS = [A, B, C]
+SPILL = auto.spill              # as the module defines it: the fixture below stands in for it
 SECRET = "hunter2-token"
 MEM_BLOCK = f"41{auto.MEMORY_BLOCK}, under the 200 GB a check here may peak at"
 
@@ -20,7 +21,7 @@ MEM_BLOCK = f"41{auto.MEMORY_BLOCK}, under the 200 GB a check here may peak at"
 @pytest.fixture(autouse=True)
 def cpu_machines(monkeypatch, tmp_path):
     """The registry names CPUS, each reached by its name; the tree sent is an empty slot.py and lean_slot.py."""
-    monkeypatch.setattr(auto, "spill", lambda machines=None: tuple((m, auto.SPILL_POOL) for m in CPUS))
+    monkeypatch.setattr(auto, "spill", lambda machines=None, now=None: tuple((m, auto.SPILL_POOL) for m in CPUS))
     monkeypatch.setattr(auto, "_reach", lambda name: [name])
     for rel in (stranded.SLOT_PY, stranded.LEAN_SLOT_PY):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -281,6 +282,33 @@ def test_a_jobs_auto_words_are_printed_and_a_job_with_no_auto_key_is_not_recorde
 def test_the_peers_a_machine_lacks_are_listed():
     doc = stranded.analyse({A: machine(peers=[B]), B: machine(peers=None) | {"peers": None}, C: machine()}, T0, CPUS)
     assert doc["peers"] == [{"machine": A, "file": True, "missing": [C]}, {"machine": B, "file": False, "missing": [A, C]}]
+
+
+def test_a_machine_the_registry_marks_stopped_is_not_read_and_no_list_is_short_for_lacking_it(monkeypatch, capsys):
+    """Once a roll has taken a stopped machine out of every node's list, those lists are whole: no `peers` finding, no
+    `shut` finding for the machine that doesn't answer, and no ssh to it. Unmarked, the same lists are short."""
+    reg = {m: {"project": "verity"} for m in CPUS}
+    monkeypatch.setattr(auto, "spill", lambda machines=None, now=None: SPILL(reg, now))
+    docs = {A: machine(peers=[A, B]), B: machine(peers=[A, B]), C: f"{auto.NO_SSH} (Connection timed out)"}
+    asked = []
+
+    def run(argv, **kw):
+        asked.append(argv[0])
+        d = docs[argv[0]]
+        return subprocess.CompletedProcess(argv, 0, json.dumps(d).encode(), b"") if isinstance(d, dict) else \
+            subprocess.CompletedProcess(argv, 255, b"", d.encode())
+
+    assert stranded.machines(T0) == CPUS
+    assert sorted(f.key for f in stranded.findings(M.Ctx(now=T0, run=run))) == ["peers", f"shut|{C}|*"]
+    reg[C]["stopped_since"] = "2026-11-12T18:20:00Z"
+    asked.clear()
+    assert stranded.machines(T0) == [A, B]
+    assert stranded.findings(M.Ctx(now=T0, run=run)) == [] and sorted(asked) == [A, B]
+    assert stranded.analyse({m: docs[m] for m in (A, B)}, T0, stranded.machines(T0))["peers"] == []
+    monkeypatch.setattr(stranded, "read", lambda names: {m: docs[m] for m in names})
+    assert stranded.main([], now=lambda: T0) == 0 and f"{stranded.PEERS} short" not in capsys.readouterr().out
+    reg[C] = {"project": "verity", "unreachable_since": "2026-11-12T18:20:00Z"}     # the sampler's mark, 15 min old: it stays
+    assert stranded.machines(T0) == CPUS and stranded.machines(T0 + 45 * 60) == [A, B]
 
 
 # ---- the read ---------------------------------------------------------------------------------------------------------------
