@@ -1,6 +1,6 @@
 module
 
-public import MemoryChallenger.Verdict
+public import MemoryAttester.Verdict
 public import Properties.Pous
 public import PousCheck.SetupInProofs
 public import Definitions.Core.Interaction
@@ -10,7 +10,7 @@ public import Definitions.Core.Boolean
 # PoUS's setup and session checked inside proofs, as deployed: stated, unproved
 
 **The session.** The memory challenger's signed record never reaches the auditor. The auditor's session decides by
-SESSUNITS' `MemoryChallenger.sessionInProofs` (`MemoryChallenger/InProofs.lean`, memory-accounting/pous-session-inside-proof):
+SESSUNITS' `MemoryAttester.sessionInProofs` (`MemoryAttester/InProofs.lean`, memory-accounting/pous-session-inside-proof):
 the clear checks on what the device releases (the commitment, the coin openings, the scheme and key), the carried rows'
 leaves agreeing across the session's `c.k + 2` proof blocks, and every block's proof accepted. `RunInProofsDeployed`
 says that a fixed extractor, rerunning any prover, recovers a signed session that today's `verdict` accepts, except
@@ -40,9 +40,9 @@ Both are stated and not proved. What closes them is proofs' two forms, through t
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SessionDeployed
+namespace MemoryAttester.Properties.SessionDeployed
 
-open MemoryChallenger
+open MemoryAttester
 
 /-- **PoUS's session checked inside proofs, as deployed: stated and unproved**; proofs' `IntegrityAllProvedCarried`
 closes it through `sessionGives`. For a session check `sessionInProofs` over one outcome a proof block (SESSUNITS', not on
@@ -67,7 +67,7 @@ def RunInProofsDeployed (H : Claims.Msg → Claims.Msg) (UnitOutcome : Type)
           (verdict schemes trusted expected s c openings).accepted = true) E
         (fun _ => (c.k + 2) * (εKs + εBind)) fun _ => γ
 
-end MemoryChallenger.Properties.SessionDeployed
+end MemoryAttester.Properties.SessionDeployed
 
 namespace PousCheck.Properties.SetupDeployed
 

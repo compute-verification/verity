@@ -1,11 +1,11 @@
 """`memory_attester.verdict` computed by its Lean port, behind the Python's signature: `verdict(signed, commitment, openings,
-expected, trusted=..., schemes=...)` sends the record to `memory-challenger-verdict` (`MemoryChallenger.Judge`, built here
+expected, trusted=..., schemes=...)` sends the record to `memory-attester-verdict` (`MemoryAttester.Judge`, built here
 with `lake` on first use) and returns its `Verdict`, the reasons the Python's word for word.  `memory_attester.verdict`
 stays the reference: `tests/test_verdict.py` holds this to it, and `benchmarks/pous/memory_attester/live.py`'s `judge`
 runs both on every session, records both, and rejects a session they disagree on.
 
 The record goes as `to_json` writes its parts.  `expected` is read only at the labels the rounds name, so C's whole table
-never crosses; `schemes` goes by id, each one the port verifies (`MemoryChallenger.KNOWN_SCHEMES`: `memory_attester.LMS`
+never crosses; `schemes` goes by id, each one the port verifies (`MemoryAttester.KNOWN_SCHEMES`: `memory_attester.LMS`
 and the test signers' ids).  Where the Lean refuses the record (a scheme id it doesn't verify, a field `to_json` can't
 have written, such as a negative integer), this raises `ValueError`: it fails closed, never to the Python."""
 
@@ -22,7 +22,7 @@ import verity_difftest as D
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 PACKAGE = Path(__file__).resolve().parent
-EXE = "memory-challenger-verdict"
+EXE = "memory-attester-verdict"
 
 
 def record(signed: mc.SignedSession, commitment: mc.SessionCommitment, openings: Sequence[mc.CoinOpening],

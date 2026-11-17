@@ -55,7 +55,7 @@ set_option backward.privateInPublic.warn false
 namespace PousCheck.RunProtocol
 
 open Lean (Json JsonNumber)
-open Flock MemoryChallenger
+open Flock MemoryAttester
 
 def ID : String := "verity/pous/p2/v4/run"
 

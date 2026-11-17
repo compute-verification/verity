@@ -1,4 +1,4 @@
-"""The memory attester's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_attester.py`,
+"""The memory attester's record formats and crypto in Lean (`memory-attester-difftest`) against `memory_attester.py`,
 `streamed_wipe.py` and `verity.commitments.crypto.lms`: the coins and their tree, the round records' digest, the header and the
 signed message, the label digest, LMS signing at a leaf and verification, the setup record's bytes, message and check,
 and the streamed wipe's signed message, start and end messages and an egress count's unit, each on sampled inputs that
@@ -23,7 +23,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier import streamed_w
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-EXE = "memory-challenger-difftest"
+EXE = "memory-attester-difftest"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, a refusal of its own (`ValueError`, which
 #: `InvalidArtifact` is), an empty `source` (`TypeError`) and a width overflowed (`OverflowError`).
 REFUSALS = (D.Reject, ValueError, TypeError, OverflowError)
@@ -359,7 +359,7 @@ WIPE_BATCHES = st.lists(mostly(WIPE_BATCH, malformed(WIPE_BATCH), 15), max_size=
 #: A start mark as the header writes it: none or a digest, now and then bytes of another length.
 WIPE_MARK = hexed(mostly(st.one_of(st.just(b""), st.binary(min_size=sw.MARK_BYTES, max_size=sw.MARK_BYTES)),
                          st.binary(max_size=70), 5))
-#: A signed session's fields; `MemoryChallenger.StreamedWipe.Signed.ofJson` refuses a start mark of another length.
+#: A signed session's fields; `MemoryAttester.StreamedWipe.Signed.ofJson` refuses a start mark of another length.
 WIPE_SIGNED = st.fixed_dictionaries({
     "commitment": mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 9), "ended": ENDED, "start_mark": WIPE_MARK,
     "fill_start_ns": SIGNED, "fill_end_ns": SIGNED, "batches": WIPE_BATCHES,
