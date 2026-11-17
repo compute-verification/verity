@@ -540,7 +540,7 @@ def _num_den(p: str, ctx: str) -> str:
 
 
 def unit_sample(j: Any) -> dict:
-    """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` sampling designs with exactly its keys (`check_sample`'s),
+    """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` sampling designs with exactly its keys (`check_draw`'s),
     and a live execution phase's ``salt``, an object (`window_salt` reads it)."""
     if not (isinstance(j, dict) and sorted(j) in (["draw"], ["draw", "salt"])):
         raise Refused("public: keys are not draw, and optionally salt")

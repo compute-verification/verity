@@ -353,7 +353,7 @@ class _Coins:
 
 
 def _sample(rec: dict, sampling_design: dict) -> dict:
-    """A challenger's sample under the registration's expanded `sampling_design` (`service.select_sample` past its rule)."""
+    """A challenger's sample under the registration's expanded `sampling_design` (`service.select_draw` past its rule)."""
     from verity.protocols.proofs.spot.verifier.challenger import coins as T
 
     n = rec["population"]
@@ -378,12 +378,12 @@ def test_the_compilers_transfer_gate_units_are_sampled_whole_beside_the_sampled_
                 work_table=mine.work_table)
     assert v.ok, v.codes
     sample = _sample(rec, rec["law"])
-    assert set(range(32)) <= set(sample["units"]) and len(sample["units"]) == 34 and D.check_sample(sample, rec, rec["law"]).ok
+    assert set(range(32)) <= set(sample["units"]) and len(sample["units"]) == 34 and D.check_draw(sample, rec, rec["law"]).ok
 
 
 def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
     """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a sample trading one for an unsampled SiluMul
-    row (`check_sample`, the stratum's count), and a registration whose sampling design samples the RoPE heads as the rest is (R1)."""
+    row (`check_draw`, the stratum's count), and a registration whose sampling design samples the RoPE heads as the rest is (R1)."""
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
     c = gated_tp
@@ -393,7 +393,7 @@ def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
     left = [u for u in sample["units"] if u != 0]
     assert not D.check_proved(sample, left, len(left)).ok and D.check_proved(sample, sample["units"], len(sample["units"])).ok
     spare = next(u for u in range(32, 40) if u not in sample["units"])
-    v = D.check_sample({**sample, "units": sorted(set(sample["units"]) - {0} | {spare})}, rec, rec["law"])
+    v = D.check_draw({**sample, "units": sorted(set(sample["units"]) - {0} | {spare})}, rec, rec["law"])
     assert (v.ok, list(v.codes)) == (False, ["strata-count"])
     sampled = {t: {"work": 1, "floor": 1} for t in mine.work_table}
     v = R.check({**rec, "law": D.derive(mine.program, mine.query, mine.law, sampled)}, mine.program, mine.query, mine.law, CS.SCHEME,
