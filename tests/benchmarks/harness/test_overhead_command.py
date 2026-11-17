@@ -154,7 +154,7 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
         g = rows[point]["gamma"]
         assert (m["value"], m["ci95"], m["unit"], m["mark"]) == (g["gamma"], g["ci95"], R.GAMMA_UNIT, "measured")
         assert m["verdict"] == "within target" and m["inputs"] == ["measured", run, art] and "why" not in m
-        assert m["note"] == O.WITHOUT_Y and m["covers"] == O.covers()
+        assert m["note"] == O.WITHOUT_Y and m["covers"] == O.covers() and m["commits_y"] is False
     assert got["validation"] == {"status": "passed", "checker": "verity_bench.overhead_records.of_record",
                                  "detail": "2 of 2 metrics have a γ of record (the source check, `of_record`)",
                                  "evidence": [R.TABLE]}
