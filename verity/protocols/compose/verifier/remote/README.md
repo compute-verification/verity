@@ -514,9 +514,9 @@ the figures: this page keeps none.
   not per verification phase. The calculator prints its own: `CertificateSlack`'s p/ε′ at ε′ = 10⁻⁴,
   PoUW's per-phase p assumed at 3·2⁻⁴⁰ (δ_bind, δ_ks unnumbered, part 5), with no term growing with the period.
 
-## The demo
+## The application
 
-**No run of record of the remote verifier yet:** `remote-v1 check` (to be `verity verify remote`) has none. The remote demo
+**No run of record of the remote verifier yet:** `remote-v1 check` (to be `verity verify remote`) has none. The remote application
 is `applications/remote.toml` (`applications/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The vLLM served
 run runs both halves on one served run, PoUW's as a development run:
 

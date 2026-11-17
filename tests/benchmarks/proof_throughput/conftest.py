@@ -18,6 +18,12 @@ HARDWARE = {"gpu": {"name": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "dri
             "cpu": {"model": "AMD EPYC 9575F 64-Core Processor", "count": 256}, "affinity_cpus": 32}
 
 
+@pytest.fixture(autouse=True)
+def _no_run_result(monkeypatch):
+    for name in ("RESEARCH_RUN_DIR", "OUT"):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def record():
     return {"shape": "24dbfd96f26702eb" * 4, "domain": "total", "ands": 123, "live": copy.deepcopy(LIVE), "stage_setup_s": 41.0}
