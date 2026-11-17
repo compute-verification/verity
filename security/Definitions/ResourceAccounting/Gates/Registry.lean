@@ -48,13 +48,16 @@ mask (`PouwOrBit`, `PouwMask32`, `PouwH1Tile_v4`) and J10-R's call-scope noise (
   `Bf16ToF32_v1`, the FP and FP8 dots, integer division, remainder and narrowing, integer products and sums reduced mod
   `2^w` (`I32Mul_v1`, `NcpDot16I7_v1`, `PouwSqAcc_v1`, H1's `PouwWrapSeg`, `PouwPeelSeg` and one streams: a wrap
   drops a carry), bit operations on words, field extractions (`PouwWindowWord_v1` and the family `BitAtx`: a field of
-  one runtime word, not a column, so never a gather, whose constant index would cost nothing), LimbSplit's limb steps
+  one runtime word, not a column, so never a gather, whose constant index would cost nothing), a wired circuit's
+  conversions between a word and its bits (`BitOf{w}x{i}`, bit `i` of a `w`-bit word, and `WordOf{w}`, the word of
+  `w` bits, each no AND gate: a constant position still computes), LimbSplit's limb steps
   (the carries `IntGate.role` gives), and PoUW's integer helpers (H1's noise, digits and `PouwXinFinal` among them).
 * **inputs**, by family: `Input{n}_v1` ids are run inputs and `RegisteredInput{n}_v1` ids registered. A coin input is
   an `Input` id whose port is kind coin (`verity/circuits/ports.py`), so its binding is its port's, not its id's
   (`Class.listed`).
 * **families** are full patterns, as property/v1's: a family's id is its prefix, a positive numeral with no leading `0`
-  and `_v1` (`numbered`), and a table read's `TableRead`, its `n`, `x`, its `w` and `_v1`.
+  and `_v1` (`numbered`), a table read's `TableRead`, its `n`, `x`, its `w` and `_v1`, and a bit's `BitOf`, its `w`,
+  `x`, its `i` (`0` or a numeral) and `_v1` (`bitOfIndex`).
 * **refused:** any id neither list names (`classOf id = none`: another version of a family, or a numeral it lacks,
   among them), and any gate whose operation isn't in its primitive's class (`Classed`).
 
@@ -360,6 +363,7 @@ def families : List (String × Class) := [
   ("GatherE2m1x", .gather none 0),
   ("GatherE8m0x", .gather none (-1)),
   ("BitAtx", .budgeted .rounding),
+  ("WordOf", .budgeted .rounding),
   ("TopPMaskWordx", .budgeted .compareSelect)]
 
 /-- The value of a positive decimal numeral with no leading `0`, else none. -/
@@ -382,11 +386,21 @@ def tableReadBits (id : String) : Option ℕ :=
   let n := (id.toList.drop 9).takeWhile Char.isDigit
   (numbered ("TableRead".toList ++ n ++ ['x']) id.toList).bind fun _ => numeral n
 
+/-- The `(w, i)` of `BitOf{w}x{i}_v1` (`w` a numeral, `i` `0` or a numeral). -/
+def bitOfIndex (id : String) : Option (ℕ × ℕ) :=
+  let cs := id.toList
+  let w := (cs.drop 5).takeWhile Char.isDigit
+  let i := (cs.drop (6 + w.length)).takeWhile Char.isDigit
+  if cs == "BitOf".toList ++ w ++ ['x'] ++ i ++ "_v1".toList then
+    (numeral w).bind fun w => (if i == ['0'] then some 0 else numeral i).map (w, ·)
+  else none
+
 /-- A primitive id's class: the registry's entry, else a table read's (fill 0, never read: its table has `2^n`
-entries), else its family's, else none (refused). -/
+entries), else a `BitOf`'s, else its family's, else none (refused). -/
 def classOf (id : String) : Option Class :=
   (registry.lookup id).orElse fun _ => ((tableReadBits id).map fun n => .gather (some n) 0).orElse fun _ =>
-    (families.find? fun e => (numbered e.1.toList id.toList).isSome).map Prod.snd
+    ((bitOfIndex id).map fun _ => .budgeted .rounding).orElse fun _ =>
+      (families.find? fun e => (numbered e.1.toList id.toList).isSome).map Prod.snd
 
 /-- `Bf16ToF32_v1`'s operation: `×2^16`, from the bf16 word's s16 reading to the f32 word's s32 reading. -/
 def bf16ToF32Op {ι : Type} : IntOp ι := .affine 0 [2 ^ 16]

@@ -518,6 +518,9 @@ def familyRows : List (String × String × ℕ) := [
   ("GatherE2m1x16_v1", "range", 0),
   ("GatherE8m0x16_v1", "range", 0),
   ("BitAtx32_v1", "roundings", 0),
+  ("BitOf16x0_v1", "roundings", 0),
+  ("BitOf32x31_v1", "roundings", 0),
+  ("WordOf16_v1", "roundings", 0),
   ("TopPMaskWordx151936_v1", "compare_select", 0),
   ("NoSuchPrimitive_v1", "unlisted", 0),
   ("Zero_v1", "unlisted", 0),
@@ -531,6 +534,10 @@ def familyRows : List (String × String × ℕ) := [
   ("Input_v1", "unlisted", 0),
   ("GatherI32x064_v1", "unlisted", 0),
   ("BitAtx0_v1", "unlisted", 0),
+  ("BitOf16x01_v1", "unlisted", 0),
+  ("BitOf016x0_v1", "unlisted", 0),
+  ("BitOf16_v1", "unlisted", 0),
+  ("WordOf0_v1", "unlisted", 0),
   ("TopPMaskWordx_v1", "unlisted", 0)]
 
 /-- Rows `(id, class, k)` of table reads: `n` index bits, and refused: a table read of no bits, another version, a

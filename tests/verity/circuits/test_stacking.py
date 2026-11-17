@@ -434,7 +434,8 @@ NOT_IN_LEAN = {"F32MulWide_v1", "F32Rint_v1", "F32ToS8Rzi_v1", "F64Mul_v1", "F64
 
 def lean_class_of() -> tuple[dict[str, str], dict[str, str]]:
     """Lean's `registry` and `families` (`Registry.lean`), each id or prefix with its class in this module's names; the
-    table reads are the family `TableRead` whether Lean lists them as one or classes them by their bits (`tableReadBits`)."""
+    table reads are the family `TableRead` whether Lean lists them as one or classes them by their bits (`tableReadBits`),
+    and a bit of a word the family `BitOf` (`bitOfIndex`)."""
     src = LEAN_REGISTRY.read_text()
     entry = re.compile(r'\("([^"]+)",\s*\.(\w+)(?:\s+\.(\w+))?')
     budgeted = {"rounding": "roundings", "compareSelect": "compare_select", "fold": "folds"}
@@ -443,6 +444,8 @@ def lean_class_of() -> tuple[dict[str, str], dict[str, str]]:
                      for part in (src[:cut], src[cut:]))
     if "def tableReadBits" in src:
         families.setdefault("TableRead", "gathers")
+    if "def bitOfIndex" in src:
+        families.setdefault("BitOf", "roundings")
     return ids, families
 
 
@@ -458,7 +461,8 @@ def test_the_table_is_leans_class_of():
     assert set(P.CLASSES) - set(ids) <= NOT_IN_LEAN, set(P.CLASSES) - set(ids) - NOT_IN_LEAN
     instance = {"GatherBf16x": "GatherBf16x16_v1", "GatherF32x": "GatherF32x128_v1", "GatherI32x": "GatherI32x64_v1",
                 "GatherE4m3x": "GatherE4m3x16_v1", "GatherE2m1x": "GatherE2m1x16_v1", "GatherE8m0x": "GatherE8m0x16_v1",
-                "TableRead": "TableRead16x4_v1", "BitAtx": "BitAtx32_v1", "TopPMaskWordx": "TopPMaskWordx151936_v1"}
+                "TableRead": "TableRead16x4_v1", "BitAtx": "BitAtx32_v1", "BitOf": "BitOf16x0_v1", "WordOf": "WordOf16_v1",
+                "TopPMaskWordx": "TopPMaskWordx151936_v1"}
     listed = families.keys() & instance
     assert {f: P.class_of(instance[f]) for f in listed} == {f: families[f] for f in listed}
     assert set(families) - set(instance) == {"Input", "RegisteredInput"}
