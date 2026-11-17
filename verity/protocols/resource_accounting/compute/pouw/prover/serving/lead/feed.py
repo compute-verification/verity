@@ -1,6 +1,6 @@
 """The lead's coin feed: the coins the network attester samples for one call of the lead (layout
 ``blc4a_t64_e7_s1_rot_fold``) once it holds the call's root(A_j), packed as the served kernel reads them, and the
-in-process certifier that stands in for the network attester's coin link (`CoinLink`).
+in-process attester that stands in for the network attester's coin link (`CoinLink`).
 
 * **A call** (`Call`): its pass, its index in the pass, its linear's index among the registered linears and its shape
   m × K × n, which the up-link carries beside root(A_j) so the network attester can size the call's feed.
