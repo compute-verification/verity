@@ -398,8 +398,8 @@ def _own_terms(t) -> KP.Terms:
 @pytest.mark.parametrize("name", DRAFT_CASES)
 @pytest.mark.parametrize("contexts", R.CONTEXTS)
 def test_residual_decodes_to_the_trace_with_a_draft(name, contexts):
-    """Where the arrivals are not certified, the residual advice is still each request's admission alone, and the
-    drafts each row kept are advice beside it: the certified record carries none of them, and the residual decodes
+    """Where the arrivals are not attested, the residual advice is still each request's admission alone, and the
+    drafts each row kept are advice beside it: the attested record carries none of them, and the residual decodes
     back to the trace's steps with each count asked once, by the row that emits it, in the trace's order, so no fork
     is given one. A decoder handed the counts as lists (`RequestIO.kept`) is refused by name, and so is one handed
     no counts."""
@@ -447,7 +447,7 @@ def test_kept_count_is_charged_at_advice_v1s_code_or_derived(name):
     code, ideal = R.kept_code(K, own)
     assert b["charged"] == code.nbits == code.lens[0] and b["ideal"] == ideal and ideal <= code.nbits <= ideal + 2
     assert R.kept_read(t, code) == own
-    # from the two strings and the certified record alone: the arrivals' advice decodes on the counts read off the kept string
+    # from the two strings and the attested record alone: the arrivals' advice decodes on the counts read off the kept string
     assert all(R.kept_read(t, code, R.encode(t, contexts=c)) == own for c in R.CONTEXTS)
     d = R.draft_table(t, contexts=R.CONTEXTS)
     assert d["kept_count"] == b and not d["tick"] and (d["requests"], d["steps"]) == (len(t.requests), len(t.steps))
