@@ -99,8 +99,6 @@ Lemmas.lean     the statements that are only steps of the guarantees' proofs, Th
 Occupancy.lean  Proposition 2 (the occupancy counts, fill, and the FIFO network attester's tightness)
 Counting.lean   Theorem 1(b) (the tree lemma on accepted runs, zero error, W6 on accepted runs)
 Advice.lean     Theorem 3 (the 2^A cap, and at k bits per execution block)
-Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap of k bits per execution block,
-    causality, the blocks opened, the composed statement) and its witness
 Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
 Cells.lean     the network attester's code is the client view: its lane is the client view of its first late
     cell (certifierLane_eq), and so are its code's cells (certifierCode_eq), which
@@ -261,8 +259,8 @@ part of the theorem. It is exact under fixed-length frames (W3): N frames of B b
 monitoring period: `E` execution blocks, each of `g·T` buckets, and block `e`'s frames, with their content and send
 ticks, `frames ins e (a e) ℓ`, read from the ingress and `e`'s own advice. A frame is handed at
 `h(k) = max(send(k), h(k−1))` and released by `fifoGrid`, with the FIFO empty at each execution block's first bucket.
-Its advice type is `Fin E → Adv`, the protocol's `Adv` the `|a|`-bit strings, so Theorem 3's `2^(E·k)` form holds for
-it with no dataflow hypothesis (`encard_accSeqs_le_constantRate`, a lemma). The check is this Program as one execution
+Its advice type is `Fin E → Adv`, the protocol's `Adv` the `|a|`-bit strings, so Theorem 3 (`encard_accSeqs_le_advice`)
+counts `2^(E·k)` for it with no dataflow hypothesis. The check is this Program as one execution
 block of its `W` execution phases (`CodeAcceptedConstantRate`).
 
 ## The trusted layer (`NetTiming.Assumptions`)
@@ -463,8 +461,7 @@ So are the 9 witnesses, checked tests rather than guarantees, under their own na
 `ingress_witness`, `ingress_witness_tight`, `allocated_witness`, `allocated_witness_tight`, `toy_leftPacked`; the
 lemmas of Proposition 2's counts, `card_free`, `card_leftPacked`, `card_counts_eq_le`,
 `encard_fifoGrids_le_of_available` and `encard_fifoGrids`, and of Theorem 3's at `k` advice bits,
-`encard_accSeqs_le_adviceBits`, and at the constant-rate Program, `encard_accSeqs_le_constantRate`,
-`constantRate_rows_causal` and `encard_accSeqs_le_constantRate_executionPhases`; and
+`encard_accSeqs_le_adviceBits`; and
 `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (`NetTiming.SecurityProofs.Occupancy`). They use only the
 three axioms, but they have no record in `lean-audit.json`, so no citation may call them guarantees. Listing one is an
 `--update` like any other.

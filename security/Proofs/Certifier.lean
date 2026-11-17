@@ -31,7 +31,6 @@ public import Proofs.Certifier.Pooled
 public import Proofs.Certifier.TapRows
 public import Proofs.Certifier.MonitoringPeriod
 public import Proofs.Certifier.PooledLeak
-public import Proofs.Certifier.Schedule
 public import Proofs.Certifier.Sanity
 public import Proofs.Certifier.Code
 public import Proofs.Certifier.Tap
@@ -87,8 +86,7 @@ import Mathlib.Topology.Sheaves.Init
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the
 theorem of the same statement in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3),
 `Ingress` (the ingress bound) or `SampledCharge` (the leak bound under a sampled audit: the incorrect proof blocks'
-charge), and every lemma behind them. `Schedule` counts the
-constant-rate Program's runs (Theorem 3 for it), for `Accepted` and `Causal`. `SampledLeak` composes `SampledCharge`'s
+charge), and every lemma behind them. `SampledLeak` composes `SampledCharge`'s
 count with `SampledAuditAccepted`, taken as a hypothesis (`NetTiming.sampledLeak`), which the module `SampledAuditAccepted` proves, and `SampledLeakReg` moves its count to the
 registration's values
 (`NetTiming.sampledLeak_registered`);
