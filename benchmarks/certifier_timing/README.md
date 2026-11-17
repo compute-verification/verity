@@ -25,9 +25,11 @@ run takes to show a number that small. The measurement itself is `run`, below, o
 - **A lower bound, of the attacks built here.** `value` is what these servers move to these observers under a
   one-threshold decoder. Nothing here bounds the channel from above: a reading of 0 says these attacks carry nothing
   the run could see, at its `ceiling`.
-- **On one host.** `run`'s three parties share a host, its cores and its monotonic clock, over loopback. A network attester
+- **On one host.** `run`'s three parties share a host, its cores and its raw monotonic clock, over loopback. A network attester
   is the auditor's hardware on a machine the developer doesn't control, so what the server does to the network attester's
   host through shared cores is more than a deployed server can do, and a loopback path is quieter than a network.
+  There the network attester's own release times (a row's `sender`, beside the observer's `process` and `kernel`
+  stamps) carry the bit through how long its write takes, while each release starts on time.
 - **`serve` and `observe`** put the observer on another host (below). The server still shares the network attester's host
   and clock.
 - **One connection.** A case's observer holds one connection. A receiver holding several of a link's sees each
