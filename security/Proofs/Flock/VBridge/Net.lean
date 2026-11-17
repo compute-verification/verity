@@ -65,12 +65,12 @@ theorem fresh_residualsGo (S : GfS) (W V : List Lin) : ∀ rs : List Res, Fresh 
   | r :: rs => Fresh.bind' (fresh_residual S W V r) fun _ =>
       Fresh.bind' (fresh_residualsGo S W V rs) fun _ => Fresh.pure' _
 
-theorem fresh_shaBlock (st blk : List Lin) : Fresh (shaBlock st blk) :=
+theorem fresh_shaChunk (st blk : List Lin) : Fresh (shaChunk st blk) :=
   Fresh.bind' (fresh_compress _ _) fun _ => Fresh.pure' _
 
 theorem fresh_shaBlocks (msg : List Lin) : ∀ (n k : ℕ) (st : List Lin), Fresh (shaBlocks msg n k st)
   | 0, _, _ => Fresh.pure' _
-  | n + 1, k, _ => Fresh.bind' (fresh_shaBlock _ _) fun st' => fresh_shaBlocks msg n (k + 1) st'
+  | n + 1, k, _ => Fresh.bind' (fresh_shaChunk _ _) fun st' => fresh_shaBlocks msg n (k + 1) st'
 
 theorem fresh_shaFrom (cv : List (BitVec 64)) (bits : List Lin) (pre : ℕ) : Fresh (shaFrom cv bits pre) :=
   Fresh.bind' (fresh_shaBlocks _ _ _ _) fun _ => Fresh.pure' _

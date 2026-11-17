@@ -67,7 +67,7 @@ The lock's `meets` witnesses of these claims are Flock's decoder bounds at its d
   `twoPart`), block `u`'s session at round `u`, under a commitment whose openings of `true` pass (`trueCm`). It meets
   `Compiled.Sessions` at every hash, its commitment binds, and the silent prover is accepted: `twoSessions_meets`.
 
-The network certifier's leak guarantees fail at two more compiled verifiers that accept everything, whose lemmas are
+The network attester's leak guarantees fail at two more compiled verifiers that accept everything, whose lemmas are
 `NetTiming.Witness`'s:
 
 * `leakL`: `sksL` at a statement whose program negates its input (`notStmt`, its partition `notPart` one proof block
@@ -115,7 +115,7 @@ noncomputable def sksL (Coin : Type) : Compiled Coin (toyA Coin) where
   scopeCheck _ := true
   partition _ := some toyPart
   commit := rejCm
-  stage2 _ := ∅
+  secondStage _ := ∅
   checked _ _ := []
   sh _ _ := ()
   κb _ _ := 0
@@ -161,7 +161,7 @@ theorem noHash_compiledE (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v 
       refine noHash_bind _ _ (noHash_waitAccC _ _ _) fun outer => ?_
       generalize (List.finRange (L.kOut x)).zip outer = jos
       refine noHash_bind _ _ (noHash_flatMapRP _ (fun jo => ?_) _) fun _ => trivial
-      generalize List.map (fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (L.capIn x)) = rs'
+      generalize List.map (fun l => forkOn (L.secondStage x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (L.capIn x)) = rs'
       refine noHash_bind _ _ (noHash_waitAccC _ _ _) fun inner => ?_
       generalize (List.finRange (L.kIn x)).zip inner = lis
       exact noHash_flatMapRP _ (fun _ => noHash_runExt L hs _ _ _ _ _) _
@@ -474,7 +474,7 @@ def twoL (Coin : Type) : Compiled Coin (twoA Coin) where
   scopeCheck _ := true
   partition _ := some twoPart
   commit := trueCm
-  stage2 _ := Finset.univ
+  secondStage _ := Finset.univ
   checked _ _ := [0, 1]
   sh _ _ := ()
   κb _ _ := 0
@@ -631,7 +631,7 @@ theorem twoL_sessions (H : Msg → Msg) : (twoL Coin).Sessions H where
     · obtain ⟨v, hv⟩ := Finset.nonempty_iff_ne_empty.2 h0
       have hv2 : v < 2 := Finset.mem_range.1 (hB hv)
       have hn : ∀ d : Fin ((twoL Coin).V.k x) → Coin,
-          ¬ ∀ u ∈ (twoL Coin).checked x (forkOn ((twoL Coin).stage2 x) r d), u ∉ B := by
+          ¬ ∀ u ∈ (twoL Coin).checked x (forkOn ((twoL Coin).secondStage x) r d), u ∉ B := by
         intro d hall
         refine hall v ?_ hv
         show v ∈ [0, 1]

@@ -146,7 +146,7 @@ theorem depth_revealOwn : depth revealOwn = 64 := by
 def drawnOf (draw : Option Json) : List ℕ :=
   match draw with
   | some d =>
-    match _root_.Flock.Draw.UnitDraw.ofJson d with
+    match _root_.Flock.Draw.UnitSample.ofJson d with
     | .ok D => D.proved.toList
     | .error _ => []
   | none => []

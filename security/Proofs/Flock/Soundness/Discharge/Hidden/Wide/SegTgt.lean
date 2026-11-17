@@ -376,15 +376,15 @@ theorem seg_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) {segs : Array (ℕ × ℕ)} (hs : st.c.ports[p]!.segs = some segs) :
     (∀ k ≤ st.c.ports[p]!.chunks, ∀ j, HmRow.chainStart st.c.ports[p]! k = some j → ∀ t < 512,
-      blockBit (L.model regs) z o (segCvCol st.c g p k + t) =
+      chunkBit (L.model regs) z o (segCvCol st.c g p k + t) =
         wordsBit (if j < segs.size then HmRow.segMidstate st.c.ports[p]! j else HmRow.midstateOf st.c.ports[p]!) t) ∧
     (∀ k ≤ st.c.ports[p]!.chunks, 0 < k → HmRow.chainStart st.c.ports[p]! k = none → ∀ t < 512,
-      blockBit (L.model regs) z o (segCvCol st.c g p k + t) =
-        blockBit (L.model regs) z o (shaBase st.c g p (k - 1) + shaOut st.c (shaSub st.c p (k - 1)) + t)) ∧
+      chunkBit (L.model regs) z o (segCvCol st.c g p k + t) =
+        chunkBit (L.model regs) z o (shaBase st.c g p (k - 1) + shaOut st.c (shaSub st.c p (k - 1)) + t)) ∧
     (∀ k ≤ st.c.ports[p]!.chunks, ∀ t < 1024, ∀ v, HmRow.msgBit st.c.ports[p]! k t = .const v →
-      blockBit (L.model regs) z o (segMsgCol st.c g p k + t) = v) ∧
+      chunkBit (L.model regs) z o (segMsgCol st.c g p k + t) = v) ∧
     (∀ k ≤ st.c.ports[p]!.chunks, ∀ t < 1024, ∀ kk col, HmRow.msgBit st.c.ports[p]! k t = .digest kk col →
-      blockBit (L.model regs) z o (segMsgCol st.c g p k + t) = blockBit (L.model regs) z o (digestSrc st.c g p kk col)) := by
+      chunkBit (L.model regs) z o (segMsgCol st.c g p k + t) = chunkBit (L.model regs) z o (digestSrc st.c g p kk col)) := by
   have R := RowRanges.ofL L F.parse F.check
   have hrw : RowWires st.c := F.parse.rowWires
   have hpin := pin_bit_ex L hz o
@@ -394,7 +394,7 @@ theorem seg_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
       (rowCopiesAny st.c st.pin ++
           wireCopiesOf st.c (HmRow.rowWires st.c.ports st.c.shaNet st.c.hmNet).toList).filter
         (fun e => e.1 = segPos st.c g p k off) = [(segPos st.c g p k off, src)] →
-      blockBit (L.model regs) z o (segPos st.c g p k off) = blockBit (L.model regs) z o src := by
+      chunkBit (L.model regs) z o (segPos st.c g p k off) = chunkBit (L.model regs) z o src := by
     intro k hk off ho src hf
     by_cases hks : k < st.c.ports[p]!.chunks
     · have hsub : shaSub st.c p k < 3 := (rowSlot_lt hp hks).2
@@ -410,7 +410,7 @@ theorem seg_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
   · have hf := segCv_filter_start R (pin := st.pin) hs hg hp hk ht hj
     rw [segCv_pos R hp] at hf ⊢
     rw [hat k hk t (by omega) _ hf]
-    exact blockBit_constSrc _ _ hpin hzero
+    exact chunkBit_constSrc _ _ hpin hzero
   · by_cases hks : k < st.c.ports[p]!.chunks
     · have hf := segCv_filter_chain R (pin := st.pin) hs hg hp h0 hks ht hn
       rw [segCv_pos R hp] at hf ⊢
@@ -447,9 +447,9 @@ theorem seg_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p l : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hs : st.c.ports[p]!.segs = some (HmRow.segShape l).1) (hbits : st.c.ports[p]!.bits = l)
     (hn : st.c.ports[p]!.chunks = firstOf (HmRow.segShape l).1 (count l) + outerComps l) (hfit : SegFits l) :
-    bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
-      (enc l (bytesOf (blockBit (L.model regs) z o) ((l + 7) / 8) (Typed.msgCol st.c g p)))
-      (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g p)) := by
+    bytesOf (chunkBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
+      (enc l (bytesOf (chunkBit (L.model regs) z o) ((l + 7) / 8) (Typed.msgCol st.c g p)))
+      (bytesOf (chunkBit (L.model regs) z o) 192 (saltCol st.c g p)) := by
   have R := RowRanges.ofL L F.parse F.check
   have hhm := hmSlot_flat_ex L F hz o hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _))
   obtain ⟨hcvS, hcvC, hmC, hmD⟩ := seg_copies_tgt L F hda hupv hz o hg hp hs

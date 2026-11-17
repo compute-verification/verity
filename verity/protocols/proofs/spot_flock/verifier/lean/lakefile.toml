@@ -1,0 +1,51 @@
+# SPOT's recursive audit as a `Core.BlobProtocol` (`verity/sampled-proofs/recursive/v1`, `VStar.Recursive`): one-stage
+# v1's live audit with its verdict of record V*'s compiled check (`verity-verify-proof verify --zk` once per V* part, at that part's
+# recursive inputs) on the blobs; and SPOT (`verity/sampled-proofs/v1`): one-stage v2, the two-stage form read
+# and refused while its switch is off, one-stage v1 and the recursive audit refused. Their command, `vstar-recursive`, is
+# built in `spot_flock_recursion/verifier/lean/`. Code, not analysis: Lean core, Flock, the interface and the one-stage
+# audit.
+name = "core_vstar_recursive"
+defaultTargets = ["VStarRecursive"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "core_protocol"
+path = "../../../../interface"
+
+[[require]]
+name = "flock_verifier"
+path = "../../../flock/verifier"
+
+[[require]]
+name = "core_spot"
+path = "../../../spot/verifier/lean"
+
+[[lean_lib]]
+name = "VStarRecursive"
+
+# SPOT's caller's check (`VStar.Recursive.Caller.check`) behind `Difftest.serve`: SPOT's verifier asks it once SPOT's
+# check passes (`one_stage.verifier.check`), and the difftest holds it to its Python twin.
+[[lean_exe]]
+name = "spot-flock-caller"
+root = "CallerMain"
+
+# The two-stage form (`VStar.Recursive.SampledTwo`, `id | check | serve`), which nothing dispatches to: its difftest drives it.
+[[lean_exe]]
+name = "sampled-two"
+root = "SampledTwoMain"
+
+# A test's executable: the two-stage form's check with its switch on (`SampledTwoOnMain`), which the form's accept test
+# drives on one honest play. No party runs it.
+[[lean_exe]]
+name = "sampled-two-on"
+root = "SampledTwoOnMain"
+
+# A test's executable: the two-stage form's descriptor check (`SampledTwoDescMain`) on one play, and on the play with
+# two templates of one name, which it must refuse. No party runs it; nothing in the form calls the check yet.
+[[lean_exe]]
+name = "sampled-two-desc"
+root = "SampledTwoDescMain"

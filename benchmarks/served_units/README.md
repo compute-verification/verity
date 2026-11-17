@@ -39,6 +39,8 @@ Files:
 - `job.sh`: builds, stages, proves and verifies every proof block of `SU_UNITS` (its header lists the checks and the environment);
   the builds, the run and the controls are `benchmarks/pouw/hidden_zk/job.sh`'s.
 - `summarize.py`: `out/<tag>/summary.json` and one table row per proof block.
+- `run.sh`: `verity bench served_units`; `record.py` writes each proof block's prove seconds and peak memory
+  (`metrics.toml`) into the run's result, only where every check gave the verdict it must.
 - `prove_time.sh`: the prover's time on statements of each `PT_UNITS` type (`TYPE[:S=V,...]`, `+public-weights` or
   `+packed-weights` for those arms)
   at each size of `PT_NS`, on one leased GPU (`PT_DEVICE=gpu`) or the CPU prover (`cpu`); `prove_time.py` fits each type's
@@ -50,22 +52,30 @@ Files:
 - `stage_window.py WINDOW_DIR OUT (--member K | --pick P N)`: a served window's member (a TP Commit's `--serving-rows`
   window, or `verity-vllm tp-serving-rows`') as its served statement for `PT_STATEMENTS`: the verifier's circuit for its
   template bound to the window's digests, and the window's own bodies (its `inst.bin` is the prover's: keep OUT private).
-  `server_rate.py` takes OUT as `Z/<type>/c<n>/stage`.
+  `benchmarks/one_stage/server_rate.py` takes OUT as `Z/<type>/c<n>/stage`.
 - `window.py stage|prove UNITS_FILE`: `prove_time.sh`'s stage and prove steps for many types on a shared node, inside
   host limits the job enforces itself (cores, niceness, host memory, disk, a deadline, device memory a GPU); its
   docstring has the file's format and each limit. `prove` keeps what a Lean verifier on another node reads of each
   statement it proves (`out/kept/`: the public files, every session's records and the prover's exit status, not the
   circuit or the witness) and each statement's seconds (`out/seconds.tsv`, finished only where the prover exited 0),
   which a later `prove` balances its GPUs by (`WIN_SECONDS`). `settings.py` declares each variable it reads, with its
-  default.
+  default. `route` splits a units file by the GPU prover's nonzero bound (`GPU_NNZ_MAX`), read off each staged statement's
+  nets: a statement past it is the CPU prover's.
+- `stage_prove.sh`: `window.py stage` and `prove` for a few statements on named cards, in one job or two. Proving, it
+  routes a statement past the GPU prover's bound to the CPU prover with no card, and has the Lean verifier check each
+  proved statement's last kept session in the same job, before the statement is removed (`lean_check.sh`, which
+  `lean_shard.sh` runs on another node too): a proof it doesn't accept fails the job, and nothing is retried.
 - `prove_rows.py OUT --record RUN`: a `window.py prove` run's timed statements as rows by block type, in the format
   the break-even planner reads a measured row in (`benchmarks/spot_figures/breakeven/headline.py --steady`): a type's
   largest statement whose prover exited 0 with every session accepted, one prover on a GPU; the statements that gave
   no time are listed with their reasons.
+- `cover_count.py (COVER | art:ID) [--card CARD] [--form listed] [--check]`: how many of a request's proof-block types
+  have no statement the Lean verifier accepted, from its request cover record (below).
 - `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `prove_rows.py` on a stand-in run, `settings.py`,
+  `cover_count.py` on a small hand-written cover record,
   `ks_form.py` on synthetic circuit heads,
   `stage.py`'s `census:NAME`, `full/D`, its bound default, `--unbound` and its retired names on a stub stager, `stage_window.py`'s member choice and public-body
-  check, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in
+  check, `job.sh`'s `stage_one` handing a census name with several statics to a stub stager as one argument, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in
   each) held to the tree.
 - `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
   the Lean verifier's `ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and
@@ -86,11 +96,28 @@ research run --on NODE --cwd source -- bash benchmarks/served_units/prove_time.s
   PT_UNITS="fp8-coord:K=6144 fp8-coord:K=6144+public-weights" PT_NS="16 64" PT_DEVICE=gpu SM=120
 ~~~
 
+## The request cover record
+
+`cover.json` (schema `circuits/request-cover/v7`, or v8, which names the card it is of under `card`) is one served
+request's proof-block types, each with how many proof blocks it holds, whether it is on the card, the outcome of staging
+and verifying it in its listed form (`bound_outcome`, its run in `bound_runs`) and, for a type whose listed form was not
+run, the run of its Boolean version (`beside_extras`), with each run's Lean verdicts and their two controls. It lives in
+the evidence store, never in the tree. `cover_count.py` recounts it from those entries, refuses it when the recount and
+its stored totals disagree, and prints the types with none accepted, by family, ending in a line that starts with their
+count:
+
+~~~text
+uv run -q python benchmarks/served_units/cover_count.py art:ID              # the Boolean version counted where the listed form has none
+uv run -q python benchmarks/served_units/cover_count.py art:ID --form listed # the listed form only
+uv run -q python benchmarks/served_units/cover_count.py cover.json --check  # exit 1 unless every type has one
+uv run -q python benchmarks/served_units/cover_count.py art:ID --card calibration/sampling_plan/glm53_blocks.json  # exit 2 unless its types are the card's
+~~~
+
 ## Interface
 
 - **Provides:** `stage.py`, which stages a served proof block's statement, and the runners and scripts around it.
 - **Loaded by:** `benchmarks/one_stage`, which imports `stage`. Nothing else.
-- **Loads:** `verity.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
-  `verity.commitments`, `verity.protocols.proofs.spot.verifier`, `verity.hardware`, Flock (`verity_flock`),
+- **Loads:** `verity_vllm.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
+  `verity.commitments`, `verity.protocols.proofs.spot.verifier`, `verity.device`, Flock (`verity_flock`),
   `circuit_check.targets` and `verity_vllm.pipeline`; the scripts build and run Flock's circuit prover and its Lean
   verifier.

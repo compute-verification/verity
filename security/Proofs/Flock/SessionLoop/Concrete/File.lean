@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
 public import Proofs.Flock.SessionLoop.ConcreteNet
 public import Properties.Flock.Nets
-public import Flock
+public import Flock.Zk
 public import VStar.Unit
 public import VStar.Compose
 public import Std.Data.String.ToNat

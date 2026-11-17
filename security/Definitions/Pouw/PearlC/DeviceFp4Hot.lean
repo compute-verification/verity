@@ -47,7 +47,7 @@ def gapFp4HotChainOnly (d : Fp4Device) (a ρ : ℚ) (s : Shape) : ℚ :=
 protocol's credit is that credit less the debit, with the cap `debit ≤ ρ·creditFp4Hot`. -/
 def Fp4HotUnitAccounting (P : Protocol Q R S) (D : Layout → Prop) (d : Fp4Device) (a K : ℚ) (s : Shape) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
-    P.actOK (U.layout.shape u) act → P.capOK H s' U u act →
+    P.actOK (U.layout.shape u) act → P.inertBoundOK H s' U u act →
       P.Wref U.layout u = (wrefFp4Hot d a s : ℝ) ∧ (K : ℝ) ≤ P.credit H s' U u act
 
 /-- **The per-tile accounting a Pearl-C4 v2 protocol's audit tiles meet**, with the credited bound `K`: each tile has a
@@ -56,6 +56,6 @@ def Fp4HotTileAccounting (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout
     (s : Shape) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes, ∃ t : ℚ, 0 ≤ t ∧
     TR.Wcred U.layout g act = ((wrefFp4Hot d a s * t : ℚ) : ℝ) ∧ TR.Wcred U.layout g act ≤ TR.Wref U.layout g ∧
-    ∀ (H : Q → R) (s' : S), TR.capOK H s' U g act → ((K * t : ℚ) : ℝ) ≤ TR.credit H s' U g act
+    ∀ (H : Q → R) (s' : S), TR.inertBoundOK H s' U g act → ((K * t : ℚ) : ℝ) ≤ TR.credit H s' U g act
 
 end Pouw.PearlC

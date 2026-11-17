@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Readings
 public import Proofs.Properties.Verity.Sampled.RecordRounds
 
 /-!
-# Sampled proofs' coupling: a stop's written coins in the play's log
+# SPOT's coupling: a stop's written coins in the play's log
 
 Where the projection writes a round's coins into a stop's opening, the play on the tape the trace ends on releases them
 there.
@@ -1349,7 +1349,7 @@ theorem link_picks (tables : Array String) {log : List Release} (hS : LogServed 
 
 section First
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (θ : ByteArray)
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (θ : ByteArray)
   (F : Array ByteArray) (c : ByteArray)
 
 /-- **The first stop is where `StopOf` says**, from the empty log with every round live, at the releases continuing

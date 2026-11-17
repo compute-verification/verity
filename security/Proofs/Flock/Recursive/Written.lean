@@ -95,7 +95,7 @@ theorem leaves_seqC : ∀ (S : ℕ) {T α : Fin S → Type} {gs : (j : Fin S) �
 namespace ZkOuter
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv}
+  {Lv : SamplingDesign nv}
 
 /-- **Every outcome of a session of V* is a transcript it writes** at the registration the outcome records. -/
 theorem leaves_game (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ) :

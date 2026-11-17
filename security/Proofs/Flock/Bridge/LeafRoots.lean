@@ -32,7 +32,7 @@ namespace Flock.Bridge
 
 open Claims Claims.Sampling
 open Flock.SecurityProofs
-open Properties.NetworkCertifier.Bytes (bs bs_inj be32_size)
+open Properties.Certifier.Bytes (bs bs_inj be32_size)
 open scoped ENNReal
 
 /-! ## Frames of different kinds -/

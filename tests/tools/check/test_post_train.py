@@ -1,0 +1,617 @@
+"""`post_train.py`: the label a landing's check attempt gets from its manifest rebuilds, which landing it labels, and the job it runs."""
+from __future__ import annotations
+
+import fcntl
+import importlib.util
+import json
+import os
+import subprocess
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[3]
+spec = importlib.util.spec_from_file_location("post_train_under_test", ROOT / "tools" / "check" / "post_train.py")
+PT = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(PT)
+PASSED = PT.passed
+
+
+def _junit(tmp_path: Path, cases: dict[str, str]) -> Path:
+    body = {"pass": "", "fail": "<failure message='x'/>", "error": "<error message='x'/>", "skip": "<skipped message='retired'/>"}
+    xml = "".join(f"<testcase classname='tests.regression.test_regression' name='{n}'>{body[k]}</testcase>" for n, k in cases.items())
+    p = tmp_path / "junit.xml"
+    p.write_text(f"<testsuites><testsuite name='pytest'>{xml}</testsuite></testsuites>")
+    return p
+
+
+def test_a_pass_is_every_rebuild_passing_or_retired(tmp_path):
+    j = _junit(tmp_path, {"test_reproduces[T0-manifest_digest-r23]": "pass", "test_reproduces[T0-manifest_digest-r74]": "skip",
+                          "test_negative_57_refusal_reproduces": "pass"})
+    assert PT.verdict(j) == "regression pass"
+
+
+def test_a_failure_names_its_rows_in_row_order_and_the_refusal_by_name(tmp_path):
+    j = _junit(tmp_path, {"test_reproduces[T0-manifest_digest-r57]": "fail", "test_reproduces[T0-manifest_digest-r11]": "error",
+                          "test_reproduces[T0-manifest_digest-r23]": "pass", "test_negative_57_refusal_reproduces": "fail"})
+    assert PT.verdict(j) == "regression fail:r11,r57,negative_57"
+
+
+def test_no_result_is_a_failure_that_says_why(tmp_path):
+    assert PT.verdict(tmp_path / "absent.xml", 3) == "regression fail:no junit (run rc=3)"
+    assert PT.verdict(_junit(tmp_path, {"test_reproduces[T0-manifest_digest-r74]": "skip"}), 0) == "regression fail:nothing ran (run rc=0)"
+
+
+def _git(repo: Path, *args: str) -> str:
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    return subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, check=True, capture_output=True, text=True,
+                          env=env).stdout.strip()
+
+
+@pytest.fixture(autouse=True)
+def _no_store(monkeypatch):
+    monkeypatch.setattr(PT, "passed", lambda sha: None)
+
+
+def test_a_train_drive_fast_forwarded_main_to_is_a_landing_of_the_check_that_passed_on_it(tmp_path, monkeypatch):
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Merge #1 into next")
+    train = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a lane's commit")
+    lane = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "push", "-q", "origin", f"{train}:refs/heads/main")
+    _git(repo, "fetch", "-q", "origin")
+    checked = {train: "r20261012-141854-3bba", lane: "r20261012-150000-0001"}
+    monkeypatch.setattr(PT, "passed", checked.get)
+    assert PT.check_attempt(train, cwd=repo) == "r20261012-141854-3bba"
+    assert PT.check_attempt(lane, cwd=repo) is None, "a checked commit main doesn't contain is no landing"
+
+
+class _Store:
+    """The store's attempts index (the columns `passed` reads) and each attempt's result.json steps."""
+    remote = None
+
+    def __init__(self, attempts: list[tuple], steps: dict[str, dict[str, str]]):
+        import sqlite3
+        from types import SimpleNamespace
+
+        db = sqlite3.connect(":memory:")
+        db.execute("CREATE TABLE attempts(id TEXT PRIMARY KEY, tool TEXT, state TEXT, rc INTEGER, start_utc TEXT, "
+                   "source_commit TEXT, source_dirty INTEGER, manifest_json TEXT)")
+        db.executemany("INSERT INTO attempts VALUES (?, ?, ?, ?, ?, ?, ?, ?)", attempts)
+        self.index = SimpleNamespace(sql=lambda q, p=(): db.execute(q, p).fetchall())
+        self.steps = steps
+        self.get_manifest = lambda art: SimpleNamespace(meta={"steps": [{"step": s, "status": v}
+                                                                         for s, v in self.steps[art].items()]})
+
+    def get_attempt(self, rid):
+        return {"outputs": {"result": rid}} if rid in self.steps else {}
+
+
+def _shard(rid: str, sha: str, shard: str, rc: int, tool: str = "python3", dirty: int = 0, deferred: bool = True,
+           check: str = "tools/verity/check/") -> tuple:
+    """An attempt of the verified queue's check of ``sha``, as `train.sh --shard` launches it (``shard`` None: no --shard), from
+    the check's directory ``check``."""
+    argv = ["python3", f"{check}slot.py", "--priority", "--by", "ci", "--", "uv", "run", "python",
+            f"{check}check.py", "--keep-going", *(["--deferred", "pytest,lean-build,circuit-check"] if deferred else []),
+            "--no-regenerate", *(["--shard", shard] if shard else [])]
+    return (rid, tool, "done" if rc == 0 else "failed", rc, f"2026-11-14T{rid[10:12]}:{rid[12:14]}:{rid[14:16]}Z", sha, dirty,
+            json.dumps({"argv": argv, "params": {"argv": argv}}))
+
+
+def _landed(tmp_path: Path) -> tuple[Path, str, str]:
+    """A repository whose origin/main holds a landing; the landing's commit and one off main."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #1 a change\n\nPR: #1")
+    landed = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a candidate the queue dropped")
+    off = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "fetch", "-q", "origin")
+    return repo, landed, off
+
+
+def _store(monkeypatch, attempts: list[tuple], steps: dict[str, dict[str, str]] | None = None) -> None:
+    import research.store.local as L
+
+    passed = {rid: {"pytest": "passed", "lean-build": "passed", "circuit-check": "passed"} for rid, *_ in attempts}
+    monkeypatch.setattr(L, "LocalStore", lambda: _Store(attempts, {**passed, **(steps or {})}))
+    monkeypatch.setattr(PT, "passed", PASSED)
+    monkeypatch.setattr(PT, "off_gate", lambda sha: {"circuit-check", "ratchet-gate"})
+
+
+def test_a_verified_queue_landing_is_labelled_on_shard_1_of_its_sharded_check(tmp_path, monkeypatch):
+    """The verified queue checks a candidate in shards (`train.sh --shard K/N`, recorded with no `--tool check`) and fast-forwards
+    main to it: its landing is found by every shard of that check passing, and labelled on shard 1, whichever ended first."""
+    repo, landed, off = _landed(tmp_path)
+    shards = [_shard("r20261114-171306-0003", landed, "3/3", 0), _shard("r20261114-171305-0002", landed, "2/3", 0),
+              _shard("r20261114-171304-0001", landed, "1/3", 0), _shard("r20261114-171304-0004", off, "1/3", 0)]
+    _store(monkeypatch, shards)
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001"
+    assert PT.check_attempt(off, cwd=repo) is None, "a checked candidate main doesn't contain is no landing"
+    _store(monkeypatch, shards[1:])
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001", "a shard still running counts neither way"
+    _store(monkeypatch, [*shards[:2], _shard("r20261114-171304-0005", landed, "auto:1/3", 0)])
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0005", "a shard of an auto plan"
+    _store(monkeypatch, [_shard("r20261114-171304-0006", landed, None, 0, deferred=False, tool="check"), *shards])
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0006", "drive's whole check comes first"
+
+
+def test_a_shard_is_found_by_the_check_at_either_path(tmp_path, monkeypatch):
+    """A candidate's check runs `tools/check/check.py` since the move, and records from before it name
+    `tools/verity/check/check.py`: either is a shard of the landing's check, and another file named check.py is none."""
+    repo, landed, _ = _landed(tmp_path)
+    for check in ("tools/check/", "tools/verity/check/"):
+        _store(monkeypatch, [_shard("r20261114-171304-0001", landed, "1/2", 0, check=check),
+                             _shard("r20261114-171305-0002", landed, "2/2", 0, check=check)])
+        assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001", check
+    _store(monkeypatch, [_shard("r20261114-171304-0001", landed, "1/2", 0, check="tools/other/")])
+    assert PT.check_attempt(landed, cwd=repo) is None, "another check.py"
+
+
+def test_a_shard_that_failed_on_the_gate_makes_no_landing(tmp_path, monkeypatch):
+    """A shard that failed a step on the merge gate, or was killed, means the check didn't pass; one that failed only steps
+    policy.toml takes off the gate (circuit-check, ratchet-gate) passed it, as the queue reads it; a shard's newest result counts."""
+    repo, landed, _ = _landed(tmp_path)
+    ok = [_shard("r20261114-171304-0001", landed, "1/3", 0), _shard("r20261114-171306-0003", landed, "3/3", 0)]
+    for rc, steps in ((1, {"pytest": "failed", "circuit-check": "passed"}), (1, {"pytest": "passed", "lean-build": "skipped"}),
+                      (137, {"pytest": "passed"}), (143, {}), (1, None)):
+        two = _shard("r20261114-171305-0002", landed, "2/3", rc)
+        _store(monkeypatch, [*ok, two], {"r20261114-171305-0002": steps} if steps is not None else {})
+        if steps is None:
+            monkeypatch.setattr(_Store, "get_attempt", lambda self, rid: {})
+        assert PT.check_attempt(landed, cwd=repo) is None, (rc, steps)
+        monkeypatch.undo()
+    _store(monkeypatch, [*ok, _shard("r20261114-171305-0002", landed, "2/3", 1)],
+           {"r20261114-171305-0002": {"pytest": "passed", "circuit-check": "failed", "ratchet-gate": "failed"}})
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001", "failed off the gate only"
+    _store(monkeypatch, [*ok, _shard("r20261114-171305-0002", landed, "2/3", 0), _shard("r20261114-171205-0002", landed, "2/3", 137)])
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001", "a shard relaunched after it was killed"
+    _store(monkeypatch, [*ok, _shard("r20261114-181305-0002", landed, "2/3", 1), _shard("r20261114-171305-0002", landed, "2/3", 0)],
+           {"r20261114-181305-0002": {"pytest": "failed"}})
+    assert PT.check_attempt(landed, cwd=repo) is None, "its newest result failed"
+
+
+def test_an_unrun_twin_is_no_shard_result(tmp_path, monkeypatch):
+    """With no free slot a shard launches twins, one per machine: the first to take a slot runs it and the others exit 75,
+    not started.  Those neither fail the check nor stand for a shard, nor does any other run of the commit than a shard of it."""
+    repo, landed, _ = _landed(tmp_path)
+    twins = [_shard(f"r20261114-17140{k}-00{k}{k}", landed, f"{k}/3", PT.UNRUN) for k in (1, 2, 3)]
+    shards = [_shard("r20261114-171304-0001", landed, "1/3", 0), _shard("r20261114-171305-0002", landed, "2/3", 0)]
+    _store(monkeypatch, [*twins, *shards])
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001"
+    others = [_shard("r20261114-171304-0007", landed, None, 0), _shard("r20261114-171304-0008", landed, "1/3", 0, dirty=1),
+              (*_shard("r20261114-171304-0009", landed, None, 0)[:7], json.dumps({"params": {"argv": ["bash", "-c", "--shard 1/3"]}}))]
+    _store(monkeypatch, [*twins, *others, shards[1]])
+    assert PT.check_attempt(landed, cwd=repo) is None, "no shard 1: a twin, an unsharded run, a dirty tree, another command"
+
+
+def test_only_a_landing_has_a_check_attempt_to_label(tmp_path):
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "a lane's commit")
+    lane = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "Merge #1 #2 (abc)\n\nCheck: r20261003-145201-e806\n\nCo-authored-by: x <x@x>")
+    assert PT.check_attempt(_git(tmp_path, "rev-parse", "HEAD"), cwd=tmp_path) == "r20261003-145201-e806"
+    assert PT.check_attempt(lane, cwd=tmp_path) is None
+
+
+def test_drive_s_attempt_is_the_landing_s_when_it_ran_on_the_commit_or_on_its_merged_train(tmp_path, monkeypatch, capsys):
+    """A landing with deferred steps has no passed attempt in the store (its check still runs, or was cancelled at landing).  Drive
+    names the attempt it landed on; it is taken when it ran on the commit main was fast-forwarded to, or on the train main was
+    merged onto (the merge's second parent), and refused otherwise."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "main")
+    _git(repo, "checkout", "-q", "-b", "pr1")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "#1's head")
+    head = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "--detach", "HEAD^")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "Queue: #1 a change\n\nPR: #1", head)
+    ff = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #2 another")
+    train = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "--detach", ff)
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a pure move, landed alone")
+    moved = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge {train[:12]}\n\n#2\n\nChecked: r20261019-020000-0002 (...)", train)
+    merge = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a lane's commit")
+    lane = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "push", "-q", "origin", f"{merge}:refs/heads/main")
+    _git(repo, "fetch", "-q", "origin")
+    ran = {"r20261019-010000-0001": ff, "r20261019-020000-0002": train, "r20261019-020500-0003": moved,
+           "r20261019-030000-0004": lane, "r20261019-005000-0006": head}
+    monkeypatch.setattr(PT, "source_of", ran.get)
+    assert PT.check_attempt(ff, cwd=repo) is None, "no passed attempt in the store: refused"
+    assert PT.check_attempt(ff, cwd=repo, attempt="r20261019-010000-0001") == "r20261019-010000-0001", "fast-forwarded"
+    assert PT.check_attempt(merge, cwd=repo, attempt="r20261019-020000-0002") == "r20261019-020000-0002", "merged onto moved main"
+    capsys.readouterr()
+    for commit, rid in ((merge, "r20261019-020500-0003"), (merge, "r20261019-010000-0001"), (ff, "r20261019-020000-0002"),
+                        (lane, "r20261019-030000-0004"), (ff, "r20261019-040000-0005"), (ff, "r20261019-005000-0006")):
+        assert PT.check_attempt(commit, cwd=repo, attempt=rid) is None, (commit, rid)
+    err = capsys.readouterr().err
+    assert f"r20261019-020500-0003 ran on {moved[:12]}, which is neither {merge[:12]}, the train it merged" in err
+    assert "r20261019-040000-0005 ran on no commit its attempt or run record names" in err
+    assert f"r20261019-005000-0006 ran on {head[:12]}, which is neither {ff[:12]}" in err, "a train's second parent is a PR head"
+    assert err.count("so it is no check of this landing") == 5, "a commit off main is refused before its attempt is read"
+
+
+def test_a_landing_ending_in_drives_lock_commit_is_labelled_on_the_trains_check(tmp_path, monkeypatch, capsys):
+    """A landing with drive's lock commit on top has its check run on the train, the lock commit's parent, which
+    `check_attempt` reads, so its job labels it."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "main")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #1 a change")
+    train = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m",
+         "Lock records regenerated for #1\n\nChecked: r20261020-152946-96c9 (the lock run of `checked` x, passed by regenerating "
+         "them)\n"
+         "Regenerated: security/lean-audit.json")
+    lock = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #2 later\n\nChecked: r20261020-152946-96c9 (copied)")
+    later = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "push", "-q", "origin", f"{later}:refs/heads/main")
+    _git(repo, "fetch", "-q", "origin")
+    monkeypatch.setattr(PT, "source_of", {"r20261020-152946-96c9": train}.get)
+    assert PT.check_attempt(lock, cwd=repo, attempt="r20261020-152946-96c9") == "r20261020-152946-96c9"
+    assert PT.check_attempt(later, cwd=repo, attempt="r20261020-152946-96c9") is None, "no Regenerated: line, no lock commit"
+
+
+def test_a_lock_commit_is_read_by_its_message_and_its_parent_whoever_the_queue_made_it_as(tmp_path, monkeypatch):
+    """The queue makes its commits as its own identity or, where its repository's rules name an author, as that author: a
+    `main` whose landings hold a lock commit of each has both labelled on its train's check, and neither on another's."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "main")
+    trains, locks = {}, {}
+    for n, (rid, name, email) in enumerate((("r20261020-152946-96c9", "research queue", "queue@research.invalid"),
+                                            ("r20261021-101500-0a1b", "rules-bot[bot]", "7+rules-bot[bot]@users.noreply.invalid")), 1):
+        made_as = {**os.environ, "GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email, "GIT_COMMITTER_NAME": name,
+                   "GIT_COMMITTER_EMAIL": email}
+        for kept, message in ((trains, f"Queue: #{n} a change"),
+                              (locks, f"Lock records regenerated for #{n}\n\nChecked: {rid} (the lock run of `checked` x, passed "
+                                      "by regenerating them)\nRegenerated: security/lean-audit.json")):
+            subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", message], cwd=repo,
+                           check=True, capture_output=True, env=made_as)
+            kept[rid] = _git(repo, "rev-parse", "HEAD")
+            assert _git(repo, "log", "-1", "--format=%an <%ae> | %cn <%ce>") == f"{name} <{email}> | {name} <{email}>"
+    _git(repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+    _git(repo, "fetch", "-q", "origin")
+    monkeypatch.setattr(PT, "source_of", trains.get)
+    (own, lock), (named, named_lock) = locks.items()
+    assert PT.check_attempt(lock, cwd=repo, attempt=own) == own and PT.check_attempt(named_lock, cwd=repo, attempt=named) == named
+    assert PT.check_attempt(lock, cwd=repo, attempt=named) is None and PT.check_attempt(named_lock, cwd=repo, attempt=own) is None
+
+
+def test_a_deferred_landing_labels_the_attempt_drive_names_and_refuses_one_it_did_not_land_on(tmp_path, monkeypatch, capsys):
+    calls, _ = _fake_landing(tmp_path, monkeypatch, None)
+    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, attempt=None:
+                        attempt if (sha, attempt) == (SHA, "r20261019-010000-0001") else None)
+    assert PT.main([SHA, "--attempt", "r20261019-010000-0001"]) == 1
+    assert calls[-1] == ("data", "label", "r20261019-010000-0001", "note", "regression fail:r39", "--by", "regression",
+                         "--ref", _launched(calls))
+    calls, _ = _fake_landing(tmp_path / "other", monkeypatch, None)
+    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, attempt=None: None)
+    assert PT.main([SHA, "--attempt", "r20261019-020500-0003"]) == 2 and calls == []
+    assert f"{SHA[:12]} is no landing of main on r20261019-020500-0003; nothing labelled" in capsys.readouterr().err
+
+
+def test_source_of_reads_the_run_record_when_the_store_has_no_attempt(monkeypatch):
+    import research.store.local as L
+
+    monkeypatch.setattr(L, "LocalStore", lambda: (_ for _ in ()).throw(OSError("no store")))
+    monkeypatch.setattr(PT, "research", lambda *a, **_k: subprocess.CompletedProcess(
+        a, 0, json.dumps({"runs": [{"id": a[1], "state": "running", "tree_sha": "a" * 40}]}), ""))
+    assert PT.source_of("r20261019-010000-0001") == "a" * 40
+    monkeypatch.setattr(PT, "research", lambda *a, **_k: subprocess.CompletedProcess(a, 1, "", "research status: no run"))
+    assert PT.source_of("r20261019-010000-0001") is None
+
+
+def test_check_starts_it_after_each_landing():
+    spec = importlib.util.spec_from_file_location("check_tool_under_test", ROOT / "tools" / "check" / "tool.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.CHECK.after_land[-1] == "tools/check/post_train.py" and (ROOT / mod.CHECK.after_land[-1]).is_file()
+
+
+SHA = "f" * 40
+PREV = "r20261003-120000-0001"
+LLAMA = "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+QWEN = "qwen3-06b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+NEUTRAL = {LLAMA: True, QWEN: True}
+THREAD = "1790000000.000001"
+
+
+def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=False, polls=0, cut=None, r39="fail", rows=NEUTRAL):
+    """A landing ``SHA`` admitted on ``attempt``, after a landing admitted on PREV that carries ``prev_label``; every call to
+    `research` is recorded, and a run (launched with the lock held: jobs run one at a time) gives r39 ``r39`` and a neutrality
+    report of ``rows`` (each row: neutral or not; None: the tier ran and wrote none), its records showing its end after ``polls``
+    fetches (at launch for 0, never for -1), or ends with the runner's status ``cut`` and nothing written.  Returns the calls and
+    the sleeps between fetches."""
+    runs = tmp_path / "runs"
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(PT, "LOCK", tmp_path / "post-train.lock")
+    calls: list[tuple[str, ...]] = []
+    sleeps: list[float] = []
+    monkeypatch.setattr(PT, "SLEEP", sleeps.append)
+    left = [polls]
+
+    def end(rid):
+        out = runs / rid / "out"
+        (out / "neutrality").mkdir(parents=True, exist_ok=True)
+        if not cut:
+            _junit(out, {"test_reproduces[T0-manifest_digest-r39]": r39})
+            (out / "neutrality.log").write_text("[neutrality] ...\n")
+            if rows is not None:
+                (out / PT.NEUTRALITY).write_text(json.dumps({"rows": {r: {"neutral": n} for r, n in rows.items()}}))
+        ok = r39 == "pass" and rows is not None and all(rows.values())
+        (runs / rid / "status.json").write_text(json.dumps(cut or {"state": "done", "rc": 0 if ok else 1}))
+
+    def research(*args, cwd=None):
+        calls.append(args)
+        if args[0] == "run":
+            with open(PT.LOCK) as other, pytest.raises(BlockingIOError):
+                fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            rid = args[args.index("--id") + 1]
+            (runs / rid).mkdir(parents=True)
+            if not polls:
+                end(rid)
+            return subprocess.CompletedProcess(args, 0, f"research: run {rid} launched on vy-nebius-1\n", "")
+        if args[0] == "fetch" and "--all" not in args:
+            left[0] -= 1
+            if left[0] == 0:
+                end(args[1])
+        if args[:2] == ("data", "labels"):
+            labs = [prev_label] if args[2] == PREV and prev_label else []
+            return subprocess.CompletedProcess(args, 0, json.dumps(labs), "")
+        return subprocess.CompletedProcess(args, 0, "", "")
+    monkeypatch.setattr(PT, "research", research)
+    monkeypatch.setattr(PT, "git", lambda *a, **k: SHA if a[0] == "rev-parse" else "")
+    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, **_k: {SHA: attempt, f"{SHA}^1": PREV}.get(sha))
+    monkeypatch.setattr(PT, "untouched", lambda tree, rev: untouched and rev == f"{SHA}^1")
+    monkeypatch.setattr(PT, "merge_thread", lambda: THREAD)
+    import research.runs
+    monkeypatch.setattr(research.runs, "runs_root", lambda: runs)
+    return calls, sleeps
+
+
+def _launched(calls) -> str:
+    run = next(c for c in calls if c[0] == "run")
+    return run[run.index("--id") + 1]
+
+
+def test_the_run_reserves_its_memory_and_sizes_its_workers_to_it(tmp_path, monkeypatch):
+    """About 20 workers at ~28 GB each with nothing reserved fill a node's slice and get other runs killed."""
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
+    PT.main(["--workers", "40"])
+    run = next(c for c in calls if c[0] == "run")
+    assert run[run.index("--mem-gb") + 1] == str(PT.MEM_GB) and run[run.index("--mem-wait") + 1] == str(PT.MEM_WAIT_S)
+    assert f"-n {PT.MEM_GB // PT.WORKER_GB} " in run[-1] or f"-n{PT.MEM_GB // PT.WORKER_GB} " in run[-1], run[-1]
+
+
+def test_a_landing_gets_its_label_and_a_dry_run_writes_none(tmp_path, monkeypatch):
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
+    assert PT.main(["--cores", "0-31"]) == 1
+    assert ("data", "label", "r20261003-145201-e806", "note", "regression fail:r39", "--by", "regression",
+            "--ref", _launched(calls)) in calls
+    calls, _ = _fake_landing(tmp_path / "dry", monkeypatch, None)
+    assert PT.main(["HEAD", "--dry-run"]) == 1
+    assert [c[0] for c in calls] == ["run", "fetch"], "a dry run reads no label and writes none"
+    assert PT.main(["HEAD"]) == 2, "without --dry-run, a commit that is no landing has nothing to label"
+
+
+def test_the_neutrality_tier_names_each_fast_row_that_moved_after_the_rebuilds_rows(tmp_path):
+    report = tmp_path / "neutrality.json"
+    report.write_text(json.dumps({"rows": {QWEN: {"neutral": False}, LLAMA: {"neutral": False}, "tp2": {"neutral": True}}}))
+    j = _junit(tmp_path, {"test_reproduces[T0-manifest_digest-r57]": "fail", "test_reproduces[T0-manifest_digest-r23]": "pass"})
+    assert PT.verdict(j, 1, report=report) == f"regression fail:r57,{LLAMA},{QWEN}"
+    j = _junit(tmp_path, {"test_reproduces[T0-manifest_digest-r23]": "pass"})
+    assert PT.verdict(j, 1, report=tmp_path / "absent.json") == "regression fail:no neutrality report (run rc=1)"
+    report.write_text(json.dumps({"rows": {LLAMA: {"neutral": True}}}))
+    assert PT.verdict(j, 0, report=report) == "regression pass"
+
+
+def test_a_moved_fast_row_fails_its_landing_and_rings_vllm_at_once_and_a_neutral_tier_passes(tmp_path, monkeypatch):
+    """A landing that moves a fast workload of record's Program without re-pinning it is labelled with the row, and the owner of
+    the workloads of record is rung in the merge thread as ci with the run, not left to the daily sweep; a tier whose every row
+    reproduced its pins passes and rings no one."""
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", r39="pass", rows={LLAMA: False, QWEN: True})
+    assert PT.main([]) == 1
+    rid = _launched(calls)
+    assert ("data", "label", "r20261003-145201-e806", "note", f"regression fail:{LLAMA}", "--by", "regression", "--ref", rid) in calls
+    (ring,) = [c for c in calls if c[0] == "msg"]
+    assert ring[:-1] == ("msg", "send", "--as", "ci", "--thread", THREAD, "--to", "@vllm", "--quiet", "--report", "--text")
+    assert ring[-1].startswith(f"@vllm post-train: the fast neutrality tier at landing {SHA[:12]} (check r20261003-145201-e806) "
+                               f"moved {LLAMA}. Run {rid}:") and QWEN not in ring[-1]
+    calls, _ = _fake_landing(tmp_path / "neutral", monkeypatch, "r20261003-145201-e806", r39="pass")
+    assert PT.main([]) == 0
+    assert calls[-1] == ("data", "label", "r20261003-145201-e806", "note", "regression pass", "--by", "regression",
+                         "--ref", _launched(calls))
+    assert not any(c[0] == "msg" for c in calls)
+
+
+def test_vllm_is_rung_for_its_own_tier_once_and_a_dry_run_rings_no_one(tmp_path, monkeypatch, capsys):
+    """A tier that ran and wrote no report compared nothing: its label says so and the rows' owner is rung.  A rebuild's
+    failure alone is the regression's, read by the daily sweep; a carried verdict rings no one (the run it carries from
+    rang); a dry run prints the ring instead."""
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", r39="pass", rows=None)
+    assert PT.main([]) == 1
+    assert calls[-2][4] == "regression fail:no neutrality report (run rc=1)"
+    assert [c[0] for c in calls[-2:]] == ["data", "msg"] and "ran and left no report" in calls[-1][-1]
+    calls, _ = _fake_landing(tmp_path / "rebuild", monkeypatch, "r20261003-145201-e806")
+    assert PT.main([]) == 1 and calls[-1][4] == "regression fail:r39" and not any(c[0] == "msg" for c in calls)
+    prev = {"key": "note", "value": f"regression fail:{LLAMA}", "by": "regression", "ref": "r20261003-120500-beef"}
+    calls, _ = _fake_landing(tmp_path / "carried", monkeypatch, "r20261003-145201-e806", prev, untouched=True)
+    assert PT.main([]) == 1 and not any(c[0] in ("run", "msg") for c in calls)
+    calls, _ = _fake_landing(tmp_path / "dry", monkeypatch, None, r39="pass", rows={LLAMA: False})
+    capsys.readouterr()
+    assert PT.main(["HEAD", "--dry-run"]) == 1 and [c[0] for c in calls] == ["run", "fetch"]
+    assert f"--dry-run, so @vllm is not rung: @vllm post-train: the fast neutrality tier at landing {SHA[:12]}" in capsys.readouterr().out
+
+
+def test_a_landing_that_touches_none_of_the_inputs_carries_the_verdict_before_it(tmp_path, monkeypatch):
+    for value, rc in (("regression pass", 0), ("regression fail:r57", 1)):
+        prev = {"key": "note", "value": value, "by": "regression", "ref": "r20261003-120500-beef"}
+        calls, _ = _fake_landing(tmp_path / value[11:15], monkeypatch, "r20261003-145201-e806", prev, untouched=True)
+        assert PT.main([]) == rc
+        assert ("data", "label", "r20261003-145201-e806", "note", value, "--by", "regression", "--ref", "r20261003-120500-beef") in calls
+        assert not any(c[0] == "run" for c in calls)
+
+
+def test_a_verdict_is_not_carried_over_a_change_to_the_inputs_nor_from_a_run_that_never_tested(tmp_path, monkeypatch):
+    ok = {"key": "note", "value": "regression pass", "by": "regression", "ref": "r20261003-120500-beef"}
+    broken = {**ok, "value": "regression fail:no junit (run rc=3)"}
+    cut = {**ok, "value": "regression inconclusive:timeout"}
+    for name, prev, untouched in (("touched", ok, False), ("broken", broken, True), ("cut", cut, True), ("unlabelled", None, True)):
+        calls, _ = _fake_landing(tmp_path / name, monkeypatch, "r20261003-145201-e806", prev, untouched=untouched)
+        assert PT.main([]) == 1, name
+        assert [c[:2] for c in calls if c[0] == "run" or c[:2] == ("data", "label")] == [("run", "--id"), ("data", "label")], name
+        assert calls[-1][-1] == _launched(calls), name
+
+
+def test_the_label_waits_for_the_run_to_end_not_for_its_launch(tmp_path, monkeypatch):
+    calls, sleeps = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", polls=2)
+    assert PT.main([]) == 1
+    rid = _launched(calls)
+    assert [c[:2] for c in calls if c[0] in ("run", "fetch", "data") and c[:2] != ("data", "labels")] == [
+        ("run", "--id"), ("fetch", rid), ("fetch", rid), ("fetch", rid), ("data", "label")]
+    assert calls[-1][4:] == ("regression fail:r39", "--by", "regression", "--ref", rid) and sleeps == [PT.POLL_S] * 2
+
+
+def test_a_run_launched_before_is_waited_for_and_none_is_launched(tmp_path, monkeypatch):
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", polls=1)
+    assert PT.main(["--run", "r20261003-190207-2759"]) == 1
+    assert not any(c[0] == "run" for c in calls)
+    assert calls[-1] == ("data", "label", "r20261003-145201-e806", "note", "regression fail:r39", "--by", "regression",
+                         "--ref", "r20261003-190207-2759")
+
+
+def test_a_run_cut_off_before_its_end_is_inconclusive_not_a_failure(tmp_path, monkeypatch):
+    j = _junit(tmp_path, {"test_reproduces[T0-manifest_digest-r39]": "fail"})
+    assert PT.verdict(j, 143, "timeout") == "regression inconclusive:timeout", "whatever it wrote before the cut"
+    for name, status, value in (("timeout", {"state": "cancelled", "rc": 143, "signal": 15, "timed_out": True}, "timeout"),
+                                ("cancel", {"state": "cancelled", "rc": 143, "signal": 15, "timed_out": False}, "cancelled")):
+        calls, _ = _fake_landing(tmp_path / name, monkeypatch, "r20261003-145201-e806", cut=status)
+        assert PT.main([]) == 1, name
+        assert calls[-1] == ("data", "label", "r20261003-145201-e806", "note", f"regression inconclusive:{value}", "--by",
+                             "regression", "--ref", _launched(calls)), name
+
+
+def test_a_run_that_never_shows_its_end_gets_no_label(tmp_path, monkeypatch):
+    calls, sleeps = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", polls=-1)
+    monkeypatch.setattr(PT, "POLLS", 3)
+    assert PT.main([]) == 1
+    assert len(sleeps) == 3 and not any(c[:2] == ("data", "label") for c in calls)
+
+
+def _queued(monkeypatch):
+    """The lock held by the job before this one, until this one blocks on it."""
+    real = fcntl.flock
+
+    def flock(f, op):
+        if op & fcntl.LOCK_NB:
+            raise BlockingIOError
+        return real(f, op)
+    monkeypatch.setattr(PT.fcntl, "flock", flock)
+
+
+def test_a_job_that_queued_behind_another_is_superseded_by_a_later_landing(tmp_path, monkeypatch):
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
+    monkeypatch.setattr(PT, "later_landing", lambda sha: "r20261003-160000-0002")
+    _queued(monkeypatch)
+    assert PT.main([]) == 0
+    assert calls[-1] == ("data", "label", "r20261003-145201-e806", "note", "regression superseded:r20261003-160000-0002", "--by",
+                         "regression", "--ref", "r20261003-160000-0002")
+    assert not any(c[0] == "run" for c in calls)
+    calls, _ = _fake_landing(tmp_path / "tip", monkeypatch, "r20261003-145201-e806")
+    monkeypatch.setattr(PT, "later_landing", lambda sha: None)
+    assert PT.main([]) == 1 and any(c[0] == "run" for c in calls), "the tip's own job runs after its wait"
+
+
+def test_a_job_that_did_not_queue_runs_whatever_landed_since(tmp_path, monkeypatch):
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
+    monkeypatch.setattr(PT, "later_landing", lambda sha: pytest.fail("a job that had the lock at once asks for no later landing"))
+    assert PT.main([]) == 1 and any(c[0] == "run" for c in calls)
+
+
+def test_a_later_landing_is_main_s_tip_when_it_is_a_landing_after_the_commit(tmp_path):
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+
+    def land(msg: str) -> str:
+        _git(repo, "commit", "-q", "--allow-empty", "-m", msg)
+        _git(repo, "push", "-q", "origin", "HEAD:main")
+        return _git(repo, "rev-parse", "HEAD")
+    first = land("Merge #1 (a)\n\nCheck: r20261003-140000-0001")
+    assert PT.later_landing(first, cwd=repo) is None, "main's tip itself"
+    land("a lane's commit pushed another way")
+    assert PT.later_landing(first, cwd=repo) is None, "a tip that is no landing"
+    land("Merge #2 (b)\n\nCheck: r20261003-150000-0002")
+    assert PT.later_landing(first, cwd=repo) == "r20261003-150000-0002"
+    _git(repo, "checkout", "-q", "--detach", first)
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Merge #3 (c)\n\nCheck: r20261003-150500-0003")
+    assert PT.later_landing(_git(repo, "rev-parse", "HEAD"), cwd=repo) is None, "a commit main doesn't contain"
+
+
+def test_a_later_landing_with_no_check_line_is_found_by_the_attempt_its_own_job_recorded(tmp_path, monkeypatch):
+    """drive's landings carry no `Check:` line and drive cancels a train's check once it lands, so without a record no queued
+    job would ever be superseded. Each job records its landing's attempt (`note_attempt`), and a job that waited finds main's
+    tip by it."""
+    monkeypatch.setattr(PT, "LOCK", tmp_path / "post-train.lock")
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+
+    def land(msg: str) -> str:
+        _git(repo, "commit", "-q", "--allow-empty", "-m", msg)
+        _git(repo, "push", "-q", "origin", "HEAD:main")
+        return _git(repo, "rev-parse", "HEAD")
+    first = land("Queue: #1 a\n\nPR: #1")
+    tip = land("Queue: #2 b\n\nPR: #2")
+    monkeypatch.setattr(PT, "passed", lambda sha: None)
+    assert PT.later_landing(first, cwd=repo) is None, "no Check: line, no passed check, nothing recorded"
+    PT.note_attempt(first, "r20261019-100000-0001")
+    PT.note_attempt(tip, "r20261019-110000-0002")
+    assert PT.later_landing(first, cwd=repo) == "r20261019-110000-0002"
+    assert PT.queued_attempt(first) == "r20261019-100000-0001"
+    PT.note_attempt(tip, "r20261019-120000-0003")                         # a relaunch records its newer attempt
+    assert PT.queued_attempt(tip) == "r20261019-120000-0003"
+
+
+def test_superseded_is_no_verdict_to_carry(tmp_path, monkeypatch):
+    prev = {"key": "note", "value": "regression superseded:r20261003-160000-0002", "by": "regression", "ref": "r20261003-160000-0002"}
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", prev, untouched=True)
+    assert PT.main([]) == 1 and any(c[0] == "run" for c in calls)
+
+
+def test_untouched_is_suites_saying_the_change_touches_none(monkeypatch):
+    def fake(out: str, rc: int = 0):
+        monkeypatch.setattr(PT.subprocess, "run", lambda argv, **_k: subprocess.CompletedProcess(argv, rc, out, ""))
+    fake("suites: the change from 1a2b3c4d5e6f touches 0: none\n")
+    assert PT.untouched(ROOT, "HEAD^1")
+    fake("suites: the change from 1a2b3c4d5e6f touches 1: verity-vllm\nverity-vllm  adapters/vllm  not cached\n")
+    assert not PT.untouched(ROOT, "HEAD^1")
+    fake("suites: the change from 1a2b3c4d5e6f touches 0: none\n", rc=2)
+    assert not PT.untouched(ROOT, "HEAD^1")
+
+
+def test_the_job_pins_the_rebuilds_to_the_cores_it_is_given_at_nice_19():
+    pinned, free = PT.job("96-127", 12), PT.job("", 4)
+    assert "nice -n 19 taskset -c 96-127 ../../.venv/bin/python -m pytest" in pinned and "taskset" not in free
+    assert "nice -n 19 ../../.venv/bin/python -m pytest" in free
+    assert "-m 'regression and rebuild' -n 12" in pinned and "-n 4" in free
+    assert "VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1" in pinned and "fetch-fixtures" in pinned
+    tier = 'bash ../../tools/check/neutrality_tier.sh fast "$out/neutrality"'
+    assert f"nice -n 19 taskset -c 96-127 {tier}" in pinned and f"nice -n 19 {tier}" in free
+    assert pinned.index("pytest.log") < pinned.index(tier), "after the rebuilds, whatever they found"
+    assert (ROOT / "adapters" / "vllm" / "../../tools/check/neutrality_tier.sh").is_file(), "run from adapters/vllm"
+    assert str(PT.NEUTRALITY) == "neutrality/neutrality.json"

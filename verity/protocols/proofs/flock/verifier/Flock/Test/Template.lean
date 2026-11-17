@@ -1,14 +1,15 @@
-/-
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+/-!
 `RecVStar.checkTemplate`: the verifier's bindings' `program_digests` names V*'s template of the statement, the descriptor id
 core's codec names its Definition by (`RecVStar.templateId`, each pinned below as `codec.descriptor_id` writes it). A part
 relabelled under another template (another part's S, a level's, or the same S with a port renamed) is refused, and so are
 a level under its neighbour's `H` and the link table's part under another table's `UB` or `PB`, however consistently the
 bindings carry the label.
 -/
-module
-
-public import Flock.RecVStar
-meta import Flock.RecVStar
 
 @[expose] public section
 

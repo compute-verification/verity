@@ -53,14 +53,14 @@ reads no witness and no prover: every fact is about `decR` and the statement's s
 * **The statement and the shapes** are `decR`'s refusals: it keeps the last message only at the statement
   (`FlockDeploy.decR_stmt`) and the proofs only where they are shaped for their files (`FlockDeploy.decR_shaped`).
 * **Custody** at the reader's record is `custodyRecJ`.
-* **The sample** (`drawTiedS`): at a statement that carries a sample (`parse_innerOk` gives one), the session's `unitDraw`
+* **The sample** (`sampleTiedS`): at a statement that carries a sample (`parse_innerOk` gives one), the session's `unitSample`
   is the statement's sample, which is not `null`. At several tables the setup sets it (`setupTables_spec`). At one table
   it is the public file's parsed header's `unit_draw`, which the setup put the sample into (`HmRow.drawn`), which the
-  loaded header keeps as an object (`loadPublic_header`, at `unitDraw_of`); the header's sample decodes
+  loaded header keeps as an object (`loadPublic_header`, at `unitSample_of`); the header's sample decodes
   (`setupOne_stmt`), so it is not `null`.
 
-`DrawTied` asks the tie at statements without a sample too, where at one table the header may carry any `unit_draw`;
-`.after` reads it only where the statement carries one (`holdsR_afterS`, `DrawTiedS`).
+`SampleTied` asks the tie at statements without a sample too, where at one table the header may carry any `unit_draw`;
+`.after` reads it only where the statement carries one (`holdsR_afterS`, `SampleTiedS`).
 -/
 
 @[expose] public section
@@ -69,15 +69,15 @@ namespace FlockComplete.ZkTables
 
 open Flock
 open Lean (Json)
-open FlockDeploy (setupOf drawEq)
+open FlockDeploy (setupOf sampleEq)
 
-open private setupOne_stmt unitDraw_of from Proofs.Flock.Claims.Complete.ZkTables.StmtOne
+open private setupOne_stmt unitSample_of from Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
 /-- **At a statement that carries a sample, the session's sample is it**, not `null`, at any number of tables. -/
-theorem unitDraw_of_setup {x : Claims.Msg} {s : FlockDeploy.Ins}
+theorem unitSample_of_setup {x : Claims.Msg} {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Flock.Stmt} (hx : setupOf false x = some (s, spec, sts))
     (hq : s.read.check = .ok ()) {d : Json} (hdr : s.read.draw = some d) :
-    spec.unitDraw = some d ∧ d ≠ Json.null := by
+    spec.unitSample = some d ∧ d ≠ Json.null := by
   have hs := (FlockDeploy.setupOf_some hx).2
   have hpi := Claims.Bridge.Custody.publicInputs_none_of_check hq
   have h := FlockDeploy.Ins.setup_read hs
@@ -91,7 +91,7 @@ theorem unitDraw_of_setup {x : Claims.Msg} {s : FlockDeploy.Ins}
   · have h1 : sts.size = 1 := by omega
     rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny h with ⟨-, st, hst, hspec, hsts⟩ | ⟨hc, hsz', -⟩
     · obtain ⟨⟨c, pop, hl, hd⟩, hinst, -, -⟩ := setupOne_stmt hst
-      have hu := unitDraw_of hl (hd d hdr)
+      have hu := unitSample_of hl (hd d hdr)
       obtain ⟨u, hu', -⟩ := hinst d hu
       refine ⟨?_, ofJson_obj hu'⟩
       rw [hspec]
@@ -105,37 +105,37 @@ namespace RecDeploy
 open Flock
 open Lean (Json)
 open Claims (Msg)
-open FlockDeploy (Coin FinalP VerdictR holdsR decR DecR actR checksAtJ drawOfJ drawEq setupOf)
+open FlockDeploy (Coin FinalP VerdictR holdsR decR DecR actR checksAtJ sampleOfJ sampleEq setupOf)
 open Claims.Recursion.VStarB
 
 noncomputable section
 
-/-- **The session's sample is the statement's, where the statement carries one**: `DrawTied` at the statements with a
+/-- **The session's sample is the statement's, where the statement carries one**: `SampleTied` at the statements with a
 sample. -/
-def DrawTiedS : Prop :=
+def SampleTiedS : Prop :=
   ∀ (x : Msg) (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt), setupOf false x = some (s, spec, sts) →
-    s.read.check = .ok () → s.read.draw.isSome = true → drawEq (drawOfU spec.unitDraw) s.read.draw = true
+    s.read.check = .ok () → s.read.draw.isSome = true → sampleEq (sampleOfU spec.unitSample) s.read.draw = true
 
-/-- **`DrawTiedS` holds.** -/
-theorem drawTiedS : DrawTiedS := by
+/-- **`SampleTiedS` holds.** -/
+theorem sampleTiedS : SampleTiedS := by
   intro x s spec sts hx hq hn
   obtain ⟨d, hdr⟩ := Option.isSome_iff_exists.1 hn
-  obtain ⟨hU, hnull⟩ := FlockComplete.ZkTables.unitDraw_of_setup hx hq hdr
-  have hnn := (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some hx).1 hdr).1
-  have e : drawOfU (some d) = some d := by
+  obtain ⟨hU, hnull⟩ := FlockComplete.ZkTables.unitSample_of_setup hx hq hdr
+  have hnn := (FlockDeploy.insOf_sample_norm (FlockDeploy.setupOf_some hx).1 hdr).1
+  have e : sampleOfU (some d) = some d := by
     cases d with
     | null => exact absurd rfl hnull
     | _ => exact congrArg some hnn
   rw [hU, hdr, e]
-  exact FlockDeploy.drawEq_refl _
+  exact FlockDeploy.sampleEq_refl _
 
 /-- **`.after` holds at every decision at SHA-512** on as many coins as messages, of a statement whose scope check
 passes and which carries a sample, where the session's sample is the statement's there and custody passes at the reader's
-record: `holdsR_after` at `DrawTiedS`. -/
+record: `holdsR_after` at `SampleTiedS`. -/
 theorem holdsR_afterS (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs : List Coin)
     (hlen : as.length = cs.length)
     (hck : ∀ s spec sts, setupOf false x = some (s, spec, sts) → s.read.check = .ok () ∧ s.read.draw.isSome = true)
-    (hud : DrawTiedS) (hcu : CustodyRecJ rd) :
+    (hud : SampleTiedS) (hcu : CustodyRecJ rd) :
     holdsR FlockDeploy.sha512 rd .after x as cs := by
   unfold holdsR
   split
@@ -146,13 +146,13 @@ theorem holdsR_afterS (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hs')
     obtain ⟨hq, hn⟩ := hck _ _ _ hx
     obtain ⟨lv, hL, hC⟩ := hcu x as cs _ hlen hd hq
-    have hD : drawEq (drawOfJ f.j) s.read.draw = true := by
+    have hD : sampleEq (sampleOfJ f.j) s.read.draw = true := by
       obtain ⟨v, c₁', r₀, rss, fl, link', pf, -, -, -, -, -, -, he⟩ := FlockDeploy.decR_some hd
       obtain ⟨-, hspec, -, -, -, -, hf⟩ := DecR.mk.inj he
       rw [hf]
       dsimp only
-      rw [FlockDeploy.recJ, drawOfJ_recordObj, ← hspec]
-      exact drawEq_map_norm (fun e he => (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some hx).1 he).1)
+      rw [FlockDeploy.recJ, sampleOfJ_recordObj, ← hspec]
+      exact sampleEq_map_norm (fun e he => (FlockDeploy.insOf_sample_norm (FlockDeploy.setupOf_some hx).1 he).1)
         (hud _ _ _ _ hx hq hn)
     exact checksAtJ_ok_of (f := ⟨f.stmt, f.j, #[]⟩) (FlockDeploy.decR_stmt hd) hD hL hC hq hn
   · trivial
@@ -181,7 +181,7 @@ theorem basesHold_spec (rd : Msg → Option FinalP) :
   · exact holdsR_setup rd _ as cs
   · exact holdsR_shaped rd _ as cs (decShaped rd _ as cs)
   · exact holdsR_names rd _ as cs fun s spec sts h => (hck s spec sts h).1
-  · exact holdsR_afterS rd _ as cs hlen hck drawTiedS (custodyRecJ rd)
+  · exact holdsR_afterS rd _ as cs hlen hck sampleTiedS (custodyRecJ rd)
 
 end
 

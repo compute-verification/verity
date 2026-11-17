@@ -1,23 +1,23 @@
-/-
-The rate law's count (`draw.rate_count`): a public rate `q = NUM/DEN` over `T` tables samples a uniform `k`-subset of a
+module
+
+public import Flock.Draw
+
+/-!
+The rate sampling design's count (`draw.rate_count`): a public rate `q = NUM/DEN` over `T` tables samples a uniform `k`-subset of a
 registration's `n` units at `k = T·⌈NUM·n/(DEN·T)⌉`, `⌈q·n⌉` rounded up to a multiple of `T`. Every unit is sampled with
 probability `k/n ≥ q` whatever `n` the prover registers (`count_ge`), each of the `T` tables proves `k/T` of them
 (`count_dvd`), `k ≥ 1` once `q > 0` and `n ≥ 1` (`count_pos`), and `k ≤ n` whenever `T` divides `n` (`count_le`).
 
-The stratified rate law's `K` (`draw.strat_k`): the stratified sampling design over strata of `n_s` of `N` units at the largest
+The stratified rate sampling design's `K` (`draw.strat_k`): the stratified sampling design over strata of `n_s` of `N` units at the largest
 `K` a stratum needs to sample at least `⌈q·n_s⌉` of them (`need`), at most `N` (`stratK`), so every unit of every stratum
 is sampled with probability `k_s/n_s ≥ q` whatever strata the prover registers (`stratK_ge`).
 
-The work rate law's floor (`draw.rate_floor`): a stratum of `n` units samples at least `⌈q·n⌉` of them, the verifier's own
+The work rate sampling design's floor (`draw.rate_floor`): a stratum of `n` units samples at least `⌈q·n⌉` of them, the verifier's own
 floor `f` where that is more, and never more than `n` (`floor`). A work sampling design sizes each stratum at its floor or above
 (`Flock.Draw.workK`), so under any `K`, any works and any population work, every unit of every stratum is sampled with
 probability `k_s/n_s ≥ q` whatever strata the prover registers (`workK_ge`), and `1 ≤ k_s ≤ n_s` (`floor_pos`,
 `workK_le`).
 -/
-
-module
-
-public import Flock.Draw
 
 @[expose] public section
 
@@ -108,7 +108,7 @@ theorem workK_le (n f k work total num den : Nat) : Flock.Draw.workK k work n to
 def need (num den s n : Nat) : Nat :=
   if count num den 1 s ≤ 1 then 1 else (2 * (count num den 1 s * n) - n + 2 * s - 1) / (2 * s)
 
-/-- The stratified rate law's `K` over strata of `sizes` units of `n`: the most any stratum needs (`need`), at most `n`,
+/-- The stratified rate sampling design's `K` over strata of `sizes` units of `n`: the most any stratum needs (`need`), at most `n`,
 at which each stratum samples all of its units. -/
 def stratK (num den : Nat) (sizes : List Nat) (n : Nat) : Nat :=
   min n (sizes.foldl (fun k s => max k (need num den s n)) 1)
@@ -150,7 +150,7 @@ theorem need_le (num den s n K : Nat) (h0 : 0 < s) (hn : 0 < n) (hK : need num d
     generalize K * s = q at hm ⊢
     omega
 
-/-- **The stratified rate law samples each stratum at least at the rate**: over strata of `sizes` units of `n`, the
+/-- **The stratified rate sampling design samples each stratum at least at the rate**: over strata of `sizes` units of `n`, the
 stratified sampling design at `stratK NUM DEN sizes n` samples `k` of a stratum of `s` with `NUM·s ≤ DEN·k`, so each of its units is
 sampled with probability `k/s ≥ NUM/DEN` however many units the prover registers in it or elsewhere. -/
 theorem stratK_ge (num den s n : Nat) (sizes : List Nat) (hs : s ∈ sizes) (h0 : 0 < s) (hsn : s ≤ n) (hd : 0 < den)

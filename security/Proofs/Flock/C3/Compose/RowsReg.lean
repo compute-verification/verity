@@ -92,7 +92,7 @@ theorem coversAt_zsOf {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     exact coversAt_refuse _
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 namespace C3Family
 
@@ -154,8 +154,8 @@ theorem reads_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hTags : TagsOkZHJ I)
     {own : Array Registered.Port} {tr : Exec.Transcript} (hacc : AcceptsZKR I own tr) {reg : Registered.Port}
-    (hmem : reg ∈ own) {u : ℕ} {d : Lean.Json} {D : Draw.UnitDraw} {dp : Public} {idx : Array ℕ}
-    (hd : recordDraw tr.record = some d) (hD : Draw.UnitDraw.ofJson (drawJ I d (partOf I d u)) = .ok D)
+    (hmem : reg ∈ own) {u : ℕ} {d : Lean.Json} {D : Draw.UnitSample} {dp : Public} {idx : Array ℕ}
+    (hd : recordDraw tr.record = some d) (hD : Draw.UnitSample.ofJson (drawJ I d (partOf I d u)) = .ok D)
     (hdp : HmOut.drawn c pub (drawJ I d (partOf I d u)) = .ok dp) (hidx : Registered.unitIndices dp = .ok idx)
     (hu : u ∈ D.proved) : ∃ x, reg.reads[idx.getD (D.proved.idxOf u) 0]? = some (some x) := by
   obtain ⟨spec, sts, hs, hreg, -, -⟩ := hacc
@@ -179,7 +179,7 @@ theorem reads_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   rw [hidx] at hidx'
   cases hidx'
   obtain ⟨p', positions, paths, -, -, hall⟩ := checkPort_at (hports _ hmem)
-  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdpR
+  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.sampled_spec hdpR
   rw [hD] at hD'
   cases hD'
   have hi : D.proved.idxOf u < D.proved.size := Array.idxOf_lt_length_of_mem hu
@@ -189,12 +189,12 @@ theorem reads_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
 /-- **An accepted transcript sets up the table each unit is sampled into**: at the record's sample `d`, the table `u` is
 sampled into (`partOf`) has a sample, a sampled statement over `pub` at it, and that statement's labels, which the registered
 check reads. -/
-theorem drawn_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+theorem sampled_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hTags : TagsOkZHJ I)
     {own : Array Registered.Port} {tr : Exec.Transcript} (hacc : AcceptsZKR I own tr) {d : Lean.Json}
     (hd : recordDraw tr.record = some d) (u : ℕ) :
-    ∃ D dp idx, Draw.UnitDraw.ofJson (drawJ I d (partOf I d u)) = .ok D ∧
+    ∃ D dp idx, Draw.UnitSample.ofJson (drawJ I d (partOf I d u)) = .ok D ∧
       HmOut.drawn c pub (drawJ I d (partOf I d u)) = .ok dp ∧ Registered.unitIndices dp = .ok idx := by
   obtain ⟨spec, sts, hs, hreg, -, -⟩ := hacc
   obtain ⟨hsz, hstJ⟩ := setupOf_tableJH hTags.1 hd hs
@@ -211,7 +211,7 @@ theorem drawn_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   rw [hcst] at hdp
   have hdpR : HmRow.drawn { c with outPorts := #[] } pub (drawJ I d (partOf I d u)) =
       .ok sts[(partOf I d u).val].pub := hdp
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdpR
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec hdpR
   have hck := checkRegistered_ok (array_forM_ok hreg _ hjs)
   rw [hcst] at hck
   obtain ⟨-, idx, -, hidx, -⟩ := check_tables hck
@@ -291,7 +291,7 @@ theorem find_of_names {c : Flock.Circuit} (hN : NamesOnce c) (q : Fin c.ports.si
 section Honest
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv}
+  {Lv : SamplingDesign nv}
 
 /-- **The registrant holds the rows `own` names**: at each typing of the session, a record of registered reads holding
 every row of a port `own` names, at every unit, under the first port of its name, at the position that port gives the
@@ -301,7 +301,7 @@ at; the verifier derives it (`Registered.derived`), and `loadPublic` does not ma
 registrant's: it committed every row it registered. -/
 def RegistrantOpens (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
   ∀ (ht : x.I.tags.typed = false) (S₀ : Finset (Fin nv)) (d₀ : Lean.Json)
-    (y₀ : ZkHidden.DrawSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
+    (y₀ : ZkHidden.SampleSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
     (hc : HmOut.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok c)
     (hpub : HmOut.loadPublic (zkTags x.I) c x.I.publicFile = .ok (pubZ x.I)),
     ∃ rdH : FlockSoundness.Registered.ReadsX
@@ -309,7 +309,7 @@ def RegistrantOpens (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
         (rsShHJS x.dj y₀ ht hc (Layout.scopeOkH_of_scopeOk hscope) hU hpub),
       ∀ (u : Fin nv) (q : Fin c.ports.size), NamedBy x.own c q →
         rdH.isRead (.inl (u, q)) ∧ rdH.port (.inl (u, q)) = portOf x.own c.ports[q].name ∧
-          ∀ d D dp idx, Flock.Draw.UnitDraw.ofJson (drawJ x.I d (partOf x.I d u.val)) = .ok D →
+          ∀ d D dp idx, Flock.Draw.UnitSample.ofJson (drawJ x.I d (partOf x.I d u.val)) = .ok D →
             HmOut.drawn c (pubZ x.I) (drawJ x.I d (partOf x.I d u.val)) = .ok dp →
             Flock.Registered.unitIndices dp = .ok idx → u.val ∈ D.proved → ∀ pos,
               (portOf x.own c.ports[q].name).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos) →
@@ -317,19 +317,19 @@ def RegistrantOpens (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
 
 /-- **An accepted session samples each unit of its sample into a sampled statement**: at every accepted outcome, the record
 names the sampling design's sample file (the record's custody, `RecordsLiveZKJ`), its table `u` is sampled into has a sampled statement
-labelling its instances (`drawn_of_acceptsZKR`), and that table's sample proves `u` (the challenger's live-coin part's sample, `hDraw`). -/
+labelling its instances (`sampled_of_acceptsZKR`), and that table's sample proves `u` (the challenger's live-coin part's sample, `hDraw`). -/
 theorem labelsSelf (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr)
     (ht : x.I.tags.typed = false) (hc : HmOut.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok c)
     (hpub : HmOut.loadPublic (zkTags x.I) c x.I.publicFile = .ok (pubZ x.I)) (ω : Lv.Ω) (R' : Reg')
     (o : Tables.LiveOutJ J mPts) (hacc : LiveAcceptsZKR x.I x.own (R', Lv.draw ω, x.wr (Lv.draw ω) R' o))
     (u : Fin nv) (hu : u ∈ Lv.draw ω) :
     ∃ d D dp idx, recordDraw (x.wr (Lv.draw ω) R' o).record = some d ∧
-      Flock.Draw.UnitDraw.ofJson (drawJ x.I d (partOf x.I d u.val)) = .ok D ∧
+      Flock.Draw.UnitSample.ofJson (drawJ x.I d (partOf x.I d u.val)) = .ok D ∧
       HmOut.drawn c (pubZ x.I) (drawJ x.I d (partOf x.I d u.val)) = .ok dp ∧
       Flock.Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved := by
   have hd := (hRec _ _ _ (acceptsZK_of_R (t := x.wr (Lv.draw ω) R' o) hacc)).1
   obtain ⟨D, dp, idx, hD, hdp, hidx⟩ :=
-    FlockSoundness.Discharge.ZkReg.drawn_of_acceptsZKR x.I ht hc hpub x.hTags (tr := x.wr (Lv.draw ω) R' o) hacc hd
+    FlockSoundness.Discharge.ZkReg.sampled_of_acceptsZKR x.I ht hc hpub x.hTags (tr := x.wr (Lv.draw ω) R' o) hacc hd
       u.val
   exact ⟨_, D, dp, idx, hd, hD, hdp, hidx, ((x.hDraw ω) (partOf x.I _ u.val)).1 D hD u (mem_partS hu)⟩
 
@@ -341,7 +341,7 @@ acceptance requires (`reads_of_acceptsZKR`). -/
 theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv)
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr) (ht : x.I.tags.typed = false) {S₀ : Finset (Fin nv)}
     {d₀ : Lean.Json}
-    (y₀ : ZkHidden.DrawSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
+    (y₀ : ZkHidden.SampleSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
     (hc : HmOut.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok c)
     (hpub : HmOut.loadPublic (zkTags x.I) c x.I.publicFile = .ok (pubZ x.I))
     (rdH : FlockSoundness.Registered.ReadsX
@@ -349,7 +349,7 @@ theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv)
         (rsShHJS x.dj y₀ ht hc (Layout.scopeOkH_of_scopeOk hscope) hU hpub))
     (hH : ∀ (u : Fin nv) (q : Fin c.ports.size), NamedBy x.own c q →
       rdH.isRead (.inl (u, q)) ∧ rdH.port (.inl (u, q)) = portOf x.own c.ports[q].name ∧
-        ∀ d D dp idx, Flock.Draw.UnitDraw.ofJson (drawJ x.I d (partOf x.I d u.val)) = .ok D →
+        ∀ d D dp idx, Flock.Draw.UnitSample.ofJson (drawJ x.I d (partOf x.I d u.val)) = .ok D →
           HmOut.drawn c (pubZ x.I) (drawJ x.I d (partOf x.I d u.val)) = .ok dp →
           Flock.Registered.unitIndices dp = .ok idx → u.val ∈ D.proved → ∀ pos,
             (portOf x.own c.ports[q].name).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos) →
@@ -403,14 +403,14 @@ inputs, own lists and writers, and so the same game: the guarantee at them reads
 theorem registrantCovers_attained {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') (hO : ∀ R ω t R₂ j, RegistrantOpens (zr R ω t R₂ j))
     (hCust : Flock.Premises.RecordCustody zr) (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I) {k : ℕ} {ρ : ℝ}
-    (hr : ∀ R ω t R₂ j S₀ (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀)
+    (hr : ∀ R ω t R₂ j S₀ (d₀ : Lean.Json) (y₀ : ZkHidden.SampleSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀)
       S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     (hT : Typed zr) (dg : ByteArray → ByteArray) (N : ℕ) :
     ∃ zr' : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg',
       Flock.Premises.RegistrantCovers zr' ∧ Flock.Premises.RecordCustody zr' ∧
       (∀ R ω t R₂ j, TagsFound (zr' R ω t R₂ j).I) ∧
       (∀ R ω t R₂ j S₀ (d₀ : Lean.Json)
-        (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr' R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
+        (y₀ : ZkHidden.SampleSetupZHJ (inputsJ (zr' R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
         rateZ (ZkHidden.planZHJ (Reg := Reg') (zr' R ω t R₂ j).dj y₀ S' R') i k ≤ ρ) ∧
       Typed zr' ∧ (∀ R ω t, outerVR (zr' R ω t) dg N = outerVR (zr R ω t) dg N) ∧
       ∀ R ω t R₂ j, (zr' R ω t R₂ j).I = (zr R ω t R₂ j).I ∧ (zr' R ω t R₂ j).own = (zr R ω t R₂ j).own ∧

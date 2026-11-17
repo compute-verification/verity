@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The Lean verifier on a served statement: flock_served.py stages one kind of a saved served step as one_stage/a11.py
 # stages it (flat), or with --layout MODE as a templated statement of the same unit (with --structural, struct_lower's
-# template, the flat unit never built). With a session sent, this times `flock-verify archive-put` and `flock-verify
+# template, the flat unit never built). With a session sent, this times `verity-verify-proof archive-put` and `verity-verify-proof
 # verify --zk --partition --program` on it as a0.lean_verify runs them (under `perf record` where the node has perf).
 # With --phases or --layout, flock-served (flock_served/Main.lean)
 # times verify's work on the statement before any session a step at a time, and on a flat one flock-read
@@ -40,8 +40,8 @@ S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
 uv sync -q --all-packages --extra torch-cpu
-(cd "$L" && lake build flock-verify) > "$O/build.log" 2>&1 || { tail -60 "$O/build.log" >&2; exit 1; }
-FV=$L/.lake/build/bin/flock-verify
+(cd "$L" && lake build verity-verify-proof) > "$O/build.log" 2>&1 || { tail -60 "$O/build.log" >&2; exit 1; }
+FV=$L/.lake/build/bin/verity-verify-proof
 . "$PWD/verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh"
 scratch() { # scratch NAME [VERIFIER [DIR]]: NAME's Main.lean in a scratch package DIR (NAME) against VERIFIER (the checkout's)
   local v=${2:-$L} d=$S/${3:-$1}

@@ -226,7 +226,7 @@ theorem resZeroAtLH_wRead {Reg' : Type} (hrc : ResReadCol Vs sh sess) {zs : (s :
 end read
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
   {stmt : Fin S → VStar.Stmt} {sh : Flock.Shape}
 
 /-- **`WDecodes` where `rep₀` reads `w` off the layers** (`wRead`): element `i` at `wLoc`'s session, unit and columns,

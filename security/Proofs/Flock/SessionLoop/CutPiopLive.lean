@@ -78,7 +78,7 @@ theorem betaSlot_lt_repBase {x : Msg} (hx : Live x) {s spec}
     betaSlot x (q / 2) (q % 2) < repBase x (q + 1) := by
   have hj : q / 2 < (stsOf x).size := by omega
   obtain ⟨y⟩ := hx.2 (q / 2) hj
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[q / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[q / 2]!.wideLeaf (stsOf x)[q / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [getElem!_pos (stsOf x) _ hj]
     exact y.hz
   have hk6 : 6 ≤ (stsOf x)[q / 2]!.c.kLog := by
@@ -105,7 +105,7 @@ theorem slots_order {x : Msg} (hx : Live x) {s spec}
   have hst : (stsOf x)[(2 * j + r) / 2]! = (stsOf x)[j] := by
     rw [show (2 * j + r) / 2 = j by omega]
     exact getElem!_pos (stsOf x) j hj
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j + r) / 2]!.wideLeaf (stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]
     exact y.hz
   have hβ := betaSlot_lt_repBase hx hsx (q := 2 * j + r) (by omega)
@@ -291,7 +291,7 @@ theorem unrefused_prefix (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)

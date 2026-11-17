@@ -51,12 +51,12 @@ theorem msgTape_succ {k : ℕ} (msg : ℕ → 𝔽 × (Fin k → 𝔽)) (a n : �
 theorem getElem!_single (x : F128) : (#[x] : Array F128)[0]! = x := by
   simp
 
-/-- **`drawFin`'s run**: `n` coins, one word each, read through `fOf`. -/
-theorem drawFin_plays (cs : Array F128) : ∀ (n a : ℕ),
-    Plays fOf (drawFin (F := 𝔽) n) [] (coinTape cs a n) (fun i => fOf cs[a + i.val]!)
+/-- **`sampleFin`'s run**: `n` coins, one word each, read through `fOf`. -/
+theorem sampleFin_plays (cs : Array F128) : ∀ (n a : ℕ),
+    Plays fOf (sampleFin (F := 𝔽) n) [] (coinTape cs a n) (fun i => fOf cs[a + i.val]!)
   | 0, a => by
       have e : (Fin.elim0 : Fin 0 → 𝔽) = fun i => fOf cs[a + i.val]! := funext fun i => i.elim0
-      rw [drawFin, ← e]
+      rw [sampleFin, ← e]
       exact Plays.pure _
   | n + 1, a => by
       have e : (Fin.cons (fOf (#[cs[a]!] : Array F128)[0]!) (fun i : Fin n => fOf cs[a + 1 + i.val]!) :
@@ -66,9 +66,9 @@ theorem drawFin_plays (cs : Array F128) : ∀ (n a : ℕ),
         · simp
         · simp only [Fin.cons_succ, Fin.val_succ]
           rw [show a + 1 + j.val = a + (j.val + 1) by omega]
-      rw [drawFin, coinTape_succ, ← e]
+      rw [sampleFin, coinTape_succ, ← e]
       refine Plays.bind' (ms₂ := []) (cs₂ := coinTape cs (a + 1) n) (Plays.drawOne #[cs[a]!] rfl) ?_ rfl rfl
-      refine Plays.bind' (ms₂ := []) (cs₂ := []) (drawFin_plays cs n (a + 1)) ?_ rfl (List.append_nil _).symm
+      refine Plays.bind' (ms₂ := []) (cs₂ := []) (sampleFin_plays cs n (a + 1)) ?_ rfl (List.append_nil _).symm
       exact Plays.pure _
 
 /-- **`degRounds`' run**: round `j`'s message `msg j` and coin `cs[o + j]`, from round `a`; the claim is `degFold`. -/
@@ -164,12 +164,12 @@ def verdictOf (w : Array F128) (τ : Array ℕ) (c : SCoins) : Option (RegClaim 
 theorem sparsePhase_plays (w : Array F128) (τ : Array ℕ) (c : SCoins) :
     Plays fOf (sparsePhase execArith sh (pubOf sh c) (fun σ => τ[σ.val]!) (fun s => fOf w[s.val]!))
       (phaseMsgs sh w) (phaseCoins sh c.cs) (verdictOf sh w τ c) := by
-  have h1 := drawFin_plays c.cs 6 0
+  have h1 := sampleFin_plays c.cs 6 0
   have h2 := degRounds_plays 1 (msg2 w) c.cs 6 6 0 (h1Claim w c.cs)
   have h3 := degRounds_plays (2 * sh.ell) (msg3 sh w (2 * sh.ell)) c.cs 12 sh.nu 0 (fOf w[wV2]!)
   have h4 := degRounds_plays (2 * sh.ell + 1) (msg3 sh w (2 * sh.ell + 1)) c.cs 12 sh.sLog sh.nu (c3Of sh w c.cs)
-  have h5 := drawFin_plays c.cs sh.pLog (12 + nR sh)
-  have h7 := drawFin_plays c.cs sh.tLog (12 + nR sh + sh.pLog)
+  have h5 := sampleFin_plays c.cs sh.pLog (12 + nR sh)
+  have h7 := sampleFin_plays c.cs sh.tLog (12 + nR sh + sh.pLog)
   simp only [Nat.add_zero] at h2 h3
   unfold sparsePhase
   refine Plays.bind' (ms₂ := phaseMsgs sh w) h1 ?_ rfl rfl

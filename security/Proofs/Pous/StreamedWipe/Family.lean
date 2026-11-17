@@ -104,16 +104,12 @@ theorem streamed_wipe_meets_family : Pous.Guarantees.StreamedWipeMeetsFamily := 
   exact streamed_wipe_le_of_reads (r := 24) (R := 0) (by norm_num) (by decide +kernel) (by omega)
     (Nat.add_zero _).symm (by omega) prf P
 
-/-- **`StreamedWipeMeets96GiB`**: the family at `3072` segments. -/
-theorem streamed_wipe_meets_96GiB : Pous.Guarantees.StreamedWipeMeets96GiB := fun q E κ prf P hq =>
-  streamed_wipe_meets_family 1610612736 (by norm_num) q E κ prf P (by omega)
+/-- **`StreamedWipeMeets96GiB`**: the family at `n = c.size .dram / 16` labels of the card handed in. -/
+theorem streamed_wipe_meets_96GiB : Pous.Guarantees.StreamedWipeMeets96GiB := fun c hn q E κ prf P hq =>
+  streamed_wipe_meets_family (c.size .dram / 16) hn q E κ prf P hq
 
-/-- **`StreamedWipeMeets141GB`**: the family at `141·10^9` bytes. -/
-theorem streamed_wipe_meets_141GB : Pous.Guarantees.StreamedWipeMeets141GB := fun q E κ prf P hq =>
-  streamed_wipe_meets_family 2203125000 (by norm_num) q E κ prf P (by omega)
-
-/-- **`StreamedWipeMeetsH200`**: `StreamedWipeMeetsReads` at `r = 33`, `k = 2906`, an H200's 141 GiB (`151,397,597,184`
-bytes) filled whole and `R = 0`. -/
+/-- **`StreamedWipeMeetsH200`**: `StreamedWipeMeetsReads` at `r = 33`, `k = 2906`, an H200's device memory (the card
+`h200-sxm-141gb`'s `store.dram`, 141 GiB) filled whole and `R = 0`. -/
 theorem streamed_wipe_meets_H200 : Pous.Guarantees.StreamedWipeMeetsH200 := by
   intro s E κ prf P
   have hk : Nat.log2 2906 < 12 := (Nat.log2_lt (by norm_num)).2 (by norm_num)

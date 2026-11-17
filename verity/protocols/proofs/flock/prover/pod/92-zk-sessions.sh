@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The --zk sessions fixture of test_lean_zk.py, test_lean_hello.py and test_lean_session.py, on a CPU machine, on hidden_zk's
 # builds (benchmarks/pouw/hidden_zk/job.sh, sourced: the selftest build of flock-circuit, with seed-injection, and the Lean
-# flock-verify). From a clone:
+# verity-verify-proof). From a clone:
 #   research run --on auto --source . --as LANE --project verity --cwd clone --cpus 16 --mem-gb 32 \
 #     -- bash verity/protocols/proofs/flock/prover/pod/92-zk-sessions.sh
 # RoPE d64 (rope-head/d64/neox-bf16, generated n=32 seed 20260926) staged by verity_flock.circuit at 16 and 32 instances
@@ -16,7 +16,7 @@ set -uo pipefail
 export HZ_CONFIGS=zk-sessions HZ_MEM_GB=${ZS_MEM_GB:-32}
 [ -n "${ZS_CACHE:-}" ] && export HZ_CACHE=$ZS_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/benchmarks/numerical/python
 STATEMENT=verity/flock-circuit+seed-injection
 setup
 FIX=$OUT/fixture

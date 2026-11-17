@@ -60,7 +60,7 @@ end OutRowsF
 `b / 128`'s message column of byte `b`'s bit `t` holds no constant. -/
 theorem constBit_msg {p : Port} {tl : ByteArray} {b t : ℕ} (hbits : p.bits = 16 * p.words) (hb : b < 2 * p.words)
     (ht : t < 8) : HmRow.constBit p tl (b / 128) (msgOff b t) = none := by
-  unfold HmRow.constBit HmRow.blockBit msgOff
+  unfold HmRow.constBit HmRow.chunkBit msgOff
   exact ite_eq_left_iff.2 fun h => absurd (by omega) h
 
 section Pos
@@ -249,8 +249,8 @@ fit rows: at template instance `g`, output row `j`'s word `k`, bit `t`, what the
 theorem msg_copyF {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
-    blockBit (L.model regs) z o (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) =
-      blockBit (L.model regs) z o (outSrc st.c g j k t) := by
+    chunkBit (L.model regs) z o (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) =
+      chunkBit (L.model regs) z o (outSrc st.c g j k t) := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
   obtain ⟨hp, hb, ht8⟩ := hrows.bound hj hk ht
   obtain ⟨n, s, off, hn, hat, -, l, name, hl, hself⟩ := msg_at R hrows.segs (b := 2 * k + t / 8) hg hp ht8

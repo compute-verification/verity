@@ -293,7 +293,7 @@ theorem msgCol_hm (c : Circuit) (g p : ℕ) {n o t : ℕ} (hs : c.ports[p]!.segs
 /-- **Block `k` of a row's message holds only row bits** where the row's bits fill it (`1024 (k + 1) ≤ bits`). -/
 theorem constBit_row (p : Port) (tl : ByteArray) {k t : ℕ} (ht : t < 1024) (h : 1024 * (k + 1) ≤ p.bits) :
     HmRow.constBit p tl k t = none := by
-  unfold HmRow.constBit HmRow.blockBit
+  unfold HmRow.constBit HmRow.chunkBit
   exact if_pos (by omega)
 
 /-- **A row's block's bits**, for a row of `16 · words` bits: block `K + 1` of the row's message after the prefix, padded,
@@ -330,8 +330,8 @@ theorem blk_bitsP (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {pre : ByteArray}
         some (decide (2 * c.ports[p]!.words ≤ 128 * K + (8 * (q / 64) + (7 - q % 64 / 8))) &&
           (((HmRow.tailOf c.ports[p]!).get! (128 * K + (8 * (q / 64) + (7 - q % 64 / 8)) - 2 * c.ports[p]!.words)).toNat
             >>> (q % 8)) % 2 == 1) := by
-      have hj1 : (HmRow.blockBit q).1 = 8 * (q / 64) + (7 - q % 64 / 8) := by unfold HmRow.blockBit; omega
-      have hj2 : (HmRow.blockBit q).2 = q % 8 := rfl
+      have hj1 : (HmRow.chunkBit q).1 = 8 * (q / 64) + (7 - q % 64 / 8) := by unfold HmRow.chunkBit; omega
+      have hj2 : (HmRow.chunkBit q).2 = q % 8 := rfl
       unfold HmRow.constBit
       simp only [bytes_of_bits hb, hj1, hj2]
       rw [ite_eq_right_iff.2 (fun h => absurd h (by omega))]

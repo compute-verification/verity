@@ -6,13 +6,13 @@ Every channel has a SHA-512 chain key. An onsite device's is its imprint key, a 
 installed over the cable once per auditor device, then ratcheted. A remote party with no cable holds a chain key
 installed at provisioning, and each of its sessions also XORs in an ML-KEM-1024 shared secret (``ind-cca/ml-kem-1024``,
 the one-hash rule's transport exception), so its security never drops below the chain key's alone. No session runs on a
-KEM secret alone, and the certifiers' pair links never use this module.
+KEM secret alone, and the network attesters' pair links never use this module.
 
 H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104), [x] is u16be len(x) ‖ x and ⟨x⟩ is u32be len(x) ‖ x.
 
 - **Derivation** (RFC 5869 over SHA-512): ``extract(salt, ikm) = HMAC(salt, ikm)``, and
   ``expand(k, s, ctx) = HMAC(k, [LABEL ‖ s] ‖ ⟨ctx⟩ ‖ 0x01)``, HKDF-Expand's first 64-byte block. Every info here starts
-  with a 0x00 byte and every info of `aead.keys` with ``ve``, so no input is shared with the certifier's pair links.
+  with a 0x00 byte and every info of `aead.keys` with ``ve``, so the two derivations share no input.
 - **Imprint** (`imprint`, `check_imprint`): over the cable between a device D and its server S, before D forwards any
   traffic, each sends 64 random bytes; ``K_0 = expand(extract(R_D, R_S), "root", [id_D] ‖ [id_S])``, and the two compare
   ``expand(K_0, "imprint")``. K_0 is secret while nothing else reads the cable during that exchange.
@@ -36,9 +36,11 @@ structure (the frame's declared size class), never a private value's length.
 
 Every key is an HMAC-SHA512 output under a uniform key, so a PRF under ``prf/sha-512`` (Bellare 2006), and a KEM's
 shared secret enters only as an HMAC key. Standard library only. The premises are named Props in
-``security/Definitions/Core/Assumptions/Transport.lean``: ``WitnessPathPrivate`` for a channel without keys,
-``ImprintPathPrivate`` for the cable during the imprint, and ``ChannelHides`` and ``ChannelAuthentic`` for what this
-module gives; ``Verity.Guarantees.TransportPassiveZk`` takes the first or the third.
+``security/Definitions/Core/Assumptions/Transport.lean`` (``WitnessPathPrivate``, ``ChannelHides``) and
+``security/Definitions/Assumptions/Transport.lean`` (``ImprintPathPrivate``, ``ChannelAuthentic``):
+``WitnessPathPrivate`` for a channel without keys, ``ImprintPathPrivate`` for the cable during the imprint, and
+``ChannelHides`` and ``ChannelAuthentic`` for what this module gives; ``Verity.Guarantees.TransportPassiveZk`` takes the
+first or the third.
 """
 from __future__ import annotations
 

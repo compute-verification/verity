@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.ExecDrawOS
+public import Proofs.Flock.Soundness.ExecSampleOS
 public import Proofs.Flock.Claims.Sampling.Select.SecondWitness
 public import Proofs.Flock.Claims.Sampling.Select.Size
 
@@ -23,12 +23,12 @@ therefore runs out only if one of its `k` steps rejects its first word.
 * `runOS_subset_none_le`: the live subset sample runs out with probability at most `k·2⁻⁶⁴`, on a uniform source (A3)
   of at least `2·k·width n + 64` bytes. A shorter source runs out always, its first read failing, so `k·width n`
   bytes do not suffice for the live sample.
-* `execOS_subset_draw_card_le`: a live subset sample that does not run out holds at most `k` units.
+* `execOS_subset_sample_card_le`: a live subset sample that does not run out holds at most `k` units.
 -/
 
 @[expose] public section
 
-namespace FlockSoundness.Audit.DrawExec
+namespace FlockSoundness.Audit.SampleExec
 
 open Game Finset
 open scoped ENNReal
@@ -42,7 +42,7 @@ theorem log2_mono {a b : ℕ} (h : a ≤ b) : a.log2 ≤ b.log2 := by
   · exact (Nat.le_log2 (by omega)).2 ((Nat.log2_self_le (by omega)).trans h)
 
 /-- A larger population's words are at least as wide. -/
-theorem drawWidth_mono {a b : ℕ} (h : a ≤ b) : Flock.Draw.width a ≤ Flock.Draw.width b := by
+theorem sampleWidth_mono {a b : ℕ} (h : a ≤ b) : Flock.Draw.width a ≤ Flock.Draw.width b := by
   have := log2_mono h
   unfold Flock.Draw.width
   omega
@@ -151,12 +151,12 @@ theorem loopP_none_of_loopSw (n : ℕ) (src : ByteArray) : ∀ (l : List ℕ) (s
 
 /-- A `subset` sample that returns `none` on a stream has its loop run out on that stream's bytes. -/
 theorem subset_none_failL {L : ℕ} (f : Fin L → Fin 256) (k n : ℕ)
-    (h : Flock.Draw.subset k n (Law.streamOf f) = none) : failL n (L + 1) (List.range' 0 k) (bsOf f) := by
-  rw [DrawExec.subset_eq] at h
-  cases hl : loopSw n (Law.streamOf f) (List.range' 0 k) ∅ 0 with
+    (h : Flock.Draw.subset k n (SamplingDesign.streamOf f) = none) : failL n (L + 1) (List.range' 0 k) (bsOf f) := by
+  rw [SampleExec.subset_eq] at h
+  cases hl : loopSw n (SamplingDesign.streamOf f) (List.range' 0 k) ∅ 0 with
   | some sw => rw [hl] at h; exact absurd h (by simp)
   | none =>
-    have hp := loopP_none_of_loopSw n (Law.streamOf f) _ _ (Equiv.refl ℕ) _ hl
+    have hp := loopP_none_of_loopSw n (SamplingDesign.streamOf f) _ _ (Equiv.refl ℕ) _ hl
     rw [loopP_streamOf f n _ _ 0 (Nat.zero_le _), List.drop_zero] at hp
     exact failL_of_loopL_none n (L + 1) _ _ _ hp
 
@@ -179,7 +179,7 @@ theorem failL_le (n F : ℕ) : ∀ (c i ℓ : ℕ), i + c ≤ n → c * Flock.Dr
   | succ c ih =>
     intro i ℓ hi hℓ
     have hm : 0 < n - i := by omega
-    have hwn : Flock.Draw.width (n - i) ≤ Flock.Draw.width n := drawWidth_mono (Nat.sub_le n i)
+    have hwn : Flock.Draw.width (n - i) ≤ Flock.Draw.width n := sampleWidth_mono (Nat.sub_le n i)
     have hℓ2 : c * Flock.Draw.width n + Flock.Draw.width n ≤ ℓ :=
       le_trans (le_of_eq (Nat.add_one_mul c (Flock.Draw.width n)).symm) hℓ
     obtain ⟨ℓ', rfl⟩ : ∃ ℓ', ℓ = Flock.Draw.width (n - i) + ℓ' := ⟨ℓ - Flock.Draw.width (n - i), by omega⟩
@@ -224,13 +224,13 @@ theorem failL_le (n F : ℕ) : ∀ (c i ℓ : ℕ), i + c ≤ n → c * Flock.Dr
 /-- **`Flock.Draw.subset k n` runs out with probability at most `k·2⁻⁶⁴`**, on a uniform stream of at least
 `k·width n` bytes. -/
 theorem subset_none_le (k n L : ℕ) (hk : k ≤ n) (hL : k * Flock.Draw.width n ≤ L) :
-    prCoin (fun f : Fin L → Fin 256 => Flock.Draw.subset k n (Law.streamOf f) = none) ≤
+    prCoin (fun f : Fin L → Fin 256 => Flock.Draw.subset k n (SamplingDesign.streamOf f) = none) ≤
       (k : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ :=
   (prCoin_mono fun f h => subset_none_failL f k n h).trans (failL_le n L k 0 L (by omega) hL)
 
-end FlockSoundness.Audit.DrawExec
+end FlockSoundness.Audit.SampleExec
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 
 open Game Finset
 open scoped ENNReal
@@ -251,9 +251,9 @@ theorem subset_prefix_none_le (n k : ℕ) (hk : k ≤ n) (N L : ℕ) (hN : k * F
       show Flock.Draw.subset k n ((a ++ b).extract 0 N) = none ↔ Flock.Draw.subset k n a = none ∧ True
       rw [ByteArray.extract_append_eq_left ha.symm, and_true])
   refine le_trans (le_of_eq happ) ?_
-  refine le_trans (mul_le_mul' le_rfl (DrawExec.prCoin_le_one _)) ?_
+  refine le_trans (mul_le_mul' le_rfl (SampleExec.prCoin_le_one _)) ?_
   rw [mul_one]
-  exact DrawExec.subset_none_le k n N hk hN
+  exact SampleExec.subset_none_le k n N hk hN
 
 theorem onWithFuel_succ_some {m : Type → Type} [Monad m] (get : ℕ → m ByteArray) (need : ℕ)
     (run : ByteArray → Option (Array ℕ)) (f : ℕ) (src : ByteArray) (u : Array ℕ) (h : run src = some u) :
@@ -288,17 +288,17 @@ theorem runOS_subset_none {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) →
   | some D =>
     exfalso
     have hrun := onWith_first (tapesOf f) 0 (2 * k * Flock.Draw.width n + 64) (Flock.Draw.subset k n) D
-      (fun _ => 0) rfl (by rw [h2, DrawExec.size_streamOf]; exact hL) (by rw [h2]; exact hs)
+      (fun _ => 0) rfl (by rw [h2, SampleExec.size_streamOf]; exact hL) (by rw [h2]; exact hs)
     unfold runOS at h
-    rw [drawWith_subset_run, hrun] at h
+    rw [sampleWith_subset_run, hrun] at h
     simp at h
 
 /-- **A live subset sample that returns a sample returns the sampler's on the whole stream** (`onWith_tape`). -/
 theorem runOS_subset_some {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) (k n : ℕ)
-    (d : Flock.Draw.UnitDraw) (hd : runOS f (.subset k) n = some d) :
+    (d : Flock.Draw.UnitSample) (hd : runOS f (.subset k) n = some d) :
     Flock.Draw.subset k n (streamOf (f 0)) = some d.units := by
   unfold runOS at hd
-  rw [drawWith_subset_run] at hd
+  rw [sampleWith_subset_run] at hd
   cases ho : (Flock.Draw.onWith (tapeGet (tapesOf f) 0) (2 * k * Flock.Draw.width n + 64)
       (Flock.Draw.subset k n)).run (fun _ => 0) with
   | none => rw [ho] at hd; exact absurd hd (by simp)
@@ -360,7 +360,7 @@ theorem card_filter_mem_le (n : ℕ) (D : Array ℕ) {dec : DecidablePred fun u 
 
 /-- **A live subset sample that does not run out holds at most `k` units**: it holds the units of the sampler's `k`
 values (`subset_size`). -/
-theorem execOS_subset_draw_card_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
+theorem execOS_subset_sample_card_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (k : ℕ) (ω : Ω) (h : runOS (t ω) (.subset k) n ≠ none) :
     ((execOS (n := n) t (.subset k) n).draw ω).card ≤ k := by
   change ((match runOS (t ω) (.subset k) n with
@@ -372,4 +372,4 @@ theorem execOS_subset_draw_card_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : F
     exact (card_filter_mem_le n d.units).trans
       (le_of_eq (_root_.Properties.Spot.SecurityProofs.subset_size (runOS_subset_some (t ω) k n d hd)))
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign

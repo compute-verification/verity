@@ -1,8 +1,8 @@
-"""Per-token timing traces of real vLLM serving, for the network certifier's calibration (`network-certifier-calibrate`).
+"""Per-token timing traces of real vLLM serving, for sizing the network attester.
 
 One job (`run.sh`, queued on one leased GPU) starts vLLM's OpenAI-compatible server on that GPU from
 the node's local weights, replays recorded request mixes open-loop with a streaming client on the same host, and records
-on the monotonic clock when each request was sent and when each streamed chunk arrived. The client stands where a certifier
+on the monotonic clock when each request was sent and when each streamed chunk arrived. The client stands where a network attester
 in front of the server would: every streamed token is one egress frame, ready when its chunk arrives, and a request is
 ⌈bytes/B⌉ ingress frames that arrive when it is sent.
 
@@ -31,8 +31,9 @@ goes to stderr and the job exits, rather than holding its GPU to the lease's end
   GPU and of the job's CPUs, the GPU's utilisation, clocks and compute processes, and the longest stall of a 10 ms
   heartbeat thread and of the client's event loop (the monitor's own, in the offline modes);
 - `meta.json`: host, GPU, CPUs, versions, model, server arguments, the mix and t0;
-- `server.log`, and at the end `trace.json` (the calibration format, `verity.protocols.accounting.certifier.verifier.calibration`) and
-  `summary.json`.
+- `server.log`, and at the end `trace.json` (`trace_doc`) and `summary.json`;
+- through the harness kit's writer (`record_metric`), `METRIC`: under a research run in the run's `result.json`, else in
+  `--out`'s.
 
 **Exit status.** 0 when the chunk ran to its deadline. A SIGTERM (an eviction: the lease reclaimed the GPU) stops it;
 the job still converts what it recorded, sets `ended.evicted` in `meta.json`, and exits 143, so that a queue requeues
@@ -50,7 +51,7 @@ the chunk rather than counting it done.
   a sample came over `--freeze-ms` late or none came after it, or when one of its requests failed;
 - the chunk is cut at dropped windows into contiguous segments, one configuration each.
 
-**`merge`** joins chunks' traces into one for the calibration tool.
+**`merge`** joins chunks' traces into one.
 
     python record.py run --out DIR --model unsloth/Llama-3.2-1B --mix b16=3,b4=1,b64=10 --minutes 55
     python record.py convert DIR [DIR ...]
@@ -95,6 +96,9 @@ FREEZE_MS, MAX_OTHERS_BUSY, MAX_AFFINITY_BUSY, MAX_COTENANT_BUSY, TAIL_MS = 1000
 FREEZE_REST_MS = 5000.0  # a longer stall drops the rest of its chunk (`convert` in the module docstring)
 CPU_RULES, FREEZE_SCOPES = ("cotenants", "total"), ("window", "chunk")
 STALL_S = 120  # an offline engine step or finalize this long is hung: every thread's stack goes to stderr and the job exits
+#: the one number a run records: the p99.9 of the time between consecutive streamed chunks of one response, over every
+#: request sent in the recording's windows that completed, dropped windows included (`summary.json`'s ``inter_chunk_ms``)
+METRIC = "network-accounting/streamed-gap-p99.9"
 
 clock = time.monotonic
 
@@ -104,7 +108,7 @@ def ms(seconds: float) -> float:
 
 
 def percentiles(xs: Sequence[float], ps: Iterable[float] = (50, 99, 99.9)) -> dict:
-    """Nearest-rank percentiles and the maximum, as the calibration tool takes them."""
+    """Nearest-rank percentiles and the maximum."""
     s = sorted(xs)
     if not s:
         return {}
@@ -657,7 +661,7 @@ def run(args: argparse.Namespace) -> int:
     ended["evicted"] = ended["stopped_ms"] is not None
     meta["ended"] = ended
     (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
-    convert(out)
+    record_metric(out, convert(out), meta)
     return 143 if ended["evicted"] else 0
 
 
@@ -821,6 +825,19 @@ def convert(out: Path, **rules) -> dict:
     (out / "trace.json").write_text(json.dumps(trace_doc(configs), separators=(",", ":")))
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     return summary
+
+
+def record_metric(out: Path, summary: dict, meta: dict) -> dict:
+    """`METRIC` of `summary`, in ms, written with the model, the mode and the traced card as the measurement's fields
+    and printed as one line; with no value where no completed request streamed two chunks."""
+    from verity_bench import kit
+
+    gap = (summary.get("inter_chunk_ms") or {}).get("p99.9")
+    why = None if gap is not None else summary.get("error") or "no completed request streamed two chunks"
+    m = kit.writer(out).measurement(METRIC, gap, "ms", why=why, mark="measured",
+                                    extra={"model": meta["model"], "mode": meta["mode"], "card": meta["gpu"]["name"]})
+    print(f"{METRIC}: {gap} ms" if gap is not None else f"{METRIC}: no number: {why}", flush=True)
+    return m
 
 
 def merge(paths: Sequence[Path]) -> dict:

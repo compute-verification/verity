@@ -73,13 +73,15 @@ open FlockSoundness FlockSoundness.Model
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-- **The round of level 0's query coins** in a masked rep's stream: after the masked replay's `m + kLog − 6` rounds,
 the ring switch's `claims + 1` and Ligerito's `k0 + 8` (at `m ≥ 14`, where the replay's outer coins are a round). -/
 def zkQueryRound (m kLog k0 claims : ℕ) : ℕ := (m + (kLog - 6)) + (claims + 1) + (k0 + 8)
 
 /-- The masked verifier's proof shape for a table at `m` (`Zk.verifyRep`'s `shape`). -/
-def zkProofShape (m kLog claims hashLen : ℕ) (saltLen : Option ℕ) : Flock.Shape :=
-  { m, kLog, claims, sched := (zkSched m).1, hashLen, saltLen }
+def zkProofShape (wideLeaf : Bool) (m kLog claims hashLen : ℕ) (saltLen : Option ℕ) : Flock.Shape :=
+  { m, kLog, claims, sched := (zkSched wideLeaf m).1, hashLen, saltLen }
 
 /-- **One rep's opened level-0 columns** from its query coins and opened rows: position `j` of
 `Flock.positions lv₀ coins` with row `j`, for `j < q₀`, each symbol read in GF(2^128). -/
@@ -99,7 +101,8 @@ def zkRepColsOf (sh : Flock.Shape) (rounds : Array Flock.Round) (bytes : ByteArr
   | .error _ => []
 
 /-- What the reader takes from a masked run, for one table: the shape's numbers and each rep's recorded rounds and
-proof bytes. -/
+proof bytes, and the statement's version (`wideLeaf`, which the masked shape's schedule reads; a plain run's is
+`false`). -/
 structure ZkRun where
   m : ℕ
   kLog : ℕ
@@ -107,9 +110,10 @@ structure ZkRun where
   hashLen : ℕ
   saltLen : Option ℕ
   reps : List (Array Flock.Round × ByteArray)
+  wideLeaf : Bool := false
 
 /-- The run's proof shape. -/
-def ZkRun.shape (r : ZkRun) : Flock.Shape := zkProofShape r.m r.kLog r.claims r.hashLen r.saltLen
+def ZkRun.shape (r : ZkRun) : Flock.Shape := zkProofShape r.wideLeaf r.m r.kLog r.claims r.hashLen r.saltLen
 
 /-- The columns at positions below `2^d`, one per position. -/
 def distinctBelow (d : ℕ) (os : List (ℕ × List 𝔽)) : List (ℕ × List 𝔽) :=
@@ -117,7 +121,7 @@ def distinctBelow (d : ℕ) (os : List (ℕ × List 𝔽)) : List (ℕ × List �
 
 /-- **A masked run's opened level-0 columns** for one table: its reps' columns, one per position, below `2^d`. -/
 def zkRunCols (r : ZkRun) : List (ℕ × List 𝔽) :=
-  distinctBelow (zkLevel0 r.m).d (r.reps.flatMap fun x => zkRepColsOf r.shape x.1 x.2)
+  distinctBelow (zkLevel0 r.wideLeaf r.m).d (r.reps.flatMap fun x => zkRepColsOf r.shape x.1 x.2)
 
 theorem distinctBelow_nodup (d : ℕ) (os : List (ℕ × List 𝔽)) : ((distinctBelow d os).map Prod.fst).Nodup :=
   List.pairwise_map.2 (List.pairwise_pwFilter _)
@@ -147,22 +151,23 @@ theorem length_zkRepColsOf_le (sh : Flock.Shape) (rounds : Array Flock.Round) (b
 theorem zkRunCols_nodup (r : ZkRun) : ((zkRunCols r).map Prod.fst).Nodup := distinctBelow_nodup _ _
 
 /-- **A masked run's columns sit below `2^d`**, so below `2^64` (`zkShape_fits`). -/
-theorem zkRunCols_lt (r : ZkRun) : ∀ p ∈ zkRunCols r, p.1 < 2 ^ (zkLevel0 r.m).d := fun _ h => distinctBelow_lt h
+theorem zkRunCols_lt (r : ZkRun) : ∀ p ∈ zkRunCols r, p.1 < 2 ^ (zkLevel0 r.wideLeaf r.m).d := fun _ h => distinctBelow_lt h
 
 /-- **A masked run opens at most `q₀` level-0 columns per rep.** -/
-theorem zkRunCols_length_le (r : ZkRun) : (zkRunCols r).length ≤ r.reps.length * (zkLevel0 r.m).q := by
+theorem zkRunCols_length_le (r : ZkRun) : (zkRunCols r).length ≤ r.reps.length * (zkLevel0 r.wideLeaf r.m).q := by
   refine (length_distinctBelow_le _ _).trans ?_
   rw [List.length_flatMap]
-  refine (List.sum_le_length_nsmul _ (zkLevel0 r.m).q fun n hn => ?_).trans (by simp)
+  refine (List.sum_le_length_nsmul _ (zkLevel0 r.wideLeaf r.m).q fun n hn => ?_).trans (by simp)
   obtain ⟨x, -, rfl⟩ := List.mem_map.1 hn
   exact length_zkRepColsOf_le r.shape x.1 x.2
 
-/-- **One masked run's two reps open fewer level-0 columns than the Johnson count** of a trace at the run's `m`, at
-`0 < agree ≤ 1`. -/
+/-- **One masked run's two reps open fewer level-0 columns than the Johnson count** of a trace at the run's table
+(`ZkIdx.At`: its `m` and statement version), at `0 < agree ≤ 1`. -/
 theorem zkRunCols_length_lt_zkNMinD {agree : ℝ} (ha0 : 0 < agree) (ha1 : agree ≤ 1) (r : ZkRun)
-    (h2 : r.reps.length ≤ 2) (M : ZkTrace) (hm : M.1.m = r.m) : (zkRunCols r).length < zkNMinD agree M := by
+    (h2 : r.reps.length ≤ 2) (M : ZkTrace) (hm : M.1.At r.wideLeaf r.m) :
+    (zkRunCols r).length < zkNMinD agree M := by
   refine lt_of_le_of_lt ((zkRunCols_length_le r).trans (Nat.mul_le_mul_right _ h2)) ?_
-  rw [← hm]
+  rw [← hm.level0]
   exact zkQueries_lt_zkNMinD ha0 ha1 M
 
 end Claims.Flock

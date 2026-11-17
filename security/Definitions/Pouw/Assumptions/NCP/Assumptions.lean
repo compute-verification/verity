@@ -16,7 +16,7 @@ open Finset
 
 variable {Q R S : Type}
 
-/-- **Assumption TT_NCP(g₀), tight stacked transcript**, for a cost model `CM`, a protocol `P` (the
+/-- **Assumption TT_NCP(g₀), tight stacked trace**, for a cost model `CM`, a protocol `P` (the
 named assumption is its instance at `CM = M_4090` and `P` an NCP instance with `IsLead`), a segment length `d` (the
 instance's `P.d`), a domain `D`, a target `g₀` and an error `δ(q, N)`: TT (`Pouw.Assumptions.TT`) with every
 checked-correct unit credited `3·m·k·n`, the work of the stacked product, and like TT an event of no break
@@ -31,7 +31,7 @@ def TTNCP [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q 
   CM.Queries ∧
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - g₀) < ∑ u ∈ checkedSet P U x.1 x.2 (A.transcript U x.1 x.2), 3 * ((U.layout.shape u).Wmm : ℝ) ∧
+      T / (1 - g₀) < ∑ u ∈ checkedSet P U x.1 x.2 (A.trace U x.1 x.2), 3 * ((U.layout.shape u).Wmm : ℝ) ∧
         ¬ A.Breaks U x.1 x.2)
       ≤ δ q U.layout.N
 

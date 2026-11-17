@@ -318,7 +318,7 @@ theorem lamLin2_deployed_ge_dep_tight (rel : _root_.Flock.Readable.Parsed → _r
   · obtain ⟨i, spec', sts', hp⟩ := hO j j.isLt
     obtain ⟨-, hhi⟩ := N₀O_le hp
     have hsz' : (sts'.size : ℝ) ≤ 200 := by exact_mod_cast hp.size_le
-    exact k_le_200 (N := N₀O (staged b.st x (pick b.st x j) j)) (hhi.trans (by gcongr))
+    exact (numsOf_k _).le.trans (k_le_200 (N := N₀O (staged b.st x (pick b.st x j) j)) (hhi.trans (by gcongr)))
 
 /-- **Route 2C's `λ₂ ≥ 135.7` at the deployed brings**: `lamLin2_deployedB_ge`'s statement, at the same hypotheses and
 the call bound `v = 2^55`, with `135.7` for `100`. -/

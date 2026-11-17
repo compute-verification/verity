@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from verity.commitments.windows.rows import ORDER, Member
+from verity.commitments.periods.rows import ORDER, Member
 
 from verity_vllm.records.schema_ids import SERVING_ROWS_INDEX_SCHEMA
 

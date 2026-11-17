@@ -8,7 +8,7 @@ dicts built by `research run` (the other half of this package); `validate_attemp
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from . import canon, ids, kinds
@@ -23,7 +23,7 @@ ATTEMPT_NULLABLE = ("reuse_key", "closure", "cost", "telemetry")
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _path_errors(path: Any, where: str) -> list[str]:

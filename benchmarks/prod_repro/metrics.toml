@@ -1,33 +1,37 @@
 # This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
-# enforces it.
+# enforces it. The goal's number is the first row naming it (infra/dashboard/run.py), so the cost, whose target is
+# the goal's, comes first.
+
+[[metric]]
+id = "vllm/prod-serving-cost-glm53"
+title = "Serving time, published settings"
+owner = "vllm"
+unit = "percent"
+axis = "Extra serving time at one load of four agent users, as a percent of stock's: unchanged vLLM, sent no seeds; each point's member names its model, card and arm over its reference (GLM-5.3 at vLLM's published settings on one node, unsaturated; Llama 3.2 1B on one H200)."
+better = "lower"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 8 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
+every = "7d"
+floor = 1
+goal = "vllm/production-vllm-reproducible"
 
 [[metric]]
 id = "vllm/prod-replay-match-glm53"
-title = "GLM-5.3 served at vLLM's production settings: the share of a served window's tokens its replay gives back before a request's first difference"
+title = "Replay match rate"
 owner = "vllm"
-unit = "percent of served tokens"
+unit = "percent of tokens"
+axis = "Percent of the tokens a model serves that a replay reproduces before a request's first difference; each point's member names its model, card and arm (GLM-5.3 at vLLM's published settings, Llama 3.2 1B on one H200)."
 better = "higher"
-command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 8 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
 every = "7d"
 goal = "vllm/production-vllm-reproducible"
 
 [[metric]]
 id = "vllm/prod-advice-bits-glm53"
-title = "GLM-5.3 served at vLLM's production settings: the advice its replayed pass's schedule costs"
+title = "Replay advice per request"
 owner = "vllm"
 unit = "bits a request"
+axis = "Bits a replay must be told, for each request a model serves, to follow the original schedule; each point's member names its model, card and arm (GLM-5.3 at vLLM's published settings, Llama 3.2 1B on one H200)."
 better = "lower"
-command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 8 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
 every = "7d"
-goal = "vllm/production-vllm-reproducible"
-
-[[metric]]
-id = "vllm/prod-serving-cost-glm53"
-title = "GLM-5.3 served at the settings vLLM publishes for serving it: its serving cost over stock vLLM"
-owner = "vllm"
-unit = "percent of stock's serving time"
-better = "lower"
-command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
-every = "7d"
-floor = 1
 goal = "vllm/production-vllm-reproducible"

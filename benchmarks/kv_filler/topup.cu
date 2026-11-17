@@ -39,8 +39,8 @@
     }                                                                                                          \
   } while (0)
 
-// SHA-512 (`../codec_tensor/sha512.cuh`): fill-sk16/v0's signs on the host, fill-sk16/v2's receipts on the device.
-#include "../codec_tensor/sha512.cuh"
+// SHA-512 (`../../verity/protocols/accounting/poub/prover/codec_tensor/sha512.cuh`): fill-sk16/v0's signs on the host, fill-sk16/v2's receipts on the device.
+#include "../../verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sha512.cuh"
 
 namespace sha {
 static void sha512_host(const uint8_t* msg, size_t len, uint64_t out[8]) {
@@ -860,7 +860,7 @@ __global__ void smid_of(unsigned* out, unsigned long long hold_ns) {
 extern "C" {
 
 // got: the filler's SMs, the step's, the minimum partition, the co-scheduled alignment. Returns 0, or 1000 · the failing
-// stage + its CUresult (stage 1: a missing driver symbol).
+// stage + its CUresult (1000: a missing driver symbol).
 int sq_green(int fill_sms, void** s_step, int prio_step, int* got) {
   auto dget = gc::drv<decltype(&cuDeviceGet)>("cuDeviceGet");
   auto res = gc::drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");

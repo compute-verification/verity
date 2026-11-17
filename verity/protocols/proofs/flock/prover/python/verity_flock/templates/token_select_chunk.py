@@ -3,7 +3,7 @@
 graph is no row of identical units), lowered piece by piece from the word Definition. At C = 64 its input row is 64 bf16 logits,
 one SHA-512 block (1,024 bits).
 
-The unit is the whole instance, so its netlist depends on C and is pinned per C by :data:`PINS`."""
+The unit is the whole instance, so its circuit description depends on C and is pinned per C by :data:`PINS`."""
 TEMPLATE = "token-select-chunk"
 UNIT = "token-select-chunk/v2/chunk"
 PINS = {64: "802a2f1ac3709b52ce0930508777e4400eb2d53ec62b1084efd525ffb4cb196c"}
@@ -29,7 +29,7 @@ def frame_lowering(subcircuit):
 def supports(subcircuit, scheme):
     if scheme in FRAME_SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3); binding its rows under "
+    return (f"Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3); binding its rows under "
             f"{scheme} is not wired yet")
 
 

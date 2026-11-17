@@ -40,8 +40,11 @@ KAPPA_TABLE = -202.98
 GAMMA_ONE = 51.0
 TABLES_MAX = 64
 
-# The recursion's outer proof (its κ + t·ε lemma in `security/Proofs/Flock/Claims/Recursion/`): Pr[acc ∧ ¬R] ≤ κ + t·ε.
-REC_KAPPA, REC_EPS = -167.7, -174.95
+# The recursion's outer proof, `Verity.Recursive.Dep.ksAt` (`security/Proofs/Properties/Verity/Recursive.lean`):
+# min(κ + t·ε, t·2^-λ₂) at the deployment's tables, t·2^-λ₂ off them; λ₂ ≥ 135.7 at an accepted statement (`calls_lam`).
+REC_KAPPA, REC_EPS, REC_LAM = -167.7, -174.95, 135.7
+# `RecursiveAuditC3`'s δ_s: the sample's miss, a hypothesis, at the epoch's δ.
+REC_DELTA_S = Fraction(1, 100)
 
 # Pearl+ as served.
 PASSES = (128, 4, 4, 4)
@@ -57,9 +60,9 @@ G0 = Fraction(1, 400)
 # The deployed PoUW window (`verity/protocols/proofs/spot/verifier/profile.py` WINDOW_DELTA) and the served run's sampling δ.
 WINDOW_DELTA = Fraction(1, 2**40)
 SERVED_DELTA = Fraction(1, 100)
-# A K_d that `security/Definitions/Accounting/Guarantees/Compose.lean`'s docstring takes as its example; not served.
+# A K_d that `security/Definitions/Compose/Guarantees/Compose.lean`'s docstring takes as its example; not served.
 COMPOSE_KD = 96000
-# The Sm120 headlines' window (`security/Definitions/Accounting/Guarantees/Headline.lean`): checks·(√δ_fork + n_π·δ_ZK) ≤ 2^-41.
+# The Sm120 headlines' window (`security/Definitions/Pouw/Guarantees/Headline.lean`): checks·(√δ_fork + n_π·δ_ZK) ≤ 2^-41.
 SM120_CHECKS, SM120_BUDGET = 48000, -41.0
 
 # Dither's design point (`verity/protocols/experimental/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).
@@ -84,6 +87,17 @@ def session_ks(t: float = T, tables: int = 1) -> float:
         gamma = lg(16 * (math.sqrt(2 * r * c) + r) ** 2)
     fork = 0.5 * (gamma + 2 * (t + 1) - 513)
     return l2sum(KAPPA_TABLE + lg(tables), fork)
+
+
+def up(x: float) -> str:
+    """A log2 bound to two decimals, rounded up (a float within 1e-9 of the grid counts as on it)."""
+    return f"{math.ceil(x * 100 - 1e-9) / 100:.2f}"
+
+
+def rec_ks(t: float = T) -> tuple[float, float]:
+    """The recursion's `ksAt` at `2^t` calls: at the deployment's tables (`OneTable`), and off them."""
+    off = t - REC_LAM
+    return min(l2sum(REC_KAPPA, t + REC_EPS), off), off
 
 
 def pearl_gap(n: int, k: int) -> Fraction:
@@ -167,7 +181,7 @@ def rows() -> list[dict[str, Any]]:
             "PouwSound's bridge, not stated; κ = 0 assumed", "assumed")
 
     nmax = SM120_BUDGET - lg(SM120_CHECKS) - s64
-    row("sm120 n_π·δ_ZK", "Accounting.Guarantees.TS.Sm120SheetHeadline and siblings (ProofSoundAt)",
+    row("sm120 n_π·δ_ZK", "ResourceAccounting.Guarantees.TS.Sm120SheetHeadline and siblings (ProofSoundAt)",
         "n_π · one session's KS, against 2^-41/checks", f"n_π = 1, {TABLES_MAX} tables; budget 2^{SM120_BUDGET - lg(SM120_CHECKS):.2f}",
         s64, f"holds for n_π up to 2^{nmax:.1f}; Flock's bound omits the rows link ProofSoundAt reads")
 
@@ -185,6 +199,15 @@ def rows() -> list[dict[str, Any]]:
         e = (1 + float(eps_a)) / (1 - sampling_eps(d)) - 1
         row("pearl+ ε", f"{served}, with the sample", "(1 + ε_a)/(1 − ε_s) − 1, ε_s = 1 − δ^(1/t)", f"t = {SAMPLE}, δ_s = {d}",
             f"{e:.3%}", "TTOutTilePearlCH100Rev1 (ε_a)", "assumed")
+
+    for t in (T, 64):
+        on, off = rec_ks(t)
+        row("recursive audit δ", "Flock.Guarantees.RecursiveAuditC3 (Verity.Recursive.Dep.delta), one proof",
+            "δ_s + E[ksAt] + √(min(W, 2n)·E[bindBudget]/2^256)", f"t = 2^{t}, δ_s = {REC_DELTA_S}",
+            f"δ_s {up(lg(REC_DELTA_S))} (by design) + ksAt {up(on)} ({up(off)} off the deployment's tables)"
+            " + binding: no value",
+            "FinderCR, else ⊤; the binding term waits on a lemma evaluating the extractor's `runs` at the deployed shape;"
+            f" over a period: none, δ_s alone sums to 1 at {math.ceil(1 / REC_DELTA_S)} proofs")
 
     for t in (T, 64):
         one = l2sum(REC_KAPPA, t + REC_EPS)

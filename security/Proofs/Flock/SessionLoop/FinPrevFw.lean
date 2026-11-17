@@ -111,7 +111,7 @@ theorem repCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.
   obtain ⟨files, hp⟩ := proofsOf_ok_of_ctx L₀ src (realOf src) wk x w hF hsx
   have hrs : spec.repStreams.size = 2 * spec.tables.size := FlockDeploy.repStreams_size spec
   obtain ⟨tb, hi, q, hRep⟩ := proofsOf_at hp (k := k) (by rw [hrs]; exact hk)
-  obtain ⟨ic', p, tr, hic', hfw, -⟩ := _root_.Flock.Firewall.Finish.proofFile_ok hRep.2.2
+  obtain ⟨ic', p, tr, hic', hfw, -⟩ := _root_.Flock.ZkServer.Finish.proofFile_ok hRep.2.2
   have hsz := finRepCut_size L₀ src (realOf src) wk x w hsc ν t κ m₀ ρ₀ ops hF s0 spec hsx k hk tb hi q _ hRep ic' p
     tr hic' hfw l hl
   have hgo := go_of_fst (finRepCut L₀ src (realOf src) wk x w hsc ν t κ m₀ ρ₀ ops hF s0 spec hsx k hk tb hi q _ hRep
@@ -132,10 +132,10 @@ theorem repCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.
     rfl
   -- as many extra claims as the ZK server's
   have hxs := finRepXs L₀ src (realOf src) wk x w hsc hR ν t κ m₀ ρ₀ ops hF s0 spec hsx k hk extras hex tb hi q _ hRep
-  have hcx := congrArg Array.size (_root_.Flock.Firewall.Finish.claimsOf_map_x q.xs)
+  have hcx := congrArg Array.size (_root_.Flock.ZkServer.Finish.claimsOf_map_x q.xs)
   have hex' := congrArg Array.size hxs
   rw [Array.size_map] at hcx hex'
-  have hes : extras.size = (_root_.Flock.Firewall.Finish.claimsOf q.xs).size := by omega
+  have hes : extras.size = (_root_.Flock.ZkServer.Finish.claimsOf q.xs).size := by omega
   have hl' : l.size = Masked.repBase x (2 * (k / 2) + k % 2) := by
     rw [hl]
     congr 1

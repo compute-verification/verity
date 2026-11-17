@@ -1,9 +1,3 @@
-/-
-The circuit statement (its file: `Flock.Circuit`), set up from its `Tags`, its row leaf (`RowLeaf`), the pinned
-circuit file and the public file: Δ, the regions and their claims, the lincheck fold, the statement digest, Σ and `Hello`.
-Nothing here evaluates the computation: the region values are the layout's constants, the public digests and outputs, and
-hashes of pinned padding constants.
--/
 module
 
 public import Flock.RowLeaf
@@ -11,6 +5,13 @@ public import Flock.Piop
 public import Flock.Merkle
 public import Flock.Record
 public import Flock.TmplSplit
+
+/-!
+The circuit statement (its file: `Flock.Circuit`), set up from its `Tags`, its row leaf (`RowLeaf`), the pinned
+circuit file and the public file: Δ, the regions and their claims, the lincheck fold, the statement digest, Σ and `Hello`.
+Nothing here evaluates the computation: the region values are the layout's constants, the public digests and outputs, and
+hashes of pinned padding constants.
+-/
 
 @[expose] public section
 
@@ -171,7 +172,7 @@ theorem checkRegionBytes_ok (nbl : Nat) (regions : Array Region) :
     simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq, false_iff]
     exact fun h' => h (hall.2 h')
 
-/-- The coin source named in `Hello` (`Flock.Draw`). -/
+/-- The coins' origin named in `Hello` (`Flock.Draw`). -/
 inductive Coins where
   /-- upstream's committed seed: a plain session without a challenger, which `verify` refuses once every check has passed
   (`ProvedScope.servedForm`) -/
@@ -214,10 +215,15 @@ structure Stmt where
 in UTF-8 (`canonUtf8`). Canonical JSON (`canon`) would escape what upstream writes raw, and the `--zk` hooks carry `§`. -/
 def identityBytes (identity : Json) : V ByteArray := return (← canonUtf8 identity).toUTF8
 
+/-- Whether the statement is a wide-leaf one (`Tags.wideLeaf`): which `--zk` schedule its tables' proofs follow. -/
+def Stmt.wideLeaf (st : Stmt) : Bool := st.tags.wideLeaf
+
 /-- `Hello`, the session parameters S2 compares. A keyed coin tree's `coins` has an empty nonce here: R7 puts the prover's
-in (`CoinTree.checkHello`). -/
+in (`CoinTree.checkHello`). Its `profile` names the schedule: `fast100`, or a wide-leaf statement's
+(`Tags.WIDE_LEAF_PROFILE`). -/
 def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) (tables : Array String := #[tags.table]) : V String :=
-  let base := [("profile", Json.str "fast100"), ("reps", Lean.toJson (2 : Nat)), ("flavor", Json.str "rs"),
+  let profile := if tags.wideLeaf then Tags.WIDE_LEAF_PROFILE else "fast100"
+  let base := [("profile", Json.str profile), ("reps", Lean.toJson (2 : Nat)), ("flavor", Json.str "rs"),
     ("tables", Json.arr (tables.map Json.str)),
     ("link", Json.mkObj [("sigma", Json.str (hexOf sigma)), ("m", Lean.toJson mPts), ("points", Lean.toJson (2 : Nat))])]
   let base := match coins with
@@ -258,7 +264,7 @@ namespace Stmt
 /-- A one-table session of the statement. -/
 def spec (st : Stmt) : SessionSpec :=
   { tables := #[st.tags.table], domain := fun _ r => st.tags.domain r, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
-    retainRounds := st.tags.retainRounds, unitDraw := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n,
+    retainRounds := st.tags.retainRounds, unitSample := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n,
     sha512Digests := st.tags.hm96Rows, coinTree := st.coinTree }
 
 /-- `e[s + 64·u] = lw[s] · eq(ρ, u)` for `u < 2^|ρ|`. -/

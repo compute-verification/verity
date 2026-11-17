@@ -30,6 +30,7 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -80,7 +81,8 @@ def ramlock(dirpath: Path) -> dict[str, Any]:
     for f in sorted(Path(dirpath).glob("*.json")):
         try:
             r = json.loads(f.read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"resource_probe: reservation {f.name} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if "pid" in r and not _alive(r["pid"]):
             stale += 1
@@ -122,7 +124,8 @@ def replay_queue_fill(fill_dir: Path, floor_gb: float) -> dict[str, Any]:
                 continue
             try:
                 head = f.read_text(errors="replace")[:2000]
-            except OSError:
+            except OSError as e:
+                print(f"resource_probe: fill job {f.name} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 continue
             m = re.search(r"^# fill:.*\bmem_gb=([\d.]+)", head, re.M)
             req = float(m.group(1)) if m and pat == "replay" else 0.0
@@ -148,7 +151,8 @@ def idle_gpus_sampler(lines: list[str], now: float, window_s: float, gib: float)
         try:
             r = json.loads(ln)
             t = calendar.timegm(time.strptime(r["t"], "%Y-%m-%dT%H:%M:%SZ"))
-        except (ValueError, KeyError):
+        except (ValueError, KeyError) as e:
+            print(f"resource_probe: a sampler line skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if t < now - window_s:
             continue
@@ -175,19 +179,24 @@ def idle_from_series(util: dict, fb: dict, n: dict, gib: float, cover: float = 0
 
 def pool_flagged(path: Path, now: float, max_age_s: float = 900.0) -> set[int]:
     """GPUs that pool_n1's fresh `gpu-idle-in-lease` monitor already flags (job norms own those; the steward doesn't re-alert)."""
+    if not Path(path).exists():
+        return set()
     try:
         doc = json.loads(Path(path).read_text())
         if now - calendar.timegm(time.strptime(doc["generated_at"], "%Y-%m-%dT%H:%M:%SZ")) > max_age_s:
             return set()
         return {int(m["gpu"]) for n in doc["nodes"].values() for m in n.get("monitors") or [] if m.get("kind") == "gpu-idle-in-lease"}
-    except (OSError, ValueError, KeyError, TypeError):
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        print(f"resource_probe: {path} unread, so no GPU counts as flagged by pool_n1 ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return set()
 
 
 def idle_gpus_prometheus(window_s: float, gib: float) -> list[dict[str, Any]]:
     def by_series(q: str) -> dict[tuple[int, str], float]:
+        if (scheme := urllib.parse.urlsplit(PROMETHEUS).scheme) not in ("http", "https"):
+            raise ValueError(f"VY_PROMETHEUS is not an http or https URL (scheme {scheme!r})")
         url = f"{PROMETHEUS}/api/v1/query?" + urllib.parse.urlencode({"query": q})
-        with urllib.request.urlopen(url, timeout=10) as r:
+        with urllib.request.urlopen(url, timeout=10) as r:  # noqa: S310 (http or https, checked above)
             return {(int(x["metric"]["gpu"]), x["metric"].get("pod", "")): float(x["value"][1]) for x in json.load(r)["data"]["result"]}
     w = f"{int(window_s)}s"
     return idle_from_series(by_series(f"max by (gpu, pod) (max_over_time(DCGM_FI_DEV_GPU_UTIL{{{DCGM}}}[{w}]))"),
@@ -200,11 +209,14 @@ def unpreserved(runs_dir: Path, now: float, age_s: float) -> dict[str, Any]:
     for d in Path(runs_dir).glob("r2*"):
         if any((d / m).exists() for m in (".custody", ".fetched", "preserved.json")):
             continue
+        if not (d / "status.json").exists():
+            continue
         try:
             st = d / "status.json"
             state = json.loads(st.read_text())["transitions"][-1]["state"]
             mtime = st.stat().st_mtime
-        except (OSError, ValueError, KeyError, IndexError):
+        except (OSError, ValueError, KeyError, IndexError) as e:
+            print(f"resource_probe: run {d.name} skipped, its status unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if state in ("running", "queued", "starting"):
             continue
@@ -221,8 +233,9 @@ def scratch(cache: Path, now: float) -> list[dict[str, Any]]:
     for d in sorted(Path(cache).glob("lean-audit-scratch-*")):
         try:
             out.append({"path": str(d), "age_h": round((now - d.stat().st_mtime) / 3600, 1)})
-        except OSError:
-            continue
+        except OSError as e:
+            if d.exists():
+                print(f"resource_probe: {d} unread, so not listed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return out
 
 
@@ -242,9 +255,12 @@ def inode_dirs(state: Path, ws: str, now: float, every_s: float, *, walk: bool) 
     cur, prev, tmp = (state / f"inode-dirs{s}" for s in (".txt", ".prev.txt", ".tmp"))
 
     def age(f: Path) -> float | None:
+        if not f.exists():
+            return None
         try:
             return now - f.stat().st_mtime
-        except OSError:
+        except OSError as e:
+            print(f"resource_probe: {f} has no age ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             return None
 
     last, running = age(cur), age(tmp)
@@ -381,7 +397,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     try:
         prev = json.loads(ns.state.read_text()) if ns.state.exists() else None
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"resource_probe: {ns.state} unread, so nothing is compared with the last probe ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         prev = None
     try:
         lim = {**COMMON, **LIMITS[ns.node]}

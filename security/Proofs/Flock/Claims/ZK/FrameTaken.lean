@@ -59,7 +59,7 @@ open Claims
 
 namespace LeanRelease
 
-open _root_.Flock.Firewall.Frame (Masker)
+open _root_.Flock.ZkServer.Frame (Masker)
 
 theorem cfg_eq_cfgAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
     L.cfg x ρ h = L.cfgAt x ρ h.length := rfl

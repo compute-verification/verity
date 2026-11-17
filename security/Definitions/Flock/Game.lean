@@ -29,7 +29,7 @@ end FlockSoundness
 
 namespace FlockSoundness.Game
 
-export Verity.Game (avg batch bind casesOn coin draw drawStrat expect expect₂ ind instMonad interleave interleaveWith
+export Verity.Game (avg batch bind casesOn coin draw sampleStrat expect expect₂ ind instMonad interleave interleaveWith
   Lock map prCoin prob rec recOn recv ret runsG runsStrat send Strategy value)
 
 end FlockSoundness.Game

@@ -42,7 +42,7 @@ open Claims Claims.ZKMal
 open FlockSoundness.Discharge
 open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 open _root_.Flock (V F128)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, as in `Statement`
@@ -63,7 +63,7 @@ def FreedAt (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (ν : CoinLayer.Nonc
     (s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z) (cs : List FlockDeploy.Coin)
     (j : Fin (jOf x)) (r : Fin 2) (i : ℕ) (a : F128) : Prop :=
   ∃ (t : (CoinLayer.session loopNr Masked.dataE).Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg))
-    (v : Msg) (m : _root_.Flock.Firewall.Frame.Masker) (out : ByteArray) (s' : _root_.Flock.Firewall.Frame.Masker)
+    (v : Msg) (m : _root_.Flock.ZkServer.Frame.Masker) (out : ByteArray) (s' : _root_.Flock.ZkServer.Frame.Masker)
     (fr : Array ℕ) (k : ℕ),
     (CoinLayer.session loopNr Masked.dataE).seenOf x t = s ∧
     ops.map (fun p => (CoinLayer.session loopNr Masked.dataE).decOf p.2) = cs ∧
@@ -72,11 +72,11 @@ def FreedAt (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (ν : CoinLayer.Nonc
       CoinOpen.shaH).1 = true ∧
     wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) ∧
     L.answered x (ν, t) ((m₀, ρ₀) :: ops) = .ok m ∧
-    _root_.Flock.Firewall.Frame.roundFree (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)) { m with stopped := false }
+    _root_.Flock.ZkServer.Frame.roundFree (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)) { m with stopped := false }
       ⟨v.toArray⟩ (L.coins x (ops.length + 1)) = .ok (out, s', fr) ∧
     L.rep x (ops.length + 1) = 2 * j.val + r.val ∧ k < fr.size ∧
     (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)).order[m.pos + k]! = i ∧
-    (_root_.Flock.Firewall.Frame.words ⟨v.toArray⟩ fr[k]! 1)[0]! = a
+    (_root_.Flock.ZkServer.Frame.words ⟨v.toArray⟩ fr[k]! 1)[0]! = a
 
 open Classical in
 /-- **The word `bx` frees at pad `i` of rep stream `2j + r`**, at the coins `c` and what the workers see `s`: where for

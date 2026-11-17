@@ -20,8 +20,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # The planned rate of the hidden-output `--zk` plan of `J` tables, at every sample
 
 `ZkBind/Rate.lean` at `planZHJ dj y₀ S R = List.ofFn (tableZHJ dj y₀ S)`, the plan `PublicAudit`'s rate premise `_hr`
-reads. Each of its tables, at every sample `S` (table `j`'s `DrawSetupZHJ`'s table, or `y₀`'s refused one), carries a
-schedule `Zk.schedule` returned (`DrawSetupZHJ.hz`), so a cap `L` (`ZkBind.ZkLogLenCap L`) bounds every table's rate:
+reads. Each of its tables, at every sample `S` (table `j`'s `SampleSetupZHJ`'s table, or `y₀`'s refused one), carries a
+schedule `Zk.schedule` returned (`SampleSetupZHJ.hz`), so a cap `L` (`ZkBind.ZkLogLenCap L`) bounds every table's rate:
 
 * `logLen_tableZHJ_le`, `rateZ_planZHJ_le`: table `j`'s `logLen₀ ≤ L`, and the plan's rate `≤ 2^L/(e·k)` at every table.
 * `hr_planZHJ`: `2^L ≤ ρ·(e·k)` gives `rateZ (planZHJ dj y₀ S R) i k ≤ ρ` at every `dj`, `y₀`, `S`, `R`, `i`.
@@ -36,16 +36,16 @@ open ZkLink ZkBind Composed
 open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n mPts : ℕ} {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-  (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {Reg : Type}
+  (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) {Reg : Type}
 
-/-- **Table `j`'s `logLen₀` is under the cap at every sample**: its `DrawSetupZHJ`'s schedule, or `y₀`'s, is one
+/-- **Table `j`'s `logLen₀` is under the cap at every sample**: its `SampleSetupZHJ`'s schedule, or `y₀`'s, is one
 `Zk.schedule` returned. -/
 theorem logLen_tableZHJ_le {L : ℕ} (hL : ZkLogLenCap L) (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (lvOf (tableZHJ dj y₀ S j).sch 0).logLen ≤ L := by
   unfold tableZHJ
   split_ifs with h
-  · exact hL _ _ _ (Classical.choice h).hz
-  · exact hL _ _ _ y₀.hz
+  · exact hL _ _ _ _ (Classical.choice h).hz
+  · exact hL _ _ _ _ y₀.hz
 
 /-- The plan's table at index `i` is `tableZHJ` at `i`. -/
 theorem planZHJ_get (S : Finset (Fin n)) (R : Reg) (i : Fin (planZHJ (Reg := Reg) dj y₀ S R).length) :

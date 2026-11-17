@@ -5,16 +5,16 @@ public import Proofs.Properties.Verity.SampledRead
 public import Proofs.Properties.Composition
 
 /-!
-# Sampled proofs' coupling: the digest v2's sample answers
+# SPOT's coupling: the digest v2's sample answers
 
-v2 samples at the coins its challenger releases after the digest sampled proofs' case commits (`draw_after`). That digest
+v2 samples at the coins its challenger releases after the digest SPOT's case commits (`draw_after`). That digest
 is the prover's: the commitment fixes it before any coin only as one entry of the list of digests `bind` hashes into it
 (`BindsAt`, `Core.Composition.bind`), and the cases are sent at the close. So it is fixed where the commitment is, at
 the play's start, by the SHA-512 of a message (`bindMessage`) the play reveals only at its close: a cut of the period's
 game (`bindCut`, a `Verity.Game.DigestCut`) whose revealed messages have one SHA-512, since each play binds its list
 into the one commitment (`bind_hash_eq`).
 
-* **The clause** (`SampledDigest`, `afterAt`): v2 samples at `afterAt σ`, sampled proofs' entry in the list whose message
+* **The clause** (`SampledDigest`, `afterAt`): v2 samples at `afterAt σ`, SPOT's entry in the list whose message
   is the one `σ`'s plays most likely reveal at the cut (`bindMode`). An accepted play that doesn't miss at the cut
   meets it (`sampledDigest_of_noMiss`).
 * **The finder** (`bindFinder`, `Constructions.withBind`): the cut's two-continuation finder, `σ`'s play on two
@@ -33,7 +33,7 @@ open Verity.Game
 open Properties.Challenger (Draws)
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The digests the commitment binds -/
 
@@ -91,9 +91,9 @@ theorem mapM_entry {β γ : Type _} {f : β → Option γ} :
         · obtain ⟨y, hy, e⟩ := mapM_entry hl x hx
           exact ⟨y, List.mem_cons.2 (Or.inr hy), e⟩
 
-/-- **v2 samples at the digest sampled proofs' case commits**: where composite `k` accepted what the prover sent and
+/-- **v2 samples at the digest SPOT's case commits**: where composite `k` accepted what the prover sent and
 v2's case in it accepts at the sample `dr`, the digests the commitment binds (`BindsAt`), keyed by distinct ids, give
-sampled proofs `dr`'s digest. -/
+SPOT `dr`'s digest. -/
 theorem draw_after {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
@@ -177,26 +177,70 @@ theorem eq_of_bindMsg {k : Verity.Registration.Composite} {s s' : Verity.Sent} (
 theorem sha512Msg_bytes (b : ByteArray) : sha512Msg b.data.toList = (Flock.Sha512.hash b).data.toList :=
   rfl
 
-open Classical in
+/-- **The digests what the prover sent binds, as a function** (`BindsAt`): the three byte strings decode under the
+composition's formats, `Properties.Composition.digests` gives the list `ds`, and `bind` of it is the decoded
+commitment; else none. It is `BindsAt` read off the data (`bindsOf_eq`). -/
+noncomputable def bindsOf (k : Verity.Registration.Composite) (s : Verity.Sent) :
+    Option (List (String × ByteArray)) :=
+  match _root_.Core.canonicalJson s.params >>= _root_.Core.Composition.decodeParams with
+  | .error _ => none
+  | .ok ps =>
+    match _root_.Core.Composition.decodeCommitment s.commitment with
+    | .error _ => none
+    | .ok c =>
+      match _root_.Core.Composition.decodeEvidence s.evidence with
+      | .error _ => none
+      | .ok ev =>
+        match Properties.Composition.digests (s.components k) ps ev with
+        | none => none
+        | some ds => if _root_.Core.Composition.bind (Verity.verifier k).id ds = c then some ds else none
+
+/-- **`bindsOf` is `BindsAt`**: the digests the data gives are exactly the ones the commitment binds. -/
+theorem bindsOf_eq {k : Verity.Registration.Composite} {s : Verity.Sent} {ds : List (String × ByteArray)} :
+    bindsOf k s = some ds ↔ BindsAt k s ds := by
+  constructor
+  · intro h
+    rw [bindsOf] at h
+    split at h
+    · cases h
+    · rename_i ps hps
+      split at h
+      · cases h
+      · rename_i c hc
+        split at h
+        · cases h
+        · rename_i ev hev
+          split at h
+          · cases h
+          · rename_i ds' hdig
+            split at h
+            · rename_i hb
+              obtain rfl := Option.some.inj h
+              exact ⟨ps, c, ev, ⟨hps, hc, hev⟩, hdig, hb⟩
+            · cases h
+  · rintro ⟨ps, c, ev, ⟨hps, hc, hev⟩, hdig, hb⟩
+    simp only [bindsOf, hps, hc, hev, hdig]
+    rw [if_pos hb]
+
 /-- **What a play reveals for the commitment `c`**: where what the prover sent has the commitment `c` and binds a list
-of digests (`BindsAt`), the message `bind` hashed over it (`bindMsg`); else none. -/
+of digests (`bindsOf`), the message `bind` hashed over it (`bindMsg`); else none. -/
 noncomputable def bindReveal (k : Verity.Registration.Composite) (c : ByteArray) (o : Exchange) : Option Claims.Msg :=
-  if h : o.sent.commitment = c ∧ ∃ ds, BindsAt k o.sent ds then some (bindMsg k h.2.choose) else none
+  if o.sent.commitment = c then (bindsOf k o.sent).map (bindMsg k) else none
 
 theorem bindReveal_of {k : Verity.Registration.Composite} {c : ByteArray} {o : Exchange}
     {ds : List (String × ByteArray)} (hc : o.sent.commitment = c) (hB : BindsAt k o.sent ds) :
     bindReveal k c o = some (bindMsg k ds) := by
-  have h : o.sent.commitment = c ∧ ∃ ds, BindsAt k o.sent ds := ⟨hc, ds, hB⟩
-  rw [bindReveal, dite_eq_left h, BindsAt.unique h.2.choose_spec hB]
+  rw [bindReveal, if_pos hc, bindsOf_eq.mpr hB, Option.map_some]
 
 theorem bindReveal_some {k : Verity.Registration.Composite} {c : ByteArray} {o : Exchange} {w : Claims.Msg}
     (h : bindReveal k c o = some w) :
     o.sent.commitment = c ∧ ∃ ds, BindsAt k o.sent ds ∧ w = bindMsg k ds := by
-  by_cases hc : o.sent.commitment = c ∧ ∃ ds, BindsAt k o.sent ds
-  · rw [bindReveal, dite_eq_left hc] at h
-    exact ⟨hc.1, hc.2.choose, hc.2.choose_spec, (Option.some.inj h).symm⟩
-  · rw [bindReveal, dite_eq_right hc] at h
-    cases h
+  rw [bindReveal] at h
+  split at h
+  · rename_i hc
+    obtain ⟨ds, hds, rfl⟩ := Option.map_eq_some_iff.1 h
+    exact ⟨hc, ds, bindsOf_eq.mp hds, rfl⟩
+  · cases h
 
 variable (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
@@ -223,27 +267,72 @@ def SampledDigest (s : Verity.Sent) (after : ByteArray) : Prop :=
   ∀ a b e p c ev ξ dr, V2Case k s a b e → V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr →
     dr.after = after
 
-/-- **`dg` is sampled proofs' digest in an accepted play of `σ` whose message is the most likely one**: the sampled
+/-- **`dg` is SPOT's digest in an accepted play of `σ` whose message is the most likely one**: the sampled
 verdict accepts the play at some tape, the message of the digests its commitment binds is `bindMode`, and those digests
-give sampled proofs `dg`. -/
+give SPOT `dg`. -/
 def DigestAt (σ : Strategy (V.game θ F c)) (dg : ByteArray) : Prop :=
   ∃ (x : CoinTape (V.game θ F c) σ) (ds : List (String × ByteArray)),
     V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ BindsAt k (CoinTape.run (V.game θ F c) σ x).sent ds ∧
       bindMsg k ds = bindMode V k θ F c σ ∧ (VStar.Recursive.Sampled.PROTOCOL, dg) ∈ ds
 
 open Classical in
-/-- **The sample's digest at `σ`**: sampled proofs' digest in one of `σ`'s accepted plays whose message is the most
-likely one (`DigestAt`), or the empty string where there is none. -/
+/-- **SPOT's digest in `σ`'s play `x`, where it meets the clause**: where the sampled verdict accepts the play
+and the digests its commitment binds (`bindsOf`) have the most likely message (`bindMode`), the digest of their entry
+for SPOT; else none. -/
+noncomputable def digAt (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ) : Option ByteArray :=
+  if V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) then
+    (bindsOf k (CoinTape.run (V.game θ F c) σ x).sent).bind fun ds =>
+      if bindMsg k ds = bindMode V k θ F c σ then
+        (ds.find? (·.1 == VStar.Recursive.Sampled.PROTOCOL)).map (·.2)
+      else none
+  else none
+
+/-- **A play `digAt` answers for meets the clause** (`DigestAt`). -/
+theorem digAt_some {σ : Strategy (V.game θ F c)} {x : CoinTape (V.game θ F c) σ} {v : ByteArray}
+    (h : digAt V k θ F c σ x = some v) : DigestAt V k θ F c σ v := by
+  rw [digAt] at h
+  split at h
+  · rename_i hvd
+    obtain ⟨ds', hbd, hmeq'⟩ := Option.bind_eq_some_iff.1 h
+    split at hmeq'
+    · rename_i hmeq
+      obtain ⟨e, hfind, hev⟩ := Option.map_eq_some_iff.1 hmeq'
+      have hm1 : e.1 = VStar.Recursive.Sampled.PROTOCOL := by simpa using List.find?_some hfind
+      refine ⟨x, ds', hvd, bindsOf_eq.mp hbd, hmeq, ?_⟩
+      have he : (VStar.Recursive.Sampled.PROTOCOL, v) = e := Prod.ext hm1.symm hev.symm
+      rw [he]
+      exact List.mem_of_find?_eq_some hfind
+    · cases hmeq'
+  · cases h
+
+/-- **A play meeting the clause makes `digAt` answer**. -/
+theorem digAt_isSome {σ : Strategy (V.game θ F c)} {x : CoinTape (V.game θ F c) σ}
+    {ds : List (String × ByteArray)} (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x))
+    (hB : BindsAt k (CoinTape.run (V.game θ F c) σ x).sent ds) (hm : bindMsg k ds = bindMode V k θ F c σ)
+    {dg : ByteArray} (hmem : (VStar.Recursive.Sampled.PROTOCOL, dg) ∈ ds) :
+    (digAt V k θ F c σ x).isSome := by
+  rw [digAt, if_pos hv, bindsOf_eq.mpr hB, Option.bind_some, if_pos hm, Option.isSome_map]
+  exact List.find?_isSome.2 ⟨_, hmem, by simp⟩
+
+/-- **The sample's digest at `σ`**: SPOT's digest in one of `σ`'s accepted plays whose message is the most
+likely one (`DigestAt`), the first such in the listing of the tapes (`Finset.univ.toList`), or the empty string where
+there is none. -/
 noncomputable def afterAt (σ : Strategy (V.game θ F c)) : ByteArray :=
-  if h : ∃ dg, DigestAt V k θ F c σ dg then h.choose else ByteArray.empty
+  ((Finset.univ : Finset (CoinTape (V.game θ F c) σ)).toList.findSome? (digAt V k θ F c σ)).getD ByteArray.empty
 
 theorem afterAt_spec {σ : Strategy (V.game θ F c)} (h : ∃ dg, DigestAt V k θ F c σ dg) :
     DigestAt V k θ F c σ (afterAt V k θ F c σ) := by
-  rw [afterAt, dite_eq_left h]
-  exact h.choose_spec
+  obtain ⟨dg, x, ds, hv, hB, hm, hmem⟩ := h
+  have hgx : (digAt V k θ F c σ x).isSome := digAt_isSome V k θ F c hv hB hm hmem
+  have hfs : ((Finset.univ : Finset (CoinTape (V.game θ F c) σ)).toList.findSome? (digAt V k θ F c σ)).isSome :=
+    List.findSome?_isSome_iff.2 ⟨x, Finset.mem_toList.2 (Finset.mem_univ x), hgx⟩
+  obtain ⟨v, hv'⟩ := Option.isSome_iff_exists.1 hfs
+  rw [afterAt, hv', Option.getD_some]
+  obtain ⟨x', -, hfx⟩ := List.exists_of_findSome?_eq_some hv'
+  exact digAt_some V k θ F c hfx
 
 /-- **An accepted play that doesn't miss at the commitment's cut samples at `afterAt`**: its message is the most likely
-one, so its digests are those of `afterAt`'s play (`eq_of_bindMsg`), which give sampled proofs one digest. -/
+one, so its digests are those of `afterAt`'s play (`eq_of_bindMsg`), which give SPOT one digest. -/
 theorem sampledDigest_of_noMiss (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x)) (hn : ¬ (bindCut V k θ F c).missOn σ x) :
     SampledDigest k (CoinTape.run (V.game θ F c) σ x).sent (afterAt V k θ F c σ) := by
@@ -299,7 +388,7 @@ theorem bindFinder_calls : ∀ (A : Live) (θ : ByteArray) (F : Array ByteArray)
   show ((2 * V.cost θ F c σ + 2 * A.h : ℕ) : ℝ) ≤ A.qM (V.cost θ F c σ)
   simp [Live.qM]
 
-/-- **The leg's constructions with the bound digests' finder at `k`** (`bindFinder`): `K`'s otherwise. -/
+/-- **The subprotocol's constructions with the bound digests' finder at `k`** (`bindFinder`): `K`'s otherwise. -/
 noncomputable def Constructions.withBind {V : Vocab d α} (K : Constructions V) (k : Verity.Registration.Composite) :
     Constructions V :=
   { K with bindFinder := Verity.Sampled.bindFinder V k, bind_calls := Verity.Sampled.bindFinder_calls V k }

@@ -7,7 +7,7 @@ vLLM's kernels write a row of ``n <= k`` keys as ``0, 1, ..., n - 1`` and then `
 leaves those rows untouched (no kernel runs when no row of the call can be longer than ``k``). A longer row's kernels
 place the selected indices with shared-memory atomics, so their order varies run to run, and they admit the keys tied at
 the k-th score in atomic order, so the set can vary too; the sparse attention then sums over the keys in that order.
-The canonical row's selection is the registered relation's top-k set (`verity.definitions.registry.dsa_topk`'s
+The canonical row's selection is the registered relation's top-k set (`verity_vllm.definitions.registry.dsa_topk`'s
 ``topk_set``, which ``DsaTopKLongRow`` checks), and its order is ascending:
 
 - each score's key is the fast kernels' own, ``convert_to_uint32_v2`` of its 32 bits, here as the signed integer of the
@@ -19,14 +19,14 @@ The canonical row's selection is the registered relation's top-k set (`verity.de
 The device pass reads the fast kernel's selection only for a candidate k-th key ``tau``. Reading the row once, it
 writes the keys at or above ``tau`` in ascending order and counts them, then checks the candidate
 (``#{key > tau} < k <= #{key >= tau}``): with no tie across the k-th key the row stands as written; with one, the row
-is written again from the counts; a row whose candidate fails (it isn't the k-th key) is selected again by bisection
-over the keys. Every way the output is the row's canonical one. Rows of
+is written again from the counts; a row whose candidate fails (it isn't the k-th key) is selected again by refinement
+or bisection over the keys. Every way the output is the row's canonical one. Rows of
 ``n > k`` keys are a prefill's (``top_k_per_row_prefill``: keys ``[start, end)`` of the gathered row) or a decode's (the
 three decode selectors: keys ``[0, length)``).
 
 ``VERITY_DSA_TOPK_LOG=DIR`` keeps, per process, ``DIR/dsa_topk.PID.json`` (`log_to`), from the plugin's load on and
 whatever ends the process: each op's calls and canonicalizing launches as of its last call, and the rows rewritten,
-those with a tie across the k-th key, and those bisected, as its devices counted them when they were last read.
+those with a tie across the k-th key, and those bisected or refined, as its devices counted them when they were last read.
 """
 from __future__ import annotations
 
@@ -43,10 +43,14 @@ from typing import Any
 
 ENV = "VERITY_DSA_TOPK"
 LOG_ENV = "VERITY_DSA_TOPK_LOG"
+#: each mode gives the same output
+MODES = {"canonical": {}, "canonical-bisect": {"refine": False}}
 #: the indexer's top-k ops at the pin, under ``torch.ops._C``
 OPS = ("top_k_per_row_prefill", "top_k_per_row_decode", "persistent_topk", "cooperative_topk")
-#: the device counters: rows rewritten, rows with a tie across the k-th key, rows bisected
-STATS = ("rows_long", "rows_tied", "rows_bisected")
+#: rows_bisected and rows_refined both count rows whose candidate failed
+STATS = ("rows_long", "rows_tied", "rows_bisected", "rows_refined")
+#: `dsa_topk_kernels.HROW`
+HIST_WORDS = 2048 + 1024 + 1
 #: a segment of a row (a call of few rows splits each over programs) is at least this many keys
 SEG_MIN_KEYS = 8192
 #: keys a program reads at a time (32 to 2**14: canon_row reads 32-key words, and two block counts share an int32), and
@@ -57,6 +61,10 @@ NUM_WARPS = 8
 FILL = 2
 #: under `log_to`, the devices' counters are read (a device sync) once this many calls have passed since their last read
 ROWS_EVERY = 4096
+#: where `steps_to` keeps each step's counters
+STEPS_ENV = "VERITY_DSA_TOPK_STEPS"
+#: the model runners whose ``execute_model`` runs a step's forward on its rank, at the pin
+RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 
 INT32_MIN = -(1 << 31)
 
@@ -115,19 +123,22 @@ def kernels() -> dict[str, Any]:
         import importlib
 
         mod = importlib.import_module("dsa_topk_kernels")
-        _KERNELS.update(canon_row=mod.canon_row, count_seg=mod.count_seg, emit_seg=mod.emit_seg)
+        _KERNELS.update({name: getattr(mod, name) for name in ("canon_row", "count_seg", "emit_seg", "fix_find",
+                                                               "fix_count", "fix_emit")})
     return _KERNELS
 
 
 class Canon:
     """The device pass, and its counters: `run` rewrites the rows of ``out`` (int32, rows x k) longer than ``k`` keys of
-    ``logits`` (float32, rows x columns) in place."""
+    ``logits`` (float32, rows x columns) in place. ``refine=False`` bisects every row whose candidate fails."""
 
     def __init__(self, seg_min_keys: int = SEG_MIN_KEYS, block: int = BLOCK, num_warps: int = NUM_WARPS,
-                 fill: int = FILL) -> None:
+                 fill: int = FILL, refine: bool = True) -> None:
         if not 32 <= block < 1 << 15 or block & (block - 1):
             raise ValueError(f"block: a power of two from 32 to 2**14, not {block}")
         self.seg_min_keys, self.block, self.num_warps, self.fill = seg_min_keys, block, num_warps, fill
+        self.refine = refine
+        self._fine: dict[Any, Any] = {}
         self.calls = {op: 0 for op in OPS}
         self.launches: dict[str, int] = {op: 0 for op in OPS}
         #: each device's counters as last read (`read_rows`), and the calls made by then
@@ -184,21 +195,40 @@ class Canon:
         if seg == 1:
             K["canon_row"][(rows,)](*args, stats, HW=logits.is_cuda, **const)
             return
-        ws = self.workspace(dev, rows * (2 * seg + 1))
+        ws = self.workspace(dev, rows * (5 * seg + 4))
+        fine = self.fine(dev, rows * HIST_WORDS) if self.refine else ws
         K["count_seg"][(rows, seg)](*args, ws, seg, **const)
         const.pop("KP2")
-        K["emit_seg"][(rows, seg)](*args, ws, stats, seg, SEGP2=next_pow2(seg), **const)
+        K["emit_seg"][(rows, seg)](*args, ws, fine, stats, seg, SEGP2=next_pow2(seg), REFINE=self.refine, **const)
+        if self.refine:
+            for name in ("fix_find", "fix_count", "fix_emit"):
+                K[name][(rows, seg)](*args, ws, fine, stats, seg, SEGP2=next_pow2(seg), **const)
 
-    def workspace(self, device: Any, words: int) -> Any:
-        """An int32 scratch of at least ``words`` for the current stream, kept between calls (a call's two kernels
-        are ordered on its stream, and each stream has its own)."""
+    def _stream_key(self, device: Any) -> tuple[Any, int]:
         import torch
 
-        key = (device, torch.cuda.current_stream(device).cuda_stream if device.type == "cuda" else 0)
+        return device, torch.cuda.current_stream(device).cuda_stream if device.type == "cuda" else 0
+
+    def workspace(self, device: Any, words: int) -> Any:
+        """An int32 scratch of at least ``words`` for the current stream, kept between calls (a call's kernels are
+        ordered on its stream, and each stream has its own)."""
+        import torch
+
+        key = self._stream_key(device)
         ws = self._ws.get(key)
         if ws is None or ws.numel() < words:
             ws = self._ws[key] = torch.empty(max(words, 1 << 16), dtype=torch.int32, device=device)
         return ws
+
+    def fine(self, device: Any, words: int) -> Any:
+        """The current stream's window tables. Every call leaves them zero, so none clears them first."""
+        import torch
+
+        key = self._stream_key(device)
+        t = self._fine.get(key)
+        if t is None or t.numel() < words:
+            t = self._fine[key] = torch.zeros(max(words, 1 << 20), dtype=torch.int32, device=device)
+        return t
 
     def read_rows(self) -> None:
         """Read each device's counters (synchronizes it)."""
@@ -335,21 +365,124 @@ def log_to(canon: Canon, d: str) -> None:
     atexit.register(write, True)
 
 
+class Steps:
+    """Each step's counts on each of its devices, kept with no device sync: at a step's start and end a copy of each
+    device's counters is queued on its stream (``queue``: the copy into pinned host memory and its event), and the
+    step's line is written (``write``) once its end's copy has landed, at a later step's end or at `drain`. A line is
+    ``{"step", "tokens", "device", **counts}``, each count named as in `STATS` and the step's own (its end's int32 less
+    its start's, modulo 2**32), so work between steps counts in none; a killed process loses the lines of its last
+    steps still queued."""
+
+    def __init__(self, canon: Canon, write: Callable[[dict], None], queue: Callable[[Any], tuple[Any, Any]] | None = None) -> None:
+        self.canon, self.write, self.queue = canon, write, queue or _queue
+        self.step = 0
+        self._start: dict[str, Any] = {}
+        self._pending: list[tuple[int, int, str, Any, Any, Any]] = []
+
+    def begin(self) -> None:
+        """A step that `end` will count starts its forward on this rank."""
+        self._start = {str(d): self.queue(s)[0] for d, s in self.canon._stats.items()}
+
+    def end(self, tokens: int) -> None:
+        """A step of ``tokens`` scheduled tokens has run its forward on this rank."""
+        for device, stats in self.canon._stats.items():
+            self._pending.append((self.step, tokens, str(device), self._start.get(str(device)), *self.queue(stats)))
+        self._start = {}
+        self.step += 1
+        self.drain(wait=False)
+
+    def drain(self, wait: bool = True) -> None:
+        """Write each queued step's lines in order up to the first whose copy hasn't landed, or, with ``wait``, all."""
+        while self._pending and (wait or self._pending[0][5].query()):
+            step, tokens, device, start, host, done = self._pending.pop(0)
+            if wait:
+                done.synchronize()
+            before = start.tolist() if start is not None else [0] * len(STATS)
+            self.write({"step": step, "tokens": tokens, "device": device,
+                        **{n: (b - a) % (1 << 32) for n, a, b in zip(STATS, before, host.tolist())}})
+
+
+def _queue(stats: Any) -> tuple[Any, Any]:
+    import torch
+
+    host = torch.empty(stats.shape, dtype=stats.dtype, pin_memory=True)
+    host.copy_(stats, non_blocking=True)
+    done = torch.cuda.Event()
+    done.record(torch.cuda.current_stream(stats.device))
+    return host, done
+
+
+def step_runner(execute: Callable[..., Any], steps: Steps,
+                capturing: Callable[[], bool] = lambda: _capturing()) -> Callable[..., Any]:
+    """A model runner's ``execute_model`` between `Steps.begin` and `Steps.end` on a step that scheduled tokens,
+    outside a capture and a dummy run: the step's index is its place among them, as the step trace's
+    (`verity_vllm.engine.step_trace`)."""
+    def execute_model(self: Any, scheduler_output: Any, *args: Any, **kwargs: Any) -> Any:
+        tokens = int(getattr(scheduler_output, "total_num_scheduled_tokens", 0) or 0)
+        counted = bool(tokens) and not kwargs.get("dummy_run") and not capturing()
+        if counted:
+            steps.begin()
+        out = execute(self, scheduler_output, *args, **kwargs)
+        if counted:
+            steps.end(tokens)
+        return out
+    execute_model.dsa_topk_steps = steps  # type: ignore[attr-defined]
+    return execute_model
+
+
+def steps_to(canon: Canon, d: str, runners: Sequence[Any] | None = None) -> Steps:
+    """Keep ``canon``'s counters at each step's end in ``d/dsa_topk_steps.PID.jsonl`` (`Steps`), from now on: a
+    header line naming `STATS`, then one appended line a device a step. Each of ``runners`` (default `RUNNERS`' model
+    runners that import) has its ``execute_model`` wrapped once (`step_runner`)."""
+    import importlib
+
+    path = Path(d) / f"dsa_topk_steps.{os.getpid()}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND)
+
+    def write(line: Any) -> None:
+        os.write(fd, json.dumps(line, separators=(",", ":")).encode() + b"\n")
+
+    write({"pid": os.getpid(), "stats": list(STATS)})
+    steps = Steps(canon, write)
+    if runners is None:
+        runners = [importlib.import_module(name).GPUModelRunner for name in RUNNERS if _importable(name)]
+    for runner in runners:
+        if not hasattr(runner.execute_model, "dsa_topk_steps"):
+            runner.execute_model = step_runner(runner.execute_model, steps)
+    atexit.register(steps.drain)
+    return steps
+
+
+def _importable(name: str) -> bool:
+    import importlib.util
+
+    parts = name.split(".")
+    return all(importlib.util.find_spec(".".join(parts[:i])) is not None for i in range(1, len(parts) + 1))
+
+
 def settings() -> tuple[str, str]:
     """The plugin's two variables, read here only: ``VERITY_DSA_TOPK`` and ``VERITY_DSA_TOPK_LOG`` ("" when unset)."""
     return os.environ.get(ENV, ""), os.environ.get(LOG_ENV, "")
 
 
+def steps_setting() -> str:
+    """``VERITY_DSA_TOPK_STEPS``, read here only ("" when unset)."""
+    return os.environ.get(STEPS_ENV, "")
+
+
 def register() -> None:
-    """The plugin: with ``VERITY_DSA_TOPK=canonical``, `install` on ``torch.ops._C`` in this process."""
+    """The plugin: with ``VERITY_DSA_TOPK`` one of `MODES`, `install` that pass on ``torch.ops._C`` in this process."""
     mode, log = settings()
     if mode in ("", "0"):
         return
-    if mode != "canonical":
-        raise ValueError(f"{ENV}: 'canonical' or unset, not {mode!r}")
-    canon = install()
+    if mode not in MODES:
+        raise ValueError(f"{ENV}: one of {', '.join(map(repr, MODES))} or unset, not {mode!r}")
+    canon = install(canon=Canon(**MODES[mode]))
     if log:
         log_to(canon, log)
+    if steps := steps_setting():
+        steps_to(canon, steps)
 
 
 def site(d: Path) -> Path:

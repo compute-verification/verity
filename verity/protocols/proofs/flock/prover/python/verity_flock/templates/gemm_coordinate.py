@@ -1,4 +1,4 @@
-"""Flock lowering of ``gemm-coordinate``: flock-pure's pinned unit netlists (``verity_flock.lowering``) under the
+"""Flock lowering of ``gemm-coordinate``: flock-pure's pinned unit circuit descriptions (``verity_flock.lowering``) under the
 ``verity/flock-pure-block/v2`` layouts.
 
 K = 1536 is the frozen sets' K (``Chunk(3)`` for BF16, ``Fp8`` for E4M3). Any other K lowers when a row is whole BLAKE3
@@ -27,7 +27,7 @@ def chunks(subcircuit) -> int | None:
 def supports(subcircuit, scheme):
     sem = subcircuit.params.get("semantics")
     if sem not in RELATIONS:
-        return f"C-Flock lowers the semantics {sorted(RELATIONS)} (verity_flock.lowering.PIPES), not {sem}"
+        return f"Flock lowers the semantics {sorted(RELATIONS)} (verity_flock.lowering.PIPES), not {sem}"
     k = int(subcircuit.params["K"])
     if k != K:
         row = k * (1 if "e4m3" in sem else 2)

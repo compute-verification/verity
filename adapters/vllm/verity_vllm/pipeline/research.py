@@ -41,6 +41,7 @@ from typing import Any
 from verity_vllm.config import ROOT, UsageError
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import source_identity
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.row_driver import CLI, utc
 from verity_vllm.pipeline.row_json import field_of
 from verity_vllm.records.schema_ids import ROW_ATTEMPTS_SCHEMA
@@ -125,7 +126,7 @@ def attempt_output(research: tuple[list[str], dict[str, str]], run_id: str, name
 
 
 def _tee(path: str, line: str) -> None:
-    print(line, flush=True)
+    write(line)
     with open(path, "a") as f:
         f.write(line + "\n")
 
@@ -247,7 +248,7 @@ def publish(o: Any, d: str, runs: dict[str, dict[str, Any]], research: tuple[lis
     r = subprocess.run(argv, stdout=subprocess.PIPE, text=True, cwd=ROOT, env=research[1])
     found = re.findall(r"art:[0-9a-f]{64}", r.stdout) if r.returncode == 0 else []
     art = found[-1] if found else ""
-    print(f"publish - {art or '-'} rc={r.returncode}", flush=True)
+    write(f"publish - {art or '-'} rc={r.returncode}")
     _row_json(d, ("record",), {"artifact": art or None, "rc": r.returncode})
     return 0 if art else PUBLISH_REFUSED
 
@@ -298,7 +299,7 @@ def chain(o: Any, sweep_dir: str) -> int:
         workload = cli("row", "stage", st, o.row, o.role, o.repo, o.rev, *o.flags, py=sys.executable)
         rc = subprocess.run([*research[0], *args, "--", *workload], env=research[1]).returncode
         art = attempt_output(research, run_id, ACCOUNT[st])
-        print(f"{st} {run_id} {art or '-'} rc={rc}", flush=True)
+        write(f"{st} {run_id} {art or '-'} rc={rc}")
         runs[st] = {"run_id": run_id, "artifact": art or None, "rc": rc}
         _row_json(d, ("stages", st), runs[st])
         if rc != 0 or not art:

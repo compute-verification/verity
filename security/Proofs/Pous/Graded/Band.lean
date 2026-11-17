@@ -13,7 +13,7 @@ import Proofs.Pous.Graded.Theorem
 
 `band_graded_meets_family` proves `Pous.Guarantees.BandGradedMeetsFamily` (pinned as
 `Pous.SecurityProofs.BandGradedMeetsFamily`) over the graded game `GradedMeets`
-(`Security/Definitions/Pous/Model/Graded.lean`, `Security/Definitions/Pous/Accounting/GradedMeets.lean`),
+(`security/Definitions/Pous/Model/Graded.lean`, `security/Definitions/Pous/Accounting/GradedMeets.lean`),
 and assumes nothing: `ChainExPostFactoG` is discharged by `chainExPostFactoG_v6`, as for `BandMultiMeetsFamily`.
 
 **The point.** `BandMultiMeetsFamily`'s band: `N` segments (`1 ≤ N ≤ 2^64`) of `2^9` blocks of 64 KiB, in-degree
@@ -43,7 +43,7 @@ Lowering `β` by at most `22,029` bits (`N ≥ 2`) and `2,829` bits (`N = 1`) ke
 
 **The deployment condition: the window is too short to re-encode `C`.** The certificate holds at every
 `(D_late, Q_late)` (`band_graded_fam_dom`); the conditions on `D_late` are necessary for the game's `S`-bit state to
-be a model of storage at rest (`Security/Definitions/Pous/Model/Graded.lean`), so `BandGradedMeetsFamily` carries
+be a model of storage at rest (`security/Definitions/Pous/Model/Graded.lean`), so `BandGradedMeetsFamily` carries
 them as hypotheses. Block `v` of a segment absorbs its `min(v mod 2^9, d)` newest parents, newest first, then the pad,
 so it takes `min(v mod 2^9, d) + 1` sequential `Π₂` calls even with every parent held, and block `v + 1`'s chain starts
 from `C_v`. Re-encoding a segment from `W` therefore takes `R(d) = Σ_{v < 2^9} (min(v, d) + 1)` sequential calls, at

@@ -5,7 +5,7 @@ public import Lms.Verify
 /-!
 # HSS at two levels: a device's identity and its parties' keys (RFC 8554 §6 over SHA-512)
 
-Executable forms of `verity/ml/crypto/lms.py`'s HSS verification, whose module docstring is the spec: the three role
+Executable forms of `verity/commitments/crypto/lms.py`'s HSS verification, whose module docstring is the spec: the three role
 digests a device's keys sign (`partyKeyMessage`, `periodRootMessage`, `livenessMessage`), the two-level signature's byte
 format (`HssSignature.decode`: `lower ‖ certificate ‖ signature`, the lower key `16 + N` bytes and each signature
 `signatureBytes`), and its verification (`verifyCertificate`, `hssVerify`, `verifyLiveness`). A role digest is

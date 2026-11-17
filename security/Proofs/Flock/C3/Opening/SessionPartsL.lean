@@ -45,7 +45,7 @@ open FlockVBridge.Decode
 open FlockVBridge.AccChain (RegOut copyVal_regOut)
 
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
 /-- **`decode_opening` from the read row columns** (`decode_resUnitR` at `check_opening`'s net): the row ports
 registered bits of `w` only at the columns some computed row of the unit reads. -/

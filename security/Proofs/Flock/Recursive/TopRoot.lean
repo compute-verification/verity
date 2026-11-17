@@ -15,7 +15,8 @@ import VCVio.Prelude.Core
 leaves are registered-row frames around hm96 tree leaves.  This file follows
 that computation level by level.  If two unequal arrays of commit strings give
 one root, one of the hm96 leaf inputs, row frames, or node frames hashed while
-recomputing those roots is an explicit SHA-512 collision.
+recomputing those roots is an explicit SHA-512 collision: some two of those
+inputs (`topCands`) differ and have one digest (`topRoot_cand`, `topCands_spec`).
 -/
 
 @[expose] public section
@@ -295,25 +296,36 @@ end TopRoot
 
 open TopRoot
 
-/-- Two unequal level-zero top arrays with one `topEntry` root expose a
-collision among SHA-512 inputs used by those two root computations. -/
-theorem topRoot_collision {dom : ByteArray} {bcs bcs' : Array ByteArray}
+/-- **Two top arrays' candidates**: each two of the SHA-512 inputs the two root computations hash (`topStrings` of
+`bcs`, then of `bcs'`), with the test that the two differ and have one SHA-512 digest. -/
+def topCands (dom : ByteArray) (bcs bcs' : Array ByteArray) : List (Prop × (List UInt8 × List UInt8)) :=
+  (topStrings dom bcs ++ topStrings dom bcs').flatMap fun x =>
+    (topStrings dom bcs ++ topStrings dom bcs').map fun y =>
+      (x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y, (x.data.toList, y.data.toList))
+
+/-- **A candidate whose test passes is a collision** of SHA-512 on its two byte strings. -/
+theorem topCands_spec {dom : ByteArray} {bcs bcs' : Array ByteArray} {c : Prop × (List UInt8 × List UInt8)}
+    (hc : c ∈ topCands dom bcs bcs') (h : c.1) : Hash.Collision Refine.H512 c.2.1 c.2.2 := by
+  obtain ⟨x, -, hc⟩ := List.mem_flatMap.1 hc
+  obtain ⟨y, -, rfl⟩ := List.mem_map.1 hc
+  have hw : x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := h
+  refine ⟨fun e => hw.1 (ByteArray.ext (Array.ext' e)), ?_⟩
+  apply Subtype.ext
+  simpa only [Refine.H512, Refine.bytes_of_list] using hw.2
+
+/-- Two unequal level-zero top arrays with one `topEntry` root have a candidate whose test passes: two of the SHA-512
+inputs those two root computations hash collide. -/
+theorem topRoot_cand {dom : ByteArray} {bcs bcs' : Array ByteArray}
     (hsz : bcs.size = bcs'.size) (hne : bcs ≠ bcs')
     (hroot : Flock.FV3.root dom (topLeaves dom bcs) Flock.Sha512.hash =
       Flock.FV3.root dom (topLeaves dom bcs') Flock.Sha512.hash) :
-    Merkle.Collision Refine.H512 := by
+    ∃ c ∈ topCands dom bcs bcs', c.1 := by
   classical
-  let S := topStrings dom bcs ++ topStrings dom bcs'
-  by_contra noCollision
-  have cf : CF S := by
+  by_contra no
+  have cf : CF (topStrings dom bcs ++ topStrings dom bcs') := by
     intro x hx y hy he
     by_contra hxy
-    apply noCollision
-    refine ⟨x.data.toList, y.data.toList, ?_, ?_⟩
-    · intro h
-      exact hxy (ByteArray.ext (Array.ext' h))
-    · apply Subtype.ext
-      simpa only [Refine.H512, Refine.bytes_of_list] using he
+    exact no ⟨_, List.mem_flatMap.2 ⟨x, hx, List.mem_map.2 ⟨y, hy, rfl⟩⟩, hxy, he⟩
   exact hne (top_bind hsz cf hroot)
 
 end Flock.SecurityProofs

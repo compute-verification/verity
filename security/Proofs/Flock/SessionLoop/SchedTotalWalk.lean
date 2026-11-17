@@ -29,8 +29,8 @@ where `A` makes `ρ₁`'s answer independent of `ρ₀`'s.
 namespace Claims.ZKServer.Count
 
 open _root_.Flock (V F128 Transcript TMW liftTM)
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
-open _root_.Flock.Firewall.Finish (squeezeP sampleP sampleVecP sampleKP LP LigState liftT sendMsg powP challengeP
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
+open _root_.Flock.ZkServer.Finish (squeezeP sampleP sampleVecP sampleKP LP LigState liftT sendMsg powP challengeP
   oodIntroP queryP)
 open FlockComplete.JsonRT (Total)
 open FlockComplete.JsonRT.Total (bind' pure' lift_st forIn_range forIn_array)
@@ -243,7 +243,7 @@ theorem oodIntroP_tot (coins : Got) (nonce : ℕ → ℕ → UInt64) (g : Array 
     | (with_reducible apply FlockComplete.JsonRT.Total.liftTM; intro _; exact ⟨_, rfl⟩))
 
 theorem queryP_tot (coins : Got) (nonce : ℕ → ℕ → UInt64) (ms : _root_.Flock.MerkleScheme) (lv : _root_.Flock.Level)
-    (cm : _root_.Flock.Firewall.Finish.Commit) :
+    (cm : _root_.Flock.ZkServer.Finish.Commit) :
     (totOL A coins).T (queryP (stepAsks coins true) nonce ms lv cm) fun _ => True := by
   unfold queryP
   repeat (first
@@ -491,8 +491,8 @@ theorem sq_length {n : ℕ} (h : n ≠ 0) : (sq n).length = 1 := by
 /-- **The ring switch's answers**: one a claim, then the batching's (none for no claims). -/
 theorem ringSwitchP_st (sv : ℕ → Array F128) (claims : Array _root_.Flock.Claim) (m : ℕ) :
     OS A (PL coins m) (fun _ => PL coins (m + claims.size + (sq claims.size).length))
-      (_root_.Flock.Firewall.Finish.ringSwitchP (stepAsks coins true) sv claims) := by
-  unfold _root_.Flock.Firewall.Finish.ringSwitchP
+      (_root_.Flock.ZkServer.Finish.ringSwitchP (stepAsks coins true) sv claims) := by
+  unfold _root_.Flock.ZkServer.Finish.ringSwitchP
   refine os_bind (os_liftTM _ fun _ => ⟨_, rfl⟩) fun _ => ?_
   refine os_forIn_bind (fun i _ => PL coins (m + i)) (fun _ _ h => h) (fun i _ u => ?_) fun r => ?_
   · refine os_bind (os_liftTM _ fun _ => ⟨_, rfl⟩) fun _ => ?_
@@ -508,16 +508,16 @@ theorem ringSwitchP_st (sv : ℕ → Array F128) (claims : Array _root_.Flock.Cl
 /-- **The masked Ligerito does not stop** from `m` answers, where `A` makes the answer after `ρ₀`'s, at `z`'s, `β₀`'s
 and the `k₀` lanes' past `m`, independent of it. -/
 theorem ligeritoPZk_st (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T : F128)
-    (cm0 : _root_.Flock.Firewall.Finish.Commit) (t b : Array F128) (lay : _root_.Flock.Zk.PadLayout) (h : Array F128)
+    (cm0 : _root_.Flock.ZkServer.Finish.Commit) (t b : Array F128) (lay : _root_.Flock.Zk.PadLayout) (h : Array F128)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (m : ℕ)
     (hρ : ∀ hs cs, hs.length = m + (sq sch.n).length + 1 + sch.k0 + 1 → A hs cs →
       _root_.Flock.Zk.rhoIndependent (⟨(hs.getD (m + (sq sch.n).length + 1 + sch.k0) #[])[0]!,
         (hs.getD (m + (sq sch.n).length + 1 + sch.k0) #[])[1]!⟩, ⟨cs[0]!, cs[1]!⟩) = true) :
     OS A (PL coins m) (fun _ g _ => Past coins g)
-      (_root_.Flock.Firewall.Finish.ligeritoPZk (stepAsks coins true)
-        (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) ms sch T cm0 t b lay h rep tPad extra
+      (_root_.Flock.ZkServer.Finish.ligeritoPZk (stepAsks coins true)
+        (fun lv g s => pure (_root_.Flock.ZkServer.Finish.commitFw lv g s)) ms sch T cm0 t b lay h rep tPad extra
         lanePad salt nonce) := by
-  unfold _root_.Flock.Firewall.Finish.ligeritoPZk
+  unfold _root_.Flock.ZkServer.Finish.ligeritoPZk
   refine os_bind (os_liftTM _ fun _ => ⟨_, rfl⟩) fun _ => ?_
   refine os_bind (os_liftTM _ fun _ => ⟨_, rfl⟩) fun _ => ?_
   refine os_bind (os_liftTM _ fun _ => ⟨_, rfl⟩) fun _ => ?_
@@ -613,7 +613,7 @@ theorem ligeritoPZk_st (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Sche
 /-- **The opening past its PIOP does not stop** where `A` makes the answer after `ρ₀`'s, past the ring switch's, `z`'s,
 `β₀`'s and the `k₀` lanes', independent of it. -/
 theorem repOpening_st (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (lay : _root_.Flock.Zk.PadLayout)
-    (tPad rep : ℕ) (g : Array F128) (cm0 : _root_.Flock.Firewall.Finish.Commit) (claims : Array _root_.Flock.Claim)
+    (tPad rep : ℕ) (g : Array F128) (cm0 : _root_.Flock.ZkServer.Finish.Commit) (claims : Array _root_.Flock.Claim)
     (h : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (hρ : ∀ hs cs, hs.length = claims.size + (sq claims.size).length + (sq sch.n).length + 1 + sch.k0 + 1 → A hs cs →
       _root_.Flock.Zk.rhoIndependent
@@ -621,10 +621,10 @@ theorem repOpening_st (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (l
           (hs.getD (claims.size + (sq claims.size).length + (sq sch.n).length + 1 + sch.k0) #[])[1]!⟩,
           ⟨cs[0]!, cs[1]!⟩) = true) :
     OS A (PL coins 0) (fun _ g _ => Past coins g)
-      (_root_.Flock.Firewall.Finish.repOpening (stepAsks coins true)
-        (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch lay tPad rep g cm0 claims h extra
+      (_root_.Flock.ZkServer.Finish.repOpening (stepAsks coins true)
+        (fun lv g s => pure (_root_.Flock.ZkServer.Finish.commitFw lv g s)) st sch lay tPad rep g cm0 claims h extra
         lanePad salt) := by
-  unfold _root_.Flock.Firewall.Finish.repOpening
+  unfold _root_.Flock.ZkServer.Finish.repOpening
   refine os_bind (os_mono (ringSwitchP_st _ claims 0) (fun _ _ h => h)
     (B' := fun _ => PL coins (claims.size + (sq claims.size).length))
     fun _ _ _ h => ⟨h.1, by have h2 := h.2; omega⟩) fun r => ?_

@@ -33,6 +33,7 @@ from typing import Any
 
 from verity_vllm.config import option, workload_arg
 from verity_vllm.engine.arrivals import realized_arrive_steps
+from verity_vllm.pipeline.cli import write
 from verity_vllm.program.prefix_plan import cached_of, shape, shape_name
 
 __all__ = ["Options", "bad_chunks", "batch_dispatch", "batch_dispatch_of", "main", "missing_batch", "rows_at",
@@ -132,11 +133,16 @@ def shape_contexts(workload: dict[str, Any]) -> dict[tuple[int, ...], list | str
 
 def _requests(workload: dict[str, Any]) -> list[dict[str, Any]]:
     """The workload's requests at their realized arrivals (`arrivals.realized_arrive_steps`: an arrival the idle engine brings
-    forward is prefilled alone, not with the requests declared at its step)."""
+    forward is prefilled alone, not with the requests declared at its step); a ValueError naming the fix for a workload that
+    declares neither its requests nor a sweep, whose launches nothing here knows."""
     reqs = workload.get("requests")
     if isinstance(reqs, list) and reqs and all(isinstance(r, dict) and "prompt_len" in r for r in reqs):
         out = [{"arrive_step": int(r.get("arrive_step", 0) or 0), "prompt_len": int(r["prompt_len"]), "max_tokens": int(r["max_tokens"]),
                 "cached": c} for r, c in zip(reqs, cached_of(workload))]
+    elif "sweep" not in workload:
+        raise ValueError(f"the workload declares no requests with their prompt_len and no sweep (its requests: {reqs!r:.80}), so no "
+                         f"launch of its requests is known here. The fix: a Program of no declared request (a class's) is built at its "
+                         f"launch, `build_program`'s batch (`steps.RequestUnit.launch`, which its key holds), never one read from here")
     else:
         s = workload["sweep"]
         ils, caps = s["input_lengths"], s["output_caps"]
@@ -170,8 +176,8 @@ def main(a: Options) -> int:
     with open(a.workload) as f:
         w = json.load(f)
     if a.LP is not None and a.T is not None:
-        print(spec_for(w, a.LP, a.T, a.C))
+        write(spec_for(w, a.LP, a.T, a.C))
         return 0
     for s, v in sorted(shape_contexts(w).items()):
-        print(f"{shape_name(s)} {v if isinstance(v, str) else _spec(w, v)}")
+        write(f"{shape_name(s)} {v if isinstance(v, str) else _spec(w, v)}")
     return 0

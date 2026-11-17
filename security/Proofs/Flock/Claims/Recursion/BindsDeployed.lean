@@ -50,7 +50,7 @@ the rest (`binds_deployed`).
 `LastBindsEC`) **failed before S0** where the element-level verifier's steps are the deployed plain verifier's (`FlockDeploy.V
 false`) and `final` keeps `DE`'s last message as it is. That last message is `Final.encode` of the statement, the
 record's text and the proof files, and the verifier read the record's text only through `Json.parse`
-(`Record.decodeWith`, `liveOf`, `recordDraw`: `LastGap.decodeWith_congr`, `liveOf_congr`, `recordDraw_congr`). The
+(`Record.decodeWith`, `liveOf`, `recordDraw`: `LastGap.decodeWith_congr`, `liveOf_congr`, `recordSample_congr`). The
 text with one trailing space parses alike (`JsonTrailingSpace`, Lean's parser ends every value with `ws` before
 `eof`), so it was another last message that `final` reads differently and `IVStar` decided alike, with the same calls.
 S0 closes that: the checks end with `RecordText.check`, which accepts a record only as `printT` of what it parses to,
@@ -217,7 +217,7 @@ open Lean (Json)
 
 /-! ## The deployed plain verifier reads the record only through `Json.parse` -/
 
-theorem recordDraw_congr {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r) :
+theorem recordSample_congr {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r) :
     FlockSoundness.Discharge.Exec.recordDraw r' = FlockSoundness.Discharge.Exec.recordDraw r := by
   unfold FlockSoundness.Discharge.Exec.recordDraw
   rw [h]

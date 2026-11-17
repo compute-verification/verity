@@ -53,6 +53,7 @@ FROM_LABEL = "from:"                                             # the handle th
 STRAY_NOTE = (f"Canceled by the Linear audit's stray rule: an ask filed in another lane's team that nobody took up (a project "
               f"and a due date) or touched for {STRAY_H} h. If it is still wanted, its owner reopens it with a project and a date.")
 AUDIT_PAGE = 25                                                  # first: 50 with the nested fields is "Query too complex"
+COMMENT_PAGE = 250                                               # Linear's largest page; `comments` asks for few fields
 AUDIT_CHILDREN = 50                                              # a parent's most recently updated children the audit reads
 LANE_LABEL = "lane:"                                             # a handle with no team of its own marks its issues so
 NO_LANE = "-"
@@ -239,6 +240,15 @@ def _lane_label(i: dict) -> str | None:
 
 def _lane(i: dict, owners: dict[str, str]) -> str:
     return _lane_label(i) or owners.get(i["team"]["key"]) or NO_LANE
+
+
+def lane(i: dict, reg: dict) -> str | None:
+    """The handle an issue (with its `team { key }` and `labels { nodes { name } }`) belongs to: its `lane:` label's when
+    the Slack registry `reg` has that handle, else its team's handle (`owners`), else None."""
+    label = _lane_label(i)
+    if label and any(h["handle"] == label for h in reg.get("handles", [])):
+        return label
+    return owners(reg).get(i["team"]["key"])
 
 
 def ask_open(a: dict) -> bool:
@@ -594,7 +604,8 @@ class Linear:
           (an update, a comment, a child's) for STRAY_H.  `close_strays` closes these; the audit only reports them.
         - unheard: filed by a person (a creator and no bot) and not assigned to that person (a note to themself), not yet
           started, with no comment UNHEARD_H after it was filed.
-          The sweep rings its lane for it, so no lane subscribes to its team's issue events, which wake it for its own.
+          The Slack events service rings its lane when it is filed, and the sweep again for this, so no lane subscribes to
+          its team's issue events, which wake it for its own.
         The rest hold on open issues (OPEN_TYPES), Backlog being where an issue that serves no goal waits:
         - orphan: in no project, ORPHAN_H after it was filed.  milestone: in a project with milestones, with none set.
         - undated: Todo, In Progress or In Review with no due date.  overdue: due before today (Pacific).
@@ -774,6 +785,20 @@ class Linear:
                 return issues
             after = page["pageInfo"]["endCursor"]
 
+    def comments(self, since: str) -> list[dict]:
+        """Every comment created after `since` (UTC ISO), on every team's issues these credentials read, COMMENT_PAGE a page:
+        {id, createdAt, body, user {name}, botActor {userDisplayName}, issue {identifier, url}}."""
+        q = ("query($f: CommentFilter!, $after: String) { comments(filter: $f, first: " + str(COMMENT_PAGE) + ", after: $after) "
+             "{ pageInfo { hasNextPage endCursor } nodes { id createdAt body user { name } botActor { userDisplayName } "
+             "issue { identifier url } } } }")
+        out, after = [], None
+        while True:
+            page = self.gql(q, {"f": {"createdAt": {"gt": since}}, "after": after})["comments"]
+            out += page["nodes"]
+            if not page["pageInfo"]["hasNextPage"]:
+                return out
+            after = page["pageInfo"]["endCursor"]
+
     def comment(self, issue_id: str, sender: str, body: str) -> None:
         i = {"issueId": issue_id, "body": body if self.app else f"@{sender}: {body}"}
         if self.app:
@@ -832,13 +857,6 @@ class Linear:
         if not r["success"]:
             raise LinearError(f"Linear didn't link {url}: attachmentLinkGitHubPR returned success false")
         return True
-
-    def issues(self, team: str, state: str | None = None) -> list[dict]:
-        """The team's open issues, or those in the state named `state`, oldest first: {identifier, title, state: {name}}."""
-        f = {"team": {"id": {"eq": self.team(team)["id"]}},
-             "state": {"name": {"eqIgnoreCase": state}} if state else {"type": {"nin": ["completed", "canceled"]}}}
-        q = "query($f: IssueFilter!) { issues(filter: $f, first: 250) { nodes { identifier title createdAt state { name } } } }"
-        return sorted(self.gql(q, {"f": f})["issues"]["nodes"], key=lambda i: i["createdAt"])
 
     def subscribers(self, issue_id: str) -> list[str]:
         q = "query($id: String!) { issue(id: $id) { subscribers { nodes { name } } } }"

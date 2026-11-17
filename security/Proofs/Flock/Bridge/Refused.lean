@@ -44,7 +44,7 @@ published domain (`PortRoots.dupId`), no two ports' registered roots one root un
 (`PortRoots.rootsColl = none`), and the registration's population the game's `n` units in order
 (`Bridge.PopMatches`).
 The verifiers now refuse every file that fails the last three: `verify --zk` runs `Flock.PortRoots.check`
-last in its verdict (`Main.verifyCmd`, with or without `--ks-form`, the check's old flag), and the sampled-proofs run
+last in its verdict (`Main.verifyCmd`, with or without `--ks-form`, the check's old flag), and the SPOT run
 refuses the registration (`Spot.Run.run`,
 `population-order`, `Spot.Slots.popOk`). So the guarantee reads them off acceptance.
 
@@ -65,7 +65,7 @@ refuses the registration (`Spot.Run.run`,
 
 namespace Flock.Bridge
 
-open Properties.NetworkCertifier.Bytes (bs bs_inj)
+open Properties.Certifier.Bytes (bs bs_inj)
 
 /-- **The verifier's published roots are `rootsOf`'s**: at a public file without shared rows, port `q`'s published
 root (`Flock.PortRoots.pubRoot`: its published domain, its population's rows, its schema) is `rootsOf`'s at the file's
@@ -105,7 +105,7 @@ def LiveAcceptsKS {n : ℕ} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inpu
     (o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript) : Prop :=
   LiveAcceptsZK I o ∧ Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok ()
 
-/-- **The sampled-proofs run passes the registration's population** (`Spot.Run.run`, `population-order`):
+/-- **The SPOT run passes the registration's population** (`Spot.Run.run`, `population-order`):
 the descriptor `desc` parses and its population under the query `qr` is `n` units in order (`Slots.popOk`). -/
 def RunPopOk (desc : Claims.Msg) (qr : Lean.Json) (n : ℕ) : Prop :=
   ∃ p, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Slots.popOk p qr n = true
@@ -121,7 +121,7 @@ open Classical in
 `verify --zk` accepts the transcript and the files (`Bridge.LiveAcceptsKS`: their ports row/v1, row/v2 or row-seg/v1 rows
 of distinct published domains, and no two registered roots, each over its port's published domain at its schema, one
 root under different domains, at the public file's population), the
-sampled-proofs run passes the registration's population (`Bridge.RunPopOk`: the descriptor `desc` and the query `qr`
+SPOT run passes the registration's population (`Bridge.RunPopOk`: the descriptor `desc` and the query `qr`
 give the game's `n` units in order, in the strata `Bridge.nsOf desc qr` the statement's partition lays), and the claims
 relation fails. It has none of V2's hypotheses `RowsOk`,
 `dupId = false`, `rootsColl = none` and `PopMatches`; the game's `n` is the public file's population (`pub.n = n`).
@@ -139,7 +139,7 @@ def SampledKSLiveRoots : Prop :=
     (desc : Claims.Msg) (qr : Lean.Json)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -151,12 +151,12 @@ def SampledKSLiveRoots : Prop :=
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     -- one opening's verification, in SHA-512 evaluations
     (v : ℝ) (_hv : 0 ≤ v)
     -- what the sampling statement carries and `RelS` doesn't read
     (q : Claims.Sampling.Query),
-    let L := Law.execOS (n := n) src (.subset kd) n
+    let L := SamplingDesign.execOS (n := n) src (.subset kd) n
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
@@ -165,7 +165,7 @@ def SampledKSLiveRoots : Prop :=
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
-          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+          fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
     let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
     -- the deployed commitment's layout: the game's rows, read off the circuit file

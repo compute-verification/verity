@@ -16,18 +16,24 @@ from functools import partial
 from types import SimpleNamespace
 from typing import Any
 
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    H1_COMMIT_SCHEME as SCHEME,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    CommitTap,
+    Sites,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    commit_site as site,
+)
+
+from verity_vllm import settings
 from verity_vllm.acquire.sources.int8_source import Int8Source
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw.h1.commit import (
-    SCHEME,
-    CommitTap,
-    Sites,
-    site,
-)
-from verity_vllm.protocols.pouw.h1.hooks import expert_names
-from verity_vllm.protocols.pouw.h1.ranks import RankExtension, RankRun, RankTap
+from verity_vllm.protocols.pouw.h1_hooks import expert_names
+from verity_vllm.protocols.pouw.h1_ranks import RankExtension, RankRun, RankTap
 
 
 class _EveryStep(dict):
@@ -131,7 +137,6 @@ def committer(engine: Any, run_id: str) -> Any:
     as `pipeline.served_match` builds it), the windowed collector under rows-sha512 (`protocols.pouw.h1.commit.SCHEME`). It retains
     its values nowhere unless VERITY_RETAIN says otherwise: H1 reads them from its tap, and the windowed collector retains
     none on the device."""
-    from verity_vllm import settings
     from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
     settings.setdefault("VERITY_RETAIN", "none")
@@ -199,7 +204,7 @@ class RankCommit(RankExtension):
         effective = {"max_num_batched_tokens": vc.scheduler_config.max_num_batched_tokens,
                      "max_num_seqs": vc.scheduler_config.max_num_seqs, "max_model_len": vc.model_config.max_model_len}
         return SimpleNamespace(llm=SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=vc)), runner=self.model_runner,  # type: ignore[attr-defined]
-                               model=model, cp=dict(cp), effective=effective)
+                               model=model, cp=dict(cp), effective=effective, vllm_config=vc)
 
     def h1rank_commit(self, cp: Mapping[str, Any] | None = None, run_id: str = "h1") -> dict[str, Any]:
         """The Commit on this rank (`attach`, its run ``run_id`` named with the rank's first linear), its tap a

@@ -1,6 +1,6 @@
 """A served workload: verity_vllm's serving Program for a truncated SmolLM2 checkpoint, built and evaluated on CPU.
 
-`verity_vllm.program.frontend.derive.derive_report` derives the Program from `derive_examples.GreedyServe`, the vLLM-style
+`verity_vllm.program.frontend.vllm_derive.derive_report` derives the Program from `derive_examples.GreedyServe`, the vLLM-style
 module (merged QKV and gate_up linears, vLLM's kernel interface, a per-layer KV cache) that serves one request: a prefill
 of `prompt` tokens, then `steps` greedy decode steps. In profile mode (`b1-eager`) every node is bound to the registered
 Definition of the kernel vLLM runs, and the derivation claims the registered family `Serve_v1` (`registry.b1.Serve`)
@@ -15,8 +15,8 @@ token. `Served.calls` gives each Call its round (as `CallInfo.request`) and laye
 the last layer's), which is what a pipeline placement reads; round r's layer l runs at engine step 1 + r·layers + l,
 since a round needs the token the round before it chose.
 
-`Served` has `model.Model`'s interface, so placement, framing and the block processes run on it as they do on the MLP. There is no torch oracle on CPU (vLLM's kernels are stand-ins there), so `reference` is the Program evaluated in
-one process, which a distributed run has to reproduce.
+`Served` has `model.Model`'s interface. There is no torch oracle on CPU (vLLM's kernels are stand-ins there), so
+`reference` is the Program evaluated in one process.
 """
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ class Config:
 
     def registry(self) -> dict:
         """The configuration `registry.b1` reads: B0's, with this size."""
-        from verity.definitions.registry import b1
+        from verity_vllm.definitions.registry import b1
         c = dict(b1.B0_CONFIG)
         c.update(NL=self.layers, H=self.hidden, NH=self.heads, KVH=self.kv_heads, D=self.head_dim, I=self.intermediate,
                  V=self.vocab, MAX_POS=self.max_pos, QKV=(self.heads + 2 * self.kv_heads) * self.head_dim,
@@ -75,7 +75,7 @@ def _module(cfg: Config, device: str | None = None):
 
 def _derive(cfg: Config):
     import torch
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_vllm.program.frontend.vllm_derive import derive_report
     prompt = torch.empty(cfg.prompt, dtype=torch.int32, device="meta")
     rep = derive_report(_module(cfg, "meta"), (prompt,), mode="profile", profile=PROFILE, config=cfg.registry(), name="Serve")
     if not rep.ok:

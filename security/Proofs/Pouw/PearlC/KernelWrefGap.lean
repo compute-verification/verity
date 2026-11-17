@@ -48,17 +48,17 @@ theorem pearlCGapDevKAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevK d sem ρ c) (pearlCDomainDevAt d s) →
       ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
         (pearlCProtocolDevK d sem ρ c).actOK (U.layout.shape u) act →
-        (pearlCProtocolDevK d sem ρ c).capOK H s' U u act →
+        (pearlCProtocolDevK d sem ρ c).inertBoundOK H s' U u act →
           (pearlCProtocolDevK d sem ρ c).Wref U.layout u ≤
             (ω : ℝ) * (pearlCProtocolDevK d sem ρ c).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
     have hsh : U.layout.shape u = s := hU.2.2 u hu
-    have hc : debitDev d (sem.unitDebitDev d H s' U u act) ≤ ρ * creditDev d (U.layout.shape u) := hcap
+    have hc : inertWorkDev d (sem.unitInertWorkDev d H s' U u act) ≤ ρ * creditDev d (U.layout.shape u) := hcap
     show (wrefDevK d c (U.layout.shape u) : ℝ) ≤
-      (ω : ℝ) * ((creditDev d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s' U u act) : ℚ) : ℝ)
+      (ω : ℝ) * ((creditDev d (U.layout.shape u) - inertWorkDev d (sem.unitInertWorkDev d H s' U u act) : ℚ) : ℝ)
     rw [hsh] at hc ⊢
     rw [hω]
-    have : ω * ((1 - ρ) * creditDev d s) ≤ ω * (creditDev d s - debitDev d (sem.unitDebitDev d H s' U u act)) :=
+    have : ω * ((1 - ρ) * creditDev d s) ≤ ω * (creditDev d s - inertWorkDev d (sem.unitInertWorkDev d H s' U u act)) :=
       mul_le_mul_of_nonneg_left (by linarith) hω0.le
     exact_mod_cast this
   have key := gapFromTTOut CM (pearlCProtocolDevK d sem ρ c) (pearlCDomainDevAt d s) (1 / 400) (ω : ℝ) δPearlC
@@ -77,7 +77,7 @@ theorem pearlCSampledDevKAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
       δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevK d sem ρ c) (pearlCDomainDevAt d s) →
       ∀ (H : Q → R) (s' : S), ∀ g < ((pearlCTilesDevK d sem ρ c).tiling U.layout).NT, ∀ act : Codes,
-        (pearlCTilesDevK d sem ρ c).capOK H s' U g act →
+        (pearlCTilesDevK d sem ρ c).inertBoundOK H s' U g act →
         (pearlCTilesDevK d sem ρ c).Wcred U.layout g act ≤
           (ω : ℝ) * (pearlCTilesDevK d sem ρ c).credit H s' U g act := by
     intro U hU H s' g hg act _
@@ -113,17 +113,17 @@ theorem pearlCGapDevRev1KAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevAt d s) →
       ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
         (pearlCProtocolDevRev1K d sem ρ c).actOK (U.layout.shape u) act →
-        (pearlCProtocolDevRev1K d sem ρ c).capOK H s' U u act →
+        (pearlCProtocolDevRev1K d sem ρ c).inertBoundOK H s' U u act →
           (pearlCProtocolDevRev1K d sem ρ c).Wref U.layout u ≤
             (ω : ℝ) * (pearlCProtocolDevRev1K d sem ρ c).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
     have hsh : U.layout.shape u = s := hU.2.2 u hu
-    have hc : sem.unitDebitRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
+    have hc : sem.unitInertWorkRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
     show (wrefDevRev1K d c (U.layout.shape u) : ℝ) ≤
-      (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act : ℚ) : ℝ)
+      (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitInertWorkRev1 d H s' U u act : ℚ) : ℝ)
     rw [hsh] at hc ⊢
     rw [hω]
-    have : ω * ((1 - ρ) * creditDevRev1 d s) ≤ ω * (creditDevRev1 d s - sem.unitDebitRev1 d H s' U u act) :=
+    have : ω * ((1 - ρ) * creditDevRev1 d s) ≤ ω * (creditDevRev1 d s - sem.unitInertWorkRev1 d H s' U u act) :=
       mul_le_mul_of_nonneg_left (by linarith) hω0.le
     exact_mod_cast this
   have key := gapFromTTOut CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevAt d s) (1 / 400) (ω : ℝ) δPearlC
@@ -142,7 +142,7 @@ theorem pearlCSampledDevRev1KAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fint
       (γ : ℝ) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevAt d s) →
       ∀ (H : Q → R) (s' : S), ∀ g < ((pearlCTilesDevRev1K d sem ρ c).tiling U.layout).NT, ∀ act : Codes,
-        (pearlCTilesDevRev1K d sem ρ c).capOK H s' U g act →
+        (pearlCTilesDevRev1K d sem ρ c).inertBoundOK H s' U g act →
         (pearlCTilesDevRev1K d sem ρ c).Wcred U.layout g act ≤
           (ω : ℝ) * (pearlCTilesDevRev1K d sem ρ c).credit H s' U g act := by
     intro U hU H s' g hg act _

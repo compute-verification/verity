@@ -51,7 +51,7 @@ first round, after the ZK server's PIOP and Ligerito logs. Here that stop is pla
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock Transcript
 open FlockComplete (PS)
@@ -142,4 +142,4 @@ theorem repCut_fw_inner_at (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) 
   simp only [FlockComplete.CutEq.innerAt, FlockComplete.CutEq.ligAt]
   omega
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

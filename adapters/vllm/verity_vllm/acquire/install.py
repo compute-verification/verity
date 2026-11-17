@@ -23,7 +23,8 @@ from typing import Any
 
 from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, AcquisitionSite
 from verity_vllm.engine import hooks as engine_hooks
-from verity_vllm.observe.runtime_tree import RUNNER_PATH
+from verity_vllm.records.runtime_tree import RUNNER_PATH
+from verity_vllm.records.schema_ids import ACQUISITION_OBSERVED_SCHEMA
 
 Sink = Callable[[tuple[str, str, str], Any], None]
 
@@ -42,7 +43,7 @@ def _sites_of(plan: AcquisitionPlan) -> tuple[list[AcquisitionSite], list[Acquis
 def _slot_of_output(output: Any, slot: str) -> Any:
     if slot == "out":
         return output
-    if slot.isdigit():
+    if slot.isdecimal():
         k = int(slot)
         return output[k] if isinstance(output, (tuple, list)) and k < len(output) else None
     return None
@@ -63,6 +64,7 @@ class Installation:
     handles: list = field(default_factory=list)
     _runner: Any = None
     _sample_patch: Any = None
+    _attrs: list[tuple[tuple[str, str, str], str]] = field(default_factory=list)  # each runner_return site's key and its attribute of what `sample()` returns
 
     def keys(self) -> list[tuple[str, str, str]]:
         return sorted(s.key() for s in self.installed)
@@ -101,7 +103,7 @@ class OccurrenceSink:
 
     def to_json(self) -> dict[str, Any]:
         keys = sorted(set(self.counts) | set(self.non_tensor))
-        return {"schema": "verity-vllm/acquisition-observed/v1", "sites": [
+        return {"schema": ACQUISITION_OBSERVED_SCHEMA, "sites": [
             {"module": k[0], "kind": k[1], "slot": k[2], "occurrences": self.counts.get(k, 0), "shapes": self.shapes.get(k, []),
              "dtypes": sorted(self.dtypes.get(k, ())), "non_tensor": self.non_tensor.get(k, 0)} for k in keys]}
 
@@ -147,9 +149,8 @@ def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None, *, 
                 continue
             if inst._runner is None:
                 inst._runner = runner
-                attrs: list[tuple[tuple[str, str, str], str]] = []
 
-                def sample(*a, _orig=runner.sample, _attrs=attrs, **kw):
+                def sample(*a, _orig=runner.sample, _attrs=inst._attrs, **kw):
                     res = _orig(*a, **kw)
                     so = res[0] if isinstance(res, tuple) else res
                     for k, attr in _attrs:
@@ -159,8 +160,7 @@ def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None, *, 
                     return res
 
                 inst._sample_patch = engine_hooks.patch(runner, "sample", sample)
-                inst._attrs = attrs  # type: ignore[attr-defined]
-            inst._attrs.append((key, s.slot.lstrip(".")))  # type: ignore[attr-defined]
+            inst._attrs.append((key, s.slot.lstrip(".")))
             inst.installed.append(s)
     if inst.missing:
         inst.remove()

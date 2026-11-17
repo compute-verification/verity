@@ -30,7 +30,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, option, row_file
+from verity_vllm.config import CHECKPOINTS, UsageError, checkpoint_entries, option, row_file
+from verity_vllm.pipeline.cli import write
 from verity_vllm.records.schema_ids import REBASELINE_DIGESTS_SCHEMA
 
 __all__ = ["COMMANDS", "build_programs", "main", "resolve", "row_digests"]
@@ -93,11 +94,14 @@ def has_role(checkpoint: dict[str, Any], role: str) -> bool:
 
 
 def resolve(row: str) -> tuple[str, str, str, int]:
-    """The row's checkpoint role, repo, revision and TP world (its workload and `manifests/checkpoints.json`)."""
+    """The row's checkpoint role, repo, revision and TP world (its workload and `manifests/checkpoints.json` with its sibling
+    manifests, `config.checkpoint_entries`)."""
     wl = _doc(row_file(row))
     role = wl["case"]
-    cps = _doc(ROOT / "manifests" / "checkpoints.json")["checkpoints"]
-    cp = next((c for c in cps if c.get("role") == role), None) or next(c for c in cps if has_role(c, role) and c.get("local_path"))
+    cps = checkpoint_entries(CHECKPOINTS)
+    cp = next((c for c in cps if c.get("role") == role), None) or next((c for c in cps if has_role(c, role) and c.get("local_path")), None)
+    if cp is None:
+        raise UsageError(f"row {row}: no pin in {CHECKPOINTS.name} or its sibling manifests serves its case {role!r}")
     # a row outside a sweep states `tp` itself, or in its id
     tp = int(_of(wl.get("sweep"), "tp") or wl.get("tp") or (2 if "__tp2__" in row else 1))
     return role, cp["repo"], cp["revision"], tp
@@ -312,16 +316,16 @@ COMMANDS = {"job": JobOptions, "resolve": ResolveOptions, "row-state": RowStateO
 def main(a: Any) -> int:
     dash = lambda x: "-" if x is None or x == "" else str(x)                 # noqa: E731
     if a.cmd == "job":
-        print(" ".join(map(dash, job(a.run_dir, a.custody_dir, a.store_reserve_s, a.job_deadline))))
+        write(" ".join(map(dash, job(a.run_dir, a.custody_dir, a.store_reserve_s, a.job_deadline))))
     elif a.cmd == "resolve":
-        print(" ".join(map(str, resolve(a.row))))
+        write(" ".join(map(str, resolve(a.row))))
     elif a.cmd == "row-state":
         fams, outcome, mv = row_state(a.row_dir, a.header)
-        print(dash(",".join(fams)), dash(outcome), dash(mv))
+        write(" ".join((dash(",".join(fams)), dash(outcome), dash(mv))))
     elif a.cmd == "word-check":
         rep = word_check(a.row, a.row_dir, a.world, a.build_word_check, a.build_max_gates, a.allowed_max_gates)
         Path(a.out).write_text(json.dumps(rep, indent=1))
-        print(("PASS" if rep["ok"] else "FAIL") + f" fast: {rep['word_lines']}/{rep['components']} word lines, {rep['calls']} calls -> "
+        write(("PASS" if rep["ok"] else "FAIL") + f" fast: {rep['word_lines']}/{rep['components']} word lines, {rep['calls']} calls -> "
               f"{rep['units']} units over {rep['gates']} gates, manifest {str(rep['manifest_digest'])[:16]}"
               + ("" if rep["ok"] else ": " + "; ".join(rep["problems"])))
         return 0 if rep["ok"] else 1
@@ -333,15 +337,15 @@ def main(a: Any) -> int:
         md = digests_markdown(rows)
         if a.markdown:
             Path(a.markdown).write_text(md)
-        print(md if a.out else text, end="")
+        write(md if a.out else text, end="")
         return 0 if all(r["programs"] and r["manifest_digest"] for r in rows) else 1
     elif a.cmd == "store-meta":
-        print(json.dumps(store_meta(a.row_dir, kind=a.kind, role=a.role, rownum=a.rownum, run_id=a.run_id, epoch_sha=a.epoch_sha,
+        write(json.dumps(store_meta(a.row_dir, kind=a.kind, role=a.role, rownum=a.rownum, run_id=a.run_id, epoch_sha=a.epoch_sha,
                                     gpu=a.gpu, pod=a.pod, epoch=a.epoch)))
     elif a.cmd == "custody-env":
-        print("\n".join(custody_exports(a.custody_dir)))
+        write("\n".join(custody_exports(a.custody_dir)))
     elif a.cmd == "device":
         dev, ok = device(a.expect_sms, a.expect_cc)
-        print(json.dumps(dev))
+        write(json.dumps(dev))
         return 0 if ok else 3
     return 0

@@ -23,8 +23,8 @@ rep's start (`Loop.freshOf`), which at rep 0 is the frame's start, and the loop'
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (V SessionSpec Stmt)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
-open _root_.Flock.Firewall.Frame (Masker Place)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frame (Masker Place)
 
 open Loop LeanRelease in
 /-- **At a rep switch the model's state is the next rep's start**: where the round after `e0 :: h1` is the session's
@@ -35,7 +35,7 @@ theorem ofLoop_answered_switch (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (e0 : Msg × Msg) (h1 : List (Msg × Msg))
     (hs : 2 ≤ h1.length → repOf x (h1.length + 1) ≠ repOf x h1.length) {m : Masker}
@@ -62,7 +62,7 @@ theorem ofLoop_answeredR_switch (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (e0 : Msg × Msg) (h1 : List (Msg × Msg))
     (hs : 2 ≤ h1.length → repOf x (h1.length + 1) ≠ repOf x h1.length) {m : Masker}
@@ -84,12 +84,12 @@ theorem freshOf_rep0 (x : Msg) (cs : List FlockDeploy.Coin) {s0 : _} {spec : Ses
 
 set_option maxHeartbeats 1000000 in
 /-- **At any rep but rep 1 the readied frame is at the found frame's state**: `withAlg` and `placeOf` keep it. -/
-theorem roundPlace_st {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r j : Nat}
+theorem roundPlace_st {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
     (hr : r ≠ 1) : q.st = p.st := by
-  unfold _root_.Flock.Firewall.Frames.roundPlace at h
+  unfold _root_.Flock.ZkServer.Frames.roundPlace at h
   simp only [hf, bind, Except.bind, pure, Except.pure] at h
   by_cases hfst : (p.coins.isEmpty && !p.st.begun) = true
   all_goals repeat' (first
@@ -108,10 +108,10 @@ theorem roundPlace_st {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {
 
 /-- **At rep 0's first round the readied frame is at the model's state**: on its frame's run on no requests, where
 the model's state for the round is `freshOf`'s at a rep 0 stream's first round. -/
-theorem roundPlace_switch0 {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i j : Nat}
+theorem roundPlace_switch0 {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i 0 = some (j, p))
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i 0 dom content n = .ok (q, pl, f, nd))
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i 0 dom content n = .ok (q, pl, f, nd))
     (hR : RepRun [] [] p) (x : Msg) (cs : List FlockDeploy.Coin) {s0 : _} {spec : SessionSpec}
     {sts : Array Stmt} {q₀ : Nat} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
     (hq : cs.length = q₀ + 1) (hk : (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q₀).1 % 2 = 0)

@@ -10,7 +10,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler
+D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/tprobe.XXXXXX); trap 'rm -rf "$B"' EXIT
 export TP_BUILDS=${TP_BUILDS:-"bits:-DPFILL_BITS bu:-DPFILL_BU,-Xcompiler,-mpopcnt li:-DPFILL_BU,-DPFILL_LI,-Xcompiler,-mpopcnt xin13:-DPFILL_BU,-DPFILL_XIN13,-Xcompiler,-mpopcnt"}
 export TP_NC=${TP_NC:-"bits:4 bu:4 bu:2 li:4 xin13:4"} TP_W=${TP_W-"bits"} TP_S=${TP_S:-256} TP_WS=${TP_WS:-2048}
@@ -21,7 +21,7 @@ echo "$DFILL_COINS" > "$O/coins.txt"
 for b in $TP_BUILDS; do
   n=${b%%:*} f=${b#*:}
   # shellcheck disable=SC2086
-  nvcc -O3 -std=c++17 ${f//,/ } -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap-$n" $D/dcap.cu \
+  nvcc -O3 -std=c++17 ${f//,/ } -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap-$n" $K/dcap.cu \
     -lcublasLt -lnvidia-ml -ldl > "$O/build-$n.log" 2>&1 &
 done
 wait

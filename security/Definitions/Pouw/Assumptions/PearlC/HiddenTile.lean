@@ -11,7 +11,7 @@ probability at most `δzk(q)` per sample. `HiddenGap` turns it and `GGapSampled`
 
 It is an open obligation, not a hardness assumption, and lives here only because a `Prop` taken as a hypothesis goes in
 the assumptions module. It is to be discharged from Flock's soundness: its single-game theorem
-`flock_e2e_drawn_hm96_reads` through core's batch lemma (`Verity.Guarantees.ProbBatchInduced`), the binding of
+`flock_e2e_sampled_hm96_reads` through core's batch lemma (`Verity.Guarantees.ProbBatchInduced`), the binding of
 hm96-SHA-512 commitments to `τ`'s rows under the opening, the tile-check Program computing the good-tile predicate (L3)
 and the pinned anchors (L8). `tileProofSoundAll_of_tileGame` (`HiddenTileGame`) takes the batch lemma's part: it proves
 `TileProofSoundAll` from a `TileGame` per tile, so the rest is Flock's `TileGame`. What remains assumed under it is only
@@ -32,7 +32,7 @@ committed under the openings `op`, the prover `σ` of the proof phase and each s
 salt and the sample, the probability over the proof games' coins that the verdict on sample `i` is accept while tile `c i`
 is neither good nor blank in `τ` is at most `δzk`. -/
 def TileProofSound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
-    (HA : HiddenAudit Q R S) (U : Workload) (τ : (Q → R) → S → Transcript) (op : (Q → R) → S → HA.Opening)
+    (HA : HiddenAudit Q R S) (U : Workload) (τ : (Q → R) → S → Trace) (op : (Q → R) → S → HA.Opening)
     {w : ℕ → ℕ} {t : ℕ} (σ : HA.Prover TR U τ op w t) (δzk : ℝ) : Prop :=
   ∀ i : Fin t, ex (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
       if ((x.2.2 i).1 : ℕ) ∈ goodTiles P TR U x.1 x.2.1 (τ x.1 x.2.1) ∪ blankTiles TR U (τ x.1 x.2.1) then 0 else
@@ -52,7 +52,7 @@ degenerate hidden audit whose class is empty (`Bounded := fun _ _ _ _ _ => False
 something about Flock only at Flock's `HiddenAudit`. -/
 def TileProofSoundAll [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
     (D : Layout → Prop) (HA : HiddenAudit Q R S) (δzk : ℕ → ℝ) : Prop :=
-  ∀ U : Workload, U.InDomain P D → ∀ (τ : (Q → R) → S → Transcript) (op : (Q → R) → S → HA.Opening) (w : ℕ → ℕ)
+  ∀ U : Workload, U.InDomain P D → ∀ (τ : (Q → R) → S → Trace) (op : (Q → R) → S → HA.Opening) (w : ℕ → ℕ)
     (t q : ℕ) (σ : HA.Prover TR U τ op w t), HA.ProverBounded σ q → TileProofSound P TR HA U τ op σ (δzk q)
 
 end Pouw.PearlC.Assumptions

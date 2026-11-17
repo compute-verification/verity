@@ -52,7 +52,7 @@ def LiftMinRankL5eWitness : Prop :=
 
 /-- **MinRank ≥ ρ's witness, jointly**: for every `k ≥ 1024` with `16 ∣ k`, some `R` passes `Admissible`, is
 checkpoint independent, has MinRank ≥ 2 (`MinRank2`) and satisfies `MinRankGe k R 1`. (`minrank.md` certifies
-MinRank = 16 for the shift by 24 and the production P, on paper and by script; `MinRankGe k R 16` is not pinned.) -/
+MinRank = 16 for the shift by 24 and the served P, on paper and by script; `MinRankGe k R 16` is not pinned.) -/
 def MinRankGeWitness : Prop :=
   ∀ k, 1024 ≤ k → 16 ∣ k → ∃ R, Admissible k 16 R ∧ CheckpointIndependent k 16 R ∧ MinRank2 k R ∧ MinRankGe k R 1
 

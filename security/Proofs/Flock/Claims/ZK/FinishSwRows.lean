@@ -118,7 +118,7 @@ theorem fwCons_asz {st : Setup} {lay : Zk.PadLayout} {p : Flock.Proof} {root : B
 
 end FlockSoundness.Discharge.Composed
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 open Flock Transcript
 
 /-- **The PIOP's run is its three runs**: where `piopFw` returned, so did its zerocheck, its lincheck and its ring
@@ -148,7 +148,7 @@ theorem piopFw_split {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay :
   obtain ⟨⟨⟨rfl, rfl, rfl, rfl, rfl⟩, rfl⟩, rfl⟩ := h
   exact ⟨zc, t₁, l₁, lc, t₂, l₂, h₁, h₂, h₃⟩
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK

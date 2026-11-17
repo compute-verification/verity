@@ -198,7 +198,7 @@ theorem sessionNums (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) 
   obtain ⟨s, hs⟩ := s
   dsimp only [deployRec, numsZk]
   rw [vstar_getD b.st x ms hs, ← numsOf_vstarAt b.st x ms s]
-  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+  exact ⟨rfl, rfl, rfl, (N₀Oq_cast _).symm, rfl, rfl⟩
 
 theorem sum_range_le (f : ℕ → ℕ) {a b : ℕ} (h : a ≤ b) :
     ((List.range a).map f).sum ≤ ((List.range b).map f).sum := by

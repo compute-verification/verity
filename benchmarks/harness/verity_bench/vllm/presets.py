@@ -6,7 +6,8 @@ import hashlib
 import re
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from verity_config import Admission, ConfigError, gpus, load, sha256
 
@@ -24,6 +25,14 @@ ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 RESERVED_ENV = re.compile(r"VERITY_BENCH_\w*|RESEARCH_\w*|GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES|CUDA_DEVICE_ORDER|PYTHONPATH|PATH")
 #: Every point's sampling, as vLLM `SamplingParams` fields.
 GREEDY: Mapping[str, float] = {"temperature": 0.0}
+
+
+def wrong_card(spec_id: str, gpu_id: str, card: str) -> str | None:
+    want = GPUS[gpu_id].nvidia_smi_name
+    if all(want in name for name in card.split(", ")):
+        return None
+    return (f"the card is a {card}, not the {gpu_id} of spec {spec_id!r} ({want}): run it on a node whose card is a "
+            f"{want}, or use the spec for this card")
 
 
 @dataclass(frozen=True)
@@ -45,15 +54,14 @@ class Preset:
         return asdict(self)
 
 
-#: Engine precisions an arm may name (`engine.engine_args`). ``int8_exact`` is the eager exact-int8 engine on an int8 pin
-#: (`TargetProfile.int8_exact` ``"all"``: every linear and every attention layer on the plain exact-int8 arm)
-PRECISIONS = ("bfloat16", "fp8", "int8_exact")
+#: Engine precisions an arm may name (`engine.engine_args`)
+PRECISIONS = ("bfloat16", "fp8")
 #: The keys a preset's `engine_settings` may set: those `engine.engine_args` reads, and the two `served` sets from the
 #: spec's `eager` (``cuda_graphs``, ``enforce_eager``), which a spec's own value doesn't change
 ENGINE_SETTINGS = (
     "max_model_len", "max_num_seqs", "max_num_batched_tokens", "resident_gpu_memory_utilization",
     "block_gpu_memory_utilization", "resident_kv_cache_memory_bytes", "block_kv_cache_memory_bytes", "capture_sizes",
-    "serving_defaults", "attention_backend", "attention_config", "cuda_graphs", "enforce_eager",
+    "serving_defaults", "cuda_graphs", "enforce_eager", "batch_invariant",
 )
 #: A protocol arm's `control` that gives it none: its tokens are checked by no other arm's, and the table names it
 NO_CONTROL = "none"
@@ -68,15 +76,11 @@ class ArmSettings:
     the spec names, or `NO_CONTROL`; default stock FP8), and the protocols config handed to `verity_vllm.LLM`
     (``{protocol: {...}}``), where a string value ``"$NAME"`` is the point's environment variable NAME, which the spec's
     setup exports. A served variant (`[arm_settings."stock-fp8@compiled"]`) takes only its control (default its
-    built-in) and its own checkpoint, `model` at `revision` (default the preset's), for a preset whose checkpoint its
-    precision can't load (stock FP8 against the int8 pin, from the pin's BF16 base). All of it is in the point's
-    identity."""
+    built-in). All of it is in the point's identity."""
 
     precision: str | None = None
     control: str | None = None
     protocols_config: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
-    model: str | None = None
-    revision: str | None = None
 
 
 @dataclass(frozen=True)
@@ -185,11 +189,7 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
             raise ConfigError(f"{path}: arm_settings {name!r} must name a protocol arm (protocol:scheme) or a served "
                               f"variant (BUILTIN@{'|'.join(SERVED_EXECUTIONS)}) in arms")
         if variant and (arm.precision is not None or arm.protocols_config):
-            raise ConfigError(f"{path}: arm_settings {name!r}: a served variant takes only its control and checkpoint")
-        if not variant and (arm.model is not None or arm.revision is not None):
-            raise ConfigError(f"{path}: arm_settings {name!r}: only a served variant names its own checkpoint")
-        if (arm.model is None) != (arm.revision is None):
-            raise ConfigError(f"{path}: arm_settings {name!r}: a checkpoint is a model at a pinned revision: set both")
+            raise ConfigError(f"{path}: arm_settings {name!r}: a served variant takes only its control")
         if arm.precision is not None and arm.precision not in PRECISIONS:
             raise ConfigError(f"{path}: arm_settings {name!r}: precision is one of {', '.join(PRECISIONS)}")
         if arm.control is not None and arm.control != NO_CONTROL and (arm.control not in doc.arms or arm.control == name):

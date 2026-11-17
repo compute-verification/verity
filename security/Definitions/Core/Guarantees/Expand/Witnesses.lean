@@ -7,11 +7,11 @@ public import Definitions.Core.Expand.Instances
 # The bit-level expansion's size bounds: honest and nontrivial lemmas
 
 `ExpandSize` and `ExpandAndSize` take no premise, so each has two statements here, at `Verity.Expand.AndPair`
-(`Security/Definitions/Core/Expand/Instances.lean`): `<Guarantee>_honest`, its conclusion at that declaration and its
+(`security/Definitions/Core/Expand/Instances.lean`): `<Guarantee>_honest`, its conclusion at that declaration and its
 one-unit partition, and `<Guarantee>_nontrivial`, its bound with the right-hand side lowered by one failing there, so
 the bound is tight at an explicit circuit.
 
-The proofs are in `Security/Proofs/Core/ExpandWitnesses.lean`.
+The proofs are in `security/Proofs/Core/ExpandWitnesses.lean`.
 -/
 
 @[expose] public section

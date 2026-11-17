@@ -37,13 +37,19 @@ from verity.circuits import word as word_query
 
 from verity_vllm.config import option, workload_arg
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.log import init_logger
+from verity_vllm.pipeline.cli import write
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
 from verity_vllm.query.compose import compose_global, merge_ranks
-from verity_vllm.query.program_view import from_instances, iter_instance_rows, specialization
+from verity_vllm.query.program_view import (
+    from_instances,
+    iter_instance_rows,
+    specialization,
+)
 from verity_vllm.query.required import (
     Q_WORD_ID,
     QUERIES,
@@ -52,6 +58,8 @@ from verity_vllm.query.required import (
 )
 
 __all__ = ["COMMANDS", "build", "build_global", "cpus", "incomplete_rc", "main", "taps_of"]
+
+logger = init_logger(__name__)
 
 #: `--jobs`'s variable
 JOBS_ENV = "VERITY_MANIFEST_JOBS"
@@ -194,7 +202,7 @@ def _headroom() -> int | None:
                 lim, cur = a.read().strip(), int(b.read().strip())
         except (OSError, ValueError):
             continue
-        if lim.isdigit() and int(lim) < (1 << 60):
+        if lim.isdecimal() and int(lim) < (1 << 60):
             return max(0, int(lim) - cur)
     try:
         with open("/proc/meminfo") as f:
@@ -305,7 +313,7 @@ def _own_budget(budget_gb: float | None = None) -> int | None:
             total = next(int(ln.split()[1]) * 1024 for ln in f if ln.split(":")[0] == "MemTotal")
     except (OSError, StopIteration, ValueError, IndexError):
         return None
-    return head if lim.isdigit() and int(lim) < total else None
+    return head if lim.isdecimal() and int(lim) < total else None
 
 
 def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None], log=None) -> list[dict[str, Any]]:
@@ -621,7 +629,7 @@ COMMANDS = {"build": BuildOptions, "build-global": BuildGlobalOptions}
 
 
 def main(a: Any) -> int:
-    log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    log = logger.info
     if a.cmd in ("build", "build-global"):
         # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
         from verity_vllm.gc_tuning import tune as _gc_tune
@@ -633,7 +641,7 @@ def main(a: Any) -> int:
                     word=a.word_check, norm_scales=a.norm_scales, taps=taps_of(a.router_softmax, a.vocab_range),
                     cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, jobs=a.jobs or cpus(), log=log)
         _write(man, a.out)
-        print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "complete": man["complete"], "out": a.out}))
+        write(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "complete": man["complete"], "out": a.out}))
         return incomplete_rc(man)
     if a.cmd == "build-global":
         fx = _load_json(a.fixture)
@@ -643,7 +651,7 @@ def main(a: Any) -> int:
                                  cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, jobs=a.jobs or cpus(),
                                  budget_gb=a.build_ram_budget_gb, log=log)
         _write(man, a.out)
-        print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
+        write(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],
                           "tp_peer_binding_n_unbound": _unbound_peers(man), "out": a.out}))
         return incomplete_rc(man)

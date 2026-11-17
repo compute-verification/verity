@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Complete.Encode
 public import Proofs.Flock.Claims.Recursion.Deploy
-public import VStarRecursive.Protocol
+public import VStarRecursion.Protocol
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -42,7 +42,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 The compiled recursive component runs, per V\* part `j`, `partVerdict`: part `j`'s setup at its record's sample
 (`buildSessionOf` and the recursive setup's checks), then `Zk.verify` on the record and the rep files the part names
-(`partFiles`), the scope check, the tables' sizes, the sample's law, the full-draw and inner-draw refusals, the program and
+(`partFiles`), the scope check, the tables' sizes, the sample's sampling design, the full-draw and inner-draw refusals, the program and
 the record's canonical text. The model verifier (`RecDeploy.V`) decides session `s` with `RecDeploy.nextO` at the
 session's V\* statement `xO`: at SHA-512 it accepts exactly when `Zk.verify` at `xO`'s recursive setup accepts the last
 message's record and proof files, `FlockDeploy.checks` pass and so do the verdict's last refusals
@@ -75,7 +75,7 @@ namespace Verity.Recursive
 open Lean (Json)
 open Flock (V SessionSpec Stmt Setup)
 open FlockDeploy (Coin Final Ins sha512 tabsOf checks)
-open RecDeploy (actO nextO setupO fullDrawO innerOfO srcOfO VO)
+open RecDeploy (actO nextO setupO fullSampleO innerOfO srcOfO VO)
 open VStar.Recursive (InnerHeld PartOwn PartProof STATEMENT registeredOf partVerdict)
 
 /-- **Part `j`'s rep files** at the session `spec`: for each rep stream, the file the part names under the stream's
@@ -164,15 +164,15 @@ theorem partFiles_eq {spec : SessionSpec} {s : PartProof} {bs : Core.Blobs} {pro
     simp only [hfind]
     exact get_what hget
 
-private theorem fullDraw_some (i : Flock.RecVStar.Inner) (b : Bool) (d : Option Json) (r : String) :
-    Flock.RecSetup.fullDraw (some i) b d r = Flock.RecSetup.fullDraw (some i) true d r := by
-  cases b <;> first | rfl | simp [Flock.RecSetup.fullDraw]
+private theorem fullSample_some (i : Flock.RecVStar.Inner) (b : Bool) (d : Option Json) (r : String) :
+    Flock.RecSetup.fullSample (some i) b d r = Flock.RecSetup.fullSample (some i) true d r := by
+  cases b <;> first | rfl | simp [Flock.RecSetup.fullSample]
 
-private theorem innerDrawn_record {s s' : Flock.RecCoins.Source} (h : s.record = s'.record) :
-    Flock.RecSetup.innerDrawn (some s) = Flock.RecSetup.innerDrawn (some s') := by
-  simp only [Flock.RecSetup.innerDrawn, h]
+private theorem innerSampled_record {s s' : Flock.RecCoins.Source} (h : s.record = s'.record) :
+    Flock.RecSetup.innerSampled (some s) = Flock.RecSetup.innerSampled (some s') := by
+  simp only [Flock.RecSetup.innerSampled, h]
 
-private theorem recordDraw_eq (r : String) :
+private theorem recordSample_eq (r : String) :
     FlockSoundness.Discharge.Exec.recordDraw r = Flock.Witness.recordDraw r := rfl
 
 /-- **The compiled part's verdict, unfolded**: where part `j`'s verdict is `.ok ()`, it read the statement's tags, the
@@ -201,8 +201,8 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
       Flock.ProvedScope.check
           (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
           true circuitB pubB [] 1 false registered.isSome = .ok () ∧
-      Flock.RecSetup.fullDraw (some h.shape) true (Flock.Witness.recordDraw record) record = .ok () ∧
-      Flock.RecSetup.innerDrawn (some h.src) = .ok () ∧
+      Flock.RecSetup.fullSample (some h.shape) true (Flock.Witness.recordDraw record) record = .ok () ∧
+      Flock.RecSetup.innerSampled (some h.src) = .ok () ∧
       Flock.RecordText.check record = .ok () := by
   unfold partVerdict at hpart
   dsimp only at hpart
@@ -257,7 +257,7 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     rcases D with _ | d
     · simp only [Option.isNone_none, ↓reduceIte] at hv
       obtain ⟨⟨⟩, hdl, -⟩ := bind_ok hv
-      first | cases hdl | simp [Flock.ProvedScope.drawLaw] at hdl
+      first | cases hdl | simp [Flock.ProvedScope.sampleDesign] at hdl
     simp only [Option.isNone_some, Bool.false_eq_true, ↓reduceIte] at hv
     obtain ⟨⟨⟩, hfd, hv⟩ := bind_ok hv
     obtain ⟨⟨⟩, hid, hv⟩ := bind_ok hv
@@ -328,7 +328,7 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
     (hnp : f.proofs.size = spec.repStreams.size)
     (hlive : (do FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids : Flock.V Unit) = .ok ()) :
     Flock.Zk.verify spec (tabsOf sts) f.record f.proofs = .ok () ∧ checks true s spec xO link c₁ mids f = .ok () ∧
-      fullDrawO xO f = true := by
+      fullSampleO xO f = true := by
   obtain ⟨tags0, circuitB, pubB, registered, rB, record, spec', sts', proofs, hT, hc, hp, hr, hrB, hu, hds, hbs, hpf,
     hzv, hsc, hfd, hid, hrt⟩ := partVerdict_ok hpart
   rw [hfind] at hT
@@ -354,7 +354,7 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
       unfold Flock.Readable.Read.check
       rw [htags, hzk, htables, hcount, hpi, hreadReg]
       exact hsc
-    have hdl : (if s.read.draw.isNone then Flock.ProvedScope.drawLaw true s.read.tags false none else pure ()) =
+    have hdl : (if s.read.draw.isNone then Flock.ProvedScope.sampleDesign true s.read.tags false none else pure ()) =
         (.ok () : V Unit) := by
       obtain ⟨d, hd⟩ := Option.isSome_iff_exists.1 hds
       rw [hdraw, hd]
@@ -364,7 +364,7 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
     · simp [Flock.Record.check, hstmt]
       all_goals rfl
     refine ok_bind (a := ()) ?_ ?_
-    · rw [recordDraw_eq, hdraw, FlockDeploy.drawEq_refl]
+    · rw [recordSample_eq, hdraw, FlockDeploy.sampleEq_refl]
       all_goals rfl
     refine ok_bind hlv ?_
     refine ok_bind hcu ?_
@@ -375,8 +375,8 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
     have hho : h.shape.holo = false ∧ h.shape.sparse = none := by
       unfold VStar.Recursive.dense at hdn
       cases hh : h.shape.holo <;> cases hs : h.shape.sparse <;> simp [hh, hs] at hdn ⊢
-    unfold fullDrawO
-    rw [hinner, hsrcEq, fullDraw_some, hfd, innerDrawn_record hrecEq, hid]
+    unfold fullSampleO
+    rw [hinner, hsrcEq, fullSample_some, hfd, innerSampled_record hrecEq, hid]
     all_goals first
       | rfl
       | (simp [Flock.RecSetup.denseOnly, hho.1, hho.2, bind, Except.bind, pure, Except.pure, Except.isOk,

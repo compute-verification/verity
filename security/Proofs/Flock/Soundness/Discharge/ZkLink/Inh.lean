@@ -95,11 +95,11 @@ theorem allInh_openingZK (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (a c : Claim F
     AllInh.bind' (AllInh.mapM _ hs _) fun _ => AllInh.bind' (AllInh.draw' _) fun _ => .ret _
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
-theorem allInh_drawKs (A : Arith F K) : ∀ e : ℕ, AllInh (drawKs A e)
+theorem allInh_sampleKs (A : Arith F K) : ∀ e : ℕ, AllInh (sampleKs A e)
   | 0 => .ret _
   | e + 1 => by
-      simp only [drawKs]
-      exact AllInh.bind' (allInh_drawK A) fun _ => AllInh.bind' (allInh_drawKs A e) fun _ => .ret _
+      simp only [sampleKs]
+      exact AllInh.bind' (allInh_sampleK A) fun _ => AllInh.bind' (allInh_sampleKs A e) fun _ => .ret _
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
 theorem allInh_foldRoundsZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) :
@@ -107,10 +107,10 @@ theorem allInh_foldRoundsZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) :
   | 0, _, _, _ => .ret _
   | 1, _, _, _ => by
       simp only [foldRoundsZK]
-      exact AllInh.bind' (allInh_drawK A) fun _ => .ret _
+      exact AllInh.bind' (allInh_sampleK A) fun _ => .ret _
   | k + 2, j, _, q => by
       simp only [foldRoundsZK]
-      refine AllInh.bind' (allInh_drawK A) fun _ => ?_
+      refine AllInh.bind' (allInh_sampleK A) fun _ => ?_
       repeat' (first
           | exact AllInh.ret _
           | exact AllInh.pure' _
@@ -138,7 +138,7 @@ theorem allInh_ligeritoPadZC (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (sch 
       | dsimp only)
   all_goals first
     | exact allInh_foldRoundsZK A P _ _ _ _
-    | exact allInh_drawKs A _
+    | exact allInh_sampleKs A _
     | exact allInh_twoOodC A _ _ _ _
     | exact allInh_recursiveRoundsC A _ _ _ _ _ _ _
 

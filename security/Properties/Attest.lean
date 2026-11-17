@@ -1,17 +1,17 @@
 module
 
 public import Attest.Period
-public import Definitions.Accounting.Assumptions.Parties
+public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Claims
 public import Mathlib
-public import Properties.Pous.MemoryChallenger
+public import Properties.Pous.MemoryAttester
 
 /-!
 # A party's signed period roots and liveness records: what a period's proof establishes, and what the auditor sees
 
-An auditor party (the memory challenger; a network certifier) holds a lower HSS key its device's identity certified for
+An auditor party (the memory challenger; a network attester) holds a lower HSS key its device's identity certified for
 it, commits each certification period's records as the leaves of one frame-v3-sha512 tree and signs the root once, and
-signs one liveness record per sampling block (`Attest.Period`, `verity.core.attest`). The records, the root
+signs one liveness record per sampling block (`Attest.Period`, `verity.commitments.attest`). The records, the root
 and its signature go to the prover only, as witness; a period's proof runs `Attest.check` on them under the lower key.
 The lower key and its certificate (`Attest.PartyKey`) are public, as every liveness record shows them, and the verifier
 checks the certificate in the clear (`Attest.checkKey`); `Attest.accepts` is both. The liveness records are public,
@@ -45,10 +45,10 @@ records read, their paths)`: their zero knowledge is Flock's (`Claims.ZKmalR` at
 
 @[expose] public section
 
-namespace MemoryChallenger.Attest.Properties
+namespace MemoryAttester.Attest.Properties
 
 open Flock
-open Accounting.Assumptions
+open ResourceAccounting.Assumptions
 
 /-! ## What the devices sign -/
 
@@ -387,4 +387,4 @@ def emptyRun : Unit → PeriodRun := fun _ => ⟨emptyDevice, .empty, .empty, ""
 def acceptAll : ByteArray → ByteArray → String → Attest.PartyKey → Attest.SignedRoot → Array Attest.Read → Lms.E Bool :=
   fun _ _ _ _ _ _ => .ok true
 
-end MemoryChallenger.Attest.Properties
+end MemoryAttester.Attest.Properties

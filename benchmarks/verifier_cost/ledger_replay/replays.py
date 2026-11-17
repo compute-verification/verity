@@ -5,7 +5,7 @@
 Per W, DIR/period-W.json is one request of `pouw-period serve`, a line: an honest period of W windows in the form the
 period's guarantee covers, as PoUW's period difftest generates one (`pouw_credit_cases.period_instance`). One line of
 JSON a W on stdout: the period's windows, its ledger's entries and sessions, the reference's verdict
-(`period_check.case`), and how many times the reference replayed the ledger on the way (`replays`, the calls of
+(`period_check.case_twin`), and how many times the reference replayed the ledger on the way (`replays`, the calls of
 `challenger._verify`).
 """
 from __future__ import annotations
@@ -17,11 +17,11 @@ from pathlib import Path
 
 import verity_difftest as D
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/verifier/lean/check/tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"))
 import pouw_credit_cases as credit_cases
 import pouw_period_cases as period_cases
-from verity.protocols.accounting.pouw.verifier import period_check
-from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.resource_accounting.compute.pouw.verifier import period_check
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
 
 def count(windows: int) -> tuple[dict, dict]:
@@ -38,7 +38,7 @@ def count(windows: int) -> tuple[dict, dict]:
 
     Ch._verify = counted
     try:
-        answer = period_check.case(case)
+        answer = period_check.case_twin(case)
     finally:
         Ch._verify = verify
     kinds = [json.loads(line)["kind"] for line in d["ledger"]]

@@ -15,8 +15,8 @@ open FlockSoundness FlockSoundness.Audit
 /-- `subset k n` samples `k` units when it samples. -/
 theorem subset_size {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Draw.subset k n src = some D) :
     D.size = k := by
-  rw [DrawExec.subset_eq] at h
-  cases hl : DrawExec.loopSw n src (List.range' 0 k) ∅ 0 with
+  rw [SampleExec.subset_eq] at h
+  cases hl : SampleExec.loopSw n src (List.range' 0 k) ∅ 0 with
   | none => rw [hl] at h; exact absurd h (by simp)
   | some sw =>
     rw [hl, Option.map_some, Option.some.injEq] at h
@@ -91,13 +91,13 @@ theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum
     rw [hD, Verity.QSort.size_qsort, hsz, Array.size_empty, Nat.zero_add]
     exact sum_range'_getElem! strata (·.k)
 
-/-- **`drawUnits` samples the sampling design's `k`**: a sample from `src` under a sampling design on strata of sizes `ns` with sample `kd` (`LawOn`)
+/-- **`sampleUnits` samples the sampling design's `k`**: a sample from `src` under a sampling design on strata of sizes `ns` with sample `kd` (`SamplingDesignOn`)
 returns `kd` units. -/
-theorem drawUnits_size {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} {src : ByteArray} {units : Array ℕ}
-    {read : ℕ} (hlaw : Flock.Bridge.LawOn law ns kd) (h : Draw.drawUnits law n src = .ok (units, read)) :
+theorem sampleUnits_size {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd n : ℕ} {src : ByteArray} {units : Array ℕ}
+    {read : ℕ} (hlaw : Flock.Bridge.SamplingDesignOn samplingDesign ns kd) (h : Draw.sampleUnits samplingDesign n src = .ok (units, read)) :
     units.size = kd := by
-  unfold Draw.drawUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) law n).run 0 with
+  unfold Draw.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) samplingDesign n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
     obtain ⟨r, read'⟩ := x
@@ -109,7 +109,7 @@ theorem drawUnits_size {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} {src 
     dsimp only at h
     obtain ⟨hu, -⟩ := Prod.mk.inj (Except.ok.inj h)
     subst hu
-    cases law with
+    cases samplingDesign with
     | subset k =>
       obtain ⟨hk, -⟩ := hlaw
       unfold Flock.Draw.drawWith at hw

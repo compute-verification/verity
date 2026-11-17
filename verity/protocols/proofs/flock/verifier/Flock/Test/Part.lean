@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+/-!
 `RecVStar.checkPart` where it fails closed before the verifier's part is computed: a part's statement over a unit not
 named `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, at a shape with no `fast100` schedule (m = 6), or whose META's
 `holo` is not a boolean, is refused; a level's statement passes whatever its unit. The whole S's row-port names
@@ -6,10 +11,6 @@ named `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, at a shape with no `fast100`
 takes minutes to evaluate interpreted, so the comparison itself is held to V*'s honest parts by the flock suite's
 `test_f1_the_session_meets` (V*'s statements `alg/p0`, `alg/p1` at m = 27, through `checkCircuit`).
 -/
-module
-
-public import Flock.RecVStar
-meta import Flock.RecVStar
 
 @[expose] public section
 

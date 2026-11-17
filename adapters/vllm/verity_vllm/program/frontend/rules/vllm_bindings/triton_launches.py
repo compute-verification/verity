@@ -6,12 +6,12 @@ import sys
 
 import torch
 from verity.circuits.refs import Coll
-from verity.definitions.registry.dsa_norm import check_block
+from verity_vllm.definitions.registry.dsa_norm import check_block
 
-from verity_vllm.program.frontend.derive import Alloc
+from verity_torch.frontend.derive import Alloc
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.rules.base import InPlaceRule, RuleInfo
+from verity_torch.frontend.rules.common import (
     dtype_is,
     from_rows,
     known,
@@ -20,7 +20,7 @@ from verity_vllm.program.frontend.rules.common import (
     rows_of,
     shape,
 )
-from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
+from verity_torch.frontend.rules.profile import BF16, _bias_shape
 from verity_vllm.program.frontend.rules.triton_iface import (
     launch_meta,
     launch_tensor,
@@ -29,7 +29,7 @@ from verity_vllm.program.frontend.rules.triton_iface import (
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
 )
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import (
+from verity_torch.frontend.rules.bindings.operands import (
     _strides,
     _untransposed,
 )
@@ -44,8 +44,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings.pins import (
     gemm_pins_for,
     lookup_key,
 )
-from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
+from verity_torch.frontend.strided_views import _tensor_type
+from verity_torch.frontend.value_types import shape_of
 
 __all__ = ["QKV_ARGS", "TRITON_DIVISIBILITY", "qkv_rms_launch"]
 
@@ -165,7 +165,7 @@ class FusedQKvRmsNormRule(InPlaceRule):
             return f"kernel source sha256 {meta.get('src_sha256')} differs from the pin {QKV_RMS_PINS['src_sha256']}"
         if not ctx.vocab.has("triton_block_rmsnorm"):
             return "numerics_unregistered: the vocabulary has no triton_block_rmsnorm"
-        sc, nw = meta.get("scalars", {}), (meta.get("geometry") or {}).get("num_warps")
+        sc, nw = meta.get("scalars", {}), meta["geometry"].get("num_warps")
         sizes = [sc.get(k[-1]) for k in QKV_ARGS]
         if not all(isinstance(n, int) and n > 0 for n in sizes) or not isinstance(sc.get("eps"), float):
             return f"Q_SIZE, KV_SIZE {sizes} and eps {sc.get('eps')!r} are not static positive sizes and a float"
@@ -360,15 +360,17 @@ def module_type(cls) -> type | None:
 
 def _pouw_scheme(node) -> str | None:
     """The PoUW scheme a launch is lowered under: the active target's ``pouw:<scheme>`` when that scheme has a circuit
-    (`verity.protocols.accounting.pouw.prover.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
+    (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
     module in the node's module stack)."""
-    from verity.protocols.accounting.pouw.prover import circuit
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        NCP_CIRCUIT_SCHEMES,
+    )
 
     entries = dict(e.split(":", 1) for e in (active_target_profile().protocols or ()))
     scheme = entries.get("pouw")
-    if scheme not in circuit.SCHEMES:
+    if scheme not in NCP_CIRCUIT_SCHEMES:
         return None
-    stack = node.meta.get("nn_module_stack") or {}
+    stack = node.meta.get("nn_module_stack")    # a node no module call made (a placeholder, an output) has none
     cls = module_type(list(stack.values())[-1][1]) if stack else None
     return scheme if cls is not None and issubclass(cls, linear_types()) else None
 

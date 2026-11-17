@@ -29,7 +29,7 @@ points and slot (`Masker.label`), whether the rep is stopped or not. So:
 namespace Claims.ZKServer.Flags
 
 open _root_.Flock (V F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker LABEL_PCS roundFree INNER_ROUNDS claimPoints check)
+open _root_.Flock.ZkServer.Frame (Cfg Masker LABEL_PCS roundFree INNER_ROUNDS claimPoints check)
 open FlockSoundness.Refine (Frame encs)
 
 /-- **Where the opening's label takes a state, the rank stop passes it**: in the algebraic phase at its last position
@@ -101,18 +101,18 @@ theorem rankFails_of_check {c : Cfg} {s : Masker} {v : ByteArray} {r : ByteArray
   · obtain ⟨q', hr, -⟩ := passes_none (check_none_passes h)
     exact rankFails_of_roundFree hq hr
   · have hr := check_some h
-    unfold _root_.Flock.Firewall.Frame.round at hr
+    unfold _root_.Flock.ZkServer.Frame.round at hr
     obtain ⟨q', hq', -⟩ := bindV_ok hr
     rw [← rankFails_stopped c s true]
     exact rankFails_of_roundFree hq hq'
 
 /-- **Where the frame's step releases a device round with the opening's first round in its place**, at its count,
 the rank stop passes the frame's state. -/
-theorem rankFails_of_step {c : Cfg} {st st' : _root_.Flock.Firewall.Frame.State} {r : ByteArray × ℕ}
+theorem rankFails_of_step {c : Cfg} {st st' : _root_.Flock.ZkServer.Frame.State} {r : ByteArray × ℕ}
     {v out : ByteArray} {vd : String} (hq : PcsRound r)
-    (h : _root_.Flock.Firewall.Frame.step c st (.round r.2 v (.sched r.1)) = (.round out vd, st')) :
+    (h : _root_.Flock.ZkServer.Frame.step c st (.round r.2 v (.sched r.1)) = (.round out vd, st')) :
     LeanRelease.rankFails c st.m = false := by
-  obtain ⟨why, hck⟩ := _root_.Flock.Firewall.Frame.check_of_step h
+  obtain ⟨why, hck⟩ := _root_.Flock.ZkServer.Frame.check_of_step h
   exact rankFails_of_check hq hck
 
 end Claims.ZKServer.Flags

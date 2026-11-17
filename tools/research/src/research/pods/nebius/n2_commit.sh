@@ -91,7 +91,7 @@ tp_of() { [[ $1 =~ __tp([12])__ ]] && echo "${BASH_REMATCH[1]}"; }
 
 # A row with 1024 input tokens or batch 32+ runs 20-120 min on node 1 (gemma2-9b B8 67-76, qwen3-30b-a3b 44-54, qwen3-14b
 # TP2 B8 ~45), and a stop at max_min reruns it from the top, so VY_N2_COMMIT_MAX_MIN (sized for node 2's 30-min gaps) would kill
-# it every time. Such a row gets VY_N2_COMMIT_LONG_MAX_MIN (the fill runner's cap for a Commit guest, FILL_COMMIT_MAX_MIN), which
+# it every time. Such a row gets VY_N2_COMMIT_LONG_MAX_MIN (the fill runner's limit for a Commit guest, FILL_COMMIT_MAX_MIN), which
 # it starts only where no booked window is that close.
 commit_max_min() {  # commit_max_min ROW
   local b=0
@@ -126,7 +126,7 @@ fetch_manifests() {  # fetch_manifests ART...: (on node 2) every manifest node 2
 }
 
 n2_question() {  # n2_question ROW: node 2's question for a Commit of ROW (the Attempt's second `question` label, load_item's)
-  printf "Does %s's Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled unit, as node 1's Commits of its Build do?" "$1"
+  printf "Does %s's Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled proof block, as node 1's Commits of its Build do?" "$1"
 }
 
 place() {  # place KIND KEY GPUS MAX_MIN QUESTION [CPUS [MEM_GB [SUBMITTER]]]: the queue's placement on node 2 as one placed.jsonl
@@ -305,7 +305,7 @@ n2 = d["n2"]
 env.update(SRC=n2["src"], TREE=d["tree"], KEY=n2["key"], COMMIT_KEY=n2["commit_key"], BUILD_ART=n2.get("build_art") or "",
            COMMIT_ART=n2.get("commit_art") or "", REPLAY_DEFERRED="0" if n2.get("proof") else "1", PROOF="1" if n2.get("proof") else "",
            QUESTION=d.get("question") or "",
-           N2_QUESTION=f"Does {env.get('ROW')}'s Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled unit,"
+           N2_QUESTION=f"Does {env.get('ROW')}'s Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled proof block,"
                        " as node 1's Commits of its Build do?")
 print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items()))
 EOF
@@ -468,7 +468,7 @@ EOF
 }
 
 # a passed replay's bundle goes only with its complete slim keep, as config-run.yaml's replay task checks it (the same lines); a
-# bundle kept goes home to node 1 with the row, where release.py counts it against the bundle cap
+# bundle kept goes home to node 1 with the row, where release.py counts it against the bundle limit
 discard_kept_bundles() {  # discard_kept_bundles ROW_DIR
   python3 - "$1" << 'EOF' || echo "$(date -u +%FT%TZ) replay bundles kept: the keep check failed" | tee -a "$1/row.log" || true
 import glob, hashlib, json, os, re, shutil, sys, time

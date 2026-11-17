@@ -5,9 +5,9 @@
 #   bash benchmarks/one_stage/zk_cost.sh
 #   (a job run from a clone of the tree, on a GPU host, 32 CPUs, 96 GB, up to 240 min)
 # (a guest job on a shared GPU node is preemptible; one arm a run, ZK_ARMS=fw, takes about 3.5 h with its verification, the builds cached)
-# env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_DRAWS=1,8,64,c  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1
+# env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_SAMPLES=1,8,64,c  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1
 #      ZK_UNITS="fp8-coord:K=6144 router-row" (served types instead of A6's coordinates, zk_cost.py's --units: ZK_SIZES then
-#      defaults to half,full, ZK_DRAWS to c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw, ZK_ARMS to dev,nofw,fw; overhead instead of fit)
+#      defaults to half,full, ZK_SAMPLES to c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw, ZK_ARMS to dev,nofw,fw; overhead instead of fit)
 #      ZK_STAGE_ONLY=1 (with ZK_UNITS: stage on this node's CPUs, keep the records, no CUDA, build or GPU)
 #      ZK_SM (the prover's target, from nvidia-smi unless given)  ZK_CARD=rtx-pro-6000-server (the card whose datasheet
 #      peak divides; the overhead step refuses one whose arch isn't the run's GPU's; an H200: ZK_CARD=h200-sxm-141gb)
@@ -19,6 +19,8 @@
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+for o in ZK_DRAWS:ZK_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "zk-cost: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 PT_WORK=${PT_WORK:-/workspace/cache/proof-throughput}
@@ -34,7 +36,7 @@ if [ ! -x "$PY" ]; then
   (exec 8>"$FLOCK_WORK/flock-circuit/venv.lock"; flock 8; [ -x "$PY" ] || { "$UV" venv -q --python 3.12 "$FLOCK_WORK/flock-circuit/py" \
     && "$UV" pip install -q --python "$PY" numpy blake3; })
 fi
-export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 Z=$S/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
 keep() {
@@ -43,9 +45,9 @@ keep() {
 }
 # a served type stages on CPUs alone (stage.py, no Lean), before the builds
 if [ -n "${ZK_UNITS:-}" ]; then
-  : "${ZK_SIZES:=half,full}" "${ZK_DRAWS:=c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw}" "${ZK_ARMS:=dev,nofw,fw}"
-  log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}; stage: units $ZK_UNITS, sizes $ZK_SIZES, draws $ZK_DRAWS"
-  ZK stage --units "$ZK_UNITS" --sizes "$ZK_SIZES" --draws "$ZK_DRAWS" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
+  : "${ZK_SIZES:=half,full}" "${ZK_SAMPLES:=c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw}" "${ZK_ARMS:=dev,nofw,fw}"
+  log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}; stage: units $ZK_UNITS, sizes $ZK_SIZES, draws $ZK_SAMPLES"
+  ZK stage --units "$ZK_UNITS" --sizes "$ZK_SIZES" --draws "$ZK_SAMPLES" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
   rc=${PIPESTATUS[0]}
   if [ "${ZK_STAGE_ONLY:-0}" = 1 ] || [ "$rc" != 0 ]; then keep; log "zk-cost: staged only, rc $rc"; exit "$rc"; fi
 fi
@@ -78,21 +80,21 @@ OUT=$O/lean bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 PT_WORK="$PT
 wait
 BIN=$(sed -n 's/^BINARY=//p' "$O/build.txt" | tail -1)
 LEAN=$(sed -n 's/.*BUILD_ONLY: \(\S*\) .*/\1/p' "$O/lean/job.log" 2>/dev/null | tail -1)
-# the ZK server's Lean frame (FC_FIREWALL=1 spawns it per rep), built in the same package as flock-verify
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-if [ -x "$LEAN" ] && [ ! -x "$FC_FIREWALL_LEAN" ]; then
+# the ZK server's Lean frame (FC_ZK_SERVER=1 spawns it per rep), built in the same package as verity-verify-proof
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+if [ -x "$LEAN" ] && [ ! -x "$FC_ZK_SERVER_LEAN" ]; then
   command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
-  (exec 8>"$PT_WORK/lean.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-    > "$O/lake-firewall.log" 2>&1
+  (exec 8>"$PT_WORK/lean.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+    > "$O/lake-zk-server.log" 2>&1
 fi
-for p in "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" "$PY"; do
-  [ -x "$p" ] || { log "missing: '$p'"; tail -20 "$O/build.txt" "$O/lean-build.txt" "$O/lake-firewall.log"; exit 1; }
+for p in "$BIN" "$LEAN" "$FC_ZK_SERVER_LEAN" "$PY"; do
+  [ -x "$p" ] || { log "missing: '$p'"; tail -20 "$O/build.txt" "$O/lean-build.txt" "$O/lake-zk-server.log"; exit 1; }
 done
-sha256sum "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
+sha256sum "$BIN" "$LEAN" "$FC_ZK_SERVER_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 
 if [ -z "${ZK_UNITS:-}" ]; then
-  log "stage: K ${ZK_KS:-4096,14336}, sizes ${ZK_SIZES:-1,8,64,512}, draws ${ZK_DRAWS:-1,8,64,c}"
-  ZK stage --lean "$LEAN" --ks "${ZK_KS:-4096,14336}" --sizes "${ZK_SIZES:-1,8,64,512}" --draws "${ZK_DRAWS:-1,8,64,c}" 2>&1 \
+  log "stage: K ${ZK_KS:-4096,14336}, sizes ${ZK_SIZES:-1,8,64,512}, draws ${ZK_SAMPLES:-1,8,64,c}"
+  ZK stage --lean "$LEAN" --ks "${ZK_KS:-4096,14336}" --sizes "${ZK_SIZES:-1,8,64,512}" --draws "${ZK_SAMPLES:-1,8,64,c}" 2>&1 \
     | tee -a "$O/zk.log" | grep ZKCOST
   rc=${PIPESTATUS[0]}
 fi

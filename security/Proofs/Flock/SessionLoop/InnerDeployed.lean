@@ -44,7 +44,7 @@ def _root_.Flock.Guarantees.SessionLoopZKDeployedInner : Prop :=
         ℕ → V (Array F128 × ByteArray × Array ByteArray))
       (real : Msg → Flock.Wit →
         (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-        ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)),
+        ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)),
     real = Loop.realOf src → L₀ = LeanRelease.withInner Masked.dataE L₁ real fin →
     ∀ (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit),
     Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w → Loop.Serves x →

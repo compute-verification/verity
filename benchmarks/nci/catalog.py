@@ -150,7 +150,7 @@ def _parameter_problems(parameters: list[dict], fs: dict[str, dict]) -> list[str
 
 
 def _row_problems(rows: list[dict], parameters: list[dict], sources: list[dict]) -> list[str]:
-    from slowdown import INPUTS
+    from bracket import INPUTS
 
     out, seen = [], set()
     ests, sids = estimates(parameters), {s["id"] for s in sources}

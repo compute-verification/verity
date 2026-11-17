@@ -50,8 +50,8 @@ it: the extra claims at any points (`Stmt.extraClaims`) and the lincheck's circu
 
 * `drawn_rows`: a hidden-output statement set up at a sample that proves every one of the unsampled statement's units, in
   order, has its circuit, its instance count and every instance's `b ‖ c`, which the sampled file keeps at each proved unit
-  (`drawn_digestW`); `innerSetup_rows` gives the plain verifier's inner statement the files' rows.
-* `drawn_same`: such a statement has the unsampled one's circuit, leaf, `nbl`, `m`, pin, Δ and regions. The regions read
+  (`sampled_digestW`); `innerSetup_rows` gives the plain verifier's inner statement the files' rows.
+* `sampled_same`: such a statement has the unsampled one's circuit, leaf, `nbl`, `m`, pin, Δ and regions. The regions read
   the public file only at its instances' `b ‖ c` (`regions_same`).
 * `extraClaims_congr`, `circuitFold_congr`: the extra claims read a statement's `k_log`, `m`, `nbl` and regions, and the
   circuit fold its circuit, leaf, pin and Δ.
@@ -182,12 +182,12 @@ theorem getElem_range_of {A : Array ℕ} {N r : ℕ} (h : A = Array.range N) (hr
 
 /-- **A full sample keeps the statement's rows**: a hidden-output statement set up at a sample that proves every one of the
 unsampled statement's units, in order, has its circuit, its instance count and every instance's `b ‖ c`, which the sampled
-file keeps at each proved unit (`drawn_digestW`). -/
+file keeps at each proved unit (`sampled_digestW`). -/
 theorem drawn_rows {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
-    {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitDraw} {st st' : Stmt}
+    {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitSample} {st st' : Stmt}
     (h' : Stmt.setupHidden T cf pf co tb none pa pr = .ok st')
     (h : Stmt.setupHidden T cf pf co' tb (some d) pa' pr' = .ok st)
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hp : D.proved = Array.range st'.n) :
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hp : D.proved = Array.range st'.n) :
     st.c = st'.c ∧ st.pub.n = st'.pub.n ∧ ∀ r < st'.pub.n, ∀ q < st'.c.ports.size,
       st.pub.digest r q st'.c.ports.size = st'.pub.digest r q st'.c.ports.size := by
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' h
@@ -203,7 +203,7 @@ theorem drawn_rows {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (S
     have := hd d rfl
     rw [hc] at this
     exact this
-  obtain ⟨D', hD', hpn, hn, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hdr
+  obtain ⟨D', hD', hpn, hn, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hdr
   rw [hD] at hD'
   cases hD'
   have hpopn : pop.n = st'.n := by rw [s'.n, hpub']
@@ -215,18 +215,18 @@ theorem drawn_rows {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (S
     rw [hpn, hpopn]
     exact hu
   have hr' : r < D.proved.size := by rw [hp, Array.size_range, ← hpopn]; exact hr
-  have := FlockSoundness.Discharge.Hidden.drawn_digestW
+  have := FlockSoundness.Discharge.Hidden.sampled_digestW
     (FlockSoundness.Discharge.Hidden.loadPublic_nil hpop) hdr hD hlt hr' hq
   rw [getElem_range_of hp hr'] at this
   exact this
 
 /-- **A full sample keeps the statement's algebra**: a hidden-output statement set up at a sample that proves every one
 of the unsampled statement's units, in order, has its circuit, leaf, `nbl`, `m`, pin, Δ and regions. -/
-theorem drawn_same {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
-    {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitDraw} {st st' : Stmt}
+theorem sampled_same {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
+    {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitSample} {st st' : Stmt}
     (h' : Stmt.setupHidden T cf pf co tb none pa pr = .ok st')
     (h : Stmt.setupHidden T cf pf co' tb (some d) pa' pr' = .ok st)
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hp : D.proved = Array.range st'.n) :
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hp : D.proved = Array.range st'.n) :
     st.c = st'.c ∧ st.leaf = st'.leaf ∧ st.nbl = st'.nbl ∧ st.m = st'.m ∧ st.pin = st'.pin ∧ st.da = st'.da ∧
       st.db = st'.db ∧ st.regions = st'.regions := by
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' h
@@ -237,7 +237,7 @@ theorem drawn_same {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (S
     have := hd d rfl
     rw [hc] at this
     exact this
-  obtain ⟨D', hD', -, hn, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hdr
+  obtain ⟨D', hD', -, hn, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hdr
   rw [hD] at hD'
   cases hD'
   have hN : st.n = st'.n := by rw [s.n, hn, hp, Array.size_range]
@@ -257,14 +257,14 @@ theorem drawn_same {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (S
   · rw [s.db, s'.db, hc, hpin]
 
 /-- **A full sample keeps the statement's extra claims, circuit fold and link points' length.** -/
-theorem drawn_setup {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
-    {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitDraw} {st st' : Stmt}
+theorem sampled_setup {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
+    {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitSample} {st st' : Stmt}
     (h' : Stmt.setupHidden T cf pf co tb none pa pr = .ok st')
     (h : Stmt.setupHidden T cf pf co' tb (some d) pa' pr' = .ok st)
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hp : D.proved = Array.range st'.n) :
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hp : D.proved = Array.range st'.n) :
     st.m = st'.m ∧ st.c.kLog = st'.c.kLog ∧ st.extraClaims = st'.extraClaims ∧ st.circuitFold = st'.circuitFold ∧
       st.mPts = st'.mPts := by
-  obtain ⟨hc, hl, hn, hm, hpin, hda, hdb, hr⟩ := drawn_same h' h hD hp
+  obtain ⟨hc, hl, hn, hm, hpin, hda, hdb, hr⟩ := sampled_same h' h hD hp
   refine ⟨hm, by rw [hc], extraClaims_congr (by rw [hc]) hm hn hr, circuitFold_congr hc hl hpin hda hdb, ?_⟩
   rw [(FlockSoundness.Discharge.Hidden.setupHidden_spec' h).mPts,
     (FlockSoundness.Discharge.Hidden.setupHidden_spec' h').mPts, hn]
@@ -278,15 +278,15 @@ checks accept what the verifier reads of a compiled statement (`RecScope.accepts
 statement up as one hidden-output table at no sample (`files_stmt`), and Flock's plain verifier sets it up as one table,
 in a session of two link points, by the same setup at the files' tags (`RecCoins.innerTags`) at a sample proving every
 one of the files' units in order (`checkForm_ok`), with no public inputs (`check_plain`). As `innerSetup_files`. -/
-theorem innerSetup_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true) :
+theorem innerSetup_sampled {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true) :
     ∃ f spec' st' s spec st, filesOf r = some (.files f) ∧ f.stmt "the inner session" = .ok (spec', st') ∧
       FlockDeploy.setupOf false r.w.inner = some (s, spec, #[st]) ∧ spec.points = 2 ∧ spec.mPts = st.mPts ∧
       s.read.tags = RecCoins.innerTags ∧ s.read.publicInputs = none ∧
       ∃ (cf pf : ByteArray) (co co' : Coins) (tb : List (String × ByteArray)) (pa pa' : Option Lean.Json)
-        (pr pr' : Option ByteArray) (d : Lean.Json) (D : Draw.UnitDraw),
+        (pr pr' : Option ByteArray) (d : Lean.Json) (D : Draw.UnitSample),
         Stmt.setupHidden RecCoins.innerTags cf pf co tb none pa pr = .ok st' ∧
         Stmt.setupHidden RecCoins.innerTags cf pf co' tb (some d) pa' pr' = .ok st ∧
-        Draw.UnitDraw.ofJson d = .ok D ∧ D.proved = Array.range st'.n := by
+        Draw.UnitSample.ofJson d = .ok D ∧ D.proved = Array.range st'.n := by
   unfold RecScope.accepts at ha
   simp only [Bool.and_eq_true, RecScope.isOk_iff] at ha
   obtain ⟨⟨-, ⟨u, hsh⟩⟩, hheld⟩ := ha
@@ -342,29 +342,29 @@ theorem innerSetup_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
 /-- **Flock's plain verifier sets the inner statement up as its files do, as the algebra reads it**: where the
 setup's checks accept what the verifier reads of a compiled statement (`RecScope.accepts`), Flock's plain verifier sets
 the inner statement up as one table whose `m`, `k_log`, extra claims (at any points) and circuit fold are the files'
-statement's (`RecCoins.Files.stmt`), in a session of two link points of the files' `m_pts`: `innerSetup_drawn`, with
-`drawn_setup`. -/
+statement's (`RecCoins.Files.stmt`), in a session of two link points of the files' `m_pts`: `innerSetup_sampled`, with
+`sampled_setup`. -/
 theorem innerSetup_same {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true) :
     ∃ f spec' st' s spec st, filesOf r = some (.files f) ∧ f.stmt "the inner session" = .ok (spec', st') ∧
       FlockDeploy.setupOf false r.w.inner = some (s, spec, #[st]) ∧
       st.m = st'.m ∧ st.c.kLog = st'.c.kLog ∧ st.extraClaims = st'.extraClaims ∧
       st.circuitFold = st'.circuitFold ∧ spec.points = 2 ∧ spec.mPts = st'.mPts := by
   obtain ⟨f, spec', st', s, spec, st, hfs, hstm, hset, hp2, hmp, -, -, _, _, _, _, _, _, _, _, _, _, _, hst', hst, hD,
-    hpr⟩ := innerSetup_drawn hr ha
-  obtain ⟨e1, e2, e3, e4, e5⟩ := drawn_setup hst' hst hD hpr
+    hpr⟩ := innerSetup_sampled hr ha
+  obtain ⟨e1, e2, e3, e4, e5⟩ := sampled_setup hst' hst hD hpr
   exact ⟨f, spec', st', s, spec, st, hfs, hstm, hset, e1, e2, e3, e4, hp2, hmp.trans e5⟩
 
 /-- **Flock's plain verifier sets the inner statement up with the files' rows**: where the setup's checks accept what
 the verifier reads of a compiled statement (`RecScope.accepts`), Flock's plain verifier sets the inner statement up as
 one table, at the files' tags, with the files' statement's circuit, instance count and every instance's `b ‖ c`
-(`RecCoins.Files.stmt`): `innerSetup_drawn`, with `drawn_rows`. -/
+(`RecCoins.Files.stmt`): `innerSetup_sampled`, with `drawn_rows`. -/
 theorem innerSetup_rows {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true) :
     ∃ f spec' st' s spec st, filesOf r = some (.files f) ∧ f.stmt "the inner session" = .ok (spec', st') ∧
       FlockDeploy.setupOf false r.w.inner = some (s, spec, #[st]) ∧ s.read.tags = RecCoins.innerTags ∧
       st.c = st'.c ∧ st.pub.n = st'.pub.n ∧ ∀ u < st'.pub.n, ∀ q < st'.c.ports.size,
         st.pub.digest u q st'.c.ports.size = st'.pub.digest u q st'.c.ports.size := by
   obtain ⟨f, spec', st', s, spec, st, hfs, hstm, hset, -, -, ht, -, _, _, _, _, _, _, _, _, _, _, _, hst', hst, hD,
-    hpr⟩ := innerSetup_drawn hr ha
+    hpr⟩ := innerSetup_sampled hr ha
   obtain ⟨e1, e2, e3⟩ := drawn_rows hst' hst hD hpr
   exact ⟨f, spec', st', s, spec, st, hfs, hstm, hset, ht, e1, e2, e3⟩
 

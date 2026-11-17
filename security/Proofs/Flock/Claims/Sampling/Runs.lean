@@ -41,13 +41,13 @@ import Proofs.Flock.Claims.Sampling.Cost
 # The opening checks' count, and a list's reruns
 
 The compiled sampled extractor's strict reruns and own calls (`SamplingGeneric.Compiled`,
-`Proofs.Flock.SamplingGeneric.Efficient`) are bounded from the rerun programs' laws (`Sampling.Cost`) and these steps:
+`Proofs.Flock.SamplingGeneric.Efficient`) are bounded from the rerun programs' sampling designs (`Sampling.Cost`) and these steps:
 
 * `flatMapRP_runs_le`, `ownLog_flatMapRP_le`, `outer_runs_le`: the programs over a list rerun, and call `H` on their
   own, at most the list's length times each one's bound; checking what a witness reveals reruns nothing
   (`checkRevealed_runs`) and makes the opening checks' calls (`ownLog_checkRevealed_length`).
 * `OpenCallsLe`: checking the openings one checked unit's Flock witness reveals, each under its roots, makes at most
-  `openCalls` SHA-512 calls, at a statement that parses. It is the deployed opening check's count, the sampled-proofs
+  `openCalls` SHA-512 calls, at a statement that parses. It is the deployed opening check's count, the SPOT
   verifier's.
 -/
 

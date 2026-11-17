@@ -1,6 +1,6 @@
 """A Definition registered over a range of its statics: a sidecar's ``RANGES``, {rule: its spots}.  A rule is the family's id with
 ``lo..hi`` in place of each static it spans, or ``lo..hi step s`` for lo, lo + s, ..., hi (a grid of size classes,
-``N=4096..131072 step 2048``), and the rest at the values the id spells (``SparseMlaSplit_v1{T=1..2048,NS=1..28,NH=8,...}``); a
+``N=4096..131072 step 2048``), and the rest at the values the id spells (``WidgetSplit_v1{T=1..2048,NS=1..28,NH=8,...}``); a
 spot gives each spanned static a value (``"T=2048,NS=28"``), and the spots reach both ends of each range (`parse` refuses a rule
 whose spots don't).
 
@@ -25,6 +25,8 @@ from .targets import _split
 _ID = re.compile(r"([^{]+)\{(.*)\}")
 _SPAN = re.compile(r"(-?\d+)\.\.(-?\d+)(?: step (\d+))?")
 _INT = re.compile(r"-?\d+")
+#: the warning codes that say a check was not run
+UNCHECKED = frozenset({"unchecked", "over-cost-target"})
 
 
 @dataclass(frozen=True)
@@ -136,8 +138,8 @@ def spots(families: Iterable[str] = ()) -> list[str]:
 def section(targets: list[dict], rules: Iterable[Rule] | None = None) -> list[dict]:
     """The report's ``ranges``: each rule a spot of which is among ``targets``, with its spots, those not among them
     (``missing``), those that failed, whether it holds, and {spot: the checks it passed without running} (``unchecked``: a
-    warning of code ``unchecked``, such as the partition over its budget of a spot that is no Call, which fails nothing, as
-    circuit-check's own verdict doesn't; a Call's fails, ``partition/unpartitioned``)."""
+    warning of code ``unchecked`` or ``over-cost-target``, such as the partition of a spot over its cost target, which fails
+    nothing, as circuit-check's own verdict doesn't; a Call's over the leaf budget fails, ``partition/unpartitioned``)."""
     out = []
     for rule in declared() if rules is None else rules:
         seen: dict[str, bool] = {}
@@ -145,7 +147,7 @@ def section(targets: list[dict], rules: Iterable[Rule] | None = None) -> list[di
         for t in targets:
             if (did := t.get("target")) in rule.spots:
                 seen[did] = seen.get(did, False) or bool(t.get("failures"))
-                skipped.setdefault(did, set()).update(w["check"] for w in t.get("warnings", []) if w.get("code") == "unchecked")
+                skipped.setdefault(did, set()).update(w["check"] for w in t.get("warnings", []) if w.get("code") in UNCHECKED)
         if not seen:
             continue
         missing = [s for s in rule.spots if s not in seen]

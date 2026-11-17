@@ -22,8 +22,8 @@ from verity_vllm.check.verdict_names import (
 )
 
 # ---------------------------------------------------------------------------------------------------------
-# FROZEN CONSTANTS — part of the accepted invariant set; change only through an approved decision in
-# `out/capture/decisions.md`.
+# FROZEN CONSTANTS — part of the accepted invariant set; change only through an approved decision, never by
+# editing this file alone.
 # ---------------------------------------------------------------------------------------------------------
 
 #: G4 — the tier-a body replay must evaluate at least this many instances per specialization (`k`).

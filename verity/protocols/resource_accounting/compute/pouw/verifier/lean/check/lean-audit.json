@@ -1,0 +1,139 @@
+{
+ "format": 2,
+ "roots": ["PouwVerifier", "PouwVerifier.DifftestMain"],
+ "exempt": {
+  "PouwVerifier.Main": "the pouw-verifier executable's entry point, one line; its command is Core.Protocol.main over PouwVerifier.protocol, audited under PouwVerifier",
+  "PouwVerifier.LeafOwnMain": "the pouw-leaf-own-window executable's entry point, one line; its command is PouwVerifier.LeafOwn.leafOwnCmd, audited under PouwVerifier",
+  "PouwVerifier.PeriodMain": "the pouw-period executable's entry point, one line; its command is Core.Protocol.main over PouwVerifier.Period.protocol, audited under PouwVerifier"
+ },
+ "layers": {
+  "PouwVerifier.Json": {
+   "imports": ["Lean.Data.Json", "Flock.Canon", "PouwWindow.Json"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.Tile": {
+   "imports": [],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.Chunks": {
+   "imports": [],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.Inputs": {
+   "imports": [
+    "CoreProtocol.Protocol",
+    "CoreProtocol.Profile",
+    "Flock.WindowRecord",
+    "PouwVerifier.Json",
+    "PouwVerifier.Tile",
+    "PouwWindow.Length",
+    "Identity.Domains.Pouw",
+    "Flock.Draw"
+   ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.Check": {
+   "imports": [
+    "CoreProtocol.Protocol",
+    "PouwWindow.Grid",
+    "PouwWindow.Sample",
+    "PouwWindow.Public",
+    "PouwWindow.Length",
+    "PouwVerifier.Inputs",
+    "PouwVerifier.WindowSalt",
+    "Identity.Domains.Pouw"
+   ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.Opening": {
+   "imports": [
+    "PouwVerifier.Inputs",
+    "PouwVerifier.Pass",
+    "PouwWindow.Record",
+    "PouwWindow.Side",
+    "Identity.Domains.Pouw",
+    "Flock.FV3"
+   ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.Protocol": {
+   "imports": ["CoreProtocol.Cli", "PouwVerifier.Check", "Identity.Domains.Pouw"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.Pass": {
+   "imports": [
+    "Flock.Draw",
+    "PouwCommit.Samples",
+    "PouwCommit.Bindings",
+    "PouwWindow.Rounds",
+    "PouwVerifier.Inputs",
+    "Spot.ChallengerRecord",
+    "Spot.ChallengerSession",
+    "Identity.Domains.Pouw"
+   ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.WindowSalt": {
+   "imports": ["PouwVerifier.Pass", "Identity.Domains.Pouw"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.Credit": {
+   "imports": [
+    "Std.Data.HashMap",
+    "Flock.Bytes",
+    "Flock.Hash",
+    "Flock.Program",
+    "Flock.RegKnown",
+    "PouwCommit.Frame",
+    "PouwVerifier.Chunks",
+    "PouwVerifier.Json",
+    "PouwVerifier.Opening",
+    "PouwVerifier.Pass",
+    "PouwVerifier.Rounds",
+    "PouwWindow.Sample",
+    "PouwWindow.Rounds",
+    "Spot.ChallengerCoins",
+    "Spot.ChallengerSession",
+    "Spot.PyJson",
+    "Spot.Registered",
+    "Identity.Domains.Pouw",
+    "Flock.FV3"
+   ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.CreditOnce": {
+   "imports": ["PouwVerifier.Credit", "Spot.ChallengerSession"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.LeafOwn": {
+   "imports": ["PouwVerifier.Credit", "PouwWindow.RegFile"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.Period": {
+   "imports": ["CoreProtocol.Account", "CoreProtocol.Cli", "PouwVerifier.Credit", "PouwVerifier.CreditOnce"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.CreditUnwritten": {
+   "imports": ["PouwVerifier.Credit"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
+ }
+}

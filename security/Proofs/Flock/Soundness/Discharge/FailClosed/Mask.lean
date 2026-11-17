@@ -21,8 +21,8 @@ import Proofs.Flock.Soundness.Refine.Setup
 # Every statement `verify --zk` sets up avoids the mask slot
 
 `Zk.shapeOk` refuses a statement whose Δ or regions meet the mask slot (`Zk.maskFree`, D12), so `avoidsMask` holds at
-every statement it passes (`avoidsMask_of_shapeOk`), and so at every `--zk` setup (`DrawSetupZK.avoidsMask`,
-`DrawSetupZHJ.avoidsMask`): the zero-knowledge views take it from the setup, not as a hypothesis.
+every statement it passes (`avoidsMask_of_shapeOk`), and so at every `--zk` setup (`SampleSetupZK.avoidsMask`,
+`SampleSetupZHJ.avoidsMask`): the zero-knowledge views take it from the setup, not as a hypothesis.
 
 `maskFree` checks each region against the mask range's words in one block; `regionWordsOff` checks it against them in every
 block, which differ only above bit `k_log − 7` of the word index, where the check reads no bit. `regionCellsOff` follows
@@ -158,13 +158,13 @@ theorem avoidsMask_of_shapeOk {st : Stmt} (hw : RegionsWF st) (h : Zk.shapeOk st
   exact avoidsMask_of_maskFree hr hw hm
 
 /-- A `--zk` setup of one table's statement avoids the mask slot. -/
-theorem DrawSetupZK.avoidsMask {I : Inputs} {n mPts : ℕ} {S : Finset (Fin n)} {d : Lean.Json}
-    (y : ZkLink.DrawSetupZK I mPts S d) : Composed.avoidsMask y.x.st = true :=
+theorem SampleSetupZK.avoidsMask {I : Inputs} {n mPts : ℕ} {S : Finset (Fin n)} {d : Lean.Json}
+    (y : ZkLink.SampleSetupZK I mPts S d) : Composed.avoidsMask y.x.st = true :=
   avoidsMask_of_shapeOk (setupH_wf y.x.h).2 y.hzk
 
 /-- A `--zk` setup of a hidden-output table's statement avoids the mask slot. -/
-theorem DrawSetupZHJ.avoidsMask {I' : Inputs} {n mPts : ℕ} {S : Finset (Fin n)} {d : Lean.Json}
-    (y : ZkHidden.DrawSetupZHJ I' mPts S d) : Composed.avoidsMask y.x.st = true :=
+theorem SampleSetupZHJ.avoidsMask {I' : Inputs} {n mPts : ℕ} {S : Finset (Fin n)} {d : Lean.Json}
+    (y : ZkHidden.SampleSetupZHJ I' mPts S d) : Composed.avoidsMask y.x.st = true :=
   avoidsMask_of_shapeOk (Hidden.setupHidden_wf y.x.h).2 y.hzk
 
 end FlockSoundness.Discharge.FailClosed

@@ -1,8 +1,8 @@
 """The runtime: it runs parties over channels and keeps their transcripts, and knows no protocol.
 
-`run(config, parties_here, mode, state_dir, protocols=...)` runs the parties ``parties_here`` of a deployment: the
-lifecycle examples (`demos/lifecycle/`) call it, and so does a `verity run` table whose ``live`` runs a protocol's
-parties (the CLI's test table, `tools/verity/cli/tests/step0.py`). `config` is the deployment
+`run(config, parties_here, mode, state_dir, protocols=...)` runs the parties ``parties_here`` of a deployment: a
+`verity run` table whose ``live`` runs a protocol's parties calls it (the CLI's test table,
+`tests/tools/verity/cli/step0.py`). `config` is the deployment
 configuration as data; the runtime reads its protocol (`protocol`, or the one entry of `protocols`), `params`, its
 parties (`party`: `name`, `machine`, and `key`, the public key a handshake checks), its site when it describes one
 (`machine`: `name`, `owner`, `provides`; `link`: `ends`, `latency_ms`, `via`) and its hash (`hash`, else SHA-512 of its
@@ -45,13 +45,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.channel import Int, Message, MessageTypes, Refused, Schema, Str, canonical, parse, split
-from verity.runtime.handshake import NONCE_BYTES, Handshake, Key, Verify
+from verity.channel import Int, Message, MessageTypes, Refused, Schema, Str, canonical
+from verity.runtime.framing import decode, encode, parse, split
+from verity.runtime.handshake import NONCE_BYTES, Handshake, Verify
 
 from . import sources as S
 from .channels import Adversary, MemoryPipe, Pipe, Playback, TcpListen, dial
-from verity.protocol import SOURCES, Manifest, PlaceResult, place, site_of
-from verity.party import Action, Finish, Identity, Party, Received, LogEntry, Send, Timer
+from verity.protocol import SOURCES, Manifest, PlaceResult, ProtocolDef, place, site_of
+from verity.party import Action, Finish, Identity, Key, Party, Received, LogEntry, Send, Timer
 from .transcript import Entry, PartyLog, record
 
 MODES = ("live", "simulated", "mixed", "replay")
@@ -67,14 +68,6 @@ RUNS = "runs.jsonl"
 
 class Diverged(Exception):
     """The run stopped at its first divergence from a recorded transcript."""
-
-
-@dataclass(frozen=True)
-class ProtocolDef:
-    """A protocol as the runtime runs it: its manifest, and a factory for each of its parties."""
-
-    manifest: Manifest
-    parties: Mapping[str, Callable[[], Party]]
 
 
 @dataclass
@@ -159,9 +152,9 @@ class Host:
             self.early.append((channel, raw, at))
             return
         if at is not None:
-            self.transcript.append("arrived", channel, "private", ARRIVED.encode(Message("Arrived", {"ns": at})))
+            self.transcript.append("arrived", channel, "private", encode(ARRIVED, Message("Arrived", {"ns": at})))
         try:
-            msg = ep.accepts.decode(raw)
+            msg = decode(ep.accepts, raw)
         except Refused as e:
             self.transcript.append("in", channel, "private", raw)
             ep.closed = True
@@ -179,7 +172,7 @@ class Host:
         if self.finished is not None or ep.closed:
             return
         ep.closed = True
-        self.transcript.append("event", channel, "structure", RUNTIME.encode(msg))
+        self.transcript.append("event", channel, "structure", encode(RUNTIME, msg))
         if not self.started:
             self._end(_refused("closed", channel=channel, detail=f"{channel} closed before {self.name} started"))
             return
@@ -210,7 +203,7 @@ class Host:
                                    detail=f"{self.name} sent {m.type} on {a.channel}, which its manifest doesn't declare"))
                 return
             try:
-                f = ep.sends.encode(m)
+                f = encode(ep.sends, m)
             except Refused as e:
                 self._end(_refused(e.name, channel=a.channel, detail=e.detail))
                 return
@@ -241,13 +234,13 @@ class _Source:
 
     def _send(self, actions: list[Action]) -> None:
         for a in actions:
-            self.pipe.send(S.ANSWERS[self.need].encode(a.message))
+            self.pipe.send(encode(S.ANSWERS[self.need], a.message))
 
     def pump(self) -> bool:
         raw = self.pipe.take()
         if raw is None:
             return False
-        self._send(self.source.on(Received(S.OWNER, S.ASKS[self.need].decode(raw))))
+        self._send(self.source.on(Received(S.OWNER, decode(S.ASKS[self.need], raw))))
         return True
 
 
@@ -477,7 +470,7 @@ def replay(protocol: ProtocolDef, name: str, party: Party, recorded: PartyLog, i
                 break
             k, at = j, None
             if old[j].dir == "arrived" and j + 1 < len(old) and old[j + 1].dir == "in":
-                k, at = j + 1, ARRIVED.decode(old[j].data).fields["ns"]
+                k, at = j + 1, decode(ARRIVED, old[j].data).fields["ns"]
             nxt = old[k]
             if nxt.elided and nxt.dir in ("in", "event"):
                 raise Refused("elided", f"entry {k} of {name}'s transcript keeps only its frame's digest, which a replay "
@@ -485,7 +478,7 @@ def replay(protocol: ProtocolDef, name: str, party: Party, recorded: PartyLog, i
             if nxt.dir == "in":
                 host.receive(nxt.channel, nxt.data, at)
             elif nxt.dir == "event":
-                host.event(nxt.channel, RUNTIME.decode(nxt.data))
+                host.event(nxt.channel, decode(RUNTIME, nxt.data))
             else:
                 why = f"entry {j}: recorded {_describe(nxt)}, which the replayed party doesn't make"
     outcomes = {name: _plain(host.finished) if host.finished else {"outcome": None, "refused": None}}
@@ -575,9 +568,9 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
         raise ValueError("a simulated run has a seed and runs every party here, in this process")
     state = Path(state_dir) if state_dir is not None else None
 
-    def identity(p: str) -> Identity:
+    def identity(p: str, clock: str | None = None) -> Identity:
         return Identity(p, entries.get(p, {}).get("instance", p), conf, keys.get(p),
-                        None if state is None else state / p, (capabilities or {}).get(p, {}))
+                        None if state is None else state / p, (capabilities or {}).get(p, {}), clock)
 
     if mode == "replay":
         src = Path(replay_dir) if replay_dir is not None else None
@@ -627,7 +620,7 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
     for a in here:
         role = m.role(a)
         given = (sources or {}).get(a, {})
-        clock = None
+        clock, clock_name = None, None
         for need in SOURCES:
             if need not in role.needs:
                 continue
@@ -638,7 +631,7 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
             elif src is None:
                 src = S.seeded(seed, a, "coins") if seed is not None else S.OsCoins()
             if need == "clock":
-                clock = src.now
+                clock, clock_name = src.now, src.name
             mine, theirs = MemoryPipe.pair(S.VirtualTime())
             pipes[a][need] = mine
             rt.sources.append(_Source(a, need, src, theirs))
@@ -653,7 +646,7 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
             handshakes[b] = Handshake(party=a, peer=b, protocol=pid, version=m.version, configuration=conf, nonce=nonce,
                                       key=keys[a], verify=verify, peer_key=None if peer_key is None else bytes.fromhex(peer_key))
         t = PartyLog(a, None if tdir is None else tdir / f"{a}.transcript")
-        rt.hosts[a] = Host(a, protocol.parties[a](), identity(a), config.get("params", {}), t,
+        rt.hosts[a] = Host(a, protocol.parties[a](), identity(a, clock_name), config.get("params", {}), t,
                            _endpoints(m, a, pipes[a], handshakes), rt.transmit, rt.finished, clock)
     from .process import spawn  # here, since process imports this module
 
@@ -695,5 +688,5 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
     return result
 
 
-__all__ = ["ARRIVED", "FAILED", "MODES", "RUNTIME", "Diverged", "Endpoint", "Host", "ProtocolDef", "RunResult", "Runtime",
+__all__ = ["ARRIVED", "FAILED", "MODES", "RUNTIME", "Diverged", "Endpoint", "Host", "RunResult", "Runtime",
            "configuration_hash", "protocol_of", "replay", "run"]

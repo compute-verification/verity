@@ -14,7 +14,7 @@ the few below), --elan DIR (default ~research/.elan, read-only at /opt/elan), --
 --memory SIZE, --max-sec N, --user NAME (default lean-build; never root, research or a member of research, sudo, docker or
 adm). Every DEST must exist: systemd would make a missing one on the host's disk (`vy-lean-build-setup` makes /opt/elan).
 
-Run it as root (`sudo -n`). `run` takes a slot of the `build` pool in node 1's Lean slot file, in `tools/verity/check/lean_slot.py`'s
+Run it as root (`sudo -n`). `run` takes a slot of the `build` pool in node 1's Lean slot file, in `tools/check/lean_slot.py`'s
 format (`lean-build-I.lock` and `.who` beside the file, waiting in arrival order in `lean-line-build`), unless the caller holds
 one (`--held-slot`, which must be held). The lock directory is research's, so root opens nothing there through a link, takes
 only regular files with one name, and gives research only what it made itself; anything else there is refused. It holds the
@@ -56,7 +56,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
@@ -144,6 +144,31 @@ def _ids() -> tuple[int, int, set[int]]:
     return os.geteuid(), os.getegid(), set(os.getgroups())
 
 
+def _reached(fn: Callable[..., object], *args: object) -> bool:
+    """Whether ``fn(*args)`` returns rather than raising OSError, the refusal a probe looks for."""
+    try:
+        fn(*args)
+        return True
+    except OSError:
+        return False
+
+
+def _stat(path: str | Path) -> os.stat_result | OSError:
+    """``os.stat(path)``, or the OSError a probe looks for."""
+    try:
+        return os.stat(path)
+    except OSError as e:
+        return e
+
+
+def _peek(path: str) -> None:
+    if os.path.isdir(path):
+        os.listdir(path)
+    else:
+        with open(path, "rb") as f:
+            f.read(1)
+
+
 def listening(text: str) -> list[str]:
     """The paths of the host's listening Unix sockets, from /proc/net/unix."""
     return sorted({f[7] for ln in text.splitlines()[1:] if len(f := ln.split()) >= 8 and f[7].startswith("/")
@@ -164,9 +189,9 @@ def probe(spec: dict, environ=None, connect=_connect, resolve=_resolve, sudo=_su
 
     def privileges():
         st = dict(ln.split(":", 1) for ln in status().splitlines() if ":" in ln)
-        caps = {k: int(st.get(k, "1").strip(), 16) for k in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")}
+        capabilities = {k: int(st.get(k, "1").strip(), 16) for k in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")}
         nnp = st.get("NoNewPrivs", "").strip() == "1"
-        return nnp and not any(caps.values()), f"NoNewPrivs {int(nnp)}, " + ", ".join(f"{k} {v:x}" for k, v in caps.items() if v)
+        return nnp and not any(capabilities.values()), f"NoNewPrivs {int(nnp)}, " + ", ".join(f"{k} {v:x}" for k, v in capabilities.items() if v)
 
     def sudo_():
         path = which("sudo", path="/usr/bin:/bin:/usr/sbin:/sbin")
@@ -179,73 +204,31 @@ def probe(spec: dict, environ=None, connect=_connect, resolve=_resolve, sudo=_su
         return rc != 0, f"`sudo -n true` exited {rc}"
 
     def network():
-        got = []
-        for host, port in spec["reach"]:
-            try:
-                connect(host, port)
-                got.append(f"{host}:{port}")
-            except OSError:
-                pass
-        try:
-            resolve(spec["resolve"])
+        got = [f"{host}:{port}" for host, port in spec["reach"] if _reached(connect, host, port)]
+        if _reached(resolve, spec["resolve"]):
             got.append(f"resolved {spec['resolve']}")
-        except OSError:
-            pass
-        try:
-            got += [f"interface {n}" for _, n in interfaces() if n != "lo"]
-        except OSError:
-            pass
+        _reached(lambda: got.extend(f"interface {n}" for _, n in interfaces() if n != "lo"))
         return not got, ", ".join(got) or "nothing reachable"
 
     def sockets():                                              # seen, never connected: some start a service when one is
-        got = []
-        for path in spec["sockets"]:
-            try:
-                if stat.S_ISSOCK(os.stat(path).st_mode):
-                    got.append(path)
-            except OSError:
-                pass
+        got = [path for path in spec["sockets"] if not isinstance(st := _stat(path), OSError) and stat.S_ISSOCK(st.st_mode)]
         return not got, ("visible: " + ", ".join(got)) if got else f"none of the host's {len(spec['sockets'])} visible"
 
     def secrets():
-        got = []
-        for p in spec["secrets"]:
-            try:
-                if os.path.isdir(p):
-                    os.listdir(p)
-                else:
-                    with open(p, "rb") as f:
-                        f.read(1)
-                got.append(p)
-            except OSError:
-                pass
+        got = [p for p in spec["secrets"] if _reached(_peek, p)]
         return not got, ("readable: " + ", ".join(got)) if got else f"{len(spec['secrets'])} paths unreadable"
 
     def writes():
         got = []
         for d in spec["unwritable"]:
             p = os.path.join(d, f".vy-lean-sandbox-probe-{os.getpid()}")
-            try:
-                fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            except OSError:
-                continue
-            os.close(fd)
-            try:
-                os.unlink(p)
-            except OSError:
-                pass
-            got.append(d)
+            if _reached(lambda: os.close(os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))):
+                got.append(d if _reached(os.unlink, p) else f"{d} (its probe file left there)")
         return not got, ("writable: " + ", ".join(got)) if got else f"{len(spec['unwritable'])} directories unwritable"
 
     def private():
-        got = []
-        for d, ident in spec["private"].items():
-            try:
-                st = os.stat(d)
-            except OSError:
-                continue
-            if [st.st_dev, st.st_ino] == list(ident):
-                got.append(d)
+        got = [d for d, ident in spec["private"].items()
+               if not isinstance(st := _stat(d), OSError) and [st.st_dev, st.st_ino] == list(ident)]
         return not got, ("the host's: " + ", ".join(got)) if got else "own " + ", ".join(spec["private"])
 
     def environment():
@@ -256,21 +239,15 @@ def probe(spec: dict, environ=None, connect=_connect, resolve=_resolve, sudo=_su
                                                   *(["not passed: " + ", ".join(extra)] if extra else [])]) or "only what -E passed"
 
     def processes():
-        others = []
-        for pid in os.listdir(proc):
-            if pid.isdigit():
-                try:
-                    if (proc / pid).stat().st_uid != euid:
-                        others.append(pid)
-                except OSError:
-                    pass
+        others = [pid for pid in os.listdir(proc)
+                  if pid.isdigit() and not isinstance(st := _stat(proc / pid), OSError) and st.st_uid != euid]
         return not others, f"{len(others)} other users' processes visible" if others else "only its own processes"
 
     out = []
     for name, fn in zip(PROBES, (user, privileges, sudo_, network, sockets, secrets, writes, private, environment, processes)):
         try:
             held, detail = fn()
-        except Exception as e:                                      # noqa: BLE001: a probe that can't answer didn't hold
+        except Exception as e:                                      # noqa: BLE001 (a probe that can't answer didn't hold)
             held, detail = False, f"the probe raised {type(e).__name__}: {e}"
         out.append({"probe": name, "held": bool(held), "detail": detail})
     return out
@@ -282,7 +259,8 @@ def verdict(stdout: str) -> list[dict] | None:
         if ln.startswith(MARK):
             try:
                 return json.loads(ln[len(MARK):])
-            except ValueError:
+            except ValueError as e:
+                log(f"the probe unit's result line is not JSON, so it counts as not started ({e})")
                 return None
     return None
 
@@ -407,6 +385,7 @@ def prepare(ns: argparse.Namespace, geteuid=os.geteuid, getpwnam=pwd.getpwnam, g
     try:
         verity = sorted(os.path.join("/etc/verity", n) for n in listdir("/etc/verity"))
     except FileNotFoundError:
+        log("no /etc/verity on this host, so none of it is hidden")
         verity = []
     hidden = list(HIDDEN)
     leases = sorted(glob.glob("/run/gpu-lease*"))
@@ -415,8 +394,8 @@ def prepare(ns: argparse.Namespace, geteuid=os.geteuid, getpwnam=pwd.getpwnam, g
         try:
             st = host(d)
             private[d] = [st.st_dev, st.st_ino]
-        except OSError:
-            pass
+        except OSError as e:
+            log(f"{d} not found on the host, so the probes don't check it is private ({type(e).__name__}: {e})")
     ro_in = [dst for _, dst in (*ro, *deps)]
     unwritable = sorted({*UNWRITABLE, tree_in, str(Path(tree_in).parent), *ro_in})
     gids = sorted({groups[n].gr_gid for n in FORBIDDEN_GROUPS if n in groups})
@@ -582,11 +561,7 @@ def _join(d: Path, who: dict, ns: int) -> tuple[int, str, int]:
     """slot.py's `join`: a ticket in the pool's line, named by arrival and locked before it is visible: (the line's
     descriptor, the ticket's name in it, the ticket's descriptor)."""
     line = d / f"lean-line-{POOL}"
-    try:
-        os.mkdir(line, 0o775)
-        made = True
-    except FileExistsError:
-        made = False
+    made = _made(line, 0o775)
     try:
         lfd = os.open(line, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except OSError as e:
@@ -605,6 +580,24 @@ def _join(d: Path, who: dict, ns: int) -> tuple[int, str, int]:
     return lfd, name, fd
 
 
+def _made(path: Path, mode: int) -> bool:
+    """Whether this call made the directory ``path``: False when it was there already."""
+    try:
+        os.mkdir(path, mode)
+        return True
+    except FileExistsError:
+        return False
+
+
+def _granted(fd: int) -> bool:
+    """Whether an exclusive flock on ``fd`` is granted at once: False exactly while another descriptor holds the file."""
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except BlockingIOError:
+        return False
+
+
 def _ahead(line: int, ticket: str) -> int:
     """slot.py's `ahead`: the live waiters before ``ticket`` in ``line``; a dead waiter's ticket is removed, and what isn't a
     plain file is no waiter's."""
@@ -616,7 +609,9 @@ def _ahead(line: int, ticket: str) -> int:
             continue
         try:
             fd = os.open(p, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=line)
-        except OSError:
+        except OSError as e:
+            if p in os.listdir(line):
+                log(f"line entry {p} is no waiter's: it doesn't open as a plain file ({e.strerror})")
             continue
         try:
             st = os.fstat(fd)
@@ -631,14 +626,16 @@ def _ahead(line: int, ticket: str) -> int:
     return n
 
 
-def _unlink(name: str, dir_fd: int) -> None:
+def _unlink(name: str, dir_fd: int) -> bool:
+    """Whether this call removed ``name``: False when another waiter removed it first."""
     try:
         os.unlink(name, dir_fd=dir_fd)
+        return True
     except FileNotFoundError:
-        pass
+        return False
 
 
-def take(slots: Path, who: dict, wait_s: float | None = None, now=lambda: datetime.now(timezone.utc),
+def take(slots: Path, who: dict, wait_s: float | None = None, now=lambda: datetime.now(UTC),
          sleep=time.sleep) -> tuple[int, int] | None:
     """A slot of the `build` pool, in arrival order with lean_slot.py's waiters: (its index, the descriptor holding it), or
     None when ``wait_s`` passed first."""
@@ -651,8 +648,8 @@ def take(slots: Path, who: dict, wait_s: float | None = None, now=lambda: dateti
         while True:
             try:
                 n = pools(slots)[POOL]
-            except (OSError, Refused):
-                pass                                            # mid-rewrite: the last N it read
+            except (OSError, Refused) as e:
+                log(f"{slots} unread, so the build pool keeps the last size read, {n} ({type(e).__name__}: {e})")
             ahead = _ahead(line, ticket)
             got = None if ahead else next(((i, fd) for i in range(n) if (fd := _try(d, i)) is not None), None)
             if got:
@@ -700,9 +697,8 @@ def held(slots: Path, slot: str) -> None:
     except OSError as e:
         raise Refused(f"--held-slot {slot}: can't open {path} as a plain file ({e.strerror})") from None
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        return
+        if not _granted(fd):
+            return
     finally:
         os.close(fd)
     raise Refused(f"--held-slot {slot}: nobody holds it; take it first, or leave --held-slot out")
@@ -796,10 +792,9 @@ def alive(uid: int, proc: Path = PROC, systemctl: Systemctl = _systemctl) -> lis
     for pid in sorted((p for p in os.listdir(proc) if p.isdigit()), key=int):
         try:
             st = dict(ln.split(":", 1) for ln in (proc / pid / "status").read_text().splitlines() if ":" in ln)
-        except (FileNotFoundError, ProcessLookupError):
-            continue
         except OSError as e:
-            out.append(f"pid {pid}: its status is unreadable ({e})")
+            if not isinstance(e, (FileNotFoundError, ProcessLookupError)):
+                out.append(f"pid {pid}: its status is unreadable ({e})")
             continue
         uids = st.get("Uid", "").split()
         if len(uids) != 4:
@@ -936,7 +931,7 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
-def main(argv: list[str], run: Runner = systemd_run, now=lambda: datetime.now(timezone.utc), sleep=time.sleep,
+def main(argv: list[str], run: Runner = systemd_run, now=lambda: datetime.now(UTC), sleep=time.sleep,
          geteuid=os.geteuid, getpwnam=pwd.getpwnam, proc: Path = PROC, systemctl: Systemctl = _systemctl, **prep) -> int:
     if argv[:1] == ["_probe"]:
         print(MARK + json.dumps(probe(json.loads(argv[1]))), flush=True)

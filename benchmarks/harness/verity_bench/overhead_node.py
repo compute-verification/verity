@@ -18,7 +18,8 @@ the SASS gate must pass): the timed pass untraced, then at each shape a traced p
 entries that nsys captures alone (SMs Active at 10 kHz, each item an NVTX range; `--traced`). It then runs the arm's
 reference verifier on every row (`verify.py --every-row`), reads each traced item's busy SM-time from the reports
 (`nsys.report`, the reports kept in `--scratch`, outside `$OUT`; a report that collected past its traced pass, or a traced
-item no report holds, refuses the run), and writes `overhead.json`: per point, the layer's γ over
+item no report holds, refuses the run; with `--keep-reports`, a profiling pass, they and their exports are kept in
+`$OUT/nsys/` and the run is not of record), and writes `overhead.json`: per point, the layer's γ over
 the fastest stock arm by wall time, beside it over the least-SM-time arm, with the weight side as a bound, the A/A control,
 the cross-check, ε from the scheme's function at the same point and card, and why each point's γ isn't of record. A kernel
 point runs no model, so it has no perplexity; nor does it serve requests, so it has no load counts to keep on the node.
@@ -31,12 +32,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
+import importlib.util
 import json
 import os
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 from verity_bench import kit, nsys
 from verity_bench import overhead as O
@@ -53,6 +56,10 @@ POINTS_BENCH = ("--methods", "graph", "--decode-method", "independent")
 #: a timed run's: the graph method gives each stock kernel's wall time, the burst method the host's enqueue, and the traced
 #: pass beside them each item's busy SM-time
 RUN_BENCH = ("--methods", "graph", "burst", "--decode-method", "independent", "--traced", "--twins")
+#: why a run that kept its Nsight reports (`run --keep-reports`) isn't of record
+KEEP_REPORTS_WHY = "it kept its Nsight reports in $OUT/nsys (`--keep-reports`): a profiling pass is never of record"
+#: a timed run's measurement of each point's γ, by the point's name (``C``, ``L``): the metric's id, OWNER/NAME
+GAMMA = "benchmarks/overhead.gamma-{}"
 #: the cubin the run was sent (`run --cubin ART`), which the scheme's arm loads and lists in its build record's `binaries`
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
 
@@ -93,20 +100,23 @@ def _write(path: Path, doc: dict) -> None:
 
 def write_result(run_dir: Path, run_id: str, out: Path, record: str, ok: bool, detail: str, fingerprint: dict,
                  measurements: Sequence[dict] = (), *, measured: Sequence[dict] = ()) -> None:
-    """The run's `result.json`: its validation, then each of `measured` (the kit writer's arguments) through the kit's
-    writer, which stamps it with the run, the commit and the host. `measurements` are entries a caller wrote whole, held
-    as given: serving cost's (`benchmarks/serve_tax`), until it writes them through the kit's writer."""
+    """The run's `result.json`, started afresh and written by the kit's writer, which stamps each measurement with the
+    run, the commit and the host: what ran (`fingerprint`), `record` as its measurement file, each of `measured` (the kit
+    writer's arguments), and last the validation, with `record` as its evidence. `measurements` are entries a caller
+    wrote whole, held as given ahead of the writer's: serving cost's (`benchmarks/serve_tax`), until it writes them
+    through the kit's writer."""
 
     rel = os.path.relpath(out / record, run_dir)
-    _write(run_dir / kit.RESULT, {
-        "schema": kit.RESULT_SCHEMA, "run_id": run_id, "workload_fingerprint": fingerprint,
-        "validation": {"status": "passed" if ok else "failed", "checker": "verity bench overhead", "detail": detail,
-                       "evidence": [rel]},
-        "measurements": list(measurements), "measurement_files": [rel], "artifacts": []})
-    if measured:
-        writer = kit.Writer(run_dir, run_id, kit.host_stamp())
-        for m in measured:
-            writer.measurement(**m, inputs=[rel], mark="measured")
+    (run_dir / kit.RESULT).unlink(missing_ok=True)
+    if measurements:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        _write(run_dir / kit.RESULT, {"schema": kit.RESULT_SCHEMA, "run_id": run_id, "measurements": list(measurements)})
+    writer = kit.Writer(run_dir, run_id, kit.host_stamp() if measured else {})
+    writer.fingerprint(**fingerprint)
+    writer.measurement_file(rel)
+    for m in measured:
+        writer.measurement(**m, inputs=[rel], mark="measured")
+    writer.validation("passed" if ok else "failed", "verity bench overhead", detail, [rel])
 
 
 # ---- points ------------------------------------------------------------------------------------------------------------------
@@ -168,6 +178,27 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
 # ---- run ---------------------------------------------------------------------------------------------------------------------
 
 
+def _arm_module(arm_path: str | None, name: str) -> Any:
+    """The module `name` of a scheme's `arm_path`, a directory that is no package, loaded by its file's path (as `bench.py
+    --arm-path` takes it); an importable module where the scheme gives no path."""
+
+    if not arm_path:
+        return importlib.import_module(name)
+    if (held := sys.modules.get(name)) is not None and Path(getattr(held, "__file__", "")) == Path(arm_path) / f"{name}.py":
+        return held
+    spec = importlib.util.spec_from_file_location(name, Path(arm_path) / f"{name}.py")
+    if spec is None or spec.loader is None:
+        raise ImportError(f"no module {name} in {arm_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        del sys.modules[name]
+        raise
+    return module
+
+
 def epsilon_at(sch: O.Scheme, card: O.Gpu, m: int, model: str) -> dict:
     """The scheme's ε at each linear of the layer at m on the card, from its own function; or why there is none."""
 
@@ -175,9 +206,7 @@ def epsilon_at(sch: O.Scheme, card: O.Gpu, m: int, model: str) -> dict:
         return {"why": f"{sch.id} has no ε: it is the A/A control"}
     mod, _, name = sch.epsilon.partition(":")
     try:
-        if sch.arm_path and sch.arm_path not in sys.path:
-            sys.path.insert(0, sch.arm_path)
-        fn = getattr(importlib.import_module(mod), name)
+        fn = getattr(_arm_module(sch.arm_path, mod), name)
         return {linear: fn(m, n, k, card.gpu) for linear, (n, k) in O.MODELS[model].items()}
     except Exception as ex:  # noqa: BLE001 - recorded beside γ: a missing ε is shown, never invented
         return {"why": f"{sch.epsilon}: {type(ex).__name__}: {ex}"}
@@ -221,6 +250,11 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
         write_result(a.run_dir, a.run_id, out, "overhead.json", False, whys[0], fingerprint)
         print(f"run: {whys[0]}")
         return 1
+    if a.keep_reports:
+        fingerprint["keep_reports"] = True
+        whys.append(KEEP_REPORTS_WHY)
+        scratch = out / "nsys"
+        scratch.mkdir(parents=True, exist_ok=True)
     model = pts["model"]
     at = {p: pts[p.lower()] for p in (O.POINTS if a.point == "all" else (a.point,))}
     arm_args = ["--arm", sch.arm, "--arm-path", sch.arm_path] if sch.arm and sch.arm_path else []
@@ -295,7 +329,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
             p["epsilon"] = epsilon_at(sch, card, m, model)
             p["perplexity"] = {"value": None, "why": "a kernel point runs no model: perplexity is a served point's"}
             g = (p.get("gamma") or {}).get("gamma")
-            p["gate"] = None if g is None else {"cap": O.GAMMA_MAX, "passes": g <= O.GAMMA_MAX}
+            p["gate"] = None if g is None else {"gamma_max": O.GAMMA_MAX, "passes": g <= O.GAMMA_MAX}
             p["whys"] = O.point_whys(p)
             doc["points"][name] = p
     _write(out / "overhead.json", doc)
@@ -304,7 +338,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     write_result(a.run_dir, a.run_id, out, "overhead.json", ok,
                  "; ".join(f"γ at {n} {g:.4f}" if g is not None else f"no γ at {n}" for n, g in gammas.items())
                  or (whys[0] if whys else "nothing timed"),
-                 fingerprint, measured=[{"name": f"gamma_{n}", "value": gammas[n], "unit": "ratio",
+                 fingerprint, measured=[{"name": GAMMA.format(n.lower()), "value": gammas[n], "unit": "ratio",
                                          "interval": p["gamma"].get("ci95")}
                                         for n, p in doc["points"].items() if gammas[n] is not None])
     for n, p in doc["points"].items():
@@ -340,6 +374,8 @@ def parse(argv: Sequence[str] | None) -> argparse.Namespace:
             s.add_argument("--commit", help="the run's source commit (the arm's verifier runs it)")
             s.add_argument("--scratch", type=Path, required=True, help="where the nsys report goes, outside --out")
             s.add_argument("--nsys", default="nsys")
+            s.add_argument("--keep-reports", action="store_true",
+                           help="keep the Nsight reports in --out's nsys/ instead of --scratch: a profiling pass, never of record")
     return p.parse_args(argv)
 
 

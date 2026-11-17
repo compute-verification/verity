@@ -109,7 +109,7 @@ variable (H rel)
 table from the record's premises. -/
 structure RecordAt (o : Run H rel) : Prop where
   finalFits : o.record.toUTF8.size < 2 ^ 64 ∧ o.proofs.size < 2 ^ 64 ∧ ∀ b ∈ o.proofs, b.size < 2 ^ 64
-  draw : drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
+  draw : sampleEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
   liveReads : liveOf o.spec o.record = .ok o.live
   canonical : Flock.RecordText.check o.record = .ok ()
   rootB : (o.live.rootB.toList == o.link.1) = true
@@ -222,7 +222,7 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
     { finalFits := by
         obtain ⟨-, -, -, -, -, -, hsz, hb, -⟩ := JsonRT.RunZk.rep h64 hS hP hR (o.toZk h1)
         exact ⟨o.recordFits, by change o.proofs.size = 2 at hsz; omega, hb⟩
-      draw := JsonRT.drawMatchesZk_goal h64 hS hP (o.toZk h1)
+      draw := JsonRT.sampleMatchesZk_goal h64 hS hP (o.toZk h1)
       liveReads := JsonRT.liveReadsZk_goal h64 hS hP (o.toZk h1)
       canonical := JsonRT.canonicalZk_goal h64 hS hP (o.toZk h1)
       rootB := JsonRT.custodyRootBZk_goal h64 hS hP (o.toZk h1)

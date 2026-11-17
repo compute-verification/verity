@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Accel.Isa
-public import Definitions.Accounting.Device
+public import Definitions.Registration.Device
 public import Mathlib.Data.NNRat.Floor
 
 /-!
@@ -90,12 +90,12 @@ def Exact (x : Open) : Prop :=
     x.dot o k acc a b = (BitVec.ofInt 32 ((BitVec.ofNat 32 acc).toInt +
       (List.zipWith (fun p q => (x.fa o).intVal p * (x.fb o).intVal q) a b).sum)).toNat
 
-/-- **The card as the device model's device** (`Accounting.Device`), at ticks of `τ` seconds: on-chip state the
+/-- **The card as the device model's device** (`ResourceAccounting.Device`), at ticks of `τ` seconds: on-chip state the
 registers', shared memory's and L2's bits, device memory its bits, and a tick's tensor MACs (`s8` MACs), CUDA-core ops
 (32 an issue slot, and every pipe's lanes), oracle queries (an issue slot each at most: a call uses a public
 compression's issue slots, G3) and device memory's bits, each rounded up. The side channels `cap` are the host links',
 not the card's. -/
-def toDevice {ι : Type} (τ : ℚ≥0) (cap : ι → ℕ) : Accounting.Device ι where
+def toDevice {ι : Type} (τ : ℚ≥0) (cap : ι → ℕ) : ResourceAccounting.Device ι where
   chip := 32 * (c.size .reg + c.size .smem + c.size .l2)
   mem := 32 * c.size .dram
   rate

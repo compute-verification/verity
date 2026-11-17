@@ -6,7 +6,7 @@ public import Proofs.Properties.Verity.Sampled.TreeGap
 import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
-# Sampled proofs' coupling: the leaves' class errors, paid once each
+# SPOT's coupling: the leaves' class errors, paid once each
 
 An opening's node costs the coupling its gap and its empty class, and both are within the node's class error
 (`openGap_add_openEmpty_le_round`, in `Proofs.Properties.Verity.Sampled.OpenErr`). This file reads that class error off

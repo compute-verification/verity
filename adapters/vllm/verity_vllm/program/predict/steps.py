@@ -7,14 +7,14 @@ its account in the output accounting (the advice through `reads.gate`):
   public bound on the advice's length in bits, and the advice code, if the registration selects it (`Registered.code`).
 - `salt`: the window's seed salt, public, which a stochastic request's seed derives from where its body names none
   (`reads.seed_of`): the bytes of the window record's ``seed_salt``.
-- `advice`: I1 v0 (`verity.protocols.accounting.certifier.verifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
+- `advice`: I1 v0 (`verity.protocols.resource_accounting.network.verifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
   the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
   that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Under the advice
-  code it is a v1 string (`pipeline.advice_code.codec`), which `advice_of` decodes against the network certifier's certified record
+  code it is a v1 string (`pipeline.advice_code.codec`), which `advice_of` decodes against the network attester's certified record
   into the I1 v0 it carries, planned from as I1's bytes would be; ℓ bounds the string's bits. Nothing else is advice.
 - `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
   OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice. A body
-  given as the network certifier's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
+  given as the network attester's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
   request gets the parse unit `IngressPrompt_v1{MODEL, LP, V}` (`RequestUnit.parse`): the unit that reads the ingress transfer
   gates, whose ids output is the request Program's `prompt` input and whose ``ok`` proves the bytes are in the schema.
 
@@ -24,11 +24,17 @@ its account in the output accounting (the advice through `reads.gate`):
   input, the producers' rows, which GP-01 records per block). The one row async scheduling runs past a request's last kept output
   samples nothing kept: it is `discarded`, in no Program; a request its client aborted (finish `abort`) compiles as one that
   stopped at its last kept output, since the endpoint frees it after the step in flight. A request's (LP, T, C, policy) reads
-  its own advice record and body alone, never its batch; requests of one (LP, T, C, policy) share one Program. On a
+  its own advice record and body alone, never its batch; requests of one (LP, T, C, policy) share one Program (where FA3's tile
+  reads the launch, of one launch context too: below). On a
   batch-invariant target a chunked or preempted request compiles to the same Program: chunking and preemption are advice no
   Program there reads.
 - On a batch-invariant target a request's Program does not read its batch, so the advice's steps only place rows: each live row
   is a `RowRef` into its request's Program (positions start..start+n-1; `samples` the tokens the row samples), in I1's row order.
+  One launch static is the batch's: FA3's tile reads the varlen launch's max_seqlen_q, the most rows any one sequence of the step
+  has. Where FA3's tile reads it, a request whose prefill ran in one launch and each decode in one row takes, per step of its
+  Program, the most rows any row of the advice step it ran in has (`RequestUnit.seqlen_q`, `segment.seqlen_q_of`: the advice's
+  schedule, as the Build's `--launch-context [n0, n1, …]` takes it), where any step's exceeds its own rows; FA2's guard is
+  chosen from the request's own rows.
   The Program holds each of its positions C..LP+T-1 once, in the row that first reaches it: a chunked prefill's chunks are its
   prefill rows in turn, and a resume's recompute of positions its request had reached is `discarded`, like the row past the last
   kept output. This rests on the target computing a position's row bit for bit alike however its prefill is chunked or
@@ -70,7 +76,7 @@ its account in the output accounting (the advice through `reads.gate`):
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
 - Each request Program returns its length rule over its outputs as its last check, which the verifier requires to be 1
-  (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, which with no stop ids reads its caps.
+  (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, which with no stop ids reads its length limits.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
   first scheduled step and with bound T + 1 (the executed prefix), under the target's lag.
 - On a batch-invariant target, a request a Commit window carries in (admitted in an earlier window) compiles to the Program it has
@@ -119,7 +125,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-import verity.protocols.accounting.certifier.verifier.advice as I1
+import verity.protocols.resource_accounting.network.verifier.advice as I1
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
@@ -127,8 +133,9 @@ from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.advice_windows import CAP_BITS
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.frontend import stop_rule as SR
-from verity_vllm.program.prune import dead_units
-from verity.definitions.registry import io_shell as IO
+from verity_vllm.records.schema_ids import COMPILED_STEPS_SCHEMA
+from verity_torch.prune import dead_units
+from verity_vllm.definitions.registry import io_shell as IO
 
 from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape
@@ -136,11 +143,11 @@ from .common import cyclic_gc_off, edge_config
 from .hits import Rows, check_sources, hit_chunks, producers_of
 from .ingress_policy import ingress_body, policy_of, request_of
 from .phi import Phi
-from .segment import edge_groups, edge_of, launch_of, segment_of
+from .segment import edge_groups, edge_of, launch_of, segment_of, seqlen_q_of
 from .traced import NO_EDGE_TRACE, NO_PARTIAL_TRACE, trace_dir
 from .traced import trace_commands as trace_commands
 
-SCHEMA = "verity-vllm/compiled-steps/v2"
+SCHEMA = COMPILED_STEPS_SCHEMA
 #: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
 EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
 
@@ -151,7 +158,7 @@ class Registered:
     seed serving fills in (`engine.served_seed.DEFAULT_SEED`, under which no request compiles: `reads.seed_of`), ℓ, the bound on
     the advice's length in bits, the served model name ingress v0's ``"model"`` carries (`io_shell`; None: no ingress is bytes),
     the advice code (None: the advice is I1's): advice v1's registration (`pipeline.advice_code.codec.Registered`), private
-    like the network certifier's protocol, read only through `decode(string, record, cap_bits)`, which gives the I1 v0 `Advice`
+    like the network attester's protocol, read only through `decode(string, record, cap_bits)`, which gives the I1 v0 `Advice`
     the string carries under the certified record or a `ValueError` naming why not; ℓ then bounds its strings; and whether
     class G's DSA rows past INDEX_TOPK keys read their history by table (`dsa_table_reads`, `program.dsa_table`; off: the rows
     network), which no other Program reads and which takes the prefix cache off."""
@@ -204,7 +211,8 @@ class RequestUnit:
     """A request that ran: its Program's shape and digest, its policy, the seed its `seed` Input takes, its first step and its id;
     with a prefix-cache hit, its C cached rows and the request that computed each cached block; in class G, its launch context and,
     for a prefill the engine ran in several launches, its chunks (`launch_of`), and C its history in the window (`segment_of`), for a
-    request the window carries in its rows at the open."""
+    request the window carries in its rows at the open; on a batch-invariant target where FA3's tile reads the launch, each step's
+    max_seqlen_q where a step's exceeds its own rows (`seqlen_q_of`)."""
 
     request: int
     digest: str
@@ -226,11 +234,13 @@ class RequestUnit:
     recomputed: int = 0           # recompute_hits: its hit's positions 0..recomputed-1, which its Program computes and no row of it ran
     hit_steps: tuple[int, ...] = ()     # class G, recompute_hits: the advice step each chunk of those positions ran in
     entries: tuple[int, ...] = ()   # class G: per prefill chunk, its sequence's rows in that launch, where a chunk computes fewer
+    seqlen_q: tuple[int, ...] = ()  # batch invariant, FA3: per Program step, its launch's max_seqlen_q (`segment.seqlen_q_of`)
 
     def key(self) -> str:
         return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else []), *([{"chunks": self.chunks}] if self.chunks else []),
                            *([{"launch": self.launch}] if self.launch is not None else []), *([edge_config(self.edge)] if self.edge else []),
-                           *([{"stop": self.stop}] if self.stop else []), *([{"entries": self.entries}] if self.entries else [])],
+                           *([{"stop": self.stop}] if self.stop else []), *([{"entries": self.entries}] if self.entries else []),
+                           *([{"seqlen_q": self.seqlen_q}] if self.seqlen_q else [])],
                           sort_keys=True)
 
     def events(self) -> int:
@@ -282,7 +292,8 @@ class Compiled:
                                                      **({"chunks": list(u.chunks)} if u.chunks else {}), **edge_config(u.edge),
                                                      **({"stop": u.stop} if u.stop else {}),
                                                      **({"recomputed": u.recomputed, "hit_steps": list(u.hit_steps)} if u.recomputed else {}),
-                                                     **({"entries": list(u.entries)} if u.entries else {})}
+                                                     **({"entries": list(u.entries)} if u.entries else {}),
+                                                     **({"seqlen_q": list(u.seqlen_q)} if u.seqlen_q else {})}
                              for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())},
@@ -301,7 +312,7 @@ def advice_of(registered: Registered, advice: Any, record: Any = None) -> Any:
     if record is not None:
         raise Unexpressible("a certified record is for the advice code, and the registration selects none: its advice is I1's")
     data = _advice_bytes(advice)
-    _within_cap(registered, data)
+    _within_cap_bits(registered, data)
     return _window_advice(data)
 
 
@@ -316,7 +327,7 @@ def _advice_bytes(advice: Any) -> bytes:
     raise Unexpressible(f"the advice is I1's bytes or an I1 Advice, not a {type(advice).__name__}: nothing else is advice")
 
 
-def _within_cap(registered: Registered, data: bytes) -> None:
+def _within_cap_bits(registered: Registered, data: bytes) -> None:
     if 8 * len(data) > registered.cap_bits:
         raise Unexpressible(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {registered.cap_bits} bits")
 
@@ -337,7 +348,7 @@ def _coded_advice(registered: Registered, advice: Any, record: Any) -> Any:
     """A v1 string's I1 v0, held to ℓ before any of it is read and decoded under the registered code at that ℓ."""
     if type(advice) is not bytes:
         raise Unexpressible(f"under the advice code its advice is a v1 string's bytes, not a {type(advice).__name__}")
-    _within_cap(registered, advice)
+    _within_cap_bits(registered, advice)
     if record is None:
         raise Unexpressible("the advice code decodes against the session's certified record, and none was given")
 
@@ -421,8 +432,8 @@ def launch_class(phi: Phi) -> None:
     elif (phi.target or {}).get("compilation") != CLASS_G_EXECUTIONS[phi.execution]:
         facts.append(f"target compilation {(phi.target or {}).get('compilation')!r} at execution {phi.execution!r}, not "
                      f"{CLASS_G_EXECUTIONS[phi.execution]!r}")
-    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {cap}" for k, cap in CLASS_G_LIMITS.items()
-              if type(eng.get(k)) is not int or not 0 < eng[k] <= cap]
+    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {limit}" for k, limit in CLASS_G_LIMITS.items()
+              if type(eng.get(k)) is not int or not 0 < eng[k] <= limit]
     if type(eng.get("enable_prefix_caching")) is not bool:
         facts.append(f"engine arg enable_prefix_caching {eng.get('enable_prefix_caching')!r}, not stated True or False")
     if facts:
@@ -472,7 +483,7 @@ class Plan:
 
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, after its C rows of
-    history, in class G at its launch context and in its prefill chunks, at φ's rank, in the registered compiler's form
+    history, in class G at its launch context and in its prefill chunks (batch invariant: at its launches' max_seqlen_q), at φ's rank, in the registered compiler's form
     (`dead_free`) at any world, batched in class G with its DSA long rows as the registration says (`Registered.dsa_table_reads`),
     its length rule last; `named`: its trace's names (`naming.named_program`, no class-G decoder)."""
     phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
@@ -481,7 +492,7 @@ def request_program(registered: Registered, unit: RequestUnit, named: bool = Fal
         return named_program(phi, unit.LP, unit.T, unit.C, stop=unit.stop)
     r = build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
                       edge=unit.edge, stop=unit.stop, with_desc=False, batched=not phi.target_profile().batch_invariant,
-                      table_reads=registered.dsa_table_reads, entries=unit.entries)
+                      table_reads=registered.dsa_table_reads, entries=unit.entries, seqlen_q=unit.seqlen_q)
     return replace(r, digest=program_digest(r.program))
 
 
@@ -533,7 +544,8 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, salt: by
                                               T=u.events() - 1, prefix=u.prefix())
                             for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()),
                            edge=edge)
-    steps = [[RowRef(r, units[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
+    ran: list[Any] = units   # a step's row is of a request the plan kept: None's AttributeError otherwise
+    steps = [[RowRef(r, ran[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
     compiled = Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
                         cap_bits=registered.cap_bits, idle=plan.idle, named=names)
     from .batch import BatchDependent, check_compiled
@@ -636,7 +648,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
             try:
                 carry = carried.get(i)
                 LP, T, s0, C = shape_of(i, q.prompt_len, rows[i], q.output_len, carry)
-                if LP + T > max_pos:
+                if max_pos < LP + T:
                     raise Unexpressible(f"request {i}: positions to {LP + T - 1}, past the model's {max_pos} positions" if bi else
                                         f"request {i}: positions to {LP + T - 1}, past the {max_pos} the model and the registered "
                                         f"max_model_len allow")
@@ -650,14 +662,17 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
                     continue
                 chunks, launch = ((), None) if bi else launch_of(i, LP, T, C, rows[i], adv.steps)
                 hit = C if recompute_hits and C and carry is None else 0
-                hit_steps, entries = (), ()
+                hit_steps: tuple[int, ...] = ()
+                entries: tuple[int, ...] = ()
                 if hit and not bi:
                     pre = hit_chunks(i, hit, rows, adv.steps, len(carried))
                     hit_steps = tuple(s for s, _, _, _ in pre)
-                    launch = tuple(tuple((r.n, r.start) for r in adv.steps[s].rows) for s in hit_steps) + launch
+                    served: Any = launch   # `launch_of`'s tuple: class G's requests alone get here (`not bi`)
+                    launch = tuple(tuple((r.n, r.start) for r in adv.steps[s].rows) for s in hit_steps) + served
                     entries = tuple(m for _, _, _, m in pre) + chunks
                     chunks = tuple(n for _, _, n, _ in pre) + chunks
                     entries = entries if entries != chunks else ()
+                seqlen_q = seqlen_q_of(phi0.target_profile(), LP, T, C, rows[i], adv.steps) if bi and carry is None and not hit else ()
                 edge = edge_groups(decoder(phi0, 1, 0), q) if i in left and launch is not None else ()
                 policy, seed = policy_of(i, params[i], phi0.target_profile().num_sms, request_id=q.id, salt=salt,
                                          carried=carry is not None)
@@ -675,7 +690,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
             else:
                 parse = bind(IO.IngressPrompt, MODEL=registered.served_model, LP=LP, V=V) if i in wired else None
                 units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C - hit, producers, parse, carry is not None, i in left,
-                                         launch, chunks if len(chunks) > 1 else (), edge, stop, hit, hit_steps, entries))
+                                         launch, chunks if len(chunks) > 1 else (), edge, stop, hit, hit_steps, entries, seqlen_q))
                 placed.update(own)
                 continue
         units.append(None)
@@ -717,7 +732,8 @@ def compare(summary: dict, root: str) -> dict:
         seen.add(d)
         res = Path(root, d, "result.json")
         doc = json.loads(res.read_text()) if res.exists() else {}
-        traced = (doc.get("program") or {}).get("digest")
+        program = doc.get("program")   # a trace that built no Program states none: no digest, and the unit counts no_trace
+        traced = (program if program else {}).get("digest")
         why = ((NO_EDGE_TRACE if u.get("edge") else NO_PARTIAL_TRACE if u.get("entries") else None) if not doc else
                str(doc.get("message") or doc.get("unsupported"))[:400])
         out.append({"unit": d, "compiled": u["digest"], "traced": traced,
@@ -728,3 +744,6 @@ def compare(summary: dict, root: str) -> dict:
 
 
 compile_steps = cyclic_gc_off(compile_steps)
+
+
+__all__ = ["Registered", "RequestUnit", "compile_steps", "plan_steps", "request_program", "trace_dir"]

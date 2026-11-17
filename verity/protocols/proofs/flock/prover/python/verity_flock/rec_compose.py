@@ -1,15 +1,15 @@
-"""`flock-verify rec-compose` in Python (`Flock/RecCompose.lean`, `RecCompose.check`), reason for reason, which
+"""`verity-verify-proof rec-compose` in Python, its twin `check_twin` (`Flock/RecCompose.lean`, `RecCompose.check`), reason for reason, which
 `tests/test_lean_rec_compose.py` holds to the Lean binary on honest and tampered part sets. The Lean is the verifier;
 this is for writing part sets and their verdicts (``verdict``) in tests and stand-ins, and a run's record (`run_record`)
 staging the shared set its parts' files give (`shared_of_args`, held to ``verify``'s by `tests/test_lean_rec_coins.py`).
 
-A recursive statement's V* parts each ran ``flock-verify verify --zk --rec-part J`` once. Their logs compose when there
+A recursive statement's V* parts each ran ``verity-verify-proof verify --zk --rec-part J`` once. Their logs compose when there
 is one log per V* statement with one ``VERDICT``; ``rec_part`` 0 to n - 1 each once; every ``VERDICT`` accepts, ran
 ``--zk``, names no identifier and the composition's own rows file's SHA-512; the first part's ``rec_shared`` holds every
 input the compiled verifier's parts read at the composition's own inner shape and link table (``--rec-links``), and
 every part's is that one; and no two
 sessions share a coin key. Then the challenger's interactive-run record (``verity/rec-run/v1``, `RecCompose.runOf`,
-written by `verity.protocols.proofs.spot.device.challenger.RunRecord`) must be one run of them (`RecCompose.checkRun`,
+written by `verity.protocols.proofs.spot.verifier.challenger.challenger.RunRecord`) must be one run of them (`RecCompose.checkRun`,
 C10 ``OneRun``): the staging first, at the composition's rows and the shared set every part read; exactly one session
 opened per part and none for another; every opened session a composed part's and every part's opened; the close last."""
 from __future__ import annotations
@@ -26,7 +26,7 @@ SHARED = (
     ("inner_partition", "the inner statement's partition, --rec-inner-partition"),
     ("inner_coins", "a record of check 5's coins, --rec-inner-coins"),
     ("inner_session", "the inner session's record, --rec-inner-session"),
-    ("inner_transcript", "the coin server's transcript, --rec-inner-transcript"),
+    ("inner_transcript", "the challenger's live-coin part's transcript, --rec-inner-transcript"),
     ("inner_registration", "the circuit registration, --rec-inner-registration"),
     ("inner_statement", "how the inner statement is proved, --rec-inner-statement"),
     ("inner_tables", "the inner statement's lookup tables, --rec-inner-tables"),
@@ -231,7 +231,7 @@ def _check_form(name: str, inner: str, links: tuple | None, s: tuple) -> None:
         raise Refused(f"{name}: it read a record of check 5's coins (--rec-inner-coins), which no part of the compiled "
                       "verifier reads")
     for v, what in ((session, "inner session's record (--rec-inner-session)"),
-                    (transcript, "coin server's transcript (--rec-inner-transcript)"),
+                    (transcript, "live-coin part's transcript (--rec-inner-transcript)"),
                     (statement, "word on how the inner statement is proved (--rec-inner-statement)"),
                     (tables, "inner statement's lookup tables (--rec-inner-statement)")):
         if v is None:
@@ -352,9 +352,9 @@ def _check_run(n: int, rows: str, vs: list[tuple[str, dict]], evs: list[tuple]) 
             raise Refused(f"{name}: its session is not one the run record opened for its part")
 
 
-def check(n: int, rows: str, inner: str, run: str, parts: list[tuple[str, str]],
-          links: tuple[bytes, int] | None = None) -> tuple[bool, str]:
-    """`RecCompose.check` at V*'s ``n`` statements, the composition's own rows file's SHA-512 ``rows``, inner shape's
+def check_twin(n: int, rows: str, inner: str, run: str, parts: list[tuple[str, str]],
+               links: tuple[bytes, int] | None = None) -> tuple[bool, str]:
+    """The Python twin of `RecCompose.check`, for tests only, at V*'s ``n`` statements, the composition's own rows file's SHA-512 ``rows``, inner shape's
     ``inner`` and link table ``links`` (``--rec-links``' root and rows), over the challenger's interactive-run record
     ``run`` (its text) and ``parts``' logs (name, text): (accepted, the refusal's reason or "")."""
     try:

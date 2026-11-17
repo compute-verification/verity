@@ -31,7 +31,7 @@ streams before it in `holoStreams`' order (`laterCoins_of_held`'s `h2`, `h3` and
 `coinRounds_take_sum`: within a sparse stream, the coins of its coin rounds before the `p`-th take the history rounds
 before it (`heldBefore`).
 `stageHeldW_sparse`: at the verifier's record of the session (`hh`), its count check of the sparse streams
-(`SparseRoundsCounted`) and their samples at the map (`SparseDrawnAt`, `sparseDrawnAt_holo` at `holoSelWords`), phase
+(`SparseRoundsCounted`) and their samples at the map (`SparseSampledAt`, `sparseSampledAt_holo` at `holoSelWords`), phase
 `x`'s stage at `sparseCoins`' coins is `StageHeldW` from its start round: its coins are the held rounds of coins,
 flattened (`sparseCsFlat`).
 -/
@@ -164,8 +164,8 @@ def SparseRoundsCounted (cs : InnerCommits) (sp : Flock.RecSparse.Shape) : Prop 
 
 /-- **Phase `x`'s rounds of coins are flipped at the map read from round `j`**: the stage's `nc` rounds are below `r`,
 and the stream's coin round `q` is sampled at the history round `j` past its rounds before `q` and its own coins, less
-one (`selW`). `sparseDrawnAt_holo` gives it at `holoSelWords`. -/
-def SparseDrawnAt (selW : ℕ → String → ℕ → Prop) (r : ℕ) (sp : Flock.RecSparse.Shape) (x : Fin 2) (j : ℕ) : Prop :=
+one (`selW`). `sparseSampledAt_holo` gives it at `holoSelWords`. -/
+def SparseSampledAt (selW : ℕ → String → ℕ → Prop) (r : ℕ) (sp : Flock.RecSparse.Shape) (x : Fin 2) (j : ℕ) : Prop :=
   j + nc (FlockC3.Compose.sparseOf sp) ≤ r ∧ ∀ q ∈ coinRounds (sparseRounds sp),
     selW (j + heldBefore (.sparse x) (sparseRounds sp) q + ((sparseRounds sp).getD q default).1 - 1)
       s!"{Flock.RecVStar.SPARSE}/rep{x.val}" q
@@ -176,7 +176,7 @@ def SparseCsFlat (c3 : Flock.RecCoins.C3) (unit : String) : Prop :=
   ∀ (x : Fin 2) sc H, Flock.RecCoins.sparseCoins c3 unit x.val = .ok sc →
     c3.coins unit s!"{Flock.RecVStar.SPARSE}/rep{x.val}" = .ok H → sparseCs sc = (H.filter (·.size != 0)).flatten
 
-/-! ## `SparseDrawnAt` at the map read -/
+/-! ## `SparseSampledAt` at the map read -/
 
 theorem toString_lt_two {n : ℕ} (hn : n < 2) : (toString n : String).toList.length = 1 := by
   rcases (show n = 0 ∨ n = 1 by omega) with rfl | rfl <;> decide
@@ -246,19 +246,19 @@ theorem htblR_of {tbl : String}
     FlockVBridge.toString_str, String.toList_append] at this
   exact this.2 (List.prefix_append _ _)
 
-/-- **`SparseDrawnAt` at the map read**: at `holoStreams`' order (`holoStreams_sparse_eq`), sparse phase `x`'s
+/-- **`SparseSampledAt` at the map read**: at `holoStreams`' order (`holoStreams_sparse_eq`), sparse phase `x`'s
 stream, found by its name (`find?_sparseName`, the table's prefix not the sparse streams', `htbl`; `htbl_of` gives it
 from the guarantee's `_htbl`), starts one past
 both reps' rounds and, for phase 1, phase 0's (`roundAt_sparseRounds`, `stageStarts`' start), its rounds of forms
 `none` (`holoForms_sparse_none`), and its `nc` rounds inside `holoForms` past both reps' (`heldBefore_rep_forms`). -/
-theorem sparseDrawnAt_holo {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecVStar.Inner} {tbl : String}
+theorem sparseSampledAt_holo {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecVStar.Inner} {tbl : String}
     {sp : Flock.RecSparse.Shape} {rs : Array SchedRound} (x : Fin 2) (hsp : ish.sparse = some sp)
     (hr : Flock.Guarantees.holoRounds ish.m ish.kLog ish.claims = some rs)
     (hS : ∃ L, Flock.Guarantees.holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L)
     (hc : 0 < ish.claims)
     (hA : FlockC3.Compose.repFormsAt (holoAt st hp) = FlockC3.Compose.repForms ish.m ish.kLog ish.claims)
     (hshape : (holoAt st hp).cls.shape = FlockC3.Compose.sparseOf sp) (htbl : tbl ≠ s!"{Flock.RecVStar.SPARSE}/") :
-    SparseDrawnAt (FlockC3.Compose.holoSelWords st hp ish tbl)
+    SparseSampledAt (FlockC3.Compose.holoSelWords st hp ish tbl)
       (1 + (kindCoinTys (Flock.Guarantees.holoKinds (holoAt st hp))).length) sp x
       (1 + 2 * heldBefore (.rep 0) rs rs.size + x.val * nc (FlockC3.Compose.sparseOf sp)) := by
   obtain ⟨L, hS⟩ := hS
@@ -372,7 +372,7 @@ theorem map_range'_get! {α : Type} [Inhabited α] (a : Array α) : (List.range'
 
 /-- **`h2`, `h3` at `sparseOf`'s stages**: where the verifier holds the challenger's live-coin part's record (`hh`), counts its sparse
 streams' rounds (`SparseRoundsCounted`) and `sparseCoins` accepts phase `x`'s coins `sc`, the stage of any words at
-them (`stepsOf … (sparseCs sc)`) is `StageHeldW` from a round `j` its coin rounds are sampled from (`SparseDrawnAt`):
+them (`stepsOf … (sparseCs sc)`) is `StageHeldW` from a round `j` its coin rounds are sampled from (`SparseSampledAt`):
 its coin steps are the held rounds of coins (`coinRounds` of `sparseRounds`), flattened (`sparseCsFlat`). -/
 theorem stageHeldW_sparse {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))}
     {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
@@ -381,7 +381,7 @@ theorem stageHeldW_sparse {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List 
     {sc : Flock.RecCoins.SparseCoins} (w : Array Flock.F128) {j : ℕ}
     (hh : held (wr t) = .ok c3.commits) (hcnt : SparseRoundsCounted c3.commits sp)
     (hsh : c3.sparse = sp) (hsc : Flock.RecCoins.sparseCoins c3 unit x.val = .ok sc)
-    (hdr : SparseDrawnAt selW r sp x j) :
+    (hdr : SparseSampledAt selW r sp x j) :
     StageHeldW t wr held selW j (stepsOf (FlockC3.Compose.sparseOf sp) w (sparseCs sc)) := by
   have hsc' := hsc
   unfold Flock.RecCoins.sparseCoins at hsc'

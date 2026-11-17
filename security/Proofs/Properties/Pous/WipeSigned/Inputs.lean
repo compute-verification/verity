@@ -3,22 +3,22 @@ module
 public import Proofs.Properties.Pous.WipeSigned.Tree
 import all Init.Data.String.Defs
 import Mathlib.Basic.ENNReal.Real
-import Proofs.Properties.Pous.MemoryChallenger.Inputs
+import Proofs.Properties.Pous.MemoryAttester.Inputs
 
 /-!
 # What the wipe's hashes read
 
 The wipe's `message` and `recordsRoot` unfolded to the SHA-512 inputs they hash (`message_ok`, `recordsRoot_ok`), the
-session input split back into its header and records root (`session_split`), a batch's value into its batch
+session input split back into its header and records root (`signedWipe_split`), a batch's value into its batch
 (`value_inj`, `batches_inj`), and the wipe's session input told apart from PoUS's by their tags (`tags_differ`).
 -/
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SecurityProofs.WipeInputs
+namespace MemoryAttester.Properties.SecurityProofs.WipeInputs
 
-open MemoryChallenger Flock
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size)
+open MemoryAttester Flock
+open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size)
 
 theorem beInt_ok {n : Nat} {x : Int} {w : String} {b : ByteArray} (h : StreamedWipe.beInt n x w = .ok b) :
     0 ≤ x ∧ beN n x.toNat w = .ok b := by
@@ -144,7 +144,7 @@ theorem message_ok {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {
     exact ⟨root, rfl, h.symm⟩
 
 /-- The wipe's session input, with records roots of one width, determines the header and the root. -/
-theorem session_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
+theorem signedWipe_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
     (e : StreamedWipe.SESSION_TAG ++ be64 h.size.toUInt64 ++ h ++ r =
       StreamedWipe.SESSION_TAG ++ be64 h'.size.toUInt64 ++ h' ++ r') :
     h = h' ∧ r = r' := by
@@ -175,4 +175,4 @@ theorem tags_differ (a b c a' b' c' : ByteArray) :
   rw [List.getElem?_append_left h1, List.getElem?_append_left h2, tag_byte, wipe_tag_byte] at e
   exact absurd e (by decide)
 
-end MemoryChallenger.Properties.SecurityProofs.WipeInputs
+end MemoryAttester.Properties.SecurityProofs.WipeInputs

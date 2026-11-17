@@ -1,0 +1,22 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "circuits/window-compile-minutes"
+title = "Workload compile time"
+owner = "circuits"
+unit = "minutes"
+axis = "Wall minutes on one core to compile a workload window's request Programs, each point naming its model, window and machine."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --mem-gb 64 --timeout 60m -- uv run --extra torch-cpu python benchmarks/compile_cost/run.py --window long-w0"
+every = "7d"
+
+[[metric]]
+id = "circuits/window-compile-peak-memory"
+title = "Workload compile memory"
+owner = "circuits"
+unit = "GiB"
+axis = "Peak resident memory compiling a workload window's request Programs, each point naming its model, window and machine."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --mem-gb 64 --timeout 60m -- uv run --extra torch-cpu python benchmarks/compile_cost/run.py --window long-w0"
+every = "7d"

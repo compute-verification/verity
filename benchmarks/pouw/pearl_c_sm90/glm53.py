@@ -33,7 +33,7 @@ from fractions import Fraction
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from verity.protocols.accounting.pouw.prover.schemes.pearl_c import PearlC
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import PearlC
 
 __all__ = ["CONFIG", "DECODE_M", "DEEPGEMM", "FADD_READINGS", "Linear", "PREFILL_M", "SCHEME", "TP", "expert_rows", "gamma",
            "in_domain", "linears", "scheme", "table"]
@@ -94,9 +94,9 @@ def expert_rows(m: int, c: dict = CONFIG) -> Fraction:
 
 def scheme(fadd: Fraction | None = None, name: str = SCHEME) -> PearlC:
     """The registered record's scheme, with the FP32 add's price at `fadd` when given."""
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
-    from verity.protocols.accounting.pouw.verifier.serving import SchemeId
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+    from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SchemeId
 
     sid = SchemeId.parse(name)
     dev = DEVICES[sid.device]
@@ -107,7 +107,7 @@ def scheme(fadd: Fraction | None = None, name: str = SCHEME) -> PearlC:
 def gamma(s: PearlC, n: int, k: int, cast: Fraction = Fraction(0)) -> Fraction:
     """One unit's gap at scheme `s` (module docstring), W_ref with `cast` more per activation element (the kernel's cast over
     the credited one)."""
-    from verity.protocols.accounting.pouw.verifier.protocol import Shape
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape
 
     sh = Shape(16, k, n)
     rho = s.device.cap
@@ -117,7 +117,7 @@ def gamma(s: PearlC, n: int, k: int, cast: Fraction = Fraction(0)) -> Fraction:
 def table(name: str = SCHEME, ep: bool = False) -> list[dict]:
     """Every linear (`linears`) with its domain verdict (`pouw_pearl_c_device.refusals`, the kernels' grain with the
     record's) and, in the domain, the gap at each FADD reading."""
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 
     rows = []
     for i, lin in enumerate(linears(ep=ep)):

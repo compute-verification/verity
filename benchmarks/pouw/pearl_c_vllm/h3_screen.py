@@ -31,8 +31,10 @@ from pathlib import Path
 from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
+#: the sm_120 kernel's directory, the default kernel
+SM120 = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/prover/clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/compute/pouw/prover/clear"))
 settings = of(__file__)
 
 SCHEME = "pearl-c-sm120-v1-h3"
@@ -43,10 +45,11 @@ PASSES = {"eager": (False, ()), "graphs": (True, ()), "omit-seeds": (False, ("se
 
 def capture(args) -> int:
     import torch
-    from verity.protocols.accounting.pouw.verifier.audit import weights_root
-    from verity.protocols.accounting.pouw.verifier import verifier
-    from verity.protocols.accounting.pouw.verifier.coins import Challenger
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     out, dev = Path(args.out), torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261006)
@@ -56,14 +59,14 @@ def capture(args) -> int:
         raise SystemExit(f"{args.scheme} refuses the screen's weights: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
     salt_key = PPD.new_salt_key(args.scheme)
-    roots = PPD.weight_roots(kernel, weights, args.scheme, salt_key=salt_key)
+    roots = PPDR.weight_roots(kernel, weights, args.scheme, salt_key=salt_key)
     challenger = Challenger(0, verifier.coins)
     opening = challenger.open("salt", weights_root(roots))
     xs = [torch.randn(m, weights[w].shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, m in CALLS]
     s, log = PPD.scheme_of(args.scheme), {}
     dumps = ("seeds_a", "seed_a", "ea_codes", "rowdig_a")
     for name, (graphs, omit) in PASSES.items():
-        run = PPD.PearlCDeviceRun(s, f"pouw:{args.scheme}", kernel, weights, roots, challenger.commitment, opening, graphs=graphs,
+        run = PPDR.PearlCDeviceRun(s, f"pouw:{args.scheme}", kernel, weights, roots, challenger.commitment, opening, graphs=graphs,
                                   salt_key=salt_key)
         d = out / name
         try:
@@ -76,7 +79,7 @@ def capture(args) -> int:
                     W = weights[w]
                     sh = run._shape(-(-m // PPD.ROW_ALIGN) * PPD.ROW_ALIGN, W.shape[0], W.shape[1])
                     for b in dumps:
-                        (d / f"call{index}.{b}").write_bytes(PPD._bytes(sh.b[b])[:sh.size[b]])
+                        (d / f"call{index}.{b}").write_bytes(PPDR._bytes(sh.b[b])[:sh.size[b]])
                 ref = x.float() @ weights[w].float().T
                 log.setdefault(name, []).append({"call": index, "rel_rms": float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())})
             log[name + ":end"] = {k: v for k, v in run.end().items() if k != "manifest"}
@@ -91,15 +94,15 @@ def capture(args) -> int:
 
 
 def _scheme(man: dict):
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     return PPD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
 
 
 def _calls(d: Path) -> dict:
     """An eager pass's calls held to the reference: the row seeds, E_A's committed rows and its padding rows."""
     import verify_run as VR
-    from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 
     man = json.loads((d / "manifest.json").read_text())
     s, files, out = _scheme(man), VR.Files(d), []
@@ -139,9 +142,9 @@ def _tiles(d: Path, jobs: int) -> dict:
     import verify_run as VR
     from verity.commitments import Commitment
     from clear_audit import Transcript, Verifier
-    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
     import clear_work as CW
-    from verity_vllm.protocols.pouw.pearl_c import manifest as PM
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import manifest as PM
 
     man = json.loads((d / "manifest.json").read_text())
     s = _scheme(man)
@@ -191,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("mode", choices=("capture", "check"))
     p.add_argument("--out", required=True)
     p.add_argument("--scheme", default=SCHEME)
-    p.add_argument("--kernel", default=str(HERE.parent / "pearl_c_sm120"), help="the ship (run.py, fixture.py, the cubin)")
+    p.add_argument("--kernel", default=str(SM120), help="the ship (run.py, fixture.py, the cubin)")
     p.add_argument("--cubin")
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     a = p.parse_args(argv)

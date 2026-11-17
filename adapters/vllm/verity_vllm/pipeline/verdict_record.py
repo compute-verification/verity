@@ -9,6 +9,7 @@ from pathlib import Path
 
 from verity_vllm.check.verdict import from_record
 from verity_vllm.config import option
+from verity_vllm.pipeline.cli import write
 
 __all__ = ["COMMANDS", "main"]
 
@@ -32,5 +33,5 @@ def main(a: FromRecordOptions) -> int:
     out = Path(a.out) if a.out else Path(a.row_dir) / "verdict.json"
     v.write(out)
     gs = " ".join(f"{k}={v_}" for k, v_ in v.groups().items())
-    print(f"{v.outcome} {out} [{gs}]")
+    write(f"{v.outcome} {out} [{gs}]")
     return 0

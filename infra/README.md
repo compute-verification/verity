@@ -26,6 +26,7 @@ to it by exec, so those are the commands to run:
 ~~~text
 research deploy drift [--on NODE]        how far each node's installed files are from origin/main
 research deploy install NODE --by WHO    install them from a pushed commit; a dry run without --apply
+research deploy roll PATH --by WHO       a file made from the register of machines, on every node that lists it, one at a time
 research keeper status --on NODE         a node's standing targets (`set` and `stop` change them)
 ~~~
 
@@ -44,7 +45,8 @@ node 1 runs the console's `node1` group (`tools/research/console/`). The manifes
 | Loop | Code |
 |---|---|
 | Boot: links and services from the network volume | `infra/control/post_start.sh` |
-| Drive, the landing automation's ticks, and promote | `infra/control/drive.sh`, `infra/control/promote-loop.sh` |
+| Landing, ci's verified queue (`research queue vqueue`) | ci's scripts on the pod's volume, `/data/vqueue`, started by `post_start.sh` |
+| `research merge` and `research queue` on the pod with the App's token | `infra/control/drive.sh` |
 | The agent watch: frees held runs, records idle workers and run ends | `infra/ops/verity_ops/agent_watch.py`, run by `infra/control/agent_watch.sh` |
 | The agent watch's relay to Slack | `infra/control/agent_watch_relay.py` |
 | The cloud watch: loop health, R2, Neon, spend against budgets | `infra/control/cloud_watch.py` and `cloud_watch.toml` |
@@ -55,6 +57,7 @@ node 1 runs the console's `node1` group (`tools/research/console/`). The manifes
 | GitHub App tokens for drive and the notes, and the read-only one every watcher reads GitHub with | `infra/control/gh_app_token.sh`, `gh_notes_token.sh`, `gh_read_token.sh` |
 | `research msg` as root, for credentials that live only on the pod | `infra/control/msg.sh` |
 | The dead-man's switch, which alerts when the pod stops | `infra/control/deadman/` |
+| A benchmark run on VCF's Slurm cluster, sent from the pod and published from it (`benchmarks/README.md`, "On VCF's Slurm cluster") | `infra/vcf/`, deployed as `/data/vcf/` |
 
 ## Agents and messaging
 

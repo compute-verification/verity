@@ -1,4 +1,4 @@
-"""A production-like plan for the ladder's served window, in serve_tax's plan format, and its replays broken down by kind.
+"""A serving-like plan for the ladder's served window, in serve_tax's plan format, and its replays broken down by kind.
 
     prod_plan.py build --checkpoint DIR --sharegpt FILE --c4 C4.json.gz --out PLAN.jsonl [--n 8000] [--seed 0]
     prod_plan.py kinds MODEL_DIR

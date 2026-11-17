@@ -498,13 +498,13 @@ theorem bernoulli_Pa_le {s : AuditStatement} {Pt : Partition} {d : Design.Two} (
       simp at hlen
   have hwf1 : 0 < den ∧ num ≤ den := hwf (.bernoulli num den, c) (by simp [hc])
   refine ⟨fun T hT => ?_, div_le_one_of_le₀ (by exact_mod_cast hwf1.2) (Nat.cast_nonneg _)⟩
-  rw [EndToEndDraw.blocks_length hc] at hT
+  rw [EndToEndSample.blocks_length hc] at hT
   have hPa : d.replay.Pa d.part T =
       (OneStage.bernoulli num den).Pa (strataSizes c) (window 0 c.flatten.length T) * 1 := by
     unfold Design.Pa
     rw [hb, hc]
     rfl
-  rw [hPa, mul_one, EndToEndDraw.window_zero fun v hv => mem_range.1 (hT hv)]
+  rw [hPa, mul_one, EndToEndSample.window_zero fun v hv => mem_range.1 (hT hv)]
   show (((den - num : ℕ) : ℝ) / den) ^ T.card ≤ _
   rw [prod_const, Nat.cast_sub hwf1.2, sub_div, div_self (by exact_mod_cast hwf1.1.ne')]
 

@@ -32,7 +32,7 @@ import Proofs.Flock.Soundness.Registered.Binding
 * `digest_top`: the public file's row at such a read is the node's commit string (`HPubRows` at the verifier's hold,
   `hrow`);
 * `leaf_top`: so the read's leaf is `treeLeaf` of that string, or its two openings conflict (`leaf_of_accepts` at the
-  outcome, with `ReadsOwnAt`'s port); `leaf_drawn`: `leaf_of_accepts` at a sampled outcome, whose reads the session's
+  outcome, with `ReadsOwnAt`'s port); `leaf_sampled`: `leaf_of_accepts` at a sampled outcome, whose reads the session's
   `hown` gives.
 
 Two registrant records' reads at one root, leaf count, domain and leaf schema, at one position, have one row, or the
@@ -161,10 +161,10 @@ theorem read_of_topRead {qq H u x : ℕ} {pos : Array ℕ} {reads : Array (Optio
 section Session
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **`leaf_of_accepts` at a sampled outcome**: the session's `hown` gives the sampled proof blocks' reads. -/
-theorem leaf_drawn {ω : Lv.Ω} {R' : Reg'} {o}
+theorem leaf_sampled {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : ZkReg.LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv}
     (hu : u ∈ Lv.draw ω) {q : Fin c.ports.size} (hp : zo.rd.isRead (.inl (u, q))) :
     (zo.rd.leaf (.inl (u, q))).1 = Hm96.Default512.treeLeaf (zo.pub.digest u.val q.val c.ports.size) ∨
@@ -182,7 +182,7 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 

@@ -1,4 +1,4 @@
-"""One-stage audit, run A5, on a sparse-MLA split stand-in: `adapters/vllm/tests/pipeline/test_serving_rows_splits.py`'s
+"""One-stage audit, run A5, on a sparse-MLA split stand-in: `tests/adapters/vllm/tests/pipeline/test_serving_rows_splits.py`'s
 window (one ``SparseMlaSplit_v1{T=40,NS=2,NH=2,DR=16,DV=32,BN=16}`` row in its heads' split chains: per head, split 0's 16-key
 first block and the full block after it, split 1's 8-key first block, each split's end in one column block and the two-split
 combine, each read row wired to the output row of the unit that wrote it; each key block its Boolean body,
@@ -8,22 +8,26 @@ commits it (`pipeline.serving_rows.read_all` on the fixture's served values, eac
 ``stratified-rate:1/64``, a 64th of each template's units and at least one: the wiring check on the public bodies before the
 sample (`commit.wiring.check`), each template's circuit (`compose_circuit.py --template`; every one flat, `chunk_rows.reads`:
 a key block's EX2 is its body's gates, and the column end's and the combine's MUFU reads are inline), M0's `--zk` session of each
-sampled proof block (behind the ZK server under ``--firewall``), the Lean verifier, the stream's outcome and the negatives
+sampled proof block (behind the ZK server under ``--zk-server``), the Lean verifier, the stream's outcome and the negatives
 (`a5.wiring_negatives` among them). It stands in for a partition that names whole key blocks (step 16's 78 rows at T = 272:
 per head, four 64-key first blocks, one 16-key one, forty column ends and eight combines), whose units it does not prove. The
 run exits 0 only when the outcome is accepted and every negative refused. ``--out`` holds the window serving wrote
 (``window/``, its private files too) and a5's records (``rank0/``, ``challenger/``, ``summary.json``).
 
-``--units`` audits the row at DV = 64 (the fixture's ``HALF``) with each key block served as its scores unit and its values
-units on 32 columns, the fixture's ``UNITS_BITS``: per head and key block the Boolean ``SparseMlaHeadScores_v2`` and two
-``SparseMlaHeadValues_v2``, each values unit's probabilities (and past a split's first block its rescale and the O before)
+``--units`` audits the row at DV = 64 and DR = 32 (the fixture's ``HALF``) with each key block served as its scores unit and
+its values units on 32 columns, the fixture's ``UNITS_BITS``: per key block and column block of 32 of its key rows the Boolean
+``SparseMlaHeadKeysWire_v2`` that writes it, and per head and key block the Boolean ``SparseMlaHeadScoresCols_v2`` and two
+``SparseMlaHeadValues_v2``, which read their key rows from those writers' committed rows (no tree of their own,
+`chain_rows.held_rows`; a column block's writers are a template of their own, and so are the values units that read them,
+since no two ports of a statement may be one tree), each values unit's probabilities (and past a split's first block its rescale and the O before)
 wired to the unit that wrote them, each split's end on a column block and the two-split combine of one. It stands in for
-step 16's rows as the served partition (``glm53_sparse_mla_tp8_step16.json``) names them: at T = 272, per head, five scores
-units, forty values units and forty split ends on 64 columns, and eight combines.
+step 16's rows as the served partition (``glm53_sparse_mla_tp8_step16.json``) names them: at T = 272, per row, forty-five key
+rows' writers on 64 columns, and per head, five scores units, forty values units and forty split ends on 64 columns, and
+eight combines.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
-      python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        [--firewall flock-firewall] [--units] --main FILE --out DIR
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
+      python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
+        [--zk-server flock-zk-server] [--units] --main FILE --out DIR
 """
 from __future__ import annotations
 
@@ -40,14 +44,15 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 
 import a5  # noqa: E402
-import a5_coins as AC  # noqa: E402
+from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
-from verity.commitments.windows import rows as CS  # noqa: E402
+from verity.commitments.periods import rows as CS  # noqa: E402
 
 RULE = "stratified-rate:1/64"
-FIXTURE = "adapters/vllm/tests/pipeline/test_serving_rows_splits.py"
+FIXTURE = "tests/adapters/vllm/tests/pipeline/test_serving_rows_splits.py"
 #: what a run's summary keeps of the rank's own (`a5.audit`'s), and what its printed line shows of it
 RANK = ("checks_before_draw", "refused", "audit", "draw", "draw_counts", "negatives", "coins", "circuits", "timing")
 SHOWN = ("draw", "negatives")
@@ -55,8 +60,8 @@ SHOWN = ("draw", "negatives")
 
 def stand_in(units: bool) -> tuple[str, dict, list[str], dict[str, int]]:
     """The stand-in's session root (as a TP Commit's run root is its ranks' session root), what it stands in for, its
-    templates and each one's chunk size: the fixture's row in whole key blocks, or with ``units`` its row at DV = 64 in scores
-    and values units."""
+    templates and each one's chunk size: the fixture's row in whole key blocks, or with ``units`` its row at DV = 64 and
+    DR = 32, with the writers."""
     tag, row, tmpls, chunk = ((b"verity/a5/sparse-mla-split-stand-in/units/v1", TS.row(TS.HALF), TS.UNITS_BITS, TS.UNITS_BITS_CHUNK)
                               if units else (b"verity/a5/sparse-mla-split-stand-in/v1", TS.row(), TS.BITS, TS.BITS_PER_CHUNK))
     return hashlib.sha512(tag).hexdigest(), {"fixture": FIXTURE, "row": row}, tmpls, chunk
@@ -64,8 +69,9 @@ def stand_in(units: bool) -> tuple[str, dict, list[str], dict[str, int]]:
 
 def committed(w: CS.Binding, got: list, out: Path, of: dict, module: str) -> CS.Binding:
     """Window ``w`` on its members' values ``got`` (`serving_rows.read_all`'s) committed into ``out`` as serving commits it, its
-    salts fresh: a stand-in of ``of``, committed by ``module``."""
-    c = CS.commit(w, [g for g, _e in got])
+    salts fresh, each port a member holds in its writer's tree given as its writer's (`chain_rows.held_rows`): a stand-in of
+    ``of``, committed by ``module``."""
+    c = CS.commit(w, TS.held_values(w, got))
     CS.write(c, out, {"of": of, "committer": {"module": module}}, IX.index_doc(w.members, [e for _g, e in got], w.run),
              kind="stand-in", registrar=R)
     return w
@@ -85,7 +91,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+    ap.add_argument("--zk-server", help="a5.py's --zk-server: the core protocols' path, every session behind the ZK server; "
                     "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--out", required=True)
@@ -107,7 +113,7 @@ def audited(a: argparse.Namespace, mine: CS.Binding, of: dict, root: str, rule: 
         return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {"kind": w.get("kind"), "run": w.get("run")}}
 
     a.rule, a.window_root = rule, root
-    manager, a.coins, finisher = AC.start("local", root, [0], out / "challenger", a.main)
+    manager, a.coins, finisher = AC.start("local", root, [0], out / "challenger", a.main, local=LC.Local)
     try:
         s, ok = a5.audit(a, {}, out / "rank0", mine, out / "window", source, a.port, {"rank": 0, "standin": of}, rank=0)
     finally:

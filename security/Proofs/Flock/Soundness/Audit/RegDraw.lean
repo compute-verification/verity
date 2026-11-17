@@ -24,18 +24,18 @@ open Game
 variable {n : ℕ}
 
 /-- **The audit whose sample depends on the registration**: `R`, then `L R`'s coin, then the session on its sample. -/
-def auditReg {Reg : Type} (L : Reg → Law n) (session : Finset (Fin n) → Reg → Game Bool) :
+def auditReg {Reg : Type} (L : Reg → SamplingDesign n) (session : Finset (Fin n) → Reg → Game Bool) :
     Game (Bool × Finset (Fin n)) :=
   .send Reg fun R => .coin (L R).Ω fun ω => (session ((L R).draw ω) R).map fun ok => (ok, (L R).draw ω)
 
 /-- The strategy of the fixed-law game at `σ`'s registration that plays `σ`. -/
-def atReg {Reg : Type} {L : Reg → Law n} {session : Finset (Fin n) → Reg → Game Bool}
+def atReg {Reg : Type} {L : Reg → SamplingDesign n} {session : Finset (Fin n) → Reg → Game Bool}
     (σ : Strategy (auditReg L session)) : Strategy (audit (L σ.1) Reg session) :=
   ⟨σ.1, σ.2⟩
 
-/-- **A strategy of the registration-dependent audit is a strategy of the fixed-law audit at its registration's law**,
+/-- **A strategy of the registration-dependent audit is a strategy of the fixed-law audit at its registration's sampling design**,
 with the same outcome probabilities. -/
-theorem prob_auditReg {Reg : Type} (L : Reg → Law n) (session : Finset (Fin n) → Reg → Game Bool)
+theorem prob_auditReg {Reg : Type} (L : Reg → SamplingDesign n) (session : Finset (Fin n) → Reg → Game Bool)
     (p : Bool × Finset (Fin n) → Prop) (σ : Strategy (auditReg L session)) :
     prob p (auditReg L session) σ = prob p (audit (L σ.1) Reg session) (atReg σ) := rfl
 

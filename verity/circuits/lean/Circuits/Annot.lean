@@ -12,7 +12,7 @@ reference the check is held to (`Flock.Test.Annot`, `Properties.Annot.CheckAgree
 
 ## The term language
 
-The JSON codec is `verity.ml.circuits.query_codec`'s, one object per constructor, paths and selectors as their canonical
+The JSON codec is `verity.circuits.query_codec`'s, one object per constructor, paths and selectors as their canonical
 strings (`query_ast.Path`, `NameSel`, `NodeSel`):
 
 * `instances`, `members` (`k` a positive integer, or `[r, c]`: the `r × c` rectangles of the selected node's members by

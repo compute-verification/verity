@@ -11,9 +11,9 @@ and the sampled population (`SetupCount.setupHidden_cost`). Each is a function o
 * `hmOutParse_ports`: an untyped circuit's ports are `HmRow.rowPorts` of its META line (`metaOf`).
 * `loadPublic_counts`: a public file's shared-row counts are `HmRow.sharedRows` of its header (`headerOf`) at the
   circuit's ports (`sharedRows_ports`), and the header the load keeps is that header.
-* `drawn_facts`: a sample keeps the counts, and its population is its JSON's (`Draw.UnitDraw.ofJson`).
+* `sampled_facts`: a sample keeps the counts, and its population is its JSON's (`Draw.UnitSample.ofJson`).
 
-So the values at any hash are the ones at SHA-512 (`parse_ports_eq`, `load_counts_eq`, `drawn_pop`), where the
+So the values at any hash are the ones at SHA-512 (`parse_ports_eq`, `load_counts_eq`, `sampled_pop`), where the
 verifier's own checks bound them.
 -/
 
@@ -317,12 +317,12 @@ theorem loadPublic_counts (h : ByteArray → ByteArray) (tags : Tags) (c : Circu
   cases hp
   exact ⟨congrArg Except.ok htab.symm, rfl⟩
 
-theorem drawn_facts (h : ByteArray → ByteArray) (c : Circuit) (pop pub : Public) (d : Json)
-    (hp : HmRow.drawnWith (M := V) (Hashes.ofSha512 h) c pop d = .ok pub) :
-    ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ D.population = pop.n ∧
+theorem sampled_facts (h : ByteArray → ByteArray) (c : Circuit) (pop pub : Public) (d : Json)
+    (hp : HmRow.sampledWith (M := V) (Hashes.ofSha512 h) c pop d = .ok pub) :
+    ∃ D, Draw.UnitSample.ofJson d = .ok D ∧ D.population = pop.n ∧
       (pub.population.getD (pub.n, pub.digests, pub.outputs)).1 = pop.n ∧
       pub.tables.map (·.counts) = pop.tables.map (·.counts) := by
-  unfold HmRow.drawnWith at hp
+  unfold HmRow.sampledWith at hp
   simp (config := { zeta := false }) only [Hashes.ofSha512, monadLift_self] at hp
   (have hh := except_bind_ok hp; clear hp; obtain ⟨D, hD, hp⟩ := hh)
   refine ⟨D, hD, ?_⟩
@@ -397,11 +397,11 @@ theorem counts_le {pop pop' : Public} {B : Nat} (he : pop.tables.map (·.counts)
     exact hb t' ht' r (he' ▸ hr)
 
 /-- **A sample's population is its JSON's**, and it keeps the shared-row counts, at any hash. -/
-theorem drawn_pop (h : ByteArray → ByteArray) {c : Circuit} {pi : HmIn.Ports} {pop pub : Public} {d : Json}
-    (hp : HmIn.drawnWith (M := V) (Hashes.ofSha512 h) c pi pop d = .ok pub) :
-    ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ (pub.population.getD (pub.n, pub.digests, pub.outputs)).1 = D.population ∧
+theorem sampled_pop (h : ByteArray → ByteArray) {c : Circuit} {pi : HmIn.Ports} {pop pub : Public} {d : Json}
+    (hp : HmIn.sampledWith (M := V) (Hashes.ofSha512 h) c pi pop d = .ok pub) :
+    ∃ D, Draw.UnitSample.ofJson d = .ok D ∧ (pub.population.getD (pub.n, pub.digests, pub.outputs)).1 = D.population ∧
       pub.tables.map (·.counts) = pop.tables.map (·.counts) := by
-  obtain ⟨D, hD, hDp, hn, ht⟩ := drawn_facts h _ pop pub d hp
+  obtain ⟨D, hD, hDp, hn, ht⟩ := sampled_facts h _ pop pub d hp
   exact ⟨D, hD, hn.trans hDp.symm, ht⟩
 
 end RecDeploy.SetupValues

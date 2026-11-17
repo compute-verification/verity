@@ -24,6 +24,11 @@ def _rss_gb(pid: int) -> float | None:
         return None
 
 
+def _limit(seconds: float) -> str:
+    """A limit as it was given: a whole number as an integer, any other as Python writes the float (``1.5``, ``inf``)."""
+    return str(int(seconds)) if float(seconds).is_integer() else repr(float(seconds))
+
+
 def run_stage(stage: str, cmd: list[str], log_path: Path, *, max_rss_gb: float | None, timeout_s: float | None, cwd: Path | None = None) -> dict:
     """Run one command, teeing stdout+stderr to `log_path`; watch RSS / wall when limits are given."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -58,7 +63,7 @@ def run_stage(stage: str, cmd: list[str], log_path: Path, *, max_rss_gb: float |
                         break
             if timeout_s is not None and time.time() - t0 > timeout_s:
                 proc.kill()
-                rec.update(status="timeout", reason=f"wall > {timeout_s:.0f} s")
+                rec.update(status="timeout", reason=f"wall > {_limit(timeout_s)} s")
                 proc.wait()
                 break
             time.sleep(0.25)

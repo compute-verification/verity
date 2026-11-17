@@ -6,7 +6,7 @@ public import Proofs.Pouw.PearlC.TileGap
 # The gap under the tolerant sampled audit, from TT_OUT per tile
 
 The tolerant audit accepts a sampled tile that is good, of a blank unit, or over its inert-work bound
-(`overCapTiles`), and credits the last nothing.
+(`overInertBoundTiles`), and credits the last nothing.
 - An accepted run certifies `T ≥ (1 − g)·(S − u(X_O)·W)`, where `S` is the credit (the claimed work; the type `S` in
   the signatures below is the salt's), `W` is the layout's work, `g` is the gap (the statements' `γ`), `X_O` is the
   number of samples on tiles over their bound, and `u` is a table with a miss bound at `δ` (`MissBound`).
@@ -31,12 +31,12 @@ namespace Pouw.PearlC
 open Finset _root_.Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- A tile over its inert-work bound is neither good, whose bound holds, nor of a blank unit. -/
-theorem overCapTiles_disjoint {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R)
-    (s : S) (τ : Transcript) : Disjoint (goodTiles P TR U H s τ ∪ blankTiles TR U τ) (overCapTiles TR U H s τ) := by
+theorem overInertBoundTiles_disjoint {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R)
+    (s : S) (τ : Trace) : Disjoint (goodTiles P TR U H s τ ∪ blankTiles TR U τ) (overInertBoundTiles TR U H s τ) := by
   classical
   rw [Finset.disjoint_left]
   intro g hg ho
-  unfold overCapTiles at ho
+  unfold overInertBoundTiles at ho
   rw [mem_filter] at ho
   obtain ⟨_, c, hc, hcap⟩ := ho
   rcases mem_union.mp hg with hg | hg
@@ -99,7 +99,7 @@ committed tiles, disjoint from the good and blank ones, that the audit accepts a
 a miss bound at `δ`: the audit that accepts `good ∪ blank` and `over` does so while `T` is below `1 − γ` (the gap) of
 the claimed work less `u(X_O)` of the layout's, `X_O` the samples in `over`, with probability at most `δ + e`. -/
 theorem sampledOfGoodTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (TR : TileRules Q R S)
-    (U : Workload) (τ : (Q → R) → S → Transcript) (good over : (Q → R) → S → Finset ℕ) (γ₀ Ω T e : ℝ)
+    (U : Workload) (τ : (Q → R) → S → Trace) (good over : (Q → R) → S → Finset ℕ) (γ₀ Ω T e : ℝ)
     (hγ₀ : γ₀ < 1) (hΩ : 0 < Ω) (hsub : ∀ H s, good H s ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U (τ H s))
     (hdisj : ∀ H s, Disjoint (good H s ∪ blankTiles TR U (τ H s)) (over H s))
     (hW : ∀ H s, ∀ g ∈ good H s, TR.Wcred U.layout g (actOf (τ H s) ((TR.tiling U.layout).unit g)) ≤
@@ -203,21 +203,21 @@ theorem gapSampledTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fi
     (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hγ₀ : γ₀ < 1)
     (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
-      TR.capOK H s U g act → TR.Wcred U.layout g act ≤ Ω * TR.credit H s U g act)
+      TR.inertBoundOK H s U g act → TR.Wcred U.layout g act ≤ Ω * TR.credit H s U g act)
     (hWc : ∀ U : Workload, U.InDomain P D → ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
       TR.Wcred U.layout g act ≤ TR.Wref U.layout g)
     (hTT : TTOutTile CM P TR D γ₀ ε) : GGapSampledTol CM P TR D (1 - (1 - γ₀) / Ω) ε := by
   intro U hU T hT q hq A hA w κ hκ hw t u δ hu
   classical
-  refine sampledOfGoodTol TR U (fun H s => A.transcript U H s) (fun H s => goodTiles P TR U H s (A.transcript U H s))
-    (fun H s => overCapTiles TR U H s (A.transcript U H s)) γ₀ Ω T (ε q U.layout.N) hγ₀ hΩ
-    (fun H s => goodTiles_subset P TR U H s _) (fun H s => overCapTiles_disjoint P TR U H s _) ?_ (hWc U hU)
+  refine sampledOfGoodTol TR U (fun H s => A.trace U H s) (fun H s => goodTiles P TR U H s (A.trace U H s))
+    (fun H s => overInertBoundTiles TR U H s (A.trace U H s)) γ₀ Ω T (ε q U.layout.N) hγ₀ hΩ
+    (fun H s => goodTiles_subset P TR U H s _) (fun H s => overInertBoundTiles_disjoint P TR U H s _) ?_ (hWc U hU)
     (hTT.2 U hU T hT q hq A hA) w κ hκ hw t u δ hu
   intro H s g hg
   unfold goodTiles at hg
   rw [mem_filter] at hg
   obtain ⟨hgr, c, hc, hgc⟩ := hg
-  have hact : actOf (A.transcript U H s) ((TR.tiling U.layout).unit g) = c.act := by simp [actOf, hc]
+  have hact : actOf (A.trace U H s) ((TR.tiling U.layout).unit g) = c.act := by simp [actOf, hc]
   rw [hact]
   exact hW U hU H s g (mem_range.mp hgr) c.act hgc.1
 
@@ -231,15 +231,15 @@ theorem gapSampled_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]
   classical
   refine le_trans (pr_mono fun x hx => ?_) (h U hU T hT q hq A hA w κ hκ hw t _ _ (missBound_strict t εs hεs))
   obtain ⟨hacc, hTlt⟩ := hx
-  have h0 : drawsIn (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 = 0 := by
+  have h0 : drawsIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 = 0 := by
     unfold drawsIn
     rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
-    exact fun i _ ho => Finset.disjoint_left.mp (overCapTiles_disjoint P TR U x.1 x.2.1 _) (hacc i) ho
-  have hu0 : (if drawsIn (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 = 0 then εs else 1) = εs := by
+    exact fun i _ ho => Finset.disjoint_left.mp (overInertBoundTiles_disjoint P TR U x.1 x.2.1 _) (hacc i) ho
+  have hu0 : (if drawsIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 = 0 then εs else 1) = εs := by
     rw [h0, ite_eq_left rfl]
   refine ⟨fun i => Or.inl (hacc i), ?_⟩
-  show T < (1 - g) * (claimedWref TR U (A.transcript U x.1 x.2.1) -
-    (if drawsIn (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 = 0 then εs else 1) *
+  show T < (1 - g) * (claimedWref TR U (A.trace U x.1 x.2.1) -
+    (if drawsIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 = 0 then εs else 1) *
       tileWrefTotal TR U.layout)
   rw [hu0]
   exact hTlt

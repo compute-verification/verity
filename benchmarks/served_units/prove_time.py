@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+CARD_FILES = ROOT / "calibration/hardware/cards"
 
 
 def _session_set():
@@ -29,7 +30,7 @@ def _session_set():
 def peak_macs(card: str) -> float:
     sys.path.insert(0, str(ROOT))
     from verity.device import load_card
-    c = load_card(card)
+    c = load_card(card, directory=CARD_FILES)
     return c["rate"]["tensor"]["value"] * c["sm"]["count"]["value"] * c["clock"]["sm"]["value"] * 1e6
 
 
@@ -53,11 +54,12 @@ def main(out: Path, card: str | None) -> dict:
         for d in sorted(p for p in (out / dev).glob("*") if (out / "stage" / p.name / "stage.json").is_file()):
             st = json.loads((out / "stage" / d.name / "stage.json").read_text())
             s = session_set(d, gpu=dev == "gpu")
-            rec = {"device": dev, "tag": st["tag"], "n": st["n"], "k_log": st["k_log"], "unit_log": st.get("unit_log"),
+            rec = {"device": dev, "tag": st["tag"], "word": st.get("word"), "n": st["n"], "k_log": st["k_log"],
+                   "unit_log": st.get("unit_log"),
                    "vus_per_block": st["vus_per_block"],
                    "ands": st["ands"], "macs": st.get("macs") or st.get("statics", {}).get("K"),
                    "public_inputs": st.get("public_inputs", []),
-                   "accepted": s.get("accepted"), "prove_total_s": s.get("prove_total_s"),
+                   "accepted": s.get("accepted"), "timed": s.get("timed"), "prove_total_s": s.get("prove_total_s"),
                    "prove_total_all_s": s.get("prove_total_all_s"), "session_s": s.get("session_s"), "buckets": s.get("buckets"),
                    "gpu_util_mean_pct": s.get("gpu_util_mean_pct"), "sm_clock_mean_mhz": s.get("sm_clock_mean_mhz"),
                    "error": s.get("error")}

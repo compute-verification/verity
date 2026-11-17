@@ -41,7 +41,7 @@ public import Proofs.Core.Accel.Model
 public import Proofs.Core.Accel.Sheet
 public import Proofs.Core.Accel.Witness
 public import Proofs.Core.NaiveStrassen
-public import Proofs.Core.Bilinear
+public import Definitions.Core.Structure
 public import Proofs.Core.Blocks
 public import Proofs.Core.ProofSystem
 public import Proofs.Core.Fp32.Vectors
@@ -49,10 +49,10 @@ public import Proofs.Pouw.Prob
 public import Proofs.Core.Prims.Vectors
 public import Proofs.Core.Scalar.Vectors
 public import Proofs.Core.Transport
-public import Proofs.Core.Structure
 public import Proofs.Core.DeviceFigures
 public import Proofs.Core.CapacityWithinEstimate
 public import Proofs.Core.Site
+public import Proofs.Core.SiteSubtree
 public import Proofs.Core.QSort
 public import Proofs.Core.Fp32
 public import Proofs.Core.HongKung

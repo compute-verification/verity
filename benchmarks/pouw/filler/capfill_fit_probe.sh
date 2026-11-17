@@ -7,7 +7,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler
+D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/capfillt.XXXXXX); trap 'rm -rf "$B"' EXIT
 export CP_POINTS=${CP_POINTS:-"1:2048 32:2048 128:2048 256:2048"} CP_NCU=${CP_NCU:-"1:2048 32:2048 256:2048"}
 [ "$CP_NCU" = none ] && CP_NCU=""
@@ -21,7 +21,7 @@ pids=()
 for b in c2duo c1duo; do
   # shellcheck disable=SC2086
   nvcc -O3 -std=c++17 -DPFILL_BU -DPF_PW=4 ${FLAGS[$b]} -Xcompiler -mpopcnt -gencode arch=compute_120a,code=sm_120a \
-    -Xptxas -v -o "$B/dcap_$b" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl > "$O/build-$b.log" 2>&1 &
+    -Xptxas -v -o "$B/dcap_$b" $K/dcap.cu -lcublasLt -lnvidia-ml -ldl > "$O/build-$b.log" 2>&1 &
   pids+=("$!")
 done
 bad=0

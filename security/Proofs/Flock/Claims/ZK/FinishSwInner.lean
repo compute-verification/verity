@@ -226,23 +226,23 @@ theorem innerLayE_layE (x : Msg) (j : Fin (jOf x)) : innerLayE x j = layE x j :=
   rw [htab]
   rfl
 
-/-- **The ZK server's pads are the honest pads**: at frame rep `rep j r` of the release `L`, on samples of `drawBytes`
+/-- **The ZK server's pads are the honest pads**: at frame rep `rep j r` of the release `L`, on samples of `sampleBytes`
 bytes, where the tape's pads of table `j`'s rep `r` are those on the tape of the release's samples, the request's pads
 (`Finish.padsOf` of its samples, as the analysis's) are the tape's at the table's layout. -/
 theorem pads_frame_eq {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
-    (rep : ℕ → ℕ → ℕ) (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (q : _root_.Flock.Firewall.Finish.RepIn)
-    (hq : q.draws = L.drawsAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
-    (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.Firewall.Frame.drawBytes (L.lay x (rep j.val r.val)))
+    (rep : ℕ → ℕ → ℕ) (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (q : _root_.Flock.ZkServer.Finish.RepIn)
+    (hq : q.draws = L.samplesAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
+    (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.ZkServer.Frame.sampleBytes (L.lay x (rep j.val r.val)))
     (hpads : FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j) =
-      FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j)) :
-    (_root_.Flock.Firewall.Finish.padsOf q.draws).toC = FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j) := by
+      FlockComplete.padsOf (Claims.ZKServer.tapeOfSamples t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j)) :
+    (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC = FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j) := by
   have hs : q.draws.tauSalt.size = _root_.Flock.Zk.TAU_SALT_BYTES := by
     rw [hq]
     exact Claims.ZKServer.tauSalt_size (L.lay x (rep j.val r.val)) (L.draws ρ (rep j.val r.val))
-      (by rw [hz]; exact Claims.ZKServer.tau_le_drawBytes _)
-  rw [hpads, ← hlay, Claims.ZKServer.padsOf_drawsAt L x ρ t₀ rep j.val r.val hz, ← hq]
-  simp only [_root_.Flock.Firewall.Finish.padsOf, _root_.Flock.Firewall.Finish.PadsZk.toC,
-    Claims.ZKServer.drawsPads]
+      (by rw [hz]; exact Claims.ZKServer.tau_le_sampleBytes _)
+  rw [hpads, ← hlay, Claims.ZKServer.padsOf_samplesAt L x ρ t₀ rep j.val r.val hz, ← hq]
+  simp only [_root_.Flock.ZkServer.Finish.padsOf, _root_.Flock.ZkServer.Finish.PadsZk.toC,
+    Claims.ZKServer.samplesPads]
   congr 1
   exact Claims.ZKServer.fitBytes_of_size _ _ hs
 
@@ -265,7 +265,7 @@ theorem betaSlot_inner {x : Msg} (hx : Live x) {s spec} (hs : FlockDeploy.setupO
   have hst : (stsOf x)[(2 * j.val + r.val) / 2]! = (stsOf x)[j.val] := by
     rw [show (2 * j.val + r.val) / 2 = j.val by omega]
     exact getElem!_pos (stsOf x) j.val hj
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]
     exact y.hz
   show repSlot x _ _ = repSlot x _ _ + 2
@@ -282,28 +282,28 @@ theorem swSrcE_innerSrc_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hn : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
-    (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (q : _root_.Flock.Firewall.Finish.RepIn)
-    (hq : q.draws = L.drawsAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
-    (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.Firewall.Frame.drawBytes (L.lay x (rep j.val r.val)))
+    (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (q : _root_.Flock.ZkServer.Finish.RepIn)
+    (hq : q.draws = L.samplesAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
+    (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.ZkServer.Frame.sampleBytes (L.lay x (rep j.val r.val)))
     (hpads : FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j) =
-      FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j))
+      FlockComplete.padsOf (Claims.ZKServer.tapeOfSamples t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (cons : Array (String × _root_.Flock.Zk.Lin)) {L₀ : ℕ} (hL : L₀ = repSlot x (2 * j.val + r.val) (innerOff 0))
     (hbat : L₀ + 1 < n →
-      ((FlockComplete.Replay.InZ.lin (layE x j) (_root_.Flock.Firewall.Finish.padsOf q.draws).toC cons
+      ((FlockComplete.Replay.InZ.lin (layE x j) (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC cons
           (FlockComplete.SimInner.cutCoins (ligCoin c) L₀)).c +
-        _root_.Flock.dot (FlockComplete.Replay.InZ.lin (layE x j) (_root_.Flock.Firewall.Finish.padsOf q.draws).toC
+        _root_.Flock.dot (FlockComplete.Replay.InZ.lin (layE x j) (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC
           cons (FlockComplete.SimInner.cutCoins (ligCoin c) L₀)).a
-          (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h).isZero = true)
+          (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h).isZero = true)
     (htau : L₀ + 1 < n → ((swSrcE x c w v τ j.val).rep r.val).tauCom =
       FlockComplete.Replay.InZ.tcOf _root_.Flock.Sha512.hash
-        (FlockComplete.Replay.InZ.tau (layE x j) (_root_.Flock.Firewall.Finish.padsOf q.draws).toC cons
+        (FlockComplete.Replay.InZ.tau (layE x j) (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC cons
           (FlockComplete.SimInner.cutCoins (ligCoin c) L₀))
-        (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.tauSalt) :
+        (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.tauSalt) :
     FlockComplete.SimInner.InnerSrc (ligCoin c) n _root_.Flock.Sha512.hash (layE x j)
-      (_root_.Flock.Firewall.Finish.padsOf q.draws).toC cons ((swSrcE x c w v τ j.val).rep r.val) L₀ := by
+      (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC cons ((swSrcE x c w v τ j.val).rep r.val) L₀ := by
   have hP := pads_frame_eq L ρ t₀ rep x τ j r q hq hlay hz hpads
   have hβ := betaSlot_inner hx hs j r
   refine ⟨?_, hbat, htau, ?_⟩

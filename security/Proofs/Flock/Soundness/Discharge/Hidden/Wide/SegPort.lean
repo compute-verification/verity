@@ -98,8 +98,8 @@ end Slots
 
 /-! ## Bits -/
 
-theorem blockBit_wordBit {o t : ℕ} (ho : o < 128) (ht : t < 8) : HmRow.blockBit (wordBit (8 * o + t)) = (o, t) := by
-  unfold HmRow.blockBit wordBit
+theorem chunkBit_wordBit {o t : ℕ} (ho : o < 128) (ht : t < 8) : HmRow.chunkBit (wordBit (8 * o + t)) = (o, t) := by
+  unfold HmRow.chunkBit wordBit
   ext <;> dsimp only <;> omega
 
 theorem wordBit_lt {o t : ℕ} (ho : o < 128) (ht : t < 8) : wordBit (8 * o + t) < 1024 := by
@@ -261,7 +261,7 @@ theorem port_commit_seg (w : ℕ → Bool) {g p l : ℕ} (hp : p < c.ports.size)
       have hk1 : firstOf S j ≤ firstOf S j + k' := Nat.le_add_right _ _
       have hk2 : firstOf S j + k' < firstOf S (j + 1) := by omega
       have hmb := msgBit_seg hs (by rw [hsS]; exact hj) hk1 hk2 (wordBit (8 * o + t))
-      rw [blockBit_wordBit ho ht] at hmb
+      rw [chunkBit_wordBit ho ht] at hmb
       dsimp only at hmb
       have hm1 : S[j]!.1 = segBits l j := by rw [segShape_get hj]
       rw [hm1] at hmb
@@ -299,7 +299,7 @@ theorem port_commit_seg (w : ℕ → Bool) {g p l : ℕ} (hp : p < c.ports.size)
           (wordBit (8 * ((128 * (k - F) + o) % 64) + t)) := by
     intro k hk hFk o ho t ht ha
     have hmb := msgBit_outer hs (k := k) (by rw [hsS]; exact hFk) (wordBit (8 * o + t))
-    rw [blockBit_wordBit ho ht] at hmb
+    rw [chunkBit_wordBit ho ht] at hmb
     dsimp only at hmb
     rw [hsS, if_pos ha] at hmb
     have hj : (128 * (k - F) + o) / 64 < count l := by omega
@@ -359,7 +359,7 @@ theorem port_commit_seg (w : ℕ → Bool) {g p l : ℕ} (hp : p < c.ports.size)
           Nat.add_sub_cancel_left]
       · rename_i ha
         have hmb := msgBit_outer hs (k := N) (by rw [hsS]; omega) (wordBit (8 * o + t))
-        rw [blockBit_wordBit ho ht] at hmb
+        rw [chunkBit_wordBit ho ht] at hmb
         dsimp only at hmb
         have hNF' : N - F = outerComps l := by omega
         rw [hsS, hNF', if_neg ha] at hmb

@@ -25,13 +25,13 @@ from types import SimpleNamespace
 import torch
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array
-from verity.definitions.numerics import marlin_moe_rows as MR
-from verity.definitions.registry import marlin_moe as MM
-from verity.definitions.registry.prims import F32 as F32_WORD
-from verity.definitions.registry.prims import I32 as I32_WORD
+from verity_vllm.definitions.numerics import marlin_moe_rows as MR
+from verity_vllm.definitions.registry import marlin_moe as MM
+from verity_vllm.definitions.registry.prims import F32 as F32_WORD
+from verity_vllm.definitions.registry.prims import I32 as I32_WORD
 
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.rules.base import OpRule, RuleInfo
+from verity_torch.frontend.rules.common import (
     call_args,
     from_rows,
     known,
@@ -44,8 +44,6 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
 )
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 BF16, F32, I32, U8 = torch.bfloat16, torch.float32, torch.int32, torch.uint8
 

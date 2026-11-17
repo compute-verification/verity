@@ -7,7 +7,7 @@ public import Circuits.AnnotExpand
 # The annotation check's port: `Flock.Annot` behind `Difftest.serve`
 
 `annot-difftest` serves the description-level annotation check and its per-gate reference to the difftest harness, so the
-Python mirror (`verity.ml.circuits.query_ast` and its codec) is held to them (`verity_difftest.annot`). `program` is the
+Python mirror (`verity.circuits.query_ast` and its codec) is held to them (`verity_difftest.annot`). `program` is the
 descriptor's text, `annotation` is `{"query", "tables"}` (`Annot.Desc.ofJson`) and `meaning` is
 `{"tiling", "max_gates", "max_count"}` (`Annot.Meaning.ofJson`):
 

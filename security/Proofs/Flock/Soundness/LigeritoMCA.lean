@@ -262,7 +262,7 @@ theorem value_foldRounds_mca_le (A : Arith F K) (hA : A.Correct) {ι : Type} [Fi
       simp [MCAGood]
   | k + 1, R, s, q => by
       rw [foldRounds_succ]
-      refine (value_drawK_le A hA _ _ (fun r => ∃ ℓ : Fin (2 ^ k),
+      refine (value_sampleK_le A hA _ _ (fun r => ∃ ℓ : Fin (2 ^ k),
           IsMCA (AffineLineGenerator K) code r (foldPair (splitRows R) ℓ) δ)
           ((2 ^ k : ℕ) * ε) (((2 ^ k - 1 : ℕ) : ℝ≥0∞) * ε)
           (prCoin_fold_mca_le code δ (splitRows R) ε hε) fun r hr => ?_).trans ?_

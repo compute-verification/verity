@@ -181,6 +181,13 @@ def axisDims : Ty → Nat → Option (Nat × Nat)
 
 end Ty
 
+/-- **A return's fields**: a Tuple's or a Record's, else the return itself. A Tuple or a Record of no field has no
+field. -/
+def fieldsOf : Ty → List Ty
+  | .tuple fs => fs.toList
+  | .record fs => fs.toList.map (·.2)
+  | t => [t]
+
 /-! ### §3 Reference sequences -/
 
 /-- A body-scoped reference: space `p` (a parameter of the body) when `p`, else `n` (a node's output); the collection; the leaf. -/
@@ -747,9 +754,12 @@ private def liftV {α} (x : V α) : D α := fun s => match x with
 
 private def paramsOf (j : Json) (what : String) : V (Array (String × Ty)) := do
   let .arr ps := j | throw s!"{what}: params are a list"
-  ps.mapM fun p => match p with
+  let ps ← ps.mapM fun p => match p with
     | .arr #[.str k, t] => do pure (k, ← Ty.ofJson t)
     | _ => throw s!"{what}: a parameter is [name, type]"
+  if (ps.foldl (fun s p => s.insert p.1) ({} : Std.HashSet String)).size != ps.size then
+    throw s!"{what}: parameters: a name twice"
+  return ps
 
 /-- `_build_node`: the node rebuilt as `defs.Builder` builds it, its arguments checked against the callee, and its computed
 output type, which must be the declared one. -/

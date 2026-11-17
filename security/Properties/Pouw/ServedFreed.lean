@@ -9,7 +9,7 @@ public import Properties.Pouw.ServedWork
 `ServedWork` is the remote form: the prover's whole inventory is one machine of 𝓜 whose programs exchange nothing
 outside it, and an accepted period's priced work on it is at least `p` a credited word, less the luck allowances.
 `ServedFreed` is the onsite form at the same check (the J10-R period, `PouwCheck.Credit.window` on each window): the
-inventory is the registered devices, a network certifier counts the bits their window programs exchange with machines
+inventory is the registered devices, a network attester counts the bits their window programs exchange with machines
 outside them, and an accepted period that the certifier also accepts frees at most `ε C` of the registered devices'
 capacity at the period's dual price (`Pouw.Dither.Period.FreedWithin`). It composes:
 
@@ -30,9 +30,9 @@ reductions, is open.
 
 **The coins stay in the boundary.** `OutsourceWithinEgressServed` is claimed where a window's salt
 reaches a machine outside the registered devices only through a bit their programs exchange (`CoinsConfidential`).
-For the MVP that holds by placement: the device that runs a server's network certifier produces that server's live
+For the MVP that holds by placement: the device that runs a server's network attester produces that server's live
 coins, and private messages travel only on private links (`WitnessPathPrivate`). Trust in that device and its host
-provider is `trusted-host`.
+provider is `trusted-device`.
 
 The proof is `Proofs.Pouw.ServedFreed`; `Proofs.Pouw.ServedFreed.Honest` has its honest and nontrivial lemmas.
 -/
@@ -41,8 +41,8 @@ The proof is `Proofs.Pouw.ServedFreed`; `Proofs.Pouw.ServedFreed.Honest` has its
 
 namespace Properties.Pouw.Served
 
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Properties.Pouw.PeriodJ10R
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open Properties.Pouw.MonitoringPeriodJ10R
 
 /-- `pouw-outsource-egress-served` (proposed; class L; `pouw-outsource-egress` over a period's window programs
 together). **An exchanged bit replaces at most `β` of priced work, over a period's window programs**: in the
@@ -70,7 +70,7 @@ def OutsourceWithinEgressServed {C B I St : Type} (O : Type) {m n : ℕ} (hm : 0
           ∑ w, G.cost μ (work x w) (state x w, saltCoin hm x w) +
             β * ∑ w, G.ext (work x w) (state x w, saltCoin hm x w)
 
-/-- `pouw-certified-exchange` (proposed; the network certifier's count at the served check). **The certifier
+/-- `pouw-certified-exchange` (proposed; the network attester's count at the served check). **The certifier
 accepts a period that exchanged more than `K` bits but with probability `δ`**: the probability over the period's coins
 that the certifier's check `cert` accepts while the period's window programs exchanged `ext > K` bits with machines
 outside the registered devices is at most `δ`. The served form of the certifier's count, which
@@ -97,7 +97,7 @@ def ServedFreed : Prop :=
     [Nonempty C] [Nonempty Ξ] [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι)
     {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ tileCount σ sT) (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1)
-    (_hKd : 1 ≤ k sT) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
+    (_hKd : 1 ≤ k sT) (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ sT) → (ℕ → V) → Prop)
@@ -123,7 +123,7 @@ def ServedFreed : Prop :=
       (j10rAtCoin hr enc place tile)).MovedIn x w) ≤ δbind) →
     RegisteredBeforeDraw ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
-    Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
+    Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
         (j10rAtCoin hr enc place tile))
       (monitoringPeriodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)

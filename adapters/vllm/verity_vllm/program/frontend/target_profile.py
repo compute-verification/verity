@@ -1,17 +1,8 @@
-"""The applicability contract of an ahead-of-time constructed Program (cb-fix).
-
-Three objects, all pure Python (no torch; testable on any host):
-
-* `TargetProfile` — the ONE declared input a construction is built for: compute capability, SM count, batch-invariant switch,
-  attention-backend knob, pinned vLLM revision, numerics profile (derive vocabulary). Everything the builder's shims answer to vLLM
-  and everything the manifest reports as "declared" comes from this object; there is no second copy of any of these values.
-* `ArtifactIdentity` — the cache key / wrapper identity of a constructed artifact:
-      sha256( canonical(construction_version) || canonical(TargetProfile) || canonical(applicability) || program_digest )
-  The Program digest is a component, not a function of the profile: two targets that genuinely produce the same circuit share the
-  Program digest and differ in identity; two hosts building the same profile share both (no host fact enters any component).
-* `check_reuse(artifact, profile, applicability_now)` — fail-closed: an artifact may be reused only under the profile it was built
-  for and only when every applicability condition it was built under holds for the requester; the refusal names every differing
-  field with both values.
+"""The applicability contract of an ahead-of-time constructed Program (cb-fix), pure Python (no torch; testable on any host):
+`TargetProfile`, the ONE declared input a construction is built for: compute capability, SM count, batch-invariant switch,
+attention-backend knob, pinned vLLM revision, numerics profile (derive vocabulary). Everything the builder's shims answer to vLLM
+and everything the manifest reports as "declared" comes from this object; there is no second copy of any of these values. The
+artifact's identity and the reuse check are `artifact`'s.
 
 Canonical bytes = `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`; tuples are serialised as lists.
 """
@@ -20,17 +11,20 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
 from verity_vllm.program.frontend.compilations import COMPILATIONS
-from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
+from verity_vllm.program.frontend.kernel_readback import (  # noqa: F401
+    applied_kernels,
+    fp8_block_gemm_kernel_of,
+    int8_exact_of,
+    moe_experts_class_of,
+)
 
 if TYPE_CHECKING:
     from verity_vllm.program.frontend.gemm_targets import GemmTarget
-
-SCHEMA = "verity/aot-artifact/v1"
 
 
 def canonical_bytes(obj: Any) -> bytes:
@@ -75,8 +69,8 @@ class TargetProfile:
                            declaration).  `emulate_precision_casts` (Inductor's own switch) makes every fused Triton kernel perform the bf16
                            roundings the Program specifies at each op boundary; default Inductor carries fp32 through a fused region, so the
                            Program's intermediate values do not exist in that execution and any observation of them changes it
-                           (instrumented != production).  With the emulation the collection boundary is invisible by
-                           construction (measured: production vs instrumented top-8 logprobs bit-identical over 32 steps).
+                           (instrumented != served).  With the emulation the collection boundary is invisible by
+                           construction (measured: served vs instrumented top-8 logprobs bit-identical over 32 steps).
                            The Program itself is DERIVED eagerly by construction (`engine_args(execution=False)` omits the compile knobs);
                            what the declaration claims for the compiled execution is stated in `modelled_engine()` (boundary-level
                            conformance on committed bytes; fused region == composed relations NOT established).
@@ -118,7 +112,7 @@ class TargetProfile:
                            None) = MOE-01 with the router stated in its selection order over one committed softmax
                            (`MoeRouterTopKOrdered_v1`).  `"padded"` = the
                            fixed-slot construction: ONE `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` call per token over ALL E experts on their own
-                           weights, the TOPK slot outputs selected by the router ids (`verity.definitions.registry.moe_pad`; its lift of record is the
+                           weights, the TOPK slot outputs selected by the router ids (`verity_vllm.definitions.registry.moe_pad`; its lift of record is the
                            hand-authored `LMoeFfnL_v1` with the unselected slots DISABLED by the enable vector `a_{r,t,e}`).  Two Programs
                            of the same trace differ in digest by construction; GP-01 refuses a workload whose components were derived under
                            another construction than the declared one, and labels the workload (`moe_construction` block) so the row's
@@ -145,14 +139,14 @@ class TargetProfile:
                            `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.  Omitted
                            from `to_json()` when None.
     protocols           -> the protocol set the run executes (`verity_vllm.protocols`; grammar `config.parse_protocols`).  None =
-                           sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
-                           whole set in its one spelling, sampled proofs included (a profile is the target of SPOT's Program);
+                           SPOT alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
+                           whole set in its one spelling, SPOT included (a profile is the target of SPOT's Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
                            committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
     ir                  -> the circuit profile the Program is written in (a Program static, declared-and-bound, never attested).  None = word
                            (every Call of the Definition its derive rule binds, on w-bit values).  `"boolean"` = the same Calls,
-                           each of the Boolean version of that Definition, on bits (`verity_vllm.program.frontend.boolean.derived`); the
+                           each of the Boolean version of that Definition, on bits (`verity_torch.frontend.boolean.derived`); the
                            Build refuses by name every Definition with no Boolean version.  Declaring `"word"` is refused (declare None).
                            Omitted from `to_json()` when None.
     registered_values   -> where the Program's values live (a Program static, declared-and-bound, never attested).  None = in the
@@ -194,7 +188,7 @@ class TargetProfile:
 
     #: the blockwise FP8 GEMM's scale-product construction (None = "shared-per-block"; see the doc); never attested
     fp8_scale_construction: str | None = None
-    #: the protocol set the run executes (None = sampled proofs alone; see the doc); declared, never attested
+    #: the protocol set the run executes (None = SPOT alone; see the doc); declared, never attested
     protocols: tuple[str, ...] | None = None
     #: the circuit profile the Program is written in (None = word; see the doc); declared, never attested
     ir: str | None = None
@@ -490,7 +484,7 @@ class TargetProfile:
         if d.get("fp8_scale_construction") is None:
             d.pop("fp8_scale_construction", None)  # absent = shared-per-block; every earlier profile digest unchanged
         if d.get("protocols") is None:
-            d.pop("protocols", None)               # absent = sampled proofs alone; every earlier profile digest unchanged
+            d.pop("protocols", None)               # absent = SPOT alone; every earlier profile digest unchanged
         else:
             d["protocols"] = list(d["protocols"])
         if d.get("ir") is None:
@@ -679,94 +673,6 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
     return bad
 
 
-# -- the artifact wrapper --------------------------------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class ArtifactIdentity:
-    construction_version: dict
-    target_profile: dict
-    applicability: dict
-    program_digest: str
-    identity: str = field(default="")
-
-    @staticmethod
-    def compute(construction_version: dict, target_profile: TargetProfile | dict, applicability: dict, program_digest: str) -> str:
-        tp = target_profile.to_json() if isinstance(target_profile, TargetProfile) else target_profile
-        h = hashlib.sha256()
-        for part in (canonical_bytes(construction_version), canonical_bytes(tp), canonical_bytes(applicability), program_digest.encode()):
-            h.update(len(part).to_bytes(8, "big"))  # length-prefixed: no component can absorb its neighbour
-            h.update(part)
-        return h.hexdigest()
-
-    @classmethod
-    def build(cls, construction_version: dict, target_profile: TargetProfile, applicability: dict, program_digest: str) -> ArtifactIdentity:
-        tp = target_profile.to_json()
-        return cls(construction_version=construction_version, target_profile=tp, applicability=applicability, program_digest=program_digest,
-                   identity=cls.compute(construction_version, tp, applicability, program_digest))
-
-    def to_json(self) -> dict:
-        return {"schema": SCHEMA, "identity": self.identity, "construction_version": self.construction_version, "target_profile": self.target_profile,
-                "applicability": self.applicability, "program_digest": self.program_digest,
-                "identity_definition": "sha256(len8||canonical(construction_version) || len8||canonical(target_profile) || len8||canonical(applicability) || len8||program_digest)"}
-
-    @classmethod
-    def from_json(cls, d: dict) -> ArtifactIdentity:
-        if d.get("schema") != SCHEMA:
-            raise ValueError(f"artifact schema {d.get('schema')!r} is not {SCHEMA!r}")
-        return cls(construction_version=d["construction_version"], target_profile=d["target_profile"], applicability=d["applicability"],
-                   program_digest=d["program_digest"], identity=d["identity"])
-
-    def recomputed(self) -> str:
-        return self.compute(self.construction_version, self.target_profile, self.applicability, self.program_digest)
-
-
-class ApplicabilityError(RuntimeError):
-    """An artifact was requested outside its declared applicability; `.reasons` lists every differing field verbatim."""
-
-    def __init__(self, reasons: list[str]) -> None:
-        self.reasons = list(reasons)
-        super().__init__("artifact not applicable: " + "; ".join(self.reasons))
-
-
-def reuse_mismatches(artifact: ArtifactIdentity, profile: TargetProfile, applicability_now: dict | None, construction_version_now: dict | None = None) -> list[str]:
-    """Every reason `artifact` may NOT be reused by a requester declaring `profile` under `applicability_now` (the facts read back from
-    the requester's environment; None = not provided = every condition unverifiable = refused)."""
-    bad: list[str] = []
-    if artifact.recomputed() != artifact.identity:
-        bad.append(f"identity {artifact.identity} does not match its components (recomputed {artifact.recomputed()})")
-    want, have = profile.to_json(), dict(artifact.target_profile)
-    for k in sorted(set(want) | set(have)):
-        if want.get(k, "<absent>") != have.get(k, "<absent>"):
-            bad.append(f"target_profile.{k}: requested {want.get(k, '<absent>')!r}, artifact built for {have.get(k, '<absent>')!r}")
-    if applicability_now is None:
-        bad.append("applicability conditions of the requester were not provided (every condition is unverifiable)")
-    else:
-        for k in sorted(artifact.applicability):
-            if k not in applicability_now:
-                bad.append(f"applicability.{k}: artifact requires {artifact.applicability[k]!r}, requester did not report it")
-            elif applicability_now[k] != artifact.applicability[k]:
-                bad.append(f"applicability.{k}: artifact requires {artifact.applicability[k]!r}, requester has {applicability_now[k]!r}")
-    if construction_version_now is not None and canonical_bytes(construction_version_now) != canonical_bytes(artifact.construction_version):
-        bad.append("construction_version differs from the artifact's")
-    return bad
-
-
-def check_reuse(artifact: ArtifactIdentity, profile: TargetProfile, applicability_now: dict | None, construction_version_now: dict | None = None) -> ArtifactIdentity:
-    """Return `artifact` if it is applicable for the requester, else raise `ApplicabilityError` (fail-closed)."""
-    bad = reuse_mismatches(artifact, profile, applicability_now, construction_version_now)
-    if bad:
-        raise ApplicabilityError(bad)
-    return artifact
-
-
-def load_artifact(path: str, profile: TargetProfile, applicability_now: dict | None, construction_version_now: dict | None = None) -> ArtifactIdentity:
-    """Read `artifact.json` and admit it only under `profile` / `applicability_now` (`check_reuse`)."""
-    with open(path) as f:
-        art = ArtifactIdentity.from_json(json.load(f))
-    return check_reuse(art, profile, applicability_now, construction_version_now)
-
-
 def parse_target_arg(s: str | None, *, base: TargetProfile | None = None) -> TargetProfile:
     """CLI helper: None -> default; a JSON object -> overrides laid over `base` (`{"compute_capability": [9, 0]}`); a path to a JSON
     file -> the whole profile.  `base` defaults to THIS host's device profile when CUDA is available, else `default()` -- the same
@@ -796,5 +702,4 @@ def parse_target_arg(s: str | None, *, base: TargetProfile | None = None) -> Tar
     return TargetProfile.from_json(doc)
 
 
-__all__ = ["TargetProfile", "DEFAULT_TARGET", "ArtifactIdentity", "ApplicabilityError", "canonical_bytes", "sha256_hex", "profile_mismatches",
-           "reuse_mismatches", "check_reuse", "load_artifact", "parse_target_arg", "SCHEMA"]
+__all__ = ["TargetProfile", "DEFAULT_TARGET", "canonical_bytes", "sha256_hex", "profile_mismatches", "parse_target_arg"]

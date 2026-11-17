@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from verity_vllm.program.frontend.rules.base import RuleInfo
+from verity_torch.frontend.rules.base import RuleInfo
 from verity_vllm.program.frontend.rules.profile import (
     FusedAddRmsNormRule as _FusedAddRmsNormRule,
 )

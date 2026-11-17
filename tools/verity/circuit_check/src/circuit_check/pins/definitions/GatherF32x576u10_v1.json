@@ -1,8 +1,0 @@
-{
- "definitions": {
-  "GatherF32x576u10_v1": {
-   "and": 18496,
-   "type": "0b2d9a0bd952ab983b42602f26fe90c58d7457138200515e5e26fa5fe7a70553b5e4e124b754b698728ac46e71e150d63b63406ca3777daea32e7f4154c9b341"
-  }
- }
-}

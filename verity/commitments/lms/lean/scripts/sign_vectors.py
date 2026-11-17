@@ -10,7 +10,7 @@ sign at), and `DIR/sign/python.jsonl`, the same line's results from the checkout
 (W = 1, 2, 4, heights 1 to 3) and at `TOY_N` (every W, heights 1 to 4), from seeds and identifiers of the right length
 and of others, and at parameter sets `Params` refuses; the leaves are every leaf of the key or a sample, and 2^H and past
 it; the messages are 0 to 100 bytes and certificate messages. The Lean audit runs `Lms/SignDifftestMain.lean` on both
-files (`runs` in `lean-audit.json`, which pins their SHA-256), and `verity/commitments/tests/
+files (`runs` in `lean-audit.json`, which pins their SHA-256), and `tests/verity/commitments/
 test_lms_sign_lean_difftest.py` checks that this script still writes them.
 """
 from __future__ import annotations

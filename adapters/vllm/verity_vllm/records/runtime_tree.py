@@ -3,7 +3,7 @@ MRO names, its named buffers and the runner's facts, as the acquisition plan (`a
 at runtime (`correspondence.reader_for_acquire`) read it.
 
 Module-tree facts are not correspondence: they say which modules the runtime has, not which module a Program Call was lowered from
-(that is `verity_vllm.correspondence.runtime`).  A tree is taken from a live engine (`runtime_tree_of`), from a model instantiated on
+(that is `verity_torch.correspondence.runtime`).  A tree is taken from a live engine (`runtime_tree_of`), from a model instantiated on
 the meta device as the Build does (`verity_vllm.observe.runtime_tree.meta_runtime_tree`, which needs vLLM) or from paths
 (`runtime_tree_from_paths`: tests, fixtures).  Its one writer is `RuntimeTree.save`, which writes every field; `from_json` and
 `load` read a field the document leaves out, or holds as null or empty, as empty, and refuse another schema than the tree's.

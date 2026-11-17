@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The hash area's guarantee statements
 
-Each is proved by a theorem `Hash.SecurityProofs.G : Hash.Guarantees.G` in `Security/Proofs/Hash/`. All are
+Each is proved by a theorem `Hash.SecurityProofs.G : Hash.Guarantees.G` in `security/Proofs/Hash/`. All are
 deterministic and assume nothing about the hash: each conclusion is the property, or a collision among
 the messages the two openings' checks themselves hashed, never an advantage bound. So no proof takes an assumption.
 
@@ -79,14 +79,14 @@ inputs the two openings hashed. It is stated for any 64-byte `H` and `G`.
 Scope:
 * **Leaves.** The verifier's format (`RowLeaf.Format`): `hm96-sha512/row-seg/v1` leaves (`seg`: PoUW's per-call A rows,
   the vLLM row tables, A6's `x` port, the clear sampled audit's rows) or `hm96-sha512/row/v2` leaves (`v2`: H1's tables
-  and registered weights, serving's step rows, the chunked templates' `w`, `in<g>` and `o0` rows, the remote audit's
+  and registered weights, serving's step rows, the chunked templates' `w`, `in<g>` and `o0` rows, PoUB's
   receipts) or `hm96-sha512/row/v1` leaves (`v1`: Flock's default ports, the registered values, M0's serving rows,
   each a row of 16-bit words). A row cut into several leaves (H1's chunk rows past K = 4096, n leaves a row) is bound
   leaf by leaf, at each leaf's rank; which leaves form a row is the layout's.
 * **Domain.** `V.domain` is free, and RowBinding holds for every domain. It does not say that a root is a rows tree. The
   schema doesn't separate them: PoUW's tile-digest trees write `hm96-sha512/row-seg/v1` too, with `x` the 64-byte digest
   itself, and there a row's leaf equals the leaf of its own row-seg digest with no collision. Only the domain's binding
-  (`weight_binding`/`activation_binding` against `transcript_binding` in `verity/core/protocols/pouw/audit.py`)
+  (`weight_binding`/`activation_binding` against `transcript_binding` in `verity/protocols/accounting/pouw/verifier/audit.py`)
   separates them, so a consumer establishes that `V.domain` is a rows domain from its binding.
 * **Relation to Flock.** `FlockSoundness.Binding.ExplicitLeaf.rowSeg` already proves row-seg binding at the hm96 leaf,
   in explicit-pair form, over `SegRow l`, `List UInt8` digests and one hash. RowBinding's hm96 and row-seg part is the
@@ -122,7 +122,7 @@ that `G` hashed in the two row digests have one digest.
 
 Scope:
 * **What it is about.** The reference's outputs (`Definitions/Hash/EmbeddingRead.lean`), not the gates; the gates'
-  tests (`verity/ml/commitments/tests/test_boolean_embedding.py`) hold them to the reference.
+  tests (`verity/commitments/tests/test_boolean_embedding.py`) hold them to the reference.
 * **What the unit's wiring supplies.** `root`, `domain` and `key` are the registered table's: the root and domain id are
   registered reads of the table's root in the unit that holds the read, the domain's count is `V`, and the key is hm96's
   pinned key, which the table's registration uses. `RowBinding`'s note on domains applies: the domain's binding says it

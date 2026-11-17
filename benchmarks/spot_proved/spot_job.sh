@@ -7,7 +7,7 @@
 #     bash "$RESEARCH_RUN_DIR/inputs/spot_job.sh"
 #   ARM=... LOAD=... CAPTURE=DIR STEPS=s,... bash .../spot_job.sh   # only stage an earlier run's capture again (CPU only)
 # The engine's environment is the served one's: ENGINE_ENV=FILE (KEY=VALUE lines, a server's engine_env.txt) is exported,
-# and FLASHINFER=1 (the default, as production) puts $CUDA_HOME/bin (default /usr/local/cuda-12.9) on PATH for FlashInfer's
+# and FLASHINFER=1 (the default, as in serving) puts $CUDA_HOME/bin (default /usr/local/cuda-12.9) on PATH for FlashInfer's
 # JIT; OUT/engine_env.txt.
 # 1. The first-stage coin: one step of the replay block's with SMALL tokens (the FP8 linears' FlashInfer branch, the fused MNNVL
 #    all-reduce + norm) and one with BIG (DeepGEMM and its group quants, the multimem all-reduce, the fused add + RMSNorm at
@@ -117,7 +117,7 @@ print("spot first stage:", pick, {k: tokens[v] for k, v in pick.items()}, classe
 EOF
   STEPS=$("$PY" -c "import json; p = json.load(open('$OUT/first_stage.json'))['steps']; print(','.join(dict.fromkeys(str(p[k]) for k in ('long', 'big', 'small') if k in p)))")
 fi
-[ -n "$STEPS" ] || { echo "spot: no step drawn"; exit 2; }
+[ -n "$STEPS" ] || { echo "spot: no step sampled"; exit 2; }
 if [ "${KEEP_TENSORS:-opened}" = all ] && [ -z "${KEEP_STEPS:-}" ] && [ -f "$OUT/first_stage.json" ]; then
   # whole steps in the order sampled (long, big, small) while about GB_PER_TOKEN (0.5: about 64 MB a token on each of 8
   # ranks, the tensors up to capture.py's keep cap)

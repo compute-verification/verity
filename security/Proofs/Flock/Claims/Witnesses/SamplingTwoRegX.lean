@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.SamplingTwoRegX
+public import Definitions.Claims.SamplingTwoServedX
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoRegMiss
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.ZK.NonVacuous
@@ -12,11 +13,13 @@ import Proofs.Flock.Claims.ZK.NonVacuous
 (`Witnesses.SamplingTwo`: `sksL`, which accepts after one round, samples nothing and opens nothing, with the two-stage
 design `toyTwo`), its silent prover and any hash: `CompiledTwo.KSRegTwoX_fails`, `CompiledTwo.HeadlineTwoX_fails` and
 `CompiledTwo.MissTwoX_fails` over the spec, and at coins `Bool` and SHA-512 (`FlockDeploy.sha512`) the nontrivial
-lemmas of `CompilerKSRegTwoX`, `CompilerHeadlineTwoX` and `CompilerMissTwoX`.
+lemmas of `CompilerKSRegTwoX`, `CompilerHeadlineTwoX` and `CompilerMissTwoX`. The bound on what the committed trace
+serves, `CompiledTwo.ExfilRegTwoX`, has the committed form as its first part, so it fails there too
+(`CompiledTwo.ExfilRegTwoX_fails`).
 
 * `sksLTwo`'s boundary trace read at the statement opens nothing (`sksL_regValX`), so its one proof block is incorrect
-  there at any interior (`toy_wrongInAt`): the footprint is outside `M̄_0` at every interior (`sksLTwo_notMX`), the
-  design's `P̄_a` is `0` there, and its one replay block is wrong at the boundary (`toy_wrongAtBoundaryAt`).
+  there at any interior (`toy_incorrectInAt`): the footprint is outside `M̄_0` at every interior (`sksLTwo_notMX`), the
+  design's `P̄_a` is `0` there, and its one replay block is wrong at the boundary (`toy_incorrectAtBoundaryAt`).
 * Its sessions make no call, so with `ε_reg,X = 0` (`sksL_εregX`) and `B_conf,2` finding nothing (`sksLTwo_bconfTwo`)
   the error at two stages is `0` (`sksLTwo_εregTwoX`).
 * It accepts always and samples nothing. At `δ = 0` the threshold form then bounds `1` by `0`
@@ -32,7 +35,7 @@ forms' (`compilerKSTwo_honest`, `compilerMissTwo_honest`).
 namespace Claims.Witness.SamplingGeneric
 
 open Claims.SamplingGeneric
-open Claims.Sampling (footprintAt wrongAtBoundaryAt)
+open Claims.Sampling (footprintAt incorrectAtBoundaryAt)
 open Claims.Witness.Sampling (toyStmt toyPart)
 
 /-- `sksLTwo`'s boundary trace read at the statement has its footprint outside `M̄_0` at every interior. -/
@@ -91,15 +94,15 @@ theorem compiledTwoMissX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inh
   intro h
   have h1 := h [] toyStmt toyPart toyTwo (sksLTwo_scope []) rfl rfl rfl toyTwo_firstRate toyTwo_secondRate Unit
     silentP ()
-  have hW : 0 < (wrongAtBoundaryAt toyStmt toyPart toyTwo.part ((sksLTwo Coin).regValX H silentP [])).card :=
-    Finset.card_pos.2 ⟨0, toy_wrongAtBoundaryAt (val := (sksLTwo Coin).regValX H silentP [])
+  have hW : 0 < (incorrectAtBoundaryAt toyStmt toyPart toyTwo.part ((sksLTwo Coin).regValX H silentP [])).card :=
+    Finset.card_pos.2 ⟨0, toy_incorrectAtBoundaryAt (val := (sksLTwo Coin).regValX H silentP [])
       (sksL_regValX H silentP [] 0)⟩
   have hp : Pr (fun r : Fin ((sksLTwo Coin).V.k []) → Coin =>
       ∀ u ∈ (sksLTwo Coin).checked [] r, u ∉ (sksLTwo Coin).FregTwoX H silentP [] () r) = 1 :=
     Eq.trans (Pr_congr fun _ => iff_true_intro fun u hu => absurd (show u ∈ ([] : List ℕ) from hu) (by simp))
       Claims.ZKMal.Pr_true
   have h2 : (1 : ℝ) ≤ (1 - 1 * 1) ^
-      (wrongAtBoundaryAt toyStmt toyPart toyTwo.part ((sksLTwo Coin).regValX H silentP [])).card :=
+      (incorrectAtBoundaryAt toyStmt toyPart toyTwo.part ((sksLTwo Coin).regValX H silentP [])).card :=
     hp.symm.trans_le h1
   rw [show (1 : ℝ) - 1 * 1 = 0 by norm_num, zero_pow hW.ne'] at h2
   norm_num at h2
@@ -116,6 +119,12 @@ open Claims.Witness.SamplingGeneric
 theorem CompiledTwo.KSRegTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
     ∃ (A : Arg Coin) (L : CompiledTwo Coin A), ¬ L.KSRegTwoX H :=
   ⟨_, _, compiledTwoKSRegX_fails H⟩
+
+/-- **`CompiledTwo.ExfilRegTwoX` fails** at some compiled two-stage verifier: its first part is the committed form
+(`KSRegTwoX`), which fails at `sksLTwo`. -/
+theorem CompiledTwo.ExfilRegTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    (H : Msg → Msg) : ∃ (A : Arg Coin) (L : CompiledTwo Coin A), ¬ L.ExfilRegTwoX H :=
+  ⟨_, sksLTwo Coin, fun h => compiledTwoKSRegX_fails H h.1⟩
 
 /-- **`CompiledTwo.HeadlineTwoX` fails** at some compiled two-stage verifier. -/
 theorem CompiledTwo.HeadlineTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]

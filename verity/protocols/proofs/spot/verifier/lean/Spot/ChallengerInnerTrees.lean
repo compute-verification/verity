@@ -1,7 +1,7 @@
 /-
 A recursive session's inner coins as the challenger's release log shows it sampled and opened them: `rec_live`'s live-coin
-part (`verity_flock.rec_live.CoinServer`) on the challenger's coin tree, held to the log as `rec_live.tree_held_reason`
-holds it (`tests/test_challenger_inner_trees.py` holds that to this, the verifier).
+part (`verity_flock.rec_live.LiveCoinPart`) on the challenger's coin tree, held to the log as `rec_live.tree_held_reason`
+holds it (Flock's prover `tests/test_challenger_audit.py` holds that to this, the verifier).
 
 `rec_live`'s live-coin part opens each round of its session's tree once given what the round answers, which are other bytes
 than the ones `flock-circuit serve` opens a round after (`sessionTreeReason`): the link points, the tree's `session`
@@ -33,7 +33,7 @@ open Lean (Json)
 open Flock (V)
 
 def INNER_RECORD_FORM : String :=
-  "its coin server's record is not one rec_live writes (link {points, roots}, rounds [{stream, k, coins, ...}])"
+  "its live-coin part's record is not one rec_live writes (link {points, roots}, rounds [{stream, k, coins, ...}])"
 
 private def formed {α : Type} (x : V α) : V α := x.mapError fun _ => INNER_RECORD_FORM
 
@@ -98,14 +98,14 @@ def innerTreeReason (trees : Array LoggedTree) (tree pub : Json) : Option String
   let mut seen : Array (String × Nat) := #[]
   for r in reads do
     if seen.contains (r.stream, r.round) then
-      return some s!"its coin server's record reads its {r.stream} round {r.round} twice"
+      return some s!"its live-coin part's record reads its {r.stream} round {r.round} twice"
     seen := seen.push (r.stream, r.round)
     let ok := match t.opening r.stream r.round with
       | some o => o.n == r.n && o.after == r.after && o.coins == r.coins
       | none => false
     unless ok do
       return some (s!"its {r.stream} round {r.round} is not coins the challenger opened under its tree after what " ++
-        "the coin server recorded")
+        "the challenger's live-coin part recorded")
   unless t.opened.size == reads.size do
     return some s!"the challenger's release log shows {t.opened.size} openings of its tree and its record {reads.size}"
   return none

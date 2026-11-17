@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.With.Transcript
+import all Init.Data.List.Control
+
+/-!
 A simulation between two verdict monads: a relation `R` between computations of `M` and of `N` that `pure`, `bind`,
 `throw` and the lift of a `V` action respect. Lean has no parametricity theorem, so `Flock.With.SimVerify` and
 `Flock.With.SimZk` prove, once per `…With` function, that a simulation relates its runs under related oracles; a logging
@@ -8,10 +13,6 @@ Here: the simulation, its lift through `StateT` (the transcript and the Ligerito
 traversals the verifier uses (`forIn` over lists, arrays and ranges, `Array.mapM`, `Array.mapIdxM`, `List.findM?`), and
 related oracles. `sim_walk` (`Flock.With.SimWalk`) walks two copies of one definition in step with them.
 -/
-module
-
-public import Flock.With.Transcript
-import all Init.Data.List.Control
 
 @[expose] public section
 

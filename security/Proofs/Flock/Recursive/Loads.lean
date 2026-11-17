@@ -25,7 +25,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # Recursion: where V*'s statement enters a session (gap 8)
 
-A session of V*'s statement `Q` is a `flock-verify verify --zk --registered` session of the verifier's own inputs `I`,
+A session of V*'s statement `Q` is a `verity-verify-proof verify --zk --registered` session of the verifier's own inputs `I`,
 as the prover supplies them (`ZkOuterR`). What ties a session to `Q` is the verifier's check that the session is V*'s
 statement of its index (`AcceptsZKV`, `RecVStar.checkStmt`), the one place the recursive audit's proof takes the
 equation:
@@ -106,8 +106,8 @@ theorem loads_of_verifiesV {S : ℕ} {i : RecVStar.Inner} {bind : Fin S → VSta
 and load V*'s statement (`hL`): the record carries the sample (custody), at which table 0 sets up
 (`setupZHJ_of_acceptsZKI`). -/
 theorem typable_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg')
-    (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => Q.J) x.wr) (ω : Q.law.live.Ω) (R : Reg') (o : LiveOutJ Q.J Q.mPts)
-    (hacc : AcceptsZKR x.I x.own (x.wr (Q.law.live.draw ω) R o)) (hck : ScopeZR x.I) (hL : Q.Loads x.I)
+    (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => Q.J) x.wr) (ω : Q.samplingDesign.live.Ω) (R : Reg') (o : LiveOutJ Q.J Q.mPts)
+    (hacc : AcceptsZKR x.I x.own (x.wr (Q.samplingDesign.live.draw ω) R o)) (hck : ScopeZR x.I) (hL : Q.Loads x.I)
     (hi : x.I.tags.isTmpl = false) : x.Typable := by
   have hacc' := acceptsZK_of_R hacc
   exact ⟨hck, hi, hL.1, hL.2, _, _, ZkHidden.setupZHJ_of_acceptsZKI x.I x.hTags.1 hck.typed
@@ -163,7 +163,7 @@ at an outcome whose transcripts the typed sessions write (`hq`): where every ses
 typed sessions are the raw ones (`sessions_zsOf`, `prob_sessT`), every outcome of which they write
 (`leaves_sessions`); where one doesn't, the raw event is empty there (`prob_sessionsR_untypable`). -/
 theorem prob_recT_le {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg : ByteArray → ByteArray} {N : ℕ}
-    {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
+    {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {rows : Option (Array Flock.Registered.Port)} (hob : VStarParsesScoped Flock.Tags.circuit i bind Vs)
     (zr : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg')
     (hRec : ∀ R ω t R₂ j, RecordsLiveZKJ (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (fun _ _ => (Vs j).J)

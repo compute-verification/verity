@@ -34,8 +34,8 @@ theorem commitAns_eq (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) :
       = ⟨A, P.toProtocol.refChecked H s U u A, P.toProtocol.refOut H s U u A⟩ := rfl
 
 theorem eval_honestProg (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : S) :
-    (honestProg P U act s).eval H = honestTranscript P.toProtocol H s U act := by
-  unfold honestProg honestTranscript
+    (honestProg P U act s).eval H = honestTrace P.toProtocol H s U act := by
+  unfold honestProg honestTrace
   rw [eval_upTo]
   funext u
   simp only [unitProg, eval_bind, eval_queryAll, eval, commitAns_eq]
@@ -101,13 +101,13 @@ theorem ttWitness : GameStatements.TTWitness := by
 
 theorem honest_correctSet (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Mat) (hP : P.Complete D) (hU : U.InDomain D) (hact : ∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) :
-    correctSet P U H s (honestTranscript P H s U act) = range U.layout.N := by
+    correctSet P U H s (honestTrace P H s U act) = range U.layout.N := by
   classical
   ext u
   unfold correctSet
   rw [Finset.mem_filter, Finset.mem_range, and_iff_left_iff_imp]
   intro hu
-  unfold honestTranscript
+  unfold honestTrace
   have hc := hP U hU u hu H s (act u) (hact u hu)
   exact ⟨⟨act u, P.refChecked H s U u (act u), P.refOut H s U u (act u)⟩, by simp [hu], ⟨hact u hu, fun x hx => hc.1 x hx⟩, fun i hi j hj => hc.2 i hi j hj⟩
 
@@ -146,7 +146,7 @@ theorem honest_wins_sixteen {Q R : Type} (P : D1.Params Q R Salt) (hN : P.NoiseR
     (hW : ∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
       Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ))
     (H : Q → R) (s : Salt) {g T : ℝ} (hT : T / (1 - g) < 16 * 2 ^ 44 * Ω) :
-    Wins P.toProtocol M1.sixteen g T (honestTranscript P.toProtocol H s M1.sixteen fun _ => 0) H s := by
+    Wins P.toProtocol M1.sixteen g T (honestTrace P.toProtocol H s M1.sixteen fun _ => 0) H s := by
   unfold Wins
   rw [honest_correctSet P.toProtocol _ M1.sixteen H s _ (d1_complete_m1Domain P hN) M1.sixteen_inDomain
     fun _ _ => zero_actOK _]
@@ -166,12 +166,12 @@ theorem pricedHonest_bounded {Q R : Type} (P : D1.Params Q R Salt) {c : ℕ} (hc
     (pricedHonest P).Bounded U (∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (U.layout.N * c) :=
   fun H s => ⟨outputPriced_cost_le _ H U _ _ s, (Nat.zero_add _).le.trans (calls_honestProg P H U _ s hc)⟩
 
-theorem freeHonest_transcript {Q R : Type} (P : D1.Params Q R Salt) (U : Workload) (H : Q → R) (s : Salt) :
-    (freeHonest P).transcript U H s = honestTranscript P.toProtocol H s U fun _ => 0 :=
+theorem freeHonest_trace {Q R : Type} (P : D1.Params Q R Salt) (U : Workload) (H : Q → R) (s : Salt) :
+    (freeHonest P).trace U H s = honestTrace P.toProtocol H s U fun _ => 0 :=
   eval_honestProg P H U _ s
 
-theorem pricedHonest_transcript {Q R : Type} (P : D1.Params Q R Salt) (U : Workload) (H : Q → R) (s : Salt) :
-    (pricedHonest P).transcript U H s = honestTranscript P.toProtocol H s U fun _ => 0 :=
+theorem pricedHonest_trace {Q R : Type} (P : D1.Params Q R Salt) (U : Workload) (H : Q → R) (s : Salt) :
+    (pricedHonest P).trace U H s = honestTrace P.toProtocol H s U fun _ => 0 :=
   eval_honestProg P H U _ s
 
 theorem sum_Wmm_sixteen : ∑ u ∈ range M1.sixteen.layout.N, ((M1.sixteen.layout.shape u).Wmm : ℝ) = 16 * 2 ^ 44 := by
@@ -190,7 +190,7 @@ theorem lost_free {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty
   have h := hG M1.sixteen M1.sixteen_inDomain 0 le_rfl (M1.sixteen.layout.N * c) hc64 (freeHonest P)
     (freeHonest_bounded P hc M1.sixteen)
   refine le_of_eq_of_le (pr_eq_one fun x => ⟨?_, not_breaks_of_hashless freeModel_hashless _ _ _ _⟩).symm h
-  rw [freeHonest_transcript]
+  rw [freeHonest_trace]
   exact honest_wins_sixteen P hN hW x.1 x.2 (by rw [zero_div]; positivity)
 
 theorem lost_priced {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] (P : D1.Params Q R Salt)
@@ -205,7 +205,7 @@ theorem lost_priced {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonemp
   have h := hG M1.sixteen M1.sixteen_inDomain (16 * 2 ^ 44) (by positivity) (M1.sixteen.layout.N * c) hc64
     (pricedHonest P) hB
   refine le_of_eq_of_le (pr_eq_one fun x => ⟨?_, not_breaks_of_hashless outputPriced_hashless _ _ _ _⟩).symm h
-  rw [pricedHonest_transcript]
+  rw [pricedHonest_trace]
   refine honest_wins_sixteen P hN hW x.1 x.2 ?_
   have hΩ0 : 0 < Ω := by linarith
   have h1 : 1 / Ω < 1 - g := by linarith

@@ -1,0 +1,9 @@
+{
+ "format": "verity/all-protocols-window/v1",
+ "protocols": {
+  "work": {
+   "verdict": "missing",
+   "why": "a development run: its record names no devices it was served on, which PoUW's verdict needs"
+  }
+ }
+}

@@ -38,9 +38,11 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
+
+from . import settings
 
 #: How far back a first digest reads doorbells and threads.
 FIRST_LOOKBACK_S = 3600
@@ -85,7 +87,7 @@ class Sources:
 
 
 def state_path(lane: str, explicit: str | None = None) -> Path:
-    return Path(explicit or os.environ.get("RESEARCH_DIGEST_STATE") or Path.home() / ".research" / "digest" / f"{lane}.json")
+    return Path(explicit or settings.get("RESEARCH_DIGEST_STATE") or Path.home() / ".research" / "digest" / f"{lane}.json")
 
 
 def load(path: Path) -> dict:
@@ -103,7 +105,7 @@ def save(path: Path, s: dict) -> None:
 
 
 def hhmm(ts: str | float) -> str:
-    return datetime.fromtimestamp(float(ts), timezone.utc).strftime("%d %H:%MZ")
+    return datetime.fromtimestamp(float(ts), UTC).strftime("%d %H:%MZ")
 
 
 def plain(text: str | None, n: int = 420) -> str:
@@ -157,7 +159,7 @@ def parse_inbox(text: str) -> list[dict]:
     out = []
     for line in text.splitlines():
         if m := INBOX_LINE.match(line):
-            since = datetime.strptime(m[3], "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc).timestamp() if m[3] else None
+            since = datetime.strptime(m[3], "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC).timestamp() if m[3] else None
             out.append({"agent": m[1], "bytes": int(m[2]), "since": since})
     return out
 
@@ -311,7 +313,7 @@ def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: l
     def check(name: str, f: Callable[[], list[str]]) -> None:
         try:
             lines.extend(f())
-        except Exception as e:  # one check down must not hide the others
+        except Exception as e:  # noqa: BLE001 (one check down must not hide the others)
             lines.append(f"- {failed(name, e)}")
 
     check("VM", lambda: _vm(src.vm()))
@@ -324,7 +326,7 @@ def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: l
             lines.append(f"- inbox: no tools/agent-guard/inbox.py in {WORKSPACE}")
         else:
             pending = {d["agent"]: d for d in got}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 (an unread inbox must not hide the rest of the digest)
         lines.append(f"- {failed('inbox', e)}")
 
     def inbox(agent: str) -> tuple[str, bool]:
@@ -343,7 +345,7 @@ def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: l
         try:
             age = src.branch_age(branch)
             b = f"{branch} {age}" if age else f"no branch {branch} on origin"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 (one unread branch must not hide the other workers)
             b = failed(f"branch {branch}", e)
         text, stale = inbox(agent)
         lines.append(f"- {'WARNING ' if stale else ''}worker {label} {agent}: {b}; {text}")
@@ -390,13 +392,13 @@ def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: l
 def digest(lane: str, s: dict, src: Sources, roster: list[tuple[str, str, str]] | None = None) -> tuple[list[str], list[str]]:
     """The digest's lines and the sources' errors; `s` advances past everything shown. A failing source is reported and
     leaves its cursor where it was, so its news shows next time; a failing health check is reported in its place."""
-    out = [f"# research digest @{lane} {datetime.fromtimestamp(src.now(), timezone.utc):%d %H:%MZ}"]
+    out = [f"# research digest @{lane} {datetime.fromtimestamp(src.now(), UTC):%d %H:%MZ}"]
     errors: list[str] = []
 
     def guard(name: str, f: Callable[[], object], default: object = None) -> object:
         try:
             return f()
-        except Exception as e:  # one source down must not hide the others
+        except Exception as e:  # noqa: BLE001 (one source down must not hide the others)
             errors.append(f"{name}: {e}")
             return default
 
@@ -436,7 +438,7 @@ def real_sources(lane: str, repo: Path, notes_root: Path) -> Sources:
         return tip, _git(repo, "log", "--first-parent", "--reverse", "--format=%s", f"{last}..{tip}").splitlines()
 
     def landed_since(t: float) -> int:
-        since = datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        since = datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         log = _git(repo, "log", "--first-parent", f"--since={since}", "--format=%s", "origin/main").splitlines()
         return sum(1 for x in log if QUEUE_SUBJECT.match(x))
 

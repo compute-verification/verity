@@ -42,7 +42,7 @@ import Mathlib.Topology.Sheaves.Init
 
 Every protocol decides on its own coins, and the coins of a period, or of a monitoring period's periods, are their
 product: a uniform `ξ : (i : I) → Ω i`. A protocol's guarantee bounds its failure event by `δ` over its own coordinate,
-at every value of the others (`Accounting.PeriodRun.Sound`'s form), or over its own and the later coordinates, at every
+at every value of the others (`ResourceAccounting.PeriodRun.Sound`'s form), or over its own and the later coordinates, at every
 value of the earlier ones. Either way the event may read every coin, so the protocols may adapt to each other's coins.
 The probability over the product that some protocol fails is then at most the sum of the `δ`s.
 
@@ -55,7 +55,7 @@ The probability over the product that some protocol fails is then at most the su
   the coins before it.
 * `union_bound_monitoringPeriod`: over a monitoring period's periods, each period's protocols in
   `union_bound_update`'s form: `∑_j ∑_a δ j a`. `union_bound_monitoringPeriod_with` adds one more event bounded over the
-  whole product, such as acceptance over a monitoring period (`FlockSoundness.Audit.Law.pooled_escape`, in `prCoin`,
+  whole product, such as acceptance over a monitoring period (`FlockSoundness.Audit.SamplingDesign.pooled_escape`, in `prCoin`,
   which is `pr`'s through `Claims.Sampling.Pr_eq_toReal_prCoin` and `Pr_eq_pr`); `pr_restrict_le` carries a bound proved over a block of the coordinates to the
   whole product.
 -/
@@ -146,7 +146,7 @@ theorem union_bound_monitoringPeriod {J A : Type} [Fintype J] [Fintype A] [∀ i
   exact (pr_mono fun _ ⟨j, a, hb⟩ => ⟨(j, a), hb⟩).trans this
 
 /-- **A monitoring period with one more event**, bounded over the whole product (`pr F ≤ η`), such as every period's
-sample accepting (`FlockSoundness.Audit.Law.pooled_escape`, carried over by `pr_restrict_le`): that event or some
+sample accepting (`FlockSoundness.Audit.SamplingDesign.pooled_escape`, carried over by `pr_restrict_le`): that event or some
 protocol of some period failing has probability at most `η + ∑ j, ∑ a, δ j a`. -/
 theorem union_bound_monitoringPeriod_with {J A : Type} [Fintype J] [Fintype A] [∀ i, Nonempty (Ω i)]
     (F : ((i : I) → Ω i) → Prop) {η : ℝ} (hF : pr F ≤ η) (own : J → A → I)

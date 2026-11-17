@@ -1,10 +1,10 @@
 """PoUW's MVP end to end on the RTX PRO 6000 (sm_120): Pearl-C (`pearl-c-sm120-v1-h3`) commits every linear call of a vLLM model
 on the device, timed against stock vLLM on the same card at the panel's two shapes, rep by rep.
 
-  python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
+  python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
       --out RUN_DIR/e2e.json [--retain DIR] [--reps 3]
 
-On an H100 or H200 the kernel directory is ``benchmarks/pouw/pearl_c_sm90`` under ``--scheme pearl-c-h100-v1-h3`` (window.sh's
+On an H100 or H200 the kernel directory is ``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90`` under ``--scheme pearl-c-h100-v1-h3`` (window.sh's
 ``PEARLC_KERNEL``), and ``--tag`` names another model in the shape names (`SHAPES`).
 
 The run:
@@ -32,8 +32,8 @@ The run:
 - **The verify passes** (``--retain``): after the timing, the first timed prefill prompt and the decode prompts are replayed
   in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
-  `verify_run.py` after the execution phase: the first two must be replay-verified (development shortcut; the protocol's check is
-  a ZK proof, PouwCheck) and the control rejected (the panel's rule).
+  `verify.sh` after the execution phase, whose verdict on each is the Lean's: the first two must be replay-verified
+  (development shortcut; the protocol's check is a ZK proof, PouwCheck) and the control rejected (the panel's rule).
 - **The panel's shapes:** `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
@@ -65,7 +65,6 @@ import argparse
 import contextlib
 import json
 import multiprocessing as mp
-import os
 import random
 import statistics
 import subprocess
@@ -80,6 +79,8 @@ from verity_config.settings import of
 settings = of(__file__)
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
+#: the sm_120 kernel's directory, the default kernel
+SM120 = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 sys.path.insert(0, str(HERE.parent))
 
 SCHEME = "pearl-c-sm120-v1-h3"
@@ -102,7 +103,7 @@ BLOCKS = 4
 #: the decode batch and its prompts' length are ``--batch`` and ``--prompt`` (`configure`); these are their defaults, the panel's
 PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 PREFILL_DEFAULT, BATCH_DEFAULT, PROMPT_DEFAULT = PREFILL, BATCH, PROMPT
-#: the served y's bound against the float product (the scheme's tested bound, verity/protocols/accounting/pouw/verifier's sm120 useful-output test)
+#: the served y's bound against the float product (the scheme's tested bound, verity/protocols/resource_accounting/compute/pouw/verifier's sm120 useful-output test)
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row digests and row tree, the tile leaves)
 CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_leaf"})
@@ -178,12 +179,11 @@ def decode_key() -> str:
 
 
 def kv_tokens(llm) -> int | None:
-    """The engine's KV cache in tokens (vLLM's block count times block size), read in-process; None where vLLM hides it."""
-    try:
-        cc = llm.llm_engine.vllm_config.cache_config
-        return int(cc.num_gpu_blocks) * int(cc.block_size)
-    except (AttributeError, TypeError):
-        return None
+    """The engine's KV cache in tokens (vLLM's block count times block size), read in-process; None where vLLM hides it
+    (no cache config on the engine, or its block count not yet set)."""
+    cc = getattr(getattr(getattr(llm, "llm_engine", None), "vllm_config", None), "cache_config", None)
+    blocks, size = getattr(cc, "num_gpu_blocks", None), getattr(cc, "block_size", None)
+    return None if blocks is None or size is None else int(blocks) * int(size)
 
 
 def pass_capacity(tile: int, ns: list[int]) -> tuple[int, int]:
@@ -191,7 +191,7 @@ def pass_capacity(tile: int, ns: list[int]) -> tuple[int, int]:
     and at least the device run's defaults: the prompts' prefill in chunks of `PREFILL` tokens, then 1 + `STEPS` forwards of the
     batch, each forward's rows padded to `ROW_ALIGN` and its tiles to whole tile rows, with as many forwards again for
     vLLM's mixed prefill-and-decode steps.  Every linear (`ns`, their n) runs once per forward."""
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     cdiv = lambda a, b: -(-a // b)  # noqa: E731
     prompt_rows, forwards = BATCH * PROMPT, 2 * (cdiv(BATCH * PROMPT, PREFILL) + 1 + STEPS)
     tile_rows = cdiv(prompt_rows, tile) + forwards * cdiv(BATCH, tile)
@@ -240,11 +240,12 @@ def install(model, args, coins):
     `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  The execution phase's salt is `coins`' salt coin,
     asked for once the weights are committed (`Coins`).  Returns the run, the weights by id and the stack; the stack starts
     inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
-    from verity.protocols.accounting.pouw.verifier.audit import weights_root
+    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.protocols.linear import vllm_site
     from verity_vllm.protocols.linear.api import Stack
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     sites = vllm_site.discover(model)
     weights = {site.weight_id: layer.weight.data for site, layer in sites}
@@ -254,10 +255,10 @@ def install(model, args, coins):
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
     salt_key = PPD.new_salt_key(scheme)
-    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
+    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
     tiles, rows = pass_capacity(kernel.run.TILE, [t.shape[0] for t in weights.values()])
     opening = coins.open("salt", weights_root(roots))
-    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, coins.commitment, opening, time_gemm=True,
+    run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, coins.commitment, opening, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
                               whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, salt_key=salt_key,
                               whole_defer_a=getattr(args, "whole_defer_a", False),
@@ -265,11 +266,11 @@ def install(model, args, coins):
                               whole_tree_sm=getattr(args, "whole_tree_sm", False))
     if getattr(args, "statement", None):
         import importlib.util
-        spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement.py")
+        spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement_torch.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         run.statement = mod.Statement(run, args.statement)
-    stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
+    stack = Stack([site for site, _ in sites], PPDR.PearlCExecutor(run))
     bad = stack.refusals()
     if bad:
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
@@ -282,7 +283,7 @@ def whole_step(llm, run, stack):
     engine's in-process model runner."""
     from verity_vllm.engine import handle
     from verity_vllm.engine.hooks import Hooks
-    from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
+    from verity_torch.pouw.pearl_c.whole import WholeStep
     return WholeStep(run, stack, handle.model_runner(llm), Hooks(tag=f"{run.entry}:whole-step"))
 
 
@@ -489,7 +490,7 @@ def graphs_check(run, weights: dict) -> list[dict]:
     fresh pass on poisoned outputs, must give the same A roots, tile root, screen flags and y, bit for bit.  And the screen
     of an m = 8,192 call read from its BF16 x must give the flags it gives from A's FP32 words."""
     import torch
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
     out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20261001)
     for w, W in weights.items():
@@ -520,8 +521,8 @@ def graphs_check(run, weights: dict) -> list[dict]:
     run.gemm(w, x, W, None)
     sh = run.shapes[(PREFILL, W.shape[0], W.shape[1])]
     a, b = torch.zeros((PREFILL, 2), dtype=torch.uint8, device=W.device), torch.zeros((PREFILL, 2), dtype=torch.uint8, device=W.device)
-    PPD.screen_into(a, x, sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
-    PPD.screen_into(b, sh.xa[:PREFILL], sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
+    PPDR.screen_into(a, x, sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
+    PPDR.screen_into(b, sh.xa[:PREFILL], sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
     run.end()
     same = bool(torch.equal(a, b))
     out.append({"check": "screen_bf16", "rows": PREFILL, "k": W.shape[1], "flagged": int(a.sum()), "flags_equal": same, "ok": same})
@@ -533,7 +534,7 @@ def screen_check(run, weights: dict) -> dict:
     entries, one over the noise floor's bound, the rest ordinary) whose flags, from the run's screen, must be the torch
     screen's on the same rows and the kernel's own α and ρ."""
     import torch
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
     w, W = next(iter(weights.items()))
     k = W.shape[1]
     gen = torch.Generator(device=W.device).manual_seed(20260931)
@@ -548,8 +549,8 @@ def screen_check(run, weights: dict) -> dict:
     sh = run.shapes[(16, W.shape[0], k)]
     got = run.flag_buf[:16].clone()
     ref = torch.zeros_like(got)
-    PPD.screen_into(ref, sh.xa[:16], sh.b["alpha_a"], sh.b["aux_a"], fused=False)
-    same = PPD.excluded(got[:, 0].bool(), got[:, 1].bool(), sh.xa[:16]) == PPD.excluded(ref[:, 0].bool(), ref[:, 1].bool(), sh.xa[:16])
+    PPDR.screen_into(ref, sh.xa[:16], sh.b["alpha_a"], sh.b["aux_a"], fused=False)
+    same = PPDR.excluded(got[:, 0].bool(), got[:, 1].bool(), sh.xa[:16]) == PPDR.excluded(ref[:, 0].bool(), ref[:, 1].bool(), sh.xa[:16])
     run.end()
     return {"check": "screen", "screen": run.details["host"]["screen"], "flags_equal": bool(torch.equal(got, ref)),
             "excluded_equal": same, "ok": same}
@@ -729,16 +730,16 @@ class Coins:
     refusal, so nothing resamples."""
 
     def __init__(self, epoch: int, entropy=None):
-        from verity.protocols.accounting.pouw.verifier import verifier
-        from verity.protocols.accounting.pouw.verifier.coins import Challenger
-        from verity.protocols.proofs.spot.device.challenger import served_claim
+        from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+        from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+        from verity.protocols.proofs.spot.verifier.challenger.challenger import served_claim
         entropy = verifier.coins if entropy is None else entropy
         served_claim(entropy)
         self.challenger, self.opened = Challenger(epoch, entropy), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes):
-        from verity.protocols.accounting.pouw.verifier.protocol import DomainError
+        from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
         if label in self.opened:
             if self.opened[label].after != after:
                 raise DomainError(f"epoch {self.commitment.epoch}'s {label!r} coin is already open, after another record")
@@ -751,12 +752,12 @@ class PipeCoins:
     """The engine's side: the execution phase's commitment, and each coin asked of the controller's `Coins` over the pipe."""
 
     def __init__(self, conn, commitment: dict):
-        from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
+        from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
         self.conn, self.commitment = conn, CoinCommitment.from_json(commitment)
 
     def open(self, label: str, after: bytes):
-        from verity.protocols.accounting.pouw.verifier.coins import CoinOpening
-        from verity.protocols.accounting.pouw.verifier.protocol import DomainError
+        from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinOpening
+        from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
         self.conn.send({"coin": label, "after": after.hex()})
         msg = self.conn.recv()
         if "refused" in msg:
@@ -789,7 +790,7 @@ class Worker:
 
     def recv(self, timeout: float = 1200) -> dict:
         """The engine's answer; a coin it asks for on the way is answered from the execution phase's `Coins`."""
-        from verity.protocols.accounting.pouw.verifier.protocol import DomainError
+        from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
         while True:
             if not self.conn.poll(timeout):
                 raise RuntimeError(f"{self.group}: no answer in {timeout:.0f} s")
@@ -902,31 +903,15 @@ def split(results: dict) -> dict:
 
 
 def state_entropy(path: str):
-    """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
-    verifier's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
-    and for the challenger process that later samples the execution phase's units (`served_commit.py challenger --state`), so named
-    by the Lean's claim instance (`verifier.CLAIM`)."""
-    from verity.protocols.accounting.pouw.verifier import verifier
-    from verity.protocols.accounting.pouw.verifier.coins import COIN_BYTES, HM96, LABELS
-    p = Path(path)
-    if not p.exists():
-        entropy = verifier.coins(len(LABELS) * (COIN_BYTES + HM96.salt_bytes))
-        p.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(entropy)
-    data, at = p.read_bytes(), [0]
-
-    def take(n: int) -> bytes:
-        at[0] += n
-        return data[at[0] - n:at[0]]
-    take.claim = verifier.CLAIM
-    return take
+    """The challenger's entropy held in the file `path`: served_zk's `served_commit.state_entropy`, which the challenger
+    process reads it with too."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk.served_commit import state_entropy as entropy_of
+    return entropy_of(path)
 
 
 def epoch_coins(args, epoch: int) -> Coins:
     """The run's execution-phase coins, committed before any engine starts; with ``--retain`` the commitment is published beside the
-    passes (``coins.json``), where `verify_run.py --coins` reads it.  ``POUW_COIN_STATE`` names a file holding the
+    passes (``coins.json``), where `verify.sh` reads it.  ``POUW_COIN_STATE`` names a file holding the
     challenger's entropy (`state_entropy`)."""
     state = settings.POUW_COIN_STATE
     coins = Coins(epoch, state_entropy(state)) if state else Coins(epoch)
@@ -941,7 +926,8 @@ def memory_mib() -> int | None:
         q = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits", "-i", gpu()],
                            capture_output=True, text=True, timeout=10, check=False)
         return int(q.stdout.strip())
-    except (OSError, ValueError, subprocess.TimeoutExpired):
+    except (OSError, ValueError, subprocess.TimeoutExpired) as e:
+        print(f"e2e: no GPU memory reading from nvidia-smi, recorded as none ({type(e).__name__}: {e})", file=sys.stderr)
         return None
 
 
@@ -1038,7 +1024,7 @@ def perplexity(args) -> int:
     ctx, t0 = mp.get_context("spawn"), time.perf_counter()
     d = args.out.parent
     windows = wikitext_windows(args.model, args.ppl_windows)
-    quality = QUALITY[Path(getattr(args, "kernel", None) or HERE.parent / "pearl_c_sm120").name]
+    quality = QUALITY[Path(getattr(args, "kernel", None) or SM120).name]
     groups = [("fp8", "base", None, ("fp8",)), ("v1", "arm", quality["pearlc-v1"], ("bf16", "pearlc-v1"))]
     if "pearlc-v2" in quality:
         groups.append(("v2", "arm", quality["pearlc-v2"], ("pearlc-v2",)))
@@ -1083,12 +1069,13 @@ def agree(a, b) -> float:
 
 
 def main() -> None:
-    from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SCHEDULES
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
     ap.add_argument("--revision")
-    ap.add_argument("--kernel", default=str(HERE.parent / "pearl_c_sm120"), help="GPU 1's kernel directory (run.py, fixture.py)")
+    ap.add_argument("--kernel", default=str(SM120), help="GPU 1's kernel directory (run.py, fixture.py)")
     ap.add_argument("--cubin", help="build.sh's pearl_c_sm120.cubin (default: the kernel directory's)")
     ap.add_argument("--out", type=Path, default=Path(settings.RESEARCH_RUN_DIR or ".") / "e2e.json")
     ap.add_argument("--reps", type=int, default=3)
@@ -1133,9 +1120,9 @@ def main() -> None:
     if args.batch < 1 or args.prompt < 1 or args.prefill < 1:
         ap.error("--batch, --prompt and --prefill are positive")
     for size in (args.batch, *(args.capture or ())) if args.whole_step else ():
-        if not 0 < -(-size // PPD.ROW_ALIGN) * PPD.ROW_ALIGN <= PPD.GRAPH_ROWS:
+        if not 0 < -(-size // PPD.ROW_ALIGN) * PPD.ROW_ALIGN <= PPDR.GRAPH_ROWS:
             ap.error(f"--whole-step captures the decode batch whole: a batch of {size}'s calls, filler rows to a multiple of "
-                     f"{PPD.ROW_ALIGN} included, are not 1 to {PPD.GRAPH_ROWS} rows (pouw_pearl_c_whole)")
+                     f"{PPD.ROW_ALIGN} included, are not 1 to {PPDR.GRAPH_ROWS} rows (pouw_pearl_c_whole)")
     if args.capture and not args.whole_step:
         ap.error("--capture sets the whole-step arm's graph sizes: it needs --whole-step")
     configure(args)

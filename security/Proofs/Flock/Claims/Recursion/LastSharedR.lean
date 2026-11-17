@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.KS.PlainDrawRCols
+import Proofs.Flock.Claims.KS.PlainSampleRCols
 import Proofs.Flock.Claims.Scope.Check
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
@@ -157,7 +157,7 @@ theorem decideR_runs {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : 
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) :
     Runs sha512 (verifyJWithM Claims.Hashes.oc spec (tabsOf sts) (jAt sha512 spec sts c₁ mids f)
       (filesAt (tabsOf sts) (pointsOf spec c₁) f.ps)) () (((nextR rd x as cs).eval sha512).2.map Prod.fst) := by
-  have hsu := (Claims.Bridge.PlainDraw.decideR_sha512 ha hacc).2.2.1
+  have hsu := (Claims.Bridge.PlainSample.decideR_sha512 ha hacc).2.2.1
   have hrun : Runs sha512 (decisionSF s x link c₁ mids f) ()
       (((nextR rd x as cs).eval sha512).2.map Prod.fst) := by
     have ha' : ((outOf (decisionSF s x link c₁ mids f)).eval sha512).1 = .acc := by

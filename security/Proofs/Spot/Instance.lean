@@ -6,7 +6,7 @@ public import Mathlib.Algebra.Order.Sub.Basic
 public import Proofs.Core.Circuit
 
 /-!
-# Sampled proofs' partitions as populations
+# SPOT's partitions as populations
 
 * `singleAssignment`: a partition's population is always single assignment: every computed gate is in exactly one unit,
   and input gates in none.
@@ -15,7 +15,7 @@ public import Proofs.Core.Circuit
 * `ordered_of_inLayoutOrder`: units that are intervals of gates numbered in layout order, as `Q_call` v1 cuts them, are
   ordered.
 * `incorrect_eq`, **the bridge**: with every value carried in `W` bits, a unit is incorrect in the population exactly when it is
-  incorrect in the partition (`correct_iff`), so the population's hypothesis `|incorrect| ≤ m` is sampled proofs' guarantee.
+  incorrect in the partition (`correct_iff`), so the population's hypothesis `|incorrect| ≤ m` is SPOT's guarantee.
 * `not_acyclic_of_sandwich`, **what fails**: a unit holding a gate before and a gate after a gate of another unit, on
   one path of wires, makes a cycle. `Q_word` v1 cuts such units: it packs a Call's returned gates into output units in
   return order, so a chain `g₁ → g₂ → g₃` returned as `[g₁, g₃, g₂]` at 8 bits a gate and `X = 16` puts `g₁` and `g₃` in
@@ -123,7 +123,7 @@ theorem correct_iff {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) (u : Fin n
 
 /-- **The bridge**: the population's incorrect proof blocks are the partition's. -/
 theorem incorrect_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) :
-    P.toDataflow.incorrect (P.fns W) (P.encode W X) = P.wrong X := by
+    P.toDataflow.incorrect (P.fns W) (P.encode W X) = P.incorrect X := by
   ext u
   simp only [Population.Dataflow.incorrect, mem_filter, mem_univ, true_and, P.mem_incorrect, P.correct_iff hW X u]
 

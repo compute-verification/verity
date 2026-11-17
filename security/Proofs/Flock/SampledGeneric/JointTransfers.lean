@@ -34,7 +34,7 @@ private theorem avg_ofReal_eq {C : Type} [Fintype C] [Nonempty C] (f : C → ℝ
 
 namespace JointExtractor
 
-variable (J : JointExtractor PS B) (L : Law n)
+variable (J : JointExtractor PS B) (L : SamplingDesign n)
 
 /-- **What the extractor's game reads wrong at `c`** after the sample, against `x`: `1` if it reads a value there and
 not exactly `x`, else `0` (the integrand of `LinkFinder.errAt`, `errAt_eq_expect`). -/
@@ -111,8 +111,8 @@ theorem errOf_toTrials (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (c
   split_ifs with h'
   · rw [errAt_eq_expect]
     refine (expect_bind _ (Game.draw (J.ReadsAt L c)) (fun w => (J.G (L.draw w.1) R).map fun o => (w.1, o))
-      (drawStrat _) (fun w => Strategy.map _ _ (J.strat (L.draw w.1) R (τ w.1)))).trans
-      ((Verity.Game.expect_draw _ _).trans (congrArg (· / (Fintype.card (J.ReadsAt L c) : ℝ))
+      (sampleStrat _) (fun w => Strategy.map _ _ (J.strat (L.draw w.1) R (τ w.1)))).trans
+      ((Verity.Game.expect_sample _ _).trans (congrArg (· / (Fintype.card (J.ReadsAt L c) : ℝ))
         (Finset.sum_congr rfl fun w _ => ?_)))
     exact expect_map _ _ _ _
   · exact absurd h h'

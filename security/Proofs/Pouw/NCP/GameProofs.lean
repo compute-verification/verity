@@ -124,7 +124,7 @@ theorem leadComplete : GamePinned.LeadComplete := by
 
 /-! ## `G_γ` from TT_NCP -/
 
-theorem wins_imp_ttncp (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {g₀ Ωmax T : ℝ}
+theorem wins_imp_ttncp (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) {g₀ Ωmax T : ℝ}
     (hΩ : 0 < Ωmax)
     (hW : ∀ u < U.layout.N, (P.Wref U.layout u : ℝ) ≤ Ωmax * (3 * ((U.layout.shape u).Wmm : ℝ)))
     (hwin : Wins P U (reductionGap g₀ Ωmax) T τ H s) :
@@ -174,12 +174,12 @@ def unitProg (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R Co
     (queryAll (P.qWt s (U.layout.fixedId u))).bind fun b => done (commitAns P U u (act u) a b)
 
 /-- NCP's honest reference as an oracle program. -/
-def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
+def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Trace :=
   upTo (unitProg P U act s) U.layout.N
 
 theorem eval_honestProg (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : S) :
-    (honestProg P U act s).eval H = honestTranscript P.toProtocol H s U act := by
-  unfold honestProg honestTranscript
+    (honestProg P U act s).eval H = honestTrace P.toProtocol H s U act := by
+  unfold honestProg honestTrace
   rw [eval_upTo]
   funext u
   simp only [unitProg, eval_bind, eval_queryAll, eval, commitAns_eq]
@@ -390,7 +390,7 @@ theorem oneSegment : GamePinned.OneSegment := by
     positivity
   · intro g₀ hg hN hgk H s
     have hchk : checkedSet P.toProtocol ⟨Lay, fun _ => 0⟩ H s
-        ((Barrier.Proofs.planAdv P.nz (onePlan P.d)).transcript ⟨Lay, fun _ => 0⟩ H s) = range Lay.N := by
+        ((Barrier.Proofs.planAdv P.nz (onePlan P.d)).trace ⟨Lay, fun _ => 0⟩ H s) = range Lay.N := by
       refine Finset.Subset.antisymm (fun u hu => ?_) ?_
       · simp only [checkedSet, Finset.mem_filter] at hu; exact hu.1
       · rw [← hall H s]; exact correctSet_subset_checkedSet _ _ _ _ _

@@ -7,7 +7,7 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECK = ROOT / "tools" / "verity" / "check" / "check.py"
+CHECK = ROOT / "tools" / "check" / "check.py"
 
 
 def opt_in() -> dict[str, dict[str, tuple[str, ...]]]:
@@ -33,6 +33,13 @@ def marks(path: Path, test: str) -> str | None:
                       *(ast.get_source_segment(src, named[n]) or "" for n in sorted(used))])
 
 
+def suite_dir(suite: str) -> Path:
+    """The directory the suite OPT_IN names by its code's path runs in: its tests' mirror, `tests/X/`, or `tests/X/tests/`
+    where its tests are a package imported as `tests`."""
+    return next((d for d in (ROOT / "tests" / suite / "tests", ROOT / "tests" / suite) if (d / "pyproject.toml").is_file()),
+                ROOT / suite)
+
+
 def test_every_opt_in_test_a_cold_check_names_is_in_its_suite_and_marked_by_its_variable():
     table = opt_in()
     assert table, "check.py's OPT_IN is empty"
@@ -40,7 +47,7 @@ def test_every_opt_in_test_a_cold_check_names_is_in_its_suite_and_marked_by_its_
     for suite, var, tests in ((suite, var, tests) for suite, by_var in table.items() for var, tests in by_var.items()):
         for test in tests:
             file, _, name = test.partition("::")
-            seen = marks(ROOT / suite / file, name)
+            seen = marks(suite_dir(suite) / file, name)
             if seen is None:
                 wrong.append(f"{suite}: {test} isn't in its suite: rename or drop it in check.py's OPT_IN")
             elif var not in seen:

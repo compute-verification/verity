@@ -6,18 +6,18 @@
                queued GPU phase's runner in cluster-<run id>.scope and its workload in gpu-lease's gpu-lease-<pid>.scope.
                The namespace root `/` is left out: it is the whole visible machine, not the run's.
     current    memory.current; peak memory.peak (absent before Linux 5.19)
-    cap        the tightest finite memory.max on the cgroup and its ancestors (a scope inside a capped vy-lend.slice is bound
-               by the slice), with the cgroup that sets it; `max` everywhere is no cap
+    limit      the tightest finite memory.max on the cgroup and its ancestors (a scope inside a capped vy-lend.slice is bound
+               by the slice), with the cgroup that sets it; `max` everywhere is no limit
     growth     bytes/s of memory.current over the last GROWTH_WINDOW_S of the run's own sampler records (resources.jsonl
                `cgroup` records), only for the cgroup the sampler reads; none otherwise -- never two reads taken here
-    near_cap   current within NEAR_CAP of the cap
+    near_limit current within NEAR_LIMIT of the limit
     cpuset     each cgroup's own cpuset.cpus (a scope's AllowedCPUs; none when unset) and cpuset.cpus.effective, and the
                workload group's affinities (Cpus_allowed_list), which a `taskset` sets where no cgroup does
 
 `node` reads the same for several runs on one machine, and that machine's state they may hold or wait on: every GPU_LEASE_DIRS
 directory's live leases and live waiters as gpu-lease writes them (an `<i>.owner` line whose pid lives and whose `<i>.lock`
 someone flocks; a `wait.*` file someone flocks), with node 1's `n1-lease.json` pool record and `n1-lease.limits`, and the
-check and Lean slots (`tools/verity/check/slot.py` and `lean_slot.py`'s `--status --json` documents, when the caller loaded them).
+check and Lean slots (`tools/check/slot.py` and `lean_slot.py`'s `--status --json` documents, when the caller loaded them).
 gpu-lease's locks are read from /proc/locks, never probed; slot.py probes its line's tickets, as `check.py --slots` does.
 
 `procs` reads the other way, from a process to its run: for each live process of a given name or pid, the run it belongs to
@@ -36,7 +36,7 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
-NEAR_CAP = 0.10
+NEAR_LIMIT = 0.10
 GROWTH_WINDOW_S = 60.0
 SAMPLES_TAIL = 1 << 20
 JOB_UNIT = "/system.slice/research-job-{run_id}.service"   # research.jobuser.unit_name, in the system slice systemd-run puts it
@@ -71,8 +71,9 @@ def _cgroup_of(proc: Path, pid: int) -> str | None:
 def workload(run_dir: Path, proc: Path) -> list[int]:
     """The run's pid (unless reused) and every live member of its workload's process group."""
     try:
-        st = json.loads((run_dir / "status.json").read_text())
-    except (OSError, ValueError):
+        st = json.loads((run_dir / "status.json").read_text()) if (run_dir / "status.json").exists() else {}
+    except (OSError, ValueError) as e:
+        print(f"scopemem: {run_dir / 'status.json'} unread, so the run's pid is not known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         st = {}
     pid, pgid, start = st.get("pid"), st.get("pgid"), st.get("starttime_ticks")
     pids: list[int] = []
@@ -83,7 +84,8 @@ def workload(run_dir: Path, proc: Path) -> list[int]:
     if isinstance(pgid, int) and (pids or not isinstance(pid, int)):
         try:
             entries = sorted(int(e) for e in os.listdir(proc) if e.isdigit())
-        except OSError:
+        except OSError as e:
+            print(f"scopemem: {proc} unlisted, so the group's members are not known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             entries = []
         pids += [p for p in entries if p not in pids and (_stat(proc, p) or [None] * 3)[2] == str(pgid)]
     return pids
@@ -103,13 +105,16 @@ def locate(run_dir: Path, proc: Path, cg_root: Path, pids: list[int] | None = No
 
 def samples(run_dir: Path) -> list[dict[str, Any]]:
     """The cgroup records in the last SAMPLES_TAIL bytes of the run's resources.jsonl, oldest first."""
+    if not (run_dir / "resources.jsonl").exists():
+        return []
     try:
         with open(run_dir / "resources.jsonl", "rb") as f:
             f.seek(0, os.SEEK_END)
             size = f.tell()
             f.seek(max(0, size - SAMPLES_TAIL))
             lines = f.read().decode("utf-8", "replace").splitlines()[1 if size > SAMPLES_TAIL else 0:]
-    except OSError:
+    except OSError as e:
+        print(f"scopemem: {run_dir / 'resources.jsonl'} unread, so no sample ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     return list(cgroup_records(lines))
 
@@ -122,7 +127,8 @@ def cgroup_records(lines: Iterable[str]) -> Iterator[dict[str, Any]]:
             continue
         try:
             rec = json.loads(line)
-        except ValueError:
+        except ValueError as e:
+            print(f"scopemem: a cgroup sample line is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
         if isinstance(rec.get("cgroup"), dict) and isinstance(rec.get("t_mono"), (int, float)):
             yield rec
@@ -143,18 +149,18 @@ def growth(recs: list[dict[str, Any]], path: str) -> dict[str, Any] | None:
 def read(cg_root: Path, path: str) -> dict[str, Any]:
     d = cg_root / path.lstrip("/")
     own = _text(d / "memory.max")
-    cap = cap_at = None
+    limit = limit_at = None
     p = Path(path)
     while True:
         v = _bytes(_text(cg_root / str(p).lstrip("/") / "memory.max"))
-        if v is not None and (cap is None or v < cap):
-            cap, cap_at = v, str(p)
+        if v is not None and (limit is None or v < limit):
+            limit, limit_at = v, str(p)
         if p == p.parent:
             break
         p = p.parent
     cur = _bytes(_text(d / "memory.current"))
     return {"cgroup": path, "current_bytes": cur, "peak_bytes": _bytes(_text(d / "memory.peak")), "memory_max": own,
-            "cap_bytes": cap, "cap_at": cap_at, "near_cap": cur is not None and cap is not None and cur >= (1 - NEAR_CAP) * cap,
+            "limit_bytes": limit, "limit_at": limit_at, "near_limit": cur is not None and limit is not None and cur >= (1 - NEAR_LIMIT) * limit,
             "cpuset": _text(d / "cpuset.cpus") or None, "cpus_effective": _text(d / "cpuset.cpus.effective"),
             **({} if d.is_dir() else {"error": "gone"})}
 
@@ -214,9 +220,12 @@ def _locked(p: Path, held: set[tuple[int, int, int]]) -> bool:
 def leases(d: Path, proc: Path, held: set[tuple[int, int, int]]) -> dict[str, Any] | None:
     """gpu-lease's directory `d`: its GPUs, how many are locked (a lease, or on node 1 a fence), each live lease's owner line
     and each live waiter's wait line, oldest first, and node 1's pool record; None when `d` doesn't exist."""
+    if not os.path.isdir(d):
+        return None
     try:
         names = sorted(os.listdir(d))
-    except OSError:
+    except OSError as e:
+        print(f"scopemem: {d} unlisted, so no GPU lease is read ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     gpus = sorted(int(n[:-5]) for n in names if n.endswith(".lock") and n[:-5].isdigit())
     owners = []
@@ -227,9 +236,10 @@ def leases(d: Path, proc: Path, held: set[tuple[int, int, int]]) -> dict[str, An
     waits = [{"file": n, **fields(_text(d / n) or "")} for n in names
              if n.startswith("wait.") and n.rsplit(".", 1)[-1].isdigit() and _locked(d / n, held)]
     try:
-        pool = json.loads((d / "n1-lease.json").read_text())
-        pool = {k: pool.get(k) for k in ("t", "pool", "pool_name", "blocked")} | {"pending_holders": len(pool.get("pending_holders") or [])}
-    except (OSError, ValueError, AttributeError):
+        pool = json.loads((d / "n1-lease.json").read_text()) if (d / "n1-lease.json").exists() else None
+        pool = None if pool is None else {k: pool.get(k) for k in ("t", "pool", "pool_name", "blocked")} | {"pending_holders": len(pool.get("pending_holders") or [])}
+    except (OSError, ValueError, AttributeError) as e:
+        print(f"scopemem: {d / 'n1-lease.json'} unread, so no pool record ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         pool = None
     return {"gpus": len(gpus), "locked": sum(_locked(d / f"{i}.lock", held) for i in gpus), "owners": owners, "waits": waits,
             "pool": pool, "limits": _text(d / "n1-lease.limits")}
@@ -385,18 +395,19 @@ def _gib(b: int | None) -> str:
 
 
 def render(r: dict[str, Any]) -> str:
-    """One line: `<cgroup>  current .. peak .. cap .. growth ..`, ending NEAR CAP when current is within NEAR_CAP of the cap."""
+    """One line: `<cgroup>  current .. peak .. limit .. growth ..`, ending NEAR LIMIT when current is within NEAR_LIMIT of the
+    limit."""
     if r.get("error") == "gone":
         return f"{r['cgroup']}  gone"
-    if r["cap_bytes"] is None:
-        cap = "none (memory.max is max)"
+    if r["limit_bytes"] is None:
+        limit = "none (memory.max is max)"
     else:
-        used = f", {100 * r['current_bytes'] / r['cap_bytes']:.0f}% used" if r["current_bytes"] is not None else ""
-        cap = _gib(r["cap_bytes"]) + (f" (at {r['cap_at']}{used})" if r["cap_at"] != r["cgroup"] else f" ({used[2:]})" if used else "")
+        used = f", {100 * r['current_bytes'] / r['limit_bytes']:.0f}% used" if r["current_bytes"] is not None else ""
+        limit = _gib(r["limit_bytes"]) + (f" (at {r['limit_at']}{used})" if r["limit_at"] != r["cgroup"] else f" ({used[2:]})" if used else "")
     g = r.get("growth")
     grow = "-" if g is None else f"{g['bytes_per_s'] * 60 / GIB:+.1f} GiB/min over {g['over_s']:g} s of samples"
-    return (f"{r['cgroup']}  current {_gib(r['current_bytes'])}  peak {_gib(r['peak_bytes'])}  cap {cap}  growth {grow}"
-            + ("  NEAR CAP" if r["near_cap"] else ""))
+    return (f"{r['cgroup']}  current {_gib(r['current_bytes'])}  peak {_gib(r['peak_bytes'])}  limit {limit}  growth {grow}"
+            + ("  NEAR LIMIT" if r["near_limit"] else ""))
 
 
 def main(argv: list[str]) -> int:

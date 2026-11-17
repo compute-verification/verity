@@ -15,14 +15,14 @@ meta import Lean.Meta.Tactic.NormCast
 /-!
 # The expected-time extractor as an algorithm: waits of at most `R` runs
 
-The extractor's law `Extract.expectAcc` is `k` independent accepted runs. An algorithm gets them by
+The extractor's sampling design `Extract.expectAcc` is `k` independent accepted runs. An algorithm gets them by
 waiting: it runs the session until a run accepts, at most `R` times, and does that `k` times. This
-file is that algorithm's law and cost, the form a collision finder runs.
+file is that algorithm's sampling design and cost, the form a collision finder runs.
 
 * `expectN_find`: over `R` runs, the first accepted one is found with probability
   `ε·geom ε R = 1 − (1 − ε)^R` (`mul_geom`), distributed as an accepted run;
 * `expectN_firsts`: `k` waits that all find one give `k` independent accepted runs, weighted by
-  `geom ε R ^ k`, so their law is `(1 − (1 − ε)^R)^k` times `expectAcc`;
+  `geom ε R ^ k`, so their sampling design is `(1 − (1 − ε)^R)^k` times `expectAcc`;
 * `expectN_waitCost`: a wait plays `geom ε R` runs in expectation, so after an accepted run the `k`
   waits play `k·geom ε R` runs, and `ε·k·geom ε R = k·(1 − (1 − ε)^R) ≤ k`, whatever `ε`.
 -/
@@ -178,7 +178,7 @@ theorem expectAcc_zero (k : ℕ) : expectAcc g s acc k (fun _ => 0) = 0 := by
   unfold expectAcc
   simp only [mul_zero, expectN_const, zero_div]
 
-/-- **The waits against the ideal law**: when each of the `k` waits gives up after `R` runs, at
+/-- **The waits against the ideal sampling design**: when each of the `k` waits gives up after `R` runs, at
 most `k/(eR)` of `ε · expectAcc Ψ` is lost, for `0 ≤ Ψ ≤ 1`. -/
 theorem expectAcc_le_waits (k R : ℕ) (hR : 1 ≤ R) (Ψ : List α → ℝ) (h0 : ∀ bs, 0 ≤ Ψ bs)
     (h1 : ∀ bs, Ψ bs ≤ 1) :

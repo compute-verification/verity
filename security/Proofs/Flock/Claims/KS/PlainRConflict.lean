@@ -69,7 +69,7 @@ open Claims (OC OCV)
 open FlockSoundness.Refine (ebind_ok)
 open FlockSoundness.Discharge.Exec (verifyJWithMK_tables_cap)
 open Claims.Bridge.Custody (checksAtJ_ok checksAtJ_scope)
-open Claims.Bridge.PlainDraw (decideR_sha512)
+open Claims.Bridge.PlainSample (decideR_sha512)
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128

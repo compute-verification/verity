@@ -22,8 +22,8 @@ for i, flags in enumerate(I.PINNED):
 EOF
 while read -r i args; do
   # shellcheck disable=SC2086
-  (cd "$W" && "$CUDA/bin/nvcc" $args "$H/ieee_pin.cu" -o "$W/pin$i")
+  (cd "$W" && "$CUDA/bin/nvcc" $args "$ROOT/verity/protocols/resource_accounting/compute/pouw/prover/ieee_pin.cu" -o "$W/pin$i")
 done < "$W/builds"
-POUW_CUDA_BIN="$CUDA/bin" python3 "$ROOT/verity/protocols/accounting/pouw/prover/sass_gate.py" "$W"/pin? --pin --toolkit "$TK"
-cp "$ROOT/verity/protocols/accounting/pouw/prover/sass_pins.json" "$OUT/sass_pins.json"
+POUW_CUDA_BIN="$CUDA/bin" python3 "$ROOT/verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py" "$W"/pin? --pin --toolkit "$TK"
+cp "$ROOT/verity/protocols/resource_accounting/compute/pouw/prover/sass_pins.json" "$OUT/sass_pins.json"
 python3 "$H/ieee_pin.py" --toolkit "$TK=$CUDA" --out "$OUT/ieee-pin.json"

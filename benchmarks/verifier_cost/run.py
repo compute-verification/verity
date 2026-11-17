@@ -3,11 +3,11 @@ the size of the circuit that description unrolls to (README.md).
 
   measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an inference-only check instance (θ its registered inputs, one
-      IU per Call), checked by `nci-check --policy` (`NciCheck.Desc`) and, where the unrolled circuit has at most GATES
-      gates, by `nci-check --policy --unrolled` (`NciCheck.check`) on the instance expanded gate by gate;
+      inference block per Call), checked by `inference-only-check --policy` (`InferenceOnlyCheck.Desc`) and, where the unrolled circuit has at most GATES
+      gates, by `inference-only-check --policy --unrolled` (`InferenceOnlyCheck.check`) on the instance expanded gate by gate;
       DIR/results.json.
   partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
-      the one-stage verifier's partition (`sampled-proofs-difftest`'s `partition`: `Partition.units`, `strata`, the sampling design
+      the one-stage verifier's partition (`spot-difftest`'s `partition`: `Partition.units`, `strata`, the sampling design
       and the digest) on Serve_v1 under the template query of its Calls, and under `Q_word` v1 and `Q_call` v1 at X = 16
       where its Calls' distinct Definitions have at most GATES gates in all; and on the served shape, the population
       program of Serve_v1's largest Definition at N instances (`Q_template_instance`); DIR/partition.json.
@@ -33,9 +33,16 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-NCI = ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
-EXE = NCI / ".lake/build/bin/nci-check"
+INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
+EXE = INFERENCE_ONLY_PACKAGE / ".lake/build/bin/inference-only-verifier"
 SCHEMA = "verity/verifier-cost/v1"
+METRIC = "proofs/verifier-seconds-served-description"
+
+
+def built(exe: Path) -> Path:
+    if not exe.exists():
+        subprocess.run(["lake", "build", exe.name], cwd=exe.parents[3], check=True)
+    return exe
 
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "benchmarks/network_sim"))
@@ -50,12 +57,14 @@ CONFIGS: dict[str, dict | tuple[str, int]] = {
     "mid": {"layers": 1, "hidden": 128, "intermediate": 256, "vocab": 64},
     **{f"b0-{n}": ("b0", n) for n in (1, 2, 4, 8, 16)},
     "b0": ("b0", 30),
+    "llama32-1b": {"layers": 16, "hidden": 2048, "heads": 32, "kv_heads": 8, "head_dim": 64, "intermediate": 8192,
+                   "vocab": 128256},
 }
 BOOLEAN = ("tiny", "tiny-2", "small", "mid", "b0-1", "b0")
 
 
 def _reference():
-    spec = importlib.util.spec_from_file_location("nci_reference", NCI / "scripts/nci_reference.py")
+    spec = importlib.util.spec_from_file_location("inference_only_reference", INFERENCE_ONLY_PACKAGE / "scripts/inference_only_reference.py")
     ref = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ref)
     return ref
@@ -89,7 +98,7 @@ def program(name: str, ir: str) -> str:
 
 
 def instance(ref, text: str) -> tuple[dict, dict]:
-    """`NciCheck.Desc`'s instance (θ the registered inputs, one IU per Call, a gate-less node in none) and the
+    """`InferenceOnlyCheck.Desc`'s instance (θ the registered inputs, one inference block per Call, a gate-less node in none) and the
     description's sizes."""
     inp, reg, spans = ref.root_nodes(text)
     desc = json.loads(text)
@@ -146,6 +155,7 @@ def _digest(v) -> str:
 
 def measure(args) -> int:
     ref = _reference()
+    args.exe = built(args.exe)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -181,18 +191,36 @@ def measure(args) -> int:
                                  | {"desc_s": round(row["desc"]["seconds"], 3),
                                     "unrolled_s": row["unrolled"].get("seconds"), "agrees": row["unrolled"].get("agrees")}),
                       flush=True)
-    result = {"schema": SCHEMA, "verifier": "nci-check", "workload": "Serve_v1", "repeat": args.repeat,
+    result = {"schema": SCHEMA, "verifier": "inference-only-verifier", "workload": "Serve_v1", "repeat": args.repeat,
               "unrolled_max": args.unrolled_max, "rows": rows}
     (out / "results.json").write_text(json.dumps(result, indent=1) + "\n")
     bad = [r["config"] + "/" + r["ir"] for r in rows
            if r["desc"]["rc"] != 0 or r["unrolled"].get("agrees") is False]
+    record(out, rows, bad)
     if bad:
         print("disagreements or failures:", ", ".join(bad), file=sys.stderr)
         return 1
     return 0
 
 
-PIECES = ROOT / "verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest"
+def record(out: Path, rows: list[dict], bad: list[str]) -> None:
+    from verity_bench import kit
+
+    res = kit.writer(out)
+    res.validation("failed" if bad else "passed",
+                   "inference-only-verifier --policy exits 0 on every row and agrees with --unrolled wherever both ran",
+                   ", ".join(bad) or "ok")
+
+    for r in rows:
+        ok = r["desc"]["rc"] == 0 and r["unrolled"].get("agrees") is not False
+        res.measurement(METRIC, r["desc"]["seconds"] if ok else None, "s", mark="measured",
+                        member=f"serve-v1-{r['config']}-{r['ir']}-cpu",
+                        why=None if ok else "the verifier refused or disagreed with --unrolled",
+                        extra={"workload": "Serve_v1", "max_rss_kb": r["desc"].get("max_rss_kb"),
+                               **{k: r[k] for k in ("config", "ir", "description_bytes", "unrolled_gates")}})
+
+
+PIECES = ROOT / "verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-difftest"
 PARTITION_SCHEMA = "verity/verifier-cost-partition/v1"
 POPULATION = (1, 30, 1000, 1_000_000)
 
@@ -227,6 +255,7 @@ def partition(args) -> int:
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.circuits import partition_object as PO
 
+    args.exe = built(args.exe)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -298,11 +327,11 @@ def plot(args) -> int:
 
     path = subprocess.run(["research", "data", "fetch", args.art], check=True, capture_output=True, text=True).stdout.strip()
     res = json.loads(Path(path).read_text())
-    nci = res["schema"] == SCHEMA
+    inference_only = res["schema"] == SCHEMA
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8))
     for ax, x, label in ((axes[0], "description_bytes", "description (bytes)"), (axes[1], "unrolled_gates", "unrolled circuit (gates)")):
         for ir, marker in (("word", "o"), ("boolean", "s")):
-            if not nci:
+            if not inference_only:
                 for shape, query, style in (("serve", "template", "-"), ("population", "template", ":"),
                                             ("serve", "Q_word v1", "--"), ("serve", "Q_call v1", "-.")):
                     rs = sorted((r for r in res["rows"] if r["ir"] == ir and r["shape"] == shape and r["query"] == query
@@ -312,18 +341,18 @@ def plot(args) -> int:
                                 label=f"{query}, {'population program' if shape == 'population' else 'Serve_v1'}, {ir}")
                 continue
             rs = sorted((r for r in res["rows"] if r["ir"] == ir), key=lambda r: r[x])
-            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"NciCheck.Desc, {ir}")
+            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"InferenceOnlyVerifier.Desc, {ir}")
             us = [r for r in rs if "seconds" in r["unrolled"]]
             if us:
                 ax.plot([r[x] for r in us], [r["unrolled"]["seconds"] for r in us], marker=marker, linestyle="--",
-                        label=f"NciCheck.check (unrolled), {ir}")
+                        label=f"InferenceOnlyVerifier.check (unrolled), {ir}")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(label)
         ax.set_ylabel("verifier wall time (s)")
         ax.grid(True, which="both", alpha=0.3)
     axes[1].legend(fontsize=8)
-    fig.suptitle(f"{'NCI check' if nci else 'one-stage partition'} on Serve_v1 ({args.art})", fontsize=10)
+    fig.suptitle(f"{'inference-only check' if inference_only else 'one-stage partition'} on Serve_v1 ({args.art})", fontsize=10)
     fig.tight_layout()
     fig.savefig(args.to, dpi=130)
     print(args.to)

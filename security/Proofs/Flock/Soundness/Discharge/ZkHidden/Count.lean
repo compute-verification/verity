@@ -35,13 +35,13 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {K : Type} [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ} {D Sl : Type} [Inhabited D] [Inhabited Sl]
   (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {I : Inputs}
-  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
 
 /-- **The compiled `--zk` count curve at the hidden-output tables**: `zk_flock_countC_execOS_cr` at
 `planAtZKH dj y₀` (each sample's table `tableAtZKH dj y₀ S`, every unit in it). -/
 theorem zk_flock_countC_execOS_crH (hA : A.Correct)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     (place : ∀ S R u, u ∈ S →
@@ -51,22 +51,22 @@ theorem zk_flock_countC_execOS_crH (hA : A.Correct)
       (decodeOfPlace A P (planAtZKH dj y₀) (tabAtZKH dj y₀) place) Hc)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs (planAtZKH dj y₀))))
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ A Hs
-      (planAtZKH dj y₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
+      (planAtZKH dj y₀ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
       j (zcStrat A Hs (planAtZKH dj y₀) (cont σ ω)) qF qS)
     {execAccept : Bool × Finset (Fin n) → Prop}
-    (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (tr : StrictCR.TreeRewind Hs.H (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs (planAtZKH dj y₀))) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (XplurZC A Hs P (planAtZKH dj y₀) (tabAtZKH dj y₀) vb (reg σ) (cont σ) k Rw)).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+        K ≤ (P.incorrect (XplurZC A Hs P (planAtZKH dj y₀) (tabAtZKH dj y₀) vb (reg σ) (cont σ) k Rw)).card)
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
           (batchedSessionZC A Hs (planAtZKH dj y₀))) σ ≤
-      (Law.stratified σs ks hks).miss K +
-        ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+      (SamplingDesign.stratified σs ks hks).miss K +
+        ksAvgStrictZ (planAtZKH dj y₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg σ) +
         linkBoundZC A Hs P (planAtZKH dj y₀) (tabAtZKH dj y₀) vb k Rw M ρ t' (reg σ) (cont σ) +
         ENNReal.ofReal (tr.bound qT) :=

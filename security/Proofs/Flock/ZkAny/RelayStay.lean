@@ -26,7 +26,7 @@ session's end leaves the rep's salts.
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (SessionSpec Stmt F128)
-open _root_.Flock.Firewall.Frames (Sessions Rep Release)
+open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
 
 local instance lawfulBEqByteArrayStay : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
@@ -91,7 +91,7 @@ theorem map_find?_self {α : Type} {xs : Array α} {p : α → Bool} {f : α →
 
 theorem sessions_file {R R' : Sessions} {root : ByteArray} {r : Nat} {b : ByteArray} (h : R.file root r b = .ok R') :
     R'.sessions = R.sessions ∧ R'.salts = R.salts := by
-  unfold _root_.Flock.Firewall.Frames.Sessions.file at h
+  unfold _root_.Flock.ZkServer.Frames.Sessions.file at h
   split at h
   · cases h
   · cases h
@@ -99,7 +99,7 @@ theorem sessions_file {R R' : Sessions} {root : ByteArray} {r : Nat} {b : ByteAr
 
 theorem sessions_innerRound {R R' : Sessions} {root : ByteArray} {r j : Nat} {b : ByteArray}
     (h : R.innerRound root r j b = .ok R') : R'.sessions = R.sessions ∧ R'.salts = R.salts := by
-  unfold _root_.Flock.Firewall.Frames.Sessions.innerRound at h
+  unfold _root_.Flock.ZkServer.Frames.Sessions.innerRound at h
   simp only at h
   split at h
   · cases h

@@ -2,7 +2,7 @@
 //! event a line, in order. The challenger's operator writes the staging (V*'s shared rows and shared set) before any
 //! session and the close after the last; between them each `flock-circuit serve --rec-run FILE --rec-part J` appends an
 //! `open` for every `Hello` it answers with coins, before that answer (which carries the session's fresh coin key) leaves.
-//! `flock-verify rec-compose --rec-run` reads the events in this order (`Flock.RecCompose.checkRun`): a part opened twice
+//! `verity-verify-proof rec-compose --rec-run` reads the events in this order (`Flock.RecCompose.checkRun`): a part opened twice
 //! is a retry, and is refused.
 
 use std::io::Write;

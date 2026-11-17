@@ -34,10 +34,11 @@ import json
 import os
 import sqlite3
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
@@ -58,12 +59,14 @@ HOURS = 4                                                   # Jobs are deleted 6
 
 
 def iso(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def prom(q: str) -> list[dict]:
+    if (scheme := urllib.parse.urlsplit(PROMETHEUS).scheme) not in ("http", "https"):
+        raise ValueError(f"VY_PROMETHEUS is not an http or https URL (scheme {scheme!r})")
     url = f"{PROMETHEUS}/api/v1/query?" + urllib.parse.urlencode({"query": q})
-    with urllib.request.urlopen(url, timeout=20) as r:
+    with urllib.request.urlopen(url, timeout=20) as r:  # noqa: S310 (http or https, checked above)
         return json.load(r)["data"]["result"]
 
 
@@ -112,7 +115,8 @@ def attempts_by_job(since: str) -> dict[str, list[tuple]]:
         with sqlite3.connect(f"file:{STORE_DB}?mode=ro", uri=True) as c:
             rows = c.execute("select a.host, a.state, a.rc, a.validation, (select count(*) from attempt_outputs o where o.attempt = a.id)"
                              " from attempts a where a.start_utc >= ?", (since,)).fetchall()
-    except sqlite3.Error:
+    except sqlite3.Error as e:
+        print(f"pool_n1: node 1's store unread, so no attempt is known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     out: dict[str, list[tuple]] = {}
     for host, *rest in rows:
@@ -129,7 +133,7 @@ def _delivered(a: tuple) -> bool:
 def _at(w: dict, kind: str) -> float | None:
     for c in (w.get("status") or {}).get("conditions") or []:
         if c.get("type") == kind and c.get("status") == "True" and c.get("lastTransitionTime"):
-            return datetime.strptime(c["lastTransitionTime"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+            return datetime.strptime(c["lastTransitionTime"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp()
     return None
 
 
@@ -158,11 +162,14 @@ def delivery(obs: dict) -> list[dict]:
 
 def lease_pool() -> dict[int, dict]:
     """n1_lease.py's GPUs in the lease pool (index -> its record), when its state is fresh; else none."""
+    if not LEASE_STATE.exists():
+        return {}
     try:
         s = json.loads(LEASE_STATE.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"pool_n1: {LEASE_STATE} unread, so the lease pool reads as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
-    if time.time() - datetime.strptime(s["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() > 120:
+    if time.time() - datetime.strptime(s["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp() > 120:
         return {}
     return {g["index"]: g for g in s.get("gpus") or [] if g.get("holder")}
 
@@ -210,7 +217,7 @@ def build(obs: dict, drift: dict | None = None) -> dict:
             lease = pooled.get("lease")
             holder, cls = (f"lease:{lease.get('who')}", "verity") if lease else ("pool:free", "free")
             since = (lease or {}).get("since")
-            held_s = t - datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if since else 0
+            held_s = t - datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp() if since else 0
             if lease and held_s >= IDLE_S and util5 < IDLE_UTIL:
                 name = lease.get("pod") or lease.get("run") or "-"
                 meta = (jobs.get((pods.get(name) or {}).get("metadata", {}).get("labels", {}).get("job-name", "")) or {}).get("metadata", {})
@@ -222,7 +229,7 @@ def build(obs: dict, drift: dict | None = None) -> dict:
             holder = f"kueue:{job or pod_name}"
             cls = CLASS_OF_QUEUE.get(wl["spec"].get("queueName", ""), "verity")
             since = (pod or {}).get("status", {}).get("startTime")
-            held_s = t - datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if since else 0
+            held_s = t - datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp() if since else 0
             if held_s >= IDLE_S and util5 < IDLE_UTIL:
                 meta = (jobs.get(job or "") or pod or {}).get("metadata", {})
                 name = job or pod_name

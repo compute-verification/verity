@@ -3,12 +3,11 @@ module
 public import Proofs.Flock.Bridge.PortRoots
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Bridge.Targets
-public import Proofs.Flock.Bridge.FilePartTarget
-public import Proofs.Flock.Bridge.FilePart
+public import Properties.Verity.GateARow
+public import Proofs.Flock.Bridge.FilePart.Owned
+public import Proofs.Flock.Bridge.FilePart.Inst
 public import Proofs.Flock.Bridge.Lowers
 public import Proofs.Flock.Bridge.Slots
-public import Proofs.Flock.Bridge.SlotsKey
-public import Proofs.Flock.Bridge.Scope
 public import Proofs.Flock.Bridge.Count
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Bridge.UnitRows
@@ -26,13 +25,12 @@ public import Proofs.Flock.Bridge.BitsRows
 public import Proofs.Flock.Bridge.BitsLower
 public import Proofs.Flock.Bridge.BitsKeys
 public import Proofs.Flock.Bridge.BitsKeyProg
+public import Proofs.Flock.Bridge.BitsCopyGate
 public import Proofs.Flock.Bridge.Members
 public import Proofs.Flock.Bridge.BitsRowMap
 public import Proofs.Flock.Bridge.V5
 public import Proofs.Flock.Bridge.LeafSeg
 public import Proofs.Flock.Bridge.Public
-public import Proofs.Flock.Bridge.QsRows
-public import Proofs.Flock.Bridge.PublicRows
 public import Proofs.Flock.Bridge.QsRows.FirstReads
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
@@ -61,6 +59,8 @@ Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`, `Flock.Bridg
 Bits' row map is the bridge's: at an input gate (`Flock.Bridge.rowBit_keyRowOf`, `Flock.Bridge.rowBit_wire`) and at a
 returned output's bit (`Flock.Bridge.outRowBit_outBitRow`, `Flock.Bridge.outRowBit_outRowOf`). `UnitRows`: each copy
 of a unit of the parsed file holds the unit net's rows at the unit's local evaluation (`Flock.Bridge.rows_localEval`).
+`BitsCopyGate`: a copy's gate at a column is the gate Bits gives there, at an input port's bit
+(`Flock.Bridge.copyGate_inGate`) and at a returned output's (`Flock.Bridge.copyGate_outGate`).
 -/
 
 @[expose] public section

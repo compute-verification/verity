@@ -35,10 +35,10 @@ from collections.abc import Callable
 from typing import Any
 
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
-from verity.definitions.registry import act
-from verity.definitions.registry import moe as M
 
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
+from verity_vllm.definitions.registry import act
+from verity_vllm.definitions.registry import moe as M
 
 PLANES = ("logits", "router_w", "router_ids", "up", "act", "down")
 #: the compute capabilities whose fused_moe_kernel lowering `expert_definition` models

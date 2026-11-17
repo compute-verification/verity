@@ -4,8 +4,8 @@ xor butterfly where v1 states all 160, but a lowering reads only the live gates 
 held the other 129: the two graphs give the same warp units (a warp's 8-column square chains, lane 0's adds, whose sum is a cut
 word, and the epilogue of its 256 columns, which reads the row scalar ``inv``), the same cut words and the same tail (the CTA
 combine ``(w0 + w2) + (w1 + w3)``, the chunks summed from +0, ``fma(rcp(N), sum, eps)``, ``MufuSqrtFtz`` and ``div.full``). The
-unit netlist is ``rmsnorm-triton``'s, under its name and its :data:`PINS`; what binds the statement to v5 is the Program it
-names (``verity_flock.circuit.program_digests``).
+unit's circuit description is ``rmsnorm-triton``'s, under its name and its :data:`PINS`; what binds the statement to v5 is the
+Program it names (``verity_flock.circuit.program_digests``).
 
 v5 states the kernel's 1024-column chunks at every N, so its warps are identical units only when every lane of every chunk holds
 columns (:func:`width`: N a multiple of 1024; Llama's N = 2048 and 4096 are 8 and 16 units). These templates are proved under
@@ -42,10 +42,10 @@ def circuit_lowering(subcircuit):
 def supports(subcircuit, scheme):
     n = int(subcircuit.params["N"])
     if width(n) is None:
-        return f"C-Flock lowers {FAMILY} when its warps are identical units (N a multiple of 1024), not N = {n}"
+        return f"Flock lowers {FAMILY} when its warps are identical units (N a multiple of 1024), not N = {n}"
     if scheme in SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: unit {UNIT}, the row tail in the "
+    return (f"Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: unit {UNIT}, the row tail in the "
             f"statement), not under {scheme}")
 
 

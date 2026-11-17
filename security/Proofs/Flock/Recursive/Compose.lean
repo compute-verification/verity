@@ -89,7 +89,7 @@ theorem Inner.accepts_of_rel_eq (I : Inner) (y : I.Stmt) (ms ms' : List I.Msg) (
     I.accepts y (ms'.zip ρs) :=
   zip_congr ms ms' ρs (fun k hk => rel_eq_iff.1 (h k hk)) ▸ hy
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
 
 /-- **Commit-and-prove composition, up to what the inner verifier reads.** `Acc R ω t b`: the outer session accepts with

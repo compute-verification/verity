@@ -1,5 +1,5 @@
 """What the service runs against: the routing code, the registry, the queue, Slack, a best-effort cache and a clock.
-`production()` builds them from the environment; the tests build fakes.  Logs carry ids, decisions and errors, never Slack
+`deployed()` builds them from the environment; the tests build fakes.  Logs carry ids, decisions and errors, never Slack
 text.
 
 Slack is the record: what was routed is the routing lines and doorbells the consumer posted, which it and the crons read
@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import time
+import urllib.request
 from dataclasses import dataclass, field
 from functools import lru_cache
 from types import ModuleType
@@ -24,14 +25,20 @@ LAST_SUCCESS = "last-success-at"                                 # when a delive
 LAST_DONE = "last-done-at"                                       # when the consumer last finished a message (no cron writes it)
 LAST_ENQUEUED = "last-enqueued-at"                               # when the app last published an event
 STALL_RUNG = "stall-rung-at"                                     # when the watchdog last rang STALL_TO for a stalled consumer
+SLACK_HEARD = "slack-heard-at"                                   # when Slack last sent the events route a signed request
+SILENCE_RUNG = "silence-rung-at"                                 # when reconciliation last rang STALL_TO for Slack's silence
 CANARY_SENT = "canary-sent-at"                                   # when the watchdog last published its synthetic event
 CANARY_DONE = "canary-done-at"                                   # when the consumer last finished one
 DEAD = "dead-letters"                                            # {"count", "since"}: dead letters since the record began
 OLDEST = "oldest-unrouted"                                       # {"ts", "at"}: reconcile's oldest unrouted post, or ts None
+COMMENTS_RUNG = "linear-comments-rung"
+LINEAR_API = "https://api.linear.app/graphql"
+
+Linear = Callable[[str, dict], dict]                             # a GraphQL query and its variables to the answer's `data`
 
 
 class Cache(Protocol):
-    """Vercel's Runtime Cache in production: regional and ephemeral, so a value may be missing at any time."""
+    """Vercel's Runtime Cache, as deployed: regional and ephemeral, so a value may be missing at any time."""
 
     def get(self, key: str) -> Any: ...
     def set(self, key: str, value: Any, options: dict | None = None) -> None: ...
@@ -51,6 +58,7 @@ class Deps:
     clock: Callable[[], float]
     env: Mapping[str, str] = field(default_factory=dict)
     out: Any = None                                               # where log lines go (stdout)
+    linear: Linear | None = None                                  # reads Linear (LINEAR_API_KEY); None reads nothing
 
     def log(self, event: str, **fields: Any) -> None:
         """One JSON line: ids, decisions and errors only.  Never pass Slack text here."""
@@ -106,13 +114,28 @@ def runtime_cache() -> Cache:
     return RuntimeCache(namespace=CACHE_NS)
 
 
+def linear_reader(key: str) -> Linear:
+    """Linear's GraphQL API with a personal API key (read access is all the service needs)."""
+    def gql(query: str, variables: dict) -> dict:
+        req = urllib.request.Request(LINEAR_API, data=json.dumps({"query": query, "variables": variables}).encode(),
+                                     method="POST", headers={"Authorization": key, "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            body = json.load(r)
+        if body.get("errors"):
+            raise RuntimeError("Linear: " + "; ".join(x.get("message", "?") for x in body["errors"]))
+        return body["data"]
+    return gql
+
+
 @lru_cache(maxsize=1)
-def production() -> Deps:
+def deployed() -> Deps:
     """The deployment's: SLACK_BOT_TOKEN posts directly (never through the broker), the registry bundled at build, Vercel
-    Queues and Runtime Cache; routes.d and people.d from the published notes (RESEARCH_ROUTES_URL, RESEARCH_NOTES_TOKEN)."""
+    Queues and Runtime Cache; routes.d and people.d from the published notes (RESEARCH_ROUTES_URL, RESEARCH_NOTES_TOKEN);
+    Linear read with LINEAR_API_KEY when it is set."""
     rs, env = vendor.slack(), os.environ
     if not env.get("SLACK_BOT_TOKEN"):
         raise RuntimeError("SLACK_BOT_TOKEN is not set: the service posts and reads with Verity's bot, never the broker")
     rs.OIDC_TOKEN = vercel_oidc
     return Deps(rs=rs, registry=vendor.registry(), cache=runtime_cache(), queue=VercelQueue(),
-                slack=rs.Slack(env["SLACK_BOT_TOKEN"], direct=True), clock=time.time, env=env)
+                slack=rs.Slack(env["SLACK_BOT_TOKEN"], direct=True), clock=time.time, env=env,
+                linear=linear_reader(env["LINEAR_API_KEY"]) if env.get("LINEAR_API_KEY") else None)

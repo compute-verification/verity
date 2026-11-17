@@ -281,7 +281,7 @@ theorem out_words {bits : List Lin} (h : Out u bits) (n : Nat) : ∀ x ∈ words
   obtain ⟨i, -, rfl⟩ := List.mem_map.1 hx
   exact out_take _ (out_drop _ h)
 
-theorem av_shaBlock {st blk : List Lin} (hs : Out u st) (hb : Out u blk) : Av u (shaBlock st blk) (Out u) :=
+theorem av_shaChunk {st blk : List Lin} (hs : Out u st) (hb : Out u blk) : Av u (shaChunk st blk) (Out u) :=
   Av.bind' (av_compress (out_words hs 8) (out_words hb 16)) fun _ hws => Av.pure' fun f hf =>
     let ⟨l, hl, hfl⟩ := List.mem_flatten.1 hf
     hws l hl f hfl
@@ -289,7 +289,7 @@ theorem av_shaBlock {st blk : List Lin} (hs : Out u st) (hb : Out u blk) : Av u 
 theorem av_shaBlocks {msg : List Lin} (hm : Out u msg) :
     ∀ (n k : Nat) (st : List Lin), Out u st → Av u (shaBlocks msg n k st) (Out u)
   | 0, _, _, h => Av.pure' h
-  | n + 1, k, _, h => Av.bind' (av_shaBlock h fun f hf => by
+  | n + 1, k, _, h => Av.bind' (av_shaChunk h fun f hf => by
         obtain ⟨p, -, rfl⟩ := List.mem_map.1 hf
         exact out_getD hm _) fun st' h' => av_shaBlocks hm n (k + 1) st' h'
 

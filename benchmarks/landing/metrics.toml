@@ -5,9 +5,10 @@
 # labels, which no CPU node reaches (benchmarks/landing/README.md)
 [[metric]]
 id = "ci/plain-mark-to-main-p90"
-title = "PRs with no Lean change: the 90th percentile of hours from the ready mark to `main`, over the last 7 days"
+title = "Time to merge"
 owner = "ci"
 unit = "hours"
+axis = "Hours from validated to merged, 90th percentile over the last 7 days, for branches with no Lean change."
 better = "lower"
 command = "research run --project verity --cwd source -- bash benchmarks/landing/run.sh"
 every = "12h"
@@ -15,9 +16,10 @@ goal = "ci/landing-two-hours"
 
 [[metric]]
 id = "ci/lean-mark-to-main-p90"
-title = "PRs changing Lean: the 90th percentile of hours from the ready mark to `main`, over the last 7 days"
+title = "Time to merge, Lean changes"
 owner = "ci"
 unit = "hours"
+axis = "Hours from validated to merged, 90th percentile over the last 7 days, for branches that change Lean."
 better = "lower"
 command = "research run --project verity --cwd source -- bash benchmarks/landing/run.sh"
 every = "12h"

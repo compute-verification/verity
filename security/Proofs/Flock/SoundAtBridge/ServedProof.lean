@@ -42,7 +42,7 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 `RowsSession.ownReadsHJ_of_served`: at an accepted outcome, a sampled proof block whose registrant's reads are the rows of its
 served roots (`ServedRegistered`) has every one of them owned (`OwnReadsHJ`), as C3's `FlockC3.Compose.ownReads_cover`
 has it for the honest registrant: the record's sample is the sampling design's sample file (`RecordCustodyZKJ`), the unit's table has a
-sampled statement (`drawn_of_acceptsZKR`) whose sample proves the unit (`drawOkZKHJ_of_file`), and acceptance gives each
+sampled statement (`sampled_of_acceptsZKR`) whose sample proves the unit (`sampleOkZKHJ_of_file`), and acceptance gives each
 `own` port's position at the unit's label (`reads_of_acceptsZKR`). With it, `RowsAt` is the rows link at those reads
 (`RowsSession.xv_eq_of_rowsAt`).
 -/
@@ -75,9 +75,9 @@ theorem ownReadsHJ_of_served {S : Finset (Fin s.n)} {R : s.Reg}
     (s.hCust.1 S R o (acceptsZK_of_R (t := s.wr S R o) hacc)).1
   have hN := names_of_acceptsZKR s.I s.ht s.hc s.hTags (tr := s.wr S R o) hacc hd
   obtain ⟨D, dp, idx, hD, hdp, hidx⟩ :=
-    drawn_of_acceptsZKR s.I s.ht s.hc s.hpub s.hTags (tr := s.wr S R o) hacc hd u.val
+    sampled_of_acceptsZKR s.I s.ht s.hc s.hpub s.hTags (tr := s.wr S R o) hacc hd u.val
   have hmD : u.val ∈ D.proved :=
-    ((FlockSoundness.Discharge.ZkReg.drawOkZKHJ_of_file s.I s.ht s.hc s.kd s.n s.hdiv s.dj s.hCust.2 S)
+    ((FlockSoundness.Discharge.ZkReg.sampleOkZKHJ_of_file s.I s.ht s.hc s.kd s.n s.hdiv s.dj s.hCust.2 S)
       (partOf s.I (s.dj S) u.val)).1 D hD u (mem_partS hu)
   obtain ⟨pos, hpos⟩ :=
     reads_of_acceptsZKR s.I s.ht s.hc s.hpub s.hTags (tr := s.wr S R o) hacc hmem hd hD hdp hidx hmD

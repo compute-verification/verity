@@ -86,7 +86,7 @@ theorem extract_top (ws : Array ℕ) : (fitRow 32 ws ++ Array.replicate 32 0).ex
 
 /-- **A fitted node is read back as its top row**: `topRows` of its 32 words, then 32 zero words. -/
 theorem topRows_fit (ws : Array ℕ) :
-    Firewall.topRows (wordsBytes (fitRow 32 ws)) = [fitRow 32 ws ++ Array.replicate 32 0] :=
+    ZkServer.topRows (wordsBytes (fitRow 32 ws)) = [fitRow 32 ws ++ Array.replicate 32 0] :=
   topRows_wordsBytes _ (fitRow_size 32 ws) (fitRow_lt 32 ws)
 
 theorem flatMap_single {α β : Type} (l : List α) (f : α → β) : l.flatMap (fun a => [f a]) = l.map f := by

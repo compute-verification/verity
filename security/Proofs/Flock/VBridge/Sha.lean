@@ -56,7 +56,7 @@ def blockAt (msg : List Lin) (off : ℕ) : List Lin := (List.range 1024).map fun
 
 /-- One compression of the chaining value `st` (512 forms, word order) and the block `blk` (1024), its words
 concatenated. -/
-def shaBlock (st blk : List Lin) : M (List Lin) := do
+def shaChunk (st blk : List Lin) : M (List Lin) := do
   let out ← compress (words st 8) (words blk 16)
   pure out.flatten
 
@@ -64,7 +64,7 @@ def shaBlock (st blk : List Lin) : M (List Lin) := do
 def shaBlocks (msg : List Lin) : ℕ → ℕ → List Lin → M (List Lin)
   | 0, _, st => pure st
   | n + 1, k, st => do
-    let st ← shaBlock st (blockAt msg (1024 * k))
+    let st ← shaChunk st (blockAt msg (1024 * k))
     shaBlocks msg n (k + 1) st
 
 /-- `rec_open._sha`: SHA-512 of a message whose first `pre` bytes left the chaining value `cv` and whose rest has the bits
@@ -190,7 +190,7 @@ theorem bit_constCv (z : Var → Bool) {cv : List (BitVec 64)} (hcv : cv.length 
 
 /-! ## What the rows force -/
 
-theorem sound_shaBlock (st blk : List Lin) : Sound (shaBlock st blk) fun z out =>
+theorem sound_shaChunk (st blk : List Lin) : Sound (shaChunk st blk) fun z out =>
     st.length = 512 → blk.length = 1024 → out.length = 512 ∧ ∀ q < 512,
       bit z out q = wbit (compressV ((words st 8).map (bv z)) ((words blk 16).map (bv z))) q :=
   sound_compressFlat st blk
@@ -204,7 +204,7 @@ theorem sound_shaBlocks (msg : List Lin) : ∀ (n k : ℕ) (st : List Lin), Soun
   | 0, _, _ => Sound.pure' fun _ _ _ hl hst _ => ⟨hl, hst⟩
   | n + 1, k, st => by
       unfold shaBlocks
-      refine Sound.bind' (sound_shaBlock st (blockAt msg (1024 * k))) fun st' =>
+      refine Sound.bind' (sound_shaChunk st (blockAt msg (1024 * k))) fun st' =>
         Sound.mono (sound_shaBlocks msg n (k + 1) st') fun z out hih hstep P b hl hst hblk => ?_
       obtain ⟨hl', hst'⟩ := hstep hl (length_blockAt _ _)
       have hst64 : st.length = 64 * 8 := by omega

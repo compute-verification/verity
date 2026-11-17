@@ -1,5 +1,5 @@
 """Pearl-C4's reference replay of a device run's own transcript under the work sampling design (`clear_work.audit`), with
-Pearl-C4's domain and inert work (`schemes.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
+Pearl-C4's domain and inert work (`verity.protocols.experimental.pearl_c4.prover.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
 ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck), never the protocol's
 verdict.
 
@@ -17,14 +17,14 @@ many fall outside D-SB's byte range (`device_scales`).
 * the transcript commitment over the device's leaves (`audit.transcript_domain`);
 * the records: one unit, no channel split, its real rows, and as excluded the rows that fail `row_passes` (D-NF) and the
   rows that pass it but not R1 (`PearlC4.r1_row`, row by row over the workers), as `clear_work.declare` has them;
-* the samples' beacon, Fiat-Shamir over the commitment (`draw_beacon`), and the openings of the tiles the work sampling design opens
+* the samples' beacon, Fiat-Shamir over the commitment (`sample_beacon`), and the openings of the tiles the work sampling design opens
   there: t samples by the records' credit and one tile per excluded row.
 
 **`verify`** recomputes everything from the transcript and the scheme: the salt, the records against the workload, the
 samples, and on every opened tile (`clear_work.check_drawn`) A's and B's openings against the device's roots, the leaf's
 against the commitment, the tile's C̃ and U through the scalar reference to the device's leaf, zero filler rows, credited
 rows passing the per-row rules and R1 and excluded rows failing one of them, and the replayed inert work
-(`pearl_c4.tile_debit`: F1′'s base split under the exact noise distribution given the sampled E lines and the realised
+(`pearl_c4.tile_inert_work`: F1′'s base split under the exact noise distribution given the sampled E lines and the realised
 scale bytes, F2's int8 route on flat scales, identity atoms, dead × dead pairs, salt-dead or inert A forming, sub-grid
 blocks, D-24's pair-sparse row windows) under the inert-work bound, ρ = 1/400 of the credited cells' creditOf.  Its report
 carries every tile's inert work and the accept line (`accept_line`).
@@ -53,14 +53,14 @@ from pathlib import Path
 from verity_config.settings import of
 
 from verity.commitments import Commitment, MerkleTree, Opening
-from verity.protocols.accounting.pouw.prover.schemes import get
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
-from verity.protocols.accounting.pouw.verifier import audit as au
-from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, tagged
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as W
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit as au
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, tagged
 
-# the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/prover/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
+# the work sampling design and the clear audit are a reference tool's (verity/protocols/resource_accounting/compute/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
 import clear_audit as CA
 import clear_work as CW
 
@@ -68,16 +68,16 @@ settings = of(__file__)
 
 FORMAT = "verity/pouw/pearl-c4-transcript/v0"
 REPORT = "verity/pouw/pearl-c4-replay/v0"
-DRAW_BEACON_TAG = "verity/pouw/pearl-c4-replay/draw-beacon/v0"
+SAMPLE_BEACON_TAG = "verity/pouw/pearl-c4-replay/draw-beacon/v0"
 COMMITTED_ROUND = 0
 SHORTCUTS = (
-    ("the draws' beacon is Fiat-Shamir over the transcript root and the records root (draw_beacon), not a public beacon "
-     "round after the commitment"),
+    ("the samples' beacon is Fiat-Shamir over the transcript root and the records root (sample_beacon), not a public "
+     "beacon round after the commitment"),
     "the epoch beacon is a label of the benchmark's operand set, not a public beacon round after the weights",
     ("the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
      "timing"),
-    ("verify opens the drawn tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
-     "(development shortcut; the protocol's check is a ZK proof, PouwCheck)"),
+    ("verify opens the sampled tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
+     "(development shortcut; the protocol's check is a ZK proof, PouwVerifier)"),
 )
 
 
@@ -128,8 +128,8 @@ def device_scales(fmt: F.Fmt, data: bytes) -> dict:
     return out
 
 
-def draw_beacon(transcript_root: bytes, records_digest: bytes) -> CW.RecordedDraw:
-    return CW.RecordedDraw(COMMITTED_ROUND + 1, tagged(DRAW_BEACON_TAG, transcript_root, records_digest))
+def sample_beacon(transcript_root: bytes, records_digest: bytes) -> CW.RecordedDraw:
+    return CW.RecordedDraw(COMMITTED_ROUND + 1, tagged(SAMPLE_BEACON_TAG, transcript_root, records_digest))
 
 
 def _pool(workers: int, chunksize: int = 1) -> tuple[Callable, Callable[[], None]]:
@@ -200,7 +200,7 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
                           tuple(j for j in range(n) if not passes[real + j] or ("B", j) in over))
     splits = {unit.weight: W.Split(k)}
     digest = W.records_root(epoch.salt, epoch.weights_root, splits, [record])
-    beacon = draw_beacon(tree.commitment.root, digest)
+    beacon = sample_beacon(tree.commitment.root, digest)
     picks = (CW.draw(s, [record], CW.replay_key(beacon, tree.commitment.root, digest, epoch.salt), t)
              + CW.exclusion_tiles(s, [record]))
     ids = {(r.matmul, r.tile.rows[0], r.tile.cols[0]): r.id for r in refs}
@@ -242,9 +242,9 @@ class _Openings:
 
 def _check_with_inert_work(f: Callable, pick) -> tuple[CA.Verdict, dict | None]:
     scheme = f.args[0]
-    scheme.last_debit = None
+    scheme.last_inert_work = None
     v = f(pick)
-    return v, None if scheme.last_debit is None else scheme.last_debit.to_json()
+    return v, None if scheme.last_inert_work is None else scheme.last_inert_work.to_json()
 
 
 def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
@@ -263,9 +263,9 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
     beacon = CW.RecordedDraw(t["draw"]["round"], bytes.fromhex(t["draw"]["value"]))
     report = {"format": REPORT, "scheme": s.name, "run": t["run"], "shape": t["shape"], "t": t["t"],
               "shortcuts": list(SHORTCUTS), "salt": epoch.salt.hex()}
-    fs = draw_beacon(commitment.root, W.records_root(epoch.salt, epoch.weights_root, splits, records))
+    fs = sample_beacon(commitment.root, W.records_root(epoch.salt, epoch.weights_root, splits, records))
     if beacon != fs:
-        return report | {"accepted": False, "reason": "the draws' beacon is not the Fiat-Shamir of the commitment"}
+        return report | {"accepted": False, "reason": "the samples' beacon is not the Fiat-Shamir of the commitment"}
     inert: list = []
     fmap, done = _pool(workers)
 
@@ -289,7 +289,7 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
         if v.tile >= 0:
             ref = refs[v.tile]
             rows, cols = records[0].credited(ref.tile)
-            bound = F.CAP * cell * len(rows) * len(cols)
+            bound = F.INERT_SHARE * cell * len(rows) * len(cols)
             row |= {"rows": [ref.tile.rows[0], ref.tile.rows[-1]], "cols": [ref.tile.cols[0], ref.tile.cols[-1]],
                     "credited": [len(rows), len(cols)], "cap": str(bound)}
             if d is not None:

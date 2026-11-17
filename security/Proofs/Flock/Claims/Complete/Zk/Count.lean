@@ -66,6 +66,8 @@ namespace FlockComplete
 
 open With
 
+variable {wideLeaf : Bool}
+
 /-- **The masked zerocheck** sends at most `3 + (m − 6)` rounds. -/
 theorem zerocheckPZk_sends (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
     (h : Array F128) (tr : Trace) :
@@ -215,7 +217,7 @@ theorem afterLinkPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteAr
 
 /-- One table's `--zk` schedules: its `--zk` schedule. -/
 theorem schedsPZk_one {st : Stmt} {schs : Array (Schedule × ℕ)}
-    (hs : (schedsPZk #[Setup.ofCircuit st] : V _) = .ok schs) : ∃ v, Zk.schedule st.m = .ok v ∧ schs = #[v] := by
+    (hs : (schedsPZk #[Setup.ofCircuit st] : V _) = .ok schs) : ∃ v, Zk.schedule st.wideLeaf st.m = .ok v ∧ schs = #[v] := by
   unfold schedsPZk at hs
   obtain ⟨h1, h2⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hs
   have h0 := h2 0 (by simp) (by rw [h1]; simp)
@@ -238,17 +240,24 @@ theorem fast100_k0 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : 1 ≤
   · rw [FlockSoundness.Refine.exec_fast100_none m (by omega)] at h
     cases h
 
-/-- The `--zk` schedule keeps fast100's lane rounds and levels: at least one, and at least two. -/
-theorem zkSchedule_shape {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) :
+/-- A `--zk` schedule has at least one lane round and at least two levels: the kernel's evaluation at either statement
+version, `m < 40` (`queries0` refuses the rest). -/
+theorem zkSchedule_shape {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     1 ≤ v.1.k0 ∧ 2 ≤ v.1.levels.size := by
-  unfold Zk.schedule at h
-  obtain ⟨q0, -, h⟩ := except_ok_bind h
-  cases hf : fast100 m with
-  | none => rw [hf] at h; cases h
-  | some sch =>
-    rw [hf] at h
-    cases h
-    exact ⟨(fast100_k0 hf : 1 ≤ sch.k0), by simpa using fast100_levels hf⟩
+  by_cases hm : m < 40
+  · have key : ∀ (w : Bool) (m : Fin 40), (match Zk.schedule w m.val with
+        | .ok v => decide (1 ≤ v.1.k0 ∧ 2 ≤ v.1.levels.size)
+        | .error _ => true) = true := by
+      decide +kernel
+    have := key wideLeaf ⟨m, hm⟩
+    simp only [h, decide_eq_true_eq] at this
+    exact this
+  · exfalso
+    unfold Zk.schedule at h
+    obtain ⟨q0, hq0, -⟩ := except_ok_bind h
+    unfold Zk.queries0 at hq0
+    simp [show ¬m ≤ 24 by omega, show m ≠ 25 by omega, show m ≠ 26 by omega, show m ≠ 27 by omega,
+      show ¬m ≤ 31 by omega, show ¬m ≤ 35 by omega] at hq0
 
 /-- **The masked sends fit the masked verifier's rounds**: the goal `SendCountZk`. -/
 theorem sendCountZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :

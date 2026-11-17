@@ -42,13 +42,13 @@ theorem toExtractor_covers (hJ : J.Judged) (hS : J.Sound Correct) : J.toExtracto
     exact hX ((hS S R u w hu hR).2 X fun c hc' => by_contra fun hne => hc ⟨c, hc', hne⟩)
 
 open Classical in
-theorem mem_readsOut {L : Law n} {R : Reg} {c : B.Pos} {e : L.Ω × (Bool × (Fin n → Option J.Wit))} {v : B.Val} :
+theorem mem_readsOut {L : SamplingDesign n} {R : Reg} {c : B.Pos} {e : L.Ω × (Bool × (Fin n → Option J.Wit))} {v : B.Val} :
     v ∈ J.readsOut L R c e ↔ e.2.1 = true ∧ ∃ u ∈ L.draw e.1, c ∈ J.reads u ∧
       ∃ w, e.2.2 u = some w ∧ J.Rel (L.draw e.1) R u w ∧ B.val (J.opens (L.draw e.1) R u w c) = v := by
   unfold readsOut
   exact Finset.mem_filter.trans (and_iff_right (Finset.mem_univ v))
 
-theorem toTrials_opens (hS : J.Sound Correct) (L : Law n) : (J.toTrials L).Opens := by
+theorem toTrials_opens (hS : J.Sound Correct) (L : SamplingDesign n) : (J.toTrials L).Opens := by
   intro R τ c e v hv
   obtain ⟨-, u, hu, hc, w, hw, hR, hval⟩ := (J.mem_readsOut (L := L)).1 hv
   obtain ⟨u', hu', hc', w', -, hR', hop, hval'⟩ := Classical.epsilon_spec
@@ -60,7 +60,7 @@ theorem toTrials_opens (hS : J.Sound Correct) (L : Law n) : (J.toTrials L).Opens
   rw [hop']
   exact (hS _ R u' w' hu' hR').1 c hc'
 
-theorem toTrials_wellFormed (hc : ∀ S R o, 0 ≤ J.cost S R o) (L : Law n) : (J.toTrials L).WellFormed :=
+theorem toTrials_wellFormed (hc : ∀ S R o, 0 ≤ J.cost S R o) (L : SamplingDesign n) : (J.toTrials L).WellFormed :=
   ⟨fun R _ e => hc _ R e.2, fun _ => div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _),
     show (0 : ℝ) < 1 from one_pos, show (0 : ℝ) ≤ 0 from le_rfl⟩
 
@@ -68,7 +68,7 @@ end JointExtractor
 
 namespace Trials
 
-variable {L : Law n} (Tr : Trials L PS B)
+variable {L : SamplingDesign n} (Tr : Trials L PS B)
 
 theorem plurality_plur : Tr.Plurality Tr.plur := by
   intro R τ c h v

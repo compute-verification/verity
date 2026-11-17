@@ -90,7 +90,7 @@ __all__ = ["PAD_TO", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "Spa
 BIT = BL.BIT
 U16 = Array(16, BIT)
 F_WORDS = 8
-ROW_BLOCK = 64
+ROW_CHUNK = 64
 #: H2's rounds: the univariate skip's 6 low row bits
 PRE_ROUNDS = 6
 SKIP = 1 << PRE_ROUNDS
@@ -158,7 +158,7 @@ def _shape(S) -> Shape:
 # --- layout ------------------------------------------------------------------------------------------------------------------
 
 def port_words(n: int) -> int:
-    return -(-F_WORDS * n // ROW_BLOCK) * ROW_BLOCK
+    return -(-F_WORDS * n // ROW_CHUNK) * ROW_CHUNK
 
 
 def message_ports(sh: Shape) -> list[tuple[str, int]]:
@@ -171,7 +171,7 @@ def message_ports(sh: Shape) -> list[tuple[str, int]]:
 
 
 def tau_words(sh: Shape) -> int:
-    return -(-sh.S // ROW_BLOCK) * ROW_BLOCK
+    return -(-sh.S // ROW_CHUNK) * ROW_CHUNK
 
 
 def v_layout(sh: Shape) -> dict[str, tuple[int, int]]:
@@ -200,7 +200,7 @@ def residual_names(sh: Shape) -> list[str]:
 
 def out_words(sh: Shape) -> int:
     n = F_WORDS * len(residual_names(sh)) + (sh.S if sh.stacked else 0)
-    return -(-n // ROW_BLOCK) * ROW_BLOCK
+    return -(-n // ROW_CHUNK) * ROW_CHUNK
 
 
 def ports(sh: Shape) -> list[tuple[str, int]]:
@@ -326,7 +326,7 @@ def inner_points(inner, rounds: Sequence[Sequence[int]]) -> dict:
     points the comb is folded at and the inner claim on z has."""
     from . import rec_algebra as A
 
-    info = A.run(inner, A.CoinSource(rounds), A.symbolic(inner), [], fold_only=True)[1]
+    info = A.run(inner, A.RoundCoins(rounds), A.symbolic(inner), [], fold_only=True)[1]
     return {"alpha": info["fold"]["alpha"], "z": info["z"], "x_rest": tuple(info["fold"]["rho_in"]), "y_rest": tuple(info["r_in"])}
 
 

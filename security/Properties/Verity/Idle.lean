@@ -7,7 +7,7 @@ public import Properties.Verity.Coupling
 
 The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.SoundnessOf` read these: a small hand-built
 descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
-circuit file is read as empty files under the netlist tags (`fileRead`); the coin commitment has no families, the device
+circuit file is read as empty files under the `verity/flock-netlist/v1` tags (`fileRead`); the coin commitment has no families, the device
 samples nothing at the close and signs nothing (`signer`), the honest prover sends an empty request and closes the device
 at once, no check reads its log, and there are no commitment openings and no gates computed;
 the world charges nothing over an empty window (`world`); the schedule is one
@@ -30,7 +30,7 @@ that charges nothing and accepts everything (`periodRun`), whose claim, a gate o
 
 namespace Verity.Idle
 
-open Accounting
+open ResourceAccounting
 open scoped ENNReal
 
 noncomputable section
@@ -38,14 +38,14 @@ noncomputable section
 /-- **The device**: no on-chip state, no memory, no ops, no bandwidth, and one side channel that carries nothing. -/
 def device : Device Unit := ⟨0, 0, fun _ => 0, 0, fun _ => 0⟩
 
-/-- **The committed files as v2 reads them**: empty files under the netlist tags. -/
+/-- **The committed files as v2 reads them**: empty files under the `verity/flock-netlist/v1` tags. -/
 def fileRead : FileRead := ⟨Flock.Tags.netlistV1, .empty, [], .empty⟩
 
 /-- The step that charges nothing. -/
 def step : Step Unit Unit := ⟨fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ => 0⟩
 
 /-- **The world**: every resource on the one account, an empty window, the schedule that charges nothing, and every
-bound on what the network certifiers saw met. -/
+bound on what the network attesters saw met. -/
 def world : World device Unit where
   acct _ := ()
   win := ⟨0, 0⟩
@@ -96,7 +96,7 @@ def forger : Hash.Assumptions.LmsForger where
 
 /-- **The idle deployment's names**, publishing the error `δ` for every subprotocol and the work certificate `W`. -/
 noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
-  read _ _ := fileRead
+  read _ _ := .one fileRead
   place _ _ _ _ := none
   programDigest θ := some (sha512 θ.data.toList)
   publicDigest θ := some (sha512 θ.data.toList)
@@ -123,10 +123,6 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   capacity _ := ()
   world_window _ _ _ _ _ := rfl
   world_capacity _ _ _ _ _ := rfl
-  theta _ _ := ∅
-  theta_input _ _ _ h := absurd h (Finset.notMem_empty _)
-  gates _ := 0
-  fresh _ := 0
   spans _ _ := 1
   schedule _ _ := blocks
   boundary _ _ := 0
@@ -153,7 +149,7 @@ instance instFintypeSpotsUnbounded : Fintype unbounded.Spots := inferInstanceAs 
 instance instNonemptySpotsUnbounded : Nonempty unbounded.Spots := inferInstanceAs (Nonempty Unit)
 
 /-- **The period run that charges nothing and accepts everything**, on the committed files' circuit over one coin: no
-work, no memory held, nothing read, every bound on what the network certifiers saw met, and every audit's verdict
+work, no memory held, nothing read, every bound on what the network attesters saw met, and every audit's verdict
 accepting. -/
 def periodRun : PeriodRun device Unit fileRead.circuit fun _ : Unit => Unit where
   units := fileRead.units

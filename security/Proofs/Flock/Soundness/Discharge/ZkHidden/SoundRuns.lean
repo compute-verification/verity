@@ -28,7 +28,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 # `RunsZC` at the live hidden-output `--zk` tables, from `TablesAtZKHLive`
 
 `runsZC_liveH`: `ZkExec.runsZC_live`'s proof under hidden outputs. `TablesAtZKHLive` puts the sample's table at
-`tablesAtZKH` (`DrawSetupZKH.table`, at the executable's dimensions, pads and inner code: `table_seamH`, `table_layH`),
+`tablesAtZKH` (`SampleSetupZKH.table`, at the executable's dimensions, pads and inner code: `table_seamH`, `table_layH`),
 the acceptance peels to the one table's two `verifyRep` successes (`setupTables_okH`, `zk_verify_ok`) and each rep's run
 (`zk_verifyRep_ok`), and `zk_rep_run_plays` and `zk_table_verdict`, which read the table only through those seams, make
 each run a `RepRun` for `decAtZ` and the table's verdict accept at the two results.
@@ -51,21 +51,21 @@ section Table
 variable {n mPts : ℕ} {I : Inputs} {S : Finset (Fin n)} {d : Lean.Json}
 
 /-- A hidden-output sample's `--zk` table is at the executable's dimensions. -/
-theorem table_seamH (y : DrawSetupZKH I mPts S d) :
+theorem table_seamH (y : SampleSetupZKH I mPts S d) :
     ZkTabSeam y.table (Setup.ofCircuit y.x.st) y.sch y.tPad :=
   ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 /-- A hidden-output sample's `--zk` table has the executable's pads and inner code. -/
-theorem table_layH (y : DrawSetupZKH I mPts S d) : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
+theorem table_layH (y : SampleSetupZKH I mPts S d) : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
   constructor <;> intros <;> rfl
 
 end Table
 
 /-- **`RunsZC` at the live hidden-output `--zk` tables, from the session alone** (`tablesAtZKH_liveU`). -/
 theorem runsZC_liveHU {n mPts : ℕ} {Reg : Type} (I : Inputs) (ht : I.tags.typed = false)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.Law n)
-    (hT : HiddenDec.TagsOkH I) (hRec : ZkLink.RecordsLiveZK I dj wr) (hDraw : ∀ ω, DrawOkZKH I dj mPts (L.draw ω)) :
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.SamplingDesign n)
+    (hT : HiddenDec.TagsOkH I) (hRec : ZkLink.RecordsLiveZK I dj wr) (hDraw : ∀ ω, SampleOkZKH I dj mPts (L.draw ω)) :
     RunsOnZC (K := 𝕂) execArith hs512 (tablesAtZKH (Reg := Reg) dj y₀) I wr
       (opnAtZH (tablesAtZKH dj y₀) I dj) (decAtZ (tablesAtZKH dj y₀)) (fun _ _ _ _ => [])
       (fun _ _ b _ => capOfRoot b) L := by
@@ -90,7 +90,7 @@ theorem runsZC_liveHU {n mPts : ℕ} {Reg : Type} (I : Inputs) (ht : I.tags.type
   obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, c, hz0, hv0, hv1⟩ := hall 0 (by simp)
   simp only [Array.getElem_map] at hz0 hv0 hv1
-  change Zk.schedule (Setup.ofCircuit y.x.st).m = .ok schs[0] at hz0
+  change Zk.schedule (Setup.ofCircuit y.x.st).wideLeaf (Setup.ofCircuit y.x.st).m = .ok schs[0] at hz0
   change Zk.verifyRep y.x.st.spec (Setup.ofCircuit y.x.st) schs[0].1 schs[0].2 sess 0 0 _ = .ok c at hv0
   change Zk.verifyRep y.x.st.spec (Setup.ofCircuit y.x.st) schs[0].1 schs[0].2 sess 0 1 _ = .ok c at hv1
   have hsc : schs[0] = (y.sch, y.tPad) := Except.ok.inj (hz0.symm.trans hz)

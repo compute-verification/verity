@@ -11,7 +11,7 @@ from ..graph import LOG
 from . import call
 
 SCRIPT = "verity/protocols/proofs/flock/prover/check_build.sh"
-#: what the log shows when the tree is at fault: `git apply` refusing a patch, cargo a crate (ci.toml's `halts_on`)
+#: what the log shows when the tree is at fault: `git apply` refusing a patch, cargo a crate
 FAILS = ("patch does not apply", "patch failed", "error: could not compile")
 
 

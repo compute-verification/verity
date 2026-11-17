@@ -47,7 +47,7 @@ import VCVio.Prelude.Core
 * `misses_layout`: a sample that checks no proof block at a slot of `B` leaves `B` no input slot, and proves no unit at a
   population slot of `B`.
 * `pa_slots`: the design's `P_a` on `Slots.layout`'s partition, the population's first stage times the input class's.
-* `drawMisses`: the sample is accepted and misses `B` with probability at most `missBound`.
+* `sampleMisses`: the sample is accepted and misses `B` with probability at most `missBound`.
 -/
 
 @[expose] public section
@@ -150,13 +150,13 @@ theorem pa_slots (first : OneStage) (pop ic : Array (Array Slots.ProofBlock)) (B
   congr 2
   simp [Function.comp_def]
 
-/-- `slotDesign`'s steps: the population, the rule's law and its expansion, and the design they give. -/
+/-- `slotDesign`'s steps: the population, the rule's sampling design and its expansion, and the design they give. -/
 theorem slotDesign_ok (rule : Select.Rule) (d : Program) (query : Lean.Json) (table : Option Lean.Json)
     (D : Design) (h : slotDesign rule d query table = .ok D) :
-    ∃ n named derived, Partition.units d query = .ok n ∧ rule.lawOver n = .ok named ∧
-      Draw.deriveLaw d query named table = .ok derived ∧
+    ∃ n named derived, Partition.units d query = .ok n ∧ rule.samplingDesignOver n = .ok named ∧
+      Draw.deriveSamplingDesign d query named table = .ok derived ∧
       ((rule = .all ∧ D = ⟨[.all, .all]⟩) ∨
-        (rule ≠ .all ∧ ∃ parsed, Draw.flockLaw (lawObj named derived) n = .ok parsed ∧
+        (rule ≠ .all ∧ ∃ parsed, Draw.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed ∧
           D = ⟨[oneStageOf (derived.getD parsed), .all]⟩)) := by
   unfold slotDesign at h
   obtain ⟨n, hn, h⟩ := bind_eq_ok.1 h
@@ -215,19 +215,19 @@ theorem totalWork_eq (ws : Array Flock.Draw.WorkStratum) :
   | cons s l ih => intro a; simp only [List.foldl_cons, ih, List.map_cons, List.sum_cons, Nat.mul_comm s.work]; omega
 
 /-- **The population's first stage misses `W`** with probability at most the claims' `P_a(W)` of the sampling design it samples, on
-the population's strata: the units `drawUnits` samples hold none at a slot of `W`. -/
-theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
+the population's strata: the units `sampleUnits` samples hold none at a slot of `W`. -/
+theorem samplingDesign_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
     (he : Partition.evaluate d query = .ok rs) (pop : Array (Array Slots.ProofBlock))
     (hlays : List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList
       pop.toList)
-    (named : Lean.Json) (table : Option Lean.Json) (derived : Option Flock.Draw.Law) (parsed : Flock.Draw.Law)
-    (hd : Draw.deriveLaw d query named table = .ok derived)
-    (hp : Draw.flockLaw (lawObj named derived)
+    (named : Lean.Json) (table : Option Lean.Json) (derived : Option Flock.Draw.SamplingDesign) (parsed : Flock.Draw.SamplingDesign)
+    (hd : Draw.deriveSamplingDesign d query named table = .ok derived)
+    (hp : Draw.flockSamplingDesign (samplingDesignObj named derived)
       (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).length = .ok parsed)
     (W : Finset ℕ) (hW : W ⊆ range (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).length)
     (L : ℕ) :
     Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
-      Draw.drawUnits (derived.getD parsed)
+      Draw.sampleUnits (derived.getD parsed)
         (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).length (bytesOf src) =
           .ok (units, read) ∧
         ∀ v ∈ W, (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).getD v 0 ∉ units) ≤
@@ -241,12 +241,12 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
     rw [hlen]; have := List.mem_range'.1 (hperm.subset hx); omega
   have hns : pop.toList.map (·.size) = S.toList.map fun p => rsSize p.2 := (laysOut_units _ _ hlays).2
   have hsum : (pop.toList.map (·.size)).sum = (popUnits S).length := by rw [hns, length_popUnits]
-  rcases deriveLaw_cases d query named table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S', k, law', hS', rfl, hlaw⟩
+  rcases deriveSamplingDesign_cases d query named table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S', k, samplingDesign', hS', rfl, hlaw⟩
   · obtain ⟨hU, hcard⟩ := image_units _ hnd hlt W hW
     have hmiss : ∀ units : Array ℕ, (∀ v ∈ W, (popUnits S).getD v 0 ∉ units) →
         ∀ u ∈ W.image fun v => (popUnits S).getD v 0, u ∉ units := fun units hm u hu => by
       obtain ⟨v, hv, rfl⟩ := mem_image.1 hu; exact hm v hv
-    rcases flockLaw_cases _ _ _ hp with ⟨k, rfl, hk, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
+    rcases flockSamplingDesign_cases _ _ _ hp with ⟨k, rfl, hk, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
     · refine le_trans (Claims.Pr_mono fun src ⟨units, read, hu, hm⟩ => ⟨units, read, hu, hmiss units hm⟩)
         ((one_bound _ _ hU L).1 k hk) |>.trans_eq ?_
       simp only [Option.getD_none, oneStageOf, OneStage.Pa, hsum, hcard]
@@ -258,13 +258,13 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
   · have hS'eq : S' = S := by rw [strata_eq d query rs he] at hS'; exact (Except.ok.inj hS').symm
     subst hS'eq
     rcases hlaw with hder | ⟨t, tab, ht, hwork⟩
-    · obtain rfl := derive_ok k _ law' hder
+    · obtain rfl := derive_ok k _ samplingDesign' hder
       refine le_trans (Claims.Pr_mono fun src ⟨units, read, hu, hm⟩ => ⟨units, read, hu, fun v hv => ?_⟩)
         (strata_bound _ _ (Or.inl ⟨k, rfl⟩) _ W L) |>.trans_eq ?_
       · rw [hns]
         simp [oneStageOf, OneStage.Pa, stratum_size, Flock.Draw.stratumK, strataSize, Function.comp_def]
       · simpa [popUnits, List.flatMap_map] using hm v hv
-    · obtain ⟨ws, hF, rfl⟩ := deriveWork_ok k _ tab law' hwork
+    · obtain ⟨ws, hF, rfl⟩ := deriveWork_ok k _ tab samplingDesign' hwork
       have hunits := units_of_forall₂ _ _ hF
       have hsz : S.toList.map (fun p => rsSize p.2) = ws.toList.map (·.size) := by
         have := congrArg (List.map rsSize) hunits
@@ -283,7 +283,7 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
         simpa [popUnits, List.flatMap_map, Function.comp_def, h1] using hm v hv
 
 /-- **`Slots.select` misses `B` no more often than the claims' `P_a(B)`** (`Properties.Spot.DrawMisses`). -/
-theorem drawMisses : DrawMisses := by
+theorem sampleMisses : DrawMisses := by
   intro rule d query table cm L B
   set E := fun src : Fin L → Fin 256 => (Slots.select rule d query table cm (bytesOf src)).isOk = true ∧
     Misses B (checkedOf (Slots.select rule d query table cm (bytesOf src))) with hE
@@ -312,7 +312,7 @@ theorem drawMisses : DrawMisses := by
     rcases hcase with ⟨rfl, -⟩ | ⟨hne, parsed, -, hp, -⟩
     · rw [slotDesign_all d query table n named derived hn hnamed hd] at hD
       exact absurd hD (by simp)
-    · rw [slotDesign_law rule d query table n named derived parsed hne hn hnamed hd hp] at hD
+    · rw [slotDesign_samplingDesign rule d query table n named derived parsed hne hn hnamed hd hp] at hD
       exact absurd hD (by simp)
   | ok D =>
   dsimp only
@@ -333,8 +333,8 @@ theorem drawMisses : DrawMisses := by
   have hstep : ∀ src, E src → window (popUnits S).length (popBlocks (inputClass d)).length B = ∅ ∧
       ∃ units : Array ℕ, (∀ v ∈ window 0 (popUnits S).length B, (popUnits S).getD v 0 ∉ units) ∧
         ((rule = .all ∧ units = Array.range (popUnits S).length) ∨
-          (rule ≠ .all ∧ ∃ parsed read', Draw.flockLaw (lawObj named derived) (popUnits S).length = .ok parsed ∧
-            Draw.drawUnits (derived.getD parsed) (popUnits S).length (bytesOf src) = .ok (units, read'))) := by
+          (rule ≠ .all ∧ ∃ parsed read', Draw.flockSamplingDesign (samplingDesignObj named derived) (popUnits S).length = .ok parsed ∧
+            Draw.sampleUnits (derived.getD parsed) (popUnits S).length (bytesOf src) = .ok (units, read'))) := by
     intro src hs
     obtain ⟨l', c, hs, hm⟩ := hev src hs
     obtain ⟨hl', draw, proved, read, hsel, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
@@ -375,7 +375,7 @@ theorem drawMisses : DrawMisses := by
   · rw [pa_slots, hlenP]
     simp only [hW1, ↓reduceIte, mul_one]
     refine le_trans (Claims.Pr_mono fun src hs => ?_)
-      (law_bound d query rs he pop hlays named table derived parsed hd hp _ (window_subset _ _ _) L)
+      (samplingDesign_bound d query rs he pop hlays named table derived parsed hd hp _ (window_subset _ _ _) L)
     obtain ⟨-, units, hW0, hcase⟩ := hstep src hs
     rcases hcase with ⟨hr, -⟩ | ⟨-, parsed', read', hp', hu⟩
     · exact absurd hr hne

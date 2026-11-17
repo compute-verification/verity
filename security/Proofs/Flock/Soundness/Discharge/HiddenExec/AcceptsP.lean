@@ -19,7 +19,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
-# flock-verify's acceptance at the verifier's public inputs
+# verity-verify-proof's acceptance at the verifier's public inputs
 
 `Exec.setupOf` sets the session up with no `--public-inputs`; `Exec.setupOfP I own` passes `own`, the verifier's own
 recomputation of the public input words (`HmIn.checkOwn`), and `Exec.AcceptsP` is `Exec.Accepts` at it. At `own = none`
@@ -38,12 +38,12 @@ namespace FlockSoundness.Discharge.Exec
 
 open Flock
 
-/-- The session's statement flock-verify sets up for a record with `own` as `--public-inputs`. -/
+/-- The session's statement verity-verify-proof sets up for a record with `own` as `--public-inputs`. -/
 def setupOfP (I : Inputs) (own : Option ByteArray) (record : String) : Flock.V (Flock.SessionSpec × Array Flock.Stmt) :=
   Flock.Stmt.setupTables I.tags I.circuitFile I.publicFile I.coins I.count I.tables (recordDraw record) I.partition I.program
     I.work I.stratified I.closure own
 
-/-- **flock-verify accepts the transcript at the verifier's public inputs `own`**. -/
+/-- **verity-verify-proof accepts the transcript at the verifier's public inputs `own`**. -/
 def AcceptsP (I : Inputs) (own : Option ByteArray) (t : Transcript) : Prop :=
   ∃ spec sts, setupOfP I own t.record = .ok (spec, sts) ∧
     Flock.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok ()
@@ -127,7 +127,7 @@ theorem setupTables_specP (hh : tags.hiddenOutputs = true)
       ite_eq_right (by omega)
     exact ⟨some d, pi, by rw [ht]; exact hp, fun h1 => absurd h1 (by omega)⟩
 
-/-- **flock-verify's acceptance at the verifier's public inputs, table by table**: under hidden outputs, when
+/-- **verity-verify-proof's acceptance at the verifier's public inputs, table by table**: under hidden outputs, when
 `AcceptsP I own t`, every table's statement is its `SpecP` at `own`. -/
 theorem acceptsP_specP {I : Inputs} {own : Option ByteArray} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = true)
     (h : AcceptsP I own t) :

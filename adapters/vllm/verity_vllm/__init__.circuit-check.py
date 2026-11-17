@@ -6,7 +6,8 @@ Definitions a served Program calls are the word Call families circuit-check hold
 here, not beside that module, so that the registries import no frontend module for it."""
 from __future__ import annotations
 
-from typing import Any, Callable, Iterator
+from collections.abc import Callable, Iterator
+from typing import Any
 
 
 def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
@@ -31,15 +32,21 @@ def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
 
 def _served_kind_statics() -> dict[str, dict[str, Any]]:
     """The kinds no small table binds (launch tiles and CTA sizes, collective routes, split counts, the DSA and sparse-MLA shapes; DeepSeek-V4's
-    mHC, FlashMLA, compressors, routers and Marlin MoE; the int8 attention row, whose head dim is a multiple of 32), each at a
+    mHC, FlashMLA, compressors, routers and Marlin MoE; GLM-5.3's fp8_ds_mla cache rows and FlashMLA decode; the int8 attention row,
+    whose head dim is a multiple of 32), each at a
     binding its Definition module's sidecar already checks, so they add no task."""
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.ops.boolean import gemm as BG
-    from verity.definitions.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
-    from verity.definitions.registry import flashmla as FM, flashmla_prefill as FP
-    from verity.definitions.registry import marlin_moe as MM
-    from verity.definitions.registry import sparse_mla as SM
-    from verity.definitions.registry import tp_allreduce as TA
+
+    from verity_vllm.definitions.registry import dsv4_compressor as DC
+    from verity_vllm.definitions.registry import dsv4_qnorm_insert as DQ
+    from verity_vllm.definitions.registry import flashmla as FM
+    from verity_vllm.definitions.registry import flashmla_dsv32 as FD
+    from verity_vllm.definitions.registry import flashmla_prefill as FP
+    from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as FU
+    from verity_vllm.definitions.registry import marlin_moe as MM
+    from verity_vllm.definitions.registry import sparse_mla as SM
+    from verity_vllm.definitions.registry import tp_allreduce as TA
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     mla = {k: SM.SPARSE_MLA_GLM53[k] for k in ("NH", "DR", "DV", "BN", "DOT", "INV")} | {"SM_SCALE": SM.SPARSE_MLA_GLM53["SCALE"]}
@@ -48,7 +55,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
     router = {"E": 8, "SCALE": 2.5}
     marlin = {"E": 3, "K": 256, "N": 16, "TK": 128, "TN": 8, "GRID": 5, "DOT": MM.DOT}
     int8_row = {"D": 32, "S": 33, "SCALE": 32 ** -0.5}   # Q' K'^T steps 32 channels, so D >= 32; int8_exact's sidecar's row
-    dsv4 = {"triton_block_rmsnorm": {"N": 512, "BLOCK": 2048, "WARPS": 8, "EPS": 1e-6},
+    dsv4: dict[str, dict[str, Any]] = {"triton_block_rmsnorm": {"N": 512, "BLOCK": 2048, "WARPS": 8, "EPS": 1e-6},
             "mhc_pre_broadcast": {**mhc, "H": 7168, "NS": 28}, "mhc_residual_broadcast": {"HC": 2, "H": 8},
             "mhc_fused_post_pre": {**mhc, "H": 1024, "NS": 4, "TH": 256}, "mhc_post_pre_tf32": {**mhc, "H": 1024, "NS": 4},
             "mhc_post": {"HC": 4, "N": 7168}, "hc_head": {**mhc, "H": 7168, "TH": 128},
@@ -59,6 +66,9 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "silu_mul_clamp": {"I": 4, "LIMIT": 10.0}, "moe_router_hash": router, "moe_router_sqrtsoftplus": router,
             "marlin_moe_rank": {"E": 3, "P": 30, "BM": 4}, "marlin_moe_align": {"P": 30, "BM": 4}, "marlin_moe_gemm": marlin,
             "marlin_moe_gemm_w": marlin}
+    fp8_ds_mla = {"dsa_latent_row_ds_mla": {"KVL": 512, "R": 64, "TILE": 128, "EPS": 1e-5},
+                  "flashmla_v32_decode": {**FD.FLASHMLA_GLM53, "NH": 2, "SPLITS": (0, 1, 3)},
+                  "fp8_ds_mla_upconvert_row": FU.FP8_DS_MLA_GLM53}
     return {"rmsnorm_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256}, "rmsnorm_fused_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256},
             "all_reduce_mnnvl": {"WORLD": 8, "N": 8, "SHOT": 2},
             "all_reduce_rmsnorm_mnnvl": {"WORLD": 8, "N": 512, "SHOT": 1, "CLUSTER": 2, "EPS": 1e-5, "FMA": False},
@@ -74,16 +84,17 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "ll_bf16_dotprod": {"N": 2, "K": 256, "BS": 64, "VEC": 2, "FMA": 1},
             "ll_bf16_splitk": {"N": 2, "K": 128, "SPLIT_K": 2, "TILE_K": 32, "WARPS": 2, "DOT": hop},
             "sparse_mla": {"T": 65, **mla}, "sparse_mla_split": {"T": 130, "NS": 2, **mla},
-            "int8_attention_row": int8_row, "int8_attention_row_table": int8_row, **dsv4}
+            "int8_attention_row": int8_row, "int8_attention_row_table": int8_row, **dsv4, **fp8_ds_mla}
 
 
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics, or at
     `_served_kind_statics`' when no small table binds it: (label, the bound Definition, or the error)."""
     from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32
+
     from verity_vllm import TargetProfile
+    from verity_vllm.definitions.registry import prims as P
     from verity_vllm.program.frontend.rules import vocab as V
-    from verity.definitions.registry import prims as P
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,

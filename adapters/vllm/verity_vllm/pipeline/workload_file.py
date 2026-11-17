@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verity_vllm.config import option, row_file, workload_file
+from verity_vllm.pipeline.cli import write
 
 __all__ = ["Options", "main", "workload_file"]
 
@@ -18,5 +19,5 @@ class Options:
 
 def main(o: Options) -> int:
     for w in o.workloads:
-        print(workload_file(w) if w.endswith(".json") else row_file(w))
+        write(str(workload_file(w) if w.endswith(".json") else row_file(w)))
     return 0

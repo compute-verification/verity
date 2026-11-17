@@ -59,7 +59,8 @@ def python_tree(root_pid: int, starttime: int | None = None, proc: Path | None =
     comms, children = {root_pid: root[0]}, {}
     try:
         entries = sorted(int(e) for e in os.listdir(proc) if e.isdigit())
-    except OSError:
+    except OSError as e:
+        print(f"tele pyspy: {proc} unlisted, so only the root is sampled ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         entries = []
     for p in entries:
         if (s := _stat(proc, p)) is not None and p != root_pid:
@@ -101,9 +102,12 @@ def render(results: list[dict[str, Any]]) -> str:
 
 
 def _status(run_dir: Path) -> dict[str, Any]:
+    if not (Path(run_dir) / "status.json").exists():
+        return {}
     try:
         st = json.loads((Path(run_dir) / "status.json").read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"tele pyspy: {Path(run_dir) / 'status.json'} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return st if isinstance(st, dict) else {}
 

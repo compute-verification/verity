@@ -9,8 +9,12 @@ from pathlib import Path
 
 import methodology
 
-__all__ = ["BASELINE_ARMS", "BASELINE_POINTS", "arm_stats", "baseline_check", "baseline_table", "load", "lock", "pct",
-           "point_key", "table"]
+__all__ = ["BASELINE_ARMS", "BASELINE_POINTS", "METRICS", "PEARL_C_ARM", "arm_stats", "baseline_check", "baseline_table", "load",
+           "lock", "metrics", "pct", "point_key", "table"]
+
+METRICS = {"shipped": "compute-accounting/perplexity-shipped", "pearl_c": "compute-accounting/perplexity-pearl-c",
+           "cost": "compute-accounting/perplexity-cost-pearl-c"}
+PEARL_C_ARM = "pearl-c-linears"
 
 
 def load(paths: Iterable[str | Path]) -> list[dict]:
@@ -113,8 +117,8 @@ def baseline_table(lk: dict) -> str:
     """The locked baseline as `run.py tables baseline` prints it: per point and arm, the bench's perplexity, its Δ
     against bf16 and plain int8, tonight's measurement of the same arm, and whether the two reproduce each other
     (methodology.reproduces)."""
-    lines = ["| model · set · context | arm | perplexity | Δ% vs bf16 | Δ% vs plain int8 | tonight | tonight's method | "
-             "Δ% vs tonight | reproduces |", "|---|---|---:|---:|---:|---:|---|---:|---|"]
+    lines = [("| model · set · context | arm | perplexity | Δ% vs bf16 | Δ% vs plain int8 | tonight | tonight's method | "
+              "Δ% vs tonight | reproduces |"), "|---|---|---:|---:|---:|---:|---|---:|---|"]
     runs = []
     for p in lk["points"]:
         where = f"{p['model']} · {p['set']} · {p['ctx'] // 1024}K ({p['windows']} windows)"
@@ -168,3 +172,28 @@ def baseline_check(lk: dict, results: list[dict]) -> tuple[str, bool]:
         ok_all = False
         lines.append("no results measure a locked arm")
     return "\n".join(lines), ok_all
+
+
+def metrics(r: dict, repo: str, revision: str) -> tuple[str, dict, list[dict]]:
+    if not r.get("passed"):
+        raise ValueError(f"{r.get('model')} {r.get('set')}/{r.get('ctx')}: its gates failed, so it has no perplexity")
+    base, arm = arm_stats(r, "bf16"), arm_stats(r, PEARL_C_ARM)
+    if arm is None:
+        raise ValueError(f"{r['model']} {r['set']}/{r['ctx']}: no {PEARL_C_ARM} arm (run.py eval ... {PEARL_C_ARM})")
+    cost = 100 * (arm["ppl"] / base["ppl"] - 1)
+    env = r["env"]
+    fields = {"model": repo, "revision": revision, "hardware": env["device"], "set": r["set"], "ctx": r["ctx"]}
+    member = f"{r['model']}-{'-'.join(env['device'].lower().split()).removeprefix('nvidia-')}"
+    run = env.get("run") or None
+    inputs = [run] if run else []
+    kw = {"inputs": inputs, "member": member}
+    measured = [{"name": METRICS["shipped"], "value": base["ppl"], "unit": "perplexity", **kw, "extra": fields},
+                {"name": METRICS["pearl_c"], "value": arm["ppl"], "unit": "perplexity", **kw,
+                 "extra": fields | {"seeds": arm["seeds"]}},
+                {"name": METRICS["cost"], "value": cost, "unit": "percent", **kw, "extra": fields}]
+    doc = {"value": cost, "unit": "percent", "commit": env.get("commit") or None, "run": run, **fields,
+           "shipped": base["ppl"], "pearl_c": arm["ppl"], "pearl_c_seeds": arm["seeds"]}
+    text = "\n".join([f"ppl: {cost:+.3f}% perplexity with Pearl-C linears ({repo} on {env['device']}, "
+                      f"{r['set']} at {r['ctx']})",
+                      f"  bf16, as shipped: {fmt_ppl(base)}", f"  {PEARL_C_ARM}: {fmt_ppl(arm)}"])
+    return text, doc, measured

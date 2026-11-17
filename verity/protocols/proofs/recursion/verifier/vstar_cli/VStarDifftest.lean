@@ -10,14 +10,14 @@ public import Flock.RecLinkRef
 # V*'s difftest executable
 
 The functions `verity_flock`'s builders are held to (`tests/test_vstar_difftest.py`), each answering for one part of V*'s
-circuits on the parameters it is given: a part's rows as a laid-out netlist (`sha`, `climb`, `residuals`: the netlist's
-SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`), and a statement's whole circuit file
-(`rec_open_circuit`, `inner_circuit`: its SHA-512 and bytes); the algebra's structure and its parts (`structure`,
+circuits on the parameters it is given: a part's rows as a laid-out circuit description (`sha`, `climb`, `residuals`: the circuit
+description's SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`), and a statement's whole circuit
+file (`rec_open_circuit`, `inner_circuit`: its SHA-512 and bytes); the algebra's structure and its parts (`structure`,
 `spec`, `parts`), and V*'s statements over an inner session's shape (`statements`); `spec_holo`, `statements_holo`,
 `inner_circuit_holo` and `verifier_parts_holo` are those over a holo inner session (`VStar.Holo`). `verifier_parts` holds the Lean
 verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units, and `verifier_algebra` the verifier's own algebra
 (`Flock.RecAlgebra`, its parts and their nets, holo shapes included) to `rec_algebra` and `rec_residuals`. `inner_draw`
-holds `rec_live.inner_draw`, the prover's reading of the inner session's sample, to the verifier's (`Flock.RecSetup.innerDrawn`).
+holds `rec_live.inner_draw`, the prover's reading of the inner session's sample, to the verifier's (`Flock.RecSetup.innerSampled`).
 `link_unit` holds V*'s link unit (`VStar.linkUnit`) to `rec_link.lowering`, `link_tree` the verifier's rows trees
 (`Flock.RecLinkTree`) to `rec_link.Tree`, and `link_ref` the unit's Lean reference (`Flock.RecLinkRef.linkRef`) to
 `rec_link.link_ref`.
@@ -36,7 +36,7 @@ def digestsJson (d : Digests) (rows : Nat) : Json :=
   Json.mkObj [("sha256", Flock.hexOf d.sha256.finish), ("bytes", (d.bytes : Json)), ("rows", (rows : Json))]
 
 /-- A part laid out with input ports `ins` and its outputs as one port, as `IL.layout(C, ins, ["y"])` and
-`IL.netlist(lay, "part")` lay out and write it. -/
+`IL.circuit_description(lay, "part")` lay out and write it. -/
 def partNet (st : St) (ins : Array Nat) (outs : List Lin) : Except String Json := do
   if let some v := deadRow st outs.toArray then throw s!"AND {v} reaches no output"
   let l := layout st ins #[outs.length] outs.toArray
@@ -230,11 +230,11 @@ def verifierAlgebraFn (j : Json) : Except String Json := do
   pure (Json.mkObj ([("parts", Json.arr out)] ++ (← gfSummary (algGfS S))))
 
 /-- `rec_live.inner_draw` on an inner session's record: its sample, or the verifier's refusal of a session over it
-(`Flock.RecSetup.innerDrawn`, the same at the inner statement's files and at the verifier's inner coins). -/
-def innerDraw (j : Json) : Except String Json := do
+(`Flock.RecSetup.innerSampled`, the same at the inner statement's files and at the verifier's inner coins). -/
+def innerSample (j : Json) : Except String Json := do
   let o ← input' j ["record"]
   let record ← jStr (o "record") "record"
-  pure <| match Flock.RecSetup.innerDrawn (some (.coins Json.null record)) with
+  pure <| match Flock.RecSetup.innerSampled (some (.coins Json.null record)) with
     | .ok () => Json.mkObj [("draw", (Flock.RecCoins.recordDraw record).getD Json.null)]
     | .error e => Json.mkObj [("refused", (e : Json))]
 
@@ -383,6 +383,6 @@ def main : IO Unit := Difftest.serve (Difftest.table [
   ("structure", structureFn), ("spec", specFn false), ("parts", partsFn), ("statements", statementsFn false),
   ("verifier_parts", verifierPartsFn false), ("verifier_algebra", verifierAlgebraFn), ("spec_holo", specFn true),
   ("statements_holo", statementsFn true), ("inner_circuit_holo", innerCircuit true),
-  ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerDraw), ("part_in", partInFn),
+  ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerSample), ("part_in", partInFn),
   ("top_sizes", topSizesFn), ("link_unit", linkLowering), ("link_tree", linkTree),
   ("link_ref", linkRefFn)])

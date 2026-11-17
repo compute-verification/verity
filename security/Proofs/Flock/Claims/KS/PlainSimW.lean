@@ -41,7 +41,7 @@ import Proofs.Flock.Claims.KS.LiveMix
 # The deployed events a simulator's bounds read
 
 A simulator of a prover `P` is a live prover `P'` with a finite tape and coins `Φ` of `V false` at the tape and the
-live coins (`PlainDrawSim`'s `PlainSimWrPAtD`). Its bounds read these events of `P`'s deployed runs:
+live coins (`PlainSampleSim`'s `PlainSimWrPAtD`). Its bounds read these events of `P`'s deployed runs:
 
 * `plainRoot`, `plainRoot_of_first`: the roots of `P`'s first message, which the strategies send wherever `P'`'s first
   message is `P`'s and the wire reads roots as the deployed link does;

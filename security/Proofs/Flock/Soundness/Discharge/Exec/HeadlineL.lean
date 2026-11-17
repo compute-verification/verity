@@ -7,7 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Headline
 # The headline over the salted session, and at the executable
 
 `Prog.flock_headline` (`Headline.lean`) restated for the session at a leaf scheme `Lp` (`batchedSessionL H512 enc512 Lp
-plan`), the session flock-verify checks for `hm96Rows` statements: `leaf512` under `hm96-sha512/v1` leaves, `leafPlain`
+plan`), the session verity-verify-proof checks for `hm96Rows` statements: `leaf512` under `hm96-sha512/v1` leaves, `leafPlain`
 under plain SHA-512 leaves. Every term is generic in `Lp`; its binding is `Lp.bind`, a collision of `H512`:
 
 * `Prog.flock_headline_L`: the count curve on the statement's rows, at the live sample, with the same bound as
@@ -38,16 +38,16 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
 
 /-- **The headline over the salted session**: `Prog.flock_headline` for the batched session at the leaf scheme `Lp`
 (`batchedSessionL H512 enc512 Lp plan`). If `execAccept` holds, the probability that at least `K` units of
-the program's rows circuit are wrong at the committed values (1 on `ones`, 0 on `zeros`, the plurality of the prover's
-openings elsewhere) is at most `miss(K) + ε_ks + δ_link + δ_tree`:
-* `miss(K)`, `Law.stratified`'s count curve, under A3 (`hA3`);
+the program's rows circuit are incorrect at the committed values (1 on `ones`, 0 on `zeros`, the plurality of the prover's
+openings elsewhere) is at most `miss(K) + ε_ks + ε_bind + δ_tree`:
+* `miss(K)`, `SamplingDesign.stratified`'s count curve, under A3 (`hA3`);
 * `ε_ks = ksAvgStrict`, under `SHA512CRStrict` (`cr/sha-512`) for each table's knowledge finders at budgets `qF`, `qS`
   (`hKS`, `TableCRL`);
-* `δ_link = linkBoundE`, under `SHA512CRExpected` (`ecr/sha-512`) for the prover's link finders (`hCR`, `LinkCRL`);
+* `ε_bind = linkBoundE`, under `SHA512CRExpected` (`ecr/sha-512`) for the prover's link finders (`hCR`, `LinkCRL`);
 * `δ_tree = TreeRewind.bound qT`, under `SHA512CRStrict` (`cr/sha-512`) for the serving roots' rewinding finder (`hT`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_L {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {execAccept : Bool × Finset (Fin n) → Prop}
@@ -59,36 +59,36 @@ theorem _root_.FlockSoundness.Prog.flock_headline_L {Lp : Merkle.Leaf (List Floc
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionL H512 enc512 Lp plan)))
     (hCR : LinkCRL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 Lp
-      (plan ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
+      (plan ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (batchStratL H512 enc512 Lp plan (cont σ ω)) qF qS)
     (tr : StrictCR.TreeRewind H512
-      (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+      (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
         (batchedSessionL H512 enc512 Lp plan)) σ
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H512 qT) :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
           (batchedSessionL H512 enc512 Lp plan)) σ ≤
-      (Law.stratified σs ks hks).miss K +
-        StrictCR.ksAvgStrict plan (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
-        (p.partition outs).linkBoundE (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) plan tab
+      (SamplingDesign.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict plan (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
+        (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) plan tab
           (rs.binding hHm) k Rw M ρ t' +
         ENNReal.ofReal (tr.bound qT) :=
   (flock_e2e_count_hm96L (p.partition outs) H512 enc512 Lp plan tab pp.derived ones hConst zeros hZero lay rs hHm
     hk hRw hM hρ hr ht K σ hCR hKS tr hT).trans
-    (add_le_add (add_le_add (add_le_add (Law.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K) le_rfl) le_rfl) le_rfl)
+    (add_le_add (add_le_add (add_le_add (SamplingDesign.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K) le_rfl) le_rfl) le_rfl)
 
 /-- `Prog.flock_headline_L` at rows each under its own encoding (`Binding.HmRowsX`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_LX {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {execAccept : Bool × Finset (Fin n) → Prop}
@@ -100,41 +100,41 @@ theorem _root_.FlockSoundness.Prog.flock_headline_LX {Lp : Merkle.Leaf (List Flo
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionL H512 enc512 Lp plan)))
     (hCR : LinkCRL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 Lp
-      (plan ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
+      (plan ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (batchStratL H512 enc512 Lp plan (cont σ ω)) qF qS)
     (tr : StrictCR.TreeRewind H512
-      (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+      (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
         (batchedSessionL H512 enc512 Lp plan)) σ
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H512 qT) :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
           (batchedSessionL H512 enc512 Lp plan)) σ ≤
-      (Law.stratified σs ks hks).miss K +
-        StrictCR.ksAvgStrict plan (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
-        (p.partition outs).linkBoundE (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) plan tab
+      (SamplingDesign.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict plan (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
+        (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) plan tab
           (rs.binding hHm) k Rw M ρ t' +
         ENNReal.ofReal (tr.bound qT) :=
   (flock_e2e_count_hm96LX (p.partition outs) H512 enc512 Lp plan tab pp.derived ones hConst zeros hZero lay rs hHm
     hk hRw hM hρ hr ht K σ hCR hKS tr hT).trans
-    (add_le_add (add_le_add (add_le_add (Law.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K) le_rfl) le_rfl) le_rfl)
+    (add_le_add (add_le_add (add_le_add (SamplingDesign.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K) le_rfl) le_rfl) le_rfl)
 
 /-- **The headline at the executable, for the salted session.** Let the verifier sample the units as in
 `Prog.flock_headline_L` (the live stratified sample under A3), and let the live audit `auditLive Lx Reg live`, played by
 the prover `τ`, refine the audit with `batchedSessionL H512 enc512 Lp plan` played by `σ`, up to the live event
-`bad` (`hRef`). If `σ`'s committed values have at least `K` incorrect proof blocks, flock-verify accepts with probability at most
-`miss(K) + ε_ks + δ_link + Pr[bad]`. `pp`, `hConst`, `hZero`, `lay`, `rs` and `hHm` are open as in
+`bad` (`hRef`). If `σ`'s committed values have at least `K` incorrect proof blocks, verity-verify-proof accepts with probability at most
+`miss(K) + ε_ks + ε_bind + Pr[bad]`. `pp`, `hConst`, `hZero`, `lay`, `rs` and `hHm` are open as in
 `Prog.flock_headline`; `hRef` is the refinement. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_execL {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     (pp : ProgPlaces p outs plan tab)
@@ -146,28 +146,28 @@ theorem _root_.FlockSoundness.Prog.flock_headline_execL {Lp : Merkle.Leaf (List 
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (K : ℕ)
     (I : Inputs) (live : Finset (Fin n) → Reg → Game Transcript)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live))
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live))
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionL H512 enc512 Lp plan)))
     {bad : Reg × Finset (Fin n) × Transcript → Prop}
-    (hRef : ExecRefines (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ
+    (hRef : ExecRefines (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ
       (LiveAccepts I) bad
-      (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+      (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
         (batchedSessionL H512 enc512 Lp plan)) σ)
     (hCR : LinkCRL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 Lp
-      (plan ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
+      (plan ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (batchStratL H512 enc512 Lp plan (cont σ ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ ≤
-      (Law.stratified σs ks hks).miss K +
-        StrictCR.ksAvgStrict plan (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
-        (p.partition outs).linkBoundE (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) plan tab
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict plan (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
+        (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) plan tab
           (rs.binding hHm) k Rw M ρ t' +
-        prob bad (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ := by
+        prob bad (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ := by
   have hnever : ∀ o : Bool × Finset (Fin n), ¬ (o.1 = true ∧ o.1 = false) := fun o h => by
     rw [h.1] at h; exact Bool.noConfusion h.2
   have hH := p.flock_headline_L outs plan tab (execAccept := fun o => o.1 = true) σs ks hks St hS Kd pop Lb src hA3 pp
@@ -178,8 +178,8 @@ theorem _root_.FlockSoundness.Prog.flock_headline_execL {Lp : Merkle.Leaf (List 
 
 /-- `Prog.flock_headline_execL` at rows each under its own encoding (`Binding.HmRowsX`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_execLX {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     (pp : ProgPlaces p outs plan tab)
@@ -191,28 +191,28 @@ theorem _root_.FlockSoundness.Prog.flock_headline_execLX {Lp : Merkle.Leaf (List
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (K : ℕ)
     (I : Inputs) (live : Finset (Fin n) → Reg → Game Transcript)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live))
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live))
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionL H512 enc512 Lp plan)))
     {bad : Reg × Finset (Fin n) × Transcript → Prop}
-    (hRef : ExecRefines (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ
+    (hRef : ExecRefines (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ
       (LiveAccepts I) bad
-      (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+      (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
         (batchedSessionL H512 enc512 Lp plan)) σ)
     (hCR : LinkCRL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 Lp
-      (plan ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
+      (plan ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (batchStratL H512 enc512 Lp plan (cont σ ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ ≤
-      (Law.stratified σs ks hks).miss K +
-        StrictCR.ksAvgStrict plan (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
-        (p.partition outs).linkBoundE (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) plan tab
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict plan (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
+        (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) plan tab
           (rs.binding hHm) k Rw M ρ t' +
-        prob bad (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ := by
+        prob bad (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ := by
   have hnever : ∀ o : Bool × Finset (Fin n), ¬ (o.1 = true ∧ o.1 = false) := fun o h => by
     rw [h.1] at h; exact Bool.noConfusion h.2
   have hH := p.flock_headline_LX outs plan tab (execAccept := fun o => o.1 = true) σs ks hks St hS Kd pop Lb src hA3 pp

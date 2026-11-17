@@ -20,7 +20,7 @@ may take its A from the per-call pad instead (`fill_seeds`, `pad_rows`); it comm
 **The coins** are each stream's 512-bit seed, expanded as
 ``prg(seed, x, idx) = SHA-512(seed ‖ x ‖ be64(idx))``, x NUL-padded to 8 bytes. A served call's seeds come from the
 challenger's raw coin opened after its operand roots (`seeds`): seed_x = SHA-512(`SEEDS_TAG` ‖ coin ‖ operand-root
-receipt ‖ be64(call) ‖ x), the receipt being the digest of the certifier's signed receipt of the block's operand roots.
+receipt ‖ be64(call) ‖ x), the receipt being the digest of the network attester's signed receipt of the block's operand roots.
 
 * ``dA``, ``dB``: d[i, k] is bit k mod 512 (least significant first) of block i ceil(K / 512) + k div 512.
 * ``V``, ``U``: row r's entry c is ((w 161) >> 32) - 80 for w the little-endian u32 word r L′ + c of the stream.
@@ -90,7 +90,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.commitments.scheme import DIGEST_BYTES
 
-from verity.protocols.accounting.pouw.prover.circuit import segment as SG
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import segment as SG
 
 #: a served call's values tree, and a filler's (no O)
 TAG = domains.POUW_DITHER_CALL
@@ -255,7 +255,7 @@ def _x(x: str) -> bytes:
 
 def seeds(coin: bytes, receipt: bytes, call: int) -> dict[str, bytes]:
     """A served call's seeds: SHA-512(`SEEDS_TAG` ‖ coin ‖ receipt ‖ be64(call) ‖ x) for each stream x, from the
-    challenger's raw coin `coin` opened after the operand roots, the digest `receipt` of the certifier's signed receipt
+    challenger's raw coin `coin` opened after the operand roots, the digest `receipt` of the network attester's signed receipt
     of them, and the call's index `call` in its execution phase."""
     if not 0 <= call < 1 << 64:
         raise ValueError(f"a call's index is a u64, not {call}")
@@ -449,7 +449,7 @@ def leaf_row(sh: Shape, seeds: Mapping[str, bytes], A: Sequence[Sequence[int]], 
 # -- the leaves and the trees ----------------------------------------------------------------------------------------------------
 
 def prf_salt(ks: bytes, pos: int) -> bytes:
-    """commit_gpu's salt PRF (`benchmarks/pouw/commit_gpu/reference.py`): leaf `pos`'s hm96 salt under the prover's private
+    """commit_gpu's salt PRF (`verity/commitments/cuda/commit_gpu/reference.py`): leaf `pos`'s hm96 salt under the prover's private
     key `ks`, three SHA-512 blocks."""
     return b"".join(hashlib.sha512(ks + pos.to_bytes(8, "big") + r.to_bytes(8, "big")).digest() for r in range(3))
 
@@ -856,10 +856,11 @@ def check_last(sh: Shape, seeds: Mapping[str, bytes], i: int, j: int, ins: Seque
     return int((tS - t0 - seg) & M16 == 0 and (o - sum(map(mul, Ad, Bd))) & M32 == 0)
 
 
-__all__ = ["DEVICES", "K_LIMIT", "NOISE", "PAD", "STREAMS", "Shape", "TAG", "TILE", "Tree", "PouwDitherBlock",
-           "PouwDitherFirst", "PouwDitherLast", "PouwDitherLastOk", "PouwDitherOnlyOk", "PouwDitherOutDot",
-           "PouwDitherOutDot0", "PouwDitherStep", "block_bits", "block_definition", "block_inputs", "block_widths",
-           "cell_values", "check_block", "check_last", "checkpoint_digest", "commit", "dithers", "dot_steps", "fill_seeds",
-           "leaf_h", "leaf_row", "noise_a", "noise_b", "operand_domain", "operand_row", "operand_tree", "opens", "out_at",
-           "out_dot", "pad_rows", "perms", "prf_salt", "prg", "row_bytes", "salts", "seeds", "step_ok", "tree", "values",
-           "values_buffer", "word_at", "wrap8"]
+__all__ = ["DEVICES", "FILL_SEEDS_TAG", "K_LIMIT", "M16", "M32", "NOISE", "PAD", "STREAMS", "Shape", "TAG", "TILE",
+           "Tree", "PouwDitherBlock", "PouwDitherFirst", "PouwDitherLast", "PouwDitherLastOk", "PouwDitherOnlyOk",
+           "PouwDitherOutDot", "PouwDitherOutDot0", "PouwDitherOutDot0Word", "PouwDitherOutDotWord", "PouwDitherStep",
+           "block_bits", "block_definition", "block_inputs", "block_widths", "cell_values", "check_block", "check_last",
+           "checkpoint_digest", "commit", "dithers", "dot_steps", "fill_seeds", "leaf_h", "leaf_row", "noise_a",
+           "noise_b", "operand_domain", "operand_row", "operand_tree", "opens", "out_at", "out_dot", "pad_rows",
+           "perms", "prf_salt", "prg", "row_bytes", "salts", "seeds", "step_ok", "tree", "values", "values_buffer",
+           "word_at", "wrap8"]

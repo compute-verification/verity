@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pous.TimedAudit
-public import Proofs.Properties.NetworkCertifier.Check.Bytes
+public import Proofs.Properties.Certifier.Check.Bytes
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
@@ -16,16 +16,16 @@ two of their inner nodes' inputs collide (`mth_binds`), which ties each answer's
 
 @[expose] public section
 
-namespace PousCheck.Properties.SecurityProofs
+namespace PousVerifier.Properties.SecurityProofs
 
 open Lean (Json)
-open Flock PousCheck.Properties
+open Flock PousVerifier.Properties
 
 local instance instLawfulBEqByteArray_properties : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
-theorem hash_size (m : ByteArray) : (Sha512.hash m).size = 64 := Properties.NetworkCertifier.Bytes.hash_size m
+theorem hash_size (m : ByteArray) : (Sha512.hash m).size = 64 := Properties.Certifier.Bytes.hash_size m
 
 theorem append_cancel {a b c d : ByteArray} (h : a ++ b = c ++ d) (hs : a.size = c.size) : a = c ∧ b = d := by
   have := congrArg ByteArray.data h
@@ -442,4 +442,4 @@ theorem timedAuditAccepts : TimedAuditAccepts := by
   · exact absurd ⟨x, by rw [hrun]; exact List.mem_append_left _ hx, y,
       by rw [hrun, hCs]; exact List.mem_append_right _ hy, hxy⟩ hcoll
 
-end PousCheck.Properties.SecurityProofs
+end PousVerifier.Properties.SecurityProofs

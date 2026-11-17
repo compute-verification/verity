@@ -502,8 +502,8 @@ class TPPartialSource:
         import torch
 
         t0 = time.perf_counter()
-        cap = Path(capture_dir)
-        res: dict[str, Any] = {"rank": self.rank, "oracle": str(cap), "steps_compared": 0, "steps_without_oracle": [], "oracle_steps_not_committed": [],
+        oracle_dir = Path(capture_dir)
+        res: dict[str, Any] = {"rank": self.rank, "oracle": str(oracle_dir), "steps_compared": 0, "steps_without_oracle": [], "oracle_steps_not_committed": [],
                                "duplicate_module_steps": [], "oracle_inconsistent": [], "per_tensor": [],
                                "missing_in_commit": [], "not_verified": [], "committed_not_in_oracle": [],
                                "witnesses": {"equal": 0, "differs": [], "unpaired": []},
@@ -515,7 +515,7 @@ class TPPartialSource:
                                         "paired by (step, module) with k recorded, same rank; exhaustive in BOTH directions (every committed step has an oracle "
                                         "step and every oracle step a committed step); a module recorded twice in a step or a truncated .pt is a named FAIL; "
                                         "an MoE align witness that differs between the runs FAILS by name, nothing exempt (witness_rule)")}
-        recp = cap / f"coll.rank{self.rank}.jsonl"
+        recp = oracle_dir / f"coll.rank{self.rank}.jsonl"
         if not recp.exists():
             res["verdict"], res["why"] = "FAIL", f"no oracle records {recp}"
             return res
@@ -525,7 +525,7 @@ class TPPartialSource:
                 x = json.loads(line)
                 by_step.setdefault(int(x["step"]), []).append(x)
         recorded: dict[int, dict[str, dict]] = {}
-        if (wp := cap / OW.witness_file(self.rank)).exists():
+        if (wp := oracle_dir / OW.witness_file(self.rank)).exists():
             for line in wp.open():
                 if line.strip():
                     x = json.loads(line)
@@ -538,7 +538,7 @@ class TPPartialSource:
         for step in sorted(self.c._layouts):
             by_name = _metas_by_name(self.c._layouts.get(step, []))
             fam = {n for n in by_name if n.endswith((f"/part_rank{self.rank}", f"/shard_rank{self.rank}")) or (n.endswith("/out") and n.rsplit("/", 1)[0] in received)}
-            pt = cap / f"coll.rank{self.rank}.step{step}.pt"
+            pt = oracle_dir / f"coll.rank{self.rank}.step{step}.pt"
             if not pt.exists() or step not in by_step:
                 res["steps_without_oracle"].append(step)
                 continue

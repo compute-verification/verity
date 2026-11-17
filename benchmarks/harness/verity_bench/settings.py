@@ -9,7 +9,7 @@ value settings in force (`record`) beside its result (``out/settings.json``).
 Read a setting as an attribute, ``settings.VERITY_BENCH_VENV`` (or `get` by name).  `put`, `setdefault` and `unset` write a
 declared variable; `environ` is a copy of the whole environment, for code that passes it on (a spec's ``[env]`` and
 ``"$NAME"`` values name variables the arms read).  A variable the vLLM integration declares (``verity_vllm/settings.py``) is
-never declared here too: the harness writes one through the integration's writer, ``verity_vllm.engine.env.apply_target``.
+never declared here too: the harness writes one through the integration's writer, ``apply_target`` (`verity_vllm.engine.env`).
 
 `validate` (the registry's `Registry.check`) refuses a ``VERITY_BENCH_*`` variable that nothing reads (the registry's
 ``elsewhere`` names the ones other parts of the tree read), a declared value that doesn't parse, and on a run of record a
@@ -53,7 +53,7 @@ REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
     S("GPU_LEASE_UUID", str, None, WHERE, "the UUIDs of the GPUs gpu-lease leased the job (it sets them), which the host stamp "
       "reads the clocks of; unset, every GPU of the host"),
     elsewhere=(
-        "VERITY_BENCH_FULL",       # benchmarks/numerical/tests/bench/test_instances.py's opt-in
+        "VERITY_BENCH_FULL",       # tests/benchmarks/numerical/bench/test_instances.py's opt-in
         "VERITY_BENCH_CUBIN",      # `verity bench overhead run --cubin`'s file, which overhead_node sets and a scheme's arm loads
     ), shared=False)
 del S

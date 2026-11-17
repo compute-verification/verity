@@ -14,8 +14,10 @@ import all Init.Data.Nat.Power2.Basic
 takes a cap of as a hypothesis. At the deployed session's tables (`Masked.tabC`) the count is bounded by the table
 count times a constant, from what `Zk.schedule` accepts, and the table count by the verifier's cap.
 
-* `ZkHidden.zkLen0_all`: level 0's codeword of `Zk.schedule m` has at most `2^23` symbols at every `m` it accepts,
-  one check per `m` (`decide +kernel`), as `zkSchedFacts_all` is.
+* `ZkHidden.zkLen0_all`: level 0's codeword of `Zk.schedule wideLeaf m` has at most `2^23` symbols at every `m` it
+  accepts, at either statement version (`wideLeaf`), one check per version and `m` (`decide +kernel`), as
+  `zkSchedFacts_all` is. The wide-leaf version holds level 0 at `2^19` symbols, so the cap binds at the narrow
+  version's `m = 35`.
 * `ZkHidden.ZkTab.card_leafPos_le`: a `--zk` table's `Coined` tables have at most `leafCap = 2^23 + 2^14 + 2`
   pre-final leaves. Level 0's opened and unopened positions are its codeword's (`zkSchedFacts_all`: the pad count is
   below the codeword's length); each of the two reps' pads positions are the inner code's, at most `2^13` (`len_le`);
@@ -42,25 +44,26 @@ open Flock Refine ZkLink
 leaves, at the largest sizes `Zk.schedule` accepts (`m = 35`, where level 0's codeword has `2^23` symbols). -/
 def leafCap : ℕ := 2 ^ 23 + 2 ^ 14 + 2
 
-/-- Whether level 0's codeword of `Zk.schedule m` has at most `2^23` symbols. -/
-def zkLen0 (m : ℕ) : Bool :=
-  match Zk.schedule m with
+/-- Whether level 0's codeword of `Zk.schedule wideLeaf m` has at most `2^23` symbols. The wide-leaf version holds
+level 0 at `2^19` symbols (`fast100Wide`, `m = 31`'s level 0), so the cap binds at the narrow version's `m = 35`. -/
+def zkLen0 (wideLeaf : Bool) (m : ℕ) : Bool :=
+  match Zk.schedule wideLeaf m with
   | .ok (s, _) => decide (((schedOf s).levels.headD default).logLen ≤ 23)
   | .error _ => true
 
 set_option maxRecDepth 100000 in
-theorem zkLen0_all : ∀ m, 25 ≤ m → m ≤ 35 → zkLen0 m = true := by
+theorem zkLen0_all {wideLeaf : Bool} : ∀ m, 25 ≤ m → m ≤ 35 → zkLen0 wideLeaf m = true := by
   intro m h1 h2
-  interval_cases m <;> decide +kernel
+  cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 /-- **A `--zk` table's `Coined` tables have at most `leafCap` pre-final leaves.** -/
 theorem ZkTab.card_leafPos_le (P : Composed.LigProver) {st : Flock.Stmt} (y : ZkTab st) :
     Fintype.card (ZkView.LeafPos (Composed.coinedOf P y.table st).z) ≤ leafCap := by
   obtain ⟨h1, h2⟩ := schedule_range y.hz
-  have hf := zkSchedFacts_all _ h1 h2
+  have hf := zkSchedFacts_all (wideLeaf := st.wideLeaf) _ h1 h2
   simp only [zkSchedFacts, y.hz, Bool.and_eq_true, decide_eq_true_eq] at hf
   obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨-, -⟩, -⟩, -⟩, -⟩, -⟩, -⟩, b3⟩, -⟩, -⟩, hk0⟩ := hf
-  have b1 := zkLen0_all _ h1 h2
+  have b1 := zkLen0_all (wideLeaf := st.wideLeaf) _ h1 h2
   simp only [zkLen0, y.hz, decide_eq_true_eq] at b1
   have hlen := len_le h2 y.wf.1.hk hk0
   have hle : ((layOf st y.sch).len + Zk.K_PAD).nextPowerOfTwo ≤ 2 ^ 10 :=
@@ -148,7 +151,7 @@ theorem anyErr_le_dataE (vs : (CoinLayer.session loopNr Masked.dataE).SwVals)
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
     (real : Msg → Flock.Wit →
       (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) (t : ℕ) {x : Msg} {w : Flock.Wit}
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)) (t : ℕ) {x : Msg} {w : Flock.Wit}
     {Θ : Type} {Vs : VStar Θ} {θ : Θ} {q : ℕ} {δ₁ : ℝ} (hδ : hidingGap ZkView.My ZkView.saltHash ≤ δ₁)
     (hB : Budget Masked.dataE vs L₀ real x w Vs θ q) (o : Bool) :
     anyErr Masked.dataE vs L₀ real t x w Θ Vs θ o ≤

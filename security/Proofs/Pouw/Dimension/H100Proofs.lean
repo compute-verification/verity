@@ -179,7 +179,7 @@ theorem tr100_spec : ∀ (P : List (Op100 G)) (Rs Vs : List (G → ℚ)),
 
 end Spec
 
-/-! ## The pinned theorems -/
+/-! ## The guarantees -/
 
 /-- The embedding at any floor `c`: into AlgM_c. -/
 theorem embedFloor (c : ℕ) (pr : Prices100) (hpr : Floor c pr) (G : Type) (V : Submodule ℚ (G → ℚ))

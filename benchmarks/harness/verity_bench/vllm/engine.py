@@ -17,38 +17,18 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
 from verity_vllm import LLM
-from verity_vllm.engine import env as engine_env
-from verity_vllm.engine import handle, int8_ranks
+from verity_vllm.engine import handle
 from verity_vllm.engine.arrivals import run_requests_arrivals
+from verity_vllm.engine.env import INDUCTOR_DIR_MARK, apply_compile_fresh, apply_engine, apply_target, own_inductor_dir
 from verity_vllm.engine.hooks import Hooks, live
-from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import pearl_c as PPD
 
 from verity_bench import settings
-from verity_bench.vllm.arms import (
-    H1,
-    Arm,
-    Target,
-    build_bound,
-    h1_config,
-    is_h1,
-    plugin,
-    protocols_config,
-    window_steps,
-)
+from verity_bench.vllm.arms import Arm, Target, build_bound, plugin, protocols_config
 from verity_bench.vllm.presets import GREEDY, Preset, SweepPoint
-from verity_bench.vllm.runner import (
-    BenchEngine,
-    ResidentCapacityError,
-    _numeric_leaves,
-    _pearl_c_gate,
-    _token_digest,
-    h1_gate,
-    h1_summary,
-)
+from verity_bench.vllm.runner import BenchEngine, ResidentCapacityError, _numeric_leaves, _pearl_c_gate, _token_digest
 from verity_bench.vllm.timing import (
     HostProbe,
     decode_time_per_token,
@@ -56,14 +36,6 @@ from verity_bench.vllm.timing import (
     percentile,
     run_trace,
 )
-
-# `TargetProfile.int8_exact` "all" as vLLM takes it (`TargetProfile.engine_args`, `INT8_EXACT_SCOPES`)
-INT8_EXACT_SCOPE = "all"
-INT8_EXACT_PARTS = ("linears", "attention")
-INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND = "verity_int8", "CUSTOM"
-# S of the H1 window `verity_vllm.LLM` opens at the build, before the engine knows its points: the first run's
-# `reinstall` closes it unserved and opens that run's own
-H1_OPENING_STEPS = 1
 
 
 def _callback(obj: Any, name: str, target: Target, default: Any) -> Any:
@@ -109,10 +81,11 @@ def _pearl_c_run(llm: Any) -> Any | None:
     """The arm's Pearl-C device run, the owner of its option's ``end_pass``; None when the arm runs none. The adapter ends
     a pass each time the model runner's ``execute_model`` returns (`pouw.install`), so the harness only reads the passes
     (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
+    from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
 
     option = llm.protocols.get("pouw") if llm.protocols is not None else None
     run = getattr(getattr(option, "end_pass", None), "__self__", None)
-    return run if isinstance(run, PPD.PearlCDeviceRun) else None
+    return run if isinstance(run, PearlCDeviceRun) else None
 
 
 def _pass_totals(run: Any) -> dict[str, int]:
@@ -142,8 +115,7 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     share one exact KV pool, ``resident_kv_cache_memory_bytes`` or ``block_kv_cache_memory_bytes``: vLLM schedules by
     free KV pages, and an arm whose install leaves a different amount of free memory would otherwise get a different
     pool, a different schedule, and (through batch-composition-dependent kernels) different tokens than its control.
-    Without a pin the kv-pool gate catches unequal pools. ``attention_backend`` and ``attention_config`` pass to vLLM as
-    set, for a preset whose Build's row declares them (the B200's FlashAttention 2)."""
+    Without a pin the kv-pool gate catches unequal pools."""
 
     settings = preset.engine_settings
     engine: dict[str, Any] = {
@@ -159,15 +131,11 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
         engine["max_num_batched_tokens"] = int(settings["max_num_batched_tokens"])
     if precision == "fp8":
         engine["quantization"] = "fp8"
-    elif precision == "int8_exact":
-        if not eager:
-            raise ValueError("int8_exact runs eagerly only, on its own attention backend: an eager spec")
-        engine["quantization"], engine["attention_backend"] = INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND
     elif precision != "bfloat16":
         engine["dtype"] = precision
-    if settings.get("serving_defaults"):
+    if settings.get("serving_defaults") or settings.get("batch_invariant") is False:
         engine["execution"] = "eager" if eager else "compiled"
-    elif not eager:
+    if not settings.get("serving_defaults") and not eager:
         engine["compilation_config"] = {
             "mode": 0,
             "cudagraph_mode": "FULL_DECODE_ONLY",
@@ -176,10 +144,6 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     kv_pin = settings.get("resident_kv_cache_memory_bytes" if resident else "block_kv_cache_memory_bytes")
     if kv_pin is not None:
         engine["kv_cache_memory_bytes"] = int(kv_pin)
-    if settings.get("attention_backend") is not None:
-        engine["attention_backend"] = str(settings["attention_backend"])
-    if settings.get("attention_config") is not None:
-        engine["attention_config"] = dict(settings["attention_config"])
     return engine
 
 
@@ -190,12 +154,12 @@ class _VllmEngine:
         if preset.revision is None and preset.model_digest is None:
             raise ValueError(f"preset {preset.id} has no pinned checkpoint revision")
         if preset.engine_settings.get("serving_defaults"):
-            engine_env.apply_compile_fresh()
-        engine_env.apply_engine(None)
+            apply_compile_fresh()
+        apply_engine(None)
         import torch
         import vllm
 
-        self.arm, self.obj, self.installed, self.pearl_c, self.h1 = arm, plugin(arm), None, None, None
+        self.arm, self.obj, self.installed, self.pearl_c = arm, plugin(arm), None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
         if self.obj is not None:
             before = {id(e) for e in live()}
@@ -210,9 +174,6 @@ class _VllmEngine:
         kernel_digest = arm.kernel_digest
         precision = arm.precision or preset.precision
         engine = engine_args(preset, precision, resident=resident, eager=eager)
-        if precision == "int8_exact":
-            # `engine.build.register_int8_parts` registers a TargetProfile's parts, and verity_vllm.LLM builds with none
-            int8_ranks.register(INT8_EXACT_PARTS)
         overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
         engine.update(overrides or {})
         if preset.model_digest is not None:
@@ -232,32 +193,16 @@ class _VllmEngine:
             config: dict[str, Any] = {}
             if arm.protocols:
                 config = protocols_config(arm, settings.environ())
-            if is_h1(arm):
-                rows = config.get("pouw", {}).get("rows")
-                if rows != engine.get("max_num_batched_tokens"):
-                    raise ValueError(f"{arm.id}: the pouw setting 'rows' (T, {rows}) is the engine's "
-                                     f"max_num_batched_tokens ({engine.get('max_num_batched_tokens')})")
-                self.h1 = {"config": config, "rows": rows, "windows": []}
-                config = h1_config(config, H1_OPENING_STEPS)
-            if arm.protocols:
                 engine["protocols"] = ",".join(arm.protocols)
                 if config:
                     engine["protocols_config"] = config
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
-            if arm.protocols and self.h1 is None:
+            if arm.protocols:
                 self.pearl_c = _pearl_c_run(self.llm)
                 cubin = config.get("pouw", {}).get("cubin")
                 if cubin:
                     kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
-        if precision == "int8_exact":
-            # kernel_readback imports torch
-            from verity_vllm.program.frontend.kernel_readback import int8_exact_of
-
-            got = int8_exact_of(self.llm.model)
-            if got != INT8_EXACT_SCOPE:
-                raise RuntimeError(f"{arm.id}: an int8_exact engine whose layers run int8 scope {got!r}, not "
-                                   f"{INT8_EXACT_SCOPE!r}")
         ready = getattr(self.installed, "ready", None)
         if callable(ready):
             ready(self.target)
@@ -303,29 +248,6 @@ class _VllmEngine:
         return info if self.pearl_c is None else {**info, "pearl_c": _pass_totals(self.pearl_c)}
 
     def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
-        """One run; an H1 arm's in its own window, opened before the clock starts (`verity_vllm.LLM.reinstall`, S the run's
-        step bound, `window_steps`) and closed after it stops."""
-
-        if self.h1 is None:
-            return self._serve(point, phase)
-        llm = cast(LLM, self.llm)  # an H1 arm's: a local checkpoint serves no protocol arm
-        start = time.perf_counter()
-        llm.reinstall(h1_config(self.h1["config"], window_steps(point, self.h1["rows"])))
-        install_s = time.perf_counter() - start
-        run = pouw.h1_run(H1)
-        try:
-            tokens, out = self._serve(point, phase)
-        finally:
-            start = time.perf_counter()
-            llm.close()
-            window = {"point": point.id, "phase": phase, **h1_summary(run), "install_s": round(install_s, 3),
-                      "close_s": round(time.perf_counter() - start, 3)}
-            self.h1["windows"].append(window)
-        if phase == "measure":
-            out = {**out, "extras": {**out["extras"], "h1_window": window}}
-        return tokens, out
-
-    def _serve(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch
         from vllm import SamplingParams
 
@@ -402,8 +324,6 @@ class _VllmEngine:
         return self._run(point, "gate")[0]
 
     def custom_gate(self) -> Mapping[str, Any]:
-        if self.h1 is not None:
-            return h1_gate(self.h1["windows"])
         if self.obj is None:
             return {"passed": True, "provided": False} if self.pearl_c is None else _pearl_c_gate(self.pearl_c)
         got = _callback(self.obj, "gate", self.target, None)
@@ -528,15 +448,12 @@ class _ProcessEngine:
 
 def arm_execution(arm: Arm, preset: Preset, eager: bool) -> tuple[Preset, bool]:
     """The preset and eagerness the arm's engine is built with: the spec's, or for a served variant
-    (`arms.served_variant`) vLLM's serving defaults in the variant's execution (`engine_args`), on its own checkpoint
-    when it names one."""
+    (`arms.served_variant`) vLLM's serving defaults in the variant's execution (`engine_args`)."""
 
     if arm.execution is None:
         return preset, eager
     eager = arm.execution == "eager"
     settings = {**preset.engine_settings, "serving_defaults": True, "cuda_graphs": not eager, "enforce_eager": eager}
-    if arm.model is not None:
-        preset = replace(preset, model=arm.model, revision=arm.revision, case=None, model_digest=None)
     return replace(preset, engine_settings=settings), eager
 
 
@@ -558,10 +475,10 @@ class ProcessEngineFactory:
                     "spec)")
         if resident and not arm.resident:
             raise ResidentCapacityError(f"arm {arm.id!r} requires an isolated engine lifetime")
-        if preset.engine_settings.get("serving_defaults") and not engine_env.own_inductor_dir():
+        if preset.engine_settings.get("serving_defaults") and not own_inductor_dir():
             # Every arm's process compiles on its own, and the kernel configurations Inductor autotunes reach the numerics
             # (a reduction's tile size): one cache directory gives every arm the configurations the first one picked.
-            engine_env.apply_target({"TORCHINDUCTOR_CACHE_DIR": tempfile.mkdtemp(prefix="verity_bench_inductor_"), engine_env.INDUCTOR_DIR_MARK: "1"})
+            apply_target({"TORCHINDUCTOR_CACHE_DIR": tempfile.mkdtemp(prefix="verity_bench_inductor_"), INDUCTOR_DIR_MARK: "1"})
         parent, child = self.context.Pipe()
         process = self.context.Process(target=_worker, args=(child, arm, preset, resident, eager))
         process.start()

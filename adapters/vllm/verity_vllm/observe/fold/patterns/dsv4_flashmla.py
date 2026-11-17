@@ -5,18 +5,15 @@ with the C4 / C128 compress the attention emits before it (`mla_compress`), as t
 
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import re
 from dataclasses import dataclass
 
-from verity.definitions.numerics.flashmla_twin import (
+from verity_vllm.definitions.numerics.flashmla_twin import (
     num_sm_parts,
     request_splits,
     sched_meta,
 )
-from verity.definitions.registry import dsv4_compressor as C
-
+from verity_vllm.definitions.registry import dsv4_compressor as C
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.dsv4_cache import (
     _entry_slots,

@@ -110,7 +110,7 @@ def _tanh_rn_table():
 def _gelu_table():
     """``GeluTanhMulBf16_v1``'s activation word ``dense.gelu_tanh_bf16_bits(g)`` for every bf16 word g."""
     import numpy as np
-    from verity.definitions.registry import dense
+    from verity_vllm.definitions.registry import dense
 
     return np.array([dense.gelu_tanh_bf16_bits(g) for g in range(1 << 16)], np.uint32)
 
@@ -565,7 +565,7 @@ PIECES = {
     "F32Max_v1": f32_max,
     "GuardNegInfZero_v1": guard_neg_inf_zero,
     "MufuEx2Ftz_v1": mufu_ex2,
-    # the top-p keep word's word gates (verity.definitions.registry.topp_word_gates)
+    # the top-p keep word's word gates (verity_vllm.definitions.registry.topp_word_gates)
     "BitXor_v1": lambda C, a, b: [a[0] ^ b[0]],
     "U32Xor_v1": lambda C, a, b: [x ^ y for x, y in zip(a, b)],
     "SelectBit_v1": lambda C, c, a, b: mux(C, c[0], a, b),
@@ -599,7 +599,7 @@ PIECES = {
     "F32Fmaxf_v1": lambda C, a, b: C.commit(_fmaxmin(C, a, b, True)),
     "F32Fminf_v1": lambda C, a, b: C.commit(_fmaxmin(C, a, b, False)),
     "F32ToE4m3Sat_v1": f32_to_e4m3_sat,
-    # NVFP4 quantization's casts and the bit AND (PoUW's units; verity.definitions.registry.nvfp4)
+    # NVFP4 quantization's casts and the bit AND (PoUW's units; verity_vllm.definitions.registry.nvfp4)
     "E4m3ToF32_v1": e4m3_to_f32,
     "F32ToE2m1Sat_v1": f32_to_e2m1_sat,
     "BitAnd_v1": lambda C, a, b: [C.AND(a[0], b[0])],
@@ -626,6 +626,19 @@ PIECES = {
     "TanhF32Rn_v1": tanh_rn,
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
 }
+
+
+def word_of(C, *bits):
+    return [b[0] for b in bits]
+
+
+def bit_of(m):
+    i = int(m[2])
+    return lambda C, word: [word[i]]
+
+
 #: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32,
-            r"GatherE4m3x\d+_v1": gather_e4m3, r"MoeSelectBf16x\d+_v1": moe_select_bf16}
+            r"GatherE4m3x\d+_v1": gather_e4m3, r"MoeSelectBf16x\d+_v1": moe_select_bf16, r"WordOf\d+_v1": word_of}
+#: primitive families whose piece reads its id: pattern -> (match -> piece)
+MADE = {r"BitOf(\d+)x(\d+)_v1": bit_of}

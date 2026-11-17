@@ -43,7 +43,7 @@ and result.json is the session's (`session`).
     python gemm_hill.py stamp --out stamps.tsv -- BINARY prove ...    # the prover, its stdout passed through and each line stamped
     python gemm_hill.py key --binary-sha binary.sha256 --out key.json # what a point shares with its session's preflight check
     python gemm_hill.py metrics --K 8192 --preflight preflight.jsonl --sweep results.jsonl --stamps stamps.tsv --dmon dmon.tsv \
-        --phases phases.tsv --census benchmarks/census/hardware.json --out metrics.json --result result.json --hillclimb hillclimb.json \
+        --phases phases.tsv --census calibration/census/hardware.json --out metrics.json --result result.json --hillclimb hillclimb.json \
         [--point I --points N --preflight-key preflight/key.json --point-key key.json]
     python gemm_hill.py session --dir RUN_DIR [--points N]            # outputs.json, and with N > 1 the session's result.json
     python gemm_hill.py rollup --attempt RUN [--run-dir DIR] --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
@@ -67,7 +67,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import gemm_slowdown as GS  # noqa: E402
+import gemm_slowdown as GS
 
 #: dtype -> the coordinate Definition, its dot, the census line of its dense peak at FP32 accumulate, and the campaign target
 #: (verity.circuits.targets.target) whose operands and accumulator these are: MXFP4 has none, so its result.json names none
@@ -968,7 +968,7 @@ def main() -> None:
     m.add_argument("--others")
     m.add_argument("--slice")
     m.add_argument("--gpu-csv")
-    m.add_argument("--census", default="benchmarks/census/hardware.json")
+    m.add_argument("--census", default="calibration/census/hardware.json")
     m.add_argument("--peak-id", default=None, help="the census line (default: the dtype's, DTYPES)")
     m.add_argument("--root", default=".")
     m.add_argument("--binary-sha", default=None)

@@ -5,22 +5,20 @@ attention `vllm_dsa` binds: `bmm(q_nope^T, W_UK_T)` and `bmm(attn^T, W_UV)`, `ba
 
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from typing import cast
 
 import torch
 from verity.circuits.refs import array_of
 
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import known, shape
-from verity_vllm.program.frontend.rules.patterns import Consumed
+from verity_torch.frontend.rules.base import OpRule, RuleInfo
+from verity_torch.frontend.rules.common import known, shape
+from verity_torch.frontend.rules.patterns import Consumed
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
 )
 from verity_vllm.program.frontend.rules.vllm_dsa import BF16, _missing, _rows, _value
-from verity_vllm.program.frontend.strided_views import _permute
+from verity_torch.frontend.strided_views import _permute
 
 aten = torch.ops.aten
 

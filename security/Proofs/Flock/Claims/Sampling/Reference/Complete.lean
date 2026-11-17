@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+public import Proofs.Flock.Claims.Sampling.Select.SampleDesign
 public import Proofs.Flock.Claims.Sampling.Reference.Prover
 public import Proofs.Flock.Claims.Sampling.Session
 import Mathlib.Algebra.Order.Floor.Extended
@@ -55,13 +55,13 @@ verifier and reference prover, each a hypothesis to discharge at the deployment:
 * `SessionsAmong K`: every checked unit's session is the session of the unit checked at a slot below `K x`; at
   `K = n_PU` from `CheckedLe` (`sessionsAmong_nPU`), and at `K = 1` when one session proves every sampled proof block.
 
-With `DrawFixed` (the checked units don't read their sessions' coins), each slot `p` rejects with probability at most
+With `SampleFixed` (the checked units don't read their sessions' coins), each slot `p` rejects with probability at most
 its session's Flock error: resampling the slot's session rounds (`Ex_resample`) leaves the slot's unit and statement
 fixed, and the session's coins are then uniform (`Pr_comp_inj`), so Flock's completeness bounds the rejection. The union
 bound over the slots below `K x` gives the error `K · sessErr`, `sessErr` the largest Flock error, capped at `1`, over
 the statements of the sessions at `x`.
 
-* `complete_of_sessions`: **`Complete H D`** from Flock's completeness at `D.flock`, `DrawFixed`, the four facts,
+* `complete_of_sessions`: **`Complete H D`** from Flock's completeness at `D.flock`, `SampleFixed`, the four facts,
   Flock's errors nonnegative, and `D.δc H x ≥ K · sessErr`.
 -/
 
@@ -86,7 +86,7 @@ theorem checkedLe_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : CheckedLe
   have hnPU : nPU D x = (slotPartition l).blocks.length := by
     simp [nPU, hx, Deploy.part, hP, Partition.blocks_length_of_shape hshape]
   rw [hch r, hnPU, Array.length_toList]
-  unfold drawChecked
+  unfold sampleChecked
   split
   · rename_i c hs
     obtain ⟨hl', draw, proved, read, -, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
@@ -153,7 +153,7 @@ theorem slot_lt (D : Deploy Coin Col T) (hle : CheckedLe D) {x : Msg} (hx : Scop
   ⟨⟨p, (List.getElem?_eq_some_iff.1 hu).1.trans_le (hle x hx d)⟩, hu⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem slotRounds_fork (D : Deploy Coin Col T) (hfix : DrawFixed D) (hle : CheckedLe D) {x : Msg} (hx : Scope D x)
+theorem slotRounds_fork (D : Deploy Coin Col T) (hfix : SampleFixed D) (hle : CheckedLe D) {x : Msg} (hx : Scope D x)
     (p : ℕ) (d σ : Fin (D.V.k x) → Coin) :
     slotRounds D x p (forkOn (slotRounds D x p d) d σ) = slotRounds D x p d := by
   unfold slotRounds
@@ -164,7 +164,7 @@ theorem slotRounds_fork (D : Deploy Coin Col T) (hfix : DrawFixed D) (hle : Chec
 /-- **A checked slot rejects with at most its session's error**: the event that the unit checked at slot `p` has a
 session that shows a rejection. -/
 theorem Pr_slot_le (H : Msg → Msg) (D : Deploy Coin Col T) (hF : Claims.Flock.Complete H D.flock)
-    (hfix : DrawFixed D) (hle : CheckedLe D) (hS : HonestSessions H D) (hnn : ∀ xS, 0 ≤ D.flock.δc H xS)
+    (hfix : SampleFixed D) (hle : CheckedLe D) (hS : HonestSessions H D) (hnn : ∀ xS, 0 ≤ D.flock.δc H xS)
     (h64 : Out64 H) (x : Msg) (w : Wit) (hx : Scope D x) (hw : Rhon H D.commit D.parse D.partition x w) (ω : D.Tape)
     (p : ℕ) :
     Pr (fun r : Fin (D.V.k x) → Coin => ∃ u, (D.checked x r)[p]? = some u ∧
@@ -236,11 +236,11 @@ theorem sessionsAmong_nPU (H : Msg → Msg) (D : Deploy Coin Col T) (hle : Check
   exact ⟨i, hi.trans_le (hle x hx r), u, List.getElem?_eq_some_iff.2 ⟨hi, hget⟩, rfl⟩
 
 /-- **Sampling completeness from Flock's, session by session**: at Flock's completeness at the record's sessions,
-`DrawFixed`, `CheckedLe`, `HonestSessions`, `AcceptsSessions` and `SessionsAmong` at `K`, with Flock's errors
+`SampleFixed`, `CheckedLe`, `HonestSessions`, `AcceptsSessions` and `SessionsAmong` at `K`, with Flock's errors
 nonnegative, the reference prover is accepted with probability at least `1 − K · sessErr`, so `Complete` holds at any
 `δc` at least that. -/
 theorem complete_of_sessions (H : Msg → Msg) (D : Deploy Coin Col T) (hF : Claims.Flock.Complete H D.flock)
-    (hfix : DrawFixed D) (hle : CheckedLe D) (hS : HonestSessions H D) (hA : AcceptsSessions H D) (K : Msg → ℕ)
+    (hfix : SampleFixed D) (hle : CheckedLe D) (hS : HonestSessions H D) (hA : AcceptsSessions H D) (K : Msg → ℕ)
     (hK : SessionsAmong H D K) (hnn : ∀ xS, 0 ≤ D.flock.δc H xS) (hδ : ∀ x, K x * sessErr H D x ≤ D.δc H x) :
     Complete H D := by
   intro h64 x w hx hw ω

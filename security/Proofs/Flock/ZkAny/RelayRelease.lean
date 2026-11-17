@@ -23,15 +23,15 @@ the same at the session's stop (`Frames.Sessions.stopped`), where a stopped sess
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Frame (Masker)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frame (Masker)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
 /-- **What the frame's check releases is the model's release**, where the session stopped (`b`, no device round) or
 not (the frame not stopped). -/
 theorem release_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     {m : Masker} (hm : L.answered x ρ h = .ok m) {s : Masker} (hu : unstop s = unstop m) {b : Bool}
     (hb : b = false → s.stopped = false) {v : Msg} {out : ByteArray} {s' : Masker} {why : Option String}
-    (hc : _root_.Flock.Firewall.Frame.check (L.cfg x ρ h) s (if b then ByteArray.empty else ⟨v.toArray⟩)
+    (hc : _root_.Flock.ZkServer.Frame.check (L.cfg x ρ h) s (if b then ByteArray.empty else ⟨v.toArray⟩)
       ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩ (L.coins x h.length) = .ok (out, s', why)) :
     0 :: out.data.toList = if (!b && L.pass x w ρ h v) = true then L.release x ρ h false v
       else L.release x ρ h true (L.scheduled x w ρ h (computedOf (L.computed x w ρ h))) := by
@@ -50,7 +50,7 @@ theorem release_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (�
       cases why with
       | none =>
         have hr := check_none hc
-        unfold _root_.Flock.Firewall.Frame.round at hr
+        unfold _root_.Flock.ZkServer.Frame.round at hr
         obtain ⟨q, hq, -⟩ := bindV_ok hr
         exact absurd hq (Ranked.roundFree_empty _ _ _ q)
       | some _ => rfl
@@ -63,7 +63,7 @@ theorem release_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (�
     simp only [Bool.not_true, Bool.false_and, Bool.false_eq_true, ↓reduceIte]
     unfold LeanRelease.release LeanRelease.step
     rw [hm]
-    show 0 :: out.data.toList = match _root_.Flock.Firewall.Frame.round (L.cfg x ρ h) { m with stopped := true }
+    show 0 :: out.data.toList = match _root_.Flock.ZkServer.Frame.round (L.cfg x ρ h) { m with stopped := true }
       ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩ (L.coins x h.length) with
       | .ok (out, _) => 0 :: out.data.toList
       | .error _ => L.stop
@@ -76,15 +76,15 @@ configuration and masking state are the model's but for `stopped`, what the roun
 device round `v` where the session has not stopped and `v` passes, else of the scheduled round as a stopped rep's, after
 the stream's domain frame at its first round; after its put the session is stopped where it was or `v` fails. -/
 theorem roundStep_release {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (w : W) (ρ : Rr) (h : List (Msg × Msg))
-    {m : Masker} (hm : L.answered x ρ h = .ok m) {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots}
+    {m : Masker} (hm : L.answered x ρ h = .ok m) {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots}
     {sid i r : Nat} {dom : ByteArray} (v : Msg) {q p₁ : Rep} {f : Bool} {nd : Option String} {o : ByteArray}
     (hfr : (frameAt R sid i r).isSome)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length) =
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length) =
       .ok (q, .sched ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩, f, nd))
     (hnd : nd.isSome = R.stopped sid) (hq : R.stopped sid = false → q.st.m.stopped = false)
     (hcfg : q.cfg = L.cfg x ρ h) (hu : unstop q.st.m = unstop m)
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).put =
+    (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).out = .ok o)
+    (hput : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).put =
       some p₁) :
     ∃ out, o = (if f then dom ++ out else out) ∧
       0 :: out.data.toList = (if (!R.stopped sid && L.pass x w ρ h v) = true then L.release x ρ h false v

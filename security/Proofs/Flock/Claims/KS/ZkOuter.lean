@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 The recursion's outer verifier (`RecDeploy.deployZkRec`) is `deployZk` at another setup, `SO`: masked, the recursive
 setup (`RecDeploy.setupO`) at its Flock inputs, whose `Ok` is the recursive setup's success (`RecIns.setup`, which runs
 the verifier's inner-shape refusals, `RecSetup.checkInner`, among its own), with the verdict's last refusals
-(`RecDeploy.fullDrawO`) after the checks (`wrapO`); plain, `S₀`'s. At `SO` the masked chain's copy of the masked
+(`RecDeploy.fullSampleO`) after the checks (`wrapO`); plain, `S₀`'s. At `SO` the masked chain's copy of the masked
 instance (`KS.Gen.deployZk`) is `deployZkRec` (`deployZk_SO`): the same step (`act_SO`), the decision's refusal after the
 verdict (`outOf_decision_SO`), the same reading of the statement, columns and numbers. So the chain's knowledge
 soundness at `SO` (`KS.Gen.zk_KS_untrim`) is the outer verifier's (`zk_KS_outer`).
@@ -51,12 +51,12 @@ soundness at `SO` (`KS.Gen.zk_KS_untrim`) is the outer verifier's (`zk_KS_outer`
 namespace FlockDeploy.KS
 
 open Flock
-open RecDeploy (RecIns insO setupO readOfO fullDrawO actO nextO VO runOfO colsO tablesO εtableO N₀O weightO
+open RecDeploy (RecIns insO setupO readOfO fullSampleO actO nextO VO runOfO colsO tablesO εtableO N₀O weightO
   deployZkRec)
 
-/-- **The outer verifier's refusal after the checks**: the verdict's last refusals (`fullDrawO`). -/
+/-- **The outer verifier's refusal after the checks**: the verdict's last refusals (`fullSampleO`). -/
 def wrapO (x : Claims.Msg) (f : Final) (v : Flock.V Unit) : Flock.V Unit :=
-  if fullDrawO x f then v else .error "rec: refused by the verdict's last refusals (fullDraw, innerDrawn, denseOnly)"
+  if fullSampleO x f then v else .error "rec: refused by the verdict's last refusals (fullSample, innerSampled, denseOnly)"
 
 /-- Under `--zk` the recursive setup passes every table's `Zk.shapeOk`. -/
 theorem recIns_shapeOk {r : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : r.setup = .ok (spec, sts))
@@ -144,13 +144,13 @@ step). -/
 theorem outOf_decision_SO (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
     (mids : List (Claims.Msg × Coin)) (f : Final) :
     outOf (@Gen.decision SO true s x link c₁ mids f) =
-      (outOf (decision true s x link c₁ mids f)).bind fun o => .ret (if fullDrawO x f then o else .rej) := by
+      (outOf (decision true s x link c₁ mids f)).bind fun o => .ret (if fullSampleO x f then o else .rej) := by
   unfold Gen.decision decision
   rw [outOf_bind, outOf_bind, Claims.OC.bind_assoc']
   congr 1
   funext r
   rcases r with e | ⟨spec, sts⟩
-  · cases fullDrawO x f <;> rfl
+  · cases fullSampleO x f <;> rfl
   · show outOf (@Gen.decisionAt SO true s spec sts x link c₁ mids f) =
       (outOf (decisionAt true s spec sts x link c₁ mids f)).bind _
     unfold Gen.decisionAt decisionAt
@@ -158,12 +158,12 @@ theorem outOf_decision_SO (s : Ins) (x : Claims.Msg) (link : List ByteArray × L
     congr 1
     funext r'
     rcases r' with e | ⟨⟩
-    · cases fullDrawO x f <;> rfl
+    · cases fullSampleO x f <;> rfl
     · show outOf (monadLift (@Gen.checks SO true s spec x link c₁ mids f)) =
         (outOf (monadLift (checks true s spec x link c₁ mids f))).bind _
       rw [checks_SO]
       unfold wrapO
-      cases fullDrawO x f <;> rfl
+      cases fullSampleO x f <;> rfl
 
 /-- **The verifier's next message at `SO` is the outer verifier's** (`nextO`). -/
 theorem next_SO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) :

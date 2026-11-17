@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Assumptions.Pouw
 public import Definitions.Pouw.PearlC.W1Stop
 public import Proofs.Pouw.PearlC.W1BudgetAbort
 import Mathlib.Tactic.Positivity.Finset

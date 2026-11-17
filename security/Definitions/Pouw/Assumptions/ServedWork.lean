@@ -11,7 +11,7 @@ program that exchanges no bits and reads at most `B` bits of advice costs at lea
 right times `pub`, less a luck allowance `lam`. It is a proof-only definition over `noFoldRound`'s types.
 
 `SAKServed` is the same claim at the served protocol's types (`PouwCheck.Credit.periodCredit`, H1's design): a window's words are
-its tiles' (`Fin Np → W`), the dither is the window's round-0 coin (its salt, `Properties.Pouw.Period.SaltIsLiveCoin`),
+its tiles' (`Fin Np → W`), the dither is the window's round-0 coin (its salt, `Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin`),
 and a tile counts as right only when all of its words are the honest ones (`rightWords`), each weighted by its
 credited words `wt t`. At `pub = p · Σ_t wt t` the right fraction by tiles is at most the right fraction by words, so
 `SakLb.SAKResidual` at the same `μ`, `lam` and `κdeg`, on a round whose cells are the tiles' credited words, gives

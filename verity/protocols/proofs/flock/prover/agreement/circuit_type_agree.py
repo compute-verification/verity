@@ -1,4 +1,4 @@
-"""Conformance of the Lean circuit-type check (`flock-verify circuit-type`, `Flock/CircuitType.lean`) with the reference,
+"""Conformance of the Lean circuit-type check (`verity-verify-proof circuit-type`, `Flock/CircuitType.lean`) with the reference,
 `verity_flock.circuit_types`: the same digest for every type, and the same verdict (accepted or refused).
 
     python circuit_type_agree.py --lean BIN --out DIR [--seed S] [--n N]
@@ -21,7 +21,7 @@ from pathlib import Path
 from verity.circuits import library
 from verity_flock import circuit_types as CT
 
-VECTORS = Path(__file__).resolve().parents[1] / "tests" / "circuit_type_vectors.json"
+VECTORS = Path(__file__).resolve().parents[6] / "tests" / "verity" / "protocols" / "proofs" / "flock" / "prover" / "circuit_type_vectors.json"
 
 
 def toy_table(rng, ib, vb):

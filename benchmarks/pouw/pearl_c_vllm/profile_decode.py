@@ -42,6 +42,8 @@ from verity_config.settings import of
 settings = of(__file__)
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
+#: the sm_120 kernel's directory, the default kernel
+SM120 = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 sys.path[:0] = [str(HERE), str(HERE.parent)]
 
 CATEGORY = {"gemm_pearlc": "gemm",
@@ -156,22 +158,22 @@ class Profile:
 def instrument(prof: Profile):
     """Wrap the device run's module functions before the install, so every call's steps and sections are timed.  Returns
     the function that puts them back."""
-    from verity_vllm.protocols.pouw import pearl_c as PPD
-    run_cls = PPD.PearlCDeviceRun
-    saved = [(PPD, n, getattr(PPD, n)) for n in ("_steps", "screen_into", "excluded")]
+    from verity_torch.pouw.pearl_c import run_device as PPDR
+    run_cls = PPDR.PearlCDeviceRun
+    saved = [(PPDR, n, getattr(PPDR, n)) for n in ("_steps", "screen_into", "excluded")]
     saved += [(run_cls, n, vars(run_cls).get(n)) for n in ("_shape", "_pipe", "end", "gemm")]  # None: a mixin's, undone by delattr
-    saved += [(PPD._Keys, "__call__", vars(PPD._Keys)["__call__"]), (PPD._Uploads, "put", vars(PPD._Uploads)["put"])]
-    steps = PPD._steps
+    saved += [(PPDR._Keys, "__call__", vars(PPDR._Keys)["__call__"]), (PPDR._Uploads, "put", vars(PPDR._Uploads)["put"])]
+    steps = PPDR._steps
 
     def named_steps(pipe, names):
         present = {n for n, _, _ in pipe.steps()}
         return [prof.step(name, f) for name, f in zip([x for x in names if x in present], steps(pipe, names), strict=True)]
 
-    PPD._steps = named_steps
-    PPD.screen_into = prof.section("screen", PPD.screen_into)
-    PPD.excluded = prof.section("excluded", PPD.excluded)
-    PPD._Keys.__call__ = prof.section("call_keys", PPD._Keys.__call__)
-    PPD._Uploads.put = prof.section("_put", PPD._Uploads.put)
+    PPDR._steps = named_steps
+    PPDR.screen_into = prof.section("screen", PPDR.screen_into)
+    PPDR.excluded = prof.section("excluded", PPDR.excluded)
+    PPDR._Keys.__call__ = prof.section("call_keys", PPDR._Keys.__call__)
+    PPDR._Uploads.put = prof.section("_put", PPDR._Uploads.put)
     run_cls._shape = prof.section("shapes (first use: buffers)", run_cls._shape)
     run_cls._pipe = prof.section("pipelines (first use: build, tensor maps)", run_cls._pipe)
     end = run_cls.end
@@ -269,7 +271,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model")
     ap.add_argument("--revision")
-    ap.add_argument("--kernel", default=str(HERE.parent / "pearl_c_sm120"))
+    ap.add_argument("--kernel", default=str(SM120))
     ap.add_argument("--cubin")
     ap.add_argument("--mem-arm", type=float, default=0.3)
     ap.add_argument("--mem-base", type=float, default=0.2)

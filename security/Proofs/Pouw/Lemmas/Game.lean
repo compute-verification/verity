@@ -29,7 +29,7 @@ def Theorem1 : Prop :=
     ∀ (C : Type) [Fintype C] (accept : (Q → R) → S → C → Prop) (εs δs : ℝ),
       pr (fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧
           εs * totalWref P U.layout <
-            ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1), (P.Wref U.layout u : ℝ))
+            ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1), (P.Wref U.layout u : ℝ))
         ≤ δs →
       pr (fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧ T < (1 - g) * (1 - εs) * totalWref P U.layout ∧
           ¬ A.Breaks U x.1 x.2.1)

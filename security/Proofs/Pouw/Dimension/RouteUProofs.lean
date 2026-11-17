@@ -20,7 +20,7 @@ import Proofs.Pouw.NCP.RouteUWordProofs
   the unbiased family's (`indep_sub`, `indep_subC`).
 * `algBoundWrappedU`, `algBoundWrappedUUnsigned`: the wrap is the identity for a signed `R` and `k ≤ 2^15`, or a
   permutation matrix and `k ≤ 2^16` (`wrapped_eq_wordU`, `NCP.RouteUWordProofs.int7Int32UPos`).
-* `a1U`: both spans are complements of `V₀` in `T ⊔ V₀` (the modular law), so A1 transfers; then `algBound4090U`.
+* `a1U`: both spans are complements of `V₀` in `T ⊔ V₀` (the modular identity), so A1 transfers; then `algBound4090U`.
 * `algWitnessU`, `algSharpU`, `alg4090WitnessU`, `algWrappedWitnessU`: one priced instruction at 16 per route-U word.
 -/
 

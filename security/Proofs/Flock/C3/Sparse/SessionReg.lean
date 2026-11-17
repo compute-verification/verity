@@ -233,7 +233,7 @@ theorem unitShape_holoAt {st : Flock.Stmt} {hp : HoloParams} (hell : hp.EllOk (e
 /-- **An accepted session's setup has a first statement, of the session's circuit** (`setupTables_okH`: one table's
 statement or several, each `setupHidden`'s, whose circuit is the session's file's, `hcH`). -/
 theorem stmt0_of_setup {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {record : String}
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {record : String}
     {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf (zkInputs zo.I) record = .ok (spec, sts)) :
     ∃ h0 : 0 < sts.size, sts[0].c = c := by
   have hh : (zkTags zo.I).hiddenOutputs = true := (zkTags_hiddenOutputs zo.I).trans zo.hTags.1
@@ -254,7 +254,7 @@ theorem stmt0_of_setup {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU :
 section Family
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 

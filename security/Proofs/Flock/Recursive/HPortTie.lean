@@ -55,7 +55,7 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
   `readsOwn_of_hown` and the label check at reached, checked outcomes (`ReachedChecked`: `accRead_at_unit`'s
   premises at every session). `reachedChecked_of` discharges it: an accepted record is a session-game outcome
   (`Accepted`'s tie), so each session's record is reached and written, and `ChecksC3Reached` (named, `ChecksReached`'s
-  form at `ChecksC3`) transfers the checks to it along the record's sample (`checksC3_of_recordDraw`).
+  form at `ChecksC3`) transfers the checks to it along the record's sample (`checksC3_of_recordSample`).
 * `hSite_of_checked`: the two reads' registration and position: both entries read `rec-c<hr>` at both reps' rows
   (`checkOwn`), `--rec-rows` registers it (`checkRows` at the part's `m<hr>`), and `checkShared` holds both to its
   first entry of that value (`site_of_checkShared`).
@@ -470,7 +470,7 @@ end point
 section src
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
@@ -581,7 +581,7 @@ open FlockC3.PubRows (ChecksAccepted)
 open FlockC3.RegLevels (Reached readsOwn_of_hown SharedValue site_of_checkShared site_of_portDiff)
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
@@ -612,7 +612,7 @@ def ChecksC3Reached (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
 tie), so each session's record is one its game reaches (`Reached`, `ZkOuter.outcome_writes`) — a transcript the
 session writes and accepts. `ChecksC3Reached` then checks some written, accepted transcript; under V*'s full sample
 every written record carries one sample (`execOS_subset_full_mem`, through the record's custody `hRec`), so the checks
-transfer to the outcome's own transcript (`checksC3_of_recordDraw`). -/
+transfer to the outcome's own transcript (`checksC3_of_recordSample`). -/
 theorem reachedChecked_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {cs : List (Cm × (ℐ).Coin) → Option Flock.RecVStar.InnerCommits}
     {coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source}
@@ -620,20 +620,20 @@ theorem reachedChecked_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg 
     (hcr : ChecksC3Reached F cs coins rows) : ReachedChecked F dg N k Rw := by
   intro R ω t R₂ τ o hA j
   obtain ⟨ω₁, x₁, hx₁⟩ := (F.zs R ω t R₂ j).outcome_writes dg N (τ j) (hA.2.2 j)
-  have hwr : (o j).2.2 = (F.zs R ω t R₂ j).wr ((F.Vs j).law.live.draw ω₁) (τ j).1 x₁ := by rw [hx₁]
+  have hwr : (o j).2.2 = (F.zs R ω t R₂ j).wr ((F.Vs j).samplingDesign.live.draw ω₁) (τ j).1 x₁ := by rw [hx₁]
   have hacc₁ : AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own
-      ((F.zs R ω t R₂ j).wr ((F.Vs j).law.live.draw ω₁) (τ j).1 x₁) := by
+      ((F.zs R ω t R₂ j).wr ((F.Vs j).samplingDesign.live.draw ω₁) (τ j).1 x₁) := by
     rw [← hwr]
     exact (hA.1 j).1
   obtain ⟨R₁, tr₁, hw₁, hacc₂, hc3⟩ := hcr R ω t R₂ j ⟨(τ j).1, _, ⟨ω₁, x₁, rfl⟩, hacc₁⟩
   obtain ⟨ω₂, x₂, rfl⟩ := hw₁
-  have huniv : (F.Vs j).law.live.draw ω₁ = (F.Vs j).law.live.draw ω₂ :=
-    (Finset.eq_univ_iff_forall.2 fun u => execOS_subset_full_mem (F.Vs j).law.src ω₁ u).trans
-      (Finset.eq_univ_iff_forall.2 fun u => execOS_subset_full_mem (F.Vs j).law.src ω₂ u).symm
+  have huniv : (F.Vs j).samplingDesign.live.draw ω₁ = (F.Vs j).samplingDesign.live.draw ω₂ :=
+    (Finset.eq_univ_iff_forall.2 fun u => execOS_subset_full_mem (F.Vs j).samplingDesign.src ω₁ u).trans
+      (Finset.eq_univ_iff_forall.2 fun u => execOS_subset_full_mem (F.Vs j).samplingDesign.src ω₂ u).symm
   have hd₁ := ((F.zs R ω t R₂ j).hRec _ _ x₁ (acceptsZK_of_R hacc₁)).1
   have hd₂ := ((F.zs R ω t R₂ j).hRec _ _ x₂ (acceptsZK_of_R hacc₂)).1
   refine ⟨⟨ω₁, (τ j).1, x₁, hx₁⟩, F.ish, cs t, coins t, F.bind j, rows,
-    Flock.Guarantees.checksC3_of_recordDraw hc3 ?_⟩
+    Flock.Guarantees.checksC3_of_recordSample hc3 ?_⟩
   rw [hwr, hd₁, hd₂, huniv]
 
 /-- **A registered read's port is the reads file's entry of its name, read at the unit's own row.** -/

@@ -47,7 +47,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 # The deployed plain decoder, with no opening off the table
 
 `PlainLiveAccAt` asks the decoder to be right for the live verdict accepting with no level-0 opening off the table `C`
-unless it self-clashes. At `wrP`, at one table, that holds on the outcomes whose transcript flock-verify accepts, whose
+unless it self-clashes. At `wrP`, at one table, that holds on the outcomes whose transcript verity-verify-proof accepts, whose
 root is the live strategies' and on which the deployed plain reader looks up no column off `C` (`TxNoOff`):
 
 * `wrP1_oneOf`: `wrP1` at a one-table session's outcome read as one table's is `wrP` at the session's outcome.
@@ -92,13 +92,13 @@ def TxNoOff (I : Exec.Inputs) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Tran
 
 open DecodeZL Integrate in
 /-- **The deployed plain decoders are right at `wrP` for accepting with no opening off `C` without a self-clash**, at
-one table: `decodesTable_wrP` on the outcomes whose transcript flock-verify accepts, whose root is `rootB₀`'s and on
+one table: `decodesTable_wrP` on the outcomes whose transcript verity-verify-proof accepts, whose root is `rootB₀`'s and on
 which the deployed plain reader looks up no column off `C` (`TxNoOff`), with the verdict that the table accepts and does
 not open a level-0 position off `C` against `rootB₀`'s cap unless it self-clashes. -/
 theorem decodesTable_wrP_sc {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.DrawSetup I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : DecodeZL.TagsOk I) {S : Finset (Fin n)} (hS : DecodeZL.DrawOk I dj mPts S) (R : Reg) {N : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.SampleSetup I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : DecodeZL.TagsOk I) {S : Finset (Fin n)} (hS : DecodeZL.SampleOk I dj mPts S) (R : Reg) {N : ℕ}
     (hN : N = 2 ^ (lvOf (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R).sch 0).logLen) (C : Fin N → List 𝔽)
     (rootB₀ : Array ByteArray) (j : Fin [Integrate.tablesAt (Reg := Reg) ht dj x₀ S R].length) :
     Tables.DecodesTable (fun _ cap pend os => tableOutL H512 enc512 leaf512 cap pend os)

@@ -84,7 +84,7 @@ theorem setupHiddenOf_spec (h : Stmt.setupHiddenOf parsed tags pf coins draw par
       pub := by
         refine ⟨_, this, fun hd => ?_, fun d' hd => ?_⟩
         · first | exact absurd hd (Option.some_ne_none _) | rfl
-        · first | exact absurd hd.symm (Option.some_ne_none _) | (cases hd; rw [← drawn_noPorts he]; assumption)
+        · first | exact absurd hd.symm (Option.some_ne_none _) | (cases hd; rw [← sampled_noPorts he]; assumption)
       checkPublic := by assumption
       n := rfl
       blocksReal := rfl

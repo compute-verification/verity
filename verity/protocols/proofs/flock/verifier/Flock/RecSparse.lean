@@ -22,7 +22,7 @@ namespace RecSparse
 open HmNets hiding and
 
 def F_WORDS : Nat := 8
-def ROW_BLOCK : Nat := 64
+def ROW_CHUNK : Nat := 64
 /-- H2's rounds: the univariate skip's 6 low row bits. -/
 def PRE_ROUNDS : Nat := 6
 def SKIP : Nat := 64
@@ -57,7 +57,7 @@ def degrees (sh : Shape) : List Nat := List.replicate sh.nu sh.d ++ List.replica
 end Shape
 
 /-- `port_words`: a port of `n` elements, in whole 64-word rows. -/
-def portWords (n : Nat) : Nat := (F_WORDS * n + ROW_BLOCK - 1) / ROW_BLOCK * ROW_BLOCK
+def portWords (n : Nat) : Nat := (F_WORDS * n + ROW_CHUNK - 1) / ROW_CHUNK * ROW_CHUNK
 
 /-- `message_ports`: the F-element ports in order, each with its elements: the messages, then `claim`. -/
 def messagePorts (sh : Shape) : List (String × Nat) :=
@@ -65,7 +65,7 @@ def messagePorts (sh : Shape) : List (String × Nat) :=
     (sh.degrees.zipIdx.map fun (deg, j) => (s!"sc{j}", deg)) ++ [("u", sh.PP)] ++
     (if sh.stacked then [("vt", sh.T)] else []) ++ [("claim", 1)]
 
-def tauWords (sh : Shape) : Nat := (sh.S + ROW_BLOCK - 1) / ROW_BLOCK * ROW_BLOCK
+def tauWords (sh : Shape) : Nat := (sh.S + ROW_CHUNK - 1) / ROW_CHUNK * ROW_CHUNK
 
 /-- `v_layout`'s parts in order, each with its elements. -/
 def vParts (sh : Shape) : List (String × Nat) :=
@@ -85,7 +85,7 @@ def residualNames (sh : Shape) : List String := ["h2", "h3"] ++ (if sh.stacked t
 
 /-- `out_words`: the residuals' 8 words each, then with T > 1 a word a slot, in whole 64-word rows. -/
 def outWords (sh : Shape) : Nat :=
-  (F_WORDS * (residualNames sh).length + (if sh.stacked then sh.S else 0) + ROW_BLOCK - 1) / ROW_BLOCK * ROW_BLOCK
+  (F_WORDS * (residualNames sh).length + (if sh.stacked then sh.S else 0) + ROW_CHUNK - 1) / ROW_CHUNK * ROW_CHUNK
 
 /-- `ports`: every port in order with its words. -/
 def ports (sh : Shape) : List (String × Nat) :=
@@ -309,9 +309,9 @@ is built. Irreducible, so that no unification against it builds the net. -/
       throw s!"circuit {c.name}: unit {c.unit.name} is not rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>"
     else pure ()
 
-/-- A layout as `ir_lower.netlist` writes it without `LEAVES` or `CUT` (`circuit._expanded`): the header, then one line a
+/-- A layout as `ir_lower.circuit_description` writes it without `LEAVES` or `CUT` (`circuit._expanded`): the header, then one line a
 row. -/
-def netlist (name : String) (l : Laid) : String :=
+def circuitDescription (name : String) (l : Laid) : String :=
   let line := fun (xs : List Nat) => " ".intercalate (xs.map toString)
   let side := fun (gs : Array Group) =>
     gs.size :: gs.toList.flatMap fun g => [g.col, g.words, g.bits.size] ++ g.bits.toList

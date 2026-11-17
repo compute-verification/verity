@@ -345,7 +345,7 @@ def Fails (L : Compiled Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → 
   ∃ s Pt, L.parse x = some s ∧ L.partition s = some Pt ∧ InScope Pt s ∧
     ((accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x ∨
       ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (L.kOut x)
-        (fun r e => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e) ((List.finRange (L.capOut x)).map c.1)
+        (fun r e => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e) ((List.finRange (L.capOut x)).map c.1)
         (L.toE1 x c))
 
 /-- **The sessions' knowledge soundness** at the sample's slots: on every prover, a nonnegative weight `β` of each tape
@@ -359,10 +359,10 @@ def SessionKS (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
       Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x ∧
       ∀ ω r (sel : List ℕ → Option (Fin (L.nPU x))),
         Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-          (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-            ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-              ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-                ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤
+          (run H P L.V x ω (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+            ∃ i, sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+              ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+                ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.secondStage x) r p.1) (p.2 i u)) ≤
           L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r)
 
 /-! ## The numbers -/
@@ -428,16 +428,16 @@ at most `esc + κr`: the union bound at the first slot of the session of the fir
 theorem pr_notGood_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {B : Finset ℕ}
     (hB : ∀ v ∈ B, v < L.nPU x) (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
-    {esc κr : ℝ} (hesc : Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B) ≤ esc)
+    {esc κr : ℝ} (hesc : Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.secondStage x) r d), u ∉ B) ≤ esc)
     (hsess : ∀ sel : List ℕ → Option (Fin (L.nPU x)),
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-        (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-          ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-              ¬ found u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤ κr) :
+        (run' (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+          ∃ i, sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+              ¬ found u (forkOn (L.secondStage x) r p.1) (p.2 i u)) ≤ κr) :
     Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-        ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.stage2 x) r p.1) v p.2) ≤ esc + κr := by
+      (run' (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+        ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.secondStage x) r p.1) v p.2) ≤ esc + κr := by
   let sel : List ℕ → Option (Fin (L.nPU x)) := fun l =>
     (List.finRange (L.nPU x)).find? fun i => decide (∃ v ∈ B, l[i.val]? = some v)
   have hsel : ∀ l : List ℕ, l.length ≤ L.nPU x → ∀ v ∈ l, v ∈ B →
@@ -453,13 +453,13 @@ theorem pr_notGood_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) →
     exact ⟨i, hi, of_decide_eq_true
       (List.find?_some (p := fun i : Fin (L.nPU x) => decide (∃ v ∈ B, l[i.val]? = some v)) hi)⟩
   have hmiss := (Pr_fst (β := L.SlotEC x) (fun d : Fin (L.V.k x) → Coin =>
-    ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B)).trans_le hesc
+    ∀ u ∈ L.checked x (forkOn (L.secondStage x) r d), u ∉ B)).trans_le hesc
   refine Pr_or_le (fun p hp => ?_) hmiss (hsess (L.leadSel x sel))
-  by_cases hm : ∃ v ∈ L.checked x (forkOn (L.stage2 x) r p.1), v ∈ B
+  by_cases hm : ∃ v ∈ L.checked x (forkOn (L.secondStage x) r p.1), v ∈ B
   · obtain ⟨v, hvl, hvB⟩ := hm
     obtain ⟨i, hi, v', hv'B, hv'⟩ := hsel _ (hslots _) v hvl hvB
     obtain ⟨i₀, u₀, hlead, hu₀⟩ := leadOf_some hv' (hB v' hv'B)
-    have hsel₀ : L.leadSel x sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i₀ := by
+    have hsel₀ : L.leadSel x sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i₀ := by
       rw [leadSel, hi, Option.bind_some, hlead]
     exact Or.inr ⟨hp.1, i₀, hsel₀, u₀, hu₀, fun hf => hp.2 v' hv'B ⟨i, hB v' hv'B, hv', i₀, u₀, hlead, hu₀, hf⟩⟩
   · exact Or.inl fun v hvl hvB => hm ⟨v, hvl, hvB⟩
@@ -474,33 +474,33 @@ theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → 
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {B : Finset ℕ}
     (hB : ∀ v ∈ B, v < L.nPU x) (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
     {esc κr : ℝ} (hesc0 : 0 ≤ esc) (hκr0 : 0 ≤ κr)
-    (hesc : Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B) ≤ esc)
+    (hesc : Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.secondStage x) r d), u ∉ B) ≤ esc)
     (hsess : ∀ sel : List ℕ → Option (Fin (L.nPU x)),
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-        (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-          ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-              ¬ found u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤ κr) :
-    Pr (fun d : Fin (L.V.k x) → Coin => (run' (forkOn (L.stage2 x) r d)).out = .acc) *
-        Pr (fun e : L.E1 x => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e) ≤
+        (run' (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+          ∃ i, sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+              ¬ found u (forkOn (L.secondStage x) r p.1) (p.2 i u)) ≤ κr) :
+    Pr (fun d : Fin (L.V.k x) → Coin => (run' (forkOn (L.secondStage x) r d)).out = .acc) *
+        Pr (fun e : L.E1 x => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e) ≤
       2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (esc + κr) := by
   have hy : ∀ _u ∈ ({()} : Finset Unit),
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-        (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-          ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.stage2 x) r p.1) v p.2) ≤ esc + κr :=
+        (run' (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+          ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.secondStage x) r p.1) v p.2) ≤ esc + κr :=
     fun _ _ => L.pr_notGood_le x run' found hB hslots r hesc hsess
-  have hw := wait_bad_le (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x) (L.capIn x)
+  have hw := wait_bad_le (fun d => (run' (forkOn (L.secondStage x) r d)).out = .acc) (L.kIn x) (L.capIn x)
     (L.capIn_pos x) (L.kIn_pos x) ({()} : Finset Unit)
-    (fun _ d uc => ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.stage2 x) r d) v uc)
+    (fun _ d uc => ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.secondStage x) r d) v uc)
     (add_nonneg hesc0 hκr0) hy
   have hcard : (({()} : Finset Unit).card : ℝ) ^ (1 / (L.kIn x : ℝ)) ≤ slack :=
     L.rpow_kIn_le_slack x (m := 0) (by simp) (by omega)
-  have hE : Pr (fun e : L.E1 x => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e) =
+  have hE : Pr (fun e : L.E1 x => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e) =
       Pr (fun c : L.E1 x =>
-        (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x)
+        (accList (fun d => (run' (forkOn (L.secondStage x) r d)).out = .acc) (L.kIn x)
           ((List.finRange (L.capIn x)).map c.1)).length < L.kIn x ∨
-        ∃ _u ∈ ({()} : Finset Unit), AllBad (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x)
-          (fun d uc => ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.stage2 x) r d) v uc)
+        ∃ _u ∈ ({()} : Finset Unit), AllBad (fun d => (run' (forkOn (L.secondStage x) r d)).out = .acc) (L.kIn x)
+          (fun d uc => ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.secondStage x) r d) v uc)
           ((List.finRange (L.capIn x)).map c.1) c.2) :=
     Pr_congr fun e => by simp [BadOuter]
   rw [hE]
@@ -518,22 +518,22 @@ theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
     (Pt : Partition) (hPU : L.nPU x = Pt.blocks.length) (hun : L.nPU x ≤ L.nOut x)
     (κr : (Fin (L.V.k x) → Coin) → ℝ) (hκr0 : ∀ r, 0 ≤ κr r)
     (hdraw : ∀ B ⊆ range Pt.blocks.length, ∃ esc : (Fin (L.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
-      (∀ r, Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B) ≤ esc r) ∧
+      (∀ r, Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.secondStage x) r d), u ∉ B) ≤ esc r) ∧
       Ex esc ≤ s.design.Pa Pt B)
     (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x)
     (hsess : ∀ r (sel : List ℕ → Option (Fin (L.nPU x))),
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-        (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-          ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-              ¬ found u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤
+        (run' (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+          ∃ i, sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+              ¬ found u (forkOn (L.secondStage x) r p.1) (p.2 i u)) ≤
         κr r) :
     Pr (fun r : Fin (L.V.k x) → Coin => (run' r).out = .acc) *
         Pr (fun c : (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.E1 x) =>
           (accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1)).length <
               L.kOut x ∨
             ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (L.kOut x)
-              (fun r e => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e)
+              (fun r e => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e)
               ((List.finRange (L.capOut x)).map c.1) c.2) ≤
       2 * (L.kOut x : ℝ) / L.capOut x + Real.exp (-(L.kOut x : ℝ) / 8) +
         slack * (2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr)) := by
@@ -541,7 +541,7 @@ theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
   have hEκ : 0 ≤ Ex κr := Ex_nonneg hκr0
   have hy : ∀ B ∈ S₁ s.design Pt δ,
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.E1 x =>
-        (run' p.1).out = .acc ∧ L.BadOuter x run' found B (forkOn (L.stage2 x) p.1) p.2) ≤
+        (run' p.1).out = .acc ∧ L.BadOuter x run' found B (forkOn (L.secondStage x) p.1) p.2) ≤
       2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr) := by
     intro B hB
     obtain ⟨hBsub, hBδ⟩ := mem_filter.1 hB
@@ -550,11 +550,11 @@ theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
     have hBlt : ∀ v ∈ B, v < L.nPU x := fun v hv => by
       rw [hPU]
       exact mem_range.1 (hBsub' hv)
-    refine (Pr_acc_forkOn (L.stage2 x) (fun r => (run' r).out = .acc)
-      (fun r e => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e)
+    refine (Pr_acc_forkOn (L.secondStage x) (fun r => (run' r).out = .acc)
+      (fun r e => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e)
       fun r d e => by rw [forkOn_forkOn']).trans_le ?_
-    calc Ex (fun r => Pr (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) *
-          Pr (fun e : L.E1 x => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e))
+    calc Ex (fun r => Pr (fun d => (run' (forkOn (L.secondStage x) r d)).out = .acc) *
+          Pr (fun e : L.E1 x => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e))
         ≤ Ex (fun r => 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (esc r + κr r)) :=
           Ex_mono fun r => L.inner_bad_le x run' found hBlt hslots r (hesc0 r) (hκr0 r) (hesc r) (hsess r)
       _ = 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (Ex esc + Ex κr) := by
@@ -565,7 +565,7 @@ theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
   have hy0 : 0 ≤ 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr) := by
     positivity
   have hw := wait_bad_le (fun r => (run' r).out = .acc) (L.kOut x) (L.capOut x) (L.capOut_pos x) (L.kOut_pos x)
-    (S₁ s.design Pt δ) (fun B r e => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e) hy0 hy
+    (S₁ s.design Pt δ) (fun B r e => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e) hy0 hy
   have hcard : ((S₁ s.design Pt δ).card : ℝ) ^ (1 / (L.kOut x : ℝ)) ≤ slack :=
     L.rpow_kOut_le_slack x (card_S₁_le _ _ _) (by rw [← hPU]; omega)
   exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard hy0))
@@ -584,10 +584,10 @@ theorem pr_fails_le_of (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ :
     (hβ : Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x)
     (hsess : ∀ ω r (sel : List ℕ → Option (Fin (L.nPU x))),
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-        (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-          ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-              ¬ found ω u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤
+        (run H P L.V x ω (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+          ∃ i, sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+              ¬ found ω u (forkOn (L.secondStage x) r p.1) (p.2 i u)) ≤
         L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r)) :
     Pr (fun s : Ω × (Fin (L.V.k x) → Coin) × L.ECoins x =>
       (run H P L.V x s.1 s.2.1).out = .acc ∧ L.Fails δ x (run H P L.V x s.1) (found s.1) s.2.2) ≤
@@ -613,7 +613,7 @@ theorem pr_fails_le_of (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ :
           (accList (fun r => (run H P L.V x ω r).out = .acc) (L.kOut x)
             ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x ∨
             ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run H P L.V x ω r).out = .acc) (L.kOut x)
-              (fun r e => L.BadOuter x (run H P L.V x ω) (found ω) B (forkOn (L.stage2 x) r) e)
+              (fun r e => L.BadOuter x (run H P L.V x ω) (found ω) B (forkOn (L.secondStage x) r) e)
               ((List.finRange (L.capOut x)).map c.1) c.2) := by
       refine Eq.trans ?_ (Claims.Sampling.Pr_equiv (L.ecoinsEquiv x) _)
       refine Pr_congr fun c => ⟨fun ⟨s', Pt', hs', hPt', _, h⟩ => ?_, fun h => ⟨s, Pt, hs, hPt, hin, h⟩⟩
@@ -683,10 +683,10 @@ theorem KS_of_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H)
         Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x ∧
         ∀ ω r (sel : List ℕ → Option (Fin (L.nPU x))),
           Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-            (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-              ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-                ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-                  ¬ found x Ω P ω u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤
+            (run H P L.V x ω (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+              ∃ i, sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+                ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+                  ¬ found x Ω P ω u (forkOn (L.secondStage x) r p.1) (p.2 i u)) ≤
             L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r)) :
     L.KS H := by
   intro δ hδ x _

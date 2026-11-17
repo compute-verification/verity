@@ -52,7 +52,7 @@ section Model
 and their composition), the period's devices' resources `Res` (tensor cores, issue slots, shared-memory and register
 ports, device memory, links), each at its data-sheet rate `rate` (`ρ`, units a second), their memory `mem` (`M`, bits),
 and per run its use of each resource `use` (`u`), the bits it holds at its peak `held`, its wall time `wall`, the
-bits it exchanges with machines outside the period's devices `ext` (what the network certifier counts), and its oracle
+bits it exchanges with machines outside the period's devices `ext` (what the network attester counts), and its oracle
 calls `calls`, each a step of the machine that uses `callUse`. `P1` and `P2` are the arithmetic
 premises, exact integer MMAs and one accumulator per product, as the machine 𝓜 defines them (`Accel.Card.Exact`,
 `Assumptions.AccelProductForm`). `θ = (M, ρ, u)` are the model's parameters. -/
@@ -73,7 +73,7 @@ structure Accel where
   /-- A run's wall time, seconds. -/
   wall : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
   /-- The bits a run exchanges with machines outside the period's devices, in either direction (what the network
-  certifier counts, into and out of the devices), other than the challenger's coin stream, which
+  attester counts, into and out of the devices), other than the challenger's coin stream, which
   `Assumptions.CertifierSeesImports` defines exactly. -/
   ext : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
   /-- The oracle calls a run makes: SHA-512 evaluations through the machine's oracle-call step. -/
@@ -291,7 +291,7 @@ section Prover
 in three phases: the commit phase, the challenge phase and the response phase, every commitment of a block bound
 before any of its coins. It keeps a state `St` across sampling blocks, starting from `start`, fixed before the
 period. Every program reads the oracle `P.Orc` (the block's hash), so its queries are inside priced programs. The
-challenger issues every live coin; the network certifier only watches the boundary. Sampling block `b`, in the
+challenger issues every live coin; the network attester only watches the boundary. Sampling block `b`, in the
 order of its coins:
 
 * **the commit phase**: `commit b` is everything the prover computes between the previous block's work and the
@@ -323,7 +323,7 @@ answered, beside later blocks. No later program reads an answer, and an honest a
 `W_ans` (`WorkSound`'s `H_o`), which the headline's `ε` charges at full weight, so no answer's use is credited or
 counted against the period. A selected answer's oracle calls are under the cap (`WithinCap`), since it runs within the
 period (`AnswersFit`), and its exchanged bits are counted (`ext`): an answer that runs beside later
-blocks holds their coins, and what it sends out crosses the boundary the network certifier watches.
+blocks holds their coins, and what it sends out crosses the boundary the network attester watches.
 
 The sampling blocks of a period are one sequence in the order their coins went out: a fleet whose replicas' coins aren't
 serialized is one prover per replica (the fleet's bound is `Definitions.Pouw.Guarantees.Dither.FleetSound`). -/
@@ -421,13 +421,13 @@ noncomputable def ext (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
 end Prover
 
 /-- **The service's verdict on a period**: what the verifier accepts, from the oracle, the verifier's
-coins, the transcript (`Prover.transcript`) and the readings `Obs` of the auditor's devices (the network certifier's
+coins, the transcript (`Prover.transcript`) and the readings `Obs` of the auditor's devices (the network attester's
 signed counts). It reads no code: the sampling blocks' checks run inside Flock's zero-knowledge proofs
 (`ProofSystemSound` ties it to `Prover.Accepted`). -/
 abbrev Verdict (P : RoundProto) (k : ℕ) (Obs : Type) : Type :=
   P.Orc → (Fin k → P.Draw × P.Chk) → (Fin k → P.Inst × P.Root × P.Ans) → Obs → Prop
 
-/-- **The auditor's devices' readings** of a prover's period (the network certifier's counts), at the oracle and the
+/-- **The auditor's devices' readings** of a prover's period (the network attester's counts), at the oracle and the
 coins. They are the devices' and depend on what the prover's programs exchange (`ImportWithinCertifier`). -/
 abbrev Readings (G : Accel) (P : RoundProto) (k : ℕ) (Obs : Type) : Type 1 :=
   Prover G P k → P.Orc → (Fin k → P.Draw × P.Chk) → Obs
@@ -437,7 +437,7 @@ def Prover.Passes {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} (A : Prove
     (dev : Readings G P k Obs) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Prop :=
   verdict o x (A.transcript o x) (dev A o x)
 
-/-- **The verdict with the network certifier's count**: the service's verdict, and the certifier's signed counts of the
+/-- **The verdict with the network attester's count**: the service's verdict, and the certifier's signed counts of the
 bits into (`cin`) and out of (`cout`) the period's devices, as the verdict reads them from the devices' readings,
 within `K` together; a period past it is refused. With the certifier counting every exchanged bit
 (`Assumptions.CertifierSeesImports`), a period it accepts exchanged at most `K` bits. The card instance caps each
@@ -452,7 +452,7 @@ cost `H w` (its matmul, hashing and other parts at the dual prices) and public b
 `ε = (∑_w (H_w − pub_mm,w − pub_sha,w) + ln(1/δ)/η + β K) / ∑_w H_w`.
 The terms: the model's slack against the public bests and the honest work that is neither (no lower bound, full
 weight), the sampling luck at confidence `δ` and rate `η` a unit of priced cost (`η = k_draw/C`, so the term
-is `ln(1/δ)/k_draw`), and the exchanged bits (`K` at most, the network certifier's count, each worth `β`). -/
+is `ln(1/δ)/k_draw`), and the exchanged bits (`K` at most, the network attester's count, each worth `β`). -/
 noncomputable def epsWorkSound {k : ℕ} (H pubmm pubsha : Fin k → ℝ) (η δ β K : ℝ) : ℝ :=
   (∑ w, (H w - pubmm w - pubsha w) + Real.log (1 / δ) / η + β * K) / ∑ w, H w
 

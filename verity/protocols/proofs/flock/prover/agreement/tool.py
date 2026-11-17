@@ -1,4 +1,4 @@
-"""Store declaration for the verifier-of-record agreement job (research.store README §6.1): ``ci-pod.sh`` with its settings as
+"""Store declaration for the verifier's agreement job (research.store README §6.1): ``ci-pod.sh`` with its settings as
 ``K=V`` arguments, the shipped bundle as its input.
 
     research run --on M --project verity --source . --send ci-bundle.tar.gz --tool flock_agreement --campaign flock-verifier \\

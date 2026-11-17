@@ -8,9 +8,9 @@ the circuit back.
     - the unit circuit is a `compact_stage.CompactCircuit`: its ANDs' operands go to a spool under ``scratch`` as int32, and
       `compact_stage.layout` lays it out from there (a circuit it does not take gets the library's lists back, and the
       layout below). `compact_stage.lower` lowers into it, dropping each IR wire after its last read
-    - a stager with ``circuit`` has `circuit.compose_to` stream the unit's description into its file (`ir_lower.netlist_pieces`, a
+    - a stager with ``circuit`` has `circuit.compose_to` stream the unit's description into its file (`ir_lower.circuit_description_pieces`, a
       spooled unit's rendered from its spool as below); one without it (`stage_unit`'s):
-      the unit's description (`ir_lower.netlist`'s text) is rendered once for its hash and once into circuit.txt: `compose`
+      the unit's description (`ir_lower.circuit_description`'s text) is rendered once for its hash and once into circuit.txt: `compose`
       builds it as one string, which `Lowering.sha256_of` hashes with the LEAVES and CUT lines. `compose` gets in its
       place a string of as many newlines (and `sha256_of` the description's hash), and the circuit text it returns stands for
       that text with the description in the newlines' place: its digests (`circuit.digest`, `circuit.class_digest`) and
@@ -131,7 +131,7 @@ def sha256(text: str) -> str:
 
 
 def _description(lay, name: str):
-    """`ir_lower.netlist(lay, name)`'s text in pieces."""
+    """`ir_lower.circuit_description(lay, name)`'s text in pieces."""
     head = [IL.FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
         head.append(len(groups))
@@ -305,12 +305,12 @@ def install(scratch: Path) -> None:
     CST.set_root(scratch)
     CS.cache_slot_circuits()
     new, lower, layout, expanded = forms.Circuit._new, IL.lower, IL.layout, FC._expanded
-    unit_lowering, compose, write_text, library_pieces = CS.unit_lowering, FC.compose, Path.write_text, IL.netlist_pieces
+    unit_lowering, compose, write_text, library_pieces = CS.unit_lowering, FC.compose, Path.write_text, IL.circuit_description_pieces
 
     def pieces_(lay, name, cut=None, leaves=None):
         if not isinstance(lay, CST.CompactLayout):
             return library_pieces(lay, name, cut, leaves)
-        return itertools.chain((bytes(b).decode() for b in lay.pieces(name)), [IL.netlist_pins(cut, leaves)])
+        return itertools.chain((bytes(b).decode() for b in lay.pieces(name)), [IL.circuit_description_pins(cut, leaves)])
 
     def new_(self, kind, data):
         if kind == "and" and _lowering and self is _lowering[-1]:
@@ -385,7 +385,7 @@ def install(scratch: Path) -> None:
     forms.Circuit._new = new_
     CS._UnitCircuit = CST.CompactCircuit
     CS.unit_lowering, IL.lower, IL.layout, FC._expanded, FC.compose = unit_lowering_, lower_, layout_, expanded_, compose_
-    IL.netlist_pieces = pieces_
+    IL.circuit_description_pieces = pieces_
     Path.write_text = write_text_
     IL.digest, FC.digest, FC.class_digest = sha256, digest, class_digest
     # a structural unit (`class_statement.TmplLowering`) has no description: its unit_sha256 stays the library's, over its template

@@ -11,7 +11,7 @@ every row a function of its logits.
 ## The canonical row
 
 For a row of `n` keys with float32 logits `v[0..n)`, the canonical row is the registered selection's
-(`verity.definitions.registry.dsa_topk`: `topk_set`, which `DsaTopKLongRow` checks) in ascending order:
+(`verity_vllm.definitions.registry.dsa_topk`: `topk_set`, which `DsaTopKLongRow` checks) in ascending order:
 
 - **Key.** `key(v)` is `convert_to_uint32_v2` of the float's 32 bits, the key the pin's kernels rank by: `~b` for a
   negative word, `b | 2^31` otherwise. Keys order as the floats do, with `-0` below `+0`, a positive NaN above `+inf`
@@ -33,8 +33,10 @@ another key and tie rule. `dsa_topk.reference` is the definition in Python, held
 a Triton pass (`dsa_topk_kernels.py`) that rewrites only the rows longer than `k`, on the device, before attention
 reads them. The pass takes the fast kernel's smallest selected key as a candidate k-th key and reads the row once,
 writing the keys at or above it in ascending order and counting them. With no tie across the k-th key the row stands;
-with one, the row is written again from the counts; a row whose candidate fails the count check is selected again by
-bisection over the keys. So the output never depends on what the fast kernel wrote. GLM-5.3's indexer
+with one, the row is written again from the counts. A row whose candidate fails the count check is selected again by
+the row's segments together, from the keys within three 13-bit key prefixes of the candidate, or by bisection over
+the keys where the k-th key lies outside them (`VERITY_DSA_TOPK=canonical-bisect` bisects every such row). So the
+output never depends on what the fast kernel wrote. GLM-5.3's indexer
 runs eagerly between CUDA-graph pieces (vLLM's `eager_break_during_capture`), so the wrappers run on every call; under a
 plain CUDA graph the pass is captured with the op, and what the wrappers decide on the host reads only shapes. A `cooperative_topk` call whose
 `max_seq_len` is at most `k` launches nothing: vLLM passes the batch's longest sequence there.
@@ -42,11 +44,19 @@ plain CUDA graph the pass is captured with the op, and what the wrappers decide 
 `python dsa_topk.py site DIR` writes the plugin's entry point into `DIR`; a server or replay with `DIR` on its
 `PYTHONPATH` loads it. `VERITY_DSA_TOPK_LOG=DIR` keeps each process's counters in `DIR/dsa_topk.PID.json`, from the
 plugin's load on: calls and launches per op, and the rows rewritten, those with a tie across the k-th key, and those
-bisected. vLLM kills its workers, which then run no exit handler, so a process writes its record over, in place, at
-the end of every call: one write on the host, nothing synced to the disk. Its calls and launches are there whatever
+whose candidate failed, bisected or refined. vLLM kills its workers, which then run no exit handler, so a process
+writes its record over, in place, at the end of every call: one write on the host, nothing synced to the disk. Its calls and launches are there whatever
 ends it. A call is a wrapper's run on the host, so a call a CUDA graph replays adds rows and no call. The rows are the
 device's own counters, read every 4,096 calls outside a capture and when the process exits in order; `rows_at` is the
 calls it had made by then, so a killed process's rows are a lower bound.
+
+`VERITY_DSA_TOPK_STEPS=DIR` keeps each step's counters on each card in `DIR/dsa_topk_steps.PID.jsonl`: a header naming
+the counters, then a line a card a step, `{"step", "tokens", "device", "rows_long", ...}`, each count the step's own,
+the step numbered as the step trace numbers it (a step that scheduled tokens, outside a capture and a dummy run) by a
+wrapper of the model runner's `execute_model`; the drafter's forwards count in their step. At a step's start and end
+the counters are copied into pinned host memory on the device's stream and the line is written once the end's copy has
+landed, at a later step's end; nothing waits on the device but the process's exit.
+`serve_tax` sets it beside each arm's step traces and joins the two by step (`serve_tax.topk_counts`).
 
 ## Using it
 
@@ -76,6 +86,12 @@ outputs unpatched and canonical across processes and repetitions, whether the ca
 (also from a garbage fast selection), whether the unpatched one selects the reference's set up to keys tied at the
 k-th, and whether rows of at most `k` keys are unchanged. `stress.py time` writes `time.json`: the device time a call
 (CUDA events, queued behind a sleep) and the host time, unpatched and canonical, per parameter variant (`--variants`).
+`stress.py definition --out DIR [--result RUN_DIR/result.json]` holds each of the plugin's `MODES` to the registry's
+own `topk_set` (read from its source, since the venv has no `verity`) on `cooperative_topk` at served decode shapes: 6
+distributions, 6 to 24 rows of 20,000 to 131,072 keys in rows as wide as GLM-5.3's longest context, and 45 calls whose
+first guess is garbage, a near miss or the pin's overflow. Every row is compared eagerly and replayed from a CUDA
+graph. It writes `definition.json` and the run's validation, passed only where every row is the Definition's and every
+mode's fallback was reached.
 `stress.py plugin`, run from a site directory under `VERITY_DSA_TOPK=canonical`, loads the plugin as vLLM does and calls
 each case through the indexer's own entry points (`plugin.json`). `log_cost.py` needs no device: it times what keeping
 the counters adds to a call on the host, a wrapper's time a call over stand-in ops with the record kept and without.

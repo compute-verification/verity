@@ -22,8 +22,8 @@ extracted opening and `wo c`, which a one-trial finder outputs (`regFinderZC`, a
   `LinkEvRegZK`;
 * `RegCRZC`, `regTermZC`: `cr/sha-512` for the registered-value finders of one prover at budget `qW` on every outcome,
   and its term `Q_s/(1 − ρ)·(qW²/2^513 + k/(eR_w))`, `Q_s = Σ_c π_c` as in `linkBoundZC`;
-* `zk_flock_regValsC_cr`: `Pr[accept ∧ a drawn unit reads a registered-value disagreement] ≤ ε_ks + δ_link + δ_reg`;
-  `zk_flock_regDrawnC_cr`: the same with a wrong sampled proof block counted too.
+* `zk_flock_regValsC_cr`: `Pr[accept ∧ a drawn unit reads a registered-value disagreement] ≤ ε_ks + ε_bind + δ_reg`;
+  `zk_flock_regSampledC_cr`: the same with a incorrect sampled proof block counted too.
 
 `qW` bounds the SHA-512 evaluations of one trial: a fresh run and at most `k` waits of at most `R_w` reruns each, so
 `t'(1 + k R_w)` at `t'` per run is an honest budget. Lean counts no evaluations; whoever instantiates `RegCRZC` states it.
@@ -77,11 +77,11 @@ noncomputable def linkTermRegZC (k : ℕ) (S : Finset (Fin n)) (R : Reg)
 
 /-- **The registered-values term**: `Q_s/(1 − ρ)·(qW²/2^513 + k/(eR_w))`, with `Q_s = Σ_c π_c` the expected number of
 commit strings the sampled proof blocks read. -/
-noncomputable def regTermZC (L : Law n) (k Rw : ℕ) (ρ qW : ℝ) : ℝ≥0∞ :=
+noncomputable def regTermZC (L : SamplingDesign n) (k Rw : ℕ) (ρ qW : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω) *
     (qW ^ 2 / 2 ^ (513 : ℝ) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The compiled `--zk` audit's analysis against registered values**: `analysisZC`, its committed transcript paired
 with the registration, its incorrect proof blocks also those that read a registered-value disagreement (`regWrongZ`), and its
@@ -93,7 +93,7 @@ noncomputable def analysisRegZC
     (hj : JointZC A Hs planZ k a) :
     ExtractionAnalysis L Reg (batchedSessionZC A Hs planZ) where
   Tr := Reg × (Fin C.N → Bool)
-  wrong t := P.wrong t.2 ∪ regWrongZ A P planZ tab vb wo t.1 t.2
+  incorrect t := P.incorrect t.2 ∪ regWrongZ A P planZ tab vb wo t.1 t.2
   committed R τ := (R, Xc R τ)
   ks S R τ u := ENNReal.ofReal (a S R (zcStrat A Hs planZ τ) (tab S R u) / (1 - rateZ (planZ S R) (tab S R u) k))
   link := linkTermRegZC A Hs P planZ tab vb wo k
@@ -103,7 +103,7 @@ noncomputable def analysisRegZC
       fun T hc => ⟨hc, fun M _ hsat => by
         rcases Finset.mem_union.1 hu with hw | hw
         · by_contra hno
-          refine P.mem_wrong.1 hw (P.correct_congr (fun g hg => ?_) (hlow S R u hS M hsat))
+          refine P.mem_incorrect.1 hw (P.correct_congr (fun g hg => ?_) (hlow S R u hS M hsat))
           by_contra hne
           exact hno ⟨g, hg, Or.inl (Ne.symm hne)⟩
         · obtain ⟨g, hg, hcom, hne⟩ := (Finset.mem_filter.1 hw).2
@@ -230,7 +230,7 @@ off the samples reading `c`): jointly with acceptance and averaged over the samp
 bound `B₀` plus `k/(eRw)` for the waits that give up. -/
 theorem ideal_mass_genZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω → List (List (OutZC F D Sl)) → ℝ)
     (h0 : ∀ ω bs, 0 ≤ Ψ ω bs) (h1 : ∀ ω bs, Ψ ω bs ≤ 1)
-    (hoff : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → ∀ bs, Ψ ω bs = 0) {B₀ : ℝ} (hB₀ : 0 ≤ B₀)
+    (hoff : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → ∀ bs, Ψ ω bs = 0) {B₀ : ℝ} (hB₀ : 0 ≤ B₀)
     (htr : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c),
       expect (trialValZC planZ R Ψ) (trialGZC A Hs P planZ tab vb R τ c k Rw)
         (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≤ B₀) :
@@ -244,12 +244,12 @@ theorem ideal_mass_genZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω �
     expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k (Ψ ω) with hf
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
   have hB : 0 ≤ B₀ + k / (Real.exp 1 * Rw) := add_nonneg hB₀ (by positivity)
-  have hoff' : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → f ω = 0 := by
+  have hoff' : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → f ω = 0 := by
     intro ω hω
     have hpsi : Ψ ω = fun _ => 0 := funext (hoff ω hω)
     simp only [hf, hpsi, expectAcc_zero, mul_zero]
   have hsum : ∑ ω : L.Ω, f ω = ∑ w : ΩcZ A P planZ tab vb L c, f w.1 := by
-    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsDrawZ A P planZ tab vb c ω)
+    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsSampleZ A P planZ tab vb c ω)
       (fun ω _ hne => by by_contra h; exact hne (hoff' ω h))]
     exact Finset.sum_subtype _ (fun ω => by simp) f
   rw [hsum, div_le_iff₀ hΩ]
@@ -359,7 +359,7 @@ theorem reg_knowledgeSoundZC
     (tab (L.draw ω) R u)
 
 /-- **The registered link theorem**: at the plurality value layer, the registered analysis's binding error is at most
-`δ_link + δ_reg`, `linkBoundZC` under A2 for the link finders and `regBoundZC` under `cr/sha-512` for the
+`ε_bind + δ_reg`, `linkBoundZC` under A2 for the link finders and `regBoundZC` under `cr/sha-512` for the
 registered-value finders, prover by prover. -/
 theorem zk_linkSoundRegC
     (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
@@ -482,8 +482,8 @@ theorem zk_linkSoundRegC
 assumptions.** With each sampled proof block read from its table at its place (`place`), the committed values the plurality value
 layer of `vb`, and `wo` a registrant's opening of each commit string: at a prover whose registered-value finders satisfy
 `cr/sha-512` at budget `qW` (`hW`),
-`Pr[accept ∧ a drawn unit reads a wire disagreeing with its registered value] ≤ ε_ks + δ_link + δ_reg`, with
-`ε_ks = ksAvgStrictZ` under A1 for every table's finders after each sample (`hCR`), `δ_link = linkBoundZC` under A2 for
+`Pr[accept ∧ a drawn unit reads a wire disagreeing with its registered value] ≤ ε_ks + ε_bind + δ_reg`, with
+`ε_ks = ksAvgStrictZ` under A1 for every table's finders after each sample (`hCR`), `ε_bind = linkBoundZC` under A2 for
 the link finders, and `δ_reg = regTermZC`. -/
 theorem zk_flock_regValsC_cr (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
@@ -502,7 +502,7 @@ theorem zk_flock_regValsC_cr (hA : A.Correct)
   classical
   have hlow := loweringSoundZK_of_place A P planZ tab place
   have hj := jointZC_ksBound A hA Hs planZ hk
-  have h := extraction_audit_drawn
+  have h := extraction_audit_sampled
     (analysisRegZC A Hs P planZ tab vb wo (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
       (fun S R j => (hr S R j).trans_lt hρ) hlow _ hj)
     (reg_knowledgeSoundZC A Hs P planZ tab vb wo _ _ hlow hj)
@@ -520,9 +520,9 @@ theorem zk_flock_regValsC_cr (hA : A.Correct)
     exact add_le_add (add_le_add (ksAvgZC_le_strict A Hs planZ k (reg σ) (cont σ) hCR) le_rfl) le_rfl
 
 /-- **`zk_flock_regValsC_cr` with the incorrect proof blocks counted too**: on its assumptions,
-`Pr[accept ∧ a drawn unit is wrong or reads a wire disagreeing with its registered value] ≤ ε_ks + δ_link + δ_reg`, the
+`Pr[accept ∧ a drawn unit is incorrect or reads a wire disagreeing with its registered value] ≤ ε_ks + ε_bind + δ_reg`, the
 event `analysisRegZC`'s at its committed transcript. -/
-theorem zk_flock_regDrawnC_cr (hA : A.Correct)
+theorem zk_flock_regSampledC_cr (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc) (wo : vb.Pos → vb.Opening)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -531,7 +531,7 @@ theorem zk_flock_regDrawnC_cr (hA : A.Correct)
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ A Hs (planZ (L.draw ω) (reg σ)) j (zcStrat A Hs planZ (cont σ ω)) qF qS)
     {qW : ℝ} (hW : RegCRZC A Hs P planZ tab vb wo (reg σ) (cont σ) k Rw qW) :
-    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw) ∪
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw) ∪
           regWrongZ A P planZ tab vb wo (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       ksAvgStrictZ planZ L k qF qS (reg σ) + linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) +
@@ -539,7 +539,7 @@ theorem zk_flock_regDrawnC_cr (hA : A.Correct)
   classical
   have hlow := loweringSoundZK_of_place A P planZ tab place
   have hj := jointZC_ksBound A hA Hs planZ hk
-  have h := extraction_audit_drawn
+  have h := extraction_audit_sampled
     (analysisRegZC A Hs P planZ tab vb wo (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
       (fun S R j => (hr S R j).trans_lt hρ) hlow _ hj)
     (reg_knowledgeSoundZC A Hs P planZ tab vb wo _ _ hlow hj)

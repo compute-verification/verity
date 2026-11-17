@@ -77,9 +77,8 @@ class RecomputedPrefix:
             raise ValueError(f"request {rid}: a hit of {C} positions of its {len(prompt)}-token prompt (at least one, and short of it)")
         self.store, self.rid, self.C, self.arrive = store, str(rid), int(C), int(arrive)
         self.per = positions(pi)
-        if weights is None and not plan:
-            raise TypeError(f"request {rid}: its recomputed prefix is replayed from the registered weights, and none are given")
-        self.replay = None if plan or weights is None else Replay(pi, rid, prompt, weights, arrive=arrive)
+        given: Any = weights                                                      # None: the replay's first weight read fails, naming its row
+        self.replay = None if plan else Replay(pi, rid, prompt, given, arrive=arrive)
         self.reads: list[list[Any]] = []
 
     def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray | None, str]:

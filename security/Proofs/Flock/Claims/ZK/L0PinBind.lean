@@ -64,9 +64,9 @@ rep's schedule so far:
 namespace Claims.ZKServer.Bind
 
 open _root_.Flock (F128 Transcript TMW)
-open _root_.Flock.Firewall.Frame (Cfg Masker)
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks openStep)
-open _root_.Flock.Firewall.Finish (repOpening repPiop commitFw claimsOf ringSwitchP_eq switchVec)
+open _root_.Flock.ZkServer.Frame (Cfg Masker)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks openStep)
+open _root_.Flock.ZkServer.Finish (repOpening repPiop commitFw claimsOf ringSwitchP_eq switchVec)
 open FlockSoundness.Refine (Frame encs)
 open FlockComplete (PS asksCut ringSwitchCut)
 open FlockComplete.Replay (bind_go liftTM_ok)
@@ -95,9 +95,9 @@ theorem feed_part {α : Type} : ∀ (s : Step α) (cs : List (Array F128)) (ns :
 
 /-- **A rep's schedule past its algebraic phase** is what its opening, fed the rest of the coins, sent and asks for
 next, and the feeding has not failed. -/
-theorem schedSoFar_sentQ {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
+theorem schedSoFar_sentQ {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hA : alg.size ≤ cr.size) :
     (sched.toList.map Prod.fst).drop alg.size =
@@ -158,7 +158,7 @@ theorem sched_bytes {sched : Array (ByteArray × ℕ)} {A N : ℕ} {q : List Byt
 
 theorem openList_eq {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) :
     Count.openList N sch = List.replicate N 7 ++ N ::
-      (_root_.Flock.Firewall.Session.ligeritoCoins sch).toList.filter (· != 0) := by
+      (_root_.Flock.ZkServer.Session.ligeritoCoins sch).toList.filter (· != 0) := by
   unfold Count.openList Count.sq
   rw [Count.flatten_seven, if_neg hN, List.append_assoc, List.singleton_append]
 
@@ -177,8 +177,8 @@ theorem openList_at {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) : (Co
   rfl
 
 theorem ligeritoCoins_cons (sch : _root_.Flock.Schedule) :
-    ∃ rest, (_root_.Flock.Firewall.Session.ligeritoCoins sch).toList = sch.n :: rest := by
-  unfold _root_.Flock.Firewall.Session.ligeritoCoins
+    ∃ rest, (_root_.Flock.ZkServer.Session.ligeritoCoins sch).toList = sch.n :: rest := by
+  unfold _root_.Flock.ZkServer.Session.ligeritoCoins
   simp only [Array.toList_append, List.append_assoc, List.toList_toArray, List.cons_append, List.nil_append]
   exact ⟨_, rfl⟩
 
@@ -194,12 +194,12 @@ theorem openList_bind {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) (hn
     rfl
 
 /-- **A rep's schedule past its algebraic phase squeezes the opening's counts.** -/
-theorem sched_count {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+theorem sched_count {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hdom : dom.size < 2 ^ 64)
-    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
     (hm : t.st.m < 2 ^ 64) (hx : xs.size + 2 < 2 ^ 64) (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62)
     (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63) {i : ℕ} (hi' : alg.size + i < sched.size) :
     (sched.getD (alg.size + i) (.empty, 0)).2 = (Count.openList (xs.size + 2) t.sch).getD i 0 := by
@@ -248,9 +248,9 @@ theorem ringSwitchCut_gamma (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ �
 
 /-- **The opening's first rounds are the ring switch's**: fed past `γ`'s squeeze, `openStep`'s first `claims + 1`
 rounds are the switch's bodies from empty pending bytes, each claim's switched vector of `128` words. -/
-theorem openStep_switch (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+theorem openStep_switch (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) (hdom : dom.size < 2 ^ 64)
-    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
     (hm : t.st.m < 2 ^ 64) (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (cs : List (Array F128))
     (hlen : xs.size + 2 < (sentQ (feedR (openStep t rep dom xs hi coins) cs)).length) :
     ∃ sv : ℕ → Array F128, (∀ k, (sv k).size = 128) ∧
@@ -261,7 +261,7 @@ theorem openStep_switch (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
     simp at hlen
   have hna : r.1.1.2.2.size = xs.size + 2 := by
     have := Count.piop_na coins t.st (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
-      (_root_.Flock.Firewall.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
+      (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
       (Sched.trAlike_init dom hdom) #[]
     rw [hp] at this
     have h' : r.1.1.2.2.size = (claimsOf xs).size + 2 := this
@@ -275,7 +275,7 @@ theorem openStep_switch (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
   obtain ⟨-, hF⟩ := repOpening_feed (fun j i => (cs.getD j #[])[i]!) (xs.size + 2) coins t.st hmk t.sch
     (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) t.tPad rep t.g t.cm0 r.1.1.2.2
     (Array.replicate (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).len 0) t.extra t.lanePad
-    (fun l => _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)) r.1.2 r.2 #[] cs (by omega) hc
+    (fun l => _root_.Flock.ZkServer.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)) r.1.2 r.2 #[] cs (by omega) hc
   rw [hQ] at hlen ⊢
   have e := hF (by simp) (by rw [Array.size_empty, Nat.zero_add]; exact hlen)
   obtain ⟨L', hL, hL'⟩ := ringSwitchCut_gamma (fun j i => (cs.getD j #[])[i]!) (xs.size + 2)
@@ -284,7 +284,7 @@ theorem openStep_switch (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
       (fun lv g s => pure (commitFw lv g s)) t.st t.sch (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
       t.tPad rep t.g t.cm0 r.1.1.2.2
       (Array.replicate (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).len 0) t.extra t.lanePad
-      (fun l => _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty))).run r.1.2).go #[] =
+      (fun l => _root_.Flock.ZkServer.Finish.saltAt (hi.getD (l - 1) ByteArray.empty))).run r.1.2).go #[] =
       (.error "past the openings", L') := by
     unfold repOpening
     rw [ringSwitchP_eq, cutAsks_toC]
@@ -302,12 +302,12 @@ theorem openStep_switch (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
 phase, past the algebraic phase's opening, before level 0 and the inner proof, at the algebraic phase's last position
 `c.nPiop`, and owes nothing. -/
 theorem repState_opened {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
-    {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+    {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hm14 : 14 ≤ t.st.m) (hm : t.st.m < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
-    (hcap : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
+    (hcap : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) (hk : 1 ≤ t.sch.k0)
     (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63)
     (hcr : cr.size = alg.size + (xs.size + 2) + 1) {cs : Array F128} {m : Masker}
@@ -343,8 +343,8 @@ theorem repState_opened {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[
     rw [hrest, Array.getD_eq_getD_getElem?, Array.getElem?_append_left hk']
   have h1s : 1 < alg.size := (Array.getElem?_eq_some_iff.1 ha1).1
   have h0 : sched.getD 0 (.empty, 0) = (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8,
-      .bytes t.st.digest, .bytes (_root_.Flock.Firewall.Finish.flat t.cm0.cap),
-      .label _root_.Flock.Firewall.Frame.LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray, 6) := by
+      .bytes t.st.digest, .bytes (_root_.Flock.ZkServer.Finish.flat t.cm0.cap),
+      .label _root_.Flock.ZkServer.Frame.LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray, 6) := by
     rw [hg 0 (by omega), ha0, Option.getD_some, head_encs]
   have hN0 : xs.size + 2 ≠ 0 := by omega
   have hsv' : ∀ i, (sv i).size < 2 ^ 64 := fun i => by rw [hsv]; decide
@@ -376,7 +376,7 @@ theorem repState_opened {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[
         exact Switch.qRound_gamma sv hN0 hx hb
   rw [repState_at c t rep dom xs hi cr0 cr ns (alg.size + (xs.size + 2)) hal hs (by omega)] at ha
   dsimp only at ha
-  cases h2 : (_root_.Flock.Firewall.Frame.run c {} (schedReqs
+  cases h2 : (_root_.Flock.ZkServer.Frame.run c {} (schedReqs
       (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr (alg.size + (xs.size + 2)))).2
   · rw [h2] at ha
     simp only [Bool.false_eq_true, ↓reduceIte] at ha
@@ -402,12 +402,12 @@ theorem coinAt_getD (cs : List (Array F128)) :
 /-- **A rep's schedule holds level 0's binding**: fed the coins of the algebraic phase's rounds, the ring switch's and
 `γ`'s, a rep's schedule asks next for level 0's binding, at the switch's target `T` and the level-0 cap, with `z`'s
 squeeze of `n` coins. -/
-theorem sched_binding {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+theorem sched_binding {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hdom : dom.size < 2 ^ 64)
-    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
     (hm : t.st.m < 2 ^ 64) (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64)
     (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63)
     (hn0 : t.sch.n ≠ 0) (hcr : cr.size = alg.size + (xs.size + 2) + 1) :
@@ -440,7 +440,7 @@ theorem sched_binding {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : 
     (by intro h0; rw [h0] at hlenF; simp at hlenF)
   have hna : r.1.1.2.2.size = xs.size + 2 := by
     have := Count.piop_na (cr.extract 0 alg.size) t.st (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
-      (_root_.Flock.Firewall.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
+      (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
       (Sched.trAlike_init dom hdom) #[]
     rw [hp] at this
     have h' : r.1.1.2.2.size = (claimsOf xs).size + 2 := this
@@ -471,9 +471,9 @@ theorem sched_binding {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : 
 /-! ## Level 0's rounds in the schedule -/
 
 theorem ligeritoCoins_l0 (sch : _root_.Flock.Schedule) :
-    ∃ rest, (_root_.Flock.Firewall.Session.ligeritoCoins sch).toList =
+    ∃ rest, (_root_.Flock.ZkServer.Session.ligeritoCoins sch).toList =
       sch.n :: 1 :: (List.replicate sch.k0 2 ++ 2 :: 2 :: rest) := by
-  unfold _root_.Flock.Firewall.Session.ligeritoCoins
+  unfold _root_.Flock.ZkServer.Session.ligeritoCoins
   simp only [Array.toList_append, List.append_assoc, List.toList_toArray, Array.toList_replicate, List.cons_append,
     List.nil_append]
   exact ⟨_, rfl⟩
@@ -492,12 +492,12 @@ theorem openList_len_l0 {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) (
 /-- **A rep's schedule holds level 0's rounds**: fed the coins of the algebraic phase's rounds, the ring switch's, `γ`'s
 and level 0's first `j`, a rep's schedule past the ring switch's rounds is level 0's first `j + 1` bodies at zero pads,
 at the fed coins from the binding on, the switch's target and basis, with the opening's counts. -/
-theorem sched_l0 {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+theorem sched_l0 {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hdom : dom.size < 2 ^ 64)
-    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
     (hm : t.st.m < 2 ^ 64) (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64)
     (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63)
     (hn0 : t.sch.n ≠ 0) (hm14 : 14 ≤ t.st.m) {j : ℕ} (hj : j < t.sch.k0 + 4)
@@ -538,7 +538,7 @@ theorem sched_l0 {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteA
     (by intro h0; rw [h0] at hlenF; simp at hlenF)
   have hna : r.1.1.2.2.size = xs.size + 2 := by
     have := Count.piop_na (cr.extract 0 alg.size) t.st (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
-      (_root_.Flock.Firewall.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
+      (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
       (Sched.trAlike_init dom hdom) #[]
     rw [hp] at this
     have h' : r.1.1.2.2.size = (claimsOf xs).size + 2 := this

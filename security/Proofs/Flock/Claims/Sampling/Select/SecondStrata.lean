@@ -3,12 +3,12 @@ module
 public import Proofs.Flock.Claims.Sampling.Select.SecondCount
 public import Proofs.Flock.Claims.Sampling.Select.Bounds
 public import Proofs.Flock.Claims.Sampling.Reg
-public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
 import Spot.Draw
 import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take
 import Proofs.Flock.Claims.Sampling.Select.Steps
-import Proofs.Flock.Soundness.ExecDraw
+import Proofs.Flock.Soundness.ExecSample
 import Proofs.Flock.SamplingGeneric.TwoCode
 
 /-!
@@ -112,7 +112,7 @@ theorem stratifiedWith_sum_le (src : ByteArray) (strata : Array Flock.Draw.Strat
     rw [StateT.run_pure] at h
     obtain ⟨h1, _⟩ := Prod.mk.inj (Except.ok.inj h)
     have hD : D = out'.qsort (fun x1 x2 => decide (x1 < x2)) := (Option.some.inj h1).symm
-    rw [hD, ((Array.perm_iff_toList_perm.1 (DrawExec.qsort_perm out' _)).map W).sum_eq]
+    rw [hD, ((Array.perm_iff_toList_perm.1 (SampleExec.qsort_perm out' _)).map W).sum_eq]
     refine hsum.trans (le_of_eq ?_)
     rw [Array.toList_empty, List.map_nil, List.sum_nil, Nat.zero_add]
     exact sum_range'_getElem! strata fun s => s.k * (expand s.units.toList).toFinset.sup W
@@ -120,9 +120,9 @@ theorem stratifiedWith_sum_le (src : ByteArray) (strata : Array Flock.Draw.Strat
 /-- **A work sampling design's sample by stratum**: `units` weighs at most each stratum's `k` times the largest weight
 on its units, summed over the strata. -/
 theorem workUnits_sum_le {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray}
-    {units : Array ℕ} (h : Draw.drawUnits (.work K ws) n src = .ok (units, read)) (W : ℕ → ℕ) :
+    {units : Array ℕ} (h : Draw.sampleUnits (.work K ws) n src = .ok (units, read)) (W : ℕ → ℕ) :
     (units.toList.map W).sum ≤ (ws.toList.map fun s => s.k * (expand s.units.toList).toFinset.sup W).sum := by
-  unfold Draw.drawUnits at h
+  unfold Draw.sampleUnits at h
   cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) (.work K ws) n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
@@ -164,7 +164,7 @@ theorem sum_proved_of_units {draw : Json} {units : Array ℕ} (hu : getD draw "u
     ((Draw.proved draw).toList.map fun j => W j.toNat).sum = (units.toList.map W).sum := by
   unfold Draw.proved
   dsimp only
-  rw [hu, hc, ((Array.perm_iff_toList_perm.1 (DrawExec.qsort_perm _ _)).map _).sum_eq]
+  rw [hu, hc, ((Array.perm_iff_toList_perm.1 (SampleExec.qsort_perm _ _)).map _).sum_eq]
   simp only [natsJson]
   rw [filterMap_map_some units _ int? (fun a : ℕ => (a : Int)) int_toJson]
   simp [Function.comp_def]
@@ -196,7 +196,7 @@ theorem sum_proved_selectSecond_le {sample ns ks : Array ℕ} {src : ByteArray} 
     ((Draw.proved draw).toList.map fun j => W j.toNat).sum ≤
       sample.size * ((List.range ns.size).map fun t => ks.getD t 0 * M t).sum := by
   obtain ⟨-, parsed, units, hp, hu, hdu, hdc⟩ := selectSecond_units h
-  obtain ⟨ws, rfl, hmap⟩ := flockLaw_second sample ns ks _ parsed hp
+  obtain ⟨ws, rfl, hmap⟩ := flockSamplingDesign_second sample ns ks _ parsed hp
   rw [sum_proved_of_units hdu hdc W]
   refine (workUnits_sum_le hu W).trans ?_
   have hws : (ws.toList.map fun s => s.k * (expand s.units.toList).toFinset.sup W) =

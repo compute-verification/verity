@@ -66,7 +66,7 @@ is as an oracle program that queries the code's own frames in the code's order (
 namespace Claims.Sampling
 
 open _root_.Flock _root_.Flock.Registered
-open Properties.NetworkCertifier.Bytes (bs bs_inj be64_size)
+open Properties.Certifier.Bytes (bs bs_inj be64_size)
 
 /-- A message as a byte string. -/
 def bytes (m : Msg) : ByteArray := ⟨m.toArray⟩

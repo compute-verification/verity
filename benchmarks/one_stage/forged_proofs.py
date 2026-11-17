@@ -1,4 +1,4 @@
-"""The fixture of Flock's forged-proof negatives (`verity/protocols/proofs/flock/prover/tests/test_lean_forged_proofs.py`): M0 `--zk` sessions on
+"""The fixture of Flock's forged-proof negatives (`tests/verity/protocols/proofs/flock/prover/test_lean_forged_proofs.py`): M0 `--zk` sessions on
 one small A8 unit, staged by Flock's `UnitStager` bound to a template query's partition as A8's members are, N instances
 with every unit sampled (subset:N), each case's statement on the one circuit:
 
@@ -11,8 +11,8 @@ A tampered statement's rows and b || c agree with the outputs it commits, so onl
 with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) and sends the proofs of the false witness; with the check, it sends
 none, and Lean refuses the session for want of a proof (A8's negative).
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src:\\
-      <tree>/benchmarks/numerical/python python benchmarks/one_stage/forged_proofs.py --bin flock-circuit --lean flock-verify \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch:<tree>/tools/verity/circuit_check/src:\\
+      <tree>/benchmarks/numerical/python python benchmarks/one_stage/forged_proofs.py --bin flock-circuit --lean verity-verify-proof \\
       --work DIR --fixture DIR
 
 ``--fixture`` gets the tree: ``stage/`` (circuit.txt, partition.json, program.json), per case ``<case>/pub-N.bin`` and
@@ -87,7 +87,7 @@ def free_port() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True, help="flock-circuit, the proving build (sha512, glue)")
-    ap.add_argument("--lean", required=True, help="flock-verify")
+    ap.add_argument("--lean", required=True, help="verity-verify-proof")
     ap.add_argument("--work", required=True)
     ap.add_argument("--fixture", required=True)
     a = ap.parse_args()

@@ -1,4 +1,4 @@
-# A timed prover run (a bench cell) on the Nebius cluster: queue provers, priority prover-bench.
+# A timed prover run (one run of a benchmark) on the Nebius cluster: queue provers, priority prover-bench.
 #
 #   tools/research/src/research/pods/nebius/sky/submit.sh prover-bench bench-<cell> --env CMD='...'
 #

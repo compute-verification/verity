@@ -34,8 +34,9 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import IO, Any
 
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
-from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import CommitRecord, commit_registration
+from verity_vllm import messages as M
 
 #: the deployment's registration log under the serve dir's ``h1/``: one line a record, W at its writing and R once bound
 LOG = "log.jsonl"
@@ -58,13 +59,12 @@ class WindowTie:
         self.command, self.out, self.flush, self.runner, self.day = command, Path(out), flush, runner, day
         self.log = self.out / "h1" / LOG
         self.last: str | None = None
-        got = [json.loads(x) for x in self.log.read_text().splitlines() if x.strip()] if self.log.exists() else []
+        got = [json.loads(x) for x in M.lines(self.log, "H1Registration")] if self.log.exists() else []
         records = [x for x in got if x.get("kind") != "declaration"]
         self.last = records[-1]["digest"] if records else None
         if day is not None and not any(x.get("kind") == "declaration" and x.get("digest") == day.digest for x in got):
             self.log.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.log, "a") as fh:
-                fh.write(json.dumps(day.line()) + "\n")
+            M.append(self.log, "H1Registration", json.dumps(day.line()).encode())
         self._cv = threading.Condition()
         self._seals: dict[int, dict[str, Any]] = {}
         self._refused: dict[int, str] = {}
@@ -107,7 +107,7 @@ class WindowTie:
             raise ValueError(f"window {window}'s seal failed, so window-commit has no row dir: {line['error']}"[:500])
         return line
 
-    def hook(self, window: int, prover: Path | None, kept: Callable[[], Any] | None) -> CT.CommitRecord:
+    def hook(self, window: int, prover: Path | None, kept: Callable[[], Any] | None) -> CommitRecord:
         """Window ``window``'s pouw setting ``commit_record`` (`pouw_h1_commit.CommitRecord`): its prover directory
         ``prover`` and ``kept``, which waits until its prover state is written."""
         return lambda run: self.record(window, run, prover, kept)
@@ -123,8 +123,8 @@ class WindowTie:
             kept()
         d = self.out / "h1" / f"w{window}"
         d.mkdir(parents=True, exist_ok=True)
-        w, wf, rf = CT.registration(run, self.last, self.day and self.day.naming()), d / W_FILE, d / R_FILE
-        wf.write_text(json.dumps(w, indent=1) + "\n")
+        w, wf, rf = commit_registration(run, self.last, self.day and self.day.naming()), d / W_FILE, d / R_FILE
+        M.write(wf, "H1Registration", (json.dumps(w, indent=1) + "\n").encode())
         self.last = self._logged(window, "registration", wf, REG.digest(w))
         rf.unlink(missing_ok=True)
         argv = ["bash", "-c", self.command, "_", str(self.out), str(window), str(wf), str(rf), str(prover or "")]
@@ -133,7 +133,7 @@ class WindowTie:
         if rc != 0:     # its output may name the window's values: the reason, which windows.jsonl carries, only points to it
             raise ValueError(f"--h1-window-commit exited {rc}: its output is in the serve dir's h1/w{window}/{COMMAND_LOG}")
         try:
-            r = json.loads(rf.read_text())
+            r = json.loads(M.read(rf, "H1Registration"))
         except (OSError, ValueError) as e:
             raise ValueError(f"--h1-window-commit wrote no record R to h1/w{window}/{R_FILE}: {e}") from None
         if self.day is not None and (why := self.day.refusal(r)):
@@ -151,9 +151,9 @@ class WindowTie:
             self.last = self._logged(window, "record", *named)
 
     def _logged(self, window: int, kind: str, path: Path, digest: str) -> str:
-        with open(self.log, "a") as fh:
-            fh.write(json.dumps({"window": window, "kind": kind, "file": str(path.relative_to(self.log.parent)),
-                                 "digest": digest}) + "\n")
+        M.append(self.log, "H1Registration", json.dumps({"window": window, "kind": kind,
+                                                         "file": str(path.relative_to(self.log.parent)),
+                                                         "digest": digest}).encode())
         return digest
 
 

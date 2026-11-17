@@ -18,7 +18,7 @@ witness satisfies the flat twin off the unit input rows (`Hidden.Any.sat_flatFP`
 
 * `siteAddrHP a o x`: in-block column `x` of block `o`, as an address of `T`;
 * `bc_site_ofHP`: in a satisfying witness, the 128 bytes at row `p`'s `hm96` output are the population's `b ‖ c` of the
-  proved unit at rank `o · c.g + g` (`Hidden.bc_drawnWP`); `BcSiteHP` bundles what it reads;
+  proved unit at rank `o · c.g + g` (`Hidden.bc_sampledWP`); `BcSiteHP` bundles what it reads;
 * `copy_siteHP`: a stacked unit input off a public leaf whose Δ key is message bit `bit` of byte `byte` of row `q` holds
   the witness's bit at that message column (`copyPos_blockHP`, `Aliased.copyPos_key` at the flat twin);
 * `out_copyHP`: copy `u'`'s output `j`, bit `t` of the statement circuit `c` holds the witness's bit at output row
@@ -30,7 +30,7 @@ witness satisfies the flat twin off the unit input rows (`Hidden.Any.sat_flatFP`
 namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 Model
-open FlockSoundness.Discharge.Hm (blockBit blockBit_of_lt bytesOf bcCol saltCol RowRanges)
+open FlockSoundness.Discharge.Hm (chunkBit chunkBit_of_lt bytesOf bcCol saltCol RowRanges)
 
 variable {T : Model.Statement}
 
@@ -87,11 +87,11 @@ def siteAddrHP (a : AcceptedHP T) (o : Fin (2 ^ T.nbl)) (x : ℕ) : Fin (2 ^ T.m
   T.addr o (Fin.cast a.kLog_eq (Layout.inBlockOr a.st.c.kLog x))
 
 theorem bit_siteAddrHP (a : AcceptedHP T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) {y : ℕ}
-    (hy : y < 2 ^ a.st.c.kLog) : FlockSoundness.bit (z (siteAddrHP a o y)) = blockBit T z o y := by
+    (hy : y < 2 ^ a.st.c.kLog) : FlockSoundness.bit (z (siteAddrHP a o y)) = chunkBit T z o y := by
   have hy' : y < 2 ^ T.kLog := by rw [← a.kLog_eq]; exact hy
   have hin : Layout.inBlockOr a.st.c.kLog y = ⟨y, hy⟩ := by
     simp only [Layout.inBlockOr, hy, ↓reduceDIte]
-  unfold blockBit siteAddrHP
+  unfold chunkBit siteAddrHP
   simp only [hy', ↓reduceDIte]
   rw [hin]
   rfl
@@ -99,7 +99,7 @@ theorem bit_siteAddrHP (a : AcceptedHP T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)
 theorem ofFn_siteHP (a : AcceptedHP T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) (N : ℕ) (col : ℕ → ℕ → ℕ)
     (hcol : ∀ j < N, ∀ t < 8, col j t < 2 ^ a.st.c.kLog) :
     (List.ofFn fun j : Fin N => Binding.byteOf fun t => FlockSoundness.bit (z (siteAddrHP a o (col j.val t.val)))) =
-      bytesOf (blockBit T z o) N col := by
+      bytesOf (chunkBit T z o) N col := by
   unfold bytesOf
   congr 1
   funext j
@@ -110,7 +110,7 @@ theorem ofFn_siteHP (a : AcceptedHP T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) (
 theorem bytesAt_siteHP (a : AcceptedHP T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) (N : ℕ) (col : ℕ → ℕ → ℕ)
     (hcol : ∀ j < N, ∀ t < 8, col j t < 2 ^ a.st.c.kLog) :
     Binding.bytesAt z (fun (j : Fin N) (t : Fin 8) => siteAddrHP a o (col j.val t.val)) =
-      bytesOf (blockBit T z o) N col :=
+      bytesOf (chunkBit T z o) N col :=
   ofFn_siteHP a z o N col hcol
 
 /-! ## The registered `b ‖ c` at a site -/
@@ -119,11 +119,11 @@ theorem bytesAt_siteHP (a : AcceptedHP T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)
 public inputs whose sample `d` decodes to `D`, whose proved units are in its population; whose public file
 `HmIn.loadPublic` loads to `pop`; with `g` below `2^⌊log₂ c.g⌋`; and whose proved unit at rank `o · c.g + g` is `u`. -/
 def BcSiteHP (a : AcceptedHP T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) : Prop :=
-  ∃ d D, a.draw = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧ (∀ v ∈ D.proved, v < D.population) ∧
+  ∃ d D, a.draw = some d ∧ Draw.UnitSample.ofJson d = .ok D ∧ (∀ v ∈ D.proved, v < D.population) ∧
     HmIn.loadPublic a.tags a.st.c a.pi a.pf = .ok pop ∧ g < 2 ^ a.st.c.g.log2 ∧
     D.proved[o.val * a.st.c.g + g]? = some u
 
-/-- **The `b ‖ c` at a sampled proof block's site is the population's** (`Hidden.bc_drawnWP`), at a `BcSiteHP`, for every row
+/-- **The `b ‖ c` at a sampled proof block's site is the population's** (`Hidden.bc_sampledWP`), at a `BcSiteHP`, for every row
 `p`. -/
 theorem bc_site_ofHP {a : AcceptedHP T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSiteHP a pop o g u)
     {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
@@ -135,7 +135,7 @@ theorem bc_site_ofHP {a : AcceptedHP T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g 
   dsimp only at hd hpop hu hg hg2 hp ⊢
   subst hd
   obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
-  exact Hidden.bc_drawnWP s hpop hD hlt L regs hregs hz o hg hg2 hp hr
+  exact Hidden.bc_sampledWP s hpop hD hlt L regs hregs hz o hg hg2 hp hr
 
 /-! ## Copies at a site -/
 
@@ -247,7 +247,7 @@ theorem out_copyHP (a : AcceptedHP T) {c : Flock.Circuit} (hce : HmOut.unrolled 
   refine bit_inj _ _ ?_
   rw [hb, hb8, bit_siteAddrHP ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht', h, pi, s, L, hR,
     regs, hregs, rfl⟩ z o hin, Hidden.msgCol_delta st.c g (HmOut.nIn st.c + jo) (2 * k + t / 8) (t % 8), hmc, hsrc,
-    ← hcol, blockBit_of_lt _ z o (Fin.isLt _)]
+    ← hcol, chunkBit_of_lt _ z o (Fin.isLt _)]
 
 /-! ## The rows' `b ‖ c` at a site -/
 
@@ -257,10 +257,10 @@ theorem AcceptedHP.row_bc (a : AcceptedHP T) (hupv : 0 < a.st.c.upv)
     (hrf : Hidden.Any.RowsFitS a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
-    bytesOf (blockBit T z o) 128 (bcCol a.st.c g p) = Binding.commitString
+    bytesOf (chunkBit T z o) 128 (bcCol a.st.c g p) = Binding.commitString
       (Hidden.Any.rowMsg a.st.c.ports[p]!
-        (bytesOf (blockBit T z o) (2 * a.st.c.ports[p]!.words) (Typed.msgCol a.st.c g p)))
-      (bytesOf (blockBit T z o) 192 (saltCol a.st.c g p)) := by
+        (bytesOf (chunkBit T z o) (2 * a.st.c.ports[p]!.words) (Typed.msgCol a.st.c g p)))
+      (bytesOf (chunkBit T z o) 192 (saltCol a.st.c g p)) := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, h, pi, s, L, hR, regs, hregs, hT⟩ := a
   subst hT
   dsimp only at hupv hrf hg hp ⊢

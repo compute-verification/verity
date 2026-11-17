@@ -38,8 +38,8 @@ open Claims Claims.ZKMal
 open FlockSoundness.Discharge
 open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 open _root_.Flock (Stmt SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
-open _root_.Flock.Firewall.Frame (Cfg Masker absorbed nLig)
+open _root_.Flock.ZkServer.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker absorbed nLig)
 
 namespace Loop
 

@@ -29,7 +29,7 @@ Nothing of the two-stage argument is redone. The deterministic half and the even
 (`ex_offIreg_le`) read no boundary. This file sets that parameter:
 
 * `FregTwoX_eq`: the incorrect set is the grid's incorrect proof blocks at the boundary trace read at the statement and
-  the committed interiors (`wrongAllAt`).
+  the committed interiors (`incorrectAllAt`).
 * `eventTwoX_le`: **the primary conjunct of `KSRegTwoX`**: `eventTwo_split` at that trace, with the sessions' bound at
   a selection that reads the run's coins off the second stage only, one run's disagreement and the rewinding lemma at
   the trace both at `B_conf,X` (`Compiled.pr_inConfX_le`, `Compiled.ex_offRegX_le`), and the interior's as before.
@@ -41,7 +41,7 @@ Nothing of the two-stage argument is redone. The deterministic half and the even
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition InScopeTwo footprintAt wrongAtBoundaryAt wrongAllAt)
+open Claims.Sampling (AuditStatement Partition InScopeTwo footprintAt incorrectAtBoundaryAt incorrectAllAt)
 
 namespace CompiledTwo
 
@@ -52,8 +52,8 @@ whose partitions evaluate, the incorrect proof blocks at that trace and the comm
 theorem FregTwoX_eq (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (ω : Ω) (r : Fin (L.V.k x) → Coin) :
-    L.FregTwoX H P x ω r = wrongAllAt s Pt d.part (L.regValX H P x) (L.iregVal H P x ω r) := by
-  simp only [FregTwoX, hs, hPt, hd, wrongAllAt]
+    L.FregTwoX H P x ω r = incorrectAllAt s Pt d.part (L.regValX H P x) (L.iregVal H P x ω r) := by
+  simp only [FregTwoX, hs, hPt, hd, incorrectAllAt]
 
 /-- **The primary conjunct of `KSRegTwoX`, from the sessions' bound**: an accepted run that samples a proof block of
 `FregTwoX` has the first such block's session unfound at its first slot (the sessions' bound at `leadSel (selOf …)`,
@@ -72,13 +72,13 @@ theorem eventTwoX_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (h
   obtain ⟨β, hβ0, hβ, hκ⟩ := hSK x Ω P
   have hT : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (L.regValX H P x) (L.iregVal H P x ω rc.1)))
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (L.regValX H P x) (L.iregVal H P x ω rc.1)))
             (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) ≤
       L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) :=
     Compiled.pr_unfound_le_at H L.toCompiled P β hβ0 hβ
-      (fun ω r => L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (L.regValX H P x) (L.iregVal H P x ω r))))
+      (fun ω r => L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (L.regValX H P x) (L.iregVal H P x ω r))))
       (fun ω r e => by simp only [iregVal_forkOn]) fun ω r sl => hκ ω r sl
   have hI := Compiled.pr_inConfX_le hbind hs P
   have hO : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>

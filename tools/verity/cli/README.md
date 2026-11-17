@@ -1,37 +1,49 @@
 # `verity`
 
-`verity` is the repository's one command (the distribution `verity-cli`, its package `verity_cli`). It dispatches to the
-tools beside it and holds no check of its own. `uv run verity --help` prints the usage `verity_cli/__init__.py` states.
+`verity` is the repository's one command. It does no work of its own: each subcommand hands off to the tool that does
+it, such as the check, a benchmark's runner, Flock's Lean verifier or a configuration's parties.
 
-| Command | What it runs |
-| --- | --- |
-| `verity check [ARGS]` | the whole check, `tools/verity/check/check.py` |
-| `verity check tests\|circuits\|lean` | only those parts of it, with the jobs `check/ci.toml` puts in each |
-| `verity check --record [ARGS]` | the check of a clean commit, recorded as an Attempt |
-| `verity check move BASE HEAD` | the certificate that BASE..HEAD is a pure move (`check/move_check.py`) |
-| `verity bench NAME [ARGS]` | `benchmarks/<NAME>/`'s runner, its `run.py` or `run.sh` |
-| `verity demo NAME [ARGS]` | `demos/<NAME>/`'s command: `verity run` on its `config.toml`, else its runner |
-| `verity demo --status` | every demo's place on its two axes, how far it runs and how far its guarantee is proved, and what each next step needs |
-| `verity run CONFIG` | the parties a deployment configuration places on this machine, and its verdict |
-| `verity config new\|check\|hash` | write, check or hash a deployment configuration |
-| `verity lean try FILE` | `lake env lean FILE` in the Lake package that holds it, the Lean edit loop; with `--on NODE` on a project machine |
-| `verity lean deployed [--rev REV] [--today YYYY-MM-DD]` | the deployed guarantees' rows as one JSON object, read from the locks at REV by git alone: each one's gap as `check.trust_gaps` computes it beside the lock's `trust_gap` and the witness halves its lock shows it lacks (`lacks_witness`), and each open or gap premise once by name (`verity_cli/deployed.py` has the keys). The gap is computed by the running checkout's Lean check, on REV's locks |
-
-In a NAME, a `-` stands for a `_`.
-
-## Modules
-
-| Module | What it holds |
-| --- | --- |
-| `verity_cli/__init__.py` | the dispatch, `verity check` and `verity lean try` |
-| `verity_cli/deployed.py` | `verity lean deployed`, over `tools/verity/lean/check.py`'s `trust_gaps` |
-| `verity_cli/run.py` | `verity run` and `verity config`, over `verity.config` |
-| `verity_cli/examples.py` | the examples' ladder, read from each `demos/<name>/example.toml` |
-| `verity_cli/settings.py` | the environment variables `verity run` reads, declared once |
-
-`verity run` and `verity config` refuse a configuration (`no-table`) until a workload's protocols bring a table of parties;
-the suite runs one of its own (`tests/step0.py`).
+## Try it
 
 ~~~sh
-uv run tools/verity/check/suites.py tools/verity/cli   # the suite, on a node through `research run --on auto`
+uv run verity --help
+uv run verity run onsite_full --dry-run
 ~~~
+
+The first prints every subcommand with a line each. The second resolves the onsite application's eight parties and the
+channels between them and runs nothing: it prints a `PLAN` line for each party, a `CHANNEL` line for each channel, and a
+`DRY` line with the counts and the bindings still missing. Neither needs a GPU.
+
+## What it runs
+
+| Command | What it hands off to |
+| --- | --- |
+| `verity check` | The whole check, or with `tests`, `circuits` or `lean` only those parts of it. |
+| `verity ci` | The check's recent runs, and one run's steps. |
+| `verity tasks`, `verity graph` | The check as a graph of tasks: listed, or one task run here. |
+| `verity bench NAME` | A benchmark's runner. |
+| `verity calibrate NAME` | A calibration's runner. |
+| `verity run CONFIG\|NAME` | A configuration's parties on the machines this host stands for (an `--on` for each), and its verdict. An application is one configuration file, `applications/NAME.toml`; by NAME it runs on every machine it places parties on, with the running tree's commit as its program. |
+| `verity config` | Writes, checks or hashes a configuration. |
+| `verity verify proof` | Flock's Lean verifier, with its own arguments. |
+| `verity lean try FILE`, `verity lean deployed` | One Lean file elaborated, the edit loop; the deployed guarantees' rows from the locks. |
+
+In a NAME, a `-` stands for a `_`. `verity run`'s options, what it prints and its exit codes are in its module's
+docstring (`verity_cli/run.py`).
+
+## Running an application on machines
+
+A configuration names roles, not hosts. The onsite application places the developer's parties on `prover-node`, and the
+auditor's on `gate-host` and `auditor-host`. A bindings file (`--bindings FILE`) gives each party's hosts, addresses and
+gate commands, so binding another host changes no hash. On the developer's node, then on the auditor device:
+
+    verity run applications/onsite_full.toml --on prover-node --bindings BINDINGS --state STATE
+    verity run applications/onsite_full.toml --on auditor-host --state STATE
+
+The gate's sides start when the developer's pieces open them.
+
+By NAME, every party runs on this one host, and the record says coins `simulated`, since the challenger shares the
+developer's host. The bindings a party started first writes are bound for the others (`verity_cli/run.py`'s
+docstring); the served table starts none yet, so the gate's still come from `--bindings`:
+
+    verity run onsite_full --bindings BINDINGS --state STATE

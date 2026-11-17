@@ -10,7 +10,7 @@ import Proofs.Flock.Soundness.Game
 # Lazy sampling of committed rounds
 
 A committed prover whose strategy does not depend on the rounds' leaves (`s : CStrat Salt g` fixed) and whose rounds
-are sampled from a product distribution with uniform blocks (`μ j`'s block marginal is uniform, whatever the salts' law) does no
+are sampled from a product distribution with uniform blocks (`μ j`'s block marginal is uniform, whatever the salts' distribution) does no
 better than the optimal prover against live coins, provided no path opens a round twice (`lazy`): each round's block
 is then sampled when it is opened.
 -/

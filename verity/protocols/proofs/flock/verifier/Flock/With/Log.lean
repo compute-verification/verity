@@ -1,4 +1,11 @@
-/-
+module
+
+public import Flock.With.Sim
+public import Flock.With.SimVerify
+public import Flock.With.SimZk
+public import Flock.With.Zk
+
+/-!
 The verifier with a logging oracle. `LogV` is the verdict monad with a write-only log of SHA-512 inputs, kept under the
 exception so that a rejecting run keeps its log too; `Hashes.logged h` appends each SHA-512 input to the log and answers
 with `h` of it. SHA-256 and BLAKE3 stay the deployed functions, unlogged, as in `Hashes.ofSha512`: the oracle is SHA-512.
@@ -7,12 +14,6 @@ Forgetting the log gives back `verifyWith h` (`verifyLogged_fst`, `Zk.verifyLogg
 length is `shaCalls h`, the number of SHA-512 calls a run with the counting oracle `Hashes.counted h` makes
 (`verifyLogged_size`, `Zk.verifyLogged_size`). Both are instances of the simulations of `Flock.With.Sim`.
 -/
-module
-
-public import Flock.With.Sim
-public import Flock.With.SimVerify
-public import Flock.With.SimZk
-public import Flock.With.Zk
 
 @[expose] public section
 

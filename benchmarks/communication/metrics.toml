@@ -1,0 +1,26 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# a local research run from a checkout on an agent VM with the team's keys: it reads Linear with the app's
+# LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET (response.py)
+[[metric]]
+id = "top/lead-response-p90-minutes"
+title = "Lead response time, slowest tenth"
+owner = "top"
+unit = "minutes"
+axis = "Minutes from a ring naming at most 3 handles to the rung lead's answer on Linear, at the 90th percentile of the last 24 hours' asks, an open ask counted at its age."
+better = "lower"
+command = "research run --project verity --cwd source -- uv run python benchmarks/communication/response.py"
+every = "6h"
+tags = ["communication"]
+
+[[metric]]
+id = "top/lead-asks-open-over-30-min"
+title = "Asks open over thirty minutes"
+owner = "top"
+unit = "asks"
+axis = "Asks to a lead, rung on Linear in the last 24 hours by a ring naming at most 3 handles, still unanswered more than 30 minutes after the ring."
+better = "lower"
+command = "research run --project verity --cwd source -- uv run python benchmarks/communication/response.py"
+every = "1h"
+tags = ["communication"]

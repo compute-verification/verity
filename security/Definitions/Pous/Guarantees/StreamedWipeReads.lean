@@ -8,7 +8,8 @@ public import Definitions.Pous.Model.StreamedWipe
 `Pous.Guarantees.StreamedWipe` for every number `k` of sequential timed reads: a ratio `r` with `(1 − 1/r)^k ≤ 2^-129`
 puts the threshold at `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` bits of the fill, plus the server's memory outside the fill
 and the egress, at `2^-128` (`StreamedWipeMeetsReads`). `StreamedWipeMeetsFamily`'s `k = 2152` is its instance at
-`r = 24`, and `StreamedWipeMeetsH200` is the instance at an H200 of 141 GiB (151,397,597,184 bytes) filled whole, at
+`r = 24`, and `StreamedWipeMeetsH200` is the instance at an H200's device memory (the card `h200-sxm-141gb`'s
+`store.dram`, 141 GiB) filled whole, at
 most 5 GB in all. The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`, the proofs
 `Security/Proofs/Pous/StreamedWipe/Family.lean`.
 
@@ -52,8 +53,9 @@ def StreamedWipeMeetsReads : Prop :=
           (2⁻¹ : ℝ≥0∞) ^ 128 + StreamedWipe.prfAdvantage prf (StreamedWipe.wipeDistinguisher P)
 
 /-- **The H200 at 5 GB: 141 GiB at 2906 reads.** `StreamedWipeMeetsReads` at `r = 33` and `k = 2906` on an H200 of
-141 GiB: a fill of `n = 2,365,587,456` labels, `151,397,597,184` bytes (the data sheet's 141 GB in binary units), and
-`R = 0`. A prover with `E` bits of egress that keeps `39,068,035,213 + E + s` bits of uniform prior content through
+141 GiB: a fill of `n = 2,365,587,456` labels, the card `h200-sxm-141gb`'s `store.dram` (the data sheet's 141 GB in
+binary units) over 64 bytes, and `R = 0`. The literal stays: `Verity.Accel.Card`'s `size .dram` is
+`store.dram_installed` (144 GiB), not this field. A prover with `E` bits of egress that keeps `39,068,035,213 + E + s` bits of uniform prior content through
 the reads, for every `s` (the bits past the threshold, so every count at least the threshold), is accepted with
 probability at most `2^-128` plus the PRF's advantage. The threshold is about 4.884 GB plus the egress. NVML's total on the deployed card is `150,754,820,096` bytes (143,771 MiB), 613 MiB less; that
 card filled whole has the lower threshold `38,902,167,181` bits at the same `r` and `k`. A fill that leaves some of the

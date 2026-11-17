@@ -18,7 +18,7 @@
 //! - every run's `out_lo` at its last compression (a prover-committed public: the run's output value; a chunk's last run's is
 //!   the chunk chaining value, or the row digest for a one-chunk row);
 //! - every unit's returned-output words, and for a cut template every unit's cut input and cut output words (public, from
-//!   the verifier's own instance file, whose cut words the netlist's pinned tail relates).
+//!   the verifier's own instance file, whose cut words the circuit description's pinned tail relates).
 //!
 //! v3 adds, for tensor-core templates (attention): rows whose last chunk is short (a chunk's flags follow its own block
 //! count); a public input port, read by the units as cut words and hashed by the verifier into its committed digest instead
@@ -27,9 +27,9 @@
 //! words (`check_cut_words`) and committed under the output root.
 //!
 //! So a chunk's runs chain across blocks through their output values, and one circuit serves every block. What the layout
-//! means (which leaves each unit slot reads, which output leaves it returns, the row key) is checked against the netlist's
-//! pinned leaf maps before anything (`check_leaf_maps`, IR6); the header's copy is never trusted. The verifier folds
-//! each row's chunk values into its digest natively (BLAKE3's keyed parent tree) and checks the digests, and the output
+//! means (which leaves each unit slot reads, which output leaves it returns, the row key) is checked against the circuit
+//! description's pinned leaf maps before anything (`check_leaf_maps`, IR6); the header's copy is never trusted. The verifier
+//! folds each row's chunk values into its digest natively (BLAKE3's keyed parent tree) and checks the digests, and the output
 //! words, against the frame-v3 roots it recomputes. An empty run slot (padding) hashes `nb` zero blocks from the key at
 //! counter 0, flags KEYED_HASH | CHUNK_START (first) | CHUNK_END (last).
 
@@ -392,32 +392,32 @@ pub fn check_blocks(inst: &FrameInstances) -> Result<(), String> {
     Ok(())
 }
 
-/// Red-team-flock-2 IR6: the file's meaning against the netlist's pinned leaf maps (its LEAVES line), not the header's word.
-/// The ports are 16-bit words with the pinned leaf counts; the output mapping is the pinned one and the returned-output
-/// columns are consecutive 16-bit ports (no returned-output group when the tail computes the outputs); every real unit
-/// slot's wiring reads exactly the runs and byte offsets its unit's pinned input leaves occupy in its own instance's hashed
+/// Red-team-flock-2 IR6: the file's meaning against the circuit description's pinned leaf maps (its LEAVES line), not the
+/// header's word. The ports are 16-bit words with the pinned leaf counts; the output mapping is the pinned one and the
+/// returned-output columns are consecutive 16-bit ports (no returned-output group when the tail computes the outputs); every real
+/// unit slot's wiring reads exactly the runs and byte offsets its unit's pinned input leaves occupy in its own instance's hashed
 /// rows (so the block assignment is the leaf maps'), and a zero leaf (-1, a word the IR pads with) an empty run slot, whose
 /// message the verifier-fixed chaining value binds to zero; the row key is the x-row key.
 pub fn check_leaf_maps(inst: &FrameInstances, net: &IrUnitNet) -> Result<(), String> {
-    let lv = net.leaves.as_ref().ok_or("the netlist pins no leaf maps (no LEAVES line)")?;
+    let lv = net.leaves.as_ref().ok_or("the circuit description pins no leaf maps (no LEAVES line)")?;
     let ints = |v: &Value| -> Vec<Vec<i64>> { v.as_array().map(|a| a.iter().map(|u| u.as_array().map(|x| x.iter().filter_map(|y| y.as_i64()).collect()).unwrap_or_default()).collect()).unwrap_or_default() };
     let lists = |v: &Value| -> Vec<Vec<usize>> { v.as_array().map(|a| a.iter().map(usizes).collect()).unwrap_or_default() };
     let (lin, lout, pin, pout) = (ints(&lv["in"]), lists(&lv["out"]), lists(&lv["in_ports"]), lists(&lv["out_ports"]));
     if pin.iter().chain(&pout).any(|p| p.len() != 2 || p[1] != 16) {
-        return Err("the netlist's ports are not all [leaves, 16] (u16 rows and output words)".into());
+        return Err("the circuit description's ports are not all [leaves, 16] (u16 rows and output words)".into());
     }
     let words = |ports: &[(String, usize)]| ports.iter().map(|p| p.1).collect::<Vec<_>>();
     if words(&inst.in_ports) != pin.iter().map(|p| p[0]).collect::<Vec<_>>() || words(&inst.out_ports) != pout.iter().map(|p| p[0]).collect::<Vec<_>>() {
-        return Err("the header's ports are not the netlist's".into());
+        return Err("the header's ports are not the circuit description's".into());
     }
     let lay = &inst.lay;
     if lin.len() != inst.upi || lout.len() != inst.upi || lay.out_leaf != lout {
-        return Err("the output mapping is not the netlist's leaf map".into());
+        return Err("the output mapping is not the circuit description's leaf map".into());
     }
     if lay.ret_words > 0 {
         let g0 = &net.out_groups[0];
         if g0.bits.iter().any(|&b| b != 16) || lay.ret_cols != (0..g0.bits.len()).map(|j| 16 * j).collect::<Vec<_>>() {
-            return Err("the returned outputs are not the netlist's 16-bit ports".into());
+            return Err("the returned outputs are not the circuit description's 16-bit ports".into());
         }
     } else if lout.iter().any(|o| !o.is_empty()) || !lay.ret_cols.is_empty() {
         return Err("tail-computed outputs, but units that return output leaves".into());
@@ -458,8 +458,8 @@ pub fn check_leaf_maps(inst: &FrameInstances, net: &IrUnitNet) -> Result<(), Str
     Ok(())
 }
 
-/// The public ports: exactly the ports every one of whose leaves the netlist's CUT line lists as a public cut word; per
-/// instance those words (16-bit) hash, as the port's `blake3-keyed/row/v2` row under the x-row key, to the committed digest.
+/// The public ports: exactly the ports every one of whose leaves the circuit description's CUT line lists as a public cut word;
+/// per instance those words (16-bit) hash, as the port's `blake3-keyed/row/v2` row under the x-row key, to the committed digest.
 pub fn check_public_ports(inst: &FrameInstances, cm: &CutMap) -> Result<(), String> {
     let starts: Vec<usize> = inst.in_ports.iter().scan(0, |a, p| { let s = *a; *a += p.1; Some(s) }).collect();
     let by_leaf: BTreeMap<usize, usize> = cm.public.iter().map(|&(k, leaf)| (leaf, k)).collect();
@@ -467,7 +467,7 @@ pub fn check_public_ports(inst: &FrameInstances, cm: &CutMap) -> Result<(), Stri
     if covered != inst.public_ports || by_leaf.len() != cm.public.len()
         || by_leaf.keys().any(|&l| !covered.iter().any(|&p| (starts[p]..starts[p] + inst.in_ports[p].1).contains(&l)))
     {
-        return Err("the header's public ports are not the ports the netlist reads publicly".into());
+        return Err("the header's public ports are not the ports the circuit description reads publicly".into());
     }
     for i in 0..inst.n {
         for &p in &covered {
@@ -487,9 +487,9 @@ pub fn check_public_ports(inst: &FrameInstances, cm: &CutMap) -> Result<(), Stri
     Ok(())
 }
 
-/// Per instance, the netlist's pinned tail evaluated on the cut words the units compute and the public words: every other cut
-/// word in the file must be what it gives (the units' cut ports are region claims on these words), a word read by a 16-bit
-/// port must fit it, and, when the tail computes the outputs, its output slots must be the file's output words.
+/// Per instance, the circuit description's pinned tail evaluated on the cut words the units compute and the public words: every
+/// other cut word in the file must be what it gives (the units' cut ports are region claims on these words), a word read by a
+/// 16-bit port must fit it, and, when the tail computes the outputs, its output slots must be the file's output words.
 pub fn check_cut_words(inst: &FrameInstances, cm: &CutMap, t: &Tables) -> Result<(), String> {
     if cm.words == 0 {
         return Ok(());
@@ -645,7 +645,7 @@ fn delta(net: &IrUnitNet, lay: &Layout) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
 pub struct FrameStmt {
     pub lay: Layout,
     pub net: IrUnitNet,
-    /// the netlist's pinned cut structure (no cut words for a template without a cut)
+    /// the circuit description's pinned cut structure (no cut words for a template without a cut)
     pub cm: CutMap,
     pub blocks_real: usize,
     pub nbl: usize,
@@ -684,7 +684,7 @@ impl FrameStmt {
         let cm = cut_map_of(&net, &inst.header, inst.units)?;
         let ret = lay.ret_words > 0;
         if ret == !cm.outputs.is_empty() || (ret && (net.out_groups[0].col != lay.ret_col || net.out_groups[0].words != lay.ret_words)) {
-            return Err("the returned-output group is not the netlist's first output group (or the tail computes the outputs)".into());
+            return Err("the returned-output group is not the circuit description's first output group (or the tail computes the outputs)".into());
         }
         let cut = cm.words > 0;
         let leaf_cols: Vec<usize> = {

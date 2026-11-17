@@ -1,7 +1,3 @@
-/-
-JSON as the Python reference reads it, over canonical JSON (integers only): Python's `==`, `bool(x)`, `x.get(k)` and its
-integer tests. The one difference is deliberate: `jeq` tells `true` from `1`, which Python's `==` doesn't.
--/
 module
 
 public import Flock.Canon
@@ -12,6 +8,11 @@ meta import Flock.Hash
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 public import Lean.Data.Json.FromToJson.Basic
+
+/-!
+JSON as the Python reference reads it, over canonical JSON (integers only): Python's `==`, `bool(x)`, `x.get(k)` and its
+integer tests. The one difference is deliberate: `jeq` tells `true` from `1`, which Python's `==` doesn't.
+-/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -69,6 +70,15 @@ example : jsonStrIs (getD (Json.mkObj [("label", .arr #[.str "draw"])]) "label")
 example : jsonStrIs (getD (Json.mkObj [("label", .null)]) "label") "" = false := by decide
 example : jsonStrIs (getD (Json.mkObj [("after", .str "draw")]) "label") "draw" = false := by decide
 example : jsonStrIs (getD (Json.str "draw") "label") "draw" = false := by decide
+
+/-- `j == .bool b`, by a match the kernel reduces, as `jsonStrIs` is `j == .str s`. -/
+def jsonBoolIs (j : Json) (b : Bool) : Bool := match j with | .bool c => c == b | _ => false
+
+example : jsonBoolIs (getD (Json.mkObj [("complete", .bool true)]) "complete") true = true := by decide
+example : jsonBoolIs (getD (Json.mkObj [("complete", .bool true)]) "complete") false = false := by decide
+example : jsonBoolIs (getD (Json.mkObj [("complete", .bool false)]) "complete") false = true := by decide
+example : jsonBoolIs (getD (Json.mkObj [("complete", .num 0)]) "complete") false = false := by decide
+example : jsonBoolIs (getD (Json.mkObj [("windows", .bool true)]) "complete") true = false := by decide
 
 def entries : Json → Array (String × Json)
   | .obj kvs => kvs.toArray

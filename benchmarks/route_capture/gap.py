@@ -170,7 +170,7 @@ def markdown(g: dict[str, Any]) -> str:
     lines += ["", "| engine fact | share of tokens |", "|---|---|"]
     lines += [f"| {k} | {v['share']:.1%} |" for k, v in g["engine"].items()]
     if g.get("engine_had_flashinfer") is False:
-        lines += ["", "The captured engine had no FlashInfer, which production images ship: its block-FP8 GEMMs below 32 rows "
+        lines += ["", "The captured engine had no FlashInfer, which serving images ship: its block-FP8 GEMMs below 32 rows "
                       "and its sampler ran other kernels than the rows, which are the decoder's for an engine with FlashInfer."]
     return "\n".join(lines) + "\n"
 

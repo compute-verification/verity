@@ -38,11 +38,11 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
     # the driver's tokens.json is PART of the record: without it every output-association check (driver-served token k
     # == the recorder's k-th TokenSelect, served length == the driver's, the driver's two-length claims, the tokens.json lag attestation) is
     # silently skipped.  Fail closed by name; `tokens_optional=True` (CLI --tokens-optional) accepts a record without it for mechanism /
-    # fixture runs, LABELLED in checks[G6].tokens_json=false -- never a row of record (row_pod always produces the file).
+    # fixture runs, LABELLED in checks[G6].tokens_json=false -- never a workload of record (row_pod always produces the file).
     if tokens is None and not tokens_optional:
         c.fail(f"the record has no {os.path.relpath(tokens_path, oracle_dir)}: the output-association legs (driver-served tokens vs the recorder's "
                f"TokenSelects, served/executed length claims, tokens.json lag attestation) cannot run; a record without it is refused unless the caller "
-               f"passes --tokens-optional (labelled, never a row of record)")
+               f"passes --tokens-optional (labelled, never a workload of record)")
     driver = _driver_record(c, tokens, os.path.relpath(tokens_path, oracle_dir))
     tok_req = driver.by_request if driver is not None else {}
     _driver_requests(c, gp, driver)

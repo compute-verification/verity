@@ -3,9 +3,10 @@
 
 [[metric]]
 id = "top/tree-not-yet-lines"
-title = "Paths main holds outside the layout of record: the lines of tests/tree.toml's not-yet list"
+title = "Files left to reorganize"
 owner = "top"
 unit = "lines"
+axis = "Paths on main still outside the new repository layout."
 better = "lower"
 command = "research run --on auto --cwd source -- uv run python benchmarks/tree/not_yet.py"
 every = "1d"
@@ -13,10 +14,75 @@ goal = "top/repo-cleaned-up"
 
 [[metric]]
 id = "top/architecture-not-built-rows"
-title = "What the architecture requires that main doesn't do yet: the rows of ARCHITECTURE.md's table of code that has to be written"
+title = "Architecture left to build"
 owner = "top"
 unit = "rows"
+axis = "Things the architecture requires that main doesn't do yet, one row each of its table of code to write."
 better = "lower"
 command = "research run --on auto --cwd source -- uv run python benchmarks/tree/not_built.py"
 every = "1d"
 goal = "top/architecture-implemented"
+
+[[metric]]
+id = "top/lint-sites-found"
+title = "Sites the lints find"
+owner = "top"
+unit = "sites"
+axis = "Sites on main that the ratchet lints find, summed over every lint and file, in total and for each lead."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run --all-packages --extra torch-cpu python benchmarks/tree/lint_sites.py"
+every = "1d"
+goal = "top/slices-clean"
+
+[[metric]]
+id = "top/lint-sites-allowed"
+title = "Sites the allowlists permit"
+owner = "top"
+unit = "sites"
+axis = "Sites on main that the ratchet lints' committed allowlists permit, in total and for each lead."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run --all-packages --extra torch-cpu python benchmarks/tree/lint_sites.py"
+every = "1d"
+
+[[metric]]
+id = "top/lint-sites-past-entries"
+title = "Sites past their allowlist entries"
+owner = "top"
+unit = "sites"
+axis = "Sites on main that the ratchet lints find past what their allowlist entries allow, summed by key and never netted, in total and for each lead."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run --all-packages --extra torch-cpu python benchmarks/tree/lint_sites.py"
+every = "1d"
+
+[[metric]]
+id = "top/prose-share"
+title = "Source lines that are prose"
+owner = "top"
+unit = "percent"
+axis = "Percent of the Python and Lean lines on main that are docstrings or comments and no code, in total and for each lead's own files."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/tree/prose.py"
+every = "1d"
+goal = "top/repo-cleaned-up"
+
+[[metric]]
+id = "top/prose-over-length"
+title = "Comments longer than allowed"
+owner = "top"
+unit = "items"
+axis = "Docstrings and comments on main longer than AGENTS.md's comments and docstrings section allows, in total and for each lead."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/tree/prose.py"
+every = "1d"
+goal = "top/repo-cleaned-up"
+
+[[metric]]
+id = "top/prose-memory"
+title = "Comments naming dates or ids"
+owner = "top"
+unit = "items"
+axis = "Docstrings and comments on main that name a date, an issue, pull request, run or artifact id, a commit, a machine or a person, in total and for each lead."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/tree/prose.py"
+every = "1d"
+goal = "top/repo-cleaned-up"

@@ -36,7 +36,7 @@ coordinate, its verdict and claim carried by the coupling, and the rest of the e
 
 namespace Verity
 
-open Accounting
+open ResourceAccounting
 open scoped ENNReal
 
 namespace Coupling
@@ -631,7 +631,7 @@ the run's (its verdict accepting while its claim fails, which `PeriodRun.Sound` 
 within `δ`) or the rest of the event (`BreakBound`, whose forgery term `Unforgeable` bounds by `ε_forge`). -/
 theorem target_of_periods : TargetOfPeriods := by
   intro ι α _ d V acc k b h θ F c σ
-  unfold Vocab.error Accounting.condError
+  unfold Vocab.error ResourceAccounting.condError
   split_ifs with hcr
   · classical
     obtain ⟨-, -, hcr, hun⟩ := hcr
@@ -746,7 +746,7 @@ theorem wipe_target_nontrivial : ¬ Idle.exact.TargetFor (fun _ => True) .onsite
     (fun _ h => h ⟨Nat.le_refl 0, funext fun i => i.elim0⟩) (lt_of_eq_of_lt (Idle.error_exact _ _ _ _ _) zero_lt_one)
 
 /-- **`SoundnessOfUpFront`'s honest lemma**: its hypotheses hold at the idle deployment's compiled remote composite,
-sampled proofs, PoUW and the inference-only policy each meeting its bound at its component. -/
+SPOT, PoUW and the inference-only policy each meeting its bound at its component. -/
 theorem soundness_of_upFront_honest :
     Idle.unbounded.SubprotocolBound .remote .sampled ∧ Idle.unbounded.SubprotocolBound .remote .pouw ∧
       Idle.unbounded.SubprotocolBound .remote .inferenceOnly :=
@@ -756,6 +756,6 @@ theorem soundness_of_upFront_honest :
 /-- **`SoundnessOfUpFront`'s nontrivial lemma**: its conclusion fails at remote for a verifier that accepts
 everything, at the idle deployment whose errors are all `0`. -/
 theorem soundness_of_upFront_nontrivial : ¬ Idle.exact.SoundnessFor .remote fun _ => True :=
-  Idle.nontrivial_at .remote (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+  Idle.nontrivial_at .remote (Verity.mem_subprotocols.2 (by decide))
 
 end Verity

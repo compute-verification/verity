@@ -116,7 +116,7 @@ def binding_check(bnd: CommitBinding | Mapping[str, Any], *, min_openings: int =
     if not po:
         po = {}   # a binding that records no openings sampled from the population: none unbound, none opened
     if int(po.get("unbound_n") or 0) > 0:
-        return False, f"{po['unbound_n']} population-drawn openings had no binding (first: {json_short((po.get('unbound') or [{}])[0])})"
+        return False, f"{po['unbound_n']} population-sampled openings had no binding (first: {json_short((po.get('unbound') or [{}])[0])})"
     if not po.get("skipped"):
         if int(po.get("opened") or 0) < min(min_openings, int(po.get("n") or 0)):
             return False, f"population openings opened {po.get('opened')} < {min(min_openings, int(po.get('n') or 0))}"
@@ -561,7 +561,7 @@ def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> Chec
     if _int(po.get("unbound_n") or 0, "binding.openings_population.unbound_n") > 0:
         return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope,
                    differences=[{"name": "population_openings_unbound", "n": _int(po.get("unbound_n") or 0, "binding.openings_population.unbound_n"), "first": _first(po.get("unbound"))}],
-                   reason=f"{po['unbound_n']} population-drawn openings had no binding (first: {json_short(_d(_first(po.get('unbound'))))})")
+                   reason=f"{po['unbound_n']} population-sampled openings had no binding (first: {json_short(_d(_first(po.get('unbound'))))})")
     if not po.get("skipped"):
         want = min(min_openings, _int(po.get("n") or 0, "binding.openings_population.n"))
         if _int(po.get("opened") or 0, "binding.openings_population.opened") < want:
@@ -675,7 +675,7 @@ def rule_required_classes(commit: dict, ctx: dict, declaration: dict | None, req
 
 
 def rule_manifest_verified(commit: dict, ctx: dict) -> CheckResult:
-    """row_pod.sh: `required_manifest verify` rebuilt the manifest from this attempt's Program x workload == the one used."""
+    """The row's driver: `manifest-verify` rebuilt the manifest from this attempt's Program x workload == the one used."""
     mv = ctx.get("manifest_verify")
     claim = "The required-value manifest the Commit used is byte-identical (rows digest) to the one rebuilt from this attempt's Program x workload."
     compat = ["manifest_verify.ok", "manifest_verify.used_digest", "manifest_verify.rebuilt_digest", "stages.txt manifest_verify="]

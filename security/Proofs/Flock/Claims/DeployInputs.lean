@@ -41,7 +41,7 @@ import VCVio.Prelude.Core
 # The deployed verifier's statement: its bytes, its parser and its setup
 
 A statement `x` of Flock's deployed verifier is the canonical byte encoding (`Raw.encode`) of exactly what
-`flock-verify verify` reads besides the session directory: the `--statement` id, the circuit and public files, the lookup
+`verity-verify-proof verify` reads besides the session directory: the `--statement` id, the circuit and public files, the lookup
 tables, `--zk` and whether it names `--coins os`, `--session-tables`, the sampled session's sample (the record's `unit_draw`), and the bytes of
 `--partition`, `--program`, `--work K` with `--work-table`, `--stratified`, `--closure`, `--registered` and
 `--public-inputs`. Fields are length-prefixed (8 bytes, little-endian), options and flags one tag byte, after a format
@@ -61,9 +61,9 @@ agreement on `--zk` that C's `scope_iff` and `scopeMatches` take.
 `Ins.setup` is `verifyCmd`'s `setupOf` at the statement's sample, with no recursive input and no `--identifier`: the
 session's statement (`Stmt.setupTables`), each table's registered reads (`checkRegistered`) and the identifier's absence
 (`checkIdentifier` without `--identifier`), `Registered.checkFull`, `RecSetup.checks`, `Zk.shapeOk` under `--zk`,
-`RecCoins.check`, `RecVStar.checkPubRows`, and the sample's law (`ProvedScope.drawLaw`). It refuses a statement without
+`RecCoins.check`, `RecVStar.checkPubRows`, and the sample's sampling design (`ProvedScope.sampleDesign`). It refuses a statement without
 hm96-sha512 rows, which `verifyCmd` sets up on its compression circuit and then always refuses (such a session has no
-sample, `drawLaw zk tags false none`); the deployed form does not carry `--comp`.
+sample, `sampleDesign zk tags false none`); the deployed form does not carry `--comp`.
 -/
 
 @[expose] public section
@@ -75,7 +75,7 @@ open Lean (Json)
 
 /-! ## The statement's bytes -/
 
-/-- **What `flock-verify verify` reads of a statement**, as bytes and flags: the `--statement` id, the circuit and public
+/-- **What `verity-verify-proof verify` reads of a statement**, as bytes and flags: the `--statement` id, the circuit and public
 files, the lookup tables the circuit pins, `--zk`, whether it names `--coins os` (which it refuses), `--session-tables`, the sampled session's sample (JSON text),
 and the files and numbers of `--partition`, `--program`, `--work`, `--work-table`, `--stratified`, `--closure`,
 `--registered` and `--public-inputs`. -/
@@ -259,7 +259,7 @@ def Ins.setup (s : Ins) : V (SessionSpec × Array Stmt) := do
   if r.zk then sts.forM Zk.shapeOk
   sts.forM (RecCoins.check · s.registered (RecCoins.Source.atC3 none none none) (RecSetup.c3 none none))
   sts.forM (RecVStar.checkPubRows · s.registered none none)
-  if r.draw.isSome then ProvedScope.drawLaw r.zk r.tags false r.draw
+  if r.draw.isSome then ProvedScope.sampleDesign r.zk r.tags false r.draw
   pure (spec, sts)
 
 /-- The statement's inputs, for the verifier that is masked exactly when `zk`: a statement of the other verifier does not
@@ -306,7 +306,7 @@ theorem Raw.ins_zk {w : Raw} {s : Ins} (h : w.ins = .ok s) : s.read.zk = w.zk :=
   all_goals first | (cases h; done) | (cases h; rfl)
 
 /-- **The statement's sample is rebuilt** (`norm`) from the JSON its bytes parse to. -/
-theorem Raw.ins_draw {w : Raw} {s : Ins} (h : w.ins = .ok s) :
+theorem Raw.ins_sample {w : Raw} {s : Ins} (h : w.ins = .ok s) :
     ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -329,8 +329,8 @@ theorem readOf_zk {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : readOf z
     cases hw
     exact Raw.ins_zk hi
 
-/-- **A statement's sample is rebuilt** (`Flock.norm`, `Raw.ins_draw`). -/
-theorem insOf_draw_norm {zk : Bool} {x : Claims.Msg} {s : Ins} (h : insOf zk x = some s) {d : Json}
+/-- **A statement's sample is rebuilt** (`Flock.norm`, `Raw.ins_sample`). -/
+theorem insOf_sample_norm {zk : Bool} {x : Claims.Msg} {s : Ins} (h : insOf zk x = some s) {d : Json}
     (hd : s.read.draw = some d) : Flock.norm d = d ∧ Claims.Json.Wf d := by
   unfold insOf at h
   obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 h
@@ -342,7 +342,7 @@ theorem insOf_draw_norm {zk : Bool} {x : Claims.Msg} {s : Ins} (h : insOf zk x =
   | ok s' =>
     rw [hi] at hw
     cases hw
-    obtain ⟨draw, -, hdr⟩ := Raw.ins_draw hi
+    obtain ⟨draw, -, hdr⟩ := Raw.ins_sample hi
     rw [hdr] at hd
     obtain ⟨d₀, -, rfl⟩ := Option.map_eq_some_iff.1 hd
     exact ⟨norm_norm d₀, wf_norm d₀⟩

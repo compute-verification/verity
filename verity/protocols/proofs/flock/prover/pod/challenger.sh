@@ -1,10 +1,10 @@
 # Sourced by a pod whose `flock-circuit serve` takes its sessions' coin trees from the auditor's challenger
-# (`serve --tree-from`): verity/protocols/compose/device/live_challenger/serve.py, its coins the Lean verifier's `IO.getRandomBytes`
-# (`one_stage.verifier.coins`, the sampled-proofs-verifier built here with lake), a test LMS key and a fresh session secret
+# (`serve --tree-from`): verity/protocols/compose/verifier/live_challenger/serve.py, its coins the Lean verifier's `IO.getRandomBytes`
+# (`one_stage.verifier.coins`, the spot-verifier built here with lake), a test LMS key and a fresh session secret
 # in the pod's scratch, none of it the prover's. One challenger serves one `serve` process: its session closes after that
 # server's last session, and the challenger exits 0 once it closes.
-#   challenger_build                 start building the Lean the challenger and its audit run (sampled-proofs-verifier,
-#                                    sampled-proofs-difftest), in the background
+#   challenger_build                 start building the Lean the challenger and its audit run (spot-verifier,
+#                                    spot-difftest), in the background
 #   challenger_built                 wait for that build; 0 when it built
 #   challenger_start DIR             a challenger whose record, key, releases.jsonl and hellos.jsonl go under DIR; sets
 #                                    CHALLENGER (its HOST:PORT), CHALLENGER_SECRET (the secret's file) and TREE_FROM, the
@@ -31,7 +31,7 @@ challenger_build() {
   local lock=$CHALLENGER_REPO/verity/circuits/difftest/.lake/harness-build.lock
   mkdir -p "$CHALLENGER_WORK" "$(dirname "$lock")"
   # under one_stage.verifier's own build lock: in a tree other runs share (--cwd source), they build here too
-  ( cd "$CHALLENGER_SP" && flock "$lock" lake build sampled-proofs-verifier sampled-proofs-difftest \
+  ( cd "$CHALLENGER_SP" && flock "$lock" lake build spot-verifier spot-difftest \
       > "$CHALLENGER_WORK/build.log" 2>&1
     echo $? > "$CHALLENGER_WORK/build.rc" ) &
   CHALLENGER_BUILD=$!
@@ -50,7 +50,7 @@ challenger_start() {
   mkdir -p "$dir" "$CHALLENGER_WORK/$name"
   CHALLENGER_SECRET=$CHALLENGER_WORK/$name/secret
   "$CHALLENGER_PY" -c 'import secrets; print(secrets.token_hex(32))' > "$CHALLENGER_SECRET" || return 1
-  "$CHALLENGER_PY" "$CHALLENGER_REPO/verity/protocols/compose/device/live_challenger/serve.py" --out "$dir" --port 0 \
+  "$CHALLENGER_PY" "$CHALLENGER_REPO/verity/protocols/compose/verifier/live_challenger/serve.py" --out "$dir" --port 0 \
     --scheme verity/flock/tree-from/v1 --families '[["positions", 1]]' --session "$name" --key "$CHALLENGER_WORK/$name/key" \
     --params "${CHALLENGER_PARAMS:-4,3}" --keygen-workers 1 --secret-file "$CHALLENGER_SECRET" \
     > "$dir/challenger.out" 2> "$dir/challenger.err" &
@@ -81,10 +81,10 @@ challenger_cases() {
 }
 
 _challenger_trees() {
-  "$CHALLENGER_PY" - "$CHALLENGER_SP/.lake/build/bin/sampled-proofs-difftest" "$@" <<'EOF'
+  "$CHALLENGER_PY" - "$CHALLENGER_SP/.lake/build/bin/spot-difftest" "$@" <<'EOF'
 import copy, json, subprocess, sys
 from pathlib import Path
-from verity.protocols.proofs.spot.device import challenger as C, remote as R
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C, remote as R
 
 difftest, mode, ch, *rest = sys.argv[1:]
 log = R.log_lines(Path(ch) / R.RELEASES)

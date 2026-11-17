@@ -23,8 +23,9 @@ A place (`analyse`) is a slot the launcher's own rule would start the job in now
     that reserves nothing would start beside a line stalled on memory), against the memory not reserved (`free_gb`), with
     each slot that shares a core with any held slot on the machine first marked blocked;
   - a check job that carries a twin (a queue shard) has no place off its own lines: it was launched as one run on each machine
-    of its launcher's list (the loop's `--on` line), all in one twin group, so a machine where the group has no line is one
-    that list leaves out by choice, which no window records;
+    of its launcher's list (the loop's `--on` line), or, when its first machine had a slot free, there and on the two others
+    with the most slots free, which join their lines only after a delay (check.py's `twins`), all in one twin group, so a
+    machine where the group has no line is one its launcher leaves out by choice, which no window records;
   - two idle slots that overlap are one place, and one place takes one job: places are dealt oldest first (priority first in
     the check pool), and a job left with none is in line but not stranded;
   - a twin still in line while its pair holds a slot (`runs_on`: its machine can't ask its home, so it can't see that) is a
@@ -174,9 +175,10 @@ def program(tree: Path | None = None, root: str = remote.DEFAULT_ROOT, peers: st
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + defs + ENDING).encode()
 
 
-def machines() -> list[str]:
-    """Every CPU machine of the registry, by number (`auto.spill`)."""
-    return [m for m, _ in auto.spill()]
+def machines(now: float | None = None) -> list[str]:
+    """Every CPU machine of the registry that is in placement at ``now``, by number (`auto.spill`): one the registry marks
+    stopped is not read, and no machine's peers are short for lacking it."""
+    return [m for m, _ in auto.spill(now=now)]
 
 
 def _ssh(argv: list[str], data: bytes) -> subprocess.CompletedProcess:
@@ -589,7 +591,7 @@ def findings(ctx: Any) -> list:
     be read at all."""
     from .monitors import Finding
 
-    names = machines()
+    names = machines(ctx.now)
     if not names:
         raise RuntimeError(f"the registry names no CPU machine of project {auto.AUTO_PROJECT}: give the relay the registry "
                            "(RESEARCH_MACHINES_D in infra/control/watchers.toml's [env])")
@@ -673,7 +675,7 @@ def main(argv: list[str], now: Callable[[], float] = time.time) -> int:
     ap.add_argument("--pool", metavar="P", help="only pool P")
     ap.add_argument("--min", type=float, default=0, metavar="MINUTES", help="only jobs that have waited this long (default 0)")
     a = ap.parse_args(argv)
-    names = machines()
+    names = machines(now())
     if not names:
         raise SystemExit("research queue stranded: the registry names no CPU machine of project "
                          f"{auto.AUTO_PROJECT} (`research pods list`)")

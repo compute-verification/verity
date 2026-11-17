@@ -40,7 +40,7 @@ use crate::chunk::{key_words, row_key, comp, log2ceil};
 
 pub const K_LOG: usize = 20;
 pub const UNIT_LOG: usize = 13;
-/// The largest unit slot: a netlist of more than 2^13 rows (a total unit) takes 2^14-row slots (`UnitNet::unit_log`).
+/// The largest unit slot: a circuit description of more than 2^13 rows (a total unit) takes 2^14-row slots (`UnitNet::unit_log`).
 pub const UNIT_LOG_MAX: usize = 14;
 pub const COMP_SLOTS: usize = 32;
 pub const UNITS: usize = 32;
@@ -246,7 +246,7 @@ impl UnitNet {
         let sha256: [u8; 32] = Sha256::digest(text.as_bytes()).into();
         let mut lines = text.lines();
         let h: Vec<&str> = lines.next().expect("header").split_whitespace().collect();
-        assert_eq!(h[0], "flock-unit-io/v1", "not a flock-unit-io/v1 netlist");
+        assert_eq!(h[0], "flock-unit-io/v1", "not a flock-unit-io/v1 circuit description");
         let n = |i: usize| -> usize { h[i].parse().unwrap() };
         let (useful, const_pos, n_in, ni) = (n(2), n(3), n(4), n(5));
         assert_eq!((0..ni).map(|i| n(6 + i)).collect::<Vec<_>>(), vec![0, 1, 2, 3, 4]);
@@ -269,10 +269,10 @@ impl UnitNet {
     }
 
     pub fn load(path: &str) -> Self {
-        Self::parse(&std::fs::read_to_string(path).expect("netlist"))
+        Self::parse(&std::fs::read_to_string(path).expect("circuit description"))
     }
 
-    /// log2 of the unit's slot: 13, or 14 for a netlist past 2^13 rows. Statements of 2^13-row units are unchanged.
+    /// log2 of the unit's slot: 13, or 14 for a circuit description past 2^13 rows. Statements of 2^13-row units are unchanged.
     pub fn unit_log(&self) -> usize {
         if self.useful <= 1 << UNIT_LOG { UNIT_LOG } else { UNIT_LOG_MAX }
     }
@@ -393,10 +393,10 @@ pub const MAX_EXTRA_CLAIMS: usize = 2 * crate::circuit::IN_RANGE_REGIONS;
 /// The largest proof: m ≤ 35 (the Fast100 schedule's reach; Chunk(n): n × VUs ≤ 32,768 blocks).
 pub const MAX_M: usize = 35;
 
-/// What both parties check of an (instances, netlist, layout) triple before any coin:
+/// What both parties check of an (instances, circuit description, layout) triple before any coin:
 /// - CN3: no `Chunk(1)` (a one-chunk row's digest is its ROOT output, which Chunk(n) does not compute);
 /// - CN2: the proof fits m ≤ MAX_M;
-/// - NV2: a netlist with the fp4-nvf4 scale inputs (608 input bits) pairs only with the fp4 layouts, and the reverse;
+/// - NV2: a circuit description with the fp4-nvf4 scale inputs (608 input bits) pairs only with the fp4 layouts, and the reverse;
 /// - NV3: the a / b trees' row schema is the layout's pinned one;
 /// - NV5: the y leaf's schema and width are the relation's (`y_leaf`), and every y word fits it;
 /// - NV1: every VU's circuit output word is the one its committed y word opens (the y root is built from y).
@@ -405,7 +405,7 @@ pub fn admit(lay: Layout, net: &UnitNet, inst: &Instances) -> Result<(), String>
         return Err(format!("CN3: a {}-byte row is one BLAKE3 chunk, whose last block is the ROOT, and {lay:?} never sets ROOT", lay.row_bytes()));
     }
     if !lay.fits(net.unit_log()) {
-        return Err(format!("UL1: {} units of 2^{} bits (a {}-row netlist) do not fit layout {lay:?}", lay.units(), net.unit_log(), net.useful));
+        return Err(format!("UL1: {} units of 2^{} bits (a {}-row circuit description) do not fit layout {lay:?}", lay.units(), net.unit_log(), net.useful));
     }
     let blocks = lay.blocks_per_vu() * inst.vus;
     if lay.k_log() + log2ceil(blocks).max(3) > MAX_M {
@@ -413,7 +413,7 @@ pub fn admit(lay: Layout, net: &UnitNet, inst: &Instances) -> Result<(), String>
                            lay.blocks_per_vu(), lay.k_log() + log2ceil(blocks).max(3)));
     }
     if (net.n_in == 608) != lay.is_fp4() {
-        return Err(format!("NV2: a netlist with {}-bit unit inputs does not pair with layout {lay:?}", net.n_in));
+        return Err(format!("NV2: a circuit description with {}-bit unit inputs does not pair with layout {lay:?}", net.n_in));
     }
     for t in ["a", "b"] {
         let s = inst.header["schemas"][t].as_str().unwrap_or("");
@@ -1070,7 +1070,7 @@ impl PureStmt {
         }
     }
 
-    /// Everything a prover session precomputes from the instance set before any parallel witness work: `ChunkTail`'s
+    /// Everything a prover session precomputes from the input set before any parallel witness work: `ChunkTail`'s
     /// continuation accumulators.
     pub fn prepare(&self, inst: &Instances) {
         if self.lay.tail().is_some() {
@@ -1301,7 +1301,7 @@ mod tests {
         UnitNet { relation: "shape".into(), useful, const_pos: useful - 1, n_in, out_cols: if epilogue { vec![5, 6] } else { vec![5] }, a, b, sha256: [0; 32] }
     }
 
-    /// Every layout's region claims fit the GPU prover (ChunkTail with the epilogue once had 18 against a cap of 16).
+    /// Every layout's region claims fit the GPU prover (ChunkTail with the epilogue once had 18 against a limit of 16).
     #[test]
     fn region_claims_fit_the_gpu_prover() {
         let layouts = [Layout::Chunk(3), Layout::Chunk(16), Layout::ChunkTail(4), Layout::ChunkTail(17), Layout::Fp8, Layout::ShaBf16, Layout::ShaFp8];

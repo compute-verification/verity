@@ -8,7 +8,7 @@ shape is timed as one dense call, not the grouped launch.
 
 Arms, each one linear's call on a BF16 x of M rows:
 
-- ``pearlc``: `pouw_pearl_c_device.PearlCDeviceRun.gemm` (``pearl-c-h100-v1-h3`` on this directory's kernels, under
+- ``pearlc``: `pouw_pearl_c_device.PearlCDeviceRun.gemm` (``pearl-c-h100-v1-h3`` on the kernel's, under
   ``--schedule``'s first, default serial, hashing on) inside an open pass, each sample closed only after any side lane's
   work; the pass's end (its tile tree) is timed apart, once per sample, as ``pass_end``;
 - ``pearlc-S``: the same under each further schedule S of ``--schedule``, each sample's pass begun under it (with
@@ -62,6 +62,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+KERNEL = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 sys.path.insert(0, str(HERE))
 
 import glm53  # noqa: E402
@@ -240,24 +241,25 @@ def timed(f, before=None, after=None, join=None, host=None) -> float:
 
 def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin: str | None = None, schedule: str = "serial",
                graphs: bool = False):
-    """`pouw_pearl_c_device.PearlCDeviceRun` (`scheme` on this directory's kernels, under `schedule`, its calls of up to
+    """`pouw_pearl_c_device.PearlCDeviceRun` (`scheme` on the kernel's, under `schedule`, its calls of up to
     `GRAPH_ROWS` rows replayed as CUDA graphs with `graphs`) on synthetic BF16
     weights, 0.05·N(0, 1), one a shape (weight w is shapes[w]), under an epoch whose salt coin a challenger opened after the
     weights' root: (run, weights, kernel, the generator, which goes on to make the calls' x)."""
     import torch
-    from verity.protocols.accounting.pouw.verifier.audit import weights_root
-    from verity.protocols.accounting.pouw.verifier import verifier
-    from verity.protocols.accounting.pouw.verifier.coins import Challenger
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     dev = torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261023)
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
-    kernel = PPD.Kernel.load(str(HERE), cubin)
+    kernel = PPD.Kernel.load(str(KERNEL), cubin)
     salt_key = PPD.new_salt_key(scheme)
-    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
+    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
     ch = Challenger(EPOCH, verifier.coins)
-    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, ch.commitment,
+    run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, ch.commitment,
                               ch.open("salt", weights_root(roots)), salt_key=salt_key, schedule=schedule, graphs=graphs)
     return run, weights, kernel, gen
 
@@ -476,7 +478,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--shapes", nargs="*", help="N:K (default every in-domain linear of --model)")
     p.add_argument("--m", nargs="*", type=int, help="M (default --model's decode's and prefill's; --whole: decode's)")
     p.add_argument("--schedule", nargs="+", default=["serial"],
-                   help="pearlc's schedule, then each further arm's (verity.protocols.accounting.pouw.verifier.serving.SCHEDULES)")
+                   help="pearlc's schedule, then each further arm's (verity.protocols.resource_accounting.compute.pouw.verifier.serving.SCHEDULES)")
     p.add_argument("--graphs", action="store_true", help="pearlc's calls of up to 256 rows replayed as CUDA graphs (a side lane's schedule: one a lane)")
     p.add_argument("--whole", action="store_true",
                    help="decode's forward captured whole, serial, deferred and as served (whole.json)")
@@ -484,8 +486,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--nvtx", action="store_true", help="--whole: each arm's NVTX-ranged forwards after its timed reps (under nsys)")
     a = p.parse_args(argv)
     import torch
-    from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS
-    from verity_vllm.protocols.pouw.pearl_c.lanes import whole_options
+    from verity_torch.pouw.pearl_c.graphs import GRAPH_ROWS
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.lanes import whole_options
 
     out, dev, model = Path(a.out), torch.device("cuda"), importlib.import_module(a.model)
     table = model.in_domain(a.scheme)

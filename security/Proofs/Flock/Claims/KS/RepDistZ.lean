@@ -277,7 +277,7 @@ theorem dist_lockLigPadZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P 
       obtain ⟨rfl, rfl, hlen⟩ := hxy
       rcases x with ⟨initial, s⟩
       refine .send _ fun ev => ?_
-      refine Lock.Dist.bind_eq (j := ligSlotDist rest ℓ) ?_ (Lock.noSlot_same _) (drawKs_exact A e)
+      refine Lock.Dist.bind_eq (j := ligSlotDist rest ℓ) ?_ (Lock.noSlot_same _) (sampleKs_exact A e)
         (by rw [coinsK_replicate_coin])
       intro i'' ρ ρ' hρ
       obtain ⟨rfl, rfl⟩ := hρ

@@ -23,14 +23,14 @@ namespace VStar
 
 open Flock.HmNets
 
-def ROW_BLOCK : Nat := 64
+def ROW_CHUNK : Nat := 64
 def NODE_WORDS : Nat := 32
 def OUT_WORDS : Nat := 64
 def ACC_WORDS : Nat := 64
 def DIRS_WORDS : Nat := 64
 
 def rowWords (LANES : Nat) : Nat := 8 * LANES
-def auxWords (H : Nat) : Nat := max 1 ((NODE_WORDS * H + ROW_BLOCK - 1) / ROW_BLOCK) * ROW_BLOCK
+def auxWords (H : Nat) : Nat := max 1 ((NODE_WORDS * H + ROW_CHUNK - 1) / ROW_CHUNK) * ROW_CHUNK
 def coefWords (LANES : Nat) : Nat := 16 * LANES
 
 /-- `rec_open.port_words`: `row`, `aux`, `acc`, `coef`, `dirs`. -/

@@ -20,7 +20,7 @@ block `o` of it:
 
 * `siteAddr a o x`: in-block column `x` of block `o`, as an address of `T`;
 * `bc_site`: in a satisfying witness, the 128 bytes at port `p`'s `hm96` output (`bcAddr`) are the population's `b ‖ c`
-  of the proved unit at rank `o · c.g + g` (`bc_drawn`, carried to `T`; `bc_siteS` with shared rows, `bc_drawnS`);
+  of the proved unit at rank `o · c.g + g` (`bc_sampled`, carried to `T`; `bc_siteS` with shared rows, `bc_sampledS`);
   `BcSite` bundles what `bc_siteS` reads, whose regions condition holds at `Refine.regionsOf st` (`regionsOf_mem`);
 * `copy_site`: in a satisfying witness, each of the template instance's stacked unit inputs whose Δ key is message bit
   `bit` of byte `byte` of row port `q` (`Aliased.srcKey`) holds the witness's bit at that message column
@@ -45,7 +45,7 @@ proved unit `u` at rank `o · c.g + g`. -/
 theorem bc_site (a : Placed.Accepted T) {d : Lean.Json} (hd : a.draw = some d)
     (hregs : ∀ r ∈ a.st.regions.toList, Refine.regionOf a.st.c.kLog (a.st.m - a.st.c.kLog) r ∈ a.regs)
     {pop : Public} (hpop : HmRow.loadPublic a.tags a.st.c a.pf = .ok pop) (hpt : pop.tables = none)
-    {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
+    {D : Draw.UnitSample} (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p u : ℕ} (hg : g < a.st.c.g)
     (hg2 : g < 2 ^ a.st.c.g.log2) (hp : p < a.st.c.ports.size) (hu : D.proved[o.val * a.st.c.g + g]? = some u) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddr a o (bcAddr a.st.c g p j.val t.val)) =
@@ -55,13 +55,13 @@ theorem bc_site (a : Placed.Accepted T) {d : Lean.Json} (hd : a.draw = some d)
   dsimp only at hd hregs hpop hu hg hg2 hp ⊢
   subst hd
   obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
-  exact bc_drawn h hpop hpt hD hlt (setupH_layout ht h) regs hregs hz o hg hg2 hp hr
+  exact bc_sampled h hpop hpt hD hlt (setupH_layout ht h) regs hregs hz o hg hg2 hp hr
 
-/-- **`bc_site` with or without shared rows** (`bc_drawnS`). -/
+/-- **`bc_site` with or without shared rows** (`bc_sampledS`). -/
 theorem bc_siteS (a : Placed.Accepted T) {d : Lean.Json} (hd : a.draw = some d)
     (hregs : ∀ r ∈ a.st.regions.toList, Refine.regionOf a.st.c.kLog (a.st.m - a.st.c.kLog) r ∈ a.regs)
     {pop : Public} (hpop : HmRow.loadPublic a.tags a.st.c a.pf = .ok pop)
-    {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
+    {D : Draw.UnitSample} (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p u : ℕ} (hg : g < a.st.c.g)
     (hg2 : g < 2 ^ a.st.c.g.log2) (hp : p < a.st.c.ports.size) (hu : D.proved[o.val * a.st.c.g + g]? = some u) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddr a o (bcAddr a.st.c g p j.val t.val)) =
@@ -71,13 +71,13 @@ theorem bc_siteS (a : Placed.Accepted T) {d : Lean.Json} (hd : a.draw = some d)
   dsimp only at hd hregs hpop hu hg hg2 hp ⊢
   subst hd
   obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
-  exact bc_drawnS h hpop hD hlt (setupH_layout ht h) regs hregs hz o hg hg2 hp hr
+  exact bc_sampledS h hpop hD hlt (setupH_layout ht h) regs hregs hz o hg hg2 hp hr
 
 /-- **What `bc_site` reads at a site**: block `o` and template instance `g` of an accepted statement whose sample `d` decodes to `D`, whose
 proved units are in its population; whose model statement's regions contain the executable's; whose public file loads to
 `pop`, with or without shared rows; with `g` below `2^⌊log₂ c.g⌋`; and whose proved unit at rank `o · c.g + g` is `u`. -/
 def BcSite (a : Placed.Accepted T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) : Prop :=
-  ∃ d D, a.draw = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧ (∀ v ∈ D.proved, v < D.population) ∧
+  ∃ d D, a.draw = some d ∧ Draw.UnitSample.ofJson d = .ok D ∧ (∀ v ∈ D.proved, v < D.population) ∧
     (∀ r ∈ a.st.regions.toList, Refine.regionOf a.st.c.kLog (a.st.m - a.st.c.kLog) r ∈ a.regs) ∧
     HmRow.loadPublic a.tags a.st.c a.pf = .ok pop ∧ g < 2 ^ a.st.c.g.log2 ∧
     D.proved[o.val * a.st.c.g + g]? = some u

@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Project
 public import Proofs.Properties.Verity.SampledCoins
 
 /-!
-# Sampled proofs' coupling: the coin map
+# SPOT's coupling: the coin map
 
 The coin map the projection reads (`CoinMap`, in `Proofs.Properties.Verity.Sampled.Project`) writes the live audit's
 coins into the period's tape at the projection's stops. A stop is an opening's coin node, where the device flips the
@@ -19,11 +19,11 @@ frame's coins are 512 uniform bits, one for one with 64 of the bytes the sample 
   uniform, and at any `κ` the tape from the first stop is uniform and independent of the walk to it.
 * **A written coin** (`shortfall`, `avg_le_write`, `writeCoin`, `avg_le_writeCoin`): at a coin node, the tape's coin
   replaced by `w c` of itself at a uniform `c`. A reading bounded by 1 of the uniform tape is at most its mean on the
-  written tape plus `w`'s shortfall, the total variation between the written coin's law and the uniform coin's. A writer
-  whose coin releases the challenge pays at least the distance of the release's law from the challenge's
+  written tape plus `w`'s shortfall, the total variation between the written coin's distribution and the uniform coin's. A writer
+  whose coin releases the challenge pays at least the distance of the release's sampling design from the challenge's
   (`prCoin_rel_le`).
 * **The premises within a term** (`CoinMap.RoundClose`, `CoinMap.LinkClose`) and their composition (`roundsErr`,
-  `avg_roundsOff_le`, `resample_sessionOff_le`, `couples_of_close`): the joint law's tape off held-off events at the
+  `avg_roundsOff_le`, `resample_sessionOff_le`, `couples_of_close`): the joint distribution's tape off held-off events at the
   stops (`LinkHold`, `RoundHold`) is within the start's term and the stops' (`couplesErr`) of the uniform tape at every
   event (`CouplesWithin`). The stops' term carries each held-off event's probability beside the stop's own
   (`avg_le_off`), so `Couples` holds wherever their sum is at most the hiding term (`couples_of_within`,
@@ -76,7 +76,7 @@ theorem avg_sum_comm {C E : Type} [Fintype C] [Fintype E] (f : C → E → ℝ�
   exact Finset.sum_comm
 
 open Classical in
-/-- **A written coin's shortfall below uniform**: the total variation between the uniform coin's law and the sampling design of
+/-- **A written coin's shortfall below uniform**: the total variation between the uniform coin's distribution and the sampling design of
 `w c d` at a uniform `c` and a uniform coin `d`. -/
 noncomputable def shortfall {P C : Type} [Fintype P] [Fintype C] (w : P → C → C) : ℝ≥0∞ :=
   ∑ e : C, ((Fintype.card C : ℝ≥0∞)⁻¹ - avg fun c : P => avg fun d : C => if w c d = e then 1 else 0)
@@ -159,7 +159,7 @@ theorem avg_le_writeCoin {P : Type} [Fintype P] [Nonempty P] {g' : Game α} {C :
   exact avg_le_write (T := fun c => CoinTape (k c) (s' c)) w G hG
 
 open Classical in
-/-- **No written coin does better than its release's law**: where the coin `w c d` releases `enc c` (`rel`), an event
+/-- **No written coin does better than its release's sampling design**: where the coin `w c d` releases `enc c` (`rel`), an event
 of the release of a uniform coin is at most as likely as the event of `enc` at a uniform `c`, plus `w`'s shortfall. -/
 theorem prCoin_rel_le {P C B : Type} [Fintype P] [Nonempty P] [Fintype C] [Nonempty C] (w : P → C → C)
     (rel : C → B) (enc : P → B) (hw : ∀ c d, rel (w c d) = enc c) (A : B → Prop) :
@@ -273,7 +273,7 @@ theorem avg_comp_eq_sum {Ω C : Type} [Fintype Ω] [Fintype C] (t : Ω → C) (H
   simp only [h, avg_sum_comm, avg_mul_const]
   rfl
 
-/-- **A map whose events have their probabilities under the uniform law carries means to means.** -/
+/-- **A map whose events have their probabilities under the uniform distribution carries means to means.** -/
 theorem avg_comp_of_prCoin {Ω C : Type} [Fintype Ω] [Fintype C] {t : Ω → C}
     (h : ∀ E : C → Prop, prCoin (fun ω => E (t ω)) = prCoin E) (H : C → ℝ≥0∞) :
     avg (fun ω => H (t ω)) = avg H := by
@@ -912,12 +912,12 @@ def roundBits {m : ℕ} (c : Fin m → 𝔽) : List Bool := (List.ofFn fun i => 
 /-- **The live link points as bits**: the first point's, then the second's. -/
 def linkBits {m : ℕ} (pts : Fin 2 → Fin m → 𝔽) : List Bool := roundBits e (pts 0) ++ roundBits e (pts 1)
 
-/-- **The link's empty class, the event the joint law is held off at the first stop**: no round of the stop's opening,
+/-- **The link's empty class, the event the joint distribution is held off at the first stop**: no round of the stop's opening,
 in a play that ends in `E`, is released as the link points' bits. -/
 def linkEmpty (E : List Release → Game Exchange) {mPts : ℕ} : LinkHold mPts := fun g' pts =>
   EmptyAt E g' (linkBits e pts)
 
-/-- **A round's empty class, the event the joint law is held off at a later stop**: no round of the stop's opening, in
+/-- **A round's empty class, the event the joint distribution is held off at a later stop**: no round of the stop's opening, in
 a play that ends in `E`, is released as the round's coins' bits. -/
 def roundEmpty (E : List Release → Game Exchange) : RoundHold := fun g' _ _ c => EmptyAt E g' (roundBits e c)
 
@@ -948,11 +948,11 @@ theorem openMap_linkClose {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R m
 
 /-! ## The coin map's premise within a term -/
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
-/-- **The joint law's tape off `BL` and `B` is within `ε` of the uniform tape**, at every event `Q` of the period's
+/-- **The joint distribution's tape off `BL` and `B` is within `ε` of the uniform tape**, at every event `Q` of the period's
 tape. -/
 def CouplesWithin (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (D : Decoders A.rounds A.Reg)
     (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (BL : LinkHold A.mP) (B : RoundHold) (ε : ℝ≥0∞) : Prop :=
@@ -983,7 +983,7 @@ noncomputable def couplesErr (A : Live) (rd : Reading A.rounds) (σ : Strategy (
       (firstStop V θ F c A rd σ M ω).consume
 
 open Classical in
-/-- **The coin map's premise within a term, off its local ones**: the joint law's tape off `BL` and `B` is within the
+/-- **The coin map's premise within a term, off its local ones**: the joint distribution's tape off `BL` and `B` is within the
 start's term and the stops' of the uniform tape at every event, wherever the coin map writes the link points in within
 `γL` of the tape's own and each round's coins within `γ`, its start leaves the tape from the first stop fresh, and its
 start is within `ε₀` of the uniform tape. The stops' term carries, beside `γL` and `γ`, the probability of `BL` and of
@@ -1031,7 +1031,7 @@ theorem couples_of_close (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.ga
         ring
 
 /-- **The coin map that writes the live coins into the openings, within the openings' gaps and empty classes**: at
-the plays' close `E`, its widening `T` and start `start`, the joint law's tape off the empty classes (`linkEmpty`,
+the plays' close `E`, its widening `T` and start `start`, the joint distribution's tape off the empty classes (`linkEmpty`,
 `roundEmpty`) is within the start's term and, over the stops, the openings' gaps and empty classes of the uniform tape,
 wherever the start leaves the tape from the first stop fresh and is within `ε₀` of the uniform tape. -/
 theorem openMap_couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
@@ -1087,30 +1087,50 @@ def srcEquiv {L : Fin 1 → ℕ} {n : ℕ} (h : L 0 = n) :
   Equiv.piCongrRight fun i =>
     (finCongr (by rw [Subsingleton.elim i 0]; exact h)).arrowCongr (Equiv.refl (Fin 256))
 
-/-- **The sample's bytes as fresh frames' coins**: the device's `m * 64` bytes the sample reads, as `m` fresh frames'
+/-- **A byte stream as fresh frames' coins**: the `m * 64` bytes of the one stream `src` reads, as `m` fresh frames'
 512 bits each (`coinBytesEquiv`). -/
-noncomputable def srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) : Fin m → Fin 512 → Bool :=
-  coinBytesEquiv m 64 (srcEquiv hL (A.src ω))
+noncomputable def byteCoins {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {m : ℕ}
+    (hL : Lb 0 = m * 64) (ω : Ω) : Fin m → Fin 512 → Bool :=
+  coinBytesEquiv m 64 (srcEquiv hL (src ω))
 
-/-- **The sample's coins are uniform**, by A3 at the device's bytes (`Live.hA3`). -/
-theorem avg_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
-    avg (fun ω : A.Ω => H (srcCoins A hL ω)) = avg H :=
-  avg_comp_of_prCoin (fun E => (A.hA3 fun s => E (coinBytesEquiv m 64 (srcEquiv hL s))).trans
+/-- **A uniform byte stream's coins are uniform** (A3 at `src`). -/
+theorem avg_byteCoins {Ω : Type} [Fintype Ω] {Lb : Fin 1 → ℕ} {src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256}
+    (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src) {m : ℕ} (hL : Lb 0 = m * 64)
+    (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
+    avg (fun ω : Ω => H (byteCoins src hL ω)) = avg H :=
+  avg_comp_of_prCoin (fun E => (hA3 fun s => E (coinBytesEquiv m 64 (srcEquiv hL s))).trans
     (FlockSoundness.ZK.prCoin_congr_equiv ((srcEquiv hL).trans (coinBytesEquiv m 64)) E)) H
 
-/-- **The sample reads the bytes of its coins**: the device's bytes the sample reads are those `coinBytes` reads off
-`srcCoins`, the premise `coupled_draw_coins_setsUp` takes. -/
-theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) :
-    _root_.Properties.Spot.bytesOf (A.src ω 0) =
-      _root_.Properties.Spot.bytesOf (coinBytes m 64 (srcCoins A hL ω) 0) := by
-  have h : coinBytes m 64 (srcCoins A hL ω) = srcEquiv hL (A.src ω) := (coinBytesEquiv m 64).symm_apply_apply _
+/-- **A byte stream is the bytes of its coins**: the bytes of `src` are those `coinBytes` reads off `byteCoins`. -/
+theorem bytesOf_byteCoins {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {m : ℕ}
+    (hL : Lb 0 = m * 64) (ω : Ω) :
+    _root_.Properties.Spot.bytesOf (src ω 0) =
+      _root_.Properties.Spot.bytesOf (coinBytes m 64 (byteCoins src hL ω) 0) := by
+  have h : coinBytes m 64 (byteCoins src hL ω) = srcEquiv hL (src ω) := (coinBytesEquiv m 64).symm_apply_apply _
   have key : ∀ {L L' : ℕ} (h : L = L') (f : Fin L → Fin 256), _root_.Properties.Spot.bytesOf f =
       _root_.Properties.Spot.bytesOf fun j : Fin L' => f (Fin.cast h.symm j) := by
     intro L L' h f
     subst h
     rfl
   rw [h]
-  exact key hL (A.src ω 0)
+  exact key hL (src ω 0)
+
+/-- **The sample's bytes as fresh frames' coins**: the device's `m * 64` bytes the sample reads, as `m` fresh frames'
+512 bits each (`byteCoins`). -/
+noncomputable def srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) : Fin m → Fin 512 → Bool :=
+  byteCoins A.src hL ω
+
+/-- **The sample's coins are uniform**, by A3 at the device's bytes (`Live.hA3`). -/
+theorem avg_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
+    avg (fun ω : A.Ω => H (srcCoins A hL ω)) = avg H :=
+  avg_byteCoins A.hA3 hL H
+
+/-- **The sample reads the bytes of its coins**: the device's bytes the sample reads are those `coinBytes` reads off
+`srcCoins`, the premise `coupled_sample_coins_setsUp` takes. -/
+theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) :
+    _root_.Properties.Spot.bytesOf (A.src ω 0) =
+      _root_.Properties.Spot.bytesOf (coinBytes m 64 (srcCoins A hL ω) 0) :=
+  bytesOf_byteCoins A.src hL ω
 
 /-- **The fresh frames of the family `label` answering `after` in `σ`'s play**: those whose log ends in the close
 after `σ`'s request (`freshSel`). -/
@@ -1134,7 +1154,7 @@ noncomputable def sampleMap (A : Live) (rd : Reading A.rounds) (σ : Strategy (V
   openMap e (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ) (sampleStart V θ F c rd σ label after κ)
 
 /-- The sample at widened coins is the sample at the device's coins. By `dsimp`, not `rfl`: elaborating the two samples
-as definitionally equal reduces their `match` and evaluates `drawUnits`. -/
+as definitionally equal reduces their `match` and evaluates `sampleUnits`. -/
 theorem sample_extend (A : Live) (S : Widening) (ω : (A.extend S).L.Ω) : (A.extend S).L.draw ω = A.L.draw ω.1 := by
   dsimp only [Live.L, Live.extend]
 
@@ -1189,7 +1209,7 @@ theorem sampleMap_start (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.gam
     (hκ fun κ' => avg fun t =>
       H (fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m κ' t)).symm
 
-/-- **The sample-coupled coin map's premise within the openings' gaps and empty classes**: the joint law's tape off the
+/-- **The sample-coupled coin map's premise within the openings' gaps and empty classes**: the joint distribution's tape off the
 empty classes is within the openings' gaps and empty classes over the stops of the uniform tape, wherever the sample's
 coins are uniform. -/
 theorem sampleMap_couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))

@@ -3,7 +3,7 @@ packages whose passes can't be reused, with dependencies kept warm.
 
     python tools/verity/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
                                                       (only those packages: a shard's share, `check.py --shard`)
-                                                      [--regenerate] (the Lean check of `next`: record differences pass,
+                                                      [--regenerate] (a candidate's Lean check: record differences pass,
                                                       and audit.json's `regenerated` names the records drive commits,
                                                       `rekeyed` the passes kept for that commit)
                                                       [--bookkeeping warn] (with --regenerate, drive's lock run: the
@@ -26,9 +26,9 @@ each file under its path relative to its package (a module's is its name), never
   lakefile's `require ... path = "P"` and the manifest's `"dir": "P"` name such a package, the key reads P as that
   package's own content key (`content_key`), so moving it and rewriting the paths to it keeps every key. A path spelled
   otherwise stays a path in the key;
-- `tools/verity/lean/` (the auditor and this file) and `tools/verity/check/common.py`, the helpers it imports, at their paths in the
+- `tools/verity/lean/` (the auditor and this file) and `tools/check/common.py`, the helpers it imports, at their paths in the
   repository: not `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict. Nor
-  `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
+  `tests/tools/verity/lean/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
   (the merge driver, the Lean fast path, the daily publish, ...), which the audit never reads: the scratch tree leaves them
   out too, so a read of one would fail there.
 A `git mv` of a package with its content unchanged is therefore no miss, and its kept pass answers at the new path. What the
@@ -79,7 +79,8 @@ one imported (`check.verdicts_fetched`) is reused (`check.py --replay-cache`, `l
 `REPLAYS_KEPT` last used kept), so a change to a few modules replays those and what imports them, and a dependency's
 modules go through the kernel once per change of their `.olean` files. With `--fresh` the replay cache is
 the scratch tree's, so the packages of one run share it and nothing outlives the run. Lean gets this
-machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
+machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's; a heavy build runs as many of them as
+what the run reserved holds (`check.py`'s `build_threads`).
 
 The audits of `security` and `security/Proofs` (`UNREAD_FACTS`) also write what each constant of the analysis mentions
 (`check.py`'s `unread_facts`), and their passes are stored, and reused, only with those facts beside them (`unread/` in
@@ -120,6 +121,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tarfile
@@ -145,7 +147,7 @@ def _module(path: Path, name: str):
 
 #: every file this step loads is in `inputs`: `tools/verity/lean/` (this module among them), `common.py` and the task graph's
 #: contract, which `module_keys` loads (`test_lean_audit.py` holds it)
-COMMON = _module(ROOT / "tools" / "verity" / "check" / "common.py", "check_common_for_lean_audit")
+COMMON = _module(ROOT / "tools" / "check" / "common.py", "check_common_for_lean_audit")
 MK = _module(Path(__file__).resolve().parent / "module_keys.py", "lean_module_keys_for_lean_audit")
 SETTINGS = _module(Path(__file__).resolve().parent / "settings.py", "lean_settings_for_lean_audit")
 #: the task graph's contract, which `module_keys` keys each module with (`module_keys.CONTRACT`)
@@ -165,7 +167,7 @@ def sandboxed() -> bool:
     return lean_check().sandboxed()
 
 
-def runs_code(pkg: Path) -> str | None:
+def runs_code(pkg: Path, staged: Path | None = None) -> str | None:
     """The first source that runs code while it compiles, in ``pkg`` or a package it requires by path, or None: as
     check.py scans for it (`check.COMPILE_TIME`, comments aside), outside a `compile_time` listing of its package's lock
     reviewed at the file's digest (`check.listings`); or a `lakefile.lean`, which runs whenever Lake loads its package. A
@@ -175,9 +177,14 @@ def runs_code(pkg: Path) -> str | None:
     a module runs while it compiles can write there what it likes: another module's outputs, their `.hash` files and
     its trace, which nothing then tells from Lake's. A passing audit says there is no such code in the package it
     audits (`check.scans`); the artifact cache takes builds no audit passed, so `LakeArtifacts.put` asks it of every
-    build, the sources being the ones the build read: the sandbox lets no build write them."""
+    build, the sources being the ones the build read: the sandbox lets no build write them. ``staged``: the copy of the
+    tree the caller made and built ``pkg`` in, where its path dependencies must lie (`check.home`)."""
     a = lean_check()
-    for d in [pkg.resolve(), *a.path_deps(pkg)]:
+    try:
+        dirs = [pkg.resolve(), *a.path_deps(pkg, staged)]
+    except a.OutsideTree as e:
+        return f"{pkg.name}: {e}"
+    for d in dirs:
         try:
             if (d / "lakefile.lean").exists():
                 return f"{d.name}/lakefile.lean runs code whenever Lake loads the package"
@@ -200,7 +207,7 @@ def _sha(p: Path) -> str:
 
 def packages(files: list[str]) -> list[str]:
     """The audited packages: directories whose tracked files include a `lean-audit.json`, the auditor's fixtures aside."""
-    return sorted({f.rsplit("/", 1)[0] for f in files if f.endswith("/lean-audit.json") and not f.startswith(LEAN_TOOL)})
+    return sorted({f.rsplit("/", 1)[0] for f in files if f.endswith("/lean-audit.json") and not f.startswith((LEAN_TOOL, f"tests/{LEAN_TOOL}"))})
 
 
 #: the files of a package no audit reads, by name, each with what does: out of the package's key and of the scratch tree,
@@ -223,15 +230,28 @@ def own_files(pkg: str, files: list[str]) -> list[str]:
             and not any(fnmatch.fnmatchcase(f.rsplit("/", 1)[-1], p) for p in UNREAD_NAMES)]
 
 
+def in_tree(pkg: str, entry: str, file: str) -> str:
+    """``entry`` of ``pkg``'s ``file`` (a path dependency's `dir`, a `proved_in` package) as a repository path: a kept build
+    is taken into it and its `.lake` built, so one outside the tree is refused (`check.OutsideTree`)."""
+    p = os.path.relpath(os.path.normpath(ROOT / pkg / entry), ROOT)
+    real = (ROOT / p).resolve()
+    if p == ".." or p.startswith("../") or not real.is_relative_to(ROOT.resolve()):
+        raise lean_check().OutsideTree(f"{pkg}/{file}: {entry!r} names {p!r}, which resolves to {str(real)!r}, outside the "
+                                       f"tree, whose .lake a build of {pkg} would write: a package it requires by path or "
+                                       f"names under proved_in must lie in the tree")
+    return p
+
+
 def path_deps(pkg: str) -> list[str]:
-    """The packages ``pkg`` requires by path, as `audit.path_deps` reads them (its manifest lists the inherited ones too)."""
+    """The packages ``pkg`` requires by path, as `audit.path_deps` reads them (its manifest lists the inherited ones too),
+    each in the tree (`in_tree`)."""
     m = ROOT / pkg / "lake-manifest.json"
     if not m.exists():
         return []
     out = []
     for d in json.loads(m.read_text()).get("packages", []):
         if d.get("type") == "path":
-            out.append(os.path.relpath(os.path.normpath(ROOT / pkg / d["dir"]), ROOT))
+            out.append(in_tree(pkg, d["dir"], "lake-manifest.json"))
     return sorted(set(out))
 
 
@@ -242,32 +262,38 @@ def provers(pkg: str) -> list[str]:
         named = json.loads(p.read_text()).get("proved_in", []) if p.is_file() else []
     except (OSError, ValueError, AttributeError):
         return []                                       # the audit fails the policy
-    return sorted({os.path.relpath(os.path.normpath(ROOT / pkg / d), ROOT) for d in named if isinstance(d, str)})
+    return sorted({in_tree(pkg, d, "lean-audit.json") for d in named if isinstance(d, str)})
 
 
 #: How the audit runs, and so part of every key
 FLAGS = ["--build", "--closure"]
 
 
-#: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and of the scratch tree, where a
-#: read of one fails the audit
+#: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and but for `CARRIED` of the
+#: scratch tree, where a read of one fails the audit
 NOT_READ = {
+    "reserve.json": "the figures a run reserves and plans its jobs by (`reserve.py`'s), never what it checks",
     "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
+    "claim_ids.py": "`verity.claims`' table of each claim id's premises, written from the locks by a command of its own",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "the Lean fast path, which runs beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
     "modules.py": "the codemod onto Lean's module system, which the ratchet and the merge driver load",
+    "posture.py": "each deployed guarantee's premises against the trust list, a command of its own on the locks",
     "run_daily.py": "the build cache's daily publish",
     "siblings.py": "the sibling check of `verity lean try --siblings`, which `lean_changed.py` and the CLI load",
     "tool.py": "the store's declarations of the scheduled runs",
+    "trust-list.json": "Daniel's trust list, which `posture.py` and the repository suite's `test_trust_list.py` read",
     "trusted_size.py": "the size of a package's trusted text, a command of its own on a records run's facts document",
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
     "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
     "unread-caps.json": "the ratchet's caps, which `unread.py` reads",
     "unread_gate.py": "drive's landing gate on the seeds the ratchet reads, which runs `main`'s copy of this tool",
     "warm.py": "the audit of a ready mark's merge, which starts `lean_audit.py` for the packages a change reaches",
-    "pyproject.toml": "the tools/verity/lean suite's settings",
 }
+#: the files of `NOT_READ` every scratch tree carries all the same (`scratch_tree`): check.py plans its run by them, and
+#: no verdict reads them
+CARRIED = ("reserve.json",)
 
 #: the packages whose audits write `Unread.lean`'s facts (`check.py`'s `UNREAD_FACTS`): a pass of one is reused only with
 #: the facts it wrote, kept beside it, and the ratchet on wholly unread modules joins theirs (`unread_ratchet`)
@@ -315,7 +341,7 @@ def keep_repaired(out: Path, path: str, text: str) -> str:
 def held_caps(text: str, locks: dict[str, dict]) -> tuple[str, list[str]]:
     """``text`` (`CAPS_TEST`) with each cap of `LOCK_CAPS` that ``locks`` ({package: its lock}) break (`_held`: a count above
     its cap, raised to the count; a cap above its count by more than its `ROOM`, lowered to the count and its room, which
-    changes queued on `next` still use), and a warning naming each. LookupError when a cap's line is not one dict literal
+    changes queued still use), and a warning naming each. LookupError when a cap's line is not one dict literal
     there."""
     def literal(name: str) -> tuple[re.Match, dict]:
         if not (m := re.search(rf"^{name} = (\{{.*\}})$", text, re.M)):
@@ -430,7 +456,7 @@ def tool_files(files: list[str]) -> list[str]:
     """The auditor's files: `tools/verity/lean/` less its tests, its docs and `NOT_READ`, and the helpers it imports."""
     tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")
             and f[len(LEAN_TOOL):] not in NOT_READ]
-    return sorted({*tool, "tools/verity/check/common.py", CONTRACT})
+    return sorted({*tool, "tools/check/common.py", CONTRACT})
 
 
 def read_packages(pkg: str) -> list[str]:
@@ -1106,9 +1132,10 @@ class LakeArtifacts:
         fcntl.flock(f, fcntl.LOCK_EX)
         return f
 
-    def put(self, reports: dict[Path, dict], since: float | None = None, log=print) -> int:
+    def put(self, reports: dict[Path, dict], since: float | None = None, log=print, staged: Path | None = None) -> int:
         """Index each module of the builds of ``reports``' packages (each with what check.py said of its build: its report,
-        or `builds`' record of a run that didn't end) that the build compiled (a trace written after ``since``, and not
+        or `builds`' record of a run that didn't end; ``staged``: the copy of the tree the caller made and built them in,
+        `runs_code`'s) that the build compiled (a trace written after ``since``, and not
         one Lake restored) under its key; the number of entries new to the index. Whether the run passed is not read: a
         key names what a compile read, and a failed or killed run's compile of those is the compile a passing run's is,
         given the two things a passing audit said of the build, which are asked here of every build instead.
@@ -1146,6 +1173,10 @@ class LakeArtifacts:
                     log(f"lean-audit: {pkg}: a module its build didn't compile differs from its recompile (`sampled`), so "
                         "none of the modules compiled on top of it go into the artifact cache")
                     continue
+                if all(rep.get(k) == v for k, v in SAMPLE_PENDING.items()):
+                    log(f"lean-audit: {pkg}: check.py ended before the sampled recompile of what its build restored did, "
+                        "so none of the modules compiled on top of those go into the artifact cache")
+                    continue
                 ws = MK.workspace(pkg)
                 if isinstance(ws, str):
                     continue
@@ -1166,7 +1197,7 @@ class LakeArtifacts:
                     if (m := todo.pop()) not in need:
                         need.add(m)
                         todo += MK.loads(m, keyed)
-                if refused := runs_code(pkg) if need else None:
+                if refused := runs_code(pkg, staged) if need else None:
                     log(f"lean-audit: {pkg}: {refused}. Such code can write any module's outputs in the build, so none of "
                         "its modules go into the artifact cache")
                 outs = MK.read_digests({m: k for m, k in keyed.items() if m in need},
@@ -1231,7 +1262,10 @@ class LakeArtifacts:
         for name in sorted({s for s in _strings(out) if ARTIFACT.fullmatch(s)}):
             f = MK.output(build, mod, name)
             hashed = f.parent / f"{f.name}.hash"
-            if not f.is_file() or not hashed.is_file() or hashed.read_text().strip() != name.split(".", 1)[0]:
+            for g in (f, hashed):
+                if (why := _plain(g, build.parent.parent)) is not None:
+                    return why if why else f"{f.name} isn't in the build under {name}"
+            if hashed.read_text().strip() != name.split(".", 1)[0]:
                 return f"{f.name} isn't in the build under {name}"
             if f.stat().st_mtime_ns > hashed.stat().st_mtime_ns:
                 return f"{f.name} was written after {hashed.name}, which names what was there before"
@@ -1507,6 +1541,23 @@ class LakeArtifacts:
         return n
 
 
+def _plain(f: Path, base: Path) -> str | None:
+    """None when ``f`` is a regular file reached from ``base`` (a package's directory) through no link; "" when it is
+    missing; else why it is refused: a build writes its `.lake`, so an output that is a link, or lies under one, is the
+    build's choice of a file anywhere, which the index would hard-link and make read-only."""
+    try:
+        st = f.lstat()
+    except FileNotFoundError:
+        return ""
+    except OSError as e:
+        return f"{f.name} can't be read ({e.strerror})"
+    if not stat.S_ISREG(st.st_mode):
+        return f"{f.name} is no regular file of the build (a link, a directory or a special file)"
+    if f.resolve() != base.resolve() / f.relative_to(base):
+        return f"{f.name} lies under a link in the build, to {str(f.resolve())!r}"
+    return None
+
+
 def _strings(j) -> list[str]:
     if isinstance(j, str):
         return [j]
@@ -1521,12 +1572,17 @@ def _move(src: Path, dst: Path) -> None:
 
 
 def scratch_tree(dest: Path, files: list[str]) -> None:
-    for f in files:
+    """``files`` copied from this checkout into ``dest``, and with them `CARRIED`. A symbolic link among them is refused
+    (`check.OutsideTree`): copied as a link, it would let the tree choose where the audit's steps write outside any sandbox
+    (`WarmDeps.take` and `WarmBuilds.take` into a package's `.lake`), and the tree holds none."""
+    for f in dict.fromkeys([*files, *(LEAN_TOOL + c for c in CARRIED)]):
         s, d = ROOT / f, dest / f
-        d.parent.mkdir(parents=True, exist_ok=True)
         if s.is_symlink():
-            d.symlink_to(os.readlink(s))
-        elif s.is_file():
+            raise lean_check().OutsideTree(f"{f!r} is a symbolic link (to {os.readlink(s)!r}), which a copy of the tree "
+                                           f"would keep and the audit then write through: the tree holds no links, so replace it "
+                                           f"with the file or directory it points to")
+        d.parent.mkdir(parents=True, exist_ok=True)
+        if s.is_file():
             shutil.copy2(s, d)
 
 
@@ -1594,14 +1650,18 @@ RETRIES = (90, 240, 480)
 #: what check.py writes in a package's work directory (`audit-<tag>/` under its `--out`) once it knows whether the package's
 #: builds run in the sandbox, before the first of them (check.py's `BUILDING`)
 BUILDING = "building.json"
+#: what it says until the package's sampled recompile has ended (check.py's `SAMPLE_PENDING`), which `put` refuses
+SAMPLE_PENDING = {"sample": "pending"}
 
 
 def built(out: Path) -> dict[Path, dict]:
     """{package: what check.py said of its build} for each package the check.py with its reports under ``out`` built, or
     began to build: its report in `audit.json`, which says `sandbox` of a package it built, else what it wrote as the build
-    began (`BUILDING`: the package, and whether its builds run in the sandbox), which is all a check.py that was killed
-    leaves, and which is the later of the two when an earlier check.py left its report there. `LakeArtifacts.put` takes
-    either. Both are check.py's own words: ``out`` is outside every directory a build in the sandbox can write."""
+    began (`BUILDING`: the package, whether its builds run in the sandbox, and `SAMPLE_PENDING` until its sampled
+    recompile has ended, then that recompile's failure where it differs), which is all a check.py that was killed leaves,
+    and which is the later of the two when an earlier check.py left its report there. `LakeArtifacts.put` takes either,
+    and refuses both for a sampled failure, and `BUILDING` while its sample is pending. Both are check.py's own words:
+    ``out`` is outside every directory a build in the sandbox can write."""
     found: dict[Path, tuple[int, dict]] = {}
 
     def said(f: Path) -> tuple[int, dict]:
@@ -1648,7 +1708,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
            regenerate: bool = False, bundle: bool = False, bookkeeping: bool = False,
            documents: Path | None = None) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
-    ``regenerate`` (`check.py --regenerate`, the Lean check of `next`) passes a package whose every failure is a record
+    ``regenerate`` (`check.py --regenerate`, a candidate's Lean check) passes a package whose every failure is a record
     difference; such a pass is never stored here, since its lock changes when drive commits the record (`keep_regenerated`
     stores the pass of the tree with that lock, from the facts document this audit leaves in ``documents``, `check.py
     --facts-cache`).  What each package's build compiled in the sandbox goes into the artifact cache whether the package
@@ -1690,6 +1750,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
                             "--replay-cache", str((work if fresh else cache.parent) / "lean-replay"),
+                            "--program-cache", str((work if fresh else cache.parent) / "lean-programs"),
                             *([] if fresh or cold else ["--artifacts", str(artifacts.store)]),
                             *(["--regenerate"] if regenerate else []), *(["--bookkeeping", "warn"] if bookkeeping else []),
                             *(["--facts-cache", str(documents)] if documents else []),
@@ -1716,7 +1777,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             kept = {work / p for p in ok}
             try:
                 mine = {at: rep for at, rep in built(out).items() if work in at.resolve().parents}
-                log(f"lean-audit: {artifacts.put(mine, since, log)} module version(s) new in the artifact cache")
+                log(f"lean-audit: {artifacts.put(mine, since, log, work)} module version(s) new in the artifact cache")
                 if bundle and artifacts.added:
                     log(f"lean-audit: {bundled(*artifacts.bundle_into(out), len(artifacts.added))}")
             except OSError as e:
@@ -2142,9 +2203,13 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--prune"]:
         root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
         got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
-               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records"),
-               "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune(),
-               "lean-audit/unread": prune_facts(root / "lean-audit")}
+               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records")}
+        # a build's `module_keys.stage` reads the index, the records of what `put` couldn't index and the artifacts under
+        # this lock, shared, and `put` and `take` prune under it already
+        artifacts = LakeArtifacts(root / "lean-artifacts")
+        with artifacts._lock():
+            got["lean-artifacts"] = artifacts.prune()
+        got["lean-audit/unread"] = prune_facts(root / "lean-audit")
         print("lean-audit --prune: removed " + ", ".join(f"{v} from {k}" for k, v in got.items()) + f" (under {root})")
         return 0
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):
@@ -2160,7 +2225,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")
     ap.add_argument("--package", action="append", metavar="PKG", help="audit only this package (repeatable): a shard's share")
-    ap.add_argument("--regenerate", action="store_true", help="the Lean check of `next`: `check.py --regenerate`, so a package whose "
+    ap.add_argument("--regenerate", action="store_true", help="a candidate's Lean check: `check.py --regenerate`, so a package whose "
                     "every failure is a record difference passes and audit.json's `regenerated` names its record; not in the "
                     "cache key, and such a pass is never stored")
     ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: write the module versions it added to the "

@@ -27,7 +27,7 @@ Commit of its chain renders from that copy, never from the live `sky/jobs/`, so 
 submitted after it. A Job whose pinned copy is gone is held (left unseen, printed each tick), never chained on another template.
 Every task starts under `taskset -c`: a `provers` task on $VY_PROVER_CPUS (128-175, three 16-core slices: the floor of 2 GPUs plus 1
 borrowed), every other task on $VY_DISPATCH_CPUS (96-127,176-191), so vLLM jobs never run on a prover's slice
-(they skew its timed CPU verifier). 0-7 are k3s's, 8-95 the RC's three train-check slots.
+(they skew its timed CPU verifier). 0-7 are k3s's, 8-95 the RC's three candidate-check slots.
 
 **Ready files.** One JSON file per item, `$VY_READY/<workstream>/<id>.json` (default /workspace/jobs/ready, which the steward's
 exporter counts as `vy_ready_jobs{lane}` for the idle alert), written by the workstream's owner (write a temp name, then rename):
@@ -66,7 +66,7 @@ PACK_MODELS, batch <= 8, a tree with the deferred replay; never TP2, Gemma-2, Py
 be, to `$PACK_SPOOL/queue/` (default <root>/pack) instead of submitted, and still-suspended gpu Jobs of eligible items are taken
 off Kueue into the spool (PACK_ADOPT, default 1). At most PACK_PODS (1 while node 1's storage is short)
 `commit-pack` Jobs run at once (sky/jobs/commit-pack.yaml, its pilot sky/commit_pack.py), each running up to 3 spooled Commits on its
-one GPU under MPS; one starts only when a queued entry passes the pilot's replay-bundle cap with every claimed entry counted as
+one GPU under MPS; one starts only when a queued entry passes the pilot's replay-bundle limit with every claimed entry counted as
 running, since a pod that can claim nothing idles 3 min and exits having run no Commit. With /workspace at
 PACK_DISK_PAUSE (80%) or fuller, nothing new is spooled, adopted or started (the Commit goes
 out as a normal Job), and the pilot claims nothing. Their `results/` come back into the
@@ -117,6 +117,7 @@ import ast
 import calendar
 import fnmatch
 import hashlib
+import http.client
 import importlib.util
 import json
 import os
@@ -141,10 +142,9 @@ ROOT = Path(os.environ.get("VY_DISPATCH_ROOT", "/workspace/jobs/dispatch"))
 
 def load_settings(path: Path) -> None:
     """`KEY=VALUE` lines of `path` into os.environ, each only where the caller's environment doesn't set it; no file, no change."""
-    try:
-        lines = path.read_text().splitlines()
-    except FileNotFoundError:
+    if not path.exists():
         return
+    lines = path.read_text().splitlines()
     for line in lines:
         k, sep, v = line.strip().partition("=")
         if sep and k and not k.startswith("#"):
@@ -403,7 +403,8 @@ def kind_of(key: str) -> dict:
     """The kind in the queue's kinds/circuits.toml whose `keys` globs first match the item id, with its name; {} for none."""
     try:
         kinds = tomllib.loads((QUEUE_SRC / "kinds" / "circuits.toml").read_text()).get("kinds", {})
-    except (OSError, tomllib.TOMLDecodeError):
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        print(f"{now_utc()} kinds unread, so {key} has no kind ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     stem = key.split("/")[-1]
     for name, d in kinds.items():
@@ -534,7 +535,8 @@ def stopped_models() -> dict[str, dict] | None:
     """{model: its stop entry} for every model whose last entry is a stop, or None when the list can't be read."""
     try:
         entries = stop_entries()
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"{now_utc()} the stop list is unreadable ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     out: dict[str, dict] = {}
     for e in entries:
@@ -709,14 +711,18 @@ def packed_replay(job: dict, state: str, rc: int | None) -> tuple[str | None, di
 def run_ids(job: dict, pod_list: list[dict]) -> tuple[str | None, str | None]:
     """(the replay's research run id, from its pod's log; the Commit's, from <row>/pipeline-commit-run), None where unknown."""
     try:
-        commit = (row_dir(job) / "pipeline-commit-run").read_text().strip() or None
-    except OSError:
+        p = row_dir(job) / "pipeline-commit-run"
+        commit = (p.read_text().strip() or None) if p.exists() else None
+    except OSError as e:
+        print(f"{now_utc()} {row_dir(job) / 'pipeline-commit-run'} unread, so the Commit's run is unknown ({type(e).__name__}: "
+              f"{e})", file=sys.stderr, flush=True)
         commit = None
     replay = None
     for p in pod_list:
         try:
             m = re.search(r"research: run (\S+) ->", kubectl("logs", p["metadata"]["name"], "--limit-bytes=1000000"))
-        except RuntimeError:
+        except RuntimeError as e:
+            print(f"{now_utc()} pod {p['metadata']['name']}'s log unread, so it names no replay run ({e})", file=sys.stderr, flush=True)
             continue
         replay = m.group(1) if m else replay
     return replay, commit
@@ -728,8 +734,8 @@ def pack_keys() -> set[str]:
     for f in [*PACK.glob("queue/*.json"), *PACK.glob("claimed/*/*.json"), *PACK.glob("results/*.json")]:
         try:
             keys.add(json.loads(f.read_text())["key"])
-        except (OSError, ValueError, KeyError):
-            continue
+        except (OSError, ValueError, KeyError) as e:
+            print(f"{now_utc()} {f} skipped: its key unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return keys
 
 
@@ -802,7 +808,8 @@ def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
         try:
             if packable(item, key, idx) is not None:
                 continue
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"{now_utc()} {name} skipped: whether it packs is unknown ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if dry:
             print(f"would adopt {name} ({key})")
@@ -835,7 +842,8 @@ def pack_hold(jobs: list[dict], dry: bool = False) -> None:
         mine.parent.mkdir(parents=True, exist_ok=True)
         try:
             f.rename(mine)
-        except OSError:
+        except OSError as e:
+            print(f"{now_utc()} {f.name} not unspooled here ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         entry = json.loads(mine.read_text())
         item = pinned_item(entry["item"], entry.get("template", ""))
@@ -868,7 +876,7 @@ def pack_pods(jobs: list[dict], dry: bool = False) -> None:
     if queued and len(active) < PACK_PODS and queued > PACK_SLOTS * len(active) - claimed:
         if not pack_fits():
             if dry:
-                print("would start no pack pod: no queued entry fits the replay-bundle cap")
+                print("would start no pack pod: no queued entry fits the replay-bundle limit")
             return
         submit_pack_pod(dry=dry)
 
@@ -878,8 +886,8 @@ def read_entries(pattern: str) -> list[dict]:
     for f in PACK.glob(pattern):
         try:
             out.append(json.loads(f.read_text()))
-        except (OSError, ValueError):
-            continue
+        except (OSError, ValueError) as e:
+            print(f"{now_utc()} {f} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return out
 
 
@@ -994,7 +1002,7 @@ def n2_block(item: dict) -> dict:
     if b["gpus"] != 1:
         raise ValueError(f"n2.gpus {b['gpus']}: a node-2 fill job other than a Commit holds 1 GPU")
     if not 1 <= b.get("max_min", 0) <= 30:
-        raise ValueError(f"n2.max_min {b.get('max_min')}: 1-30, the fill runner's cap")
+        raise ValueError(f"n2.max_min {b.get('max_min')}: 1-30, the fill runner's limit")
     if b.get("pool") not in (None, "provers"):
         raise ValueError(f"n2.pool {b['pool']!r}: provers or none")
     for k in ("owner", "on", "cpuset"):
@@ -1061,8 +1069,9 @@ def booked(text: str | None) -> list[tuple[float, float]]:
             s = datetime.fromisoformat(f[0])
             s = (s if s.tzinfo else s.replace(tzinfo=UTC)).timestamp()
             out.append((s, s + 60 * float(f[1] if len(f) > 1 else 30)))
-        except (IndexError, ValueError):
-            continue
+        except (IndexError, ValueError) as e:
+            if f:
+                print(f"{now_utc()} booked window {line[:80]!r} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return out
 
 
@@ -1143,7 +1152,8 @@ def spill_candidates(jobs: list[dict], wls: list[dict], t: float) -> list[tuple[
         item = job_item(j)
         try:
             b = n2_block(item)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
+            print(f"{now_utc()} {name} skipped: its node-2 block unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         out.append((j, w, item, b))
     return out
@@ -1292,8 +1302,8 @@ def ready_items() -> list[tuple[str, dict, Path]]:
         for f in d.glob("*.json"):
             try:
                 files.append((f.stat().st_mtime, f))
-            except OSError:
-                continue
+            except OSError as e:
+                print(f"{now_utc()} {f} skipped, gone while listed ({type(e).__name__})", file=sys.stderr, flush=True)
         for _, f in sorted(files):
             key = f"{d.name}/{f.stem}"
             try:
@@ -1471,10 +1481,13 @@ def tick(dry: bool = False) -> list[str]:
 
 def prom(q: str) -> float | None:
     try:
+        if urllib.parse.urlsplit(PROMETHEUS).scheme not in ("http", "https"):
+            return None
         url = f"{PROMETHEUS}/api/v1/query?" + urllib.parse.urlencode({"query": q})
-        r = json.load(urllib.request.urlopen(url, timeout=10))["data"]["result"]
+        r = json.load(urllib.request.urlopen(url, timeout=10))["data"]["result"]  # noqa: S310 (http or https, checked above)
         return float(r[0]["value"][1]) if r else None
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError, KeyError, IndexError, TypeError, http.client.HTTPException) as e:
+        print(f"{now_utc()} Prometheus gave no value for {q[:80]!r} ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -1529,7 +1542,7 @@ def run_loop(tick: Callable[[], int], every: float, sleep: Callable[[float], Non
             if not stop:
                 (sleep or time.sleep)(every)
     except _Stop:
-        pass
+        print(f"{now_utc()} stopped by SIGTERM between ticks", file=sys.stderr, flush=True)
     finally:
         signal.signal(signal.SIGTERM, prev)
     return 0

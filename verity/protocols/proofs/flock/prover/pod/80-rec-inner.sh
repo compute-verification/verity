@@ -4,15 +4,16 @@
 # only salted tops, message commitments and the schedule (the statement's public shape's) and answers Register with the
 # verifier's full sample (stage/draw.json, rec_live.full_draw: every unit); every coin of the session is the challenger's coin
 # tree, sampled at Hello and opened round by round (rec_live --coin-tree, from TREE_FROM). Then the recorded session replayed by
-# upstream's verifier (flock-circuit replay), V*'s hashing over it (verity_flock.rec_vstar), and two forgeries (a changed
-# challenge, a changed query coin) that both must reject. Lean's plain verify takes a coin tree of the session's own streams
+# upstream's verifier (flock-circuit replay) and two forgeries (a changed challenge, a changed query coin) it must reject.
+# V*'s verdict on the session is Lean's, over outer proofs of V*'s parts (verify --zk --rec-part J, composed by rec-compose:
+# pod 85's STEP=vstage, oprove and lean), which this pod does not prove, so it gives none. Lean's plain verify takes a coin tree of the session's own streams
 # (--coins tree), not one with the inner phase's sparse and stacked streams added, so the session is not verified on its own
 # here (pod 85's INNER_LEAN likewise). Run from the verity tree (research run
 # --cwd source). Outputs under out/: host.txt, stage.json, statement.txt, schedule.json, time-prove.txt, prove.txt/.err,
 # proxy.log, inner/ (session/, public.json, private.json, stage/:
 # the statement's circuit.txt, public file and the verity/partition/v1 object it binds with its program (partition.json,
 # program.json), claims.json: each rep's extra claims and circuit fold from Lean's
-# InnerClaims.lean, which V*'s algebra reads), replay.txt, vstar.json, forged-*, summary.json, tree-source.txt.
+# InnerClaims.lean, which V*'s algebra reads), replay.txt, forged-*, summary.json, tree-source.txt.
 # env: N=64 (instances: RoPE heads, one VU each; 64 at G=2 is m=27)  CPUS=32  FLOCK_WORK (as 76-read-gadget.sh)
 #      TREE_FROM= (the challenger's device, HOST:PORT, each session's coin tree sampled and opened there, rec_live --tree-from;
 #      TREE_SECRET_FILE= its session secret, hex; empty: this host's OS samples it, rec_live --tree-test-os, a test's coins)
@@ -33,14 +34,14 @@ TREE=(--tree-test-os)
 echo "${TREE_FROM:-test-os}" > $O/tree-source.txt
 
 N=${N:-64}; D=$S/stage
-# InnerClaims.lean as an executable beside flock-verify (interpreted it takes about half an hour), cached by its sources
-CSHA=$( (echo $LSHA; cat verity/protocols/proofs/flock/prover/tests/lean/InnerClaims.lean) | sha256sum | cut -c1-16)
+# InnerClaims.lean as an executable beside verity-verify-proof (interpreted it takes about half an hour), cached by its sources
+CSHA=$( (echo $LSHA; cat tests/verity/protocols/proofs/flock/prover/lean/InnerClaims.lean) | sha256sum | cut -c1-16)
 CLAIMS_BIN=$L/claims-$CSHA/inner-claims
 (
   export PATH=$HOME/.elan/bin:$PATH
   exec 9>$L/claims.lock; flock 9
   if [ ! -x $CLAIMS_BIN ]; then
-    C=$L/claims-src; rm -rf $C && C=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $C) && cp verity/protocols/proofs/flock/prover/tests/lean/InnerClaims.lean $C/ \
+    C=$L/claims-src; rm -rf $C && C=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $C) && cp tests/verity/protocols/proofs/flock/prover/lean/InnerClaims.lean $C/ \
       && printf '\n[[lean_exe]]\nname = "inner-claims"\nroot = "InnerClaims"\n' >> $C/lakefile.toml \
       && (cd $C && lake build inner-claims) && mkdir -p $L/claims-$CSHA && cp $C/.lake/build/bin/inner-claims $CLAIMS_BIN
   fi
@@ -54,10 +55,10 @@ PART=(--partition $D/partition.json)
 # the schedule the proxy holds the session to, from the statement's public shape before the session (rec_live --schedule-for)
 env $INNER_COINS $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
 python3 -m verity_flock.rec_live --schedule-for $O/statement.txt > $O/schedule.json || exit 1
-# the session's send check is Lean's flock-firewall live, built beside the Lean verifier
-wait $LP; [ -x $FIREWALL_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
+# the session's send check is Lean's flock-zk-server live, built beside the Lean verifier
+wait $LP; [ -x $ZK_SERVER_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
 python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $O/inner --schedule $O/schedule.json --draw $D/draw.json \
-  --coin-tree "${TREE[@]}" --lean $FIREWALL_BIN > $O/proxy.log 2>&1 &
+  --coin-tree "${TREE[@]}" --lean $ZK_SERVER_BIN > $O/proxy.log 2>&1 &
 PP=$!
 ADDR=
 for i in $(seq 600); do ADDR=$(awk '/^SERVING/ {print $2}' $O/proxy.log); [ -n "$ADDR" ] && break; kill -0 $PP 2>/dev/null || break; sleep 0.5; done
@@ -70,18 +71,16 @@ grep -h panicked $O/prove.err | head -3
 SESS=$O/inner/session
 [ -f $SESS/session.json ] || { tail -20 $O/proxy.log $O/prove.err; exit 1; }
 env $INNER_COINS $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" --sessions $SESS > $O/replay.txt 2>&1
-python3 -m verity_flock.rec_vstar $O/inner > $O/vstar.json 2> $O/vstar.err; echo "vstar exit $?"
 mkdir -p $O/inner/stage && cp $D/circuit.txt $D/pub-$N.bin $D/partition.json $D/program.json $D/draw.json $O/inner/stage/
 wait $CLP
 /usr/bin/time -v -o $O/time-claims.txt $CLAIMS_BIN "${PART[@]}" verity/flock-circuit $D/circuit.txt $D/pub-$N.bin $SESS tree > $O/inner/claims.json 2> $O/claims.err
 echo "claims exit $?"
-# forgeries upstream's replay and V*'s reference must reject: rep 0's first challenge, and the first query coin of rep 0's
-# level 0 (its position moves); both go to replay through session.json and to V*'s reference through public.json
+# forgeries upstream's replay must reject: rep 0's first challenge, and the first query coin of rep 0's level 0 (its
+# position moves), through session.json
 for F in challenge query; do
   FS=$S/forged-$F; rm -rf $FS; cp -r $O/inner $FS
   python3 verity/protocols/proofs/flock/prover/pod/rec_inner.py forge --what $F --inner $FS
   env $INNER_COINS $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" --sessions $FS/session > $O/forged-$F-replay.txt 2>&1
-  python3 -m verity_flock.rec_vstar $FS > $O/forged-$F-vstar.json 2>&1; echo "forged $F vstar exit $?"
 done
 python3 - $O <<'EOF'
 import json, re, sys
@@ -92,9 +91,7 @@ t = (o / "time-prove.txt").read_text()
 live = [json.loads(l[5:]) for l in (o / "prove.txt").read_text().splitlines() if l.startswith("LIVE")]
 pub = json.loads((o / "inner" / "public.json").read_text())
 s = {"stage": json.loads((o / "stage.json").read_text()), "replay": up("replay.txt"),
-     "vstar": json.loads((o / "vstar.json").read_text() or "null"),
-     "forged": {f: {"replay": up(f"forged-{f}-replay.txt"),
-                    "vstar": (o / f"forged-{f}-vstar.json").read_text()[-300:]} for f in ("challenge", "query")},
+     "forged": {f: {"replay": up(f"forged-{f}-replay.txt")} for f in ("challenge", "query")},
      "prover_peak_gb": int(re.search(r"Maximum resident set size \(kbytes\): (\d+)", t).group(1)) / 2**20,
      "prove_wall": re.search(r"Elapsed \(wall clock\) time.*: (\S+)", t).group(1),
      "live": {k: live[0].get(k) for k in ("prove_s", "prove_total_s", "e2e_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "dense_m")} if live else None,

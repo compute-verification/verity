@@ -8,7 +8,7 @@ import Proofs.Flock.Claims.Complete.Json.Stmt
 # The count match on the moves' reach, at the session's layout
 
 At the readings and the decoders at the session's layout (`Live.layout`, `Live.tables`) and the sample-coupled coin map
-under `fieldEnc`, every outcome the joint law reaches off the empty classes at their counts (`linkEmptyAt`,
+under `fieldEnc`, every outcome the joint distribution reaches off the empty classes at their counts (`linkEmptyAt`,
 `roundEmptyAt`), beside an accepted play that misses nowhere and whose log v2 read is the device's, it reaches off the
 empty classes (`CountsReach`): each stop's opening asks for the count of coins the stop releases. It needs no verifier
 fact beyond those `MovesReach` reads: v2 reads each opening frame's count off the line that opens its round, and
@@ -20,7 +20,7 @@ fact beyond those `MovesReach` reads: v2 reads each opening frame's count off th
   of a stream's round `k`, not the session stream's, the `n` `Record.decode` decodes there.
 * **The link's count** (`link_count`, `SetsUp.mPts_eq`): the session stream's round 0 gives a coin a 16 bytes of the
   two link points of `spec.mPts` coordinates each (`link_coins`, `decode_points`), and the session `--zk` sets up at
-  the record's sample has `A.mP` of them (`drawOkZKHJP_of_size`).
+  the record's sample has `A.mP` of them (`sampleOkZKHJP_of_size`).
 * **A stop's frame** (`RoundsReach.stop_frame`, `firstOpened_noPick`): a stop where `StopOf` says and not every cut is
   past releases, on the tape a trace from it ends on, at an opening frame its fixed rounds pick, after a log none of its
   live rounds picks in, its cuts at the bytes that frame answers, and every description of its opening asks for that
@@ -54,7 +54,7 @@ open Claims.Bridge.Custody (decode_ok DecStream forall₂_find? forall₂_mem_le
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The counts the release log and the record give -/
 
@@ -139,13 +139,13 @@ theorem link_count {spec : Flock.SessionSpec} {record : String} {sess : Flock.Ru
 
 /-- **The session `--zk` sets up at the record's sample has `A.mP` points' coordinates**: at one table, its one
 statement is set up at the record's sample, the session's sample file at a sample, where every statement has
-`mPtsOf A.D.unroll.g (A.kd / nTab A.I)` of them (`drawOkZKHJP_of_size`). -/
+`mPtsOf A.D.unroll.g (A.kd / nTab A.I)` of them (`sampleOkZKHJP_of_size`). -/
 theorem SetsUp.mPts_eq {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {record : String} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hs : Exec.setupOfP (ZkExec.zkInputs A.I) A.own record = .ok (spec, sts)) {S : Finset (Fin A.n)}
     (hdr : Exec.recordDraw record = some (A.dj S)) : spec.mPts = A.mP := by
-  have hpin := ZkHidden.drawOkZKHJP_of_size A.I A.own A.ht A.hcS (.subset A.kd) A.kd A.n A.hdiv A.dj
-    (drawFileZK_printedDraw A.kd) S (A.hsz S)
+  have hpin := ZkHidden.sampleOkZKHJP_of_size A.I A.own A.ht A.hcS (.subset A.kd) A.kd A.n A.hdiv A.dj
+    (sampleFileZK_printedSample A.kd) S (A.hsz S)
   have h1 : A.I.count ≤ 1 := hA.count.le
   unfold Exec.setupOfP at hs
   rw [hdr] at hs
@@ -395,17 +395,17 @@ theorem link_frameCount {V : Vocab d α} {k : Verity.Registration.Composite} {θ
 
 -- `decodersAt`'s roots search `List.finRange A.rounds`, which unification would otherwise unfold at `A.rounds`'s value
 attribute [local irreducible] Live.rounds Live.N in
-/-- **The count match at a witness of the joint law's support, at the session's layout**: at the readings and the
+/-- **The count match at a witness of the joint distribution's support, at the session's layout**: at the readings and the
 decoders at `Live.layout` and `Live.tables`, and at the sample-coupled coin map under `fieldEnc`, an outcome off the
 empty classes at their counts, beside a play that the sampled verdict accepts, that misses nowhere, whose log v2's
 check read is the device's and whose blobs sent hold each pinned table at its registered file (`TablesSent`), is off the
 empty classes, under `ReachesOff.movesOf`'s premises. The first stop's frame is
 the log's first opening (`RoundsReach.stop_frame`, `firstOpened_noPick`), of the session stream (`linkFirst_verdict`),
-which asks for `A.mP + A.mP` coins (`link_frameCount`, at the record's sample, `recordDraw_firstStop`); each answered
+which asks for `A.mP + A.mP` coins (`link_frameCount`, at the record's sample, `recordSample_firstStop`); each answered
 stop's frame is round `k` of the first table's rep stream at its fixed round's slot (`stop_slot`), which asks for its
 message's count (`stop_count`). So no stop off the first events is in the second (`RoundsReach.weaken`). -/
-theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
+theorem ReachesOff.counts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
@@ -419,7 +419,7 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
       (roundEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1)) o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2)) (hn : NoMiss V θ F c rd σ o.2)
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
-    (ht : TablesSent (CoinTape.run (V.game θ F c) σ o.2).sent)
+    (ht : TablesSent T (CoinTape.run (V.game θ F c) σ o.2).sent)
     (hN : SampleNamed k (CoinTape.run (V.game θ F c) σ o.2).sent label after)
     (hO : ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text →
       Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log) :
@@ -444,7 +444,7 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
     exact Nat.one_pos
   have hPk := readingAt_picks A.tables A.layout record recordDigest
   have hPS := readingAt_served A.tables A.layout record recordDigest
-  have hdr := recordDraw_firstStop fieldEnc hA hA.popTied (drawReadAll_coinsRead k) (drawHeld k) hPk hm hsrc ω
+  have hdr := recordSample_firstStop fieldEnc hA hA.popTied (sampleReadAll_coinsRead k) (sampleHeld k) hPk hm hsrc ω
     (firstStop_playReaches V θ F c A _ σ _ ω hr) hv hl hN hP hrec₀
   have hjl := A.layout_link h0r
   have hj₀ : ∀ pre fr, slotRound A.tables .link pre fr →
@@ -500,8 +500,8 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
 the device's log and each pinned table at its registered file (`TablesSent`) and that v2 samples at `after`
 (`SampledDigest`), with what it takes of each accepted play the cut holds
 of stated for every tape, as `movesReach_layout` takes it. -/
-theorem countsReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
+theorem countsReach_layout {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
@@ -519,15 +519,16 @@ theorem countsReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
     CountsReach fieldEnc V θ F c k
-      (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧ SampledDigest k o.sent after) A rd σ D M :=
+      (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent) ∧ SampledDigest k o.sent after) A rd σ D M :=
   fun _ h ⟨hv, hn, ⟨hl, ht⟩, hd⟩ => h.counts hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl ht
     (hN _ hv hl hd) (hO _ hv hl)
 
 /-- **`CountsReach` at the deployment**: `countsReach_layout` at `movesReachAt`'s readings, decoders, family, digest
 and coins, its premises on the sample closed as `movesReachAt` closes them. -/
-theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
-    {A : Live} (reg : Option Claims.Msg → A.Reg) (record : ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
+theorem countsReachAt {V : Vocab d α} {T : PinnedTables} {k : Verity.Registration.Composite} {θ : ByteArray}
+    {F : Array ByteArray} {A : Live} (reg : Option Claims.Msg → A.Reg)
+    (record : ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
@@ -536,7 +537,8 @@ theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ :
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) :
     CountsReach fieldEnc V θ F c k
-      (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
+      (fun o =>
+        (Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent) ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
       (readingAt A.tables A.layout (record c) (recordDigest c)) σ (decodersAt reg A.layout)
       (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout (record c) (recordDigest c)) σ (labelAt θ)
         (afterAt V k θ F c σ) (srcCoinsAt _root_.Spot.Challenger.MAX_COINS A)) :=
@@ -549,22 +551,22 @@ deployed device's history and `movesReachAt`'s readings, decoders, family, diges
 `movesReachAt` and the count match (`countsReachAt`, `movesReach_at`). It holds wherever the vocabulary's signer at
 `θ` is the deployment's (`hD`) and `movesReachAt`'s premises hold, with no bound on the stops' term. -/
 theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
-    (P : Device.Deployment) {θ : ByteArray} {F : Array ByteArray} {A : Live}
+    (T : PinnedTables) (P : Device.Deployment) {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hD : V.signer θ = P.signer V.families θ)
-    (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
+    (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ) (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
-    CouplingTarget V k (K.assembled fieldEnc (Device.dev (P.setupOf V.families)) k
+    CouplingTarget V k (K.assembled fieldEnc T (Device.dev (P.setupOf V.families)) k
       (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
       (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ) (afterAt V k)
       (srcCoinsAt _root_.Spot.Challenger.MAX_COINS)) A θ F :=
-  couplingTarget_assembled_at fieldEnc V k K (Device.dev (P.setupOf V.families))
+  couplingTarget_assembled_at fieldEnc V k K T (Device.dev (P.setupOf V.families))
     (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
     (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ)
     (srcCoinsAt _root_.Spot.Challenger.MAX_COINS) A θ F (fun o _ => Device.printsLog_dev _ o)

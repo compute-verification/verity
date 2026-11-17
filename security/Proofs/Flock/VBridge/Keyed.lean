@@ -60,10 +60,10 @@ theorem keyInst_one (outs : Finset (Fin (keyGates hU n))) (u : Fin n) :
 
 /-- **No incorrect proof block, every unit correct.** -/
 theorem keyProg_correct {outs : Finset (Fin (keyGates hU n))} {X : Fin (keyGates hU n) → Bool}
-    (hw : ((Placed.keyProg c hU n).partition outs).wrong X = ∅) (u : Fin n) :
+    (hw : ((Placed.keyProg c hU n).partition outs).incorrect X = ∅) (u : Fin n) :
     ((Placed.keyProg c hU n).partition outs).Correct X u := by
   by_contra h
-  have hu := (Partition.mem_wrong _).2 h
+  have hu := (Partition.mem_incorrect _).2 h
   rw [hw] at hu
   simp at hu
 

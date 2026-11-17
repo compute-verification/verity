@@ -20,7 +20,7 @@ mode, over the integers:
 * `hopper_step_iff`: together, the states the relation can output are exactly the one the semantics gives;
 * `hopper_step_hw`: under `gemm-hopper-step`, the output state is the decode of the word the device writes.
 
-A verification unit starts from `zero_state = decode_state(+0)` and feeds each step's output state to the next, so the
+A proof block starts from `zero_state = decode_state(+0)` and feeds each step's output state to the next, so the
 step theorem applies to every step of a unit in turn.
 -/
 
@@ -164,7 +164,7 @@ theorem hopper_step_lt (acc : Nat) (a b : List Nat) (hin : StepInputs HOPPER_BF1
   obtain ⟨V, hV, hsem, -⟩ := hopper_step_core .div acc a b hin w hw
   rw [hsem]; exact pack_lt V hV
 
-/-- A verification unit: every witness chain the relation accepts from `decode_state(acc)` outputs the decode of the
+/-- A proof block: every witness chain the relation accepts from `decode_state(acc)` outputs the decode of the
 semantics' accumulator after the unit's steps. -/
 theorem hopper_unit_sound (align : Align) (acc : Nat) (hacc : acc < 2 ^ 32)
     (steps : List (List Nat × List Nat × Witness))

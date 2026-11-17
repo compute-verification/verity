@@ -1,17 +1,18 @@
-/-
+module
+
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+/-!
 `ProvedScope.check`'s table cap: a `--zk` session of more than `zkTableCap` tables is refused, with the text the live
 build's mirror (`proved_scope.rs`, `statement_why`) gives; one of `zkTableCap` tables passes the statement's rules, and
 without `--zk` the rule is still at most one table. Under `--plain-tables` (`ProvedScope.checkP`) a plain session of
 public or hidden outputs passes the cap at up to `Tags.MAX_TABLES` tables and is refused at 65, a statement with hidden
 outputs and plain SHA-512 leaves is refused at any count, and the verifier's own program must be the one META binds
 (`ProvedScope.programWhyP`). Its sample is by the
-subset sampling design alone (`ProvedScope.lawWhy` at `plainTables`), where without the flag a plain session at public outputs samples
+subset sampling design alone (`ProvedScope.samplingDesignWhy` at `plainTables`), where without the flag a plain session at public outputs samples
 by the stratified sampling design alone.
 -/
-module
-
-public import Flock.ProvedScope
-meta import Flock.ProvedScope
 
 @[expose] public section
 
@@ -50,7 +51,7 @@ def bound (m : Option String) : Circuit :=
 
 def prog : ByteArray := "{\"root\":\"r\",\"definitions\":[1,2],\"annotations\":{\"x\":1}}".toUTF8
 
-/-- `program_digest` of `{"root": "r", "definitions": [1, 2]}` (`verity.ml.circuits.codec`, which drops `annotations`). -/
+/-- `program_digest` of `{"root": "r", "definitions": [1, 2]}` (`verity.circuits.codec`, which drops `annotations`). -/
 def progSha : String :=
   "2ddb1d2afb53742ae98210afa683ceb6842b10625d88ff0ad16eca0de13512b40226451238d1cf430a87db6db4e6d34629a43fd5ee5609bd8e23bd191e6b96a4"
 
@@ -64,12 +65,12 @@ def progSha : String :=
 #guard ProvedScope.programWhyP (bound none) (some prog) ==
   some "refused: a circuit whose META binds no program_sha512 under --plain-tables: the verifier cannot hold its program to the circuit"
 
-def subsetD : Draw.UnitDraw := { law := .subset 2, population := 8, units := #[1, 6] }
-def stratD : Draw.UnitDraw := { law := .stratified 2 #[], population := 8, units := #[1, 6] }
+def subsetD : Draw.UnitSample := { samplingDesign := .subset 2, population := 8, units := #[1, 6] }
+def stratD : Draw.UnitSample := { samplingDesign := .stratified 2 #[], population := 8, units := #[1, 6] }
 
-#guard ProvedScope.lawWhy false Tags.circuit967b8d06 true subsetD == none
-#guard ProvedScope.lawWhy false Tags.circuit967b8d06 true stratD == some "a stratified draw under --plain-tables"
-#guard ProvedScope.lawWhy false Tags.circuit967b8d06 false stratD == none
-#guard ProvedScope.lawWhy false Tags.circuit967b8d06 false subsetD == some "a subset draw without --zk"
+#guard ProvedScope.samplingDesignWhy false Tags.circuit967b8d06 true subsetD == none
+#guard ProvedScope.samplingDesignWhy false Tags.circuit967b8d06 true stratD == some "a stratified draw under --plain-tables"
+#guard ProvedScope.samplingDesignWhy false Tags.circuit967b8d06 false stratD == none
+#guard ProvedScope.samplingDesignWhy false Tags.circuit967b8d06 false subsetD == some "a subset draw without --zk"
 
 end Flock.Test.TableCap

@@ -1,6 +1,6 @@
 """The serving rows of a Commit: the units of the verifier's partition, read exactly as the replay reads them (committed members
 through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity.commitments.windows.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
+:mod:`verity.commitments.periods.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
@@ -17,8 +17,8 @@ through an opened reader, registered weights for weight slices), committed in M0
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": <a rate> | "subset:K" | "stratified:K" |
 "work:K" | {...}, "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?:
-{<descriptor id>: cap}, "row_tables"?: true, "zk"?: true, "partition_digest"?}``, a rate (`law_of`) resolved over the window's population
-(`service.params_law`).  A ``work`` window samples by the work table `work_table_of` derives from the registered compiler's
+{<descriptor id>: cap}, "row_tables"?: true, "zk"?: true, "partition_digest"?}``, a rate (`sampling_design_of`) resolved over the window's population
+(`service.params_sampling_design`).  A ``work`` window samples by the work table `work_table_of` derives from the registered compiler's
 transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest sampled as the
 stratified sampling design samples it.  The members are its templates in order, each instance count read off the Build's Programs;
 the population program over them (``ml.windows.population.population_program``: ``TemplatePopulations`` for several
@@ -131,13 +131,13 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import history_tables as H, index as IX, row_tables as RTB, step_rows
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.pipeline import chain_rows as CH, chunk_rows as CR, ingress_rows as IR
 from verity_vllm.pipeline import expert_rows as EX, gemm_rows as GM, history_rows as HR
 from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
@@ -147,7 +147,7 @@ from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
                                                     SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
                                                     chain_ways, final_hits, part, template, unit_templates)
-from verity_vllm.pipeline.window_law import law_of, work_table_of
+from verity_vllm.pipeline.window_sampling_design import sampling_design_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
@@ -400,11 +400,11 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     (`with_row_tables`, its engine steps the requests' ``arrivals`` plus their steps), under ``context`` (hex: the live coin
     commitment's root serving committed its step roots under).  ``reuse``: `member_rows`'.  ``transfer_gates``: the registered
     compiler's transfer-gate templates, whose units a ``work:K`` window proves every one of (`work_table_of`)."""
-    tmpls, law = list(partition["templates"]), law_of(partition["law"])
+    tmpls, sampling_design = list(partition["templates"]), sampling_design_of(partition["law"])
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
-        if q == P.Q_WORD[0] and law.get("law") == "stratified":
-            raise ValueError(f"a word partition ({P.Q_WORD[0]}) with the stratified law: its strata are templates, which a word "
+        if q == P.Q_WORD[0] and sampling_design.get("law") == "stratified":
+            raise ValueError(f"a word partition ({P.Q_WORD[0]}) with the stratified sampling design: its strata are templates, which a word "
                              f"partition does not have; the serving rows' partition is {' / '.join(TEMPLATE_QUERIES)}")
         raise ValueError(f"partition query {q!r}: the serving rows' window is the template instances' partition "
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
@@ -423,11 +423,11 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
     n_of = {t: sum(m.n for m in ms if m.template == t) for t in tmpls}
     program, query = CS.population_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], several=q == TEMPLATE_QUERIES[1])
-    table = work_table_of(law, n_of, transfer_gates)
+    table = work_table_of(sampling_design, n_of, transfer_gates)
     if table is not None:
         table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
-    law, table = SV.params_law(law["rate"], program, query, table) if "rate" in law else (law, table)
-    window = CS.Binding(program, query, law, run_root, tuple(ms), tables, context, table)
+    sampling_design, table = SV.params_sampling_design(sampling_design["rate"], program, query, table) if "rate" in sampling_design else (sampling_design, table)
+    window = CS.Binding(program, query, sampling_design, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
     if want and want != window.partition_digest:
         raise ValueError(f"the run's population ({', '.join(f'{t} x {n}' for t, n in n_of.items())}) is partition "
@@ -436,7 +436,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
 
 
 def partition_doc(window: CS.Binding, partition: Mapping[str, Any]) -> dict[str, Any]:
-    """The partition file as derived: the verifier's templates, law and scope, with the members, the partition object and digest."""
+    """The partition file as derived: the verifier's templates, sampling design and scope, with the members, the partition object and digest."""
     return {"format": PARTITION_FORMAT, "templates": list(dict.fromkeys(m.template for m in window.members)), "law": window.law,
             "query": window.query["name"], "scope": partition.get("scope"), "members": [[m.key, m.n] for m in window.members],
             **({"chunk_cap": partition["chunk_cap"]} if partition.get("chunk_cap") else {}),
@@ -676,7 +676,8 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                       list[dict[str, Any]], dict[str, Any], dict[str, str], dict[str, bytes], dict[str, bytes], list[list[list[Any]]],
                       IF.Registered | None]:
     """What `after_commit` commits of ``window``'s members (``rows`` its templates', `population`'s): their words (`read_all`)
-    with each registered read given by reference (`weight_rows.by_reference`) to ``weight_values``, the per-expert cut's
+    with each registered read given by reference (`weight_rows.by_reference`) to ``weight_values``, each port a chain unit
+    holds in its writer's tree given as its writer's (`chain_rows.held_rows`), the per-expert cut's
     ``tables`` (`expert_rows.commit_tables`) and, in a window of history tables (``on``: its partition file's
     ``"histories": true``), the committer's ``histories`` (`commit.history_tables.Histories`), which it appends the
     window's latent rows to, each table from its edge, before it reads the history reads against them. -> (the data, the
@@ -691,7 +692,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     tmpls = list(dict.fromkeys(m.template for m in ms))
     plan, values = EX.Plan(tmpls, rows), dict(weight_values or {})
     hp = HR.Plan(tmpls, rows, on)
-    hreg = HR.declarations(hp, histories, {k: histories.edge(*k) for k in hp.keys()}) if histories is not None else None
+    hreg = HR.declarations(hp, histories, {k: histories.edge(*k) for k in hp}) if histories is not None else None
     if on and window.row_tables:
         raise ValueError("a window of history tables gives its reads by reference, which a window of row tables doesn't")
     reg = registered(ms, rows, hreg) if weight_values else merged(EX.declarations(plan), hreg)
@@ -703,7 +704,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     got = read_all(first, [by_t[t] for t in dict.fromkeys(m.template for m in first)], store, weights, arrivals, values)
     if histories is not None:
         at = HR.append(hp, first, got, histories)
-        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp.keys()}, window.partition_digest,
+        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp}, window.partition_digest,
                               module=G)
     if apart:
         read = dict(zip([m.key for m in first], got, strict=True))
@@ -711,11 +712,12 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                                                       weights, arrivals, values, histories))
         got = [read[m.key] for m in ms]
     data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values)
+    data = CH.held_rows(window, data)
     strings_of: dict[str, bytes] = {}
     if histories is not None:
         hs, strings_of = HR.strings_of(hp, ms, histories, at)
         salts_of = {**salts_of, **hs}
-        roots = {**roots, **{H.name(*k): histories.tables[k].root.hex() for k in hp.keys()}}
+        roots = {**roots, **{H.name(*k): histories.tables[k].root.hex() for k in hp}}
     return data, entries, roots, salts_of, strings_of, [g[1] for g in got], hreg
 
 

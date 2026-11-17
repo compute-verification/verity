@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+/-!
 `RecVStar.checkSchedule` counts the challenger's live-coin part's rounds. At the plain session's inner shape (fixture
 `rec-coins/16-16-8-n64`: m 28, k_log 22, 12 claims, whose two reps' 110 rounds each are `inner-honest`'s), a
 record listing the schedule's 220 rounds is on it, and one listing 222 is refused before any round is read. 222 is
@@ -8,10 +13,6 @@ statement: `RecSetup.commits` runs `checkSchedule` on the staged transcript, and
 no staged statement. `RecDeploy.recTr` now lists the rounds the challenger's live-coin part records, the reps' alone, with round 0
 under the record's link.
 -/
-module
-
-public import Flock.RecVStar
-meta import Flock.RecVStar
 
 @[expose] public section
 

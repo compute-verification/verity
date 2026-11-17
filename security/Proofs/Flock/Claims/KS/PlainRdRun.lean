@@ -29,7 +29,7 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
   FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
-open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainSample
 open Claims.Bridge.Live
 open Lean (Json)
 
@@ -47,7 +47,7 @@ theorem plainRawLevelCols_topK (keep : Bool → Bool) {Ω : Type} {P : Claims.Pr
   have hx := (Claims.Bridge.Custody.checks_ok hc).1
   rcases hro : runOf false (Claims.run sha512 P (VK keep) x ω c).seen 0 with _ | rr
   · simp only [plainRawLevelCols, hro]
-  · obtain ⟨f', s'', spec'', sts'', st', hf', hs', hst', hm⟩ := runOf_m hro
+  · obtain ⟨f', s'', spec'', sts'', st', hf', hs', hst', hm, -⟩ := runOf_m hro
     obtain rfl := Option.some.inj (hf.symm.trans hf')
     rw [hx, hs] at hs'
     obtain ⟨-, -, rfl⟩ : s = s'' ∧ spec = spec'' ∧ sts = sts'' := by simpa using hs'
@@ -224,7 +224,7 @@ theorem plain_accPr_le_rdAll {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha51
               Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧
                 u ≠ C p := by
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
-  obtain ⟨ins, spec, sts, d, hset, hd⟩ := acc_draw hno
+  obtain ⟨ins, spec, sts, d, hset, hd⟩ := acc_sample hno
   have h1 := plain_one hs hin hset
   have h0 : 0 < sts.size := by omega
   have hm := parse_m hs hset h0

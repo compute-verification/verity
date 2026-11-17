@@ -114,10 +114,10 @@ def align_values(topk_ids: Any, sorted_ids: Any, expert_ids: Any, num_post_padde
     return rank.to(i32), start.to(i32), blk.to(i32), par.to(i32), ok
 
 
-def replay_schedule(topk_ids: Any, sorted_ids: Any, num_experts: int, block: int, cap_ids: Any, cap_rank: Any) -> tuple[Any, Any]:
-    """Rewrite one `moe_align_block_size` call's sorted_token_ids in place to the schedule a run of the same call recorded (``cap_ids``,
-    ``cap_rank``: its top-k ids and `align_values` rank), when this call's top-k ids are those: each pair p of an expert e in [0, E)
-    moves to slot first(e) * block + cap_rank[p], first(e) the expert's first block.  The kernel fills exactly the first count(e) slots
+def replay_schedule(topk_ids: Any, sorted_ids: Any, num_experts: int, block: int, captured_ids: Any, captured_rank: Any) -> tuple[Any, Any]:
+    """Rewrite one `moe_align_block_size` call's sorted_token_ids in place to the schedule a run of the same call recorded (``captured_ids``,
+    ``captured_rank``: its top-k ids and `align_values` rank), when this call's top-k ids are those: each pair p of an expert e in [0, E)
+    moves to slot first(e) * block + captured_rank[p], first(e) the expert's first block.  The kernel fills exactly the first count(e) slots
     from first(e) * block, in the order atomicAdd hands them out, and expert_ids and num_tokens_post_padded follow from the counts
     alone, so the rewritten output is the kernel's for the recorded order.  Returns (same, placed), device bool scalars: the ids are
     the recorded ones, and the recorded ranks put every pair once in its expert's slots; the rewrite happens only when both hold.
@@ -127,7 +127,7 @@ def replay_schedule(topk_ids: Any, sorted_ids: Any, num_experts: int, block: int
     dev, i64 = topk_ids.device, torch.int64
     e = topk_ids.reshape(-1).to(i64)
     P, L = int(e.numel()), int(sorted_ids.numel())
-    if int(cap_ids.numel()) != P or int(cap_rank.numel()) != P:
+    if int(captured_ids.numel()) != P or int(captured_rank.numel()) != P:
         no = torch.zeros((), dtype=torch.bool, device=dev)
         return no, no
     valid = (e >= 0) & (e < num_experts)
@@ -136,11 +136,11 @@ def replay_schedule(topk_ids: Any, sorted_ids: Any, num_experts: int, block: int
     cnt = torch.zeros(num_experts + 1, dtype=i64, device=dev).scatter_add_(0, ev, one)[:num_experts]
     nb = (cnt + block - 1) // block
     first = torch.cumsum(nb, 0) - nb
-    ec, r = ev.clamp(max=num_experts - 1), cap_rank.reshape(-1).to(dev).to(i64)
+    ec, r = ev.clamp(max=num_experts - 1), captured_rank.reshape(-1).to(dev).to(i64)
     inside = valid & (r >= 0) & (r < cnt[ec])
     slot = torch.where(inside, first[ec] * block + r, L)
     hits = torch.zeros(L + 1, dtype=i64, device=dev).scatter_add_(0, slot, one)[:L]
-    same = (cap_ids.reshape(-1).to(dev).to(i64) == e).all()
+    same = (captured_ids.reshape(-1).to(dev).to(i64) == e).all()
     placed = (inside == valid).all() & (hits <= 1).all()
     buf = torch.cat([sorted_ids, sorted_ids.new_zeros(1)])
     buf.scatter_(0, torch.where(same & placed & valid, slot, L), torch.arange(P, device=dev, dtype=sorted_ids.dtype))
@@ -270,11 +270,11 @@ class MoeAlignSource:
             if self._replay_device != topk_ids.device:          # once: no copy, and no sync, per call
                 self.replay = {k: (a.to(topk_ids.device), b.to(topk_ids.device)) for k, (a, b) in self.replay.items()}
                 self._replay_device = topk_ids.device
-            cap = self.replay.get((int(job.step), op))
-            if cap is None:
+            captured = self.replay.get((int(job.step), op))
+            if captured is None:
                 self.stats["schedule_missing"] += 1
             else:
-                same, placed = replay_schedule(topk_ids, sorted_ids, num_experts, block, *cap)
+                same, placed = replay_schedule(topk_ids, sorted_ids, num_experts, block, *captured)
                 self._replays.append((op, same, placed))
         rank, start, blk, par, ok = align_values(topk_ids, sorted_ids, expert_ids, ntpp, num_experts, block)
         if self.on_schedule is not None:

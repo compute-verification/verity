@@ -1,7 +1,7 @@
 import Spot
 
 /-!
-`registration-time FILE [--no-ref]`: `Registration.check` and `Registration.checkRef` (R3 as first written, quadratic in
+`registration-time FILE [--no-ref]`: `Docket.check` and `Docket.checkRef` (R3 as first written, quadratic in
 the ports; `check_eq_checkRef` proves them equal) on one `{"params", "record"}` input, as the `registration` piece reads
 it, each timed after the input is parsed, one `PHASE {json}` line each on stdout; exit 1 if their codes differ.
 `registration.sh` builds it against the checkout's verifier and runs it; it is a measurement, not a verifier.
@@ -17,7 +17,7 @@ def statusKb (field : String) : IO Nat := do
   return 0
 
 /-- `f`'s codes and its milliseconds; `f` reads the clock's reading so the compiler can't hoist it out of the timing. -/
-def timed (f : Json → Registration.Verifier → Array String) (rec_ : Json) (v : Registration.Verifier) :
+def timed (f : Json → Docket.Verifier → Array String) (rec_ : Json) (v : Docket.Verifier) :
     IO (Array String × Nat) := do
   let t0 ← IO.monoNanosNow
   let v := if t0 == 0 then { v with ports := #[] } else v
@@ -37,7 +37,7 @@ def main (args : List String) : IO UInt32 := do
   let v := p.verifier
   let roots := match getD rec_ "roots" with | .arr rs => rs.size | _ => 0
   let mut got : Array (Array String) := #[]
-  for (name, f) in [("check", Registration.check), ("checkRef", Registration.checkRef)] do
+  for (name, f) in [("check", Docket.check), ("checkRef", Docket.checkRef)] do
     if name == "checkRef" && !ref then continue
     let (cs, ms) ← timed f rec_ v
     got := got.push cs

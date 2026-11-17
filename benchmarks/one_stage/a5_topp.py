@@ -1,5 +1,5 @@
 """One-stage audit, run A5, on a top-p stand-in: a window of ``GumbelTopPTokenSelectSharedGreedy_v1{V}`` rows cut into their
-stages, the fixture's (`adapters/vllm/tests/pipeline/test_serving_rows_stages.py`: its ``Served`` rows, wired by its ``members``
+stages, the fixture's (`tests/adapters/vllm/tests/pipeline/test_serving_rows_stages.py`: its ``Served`` rows, wired by its ``members``
 and read by its ``read``, each carried row wired to the output row of the unit that wrote it), under a partition naming each
 stage on bits (the fixture's ``boolean``, the ``_v2`` Definitions of `boolean_topp_stages`), its run ``<ROOT>/rank0``, committed
 as serving commits it and audited as `a5_sparse_mla.py` audits its own window (`a5_sparse_mla.audited`: `a5.audit` as rank 0 of a
@@ -46,17 +46,17 @@ import a5_sparse_mla as SM  # noqa: E402
 from tests.pipeline import test_serving_rows_stages as TS  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
-from verity.commitments.windows import interface as IF  # noqa: E402
-from verity.commitments.windows import rows as CS  # noqa: E402
-from verity.definitions.registry import sampling as SA  # noqa: E402
-from verity.definitions.registry import topp_keep_builder as K  # noqa: E402
-from verity.definitions.registry import topp_stages as T  # noqa: E402
+from verity.commitments.periods import interface as IF  # noqa: E402
+from verity.commitments.periods import rows as CS  # noqa: E402
+from verity_vllm.definitions.registry import sampling as SA  # noqa: E402
+from verity_vllm.definitions.registry import topp_keep_builder as K  # noqa: E402
+from verity_vllm.definitions.registry import topp_stages as T  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/topp-stages-stand-in/v1").hexdigest()
-FIXTURE = "adapters/vllm/tests/pipeline/test_serving_rows_stages.py"
+FIXTURE = "tests/adapters/vllm/tests/pipeline/test_serving_rows_stages.py"
 #: the most units a member holds, the fixture's
 MEMBER_UNITS = 7
 #: the select chunks' family

@@ -42,12 +42,12 @@ import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 `2j + r` is the tape's (`Masked.layE`), the premises `Masked.swSrcE_repCut` takes of the frame's samples and the tape, at
 the frame reps `Loop.frepOf`:
 
-* `Loop.RepSrc.size`: the samples are `drawBytes` long (`hz`).
+* `Loop.RepSrc.size`: the samples are `sampleBytes` long (`hz`).
 * `Loop.RepSrc.pads`: the tape's pads are those of the tape of the frames' samples (`hpads`).
 * `Loop.RepSrc.h`: below `h_ab`, the tape's `h` is the tape of the frames' samples' (`htape`).
 * `Loop.RepSrc.innerSalt`: at each leaf of the pads tree, the masked prover's fitted leaf salts agree.
 
-At the loop's own release (`ofLoopLink`) the samples are `L₀`'s (`LeanRelease.draws_ofLoopLink`), and where the rep's frame
+At the loop's own release (`ofLoopLink`) the samples are `L₀`'s (`LeanRelease.samples_ofLoopLink`), and where the rep's frame
 starts, its layout is the tape's (`LeanRelease.lay_ofLoopLink`, `swSrcE_repCut`'s `hlayR`).
 -/
 
@@ -70,7 +70,7 @@ variable {L₀ : LeanRelease Flock.Wit
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
 
-/-- **The frame's samples are `drawBytes` long** at the release `Lr`, whose samples are `L₀`'s and whose layout at the rep is
+/-- **The frame's samples are `sampleBytes` long** at the release `Lr`, whose samples are `L₀`'s and whose layout at the rep is
 the tape's. -/
 theorem Loop.RepSrc.size (hS : Loop.RepSrc L₀ src x w)
     (Lr : LeanRelease Flock.Wit
@@ -79,12 +79,12 @@ theorem Loop.RepSrc.size (hS : Loop.RepSrc L₀ src x w)
     (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
     (hlay : Lr.lay x (Loop.frepOf j.val r.val) = Masked.layE x j) :
     (Lr.draws (ν, t) (Loop.frepOf j.val r.val)).size =
-      _root_.Flock.Firewall.Frame.drawBytes (Lr.lay x (Loop.frepOf j.val r.val)) := by
+      _root_.Flock.ZkServer.Frame.sampleBytes (Lr.lay x (Loop.frepOf j.val r.val)) := by
   rw [hd, hlay]
   exact (hS ν t j r).1
 
 /-- **The tape's pads are the frame's**: table `j`'s rep `r`'s pads on the tape are those on the tape of the frames'
-samples (`tapeOfDraws`, at any other entries `tz`). -/
+samples (`tapeOfSamples`, at any other entries `tz`). -/
 theorem Loop.RepSrc.pads (hS : Loop.RepSrc L₀ src x w)
     (Lr : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -92,11 +92,11 @@ theorem Loop.RepSrc.pads (hS : Loop.RepSrc L₀ src x w)
     (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
     (hlay : Lr.lay x (Loop.frepOf j.val r.val) = Masked.layE x j) (tz : FlockComplete.TapeZk) :
     FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j) =
-      FlockComplete.padsOf (tapeOfDraws tz (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf) j.val r.val (Masked.layE x j) := by
-  have h := padsOf_drawsAt Lr x (ν, t) tz Loop.frepOf j.val r.val (hS.size Lr hd ν t j r hlay)
+      FlockComplete.padsOf (tapeOfSamples tz (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf) j.val r.val (Masked.layE x j) := by
+  have h := padsOf_samplesAt Lr x (ν, t) tz Loop.frepOf j.val r.val (hS.size Lr hd ν t j r hlay)
   rw [hlay] at h
   rw [h]
-  unfold LeanRelease.drawsAt
+  unfold LeanRelease.samplesAt
   rw [hlay, hd]
   exact (hS ν t j r).2.1
 
@@ -109,7 +109,7 @@ theorem Loop.RepSrc.h (hS : Loop.RepSrc L₀ src x w)
     (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
     (hlay : Lr.lay x (Loop.frepOf j.val r.val) = Masked.layE x j) (tz : FlockComplete.TapeZk) :
     ∀ k < (Masked.layE x j).hab, (Masked.UE.tapeZk t).h j.val r.val k =
-      (tapeOfDraws tz (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf).h j.val r.val k := by
+      (tapeOfSamples tz (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf).h j.val r.val k := by
   intro k hk
   have hlen : (Masked.layE x j).len = (Masked.layE x j).tw + 1 := rfl
   have htw : (Masked.layE x j).tw = (Masked.layE x j).hab + 3 := rfl
@@ -125,21 +125,21 @@ theorem Loop.RepSrc.innerSalt (hS : Loop.RepSrc L₀ src x w)
     (hd : Lr.draws = L₀.draws) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
     (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
     (hlay : Lr.lay x (Loop.frepOf j.val r.val) = Masked.layE x j) (tz : FlockComplete.TapeZk) :
-    ∀ q < _root_.Flock.Firewall.Frame.codeLen (Masked.layE x j),
+    ∀ q < _root_.Flock.ZkServer.Frame.codeLen (Masked.layE x j),
       FlockComplete.fitBytes 192 ((Masked.UE.tapeZk t).innerSalt j.val r.val q) =
-        FlockComplete.fitBytes 192 ((tapeOfDraws tz (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf).innerSalt j.val r.val q) := by
+        FlockComplete.fitBytes 192 ((tapeOfSamples tz (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf).innerSalt j.val r.val q) := by
   intro q hq
   rw [innerSalt_fit tz (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf j.val r.val q (hS.size Lr hd ν t j r hlay)
     (by rw [hlay]; exact hq), hlay, hd]
   exact (hS ν t j r).2.2.1 q hq
 
 /-- The release at the loop's own frames and link samples `L₀`'s bytes. -/
-theorem LeanRelease.draws_ofLoopLink (src : Msg → Flock.Wit →
+theorem LeanRelease.samples_ofLoopLink (src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) :
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)) :
     (LeanRelease.ofLoopLink L₀ src real).draws = L₀.draws := rfl
 
 /-- **The loop lays table `j`'s rep `r` out at the tape's layout** (`Masked.layE`), where its frame starts
@@ -149,16 +149,16 @@ theorem LeanRelease.lay_ofLoopLink (src : Msg → Flock.Wit →
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-    (j : Fin (Masked.jOf x)) (r : Fin 2) {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.Firewall.Frame.MaskSlot}
-    (hs : _root_.Flock.Firewall.Drive.start (Masked.stsOf x)[j.val]! = .ok (lay, mask)) :
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
+    (j : Fin (Masked.jOf x)) (r : Fin 2) {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.ZkServer.Frame.MaskSlot}
+    (hs : _root_.Flock.ZkServer.Drive.start (Masked.stsOf x)[j.val]! = .ok (lay, mask)) :
     (LeanRelease.ofLoopLink L₀ src real).lay x (Loop.frepOf j.val r.val) = Masked.layE x j := by
   have hst : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val (Masked.lt_of_jOf j)
   have hk : Loop.frepOf j.val r.val / 2 = j.val := by
     unfold Loop.frepOf
     omega
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) (Masked.lt_of_jOf j))
-  have e : Loop.startOf x (Loop.frepOf j.val r.val) = _root_.Flock.Firewall.Drive.start (Masked.stsOf x)[j.val]! := by
+  have e : Loop.startOf x (Loop.frepOf j.val r.val) = _root_.Flock.ZkServer.Drive.start (Masked.stsOf x)[j.val]! := by
     unfold Loop.startOf
     rw [hsx]
     dsimp only

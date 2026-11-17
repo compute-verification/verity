@@ -11,8 +11,8 @@ same session: the memory challenger streams one label sequence over every tier a
 session of its own would leave every other tier in its `R`, and two sessions don't compose.
 
 On a disk the fill writes its free space: raw devices whole, and a mounted filesystem's free space in a fill file
-(`verity/core/protocols/pous/wipe_store.py`, `Disk`). Everything on the disks the fill doesn't overwrite counts in `R`
-in full, whatever it holds:
+(`verity/protocols/accounting/pous/verifier/wipe_store.py`, `Disk`). Everything on the disks the fill doesn't overwrite
+counts in `R` in full, whatever it holds:
 
 * the used bytes of each mounted filesystem, the root filesystem among them. Its content is public, so a read of it
   proves nothing (every prover strategy can recompute a constant), and its blocks could hold prior content instead;
@@ -34,9 +34,10 @@ structure Disks where
   bytes : ℕ
   labels : ℕ
 
-/-- The deployed H200 node's disks as a whole-node session filled them: its two virtual disks whole (`vda`
-274,877,906,944 B and `vdc` 499,289,948,160 B), and the labels of the fill written on them, each filesystem's free space
-less 10 GiB (325,243,109,376 B). -/
+/-- The deployed H200 node's disks as a whole-node session filled them: its two virtual disks whole, the node file
+`hardware/nodes/h200-sxm-141gb-x1.toml`'s `memory.vda.bytes` and `memory.vdc.bytes` summed (no Lean form of a node
+file holds them), and the labels of the fill written on them, each filesystem's free space less 10 GiB
+(325,243,109,376 B). -/
 def h200Disks : Disks where
   bytes := 774167855104
   labels := 5081923584

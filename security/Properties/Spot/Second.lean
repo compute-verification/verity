@@ -6,7 +6,7 @@ public import Properties.Spot.Draw
 /-!
 # The second stage misses proof blocks no more often than the cells' escapes (`Select.selectSecond`)
 
-The property of a two-stage rule's second stage as the claims read it (`CompiledTwo.Sessions`' `secondDraws`): the sample
+The property of a two-stage rule's second stage as the claims read it (`CompiledTwo.Sessions`' `secondSamples`): the sample
 `Select.selectSecond` makes from `L` uniform bytes, given the first stage's replay sample, the `n_t` proof blocks of each
 template `t` in a replay block and the `k_t` it samples from each such cell, proves no proof block of a set `X` with
 probability at most the product, over the templates and the replay sample's blocks, of a uniform `k_t`-subset's escape

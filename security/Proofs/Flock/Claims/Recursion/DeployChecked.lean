@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Json.UnitDraw
+public import Proofs.Flock.Claims.Complete.Json.UnitSample
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
 public import Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves
 public import Proofs.Flock.Claims.Recursion.VStarCross
@@ -56,16 +56,16 @@ soundness headline at the statement's leaf. What the recursion needs of an inner
   passes Flock's statement check and carries a sample (`parse_innerOk`), so the cut `decomp_deployed_iff` asks of the
   parts is the inner run's conditions alone (`InnerRun`, `RunCut`: the link and last messages, the verdict, the record's
   statement and sample, the custody, the record's canonical text), every other condition of `FlockDeploy.checks` being the reader's (`checks_iff`).
-  The inner statement's sample (`InnerDrawn`) holds at the checked reader (`innerDrawn_checked`): the
+  The inner statement's sample (`InnerSampled`) holds at the checked reader (`innerSampled_checked`): the
   recursion's inner session carries the verifier's full stratified sample, `readX` refuses an inner statement without a
   sample (`innerOk`), and the compiled verifier refuses, last in each V* session's verdict, a session over an inner
-  session whose record holds none (`RecSetup.innerDrawn`, `fullDrawO`).
+  session whose record holds none (`RecSetup.innerSampled`, `fullSampleO`).
 * **The inner acceptance is satisfiable under the Prop** (`admitted_acc`): Flock's completeness at a true in-scope
   statement whose error is below 1 gives an accepted run of its prover (`exists_of_pr_pos`), whose own messages replayed
   are accepted (`run_replay_out`), so `InnerAccSha` holds at some coins and messages (`innerAccSha_of_complete`). At
   `Readable.relation` that completeness is `FlockComplete.Replay.complete_plain` (`admitted_acc_plain`). The reader's
-  sample tie at one table (`drawTiedB`) is no part of the Prop: in scope, the setup writes the statement's sample into the
-  header the session's sample is read from (`drawTied_of_scope`).
+  sample tie at one table (`sampleTiedB`) is no part of the Prop: in scope, the setup writes the statement's sample into the
+  header the session's sample is read from (`sampleTied_of_scope`).
 * **The inner readiness the deployed stop reads** (`RecDeploy.stopsRec`): at a statement in scope, `FlockComplete.ready`
   at SHA-512 is three facts of the inner session, its size, its regions and its honest record
   (`FlockComplete.RecordFitsAt`), since the scope check already sets it up with a sample (`ready_inScope_iff`); at the
@@ -158,7 +158,7 @@ theorem innerAccSha_of_complete {Ω : Type} [Nonempty Ω] {rel : Flock.Readable.
 
 theorem innerOk_iff {inner : Msg} : innerOk inner = .ok () ↔
     ∃ s spec sts, FlockDeploy.setupOf false inner = some (s, spec, sts) ∧ s.read.check = .ok () ∧
-      s.read.draw.isSome = true ∧ drawTiedB s spec sts = true := by
+      s.read.draw.isSome = true ∧ sampleTiedB s spec sts = true := by
   unfold innerOk
   split
   · next s spec sts hs =>
@@ -172,7 +172,7 @@ theorem innerOk_iff {inner : Msg} : innerOk inner = .ok () ↔
           rw [hd] at h
           cases h
         | some _ => rfl
-      · cases ht : drawTiedB s spec sts with
+      · cases ht : sampleTiedB s spec sts with
         | false =>
           cases hd : s.read.draw with
           | none =>
@@ -210,41 +210,41 @@ theorem parse_innerOk {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst :
   exact ⟨s, spec, sts, h1, h2, h3⟩
 
 /-- **At every statement the reader parses, at one table the session's sample is the statement's** (`innerOk`'s
-`drawTiedB`): the inner setup reads the session's `unitDraw` from the public file's header, and the reader refuses a
+`sampleTiedB`): the inner setup reads the session's `unitSample` from the public file's header, and the reader refuses a
 header whose sample is not the record's. -/
-theorem parse_drawTiedOne {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) :
+theorem parse_sampleTiedOne {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) :
     ∀ s spec sts, FlockDeploy.setupOf false (xIOf x) = some (s, spec, sts) → s.read.check = .ok () →
-      sts.size = 1 → FlockDeploy.drawEq (drawOfU spec.unitDraw) s.read.draw = true := by
+      sts.size = 1 → FlockDeploy.sampleEq (sampleOfU spec.unitSample) s.read.draw = true := by
   intro s spec sts hs _ h1
   obtain ⟨r, hr, hx⟩ := readX_of_parse hst
   rw [hx] at hs
   obtain ⟨s', spec', sts', hs', -, -, ht⟩ := innerOk_iff.1 (readX_inner hr).2.2
   rw [hs] at hs'
   cases hs'
-  exact drawTiedB_iff.1 ht h1
+  exact sampleTiedB_iff.1 ht h1
 
 /-! ## Flock's admission of plain leaves (`Assumptions/PlainLeaves.lean`) -/
 
-/-- **In Flock's scope, at one table, the session's sample is the statement's** (`innerOk`'s `drawTiedB`): the setup writes
-the statement's sample into the public file's header, whose sample the session's `unitDraw` is
-(`FlockComplete.JsonRT.unitDraw_one`). -/
-theorem drawTied_of_scope {rel : Flock.Readable.Parsed → Flock.Readable.Relation} {inner : Msg} {s : FlockDeploy.Ins}
+/-- **In Flock's scope, at one table, the session's sample is the statement's** (`innerOk`'s `sampleTiedB`): the setup writes
+the statement's sample into the public file's header, whose sample the session's `unitSample` is
+(`FlockComplete.JsonRT.unitSample_one`). -/
+theorem sampleTied_of_scope {rel : Flock.Readable.Parsed → Flock.Readable.Relation} {inner : Msg} {s : FlockDeploy.Ins}
     {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} (hS : Claims.Flock.Scope (FlockDeploy.deployPlain rel) inner)
     (hs : FlockDeploy.setupOf false inner = some (s, spec, sts)) (hd : s.read.draw.isSome = true) :
-    sts.size = 1 → FlockDeploy.drawEq (drawOfU spec.unitDraw) s.read.draw = true := by
+    sts.size = 1 → FlockDeploy.sampleEq (sampleOfU spec.unitSample) s.read.draw = true := by
   intro h1
-  obtain ⟨d, hU, hdd, hn⟩ := FlockComplete.JsonRT.unitDraw_one hS hs h1 hd
-  have hnn := (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some hs).1 hdd).1
-  have hu : drawOfU (some d) = some d := by
+  obtain ⟨d, hU, hdd, hn⟩ := FlockComplete.JsonRT.unitSample_one hS hs h1 hd
+  have hnn := (FlockDeploy.insOf_sample_norm (FlockDeploy.setupOf_some hs).1 hdd).1
+  have hu : sampleOfU (some d) = some d := by
     cases d with
     | null => exact absurd rfl hn
     | _ => exact congrArg some hnn
   rw [hU, hdd, hu]
-  exact FlockDeploy.drawEq_refl _
+  exact FlockDeploy.sampleEq_refl _
 
 /-- **Under the Prop, the inner verifier's acceptance is satisfiable at an inner statement the checked reader
 admits**, wherever Flock's honest prover is complete (`innerAccSha_of_complete`, at `δc < 1` from the sample and the
-sizes, `FlockComplete.δc_sha512_lt_one`); the reader's sample tie at one table is the setup's (`drawTied_of_scope`). -/
+sizes, `FlockComplete.δc_sha512_lt_one`); the reader's sample tie at one table is the setup's (`sampleTied_of_scope`). -/
 theorem admitted_acc {rel : Flock.Readable.Parsed → Flock.Readable.Relation} (hA : PlainLeavesAdmitted rel)
     (hC : Claims.Flock.Complete FlockDeploy.sha512 (FlockDeploy.deployPlain rel))
     (h64 : Claims.Out64 FlockDeploy.sha512) :
@@ -255,7 +255,7 @@ theorem admitted_acc {rel : Flock.Readable.Parsed → Flock.Readable.Relation} (
   obtain ⟨inner, ri, partition, dims, w, s, spec, sts, hri, hpa, hdims, hs, hck, hd, hl, hε, hreg, hrec, hS, hR⟩ :=
     hA
   exact ⟨inner, ri, partition, dims, hri, hpa, hdims,
-    innerOk_iff.2 ⟨s, spec, sts, hs, hck, hd, drawTiedB_iff.2 (drawTied_of_scope hS hs hd)⟩,
+    innerOk_iff.2 ⟨s, spec, sts, hs, hck, hd, sampleTiedB_iff.2 (sampleTied_of_scope hS hs hd)⟩,
     innerAccSha_of_complete hC h64 hS hR
       (FlockComplete.δc_sha512_lt_one hs hd (hl.trans (by norm_num)) hreg hrec hε)⟩
 
@@ -315,7 +315,7 @@ check and the sampling design). -/
 def checksRun (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (x : Msg) (link : List ByteArray × List ByteArray)
     (c₁ : Coin) (mids : List (Msg × Coin)) (f : FlockDeploy.Final) : Flock.V Unit := do
   Flock.Record.check (f.stmt == x) "live: the last message's statement is not the statement"
-  Flock.Record.check (FlockDeploy.drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw)
+  Flock.Record.check (FlockDeploy.sampleEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw)
     "live: the record's draw is not the statement's"
   FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids
   Flock.RecordText.check f.record
@@ -346,7 +346,7 @@ theorem checks_iff {zk : Bool} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} 
       rw [h4]
       exact h7
     · cases hd : s.read.draw with
-      | none => simp [hd, Flock.ProvedScope.drawLaw] at h6
+      | none => simp [hd, Flock.ProvedScope.sampleDesign] at h6
       | some _ => rfl
   · rintro ⟨hr, hc, hd⟩
     unfold checksRun at hr
@@ -365,7 +365,7 @@ theorem checks_iff {zk : Bool} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} 
     rw [h4]
     show (s.read.check >>= _) = _
     rw [hc]
-    show ((if s.read.draw.isNone = true then Flock.ProvedScope.drawLaw zk s.read.tags false none else pure ()) >>= _) = _
+    show ((if s.read.draw.isNone = true then Flock.ProvedScope.sampleDesign zk s.read.tags false none else pure ()) >>= _) = _
     cases hdr : s.read.draw with
     | none =>
       rw [hdr] at hd
@@ -408,21 +408,21 @@ def RunCut (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ 
 
 /-- **The inner statement is sampled wherever the parts' inner checks all hold**: at a statement the reader parses, of
 the shape, where some coins and inner messages pass every part's inner check, Flock's plain verifier reads a sample off
-the inner statement. It holds at the checked reader (`innerDrawn_checked`). -/
-def InnerDrawn (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
+the inner statement. It holds at the checked reader (`innerSampled_checked`). -/
+def InnerSampled (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     (∀ s < nS x, chk s x c ms) →
       ∃ s spec sts, FlockDeploy.setupOf false (xIOf x) = some (s, spec, sts) ∧ s.read.draw.isSome = true
 
 /-- **The inner statement is sampled at the checked reader**: `readX` refuses an inner statement without a sample
 (`innerOk`, `parse_innerOk`), whatever the parts' checks. -/
-theorem innerDrawn_checked (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) :
-    InnerDrawn shape chk := fun _ _ hst _ _ _ _ => by
+theorem innerSampled_checked (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) :
+    InnerSampled shape chk := fun _ _ hst _ _ _ _ => by
   obtain ⟨s, spec, sts, hs, -, hd⟩ := parse_innerOk hst
   exact ⟨s, spec, sts, hs, hd⟩
 
 /-- **`Decomp` at the deployed recursion is the run's cut**, at every shape: the reader passes the inner statement's
-statement check and its sample at every statement it parses (`parse_innerOk`, `innerDrawn_checked`), so of
+statement check and its sample at every statement it parses (`parse_innerOk`, `innerSampled_checked`), so of
 `decomp_deployed_iff`'s cut there remain the run's conditions (`innerAccSha_iff_run`). -/
 theorem decomp_checked_iff (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)

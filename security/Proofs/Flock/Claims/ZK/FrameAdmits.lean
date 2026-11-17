@@ -111,7 +111,7 @@ theorem finalRoundEq_ofLoop (T : CoinLayer.TableData) (vs : (CoinLayer.session L
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (H : Msg → Msg) (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
     (hT : _root_.Flock.Guarantees.TablesAdmitUnrefused T)
     (hU : FrameUnrefused Loop.loopNr T (ofLoop T L₀ real) H wk x w)

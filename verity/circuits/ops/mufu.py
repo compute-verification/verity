@@ -14,10 +14,10 @@ measured the same rcp and sqrt words.
 
 Batch kernels.  Every primitive but `MufuTanh` has a numpy kernel registered with `verity.circuits.evaluation` (domain: every encoding).
 
-Provenance.  These are the definitions the vLLM integration registered in `verity.definitions.registry.prims` (same ids,
+Provenance.  These are the definitions the vLLM integration registered in `verity_vllm.definitions.registry.prims` (same ids,
 signatures and conformance statuses), which re-exports them from here.  The bit rules are the integration's C++ models
 (`fa2_model.cpp`: `mufu_ex2_bits`, `mufu_rcp_bits`; `rms_triton_model.cpp`: `mufu_sqrt`, `mufu_rsq`, `div_full_parts`,
-`rsqrt_nonftz`) on integers; the kernels are its numpy ports (`verity/definitions/numerics/derived_rows.py`).
+`rsqrt_nonftz`) on integers; the kernels are its numpy ports (`adapters/vllm/verity_vllm/definitions/numerics/derived_rows.py`).
 """
 from __future__ import annotations
 
@@ -272,7 +272,7 @@ def RsqrtApprox(x: int) -> int:
 # ~0.005 B/word).  The evaluator answers
 #   (a) NaN inputs and the closed regions in `MUFU_TANH_RULES` (each established by an EXHAUSTIVE scan of the whole region),
 #   (b) every other word from the table: the in-tree `tables/mufu_tanh_sm89.{json,xzblocks}` (manifest with
-#       sha512, hardware/software, rules, the measurement jobs, a 512-word raw sample; table [0x31000000, 0x41000000) = [2^-29, 8), which
+#       sha512, calibration/hardware/software, rules, the measurement jobs, a 512-word raw sample; table [0x31000000, 0x41000000) = [2^-29, 8), which
 #       covers the table-only region [2^-8, 8) with margin; the manifest is pinned by `MUFU_TANH_TABLE_MANIFEST_SHA512`); negative
 #       words via the table's odd symmetry, which is used only where the measurement shows 0 violations over the table's whole range.
 # `MufuTanhUnmeasured` is raised only when the table does not cover the word or does not load: manifest missing or not the pinned
@@ -367,7 +367,7 @@ class _TanhShard:
 
 
 def mufu_tanh_table_manifest(path: str = MUFU_TANH_TABLE_MANIFEST) -> dict:
-    """The in-tree table's manifest (format `verity/mufu-tanh-table/v1`): digests, hardware/software, rules, evidence job ids, the
+    """The in-tree table's manifest (format `verity/mufu-tanh-table/v1`): digests, calibration/hardware/software, rules, evidence job ids, the
     512-word raw sample (`sample.pairs` = [[x_hex, hw_hex], ...]) and the xz-block index (`table`)."""
     import json as _json
     with open(path) as f:

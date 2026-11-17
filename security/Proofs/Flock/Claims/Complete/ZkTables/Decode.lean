@@ -52,7 +52,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 `root_B` per table is printable (`good_recordObjZkJ`); a printable object with the plain record's fields decodes as
 `sessOf` (`decodeZk_ofFieldsJ`: S5 reads each table's `root_B` under its name, and S11/S13 find each rep stream under
 its name, `find?_name`), and `liveOf` reads it (`liveZk_ofFieldsJ`); so the masked record decodes
-(`decode_recordObjZkJ`), reads live (`live_recordObjZkJ`) and carries the sample (`recordDraw_recordObjZkJ`).
+(`decode_recordObjZkJ`), reads live (`live_recordObjZkJ`) and carries the sample (`recordSample_recordObjZkJ`).
 -/
 
 @[expose] public section
@@ -82,7 +82,7 @@ theorem good_linkObjJ {spec : SessionSpec} (hn : spec.tables.toList.Nodup) (h : 
 theorem good_recordObjZkJ {spec : SessionSpec} (hn : spec.tables.toList.Nodup) (h : ByteArray → ByteArray)
     (hz : String) (ct : CoinTree.Spec) {rootB : Array ByteArray} (hs : rootB.size = spec.tables.size)
     (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray)
-    (hd : Good (spec.unitDraw.getD Json.null)) :
+    (hd : Good (spec.unitSample.getD Json.null)) :
     Good (recordObjZk spec h hz ct rootB points streams proofs) := by
   refine good_mkObj (recordListZk_distinct spec h hz ct _ points streams proofs) ?_
   simp only [recordListZk, recordList, List.cons_append, List.nil_append, List.mem_cons, List.mem_nil_iff, or_false,
@@ -122,7 +122,7 @@ theorem find?_name {α β : Type} [BEq β] [LawfulBEq β] (f : α → β) :
 named distinctly, as `decodeZk_ofFields`. -/
 theorem decodeZk_ofFieldsJ {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64)
     {spec : SessionSpec} (hn : spec.tables.toList.Nodup) (hct : spec.coinTree = none)
-    (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
+    (hdraw : SampleOk spec) (hsig : 0 < spec.sigma.size)
     {rootB : Array ByteArray} (hrbs : rootB.size = spec.tables.size) (hrb : ∀ rb ∈ rootB, 0 < rb.size)
     {points : Array (Array F128)} (hpts : points.size = spec.points) (hpm : ∀ p ∈ points, p.size = spec.mPts)
     {streams : Array (Array Round)} (hss : streams.size = spec.repStreams.size)
@@ -149,15 +149,15 @@ theorem decodeZk_ofFieldsJ {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).siz
   have hlm : Record.str l "mode" = .ok "exchange" := str_same hls (gL (by simp [linkList]))
   have hsg : Record.str l "sigma" = .ok (hexOf spec.sigma) :=
     str_same hls (gL (v := hexJ spec.sigma) (by simp [linkList]))
-  obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (gR (k := "unit_draw") (v := spec.unitDraw.getD Json.null)
+  obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (gR (k := "unit_draw") (v := spec.unitSample.getD Json.null)
     (by simp [recordList]))
   simp only [hlm, hsg, ok_bind, beq_self_eq_true, check_true, hdv]
   have hdc : ∀ o : Option Json, (dv = Json.null → o = none) → (dv ≠ Json.null → o = some dv) →
-      Draw.check o spec.unitDraw spec.instances = .ok () := by
+      Draw.check o spec.unitSample spec.instances = .ok () := by
     intro o ho₁ ho₂
-    unfold DrawOk at hdraw
+    unfold SampleOk at hdraw
     revert hdraw hdvs
-    cases spec.unitDraw with
+    cases spec.unitSample with
     | none =>
       intro _ hdvs
       simp only [Option.getD_none] at hdvs
@@ -429,25 +429,25 @@ theorem liveZk_ofFieldsJ {h : ByteArray → ByteArray} {spec : SessionSpec}
   rfl
 
 /-- **A printable object with the honest record's fields carries the statement's sample**, up to key order, at any root
-`B`s, as `recordDrawZk_ofFields`. -/
-theorem recordDrawZk_ofFieldsJ {h : ByteArray → ByteArray} {spec : SessionSpec}
-    (hdraw : DrawOk spec) (rootB : Array ByteArray) (points : Array (Array F128)) (streams : Array (Array Round))
+`B`s, as `recordSampleZk_ofFields`. -/
+theorem recordSampleZk_ofFieldsJ {h : ByteArray → ByteArray} {spec : SessionSpec}
+    (hdraw : SampleOk spec) (rootB : Array ByteArray) (points : Array (Array F128)) (streams : Array (Array Round))
     (proofs : Array ByteArray) {R : Json} (hgood : Good R)
     (gR : ∀ {k v}, (k, v) ∈ recordList spec h rootB points streams proofs → R.getObjVal? k = .ok v) :
-    match spec.unitDraw with
+    match spec.unitSample with
     | none => FlockSoundness.Discharge.Exec.recordDraw (printJ R) = none
     | some d => ∃ d', FlockSoundness.Discharge.Exec.recordDraw (printJ R) = some d' ∧
         FlockDeploy.JsonEquiv d' d := by
   obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ hgood
-  obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (gR (k := "unit_draw") (v := spec.unitDraw.getD Json.null)
+  obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (gR (k := "unit_draw") (v := spec.unitSample.getD Json.null)
     (by simp [recordList]))
   unfold FlockSoundness.Discharge.Exec.recordDraw
   rw [hp]
   dsimp only
   rw [hdv]
-  unfold DrawOk at hdraw
+  unfold SampleOk at hdraw
   revert hdraw hdvs
-  cases spec.unitDraw with
+  cases spec.unitSample with
   | none =>
     intro _ hdvs
     simp only [Option.getD_none] at hdvs
@@ -466,7 +466,7 @@ theorem recordDrawZk_ofFieldsJ {h : ByteArray → ByteArray} {spec : SessionSpec
 `decode_recordObjZk`. -/
 theorem decode_recordObjZkJ {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64)
     {spec : SessionSpec} (hn : spec.tables.toList.Nodup) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct)
-    {hz : String} (hH : HelloOk spec hz) (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
+    {hz : String} (hH : HelloOk spec hz) (hdraw : SampleOk spec) (hsig : 0 < spec.sigma.size)
     {rootB : Array ByteArray} (hrbs : rootB.size = spec.tables.size) (hrb : ∀ rb ∈ rootB, 0 < rb.size)
     {points : Array (Array F128)} (hpts : points.size = spec.points) (hpm : ∀ p ∈ points, p.size = spec.mPts)
     {streams : Array (Array Round)} (hss : streams.size = spec.repStreams.size)
@@ -476,7 +476,7 @@ theorem decode_recordObjZkJ {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).si
       (printJ (recordObjZk spec h hz ct rootB points streams proofs)) =
       .ok (sessOf spec h rootB points streams proofs) := by
   obtain ⟨m, kvs, hown, hm, hkv, hco, hg, hc⟩ := hH.obj
-  have hgood := good_recordObjZkJ hn h hz ct hrbs points streams proofs (good_draw hdraw)
+  have hgood := good_recordObjZkJ hn h hz ct hrbs points streams proofs (good_sample hdraw)
   obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ hgood
   have hh : Record.str j "hello" = .ok hz :=
     str_same hs (recordObjZk_fields spec h hz ct _ points streams proofs (v := Json.str hz)
@@ -489,7 +489,7 @@ theorem decode_recordObjZkJ {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).si
 
 /-- **`liveOf` reads the printed honest masked record** at any number of tables named distinctly. -/
 theorem live_recordObjZkJ {h : ByteArray → ByteArray} {spec : SessionSpec}
-    (hn : spec.tables.toList.Nodup) (hd : Good (spec.unitDraw.getD Json.null)) (hz : String) (ct : CoinTree.Spec)
+    (hn : spec.tables.toList.Nodup) (hd : Good (spec.unitSample.getD Json.null)) (hz : String) (ct : CoinTree.Spec)
     {rootB : Array ByteArray} (hrbs : rootB.size = spec.tables.size) {points : Array (Array F128)}
     {streams : Array (Array Round)} (hss : streams.size = spec.repStreams.size) (proofs : Array ByteArray) :
     liveOf spec (printJ (recordObjZk spec h hz ct rootB points streams proofs)) =
@@ -499,17 +499,17 @@ theorem live_recordObjZkJ {h : ByteArray → ByteArray} {spec : SessionSpec}
 
 /-- **The honest masked record's sample is the statement's**, up to key order (`JsonEquiv`), at any number of tables
 named distinctly. -/
-theorem recordDraw_recordObjZkJ {h : ByteArray → ByteArray} {spec : SessionSpec}
-    (hn : spec.tables.toList.Nodup) (hdraw : DrawOk spec) (hz : String) (ct : CoinTree.Spec)
+theorem recordSample_recordObjZkJ {h : ByteArray → ByteArray} {spec : SessionSpec}
+    (hn : spec.tables.toList.Nodup) (hdraw : SampleOk spec) (hz : String) (ct : CoinTree.Spec)
     {rootB : Array ByteArray} (hrbs : rootB.size = spec.tables.size) (points : Array (Array F128))
     (streams : Array (Array Round)) (proofs : Array ByteArray) :
-    match spec.unitDraw with
+    match spec.unitSample with
     | none => FlockSoundness.Discharge.Exec.recordDraw (printJ (recordObjZk spec h hz ct rootB points streams proofs)) =
         none
     | some d => ∃ d', FlockSoundness.Discharge.Exec.recordDraw
         (printJ (recordObjZk spec h hz ct rootB points streams proofs)) = some d' ∧ FlockDeploy.JsonEquiv d' d :=
-  recordDrawZk_ofFieldsJ (h := h) (spec := specZ spec hz) hdraw rootB points streams proofs
-    (good_recordObjZkJ hn h hz ct hrbs points streams proofs (good_draw hdraw))
+  recordSampleZk_ofFieldsJ (h := h) (spec := specZ spec hz) hdraw rootB points streams proofs
+    (good_recordObjZkJ hn h hz ct hrbs points streams proofs (good_sample hdraw))
     fun hm => recordObjZk_fields _ _ _ _ _ _ _ _ hm
 
 end FlockComplete.ZkTables

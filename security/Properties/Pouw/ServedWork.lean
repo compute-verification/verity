@@ -1,23 +1,23 @@
 module
 
 public import Definitions.Pouw.Assumptions.ServedWork
-public import Properties.Pouw.PeriodJ10R
+public import Properties.Pouw.MonitoringPeriodJ10R
 
 /-!
 # The served PoUW protocol's work: priced work on the prover's machines from an accepted period
 
-`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` says what an accepted period of served H1 (`PouwCheck.Credit.periodCredit`,
+`Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod` says what an accepted period of served H1 (`PouwCheck.Credit.periodCredit`,
 the verdict `PouwCheck.Credit.window` on each window, J10-R's noise) fixes: except with probability
 `δ_s + n·(δ_bind + δ_ks)`, its fixed words are at least `(1 − ε(j))₊` of the live words of its windows before the first
 refusal. `ServedWork` turns those words into work: the prover's machines, wherever they ran, spent at least `p` a
 credited word of that, less the luck allowance, except with that probability plus `n·κ_deg(B)`.
 
 It is the remote form. The prover's machines are its whole inventory, one machine of the accelerator model 𝓜
-(`Pouw.Dither.Accel`) with its device premises (G1, G2, P1, P2) as hypotheses; no network certifier, wipe or latency
+(`Pouw.Dither.Accel`) with its device premises (G1, G2, P1, P2) as hypotheses; no network attester, wipe or latency
 check enters, and no outside machine is priced: every program of the inventory exchanges no bits with machines outside
 it (`G.ext = 0`), which is what "the inventory" means. The claim is about the work, not where it ran.
 
-* `saltCoin`: window `w`'s round-0 coin, the coin its salt is (`Properties.Pouw.Period.SaltIsLiveCoin`) and its tiles'
+* `saltCoin`: window `w`'s round-0 coin, the coin its salt is (`Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin`) and its tiles'
   noise reads (`j10rAtCoin`).
 * `FixedBeforeSalt`: a function of the period's coins and a window that reads only the windows before it, so it is fixed
   before that window's salt.
@@ -54,8 +54,8 @@ The proof is `Proofs.Pouw.ServedWork`; `Proofs.Pouw.ServedWork.Honest` has its h
 
 namespace Properties.Pouw.Served
 
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Properties.Pouw.PeriodJ10R
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open Properties.Pouw.MonitoringPeriodJ10R
 
 /-- **Window `w`'s salt coin**: its round-0 coin, which `SaltIsLiveCoin` makes its salt and `j10rAtCoin`'s noise reads. -/
 def saltCoin {C B : Type} {m n : ℕ} (hm : 0 < m) (x : Paths (Paths C m × B) n) (w : Fin n) : C :=
@@ -76,7 +76,7 @@ def FixedAreRight {Ω K T L U : Type} {n : ℕ} (Pl : Play Ω n K T L U) (right 
   ∀ x, Pl.accepts x → n * (Pl.run x).fixed ≤ ∑ w, right x w
 
 /-- **The served PoUW protocol's work** (H1, J10-R, `Credit.window`'s verdict), in the remote form. Under
-`H1J10RCheckedCreditPeriod`'s premises and setting, let the prover's whole inventory be one machine `G` of 𝓜 at its
+`H1J10RCheckedCreditMonitoringPeriod`'s premises and setting, let the prover's whole inventory be one machine `G` of 𝓜 at its
 device premises, whose window-`w` program `work x w` exchanges no bits outside it and reads the window's salt coin
 (`saltCoin`) and advice `state x w` of at most `B` bits, on the registrable instance `inst x w`, all three fixed before
 the salt (`FixedBeforeSalt`). With SAK at the served words (`SAKServed`: `p ≥ 0` a credited word, luck `lam`, degenerate
@@ -89,7 +89,7 @@ def ServedWork : Prop :=
     [Nonempty C] [Nonempty Ξ] [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι)
     {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ tileCount σ sT) (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1)
-    (_hKd : 1 ≤ k sT) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
+    (_hKd : 1 ≤ k sT) (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ sT) → (ℕ → V) → Prop)
@@ -114,7 +114,7 @@ def ServedWork : Prop :=
       (j10rAtCoin hr enc place tile)).MovedIn x w) ≤ δbind) →
     RegisteredBeforeDraw ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
-    Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
+    Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
         (j10rAtCoin hr enc place tile))
       (monitoringPeriodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)

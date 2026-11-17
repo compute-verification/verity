@@ -26,8 +26,8 @@ a PR (a ``Queue: #N`` merge), else its merge base with ``MAIN``, as `markdown_ca
   fails, naming each module that went, the mentions that kept it (each at its file and line at ``LO``) and the fix.
 
 It runs ``MAIN``'s `unread.py`, `lean_audit.py` and their helpers (`git archive`, `CODE`), so the change it judges can't change
-how it is judged, and it builds nothing; it runs git under `LOCALE`, so the host's locale can't either. Drive judges every PR
-of `next` again whenever `main` moves, so the gate keeps each verdict by the trees it judged and the code that judged it
+how it is judged, and it builds nothing; it runs git under `LOCALE`, so the host's locale can't either. The queue judges every
+marked PR again whenever `main` moves, so the gate keeps each verdict by the trees it judged and the code that judged it
 (`gate`), and what the Lean declares by the Lean's tree (`declared`). Before marking a branch, run ``python3 tools/verity/lean/unread_gate.py origin/main
 HEAD``. Exit 0 when it passes, 1 when it fails (``--json``: `{"failures": [{"why", "fix"}]}`, `KIND`), 2 when it can't judge: a
 git error, `MAIN`'s code doesn't load, or neither tree's facts nor an ancestor's are kept here or stored.
@@ -45,17 +45,18 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from collections import defaultdict
 from pathlib import Path
 
 KIND = "lean-unread-gate/v1"
-#: the subject of the queue's merge of one PR onto `next`
+#: the subject of the queue's merge of one PR onto a candidate's base
 QUEUE_SUBJECT = "Queue: #"
 LEAN_TOOL = "tools/verity/lean/"
 #: what a Lean check reads (drive's `lean_reads`): a change to any of it is the Lean check's to judge
 LEAN_READS = (".lean", "lakefile.toml", "lakefile.lean", "lean-toolchain", "lake-manifest.json", "lean-audit.json")
 #: ``MAIN``'s code the gate runs: the Lean tools (not their tests) and what `lean_audit.py` loads
-COMMON = "tools/verity/check/common.py"
+COMMON = "tools/check/common.py"
 CODE = (f":(glob){LEAN_TOOL}*", COMMON, "tools/verity/graph/verity_graph/contract.py")
 #: what a kept verdict's key holds of ``MAIN``: `CODE`'s trees (the Lean tools with their tests: a superset)
 CODE_TREES = (LEAN_TOOL.rstrip("/"), *CODE[1:])
@@ -70,8 +71,11 @@ SCAN = 64
 ANCESTORS, ANCESTOR_CHECKS = 300, 8
 #: a recorded check that ended
 ENDED = "state IN ('done', 'failed', 'cancelled')"
-#: how many facts files this gate keeps in its cache, the last used first; how many `declared` sets; how many verdicts (drive
-#: judges each PR of `next` again on every landing)
+#: how long before a commit's committer time a check of it may have started by its run id: the commit's clock and the
+#: check's machine's are not one
+SKEW_S = 3600
+#: how many facts files this gate keeps in its cache, the last used first; how many `declared` sets; how many verdicts (the
+#: queue judges each marked PR again on every landing)
 KEPT, DECLARED_KEPT, VERDICTS_KEPT = 16, 16, 1024
 #: a recorded check's facts of the package with key K: `unread/K.jsonl.gz` under its lean-audit output
 STORED = re.compile(r"(?:.*/)?lean-audit/unread/([0-9a-f]{64})\.jsonl\.gz")
@@ -88,6 +92,8 @@ GONE = ("unread", "unread aggregator")
 #: the locale git runs under: its patterns match characters, whatever the host's default (`C`'s match bytes, and cut a name
 #: inside a character)
 LOCALE = "C.UTF-8"
+#: how long `archive` waits for git once its tar has ended: it has at most a record of zeros left to write
+ARCHIVE_TAIL_S = 120
 
 
 class GitError(RuntimeError):
@@ -144,14 +150,22 @@ def blobs(rev: str, paths: list[str]) -> dict[str, bytes | None]:
 
 
 def archive(rev: str, dest: Path, *paths: str) -> Path:
-    """``rev``'s tree (its ``paths``, as git pathspecs, when given) written under ``dest``."""
+    """``rev``'s tree (its ``paths``, as git pathspecs, when given) written under ``dest``.  The tar reader stops at the end
+    marker, and git writes a record of zeros after it when the marker leaves under 1024 bytes of its record: that record is
+    read off before the wait, since a pipe holds less than a record where its user is over `fs.pipe-user-pages-soft`."""
     dest.mkdir(parents=True, exist_ok=True)
     p = subprocess.Popen(["git", "archive", "--format=tar", rev, *(["--", *paths] if paths else [])], stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE, env=git_env())
     with tarfile.open(fileobj=p.stdout, mode="r|") as t:
         t.extractall(dest, filter="data")
-    if p.wait():
-        raise GitError(f"git archive {rev[:12]}: {p.stderr.read().decode(errors='replace').strip()[-300:]}")
+    try:
+        _, err = p.communicate(timeout=ARCHIVE_TAIL_S)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        p.communicate()
+        raise GitError(f"git archive {rev[:12]}: still running {ARCHIVE_TAIL_S} s after its tar ended (killed)") from None
+    if p.returncode:
+        raise GitError(f"git archive {rev[:12]}: {err.decode(errors='replace').strip()[-300:]}")
     return dest
 
 
@@ -290,7 +304,7 @@ def declared(lo: str, cache: Path | None = None) -> tuple[set[str], set[str]]:
     """What the names the Lean under `ANALYSIS_DIR` declares at ``lo`` can start and end with (each a `WORD`): the first
     component of a `namespace` or of a name a keyword of `DECLARED` declares, and a private name's `_private`; the last
     component of such a name, or of a helper first on a line of a definition's `WHERE` block.  Kept in ``cache`` by the tree
-    of `ANALYSIS_DIR` (`declared/K.json`): every PR of `next` above the same Lean reads the same."""
+    of `ANALYSIS_DIR` (`declared/K.json`): every PR above the same Lean reads the same."""
     f = cache / "declared" / f"{digest(own(), lean_tree(lo))}.json" if cache is not None else None
     if f is not None and (got := kept(f)) is not None:
         return set(got["heads"]), set(got["lasts"])
@@ -336,18 +350,30 @@ def plausible(lo: str, gone: dict[tuple[str, str], list[str]], cache: Path | Non
     return {s: fs for s, fs in gone.items() if could(*s)}
 
 
+#: the store and the start (seconds since the epoch) of the attempts this run refreshed it from, once it has
 _STORE: list = []
 
 
-def evidence_store():
-    """This machine's evidence store, its attempts refreshed once a run: every lookup of one gate's run reads it."""
+def started_by(commits: list[str] | tuple[str, ...]) -> float:
+    """When a recorded check of any of ``commits`` started at the earliest: the oldest one's committer time, less `SKEW_S`
+    (with none, `SKEW_S` before now: the newest checks)."""
+    times = [int(t) for t in git_text("show", "-s", "--format=%ct", *commits).split()] if commits else [int(time.time())]
+    return min(times) - SKEW_S
+
+
+def evidence_store(since: float):
+    """This machine's evidence store, with the attempts started after ``since`` (seconds since the epoch) refreshed from its
+    remote, once a run unless a later lookup asks for older ones. A lookup reads checks of commits (`started_by`) or the
+    newest: the remote holds every attempt ever started, and listing them all and fetching those this machine lacks grows
+    with the store past what a ready mark's preflight gives the gate."""
     if not _STORE:
         from research.store.local import LocalStore
-        store = LocalStore()
-        if store.remote is not None:
-            store.refresh(attempts_only=True)
-        _STORE.append(store)
-    return _STORE[0]
+        _STORE[:] = [LocalStore(), None]
+    store, done = _STORE
+    if store.remote is not None and (done is None or since < done):
+        store.refresh(attempts_only=True, since=time.strftime("r%Y%m%d-%H%M%S", time.gmtime(since)))
+        _STORE[1] = since
+    return store
 
 
 def checked_commits(line: list[str], recorded: str, store=None) -> tuple[list[str], list[str]]:
@@ -355,8 +381,9 @@ def checked_commits(line: list[str], recorded: str, store=None) -> tuple[list[st
     kept the store from being read, if anything."""
     if not line:
         return [], []
+    since = started_by(line) if store is None else 0.0
     try:
-        store = evidence_store() if store is None else store
+        store = evidence_store(since) if store is None else store
         rows = store.index.sql(f"SELECT DISTINCT source_commit FROM attempts WHERE {recorded} AND {ENDED} "
                                f"AND source_commit IN ({', '.join('?' * len(line))})", tuple(line))
     except Exception as e:  # noqa: BLE001  (no store here: the gate says it can't judge, naming why)
@@ -375,11 +402,9 @@ def stored(keys: dict[str, str], cache: Path, recorded: str, store=None, scan: i
     got: dict[str, Path] = {}
     errors: list[str] = []
     ended = f"{recorded} AND {ENDED}"
+    since = started_by(commits) if store is None else 0.0
     try:
-        if store is None:
-            store = evidence_store()
-        elif store.remote is not None:
-            store.refresh(attempts_only=True)
+        store = evidence_store(since) if store is None else store
         rows = [*(store.index.sql(f"SELECT id FROM attempts WHERE {ended} AND source_commit IN ({', '.join('?' * len(commits))}) "
                                   "ORDER BY start_utc DESC", commits) if commits else []),
                 *store.index.sql(f"SELECT id FROM attempts WHERE {ended} ORDER BY start_utc DESC LIMIT ?", (scan,))]
@@ -527,7 +552,7 @@ def judge(U, LA, base: str, lo: str, top: str, gone: dict[tuple[str, str], list[
 def gate(base: str, top: str) -> dict:
     """The verdict on ``top``'s change: one kept for the same trees (``LO``'s and ``top``'s) by the same code (this script,
     ``base``'s `CODE_TREES`), and for one on `main`'s facts the same `main` Lean, else `judged` and kept (`verdicts/K.json`).
-    Drive judges every PR of `next` again when `main` moves, and a PR whose members below are the same has the same trees.
+    The queue judges every marked PR again when `main` moves, and a PR whose members below are the same has the same trees.
     A verdict on stale facts isn't kept, so a later run reads the facts of the Lean it judges once they are published; a gate
     that can't judge raises, and keeps nothing."""
     base, top = (git_text("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))

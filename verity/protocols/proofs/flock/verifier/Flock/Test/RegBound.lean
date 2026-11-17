@@ -1,5 +1,5 @@
 /-
-`RegBound.check`, which `flock-verify` runs on every statement whenever `--registered` is given: without bound ports it is
+`RegBound.check`, which `verity-verify-proof` runs on every statement whenever `--registered` is given: without bound ports it is
 `Registered.checkComplete`; with them, `Flock.Test.RegComplete`'s lane statement, whose index row `pub` is committed afresh,
 passes when the verifier's file binds `pub` at the public header's frame-v3-sha512 root and domain, and is refused when it
 binds it at another root or domain, binds a port the circuit lacks or a registered port, or leaves `pub` out. A port named
@@ -21,7 +21,7 @@ meta import Flock.RegBound
 # Tests of `Flock.RegBound`
 
 `#guard`s over `RegBound.check`, `RegBound.ofJson` and `RegBound.declaredOf`, built on `Flock.Test.RegComplete`'s
-lane statement and `Flock.Test.RegCover`'s templates: `run` reads a `--registered` file as `flock-verify` does, and
+lane statement and `Flock.Test.RegCover`'s templates: `run` reads a `--registered` file as `verity-verify-proof` does, and
 each guard pins an acceptance or a refusal's words. No module imports it: it is a root of the package's Lean check (`roots` in
 `lean-audit.json`), whose build runs its guards.
 -/
@@ -59,7 +59,7 @@ def boundOf (ports : List (String × ByteArray × ByteArray)) : Json :=
 def file (bound : Json) (format : String := Registered.FORMAT) : Json :=
   Json.mkObj [("format", Json.str format), ("ports", Json.mkObj [("w", wEntry)]), (RegBound.KEY, bound)]
 
-/-- `flock-verify`'s registered reads of `f`: the file's bound ports and registered reads, `Registered.check`, then
+/-- `verity-verify-proof`'s registered reads of `f`: the file's bound ports and registered reads, `Registered.check`, then
 `RegBound.check` under the verifier's program and the window's interface `declared`. -/
 def run (f : Json) (program : Option ByteArray := some plain) (declared : Option (Array (String × String)) := some decl) :
     Except String Unit := do
