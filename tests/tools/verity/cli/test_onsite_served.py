@@ -546,8 +546,8 @@ def test_the_workloads_piece_is_the_prover_nodes_first_and_each_verb_it_names_is
 
 
 #: what the adapter's `run.sh settings MODEL -- verity run ...` sets of the node the workload runs on
-NODE_SETTINGS = ("VENV", "CUDA_HOME", "HF_HOME", "FLOCK_WORK", "DISK_FLOOR_GB", "HIDDEN_SO", "NORM_TAP_SO", "SERVE_ROOT",
-                 "ROW", "ROW_ID")
+NODE_SETTINGS = ("VENV", "CUDA_HOME", "HF_HOME", "FLOCK_WORK", "DISK_FLOOR_GB", "HIDDEN_SO", "NORM_TAP_SO",
+                 "SERVE_ROOT", "ROW", "ROW_ID")
 
 
 def test_the_workloads_piece_hands_the_runner_the_nodes_settings(tmp_path, capsys, monkeypatch):
