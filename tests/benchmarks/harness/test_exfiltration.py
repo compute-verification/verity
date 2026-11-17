@@ -97,8 +97,17 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert code == 2 and out == "" and "verity bench exfiltration: " in err and "none.json" in err
     # this machine's catalog alone holds no label
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "alone"))
+    clone = ("with only a clone, run `uv run verity bench exfiltration --from benchmarks/exfiltration/made_up`, a made-up "
+             "record, printed as made up\n")
     code, _, err = run("--local-only")
-    assert code == 2 and "no planner rows of record: nothing in the store carries" in err
+    assert code == 2 and "no planner rows of record: nothing in the store carries" in err and err.endswith(f"); {clone}")
+    # and no store remote is configured at all
+    for name in ("R2_ENDPOINT", "R2_BUCKET"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "no-store.toml"))
+    code, out, err = run()
+    assert code == 2 and out == "" and "the evidence store has no remote here" in err
+    assert err.endswith(f"pass --local-only to read this machine's catalog alone; {clone}")
 
 
 def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_the_same(tmp_path, monkeypatch, capsys):

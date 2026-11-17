@@ -1,10 +1,8 @@
 """A Commit run publishes only listed files. `research run` publishes what a script leaves under $OUT, its stdout and the
-other files of its run dir, so `adapters/vllm/tools/served_run/commit.sh` and `a5_llama1b_h200.sh` put a row's file there only when
-`adapters/vllm/tools/served_run/published.sh` lists it with the reason it holds nothing of a request, and name the files they leave on the node.
-Here the list never matches a file known to hold a value; each script's `row` and `records` run over a stand-in row dir with
-values planted in every file a stage leaves; and the demo's Commit runs whole in a toy tree under a stub of vLLM's venv, where
-its run dir gains only listed files, its stdout no planted value, the evidence store nothing, and its bundle stays in the row
-dir. A file the published set gains without an entry fails `unlisted`."""
+other files of its run dir, so `a5_llama1b_h200.sh` puts a row's file there only when
+`adapters/vllm/tools/served_run/published.sh` lists it with the reason it holds nothing of a request, and names the files it leaves on the node.
+Here the list never matches a file known to hold a value, and the script's `row` and `records` run over a stand-in row dir with
+values planted in every file a stage leaves. A file the published set gains without an entry fails `unlisted`."""
 from __future__ import annotations
 
 import fnmatch
@@ -16,11 +14,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 PUBLISHED_SH = ROOT / "adapters" / "vllm" / "tools" / "served_run" / "published.sh"
-COMMIT_SH = ROOT / "adapters" / "vllm" / "tools" / "served_run" / "commit.sh"
 A5_SH = ROOT / "benchmarks" / "one_stage" / "a5_llama1b_h200.sh"
 ROW = "llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 #: what every file a stage leaves carries here, and no path can
@@ -64,13 +60,11 @@ with open(d / "row.log", "a") as f:
     f.write(planted + "\\n")
 with open(d / "stages.txt", "a") as f:
     f.write(f"{stage} PASS 2026-01-01T00:00:00Z {planted}\\n{stage} T_r=17 2026-01-01T00:00:00Z {planted}\\n{planted}\\n")
-# what `row run` leaves in its run dir (the one it is given, else the runner's) and a stage that writes into $OUT
+# what `row run` leaves in its run dir (the one it is given, else the runner's)
 run_dir = Path(a[a.index("--research-run-dir") + 1] if "--research-run-dir" in a else os.environ["RESEARCH_RUN_DIR"])
 for rel in ("result.json", "evidence/row.log", f"serving-rows/{a[2]}/m0-private.bin"):
     (run_dir / rel).parent.mkdir(parents=True, exist_ok=True)
     (run_dir / rel).write_text(planted)
-if os.environ.get("STRAY_IN_OUT"):
-    (Path(os.environ["OUT"]) / f"{stage}.stray").write_text(planted)
 Path(os.environ["ARGS"]).write_text(json.dumps(a))
 print(planted)
 '''
@@ -131,7 +125,7 @@ def stub_venv(tmp: Path) -> tuple[Path, Path, dict[str, str]]:
                         "LEAVES": str(tmp / "leaves.json"), "PLANTED": PLANTED}
 
 
-def run_function(tmp: Path, script: Path, body: str, **environ: str) -> tuple[subprocess.CompletedProcess, Path, Path, Path]:
+def run_function(tmp: Path, script: Path, body: str) -> tuple[subprocess.CompletedProcess, Path, Path, Path]:
     """``body`` under bash after published.sh and the script's `row` and `records`, over a row dir a stub's stages fill: the
     result, the row dir, $OUT and KEPT."""
     tree, base, out, run_dir = tmp / "tree", tmp / "base", tmp / "run" / "out", tmp / "run"
@@ -143,12 +137,9 @@ def run_function(tmp: Path, script: Path, body: str, **environ: str) -> tuple[su
     code = (f". {q(str(PUBLISHED_SH))}\nTREE={q(str(tree))} PY={q(str(venv / 'python'))} ROW={ROW} ROLE=R REPO=r REV=0 BASE={q(str(base))}\n"
             f"D={q(str(d))} KEPT={q(str(kept))} WD={q(str(window))} FA3=a FA3G=b NT=c\n"
             f"{function(script, 'row')}{function(script, 'records')}{body}\n")
-    got = subprocess.run(["bash", "-uc", code], env={**env, **environ, "OUT": str(out), "RESEARCH_RUN_DIR": str(run_dir)}, stdin=subprocess.DEVNULL,
+    got = subprocess.run(["bash", "-uc", code], env={**env, "OUT": str(out), "RESEARCH_RUN_DIR": str(run_dir)}, stdin=subprocess.DEVNULL,
                          capture_output=True, text=True)
     return got, d, out, kept
-
-
-SCRIPTS = pytest.mark.parametrize("script", [COMMIT_SH, A5_SH], ids=["commit.sh", "a5_llama1b_h200.sh"])
 
 
 def test_every_entry_says_why_and_none_matches_a_file_that_holds_a_value():
@@ -171,9 +162,8 @@ def test_a_published_file_with_no_entry_is_found(tmp_path):
     assert unlisted(tmp_path) == ["match/spec.json", "steps.txt", "stray.json", "verdicts.txt"]
 
 
-@SCRIPTS
-def test_a_stage_gets_a_run_dir_on_the_node_and_prints_verdict_words_alone(tmp_path, script):
-    got, d, out, kept = run_function(tmp_path, script, "row build --stages build")
+def test_a_stage_gets_a_run_dir_on_the_node_and_prints_verdict_words_alone(tmp_path):
+    got, d, out, kept = run_function(tmp_path, A5_SH, "row build --stages build")
     assert got.returncode == 0, got.stderr
     args = json.loads((tmp_path / "args.json").read_text())
     assert args[args.index("--research-run-dir") + 1] == str(kept), "the stage's result and record copies go to KEPT, on the node"
@@ -184,17 +174,13 @@ def test_a_stage_gets_a_run_dir_on_the_node_and_prints_verdict_words_alone(tmp_p
     assert "build PASS 2026-01-01T00:00:00Z" in got.stdout.splitlines()
 
 
-@SCRIPTS
-def test_records_copies_only_listed_files_and_names_the_ones_it_leaves(tmp_path, script):
+def test_records_copies_only_listed_files_and_names_the_ones_it_leaves(tmp_path):
     body = "".join(f"row {s} --stages {s} > /dev/null\n" for s in STAGES) + "records\n"
-    # only the demo's Commit holds all of $OUT to the list: a5's $OUT also keeps its audit's and its window's files
-    holds = script == COMMIT_SH
-    got, d, out, kept = run_function(tmp_path, script, body, **({"STRAY_IN_OUT": "1"} if holds else {}))
+    got, d, out, kept = run_function(tmp_path, A5_SH, body)
     assert got.returncode == 0, got.stderr
     assert unlisted(out) == []
     assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()) == sorted([*row_records(), "steps.txt", "verdicts.txt"])
     assert all((d / rel).is_file() for rel in leaves()["match"]), "a file left out stays where it was"
-    assert all((kept / "out" / f"{s}.stray").is_file() for s in STAGES) == holds, "and one found in $OUT moves to KEPT"
     assert (out / "verdicts.txt").read_text() == "".join(f"{s} PASS 2026-01-01T00:00:00Z\n" for s in STAGES)
     left = next(line for line in got.stdout.splitlines() if line.startswith("not published (no entry in published.sh), left in " + str(d)))
     for rel in ("match/spec.json", "stray.json", "match/stray.json", "stages.txt", "row.log", "commit.log", "build_request_LPN_TN/digest.txt"):
@@ -202,26 +188,3 @@ def test_records_copies_only_listed_files_and_names_the_ones_it_leaves(tmp_path,
     assert "4096" not in left.split(": ", 1)[1], "a number in a left file's name is masked: a row dir's names carry lengths"
     assert PLANTED not in got.stdout + got.stderr
     assert (kept / "sizes.txt").is_file() and not (out / "sizes.txt").exists()
-
-
-def test_the_demos_commit_publishes_listed_files_alone_and_leaves_its_bundle_on_the_node(tmp_path):
-    tree, run_dir, root = tmp_path / "tree", tmp_path / "runs" / "r-toy", tmp_path / "llama"
-    (tree / "adapters" / "vllm").mkdir(parents=True)
-    venv, _, env = stub_venv(tmp_path)
-    env.update({"OUT": str(run_dir / "out"), "STRAY_IN_OUT": "1", "RESEARCH_RUN_ID": "r-toy", "RESEARCH_RUN_DIR": str(run_dir), "ROW": ROW, "ROLE": "LLAMA32_1B",
-                "REPO": "unsloth/Llama-3.2-1B", "REV": "9535bd9b", "VENV": str(venv.parent), "CUDA_HOME": str(tmp_path),
-                "HF_HOME": str(tmp_path), "LLAMA_ROOT": str(root)})
-    got = subprocess.run(["bash", str(COMMIT_SH)], cwd=tree, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True)
-    calls = [line.split()[0] for line in (tmp_path / "calls.txt").read_text().splitlines()]
-    assert calls == ["keep"], f"commit.sh's `research` calls are its keep of the node's root alone, never a put: {calls}"
-    assert got.returncode == 0, got.stdout + got.stderr
-    assert sorted(p.name for p in run_dir.iterdir()) == ["out"], "the run dir, which the run publishes beside $OUT, gains no other file"
-    assert unlisted(run_dir / "out") == []
-    assert sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*") if p.is_file()) == sorted(
-        f"out/{rel}" for rel in [*row_records(), "machine.txt", "steps.txt", "verdicts.txt", "bundle.sha256"])
-    assert PLANTED not in got.stdout + got.stderr, "the run's stdout is published too"
-    d, kept = root / "r-toy" / ROW, root / "r-toy" / "unpublished"
-    assert all((d / rel).read_text() == PLANTED for rels in VALUES.values() for rel in rels), "the prompts, the bundle, the keep and the token records stay in the row dir"
-    on_node = [*(f"{s}.out" for s in STAGES), *(f"out/{s}.stray" for s in STAGES), "result.json", "evidence/row.log", "sizes.txt"]
-    assert all((kept / rel).is_file() for rel in on_node), "each stage's output, what it wrote for the runner and what it left in $OUT stay on the node"
-    assert sum(line.startswith("not published (no entry in published.sh), left in ") for line in got.stdout.splitlines()) == 2

@@ -41,7 +41,7 @@ POINTS_RECORD, RUN_RECORD = "overhead-points", "overhead"
 POINTS_KIND = "verity-bench-overhead-points/v1"
 BY = "benchmarks"
 #: each card's GPU node, where `--on` names none
-NODES = {"h200": "vy-dc-h200"}
+NODES = {"h200": "vy-spot-glm53"}
 NODE_JOB = "benchmarks/harness/overhead_node.sh"
 #: the options the door gives each node job (`launch_points`, `launch_run`); the node job sets the rest itself
 DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},

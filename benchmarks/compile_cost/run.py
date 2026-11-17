@@ -38,9 +38,11 @@ from pathlib import Path
 
 from verity.device import load_card
 
+CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
+
 MINUTES, PEAK = "circuits/window-compile-minutes", "circuits/window-compile-peak-memory"
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
-TARGET = {"compute_capability": [9, 0], "num_sms": load_card("h200-sxm-141gb")["sm"]["count"]["value"], "batch_invariant": False,
+TARGET = {"compute_capability": [9, 0], "num_sms": load_card("h200-sxm-141gb", directory=CARD_FILES)["sm"]["count"]["value"], "batch_invariant": False,
           "attention_backend": None,
           "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": "NVIDIA H200",
           "moe_backend": "triton"}
@@ -206,9 +208,9 @@ def instrument(m: Meter) -> None:
     defs.Builder.finish = top_finish
 
 
-def main() -> int:
+def parse(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--window", choices=sorted(WINDOWS), default=None)
+    ap.add_argument("--window", choices=sorted(WINDOWS), default=None, help="default: long-w0, unless --requests")
     ap.add_argument("--requests", default=None, help="ARRIVE:LP:MAX_TOKENS,... in place of --window")
     ap.add_argument("--rank", type=int, default=0)
     ap.add_argument("--execution", choices=("eager", "compiled"), default="eager",
@@ -220,11 +222,18 @@ def main() -> int:
     ap.add_argument("--guard", action="store_true", help="exit 1 unless the digests are the window's PINS")
     ap.add_argument("--engine", default=None, help="KEY=INT,... over class G's engine (max_model_len, max_num_batched_tokens, "
                     "long_prefill_token_threshold)")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
+    if a.window and a.requests:
+        ap.error("one of --window and --requests")
+    if not a.requests:
+        a.window = a.window or "long-w0"
+    return a
+
+
+def main() -> int:
+    a = parse()
     if a.engine:
         ENGINE.update({k: int(v) for k, v in (kv.split("=") for kv in a.engine.split(","))})
-    if (a.window is None) == (a.requests is None):
-        ap.error("one of --window and --requests")
     reqs = WINDOWS[a.window] if a.window else [tuple(int(x) for x in r.split(":")) for r in a.requests.split(",")]
     from verity_bench import settings
     out = Path(a.out or settings.OUT or Path(settings.RESEARCH_RUN_DIR) / "out")

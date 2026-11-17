@@ -62,7 +62,9 @@ done
 exit \$rc
 EOF
 # a chunk times in about a minute: the lease is 2 minutes a chunk and 5 more, so a big batch isn't cut off mid-chunk
-gpu-lease 1 --wait --max-min $(( ${#bins[@]} * 2 + 5 )) -- bash "$WORK/time.sh"
+lease=(gpu-lease 1 --wait --max-min $(( ${#bins[@]} * 2 + 5 )) --)
+[ -n "${GPU_LEASE_UUID:-}" ] && lease=()
+"${lease[@]}" bash "$WORK/time.sh"
 rc=$?
 cat "$OUT"/chunks/*/rows.jsonl >"$OUT/rows.jsonl" 2>/dev/null
 python3 "$HERE/loads.py" table "$OUT/rows.jsonl" >"$OUT/loads.jsonl"

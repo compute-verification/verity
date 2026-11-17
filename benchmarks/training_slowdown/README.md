@@ -12,17 +12,21 @@ today: its commands are documented as they are, and none of them is a routine st
 ## Try it
 
 The library of training algorithms traces each entry's step on a CPU, on fake tensors, and reads its slowdown under
-its policy. It trains nothing. From this directory:
+its policy. It trains nothing. From the repository's root:
 
 ~~~sh
-uv run --project ../.. python -m training_slowdown.library s-t20-1.1x-adamw
+uv sync --all-packages --extra torch-cpu
+uv run verity bench training_slowdown s-t20-1.1x-adamw --library --root DIR
 ~~~
 
 It prints one line an entry: the share of the start's parameters its step trains, the dtypes its products are priced
 in, its slowdown under its policy and what binds. Then it prints the statement each slowdown rests on, the planned run
 as a share of one datacenter's and of the world's compute over each period, and which parts are traced, approximated,
-proved, premises and scaled. torch logs tracebacks from its fake tensors on the way; the command still exits 0. Given
-no entry, it reads every entry of `attacks/`.
+proved, premises and scaled. torch logs tracebacks from its fake tensors on the way; the command still exits 0. Its
+slowdown is the bound on one traced step at the entry's policy, with no entry trained. It runs no job and reads no
+store, and in `DIR` it writes `library.json` and the metric's point, `partial`, with the entry as its `member` and its
+start as its `model`, which it prints last. The library's own command (`library.py`, below) takes any entries, and
+every entry of `attacks/` given none.
 
 ## What is here
 
@@ -39,11 +43,11 @@ no entry, it reads every entry of `attacks/`.
 Their commands, as the search ran them:
 
 ~~~text
-python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DIR]
+uv run python benchmarks/training_slowdown/training_slowdown/library.py [ENTRY ...] [--starts starts.toml] [--out DIR]
 python -m training_slowdown.of_record [ENTRY ...] --records DIR [--held of_record.toml] [--starts starts.toml] \
     [--out DIR]
-verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]] \
-    [--weights]
+verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME] \
+    | --library [--root DIR]] [--weights]
 python -m training_slowdown.run --config CONFIG.toml --seed 0 --split search|final --out OUT [--starts-root DIR] \
     [--device cuda] [--threads 8] [--keep-weights] [--state DIR]      # one job
 python -m training_slowdown.run --retrace RUN_JSON --out OUT   # a record with its trace taken again
@@ -55,9 +59,10 @@ python -m training_slowdown.grade --config attacks/NAME.toml --starts starts.tom
     [--also NAME=DIR ...] [--out OUT] [--as-if-assumed]
 ~~~
 
-Run the `python -m` commands from this directory in the workspace's environment, `uv run --project ../.. python -m
-training_slowdown.MODULE` (a bare `uv run` here makes an environment of this directory's own, without the workspace's
-packages). The grader runs from `grader/`:
+Run `verity bench` from the repository's root and the `python -m` commands from this directory, each in the
+workspace's environment, which `uv sync --all-packages --extra torch-cpu` at the root makes: `uv run verity bench ...`
+and `uv run --project ../.. python -m training_slowdown.MODULE` (a bare `uv run` here makes an environment of this
+directory's own, without the workspace's packages). The grader runs from `grader/`:
 
 ~~~text
 python grader.py HANDOVER --slowdown-code DIR --commit SHA [--trace STEP.products.json] --out OUT.json
