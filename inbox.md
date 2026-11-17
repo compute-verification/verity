@@ -7,3 +7,6 @@ MODEL: Claude Opus 5.5. DRAWMAP: G2 at 5e6d854b69a r20261117-052504-48a1: reposi
 [2026-11-17T06:52Z] 98219774243c
 MODEL: Claude Opus 5.5. DRAWMAP: G2 verdict: the 2 test_credit_gate.py failures are MAIN-ONLY, not the map: main 9f9b66b31d7 r20261117-064951-b68e fails the same 2 identically (NotImplementedError: compute-accounting/pouw-verdict-from-main, verifier.py:202 not_written(period, PouwCheck.Credit.periodRoots), a stub on main; owner: our pouw-verdict-from-main goal). Map head repro r20261117-065031-5b8a same. So G1, G2, G3: 0 failures from the map. Lean rerun 41a5 ends by 07:07Z.
 
+[2026-11-17T06:54Z] b4f5c15bbd6b
+PPL1B: entry-7 run r20261117-064755-84ec ended rc 0 at main 144b3aecad0: C4 bf16 13.3172, Pearl-C 13.8624, +4.094%; card 5 released 06:54Z
+
