@@ -39,11 +39,11 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The rep's own table against the placeholder's
 
-The session loop keeps a rep's table as `Finish.tabOfLevel0` of a level 0 that `Level0.ofSamples` drew (`Finish`'s
+The session loop keeps a rep's table as `Finish.tabOfLevel0` of a level 0 that `Level0.ofSamples` sampled (`Finish`'s
 `level0` request, `level0Of`), and the placeholder is the same at zero samples. So the rep's own table is of the
 placeholder's shape.
 
-* `RealTabs`: the tables `real` answers are table `k / 2`'s `tabOfLevel0` at a level 0 `ofSamples` drew at its `m`.
+* `RealTabs`: the tables `real` answers are table `k / 2`'s `tabOfLevel0` at a level 0 `ofSamples` sampled at its `m`.
 * `sched_bounds`: every `--zk` schedule's pad and level-0 tree positions fit a `u64`'s count, by `decide +kernel`.
 * `ofSamples_gsize`: `ofSamples` takes a packed witness of exactly level 0's size.
 * `real_tabAlike`: at `RealTabs`, the rep's own table is `TabAlike` the placeholder's (`Sched.tabOfLevel0_alike`).
@@ -98,7 +98,7 @@ theorem ofSamples_gsize {m : ℕ} {g : Array F128} {d : ByteArray} {l : _root_.F
     simp [bind, Except.bind, hg] at h
 
 /-- **The tables `real` answers are the session loop's own**: table `k / 2`'s `tabOfLevel0` at a level 0 that
-`Level0.ofSamples` drew at its `m`, as `Finish`'s `level0` request reads it (`level0Of`). -/
+`Level0.ofSamples` sampled at its `m`, as `Finish`'s `level0` request reads it (`level0Of`). -/
 def RealTabs (sts : Array _root_.Flock.Stmt) (real : ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)) :
     Prop :=
   ∀ k tr hr, real k = .ok (tr, hr) → ∃ g d l, _root_.Flock.ZkServer.Level0.ofSamples sts[k / 2]!.wideLeaf sts[k / 2]!.m g d = .ok l ∧

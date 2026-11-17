@@ -95,7 +95,7 @@ theorem repCut_inner_of_ret (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup)
   subst t₇ l₇
   try dsimp only at hc
   obtain ⟨inner, t₈, l₈, h₈, -⟩ := run_bind_ok hc
-  -- the inner proof drew its first coin, so that round is below `n`
+  -- the inner proof sampled its first coin, so that round is below `n`
   have hl₄n : l₄.size < n := by
     unfold FlockComplete.innerCut at h₈
     try dsimp only at h₈

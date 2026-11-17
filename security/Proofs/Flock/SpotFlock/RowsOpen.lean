@@ -21,7 +21,7 @@ gives the unit (`Registered.opens`). It is `InnerRows.rows_commit_check` (the ci
 public file pins it) after `opens_of_setup` (the registered reads open the public file's rows).
 
 `rows_rooted`: where the statement has one table (`count ≤ 1`), the same commit string opens the population's published
-tree at port `q` (`pubPort`) at the row of the unit the sample drew as instance `n` (`unitOf`, `rowAt`), through
+tree at port `q` (`pubPort`) at the row of the unit the sample sampled as instance `n` (`unitOf`, `rowAt`), through
 the path from that row (`pubPath`): it is the population's `b ‖ c` there (`setupHidden_unit`), a leaf of the tree whose
 root Flock's `checkPublic` recomputes (`pubPort_opens`).
 
@@ -161,7 +161,7 @@ theorem rows_open {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.Sessio
 (`count ≤ 1`) that sets up as a masked Flock statement, in Flock's scope with hidden outputs, and a Flock witness its
 relation accepts, the session's public file loads a population, and at each table `j`, port `q` and unit `n`, the
 commit string of row `q` of unit `n`, as the witness holds it, opens port `q`'s published tree there (`pubPort`) at the
-row of the unit the sample drew as `n`, through the path from that row. -/
+row of the unit the sample sampled as `n`, through the path from that row. -/
 theorem rows_rooted {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} {w : Claims.Flock.Wit}
     (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts)) (hsc : ScopedHidden xS)
@@ -217,7 +217,7 @@ names, that passes wherever the commit string of row `q` of a unit `n` of the ta
 * the registered read `reg` of the session's registered ports `own` that table `j`'s port `q` is named like, at the
   position and through the path the session gives the unit; or
 * at a one-table session, port `q`'s published tree over the session's population (`pubPort`), at the row of the unit
-  the sample drew as `n`, through the path from that row.
+  the sample sampled as `n`, through the path from that row.
 
 A session of more than one table needs only the first: round 2 refuses a session split across Flock tables
 (`second-tables`). -/

@@ -183,7 +183,7 @@ def unset (g : Nat) (s : Session.State) (e : Session.Event) (res : Option Sessio
   match e, res with
   | .start _, some (.released (some t)) | .boundary _, some (.released (some t)) =>
     if missing t then some s!"window {t}'s challenge left without the challenger's coin" else none
-  | .close t _, some (.drew _) =>
+  | .close t _, some (.sampled _) =>
     if missing (s.params.windows + t.toNat / g) then
       some s!"window {t}'s openings were drawn without the challenger's coin"
     else none
