@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+CARD_FILES = ROOT / "hardware/cards"
 
 
 def _session_set():
@@ -29,7 +30,7 @@ def _session_set():
 def peak_macs(card: str) -> float:
     sys.path.insert(0, str(ROOT))
     from verity.device import load_card
-    c = load_card(card)
+    c = load_card(card, directory=CARD_FILES)
     return c["rate"]["tensor"]["value"] * c["sm"]["count"]["value"] * c["clock"]["sm"]["value"] * 1e6
 
 
