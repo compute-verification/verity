@@ -154,11 +154,11 @@ DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token
 ROLES = ("The deployment is SPOT[Flock]'s three roles: an inference server serves and commits its values; a proof "
          "server replays each sampled replay block and proves it with flock-circuit prove --zk, with no ZK server and "
          "no recursion (the proof_overhead card's dev arm); and a verifier samples the sample on the challenger's live "
-         "coins and decides with the Lean verifier. The network certifier, which stamps each request's release order "
+         "coins and decides with the Lean verifier. The network attester, which stamps each request's release order "
          "and bucket at ingress, is a layer of its own.")
 #: what every bound rests on
 TRUST = ("Every bound is soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and an "
-         "honest verifier; a bound that reads the certifier's stamp rests on the certifier's own assumptions too, "
+         "honest verifier; a bound that reads the network attester's stamp rests on network attestation's own assumptions too, "
          "stated in its layer.")
 #: the share of compute the infiltration caption compares the two panels' bounds at
 RATIO_BUDGET = 0.01

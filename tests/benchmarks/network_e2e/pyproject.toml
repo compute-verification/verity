@@ -1,7 +1,7 @@
 [project]
 name = "verity-network-e2e"
 version = "0.0.0"
-description = "Network certification's chain after N2: the advice and its bits, the endpoint's own advice and the prove path's adoption."
+description = "Network attestation's chain after N2: the advice and its bits, the endpoint's own advice and the prove path's adoption."
 requires-python = ">=3.12"
 dependencies = ["verity"]
 
