@@ -23,7 +23,7 @@
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
   forms, with the first tile and every ``--cross-check``-th after it, in the sample's order, replayed on the scalar reference
-  too).  `benchmarks/pouw/tests/test_pearl_c_vllm.py` holds this to `audit`'s own verdict.
+  too).  `tests/benchmarks/pouw/test_pearl_c_vllm.py` holds this to `audit`'s own verdict.
 - **The served y**, where a call commits it (`served_y`, the manifest's ``y``): an accepted tile's real rows of y open against
   its root, each holds a word for every column of the tile (the opening doesn't bind a row's length: one that ends before
   the tile's columns is refused, ``the opened row holds N words``), and each of the tile's words must be the unscale of
@@ -676,10 +676,7 @@ def pass_macs(p: Pass) -> int:
 
 def assumption_of(scheme: Any) -> str:
     """The named assumption a run of `scheme` is credited at (`ASSUMPTION_H100`, else `ASSUMPTION_DEV` at its device
-    record, and at its prices where they are another device's). Only a v1 scheme has TT_OUT accounting; any other is
-    refused."""
-    if scheme.forming != "v1":
-        raise ValueError(f"{scheme.name}: only a v1 scheme is credited at a named assumption (TT_OUT rev1)")
+    record, and at its prices where they are another device's)."""
     own = scheme.prices == scheme.device.prices
     if scheme.device.name == "h100" and own:
         return ASSUMPTION_H100

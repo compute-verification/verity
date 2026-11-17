@@ -24,7 +24,7 @@ setup
 export FLOCK_PROVE=$BIN FLOCK_SELFTEST=$SBIN FLOCK_VERIFY=$LEAN HZ_PYTHON=$PY
 export SC_CLASS=${SC_CLASS:-test} SC_GROUP=1 SC_REHEARSE=1 SC_REQUESTS=${SC_REQUESTS:-4} SC_RATE=${SC_RATE:-1} \
   SC_TAIL=${SC_TAIL:-3} SC_PROMPT_MAX=${SC_PROMPT_MAX:-40} SC_MAX_TOKENS=${SC_MAX_TOKENS:-8}
-if [ -f verity/protocols/resource_accounting/network/verifier/network/tests/period_case.py ]; then
+if [ -f tests/verity/protocols/resource_accounting/network/verifier/network/period_case.py ]; then
   P=$SRC; log "period: network-period and the mirror from the tree"
 else   # a machine's clone has only the shipped commits, so a run there ships a commit with the period in it
   REF=${SC_PERIOD_REF:?this tree has no period: set SC_PERIOD_REF to a ref on origin whose tree has it}
@@ -46,7 +46,7 @@ for run in honest late; do
 done
 NP=$P/verity/protocols/resource_accounting/network/verifier/lean/.lake/build/bin/network-period
 PYTHONPATH=$PYTHONPATH:$SRC/tools/difftest/python "$PY" -m verity.protocols.resource_accounting.network.prover.scan_period \
-  --mirror "$P/verity/protocols/resource_accounting/network/verifier/network/tests/period_case.py" --lean "$NP" --out "$OUT/period" \
+  --mirror "$P/tests/verity/protocols/resource_accounting/network/verifier/network/period_case.py" --lean "$NP" --out "$OUT/period" \
   "honest=$OUT/honest/warden,$OUT/honest/sczk" "late=$OUT/late/warden,$OUT/late/sczk" \
   "tampered=$OUT/honest/warden,$OUT/honest/sczk,tampered" "chain=$OUT/honest/warden,$OUT/honest/sczk,chain" \
   "forged=$OUT/honest/warden,$OUT/honest/sczk,forged" 2>&1 | tee -a "$OUT/period.log"

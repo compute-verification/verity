@@ -54,7 +54,7 @@ Parts:
 Run from the repository root: `uv run --no-project --with numpy --with python-sat --with-editable
 benchmarks/pouw/exact_kit python -B benchmarks/pouw/theory/checked_strip.py --mutations` (`--full` adds the 2×2
 block's SAT case: 12 products, model checked, and 11 under a conflict budget, which so far leaves it undecided).
-`benchmarks/pouw/tests/test_theory_checked_strip.py` runs it in the pouw suite.
+`tests/benchmarks/pouw/test_theory_checked_strip.py` runs it in the pouw suite.
 """
 from __future__ import annotations
 

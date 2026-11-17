@@ -3,7 +3,7 @@
 
 `lean_headline`'s bound (`Whole.headline_of_branches`) for the data-centre families, whose instances its
 `instance()` refuses. The bound is the larger of the folded branch, at w* and φ* on π* with p = 7/8, and the unfolded
-one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three things differ from sm_120's and sm_80's instances:
+one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three things differ from sm_120's instances:
 
 - a design credits only work a check reads: a filler at p = 0 (pinned receipts) would enter Y whole at
   χ*, its load on π*, and one at p = 1 enters ♭ not at all. The H200's ffill is at p = 1, since no check reads its
@@ -71,7 +71,7 @@ from verity_machine_model.lean_headline import Q, exact
 from verity_machine_model.model import device
 
 #: What other files read of it: `verity_machine_model.lean_headline_dc`, which writes the readings as Lean and also
-#: takes the private `_Exact` and `_and`, and two tests in `benchmarks/pouw/tests/` (the data-centre exporter's and
+#: takes the private `_Exact` and `_and`, and two tests in `tests/benchmarks/pouw/` (the data-centre exporter's and
 #: the census cover's).
 __all__ = ["CATCH_ALL", "CATCH_ALLS", "EPS_DEN", "FAMILIES", "JOINT_ISSUE", "SCALAR_REF", "SM90", "Family", "Reading",
            "reading"]

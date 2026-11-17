@@ -88,43 +88,43 @@ kind = "version"
 reason = "the version of the cuBLASLt library a toolkit ships"
 
 [[finding.except]]
-path = "infra/ops/tests/test_cloud_watch.py"
+path = "tests/infra/ops/test_cloud_watch.py"
 count = 1
 kind = "third party"
 reason = "a database provider's address, quoted in the provider's own error message"
 
 [[finding.except]]
-path = "infra/ops/tests/test_watchers.py"
+path = "tests/infra/ops/test_watchers.py"
 count = 3
 kind = "example"
 reason = "a test's stand-in host, the placeholder address every example uses"
 
 [[finding.except]]
-path = "tools/research/tests/test_budgets.py"
+path = "tests/tools/research/test_budgets.py"
 count = 1
 kind = "example"
 reason = "a test's stand-in host, the placeholder address every example uses"
 
 [[finding.except]]
-path = "tools/research/tests/test_env_credentials.py"
+path = "tests/tools/research/test_env_credentials.py"
 count = 2
 kind = "example"
 reason = "a test's stand-in host, the placeholder address every example uses"
 
 [[finding.except]]
-path = "tools/research/tests/test_pod_lease.py"
+path = "tests/tools/research/test_pod_lease.py"
 count = 2
 kind = "example"
 reason = "a test's stand-in host, the placeholder address every example uses"
 
 [[finding.except]]
-path = "tools/research/tests/test_remote_ship_git.py"
+path = "tests/tools/research/test_remote_ship_git.py"
 count = 2
 kind = "example"
 reason = "a test's stand-in host, the placeholder address every example uses"
 
 [[finding.except]]
-path = "tools/check/tests/test_verdicts.py"
+path = "tests/tools/check/test_verdicts.py"
 count = 2
 kind = "example"
 reason = "two test stand-in pods' addresses, the placeholder and the one after it"

@@ -41,7 +41,7 @@ python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.j
 registered values and its step committed under test salt keys, its target the RTX PRO 6000's. The suite pins its
 SHA-512s. `check` recomputes every string, path and domain and replays each proof block's Definition on its input rows. The
 window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is the registered fixture
-`benchmarks/one_stage/tests/fixtures/bundle-window` (its `BUNDLE_WINDOW`).
+`tests/benchmarks/one_stage/fixtures/bundle-window` (its `BUNDLE_WINDOW`).
 
 ## The block record (`verity/block-record/v2`)
 
@@ -63,7 +63,7 @@ for one server block and the Lean check's answer for it. It extends the all-prot
   `check` and the schema refuse a record whose bandwidth entry has none. The error, its certificates at each δ and
   every sum over it read with the term beside them (`error_form`, the ledger's `DELTA_FORM` with the error for δ);
 - the composed verdict, which is the answer's: the Lean check of the block's product (`CHECKS`: `verity/onsite/v0`, or
-  `verity/remote/v0` or remote's composite of record `verity/remote/v1`, as the composite Lean check writes its
+  remote's composite of record `verity/remote/v1`, as the composite Lean check writes its
   `answer.json` and `composite.py` its public `composite.json`), `accept`, `reject` or `undecided`, and
   `undecided` with no answer. Nothing in Python combines the subprotocols' verdicts;
 - what the product's subprotocols say (`compose`) and the error of `ResourceAccounting.Guarantees.JointPooledLive` over the

@@ -9,7 +9,7 @@ of each recorded window whose row differs from the expected one (`diff`), `Audit
 every boundary execution phase (`status`), and whether the audit accepts every execution phase of the first `m` windows
 (`accepted`) and every status there (`complete`), for `m = 0 … W`. The Lean audit runs
 `NetworkAttester/DifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256), and
-`verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_lean_difftest.py` checks that this script
+`tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_lean_difftest.py` checks that this script
 still writes them.
 
 An instance has one to three egress links and up to two ingress links, varied `T`, `W`, allocation, `Σ_sync` (δ, and ρ
@@ -65,7 +65,7 @@ def _forge(rng: random.Random, record: BlockGrid, payloads: list[bytes], allocat
     kind = rng.randrange(4)
     if kind == 0:  # another frame's content in a slot
         grid[b][s] = rng.choice(payloads) if payloads else b"\x00"
-    elif kind == 1:  # one frame more than the certifier released: the first padding slot filled, or a full row's slot
+    elif kind == 1:  # one frame more than the attester released: the first padding slot filled, or a full row's slot
         free = [i for i, x in enumerate(grid[b]) if x is None]
         grid[b][free[0] if free else s] = rng.choice(payloads) if payloads else b"\x00"
     elif kind == 2:  # a frame withheld

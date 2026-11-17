@@ -2,7 +2,7 @@
 
 This package (`pous_grader`) is code: the grader, its driver `grade.sh`, the trusted-file hashes and the submissions. It
 imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game, whose responder gets no
-outside help (a deployment accounts for help: `../../verity/protocols/resource_accounting/memory/pous/verifier/PROTOCOL.md`, "The problem"), are part of the security analysis,
+outside help, are part of the security analysis,
 `security/`, listed below by their paths there. Declarations kept their names
 (`python3 tools/move/lean.py --resolve MODULE` maps a module's old name). Conventions follow the other Lean packages:
 the same toolchain and Mathlib pin, `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a
@@ -29,14 +29,14 @@ Definitions/Pous/Model/{BandGraph,SegLift}.lean
                                     segment's parents at their global positions, which the tagged transfer reads
 Definitions/Pous/Model/Graded.lean  the graded audit: up to `t` late rounds, each within a hard `(D_late, Q_late)`
 Definitions/Pous/Model/Continuous.lean
-                                    the continuous audit: an explicit memory challenger (sequential reveal, a hard
+                                    the continuous audit: an explicit memory attester (sequential reveal, a hard
                                     deadline, every answer past `Δ` counted) and a responder on its clock; the
-                                    arrivals the memory challenger samples (queued, never dropped) and the memory at each time
+                                    arrivals the memory attester samples (queued, never dropped) and the memory at each time
 Definitions/Pous/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
                                     `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`;
                                     a band segment's re-encode cost `R(d)`, a graded row's round span and
-                                    the memory challenger's limit on an audit's duration
+                                    the memory attester's limit on an audit's duration
 Definitions/Pous/P2/Cost.lean       P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
@@ -74,7 +74,7 @@ Proofs/Pous/Chain/Flat.lean         proved, generated: P3 with a concrete `H`, t
                                     the public encoder over the overwrite chain (the graded lanes, flattened, then
                                     pruned to what their importers use and the docs cite)
 Proofs/Pous/Continuous/             proved: the continuous audit's counting step (`MissCount.lean`), the three
-                                    rules its memory challenger enforces (`Verifier.lean`), `PerAnswer` and
+                                    rules its memory attester enforces (`Verifier.lean`), `PerAnswer` and
                                     `ContinuousAudit` (`PerAnswer.lean`), the 64 KiB band at `D = 5`
                                     (`Band.lean`, no record), completeness, `ContinuousComplete`
                                     (`Complete.lean`), the idle-slot time average `ContinuousTimeAverage`
@@ -83,7 +83,7 @@ Proofs/Pous/Continuous/             proved: the continuous audit's counting step
 Proofs/Pous/Graded/                 proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit
                                     (`Theorem.lean`) and the band with grace `t` at `D = 5` (`Band.lean`,
                                     `BandGradedMeetsFamily`)
-Proofs/Pous/Rebuild/                proved: under the memory challenger's duration limit, no audit re-encodes a whole band
+Proofs/Pous/Rebuild/                proved: under the memory attester's duration limit, no audit re-encodes a whole band
                                     segment from `W` alone (`Clock.lean`, the cumulative chain clock;
                                     `Window.lean`, the counts; `Exclusion.lean`, `BackgroundRebuildExcluded`)
 lean-audit.json                     the policy and guarantee records for tools/verity/lean/check.py
@@ -146,7 +146,7 @@ then review the records' diff).
 files `Sanity.lean` imports) or adding a `.lean` file under
 `Definitions/Pous`, regenerating it from this directory (`tools/check/pins.py --regen` runs this command, and
 `--stale` fails while it would hash a file the list lacks), and running the audit (`bash check.sh`). A file the command
-starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them too (`verity/protocols/resource_accounting/memory/pous/verifier/tests/test_pous_trusted.py` names it):
+starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them too (`tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_trusted.py` names it):
 
 ~~~bash
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \

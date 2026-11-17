@@ -1,7 +1,7 @@
 """No retired term in the tree's prose (AGENTS.md "Working principles": a decision rolls out in the change that records it).
 A semantically meaningful part of the registered or actual circuit is a block, always named with a prefix
-(`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty or wrong unit an incorrect
-proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
+(`GLOSSARY.md`, "Block"): a proof unit is a proof block, and a faulty or wrong unit an incorrect
+proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`GLOSSARY.md`, "Proof system").
 
 Scanned: every tracked text file but the Lean packages' `lakefile.toml` and their locks' reasons (`lean-audit.json`), the
 lints that name the terms (``LINTS``: `tests/lint/test_repo_retired_terms.py` holds every term the table retires, in the
@@ -38,7 +38,7 @@ The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (`
 their names, and "leg", the dampener, NCI, C-Flock, the netlist, M0, IR and the verifier of record are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too. A retired command
-(`verity example`) keeps no path or key, so it is found in code spans and fences as well.
+(`verity example`, `verity demo`) keeps no path or key, so it is found in code spans and fences as well.
 """
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
 #: Retired in every file under INCORRECT too, and what to write instead.
-INCORRECT = ("benchmarks/slowdown/", "benchmarks/network_traces/", "verity/protocols/resource_accounting/network/verifier/network/tests/")
+INCORRECT = ("benchmarks/slowdown/", "benchmarks/network_traces/", "tests/verity/protocols/resource_accounting/network/verifier/network/")
 INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
                    "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
                    "faulty window, wrong unit": "incorrect window, incorrect proof block",
@@ -80,7 +80,7 @@ DOC_TERMS = {
     "isolation unit, IU": "inference block",
     "replay unit": "replay block",
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
-    "verity example": "verity demo",
+    "verity example, verity demo": "verity run NAME",
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
     "warden, network warden": "the network attester (what keeps the older name, a format's value or a name a caller "
@@ -118,7 +118,7 @@ DOC_TERMS = {
     "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
-    "uplink tap, the auditor's tap": "the network attester, and its records network certificates",
+    "uplink tap, the auditor's tap": "the network attester, and its records network attestations",
     "timed verifier": "the memory attester",
     "network transparency": "network accounting",
     "prover gateway, verifier gateway": "the ZK server; the challenger",
@@ -166,7 +166,7 @@ DOC_TERMS = {
     "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
-    "leg": "the subprotocol's name (SPOT, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
+    "leg": "the subprotocol's name (SPOT, PoUW, PoUS, PoUB, network attestation), the bandwidth audit's or the "
            "memory wipe's, or run",
     "remote bandwidth audit, remote bandwidth, remote audit, proof of useful bandwidth":
         "PoUB (the `verity/remote-bandwidth/` ids are bytes and stay, in backticks, until PoUB's next version)",
@@ -211,7 +211,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
                        rf"|(?i:\bC-Flock\b|\bnetlists?\b|\bverifiers?{_SPACE}of{_SPACE}record\b)|\bM0\b|\bIRs?\b"
                        rf"|\bcommit{_SPACE}periods?\b")
-_DOC_COMMAND = re.compile(r"\bverity[ \t]+(?:bench\|)?example\b")
+_DOC_COMMAND = re.compile(r"\bverity[ \t]+(?:(?:bench\|)?example|demo)\b")
 #: The commitments' own docs, where hm96 rows keep their name.
 HM96_HOME = "verity/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
@@ -239,10 +239,10 @@ ALLOWED: dict[str, str] = {
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
     "a tied audit no faulty term (its wrong units' outputs are the egress's)": "the network period check's refusal in "
-        "`period_case.py`, which mirrors `NetworkCheck.Period`'s Lean message word for word; renamed with the Lean",
+        "`period_case.py`, which mirrors `NetworkVerifier.Period`'s Lean message word for word; renamed with the Lean",
     "K charges a tied audit no faulty term": "the refusal `test_network_period_protocol.py` expects from Lean "
-                                             "(`NetworkCheck.Period`); renamed with the Lean",
-    "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
+                                             "(`NetworkVerifier.Period`); renamed with the Lean",
+    "an *active warden* in network steganography's sense": "network steganography's own term, which `GLOSSARY.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
     "Verity's two composite protocols": "`verity/protocols/compose/verifier/lean/README.md`, in a Lake package's "
@@ -351,7 +351,7 @@ def test_no_retired_term_in_prose():
     bad = [o for o in found if not o[0].endswith(".lean")]
     say = ("say " + " and ".join(f'"{new}" for "{old}"' for old, new in TERMS.items())
            + f" (in {', '.join(INCORRECT)}, also " + " and ".join(f'"{new}" for "{old}"' for old, new in INCORRECT_TERMS.items())
-           + ")" + f' (ARCHITECTURE.md, Glossary, "Block"; {GLOSSARY})')
+           + ")" + f' ({GLOSSARY}, "Block")')
     assert not bad, (
         f"a retired term: {say}; a spelling baked into a record or a digest goes in ALLOWED with its reason:\n"
         + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
@@ -367,7 +367,7 @@ def test_no_retired_term_in_the_maintained_docs():
     bad, _ = doc_offenders(_tracked())
     assert not bad, (
         "a retired term in a maintained doc: say " + "; ".join(f'{new} for "{old}"' for old, new in DOC_TERMS.items())
-        + f" (ARCHITECTURE.md's Glossary, {GLOSSARY}). A path or a record key that keeps it goes in backticks, and a word"
+        + f" ({GLOSSARY}). A path or a record key that keeps it goes in backticks, and a word"
         + " in another sense goes in ALLOWED with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
 
 
@@ -570,8 +570,8 @@ CERTIFIER_OLD = re.compile(r"(?<![a-z])warden|Warden|WARDEN")
 CERTIFIER_LEFT_OUT = {
     MAPS: "the word maps, the move tool, its tests and its fixtures spell the name to move it",
     "tools/research/src/research/store/moves.json": "the store's record of the moves names the paths each one renamed",
-    "tools/research/tests/test_queue.py": "a test of the words a word map retires spells one in its map",
-    "tools/research/tests/test_store_vocab.py": "a test of the store's label values spells the ones that hold it",
+    "tests/tools/research/test_queue.py": "a test of the words a word map retires spells one in its map",
+    "tests/tools/research/test_store_vocab.py": "a test of the store's label values spells the ones that hold it",
     LINTS[0]: "this test spells the name to find it",
 }
 #: The public items' reasons that hold it, which a spec's digest takes in (`warden_map.toml`'s [keep]).
@@ -744,7 +744,7 @@ def test_the_scan_reads_the_network_terms():
     """The network tests' and `benchmarks/network_traces`' incorrect proof blocks, windows and K's terms for them, on toy
     files: a key or a name that mirrors the Lean's (`faulty_bits`, `wrong_units`, `faultySets`), a faulty certifier, a
     wrong verdict, and the same words outside them stay."""
-    net = "verity/protocols/resource_accounting/network/verifier/network/tests/a.py"
+    net = "tests/verity/protocols/resource_accounting/network/verifier/network/a.py"
     docs = {
         net: ('"""Its faulty bits, no faulty\n    term and at most 3 wrong units."""\n'
               'class _Faulty(Certifier):  # a faulty certifier; a wrong verdict\n'
@@ -788,7 +788,7 @@ def test_the_doc_scan_reads_each_form():
         ("a.md", 1, "wrong unit"), ("a.md", 1, "Isolation-Units"), ("a.md", 1, "replay unit"), ("a.md", 2, "IU"),
         ("a.md", 2, "IUs"), ("a.md", 2, "KV block"), ("a.md", 3, "legs"), ("a.md", 3, "leg"), ("a.md", 3, "leg"),
         ("b.md", 8, "thread block"), ("b.md", 9, "verity example"), ("b.md", 9, "verity bench|example"),
-        ("b.md", 11, "verity example")]
+        ("b.md", 9, "verity demo"), ("b.md", 11, "verity example")]
 
 
 def test_the_doc_scan_reads_the_party_terms():
@@ -809,7 +809,7 @@ def test_the_doc_scan_reads_the_party_terms():
 
 
 def test_the_doc_scan_reads_the_protocol_terms():
-    """The protocol's vocabulary (`ARCHITECTURE.md`, Glossary), on toy files: hm96 rows keep their name in the commitments' own docs."""
+    """The protocol's vocabulary (`GLOSSARY.md`), on toy files: hm96 rows keep their name in the commitments' own docs."""
     docs = {
         "NETWORK.md": "The warden, a network warden's cells, two Wardens.\n"
                       "`warden.py`, `--warden-run`, WardenParams and warden_rows stay.\n",

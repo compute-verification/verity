@@ -5,7 +5,7 @@ The per-element and per-word work is batched over `verity.circuits.kernels.tc`' 
 scales and the E2M1 cast, the chain, the fused A′·F_B and B̃·F_A, and the peel.  The per-row statistics, the lines and
 P_B's FP32 FMA chain come from the scalar reference (`verity.protocols.experimental.pearl_c4.prover.pearl_c4`).  `fixture.py` writes
 the device check's fixtures from these steps; `tile` is the steps as one tile, which
-verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_twin.py holds to the scalar reference.
+tests/verity/protocols/experimental/pearl_c4/test_pearl_c4_twin.py holds to the scalar reference.
 """
 
 from __future__ import annotations

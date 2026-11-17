@@ -12,7 +12,7 @@ every expansion: the description-sized check against the unrolled one, on the sa
 
 Instance `seed`'s program, for the first `COUNT`, is one of `difftest_vectors.program`'s or (a quarter of them) one read
 across its arrays' rows (`transposed`), then each distinct descriptor
-the circuits fixtures hold (`verity/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
+the circuits fixtures hold (`tests/verity/circuits/*_vectors.json`: pass-throughs, scans with carries, batches of
 composites, root batches and scans) for `PER_FIXTURE` instances each, then six on a composite keyed with an input id
 (`decoys`), which is no input node, then two on a gate reading a nested scan's carry (`walks`), one past
 `InferenceOnlyCheck.Desc.walkBound`'s limit, then four on a scan of no iterations (`empties`), three of them refused, its carry a
@@ -59,7 +59,7 @@ reference = vectors.reference
 COUNT = 3000
 PER_FIXTURE = 24
 TRANSPOSED = 0.25
-FIXTURES = Path(verity.circuits.__file__).resolve().parent / "tests"
+FIXTURES = Path(verity.circuits.__file__).resolve().parents[2] / "tests" / "verity" / "circuits"
 MALFORMED = vectors.MALFORMED
 
 

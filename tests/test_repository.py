@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 #: notes store (cite it from here by ``note:<id>``).
 ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "PROTOCOL.md", "DESIGN.md", "SKILL.md",
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
-#: The Glossary's second file, at the root only: no directory holds a glossary.
+#: The Glossary, at the root only: no directory holds a glossary.
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 #: Layout/spec documents left in place by the layout migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
@@ -47,9 +47,10 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
-#: The Glossary's "Older names" table is the list `tests/test_retired_terms.py` scans the tree for, so it grows by a row
-#: with each retired name and no row can go while its term is retired.
-GLOSSARY_SIZE_CAP = 64 * 1024
+#: The one Glossary: every term, the notation and the older names. Its table of older names is the list
+#: `tests/test_retired_terms.py` scans the tree for, so it grows by an entry with each retired name, and none can go while
+#: its term is retired.
+GLOSSARY_SIZE_CAP = 112 * 1024
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
 #: (`.agents/skills/authoring-skills/`).
 SKILL_SIZE_CAP = 16 * 1024
@@ -67,13 +68,13 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
-    "adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
+    "tests/adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
     "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
     # the paths of every layout move: one record a move, read in order (tools_registry.former_modules), and the branch
     # `architecture` makes many; its limit holds the records that branch adds until it closes, at the rate it adds them
     "tools/research/src/research/store/moves.json": 576 * 1024,
-    "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
+    "tests/adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
     "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
     # GLM-5.3's block card and its sparse-attention partition card: each key block's values units and key rows' writers
     # are a type a column block
@@ -139,7 +140,7 @@ def test_generated_output_patterns() -> None:
     assert generated_output("benchmarks/numerical/plot_overhead.png") == "a .png render"
     assert generated_output("adapters/vllm/20260929T0300Z-tables.json") == "a stamped render or note"
     assert generated_output("benchmarks/numerical/python/verity_numerical/bench/contract.py") is None
-    assert generated_output("tools/research/tests/fixtures/run_v0.2/out/result.json") is None
+    assert generated_output("tests/tools/research/fixtures/run_v0.2/out/result.json") is None
 
 
 def test_no_generated_output() -> None:
@@ -376,8 +377,8 @@ def test_tracked_data_within_budget() -> None:
 #: Tracked files an ignore line covers, each added on purpose (`git add -f`): a fixture whose name a pattern for run
 #: outputs or archives matches.
 IGNORED_TRACKED = frozenset({
-    "tools/research/tests/fixtures/run_v0.2/out/proof.bin",
-    "tools/research/tests/fixtures/run_v0.2/out/verify.jsonl",
+    "tests/tools/research/fixtures/run_v0.2/out/proof.bin",
+    "tests/tools/research/fixtures/run_v0.2/out/verify.jsonl",
 })
 
 
@@ -412,3 +413,11 @@ def test_fetched_fixtures_are_gitignored() -> None:
                          capture_output=True, text=True).stdout.split("\n")
     unignored = sorted(set(fetched) - {x for x in out if x})
     assert not unignored, "registry entries git does not track must be gitignored (add them to .gitignore):\n" + "\n".join(unignored)
+
+
+def test_the_tree_tracks_no_symbolic_link() -> None:
+    """A tracked link where a build writes (a package's `.lake`, a path dependency) would let the tree choose what the
+    build writes. `sandbox.sh` refuses such a link, which is the protection (a change could edit this test); this keeps
+    the tree from needing one, so the refusal never stops an honest build."""
+    out = subprocess.run(["git", "ls-files", "-s", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
+    assert not (links := [e.split(b"\t", 1)[1].decode() for e in out.split(b"\0") if e.startswith(b"120000 ")]), links

@@ -45,7 +45,7 @@ VERITY_RETIRED = frozenset({"core", "ml"})
 END_STATE_DOCS = ("ARCHITECTURE.md",)
 #: (document, token as written) that reads as a repository path but names something else, each with why.
 NOT_PATHS = {
-    ("verity/circuits/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
+    ("tests/verity/circuits/ops/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
     ("tools/research/README.md", ".cursor/mcp.json"): "the Cursor config the reader writes in their own checkout",
     (".agents/skills/kernel-engineering/SKILL.md", "panel.py"): "the kernel panel, kept in an agent store",
     ("benchmarks/pouw/harness/README.md", "panel.py"): "the kernel panel, kept in an agent store",
@@ -55,10 +55,6 @@ NOT_PATHS = {
     ("benchmarks/pous/README.md", "gmp.h"): "the system's GMP header",
     ("benchmarks/ppl/README.md", "linears_layerwise.py"): "a harness the bench replaced",
     ("tools/verity/lean/README.md", "lakefile.lean"): "the file the package deliberately lacks",
-    ("verity/protocols/resource_accounting/memory/pous/verifier/DISCREPANCIES.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
-    ("verity/protocols/resource_accounting/memory/pous/verifier/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
-    ("verity/protocols/resource_accounting/memory/pous/verifier/PROTOCOL.md", "BandEncDec.lean"): "the band chain's Lean, outside this tree",
-    ("verity/protocols/resource_accounting/memory/pous/verifier/PROTOCOL.md", "regate.py"): "the timing red team's script",
     ("security/Definitions/Pous/Model/BandChain.lean", "SpongeDense.lean"): "the band chain's Lean, outside this tree",
     ("security/Definitions/Pous/Model/BandChain.lean", "BandChainModel.lean"): "the band chain's Lean, outside this tree",
     ("security/Definitions/Pous/Model/BandChain.lean", "BandMultiModel.lean"): "the band chain's Lean, outside this tree",

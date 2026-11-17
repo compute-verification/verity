@@ -6,7 +6,7 @@ Writes `DIR/difftest/instances.jsonl`, one instance per line as `NetworkCheck.Di
 `DIR/difftest/python.jsonl`, the same line's results from the checkout's `verity.protocols.resource_accounting.network.verifier.certificate`
 (and `verity.commitments.identity`, `verity.commitments.crypto.lms` through it), with `null` where Python raises `ValueError`.
 The Lean audit runs `NetworkCheck/DifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256),
-and `verity/protocols/resource_accounting/network/verifier/tests/test_network_check_lean_difftest.py` checks that this script still writes
+and `tests/verity/protocols/resource_accounting/network/verifier/test_network_check_lean_difftest.py` checks that this script still writes
 them.
 
 An instance has grid parameters (T·r from 1, so D = 0, to past 32, B up to 300 bytes, so a leaf's frame spans blocks,

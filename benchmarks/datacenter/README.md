@@ -5,7 +5,7 @@
 - **Python**: the package `datacenter`, the distribution `verity-datacenter` (this directory's `pyproject.toml`; it
   depends on `verity` alone). It is not a member of the uv workspace, so nothing installs it: an importer puts this
   directory on `sys.path`.
-- **Importers**: `benchmarks/pouw/tests/test_proved_ticks_placed.py` alone. No code under `verity/` imports it. What
+- **Importers**: `tests/benchmarks/pouw/test_proved_ticks_placed.py` alone. No code under `verity/` imports it. What
   it imports:
   - from `datacenter`: `FLEET_CLOSED`, `Assumption`, `Cadence`, `Computed`, `Credit`, `Datacenter`, `DeviceEntry`,
     `Interval`, `LinkEntry`, `Plan`, `Zone`, `account`, `ands`, `crossings`, `names`, `place` and `register`;

@@ -71,7 +71,7 @@
 #     and PP_SERVE_STANDIN), each the rate that samples its window as its text reads at the proof blocks its scope has under
 #     the declared run's advice; a window of more is sampled in proportion. A PP_PARTITION or PP_FORGED_PARTITION that still
 #     states a fixed design (subset:K, stratified:K or work:K) is refused at the rule check, before any session opens, by
-#     either audit, by name. benchmarks/prove_path/tests/test_run_rules.py holds the stand-in's rules to what a stream takes
+#     either audit, by name. tests/benchmarks/prove_path/test_run_rules.py holds the stand-in's rules to what a stream takes
 #     and lists the partition files, this benchmark's and the one-stage audit's, that still state a fixed design: among them
 #     the transfer-gate example's forged partition below.
 #   PP_KEEP_WINDOWS=DIR: each run's committed windows copied whole to DIR/<name>-windows (the prover's files with them, so
@@ -298,7 +298,7 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
   fi
 elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   TCAP=${PP_TIE_CAP:-16} F=$W/tie-fixture
-  (cd adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $O/tie-fixture.err \
+  (cd tests/adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $O/tie-fixture.err \
     || { tail -20 $O/tie-fixture.err; exit 8; }
   WT="$PY -m verity_vllm.pipeline.cli weights-tie"
   tie() {  # NAME [--served] [--forge-digest]: the committer's registration of X and its tie window (--served: Y's words served
@@ -342,7 +342,7 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   [ "${PP_ONLY:-}" = honest ] || tie weights-tie-forged --served --forge-digest || rc=1
 else
   S=$W/served
-  (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $SAMPLING_DESIGN:1/2 --deferred) \
+  (cd tests/adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $SAMPLING_DESIGN:1/2 --deferred) \
     > $O/standin.json 2> $O/standin.err || { tail -20 $O/standin.err; exit 8; }
   mkdir -p $O/standin && find $S/commit -maxdepth 1 -type f -exec cp {} $O/standin/ \;
   $PP advice --workload $S/workload.json --out $W/advice.bin | tee $O/advice.log || exit 8

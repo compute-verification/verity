@@ -171,7 +171,7 @@ def DsaRMSNorm(B, S, x, w):
 
 
 _SPLIT_CONF = ("model-untested: `DsaRMSNorm_v1` cut at its scale; the scale and N / G apply units return its words "
-               "(`adapters/vllm/verity_vllm/definitions/tests/test_mnnvl_and_dsa_norm_splits.py`)")
+               "(`tests/adapters/vllm/verity_vllm/definitions/test_mnnvl_and_dsa_norm_splits.py`)")
 
 
 @composite("DsaRMSNormSumSq", 1, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)),), F32), conformance=_SPLIT_CONF)

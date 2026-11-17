@@ -23,8 +23,8 @@
       "status": "excluded",
       "resolution": "FIRST is the finite-domain relation: a non-finite input is rejected, not computed. The measured total semantics exist (family veritor.tensor-core.ampere_bf16_m16n8k16@3, unbound) and declaring them is a later protocol decision.",
       "evidence_refs": [
-        "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
-        "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz",
+        "tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
+        "tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz",
         "verity/circuits/silicon/total.py"
       ],
       "owner": "coordinator"
@@ -41,8 +41,8 @@
       "status": "resolved",
       "resolution": "Resolved by measurement on sm_80: recorded run r20260921-232750-56c5 (stage wp1.probe.a100, NVIDIA A100 80GB PCIe, compute capability 8.0, driver 570.133.20, CUDA 12.4) ran benchmarks/tc_probe with --arch sm_80: the 7,713 all-finite records of the A100 special campaign (4,565 with a nonzero accumulator) replayed on the device with 0 mismatches against their recorded words and 0 nonzero words at the other tile positions, and the finite sweep -- the same 10 families and seed 20260902 as the RTX 4090 run r20260921-231618-ea24: randn zero/random accumulators, uniform bits, subnormal, cancellation, mixed magnitude, near overflow, signed zero, tiny accumulators x zero products, zero accumulators x tiny cancelling products -- 25,698,304 elements, 12,065,535 of them with a nonzero accumulator, 0 mismatches against silicon.tc_dot (AMPERE_BF16_M16N8K16 parameters: groups (8,8), 25-bit truncating adder, floor -132) and 0 model-domain errors.  The same inputs gave the same 25,698,304 words on sm_89 (run r20260921-231618-ea24, 360/360 Ada golden records reproduced).  Raw captures: tiles_<family>.npz and capture_sample.json in the run directory. Status set by the coordinator 2026-09-21 on this evidence.",
       "evidence_refs": [
-        "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
-        "verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json",
+        "tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
+        "tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json",
         "benchmarks/tc_probe/tc_probe.py",
         "r20260921-231618-ea24",
         "r20260921-232750-56c5"
@@ -63,7 +63,7 @@
       "evidence_refs": [
         "verity/circuits/silicon/models.py",
         "benchmarks/numerical/python/verity_numerical/reference/hawkeye_close.py",
-        "benchmarks/numerical/tests/reference/test_normalisation_d3.py",
+        "tests/benchmarks/numerical/reference/test_normalisation_d3.py",
         "r20260921-230852-4f1e"
       ],
       "owner": "WP1"
@@ -80,8 +80,8 @@
       "status": "resolved",
       "resolution": "The FP32 result word of a zero magnitude is +0 (0x00000000) in every case; an internal sign on a zero intermediate never reaches the accumulator word. Both the simulator's final conversion and the hardware agree.",
       "evidence_refs": [
-        "verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json",
-        "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz"
+        "tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json",
+        "tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz"
       ],
       "owner": "coordinator"
     },
@@ -97,8 +97,8 @@
       "status": "excluded",
       "resolution": "FIRST fixes family @1 and a finite domain, so a NaN never reaches the epilogue. The production epilogue is the hardware word (@2); re-versioning the target to @2 changes the family digest and is a protocol decision.",
       "evidence_refs": [
-        "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/cvt_special.json",
-        "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/cvt_special.json"
+        "tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/a100/cvt_special.json",
+        "tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/4090/cvt_special.json"
       ],
       "owner": "coordinator"
     },
@@ -114,7 +114,7 @@
       "status": "open",
       "resolution": null,
       "evidence_refs": [
-        "verity/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z"
+        "tests/verity/circuits/ops/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z"
       ],
       "owner": "integration (not this campaign)",
       "to_resolve": "A frontend/integration binding question: which kernels, on which shapes, realise this chain. The numerical backend proves the chain as stated."
@@ -131,10 +131,10 @@
       "status": "resolved",
       "resolution": "The adapter is hawkeye_close.fp32_to_gfloat: an FP32 word becomes the Gfloat the simulator's group_sum would have produced for it -- zero (either sign) -> Gfloat(sign, -132, 0), subnormal -> (sign, -126, m), normal -> (sign, e - 127, 2^23 | m) -- and hawkeye_close.tc_dot16 feeds it to group_sum([c, p0..p7]) then group_sum([., p8..p15]) then Gfloat::operator float.  The wrapper's finalisation (Ampere_simulator::matrix_multiply_template) is one more group_sum over the single Gfloat the second group produced, then operator float; group_sum([g]) = g for every reachable g (a 24-bit significand rescales to 25 bits, has width 25 and shifts back; a subnormal is shifted left by 25 - l and right by 24 - l and 1), and fp32_to_gfloat is the left inverse of operator float on every such g (both checked on every subnormal significand and on 3,072 mantissa patterns per exponent, run r20260921-230852-4f1e step g), so the adapter provably omits the identity group_sum and preserves the cast.  Evidence: tc_dot16 equals silicon.tc_dot on every case with a finite result -- 60,858 structured, 1,000,000 random, every all-finite record of the A100 and RTX 4090 special campaigns (7,713 each, 4,565 with a nonzero accumulator) and the 360 golden records -- and equals the compiled pinned simulator bit for bit on the same cases, the compiled wrapper included on the zero-accumulator ones (run r20260921-230852-4f1e steps d and e).  The zero must carry -132 (the C++ maximum ranges over every term); no earlier capture distinguishes that from a zero at -126/-127 -- entry D9. Status set by the coordinator 2026-09-21 on this evidence.",
       "evidence_refs": [
-        "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
+        "tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
         "benchmarks/numerical/python/verity_numerical/reference/hawkeye_close.py",
-        "benchmarks/numerical/tests/reference/test_hawkeye_close.py",
-        "benchmarks/numerical/tests/reference/hawkeye_harness.cpp",
+        "tests/benchmarks/numerical/reference/test_hawkeye_close.py",
+        "tests/benchmarks/numerical/reference/hawkeye_harness.cpp",
         "r20260921-230852-4f1e"
       ],
       "owner": "WP1"
@@ -151,9 +151,9 @@
       "status": "resolved",
       "resolution": "FIRST's transition is silicon.tc_dot, including saturation: a finite input whose group result leaves the FP32 range yields +-inf at once, sticky through the remaining group -- the hardware's word on every measured case (2,197 A100, 2,197 RTX 4090, 114 golden records). That infinite word is a valid output of a transition and, through the epilogue, of the VU (+-inf BF16), but it is not a finite accumulator: a chain whose intermediate transition saturates is rejected at the next step (domain rule). The pinned simulator's exponent masking is outside the paper's tested magnitudes and is not the reference on these cases; hawkeye_close.tc_dot16 documents where it parts from the hardware. Coordinator decision 2026-09-21.",
       "evidence_refs": [
-        "benchmarks/numerical/tests/reference/test_hawkeye_close.py",
-        "verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json",
-        "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
+        "tests/benchmarks/numerical/reference/test_hawkeye_close.py",
+        "tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json",
+        "tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
         "r20260921-230852-4f1e"
       ],
       "owner": "coordinator"
@@ -189,10 +189,10 @@
       "status": "resolved",
       "resolution": "Ada E4M3 mma.sync is GroupSum(groups=(16,16), width=14, floor=-139), Hopper wgmma E4M3 is GroupSum(groups=(32,), width=14, floor=-139): the same 14-bit truncating adder, a different grouping, and so different functions (36 of 48 K=1536 steps differ on shared operands, verity/circuits/silicon/captures/vectors).  The 14-bit rescale of the incoming accumulator applies unconditionally -- through a group of zero products too -- and is a rule of the model (GroupSum.step) and a gadget of the checker (RescaleState), not a special case.  Hawkeye's Hopper FP8 simulator is the wrong model for sm_89 and is kept only as the source of the floor constant.  Recorded by lane silicon-p0 2026-09-22 from veritor's measurements; no new hardware.",
       "evidence_refs": [
-        "verity/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json",
+        "tests/verity/circuits/ops/fixtures/golden/ada_e4m3_m16n8k32.json",
         "verity/circuits/silicon/captures/veritor-tc-fp8.json",
         "verity/circuits/silicon/models.py",
-        "benchmarks/numerical/tests/checker/test_fp8.py"
+        "tests/benchmarks/numerical/checker/test_fp8.py"
       ],
       "owner": "silicon-p0"
     },
@@ -210,7 +210,7 @@
       "evidence_refs": [
         "verity/circuits/silicon/captures/autoproof-SEMANTICS.lock.v1.json",
         "verity/circuits/silicon/captures/autoproof-probe-vectors.json",
-        "verity/circuits/ops/tests/test_models.py"
+        "tests/verity/circuits/ops/test_models.py"
       ],
       "owner": "silicon-p0"
     },
@@ -249,7 +249,7 @@
         "r20260922-221824-8d99",
         "r20260922-222148-6342",
         "verity/circuits/silicon/models.py",
-        "verity/circuits/ops/tests/test_models.py"
+        "tests/verity/circuits/ops/test_models.py"
       ],
       "owner": "fp4-re"
     },
@@ -291,7 +291,7 @@
         "r20260922-183435-fd5d",
         "r20260922-232403-fbd0",
         "benchmarks/tc_probe/tc_probe.py",
-        "verity/circuits/ops/tests/test_tc_probe_families.py"
+        "tests/verity/circuits/ops/test_tc_probe_families.py"
       ],
       "owner": "pin-bf16"
     },
@@ -314,7 +314,7 @@
         "r20260922-221824-8d99",
         "benchmarks/tc_probe_fp4/probe.py",
         "verity/circuits/silicon/models.py",
-        "verity/circuits/ops/tests/test_models.py"
+        "tests/verity/circuits/ops/test_models.py"
       ],
       "owner": "fp4-re"
     },
@@ -336,7 +336,7 @@
         "r20260922-221716-65b9",
         "benchmarks/tc_probe_fp4/probe.py",
         "verity/circuits/silicon/models.py",
-        "verity/circuits/ops/tests/test_models.py"
+        "tests/verity/circuits/ops/test_models.py"
       ],
       "owner": "fp4-re"
     },
@@ -380,7 +380,7 @@
         "r20260922-221824-8d99",
         "r20260922-222148-6342",
         "verity/circuits/silicon/models.py",
-        "verity/circuits/ops/tests/test_models.py"
+        "tests/verity/circuits/ops/test_models.py"
       ],
       "owner": "fp4-re"
     },

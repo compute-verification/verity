@@ -16,10 +16,10 @@ two of their inner nodes' inputs collide (`mth_binds`), which ties each answer's
 
 @[expose] public section
 
-namespace PousCheck.Properties.SecurityProofs
+namespace PousVerifier.Properties.SecurityProofs
 
 open Lean (Json)
-open Flock PousCheck.Properties
+open Flock PousVerifier.Properties
 
 local instance instLawfulBEqByteArray_properties : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
@@ -442,4 +442,4 @@ theorem timedAuditAccepts : TimedAuditAccepts := by
   · exact absurd ⟨x, by rw [hrun]; exact List.mem_append_left _ hx, y,
       by rw [hrun, hCs]; exact List.mem_append_right _ hy, hxy⟩ hcoll
 
-end PousCheck.Properties.SecurityProofs
+end PousVerifier.Properties.SecurityProofs

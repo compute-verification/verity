@@ -35,7 +35,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "tests"))
+sys.path.insert(0, str(ROOT.parent / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier"))
 
 
 import pearl_c_vectors as CV  # noqa: E402

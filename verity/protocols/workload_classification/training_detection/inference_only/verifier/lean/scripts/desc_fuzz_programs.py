@@ -7,7 +7,7 @@ Writes `DIR/desc_fuzz/programs.jsonl`, one `{"id", "family", "program", "agree"}
 (`agree`: how many instances of its own `InferenceOnlyCheck.DescFuzz.agrees` checks beside them).
 The Lean audit runs `InferenceOnlyCheck/DescFuzzMain.lean` on it (`runs` in `lean-audit.json`, which pins its SHA-256), which
 decides the statements behind `DescAgrees` on each Program (`InferenceOnlyCheck.DescFuzz`'s docstring) and fails if one fails;
-`verity/protocols/resource_accounting/network/verifier/network/tests/test_inference_only_desc_fuzz.py` checks that this script still writes it. The search itself,
+`tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_desc_fuzz.py` checks that this script still writes it. The search itself,
 at millions of Programs, runs outside this tree; this is a seeded sample of it at a size the audit runs on every change to
 the package.
 

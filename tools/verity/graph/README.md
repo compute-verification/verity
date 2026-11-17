@@ -118,7 +118,7 @@ Sorting is by code point (Python's string order, which is UTF-8's byte order). `
 readers' keys unchanged (early cutoff). `contract.key(task, file_digests, read_digests, env_digest)` takes `read_digests` as
 {read task: its result's `outputs`}. `tests/key_vectors.json` covers inputs alone, outputs, reads of one and of two tasks,
 unicode paths, escapes in vars and argv, another env, and the fields the key leaves out; `python
-tools/verity/graph/tests/test_contract.py --write` rewrites it from the cases in that file, which is a change to the contract.
+tests/tools/verity/graph/test_contract.py --write` rewrites it from the cases in that file, which is a change to the contract.
 
 ## Running one task
 

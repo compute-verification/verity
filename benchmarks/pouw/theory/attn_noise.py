@@ -23,7 +23,7 @@ Parts:
   bound a seed at prefill and at decode.
 
 Run from the repository root: `uv run python -B benchmarks/pouw/theory/attn_noise.py --mutations`.
-`benchmarks/pouw/tests/test_theory_attn_noise.py` runs it in the pouw suite.
+`tests/benchmarks/pouw/test_theory_attn_noise.py` runs it in the pouw suite.
 """
 from __future__ import annotations
 

@@ -35,7 +35,7 @@ challenger_built || exit 1
 S=$OUT/sessions CH=$OUT/challenger CHP=$OUT/challenger-plain
 mkdir -p "$S"
 
-"$PY" "$SRC/verity/protocols/proofs/flock/prover/tests/plain_hidden.py" --out "$W/stage" > "$OUT/stage.json" 2> "$OUT/stage.err" \
+"$PY" "$SRC/tests/verity/protocols/proofs/flock/prover/plain_hidden.py" --out "$W/stage" > "$OUT/stage.json" 2> "$OUT/stage.err" \
   || { log "stage FAILED: $(tail -2 "$OUT/stage.err")"; exit 1; }
 PIN=$(sha512sum "$W/stage/circuit.txt" | cut -d' ' -f1)
 log "staged: circuit_sha512 ${PIN:0:16}"

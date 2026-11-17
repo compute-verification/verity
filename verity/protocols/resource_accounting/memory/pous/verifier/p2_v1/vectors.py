@@ -28,7 +28,7 @@ from . import wire as Wi
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[7]
 AUDIT_VECTORS, NEGATIVE_VECTORS = R.AUDIT_VECTORS, R.NEGATIVE_VECTORS
-KEYS_FIXTURE = ROOT / "verity/protocols/resource_accounting/memory/pous/verifier/tests/fixtures/p2-v4-keys.json"
+KEYS_FIXTURE = ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier/fixtures/p2-v4-keys.json"
 PINNED_TEXT = (HERE / "reference.py", KEYS_FIXTURE.parent.parent / "test_pous_protocol.py")
 
 POINTS = (*(R.vector_params(w, c0) for w, c0 in ((64, 189), (96, 17), (128, 173))), R.DEPLOYMENT)

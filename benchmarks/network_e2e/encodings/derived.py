@@ -526,7 +526,7 @@ FIELDS = [
      "derivation": "FCFS admits a step's new requests from the waiting queue's head: the lowest ingress indices not yet "
      "admitted, in arrival order. I1 numbers them by first row: in scheduling order, arrival order; in batch order, Model "
      "Runner V2's stable sort of the step by scheduled tokens, so by n and, at equal n, by arrival",
-     "checker": "compile unit (it derives n in arrival order anyway); a sent step equal to the prediction is refused, "
+     "checker": "compile slice's proof block (it derives n in arrival order anyway); a sent step equal to the prediction is refused, "
                 "and the tie uses each certified request once", "cost": "0"},
     {"field": "prompt_len", "verdict": "stays, forced", "bits": "w_len a request",
      "from": "certified request's id count (witness)", "derivation": "len(prompt ids); the Programs read it (a final prefill "
@@ -549,15 +549,15 @@ FIELDS = [
      "checker": "compiler (the Programs' shapes)", "cost": "0"},
     {"field": "start", "verdict": "derived", "bits": "0", "from": "rows' history, cache_hit",
      "derivation": "the request's previous row's end; an admitting row's (its first, or a resumed one) is its hit",
-     "checker": "compile unit (a derived hit makes it witness-dependent)", "cost": "0"},
+     "checker": "compile slice's proof block (a derived hit makes it witness-dependent)", "cost": "0"},
     {"field": "n", "verdict": "derived", "bits": "0 (w_len a non-decode row when the scheduling order is unknown)",
      "from": "rows' history, prompt_len, max_num_batched_tokens, max_model_len, the certified ingress order",
      "derivation": "min(K - start, the step's budget left, the long-prefill threshold; a running row's max_model_len - 1 - "
      "start), K = prompt_len + sampling rows so far, the budget taken in vLLM's scheduling order (in batch order: running "
      "rows by admission, then resumed, then new ones in arrival order, so only the last arrival is cut short)",
-     "checker": "compile unit", "cost": "0"},
+     "checker": "compile slice's proof block", "cost": "0"},
     {"field": "kind", "verdict": "derived", "bits": "0", "from": "start, n, prompt_len",
-     "derivation": "decode iff n = 1 and start >= prompt_len (I1's rule)", "checker": "compile unit", "cost": "0"},
+     "derivation": "decode iff n = 1 and start >= prompt_len (I1's rule)", "checker": "compile slice's proof block", "cost": "0"},
     {"field": "cache_hit", "verdict": "canonical while nothing can have been evicted; else sent sparse (hits)",
      "bits": "0 / 1 an admitting row + w_hit (hit units) a hit (I1: w_len every row)",
      "from": "every request's tokens (witness), the rows scheduled before it, num_gpu_blocks",
@@ -566,14 +566,14 @@ FIELDS = [
      "with the scheduling order known: the longest prefix, at most K - 1 tokens in whole hit units (the block, or a hybrid "
      "model's finer hash_block_size), each of whose units a row scheduled before it computed from the same tokens; "
      "past the bound, which cached blocks LRU eviction left is vLLM's block pool over witness, so the hit is sent",
-     "checker": "compile unit: the derived hit, and a hit of any other length, shorter included, is refused; none yet "
+     "checker": "compile slice's proof block: the derived hit, and a hit of any other length, shorter included, is refused; none yet "
                 "for a sent one", "cost": "a token comparison per hit unit of each admitting row"},
     {"field": "sources", "verdict": "canonical", "bits": "0 (I1: a count, and w_req + w_len a run)",
      "from": "every request's tokens (witness), rows (which request computed KV where by each step)",
      "derivation": "hit unit by hit unit, the earliest-admitted (lowest-numbered) request that has computed the whole "
      "unit by this step (I1's rule) from the same tokens through it, in runs; looked up by a SHA-512 chain over whole "
      "units, every match checked on the tokens",
-     "checker": "compile unit (it holds every request's tokens and checks their equality anyway); any other source is "
+     "checker": "compile slice's proof block (it holds every request's tokens and checks their equality anyway); any other source is "
                 "refused", "cost": "the token equality it checks for the KV read, and the lowest number among them"},
     {"field": "preempted", "verdict": "derived under the pool bound; else sent sparse (resumes)",
      "bits": "0 / a count and w_res a resumed row (I1: 1 every row)",

@@ -3,7 +3,7 @@
 One point is sessions of one workload that each prove the B coordinates a loopback ``flock-circuit serve`` samples from the
 workload's population by the stratified sampling design (``instances``), proved by Flock's native prover with live coins, warm
 ``warm`` times and timed ``runs`` times, then each timed session verified by the compiled Lean verifier (``verity-verify-proof
-verify --stratified B``, its own sampling design). The VU is one coordinate (K MACs, 2K FLOP), ``vu.count`` = B. The fingerprint's
+verify --stratified B``, its own sampling design). A proof block is one coordinate (K MACs, 2K FLOP), ``vu.count`` = B. The fingerprint's
 ``instances`` is null (the contract's names the B ids a statement proves, which a sample doesn't fix); ``population`` names the
 frozen population and ``draw`` the sampling design.
 

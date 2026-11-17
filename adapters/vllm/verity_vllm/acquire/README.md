@@ -5,7 +5,7 @@ Value acquisition: how a served run's values reach the Commit. The package's doc
 ## Interface
 
 - **Provides:** the acquisition plan, derived from the required-value manifest and the runtime correspondence (`plan`);
-  the hooks installed from it (`install`); the sources those hooks feed (`sources`); and the CPU gate of a row
+  the hooks installed from it (`install`); the sources those hooks feed (`sources`); and the CPU gate of a workload
   (`verity-vllm gate`). The names the adapter's other packages read, module by module: `as_loaded` gives
   `attach_rank`. `committer_api` gives `Opening`, `RunCommitment`, `StepCommitment` and `declaration`. `compiled` gives
   `schedule_of_workload` and the command `verity-vllm compiled`. `fa2_plane_classes` gives `LayoutPolicy`,

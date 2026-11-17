@@ -30,6 +30,7 @@ import atexit
 import fcntl
 import functools
 import json
+import os
 import subprocess
 import tempfile
 import threading
@@ -41,7 +42,7 @@ RECORD_VERDICT = "lean"
 DISAGREE = "disagree"
 
 PACKAGE = Path(__file__).resolve().parent / "lean" / "check"
-EXE = "pouw-check-difftest"
+EXE = "pouw-verifier-difftest"
 BUILD_LOCK = Path(__file__).resolve().parents[6] / "verity/circuits/difftest" / ".lake" / "harness-build.lock"
 #: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
 COINS_MAX = 1 << 24
@@ -53,7 +54,7 @@ class LeanError(RuntimeError):
 
 #: the core protocols' executables of `PACKAGE` whose `serve` answers a case (`Core.Protocol.main`): one execution
 #: phase's check (`verity/pouw/v1`) and a credit period's (`verity/pouw/period/v1`)
-SERVE_EXES = ("pouw-check", "pouw-period")
+SERVE_EXES = ("pouw-verifier", "pouw-period")
 
 
 @functools.cache
@@ -66,7 +67,8 @@ def executable(exe: str = EXE) -> Path:
         try:
             p = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
         except FileNotFoundError:
-            raise LeanError(f"lake is not on the PATH, so {exe} in {PACKAGE} cannot be built") from None
+            raise LeanError(f"lake is not on the PATH ({os.pathsep.join(os.get_exec_path())}), so {exe} in {PACKAGE} cannot be "
+                            "built: put elan's bin on the PATH (tools/verity/lean/setup.sh installs it in ~/.elan/bin)") from None
     if p.returncode != 0:
         raise LeanError(f"lake build {exe} in {PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
     return PACKAGE / ".lake" / "build" / "bin" / exe

@@ -41,7 +41,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   the sample): GLM-5.3's TP8 Commit with
   `SERVING_ROWS=benchmarks/one_stage/glm53_silu_mul_v2_tp8.json` (its SiluMul_v2 partition: every proof block of `SiluMul_v2{I=1536}`,
   the dense layers' 861 per rank, by `rate:512/861`), or by default the CPU TP stand-in
-  (`adapters/vllm/tests/pipeline/served_tp.py`). A member's whole population is one `verity/flock-circuit` statement, whose shape takes at most
+  (`tests/adapters/vllm/tests/pipeline/served_tp.py`). A member's whole population is one `verity/flock-circuit` statement, whose shape takes at most
   `2^(35 - k_log)` instances: 2,048 at I=1536 (`k_log` 24) and 8,192 at I=256 (`k_log` 22), so a rank's `SiluMul_v2{I=256}`
   (172,200 routed-expert and 21,525 shared-expert proof blocks) is not a member. Each session's `circuit.txt` files and lookup tables
   go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
@@ -52,11 +52,11 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   SHA-512s and committed under the committer's key, which never leaves the node. A window's per-expert table reads count
   registered against these files (`records_audit.py audit --registered`).
 - `a5_row_tables.py` (`a5_tp.sh` with `STANDIN=row-tables`): A5 on a window with row tables, which no TP window of record has
-  yet: `adapters/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
+  yet: `tests/adapters/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
   verifies each sampled chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
 - `a5_topp.py` (`a5_tp.sh` with `STANDIN=topp` or `topp:slots`): A5 on a window of top-p select rows cut into their stages,
-  which no served window has yet: `adapters/vllm/tests/pipeline/test_serving_rows_stages.py`'s rows, each carried row wired
+  which no served window has yet: `tests/adapters/vllm/tests/pipeline/test_serving_rows_stages.py`'s rows, each carried row wired
   to the proof block that wrote it, as rank 0 of a one-rank step on a local challenger's coins, run as `a5_sparse_mla.py` runs its
   window. `topp` names each stage on bits, the form Lean's `verify --zk` takes; `topp:slots` names the stages as words, whose
   table reads go in lookup slots, and Lean refuses each sampled proof block's statement. The window holds the stages whose
@@ -65,13 +65,13 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `--rows`). `--select-only` holds the select chunks alone, composed at any V, each wired to the chunk before it, with the
   rows they read from the step blocks committed as plain input rows that no proof block of the window writes.
 - `a5_network_attester.py` (`a5_tp.sh` with `STANDIN=network_attester`, `network_attester:altered`, `network_attester:pad`, `network_attester:pad-named` or `network_attester:swapped`):
-  A5 on a window with transfer gates, which no served window has yet: two chunks of the certifier's toy Definition whose ports are the
-  bucket rows of one connection's ingress and egress cells (a row a bucket, docket v2), committed under the certifier's
+  A5 on a window with transfer gates, which no served window has yet: two chunks of network attestation's toy Definition whose ports are the
+  bucket rows of one connection's ingress and egress cells (a row a bucket, docket v2), committed under the network attester's
   salts, proved whole (the work sampling design's selection All) beside a sampled rest, on a local challenger's coins or the verifier's
   own. The proof blocks' wiring is the Program's (`network_attester_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
-  cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the certifier signed,
-  named by the proof blocks' value and each proof block's read (connection, cell) placed by the wiring the certifier signed
-  (`network_attester_rows.port`, after `check_registration` under the certifier's key), which refuses a foreign, a duplicate and a
+  cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the network attester signed,
+  named by the proof blocks' value and each proof block's read (connection, cell) placed by the wiring the network attester signed
+  (`network_attester_rows.port`, after `check_registration` under the network attester's key), which refuses a foreign, a duplicate and a
   padding-slot read by name; the altered run, and a statement made for another wiring of the proof blocks (a pad in a data cell's place,
   its rows under the Program's value, two proof blocks swapped: `--made-for`), are refused by Lean's registered reads. Its certifier run
   is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `network_attester_replay.py`'s: a served window's requests through the
@@ -107,14 +107,10 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `adapters/vllm/tools/served_run/commit.sh` (the vLLM served run's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
-  bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
-  `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run) and its replay on CPU. The row dir stays on the
-  node, the only copy of its bundle. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
 - `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol, in one job on an H200 node
   from a clone of the tree (`bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
-  few greedy requests from the certifier's traffic generator, and seals each window. Before the first request, the committer
+  few greedy requests from the network attester's traffic generator, and seals each window. Before the first request, the committer
   registers its weights under its own key (`prove_path.py weights-registration`). Without a docket, `NO WEIGHTS
   REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
   SPOT: the window's advice under that docket (`--weights-of-record`) and its request Programs, V3b's window
@@ -137,10 +133,10 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   directory that names: a kept compose cache, from which a later window under the same tree takes the circuits it
   shares and composes only the rest. No step removes a kept cache, and it holds every template's circuit composed into
   it, one of which can be past 100 GB.
-  With the certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and
+  With network attestation's piece split in two (`CERTIFIER_CHAIN_CMD` and
   `CERTIFIER_PERIOD_CMD`), V3c runs before the pieces instead: the chain after its window commit, beside its audit
   (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its `period.json` once both are done, whose answer
-  the certifier's piece reads. Each
+  network attestation's piece reads. Each
   step's verdict line is in `out/verdicts.txt`. The network attester's piece, the longest, starts as soon as the window is
   picked. No line counts a window's requests: the serve dir's request lists, serve-openai's log and the load's records,
   timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate, less the load's counts,
@@ -163,6 +159,8 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   and parameters: a development challenger local to each session, never an auditor's device, so a measurement and not
   an audit. The served table's benchmark results are `benchmarks/prove_path/run.sh`'s and `a5_llama1b_h200.sh`'s (`verity bench prove
   layers`). Its rules are the three parts at the end of this file.
+- `proof_layers.sh`: the served table's first three benchmark results from a clone, as one command, from the bootstrap to
+  the printer's table, removing its work directory at the end ("The three benchmarks of the proof-layers table").
 - `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--cases DIR`
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
@@ -240,12 +238,12 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   CUDA and OS calls traced, and an A/B of base and new.
   `phase_profile.py` cuts each rep's phase at the prover's synchronizes and splits it into GPU time by kernel family and the
   host's time with the GPU idle: its OS calls (a live coin's round trip), its CUDA calls and its own compute.
-- `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`verity/protocols/proofs/flock/prover/tests/test_lean_forged_proofs.py`),
+- `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`tests/verity/protocols/proofs/flock/prover/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 proof block (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
 - `form_refusals.sh`: the fixture of `verify --zk`'s form refusals
-  (`verity/protocols/proofs/spot/verifier/tests/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
+  (`tests/verity/protocols/proofs/spot/verifier/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
   `--zk` sessions of that proof block flat, of it as its template, and of a toy whose last stage returns the outputs, with the
   flat session's verdicts under four statements `verify --zk` must refuse.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
@@ -313,7 +311,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   execution phase, marked proved or scaled by the record's rules. It refuses a record whose labels its rules contradict:
   K/m proved past one phase, a node cell proved over a period the run doesn't cover, a datacenter or world cell proved,
   a proved statement outside the lock, a rule without its sources. The tight K is shown conditional on what is open.
-  Its test reads stand-ins cut from the writer's own record (`tests/fixtures/onsite_periods/make.py`).
+  Its test reads stand-ins cut from the writer's own record (`tests/benchmarks/one_stage/fixtures/onsite_periods/make.py`).
 - `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B
   prefill mix (prompts of 1,024 ids, `max_tokens` 1, all queued at once, T tokens a step), one arm a run (stock, the
   Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.
@@ -344,7 +342,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   line naming both), and lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
   W registers exactly that circuit's Pearl+ values (CUT). Its last line, `SERVED-COMPARE: EQUAL` or `NOT EQUAL`, is the
   one the record names (`served_verdicts.py record --served-compare`); `served_verdicts.sh served-compare K` reruns it.
-- `rehearsal.sh check|serve|audit|compose|probe`: the remote demo's served path as one command a node, each verb
+- `rehearsal.sh check|serve|audit|compose|probe`: the remote application's served path as one command a node, each verb
   `served_verdicts.sh` at fixed settings (Pearl+ tied to the window, product remote) with its output through a filter
   that withholds a session secret. `check` runs on any CPU node what the other verbs read that needs no card and no
   gate: the settings, the class's circuit from the serve's φ, a stand-in window of the class through what a served
@@ -370,28 +368,50 @@ bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m
 The proof-layers table's first three benchmarks are three runs of `a5_llama1b_h200.sh` on one work directory: Flock (a
 plain audit), Flock with zero knowledge, and with sampling. They differ in their settings and in their partition file's
 sampling design (its `law` key): `stratified-rate:880/880` and `subset:880` take all 880 proof blocks of the window, and
-`subset:256` samples 256 of them. From a clone of `main` on an H200 node with about 450 GB of memory, at the tree's root,
-with `CPUS` the cores the jobs may use and `A5_CARD` their card:
+`subset:256` samples 256 of them. From a clone of `main` on an H200 node with at least 96 GB of host memory available
+and 96 GB of disk free under the work directory (75 GB left beside its peak of about 21 GB), at the tree's root:
 
 ~~~sh
-export WORK=/workspace/a5-layers A5_CARD=0 CPUS=40-59
-(cd adapters/vllm && taskset -c $CPUS bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B_INT8)
+A5_CARD=0 A5_CORES=40-59 WORK=/workspace/a5-layers GPU_LEASE_WHO=$USER bash benchmarks/one_stage/proof_layers.sh
+~~~
+
+Another lease may hold the example's cores: give `A5_CORES` cores no lease holds. `research run` can't ship a shallow
+clone: run it from a full clone. Each row prints an interim `config FAIL` before its `config PASS`; that is expected.
+
+`A5_CARD` is the jobs' card, `A5_CORES` their cores, `WORK` a new or empty work directory and `GPU_LEASE_WHO` who their
+leases are recorded for; `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
+`research run`), and `--dry-run` makes every check and prints each step's command without running it. What it does:
+before anything is downloaded or built, it refuses a missing setting, a card that is not an H200, under 96 GB of host
+memory available, cores this job may not run on, under 96 GB free under `WORK`, a `WORK` that is not empty and results
+already in the results directory. Then it runs the eight steps below, stopping at the first that fails: the bootstrap,
+the three partition files, the three runs and the printer, whose table it keeps as `proof-layers.txt`. Its `steps.log`
+records each step's start, command, exit code and seconds; the peaks of the job's own memory (PSS over its session), of
+the machine's memory in use (other jobs' included) and of `WORK`'s size; and the largest process. At its end, success or
+failure, it copies the three runs' records and the bootstrap's to the results directory and removes `WORK`. It does not
+run the recursion benchmark. By hand, the same steps (the script's bootstrap writes its record under `WORK`):
+
+~~~sh
+export WORK=/workspace/a5-layers A5_CARD=0 A5_CORES=40-59 GPU_LEASE_WHO=$USER
+(cd adapters/vllm && taskset -c $A5_CORES bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B_INT8)
 for b in flock=stratified-rate:880/880 zk=subset:880 sampling=subset:256; do python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); p["law"] = sys.argv[2]; json.dump(p, open(sys.argv[3], "w"))' benchmarks/one_stage/llama32_1b_rope_d64_l0.json "${b#*=}" "$WORK/partition-${b%%=*}.json"; done
-A5_COINS=challenger A5_PLAIN=1 A5_PARTITION=$WORK/partition-flock.json OUT=$WORK/out-flock taskset -c $CPUS bash benchmarks/one_stage/a5_llama1b_h200.sh
-A5_COINS=challenger A5_PARTITION=$WORK/partition-zk.json OUT=$WORK/out-zk taskset -c $CPUS bash benchmarks/one_stage/a5_llama1b_h200.sh
-A5_COINS=challenger A5_PARTITION=$WORK/partition-sampling.json OUT=$WORK/out-sampling taskset -c $CPUS bash benchmarks/one_stage/a5_llama1b_h200.sh
+A5_COINS=challenger A5_PLAIN=1 A5_PARTITION=$WORK/partition-flock.json OUT=$WORK/out-flock taskset -c $A5_CORES bash benchmarks/one_stage/a5_llama1b_h200.sh
+A5_COINS=challenger A5_PARTITION=$WORK/partition-zk.json OUT=$WORK/out-zk taskset -c $A5_CORES bash benchmarks/one_stage/a5_llama1b_h200.sh
+A5_COINS=challenger A5_PARTITION=$WORK/partition-sampling.json OUT=$WORK/out-sampling taskset -c $A5_CORES bash benchmarks/one_stage/a5_llama1b_h200.sh
 uv run verity bench prove layers --flock $WORK/out-flock --zk $WORK/out-zk --sampling $WORK/out-sampling
+cp -r $WORK/out-flock $WORK/out-zk $WORK/out-sampling . && rm -rf "$WORK"
 ~~~
 
 `taskset -c` gives each job its cores, and its builds, replay and audit run on them (`nproc`). On a node shared through
 `gpu-lease`, the bootstrap runs under a lease of the same card and cores instead, with
-`gpu-lease 1 --wait --on $A5_CARD --cores $CPUS --` in place of `taskset -c $CPUS`. The script leases `A5_CARD` for its
-Match capture and its Commit; with no `gpu-lease` it takes that card directly. On a tree whose script reads `A5_CORES`,
-also export `A5_CORES=$CPUS`, which every lease the script takes then names. Unless `CUDA_HOME` is set, the script takes
-the first of `/usr/local/cuda-12.9`, `/usr/local/cuda-12`, `/usr/local/cuda-13.0` and `/usr/local/cuda` that has `nvcc`.
-Where that toolkit lacks the CUDA math libraries' headers, it takes them from the venv's NVIDIA wheels, as the bootstrap's
-norm and router tap builds do. Each run's record is its `OUT`, which the printer reads as a directory, as it reads a
-`research run`'s id.
+`gpu-lease 1 --wait --on $A5_CARD --cores $A5_CORES --` in place of `taskset -c $A5_CORES`. The script leases `A5_CARD`
+for its Match capture and its Commit, and every lease it takes names `A5_CORES`, without which it refuses before any
+build; with no `gpu-lease` it takes that card directly. `gpu-lease status` shows each lease under `GPU_LEASE_WHO`;
+unset, the script records its leases as `vllm-sha512`. Unless `CUDA_HOME` is set, the script takes the first of
+`/usr/local/cuda-12.9`, `/usr/local/cuda-12`, `/usr/local/cuda-13.0` and `/usr/local/cuda` that has `nvcc`. Where that
+toolkit lacks the CUDA math libraries' headers, it takes them from the venv's NVIDIA wheels, as the bootstrap's norm and
+router tap builds do. Each run's record is its `OUT`, which the printer reads as a directory, as it reads a
+`research run`'s id. The three `OUT` directories are inside `WORK`, so the last line copies them to the current
+directory before it removes `WORK` (the venv, the checkpoint, the taps and the Flock build).
 
 Development-only: the coins come from challengers run on the node, stand-ins for the auditor's device, so the printer
 calls the table a measurement, not an audit, and says its parameters are not stated.

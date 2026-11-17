@@ -14,7 +14,7 @@ package). `PouwETilde_v1` is exhaustive on its domain (16 codes × 256 bytes); t
 * `PouwSqGe_v1`: thresholds at, above and below `up48 (sq300 x)`;
 * `PouwBf16Neg_v1`: its edges and random words.
 
-`verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_row_prims_lean.py` checks that this script still writes both files byte for byte.
+`tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_row_prims_lean.py` checks that this script still writes both files byte for byte.
 """
 from __future__ import annotations
 

@@ -148,7 +148,7 @@ def test_readers_carry_no_literal_of_the_table():
 
 
 def test_every_entry_is_read_or_still_written():
-    files = subprocess.run(["git", "ls-files", "-z", "verity", "adapters/vllm/verity_vllm"], cwd=ROOT, check=True, capture_output=True).stdout
+    files = subprocess.run(["git", "ls-files", "-z", "verity", "adapters/vllm/verity_vllm", "tests/verity", "tests/adapters/vllm/verity_vllm"], cwd=ROOT, check=True, capture_output=True).stdout
     text, table = [], {*lean_files(), PYTHON}
     for rel in files.decode().split("\0"):
         path = ROOT / rel

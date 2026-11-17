@@ -17,7 +17,7 @@ to the output count its request row states, the count a tied audit already count
 least significant bit first, then zero bits to a whole 16-bit word (unread): `valid` K×1, `id` K×IW, `P` K×LW and
 `O` K×LW: the layout vLLM's compiler commits for K arrival slots, without a cap bit
 (`verity_vllm.compiler.replay_chain.arrival_fields`), to which
-`benchmarks/network_traces/tests/test_lengths_row_arrivals.py` holds this row. A slot's `id` is the request's place N
+`tests/benchmarks/network_traces/test_lengths_row_arrivals.py` holds this row. A slot's `id` is the request's place N
 in the network attester's release order, `P` its prompt's ids and `O` its outputs. A slot whose `valid` is 0 reads as
 empty whatever its other fields hold.
 
@@ -409,7 +409,7 @@ def _build(C, S, requests, fails):
 
 LengthsRow = part(
     "LengthsRow", STATICS, _sig, _build,
-    "one row of the network certifier's lengths table computed from the request row of its K slots (valid K×1, id "
+    "one row of the network attester's lengths table computed from the request row of its K slots (valid K×1, id "
     "K×IW, P K×LW, O K×LW, each element LSB first, zero-padded to whole u16s) and the fails row (a slot u16 class, u16 "
     "at): the third output's slot k is u32 id + 1, u32 the bytes of the canonical id request of P prompt ids in "
     "B-byte cells and u32 at where the class has bit 0 set, else O, all 0 where valid is 0; the second output counts "
@@ -482,7 +482,7 @@ def blocks(sh: Shape, opened: Rows, requests: Sequence[Sequence[Request]]) -> li
         for k, (got, want) in enumerate(zip(slot.iter_unpack(row), slot.iter_unpack(signed))):
             for name, a, b in zip(("N + 1", "bytes", "n"), got, want):
                 if a != b:
-                    raise Refused(f"row {j}: slot {k}: the request row gives {name} = {a} and the network certifier "
+                    raise Refused(f"row {j}: slot {k}: the request row gives {name} = {a} and the network attester "
                                   f"signed {b}")
         out.append(RowBlock(j, tuple(_slots(sh, mine)), failed, failures, row))
     return out

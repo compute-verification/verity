@@ -6,8 +6,7 @@ A family's data-sheet instance (`ResourceAccounting.TS.Headline.SmNN`, read by `
 its device's data sheet (`DS-NN`) as `ResourceAccounting.TS.Sheet` data, its headline design as a TS model on it, the floor
 program ♭ with the work the proofs could miss (ε_skip), and π*, the certificate the machine model's LP finds at q* = ½.
 Every number is exact: a census value or a TOML value read as its decimal, and `skip.design_skip`'s ε_skip as the
-decimal Python prints. `FAMILIES` lists them: sm_120 (H1 + fx1). sm_80 has none: FOLD-OPT is false at its ALU-pipe
-certificate.
+decimal Python prints. `FAMILIES` lists them: sm_120 (H1 + fx1).
 
 `instance()` derives one and checks it against Python's own numbers: the sheet reproduces every DS coefficient, ♭ is
 `setup`'s floor program at ω's words, π* is one facet, and the bound the Lean proof reads off the identity is at most
@@ -26,7 +25,7 @@ routes at `q = q_T = 9/8`, the work of ♭ the proofs could miss at the vector's
 checks it the same way, against 0.591%, at the sharper ln(8/7) ≥ 2/15 (`LN_P_M`, the first term of
 `Real.hasSum_log_one_add_inv` at 7). The vector is VF3s-16, facet_break's refit of VF3r-16's joint issue rows, and not
 model.toml's `current` (VF3r-16): measured, bit-exact programs load VF3r-16's π*, JI3s_0, at up to 1.0383 (1.0107 in
-honest's IMMA16832), and no census program loads a VF3s-16 row above 1 (`benchmarks/pouw/tests/test_lean_headline.py`).
+honest's IMMA16832), and no census program loads a VF3s-16 row above 1 (`tests/benchmarks/pouw/test_lean_headline.py`).
 """
 from __future__ import annotations
 

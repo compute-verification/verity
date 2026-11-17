@@ -2,7 +2,7 @@
 
 The **network attester** is the auditor's device on a boundary link of a spatial unit (the machines behind network
 attesters). It shapes each link into a fixed grid of buckets and frames, records exactly that grid and one status per
-execution phase, and once per execution phase signs a **network certificate** over a salted digest of the record. What
+execution phase, and once per execution phase signs a **network attestation** over a salted digest of the record. What
 it bounds is how much a covert sender can move across the boundary through **when** frames leave, once the content and
 order of every frame are fixed by the declared Program.
 
@@ -16,7 +16,7 @@ order of every frame are fixed by the declared Program.
   read on one clock; on two devices, within 1.03 s of each other), prose only. The network attester's program's Lean reads
   neither.
 - **What it signs.** An LMS signature (SHA-512, n = 64) over a message binding its key, its session, the execution phase
-  and the record's digest hidden under a salt the network attester samples ("Network certificates").
+  and the record's digest hidden under a salt the network attester samples ("Network attestations").
 - **Public parameters.** Each direction's grid (T, τ_b, r, B and Q, "The network attester (`grid`)"), the set of clock-sync
   values Σ_sync, the network attester's key id and session, and the execution phases audited.
 
@@ -30,7 +30,7 @@ Where each part is stated in Lean:
 - the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
   (`verity/network-records/v3`);
 - one execution phase's verdict of record: `NetworkCheck.TransferBlocks`;
-- a period, onsite's network certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`);
+- a period, onsite's network attestation subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`);
 - an active network attester's run audited as rows over its certified records: `NetworkCheck.RowsAudit`
   (`verity/network-rows/v1`), over the network attester's program's `NetworkAttester.Rows`. It does not hold an egress cell to
   the id egress form, which the reference's `audit` does: that is the io tie's (`IoTieCell`, on every cell), and a
@@ -111,12 +111,12 @@ the status instead, which is 64 bytes per execution phase, or about 92 KB per li
 
 v1 stays as it is, and readable: `CommittedRecord` and `record_digest` are unchanged, and the audit still takes them.
 
-## Network certificates (`certificate`)
+## Network attestations (`certificate`)
 
 **The trust change.** The **network attester**, the device on a node's uplink that shapes each link into the grid
 (`grid.Certifier`), is auditor-trusted: the auditor trusts it to run the grid and to sign what it ran. A raw or
 committed record reaches the auditor as published. Instead, once per execution phase whose status is complete, the
-network attester signs a **network certificate**: a signature over a hiding digest of the execution phase's record, salted by the
+network attester signs a **network attestation**: a signature over a hiding digest of the execution phase's record, salted by the
 network attester (`certificate.Issuer`). Any other execution phase gets none (`Issuer.refused`) and fails closed (W6).
 The record head and the salt are witness. They enter proofs, which open frames of the record in-circuit, and never
 reach the auditor in the clear, so the record's own hashes are unsalted. The audit checks the certificate against the
@@ -150,7 +150,7 @@ This is LMS's network-certificate role digest (`verity.commitments.crypto.lms.ce
 network attester's 16-byte LMS identifier. `session` is the network attester's session id: 32 bytes (`lms.SESSION_BYTES`) the
 challenger samples for the session and issues to the network attester, and the audit takes from its parameters, as it takes the
 key; the record head and `service.encode` don't carry it. The tag is the message's own domain separation, distinct from
-the ids of the checks that read it: the network certificate check `verity/network-certificate/v4` and the audit over
+the ids of the checks that read it: the network attestation check `verity/network-certificate/v4` and the audit over
 every record `verity/network-records/v3`. The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1,
 h = 20, the whole SHA-512 output, not truncated), and its unforgeability is `euf-cma/lms-sha512-n64`.
 The network attester's `Issuer` holds it as a `Signer` (`key_id`, `sign(message)`; `certificate.LmsSigner`) and the audit as a
@@ -278,9 +278,9 @@ Stated in Lean: `NetworkCheck.TransferBlocks`'s network attester form (`Kind.net
 active network attester's records, both ends at the network attester's grid and parameters digest, with no sync read;
 `service.NetworkAttesterProfile` is the Python reference.
 
-## A period, as onsite's network certification subprotocol (`verity/certifier/v0`)
+## A period, as onsite's network attestation subprotocol (`verity/certifier/v0`)
 
-Stated in Lean: `NetworkCheck.Period` (`verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/Period.lean`, the
+Stated in Lean: `NetworkCheck.Period` (`verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/Period.lean`, the
 `network-period` executable), whose module docstring has its one form, the rows form, its formats and the bound `K` it
 publishes. Its parameters list the keys of the link's network attester (`"keys"`), an entry
 for each network attester's session: `{"key": hex, "session": hex, "start": a}`, its LMS public key, its session of 32 bytes,
@@ -539,7 +539,7 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   trace, 30 on smallkv), and `window_map(…, order)` ranks each bucket's connections by order[i]. Every execution phase of the
   heavy trace's honest egress, served through the network attester's own egress at r = 1, is accepted through it (37 execution phases
   of 16 buckets, `test_the_heavy_traces_honest_egress_is_accepted_through_its_order`, on
-  `verity/protocols/resource_accounting/network/verifier/tests/fixtures/warden-heavy-order.json`), and a permutation other than the network
+  `tests/verity/protocols/resource_accounting/network/verifier/fixtures/warden-heavy-order.json`), and a permutation other than the network
   attester's is refused (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`).
   In v4 the permutation is public with the map, in the named gap; at the target it is in the committed map's rows,
   which the compile slice's proof block holds to the advice. A server that admits in release order (a serve-openai
@@ -873,7 +873,7 @@ The audit (`Audit.check_link` on every egress link, `Audit.check_ingress_link` o
 Lean as a core protocol: `NetworkCheck.Check` (`verity/network-certificate/v4`, certified records) and
 `NetworkCheck.Records` (`verity/network-records/v3`, raw, committed and certified records). Their module docstrings give
 the acceptance conditions and the violations, the first that applies naming it (`no-verdict`, `duplicate`, `signature`,
-`status:<reason>`, `advice`, `mismatch`), and `verity/protocols/resource_accounting/network/verifier/network/tests/test_network_check_protocol.py` and
+`status:<reason>`, `advice`, `mismatch`), and `tests/verity/protocols/resource_accounting/network/verifier/network/test_network_check_protocol.py` and
 `test_network_records_protocol.py` hold them to `audit.py`. A violation is recorded and the run rejected; there is no
 halt, and later execution phases are still checked.
 
@@ -947,8 +947,8 @@ so `en` is pinned by that slice's scan, and the carry across execution phases is
 and the Lean is held to those references by the charge difftests: the network attester's program's `NetworkAttester.AdviceV1`
 and `NetworkAttester.WindowCharge`, proved equal to the definitions (`CodeChargesV1`, `CodeChargesWhole`), give what
 `reference_charge` and `reference_window` give on 4,000 random instances each (`runs` in `../attester/program/lean/lean-audit.json`, their
-data checked by `verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_charge_lean_difftest.py` and
-`verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_window_lean_difftest.py`); it is not proved in Lean.
+data checked by `tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_charge_lean_difftest.py` and
+`tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_window_lean_difftest.py`); it is not proved in Lean.
 
 The bound charges the declared `c`, not the realized lengths, since a run counts if any advice within it explains it.
 Each run's egress must equal the Program's, which needs every egress frame tied, and which the tie gives only when no
@@ -1029,7 +1029,7 @@ link that carries the coins: [protocol/coin-link.md](protocol/coin-link.md).
 
 ## Advice for arbitrary serving: what it can carry
 
-The goal is network certification for arbitrary vLLM usage: no FIXLEN, no fixed request size, and
+The goal is network attestation for arbitrary vLLM usage: no FIXLEN, no fixed request size, and
 real EOS. The registered thing is a precommitted ahead-of-time compiler. After serving, the prover hands it an
 **advice** string that encodes everything serving made unpredictable: in advice v0, each request's lengths and finish,
 each step's batch rows, and each step's release bucket. The compiler turns the advice into each step's circuit, and the
@@ -1217,7 +1217,7 @@ and checking state row u + 1. Steps past the execution phase's executed count ar
   execution-phase row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a
   decision to the earlier of its step's execution phase and its arrival's ingress execution phase, up to two before
   its step's: at T = 20, 5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries
-  from execution phase 0 to their steps in execution phases 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
+  from execution phase 0 to their steps in execution phases 1 and 2 (`tests/benchmarks/network_e2e/encodings/test_v1.py`).
 - **The end.** `ReplayClose` reads the session's last state row and execution-phase row and refuses a session that ends with a
   step to run or a decision unread (`close`). The compile slice's proof block charges each decision in the execution phase that
   commits it, A5's, in commit order, which is the order the scan reads them in. So a carried decision is charged where

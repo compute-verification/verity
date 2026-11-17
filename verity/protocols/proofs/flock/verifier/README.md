@@ -15,10 +15,10 @@ the base module. A job that builds this package outside the checkout copies it w
 
 The libraries are layers, each loading only the ones before it: the verifier (`Flock`'s modules outside the next two),
 the ZK server (`FlockZkServer`, which imports `Flock.ZkServer` and the modules under it) and the recursion (`FlockRec`,
-which imports the `Flock.Rec*` modules, with `VStar`). `verity/protocols/proofs/flock/prover/tests/test_lean_layers.py` gives each module its layer and fails on an import
+which imports the `Flock.Rec*` modules, with `VStar`). `tests/verity/protocols/proofs/flock/prover/test_lean_layers.py` gives each module its layer and fails on an import
 of a layer above; the imports that still point up are its `UP`, each with what removes it.
 
 The proofs are about the Lean definitions, so the running binary also trusts the pinned toolchain's compiler and the Lean
 runtime it links, the C compiler that builds both, and the C library under them, and no declaration here swaps a
 definition for code no proof reads (`@[extern]`, `@[implemented_by]`, `unsafe`, `native_decide`), which
-`verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py` refuses.
+`tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py` refuses.

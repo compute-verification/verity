@@ -76,7 +76,7 @@
 #      H1_KEY_SHA512 and MAIN_FILE's line; with in-process coins it claims no verdict) and an accept to the published
 #      coin (`pearlplus_coin`), its load, the replay's node and the rounds dropped, the give-up's document (which
 #      `served_verdicts.py publish` holds on the node, with its counts in this log's lines), Pearl+'s verdict's credit,
-#      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
+#      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.pearlplus_why: its
 #      passes are not the window SPOT audited, so WINDOW names nothing here).
 # With PEARLPLUS_TIE set (served_verdicts.sh's PEARLPLUS_TIE: the window itself served under serve-openai's Pearl+ arm,
 # `serve_pearl`, one Pearl+ epoch a Commit window in SERVE_DIR/pearl/w<k>/), the piece serves nothing of its own: step 1

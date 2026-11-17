@@ -125,5 +125,5 @@ reads after the seal:
 
 ~~~text
 python benchmarks/prove_path/window_cost.py PROBE.json --target h200 --project 8,1024,64 \
-    [--measure-cpu SCRATCH] [--stream adapters/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
+    [--measure-cpu SCRATCH] [--stream tests/adapters/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
 ~~~

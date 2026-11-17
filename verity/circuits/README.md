@@ -12,7 +12,7 @@ descriptor format, its canonical bytes and its digests are specified in [`PROTOC
 
 ## Terms
 
-The terms are the [Glossary](../../ARCHITECTURE.md#glossary)'s; [`GLOSSARY.md`](../../GLOSSARY.md) holds the rest.
+The terms are the [Glossary](../../GLOSSARY.md)'s.
 
 - A **circuit** is gates and the wires between them. A **gate** outputs one bit: the AND or XOR of two or more bits, a NOT,
   an input gate, or the constant 0 or 1 as one of an operation's own bits. A wire carries its source gate's value and none
@@ -73,7 +73,8 @@ Definitions' fast evaluators are `verity_vllm.definitions.numerics`'s, registere
 
 [`circuit-check`](../../tools/verity/circuit_check/README.md) holds every circuit to the property checks: correspondence
 with the reference on every realization, the declared port intervals, redundant and dead gates, and the partition. A
-change that adds or modifies a circuit passes `uv run circuit-check <definition|template|row>`, with its report in the PR.
+change that adds or modifies a circuit passes `uv run circuit-check <definition|template|request-program>`, with its
+report in the PR.
 
 - `check` runs it as its `circuit-check` step (`tools/check/check.py`): `circuit-check --all`, every registered
   Definition and template, each target's pass kept in check's cache (`--cache`, `--catalog-units`) and reused while
@@ -82,7 +83,7 @@ change that adds or modifies a circuit passes `uv run circuit-check <definition|
   records step (`--cc-records`: `circuit-check --all --records-only`), and give each shard those records
   (`--cc-records-from`). The step is off the merge gate (`off_gate` in `tools/check/policy.toml`): a candidate's
   check runs it, and its red holds nothing. The session of circuit-check's own test suite takes the bindings' records from
-  that same cache and has the ones it lacks built and stored there once (`tools/verity/circuit_check/tests/conftest.py`);
+  that same cache and has the ones it lacks built and stored there once (`tests/tools/verity/circuit_check/conftest.py`);
   either can list the records its catalog rests on (`--records-manifest FILE`, `CIRCUIT_CHECK_RECORDS_MANIFEST`), by which
   a store carries them to another run.
 - The fine-grained check ([`verity graph`](../../tools/verity/graph/README.md)) has circuit-check as one
@@ -213,5 +214,5 @@ Pure functions of a Program, read by the resource audits:
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits`), and `./ops/tests/` is a suite
+`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits`), and `../../tests/verity/circuits/ops/` is a suite
 of its own.

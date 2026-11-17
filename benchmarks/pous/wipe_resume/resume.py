@@ -7,10 +7,10 @@ prover keeps the five 200-byte post-absorb states (1,000 bytes of a 64 KiB block
 481 sequential Keccak-f, with no `Π₂` call, inside the 1.449 ms read deadline that `(D, Q) = (5, 2^20)` was converted
 to.
 
-**The streamed wipe.** `L_i = SHA-512(LABEL_TAG ‖ K ‖ u64 i)` under the memory challenger's key `K`, which the prover
+**The streamed wipe.** `L_i = SHA-512(LABEL_TAG ‖ K ‖ u64 i)` under the memory attester's key `K`, which the prover
 never holds. The only state short of a label from which labels resume is the challenger's: SHA-512's state after
 the 67 bytes of `LABEL_TAG ‖ K` (rounds 0–7 in `wipe_stream.c`), which is `K`'s worth. Each prover below runs whole
-sessions of `wipe_challenger.WipeMemoryChallenger` (sequential reads, batch size 1), signed by a test signer and judged by
+sessions of `wipe_challenger.WipeMemoryAttester` (sequential reads, batch size 1), signed by a test signer and judged by
 `wipe_verdict.judge`:
 
 - `honest`: keeps every label. Expect accept.
@@ -23,7 +23,7 @@ sessions of `wipe_challenger.WipeMemoryChallenger` (sequential reads, batch size
   Expect reject.
 - `resume-untimed`: the same under a 10-minute deadline with `UNTIMED_TRIES` keys searched at the first read.
   Expect reject: the deadline isn't what stops it.
-- `key-leak` (a premise broken): the prover is handed `K`, as a memory challenger on the developer's own machine can
+- `key-leak` (a premise broken): the prover is handed `K`, as a memory attester on the developer's own machine can
   leak it. It keeps SHA-512's state after `LABEL_TAG ‖ K` and prior content in the whole store, and answers a read
   with one compression. Expect accept: the attack's mechanism, once the resume state is the prover's.
 - `untiered` (a premise broken): every label kept in memory the commitment doesn't declare, prior content in the
@@ -31,13 +31,16 @@ sessions of `wipe_challenger.WipeMemoryChallenger` (sequential reads, batch size
 - `sampling`: the best keyless strategy, `naive`'s `g = N − dropped(N, k)` labels kept at the sessions' `k`, over many
   sessions at a small `k`: its acceptance rate against `(g/N)^k`, the bound's sampling term.
 
-For each it records the verdict (each side's), how the session ended, the prior content (its size, its share of the
-declared store, and whether `keep` returns it after the reads) and the read times. `main` writes `resume.json`.
+For each it records the verdict (each side's; under `--decide python` no Lean judges, so a session the Python accepts
+is `undecided`, never accepted, and what it expected is read from the Python's side, named by `expected_by`), how the
+session ended, the prior content (its size, its share of the declared store, and whether `keep` returns it after the
+reads) and the read times. `main` writes `resume.json`.
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import importlib.util
 import json
@@ -51,7 +54,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT), str(ROOT / "verity/protocols/resource_accounting/memory/pous/verifier/tests")]
+sys.path[:0] = [str(ROOT), str(ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier")]
 
 import pous_test_signer as ts  # noqa: E402
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw  # noqa: E402
@@ -85,7 +88,7 @@ def dropped(n: int, k: int) -> int:
 class Honest:
     """Keeps every label; its prior content was the whole store, and the fill overwrites it."""
 
-    def __init__(self, n: int, c: WC.WipeMemoryChallenger) -> None:
+    def __init__(self, n: int, c: WC.WipeMemoryAttester) -> None:
         self.store = bytearray(os.urandom(n * LABEL))
         self.z = bytes(self.store)
 
@@ -103,7 +106,7 @@ class Naive(Honest):
     """Keeps prior content in the room of the last `dropped(N, at_k)` labels (`at_k` the session's reads unless
     given) and answers those reads from it."""
 
-    def __init__(self, n: int, c: WC.WipeMemoryChallenger, at_k: int | None = None) -> None:
+    def __init__(self, n: int, c: WC.WipeMemoryAttester, at_k: int | None = None) -> None:
         self.cut = n - dropped(n, c.params.k if at_k is None else at_k)
         self.store = bytearray(n * LABEL)
         self.store[LABEL * self.cut:] = os.urandom(LABEL * (n - self.cut))
@@ -126,7 +129,7 @@ class Resume(Honest):
     """The band attack's strategy on the streamed fill (module docstring): `KEPT` bytes of each label and 63 of prior
     content a slot, `SEEDS` whole labels, and a key search, the only way to the state labels resume from, at a read."""
 
-    def __init__(self, n: int, c: WC.WipeMemoryChallenger, *, clock: Callable[[], int], search_ns: int,
+    def __init__(self, n: int, c: WC.WipeMemoryAttester, *, clock: Callable[[], int], search_ns: int,
                  tries: int) -> None:
         self.n, self.clock, self.search_ns, self.tries = n, clock, search_ns, tries
         self.store = bytearray(os.urandom(n * LABEL))
@@ -176,7 +179,7 @@ class KeyLeak(Honest):
     """Handed `K`: keeps SHA-512's state after `LABEL_TAG ‖ K`, the challenger's own resume point (32 bytes of `K`),
     and prior content in the whole store; a read is one compression from that state."""
 
-    def __init__(self, n: int, c: WC.WipeMemoryChallenger) -> None:
+    def __init__(self, n: int, c: WC.WipeMemoryAttester) -> None:
         super().__init__(n, c)
         self.head = hashlib.sha512(sw.LABEL_TAG + c.key)
 
@@ -195,7 +198,7 @@ class KeyLeak(Honest):
 class Untiered(Honest):
     """Every label in `outside`, memory the commitment doesn't declare; prior content in the whole declared store."""
 
-    def __init__(self, n: int, c: WC.WipeMemoryChallenger) -> None:
+    def __init__(self, n: int, c: WC.WipeMemoryAttester) -> None:
         super().__init__(n, c)
         self.outside = bytearray(n * LABEL)
 
@@ -206,6 +209,7 @@ class Untiered(Honest):
         return b"".join(bytes(self.outside[LABEL * i:LABEL * (i + 1)]) for i in idx)
 
 
+@functools.cache
 def _wipe_verdict():
     spec = importlib.util.spec_from_file_location("streamed_wipe_lean_verdict", WIPE_VERDICT)
     mod = importlib.util.module_from_spec(spec)
@@ -220,13 +224,13 @@ def _stats(xs: list[int]) -> dict[str, int] | None:
     return {"n": len(s), "p50": s[len(s) // 2], "p99": s[min(len(s) - 1, (99 * len(s)) // 100)], "max": s[-1]}
 
 
-def session(name: str, make: Callable[[int, WC.WipeMemoryChallenger], Any], *, n: int, k: int, limit_ns: int, signer,
+def session(name: str, make: Callable[[int, WC.WipeMemoryAttester], Any], *, n: int, k: int, limit_ns: int, signer,
             log, judge: Callable[..., Any], decide: str, clock: Callable[[], int], tag: bytes = b"",
             coin_secret: bytes | None = None) -> dict[str, Any]:
     """One whole session against the prover `make(n, challenger)` builds; its record (module docstring). The coins
     are the OS's, sampled when the fill completes, unless `coin_secret` fixes them."""
     sid = hashlib.sha512(b"verity-pous/wipe-resume/session\0" + name.encode() + b"\0" + tag).digest()[:32]
-    c = WC.WipeMemoryChallenger(os.urandom(32), SERVER, sid, params(n, k, limit_ns), signer, log=log, clock=clock,
+    c = WC.WipeMemoryAttester(os.urandom(32), SERVER, sid, params(n, k, limit_ns), signer, log=log, clock=clock,
                                 coin_secret=coin_secret)
     prover = make(n, c)
     z_before = hashlib.sha512(prover.z).hexdigest()
@@ -237,7 +241,8 @@ def session(name: str, make: Callable[[int, WC.WipeMemoryChallenger], Any], *, n
     v, sides = judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=decide)
     kept = prover.keep()
     out = {"prover": name, "labels": n, "k": k, "limit_ns": limit_ns, "ended": signed.ended,
-           "reads": len(signed.batches), "accepted": v.accepted, "reasons": list(v.reasons)[:3], "verdicts": sides,
+           "reads": len(signed.batches), "accepted": v.accepted, "outcome": _wipe_verdict().outcome(v),
+           "reasons": list(v.reasons)[:3], "verdicts": sides,
            "prior_bytes": len(prover.z), "prior_share": len(prover.z) / (n * LABEL),
            "kept": kept == prover.z, "prior_sha512_before": z_before,
            "prior_sha512_after": hashlib.sha512(kept).hexdigest(),
@@ -249,6 +254,15 @@ def session(name: str, make: Callable[[int, WC.WipeMemoryChallenger], Any], *, n
 
 
 EXPECT = {"honest": True, "naive": False, "resume": False, "resume-untimed": False, "key-leak": True, "untiered": True}
+
+
+def reading(rec: dict[str, Any]) -> tuple[bool, str]:
+    """Whether the check passed the session, and whose reading that is: the verdict's (`verdict`), or, where no Lean
+    judged it (`undecided`), the Python reference's (`python`), a figure of the attack, never the session's
+    verdict."""
+    if rec["outcome"] != "undecided":
+        return rec["accepted"], "verdict"
+    return rec["verdicts"]["python"]["accepted"], "python"
 
 
 def provers(clock: Callable[[], int], limit_ns: int, untimed_tries: int = UNTIMED_TRIES):
@@ -266,17 +280,20 @@ def provers(clock: Callable[[], int], limit_ns: int, untimed_tries: int = UNTIME
 
 def sampling(*, n: int, k: int, at_k: int, sessions: int, signer, log, judge, decide: str, clock,
              limit_ns: int) -> dict[str, Any]:
-    """`naive` as it is at `at_k` reads over `sessions` sessions at `k`: accepted count against `(g/N)^k`."""
-    accepted = 0
+    """`naive` as it is at `at_k` reads over `sessions` sessions at `k`: the count the check passed (`reading`) against
+    `(g/N)^k`, `accepted` where verdicts gave it and `python_accepts` where the Python reference did."""
+    passed, by = 0, set()
     for r in range(sessions):
         rec = session("sampling", lambda n, c: Naive(n, c, at_k), n=n, k=k, limit_ns=limit_ns, signer=signer, log=log,
                       judge=judge, decide=decide, clock=clock, tag=r.to_bytes(4, "big"))
-        accepted += rec["accepted"]
+        got, whose = reading(rec)
+        passed, by = passed + got, by | {whose}
     g = n - dropped(n, at_k)
     p = (g / n) ** k
     sd = math.sqrt(sessions * p * (1 - p))
-    return {"labels": n, "k": k, "at_k": at_k, "g": g, "sessions": sessions, "accepted": accepted,
-            "expected": sessions * p, "p": p, "z_score": (accepted - sessions * p) / sd if sd else None}
+    return {"labels": n, "k": k, "at_k": at_k, "g": g, "sessions": sessions,
+            ("accepted" if by == {"verdict"} else "python_accepts"): passed,
+            "expected": sessions * p, "p": p, "z_score": (passed - sessions * p) / sd if sd else None}
 
 
 def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Callable[[], int] = sw.raw_clock_ns,
@@ -291,8 +308,9 @@ def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Cal
     for name, make, lim in provers(clock, limit_ns, untimed_tries):
         rec = session(name, make, n=n, k=k, limit_ns=lim, signer=signer, log=log, judge=judge, decide=decide,
                       clock=clock, coin_secret=coin_secret)
+        got, rec["expected_by"] = reading(rec)
         rec["expect_accept"] = EXPECT[name]
-        rec["as_expected"] = rec["accepted"] == EXPECT[name]
+        rec["as_expected"] = got == EXPECT[name]
         out["sessions"].append(rec)
     g, cert = n - dropped(n, k), W.certify(params(n, k), 0)
     out["bound"] = {"labels": n, "memory_bits": cert["memory_bits"], "k": k, "r": cert["r"],
@@ -321,8 +339,8 @@ def main() -> None:
                   sample_sessions=args.sample_sessions)
     (args.out / "resume.json").write_text(json.dumps(res, indent=1) + "\n")
     for s in res["sessions"]:
-        print(f"{s['prover']:15} accepted={s['accepted']!s:5} ended={s['ended']:8} reads={s['reads']:5} "
-              f"prior={s['prior_share']:.2%} kept={s['kept']} expected={s['as_expected']}")
+        print(f"{s['prover']:15} outcome={s['outcome']:9} ended={s['ended']:8} reads={s['reads']:5} "
+              f"prior={s['prior_share']:.2%} kept={s['kept']} expected={s['as_expected']} (by {s['expected_by']})")
     if "sampling" in res:
         print("sampling", json.dumps(res["sampling"]))
     sys.exit(0 if res["as_expected"] else 1)

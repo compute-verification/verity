@@ -1,9 +1,21 @@
-# h1_prove
+# H1 tile proof blocks through SPOT
 
-H1 tile proof blocks through SPOT: a recorded or served int8 Llama-3.1-8B window's proof blocks sampled by the live coin,
-proved by Flock `--zk` under the ZK server and checked by the Lean verifier against the verifier's own public files,
-beside controls each refused or rejected by the check it breaks; and the proof blocks a served window's own sampling coin
-selects, read from that window's run.
+This directory takes H1 tile proof blocks through SPOT: the proof blocks of a recorded or served int8 Llama-3.1-8B
+execution phase are sampled by the live coin, proved by Flock `--zk` under the ZK server and checked by the Lean verifier
+against the verifier's own public files, beside controls each refused or rejected by the check it breaks. It also reads,
+from a served execution phase's run, the proof blocks that phase's own sampling coin selects.
+
+## Try it
+
+Check, without a prover or Lean, that a served dump's staged statements are the verifier's own public files:
+
+~~~sh
+uv run pytest tests/benchmarks/pouw/test_h1_prove_live.py -q
+~~~
+
+It prints `6 passed`.
+
+## Runner
 
 **Hardware:** a node's CPUs, no GPU, with the memory the job's header sizes: `job` at K = 4096 wants hundreds of GB
 (`H1_MEM_GB`), `live` 128 GB, `served` 16 GB.
@@ -49,4 +61,4 @@ them. `h1form.py` hands it this harness's ``H1_TILE`` and ``H1_TMPL`` (`benchmar
 codes and scales from a checkpoint on the CPU; `live.py` is the live proof blocks' CLI over the lowering, which `live.sh` runs
 and `benchmarks/one_stage/` reads, and `h1_lanes/served.py` takes the proof blocks `served.py` samples. `window.py`,
 `recorded.py`, `stage.py`, `layer.py` and `live.py` list in `__all__` the names other files read through them, the tests'
-included, except underscore names. Their tests are the `test_h1_prove*.py` files under `benchmarks/pouw/tests/`.
+included, except underscore names. Their tests are the `test_h1_prove*.py` files under `tests/benchmarks/pouw/`.
