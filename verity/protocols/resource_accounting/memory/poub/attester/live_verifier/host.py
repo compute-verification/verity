@@ -1016,19 +1016,24 @@ def compose_handoff(host: Host, scratch: Path, src: BinaryIO, *, pinned: str, on
         if not host.compose:
             raise Refused("compose runs on the compose gate (vy-compose-gate), not this one")
         got = receive(src, scratch / "serve")
-        if COMPOSE_ENV in got and compose_settings((scratch / "serve" / COMPOSE_ENV).read_bytes()).get("DEVELOPMENT"):
-            why = (f"the hand-off sets DEVELOPMENT, a development run's compose, and this gate composes one only where "
-                   f"its own configuration ({host.config}) sets \"development\": true")
-            try:
-                development = host.settings().get("development") is True
-            except (OSError, ValueError, AttributeError) as e:
-                raise Refused(f"{why}, which can't be read ({type(e).__name__}: {e})"[:2000]) from None
-            if not development:
-                raise Refused(f"{why}, which it doesn't")
+        try:
+            settings = host.settings()
+        except (OSError, ValueError) as e:
+            raise Refused(f"this gate's own configuration ({host.config}) can't be read ({type(e).__name__}: {e})"[:2000]) \
+                from None
+        settings = settings if isinstance(settings, dict) else {}
+        name = settings.get("name")
+        if not isinstance(name, str) or not name:
+            raise Refused(f"this gate's own configuration ({host.config}) sets no \"name\", the cluster's name for this "
+                          "machine, which the record names its host by (PP_PEER)")
+        if (COMPOSE_ENV in got and compose_settings((scratch / "serve" / COMPOSE_ENV).read_bytes()).get("DEVELOPMENT")
+                and settings.get("development") is not True):
+            raise Refused(f"the hand-off sets DEVELOPMENT, a development run's compose, and this gate composes one only "
+                          f"where its own configuration ({host.config}) sets \"development\": true, which it doesn't")
     except Refused as e:
         return 3, {"refused": str(e)}
     sums = digest_of(scratch / "serve" / COMPOSE_SUMS)
-    rc = run({**compose_env(host, scratch, pinned, on), **(env or {})}, scratch / "compose.log")
+    rc = run({**compose_env(host, scratch, pinned, on), **(env or {}), "PP_PEER": name}, scratch / "compose.log")
     return rc, {"rc": rc, "pinned": pinned, **({"on": on} if on else {}), "received": len(got), "sums_sha512": sums,
                 **answered(scratch / "out")}
 
