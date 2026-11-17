@@ -1324,16 +1324,19 @@ def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only
         assert composed == "pending"
 
 
-@pytest.mark.parametrize(("said", "verdict"), [("accept", "accept"), ("refuse", "reject"), (None, "error")])
+@pytest.mark.parametrize(("said", "why", "verdict"), [
+    ("accept", None, "accept"), ("refuse", "the Lean verifier counts a block of 9 fresh bits, more than k = 2", "reject"),
+    ("refuse", S.UNDECIDED + "the Lean verifier gave no verdict: inference-only-check not started", "error"),
+    (None, "why", "error")], ids=["accept", "lean-refuses", "undecided", "no-verdict"])
 def test_the_record_carries_the_inference_only_verifiers_verdict_as_a_row_the_combined_verdict_does_not_read(
-        tmp_path, said, verdict):
-    io = {"format": "verity-bench/inference-only-verdict/v5", "verdict": said, "reason": None if said == "accept" else "why",
-          "c": 1, "k": 2, "n": 3, "sealed": 4}
+        tmp_path, said, why, verdict):
+    io = {"format": "verity-bench/inference-only-verdict/v5", "verdict": said, "reason": why,
+          "c": 1, "k": 2, "n": 3, "sealed": 4, "theta": {"inputs": ["0.w"], "by": "chosen"}}
     bare, bare_rec, bare_line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
     report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                  inference_only=io)
     assert report["protocols"].pop("inference-only") == {
-        "verdict": verdict, "protocol": io["format"], "reason": io["reason"], "answer": {"c": 1, "k": 2, "n": 3},
+        "verdict": verdict, "protocol": io["format"], "reason": io["reason"], "answer": {"c": 1, "k": 2, "n": 3, "theta": io["theta"]},
         "answer_from": f"{S.AS_WRITTEN} ({S.INFERENCE_ONLY})", "combined": S.INFERENCE_ONLY_UNREAD}
     assert line.pop("not_combined") == {"the inference-only verifier": verdict}
     assert (report, rec["composed"], line) == (bare, bare_rec["composed"], bare_line)
@@ -1352,6 +1355,9 @@ def test_record_reads_the_inference_only_verdict_beside_it_into_its_row(tmp_path
     rc, line, rows = _recorded(tmp_path, argv, capsys)
     assert rows["inference-only"]["verdict"] == "reject" and line["not_combined"] == {"the inference-only verifier": "reject"}
     assert rc == S.RECORD_EXIT[line["composed"]] == 2
+    (tmp_path / "record" / S.INFERENCE_ONLY).write_text(json.dumps({"verdict": "refuse", "reason": S.UNDECIDED + "why"}))
+    _, line, rows = _recorded(tmp_path, argv, capsys)
+    assert rows["inference-only"]["verdict"] == "error" and line["not_combined"] == {"the inference-only verifier": "error"}
     (tmp_path / "record" / S.INFERENCE_ONLY).write_text("[")
     _, _, rows = _recorded(tmp_path, argv, capsys)
     assert rows["inference-only"]["verdict"] == "error" and rows["inference-only"]["reason"].startswith(

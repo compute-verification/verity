@@ -264,6 +264,8 @@ WIPE = ("the wipe", "wipe", "memory-accounting", "the wipe of the serving card b
 NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "wipe": WIPE[0]}
 INFERENCE_ONLY = "inference-only.json"
 INFERENCE_ONLY_ROW = "inference-only"
+#: how the inference-only verdict's reason begins where its verifier gave no verdict
+UNDECIDED = "undecided: "
 INFERENCE_ONLY_UNREAD = ("not read by the combined verdict: the composite combines verity/inference-only/v0's own "
                          "case, not this (c, k, n) verdict")
 #: a piece's limit unless ``<COMPONENT>_TIMEOUT`` or ``PIECE_TIMEOUT`` sets one, as `timeout` reads it
@@ -2352,9 +2354,10 @@ def composite_answer(public: Path, product: str, window: str | None = None,
 
 
 def inference_only_row(v: Mapping[str, Any]) -> dict[str, Any]:
-    return {"verdict": {"accept": "accept", "refuse": "reject"}.get(v.get("verdict"), "error"),
+    undecided = str(v.get("reason") or "").startswith(UNDECIDED)
+    return {"verdict": {"accept": "accept", "refuse": "error" if undecided else "reject"}.get(v.get("verdict"), "error"),
             "protocol": v.get("format"), "reason": v.get("reason"),
-            "answer": {k: v[k] for k in ("classes", "c", "k", "n", "lean", "record_count", "failure") if k in v},
+            "answer": {k: v[k] for k in ("classes", "c", "k", "n", "lean", "record_count", "theta", "failure") if k in v},
             "answer_from": f"{AS_WRITTEN} ({INFERENCE_ONLY})", "combined": INFERENCE_ONLY_UNREAD}
 
 
@@ -2375,7 +2378,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     Lean check's answer (`composite_answer`), the block record's verdict, and ``lean`` where it was read or why there is
     none, which the report and the line carry; a rejection by it rejects whatever the rows say. ``inference_only``: the
     inference-only verifier's verdict, which the report carries as its ``inference-only`` row and the line under
-    ``not_combined``, and which neither the combined verdict nor the block record reads."""
+    ``not_combined``, and which neither the combined verdict nor the block record reads: ``reject`` only where the Lean
+    verifier gave a verdict, ``error`` where it gave none (`UNDECIDED`)."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()

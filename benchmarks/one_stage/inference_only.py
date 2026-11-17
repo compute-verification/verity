@@ -48,10 +48,13 @@ that can't be decided refuses (`Undecided`): no policy, a policy whose ``k_by_ki
 run's circuit's (a policy written without one is read as before), a serve dir that records no start, a policy written
 once the serve had begun (unless ``--retroactive`` says why it's read anyway), a record with no inference blocks, an
 unpriced primitive, a closed window with no seal, a sealed window the class doesn't take, no ``--lean``, or a Lean
-verifier that gives no verdict or counts other gates a block than the table does.
-The verdict is the Lean verifier's: `inference-only-check --count` on one window's session Program (`lean_count`), with
-``--detail`` where the binary takes it, as its usage says (`takes_detail`), the Program's parameters whose every row is
-a registered read of a pinned parameter bound at registration and named in θ (`held_inputs`, `count_instance`). It
+verifier that gives no verdict, is not started on a host that gives it no memory limit, or counts other gates a block
+than the table does.
+The verdict is the Lean verifier's: `inference-only-check --count` on one window's session Program (`lean_count`),
+under the memory limit `served_cases.limits` gives a check on this host, with ``--detail`` where the binary takes it,
+as its usage says (`takes_detail`), the Program's parameters whose every row is a registered read of a pinned parameter
+bound at registration and named in θ (`held_inputs`, `count_instance`). Which parameters those are is the record's
+reading in Python: the Lean verifier's call holds none of them to its pinned root. It
 decides each block's gates against c and fresh bits against k; n is judged on the exact count, the sealed windows' blocks.
 The record's count (``record_count``: `block_counts.fresh` and the rows the record's wires and the pinned tables'
 openings fill) is carried beside it and never decides it. The session Program carries no wires,
@@ -61,8 +64,8 @@ and the rule that failed, or its refusal's ``error`` and ``message`` (`lean_said
 
 ``--out`` is the public verdict: the judgment against (c, k, n) and no count, of blocks or of windows, in any form. It
 holds the verdict, ``complies``, ``failure`` and ``reason``, each block class's session and the Lean verifier's gates
-and fresh bits a block (``classes``), the record's count a block, the class's slots and positions, and ``counts`` saying
-that n was judged on the exact count, which it doesn't publish. ``--private`` (the serve dir's, 0600) holds it with the
+and fresh bits a block (``classes``), the record's count a block, the inputs named in θ and how they were chosen
+(``theta``), the class's slots and positions, and ``counts`` saying that n was judged on the exact count, which it doesn't publish. ``--private`` (the serve dir's, 0600) holds it with the
 exact counts (``blocks``, the record's rows, and ``total``), each window the class doesn't take and why, and the
 `inference-only-check --count` call (``lean_detail``).
 """
@@ -99,6 +102,8 @@ VERDICT_FORMAT = "verity-bench/inference-only-verdict/v5"
 COUNTS = "none published: n judged on the blocks' exact count, which only the serve dir's private verdict holds"
 RECORD_COUNT = ("the record's count: block_counts on the record's wires and declarations, beside the Lean verifier's "
                 "verdict, which it does not decide and which does not confirm it")
+THETA = ("the inputs the session Program names registered and in θ, chosen by the record's reading (held_inputs) and "
+         "not held to a pinned root by the Lean verifier's call")
 WIRED = ("the Lean verifier counts the rows the record's wires fill and the pinned tables' openings as fresh, because "
          "the session Program it is given carries no wires")
 INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
@@ -473,40 +478,50 @@ def session_instance(fn: Any, m: int, table: Mapping[str, int], c: int, k: int, 
             "table": dict(table), "c": c, "k": k, "n": n}
 
 
-def takes_detail(exe: Path, timeout_s: int) -> bool:
+def takes_detail(exe: Path, timeout_s: int, behind: Sequence[str] = ()) -> bool:
     """Whether ``exe``'s ``--count`` takes ``--detail``, as the usage it prints given no argument says. One that does
     prints only ``{complies}`` without it; one that doesn't answers ``--detail`` with its usage."""
-    p = subprocess.run([str(exe)], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s)
+    p = subprocess.run([*behind, str(exe)], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s)
     return "--detail" in p.stdout + p.stderr
 
 
-def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int = 1800) -> dict[str, Any]:
+def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int = 1800,
+               within: Any = None) -> dict[str, Any]:
     """`inference-only-check --count` on ``inst``, in ``scratch``, with ``--detail`` where ``exe`` takes it (`takes_detail`): its
     ``flags`` and the JSON object it printed (``out``), its whole verdict or its refusal, else ``error``, why it printed
-    none, and where it said something, its tail (``said``). All of it is private; `lean_said` is what the public verdict
-    takes."""
+    none, and where it said something, its tail (``said``). Each call runs under ``within`` (default
+    `served_cases.limits`, this host's memory limit, under which ``memory`` says it ran), and none starts where the host
+    gives no limit. All of it is private; `lean_said` is what the public verdict takes."""
+    import served_cases as SC
+
+    within = SC.limits() if within is None else within
+    flags = ["--count"]
+    if within.refusal is not None:
+        return {"flags": flags, "error": f"inference-only-check not started: {within.refusal}"}
+    behind = tuple(within.scope or ())
     fd, path = tempfile.mkstemp(dir=scratch, suffix=".json")
     with os.fdopen(fd, "w") as fh:
         json.dump(inst, fh)
-    flags = ["--count"]
     try:
-        if takes_detail(exe, timeout_s):
+        if takes_detail(exe, timeout_s, behind):
             flags.append("--detail")
-        p = subprocess.run([str(exe), *flags, path], capture_output=True, text=True, timeout=timeout_s)
+        p = subprocess.run([*behind, str(exe), *flags, path], capture_output=True, text=True, timeout=timeout_s)
     except subprocess.TimeoutExpired:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} gave no verdict within {timeout_s} s"}
+        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} gave no verdict within {timeout_s} s",
+                "memory": within.memory}
     finally:
         os.unlink(path)
     if p.returncode != 0:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} exit {p.returncode}", "said": p.stderr.strip()[-300:]}
+        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} exit {p.returncode}",
+                "said": p.stderr.strip()[-300:], "memory": within.memory}
     try:
         out = json.loads(p.stdout)
         if not isinstance(out, dict):
             raise ValueError("not an object")
     except ValueError:
         return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} printed no JSON object",
-                "said": p.stdout.strip()[-300:]}
-    return {"flags": flags, "out": out}
+                "said": p.stdout.strip()[-300:], "memory": within.memory}
+    return {"flags": flags, "out": out, "memory": within.memory}
 
 
 def lean_said(call: Mapping[str, Any], gates: int) -> dict[str, Any]:
@@ -594,7 +609,9 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
                  "record_count": {**counted, "by": RECORD_COUNT}}
         if lean is None:
             raise Undecided("no Lean verifier was given (--lean), and the verdict is the Lean verifier's")
-        inst = count_instance(doc, row["table"], c, k, n, held_inputs(doc, pins, roots))
+        held = held_inputs(doc, pins, roots)
+        base["theta"] = {"inputs": list(held), "by": THETA}
+        inst = count_instance(doc, row["table"], c, k, n, held)
         call = lean_count(lean, inst, scratch or Path(tempfile.gettempdir()), lean_timeout_s)
         private["lean_detail"] = call
         base["lean"] = said = lean_said(call, row["gates"])
@@ -619,9 +636,9 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
                 "fresh": f"the Lean verifier counts a block of {said['fresh']} fresh bits, more than k = {k}{beside}",
                 "count": f"the blocks' exact count is more than n = {n}"}[failure[1]]}
     except Undecided as e:
-        base |= {"verdict": "refuse", "reason": f"undecided: {e}", "complies": False}
+        base |= {"verdict": "refuse", "reason": f"{SV.UNDECIDED}{e}", "complies": False}
     except Exception as e:  # noqa: BLE001 - anything else the count can't get past is undecided too, and refuses
-        base |= {"verdict": "refuse", "reason": f"undecided: {type(e).__name__}: {e}"[:600], "complies": False}
+        base |= {"verdict": "refuse", "reason": f"{SV.UNDECIDED}{type(e).__name__}: {e}"[:600], "complies": False}
     return base, {**base, **private}
 
 

@@ -31,6 +31,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 
 import inference_only as IO  # noqa: E402
+import served_cases as SC  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 from verity.circuits.ops.boolean import versions as BL  # noqa: E402
 from verity_vllm.definitions.registry.catalog import load  # noqa: E402
@@ -269,6 +270,11 @@ def _policy(row: dict, **over) -> dict:
 FULL = {7: [{}, {}], 11: [{}, {"prompt": 1}], 13: [{"outputs": 1}]}
 
 
+@pytest.fixture(autouse=True)
+def development_host(monkeypatch):
+    monkeypatch.setenv("CHECK_SCOPE", SC.NO_SCOPE)
+
+
 @pytest.fixture
 def lean(monkeypatch) -> Path:
     ref = IO._reference()
@@ -291,6 +297,7 @@ def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(
                                                                               row["fresh"], 6)
     assert (pub["format"], pub["counts"]) == ("verity-bench/inference-only-verdict/v5", IO.COUNTS)
     assert pub["record_count"] == {"held": 0, "wired": 0, "openings": 0, "fresh": row["fresh"], "by": IO.RECORD_COUNT}
+    assert pub["theta"] == {"inputs": [], "by": IO.THETA}
     assert IO.COUNTS.startswith("none published") and "exact count" in IO.COUNTS
     assert pub["registered_session"] is True and pub["serve_began_utc"] == "2025-11-01T12:26:40+00:00"
     assert SV.public_json(pub) == pub and not {"sealed", "outside_class", "retroactive"} & set(pub)
@@ -461,8 +468,48 @@ def test_a_lean_verifier_that_gives_no_verdict_leaves_the_run_undecided(small, t
         pub, full = IO.verdict(_policy(row), small, d, None, None, lean=exe, scratch=tmp_path)
         assert pub["verdict"] == "refuse" and pub["lean"] == {"error": f"inference-only-check --count {why}"}
         assert pub["reason"] == f"undecided: the Lean verifier gave no verdict: inference-only-check --count {why}"
-        assert full["lean_detail"] == {"flags": ["--count"], "error": f"inference-only-check --count {why}", "said": said}
+        assert full["lean_detail"] == {"flags": ["--count"], "error": f"inference-only-check --count {why}", "said": said,
+                                       "memory": SC.UNLIMITED}
         assert list(tmp_path.glob("tmp*.json")) == []
+
+
+def test_the_lean_verifier_runs_behind_the_hosts_memory_limit(small, tmp_path, monkeypatch):
+    """Both of `inference-only-check`'s calls, its usage and its count, run behind the scope `served_cases.limits` gives
+    a check on this host, and the private verdict says under which limit."""
+    row = IO.session_row(small, None, None)
+    exe = _inference_only_check(tmp_path / "lean", NEW_USAGE, {"complies": False}, _whole(row))
+    scope = tmp_path / "scope"
+    scope.write_text(f"""#!/bin/sh
+echo "$*" >> '{tmp_path}/scope.log'
+while [ "$1" != -- ]; do shift; done
+shift
+exec "$@"
+""")
+    scope.chmod(0o755)
+    within = SC.Limits(1, 3, (str(scope), "-p", "MemoryMax=3G", "--"))
+    monkeypatch.setattr(SC, "limits", lambda env=None: within)
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
+    assert (pub["verdict"], pub["failure"]) == ("refuse", [0, "fresh"]) and full["lean_detail"]["memory"] == within.memory
+    calls = (tmp_path / "scope.log").read_text().splitlines()
+    assert len(calls) == 2 and calls[0] == f"-p MemoryMax=3G -- {exe}"
+    assert calls[1].startswith(f"-p MemoryMax=3G -- {exe} --count --detail ")
+
+
+def test_a_host_with_no_memory_limit_starts_no_lean_verifier_and_the_row_is_an_error(small, tmp_path, monkeypatch):
+    """On a host that makes no memory scope (and runs no address-space limit) `inference-only-check` is not started: the
+    run is undecided, saying why, and the record's row says the verifier gave no verdict (``error``), not ``reject``."""
+    monkeypatch.delenv("CHECK_SCOPE")
+    monkeypatch.setattr(SC, "scope_here", lambda: False)
+    monkeypatch.setattr(SC, "address_space_here", lambda: False, raising=False)
+    row = IO.session_row(small, None, None)
+    exe = _inference_only_check(tmp_path / "lean", NEW_USAGE, {"complies": True}, _whole(row))
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
+    why = f"inference-only-check not started: {SC.limits().refusal}"
+    assert (pub["verdict"], pub["lean"]) == ("refuse", {"error": why})
+    assert pub["reason"] == f"{SV.UNDECIDED}the Lean verifier gave no verdict: {why}"
+    assert full["lean_detail"] == {"flags": ["--count"], "error": why}
+    assert not (tmp_path / "lean" / "args.log").exists() and list(tmp_path.glob("tmp*.json")) == []
+    assert SV.inference_only_row(pub)["verdict"] == "error"
 
 
 #: `inference-only-check`'s usage while ``--count`` printed its whole verdict, and once it prints that only with ``--detail``
@@ -521,7 +568,7 @@ def test_the_verdict_is_the_lean_verifiers_and_takes_its_gates_fresh_bits_and_fa
     assert pub["record_count"]["fresh"] == row["fresh"]
     assert str(COUNT) not in json.dumps(pub) and str(COUNT) not in IO.line(pub) and "lean_detail" not in pub
     assert IO.line(pub).startswith(f"refuse: {pub['reason']}: session ")
-    assert full["lean_detail"] == {"flags": flags, "out": _whole(row)}
+    assert full["lean_detail"] == {"flags": flags, "out": _whole(row), "memory": SC.UNLIMITED}
     calls = (tmp_path / "lean" / "args.log").read_text().splitlines()
     assert calls[0] == "" and len(calls) == 2 and calls[1].startswith(" ".join(flags) + " " + str(tmp_path))
 
@@ -534,7 +581,7 @@ def test_a_binary_whose_usage_hides_detail_gives_no_rows_which_is_said(small, tm
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "refuse" and pub["lean"] == {"error": "inference-only-check --count printed no row of the block"}
     assert pub["reason"] == "undecided: the Lean verifier gave no verdict: inference-only-check --count printed no row of the block"
-    assert full["lean_detail"] == {"flags": ["--count"], "out": {"complies": False}}
+    assert full["lean_detail"] == {"flags": ["--count"], "out": {"complies": False}, "memory": SC.UNLIMITED}
 
 
 @pytest.mark.parametrize(("usage", "flags"), [(OLD_USAGE, ["--count"]), (NEW_USAGE, ["--count", "--detail"])],
@@ -550,7 +597,7 @@ def test_an_inference_only_check_refusal_lands_in_lean_with_its_code_and_message
     assert pub["verdict"] == "refuse" and pub["lean"] == refusal
     assert IO.line(pub) == f"refuse: undecided: the Lean verifier gave no verdict: program: {refusal['message']}"
     assert str(COUNT) not in json.dumps(pub) and str(COUNT) not in IO.line(pub)
-    assert full["lean_detail"] == {"flags": flags, "out": said}
+    assert full["lean_detail"] == {"flags": flags, "out": said, "memory": SC.UNLIMITED}
 
 
 @pytest.mark.slow
