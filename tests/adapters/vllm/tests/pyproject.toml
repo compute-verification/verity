@@ -85,7 +85,7 @@ untraced = [
 # rules' sources.
 # tests/commit/test_census_and_memory_map.py builds `core_requirement` (verity/circuits/requirement) against the
 # difftest harness's Lean (tools/difftest), and loads that package's test_requirement_difftest.py by its path.
-# tests/tools/test_served_run.py reads `run.sh bindings`' output for the demos' configurations with `verity run`'s reader.
+# tests/tools/test_served_run.py reads `run.sh bindings`' output for the applications' configurations with `verity run`'s reader.
 # tests/pipeline/test_serve_h1.py loads adapters/torch's test_pouw_h1_receipts.py by its path, for its lanes-form Window;
 # tests/protocols/test_pous_option.py runs the memory attester, which reads the configuration hashes the verity command
 # commits (tools/verity/cli/verity_cli/configurations.toml).
