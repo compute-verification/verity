@@ -6529,6 +6529,7 @@ def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks
     (d / "private").mkdir(parents=True)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2" && echo "$2" >> {tmp_path}/built')
     _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     remote = tree / "verity" / "protocols" / "compose" / "verifier" / "remote"
     remote.mkdir(parents=True)
     if v1:
@@ -6661,9 +6662,9 @@ sys.exit(1)
     _script(bin_ / "prlimit", "exit 1")
     (out / "verdicts.txt").unlink()
     assert run().returncode == 1
-    assert (out / "verdicts.txt").read_text().splitlines() == [dev, (
+    assert (out / "verdicts.txt").read_text().splitlines() == [
         "COMPOSITE: not run, this host makes no systemd user scope and runs no prlimit: composite.py runs only under a "
-        "memory limit of its own")]
+        "memory limit of its own"]
     _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
     (d / "sampled-proofs-served" / "window").mkdir(parents=True)
