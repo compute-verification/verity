@@ -22,16 +22,6 @@ command = "research run --on NODE --project verity --source . --cwd source --gpu
 every = "7d"
 
 [[metric]]
-id = "circuits/committed-time-per-output-token-over-stock"
-title = "Committed time per output token"
-owner = "circuits"
-unit = "times stock"
-axis = "Time per output token of vLLM committing every value, over stock vLLM's, both compiled, at batch 32 with mixed prompts, each point naming its model and machine."
-better = "lower"
-command = "research run --on NODE --project verity --source . --cwd source --gpus 1 -- env SPEC=llama32-1b-bf16-rtx-served-arm bash benchmarks/served_commit/run.sh"
-every = "7d"
-
-[[metric]]
 id = "circuits/commitment-hash-rate"
 title = "Commitment hashing rate"
 owner = "circuits"
