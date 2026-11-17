@@ -60,8 +60,9 @@
 # reason.
 # The cases under the serve dir's private/compose and private/deferred (a hand-off's or a deferral's copies) are no
 # product's. Each composite.py gets VERITY_CONFIGURATION, the hash of the configuration `verity run` read, as its
-# --configuration: a memory case listing a key that committed configuration doesn't pin is refused (exit 67), and a
-# composite whose memory cases list keys is a development check (key_pin: run) either way. No hand-off carries it.
+# --configuration: a memory case listing a key that committed configuration doesn't pin is the run's key, refused
+# (exit 67) under VERITY_HOLD_PLACEMENT=1, which passes --hold-placement, and taken otherwise, and a composite whose
+# memory cases list keys is a development check (key_pin: run) either way. No hand-off carries either.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -182,7 +183,8 @@ EOF
 )
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
     --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" \
-    ${VERITY_CONFIGURATION:+--configuration "$VERITY_CONFIGURATION"} > "$P/$x.log" 2>&1
+    ${VERITY_CONFIGURATION:+--configuration "$VERITY_CONFIGURATION"} \
+    $([ "${VERITY_HOLD_PLACEMENT:-}" = 1 ] && echo --hold-placement) > "$P/$x.log" 2>&1
   r=$?
   grep -E '^(DEVELOPMENT|KEY_PIN|REFUSED|NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
   case $r in

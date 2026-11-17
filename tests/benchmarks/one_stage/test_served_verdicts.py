@@ -6981,6 +6981,16 @@ def test_each_composite_gets_the_configuration_verity_run_read_and_says_what_it_
                             "configuration doesn't pin)")
 
 
+def test_only_verity_hold_placement_1_asks_composite_py_to_refuse_a_run_s_key(tmp_path):
+    given = {}
+    for n, hold in enumerate((None, "", "0", "1")):
+        rc, argv, _lines = _composed(tmp_path / str(n), {"EXIT": "0", "VERITY_CONFIGURATION": "ab" * 64,
+                                                         **({"VERITY_HOLD_PLACEMENT": hold} if hold is not None else {})})
+        given[hold] = (rc, _flag(argv, "--configuration"), "--hold-placement" in argv)
+    assert given == {None: (0, "ab" * 64, False), "": (0, "ab" * 64, False), "0": (0, "ab" * 64, False),
+                     "1": (0, "ab" * 64, True)}
+
+
 def test_where_a_compose_says_it_runs_decides_nothing_composite_py_is_given(tmp_path):
     """`SERVED_NODE`, `PP_PEER` and `COMPOSE_HANDOFF` are the developer's to set on its own node, so composite.py gets
     the same arguments on the workload's node, a deferral's prover node and the auditor's compose gate."""
