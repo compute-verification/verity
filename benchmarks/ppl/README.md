@@ -29,7 +29,8 @@ and then `run.py metrics`. `env GPU=I CORES=A-B` pins its lease to card I and th
 `--gpus 1` (research's own lease would take any card and leave the script none to pin). `SET=wikitext2` measures
 WikiText-2 instead, built from the hub's parquet of its test split into the bench's pinned file, with pyarrow installed
 beside the venv (`$WORK/ppl-pyarrow`) if it lacks one. `ARMS` runs other arms beside `pearl-c-linears` in the same eval,
-e.g. `fp8-linears`, the same linears in plain E4M3 with no noise, and `PPL_OUT` names the output directory.
+e.g. `fp8-linears`, the same linears in plain E4M3 with no noise, and `PPL_OUT` names the output directory. One `SET`
+a `research run`: the run's result holds one measurement a metric, so a second set's `run.py metrics` is refused.
 
 This file holds no table: `run.py tables` (`tables.py`) prints each one from the code and data it describes, the
 registered steps, the arms in `specs/`, the window lists, the models and the locked baseline, so a new step, arm,
