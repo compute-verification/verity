@@ -17,7 +17,9 @@ testpaths = ["."]
 pythonpath = ["../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The suite also tests PoUW's pieces of composite's cases (`pouw_piece.py`, on PoUW's difftest cases and a served H1
-# window's line), and v2's case (`v2_case.py`, on a served window's compose.log).
+# window's line), and v2's case (`v2_case.py`, on a served window's compose.log), and the two-stage audit's second stage on
+# a toy replay block (`toy.py`, `test_toy.py`; `audit.py` proves it on a node), and, opt-in (`VERITY_TWO_STAGE_GUARD`;
+# `guard_node.py --pytest` on a node), SPOT[Flock]'s two-stage Lean model on a run's guard export (`test_guard.py`).
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
@@ -39,6 +41,7 @@ untraced = [
     "test_served_overhead.py",
     "test_served_verdicts.py",
     "test_proof_layers_script.py",
+    "test_toy.py", "test_guard.py",
 ]
 # The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step
 # builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/proofs/flock/prover/check_build.sh bin`'s,
@@ -92,7 +95,7 @@ parts = 7
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
 # network_e2e's endpoint advice: `verity-vllm advice`'s output, which advice_charge's tests read.
-# `benchmarks/census/adversary.json`: onsite_record's world cells (`leak_bounds.world_links`).
+# `calibration/census/adversary.json`: onsite_record's world cells (`leak_bounds.world_links`).
 # `benchmarks/slowdown/data/reference.toml`: the world fleet `leak_bounds.world_links` counts; the GLM-5.3 workload card
 # (`benchmarks/spot_figures/cards/workload.glm-5.3.json`): the weights `leak_bounds` reads as it loads (`WEIGHTS`).
 # `security/lean-audit.json` and `security/Properties/lean-audit.json`: onsite_record's guarantees the tight K rests on
@@ -104,7 +107,7 @@ inputs = ["tools/config/verity_config", "verity/protocols/resource_accounting/co
           "benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm",
           "tests/benchmarks/pouw/test_pearl_c_vllm.py", "tests/benchmarks/pouw/test_pearl_c_hash_decode.py",
           "tests/benchmarks/pouw/test_pearl_c_sm90_prefill.py", "benchmarks/pouw/run_result.py",
-          "benchmarks/pouw/settings.py", "verity", "hardware/cards",
+          "benchmarks/pouw/settings.py", "verity", "calibration/hardware/cards",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/compose/verifier/live_challenger",
           # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
           "tools/difftest/python/verity_difftest",
@@ -117,8 +120,8 @@ inputs = ["tools/config/verity_config", "verity/protocols/resource_accounting/co
           "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.json",
           "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.bin",
           "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-registration.json",
-          "benchmarks/census/deployments.json",
-          "benchmarks/census/adversary.json", "benchmarks/slowdown/data/reference.toml",
+          "calibration/census/deployments.json",
+          "calibration/census/adversary.json", "benchmarks/slowdown/data/reference.toml",
           "benchmarks/spot_figures/cards/workload.glm-5.3.json",
           "security/lean-audit.json", "security/Properties/lean-audit.json",
           "tests/benchmarks/network_e2e/data/endpoint/advice",
@@ -134,7 +137,6 @@ inputs = ["tools/config/verity_config", "verity/protocols/resource_accounting/co
           "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/wire.py", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/vectors.json", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/audit-vectors.json",
           "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/audit-negative-vectors.json", "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json",
           "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/layout.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py",
-          "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py",
           "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py", "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/sources.json",
           "benchmarks/prove_path/llama32_1b_tg_l0_step1.json",
           "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json", "benchmarks/one_stage"]

@@ -14,7 +14,7 @@ concludes:
   weights needs only small inputs and outputs. Work is pinned to the block only by data it must consume that only the
   block receives, a trusted device's fresh data (a run input placed on a trusted device), which a helper could get only through the
   block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the proposed assumption `FLEET_CLOSED`. Or,
-  under the proposed assumption `SALT_CUSTODY`, by a salt the block's own certifier releases only into it: the work that depends
+  under the proposed assumption `SALT_CUSTODY`, by a salt the block's own attester releases only into it: the work that depends
   on it is pinned while `custody`, k, the bits that could carry the salt out before registration (the block's egress
   timing advice, the profile's advice, inside inputs and salt-dependent values crossing out), stays at most 384. With
   none, it is unbounded and nothing is attributed;
@@ -30,7 +30,7 @@ advice, timing advice, inputs, every refused port-window charged at its link's f
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas). Beside the
 covert budget, which is only what goes beyond the committed computation, it reports the export (λ_out, `export_bits`):
 the committed bits that crossed a certified boundary out of a block, by port. They count as fresh input read by
-their receivers once the declaration's certifiers cover every link; until then the export is reported
+their receivers once the declaration's attesters cover every link; until then the export is reported
 as not applicable, with the uncovered links named.
 
 Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, (1 − ε)
@@ -58,7 +58,7 @@ from .time import Interval
 
 #: the premise that no unregistered hardware is reachable from a block
 FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
-#: salt custody (unproved): a salt the block's certifier releases only into it pins the work that depends on it, while
+#: salt custody (unproved): a salt the block's attester releases only into it pins the work that depends on it, while
 #: k, the bits that could carry it out before registration, stays at most this many
 SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
 #: a block's proof blocks counted under the served query (Q_word v1 at X = 16) because no one-stage registration named the
@@ -138,7 +138,7 @@ class Account:
     @property
     def export_bits(self) -> float:
         """The export, λ_out: the committed bits that crossed a certified boundary out of a block, fresh input
-        read by their receivers. Charged only when the declaration's certifiers cover every link (`export_charged`)."""
+        read by their receivers. Charged only when the declaration's attesters cover every link (`export_charged`)."""
         return sum(self.exported.values())
 
     @property
@@ -185,7 +185,7 @@ class Account:
             ports = ", ".join(f"{p!r}: {v:g}" for p, v in sorted(self.exported.items(), key=lambda kv: repr(kv[0])))
             lines.append(f"export: {self.export_bits:g} committed bits out of blocks ({ports}), " + (
                 "charged as novel information read by their receivers" if self.export_charged else
-                f"not applicable while no certifier covers {', '.join(self.uncovered)}"))
+                f"not applicable while no attester covers {', '.join(self.uncovered)}"))
         for s, where in self.located.items():
             lines.append(f"store {s}: held on {where[0]}" if len(where) == 1 else
                          f"store {s}: held on one of {', '.join(where)}" if where else
@@ -287,7 +287,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                                    reads_local[b.name], profile.forced[b.name], names, k, dict(loads), anchor,
                                    {kind: n for kind, n in profile.work.get(b.name, {}).items() if kind.startswith("mac:")}))
 
-    links = {repr(port): dc.uplink(port.certifier) for port in dc.ports}
+    links = {repr(port): dc.uplink(port.attester) for port in dc.ports}
     window_seconds = dc.cadence.seconds(dc.cadence.window_ticks)
     voided = {(r.on.name, r.on.during) for r in refused if r.on.kind == "port"}
     refused_bits = sum(float(links[name].capacity) * window_seconds for name, _ in voided if name in links)

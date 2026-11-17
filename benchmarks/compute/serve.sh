@@ -168,9 +168,9 @@ fail() {  # NAME: a step serve.sh can't go on without failed; the run's statemen
 coins() {  # the coins and parameters the run used, as a line and as compute-run.json
   "$PY" - "$OUT/compute-run.json" "$COINS" "$CLASS" "$DRAWS" "$DELTA" "$SCHEME" "$REPO" "$REV" \
     "$(git -C "$TREE" rev-parse HEAD 2> /dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}")" "$OUT/auditor-gate.json" \
-    "$AUDITOR" "$PIECE/development.json" <<'EOF'
+    "$AUDITOR" "$PIECE/development.json" "${card:-}" <<'EOF'
 import json, os, sys
-out, mode, cls, draws, delta, scheme, repo, rev, commit, gate, auditor, piece = sys.argv[1:13]
+out, mode, cls, draws, delta, scheme, repo, rev, commit, gate, auditor, piece, card = sys.argv[1:14]
 if mode == "local":
     g = json.load(open(gate)) if os.path.exists(gate) else {}
     w, h = g.get("params") or (None, None)
@@ -195,7 +195,7 @@ if os.path.exists(os.path.join(os.path.dirname(out), "steps.txt")):
             steps[name] = {"rc": int(rc), "seconds": int(sec.split("s:")[0])}
 doc = {"schema": "verity-bench/compute-run/v1", **held, "development": True, "draws": int(draws), "delta": delta,
        "over_cap": "uncredited", "class": cls, "scheme": scheme, "model": repo, "revision": rev, "commit": commit,
-       "steps": steps, "seconds": sum(v["seconds"] for v in steps.values())}
+       "card": card.split(",")[1].strip() if card.count(",") == 2 else None, "steps": steps, "seconds": sum(v["seconds"] for v in steps.values())}
 open(out, "w").write(json.dumps(doc, indent=1) + "\n")
 print(f"COINS {line}; parameters: development (sample size {draws} at delta {delta}, tiles over the inert-work bound "
       f"uncredited, {scheme}, class "
@@ -288,7 +288,7 @@ doc = {"model": sys.argv[1], "revision": sys.argv[2], "default_seed": DEFAULT_SE
        "execution": "bi-eager"}
 open(sys.argv[3], "w").write(json.dumps(doc, indent=1) + "\n")
 print(json.dumps(doc, sort_keys=True))
-' "$REPO" "$REV" "$REC/serve-phi.json" "$TREE/hardware/cards"
+' "$REPO" "$REV" "$REC/serve-phi.json" "$TREE/calibration/hardware/cards"
 }
 step cubin cubin || fail cubin
 step serve-phi phi || fail serve-phi

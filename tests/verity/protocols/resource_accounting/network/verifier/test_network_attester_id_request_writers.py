@@ -1,5 +1,5 @@
 """The id request has two writers: the verifier's `id_form.id_request` and the workload's declaration
-(`certifier.prover.workload.id_request`), which the adapter imports so it reads nothing of the verifier. They write
+(`attester.prover.workload.id_request`), which the adapter imports so it reads nothing of the verifier. They write
 the same bytes in the network attester's cells (``offset=0``) and refuse the same fields, and the link frame's header
 is one format on both sides. The same holds for a response's id events (`io_tie.id_event`) and its last bytes
 (`io_tie.TRAILER`), which the workload declares beside them."""
@@ -71,7 +71,7 @@ def test_both_refuse_the_same_fields(bad):
 
 
 def test_both_agree_on_a_seeded_sweep_of_every_field():
-    rng = random.Random("certifier/id-request-writers")
+    rng = random.Random("attester/id-request-writers")
     wrote = 0
     for _ in range(3000):
         f = fields(rng)
@@ -107,7 +107,7 @@ def test_both_refuse_the_same_id_event_arguments(args):
 
 
 def test_both_agree_on_a_seeded_sweep_of_id_events():
-    rng = random.Random("certifier/id-event-writers")
+    rng = random.Random("attester/id-event-writers")
     for _ in range(3000):
         token_id, size = rng.randrange(1 << 32), IT.ID_EVENT_BYTES + rng.randrange(4096)
         assert WL.id_event(token_id, size) == IT.id_event(token_id, size), (token_id, size)

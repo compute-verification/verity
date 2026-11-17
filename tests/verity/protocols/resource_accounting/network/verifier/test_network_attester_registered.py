@@ -40,7 +40,7 @@ def link(i: str, a: str, b: str, beta: int | None, unmediated: str | None = None
 
 def view_site() -> dict:
     """A site as a registration log's view writes it: a host behind a network attester, which splits its uplink, and
-    a memory attester; beside them a second host behind a second certifier, a link between the two hosts, the second
+    a memory attester; beside them a second host behind a second attester, a link between the two hosts, the second
     host's bare uplink, which states no capacity and says why no certifier splits it, and an auditor's device with a
     link to the first host. Each field a location may state is stated on one of them."""
     return {
@@ -76,10 +76,10 @@ def with_key(key: str) -> dict:
     return site
 
 
-def test_the_certifiers_link_and_key_as_registered():
+def test_the_attesters_link_and_key_as_registered():
     assert read(view_site(), "up0", KEY0, head="head0") == R.Registered("head0", "up0", "node0", "cert0", KEY0, 100)
     assert read(view_site(), "up2", KEY1) == R.Registered("h", "up2", "node1", "cert1", KEY1, 40)
-    assert R.certifier_links(R.site_of(view_site())) == ["up0", "up2"]
+    assert R.attester_links(R.site_of(view_site())) == ["up0", "up2"]
 
 
 def test_a_link_that_is_no_link_of_the_site_is_refused():
@@ -95,7 +95,7 @@ def test_a_link_that_is_no_link_of_the_site_is_refused():
     ("mc0", "challenger chal0 and host node0"),
     ("ah0", "auditor-host aud0 and host node0"),
 ])
-def test_a_link_that_joins_no_certifier_and_host_is_refused(name, joins):
+def test_a_link_that_joins_no_attester_and_host_is_refused(name, joins):
     """The attester's half to the outside, a host's bare uplink, a link between two hosts, the memory attester's,
     an auditor's device's."""
     assert refusal(view_site(), name, KEY0) == (f"link {name}: it joins {joins}, not a network certifier and a host; "
@@ -110,7 +110,7 @@ def no_capacity(why: str | None) -> dict:
 
 
 @pytest.mark.parametrize("why", [None, "no line rate"])
-def test_a_certifiers_link_that_states_no_capacity_is_refused(why):
+def test_a_attesters_link_that_states_no_capacity_is_refused(why):
     """After a key that is not the attester's, and whatever the link says of why no certifier splits it."""
     assert refusal(no_capacity(why), "up0", KEY0) == ("link up0: it states no capacity; a network certifier's link "
                                                       "states its line rate")
@@ -151,7 +151,7 @@ def test_the_first_link_and_location_of_a_name_are_read():
     assert refusal(repeated(), "up0", KEY1).startswith(f"link up0: the key {KEY1} is not network certifier cert0's")
 
 
-def test_a_key_that_is_not_the_certifiers_registered_key_is_refused():
+def test_a_key_that_is_not_the_attesters_registered_key_is_refused():
     assert refusal(view_site(), "up0", KEY1) == (f"link up0: the key {KEY1} is not network certifier cert0's registered "
                                                  f"key, {KEY0}")
     assert refusal(view_site(), "up2", "00") == f"link up2: the key 00 is not network certifier cert1's registered key, {KEY1}"
@@ -294,11 +294,11 @@ def seeded(rng: random.Random) -> dict:
             if k["id"] == name:
                 k.update(beta=None, unmediated=rng.choice(WHYS))
     ends = next((k["ends"] for k in site["links"] if k["id"] == name), [])
-    certifiers = [x for x in site["locs"] if x["id"] in ends and x["kind"] == "certifier"]
+    attesters = [x for x in site["locs"] if x["id"] in ends and x["kind"] == "certifier"]
     if rng.random() < 0.25:
-        for x in certifiers:
+        for x in attesters:
             x["key"] = rng.choice(KEYS)
-    keys = [x["key"] for x in certifiers]
+    keys = [x["key"] for x in attesters]
     key = rng.choice(keys) if keys and rng.random() < 0.7 else rng.choice(KEYS)
     return {"head": rng.choice(("h", "", "é")), "key": key, "link": name, "site": site}
 

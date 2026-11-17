@@ -1,7 +1,7 @@
 # The applications' directory: what `tools/move/layout.py --map applications_map.toml` moves and rewrites.
 #
 # An application is one configuration file holding the full set of parameters for one call of Verity, run with
-# `verity run NAME` (Daniel's ruling, Mon 16 Nov 5:12 PM PST). What the repository called a demo is an application, so
+# `verity run NAME`. What the repository called a demo is an application, so
 # `demos/` is `applications/`, whole: README.md and the four configurations, byte for byte. No test directory mirrors it.
 # Kept out of this map's rewrite, beyond the moves' usual records: the move tooling and its tests (their `demos` are
 # toys and old layouts), goal ids that start with `demos/` (a goal's id is a name on the Goals page, not a path).

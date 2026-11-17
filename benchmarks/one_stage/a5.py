@@ -146,7 +146,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   (`case_coins`); it names the session's key as it is, and v2 reads one only at the deployed LMS parameters, so the
   case of a ``local`` session's audit is refused there (`a5_coins.LOCAL_PARAMS`).
 * **Transfer gates opened under the network attester's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
-  registered value's (a network attester execution phase's cells, `certifier.network_attester_rows`), committed under that value's salts
+  registered value's (a network attester execution phase's cells, `attester.network_attester_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
   the root the network attester signed, which the caller read under the network attester's key), the same reads, record and negatives as a row
   table's (below). `a5_network_attester.py` is their stand-in.
@@ -304,6 +304,14 @@ def tie(a: argparse.Namespace) -> dict[str, Any]:
     ``--tie``): one-stage's ``log`` (that record), ``registered`` (each value's words), ``outputs`` (each value that
     record's) and ``schemas`` (their row formats), as `verifier.check` takes them; empty without one."""
     return dict(getattr(a, "tie", None) or {})
+
+
+def verifying(a: argparse.Namespace) -> dict[str, Any]:
+    """`tie` with the window's open root where it registers a value afresh, no earlier record's output: that value's
+    domain binds the root (`docket.unwindowed`)."""
+    t = tie(a)
+    fresh = set(t.get("registered") or ()) - set(t.get("outputs") or ())
+    return {"window_root": a.window_root, **t} if fresh and getattr(a, "window_root", None) is not None else t
 
 
 def declared(a: argparse.Namespace) -> dict[str, Any]:
@@ -531,8 +539,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
             accepted, side = None, {"refused": refusal(e)}
         py = reason(coins, window, held)
         at = ((side or {}).get("step"), (side or {}).get("codes"))
-        return {name: {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted,
-                       "python": py, "lean": side}}
+        # a value registered afresh binds the window's open root, so under another root R7 refuses the docket first
+        bound = window != root and "R7-domain" in (((side or {}).get("refused") or {}).get("codes") or ())
+        return {name: {"refused": py is not None and (accepted is False and at == SELECT_COINS or bound),
+                       "accepted": accepted, "python": py, "lean": side}}
 
     bad = {**AC.negatives(ev, a.coins.pre(), **ours), "coins-for-another-window": (ev, ours)} if ev is not None else {}
     neg = [workers.submit(name, functools.partial(negative, name, coins, held)) for name, (coins, held) in bad.items()]
@@ -942,7 +952,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
-                                     **tie(a), **declared(a)).to_json()
+                                     **verifying(a), **declared(a)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -1280,7 +1290,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                    {"draw": union_sample, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=given["served"], v2=v2_proof(done, not plain(a)) if pm is None else None, partition=part,
-                   tied=tie(a), per_member=pm,
+                   tied=verifying(a), per_member=pm,
                    coins=AC.evidence(a.coins.evidence(), segment), window_root=a.window_root,
                    family=stream.family(draw), member_trees=relay is not None, challenger_key=a.coins.held()["key"])
     result["draw_counts"] = counts
@@ -1308,12 +1318,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         taken = program_values(program)
 
         def registration(name: str, program_: Program, ports: dict, layer: str | None, **day: Any) -> dict[str, dict]:
-            v = V.check(rec, program_, query, sampling_design, CS.SCHEME, ports, leaf_layer=layer, work_table=table, **tie(a), **day)
+            v = V.check(rec, program_, query, sampling_design, CS.SCHEME, ports, leaf_layer=layer, work_table=table, **verifying(a), **day)
             return {name: a0.negative(v)}
 
         def history_root(name: str, wrong: dict) -> dict[str, dict]:
             v = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
-                        **tie(a))
+                        **verifying(a))
             return {name: a0.negative(v)}
 
         parts: list[dict[str, dict] | Negative] = []
@@ -1346,7 +1356,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             parts.append({"proved-set-short-of-the-draw": a0.negative(v)})
         parts.append(workers.submit("transfer gates", functools.partial(
             transfer_gate_negatives, getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_sample, sampled_design, proved,
-            tie(a))))
+            verifying(a))))
         parts.append(workers.submit("audit record", functools.partial(
             a0.audit_negatives, result, sampled_design, a.delta, session_roots, served=sorted(served_units))))
         parts += coin_neg

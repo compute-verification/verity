@@ -127,7 +127,9 @@ recorded run: the metric (the printed number, its unit and target), the two shar
 `OF_CREDITABLE`: the model's MACs Pearl+ can credit at the load, and the share of those credited, each printed too),
 the verified MACs (the credit), the capacity and
 the free MACs at each data-sheet reading, and beside them the answer's ε_s and the error (its δ_s, a parameter the run
-chose, marked modeled: neither is more than sampling's). The metric is
+chose, marked modeled: neither is more than sampling's). Each names its member (`member`): the served model, then the
+card `out/compute-run.json` says the run served on (``llama-3.2-1b-h200``); none names one where that file names no
+card. The metric is
 named by its id in `metrics.toml` beside this file (`METRIC`), where the console reads it; the rest are every
 resource's names: `verified`, `capacity`, `free` and `error`. A reading is a clock of a
 registered device's card file (`clock.tensor`, `clock.sm`; `verity.device.load_card`), capacity the registered devices'
@@ -153,12 +155,12 @@ from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_bench.kit_report import RUN_ID
 
-CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 
 __all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DELTA_S_MARK", "DEVELOPMENT", "EPSILON_S", "HELD_TO_W", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
            "POLICY",
            "RECORDS", "RESTS_ON", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
-           "amounts", "capacity", "coins", "from_dir", "from_run", "main", "model_macs", "uncredited_words"]
+           "amounts", "capacity", "coins", "from_dir", "from_run", "main", "member", "model_macs", "uncredited_words"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
 #: the unit of the two shares the number is the product of (`CREDITABLE`, `OF_CREDITABLE`)
@@ -183,8 +185,8 @@ POLICY = "out/inference-only-policy.json"
 VERDICTS = "out/record/verdicts.json"
 #: the Pearl+ piece's own document (`served_verdicts.py pearlplus`), read for its ``coin_source`` alone
 DEVELOPMENT = "out/pieces/pouw/development.json"
-#: the launcher's statement of the coins and parameters it ran with (`serve.sh`), read for its ``challenger`` and
-#: ``development`` alone
+#: the launcher's statement of the coins and parameters it ran with (`serve.sh`), read for its ``challenger``,
+#: ``development`` and ``card`` alone
 RAN = "out/compute-run.json"
 #: the run's own record of itself: a record directory's run id and commit, and where a record is made up, ``made_up``
 JOB = "job.json"
@@ -637,12 +639,15 @@ def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[st
     total = sum(macs.values())
     head = {"lm_head": {"calls": len(heads), "creditable_macs": creditable,
                         "creditable_share": creditable / total}} if heads else {}
+    ran = _optional(tree, RAN)
+    card = ran.get("card") if isinstance(ran, dict) else None
     return {"value": c["credited"] / total, "unit": UNIT, "commit": commit, "run": run, "target": float(TARGET),
             "met": Fraction(c["credited"], total) >= TARGET, "credited_macs": c["credited"], "model_macs": total,
             "macs": macs, "linears_share": macs["linears"] / total, "passes_macs": c["passes"], "scheme": c["scheme"],
             "epsilon_s": c["epsilon_s"], "delta_s": c["delta_s"], "lean": c["lean"], "coins": coins(tree), "record": record,
             "withdrawn": withdrawn,
-            "model": served["model"], "revision": served["revision"], "class": served["class"], "policy_agrees": served["policy_agrees"],
+            "model": served["model"], "revision": served["revision"], "card": card if isinstance(card, str) and card else None,
+            "class": served["class"], "policy_agrees": served["policy_agrees"],
             "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None, **head,
             "made_up_says": made_up(tree)}
 
@@ -690,7 +695,7 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
     the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name), a parameter the run
     chose and marked so (`DELTA_S_MARK`), never measured.
     Where `site` or `span_s` is None, capacity and free are one entry each, with no value and why. Each is computed from
-    the recorded run."""
+    the recorded run, and each names the document's `member` where it has one."""
     inputs = [doc["run"]] if doc["run"] else []
     verified = doc["credited_macs"]
     head = doc.get("lm_head")
@@ -712,7 +717,17 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
         v = doc[key]
         out.append({"name": name, "value": None if v is None else float(Fraction(str(v))), "unit": unit,
                     "inputs": [*inputs, key], **extra, **({"why": f"the answer states no {said}"} if v is None else {})})
-    return out
+    return [m | {"member": line} for m in out] if (line := member(doc)) else out
+
+
+def member(doc: dict) -> str | None:
+    """The metrics' line a document's measurements are for, as `benchmarks/README.md` names one, model then card: the
+    served model's name and the card the record says the run served on (`RAN`'s ``card``, nvidia-smi's name), each
+    lower-case and hyphenated (``llama-3.2-1b-h200``); None where the record names no card."""
+    if not doc.get("card"):
+        return None
+    card = "-".join(doc["card"].lower().split()).removeprefix("nvidia-")
+    return f"{doc['model'].rsplit('/', 1)[-1].lower()}-{card}"
 
 
 def commit_of(attempt: dict) -> str | None:
