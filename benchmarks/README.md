@@ -49,7 +49,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench route_capture` | what a model executes when served, step by step, and the routes class G's Definitions don't cover |
 | `verity bench scan_cost` | one scan of the network attester's synthetic run with every block proved, and what it costs for each second of execution phase: the prover's seconds and the Lean verifier's CPU seconds on one core |
 | `verity bench serve_tax` | what each change to serving costs vLLM's own server against stock compiled vLLM, at three loads; on Llama 3.2 1B and one H200, `--model llama32-1b --arms 'compiled compiled-again record'` |
-| `verity bench serving_cost` | the serving cost in five stages, each run's record read by the next by its run id: `minify RUN` and `capture RUN` check a stored record and print what it holds, `exact` says what stores nothing, `price` and `confirm` compute ("The serving cost in five stages") |
+| `verity bench serving_cost` | the serving cost in five stages, each run's record read by the next by its run id: `minify RUN` and `capture RUN` check a stored record and print what it holds, `exact` stores the replay's and circuit-check's verdicts, `price` and `confirm` compute ("The serving cost in five stages") |
 | `verity bench served_commit` | served vLLM against served vLLM with every value committed, interleaved, through `verity-bench vllm` |
 | `verity bench served_errors` | error terms of the quoted guarantees that had no value, evaluated at the served sizes, each with its formula and premises |
 | `verity bench served_units` | a served model's proof blocks proved one type at a time from synthetic values and verified by the Lean verifier, forgeries included: `fp8-coord:K=6144` at one input unless given other units |
@@ -250,12 +250,12 @@ The serving cost of a model too large to optimize on (`serve_tax/README.md`'s "T
 stages, each `verity bench serving_cost STAGE` (`serving_cost/run.py`) run under `research run --store-read`. A stage
 reads the record of the stage before it from the evidence store by the id of the run that stored it, never by a path,
 and refuses a run whose result is not that record's kind or did not pass, naming what makes the missing record and
-stating the record's contract below. Two records are stored by the runs that make them, and the door launches
-neither: minify's by a run of `serve_tax`'s stand-in `glm53-standin` (`prod_repro/run.sh --model glm53-standin`), and
-capture's by `prod_repro/run.sh` on the real model. `minify RUN` and `capture RUN` check that a run is a passed record
-of their kind and print what it holds. No command stores exact's record: its check of bindings runs today as
-`circuit-check` on a Definition module's sidecar and its replay as `serve_tax/replay.py`'s, and `exact` refuses,
-naming them. Price and confirm compute their figures. A stage's numbers are measurements under "Metrics"' rules, and a
+stating the record's contract below. The records the door reads are stored by the runs that make them, and the door
+launches none: minify's by a run of `serve_tax`'s stand-in `glm53-standin` (`prod_repro/run.sh --model glm53-standin`),
+capture's by `prod_repro/run.sh` on the real model, the replay's by `serve_tax/replay.py --result`, and circuit-check's
+report by `circuit-check --out` under `research run`. `minify RUN` and `capture RUN` check that a run is a passed record
+of their kind and print what it holds. `exact` checks the replay and the circuit-check report and stores the verdict.
+Price and confirm compute their figures. A stage's numbers are measurements under "Metrics"' rules, and a
 stage whose record is a verdict is to record what the check or the verifier returned ("What a benchmark may import
 and write").
 
@@ -264,7 +264,7 @@ and write").
 | 1. Minify | a small copy of the model from random weights on one card, keeping the selectors that choose each code path (`serve_tax`'s `glm53-standin`) | the copy's identity, the selectors it keeps and its size class; and for each part and each code path the part can take, a unit cost in seconds a call or a step, `measured`, with the count of calls behind it |
 | 2. Exact | `circuit-check` on the full model's bindings, and a replay on the copy | a verdict, not a number: `circuit-check`'s on the bindings, and the replay's on the copy (its tokens equal to the served tokens, its steps reproduced), saying whether the replay was the Python replay or a proof the Lean verifier accepted, so that exact is not read as proved |
 | 3. Capture | a short run of the real model | for each part and code path its counts (calls a step, steps a request), the baseline step time, and the value-dependent inputs a price needs |
-| 4. Price | minify's unit costs times capture's counts, over capture's baseline step time | the priced serving cost under `benchmarks/serving-cost-priced` (`serving_cost/metrics.toml`), never under the measured line, its `member` model, card, then arm (`glm-5.3-h200-prod-record`), `partial` while any (part, code path) is unpriced and `modeled` otherwise, with the capture and minify runs among its `inputs`, and every (part, code path) it could not price |
+| 4. Price | minify's unit costs times capture's counts, over capture's baseline step time | the priced serving cost under `benchmarks/serving-cost-priced` (`serving_cost/metrics.toml`), never under the measured line, its `member` model, card, then arm (`glm-5.3-h200-prod-record`), `partial` while any (part, code path) is unpriced and `modeled` otherwise, with the capture, minify and units runs among its `inputs`, every (part, code path) it could not price, and the runs each priced one's unit costs came from |
 | 5. Confirm | a stored run of the real model at scale (`--measured RUN`), and price's | the measured minus the priced as a measurement of its own, in percentage points, with both runs among its `inputs`: the measured figure under `vllm/prod-serving-cost-glm53` of the price's member over its stock unless `--member` names another; the measured serving cost stays the measuring run's |
 
 Stage 1 is to write no serving-cost percentage and no point under the real model's metric: a `member` tells apart
@@ -272,26 +272,39 @@ configurations that read the same quantity, and a copy from random weights does 
 cost. Stage 4 names the runs it read in its `inputs` and not as `from_run`, since its number is its own and
 `from_run` writes no measurement.
 
-The two records the door reads from the runs that make them:
+The records the door reads from the runs that make them:
 
 - **minify:** a result of kind `serving-cost-minify/v1`, validation `passed`, holding `out/units.jsonl` in the form
   `priced.units` reads (each top-k pass's device time a call by rows and keys, with no row failed and with every row
-  failed). It writes no serving-cost percentage.
+  failed), at decode shapes unless its fingerprint's `shapes` says `prefill`. It writes no serving-cost percentage.
+- **units** (`--units RUN`, repeatable, on `price` and `minify`): a result of kind `dsa-topk-units/v1`, validation
+  `passed`, holding `out/units.jsonl` in the same form, its fingerprint naming the shapes it timed under `shapes`:
+  `decode` or `prefill`.
+- **replay** (`exact --replay RUN`): a result of kind `serve-tax-replay/v1`, validation `passed`, as
+  `serve_tax/replay.py --result` stores it. Where its fingerprint names the minify run under `minify`, exact holds it
+  to that run; where it names none, exact records `held_to_minify` false and says so. Its fingerprint's `replay` says
+  `lean` for a proof the Lean verifier accepted, and anything else is the Python replay.
+- **circuit-check** (`exact --circuit-check RUN --bindings NAME...`): a run holding `out/circuit-check.json`,
+  circuit-check's report (`verity-circuit-check/v1`), whose targets include every binding named.
 - **capture:** a result of kind `serving-cost-capture/v1`, validation `passed`, holding the run's `out/` as
   `priced.py` reads it: each arm's lifetimes (`ARM.N/`), `topk_counters.json` and `prod_repro.json`. Its fingerprint
   names the minify run under `minify`, the exact run under `exact` once an exact record exists, and the member's model
   and card under `served` and `card`, as `serve_tax.member` gives them (`glm-5.3`, `h200`).
 
-While no command stores an exact record, a capture names none, and price reads the capture and the minify run it
-names.
+Exact stores a result of kind `serving-cost-exact/v1`, passed only where the replay passed and circuit-check's report
+passed and holds every binding named, its fingerprint naming the minify, replay and circuit-check runs, the bindings,
+`replay_kind` (`python` or `lean`) and `held_to_minify`. Price merges the minify run's unit costs with each units
+run's, refusing where two runs give one shape of one pass and path different costs, or where together they time no
+rows × keys grid. A capture that names an exact run is refused unless that run is a passed exact record.
 
 Two cases decide where a price comes from:
 
 - **A cost that depends on the load,** such as the attested tick's holding a request back until its admission step,
   is stored as a count from stage 3, the steps an admission was held under the captured load, times the step time,
   and never as a unit cost from the copy.
-- **A code path the copy never takes** is listed as unpriced, and stage 4's point is `partial`, not `modeled`, until
-  a unit cost for that path comes from another source.
+- **A code path the copy never takes** is listed as unpriced, and the price is `partial`, not `modeled`, until a
+  unit cost for that path comes from another source: the top-k at prefill steps is unpriced while the capture has
+  prefill steps and no source's `shapes` is `prefill`.
 
 ## On VCF's Slurm cluster
 
