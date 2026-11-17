@@ -59,12 +59,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ liveSession liveRoundsJ)
 
 open scoped ENNReal
 
-/-- V*'s live session of `J` tables at a sample and registration, its outcome written by `wr`. -/
-def liveJ {nv : ℕ} {Reg' : Type} (dg : ByteArray → ByteArray) (J mPts N : ℕ)
-    (wr : Finset (Fin nv) → Reg' → LiveOutJ J mPts → Exec.Transcript) (S : Finset (Fin nv)) (R : Reg') :
-    Game Exec.Transcript :=
-  (liveSession dg J mPts N).map (wr S R)
-
 /-- A live session's outcome of `J'` tables, as one of `J` tables when `J' = J`. -/
 def castOut {J J' : ℕ} (h : J' = J) (mPts : ℕ) (o : LiveOutJ J' mPts) : LiveOutJ J mPts :=
   cast (congrArg (fun J => LiveOutJ J mPts) h) o
@@ -122,9 +116,6 @@ namespace ZkOuterR
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
-
-/-- V*'s live session at the history. -/
-abbrev game : Game (Reg' × Finset (Fin nv) × Exec.Transcript) := auditLive Lv Reg' (liveJ dg J mPts N x.wr)
 
 /-- **The session types**: its inputs pass the statement check with the verifier's registered reads (`ScopeZR`) at
 untemplated tags, their circuit is `c`, their registered population has `nv` units, and table 0 sets up at some

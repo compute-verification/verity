@@ -90,15 +90,56 @@ def castLive {J J' : ℕ} (h : J' = J) (dg : ByteArray → ByteArray) (mPts N : 
     (s : Strategy (liveSession dg J mPts N)) : Strategy (liveSession dg J' mPts N) :=
   cast (congrArg (fun J => Strategy (liveSession dg J mPts N)) h.symm) s
 
+namespace ZkOuterD
+
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : SamplingDesign nv} (zo : ZkOuterD mPts nv J Reg' c hU hscope Lv)
+
+/-- Every table count of the plan is `J`. -/
+theorem hlen (S : Finset (Fin nv)) (R : Reg') : (planZHJ (Reg := Reg') zo.dj zo.y₀ S R).length = J :=
+  (planZHJ_length zo.dj zo.y₀ S R).trans zo.hJ
+
+end ZkOuterD
+
 namespace ZkOuter
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
 
+/-- V*'s live session at the history. -/
+noncomputable abbrev game : Game (Reg' × Finset (Fin nv) × Exec.Transcript) :=
+  auditLive Lv Reg' (liveOfZJ dg (planZHJ zo.dj zo.y₀) N zo.wr)
+
+/-- The registered-reads layout of V*'s session (`layShHJ`). -/
+noncomputable abbrev lay :=
+  layShHJ (Reg := Reg') zo.dj zo.y₀ zo.ht zo.hcH (Layout.scopeOkH_of_scopeOk hscope) hU (pub := zo.pub)
+
+/-- The value binding of V*'s session (`vbHJ`). -/
+noncomputable abbrev vb := vbHJ (Reg := Reg') zo.dj zo.y₀ zo.ht zo.hcH (Layout.scopeOkH_of_scopeOk hscope) hU zo.hpub
+
 /-- The strategy a name stands for in V*'s session. -/
 noncomputable def ofBase (τ₀ : Strategy (baseGame Lv Reg' dg J mPts N)) : Strategy (zo.game dg N) :=
   ⟨τ₀.1, fun ω => Strategy.map (fun t => (τ₀.1, Lv.draw ω, t)) _ (Strategy.map (zo.wr (Lv.draw ω) τ₀.1) _
     (castLive (zo.hlen (Lv.draw ω) τ₀.1) dg mPts N (τ₀.2 ω)))⟩
+
+/-- The prover's strategy in V*'s session, simulated in the compiled batched session (`simZHJ`). -/
+noncomputable def sim (τ : Strategy (zo.game dg N)) :=
+  simZHJ zo.dj zo.y₀ zo.ht zo.hcH (Layout.scopeOkH_of_scopeOk hscope) hU zo.wr dg N zo.hTags zo.hRec zo.hDraw τ
+
+/-- **V*'s value layer at the strategy `τ`**: the decoded witness (`XplurZC`), each wire's bit in its commit string's
+plurality value. -/
+noncomputable def layer (k Rw : ℕ) (τ : Strategy (zo.game dg N)) : Fin (Layout.keyN c hU nv) → Bool :=
+  XplurZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀) (tabZHJ zo.dj zo.y₀)
+    zo.vb (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw
+
+/-- **A layer agrees with the registrant**: every wire a unit reads at a registered read carries the registrant's bit. -/
+def RegAgree (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
+  ∀ u, ∀ g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u, zo.rd.isRead (zo.lay.pos g) →
+    bits g = zo.lay.bit (zo.rd.wv (zo.lay.pos g)) g
+
+/-- **A good layer**: no incorrect proof block, and agreement with the registrant. -/
+def Good (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
+  ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).incorrect bits = ∅ ∧ zo.RegAgree bits
 
 end ZkOuter
 
@@ -124,11 +165,30 @@ structure VStmt : Type 1 where
   hscope : Layout.scopeOk c = true
   samplingDesign : VSamplingDesign nv
 
+namespace VStmt
+
+/-- A session of the verifier's circuit at one history. -/
+abbrev Outer (Q : VStmt) (Reg' : Type) := ZkOuter Q.mPts Q.nv Q.J Reg' Q.c Q.hU Q.hscope Q.samplingDesign.live
+
+/-- A value layer of the verifier's circuit. -/
+abbrev Bits (Q : VStmt) : Type := Fin (Layout.keyN Q.c Q.hU Q.nv) → Bool
+
+/-- A name for a strategy of a session of the verifier's circuit. -/
+abbrev Name (Q : VStmt) (Reg' : Type) (dg : ByteArray → ByteArray) (N : ℕ) : Type :=
+  Strategy (baseGame Q.samplingDesign.live Reg' dg Q.J Q.mPts N)
+
+end VStmt
+
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
 
 /-- The record of V*'s sessions at one history: each session's name and outcome. -/
 abbrev VRec (Vs : Fin S → VStmt) (Reg' : Type) (dg : ByteArray → ByteArray) (N : ℕ) : Type :=
   (j : Fin S) → (Vs j).Name Reg' dg N × (Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript)
+
+/-- **Every session accepts.** -/
+def Accepts (zs : (j : Fin S) → (Vs j).Outer Reg') {dg : ByteArray → ByteArray} {N : ℕ} (b : VRec Vs Reg' dg N) :
+    Prop :=
+  ∀ j, LiveAcceptsZKR (zs j).I (zs j).own (b j).2
 
 /-- **V*'s layers** at the strategies the record names. -/
 noncomputable def layers (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N k Rw : ℕ)

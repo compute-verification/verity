@@ -67,10 +67,19 @@ structure ZkOuterR (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Bui
     OwnReadsHJ I own c (pubZ I) (wr (Lv.draw ω) R' o) ((rd ht S₀ d₀ y₀ hc hpub).restrict (rowIn (Lv.draw ω))).isRead
       (rd ht S₀ d₀ y₀ hc hpub).port (rd ht S₀ d₀ y₀ hc hpub).readAt
 
+/-- V*'s live session of `J` tables at a sample and registration, its outcome written by `wr`. -/
+def liveJ {nv : ℕ} {Reg' : Type} (dg : ByteArray → ByteArray) (J mPts N : ℕ)
+    (wr : Finset (Fin nv) → Reg' → LiveOutJ J mPts → Exec.Transcript) (S : Finset (Fin nv)) (R : Reg') :
+    Game Exec.Transcript :=
+  (liveSession dg J mPts N).map (wr S R)
+
 namespace ZkOuterR
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
+
+/-- V*'s live session at the history. -/
+abbrev game : Game (Reg' × Finset (Fin nv) × Exec.Transcript) := auditLive Lv Reg' (liveJ dg J mPts N x.wr)
 
 /-- The strategy a name stands for in V*'s session. -/
 def ofBase (τ₀ : Strategy (baseGame Lv Reg' dg J mPts N)) : Strategy (x.game dg N) :=

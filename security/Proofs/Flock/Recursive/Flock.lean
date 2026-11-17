@@ -194,27 +194,12 @@ variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
 theorem hc : HmRow.parse (zkTags zo.I) zo.I.circuitFile zo.I.tables = .ok c :=
   (Hidden.parse_untyped (zkTyped zo.ht) zo.hcH).1
 
-/-- Every table count of the plan is `J`. -/
-theorem hlen (S : Finset (Fin nv)) (R : Reg') : (planZHJ (Reg := Reg') zo.dj zo.y₀ S R).length = J :=
-  (planZHJ_length zo.dj zo.y₀ S R).trans zo.hJ
-
 end ZkOuterD
 
 namespace ZkOuter
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
-
-/-- V*'s live session at the history. -/
-noncomputable abbrev game : Game (Reg' × Finset (Fin nv) × Exec.Transcript) :=
-  auditLive Lv Reg' (liveOfZJ dg (planZHJ zo.dj zo.y₀) N zo.wr)
-
-/-- The registered-reads layout of V*'s session (`layShHJ`). -/
-noncomputable abbrev lay :=
-  layShHJ (Reg := Reg') zo.dj zo.y₀ zo.ht zo.hcH (Layout.scopeOkH_of_scopeOk hscope) hU (pub := zo.pub)
-
-/-- The value binding of V*'s session (`vbHJ`). -/
-noncomputable abbrev vb := vbHJ (Reg := Reg') zo.dj zo.y₀ zo.ht zo.hcH (Layout.scopeOkH_of_scopeOk hscope) hU zo.hpub
 
 /-- **Every strategy of V*'s session has a name.** -/
 theorem ofBase_surj (τ : Strategy (zo.game dg N)) : ∃ τ₀, zo.ofBase dg N τ₀ = τ := by
@@ -239,19 +224,9 @@ theorem outcome_writes (τ : Strategy (zo.game dg N)) {o : Reg' × Finset (Fin n
     (h : Game.Outcome (zo.game dg N) τ o) : ∃ ω x, o = (τ.1, Lv.draw ω, zo.wr (Lv.draw ω) τ.1 x) :=
   outcome_auditLive_liveOfZJ dg N zo.wr τ h
 
-/-- The prover's strategy in V*'s session, simulated in the compiled batched session (`simZHJ`). -/
-noncomputable def sim (τ : Strategy (zo.game dg N)) :=
-  simZHJ zo.dj zo.y₀ zo.ht zo.hcH (Layout.scopeOkH_of_scopeOk hscope) hU zo.wr dg N zo.hTags zo.hRec zo.hDraw τ
-
 /-- The simulation registers what the prover sends. -/
 theorem reg_sim (τ : Strategy (zo.game dg N)) : reg (zo.sim dg N τ) = τ.1 :=
   rfl
-
-/-- **V*'s value layer at the strategy `τ`**: the decoded witness (`XplurZC`), each wire's bit in its commit string's
-plurality value. -/
-noncomputable def layer (k Rw : ℕ) (τ : Strategy (zo.game dg N)) : Fin (Layout.keyN c hU nv) → Bool :=
-  XplurZC execArith hs512 ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀) (tabZHJ zo.dj zo.y₀)
-    zo.vb (reg (zo.sim dg N τ)) (cont (zo.sim dg N τ)) k Rw
 
 /-- **`cr/sha-512` for the knowledge finders** of the simulation at the strategy `τ` (`TableCRZ`), at budgets
 `qF, qS`. -/
@@ -338,15 +313,6 @@ theorem boundIf_le (Lm : SamplingDesign nv) {k Rw M : ℕ} (ρ : ℝ) {τ : Stra
   split_ifs with hc
   · exact (zo.bound_zero dg N Lm ρ (zo.cr_of_not_fork dg N h).2).le
   · exact absurd (zo.cr_of_not_fork dg N h).1 hc
-
-/-- **A layer agrees with the registrant**: every wire a unit reads at a registered read carries the registrant's bit. -/
-def RegAgree (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
-  ∀ u, ∀ g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u, zo.rd.isRead (zo.lay.pos g) →
-    bits g = zo.lay.bit (zo.rd.wv (zo.lay.pos g)) g
-
-/-- **A good layer**: no incorrect proof block, and agreement with the registrant. -/
-def Good (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
-  ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).incorrect bits = ∅ ∧ zo.RegAgree bits
 
 open Classical in
 /-- The units with a row at a registered read whose leaf under `R` is not the registrant's. -/
@@ -463,18 +429,8 @@ end VSamplingDesign
 
 namespace VStmt
 
-/-- A session of the verifier's circuit at one history. -/
-abbrev Outer (Q : VStmt) (Reg' : Type) := ZkOuter Q.mPts Q.nv Q.J Reg' Q.c Q.hU Q.hscope Q.samplingDesign.live
-
 /-- A session of the verifier's circuit at one history, but for its record's custody. -/
 abbrev OuterD (Q : VStmt) (Reg' : Type) := ZkOuterD Q.mPts Q.nv Q.J Reg' Q.c Q.hU Q.hscope Q.samplingDesign.live
-
-/-- A value layer of the verifier's circuit. -/
-abbrev Bits (Q : VStmt) : Type := Fin (Layout.keyN Q.c Q.hU Q.nv) → Bool
-
-/-- A name for a strategy of a session of the verifier's circuit. -/
-abbrev Name (Q : VStmt) (Reg' : Type) (dg : ByteArray → ByteArray) (N : ℕ) : Type :=
-  Strategy (baseGame Q.samplingDesign.live Reg' dg Q.J Q.mPts N)
 
 end VStmt
 
@@ -485,11 +441,6 @@ noncomputable abbrev sessions (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : Byt
     Game (VRec Vs Reg' dg N) :=
   seqC S (T := fun j => (Vs j).Name Reg' dg N) (α := fun j => Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript)
     (fun j => (zs j).game dg N) fun j => (zs j).ofBase dg N
-
-/-- **Every session accepts.** -/
-def Accepts (zs : (j : Fin S) → (Vs j).Outer Reg') {dg : ByteArray → ByteArray} {N : ℕ} (b : VRec Vs Reg' dg N) :
-    Prop :=
-  ∀ j, LiveAcceptsZKR (zs j).I (zs j).own (b j).2
 
 /-- **An outcome of V*'s sessions plays each session's game to its recorded outcome, against the strategy its recorded
 name stands for** (`outcome_seqC`). -/

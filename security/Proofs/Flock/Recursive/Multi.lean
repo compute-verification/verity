@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Recursion.Multi
 public import Proofs.Flock.Recursive.Compose
 public import Proofs.Flock.Recursive.Defs
 import Mathlib.Combinatorics.Matroid.Init
@@ -32,6 +33,7 @@ strategies' types, vary with the history the sessions follow.
 namespace FlockSoundness.Discharge.Recursion
 
 open Game
+
 open scoped ENNReal
 
 section Exp
@@ -132,22 +134,11 @@ section Seq
 
 variable {α : Type}
 
-/-- **`g` with the prover's messages fixed by `τ`**: only the coins remain. -/
-def play : (g : Game α) → Strategy g → Game α
-  | .ret a, _ => .ret a
-  | .send _ k, τ => play (k τ.1) τ.2
-  | @Game.coin _ C iF iN k, τ => @Game.coin _ C iF iN fun c => play (k c) (τ c)
-
 theorem exG_play (F : α → ℝ≥0∞) : ∀ (g : Game α) (τ : Strategy g) (s : Strategy (play g τ)),
     exG F (play g τ) s = exG F g τ
   | .ret _, _, _ => rfl
   | .send _ k, τ, s => exG_play F (k τ.1) τ.2 s
   | @Game.coin _ _ _ _ k, τ, s => congrArg avg (funext fun c => exG_play F (k c) (τ c) (s c))
-
-/-- **`g` played by a strategy the prover names first**: the prover sends a name `τ`, `g` is played by `of τ`, and the
-output is the name with the outcome. -/
-def committed {T : Type} (g : Game α) (of : T → Strategy g) : Game (T × α) :=
-  .send T fun τ => (play g (of τ)).map fun a => (τ, a)
 
 theorem exG_committed {T : Type} (g : Game α) (of : T → Strategy g) (F : T × α → ℝ≥0∞)
     (s : Strategy (committed g of)) : exG F (committed g of) s = exG (fun a => F (s.1, a)) g (of s.1) :=

@@ -47,17 +47,6 @@ namespace ReadsX
 
 variable {lay : Layout P plan tab decode} {rs : HmRowsX lay}
 
-/-- **The registered reads at the positions `A` keeps.** -/
-def restrict (rd : ReadsX lay rs) (A : lay.Pos → Prop) : ReadsX lay rs where
-  isRead p := rd.isRead p ∧ A p
-  read_row p h := rd.read_row p h.1
-  port := rd.port
-  readAt := rd.readAt
-  wv := rd.wv
-  ws := rd.ws
-  wpath := rd.wpath
-  committed p h := rd.committed p h.1
-
 /-- **`prob_off_le` at the outcome's reads and registration.** In a game `G` played by `σ` whose accepted outcomes `o`
 (`accept`) the verifier's registered check holds on, for the reads `rdo o` at the registration `Rof o` through
 `path o`: the probability of accepting while one of `rdo o`'s reads has a leaf under `Rof o` that is not the

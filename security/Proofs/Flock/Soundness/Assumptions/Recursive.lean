@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Recursion.Defs
 public import Proofs.Flock.Soundness.Discharge.Recursion.Flock
 public import Proofs.Flock.Soundness.Discharge.Recursion.Fork
+public import Proofs.Flock.Soundness.Discharge.Recursion.Multi
 public import Proofs.Flock.Soundness.Discharge.Recursion.Off
 public import Proofs.Flock.Soundness.Discharge.Recursion.Raw
 public import Proofs.Flock.Soundness.Discharge.Recursion.Registrants
