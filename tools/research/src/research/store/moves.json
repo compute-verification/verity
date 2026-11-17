@@ -5152,6 +5152,40 @@
       "paths": {
         "demos/": "applications/"
       }
+    },
+    {
+      "paths": {
+        "security/Proofs/Properties/Pous/MemoryChallenger.lean": "security/Proofs/Properties/Pous/MemoryAttester.lean",
+        "security/Proofs/Properties/Pous/MemoryChallenger/": "security/Proofs/Properties/Pous/MemoryAttester/",
+        "security/Properties/Pous/MemoryChallenger.lean": "security/Properties/Pous/MemoryAttester.lean",
+        "security/Properties/Pous/MemoryChallenger/": "security/Properties/Pous/MemoryAttester/",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger.lean": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester.lean",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck.lean": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier.lean",
+        "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck.lean": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier.lean",
+        "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck.lean": "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier.lean",
+        "verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/": "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck.lean": "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier.lean",
+        "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck/": "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier/"
+      }
     }
   ]
 }

@@ -30,7 +30,7 @@ builds a period of those windows, the salt each window's live coin, that meets e
 
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs
 
-open PouwCheck Properties.Pouw.MonitoringPeriod
+open PouwVerifier Properties.Pouw.MonitoringPeriod
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **A window is credited under the check exactly when it and every earlier one are accepted**, at `K_d > 0`. -/

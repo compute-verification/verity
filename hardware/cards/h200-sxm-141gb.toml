@@ -6,9 +6,13 @@
 
 kind = "gpu"
 sku = "h200-sxm-141gb"
+short = "h200"
 name = "NVIDIA H200 SXM 141 GB"
 die = "GH100"
 arch = "sm_90a"
+driver = [
+  { value = "NVIDIA H200", source = "art:0b4bdf17c2c9 (out/found.json: nvidia-smi --query-gpu=name on the card benchmarks/tensor_duty ran on); art:72daa20de42c, art:28ff838a63c9 (nvidia-smi -q: Product Name, on both H200 nodes)" },
+]
 board = "692-2G520-0280-001"
 vbios = "96.00.A5.00.03"
 nodes = "two H200 nodes (art:72daa20de42c, art:28ff838a63c9: identical apart from the current clocks)"

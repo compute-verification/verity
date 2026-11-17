@@ -122,9 +122,6 @@ tests/adapters/vllm/tests/program/predict/fixtures/naming_traces.json
 tests/adapters/vllm/tests/program/data/dsa_h200_logits.npz
 tests/adapters/vllm/tests/program/data/dsa_glm53_kslots.npz
 adapters/vllm/docs/data/ref-prims
-adapters/vllm/manifests/semantic-profiles/qwen2-eager-batch-invariant-v1.json
-adapters/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v2.json
-adapters/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v1.json
 tests/adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json
 tests/adapters/vllm/tests/records/data
 tests/adapters/vllm/tests/commit/serving_row_leaf_vector.json
