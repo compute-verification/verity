@@ -134,6 +134,7 @@ from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition,
                                   bind)
 from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.population import wired_population_program
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -1674,6 +1675,9 @@ class Circuit:
         (`rows.population_program`, `program_values`)."""
         return CS.population_program(list(self.templates), values=program_values(self.registered))
 
+    def wired_program(self) -> tuple[Any, dict[str, Any]]:
+        return wired_population_program(list(self.templates), {**self.description(), "external": list(self.external)})
+
     def template(self, tid: str) -> Any:
         """The template of descriptor id ``tid``."""
         if (got := self._by_id.get(tid)) is None:
@@ -2415,11 +2419,8 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
     are well-formed and its proof block is the record's (`Blocks.of`)."""
     if doc.get("format") != CIRCUIT:
         raise ValueError(f"a period's circuit record is {CIRCUIT}, not {doc.get('format')!r}")
-    defs = [(resolve(t), int(n)) for t, n in doc["templates"]]
-    if [descriptor_id(fn) for fn, _ in defs] != [t for t, _ in doc["templates"]]:
-        raise ValueError(f"the catalog resolves {[t for t, _ in doc['templates']]} to {[descriptor_id(fn) for fn, _ in defs]}")
-    several = len(defs) > 1 or doc["query"] != PO.template_instance_query(defs[0][0])
-    program, query = CS.population_program(defs, several=several, values=program_values(declarations(doc)[2]))
+    defs = _templates_of(doc, resolve)
+    program, query = _program_of(doc, defs)
     stated = "cap" in doc
     if (("members" in doc) == stated or ("wires" in doc) != stated
             or (not stated and ({*DECLARED, "blocks"} - {"registered"}) & set(doc)) or (stated and WINDOW_INGRESS in doc)):
@@ -2450,6 +2451,30 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
         listed_reads(ms, doc["templates"], declarations(doc)[2], ingress)
         listed_ingress(ms, doc["templates"], ingress)
     return w
+
+
+def program_of_record(doc: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[Any, dict[str, Any]]:
+    return _program_of(doc, _templates_of(doc, resolve))
+
+
+def _templates_of(doc: Mapping[str, Any], resolve: Callable[[str], Any]) -> list[tuple[Any, int]]:
+    defs = [(resolve(t), int(n)) for t, n in doc["templates"]]
+    if [descriptor_id(fn) for fn, _ in defs] != [t for t, _ in doc["templates"]]:
+        raise ValueError(f"the catalog resolves {[t for t, _ in doc['templates']]} to {[descriptor_id(fn) for fn, _ in defs]}")
+    return defs
+
+
+def _program_of(doc: Mapping[str, Any], defs: list[tuple[Any, int]]) -> tuple[Any, dict[str, Any]]:
+    several = len(defs) > 1 or doc["query"] != PO.template_instance_query(defs[0][0])
+    program, query = CS.population_program(defs, several=several, values=program_values(declarations(doc)[2]))
+    if "cap" in doc and PO.build(program, query)["program"] != doc.get("program"):
+        try:
+            wired = wired_population_program(defs, doc)
+        except ValueError:
+            return program, query
+        if PO.build(*wired)["program"] == doc.get("program"):
+            return wired
+    return program, query
 
 
 def of_records(window_dir: str | Path, sampling_design: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[CS.Binding, dict[str, Any]]:
