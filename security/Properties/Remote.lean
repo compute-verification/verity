@@ -13,7 +13,7 @@ public import VStarRecursive.Caller
 
 `Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.tiedSameB` over three subprotocols, in the order of
 their ids: the inference-only policy (`InferenceOnlyCheck.Protocol.protocol`), PoUW's period credit
-(`PouwCheck.Period.protocol`) and SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
+(`PouwVerifier.Period.protocol`) and SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
 one-stage v2's audit, the recursive audit's form refused (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`). The policy's
 commitment and SPOT's (the one-stage registration record, `Spot.OneStage.commitmentOf`, in both
 forms) are the run's registration record, and the composite rejects unless both decode to one digest
@@ -149,7 +149,7 @@ each under its own subprotocol's decoder (SPOT's is the one-stage registration r
 the run's record's;
 every Commit record the
 period's windows name, when they decode, has digest `r` (a period whose windows don't decode is the period's own
-refusal, `PouwCheck.Period.check`, which this doesn't read); the policy's case is `CaseHeld`: the record names the
+refusal, `PouwVerifier.Period.check`, which this doesn't read); the policy's case is `CaseHeld`: the record names the
 registered circuit by its SHA-512, θ holds what the log's first record registers, the instance checked has a parse, a
 declaration the registered circuit lays out and a division, every parse carries the policy's `program`, `Γ` and `α`,
 and every declaration the registered circuit lays out, with the declared division, meets the policy; and SPOT's case is `StageHeld`: it is in the one-stage form, its record names, by its SHA-512, the program of one-stage

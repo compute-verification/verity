@@ -2,12 +2,12 @@ module
 
 public import CoreProtocol.Account
 public import CoreProtocol.Cli
-public import PouwCheck.Credit
-public import PouwCheck.CreditOnce
+public import PouwVerifier.Credit
+public import PouwVerifier.CreditOnce
 meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
-meta import PouwCheck.Credit
-meta import PouwCheck.CreditOnce
+meta import PouwVerifier.Credit
+meta import PouwVerifier.CreditOnce
 
 /-!
 # A PoUW period as a `Core.Protocol`: `verity/pouw/period/v1`
@@ -56,13 +56,13 @@ challenger `key` to a registered device.
 **Profile**: the period's name and its number of windows.
 
 What it doesn't check: each sampled proof block's statement and each round's live statement, whose proof outcomes the evidence
-carries as the verifier's verdicts (`PouwCheck.Verified` and `PouwCheck.LiveVerified` judge them, with
+carries as the verifier's verdicts (`PouwVerifier.Verified` and `PouwVerifier.LiveVerified` judge them, with
 Flock's Lean verifier run outside).
 -/
 
 @[expose] public section
 
-namespace PouwCheck.Period
+namespace PouwVerifier.Period
 
 open Lean (Json toJson)
 open Flock (V)
@@ -372,4 +372,4 @@ private def accepted : Core.Answer :=
   | .steps s _ => s.read accepted
   | _ => none) == [some (3, 8)]
 
-end PouwCheck.Period
+end PouwVerifier.Period

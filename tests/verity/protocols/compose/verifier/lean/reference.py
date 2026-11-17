@@ -371,13 +371,13 @@ POUS = Recorded("verity/pous/p2/v4/run")
 #: (`pearl_plus_answer`), and else it refuses a commitment that isn't JSON, as Pearl+'s decoder does, and has no answer
 #: to any other case
 PEARL_PLUS = Recorded("verity/pouw/pearl-plus/v1")
-#: `PouwCheck.PearlPlus.Protocol.commitmentTag`
+#: `PouwVerifier.PearlPlus.Protocol.commitmentTag`
 PEARL_PLUS_TAG = "verity/pouw/pearl-plus/manifests/v1"
 
 
 def pearl_plus_answer(commitment: bytes, verified: dict) -> dict:
     """Pearl+'s outcome on a served run whose Python verdict ``served_passes.py verify`` recorded (`verified`, its
-    ``verify.json``), framed as `PouwCheck.PearlPlus.Protocol` frames the check's: its digest SHA-512(`PEARL_PLUS_TAG` ‖
+    ``verify.json``), framed as `PouwVerifier.PearlPlus.Protocol` frames the check's: its digest SHA-512(`PEARL_PLUS_TAG` ‖
     0 ‖ the commitment's bytes), and on acceptance its public the credit at δ (`publicJson`) and its profile the samples
     asked for, the tiles sampled and the passes (`profileJson`)."""
     a, digest = verified["answer"], hashlib.sha512(PEARL_PLUS_TAG.encode() + b"\0" + commitment).digest()
@@ -679,7 +679,7 @@ def _nats(x: Any) -> bool:
 
 def pearl_commitment(commitment: bytes) -> tuple[bytes, bytes] | Reject | None:
     """The registration record's digest and the window record W's digest Pearl+'s commitment names, as Pearl+ decodes
-    it (`PouwCheck.PearlPlus.Protocol.commitmentOf`: exactly ``manifests``, a nonempty list, ``record``, a SHA-512
+    it (`PouwVerifier.PearlPlus.Protocol.commitmentOf`: exactly ``manifests``, a nonempty list, ``record``, a SHA-512
     digest in lowercase hex, and ``window``, exactly ``dropped``, a list of nonnegative integers, ``record``, W, an
     object, and ``rounds``, null or such a list); else what refused it, or None when it doesn't decode."""
     try:
