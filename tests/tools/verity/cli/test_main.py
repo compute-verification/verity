@@ -2,6 +2,7 @@
 in the tree."""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -32,3 +33,22 @@ def test_an_unknown_command_is_named_then_the_usage_follows():
     first, rest = str(e.value.code).split("\n", 1)
     assert first == "verity: no command 'nosuch'"
     assert rest == verity_cli.__doc__
+
+
+def test_verity_calibrate_runs_a_calibrations_runner_and_lists_them_given_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(verity_cli, "ROOT", tmp_path)
+    with pytest.raises(SystemExit) as e:
+        verity_cli.main(["calibrate"])
+    assert str(e.value.code).endswith("NAME is one of none")
+    (tmp_path / "calibration" / "tc_probe").mkdir(parents=True)
+    (tmp_path / "calibration" / "tc_probe" / "run.py").write_text("")
+    started: list[list[str]] = []
+    monkeypatch.setattr(verity_cli, "_run", lambda argv: started.append(argv) or 0)
+    assert verity_cli.main(["calibrate", "tc-probe", "--card", "0"]) == 0
+    assert started == [[sys.executable, str(tmp_path / "calibration" / "tc_probe" / "run.py"), "--card", "0"]]
+
+
+def test_verity_demo_is_no_command():
+    with pytest.raises(SystemExit) as e:
+        verity_cli.main(["demo", "remote"])
+    assert str(e.value.code).split("\n", 1)[0] == "verity: no command 'demo'"

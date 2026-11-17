@@ -14,7 +14,7 @@ attention isn't the class Program's one-row decode's, though at as few keys as o
 A unit its node's lowering filled holds its rows of that value (`_Program.outs`), and so does each add part of a fused norm
 cut at its residual add (`_Program.norms`): part AT its words of the node's second field, the sum; a quantizer that is
 `Int8RowQuant_v5` holds the value's words whole as its H1 leaf row too (`_Program.packed`). A circuit cut at its linears
-(Pearl+'s tables, `_Program._cut`) takes each cut linear's value, its y, as registered: its `LinearOut_v1` unit holds it as
+(Pearl+'s tables, `_Program._cut`) takes each cut linear's value, its y, as registered: its `LinearOut_v3` unit holds it as
 its output rows and, each word widened to FP32, as its input row, which the window commits by reference from the call's y
 that `Rows.value` makes of them, and a served y is taken under any statics of its Definition, which the circuit never
 computes (`Slot`'s ``cut``), at every prompt position, the last layer's too, which prefill prunes there but the engine
@@ -27,7 +27,7 @@ Every other unit holds its Definition's function of the window's values:
   `SelectEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's group units each group's first maximum above -inf of its logits and its index in the group
   (`chunk_best`), and its ``x0`` unit ``logits[0]``;
-- each cut linear's `LinearARow_v1` its x widened to FP32 exactly, its A row;
+- each cut linear's `LinearARow_v3` its x widened to FP32 exactly, its A row;
 - each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
   core's ``one_stage.registered.Registered`` of ``row-seg`` rows or one like it);
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its

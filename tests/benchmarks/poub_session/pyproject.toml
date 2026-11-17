@@ -65,6 +65,9 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           # test_sass_gate.py: sass_gate.py runs the PoUW harness's mma_gate; test_rows.py checks that rows.sh's
           # paths exist, these two among them
           "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py", "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu",
+          # test_rows.py: the files session.cu's includes reach, each in a directory rows.sh's base tree links
+          "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.cu",
+          "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sha512.cuh",
           "benchmarks/pouw/harness/jobs/toolkit.sh",
           # test_host_read_tiers.py: host_read_tiers.sh's lease, asked of the tree's own gpu-lease over faked cards
           "tools/research/src/research/pods/sh/gpu_lease.sh",

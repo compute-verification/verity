@@ -107,10 +107,6 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `adapters/vllm/tools/served_run/commit.sh` (the vLLM served run's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
-  bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
-  `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run) and its replay on CPU. The row dir stays on the
-  node, the only copy of its bundle. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
 - `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol, in one job on an H200 node
   from a clone of the tree (`bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
@@ -346,7 +342,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   line naming both), and lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
   W registers exactly that circuit's Pearl+ values (CUT). Its last line, `SERVED-COMPARE: EQUAL` or `NOT EQUAL`, is the
   one the record names (`served_verdicts.py record --served-compare`); `served_verdicts.sh served-compare K` reruns it.
-- `rehearsal.sh check|serve|audit|compose|probe`: the remote demo's served path as one command a node, each verb
+- `rehearsal.sh check|serve|audit|compose|probe`: the remote application's served path as one command a node, each verb
   `served_verdicts.sh` at fixed settings (Pearl+ tied to the window, product remote) with its output through a filter
   that withholds a session secret. `check` runs on any CPU node what the other verbs read that needs no card and no
   gate: the settings, the class's circuit from the serve's φ, a stand-in window of the class through what a served

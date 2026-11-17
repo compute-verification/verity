@@ -1,4 +1,4 @@
-"""`onsite_minutes.py`: the onsite demo's minutes from the prover node's run's start to the auditor device's run's end, written
+"""`onsite_minutes.py`: the onsite application's minutes from the prover node's run's start to the auditor device's run's end, written
 only for an accepting ``VERDICT`` line of the goal's seven checks, from a research run, on a commit of main."""
 from __future__ import annotations
 
@@ -112,7 +112,7 @@ def test_a_rejecting_line_before_an_accepting_one_rejects_the_period_with_no_val
 def test_a_served_commit_off_main_or_a_third_run_is_refused(tmp_path, repo, capsys):
     r, _, off = repo
     with pytest.raises(M.R.Refused, match=f"the served commit {off} is not a commit of main"):
-        M.R.minutes(demo(tmp_path / "runs", off, line()), tmp_path / "runs", "main", r, read=M.verdict)
+        M.R.minutes(demo(tmp_path / "runs", off, line()), tmp_path / "runs", "main", r, read=M.verdict, metric=M.METRIC)
     with pytest.raises(SystemExit):
         M.main(["r-prover", "r-other", "r-auditor"])
     assert "unrecognized arguments" in capsys.readouterr().err

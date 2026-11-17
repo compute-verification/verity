@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 REPO = Path(__file__).resolve().parents[3]
+CARD_FILES = REPO / "hardware/cards"
 sys.path.insert(0, str(REPO / "tools" / "research" / "src"))
 
 from research import result as R  # noqa: E402
@@ -149,7 +150,7 @@ def test_the_cards_reading_by_path_is_verity_devices_rate_at_the_tensor_pipes_cl
     from verity.device import load_card, number, rate
 
     m = _measure()
-    card = load_card("h200-sxm-141gb")
+    card = load_card("h200-sxm-141gb", directory=CARD_FILES)
     for fmt in ("bf16", "e4m3"):
         assert m.tensor_reading("h200-sxm-141gb", fmt) == float(2 * rate(card, fmt=fmt, mhz=number(card["clock"]["tensor"])))
 

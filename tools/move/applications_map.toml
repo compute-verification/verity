@@ -1,0 +1,43 @@
+# The applications' directory: what `tools/move/layout.py --map applications_map.toml` moves and rewrites.
+#
+# An application is one configuration file holding the full set of parameters for one call of Verity, run with
+# `verity run NAME` (Daniel's ruling, Mon 16 Nov 5:12 PM PST). What the repository called a demo is an application, so
+# `demos/` is `applications/`, whole: README.md and the four configurations, byte for byte. No test directory mirrors it.
+# Kept out of this map's rewrite, beyond the moves' usual records: the move tooling and its tests (their `demos` are
+# toys and old layouts), goal ids that start with `demos/` (a goal's id is a name on the Goals page, not a path).
+# The move's commit adds this map (`regen_apps.sh`, lanes/top/tools/consolidation/appmap in the notes, wrote it).
+
+[roots]
+old = { verity = "verity", verity_cli = "tools/verity/cli/verity_cli", research = "tools/research/src/research" }
+new = { verity = "verity", verity_cli = "tools/verity/cli/verity_cli", research = "tools/research/src/research" }
+
+[paths]
+"demos/" = "applications/"
+
+[retired]
+paths = ["demos/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# `"demos"` alone between quotes is the directory wherever this repository writes it (a place of the import listing, a
+# registry root, a suite's input, the tree's level)
+words = ["demos"]
+# goal ids under the Goals page's `demos/` area, which are names and not paths
+keep = ["demos/*-demo", "demos/both", "demos/pouw"]
+# `verity demo`'s help names `demos/NAME.toml`, a placeholder and no file: ci's change deletes `verity demo` with its help
+# line, so the move edits only the two lines that read the directory (`ROOT / "demos"`), and the two changes meet in one
+# hunk, whose merge is ci's deletion
+keep_in = { "tools/verity/cli/verity_cli/__init__.py" = ["demos/NAME.toml"] }
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "tests/tools/move/**",
+           "tests/tools/check/test_move_check.py", "archive/**", "tools/research/src/research/store/moves.json",
+           "**/*.lean", "**/lean-audit.json", "**/lakefile.toml", "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c",
+           "adapters/vllm/manifests/**", "adapters/vllm/workloads/**", "adapters/vllm/data/**",
+           "adapters/vllm/verity_vllm/pins/**", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**"]
+include = []
+
+[modules]
+"demos" = "applications"

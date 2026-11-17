@@ -66,6 +66,7 @@ from typing import Any
 import jsonschema
 import pytest
 from verity import device as SITE
+from verity.commitments.periods import interface as IF
 from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
@@ -1500,7 +1501,7 @@ def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_co
     monkeypatch.setenv("ANSWER", json.dumps(answer))
     _rc, _line, rows = _recorded(tmp_path, argv, capsys)
     assert rows["integrity"]["verdict"] == "accept" and "covers" not in rows["integrity"], rows["integrity"]
-    w = tmp_path / "serve" / "sampled-proofs-served" / "window"
+    w = tmp_path / "serve" / STEP3 / "window"
     case = json.loads((w / "case-v2.json").read_text())
     members = {"m0": {"units": [[0, 2]]}, "m1": {"units": [[2, 3]]}, "m2": {"units": [[3, 4]]}}
     (w / "case-v2.json").write_text(json.dumps({**case, "params": {**case["params"], "proofs": {"members": members}}}))
@@ -1510,13 +1511,13 @@ def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_co
     assert row["members"] == {"sampled": 2, "registered": 3}, row
     assert row["bounds"] == ["at most 1 incorrect of member m0's 2 proof blocks at δ 1/100",
                              "at most 0 incorrect of member m2's 1 proof block at δ 1/100"], row
-    leg = json.loads((tmp_path / "record" / "block-record.json").read_text())["legs"]["integrity"]
+    integrity = json.loads((tmp_path / "record" / "block-record.json").read_text())[BR.BY_SUBPROTOCOL]["integrity"]
     why = ("the sample reached 2 of 3 members, so no bound over the workload's 4 proof blocks holds; at most 1 "
            "incorrect of member m0's 2 proof blocks at δ 1/1000000; at most 0 incorrect of member m2's 1 proof block "
            "at δ 1/1000000")
-    assert leg["at"]["1/1000000"] == {"holds": False, "why": why} and not leg["at"]["1/100"]["holds"], leg
-    assert leg["quantity"]["value"] is None and leg["quantity"]["members"] == {"sampled": 2, "registered": 3}, leg
-    jsonschema.Draft202012Validator({"$defs": SCHEMA["$defs"], "$ref": "#/$defs/leg"}).validate({**leg, "runs": ["r1"]})
+    assert integrity["at"]["1/1000000"] == {"holds": False, "why": why} and not integrity["at"]["1/100"]["holds"], integrity
+    assert integrity["quantity"]["value"] is None and integrity["quantity"]["members"] == {"sampled": 2, "registered": 3}, integrity
+    jsonschema.Draft202012Validator({"$defs": SCHEMA["$defs"], "$ref": "#/$defs/leg"}).validate({**integrity, "runs": ["r1"]})
     assert _line["check"] == {} and f"at δ = 1/1000000: {why}" in _line["reason"], _line
 
 
@@ -1525,7 +1526,7 @@ def test_the_experiments_per_member_accept_bounds_its_one_sampled_member():
     got = S.members_reached({"m0": {"units": [[0, 1]]}, "m1": {"units": [[1, 2]]}}, answer)
     assert got == {"members": {"sampled": 1, "registered": 2},
                    "bounds": ["at most 0 incorrect of member m1's 1 proof block at δ 1/2"],
-                   "by_member": [{"member": "m1", "of": 1, "drawn": 1}]}
+                   "by_member": [{"member": "m1", "of": 1, BR.SAMPLED: 1}]}
 
 
 @pytest.mark.parametrize("change, verdict, said", [
@@ -2476,7 +2477,9 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
         {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": []}))
-    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else {"tie": {"record": PEARL_W}}))
+    summary = {"tie": {"record": PEARL_W},
+               "audit": {"rejected": {"accepted": False}, "unsaid": {}}.get(case, {"accepted": True})}
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else summary))
     if case != "no circuit record":
         (audit / S.CIRCUIT_RECORD).write_bytes(PEARL_RECORD)
     pin = "00" * 64 if case == "other key" else None if case == "no pin" else hashlib.sha512(PUBLIC).hexdigest()
@@ -2517,6 +2520,28 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     assert reason.count(S.PEARLPLUS_SAID) == 1 and reason.index(S.PEARLPLUS_SAID) > reason.index("PoUW: accept"), reason
     assert rec["legs"]["pouw"]["protocol"] == S.PEARLPLUS_PROTOCOL
     assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
+
+
+@pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", None])
+def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sampled_no_stratified_rate(
+        tmp_path, monkeypatch, live, design):
+    """The tied audit's rule (its summary's ``sampling_design``) decides what PoUW's accept of record covers: at a
+    stratified rate every table W registers has a sampled reader, and the row says nothing more; at any other rule, or none
+    stated, the row's profile and the record's reason say the weaker tie with the rule, so nothing reads it as the tied
+    guarantee."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
+    summary = {"tie": {"record": PEARL_W}, "audit": {"accepted": True}, **({"sampling_design": design} if design else {})}
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps(summary))
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
+    weaker = None if design and design.startswith("stratified-rate:") else S.WEAKER_TIE.format(design=design)
+    assert row["verdict"] == "accept" and row["answer"]["profile"].get("weaker_tie") == weaker, row
+    reason = S.said({"work": row}, {"work": ("vy-dc-h200", "real")}, "vy-dc-h200")
+    said = f"{S.PEARLPLUS_SAID}, {weaker}" if weaker else S.PEARLPLUS_SAID
+    assert reason.startswith("PoUW: accept") and reason.endswith(said), reason
+    assert weaker is None or f"sampled {design}, not a stratified rate" in weaker
 
 
 def test_pearlpluss_verdict_of_record_keeps_a_class_held_runs_give_up_and_not_its_exact_credit(tmp_path, monkeypatch, live):
@@ -2584,6 +2609,10 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
                       f"record W {PEARL_W[:16]}..."),
     ("audit untied", f"the window's records audit is not tied to Pearl+'s window record W {PEARL_W[:16]}... "
                      "(records_audit --tie W)"),
+    ("rejected", f"the window's records audit tied to W didn't accept ({S.AUDIT_SUMMARY}'s audit.accepted is False), so "
+                 "nothing shows the window SPOT audited reads the roots Pearl+ credits"),
+    ("unsaid", f"the window's records audit tied to W didn't accept ({S.AUDIT_SUMMARY}'s audit.accepted is None), so "
+               "nothing shows the window SPOT audited reads the roots Pearl+ credits"),
     ("no circuit record", f"no window-circuit record V3c held R's circuit to ({S.CIRCUIT_RECORD} beside R: "
                           "FileNotFoundError), so nothing holds period p-pc's circuit to the window served"),
     ("period on another circuit", f"period p-pc committed circuit {hashlib.sha512(b'another circuit').hexdigest()[:16]}"
@@ -3387,7 +3416,8 @@ if a[0] == "window-circuit":
         open(os.environ["ORDER"] + ".circuit", "w").write(json.dumps([out.name, *a[a.index("--window-registration"):]]))
     else:
         open(os.environ["ORDER"] + ".circuit", "w").write("\\n".join(a))
-    out.write_text(json.dumps(tables))
+    out.write_text(json.dumps({{**tables, **({{"tables": os.environ["RECORD_TABLES"]}} if os.environ.get("RECORD_TABLES") else {{}}),
+                               **json.loads(os.environ.get("RECORD_RUN_FIELDS", "{{}}"))}}))
     print(json.dumps({{"bits": 772, "count": {{"free": 3, "inputs": 10, "registered": 7, "units": 1}}}}))
 else:
     assert a[0] == "window-commit"
@@ -3638,17 +3668,22 @@ TIED_SAMPLING_DESIGN = {"law": "stratified", "k": 1, "strata": [{"template": t, 
                                                    for i, t in enumerate(("a@0", "ids@0", "ids@1"))]}
 
 
-def _tied_commit(tmp_path: Path, bound: str | None, sampling_design: dict | None = TIED_SAMPLING_DESIGN) -> None:
+#: every run field a circuit record keeps beside its circuit, each at a toy value
+RUN_FIELDS = {k: 4 for k in IF.RUN_FIELDS}
+
+
+def _tied_commit(tmp_path: Path, bound: str | None, sampling_design: dict | None = TIED_SAMPLING_DESIGN,
+                 run_fields: Mapping[str, Any] | None = None) -> None:
     """Window 7's commit as the tie left it in the toy serve dir: its docket R (its sample ``sampling_design``; None, none) and
-    circuit, which reads H1's tables, its answer, and H1's log naming W and, unless ``bound`` is None, the record H1 bound
-    (``same``: R; ``other``: another)."""
+    circuit, which reads H1's tables (with ``run_fields`` beside its own), its answer, and H1's log naming
+    W and, unless ``bound`` is None, the record H1 bound (``same``: R; ``other``: another)."""
     d = tmp_path / "serve"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     vw.mkdir(parents=True)
     (d / "h1" / "w7").mkdir(parents=True)
     r = {"format": "toy", "after": W_OF_7, **({"law": sampling_design} if sampling_design else {})}
     (vw / "registration.json").write_text(json.dumps(r))
-    (vw / "circuit.json").write_text(json.dumps({"run": "ab", "tables": "h1"}))
+    (vw / "circuit.json").write_text(json.dumps({"run": "ab", "tables": "h1", **(run_fields or {})}))
     (d / "h1" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
     log = [{"window": 7, "kind": "registration", "file": "w7/registration.json", "digest": "aa" * 64}]
     if bound is not None:
@@ -3673,8 +3708,29 @@ def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(t
     assert lines[1].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close, its registration the Commit record H1 bound "
                                "before the sample coin (R ") and '"run": "ab"' in lines[1] and "population" not in lines[1]
     assert lines[2] == (f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the "
-                        "verifier's own window-circuit record: PASS")
+                        "verifier's own window-circuit record less its run fields: PASS")
     assert "--pearl-tables" not in (tmp_path / "order.circuit").read_text().split("\n")
+
+
+def test_under_h1_tie_the_circuit_is_held_less_the_run_fields_the_record_and_the_commit_both_keep(tmp_path):
+    """Both records keep every run field (`interface.RUN_FIELDS`), as `interface.descriptor_record` keeps the one its
+    members are stated by: the registration binds them and a circuit's digest leaves them out, so the commit's circuit is
+    held to the verifier's with neither's and the audit goes on."""
+    _tied_commit(tmp_path, "same", run_fields=RUN_FIELDS)
+    rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1", RECORD_RUN_FIELDS=json.dumps(RUN_FIELDS))
+    assert rc == 0 and "audit" in order, (lines, order)
+    assert f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the verifier's own " \
+           "window-circuit record less its run fields: PASS" in lines, lines
+
+
+def test_under_h1_tie_a_committed_circuit_other_than_the_verifiers_is_refused_before_the_audit(tmp_path):
+    """A committed circuit that differs from the verifier's record in anything but its run fields fails the hold, and no
+    audit runs."""
+    _tied_commit(tmp_path, "same", run_fields=RUN_FIELDS)
+    rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1", RECORD_RUN_FIELDS=json.dumps(RUN_FIELDS), RECORD_TABLES="another")
+    assert (rc, order) == (16, ["window-circuit"]), (lines, order)
+    assert f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the verifier's own " \
+           "window-circuit record less its run fields: FAIL" in lines, lines
 
 
 #: the flags naming the challenger whose coins records_audit's audit takes
@@ -3781,8 +3837,14 @@ def test_v3c_audits_on_the_cards_v3c_gpus_names_with_a_cuda_prover_of_its_own_el
     (pod / "cuda-13.3.sh").write_text("export CUDA_TK=/tk\n")
     _script(tmp_path / "bin" / "flock",
             f'echo "$FLOCK_WORK GPU=$GPU CUDA_TK=${{CUDA_TK:-}}" >> {tmp_path}/builds\nshift\nexec "$@"')
-    rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS=cards)
+    _script(tmp_path / "bin" / "gpu-lease", f'echo "$@" >> {tmp_path}/leases\nwhile [ "$1" != -- ]; do shift; done\nshift\n'
+                                            'CUDA_VISIBLE_DEVICES=0 exec "$@"')
+    rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS=cards, lease=False)
     assert rc == 0 and "audit" in order, (lines, order)
+    leases = (tmp_path / "leases").read_text().splitlines() if (tmp_path / "leases").exists() else []
+    assert [x.split(" RAYON_NUM_THREADS=")[0] for x in leases] == ([
+        f"1 --wait --on {cards} --mem-gb 0 -- env -u CUDA_VISIBLE_DEVICES env -u PYTHONPATH LD_LIBRARY_PATH=/tk/compat:/tk/lib64"]
+        if cards else []), leases
     fw = tmp_path / "fw"
     builds = (tmp_path / "builds").read_text().splitlines()
     assert builds == [f"{fw} GPU=0 CUDA_TK="] + ([f"{fw / 'gpu'} GPU=1 CUDA_TK=/tk"] if cards else [])
@@ -3793,6 +3855,11 @@ def test_v3c_audits_on_the_cards_v3c_gpus_names_with_a_cuda_prover_of_its_own_el
 def test_the_preflight_refuses_v3c_gpus_that_names_no_cards(tmp_path):
     rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS="cuda:0")
     assert (rc, order) == (3, []) and lines[-1].startswith("PREFLIGHT: V3C_GPUS is the cards"), lines
+
+
+def test_the_preflight_refuses_v3c_gpus_on_a_node_without_gpu_lease(tmp_path):
+    rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS="3", lease=False)
+    assert (rc, order) == (3, []) and lines[-1].startswith("PREFLIGHT: V3C_GPUS's cards are held under gpu-lease"), lines
 
 
 @pytest.mark.parametrize("tied, extra, limit", [
@@ -4468,7 +4535,7 @@ def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records
                                   "--tie-prefix": None, "--ports": "3"}
     assert f"V3C-TIE: the audit read its records tied to W {'cd' * 8}…, R chained right after it: PASS" in lines
     d, tag = tmp_path / "serve", W63K4.replace(",", "-")
-    assert any(x.endswith("window-circuit record: PASS") for x in lines), lines
+    assert any(x.endswith("window-circuit record less its run fields: PASS") for x in lines), lines
     assert (d / "pearlplus" / "w7" / "tie" / S.CIRCUIT_RECORD).read_bytes() == \
         (d / f"window-circuit-w7-{tag}.json").read_bytes(), "the record reads the period's circuit against V3c's record"
 
@@ -4532,25 +4599,32 @@ def test_the_preflight_refuses_pearlplus_tie_without_a_rule_or_at_a_rule_other_t
     assert (rc, lines, order) == (3, [_no_reader(RULE).replace("H1_TIE", "PEARLPLUS_TIE").replace("H1's", "Pearl+'s")], [])
 
 
-def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_states(tmp_path):
-    """A launch under PEARLPLUS_TIE that states a stratified rate goes on, and V3c's audit states that rate to its stream."""
-    stated = "stratified-rate:1/977"
+@pytest.mark.parametrize("stated, uniform", [("stratified-rate:1/977", None), ("rate:1/1000000000", "1")])
+def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_states(tmp_path, stated, uniform):
+    """A launch under PEARLPLUS_TIE that states a stratified rate goes on, and V3c's audit states that rate to its stream;
+    so does a uniform rate under PEARLPLUS_TIE_UNIFORM=1, on the default ports."""
     _pearl_tied_commit(tmp_path)
-    rc, lines, order, _limits = _v3c(tmp_path, **{**PEARL_TIED, "V3C_LAW": stated})
+    rc, lines, order, _limits = _v3c(tmp_path, **{**PEARL_TIED, "V3C_LAW": stated, "PEARLPLUS_TIE_UNIFORM": uniform})
     assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
     assert _audited(tmp_path, ("--sampling-design",)) == {"--sampling-design": stated}
+    assert not uniform or _audited(tmp_path, ("--ports",)) == {"--ports": "16"}
 
 
+@pytest.mark.parametrize("uniform", [None, "1"])
 @pytest.mark.parametrize("design, held", [
     (None, False), ("", False), (RULE, False), ("stratified:1", False), ("stratified-rate:0/977", False),
-    ("stratified-rate:978/977", False), ("stratified-rate:1/977", True), ("stratified-rate:977/977", True)])
-def test_the_rehearsals_settings_state_the_tied_windows_sampling_design_a_stratified_rate(tmp_path, design, held):
+    ("stratified-rate:978/977", False), ("stratified-rate:1/977", True), ("stratified-rate:977/977", True),
+    ("rate:0/977", False), ("rate:978/977", False)])
+def test_the_rehearsals_settings_state_the_tied_windows_sampling_design_a_stratified_rate(tmp_path, design, held,
+                                                                                           uniform):
     """`rehearsal.sh settings FILE`, what `rehearsal.sh serve` holds its settings to before the harness runs, refuses a
     Pearl+-tied serve's settings that state no sampling design, or one that is no ``stratified-rate:NUM/DEN`` with
     0 < NUM <= DEN: the tied window's sampling design has no default, and the harness's preflight refuses such a launch
     (`NO_PEARL_RULE`), which the rehearsal would learn only on the serve node. The refusal names the design and the form
-    in the preflight's words; settings that state one are held."""
-    rc, said, err = _rehearsal_settings(tmp_path, V3C_LAW=design)
+    in the preflight's words; settings that state one are held, and under PEARLPLUS_TIE_UNIFORM=1 so are those that state
+    ``rate:NUM/DEN``."""
+    held = held or bool(uniform) and design == RULE
+    rc, said, err = _rehearsal_settings(tmp_path, V3C_LAW=design, PEARLPLUS_TIE_UNIFORM=uniform)
     if held:
         assert rc == 0 and len(said) == 1 and said[0].startswith("SETTINGS held: "), (rc, said, err)
     else:
@@ -4558,6 +4632,7 @@ def test_the_rehearsals_settings_state_the_tied_windows_sampling_design_a_strati
             f"SETTINGS refused: the sampling design is {design or 'unset'}: under PEARLPLUS_TIE it has no default, and the "
             "launch states it, a stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one "
             "proof block of each template while none holds more than DEN"]), (rc, said, err)
+
 
 
 HELD_FORM = {"HELD_ALPHA": "the record form's alpha is a positive number P/Q or P, each a whole number with no sign or "
@@ -4811,7 +4886,7 @@ def _no_reader(sampling_design: str) -> str:
 @pytest.mark.parametrize("args, extra, records_audit, line", [
     ((), TIES, "import sys\n", NO_TIE),
     (("v3c",), {"H1_TIE": "1"}, "import sys\n", NO_TIE),
-    ((), {**TIES, "V3C_LAW": RULE}, FAKE_RECORDS_AUDIT, _no_reader(RULE)),
+    ((), {**TIES, "V3C_LAW": RULE, "PEARLPLUS_TIE_UNIFORM": "1"}, FAKE_RECORDS_AUDIT, _no_reader(RULE)),
     (("v3c",), {"H1_TIE": "1", "V3C_LAW": "work-rate:1/4"}, FAKE_RECORDS_AUDIT, _no_reader("work-rate:1/4")),
     (("v3c",), {"H1_TIE": "1", "V3C_LAW": "stratified:1"}, FAKE_RECORDS_AUDIT, _no_reader("stratified:1")),
 ])
