@@ -262,6 +262,12 @@ PIECES: dict[str, tuple[str, str, str, str]] = {
 #: the record's subprotocol outside this chain: serve() runs its piece (WIPE_CMD) on the card before its engine loads
 WIPE = ("the wipe", "wipe", "memory-accounting", "the wipe of the serving card before its engine loads")
 NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "wipe": WIPE[0]}
+INFERENCE_ONLY = "inference-only.json"
+INFERENCE_ONLY_ROW = "inference-only"
+#: how the inference-only verdict's reason begins where its verifier gave no verdict
+UNDECIDED = "undecided: "
+INFERENCE_ONLY_UNREAD = ("not read by the combined verdict: the composite combines verity/inference-only/v0's own "
+                         "case, not this (c, k, n) verdict")
 #: a piece's limit unless ``<COMPONENT>_TIMEOUT`` or ``PIECE_TIMEOUT`` sets one, as `timeout` reads it
 PIECE_TIMEOUT = "60m"
 #: what `pieces` leaves beside a piece it ran: the node it ran on, its exit and its limit
@@ -2381,11 +2387,20 @@ def composite_answer(public: Path, product: str, window: str | None = None,
             f"{doc['product']}'s Lean check, compiled, in {where}")
 
 
+def inference_only_row(v: Mapping[str, Any]) -> dict[str, Any]:
+    undecided = str(v.get("reason") or "").startswith(UNDECIDED)
+    return {"verdict": {"accept": "accept", "refuse": "error" if undecided else "reject"}.get(v.get("verdict"), "error"),
+            "protocol": v.get("format"), "reason": v.get("reason"),
+            "answer": {k: v[k] for k in ("classes", "c", "k", "n", "lean", "record_count", "theta", "failure") if k in v},
+            "answer_from": f"{AS_WRITTEN} ({INFERENCE_ONLY})", "combined": INFERENCE_ONLY_UNREAD}
+
+
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
            run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
-           lean: str = "no composite was read") -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           lean: str = "no composite was read", inference_only: Mapping[str, Any] | None = None,
+           ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; SPOT's
@@ -2395,7 +2410,10 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     hand-off (`HANDED_FROM`); ValueError on ``node`` itself. ``tree``: the composing tree's ``tree`` (its commit) and
     ``tree_on`` (the branch its host pinned it from), which ``composed_on`` carries. ``answer``: the product's compiled
     Lean check's answer (`composite_answer`), the block record's verdict, and ``lean`` where it was read or why there is
-    none, which the report and the line carry; a rejection by it rejects whatever the rows say."""
+    none, which the report and the line carry; a rejection by it rejects whatever the rows say. ``inference_only``: the
+    inference-only verifier's verdict, which the report carries as its ``inference-only`` row and the line under
+    ``not_combined``, and which neither the combined verdict nor the block record reads: ``reject`` only where the Lean
+    verifier gave a verdict, ``error`` where it gave none (`UNDECIDED`)."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
@@ -2436,6 +2454,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
              "answers": answers, "lean": lean, **left,
              **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
              **({"unserved": unserved} if unserved else {}), **dev}
+    io = {} if inference_only is None else {INFERENCE_ONLY_ROW: inference_only_row(inference_only)}
+    if io:
+        named["not_combined"] = {"the inference-only verifier": io[INFERENCE_ONLY_ROW]["verdict"]}
     bad = sorted(NAMES[k] for k, r in rows.items()
                  if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
     if bad:
@@ -2445,6 +2466,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                               "lean": lean}
         line = {"composed": composed, "by": bad, **named, "block_record": None, "reason": report["composed"]["reason"],
                 "why": "block_record carries an accepted subprotocol's certificate only"}
+        report["protocols"] = {**rows, **io}
         return report, None, line
     extra = {subprotocols[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
@@ -2457,6 +2479,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
             "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
+    report["protocols"] = {**rows, **io}
     return report, rec, line
 
 
@@ -2800,12 +2823,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                         else (None, "no composite was read"))
     except CompositeRefused as e:
         answer, lean, refused = None, str(e), True
+    try:
+        io = json.loads((a.out / INFERENCE_ONLY).read_text()) if (a.out / INFERENCE_ONLY).is_file() else None
+    except ValueError as e:
+        io = {"verdict": "error", "reason": f"{INFERENCE_ONLY} doesn't parse: {e}"}
+    if io is not None and not isinstance(io, dict):
+        io = {"verdict": "error", "reason": f"{INFERENCE_ONLY} is not an object"}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
                                servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred,
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
-                               answer=answer, lean=lean)
+                               answer=answer, lean=lean, inference_only=io)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

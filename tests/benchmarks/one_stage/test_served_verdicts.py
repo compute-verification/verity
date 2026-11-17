@@ -437,7 +437,8 @@ def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference
                    f"{i['work']['theta_macs']} θ-MACs⌉ = {i['raw']}, on the grid); session {POLICY['session']['definition'][:16]}…, "
                    f"policy {IO.digest(POLICY)[:16]}…")
     pub = {"verdict": "accept", "reason": None, "classes": [["cd" * 32, 1_000, 4_000]], "registered_session": True,
-           "c": POLICY["c"], "k": POLICY["k"], "n": POLICY["n"], "policy": {"sha512": IO.digest(POLICY)}}
+           "c": POLICY["c"], "k": POLICY["k"], "n": POLICY["n"], "policy": {"sha512": IO.digest(POLICY)},
+           "record_count": {"held": 0, "wired": 0, "openings": 0, "fresh": 4_000, "by": IO.RECORD_COUNT}}
     for line in (policy_line, f"INFERENCE-ONLY {IO.line(pub)}", f"INFERENCE-ONLY {json.dumps(pub)}"):
         assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
@@ -1325,6 +1326,46 @@ def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only
                                              "commitment": bound[x]}
     else:
         assert composed == "pending"
+
+
+@pytest.mark.parametrize(("said", "why", "verdict"), [
+    ("accept", None, "accept"), ("refuse", "the Lean verifier counts a block of 9 fresh bits, more than k = 2", "reject"),
+    ("refuse", S.UNDECIDED + "the Lean verifier gave no verdict: inference-only-check not started", "error"),
+    (None, "why", "error")], ids=["accept", "lean-refuses", "undecided", "no-verdict"])
+def test_the_record_carries_the_inference_only_verifiers_verdict_as_a_row_the_combined_verdict_does_not_read(
+        tmp_path, said, why, verdict):
+    io = {"format": "verity-bench/inference-only-verdict/v5", "verdict": said, "reason": why,
+          "c": 1, "k": 2, "n": 3, "sealed": 4, "theta": {"inputs": ["0.w"], "by": "chosen"}}
+    bare, bare_rec, bare_line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
+    report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                 inference_only=io)
+    assert report["protocols"].pop("inference-only") == {
+        "verdict": verdict, "protocol": io["format"], "reason": io["reason"], "answer": {"c": 1, "k": 2, "n": 3, "theta": io["theta"]},
+        "answer_from": f"{S.AS_WRITTEN} ({S.INFERENCE_ONLY})", "combined": S.INFERENCE_ONLY_UNREAD}
+    assert line.pop("not_combined") == {"the inference-only verifier": verdict}
+    assert (report, rec["composed"], line) == (bare, bare_rec["composed"], bare_line)
+
+
+def test_record_reads_the_inference_only_verdict_beside_it_into_its_row(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    (tmp_path / "pieces").mkdir()
+    (tmp_path / "serve").mkdir()
+    (tmp_path / "record").mkdir()
+    (tmp_path / "record" / S.INFERENCE_ONLY).write_text(json.dumps({"verdict": "refuse", "reason": "why"}))
+    argv = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+            str(_window_case(tmp_path / "audit")), "--pieces", str(tmp_path / "pieces"), "--out", str(tmp_path / "record"),
+            "--node", "vy-dc-h200", "--product", "remote"]
+    rc, line, rows = _recorded(tmp_path, argv, capsys)
+    assert rows["inference-only"]["verdict"] == "reject" and line["not_combined"] == {"the inference-only verifier": "reject"}
+    assert rc == S.RECORD_EXIT[line["composed"]] == 2
+    (tmp_path / "record" / S.INFERENCE_ONLY).write_text(json.dumps({"verdict": "refuse", "reason": S.UNDECIDED + "why"}))
+    _, line, rows = _recorded(tmp_path, argv, capsys)
+    assert rows["inference-only"]["verdict"] == "error" and line["not_combined"] == {"the inference-only verifier": "error"}
+    (tmp_path / "record" / S.INFERENCE_ONLY).write_text("[")
+    _, _, rows = _recorded(tmp_path, argv, capsys)
+    assert rows["inference-only"]["verdict"] == "error" and rows["inference-only"]["reason"].startswith(
+        f"{S.INFERENCE_ONLY} doesn't parse: ")
 
 
 def test_the_served_nodes_run_exits_nonzero_since_its_record_reads_no_composite():
