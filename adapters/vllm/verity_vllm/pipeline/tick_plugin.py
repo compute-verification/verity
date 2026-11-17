@@ -26,8 +26,8 @@ from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline.serve_admit import (LOST, RELEASE_HEADER, WATERMARK_PATH, Tick, TickGate, Watermark, install,
                                               open_watermark, release_of)
 
-__all__ = ["CATCH_UPS", "OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader", "RuleGate", "TickFeed", "register",
-           "route_of", "tick_config", "unseeded"]
+__all__ = ["CATCH_UPS", "OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader", "RuleGate", "TickFeed", "non_draft_tokens",
+           "register", "route_of", "tick_config", "unseeded"]
 
 #: `register`'s and `TickFeed`'s configuration, a JSON object (`tick_config`)
 TICK_ENV = "VERITY_TICK"
@@ -60,7 +60,8 @@ def tick_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | No
 
 class RuleGate(TickGate):
     """`TickGate` under a tick rule other than the registered one, for measuring it. ``token_ns``: T also advances that
-    many nanoseconds for each token a step schedules. ``catch_up="marks"``: before a step at which no request waits in
+    many nanoseconds for each non-draft token a step schedules (`non_draft_tokens`), on a clock of nanoseconds that T
+    is the floor of in µs, so nothing rounds. ``catch_up="marks"``: before a step at which no request waits in
     the scheduler, T moves up to the close of the newest watermark line the gate holds; which line is the server's
     choice, so each move logs a ``catch_up`` event with its advice bits, log₂(1 + the lines since the last such step
     that would have moved T further)."""
@@ -73,7 +74,8 @@ class RuleGate(TickGate):
 
     def _reset(self) -> None:
         super()._reset()
-        self.seen = -1
+        self.seen, self.ns = -1, 0
+        self.tokens = {"non_draft": 0, "draft": 0}
 
     def ready(self, sched: Any) -> bool:
         if self.catch_up == "marks" and self.opened is None:
@@ -92,7 +94,22 @@ class RuleGate(TickGate):
         steps = self.steps
         super().scheduled(sched, out)
         if self.steps > steps:
-            self.T += out.total_num_scheduled_tokens * self.token_ns // 1000
+            n, drafts = non_draft_tokens(out)
+            self.tokens["non_draft"] += n
+            self.tokens["draft"] += drafts
+            self.ns += n * self.token_ns
+            self.T += self.ns // 1000
+            self.ns %= 1000
+
+    def summary(self) -> dict[str, Any]:
+        return {**super().summary(), "rule": {"token_ns": self.token_ns, "catch_up": self.catch_up, "tokens": dict(self.tokens)}}
+
+
+def non_draft_tokens(out: Any) -> tuple[int, int]:
+    """A scheduler output's tokens less its draft tokens, and its draft tokens: the sum of its rows' n as the replay's
+    step forms it, the batch's token limit less the budget it leaves (`replay_step.reference`), which models no draft."""
+    drafts = sum(len(d) for d in (getattr(out, "scheduled_spec_decode_tokens", None) or {}).values())
+    return out.total_num_scheduled_tokens - drafts, drafts
 
 
 class FeedReader:

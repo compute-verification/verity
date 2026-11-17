@@ -297,6 +297,19 @@ def test_a_rule_gate_adds_its_tokens_to_t_and_catches_up_to_the_newest_line_whil
     assert o.step() and o.sched.added == ["r0"] and o.gate.opened == "the rule orders nothing"
 
 
+def test_a_rule_gates_token_term_counts_non_draft_tokens_on_a_clock_of_nanoseconds():
+    drafted = SimpleNamespace(total_num_scheduled_tokens=14, scheduled_spec_decode_tokens={"a": [3] * 5, "b": [-1] * 5})
+    assert tp.non_draft_tokens(drafted) == (4, 10)
+    assert tp.non_draft_tokens(SimpleNamespace(total_num_scheduled_tokens=7, scheduled_spec_decode_tokens={})) == (7, 0)
+    g = Gated(rule={"token_ns": 600})
+    g.release(0, bucket=0)
+    g.arrive("r0", out=10)
+    g.lines(1)
+    assert g.step() and g.gate.T == TICK.close(0) + TICK.free_us
+    assert g.step() and g.gate.T == TICK.close(0) + 2 * TICK.free_us + 1
+    assert g.gate.summary()["rule"] == {"token_ns": 600, "catch_up": "quiet", "tokens": {"non_draft": 2, "draft": 0}}
+
+
 def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_another_it_does_not_know(tmp_path):
     env = config(tmp_path)
     assert {k: tp.tick_config(env)[k] for k in ("token_ns", "catch_up")} == {"token_ns": 0, "catch_up": "quiet"}
