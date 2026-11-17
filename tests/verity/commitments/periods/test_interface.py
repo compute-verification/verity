@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.circuits import partition_object as PO
+from verity.circuits import partition_object as PO, population
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
 from verity.circuits.evaluation import evaluate_batch
@@ -971,6 +971,36 @@ def test_a_record_naming_the_wired_program_is_read_as_it():
     assert mine.partition_digest == PO.digest(part) and mine.members == I.window_of_record(rec, SAMPLING_DESIGN, I.resolve).members
     with pytest.raises(ValueError, match=r"\['partition', 'program'\] are not the ones its templates make"):
         I.window_of_record({**wired, "wires": [{**rec["wires"][0], "step": [2, 0]}]}, SAMPLING_DESIGN, I.resolve)
+
+
+def _wired_record(c: I.Circuit) -> tuple[dict, dict]:
+    """``c``'s descriptor record at cap 2 as a period states it, and the same naming its wired Program and partition."""
+    rec = {**I.descriptor_record(c, 2), "run": RUN, "context": ""}
+    part = PO.build(*c.wired_program())
+    return rec, {**rec, "program": part["program"], "partition": PO.digest(part)}
+
+
+def test_a_wired_record_whose_order_cuts_a_template_is_refused_by_name():
+    c = sliced(external=OPEN, order=((G8ID, 0, 2), (G8ID, 2, 4), (GID, 0, 3)))
+    rec, wired = _wired_record(c)
+    with pytest.raises(ValueError, match=re.escape(I.WIRED_MEMBERS) + r" \(here 3 ranges over 2 templates\)$"):
+        I.window_of_record(wired, SAMPLING_DESIGN, I.resolve)
+    assert I.window_of_record(rec, SAMPLING_DESIGN, I.resolve).members == I.members(c, 2)
+
+
+@pytest.mark.skipif(not hasattr(population, "BitsWord"), reason="this base's wired Program inserts no converter")
+def test_a_wired_record_with_an_order_and_converters_is_refused_by_name_and_not_on_a_converters_key():
+    """Each ``F2fpBf16_v2`` unit's bf16 bits are one 16-bit row of the ``Gemm_v2`` x, so the wired Program converts them
+    with a ``BitsWord_v1{W=16}`` batch, and the order puts half the roundings after the other half."""
+    wire = I.Wire(GID, "x", RID, "o0", at=0, radix=(1, 16), base=0, step=(0, 1), cut=(0, 16))
+    c = I.Circuit("converted", ((ROUND, 16), (GEMM, 1)), wires=(wire,), cuts={GID: {"x": 16}},
+                  external=(f"{RID}/a", f"{GID}/w"), order=((RID, 0, 8), (RID, 8, 8), (GID, 0, 1)))
+    rec, wired = _wired_record(c)
+    assert [t for _k, t, _lo, _n in CS.template_partition(*c.wired_program()).ranges] == [RID, RID, "BitsWord_v1{W=16}", GID]
+    with pytest.raises(ValueError, match=re.escape(I.WIRED_MEMBERS) + r" \(here 4 ranges over 2 templates, "
+                                         r"BitsWord_v1\{W=16\}\)$"):
+        I.window_of_record(wired, SAMPLING_DESIGN, I.resolve)
+    assert I.window_of_record(rec, SAMPLING_DESIGN, I.resolve).members == I.members(c, 2)
 
 
 def test_cap_is_a_run_field_the_registration_binds_and_the_circuits_digest_does_not():

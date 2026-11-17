@@ -2421,6 +2421,7 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
         raise ValueError(f"a period's circuit record is {CIRCUIT}, not {doc.get('format')!r}")
     defs = _templates_of(doc, resolve)
     program, query = _program_of(doc, defs)
+    _template_ranges(doc, program, query)
     stated = "cap" in doc
     if (("members" in doc) == stated or ("wires" in doc) != stated
             or (not stated and ({*DECLARED, "blocks"} - {"registered"}) & set(doc)) or (stated and WINDOW_INGRESS in doc)):
@@ -2475,6 +2476,25 @@ def _program_of(doc: Mapping[str, Any], defs: list[tuple[Any, int]]) -> tuple[An
         if PO.build(*wired)["program"] == doc.get("program"):
             return wired
     return program, query
+
+
+#: why a period isn't read under its wired Program where that Program's ranges aren't its templates' (`window_of_record`)
+WIRED_MEMBERS = ("a period under its wired Program waits on members cut over that Program's ranges: its converter batches "
+                 "(WordBits, BitsWord) and its order's ranges need members of their own")
+
+
+def _template_ranges(doc: Mapping[str, Any], program: Any, query: Mapping[str, Any]) -> None:
+    """Refuse (ValueError, `WIRED_MEMBERS`) a record whose Program's ranges aren't each template's units, in order: the
+    ranges `members` cuts."""
+    got = [(t, lo, n) for _k, t, lo, n in CS.template_partition(program, query).ranges]
+    want, at = [], 0
+    for t, n in doc["templates"]:
+        want.append((t, at, int(n)))
+        at += int(n)
+    if got != want:
+        extra = sorted({t for t, _, _ in got} - {t for t, _ in doc["templates"]})
+        raise ValueError(f"the circuit record: {WIRED_MEMBERS} (here {len(got)} ranges over {len(want)} templates"
+                         + (f", {', '.join(extra)}" if extra else "") + ")")
 
 
 def of_records(window_dir: str | Path, sampling_design: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[CS.Binding, dict[str, Any]]:
