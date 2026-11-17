@@ -44,17 +44,25 @@ def test_the_honest_window_is_the_replays(x):
     assert TL.evaluate(x.st, [x.honest, low]) == [x.honest.verdict, low.verdict]
 
 
+def _bucket_moved(x):
+    return TL.arrivals(TL.Slice(x.sl.arrivals, (), x.sl.steps, (), x.sl.max_tokens, (0, 0, 3)))
+
+
 def test_a_changed_bucket_is_refused_by_the_rows(x):
     """Request 1 released in bucket 0 in place of 1: it is given at the first step, so the scan's rows aren't the
-    served ones and ``rows`` refuses (0x2F). With the prover's own rows in ``srv`` the circuit accepts: the bucket is
-    ``cert``'s, which its b‖c to the certified record holds, and the rows are ``srv``'s, which theirs holds."""
-    sl = TL.Slice(x.sl.arrivals, (), x.sl.steps, (), x.sl.max_tokens, (0, 0, 3))
-    moved = TL.case(x.S, x.sl, BOOK, cert=TL.arrivals(sl), served=x.honest.steps)
+    served ones and ``rows`` refuses (0x2F)."""
+    moved = TL.case(x.S, x.sl, BOOK, cert=_bucket_moved(x), served=x.honest.steps)
     assert moved.verdict == TL.ACCEPT & ~(1 << 4) and _rows(moved.steps) != _rows(x.honest.steps)
-    own = TL.case(x.S, x.sl, BOOK, cert=TL.arrivals(sl))
+    assert TL.evaluate(x.st, [moved]) == [moved.verdict]
+
+
+def test_a_changed_bucket_passes_with_the_provers_own_served_rows(x):
+    """The same bucket with the prover's own rows in ``srv``: the circuit accepts. The bucket is ``cert``'s, which its
+    b‖c to the certified record holds, and the rows are ``srv``'s, which theirs holds."""
+    own = TL.case(x.S, x.sl, BOOK, cert=_bucket_moved(x))
     assert own.verdict == TL.ACCEPT and own.rows["cert"] != x.honest.rows["cert"]
     assert own.rows["srv"] != x.honest.rows["srv"]
-    assert TL.evaluate(x.st, [moved, own]) == [moved.verdict, own.verdict]
+    assert TL.evaluate(x.st, [own]) == [own.verdict]
 
 
 def test_a_t_other_than_the_chains_is_refused(x):
