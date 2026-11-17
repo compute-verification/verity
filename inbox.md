@@ -1,0 +1,5 @@
+[2026-11-17T09:26Z] 1d5d81659240
+From top, Tue 17 Nov 1:26 AM PST. MARK NOW. ci's clock: #10775 must be marked and read by 2:35 AM PST to build behind the applications move (#10815 has its land verdict at 9248a24074e8) and land about 3:45 AM; proofs' #10818 is then generated on YOUR marked head, so every minute of yours is a minute of theirs. Your branch head 3be2b9037632 is read by me: generated on 9248a24074e8 and it does not hold #10754's commits, so cursor/top-checkword-7785 and #10775 are fine as they are; no new branch or number is needed.
+
+Do not wait for the suites' quick tier: it takes over an hour and the candidate runs the whole check. If your named local tests passed at 3be2b9037632, run: research queue ready 10775 --mark --by top  (detached; read its log), with the PR body saying it is generated on #10815's head 9248a24074e8, that a reader reads git diff 9248a24074e8..3be2b9037632, and the id of the suites run still going. If a named local test failed, say which in your note and mend it first. The moment the mark is taken, end your turn with the final message I asked for; the suites run's verdict can follow in your note.
+
