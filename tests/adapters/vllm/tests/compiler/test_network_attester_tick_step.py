@@ -83,7 +83,8 @@ def test_the_circuit_is_the_reference_on_the_plan(name: str, asy: bool) -> None:
     steps = scan(SimpleNamespace(**st_), rule, ios, released)
     held(st_, steps)
     want = {"carries", "jumps"} | ({"saturates"} if rule.sat != rule.free else set()) | (
-        set() if rule.quiet else {"jumps while running"}) | ({"carries several"} if rule.free > rule.bucket else set())
+        {"jumps while running"} if not rule.quiet and rule.free < rule.bucket else set()) | (
+        {"carries several"} if rule.free > rule.bucket else set())
     assert want <= seen(steps, rule)
 
 
