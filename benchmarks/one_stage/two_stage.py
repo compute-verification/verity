@@ -157,7 +157,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -166,8 +166,8 @@ import numpy as np
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
-from verity.protocols.proofs.spot.verifier.one_stage import docket as RG, verifier as V
-from verity.circuits.codec import descriptor_id, encode_program
+from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
+from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
 from verity.commitments.periods import links as LK, rows as CS
@@ -1026,33 +1026,13 @@ def pins(proofs: Mapping[str, Any], stmts: Sequence[Mapping[str, Any]]) -> dict[
     return {x["template"]: named.get(x["template"]) == x["header"].get("circuit_sha512") for x in stmts}
 
 
-def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
-              brec: Mapping[str, Any], drawn: Sequence[int], stmts: Sequence[Mapping[str, Any]],
-              record: Mapping[str, Any], proofs: Mapping[str, Any], tie: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """Round 2's verdict on the sessions, the form allowed: the Lean verifier's, `SecondStage.checkAny` as its
-    `second_statements` piece serves it, handed what `_round_two_own` holds of the run, and returned as it answers. No
-    Python decides it (`round_two_twin` is the test's reference). `LeanError` where the Lean verifier refuses the input
-    or does not answer."""
-    own = _round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie)
-    tie = tie or {}
-    got = V.lean("second_statements", {
-        "allow": True, "sample": list(own.sample), "drawn": list(own.drawn), "program": encode_program(window.program),
-        "query": dict(window.query), "interior": own.interior, "boundary": own.boundary, "statements": list(stmts),
-        "verdicts": record.get("verdicts") or {}, "links": None if own.links is None else [asdict(x) for x in own.links],
-        "wires": None if own.wires is None else [asdict(x) for x in own.wires], "rows": [x.to_json() for x in own.rows],
-        "returns": list(own.returns), "refs": dict(own.refs), "ref_reads": dict(own.ref_reads),
-        "supplied": RG.resolved(tie.get("supplied"), tie.get("history")), "fixed": list(own.fixed),
-        "reads": dict(own.reads), "tables": dict(own.tables)})
-    if "refused" in got:
-        raise V.LeanError(f"second_statements: {got['refused']}")
-    return got
-
-
 def round_two_twin(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
                    brec: Mapping[str, Any], drawn: Sequence[int], stmts: Sequence[Mapping[str, Any]],
                    record: Mapping[str, Any], proofs: Mapping[str, Any],
                    tie: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """`round_two`'s Python twin (`second_stage.check_twin`), for tests only."""
+    """Round 2's statement check by its Python twin (`second_stage.check_twin`), for tests only: the verdict of record is
+    the Lean verifier's, inside the stream's run (`Run.run`), whose statement codes the outcome carries (``outcome``'s
+    ``statements``) and the summary's ``round_two`` reads from it."""
     return SS.check_twin(True, _round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie),
                          stmts).to_json()
 
@@ -1095,13 +1075,13 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     the boundary docket ``brec`` and its replay sample: `a5.audit` of the stream's second sample ``second`` (its
     sample, sampling design and the interior docket's receipt), each member's session verified against ``reads`` (by member
     key, the verifier's own ``--registered`` files), the audit record, and each session's statement held to round 2
-    (`round_two`, over the replay block ``replay``, its Program and descriptor id) at the params ``proofs``. ``tie``:
+    (round 2, over the replay block ``replay``, its Program and descriptor id) at the params ``proofs``. ``tie``:
     the verifier's other copies the interior docket's check takes beside the boundary record (`a5.tie`: the
     values it registers, their schemas, its window root). -> (a5's summary, its acceptance, the audit record, what the
     run reports, the sessions' statements: None without a sample). The audit record is a5's own of the interior, decided
     as the stream decides the interior's before round 2's check is attached to it (a5's ``drawn``), so it is not the
     run's outcome: the report's ``accepted`` and ``record`` are that record's (``record``: the checks it fails, and
-    ``own_reads``, that it took those reads as the stream's records do), ``round_two`` is round 2's with the form
+    ``own_reads``, that it took those reads as the stream's records do), the summary's ``round_two`` is round 2's, from the outcome's statement codes, with the form
     allowed, and the outcome is the stream's (`outcome_of`). The report names what the proof
     server refused, in flock-circuit's words, where a session never ran."""
     a5 = _a5()
@@ -1127,7 +1107,6 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
         stmts = statements(out / "audit", window)
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
         got["pins"] = pins(proofs, stmts)
-        got["round_two"] = round_two(*replay, sample, window, irec, brec, s["draw"], stmts, record, proofs, tie)
     return s, ok, record, got, stmts
 
 
@@ -1520,6 +1499,8 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
                 import sampled_two_case as SC
             with SC.capture(out / "run-input.json") if form_case else contextlib.nullcontext():
                 summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
+            codes = summary["outcome"].get("statements")
+            summary["round_two"] = None if codes is None else {"ok": codes == [], "codes": codes}
             if form_case:
                 summary["form_case"] = SC.from_run(out)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
