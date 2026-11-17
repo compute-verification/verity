@@ -152,10 +152,10 @@ SCAN_DELTA = Fraction(1, 2 ** 20)
 PERIOD_ERROR = Fraction(1, 2 ** 20)
 JITTER = "J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel)"
 ROOT = Path(__file__).resolve().parents[2]
-CENSUS = ROOT / "benchmarks" / "census"
+CENSUS = ROOT / "calibration" / "census"
 #: the files the scale is read from: the census's world, reference datacenter and GPU peak, the slowdown calculator's world fleet and its
 #: machine's GPUs, and the served model's workload card
-ADVERSARY, DEPLOYMENTS, HARDWARE = (f"benchmarks/census/{name}.json"
+ADVERSARY, DEPLOYMENTS, HARDWARE = (f"calibration/census/{name}.json"
                                     for name in ("adversary", "deployments", "hardware"))
 SLOWDOWN, SLOWDOWN_HARDWARE = "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml"
 WORKLOAD = "benchmarks/spot_figures/cards/workload.glm-5.3.json"

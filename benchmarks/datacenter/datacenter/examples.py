@@ -6,7 +6,7 @@ GPUs 0–3 on socket 0 and 4–7 on socket 1, each on a root port of its own; on
 `ResourceAccounting.Device`'s one Python mirror, `verity.protocols.resource_accounting.memory.poub.verifier.timing`: a GPU's S_chip, read and write
 rates, SHA-512 oracle and squaring ceilings, and half the host's on each socket, so the node sums to
 `ledger.Node.stated(timing.RTX_PRO_6000_NODE)`. Beside them: each GPU's memory and its rate for each kind of work
-(`logical.work`: tensor-core multiply-adds by precision at the dense datasheet peaks `benchmarks/census/hardware.json` names; CUDA-core word
+(`logical.work`: tensor-core multiply-adds by precision at the dense datasheet peaks `calibration/census/hardware.json` names; CUDA-core word
 operations, `cuda:op`, and Boolean gates, `cuda:gate`, at its integer rate times 32 lanes), each socket's host DRAM
 (half the node's online memory) and each PCIe link at PCIe 5.0 x16's rate. A capacity not measured yet is `math.inf`,
 the upper bound that claims nothing; the residuals are declared. A GPU's memory, the host's DRAM, a PCIe lane's rate and
@@ -28,8 +28,8 @@ from verity.protocols.resource_accounting.memory.poub.verifier import timing as 
 
 from .physical import Assumption, Cadence, Datacenter, DeviceEntry, Fleet, LinkEntry, Zone
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
-NODE_FILES = Path(__file__).resolve().parents[3] / "hardware/nodes"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/nodes"
 
 NODE = load_node("rtx-pro-6000-server-x8", directory=NODE_FILES, cards_directory=CARD_FILES)
 GPU_CARD = load_card(NODE["device"]["sku"], directory=CARD_FILES)
