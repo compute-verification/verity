@@ -252,9 +252,9 @@ stage reads the stage before it from the evidence store by the id of the run tha
 `--capture RUN`), never by a path, and refuses a run whose result is not that stage's kind or did not pass, naming the
 command that makes the missing record. Price and confirm compute their figures. Minify, exact and capture have no
 code that makes their records yet, and refuse saying what is missing and whose it is: parts of them run today under
-other names without storing a stage's record, stage 1's copy as `serve_tax`'s `glm53-standin` (whose runs keep no
-unit cost), stage 2's check of bindings as `circuit-check` on a Definition module's sidecar and its replay as
-`serve_tax/replay.py`'s, and stage 3's run as `prod_repro/run.sh`'s. A stage's numbers are measurements under
+other names without storing a stage's record, minify's copy as `serve_tax`'s `glm53-standin` (whose runs keep no
+unit cost), exact's check of bindings as `circuit-check` on a Definition module's sidecar and its replay as
+`serve_tax/replay.py`'s, and capture's run as `prod_repro/run.sh`'s. A stage's numbers are measurements under
 "Metrics"' rules, and a stage whose record is a verdict is to record what the check or the verifier returned ("What a
 benchmark may import and write").
 
