@@ -8,9 +8,9 @@
     verity ci inspect RUN           a check's steps: state, elapsed, an ETA from each step's recorded median, and its reds so far
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
     verity calibrate NAME [ARGS]    calibration/NAME's runner (run.py or run.sh)
-    verity run CONFIG|NAME [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
-                                    a configuration's parties on this machine, and its verdict (run.py); NAME is an
-                                    application, applications/NAME.toml
+    verity run CONFIG|NAME [--party ROLE ...] [--on MACHINE ...] [--periods N] [--state DIR]
+                                    a configuration's parties on the machines this host stands for, and its verdict
+                                    (run.py); NAME is an application, applications/NAME.toml, run on all its machines
     verity config new|check|hash    write, check or hash a configuration (run.py)
     verity verify proof [ARGS]      Flock's Lean verifier, the executable `lake build` writes in its package, with ARGS as
                                     its own (`verity verify proof verify --zk --circuit F --public F --session DIR`), run
@@ -76,6 +76,10 @@ def verify_proof_exe(root: Path) -> str:
         raise SystemExit(f"verity verify proof: {VERIFIER}/lakefile.toml has {len(names)} [[lean_exe]] with root = "
                          f"{VERIFY_PROOF_ROOT!r}, not one: name the verifier's root in verity_cli.VERIFY_PROOF_ROOT")
     return names[0]
+
+
+def verify_proof_path(root: Path) -> Path:
+    return root / VERIFIER / ".lake" / "build" / "bin" / verify_proof_exe(root)
 
 
 def _run(argv: list[str]) -> int:
@@ -282,9 +286,8 @@ def _verify(args: list[str]) -> int:
     if args[:1] != ["proof"]:
         raise SystemExit((f"verity verify: no command {args[0]!r}\n" if args else "") + "verity verify proof [ARGS]")
     name = verify_proof_exe(ROOT)
-    exe = ROOT / VERIFIER / ".lake" / "build" / "bin" / name
     try:
-        return subprocess.run([str(exe), *args[1:]]).returncode
+        return subprocess.run([str(verify_proof_path(ROOT)), *args[1:]]).returncode
     except FileNotFoundError:
         raise SystemExit(f"verity verify proof: {VERIFIER}/.lake/build/bin/{name} is not built: `bash "
                          f"tools/verity/lean/setup.sh {VERIFIER}` installs elan, the toolchain and the package's "

@@ -389,7 +389,8 @@ def _spot_challenger(cfg, params, bound):
 
 
 def _pouw(cfg, params, bound):
-    return {"H1_GATE": bound["gate"], "H1_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"]}
+    return {"H1_GATE": bound["gate"], "H1_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"],
+            **({"MAIN_FILE": bound["main-file"]} if "main-file" in bound else {})}
 
 
 #: the wipe (`streamed_wipe`'s parties), before the card's engine loads: its challenger reads the raw monotonic clock its
@@ -459,7 +460,7 @@ PARTIES: dict[str, dict[str, Piece]] = {
         CHALLENGER: Piece("pouw", CHALLENGER, GATE, "the gate: each window's H1 coins from a session of its own"),
         WORKERS: Piece("pouw", WORKERS, SERVED_WINDOW, "H1 on the serving engine (--protocols pouw:...), its coins "
                        "the gate's; served_verdicts.py pouw checks them against the gate's session under its key",
-                       reaches=CHALLENGER, binds=("gate", "peer", "key-sha512"), hooks=_pouw),
+                       reaches=CHALLENGER, binds=("gate", "peer", "key-sha512"), optional=("main-file",), hooks=_pouw),
         VERIFIER: Piece("pouw", VERIFIER, CHECK, "PoUW's row"),
     },
     "inference-only": {
