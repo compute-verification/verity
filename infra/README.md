@@ -31,6 +31,7 @@ Each reaches the nodes, so it needs the team's keys and the nodes' addresses.
 | `ops/` | The `ops` command: deploys to the nodes and their drift, and each node's keepers. |
 | `nebius/` | The units that run the console's panels on node 1. |
 | `dashboard/` | The Metrics dashboard's own number: how many top goals have a number that runs. |
+| `vcf/` | A benchmark run on VCF's Slurm cluster, sent from the control pod and published from it (`benchmarks/README.md`, "On VCF's Slurm cluster"), deployed there as `/data/vcf/`. |
 
 The agent VM's secret guard and shell hook are [`tools/agent-guard/`](../tools/agent-guard/README.md), and the run
 recorder, the evidence store's client and `research` itself are [`tools/research/`](../tools/research/README.md).
