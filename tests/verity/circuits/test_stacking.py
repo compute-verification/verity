@@ -596,6 +596,11 @@ def test_a_wired_programs_conversions_between_words_and_bits_are_roundings():
     assert {f: (g["class"], g["instances"]) for f, g in a.gates.items() if f.startswith(("BitOf", "WordOf"))} == {
         **{f"BitOf16x{i}_v1": ("roundings", 2) for i in range(16)}, "WordOf16_v1": ("roundings", 2)}
     assert a.steps[0]["units"] == {**FREE, "roundings": 2 + 32 + 2 + 2, "compare_select": 32} and a.refused == {}
+    blocks = {"inference": {"slots": 1, "steps": 1, "entries": [
+        {"template": t, "at": 0, "radix": [1], "axes": ["step"], "step": 0} for t in (ia, idd, ib)]}}
+    grouped, _ = wired_population_program([(TA, 1), (TD, 1), (TB, 1)], {**record, "blocks": blocks}, slots=True)
+    g = P.analyze(grouped, census(grouped, [len(grouped.root.body.nodes)]))
+    assert (g.steps[0]["units"], g.gates, g.refused) == (a.steps[0]["units"], a.gates, {})
 
     x, k, s, w = [0x3F80, 0x4000], [0x3F80, 0xBF80], [0xFFFF, 0x0F0F], [0x4040, 0x3F80]
     xa = evaluate(TA, x, k)

@@ -131,3 +131,61 @@ def test_word_bits_and_bits_word_are_each_others_inverse_bit_i_leaf_i(w):
     x = 0x8001 | 0x5A << 4
     bits = evaluate(bind(WordBits, W=w), x)
     assert bits == tuple((x >> i) & 1 for i in range(w)) and evaluate(bind(BitsWord, W=w), *bits) == (x,)
+
+
+def _slotted(cross=True, both=False):
+    """Four units of A, D and B, unit u in slot u % 2: D's bits come from A's words inside each slot, B's words from D's
+    bits, B unit 1's from D unit 0 in the other slot with ``cross``, and B unit 0's from D unit 1 too with ``both``."""
+    def wire(reader, port, writer, at, n, base, step=1):
+        return {"reader": reader, "port": port, "writer": writer, "out": "o0", "at": at, "radix": [n], "base": base,
+                "step": [step]}
+    ys = [wire(IB, "y", ID, 0, 4, 0)]
+    if cross:
+        ys = [wire(IB, "y", ID, 0, 1, int(both)), wire(IB, "y", ID, 1, 1, 0), wire(IB, "y", ID, 2, 2, 2)]
+    return {"templates": [[IA, 4], [ID, 4], [IB, 4]], "wires": [wire(ID, "b", IA, 0, 4, 0), *ys],
+            "external": [f"{IA}/x", f"{IA}/k"],
+            "registered": {"params": {"s": 8, "w": 2}, "tables": [], "roots": [], "openings": [], "reads": [
+                {"reader": ID, "port": "s", "param": "s", "at": 0, "radix": [4], "base": 0, "step": [2]},
+                {"reader": IB, "port": "w", "param": "w", "at": 0, "radix": [4], "base": 0, "step": [0]}]},
+            "blocks": {"inference": {"slots": 2, "steps": 2, "entries": [
+                {"template": t, "at": 0, "radix": [2, 2], "axes": ["step", "slot"], "step": 0} for t in (IA, ID, IB)]}}}
+
+
+def _nodes(fn):
+    return [n.fn for n in fn.body.nodes]
+
+
+@pytest.mark.parametrize("cross", [True, False])
+def test_slots_group_strided_units_and_evaluate_as_the_ungrouped_program(cross):
+    import random
+    rec, members = _slotted(cross), [(A, 4), (D, 4), (B, 4)]
+    flat, (grouped, query) = wired_population_program(members, rec)[0], wired_population_program(members, rec, slots=True)
+    assert grouped.fn.signature() == flat.fn.signature() and grouped.fn.id.startswith("WiredSlots_v1{")
+    assert query == wired_population_program(members, rec)[1]
+    rng = random.Random(0)
+    for _ in range(4):
+        args = [[rng.randrange(1 << 16) for _ in range(t.leaves)] for _, t in flat.fn.signature()[0]]
+        assert evaluate(grouped.fn, *args) == evaluate(flat.fn, *args)
+    calls = _nodes(grouped.fn)
+    slots = {f.id: f for f in calls}
+    assert all(i.startswith("WiredSlot_v1{") for i in slots) and len(slots) == (2 if cross else 1)
+    assert len(calls) == (2 if cross else 1)
+    for f in slots.values():
+        assert {g.id for g in _nodes(f)} >= {IA, ID, IB, descriptor_id(bind(BitsWord, W=16)), descriptor_id(bind(WordBits, W=16))}
+    first = dict(next(iter(slots.values())).signature()[0])
+    assert first["w"] == Array(2, V16) and first["s"] == Array(4, V16) and first["0.x"] == Array(2, Array(2, V16))
+    if cross:
+        assert [n for n, _ in slots[calls[1].id].signature()[0]][-1] == "wire:1.o0"
+
+
+def test_two_slots_wired_both_ways_are_refused():
+    with pytest.raises(ValueError, match="slots 0 and 1 are wired both ways"):
+        wired_population_program([(A, 4), (D, 4), (B, 4)], _slotted(both=True), slots=True)
+
+
+def test_slots_need_the_records_inference_blocks():
+    rec = {k: v for k, v in _slotted().items() if k != "blocks"}
+    with pytest.raises(ValueError, match="no inference blocks"):
+        wired_population_program([(A, 4), (D, 4), (B, 4)], rec, slots=True)
+    assert program_digest(wired_population_program([(A, 4), (D, 4), (B, 4)], rec)[0]) == program_digest(
+        wired_population_program([(A, 4), (D, 4), (B, 4)], _slotted())[0])
