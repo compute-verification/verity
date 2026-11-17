@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Recursion.Off
 public import Proofs.Flock.Soundness.Registered.ReadsX
 public import Proofs.Flock.Soundness.Discharge.Exec.Event
 import Mathlib.Combinatorics.Matroid.Init
@@ -24,11 +25,6 @@ and the verifier checks only the reads of the units it samples. So:
 
 namespace FlockSoundness.Discharge.Recursion
 
-/-- **A commit string that is a row of a unit of `S`.** -/
-def rowIn {n : ℕ} {Q G : Type} (S : Finset (Fin n)) : (Fin n × Q) ⊕ G → Prop
-  | .inl (u, _) => u ∈ S
-  | .inr _ => False
-
 theorem rowIn_mono {n : ℕ} {Q G : Type} {S S' : Finset (Fin n)} (h : S ⊆ S') :
     ∀ p : (Fin n × Q) ⊕ G, rowIn S p → rowIn S' p
   | .inl (_, _), hp => h hp
@@ -39,6 +35,7 @@ end FlockSoundness.Discharge.Recursion
 namespace FlockSoundness.Registered
 
 open Game Refine Binding Audit
+
 open scoped ENNReal
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
@@ -90,6 +87,7 @@ end FlockSoundness.Registered
 namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit Exec Refine
+
 open scoped ENNReal
 
 /-- **An event of the live audit's sample alone has the sampling design's probability.** -/

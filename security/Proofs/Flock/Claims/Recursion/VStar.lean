@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Steps.VStar
 public import Proofs.Flock.Claims.Recursion.InnerAbort
 public import Proofs.Flock.Claims.Recursion.InnerAccepts
 public import Proofs.Flock.Claims.Recursion.Registered
@@ -129,16 +130,6 @@ namespace Claims.Recursion.VStar
 open Claims
 
 /-! ## The deployed readers -/
-
-/-- A byte from up to eight bits, the low bit first. -/
-def byte (bs : List Bool) : UInt8 := bs.foldr (fun b a => (if b then 1 else 0) + 2 * a) 0
-
-/-- **Bits as bytes**: eight to a byte, the low bit first, a short last byte padded with zeros. Any other bit order is
-this one at permuted positions, which a layout lists. -/
-def bytesOf (bs : List Bool) : Msg := (List.range ((bs.length + 7) / 8)).map fun j => byte ((bs.drop (8 * j)).take 8)
-
-/-- The bytes a witness's hidden values hold at the positions `ps`, in order. -/
-def readAt (w : Flock.Wit) (ps : List ℕ) : Msg := bytesOf (ps.map fun p => w.hid.getD p false)
 
 /-- A message off a witness from its segments: each segment's constant bytes, then the bytes at its hidden values. -/
 def readSegs (w : Flock.Wit) (segs : List (Msg × List ℕ)) : Msg := segs.flatMap fun p => p.1 ++ readAt w p.2

@@ -4,6 +4,7 @@ public import Proofs.Flock.Recursive.CompileRuns
 public import Proofs.Flock.Recursive.ForkInner
 public import Proofs.Flock.Recursive.Replay
 public import Proofs.Flock.Recursive.Target
+public import Proofs.Flock.Recursive.Registrants
 public import Proofs.Flock.Soundness.Assumptions.Recursive
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

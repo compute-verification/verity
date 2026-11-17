@@ -1,7 +1,13 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Recursion.Defs
+public import Proofs.Flock.Soundness.Discharge.Recursion.Flock
+public import Proofs.Flock.Soundness.Discharge.Recursion.Fork
+public import Proofs.Flock.Soundness.Discharge.Recursion.Off
+public import Proofs.Flock.Soundness.Discharge.Recursion.Raw
 public import Proofs.Flock.Soundness.Discharge.Recursion.Registrants
 public import Proofs.Flock.Soundness.Discharge.Recursion.Stage
+public import Proofs.Flock.Claims.Steps.VStar
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

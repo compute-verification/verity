@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Recursive.Registrants
 public import Proofs.Flock.Soundness.Assumptions.Recursive
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs

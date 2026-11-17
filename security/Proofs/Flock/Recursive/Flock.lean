@@ -78,37 +78,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ liveSession)
 
 open scoped ENNReal
 
-set_option genInjectivity false in
-/-- **V*'s `--zk --registered` session at one history, but for its record's custody**: what its soundness takes besides
-the circuit `c` (fixed: V* is public), its number of tables `J`, the sampling design `Lv` of V*'s units, the record's custody
-(`ZkOuter.hRec`), the count curve and the prover's strategy. V*'s sessions hide their outputs: the circuit file parses
-under `HmOut` (`hcH`), the tags are `TagsOkZHJ`, each table is set up by setupHidden (`y₀`, `hDraw`). `rd` is the
-registrant's record of the registered reads: the hidden circuit's rows from its registration, the values of the outer
-proof's registration `R₂` (`outerV`), and the values the verifier registers itself (the sample, the coins, the comb
-`coef`). `hown`: at an accepted outcome, the reads at the rows of the sampled proof blocks are the verifier's own (`OwnReadsHJ`:
-its ports, at the positions its program reads, in the table each unit is sampled into). -/
-structure ZkOuterD (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit)
-    (hscope : Layout.scopeOk c = true) (Lv : SamplingDesign nv) where
-  I : Inputs
-  ht : I.tags.typed = false
-  own : Array Flock.Registered.Port
-  dj : Finset (Fin nv) → Lean.Json
-  S₀ : Finset (Fin nv)
-  d₀ : Lean.Json
-  y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀
-  wr : (S : Finset (Fin nv)) → (R : Reg') → LiveOutJ (planZHJ (Reg := Reg') dj y₀ S R).length mPts → Exec.Transcript
-  hcH : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c
-  pub : Public
-  hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub
-  hDraw : FlockSoundness.Assumptions.Zk.DrawCustodyZKHJ I dj mPts Lv
-  hTags : TagsOkZHJ I
-  hJ : nTab I = J
-  rd : FlockSoundness.Registered.ReadsX
-    (layShHJ (Reg := Reg') dj y₀ ht hcH (Layout.scopeOkH_of_scopeOk hscope) hU (pub := pub))
-    (rsShHJS dj y₀ ht hcH (Layout.scopeOkH_of_scopeOk hscope) hU hpub)
-  hown : ∀ ω R' o, LiveAcceptsZKR I own (R', Lv.draw ω, wr (Lv.draw ω) R' o) →
-    OwnReadsHJ I own c pub (wr (Lv.draw ω) R' o) (rd.restrict (rowIn (Lv.draw ω))).isRead rd.port rd.readAt
-
 /-- **A session's commit strings, written out**: each unit's row ports in order, then the single gates
 (`Positions.list` at `Readers.ofRows`' positions, which `layShHJ`'s are). The searches over a session's registered
 reads run through this list, so their order is computed. -/
@@ -123,25 +92,6 @@ theorem ZkOuterD.mem_posList {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit}
     (p : (layShHJ (Reg := Reg') z.dj z.y₀ z.ht z.hcH (Layout.scopeOkH_of_scopeOk hscope) hU (pub := z.pub)).Pos) :
     p ∈ z.posList :=
   Positions.mem (P := (Fin nv × Fin c.ports.size) ⊕ Fin _) p
-
-set_option genInjectivity false in
-/-- **V*'s `--zk --registered` session at one history**: `ZkOuterD`'s, with the record's custody `hRec` (the record
-`verify --zk` reads is the challenger's of the live session of `J` tables, `RecordsLiveZKJ`). -/
-structure ZkOuter (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit)
-    (hscope : Layout.scopeOk c = true) (Lv : SamplingDesign nv) extends ZkOuterD mPts nv J Reg' c hU hscope Lv where
-  hRec : FlockSoundness.Assumptions.Zk.RecordsCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg') dj y₀ S R).length)
-    wr
-
-/-- **The names of a session's strategies**: a registration and, at each of the sampling design's coins, a strategy of the live
-session of `J` tables; they read the same at every history. -/
-abbrev baseGame {nv : ℕ} (Lv : SamplingDesign nv) (Reg' : Type) (dg : ByteArray → ByteArray) (J mPts N : ℕ) :
-    Game (LiveOutJ J mPts) :=
-  .send Reg' fun _ => .coin Lv.Ω fun _ => liveSession dg J mPts N
-
-/-- A strategy of the live session of `J` tables, as one of `J'` tables when `J' = J`. -/
-def castLive {J J' : ℕ} (h : J' = J) (dg : ByteArray → ByteArray) (mPts N : ℕ)
-    (s : Strategy (liveSession dg J mPts N)) : Strategy (liveSession dg J' mPts N) :=
-  cast (congrArg (fun J => Strategy (liveSession dg J mPts N)) h.symm) s
 
 theorem castLive_castLive {J J' : ℕ} (h : J' = J) (dg : ByteArray → ByteArray) (mPts N : ℕ)
     (s : Strategy (liveSession dg J' mPts N)) : castLive h dg mPts N (castLive h.symm dg mPts N s) = s := by
@@ -265,11 +215,6 @@ noncomputable abbrev lay :=
 
 /-- The value binding of V*'s session (`vbHJ`). -/
 noncomputable abbrev vb := vbHJ (Reg := Reg') zo.dj zo.y₀ zo.ht zo.hcH (Layout.scopeOkH_of_scopeOk hscope) hU zo.hpub
-
-/-- The strategy a name stands for in V*'s session. -/
-noncomputable def ofBase (τ₀ : Strategy (baseGame Lv Reg' dg J mPts N)) : Strategy (zo.game dg N) :=
-  ⟨τ₀.1, fun ω => Strategy.map (fun t => (τ₀.1, Lv.draw ω, t)) _ (Strategy.map (zo.wr (Lv.draw ω) τ₀.1) _
-    (castLive (zo.hlen (Lv.draw ω) τ₀.1) dg mPts N (τ₀.2 ω)))⟩
 
 /-- **Every strategy of V*'s session has a name.** -/
 theorem ofBase_surj (τ : Strategy (zo.game dg N)) : ∃ τ₀, zo.ofBase dg N τ₀ = τ := by
@@ -535,10 +480,6 @@ end VStmt
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
 
-/-- The record of V*'s sessions at one history: each session's name and outcome. -/
-abbrev VRec (Vs : Fin S → VStmt) (Reg' : Type) (dg : ByteArray → ByteArray) (N : ℕ) : Type :=
-  (j : Fin S) → (Vs j).Name Reg' dg N × (Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript)
-
 /-- **V*'s sessions at one history, in a row**: each played by the strategy the prover names at its start (`seqC`). -/
 noncomputable abbrev sessions (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ) :
     Game (VRec Vs Reg' dg N) :=
@@ -556,11 +497,6 @@ theorem outcome_sessions (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArra
     (s : Strategy (sessions zs dg N)) {b : VRec Vs Reg' dg N} (h : Game.Outcome (sessions zs dg N) s b) :
     ∀ j, Game.Outcome ((zs j).game dg N) ((zs j).ofBase dg N (b j).1) (b j).2 :=
   outcome_seqC S (fun j => (zs j).game dg N) (fun j => (zs j).ofBase dg N) s h
-
-/-- **V*'s layers** at the strategies the record names. -/
-noncomputable def layers (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N k Rw : ℕ)
-    (b : VRec Vs Reg' dg N) : (j : Fin S) → (Vs j).Bits :=
-  fun j => (zs j).layer dg N k Rw ((zs j).ofBase dg N (b j).1)
 
 /-- **The expected sum over V*'s sessions** of `F j` at the strategy the prover names for session `j`. -/
 noncomputable def sumS (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
@@ -675,19 +611,6 @@ theorem outerV_le
   exact sessions_le (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR Q (hQ s.1) (sessOf zs dg N s)
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type}
-
-/-- **What V*'s circuits compute** (`k, Rw` the count curve's): at every history `(R, ω, t)`, registration `R₂` of the
-outer proof and strategies `τ` of V*'s sessions there, when every session's outcome verity-verify-proof `--zk --registered`
-accepts and every session's value layer is `Good`, the messages `wmsg` reads from the layers hold an inner transcript
-the inner verifier accepts on the hidden circuit's statement `x R ω` at the rounds' coins. -/
-def VBridge (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt)
-    (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) : Prop :=
-  ∀ R ω t R₂ (τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N))
-    (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
-    (∀ j, LiveAcceptsZKR (zs R ω t R₂ j).I (zs R ω t R₂ j).own (o j) ∧
-      (zs R ω t R₂ j).Good ((zs R ω t R₂ j).layer dg N k Rw (τ j))) →
-    I.accepts (x R ω) ((wmsg fun j => (zs R ω t R₂ j).layer dg N k Rw (τ j)).zip (t.map Prod.snd))
 
 /-- **The recursive audit with V*'s `--zk --registered` sessions as the outer proof is sound, up to what the inner
 verifier reads**: `recursive_sound_upto` at V*'s outer proof (`outerV_le` at every leaf, on `VBridge`). Stage `i` opens

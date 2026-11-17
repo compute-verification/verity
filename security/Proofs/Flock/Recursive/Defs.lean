@@ -332,7 +332,6 @@ theorem leafAvg_relabel {N δ : Type} (Q : δ → Prop) : ∀ (r : ℕ) (f : Lis
         (fun p c => ref ((s.1, ρ) :: p) c) (fun t => h ((ref [] s.1, ρ) :: t)) (s.2 ρ))
 
 omit [Fintype C] [Nonempty C] in
-
 theorem zip_eq_relabel {N : Type} : ∀ (ref : List (M × C) → M → N) (t : List (M × C)) (w : List N),
     (∀ k < t.length, w[k]? = (t[k]?).map fun e => ref (t.take k) e.1) → w.zip (t.map Prod.snd) = relabel ref t
   | _, [], _, _ => by simp [relabel]
