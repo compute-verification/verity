@@ -2490,7 +2490,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
                                                                                              capsys, live):
     """Pearl+'s accepted piece whose live coins the compose holds to its pin, whose session the lane reserved under its own
     gate key in its open Pearl-C period, whose passes are tied to the window SPOT audited, and which the Lean
-    `PouwVerifier.PearlPlus` verdict accepts on the same run with nonzero work, is PoUW's verdict of record: its row is
+    `PouwCheck.PearlPlus` verdict accepts on the same run with nonzero work, is PoUW's verdict of record: its row is
     Pearl+'s answer with the Lean's work, and remote's record composes it with W_cert that work, nothing missing, pending
     the remote check's answer."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")

@@ -3,7 +3,7 @@ module
 public import PouwVerifier.Protocol
 
 /-!
-# PoUW's window check: what its Lean code (`PouwVerifier.protocol`) does
+# PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
 
 The properties of the executable check (`verity/protocols/accounting/pouw/verifier/lean/check/`, the port of
 `verity/protocols/accounting/pouw/verifier/core_check.py`), stated against `protocol.check` as it runs, for every input of

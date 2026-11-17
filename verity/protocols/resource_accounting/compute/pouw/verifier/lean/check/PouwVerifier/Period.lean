@@ -56,7 +56,7 @@ challenger `key` to a registered device.
 **Profile**: the period's name and its number of windows.
 
 What it doesn't check: each sampled proof block's statement and each round's live statement, whose proof outcomes the evidence
-carries as the verifier's verdicts (`PouwVerifier.Verified` and `PouwVerifier.LiveVerified` judge them, with
+carries as the verifier's verdicts (`PouwCheck.Verified` and `PouwCheck.LiveVerified` judge them, with
 Flock's Lean verifier run outside).
 -/
 

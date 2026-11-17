@@ -5,7 +5,7 @@ module
 
 The port of `weights.chunks` with its `CHUNK_MAX` and `CHUNK_ALIGN`: the chunks an H1 lane at contraction K is proved in
 (`h1zy.lane_statements`), and so the chunk rows a table at K commits each of its rows as (`h1zy.chunk_leaves`, row r's
-chunk c its leaf n·r + c), which credit's layout reads. `pouw-verifier-difftest`'s `chunks` (`PouwVerifier.Difftest`) holds it
+chunk c its leaf n·r + c), which credit's layout reads. `pouw-check-difftest`'s `chunks` (`PouwCheck.Difftest`) holds it
 to the Python, refusal for refusal, at every multiple of 32 below 2^17 (`tests/test_difftest.py`).
 -/
 
