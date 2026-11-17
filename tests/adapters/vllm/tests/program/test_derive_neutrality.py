@@ -8,8 +8,6 @@ A refactor that is meant to be neutral keeps every pin.  A change that moves a c
 `verity-vllm neutrality --tier fast|heavy` (`pipeline/neutrality.py`)."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 import os
 from pathlib import Path

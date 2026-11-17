@@ -65,6 +65,9 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 - `glm53-flock-steady-head-block-h200`: GLM-5.3's sparse MLA head block at 64 visible keys, in both its forms, at one,
   two and four provers on one H200 with ten cores, each statement fetched from the store.
+- `glm53-flock-steady-head-block-h200-walk`: the first spec's `FIRST=false` point at one prover with the units' level
+  walk on the card (`FC_UNIT_WALK=1`); `benchmarks/kernels/steady_walk.py` reads the two points' runs as kernels'
+  metric.
 
 ## Sweeps
 

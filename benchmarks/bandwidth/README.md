@@ -2,7 +2,8 @@
 
 PoUB's timing (`verity/protocols/resource_accounting/memory/poub/verifier/timing.py`) cites a few hardware bounds: how
 fast a node's writers can fill a tier with labels, and how much a card holds on chip. These probes measure them. Each
-probe is one Attempt on a GPU node, and its records are its result: no code reduces them to one number.
+probe is one Attempt on a GPU node, and its records are its result: no code reduces them to one number, except that
+`write_host` also writes its fastest record into the run's `result.json` as `metrics.toml`'s number (`result.py`).
 
 ## Try it
 

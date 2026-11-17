@@ -13,8 +13,12 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
   serves PoUW's H1, each execution phase's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
 - **the inference-only policy** (`verity/protocols/workload_classification/training_detection/inference_only/verifier/`): the registered circuit divides into inference
-  blocks within their gate and fresh-input budgets. The served run doesn't run it: the served run doesn't produce the
-  declared division yet.
+  blocks within their gate and fresh-input budgets. The served run checks it on the served node: once step 3 has
+  counted the window's circuit at the policy's class (`IO_CLASS`), `inference_only.py verdict` judges the window's
+  blocks against the policy written before the serve, and the Lean `inference-only-check --count` counts one block's
+  gates, which must agree. That answer is the served node's own. The compose off the node carries it into the record
+  as the node wrote it and doesn't check it again; only a composite (`COMPOSITE` set) checks the policy's case, in the
+  product's Lean on the compose host, and the placed window composes none.
 
 PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case, the form
@@ -26,7 +30,7 @@ session, the committed trace is outside the sampling relation with probability a
 errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
 targets as open premises, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
 itself, to `SampledKSLiveV3`'s event (`verity/protocols/compose/verifier/remote/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
-meets. Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted` takes
+meets. Onsite's chain has a gap of its own: network attestation's `NetTiming.Guarantees.SampledAuditAccepted` takes
 `Claims.SamplingGeneric.Compiled.KS` as a hypothesis, and the theorem that gives it at the deployed record,
 `SamplingDeploy.ks_compiled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
 (`benchmarks/prove_path/e2e_chains/README.md`).
@@ -40,17 +44,29 @@ it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. 
 `benchmarks/one_stage/served_verdicts.sh`'s, whose header gives each step:
 
 1. the endpoint, under a GPU lease, with the committer's weights registration before the first request;
-2. greedy requests from network certification's traffic generator (`serve_load.py --varied`), closed into one execution phase;
+2. greedy requests from network attestation's traffic generator (`serve_load.py --varied`), closed into one execution phase;
 3. SPOT on that execution phase: its advice and request Programs, the circuit of the served execution blocks
    at each class, and the records audit (Flock `--zk` on the sampled proof blocks behind the Lean ZK server, and the
    Lean verifier's verdict);
 4. PoUW's piece, and each onsite subprotocol's piece where it has one;
 5. one record of every piece's verdict (`$OUT/record/verdicts.json`), `pending` while any subprotocol is missing.
 
-The run's exit is its record's verdict. 0 means the compiled Lean composite of record accepted, and only a composite
-computed off the served node, on an auditor device, is of record. 2 means pending: no composite of record yet. That is
-what a window run on the served node ends with, since its own composite is a development check; it is not a crash. 1
-means a rejection, a refused composite, or a failed step.
+The placed window (`[run.window.plain]`) is remote with no accounting piece: it serves no H1
+(`H1_GATE` empty), so PoUW's piece is `MISSING`, and it runs no V3c (`V3C_CLASS` empty, so step 3's audit is the SPOT
+audit of record) and no composite (`COMPOSITE` empty). Its record is composed off the node by `run.sh compose`. The
+tied window (`run.sh window --tie`, `[run.window.tie]`) serves the BF16 row (`tied_row`) under Pearl+
+(`PEARLPLUS_TIE`, `POUW=pearlplus`), its linears committed at V3c's class `4,32,4` (4 slots, prompts 32:32), leaves
+`COMPOSITE` at its default, so its hand-off carries `POUW` and the compose off the node composes remote's composite of
+record, `verity/remote/v1` (a hand-off without `POUW` composes v0, which its record says is not of record), and it
+defers V3c's audit off the node (`V3C_AUDIT_MEM_GB` above node A's memory) to `run.sh copy` and
+`run.sh audit`. Its sampling design is a setting of the launch's environment (`[run.window.tie]`), by default the benchmark's
+`stratified-rate:1/2097152`.
+
+`served_verdicts.sh`'s exit is its record's verdict: 0 when the compiled Lean composite of record accepted, which only
+a composite computed off the served node, on an auditor device, is; 2 pending; 1 a rejection, a refused composite or a
+failed step. A window on the served node can only end pending, so `window.sh` exits 0 when it does, its last line
+`pending: composed off this node` (or, under a deferral, audited and composed off it), and with `PREFLIGHT_ONLY=1`
+exits 0 when the preflight passed.
 
 Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `adapters/vllm/`; this
 directory holds the served run's own: its placement and its commands.
@@ -67,52 +83,66 @@ gets no verdict.
 
 The auditor's parties are the verifier, the challenger, the network attester and the memory attester. The
 challenger is an auditor device reached through its gate, and its live coins are PoUW's and, by default, SPOT's,
-V3c's audit, the SPOT audit of record, among them (`placement.toml`'s `[run.window.coins.gate]`; the launch sends the
-deployment's challenger key record, `challenger-key.json` at the tree's root). Only `run.sh window --development`
-takes development coins instead: a local challenger session on the endpoint's node samples the proof blocks, which
-shows the path but is no auditor's coins, and the run is a development run (`DEVELOPMENT=1`), which its record says.
-The verifier flips no coins of its own. The other three are not
-placed: the Lean verifier runs on the endpoint's node beside the prover, and the network attester and the memory
-attester, which onsite's pieces read, may run there too. Being placed needs each of them on a machine the developer
-doesn't control.
+the SPOT audit of record among them (`placement.toml`'s `[run.window.coins.gate]`, held to the challenger's key record,
+the tree's copy at `tests/benchmarks/pouw/fixtures/challenger-key.json`, and to main's first-parent line, which
+`run.sh` reads from origin's `main` at launch). Only `run.sh window --development` takes development coins instead: a
+local challenger session on the endpoint's node samples the proof blocks, which shows the path but is no auditor's
+coins, and the run is a development run (`DEVELOPMENT=1`), which its record says. The verifier flips no coins of its
+own. The other three are not placed: the Lean verifier runs on the endpoint's node beside the prover and again on the
+compose node, a CPU pod of the research pool, and the network attester and the memory attester, which onsite's pieces
+read, may run on the endpoint's node too. Being placed needs each of them on a machine the developer doesn't control.
 
 ## Workload and placement
 
 - The workload: the integration's one (`adapters/vllm/workloads/`) that `placement.toml`'s `row` names, with its
   requests, its model and revision, and its pinned engine. Its bytes are a fixture in the evidence store, which `run.sh`
   fetches and checks against that directory's `SHA256SUMS`. The endpoint commits under the workload's Build of record,
-  which `verity-vllm predict row` writes from the workload alone before serving. The traced Build in the workload dir
-  that `placement.toml`'s `COMMIT_RUN` names is its cross-check (`predict compare --predicted`), and the endpoint serves
-  only when they agree.
+  which `verity-vllm predict row` writes from the workload alone before serving. The row's traced Build, made by
+  `run.sh setup` and named in `placement.toml`'s `builds`, is its cross-check (`predict compare --predicted`), and the
+  endpoint serves only when they agree.
 - The load, `serve_load.py`: `served_verdicts.sh`'s one execution phase of varied requests (`--varied`, or with
-  `LOAD=fixed` one full execution phase of fixed length), or `serve.sh`'s `BURSTS` bursts of `PER_BURST` requests, each
-  burst sealed on its own (8 and 4 by default), or with `VARIED=N` and `ADMIT=release-order` the network attester's
-  varied traffic.
-- `placement.toml`: where each run goes and what its node holds. That is the node's venv, CUDA, HF cache, taps and
-  workload dirs, and the flags the run recorder starts each run with, among them the gate PoUW's coins come from.
-  `run.sh` hands a run's script its node's paths as its environment, so no script names a node. It holds no machine's
-  address: the gate's value names the variable that holds the challenger host's (`VY_CHALLENGER_1_HOST`), which
-  `run.sh` fills from the environment the run is launched in, and without it the window run starts nothing and says so.
+  `LOAD=fixed` one full execution phase of fixed length).
+- `placement.toml`: where each run goes and what its node holds. The window serves on node A (`vy-spot-glm53`, eight
+  H200s shared by card) and its record is composed on `vy-nebius-cpu-14`. A node's table holds its venv, CUDA, HF
+  cache, taps, traced Builds and Flock's build, which `run.sh setup` leaves under the served run's directory, and a
+  run's table the flags the run recorder starts it with. `run.sh` hands a run's script these as its environment, so no
+  script names a node. No file or command line holds a machine's address: `window.sh` reads the gate's
+  (`VY_CHALLENGER_1_HOST`) from `CHALLENGER_ENV`, a mode-600 env file on the node. The window's card, cores and end
+  are `CARD`, `CORES` and `END`, which `run.sh` fills from the environment the run is launched in.
+- `local_gate.py`: the challenger's gate (`live_challenger/auditor.py`) on one node under a test key, its coins the
+  Lean verifier's; `init` refuses when that verifier doesn't build.
 - `workloads/` keeps a bf16 RTX PRO 6000 workload, which the served run doesn't serve.
 
 ## Commands
 
-`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|commit|serve] [--dry-run] [--development] [FLAG...]`). It starts the run with
-the run recorder from the tree root, on the node `placement.toml` names, and returns once the run starts. FLAGs go to the
-recorder (`--env MAIN_SHA=SHA`); `--dry-run` prints the command, and `--development` takes development coins.
+`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|compose|setup|copy|audit] [--dry-run] [--development] [--tie] [FLAG...]`).
+It starts the run with the run recorder from the tree root, on the node `placement.toml` names, and returns once the
+run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--dry-run` prints the command.
 
-1. `run.sh commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
-   that seals its replay bundle. The workload dir stays on the node, the only copy: the bundle and the Commit's records
-   under `commit/` hold values (the committed store with its salts, the weights key, the requests and served tokens)
-   and `match/spec.json` holds the prompts, so nothing stores the dir. The run's record holds only the files
-   `published.sh` lists, each with the reason it holds nothing of a request (the node and the tree's commit, each
-   stage's flags, exit code and verdict word, the sealed bundle's manifest digest, the GPU lease's times, the row's
-   target), and the run names every file it left on the node; to publish another file, give it an entry there.
-   `placement.toml`'s `COMMIT_RUN` names the Commit whose traced Build the endpoint's Build of record is held to.
-2. `run.sh` (`window`, the default): `served_verdicts.sh`, the served run through every subprotocol, as above.
-3. `run.sh serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed execution
-   phase in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
-   `PP_SERVE_ROWS`).
+1. `CARD=N CORES=A-B END=UTC run.sh setup [--tie]`, once per row and node: `setup.sh` makes what the window reads,
+   each step skipped where its result is there unless `STEPS` names it: the INT8 pin, the taps, Flock's build, and the
+   row's predicted Build, held to its pin (INT8: `test_predict.py`'s; BF16: `served_verdicts.sh`'s `BUILD_OF_RECORD`),
+   its traced Build and their compare. Its last line names the run id to add to `builds`. A tap's bytes change when it
+   is rebuilt even where its sources don't, so a rebuilt tap is not live until its exactness test passes on the card
+   (`fa_tap_exactness_gpu.py`, the guarded build against the default build's record): only then does setup install
+   both taps, each replaced one kept beside it as `.replaced`, and name the commit to set `TAPS_AT` to. Nothing holds a
+   traced Build to the live taps, so after the taps change rerun setup whole for each row (its Build step always runs)
+   and name the new runs in `builds`.
+2. `CARD=N CORES=A-B END=UTC run.sh [--tie]` (`window`, the default): `window.sh`, which runs `served_verdicts.sh` on
+   that card under its own lease and packs the compose hand-off into the run's `out/handoff/`; 75 with nothing run when
+   the card is in use or `END` leaves under an hour (or under `LEASE_MIN`, a short window's length in minutes, which
+   also bounds its lease). The gate gives coins only to a commit on `main`'s first-parent line, so from a branch not yet
+   landed `run.sh` refuses: land it first, or take development coins with `--development`. It refuses a commit that
+   changed the taps' sources since `TAPS_AT`.
+3. `HANDOFF=DIR run.sh compose`, DIR holding the window run's `out/handoff/`: `compose.sh`, the window's record composed
+   off the served node, its SPOT Lean verifier run there on the audit, and a tied window's composite, remote v1, with
+   it. `run.sh` refuses it from any commit but the
+   window's (the hand-off's `COMPOSE_TREE`).
+4. A tied window's deferred audit, between the window and the compose: `SERVED_RUN=<window run id> AUDIT_NODE=<node>
+   run.sh copy` sends its serve dir's deferral (its files, held to their `inputs.sha256`) from node A to the same path on
+   the audit's node, then `SERVED_RUN=… AUDIT_NODE=… run.sh audit` runs `served_verdicts.sh v3c` there at the window's
+   commit (`V3C_PEER` the audit's node; `V3C_AUDIT_TIMEOUT` and `V3C_WARM_JOBS` from the launch) and packs the compose
+   hand-off into its `out/handoff/`.
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `adapters/vllm`, and run
 `verity_vllm.pipeline.cli` and the integration's tools from `adapters/vllm/`.
