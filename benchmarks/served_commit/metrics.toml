@@ -1,0 +1,32 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "circuits/committed-throughput-over-stock"
+title = "Committed throughput over stock"
+owner = "circuits"
+unit = "times stock"
+axis = "Output tokens a second of vLLM committing every value, over stock vLLM's, both compiled, at batch 32 with mixed prompts, each point naming its model and machine."
+better = "higher"
+command = "research run --on NODE --project verity --source . --cwd source --gpus 1 -- env SPEC=llama32-1b-bf16-rtx-served-arm bash benchmarks/served_commit/run.sh"
+every = "7d"
+
+[[metric]]
+id = "circuits/committed-time-to-first-token-over-stock"
+title = "Committed time to first token"
+owner = "circuits"
+unit = "times stock"
+axis = "Time to first token of vLLM committing every value, over stock vLLM's, both compiled, at batch 32 with mixed prompts, each point naming its model and machine."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source --gpus 1 -- env SPEC=llama32-1b-bf16-rtx-served-arm bash benchmarks/served_commit/run.sh"
+every = "7d"
+
+[[metric]]
+id = "circuits/committed-time-per-output-token-over-stock"
+title = "Committed time per output token"
+owner = "circuits"
+unit = "times stock"
+axis = "Time per output token of vLLM committing every value, over stock vLLM's, both compiled, at batch 32 with mixed prompts, each point naming its model and machine."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source --gpus 1 -- env SPEC=llama32-1b-bf16-rtx-served-arm bash benchmarks/served_commit/run.sh"
+every = "7d"
