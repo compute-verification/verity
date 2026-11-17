@@ -21,6 +21,7 @@ from verity.circuits.types import Array, RecordType, Value
 
 from tests.program.predict.test_node import _first_layers
 from tests.program.predict.test_predict import GLM53, _row_phi
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.program.predict.build import build_program, decoder
 from verity_vllm.program.predict.common import Unexpressible, _Peers
 from verity_vllm.program.predict.node import build_node_program
@@ -30,6 +31,7 @@ LAYERS, H200, H100 = 4, "NVIDIA H200", "NVIDIA H100 80GB HBM3"
 GROUPS = ("prefix", "prefix_ik", "prefix_iks")
 NO_TILE = (f"vocabulary cannot express: no tuned fused-MoE config for E=256, N=256 on {H100!r} "
            f"(engine.profiles.devices.FUSED_MOE_CONFIGS)")
+NO_PIN = f"on {H100!r}: no device pin NVIDIA_H100_80GB_HBM3.json in device_pins/ (bf16_gemm_check.device_pin)"
 SWITCHES = {"custom_all_reduce": True, "symmetric_memory": True, "flashinfer": True, "batch_invariant": False, "nccl_transport": None}
 NO_CAPTURE = " (no capture covers it: tp_allreduce.covered)"
 
@@ -90,10 +92,30 @@ def _rows(model) -> list[tuple[int, ...]]:
     return [tuple(len(model.logs[L][h]) for h in ("latent", "ik", "iks")) for L in sorted(model.logs)]
 
 
-def test_a_device_without_a_tuned_fused_moe_tile_is_refused_where_the_moe_block_is_written(cut):
-    """vLLM keys its tuned fused-MoE tiles by the name the device reports, and the decoder holds the H200's file alone.  On
-    another device the fourth layer, the MoE block, is refused by name.  The first three layers read no tile: cut to them,
-    the other device's Program is the H200's."""
+def _route_pin_of(monkeypatch, device_of) -> None:
+    """`bf16_gemm_check.default_cublas_route` reading the pin of `device_of(device)` in place of the device φ names."""
+    real = BC.default_cublas_route
+    monkeypatch.setattr(BC, "default_cublas_route", lambda phase, M, K, N, device=None: real(phase, M, K, N, device_of(device)))
+
+
+def test_a_cublas_gemm_reads_the_pin_of_the_device_phi_names(cut, monkeypatch):
+    """The decoder's cuBLAS GEMMs take their routes from the pin of the device φ names.  On the H200, the route scan's device,
+    the Program is the one a call naming no device gives; on an H100, which has no pin, the first cuBLAS GEMM (layer 0's
+    indexer key projection) is refused by name, and no Program is written on the H200's routes."""
+    phi = cut()
+    named = {M: build_program(phi, "step", M=M, pos0=0).digest for M in (1, 17)}
+    _route_pin_of(monkeypatch, lambda device: None)
+    assert {M: build_program(phi, "step", M=M, pos0=0).digest for M in (1, 17)} == named
+    monkeypatch.undo()
+    with pytest.raises(Unexpressible, match=re.escape("a bf16 linear GEMM of M=1, K=6144, N=128 " + NO_PIN)):
+        build_program(cut(device=H100), "step", M=1, pos0=0, with_desc=False)
+
+
+def test_a_device_without_a_tuned_fused_moe_tile_is_refused_where_the_moe_block_is_written(cut, monkeypatch):
+    """vLLM keys its tuned fused-MoE tiles by the name the device reports, and the decoder holds the H200's file alone.  With
+    the H200's cuBLAS route pin standing in for the H100's, which has none, the H100's fourth layer, the MoE block, is refused
+    by name.  The first three layers read no tile: cut to them, the other device's Program is the H200's."""
+    _route_pin_of(monkeypatch, lambda device: H200 if device == H100 else device)
     assert _families(build_program(cut(), "step", M=1, pos0=0, with_desc=False))["MoeExpertFp8Gemm_v1"] == 8
     with pytest.raises(Unexpressible, match=re.escape(NO_TILE)):
         build_program(cut(device=H100), "step", M=1, pos0=0, with_desc=False)
@@ -102,13 +124,13 @@ def test_a_device_without_a_tuned_fused_moe_tile_is_refused_where_the_moe_block_
 
 
 def test_a_node_of_refused_ranks_is_refused_in_the_ranks_words(cut):
-    """A node's ranks are written in lockstep, each on a thread of its own, a collective at a time.  The first rank to reach
-    the MoE block is refused there; every other rank stops where it waits, and the caller gets that rank's refusal, whichever
-    rank φ names.  On the H200 the eight ranks join."""
+    """A node's ranks are written in lockstep, each on a thread of its own, a collective at a time.  On an H100, which has no
+    cuBLAS route pin, the first rank to reach a cuBLAS GEMM is refused there; every other rank stops where it waits, and the
+    caller gets that rank's refusal, whichever rank φ names.  On the H200 the eight ranks join."""
     assert build_node_program(cut(), "step", M=1, pos0=0, with_desc=False).world == 8
     for rank in (0, 5):
         phi = cut(device=H100)
-        with pytest.raises(Unexpressible, match=re.escape(NO_TILE)):
+        with pytest.raises(Unexpressible, match=re.escape(NO_PIN)):
             build_node_program(Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": rank}}), "step", M=1, pos0=0, with_desc=False)
 
 

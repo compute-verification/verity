@@ -7,6 +7,7 @@ from collections import Counter
 import pytest
 
 from verity_vllm.config import row_file
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.program.predict import step_needs
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.step_needs import StepNeeds, workload_phi
@@ -41,12 +42,32 @@ def test_a_row_that_pins_no_revision_has_no_snapshot_dir_to_write(tmp_path, monk
 
 
 def test_a_device_named_by_no_str_names_no_tuned_file(S):
-    """The tuned fused-MoE file a step's expert GEMMs take their tile from is named by φ's `device_name`: one that is no str
-    has no name to put in it, an AttributeError, and is no missing file's refusal."""
+    """The cuBLAS route pin and the tuned fused-MoE file a step's GEMMs take their routes and tiles from are named by φ's
+    `device_name`: one that is no str has no name to put in either, an AttributeError, and is no missing file's refusal."""
     doc = S.phi.to_json()
     numbered = StepNeeds(Phi.from_json({**doc, "target": {**doc["target"], "device_name": 200}}))
     with pytest.raises(AttributeError, match="'int' object has no attribute 'replace'"):
         numbered.step(8, 8, [], [100 + i for i in range(8)], 8, {"greedy": 8}, True)
+
+
+def test_a_cublas_gemm_reads_the_pin_of_the_device_phi_names(S, monkeypatch):
+    """A step's cuBLAS GEMMs take their routes from the pin of the device φ names.  On the H200, the route scan's device, a
+    step needs what a call naming no device gives; on an H100, which has no pin, each is refused by name in its place, and
+    the step needs none of the H200's routes."""
+    steps = ((8, 8, [], [100 + i for i in range(8)], 8, {"greedy": 8}, True), (256, 256, [(256, 1024)], [], 1, {"greedy": 1}, False))
+    named = [S.step(*st) for st in steps]
+    real = BC.default_cublas_route
+    monkeypatch.setattr(BC, "default_cublas_route", lambda phase, M, K, N, device=None: real(phase, M, K, N))
+    assert [StepNeeds(S.phi).step(*st) for st in steps] == named
+    monkeypatch.undo()
+    doc = S.phi.to_json()
+    h100 = StepNeeds(Phi.from_json({**doc, "target": {**doc["target"], "device_name": "NVIDIA H100 80GB HBM3"}}))
+    need = h100.step(*steps[0])
+    assert ("cublas-bf16-gemm", "cublas-linear", "no route pin") in _gaps(need)
+    assert [n.gap for n in need if n.id == "cublas-linear{K=6144,N=128,M=8}"] == [
+        "no route pin: no device pin NVIDIA_H100_80GB_HBM3.json in device_pins/"]
+    h200 = {S._cublas(8, (L, "wk_w")).id for L in range(3)} | {S._cublas(8, "lm_head").id}
+    assert all(S._cublas(8, (L, "wk_w")).gap is None for L in range(3)) and not h200 & {n.id for n in need}
 
 
 def test_sizes_past_class_g_refuse_by_name(S):
