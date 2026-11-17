@@ -113,7 +113,7 @@ public import {imports}
 /-!
 # {fam.gpu} ({fam.key})'s {what} (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/machine_model/data`),
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`calibration/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
 this file. `ResourceAccounting.Guarantees.TS.{reads}` reads it.
 '''
