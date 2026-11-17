@@ -2064,6 +2064,7 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
         S.main(["cost", *map(str, dirs), "--out", str(out), "--result"])
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-9")
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
     assert S.main(["cost", *map(str, dirs), "--out", str(out), "--result"]) == 0
     saved = json.loads((tmp_path / "run" / "result.json").read_text())
     assert (saved["schema"], saved["run_id"], saved["validation"]["status"]) == ("research/result/v0.1", "r-9", "passed")
@@ -2214,9 +2215,9 @@ def test_a_card_no_record_lists_in_its_driver_is_refused_naming_what_to_add(monk
     S.kit()
     from verity_bench import kit
     monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "NVIDIA Z9 80GB"})
-    with pytest.raises(SystemExit, match=r"0 card records under .*cards list 'NVIDIA Z9 80GB'.*"
-                                         r"add \"NVIDIA Z9 80GB\" to its one record's `driver` and give it a `short`.*"
-                                         r"<sku>\.toml"):
+    with pytest.raises(SystemExit, match=r"0 card records under .*cards have 'NVIDIA Z9 80GB'.*in `driver`: add "
+                                         r"\{ value = \"NVIDIA Z9 80GB\", source = \.\.\. \} to its one record's `driver` "
+                                         r"and give it a `short`.*<sku>\.toml"):
         S.member(S.MODELS["llama32-1b"], "record", "compiled")
     with pytest.raises(SystemExit, match="0 card records"):
         S.card_record("")
