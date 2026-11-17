@@ -34,7 +34,7 @@ def RECORDS_TREE : String := "verity-pous/streamed-wipe/batch-records/frame-v3-s
 def RECORD_SCHEMA : String := "pous/streamed-wipe/batch-record/v1"
 
 /-- The clock a session's times are on, as its header names it: Linux's raw monotonic clock, in ns, which time
-synchronisation doesn't slew. The wipe's own: the memory challenger's sessions name `MemoryAttester.CLOCK`. -/
+synchronisation doesn't slew. The wipe's own: the memory challenger's sessions name `MemoryChallenger.CLOCK`. -/
 def CLOCK : String := "CLOCK_MONOTONIC_RAW ns"
 def LABEL_BYTES : Nat := 64
 

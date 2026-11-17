@@ -10,7 +10,7 @@ digests a device's keys sign (`partyKeyMessage`, `periodRootMessage`, `livenessM
 format (`HssSignature.decode`: `lower ‖ certificate ‖ signature`, the lower key `16 + N` bytes and each signature
 `signatureBytes`), and its verification (`verifyCertificate`, `hssVerify`, `verifyLiveness`). A role digest is
 `SHA-512([tag] ‖ I ‖ [context] ‖ [record])`, each `[·]` a u64 big-endian length then the bytes. A Python `ValueError` is
-an `Except.error` here. `MemoryAttester.Difftest` holds these to the Python.
+an `Except.error` here. `MemoryChallenger.Difftest` holds these to the Python.
 -/
 
 @[expose] public section

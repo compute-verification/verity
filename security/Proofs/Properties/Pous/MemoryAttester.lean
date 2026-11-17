@@ -7,7 +7,7 @@ import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.SetLike
 
 /-!
-# Proofs of the memory challenger's verdict's properties (`Properties.Pous.MemoryAttester`)
+# Proofs of the memory challenger's verdict's properties (`Properties.Pous.MemoryChallenger`)
 
 `verdict` is its checks before the rounds (`pre`, the reasons they give) followed by the rounds and the counts (`tail`),
 by case analysis (`verdict_eq`). The rounds' loop only adds: the reasons, the late and the wrong count never shrink,

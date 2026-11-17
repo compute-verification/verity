@@ -56,7 +56,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # Proof of `WipeSigned` (`Properties.Pous.WipeSigned`)
 
 `StreamedWipe.verdict` is its checks before the batches (`wpre`) followed by the batches (`wtail`), as
-`MemoryAttester.verdict` is in `Proofs.Properties.Pous.MemoryAttester`; an accepted verdict has no reason, so each
+`MemoryChallenger.verdict` is in `Proofs.Properties.Pous.MemoryChallenger`; an accepted verdict has no reason, so each
 check passed (`accepted_of`): the signature verifies over the session's message under a trusted key, the signed
 commitment is the session's, the batch size is 1, the session ended `complete` after `k` batches, and every batch has no
 wrong answer, is within the deadline, and the first was sent after the fill.
