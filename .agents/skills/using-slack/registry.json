@@ -1058,7 +1058,7 @@
     {
       "handle": "codex",
       "holder": "01a1eb50-14dc-7fb2-86f3-046badfabe75",
-      "remit": "Reports what the evidence establishes about completion claims in pull requests and research updates. Only ci’s staffed readers issue land verdicts. Desktop pilot: nothing wakes it; asks wait until Daniel opens it.",
+      "remit": "Reports evidence for completion claims. CI readers issue land verdicts. Desktop pilot: nothing wakes it; asks wait until Daniel opens it.",
       "linear": "TOP",
       "linear_label": "lane:codex",
       "branch_suffixes": [
