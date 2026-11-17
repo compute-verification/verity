@@ -48,8 +48,9 @@
 # makes its protocol NOT_WRITTEN, its case is not composed, the step goes on, and onsite's NOT_ESTABLISHED line names
 # the protocol as missing. It makes no verdict: exit 0 when each product's Lean answered, else 1. PRODUCT=remote
 # (`served_verdicts.sh`'s) reads no PoUS or wipe case and no ONSITE_PIECES, and runs remote's Lean alone: under
-# POUW=pearlplus, where the tree has remote's composite of record (`remote-v1`, `Core.Remote.V1`, whose work
-# subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case), that one (composite.py remote-v1), else v0.
+# POUW=pearlplus remote's composite of record (`remote-v1`, `Core.Remote.V1`, whose work
+# subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case; composite.py remote-v1), and where the tree
+# lacks it none (`COMPOSITE: not run`, exit 1), else v0.
 # On the served node itself (SERVED_NODE unset or its own host), which the prover controls, a composite claims no record:
 # it is refused (COMPOSITE refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its
 # first line COMPOSITE DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py
@@ -83,7 +84,11 @@ PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
   onsite) products=(remote onsite) ;;
   remote) products=(remote)
-    [ "${POUW:-}" = pearlplus ] && [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] && products=(remote-v1) ;;
+    if [ "${POUW:-}" = pearlplus ]; then
+      [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] \
+        || { say "COMPOSITE: not run, POUW=pearlplus composes remote/v1, and this tree has no verity/protocols/compose/verifier/remote/RemoteV1Main.lean"; exit 1; }
+      products=(remote-v1)
+    fi ;;
   *) say "COMPOSITE: not run, PRODUCT is onsite or remote, not $PRODUCT"; exit 1 ;;
 esac
 [ -f benchmarks/one_stage/composite.py ] || { say "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py"; exit 1; }
