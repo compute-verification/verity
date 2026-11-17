@@ -318,6 +318,14 @@ def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_anothe
             tp.tick_config({tp.TICK_ENV: json.dumps(json.loads(env[tp.TICK_ENV]) | bad)})
 
 
+def test_the_tick_config_refuses_the_open_gate_unless_a_benchmark_arm_names_it(tmp_path):
+    cfg = json.loads(config(tmp_path)[tp.TICK_ENV]) | {"catch_up": "open"}
+    for unnamed in (cfg, cfg | {"arm": ""}):
+        with pytest.raises(ValueError, match="catch_up 'open' opens the gate"):
+            tp.tick_config({tp.TICK_ENV: json.dumps(unnamed)})
+    assert tp.tick_config({tp.TICK_ENV: json.dumps(cfg | {"arm": "prod-tick"})})["catch_up"] == "open"
+
+
 def test_a_missing_release_no_line_names_lost_holds_the_later_ones_until_its_skip_and_comes_late():
     g = Gated(hold_s=5.0)
     g.release(1, bucket=0)
