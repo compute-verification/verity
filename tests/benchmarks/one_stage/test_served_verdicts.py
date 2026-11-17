@@ -5740,7 +5740,7 @@ def _compose(tmp_path: Path, keep: tuple[str, ...] = (), link: tuple[str, Path] 
     py = f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\n[ "$1 $2" = "-m research" ] && exit 0\nexec {sys.executable} "$@"'
     for path, body in ((venv / "python", py), (tree / ".venv" / "bin" / "python", py), (bin_ / "uv", "exit 0"),
                        (bin_ / "lake", "exit 0"),
-                       (tree / "benchmarks" / "one_stage" / "served_composite.sh", FAKE_COMPOSE_COMPOSITE)):
+                       (tree / "verity" / "protocols" / "compose" / "prover" / "served_composite.sh", FAKE_COMPOSE_COMPOSITE)):
         _script(path, body)
     (tree / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
     env = {"PATH": f"{_hosts(tmp_path)}:{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
@@ -6779,7 +6779,7 @@ def test_served_composite_builds_each_product_in_a_lake_package_of_this_tree():
     """served_composite.sh writes out each product's Lake package directory (`package`), and each is a package this tree
     has. A directory built from the product's name follows no move of the packages, and the stand-in trees of the tests
     below would go on agreeing with it."""
-    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh").read_text()
+    script = (HERE.parents[2] / "verity" / "protocols" / "compose" / "prover" / "served_composite.sh").read_text()
     packages = re.findall(r"\) echo (verity/[\w/]+) ;;", script)
     assert len(packages) >= 2 and 'exe "$x" "$(package "$x")"' in script, (
         "served_composite.sh: write each product's package directory out in `package`, as a path a layout move rewrites")
@@ -6818,10 +6818,10 @@ def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks
     if v1:
         (remote / "RemoteV1Main.lean").write_text("")
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(PRODUCT_COMPOSITE)
+    (tree / "verity" / "protocols" / "compose" / "prover" / "composite.py").write_text(PRODUCT_COMPOSITE)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "PRODUCT": "remote", "SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1", **({"POUW": pouw} if pouw else {})}
-    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)],
+    r = subprocess.run(["bash", str(HERE.parents[2] / "verity" / "protocols" / "compose" / "prover" / "served_composite.sh"), str(d), str(out)],
                        cwd=tree, env=env, check=False, capture_output=True, text=True)
     said = (out / "verdicts.txt").read_text().splitlines()
     if composed is None:
@@ -6870,9 +6870,9 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    (tree / "verity" / "protocols" / "compose" / "prover" / "composite.py").write_text(FAKE_COMPOSITE)
     v2 = d / "private" / "sampled-proofs-v2"
-    (tree / "benchmarks" / "one_stage" / "served_cases.py").write_text(f'''import json, sys
+    (tree / "verity" / "protocols" / "compose" / "prover" / "served_cases.py").write_text(f'''import json, sys
 from pathlib import Path
 assert sys.argv[1:3] in (["--serve-dir", "{d}"], ["--audit", "{d}/sampled-proofs-served"]), sys.argv
 assert sys.argv[3:] == ["--private", "{d}/private", "--from-division"], sys.argv
@@ -6891,7 +6891,7 @@ sys.exit(1)
                  "that sum to 9000 bytes, and the limit a check is started on is 8000 bytes; too large to read")
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "COMPOSE_OFF_NODE": "0"}
-    run = lambda: subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
+    run = lambda: subprocess.run(["bash", str(HERE.parents[2] / "verity" / "protocols" / "compose" / "prover" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
                                  check=False, capture_output=True, text=True)
     host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()
     on = (f"COMPOSITE: composed on {host}, which holds the serve dir, from the cases the served node wrote there, not "
@@ -6927,12 +6927,12 @@ sys.exit(1)
     assert sorted(out.iterdir()) == [out / "composite", out / "pieces", out / "verdicts.txt"]
     assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
         "composite/onsite/composite.json", "composite/remote/composite.json"]
-    (tree / "benchmarks" / "one_stage" / "composite.py").unlink()
+    (tree / "verity" / "protocols" / "compose" / "prover" / "composite.py").unlink()
     (out / "verdicts.txt").unlink()
     shutil.rmtree(out / "composite")
     assert run().returncode == 1
-    assert (out / "verdicts.txt").read_text() == f"{dev}\nCOMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
-    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    assert (out / "verdicts.txt").read_text() == f"{dev}\nCOMPOSITE: not run, this tree has no verity/protocols/compose/prover/composite.py\n"
+    (tree / "verity" / "protocols" / "compose" / "prover" / "composite.py").write_text(FAKE_COMPOSITE)
     (out / "verdicts.txt").unlink()
     shutil.rmtree(d / "private")
     env["PRODUCT"] = "remote"
@@ -7061,7 +7061,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
+    shutil.copy(HERE.parents[2] / "verity" / "protocols" / "compose" / "prover" / "composite.py", tree / "benchmarks" / "one_stage")
 
     def case(where: str, of: str) -> None:
         (d / "private" / where).mkdir(parents=True)
@@ -7082,7 +7082,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
         case(ONSITE_OWN[protocol][3], protocol)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
-    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
+    r = subprocess.run(["bash", str(HERE.parents[2] / "verity" / "protocols" / "compose" / "prover" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
                        check=False, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     said = (out / "verdicts.txt").read_text()
@@ -7126,7 +7126,7 @@ def test_the_composite_takes_no_case_from_the_attester_pieces_private_directory_
     for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
+    shutil.copy(HERE.parents[2] / "verity" / "protocols" / "compose" / "prover" / "composite.py", tree / "benchmarks" / "one_stage")
     own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])
            if p != attester}
     for p, where in own.items():
@@ -7147,7 +7147,7 @@ def test_the_composite_takes_no_case_from_the_attester_pieces_private_directory_
     (out / "pieces" / "certifier" / "answer.json").write_text(json.dumps({"protocol": attester, "verdict": "accept"}))
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
-    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
+    r = subprocess.run(["bash", str(HERE.parents[2] / "verity" / "protocols" / "compose" / "prover" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
                        check=False, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert attester in C.COMPONENTS["onsite"] and attester not in C.COMPONENTS["remote"]

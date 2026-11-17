@@ -100,7 +100,7 @@ fresh-input bits) in the clear. Both products compose it for one run of record o
 everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
 padded profile) replaces it. `tests/test_inference_only_not_composed.py` refuses any protocol that publishes
 private data among the products' subprotocols unless its `KNOWN` lists it with its reason, and `KNOWN` only shrinks;
-`benchmarks/one_stage/composite.py` writes the exception's line into the record it renders.
+`verity/protocols/compose/prover/composite.py` writes the exception's line into the record it renders.
 
 A subprotocol that reads blobs (`Core.BlobProtocol`, the content-addressed files beside its three byte strings) makes the product one too: `productB` (`CoreComposition/Blobs.lean`) hands the caller's blobs to
 every subprotocol, those that read none ignore them (`Protocol.withoutBlobs`), and on the blobs it is `product` of its

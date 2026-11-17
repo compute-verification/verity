@@ -148,7 +148,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 V1 = R.PROTOCOL
 V1_LEAN = (VF.PACKAGE, "spot-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"

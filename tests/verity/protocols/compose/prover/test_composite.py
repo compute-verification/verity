@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage")))
+sys.path.insert(0, str((Path(__file__).resolve().parents[5] / "benchmarks" / "one_stage")))
 import composite as C
 
 SAMPLED = "verity/sampled-proofs/v1"

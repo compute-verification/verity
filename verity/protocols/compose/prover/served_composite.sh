@@ -3,7 +3,7 @@
 # off the served node `served_verdicts.sh`'s step before its final record, which takes its product's answer from
 # OUT/composite as the record's verdict (`served_verdicts.py record --composite`); on the served node its step after it:
 #
-#   bash benchmarks/one_stage/served_composite.sh SERVE_DIR OUT
+#   bash verity/protocols/compose/prover/served_composite.sh SERVE_DIR OUT
 #
 # OUT is the run's public $OUT, and OUT/pieces its subprotocols' public pieces. First, under PRODUCT=onsite, onsite's own
 # cases (PoUS's and the wipe's, each under SERVE_DIR/private beside its Lean's answer, as its piece wrote it), named by
@@ -91,7 +91,7 @@ case $PRODUCT in
     fi ;;
   *) say "COMPOSITE: not run, PRODUCT is onsite or remote, not $PRODUCT"; exit 1 ;;
 esac
-[ -f benchmarks/one_stage/composite.py ] || { say "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py"; exit 1; }
+[ -f verity/protocols/compose/prover/composite.py ] || { say "COMPOSITE: not run, this tree has no verity/protocols/compose/prover/composite.py"; exit 1; }
 if [ "$PRODUCT" = onsite ]; then
   if [ -z "${ONSITE_PIECES:-}" ]; then why="it is unset"; else why="$ONSITE_PIECES is not one"; fi
   [ -n "${ONSITE_PIECES:-}" ] && [ -f "$ONSITE_PIECES" ] \
@@ -123,13 +123,13 @@ fi
 
 [ "$PRODUCT" != onsite ] || onsite_cases
 
-if [ -f benchmarks/one_stage/served_cases.py ]; then
+if [ -f verity/protocols/compose/prover/served_cases.py ]; then
   ag=(--from-division)
   [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ] && ag=(--alpha "$ALPHA" --gamma "$GAMMA")
   where=(--serve-dir "$D")
   compgen -G "$D/v3c-w*/audit/window/case.json" > /dev/null || [ -f "$D/h1/log.jsonl" ] \
     || { [ -f "$D/sampled-proofs-served/window/case.json" ] && where=(--audit "$D/sampled-proofs-served"); }
-  "$TPY" benchmarks/one_stage/served_cases.py "${where[@]}" --private "$D/private" "${ag[@]}" > "$P/served_cases.log" 2>&1
+  "$TPY" verity/protocols/compose/prover/served_cases.py "${where[@]}" --private "$D/private" "${ag[@]}" > "$P/served_cases.log" 2>&1
   rc=$?
   grep -hE '^(CASE|NOT_WRITTEN|NOT_STARTED) \{' "$P/served_cases.log" | "$PY" -c '
 import json, sys
@@ -170,7 +170,7 @@ for f in sorted(root.rglob("case.json")):
         print(d)
 EOF
 )
-  "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
+  "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" verity/protocols/compose/prover/composite.py "$x" "${cases[@]}" \
     --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" "${dev[@]}" > "$P/$x.log" 2>&1
   r=$?
   grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"

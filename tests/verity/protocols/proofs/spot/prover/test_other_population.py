@@ -14,7 +14,7 @@ from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.types import Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 
-HERE = (Path(__file__).resolve().parent)
+HERE = ((Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage"))
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import r2_population as R2  # noqa: E402
 

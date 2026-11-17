@@ -83,9 +83,9 @@ write_private(out, {"case.json": json.dumps({**c, "blobs": c.get("blobs") or []}
 print(f"KEPT {src.name}: {a['protocol']} {a['verdict']}, its kept case and answer")
 EOF
 done
-log "$PY" benchmarks/one_stage/composite.py remote "${REMOTE_CASES[@]}" --cases "$P/v2" --private-out "$W/remote" \
+log "$PY" verity/protocols/compose/prover/composite.py remote "${REMOTE_CASES[@]}" --cases "$P/v2" --private-out "$W/remote" \
   --public-out "$OUT/remote" --exe "$REMOTE"
 say "REMOTE exit $? (0 accept, 1 reject, 2 undecided)"
-log "$PY" benchmarks/one_stage/composite.py onsite --cases "$P/onsite" --cases "$P/period" --cases "$P/v2" \
+log "$PY" verity/protocols/compose/prover/composite.py onsite --cases "$P/onsite" --cases "$P/period" --cases "$P/v2" \
   --private-out "$W/onsite" --public-out "$OUT/onsite" --exe "$ONSITE"
 say "ONSITE exit $? (0 accept, 1 reject, 2 undecided)"

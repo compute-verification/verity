@@ -5254,6 +5254,17 @@
         "tests/benchmarks/two_stage/test_guard.py": "tests/benchmarks/one_stage/test_guard.py",
         "tests/benchmarks/two_stage/test_toy.py": "tests/benchmarks/one_stage/test_toy.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/composite.py": "verity/protocols/compose/prover/composite.py",
+        "benchmarks/one_stage/served_composite.sh": "verity/protocols/compose/prover/served_composite.sh",
+        "benchmarks/one_stage/served_cases.py": "verity/protocols/compose/prover/served_cases.py",
+        "benchmarks/one_stage/inference_only_lean.py": "verity/protocols/compose/prover/inference_only_lean.py",
+        "benchmarks/one_stage/r2_population.py": "verity/protocols/proofs/spot/prover/audit/other_population.py",
+        "tests/benchmarks/one_stage/test_composite.py": "tests/verity/protocols/compose/prover/test_composite.py",
+        "tests/benchmarks/one_stage/test_r2_population.py": "tests/verity/protocols/proofs/spot/prover/test_other_population.py"
+      }
     }
   ]
 }

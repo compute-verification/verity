@@ -1526,7 +1526,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
     local why="composed by a deferral's follow-on on $(hostname -s), a prover node, which the prover controls: a"
     why+=" development check, no claim of record (only the compose follow-on's composite, off the served node on an"
     why+=" auditor device, is the record's)"
-    TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_DEVELOPMENT=$why bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" \
+    TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_DEVELOPMENT=$why bash verity/protocols/compose/prover/served_composite.sh "$D" "$OUT" \
       || comp=1
     lean=(--composite "$OUT/composite")
   fi
@@ -1653,7 +1653,7 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
   fi
   local lean=()
   if [ -n "${COMPOSITE-1}" ]; then
-    TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_HANDOFF=1 bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+    TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_HANDOFF=1 bash verity/protocols/compose/prover/served_composite.sh "$D" "$OUT" || comp=1
     lean=(--composite "$OUT/composite")
   fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" \
@@ -2373,7 +2373,7 @@ elif [ -z "$v3c_done" ] && [ -n "${H1_TIE:-}" ]; then v3c_commit && v3c_proved; 
 comp=0
 fixed_limits
 [ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 1 ] || [ -z "${COMPOSITE-1}" ] \
-  || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+  || TPY=$TPY bash verity/protocols/compose/prover/served_composite.sh "$D" "$OUT" || comp=1
 if [ -n "$v3c_done" ]; then :
 elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi

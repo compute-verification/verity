@@ -354,7 +354,7 @@ writers = [
 readers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--window-registration \"\\$3\"|\"\\$D/h1/log\\.jsonl\"" },
     { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "\"--window-registration\"" },
-    { lane = "proofs", file = "benchmarks/one_stage/served_cases.py", find = "H1_LOG = Path\\(\"h1/log\\.jsonl\"\\)" },
+    { lane = "proofs", file = "verity/protocols/compose/prover/served_cases.py", find = "H1_LOG = Path\\(\"h1/log\\.jsonl\"\\)" },
 ]
 
 [[message]]

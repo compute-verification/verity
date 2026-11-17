@@ -7,7 +7,7 @@ import importlib.util
 from pathlib import Path
 from types import ModuleType
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 #: the policy's Lake package and the executable `served_cases.build` builds in it
 LEAN = (ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean", "inference-only")
 REFERENCE = LEAN[0] / "scripts" / "inference_only_reference.py"

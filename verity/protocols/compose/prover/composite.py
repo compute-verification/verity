@@ -357,7 +357,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--public-out", type=Path, required=True, help="verdicts, commitment digests and params digests only")
     ap.add_argument("--exe", help="the product's executable, to run its check")
     ap.add_argument("--development", help="why this composite claims no record: its outputs lead with it")
-    ap.add_argument("--tree", type=Path, default=Path(__file__).resolve().parents[2],
+    ap.add_argument("--tree", type=Path, default=Path(__file__).resolve().parents[4],
                     help="the checkout the executable was built from (default: this file's)")
     return run(ap.parse_args(argv))
 

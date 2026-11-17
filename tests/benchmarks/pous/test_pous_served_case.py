@@ -5,7 +5,7 @@ signer (`test_pous_served_piece`'s fixture, and its BF16 one); the builder encod
 the CPU. The wipe's
 is one wipe in this process at a small fill (`wipe_run.run`), laid out as `streamed_wipe/served_wipe.sh` leaves it:
 ``answer.json`` with the run's placement in its profile, ``served.json`` and the subprotocol's ``wipe.case.json``. Each piece is
-held to the composite's form (`benchmarks/one_stage/composite.py`'s ``piece``: a case of commitment, evidence and params,
+held to the composite's form (`verity/protocols/compose/prover/composite.py`'s ``piece``: a case of commitment, evidence and params,
 an answer whose commitment is the digest of the case's commitment), and a kept output that was changed after the run is
 refused with its reason before anything is written.
 """

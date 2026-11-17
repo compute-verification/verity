@@ -1,4 +1,4 @@
-"""PoUS's and the wipe's pieces for the composite (`benchmarks/one_stage/composite.py`), built from a served window's
+"""PoUS's and the wipe's pieces for the composite (`verity/protocols/compose/prover/composite.py`), built from a served window's
 kept outputs: each piece's case, ``case.json``, the ``{"commitment", "evidence", "params"}`` its Lean component's
 ``serve`` reads (the commitment and evidence hex, no blobs), and that component's own answer on it, ``answer.json``,
 whose commitment is the component's digest of the case's commitment: its Lean's with ``--exe``; else PoUS's Python's,
