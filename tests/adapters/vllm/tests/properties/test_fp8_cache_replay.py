@@ -16,6 +16,7 @@ import pytest
 import torch
 
 from tests.properties import fp8_cache_replay_gpu as X
+from verity_vllm.engine.profiles.stand_in import EXPERTS, LAYERS, stand_in
 
 BLOCK = 4
 #: a cache format -> its tensor's dtype and a row's last dimension (vLLM's ``fp8_ds_mla`` row: 512 e4m3, four f32 scales, 64 bf16)
@@ -234,9 +235,9 @@ def test_the_plan_shares_a_prefix_holds_one_prompt_past_the_top_k_and_samples_ha
     assert len(shared) == 4 and len({tuple(r["prompt_ids"][:200]) for r in shared}) == 1
     assert max(len(r["prompt_ids"]) for r in plan) == X.LONG > 2048
     assert [r["sampling"] for r in plan[:2]] == [{"temperature": 0.0, "seed": 7}, {"temperature": 1.0, "top_p": 0.95, "seed": 1001}]
-    X.stand_in(tmp_path)
+    stand_in(tmp_path, heads=X.HEADS)
     cut = json.loads((tmp_path / "config.json").read_text())
     assert (cut["num_hidden_layers"], cut["n_routed_experts"], len(cut["indexer_types"]), len(cut["mlp_layer_types"])) == (
-        X.LAYERS, X.EXPERTS, X.LAYERS, X.LAYERS)
+        LAYERS, EXPERTS, LAYERS, LAYERS)
     # a rank's heads at tensor-parallel 8, below the 32 at which vLLM reads an FP8 cache's prefill rows through a bf16 copy
     assert cut["num_attention_heads"] == cut["num_key_value_heads"] == X.HEADS == 64 // 8 < 32

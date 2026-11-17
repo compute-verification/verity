@@ -98,6 +98,10 @@ PUBLIC = {
                                                  "pin (MANIFEST, checkpoint_entries), a pin's config (pinned_hf_config, "
                                                  "find_hf_config, hf_snapshot) and its profile module's name, which "
                                                  "benchmarks/inference_only reads",
+    "verity_vllm.engine.profiles.stand_in": "I1: GLM-5.3's one-card stand-in: its registered config cut in layers, "
+                                            "routed experts and heads (cut) and a checkpoint directory of it with a "
+                                            "checkpoint's tokenizer and no weight (stand_in), which benchmarks/serve_tax "
+                                            "serves from random weights",
     "verity_vllm.observe.kernel_trace": "I2: a served engine's device kernels, read from a Kineto trace of its steps, which "
                                          "benchmarks/route_capture reads",
     "verity_vllm.observe.events": "I2: the observation log's event vocabulary (schema verity-capture/log/v1), the facts a "
