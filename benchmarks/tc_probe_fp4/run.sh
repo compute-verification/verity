@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# verity bench tc_probe_fp4 [ARGS]: probe.py with ARGS (default --instruction nvf4 --sass-check) into $OUT, on a GPU of
+# verity bench tc_probe_fp4 [ARGS]: probe.py with ARGS (default --instruction nvf4 --sass-check --sweep) into $OUT, on a GPU of
 # its --arch (default sm_120a, an RTX PRO 6000 or RTX 5090; sm_100a for the tcgen05 instructions); exit 2 where none is
 # visible.
 set -euo pipefail
-[ $# -gt 0 ] || set -- --instruction nvf4 --sass-check
+[ $# -gt 0 ] || set -- --instruction nvf4 --sass-check --sweep
 arch= ins=nvf4
 for ((i = 1; i <= $#; i++)); do
   j=$((i + 1))
@@ -19,6 +19,6 @@ done
 cc=${BASH_REMATCH[1]}.${BASH_REMATCH[2]}
 nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | grep -qxF "$cc" \
   || { echo "tc_probe_fp4: refused: needs an $arch GPU (compute capability $cc), and none is visible" >&2; exit 2; }
-OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
+OUT=${OUT:-${RESEARCH_RUN_DIR:-./out}}
 mkdir -p "$OUT"
 exec python benchmarks/tc_probe_fp4/probe.py --out "$OUT" "$@"

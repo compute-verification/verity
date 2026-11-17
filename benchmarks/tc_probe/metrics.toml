@@ -1,0 +1,12 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "circuits/tensor-core-mismatched-words"
+title = "Tensor core mismatched words"
+owner = "circuits"
+unit = "words"
+axis = "Output words of one tensor-core instruction on one card that differ from the instruction's declared model, each point naming the instruction, the card and the words compared."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source --gpus 1 -- uv run --extra torch-cpu bash benchmarks/tc_probe/run.sh --instruction sm90.wgmma.m64n8k32.e4m3 --canary"
+every = "7d"
