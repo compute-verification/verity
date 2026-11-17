@@ -20,3 +20,29 @@ From PAGE (training). TRN-177. Drafts; the lock and `claim_ids.json` are untouch
 
 The threads PR comes next, stacked on #10687.
 
+[2026-11-17T00:49Z] 759567f5ec94
+NAMES2 (worker B, TRN-177), 4:48 PM PST: both drafts are marked.
+
+- #10611, "Delete the capability family's local bounds", branch cursor/training-delete-capability-a32b, marked at fd6259bf518fc9411746ee02b5d1f9d318336d18 (ran). It removes 18 guarantees, 1996 lines, and adds 33.
+- #10613, "Delete the coverage floor and the task vocabulary", branch cursor/training-delete-coverage-tasks-a32b, marked at 71048bf91b92f508a8fbe4ee1b4c28c46fe3daf2 (ran). It contains #10611 and lands after it. It removes 3 guarantees; its own diff removes 531 lines and adds 16.
+- Branch names end in -a32b, not -4207: this VM requires that suffix.
+
+Lean (ran):
+- Records, security fast path: r20261116-205049-42b7 done (#10611's records, committed) and r20261116-211459-473f done (#10613, outcome pass, no change). security, Proofs and Properties all PASS, with 1045 and then 1042 guarantees.
+- Unread ratchet, unread.py --build: r20261116-211501-d836 done (#10611) and r20261116-211502-c4d7 done (#10613). No area over its cap; Proofs/Slowdown is unchanged at 1 module and 4 declarations, so unread-caps.json is untouched.
+- main moved 282 commits with no Lean change; both heads merge it cleanly (ran).
+
+Suites, fresh on nodes (ran):
+- r20261116-211637-f027 (#10611) and r20261116-211636-c1b3 (#10613): both cancelled at the 150-minute limit, after 12 and 13 suites passed.
+- The rest: r20261116-234943-da38 done (#10611), r20261116-234942-1e7f failed (#10613: research only), r20261116-230703-e64d done (#10613: repository, benchmarks/slowdown, verity-check, verity-ops, verity-slack-events).
+- Every touched suite passed except these three:
+  1. verity-vllm: 2 failures in protocols/test_credit_gate.py, the same 2 on origin/main 220767e4865 (r20261116-234941-5dfd failed; on #10613, r20261116-234940-f529 failed). They predate this change.
+  2. research at #10613: 2 failures in test_treelock.py in the full suite, twice (r20261116-234942-1e7f failed, r20261117-002952-cecd failed). The file alone passes at main, #10611 and #10613 (r20261117-003903-7327, r20261117-003905-0d3f, r20261117-003906-523a, all done), and the full suite passed at #10611. A flake under the parallel suite, not mine; its owner is research's.
+  3. verity-flock: still running (r20261116-235034-cb98 running for #10613; r20261116-235436-9f9b running for #10611, the twin of r20261116-235034-f7a7). It is touched only through compose's remote README. I'll send the result when they end.
+- Root path invariants (test_doc_paths, test_lean_vocabulary, test_glossary_lean_names, the retired-terms tests): pass locally on both heads. No warning names my files, except glossary-names at #10613 below.
+
+For you:
+- The queue warns that TRN-177 has no goal label, so neither body names a `Goal <id>`. The label is yours or top's to set; I can add the line with `research queue edit` once you name the goal.
+- A reader: I can't post to Slack. Text for ci's reviewers: "#10611 (fd6259bf518f) and #10613 (71048bf91b92, after #10611): deletions under TRN-177. The local bounds' 18 guarantees and the coverage floor's 3 go, with their Lean, records and doc mentions. The toy circuit stays cut to C, D and P1 for the slowdown witnesses. Lean records and the unread ratchet pass; suites pass except failures that fail on main or flake alone. Please review each at its head."
+- GLOSSARY.md, top's, for the list: the Notation rows 𝓕, 𝒜_p/δ_p, 𝒜, 𝒢/𝒴, GPU-hours/cost(C), T_𝒢(η; S) and slowdown(𝒢, 𝒜, η) (lines 119–143 at main 220767e4865) name 11 deleted ResourceAccounting.Slowdown declarations: physClass, Class, envelope, restricted, Task, Succeeds, cost, fleetTime, threshold, success and slowdown. test_glossary_lean_names warns on them at #10613, as bookkeeping (ran). Retired with the files: "held budget", "upstream certificate", "overlap weights", "item family", "description hardness" and "capability floor"; none is a GLOSSARY row (read).
+
