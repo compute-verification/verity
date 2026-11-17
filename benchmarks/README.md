@@ -249,8 +249,8 @@ records what the check or the verifier returned ("What a benchmark may import an
 
 | Stage | What it runs | What it stores |
 | --- | --- | --- |
-| 1. Minify | a small copy of the model from random weights on one card, keeping the selectors that choose each code path (`serve_tax`'s `glm53-standin`) | the copy's identity, the selectors it keeps and its size class; and for each part and each code path the part can take, a unit cost in seconds a call or a step, `measured`, with the count of calls behind it |
-| 2. Exact | `circuit-check` on the full model's bindings, and a replay on the copy | a verdict, not a number: `circuit-check`'s on the bindings, and the replay's on the copy (its tokens equal to the served tokens, its steps reproduced) |
+| 1. Minify | a small copy of the model from random weights on one card, keeping the selectors that choose each code path | the copy's identity, the selectors it keeps and its size class; and for each part and each code path the part can take, a unit cost in seconds a call or a step, `measured`, with the count of calls behind it |
+| 2. Exact | `circuit-check` on the full model's bindings, and a replay on the copy | a verdict, not a number: `circuit-check`'s on the bindings, and the replay's on the copy (its tokens equal to the served tokens, its steps reproduced), saying whether the replay was the Python replay or a proof the Lean verifier accepted, so that exact is not read as proved |
 | 3. Capture | a short run of the real model | for each part and code path its counts (calls a step, steps a request), the baseline step time, and the value-dependent inputs a price needs |
 | 4. Price | stage 1's unit costs times stage 3's counts, over stage 3's baseline step time | the priced serving cost under the real model's metric and `member`, `modeled`, with the stage 1 and stage 3 runs it read among its `inputs`, and every (part, code path) it could not price |
 | 5. Confirm | one run of the real model at scale | the measured serving cost, `measured`, and the measured minus the priced as a measurement of its own |
@@ -262,13 +262,11 @@ writes no measurement.
 
 Two cases decide where a price comes from:
 
-- **A cost that is not a constant a call.** The certified tick holds a request back until its admission step, and how
-  many steps it holds depends on the load: on the stand-in, 13 of 16 admissions were held, a median of about 120 steps.
-  Such a cost is stored as a count from stage 3, the steps an admission was held under the captured load, times the
-  step time, and never as a unit cost from the copy.
-- **A code path the copy never takes.** On random weights every long top-k row ties at the k-th key and none bisects,
-  so the copy has a unit cost for the tied path alone. Stage 4 lists the bisecting path as unpriced, and its point is
-  `partial`, not `modeled`, until a unit cost for that path comes from another source.
+- **A cost that depends on the load,** such as the certified tick's holding a request back until its admission step,
+  is stored as a count from stage 3, the steps an admission was held under the captured load, times the step time,
+  and never as a unit cost from the copy.
+- **A code path the copy never takes** is listed as unpriced, and stage 4's point is `partial`, not `modeled`, until
+  a unit cost for that path comes from another source.
 
 ## On VCF's Slurm cluster
 
