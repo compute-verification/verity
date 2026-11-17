@@ -575,7 +575,8 @@ def reader_call(exe: Path, case: Mapping[str, Any], scratch: Path, timeout_s: in
         try:
             got[m[2]] = json.loads(m[3])
         except ValueError:
-            continue
+            return {"error": f"inference-only-record-check printed a {m[2]} line that is not JSON", "said": ln[-300:],
+                    "memory": within.memory}
         got["seconds"][m[2]] = int(m[1])
     if not all(isinstance(got.get(key), dict) for key in ("check", "count")):
         return {"error": "inference-only-record-check printed no check and count verdicts", "said": p.stdout.strip()[-300:],
