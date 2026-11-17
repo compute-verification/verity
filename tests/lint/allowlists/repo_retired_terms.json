@@ -246,7 +246,7 @@
     {"file": "benchmarks/network_traces/kind_scan.py", "count": 40},
     {"file": "benchmarks/network_traces/leak_bounds.py", "count": 11},
     {"file": "benchmarks/network_traces/leak_guard_cost.py", "count": 12},
-    {"file": "benchmarks/network_traces/n2_tie_zk.sh", "count": 9},
+    {"file": "benchmarks/network_traces/n2_tie_zk.sh", "count": 10},
     {"file": "benchmarks/network_traces/n2_zk.sh", "count": 5},
     {"file": "benchmarks/network_traces/negatives.py", "count": 2},
     {"file": "benchmarks/network_traces/network_attester_chain.py", "count": 4},
