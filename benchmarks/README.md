@@ -49,6 +49,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench route_capture` | what a model executes when served, step by step, and the routes class G's Definitions don't cover |
 | `verity bench scan_cost` | one scan of the network attester's synthetic run with every block proved, and what it costs for each second of execution phase: the prover's seconds and the Lean verifier's CPU seconds on one core |
 | `verity bench serve_tax` | what each change to serving costs vLLM's own server against stock compiled vLLM, at three loads; on Llama 3.2 1B and one H200, `--model llama32-1b --arms 'compiled compiled-again record'` |
+| `verity bench serving_cost` | the serving cost in five stages, each run's record read by the next by its run id: `minify`, `exact`, `capture`, `price` and `confirm` ("The serving cost in five stages") |
 | `verity bench served_commit` | served vLLM against served vLLM with every value committed, interleaved, through `verity-bench vllm` |
 | `verity bench served_errors` | error terms of the quoted guarantees that had no value, evaluated at the served sizes, each with its formula and premises |
 | `verity bench served_units` | a served model's proof blocks proved one type at a time from synthetic values and verified by the Lean verifier, forgeries included: `fp8-coord:K=6144` at one input unless given other units |
@@ -246,13 +247,15 @@ the directory of the file declaring it never names, and a shared `metrics.toml` 
 ## The serving cost in five stages
 
 The serving cost of a model too large to optimize on (`serve_tax/README.md`'s "The serving cost") is to be had in
-five stages. No stage has its command in the tree yet: the table states what each stage's command stores when it
-lands. Parts of two run today under other names, without a stage's refusal: stage 2's check of bindings is
-`circuit-check` on a Definition module's sidecar, its replay is `serve_tax/replay.py`'s, and stage 5's measured figure
-is `serve_tax`'s serving cost. Each stage is to be a run of its own that stores what the next one reads and refuses to
-run without the stored benchmark result of the stage before it. Its numbers are to be measurements under "Metrics"'
-rules, and a stage whose record is a verdict is to record what the check or the verifier returned ("What a benchmark
-may import and write").
+five stages, each `verity bench serving_cost STAGE` (`serving_cost/run.py`) run under `research run --store-read`. A
+stage reads the stage before it from the evidence store by the id of the run that stored it (`--minify RUN`,
+`--capture RUN`), never by a path, and refuses a run whose result is not that stage's kind or did not pass, naming the
+command that makes the missing record. Price and confirm compute their figures. Minify, exact and capture have no
+code that makes their records yet, and refuse saying what is missing and whose it is: parts of two run today under
+other names, stage 2's check of bindings as `circuit-check` on a Definition module's sidecar and its replay as
+`serve_tax/replay.py`'s, and stage 3's run as `prod_repro/run.sh`'s. A stage's numbers are measurements under
+"Metrics"' rules, and a stage whose record is a verdict is to record what the check or the verifier returned ("What a
+benchmark may import and write").
 
 | Stage | What it runs | What it stores |
 | --- | --- | --- |
@@ -260,11 +263,11 @@ may import and write").
 | 2. Exact | `circuit-check` on the full model's bindings, and a replay on the copy | a verdict, not a number: `circuit-check`'s on the bindings, and the replay's on the copy (its tokens equal to the served tokens, its steps reproduced), saying whether the replay was the Python replay or a proof the Lean verifier accepted, so that exact is not read as proved |
 | 3. Capture | a short run of the real model | for each part and code path its counts (calls a step, steps a request), the baseline step time, and the value-dependent inputs a price needs |
 | 4. Price | stage 1's unit costs times stage 3's counts, over stage 3's baseline step time | the priced serving cost under the real model's metric and `member`, `modeled`, with the stage 1 and stage 3 runs it read among its `inputs`, and every (part, code path) it could not price |
-| 5. Confirm | one run of the real model at scale | the measured serving cost, `measured`, and the measured minus the priced as a measurement of its own |
+| 5. Confirm | a stored run of the real model at scale (`--measured RUN`), and stage 4's | the measured minus the priced as a measurement of its own, in percentage points, with both runs among its `inputs`; the measured serving cost stays the measuring run's |
 
 Stage 1 is to write no serving-cost percentage and no point under the real model's metric: a `member` tells apart
 configurations that read the same quantity, and a copy from random weights does not read the real model's serving
-cost. Stage 4 is to name the runs it read in its `inputs` and not as `from_run`, since its number is its own and
+cost. Stage 4 names the runs it read in its `inputs` and not as `from_run`, since its number is its own and
 `from_run` writes no measurement.
 
 Two cases decide where a price comes from:
@@ -331,6 +334,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
 | `serve_tax/` | what each change to serving (step trace, release order, the certified tick, committing tokens and the KV cache) costs vLLM's own server against stock compiled vLLM at three loads, the serving cost (one number with a target: the served engine's best goodput against stock's, by vLLM's own benchmark client), and replaying a recorded window under its committed schedule | maintained |
 | `prod_repro/` | one command over the serving cost benchmark's serve, load and replay: what the serve turned on (prefix caching, speculative decoding, the context limit), whether the replayed window's tokens are the served ones, what our changes cost over stock with its interval, and the advice a request, each measured or said not to be | maintained |
+| `serving_cost/` | `verity bench serving_cost`, the serving cost of a model too large to optimize on in five stages, each refusing without the stored record of the stage before it: the priced figure from a copy's unit costs and a capture's counts, and the measured less the priced | maintained |
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
 | `inference_only/` | the inference-only policy of Llama 3.2 1B as served, stated, and of the class this tree builds, with the Lean count's verdict on it, and each one's number: the least slowdown of training run inside the policy's inference blocks, under the min-cut bound | maintained |
 | `slowdown/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
