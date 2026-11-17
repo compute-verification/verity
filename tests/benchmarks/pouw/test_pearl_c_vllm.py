@@ -2883,7 +2883,7 @@ def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
     (d / "call1.rowdig_a").write_bytes(bytes(64) + (d / "call1.rowdig_a").read_bytes()[64:])
     assert not HS._calls(d)["calls"][1]["row_digests"]
 def test_verify_run_refuses_a_v1_manifest(honest_pass):
-    """A v1 manifest (a pass recorded before the execution phase's coins) is refused, as the Lean `PouwVerifier.PearlPlus`
+    """A v1 manifest (a pass recorded before the execution phase's coins) is refused, as the Lean `PouwCheck.PearlPlus`
     refuses it, and so is a manifest of another schema; there is no ``--recorded`` reading of one."""
     path, *_ = honest_pass
     man = json.loads(path.read_text())

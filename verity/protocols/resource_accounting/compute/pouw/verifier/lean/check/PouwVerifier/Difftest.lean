@@ -9,7 +9,7 @@ public import PouwVerifier.Rounds
 /-!
 # The difftest's functions: the check's Lean behind `Difftest.serve`
 
-`serve` cases go through `pouw-verifier serve` (`Core.Protocol.main`); what is not a `serve` case is here, for the shared
+`serve` cases go through `pouw-check serve` (`Core.Protocol.main`); what is not a `serve` case is here, for the shared
 harness (`verity/core/difftest`):
 
 * `opening` (`params` as JSON, `commitment` the registration's bytes as hex, `units` a list of integers or null, `unit`,
@@ -33,7 +33,7 @@ harness (`verity/core/difftest`):
   host's published pins log, `main` the auditor's own first-parent list of main, `window` the execution phase's identity,
   `session` the challenger's session's files, `roots` the round roots, `openings` the round coins, each as
   `core_check.rounds` takes it): null, or `{"refused": [code, why]}`.
-* `chunks` (a natural number K, not an object): `PouwVerifier.Chunks.chunks` (`weights.chunks`) as `{"chunks": n}`, or
+* `chunks` (a natural number K, not an object): `PouwCheck.Chunks.chunks` (`weights.chunks`) as `{"chunks": n}`, or
   `{"refused": why}`; any other input is a reject.
 * `ratio` (`s` and `ctx`, strings): `Core.Ratio.ofString s ctx` (`core_check.ratio`) as `{"ratio": [num, den]}`, each in
   lowercase hex, which no limit on decimal digits touches, with `text`, the ratio written back by `Core.Ratio.toString`

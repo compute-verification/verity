@@ -6,8 +6,8 @@ public import Properties.Pouw.MonitoringPeriodJ10R
 /-!
 # The served PoUW protocol's work: priced work on the prover's machines from an accepted period
 
-`Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod` says what an accepted period of served H1 (`PouwVerifier.Credit.periodCredit`,
-the verdict `PouwVerifier.Credit.window` on each window, J10-R's noise) fixes: except with probability
+`Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod` says what an accepted period of served H1 (`PouwCheck.Credit.periodCredit`,
+the verdict `PouwCheck.Credit.window` on each window, J10-R's noise) fixes: except with probability
 `δ_s + n·(δ_bind + δ_ks)`, its fixed words are at least `(1 − ε(j))₊` of the live words of its windows before the first
 refusal. `ServedWork` turns those words into work: the prover's machines, wherever they ran, spent at least `p` a
 credited word of that, less the luck allowance, except with that probability plus `n·κ_deg(B)`.
