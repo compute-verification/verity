@@ -36,6 +36,8 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes zk_server --oprove-runs 1 
        --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
 
+`job.sh` needs GNU time at `/usr/bin/time`, cargo, lake (or curl to install elan), 32 cores and 128 GB of memory with an oprove behind the ZK server (else 64), and refuses, before it builds anything, a machine that lacks one.
+
 ## What the verdict says
 
 - **The negative** (`negative`, on by default): the lean step again over a copy of the inner run with one coin of
