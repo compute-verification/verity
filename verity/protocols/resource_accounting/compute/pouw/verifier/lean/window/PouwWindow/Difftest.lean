@@ -282,7 +282,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("live_epoch_reason", fun j => do
     pure (toJson (liveEpochReason (← Spot.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
   ("draw_epoch_reason", fun j => do
-    pure (toJson (drawEpochReason (← Spot.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
+    pure (toJson (sampleEpochReason (← Spot.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
   ("round_key", fun j => do
     let c ← Spot.Challenger.LiveCommitment.ofJson (← get j "commitment")
     pure (hexJ (← roundKey c (← hex j "coin") (← nat j "round") (← hex j "root")))),

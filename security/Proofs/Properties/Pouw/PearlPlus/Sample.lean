@@ -11,8 +11,8 @@ import Proofs.Pouw.Prob
 /-!
 # Pearl+'s run sample (`Properties.Pouw.PearlPlusSample`)
 
-`DrawIsOnItsStreams`, by `pearlDraw`'s steps. Its filter keeps the positive tickets with their positions (`posOf`), and
-`weightedDraw` reads sample `j`'s integer below their total, which is the run's `W` (`last_sums`), from `uniform`, which
+`SampleIsOnItsStreams`, by `pearlSample`'s steps. Its filter keeps the positive tickets with their positions (`posOf`), and
+`weightedSample` reads sample `j`'s integer below their total, which is the run's `W` (`last_sums`), from `uniform`, which
 is `uniformOn` of the stream at `("u", j)`. Over their running sums (`runSums`) `bisectRight` finds the unit the integer
 falls in (`pick_posOf`), the unit `finSigmaFinEquiv` numbers that ticket on (`ticketAt_fst`): both count every unit's
 weight before it and skip a unit of none. Where some ticket holds weight the filter's list is nonempty
@@ -41,7 +41,7 @@ open scoped ENNReal
 
 /-! ## Running sums, positive tickets and the ticket a number falls in -/
 
-/-- The running sums `weightedDraw` folds, from `s`. -/
+/-- The running sums `weightedSample` folds, from `s`. -/
 def runSums : List ℕ → ℕ → List ℕ
   | [], _ => []
   | w :: ws, s => (s + w) :: runSums ws (s + w)
@@ -59,7 +59,7 @@ def pickIdx : List ℕ → ℕ → ℕ
   | [], _ => 0
   | w :: ws, r => if r < w then 0 else pickIdx ws (r - w) + 1
 
-/-- The positive weights of `ws`, each with its position from `n`: `pearlDraw`'s tickets. -/
+/-- The positive weights of `ws`, each with its position from `n`: `pearlSample`'s tickets. -/
 def posOf (ws : List ℕ) (n : ℕ) : List (ℕ × ℕ) := (ws.zipIdx n).filter (·.1 > 0)
 
 theorem posOf_cons (w : ℕ) (ws : List ℕ) (n : ℕ) :
@@ -100,7 +100,7 @@ theorem posOf_eq_nil : ∀ (ws : List ℕ) (n : ℕ), ws.sum = 0 → posOf ws n 
     exact posOf_eq_nil ws (n + 1) (by omega)
 
 /-- **`bisectRight` over the positive weights' running sums finds the unit the number falls in**, by its position in
-`ws`: the zero weights `pearlDraw` drops hold no number. -/
+`ws`: the zero weights `pearlSample` drops hold no number. -/
 theorem pick_posOf : ∀ (ws : List ℕ) (n s r : ℕ), s ≤ r → r < s + ws.sum →
     ((posOf ws n).getD (bisectRight (runSums ((posOf ws n).map (·.1)) s) r) (0, 0)).2 = n + pickIdx ws (r - s)
   | [], n, s, r, h1, h2 => by simp at h2; omega
@@ -180,7 +180,7 @@ theorem uniformOn_lt {n : ℕ} (hn : 0 < n) {s : ByteArray} {r : ℕ}
   | some rp =>
     rw [hu] at h
     cases h
-    exact Properties.Pouw.Commit.draw_uniform_lt n hn s _ _ rp hu
+    exact Properties.Pouw.Commit.sample_uniform_lt n hn s _ _ rp hu
 
 /-! ## The sample -/
 
@@ -202,21 +202,21 @@ theorem toOption_bind_pure {ε α β : Type} (x : Except ε α) (f : α → β) 
     (x >>= fun a => pure (f a) : Except ε β).toOption = x.toOption.map f := by
   cases x <;> rfl
 
-/-- Sample `j` of `weightedDraw` once its integer is read: its running-sum position, or the stream's refusal. -/
-def drawStep (cum : List ℕ) (j : ℕ) : Option ℕ → Except String ℕ
+/-- Sample `j` of `weightedSample` once its integer is read: its running-sum position, or the stream's refusal. -/
+def sampleStep (cum : List ℕ) (j : ℕ) : Option ℕ → Except String ℕ
   | some r => pure (bisectRight cum r)
-  | none => throw s!"draw {j} read {DRAW_WORDS} words of its stream without one below the limit"
+  | none => throw s!"draw {j} read {SAMPLE_WORDS} words of its stream without one below the limit"
 
-theorem toOption_drawStep (cum : List ℕ) (j : ℕ) (o : Option ℕ) :
-    (drawStep cum j o).toOption = o.map (bisectRight cum) := by
+theorem toOption_sampleStep (cum : List ℕ) (j : ℕ) (o : Option ℕ) :
+    (sampleStep cum j o).toOption = o.map (bisectRight cum) := by
   cases o <;> rfl
 
-/-- `weightedDraw` over the positive tickets: sample `j`'s position of `uniform`'s integer below their total. -/
-theorem weightedDraw_eq (key : ByteArray) (ws : List ℕ) (t : ℕ) (hW : ws.sum ≠ 0) :
-    weightedDraw key ((posOf ws 0).map (·.1)) t = (List.range t).mapM fun j =>
-      drawStep (runSums ((posOf ws 0).map (·.1)) 0) j
-        (FlockSoundness.Randomness.uniform key ws.sum [.int j] (DRAW_WORDS * Flock.Draw.width ws.sum)) := by
-  unfold weightedDraw
+/-- `weightedSample` over the positive tickets: sample `j`'s position of `uniform`'s integer below their total. -/
+theorem weightedSample_eq (key : ByteArray) (ws : List ℕ) (t : ℕ) (hW : ws.sum ≠ 0) :
+    weightedSample key ((posOf ws 0).map (·.1)) t = (List.range t).mapM fun j =>
+      sampleStep (runSums ((posOf ws 0).map (·.1)) 0) j
+        (FlockSoundness.Randomness.uniform key ws.sum [.int j] (SAMPLE_WORDS * Flock.Draw.width ws.sum)) := by
+  unfold weightedSample
   by_cases ht : t = 0
   · subst ht; rfl
   rw [ite_eq_right ht]
@@ -226,9 +226,9 @@ theorem weightedDraw_eq (key : ByteArray) (ws : List ℕ) (t : ℕ) (hW : ws.sum
   simp only [foldl_sums, List.nil_append, hl, hWs]
   rfl
 
-theorem pearlDraw_eq (key : ByteArray) (ws : List ℕ) (t : ℕ) : pearlDraw key ws t =
+theorem pearlSample_eq (key : ByteArray) (ws : List ℕ) (t : ℕ) : pearlSample key ws t =
     if (posOf ws 0).isEmpty then pure [] else
-      weightedDraw key ((posOf ws 0).map (·.1)) t >>= fun ids =>
+      weightedSample key ((posOf ws 0).map (·.1)) t >>= fun ids =>
         pure (ids.map fun i => ((posOf ws 0).getD i (0, 0)).2) := by
   rfl
 
@@ -246,20 +246,20 @@ theorem pick_eq (tk : List ((ℕ × ℕ) × ℕ)) (o : Option ℕ)
     simp only [Option.map_some, Option.bind_some, dite_eq_left hr]
     rw [tileOf_ticketAt, pick_posOf _ 0 0 r (Nat.zero_le _) hr', Nat.zero_add, Nat.sub_zero]
 
-theorem drawIsOnItsStreams : DrawIsOnItsStreams := by
+theorem sampleIsOnItsStreams : SampleIsOnItsStreams := by
   intro passes key t
   unfold draw
   dsimp only
   generalize tickets passes = tk
   by_cases hW : ticketTotal tk = 0
-  · rw [if_pos hW, pearlDraw_eq, if_pos (by simpa using posOf_eq_nil _ 0 hW)]
+  · rw [if_pos hW, pearlSample_eq, if_pos (by simpa using posOf_eq_nil _ 0 hW)]
     rfl
   have hpos : 0 < ticketTotal tk := Nat.pos_of_ne_zero hW
-  rw [if_neg hW, pearlDraw_eq, ite_eq_right (by simpa using posOf_ne_nil hW), toOption_bind_pure,
-    toOption_bind_pure, weightedDraw_eq key _ t hW, toOption_mapM, map_mapM, map_mapM]
+  rw [if_neg hW, pearlSample_eq, ite_eq_right (by simpa using posOf_ne_nil hW), toOption_bind_pure,
+    toOption_bind_pure, weightedSample_eq key _ t hW, toOption_mapM, map_mapM, map_mapM]
   congr 1
   funext j
-  rw [toOption_drawStep]
+  rw [toOption_sampleStep]
   exact pick_eq tk _ fun r h => uniformOn_lt hpos h
 
 /-! ## The coin bytes -/
@@ -380,14 +380,14 @@ theorem coinBytesGiveUniformTickets : CoinBytesGiveUniformTickets := by
 /-- The honest pass's one tile holds 3,047,424 tickets: `wref(1, 1024, 64)` a cell over its 16 credited rows. -/
 theorem honest_ticketTotal : ticketTotal (tickets [honestPass]) = 3047424 := by decide +kernel
 
-/-- Each sample has bytes to read: `DRAW_WORDS` words of at least 9 bytes. -/
-theorem drawBytes_pos (tk : List ((ℕ × ℕ) × ℕ)) : 0 < sampleBytes tk := by
-  unfold sampleBytes DRAW_WORDS Flock.Draw.width
+/-- Each sample has bytes to read: `SAMPLE_WORDS` words of at least 9 bytes. -/
+theorem sampleBytes_pos (tk : List ((ℕ × ℕ) × ℕ)) : 0 < sampleBytes tk := by
+  unfold sampleBytes SAMPLE_WORDS Flock.Draw.width
   omega
 
-/-- **`DrawIsOnItsStreams`'s honest lemma**: the honest pass's tickets hold weight, so the statement's sample there is
+/-- **`SampleIsOnItsStreams`'s honest lemma**: the honest pass's tickets hold weight, so the statement's sample there is
 the one its streams give, not the empty one. -/
-theorem drawIsOnItsStreams_honest : 0 < ticketTotal (tickets [honestPass]) := by
+theorem sampleIsOnItsStreams_honest : 0 < ticketTotal (tickets [honestPass]) := by
   rw [honest_ticketTotal]
   omega
 
@@ -395,9 +395,9 @@ theorem mapM_range_one_ne_nil {β : Type} (f : ℕ → Option β) : (List.range 
   rw [List.range_one, List.mapM_cons, List.mapM_nil]
   cases f 0 <;> simp
 
-/-- **`DrawIsOnItsStreams`'s nontrivial lemma**: its conclusion fails at a sample that names no tile whatever it is asked
+/-- **`SampleIsOnItsStreams`'s nontrivial lemma**: its conclusion fails at a sample that names no tile whatever it is asked
 (`.ok []`), at the honest pass and one sample: each sample on its stream names a tile or throws. -/
-theorem drawIsOnItsStreams_nontrivial :
+theorem sampleIsOnItsStreams_nontrivial :
     ¬ (Except.ok [] : Except String (List (ℕ × ℕ))).toOption =
       if ticketTotal (tickets [honestPass]) = 0 then some [] else
       (List.range 1).mapM fun j =>
@@ -439,9 +439,9 @@ number them from, so the bound is over neither an empty type of tickets nor empt
 theorem coinBytesGiveUniformTickets_honest :
     0 < Fintype.card (_root_.Pouw.Ticket (weightsOf (tickets [honestPass])) (tickets [honestPass]).length) ∧
       0 < sampleBytes (tickets [honestPass]) := by
-  refine ⟨?_, drawBytes_pos _⟩
+  refine ⟨?_, sampleBytes_pos _⟩
   rw [card_ticket_total]
-  exact drawIsOnItsStreams_honest
+  exact sampleIsOnItsStreams_honest
 
 /-- **`CoinBytesGiveUniformTickets`'s nontrivial lemma**: its bound fails at a sampler that returns 0 whatever it reads
 (`some 0` in `uniformOn`'s place), at the honest pass's tickets, one sample and the event that the sample is ticket 0: the

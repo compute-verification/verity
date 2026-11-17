@@ -50,9 +50,9 @@ theorem overInertBoundTiles_disjoint {Q R S : Type} (P : Protocol Q R S) (TR : T
     exact Option.some_ne_none _ hg.2
 
 /-- On a tolerant acceptance with `O` disjoint from `K`, the samples in `O` are those outside `K`. -/
-theorem drawsIn_eq_of_acceptsTol {w : ℕ → ℕ} {N t : ℕ} {K O : Finset ℕ} (c : Fin t → Ticket w N) (hdisj : Disjoint K O)
-    (hacc : AuditAcceptsTol K O c) : drawsIn O c = drawsIn (range N \ K) c := by
-  unfold drawsIn
+theorem samplesIn_eq_of_acceptsTol {w : ℕ → ℕ} {N t : ℕ} {K O : Finset ℕ} (c : Fin t → Ticket w N) (hdisj : Disjoint K O)
+    (hacc : AuditAcceptsTol K O c) : samplesIn O c = samplesIn (range N \ K) c := by
+  unfold samplesIn
   congr 1
   ext i
   simp only [mem_filter, mem_univ, true_and, mem_sdiff, mem_range]
@@ -76,12 +76,12 @@ theorem missBound_strict (t : ℕ) (εs : ℝ) (hεs : εs ≤ 1) :
       exact h2 ⟨h1, h⟩
     · exact fun h => ⟨hS h, fun h' => h'.2 h⟩
   have key : ∀ c : Fin t → Ticket w N,
-      (if drawsIn S c = 0 then εs else 1) * ∑ g ∈ range N, (w g : ℝ) < ∑ g ∈ S, (w g : ℝ) →
+      (if samplesIn S c = 0 then εs else 1) * ∑ g ∈ range N, (w g : ℝ) < ∑ g ∈ S, (w g : ℝ) →
         AuditAccepts (range N \ S) c ∧
           εs * ∑ g ∈ range N, (w g : ℝ) < ∑ g ∈ range N \ (range N \ S), (w g : ℝ) := by
     intro c hc
     rw [hS']
-    by_cases h0 : drawsIn S c = 0
+    by_cases h0 : samplesIn S c = 0
     · rw [ite_eq_left h0] at hc
       refine ⟨fun i => mem_sdiff.mpr ⟨mem_range.mpr (c i).1.isLt, fun hi => ?_⟩, hc⟩
       have h := Finset.card_eq_zero.mp h0
@@ -112,7 +112,7 @@ theorem sampledOfGoodTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] 
     pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
         AuditAcceptsTol (good x.1 x.2.1 ∪ blankTiles TR U (τ x.1 x.2.1)) (over x.1 x.2.1) x.2.2 ∧
         T < (1 - (1 - (1 - γ₀) / Ω)) *
-          (claimedWref TR U (τ x.1 x.2.1) - u (drawsIn (over x.1 x.2.1) x.2.2) * tileWrefTotal TR U.layout))
+          (claimedWref TR U (τ x.1 x.2.1) - u (samplesIn (over x.1 x.2.1) x.2.2) * tileWrefTotal TR U.layout))
       ≤ δ + e := by
   classical
   have h1γ₀ : 0 < 1 - γ₀ := by linarith
@@ -120,7 +120,7 @@ theorem sampledOfGoodTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] 
   let O : (Q → R) × S → Finset ℕ := fun y => over y.1 y.2
   let E1 : ((Q → R) × S) × (Fin t → Ticket w (TR.tiling U.layout).NT) → Prop := fun y =>
     AuditAcceptsTol (K y.1) (O y.1) y.2 ∧
-      u (drawsIn (O y.1) y.2) * ∑ g ∈ range (TR.tiling U.layout).NT, (w g : ℝ) <
+      u (samplesIn (O y.1) y.2) * ∑ g ∈ range (TR.tiling U.layout).NT, (w g : ℝ) <
         ∑ g ∈ range (TR.tiling U.layout).NT \ K y.1, (w g : ℝ)
   let E2 : (Q → R) × S → Prop := fun y =>
     T / (1 - γ₀) < ∑ g ∈ good y.1 y.2, TR.credit y.1 y.2 U g (actOf (τ y.1 y.2) ((TR.tiling U.layout).unit g))
@@ -132,7 +132,7 @@ theorem sampledOfGoodTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] 
   have hstep : ∀ x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT),
       (AuditAcceptsTol (K (x.1, x.2.1)) (O (x.1, x.2.1)) x.2.2 ∧
         T < (1 - (1 - (1 - γ₀) / Ω)) *
-          (claimedWref TR U (τ x.1 x.2.1) - u (drawsIn (O (x.1, x.2.1)) x.2.2) * tileWrefTotal TR U.layout)) →
+          (claimedWref TR U (τ x.1 x.2.1) - u (samplesIn (O (x.1, x.2.1)) x.2.2) * tileWrefTotal TR U.layout)) →
       E1 ((x.1, x.2.1), x.2.2) ∨ E2 (x.1, x.2.1) := by
     intro x ⟨hacc, hTlt⟩
     by_cases h1 : E1 ((x.1, x.2.1), x.2.2)
@@ -141,7 +141,7 @@ theorem sampledOfGoodTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] 
     set τ' := τ x.1 x.2.1 with hτ
     set gd := good x.1 x.2.1 with hgd
     set blank := blankTiles TR U τ' with hblank
-    set uX := u (drawsIn (O (x.1, x.2.1)) x.2.2) with huX
+    set uX := u (samplesIn (O (x.1, x.2.1)) x.2.2) with huX
     have hK : K (x.1, x.2.1) = gd ∪ blank := rfl
     have hbadw : ∑ g ∈ range (TR.tiling U.layout).NT \ K (x.1, x.2.1), (w g : ℝ) ≤
         uX * ∑ g ∈ range (TR.tiling U.layout).NT, (w g : ℝ) := by
@@ -188,7 +188,7 @@ theorem sampledOfGoodTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] 
     intro a
     refine (pr_mono fun c hc => ?_).trans (hu _ w (range (TR.tiling U.layout).NT \ K a) sdiff_subset)
     obtain ⟨hacc, hlt⟩ : AuditAcceptsTol (K a) (O a) c ∧ _ := hc
-    rw [← drawsIn_eq_of_acceptsTol (K := K a) (O := O a) c (hdisj a.1 a.2) hacc]
+    rw [← samplesIn_eq_of_acceptsTol (K := K a) (O := O a) c (hdisj a.1 a.2) hacc]
     exact hlt
   calc _ ≤ pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
           E1 ((x.1, x.2.1), x.2.2) ∨ E2 (x.1, x.2.1)) := pr_mono hstep
@@ -231,15 +231,15 @@ theorem gapSampled_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]
   classical
   refine le_trans (pr_mono fun x hx => ?_) (h U hU T hT q hq A hA w κ hκ hw t _ _ (missBound_strict t εs hεs))
   obtain ⟨hacc, hTlt⟩ := hx
-  have h0 : drawsIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 = 0 := by
-    unfold drawsIn
+  have h0 : samplesIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 = 0 := by
+    unfold samplesIn
     rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
     exact fun i _ ho => Finset.disjoint_left.mp (overInertBoundTiles_disjoint P TR U x.1 x.2.1 _) (hacc i) ho
-  have hu0 : (if drawsIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 = 0 then εs else 1) = εs := by
+  have hu0 : (if samplesIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 = 0 then εs else 1) = εs := by
     rw [h0, ite_eq_left rfl]
   refine ⟨fun i => Or.inl (hacc i), ?_⟩
   show T < (1 - g) * (claimedWref TR U (A.trace U x.1 x.2.1) -
-    (if drawsIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 = 0 then εs else 1) *
+    (if samplesIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 = 0 then εs else 1) *
       tileWrefTotal TR U.layout)
   rw [hu0]
   exact hTlt

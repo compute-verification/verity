@@ -23,7 +23,7 @@ public import PouwPearlPlus.Credit
   (`testInstance`), each at the served instance, `k_min` `K_MIN` and `TILE × TILE` tiles; the passes are W's and, given
   the window's class, its fixed load (`tieAt`: `tieOf` and `heldToLoad`, refused as Python's `ValueError`), the run's
   commitment is the coin record's where there is one (`after-coin`), the record's challenger sample is coin ``pouw/draw`` 0
-  opened after it (`drawReason`, refused as `draw`), a verdict of record takes only a challenger sample on live coins
+  opened after it (`sampleReason`, refused as `draw`), a verdict of record takes only a challenger sample on live coins
   (`ofRecordReason`, refused as `of-record`), the sample over every pass's tickets names the sampled tiles, each pass adds one
   tile per excluded row, and the run accepts iff every one of them passes `checkTile`, or is over its inert-work bound
   with every other check passed under `over_cap` `uncredited` (the default, and the run of record's, whose passes hold
@@ -111,7 +111,7 @@ def TileVerdict.ok (m : OverInertBound) (v : TileVerdict) : Bool :=
   | .fail _ => false
 
 /-- X_O: how many of the plan's samples landed on a tile over its inert-work bound. -/
-def overInertBoundDraws (pl : Plan) (vs : List TileVerdict) : Nat :=
+def overInertBoundSamples (pl : Plan) (vs : List TileVerdict) : Nat :=
   pl.picks.countP fun (i, tid) => (vs.find? fun v => v.pass == i && v.tile == tid).any fun v =>
     match v.outcome with
     | .overInertBound _ => true
@@ -141,8 +141,8 @@ def afterTie (i : Input) (passes : List Pass) (tie : Option Tied) : Except Refus
       | some s => pure s
       | none => throw { reason := "the verifier's coin: a source, or its record of the coin" }
   if let some h := i.held then
-    if let some why := drawReason h root then
-      throw { refused := some (DRAW_REFUSED, why), reason := s!"{DRAW_REFUSED}: {why}" }
+    if let some why := sampleReason h root then
+      throw { refused := some (SAMPLE_REFUSED, why), reason := s!"{SAMPLE_REFUSED}: {why}" }
   if i.ofRecord then
     if let some why := ofRecordReason i.coins i.source i.held then
       throw { refused := some (NOT_OF_RECORD, why), reason := s!"{NOT_OF_RECORD}: {why}" }
@@ -212,7 +212,7 @@ def check (i : Input) (opener : Nat → Nat → Except String TileOpening) : Run
       if v.ok i.overInertBound then none else v.reason.map fun r => s!"pass {v.pass} tile {v.tile}: {r}"
     if bad.isEmpty then
       { accept := true, plan := some pl, verdicts := vs, overInertBound := i.overInertBound, tie := pl.tie,
-        work := some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overInertBoundDraws pl vs) DELTA)) }
+        work := some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overInertBoundSamples pl vs) DELTA)) }
     else { accept := false, reason := some ("; ".intercalate bad), plan := some pl, verdicts := vs, overInertBound := i.overInertBound,
            tie := pl.tie }
 

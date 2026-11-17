@@ -91,7 +91,7 @@ theorem cost_ge (μ : Fin 3 → ℝ) (hμ : ∀ r, 0 ≤ μ r) {I O : Type} (f :
     μ r * f.use x r ≤ tw.cost μ f x :=
   single_le_sum (f := fun r => μ r * f.use x r) (fun r _ => mul_nonneg (hμ r) (f.use_nonneg x r)) (mem_univ r)
 
-theorem card_tdraw : Nat.card TDraw = 256 := by
+theorem card_tdraw : Nat.card TSample = 256 := by
   simp [Nat.card_eq_fintype_card]
 
 theorem card_unit' : Nat.card Unit = 1 := by
@@ -121,12 +121,12 @@ theorem enc_dec (v : Fin 16) : enc (dec ((v : ℕ) : Word)) = ((v : ℕ) : Word)
   show ((((v : ℕ) : Word).val : ℕ) : Word) = _
   rw [hv]
 
-theorem twWord (a : twRound.Inst) (d : TDraw) (i : Fin 2) (j b : Fin 1) :
+theorem twWord (a : twRound.Inst) (d : TSample) (i : Fin 2) (j b : Fin 1) :
     noFoldWord twNF (twNF.noise a d) i j b = ((d i : ℕ) : Word) := by
   show (∑ t : Fin 1, if t.val < (b.val + 1) * 1 then ((d i : ℕ) : Word) * 1 else 0) = _
   simp
 
-theorem twOk_iff (a : twRound.Inst) (d : TDraw) (c : Fin 2) (T : TTr) :
+theorem twOk_iff (a : twRound.Inst) (d : TSample) (c : Fin 2) (T : TTr) :
     twRound.ok a d c T ↔ T c 0 0 = ((d c : ℕ) : Word) := by
   show (∀ _ : Fin 1, T c 0 0 = noFoldWord twNF (twNF.noise a d) c (0 : Fin 1) (0 : Fin 1)) ↔ _
   rw [twWord]
@@ -137,7 +137,7 @@ theorem twOpens_iff (o : Unit) (r : TRoot) (c : Fin 2) (T : TTr) :
   show (∀ _ : Fin 1, ∃ _ : Unit, enc (r c 0 0) = T c 0 0) ↔ _
   exact ⟨fun h => (h 0).elim fun _ h => h, fun h _ => ⟨(), h⟩⟩
 
-theorem twAccept_iff (o : Unit) (a : twRound.Inst) (d : TDraw) (c : Fin 2) (r : TRoot)
+theorem twAccept_iff (o : Unit) (a : twRound.Inst) (d : TSample) (c : Fin 2) (r : TRoot)
     (y : Fin 1 → Word × Unit) :
     twRound.accept o a d c r y ↔ enc (r c 0 0) = (y 0).1 ∧ (y 0).1 = ((d c : ℕ) : Word) := by
   show (∀ q : Fin 1, enc (r c 0 0) = (y q).1 ∧
@@ -161,14 +161,14 @@ theorem word_inj {a b : Fin 16} (h : ((a : ℕ) : Word) = ((b : ℕ) : Word)) : 
   exact Fin.ext this
 
 /-- A free guess: a word constant in the dither is the dither's word at a cell on at most 16 of the 256 dithers. -/
-theorem card_match_le (F : TDraw → Word) (hF : ∀ d d', F d = F d') (c : Fin 2) :
-    (univ.filter fun d : TDraw => F d = ((d c : ℕ) : Word)).card ≤ 16 := by
-  have key : ∀ d ∈ univ.filter (fun d : TDraw => F d = ((d c : ℕ) : Word)),
-      ∀ d' ∈ univ.filter (fun d : TDraw => F d = ((d c : ℕ) : Word)), d c = d' c := by
+theorem card_match_le (F : TSample → Word) (hF : ∀ d d', F d = F d') (c : Fin 2) :
+    (univ.filter fun d : TSample => F d = ((d c : ℕ) : Word)).card ≤ 16 := by
+  have key : ∀ d ∈ univ.filter (fun d : TSample => F d = ((d c : ℕ) : Word)),
+      ∀ d' ∈ univ.filter (fun d : TSample => F d = ((d c : ℕ) : Word)), d c = d' c := by
     intro d hd d' hd'
     rw [mem_filter] at hd hd'
     exact word_inj (hd.2.symm.trans ((hF d d').trans hd'.2))
-  have hinj : Set.InjOn (fun d : TDraw => d (c + 1)) (univ.filter fun d : TDraw => F d = ((d c : ℕ) : Word)) := by
+  have hinj : Set.InjOn (fun d : TSample => d (c + 1)) (univ.filter fun d : TSample => F d = ((d c : ℕ) : Word)) := by
     intro d hd d' hd' h
     have hc := key d (mem_coe.1 hd) d' (mem_coe.1 hd')
     funext i
@@ -197,31 +197,31 @@ theorem exp_mul_le (j : ℕ) (hj : j ≤ 2) : Real.exp ((2 - j) / 2) * (32 + 240
 /-- **The moment bound both public-best premises reduce to on the witness round.** A test on the round's coins that
 passes only where `F d c` is the dither's word at the checked cell `c`, with `F` constant in the dither outside the
 cells `σ`, and weighs a pass at most `e^{(2 − |σ|)/2}`, averages at most 1. -/
-theorem moment_le_one (F : TDraw → Fin 2 → Word) (σ : Finset (Fin 2))
-    (hσ : ∀ c ∉ σ, ∀ d d', F d c = F d' c) (g : TDraw × Fin 2 → ℝ)
+theorem moment_le_one (F : TSample → Fin 2 → Word) (σ : Finset (Fin 2))
+    (hσ : ∀ c ∉ σ, ∀ d d', F d c = F d' c) (g : TSample × Fin 2 → ℝ)
     (hg : ∀ x, g x ≤ if F x.1 x.2 = ((x.1 x.2 : ℕ) : Word) then Real.exp ((2 - σ.card) / 2) else 0) :
     avg g ≤ 1 := by
   have hE := (Real.exp_pos ((2 - σ.card) / 2)).le
   have hj : σ.card ≤ 2 := by simpa using card_le_univ σ
-  have hc : ∀ c : Fin 2, ((univ.filter fun d : TDraw => F d c = ((d c : ℕ) : Word)).card : ℝ) ≤
+  have hc : ∀ c : Fin 2, ((univ.filter fun d : TSample => F d c = ((d c : ℕ) : Word)).card : ℝ) ≤
       16 + if c ∈ σ then 240 else 0 := by
     intro c
     split_ifs with h
-    · have h1 := card_le_univ (univ.filter fun d : TDraw => F d c = ((d c : ℕ) : Word))
-      have h256 : Fintype.card TDraw = 256 := by simp
+    · have h1 := card_le_univ (univ.filter fun d : TSample => F d c = ((d c : ℕ) : Word))
+      have h256 : Fintype.card TSample = 256 := by simp
       rw [h256] at h1
-      have : ((univ.filter fun d : TDraw => F d c = ((d c : ℕ) : Word)).card : ℝ) ≤ 256 := by exact_mod_cast h1
+      have : ((univ.filter fun d : TSample => F d c = ((d c : ℕ) : Word)).card : ℝ) ≤ 256 := by exact_mod_cast h1
       linarith
     · have h1 := card_match_le (fun d => F d c) (hσ c h) c
-      have : ((univ.filter fun d : TDraw => F d c = ((d c : ℕ) : Word)).card : ℝ) ≤ 16 := by exact_mod_cast h1
+      have : ((univ.filter fun d : TSample => F d c = ((d c : ℕ) : Word)).card : ℝ) ≤ 16 := by exact_mod_cast h1
       linarith
   unfold avg
-  rw [div_le_one (Nat.cast_pos.mpr (Fintype.card_pos (α := TDraw × Fin 2)))]
-  calc ∑ x, g x ≤ ∑ x : TDraw × Fin 2,
+  rw [div_le_one (Nat.cast_pos.mpr (Fintype.card_pos (α := TSample × Fin 2)))]
+  calc ∑ x, g x ≤ ∑ x : TSample × Fin 2,
         if F x.1 x.2 = ((x.1 x.2 : ℕ) : Word) then Real.exp ((2 - σ.card) / 2) else 0 :=
         sum_le_sum fun x _ => hg x
     _ = ∑ c : Fin 2, Real.exp ((2 - σ.card) / 2) *
-          ((univ.filter fun d : TDraw => F d c = ((d c : ℕ) : Word)).card : ℝ) := by
+          ((univ.filter fun d : TSample => F d c = ((d c : ℕ) : Word)).card : ℝ) := by
         rw [Fintype.sum_prod_type_right]
         refine sum_congr rfl fun c _ => ?_
         dsimp only
@@ -235,7 +235,7 @@ theorem moment_le_one (F : TDraw → Fin 2 → Word) (σ : Finset (Fin 2))
         push_cast
         ring
     _ ≤ 512 := exp_mul_le σ.card hj
-    _ = Fintype.card (TDraw × Fin 2) := by simp
+    _ = Fintype.card (TSample × Fin 2) := by simp
 
 end Sampling
 
@@ -341,16 +341,16 @@ theorem twImport : ImportWithinCertifier tw twRound 2 twVerdict twDev 0 := fun _
 theorem twAnswersFit : AnswersFit tw twRound 2 twVerdict twDev twSel twPd := fun _ _ _ hv b _ r => hv.2 b r
 
 /-- The advice at round `w`: the earlier rounds' coins. -/
-def past (_ : Unit) (x : Fin 2 → TDraw × Fin 2) (w : Fin 2) : twAdv := fun v => if v < w then some (x v) else none
+def past (_ : Unit) (x : Fin 2 → TSample × Fin 2) (w : Fin 2) : twAdv := fun v => if v < w then some (x v) else none
 
 /-- The coins the advice records, the later ones filled in arbitrarily. -/
-def fill (p : twAdv) : Fin 2 → TDraw × Fin 2 := fun v => (p v).getD default
+def fill (p : twAdv) : Fin 2 → TSample × Fin 2 := fun v => (p v).getD default
 
 theorem adv_inj : ∃ e : twAdv → Fin (2 ^ Fintype.card twAdv), Function.Injective e :=
   ⟨fun a => Fin.castLE (Nat.lt_two_pow_self).le (Fintype.equivFin twAdv a),
     (Fin.castLE_injective _).comp (Fintype.equivFin twAdv).injective⟩
 
-theorem fill_past (o : Unit) (x : Fin 2 → TDraw × Fin 2) (w v : Fin 2) (hv : (v : ℕ) < w) :
+theorem fill_past (o : Unit) (x : Fin 2 → TSample × Fin 2) (w v : Fin 2) (hv : (v : ℕ) < w) :
     fill (past o x w) v = x v := by
   simp [fill, past, show v < w from hv]
 
@@ -359,10 +359,10 @@ noncomputable def stOf (A : Prover tw twRound 2) (w : Fin 2) (p : twAdv) : A.St 
   (TAlg.run (A.commit w) ((), A.state () (fill p) w)).1
 
 /-- Sampling block `w`'s root, recomputed from the advice and the dither: the prover's own commit phase and work. -/
-noncomputable def rootOf (A : Prover tw twRound 2) (w : Fin 2) (p : twAdv × TDraw) : TRoot :=
+noncomputable def rootOf (A : Prover tw twRound 2) (w : Fin 2) (p : twAdv × TSample) : TRoot :=
   (TAlg.run (A.work w) ((), stOf A w p.1, p.2)).2
 
-theorem rootOf_past (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDraw × Fin 2) (w : Fin 2) :
+theorem rootOf_past (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TSample × Fin 2) (w : Fin 2) :
     rootOf A w (past o x w, (x w).1) = A.root o x w := by
   cases o
   show (TAlg.run (A.work w) ((), (TAlg.run (A.commit w) ((), A.state () (fill (past () x w)) w)).1, (x w).1)).2 =
@@ -374,16 +374,16 @@ noncomputable def cw (A : Prover tw twRound 2) (w : Fin 2) : ℕ :=
   (nonconst fun y => (TAlg.run (A.work w) y).2).card
 
 theorem mw_card_le (A : Prover tw twRound 2) (w : Fin 2) :
-    (nonconst fun (p : twAdv × TDraw) (i : Fin 2) (_ _ : Fin 1) => enc (rootOf A w p i 0 0)).card ≤ cw A w :=
+    (nonconst fun (p : twAdv × TSample) (i : Fin 2) (_ _ : Fin 1) => enc (rootOf A w p i 0 0)).card ≤ cw A w :=
   card_le_card (nonconst_mono fun _ x y hxy =>
     ⟨((), stOf A w x.1, x.2), ((), stOf A w y.1, y.2), fun he => hxy (congrArg enc he)⟩)
 
 theorem mh_card_le (A : Prover tw twRound 2) (w : Fin 2) :
-    (nonconst fun p : Unit × (twAdv × TDraw) × TTr => rootOf A w p.2.1).card ≤ cw A w :=
+    (nonconst fun p : Unit × (twAdv × TSample) × TTr => rootOf A w p.2.1).card ≤ cw A w :=
   card_le_card (nonconst_mono fun _ x y hxy =>
     ⟨((), stOf A w x.2.1.1, x.2.1.2), ((), stOf A w y.2.1.1, y.2.1.2), hxy⟩)
 
-theorem mh_shape (S : Type) (hI : (Unit × (twAdv × TDraw) × TTr) = (Unit × (S × TDraw)))
+theorem mh_shape (S : Type) (hI : (Unit × (twAdv × TSample) × TTr) = (Unit × (S × TSample)))
     (hO : TRoot = (S × TRoot)) : False := by
   have h1 := congrArg Nat.card hI
   have h2 := congrArg Nat.card hO
@@ -394,7 +394,7 @@ theorem mh_shape (S : Type) (hI : (Unit × (twAdv × TDraw) × TTr) = (Unit × (
 
 /-- **The extraction's words program** at round `w`: the words read off the prover's own root, which its work
 computes from the advice and the dither. It is charged a MAC unit for each root cell the work varies. -/
-noncomputable def mwX (A : Prover tw twRound 2) (w : Fin 2) : TAlg (twAdv × TDraw) TTr where
+noncomputable def mwX (A : Prover tw twRound 2) (w : Fin 2) : TAlg (twAdv × TSample) TTr where
   run p i _ _ := enc (rootOf A w p i 0 0)
   use _ r := if r = 0 then (cw A w : ℝ) else 0
   use_nonneg _ r := by split_ifs <;> simp
@@ -410,7 +410,7 @@ noncomputable def mwX (A : Prover tw twRound 2) (w : Fin 2) : TAlg (twAdv × TDr
 
 /-- **The extraction's commitment program** at round `w`: the prover's own root, from the advice and the dither. It
 is charged a hash unit for each root cell the work varies. -/
-noncomputable def mhX (A : Prover tw twRound 2) (w : Fin 2) : TAlg (Unit × (twAdv × TDraw) × TTr) TRoot where
+noncomputable def mhX (A : Prover tw twRound 2) (w : Fin 2) : TAlg (Unit × (twAdv × TSample) × TTr) TRoot where
   run p := rootOf A w p.2.1
   use _ r := if r = 1 then (cw A w : ℝ) else 0
   use_nonneg _ r := by split_ifs <;> simp
@@ -466,23 +466,23 @@ end Premises
 
 section Honest
 
-theorem honest_accepted (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.Accepted twReg o x := fun w =>
+theorem honest_accepted (o : Unit) (x : Fin 2 → TSample × Fin 2) : honest.Accepted twReg o x := fun w =>
   ⟨Set.mem_univ _, (twAccept_iff _ _ _ _ _ _).2 ⟨enc_dec ((x w).1 (x w).2), rfl⟩⟩
 
-theorem honest_passes (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.Passes twVerdict twDev o x :=
+theorem honest_passes (o : Unit) (x : Fin 2 → TSample × Fin 2) : honest.Passes twVerdict twDev o x :=
   ⟨fun w => (honest_accepted o x w).2, fun _ _ => show (0 : ℝ) ≤ 1 * 8 by norm_num⟩
 
-theorem honest_timedUse (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.timedUse o x = twPd.hon := by
+theorem honest_timedUse (o : Unit) (x : Fin 2 → TSample × Fin 2) : honest.timedUse o x = twPd.hon := by
   funext r
   show ∑ _b : Fin 2, ((0 : ℝ) + if r = 2 then (1 : ℝ) else 2) = twHon r
   unfold twHon
   split_ifs <;> norm_num
 
-theorem honest_calls (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.calls o x ≤ twQ := by
+theorem honest_calls (o : Unit) (x : Fin 2 → TSample × Fin 2) : honest.calls o x ≤ twQ := by
   show ∑ _b : Fin 2, ((0 : ℝ) + 2) ≤ twQ
   norm_num [twQ]
 
-theorem honest_withinCap (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.WithinCap twSel twQ o x :=
+theorem honest_withinCap (o : Unit) (x : Fin 2 → TSample × Fin 2) : honest.WithinCap twSel twQ o x :=
   ⟨honest_calls o x, fun _ _ => show (0 : ℝ) ≤ twQ by norm_num [twQ]⟩
 
 end Honest

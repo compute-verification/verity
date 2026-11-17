@@ -58,7 +58,7 @@ derivation from the salt and the prover's roots.  A live execution phase's comes
 `live_families(R)` under `LIVE_SCHEME`, its salt coin and R round coins (``pouw/round``, rounds numbered from 0 as
 Compose's `Declared.round` numbers them), all committed before the execution phase. Its sampling coin is a session of its own
 (`DRAW_FAMILIES`), opened withheld on the execution phase's sample root, so its coin root reaches the prover only after that root
-(`credit._credited`, Lean `Properties.Pouw.Credit.DrawWithheld`). The salt and round coins' session stays plain: each coin
+(`credit._credited`, Lean `Properties.Pouw.Credit.SampleWithheld`). The salt and round coins' session stays plain: each coin
 opens after its own root, so a coin root released before them hides no choice the prover makes, and its commitment's
 root is in the salt and every round's noise key.  The salt coin opens once, after the
 execution phase's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the

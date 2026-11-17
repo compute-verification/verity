@@ -10,10 +10,10 @@ import Proofs.Pouw.Prob
 # The fragment corollary: the union bound and `ttOutRowSeed_skipClass` (staging, nothing pinned)
 
 Option (a) of the fragment-draw ruling; the definitions are in
-`TTOutRowSeed.lean`, and the named assumption `Assumptions.FragDraw` is in `RowSeedAssumptions.lean`. **P2 rests on
+`TTOutRowSeed.lean`, and the named assumption `Assumptions.FragSample` is in `RowSeedAssumptions.lean`. **P2 rests on
 `ttOutRowSeed_of_ttOut` (and `ttOutTileRowSeed_of_ttOutTile`) alone, with no named assumption.** This file is a
 supporting line: no statement those proofs read is proved here. It takes no TT_OUT, and its one named assumption is
-`FragDraw`.
+`FragSample`.
 
 * **`qtree_union_bound`** (the ruling's item 3): an adaptive program with at most `q` oracle calls, whose result names
   `m` final checks, gets an answer in its input's bad set, each of probability at most `ε`, at some call or final check
@@ -21,11 +21,11 @@ supporting line: no statement those proofs read is proved here. It takes no TT_O
   query (`card_split`) leaves the other answers uniform, and the rest of the program with that answer fixed
   (`QTree.fixAt`) makes one call fewer, a repeated query included. `qtree_union_bound_at` lets the bad sets depend on
   the answer at one input that no bad set contains (the per-job sample), by conditioning on it.
-* **`ttOutRowSeed_skipClass`** (the ruling's item 5): under the named assumption `FragDraw` at `Λ = 100`, (C4) and
+* **`ttOutRowSeed_skipClass`** (the ruling's item 5): under the named assumption `FragSample` at `Λ = 100`, (C4) and
   (C6), an adversary program with at most `q` calls outputs a skip-class program on unit `u` that saves more than
   `(4096/11)·100 ≈ 37,236` units per row with probability at most `(q + m)/2^128`, `m` the unit's rows. Outside the
   union's bad event every final row has `fragCount ≤ 100`, and `fragSkip_count_le` with (C4) bounds the saving.
-* **`rowDrawn_satisfiable`**: (C6) holds on a finite oracle domain, so the corollary's `[Fintype Q]` doesn't make it
+* **`rowSampled_satisfiable`**: (C6) holds on a finite oracle domain, so the corollary's `[Fintype Q]` doesn't make it
   vacuous. (C6) asks for an injective key only on the unit's rows and their 32-bit words, the rows the corollary reads.
 -/
 
@@ -341,7 +341,7 @@ theorem operandOK_rowCodes {sem : PearlCSem Q R S} {m k : ℕ} {act : Codes} (h 
 
 /-- Under (C6), row `i` of `A′` reads the row's words, the job's answer and the row's answer only. -/
 theorem unitChain_row_eq {sem : PearlCSem Q R S} {s : S} {U : Workload} {u : ℕ} {xJ : Q}
-    {key : ℕ → (Fin (U.layout.shape u).k → ℕ) → Q} (hD : sem.RowDrawn s U u xJ key) {H H' : Q → R}
+    {key : ℕ → (Fin (U.layout.shape u).k → ℕ) → Q} (hD : sem.RowSampled s U u xJ key) {H H' : Q → R}
     {act act' : Codes} (i : Fin (U.layout.shape u).m)
     (hrow : rowWords (U.layout.shape u).k act i = rowWords (U.layout.shape u).k act' i) (hJ : H xJ = H' xJ)
     (hk : H (key i (rowWords (U.layout.shape u).k act i)) = H' (key i (rowWords (U.layout.shape u).k act i))) :
@@ -359,22 +359,22 @@ theorem unitChain_row_eq {sem : PearlCSem Q R S} {s : S} {U : Workload} {u : ℕ
 
 /-- Under (C6), `B̃` reads the job's answer only. -/
 theorem unitChain_job_eq {sem : PearlCSem Q R S} {s : S} {U : Workload} {u : ℕ} {xJ : Q}
-    {key : ℕ → (Fin (U.layout.shape u).k → ℕ) → Q} (hD : sem.RowDrawn s U u xJ key) {H H' : Q → R}
+    {key : ℕ → (Fin (U.layout.shape u).k → ℕ) → Q} (hD : sem.RowSampled s U u xJ key) {H H' : Q → R}
     (act act' : Codes) (hJ : H xJ = H' xJ) :
     (sem.unitChain H s U u act).2 = (sem.unitChain H' s U u act').2 := by
   obtain ⟨-, hEB, hFB⟩ := hD.2.2.1 H H' act act' hJ
   simp only [PearlCSem.unitChain, FormChain.quantB, hEB, hFB]
 
 /-- **The fragment corollary** (the fragment-draw ruling's item 5), a supporting line: P2 rests on
-`ttOutRowSeed_of_ttOut` alone, and this takes no TT_OUT. Under the named assumption `FragDraw` at `Λ = 100`, (C4) and
+`ttOutRowSeed_of_ttOut` alone, and this takes no TT_OUT. Under the named assumption `FragSample` at `Λ = 100`, (C4) and
 (C6): for every adversary program `T` with at most `q` oracle calls whose result is a skip program on unit `u`, the
 probability over the oracle that the skip program is in the skip class and saves more than `(4096/11)·100` units per row
 of the unit, against the honest program on some activation input and state, is at most `(q + m)/2^128`, `m` the unit's
 rows. -/
 theorem ttOutRowSeed_skipClass [Fintype Q] [DecidableEq Q] [Fintype R] {CM : CostModel Q R S}
     {sem : PearlCSem Q R S} {p : Pipeline} {G : ℕ} {s : S} {U : Workload} {u : ℕ} {xJ : Q}
-    {key : ℕ → (Fin (U.layout.shape u).k → ℕ) → Q} (e : SkipEmbed CM sem p G U u) (hD : sem.RowDrawn s U u xJ key)
-    (hF : Assumptions.FragDraw sem p G s U u key 100) (hC4 : CM.FragmentPriced e) (T : QTree Q R SkipProgram)
+    {key : ℕ → (Fin (U.layout.shape u).k → ℕ) → Q} (e : SkipEmbed CM sem p G U u) (hD : sem.RowSampled s U u xJ key)
+    (hF : Assumptions.FragSample sem p G s U u key 100) (hC4 : CM.FragmentPriced e) (T : QTree Q R SkipProgram)
     (q : ℕ) (hq : ∀ H, T.calls H ≤ q) :
     pr (fun H : Q → R => (T.eval H).InClass sem p G s U u H ∧ ∃ (act : ℕ → Codes) (σ : State),
         4096 / 11 * 100 * ((U.layout.shape u).m : ℝ) <
@@ -440,12 +440,12 @@ theorem ttOutRowSeed_skipClass [Fintype Q] [DecidableEq Q] [Fintype R] {CM : Cos
 /-- **(C6) can hold** with a finite oracle domain: `Q` holds the unit's rows with their 32-bit words, and one more
 point, `none`, for the job's input. The key that tags a row with its words satisfies (C6) for a `sem` that reads no
 oracle answer (zero noise, the exact forming chain, and unit scales and floor, as `witnessSem`). -/
-theorem rowDrawn_satisfiable {R S : Type} (s : S) (U : Workload) (u : ℕ) :
+theorem rowSampled_satisfiable {R S : Type} (s : S) (U : Workload) (u : ℕ) :
     Nonempty (Fintype (Option (Fin (U.layout.shape u).m × (Fin (U.layout.shape u).k → Fin (2 ^ 32))))) ∧
       ∃ (sem : PearlCSem (Option (Fin (U.layout.shape u).m × (Fin (U.layout.shape u).k → Fin (2 ^ 32)))) R S)
         (key : ℕ → (Fin (U.layout.shape u).k → ℕ) →
           Option (Fin (U.layout.shape u).m × (Fin (U.layout.shape u).k → Fin (2 ^ 32)))),
-        sem.RowDrawn s U u none key := by
+        sem.RowSampled s U u none key := by
   classical
   refine ⟨⟨inferInstance⟩, ⟨fun _ _ _ _ _ => ⟨fun _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ _ => 0⟩,
     FormChain.exact _, fun _ _ => 1, fun _ _ => 1, fun _ _ => 1⟩,

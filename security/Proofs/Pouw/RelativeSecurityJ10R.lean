@@ -178,7 +178,7 @@ variable {St : ℕ} {n B n' : Fin St → ℕ} {L : ℕ}
 point `W` of the other calls: its terms the products charged to the word there. -/
 theorem SlpG.parityForm_err_ovJ (φ : ZMod (2 ^ 32) →+* ZMod 2) {N : ℕ}
     (P : SlpG (OJBits St n L B n') (ZMod (2 ^ 32)) N) (hOk : ∀ j, P.isProd j = true → OneSidedAtJ (P.prod j))
-    (W : OJDraws St n L B n') (aq : ∀ t, Fin (n t) → Fin (B t) → Fin L → ZMod (2 ^ 32))
+    (W : OJSamples St n L B n') (aq : ∀ t, Fin (n t) → Fin (B t) → Fin L → ZMod (2 ^ 32))
     (wq : ∀ t, Fin (B t) → Fin L → Fin (n' t) → ZMod (2 ^ 32)) (j : Fin N) (c : OCells St n n' B) :
     ParityForm (jFrame c.2) φ (charged (jFrame c.2) φ (P.coef j) fun i z => P.prod i (mergeAt W c.1 z)).card
       fun z => P.val (mergeAt W c.1 z) j - jPrefix (aq c.1) (wq c.1) c.2.1 c.2.2.1 c.2.2.2.val z := by
@@ -198,7 +198,7 @@ open Classical in
 `L` products per cell-block, of any call, not short of products. -/
 theorem SlpG.card_full_le_ovJ (φ : ZMod (2 ^ 32) →+* ZMod 2) {N : ℕ}
     (P : SlpG (OJBits St n L B n') (ZMod (2 ^ 32)) N) (hOk : ∀ j, P.isProd j = true → OneSidedAtJ (P.prod j))
-    (W : OJDraws St n L B n') (aq : ∀ t, Fin (n t) → Fin (B t) → Fin L → ZMod (2 ^ 32))
+    (W : OJSamples St n L B n') (aq : ∀ t, Fin (n t) → Fin (B t) → Fin L → ZMod (2 ^ 32))
     (wq : ∀ t, Fin (B t) → Fin L → Fin (n' t) → ZMod (2 ^ 32)) (word : OCells St n n' B → Fin N)
     (hpure : P.ChargePureAtJ φ word) :
     L * (univ.filter fun c : OCells St n n' B => ¬ParShort (jFrame c.2) φ
@@ -356,7 +356,7 @@ theorem roundsSlice_of_overlapPJ {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St �
     fun x hx => (hacc x hx).imp_left (P.accepts_gameP fr φ x).mpr, hV, fun x => ?_⟩
   obtain ⟨N, prog, aq, wq, word, hOk, hE, hpure, hcharge⟩ := hK x
   set C : ℝ := (Fintype.card (OCells St n n' B) : ℝ)
-  let full : Fin R → OJDraws St n L B n' → OCells St n n' B → Prop := fun w W c =>
+  let full : Fin R → OJSamples St n L B n' → OCells St n n' B → Prop := fun w W c =>
     ¬ParShort (fr c) φ fun z => P.errAt x w c (mergeAt W c.1 z)
   have hprod : ∀ w W, (L : ℝ) * ((univ.filter fun c => full w W c).card : ℝ) ≤
       ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) := fun w W => by
@@ -364,14 +364,14 @@ theorem roundsSlice_of_overlapPJ {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St �
     simp only [full, fr, hE, mergeAt_mk]
     exact_mod_cast h1
   have hcor : ∀ w, C * (1 - ovDefP fr φ (P.errAt x w)) ≤
-      expect fun W : OJDraws St n L B n' => ((univ.filter fun c => full w W c).card : ℝ) := fun w => by
-    have hd : ovDefP fr φ (P.errAt x w) = expect fun W : OJDraws St n L B n' =>
+      expect fun W : OJSamples St n L B n' => ((univ.filter fun c => full w W c).card : ℝ) := fun w => by
+    have hd : ovDefP fr φ (P.errAt x w) = expect fun W : OJSamples St n L B n' =>
         prob fun c : OCells St n n' B => ParShort (fr c) φ fun z => P.errAt x w c (mergeAt W c.1 z) := by
       rw [ovDefP, prob_eq_expect, expect_prod_swap]
       congr 1
       funext W
       rw [prob_eq_expect]
-    have ha : C * (1 - ovDefP fr φ (P.errAt x w)) = expect fun W : OJDraws St n L B n' =>
+    have ha : C * (1 - ovDefP fr φ (P.errAt x w)) = expect fun W : OJSamples St n L B n' =>
         C + -C * prob fun c : OCells St n n' B => ParShort (fr c) φ fun z => P.errAt x w c (mergeAt W c.1 z) := by
       rw [hd, expect_const_add_mul]
       ring

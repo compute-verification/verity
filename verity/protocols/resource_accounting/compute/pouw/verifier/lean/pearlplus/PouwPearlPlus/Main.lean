@@ -114,7 +114,7 @@ def main (argv : List String) : IO UInt32 := do
   if let .ok pl := plan input then
     if let (some r, none) := (a.record, held) then
       IO.FS.writeFile r ((Json.mkObj [("schema", jstr COIN_SCHEMA), ("commitment", jstr (hex pl.root)),
-        ("source", jstr (hex pl.source)), ("draw", nodeDraw)]).pretty ++ "\n")
+        ("source", jstr (hex pl.source)), ("draw", nodeSample)]).pretty ++ "\n")
     for (i, tid) in pl.todo do
       let dir := (System.FilePath.mk a.manifests[i]!).parent.getD "."
       for spec in filesOf mans[i]! pl.passes[i]! tid do

@@ -161,7 +161,7 @@ def GGapSampledTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Cos
               blankTiles TR U (A.trace U x.1 x.2.1))
             (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - γ) * (claimedWref TR U (A.trace U x.1 x.2.1) -
-            u (drawsIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2) * tileWrefTotal TR U.layout))
+            u (samplesIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2) * tileWrefTotal TR U.layout))
         ≤ δ + η q U.layout.N
 
 /-! ## Pearl-C's tiles -/

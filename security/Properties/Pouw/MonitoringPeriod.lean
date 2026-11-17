@@ -70,7 +70,7 @@ check doesn't discharge it:
   (`Properties.Pouw.Check.AcceptMeans`), both proved; `rel` the relation of the statement the service proves (H1's
   subprotocol: the window's staged statement, `stagedAt`).
 * `SampleIsCoin`: the service's `subset:K′` sample from the challenger's sampling coin (`Spot.Select.select`) read as
-  the model's uniform permutation coin, with `K′ = K_d` and `N = N_p` (`Properties.Pouw.Check.AcceptedDraw` gives the
+  the model's uniform permutation coin, with `K′ = K_d` and `N = N_p` (`Properties.Pouw.Check.AcceptedSample` gives the
   published sample `K′` distinct units below `N`; `Properties.Served.SampleMissesSubset` bounds its misses by the model's).
 * `Pins` (`rel` gives `right`): the relation of the statement the service proves pins the declared tile's rightness, a
   fact of that statement and the tile's Definition, with `UnitsOfLayout`'s tie of `Cd` to it. Where the service proves

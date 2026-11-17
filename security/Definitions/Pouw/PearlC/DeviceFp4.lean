@@ -754,7 +754,7 @@ def sha512Fp4Sem (base : Fp4Sem Q R S) (salt : S → List ℕ) (rootA : List ℕ
     lines := fun _ s U u act =>
       let sB := NoiseSha512Fp4.seedB (salt s) (rootB (U.layout.fixedId u))
       let sA := NoiseSha512Fp4.seedA (salt s) (rootA (salt s) u act) (rootB (U.layout.fixedId u)) u
-      ⟨(NoiseSha512Fp4.drawA (U.layout.shape u) sA sB).1, (NoiseSha512Fp4.drawA (U.layout.shape u) sA sB).2,
+      ⟨(NoiseSha512Fp4.sampleA (U.layout.shape u) sA sB).1, (NoiseSha512Fp4.sampleA (U.layout.shape u) sA sB).2,
         (NoiseSha512Fp4.sampleB (U.layout.shape u) sB).1, (NoiseSha512Fp4.sampleB (U.layout.shape u) sB).2⟩ }
 
 /-- A committed operand of `p` rows and `q` columns passes Pearl-C4's rules: every word a widened BF16 word (its low

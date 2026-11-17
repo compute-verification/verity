@@ -19,7 +19,7 @@ salt was had, or the same refusal.
 
 Its `window` and `period` against `credit.window` and `credit.period_credit`, the only entries, and its `credit`,
 `drawn`, `window-drawn`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`,
-`credit.drawn`, `credit._window_drawn` (at the strata of the descriptor's layout, `Credit.descriptorDrawn`, the sample the
+`credit.drawn`, `credit._window_drawn` (at the strata of the descriptor's layout, `Credit.descriptorSampled`, the sample the
 J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s):
 one `Port` each, over the cases
 `pouw_credit_cases` generates (a served window whose sampling coin opened after its sample root over the manifest's credit bits,
@@ -279,7 +279,7 @@ def drawn(case: dict) -> dict:
 
 
 def window_drawn(case: dict) -> dict:
-    """`credit._window_drawn` over the strata of the descriptor's layout, as `Credit.descriptorDrawn` reads them."""
+    """`credit._window_drawn` over the strata of the descriptor's layout, as `Credit.descriptorSampled` reads them."""
     got, refused = None, ("layout", Cr.DESCRIPTOR_HEX)
     if type(case["descriptor"]) is str and Cr._HEX.fullmatch(case["descriptor"]):
         lay, refused = Cr.layout_of(bytes.fromhex(case["descriptor"]))

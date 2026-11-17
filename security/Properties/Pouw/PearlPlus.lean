@@ -193,13 +193,13 @@ def YIsTheUnscale : Prop :=
   ∀ u alphaA alphaB y, Rule.yOf u alphaA alphaB = some y → y = Pouw.PearlC.unscale u alphaA alphaB
 
 /-- **The work an accepted run publishes is its credit at Pearl's assumption**: over the plan's passes, at the run's samples,
-X_O (how many of them landed on a tile over its inert-work bound, `overInertBoundDraws`) and δ = 1/100 (`creditAtAssumption`),
+X_O (how many of them landed on a tile over its inert-work bound, `overInertBoundSamples`) and δ = 1/100 (`creditAtAssumption`),
 crediting nothing on a test instance's input (`testCredit`); a refused or rejected run publishes none. -/
 def WorkIsTheCredit : Prop :=
   (∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
     (check i opener).accept = true → ∃ pl, plan i = .ok pl ∧
       (check i opener).work =
-        some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overInertBoundDraws pl (check i opener).verdicts) DELTA))) ∧
+        some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overInertBoundSamples pl (check i opener).verdicts) DELTA))) ∧
   (∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
     (check i opener).accept = false → (check i opener).work = none)
 

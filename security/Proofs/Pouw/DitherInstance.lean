@@ -225,14 +225,14 @@ theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : De
     let wl : m.Mem × P.Draw → ℝ := fun p => (T p.2 : ℝ)
     let uw : m.Mem × P.Draw → Verity.Accel.Res ⊕ D.oth.Res → ℝ := fun p q =>
       match q with
-      | .inl r => if p.1 = M₀ then (cardUnits m (cardRun m Prg (L.putDraw p.2 p.1) sched).2 r : ℝ) else 0
+      | .inl r => if p.1 = M₀ then (cardUnits m (cardRun m Prg (L.putSample p.2 p.1) sched).2 r : ℝ) else 0
       | .inr _ => 0
     have hu : ∀ p q, 0 ≤ uw p q ∧ uw p q ≤ devRate D q * wl p := by
       have hwl : ∀ p, 0 ≤ wl p := fun p => NNRat.cast_nonneg _
       rintro ⟨M, d⟩ (r | h)
       · by_cases hM : M = M₀
         · subst hM
-          have hle : cardUnits m (cardRun m Prg (L.putDraw d M) sched).2 r ≤ (poolCard c D.n D.n_pos).ρ r * T d :=
+          have hle : cardUnits m (cardRun m Prg (L.putSample d M) sched).2 r ≤ (poolCard c D.n D.n_pos).ρ r * T d :=
             Verity.Accel.Machine.units_le_of_fits Prg _ sched (T d) (hfits d) r
           simp only [uw, ite_true]
           refine ⟨NNRat.cast_nonneg _, ?_⟩
@@ -241,7 +241,7 @@ theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : De
         · simp only [uw, hM, ite_false]
           exact ⟨le_rfl, mul_nonneg (hrate _).le (hwl _)⟩
       · exact ⟨le_rfl, mul_nonneg (hrate _).le (hwl _)⟩
-    refine ⟨⟨(fun p => L.getTr (cardRun m Prg (L.putDraw p.2 p.1) sched).1.mem, uw, wl), hu⟩, fun d =>
+    refine ⟨⟨(fun p => L.getTr (cardRun m Prg (L.putSample p.2 p.1) sched).1.mem, uw, wl), hu⟩, fun d =>
       ⟨rfl, fun r => ?_, fun _ => rfl, rfl, rfl, rfl⟩⟩
     show uw (M₀, d) (.inl r) = _
     simp only [uw, ite_true]

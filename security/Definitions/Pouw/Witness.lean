@@ -89,7 +89,7 @@ abbrev TTr : Type := Fin 2 → Fin 1 → Fin 1 → Word
 abbrev TRoot : Type := Fin 2 → Fin 1 → Fin 1 → RCell
 
 /-- The witness protocol's dither: one of 16 values per word. -/
-abbrev TDraw : Type := Fin 2 → Fin 16
+abbrev TSample : Type := Fin 2 → Fin 16
 
 open Classical in
 /-- The cells of `f`'s output that vary over its inputs. -/
@@ -121,7 +121,7 @@ structure TAlg (I O : Type) where
   calls_le : ∀ x, calls x ≤ use x 1
   words : ∀ (h : O = TTr) (x : I), ((nonconst fun y => cast h (run y)).card : ℝ) ≤ use x 0
   roots : ∀ (h : O = TRoot) (x : I), ((nonconst fun y => cast h (run y)).card : ℝ) ≤ use x 1
-  work : ∀ (S : Type), I = (Unit × (S × TDraw)) → ∀ (h : O = (S × TRoot)) (x : I),
+  work : ∀ (S : Type), I = (Unit × (S × TSample)) → ∀ (h : O = (S × TRoot)) (x : I),
     ((nonconst fun y => (cast h (run y)).2).card : ℝ) ≤ use x 0 ∧
       ((nonconst fun y => (cast h (run y)).2).card : ℝ) ≤ use x 1
 
@@ -208,7 +208,7 @@ def twNF : NoFold where
   n' := 1
   nb := 1
   L := 1
-  Draw := TDraw
+  Draw := TSample
   noise _ d := (fun i _ => ((d i : ℕ) : Word), fun _ _ => 1)
   s := 1
   Chk := Fin 2
@@ -284,7 +284,7 @@ def twDev : Readings tw twRound 2 Prop := fun A o x => ∀ b r, tw.use (A.answer
 
 /-- The extractor's advice at sampling block `w`: the coins of the blocks before `w`, which is all the block's state
 reads besides the oracle (`Unit` here). -/
-abbrev twAdv : Type := Fin 2 → Option (TDraw × Fin 2)
+abbrev twAdv : Type := Fin 2 → Option (TSample × Fin 2)
 
 /-- The advice size every prover's extraction reads. -/
 def twBadv (_ : Prover tw twRound 2) : ℕ := Fintype.card twAdv
@@ -316,11 +316,11 @@ noncomputable def constAlg {I O : Type} (v : O) : TAlg I O where
   work _ _ _ _ := ⟨le_of_eq (card_nonconst_const fun _ _ => rfl), le_of_eq (card_nonconst_const fun _ _ => rfl)⟩
 
 /-- The honest words at the dither `d`: word `i` is `d i`. -/
-def hw (d : TDraw) : TTr := fun i _ _ => ((d i : ℕ) : Word)
+def hw (d : TSample) : TTr := fun i _ _ => ((d i : ℕ) : Word)
 
 /-- The honest sampling block's work: its two words (a MAC unit each), their root (a hash unit each) and a unit of the
 rest. Its state is the words. -/
-noncomputable def hWork : TAlg (Unit × TTr × TDraw) (TTr × TRoot) where
+noncomputable def hWork : TAlg (Unit × TTr × TSample) (TTr × TRoot) where
   run p := (hw p.2.2, fun i j b => dec (hw p.2.2 i j b))
   use _ r := if r = 2 then 1 else 2
   use_nonneg _ r := by split_ifs <;> norm_num
@@ -336,7 +336,7 @@ theorem card_ans : Nat.card (Fin 1 → Word × Unit) = 4294967296 := by
 
 /-- Sampling block `b`'s honest answer: the checked word, from the state after the block's work, at the block's own
 check coin among the period's. It outputs neither words nor a root, so no sampling design charges it. -/
-noncomputable def hAnswer (b : Fin 2) : TAlg (Unit × TTr × (Fin 2 → TDraw × Fin 2)) (Fin 1 → Word × Unit) where
+noncomputable def hAnswer (b : Fin 2) : TAlg (Unit × TTr × (Fin 2 → TSample × Fin 2)) (Fin 1 → Word × Unit) where
   run p := fun _ => (p.2.1 (p.2.2 b).2 0 0, ())
   use _ _ := 0
   use_nonneg _ _ := le_rfl

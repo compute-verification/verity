@@ -205,7 +205,7 @@ private def coins : String :=
 private def params (record : String) : ByteArray :=
   ("{\"coins\":" ++ coins ++ ",\"draws\":3,\"record\":" ++ record ++ "}").toUTF8
 private def recordOf (schema : String) : String :=
-  "{\"commitment\":\"" ++ String.ofList (List.replicate 128 '0') ++ "\",\"draw\":" ++ nodeDraw.compress ++
+  "{\"commitment\":\"" ++ String.ofList (List.replicate 128 '0') ++ "\",\"draw\":" ++ nodeSample.compress ++
     ",\"schema\":" ++ schema ++ ",\"source\":\"" ++ String.ofList (List.replicate 64 '0') ++ "\"}"
 private def record : String := recordOf ("\"" ++ COIN_SCHEMA ++ "\"")
 private def reasonOf (p c e : ByteArray) : Option String := (protocol.answer p c e #[]).reason
@@ -254,7 +254,7 @@ private def run (manifests : String) : ByteArray := runIn manifests (executionPh
     let p ← paramsOf (← Core.canonicalJson (params record))
     let i := inputOf p (← commitmentOf (run "[{}]"))
     let some h := i.held | throw "no coin record"
-    pure (i.ofRecord && h.schema == COIN_SCHEMA && fieldIs (get? h.draw "from") DRAW_NODE &&
+    pure (i.ofRecord && h.schema == COIN_SCHEMA && fieldIs (get? h.draw "from") SAMPLE_NODE &&
       ((ofRecordReason i.coins i.source i.held).getD "").startsWith "the epoch's coins are an in-process")).toOption ==
   some true
 -- well-formed inputs reach the run's verdict, whose refusal is the run's
