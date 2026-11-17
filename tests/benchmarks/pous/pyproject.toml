@@ -40,7 +40,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py",
           "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/layout.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py",
           # the weight store's placement reads the committed configurations' hashes (`period.deployment`,
-          # `memory_challenger.COMMITTED`), which say whether trusted-device's premise holds
+          # `memory_attester.COMMITTED`), which say whether trusted-device's premise holds
           "tools/verity/cli/verity_cli/configurations.toml",
           # served_piece.py holds the served weights as C* through the vLLM adapter, which imports these
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
@@ -64,7 +64,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/protocols/resource_accounting/compute/pouw/verifier/window.py", "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
           "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
-          # the deployment layer and its wire, which the memory challenger's and the wipe's sides are started through
+          # the deployment layer and its wire, which the memory attester's and the wipe's sides are started through
           # (`verity.runtime.stream.Side`) and the challenger's parties run on
           "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "tests/verity/tests/test_channel.py",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py",
