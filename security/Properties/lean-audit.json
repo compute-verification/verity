@@ -520,8 +520,8 @@
   "Properties.NetworkScan.StmtFlattens": {
    "owner": "@network-accounting",
    "digest": "e631d74ea293deb3e23e26932f06ec6564877bf01793f61fbe8680be3716a7b5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
+   "issue": "NET-401",
+   "due": "2026-11-23"
   },
   "Properties.Poub.Subprotocol.HonestLogAccepted": {
    "owner": "@memory-accounting",
