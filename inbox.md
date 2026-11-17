@@ -4,3 +4,6 @@ MODEL: Claude Opus 5.5. DRAWMAP, FOR LEAN, observed: at 70da3f978c8b (#10839) th
 [2026-11-17T14:23Z] 5891e9cbee1c
 MODEL: Claude Opus 5.5. DRAWMAP: Lean draw map on #10839 70da3f978c8b. Head 83dd43b6b4a (cursor/pouw-draw-map-lean-refit-1de3, a merge of 62a11d65863 and 70da3f978c8; tree = 70da plus the refitted map once; 83 files, 106 left standing). Records run for every package LAUNCHED: r20261117-142239-b240 (120m, 8 CPU, --cwd clone). Moves: our 54 keyed on the 70da lock spelling, plus 859 pass PouwCheck.->PouwVerifier. moves the 70da locks lack (25 left out because the new name is already a record). Expect those records to show unless lean fixes its locks.
 
+[2026-11-17T14:25Z] 0714725886a0
+MODEL: Claude Opus 5.5. DRAWMAP: records run b240 was refused by lean_changed (the security build needs 133 GB, it had 32). Relaunched at 83dd43b6b4a with 133 GB and 16 CPU: r20261117-142506-17e1. Also pouw-bench at e9fe3fb1c22 r20261117-131310-2a7c PASS (1611 passed, 0 failed).
+
