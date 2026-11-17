@@ -3,24 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.PearlC.TTOut
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 
-/-!
-# The cap on the chain's share (trusted; definitions and the named `Prop`)
-
-`pearlCProtocolDev` admits a unit whose debit is at most `ρ·creditDev`. `creditDev`'s A′·F_B, forming and peel terms don't
-shrink with the unit's width n, so that cap admits a larger flagged share of the chain on narrow units: up to
-`ρ·creditDev/(m·k·n)`, 0.214% at n = 64 and k = 8,192 for ρ = 1/1,000, where the aligned-spike family R = 64 (0.12–0.14%
-flagged) passes. The chain-share cap compares the same debit with `ρ` times the chain's credited work alone
-(`chainCreditDev`: its MACs and promotion adds), so an admitted unit has at most a `ρ` share of its atom-words flagged at
-every shape (`chainInertBound_flagged_le`). Everything else, the credit and the tiles' fixed credit `(1 − ρ)·creditDev·share`
-included, is `pearlCProtocolDev`'s and `pearlCTilesDev`'s.
-
-It is stated at any device record. The panel's line is v2 (`devSm120v2`, G = 0) at ρ = 1/1,000. At G > 0 the same
-construction on rev1's protocol is the analogue, not staged.
-
-At W1 (`TTOutPearlCDevChainInertBoundW1`, `TTOutTilePearlCDevChainInertBoundW1`) the cost model is the term `W1.w1Priced dv salt`:
-`TTOutW1`'s and `TTOutTileW1`'s game at the chain-share cap's protocol and tiles. They are stated here, not in
-`Definitions`, because the protocol is.
--/
+/-! The chain-share cap on Pearl-C at a device record: a unit is admitted only if its debit is at most `ρ` times its chain's credited work. -/
 
 @[expose] public section
 
@@ -28,21 +11,17 @@ namespace Pouw.PearlC
 
 open Finset Pouw.Fp8Atom
 
-/-- The chain's credited work of one unit at a device: `m·k·n` MACs and its promotion adds, as `creditDev` counts them. -/
 def chainCreditDev (d : PearlCDevice) (s : Shape) : ℚ :=
   let mkn : ℚ := (s.m : ℚ) * s.k * s.n
   mkn + (if d.G = 0 then 0 else mkn * d.prices.add / (32 * d.G))
 
 variable {Q R S : Type}
 
-/-- **Pearl-C's protocol at a device record with the cap on the chain's share**: `pearlCProtocolDev` with the cap
-`inertWorkDev ≤ ρ·chainCreditDev`. -/
 noncomputable def pearlCProtocolDevChainInertBound (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Protocol Q R S :=
   { pearlCProtocolDev d sem ρ with
     inertBoundOK := fun H s U u act => inertWorkDev d (sem.unitInertWorkDev d H s U u act) ≤ ρ * chainCreditDev d (U.layout.shape u) }
 
-/-- **Pearl-C's audit tiles with the cap on the chain's share**: `pearlCTilesDev` with a tile's debit capped at
-`ρ·chainCreditDev` times its credited rows' share. A good tile's credit stays `(1 − ρ)·creditDev·share`. -/
+/-- A good tile's credit stays `pearlCTilesDev`'s, `(1 − ρ)·creditDev·share`. -/
 noncomputable def pearlCTilesDevChainInertBound (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : TileRules Q R S :=
   { pearlCTilesDev d sem ρ with
     inertBoundOK := fun H s U g act =>
@@ -57,33 +36,24 @@ namespace Pouw.PearlC.Assumptions
 
 variable {Q R S : Type}
 
-/-- **TT_OUT(1/400) at a device record with the cap on the chain's share**: `TTOut` at
-`pearlCProtocolDevChainInertBound d sem ρ`, `pearlCDomainDev d`, `g₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDev` with
-fewer units credited: a unit counts only if its debit is at most `ρ` times its chain's credited work, which bounds its
-flagged share of atom-words by `ρ` at every width (`chainInertBound_flagged_le`). It asserts less than `TTOutPearlCDev` at the
-same `ρ` (`ttOutPearlCDevChainInertBound_of_inert_bound`). The game, charging rule, error, debit, falsifiers and cost model are
-`TTOutPearlCDev`'s: `CM` charges a tensor-core instruction its whole fragment shape, never per output word. The panel's
-instance is `devSm120v2` at `ρ = 1/1,000` (`tt-out/pearl-c-sm120-unpromoted-chaincap1000`). -/
+/-- `TTOutPearlCDev` with fewer units credited, so it asserts less at the same `ρ`
+(`ttOutPearlCDevChainInertBound_of_inert_bound`). `CM` charges a tensor-core instruction its whole fragment shape, never
+per output word. -/
 def TTOutPearlCDevChainInertBound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOut CM (pearlCProtocolDevChainInertBound d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
-/-- **TT_OUT(1/400) per audit tile with the cap on the chain's share**: `TTOutTile` at
-`pearlCProtocolDevChainInertBound d sem ρ` and `pearlCTilesDevChainInertBound d sem ρ`. It asserts less than `TTOutTilePearlCDev` at
-the same `ρ` (`ttOutTilePearlCDevChainInertBound_of_inert_bound`): the same fixed credit on fewer tiles. -/
+/-- It asserts less than `TTOutTilePearlCDev` at the same `ρ` (`ttOutTilePearlCDevChainInertBound_of_inert_bound`): the
+same fixed credit on fewer tiles. -/
 def TTOutTilePearlCDevChainInertBound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutTile CM (pearlCProtocolDevChainInertBound d sem ρ) (pearlCTilesDevChainInertBound d sem ρ) (pearlCDomainDev d) (1 / 400)
     δPearlC
 
-/-- **TT_OUT(1/400) with the cap on the chain's share, at W1 on `dv`**: `TTOutPearlCDevChainInertBound` with its cost model the
-term `W1.w1Priced dv salt` (`TTOutW1`). -/
 def TTOutPearlCDevChainInertBoundW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device)
     (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutW1 dv salt (pearlCProtocolDevChainInertBound d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
-/-- **TT_OUT(1/400) per audit tile with the cap on the chain's share, at W1 on `dv`**: `TTOutTilePearlCDevChainInertBound` at
-`W1.w1Priced dv salt` (`TTOutTileW1`). -/
 def TTOutTilePearlCDevChainInertBoundW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device)
     (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutTileW1 dv salt (pearlCProtocolDevChainInertBound d sem ρ) (pearlCTilesDevChainInertBound d sem ρ) (pearlCDomainDev d)

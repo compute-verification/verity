@@ -3,13 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 public import Definitions.Pouw.PearlC.W1Fp4Sm120
 
-/-!
-# TT_OUT-FP4 at W1 on sm_120 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)
-
-`tt-out/fp4-sm120` at W1, per unit (`TTOutFp4Sm120W1`) and per audit tile (`TTOutTileFp4Sm120W1`): `TTOutFp4W1` and
-`TTOutTileFp4W1` at `devFp4Sm120` on `W1Device.fp4Sm120 sha fetch`, the premises of Pearl-C4's listed statements
-(`Definitions.Pouw.Guarantees.PearlC4`).
--/
+/-! TT_OUT-FP4 at W1 on sm_120, per unit and per audit tile: the named premises of Pearl-C4's listed statements. -/
 
 @[expose] public section
 
