@@ -7,7 +7,7 @@ public import Proofs.Flock.Soundness.ZK.Session
 /-!
 # The release before the `Finish` is the unswitched cut
 
-The ZK server masks each worker round with the pads its frame drew, whatever the worker's values. The switched prover
+The ZK server masks each worker round with the pads its frame sampled, whatever the worker's values. The switched prover
 (`RefSession.swP`) commits its pads tree over moved pads where a table's rows fail at the worker's values
 (`Table.swPre`), so the transport premises at it (`LeanRelease.LinkRoundEq`, `LiveRoundEq`, `FillRoundEq`) are false
 at exactly the witnesses zero knowledge at any values is about. Here the release before the `Finish` is held to the

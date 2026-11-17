@@ -260,7 +260,7 @@ def epochOpenRoot (weights : ByteArray) (k : Nat) : ByteArray :=
   Flock.Sha512.hash (EPOCH_OPEN_TAG ++ weights ++ PouwCommit.be8 k)
 
 /-- `_certified_salt`: a certified execution phase's pass under the execution phase's `stream` and `prover`: `committed`, what the
-certifier recorded before it drew the execution phase's salt, is `pouwRecord` of the pass's weights' root, the stream and the
+certifier recorded before it sampled the execution phase's salt, is `pouwRecord` of the pass's weights' root, the stream and the
 prover, and the pass's salt is `pouwSalt` of the certifier's reveal for the PoUW execution phase the execution phase's context names. -/
 def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) (committed stream prover : Option ByteArray) :
     R (ByteArray × String) := do
@@ -468,7 +468,7 @@ def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteA
 
 /-- `core_check.pass_epoch`: how the pass's salt was had, or the refusal. A live Pearl-C pass, whose manifest's coins are
 a live session's, is read only through the verifier's `live` inputs (`livePassSalt`), never `coins`. A certified
-execution phase's verifier holds `reveal`, `committed`, what PoUW recorded with the certifier before it drew that salt, and the
+execution phase's verifier holds `reveal`, `committed`, what PoUW recorded with the certifier before it sampled that salt, and the
 execution phase's `stream` and `prover`. -/
 def passEpoch (coins : Json) (raw : Option ByteArray) (context : String) (recorded : Bool)
     (reveal committed stream prover : Option ByteArray) (live : Json) : R String := do

@@ -521,7 +521,7 @@ where
       | _, _, _ => throw "recursive: a part out of range"
 
 /-- The units the recursive session proved: the inner public file's unit indices (`units.indices`) of the instances the
-inner record drew (`unit_draw.units`), ascending (`OneStageZk.provedUnits`). -/
+inner record sampled (`unit_draw.units`), ascending (`OneStageZk.provedUnits`). -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := OneStageZk.provedUnits pubB record
 
 /-- The units an accepted recursive session proved (`provedUnits` at the inner public file and record), and none for a

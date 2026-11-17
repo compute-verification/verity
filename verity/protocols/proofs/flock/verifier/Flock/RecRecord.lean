@@ -174,7 +174,7 @@ def readCoin : P F128 := fun s => (readHex s).bind fun (bs, s) =>
 
 /-- **A round of the challenger's live-coin part's record**, as `rec_live` writes it: its stream's name, its index on the stream, its
 salted tops (each a list of nodes), how many level-0 tops it absorbed, its commit strings, its coin count and the
-coins it drew. -/
+coins it sampled. -/
 structure Round where
   stream : List UInt8
   k : Nat
