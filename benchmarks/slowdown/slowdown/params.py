@@ -42,7 +42,7 @@ from verity.protocol import DELTAS, MONITORING_PERIODS
 from verity.circuits import partition_v2
 from verity.device import load_card, number
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 #: the inference-only policy's calibrations, in the directory beside this package's
@@ -218,9 +218,9 @@ def carded(params: Mapping[str, Param]) -> list[Param]:
         devices, hosts = params[f"{t}.devices"].value, params[f"{t}.hosts"].value
         rate, cluster = float(hosts * number(link["rate"])), float(number(link["cluster"]))
         out += [Param(f"{t}.memory", float(devices * number(dram) * 8), "bit", status="datasheet",
-                      source=f"hardware/cards/{gpu}.toml store.dram x {t}.devices"),
+                      source=f"calibration/hardware/cards/{gpu}.toml store.dram x {t}.devices"),
                 Param(f"{t}.links", rate, "bit/s", cluster, rate, status=links,
-                      source=f"hardware/cards/{server}.toml link.rate x {t}.hosts; low: link.cluster")]
+                      source=f"calibration/hardware/cards/{server}.toml link.rate x {t}.hosts; low: link.cluster")]
     return out
 
 

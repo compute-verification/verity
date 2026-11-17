@@ -2,7 +2,7 @@
 # payload.sh REV [--tool NAME] [--sync 'UV SYNC ARGS'] -- CMD...: writes to stdout the payload vcf-job-run.sh sends to VCF's cluster
 # (SEND=FILE): `git archive` of REV under tree/, and request.sh, which names the commit and the command vcf-bench.sh runs there
 # under `research run`. Run it in a checkout; nothing in the payload is a credential.
-#   infra/vcf/payload.sh origin/main --tool native_peak -- python benchmarks/native_peak/measure.py --dtype bf16 --sizes 8192 \
+#   infra/vcf/payload.sh origin/main --tool native_peak -- python calibration/native_peak/measure.py --dtype bf16 --sizes 8192 \
 #     | uv run --no-sync research pods ssh vy-control-verity -- 'cat > /data/vcf/payloads/native-peak.tar.gz'
 set -euo pipefail
 REV=${1:?REV}; shift
