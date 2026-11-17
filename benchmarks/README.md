@@ -30,6 +30,8 @@ says. These are the directories that have one:
 | `verity bench landing` | mark to `main` over the last 7 days, plain and Lean: each class's p90, median, count and share within 2 h, as a local research run (its README) |
 | `verity bench lean_unread_gate` | the unread landing gate on one change, timed by stage with its git calls counted, and with `--against REV` its guard: the same verdict as the gate at REV |
 | `verity bench memory` | the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, from a gate run on the whole node, a recorded run or a loopback |
+| `verity bench mempool` | the network attester's prefix-cache pool as memory-checked RAM: `cost.py`'s cost of a window at its busiest stretch, `--quick` unless given other arguments |
+| `verity bench native_peak` | a card's measured dense-GEMM throughput for one datatype, bf16 at 8192^3 unless given other arguments, on one GPU |
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network attester's calibration |
 | `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a benchmark result, the reference checker |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
@@ -50,6 +52,9 @@ says. These are the directories that have one:
 | `verity bench serve_tax` | what each change to serving costs vLLM's own server against stock compiled vLLM, at three loads |
 | `verity bench served_commit` | served vLLM against served vLLM with every value committed, interleaved, through `verity-bench vllm` |
 | `verity bench served_errors` | error terms of the quoted guarantees that had no value, evaluated at the served sizes, each with its formula and premises |
+| `verity bench served_units` | a served model's proof blocks proved one type at a time from synthetic values and verified by the Lean verifier, forgeries included: `fp8-coord:K=6144` at one input unless given other units |
+| `verity bench tc_probe` | a tensor-core instruction bit for bit against its silicon models, `sm120.mma.m16n8k32.e4m3`'s canary unless given other arguments, on a GPU of its architecture |
+| `verity bench tc_probe_fp4` | the FP4 path on Blackwell: `nvf4` with its SASS check unless given other arguments, on an sm_120a GPU |
 | `verity bench tensor_duty` | the tensor-duty sweep on one H200: dense tensor MACs a second by duty cycle, against the card's tensor clock |
 | `verity bench training_slowdown` | every job of an attack config and of its honest config, each found by its label and run where it is missing |
 | `verity bench unit_block` | a word primitive's Boolean version built as one Flock proof block, against Flock's proved range |
