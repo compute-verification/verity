@@ -31,11 +31,11 @@ import hashlib
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 from verity.commitments.identity import canonical_json_bytes
+from verity.commitments.randomness import Key, derive, frame
 from verity.commitments.rowleaf import sha512_row_v2_prefix
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
-from verity.commitments.randomness import Key, derive, frame
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"

@@ -8,8 +8,8 @@ import hashlib
 import itertools
 import json
 
-import pytest
 import poub_vectors as rv
+import pytest
 from poub_fakes import Clock
 
 from verity.commitments.randomness import derive, frame
