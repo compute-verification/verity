@@ -60,12 +60,12 @@ REHEARSAL = {
 
 def test_chain_record_publishes_no_rehearsals_request_values(tmp_path):
     g, out = tmp_path / "G", tmp_path / "OUT"
-    put(g / "g1" / "certifier-x", {"end.json": {"files": {}}, "request.json": {"args": ["--requests", "24"]},
+    put(g / "g1" / "attester-x", {"end.json": {"files": {}}, "request.json": {"args": ["--requests", "24"]},
                                    **{f"out/{k}": v for k, v in REHEARSAL.items()}})
     (out / "gates").mkdir(parents=True)
     got = run(block("chain_record.sh", '(cd "$G" && find', "  ! -name plan.json"), G=g, OUT=out)
     assert got.returncode == 0, got.stderr
-    assert published(out) == sorted(f"gates/g1/certifier-x/{f}" for f in (
+    assert published(out) == sorted(f"gates/g1/attester-x/{f}" for f in (
         "end.json", "request.json", "out/calibration.json", "out/honest/deployment.json", "out/honest/certified.jsonl",
         "out/honest/out-records.jsonl", "out/honest/check.json", "out/honest/client/certificates.jsonl"))
 

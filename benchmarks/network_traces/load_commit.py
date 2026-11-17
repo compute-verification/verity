@@ -5,7 +5,7 @@ W8A8 weights, P2-encoded into about 0.93·U of HBM).
 Two commitments of the load, each measured exactly as its verifier recomputes it (each checked, on a sample, against the
 reference it must equal):
 
-* ``hm96``: the attester's own (`certifier.transfer_rows`, `one_stage.registered`): every weight row a registered
+* ``hm96``: the attester's own (`attester.transfer_rows`, `one_stage.registered`): every weight row a registered
   value's row under `hm96-sha512/row/v2`, its own 192-byte salt from the operating system, a frame-v3-sha512 tree over
   the rows. A row is what the circuit's registered reads take: an `S8AccumulatorPart_v1{K=256}` proof block's weight
   row, 128 u16 words (256 int8 weights). Per row: ``x`` (3 compressions after the row prefix's midstate), the mask

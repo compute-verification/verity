@@ -1,5 +1,5 @@
 """The network attester's device as a party of the deployment layer (`verity.runtime`): `NetworkAttester`, the role
-`parties.NETWORK_CERTIFIER` of the attester's manifest (`parties.MANIFEST`), and `PROTOCOL`, that manifest with it.
+`parties.NETWORK_ATTESTER` of the attester's manifest (`parties.MANIFEST`), and `PROTOCOL`, that manifest with it.
 
 Its needs are the manifest's: its clock and coins are the runtime's sources, and its signing key the capability
 `signing-key` (`certificate.Signer`). Its parameters are the schedule's (`network_attester.NetworkAttesterParams`, under ``params``), the
@@ -15,7 +15,7 @@ Its life is the methods its turns call:
 
 `hand_out`, `hand_out_run` and `close` are written: they make the manifest's messages out of the documents the device
 keeps. `open_session`, `certify`, `sign` and `collect` raise `NotImplementedError` naming the goal
-`network/certifier-device-is-a-party`. Each is done today by the device's own processes outside the runtime, whose I/O
+`network/attester-device-is-a-party`. Each is done today by the device's own processes outside the runtime, whose I/O
 the runtime has no form for yet (`device_needs`): the relay (`network_attester.NetworkAttester`), its pacer and its publisher process,
 started by the auditor device's relay session.
 """
@@ -32,7 +32,7 @@ from verity.protocol import ProtocolDef
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 
-GOAL = "network/certifier-device-is-a-party"
+GOAL = "network/attester-device-is-a-party"
 SENDS = {NC.WORKERS: (NC.OUT_OPENING, NC.RECORDS, NC.CELLS_SALTS),
          NC.VERIFIER: (NC.OUT_RECORD, NC.CERTIFICATE, NC.REGISTRATION, NC.DEPLOYMENT, NC.GROUPS)}
 """What the device sends each peer: its channels' messages in the manifest."""
@@ -172,6 +172,6 @@ def _network_attester() -> NetworkAttester:
     return NetworkAttester()
 
 
-PROTOCOL = ProtocolDef(NC.MANIFEST, {NC.NETWORK_CERTIFIER: _network_attester})
+PROTOCOL = ProtocolDef(NC.MANIFEST, {NC.NETWORK_ATTESTER: _network_attester})
 
 __all__ = ["GOAL", "Kept", "NetworkAttester", "Opened", "Out", "PROTOCOL", "Phase", "SENDS", "SignedRecord"]

@@ -8,8 +8,8 @@ a finding.
     python benchmarks/network_traces/kind_scan.py --received OUT
 
 DIR is a piece's DIR, or its hold as the leak guard reads it: `DOCS`' files, the execution phase's certificates among
-them (`certifier_piece.CERTIFICATES`, the case's evidence's and nothing else of it). The piece's case
-(`certifier_piece.CASE`), the period check's three input files and the scan's answers are witness and have no
+them (`attester_piece.CERTIFICATES`, the case's evidence's and nothing else of it). The piece's case
+(`attester_piece.CASE`), the period check's three input files and the scan's answers are witness and have no
 declaration: one left in DIR is a finding. Each file's JSON is walked to its leaves, and each leaf's key path (a list's
 items ``[]``) must match one its file declares: ``*`` is any one key (a Definition's, a port's, a stratum's, a δ's), and
 ``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure) or a development check's
@@ -26,7 +26,7 @@ the clear), which the network attester path refuses. The report's steps are the 
 text field (a verdict's reason, a step's account of what ran in the clear) is declared by its key, its text not read,
 and so is a text file (`TEXT`, a
 refusal). Any other file is a finding, a log included: the steps' logs stay on the node (`served_verdicts.sh`'s
-CERTIFIER_PRIVATE).
+ATTESTER_PRIVATE).
 
 ``--received OUT`` scans what a verifier on another machine reads of a served run's OUT (`RECEIVED`): the
 attester's piece (``pieces/certifier``, `DOCS`) and V3c's audit (``v3c-audit``, `V3C_DOCS`, what `served_integrity.answer`
@@ -113,7 +113,7 @@ ONE_STAGE = {
 }
 #: a certificate (`scan_period.CERTIFICATE_KEYS`), the network attester's in the clear
 CERTIFICATE_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signature", "window"), X)
-#: the execution phase's certificates as the piece publishes them (`certifier_piece.certificates`): its records' and
+#: the execution phase's certificates as the piece publishes them (`attester_piece.certificates`): its records' and
 #: its row registrations', each with its own fields alone
 CERTIFICATES = {**under("records[]", CERTIFICATE_DOC), **under("rows[]", CERTIFICATE_DOC)}
 #: ``verity/certifier/v0``'s answer (`Answer.toJson`) with the piece's placement: K, ε and their terms the protocol's
@@ -135,13 +135,13 @@ ANSWER = {
 STEP = {"verdict": O, "in_the_clear": S, "eps_at_delta": O,
         **{f"eps_at_delta.{k}": S for k in ("law", "units", "drawn", "per_proof")},
         "eps_at_delta.incorrect_at_delta.*": O}
-#: the chain's report less what `certifier_piece.PUBLIC` drops: its verdict, each `STEPS` step's and what the path stubs
+#: the chain's report less what `attester_piece.PUBLIC` drops: its verdict, each `STEPS` step's and what the path stubs
 REPORT = {
     "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.*": O,
     **{k: v for s in STEPS for k, v in under(f"steps.{s}", STEP).items()},
     "steps.endpoint.**": ENDPOINT,
 }
-#: DIR's files, each by its declaration (`certifier_piece.PIECE_FILES` less the logs, and what `served_verdicts.py`
+#: DIR's files, each by its declaration (`attester_piece.PIECE_FILES` less the logs, and what `served_verdicts.py`
 #: leaves beside a piece it ran)
 DOCS: dict[str, dict[str, Any]] = {
     "answer.json": ANSWER,
@@ -151,7 +151,7 @@ DOCS: dict[str, dict[str, Any]] = {
     "piece.json": {"server": S, "rc": O, "limit": S},
     "served.json": {"server": S, "source": S},
 }
-#: text files, each declared whole, its text not read: a piece's refusal (`certifier_piece.REFUSED`), the protocol's
+#: text files, each declared whole, its text not read: a piece's refusal (`attester_piece.REFUSED`), the protocol's
 #: output
 TEXT = {"refused.txt": O}
 
