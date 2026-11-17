@@ -110,10 +110,10 @@ def test_a_stratified_sample_is_bounded_by_its_strata_and_not_as_a_uniform_one()
 ])
 def test_an_integrity_bound_is_null_exactly_when_its_sample_missed_a_member(value, members, clean) -> None:
     rec = _load("block-record-r2-period0")
-    lg = rec["legs"]["integrity"]
+    lg = rec[R.BY_SUBPROTOCOL]["integrity"]
     lg["quantity"]["value"] = value
     if members is not None:
-        lg["quantity"] |= {"members": members, "by_member": [{"member": "m0", "of": 1, "drawn": 1}]}
+        lg["quantity"] |= {"members": members, "by_member": [{"member": "m0", "of": 1, R.SAMPLED: 1}]}
     lg["at"] = R.at_deltas("integrity", lg["quantity"], Fraction(lg["error"]))
     assert ("subprotocol:integrity" not in R.check(rec)) is clean
 
