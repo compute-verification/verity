@@ -20,8 +20,8 @@ model arm runs only where `--vllm-python` names a Python with vLLM, on a card, a
 form, since that server answers in its own framing: the schedule and its cells' buckets are the id form's.
 
 Each arm writes the three numbers, `network-accounting/attester-added-first-byte`, `-added-last-byte` and
-`-tick-lateness`, under its member: the stub arm's `stub-cpu`, the model arm's its model and the leased card
-(`llama-3.2-1b-h200` on an H200). An arm writes them only when its guard holds: a delay planted in the network
+`-tick-lateness`, under its member: the stub arm's `stub-cpu`, the model arm's its model and the leased card's
+short name in its card record (`llama-3.2-1b-h200` on an H200). An arm writes them only when its guard holds: a delay planted in the network
 attester's release (`--plant-ms` on its pacer) shows in the added time to the first byte, and the direct arm against
 itself reads near zero.
 """
@@ -347,9 +347,19 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9.]+", "-", text.lower().replace("nvidia", "")).strip("-")
 
 
+def model_member(model: str, gpu: str | None) -> str:
+    """The model arm's member: the model's name and the card's `short` from its card record (`kit.card_short`)."""
+    from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
+
+    return f"{slug(model.rsplit('/', 1)[-1])}-{kit.card_short(gpu or '', directory=CARD_FILES)}"
+
+
 def model_arm(a: argparse.Namespace, s: dict[str, int], work: Path) -> dict:
-    """The model arm: vLLM's OpenAI server of `--model` on this machine's card, the network attester in the bytes form."""
+    """The model arm: vLLM's OpenAI server of `--model` on this machine's card, the network attester in the bytes form;
+    refused before serving unless one card record names the card."""
     gpu = card()
+    name = model_member(a.model, gpu)
     port = 18000 + secrets.randbelow(2000)
     with open(work / "vllm.log", "w") as log:
         server = subprocess.Popen([a.vllm_python, "-m", "vllm.entrypoints.openai.api_server", "--model", a.model,
@@ -365,7 +375,6 @@ def model_arm(a: argparse.Namespace, s: dict[str, int], work: Path) -> dict:
                 if server.poll() is not None or time.monotonic() > deadline:
                     raise SystemExit(f"vLLM didn't serve {a.model} ({work / 'vllm.log'})") from None
                 time.sleep(2)
-        name = f"{slug(a.model.rsplit('/', 1)[-1])}-{slug(gpu or 'none')}"
         return arm(name, ("127.0.0.1", port), s, a, work, egress="bytes", model=a.model,
                    fields={"card": gpu, "endpoint": f"vLLM's OpenAI server of {a.model}"})
     finally:

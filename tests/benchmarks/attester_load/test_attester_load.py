@@ -100,6 +100,12 @@ def test_both_arms_write_the_three_ids_each_under_its_member(monkeypatch, tmp_pa
          (R.TICK, "llama-3.2-1b-h200", 1.5)])
 
 
+def test_the_model_arm_s_member_is_its_model_and_its_card_s_short_name() -> None:
+    assert R.model_member("unsloth/Llama-3.2-1B", "NVIDIA H200") == "llama-3.2-1b-h200"
+    with pytest.raises(SystemExit, match="add"):
+        R.model_member("unsloth/Llama-3.2-1B", None)
+
+
 def test_an_arm_whose_guard_failed_writes_no_number(monkeypatch, tmp_path) -> None:
     n, got = written(monkeypatch, arm_doc(["planted"]), tmp_path)
     assert n == 0 and got == []
