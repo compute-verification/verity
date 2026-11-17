@@ -180,7 +180,7 @@ def test_the_table_holds_each_number_over_its_windows():
     rows = {r["name"]: r for r in qt.table(d, {"now": d["now"] - 3600, "nodes": {"vy-nebius-cpu-1": {"stat": [5000 - 3600 * 100 * 30, 0]}}})}
     m2m = rows["Mark to `main`"]
     assert m2m["hour"] == m2m["day"] == "p50 95, p90 111 min (n=2)"            # 115 and 75 min, landed 55 min ago
-    assert rows["Share on `main` within 2 h of the mark"]["day"] == "2 of 2 landed (100%)"
+    assert rows["Share on `main` within 2 h of the mark"]["day"] == "2 of 2 landed (100%); with the 3 marked in the window and waiting, 0 past 2 h: 5 of 5 (100%)"
     assert rows["Marked and waiting now (the backlog)"]["now"].startswith("3 PRs: 1 with a land verdict, 2 without; 1 in a candidate being checked")
     assert rows["Mark to land verdict (the review wait)"]["day"] == "p50 18, p90 28 min (n=2)"     # 30 and 5 min
     assert rows["Marked heads with no land verdict now"]["now"] == "2: 1 held by a reviewer, 1 not looked at, the oldest of those marked 90 min ago"
@@ -581,6 +581,66 @@ def test_a_mark_and_a_land_verdict_carry_across_a_restack():
     assert {r["name"]: r for r in qt.table(d)}["Marked and waiting now (the backlog)"]["now"].startswith("2 PRs: 0 with a land verdict")
     d["labels"]["1@h1"] = d["labels"]["1@n1"] = []                                  # a restack's head nobody marked was not marked before it
     assert {r["name"]: r for r in qt.table(d)}["Mark to `main`"]["day"] == "p50 75, p90 75 min (n=1); 1 of the heads a restack's, 0 marked before it"
+
+
+def merged() -> dict:
+    """The day with #1 landed at `m1`, its owner's merge of `main` into `h1`, marked again at 01:30, and #3 open at `k3`, a merge
+    of `main` into `h3` nobody marked."""
+    d = doc()
+    for r in d["control"]["decisions"]:
+        if r["sha"].startswith("a") and r.get("heads"):
+            r["heads"] = ["m1", "h2"]
+    d["labels"]["1@m1"], d["open"]["3"] = [lab("ready", True, "01:30")], "k3"
+    d["own"] = {"1@h1": "p1", "1@m1": "p1", "2@h2": "p2", "3@h3": "p3", "3@k3": "p3"}
+    return d
+
+
+def test_a_merge_of_main_keeps_the_mark_to_main_clock_and_a_change_of_the_diff_restarts_it():
+    rows = {r["name"]: r for r in qt.table(merged())}
+    assert rows["Mark to `main`"]["day"] == "p50 95, p90 111 min (n=2)"                                # 115 and 75: from h1's mark
+    former = "Mark to `main`, from the mark at the head that landed (the former definition)"
+    assert rows[former]["day"] == "p50 55, p90 71 min (n=2)"                                            # 35 and 75: from m1's
+    assert rows["Marked and waiting now (the backlog)"]["now"].startswith("3 PRs:")                     # #3 at k3 carries h3's mark
+    edited = merged()
+    edited["own"].update({"1@m1": "q1", "3@k3": "q3"})
+    rows = {r["name"]: r for r in qt.table(edited)}
+    assert rows["Mark to `main`"]["day"] == rows[former]["day"] == "p50 55, p90 71 min (n=2)"
+    assert rows["Marked and waiting now (the backlog)"]["now"].startswith("2 PRs:")
+    withdrawn = merged()
+    withdrawn["labels"]["1@h1"].append(lab("ready", False, "00:30"))
+    assert {r["name"]: r for r in qt.table(withdrawn)}["Mark to `main`"]["day"] == "p50 55, p90 71 min (n=2)"
+
+
+def test_the_share_within_2_h_also_counts_the_marked_still_waiting_a_wait_past_2_h_a_miss():
+    d = dict(doc(), now=qt.ts(at("03:30")))
+    row = {r["name"]: r for r in qt.table(d)}["Share on `main` within 2 h of the mark"]
+    assert row["day"] == "2 of 2 landed (100%); with the 3 marked in the window and waiting, 2 past 2 h: 3 of 5 (60%)"   # #3 and #4
+    assert row["hour"] == "none landed; none marked in the window waiting"
+
+
+def test_a_heads_own_change_is_the_queues_so_a_merge_of_main_keeps_it(tmp_path):
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=tmp_path, check=True,
+                              capture_output=True, text=True).stdout.strip()
+
+    def commit(name: str, text: str) -> str:
+        (tmp_path / name).write_text(text)
+        git("add", name)
+        git("commit", "-qm", name)
+        return git("rev-parse", "HEAD")
+
+    git("init", "-q", "-b", "main")
+    commit("a.py", "a\n")
+    git("checkout", "-qb", "pr")
+    h1 = commit("b.py", "b\n")
+    git("checkout", "-q", "main")
+    main_ = commit("c.py", "c\n")
+    git("checkout", "-q", "pr")
+    git("merge", "-q", "--no-edit", "main")
+    m1 = git("rev-parse", "HEAD")
+    e1 = commit("b.py", "b \n")
+    own, unread = qt.own_changes({"1": (main_, [h1, m1, e1])}, repo=tmp_path)
+    assert unread == [] and own[f"1@{h1}"] == own[f"1@{m1}"] and own[f"1@{e1}"] != own[f"1@{h1}"] and None not in own.values()
 
 
 def left() -> list[dict]:
