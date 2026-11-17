@@ -97,11 +97,11 @@ def test_every_path_rows_sh_names_is_in_the_tree():
 
 
 def test_the_base_tree_links_every_directory_session_cu_includes_reach():
-    script = (ROOT / "benchmarks/remote_session/rows.sh").read_text()
+    script = (ROOT / "benchmarks/poub_session/rows.sh").read_text()
     pr = "verity/protocols/resource_accounting/memory/poub/prover"
     links = {m.group(1).replace("$PR", pr) for m in re.finditer(r'ln -s "\$TREE/([^"]+)" "\$B/base/\1"', script)}
     assert "verity/circuits" in links
-    reached, todo = set(), [ROOT / pr / "remote_session/session.cu"]
+    reached, todo = set(), [ROOT / pr / "poub_session/session.cu"]
     while todo:
         f = todo.pop()
         for name in re.findall(r'^#include "([^"]+)"', f.read_text(), re.M):
@@ -115,7 +115,7 @@ def test_the_base_tree_links_every_directory_session_cu_includes_reach():
 
 
 def test_the_build_checks_run_on_the_python_the_steps_run_on():
-    lines = (ROOT / "benchmarks/remote_session/rows.sh").read_text().splitlines()
+    lines = (ROOT / "benchmarks/poub_session/rows.sh").read_text().splitlines()
     runs = [i for i, line in enumerate(lines) if re.search(r"\$RS/\w+\.py", line) and not line.lstrip().startswith("#")]
     py = [i for i, line in enumerate(lines) if line.startswith("export PY=")]
     assert len(runs) >= 4 and len(py) == 1 and py[0] < min(runs)
