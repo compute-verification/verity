@@ -1,12 +1,12 @@
 module
 
-public import NetworkCheck.Registered
+public import NetworkVerifier.Registered
 
 /-!
 # The network attester's link, read off the registered hardware: it states its rate
 
-`NetworkCheck.Registered.registered S head link key` reads one link of a Site, the one named `link`, which a check of the
-network attester's certificates is handed (`NetworkCheck.Span`'s parameters). It runs over that link alone and no other
+`NetworkVerifier.Registered.registered S head link key` reads one link of a Site, the one named `link`, which a check of the
+network attester's certificates is handed (`NetworkVerifier.Span`'s parameters). It runs over that link alone and no other
 link of `S`. `RegisteredLinkRated` states what its acceptance says of that link's rate; `RegisteredLinkRatedHonest` and
 `RegisteredLinkRatedNontrivial` are its witnesses.
 
@@ -20,7 +20,7 @@ for a Site the registration did not accept, nor that it is the link's true line 
 
 namespace Properties.Certifier.Registered
 
-open NetworkCheck (Registered)
+open NetworkVerifier (Registered)
 
 /-- **The named link states a rate.** For every Site `S`, registered or not, and every `head`, `link` and `key`: where
 `registered` reads `link` off `S`, `S` has a link under that id (the first, where `S` gives an id twice), it joins a

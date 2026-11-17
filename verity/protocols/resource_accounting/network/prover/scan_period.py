@@ -1,4 +1,4 @@
-"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a network attester run's execution phase
+"""scan-period: `verity/certifier/v0`'s rows form (`NetworkVerifier.Period`) on a network attester run's execution phase
 and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror
 and its Lean.
 

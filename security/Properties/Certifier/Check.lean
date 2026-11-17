@@ -1,12 +1,12 @@
 module
 
-public import NetworkCheck.Check
+public import NetworkVerifier.Check
 public import Properties.Hash.Identity
 
 /-!
-# The network certificate check: what its Lean code (`NetworkCheck.Check`) does
+# The network certificate check: what its Lean code (`NetworkVerifier.Check`) does
 
-The properties of `NetworkCheck.protocol` (`verity/network-certificate/v4`, the port of `audit.py`'s `Audit`), stated
+The properties of `NetworkVerifier.protocol` (`verity/network-certificate/v4`, the port of `audit.py`'s `Audit`), stated
 against its functions as they run, each in one shape: for every input, if the function accepts (or, for a refusal,
 doesn't reject; for the undecided outcome, is undecided), its named conclusion holds. They say what `answer` and the
 check refuse, what an acceptance establishes about each execution phase and what an undecided outcome means.
@@ -20,8 +20,8 @@ restates the check. An execution phase is a direction, a link of the unit in tha
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check
 open NetworkAttester (ClockSync LogicalFrame expectedRow)
 
 namespace Properties.Certifier
