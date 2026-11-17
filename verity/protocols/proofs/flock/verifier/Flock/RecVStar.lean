@@ -1032,7 +1032,7 @@ def STACKED : String := "stacked"
 round number, in round order; and its table's committed tops by Ligerito level (`rec_vstar.tops`), each node's `b ‖ c`:
 level 0 the table's `root_B` from `Commit` (the record's `link.roots`; R, which has none there, its binding round's salted
 top), then each later salted top in the order the stream's rounds absorbed them. A sparse stream belongs to no table and has
-none. `coins`: each round's coins, in round order, as the challenger's live-coin part sampled them (check 5's coins of the sparse phases and
+none. `coins`: each round's coins, in round order, as the challenger's live-coin part drew them (check 5's coins of the sparse phases and
 of R, which the prover's record does not hold). -/
 structure InnerStream where
   name : String
@@ -1634,7 +1634,7 @@ def topLevel (value : String) : Option Nat :=
 /-- What the challenger's live-coin part's record of the inner session fixes of the circuit table at every shape, dense, holo or
 candidate 3's: Hello's one table (`table`), its level-0 top (`root`, `root_B` from `Commit`, the record's `link.roots`,
 one `b ‖ c` a node), each rep's later salted tops (`tops`, rep `x` at `x`: each top's round and its nodes' `b ‖ c`, in
-round order, `rec_vstar.tops` past level 0) and the link points it sampled after `root_B` (`points`, one array of `m` a
+round order, `rec_vstar.tops` past level 0) and the link points it drew after `root_B` (`points`, one array of `m` a
 point). -/
 structure InnerLink where
   table : String

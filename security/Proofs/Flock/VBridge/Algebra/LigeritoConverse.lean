@@ -323,7 +323,7 @@ end VStar
 -- V*'s rounds hold no round of no coins, so `RoundCoins.ofRounds` reads them as recorded.
 variable [hne : Fact (NoEmpty c)]
 
-/-- A round of the record that V* sampled `n` coins from. -/
+/-- A round of the record that V* drew `n` coins from. -/
 theorem ofRounds_round {k n : ℕ} {v : Array F128} (h : (RoundCoins.ofRounds c).round k n = .ok v) :
     c[k]! = v ∧ v.size = n := by
   simp only [RoundCoins.ofRounds, filter_noEmpty hne.out] at h
