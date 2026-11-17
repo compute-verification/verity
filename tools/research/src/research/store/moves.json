@@ -5143,6 +5143,11 @@
         "verity/protocols/resource_accounting/network/attester/certifier_key.py": "verity/protocols/resource_accounting/network/attester/attester_key.py",
         "verity/protocols/resource_accounting/network/prover/block_certifier.py": "verity/protocols/resource_accounting/network/prover/block_attester.py"
       }
+    },
+    {
+      "paths": {
+        "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_certificate.py": "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_attestation.py"
+      }
     }
   ]
 }

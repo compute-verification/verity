@@ -127,7 +127,7 @@ def test_a_run_holds_its_keys_device_state_and_a_session_starts_where_the_last_o
         assert not [p for p in result["problems"] if "start" in p]
 
 
-def test_the_check_refuses_a_deployment_whose_start_is_missing_or_is_not_the_one_certified(tmp_path):
+def test_the_check_refuses_a_deployment_whose_start_is_missing_or_is_not_the_one_attested(tmp_path):
     key = tmp_path / "key"
     ws.make_key(key, 4)
     signer = ws.ck.signer(key)
