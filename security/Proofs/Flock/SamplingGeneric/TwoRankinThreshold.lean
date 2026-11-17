@@ -2,21 +2,7 @@ module
 
 public import Proofs.Flock.SamplingGeneric.TwoRankin
 
-/-!
-# The patterns' factor is monotone in the requests' thresholds
-
-`rankinFactorPatterns` (`Definitions.Claims.SamplingTwoRankin`) reads request `r`'s class at the threshold
-`servedBits req r`. `rankinFactorPatternsAt` is the same sum at any thresholds `n : R → ℕ`, and it only grows when the
-thresholds of the requests that read in the replay block grow.
-
-* `coarsen`, `coarsen_lightOf`: a set's class at a threshold fixes its class at any lower one.
-* `lightBits_lightOf_mono`: a class's bits `min(b(U), n)` grow with the threshold.
-* `rankinFactorPatternsAt_mono`: **the factor is monotone in the thresholds**. A class `c` at the lower thresholds is
-  the union of the classes `c'` at the higher ones that coarsen to it. Its bits are at most each `c'`'s, and the
-  largest pass probability over its sets is the largest over those `c'`, at most their sum.
-* `rankinFactorPatterns_le_at`: the patterns' factor of requests each serving at most `S` bits is at most the factor
-  at the threshold `S`.
--/
+/-! The patterns' factor is monotone in the requests' thresholds. -/
 
 @[expose] public section
 
@@ -24,8 +10,6 @@ namespace Claims.Sampling
 
 open Finset
 
-/-- **The patterns' factor at thresholds `n`**: `rankinFactorPatterns` with request `r`'s class read at `n r` in place of
-`servedBits req r`. -/
 noncomputable def rankinFactorPatternsAt (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
     [DecidableEq R] (req : Fin s.prog.outs.length → R) (n : R → ℕ) (q θ : ℝ) (ρ : ℕ) : ℝ :=
   ∑ c ∈ (blocksIn Pt d.part ρ).powerset.image
@@ -35,13 +19,11 @@ noncomputable def rankinFactorPatternsAt (s : AuditStatement) (Pt : Partition) (
           fun U => (fun r => lightOf s Pt (n r) (blocksTo s.prog Pt req U r)) = c),
         d.passes Pt q (counts Pt d.part U.1) ρ ^ θ
 
-/-- A class at a higher threshold, read at the threshold `n`. -/
 def coarsen (s : AuditStatement) (Pt : Partition) (n : ℕ) : Option (Option (Finset ℕ)) → Option (Option (Finset ℕ))
   | none => none
   | some none => some none
   | some (some A) => if n ≤ bitsOf s Pt A then some none else some (some A)
 
-/-- **A set's class at a threshold fixes its class at a lower one.** -/
 theorem coarsen_lightOf (s : AuditStatement) (Pt : Partition) {n n' : ℕ} (V : Finset ℕ)
     (h : V.Nonempty → n ≤ n') : coarsen s Pt n (lightOf s Pt n' V) = lightOf s Pt n V := by
   unfold lightOf
@@ -53,7 +35,6 @@ theorem coarsen_lightOf (s : AuditStatement) (Pt : Partition) {n n' : ℕ} (V : 
       simp [h0, h1, h2, coarsen]
     · by_cases h1 : n ≤ bitsOf s Pt V <;> simp [h0, h1, h2, coarsen]
 
-/-- **A class's bits grow with the threshold.** -/
 theorem lightBits_lightOf_mono (s : AuditStatement) (Pt : Partition) {n n' : ℕ} (V : Finset ℕ)
     (h : V.Nonempty → n ≤ n') :
     lightBits s Pt n (lightOf s Pt n V) ≤ lightBits s Pt n' (lightOf s Pt n' V) := by
@@ -63,7 +44,6 @@ theorem lightBits_lightOf_mono (s : AuditStatement) (Pt : Partition) {n n' : ℕ
     simp [bitsOf]
   · exact min_le_min le_rfl (h h0)
 
-/-- **The patterns' factor is monotone in the thresholds** of the requests that read in the replay block. -/
 theorem rankinFactorPatternsAt_mono (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
     [DecidableEq R] (req : Fin s.prog.outs.length → R) {n n' : R → ℕ} {q θ : ℝ} (ρ : ℕ) (hq1 : q ≤ 1)
     (hn : ∀ r, (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty → n r ≤ n' r) :
@@ -124,7 +104,6 @@ theorem rankinFactorPatternsAt_mono (s : AuditStatement) (Pt : Partition) (d : D
           obtain ⟨U, hU, rfl⟩ := mem_image.1 hc'
           exact mem_image.2 ⟨U, hU, (hco U hU).symm⟩) fun c' => (2 : ℝ) ^ wt n' c' * g n' c'
 
-/-- **Requests serving at most `S` bits**: the patterns' factor is at most the factor at the threshold `S`. -/
 theorem rankinFactorPatterns_le_at (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
     [DecidableEq R] (req : Fin s.prog.outs.length → R) {q θ : ℝ} (ρ : ℕ) (hq1 : q ≤ 1) {S : ℕ}
     (hS : ∀ r, (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty → servedBits req r ≤ S) :

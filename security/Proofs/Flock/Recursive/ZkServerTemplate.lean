@@ -2,29 +2,13 @@ module
 
 public import Proofs.Flock.Recursive.ZkServerRun
 
-/-!
-# The ZK server sends the schedule's transcript
-
-`run_blank_tables`: a session the ZK server (`Flock.ZkServer.run`) finishes sends, but for its commit strings,
-`tmpl s s.tables`, the pinned schedule `s`'s transcript with Commit's tables in the schedule's order
-(`Schedule.tables`), the only order `step` takes, so the tables its Commit names (`namesOf`) are the schedule's
-(`namesOf_run`). Every count, name, order, stream, parent and position it sends is the schedule's, through the
-field-by-field pins beside `step`'s canonical compares (`roundSpec`, Commit's node counts and order, Finish's round
-count). With `ZkServerRun.run_of_one`, a session that finishes at one salt list, its Commit naming the tables `o`
-(`s.tables`, by `namesOf_run`), its commit strings those of 64-byte digests `D`, sends `tmpl s o` filled with `D`'s
-commit strings at every salt list of that length (`sends_of_one`).
-
-The proof reads `step` one case at a time from states equal but for their salts (`H`, `Like`), and carries `Inv` through
-`run`'s loop: what was sent, blanked, is what the state's flags say the schedule has had so far (`sofar`).
--/
+/-! A session the ZK server finishes sends the pinned schedule's transcript but for its commit strings. -/
 
 @[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.ZkServerTemplate
 
 open Flock Flock.ZkServer FlockSoundness.Discharge.Recursion.ZkServerRun
-
-/-! ## The schedule's transcript, blank -/
 
 /-- `n` blank commit strings. -/
 def blanks (n : Nat) : List ByteArray := List.replicate n ByteArray.empty
@@ -54,7 +38,6 @@ def commitT (s : Schedule) (o : List String) : Sent :=
 def tmpl (s : Schedule) (o : List String) : List Sent :=
   [.hello s.hello, commitT s o, .link s.y] ++ roundsT s s.rounds.size ++ [.finish true]
 
-/-- The tables a transcript's Commit names, in order. -/
 def namesOf : List Sent → List String
   | _ :: .commit roots :: _ => roots.map (·.1)
   | _ => []
@@ -71,12 +54,10 @@ theorem namesOf_blank (l : List Sent) : namesOf (l.map blank) = namesOf l := by
     cases m <;> simp only [List.map_cons, blank, namesOf, List.map_map]
     rfl
 
-/-- What the schedule has had so far at a state: its flags and its round count. -/
 def sofar (s : Schedule) (st : State) : List Sent :=
   (if st.hello then [.hello s.hello] else []) ++ (if st.committed then [commitT s s.tables] else []) ++
     (if st.linked then [.link s.y] else []) ++ roundsT s st.rounds ++ (if st.finished then [.finish true] else [])
 
-/-- The ZK server's invariant: what it sent, blanked, is what the schedule has had so far, and its flags come in order. -/
 structure Inv (s : Schedule) (st : State) : Prop where
   sent : st.sent.toList.map blank = sofar s st
   hello : st.committed = true → st.hello = true
@@ -84,18 +65,13 @@ structure Inv (s : Schedule) (st : State) : Prop where
   linked : 0 < st.rounds → st.linked = true
   finished : st.finished = true → st.linked = true ∧ st.rounds = s.rounds.size
 
-/-! ## One run of the ZK server's state monad -/
-
-/-- An outcome of the ZK server's state monad: a refusal, or a result `a` at a state `t` with `Q a t`. -/
 def OK {α : Type} (Q : α → State → Prop) : V (α × State) → Prop
   | .ok (a, t) => Q a t
   | .error _ => True
 
-/-- From every state `P` holds of, `m` refuses or returns at a state `Q` holds of. -/
 def H {α : Type} (P : State → Prop) (m : Fw α) (Q : α → State → Prop) : Prop :=
   ∀ st, P st → OK Q (m.run st)
 
-/-- A state that is `v` but for its salts. -/
 def Like (v t : State) : Prop := ∃ z, t = { v with salts := z }
 
 theorem like_refl (v : State) : Like v v := ⟨v.salts, rfl⟩
@@ -148,8 +124,6 @@ theorem H.ite {α : Type} {P : State → Prop} {Q : α → State → Prop} {c : 
   · rw [ite_eq_left h]; exact ha h
   · rw [ite_eq_right h]; exact hb h
 
-/-- A `do` block's `if` with a join point `b` after it, shown once for every state `J` holds of: `v`'s when the `if`'s
-branch is skipped, and the branch `a` may end in it. -/
 theorem H.ite_jp {α : Type} {v : State} {Q : α → State → Prop} {c : Prop} [Decidable c] {a b : Fw α}
     (J : State → Prop) (hb : ∀ w, J w → H (Like w) b Q) (hv : ¬c → J v)
     (ha : c → (∀ w, J w → H (Like w) b Q) → H (Like v) a Q) : H (Like v) (if c then a else b) Q :=
@@ -173,8 +147,6 @@ theorem H.send {v : State} (m : Sent) :
     H (Like v) (send m) (fun _ t => Like { v with sent := v.sent.push m } t) :=
   H.modify _ fun z => ⟨z, rfl⟩
 
-/-- A computation the ZK server's state doesn't enter (`decode`, `split`, `nodes`, `pinned`), lifted: its result is its
-value. -/
 theorem H.lift {α : Type} {P : State → Prop} {x : V α} :
     H P (liftM x : Fw α) (fun a t => x = .ok a ∧ P t) := by
   intro st hP
@@ -189,7 +161,6 @@ theorem H.salted {v : State} (row : Array Nat) : H (Like v) (salted row) (fun _ 
   | nil => exact True.intro
   | cons y rest => exact ⟨rest, rfl⟩
 
-/-- `l.mapM f` from states `v` but for their salts, where each `f a` returns `b` with `G b = F a`. -/
 theorem H.mapM {α β γ : Type} {v : State} (f : α → Fw β) (G : β → γ) (F : α → γ)
     (hf : ∀ a, H (Like v) (f a) (fun b t => G b = F a ∧ Like v t)) :
     ∀ l : List α, H (Like v) (l.mapM f) (fun bs t => bs.map G = l.map F ∧ Like v t)
@@ -202,7 +173,6 @@ theorem H.mapM {α β γ : Type} {v : State} (f : α → Fw β) (G : β → γ) 
     refine H.bind (H.mapM f G F hf l) fun bs => H.intro fun hbs => ?_
     exact H.pure fun st h => ⟨by rw [List.map_cons, List.map_cons, hb, hbs], h⟩
 
-/-- `l.mapM f` from states `v` but for their salts, where `f` leaves them so. -/
 theorem H.mapM_like {α β : Type} {v : State} (f : α → Fw β) (hf : ∀ a, H (Like v) (f a) (fun _ t => Like v t))
     (l : List α) : H (Like v) (l.mapM f) (fun _ t => Like v t) :=
   H.conseq (H.mapM f (fun _ => ()) (fun _ => ()) (fun a => H.conseq (hf a) fun _ _ h => ⟨rfl, h⟩) l)
@@ -211,7 +181,6 @@ theorem H.mapM_like {α β : Type} {v : State} (f : α → Fw β) (hf : ∀ a, H
 theorem blankTop_eq (l : List ByteArray) : blankTop l = blanks l.length := by
   simp only [blankTop, blanks, List.map_const']
 
-/-- `saltedTop`: one commit string per node of the tree top. -/
 theorem H.saltedTop {v : State} (top : ByteArray) :
     H (Like v) (saltedTop top) (fun l t => blankTop l = blanks (top.size / NODE_BYTES) ∧ Like v t) := by
   refine H.conseq (H.mapM ZkServer.salted (fun _ => ByteArray.empty) (fun _ => ByteArray.empty)
@@ -221,8 +190,6 @@ theorem H.saltedTop {v : State} (top : ByteArray) :
   have := congrArg List.length hl
   simp only [List.length_map, topRows, List.length_range] at this
   rw [blankTop_eq, this]
-
-/-! ## The invariant through `step` -/
 
 theorem Inv.unlinked {s : Schedule} {v : State} (hv : Inv s v) (h : v.linked = false) :
     v.rounds = 0 ∧ v.finished = false := by
@@ -247,7 +214,6 @@ theorem Inv.fresh {s : Schedule} {v : State} (hv : Inv s v) (h : v.hello = false
     · exact nomatch h.symm.trans (hv.hello hc)
   exact ⟨hc, hv.uncommitted hc⟩
 
-/-- A message sent, where the schedule's transcript so far grows by it, blanked. -/
 theorem Inv.sent_push {s : Schedule} {v : State} (hv : Inv s v) {t : State} {m : Sent} (ht : t.sent = v.sent.push m)
     (h : sofar s t = sofar s v ++ [blank m]) : t.sent.toList.map blank = sofar s t := by
   rw [ht, Array.toList_push, List.map_append, hv.sent, h]
@@ -447,7 +413,6 @@ theorem step_round (s : Schedule) (stream : String) (content : ByteArray) (n : N
     · exact H.throw_bind
     · exact H.ite (fun _ => H.throw_bind) fun _ => hJ v rfl
 
-/-- **`step` keeps the invariant**, from every state equal to one it holds at but for its salts. -/
 theorem step_inv (s : Schedule) (req : Req) (v : State) (hv : Inv s v) :
     H (Like v) (step s req) (fun _ t => Inv s t) := by
   cases req with
@@ -466,8 +431,6 @@ theorem stepOf_inv (s : Schedule) (b : ByteArray) (v : State) (hv : Inv s v) :
     H (Like v) (stepOf s b) (fun _ t => Inv s t) := by
   unfold stepOf
   exact H.bind H.lift fun req => H.intro fun _ => step_inv s req v hv
-
-/-! ## The loop -/
 
 theorem inv_init (s : Schedule) (salts : List ByteArray) : Inv s ({ salts } : State) where
   sent := by simp [sofar, roundsT]
@@ -489,8 +452,6 @@ theorem loop_inv (s : Schedule) (reqs salts : List ByteArray) : Inv s (loop s re
     · exact fun ht => ⟨_, _, rfl, rfl, rfl, ht⟩
   · exact ⟨_, _, rfl, rfl, rfl, hr⟩
 
-/-- **A finished session sends the schedule's transcript**: blanked, what the ZK server sent on a session it finished is
-`tmpl s s.tables`, Commit's tables in the schedule's order, the only order `step` takes them in. -/
 theorem run_blank_tables (s : Schedule) (reqs ys : List ByteArray) (h : (run s reqs ys).2 = true) :
     (run s reqs ys).1.toList.map blank = tmpl s s.tables := by
   have hI := loop_inv s reqs ys
@@ -505,22 +466,15 @@ theorem run_blank_tables (s : Schedule) (reqs ys : List ByteArray) (h : (run s r
     simp [sofar, tmpl, hI.hello hc, hc, hl, hr, hf]
   exact e
 
-/-- **A finished session's Commit names the schedule's tables, in its order**: the order is never the worker's. -/
 theorem namesOf_run (s : Schedule) (reqs ys : List ByteArray) (h : (run s reqs ys).2 = true) :
     namesOf (run s reqs ys).1.toList = s.tables := by
   rw [← namesOf_blank, run_blank_tables s reqs ys h, namesOf_tmpl]
 
-/-- `run_blank_tables` at the tables the session's Commit named, which are the schedule's (`namesOf_run`). -/
 theorem run_blank (s : Schedule) (reqs ys : List ByteArray) (h : (run s reqs ys).2 = true) :
     (run s reqs ys).1.toList.map blank = tmpl s (namesOf (run s reqs ys).1.toList) := by
   rw [namesOf_run s reqs ys h]
   exact run_blank_tables s reqs ys h
 
-/-! ## What the ZK server sends, at every salt list -/
-
-/-- **One run fixes them all, from the schedule**: if at the salts `ys₀` the ZK server finishes a session whose Commit names
-the tables `o` in order, its commit strings those of the 64-byte digests `D` under `ys₀`, then at every salt list `ys` of
-that length it finishes and sends the schedule's transcript `tmpl s o` filled with `D`'s commit strings under `ys`. -/
 theorem sends_of_one (s : Schedule) (reqs : List ByteArray) {nh : Nat} (o : List String) (D ys₀ : Fin nh → ByteArray)
     (hD : ∀ i, (D i).size = 64) (hfin : (run s reqs (List.ofFn ys₀)).2 = true)
     (ho : namesOf (run s reqs (List.ofFn ys₀)).1.toList = o)

@@ -4,42 +4,7 @@ public import Proofs.Flock.SamplingGeneric.Guarantees
 public import Proofs.Flock.SamplingGeneric.TwoFirstHitKS
 public import Proofs.Flock.SpotFlock.ConnectedClassAt
 
-/-!
-# SPOT[Flock]'s two-stage verifier at the first-hit error
-
-`Flock.SecurityProofs.SpotFirstHitTwo : Flock.Guarantees.SpotFirstHitTwo` is `CompiledTwo.ksFirstHitTwoX` at
-SPOT[Flock]'s code at the connected program (`SpotFlock.codeConnected`), at `SpotKSTwo`'s registration, interior
-roots, design, replay sample and replay limit there: what the two-stage committed form at the first-hit error
-concludes (`CompiledTwo.FirstHitTwoXAt`), at SHA-512, under the two facts of the frame `SpotKSTwo` takes
-(`SpotFlock.BuiltWired` at the code's own wiring, `SpotFlock.AddressesConnected`), at two costs that are functions of
-the prover.
-
-The form's error is a function of two costs in SHA-512 calls, a run's and a first-hit finder's, and the form takes
-them with three bounds on masses of the prover's runs and their extractions (`CompiledTwo.BconfXLe`, `OffRegXLe`,
-`OffIregLe`). The guarantee takes none of the three. Each is proved at the code from the linear expected-time bound on
-SHA-512 (`Claims.ExpectedCR`) at the one machine that would find the collision (`SpotFlock.connected_bconfX_le_at`,
-`connected_offRegX_le_cls_at`, `connected_offIreg_le_cls_at`): `B_conf,X`, and the two by-class first-hit finders,
-under the statement's roots and under the interior roots, at every number of tries a finder stops at. So the
-guarantee's only premise on SHA-512 is that bound at those three machines, and its two costs are closed expressions:
-
-* `c_R = T·(1 + e_s·N_s) + n_PU·openCalls` (`Compiled.runCost`) and
-* `c_F = T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls` (`Compiled.firstHitCost`),
-
-where `T` is the most SHA-512 calls one run of the prover makes, both parties' calls counted (`Compiled.runCalls`),
-and `N_s`, `K_s` and `K_m` are three expectations over the run's coins: the sessions of a run's sample, the classes of
-the gates the sample needs, and the classes' representatives its sessions need, session by session. A proof block
-needs the gates its reveal opens at the connected program (`SpotFlock.needsConnected`) and a gate's class is its
-key's there (`SpotFlock.clsConnected`, `SpotFlock.gateKeyConnected`).
-The statement fixes each of the four by an equation, as it fixes the verifier, so none is a hypothesis on the prover:
-no budget and no count is assumed.
-
-The guarantee's statement writes all of this out at the code, so that each premise it takes is a hypothesis of the
-statement itself and the lock's record names it: the two facts of the frame, the scope (`CompiledTwo.Scope`) and
-`Claims.ExpectedCR`. Flock's knowledge soundness is proved at the code as `SpotKSTwo` has it (`flockArgKS`), and the
-commitment's binding and the two-stage contract are `SpotFlock.connected_contract`'s. Its nontrivial witness is
-`Claims.SamplingGeneric.compilerFirstHitTwoXAt_nontrivial`; its honest instance waits on `AddressesConnected` at a
-two-stage registration, as `SpotKSTwo`'s does.
--/
+/-! SPOT[Flock]'s two-stage verifier at the first-hit error, at SHA-512 under `Claims.ExpectedCR` and the two facts of the frame `SpotKSTwo` takes, one of them (`SpotFlock.AddressesConnected`) proved nowhere. -/
 
 @[expose] public section
 

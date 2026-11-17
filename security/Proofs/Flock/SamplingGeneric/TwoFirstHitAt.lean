@@ -9,40 +9,7 @@ import Proofs.Flock.Claims.Sampling.Bext
 import Proofs.Flock.Claims.Sampling.Cost
 import Proofs.Flock.Claims.Sampling.Extract
 
-/-!
-# The two-stage first-hit bound at a budget a run, as one closed right-hand side
-
-`eventTwoX_le_firstHit_at` bounds the event of `KSRegTwoX` by `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X]` and
-`4·E[c + Σ_{g ∈ sample} c_g]/2^256`, where `c` is a run's SHA-512 calls with every session of its sample extracted
-(`Compiled.callsAt`) and `c_g` its calls with only the sessions that have a proof block needing gate `g` extracted
-(`Compiled.callsBy`). This file bounds that expectation by a closed expression, `Compiled.firstHitCost`, where each run
-calls SHA-512 at most `T` times, both parties':
-
-`E[c + Σ_{g ∈ sample} c_g] ≤ T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls`.
-
-* `N_s` bounds the expected number of sessions in a run's sample (`Compiled.firstSlots`; `n_sess` is one such bound,
-  `ex_firstSlots_le`), `K_s` the expected number of gates the sample needs (`Compiled.sampleNeeds`), and `K_m` the
-  expected number of gates its sessions need, session by session (`Compiled.sessCount`); the three are hypotheses on
-  the coins alone.
-* A run's calls are at most `T`, its extractions' own calls and `T` for each of their reruns (`callsAt_le_at`,
-  `callsBy_le_at`, from `Sampling.calls_le_own`); the own calls are at most `n_PU·openCalls` (`runExt_own_le`).
-* At the gates of the sample, a session's reruns count once for each gate its proof blocks need
-  (`sum_runExtAt_runs_le`). A session's expected reruns are at most `e_s` over its own rounds, on which the sample
-  does not depend (`RunsFixed.fixed`), so a weight of the sample stays outside the expectation
-  (`slot_exp_le_weighted`, `ex_weighted_runs_le`): the gates the session needs at a further run, and `1` at the first
-  run.
-
-The gates a finder pays for at a further run need not be every gate the sample needs: `ex_calls_le_at_in` is the same
-bound at any set of gates of the sample, with `K_s` the expected size of the set and `K_m` the expected number of its
-gates the sample's sessions need, session by session (`Compiled.sessCountIn`, `sum_runExtAt_runs_le_in`), and
-`ex_calls_le_at_cls` reads it at the representatives of the classes of the gates the sample needs, the set a by-class
-first-hit finder pays for.
-
-`CompiledTwo.eventTwoX_le_at` is the event's bound at that right-hand side, and `eventTwoX_le_at_cap` the same at one
-cap on each finder's waits, with the caps' terms. `B_conf,X`'s cost is its two runs' calls, so under the linear
-expected-time bound at it `Pr[B_conf,X] ≤ 2·(T·(1 + e_s·N_s) + n_PU·openCalls)/2^256` (`Compiled.runCost`,
-`Compiled.bconfX_le_at`), and `eventTwoX_le_at_budget` reads the event's bound with that term at the budget too.
--/
+/-! The two-stage first-hit bound at a budget a run, as one closed right-hand side (`Compiled.firstHitCost`). -/
 
 @[expose] public section
 
@@ -50,9 +17,6 @@ namespace Claims.SamplingGeneric
 
 open Claims Claims.Sampling
 
-/-! ## Sums over the parts of a list that filters keep -/
-
-/-- Over the part of a list a filter keeps, a sum is at most the sum over the list. -/
 theorem sum_map_filter_le {β : Type} (keep : β → Bool) (F : β → ℕ) (l : List β) :
     ((l.filter keep).map F).sum ≤ (l.map F).sum := by
   induction l with
@@ -64,8 +28,6 @@ theorem sum_map_filter_le {β : Type} (keep : β → Bool) (F : β → ℕ) (l :
     · rw [List.filter_cons_of_neg hb, List.map_cons, List.sum_cons]
       exact ih.trans (Nat.le_add_left _ _)
 
-/-- **Sums over the parts of a list that a set of filters keeps**: summed over the filters, they weigh each element
-of the list once for each filter that keeps it. -/
 theorem sum_filter_map_card {G β : Type} (S : Finset G) (keep : G → β → Bool) (F : β → ℕ) (l : List β) :
     ∑ g ∈ S, ((l.filter (keep g)).map F).sum = (l.map fun b => (S.filter fun g => keep g b).card * F b).sum := by
   induction l with
@@ -81,15 +43,12 @@ theorem sum_filter_map_card {G β : Type} (S : Finset G) (keep : G → β → Bo
     rw [Finset.sum_add_distrib, ih, List.map_cons, List.sum_cons, ← Finset.sum_filter, Finset.sum_const,
       smul_eq_mul]
 
-/-- An average over a tape, coins and further coins of a function of the coins is the average over the coins. -/
 theorem Ex_coins {Ω R C : Type} [Fintype Ω] [Nonempty Ω] [Fintype R] [Fintype C] [Nonempty C] (f : R → ℝ) :
     Ex (fun q : Ω × (R × C) => f q.2.1) = Ex f := by
   rw [Verity.FirstHit.ex_tape fun (_ : Ω) (rc : R × C) => f rc.1, Ex_const,
     Verity.FirstHit.ex_tape fun (r : R) (_ : C) => f r]
   exact congrArg Ex (funext fun r => Ex_const (f r))
 
-/-- Two independent samples: the average of a function at the first plus the function at the second is twice the
-function's average. -/
 theorem Ex_two {β : Type} [Fintype β] [Nonempty β] (F : β → ℝ) :
     Ex (fun q : β × β => F q.1 + F q.2) = 2 * Ex F := by
   have h1 : Ex (fun q : β × β => F q.1) = Ex F :=
@@ -102,14 +61,10 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## The counts the bound reads -/
-
 /-- **The gates a sample needs**: the program's gates that some proof block of the sample `l` needs. -/
 def sampleNeeds (L : Compiled Coin A) (x : Msg) (needs : ℕ → Finset ℕ) (l : List ℕ) : Finset (Fin (L.nG x)) :=
   Finset.univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ l, g.val ∈ needs u)
 
-/-- **The gates a session needs**: the program's gates that some proof block of slot `i`'s session in the sample `l`
-needs. -/
 def sessNeeds (L : Compiled Coin A) (x : Msg) (needs : ℕ → Finset ℕ) (l : List ℕ) (i : ℕ) : Finset (Fin (L.nG x)) :=
   Finset.univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.sessBlocks x l i, g.val ∈ needs u)
 
@@ -117,8 +72,7 @@ def sessNeeds (L : Compiled Coin A) (x : Msg) (needs : ℕ → Finset ℕ) (l : 
 def firstSlots (L : Compiled Coin A) (x : Msg) (l : List ℕ) : Finset (Fin (L.nPU x)) :=
   Finset.univ.filter fun i : Fin (L.nPU x) => (L.sessSlots x l i.val).head? = some i.val
 
-/-- **The gates a sample's sessions need, session by session**: over the sessions of the sample `l`, each at its
-first slot, the number of gates the session needs (`sessNeeds`). A gate two sessions need counts twice. -/
+/-- A gate two sessions need counts twice. -/
 def sessCount (L : Compiled Coin A) (x : Msg) (needs : ℕ → Finset ℕ) (l : List ℕ) : ℕ :=
   ∑ i ∈ L.firstSlots x l, (L.sessNeeds x needs l i.val).card
 
@@ -142,9 +96,6 @@ session by session. -/
 noncomputable def firstHitCost (L : Compiled Coin A) (x : Msg) (T : ℕ) (Ns Ks Km : ℝ) : ℝ :=
   T * (1 + L.es x * Ns + Ks + L.es x * Km) + (1 + Ks) * ((L.nPU x : ℝ) * L.openCalls x)
 
-/-! ## A run's calls at a budget -/
-
-/-- At a gate, a run's extractions call `H` themselves at most as often as its extractions at every gate. -/
 theorem runExtAt_own_le (H : Msg → Msg) (L : Compiled Coin A) (x : Msg)
     (run' : (Fin (L.V.k x) → Coin) → Transcript) (s : AuditStatement) (needs : ℕ → Finset ℕ) (g : ℕ)
     (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) :
@@ -153,9 +104,6 @@ theorem runExtAt_own_le (H : Msg → Msg) (L : Compiled Coin A) (x : Msg)
   rw [ownLog_flatMapRP, ownLog_flatMapRP]
   exact sum_map_filter_le _ _ _
 
-/-- **A run's calls at a budget**: where each run calls `H` at most `T` times, both parties', a run's calls with
-every session of its sample extracted are at most `T`, its extractions' own calls and `T` for each of their
-reruns. -/
 theorem callsAt_le_at (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement)
     (T : ℕ) (ω : Ω) (hT : ∀ r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T)
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
@@ -167,8 +115,6 @@ theorem callsAt_le_at (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : P
   unfold callsAt
   omega
 
-/-- **A run's calls at one gate, at a budget**: at most `T`, its extractions' own calls at every gate, and `T` for
-each rerun of its extractions at the gate. -/
 theorem callsBy_le_at (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement)
     (needs : ℕ → Finset ℕ) (T : ℕ) (ω : Ω)
     (hT : ∀ r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T) (g : ℕ)
@@ -182,11 +128,6 @@ theorem callsBy_le_at (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : P
   unfold callsBy
   omega
 
-/-! ## The reruns at the gates of a set -/
-
-/-- **The reruns of a run's extractions at the gates of a set, summed**: each slot's reruns (`slotRuns`), once for
-each gate of the set that its session's proof blocks need, so at most as often as its session needs gates
-(`sessNeeds`). -/
 theorem sum_runExtAt_runs_le (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Transcript) (needs : ℕ → Finset ℕ) (S : Finset (Fin (L.nG x)))
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
@@ -236,9 +177,6 @@ theorem sum_runExtAt_runs_le (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (
       · exact Nat.cast_nonneg _
       · exact le_rfl
 
-/-- **The reruns of a run's extractions at the gates of a set, summed, counted in the set**: each slot's reruns
-(`slotRuns`), once for each gate of the set that its session's proof blocks need. `sum_runExtAt_runs_le` counts every
-gate the session needs, in the set or not. -/
 theorem sum_runExtAt_runs_le_in (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Transcript) (needs : ℕ → Finset ℕ) (S : Finset (Fin (L.nG x)))
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
@@ -289,13 +227,8 @@ theorem sum_runExtAt_runs_le_in (H : Msg → Msg) (L : Compiled Coin A) (x : Msg
       · exact Nat.cast_nonneg _
       · exact le_rfl
 
-/-! ## A session's expected reruns, weighted by the sample -/
-
 variable {H : Msg → Msg} {L : Compiled Coin A}
 
-/-- **Slot `i`'s expected reruns, weighted by the sample**: `slot_exp_le` with a weight `w` of the sample, on both
-sides, in place of acceptance. Resampling the slot's session's rounds keeps the sample (`RunsFixed.fixed`), so the
-weight is the same at every resampled run and stays outside the session's expectation, which is at most `e_s`. -/
 theorem slot_exp_le_weighted (hS : L.CostContract H) {x : Msg} (s : AuditStatement) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (i : Fin (L.nPU x)) (w : List ℕ → ℝ) (hw : ∀ l, 0 ≤ w l) (r : Fin (L.V.k x) → Coin) :
     Ex (fun d : Fin (L.V.k x) → Coin => w (L.checked x (forkOn (L.secondStage x) r d)) *
@@ -375,10 +308,6 @@ theorem slot_exp_le_weighted (hS : L.CostContract H) {x : Msg} (s : AuditStateme
       _ = 1 + A.waits (L.sh x u) * A.k (L.sh x u) := by rw [hshape]
       _ ≤ L.es x := le_maxBelow (fun v => 1 + (A.waits (L.sh x v) : ℝ) * A.k (L.sh x v)) u.isLt
 
-/-- **Expected reruns of a run's extractions, each slot weighted by the sample**: over the run's coins and the
-extractor's, at most `e_s` times the expected weight of the sample's first slots (`slot_exp_le_weighted`, the second
-stage's coins fresh at uniform coins, `Ex_forkOn`). At the weight `1` it bounds a run's expected reruns by `e_s`
-times the expected number of its sample's sessions. -/
 theorem ex_weighted_runs_le (hS : L.CostContract H) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) (s : AuditStatement)
     (w : Fin (L.nPU x) → List ℕ → ℝ) (hw : ∀ i l, 0 ≤ w i l) :
     Ex (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
@@ -429,16 +358,10 @@ theorem ex_weighted_runs_le (hS : L.CostContract H) {x : Msg} {Ω : Type} (P : P
         · exact mul_zero _
     _ = _ := Ex_mul_left _ _
 
-/-! ## The bound's expectation in closed form -/
-
-/-- **A sample has at most `n_sess` sessions in expectation**, as on every coin (`card_first_le`): `n_sess` is one
-`N_s` the bound may read. -/
 theorem ex_firstSlots_le (hS : L.CostContract H) (x : Msg) :
     Ex (fun r : Fin (L.V.k x) → Coin => ((L.firstSlots x (L.checked x r)).card : ℝ)) ≤ L.nSess x :=
   (Ex_mono fun r => Nat.cast_le.2 (card_first_le hS.keys x r)).trans_eq (Ex_const _)
 
-/-- **Expected reruns of a run's extractions**: over the tape, the run's coins and the extractor's, at most `e_s`
-times the expected number of its sample's sessions (`ex_weighted_runs_le` at the weight `1`). -/
 theorem ex_runExt_runs_le (hS : L.CostContract H) {x : Msg} (s : AuditStatement) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) {Ns : ℝ}
     (hNs : Ex (fun r : Fin (L.V.k x) → Coin => ((L.firstSlots x (L.checked x r)).card : ℝ)) ≤ Ns) :
@@ -458,8 +381,6 @@ theorem ex_runExt_runs_le (hS : L.CostContract H) {x : Msg} (s : AuditStatement)
     unfold firstSlots
     rw [Finset.sum_const, nsmul_eq_mul, mul_one]
 
-/-- **A run's expected calls at a budget `T`**, with every session of its sample extracted: at most `runCost`,
-`T·(1 + e_s·N_s) + n_PU·openCalls` (`callsAt_le_at`, `runExt_own_le`, `ex_runExt_runs_le`). -/
 theorem ex_callsAt_le_at (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (T : ℕ)
     (hT : ∀ ω r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T) {Ns : ℝ}
@@ -487,8 +408,6 @@ theorem ex_callsAt_le_at (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : 
   unfold runCost
   ring
 
-/-- **`B_conf,X`'s expected cost at a budget `T` a run**: its two runs' calls, each run's at most `runCost` in
-expectation (`ex_callsAt_le_at`), so at most `2·(T·(1 + e_s·N_s) + n_PU·openCalls)`. -/
 theorem ex_bconfX_cost_le (hS : L.CostContract H) (hopen : L.OpenCallsLe H) (x : Msg) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (T : ℕ)
     (hT : ∀ ω r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T) {Ns : ℝ}
@@ -516,8 +435,6 @@ theorem ex_bconfX_cost_le (hS : L.CostContract H) (hopen : L.OpenCallsLe H) (x :
         (L.callsAt H P x s q'.1 q'.2.1 q'.2.2 : ℝ)).trans_le
           (mul_le_mul_of_nonneg_left (ex_callsAt_le_at hS hopen hs P T hT hNs) zero_le_two)
 
-/-- **`B_conf,X` at a budget `T` a run**: under the linear expected-time bound at `B_conf,X`, it finds a collision
-with probability at most `2·(T·(1 + e_s·N_s) + n_PU·openCalls)/2^256` (`ex_bconfX_cost_le`). -/
 theorem bconfX_le_at (hS : L.CostContract H) (hopen : L.OpenCallsLe H) (x : Msg) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (T : ℕ)
     (hT : ∀ ω r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T) {Ns : ℝ}
@@ -527,12 +444,6 @@ theorem bconfX_le_at (hS : L.CostContract H) (hopen : L.OpenCallsLe H) (x : Msg)
   unfold ExpectedCR at hB
   exact hB.trans (div_le_div_of_nonneg_right (ex_bconfX_cost_le hS hopen x P T hT hNs) (by positivity))
 
-/-- **The first-hit bound's expected calls, at a budget `T` a run, in closed form.** Where each run calls `H` at most
-`T` times, both parties', the expectation `eventTwoX_le_firstHit_at` reads, of a run's calls with every session
-extracted and, for each gate its sample needs, its calls with only the sessions needing the gate extracted, is at
-most `firstHitCost`: `T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls`, at any `N_s` at least the
-expected number of sessions in a run's sample, any `K_s` at least the expected number of gates the sample needs and
-any `K_m` at least the expected number its sessions need, session by session. -/
 theorem ex_calls_le_at (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ) (T : ℕ)
     (hT : ∀ ω r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T) {Ns Ks Km : ℝ}
@@ -612,12 +523,6 @@ theorem ex_calls_le_at (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Ms
   unfold firstHitCost
   ring
 
-/-- **The first-hit bound's expected calls at any set of gates of the sample, at a budget `T` a run, in closed
-form.** `ex_calls_le_at` with the gates a finder pays for at a further run a set `G` of the run's sample, where that
-lemma has every gate the sample needs: the expectation of a run's calls with every session extracted and, for each
-gate of `G`, its calls with only the sessions needing the gate extracted, is at most `firstHitCost` at any `N_s` at
-least the expected number of sessions in a run's sample, any `K_s` at least the expected number of gates in `G` and
-any `K_m` at least the expected number of them its sessions need, session by session (`sessCountIn`). -/
 theorem ex_calls_le_at_in (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
     (G : List ℕ → Finset (Fin (L.nG x))) (T : ℕ)
@@ -703,10 +608,6 @@ theorem ex_calls_le_at_in (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x :
   unfold firstHitCost
   ring
 
-/-- **The first-hit bound's expected calls by class of gates, at a budget `T` a run, in closed form**:
-`ex_calls_le_at_in` at the representatives of the classes of the gates a run's sample needs, the set a by-class
-first-hit finder pays for at a further run. `K_s` is at least the expected number of classes of the gates the sample
-needs, and `K_m` at least the expected number of their representatives its sessions need, session by session. -/
 theorem ex_calls_le_at_cls (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
     (cls : Fin (L.nG x) → Fin (L.nG x)) (T : ℕ)
@@ -729,17 +630,6 @@ namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The event of `KSRegTwoX` at a budget `T` a run, with one closed right-hand side, at one cap on each finder's
-waits.** On a statement in scope, where a reveal for proof block `u` opens only gates of `needs u` and each run calls
-`H` at most `T` times, both parties', an accepted run samples a proof block of `FregTwoX` with probability at most
-
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls)/2^256`
-`+ N/(KX + 1) + N/(KI + 1)`,
-
-under the linear expected-time bound at the two by-position finders of the caps `KX` and `KI`: `N_s` at least the
-expected number of sessions in a run's sample, `K_s` at least the expected number of gates the sample needs, `K_m`
-at least the expected number its sessions need, session by session, `N` the program's gates
-(`eventTwoX_le_firstHit_at_cap`, `Compiled.ex_calls_le_at`). -/
 theorem eventTwoX_le_at_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
     (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
@@ -763,15 +653,6 @@ theorem eventTwoX_le_at_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.K
     (by positivity : (0 : ℝ) ≤ 2 ^ (256 : ℝ))
   exact h.trans (add_le_add (add_le_add (le_refl _) hdiv) (le_refl _))
 
-/-- **The event of `KSRegTwoX` at a budget `T` a run, with one closed right-hand side.** On a statement in scope,
-where a reveal for proof block `u` opens only gates of `needs u` and each run calls `H` at most `T` times, both
-parties', an accepted run samples a proof block of `FregTwoX` with probability at most
-
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls)/2^256`,
-
-under the linear expected-time bound at the two by-position finders of every cap: `N_s` at least the expected number
-of sessions in a run's sample, `K_s` at least the expected number of gates the sample needs, `K_m` at least the
-expected number its sessions need, session by session (`eventTwoX_le_firstHit_at`, `Compiled.ex_calls_le_at`). -/
 theorem eventTwoX_le_at {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
     (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
@@ -794,13 +675,6 @@ theorem eventTwoX_le_at {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (by positivity : (0 : ℝ) ≤ 2 ^ (256 : ℝ))
   exact h.trans (add_le_add (le_refl _) hdiv)
 
-/-- **The event of `KSRegTwoX` at a budget `T` a run, `B_conf,X` at the budget too.** `eventTwoX_le_at` with
-`Pr[B_conf,X]` read at the budget (`Compiled.bconfX_le_at`), under the linear expected-time bound at `B_conf,X` and
-at the two by-position finders of every cap: an accepted run samples a proof block of `FregTwoX` with probability at
-most
-
-`κ_s + √(k·γ_s·Pr[B]) + (2·(T·(1 + e_s·N_s) + n_PU·openCalls) + 4·(T·(1 + e_s·N_s + K_s + e_s·K_m)`
-`+ (1 + K_s)·n_PU·openCalls))/2^256`. -/
 theorem eventTwoX_le_at_budget {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
     (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)

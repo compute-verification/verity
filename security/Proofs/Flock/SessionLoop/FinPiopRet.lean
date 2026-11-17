@@ -47,21 +47,7 @@ import Proofs.Flock.SessionLoop.FinRepErasedAt
 import Proofs.Flock.SessionLoop.FinRepXs
 import Proofs.Flock.SessionLoop.FinRounds
 
-/-!
-# The views' cut PIOP returns where the ZK server's rep did
-
-The cut PIOP returns on its coins alone (`Masked.piopCut_of_repFwC`), so where the session's rep on the loop's table
-and request returned (`RepAt`, as `finRepCut` runs it at the opened coins), the cut PIOP from any source, layout, cap,
-root and domain returns from the rep's base, at table `j`'s setup, the views' extra claims, the earlier reps' points
-and the mask slot's words. No premise on the views' masked values, and none on the rows.
-
-**`Loop.piopCut_views_ret`**: that return. At the views' source, `flat cms[j]!.cap`, `ic.root` and the session's
-domain it is `FinPiop`'s first conjunct and the `hpiop` that `swSrcE_hmk_cut` and `swSrcE_l0_live` take.
-
-**`Loop.finPiop`**: `FinPiop` itself, its cap and pads-root bounds from the `--zk` schedule (`commit0Cut_cap_lt`) and
-the pads tree's size (`padsTreeCut_root_go`). **`Loop.finRepErased_of_fc`**: `finRepErased_of_cut` without it.
-**`Loop.swSrcE_l0_views`**: `swSrcE_l0_live` with no PIOP premise, which reads no rows.
--/
+/-! The views' cut PIOP returns where the ZK server's rep did, with no premise on the views' masked values or the rows. -/
 
 @[expose] public section
 
@@ -71,7 +57,6 @@ open _root_.Flock
 
 variable {wideLeaf : Bool}
 
-/-- The `--zk` schedule's level 0 caps strictly below its depth: its tree hashes at least once. -/
 theorem JsonRT.zkSchedule_cap0_lt {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : _root_.Flock.Schedule × ℕ}
     (h : _root_.Flock.Zk.schedule wideLeaf m = .ok v) :
     (v.1.levels.getD 0 default).cap < (v.1.levels.getD 0 default).d := by
@@ -83,8 +68,6 @@ theorem JsonRT.zkSchedule_cap0_lt {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v :
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at this
   exact this
 
-/-- **Level 0's cap from a source is under `2^64` bytes**: through SHA-512 under `hm96-sha512/v1`, at a level whose
-tree hashes at least once and that caps at most `32`, its cap is `2^cap` digests. -/
 theorem commit0Cut_cap_lt (lv : Level) (src : TabSrc) (hc : lv.cap < lv.d) (h32 : lv.cap ≤ 32) :
     ∃ cm, (commit0Cut (Hashes.ofSha512 Sha512.hash : Hashes V) MerkleScheme.hm96Sha512 lv src : V Commit) = .ok cm ∧
       (flat cm.cap).size < 2 ^ 64 := by
@@ -105,8 +88,6 @@ theorem commit0Cut_cap_lt (lv : Level) (src : TabSrc) (hc : lv.cap < lv.d) (h32 
   calc 64 * 2 ^ lv.cap ≤ 64 * 2 ^ 32 := Nat.mul_le_mul_left _ (Nat.pow_le_pow_right (by norm_num) h32)
     _ < 2 ^ 64 := by norm_num
 
-/-- **A pads tree's root is under `2^64` bytes** through SHA-512, where the tree hashes at least once: it is a digest
-of its last layer, or empty. -/
 theorem padsTreeCut_root (n : ℕ) (src : RepSrc) (hn : 1 ≤ Nat.log2 n) :
     ∃ ic, (padsTreeCut (Hashes.ofSha512 Sha512.hash : Hashes V) n src : V InnerCommit) = .ok ic ∧
       ic.root.size < 2 ^ 64 := by
@@ -136,7 +117,6 @@ theorem padsTreeCut_root (n : ℕ) (src : RepSrc) (hn : 1 ≤ Nat.log2 n) :
   · rw [getElem!_neg C 0 hc]
     decide
 
-/-- **A rep's pads root through the cut's hashes is under `2^64` bytes**, at a tree of at least two leaves. -/
 theorem padsTreeCut_root_go {N : ℕ} {src : RepSrc} {ic : InnerCommit} (hN : 2 ≤ N)
     (h : ∀ l, (padsTreeCut (Hashes.ofSha512 Sha512.hash : Hashes PS) N src).go l = (.ok ic, l)) :
     ic.root.size < 2 ^ 64 := by
@@ -146,7 +126,6 @@ theorem padsTreeCut_root_go {N : ℕ} {src : RepSrc} {ic : InnerCommit} (hN : 2 
   rw [Except.ok.inj ((Prod.mk.inj hv).1.symm.trans h₀)]
   exact hr₀
 
-/-- A pads tree's leaf count, `2^3` times a power of two, is at least two. -/
 theorem two_le_padsN (P : ℕ) : 2 ≤ P.nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE := by
   have hP : 0 < P.nextPowerOfTwo := Nat.pos_of_isPowerOfTwo (Nat.isPowerOfTwo_nextPowerOfTwo _)
   have h8 : 2 ^ Zk.INNER_LOG_INV_RATE = 8 := by
@@ -172,10 +151,6 @@ variable (L₀ : LeanRelease Flock.Wit Tp)
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 set_option maxHeartbeats 1000000 in
-/-- **The views' cut PIOP returns**: in the masked scope, at a witness in the relation, where the session's rep on the
-loop's table and request at table `j`'s rep `r` returned (`RepAt`), the cut PIOP at table `j`'s setup, answered by the
-opened coins, from any source, layout, cap, root and domain, at the views' extra claims, the earlier reps' points and
-the mask slot's words, returns from the rep's base. -/
 theorem piopCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
@@ -234,8 +209,6 @@ theorem piopCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_
   exact ⟨res, t₃, l₃, h⟩
 
 set_option maxHeartbeats 1000000 in
-/-- **Level 0's values at the views' source, with no PIOP premise**: `swSrcE_l0_live` at `piopCut_views_ret`'s return
-from the views' source, `flat cms[j]!.cap`, `ic.root` and the session's domain. -/
 theorem swSrcE_l0_views (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
@@ -297,9 +270,6 @@ theorem swSrcE_l0_views (vs : finS.SwVals)
     hpiop hlo hhi
 
 set_option maxHeartbeats 1000000 in
-/-- **`FinPiop` holds**: its return is `piopCut_views_ret` at the views' source, `flat cms[j]!.cap`, `ic.root` and the
-session's domain; level 0's cap is `2^cap` digests at a `--zk` schedule that caps below its depth and at most `32`
-(`commit0Cut_cap_lt`), and the pads root is a digest of a tree of at least two leaves (`padsTreeCut_root_go`). -/
 theorem finPiop (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x) :
@@ -356,7 +326,6 @@ theorem finPiop (vs : finS.SwVals)
   exact hlt
 
 set_option maxHeartbeats 1000000 in
-/-- **`FinRepErased` with no PIOP premise**: `finRepErased_of_cut` at `finPiop`, leaving the rows and `FinFc`. -/
 theorem finRepErased_of_fc (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)

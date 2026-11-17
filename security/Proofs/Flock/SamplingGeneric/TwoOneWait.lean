@@ -11,33 +11,7 @@ import Proofs.Flock.Claims.Sampling.Extract
 import Proofs.Flock.SamplingGeneric.Assemble
 import Proofs.Flock.Soundness.Rewinding
 
-/-!
-# The two-stage event against the one-wait extraction's binding terms
-
-`TwoReg.lean` bounds the event of the committed form, an accepted run that samples a proof block incorrect at a
-boundary trace and its replay block's committed interior, by the sessions' bound plus three binding terms of the run's
-extractions: they disagree with themselves, open a gate off the boundary trace, or open one off a committed interior
-(`regTwo_split`). Each binding term is paid for by a finder that reruns the extraction, so its cost is the
-extraction's, and the extraction of a proof system whose extractor waits for `k` accepting runs costs `k` waits.
-
-Here the binding terms are those of the compiled verifier over the one-wait proof system (`CompiledTwo.oneWait`),
-whose extraction is one wait, at twice their probability:
-
-* `Compiled.pr_found_le_at`: `SessionFinds` averaged over the tape, at a selection and a property that read the run's
-  coins off the second stage only (`pr_unfound_le_at`'s form).
-* `Compiled.sessKept`, `Compiled.OffAt`: what a session's witness reveals at the session's proof blocks that passes
-  its opening check, and the witness being off a boundary trace and interiors there: two of those openings disagree,
-  or one opens a gate of the program off the trace, or off its replay block's interior.
-* `regTwo_found_split`: **the deterministic half at the session's own witness**. At an accepted run that samples a
-  proof block incorrect at a boundary trace and interiors, the block's session is not found at its first slot's
-  coins, or is found with a witness that is off them (`regTwo_split`'s proof, the values read off the one witness).
-* `off_of_foundWith`: a session found at its first slot's coins with a witness that is off a boundary trace and
-  interiors puts one of the three binding terms in the run's extractions, which keep what the witness reveals.
-* `eventTwo_oneWait_le_of_off`: **the event's bound from bounds on the one-wait extraction's binding terms**,
-  `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(b_I + b_B + b_N)`: the sessions' bound where no witness is found, and
-  `SessionFinds` where one is found off the traces, the property a function of the run's coins and the witness.
-  The interiors are the one-wait extraction's committed ones, which read no second-stage coin.
--/
+/-! The two-stage event bounded by the binding terms of the one-wait extraction, at twice their probability. -/
 
 @[expose] public section
 
@@ -51,13 +25,6 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## The sessions' bound on what is found, averaged over the tape -/
-
-/-- **The sessions' bound on what the extractions find, at a selection and a property that read the first stage's
-coins**, averaged over the tape: the run accepts and the proof block at the picked slot is found, at the slot's
-coins, with a witness with the property with probability at most twice that at the one-wait proof system, plus
-`2·κ_s + √(k(x)·γ_s·Pr[B])`, for a selection that reads the run's coins off the second stage only
-(`pr_unfound_le_at`'s form). -/
 theorem pr_found_le_at (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (β : Ω → (Fin (L.V.k x) → Coin) → ℝ) (hβ0 : ∀ ω r, 0 ≤ β ω r)
     (hβ : Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x)
@@ -132,11 +99,6 @@ theorem pr_found_le_at (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : T
     exact mul_le_mul_of_nonneg_left hβ hγ0
   linarith
 
-/-! ## A session's witness, off a boundary trace and interiors -/
-
-/-- **What a session's witness keeps**: the openings the witness `w` reveals, at the proof blocks of slot `i₀`'s
-session in the sample `l`, that pass their opening check. A session's extraction that finds `w` returns them
-(`sessExt`). -/
 def sessKept (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (l : List ℕ) (i₀ : ℕ) (v : Seen)
     (w : A.W) : List (List Msg × Opening Bool) :=
   (L.sessBlocks x l i₀).flatMap fun u' => (L.reveal s u' v w).filter fun q => L.commit.Opens H q.1 q.2
@@ -148,10 +110,6 @@ theorem mem_sessKept {H : Msg → Msg} {L : Compiled Coin A} {x : Msg} {s : Audi
       ∃ u' ∈ L.sessBlocks x l i₀, q ∈ L.reveal s u' v w ∧ L.commit.Opens H q.1 q.2 = true := by
   simp only [sessKept, List.mem_flatMap, List.mem_filter]
 
-/-- **A session's witness is off a boundary trace `tr` and interiors `itr`**, `itr ρ` replay block `ρ`'s: among what
-the witness keeps (`sessKept`), two openings under one roots at one position differ, or one under the statement's
-roots opens a gate of the program off `tr`, or one under the interior roots of the replay block of `Pρ` that holds
-its gate, a gate of the program, opens it off that block's `itr`. -/
 def OffAt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (Pρ : Partition)
     (tr : ℕ → Option Bool) (itr : ℕ → ℕ → Bool) (l : List ℕ) (i₀ : ℕ) (v : Seen) (w : A.W) : Prop :=
   (∃ q ∈ L.sessKept H x s l i₀ v w, ∃ q' ∈ L.sessKept H x s l i₀ v w,
@@ -166,18 +124,7 @@ namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## The deterministic half, at the session's own witness -/
-
 set_option synthInstance.maxSize 1024 in
-/-- **The deterministic half at the session's own witness**: at an accepted run whose sample holds, at slot `i`, a
-proof block `u` incorrect at the boundary trace `tr` and the interiors `itr` (`incorrectAllAt`), the session of `i` is not
-found at its first slot `i₀`'s coins, or is found there with a witness that is off `tr` and `itr` (`Compiled.OffAt`).
-Otherwise the boundary values that are `tr` on the program's gates and what the witness keeps elsewhere, and the
-interior values that are `u`'s replay block's `itr` on its gates and what the witness keeps elsewhere, agree with
-every opening the witness reveals at `u` that passes, so they make `u` correct (`Sessions.opens`); and `tr` and `itr`
-agree with them where `u`'s correctness reads (`correct_refIn_congr`), so `u` is correct at them, which
-`u ∈ incorrectAllAt` denies. It is `regTwo_split` with the values read off the session's one witness in place of the
-run's extractions, so the interiors are the reader's too. -/
 theorem regTwo_found_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω)
@@ -253,12 +200,6 @@ theorem regTwo_found_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Se
   exact hnot ⟨b, rb, hb, hrb, (correct_refIn_congr hin.1 hin.2.1 hb rb (fun g hg => by rw [hV, ite_eq_left hg])
     fun g hg hgr => by rw [hI, ite_eq_left ⟨hg, hgr⟩]).1 hc'⟩
 
-/-- **A witness off the traces puts a binding term in the run's extractions**: at a run whose slot `i₀`, its
-session's first, holds proof block `u₀`, found at the slot's coins with a witness that is off a boundary trace `tr`
-and interiors `itr`, the run's extractions disagree with themselves, or open a gate of the program off `tr`, or open
-one, under the interior roots of the replay block that holds it, off that block's `itr`. The run's extractions keep
-what the witness keeps (`sessExt_mem`, `mem_runExt`), and where they agree with themselves they open what each kept
-opening does (`val_assemble`, `iopensAt_of_mem`). -/
 theorem off_of_foundWith {H : Msg → Msg} {L : CompiledTwo Coin A} {x : Msg} {s : AuditStatement}
     (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x)
     (Pρ : Partition) (tr : ℕ → Option Bool) (itr : ℕ → ℕ → Bool) {i₀ u₀ : Fin (L.nPU x)}
@@ -290,12 +231,7 @@ theorem off_of_foundWith {H : Msg → Msg} {L : CompiledTwo Coin A} {x : Msg} {s
   · exact Or.inr (Or.inr ⟨q.2.pos, hg, ρ, hρ, q.2.val,
       iopensAt_of_mem hs hagree (hsub q hq).1 h1 (hsub q hq).2, hne⟩)
 
-/-! ## The event -/
-
 set_option synthInstance.maxSize 1024 in
-/-- **The event at a tape, at a boundary trace and interiors**: an accepted run that samples a proof block incorrect
-at the boundary trace `tr` and the interiors `itr` has the first such block's session, at its first slot (at
-`leadSel (selOf …)`), unfound, or found with a witness that is off `tr` and `itr` (`regTwo_found_split`). -/
 theorem eventTwo_found_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω)
@@ -326,21 +262,6 @@ theorem eventTwo_found_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.
   · exact Or.inr ⟨hacc, i₀, hsel, u₀, hu₀, h⟩
 
 set_option synthInstance.maxSize 1024 in
-/-- **The event's bound from bounds on the one-wait extraction's three binding terms**, at a boundary trace that may
-read the tape: an accepted run samples a proof block incorrect at the boundary trace and its replay block's interior
-committed by the one-wait extraction with probability at most
-`3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(b_I + b_B + b_N)`, where, at the compiled verifier over the one-wait proof system,
-`b_I` bounds one run's own disagreement, `b_B` the accepted runs that open a gate off the boundary trace and `b_N`
-the accepted runs that open a gate off a committed interior.
-
-* Where the first incorrect block's session is unfound at its first slot: the sessions' bound, `κ_s + √…`
-  (`sessionKS_of`, from the proof system's knowledge soundness).
-* Where it is found with a witness that is off the traces: at most twice the same at the one-wait proof system, plus
-  `2·κ_s + √…` (`sessionFinds_of`, from `Arg.OneWaitFinds`), and there the one-wait run's extractions hold one of the
-  three binding terms (`off_of_foundWith`).
-
-The selection and the property read the run's coins off the second stage only, as the committed interior does
-(`iregVal_forkOn`). The contract's clauses it reads are those `eventTwo_le_of_off` reads. -/
 theorem eventTwo_oneWait_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
     (hA : A.KS H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two}
     (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s)

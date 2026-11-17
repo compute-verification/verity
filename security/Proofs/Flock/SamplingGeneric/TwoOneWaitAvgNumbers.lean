@@ -5,36 +5,12 @@ public import Proofs.Flock.SamplingGeneric.TwoOneWaitNumbers
 import Proofs.Flock.SamplingGeneric.Fails
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The one-wait by-class first-hit bound at the prover's expected calls, at numbers
-
-`CompiledTwo.eventTwoX_oneWait_le_cls_exp` bounds the event at the one-wait extraction's committed traces by
-`3·κ_s + 2·√(k·γ_s·Pr[B])` and twice a part that counts calls of SHA-512 over `2^256`,
-
-`(2·(T·(1 + e_s·N_s) + c) + 4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·c))/2^256`, `c = n_PU·openCalls`:
-
-`Claims.Flock.Numbers.hashBound`, with `T` a run's expected calls, both parties', and `N_s`, `K_s` and `K_m` the
-sample's three counts at every sample. This file bounds that part by a number where what it reads is within given
-numbers, as `TwoOneWaitNumbers.lean` does for the bound at a budget on every run:
-
-* `hashBound_oneWait_513_n29`: over the rationals, at sessions of one table (`e = 12343987`) with every call charged
-  as `513`, at `N_s ≤ 2^29` and `K_s, K_m ≤ 2^38`, at most `2^-103`;
-* `CompiledTwo.eventTwoX_oneWait_le_cls_exp_of_hashBound`: `eventTwoX_oneWait_le_cls_exp` with its right-hand side
-  replaced by `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·b` at any rational numbers at which `hashBound` is at most `b`;
-* `CompiledTwo.eventTwoX_oneWait_le_cls_exp_513`: the same at the instance's numerals, at most
-  `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102`.
-
-That each is within its number is a hypothesis: on a run's expected calls, on the accepting runs a wait collects, on
-the three counts and on `n_PU·openCalls`. `κ_s`, `k·γ_s` and `Pr[B]` are left as the theorem reads them.
--/
+/-! The one-wait by-class first-hit bound at the prover's expected calls, at numbers; that each count is within its number is a hypothesis, and `κ_s`, `k·γ_s` and `Pr[B]` are left as the theorem reads them. -/
 
 @[expose] public section
 
 namespace Claims.Flock.Numbers
 
-/-- **At most `2^-103` at one wait a session and `2^29` sessions, with every call charged as `513`**: the sum at
-`513·2^80` in place of a run's expected `2^80` calls and of its own opening checks', at `e = 1 + 12343986`, and
-`2^38` in place of `K_s` and of `K_m`. -/
 theorem hashBound_oneWait_513_n29 :
     hashBound (513 * 2 ^ 80) 12343987 (2 ^ 29) (2 ^ 38) (2 ^ 38) (513 * 2 ^ 80) ≤ 1 / 2 ^ 103 := by
   norm_num [hashBound, firstHitCalls]
@@ -51,11 +27,6 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 namespace CompiledTwo
 
-/-- **The event at the one-wait extraction's traces, by class of gates, at the prover's expected calls, at
-numbers.** Under `eventTwoX_oneWait_le_cls_exp`'s premises, where a run's expected calls `T`, the one-wait compiled
-verifier's expected reruns a session `e_s`, the sample's counts `N_s`, `K_s` and `K_m` and `n_PU·openCalls` are
-within rational numbers at which `hashBound` is at most `b`, an accepted run samples a proof block of the one-wait
-compiled verifier's `FregTwoX` with probability at most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·b`. -/
 theorem eventTwoX_oneWait_le_cls_exp_of_hashBound {H : Msg → Msg} {L : CompiledTwo Coin A}
     (hF : A.OneWaitFinds H) (hA : A.KS H) (hbind : L.commit.Binds H) (hS : L.Sessions H)
     (hopen : L.toCompiled.OpenCallsLe H) {x : Msg} {s : AuditStatement} {Pt : Partition}
@@ -101,14 +72,6 @@ theorem eventTwoX_oneWait_le_cls_exp_of_hashBound {H : Msg → Msg} {L : Compile
   rw [key] at h1
   exact h1.trans (add_le_add (le_refl _) (mul_le_mul_of_nonneg_left h2 (by norm_num)))
 
-/-- **The event at the one-wait extraction's traces, by class of gates, at the prover's expected calls, at sessions
-of one table with every call charged as `513`.** Under `eventTwoX_oneWait_le_cls_exp`'s premises, where a run's
-expected calls are `T ≤ 513·2^80`, every proof block's shape collects at most `12343986` accepting runs a wait, the
-sample's counts are `N_s ≤ 2^29`, `K_s ≤ 2^38` and `K_m ≤ 2^38`, and the opening checks of the statement's proof
-blocks call SHA-512 `n_PU·openCalls ≤ 513·2^80` times, an accepted run samples a proof block of the one-wait
-compiled verifier's `FregTwoX` with probability at most
-
-`3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102`. -/
 theorem eventTwoX_oneWait_le_cls_exp_513 {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
     (hA : A.KS H) (hbind : L.commit.Binds H) (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)

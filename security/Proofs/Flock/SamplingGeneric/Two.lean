@@ -40,41 +40,7 @@ import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Extract
 
-/-!
-# The two-stage compiler is knowledge sound at the footprint
-
-`CompilerKSTwo` on `CompilerKS`'s machinery: the compiled verifier's extractor, waits, errors and numbers are
-`Compiled`'s, the sessions' bound is `Compiled.sessionKS_of` (it reads only the contract's `fixed` and `runs`,
-`Compiled.RunsFixed`), and the extraction's deterministic half is `Compiled.split`'s with the interior roots read at a
-replay block. Only the failure event changes: its candidate sets are sets `Y` of proof blocks whose counts per cell
-(`counts`) are a footprint of acceptance probability at most `δ` (`S₁Two`), and a kept inner run is bad when it finds no
-block of any set that escapes no more than `Y` in every replay block (`above`), which every kept outer run's incorrect
-set at its own interior values does when `Y` is the incorrect set at each replay block's best interior.
-
-* `escCell_nonneg`, `escCell_le_one`, `escCell_zero`, `escCell_anti`: a cell's escape is a probability, `1` at no
-  incorrect proof block and antitone in their count.
-* `prod_filter_eq_sum`, `Ex_esc_le`: **the first stage**. Catching each replay block independently, `∏_{ρ∈S} e_ρ` is
-  the sum over sets `T` of the indicator that `S` misses `T` times `T`'s weight, so its average over the replay sample
-  is at most `P̄_a` (`Sessions.replaySamples`).
-* `above_congr`, `card_image_above_le`, `badOuterTwo_inter`, `unions_of_nPU_le`: the waits' unions. `above Y` reads
-  `Y` only through its counts on the grid, so over `S₁Two` it takes at most `2^M` values, `M` the footprint bits
-  (`TwoFoot`); an outer run bad for sets is bad for their projections on any set of proof blocks; and counts of at
-  least `n_PU` meet `Sessions.unions`.
-* `inner_badTwo_le`, `outer_badTwo_le`, `pr_failsTwo_le_of`: **the failure event's probability**, at `Compiled`'s
-  `κ_δ` and `γ`: the inner wait's union bound over `above Y` projected on the outer run's replay sample (at most
-  `2^{|sampleBlocks S|}` sets) at the second stage's miss (`Sessions.secondSamples`, at most `∏_{ρ∈S} e_ρ` at `Y`'s
-  counts, by `above`, which the projection keeps), and the outer wait's over `above`'s values on `S₁Two` (at most
-  `2^M`), each within its wait's slack: `|sampleBlocks S| ≤ n_in` and `M ≤ n_out` (`Sessions.unions`). An outer run
-  no second-stage fork of which is accepted adds nothing, so the inner union needs its bits only where one is.
-* `incorrectAll`, `inter_cell_incorrectAll`, `exists_best_interior`: the incorrect proof blocks at interiors, cell by cell,
-  and a replay block's best interior, at which it escapes the most (its escape takes finitely many values).
-* `splitTwo`: **the deterministic half**. At an accepted run whose extraction fails, without an own-call collision the
-  kept openings assemble a witness whose footprint is refused at `δ` at every interior; `Y`, its incorrect set at each
-  replay block's best interior, is in `S₁Two`, and each kept outer run's incorrect set at the interior values its
-  interior roots open is in `above Y` (no interior escapes more than the best); a block of it found at a kept inner run
-  would be correct (`Sessions.opens`, with the interior roots fixed by `Sessions.interior`).
-* `compilerKSTwo`: **`CompilerKSTwo`**.
--/
+/-! The two-stage compiler is knowledge sound at the footprint, on `CompilerKS`'s machinery with its own failure event. -/
 
 @[expose] public section
 
@@ -91,13 +57,11 @@ theorem escCell_le_one (n k m : ℕ) : escCell n k m ≤ 1 := by
   rw [div_le_one (by exact_mod_cast Nat.choose_pos (min_le_right k n))]
   exact_mod_cast Nat.choose_le_choose _ (Nat.sub_le n m)
 
-/-- A cell with no incorrect proof block always escapes. -/
 theorem escCell_zero (n k : ℕ) : escCell n k 0 = 1 := by
   unfold escCell
   rw [Nat.sub_zero]
   exact div_self (by exact_mod_cast (Nat.choose_pos (min_le_right k n)).ne')
 
-/-- **A cell's escape is antitone** in its incorrect count. -/
 theorem escCell_anti (n k : ℕ) {m m' : ℕ} (h : m ≤ m') : escCell n k m' ≤ escCell n k m := by
   unfold escCell
   exact div_le_div_of_nonneg_right (by exact_mod_cast Nat.choose_le_choose _ (Nat.sub_le_sub_left h n))
@@ -109,7 +73,6 @@ theorem Design.Two.esc_nonneg (d : Design.Two) (Pt : Partition) (fp : ℕ → �
 theorem Design.Two.esc_le_one (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) (ρ : ℕ) : d.esc Pt fp ρ ≤ 1 :=
   prod_le_one₀ (fun _ _ => escCell_nonneg _ _ _) fun _ _ => escCell_le_one _ _ _
 
-/-- `P̄_a` reads a footprint only on the grid of replay blocks and strata. -/
 theorem Design.Two.Pa_congr (d : Design.Two) (Pt : Partition) {f g : ℕ → ℕ → ℕ}
     (h : ∀ ρ < d.part.blocks.length, ∀ t < Pt.strata.length, f ρ t = g ρ t) : d.Pa Pt f = d.Pa Pt g := by
   have he : ∀ ρ ∈ range d.part.blocks.length, d.esc Pt f ρ = d.esc Pt g ρ := fun ρ hρ =>
@@ -119,8 +82,6 @@ theorem Design.Two.Pa_congr (d : Design.Two) (Pt : Partition) {f g : ℕ → ℕ
   have hT' := mem_powerset.1 hT
   rw [prod_congr rfl fun ρ hρ => by rw [he ρ (hT' hρ)], prod_congr rfl fun ρ hρ => he ρ (mem_sdiff.1 hρ).1]
 
-/-- **Catching each replay block independently**: the product of the escapes over the sampled replay blocks is the sum,
-over sets `T`, of the indicator that the sample misses `T` times `T`'s weight `∏_{ρ∈T}(1 − e_ρ)·∏_{ρ∉T} e_ρ`. -/
 theorem prod_filter_eq_sum (N : Finset ℕ) (S : ℕ → Prop) [DecidablePred S] (e : ℕ → ℝ) :
     ∏ ρ ∈ N.filter S, e ρ =
       ∑ T ∈ N.powerset, (if ∀ ρ ∈ T, ¬ S ρ then (1 : ℝ) else 0) * ((∏ ρ ∈ T, (1 - e ρ)) * ∏ ρ ∈ N \ T, e ρ) := by
@@ -139,9 +100,6 @@ theorem prod_filter_eq_sum (N : Finset ℕ) (S : ℕ → Prop) [DecidablePred S]
     obtain ⟨ρ, hρ, hSρ⟩ := hT
     exact mul_eq_zero_of_left (prod_eq_zero hρ (by rw [if_pos hSρ])) _
 
-/-- **The first stage's average**: over coins whose replay sample misses each set `T` of replay blocks with probability
-at most the first stage's `P_a(T)`, the product of the escapes over the sampled replay blocks averages at most
-`P̄_a`. -/
 theorem Ex_esc_le {R : Type} [Fintype R] (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) (S : R → List ℕ)
     (hreplay : ∀ T ⊆ range d.part.blocks.length, Pr (fun r => ∀ ρ ∈ S r, ρ ∉ T) ≤ d.replay.Pa d.part T) :
     Ex (fun r => ∏ ρ ∈ (range d.part.blocks.length).filter (· ∈ S r), d.esc Pt fp ρ) ≤ d.Pa Pt fp := by
@@ -179,8 +137,6 @@ theorem incorrectIn_subset_cell (H : Msg → Msg) (Cm : CommitmentScheme Bool) (
     (w : Wit) (ρ t : ℕ) (ι : ℕ → Bool) : incorrectIn H Cm s Pt Pρ w ρ t ι ⊆ cell Pt Pρ ρ t :=
   filter_subset _ _
 
-/-- **The incorrect proof blocks at interior values `ι`** over the grid of replay blocks and strata: each cell's at its
-replay block's interior. -/
 noncomputable def incorrectAll (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
     (w : Wit) (ι : ℕ → ℕ → Bool) : Finset ℕ :=
   (range Pρ.blocks.length ×ˢ range Pt.strata.length).biUnion fun p => incorrectIn H Cm s Pt Pρ w p.1 p.2 (ι p.1)
@@ -191,7 +147,6 @@ theorem incorrectAll_subset (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : 
   obtain ⟨p, _, hvp⟩ := mem_biUnion.1 hv
   exact cell_subset Pt Pρ p.1 p.2 (incorrectIn_subset_cell H Cm s Pt Pρ w p.1 p.2 _ hvp)
 
-/-- On the grid, a cell's share of `incorrectAll` is its incorrect proof blocks at its replay block's interior. -/
 theorem inter_cell_incorrectAll (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
     (w : Wit) (ι : ℕ → ℕ → Bool) {ρ t : ℕ} (hρ : ρ < Pρ.blocks.length) (ht : t < Pt.strata.length) :
     incorrectAll H Cm s Pt Pρ w ι ∩ cell Pt Pρ ρ t = incorrectIn H Cm s Pt Pρ w ρ t (ι ρ) := by
@@ -209,8 +164,6 @@ theorem inter_cell_incorrectAll (H : Msg → Msg) (Cm : CommitmentScheme Bool) (
       incorrectIn_subset_cell H Cm s Pt Pρ w ρ t _ hv⟩
 
 open Classical in
-/-- **A best interior** of replay block `ρ`: one at which `ρ` escapes the second stage at least as often as at any
-other. Its escape reads only its incorrect proof blocks, one of finitely many sets. -/
 theorem exists_best_interior (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition)
     (d : Design.Two) (w : Wit) {ρ : ℕ} (hρ : ρ < d.part.blocks.length) :
     ∃ ι : ℕ → Bool, ∀ ι' : ℕ → Bool,
@@ -250,21 +203,15 @@ namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## The failure event -/
-
 open Classical in
-/-- **The candidate sets**: sets of proof blocks whose counts per cell are a footprint of acceptance probability at
-most `δ`. -/
 noncomputable def S₁Two (Pt : Partition) (d : Claims.Sampling.Design.Two) (δ : ℝ) : Finset (Finset ℕ) :=
   (range Pt.blocks.length).powerset.filter fun Y => d.Pa Pt (counts Pt d.part Y) ≤ δ
 
 open Classical in
-/-- The sets of proof blocks that escape the second stage no more than `Y` in every replay block. -/
 noncomputable def above (Pt : Partition) (d : Claims.Sampling.Design.Two) (Y : Finset ℕ) : Finset (Finset ℕ) :=
   (range Pt.blocks.length).powerset.filter fun X =>
     ∀ ρ < d.part.blocks.length, d.esc Pt (counts Pt d.part X) ρ ≤ d.esc Pt (counts Pt d.part Y) ρ
 
-/-- `above Y` reads `Y` only through its counts on the grid of replay blocks and strata. -/
 theorem above_congr (Pt : Partition) (d : Claims.Sampling.Design.Two) {Y Y' : Finset ℕ}
     (h : ∀ ρ < d.part.blocks.length, ∀ t < Pt.strata.length, counts Pt d.part Y ρ t = counts Pt d.part Y' ρ t) :
     above Pt d Y = above Pt d Y' := by
@@ -273,15 +220,11 @@ theorem above_congr (Pt : Partition) (d : Claims.Sampling.Design.Two) {Y Y' : Fi
   unfold above
   exact filter_congr fun X _ => forall₂_congr fun ρ hρ => by rw [he ρ hρ]
 
-/-- **The outer wait's union, over footprints**: over any family of sets of proof blocks, `above` takes at most
-`∏_{ρ,t}(n_{ρ,t} + 1) ≤ 2^M` values, `M` the footprint bits. -/
 theorem card_image_above_le (Pt : Partition) (d : Claims.Sampling.Design.Two) (S : Finset (Finset ℕ)) :
     (S.image (above Pt d)).card ≤ 2 ^ footBits Pt d :=
   (card_image_le_of_counts Pt d S (above Pt d) fun _ _ h => above_congr Pt d h).trans (prod_cell_le_footBits Pt d)
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **The contract's unions at `n_PU` bits**: counts of at least `n_PU` cover both waits' unions, since `M ≤ n_PU` and
-a replay sample has at most `n_PU` proof blocks. -/
 theorem unions_of_nPU_le {H : Msg → Msg} (L : CompiledTwo Coin A) (hout : ∀ x, L.nPU x ≤ L.nOut x)
     (hin : ∀ x, L.nPU x ≤ L.nIn x) (x : Msg) (s : AuditStatement) (Pt : Partition) (d : Claims.Sampling.Design.Two)
     (hs : L.parse x = some s) (hPt : L.partition s = some Pt) :
@@ -292,8 +235,6 @@ theorem unions_of_nPU_le {H : Msg → Msg} (L : CompiledTwo Coin A) (hout : ∀ 
   ⟨(footBits_le Pt d).trans ((Compiled.nPU_eq hs hPt).ge.trans (hout x)),
     fun _ _ _ _ _ _ => (card_sampleBlocks_le Pt d.part _).trans ((Compiled.nPU_eq hs hPt).ge.trans (hin x))⟩
 
-/-- **An outer run bad for the sets `Xs`**, its second stage `g`: the inner wait comes up short, or for some `X ∈ Xs`
-no kept inner run has a proof block of `X` good. -/
 def BadOuterTwo (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (Xs : Finset (Finset ℕ))
     (g : (Fin (L.V.k x) → Coin) → Fin (L.V.k x) → Coin) (e : L.E1 x) : Prop :=
@@ -302,8 +243,6 @@ def BadOuterTwo (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Co
       (fun d uc => ∀ v ∈ X, ¬ L.GoodAt x found (g d) v uc) ((List.finRange (L.capIn x)).map e.1) e.2
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **An outer run bad for sets is bad for their projections** on any set `B` of proof blocks: a kept inner run that
-has no proof block of `X` good has none of `X ∩ B`. -/
 theorem badOuterTwo_inter (L : CompiledTwo Coin A) {x : Msg} {run' : (Fin (L.V.k x) → Coin) → Transcript}
     {found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop} {Xs : Finset (Finset ℕ)}
     {g : (Fin (L.V.k x) → Coin) → Fin (L.V.k x) → Coin} {e : L.E1 x} (B : Finset ℕ)
@@ -312,8 +251,6 @@ theorem badOuterTwo_inter (L : CompiledTwo Coin A) {x : Msg} {run' : (Fin (L.V.k
   · exact Or.inl h
   · exact Or.inr ⟨X ∩ B, mem_image_of_mem _ hX, hk, fun j r hj v hv => hbad j r hj v (mem_inter.1 hv).1⟩
 
-/-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some
-candidate `Y`, every kept outer run is bad for the sets that escape no more than `Y`. -/
 def FailsTwo (L : CompiledTwo Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (c : L.ECoins x) : Prop :=
   ∃ s Pt d, L.parse x = some s ∧ L.partition s = some Pt ∧ L.two s = some d ∧ InScopeTwo Pt d s ∧
@@ -322,12 +259,7 @@ def FailsTwo (L : CompiledTwo Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x
         (fun r e => L.BadOuterTwo x run' found (above Pt d Y) (forkOn (L.secondStage x) r) e)
         ((List.finRange (L.capOut x)).map c.1) (L.toE1 x c))
 
-/-! ## The failure event's probability -/
-
 omit [Inhabited Coin] in
-/-- **One outer run's inner wait**, at sets `Xs` of proof blocks below `n_PU`, at most `2^m` of them (`m ≤ n_in`), each
-missed by the second stage at `r` with probability at most `esc`: `Compiled.inner_bad_le`'s union bound at the picked
-slot for each `X`, and the wait's over `Xs`. -/
 theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {Xs : Finset (Finset ℕ)} {m : ℕ}
     (hXs : ∀ X ∈ Xs, ∀ v ∈ X, v < L.nPU x) (hcard : Xs.card ≤ 2 ^ m) (hm : m ≤ L.nIn x)
@@ -356,13 +288,6 @@ theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x
 
 set_option synthInstance.maxSize 1024 in
 omit [Inhabited Coin] in
-/-- **One tape's outer wait**: on a statement in scope at `(s, Pt, d)`, where the first stage misses each set of replay
-blocks with probability at most its `P_a` and the second stage misses `X` with at most the product of its cells'
-escapes, the outer wait (times its acceptance) comes up short or, for some candidate `Y`, keeps only runs bad for the
-sets that escape no more than `Y`, with probability at most `T_out + c·(T_in + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}`
-at each wait's count. Each outer run's inner wait unions over those sets projected on its replay sample's proof blocks,
-which the second stage misses alike (`inter_sampleBlocks_cell`), at most `2^{|sampleBlocks|}` (`|sampleBlocks| ≤ n_in`);
-the outer wait unions over their values `above Y`, at most `2^M` (`M ≤ n_out`). -/
 theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
     (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop)
@@ -469,9 +394,6 @@ theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x 
   · exact Or.inr ⟨above Pt d Y, mem_image_of_mem _ hY, h⟩
 
 set_option synthInstance.maxSize 1024 in
-/-- **The failure event's probability, at any found event**: `Compiled.pr_fails_le_of` at the two-stage failure event,
-`κ(δ) + √(γ·Pr[B])`, with the outer wait's bound `outer_badTwo_le` from `Sessions.replaySamples` and
-`Sessions.secondSamples`. -/
 theorem pr_failsTwo_le_of (H : Msg → Msg) (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (hS : L.Sessions H)
     (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (found : Ω → (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop)
@@ -550,8 +472,6 @@ theorem pr_failsTwo_le_of (H : Msg → Msg) (L : CompiledTwo Coin A) {δ : ℝ} 
           Real.sqrt_sq (pow_nonneg hc.le 2)]
 
 set_option synthInstance.maxSize 1024 in
-/-- **`CompiledTwo.KS` from the split and the sessions' bound** (`Compiled.KS_of_split` at the two-stage failure
-event and `RTwo`). -/
 theorem KS_of_splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H)
     (found : ∀ (x : Msg) (Ω : Type), Prover Ω → Ω → (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) →
       A.EC (L.sh x u) → Prop)
@@ -578,15 +498,6 @@ theorem KS_of_splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessio
       obtain ⟨β, hβ0, hβ, hκ⟩ := hsess x Ω P
       exact L.pr_failsTwo_le_of H hδ hS x Ω P (found x Ω P) β hβ0 hβ hκ) x
 
-/-! ## The split -/
-
-/-- **The split**: at an accepted run whose extraction fails, the failure event holds or the extractor's own calls
-collide. Otherwise the kept openings agree (`agree_of_passes`) and assemble a witness `w` whose footprint is refused at
-`δ` at every interior; take `Y`, its incorrect proof blocks at each replay block's best interior
-(`exists_best_interior`), and a kept outer run `r`. The proof blocks incorrect at the interior values the kept openings
-under `r`'s interior roots give escape no more than `Y` in each replay block, at its best interior; a kept inner run at
-which one is found would make it correct (`Sessions.opens`, its revealed openings kept by `Compiled.mem_found`, the
-interior roots `r`'s by `Sessions.interior`), so `r` is bad for it. -/
 theorem splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H) (δ : ℝ)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (r₀ : Fin (L.V.k x) → Coin) (c : L.ECoins x)
     (hacc : (run H P L.V x ω r₀).out = .acc)

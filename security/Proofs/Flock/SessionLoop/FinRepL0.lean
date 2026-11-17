@@ -7,26 +7,7 @@ public import Proofs.Flock.Claims.ZK.FinishRank
 public import Proofs.Flock.Claims.ZK.FinishSwPts
 public import Proofs.Flock.Claims.ZK.LinkFft
 
-/-!
-# (c.3)'s `FinRepL0`: level 0's opened rows and salts
-
-`Loop.FinRepL0` asks that the run from the views and the session's rep open level 0 at the same rows and salts. Both are
-answered by the opened coins (`asksCut`) from a fresh transcript at rep `k`'s first round, and both send one body for
-each round they take through the PIOP (`RankAt.Paces`, `RankAt.piopCut_counts`), `piopZk` of them, so both open level 0
-at the coins of Ligerito's round `k₀ + 8` after it (`FinRep.repCut_opens0`, `FinRep.repFwC_open0`), the slot `repSlot`
-names: at `q0At`'s positions. Each of those is opened (`FinRep.q0At_opened`), and there the two commitments agree:
-
-* the views' commitment (`commitsView`'s `k / 2`-th) holds the views' level-0 rows and salts
-  (`FlockComplete.commit0Cut_rows`). The switched views' level-0 rows and salts are the honest views'
-  (`Coined.swExe_l0`, `Loop.finSrc_l0`): the switched prover moves the pads alone. At an opened position those are
-  `encodeRowsZk`'s row and the tape's fitted level-0 salt (`FinRep.srcV_open0`);
-* the session's commitment is the loop's table's (`tb.cm0`), `commitOf` of the `Level0` the loop drew, whose rows are
-  `Link.rows` of `Masked.linkIn` and salts its fitted salts (`Loop.Level0Src.realOf_rows0`), the same row
-  (`Link.rows_eq`) and salt.
-
-**`Loop.finRepL0`**: at a statement in the masked scope with a witness, where the loop samples the tape's level 0
-(`Loop.Level0Src`), `FinRepL0` holds. It reads no worker's values.
--/
+/-! (c.3)'s `FinRepL0`: level 0's opened rows and salts, which read no worker's values. -/
 
 @[expose] public section
 
@@ -34,14 +15,10 @@ namespace FlockComplete.RankAt
 
 open Flock Transcript FlockComplete FlockDeploy With
 
-/-! ## Bodies and rounds -/
-
-/-- **A transcript computation that sends one body for each round it takes**, where it returns. -/
 def Paces {α : Type} (y : TMW PS α) : Prop :=
   ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
     (y.run t).go l = (.ok (a, t'), l') → l'.size + t.k = l.size + t'.k
 
-/-- **The simulation of `Paces`**: a transcript computation of the pure session is related to itself when it paces. -/
 def paceS : With.Sim (TMW PS) (TMW PS) where
   R _ y := Paces y
   pure a t l a' t' l' h := by
@@ -68,7 +45,6 @@ def paceS : With.Sim (TMW PS) (TMW PS) where
       cases h2
       rfl
 
-/-- A verifier action that keeps the round count. -/
 theorem liftTM_paces {α : Type} (x : TM α) (hx : ∀ t a t', x t = .ok (a, t') → t'.k = t.k) :
     paceS.R (liftTM x : TMW PS α) (liftTM x) := by
   intro t l a t' l' h
@@ -98,7 +74,6 @@ section Asks
 
 variable (coin : ℕ → ℕ → F128) (n : ℕ)
 
-/-- **`asksCut`'s squeeze** sends one body and takes one round, where it returns. -/
 theorem squeezeP_paces (kind : UInt8) (k : ℕ) :
     paceS.R (squeezeP (asksCut coin n) kind k) (squeezeP (asksCut coin n) kind k) := by
   intro t l a t' l' h
@@ -135,9 +110,6 @@ theorem ringSwitchCut_paces (sv : ℕ → Array F128) (claims : Array Claim) :
   unfold ringSwitchCut sampleVecP
   sim_walk [squeezeP_paces coin n, label_paces, absorbSlice_paces]
 
-/-- **The cut's PIOP sends `piopZk` bodies and takes as many rounds**, where it returns, whatever its source: the
-zerocheck's `3 + (m − 6)` (`zerocheckCut_at`), the lincheck's `3 + (k_log − 6)` (`lincheckCut_at`), none for the rank
-check (`rankCheckP_go`) and the ring switch's one per claim and one (`ringSwitchCut_sws`), each a round. -/
 theorem piopCut_counts (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap root : ByteArray)
     (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) {t t' : Transcript}
     {l l' : Array Claims.Msg} {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched}
@@ -181,9 +153,6 @@ namespace FinRep
 
 open FlockComplete FlockComplete.Replay FlockComplete.Replay.Lg FlockComplete.L0 Flock.With
 
-/-- **The cut's rep opens level 0 at round `k₀ + 8` of its Ligerito**, whatever its source: answered by `asksCut` from a
-fresh transcript, its PIOP takes `piopZk` rounds with as many bodies (`RankAt.piopCut_counts`), and its Ligerito opens
-its level-0 commitment `cm0` there (`ligeritoCut_open0`). -/
 theorem repCut_opens0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     (hsh : ByteArray → ByteArray) (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray)
     (cm0 : Commit) (extras : Array _root_.Flock.Claim) (ic : InnerCommit) (src : RepSrc)
@@ -219,11 +188,6 @@ theorem repCut_opens0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp
   refine h0.trans ?_
   rw [show t₃.k = piopZk st extras by omega]
 
-/-- **The ZK server's rep opens level 0 at round `k₀ + 8` of its Ligerito**: answered by `asksCut` from a fresh
-transcript, its zerocheck, lincheck and ring switch take `piopZk` rounds with as many bodies (`zerocheckCut_at`,
-`lincheckCut_at`, `ringSwitchCut_sws`, `RankAt.Paces`), and its Ligerito opens `cm0` at the query of the round
-`k₀ + 6` after its pair's coins (`L0.ligeritoPZk_opens`, through `ligeritoPZk_cut`); the replay, the constraints and
-the inner proof leave the Ligerito proof as it is. -/
 theorem repFwC_open0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk)
@@ -299,7 +263,6 @@ namespace FlockComplete
 
 open Flock
 
-/-- **Level 0's commitment from a source holds the source's rows and salts.** -/
 theorem commit0Cut_rows {ms : MerkleScheme} {lv : Level} {src : TabSrc} {cm : Commit}
     (h : (commit0Cut (Hashes.ofSha512 Sha512.hash : Hashes V) ms lv src : V Commit) = .ok cm) :
     cm.rows = (Array.range (2 ^ lv.d)).map src.row0 ∧ cm.salts = (Array.range (2 ^ lv.d)).map src.salt0 := by
@@ -329,7 +292,6 @@ section
 variable {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
   {T : Table F K W Salt (B × Salt) D Hi VL}
 
-/-- **A real view's level-0 rows and salts read the witness alone**, not the clear values. -/
 theorem Hm96.onVals_viewR_l0 (M : T.Hm96 C) (w : W) (v v' : T.Vals) (ω : T.Rand) (ys : T.Hid → Salt) :
     ((M.onVals.viewR (w, v) ω ys).rows, (M.onVals.viewR (w, v) ω ys).xrows, (M.onVals.viewR (w, v) ω ys).salts0) =
       ((M.onVals.viewR (w, v') ω ys).rows, (M.onVals.viewR (w, v') ω ys).xrows,
@@ -338,7 +300,6 @@ theorem Hm96.onVals_viewR_l0 (M : T.Hm96 C) (w : W) (v v' : T.Vals) (ω : T.Rand
   try dsimp only
   try rfl
 
-/-- **Moving the pads leaves a real view's level-0 rows and salts**: `Table.shift` moves the pads alone. -/
 theorem Hm96.viewR_shift_l0 (M : T.Hm96 C) (p q r : W) (ω : T.Rand) (ys : T.Hid → Salt) :
     ((M.viewR r (T.shift p q ω) ys).rows, (M.viewR r (T.shift p q ω) ys).xrows,
         (M.viewR r (T.shift p q ω) ys).salts0) =
@@ -352,9 +313,6 @@ end
 
 end FlockSoundness.ZK.Table
 
-/-- **A switched view's level-0 rows and salts are the honest view's**: it is the view at the workers' values or the
-view with the pads moved (`Hm96.swViewR_eq`), and level 0's rows and salts read the witness, the level-0 randomness and
-the seeds alone, whatever the values and the pads. -/
 theorem FlockSoundness.Discharge.ZkView.Coined.swExe_l0 {K W Hi VL : Type} [Field K]
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (ω : T.tab.Rand) (ys : T.tab.Hid → FlockSoundness.Discharge.ZkView.Salt) :
@@ -380,8 +338,6 @@ namespace Claims.ZKMal.Masked
 
 open Claims FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge CoinLayer
 
-/-- **A source reads its view's level-0 rows and salts**: views with the same level-0 rows and salts at table `i` give
-sources with the same level-0 rows and salts there. -/
 theorem tabSrcView_l0 (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (v v' : ∀ j, ((tabC P x j).T (cz j)).tab.View) {i : ℕ} (hi : i < jOf x)
     (h1 : (v ⟨i, hi⟩).rows = (v' ⟨i, hi⟩).rows) (h2 : (v ⟨i, hi⟩).xrows = (v' ⟨i, hi⟩).xrows)
@@ -395,7 +351,6 @@ end Claims.ZKMal.Masked
 
 namespace Flock.ZkServer.Finish
 
-/-- **A table from a level 0 keeps `commitOf` of it** as its level-0 commitment. -/
 theorem tabOfLevel0_commitOf {st : _root_.Flock.Setup} {l : _root_.Flock.ZkServer.Level0.Level0}
     {t : _root_.Flock.ZkServer.Finish.Tab} (h : _root_.Flock.ZkServer.Finish.tabOfLevel0 st l = .ok t) :
     t.cm0 = commitOf l := by
@@ -425,11 +380,8 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
-/-- **The loop's table keeps `commitOf` of the tape's level 0**: where `src` samples the tape's level 0, at rep stream
-`2j + r` the loop's table's level-0 commitment is `commitOf` of a `Level0` on `Masked.linkIn`, at level 0 of table
-`j`'s `--zk` schedule and its `t_pad`, whose rows are `Link.rows` of its own inputs (`Level0.ofSamples_ok`). -/
 theorem Loop.Level0Src.realOf_rows0 {src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
@@ -477,8 +429,6 @@ namespace Loop
 theorem l0_go_of_fst {α β : Type} {z : α × β} {a : α} (h : z.1 = a) : z = (a, z.2) := Prod.ext h rfl
 
 open FlockSoundness.Discharge in
-/-- **The views' level-0 rows and salts are the honest views'**: table `i`'s source from the switched views reads the
-switched view's level-0 rows and salts (`Masked.tabSrcView_l0`), which are the honest view's (`Coined.swExe_l0`). -/
 theorem finSrc_l0 (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) {i : ℕ} (hi : i < Masked.jOf x) :
     (finSrc vs x w ν t ops i).row0 = (Masked.srcV x (finCoins x ops) w t i).row0 ∧
@@ -495,11 +445,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **`FinRepL0` holds where the loop samples the tape's level 0**: at a statement in the masked scope with a witness
-(`Loop.Level0Src`), the run from the views and the session's rep open level 0 at `q0At`'s positions
-(`FinRep.repCut_opens0`, `FinRep.repFwC_open0`, at `repSlot`'s slot), where the views' commitment
-(`commit0Cut_rows`, `finSrc_l0`, `FinRep.srcV_open0`) and the loop's table's (`Level0Src.realOf_rows0`) hold the same
-row and salt. -/
 theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
     (hS : Level0Src src x w) : FinRepL0 vs L₀ src real wk x w := by
@@ -521,7 +466,6 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
       _root_.Flock.Setup.ofCircuit (Masked.stsOf x)[k / 2]! := by
     rw [getElem!_pos (FlockDeploy.tabsOf (Masked.stsOf x)) (k / 2) hjT, getElem!_pos (Masked.stsOf x) (k / 2) hi']
     simp [FlockDeploy.tabsOf]
-  -- the table, its schedule and its bounds
   obtain ⟨hst2, hsch2⟩ := finRepTab (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hschs hk hRep
   have hmsF := (finRepPads L₀ src real wk x w hsc ν t κ m₀ ρ₀ ops hctx s0 spec hsx k hk tb hi q f hRep).1
   have hmsV : (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by
@@ -543,7 +487,6 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
   obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
   have hn : (Masked.zkTab x ⟨k / 2, hj⟩).sch.n ≠ 0 := by rw [hn7, hsm]; omega
   have hq0 : ((Masked.zkTab x ⟨k / 2, hj⟩).sch.levels.getD 0 default).q ≠ 0 := (hlv 0 (by omega)).q_ne_zero
-  -- the extra claims and the slot
   have hxs := finRepXs L₀ src real wk x w hsc hR ν t κ m₀ ρ₀ ops hctx s0 spec hsx k hk extras hxe tb hi q f hRep
   have hpz : FlockComplete.piopZk tb.st (_root_.Flock.ZkServer.Finish.claimsOf q.xs) =
       FlockComplete.piopZk tb.st extras := by
@@ -568,7 +511,6 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
     unfold FlockComplete.piopZk FlockComplete.piopRoundsZk
     rw [e6, e7, hes]
     omega
-  -- both runs open level 0 at the slot's coins
   have hv' := hv
   unfold viewRep at hv'
   have hP := Masked.FinRep.repCut_opens0 (coin := fun k i => Masked.slotAt (finCoins x ops) k i) (n := refK x)
@@ -582,7 +524,6 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
     _ _ _ _ _ _ _ _ _ _ _ _ _ _ hm14F (by rw [hsc2]; exact hn) (by rw [hsc2]; exact hk0)
     (by rw [hsc2]; exact hL2) (by rw [hsc2]; exact fun i hi => (hlv i hi).q_ne_zero) rfl (l0_go_of_fst hrun)
   rw [hpz, ← hst2, hsc2, hco, hslot] at hQ
-  -- the views' commitment
   have hq' : FlockComplete.quietS.R
       ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
         FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash : _root_.Flock.Hashes V)
@@ -598,7 +539,6 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
   have hc := hall' (k / 2) hk2'
   rw [← getElem!_pos cms (k / 2) hk2', hsj1] at hc
   obtain ⟨hcr, hcs⟩ := FlockComplete.commit0Cut_rows hc
-  -- the loop's table's commitment
   have hk2 : k = 2 * (⟨k / 2, hj⟩ : Fin (Masked.jOf x)).val + (⟨k % 2, hr⟩ : Fin 2).val := by
     show k = 2 * (k / 2) + k % 2
     omega

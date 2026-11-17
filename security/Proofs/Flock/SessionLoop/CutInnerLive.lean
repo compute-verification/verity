@@ -52,25 +52,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# The cut session at a rep's inner proof, on the opened coins alone
-
-The inner proof (`innerCut`) sends four bodies, each the frames it absorbed since its last coin and the squeeze's header:
-round 0 the inner proof's label and `final_c`, round 1 the triple's openings `ρ`, `σ`, round 2 `τ`'s commitment and
-round 3 `Y` (`innerCutBody`). Cut at its round `i`, it stops there and sends round `i`'s body; where the rep from the
-source runs its PIOP and Ligerito opening below the cut and ends that opening on a squeeze, so does the rep, at the
-source's masked `final_c` (`piopCut_fc_go`) and the inner proof's `3 + 2 + 2` constraints and its triple
-(`INNER_CONS`). At a live statement, where the coins below the cut show no refusal, the earlier reps return
-(`Masked.repCut_ret`) and this rep's rank check, pair and, at round 3, `β` pass, so the cut session sends that body.
-
-* `CutFree.innerCut_stop`: the inner proof cut at its round `i < 4` stops there and sends `innerCutBody … i`.
-* `CutFree.repCut_inner_stop`: the rep from the source, cut at its inner proof's round `i`, stops there and sends that
-  body, wherever its rank check passes, its pair's coins are independent and, at `i = 3`, its `β` is nonzero.
-* `Masked.repCut_inner_stop`: that stop at a `Live` statement's table `j`'s rep `r`, answered by the opened coins, where
-  the coins below the cut show no refusal.
-* **`Masked.runCut_innerBody`**: the cut session stopped at rep `2j + r`'s inner round `i` sends there `innerCutBody`
-  at the rep's source.
--/
+/-! The cut session at a rep's inner proof, on the opened coins alone, at a live statement whose coins below the cut show no refusal. -/
 
 @[expose] public section
 
@@ -82,9 +64,6 @@ namespace FlockComplete.CutFree
 open Flock Transcript Replay
 open FlockSoundness.Refine (Frame encs)
 
-/-- **The inner proof's body at its round `i`**, after a squeeze: round 0 its label and `final_c`, round 1 the
-triple's openings, round 2 `τ`'s commitment, round 3 `Y`, each with the squeeze's header (`N` batching coins at round
-1, `Q` query coins at round 3). -/
 def innerCutBody (finalC : F128) (src : RepSrc) (N : ℕ) : ℕ → Claims.Msg
   | 0 => encs [.label _root_.Flock.Zk.LABEL_INNER.toUTF8, .one finalC] ++ (Frame.sq 1 1).enc
   | 1 => encs [.vec [src.rhoIn, src.sigmaIn]] ++ (Frame.sq 2 N).enc
@@ -101,7 +80,6 @@ theorem sampleVecP_cut_err (coin : ℕ → ℕ → F128) {n k : ℕ} (hk : k ≠
       (.error "past the openings", l.push (Claims.toMsg (_root_.Flock.Transcript.framed t 2 k))) := by
   rw [FlockComplete.SimInner.sampleVecCut_go coin n hk t l, if_pos hl]
 
-/-- A squeeze after a slice absorbed from no pending bytes sends the slice's frame and its header. -/
 theorem toMsg_framed_slice {T : Transcript} (vs : Array F128)
     (hT : T.pending = vs.foldl F128.pushBytes (ByteArray.empty ++ _root_.Flock.Transcript.header 3 2 vs.size))
     (kind : UInt8) (n : ℕ) :
@@ -110,7 +88,6 @@ theorem toMsg_framed_slice {T : Transcript} (vs : Array F128)
   rw [FlockSoundness.Refine.framed_enc, hT, FlockSoundness.Refine.absorbSlice_enc]
   simp [encs]
 
-/-- A squeeze after bytes absorbed from no pending bytes sends their frame and its header. -/
 theorem toMsg_framed_bytes {T : Transcript} (b : ByteArray)
     (hT : T.pending = ByteArray.empty ++ _root_.Flock.Transcript.header 5 0 b.size ++ _root_.Flock.Transcript.padded b)
     (kind : UInt8) (n : ℕ) :
@@ -120,9 +97,6 @@ theorem toMsg_framed_bytes {T : Transcript} (b : ByteArray)
   simp [encs]
 
 set_option maxHeartbeats 2000000 in
-/-- **The inner proof cut at its round `i`**: answered by `asksCut` with the cut `i < 4` bodies past its first, from no
-pending bytes and with `β ≠ 0` where round 3 is reached, it stops at round `i` and sends there `innerCutBody … i`,
-with the constraints and the triple's `N` batching coins. -/
 theorem innerCut_stop (coin : ℕ → ℕ → F128) (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128) (src : RepSrc)
     (cons : Array (String × Zk.Lin)) {t : Transcript} (ht : t.pending = ByteArray.empty) (l : Array Claims.Msg)
     {i : ℕ} (hi : i < 4) {N : ℕ} (hN : cons.size + 3 = N) {n : ℕ} (hn : n = l.size + i)
@@ -139,13 +113,13 @@ theorem innerCut_stop (coin : ℕ → ℕ → F128) (lay : Zk.PadLayout) (ic : I
       (t := ⟨t.rounds, t.k, FlockComplete.Replay.pLabel _root_.Flock.Zk.LABEL_INNER t.pending⟩)
       (t' := FlockComplete.Replay.InZ.t₁ finalC t) (a := ()) rfl l)]
   obtain rfl | rfl | rfl | rfl : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
-  · -- round 0: `ε` is past the cut
+  ·
     have hs := FlockComplete.SimInner.sampleCut_go coin (l.size + 0) (FlockComplete.Replay.InZ.t₁ finalC t) l
     rw [if_pos (show l.size + 0 ≤ l.size by omega)] at hs
     refine ⟨_, FlockComplete.bind_go_err hs, ?_⟩
     refine (push_at _ (by simp)).trans ?_
     exact Claims.ZKServer.innerBody_enc finalC ht
-  · -- round 1: the batching coins are past the cut
+  ·
     rw [FlockComplete.Replay.bind_go (FlockComplete.sampleP_cut_ok coin _ (by omega : l.size < l.size + 1))]
     try dsimp only
     rw [FlockComplete.Replay.bind_go
@@ -157,7 +131,7 @@ theorem innerCut_stop (coin : ℕ → ℕ → F128) (lay : Zk.PadLayout) (ic : I
     first
       | (rw [Array.size_append]; rfl)
       | simp [innerCutBody, Zk.triple, encs]
-  · -- round 2: `β` is past the cut
+  ·
     rw [FlockComplete.Replay.bind_go (FlockComplete.sampleP_cut_ok coin _ (by omega : l.size < l.size + 2))]
     try dsimp only
     rw [FlockComplete.Replay.bind_go
@@ -172,7 +146,7 @@ theorem innerCut_stop (coin : ℕ → ℕ → F128) (lay : Zk.PadLayout) (ic : I
     case hl2 => simp only [Array.size_push]; try omega
     refine (push_at _ (by simp)).trans ?_
     exact toMsg_framed_bytes src.tauCom (by rfl) _ _
-  · -- round 3: the query coins are past the cut
+  ·
     have hb3 := hb rfl
     rw [FlockComplete.Replay.bind_go (FlockComplete.sampleP_cut_ok coin _ (by omega : l.size < l.size + 3))]
     try dsimp only
@@ -196,11 +170,6 @@ theorem innerCut_stop (coin : ℕ → ℕ → F128) (lay : Zk.PadLayout) (ic : I
     exact toMsg_framed_slice src.y (by rfl) _ _
 
 set_option maxHeartbeats 4000000 in
-/-- **The cut's rep at its inner proof's round `i`**: answered by `asksCut` cut at the inner proof's round `i < 4`, at
-a `--zk` schedule of `m ∈ [25, 35]` and a fold defined at every point of the lincheck's shape, from any source,
-level-0 commitment, pads commitment and extra claims, the rep stops there and sends `innerCutBody … i` at the source's
-masked `final_c`, wherever its rank check passes, its pair's coins are independent and, at `i = 3`, its `β` is
-nonzero. -/
 theorem repCut_inner_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {st : Setup} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hkm : st.fold.kLog ≤ st.m) (hkk : st.kLog = st.fold.kLog)
     (hfold : ∀ (a b : F128) (lw ρ ts : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
@@ -298,11 +267,7 @@ open CoinLayer
 namespace Masked
 
 set_option maxHeartbeats 1000000 in
-/-- **A rep stopped at its inner proof's round `i`, on the opened coins alone**: at a `Live` statement whose coins
-below table `j`'s rep `r`'s inner round `i < 4` show no refusal, the cut rep answered by the opened coins from its
-first send `repBase x (2j + r)`, from any source, level-0 commitment and pads commitment, stops there and sends
-`innerCutBody … i` at the source's masked `final_c`. Its rank check passes (`rank_at_unrefused`), its pair's coins are
-independent and, at round 3, its `β` is nonzero, all below the cut. -/
+/-- At a `Live` statement whose coins below table `j`'s rep `r`'s inner round `i < 4` show no refusal. -/
 theorem repCut_inner_stop {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin) {s0}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
     (j : Fin (jOf x)) (r : Fin 2) {i : ℕ} (hi : i < 4)
@@ -418,9 +383,7 @@ theorem repCut_inner_stop {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDep
   exact ⟨L, hrun, hL⟩
 
 set_option maxHeartbeats 1000000 in
-/-- **The cut session at rep `2j + r`'s inner round `i`, on the opened coins alone**: where the coins below that round
-show no refusal, the cut session stopped there sends `innerCutBody … i` at the rep's source: the earlier reps return
-(`repCut_ret`, `runCut_cutRep_of_ret`) and the rep stops there (`repCut_inner_stop`). -/
+/-- Where the coins below that round show no refusal. -/
 theorem runCut_innerBody {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin)
     (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))

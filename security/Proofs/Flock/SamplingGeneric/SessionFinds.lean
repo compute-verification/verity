@@ -6,25 +6,7 @@ import Proofs.Flock.Claims.Aggregate
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The sampled compiler: what a session's extraction finds, its one wait finds at half the rate
-
-`Session.lean` bounds the runs at which a sampled proof block's session's extraction finds no witness
-(`Compiled.SessionKS`, from `Arg.KS`). Here the extraction finds a witness with a property `G` of the run, and the
-bound is against the same event at the compiled verifier over the one-wait proof system (`Compiled.oneWait`), from
-`Arg.OneWaitFinds`:
-
-* `FoundWith`: `Found` with the witness's property a parameter (`Found` is `FoundWith` at `A`'s relation).
-* `session_finds`: **the session transfer**. At coins `R0` that sample `u`, over fresh coins on the session's rounds
-  and the extractor's coins, the run accepts and the block's extraction returns a witness with `G` with probability
-  at most twice the one-wait extraction's, plus `2·κ_A + √(γ_A·Pr[B_sess])` at the session's statement: both
-  extractions are `A`'s and `A.oneWait`'s extractors against the session's prover (`served_eval`), the property read
-  at the session's coins, which fix the run's (`forkOn_emb`).
-* `fiber_finds`: the same at the largest of the proof blocks' error bounds, `2·κ_s + √(k_V·γ_s·Pr[B])`
-  (`session_gamma_le`).
-* `sessionFinds_of`: **`SessionFinds`**, at the slot a selection picks among the sample's, over the second stage,
-  with `SessionKS`'s weight `β`: `sessionKS_of`'s resampling with a probability on both sides.
--/
+/-! What a session's extraction finds, its one wait finds at half the rate. -/
 
 @[expose] public section
 
@@ -38,9 +20,6 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **Proof block `u`'s session's extraction finds a witness with `G`** at the run `r'`, on the prover's runs `run'`:
-`r'` shows `u`'s session `(xS, vS)` at the block's shape, and `A`'s extractor at the session, as `sessWit` serves it,
-returns a witness `w` with `G xS w`. `Found` is this at `A`'s relation. -/
 def FoundWith (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (u : Fin (L.nPU x)) (r' : Fin (L.V.k x) → Coin) (c : A.EC (L.sh x u)) (G : Msg → A.W → Prop) : Prop :=
   ∃ xS vS, L.session x u (run' r').seen = some (xS, vS) ∧ ∃ h : A.shape xS = L.sh x u, ∃ w,
@@ -53,8 +32,6 @@ theorem found_iff_foundWith (H : Msg → Msg) (L : Compiled Coin A) (x : Msg)
   Iff.rfl
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **Coins fresh on a session's rounds are fixed by the session's coins**: two that agree through `emb` give one
-run's coins. -/
 theorem forkOn_emb (L : Compiled Coin A) {x : Msg} {u : ℕ} {xS : Msg} (hcard : A.V.k xS = (L.rounds x u).card)
     (R0 : Fin (L.V.k x) → Coin) {σ σ' : Fin (L.V.k x) → Coin}
     (h : (fun i => σ (L.emb x u xS hcard i)) = fun i => σ' (L.emb x u xS hcard i)) :
@@ -71,15 +48,6 @@ theorem forkOn_emb (L : Compiled Coin A) {x : Msg} {u : ℕ} {xS : Msg} (hcard :
     exact congrFun h i
   · rw [ite_eq_right ht, ite_eq_right ht]
 
-/-! ## The session transfer -/
-
-/-- **The session transfer for what the extraction finds**: at coins `R0` that sample `u`, with `runs`'s session
-statement `xS` and prover `P'`, over fresh coins on the session's rounds and the extractor's coins, the run accepts
-and the block's extraction returns a witness with `G` with probability at most twice that at the one-wait proof
-system, plus `2·κ_A + √(γ_A·Pr[B_sess])` at the session's statement. The run accepts only when `P'`'s does on the
-session's coins, both extractions are the extractors' against `P'` (`served_eval`), the session's coins and the cast
-extractor's coins are uniform (`Pr_restrict_shape`), and the run's coins are the session's coins' (`forkOn_emb`), so
-this is `A.OneWaitFinds` at `P'` and the property with the run's acceptance. -/
 theorem session_finds {H : Msg → Msg} (hF : A.OneWaitFinds H) (L : Compiled Coin A) (x : Msg) {Ω : Type}
     (P : Prover Ω) (ω : Ω) (R0 : Fin (L.V.k x) → Coin) (u : Fin (L.nPU x)) (xS : Msg) (P' : Prover Unit)
     (hshape : A.shape xS = L.sh x u) (hcard : A.V.k xS = (L.rounds x u).card)
@@ -153,9 +121,6 @@ theorem session_finds {H : Msg → Msg} (hF : A.OneWaitFinds H) (L : Compiled Co
         have := Pr_mono himp₁
         linarith
 
-/-- **At one sampled proof block's session, the others' coins fixed**: `session_finds` at `runs`'s session, with
-`A`'s errors there within the block's bounds, so at the largest of the proof blocks' bounds:
-`2·κ_s + √(k_V·γ_s·Pr[B])` (`session_gamma_le`). -/
 theorem fiber_finds {H : Msg → Msg} (hF : A.OneWaitFinds H) {L : Compiled Coin A} (hS : L.RunsFixed H) (x : Msg)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (R0 : Fin (L.V.k x) → Coin) (u : Fin (L.nPU x))
     (hu : u.val ∈ L.checked x R0) (G : (Fin (L.V.k x) → Coin) → Msg → A.W → Prop) :
@@ -176,10 +141,6 @@ theorem fiber_finds {H : Msg → Msg} (hF : A.OneWaitFinds H) {L : Compiled Coin
     (L.session_gamma_le H x P ω R0 u xS P' hshape hγb hcard fun r' h => (hview r' h).2)
   linarith
 
-/-! ## The selected slot's session, resampled -/
-
-/-- The probability over the slots' coins that the run at `R` accepts and the block at the slot a selection picks is
-found, at the slot's coins, with a witness with the property `G` reads at the run's coins and the slot. -/
 noncomputable def selHit (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (sel : List ℕ → Option (Fin (L.nPU x)))
     (G : (Fin (L.V.k x) → Coin) → Fin (L.nPU x) → Msg → A.W → Prop) (R : Fin (L.V.k x) → Coin) : ℝ :=
@@ -193,8 +154,6 @@ theorem selHit_none (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Pro
   rw [h]
   exact (Pr_congr fun _ => ⟨fun ⟨_, _, _, hu, _⟩ => Option.some_ne_none _ hu.symm, False.elim⟩).trans Pr_false
 
-/-- At coins fresh on the picked block's session's rounds, the picked slot's coins are one coordinate of the slots'
-and then of the blocks' (`Pr_pi_eval_dep`). -/
 theorem selHit_forkOn {H : Msg → Msg} {L : Compiled Coin A} (hS : L.RunsFixed H) (x : Msg) {Ω : Type}
     (P : Prover Ω) (ω : Ω) (sel : List ℕ → Option (Fin (L.nPU x)))
     (G : (Fin (L.V.k x) → Coin) → Fin (L.nPU x) → Msg → A.W → Prop) {R0 : Fin (L.V.k x) → Coin}
@@ -214,7 +173,6 @@ theorem selHit_forkOn {H : Msg → Msg} {L : Compiled Coin A} (hS : L.RunsFixed 
   obtain ⟨rfl, rfl⟩ := hiu
   exact ⟨ha, hw⟩
 
-/-- **At the picked slot's block's session's coins**, the others fixed: `fiber_finds`. -/
 theorem selHit_fiber {H : Msg → Msg} (hF : A.OneWaitFinds H) {L : Compiled Coin A} (hS : L.RunsFixed H)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (sel : List ℕ → Option (Fin (L.nPU x)))
     (G : (Fin (L.V.k x) → Coin) → Fin (L.nPU x) → Msg → A.W → Prop) {R0 : Fin (L.V.k x) → Coin}
@@ -240,8 +198,6 @@ theorem selHit_fiber {H : Msg → Msg} (hF : A.OneWaitFinds H) {L : Compiled Coi
           (G (forkOn (L.rounds x u) R0 s.1) i))]
   exact fiber_finds hF hS x P ω R0 u (mem_of_selSlot h) fun R => G R i
 
-/-- At second-stage coins `d`, resampling the picked block's session's rounds: `selHit_fiber`, or `0` on both sides
-when none is picked. -/
 theorem resample_finds {H : Msg → Msg} (hF : A.OneWaitFinds H) {L : Compiled Coin A} (hS : L.RunsFixed H)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (sel : List ℕ → Option (Fin (L.nPU x)))
     (G : (Fin (L.V.k x) → Coin) → Fin (L.nPU x) → Msg → A.W → Prop) (r d : Fin (L.V.k x) → Coin) :
@@ -268,12 +224,6 @@ theorem resample_finds {H : Msg → Msg} (hF : A.OneWaitFinds H) {L : Compiled C
     simp only [forkOn_sub (hS.fixed x _ u (mem_of_selSlot h)).1]
     exact selHit_fiber hF hS x P ω sel G h
 
-/-- **What the sessions' extractions find, their one wait finds at half the rate**, at the sample's slots: on every
-prover, a nonnegative weight `β` of each tape and first-stage coins `(ω, r)`, averaging at most `Pr[B]`, such that
-at `(ω, r)`, over fresh second-stage coins and the extractor's coins at each slot, the run accepts and the proof
-block at the slot a selection rule `sel` picks is found, at that slot's coins, with a witness with a property `G` of
-the run's coins and the slot with probability at most twice that at the one-wait proof system, plus
-`2·κ_s + √(k(x)·γ_s·β(ω, r))`. -/
 def SessionFinds (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     ∃ β : Ω → (Fin (L.V.k x) → Coin) → ℝ, (∀ ω r, 0 ≤ β ω r) ∧
@@ -294,9 +244,6 @@ def SessionFinds (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
                     (G (forkOn (L.secondStage x) r p.1) i)) +
             (2 * L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r))
 
-/-- **`SessionFinds` from `Arg.OneWaitFinds`**, the proof system's rounds and the contract: `sessionKS_of`'s weight
-and resampling (`Ex_resample`, `selRounds_resample`), `resample_finds` at each second-stage `d`, averaged by Jensen's
-inequality (`Ex_sqrt_le`). -/
 theorem sessionFinds_of {H : Msg → Msg} (hF : A.OneWaitFinds H) {L : Compiled Coin A} (hS : L.RunsFixed H) :
     L.SessionFinds H := by
   intro x Ω _ _ P

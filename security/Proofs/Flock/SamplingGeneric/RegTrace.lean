@@ -11,26 +11,7 @@ import Proofs.Flock.Claims.Sampling.Binding
 import Proofs.Flock.Claims.Sampling.Extract
 import Proofs.Flock.SamplingGeneric.Assemble
 
-/-!
-# The committed form's event, at a table of the statement
-
-The first half of the committed form, proved once, at the incorrect set of any table of the statement
-(`Encodings.FregAt`): a trace for each statement, which may read the prover's tape.
-
-* `event_le_of_off`: an accepted run samples a proof block that no values agreeing with the table on the program's
-  gates make correct with probability at most `κ_s + √(k·γ_s·Pr[B]) + b_I + b_O`, where `b_I` bounds one run's own
-  disagreement and `b_O` the accepted runs whose extractions open a gate off the table. It is the deterministic half
-  at a trace (`trace_split`), the sessions' bound at the first sampled block of the set (`pr_unfound_le` at
-  `leadSel (selOf …)`) and a union bound. Which table it is, only the two bounds know, and they are its hypotheses.
-* `Freg_eq_FregAt`, `FregX_eq_FregAt`: the committed trace's incorrect set, and the incorrect set of the trace read at
-  the statement, are `FregAt` at those traces. So the per-tape form (`ksReg_of_sessionKS`, below), the form at the
-  trace read at the statement (`ksRegX_of_sessionKS`, `SamplingGeneric/RegX.lean`) and the form that counts each bad
-  run at one gate (`pr_regHit_le_canon_on`, `SamplingGeneric/RegCanon.lean`) are `event_le_of_off` at their tables,
-  each with its own two bounds.
-* `ksReg_of_sessionKS`, `compilerKSReg_of`: **`KSReg`**: the event at the committed trace, with `B_conf` for one run's
-  disagreement and the rewinding lemma for the gates opened off the trace; and on the sample, `miss_of_event` at
-  `Freg`.
--/
+/-! The first half of the committed form, proved once at the incorrect set of any table of the statement, and `KSReg` from it. -/
 
 @[expose] public section
 
@@ -43,10 +24,6 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## The incorrect sets, as the set at a table -/
-
-/-- **The committed trace's incorrect set is the set at a table**: `Freg` at the tape `ω` is `Encodings.FregAt` at
-the table that gives every statement the committed trace at `ω`. -/
 theorem Freg_eq_FregAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
     L.Freg H P x ω = Encodings.FregAt L x (fun _ => L.regVal H P x ω) := by
   ext v
@@ -54,8 +31,6 @@ theorem Freg_eq_FregAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : 
   | none => simp only [Freg, Encodings.FregAt, hs]
   | some s => simp only [Freg, Encodings.FregAt, hs, mem_filter, mem_range]
 
-/-- **The incorrect set of the trace read at the statement is the set at a table**: `FregX` is `Encodings.FregAt` at
-the table that gives every statement the trace read at the statement. -/
 theorem FregX_eq_FregAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) :
     L.FregX H P x = Encodings.FregAt L x (fun _ => L.regValX H P x) := by
   ext v
@@ -63,15 +38,7 @@ theorem FregX_eq_FregAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fin
   | none => simp only [FregX, Encodings.FregAt, hs]
   | some s => simp only [FregX, Encodings.FregAt, hs, mem_filter, mem_range]
 
-/-! ## The event's bound from bounds on its two binding terms -/
-
 set_option synthInstance.maxSize 1024 in
-/-- **The event's bound from bounds on its two binding terms**, at a table `T` of the statement that may read the
-tape: an accepted run samples a proof block incorrect at the table (`Encodings.FregAt`) with probability at most
-`κ_s + √(k·γ_s·Pr[B]) + b_I + b_O`, where `b_I` bounds one run's own disagreement and `b_O` the accepted runs whose
-extractions open a gate off the table. At such a run the first sampled block of the set has its session unfound at its
-first slot (the sessions' bound at `leadSel (selOf …)`), or the run's extractions disagree with themselves or open a
-gate off the table (`trace_split`). The contract's clauses it reads are `slots`, `shared` and `opens`. -/
 theorem event_le_of_off {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) (hSK : L.SessionKS H) {x : Msg}
     {s : AuditStatement} {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
     (hin : InScope Pt s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
@@ -133,13 +100,7 @@ theorem event_le_of_off {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions
   rw [Ex_add, Ex_add]
   linarith
 
-/-! ## The committed form -/
-
 set_option synthInstance.maxSize 1024 in
-/-- **`KSReg` from the sessions' bound**: `event_le_of_off` at the committed trace of each tape, where one run's own
-disagreement is `B_conf`'s collision and a run's extractions open a gate off the committed trace with probability at
-most `N·√Pr[conflict]` at each tape (the rewinding lemma), at most `N·√Pr[B_conf]` on average (Jensen's inequality);
-and a set refused at `δ` is missed with probability at most `P_a ≤ δ` (`miss_of_event`). -/
 theorem ksReg_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
     (hSK : L.SessionKS H) : L.KSReg H := by
   intro x hsc Ω _ _ P
@@ -179,7 +140,6 @@ theorem ksReg_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.co
 
 end Compiled
 
-/-- **The committed form** from the sessions' bound. -/
 theorem compilerKSReg_of (hsess : SessionKSOf) : CompilerKSReg := by
   intro Coin _ _ _ A L H hA hB hS
   exact Compiled.ksReg_of_sessionKS hB hS (hsess Coin A L H hA hS)

@@ -50,24 +50,7 @@ import Proofs.Flock.Claims.ZK.L0PinLoop
 import Proofs.Flock.SessionLoop.FinRepView
 import Proofs.Flock.SessionLoop.FinRounds
 
-/-!
-# `hmk` from the history: the views' masked values below `zp 64`, read off the cut session's PIOP
-
-At (c.3)'s context, below `zp 64` and away from `final_c`'s pad, the views' source (`Masked.swSrcE` at the workers'
-values `vs`) holds the request's values plus its pads (`q.vals + pads.h`). Nothing here reads the view rep's return: the
-history's rounds of rep `2j + r`'s PIOP are the cut session's bodies there (`msg_runCut`), which are the PIOP's bodies
-from the views' source (`runCut_cutPiop`, `piopCut_bodies`): the zerocheck's and lincheck's rounds carrying that source's
-masked values. The loop's frame re-runs those rounds and takes back exactly those values (`maskedOf_piop`), so the
-request's values there are the source's plus the pads (`valsOf_at`), and the pads cancel.
-
-* **`Masked.runCut_cutPiop`**, **`Masked.runCut_cutPiop_of_ret`**: the cut session stopped at a body `n` of rep
-  `2j + r`'s PIOP reached it and sent there the PIOP's body `n`, where the earlier reps return (`runCut_cutL0`'s walk).
-* `piopCut_bodies_go`, **`piopCut_bodies`**: a PIOP from a source, returned or not where its zerocheck and lincheck
-  have room and the fold returns, sent, from its log's start, `piopBody`: the PIOP's frames (`piopFr`) at the source's
-  masked values, each with its squeeze, the pending bytes ahead of the first.
-* **`Loop.swSrcE_hmk_cut`**: the views' source's masked values below `zp 64`, but `final_c`'s, are `q.vals + pads.h`.
-  `final_c`'s is read from the inner proof's round 0, past the PIOP, Ligerito and the replay, and is not stated here.
--/
+/-! `hmk` from the history: the views' masked values below `zp 64`, but `final_c`'s, read off the cut session's PIOP. -/
 
 @[expose] public section
 
@@ -82,10 +65,6 @@ open CoinLayer
 namespace Masked
 
 set_option maxHeartbeats 1000000 in
-/-- **The cut session in rep `2j + r`'s PIOP**: as `runCut_cutL0`, where each rep `k < 2j + r` returns from any history
-at its first round (with rep `0`'s claim points `ptsOpen`, `hprev`) and rep `2j + r`'s PIOP, returned or not, ends from a
-history `l` at its first round with log `l₁` (`hpiop`), the cut session stopped at `n`, for `n` from rep `2j + r`'s
-first round below `|l₁|` and `n ≤ refK x`, reached `n` and sent there what that PIOP sent there. -/
 theorem runCut_cutPiop {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin)
     (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -153,7 +132,6 @@ theorem runCut_cutPiop {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy
   have hmono : ∀ a b, a ≤ b → repBase x a ≤ repBase x b := fun a b hab => by
     rw [repBase_eq hsx, repBase_eq hsx]
     exact FlockComplete.ZkTables.repStart_mono _ _ hab
-  -- rep `k`'s earlier claim points, read from the streams so far
   have hpri : ∀ (k : ℕ) (streams : Array (Array _root_.Flock.Round)),
       (k % 2 = 1 → FlockComplete.MaskRank.roundPoints (FlockDeploy.tabsOf (stsOf x))[k / 2]!.m
         (FlockDeploy.tabsOf (stsOf x))[k / 2]!.kLog streams.back! = ptsOpen c (stsOf x)[k / 2]! (2 * (k / 2))) →
@@ -181,7 +159,7 @@ theorem runCut_cutPiop {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy
       FlockComplete.MaskRank.roundPoints (FlockDeploy.tabsOf (stsOf x))[k / 2]!.m
         (FlockDeploy.tabsOf (stsOf x))[k / 2]!.kLog b.1.back! = ptsOpen c (stsOf x)[k / 2]! (2 * (k / 2))))
     (2 * j.val + r.val) (by simpa using hk) ?_ ⟨?_, fun h => absurd h (by norm_num)⟩ ?_
-  · -- the reps before `2j + r` return by `n`, as at the ZK server's stop
+  ·
     rintro k hk' ⟨streams, proofs⟩ ls ⟨hls, hpts⟩
     obtain ⟨extras', hxe'⟩ := hexts k hk'
     obtain ⟨ic', hic'⟩ := padsTreeCut_go
@@ -217,7 +195,7 @@ theorem runCut_cutPiop {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy
       exact hrp (by omega)
   · rw [repBase_eq hsx]
     simp [FlockComplete.repStartZk]
-  · -- rep `2j + r` stops at `n` inside its PIOP
+  ·
     rintro ⟨streams, proofs⟩ l₀ ⟨hl₀, hpts⟩
     have hp := hpri (2 * j.val + r.val) streams hpts
     have e2 : (2 * j.val + r.val) / 2 = j.val := by omega
@@ -254,8 +232,6 @@ theorem runCut_cutPiop {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy
       rw [hLi n (by omega), hbs]
       exact Claims.ZKServer.Loop.getElem!_append_shift (hl₀.trans hl.symm) (by omega)
 
-/-- **The cut session in rep `2j + r`'s PIOP, from the earlier reps' returns alone**: `runCut_cutPiop` with rep `0`'s
-claim points at the opened coins read off its return (`repCut_points`). -/
 theorem runCut_cutPiop_of_ret {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin)
     (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -321,15 +297,11 @@ open _root_.Flock (V F128)
 open FlockSoundness.Refine (Frame encs)
 open Claims.ZKMal (dropDom)
 
-/-- **The PIOP's body `jj`** after the pending bytes `P`: its frames (`piopFr`) and its squeeze, `P` ahead of round
-`0`'s. -/
 def piopBody (P : List UInt8) (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
     (mk : ℕ → F128) (jj : ℕ) : Claims.Msg :=
   (if jj = 0 then P else []) ++
     (encs (piopFr m kLog digest cap root lay mk jj) ++ (Frame.sq (piopK jj) (piopN m jj)).enc)
 
-/-- **The cut's zerocheck and lincheck bodies are the PIOP's bodies** (`zcBodies`, then `lcBodies` after the
-zerocheck's finals). -/
 theorem piopBodies_eq (P : List UInt8) {m kLog : ℕ} (digest cap root : ByteArray)
     (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) :
     zcBodies m digest cap root lay mk P ++ lcBodies kLog lay mk (encs [.one (mk lay.fa), .one (mk lay.fb)]) =
@@ -419,7 +391,6 @@ theorem piopBodies_eq (P : List UInt8) {m kLog : ℕ} (digest cap root : ByteArr
   unfold zcBodies lcBodies
   simp only [List.cons_append, List.nil_append, List.append_assoc]
 
-/-- A log's body `|l| + jj` where it is `l`, then the bodies `f 0, …`, then any more. -/
 theorem getElem!_of_toList_mid {L l : Array Claims.Msg} {N : ℕ} {f : ℕ → Claims.Msg} {rest : List Claims.Msg}
     (h : L.toList = l.toList ++ (List.range N).map f ++ rest) {jj : ℕ} (hj : jj < N) : L[l.size + jj]! = f jj := by
   have hs : l.size + jj < L.size := by
@@ -434,10 +405,6 @@ theorem getElem!_of_toList_mid {L l : Array Claims.Msg} {N : ℕ} {f : ℕ → C
   rw [getElem!_pos L _ hs]
   exact Option.some.inj ((Array.getElem?_eq_getElem hs).symm.trans e)
 
-/-- **A PIOP from a source sent the PIOP's bodies**, returned or not (`piopBody`), from its log's start, at the source's
-masked values, the binding `st.digest`, `cap` and `root`, after the pending bytes it started from, where its zerocheck
-and lincheck have room before the cut's stop `n` and the fold returns at the lincheck's first coin (`hf`); its log
-holds all `piopNR` of them. -/
 theorem piopCut_bodies_go {coin : ℕ → ℕ → F128} {n : ℕ} {st : _root_.Flock.Setup} {lay : _root_.Flock.Zk.PadLayout}
     {src : FlockComplete.RepSrc} {cap root : ByteArray} {extras : Array _root_.Flock.Claim}
     {prior : Array (List F128)} {words : List ℕ} {t₀ : _root_.Flock.Transcript} {l : Array Claims.Msg} {v l₃}
@@ -479,8 +446,6 @@ theorem piopCut_bodies_go {coin : ℕ → ℕ → F128} {n : ℕ} {st : _root_.F
   simp only [Array.length_toList, List.length_append, List.length_map, List.length_range] at e
   omega
 
-/-- **A returned PIOP from a source sent the PIOP's bodies** (`piopBody`) from its log's start, at the source's masked
-values, the binding `st.digest`, `cap` and `root`, after the pending bytes it started from. -/
 theorem piopCut_bodies {coin : ℕ → ℕ → F128} {n : ℕ} {st : _root_.Flock.Setup} {lay : _root_.Flock.Zk.PadLayout}
     {src : FlockComplete.RepSrc} {cap root : ByteArray} {extras : Array _root_.Flock.Claim}
     {prior : Array (List F128)} {words : List ℕ} {t₀ : _root_.Flock.Transcript} {l : Array Claims.Msg} {res t₃ l₃}
@@ -496,7 +461,6 @@ theorem piopCut_bodies {coin : ℕ → ℕ → F128} {n : ℕ} {st : _root_.Floc
   cases e
   exact FlockComplete.RankAt.lincheckCut_fold coin n h₂
 
-/-- A PIOP round's frames past round `0` carry no domain frame. -/
 theorem piopFr_noDom {m kLog : ℕ} {digest cap root : ByteArray} {lay : _root_.Flock.Zk.PadLayout} {mk : ℕ → F128}
     {jj : ℕ} (h : jj ≠ 0) : ∀ f ∈ piopFr m kLog digest cap root lay mk jj, noDom f := by
   intro f hf
@@ -505,7 +469,6 @@ theorem piopFr_noDom {m kLog : ℕ} {digest cap root : ByteArray} {lay : _root_.
   split_ifs at hf <;> simp only [List.mem_cons, List.not_mem_nil, or_false] at hf <;>
     rcases hf with rfl | rfl | rfl <;> exact True.intro
 
-/-- **The PIOP's round messages without the stream's domain frame**: the round's frames and squeeze. -/
 theorem dropDom_piopBody (dom : ByteArray) (hd : dom.size < 2 ^ 64) (m kLog : ℕ) (digest cap root : ByteArray)
     (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (jj : ℕ) :
     dropDom (0 :: piopBody (_root_.Flock.Transcript.init #[] dom).pending.data.toList m kLog digest cap root lay mk
@@ -523,7 +486,6 @@ theorem dropDom_piopBody (dom : ByteArray) (hd : dom.size < 2 ^ 64) (m kLog : �
     rw [e]
     exact dropDom_noDom _ _ _ (piopFr_noDom h0)
 
-/-- **The PIOP's coin counts** in the plan's order. -/
 theorem piopN_list {m kLog jj : ℕ} (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hj : jj < piopNR m kLog) :
     ((6 :: (m - 13) :: 1 :: (List.replicate (m - 6) 1 ++ 1 :: 1 :: (List.replicate (kLog - 6) 1 ++ [1])))[jj]?).getD
       0 = piopN m jj := by
@@ -545,8 +507,6 @@ theorem piopN_list {m kLog jj : ℕ} (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hj : jj 
     rw [List.getElem?_cons_succ, List.getElem?_cons_succ, List.getElem?_replicate, if_pos (by omega)]
     simp [piopN]
 
-/-- **The masked value at pad `i`'s absorbed position** below `zp 64`, but `final_c`'s, where the masked values are
-`mk` at the absorbed order's pads. -/
 theorem getElem!_absPos {lay : _root_.Flock.Zk.PadLayout} {M : Array F128} {mk : ℕ → F128} {tail : List F128}
     (h : M.toList = (List.range (lay.fa + 2) ++ List.range' (lay.fa + 3) (2 * lay.nLc + 64)).map mk ++ tail)
     {i : ℕ} (hi : i < lay.zp 64) (hne : i ≠ lay.fc) : M[absPos lay i]! = mk i := by
@@ -576,7 +536,6 @@ theorem getElem!_absPos {lay : _root_.Flock.Zk.PadLayout} {M : Array F128} {mk :
   rw [getElem!_pos M _ hlt]
   exact Option.some.inj ((Array.getElem?_eq_getElem hlt).symm.trans e)
 
-/-- A coin other than `1` plus `1` is not zero. -/
 theorem isZero_add_one {a : F128} (h : a ≠ 1) : (a + 1).isZero = false := by
   cases hz : (a + 1).isZero
   · rfl
@@ -597,14 +556,6 @@ variable (L₀ : LeanRelease Flock.Wit Tp)
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 set_option maxHeartbeats 4000000 in
-/-- **`swSrcE_hmk_cut`: the views' masked values below `zp 64` are the request's plus its pads, from the history**: at
-(c.3)'s context on the loop's tables, where the earlier reps return from the views' source cut at the opened coins and
-table `j`'s rep `r`'s PIOP returns (`Masked.runCut_cutPiop_of_ret`'s premises, `Loop.swSrcE_l0_live`'s), every masked
-value of the views' source below `zp 64` but `final_c`'s is the request's value there plus its pad. The history's rounds
-of the rep's PIOP are the cut session's bodies (`msg_runCut`), the PIOP's from the views' source (`runCut_cutPiop_of_ret`,
-`piopCut_bodies`); the loop's frame takes back the masked values they carry (`maskedOf_piop`), so the request's value at
-pad `i` is the masked value plus pad `i` (`valsOf_at`). `hcap` and `hroot` bound the zerocheck binding's capacity and
-pads root, which the frame reads as byte frames. -/
 theorem swSrcE_hmk_cut (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
@@ -691,7 +642,6 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
   have hmS : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m = (Masked.stAt x j).m := by rw [htab]; rfl
   have hkS : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.fold.kLog = (Masked.stAt x j).c.kLog := by
     rw [htab]; rfl
-  -- the loop's table and schedule are the session's
   obtain ⟨schs', hschs', hschj⟩ := Masked.schedsPZk_live hx
   obtain ⟨htabst, hschtb⟩ := finRepTab (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hschs' hq hRep
   rw [hjj] at htabst hschtb
@@ -700,7 +650,6 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
     simp only [Prod.mk.injEq] at e
     exact e.1
   have hts : tb.st = _root_.Flock.Setup.ofCircuit (Masked.stAt x j) := htabst.symm.trans htab
-  -- the request
   have hq' := hRep.2.1
   unfold repInOf at hq'
   obtain ⟨⟨lay, msk⟩, hds, hq'⟩ := bok hq'
@@ -719,7 +668,6 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
       (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0 = lay := by
     rw [hlay, htab]; rfl
   rw [hlayG] at hi hne
-  -- the PIOP's log
   have hm14' : 14 ≤ (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m := by rw [hmS]; omega
   obtain ⟨-, hl₁, hn₁⟩ := FlockComplete.piopCut_at hm14' hpiop default
   rw [hmS, hkS, hl] at hl₁
@@ -728,7 +676,6 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
     unfold FlockComplete.repStartZk
     omega
   have hlen : ops.length = refK x := hF.1
-  -- the history's rounds of the PIOP are its bodies
   have hlast : (LeanRelease.ofLoopLink L₀ src (realOf src)).last x = refK x + 1 :=
     LeanRelease.loop_last loopNr Masked.dataE _ x
   have hsrc : Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t =
@@ -763,7 +710,6 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
       rfl
     rw [e, hm]
     rfl
-  -- the loop's coin counts there
   have hpl := Count.piop_list (kLog := (Masked.stAt x j).c.kLog) (by omega : 14 ≤ (Masked.stAt x j).m)
   have hpL := congrArg List.length hpl
   simp only [List.length_cons, List.length_append, List.length_replicate, List.length_nil] at hpL
@@ -785,7 +731,6 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
     rw [List.take_length, hNR jj (by omega)] at hs'
     rw [hs']
     exact Nat.min_eq_left (by unfold piopN _root_.Flock.ZkServer.Frames.COIN_MAX; split_ifs <;> omega)
-  -- the zerocheck's outer coins are not `1`
   have hA := admits_of_finCtx L₀ src (realOf src) wk hServe hF
   have hnr := Masked.not_refused_of_admits hx hA (Masked.innerSlotE x j r + 2)
   have hout : ∀ e < (Masked.stAt x j).m - 13,
@@ -796,7 +741,6 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
       hNR 1 (by unfold piopNR; omega)
     rw [words_slot hF.1 (by omega) (by rw [h1']; exact he) (by omega)]
     exact isZero_add_one (Masked.outer_ne_one hnr hsx j r (by omega) e he)
-  -- the rounds the loop released
   have hrk : (roundsOf spec (Masked.stsOf x)).getD (2 * j.val + r.val) 0 =
       FlockDeploy.repRounds true spec (Masked.stsOf x)[(2 * j.val + r.val) / 2]! := by
     unfold roundsOf
@@ -832,7 +776,6 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
     dsimp only
     rw [List.tail_cons, show streamAt (roundsOf spec (Masked.stsOf x)) (2 * j.val + r.val) + jj + 1 =
       Masked.repBase x (2 * j.val + r.val) + jj by omega, hbody jj hjj', hNR jj hjj']
-  -- the masked values the loop's frame took, and the request's values
   have hdg : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.digest.size < 2 ^ 64 := by
     rw [htab]
     simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]

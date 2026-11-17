@@ -34,16 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A session's coins in a compiled run
-
-* `place_of_not_mem`: the run with a session's coins replaced agrees with the run off the session's rounds.
-* `coinsOf_place`: where `A` has as many rounds at the session's statement as the session (`Sessions.runs`), the
-  session's coins of the run with them replaced are the replacement.
-* `place_coinsOf`: replacing a run's session coins by its own changes nothing.
-* `card_eq_of_strictMono`, `coinsOf_eq_of_strictMono`: an order embedding of `A`'s rounds onto the session's (the one
-  `Claims.Sampling`'s `SessionRuns` gives) makes them as many, and is `emb`, so its coins are `coinsOf`'s.
--/
+/-! A session's coins in a compiled run (`coinsOf`, `place`) invert each other. -/
 
 @[expose] public section
 

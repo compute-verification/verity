@@ -3,19 +3,7 @@ module
 public import Flock.ZkServer
 import all Init.Data.String.Defs
 
-/-!
-# The honest worker's bytes read back as it meant them
-
-`decode_putReq`: `decode` reads a request the worker encodes (`putReq`) back to itself wherever each length fits its
-word (`ReqFits`). `frames_putFrames`: `frames` reads the frames the worker writes (`putFrames`) back to themselves
-wherever each frame's op, kind, count and payload fit (`FrameFits`). `split_putRound`: `split` reads a round the
-worker's challenger absorbs (`putRound`) to its caps, its free elements and its coin count, in absorb order, wherever
-each item fits and the statement is bound once in a rep's first round and nowhere else (`RoundFits`).
-
-`At b p x` says `x` sits in `b` at `p`; each reader (`rdU32`, `rdU64`, `rdBytes`, `rdStr`, `rdList`) has a lemma
-reading what its writer put there. `split`'s loop is read item by item through `Steps`, its body's action on each frame
-an honest item makes.
--/
+/-! The honest worker's requests, frames and rounds read back as it wrote them. -/
 
 @[expose] public section
 
@@ -23,9 +11,6 @@ namespace FlockSoundness.Discharge.Recursion.ZkServerWire
 
 open Flock Flock.ZkServer
 
-/-! ## Bytes and their readers -/
-
-/-- `x` sits in `b` at offset `p`. -/
 def At (b : ByteArray) (p : Nat) (x : ByteArray) : Prop :=
   p + x.size ≤ b.size ∧ ∀ i (h : i < x.size), b.get! (p + i) = x[i]
 
@@ -138,7 +123,6 @@ theorem rdStr_at {b : ByteArray} {p : Nat} {s : String} (h : At b p (putStr s)) 
   simp only [bind, Except.bind, fromUTF8?_toUTF8]
   rfl
 
-/-- Each pair's string and bytes fit their words. -/
 def PairsFit (l : List (String × ByteArray)) : Prop := ∀ e ∈ l, e.1.toUTF8.size < 2 ^ 32 ∧ e.2.size < 2 ^ 32
 
 theorem forIn_pairs {b : ByteArray} {f : Nat → Array (String × ByteArray) → Rd (ForInStep (Array (String × ByteArray)))}
@@ -176,8 +160,6 @@ theorem rdList_at {b : ByteArray} {p : Nat} {l : List (String × ByteArray)} (h 
     simp only [ByteArray.size_append, Nat.add_assoc]
     rfl
 
-/-! ## Requests -/
-
 theorem at_tag (t : UInt8) (x : ByteArray) : At (⟨#[t]⟩ ++ x) 1 x := at_append_right ⟨#[t]⟩ x
 
 theorem size_tag (t : UInt8) : (⟨#[t]⟩ : ByteArray).size = 1 := rfl
@@ -190,7 +172,6 @@ theorem tag_get (t : UInt8) (x : ByteArray) : (⟨#[t]⟩ ++ x : ByteArray).get!
 theorem tag_size (t : UInt8) (x : ByteArray) : ((⟨#[t]⟩ ++ x : ByteArray).size == 0) = false := by
   simp [ByteArray.size_append, size_tag]
 
-/-- Each length of a request fits its word. -/
 def ReqFits : Req → Prop
   | .hello t => t.toUTF8.size < 2 ^ 32
   | .link y => y.size < 2 ^ 32
@@ -199,7 +180,6 @@ def ReqFits : Req → Prop
   | .commit f r p => f.size < 2 ^ 32 ∧ r.length < 2 ^ 32 ∧ p.length < 2 ^ 32 ∧ PairsFit r ∧ PairsFit p
   | _ => True
 
-/-- `decode` reads back each request the worker encodes, wherever its lengths fit their words. -/
 theorem decode_putReq {r : Req} (h : ReqFits r) : decode (putReq r) = .ok r := by
   cases r with
   | hello t =>
@@ -251,12 +231,8 @@ theorem decode_putReq {r : Req} (h : ReqFits r) : decode (putReq r) = .ok r := b
       ok_bind]
     rfl
 
-/-! ## A round's frames -/
-
-/-- A frame's payload size, as `frames` reads it from its op and `n`. -/
 def frameSize (op n : Nat) : Nat := if op == OP_OBSERVE then 16 * n else if op == OP_SQUEEZE then 0 else n
 
-/-- A frame `frames` reads back: a known op, a kind byte, `n` in its word, and the payload its op and `n` say. -/
 def FrameFits : Nat × Nat × Nat × ByteArray → Prop
   | (op, kind, n, p) => op ∈ [OP_DOMAIN, OP_LABEL, OP_OBSERVE, OP_SQUEEZE, OP_BYTES] ∧ kind < 256 ∧ n < 2 ^ 64 ∧
       p.size = frameSize op n
@@ -308,7 +284,6 @@ theorem forIn_frames {c : ByteArray}
       (by simpa using hk) (fun fr' h' => hf fr' (List.mem_cons_of_mem _ h'))]
     simp
 
-/-- `frames` reads back the frames the worker writes, wherever each fits. -/
 theorem frames_putFrames {fs : List (Nat × Nat × Nat × ByteArray)} (hf : ∀ fr ∈ fs, FrameFits fr) :
     frames (putFrames fs) = .ok fs := by
   have hsz := size_putFrames fs
@@ -358,8 +333,6 @@ theorem frames_putFrames {fs : List (Nat × Nat × Nat × ByteArray)} (hf : ∀ 
     rw [hsize]
     simp only [Nat.add_assoc]
 
-/-! ## A round's split -/
-
 theorem beq_iff {a b : ByteArray} : (a == b) = true ↔ a = b := by
   show (a.data == b.data) = true ↔ a = b
   rw [beq_iff_eq, ByteArray.ext_iff]
@@ -379,8 +352,6 @@ def isBind : Absorb → Bool
   | .bind _ _ => true
   | _ => false
 
-/-- An item `split` reads as the worker meant it: each length in its word, a cap a whole number of nodes, a nonce of
-`NONCE_BYTES`, an observe of a kind `split` takes, and no label that would start a binding. -/
 def ItemFits : Absorb → Prop
   | .domain d => d.size < 2 ^ 64
   | .label l => l.size < 2 ^ 64 ∧ l ≠ LABEL_R1CS
@@ -390,7 +361,6 @@ def ItemFits : Absorb → Prop
   | .observe kind es => (kind = 1 ∧ es.length = 1 ∨ kind = 2) ∧ es.length < 2 ^ 64 ∧ ∀ e ∈ es, e < 2 ^ 128
   | .squeeze kind => kind < 256
 
-/-- `split`'s caps and free message, with an item's added. -/
 def addItem (s : Split) (a : Absorb) : Split :=
   { s with caps := s.caps ++ (itemCaps a).toArray, free := s.free ++ (itemFree a).toArray }
 
@@ -432,7 +402,6 @@ section loop
 
 variable {first : Bool} {f : Nat × Nat × Nat × ByteArray → Split × Option Nat → V (ForInStep (Split × Option Nat))}
 
-/-- `split`'s loop on each frame an honest item makes, at each binding state it meets. -/
 structure Steps (first : Bool)
     (f : Nat × Nat × Nat × ByteArray → Split × Option Nat → V (ForInStep (Split × Option Nat))) : Prop where
   domain : ∀ d st, f (OP_DOMAIN, 0, d.size, d) st = pure (.yield st)
@@ -554,15 +523,11 @@ theorem forIn_round (H : Steps first f) {items : List Absorb} {kind n : Nat} (hi
     simp [foldl_addItem]
     rfl
 
-/-- A round `split` reads as the worker meant it: each item fits, the squeeze's kind and count fit their words, and one
-`bind` item binds the statement where the round is a rep's first, and none elsewhere. -/
 def RoundFits (first : Bool) (items : List Absorb) (kind n : Nat) : Prop :=
   (∀ a ∈ items, ItemFits a) ∧ kind < 256 ∧ n < 2 ^ 64 ∧
     if first then ∃ pre d c post, items = pre ++ .bind d c :: post ∧ ∀ a ∈ pre ++ post, isBind a = false
     else ∀ a ∈ items, isBind a = false
 
-/-- `split` reads a round the worker's challenger absorbs to its caps and free elements in absorb order, and its coin
-count. -/
 theorem split_putRound {first : Bool} {items : List Absorb} {kind n : Nat} (h : RoundFits first items kind n) :
     split (putRound items kind n) first =
       .ok { caps := (items.flatMap itemCaps).toArray, free := (items.flatMap itemFree).toArray, n := n } := by

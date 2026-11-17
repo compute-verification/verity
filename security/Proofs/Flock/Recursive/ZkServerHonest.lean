@@ -5,27 +5,7 @@ public import Proofs.Flock.Recursive.ZkServerWire
 public import Proofs.Flock.Recursive.ZkServerSteps
 import all Lean.Data.Json.Basic
 
-/-!
-# The honest worker's requests pass the ZK server
-
-`run_honestReqs`: on the honest worker's requests (`Flock.ZkServer.honestReqs`) the ZK server (`Flock.ZkServer.run`), at
-any salts as many as the schedule's rows (`rowCount`), finishes, its Commit names the schedule's tables
-(`Schedule.tables`), and its commit strings are those of the worker's rows (`honestRows`: each table's level-0 top in
-Commit's order, then each round's fresh tops and message) in salt order. It holds at every schedule the ZK server holds a
-session to (`Canonical`) and every worker that follows it (`Fits`): its Commit's tables the schedule's roots in the
-schedule's order, each stream opened once before its first round, and each round's caps, copies, fresh tops and message
-the schedule's entry.
-
-The proof follows the ZK server's loop (`ZkServerSteps.Goes`) through the requests. What `Schedule.canonical` checks is
-`Facts`. The Pings, Register, Hello, the first `Open`s, Commit and Link reach the loop's invariant (`At`): each salt of
-the worker's rows before the next round sampled and its commit string sent, each opened stream with its count of rounds
-so far (`cnt`). Each round, after the `Open`s just before it, keeps it (`goes_opens`, `goes_round`), and at its end
-Finish's pin holds (`finish_pin`).
-
-`honestMsgs` is the messages `ZkServerAccepts` reads: message `i` the bytes `rowDigest` hashes of the worker's row `i`
-at the commit strings before it, the worker's rows reading no commit string at or after their own (`Causal`).
-`honestReqs_accepts` (`ZkServerAccepts`) is `run_honestReqs` at zero salts.
--/
+/-! The ZK server finishes on the honest worker's requests at every schedule it holds a session to. -/
 
 @[expose] public section
 
@@ -34,9 +14,6 @@ namespace FlockSoundness.Discharge.Recursion.ZkServerHonest
 open Lean (Json)
 open Flock Flock.ZkServer
 
-/-! ## The schedule and the worker's rows -/
-
-/-- The ZK server holds a session to the schedule (`Schedule.canonical`, which `schedule` checks at load). -/
 def Canonical (s : Schedule) : Prop := s.canonical = true
 
 /-- The schedule's roots: each table's name and its level-0 top's node count, in key order. -/
@@ -55,10 +32,8 @@ def roundCount (s : Schedule) (i : Nat) : Nat :=
 def rowCount (s : Schedule) : Nat :=
   ((rootsOf s).map (·.2)).sum + ((List.range s.rounds.size).map (roundCount s)).sum
 
-/-- A stream's parent in the schedule. -/
 def parentOf (s : Schedule) (stream : String) : String := ((s.streams.find? (·.1 == stream)).map (·.2.1)).getD ""
 
-/-- The worker's level-0 top of a stream's table, as its Commit gives it. -/
 def rootOf (h : Honest) (stream : String) : Option ByteArray := (h.roots.find? (·.1 == tableOf stream)).map (·.2)
 
 /-- A round's caps, in absorb order. -/
@@ -83,12 +58,6 @@ def rowBytes (row : Array Nat) : ByteArray :=
 
 theorem rowDigest_eq (row : Array Nat) : rowDigest row = Sha512.hash (rowBytes row) := rfl
 
-/-! ## The worker that follows the schedule -/
-
-/-- Round `i` as the ZK server takes it at the schedule's entry `(stream, k, n, tops, level0, commits)`: `split` reads its
-content (`RoundFits`, a binding where it is a rep's first), the binding's cap and the first `level0` caps are the
-committed top of the stream's table, the rest are fresh tops of the schedule's node counts, its message has the
-schedule's rows, and its stream is opened by then (at a place up to `i + 1`, the one just before it). -/
 def RoundOK (s : Schedule) (h : Honest) (i : Nat) : Prop :=
   match roundSpec (s.rounds.getD i .null) with
   | some (stream, k, n, tops, level0, commits) =>
@@ -100,9 +69,6 @@ def RoundOK (s : Schedule) (h : Honest) (i : Nat) : Prop :=
       stream ∈ (List.range (i + 2)).flatMap h.opens
   | none => True
 
-/-- **The worker follows the schedule**: each length in its word (`ReqFits`), Σ a plain string, Commit's tables the
-schedule's roots with their node counts in the schedule's order (`Schedule.tables`), each stream opened once at a place
-up to the last round's, and each round as the ZK server takes it (`RoundOK`). -/
 structure Fits (s : Schedule) (h : Honest) : Prop where
   pings : ∀ b ∈ h.pings, b.size < 2 ^ 32
   sigma : plainStr h.sigma = true
@@ -118,19 +84,13 @@ structure Fits (s : Schedule) (h : Honest) : Prop where
   roundsFit : ∀ i, ∀ r ∈ honestRound s h i, ZkServerWire.ReqFits r
   proofs : ∀ p ∈ h.proofs, p.1.toUTF8.size < 2 ^ 32 ∧ p.2.1 < 2 ^ 32 ∧ p.2.2.size < 2 ^ 32
 
-/-! ## What a schedule the ZK server holds a session to holds -/
-
-/-- A stream's table has a root in the schedule. -/
 def Rooted (s : Schedule) (stream : String) : Prop := (s.roots.getObjVal? (tableOf stream)).toOption.isSome = true
 
-/-- A schedule entry's `k` where it is a round of the stream `name`. -/
 def ksOf (name : String) (r : Json) : Option Nat :=
   (roundSpec r).bind fun sp => if sp.1 == name then some sp.2.1 else none
 
-/-- The stream `name`'s rounds among the schedule's first `i`. -/
 def cnt (s : Schedule) (i : Nat) (name : String) : Nat := ((s.rounds.toList.take i).filterMap (ksOf name)).length
 
-/-- `Schedule.canonical`, fact by fact. -/
 structure Facts (s : Schedule) : Prop where
   hello : ∃ (H L : ZkServerObj.Tree) (A B : List ((_ : String) × Json)), s.hello = .obj ⟨⟨H⟩⟩ ∧ H.Ordered ∧
     plainObj H = true ∧ L.Ordered ∧ plainObj L = true ∧ H.toListModel = A ++ ⟨"link", .obj ⟨⟨L⟩⟩⟩ :: B ∧
@@ -211,14 +171,12 @@ theorem streams_nodup {s : Schedule} (hF : Facts s) : (s.streams.map (·.1)).Nod
 section
 variable {s : Schedule} {h : Honest}
 
-/-- Commit's tables are distinct. -/
 theorem roots_nodup (hF : Facts s) (hf : Fits s h) : (h.roots.map (·.1)).Nodup := by
   obtain ⟨t, he, ht, _⟩ := hF.roots
   have hp := hf.roots.map Prod.fst
   rw [List.map_map, rootsOf_obj he, List.map_map] at hp
   exact hp.nodup_iff.mpr (List.pairwise_map.mpr (ZkServerObj.Asc.ne (ZkServerObj.asc_ordered ht)))
 
-/-- Commit's node counts have the schedule's roots' canonical form. -/
 theorem commit_pin (hF : Facts s) (hf : Fits s h) :
     canonForm (Json.mkObj (h.roots.map fun e => (e.1, jnat (e.2.size / NODE_BYTES)))) = canonForm s.roots := by
   obtain ⟨t, he, ht, hn⟩ := hF.roots
@@ -236,7 +194,6 @@ theorem commit_pin (hF : Facts s) (hf : Fits s h) :
   simp only [Function.comp, hc, Option.getD_some]
   rw [← natOf?_eq hc]
 
-/-- Each table's node count is the schedule's. -/
 theorem commit_nat (hF : Facts s) (hf : Fits s h) :
     ∀ e ∈ h.roots, natOf? (s.roots.getObjValD e.1) = some (e.2.size / NODE_BYTES) := by
   intro e he
@@ -250,7 +207,6 @@ theorem commit_nat (hF : Facts s) (hf : Fits s h) :
   show natOf? x.2 = _
   rw [hc, hxe.2]
 
-/-- A stream whose table has a root in the schedule has one in the worker's Commit. -/
 theorem rootOf_isSome (hF : Facts s) (hf : Fits s h) {stream : String} (hr : Rooted s stream) :
     (rootOf h stream).isSome = true := by
   obtain ⟨t, hes, ht, _⟩ := hF.roots
@@ -268,7 +224,6 @@ theorem rootOf_isSome (hF : Facts s) (hf : Fits s h) {stream : String} (hr : Roo
   rw [Option.isSome_map]
   exact List.find?_isSome.mpr ⟨e, he, by simp [(Prod.mk.inj hee).1]⟩
 
-/-- The streams the worker opens at its places before `p`. -/
 def openedTo (h : Honest) (p : Nat) : List String := (List.range p).flatMap h.opens
 
 theorem openedTo_succ (h : Honest) (p : Nat) : openedTo h (p + 1) = openedTo h p ++ h.opens p := by
@@ -313,7 +268,6 @@ theorem eq_length_of_range {l₁ l₂ : List Nat} {k c : Nat} (h : l₁ ++ k :: 
   rw [h, List.getElem?_range hlt] at h1
   exact (Option.some.inj h1).symm
 
-/-- A round's `k` is its stream's rounds before it. -/
 theorem k_eq (hF : Facts s) {i : Nat} (hi : i < s.rounds.size) {stream : String} {k n : Nat} {tops : List Nat}
     {level0 commits : Nat} (hsp : roundSpec (s.rounds.getD i .null) = some (stream, k, n, tops, level0, commits)) :
     k = cnt s i stream := by
@@ -356,7 +310,6 @@ theorem round_of_cnt {j : Nat} {n : String} (h : 0 < cnt s j n) :
   · exact ⟨sp, rfl, hn⟩
   · simp [hn] at hrk
 
-/-- A stream the worker opens just before round `j` has no round before it. -/
 theorem cnt_new (hF : Facts s) (hf : Fits s h) {j : Nat} (hj : j < s.rounds.size) {n : String}
     (hn : n ∈ h.opens (j + 1)) : cnt s j n = 0 := by
   refine Nat.eq_zero_of_not_pos fun hpos => ?_
@@ -368,8 +321,6 @@ theorem cnt_new (hF : Facts s) (hf : Fits s h) {j : Nat} (hj : j < s.rounds.size
   have hnd := (opened_nodup hF hf).sublist (openedTo_sublist h (show j + 2 ≤ s.rounds.size + 1 by omega))
   rw [openedTo_succ] at hnd
   exact List.nodup_append.mp hnd |>.2.2 stream ((openedTo_sublist h (by omega)).subset hmem) n hn hsn
-
-/-! ## The worker's rows -/
 
 theorem length_topRows (top : ByteArray) : (topRows top).length = top.size / NODE_BYTES := by
   simp [topRows]
@@ -386,7 +337,6 @@ theorem length_roundRows (hF : Facts s) (hf : Fits s h) {i : Nat} (hi : i < s.ro
   simp only [Option.map_some, Option.getD_some, length_topRows]
   rw [← htops]
 
-/-- The worker's rows before round `j`: its tables' level-0 tops, then rounds `0` to `j - 1`'s. -/
 def pre (s : Schedule) (h : Honest) (j : Nat) : List (Array Nat) :=
   h.roots.flatMap (fun e => topRows e.2) ++ (List.range j).flatMap (roundRows s h)
 
@@ -400,7 +350,6 @@ theorem length_pre_le (s : Schedule) (h : Honest) (j : Nat) : ∀ d, (pre s h j)
     rw [← Nat.add_assoc, pre_succ, List.length_append]
     exact Nat.le_trans (length_pre_le s h j d) (Nat.le_add_right _ _)
 
-/-- The worker's rows are the schedule's count. -/
 theorem length_honestRows {s : Schedule} (hs : Canonical s) {h : Honest} (hf : Fits s h) :
     (honestRows s h).length = rowCount s := by
   have hF := facts_of hs
@@ -417,13 +366,8 @@ theorem length_honestRows {s : Schedule} (hs : Canonical s) {h : Honest} (hf : F
 
 end
 
-/-! ## What the ZK server does on the worker's requests -/
-
-/-- An opened stream as the ZK server holds it before round `j`: its parent and its rounds so far. -/
 def F (s : Schedule) (j : Nat) (n : String) : String × String × Nat := (n, parentOf s n, cnt s j n)
 
-/-- **The loop's invariant** before round `j`, the worker's places before `o` opened: after Hello, Commit and Link,
-Commit's tables the worker's, each salt of the worker's rows before round `j` sampled and its commit string sent. -/
 structure At (s : Schedule) (h : Honest) (ys : List ByteArray) (j o : Nat) (st : State) : Prop where
   hello : st.hello = true
   committed : st.committed = true
@@ -484,7 +428,6 @@ theorem goes_opens_aux {g : String → Option Req} {j : Nat} :
     rw [List.append_assoc, List.singleton_append] at hrest
     exact goes_append s [_] _ hone hrest
 
-/-- **The worker's `Open`s at its place `p`**, each stream new there. -/
 theorem goes_opens (hF : Facts s) (hf : Fits s h) {j p : Nat} (hp : p ≤ s.rounds.size)
     (hz : ∀ n ∈ h.opens p, cnt s j n = 0) {st : State} (hfin : st.finished = false)
     (hs : st.streams = (openedTo h p).map (F s j)) :
@@ -517,7 +460,6 @@ theorem caps_fit {r : HonestRound} (hi : ∀ a ∈ r.items, ZkServerWire.ItemFit
     | (subst hca; exact this.2.2)
     | (subst hca; exact this.2)
 
-/-- **Round `j`** from the loop's invariant, its stream opened. -/
 theorem goes_round (hs : Canonical s) (hf : Fits s h) {ys : List ByteArray} (hy : ys.length = rowCount s)
     {j : Nat} (hj : j < s.rounds.size) {st : State} (hA : At s h ys j (j + 2) st) :
     ∃ t, Goes s ((honestRound s h j).map putReq) st t ∧ At s h ys (j + 1) (j + 2) t := by
@@ -608,7 +550,6 @@ theorem goes_round (hs : Canonical s) (hf : Fits s h) {ys : List ByteArray} (hy 
     unfold roundRows
     rw [cs_append, List.drop_drop]
 
-/-- **The rounds**, each after the worker's `Open`s just before it. -/
 theorem goes_rounds (hs : Canonical s) (hf : Fits s h) {ys : List ByteArray} (hy : ys.length = rowCount s)
     {st : State} (hA : At s h ys 0 1 st) : ∀ j ≤ s.rounds.size, ∃ t,
       Goes s ((List.range j).flatMap fun i => (honestOpens s h (i + 1) ++ honestRound s h i).map putReq) st t ∧
@@ -641,7 +582,6 @@ theorem goes_proofs (s : Schedule) : ∀ (l : List (String × Nat × ByteArray))
     exact goes_append s [_] _ (goes_one (decode_putProof h1 h2 h3) (run_proof s hfin))
       (goes_proofs s l (fun p hp => hl p (List.mem_cons_of_mem _ hp)) st hfin)
 
-/-- Finish's pin: each stream opened, with the schedule's count of rounds. -/
 theorem finish_pin (hF : Facts s) (hf : Fits s h) :
     canonForm (Json.mkObj (((openedTo h (s.rounds.size + 1)).map (F s s.rounds.size)).map fun e => (e.1, jnat e.2.2))) =
       canonForm (Json.mkObj (s.streams.map fun e => (e.1, jnat e.2.2.2))) := by
@@ -660,9 +600,6 @@ theorem finish_pin (hF : Facts s) (hf : Fits s h) :
 
 end
 
-/-- **The ZK server finishes on the honest worker's requests**: at salts `ys`, as many as the schedule's rows, it
-finishes, its Commit names the schedule's tables, and its commit strings are those of the worker's rows under `ys`, in
-salt order. -/
 theorem run_honestReqs {s : Schedule} (hs : Canonical s) {h : Honest} (hf : Fits s h)
     (ys : List ByteArray) (hy : ys.length = rowCount s) :
     (run s (honestReqs s h) ys).2 = true ∧
@@ -725,10 +662,6 @@ theorem run_honestReqs {s : Schedule} (hs : Canonical s) {h : Honest} (hf : Fits
     simp only [ZkServerRun.holes, List.append_nil]
     rfl
 
-/-! ## The messages -/
-
-/-- The worker's row `i` reads only the commit strings before it: at two lists of commit strings that agree below `i`,
-its rows agree at `i`. -/
 def Causal {Prog Wit Rr Ωa Ωp : Type} (s : Schedule)
     (D : Prog → Wit → Rr → Ωa → Ωp → (Fin (rowCount s) → ByteArray) → Honest) : Prop :=
   ∀ P w r a p (l l' : Fin (rowCount s) → ByteArray) (i : Nat), (∀ j : Fin (rowCount s), j.val < i → l j = l' j) →
@@ -744,8 +677,6 @@ def honestMsgs {Prog Wit Rr Ωa Ωp : Type} (s : Schedule)
     (P : Prog) (w : Wit) (r : Rr) (a : Ωa) (p : Ωp) (i : Fin (rowCount s)) (pre : Fin i → ByteArray) : ByteArray :=
   rowBytes ((honestRows s (D P w r a p (pad i pre))).getD i #[])
 
-/-- At the commit strings `l`, message `i` read at `l`'s strings before it hashes to the digest of the worker's row `i`
-at `l`. -/
 theorem honestMsgs_digest {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Canonical s) 
     {D : Prog → Wit → Rr → Ωa → Ωp → (Fin (rowCount s) → ByteArray) → Honest}
     (hD : ∀ P w r a p l, Fits s (D P w r a p l)) (hc : Causal s D)
@@ -759,9 +690,6 @@ theorem honestMsgs_digest {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Cano
   rw [rowDigest_eq, honestMsgs, List.getD_eq_getElem?_getD, e, List.getElem?_eq_getElem]
   rfl
 
-/-- **`ZkServerAccepts`'s body at one salt `y`**: at every commit strings `l`, the ZK server at `rowCount s` salts `y`
-finishes on the worker's requests, Commit names the schedule's tables, and its commit strings are those of `honestMsgs`
-under `y`, message `i` read at `l`'s strings before it. -/
 theorem honest_accepts {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Canonical s) 
     {D : Prog → Wit → Rr → Ωa → Ωp → (Fin (rowCount s) → ByteArray) → Honest}
     (hD : ∀ P w r a p l, Fits s (D P w r a p l)) (hc : Causal s D) (y : ByteArray)

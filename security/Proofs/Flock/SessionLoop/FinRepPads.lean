@@ -41,22 +41,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.SessionLoop.RepSrc
 
-/-!
-# The pads commitment from the views
-
-At (c.3)'s context, rep stream `k`'s pads commitment from the views' leaves (`Loop.padsView`) has the size, root and tree
-of the ZK server's (`Finish.innerCommitP` of the request's pads under its leaf salts), wherever table `k / 2`'s rows hold
-at its base:
-
-* **`Hm96.viewR_leavesP`**: a real view's pads leaves read the randomness alone, whatever the witness, so where the rows
-  hold the switched view's pads leaves are the honest view's (`Coined.swExe_leavesP`, `Hm96.swViewR_eq`) and the views'
-  source has the honest views' pads leaves (`Loop.finSrc_padLeaf`, `Masked.tabSrcView_padLeaf`);
-* the honest views' pads tree is the masked prover's (`Masked.padsTreeCut_srcV`, `Masked.simCommit`) on the tape's pads
-  and leaf salts, which are the request's (`Masked.pads_frame_eq`, `Loop.RepSrc.innerSalt`), and the pads tree reads
-  its leaf salts only as `fitBytes 192` below its leaf count (`innerCommitP_salt_congr`).
-
-**`Loop.padsView_ic`** states it.
--/
+/-! The pads commitment from the views has the ZK server's size, root and tree, wherever the table's rows hold at its base. -/
 
 @[expose] public section
 
@@ -65,8 +50,6 @@ namespace FlockSoundness.ZK.Table
 theorem toBase_leavesP {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL)
     (v : T.onVals.View) : (T.toBase v).leavesP = v.leavesP := rfl
 
-/-- **A real view's pads leaves read the randomness alone**, whatever the witness: the opened ones are leaves of the
-pads columns, the others hm96 leaves of the pads columns' digests (`Hm96.dig` at `.inr`). -/
 theorem Hm96.viewR_leavesP {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
     {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C) (p q : W) (ω : T.Rand) (ys : T.Hid → Salt) :
     (M.viewR p ω ys).leavesP = (M.viewR q ω ys).leavesP := by
@@ -80,8 +63,6 @@ theorem Hm96.viewR_leavesP {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [
 
 end FlockSoundness.ZK.Table
 
-/-- **Where its rows hold at its base, a switched view's pads leaves are the honest view's**: it is the view at the
-workers' values (`Hm96.swViewR_eq`), and the pads leaves read the randomness alone (`Hm96.viewR_leavesP`). -/
 theorem FlockSoundness.Discharge.ZkView.Coined.swExe_leavesP {K W Hi VL : Type} [Field K]
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (ω : T.tab.Rand) (ys : T.tab.Hid → FlockSoundness.Discharge.ZkView.Salt)
@@ -99,7 +80,6 @@ namespace FlockComplete
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT _root_.Flock.V M]
 
-/-- **The pads commitment reads its leaf salts fitted to 192 bytes, below its leaf count.** -/
 theorem innerCommitP_salt_congr (hs : _root_.Flock.Hashes M) (p : PadsZk) {salt salt' : ℕ → ByteArray}
     (h : ∀ j < (p.h ++ p.padH).size.nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE,
       fitBytes 192 (salt j) = fitBytes 192 (salt' j)) :
@@ -119,8 +99,6 @@ namespace Claims.ZKMal.Masked
 
 open FlockSoundness.Discharge
 
-/-- **A source reads its view's pads leaves**: views with the same pads leaves at table `i` give sources with the same
-pads leaves at each of its reps. -/
 theorem tabSrcView_padLeaf (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (v v' : ∀ j, ((tabC P x j).T (cz j)).tab.View) {i r : ℕ} (hi : i < jOf x) (hr : r < 2)
     (h : (v ⟨i, hi⟩).leavesP = (v' ⟨i, hi⟩).leavesP) :
@@ -142,13 +120,11 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
 open FlockSoundness.Discharge in
-/-- **Where table `i`'s rows hold at its base, the views' pads leaves are the honest views'** (`Coined.swExe_leavesP`,
-`Masked.tabSrcView_padLeaf`). -/
 theorem finSrc_padLeaf (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) {i r : ℕ} (hi : i < Masked.jOf x) (hr : r < 2)
     (hrows : ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩)).tab.onVals.RowsAt
@@ -166,10 +142,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
   (x : Msg) (w : Flock.Wit)
 
-/-- **The pads commitment from the views is the ZK server's** up to its columns and salts: in the masked scope, at a
-witness in the relation, where the frame samples the tape's pads (`Loop.RepSrc`) and every table's rows hold at its base
-(as `Loop.FinRows` states them), rep stream `k`'s pads commitment from the views' leaves has the size, root and tree of
-`Finish.innerCommitP` on its request's pads and leaf salts. -/
 theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
     (hS : Loop.RepSrc L₀ src x w) {ν : finS.Nonce} {t : finS.Tape} {ops : List (Msg × Msg)}
@@ -220,7 +192,6 @@ theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock
     rfl
   obtain ⟨N, hN⟩ : ∃ N, N = ((Masked.layE x ⟨k / 2, hj⟩).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
       2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE := ⟨_, rfl⟩
-  -- the request's pads and leaf salts are the tape's
   obtain ⟨-, hq, -⟩ := hRep
   unfold repInOf at hq
   obtain ⟨⟨lay, ms⟩, hst, hq⟩ := bok hq
@@ -295,7 +266,6 @@ theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock
       (fun j hj' => hsalt j (by rw [hN, ← hpdH]; exact hj'))
     rw [hcg, ← hP]
     exact hicC
-  -- the views' commitment is the honest views', which is the masked prover's on the tape's pads
   unfold padsView at hic
   rw [hsj] at hic
   dsimp only at hic

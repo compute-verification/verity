@@ -3,20 +3,7 @@ module
 public import Proofs.Flock.SamplingGeneric.Efficient
 public import Proofs.Flock.SamplingGeneric.Reg
 
-/-!
-# The committed form read at a time budget
-
-`B_conf` declared at a budget `T` a run (`Compiled.BconfAt`) has `B_conf`'s coins and outcome, so its probability
-(`BconfAt_pr`). At the contract's cost facts and the opening checks' count its expected cost is at most
-`c_T = 2T·(1 + n_sess·e_s) + 2·n_PU·openCalls` (`BconfAt_cost_le`): `T` for each of its two runs, and each run's
-extraction's own calls, at most `n_PU·openCalls` (`runExt_own_le`), and `T` for each of its reruns, at most
-`n_sess·e_s` expected over the run's coins and the extractor's (`runExt_runs_exp`). On every coin it is at most
-`2T·(1 + n_sess·ρ_s) + 2·n_PU·openCalls` (`BconfAt_cost_strict`, `runExt_runs_le`). So where `ExpectedCR` holds at
-`B_conf` declared at `T`, `Pr[B_conf] ≤ c_T/2^256`, and `KSReg`'s two bounds hold at `ε_reg` read at `c_T`
-(`Compiled.ksRegAt_of_ksReg`): `CompilerKSReg` gives `CompilerKSRegAt` (`compilerKSRegAt_of`). Where `StrictBirthday`
-holds there instead, `Pr[B_conf] ≤ q_T²/2^513` at that cost on every coin, `q_T`, and `KSReg`'s two bounds hold at
-`ε_reg` read at `q_T` (`Compiled.ksRegAtSB_of_ksReg`, `compilerKSRegAtSB_of`).
--/
+/-! The committed form with `B_conf` read at a time budget. -/
 
 @[expose] public section
 
@@ -24,8 +11,6 @@ namespace Claims.SamplingGeneric
 
 open Claims Claims.Sampling
 
-/-- Two runs at one tape, each on its own coins: a cost `c` plus each run's, whose expectation over its coins is at most
-`b` at every tape, is at most `c + 2b` in expectation. -/
 theorem Ex_two_runs {Ω X : Type} [Fintype Ω] [Nonempty Ω] [Fintype X] [Nonempty X] (G : Ω → X → ℝ) (c b : ℝ)
     (hG : ∀ ω, Ex (G ω) ≤ b) : Ex (fun q : Ω × X × X => c + G q.1 q.2.1 + G q.1 q.2.2) ≤ c + 2 * b := by
   have hfst : ∀ ω, Ex (fun y : X × X => G ω y.1) = Ex (G ω) := fun ω =>
@@ -44,7 +29,6 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **`B_conf` declared at a budget has `B_conf`'s probability**: the same coins and outcome. -/
 theorem BconfAt_pr (H : Msg → Msg) (L : Compiled Coin A) (T : ℕ) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) : (BconfAt H L T Ω P x).Pr H = (Bconf H L Ω P x).Pr H := by
   simp only [BconfAt, Bconf]
@@ -59,14 +43,11 @@ theorem bconfCost_nonneg (L : Compiled Coin A) (x : Msg) (T : ℕ) : 0 ≤ L.bco
     (add_nonneg zero_le_one (mul_nonneg (Nat.cast_nonneg _) he0)))
     (mul_nonneg zero_le_two (mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)))
 
-/-- One run's extraction's cost at the budget `T`: its own SHA-512 calls, and `T` for each rerun of the prover. -/
 noncomputable def runCostAt (H : Msg → Msg) (L : Compiled Coin A) (T : ℕ) (x : Msg) (s : AuditStatement) {Ω : Type}
     (P : Prover Ω) (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) : ℝ :=
   (ownLog H (run H P L.V x ω) (L.runExt x s rc.1 (run H P L.V x ω rc.1).seen rc.2)).length +
     T * ((L.runExt x s rc.1 (run H P L.V x ω rc.1).seen rc.2).eval H (run H P L.V x ω)).2.2
 
-/-- **One run's extraction's expected cost at the budget `T`**, over the run's coins and the extractor's: at most
-`n_PU·openCalls + T·n_sess·e_s` (`runExt_own_le`, `runExt_runs_exp`). -/
 theorem runCostAt_exp {H : Msg → Msg} {L : Compiled Coin A} (hS : L.CostContract H) (hopen : L.OpenCallsLe H)
     (T : ℕ) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (ω : Ω) :
     Ex (fun rc => L.runCostAt H T x s P ω rc) ≤ L.nPU x * L.openCalls x + T * (L.nSess x * L.es x) := by
@@ -77,9 +58,6 @@ theorem runCostAt_exp {H : Msg → Msg} {L : Compiled Coin A} (hS : L.CostContra
   · exact Nat.cast_le.2 (runExt_own_le hS hopen hs P ω rc.1 rc.2)
   · rw [Ex_const, Nat.cast_mul]
 
-/-- **`B_conf` declared at a budget, its expected cost**: at most `c_T` (`bconfCost`) at the contract's cost facts and
-the opening checks' count: `T` for each of its two runs, and each run's extraction's cost at `T` (`runCostAt_exp`),
-over its own coins (`Ex_two_runs`). -/
 theorem BconfAt_cost_le {H : Msg → Msg} {L : Compiled Coin A} (hS : L.CostContract H) (hopen : L.OpenCallsLe H)
     (T : ℕ) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
     Ex (fun q => ((BconfAt H L T Ω P x).cost q : ℝ)) ≤ L.bconfCost x T := by
@@ -98,9 +76,6 @@ theorem BconfAt_cost_le {H : Msg → Msg} {L : Compiled Coin A} (hS : L.CostCont
     · unfold bconfCost
       ring
 
-/-- **`B_conf` declared at a budget, its cost on every coin**: at most `2T·(1 + n_sess·ρ_s) + 2·n_PU·openCalls`, each
-run's extraction rerunning at most `n_sess·ρ_s` (`runExt_runs_le`) and calling at most `n_PU·openCalls` times itself
-(`runExt_own_le`). -/
 theorem BconfAt_cost_strict {H : Msg → Msg} {L : Compiled Coin A} (hS : L.CostContract H) (hopen : L.OpenCallsLe H)
     (T : ℕ) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
     ∀ q, (BconfAt H L T Ω P x).cost q ≤ 2 * T * (1 + L.nSess x * L.ρs x) + 2 * (L.nPU x * L.openCalls x) := by
@@ -116,8 +91,6 @@ theorem BconfAt_cost_strict {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Cost
     have h₅ := Nat.mul_le_mul_left T (Nat.add_le_add h₁ h₂)
     nlinarith [h₃, h₄, h₅]
 
-/-- **`KSReg` read at a budget**: where `ExpectedCR` holds at `B_conf` declared at `T`, `Pr[B_conf] ≤ c_T/2^256`
-(`BconfAt_pr`, `BconfAt_cost_le`), so `ε_reg` is at most its reading at `T` and `KSReg`'s two bounds hold there. -/
 theorem ksRegAt_of_ksReg {H : Msg → Msg} {L : Compiled Coin A} (hS : L.CostContract H) (hopen : L.OpenCallsLe H)
     (h : L.KSReg H) : L.KSRegAt H := by
   intro x hx Ω _ _ P T hE
@@ -132,9 +105,6 @@ theorem ksRegAt_of_ksReg {H : Msg → Msg} {L : Compiled Coin A} (hS : L.CostCon
   obtain ⟨h₁, h₂⟩ := h x hx Ω P
   exact ⟨h₁.trans hε, fun s hs δ hδ => (h₂ s hs δ hδ).trans (by linarith)⟩
 
-/-- **`KSReg` read at a budget and the strict birthday bound**: where `StrictBirthday` holds at `B_conf` declared at
-`T`, `Pr[B_conf] ≤ q_T²/2^513`, `q_T` that finder's cost on every coin (`BconfAt_pr`, `BconfAt_cost_strict`), so
-`ε_reg` is at most its reading there and `KSReg`'s two bounds hold. -/
 theorem ksRegAtSB_of_ksReg {H : Msg → Msg} {L : Compiled Coin A} (hS : L.CostContract H) (hopen : L.OpenCallsLe H)
     (h : L.KSReg H) : L.KSRegAtSB H := by
   intro x hx Ω _ _ P T hB
@@ -153,14 +123,10 @@ theorem ksRegAtSB_of_ksReg {H : Msg → Msg} {L : Compiled Coin A} (hS : L.CostC
 
 end Compiled
 
-/-- **`CompilerKSRegAt` from `CompilerKSReg`**: `B_conf`'s expected cost at each budget is bounded at the contract's
-cost facts and the opening checks' count (`Compiled.ksRegAt_of_ksReg`). -/
 theorem compilerKSRegAt_of (h : CompilerKSReg) : CompilerKSRegAt := by
   intro Coin _ _ _ A L H hA hB hS hopen
   exact Compiled.ksRegAt_of_ksReg hS.toCostContract hopen (h Coin A L H hA hB hS)
 
-/-- **`CompilerKSRegAtSB` from `CompilerKSReg`**: `B_conf`'s cost on every coin at each budget is bounded at the
-contract's cost facts and the opening checks' count (`Compiled.ksRegAtSB_of_ksReg`). -/
 theorem compilerKSRegAtSB_of (h : CompilerKSReg) : CompilerKSRegAtSB := by
   intro Coin _ _ _ A L H hA hB hS hopen
   exact Compiled.ksRegAtSB_of_ksReg hS.toCostContract hopen (h Coin A L H hA hB hS)

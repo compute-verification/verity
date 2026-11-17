@@ -41,40 +41,7 @@ import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Extract
 
-/-!
-# The sampled compiler: the extraction's failure event and its probability
-
-The extraction's failure event and its bound, for a compiled sampled verifier `L` over any proof system for proof
-blocks `A` (`Claims.SamplingGeneric.Compiled`). The extractor's coins at an accepted inner run are one
-`Compiled.BlockEC` per slot of the sample (`Compiled.SlotEC`), of which a session reads its first slot's.
-
-* `first_of_slot`, `leadOf`, `card_first_le`, `sum_first_le`: **a sample's sessions**. A slot holding a block below
-  `n_PU` is in a session whose first slot (`leadOf`) holds one too; first slots have distinct keys, so a sample has at
-  most `n_sess` sessions (`Sessions.keys`), and their slots are disjoint.
-* `Found`: a sampled proof block's session's extraction finds a witness in `A`'s relation at its statement, as
-  `Compiled.sessWit` runs it. `GoodAt`: the block, below `n_PU`, is at some slot of the sample, and the block at the
-  first slot of that slot's session is found at the first slot's coins.
-* `BadOuter`, `Fails`: an outer run is bad for a set `B` of proof blocks when its inner wait comes up short or keeps only
-  runs at which no block of `B` is good; the extraction fails when the outer wait comes up short or, for some `B` of
-  acceptance probability at most `δ` (`S₁`), keeps only runs bad for `B`. Both read the found event as a parameter.
-* `SessionKS`: the sessions' knowledge soundness at the found event, the form `A.KS` gives at the slot a selection
-  picks: a weight `β` of each tape and first-stage coins, averaging at most `Pr[B]`, bounds the probability that the run
-  accepts and the proof block at the picked slot is not found at the slot's coins by `κ_s + √(k(x)·γ_s·β)`.
-* `pr_notGood_le`, `inner_bad_le`: at first-stage coins where the sample misses `B` with probability at most `esc`, the
-  union bound at the picked slot, the first slot of the session of the first slot holding a block of `B` (`leadSel`;
-  the sample's slots at most `n_PU`, `Sessions.slots`), gives
-  `Pr[acc]·Pr[bad for B] ≤ 2k_in/K_in + e^{−k_in/8} + c·(esc + κ)` (`rpow_kIn_le_slack`: one set).
-* `outer_bad_le`: over the refused sets (at most `2^{n_PU}`, `n_PU ≤ n_out` by `Sessions.unions`, against the outer
-  wait's slack, `rpow_kOut_le_slack`), with the sampling design's weights averaging at most `P_a(B) ≤ δ`.
-* `pr_fails_le_of`, `pr_fails_le`: **the composition**, `Pr[acc ∧ fails] ≤ κ_δ + √(γ·Pr[B])` with
-  `κ_δ = c²·(δ + κ_s) + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})`: independent of the judged coins,
-  the outer bound at each tape, and
-  the average of `√(k(x)·γ_s·β)` at most `√(k(x)·γ_s·Pr[B])` (Jensen).
-* `KS_of_split`, `KS_of_sessionKS`: **`Compiled.KS`** from the split (an accepted run whose extraction fails is in
-  `Fails` or its extraction's own calls collide) and the sessions' bound, which at `Found` is `SessionKS`, so `KSOf`
-  (`SamplingGeneric/Split.lean`) needs only the split.
-* `κ_le_κs`, `γ_le_γs`: each proof block's error bounds are at most the sessions' (`le_maxBelow`).
--/
+/-! The compiled extraction's failure event and its probability, for a compiled sampled verifier over any proof system for proof blocks. -/
 
 @[expose] public section
 
@@ -117,23 +84,17 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## The extractor's coins, per outer run -/
-
-/-- The extractor's coins for one outer run: its inner wait's, and at each of its accepted runs every slot's. -/
 abbrev E1 (L : Compiled Coin A) (x : Msg) := (Fin (L.capIn x) → Fin (L.V.k x) → Coin) × (Fin (L.kIn x) → L.SlotEC x)
 
 def toE1 (L : Compiled Coin A) (x : Msg) (c : L.ECoins x) (j : Fin (L.kOut x)) : L.E1 x :=
   (c.2.1 j, fun l u => c.2.2 (j, l, u))
 
-/-- The extractor's coins as the outer wait's and one `E1` per outer run. -/
 def ecoinsEquiv (L : Compiled Coin A) (x : Msg) :
     L.ECoins x ≃ (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.E1 x) where
   toFun c := (c.1, L.toE1 x c)
   invFun p := (p.1, fun j => (p.2 j).1, fun t => (p.2 t.1).2 t.2.1 t.2.2)
   left_inv _ := rfl
   right_inv _ := rfl
-
-/-! ## A sample's sessions -/
 
 section Sessions
 
@@ -168,8 +129,6 @@ theorem sessSlots_pairwise (L : Compiled Coin A) (x : Msg) (l : List ℕ) (i : �
     (L.sessSlots x l i).Pairwise (· < ·) :=
   List.pairwise_lt_range.filter _
 
-/-- **The first slot of a sampled block's session**: slot `i`, its block below `n_PU`, is in a session whose first slot
-`i₀ ≤ i` holds a block below `n_PU`, has `i`'s key, and is its own session's first. -/
 theorem first_of_slot {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i u : ℕ} (hi : l[i]? = some u)
     (hu : u < L.nPU x) :
     ∃ i₀ u₀, (L.sessSlots x l i).head? = some i₀ ∧ i₀ ≤ i ∧ l[i₀]? = some u₀ ∧ u₀ < L.nPU x ∧
@@ -188,24 +147,20 @@ theorem first_of_slot {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i u : ℕ}
       · exact (List.rel_of_pairwise_cons hp h').le
     · rw [sessSlots_congr hk, h, List.head?_cons]
 
-/-- Two sessions' first slots with one key are one slot. -/
 theorem first_eq_of_key {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i j : ℕ}
     (hi : (L.sessSlots x l i).head? = some i) (hj : (L.sessSlots x l j).head? = some j)
     (hk : L.skey x l i = L.skey x l j) : i = j := by
   rw [sessSlots_congr hk, hj] at hi
   exact (Option.some.inj hi).symm
 
-/-- A session's first slot holds a block below `n_PU`. -/
 theorem of_first {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i : ℕ} (h : (L.sessSlots x l i).head? = some i) :
     ∃ u, l[i]? = some u ∧ u < L.nPU x := by
   obtain ⟨u, hu, hlt, -⟩ := mem_sessSlots.1 (List.mem_of_mem_head? h)
   exact ⟨u, hu, hlt⟩
 
-/-- The first slot of slot `i`'s session in the sample `l`; none when no slot of it holds a block below `n_PU`. -/
 def leadOf (L : Compiled Coin A) (x : Msg) (l : List ℕ) (i : Fin (L.nPU x)) : Option (Fin (L.nPU x)) :=
   ((L.sessSlots x l i).head?).bind fun i₀ => if h : i₀ < L.nPU x then some ⟨i₀, h⟩ else none
 
-/-- A selection of the sample's slots, moved to the first slot of the picked slot's session. -/
 def leadSel (L : Compiled Coin A) (x : Msg) (sel : List ℕ → Option (Fin (L.nPU x))) (l : List ℕ) :
     Option (Fin (L.nPU x)) :=
   (sel l).bind (L.leadOf x l)
@@ -218,7 +173,6 @@ theorem leadOf_some {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i : Fin (L.n
   refine ⟨⟨i₀, hi₀⟩, ⟨u₀, hu₀lt⟩, ?_, hu₀⟩
   simp only [leadOf, hhead, Option.bind_some, dite_eq_left hi₀]
 
-/-- The first slot of slot `i`'s session has `i`'s key, so `i`'s session, of which it is the first. -/
 theorem of_leadOf {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i i₀ : Fin (L.nPU x)}
     (h : L.leadOf x l i = some i₀) :
     L.skey x l i₀ = L.skey x l i ∧ L.sessSlots x l i₀ = L.sessSlots x l i ∧
@@ -237,8 +191,6 @@ theorem of_leadOf {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i i₀ : Fin (
   · rw [dite_eq_right hjn] at h'
     exact (Option.some_ne_none _ h'.symm).elim
 
-/-- **A sample's sessions hold at most its slots**: the sessions at distinct first slots are disjoint, and each is
-among the sample's slots. -/
 theorem sum_first_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) :
     ∑ i ∈ (Finset.univ : Finset (Fin (L.nPU x))).filter
         (fun i : Fin (L.nPU x) => (L.sessSlots x l i.val).head? = some i.val),
@@ -264,7 +216,6 @@ theorem sum_first_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) :
         exact Finset.mem_range.2 (List.getElem?_eq_some_iff.1 hu).1
     _ = l.length := Finset.card_range _
 
-/-- **Slots with distinct keys are their own sessions**: slot `i`, its block below `n_PU`, is its session's one slot. -/
 theorem sessSlots_eq_singleton {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i u : ℕ}
     (hk : ∀ p q, L.skey x l p = L.skey x l q → p = q) (hi : l[i]? = some u) (hu : u < L.nPU x) :
     L.sessSlots x l i = [i] := by
@@ -294,8 +245,6 @@ theorem sessBlocks_eq_singleton {L : Compiled Coin A} {x : Msg} {l : List ℕ} {
 end Sessions
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **A sample has at most `n_sess` sessions**: their first slots have distinct keys (`first_eq_of_key`), each one of
-the sample's, which hold at most `n_sess` keys (`hkeys`, a contract's `keys`). -/
 theorem card_first_le {L : Compiled Coin A}
     (hkeys : ∀ x r, ((Finset.range (L.checked x r).length).image (L.skey x (L.checked x r))).card ≤ L.nSess x)
     (x : Msg) (r : Fin (L.V.k x) → Coin) :
@@ -309,19 +258,12 @@ theorem card_first_le {L : Compiled Coin A}
   · intro i hi j hj hij
     exact Fin.ext (first_eq_of_key (Finset.mem_filter.1 hi).2 (Finset.mem_filter.1 hj).2 hij)
 
-/-! ## The failure event -/
-
-/-- **Proof block `u`'s session's extraction finds a witness** at the run `r'`, on the prover's runs `run'`: `r'` shows
-`u`'s session `(xS, vS)` at the block's shape, and `A`'s extractor at the session, as `sessWit` serves it, returns a
-witness in `A`'s relation at `xS`. -/
 def Found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (u : Fin (L.nPU x)) (r' : Fin (L.V.k x) → Coin) (c : A.EC (L.sh x u)) : Prop :=
   ∃ xS vS, L.session x u (run' r').seen = some (xS, vS) ∧ ∃ h : A.shape xS = L.sh x u, ∃ w,
     ((serve (fun r'' => viewing (L.view x u) (L.place x u xS r' r''))
         (A.ext xS (L.coinsOf x u xS r') (cast (congrArg A.EC h.symm) c))).eval H run').1 = some w ∧ A.R xS w
 
-/-- Proof block `v`, below `n_PU`, is at some slot of the sample at `r'`, and `found` holds of the block at the first
-slot of that slot's session (`leadOf`), at the first slot's coins in `uc`. -/
 def GoodAt (L : Compiled Coin A) (x : Msg)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (r' : Fin (L.V.k x) → Coin)
     (v : ℕ) (uc : L.SlotEC x) : Prop :=
@@ -329,8 +271,6 @@ def GoodAt (L : Compiled Coin A) (x : Msg)
     ∃ i₀ u₀ : Fin (L.nPU x), L.leadOf x (L.checked x r') i = some i₀ ∧ (L.checked x r')[i₀.val]? = some u₀.val ∧
       found u₀ r' (uc i₀ u₀)
 
-/-- **An outer run bad for `B`**, its second stage `g`: the inner wait comes up short, or no kept inner run has a
-proof block of `B` good. -/
 def BadOuter (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (B : Finset ℕ)
     (g : (Fin (L.V.k x) → Coin) → Fin (L.V.k x) → Coin) (e : L.E1 x) : Prop :=
@@ -338,8 +278,6 @@ def BadOuter (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) �
     AllBad (fun d => (run' (g d)).out = .acc) (L.kIn x)
       (fun d uc => ∀ v ∈ B, ¬ L.GoodAt x found (g d) v uc) ((List.finRange (L.capIn x)).map e.1) e.2
 
-/-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some set
-`B` of acceptance probability at most `δ`, every kept outer run is bad for `B`. -/
 def Fails (L : Compiled Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (c : L.ECoins x) : Prop :=
   ∃ s Pt, L.parse x = some s ∧ L.partition s = some Pt ∧ InScope Pt s ∧
@@ -348,11 +286,6 @@ def Fails (L : Compiled Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → 
         (fun r e => L.BadOuter x run' found B (forkOn (L.secondStage x) r) e) ((List.finRange (L.capOut x)).map c.1)
         (L.toE1 x c))
 
-/-- **The sessions' knowledge soundness** at the sample's slots: on every prover, a nonnegative weight `β` of each tape
-and first-stage coins `(ω, r)`, averaging at most `Pr[B]`, such that at `(ω, r)`, over fresh second-stage coins and the
-extractor's coins at each slot, the run accepts and the proof block at the slot a selection rule `sel` picks is not
-found at that slot's coins with probability at most `κ_s + √(k(x)·γ_s·β(ω, r))` (`Claims.Sampling`'s `SessionKS`). It
-is what `A.KS` gives at the session of the block at the picked slot, the sampled run up to it as `A`'s prover. -/
 def SessionKS (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     ∃ β : Ω → (Fin (L.V.k x) → Coin) → ℝ, (∀ ω r, 0 ≤ β ω r) ∧
@@ -364,8 +297,6 @@ def SessionKS (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
               ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
                 ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.secondStage x) r p.1) (p.2 i u)) ≤
           L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r)
-
-/-! ## The numbers -/
 
 section Numbers
 
@@ -391,11 +322,9 @@ theorem κs_nonneg (L : Compiled Coin A) (x : Msg) : 0 ≤ L.κs x := maxBelow_n
 
 theorem γs_nonneg (L : Compiled Coin A) (x : Msg) : 0 ≤ L.γs x := maxBelow_nonneg _ _
 
-/-- Each proof block's bound on `A`'s `κ` is at most the sessions' (`κs`). -/
 theorem κ_le_κs (L : Compiled Coin A) (x : Msg) {u : ℕ} (hu : u < L.nPU x) : L.κb x u ≤ L.κs x :=
   le_maxBelow (L.κb x) hu
 
-/-- Each proof block's bound on `A`'s `γ`, per round, is at most the sessions' (`γs`). -/
 theorem γ_le_γs (L : Compiled Coin A) (x : Msg) {u : ℕ} (hu : u < L.nPU x) :
     L.γb x u / A.rounds (L.sh x u) ≤ L.γs x :=
   le_maxBelow (fun u => L.γb x u / A.rounds (L.sh x u)) hu
@@ -406,25 +335,17 @@ theorem κ_nonneg (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) : 
   exact add_nonneg (add_nonneg (mul_nonneg (by positivity) (add_nonneg hδ (L.κs_nonneg x))) (by positivity))
     (mul_nonneg hc.le (by positivity))
 
-/-- The slack bound at the outer wait's `k_out`, over at most `2^m` sets, `m ≤ 2·n_out + 1`. -/
 theorem rpow_kOut_le_slack (L : Compiled Coin A) (x : Msg) {N m : ℕ} (hN : N ≤ 2 ^ m)
     (hm : m ≤ 2 * L.nOut x + 1) : (N : ℝ) ^ (1 / (L.kOut x : ℝ)) ≤ slack :=
   rpow_le_slack hN (Nat.mul_le_mul_left _ hm)
 
-/-- The slack bound at the inner wait's `k_in`, over at most `2^m` sets, `m ≤ 2·n_in + 1`. -/
 theorem rpow_kIn_le_slack (L : Compiled Coin A) (x : Msg) {N m : ℕ} (hN : N ≤ 2 ^ m)
     (hm : m ≤ 2 * L.nIn x + 1) : (N : ℝ) ^ (1 / (L.kIn x : ℝ)) ≤ slack :=
   rpow_le_slack hN (Nat.mul_le_mul_left _ hm)
 
 end Numbers
 
-/-! ## The failure event's probability -/
-
 omit [Inhabited Coin] in
-/-- **No block of `B` good at an inner run**: at first-stage coins `r` where the sample misses every proof block of `B`
-(each below `n_PU`) with probability at most `esc`, the sample has at most `n_PU` slots, and the block at the slot any
-selection picks is not found with probability at most `κr`, the run accepts with no block of `B` good with probability
-at most `esc + κr`: the union bound at the first slot of the session of the first slot holding a block of `B`. -/
 theorem pr_notGood_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {B : Finset ℕ}
     (hB : ∀ v ∈ B, v < L.nPU x) (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
@@ -465,11 +386,6 @@ theorem pr_notGood_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) →
   · exact Or.inl fun v hvl hvB => hm ⟨v, hvl, hvB⟩
 
 omit [Inhabited Coin] in
-/-- **One outer run's inner wait**: at first-stage coins `r` where the sample misses every proof block of `B` (each
-below `n_PU`) with probability at most `esc`, the sample has at most `n_PU` slots, and the block at the slot any
-selection picks is not found with probability at most `κr`, the inner wait (times its acceptance) comes up short or
-keeps only runs at which no block of `B` is good with probability at most `2k_in/K_in + e^{−k_in/8} + c·(esc + κr)`
-(`pr_notGood_le` at each inner run). -/
 theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {B : Finset ℕ}
     (hB : ∀ v ∈ B, v < L.nPU x) (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
@@ -508,11 +424,6 @@ theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → 
 
 set_option synthInstance.maxSize 1024 in
 omit [Inhabited Coin] in
-/-- **One tape's outer wait**: on a statement in scope at `(s, Pt)`, where the sampling design holds, the sample has at most
-`n_PU ≤ n_out` slots, and the block at the slot any selection picks at first-stage coins `r` is not found with
-probability at most `κr(r)`, the outer wait (times its acceptance) comes up short or, for some refused `B`, keeps only
-runs bad for `B`, with probability at most `T_out + c·(T_in + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}` at each wait's
-count. -/
 theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (s : AuditStatement)
     (Pt : Partition) (hPU : L.nPU x = Pt.blocks.length) (hun : L.nPU x ≤ L.nOut x)
@@ -571,12 +482,6 @@ theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
   exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard hy0))
 
 set_option synthInstance.maxSize 1024 in
-/-- **The failure event's probability, at any found event**: over tapes, judged coins and the extractor's coins, the
-judged run accepts and the extraction's failure event at `found` holds with probability at most `κ(δ) + √(γ·Pr[B])`,
-when the block at the slot any selection picks is not found with probability at most `κ_s + √(k(x)·γ_s·β(ω, r))` for
-a weight `β` averaging at most `Pr[B]`. Out of scope the event is empty. In scope it is independent of the judged
-coins; at each tape, the outer wait's bound (`outer_bad_le`, the sampling design from `Sessions.draws` and the slots from
-`Sessions.slots`) averages, by Jensen, to `κ(δ) + c²·√(k(x)·γ_s·E[β]) ≤ κ(δ) + √(γ·Pr[B])`. -/
 theorem pr_fails_le_of (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (hS : L.Sessions H) (x : Msg)
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (found : Ω → (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop)
@@ -649,11 +554,6 @@ theorem pr_fails_le_of (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ :
           Real.sqrt_sq (pow_nonneg hc.le 2)]
 
 set_option synthInstance.maxSize 1024 in
-/-- **The acceptance-probability composition**: from the sessions' knowledge soundness (`SessionKS`) and the sampling design
-(`Sessions.draws`), over tapes, judged coins and the extractor's coins, the judged run accepts and the extraction fails
-(for some set of proof blocks of acceptance probability at most `δ`, no kept run finds a block of it) with probability
-at most `κ(δ) + √(γ·Pr[B])`, `κ(δ) = c²·(δ + κ_s) + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})`.
--/
 theorem pr_fails_le (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (hsess : L.SessionKS H)
     (hS : L.Sessions H) (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (fun s : Ω × (Fin (L.V.k x) → Coin) × L.ECoins x =>
@@ -663,14 +563,7 @@ theorem pr_fails_le (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ : 0 
   obtain ⟨β, hβ0, hβ, hκ⟩ := hsess x Ω P
   exact L.pr_fails_le_of H hδ hS x Ω P (fun ω => L.Found H x (run H P L.V x ω)) β hβ0 hβ hκ
 
-/-! ## `Compiled.KS` from the split -/
-
 set_option synthInstance.maxSize 1024 in
-/-- **`Compiled.KS` from the split and the sessions' bound**: if, at every `δ ≥ 0`, an accepted run whose extraction
-fails is in the failure event (at each prover's and tape's found event `found`) or its extraction's own calls collide,
-and on every prover a weight `β` averaging at most `Pr[B]` bounds the block at the slot any selection picks not being
-found by `κ_s + √(k_V·γ_s·β)`, then the compiled verifier is knowledge sound (`Sampling.KSLin_of_ownColl` at
-`pr_fails_le_of`). -/
 theorem KS_of_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H)
     (found : ∀ (x : Msg) (Ω : Type), Prover Ω → Ω → (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) →
       A.EC (L.sh x u) → Prop)
@@ -698,8 +591,6 @@ theorem KS_of_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H)
       exact L.pr_fails_le_of H hδ hS x Ω P (found x Ω P) β hβ0 hβ hκ) x
 
 set_option synthInstance.maxSize 1024 in
-/-- **`Compiled.KS` from the sessions' KS and the split**: `SessionKS` is `KS_of_split`'s bound at the found event
-`Found`, so `KSOf` at a compiled verifier needs only the split into `Fails` at `Found` or an own-call collision. -/
 theorem KS_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) (hSK : L.SessionKS H)
     (hsplit : ∀ δ : ℝ, 0 ≤ δ → ∀ x (Ω : Type) (P : Prover Ω) (s : Ω × (Fin (L.V.k x) → Coin) × L.ECoins x),
       (run H P L.V x s.1 s.2.1).out = .acc →

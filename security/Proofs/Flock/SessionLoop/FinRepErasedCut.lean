@@ -42,20 +42,7 @@ import Proofs.Flock.SessionLoop.FinHmkCut
 import Proofs.Flock.SessionLoop.FinPoints
 import Proofs.Flock.SessionLoop.FinRounds
 
-/-!
-# `FinRepErased` with the views' masked values read off the history
-
-`finRepErased_of` takes the views' masked values below `zp 64` as a premise (`hMk`). Here they come from the history
-(`swSrcE_hmk_cut`) inside each stream's step, at the switched cut's commitments, pads and earlier streams, which leaves
-two premises in the step's own form, each over `swSrcE_hmk_cut`'s premises:
-
-* **`Loop.FinPiop`**: table `j`'s rep `r`'s PIOP returns from the views' source, cut at the opened coins, and the cap
-  and pads root it frames are under `2^64` bytes. `swSrcE_hmk_cut` reads that return; the ZK server's rep returning
-  doesn't give it (`piopCut_fw` needs the masked values themselves), so it is a premise.
-* **`Loop.FinFc`**: the equation at `final_c`'s pad, which `swSrcE_hmk_cut` leaves out.
-
-**`Loop.finRepErased_of_cut`**: `finRepErased_of` with `hMk` replaced by those two.
--/
+/-! `FinRepErased` with the views' masked values read off the history, leaving `FinPiop`, which the ZK server's rep returning doesn't give, and `FinFc` as premises. -/
 
 @[expose] public section
 
@@ -73,9 +60,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **The views' cut PIOP returns**: at `swSrcE_hmk_cut`'s premises but its PIOP's return, table `j`'s rep `r`'s PIOP
-from the views' source, cut at the opened coins, returns from a history at the rep's first round, and the level-0 cap
-and pads root it frames are under `2^64` bytes. -/
 def FinPiop : Prop :=
   ∀ {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)}, FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops →
@@ -129,8 +113,6 @@ def FinPiop : Prop :=
       (.ok (res, tr₁), l₁)) ∧
     (FlockComplete.flat cms[j.val]!.cap).size < 2 ^ 64 ∧ ic.root.size < 2 ^ 64
 
-/-- **The views' masked value at `final_c`'s pad**: at `swSrcE_hmk_cut`'s premises, the views' source's masked value at
-`final_c`'s pad is the request's value there plus its pad. -/
 def FinFc : Prop :=
   ∀ {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)}, FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops →
@@ -191,10 +173,6 @@ def FinFc : Prop :=
           tb.sch.k0).fc]!
 
 set_option maxHeartbeats 1000000 in
-/-- **`FinRepErased` at rep stream `k`, with the masked values from the history**: `finRepErased_step` with its `hmk`
-from `swSrcE_hmk_cut` below `zp 64` but at `final_c`'s pad (`FinFc` there), at the switched cut's commitments
-(`cmsCut_ok`), pads (`icCut_ok`) and earlier streams (`repCut_eraseZ`), where the views' cut PIOP returns
-(`FinPiop`). -/
 theorem finRepErased_step_cut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w)
@@ -265,7 +243,6 @@ theorem finRepErased_step_cut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _r
     have hsj : schs[j.val]! = ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
       rw [← Except.ok.inj (hs'.symm.trans hs)]
       exact hschZ j
-    -- the switched cut's commitments and pads
     obtain ⟨cmsC, hcmsC, -, -, -, hcm⟩ := cmsCut_ok vs w ν t hA schs hcms
     have hic2 := padsView_all vs w ν t hic
     obtain ⟨icC, hicC, -, -, -⟩ := icCut_ok vs w ν t hA (i := j.val) (r := r.val) j.isLt r.isLt _
@@ -274,7 +251,6 @@ theorem finRepErased_step_cut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _r
         unfold padsView at e
         rw [hk2, hkr] at e
         exact e)
-    -- the earlier streams from the switched cut
     have hprevC : ∀ k' < 2 * j.val + r.val, ∀ extras',
         (FlockDeploy.tabsOf (Masked.stsOf x))[k' / 2]!.extra (viewPoints x ops spec) = .ok extras' → ∀ icX,
         (∀ l, (FlockComplete.padsTreeCut Masked.hsE
@@ -338,9 +314,6 @@ theorem finRepErased_step_cut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _r
     hex hic hl hRep hic' hmk hrun
 
 set_option maxHeartbeats 1000000 in
-/-- **`FinRepErased` from its parts, with the masked values from the history**: `finRepErased_of` with `hMk` replaced
-by `FinPiop` (the views' cut PIOP returns) and `FinFc` (the equation at `final_c`'s pad), the rest of `hMk` read off
-the history in each stream's step (`finRepErased_step_cut`). -/
 theorem finRepErased_of_cut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w)

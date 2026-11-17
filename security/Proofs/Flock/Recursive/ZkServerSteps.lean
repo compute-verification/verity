@@ -4,15 +4,7 @@ public import Proofs.Flock.Recursive.ZkServerObj
 public import Proofs.Flock.Recursive.ZkServerRun
 import Proofs.Flock.Recursive.ZkServerWire
 
-/-!
-# The ZK server's steps on requests it takes
-
-`ZkServerTemplate` shows what the ZK server sends wherever it doesn't refuse; this file shows where it doesn't. `Runs m st
-Q`: from the state `st`, `m` returns at a state `Q` holds of. `Draws m rows P`: `m` samples one salt for each of `rows`, in
-order, and changes nothing else, its result and the rows' commit strings `P`. `Goes s reqs st t`: the ZK server's loop
-takes every request of `reqs` from `st`, ending at `t`. Each `run_*` is one request the ZK server takes, at the state
-after it.
--/
+/-! The ZK server's steps on the requests it takes, each at the state after it. -/
 
 @[expose] public section
 
@@ -21,9 +13,6 @@ namespace FlockSoundness.Discharge.Recursion.ZkServerSteps
 open Lean (Json)
 open Flock Flock.ZkServer
 
-/-! ## Total correctness of the ZK server's state monad -/
-
-/-- From `st`, `m` returns `a` at a state `t` with `Q a t`. -/
 def Runs {α : Type} (m : Fw α) (st : State) (Q : α → State → Prop) : Prop :=
   ∃ a t, m.run st = .ok (a, t) ∧ Q a t
 
@@ -75,8 +64,6 @@ theorem Runs.lift {α : Type} {x : V α} {a : α} {st : State} {Q : α → State
   subst hx
   exact ⟨a, st, rfl, h⟩
 
-/-- A `do` block's `if` with a join point `b` after it, shown once for every state `J` holds of: `st` when the `if`'s
-branch is skipped, and the branch `a` may end in it. -/
 theorem Runs.ite_jp {α : Type} {c : Prop} [Decidable c] {a b : Fw α} {st : State} {Q : α → State → Prop}
     (J : State → Prop) (hb : ∀ t, J t → Runs b t Q) (hv : ¬c → J st)
     (ha : c → (∀ t, J t → Runs b t Q) → Runs a st Q) : Runs (if c then a else b) st Q := by
@@ -98,9 +85,6 @@ theorem Runs.set_bind {β : Type} {t : State} {f : PUnit → Fw β} {st : State}
 theorem Runs.send_bind {β : Type} {m : Sent} {f : PUnit → Fw β} {st : State} {R : β → State → Prop}
     (h : Runs (f ⟨⟩) { st with sent := st.sent.push m } R) : Runs (Flock.ZkServer.send m >>= f) st R := h
 
-/-! ## Salts sampled in order -/
-
-/-- The commit strings of `rows` under the salts `ys`, row by row. -/
 def cs (rows : List (Array Nat)) (ys : List ByteArray) : List ByteArray :=
   List.zipWith (fun row y => Hm96.Default512.commitString (rowDigest row) y) rows ys
 
@@ -108,8 +92,6 @@ theorem cs_append (a b : List (Array Nat)) (ys : List ByteArray) :
     cs (a ++ b) ys = cs a ys ++ cs b (ys.drop a.length) :=
   ZkServerRun.zipWith_append_left _ a b ys
 
-/-- `m` samples one salt for each of `rows`, in order, and changes nothing else; `P` holds of its result and the rows'
-commit strings. -/
 def Draws {α : Type} (m : Fw α) (rows : List (Array Nat)) (P : α → List ByteArray → Prop) : Prop :=
   ∀ st : State, rows.length ≤ st.salts.length →
     ∃ a, m.run st = .ok (a, { st with salts := st.salts.drop rows.length }) ∧ P a (cs rows st.salts)
@@ -165,9 +147,6 @@ theorem samples_salteds (rows : List (Array Nat)) : Draws (rows.mapM salted) row
 theorem samples_saltedTop (top : ByteArray) : Draws (saltedTop top) (topRows top) (fun l c => l = c) :=
   samples_salteds (topRows top)
 
-/-! ## The ZK server's loop -/
-
-/-- The ZK server's loop takes each of `reqs` in turn from `st`, ending at `t`. -/
 def Goes (s : Schedule) : List ByteArray → State → State → Prop
   | [], st, t => t = st
   | b :: bs, st, t => ∃ u, (ZkServerRun.stepOf s b).run st = .ok ((), u) ∧ Goes s bs u t
@@ -188,7 +167,6 @@ theorem forIn_goes (s : Schedule) : ∀ (reqs : List ByteArray) {st t : State}, 
     rw [e]
     exact forIn_goes s bs h
 
-/-- **The ZK server finishes where its loop takes every request** and ends finished. -/
 theorem run_of_goes {s : Schedule} {reqs ys : List ByteArray} {t : State} (h : Goes s reqs { salts := ys } t) :
     run s reqs ys = (t.sent, t.finished) := by
   rw [ZkServerRun.run_eq]
@@ -200,8 +178,6 @@ theorem goes_one {s : Schedule} {b : ByteArray} {r : Req} (hb : decode b = .ok r
     (h : (step s r).run st = .ok ((), t)) : Goes s [b] st t :=
   ⟨t, by unfold ZkServerRun.stepOf; rw [StateT.run_bind, show (liftM (decode b) : Fw Req).run st = .ok (r, st) by
     rw [hb]; rfl]; exact h, rfl⟩
-
-/-! ## The requests `decode` reads -/
 
 theorem decode_putPing {b : ByteArray} (hb : b.size < 2 ^ 32) : decode (putPing b) = .ok .ping := by
   simp only [putPing, decode, ZkServerWire.tag_size, ZkServerWire.tag_get, Bool.false_eq_true, ite_false]
@@ -217,8 +193,6 @@ theorem decode_putProof {table : String} {rep : Nat} {proof : ByteArray} (h1 : t
     ZkServerWire.rdBytes_at a.right.right h3, ZkServerWire.ok_bind]
   rfl
 
-/-! ## The requests the ZK server takes -/
-
 theorem Runs.run_eq {m : Fw Unit} {st t₀ : State} (h : Runs m st fun _ t => t = t₀) : m.run st = .ok ((), t₀) := by
   obtain ⟨⟨⟩, t, hm, rfl⟩ := h
   exact hm
@@ -232,7 +206,6 @@ theorem nodes_ok {top : ByteArray} (h : isCap top = true) : nodes top = .ok (top
   simp [nodes, h]
   rfl
 
-/-- `l.mapM f` where each `f a` returns `k a` and leaves the state. -/
 theorem run_mapM_pure {α β : Type} (f : α → Fw β) (k : α → β) :
     ∀ (l : List α), (∀ a ∈ l, ∀ st, (f a).run st = .ok (k a, st)) → ∀ st, (l.mapM f).run st = .ok (l.map k, st)
   | [], _, _ => rfl
@@ -265,7 +238,6 @@ theorem run_proof (s : Schedule) {st : State} (hf : st.finished = false) : (step
   rw [step]
   exact Runs.get (Runs.ite_neg (by simp [hf]) (Runs.pure rfl))
 
-/-- **Hello**: at a schedule's Hello as `ZkServerObj.hello` takes it, the worker's Hello with a plain Σ. -/
 theorem run_hello (s : Schedule) {H L : ZkServerObj.Tree} {A B : List ((_ : String) × Json)}
     (he : s.hello = .obj ⟨⟨H⟩⟩) (hH : H.Ordered) (hpH : plainObj H = true) (hL : L.Ordered)
     (hpL : plainObj L = true) (hsplit : H.toListModel = A ++ ⟨"link", .obj ⟨⟨L⟩⟩⟩ :: B)
@@ -287,9 +259,6 @@ theorem run_hello (s : Schedule) {H L : ZkServerObj.Tree} {A B : List ((_ : Stri
   refine Runs.ite_neg (by simp [ZkServerJson.fractional_printJson hp]) ?_
   exact Runs.lift_bind (pinned_ok (by rw [hT]; exact hcan)) (Runs.modify_bind (Runs.send rfl))
 
-/-- **Commit** of tables with distinct names in the schedule's order, each top a whole number of nodes, their node counts
-the schedule's roots, after Hello and before any other Commit: it samples a salt for each node and sends each table's
-commit strings. -/
 theorem run_commit (s : Schedule) (rootF : ByteArray) (roots : List (String × ByteArray)) {st : State}
     (hf : st.finished = false) (hh : st.hello = true) (hc : st.committed = false) (hnd : (roots.map (·.1)).Nodup)
     (hcap : ∀ e ∈ roots, isCap e.2 = true)
@@ -352,7 +321,6 @@ theorem zeros_any (n : Nat) : (ByteArray.mk (Array.replicate n 0)).toList.any (�
   intro x hx
   simp [zeros_loop n 0 [] (fun _ h => nomatch h) x hx]
 
-/-- **Link** with the schedule's count of zero elements, after Commit and before any other Link. -/
 theorem run_link (s : Schedule) {st : State} (hf : st.finished = false) (hc : st.committed = true)
     (hl : st.linked = false) :
     (step s (.link ⟨Array.replicate (16 * s.y) 0⟩)).run st =
@@ -365,7 +333,6 @@ theorem run_link (s : Schedule) {st : State} (hf : st.finished = false) (hc : st
   refine Runs.get (Runs.ite_neg (by simp [hc, hl]) ?_)
   exact Runs.set_bind (Runs.send rfl)
 
-/-- **Open** of a stream of the schedule, at its parent and position, not opened before. -/
 theorem run_open (s : Schedule) {stream parent : String} {label : ByteArray} {pos : Nat} {st : State} {w : String}
     {c : Nat} (hf : st.finished = false) (hfind : s.streams.find? (·.1 == stream) = some (w, parent, pos, c))
     (hnew : st.streams.any (·.1 == stream) = false) :
@@ -380,7 +347,6 @@ theorem run_open (s : Schedule) {stream parent : String} {label : ByteArray} {po
   refine Runs.ite_neg (by simp) ?_
   exact Runs.get (Runs.ite_neg (by simp [hnew]) (Runs.set rfl))
 
-/-- **Finish** after the link exchange and every round, each stream with the schedule's count of rounds. -/
 theorem run_finish (s : Schedule) {st : State} (hf : st.finished = false) (hc : st.committed = true)
     (hl : st.linked = true) (hr : st.rounds = s.rounds.size)
     (hpin : canonForm (Json.mkObj (st.streams.map fun e => (e.1, jnat e.2.2))) =
@@ -401,10 +367,6 @@ theorem bne_self (a : ByteArray) : (a != a) = false := by
 
 theorem some_bne_self (a : ByteArray) : (some a != some a) = false := bne_self a
 
-/-- **A round** on an opened stream whose content `split` reads, as the schedule's entry has it: its binding's cap and
-its first copies the committed top of its stream's table, its other caps fresh tops of the entry's node counts, its
-message the entry's rows. It samples a salt for each node of its fresh tops and each message row, and sends the round
-after its stream's `Open` where it is the stream's first. -/
 theorem run_round (s : Schedule) (stream : String) (content : ByteArray) (n : Nat) {st : State} {w parent : String}
     {k : Nat} {sp : Split} (hf : st.finished = false)
     (hfind : st.streams.find? (·.1 == stream) = some (w, parent, k))

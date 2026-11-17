@@ -2,25 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.FinInner
 
-/-!
-# The finish's transcript at a rep answered by the request's coins
-
-`Loop.asksPad C` answers a rep's round `k`, counted in the state, by `C[k]` while `C` lasts and past it by ones
-(`padCoin`). Every round the ZK server's PIOP and opening add to the prover's transcript is a round it sends, recorded
-with the coins that answer it:
-
-* **`Loop.RecStep`**: from the transcript `t` at round `k` to `t'` at round `k'`, the rounds appended to `t`'s are
-  `k' - k` and record the appended round `i` with at least one coin, its coins round `k + i`'s.
-* **`Loop.RecP`**, **`Loop.recP`**: a transcript computation answered by `asksPad C` whose every run that returns is a
-  `RecStep`; as a simulation (`With.Sim`) of the computation with itself.
-* `squeezeP_recP`, …, `repOpening_recP`: the ZK server's PIOP and opening are `RecP`, walked once (`sim_walk`), as the
-  session's are under `JsonRT.recS`.
-* **`Loop.Rets`**: what a run that returns returns; a rep's PIOP returns the zerocheck proof whose round-1c values and
-  `final_c` are the masked values at their pads (`repPiop_rets`).
-* **`Loop.repCons_parts`**: where `repCons` answered by `asksPad C` returns from round `0` and a transcript with no
-  rounds, its proof's zerocheck carries the masked values, its constraints start with the replay's, and the transcript
-  the replay reads records round `i`'s coins as `padCoin C i`, for every round it took.
--/
+/-! The finish's transcript at a rep answered by the request's coins records each round it takes. -/
 
 @[expose] public section
 
@@ -35,13 +17,11 @@ set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
-/-- Round `k`'s coins as `asksPad C` answers it: `C[k]`'s while `C` lasts, then ones. -/
 def padCoin (C : Array (Array F128)) (k : ℕ) : ℕ → F128 :=
   match C[k]? with
   | some cs => fun i => cs[i]!
   | none => fun _ => 1
 
-/-- Below a prefix `C.extract 0 N` of the coins, a round's coins are `C`'s. -/
 theorem padCoin_extract {C : Array (Array F128)} {N k : ℕ} (hk : k < N) (hkC : k < C.size) :
     padCoin (C.extract 0 N) k = fun i => (C[k]!)[i]! := by
   have h : (C.extract 0 N)[k]? = some (C[k]'hkC) := by
@@ -59,8 +39,6 @@ theorem getElem!_map_range {f : ℕ → F128} {n i : ℕ} (hi : i < n) : ((Array
 theorem getD_map_range {f : ℕ → F128} {n : ℕ} (hn : 0 < n) : ((Array.range n).map f).getD 0 0 = f 0 := by
   simp [Array.getD_eq_getD_getElem?, hn]
 
-/-- **From the transcript `t` at round `k` to `t'` at round `k'`, each round taken is recorded**: `t'`'s rounds are `t`'s
-followed by rounds `rs`, `k' = k + |rs|`, and the appended round `i` has at least one coin, its coins round `k + i`'s. -/
 def RecStep (C : Array (Array F128)) (t : Flock.Transcript) (k : ℕ) (t' : Flock.Transcript) (k' : ℕ) : Prop :=
   ∃ rs : List Round, t'.rounds.toList = t.rounds.toList ++ rs ∧ k' = k + rs.length ∧
     ∀ i (hi : i < rs.length), 0 < rs[i].n ∧ rs[i].coins = (Array.range rs[i].n).map (padCoin C (k + i))
@@ -84,14 +62,10 @@ theorem RecStep.trans {C : Array (Array F128)} {t₀ t₁ t₂ : Flock.Transcrip
     rw [show k₀ + i = k₁ + (i - rs.length) by omega]
     exact hr1' _ hi'
 
-/-- **A transcript computation answered by `asksPad C` that records each round it takes**: every run that returns is a
-`RecStep`. -/
 def RecP (C : Array (Array F128)) {α : Type} (y : TMW (StateT ℕ V) α) : Prop :=
   ∀ (t : Flock.Transcript) (k : ℕ) (a : α) (t' : Flock.Transcript) (k' : ℕ), (y.run t).run k = .ok ((a, t'), k') →
     RecStep C t k t' k'
 
-/-- **The simulation of `RecP`**: a transcript computation answered by `asksPad C` is related to itself when it is
-`RecP`. -/
 def recP (C : Array (Array F128)) : _root_.Flock.With.Sim (TMW (StateT ℕ V)) (TMW (StateT ℕ V)) where
   R _ y := RecP C y
   pure _ t k _ t' k' h := by
@@ -108,7 +82,6 @@ def recP (C : Array (Array F128)) : _root_.Flock.With.Sim (TMW (StateT ℕ V)) (
       cases h
       exact RecStep.same rfl rfl
 
-/-- `asksPad C` answers round `k` with `padCoin C k` and moves to round `k + 1`. -/
 theorem asksPad_round (C : Array (Array F128)) (c : ByteArray) {k : ℕ} {coin : ℕ → F128} {k' : ℕ}
     (h : ((asksPad C).round c).run k = .ok (coin, k')) : coin = padCoin C k ∧ k' = k + 1 := by
   simp only [asksPad, StateT.run_bind, StateT.run_get, pure_bind] at h
@@ -143,7 +116,6 @@ theorem squeezeP_recP (C : Array (Array F128)) (kind : UInt8) (n : ℕ) :
     obtain rfl : i = 0 := by simpa using hi
     exact ⟨Nat.pos_of_ne_zero hn, rfl⟩
 
-/-- A verifier action that keeps the rounds. -/
 theorem liftTM_recP (C : Array (Array F128)) {α : Type} (x : _root_.Flock.Transcript.TM α)
     (hx : ∀ t a t', x t = .ok (a, t') → t'.rounds = t.rounds) :
     (recP C).R (liftTM x : TMW (StateT ℕ V) α) (liftTM x) := by
@@ -185,7 +157,6 @@ theorem pow_recP (C : Array (Array F128)) (v : UInt64) :
       (liftTM (_root_.Flock.Transcript.pow v)) :=
   liftTM_recP C _ fun _ _ _ h => by cases h; rfl
 
-/-- A computation of the rep's round counter that keeps it, lifted to the transcript, adds no rounds. -/
 theorem liftK_recP (C : Array (Array F128)) {α : Type} (x : StateT ℕ V α)
     (hx : ∀ k a k', x.run k = .ok (a, k') → k' = k) :
     (recP C).R (StateT.lift x : TMW (StateT ℕ V) α) (StateT.lift x) := by
@@ -322,9 +293,6 @@ theorem repOpening_recP (C : Array (Array F128)) (st : _root_.Flock.Setup) (sch 
   sim_walk [ringSwitchP_recP C,
     ligeritoPZk_recP C _ (fun lv g s => liftPure_recP C (_root_.Flock.ZkServer.Finish.commitFw lv g s))]
 
-/-! ## What a run returns -/
-
-/-- **`x` returns only values `P` holds of**: from every transcript and round, a run of `x` that returns, returns one. -/
 def Rets {α : Type} (P : α → Prop) (x : TMW (StateT ℕ V) α) : Prop :=
   ∀ tr k a tr' k', (x.run tr).run k = .ok ((a, tr'), k') → P a
 
@@ -349,7 +317,6 @@ theorem rets_bind' {α β : Type} {P : α → Prop} {Q : β → Prop} {x : TMW (
   obtain ⟨a, tr₁, k₁, e1, e2⟩ := _root_.Flock.ZkServer.Finish.tmw_bind_ok e
   exact h a (hx tr k a tr₁ k₁ e1) tr₁ k₁ b tr' k' e2
 
-/-- The masked zerocheck's proof carries the masked values at round 1c's and `final_c`'s pads. -/
 theorem zerocheckFw_rets (io : Asks (StateT ℕ V)) (m : ℕ) (digest cap root : ByteArray)
     (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) :
     Rets (fun r => r.1.round1c = (Array.range 64).map (fun i => mk (lay.r1c i)) ∧ r.1.finalC = mk lay.fc)
@@ -357,7 +324,6 @@ theorem zerocheckFw_rets (io : Asks (StateT ℕ V)) (m : ℕ) (digest cap root :
   unfold _root_.Flock.ZkServer.Finish.zerocheckFw
   repeat (first | refine rets_bind fun _ => ?_ | exact rets_pure ⟨rfl, rfl⟩ | split | dsimp only)
 
-/-- A rep's PIOP's zerocheck proof carries the masked values at round 1c's and `final_c`'s pads. -/
 theorem repPiop_rets (io : Asks (StateT ℕ V)) (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout)
     (cap root : ByteArray) (extras : Array _root_.Flock.Claim) (mk : ℕ → F128) :
     Rets (fun r => r.1.round1c = (Array.range 64).map (fun i => mk (lay.r1c i)) ∧ r.1.finalC = mk lay.fc)
@@ -369,8 +335,6 @@ theorem repPiop_rets (io : Asks (StateT ℕ V)) (st : _root_.Flock.Setup) (lay :
   rintro ⟨lp, lc⟩
   exact rets_pure hr
 
-/-- **`repCons`'s proof carries the passed `final_c` under its pad**: its zerocheck proof's `finalC` is the PIOP's masked
-value at `final_c`'s pad. -/
 theorem repCons_rets (io : Asks (StateT ℕ V))
     (commit : _root_.Flock.Level → Array F128 → (ℕ → ByteArray) → StateT ℕ V _root_.Flock.ZkServer.Finish.Commit)
     (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128)
@@ -392,9 +356,6 @@ theorem repCons_rets (io : Asks (StateT ℕ V))
   refine rets_bind fun _ => ?_
   exact rets_pure hr.2
 
-/-! ## `repCons` at the request's coins -/
-
-/-- A `V` action lifted to the transcript and the round counter keeps both. -/
 theorem liftV_ok {α : Type} {v : V α} {t : Flock.Transcript} {k : ℕ} {a : α} {t' : Flock.Transcript} {k' : ℕ}
     (h : ((StateT.lift (monadLift v : StateT ℕ V α) : TMW (StateT ℕ V) α).run t).run k = .ok ((a, t'), k')) :
     v = .ok a ∧ t' = t ∧ k' = k := by
@@ -404,11 +365,6 @@ theorem liftV_ok {α : Type} {v : V α} {t : Flock.Transcript} {k : ℕ} {a : α
     cases h
     exact ⟨rfl, rfl, rfl⟩
 
-/-- **`repCons` answered by `asksPad C`, from round `0` and a transcript with no rounds**: where it returns the proof `p`
-and the constraints `cons` at the transcript `tF` and round `kF`, `tF`'s rounds `rs` number `kF`, round `i` recording
-the coins `padCoin C i`; the replay reads them (from the transcript domain `dom`), and `cons` starts with its
-constraints; and `p`'s zerocheck carries the masked values `vals + h` at round 1c's and `final_c`'s pads
-(`repPiop_rets`). -/
 theorem repCons_parts {C : Array (Array F128)} {st : _root_.Flock.Setup} {sch : _root_.Flock.Schedule}
     {tPad rep : ℕ} {dom : ByteArray} {g : Array F128} {cm0 : _root_.Flock.ZkServer.Finish.Commit}
     {extras : Array _root_.Flock.Claim} {pads : _root_.Flock.ZkServer.Finish.PadsZk}

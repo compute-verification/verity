@@ -7,43 +7,7 @@ public import Proofs.Flock.Claims.Sampling.Select
 public import Proofs.Flock.Claims.Sampling.Reg
 public import Proofs.Flock.SamplingGeneric.ReplayPartition
 
-/-!
-# The two-stage sampled verifier's code from its Lean samples
-
-`SamplingDeploy.codeTwo c reg L₁ L₂ bytes₁ bytes₂`: the record's code (`SamplingDeploy.Code`) with its checked units
-the two stages the Lean sampled verifier samples (`Spot.Run.run` under `Select.Rule.twoStage`), on the
-registration the statement names (`reg x`, a `RegTwo`), and the rest `c`'s:
-
-* the first stage is `Select.select` on the boundary registration (`RegTwo.first`, a `Reg` whose rule is the resolved
-  two-stage rule) over `L₁ x` bytes of the coins (`bytes₁`). Its proved units are the replay sample the second stage
-  reads (`RegTwo.sample`), and the replay sample of record (`replayTwo`) is its checked slots on the replay layout
-  (`Reg.checked`);
-* the second stage is `Select.selectSecond` on that sample, `k_t` of the `n_t` proof blocks of each sampled replay
-  block's cell of each template `t`, over `L₂ x` bytes (`bytes₂`). The interior is template-major: interior unit
-  `cellOff q ns t + i·n_t + p` is proof block `blockOf sample[i] t p` of the statement's partition (`RegTwo.blockAt`).
-  The checked units are those proof blocks and the ones the registration always checks (`always`); every proof block
-  is checked where either stage is refused, where the run rejects.
-
-`RegMatchesTwo` says the registration is the statement's two-stage design: its replay layout has the shape of the
-design's replay partition (its classes' strata sizes, all that the first stage's bound reads: `Design.Pa_shape`), and its
-first-stage design is the design's first stage; its templates are the partition's strata, each with the design's count;
-the layout's population slot `ρ` is unit `ρ`, and that replay block's cell of stratum `t` is `blockOf ρ t` on
-`[0, n_t)`; an input slot's cells are always checked. So the deployed second stage, one uniform `k_t`-subset per cell
-of a sampled replay block, is the contract's sample of each cell.
-
-* `replaySamples_code`: `Code.ReplaySamples` from `RegMatchesTwo` and uniform first-stage bytes (`BytesUniform`), by
-  `sampleMisses`.
-* `secondSamples_code`: `Code.SecondSamples` from `RegMatchesTwo`, first-stage bytes the second stage's coins don't move
-  (`FirstFixed`) and second-stage bytes uniform on them (`SecondUniform`), by `secondMisses`: a replay block whose
-  cells meet no proof block of `B`, or a sample entry outside the replay sample, only drops escapes at most `1`
-  (`prod_second_le`).
-* `sampleFixed_codeTwo`: `Code.SampleFixed` from `BytesFixedTwo` (the sessions' rounds are second-stage, and neither stage's
-  bytes read them).
-* `ksTwo_code`: `CompiledTwo.KS` at Flock's masked record and SHA-512 (`ksTwo_masked`) with those three facts
-  proved. It takes the code's refusals, replay cap and interior roots, and its sessions' runs, scope and openings at a
-  replay block.
-* `sessionsTwo_code`: the two-stage contract at those premises, which `ksTwo_one` reads at one session a run.
--/
+/-! The two-stage sampled verifier's code with its checked units the two stages the Lean sampled verifier samples. -/
 
 @[expose] public section
 
@@ -83,7 +47,6 @@ theorem RegTwo.ok_mem (g : RegTwo) {N j : ℕ} {src₁ src₂ : ByteArray} {draw
   rw [Bool.or_eq_true, Array.any_eq_true']
   exact Or.inr ⟨j, hj, by simp⟩
 
-/-- A nonempty replay sample is the first stage's accepted sample. -/
 theorem RegTwo.sample_ok (g : RegTwo) {src : ByteArray} (h : g.sample src ≠ #[]) :
     ∃ draw read, Spot.Select.select g.first.rule g.first.program g.first.query g.first.table
       g.first.closure src = .ok (draw, g.sample src, read) := by
@@ -106,7 +69,6 @@ theorem slots_select_of (rule : Spot.Select.Rule) (p : Spot.Program) (query : Js
   rw [hs]
   rfl
 
-/-- A checked population slot is a proved unit. -/
 theorem mem_slots_checked {l : Spot.Slots.SlotOrder} {proved : Array ℕ} {ρ : ℕ}
     {b : Spot.Slots.ProofBlock} (h : ρ ∈ Spot.Slots.checked l proved) (hb : l.blocks[ρ]? = some b)
     (hu : b.unit = some ρ) : ρ ∈ proved := by
@@ -130,7 +92,6 @@ theorem pairwise_of_zip_tail : ∀ l : List ℕ,
     · exact h.1
     · exact h.1.trans (List.rel_of_pairwise_cons ih hy)
 
-/-- **An accepted second stage's sample** is one or more replay blocks, each once. -/
 theorem selectSecond_sample {sample ns ks : Array ℕ} {src : ByteArray} {r : Json × ℕ}
     (h : Spot.Select.selectSecond sample ns ks src = .ok r) : sample ≠ #[] ∧ sample.toList.Nodup := by
   obtain ⟨draw, read⟩ := r
@@ -138,9 +99,6 @@ theorem selectSecond_sample {sample ns ks : Array ℕ} {src : ByteArray} {r : Js
   refine ⟨fun h0 => by simp [h0] at hne, (pairwise_of_zip_tail _ ?_).imp (fun h => (Nat.ne_of_lt h))⟩
   simpa using hz
 
-/-! ## The escapes the second stage meets -/
-
-/-- Interior unit `j` in template `t`'s cells is in `t`. -/
 theorem RegTwo.templateAt_eq (g : RegTwo) {q j t : ℕ} (ht : t < g.ns.size) (hlo : cellOff q g.ns t ≤ j)
     (hhi : j < cellOff q g.ns (t + 1)) : g.templateAt q j = t := by
   unfold RegTwo.templateAt
@@ -150,7 +108,6 @@ theorem RegTwo.templateAt_eq (g : RegTwo) {q j t : ℕ} (ht : t < g.ns.size) (hl
     simp only [Bool.not_eq_true', decide_eq_false_iff_not, not_lt]
     omega
 
-/-- Position `p` of template `t`'s cell `i` is proof block `blockOf sample[i] t p`. -/
 theorem RegTwo.blockAt_cell (g : RegTwo) (sample : Array ℕ) {t i p : ℕ} (ht : t < g.ns.size) (hi : i < sample.size)
     (hp : p < g.ns.getD t 0) :
     g.blockAt sample (cellOff sample.size g.ns t + i * g.ns.getD t 0 + p) = g.blockOf (sample.getD i 0) t p := by
@@ -166,12 +123,9 @@ theorem RegTwo.blockAt_cell (g : RegTwo) (sample : Array ℕ) {t i p : ℕ} (ht 
       p + i * g.ns.getD t 0 by omega, Nat.add_mul_div_right _ _ hn, Nat.div_eq_of_lt hp, zero_add,
     Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hp]
 
-/-- **The interior units at a proof block of `B`**: those of the interior over `sample` whose proof block is in `B`
-and below `N`. -/
 def secondX (B : Finset ℕ) (N : ℕ) (g : RegTwo) (sample : Array ℕ) : Finset ℕ :=
   (range (sample.size * g.ns.toList.sum)).filter fun j => g.blockAt sample j ∈ B ∧ g.blockAt sample j < N
 
-/-- Template `t`'s cell `i` of `secondX` is `B` on replay block `sample[i]`'s cell of `t`. -/
 theorem card_window_second {B : Finset ℕ} {N : ℕ} {g : RegTwo} {sample : Array ℕ} {t i ρ : ℕ}
     (ht : t < g.ns.size) (hi : i < sample.size) (hρ : sample.getD i 0 = ρ)
     (hinj : Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0))) (hN : ∀ p < g.ns.getD t 0, g.blockOf ρ t p < N) :
@@ -213,9 +167,6 @@ theorem sample_getD_inj {sample : Array ℕ} (hnd : sample.toList.Nodup) {i j : 
   rw [← Array.getElem_toList hi, ← Array.getElem_toList hj] at h
   exact (hnd.getElem_inj_iff).1 h
 
-/-- **The product over the sample's cells is at most the product over the replay sample's**: dropping the sample's
-entries outside `P` only drops escapes at most `1`, each replay block of `P` is one entry whose cell of template `t`
-is `cellF ρ t`, of `n_t` proof blocks sampling `k_t`, and `B` meets no cell of the other replay blocks of `S`. -/
 theorem prod_second_le {T N : ℕ} {cellF : ℕ → ℕ → Finset ℕ} {kOf : ℕ → ℕ} {B : Finset ℕ} {g : RegTwo}
     {sample : Array ℕ} {S P : Finset ℕ} (hT : g.ns.size = T) (hnd : sample.toList.Nodup) (hPS : P ⊆ S)
     (hsub : ∀ ρ t, cellF ρ t ⊆ range N) (hk : ∀ t < T, kOf t = g.ks.getD t 0)
@@ -273,10 +224,6 @@ theorem prod_second_le {T N : ℕ} {cellF : ℕ → ℕ → Finset ℕ} {kOf : �
     _ = ∏ ρ ∈ P, e ρ := by rw [himg]
     _ = ∏ ρ ∈ S, e ρ := prod_subset hPS fun ρ hS hnP => he1 ρ hS hnP
 
-/-! ## The stages' miss probabilities -/
-
-/-- **The first stage misses `T` with probability at most `P_a(T)`**: the sample of record's checked slots on uniform
-bytes (`sampleMisses`); a refused sample checks every slot, and a well-formed design has `P_a(∅) = 1`. -/
 theorem replay_le (g : Reg) (l : Spot.Slots.SlotOrder) (Dd : Claims.Sampling.Design) (L : ℕ) (T : Finset ℕ)
     (hl : Spot.Slots.layout g.program g.query = .ok l)
     (hds : slotDesign g.rule g.program g.query g.table = .ok Dd) (hwf : Dd.WellFormed (slotPartition l))
@@ -305,10 +252,6 @@ theorem replay_le (g : Reg) (l : Spot.Slots.SlotOrder) (Dd : Claims.Sampling.Des
     have hv0l : v0 < l.blocks.size := hlen ▸ mem_range.1 (hT hv0)
     exact hm v0 (Array.mem_toList_iff.2 ((mem_allSlots _ _).2 hv0l)) hv0
 
-/-- **The second stage misses `B` no more often than the replay sample's escapes**, at fixed first-stage bytes
-`src₁` and uniform second-stage bytes: where `B` meets no cell of the replay sample `rl`, the bound is `1`; where an
-always-checked proof block is in `B`, the miss probability is `0`; otherwise `secondMisses`'s product over the sample's
-cells, each entry one replay block of `rl` (`prod_second_le`). -/
 theorem secondSamples_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims.Sampling.Design.Two)
     (l : Spot.Slots.SlotOrder) (src₁ : ByteArray) (rl : List ℕ) (B : Finset ℕ) (L₂ : ℕ)
     (hlen : d.part.blocks.length = l.blocks.size)
@@ -394,8 +337,6 @@ theorem secondSamples_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Clai
     · exact hρP (mem_filter.2 ⟨hρS, by rw [hb, Option.map_some, hu]⟩)
     · exact hB v hvX (mem_range.1 (cell_subset Pt d.part ρ t hvc)) (hal t v hvc)
 
-/-! ## The code's two-stage facts -/
-
 variable (c : Code) (reg : Msg → Option RegTwo) (two : AuditStatement → Option Claims.Sampling.Design.Two)
   (L₁ L₂ : Msg → ℕ) (bytes₁ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₁ x) → Fin 256)
   (bytes₂ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256)
@@ -417,16 +358,13 @@ def RegMatchesTwo : Prop :=
           cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)) ∨
         (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true)
 
-/-- **The second stage's coins don't move the first stage's bytes.** -/
 def FirstFixed : Prop :=
   ∀ x r e, bytes₁ x (forkOn (c.secondStage x) r e) = bytes₁ x r
 
-/-- **The second stage's bytes are uniform on its coins**: at any coins, fresh second-stage coins make them uniform. -/
 def SecondUniform : Prop :=
   ∀ x (r : Fin (c.V.k x) → FlockDeploy.Coin) (E : (Fin (L₂ x) → Fin 256) → Prop),
     Pr (fun e : Fin (c.V.k x) → FlockDeploy.Coin => E (bytes₂ x (forkOn (c.secondStage x) r e))) = Pr E
 
-/-- **The sessions' rounds are second-stage and neither stage's bytes read them.** -/
 def BytesFixedTwo : Prop :=
   ∀ x u, c.rounds x u ⊆ c.secondStage x ∧
     ∀ r d, bytes₁ x (forkOn (c.rounds x u) r d) = bytes₁ x r ∧ bytes₂ x (forkOn (c.rounds x u) r d) = bytes₂ x r
@@ -483,11 +421,6 @@ theorem sampleFixed_codeTwo (h : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) : 
     ((reg x).map fun g => g.checked (units c x) (bytesOf (bytes₁ x r)) (bytesOf (bytes₂ x r))).getD []
   rw [((h x u).2 r d).1, ((h x u).2 r d).2]
 
-/-- **The deployed two-stage sampled verifier over Flock's masked record is knowledge sound at SHA-512** with its
-Lean samples: `ksTwo_masked` at `codeTwo`, with its replay and second-stage samples (`replaySamples_code`,
-`secondSamples_code`) and its sample's fixedness (`sampleFixed_codeTwo`) proved from the registration's match and its bytes'
-facts. It takes the code's refusals, replay cap and interior roots, and its sessions' runs, scope and openings at a
-replay block. -/
 theorem ksTwo_code (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → ℕ) (hreg : RegMatchesTwo c reg two)
     (hunif : BytesUniform c L₁ bytes₁) (hfirst : FirstFixed c L₁ bytes₁) (hsec : SecondUniform c L₂ bytes₂)
     (hfixed : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) (hr : c.RefusesTwo FlockDeploy.sha512 two)
@@ -504,8 +437,6 @@ theorem ksTwo_code (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → �
     (secondSamples_code c reg two L₁ L₂ bytes₁ bytes₂ hreg hfirst hsec) hcap hr hi
     (sampleFixed_codeTwo c reg L₁ L₂ bytes₁ bytes₂ hfixed) hruns hnum hopens
 
-/-- **The two-stage contract at `codeTwo`**, at Flock's masked record and SHA-512: `sessionsTwo_compiled` with the
-three facts `ksTwo_code` proves and the inner numbers at each unit's `N₀` by `innerNumbersAt_deploy`. -/
 theorem sessionsTwo_code (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → ℕ) (hreg : RegMatchesTwo c reg two)
     (hunif : BytesUniform c L₁ bytes₁) (hfirst : FirstFixed c L₁ bytes₁) (hsec : SecondUniform c L₂ bytes₂)
     (hfixed : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) (hr : c.RefusesTwo FlockDeploy.sha512 two)
