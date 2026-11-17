@@ -20,7 +20,6 @@ import json
 import sys
 
 import pytest
-from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
 from tests.check import test_sampled_replay as T
 from tests.check.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
@@ -30,6 +29,7 @@ from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import population as POP
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.records import replay_codes as RC
 
 

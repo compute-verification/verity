@@ -1,6 +1,6 @@
-"""The streamed wipe's memory challenger, on the challenger host: its side of one wipe (`WipeMemoryChallenger`, the
+"""The streamed wipe's memory attester, on the challenger host: its side of one wipe (`WipeMemoryAttester`, the
 steps `streamed_wipe`'s docstring states), that side as a process of its own over `wipe_party`'s wire (`serve`, `report`,
-`main`), and as a party of the deployment layer (`verity.runtime`), `MemoryChallengerParty`, over the messages
+`main`), and as a party of the deployment layer (`verity.runtime`), `MemoryAttesterParty`, over the messages
 `verity.protocols.resource_accounting.memory.pous.verifier.wipe_parties` declares.
 
 `python -m verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger --device DIR [--listen HOST:PORT] [--reads K]
@@ -10,7 +10,7 @@ prover (`serve`) and prints its report (`report`). With `--streamer` the fill is
 CPUs and gated before the side listens, and the report adds the streamer's gate (`streamer`) and its figures for the
 fill (`fill`).
 
-The party drives the same `WipeMemoryChallenger` as `serve`, in the same order: the
+The party drives the same `WipeMemoryAttester` as `serve`, in the same order: the
 labels' secret and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's
 send and receipt on its clock, the coin secret sampled when the first batch is revealed, the session signed once it
 ends. It is given no egress count and signs none. On the same coins, clock readings and key it signs the same bytes as
@@ -18,9 +18,9 @@ ends. It is given no egress count and signs none. On the same coins, clock readi
 coin and unsigned, a clock source that reads another real clock (`Identity.clock`): the runtime's own real clock reads
 `CLOCK_MONOTONIC`, which time synchronisation slews, and the run that starts it hands it
 `RealClock(streamed_wipe.raw_clock_ns, streamed_wipe.CLOCK)` instead. Virtual time (a simulated or seeded run) and a
-replay name no clock, and it signs their readings under the header's name, as `WipeMemoryChallenger` signs
+replay name no clock, and it signs their readings under the header's name, as `WipeMemoryAttester` signs
 a clock a test injects. Its machine gives it `signing-key` (`capabilities["signer"]`, a
-`memory_challenger.Signer`, with `capabilities["log"]`, its session log) and the reads it times
+`memory_attester.Signer`, with `capabilities["log"]`, its session log) and the reads it times
 (`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`). The run's parameters are
 `wipe_party.request_of`'s request, which names no reads: the challenger chooses them, never the prover. The challenger
 finishes with `report` (private: what it signs is witness), refused by name, and unsigned, when the prover
@@ -49,10 +49,10 @@ from typing import Any, BinaryIO
 from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.protocol import ProtocolDef, Start
 from verity.channel import Message, Phase, Refused
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_stream
-from verity.protocols.resource_accounting.memory.pous.attester.memory_challenger import CLOCK_RESOLUTION_NS, SessionLog, Signer
+from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import CLOCK_RESOLUTION_NS, SessionLog, Signer
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.verifier.streamed_wipe import (
     COMPLETE,
@@ -87,8 +87,8 @@ WINDOW = 8
 logger = logging.getLogger(__name__)
 
 
-class WipeMemoryChallenger:
-    """The memory challenger's side of one streamed-label wipe of `server` under `session`, signed by `signer` (module
+class WipeMemoryAttester:
+    """The memory attester's side of one streamed-label wipe of `server` under `session`, signed by `signer` (module
     docstring).  The session id goes into `log` before anything else.  `coin_secret` is sampled from the OS when the fill
     completes unless a test gives it.  `mark_source` takes the start message and returns the network attester's start certificate for it, as bytes;
     with none the session's start mark is empty.  `clock` is `raw_clock_ns` unless given.  The header names `CLOCK`
@@ -226,13 +226,13 @@ class WipeMemoryChallenger:
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog,
           reads: int = WP.READS, clock: Callable[[], int] = sw.raw_clock_ns, chunk: int = WP.CHUNK,
-          fill: Callable[[bytes, int], Any] | None = None) -> WipeMemoryChallenger:
+          fill: Callable[[bytes, int], Any] | None = None) -> WipeMemoryAttester:
     """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id sampled here, the
     fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
     `wipe_stream`), `reads` batches revealed and their answers read on `clock` (the raw monotonic clock,
     `sw.raw_clock_ns`, which the header names), the session signed by `signer` once it ends. A prover that closes first
     leaves it unsigned. This side has no mark source, so the session's start mark is empty."""
-    c = WipeMemoryChallenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
+    c = WipeMemoryAttester(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
                                 WP.params_of(request, reads), signer, log=log, clock=clock)
     try:
         if fill is not None:
@@ -259,7 +259,7 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
     return c
 
 
-def report(c: WipeMemoryChallenger, public_key: bytes, window: tuple[int, int] | None = None) -> dict[str, Any]:
+def report(c: WipeMemoryAttester, public_key: bytes, window: tuple[int, int] | None = None) -> dict[str, Any]:
     """The side's report; `window`, the session's `(t0, t1)` in Unix nanoseconds on this host's real-time clock."""
     out = {"commitment": c.commitment.to_json(), "ended": c.ended, "host": socket.gethostname(),
            "public_key": public_key.hex(), "reads": len(c.batches),
@@ -274,12 +274,12 @@ def _read() -> Send:
     return Send("clock", Message("ClockRead"))
 
 
-class MemoryChallengerParty:
-    """The memory challenger: one wipe, on its clock and coins (module docstring). `chunk` labels a fill frame."""
+class MemoryAttesterParty:
+    """The memory attester: one wipe, on its clock and coins (module docstring). `chunk` labels a fill frame."""
 
     def __init__(self, chunk: int = WP.CHUNK) -> None:
         self.chunk = chunk
-        self.c: WipeMemoryChallenger | None = None
+        self.c: WipeMemoryAttester | None = None
         self._reading: int | None = None
         self._then: Callable[[], list[Any]] | None = None
 
@@ -299,7 +299,7 @@ class MemoryChallengerParty:
         return [Send("coins", Message("CoinsDraw", {"n": 64}))]
 
     def _clock(self) -> int:
-        """The reading the challenger asked its clock for, used once: `WipeMemoryChallenger` reads it
+        """The reading the challenger asked its clock for, used once: `WipeMemoryAttester` reads it
         here."""
         if self._reading is None:
             raise RuntimeError("the wipe read its clock without a fresh reading")
@@ -325,7 +325,7 @@ class MemoryChallengerParty:
             return self._finish(e.name)
         if m.type == "Coins" and self.c is None:
             secret, session = m.body[:32], m.body[32:]
-            self.c = WipeMemoryChallenger(secret, self.request["node"].encode(), session, self.wp, self.signer,
+            self.c = WipeMemoryAttester(secret, self.request["node"].encode(), session, self.wp, self.signer,
                                              log=self.log, clock=self._clock)
             self.phase.expect()
             return [LogEntry({"commitment": self.c.commitment.to_json()}, "structure"),
@@ -394,7 +394,7 @@ def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Pat
     return Start(deployed_request(configuration, bound), {"signer": signer, "log": log, "reads": WP.READS})
 
 
-PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: MemoryChallengerParty}, {CHALLENGER: start})
+PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: MemoryAttesterParty}, {CHALLENGER: start})
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -438,7 +438,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["PROTOCOL", "WINDOW", "MemoryChallengerParty", "WipeMemoryChallenger", "main", "report", "serve", "start"]
+__all__ = ["PROTOCOL", "WINDOW", "MemoryAttesterParty", "WipeMemoryAttester", "main", "report", "serve", "start"]
 
 if __name__ == "__main__":
     sys.exit(main())

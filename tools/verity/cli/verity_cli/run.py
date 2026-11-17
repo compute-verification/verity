@@ -41,8 +41,8 @@ onsite, its id the line's ``product``), printed as a line and written to ``STATE
     VERDICT {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
              "reason": R, "registration": DIGEST, "run": RUN, "simulated": [...], "verdict": V}
 
-onsite's line also has ``trusted-device``: each memory challenger's premise that its device ran on a machine the
-developer doesn't control (`memory_challenger.trusted_device`), by component, from the outcome of its run here.
+onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
+developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here.
 remote's has ``coins_on``: the machine each component whose challenger gate is optional had its coins flipped on, the
 challenger's where its gate is bound, else the workload's, which makes ``coins`` ``simulated``.
 
