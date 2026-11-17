@@ -298,13 +298,18 @@ def test_setup_forces_every_gated_key_to_the_gate_and_keeps_roots_keys_apart(tmp
 def test_the_door_is_made_again_after_a_reset_and_deploy_installs_its_two_files():
     boot = (CONTROL / "post_start.sh").read_text()
     assert "[ ! -s /data/boot/door/gate-keys ] || { /data/infra/vy-control-setup;" in boot and " sudo\n" in boot
-    node = deploy.load()["vy-control-verity"]
+    node = deploy.load(ROOT / "tools/research/src/research/pods/nebius/deploy.toml")["vy-control-verity"]
     assert node.admin, "root there is the admin key's: the relays' drift, which holds the agents' key, passes it by"
     assert {e.path: e.src or e.by for e in node.entries} == {
         "/data/infra/vy-control-gate": "infra/control/vy-control-gate", "/data/infra/vy-control-setup": "infra/control/door_setup.sh",
         "/usr/local/sbin/vy-control-gate": "infra/control/door_setup.sh",
         "/data/watchers/ssh_config": "infra/control/watchers_ssh_config"}       # the watchers' loops' ssh, not the door's
     assert all(os.access(CONTROL / f, os.X_OK) for f in ("vy-control-gate", "door_setup.sh")), "installed with the repository's mode"
+
+
+def test_the_door_entries_are_this_trees_whichever_research_is_imported(tmp_path, monkeypatch):
+    monkeypatch.setattr(deploy.load, "__defaults__", (tmp_path / "another-trees-deploy.toml", None))
+    test_the_door_is_made_again_after_a_reset_and_deploy_installs_its_two_files()
 
 
 # ---- research through it -----------------------------------------------------------------------------------------------------------

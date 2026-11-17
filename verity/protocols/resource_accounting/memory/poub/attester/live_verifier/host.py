@@ -46,10 +46,11 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory attester's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/protocols/resource_accounting/memory/pous/verifier/wipe_party.py`, port 47611) and its block challenger
-  (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--session SID] [--minutes M]` PoUB's
+  (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--session SID --trusted-sha512 HEX] [--minutes M]` PoUB's
   P2 party (`verity/protocols/resource_accounting/memory/poub/verifier/p2_parties.py`, port 47612, with the registration the host
   names; with `--session SID`, the session id the auditor gives the memory attester, it signs the session's close with
-  the block challenger's key and claims SID in its session log, `<root>/parties/pous/`, and keeps the session's case), as
+  the block challenger's key, refused unless `--trusted-sha512 HEX` pins it, and claims SID in its session log,
+  `<root>/parties/pous/`, and keeps the session's case), as
   `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
   and the signed report on its stdout, as a lane's `--challenger-command` expects
   (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
@@ -157,6 +158,7 @@ PARTY_FIXED = {"bw_party": ["--registration", "verity/protocols/resource_account
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
 which `bw_party --fixture` holds."""
 SESSION_ID = re.compile(r"[0-9a-f]{64}")
+KEY_SHA512 = re.compile(r"[0-9a-f]{128}")
 PARTY_INTS = {"--reads": (1, 1 << 20), "--threads": (1, 256)}
 PARTY_MINUTES = (1, 180)
 """A party session's limit (`--minutes M`, 60 by default): the gate kills the party then, so one no prover joined, or whose ssh
@@ -595,8 +597,8 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
     `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, `bw_party`'s
     `--pous-session SID` (the registration the block challenger's record of PoUS session SID gives, read on this host)
     or `--fixture` (`PARTY_FIXED`'s), one of them, and `--session SID` (the session id its close is signed under, by the
-    block challenger's key and session log), and nothing of `challenger_party`'s; never a path, an address or an egress
-    count (the session signs none, and `wipe_party` takes none)."""
+    block challenger's key and session log) with `--trusted-sha512 HEX` (its pin), and nothing of `challenger_party`'s;
+    never a path, an address or an egress count (the session signs none, and `wipe_party` takes none)."""
     name, module, port = PARTIES[verb]
     extra: list[str] = []
     args = list(rest)
@@ -618,6 +620,12 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
                 raise Refused(f"bw_party --session takes the session id the auditor gives the memory attester, 64 "
                               f"lowercase hex digits; got {sid!r}")
             extra += ["--challenger", str(host.parties / PARTIES["challenger_party"][0]), "--session", sid]
+        elif verb == "bw_party" and flag == "--trusted-sha512" and args and "--trusted-sha512" not in extra:
+            key = args.pop(0)
+            if not KEY_SHA512.fullmatch(key):
+                raise Refused(f"bw_party --trusted-sha512 takes the SHA-512 the configuration pins for the close, 128 "
+                              f"lowercase hex digits; got {key!r}")
+            extra += ["--trusted-sha512", key]
         elif verb == "wipe_party" and flag == "--native" and "--streamer" not in extra:
             extra += ["--streamer", "build"]
         elif verb == "wipe_party" and flag in PARTY_INTS and args and flag not in extra:
@@ -628,10 +636,13 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
             extra += [flag, v]
         else:
             takes = {"wipe_party": "[--reads K] [--native] [--threads T]",
-                     "bw_party": "(--pous-session SID | --fixture) [--session SID]"}
+                     "bw_party": "(--pous-session SID | --fixture) [--session SID --trusted-sha512 HEX]"}
             raise Refused(f"{verb} takes {takes.get(verb, 'no flags')}; got {flag!r}")
     if "--threads" in extra and "--streamer" not in extra:
         raise Refused("wipe_party --threads sets the native streamer's threads: give --native too")
+    if verb == "bw_party" and ("--session" in extra) != ("--trusted-sha512" in extra):
+        raise Refused("bw_party --session and --trusted-sha512 go together: the close is signed only under the key the "
+                      "configuration pins")
     if verb == "bw_party" and not {"--pous-record", "--registration"} & set(extra):
         raise Refused("bw_party names no store: --pous-session SID holds the store the block challenger kept for PoUS "
                       "session SID, --fixture the fixture store's (a key whose forced command drops the caller's words "
@@ -1042,7 +1053,7 @@ USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC 
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
          "| replay RUN | stop RUN | close NODE_HEX "
          "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] "
-         "| bw_party (--pous-session SID | --fixture) [--session SID] [--minutes M] (the request line on stdin) "
+         "| bw_party (--pous-session SID | --fixture) [--session SID --trusted-sha512 HEX] [--minutes M] (the request line on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
          "| party_log wipe|pous|bw [LOG] (root on the host only)")
 PARTY_LOG_REFUSED = ("party_log is read on the host only (sudo vy-verifier-gate party_log ...), never over ssh: a party's "

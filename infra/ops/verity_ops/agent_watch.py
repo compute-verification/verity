@@ -397,7 +397,7 @@ WORKER_RELAUNCH = (
     "`research msg send --as {handle} --thread {inbox} --text '...'`. End your turn while a research run goes on: when it ends, "
     "the agent watch rings your coordinator's inbox if it failed (`research msg ring-run`) and, if you are still idle 10 min later, starts a "
     "run on you with its result. Your branches: {branches}; fetch the one you work on and push only to it. Read your runs' "
-    "results with `research inspect RUN --on NODE`. A child you start names `claude-opus-5-5-high` (or "
+    "results with `research inspect RUN --on NODE`. A child you start names `claude-opus-5-5-medium` (or "
     "`claude-sonnet-5-5-high` for a fully specified task), never Fable, `inherit` or none. You hold no timer or "
     "subscription of your own. Your predecessor's newest note ({note}) follows; carry on from where it "
     "stopped, and name both {old} and your own id in your notes' origin.\n"
@@ -410,8 +410,8 @@ NOTE_CHARS = 30_000             # a note given to a relaunched agent is cut to t
 #: a branch a note names, `cursor/...` in backticks: a relaunched worker with no recorded branch is told these, the first first
 NOTE_BRANCH_RE = re.compile(r"`(cursor/[A-Za-z0-9._/-]+)`")
 ENV_NAME = "Verity compute-verification"     # the one-repo environment every coordinator and worker runs on
-# a worker runs Opus 5.5 at high effort; only leads run Fable 5.2
-WORKER_MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
+# a worker runs Opus 5.5 at medium effort; only leads run Fable 5.2
+WORKER_MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "medium"}]}
 COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")  # launch_coordinator's
 DOORBELL_S = 10 * 60
 BELLS_STALE_S = 30 * 60
