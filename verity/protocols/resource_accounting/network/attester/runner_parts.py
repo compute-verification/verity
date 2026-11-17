@@ -40,10 +40,10 @@ def _class(text: str) -> tuple[int, ...]:
 def flags(q: argparse.ArgumentParser) -> None:
     """The connection rows as `q`'s flags, beside its schedule's."""
     q.add_argument("--lengths", type=int, choices=LENGTHS_FORMS, default=None,
-                   help="the lengths rows' form (network certifier's \"The lengths rows\"): the network certifier hands each "
-                        "execution phase's releases, and the publisher commits and signs their tables; under 2 "
-                        "every execution phase of the run ends, the last included, in its head or in the network "
-                        "certifier's signed word that it has none (default: none)")
+                   help="the lengths rows' form (network attestation's \"The lengths rows\"): the network "
+                        "attester hands each execution phase's releases, and the publisher commits and signs their "
+                        "tables; under 2 every execution phase of the run ends, the last included, in its head or in "
+                        "the network attester's signed word that it has none (default: none)")
     q.add_argument("--content", type=_class, nargs="+", default=None, metavar="P,O[,ROWS]",
                    help="with --lengths: the content rows' classes, in order (content_rows' \"The classes\"): a "
                         "class's size of prompt ids, its size of ids released and, under --lengths 1 and only "
@@ -52,7 +52,7 @@ def flags(q: argparse.ArgumentParser) -> None:
     q.add_argument("--request-words", action="store_true",
                    help="with --lengths 2, --content and --max-tokens-cap: the request words (content_rows' \"A "
                         "request's words\"), a fourth table a class of each released request's max_tokens "
-                        "and count of prompt ids as the network certifier reads them (default: none)")
+                        "and count of prompt ids as the network attester reads them (default: none)")
     head_flags(q)
 
 
@@ -60,9 +60,9 @@ def head_flags(q: argparse.ArgumentParser) -> None:
     """The head's tick as `q`'s two flags, which a schedule sets together."""
     q.add_argument("--head-offset", type=int, default=None, metavar="N",
                    help="with --lengths and --head-wait: each execution phase's line of rows.jsonl leaves at a tick "
-                        "of the schedule, N buckets after the close that hands it (network certifier's \"The head's tick\"), "
-                        "written by the network certifier's tick, which notes the tick it left at in its own log "
-                        "alone (default: none, the publisher writes it when it has signed)")
+                        "of the schedule, N buckets after the close that hands it (network attestation's "
+                        "\"The head's tick\"), written by the network attester's tick, which notes the tick it left "
+                        "at in its own log alone (default: none, the publisher writes it when it has signed)")
     q.add_argument("--head-wait", type=int, default=None, metavar="W",
                    help="with --head-offset: a line not back at its tick leaves at the first tick it is back by, "
                         "at most W ticks later, and never after; 0: a late line never leaves (no default)")
@@ -104,7 +104,7 @@ class Keeper:
 
     def __init__(self, out: Path, issuer: Issuer, params: NetworkAttesterParams, link: str, back=None) -> None:
         if (back is None) != (params.head_offset is None):
-            raise ValueError("in a schedule with a head offset, and in no other, the network certifier's tick writes "
+            raise ValueError("in a schedule with a head offset, and in no other, the network attester's tick writes "
                              "each execution phase's line, so the keeper hands the line back (`back`)")
         self.out, self.issuer, self.params, self.link, self.back = out, issuer, params, link, back
         self.open: dict[int, dict[int, Sequence[Released]]] = {}
