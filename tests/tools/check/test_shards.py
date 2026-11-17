@@ -39,7 +39,7 @@ CERTIFIER = tuple(f"lean-suites:verity/protocols/resource_accounting/network/ver
 VLLM = tuple(f"lean-suites:verity-vllm:{k}/3" for k in (1, 2, 3))
 FLOCK = tuple(f"lean-suites:verity-flock:{k}/6" for k in range(1, 7))
 ONE_STAGE = tuple(f"lean-suites:benchmarks/one_stage:{k}/7" for k in range(1, 8))
-#: the one-process suites in three parts, part K in group K; the certifier's, in three parts too, puts 3 beside the audit,
+#: the one-process suites in three parts, part K in group K; the network attester's, in three parts too, puts 3 beside the audit,
 #: 1 beside lean-build and 2 with the Rust build
 ONE_PROCESS = ("verity-pouw-check-difftest", "verity-lean-audit")
 THIRDS = tuple(tuple(f"lean-suites:{s}:{k}/3" for s in ONE_PROCESS) for k in (1, 2, 3))
@@ -84,7 +84,7 @@ def test_the_plans_are_the_documented_ones():
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "circuit-check:2/4"),
             ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", *WITH_RUST)),
         5: ((*NAMED, "pytest:adapters/vllm/verity_vllm/definitions", *BESIDE_AUDIT),
-            ("flock-circuit-build", "flock-rust-tests", "lean-audit:*", *WITH_RUST, "ratchet-gate"),
+            ("flock-circuit-build", "flock-rust-tests", "lean-audit:*", *WITH_RUST, "ratchet-gate", "added-lines"),
             (*build, *BESIDE_BUILD, "lean-agreement"), ("pytest:*",), ("circuit-check",))}
 
 
@@ -253,14 +253,14 @@ def test_a_spec_the_plan_doesnt_name_goes_with_its_provers_and_a_plan_naming_the
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_runs_every_part_of_this_tree_exactly_once_and_the_same_way_each_time(n):
-    """Every part but ratchet-gate's where the plan doesn't name it, which is off the gate: circuit-check, off the gate too, stays
-    planned."""
+    """Every part but ratchet-gate's and added-lines' where the plan doesn't name them, which are off the gate: circuit-check, off
+    the gate too, stays planned."""
     every = D.all_parts(CHECK.JOBS, _parts(n=n))
     assert len(PACKAGES) >= 4 and all(every.count(s) == 1 for s in SECURITY) and {"lean-audit", "lean-suites"}.isdisjoint(every)
     assert {p.partition(":")[0] for p in every} == {j.name for j in CHECK.JOBS}
     shards = _resolved(n)
     flat = [p for s in shards for p in s]
-    planned = [p for p in every if p != "ratchet-gate" or any("ratchet-gate" in s for s in D.plans()[n])]
+    planned = [p for p in every if p not in ("ratchet-gate", "added-lines") or any(p in s for s in D.plans()[n])]
     assert len(shards) == n and all(shards) and sorted(flat) == sorted(planned) and len(set(flat)) == len(flat)
     assert _resolved(n) == shards == _resolved(n, list(reversed(PACKAGES))), "deterministic, whatever order git lists"
     assert all(s == [p for p in every if p in s] for s in shards), "each shard's parts in the unsharded check's order"

@@ -49,14 +49,14 @@ def test_a_deferred_run_runs_only_its_steps_and_what_they_need_inside_a_recorded
 
 
 def test_a_recorded_check_runs_every_job_on_the_gate_and_passes_without_circuit_check(monkeypatch, tmp_path):
-    """circuit-check and ratchet-gate are off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared
+    """circuit-check, ratchet-gate and added-lines are off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared
     command in a run) leaves them out, and its `check/v1` passes on the jobs on the gate alone."""
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache" / "check"))
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "cache" / "tests"))
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     rc, only = _main(monkeypatch, run_dir, ["--keep-going"])
-    off = {"circuit-check", "ratchet-gate"}
+    off = {"circuit-check", "ratchet-gate", "added-lines"}
     assert rc == 0 and only == [p for p in CHECK.shard_parts() if p.partition(":")[0] not in off] == CHECK.gated_parts()
     assert {p.partition(":")[0] for p in only} == {j.name for j in CHECK.JOBS} - off
     doc = json.loads((run_dir / "result.json").read_text())
@@ -270,3 +270,17 @@ def test_a_run_sent_a_lender_hands_it_to_both_suite_steps_unless_uncached(tmp_pa
     got = suites()
     assert set(got) == {"pytest", "lean-suites"} and all("--lend-from 0123abcd" in argv for argv in got.values()), got
     assert not any("--lend-from" in argv for argv in suites(cache=False).values())
+
+
+def test_a_run_sent_its_base_runs_both_suite_steps_under_the_allowances_there(tmp_path):
+    """The commit a recorded run was sent as its base (`BASE_FILE`, where the verified queue reads the allowances) reaches
+    `suites.py --allowances` in the pytest and lean-suites steps alike, cached or not; a run sent none passes no such flag."""
+    def suites(**kw) -> dict[str, str]:
+        return {s[0]: " ".join(s[1]) for g in CHECK.groups(tmp_path, 16, **kw) for s in g if s[0] in ("pytest", "lean-suites")}
+
+    assert suites() and not any("--allowances" in argv for argv in suites().values())
+    (tmp_path / "inputs").mkdir()
+    (tmp_path / "inputs" / CHECK.BASE_FILE).write_text("4567cdef\n")
+    for cache in (True, False):
+        got = suites(cache=cache)
+        assert set(got) == {"pytest", "lean-suites"} and all("--allowances 4567cdef" in a for a in got.values()), got

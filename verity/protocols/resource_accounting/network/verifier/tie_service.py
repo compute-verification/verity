@@ -143,8 +143,8 @@ def _unit(check) -> CompositeDefinition:
 
     return CompositeDefinition(
         "NetworkIngressTieBucket", 1, _STATICS, sig, body, register=False,
-        doc="the proof block of the ingress tie: one bucket row of the network certifier's ingress execution phase, its "
-            "`io_request.IoTieRequest` on the row the registered read holds to the network certifier's root and the verifier's "
+        doc="the proof block of the ingress tie: one bucket row of the network attester's ingress execution phase, its "
+            "`io_request.IoTieRequest` on the row the registered read holds to the network attester's root and the verifier's "
             "lanes")
 
 
@@ -169,7 +169,7 @@ def framing(B: int, n_max: int) -> tuple[int, ...]:
 class AdvisedProfile:
     """The link's public sizes the tie reads, fixed before the run: its windows; `request_frames`, the link's framing,
     whose entry n − 1 is the ingress frames a request of an n-token prompt takes, for every prompt length the link
-    admits (`framing`); and `own`, the ingress certifier's own frames at the head of every window's first bucket: 1
+    admits (`framing`); and `own`, the ingress network attester's own frames at the head of every window's first bucket: 1
     with a salt frame there, else 0. The network attester's ingress has none, so `IngressTie.tie` refuses a
     profile with one."""
 
@@ -315,7 +315,7 @@ class IngressTie:
     def __post_init__(self) -> None:
         if type(self.params) is not NetworkAttesterParams or not (isinstance(self.link, str) and self.link) or \
                 type(self.session) is not bytes:
-            raise ValueError("an ingress tie is on a named link, of a network certifier.NetworkAttesterParams and a session")
+            raise ValueError("an ingress tie is on a named link, of a network_attester.NetworkAttesterParams and a session")
         Q.Shape(self.params.cell_bytes, self.params.lanes, self.params.slots)
 
     @property
@@ -391,7 +391,7 @@ class IngressTie:
                 (head.parameters, head.cell_bytes, head.slots, head.rows) != \
                 (p.digest, p.cell_bytes, p.grid.allocation, self.T) or \
                 head.domain != self.domain(head.window).domain_id:
-            raise ValueError("the head isn't the network certifier's of this link's ingress rows under this schedule and session")
+            raise ValueError("the head isn't the network attester's of this link's ingress rows under this schedule and session")
 
     # the challenger
 

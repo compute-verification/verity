@@ -1,0 +1,4 @@
+# `verity bench exfiltration`'s directory, which follows the core benchmarks' interface (benchmarks/README.md). Not a
+# package and not a suite: its code and its tests are the harness's (benchmarks/harness, tests/benchmarks/harness).
+[tool.verity.interface]
+core = "verity bench exfiltration"
