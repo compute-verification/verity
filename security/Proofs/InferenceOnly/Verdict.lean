@@ -8,14 +8,14 @@ public import Proofs.Slowdown.Threads
 # A verdict of compliance carries the thread bound, proved
 
 Each statement of `Properties.InferenceOnly.Threads`, from the verdict's compliance at its rate
-(`InferenceOnlyCheck.Properties.SecurityProofs.Witnesses`) and the thread bound's proof at a rate
+(`InferenceOnlyVerifier.Properties.SecurityProofs.Witnesses`) and the thread bound's proof at a rate
 (`Slowdown.SecurityProofs.ThreadedThrottled_rate`, `ThreadedThrottledDark_rate` and their `Slots` forms, in
 `Proofs.Slowdown.Threads`), at `c = gamma` and `α = num / den`, so `k = α c`.
 -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 /-- `num / den` of naturals is nonnegative. -/
 theorem num_div_den_nonneg (i : Instance) : (0 : ℝ) ≤ (i.num : ℝ) / i.den :=
@@ -50,4 +50,4 @@ theorem ThrottlesDarkSlots : Properties.ThrottlesDarkSlots :=
     Slowdown.SecurityProofs.ThreadedThrottledDarkSlots_rate i.gamma ((i.num : ℝ) / i.den) b_w b_a r d T σ dd e M
       (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hT hW
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs

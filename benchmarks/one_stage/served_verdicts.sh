@@ -121,7 +121,7 @@
 #     PEARLPLUS-CIRCUIT's statement of φ on the card, serve-phi.json, its circuit cut at Pearl+'s linears, as a BF16
 #     checkpoint's needs), $OUT/inference-only-policy.json and its INFERENCE-ONLY POLICY line; once the
 #     build is done, step 3's window circuit record at the class is judged beside SPOT by the Lean verifier,
-#     `inference-only-check --count`, where the build built it (and refused as undecided where it didn't), into
+#     `inference-only-verifier --count`, where the build built it (and refused as undecided where it didn't), into
 #     $OUT/record/inference-only.json (the judgment against n and no count, n judged on the exact count, the record's
 #     count beside it) and its INFERENCE-ONLY line, in full with the exact counts in the serve dir's
 #     private/inference-only.json. The record carries it as its inference-only row, which the combined verdict doesn't read.
@@ -1241,7 +1241,7 @@ block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each
   done
 }
 IO_POLICY=${IO_POLICY:-$OUT/inference-only-policy.json}
-IO_LEAN=$TREE/verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-check
+IO_LEAN=$TREE/verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-verifier
 io_class() {  # the inference-only verdict's class: IO_CLASS, else the first of CLASSES but `record`
   local c
   [ -z "${IO_CLASS:-}" ] || { echo "$IO_CLASS"; return 0; }
@@ -2175,9 +2175,9 @@ build() {  # what prove_path.sh builds, here while the endpoint serves; prove_pa
     RESEARCH_RUN_DIR=$OUT/m0-build-gpu FLOCK_WORK=$FW/gpu CUDA_TK=$tk MODE=build GPU=1 flock "$FW/.build.lock" \
       bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || return 6
   fi
-  # after verity-verify-proof's build, whose package it requires by path: the inference-only verdict's `inference-only-check --count`,
+  # after verity-verify-proof's build, whose package it requires by path: the inference-only verdict's `inference-only-verifier --count`,
   # without which the verdict is the Python count's alone
-  (cd verity/protocols/workload_classification/training_detection/inference_only/verifier/lean && lake build inference-only-check) || echo "inference-only-check didn't build"
+  (cd verity/protocols/workload_classification/training_detection/inference_only/verifier/lean && lake build inference-only-verifier) || echo "inference-only-verifier didn't build"
 }
 if [ -n "$COMPOSE" ]; then ( unset PYTHONPATH; compose_build ) > "$OUT/build.log" 2>&1 &
 else ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &

@@ -1,13 +1,13 @@
 """The count mode's difftest data: declarations, the block Definitions they name, gate tables and `(c, k, n)`, for
-`InferenceOnlyCheck/CountDifftestMain.lean`.
+`InferenceOnlyVerifier/CountDifftestMain.lean`.
 
     python scripts/count_difftest_vectors.py <verity checkout> --out DIR [--count N]
 
-Writes three files under `DIR/count_difftest/`, one line per instance: `instances.jsonl`, as `InferenceOnlyCheck.Count.check`
-reads it (`InferenceOnlyCheck.Count`'s docstring: the Program, θ by root node, the block Definitions by key, the gate table and
+Writes three files under `DIR/count_difftest/`, one line per instance: `instances.jsonl`, as `InferenceOnlyVerifier.Count.check`
+reads it (`InferenceOnlyVerifier.Count`'s docstring: the Program, θ by root node, the block Definitions by key, the gate table and
 `(c, k, n)`); `detail.jsonl`, `inference_only_reference.check_count_detail`'s results, the whole verdict; and `public.jsonl`,
-`inference_only_reference.check_count`'s, what the count publishes. The Lean audit runs `InferenceOnlyCheck/CountDifftestMain.lean` on the
-three (`runs` in `lean-audit.json`), which fails unless `InferenceOnlyCheck.Count.checkDetail` and `InferenceOnlyCheck.Count.check` give
+`inference_only_reference.check_count`'s, what the count publishes. The Lean audit runs `InferenceOnlyVerifier/CountDifftestMain.lean` on the
+three (`runs` in `lean-audit.json`), which fails unless `InferenceOnlyVerifier.Count.checkDetail` and `InferenceOnlyVerifier.Count.check` give
 Python's results on every line: one summary per Definition against the count activation by activation.
 
 Instance `seed`'s program, for the first `COUNT`, is one of `difftest_vectors.program`'s or (a quarter of them) one read
@@ -17,7 +17,7 @@ registered root inputs or a random set of them. The blocks are every primitive t
 random set of its composites (`composites`) or all of them (`all`), in a random order; the gate table gives each of
 those primitives 0 to 40 gates, and now and then names one the Program doesn't. `c`, `k` and `n` are at, below or above
 the largest block's gates and fresh bits and the total. About a third of the instances are malformed, each in one way
-`InferenceOnlyCheck.Count` refuses (`MALFORMED`: every code of its docstring but `unwalked`, which `desc_liveness_vectors.py`'s
+`InferenceOnlyVerifier.Count` refuses (`MALFORMED`: every code of its docstring but `unwalked`, which `desc_liveness_vectors.py`'s
 shapes reach and these don't).
 """
 from __future__ import annotations

@@ -3,8 +3,8 @@ the size of the circuit that description unrolls to (README.md).
 
   measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an inference-only check instance (θ its registered inputs, one
-      inference block per Call), checked by `inference-only-check --policy` (`InferenceOnlyCheck.Desc`) and, where the unrolled circuit has at most GATES
-      gates, by `inference-only-check --policy --unrolled` (`InferenceOnlyCheck.check`) on the instance expanded gate by gate;
+      inference block per Call), checked by `inference-only-verifier --policy` (`InferenceOnlyVerifier.Desc`) and, where the unrolled circuit has at most GATES
+      gates, by `inference-only-verifier --policy --unrolled` (`InferenceOnlyVerifier.check`) on the instance expanded gate by gate;
       DIR/results.json.
   partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       the one-stage verifier's partition (`spot-difftest`'s `partition`: `Partition.units`, `strata`, the sampling design
@@ -34,7 +34,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
-EXE = INFERENCE_ONLY_PACKAGE / ".lake/build/bin/inference-only-check"
+EXE = INFERENCE_ONLY_PACKAGE / ".lake/build/bin/inference-only-verifier"
 SCHEMA = "verity/verifier-cost/v1"
 METRIC = "proofs/verifier-seconds-served-description"
 
@@ -96,7 +96,7 @@ def program(name: str, ir: str) -> str:
 
 
 def instance(ref, text: str) -> tuple[dict, dict]:
-    """`InferenceOnlyCheck.Desc`'s instance (θ the registered inputs, one inference block per Call, a gate-less node in none) and the
+    """`InferenceOnlyVerifier.Desc`'s instance (θ the registered inputs, one inference block per Call, a gate-less node in none) and the
     description's sizes."""
     inp, reg, spans = ref.root_nodes(text)
     desc = json.loads(text)
@@ -189,7 +189,7 @@ def measure(args) -> int:
                                  | {"desc_s": round(row["desc"]["seconds"], 3),
                                     "unrolled_s": row["unrolled"].get("seconds"), "agrees": row["unrolled"].get("agrees")}),
                       flush=True)
-    result = {"schema": SCHEMA, "verifier": "inference-only-check", "workload": "Serve_v1", "repeat": args.repeat,
+    result = {"schema": SCHEMA, "verifier": "inference-only-verifier", "workload": "Serve_v1", "repeat": args.repeat,
               "unrolled_max": args.unrolled_max, "rows": rows}
     (out / "results.json").write_text(json.dumps(result, indent=1) + "\n")
     bad = [r["config"] + "/" + r["ir"] for r in rows
@@ -206,7 +206,7 @@ def record(out: Path, rows: list[dict], bad: list[str]) -> None:
 
     res = kit.writer(out)
     res.validation("failed" if bad else "passed",
-                   "inference-only-check --policy exits 0 on every row and agrees with --unrolled wherever both ran",
+                   "inference-only-verifier --policy exits 0 on every row and agrees with --unrolled wherever both ran",
                    ", ".join(bad) or "ok")
 
     for r in rows:
@@ -339,11 +339,11 @@ def plot(args) -> int:
                                 label=f"{query}, {'population program' if shape == 'population' else 'Serve_v1'}, {ir}")
                 continue
             rs = sorted((r for r in res["rows"] if r["ir"] == ir), key=lambda r: r[x])
-            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"InferenceOnlyCheck.Desc, {ir}")
+            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"InferenceOnlyVerifier.Desc, {ir}")
             us = [r for r in rs if "seconds" in r["unrolled"]]
             if us:
                 ax.plot([r[x] for r in us], [r["unrolled"]["seconds"] for r in us], marker=marker, linestyle="--",
-                        label=f"InferenceOnlyCheck.check (unrolled), {ir}")
+                        label=f"InferenceOnlyVerifier.check (unrolled), {ir}")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(label)

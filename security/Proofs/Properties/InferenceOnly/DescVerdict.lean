@@ -31,11 +31,11 @@ thread bounds from `Throttles` and its forms, which `Proofs.InferenceOnly.DescVe
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 open Lean (Json)
 
-/-- **A property of every verdict of `InferenceOnlyCheck.evaluate` holds of every verdict of `InferenceOnlyCheck.Desc.evaluate`, on each
+/-- **A property of every verdict of `InferenceOnlyVerifier.evaluate` holds of every verdict of `InferenceOnlyVerifier.Desc.evaluate`, on each
 expansion**, given `DescAgrees`. -/
 theorem onExpansions_of (h : Properties.DescAgrees) {Q : Json → Json → Prop}
     (hQ : ∀ j out, evaluate j = .ok out → Q j out) {j out : Json} (hev : Desc.evaluate j = .ok out) :
@@ -75,4 +75,4 @@ theorem descThrottlesDarkSlots_of (h : Properties.DescAgrees) (hT : Properties.T
     Properties.DescThrottlesDarkSlots :=
   fun _ _ hev => onExpansions_of h hT hev
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs
