@@ -1,24 +1,24 @@
-"""The difftest of the description-sized inference-only check (`InferenceOnlyCheck.Desc`) against the unrolled one: the Python half.
+"""The difftest of the description-sized inference-only check (`InferenceOnlyVerifier.Desc`) against the unrolled one: the Python half.
 
 `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/desc_difftest_vectors.py` writes 4,082 declarations divided into inference blocks of
 root nodes (six on a composite keyed with an input id, which is no input node, two on a gate reading a nested scan's
-carry, one past `InferenceOnlyCheck.Desc.walkBound`'s limit, four on a scan of no iterations, twelve on whole members of a batch
+carry, one past `InferenceOnlyVerifier.Desc.walkBound`'s limit, four on a scan of no iterations, twelve on whole members of a batch
 returning leaves of two arguments they share, 335 whose references name leaves of other widths than their types give
 them, `E_REINTERPRET`, or are their well-typed neighbours, then three pinned: θ with an input bound per run, refused,
 θ the registered one, accepted, and a declaration with a constant gate, accepted), each expanded gate by gate where it
 is well-formed, and `scripts/inference_only_reference.py`'s
 `check_desc` on each.
-`check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/DescDifftestMain.lean`
-fails unless `InferenceOnlyCheck.Desc.check` gives Python's result on every instance and `InferenceOnlyCheck.check`'s on every expansion. As
+`check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyVerifier/DescDifftestMain.lean`
+fails unless `InferenceOnlyVerifier.Desc.check` gives Python's result on every instance and `InferenceOnlyVerifier.check`'s on every expansion. As
 for `test_inference_only_lean_difftest.py`, the audit checks the data against the record's SHA-256 and caches its pass on the Lean
 package's files alone, so this test is what says the data is still what the generator and the reference write. The
 other test checks that the generator reaches what its docstring says, on the first 400 instances and the first on each
 fixture's descriptor, the third that the data holds the decoys: a root Call or batch of a composite keyed with an input
-id, whose gates are computed, which `InferenceOnlyCheck.Desc` once took for an input node, the fourth that it holds the walks: a
-gate reading a nested scan's carry, past `InferenceOnlyCheck.Desc.walkBound`'s limit, where `Prog.gate` runs out of steps, and the
+id, whose gates are computed, which `InferenceOnlyVerifier.Desc` once took for an input node, the fourth that it holds the walks: a
+gate reading a nested scan's carry, past `InferenceOnlyVerifier.Desc.walkBound`'s limit, where `Prog.gate` runs out of steps, and the
 fifth that it holds the empty scans: a scan of no iterations carrying a value, which `Flock.Program.resolve` can't
 resolve, refused read or not, the sixth that it holds the shared members: one copy of pieces of two nodes' outputs,
-which `InferenceOnlyCheck.Desc` once read as all its first piece's node's, and the seventh that the mistyped ones the codec
+which `InferenceOnlyVerifier.Desc` once read as all its first piece's node's, and the seventh that the mistyped ones the codec
 refuses are refused as `E_REINTERPRET`, which Flock's decoder once let through.
 """
 
@@ -43,7 +43,7 @@ def _load(name: str):
 
 vectors = _load("desc_difftest_vectors")
 reference = vectors.reference
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.DescDifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyVerifier.DescDifftestMain"]
 
 
 @pytest.mark.slow
@@ -124,7 +124,7 @@ def test_the_empty_scans_are_refused_where_they_carry_a_value():
 def test_the_shared_members_read_both_nodes():
     """The shared members come just before the mistyped instances, and on each the reference gives the unrolled check's
     verdict: the other Call's 8 output bits are novel to the reading gate's inference block, however the members order the pieces,
-    so it fails the policy at α 1 (`InferenceOnlyCheck.Desc` once counted none, and accepted)."""
+    so it fails the policy at α 1 (`InferenceOnlyVerifier.Desc` once counted none, and accepted)."""
     first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.mistyped()) - len(vectors.shared())
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.shared()))]
     assert made == vectors.shared() and len(made) == 12

@@ -174,7 +174,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
-  (`InferenceOnlyCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
+  (`InferenceOnlyVerifier.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
   (the walks still open are its `ALLOWED`), and `benchmarks/verifier_cost/` measures it.
 - **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest developer's GPU
   effort, its commitments and checks included. The trivial PoUW, which hashes every product and leaves

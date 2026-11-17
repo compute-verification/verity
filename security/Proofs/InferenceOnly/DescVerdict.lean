@@ -25,13 +25,13 @@ import Proofs.Properties.InferenceOnly.DescVerdict
 # A verdict of compliance of the description-sized check carries the thread bound
 
 Each thread bound of `Properties.InferenceOnly.Desc.Verdict`, from `DescAgrees` (`SecurityProofs.DescAgrees`,
-`Proofs.Properties.InferenceOnly.Agrees`) and the bound of a verdict of `InferenceOnlyCheck.evaluate` (`Throttles` and its forms,
+`Proofs.Properties.InferenceOnly.Agrees`) and the bound of a verdict of `InferenceOnlyVerifier.evaluate` (`Throttles` and its forms,
 `Proofs.InferenceOnly.Verdict`), through `Proofs.Properties.InferenceOnly.DescVerdict`.
 -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 /-- **A verdict of compliance of the description-sized check throttles every threaded reference training algorithm the declaration
 contains, if its weights are incompressible and its θ registered** (`WeightsIncompressible`,
@@ -53,4 +53,4 @@ theorem DescThrottlesSlots : Properties.DescThrottlesSlots :=
 theorem DescThrottlesDarkSlots : Properties.DescThrottlesDarkSlots :=
   descThrottlesDarkSlots_of DescAgrees ThrottlesDarkSlots
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs

@@ -22,16 +22,16 @@ choice, a unit the gate lies in; that no gate lies in two units is not used.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Row)
-open InferenceOnlyCheck.Record.SecurityProofs (read_front finish_text front_text gridsOf_covers gridsOf_ok)
+open InferenceOnlyVerifier.Record.SecurityProofs (read_front finish_text front_text gridsOf_covers gridsOf_ok)
 open Lean (Json)
 
 /-- **Every unit has a slot**, below the record's number of slots, on a record `read` accepts. -/
-theorem slot_of_unit {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c)
+theorem slot_of_unit {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c)
     {ts : Array String} {rs : Array TRange}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt c.f.P rs tid u sc) : ∃ s, c.slot tid u = some s ∧ s < c.S := by
@@ -53,7 +53,7 @@ theorem slot_of_unit {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : Inf
     Option.isSome_iff_exists.1 (List.find?_isSome.2 ⟨g, hgm, by simp [hlo, hhi]⟩)
   obtain ⟨g', hfind⟩ := hex
   refine ⟨(u - g'.start) / g'.q % c.S, ?_, Nat.mod_lt _ (by omega)⟩
-  simp only [InferenceOnlyCheck.Record.Case.slot, Spot.RecordText.slotIn, hfind, Option.map_some]
+  simp only [InferenceOnlyVerifier.Record.Case.slot, Spot.RecordText.slotIn, hfind, Option.map_some]
 
 /-- **θ and the blocks of a wired circuit.** Where `D` is the wired circuit (`LaysOut`), every unit's rows are its own
 input gates (`OwnRows`), every computed gate lies in a unit (`GatesOwn`) and every unit has a slot below `n`: some θ
@@ -97,4 +97,4 @@ theorem names_divides {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S 
       fun x => ⟨fun h => (Finset.mem_filter.1 h).2, fun h => Finset.mem_filter.2 ⟨Finset.mem_univ x, h⟩⟩,
       fun x hx => (hblock x).2 hx⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
