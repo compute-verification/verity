@@ -29,7 +29,7 @@ VY_CHALLENGER_1_HOST = "/root/.config/verity/challenger-1.env"
 VY_AUDITOR_2_HOST = "/root/.config/verity/auditor-2.env"
 
 [node.vy-spot-glm53.bindings]
-# for a run on the auditor's coins, by binding key: `run.sh bindings DEMO` binds each to every party of the demo whose
+# for a run on the auditor's coins, by binding key: `run.sh bindings APPLICATION` binds each to every party of the application whose
 # piece reads it
 gate = "research@${VY_CHALLENGER_1_HOST}"
 peer = "vy-spot-glm53"
