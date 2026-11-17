@@ -163,6 +163,8 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   and parameters: a development challenger local to each session, never an auditor's device, so a measurement and not
   an audit. The served table's benchmark results are `benchmarks/prove_path/run.sh`'s and `a5_llama1b_h200.sh`'s (`verity bench prove
   layers`). Its rules are the three parts at the end of this file.
+- `proof_layers.sh`: the served table's first three benchmark results from a clone, as one command, from the bootstrap to
+  the printer's table, removing its work directory at the end ("The three benchmarks of the proof-layers table").
 - `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--cases DIR`
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
@@ -313,7 +315,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   execution phase, marked proved or scaled by the record's rules. It refuses a record whose labels its rules contradict:
   K/m proved past one phase, a node cell proved over a period the run doesn't cover, a datacenter or world cell proved,
   a proved statement outside the lock, a rule without its sources. The tight K is shown conditional on what is open.
-  Its test reads stand-ins cut from the writer's own record (`tests/fixtures/onsite_periods/make.py`).
+  Its test reads stand-ins cut from the writer's own record (`tests/benchmarks/one_stage/fixtures/onsite_periods/make.py`).
 - `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B
   prefill mix (prompts of 1,024 ids, `max_tokens` 1, all queued at once, T tokens a step), one arm a run (stock, the
   Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.
@@ -370,28 +372,47 @@ bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m
 The proof-layers table's first three benchmarks are three runs of `a5_llama1b_h200.sh` on one work directory: Flock (a
 plain audit), Flock with zero knowledge, and with sampling. They differ in their settings and in their partition file's
 sampling design (its `law` key): `stratified-rate:880/880` and `subset:880` take all 880 proof blocks of the window, and
-`subset:256` samples 256 of them. From a clone of `main` on an H200 node with about 450 GB of memory, at the tree's root,
-with `CPUS` the cores the jobs may use and `A5_CARD` their card:
+`subset:256` samples 256 of them. From a clone of `main` on an H200 node with at least 96 GB of host memory available
+and 25 GB of disk free under the work directory, at the tree's root:
 
 ~~~sh
-export WORK=/workspace/a5-layers A5_CARD=0 CPUS=40-59
-(cd adapters/vllm && taskset -c $CPUS bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B_INT8)
+A5_CARD=0 A5_CORES=40-59 WORK=/workspace/a5-layers GPU_LEASE_WHO=$USER bash benchmarks/one_stage/proof_layers.sh
+~~~
+
+`A5_CARD` is the jobs' card, `A5_CORES` their cores, `WORK` a new or empty work directory and `GPU_LEASE_WHO` who their
+leases are recorded for; `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
+`research run`), and `--dry-run` makes every check and prints each step's command without running it. What it does:
+before anything is downloaded or built, it refuses a missing setting, a card that is not an H200, under 96 GB of host
+memory available, cores this job may not run on, under 25 GB free under `WORK`, a `WORK` that is not empty and results
+already in the results directory. Then it runs the eight steps below, stopping at the first that fails: the bootstrap,
+the three partition files, the three runs and the printer, whose table it keeps as `proof-layers.txt`. Its `steps.log`
+records each step's start, command, exit code and seconds; the peaks of the job's own memory (PSS over its session), of
+the machine's memory in use (other jobs' included) and of `WORK`'s size; and the largest process. At its end, success or
+failure, it copies the three runs' records and the bootstrap's to the results directory and removes `WORK`. It does not
+run the recursion benchmark. By hand, the same steps (the script's bootstrap writes its record under `WORK`):
+
+~~~sh
+export WORK=/workspace/a5-layers A5_CARD=0 A5_CORES=40-59 GPU_LEASE_WHO=$USER
+(cd adapters/vllm && taskset -c $A5_CORES bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B_INT8)
 for b in flock=stratified-rate:880/880 zk=subset:880 sampling=subset:256; do python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); p["law"] = sys.argv[2]; json.dump(p, open(sys.argv[3], "w"))' benchmarks/one_stage/llama32_1b_rope_d64_l0.json "${b#*=}" "$WORK/partition-${b%%=*}.json"; done
-A5_COINS=challenger A5_PLAIN=1 A5_PARTITION=$WORK/partition-flock.json OUT=$WORK/out-flock taskset -c $CPUS bash benchmarks/one_stage/a5_llama1b_h200.sh
-A5_COINS=challenger A5_PARTITION=$WORK/partition-zk.json OUT=$WORK/out-zk taskset -c $CPUS bash benchmarks/one_stage/a5_llama1b_h200.sh
-A5_COINS=challenger A5_PARTITION=$WORK/partition-sampling.json OUT=$WORK/out-sampling taskset -c $CPUS bash benchmarks/one_stage/a5_llama1b_h200.sh
+A5_COINS=challenger A5_PLAIN=1 A5_PARTITION=$WORK/partition-flock.json OUT=$WORK/out-flock taskset -c $A5_CORES bash benchmarks/one_stage/a5_llama1b_h200.sh
+A5_COINS=challenger A5_PARTITION=$WORK/partition-zk.json OUT=$WORK/out-zk taskset -c $A5_CORES bash benchmarks/one_stage/a5_llama1b_h200.sh
+A5_COINS=challenger A5_PARTITION=$WORK/partition-sampling.json OUT=$WORK/out-sampling taskset -c $A5_CORES bash benchmarks/one_stage/a5_llama1b_h200.sh
 uv run verity bench prove layers --flock $WORK/out-flock --zk $WORK/out-zk --sampling $WORK/out-sampling
+cp -r $WORK/out-flock $WORK/out-zk $WORK/out-sampling . && rm -rf "$WORK"
 ~~~
 
 `taskset -c` gives each job its cores, and its builds, replay and audit run on them (`nproc`). On a node shared through
 `gpu-lease`, the bootstrap runs under a lease of the same card and cores instead, with
-`gpu-lease 1 --wait --on $A5_CARD --cores $CPUS --` in place of `taskset -c $CPUS`. The script leases `A5_CARD` for its
-Match capture and its Commit; with no `gpu-lease` it takes that card directly. On a tree whose script reads `A5_CORES`,
-also export `A5_CORES=$CPUS`, which every lease the script takes then names. Unless `CUDA_HOME` is set, the script takes
-the first of `/usr/local/cuda-12.9`, `/usr/local/cuda-12`, `/usr/local/cuda-13.0` and `/usr/local/cuda` that has `nvcc`.
-Where that toolkit lacks the CUDA math libraries' headers, it takes them from the venv's NVIDIA wheels, as the bootstrap's
-norm and router tap builds do. Each run's record is its `OUT`, which the printer reads as a directory, as it reads a
-`research run`'s id.
+`gpu-lease 1 --wait --on $A5_CARD --cores $A5_CORES --` in place of `taskset -c $A5_CORES`. The script leases `A5_CARD`
+for its Match capture and its Commit, and every lease it takes names `A5_CORES`, without which it refuses before any
+build; with no `gpu-lease` it takes that card directly. `gpu-lease status` shows each lease under `GPU_LEASE_WHO`;
+unset, the script records its leases as `vllm-sha512`. Unless `CUDA_HOME` is set, the script takes the first of
+`/usr/local/cuda-12.9`, `/usr/local/cuda-12`, `/usr/local/cuda-13.0` and `/usr/local/cuda` that has `nvcc`. Where that
+toolkit lacks the CUDA math libraries' headers, it takes them from the venv's NVIDIA wheels, as the bootstrap's norm and
+router tap builds do. Each run's record is its `OUT`, which the printer reads as a directory, as it reads a
+`research run`'s id. The three `OUT` directories are inside `WORK`, so the last line copies them to the current
+directory before it removes `WORK` (the venv, the checkpoint, the taps and the Flock build).
 
 Development-only: the coins come from challengers run on the node, stand-ins for the auditor's device, so the printer
 calls the table a measurement, not an audit, and says its parameters are not stated.
