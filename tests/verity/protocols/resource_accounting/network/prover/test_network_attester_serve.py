@@ -238,7 +238,7 @@ def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_rea
     assert not ws.parse_id_response(data.replace(b"data:", b"datum", 1), P)["complete"]
 
 
-def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(tmp_path):
+def test_the_check_accepts_a_run_and_refuses_what_wasnt_attested_or_scheduled(tmp_path):
     out, key = tmp_path / "run", tmp_path / "key"
     out.mkdir()
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
@@ -350,7 +350,7 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     problems = refused(lambda: edit_client(late_cell))
     assert any(p.startswith("connection 2:") and "'in_bucket'" in p for p in problems)
     problems = refused(lambda: edit_client(lambda c: c.update(data_sha256="0" * 64)))
-    assert any(p.startswith("connection 2:") and "'response_certified': False" in p for p in problems)
+    assert any(p.startswith("connection 2:") and "'response_attested': False" in p for p in problems)
     assert RC.check(out)["accepted"]
 
 
@@ -381,7 +381,7 @@ def test_the_client_connects_where_the_endpoints_file_says_and_names_its_upstrea
 
 
 @pytest.mark.parametrize("process", [False, True])
-def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, process):
+def test_a_window_with_a_refused_connection_is_attested_nowhere(tmp_path, process):
     """Five connections at once on two lanes and a queue of four: the fifth is refused, traffic past the window's
     Program slots, so window 0's three records are kept and its two rows committed but none is attested or signed,
     each line naming the execution phase under `refused`, withheld, inline and in `serve`'s publisher process; window 1
@@ -405,7 +405,7 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
             f"{name} window 0's cells aren't registered" for name in ("requests", "responses")}
 
 
-def test_a_phase_with_no_certificate_or_no_registration_is_a_problem_and_one_fewer_in_its_count(tmp_path):
+def test_a_phase_with_no_attestation_or_no_registration_is_a_problem_and_one_fewer_in_its_count(tmp_path):
     """The gate's end holds three of the check's counts only when it is accepted, on the ground that each is then
     the schedule's (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`): how many records were attested, by
     how many attestations, and how many of the cells' registrations the check accepted. That stands on the check

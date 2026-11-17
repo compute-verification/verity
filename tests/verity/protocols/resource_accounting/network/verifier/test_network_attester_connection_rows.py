@@ -256,7 +256,7 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(handed, tm
     refused({**doc, "certificate": {**doc["certificate"], "signature": cells_cert.signature.hex()}}, "doesn't verify")
 
 
-def test_a_refused_signer_gives_no_certificate(handed, tmp_path):
+def test_a_refused_signer_gives_no_attestation(handed, tmp_path):
     _, _, by_window = handed
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
     issuer.signer.start(signers.OTHER_SESSION)
