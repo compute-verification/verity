@@ -7,13 +7,8 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 public import Proofs.Pouw.Break
 
-/-!
-# Satisfiability witnesses and non-vacuity
-
-* `ttWitness`: in `outputPriced`, TT(0.5%) holds with error 0 and one program runs `H_ref` at `≤ W_ref`, for `D1.m1`.
-* `honestComplete`: the honest reference is correct on every unit and does not win at `T = W`.
-* `gameCanBeLost`: the honest program at budget 0 (free model) or `W_mm` (witness model) wins with probability 1.
--/
+/-! Satisfiability witnesses and non-vacuity for PoUW's game: TT in `outputPriced`, the honest reference's completeness,
+and a game that can be lost. -/
 
 @[expose] public section
 
@@ -22,8 +17,6 @@ namespace Pouw.Proofs
 open Finset QTree
 
 variable {Q R S : Type}
-
-/-! ## The honest reference as an oracle program (`honestProg`, `Definitions.Pouw.Witness.Honest`) -/
 
 section Honest
 
@@ -48,8 +41,6 @@ theorem calls_honestProg (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : S
   omega
 
 end Honest
-
-/-! ## The witness models -/
 
 theorem outputPriced_queries : (outputPriced Q R S).Queries :=
   fun prog U act σ s => ⟨prog U act σ s, fun _ => ⟨rfl, rfl⟩⟩
@@ -77,8 +68,6 @@ theorem checked_le_outputPriced_cost (P : Protocol Q R S) (prog : (outputPriced 
   obtain ⟨hu, c, hc, -⟩ := hu
   exact ⟨hu, by rw [hc]; rfl⟩
 
-/-- In the witness model TT(0.5%) holds with error 0 for every protocol and domain: the checked units' work is at
-most the cost, which is at most the budget. -/
 theorem tt_outputPriced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
     (D : Layout → Prop) : Assumptions.TT (outputPriced Q R S) P D Params.gap0 (fun _ _ => 0) := by
   refine ⟨outputPriced_queries, fun U _ T hT q _ A hA => le_of_eq (pr_eq_zero fun x hx => ?_)⟩
@@ -89,15 +78,12 @@ theorem tt_outputPriced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P :
     unfold Params.gap0; nlinarith
   exact absurd hx.1 (not_lt.2 (h1.trans (h2.trans h3)))
 
-/-- **Satisfiability witness for TT and `AdmitsRef`** in `outputPriced`, for `D1.m1` with `W_ref ≥ W_mm`. -/
 theorem ttWitness : GameStatements.TTWitness := by
   intro Wref hW
   refine ⟨tt_outputPriced _ _, fun U act _ s => honestProg (D1.m1 Wref) U act s, fun U hU act _ H s =>
     ⟨eval_honestProg _ H U act s, ?_, calls_honestProg _ H U act s (M1.queryBound Wref)⟩⟩
   refine (outputPriced_cost_le _ H U act [] s).trans (Finset.sum_le_sum fun u hu => ?_)
   exact_mod_cast hW U hU u (Finset.mem_range.1 hu)
-
-/-! ## Honest completeness and a game that can be lost -/
 
 theorem honest_correctSet (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Mat) (hP : P.Complete D) (hU : U.InDomain D) (hact : ∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) :
@@ -111,7 +97,6 @@ theorem honest_correctSet (P : Protocol Q R S) (D : Layout → Prop) (U : Worklo
   have hc := hP U hU u hu H s (act u) (hact u hu)
   exact ⟨⟨act u, P.refChecked H s U u (act u), P.refOut H s U u (act u)⟩, by simp [hu], ⟨hact u hu, fun x hx => hc.1 x hx⟩, fun i hi j hj => hc.2 i hi j hj⟩
 
-/-- **The honest reference is complete and does not win.** -/
 theorem honestComplete : GameStatements.HonestComplete := by
   intro Q R S P D U H s act hP hU hact
   have hK := honest_correctSet P D U H s act hP hU hact
@@ -154,7 +139,6 @@ theorem honest_wins_sixteen {Q R : Type} (P : D1.Params Q R Salt) (hN : P.NoiseR
 
 theorem salt_nonempty : Nonempty Salt := ⟨⟨0, Nat.two_pow_pos 128⟩⟩
 
-/-- The honest reference as an adversary of the free model: no preprocessing, activation input 0. -/
 def freeHonest {Q R : Type} (P : D1.Params Q R Salt) : Adversary (freeModel Q R Salt) :=
   ⟨done [], fun U act _ s => honestProg P U act s, fun _ => 0⟩
 
@@ -214,7 +198,6 @@ theorem lost_priced {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonemp
   rw [div_lt_iff₀ hΩ0] at h1
   nlinarith
 
-/-- **The game can be lost.** -/
 theorem gameCanBeLost : GameStatements.GameCanBeLost := by
   intro Q R _ _ _ _ P c Ω hN hc hc64 hΩ hW
   exact ⟨fun g hg δ hG => lost_free P c Ω hN hc hc64 hΩ hW g hg δ hG,
