@@ -15,18 +15,7 @@ import Proofs.Flock.Soundness.NovelBasis
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Rounds
 
-/-!
-# Decoding the padded level-0 column
-
-`decode_pad` is `decode` for the padded level 0. If no fold round and no extra coin was an MCA
-event, and rep `r`'s padded column agrees with the encoding of `G` on a set `T` of at least
-`(1 − γ')·2^d` positions, then `G` is the next-level message of a row family in rep `r`'s list:
-* the target `Enc(G) − padCorr(ybar)` is a codeword of the padded code, so every row agrees with a
-  padded codeword on `T` (`agree_of_extras`, then `rowsAgreeOn_of_foldAll`), and the rows form a
-  family in the list;
-* the family's combined encoding and the target agree on `T`, and `|T| ≥ 2^cols + t`, so their
-  coefficients agree: at `x < 2^cols` that is `G`, at `2^cols + j` it is `ybar`.
--/
+/-! Decoding the padded level-0 column (`decode_pad`, `decode` for the padded level 0). -/
 
 @[expose] public section
 
@@ -45,7 +34,6 @@ theorem encKN_sub (A : Arith F K) (d k : ℕ) (b b' : ℕ → K) (q : ℕ) :
   rw [← Finset.sum_sub_distrib]
   exact Finset.sum_congr rfl fun c _ => by ring
 
-/-- Agreement on `(1 − γ')·2^d` positions covers at least `2^cols + t` of them. -/
 theorem card_ge_of_padAgree (l : Level) (t : ℕ) (hk : 2 ^ l.logCols + t ≤ 2 ^ l.logLen)
     (T : Finset (Fin (2 ^ l.logLen)))
     (hT : (T.card : ℝ) ≥ Fintype.card (Fin (2 ^ l.logLen)) * (1 - l.padRadius t)) :
@@ -72,7 +60,6 @@ theorem card_ge_of_padAgree (l : Level) (t : ℕ) (hk : 2 ^ l.logCols + t ≤ 2 
     nlinarith
   exact_mod_cast this
 
-/-- **Decoding the padded column.** -/
 theorem decode_pad (A : Arith F K) (hA : A.Correct) (l : Level) (t : ℕ) (hd : l.logLen ≤ 40)
     (hd64 : l.logLen ≤ 64) (hcols : l.logCols ≤ l.logLen) (ht : t ≤ 2 ^ l.logCols)
     (hk : 2 ^ l.logCols + t ≤ 2 ^ l.logLen) (c₀ : F) (k0 e r : ℕ) (C : Oracle F) (ch : List K)
@@ -97,7 +84,6 @@ theorem decode_pad (A : Arith F K) (hA : A.Correct) (l : Level) (t : ℕ) (hd : 
     rw [foldAllRows_eq_sum k0 ch hch, foldColumn, hch,
       ← Fin.sum_univ_eq_sum_range (fun ℓ => eqList ch ℓ * A.embed (C ℓ q.val))]
     rfl
-  -- the target `Enc(G) − padCorr(ybar)`, a padded codeword
   set gN : ℕ → K := fun c => if c < L then G c else 0
   set pN := padCorrN A l.logCols t c₀ ybar
   set wN : ℕ → K := fun c => gN c - pN c
@@ -118,7 +104,6 @@ theorem decode_pad (A : Arith F K) (hA : A.Correct) (l : Level) (t : ℕ) (hd : 
     unfold padColumn at h
     simp only [w, hwq, ← h, hfold, xrowsK]
     ring
-  -- every row agrees with a padded codeword on `T`
   obtain ⟨⟨c₁, hc₁, hc₁T⟩, hxs⟩ := agree_of_extras code (l.padRadius t) e ρ _ _ hx T hT
     ⟨w, hw, hwT⟩
   have hrows := rowsAgreeOn_of_foldAll code (l.padRadius t) k0 ch _ hgood T hT ⟨c₁, hc₁, hc₁T⟩
@@ -150,7 +135,6 @@ theorem decode_pad (A : Arith F K) (hA : A.Correct) (l : Level) (t : ℕ) (hd : 
     · rw [Fintype.card_fin] at hT; push_cast at hT; linarith
     · simp only [Finset.mem_filter, Finset.mem_univ, true_and]; exact hMT q hq
   refine ⟨M, hM, ?_⟩
-  -- the family's combined coefficients
   set bM : ℕ → K := fun c => if h : c < k then
       (∑ ℓ : Fin (2 ^ k0), eqList ch ℓ.val * A.embed (aw ℓ ⟨c, h⟩)) +
         ∑ i, ρ i * A.embed (ax i ⟨c, h⟩) else 0 with hbM
@@ -178,7 +162,6 @@ theorem decode_pad (A : Arith F K) (hA : A.Correct) (l : Level) (t : ℕ) (hd : 
         rw [haw ℓ q hq]
       · refine Finset.sum_congr rfl fun i _ => ?_
         rw [hax i q hq]
-  -- read off `G`
   intro x hx
   have hxk : x < k := by omega
   have h1 : bM x - wN x = 0 := hzero x hxk

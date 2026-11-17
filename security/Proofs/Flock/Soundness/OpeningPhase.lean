@@ -10,28 +10,8 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Defs
 import Proofs.Core.Game.Poly
 
-/-!
-# The opening phase: ring switching and batching (`Flock.Opening`)
-
-From a doomed start (for every codeword near the committed table, some claim handed to the
-opening is false), the opening ends doomed (no codeword near the table has the batched value)
-except with probability `L · (7·n + 1)/|F|`, for `n` claims and `L` codewords (`opening_phase_of_card`).
-
-The argument, per codeword `M` with witness `z` (paper Appendix B):
-
-* **The honest message.** For a claim with point `x = (x₀, x')`, the honest ring-switching
-  message is `ŝ[v] = Σ_y eq(x', y)·z[128y + v]`, and the claim's value is
-  `Σ_v w[v]·ŝ[v]` (`claim_eval_eq`). So the prover passes the check on a false claim only with a
-  message `s ≠ ŝ`.
-* **Ring switching.** The verifier's recombination of the honest message is the inner product
-  of the packed table with `Φ_{r''}(eq(x', ·))` (`recombine_shat`), the quantity the batched
-  claim `Σ_y f(y)·b(y) = T` checks.
-* **One claim.** For `s ≠ ŝ`, `recombine(s, r'') − recombine(ŝ, r'')` is a nonzero multilinear
-  polynomial in the seven coins `r''` (`recombine_poly`), so it vanishes with probability at most
-  `7/|F|` (`prCoin_recombine_le`).
-* **The batch.** A nonzero linear form in the batching coins vanishes with probability at most
-  `1/|F|` (`prCoin_batch_le`).
--/
+/-! The opening phase, ring switching and batching (`Flock.Opening`): from a doomed start it ends doomed except with
+probability `L · (7·n + 1)/|F|`. -/
 
 @[expose] public section
 
@@ -42,9 +22,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-! ## Equality weights at Boolean points -/
-
-/-- In characteristic 2, the equality weight at a Boolean point is the indicator of that point. -/
 theorem eqAt_bool {R : Type} [CommRing R] [CharP R 2] {n : ℕ} (u u₀ : ℕ) (hu : u < 2 ^ n)
     (hu₀ : u₀ < 2 ^ n) :
     eqAt (fun j : Fin n => if u₀.testBit j then (1 : R) else 0) u = if u = u₀ then 1 else 0 := by
@@ -59,7 +36,6 @@ theorem eqAt_bool {R : Type} [CommRing R] [CharP R 2] {n : ℕ} (u u₀ : ℕ) (
     refine Finset.prod_eq_one fun j _ => ?_
     by_cases hb : u.testBit j <;> simp [hb]
   · rw [if_neg heq]
-    -- some bit below `n` differs
     have : ∃ j : Fin n, u.testBit j ≠ u₀.testBit j := by
       by_contra hall
       push Not at hall
@@ -76,9 +52,6 @@ theorem eqAt_bool {R : Type} [CommRing R] [CharP R 2] {n : ℕ} (u u₀ : ℕ) (
     refine Finset.prod_eq_zero (Finset.mem_univ j) ?_
     cases h : u.testBit j <;> cases h' : u₀.testBit j <;> simp_all
 
-/-! ## Multilinear polynomials in the equality basis -/
-
-/-- The multilinear polynomial `Σ_u d[u]·eq(X, u)` over `n` variables. -/
 noncomputable def eqPoly {n : ℕ} (d : Fin (2 ^ n) → F) : MvPolynomial (Fin n) F :=
   ∑ u : Fin (2 ^ n), MvPolynomial.C (d u) *
     ∏ j : Fin n, (if u.val.testBit j then MvPolynomial.X j else 1 + MvPolynomial.X j)
@@ -124,8 +97,6 @@ theorem eqPoly_ne_zero [CharP F 2] {n : ℕ} (d : Fin (2 ^ n) → F) (u₀ : Fin
     · simp
   exact hd (hsum ▸ this)
 
-/-- **A nonzero multilinear function vanishes rarely.** If some coefficient in the equality basis
-is nonzero, `Σ_u d[u]·eq(r, u)` vanishes at a uniform `r` with probability at most `n/|F|`. -/
 theorem prCoin_eqSum_le [CharP F 2] {n : ℕ} (d : Fin (2 ^ n) → F) (u₀ : Fin (2 ^ n))
     (hd : d u₀ ≠ 0) :
     prCoin (fun r : Fin n → F => ∑ u : Fin (2 ^ n), d u * eqAt r u.val = 0) ≤
@@ -138,8 +109,6 @@ theorem prCoin_eqSum_le [CharP F 2] {n : ℕ} (d : Fin (2 ^ n) → F) (u₀ : Fi
     _ ≤ (n : ℝ≥0∞) / Fintype.card F := by
         gcongr; exact_mod_cast totalDegree_eqPoly_le d
 
-/-- **The batch.** A nonzero linear form in uniform coins vanishes with probability at most
-`1/|F|`. -/
 theorem prCoin_batch_le {n : ℕ} (d : Fin n → F) (k₀ : Fin n) (hd : d k₀ ≠ 0) :
     prCoin (fun γ : Fin n → F => ∑ k, γ k * d k = 0) ≤ 1 / Fintype.card F := by
   classical
@@ -164,27 +133,20 @@ theorem prCoin_batch_le {n : ℕ} (d : Fin n → F) (k₀ : Fin n) (hd : d k₀ 
     _ ≤ 1 / Fintype.card F := by gcongr; exact_mod_cast hdeg
 
 
-/-! ## The honest ring-switching message -/
-
-/-- The point beyond the packed seven address bits: `x[1 … m−7]`. -/
 def Model.Claim.tail {m : ℕ} (c : Claim F m) (hm : 7 ≤ m) : Fin (m - 7) → F :=
   fun j => c.x ⟨j.val + 1, by omega⟩
 
 theorem two_pow_eq_mul {m : ℕ} (hm : 7 ≤ m) : 2 ^ m = 2 ^ (m - 7) * 128 := by
   rw [show (128 : ℕ) = 2 ^ 7 by norm_num, ← pow_add, Nat.sub_add_cancel hm]
 
-/-- The address `128·y + v` of packed bit `v` of packed element `y`. -/
 def addr128 {m : ℕ} (hm : 7 ≤ m) (y : Fin (2 ^ (m - 7))) (v : Fin 128) : Fin (2 ^ m) :=
   ⟨128 * y.val + v.val, by
     rw [two_pow_eq_mul hm]; have := y.isLt; have := v.isLt; omega⟩
 
-/-- The honest ring-switching message for a claim on a witness (`Flock.Opening`):
-`ŝ[v] = Σ_y eq(x', y)·z[128y + v]`. -/
 def shat {m : ℕ} (hm : 7 ≤ m) (c : Claim F m) (z : Witness m) : Fin 128 → F :=
   fun v => ∑ y : Fin (2 ^ (m - 7)), eqAt (c.tail hm) y.val * ((z (addr128 hm y v)).val : F)
 
 omit [Fintype F] [DecidableEq F] in
-/-- Splitting off the lowest coordinate of an equality weight. -/
 theorem eqAt_split {m : ℕ} (hm : 7 ≤ m) (x : Fin (m - 6) → F) (y b : ℕ) (hb : b < 2) :
     eqAt x (2 * y + b) = (if b = 1 then x ⟨0, by omega⟩ else 1 + x ⟨0, by omega⟩) *
       eqAt (fun j : Fin (m - 7) => x ⟨j.val + 1, by omega⟩) y := by
@@ -204,7 +166,6 @@ theorem eqAt_split {m : ℕ} (hm : 7 ≤ m) (x : Fin (m - 6) → F) (y b : ℕ) 
       rw [Nat.testBit_succ]; congr 1; omega
     rw [htb]
 
-/-- **The claim's value from the honest message** (`Flock.Opening`): `Σ_v w[v]·ŝ[v]`. -/
 theorem claim_eval_eq {m : ℕ} (hm : 7 ≤ m) (c : Claim F m) (z : Witness m) :
     c.eval z = ∑ v : Fin 128, packedWeight c hm v * shat hm c z v := by
   classical
@@ -231,8 +192,6 @@ theorem claim_eval_eq {m : ℕ} (hm : 7 ≤ m) (c : Claim F m) (z : Witness m) :
   ring
 
 
-/-! ## Packing is a bijection of additive groups -/
-
 section Packing
 
 variable (A : Arith F K) (hA : A.Correct)
@@ -251,17 +210,14 @@ theorem pack_add (w w' : Fin 128 → ZMod 2) : A.pack (w + w') = A.pack w + A.pa
 theorem pack_zero : A.pack 0 = 0 := by
   rw [← unpack_zero A hA, hA.pack_unpack]
 
-/-- `unpack` as an additive map. -/
 def unpackHom : F →+ (Fin 128 → ZMod 2) := AddMonoidHom.mk' A.unpack hA.unpack_add
 
-/-- `pack` as an additive map. -/
 def packHom : (Fin 128 → ZMod 2) →+ F := AddMonoidHom.mk' A.pack (pack_add A hA)
 
 theorem unpackHom_apply (a : F) : unpackHom A hA a = A.unpack a := rfl
 
 theorem packHom_apply (w : Fin 128 → ZMod 2) : packHom A hA w = A.pack w := rfl
 
-/-- Multiplying by a bit: `unpack (a·b) = b • unpack a`. -/
 theorem unpack_mul_bit (a : F) (b : ZMod 2) : A.unpack (a * (b.val : F)) = b • A.unpack a := by
   fin_cases b
   · show A.unpack (a * ((0 : ZMod 2).val : F)) = (0 : ZMod 2) • A.unpack a
@@ -279,18 +235,12 @@ theorem pack_smul_bit (b : ZMod 2) (w : Fin 128 → ZMod 2) :
 
 end Packing
 
-/-! ## Ring switching -/
-
-/-- **The ring-switching identity** (`Flock.Opening`, paper Appendix B). If the witness's packed
-element `y` is `f y` (bit `v` of `f y` is `z[128y + v]`), the verifier's recombination of the
-honest message is the inner product of `f` with `Φ_{r''}(eq(x', ·))`. -/
 theorem recombine_shat (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 7 ≤ m) (c : Claim F m)
     (z : Witness m) (f : Fin (2 ^ (m - 7)) → F)
     (hz : ∀ y v, z (addr128 hm y v) = A.unpack (f y) v) (r : Fin 7 → F) :
     recombine A (shat hm c z) r =
       ∑ y : Fin (2 ^ (m - 7)), f y * phi A r (eqAt (c.tail hm) y.val) := by
   classical
-  -- the transposed bits of the honest message
   have hbits : ∀ u : Fin 128, (fun v => A.unpack (shat hm c z v) u) =
       ∑ y : Fin (2 ^ (m - 7)), A.unpack (eqAt (c.tail hm) y.val) u • A.unpack (f y) := by
     intro u
@@ -309,15 +259,12 @@ theorem recombine_shat (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 7 ≤ m)
   rw [Finset.sum_comm]
   refine Finset.sum_congr rfl fun y _ => Finset.sum_congr rfl fun u _ => by ring
 
-/-- **One claim.** A message other than the honest one survives the seven coins `r''` (the
-recombinations agree) with probability at most `7/|F|`. -/
 theorem prCoin_recombine_le (A : Arith F K) (hA : A.Correct) (s s' : Fin 128 → F) (hs : s ≠ s') :
     prCoin (fun r : Fin 7 → F => recombine A s r = recombine A s' r) ≤ 7 / Fintype.card F := by
   classical
   have := hA.charTwo
   let d : Fin 128 → F := fun u =>
     A.pack (fun v => A.unpack (s v) u) - A.pack (fun v => A.unpack (s' v) u)
-  -- some transposed bit differs
   obtain ⟨v, hv⟩ : ∃ v, s v ≠ s' v := by
     by_contra h; push Not at h; exact hs (funext h)
   have hunp : A.unpack (s v) ≠ A.unpack (s' v) := fun h => hv (by
@@ -342,8 +289,6 @@ theorem prCoin_recombine_le (A : Arith F K) (hA : A.Correct) (s s' : Fin 128 →
     _ = 7 / Fintype.card F := by norm_num
 
 
-/-! ## The opening as a loop over claims, then a batch -/
-
 /-- One claim's ring switch (O3, O5): the prover's message, then seven coins. -/
 def opStep {m : ℕ} (c : Claim F m) : Game (Claim F m × (Fin 128 → F) × (Fin 7 → F)) := do
   let s ← recv (Fin 128 → F)
@@ -367,9 +312,6 @@ theorem opening_eq (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Clai
     opening A hm claims = (claims.mapM opStep).bind fun sw =>
       (draw (Fin claims.length → F)).bind fun γ => .ret (opResult A hm claims sw γ) := rfl
 
-/-! ## One codeword -/
-
-/-- The witness a message packs, at address `128y + v`, is bit `v` of the packed element `y`. -/
 theorem wit_addr128 (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule) (h7 : 7 ≤ S.m)
     (M : Message F sch.k0 sch.level₀.logCols) (y : Fin (2 ^ (S.m - 7))) (v : Fin 128) :
     wit A S sch M (addr128 h7 y v) = A.unpack (packedAt sch M y.val) v := by
@@ -380,13 +322,10 @@ theorem wit_addr128 (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sche
   · rfl
   · rw [unpack_zero A hA]; rfl
 
-/-- The event that the opening ends outside the doomed set for the codeword `M`. -/
 def EM (S : Statement) (sch : Schedule) (M : Message F sch.k0 sch.level₀.logCols)
     (o : Option (OpenOut F)) : Prop :=
   ∃ op, o = some op ∧ (∑ y ∈ Finset.range (2 ^ (S.m - 7)), packedAt sch M y * op.b y) = op.T
 
-/-- **The opening, one codeword.** If some claim is false for `M`'s witness, the opening ends
-with `M` undoomed with probability at most `(7·n + 1)/|F|`. -/
 theorem value_EM_le (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule) (h7 : 7 ≤ S.m)
     (claims : List (Claim F S.m)) (M : Message F sch.k0 sch.level₀.logCols)
     (hM : ∃ c ∈ claims, ¬ c.Holds (wit A S sch M)) :
@@ -396,14 +335,13 @@ theorem value_EM_le (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sche
   set z := wit A S sch M with hz_def
   have hz : ∀ y v, z (addr128 h7 y v) = A.unpack (packedAt sch M y.val) v :=
     fun y v => wit_addr128 A hA S sch h7 M y v
-  -- a switched claim is bad when its message is dishonest yet its recombination is right
   let B : Claim F S.m × (Fin 128 → F) × (Fin 7 → F) → Prop := fun x =>
     x.2.1 ≠ shat h7 x.1 z ∧ recombine A x.2.1 x.2.2 = recombine A (shat h7 x.1 z) x.2.2
   let D : List (Claim F S.m × (Fin 128 → F) × (Fin 7 → F)) → Prop := fun sw =>
     sw.map Prod.fst = claims ∧ ¬ ∃ x ∈ sw, B x
   rw [opening_eq]
   refine (value_bind_le _ _ _ D (1 / Fintype.card F) fun sw hD => ?_).trans ?_
-  · -- the batch: one nonzero linear form in the coins `γ`
+  ·
     show value (EM S sch M) (Game.coin _ fun γ => Game.ret (opResult A h7 claims sw γ)) ≤ _
     rw [value_coin_ret]
     let e : Fin claims.length → Claim F S.m × (Fin 128 → F) × (Fin 7 → F) := fun k =>
@@ -412,7 +350,7 @@ theorem value_EM_le (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sche
       recombine A (e k).2.1 (e k).2.2 - recombine A (shat h7 (e k).1 z) (e k).2.2
     by_cases hok : (sw.all fun (c, s, _) =>
         decide ((∑ v, packedWeight c h7 v * s v) = c.value)) = true
-    · -- the verdict is accepting only if the batched difference vanishes
+    ·
       have hsum : ∀ γ, EM S sch M (opResult A h7 claims sw γ) → ∑ k, γ k * dd k = 0 := by
         intro γ ⟨op, hop, hT⟩
         simp only [opResult, hok, if_true, Option.some.injEq] at hop
@@ -435,7 +373,6 @@ theorem value_EM_le (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sche
         erw [hL] at hT'
         simp only [dd, mul_sub, Finset.sum_sub_distrib, sub_eq_zero]
         exact hT'.symm
-      -- and the doomed claim forces a nonzero difference
       obtain ⟨c, hc, hfalse⟩ := hM
       obtain ⟨hmap, hnoB⟩ := hD
       have hlen : sw.length = claims.length := by rw [← hmap, List.length_map]
@@ -464,13 +401,13 @@ theorem value_EM_le (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sche
           ≤ prCoin (fun γ : Fin claims.length → F => ∑ k, γ k * dd k = 0) :=
             prCoin_mono fun γ h => hsum γ h
         _ ≤ 1 / Fintype.card F := prCoin_batch_le dd ⟨i, hi⟩ hne
-    · -- a failed check rejects
+    ·
       calc prCoin (fun γ => EM S sch M (opResult A h7 claims sw γ))
           ≤ prCoin (fun _ : Fin claims.length → F => False) := prCoin_mono fun γ ⟨op, hop, _⟩ => by
             simp only [opResult, hok, if_false, Bool.false_eq_true, reduceCtorEq] at hop
         _ = 0 := by simp [prCoin, avg]
         _ ≤ _ := zero_le
-  · -- the loop over claims
+  ·
     have hstep : ∀ c : Claim F S.m, value B (opStep c) ≤ 7 / Fintype.card F := fun c => by
       show value B (Game.send _ fun s => Game.coin _ fun r => Game.ret (c, s, r)) ≤ _
       refine value_round_le _ _ _ _ _ fun s => ?_
@@ -498,12 +435,7 @@ theorem value_EM_le (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sche
           push_cast
           ring
 
-/-! ## The phase -/
-
 open Classical in
-/-- **The opening phase** (§12), for a list `W` of at most `L` messages: from a doomed start (every
-message of `W` falsifies some claim), the opening ends undoomed with probability at most
-`L · (7·n + 1)/|F|`. -/
 theorem opening_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (h7 : 7 ≤ S.m) (W : Set (Message F sch.k0 sch.level₀.logCols)) (claims : List (Claim F S.m))
     (hdoom : ∀ M ∈ W, ∃ c ∈ claims, ¬ c.Holds (wit A S sch M)) (L : ℕ)
@@ -531,8 +463,6 @@ theorem opening_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (
         gcongr
 
 open Classical in
-/-- **The opening phase** for the codewords near the committed table: `opening_phase_of_list` at
-`closeMsgs`. -/
 theorem opening_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (h7 : 7 ≤ S.m) (C : Oracle F) (claims : List (Claim F S.m))
     (hdoom : ∀ M ∈ closeMsgs A sch C, ∃ c ∈ claims, ¬ c.Holds (wit A S sch M)) (L : ℕ)

@@ -7,17 +7,8 @@ import Proofs.Flock.Soundness.LigeritoCoins
 import Proofs.Flock.Soundness.LigeritoMCA
 import Proofs.Flock.Soundness.Rounds
 
-/-!
-# A level's folds against a list (`Flock.Ligerito` step 4)
-
-`foldRounds` folds the lowest variable first, one `K` challenge per round, and the running claim
-is a sum `Σ_y u(y)·v(y)` of the level's (folded) table `u` against the claim's weight `v`. For a
-list of tables (the codewords near the level's commitment), a claim that is false for every one
-of them stays false for every one after `k` rounds, except with probability `k·2L/|K|`
-(`value_foldRounds_sum_le`): per round, each list element's true quadratic differs from the
-verifier's, which sums to the claim by construction (`Flock.Ligerito`). Together with the rounds' MCA events
-(`value_foldRounds_mca_le`) this is the accounting's `Level.foldError`.
--/
+/-! A level's folds against a list keep a claim false for every table of it, except with probability `k·2L/|K|`
+(`Flock.Ligerito` step 4). -/
 
 @[expose] public section
 
@@ -28,12 +19,10 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- Fold the lowest variable by each challenge in turn (`foldRounds`' order). -/
 def foldLoL {L : Type} [Field L] : List L → (ℕ → L) → (ℕ → L)
   | [], u => u
   | r :: rs, u => foldLoL rs (foldLo r u)
 
-/-- The true quadratic of a round over `Σ_{x < 2^(n+1)} u(x)·v(x)`, lowest variable first. -/
 noncomputable def roundPolyLo {L : Type} [Field L] (n : ℕ) (u v : ℕ → L) : L[X] :=
   ∑ y ∈ Finset.range (2 ^ n), (C (u (2 * y)) + C (u (2 * y + 1) + u (2 * y)) * Polynomial.X) *
     (C (v (2 * y)) + C (v (2 * y + 1) + v (2 * y)) * Polynomial.X)
@@ -65,9 +54,6 @@ theorem roundPolyLo_sum {L : Type} [Field L] [CharP L 2] (n : ℕ) (u v : ℕ �
   have h0 : ∀ w : ℕ → L, foldLo 0 w y = w (2 * y) := fun w => by simp [foldLo]
   rw [h1 u, h1 v, h0 u, h0 v]
 
-/-- **A level's folds against a list.** If the incoming quadratic sums to the claim and the claim
-is false for every table in the list, the folds end with a true claim for some list element with
-probability at most `k·2L/|K|`, whatever the prover sends. -/
 theorem value_foldRounds_sum_le (A : Arith F K) (hA : A.Correct) {ι : Type} (S : Finset ι)
     (u : ι → ℕ → K) (v : ℕ → K) :
     ∀ (k N : ℕ) (s : K) (q : Quad K), q.eval 0 + q.eval 1 = s →
@@ -88,7 +74,7 @@ theorem value_foldRounds_sum_le (A : Arith F K) (hA : A.Correct) {ι : Type} (S 
           q.eval r = (roundPolyLo (k + N) (u M) v).eval r)
           ((2 * S.card : ℕ) / Fintype.card K) (((2 * k * S.card : ℕ) : ℝ≥0∞) / Fintype.card K)
           ?_ fun r hr => ?_).trans ?_
-      · -- one round: each list element's true quadratic differs from the verifier's
+      ·
         calc prCoin (fun r => ∃ M ∈ S, q.eval r = (roundPolyLo (k + N) (u M) v).eval r)
             ≤ ∑ M ∈ S, prCoin (fun r => q.eval r = (roundPolyLo (k + N) (u M) v).eval r) :=
               prCoin_exists_le _ _
@@ -117,7 +103,6 @@ theorem value_foldRounds_sum_le (A : Arith F K) (hA : A.Correct) {ι : Type} (S 
         ring_nf
         exact le_rfl
 
-/-- The folds keep the quadratic summing to the claim. -/
 theorem value_foldRounds_sum_invariant (A : Arith F K) (hA : A.Correct) :
     ∀ (k : ℕ) (s : K) (q : Quad K), q.eval 0 + q.eval 1 = s →
       value (fun out : List K × K × Quad K => out.2.2.eval 0 + out.2.2.eval 1 ≠ out.2.1)

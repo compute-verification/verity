@@ -9,13 +9,8 @@ import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.TmplFoldRef
 
-/-!
-# The template fold's reference over the call tree
-
-`Tmpl.rows` writes each copy's rows through `place`, one column at a time and never one twice. `foldRef_tree`: entry `s`
-of `foldRef` is the sum over the call tree (`placeSum`) of every copy's own rows, each reference read through the copy's
-binding (`Def.ref`) and uncancelled (`sum_canon`), plus the constant's row.
--/
+/-! The template fold's reference over the call tree (`foldRef_tree`): the root copy's `placeSum` plus the constant's
+row. -/
 
 @[expose] public section
 
@@ -23,7 +18,6 @@ open Flock Flock.Tmpl FlockLevel3 GF128
 
 namespace FlockSoundness.TmplFold
 
-/-- Row `x`'s share, its `A` columns `a` read by `FA x` and its `B` columns `b` by `FB x`. -/
 noncomputable def rowShare (FA FB : ℕ → ℕ → GF128) (x : ℕ) (a b : Array ℕ) : GF128 :=
   (a.toList.map (FA x)).sum + (b.toList.map (FB x)).sum
 
@@ -34,16 +28,13 @@ theorem rowShare_canon (FA FB : ℕ → ℕ → GF128) (x : ℕ) (a b : Array �
     rowShare FA FB x (canon a) (canon b) = rowShare FA FB x a b := by
   simp only [rowShare, sum_canon]
 
-/-- Every row written so far, its share summed. -/
 noncomputable def accSum (FA FB : ℕ → ℕ → GF128) (acc : Acc) : GF128 :=
   ∑ x ∈ Finset.range acc.ra.size, rowShare FA FB x (acc.ra.getD x #[]) (acc.rb.getD x #[])
 
-/-- The three arrays have one size, and a column not yet written has empty rows. -/
 def AccOk (acc : Acc) : Prop :=
   acc.rb.size = acc.ra.size ∧ acc.set.size = acc.ra.size ∧
     ∀ c, acc.set.getD c true = false → acc.ra.getD c #[] = #[] ∧ acc.rb.getD c #[] = #[]
 
-/-- **A write adds its row's share**, and keeps the unwritten columns empty. -/
 theorem write_sum (FA FB : ℕ → ℕ → GF128) {acc acc' : Acc} {c : ℕ} {a b : Array ℕ} (hok : AccOk acc)
     (h : write acc c a b = .ok acc') :
     AccOk acc' ∧ accSum FA FB acc' = accSum FA FB acc + rowShare FA FB c a b := by
@@ -100,8 +91,6 @@ theorem foldlM_sum {α : Type} (S : Acc → GF128) (Q : Acc → Prop) (f : Acc �
     refine ⟨hq2, ?_⟩
     rw [hs2, hs1, List.map_cons, List.sum_cons, add_assoc]
 
-/-- **The call tree's rows**: Definition `d`'s copy at offset `o`, its inputs bound to `inp`, its own rows' shares, each
-reference read through `Def.ref`, and every call's copies', as `place` writes them. -/
 noncomputable def placeSum (FA FB : ℕ → ℕ → GF128) (defs : Array Def) (k : ℕ) : ℕ → ℕ → ℕ → List ℕ → GF128
   | 0, _, _, _ => 0
   | fuel + 1, d, o, inp =>
@@ -151,19 +140,15 @@ theorem place_sum (FA FB : ℕ → ℕ → GF128) (defs : Array Def) (k : ℕ) :
       simp only [placeSum, hd]
       ring
 
-/-- `foldRef`'s summand at entry `s`, `A` side: reference `v` of row `x`, at their positions under `π`. -/
 noncomputable def termA (pt : FoldPt) (π : Array ℕ) (s x v : ℕ) : GF128 :=
   if π.getD v 0 % 64 = s then of (pt.alpha * pt.e (π.getD x 0) * pt.g (π.getD v 0)) else 0
 
-/-- The same, `B` side (no `α`). -/
 noncomputable def termB (pt : FoldPt) (π : Array ℕ) (s x v : ℕ) : GF128 :=
   if π.getD v 0 % 64 = s then of (pt.e (π.getD x 0) * pt.g (π.getD v 0)) else 0
 
 theorem replicate_getD (n c : ℕ) : (Array.replicate n (#[] : Array ℕ)).getD c #[] = #[] := by
   by_cases hc : c < n <;> simp [hc]
 
-/-- **`foldRef` over the call tree**: entry `s < 64` is the root copy's `placeSum` plus the constant's row
-`[const] · [const]`. -/
 theorem foldRef_tree {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P : Array F128}
     (hP : foldRef t lays alpha lw rho r = .ok P) {s : ℕ} (hs : s < 64) :
     of P[s]! =

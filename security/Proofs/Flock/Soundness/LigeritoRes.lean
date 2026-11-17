@@ -5,15 +5,8 @@ public import Proofs.Flock.Soundness.LigeritoWeights
 import Proofs.Flock.Soundness.LigeritoMCA
 import Proofs.Flock.Soundness.Rounds
 
-/-!
-# How Ligerito's weights fold (`Flock.Ligerito`)
-
-Every term of the final check's weight is a constant times a multilinear extension read at the
-point `fixed ++ bits(y)`: the fixed challenges so far, then the bits of the still-open variables.
-Folding the open variables' lowest bits by challenges `ch` replaces those bits by `ch`
-(`foldLoL_mle_bits`), and the split coordinate's weight `(b ? u : 1)` folds to `cff(c)`
-(`foldLoL_split`). These two facts carry the claim's weight from one level to the next.
--/
+/-! How Ligerito's weights fold: each term of the final check's weight is a multilinear extension read at
+`fixed ++ bits(y)`, carried from one level to the next. -/
 
 @[expose] public section
 
@@ -30,7 +23,6 @@ theorem foldLo_eq' (t : L) (u : ℕ → L) (y : ℕ) :
     foldLo t u y = (1 + t) * u (2 * y) + t * u (2 * y + 1) := by
   unfold foldLo; ring
 
-/-- Folding by the challenges `ch` is the `eq(ch, ·)`-weighted sum over the folded bits. -/
 theorem foldLoL_eq_sum : ∀ (ch : List L) (u : ℕ → L) (y : ℕ),
     foldLoL ch u y = ∑ x ∈ Finset.range (2 ^ ch.length), eqList ch x * u (x + 2 ^ ch.length * y)
   | [], u, y => by simp [foldLoL, eqList]
@@ -76,8 +68,6 @@ theorem foldLoL_congr (ch : List L) (u v : ℕ → L) (y : ℕ)
 
 end Fold
 
-/-- **The split coordinate folds to `cff`.** The weight `(b ? u : 1)·w(y/2)` of a split table,
-folded first at `c`, is `cff(c)` times `w` folded by the rest. -/
 theorem foldLoL_split {F K : Type} [Field F] [Field K] (A : Arith F K) (c : K) (cs : List K)
     (w : ℕ → K) (y : ℕ) :
     foldLoL (c :: cs) (fun z => (if z.testBit 0 then A.u else 1) * w (z / 2)) y =
@@ -90,8 +80,6 @@ theorem foldLoL_split {F K : Type} [Field F] [Field K] (A : Arith F K) (c : K) (
   simp only [foldLo, h0, h1, show 2 * z / 2 = z by omega, show (2 * z + 1) / 2 = z by omega,
     Bool.false_eq_true, if_false, if_true, cff]
   ring
-
-/-! ## Points with open bits -/
 
 section Points
 
@@ -124,8 +112,6 @@ theorem bitsK_succ_two_mul_add_one (m z : ℕ) :
 
 theorem length_bitsK (m y : ℕ) : (bitsK (K := K) m y).length = m := by simp [bitsK]
 
-/-- **Folding open bits.** Reading `eq(·, w)` at the open bits of the point and folding them by
-`ch` reads it at `ch` followed by the still-open bits. -/
 theorem foldLoL_eqList_bits [CharP K 2] : ∀ (ch : List K) (m : ℕ), ch.length ≤ m →
     ∀ (w x : ℕ), foldLoL ch (fun y => eqList (bitsK m y) w) x =
       eqList (ch ++ bitsK (m - ch.length) x) w
@@ -147,7 +133,6 @@ theorem foldLoL_eqList_bits [CharP K 2] : ∀ (ch : List K) (m : ℕ), ch.length
       congr 3
       simp only [List.length_cons, Nat.add_sub_add_right]
 
-/-- The same with a fixed prefix of challenges. -/
 theorem foldLoL_eqList_fixed_bits [CharP K 2] (fixed ch : List K) (m : ℕ) (hm : ch.length ≤ m)
     (w x : ℕ) :
     foldLoL ch (fun y => eqList (fixed ++ bitsK m y) w) x =
@@ -157,11 +142,9 @@ theorem foldLoL_eqList_fixed_bits [CharP K 2] (fixed ch : List K) (m : ℕ) (hm 
     ← Nat.div_div_eq_div_mul]
   ring
 
-/-- A multilinear extension read at a point: `Σ_w c(w)·eq(p, w)`. -/
 def mleAt (N : ℕ) (c : ℕ → K) (p : List K) : K :=
   ∑ w ∈ Finset.range (2 ^ N), c w * eqList p w
 
-/-- **Folding a multilinear extension's open bits.** -/
 theorem foldLoL_mle_bits [CharP K 2] (N : ℕ) (c : ℕ → K) (fixed ch : List K) (m : ℕ)
     (hm : ch.length ≤ m) (x : ℕ) :
     foldLoL ch (fun y => mleAt N c (fixed ++ bitsK m y)) x =
@@ -172,8 +155,6 @@ theorem foldLoL_mle_bits [CharP K 2] (N : ℕ) (c : ℕ → K) (fixed ch : List 
     rw [foldLoL_mul_left, foldLoL_eqList_fixed_bits fixed ch m hm]
 
 end Points
-
-/-! ## List products as range products -/
 
 section Lists
 
@@ -210,7 +191,6 @@ theorem getD_bitsK (m y j : ℕ) (hj : j < m) :
     (bitsK (K := K) m y).getD j 0 = if y.testBit j then 1 else 0 := by
   simp [bitsK, List.getD_eq_getElem?_getD, hj]
 
-/-- The agreement product `Π_i (1 + z_i + p_i)` of two points of equal length is `Σ_w eq(z,w)·eq(p,w)`. -/
 theorem sum_eqList_eqList [CharP K 2] : ∀ (z p : List K), z.length = p.length →
     ∑ w ∈ Finset.range (2 ^ p.length), eqList z w * eqList p w =
       ∏ i ∈ Finset.range p.length, (1 + z.getD i 0 + p.getD i 0)
@@ -231,17 +211,13 @@ theorem sum_eqList_eqList [CharP K 2] : ∀ (z p : List K), z.length = p.length 
 
 end Lists
 
-/-! ## The final check's weight at any stage -/
-
 section Res
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- The challenges on the original variables so far. -/
 def origOf (initial : List K) (levels : List (List K)) : List K :=
   initial ++ (levels.map List.tail).flatten
 
-/-- An OOD claim's fixed challenges: those on its table's variables so far. -/
 def oodFixed (initial : List K) (levels : List (List K)) (o : OodCtx F) : List K :=
   match o.split with
   | none => origOf initial levels
@@ -252,7 +228,6 @@ def oodScale (A : Arith F K) (levels : List (List K)) (o : OodCtx F) : K :=
   | none => cffFrom A levels 0
   | some a => cffFrom A levels (a + 1)
 
-/-- An OOD claim's term of the final check's weight. -/
 def oodTerm (A : Arith F K) (initial : List K) (levels : List (List K)) (ext : ℕ) (o : OodCtx F)
     (y : ℕ) : K :=
   A.embed o.β * oodScale A levels o
@@ -261,11 +236,9 @@ def oodTerm (A : Arith F K) (initial : List K) (levels : List (List K)) (ext : �
         let zj := A.embed (o.z.getD ((oodFixed initial levels o).length + j) 0)
         if y.testBit j then zj else 1 + zj).prod
 
-/-- A consistency claim's fixed challenges: those on its folded columns so far. -/
 def consFixed (levels : List (List K)) (c : ConsCtx F) : List K :=
   ((levels.drop c.start).map List.tail).flatten
 
-/-- A consistency claim's term of the final check's weight. -/
 def consTerm (A : Arith F K) (levels : List (List K)) (ext : ℕ) (c : ConsCtx F) (y : ℕ) : K :=
   A.embed c.β * cffFrom A levels c.start
     * ((c.positions.zipIdx).map fun (p, j) =>
@@ -276,8 +249,6 @@ def consTerm (A : Arith F K) (levels : List (List K)) (ext : ℕ) (c : ConsCtx F
               if y.testBit i then A.embed (A.What ((consFixed levels c).length + i) (A.omega p))
               else 1).prod).sum
 
-/-- **The claim's weight on the open variables** at the stage where `levels` have been folded:
-the final check's `res` with the lists so far. -/
 def resAt (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K) (levels : List (List K))
     (oods : List (OodCtx F)) (cons : List (ConsCtx F)) (ext : ℕ) (y : ℕ) : K :=
   bHat A n b (origOf initial levels ++ bitsK ext y) * cffFrom A levels 0
@@ -294,8 +265,6 @@ theorem finalCheck_eq_resAt (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial :
             (A.embed (yr ⟨(2 * y) % 2 ^ (ext + 1), Nat.mod_lt _ (Nat.two_pow_pos _)⟩)
               + A.u * A.embed (yr ⟨(2 * y + 1) % 2 ^ (ext + 1), Nat.mod_lt _ (Nat.two_pow_pos _)⟩)))
             = s)) := rfl
-
-/-! ### Each term as a multilinear extension read at `fixed ++ bits(y)` -/
 
 theorem oodTerm_eq_mle [CharP K 2] (A : Arith F K) (initial : List K) (levels : List (List K))
     (ext : ℕ) (o : OodCtx F) (y : ℕ)
@@ -361,8 +330,6 @@ theorem consTerm_eq_mle [CharP K 2] (A : Arith F K) (levels : List (List K)) (ex
     · linear_combination -h2
     · ring
 
-/-! ### Appending a level's challenges -/
-
 theorem origOf_snoc (initial : List K) (levels : List (List K)) (ch : List K) :
     origOf initial (levels ++ [ch]) = origOf initial levels ++ ch.tail := by
   simp [origOf, List.map_append, List.flatten_append, List.append_assoc]
@@ -376,7 +343,6 @@ theorem cffFrom_snoc_top (A : Arith F K) (levels : List (List K)) (ch : List K) 
     cffFrom A (levels ++ [ch]) (levels.length + 1) = 1 := by
   simp [cffFrom, List.drop_eq_nil_of_le]
 
-/-- An OOD claim introduced before this stage. -/
 def OodOld (levels : List (List K)) (o : OodCtx F) : Prop :=
   o.split = none ∨ ∃ a < levels.length, o.split = some a
 
@@ -409,8 +375,6 @@ theorem consFixed_snoc (levels : List (List K)) (ch : List K) (c : ConsCtx F)
     (hc : c.start ≤ levels.length) :
     consFixed (levels ++ [ch]) c = consFixed levels c ++ ch.tail := by
   simp [consFixed, List.drop_append_of_le_length hc, List.map_append, List.flatten_append]
-
-/-! ### Each term across one level -/
 
 theorem fold_base [CharP K 2] (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K)
     (levels : List (List K)) (c : K) (cs : List K) (ext ext' : ℕ) (hext : ext = cs.length + ext')
@@ -467,7 +431,6 @@ theorem fold_cons [CharP K 2] (A : Arith F K) (levels : List (List K)) (c : K) (
   simp only [foldLoL_mle_bits _ _ _ cs ext (show cs.length ≤ ext by omega), List.tail_cons]
   ring
 
-/-- `eq(bits(y), w)` on the hypercube is the indicator of `w = y`. -/
 theorem eqList_bitsK [CharP K 2] (N y w : ℕ) (hy : y < 2 ^ N) (hw : w < 2 ^ N) :
     eqList (bitsK (K := K) N y) w = if w = y then 1 else 0 := by
   unfold eqList
@@ -525,10 +488,6 @@ theorem fold_oodNew [CharP K 2] (A : Arith F K) (initial : List K) (levels : Lis
     foldLoL_mle_bits _ _ [] ch o.z.length (by omega), List.nil_append,
     show o.z.length - ch.length = ext' by omega]
 
-/-! ### One level -/
-
-/-- **The weight on a split table** before its lanes are folded: the previous stage's weight on
-the split coordinate's two sides, plus the OOD claims made on this table. -/
 def preW (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K) (levels : List (List K))
     (oods : List (OodCtx F)) (cons : List (ConsCtx F)) (ext : ℕ) (y : ℕ) : K :=
   (if y.testBit 0 then A.u else 1) *
@@ -536,13 +495,11 @@ def preW (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K) (levels : 
     + ((oods.filter fun o => o.split = some levels.length).map fun o =>
         A.embed o.β * eqList (o.z.map A.embed) y).sum
 
-/-- The lists' shape after a level's lanes are folded. -/
 structure PostOK (initial : List K) (levels : List (List K)) (oods : List (OodCtx F))
     (cons : List (ConsCtx F)) (ext : ℕ) : Prop where
   ood : ∀ o ∈ oods, OodOld levels o ∧ o.z.length = (oodFixed initial levels o).length + ext
   cons : ∀ c ∈ cons, c.start ≤ levels.length
 
-/-- The lists' shape before a level's lanes are folded: the OOD claims on this table are new. -/
 structure PreOK (initial : List K) (levels : List (List K)) (oods : List (OodCtx F))
     (cons : List (ConsCtx F)) (ext : ℕ) : Prop where
   ood : ∀ o ∈ oods, (o.split = some levels.length ∧ o.z.length = ext + 1) ∨
@@ -561,8 +518,6 @@ theorem list_sum_mul_left {ι : Type} (l : List ι) (a : K) (f : ι → K) :
   | nil => simp
   | cons x l ih => simp [mul_add, ih]
 
-/-- **A level's fold identity.** Folding the split table's lanes carries the weight to the next
-stage's `resAt`. -/
 theorem foldLoL_preW [CharP K 2] (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K)
     (levels : List (List K)) (oods : List (OodCtx F)) (cons : List (ConsCtx F)) (ext : ℕ)
     (c : K) (cs : List K) (ext' : ℕ) (hext : ext = cs.length + ext')
@@ -633,8 +588,6 @@ theorem preOK_of_postOK (initial : List K) (levels : List (List K)) (oods : List
     · exact hok.cons c h
     · rw [List.mem_singleton.1 h, hcc]
 
-/-- The weight's two parts: its sum against a split table is the previous stage's claim on the
-table's other side plus the new OOD claims. -/
 theorem sum_preW (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K)
     (levels : List (List K)) (oods : List (OodCtx F)) (cons : List (ConsCtx F)) (ext : ℕ)
     (g : ℕ → K) :
@@ -660,7 +613,6 @@ theorem sum_preW (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K)
         congr 1
         exact Finset.sum_congr rfl fun y _ => by ring
 
-/-- A consistency claim made at this stage reads the fold's encoding: `Σ_j eq(α)_j·X̂_y(ω_{p_j})`. -/
 theorem consTerm_new (A : Arith F K) (levels : List (List K)) (ext : ℕ) (cc : ConsCtx F)
     (hcc : cc.start = levels.length) (y : ℕ) :
     consTerm A levels ext cc y = A.embed cc.β *

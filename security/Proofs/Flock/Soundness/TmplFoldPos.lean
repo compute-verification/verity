@@ -8,17 +8,8 @@ import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Level3.Nodes
 import Proofs.Flock.Soundness.TmplFoldRef
 
-/-!
-# The template fold is its reference
-
-`fold_refVal` has the unit's fold as the root copy's `refVal`, which reads every column at `A + B · posIn`; `foldRef_tree`
-has the reference as the call tree's `placeSum`, which reads every column at `π = posMap`. They agree wherever each copy
-`(d, o)` of the unrolled unit, and every copy below it, has its own column `y` at `π[o + y] = A + B · posIn y`
-(`TreeAt`), which `posMap_tree` proves whenever every Definition's layout is in order (`DefPos`).
-
-- `refVal_place`: a copy's `refVal`, its inputs read through `π`, is its `placeSum`.
-- `fold_eq_foldRef`: the fold and its reference agree entry by entry.
--/
+/-! The template fold is its reference, entry by entry, wherever every Definition's layout is in order
+(`fold_eq_foldRef`). -/
 
 @[expose] public section
 
@@ -30,7 +21,6 @@ theorem getD_map_at (l : List ℕ) (f : ℕ → ℕ) (i k d : ℕ) (hd : f k = d
   rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map]
   cases l[i]? <;> simp [hd]
 
-/-- Where a copy at `(A, B)` reads reference `v` is where `π` puts the column `Def.ref` names. -/
 theorem readAt_ref (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (π : Array ℕ) {d o A B : ℕ} (inp : List ℕ)
     (hk : π.getD t.constPos 0 = pt.qc)
     (hcopy : ∀ y < (t.defs.getD d default).cols,
@@ -42,7 +32,6 @@ theorem readAt_ref (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (π : Array ℕ) 
   · exact getD_map_at inp (fun x => π.getD x 0) _ t.constPos _ hk
   · exact hk.symm
 
-/-- A row of the copy at column `x`, its references read at `R v = π[F v]`: its `rowVal` is its `rowShare`. -/
 theorem row_place (pt : FoldPt) (π : Array ℕ) (s x : ℕ) (R F : ℕ → ℕ) (r : ℕ × Array ℕ × Array ℕ)
     (hR : ∀ v, R v = π.getD (F v) 0) :
     rowVal pt s (pt.e (π.getD x 0)) R r = rowShare (termA pt π s) (termB pt π s) x (r.2.1.map F) (r.2.2.map F) := by
@@ -69,8 +58,6 @@ theorem list_sum_getD {α β : Type} [Inhabited α] [AddCommMonoid β] (f : α �
     rw [List.map_cons, List.sum_cons, list_sum_getD f l, List.length_cons, Finset.sum_range_succ']
     simp [add_comm]
 
-/-- **A copy's `refVal` is its `placeSum`**: Definition `d`'s copy at offset `o`, at `(A, B)` under `π`, its inputs the
-columns `inp` read through `π`. -/
 theorem refVal_place (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (π : Array ℕ) (s : ℕ)
     (hk : π.getD t.constPos 0 = pt.qc)
     (hfit : ∀ d, ∀ r ∈ (t.defs.getD d default).rows.toList, r.1 < (t.defs.getD d default).cols) :
@@ -109,8 +96,6 @@ theorem refVal_place (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (π : Array ℕ
       rw [hb]
       exact refVal_place t lays pt π s hk hfit fuel _ _ _ _ _ (hcalls i hi j (Finset.mem_range.mp hj))
 
-/-- **The template fold is its reference**: entry by entry, while every Definition's layout is in order (`DefPos`), the
-lane bits fit the point, and the root reads no inputs and has a constant. -/
 theorem fold_eq_foldRef {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P P' : Array F128} {w : ℕ}
     (hP : fold t lays alpha lw rho r = .ok (P, w)) (hP' : foldRef t lays alpha lw rho r = .ok P')
     (hlay : LayOk t lays) (hins : (t.defs.getD t.root default).ins = 0) (hcols : 0 < (t.defs.getD t.root default).cols)

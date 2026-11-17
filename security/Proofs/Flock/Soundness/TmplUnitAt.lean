@@ -22,14 +22,8 @@ import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.TmplUnrollAt
 import VCVio.Prelude.Core
 
-/-!
-# A templated unit is its logical net placed at `posMap`
-
-A circuit carrying a read templated unit `tu`, whose unit net is `tu.net`: its logical net (`lunit`) is `Tmpl.unroll`'s,
-a `Built` net (`built_tmpl`), and `tu.net` is that net's rows moved to `posMap`'s positions (`Net.ofRowsAt`,
-`TmplUnit.unrolled`), so the unit is its logical net placed at `upos` (`UnitAt.tmpl`). The committed net itself need not
-be `Built`: a laned copy's columns can sit before the columns it reads.
--/
+/-! A templated unit is its logical net placed at `posMap` (`UnitAt.tmpl`); the committed net itself need not be
+`Built`: a laned copy's columns can sit before the columns it reads. -/
 
 @[expose] public section
 
@@ -56,14 +50,11 @@ theorem upos_tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) :
   funext x
   simp [upos, ht]
 
-/-- **A templated unit's logical net is `Built`**: `Tmpl.unroll`'s, `Net.ofRows` on its rows. -/
 theorem built_tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) : Built (lunit c) := by
   obtain ⟨_, n, -, -, -, hu⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
   rw [lunit_tmpl ht hu]
   exact TmplValue.unroll_built hu
 
-/-- **A templated unit net's rows are its useful rows**, which end at its constant: `Net.ofRowsAt` places one row at
-each position up to the committed constant. -/
 theorem tmpl_net_rows (tu : TmplUnit) :
     tu.net.a.rows = tu.net.useful ∧ tu.net.b.rows = tu.net.useful ∧ tu.net.useful = tu.net.constPos + 1 := by
   obtain ⟨_acc, _n, -, -, hat, -⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
@@ -72,9 +63,6 @@ theorem tmpl_net_rows (tu : TmplUnit) :
   rw [ofRows_rows ha, ofRows_rows hb, Net.placed_size, Net.placed_size, hi, hu, hcp]
   exact ⟨rfl, rfl, rfl⟩
 
-/-- **A templated unit is its logical net placed at `upos`**: `posMap` keeps the input rows, puts every other column
-between them and the constant, the constant at the committed constant, and committed row `posMap[x]` is logical row `x`
-read through `posMap`. -/
 theorem UnitAt.tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) (hu : c.unit = tu.net) : UnitAt c := by
   obtain ⟨acc, n, -, hn, hat, hun⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
   have el := lunit_tmpl ht hun

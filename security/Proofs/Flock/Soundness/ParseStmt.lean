@@ -22,15 +22,8 @@ import Proofs.Flock.Soundness.TmplUnitNet
 import Proofs.Flock.Soundness.TmplUnrollAt
 import VCVio.Prelude.Core
 
-/-!
-# A hidden-output file's statement circuit
-
-A templated file's statement circuit is the flat circuit its template unrolls to (`HmOut.unrolled`): the circuit
-`HmOut.parseTmpl` commits, its unit net `Tmpl.unroll`'s, carrying no template. `HmOut.parseStmt` reads it, and any
-other file's circuit as `HmOut.parse` does. A consumer of `HmOut.parseStmt … = .ok c` splits it with `parseStmt_cases`:
-the flat file's `HmOut.parse`, or the templated file's committed circuit `ct` with `c = HmOut.unrolled ct`, which is `ct`
-with its unit net the logical one (`unrolled_of_parseTmpl`, `unrolled_unit`, `unrolled_built`).
--/
+/-! A hidden-output file's statement circuit, which a consumer splits with `parseStmt_cases` into a flat file's
+`HmOut.parse` or a templated file's committed circuit unrolled. -/
 
 @[expose] public section
 
@@ -57,8 +50,6 @@ theorem parseStmt_of_tmpl (ht : tags.isTmpl = true) (h : HmOut.parseTmpl tags cf
     HmOut.parseStmt tags cf tables = .ok (HmOut.unrolled ct) := by
   rw [parseStmt_tmpl ht, h]; rfl
 
-/-- **The bridge every consumer of the statement circuit reads**: a flat file's is `HmOut.parse`'s, a templated file's
-is the circuit `HmOut.parseTmpl` commits, unrolled. -/
 theorem parseStmt_cases (h : HmOut.parseStmt tags cf tables = .ok c) :
     (tags.isTmpl = false ∧ HmOut.parse tags cf tables = .ok c) ∨
       (tags.isTmpl = true ∧ ∃ ct, HmOut.parseTmpl tags cf tables = .ok ct ∧ c = HmOut.unrolled ct) := by
@@ -74,7 +65,6 @@ theorem parseStmt_cases (h : HmOut.parseStmt tags cf tables = .ok c) :
       cases e
       exact ⟨ct, rfl, rfl⟩
 
-/-- A flat file's `HmOut.parse` reads the statement circuit (`parseStmt_cases`'s flat side, at tags known flat). -/
 theorem parse_of_parseStmt (ht : tags.isTmpl = false) (h : HmOut.parseStmt tags cf tables = .ok c) :
     HmOut.parse tags cf tables = .ok c := by
   rwa [parseStmt_flat ht] at h
@@ -83,8 +73,6 @@ theorem unrolled_flat (h : c.tmpl = none) : HmOut.unrolled c = c := by
   unfold HmOut.unrolled
   rw [h]
 
-/-- **A templated file's statement circuit is its committed circuit with the logical unit net**: `ct` with its unit
-(net `0`) `Tmpl.unroll`'s net, `lunit ct`, and no template; every other field is `ct`'s. -/
 theorem unrolled_of_parseTmpl (h : HmOut.parseTmpl tags cf tables = .ok ct) :
     ∃ (tu : TmplUnit) (n : Net), ct.tmpl = some tu ∧ Tmpl.unroll tu.t = .ok n ∧ lunit ct = n ∧ ct.unitNet = 0 ∧
       ct.unitNet < ct.nets.size ∧ ct.unit = tu.net ∧
@@ -102,7 +90,6 @@ theorem unrolled_of_parseTmpl (h : HmOut.parseTmpl tags cf tables = .ok ct) :
   rw [ht]
   simp only [hun]
 
-/-- A templated file's statement circuit's unit is the committed circuit's logical net. -/
 theorem unrolled_unit (h : HmOut.parseTmpl tags cf tables = .ok ct) : (HmOut.unrolled ct).unit = lunit ct := by
   obtain ⟨tu, n, -, -, hl, -, hsz, -, he⟩ := unrolled_of_parseTmpl h
   rw [he, hl]
@@ -113,7 +100,6 @@ theorem unrolled_tmpl (h : HmOut.parseTmpl tags cf tables = .ok ct) : (HmOut.unr
   obtain ⟨_, _, _, _, _, _, _, _, he⟩ := unrolled_of_parseTmpl h
   rw [he]
 
-/-- **A templated file's statement circuit's unit is `Built`**: `Tmpl.unroll`'s net (`built_tmpl`). -/
 theorem unrolled_built (h : HmOut.parseTmpl tags cf tables = .ok ct) : Built (HmOut.unrolled ct).unit := by
   obtain ⟨tu, -, ht, -⟩ := unrolled_of_parseTmpl h
   rw [unrolled_unit h]

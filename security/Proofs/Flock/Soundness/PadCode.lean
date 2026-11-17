@@ -6,21 +6,8 @@ public import Proofs.Flock.Soundness.NovelBasis
 import ArkLib.Data.CodingTheory.JohnsonBound.Family
 import Proofs.Flock.Soundness.LigeritoDecode
 
-/-!
-# The padded level-0 code: `RS[2^d, k]` on the first `k` novel-basis monomials
-
-Flock ZK's level-0 lane of `2^cols` message coefficients and `t` padding coefficients is a codeword of
-`RS[2^d, k]`, `k = 2^cols + t`: the evaluation of `Σ_{c < k} a_c·X̂_c` at `d` bits (`encAt`). This
-file gives that code what `ListSize`, `LigeritoLevels` and `LigeritoDecode` give a level's code:
-
-* its codewords are exactly the polynomials of degree below `k` (`NovelBasis`), so `encAt` is in
-  ArkLib's `ReedSolomon.code` and is injective, and a `K` codeword that agrees with an `F` row on
-  `T` is an `F` encoding there (`exists_encAt_of_agree`);
-* a `K` combination of the `k` monomials that vanishes on `k` positions is zero (`encKAt_eq_zero`);
-* at most `⌊100·2^d/k⌋` row families encode within `1 − √(k/2^d) − η` of a table
-  (`card_closeRows_le`, ArkLib's Johnson bound);
-* `prCoin_mca_le` bounds its MCA events by `padMcaA / 2^256` (`prCoin_pad_mca_le`).
--/
+/-! The padded level-0 code `RS[2^d, k]` on the first `k` novel-basis monomials, with what `ListSize`, `LigeritoLevels`
+and `LigeritoDecode` give a level's code. -/
 
 @[expose] public section
 
@@ -36,7 +23,6 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 def encAt (A : Arith F K) (d k : ℕ) (a : Fin k → F) (q : ℕ) : F :=
   ∑ c, a c * A.Xhat c.val d (A.omega q)
 
-/-- The same over `K`. -/
 def encKAt (A : Arith F K) (d k : ℕ) (b : Fin k → K) (q : ℕ) : K :=
   ∑ c, b c * A.embed (A.Xhat c.val d (A.omega q))
 
@@ -63,7 +49,6 @@ theorem encPoly_natDegree (d k : ℕ) (hd : d ≤ 40) (hk : k ≤ 2 ^ d) (hk0 : 
     omega
   omega
 
-/-- The lanes' `F` encodings are codewords of `RS[2^d, k]`. -/
 theorem encAt_mem (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤ 2 ^ d) (hk0 : 0 < k)
     (a : Fin k → F) :
     (fun q : Fin (2 ^ d) => encAt A d k a q.val) ∈ ReedSolomon.code (domainEmb A hA d hd64) k :=
@@ -71,7 +56,6 @@ theorem encAt_mem (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤ 2 ^ 
     (encPoly_natDegree A hA d k hd hk hk0 a) fun q => by
       rw [domainEmb_apply, encPoly_eval]
 
-/-- A `K` combination of the `k` monomials is a codeword of `RS[2^d, k]` over `K`. -/
 theorem encKAt_mem (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤ 2 ^ d) (hk0 : 0 < k)
     (b : Fin k → K) :
     (fun q : Fin (2 ^ d) => encKAt A d k b q.val) ∈ ReedSolomon.code (domainK A hA d hd64) k := by
@@ -92,7 +76,6 @@ theorem encKAt_mem (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤ 2 ^
     rfl
 
 include hA in
-/-- **A combination of `k` monomials vanishing on `k` positions is zero.** -/
 theorem encAt_eq_zero (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤ 2 ^ d) (a : Fin k → F)
     (T : Finset (Fin (2 ^ d))) (hT : k ≤ T.card) (h : ∀ q ∈ T, encAt A d k a q.val = 0) : a = 0 := by
   classical
@@ -113,7 +96,6 @@ theorem encAt_eq_zero (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤ 
     ((xP_linearIndependent A hA d hd).comp _ (Fin.castLE_injective hk)) _ hsum c
 
 include hA in
-/-- **Over `K`**: a `K` combination of `k` monomials vanishing on `k` positions is zero. -/
 theorem encKAt_eq_zero (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤ 2 ^ d) (b : Fin k → K)
     (T : Finset (Fin (2 ^ d))) (hT : k ≤ T.card) (h : ∀ q ∈ T, encKAt A d k b q.val = 0) :
     b = 0 := by
@@ -140,7 +122,6 @@ theorem encKAt_eq_zero (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤
   simp only [b₀, b₁, Pi.zero_apply] at *
   simp [*, ofLimbs_zero]
 
-/-- **A `K` codeword agreeing with an `F` row is an `F` encoding there.** -/
 theorem exists_encAt_of_agree (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤ 2 ^ d)
     (hk0 : 0 < k) (row : Fin (2 ^ d) → F) (T : Finset (Fin (2 ^ d))) (c : Fin (2 ^ d) → K)
     (hc : c ∈ ReedSolomon.code (domainK A hA d hd64) k) (hcT : ∀ q ∈ T, c q = A.embed (row q)) :
@@ -162,8 +143,6 @@ theorem exists_encAt_of_agree (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk 
   refine Finset.sum_congr rfl fun c' _ => ?_
   rw [← xP_eval A hA d hd]
   rfl
-
-/-! ## The list size -/
 
 /-- `γ`-close rows: the table's rows agree with the rows' encodings on a common `1 − γ` fraction
 of the positions. -/
@@ -187,8 +166,6 @@ theorem encAt_injective (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k �
 
 include hA in
 open Classical in
-/-- **The list size.** At most `⌊100·2^d/k⌋` families of `s` rows encode within `1 − √(k/2^d) − η`
-of any table: ArkLib's Johnson bound for the interleaved `RS[2^d, k]`. -/
 theorem card_closeRows_le (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤ 2 ^ d) (hk0 : 0 < k)
     {s : ℕ} (hs : 0 < s) (T : Fin s → Fin (2 ^ d) → F) :
     (Finset.univ.filter fun R : Fin s → Fin k → F =>
@@ -272,8 +249,6 @@ theorem card_closeRows_le (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k 
   rw [Nat.le_div_iff_mul_le hk0]
   exact_mod_cast h3
 
-/-! ## The MCA bound on the padded code -/
-
 theorem padRate_pos (l : Level) (t : ℕ) : 0 < l.padRate t := by
   unfold Level.padRate
   have : (0 : ℝ) < ((2 ^ l.logCols + t : ℕ) : ℝ) := by
@@ -295,9 +270,6 @@ theorem padRadius_lt_johnson (l : Level) (t : ℕ) :
   unfold Level.padRadius Accounting.eta
   linarith
 
-/-- **The MCA bound on the padded code.** Whatever two words the prover fixes, the MCA
-event of `RS[2^d, 2^cols + t]` over `K` at the padded radius has probability at most
-`padMcaA / 2^256`. -/
 theorem prCoin_pad_mca_le (l : Level) (t : ℕ)
     (hd : l.logLen ≤ 64) (hk : 1 < 2 ^ l.logCols + t) (hr : 0 < l.padRadius t)
     (U : Fin 2 → Fin (2 ^ l.logLen) → K) :

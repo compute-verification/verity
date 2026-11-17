@@ -12,15 +12,7 @@ import Proofs.Flock.Soundness.TmplLayOk
 import Proofs.Flock.Soundness.TmplWf
 import Std.Data.HashMap.Lemmas
 
-/-!
-# The split fold is the template fold
-
-`foldSplit` walks the root's class at chunk origin 0 and sums the table's entries into the 64 slots; with the root
-reading no inputs that sum is `tabExp`, which `walk_ok` values as the root copy's reference value
-(`foldSplit_refVal`), `fold_refVal`'s too. So the two folds agree entry by entry (`foldSplit_eq_fold`), and with
-`fold_eq_foldRef_wf` the split fold is the reference (`foldSplit_eq_foldRef_wf`). Beside the lane counts `fold` already
-needs, the split fold needs the root's chunk, `2^log2ceil(size)`, to hold 64 slots inside the point.
--/
+/-! The split fold is the template fold (`foldSplit_eq_fold`), and so the reference (`foldSplit_eq_foldRef_wf`). -/
 
 @[expose] public section
 
@@ -32,7 +24,6 @@ theorem getD_modify_ne (xs : Array F128) (f : F128 → F128) {i j : ℕ} (h : i 
     (xs.modify i f).getD j 0 = xs.getD j 0 := by
   simp only [Array.getD_eq_getD_getElem?, Array.getElem?_modify, ite_eq_right h]
 
-/-- `fold_val` under an invariant every step keeps. -/
 theorem fold_val_inv {κ δ : Type} [BEq κ] [Hashable κ] (I : δ → Prop) (V : δ → GF128) (step : δ → κ → F128 → δ)
     (G : κ → F128 → GF128) (hI : ∀ d k v, I d → I (step d k v)) (h : ∀ d k v, I d → V (step d k v) = V d + G k v)
     (m : HashMap κ F128) (init : δ) (hi : I init) :
@@ -50,8 +41,6 @@ theorem hsum_of_not_mem {κ : Type} [BEq κ] [LawfulBEq κ] [Hashable κ] [Lawfu
     (m : HashMap κ F128) (f : κ → GF128) (h : ∀ x, ¬ x ∈ m) : hsum m f = 0 := by
   rw [hsum_superset m f ∅ fun x hx => absurd hx (h x), Finset.sum_empty]
 
-/-- **The 64 slots `foldSplit` sums** from a table with no open inputs, at chunk origin 0: its `tabExp`, plus the
-constant's term. -/
 theorem split_val {pt : FoldPt} {L s : ℕ} (hs : s < 64) (o : Tab) (iv : ℕ → ℕ → GF128) (hU : ∀ x, ¬ x ∈ o.U)
     {stepP : Array F128 → ℕ × ℕ × ℕ → F128 → Array F128} {stepC : Array F128 → ℕ × ℕ → F128 → Array F128}
     (hsP : ∀ p cx cy s' v, stepP p (cx, cy, s') v = p.modify s' (· + v * eqTail pt.rhoT L cx * eqTail pt.rT L cy))
@@ -94,8 +83,6 @@ theorem split_val {pt : FoldPt} {L s : ℕ} (hs : s < 64) (o : Tab) (iv : ℕ �
 theorem stOk_empty (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s : ℕ) : StOk t lays pt s {} :=
   ⟨fun _ _ h => by simp [HashMap.get?_eq_getElem?] at h, fun _ _ _ _ h => by simp [HashMap.get?_eq_getElem?] at h⟩
 
-/-- **The split fold** at entry `s < 64` is `fold_refVal`'s value: the root copy's reference value plus the constant's
-row, while the root's chunk holds 64 slots inside the point and the root reads no inputs. -/
 theorem foldSplit_refVal {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P : Array F128} {w1 w2 w3 : ℕ}
     (hP : foldSplit t lays alpha lw rho r = .ok (P, w1, w2, w3)) (hlay : LayOk t lays)
     (hcall : ∀ d i, i < (t.defs.getD d default).calls.size → ((t.defs.getD d default).calls.getD i default).def_ < d)
@@ -126,7 +113,6 @@ theorem foldSplit_refVal {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r 
   exact split_val hs o _ (fun x hx => absurd (hU x hx).1 (by rw [hins]; exact Nat.not_lt_zero _))
     (by intros; rfl) (by intros; rfl) _ _
 
-/-- **The split fold is the template fold**, entry by entry. -/
 theorem foldSplit_eq_fold {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P P' : Array F128} {w w1 w2 w3 : ℕ}
     (hS : foldSplit t lays alpha lw rho r = .ok (P, w1, w2, w3)) (hP : fold t lays alpha lw rho r = .ok (P', w))
     (hlay : LayOk t lays)
@@ -139,7 +125,6 @@ theorem foldSplit_eq_fold {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r
     of P[s]! = of P'[s]! := by
   rw [foldSplit_refVal hS hlay hcall hroot hins hal hr1 hr2 hs, fold_refVal hP hlay hins hf1 hf2 hs]
 
-/-- **The split fold is the reference** on `layoutM`'s layouts of a well-formed template. -/
 theorem foldSplit_eq_foldRef_wf {t : Tmpl} {mode : Mode} {lays : Array Lay} {alpha : F128}
     {lw rho r P P' P'' : Array F128} {w w1 w2 w3 : ℕ} (hwf : t.wellFormed = true) (hL : layoutM t mode = .ok lays)
     (hS : foldSplit t lays alpha lw rho r = .ok (P, w1, w2, w3)) (hP : fold t lays alpha lw rho r = .ok (P', w))

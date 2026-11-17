@@ -7,20 +7,8 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LigeritoCoins
 import Proofs.Flock.Soundness.LigeritoQueries
 
-/-!
-# From one level to the next (`Flock.Ligerito` steps 5–8)
-
-After a level's folds, the prover commits the next table, the verifier binds it by two
-out-of-domain samples, and checks the fold against it at the level's queries. From `PostFold` on
-the level, this leaves `PreFold` on the next level except with probability
-* `pairs(L')·(μ/|F|)²` (two list elements agree at both OOD points, `value_twoOod_collide_le`),
-* `2L'/|F|` (the OOD claims' batching coins),
-* the level's `queryError` (the queries miss the unique OOD-consistent message's mismatch),
-* `⌈log2 Q⌉/|F|` (the consistency coins cancel it) and `L'/|F|` (its batching coin).
-
-`phaseA` takes the level's doom at any radius `δ` within its own (`PostFoldAt`): its queries then
-miss a `δ`-far fold with probability at most `(1 − δ)^Q`, which costs `ε` beyond `queryError`.
--/
+/-! From one Ligerito level to the next: the next commitment, its two out-of-domain samples and the level's queries
+(`Flock.Ligerito` steps 5–8). -/
 
 @[expose] public section
 
@@ -31,9 +19,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-! ## Batching coins over `K`-valued differences -/
-
-/-- A batching coin `β ∈ F` makes `c₀ + β·c₁` vanish, unless both vanish, for at most one value. -/
 theorem prCoin_embed_affine_le (A : Arith F K) (c₀ c₁ : K) :
     prCoin (fun β : F => c₀ + A.embed β * c₁ = 0 ∧ ¬ (c₀ = 0 ∧ c₁ = 0)) ≤
       1 / Fintype.card F := by
@@ -69,8 +54,6 @@ theorem sum_map_zipIdx {M : Type} [AddCommMonoid M] (h : ℕ × ℕ → M) : ∀
       congr 1
       exact Finset.sum_congr rfl fun i _ => by rw [show k + 1 + i = k + (i + 1) by ring]
 
-/-- **The consistency coins over `K`.** A nonzero `K` vector of mismatches, weighted by `eq(α)`
-over `k ≥ ⌈log2 Q⌉` coordinates of `F`, sums to zero with probability at most `k/|F|`. -/
 theorem prCoin_embed_eqList_le (A : Arith F K) (hA : A.Correct) {k Q : ℕ} (hQ : Q ≤ 2 ^ k)
     (v : ℕ → K) (j₀ : ℕ) (hj₀ : j₀ < Q) (hv : v j₀ ≠ 0) :
     prCoin (fun α : Fin k → F =>
@@ -116,9 +99,6 @@ theorem le_two_pow_ceilLog2 (Q : ℕ) (hQ : Q ≤ 2 ^ 64) : Q ≤ 2 ^ ceilLog2 Q
       have := List.find?_some h
       simpa using this
 
-/-! ## The two OOD samples -/
-
-/-- A table's multilinear extension over `K` at an `F` point. -/
 def mleK (A : Arith F K) (dim : ℕ) (g : ℕ → F) (z : List F) : K :=
   ∑ y ∈ Finset.range (2 ^ dim), A.embed (g y) * eqList (z.map A.embed) y
 
@@ -140,7 +120,6 @@ theorem mleK_ofFn (A : Arith F K) (dim : ℕ) (g : ℕ → F) (z : Fin dim → F
   refine Finset.sum_congr rfl fun y _ => ?_
   rw [map_mul, map_eqList, mul_comm]
 
-/-- `twoOod` with the prover's answers kept. -/
 structure OodRec (F K : Type) (dim : ℕ) where
   z₁ : Fin dim → F
   y₁ : F
@@ -157,7 +136,6 @@ def twoOodR (dim : ℕ) : Game (OodRec F K dim) :=
       Game.send (K × K) fun m₂ => Game.coin F fun β₂ =>
         Game.ret ⟨z₁, y₁, m₁, β₁, z₂, y₂, m₂, β₂⟩
 
-/-- `twoOod`'s output from the record. -/
 def OodRec.out (A : Arith F K) (split : ℕ) (s : K) (q : Quad K) {dim : ℕ} (r : OodRec F K dim) :
     K × Quad K × List (OodCtx F) :=
   (s + A.embed r.β₁ * A.embed r.y₁ + A.embed r.β₂ * A.embed r.y₂,
@@ -179,13 +157,10 @@ theorem Quad.addScaled_sum [CharP K 2] (q : Quad K) (msg : K × K) (y β : K) :
   rw [Quad.addScaled_eval, Quad.addScaled_eval]
   linear_combination β * h
 
-/-- The batched claim minus a message's value, after the OOD claims `y.2.2`. -/
 def oodDiff (A : Arith F K) (dim : ℕ) (g : ℕ → F) (base : K) (y : K × Quad K × List (OodCtx F)) :
     K :=
   y.1 - (base + (y.2.2.map fun o => A.embed o.β * mleK A dim g o.z).sum)
 
-/-- **After two OOD samples**: the output has the expected shape, and at most one message keeps a
-zero difference, for which the previous claim `s` is its value `base`. -/
 def OodGood (A : Arith F K) {ι : Type} (S : Finset ι) (g : ι → ℕ → F) (base : ι → K)
     (dim a : ℕ) (s : K) (y : K × Quad K × List (OodCtx F)) : Prop :=
   y.2.1.eval 0 + y.2.1.eval 1 = y.1 ∧ (∀ o ∈ y.2.2, o.split = some a ∧ o.z.length = dim) ∧
@@ -193,7 +168,6 @@ def OodGood (A : Arith F K) {ι : Type} (S : Finset ι) (g : ι → ℕ → F) (
       s = base M ∧ ∀ M' ∈ S, oodDiff A dim (g M') (base M') y = 0 → M' = M
 
 open Classical in
-/-- **The OOD samples bind the next table.** -/
 theorem value_twoOod_good (A : Arith F K) (hA : A.Correct) {ι : Type} (S : Finset ι)
     (g : ι → ℕ → F) (dim : ℕ)
     (hg : ∀ M ∈ S, ∀ M' ∈ S, (∀ y < 2 ^ dim, g M y = g M' y) → M = M')
@@ -249,7 +223,6 @@ theorem value_twoOod_good (A : Arith F K) (hA : A.Correct) {ι : Type} (S : Fins
         A.embed.injective (b1.symm.trans a1), A.embed.injective (b2.symm.trans a2)⟩
       intro hG
       exact hne (hg M' hM' M hM fun y hy => congrFun hG ⟨y, hy⟩)
-  -- the collision
   have hcol : value collide (twoOodR dim) ≤
       (S.card.choose 2 : ℝ≥0∞) * ((dim : ℝ≥0∞) / Fintype.card F) ^ 2 := by
     have h := value_twoOod_collide_le A (S.image G) a s q
@@ -257,7 +230,6 @@ theorem value_twoOod_good (A : Arith F K) (hA : A.Correct) {ι : Type} (S : Fins
     refine le_trans (value_mono (fun r hr => ⟨_, _, rfl, hr⟩) _) (h.trans ?_)
     gcongr
     exact Finset.card_image_le (s := S) (f := G)
-  -- the first batching coin
   have hb₁ : value bad₁ (twoOodR dim) ≤ S.card / Fintype.card F := by
     refine value_coin_le_of_forall _ _ _ _ fun z₁ => ?_
     rw [value_send]; refine iSup_le fun y₁ => ?_
@@ -272,7 +244,6 @@ theorem value_twoOod_good (A : Arith F K) (hA : A.Correct) {ι : Type} (S : Fins
     rw [value_send]; refine iSup_le fun m₂ => ?_
     refine value_coin_le_of_forall _ _ _ _ fun β₂ => ?_
     rw [value_ret, if_neg hβ₁]
-  -- the second batching coin
   have hb₂ : value bad₂ (twoOodR dim) ≤ S.card / Fintype.card F := by
     refine value_coin_le_of_forall _ _ _ _ fun z₁ => ?_
     rw [value_send]; refine iSup_le fun y₁ => ?_
@@ -293,8 +264,6 @@ theorem value_twoOod_good (A : Arith F K) (hA : A.Correct) {ι : Type} (S : Fins
     _ ≤ _ := by
         rw [two_mul]
         exact add_le_add hcol (add_le_add hb₁ hb₂)
-
-/-! ## The queries and the consistency claim -/
 
 theorem queryAndBatch_true (A : Arith F K) (lv : Level) (C : Oracle F) (ch : List K) (start : ℕ)
     (st : LigState F K) :
@@ -320,15 +289,12 @@ theorem queryAndBatch_false (A : Arith F K) (lv : Level) (C : Oracle F) (ch : Li
             cons := st.cons ++
               [⟨lv.logCols, positions A lv.queries lv.logLen w, List.ofFn α, β, start⟩] } := rfl
 
-/-- The consistency claim's error against a claimed fold `G`:
-`Σ_j eq(α)_j·(fold(C)[p_j] − Enc(G)[p_j])`. -/
 def consGap (A : Arith F K) (cols : ℕ) (C : Oracle F) (ch : List K) (G : ℕ → K) (α : List F)
     (pos : List ℕ) : K :=
   ((pos.zipIdx).map fun pj => A.embed (eqList α pj.2) *
     (foldColumn A ch (fun ℓ => C ℓ pj.1) - encK A cols G pj.1)).sum
 
 open Classical in
-/-- The positions where the fold of `C` by `ch` differs from the encoding of `G`. -/
 noncomputable def mismatch (A : Arith F K) (cols d : ℕ) (C : Oracle F) (ch : List K)
     (G : ℕ → K) : Finset ℕ :=
   (Finset.range (2 ^ d)).filter fun p => foldColumn A ch (fun ℓ => C ℓ p) ≠ encK A cols G p
@@ -338,10 +304,6 @@ theorem positions_length (A : Arith F K) (Q d : ℕ) (w : Fin Q → F) :
   rw [positions_eq]; simp
 
 open Classical in
-/-- **The queries and the consistency coins.** If at most one message has a zero difference `D`
-and its claimed fold's mismatch survives the queries with probability at most `ε`, then
-after the queries, `α` and `β`, every difference is nonzero, except with probability
-`ε + ⌈log2 Q⌉/|F| + |S|/|F|`. -/
 theorem value_queryAndBatch_le (A : Arith F K) (hA : A.Correct) (l : Level) (hd : l.logLen ≤ 64)
     (hQ : l.queries ≤ 2 ^ 64) (C : Oracle F) (ch : List K) (start : ℕ) (st : LigState F K)
     (wm : Bool) {ι : Type} (S : Finset ι) (D : ι → K) (G : ι → ℕ → K) (ε : ℝ)
@@ -446,9 +408,6 @@ theorem value_queryAndBatch_le (A : Arith F K) (hA : A.Correct) (l : Level) (hd 
           fun h => by cases h)
       · exact le_rfl
 
-/-! ## One level to the next -/
-
-/-- A split table's `K` message on the previous level's columns: `g(2x) + u·g(2x+1)`. -/
 def unsplit (A : Arith F K) (g : ℕ → F) (x : ℕ) : K :=
   A.embed (g (2 * x)) + A.u * A.embed (g (2 * x + 1))
 
@@ -476,9 +435,6 @@ theorem list_sum_map_sub {κ : Type} (l : List κ) (f g : κ → K) :
   | nil => simp
   | cons a l ih => simp only [List.map_cons, List.sum_cons, ih]; ring
 
-/-- **The next level's claim, unfolded.** Against the weight on the next split table, a table's
-value is its unsplit value on the previous stage's weight, plus the new consistency claim on the
-unsplit message's encoding, plus the new OOD claims. -/
 theorem sum_preW_new (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K)
     (levels : List (List K)) (oods oods₂ : List (OodCtx F)) (cons : List (ConsCtx F)) (e : ℕ)
     (cc : ConsCtx F) (hold : ∀ o ∈ oods, OodOld levels o)
@@ -522,8 +478,6 @@ theorem sum_preW_new (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K
   rw [hY]
   rfl
 
-/-- The next commitment, its OOD samples and the level's queries, then the continuation (as in
-`recursiveRounds` and `ligerito`). -/
 def midRound (A : Arith F K) (lv : Level) (dim : ℕ) (ch : List K) (st : LigState F K)
     (k : Oracle F → LigState F K → Game Bool) : Game Bool := do
   let C' ← recv (Oracle F)
@@ -532,7 +486,6 @@ def midRound (A : Arith F K) (lv : Level) (dim : ℕ) (ch : List K) (st : LigSta
   let st ← queryAndBatch A lv st.prev ch st.levels.length st true
   k C' st
 
-/-- Everything of `midLevelError` after the level's folds. -/
 noncomputable def midA (l l' : Level) : ℝ :=
   pairs l'.listBound * (((l'.logCols + l'.lanes : ℕ) : ℝ) / qF) ^ 2 + 2 * l'.listBound / qF
     + l.queryError + l'.listBound * ceilLog2 l.queries / qF + l'.listBound / qF
@@ -624,10 +577,6 @@ theorem card_agree_add_mismatch (A : Arith F K) (cols d : ℕ) (C : Oracle F) (c
   unfold mismatch
   exact Finset.filter_congr_decidable _ _ _
 
-/-- **The far fold at a radius `δ`.** A claimed fold `G` whose value is the claim, for a claim
-false for every fold of a message `δ`-close to the table (`δ` within the level's radius), is
-`δ`-far from the level's fold: its mismatch survives the queries with probability at most
-`(1 − δ)^Q`. -/
 theorem query_bound_at (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F)
     (initial : List K) (l : Level) (hf : l.Fits) (lanes : ℕ) (C : Oracle F) (ch : List K)
     (st : LigState F K) (δ : ℝ) (hδ : δ ≤ l.radius)
@@ -669,8 +618,7 @@ theorem queryError_eq (l : Level) : l.queryError = (1 - l.radius) ^ l.queries :=
   congr 1
   ring
 
-/-- **The far fold** (`query_bound_at` at the level's radius): its mismatch survives the queries
-with probability at most `queryError`. -/
+/-- `query_bound_at` at the level's radius: its mismatch survives the queries with probability at most `queryError`. -/
 theorem query_bound_of_doom (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F)
     (initial : List K) (l : Level) (hf : l.Fits) (lanes : ℕ) (C : Oracle F) (ch : List K)
     (st : LigState F K) (hpost : PostFold A hA n b initial l hf lanes C ch st) (G : ℕ → K)
@@ -681,9 +629,6 @@ theorem query_bound_of_doom (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ 
   (query_bound_at A hA n b initial l hf lanes C ch st l.radius le_rfl hpost G hs).trans_eq
     (queryError_eq l).symm
 
-/-- **A failed `PreFold` is a zero batched difference.** After the OOD claims `oods₂` and the
-consistency claim at `(α, positions, β)`, if the next level's claim is true for a message `M`
-of its list, then `M`'s OOD difference plus `β` times its consistency gap vanishes. -/
 theorem exists_zero_of_not_preFold (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K)
     (l l' : Level) (C : Oracle F) (ch : List K) (st : LigState F K)
     (hok : PostOK initial st.levels st.oods st.cons l.logCols)
@@ -728,10 +673,6 @@ theorem exists_zero_of_not_preFold (A : Arith F K) (n : ℕ) (b : ℕ → F) (in
   linear_combination hM'
 
 open Classical in
-/-- **From one level to the next.** From `PostFoldAt` on level `l` at a radius `δ` within its own,
-the commitment of `l'` (on `dim` variables), its two OOD samples and `l`'s queries leave `PreFold`
-on `l'` except with probability `midA l l' + ε`, where the queries miss a fold `δ`-far from `l`'s
-table with probability at most `(1 − δ)^Q ≤ queryError + ε`. -/
 theorem phaseA (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initial : List K)
     (l l' : Level) (hf : l.Fits) (hf' : l'.Fits) (hQ : l.queries ≤ 2 ^ 64) (lanes : ℕ)
     (ch : List K) (st : LigState F K) (δ : ℝ) (hδ : δ ≤ l.radius) (ε : ℝ)

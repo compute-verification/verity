@@ -18,18 +18,8 @@ import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Rounds
 
-/-!
-# Ligerito level by level (`Flock.Ligerito`)
-
-The doomed states between a level's steps:
-* `PreFold`: before a level's folds, the running claim is false for every message of the level's
-  list, against the weight on its split table (`preW`);
-* `PostFold`: after the folds by `ch`, it is false for every fold of those messages, against the
-  next stage's weight (`resAt`), and no fold round was an MCA event; `PostFoldAt` the same over the
-  messages within a radius `δ` of the table, for a level 0 decoded inside the list's radius.
-
-`phaseB` is the folds (sumcheck and MCA), costing `foldError`.
--/
+/-! The doomed states between a Ligerito level's steps (`PreFold`, `PostFold`, `PostFoldAt`) and a level's folds
+(`phaseB`). -/
 
 @[expose] public section
 
@@ -41,7 +31,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- Before level `l`'s folds, with `e + 1` variables on its split table. -/
 structure PreFold (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K) (l : Level)
     (C : Oracle F) (e : ℕ) (st : LigState F K) : Prop where
   sum : st.q.eval 0 + st.q.eval 1 = st.s
@@ -51,8 +40,6 @@ structure PreFold (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K) (
     st.s ≠ ∑ y ∈ Finset.range (2 ^ (e + 1)),
       A.embed (flat M y) * preW A n b initial st.levels st.oods st.cons e y
 
-/-- After level `l`'s folds by `ch` (the last entry of `st.levels`, or `initial` at level 0), the
-doom over the messages within `δ` of the level's table; the folds' MCA events are at its radius. -/
 structure PostFoldAt (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initial : List K)
     (l : Level) (hf : l.Fits) (lanes : ℕ) (C : Oracle F) (ch : List K) (δ : ℝ)
     (st : LigState F K) : Prop where
@@ -64,7 +51,6 @@ structure PostFoldAt (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) 
     st.s ≠ ∑ x ∈ Finset.range (2 ^ l.logCols),
       foldMsg A ch M x * resAt A n b initial st.levels st.oods st.cons l.logCols x
 
-/-- After level `l`'s folds by `ch`, the doom over the level's list. -/
 abbrev PostFold (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initial : List K)
     (l : Level) (hf : l.Fits) (lanes : ℕ) (C : Oracle F) (ch : List K) (st : LigState F K) :
     Prop :=
@@ -112,9 +98,6 @@ theorem foldError_bound (l : Level) (L : ℕ) (hL : 0 ≤ l.mcaA) :
 
 theorem mcaA_nonneg (l : Level) (hl : l.Ok) : 0 ≤ l.mcaA := (mcaA_bounds l hl.2.1 hl.2.2).1
 
-/-- **A level's folds.** From a doomed claim before the folds, after them the claim is false for
-every fold of the level's list and no round was an MCA event, except with probability
-`foldError`. -/
 theorem phaseB (A : Arith F K) (hA : A.Correct) (n : ℕ)
     (b : ℕ → F) (initial : List K) (l : Level) (hl : l.Ok) (hf : l.Fits) (C : Oracle F) (e : ℕ)
     (st : LigState F K) (hpre : PreFold A n b initial l C e st) (hlanes : 1 ≤ l.lanes) :

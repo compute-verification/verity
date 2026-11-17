@@ -2,17 +2,8 @@ module
 
 public import Flock.TmplLayout
 
-/-!
-# `posMap` puts every copy at its place
-
-`posMap` is `fillMap`'s writes over the call tree (`fillMap_writes`). When every Definition's layout is in order
-(`DefPos`: runs and calls ascending and apart, each column in one, copies side by side, callees earlier), every column
-`y` of copy `(d, o)` is written exactly once (`writes_ok`), and with `A + B · posIn y` (`writes_mem`). So every copy sits
-at its place (`posMap_tree`, `TreeAt`), which is what `fold_eq_foldRef` reads.
-
-- `firstGt_spec`, `locate_call`, `locate_own`: `locate`'s halving lands on the call or run holding the column.
-- `posIn_call`, `posIn_own`, `posIn_stable`: what `posIn` is in each, at any fuel past the depth.
--/
+/-! `posMap` puts every copy of the unrolled unit at its place when every Definition's layout is in order
+(`posMap_tree`). -/
 
 @[expose] public section
 
@@ -20,8 +11,6 @@ open Flock Flock.Tmpl
 
 namespace FlockSoundness.TmplFold
 
-/-- Copy `(d, o)` of the unrolled unit sits at `(A, B)` under `π`: its own column `y` at `A + B · posIn y`, and every copy
-of its calls at its place. -/
 def TreeAt (t : Tmpl) (lays : Array Lay) (π : Array Nat) : Nat → Nat → Nat → Nat → Nat → Prop
   | 0, _, _, _, _ => True
   | fuel + 1, d, o, A, B =>
@@ -33,7 +22,6 @@ def TreeAt (t : Tmpl) (lays : Array Lay) (π : Array Nat) : Nat → Nat → Nat 
         (A + B * (((lays.getD d default).places.getD i default).nb + j * ((lays.getD d default).places.getD i default).cs))
         (B * ((lays.getD d default).places.getD i default).ms)
 
-/-- Every write `fillMap` makes, in order: each run's columns, then each call's copies'. -/
 def writes (t : Tmpl) (lays : Array Lay) : Nat → Nat → Nat → Nat → Nat → List (Nat × Nat)
   | 0, _, _, _, _ => []
   | fuel + 1, d, o, A, B =>
@@ -46,7 +34,6 @@ def writes (t : Tmpl) (lays : Array Lay) : Nat → Nat → Nat → Nat → Nat �
           (A + B * (((lays.getD d default).places.getD i default).nb + j * ((lays.getD d default).places.getD i default).cs))
           (B * ((lays.getD d default).places.getD i default).ms)
 
-/-- `ws`'s writes into `m`, in order. -/
 def setAll (ws : List (Nat × Nat)) (m : Array Nat) : Array Nat := ws.foldl (fun m w => m.set! w.1 w.2) m
 
 theorem fillMap_writes (t : Tmpl) (lays : Array Lay) :
@@ -96,7 +83,6 @@ theorem setAll_hit : ∀ (ws : List (Nat × Nat)) (m : Array Nat) (z v : Nat), (
       simp [Array.getD_eq_getD_getElem?, hz]
     · exact setAll_hit ws _ z v hn.2 h (by simpa using hz)
 
-/-- `firstGt` halves to the first `i ∈ [lo, hi)` with `key i > x`, for `key` ascending there and `hi − lo < 2^fuel`. -/
 theorem firstGt_spec (key : Nat → Nat) (x H : Nat) (hmono : ∀ i j, i ≤ j → j < H → key i ≤ key j) :
     ∀ fuel lo hi, lo ≤ hi → hi ≤ H → hi - lo < 2 ^ fuel →
       lo ≤ firstGt key x fuel lo hi ∧ firstGt key x fuel lo hi ≤ hi ∧
@@ -128,8 +114,6 @@ theorem firstGt_spec (key : Nat → Nat) (x H : Nat) (hmono : ∀ i j, i ≤ j �
       · exact h4 i hi1 hm
       · exact Nat.lt_of_lt_of_le (Nat.lt_of_not_le hk) (hmono _ _ (by omega) (by omega))
 
-/-- What `posIn` and `fillMap` read of Definition `d`'s layout: its runs ascending and apart, its calls ascending and
-apart with their copies side by side, every column in one of them, and its callees earlier Definitions. -/
 structure DefPos (t : Tmpl) (lays : Array Lay) (d : Nat) : Prop where
   runs_lt : ∀ r < (lays.getD d default).runs.size,
     ((lays.getD d default).runs.getD r default).1 < ((lays.getD d default).runs.getD r default).2.1
@@ -264,7 +248,6 @@ theorem posIn_own (t : Tmpl) (lays : Array Lay) {d : Nat} (hp : DefPos t lays d)
     (h1 : a ≤ y) (h2 : y < b) (f : Nat) : posIn t lays (f + 1) d y = p + (y - a) := by
   simp only [posIn, locate_own t lays hp hr hx h1 h2]
 
-/-- `posIn` reads the same with any fuel past the depth. -/
 theorem posIn_stable (t : Tmpl) (lays : Array Lay) (hpos : ∀ d < t.defs.size, DefPos t lays d) :
     ∀ f1 f2 d y, d < t.defs.size → d < f1 → d < f2 → posIn t lays f1 d y = posIn t lays f2 d y
   | 0, _, _, _, _, h, _ => absurd h (Nat.not_lt_zero _)
@@ -330,7 +313,6 @@ theorem copy_le {base count stride Le j : Nat} (hs : 1 < count → stride = Le) 
     subst h0 h1
     simp
 
-/-- `writes` puts copy `(d, o)` in `[o, o + cols)`, each column once. -/
 theorem writes_ok (t : Tmpl) (lays : Array Lay) (hpos : ∀ d < t.defs.size, DefPos t lays d) :
     ∀ f d o A B, d < t.defs.size →
       (∀ x ∈ (writes t lays f d o A B).map Prod.fst, o ≤ x ∧ x < o + (t.defs.getD d default).cols) ∧
@@ -394,7 +376,6 @@ theorem writes_ok (t : Tmpl) (lays : Array Lay) (hpos : ∀ d < t.defs.size, Def
       have := hp.apart r hr i hi
       omega
 
-/-- Every column `y` of copy `(d, o)` is written, at `A + B · posIn y`. -/
 theorem writes_mem (t : Tmpl) (lays : Array Lay) (hpos : ∀ d < t.defs.size, DefPos t lays d) :
     ∀ f d o A B, d < t.defs.size → d < f → ∀ y < (t.defs.getD d default).cols, (o + y, A + B * posIn t lays f d y) ∈ writes t lays f d o A B
   | 0, _, _, _, _, _, h, _, _ => absurd h (Nat.not_lt_zero _)
@@ -431,7 +412,6 @@ theorem writes_mem (t : Tmpl) (lays : Array Lay) (hpos : ∀ d < t.defs.size, De
       simp only [Nat.mul_add, Nat.mul_assoc, Nat.add_assoc] at IH ⊢
       exact IH
 
-/-- A copy whose writes are among `W`'s, each column written once, sits at its place under `setAll W`. -/
 theorem treeAt_writes (t : Tmpl) (lays : Array Lay) (hpos : ∀ d < t.defs.size, DefPos t lays d) (W : List (Nat × Nat))
     (m : Array Nat) (hW : (W.map Prod.fst).Nodup) (hsz : ∀ w ∈ W, w.1 < m.size) :
     ∀ f d o A B, d < t.defs.size → d < f → (∀ w ∈ writes t lays f d o A B, w ∈ W) → TreeAt t lays (setAll W m) f d o A B
@@ -446,7 +426,6 @@ theorem treeAt_writes (t : Tmpl) (lays : Array Lay) (hpos : ∀ d < t.defs.size,
         exact List.mem_append_right _ (List.mem_flatMap.mpr ⟨i, List.mem_range.mpr hi,
           List.mem_flatMap.mpr ⟨j, List.mem_range.mpr hj, hw⟩⟩))
 
-/-- `posMap` puts every copy of the unrolled unit at its place. -/
 theorem posMap_tree (t : Tmpl) (lays : Array Lay) (hpos : ∀ d < t.defs.size, DefPos t lays d)
     (hroot : t.root < t.defs.size) : TreeAt t lays (posMap t lays) (t.defs.size + 1) t.root 0 0 1 := by
   have hok := writes_ok t lays hpos (t.defs.size + 1) t.root 0 0 1 hroot

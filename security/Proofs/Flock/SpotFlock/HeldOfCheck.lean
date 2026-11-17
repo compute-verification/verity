@@ -2,24 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.HeldOfFiles
 
-/-!
-# What the two-stage form would decide of the held copies
-
-`HeldOf.heldOf` is noncomputable (its frame is SPOT's own, built from a code), so a check can't call it. `heldOk i it u`
-decides whether it builds a held copy, at the copies before SPOT's frame is set (`held₀`): `heldOf i it u` is `some`
-exactly where `heldOk i it u` holds (`heldOf_isSome`), since nothing `decided` reads is the frame (`decided_withFrame`).
-A form that refuses unless `heldOk` holds at the run of record's input and interior and the members' reference
-statements gets a held copy at every run it accepts, and at an accepted run `TwoHolds`
-(`HeldOfRun.twoHolds_of_files`).
-
-## What deciding it costs
-
-`decided` reads the descriptor's checks (`descCore`): the rule and count checks, the layout and the first stage's design
-(`Slots.layout`, `slotDesign`), a step per stratum (`designOk`), and per template its reference statement's reading
-(`templateOk`: parsing its circuit file, the session verifier's own parse) and its member's size class (`memberOk`, a
-closed form in the unit's descriptor); and `two`'s `membersScoped`, a step per template, and `wiringOk`, each clause
-of which reads the circuit files and the registered wiring once per template, whatever the count of units.
--/
+/-! What the two-stage form would decide of the held copies (`heldOk`, `heldOkDesc`). -/
 
 @[expose] public section
 
@@ -27,8 +10,6 @@ namespace SpotFlock.HeldOf
 
 open Claims Claims.Sampling SamplingDeploy Properties.Spot SpotFlock.RunsAs
 open Lean (Json)
-
-/-! ## Nothing `decided` reads is the frame -/
 
 theorem two_setFrame (h : Held) (F : Code) (s : AuditStatement) : two { h with frame := F } s = two h s := rfl
 
@@ -47,10 +28,9 @@ theorem decided_withFrame (u : Unread) (it : Spot.Run.Interior) (h : Held) (c₀
     decided u it (withFrame h c₀) = decided u it h :=
   decided_setFrame u it h _
 
-/-! ## The check -/
-
-/-- **Whether `heldOf` builds a held copy**, decided: the boundary registration, the cells and the layout read, the
-reference statements are in Flock's masked scope and `decided` holds at the copies before SPOT's frame is set. -/
+/-- `heldOf` is noncomputable (its frame is SPOT's own, built from a code), so a check decides this instead: `heldOf` is
+`some` exactly where it holds (`heldOf_isSome`). It reads each template's circuit file and the registered wiring once
+per template, whatever the count of units. -/
 def heldOk (i : Spot.Run.Input) (it : Spot.Run.Interior) (u : Unread) : Bool :=
   match firstOf i, cellsOf i it with
   | some first, some c =>
@@ -89,9 +69,6 @@ theorem heldOf_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} (u : Unread) 
   rw [← heldOf_isSome] at hk
   exact Option.isSome_iff_exists.1 hk
 
-/-- **The form's check of the held copies**: `heldOk` at the members' reference statements on the blobs
-(`refStmtsOf`), with the registered copies `u` gives of the rest (its reference statements are not read); false where
-one is missing. At an accepted run it gives `TwoHolds` (`HeldOfRun.twoHolds_of_files`). -/
 def heldOkDesc (p : VStar.Recursive.SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input)
     (it : Spot.Run.Interior) (u : Unread) : Bool :=
   match refStmtsOf p bs with

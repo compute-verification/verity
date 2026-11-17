@@ -3,33 +3,8 @@ module
 public import Proofs.Flock.SpotFlock.FrameIsAt
 public import Proofs.Flock.SpotFlock.LayoutAt
 
-/-!
-# The base frame: a reveal that opens each gate's row at its address
-
-`revealCode h addr c₀` is a frame for `frameAt`: `c₀` but for its reveal, its own ports and how it reads an opening.
-Gate `g`'s address (`addr g`, an `Address`) names the value's place in its row, the port that holds the row in each
-unit's session and the frame's slot for the row, all fixed before the run. Nothing here reads `h.frame`.
-
-* **An opening's data** (`dataOf`): the row's bits, its salt and its path, each escaped (`esc`) so that the three
-  read back (`unesc_esc`). `bitsOf`, `saltOf` and `pathOf` are the frame's `bits`, `salt` and `π`.
-* **The unit's instance** (`rankAt`): a checked unit's instance in its session is the first unit of the session's
-  sample that the registration maps to it (`RegTwo.blockAt`, over the replay blocks the interior record lists).
-  `layoutFor h` is `layoutAt` at that rank and `pickAny`.
-* **The opening** (`openingOf`, `addressOp`): at gate `g` of unit `u`, under the roots the program opens it under
-  (`Reveal.rootsAt`), the session witness's bit at the unit's block and the layout's column (`bitAt`). Its data are
-  the row of the address's port at the unit's instance in the session's first table (`rowBitsAt`), that row's salt and
-  its path (`pathAt`): the session header's path for the registered read named like the port where there is one, else
-  the path in the port's published tree (`pubPath`). The reveal is the program's (`Reveal.reveal`) at that opener.
-* **The opening facts**, at a checked unit of an accepted run (`CheckedRun`, `CheckedRun.Ok`): the code's opening at
-  a gate the unit needs, its value and data the base frame's first opening there (`Reveal.frameAt`), is the address's
-  (`openAt_revealCode`), under `FrameIs`'s roots (`roots_opening`); its row is the one the row hash reads
-  (`row_opening`) where the address's port is an unsegmented bit row of its place's width whose bit at the place is the
-  one the layout reads (`RowAt`, with the row's format a hypothesis); its salt is that row's (`salt_opening`) and its
-  path `pathAt`'s (`path_opening`).
-
-The frame's own ports are one port of `2^64` leaves (`revealOwn`), so its depth is 64 (`depth_revealOwn`): round 2
-reads no port of more leaves.
--/
+/-! The base frame (`revealCode`): a reveal that opens each gate's row at its address, fixed before the run; nothing
+here reads `h.frame`. -/
 
 @[expose] public section
 
@@ -37,8 +12,6 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
 open Lean (Json)
-
-/-! ## An opening's data -/
 
 /-- **A byte string escaped**: each byte behind a `1`, then a `0`. -/
 def esc : List UInt8 → List UInt8
@@ -87,8 +60,6 @@ theorem pathOf_dataOf (o : Opening Bool) (row : List Bool) (salt path : Msg) (h 
     pathOf o = path := by
   simp only [pathOf, h, dataOf, unesc_esc]
 
-/-- **A deployed opening's row is a list of bits** with the list's length at its place, the opened value at the place
-and the data's bits elsewhere. -/
 theorem rowBits_eq_of {place : ℕ → (w : ℕ) × Fin w} {bits : Msg → ℕ → Bool} {o : Opening Bool} {l : List Bool}
     (hl : (place o.pos).1 = l.length) (hv : l.getD (place o.pos).2 false = o.val)
     (hb : ∀ i, i ≠ ((place o.pos).2 : ℕ) → bits o.data i = l.getD i false) : rowBits place bits o = l := by
@@ -101,8 +72,6 @@ theorem rowBits_eq_of {place : ℕ → (w : ℕ) × Fin w} {bits : Msg → ℕ �
   · rw [← hv, ← hi]
   · exact hb i fun e => hi (Fin.ext e)
 
-/-- **`sha512/row/v2`'s bytes of `8 N` bits read at `a`** are the `N` bytes read at `a` (`Hm.bytesOf`): bit `8 j + t` is
-bit `t` of byte `j` in both. -/
 theorem packBits_ofFn (f : ℕ → Bool) (N : ℕ) (a : ℕ → ℕ → ℕ) :
     _root_.Flock.HmRow.packBits (List.ofFn fun i : Fin (8 * N) => f (a (i.val / 8) (i.val % 8))) =
       FlockSoundness.Discharge.Hm.bytesOf f N a := by
@@ -127,8 +96,6 @@ theorem packBits_ofFn (f : ℕ → Bool) (N : ℕ) (a : ℕ → ℕ → ℕ) :
     have e2 : (8 * j + t.val) % 8 = t.val := by omega
     simp only [Fin.val_cast, List.getElem_take, List.getElem_drop, List.getElem_ofFn, e1, e2]
 
-/-! ## The frame's own ports -/
-
 /-- **The frame's own ports**: one port of `2^64` leaves, the most round 2 reads. -/
 def revealOwn : Array _root_.Flock.Registered.Port :=
   #[{ (default : _root_.Flock.Registered.Port) with leaves := 2 ^ 64 }]
@@ -139,8 +106,6 @@ theorem depth_revealOwn : depth revealOwn = 64 := by
   show max (_root_.Flock.log2ceil (2 ^ 64)) 0 = 64
   rw [_root_.Flock.log2ceil, ite_eq_right h2, h1]
   omega
-
-/-! ## The unit's instance -/
 
 /-- **The units a session's sample proves**, in its order (`unitOf`'s); none where it has no sample. -/
 def drawnOf (draw : Option Json) : List ℕ :=
@@ -163,8 +128,6 @@ def rankAt (_ : Msg) (m₁ xS : Msg) (u : ℕ) : ℕ :=
 
 /-- **The base frame's layout**: `layoutAt` at each unit's instance in its session (`rankAt`) and `pickAny`. -/
 noncomputable abbrev layoutFor : Layout := layoutAt h (rankAt h) (pickAny h)
-
-/-! ## The opening -/
 
 /-- **Where gate `g`'s value sits**, fixed before the run: the port whose row holds it in unit `u`'s session
 (`port u`: a gate one block writes and another reads sits in each one's own port), its place in that row (the row's
@@ -262,8 +225,6 @@ noncomputable def revealCode (addr : ℕ → Option Address) (c₀ : Code) : Cod
 theorem depth_revealCode (addr : ℕ → Option Address) (c₀ : Code) : depth (revealCode h addr c₀).own = 64 :=
   depth_revealOwn
 
-/-! ## The opening facts -/
-
 /-- **The proof blocks at `x`**: `units (base h) x`, read without the frame. -/
 def unitCount (x : Msg) : ℕ :=
   match parse h x with
@@ -325,11 +286,9 @@ noncomputable abbrev wire (g : ℕ) : ℕ := (layoutFor h).wire [] r.m₁ (r.xS 
 /-- The unit's instance in its session. -/
 abbrev n : ℕ := rankAt h [] r.m₁ (r.xS h) r.u
 
-/-- **Gate `g`'s opening at address `S`** (`openingOf`). -/
 noncomputable abbrev opening (S : Address) (g : ℕ) : List Msg × Opening Bool :=
   openingOf h r.s r.seen r.wF r.u r.m₁ r.m₂ r.ins r.sts S g
 
-/-- The roots the program opens gate `g` of the unit under (`Reveal.rootsAt`). -/
 abbrev roots (g : ℕ) : List Msg := Reveal.rootsAt (partition h) (two h) (iroots []) r.s r.u r.seen g
 
 /-- **The address's place reads the row the row hash reads**, at gate `g`: its width is the `16 w` bits of the address's
@@ -343,8 +302,6 @@ def RowAt (S : Address) (g : ℕ) : Prop :=
 
 variable {h r}
 
-/-- **The addresses' opener opens gate `g` at its address**: the program's opening there (`Reveal.openAt`) at
-`addressOp` is `openingOf`'s, where `g` has address `S`. -/
 theorem openAt_addressOp {addr : ℕ → Option Address} {S : Address} {g : ℕ} (hr : r.Ok h) (hs : addr g = some S) :
     Reveal.openAt (partition h) (two h) (iroots []) (addressOp h addr) r.s r.u r.seen r.wF g = r.opening h S g := by
   obtain ⟨Pt, d, spec, -, -, -, -, -, -, -, -, -, -, hset⟩ := hr
@@ -352,9 +309,6 @@ theorem openAt_addressOp {addr : ℕ → Option Address} {S : Address} {g : ℕ}
   exact congrArg (fun o : Opening Bool => ((r.roots h g, { o with pos := g }) : List Msg × Opening Bool))
     (addressOp_seenAt h hs hset _)
 
-/-- **The code's opening at a gate the unit needs is the address's** (the module's docstring): the base frame's reveal
-is the program's at `addressOp`, whose opening at gate `g` is the address's (`openAt_addressOp`), under `g`'s roots
-(`Reveal.openAt_mem`); every opening it holds is at its own gate, so its first at `g` under those roots is that one. -/
 theorem openAt_revealCode {addr : ℕ → Option Address} {S : Address} {g : ℕ} (hr : r.Ok h) (hs : addr g = some S)
     (hg : r.s.prog.Needs r.b g) (c₀ : Code) :
     Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt (revealCode h addr c₀)) r.s r.u r.seen r.wF g =

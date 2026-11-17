@@ -10,30 +10,7 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.SpotFlock.RevealsLe
 
-/-!
-# The by-class first-hit bound at a budget, the finders run on one wait a session, at SPOT[Flock]'s code
-
-`CompiledTwo.eventTwoX_oneWait_le_cls_at_budget` bounds the event of `KSRegTwoX` at the one-wait extraction's
-committed traces by `CompiledTwo.εclsOneWait`, for any compiled two-stage verifier whose proof system's extractor
-finds what its one wait finds at half the rate (`Arg.OneWaitFinds`). `code_eventTwoX_oneWait_le_cls_at_budget` is that
-bound at SPOT[Flock]'s compiled two-stage verifier, with `code_eventTwoX_le_cls_at_budget`'s gates and classes
-(`Reveal.needs`, `gateKey`).
-
-Under `Built` and `Addresses` at a statement in the two-stage scope, the code supplies what it supplies there, read
-at the one-wait extraction, and one thing more:
-
-* `oneWaitFinds_zk`: Flock's masked record meets `Arg.OneWaitFinds` at SHA-512, with no premise, from one wait's
-  bound at the instance (`Flock.finds_of_oneWait`).
-* `sessWit_reveal_passes_oneWait`, `code_hwit_oneWait`: a witness the one-wait extraction returns passes the proof
-  system's check at an accepted session view, as the extractor's does (`Compiled.sessWit_some` reads no count of
-  waits), so what it reveals passes whole and holds the classes of `gateKey` whole (`reveal_key_of_passes`).
-
-What the theorem still takes: the budget `T` a run, the three counts over the coins, and the linear expected-time
-bound at the one-wait compiled verifier's `B_conf,X` and its two by-class finders.
-`code_eventTwoX_oneWait_le_cls_513` is the bound at numbers: `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102` where a run and the
-opening checks call SHA-512 at most `513·2^80` times, a wait collects at most `12343986` accepted reruns, and the
-three counts are at most `2^26`, `2^38` and `2^38`.
--/
+/-! The by-class first-hit bound at a budget at SPOT[Flock]'s code, the finders run on one wait a session. -/
 
 @[expose] public section
 
@@ -41,10 +18,7 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
 
-/-- **What Flock's extractor finds, its one wait finds at half the rate, at the masked record**, at SHA-512 at the
-deployed relation, with no premise: `Flock.finds_of_oneWait` at one wait's bound at the instance
-(`FlockDeploy.KS.Gen.zk_oneWait_untrim`), the masked record's `k` range and split by table, and its decoder's list
-bound. -/
+/-- At SHA-512 at the deployed relation, with no premise. -/
 theorem oneWaitFinds_zk :
     (Claims.SamplingGeneric.Arg.ofFlock
       (FlockDeploy.deployZk _root_.Flock.Readable.relation)).OneWaitFinds FlockDeploy.sha512 :=
@@ -57,9 +31,6 @@ theorem oneWaitFinds_zk :
 
 variable (h : Held)
 
-/-- **A slot's one-wait extraction keeps its whole reveal or nothing**: `sessWit_reveal_passes` at the one-wait
-compiled verifier. Under `Built` and `Addresses`, at a statement in the two-stage scope and every run, a witness the
-session's one-wait extraction returns at a checked unit `u` reveals only openings that pass the commitment's check. -/
 theorem sessWit_reveal_passes_oneWait (hB : Built h) (hS : Addresses h) {x : Msg} {s : AuditStatement}
     {Pt : Partition} {d : Design.Two} (hx : parse h x = some s) (hP : partition h s = some Pt)
     (hd : two h s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω) (ω : Ω)
@@ -83,10 +54,6 @@ theorem sessWit_reveal_passes_oneWait (hB : Built h) (hS : Addresses h) {x : Msg
   obtain ⟨xS, vS, hsess, hacc, hck⟩ := Claims.SamplingGeneric.Compiled.sessWit_some (x := x) hRF P ω r hu c hw
   exact reveal_passes h hB hS hx hP hd hin P ω r (List.mem_of_mem_take hu) hsess hacc hck
 
-/-- **The by-class bound's hypothesis on what the extracted witnesses reveal, at the code, at one wait**: `code_hwit`
-at the one-wait compiled verifier. For each slot of the run's sample that is its session's first, each witness that
-session's one-wait extraction returns there and each proof block of the session, what the witness reveals at the
-block holds the classes of `gateKey` whole. -/
 theorem code_hwit_oneWait (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}
@@ -119,13 +86,8 @@ theorem code_hwit_oneWait (hB : Built h) (hS : Addresses h)
     (sessWit_reveal_passes_oneWait h hB hS hx hP hd hin P ω r (List.mem_of_getElem? hi) (c iu.1 ⟨iu.2, hu.1⟩) hw)
     p hp g'.val hk
 
-/-- **The by-class first-hit bound at a budget, the finders run on one wait a session, at the code and its key**:
-`CompiledTwo.eventTwoX_oneWait_le_cls_at_budget` at SPOT[Flock]'s compiled two-stage verifier `L`, with `needs` the
-gates each proof block's reveal opens and `cls` the classes of `gateKey`, under `Built` and `Addresses` at a
-statement in the two-stage scope. Where every run calls SHA-512 at most `T` times, both parties' calls counted
-(`hT`), `N_s`, `K_s` and `K_m` are `code_eventTwoX_le_cls_at_budget`'s three counts, and the one-wait compiled
-verifier's `B_conf,X` and its two by-class finders at every `K` meet the linear expected-time bound, an accepted run
-samples a proof block of the one-wait compiled verifier's `FregTwoX` with probability at most `εclsOneWait`. -/
+/-- What it still takes: the budget `T` a run, the three counts over the coins, and the linear expected-time bound at
+the one-wait compiled verifier's `B_conf,X` and its two by-class finders. -/
 theorem code_eventTwoX_oneWait_le_cls_at_budget (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}
@@ -200,12 +162,6 @@ theorem code_eventTwoX_oneWait_le_cls_at_budget (hB : Built h) (hS : Addresses h
         hgg hg)
     T hT hNs hKs hKm hBc hX hI
 
-/-- **The one-wait bound at the code, at one wait a session with every call charged as `513`**:
-`code_eventTwoX_oneWait_le_cls_at_budget` with its right-hand side at numbers (`CompiledTwo.εclsOneWait_le_513`).
-Where also the budget is `T ≤ 513·2^80`, each proof block's wait collects `k ≤ 12343986` accepted reruns, the bounds
-on the sample's counts are `N_s ≤ 2^26`, `K_s ≤ 2^38` and `K_m ≤ 2^38`, and the opening checks of the statement's
-proof blocks call SHA-512 `n_PU·openCalls ≤ 513·2^80` times, an accepted run samples a proof block of the one-wait
-compiled verifier's `FregTwoX` with probability at most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102`. -/
 theorem code_eventTwoX_oneWait_le_cls_513 (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}

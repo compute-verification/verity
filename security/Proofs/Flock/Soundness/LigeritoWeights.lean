@@ -4,17 +4,7 @@ public import Definitions.Flock.Ligerito
 import Proofs.Flock.Soundness.LigeritoMCA
 import Proofs.Flock.Soundness.ZerocheckPhase
 
-/-!
-# Ligerito's weights: the algebra of the final check (`Flock.Ligerito`)
-
-The final check evaluates the claim's weight at the fixed challenges through closed forms. They
-all come from one identity: summing a product of per-bit factors against `eq(p, ·)` over the
-hypercube gives the product of the factors' extensions (`sum_eqList_prod`). Two corollaries:
-* the split coordinate's weight `(b ? u : 1)` extends to `cff(c) = 1 + c·(1 + u)`
-  (`sum_eqList_split`);
-* the novel-basis monomial `c ↦ X̂_c(ω)` extends to `Π_i (1 + p_i·(1 + Ŵ_i(ω)))`, the consistency
-  weight of `Flock.Ligerito` (`sum_eqList_Xhat`).
--/
+/-! The closed forms through which Ligerito's final check evaluates the claim's weight, all from `sum_eqList_prod`. -/
 
 @[expose] public section
 
@@ -23,8 +13,6 @@ namespace FlockSoundness
 open Game Model Accounting
 open scoped ENNReal
 
-/-- **Sums of products over the hypercube.** Against `eq(p, ·)`, a product of per-bit factors sums
-to the product of the factors' multilinear extensions at `p`. -/
 theorem sum_eqList_prod {L : Type} [CommRing L] :
     ∀ (p : List L) (f : ℕ → Bool → L),
       ∑ c ∈ Finset.range (2 ^ p.length), eqList p c * ∏ i ∈ Finset.range p.length,
@@ -47,8 +35,6 @@ theorem sum_eqList_prod {L : Type} [CommRing L] :
         Bool.false_eq_true, if_false, if_true]
       ring
 
-/-- **The split coordinate.** The weight `(b ? u : 1)` of a split table extends to
-`cff(c) = 1 + c·(1 + u)` (`Flock.Ligerito`). -/
 theorem sum_eqList_split {F K : Type} [Field F] [Field K] (A : Arith F K) (c : K) :
     ∑ b ∈ Finset.range 2, eqList [c] b * (if b.testBit 0 then A.u else 1) = cff A c := by
   have := sum_eqList_prod [c] (fun _ bit => if bit then A.u else 1)
@@ -57,8 +43,6 @@ theorem sum_eqList_split {F K : Type} [Field F] [Field K] (A : Arith F K) (c : K
   rw [this, cff]
   ring
 
-/-- **The consistency weight** (`Flock.Ligerito`). The novel-basis monomial `c ↦ X̂_c(ω)` over `L` variables
-extends, at a point `p` of length `L`, to `Π_i (1 + p_i·(1 + Ŵ_i(ω)))`. -/
 theorem sum_eqList_Xhat {F K : Type} [Field F] [Field K] (A : Arith F K) (p : List K) (ω : F) :
     ∑ c ∈ Finset.range (2 ^ p.length), eqList p c * A.embed (A.Xhat c p.length ω) =
       ∏ i ∈ Finset.range p.length, (1 + p.getD i 0 * (1 + A.embed (A.What i ω))) := by

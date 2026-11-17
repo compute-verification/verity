@@ -12,21 +12,8 @@ import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.RepSound
 
-/-!
-# Soundness of a table with Flock ZK's padded level 0
-
-**`table_sound_pad`.** For every prover strategy, the probability that the verifier accepts a table
-with the padded level 0 (both reps, each folding its own `e` extra lanes) while no family of witness
-lanes within the padded radius of the committed table packs a witness satisfying the statement
-(`CommittedPad`), is at most `padTableError sch shape t e`.
-
-It is `table_sound` with the padded level 0, for any padding `t` and extra lanes per rep `e`:
-* the phases before Ligerito pay their union bounds over the padded code's witnesses (`padWits`,
-  at most `padListBound` of them), through the phases' list forms
-  (`zerocheck_phase_of_list` and its three siblings);
-* Ligerito is `ligeritoPad_sound` for each rep's list, which the rep's families' witness lanes
-  send into `padWits` (`padWit_mem_padWits`).
--/
+/-! Soundness of a table with Flock ZK's padded level 0 (`table_sound_pad`, `table_sound` for any padding `t` and extra
+lanes per rep `e`). -/
 
 @[expose] public section
 
@@ -66,7 +53,6 @@ theorem padWits_card_le (A : Arith F K) (hA : A.Correct) (sch : Schedule) (t : �
     (by have := Nat.two_pow_pos sch.level₀.logCols; omega) (s := 2 ^ sch.k0 + 0)
     (by have := Nat.two_pow_pos sch.k0; omega) _
 
-/-- **A rep's families send their witness lanes into the padded witnesses.** -/
 theorem padWit_mem_padWits (A : Arith F K) (sch : Schedule) (t : ℕ) (c₀ : F) (e r : ℕ)
     (C : Oracle F) (M : Fin (2 ^ sch.k0 + e) → Fin (2 ^ sch.level₀.logCols + t) → F)
     (hM : M ∈ padList A sch.level₀ t sch.k0 e r C) : padWit c₀ M ∈ padWits A sch t c₀ C := by
@@ -91,16 +77,11 @@ theorem padWit_mem_padWits (A : Arith F K) (sch : Schedule) (t : ℕ) (c₀ : F)
     simp only [padWit, R]
     congr 2
 
-/-! ## One rep -/
-
-/-- Zerocheck and the pin, over a list of `L`. -/
 noncomputable def εZcP (s : Schedule) (st : Stmt) (L : ℕ) : ℝ :=
   (((L + 1) * (s.m - 13) + L * 127 + L * (2 * (s.m - 6)) + L * (s.m - st.kLog) : ℕ) : ℝ) / qF
 
-/-- Lincheck, over a list of `L`. -/
 noncomputable def εLcP (st : Stmt) (L : ℕ) : ℝ := ((L * (2 + 2 * (st.kLog - 6) + 63) : ℕ) : ℝ) / qF
 
-/-- Opening, over a list of `L`. -/
 noncomputable def εOpP (st : Stmt) (L : ℕ) : ℝ := ((L * (7 * st.nClaims + 1) : ℕ) : ℝ) / qF
 
 theorem padRepError_eq (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (st : Stmt)
@@ -114,8 +95,6 @@ theorem padRepError_eq (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext
   push_cast
   ring
 
-/-- **One rep with the padded level 0 is sound**: from a doomed start over the padded witnesses,
-the rep accepts with probability at most `padRepError`. -/
 theorem rep_sound_pad (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
@@ -170,7 +149,6 @@ theorem rep_sound_pad (A : Arith F K) (hA : A.Correct)
     ENNReal.ofReal_add hZc hLc]
   unfold repPad
   simp only [bind_eq]
-  -- zerocheck
   refine (value_bind_le _ _ _ (DZcW A S sch W extra)
     (ENNReal.ofReal (εLcP (S.shape mPts) L) + ENNReal.ofReal (εOpP (S.shape mPts) L)
       + ENNReal.ofReal (padLigeritoError sch t e)) (fun o ho => ?_)).trans ?_
@@ -178,7 +156,6 @@ theorem rep_sound_pad (A : Arith F K) (hA : A.Correct)
     | none => simp
     | some zc =>
       simp only
-      -- lincheck
       refine (value_bind_le _ _ _ (DLcW A S sch W extra zc)
         (ENNReal.ofReal (εOpP (S.shape mPts) L) + ENNReal.ofReal (padLigeritoError sch t e))
         (fun o₂ ho₂ => ?_)).trans ?_
@@ -186,7 +163,6 @@ theorem rep_sound_pad (A : Arith F K) (hA : A.Correct)
         | none => simp
         | some ab =>
           simp only
-          -- opening
           refine (value_bind_le _ _ _ (DOpW S sch W) (ENNReal.ofReal (padLigeritoError sch t e))
             (fun o₃ ho₃ => ?_)).trans ?_
           · cases o₃ with
@@ -237,10 +213,6 @@ theorem rep_sound_pad (A : Arith F K) (hA : A.Correct)
           · norm_num
       _ = _ := by ring
 
-/-! ## One table -/
-
-/-- **The link points, padded level 0**: if the committed values do not satisfy the statement, the
-two link points leave some rep start undoomed with probability at most `padLinkError`. -/
 theorem link_sound_pad (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule) (t : ℕ)
     (hpad : PadOK sch.level₀ t) (c₀ : F) (ptLocal mPts : ℕ) (C : Oracle F)
     (hC : ¬ CommittedPad A S sch t c₀ C) (hlay : S.LinkLayout ptLocal mPts) :
@@ -259,9 +231,6 @@ theorem link_sound_pad (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : S
   push_cast
   ring_nf
 
-/-- **Soundness of one table with the padded level 0** (interactive-oracle layer). For every prover
-strategy, the verifier accepts both reps while the committed values do not satisfy the statement
-with probability at most `padTableError`. -/
 theorem table_sound_pad (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
@@ -314,9 +283,6 @@ theorem table_sound_pad (A : Arith F K) (hA : A.Correct)
         _ ≤ ENNReal.ofReal ε * ENNReal.ofReal ε := mul_le_mul' h0 h1
     · rw [padTableError, ENNReal.ofReal_add hlink0 (by positivity), sq, ENNReal.ofReal_mul hε]
 
-/-! ## At Flock ZK's values -/
-
-/-- Flock ZK's schedules have the `fast100` shape. -/
 theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 35 →
     2 ≤ (m1Schedule wideLeaf m).levels.length ∧
       ((m1Schedule wideLeaf m).levels.headD default).lanes = (m1Schedule wideLeaf m).k0 ∧
@@ -325,12 +291,9 @@ theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 35 →
   intro m h1 h2
   cases wideLeaf <;> interval_cases m <;> decide +kernel
 
-/-- **The table theorem at Flock ZK's values** (`verity/protocols/proofs/flock/prover/live/PROTOCOL.md` §7 item 6): every `m`
-the verifier serves, `25 ≤ m ≤ 35`, level-0 query counts `277, 242, 229` at `m = 25, 26, 27`, 219 at
-`m = 28..31` and 218 at `m = 32..35` (219 there at the wide-leaf statement version), padding `t = 2q₀`, a pair of
-extra lanes per rep, at either statement version. For every prover
-strategy, the verifier accepts a table while the committed values do not satisfy the statement with
-probability at most `2^-205`, for every statement shape in range. -/
+/-- At Flock ZK's values (`verity/protocols/proofs/flock/prover/live/PROTOCOL.md` §7 item 6): `25 ≤ m ≤ 35`, level-0
+query counts `277, 242, 229` at `m = 25, 26, 27`, 219 at `m = 28..31` and 218 at `m = 32..35` (219 there at the
+wide-leaf statement version), padding `t = 2q₀` and a pair of extra lanes per rep, at either statement version. -/
 theorem table_sound_pad_m1 (A : Arith F K) (hA : A.Correct)
     (S : Statement) (hm1 : 25 ≤ S.m) (hm2 : S.m ≤ 35) (c₀ : F) (ptLocal mPts : ℕ)
     (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)

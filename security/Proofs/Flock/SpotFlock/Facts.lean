@@ -4,29 +4,8 @@ public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.KS
 public import Proofs.Flock.Bridge.Members
 
-/-!
-# SPOT[Flock]'s two-stage code: the facts its order gives
-
-* `stepWith_fst_take`, `run_fst_take`: a run's prover messages through round `m` read only its coins before round `m`;
-  the verifier's answer at round `m` may read round `m`'s coin, the prover's message there doesn't.
-* `iroots_fst`: the interior roots a run shows are read off its first two prover messages.
-* `interiorFixed`: fresh second-stage coins keep them (`Code.InteriorFixed` at `SpotFlock.code h`): the interior
-  registration is the prover's message at round 1, before the second stage's coin.
-* `blocksOf_of_interiorOrderOk`: where round 1's record lists the replay sample in its order
-  (`SecondStage.interiorOrderOk`), its replay blocks are the sample, so replay block `ρ`'s interior roots start at its
-  place in the sample.
-* `topoOk_sound`, `partitionsOk_sound`, `oneStageOk_sound`, `scopeOk_sound`, `filesOk_sound`, `zkOk_sound`: the
-  verifier's decisions are sound for what they decide.
-* `stepWith_acc_at`, `run_acc_at`: an accepting run passed every round before the verifier could accept.
-* `refusesTwo`: an accepting run's statement is in the two-stage scope (`Code.RefusesTwo` at `SpotFlock.code h`), since
-  round `stage + 1` checks the design evaluates and the design evaluates only in scope.
-* `regMatchesTwo`: the registration is the statement's two-stage design (`RegMatchesTwo` at `SpotFlock.code h`), since
-  the design evaluates only where the replay layout fits the members' files, whose replay partition has the layout's
-  shape (`shape_filesReplay`) and whose cells are the registration's blocks (`Flock.Bridge.Members.cell_filesReplay`).
-* `sessionsIn`: every session is in Flock's masked scope with at most the code's tables and its template's reference
-  statement's shapes (`SessionsIn`'s clauses at `SpotFlock.code h`), since the reference statements are in scope
-  (`Held.xS₀_ok`).
--/
+/-! The facts SPOT[Flock]'s two-stage code gives by its round order: interior roots fixed, sound decisions, refusal
+outside the two-stage scope, the registration's match and the sessions' scope. -/
 
 @[expose] public section
 
@@ -35,7 +14,6 @@ namespace SpotFlock
 open Claims Claims.Sampling SamplingDeploy Finset
 open Properties.Spot (slotPartition slotDesign bitsProgs membersPart filesReplay filesBlockOf)
 
-/-- A run appends to its transcript: one more round puts the prover's message and the verifier's answer after `t`'s. -/
 theorem stepWith_succ_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
     (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) :
     ∃ ext, (stepWith H P x ω vnext (n + 1) hist as t).msgs =
@@ -47,8 +25,6 @@ theorem stepWith_succ_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Ms
   · exact ⟨[], by simp⟩
   · exact ⟨[], by simp⟩
 
-/-- **The prover's messages through round `m` read only the verifier's answers before it**: two verifiers that answer
-alike on at most `m` prover messages give runs whose first `m + 1` prover messages agree. -/
 theorem stepWith_fst_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (vnext vnext' : List Msg → OC Out) (m : ℕ) (hv : ∀ as : List Msg, as.length ≤ m → vnext as = vnext' as) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as.length = t.msgs.length →
@@ -75,7 +51,6 @@ theorem stepWith_fst_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg
       subst hm'
       simp [List.take_append]
 
-/-- **A run's prover messages through round `m` read only its coins before round `m`.** -/
 theorem run_fst_take {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg)
     (ω : Ω) (m : ℕ) (r r' : Fin (V.k x) → Coin) (h : ∀ t : Fin (V.k x), t.val < m → r t = r' t) :
     ((run H P V x ω r).msgs.map Prod.fst).take (m + 1) = ((run H P V x ω r').msgs.map Prod.fst).take (m + 1) := by
@@ -89,13 +64,11 @@ theorem run_fst_take {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (P : Pr
   · exact h _ hi'
   · rfl
 
-/-- The interior roots of replay block `ρ` the round-1 message states, from a run's prover messages. -/
 def irootsAt (ms : List Msg) (ρ : ℕ) : List Msg :=
   match ms with
   | _ :: m₁ :: _ => irootsOf m₁ ρ
   | _ => []
 
-/-- Values that read as the naturals `s`, in order, read back as `s` with `0` for any that doesn't. -/
 theorem map_getD_of_map_some : ∀ (l : List Lean.Json) (s : List ℕ), l.map Spot.nat? = s.map some →
     l.map (fun b => (Spot.nat? b).getD 0) = s
   | [], [], _ => rfl
@@ -105,8 +78,6 @@ theorem map_getD_of_map_some : ∀ (l : List Lean.Json) (s : List ℕ), l.map Sp
     simp only [List.map_cons, List.cons.injEq] at h
     simp only [List.map_cons, h.1, Option.getD_some, map_getD_of_map_some l s h.2]
 
-/-- **Round 1's replay blocks are the replay sample**, in its order, where its record lists them so
-(`SecondStage.interiorOrderOk`). -/
 theorem blocksOf_of_interiorOrderOk {own : Spot.SecondStage.Own} (h : Spot.SecondStage.interiorOrderOk own = true) :
     blocksOf own.interior = own.sample.toList := by
   unfold Spot.SecondStage.interiorOrderOk at h
@@ -117,7 +88,6 @@ theorem blocksOf_of_interiorOrderOk {own : Spot.SecondStage.Own} (h : Spot.Secon
     exact map_getD_of_map_some bs.toList own.sample.toList (beq_iff_eq.1 h)
   | _ => rw [hj] at h; simp at h
 
-/-- **The interior roots are read off the first two prover messages.** -/
 theorem iroots_fst (x : Msg) (v : Seen) (ρ : ℕ) :
     iroots x v ρ = irootsAt ((v.msgs.map Prod.fst).take 2) ρ := by
   unfold iroots irootsAt
@@ -127,8 +97,6 @@ theorem iroots_fst (x : Msg) (v : Seen) (ρ : ℕ) :
   | [_] => rfl
   | _ :: _ :: _ => rfl
 
-/-- **Interior fixed** at SPOT[Flock]'s code (`Code.InteriorFixed`): fresh second-stage coins keep the interior roots a
-run shows, since the prover states them at round 1, reading only round 0's coin. -/
 theorem interiorFixed (h : Held) (H : Msg → Msg) :
     ∀ x (Ω : Type) (P : Prover Ω) ω r d v,
       iroots x (run H P (code h).V x ω (forkOn ((code h).secondStage x) r d)).seen v =
@@ -143,8 +111,6 @@ theorem interiorFixed (h : Held) (H : Msg → Msg) :
     have : (order h x).first.val = 0 := rfl
     omega
   simp [forkOn, hn]
-
-/-! ## The decisions are sound -/
 
 theorem topoOk_sound {C : Prog} (hC : topoOk C = true) : C.Topological := by
   unfold topoOk at hC
@@ -232,10 +198,6 @@ theorem zkOk_sound {xS : Msg} (hz : zkOk xS = true) : ∃ s spec sts, FlockDeplo
 theorem ok_of_toOption {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption = some a) : e = .ok a := by
   cases e <;> simp_all [Except.toOption]
 
-/-! ## An accepting run passed the statement check's round -/
-
-/-- **An accepting run passed round `j`**: where the verifier accepts no `j` or fewer messages, rounds that end
-accepting had the verifier answer some `j` messages with other than a refusal. -/
 theorem stepWith_acc_at {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
     (j : ℕ) (hj : ∀ bs : List Msg, bs.length ≤ j → ((vnext bs).eval H).1 ≠ .acc) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as.length < j →
@@ -267,7 +229,6 @@ theorem run_acc_at {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prov
 
 variable (h : Held)
 
-/-- The verifier accepts nothing in rounds `0` to `stage + 1`. -/
 theorem next_short (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin)
     (hl : cs.length = as.length) (h3 : as.length ≤ h.stage + 2) : ((next h x as cs).eval H).1 ≠ .acc := by
   by_cases h0 : as = []
@@ -279,8 +240,6 @@ theorem next_short (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List FlockD
       simp only [OC.eval] <;> (try split) <;> simp
     · rw [next_stmt h x hl (by omega)]
       simp only [OC.eval] <;> (try split) <;> simp
-
-/-! ## The statement is in scope -/
 
 theorem parse_prog {x : Msg} {s : AuditStatement} (hs : parse h x = some s) : s.prog = bitsProgs h.ms := by
   unfold parse at hs
@@ -310,7 +269,6 @@ theorem two_eq {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
         exact ⟨l, ok_of_toOption hl, by simp, rfl, hc.1.1.1.1, hc.1.1.1.2⟩
       · cases hd
 
-/-- **Where the design evaluates, every template's reference statement reads as a member's** (`templateOk`). -/
 theorem templateOk_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
     (ht : t < h.ms.length) : templateOk h t = true := by
   unfold two at hd
@@ -327,9 +285,6 @@ theorem templateOk_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = 
         exact hc.1.1.2 t ht
       · cases hd
 
-/-- **Where the design evaluates, every member's circuit is in the scope Flock's hidden-output proof covers**
-(`membersScoped`) **and the registered wiring is one the connected program reads as the second stage's check does**
-(`wiringOk`). -/
 theorem scoped_wiring_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
     membersScoped h = true ∧ wiringOk h = true := by
   unfold two at hd
@@ -346,8 +301,6 @@ theorem scoped_wiring_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s
         exact ⟨hc.1.2, hc.2⟩
       · cases hd
 
-/-- **Where the design evaluates, every member's circuit is in the scope Flock's hidden-output proof covers**, at
-the members as the partition lists them (`Held.ms`). -/
 theorem scoped_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
     ∀ ci ∈ h.ms, _root_.Flock.ProvedScope.scopeOkH ci.1 = true := by
   intro ci hci
@@ -366,7 +319,6 @@ theorem scoped_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some
   rw [← hci']
   exact h1
 
-/-- **What the registered wiring's check decides** (`wiringOk`), clause by clause. -/
 theorem wiringOk_iff : wiringOk h = true ↔
     namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMoveRows h = true ∧
       wiresAlike h = true ∧ writtenRowsUnwired h = true ∧ writtenRowsRead h = true ∧ refReadsOwn h = true ∧
@@ -379,20 +331,16 @@ theorem wiringOk_iff : wiringOk h = true ↔
   · rintro ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11⟩
     exact ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩, h11⟩
 
-/-- **Where the design evaluates, the registered wiring passes each clause of its check.** -/
 theorem wiring_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
     namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMoveRows h = true ∧
       wiresAlike h = true ∧ writtenRowsUnwired h = true ∧ writtenRowsRead h = true ∧ refReadsOwn h = true ∧
       h.interiorNames.values = [] ∧ portsOnce h = true ∧ outsOk h = true :=
   (wiringOk_iff h).1 (scoped_wiring_of_two h hd).2
 
-/-- **Where the design evaluates, the templates' names are distinct.** -/
 theorem names_nodup_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
     ((List.range h.ms.length).map fun t => h.names.getD t "").Nodup :=
   of_decide_eq_true (wiring_of_two h hd).1
 
-/-- **The statement round `stage + 1` checks is in scope**: it parses, its partition and design evaluate, and so the
-two-stage scope holds. -/
 theorem stmtOk_scope {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) :
     ∃ s Pt d, parse h x = some s ∧ partition h s = some Pt ∧ two h s = some d ∧ InScopeTwo Pt d s := by
@@ -411,8 +359,6 @@ theorem stmtOk_scope {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage
       obtain ⟨l, -, -, -, hsc, -⟩ := two_eq h hd
       exact ⟨s, _, d, rfl, hPt, hd, scopeOk_sound hsc s (parse_prog h hs)⟩
 
-/-- **Refuses at two stages** at SPOT[Flock]'s code (`Code.RefusesTwo`): an accepting run passed round `stage + 1`,
-whose check (`stmtOk`) puts its statement in the two-stage scope. -/
 theorem refusesTwo (H : Msg → Msg) :
     ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P (code h).V x ω r).out = .acc →
       ∃ s Pt d, (code h).parse x = some s ∧ (code h).partition s = some Pt ∧ two h s = some d ∧ InScopeTwo Pt d s := by
@@ -428,16 +374,10 @@ theorem refusesTwo (H : Msg → Msg) :
     simp [OC.eval] at hne
   | true => exact stmtOk_scope h hok
 
-/-- **The members' replay partition has the layout's shape**: its classes' strata are the layout partition's
-(`slotPartition`), size for size. -/
 theorem shape_filesReplay (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Slots.SlotOrder) :
     (filesReplay ms ns l).classes.map strataSizes = (slotPartition l).classes.map strataSizes := by
   simp [filesReplay, slotPartition, strataSizes, Function.comp_def]
 
-/-- **The registration is the statement's two-stage design** at SPOT[Flock]'s code (`RegMatchesTwo`): the design
-evaluates only where the replay layout fits the members' files (`filesOk`); their replay partition has the layout's
-shape, request `ρ`'s cell of template `t` is the registration's blocks `blockOf ρ t` on `[0, n_t)`, and an input slot's
-cells are empty. -/
 theorem regMatchesTwo :
     ∀ x s Pt d, (code h).parse x = some s → (code h).partition s = some Pt → two h s = some d → InScopeTwo Pt d s →
       ∃ g l, reg h x = some g ∧ Spot.Slots.layout g.first.program g.first.query = .ok l ∧
@@ -485,8 +425,6 @@ theorem regMatchesTwo :
     · rw [Flock.Bridge.Members.cell_filesReplay h.ms hnd hne hfit hb hbu ht']
       exact Finset.image_congr fun p hp => (heq (Finset.mem_range.1 (Finset.mem_coe.1 hp))).symm
 
-/-! ## The sessions are in scope -/
-
 theorem le_foldr_max {l : List ℕ} {a : ℕ} (ha : a ∈ l) : a ≤ l.foldr max 0 := by
   induction l with
   | nil => simp at ha
@@ -506,9 +444,6 @@ theorem templateOf_le (ms : Spot.Bits.Members) (u : ℕ) : templateOf ms u ≤ m
     simp only [Option.getD_some]
     omega
 
-/-- **Every session is in Flock's masked scope** at SPOT[Flock]'s code (`SessionsIn`'s clauses, `FlockDeploy.ZkIn`
-unfolded): with at most the code's tables and its template's reference statement's shapes, the reference statements
-being in scope (`Held.xS₀_ok`). -/
 theorem sessionsIn :
     ∀ x u v xS vS, (code h).session x u v = some (xS, vS) →
       (∃ s spec sts, FlockDeploy.setupOf true xS = some (s, spec, sts) ∧ 0 < sts.size ∧ sts.size ≤ 200 ∧

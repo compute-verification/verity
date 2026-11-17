@@ -5,36 +5,13 @@ public import Proofs.Flock.Bridge.Members
 public import Proofs.Flock.Bridge.Slots
 public import Proofs.Flock.SpotFlock.BlockCommits
 
-/-!
-# The two-stage scope at the members
-
-`scopeOk` decides the two-stage scope (`scopeOk_sound`); `scopeOk_complete` is the converse. Here the scope of the
-members' programs side by side (`bitsProgs`), their proof blocks (`membersPart`) and their replay partition
-(`filesReplay`) is reduced to conditions on each member and on the replay layout:
-
-* `partitions_blockOf`: a circuit's units' proof blocks (`blockOf`: a unit's lowered gates, then the inputs it owns)
-  partition its lowering (`Partition.Partitions`), where every unit has a lowered gate, no output is an input and each
-  block commits at most `sizeClassMax` values; `partitions_keyProg` is a member's, its key program's units' blocks
-  (`Spot.Bits.blockOf`) partitioning its program (`memberProg`) where a unit's inputs and returned output bits fit.
-* `SitsAt.unread`, `SitsAt.committed_map`, `SitsAt.sizeClass_map`: a program sitting in another keeps its unread inputs,
-  and its blocks commit as many values and have the same size class, `b` later.
-* `topological_bitsProgs`, `partitions_membersPart`: the members side by side are topologically ordered and partitioned
-  by the members' proof blocks, when each member's program is.
-* `nodup_gates_filesReplay`, `isSome_replayOf_filesReplay`: the replay partition's gates are distinct where the layout
-  fits the members' files (`FilesFit`), and every proof block replays in a request where each member's units are its
-  requests' (`FilesFill`); slot `p < n_t` of request `ρ` in member `t` is proof block `filesBlockOf ms ns ρ t p`
-  (`replayOf_filesReplay_iff_filesBlockOf`), distinct for distinct `p` (`injective_filesBlockOf`).
-* `scopeOk_members`, `two_eq_filesReplay`, `isSome_two`: `scopeOk` accepts the members, and `two` returns their replay
-  design, for members that fit (`MemberFits`), a layout that fits and fills their files, a well-formed design, and
-  templates whose reference statements read as members' (`templateOk`).
--/
+/-! The two-stage scope at the members, reduced to conditions on each member and on the replay layout
+(`scopeOk_members`, `two_eq_filesReplay`). -/
 
 @[expose] public section
 
 namespace Claims.Sampling
 
-/-- **A replay partition of unions of proof blocks has distinct gates**: block `ρ` is the proof blocks of `Pt` at the
-indices `I ρ` together, `Pt`'s gates distinct, each `I ρ` without repeats and the index sets disjoint. -/
 theorem Partition.nodup_gates_union {Pt Pρ : Partition} {I : ℕ → List ℕ} (hnd : Pt.gates.Nodup)
     (hρ : ∀ ρ, ρ < Pρ.blocks.length → Pρ.blocks[ρ]? = some ((I ρ).flatMap fun w => Pt.blocks.getD w []))
     (hI : ∀ ρ, ρ < Pρ.blocks.length → (I ρ).Nodup)
@@ -78,8 +55,6 @@ namespace Flock.Bridge
 
 open FlockSoundness.Audit Claims.Sampling
 
-/-! ## A circuit's units' proof blocks partition its lowering -/
-
 section blocks
 
 variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool} {n : ℕ}
@@ -113,7 +88,6 @@ theorem length_blockOf_le (P : FlockSoundness.Audit.Partition C n) (u : Fin n) :
   rw [← List.toFinset_card_of_nodup (nodup_blockOf P u), ← Finset.card_range (progOf C κ).gates.length]
   exact Finset.card_le_card fun i hi => Finset.mem_range.2 (lt_length_blockOf (List.mem_toFinset.1 hi))
 
-/-- An input gate of the lowering is an input wire's position, a wire the constants leave free. -/
 theorem input_pos {i : ℕ} (h : (progOf C κ).gates[i]? = some .input) :
     ∃ a : Fin C.N, i = posOf C a ∧ C.op a = .input ∧ κ a = none := by
   obtain ⟨g, j, hj, rfl, hx⟩ := exists_block h
@@ -128,7 +102,6 @@ theorem input_pos {i : ℕ} (h : (progOf C κ).gates[i]? = some .input) :
     have hni : (C.op g).isInput = false := by cases h : C.op g <;> simp_all [Verity.Boolean.Op.isInput]
     exact lower_ne_input hni _ (List.mem_of_getElem? hx) rfl
 
-/-- A wire some gate reads has an owner. -/
 theorem isSome_owner (P : FlockSoundness.Audit.Partition C n) {a g : Fin C.N} (ha : a ∈ (C.op g).args) :
     (owner P a).isSome := by
   have hg : (C.op g).isInput = false := by
@@ -142,8 +115,6 @@ theorem isSome_owner (P : FlockSoundness.Audit.Partition C n) {a g : Fin C.N} (h
   unfold owner
   exact List.find?_isSome.2 ⟨u, List.mem_finRange u, decide_eq_true ⟨g, hu, ha⟩⟩
 
-/-- **Every gate of the lowering but a constant or an unread input is in some unit's block**, where no output is an
-input: an input gate some gate reads is its owner's, every other gate its unit's. -/
 theorem exists_blockOf (P : FlockSoundness.Audit.Partition C n) (hout : ∀ o ∈ C.outputs, (C.op o).isInput = false)
     {i : ℕ} (hi : i < (progOf C κ).gates.length) (hc : ∀ b, (progOf C κ).gates[i]? ≠ some (.const b))
     (hun : ¬ (progOf C κ).Unread i) : ∃ u, i ∈ blockOf P κ u := by
@@ -173,8 +144,6 @@ theorem exists_blockOf (P : FlockSoundness.Audit.Partition C n) (hout : ∀ o �
   · obtain ⟨u, hu⟩ := exists_unitGates P hi hc hin
     exact ⟨u, mem_blockOf.2 (Or.inl hu)⟩
 
-/-- **A circuit's units' proof blocks partition its lowering**, where every unit has a lowered gate, no output is an
-input, and each block commits at most `sizeClassMax` values. -/
 theorem partitions_blockOf (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (hne : ∀ u, unitGates P u ≠ []) (hout : ∀ o ∈ C.outputs, (C.op o).isInput = false)
     (hw : ∀ u, committed (progOf C κ) (blockOf P κ u) ≤ sizeClassMax) :
@@ -209,8 +178,6 @@ theorem partitions_blockOf (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.
 
 end blocks
 
-/-! ## A member's key program -/
-
 section keyProg
 
 open FlockSoundness FlockSoundness.Discharge
@@ -221,7 +188,6 @@ theorem isSome_row? {kp : Spot.Bits.KeyProg} {g : ℕ} (h1 : kp.inputs ≤ g) (h
   rw [Spot.Bits.KeyProg.row?, ite_eq_right (show ¬ g < kp.inputs by omega), Array.getElem?_eq_getElem h3]
   rfl
 
-/-- **A key program's output is a row**: each is a copy row of a unit's instance. -/
 theorem isSome_row?_of_mem_outs {c : _root_.Flock.Circuit} {n g : ℕ} (hg : g ∈ (Spot.Bits.keyProg c n).outs) :
     ((Spot.Bits.keyProg c n).row? g).isSome := by
   rw [keyProg_outs, List.mem_eraseDups, List.mem_mergeSort] at hg
@@ -277,10 +243,6 @@ theorem unitGates_keyProg_ne_nil {c : _root_.Flock.Circuit} {n : ℕ} {hU : Buil
   rw [h] at hmem
   simp at hmem
 
-/-- **A member's key program's units' blocks partition its program**, where its rows are built (`Built`), it has a
-computed row, and a unit's stacked rows' inputs and returned output bits are at most `sizeClassMax`: each unit's block
-reads only its own gates and constants (`member_closed`), so it commits only its inputs and its returned gates
-(`BlockCommits.committed_le_ends`, `BlockCommits.length_ends_le`). -/
 theorem partitions_keyProg (c : _root_.Flock.Circuit) (n : ℕ) {hU : Built c.unit} (hu : c.unit.unitLog ≤ 32)
     (hc : 0 < (bitsRows c).nComp) (hw : (bitsRows c).nIn + BlockCommits.outBits c ≤ sizeClassMax) :
     (⟨[[(List.range n).map fun u => Spot.Bits.blockOf (Spot.Bits.keyProg c n) (Spot.Bits.consts c n) u]]⟩ :
@@ -327,15 +289,12 @@ namespace Flock.Bridge.Members
 
 open Claims.Sampling Properties.Spot
 
-/-! ## A program sitting in another -/
-
 theorem blocks_single (l : List (List ℕ)) : (⟨[[l]]⟩ : Partition).blocks = l := by
   simp [Partition.blocks]
 
 theorem gates_single (l : List (List ℕ)) : (⟨[[l]]⟩ : Partition).gates = l.flatten := by
   rw [Partition.gates, blocks_single]
 
-/-- An unread input of `P` is an unread input of `Q`, `b` later. -/
 theorem SitsAt.unread {Q P : Prog} {b : ℕ} (hA : SitsAt Q b P) {p : ℕ} (hp : p < P.gates.length)
     (h : P.Unread p) : Q.Unread (b + p) := by
   unfold Prog.Unread at h ⊢
@@ -352,7 +311,6 @@ theorem SitsAt.unread {Q P : Prog} {b : ℕ} (hA : SitsAt Q b P) {p : ℕ} (hp :
   · have := hA.closed q x hq (by omega) (b + p) hr
     omega
 
-/-- `Q` commits as many of gates `u` `b` later as `P` commits of `u`. -/
 theorem SitsAt.committed_map {Q P : Prog} {b : ℕ} (hA : SitsAt Q b P) {u : List ℕ}
     (hu : ∀ g ∈ u, g < P.gates.length) : committed Q (u.map (b + ·)) = committed P u := by
   unfold committed
@@ -363,8 +321,6 @@ theorem SitsAt.committed_map {Q P : Prog} {b : ℕ} (hA : SitsAt Q b P) {u : Lis
 theorem SitsAt.sizeClass_map {Q P : Prog} {b : ℕ} (hA : SitsAt Q b P) {u : List ℕ}
     (hu : ∀ g ∈ u, g < P.gates.length) : sizeClass Q (u.map (b + ·)) = sizeClass P u := by
   simp only [sizeClass, hA.committed_map hu]
-
-/-! ## The members side by side -/
 
 theorem topological_sideBySide : ∀ ps : List Prog, (∀ p ∈ ps, p.Topological) → (sideBySide ps).Topological
   | [], _ => ⟨fun g x hx => by simp [sideBySide] at hx, fun o ho => by simp [sideBySide] at ho⟩
@@ -391,7 +347,6 @@ theorem topological_sideBySide : ∀ ps : List Prog, (∀ p ∈ ps, p.Topologica
         have := ih.2 j hj
         omega
 
-/-- Below `f N` and from `f 0`, `v` lies in some step `[f t, f (t + 1))`, `t < N`. -/
 theorem exists_step (f : ℕ → ℕ) {v : ℕ} (h0 : f 0 ≤ v) : ∀ N, v < f N → ∃ t < N, f t ≤ v ∧ v < f (t + 1)
   | 0, h => absurd h (Nat.not_lt.2 h0)
   | N + 1, h => by
@@ -428,8 +383,6 @@ theorem memberBlocks_eq {m : ℕ} (hm : m < ms.length) :
         (·.map (Spot.Bits.base ms m + ·)) := by
   simp [memberBlocks, List.getElem?_eq_getElem hm, List.map_map, Function.comp_def]
 
-/-- **The members' proof blocks partition the members side by side**, when each member's key program's units' blocks
-partition its program. -/
 theorem partitions_membersPart (htop : ∀ ci ∈ ms, (memberProg ci.1 ci.2.size).Topological)
     (hpart : ∀ ci ∈ ms, (⟨[[(List.range ci.2.size).map fun u =>
       Spot.Bits.blockOf (Spot.Bits.keyProg ci.1 ci.2.size) (Spot.Bits.consts ci.1 ci.2.size) u]]⟩ :
@@ -522,19 +475,13 @@ theorem partitions_membersPart (htop : ∀ ci ∈ ms, (memberProg ci.1 ci.2.size
     have hy' := hlt m hm y hy
     exact ⟨w, by rw [(hA m hm).sizeClass_map hy']; exact hw1, by rw [(hA m hm).committed_map hy']; exact hw2⟩
 
-/-- **A member the scope covers**: its unit net built (`Built`) with `unitLog ≤ 32`, a computed row, and a unit's
-stacked rows' inputs and returned output bits at most `sizeClassMax`, the most one unit's proof block commits. -/
 def MemberFits (ci : _root_.Flock.Circuit × Array ℕ) : Prop :=
   FlockSoundness.Built ci.1.unit ∧ ci.1.unit.unitLog ≤ 32 ∧ 0 < (bitsRows ci.1).nComp ∧
     (bitsRows ci.1).nIn + Flock.Bridge.BlockCommits.outBits ci.1 ≤ sizeClassMax
 
-/-- **The replay layout fills the members' files**: each unit `x` of each member `t` is in some request slot `ρ`'s run,
-`ρ·n_t` to `(ρ + 1)·n_t`. -/
 def FilesFill (ns : Array ℕ) (l : Spot.Slots.SlotOrder) : Prop :=
   ∀ t (ht : t < ms.length), ∀ x < ms[t].2.size, ∃ ρ b, l.blocks[ρ]? = some b ∧ b.unit = some ρ ∧
     ρ * ns.getD t 0 ≤ x ∧ x < (ρ + 1) * ns.getD t 0
-
-/-! ## The members' replay partition -/
 
 section files
 
@@ -566,7 +513,6 @@ theorem nodup_slotFiles (hfit : FilesFit ms ns l) (ρ : ℕ) : (slotFiles ms ns 
       rw [he, stratumOf_membersPart ms ht1 hx] at e
       exact htt' e
 
-/-- **The members' replay partition has distinct gates** where the layout fits the members' files. -/
 theorem nodup_gates_filesReplay (hnd : (membersPart ms).gates.Nodup) (hfit : FilesFit ms ns l) :
     (filesReplay ms ns l).gates.Nodup :=
   Partition.nodup_gates_union (I := slotFiles ms ns l) hnd (fun _ h => getElem?_blocks_filesReplay ms ns l h)
@@ -579,7 +525,6 @@ theorem exists_unitBase {v : ℕ} (hv : v < (membersPart ms).blocks.length) :
   rw [unitBase_succ ms ht] at h2
   exact ⟨t, ht, v - unitBase ms t, by omega, by omega⟩
 
-/-- **Every proof block replays in some request** where the layout fits and fills the members' files. -/
 theorem isSome_replayOf_filesReplay (hnd : (membersPart ms).gates.Nodup)
     (hne : ∀ u ∈ (membersPart ms).blocks, u ≠ []) (hfit : FilesFit ms ns l) (hfill : FilesFill ms ns l) {v : ℕ}
     (hv : v < (membersPart ms).blocks.length) : (replayOf (membersPart ms) (filesReplay ms ns l) v).isSome := by
@@ -597,8 +542,6 @@ end Flock.Bridge.Members
 namespace SpotFlock
 
 open Claims Claims.Sampling Properties.Spot
-
-/-! ## The scope check's converse -/
 
 theorem topoOk_complete {C : Prog} (hC : C.Topological) : topoOk C = true := by
   unfold topoOk
@@ -626,7 +569,6 @@ theorem partitionsOk_complete {P : Partition} {C : Prog} (hP : P.Partitions C) :
 theorem oneStageOk_complete {ns : List ℕ} {o : OneStage} (h : o.WellFormed ns) : oneStageOk ns o = true := by
   cases o <;> simp_all [oneStageOk, OneStage.WellFormed]
 
-/-- **`scopeOk` accepts what is in the two-stage scope** (`InScopeTwo`'s conjuncts), the converse of `scopeOk_sound`. -/
 theorem scopeOk_complete {C : Prog} {Pt : Partition} {d : Design.Two} (htopo : C.Topological)
     (hpart : Pt.Partitions C) (hnd : d.part.gates.Nodup) (hrep : ∀ v < Pt.blocks.length, (replayOf Pt d.part v).isSome)
     (hwf : d.WellFormed Pt) : scopeOk C Pt d = true := by
@@ -636,11 +578,6 @@ theorem scopeOk_complete {C : Prog} {Pt : Partition} {d : Design.Two} (htopo : C
   exact ⟨⟨⟨⟨⟨⟨⟨topoOk_complete htopo, partitionsOk_complete hpart⟩, hnd⟩, hrep⟩, hlen⟩,
     fun p hp => oneStageOk_complete (hrules p hp)⟩, hklen⟩, hk⟩
 
-/-! ## The scope at the members -/
-
-/-- **`scopeOk` accepts the members**, their proof blocks and their replay partition, for members that fit
-(`MemberFits`), a replay layout that fits and fills their files (`FilesFit`, `FilesFill`), a well-formed first-stage
-design and a second-stage count of at least `1` for each member. -/
 theorem scopeOk_members {ms : Spot.Bits.Members} {ns : Array ℕ} {l : Spot.Slots.SlotOrder} {d : Design} {k : List ℕ}
     (hm : ∀ ci ∈ ms, Flock.Bridge.Members.MemberFits ci) (hfit : Flock.Bridge.Members.FilesFit ms ns l)
     (hfill : Flock.Bridge.Members.FilesFill ms ns l) (hd : d.WellFormed (filesReplay ms ns l))
@@ -658,10 +595,6 @@ theorem scopeOk_members {ms : Spot.Bits.Members} {ns : Array ℕ} {l : Spot.Slot
   rw [Flock.Bridge.Members.strata_membersPart, List.length_map, List.length_range]
   exact hk
 
-/-- **`two` returns the members' replay design** for members that fit, a replay layout that fits (`filesOk`) and fills
-their files, a well-formed first-stage design, second-stage counts of at least `1`, one for each member, and templates
-whose reference statements each read as a member's (`templateOk`), whose members' circuits are in the scope
-Flock's hidden-output proof covers (`membersScoped`) and whose registered wiring passes its check (`wiringOk`). -/
 theorem two_eq_filesReplay (h : Held) (s : AuditStatement) {l : Spot.Slots.SlotOrder} {d : Design}
     (hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption = some l) (hd : replayDesign h = some d)
     (hm : ∀ ci ∈ h.ms, Flock.Bridge.Members.MemberFits ci) (hfill : Flock.Bridge.Members.FilesFill h.ms h.reg.ns l)

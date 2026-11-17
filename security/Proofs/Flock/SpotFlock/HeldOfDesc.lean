@@ -4,22 +4,8 @@ public import Proofs.Flock.SpotFlock.HeldOfCheck
 public import Proofs.Flock.SessionLoop.Concrete
 public import VStarRecursive.SampledTwoDesc
 
-/-!
-# The form's descriptor check gives the held copies (`heldOkDesc_of_descOk`)
-
-The two-stage form's descriptor check (`VStar.Recursive.SampledTwoDesc.descOk`) is the verifier's own code, so it can't
-read `heldOkDesc`, which is stated over held copies. It decides the same things on what the form holds, once per
-template. Where it passes, `heldOkDesc` holds at the form's params, blobs and the run of record's input.
-
-* `refOf_ok`: a reference statement the check reads, field by field.
-* `setupOf_rawOf`: its bytes (`rawOf`) set up under `--zk` as the check set it up, with Flock's parsers' reading
-  (`insOfRef`), where each field fits its length word (`fits_of`).
-* `refStmtsOf_of_refsOf`: the form's reference statements are those bytes.
-* `decided_of`: `decided` from its clauses, each of which the check gives at the copies it builds.
-* `heldOkDesc_of_descOk`: the check gives `heldOkDesc`.
-* `heldOf_of_descOk`: so where the check passes, `heldOf` builds a held copy at the reference statements the blobs
-  give.
--/
+/-! The two-stage form's descriptor check, the verifier's own code over what the form holds, gives `heldOkDesc` and so a
+held copy (`heldOkDesc_of_descOk`, `heldOf_of_descOk`). -/
 
 @[expose] public section
 
@@ -35,16 +21,12 @@ theorem ok_map {ε α β : Type} (a : α) (f : α → β) : (f <$> (Except.ok a 
 
 theorem error_bind {ε α β : Type} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = .error e := rfl
 
-/-! ## A reference statement, read -/
-
-/-- **A reference statement's bytes**, from what the check read of it. -/
 def rawOf (R : SampledTwoDesc.Ref) : FlockDeploy.Raw :=
   { statement := Spot.OneStageZk.STATEMENT, circuit := R.circuit, publicFile := R.pub, tables := R.tables, zk := true,
     osCoins := false, count := 1, draw := none, partition := some R.partitionB, program := some R.program,
     work := none, workTable := none, stratified := none, closure := none, registered := R.registeredB,
     publicInputs := none }
 
-/-- **What Flock's parsers read of those bytes.** -/
 def insOfRef (R : SampledTwoDesc.Ref) : FlockDeploy.Ins :=
   { stmtTags := R.tags, registered := R.registered, read :=
     { I := { tags := R.tags, circuitFile := R.circuit, publicFile := R.pub,
@@ -57,7 +39,6 @@ theorem memberOf_eq (p : SampledTwo.Params) (t : ℕ) : SampledTwoDesc.memberOf 
 
 theorem jsonOf_eq : SampledTwoDesc.jsonOf = FlockDeploy.jsonOf := rfl
 
-/-- **A reference statement the check reads**, field by field. -/
 theorem refOf_ok {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : SampledTwoDesc.Ref}
     (h : SampledTwoDesc.refOf p bs t = .ok R) :
     ∃ m, memberOf p t = some m ∧ bs.get m.own.circuit "circuit" = .ok R.circuit ∧
@@ -106,7 +87,6 @@ theorem refOf_ok {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sample
     exact ⟨m, rfl, hc, hp, rfl, hpl, rfl, hj, rfl, hr, rfl, rfl, rfl, hs⟩
   · simp only [hpl] at h; cases h
 
-/-- **Each field of a reference statement the check passes fits its length word.** -/
 theorem fits_of {R : SampledTwoDesc.Ref} (hf : SampledTwoDesc.fits R = true) : (rawOf R).Fits := by
   unfold SampledTwoDesc.fits at hf
   simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at hf
@@ -126,7 +106,6 @@ theorem fits_of {R : SampledTwoDesc.Ref} (hf : SampledTwoDesc.fits R = true) : (
     simpa using hre
   · intro b hb; cases hb
 
-/-- **Flock's parsers read the check's reading of a reference statement.** -/
 theorem ins_rawOf {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : SampledTwoDesc.Ref}
     (h : SampledTwoDesc.refOf p bs t = .ok R) : (rawOf R).ins = .ok (insOfRef R) := by
   obtain ⟨m, -, -, -, ht, hpl, -, hj, -, hr, -, -, -, -⟩ := refOf_ok h
@@ -137,7 +116,6 @@ theorem ins_rawOf {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sampl
   rw [hr]
   rfl
 
-/-- **The setup Flock's verifier runs is the check's.** -/
 theorem setup_insOfRef {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : SampledTwoDesc.Ref}
     (h : SampledTwoDesc.refOf p bs t = .ok R) : (insOfRef R).setup = .ok (R.spec, R.sts) := by
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, htz, -, hs⟩ := refOf_ok h
@@ -153,7 +131,6 @@ theorem insOf_rawOf {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sam
   rw [ins_rawOf h]
   rfl
 
-/-- **A reference statement's bytes set up under `--zk`** as the check set it up. -/
 theorem setupOf_rawOf {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : SampledTwoDesc.Ref}
     (h : SampledTwoDesc.refOf p bs t = .ok R) (hf : SampledTwoDesc.fits R = true) :
     FlockDeploy.setupOf true (rawOf R).encode = some (insOfRef R, R.spec, R.sts) := by
@@ -169,7 +146,6 @@ theorem readOf_rawOf {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sa
   rw [insOf_rawOf h hf]
   rfl
 
-/-- **The read's tags are `--zk`'s**, the check's. -/
 theorem tags_insOfRef {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : SampledTwoDesc.Ref}
     (h : SampledTwoDesc.refOf p bs t = .ok R) : (insOfRef R).read.tags = R.tz := by
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, htz, -, -⟩ := refOf_ok h
@@ -202,7 +178,6 @@ theorem zkOk_rawOf {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Samp
   rw [setupOf_rawOf h hf]
   rfl
 
-/-- **A reference statement the check reads reads as a member's** where the check says so. -/
 theorem templateOk_of {h : Held} {t : ℕ} {p : SampledTwo.Params} {bs : Core.Blobs} {j : ℕ} {R : SampledTwoDesc.Ref}
     (hR : SampledTwoDesc.refOf p bs j = .ok R) (hf : SampledTwoDesc.fits R = true)
     (hx : h.xS₀ t = (rawOf R).encode) (hT : SampledTwoDesc.templateOk R = true) : templateOk h t = true := by
@@ -210,15 +185,10 @@ theorem templateOk_of {h : Held} {t : ℕ} {p : SampledTwo.Params} {bs : Core.Bl
   rw [hx, readOf_rawOf hR hf, shapeOf_rawOf hR hf]
   simp only [tags_insOfRef hR, stmt_insOfRef hR]
   unfold SampledTwoDesc.templateOk at hT
-  -- `shapeOf` now carries each table's wide-leaf tag beside its size, so `templateOk`'s one-table clause reads the
-  -- length of the `(wideLeaf, m)` list; the reference check reads the length of the `m` list. `List.length_map`
-  -- sends both to `R.sts.toList.length`. The read's circuit file and tables are the reference's by construction.
   have hc : (insOfRef R).read.I.circuitFile = R.circuit := rfl
   have ht : (insOfRef R).read.I.tables = R.tables := rfl
   simp only [List.length_map, hc, ht] at hT ⊢
   exact hT
-
-/-! ## The reference statements -/
 
 theorem mapM_of_mapM {α β γ : Type} {f : α → Option β} {g : α → Option γ} {k : β → γ}
     (hfg : ∀ a b, f a = some b → g a = some (k b)) :
@@ -245,7 +215,6 @@ theorem refRawOf_of_refOf {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R
   unfold rawOf memberRaw
   rw [hpb, hrb, htb, hpr]
 
-/-- **The form's reference statements are the bytes of the ones the check reads.** -/
 theorem refStmtsOf_of_refsOf {p : SampledTwo.Params} {bs : Core.Blobs} {rs : List SampledTwoDesc.Ref}
     (h : SampledTwoDesc.refsOf p bs = some rs) : refStmtsOf p bs = some (rs.map fun R => (rawOf R).encode) := by
   unfold refStmtsOf
@@ -268,7 +237,6 @@ theorem refOf_of_refsOf {p : SampledTwo.Params} {bs : Core.Blobs} {rs : List Sam
   simp only [List.getElem_range] at hR
   exact ⟨R, ok_of_toOption hR, hx⟩
 
-/-- **Every reference statement the check holds is one it read.** -/
 theorem refOf_of_mem {p : SampledTwo.Params} {bs : Core.Blobs} {rs : List SampledTwoDesc.Ref}
     (h : SampledTwoDesc.refsOf p bs = some rs) {R : SampledTwoDesc.Ref} (hR : R ∈ rs) :
     ∃ j, SampledTwoDesc.refOf p bs j = .ok R := by
@@ -284,8 +252,6 @@ theorem circAt_of {rs : List SampledTwoDesc.Ref} {t : ℕ} {R : SampledTwoDesc.R
   rw [List.getD_eq_getElem?_getD, List.getElem?_map, h]
   rfl
 
-/-- **The templates' circuits are the check's**: template `t`'s reference statement's circuit is the check's
-(`circAt` of `circsOf`), at every `t`. -/
 theorem stmtOf_refStmt {p : SampledTwo.Params} {bs : Core.Blobs} {rs : List SampledTwoDesc.Ref}
     (h : SampledTwoDesc.refsOf p bs = some rs) (hf : rs.all SampledTwoDesc.fits = true) (hne : rs ≠ [])
     (t : ℕ) : stmtOf (refStmt (rs.map fun R => (rawOf R).encode) t) =
@@ -303,8 +269,6 @@ theorem stmtOf_refStmt {p : SampledTwo.Params} {bs : Core.Blobs} {rs : List Samp
     | none => exact hall R₀ (by simp)
     | some R => exact hall R (List.mem_of_getElem? hj)
 
-/-! ## The first stage -/
-
 theorem firstOf_of {i : Spot.Run.Input} {f : SampledTwoDesc.First} (h : SampledTwoDesc.firstOf i = some f) :
     firstOf i = some ⟨f.verifier, f.rule, f.closure⟩ := by
   unfold SampledTwoDesc.firstOf at h
@@ -318,7 +282,6 @@ theorem oneStageOk_samplingDesignOk (ns : List ℕ) (samplingDesign : Option _ro
     oneStageOk ns ((samplingDesign.map oneStageOf).getD .all) = SampledTwoDesc.samplingDesignOk ns samplingDesign := by
   rcases samplingDesign with _ | (_ | _ | _ | _) <;> rfl
 
-/-- **The design `Select.select` samples**, from the check's first-stage sampling design. -/
 theorem slotDesign_of_firstSamplingDesign {rule : Spot.Select.Rule} {d : Spot.Program} {q : Json} {tb : Option Json}
     {samplingDesign : Option _root_.Flock.Draw.SamplingDesign} (h : SampledTwoDesc.firstSamplingDesign rule d q tb = .ok samplingDesign) :
     slotDesign rule d q tb = .ok ⟨[(samplingDesign.map oneStageOf).getD .all, .all]⟩ := by
@@ -354,8 +317,6 @@ theorem designOk_eq (samplingDesign : Option _root_.Flock.Draw.SamplingDesign) (
   congr 1
   exact all_zip_two _ _ _ _ _ (fun s => oneStageOk_samplingDesignOk s samplingDesign) (fun s => oneStageOk_samplingDesignOk s none)
 
-/-! ## The clauses, at free held copies -/
-
 theorem namesOnce_eq (h : Held) : namesOnce h = SampledTwoDesc.namesOnce h.ms.length h.names := rfl
 
 theorem writersFirst_eq (h : Held) : writersFirst h = SampledTwoDesc.writersFirst h.ms.length h.names h.wires := rfl
@@ -380,7 +341,6 @@ theorem writtenRowsUnwired_eq (h : Held) :
 theorem writtenRowsRead_eq (h : Held) :
     writtenRowsRead h = SampledTwoDesc.writtenRowsRead h.ms.length h.names h.links h.wires (memberCircuit h) := rfl
 
-/-- **The units `unitsOf` gives a template**, counted: the check's `unitsAt`. -/
 theorem size_unitsOf (r : ℕ) (ns : Array ℕ) (T t : ℕ) :
     ((unitsOf r ns T).getD t #[]).size = SampledTwoDesc.unitsAt r ns T t := by
   unfold unitsOf SampledTwoDesc.unitsAt
@@ -402,7 +362,6 @@ theorem outsOk_eq (h : Held) : outsOk h = SampledTwoDesc.outsOk h.ms.length (mem
 
 theorem memberOk_eq (c : _root_.Flock.Circuit) (us : Array ℕ) : memberOk (c, us) = SampledTwoDesc.memberOk c := rfl
 
-/-- **`decided`, from its clauses.** -/
 theorem decided_of {u : Unread} {it : Spot.Run.Interior} {H : Held} {l : Spot.Slots.SlotOrder} {d : Design}
     (h1 : (u.xs.length == it.circuits.size) = true) (h2 : namesOnce H = true)
     (h3 : H.interiorNames.values.isEmpty = true)
@@ -416,10 +375,6 @@ theorem decided_of {u : Unread} {it : Spot.Run.Interior} {H : Held} {l : Spot.Sl
   simp only [h1, h3, h6, h7, h8, h9, h10, h11, h12, h13, Bool.and_true, Bool.true_and]
   exact h2
 
-/-! ## The check gives `heldOkDesc` -/
-
-/-- **The two-stage form's descriptor check gives `heldOkDesc`**, whatever the registered copies `u₀` gives of the
-rest. -/
 theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input}
     {it : Spot.Run.Interior} (u₀ : Unread) (hd : SampledTwoDesc.descOk p bs i it = true) :
     heldOkDesc p bs i it u₀ = true := by
@@ -478,7 +433,7 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
   simp only [Reg.program, Reg.query, hl]
   rw [dif_pos hxsOk]
   refine decided_of (l := l) (d := ⟨[(samplingDesign.map oneStageOf).getD .all, .all]⟩) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · -- as many reference statements as templates
+  ·
     simp only [List.length_map, hlen]
     exact hT
   · rw [namesOnce_eq, ms_length_held₀]
@@ -488,7 +443,7 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
   · show (slotDesign f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption = _
     rw [slotDesign_of_firstSamplingDesign (ok_of_toOption hlaw)]
     rfl
-  · -- every member fits
+  ·
     unfold Held.ms
     rw [List.all_eq_true]
     intro x hx
@@ -507,7 +462,7 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
   · exact hks1
   · rw [ms_length_held₀]
     exact hns
-  · -- every template's reference statement reads as a member's
+  ·
     rw [List.all_eq_true]
     intro t ht
     rw [ms_length_held₀] at ht
@@ -515,7 +470,7 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
     refine templateOk_of hR₁ (hR' R hRm).1 ?_ (hR' R hRm).2.2.1
     show refStmt (rs.map fun R => (rawOf R).encode) t = _
     simp only [refStmt, List.getD_eq_getElem?_getD, List.getElem?_map, hR₂] <;> rfl
-  · -- every member's circuit is in the hidden-output proof's scope
+  ·
     unfold membersScoped
     rw [ms_length_held₀, List.all_eq_true]
     intro t ht
@@ -523,7 +478,7 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
     show _root_.Flock.ProvedScope.scopeOkH (stmtOf (refStmt (rs.map fun R => (rawOf R).encode) t)) = true
     rw [stmtOf_refStmt hrs hfits hne' t, circAt_of hR₂]
     exact (hR' R hRm).2.2.2
-  · -- the registered wiring
+  ·
     have hmc : ∀ t, memberCircuit (held₀ i it { u₀ with xs := rs.map fun R => (rawOf R).encode }
         ⟨f.verifier, f.rule, f.closure⟩ ns ks (requests l) (zkOk_refStmt hxsOk)) t =
         SampledTwoDesc.circAt (SampledTwoDesc.circsOf rs) t :=
@@ -538,12 +493,7 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
       ms_length_held₀]
     exact hwir
 
-/-! ## The check gives a held copy -/
-
-/-- **The two-stage form's descriptor check gives a held copy**: where it passes at the form's params and blobs and
-the run of record's input and interior, the blobs give the templates' reference statements (`refStmtsOf`) and
-`heldOf` builds a held copy at them, whatever `u₀` gives of the rest of what the run does not read. It reads no
-acceptance: the check alone decides what `heldOf` asks. -/
+/-- It reads no acceptance: the check alone decides what `heldOf` asks. -/
 theorem heldOf_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input} {it : Spot.Run.Interior}
     (u₀ : Unread) (hd : SampledTwoDesc.descOk p bs i it = true) :
     ∃ xs h, refStmtsOf p bs = some xs ∧ heldOf i it { u₀ with xs } = some h := by

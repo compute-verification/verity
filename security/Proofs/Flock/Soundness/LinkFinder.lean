@@ -6,31 +6,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Extract
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The link finder: a trial, then further trials until one reads the same string
-
-The link theorem's collision finder (DESIGN.md §3), for any trial. A trial (`T`, played by `sT`)
-reads a set of values behind one commit string (`rd`). The finder (`finderG`) runs a trial and then
-up to `M` more. It succeeds (`Succ`) if
-
-* its first trial reads two values (two sampled proof blocks opened the string differently), or
-* its first trial reads one value, and the first further trial that reads anything reads another.
-
-With `p v` the probability that a trial reads exactly `v`, `s` that it reads two or more values and
-`r` that it reads anything, the finder succeeds with probability `s + geom r M · Σ_v p v (r − p v)`
-(`expect_succ`). For the plurality `Xv` of `p` that is at least `s + Σ_{v ≠ Xv} p v − 1/(eM)`
-(`succ_ge`): disagreeing with the plurality is at most as likely as two readings disagreeing.
-
-Its cost stops at the first further trial that reads anything, so it is at most twice a trial's in
-expectation, whatever `r` (`expect_finderCost_le`, a Wald identity). Under expected-time collision
-resistance for the finder (`Assumptions.SHA512CRExpected`), and when every success outputs a
-collision, `s + Σ_{v ≠ Xv} p v ≤ 2·E[trial cost]/2^256 + 1/(eM)` (`link_mass_le`).
-
-The finder's output is a search (`outOfOps`): each trial comes with the list of what it read, every value with an
-opening of it, and the output is the collision at the first two listed readings with different values. A trial that
-holds no such list gets one from `listed`, whose order is `Finset.toList`'s and so taken by choice: `outOf` is the
-search at that list.
--/
+/-! The link theorem's collision finder: a trial, then further trials up to the first that reads the same string. -/
 
 @[expose] public section
 
@@ -63,8 +39,6 @@ open Classical in
 noncomputable def nextRead (aux : List τ) : Option τ := aux.find? fun e => decide (rd e).Nonempty
 
 open Classical in
-/-- **The finder succeeds**: its first trial reads two values, or it reads one and the first
-further trial that reads anything reads another. -/
 def Succ (x : τ × List τ) : Prop :=
   2 ≤ (rd x.1).card ∨ ∃ v, rd x.1 = {v} ∧ ∃ e', nextRead rd x.2 = some e' ∧ rd e' ≠ {v}
 
@@ -83,10 +57,8 @@ noncomputable def finderCost (c : τ → ℝ) (x : τ × List τ) : ℝ :=
 /-- The probability that a trial reads exactly `v`. -/
 noncomputable def pRd (v : Val) : ℝ := expect (ind fun e => rd e = {v}) T sT
 
-/-- The probability that a trial reads two or more values. -/
 noncomputable def sRd : ℝ := expect (ind fun e => 2 ≤ (rd e).card) T sT
 
-/-- The probability that a trial reads anything. -/
 noncomputable def rRd : ℝ := expect (ind fun e => (rd e).Nonempty) T sT
 
 theorem ind_nonempty_eq (e : τ) :
@@ -133,14 +105,12 @@ omit [Fintype Val] [DecidableEq Val] in
 theorem rRd_le_one : rRd T sT rd ≤ 1 := expect_ind_le_one _ _ _
 
 open Classical in
-/-- **The finder's success probability**: `s + geom r M · Σ_v p v (r − p v)`. -/
 theorem expect_succ (M : ℕ) :
     expect (ind (Succ rd)) (finderG T M) (finderStrat T sT M) =
       sRd T sT rd + geom (rRd T sT rd) M *
         ∑ v, pRd T sT rd v * (rRd T sT rd - pRd T sT rd v) := by
   rw [expect_finderG]
   set r := rRd T sT rd with hrdef
-  -- a further trial that reads anything, other than `{v}`
   have hq : ∀ v, expect (fun e => ind (fun e => (rd e).Nonempty) e *
       ind (fun e => rd e ≠ {v}) e) T sT = r - pRd T sT rd v := by
     intro v
@@ -208,8 +178,6 @@ theorem expect_succ (M : ℕ) :
   ring
 
 omit [DecidableEq Val] in
-/-- **Plurality**: `Σ_v p v (r − p v) ≥ (Σ_v p v − p Xv)·r` when `r = Σ_v p v + s` and `Xv` is a
-plurality of `p`. -/
 theorem plurality_le {p : Val → ℝ} (hp : ∀ v, 0 ≤ p v) {s : ℝ} (hs : 0 ≤ s) {Xv : Val}
     (hX : ∀ v, p v ≤ p Xv) :
     ((∑ v, p v) - p Xv) * ((∑ v, p v) + s) ≤ ∑ v, p v * ((∑ v, p v) + s - p v) := by
@@ -229,8 +197,6 @@ theorem geom_mul_le_one {r : ℝ} (h1 : r ≤ 1) (M : ℕ) : r * geom r M ≤ 1 
   have : 0 ≤ (1 - r) ^ M := pow_nonneg (by linarith) M
   linarith
 
-/-- **The finder succeeds** with probability at least `s + Σ_{v ≠ Xv} p v − 1/(eM)`, for the
-plurality `Xv` of the single readings. -/
 theorem succ_ge {Xv : Val} (hX : ∀ v, pRd T sT rd v ≤ pRd T sT rd Xv) (M : ℕ) (hM : 1 ≤ M) :
     sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd Xv) - 1 / (Real.exp 1 * M) ≤
       expect (ind (Succ rd)) (finderG T M) (finderStrat T sT M) := by
@@ -285,7 +251,6 @@ theorem expectN_loopCost (c : τ → ℝ) : ∀ M : ℕ,
 
 omit [Fintype Val] [DecidableEq Val] in
 open Classical in
-/-- **The finder's expected cost** is at most twice a trial's. -/
 theorem expect_finderCost_le (c : τ → ℝ) (hc : ∀ e, 0 ≤ c e) (M : ℕ) :
     expect (finderCost rd c) (finderG T M) (finderStrat T sT M) ≤ 2 * expect c T sT := by
   rw [expect_finderG]
@@ -303,7 +268,6 @@ theorem expect_finderCost_le (c : τ → ℝ) (hc : ∀ e, 0 ≤ c e) (M : ℕ) 
       c e + (geom (rRd T sT rd) M * expect c T sT) * ind (fun e => (rd e).card = 1) e from
       funext fun e => by rw [hpt e]; ring, expect_add, expect_const_mul]
   set r := rRd T sT rd
-  -- a single reading is a reading
   have h1r : expect (ind fun e => (rd e).card = 1) T sT ≤ r :=
     expect_mono (ind_mono fun e (h : (rd e).card = 1) => Finset.card_pos.1 (by omega)) T sT
   have hr0 : 0 ≤ r := expect_nonneg (ind_nonneg _) _ _
@@ -314,9 +278,6 @@ theorem expect_finderCost_le (c : τ → ℝ) (hc : ∀ e, 0 ≤ c e) (M : ℕ) 
     (mul_le_mul_of_nonneg_right h1r hg0).trans hrg
   nlinarith
 
-/-- **The link mass under expected-time collision resistance.** If every success of the finder
-outputs a collision of `Hc`, and the finder obeys the generic bound, then
-`s + Σ_{v ≠ Xv} p v ≤ 2·E[trial cost]/2^256 + 1/(eM)` for the plurality `Xv`. -/
 theorem link_mass_le {Dh : Type} (Hc : List UInt8 → Dh)
     (out : τ × List τ → Option (List UInt8 × List UInt8)) (c : τ → ℝ) (hc : ∀ e, 0 ≤ c e)
     (M : ℕ) (hM : 1 ≤ M)
@@ -340,8 +301,6 @@ theorem link_mass_le {Dh : Type} (Hc : List UInt8 → Dh)
     div_le_div_of_nonneg_right h4 (by positivity)
   linarith
 
-/-! ## The finder's output, from openings -/
-
 section Out
 
 variable {O : Type}
@@ -356,7 +315,6 @@ def firstTwo (l l' : List (Val × O)) : Option ((Val × O) × (Val × O)) :=
   (l.flatMap fun p => l'.map fun p' => (p, p')).find? fun q => decide (q.1.1 ≠ q.2.1)
 
 omit [Fintype Val] in
-/-- The search finds two readings with different values when the lists hold two. -/
 theorem firstTwo_of_mem {l l' : List (Val × O)} {p p' : Val × O} (hp : p ∈ l) (hp' : p' ∈ l') (h : p.1 ≠ p'.1) :
     ∃ q, firstTwo l l' = some q ∧ q.1 ∈ l ∧ q.2 ∈ l' ∧ q.1.1 ≠ q.2.1 := by
   have hs : ((l.flatMap fun p => l'.map fun p' => (p, p')).find? fun q => decide (q.1.1 ≠ q.2.1)).isSome :=
@@ -379,8 +337,6 @@ noncomputable def outOfOps (ops : τ → List (Val × O)) (collide : O → O →
   (secondTrial rd x).bind fun e' => (firstTwo (ops x.1) (ops e')).map fun q => collide q.1.2 q.2.2
 
 omit [Fintype Val] in
-/-- **Every success of the finder outputs a collision**, when every listed reading's opening is of its value (`hops`),
-every reading is listed (`hrd`), and two openings of different values collide (`hcol`). -/
 theorem outOfOps_spec {Dh : Type} {Hc : List UInt8 → Dh} (ops : τ → List (Val × O))
     (collide : O → O → List UInt8 × List UInt8) (Good : O → Prop) (val : O → Val)
     (hops : ∀ e, ∀ p ∈ ops e, Good p.2 ∧ val p.2 = p.1)
@@ -435,8 +391,6 @@ noncomputable def outOf (op : τ → Val → O) (collide : O → O → List UInt
   @outOfOps τ Val (Classical.decEq Val) rd O (listed rd op) collide x
 
 omit [Fintype Val] [DecidableEq Val] in
-/-- **Every success of the finder outputs a collision**, when every reading comes with an opening of its value (`hop`)
-and two openings of different values collide (`hcol`): `outOfOps_spec` at the readings `listed` lists. -/
 theorem outOf_spec {Dh : Type} {Hc : List UInt8 → Dh} (op : τ → Val → O)
     (collide : O → O → List UInt8 × List UInt8) (Good : O → Prop) (val : O → Val)
     (hop : ∀ e v, v ∈ rd e → Good (op e v) ∧ val (op e v) = v)

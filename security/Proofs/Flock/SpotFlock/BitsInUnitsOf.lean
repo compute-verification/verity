@@ -3,17 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.InsideOf
 public import Proofs.Flock.SpotFlock.NeededBitsOf
 
-/-!
-# Each bit is a gate of its unit's proof block
-
-`bitsInUnits`: the fact `BitsInUnits h` that `inside_of` takes, with no hypothesis. A source bit sits at a free source
-gate of its member's program, and a free source gate is one of its owner's source gates `2 + u·B + b` (`free_src`),
-an input of unit `u`'s proof block (`src_in_unit`); a written bit sits at the last lowered gate of a row of its unit
-(`written_in_unit`). Each one's commitment position names that unit as its leaf (`rowBit_leaf`, `outRowBit_leaf`).
-
-`inside_of_rowed` is then `Inside h` from the members' bits being rowed (`MembersRowed`) and a gate being at one
-written position at most (`WrittenOnce`).
--/
+/-! Each bit is a gate of its unit's proof block (`bitsInUnits`), the fact `inside_of` takes, with no hypothesis. -/
 
 @[expose] public section
 
@@ -25,8 +15,6 @@ section key
 
 variable (c : Flock.Circuit) (n : ℕ)
 
-/-- **A free source gate is one of its owner's source gates**: an input gate the constants leave free is
-`2 + u·B + b` for the unit `u` that owns it and a `b < B`. -/
 theorem free_src {g : ℕ} (hg : g < (Spot.Bits.keyProg c n).inputs) (hκ : Spot.Bits.consts c n g = none) :
     ∃ u b, u < n ∧ b < (bitsRows c).nIn ∧ g = 2 + u * (bitsRows c).nIn + b ∧
       Spot.Bits.owner (Spot.Bits.keyProg c n) g = some u := by
@@ -58,7 +46,6 @@ section bitsIn
 
 variable {ms : Spot.Bits.Members}
 
-/-- **A source bit's gate is an input of its leaf's proof block.** -/
 theorem src_in_unit {m g : ℕ} {r : Spot.Bits.RowPos} (hm : m < ms.length)
     (hg : g < (Spot.Bits.keyProg ms[m].1 ms[m].2.size).inputs)
     (hκ : Spot.Bits.consts ms[m].1 ms[m].2.size g = none)
@@ -75,7 +62,6 @@ theorem src_in_unit {m g : ℕ} {r : Spot.Bits.RowPos} (hm : m < ms.length)
     ⟨g, mem_insOf.2 ⟨lt_size_of_lt hg, row?_of_lt hg, hκ, ho⟩, ?_⟩))
   rw [posOf_of_none (row?_of_lt hg), off_eq_of_le_inputs (Nat.le_of_lt hg)]
 
-/-- **A written bit's gate is a gate of its leaf's proof block**: the last lowered gate of a row of that unit. -/
 theorem written_in_unit {m u k j t x : ℕ} {r : Spot.Bits.RowPos} (hm : m < ms.length)
     (hx : Spot.Bits.outGate ms[m].1 ms[m].2.size u k j t = some x)
     (hr : Spot.Bits.outRowBit ms[m].1 u k j t = some r) :
@@ -100,7 +86,6 @@ namespace SpotFlock
 open Claims.Sampling
 open Properties.Spot (bitsProgs membersPart memberProg unitBase)
 
-/-- **Each bit is a gate of its unit's proof block** (`BitsInUnits`), at every held code. -/
 theorem bitsInUnits (h : Held) : BitsInUnits h := by
   intro x t rp hx
   rcases hx with hs | hw
@@ -118,8 +103,6 @@ theorem bitsInUnits (h : Held) : BitsInUnits h := by
     rw [e1, e2, e3]
     exact ⟨hm, _root_.Flock.Bridge.NeededBitsOf.written_in_unit hm hx' hr⟩
 
-/-- **A needed gate the wiring sends inside its replay block stays inside** (`Inside`), where every member's bits are
-rowed (`MembersRowed`) and a gate is at one written position at most (`WrittenOnce`). -/
 theorem inside_of_rowed {h : Held} (hR : MembersRowed h) (hO : WrittenOnce h) : Inside h :=
   inside_of (neededBits_of_rowed hR) (sideBySide_of_held h) (bitsInUnits h) hO
 

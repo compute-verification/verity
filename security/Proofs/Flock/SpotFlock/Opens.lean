@@ -5,55 +5,14 @@ public import Proofs.Flock.SamplingGeneric.OpensTwo
 public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.Sampling.ProgReads
 
-/-!
-# SPOT[Flock]'s session opens each checked proof block at its replay block
-
-`sessionOpensTwo h`: `Claims.SamplingGeneric.SessionOpensTwo` at SPOT[Flock]'s two-stage code (`code h`), Flock's
-masked record and SHA-512, from what one session statement establishes (`StmtOpens h`).
-
-**The run** (`run_seenAt`). An accepted run of `V h` answered rounds 0 to `stage` with their coins, the prover sending
-nothing in rounds 2 to `stage`, and round `stage + 1` with nothing, so the verifier's check of the session statements
-passed there (`stmtOk h x m₁ m₂ c₀ c₁`, at the round-1 message `m₁`, round `stage + 1`'s message `m₂`, round 0's coin
-`c₀` and the second stage's coins `c₁`, rounds 1 to `stage`'s), and its transcript is `seenAt` of them. A checked
-unit's session is its template's, at the statement `m₂` states for that template (`unitStmt`), which the run answered
-every round before (`SessionSeq.session_acc`); the interior roots are those `m₁` states, and its checked units are the
-second stage's on `c₀` and `c₁` (`checked_eq`).
-
-**The statement** (`StmtOpens h`): with no run and no coin beyond `c₀` and `c₁`, session statements that the verifier's
-check passes, at a Flock witness in the relation of a unit's statement, reveal for that unit the two stages check
-openings under which its proof block is correct on its replay block's values. That is what the session statement's
-relation, the witness's encoding of its openings and the registered reads establish; the run only selects the
-statements.
-
-**The witness's values** (`WitOpens h`, `stmtOpens`). A checked unit `u` has a proof block `b` in a replay block `ρ`
-with gates `rb` (`mem_checked_lt`, `InScopeTwo`, `replay_block`). `StmtOpens` follows from one pair of values: boundary
-values `W` and interior values `I` that make `b` correct on `ρ`'s values, each that `b`'s correctness needs
-(`Prog.Needs`) revealed by an opening that passes, an interior one of `ρ` under the interior roots, every other under
-the run's roots. Values that agree with those openings agree with `W` and `I` wherever `b`'s correctness reads them
-(`Prog.correct_of_needs`).
-
-**The witness's values, decoded** (`Decodes`, `Reveals`, `witOpens`). `WitOpens` splits in two at a decoder `dec` of
-the session witness, each gate's value for each checked unit: the decoded values make each checked unit correct
-(`Decodes`, what the session statement's relation says of its circuit), and the reveal opens each decoded value the
-unit's correctness reads, under the roots its gate is committed under (`Reveals`, what the commitment's layout and the
-reveal say of the witness). `Decodes` follows from `Evaluates`, that the decoded values evaluate each of the unit's
-gates on the decoded values of the gates it reads (`decodes_of_evaluates`, by `Prog.correct_of_eval`), which is what a
-session circuit that computes the unit's gates gives. Neither holds of every `h`. The check fixes template `t`'s session
-statement to `xS₀ t` but for what the run sets (`pin_of_stmtOkAt`), so `Evaluates` says that each
-`xS₀ t`'s circuit computes the gates of the sampled proof blocks of template `t` on the values its witness encodes, and `Reveals`
-that the frame (`h.frame`) opens them.
-
-So `ksTwo_spot_of_eval`: SPOT[Flock]'s two-stage knowledge soundness at its code (`ksTwo_spot`) from `Evaluates` and
-`Reveals`.
--/
+/-! SPOT[Flock]'s session opens each checked proof block at its replay block (`sessionOpensTwo`), from what one session
+statement establishes. -/
 
 @[expose] public section
 
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
-
-/-! ## Runs -/
 
 section Steps
 
@@ -67,9 +26,6 @@ theorem stepWith_succ_msg {f : ℕ} {hist : List (Msg × Msg)} {as : List Msg} {
                  pLog := t.pLog ++ ((P.next x hist ω).eval H).2, vLog := t.vLog ++ lo } := by
   simp only [stepWith, h]
 
-/-- **The later rounds of a second stage**: a verifier that, past its first two rounds, answers each of `n` rounds
-with that round's message `c j` where the prover sent nothing and refuses it otherwise, and then checks the next round,
-accepts only past those rounds answered and a round answered with nothing, at a check that passed. -/
 theorem stepWith_pad (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (a₀ a₁ : Msg)
     (hpad : ∀ (as : List Msg) (a : Msg), 2 ≤ as.length → as.length ≤ n + 1 →
       (a = [] ∧ vn (as ++ [a]) = .ret (.msg (c as.length))) ∨ vn (as ++ [a]) = .ret .rej)
@@ -127,9 +83,6 @@ theorem stepWith_pad (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (a₀ 
         simp only [stepWith, e] at hacc
         cases hacc
 
-/-- **A run whose verifier answers its first two rounds with their messages, then `n` rounds with theirs where the
-prover sent nothing, and checks the next** accepts only past that round answered with nothing, at a check that
-passed. -/
 theorem stepWith_stage (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (hv1 : ∀ a, vn [a] = .ret (.msg (c 0)))
     (hv2 : ∀ a b, vn [a, b] = .ret (.msg (c 1)))
     (hpad : ∀ (as : List Msg) (a : Msg), 2 ≤ as.length → as.length ≤ n + 1 →
@@ -165,7 +118,6 @@ def seenAt {h : Held} (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : S
     (((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq c₁ (i + 1)).bytes)) ++ (m₂, .msg []) :: rest),
     .acc⟩
 
-/-- The session statements' message of `seenAt`, round `stage + 1`'s. -/
 theorem seenAt_stmts {m₀ m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {rest : List (Msg × Out)} :
     ((seenAt m₀ m₁ m₂ c₀ c₁ rest).msgs.getD (h.stage + 1) ([], .rej)).1 = m₂ := by
   have hl : ((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq c₁ (i + 1)).bytes)).length = h.more := by
@@ -176,7 +128,6 @@ theorem seenAt_stmts {m₀ m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : St
   rw [hl, Nat.sub_self] at e
   exact congrArg Prod.fst e
 
-/-- The verifier's step at a run's coins in round 0: the round's coin. -/
 theorem next_run_one {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (a : Msg) :
     next h x [a] ((List.range [a].length).map (coinSeq r)) = .ret (.msg (coinSeq r 0).bytes) := by
   have e := next_two h x (as := [a]) (cs := (List.range [a].length).map (coinSeq r)) (List.cons_ne_nil a [])
@@ -184,7 +135,6 @@ theorem next_run_one {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (a : M
   rw [getD_map_range (coinSeq r) (show [a].length - 1 < [a].length by simp) default] at e
   exact e
 
-/-- The verifier's step at a run's coins in round 1: the round's coin. -/
 theorem next_run_two {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (a b : Msg) :
     next h x [a, b] ((List.range [a, b].length).map (coinSeq r)) = .ret (.msg (coinSeq r 1).bytes) := by
   have e := next_two h x (as := [a, b]) (cs := (List.range [a, b].length).map (coinSeq r)) (List.cons_ne_nil a [b])
@@ -192,8 +142,6 @@ theorem next_run_two {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (a b :
   rw [getD_map_range (coinSeq r) (show [a, b].length - 1 < [a, b].length by simp) default] at e
   exact e
 
-/-- **The verifier's step at a run's coins in rounds 2 to `stage`**: the round's coin where the prover sent nothing,
-refused otherwise. -/
 theorem next_run_pad {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (as : List Msg) (a : Msg)
     (h2 : 2 ≤ as.length) (hle : as.length ≤ h.more + 1) :
     (a = [] ∧ next h x (as ++ [a]) ((List.range (as ++ [a]).length).map (coinSeq r)) =
@@ -209,8 +157,6 @@ theorem next_run_pad {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (as : 
   · exact Or.inl ⟨ha, by rw [hn, ite_eq_left (Or.inr ha)]⟩
   · exact Or.inr (by rw [hn, ite_eq_right fun hc => hc.elim (fun h' => by omega) ha])
 
-/-- **The verifier's step at a run's coins in round `stage + 1`**: the session statements' check at round 0's coin and
-the second stage's. -/
 theorem next_run_stmt {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (as : List Msg)
     (hlen : as.length = h.more + 3) :
     next h x as ((List.range as.length).map (coinSeq r)) =
@@ -224,7 +170,6 @@ theorem next_run_stmt {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (as :
   have hlen' : as.length = h.stage + 2 := hlen
   rw [next_stmt h x (by simp) hlen', hlen', getD_map_range (coinSeq r) (show 0 < h.stage + 2 by omega), e0, hst]
 
-/-- The session statements' message of a run's prover messages through round `stage + 1`. -/
 theorem getD_stmts (m₀ m₁ m₂ : Msg) :
     ((m₀ :: m₁ :: List.replicate h.more ([] : Msg)) ++ [m₂]).getD (h.stage + 1) [] = m₂ := by
   have hs : h.stage = h.more + 1 := rfl
@@ -232,7 +177,6 @@ theorem getD_stmts (m₀ m₁ m₂ : Msg) :
   rw [← hl]
   exact getD_concat _ _ _
 
-/-- **A run's messages through round `stage + 1` are `seenAt`'s**, at the run's coins. -/
 theorem msgs_seenAt {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (m₀ m₁ m₂ : Msg) (rest : List (Msg × Out)) :
     ((m₀, Out.msg (coinSeq r 0).bytes) :: (m₁, Out.msg (coinSeq r 1).bytes) ::
         (((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq r (i + 2)).bytes)) ++
@@ -250,8 +194,6 @@ theorem msgs_seenAt {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (m₀ m
       (m₂, Out.msg []) :: rest)
   rw [h1, hpadl, ← e0]
 
-/-- **An accepted run passed the session statements' check**: its transcript is `seenAt` of its messages of rounds 0, 1
-and `stage + 1`, round 0's coin and the second stage's (`stageCoins`), and `stmtOk` held at them. -/
 theorem run_seenAt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin ((V h).k x) → FlockDeploy.Coin) (hacc : (run H P (V h) x ω r).out = .acc) :
     ∃ m₀ m₁ m₂ rest, (run H P (V h) x ω r).seen = seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest ∧
@@ -272,8 +214,6 @@ theorem run_seenAt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω :
   rw [hm', hacc]
   exact congrArg (fun l => (⟨l, .acc⟩ : Seen)) (msgs_seenAt h r m₀ m₁ m₂ rest)
 
-/-- **Template `t`'s session statement as the verifier's check passes it is the template's reference one** (`pinOk`)
-but for its sample, its registered reads and its public file. -/
 theorem pin_of_stmtOkAt {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {t : ℕ}
     (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) :
     ∃ w w₀, FlockDeploy.decode xS = some w ∧ FlockDeploy.decode (h.xS₀ t) = some w₀ ∧
@@ -307,7 +247,6 @@ theorem pin_of_stmtOkAt {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stag
               simp only [hw₀, decide_eq_true_eq] at hpin
               exact ⟨w, w₀, rfl, rfl, hpin⟩
 
-/-- **The checked units** of a run whose statement decodes: the second stage's on round 0's coin and the stage's. -/
 theorem checked_eq (x : Msg) {st : Roots} (hst : decode x = some st) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
     (code h).checked x r =
       h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (stageSrc (stageCoins h x r)) := by
@@ -316,17 +255,9 @@ theorem checked_eq (x : Msg) {st : Roots} (hst : decode x = some st) (r : Fin ((
   rw [hr, Option.map_some, Option.getD_some]
   rfl
 
-/-! ## The session statements' openings -/
-
 /-- **Unit `u`'s session statement** as round `stage + 1`'s message `m₂` states it: its template's. -/
 abbrev unitStmt (m₂ : Msg) (u : ℕ) : Msg := stmtAt h m₂ (templateOf h.ms u)
 
-/-- **The session statements open every unit they check**: at a run's statement in the two-stage scope, session
-statements `m₂` that the verifier's check passes at the round-1 message `m₁` and the coins `c₀` and `c₁`, and a Flock
-witness in the relation of unit `u`'s statement, each unit `u` the two stages check on those coins has a proof block
-`b` in a replay block `ρ` with gates `rb`, and any values `val` and interior values `ι` that agree with the openings the
-witness reveals and that pass (under the run's roots, and the interior roots `m₁` states for `ρ`) make `b` correct on
-`ρ`'s values. -/
 def StmtOpens : Prop :=
   ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
@@ -340,8 +271,6 @@ def StmtOpens : Prop :=
           (q.1 = iroots x (seenAt m₀ m₁ m₂ c₀ c₁ rest) ρ → ι q.2.pos = q.2.val)) →
         s.prog.Correct (s.prog.refIn rb val ι) b
 
-/-- **SPOT[Flock]'s session opens each checked proof block at its replay block**: `SessionOpensTwo` at SPOT[Flock]'s
-two-stage code, from `StmtOpens`. -/
 theorem sessionOpensTwo (hs : StmtOpens h) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
       (two h) iroots := by
@@ -377,8 +306,6 @@ theorem sessionOpensTwo (hs : StmtOpens h) :
     (congrArg (u ∈ ·) (checked_eq h x hst r)).mp (List.mem_of_getElem? hp)
   exact hs x s Pt d m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest wF u hx hP hd hin hok hum hck
 
-/-! ## The witness's values -/
-
 theorem mem_checked_lt {g : RegTwo} {N : ℕ} {src₁ src₂ : ByteArray} {u : ℕ} (hu : u ∈ g.checked N src₁ src₂) :
     u < N := by
   unfold SamplingDeploy.RegTwo.checked at hu
@@ -394,8 +321,6 @@ theorem units_base {x : Msg} {s : AuditStatement} {Pt : Partition} (hx : parse h
   rw [hx']
   simp [hP']
 
-/-- **A checked unit's template is a member's**: at a run's statement that parses, each unit the two stages check is
-below the members' units. -/
 theorem templateOf_lt_of_checked {x : Msg} {s : AuditStatement} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u : ℕ}
     (hx : parse h x = some s) (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁)) :
     templateOf h.ms u < h.ms.length := by
@@ -407,7 +332,6 @@ theorem templateOf_lt_of_checked {x : Msg} {s : AuditStatement} {c₀ : FlockDep
     exact _root_.Flock.Bridge.Members.length_blocks_membersPart (ms := h.ms)
   exact templateOf_lt (hN ▸ mem_checked_lt hu)
 
-/-- **The statement check holds at each checked unit's statement**, at its template (`stmtOkAt`). -/
 theorem stmtOkAt_unit {x m₁ m₂ : Msg} {s : AuditStatement} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u : ℕ}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
     (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁)) :
@@ -418,12 +342,6 @@ theorem replay_block {Pt Pρ : Partition} {v ρ : ℕ} (hρ : replayOf Pt Pρ v 
     ∃ rb, Pρ.blocks[ρ]? = some rb :=
   ⟨_, List.getElem?_eq_getElem (List.mem_range.1 (List.mem_of_find?_eq_some hρ))⟩
 
-/-- **The session statement's witness holds values that make each checked unit correct**: at a run's statement in the
-two-stage scope, session statements `m₂` that the verifier's check passes and a Flock witness in the relation of unit
-`u`'s statement, each unit `u` the two stages check, with proof block `b` in replay block `ρ` of gates `rb`, has
-boundary values `W` and interior values `I` that make `b` correct on `ρ`'s values, and the witness reveals each value
-`b`'s correctness needs by an opening that passes: one of `ρ`'s interior under the interior roots `m₁` states for `ρ`,
-every other under the run's roots. -/
 def WitOpens : Prop :=
   ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u b ρ rb,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
@@ -441,8 +359,6 @@ def WitOpens : Prop :=
             (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 q.1 q.2 = true ∧
               q.1 = s.roots ∧ q.2.pos = g ∧ W g = some q.2.val)
 
-/-- **`StmtOpens` from the witness's values**: values that agree with the openings that pass agree with `W` and `I`
-wherever the proof block's correctness reads them. -/
 theorem stmtOpens (hw : WitOpens h) : StmtOpens h := by
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u hx hP hd hin hok hu hck
   have hlt : u < Pt.blocks.length := by
@@ -461,23 +377,15 @@ theorem stmtOpens (hw : WitOpens h) : StmtOpens h := by
   · obtain ⟨q, hq, hop, hr, hpos, hval⟩ := (hcov g hg).2 hi
     rw [ite_eq_right hi, ite_eq_right hi, hval, ← hpos, (hv q hq hop).1 hr]
 
-/-- **`SessionOpensTwo` at SPOT[Flock]'s two-stage code from the witness's values.** -/
 theorem sessionOpensTwo_of_wit (hw : WitOpens h) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
       (two h) iroots :=
   sessionOpensTwo h (stmtOpens h hw)
 
-/-! ## The witness's values, decoded -/
-
-/-- **A decoder of the session witness**: `dec x m₁ xS wF u g`, the value at the statement's gate `g` that the session
-statement `xS` (unit `u`'s) and its Flock witness `wF` hold for the checked unit `u`, at the run's statement `x` and
-interior registration `m₁`. It is per unit: two checked units that read one gate need not read one value in a witness
-Flock's relation accepts, since only the commitment's binding ties them. -/
+/-- It is per unit: two checked units that read one gate need not read one value in a witness Flock's relation accepts,
+as only the commitment's binding ties them. -/
 abbrev Dec : Type := Msg → Msg → Msg → Claims.Flock.Wit → ℕ → ℕ → Bool
 
-/-- **The decoded values make each checked unit correct**: at session statements the verifier's check passes and a
-Flock witness in the relation of a unit's statement, each unit the two stages check is correct on its replay block's
-values with the decoded values for both the committed and the interior ones. -/
 def Decodes (dec : Dec) : Prop :=
   ∀ x s Pt d (m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) wF u b ρ rb,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
@@ -487,9 +395,6 @@ def Decodes (dec : Dec) : Prop :=
     s.prog.Correct (s.prog.refIn rb (fun g => some (dec x m₁ (unitStmt h m₂ u) wF u g))
       (dec x m₁ (unitStmt h m₂ u) wF u)) b
 
-/-- **The decoded values evaluate each checked unit**: at the same statements as `Decodes`, each gate of the unit but
-its inputs holds, in the decoded values, its value on the decoded values of the gates it reads, and each constant
-gate's decoded value is the constant. -/
 def Evaluates (dec : Dec) : Prop :=
   ∀ x s Pt d (m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) wF u b ρ rb,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
@@ -500,17 +405,12 @@ def Evaluates (dec : Dec) : Prop :=
       y.val (fun i => some (dec x m₁ (unitStmt h m₂ u) wF u i)) none = some (dec x m₁ (unitStmt h m₂ u) wF u g)) ∧
     ∀ g c, s.prog.gates[g]? = some (.const c) → dec x m₁ (unitStmt h m₂ u) wF u g = c
 
-/-- **`Decodes` from an evaluation**: the values a decoder gives every gate, committed or interior, make a unit correct
-where they evaluate its gates (`Prog.correct_of_eval`). -/
 theorem decodes_of_evaluates (dec : Dec) (he : Evaluates h dec) : Decodes h dec := by
   intro x s Pt d m₁ m₂ c₀ c₁ wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb
   obtain ⟨hv, hc⟩ := he x s Pt d m₁ m₂ c₀ c₁ wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb
   exact s.prog.correct_of_eval (v := dec x m₁ (unitStmt h m₂ u) wF u) hin.1 hv hc fun g _ => by
     simp only [Prog.refIn, ite_self]
 
-/-- **The reveal opens each decoded value a checked unit's correctness reads**: at the same statements, for each gate
-`Prog.Needs` names, the reveal holds an opening of the decoded value at that gate that passes, under the interior roots
-`m₁` states for the replay block where the gate is one of its interior gates, and under the run's roots otherwise. -/
 def Reveals (dec : Dec) : Prop :=
   ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u b ρ rb,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
@@ -523,7 +423,6 @@ def Reveals (dec : Dec) : Prop :=
           q.2.val = dec x m₁ (unitStmt h m₂ u) wF u g ∧
           q.1 = if g ∈ rb ∧ s.prog.Boundary rb g = false then iroots x (seenAt m₀ m₁ m₂ c₀ c₁ rest) ρ else s.roots
 
-/-- **`WitOpens` from a decoder**: the decoded values are the witness's values, committed and interior. -/
 theorem witOpens (dec : Dec) (hd : Decodes h dec) (hr : Reveals h dec) : WitOpens h := by
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb
   refine ⟨fun g => some (dec x m₁ (unitStmt h m₂ u) wF u g), dec x m₁ (unitStmt h m₂ u) wF u,
@@ -535,21 +434,18 @@ theorem witOpens (dec : Dec) (hd : Decodes h dec) (hr : Reveals h dec) : WitOpen
       hr x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb g hg
     exact ⟨q, hq, hop, hroot.trans (ite_eq_right hi), hpos, congrArg some hval.symm⟩
 
-/-- **`SessionOpensTwo` at SPOT[Flock]'s two-stage code from a decoder** that `Decodes` and `Reveals`. -/
 theorem sessionOpensTwo_of_dec (dec : Dec) (hd : Decodes h dec) (hr : Reveals h dec) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
       (two h) iroots :=
   sessionOpensTwo_of_wit h (witOpens h dec hd hr)
 
-/-- **`SessionOpensTwo` at SPOT[Flock]'s two-stage code from a decoder** whose values evaluate each checked unit
-(`Evaluates`) and that the reveal opens (`Reveals`). -/
 theorem sessionOpensTwo_of_eval (dec : Dec) (he : Evaluates h dec) (hr : Reveals h dec) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
       (two h) iroots :=
   sessionOpensTwo_of_dec h dec (decodes_of_evaluates h dec he) hr
 
-/-- **SPOT[Flock]'s two-stage knowledge soundness at its code from a decoder**: `ksTwo_spot`, with the sessions'
-openings from a decoder whose values evaluate each checked unit (`Evaluates`) and that the reveal opens (`Reveals`). -/
+/-- Neither premise holds of every `h`: `Evaluates` says each `xS₀ t`'s circuit computes the gates of the sampled proof
+blocks of template `t` on the values its witness encodes, and `Reveals` that the frame opens them. -/
 theorem ksTwo_spot_of_eval (dec : Dec) (he : Evaluates h dec) (hr : Reveals h dec) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h)
       (cap h)).KS FlockDeploy.sha512 :=

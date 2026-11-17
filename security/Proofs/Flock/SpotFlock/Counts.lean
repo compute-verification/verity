@@ -6,25 +6,8 @@ public import Proofs.Flock.SamplingGeneric.SessCount
 public import Proofs.Flock.Claims.Sampling.Refused
 public import Proofs.Flock.Claims.Sampling.Select.SecondStrata
 
-/-!
-# The first-hit bound's three counts at SPOT[Flock]'s code
-
-`CompiledTwo.eventTwoX_le_at` reads three expectations over the coins: the sessions of a run's sample (`N_s`), the gates
-the sample needs (`K_s`) and the gates its sessions need, session by session (`K_m`). At SPOT[Flock]'s compiled verifier
-each is at most a weight summed over the checked proof blocks: `1` for the sessions (`Compiled.card_firstSlots_le`), and
-the gates a block needs for the other two (`Compiled.card_filter_needs_le`, `Compiled.sum_first_sessNeeds_le`).
-
-Where the second stage accepts, the checked blocks are the always-checked ones and those it proves, at most
-`K · Σ_t k_t` with `K` the first stage's count (`RegTwo.proved_size_le`), `k_t` of template `t`'s blocks in each cell
-(`RegTwo.sum_checked_le_strata`); where it is refused, every block below `N`. So a weight at most `M_t` on template
-`t`'s blocks averages at most the always-checked blocks' weights plus `K · Σ_t k_t · M_t`, plus the refusal's
-probability times every block's weight below `N` (`code_ex_le_strata`; `code_ex_le` with one `M` for every block):
-
-* `code_hNs`: `N_s ≤ |always| + K · Σ_t k_t + Pr[refused] · N`;
-* `code_hKs`, `code_hKm`: `K_s` and `K_m` at most
-  `Σ_always |needs u| + K · Σ_t k_t · M_t + Pr[refused] · Σ_{u<N} |needs u|`, with `M_t` the most gates a block of
-  template `t` needs.
--/
+/-! The first-hit bound's three counts `N_s`, `K_s` and `K_m` at SPOT[Flock]'s code, each at most a weight summed over
+the checked proof blocks. -/
 
 @[expose] public section
 
@@ -44,9 +27,6 @@ theorem sum_map_one (l : List ℕ) : (l.map fun _ => (1 : ℕ)).sum = l.length :
 
 variable (h : Held)
 
-/-- **A function of the checked proof blocks at SPOT[Flock]'s code, in expectation**: a function `G` at most a weight
-`w ≤ M` summed over its blocks averages at most the always-checked blocks' weights below `N` plus `K · Σ_t k_t · M`,
-with `K` the first stage's count, plus the refusal's probability times every block's weight below `N`. -/
 theorem code_ex_le (x : Msg) (G : List ℕ → ℝ) (w : ℕ → ℕ) (M : ℕ) (hM : ∀ u, w u ≤ M)
     (hG : ∀ l, G l ≤ ((l.map w).sum : ℝ)) {K : ℕ} (hK : firstK h.reg.first = some K) :
     Ex (fun r : Fin ((code h).V.k x) → FlockDeploy.Coin => G ((code h).checked x r)) ≤
@@ -79,10 +59,6 @@ theorem code_ex_le (x : Msg) (G : List ℕ → ℝ) (w : ℕ → ℕ) (M : ℕ) 
           (fun r => stageSrc (stageCoins h x r)) w M (K * h.reg.ks.toList.sum) hM fun _ _ _ hsel =>
             h.reg.proved_size_le _ _ hsel hK
 
-/-- **A function of the checked proof blocks at SPOT[Flock]'s code, in expectation, by template**: a function `G` at
-most a weight `w` summed over its blocks, with `w` at most `M t` on template `t`'s blocks, averages at most the
-always-checked blocks' weights below `N` plus `K · Σ_t k_t · M t`, with `K` the first stage's count, plus the
-refusal's probability times every block's weight below `N`. -/
 theorem code_ex_le_strata (x : Msg) (G : List ℕ → ℝ) (w M : ℕ → ℕ)
     (hM : ∀ ρ t i, t < h.reg.ns.size → i < h.reg.ns.getD t 0 → w (h.reg.blockOf ρ t i) ≤ M t)
     (hG : ∀ l, G l ≤ ((l.map w).sum : ℝ)) {K : ℕ} (hK : firstK h.reg.first = some K) :
@@ -118,8 +94,6 @@ theorem code_ex_le_strata (x : Msg) (G : List ℕ → ℝ) (w M : ℕ → ℕ)
 
 variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T)
 
-/-- **`N_s` at SPOT[Flock]'s code**: the sessions of a run's sample average at most the always-checked blocks below `N`
-plus `K · Σ_t k_t`, plus the refusal's probability times `N`. -/
 theorem code_hNs (x : Msg) {K : ℕ} (hK : firstK h.reg.first = some K) :
     Ex (fun r : Fin ((compiledTwo F (code h) iroots (two h) (rs h) (cap h)).V.k x) → FlockDeploy.Coin =>
       (((compiledTwo F (code h) iroots (two h) (rs h) (cap h)).toCompiled.firstSlots x
@@ -140,9 +114,6 @@ theorem code_hNs (x : Msg) {K : ℕ} (hK : firstK h.reg.first = some K) :
   rw [sum_map_one, sum_map_one, List.length_range, mul_one] at this
   exact this
 
-/-- **`K_s` at SPOT[Flock]'s code**: with every block of template `t` needing at most `M t` gates, the gates a run's
-sample needs average at most the always-checked blocks' needs below `N` plus `K · Σ_t k_t · M t`, plus the refusal's
-probability times every block's needs below `N`. -/
 theorem code_hKs (x : Msg) (needs : ℕ → Finset ℕ) (M : ℕ → ℕ)
     (hM : ∀ ρ t i, t < h.reg.ns.size → i < h.reg.ns.getD t 0 → (needs (h.reg.blockOf ρ t i)).card ≤ M t) {K : ℕ}
     (hK : firstK h.reg.first = some K) :
@@ -163,9 +134,6 @@ theorem code_hKs (x : Msg) (needs : ℕ → Finset ℕ) (M : ℕ → ℕ)
         ((compiledTwo F (code h) iroots (two h) (rs h) (cap h)).toCompiled.nG x)
       exact_mod_cast hc.trans (sum_map_take_le l _ fun u => (needs u).card)) hK
 
-/-- **`K_m` at SPOT[Flock]'s code**: with every block of template `t` needing at most `M t` gates, the gates a run's
-sessions need, session by session, average at most the always-checked blocks' needs below `N` plus `K · Σ_t k_t · M t`,
-plus the refusal's probability times every block's needs below `N`. -/
 theorem code_hKm (x : Msg) (needs : ℕ → Finset ℕ) (M : ℕ → ℕ)
     (hM : ∀ ρ t i, t < h.reg.ns.size → i < h.reg.ns.getD t 0 → (needs (h.reg.blockOf ρ t i)).card ≤ M t) {K : ℕ}
     (hK : firstK h.reg.first = some K) :

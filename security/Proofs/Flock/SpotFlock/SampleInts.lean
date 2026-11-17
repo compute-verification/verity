@@ -3,19 +3,8 @@ module
 public import Properties.Spot
 public import Proofs.Core.QSort
 
-/-!
-# A sample's integers read back, and an ascending array is its own sort
-
-What `SpotFlock.RunsAs` reads of a checked sample's units:
-
-* `Properties.Spot.Credited.filterMap_int_arr`: an array whose every entry `Spot.int?` reads (`mapM`) is read whole by
-  `filterMap int?`;
-* `Verity.Sampled.qsort_ascending`: an array of integers that ascends (`Properties.Spot.Ascending`) is its own `qsort`.
-
-They are declared in the namespaces `Properties.Spot.Credited` and `Verity.Sampled`, where their other readers are:
-`Proofs.Properties.Spot.Credited` imports this file and reads the first, and `Proofs.Properties.Verity.Sampled.Held`,
-through it, the second.
--/
+/-! A sample's integers read back, and an ascending array is its own sort, each declared in the namespace of its other
+readers. -/
 
 @[expose] public section
 
@@ -50,7 +39,6 @@ theorem toList_of_mapM {us : Array Json} {xs : Array Int} (h : us.mapM int? = so
     obtain rfl := Option.some.inj h
     rfl
 
-/-- Integers read with `int?` throughout are read by `filterMap int?`. -/
 theorem filterMap_int_arr {us : Array Json} {xs : Array Int} (h : us.mapM int? = some xs) :
     us.filterMap int? = xs :=
   Array.toList_inj.1 (by rw [Array.toList_filterMap]; exact filterMap_int (toList_of_mapM h))

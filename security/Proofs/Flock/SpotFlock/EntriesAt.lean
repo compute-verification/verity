@@ -10,23 +10,8 @@ public import Proofs.Flock.Soundness.Refine.Walk
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# The entries the slots name, from round 2's checks
-
-`entriesAt_of`: `EntriesAt` holds where the ports a session reads are no deeper than the code's own (`DepthsAt`),
-which a code at least 64 levels deep has for the registered reads (`depthsAt_of`), leaving the published trees'
-(`RootedDepthsAt`, which `Depths` proves).
-
-* **The registered half** (`registered_entry`): in an accepted run, the entry round 2 reads each of a session's
-  registered reads off (`readKeyAt`, under `readRoots`) has the read's root, leaf count and domain id, of at most
-  `2^64` leaves. The verifier's registered reads are its `ports` file's entries (`portsOf_entries`); round 2's
-  statement check reads that file (`stmtJsonOf`) and passes each entry (`SecondStage.readOk`), whose `sameAt` holds it
-  to the entry it reads off, and to `MAX_LEAVES` (`readOk_entry`), the one `readKey` names in the record
-  `readsInterior` picks (`recKeyAt_port`, `recKeyAt_reg`).
-* **The roots half** (`interior_entry`): template `t`'s port of the interior record at a port no registered read is
-  named like has the port's published root and domain id. Round 2's `rootsOk` holds the record's entry to the
-  header's (`rootsOk_entry`), and the header's is the published tree's (`header_roots`).
--/
+/-! The entries the slots name, from round 2's checks (`entriesAt_of`), wherever the ports a session reads are no deeper
+than the code's own. -/
 
 @[expose] public section
 
@@ -37,9 +22,6 @@ open Properties.Certifier.Bytes (bs)
 open Lean (Json)
 open FlockSoundness.Refine
 
-/-! ## A record's entries by key -/
-
-/-- **The entry key `k` names in record `rec`**, at the record's naming (`recEntries`). -/
 def recKeyAt (rec : Json) (k : SlotKey) : Option Entry :=
   (recEntries rec).find? fun e => decide (e.name = keyOf (Spot.SecondStage.byTemplate rec) k)
 
@@ -129,10 +111,6 @@ theorem recKeyAt_reg (rec : Json) (v : String) :
   rw [recEntries_eq, List.find?_append, find?_entryOf_ne (k := 0) (k' := 1) (by decide), Option.none_or,
     find?_entryOf, regList_find, Option.map_map]; rfl
 
-/-! ## What `readOk` holds an entry to -/
-
-/-- **An entry `sameAt` holds a registered read to** has the read's root, leaf count and domain id, and the read has at
-most `MAX_LEAVES` leaves. -/
 theorem entryOf_sameAt {k : UInt8} {nm : String} {e x : Json} {rs ds : String} {r d : ByteArray} {n : ℕ}
     (hs : Spot.SecondStage.sameAt e x = true) (hr : Spot.getD e "root" = .str rs) (hru : _root_.Flock.unhex rs = .ok r)
     (hd : Spot.getD e "domain" = .str ds) (hdu : _root_.Flock.unhex ds = .ok d)
@@ -156,10 +134,6 @@ theorem entryOf_sameAt {k : UInt8} {nm : String} {e x : Json} {rs ds : String} {
     rw [← hexMsg_of_jeq h2]
     exact hexMsg_str hdu
 
-/-- **A read `readOk` passes has its fields at the entry `readKey` names** in the record `readsInterior` picks: at a
-port a link names, the value of its name the interior registration registers, else the boundary port it names; the
-interior record's port the read names; or the registered value either record registers, each of which `sameAt` holds
-to the read's root, domain and leaves, of at most `MAX_LEAVES`. -/
 theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {port v rs ds : String} {e : Json}
     {r d : ByteArray} {n : ℕ}
     (hok : Spot.SecondStage.readOk own (Spot.SecondStage.byTemplate own.interior) p port e = true)
@@ -272,8 +246,6 @@ theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {p
             show recKeyAt own.interior (.reg v) = _
             rw [recKeyAt_reg, hri]; rfl
 
-/-! ## The verifier's registered reads, as its file states them -/
-
 theorem getD_of_ok {j v : Json} {k : String} (h : j.getObjVal? k = .ok v) : Spot.getD j k = v := by
   simp only [Spot.getD, Spot.field?, h, Except.toOption, Option.getD_some]
 
@@ -290,8 +262,6 @@ theorem mapM_ok_mem {α β ε : Type} {f : α → Except ε β} {xs : Array α} 
   · obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hx
     exact ⟨ys[i], Array.getElem_mem (by omega), hall i hi (by omega)⟩
 
-/-- Each element `f` maps to a value of `ys`, where `ys` is `xs.mapM f`, satisfies what every value `f` returns
-there does. -/
 theorem mapM_ret {α β : Type} {f : α → _root_.Flock.V β} {xs : Array α} {ys : Array β} (h : xs.mapM f = .ok ys)
     (P : α → β → Prop) (hP : ∀ x, Ret (f x) (P x)) :
     (∀ y ∈ ys, ∃ x ∈ xs, P x y) ∧ ∀ x ∈ xs, ∃ y ∈ ys, P x y := by
@@ -302,15 +272,11 @@ theorem mapM_ret {α β : Type} {f : α → _root_.Flock.V β} {xs : Array α} {
   · obtain ⟨y, hy, hf⟩ := h2 x hx
     exact ⟨y, hy, hP x y hf⟩
 
-/-- **What a `ports` file says of a port it names `nm`** at its entry `e`: the port's name, and the hex strings of its
-root and domain id, its leaf count and its value. -/
 abbrev PortFields (nm : String) (e : Json) (reg : _root_.Flock.Registered.Port) : Prop :=
   reg.name = nm ∧ (∃ rs, e.getObjVal? "root" = .ok (.str rs) ∧ _root_.Flock.unhex rs = .ok reg.root) ∧
     (∃ ds, e.getObjVal? "domain" = .ok (.str ds) ∧ _root_.Flock.unhex ds = .ok reg.domain) ∧
     e.getObjVal? "leaves" = .ok (.num ⟨Int.ofNat reg.leaves, 0⟩) ∧ e.getObjVal? "value" = .ok (.str reg.value)
 
-/-- **A `ports` file's ports are its entries**: each port is an entry of its `ports` object under the port's name, with
-the port's fields (`PortFields`), and each entry's name is a port's. -/
 theorem portsOf_entries {j : Json} {own : Array _root_.Flock.Registered.Port}
     (h : _root_.Flock.Registered.portsOf j = .ok own) :
     ∃ kvs, j.getObjVal? "ports" = .ok (.obj kvs) ∧
@@ -363,7 +329,6 @@ theorem map_some_ok {α : Type} {x : Except String α} {a : α} (h : (some <$> x
   | error e => cases h
   | ok b => cases h; rfl
 
-/-- **The verifier's registered reads are its `registered reads` file's ports**, where it has some. -/
 theorem registered_of_ins {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (hw : w.ins = .ok s)
     {own : Array _root_.Flock.Registered.Port} (ho : s.registered = some own) :
     ∃ b j, w.registered = some b ∧ FlockDeploy.jsonOf "registered reads" b = .ok j ∧
@@ -406,7 +371,6 @@ theorem map_some_ne_none {α : Type} {x : Except String α} (h : (some <$> x) = 
   | error e => cases h
   | ok b => cases h
 
-/-- **The verifier has no registered reads only where its statement has no `registered reads` file.** -/
 theorem registered_none {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (hw : w.ins = .ok s) (hn : s.registered = none) :
     w.registered = none := by
   have hm := (ins_reads_public hw).1
@@ -417,10 +381,6 @@ theorem registered_none {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (hw : w.ins 
     rw [hr, Option.mapM_some] at hm
     exact (map_some_ne_none hm).elim
 
-/-! ## The published roots -/
-
-/-- **A port `rootsOk` passes the header's root of** is template `t`'s port of the record at an entry with the
-header's root and domain id, for a port the header roots and `reads` doesn't read. -/
 theorem rootsOk_entry {named : Bool} {rec : Json} {t : String} {hdr : Json} {reads : Array String}
     {p rs ds : String} {r d : ByteArray} (hok : Spot.SecondStage.rootsOk named rec t hdr reads = true)
     (hm : (p, Json.str rs) ∈ Spot.entries (Spot.getD (Spot.getD hdr "frame_v3") "roots"))
@@ -451,8 +411,6 @@ theorem rootsOk_entry {named : Bool} {rec : Json} {t : String} {hdr : Json} {rea
 
 variable (h : Held)
 
-/-- **Round 2's statement for template `t`** names the template, reads the session's public file's header, and reads
-its registered reads file (null where it has none). -/
 theorem stmtJsonOf_fields {t : ℕ} {w : FlockDeploy.Raw} {S : Spot.SecondStage.Stmt} (hS : stmtJsonOf h t w = some S) :
     S.template = h.names.getD t "" ∧ headerOf w.publicFile = some S.header ∧
       (∀ b, w.registered = some b → (FlockDeploy.jsonOf "registered reads" b).toOption = some S.registered) ∧
@@ -526,9 +484,6 @@ theorem keyAt_readRoots {x m₁ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h
   · exact keyAt_decode hst _
   · exact keyAt_irootsOf hrec ρ _
 
-/-- **`EntriesAt`'s registered half**: in an accepted run, the entry round 2 reads each of a checked unit's session's
-registered reads off, under the roots it reads it under, has the read's root, leaf count and domain id, and the read
-has at most `MAX_LEAVES` leaves. -/
 theorem registered_entry {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u ρ : ℕ} {ins : FlockDeploy.Ins}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
@@ -566,10 +521,6 @@ theorem registered_entry {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁
   rw [keyAt_readRoots h hst hrec hdraw]
   exact hy
 
-/-- **`EntriesAt`'s roots half**: in an accepted run, template `t`'s port of the interior record at a port of a
-checked unit's one-table session that no registered read is named like has the root and domain id of the port's
-published tree over the population the session's public file loads, which the header names (`header_roots`): round
-2's `rootsOk` holds the record's entry to the header's. -/
 theorem interior_entry {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u ρ : ℕ}
     {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
@@ -617,9 +568,6 @@ theorem interior_entry {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁ :
   rw [keyAt_irootsOf hrec ρ, recKeyAt_interior]
   exact hy
 
-/-- **The ports a checked unit's session reads are no deeper than `c`'s own**: its registered reads, and the published
-trees of a one-table session's ports that no registered read is named like, over any population its public file
-loads. -/
 def DepthsAt (c : Code) : Prop :=
   ∀ x s (m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) wF u ins spec sts,
     parse h x = some s → stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
@@ -631,8 +579,6 @@ def DepthsAt (c : Code) : Prop :=
       _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop →
       _root_.Flock.log2ceil (pubPort sts[j].c pop q).leaves ≤ depth c.own)
 
-/-- **The published trees a checked unit's one-table session reads are no deeper than `c`'s own**: each port's that
-no registered read is named like, over any population its public file loads. -/
 def RootedDepthsAt (c : Code) : Prop :=
   ∀ x s (m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) wF u ins spec sts,
     parse h x = some s → stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
@@ -643,7 +589,6 @@ def RootedDepthsAt (c : Code) : Prop :=
       _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop →
       _root_.Flock.log2ceil (pubPort sts[j].c pop q).leaves ≤ depth c.own
 
-/-- A tree of at most `MAX_LEAVES` leaves is at most 64 levels deep. -/
 theorem log2ceil_le_64 {n : ℕ} (hn : n ≤ Spot.SecondStage.MAX_LEAVES) : _root_.Flock.log2ceil n ≤ 64 := by
   unfold _root_.Flock.log2ceil
   split
@@ -653,16 +598,12 @@ theorem log2ceil_le_64 {n : ℕ} (hn : n ≤ Spot.SecondStage.MAX_LEAVES) : _roo
     have h3 : Nat.log2 (n - 1) < 64 := (Nat.log2_lt (by omega)).2 h2
     omega
 
-/-- **`DepthsAt` at a code at least 64 levels deep**: round 2 holds each registered read to at most `MAX_LEAVES`
-leaves (`registered_entry`), and the published trees' depths are `RootedDepthsAt`. -/
 theorem depthsAt_of {c : Code} (h64 : 64 ≤ depth c.own) (hP : RootedDepthsAt h c) : DepthsAt h c := by
   intro x s m₁ m₂ c₀ c₁ wF u ins spec sts hx hok hu hck hset
   refine ⟨fun own reg hown hreg => ?_, hP x s m₁ m₂ c₀ c₁ wF u ins spec sts hx hok hu hck hset⟩
   obtain ⟨-, -, -, -, -, hb⟩ := registered_entry h (ρ := 0) hx hok hu hset hown hreg
   exact (log2ceil_le_64 hb).trans h64
 
-/-- **`EntriesAt` from the ports' depths**: its registered half is `registered_entry` and its roots half
-`interior_entry`. -/
 theorem entriesAt_of {c : Code} (hD : DepthsAt h c) : EntriesAt h c := by
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset
   obtain ⟨hDr, hDp⟩ := hD x s m₁ m₂ c₀ c₁ wF u ins spec sts hx hok hu hck hset

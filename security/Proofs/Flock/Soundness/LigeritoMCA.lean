@@ -21,25 +21,8 @@ import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Rounds
 import Proofs.Flock.Soundness.ZerocheckPhase
 
-/-!
-# Mutual correlated agreement at Ligerito's folds (`Flock.Ligerito`)
-
-From mutual correlated agreement up to the Johnson bound (`mcaError_le_bchks25`, proved from DKT26)
-to Ligerito's coins:
-
-* **The coin bound** (`prCoin_mca_le`): for a Reed–Solomon code in the Johnson range over any finite
-  field, whatever two words the prover fixes, a uniform coin makes the MCA event happen with
-  probability at most `a/|L|`. This is `mcaError_le_bchks25` read through `prCoin`
-  (VCVio's `prEvent_uniformSample`).
-* **One fold round** (`rowsAgreeOn_of_fold`, `prCoin_fold_mca_le`): a round folds lanes `2ℓ` and
-  `2ℓ + 1` into `R(2ℓ) + r·(R(2ℓ+1) + R(2ℓ))`, an affine line. Outside the rounds' MCA events, if
-  every folded row agrees with a codeword on a large set `T`, so does every row, on the same `T`.
-  One round costs (number of pairs)·`a/|L|`.
-* **All rounds** (`rowsAgreeOn_of_foldAll`): folding `2^k` lanes to one by `k` challenges, lowest
-  lane bit first; the fold is the `eq`-weighted sum of the lanes (`foldAllRows_eq_sum`, the weights
-  of `Model.foldColumn`). Paper Lemma 9's row union is the sum of the rounds' pair counts,
-  `2^k − 1`.
--/
+/-! Mutual correlated agreement up to the Johnson bound (`mcaError_le_bchks25`), read as a bound on Ligerito's fold
+coins. -/
 
 @[expose] public section
 
@@ -49,12 +32,6 @@ open Game Model Accounting
 open CodingTheory CoreDefinitions
 open scoped ENNReal NNReal
 
-/-! ## The coin bound -/
-
-/-- **Mutual correlated agreement, read as a coin bound.** For a Reed–Solomon code of `k`
-coefficients on `n` points and a radius `0 ≤ δ < 1 − √((k − 1)/n)`, whatever two words the prover
-fixes, a uniform `γ` makes the MCA event happen with probability at most `a/|L|`, BCHKS25's printed
-bound (`mcaError_le_bchks25`). -/
 theorem prCoin_mca_le {n : ℕ} {L : Type} [Field L] [Fintype L] [DecidableEq L]
     (domain : Fin n ↪ L) (k : ℕ) (δ : ℝ≥0) (hk : 1 < k)
     (hδJ : (δ : ℝ) < 1 - ((((k - 1 : ℕ) : ℝ) / Fintype.card (Fin n)) ^ ((1 : ℝ) / 2)))
@@ -77,19 +54,14 @@ theorem prCoin_mca_le {n : ℕ} {L : Type} [Field L] [Fintype L] [DecidableEq L]
   refine le_trans (le_of_eq ?_) hU
   rw [SampleableType.prEvent_uniformSample, prCoin_eq_card]
 
-/-! ## One fold round -/
-
 variable {ι : Type} [Fintype ι] {L : Type} [Field L] [Fintype L] [DecidableEq L]
 
-/-- Every row agrees with a codeword on `T`. -/
 def RowsAgreeOn (code : Submodule L (ι → L)) (T : Finset ι) {m : ℕ} (R : Fin m → ι → L) : Prop :=
   ∀ ℓ, ∃ c ∈ code, ∀ i ∈ T, c i = R ℓ i
 
-/-- One fold round: lanes `2ℓ` and `2ℓ + 1` fold into `R(2ℓ) + r·(R(2ℓ+1) + R(2ℓ))`. -/
 def foldRows {m : ℕ} (r : L) (R : Fin (2 * m) → ι → L) : Fin m → ι → L := fun ℓ i =>
   R ⟨2 * ℓ.val, by omega⟩ i + r * (R ⟨2 * ℓ.val + 1, by omega⟩ i + R ⟨2 * ℓ.val, by omega⟩ i)
 
-/-- The two words folded into row `ℓ`, on the affine line `u₀ + r·u₁`. -/
 def foldPair {m : ℕ} (R : Fin (2 * m) → ι → L) (ℓ : Fin m) : Fin 2 → ι → L :=
   ![R ⟨2 * ℓ.val, by omega⟩, fun i => R ⟨2 * ℓ.val + 1, by omega⟩ i + R ⟨2 * ℓ.val, by omega⟩ i]
 
@@ -100,9 +72,6 @@ theorem mem_projected_of_agree (code : Submodule L (ι → L)) (T : Finset ι) (
   Submodule.mem_map.2 ⟨c, hc, funext fun i => h i i.property⟩
 
 omit [DecidableEq L] in
-/-- **One fold round, deterministically.** If no pair of this round is an MCA event at `r`, and
-every folded row agrees with a codeword on a set `T` of at least `(1 − δ)n` positions, then every
-row agrees with a codeword on `T`. -/
 theorem rowsAgreeOn_of_fold [CharP L 2] (code : Submodule L (ι → L)) (δ : ℝ) {m : ℕ} (r : L)
     (R : Fin (2 * m) → ι → L) (hr : ∀ ℓ, ¬ IsMCA (AffineLineGenerator L) code r (foldPair R ℓ) δ)
     (T : Finset ι) (hT : (T.card : ℝ) ≥ Fintype.card ι * (1 - δ))
@@ -130,8 +99,6 @@ theorem rowsAgreeOn_of_fold [CharP L 2] (code : Submodule L (ι → L)) (δ : �
     have h1 : (⟨2 * (ℓ₀.val / 2) + 1, by omega⟩ : Fin (2 * m)) = ℓ₀ := Fin.ext (by simp only; omega)
     rw [h1, add_assoc, Rounds.add_self, add_zero]
 
-/-- **One fold round, the coin.** Given a bound `ε` on each pair's MCA event, the round's MCA event
-over all `m` pairs has probability at most `m·ε`. -/
 theorem prCoin_fold_mca_le (code : Submodule L (ι → L)) (δ : ℝ) {m : ℕ} (R : Fin (2 * m) → ι → L)
     (ε : ℝ≥0∞)
     (hε : ∀ U : Fin 2 → ι → L, prCoin (fun γ : L => IsMCA (AffineLineGenerator L) code γ U δ) ≤ ε) :
@@ -147,22 +114,16 @@ theorem prCoin_fold_mca_le (code : Submodule L (ι → L)) (δ : ℝ) {m : ℕ} 
     _ ≤ ∑ _ℓ ∈ (Finset.univ : Finset (Fin m)), ε := Finset.sum_le_sum fun ℓ _ => hε _
     _ = m * ε := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-! ## All rounds -/
-
 theorem two_pow_succ' (k : ℕ) : 2 ^ (k + 1) = 2 * 2 ^ k := by ring
 
-/-- `2^(k+1)` rows as `2·2^k` rows. -/
 def splitRows {k : ℕ} (R : Fin (2 ^ (k + 1)) → ι → L) : Fin (2 * 2 ^ k) → ι → L :=
   fun ℓ => R (Fin.cast (two_pow_succ' k).symm ℓ)
 
-/-- Fold `2^k` rows to one by the challenges `ch`, lowest lane bit first (as `Model.foldColumn`
-weighs them). -/
 def foldAllRows : (k : ℕ) → List L → (Fin (2 ^ k) → ι → L) → (ι → L)
   | 0, _, R => R ⟨0, by norm_num⟩
   | _ + 1, [], _ => 0
   | k + 1, r :: rs, R => foldAllRows k rs (foldRows r (splitRows R))
 
-/-- No round of the fold by `ch` is an MCA event. -/
 def MCAGood (code : Submodule L (ι → L)) (δ : ℝ) : (k : ℕ) → List L → (Fin (2 ^ k) → ι → L) → Prop
   | 0, _, _ => True
   | _ + 1, [], _ => False
@@ -171,9 +132,6 @@ def MCAGood (code : Submodule L (ι → L)) (δ : ℝ) : (k : ℕ) → List L �
         MCAGood code δ k rs (foldRows r (splitRows R))
 
 omit [DecidableEq L] in
-/-- **All rounds, deterministically.** If no round is an MCA event and the fully folded row agrees
-with a codeword on a set `T` of at least `(1 − δ)n` positions, every row agrees with a codeword on
-`T`. -/
 theorem rowsAgreeOn_of_foldAll [CharP L 2] (code : Submodule L (ι → L)) (δ : ℝ) :
     ∀ (k : ℕ) (ch : List L) (R : Fin (2 ^ k) → ι → L), MCAGood code δ k ch R →
       ∀ T : Finset ι, (T.card : ℝ) ≥ Fintype.card ι * (1 - δ) →
@@ -203,7 +161,6 @@ theorem eqList_cons {R : Type} [CommRing R] (a : R) (l : List R) (j : ℕ) :
   simp only [Function.comp, Nat.testBit_succ]
 
 omit [Fintype ι] [Fintype L] [DecidableEq L] in
-/-- The full fold is the `eq`-weighted sum of the rows (the weights of `Model.foldColumn`). -/
 theorem foldAllRows_eq_sum [CharP L 2] : ∀ (k : ℕ) (ch : List L), ch.length = k →
     ∀ (R : Fin (2 ^ k) → ι → L) (i : ι),
       foldAllRows k ch R i = ∑ ℓ : Fin (2 ^ k), eqList ch ℓ.val * R ℓ i
@@ -234,8 +191,6 @@ theorem foldAllRows_eq_sum [CharP L 2] : ∀ (k : ℕ) (ch : List L), ch.length 
       simp only [Bool.false_eq_true, if_false, if_true]
       ring
 
-/-! ## The folds' MCA events in the game -/
-
 section Game
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
@@ -248,9 +203,6 @@ theorem foldRounds_succ (A : Arith F K) (k : ℕ) (s : K) (q : Quad K) :
   rw [foldRounds]
   rfl
 
-/-- **The folds' MCA events.** Over the `k` rounds of `foldRounds` on fixed rows, some round is an
-MCA event with probability at most `(2^k − 1)·ε`, whatever the prover sends: the rows are fixed
-before the folds, so each round's event depends only on the earlier challenges. -/
 theorem value_foldRounds_mca_le (A : Arith F K) (hA : A.Correct) {ι : Type} [Fintype ι]
     (code : Submodule K (ι → K)) (δ : ℝ) (ε : ℝ≥0∞)
     (hε : ∀ U : Fin 2 → ι → K, prCoin (fun γ : K => IsMCA (AffineLineGenerator K) code γ U δ) ≤ ε) :

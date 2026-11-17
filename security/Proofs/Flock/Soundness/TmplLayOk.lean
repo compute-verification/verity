@@ -2,16 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.TmplPosMap
 
-/-!
-# `layoutsM`'s layouts are in order
-
-`layDefM` lays a Definition's calls out in order, each run of its own columns between them. `layDefM_ok` follows its
-loops: the runs it pushes are nonempty, ascending and apart from the calls, and with them cover the Definition's columns
-(`RunsOk`). Each call's copies sit side by side, and each run of lanes is a power of two that holds its copies (`OutOk`).
-`layouts_defPos` reads that as `DefPos` for each Definition `layoutsM` lays out, and `layouts_lanes` as `LayOk.lanes`.
-Each depends on what `parse` checks of each call: its copies inside its caller's columns, and its callee an earlier
-Definition.
--/
+/-! `layoutsM`'s layouts are in order (`layouts_defPos`, `layouts_lanes`), given what `parse` checks of each call. -/
 
 @[expose] public section
 
@@ -25,7 +16,6 @@ theorem ebo {α β ε : Type} {x : Except ε α} {f : α → Except ε β} {v : 
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- A loop in `Except` that finished keeps an invariant indexed by how many elements it walked. -/
 theorem forIn_idx_inv {α σ ε : Type} (l : List α) (I : Nat → σ → Prop) {f : α → σ → Except ε (ForInStep σ)}
     (hf : ∀ k (hk : k < l.length) s t, I k s → f l[k] s = .ok t → ∃ s', t = .yield s' ∧ I (k + 1) s') :
     ∀ (m : List α) (k : Nat) (s v : σ), k ≤ l.length → l.drop k = m → I k s → forIn m s f = .ok v → I l.length v
@@ -49,11 +39,9 @@ theorem forIn_idx_inv {α σ ε : Type} (l : List α) (I : Nat → σ → Prop) 
     rw [← List.drop_drop, hm]
     rfl
 
-/-- Where call `i`'s copies end. -/
 def callEnd (t : Tmpl) (D : Def) (i : Nat) : Nat :=
   (D.calls.getD i default).base + (D.calls.getD i default).count * (t.defs.getD (D.calls.getD i default).def_ default).cols
 
-/-- Runs laid out so far, below `X`: nonempty, ascending, apart from the first `k` calls, and with them covering `[0, X)`. -/
 structure RunsOk (t : Tmpl) (D : Def) (runs : Array (Nat × Nat × Nat)) (X k : Nat) : Prop where
   lt : ∀ r < runs.size, (runs.getD r default).1 < (runs.getD r default).2.1
   le : ∀ r < runs.size, (runs.getD r default).2.1 ≤ X
@@ -104,8 +92,6 @@ theorem runsOk_lift {t : Tmpl} {D : Def} {runs : Array (Nat × Nat × Nat)} {X k
     · exact h.apart r hr i hi
     · exact Or.inl (by have := h.le r hr; omega)
 
-/-- After the first `k` calls: the runs below `x`, one place per call, calls ascending and side by side, runs of lanes
-a power of two that holds their copies. -/
 structure OutOk (t : Tmpl) (D : Def) (k x : Nat) (runs : Array (Nat × Nat × Nat)) (places : Array Place) : Prop where
   runs : RunsOk t D runs x k
   size : places.size = k
@@ -293,8 +279,6 @@ theorem foldlM_lays {t : Tmpl} {mode : Mode} {paths : Array Nat} : ∀ (l : List
       rw [show acc.size + (j + 1) = acc.size + 1 + j by omega]
       exact h0
 
-/-- **Each Definition's layout is in order** (`DefPos`), for every layout `layoutsM` returns, while each call's copies sit
-inside its caller's columns and call an earlier Definition, and columns and calls number below `2^64`. -/
 theorem layouts_defPos {t : Tmpl} {mode : Mode} {lays : Array Lay} (h : layoutsM t mode = .ok lays)
     (hcall : ∀ d < t.defs.size, ∀ i < (t.defs.getD d default).calls.size, ((t.defs.getD d default).calls.getD i default).def_ < d ∧ ((t.defs.getD d default).calls.getD i default).base + ((t.defs.getD d default).calls.getD i default).count * (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).cols ≤ (t.defs.getD d default).cols)
     (hsmall : ∀ d < t.defs.size, (t.defs.getD d default).cols < 2 ^ 64 ∧ (t.defs.getD d default).calls.size < 2 ^ 64) :
@@ -309,7 +293,6 @@ theorem layouts_defPos {t : Tmpl} {mode : Mode} {lays : Array Lay} (h : layoutsM
   exact ⟨hR.lt, hR.asc, hR.le, fun i i' h h' => hO.asc i i' h h', fun i hi => (hcall d hd i hi).2, hO.stride,
     hR.cover, hR.apart, by have := hR.size; omega, hs.2, fun i hi => (hcall d hd i hi).1⟩
 
-/-- Every run of lanes `layoutsM` places is a power of two that holds its copies (`LayOk.lanes`). -/
 theorem layouts_lanes {t : Tmpl} {mode : Mode} {lays : Array Lay} (h : layoutsM t mode = .ok lays)
     (hcall : ∀ d < t.defs.size, ∀ i < (t.defs.getD d default).calls.size, ((t.defs.getD d default).calls.getD i default).base + ((t.defs.getD d default).calls.getD i default).count * (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).cols ≤ (t.defs.getD d default).cols) :
     ∀ d i, i < (t.defs.getD d default).calls.size → ((lays.getD d default).places.getD i default).ms ≠ 1 →
