@@ -222,3 +222,18 @@ def test_a_row_carries_the_note_of_its_own_run_and_the_same_numbers_with_it_or_w
     assert table["covers"] in said and O.WITHOUT_Y in said
     monkeypatch.setitem(O.LEFT_OUT, O.KERNEL_MODEL, ())
     assert O.covers() == "Each γ is over the 4 linears of one llama3.1-70b layer (qkv, o, gate_up, down)."
+
+
+@pytest.mark.parametrize("commits_y", [True, False, None])
+def test_a_gamma_of_record_says_whether_its_run_timed_y_s_commitment(tmp_path, scheme, commits_y):
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    assert R.record_run(s.store, timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0002")) == []
+    table = R.build(s.fresh(), root=REPO)
+    row = next(r for r in table["rows"] if (r["scheme"], r["point"], r["model"]) == ("pearl-plus", "C", O.KERNEL_MODEL))
+    del row["commits_y"]
+    if commits_y is not None:
+        row["commits_y"] = commits_y
+    own = next(m for m in R.measurements(table, {"m": "pearl-plus/h200/C"}) if "member" not in m)
+    assert (own["value"], own["target"], own["verdict"]) == (row["gamma"]["gamma"], O.GAMMA_MAX, "within target")
+    assert own["extra"].get("commits_y", "none written") == ("none written" if commits_y is None else commits_y)

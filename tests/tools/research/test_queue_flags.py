@@ -170,7 +170,7 @@ def test_land_into_takes_checked_or_main_and_only_drives_app_pushes_checked(tmp_
     with pytest.raises(QueueError, match="land_into"):
         DriveFlags.parse('land_into = "staging"\n')
     monkeypatch.delenv("RESEARCH_DRIVE", raising=False)
-    with pytest.raises(QueueError, match="`checked` is moved only by drive's App"):
+    with pytest.raises(QueueError, match="`checked` is moved only by the verity-drive App"):
         World(tmp_path).queue(land_into="checked")._drive_only("checked", "once", False)
 
 
