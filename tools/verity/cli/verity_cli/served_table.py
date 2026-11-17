@@ -382,10 +382,10 @@ _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "
 
 
 def _spot_challenger(cfg, params, bound):
-    """The live challenger's bindings; with no gate bound the sample's coins are a local development session's, which
-    served_verdicts.sh takes only in a development run."""
+    """The live challenger's bindings; with no gate bound the sample's coins are a local development session's,
+    simulated, which served_verdicts.sh takes under VERITY_HOLD_PLACEMENT=1 only in a development run."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
-    return hooks if "gate" in bound else {**hooks, "DEVELOPMENT": "1"}
+    return hooks if "gate" in bound or os.environ.get("VERITY_HOLD_PLACEMENT") != "1" else {**hooks, "DEVELOPMENT": "1"}
 
 
 def _pouw(cfg, params, bound):
@@ -612,11 +612,12 @@ def placement(cfg: Mapping[str, Any], piece: Piece, outcome: Mapping[str, Any] |
 
 
 def composite(env: Mapping[str, str]) -> dict[str, str]:
-    """The runner's ``COMPOSITE``, set empty: it composes off the served node unless told otherwise, where onsite's
-    composite, which reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses
-    to start. A caller whose environment ``env`` names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` (a development composite
-    on the node) keeps what it named."""
-    return {} if "COMPOSITE" in env or env.get("COMPOSE_OFF_NODE") == "0" else {"COMPOSITE": ""}
+    """The runner's ``COMPOSITE``, set empty where it composes off the served node (``COMPOSE_OFF_NODE=1``, its default
+    under ``VERITY_HOLD_PLACEMENT=1``), where onsite's composite, which reads PoUS's and the wipe's cases that only the
+    node's card writes, can't be made, and it refuses to start. A caller whose environment ``env`` names ``COMPOSITE``
+    or ``COMPOSE_OFF_NODE=0`` keeps what it named."""
+    off = env.get("COMPOSE_OFF_NODE", "1" if env.get("VERITY_HOLD_PLACEMENT") == "1" else "0")
+    return {} if "COMPOSITE" in env or off == "0" else {"COMPOSITE": ""}
 
 
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
