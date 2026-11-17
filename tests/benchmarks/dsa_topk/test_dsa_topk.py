@@ -496,6 +496,8 @@ def test_steps_to_keeps_a_file_a_process_and_wraps_each_runner_once(tmp_path, mo
     assert Runner.execute_model.dsa_topk_steps is steps
     dsa_topk.steps_to(canon, str(tmp_path), runners=[Runner])
     assert Runner.execute_model.dsa_topk_steps is steps
+    assert dsa_topk._importable("json.decoder") and not dsa_topk._importable("json.no.runner")
+    assert not dsa_topk._importable("no_such_package.runner")
     steps.write({"step": 0, "tokens": 4, "device": "cuda:0", "rows_long": 1})
     path = tmp_path / f"dsa_topk_steps.{os.getpid()}.jsonl"
     lines = [json.loads(x) for x in path.read_text().splitlines()]

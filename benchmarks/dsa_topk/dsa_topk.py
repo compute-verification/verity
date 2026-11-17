@@ -420,17 +420,19 @@ def steps_to(canon: Canon, d: str, runners: Sequence[Any] | None = None) -> Step
     write({"pid": os.getpid(), "stats": list(STATS)})
     steps = Steps(canon, write)
     if runners is None:
-        runners = []
-        for name in RUNNERS:
-            try:
-                runners.append(importlib.import_module(name).GPUModelRunner)
-            except (ImportError, AttributeError):
-                continue
+        runners = [importlib.import_module(name).GPUModelRunner for name in RUNNERS if _importable(name)]
     for runner in runners:
         if not hasattr(runner.execute_model, "dsa_topk_steps"):
             runner.execute_model = step_runner(runner.execute_model, steps)
     atexit.register(steps.drain)
     return steps
+
+
+def _importable(name: str) -> bool:
+    import importlib.util
+
+    parts = name.split(".")
+    return all(importlib.util.find_spec(".".join(parts[:i])) is not None for i in range(1, len(parts) + 1))
 
 
 def settings() -> tuple[str, str]:

@@ -2557,7 +2557,7 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
     slo = slo or ran
     edges = edge_records(d)
     tags = {json.loads(f.read_text()).get("tag"): f.parent for f in d.glob("*/rep-*/meta.json")}
-    topk = topk_counts(step_traces(d), topk_steps(d), [t for t in tags if t])
+    topk = topk_counts(step_traces(d), counts, [t for t in tags if t]) if (counts := topk_steps(d)) else {}
     ended = {tags[t]: n for t, n in past_end(d, [t for t in tags if t], meta.get("end_of_text_ids") or ()).items()}
     loads: dict[str, list[dict]] = {}
     for name in meta.get("passes") or meta["rates"]:
