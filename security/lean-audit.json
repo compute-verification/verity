@@ -30684,13 +30684,13 @@
    }
   },
   "CoreOnsite": {
-   "digest": "e7e4b71b4409695f3608571a32279fdbf4c25a12d1ba29e708b02b613f529405",
+   "digest": "cf2088c58c88c05a688d36fbdb401e5a494f4e972bcecea644cb41c45c5486e8",
    "definitions": {
-    "Core.Onsite.components": "42550fe3c9238e2d1c0f0a0fed56abb8d0e6f730c1385396eea2a6eedcfb98b7",
-    "Core.Onsite.protocol": "0e07f330e559bb81509c5e3c7d9aa51bad8dc41b5d349f96e409d0beac624152",
+    "Core.Onsite.components": "b2397a9178944ad285b92627630f6053e4910c3586ac922bbcd079c61cf96079",
+    "Core.Onsite.protocol": "64b09769d6abf6bf0bb5b8d188c40d503bb6821ff7b816f6e8a2970514b817cc",
     "Core.Onsite.store": "b65965f548762d0423fbefcdfc5de30ffbedd1e4fcc1271bd3a89507cf4b2879",
     "Core.Onsite.tied": "6a1c733aad188dbefc1774d489beaeecb64ebdf5f71ddfd506f48abfd10965ad",
-    "Core.Onsite.ties": "f9bdeb44feebc9d3e7c783b058295b50d790262911fefb101e7218cb98f4bbfd"
+    "Core.Onsite.ties": "a02339ebfb90c8e1b8d57129ed3b415c4f13bfac7ff7c4ef9d0a3e3c196d2abd"
    }
   },
   "CoreProtocol.Blobs": {
@@ -34153,13 +34153,13 @@
    }
   },
   "Definitions.Core.Site": {
-   "digest": "586d9276301d6da44f91203541ab88540d8d3514d09cb973577eb7f0c513a37c",
+   "digest": "5891943acf250d0a396f34fcdaad09de913c1f76c4578e831a9bb58bc8df5d31",
    "definitions": {
     "Verity.Registration": "19abeebc07b97795968bf46f58273cd0f421c08a96fa7f67c8af825c0732d9c1",
     "Verity.Registration.Builder": "330557dcf94849eb4e17a37f661f7dcf381868026d5c68952c525352731fbdad",
     "Verity.Registration.Builder.B": "4ea94ec6c82857314aba12667f0e9088a8fcc16ec4983f80cb1ef4ad53c7a54f",
     "Verity.Registration.Composite": "e2f6823d5fa8fca82f2f9a54a9478aac12799c5dfa9badcf3990d402ef7b9363",
-    "Verity.Registration.Composite.onsite": "a3732978de6cc3c9902e6f4183bb8312cb9567d3357e48ab08a1ff647f515d03",
+    "Verity.Registration.Composite.onsite": "9751a92410f8b149761ffa1e52a6fd27fdcbb97a4b6e6a3679882f408176f918",
     "Verity.Registration.Composite.remote": "fc05e2083693a78e9b467c652be7d3d931dfd491b1762b6a1c415241487134b0",
     "Verity.Registration.Declared": "a5072072b5f757074f9a19637e0ed20f2f3e1bf4629e4cbe1eec93ebb60f0287",
     "Verity.Registration.Entry": "cf77aec916a338f85f7b9c3ac5858168d0d2d430f39e7d80ac70509511aa69ae",
