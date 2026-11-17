@@ -54,6 +54,15 @@ def test_the_verdict_judges_clean_arms_on_the_build_step_and_the_tools_own_cpu_a
     assert not over["C_peak_within_reservation"], "86 GB is 80.1 GiB"
 
 
+def test_the_headline_opens_with_the_benchmark_s_name_and_gives_each_kind_s_numbers_and_the_verdict():
+    arms = [_arm("A", 110, 60), _arm("B", 115, 62), _arm("C", 130, 61, gb="86")]
+    line = G.headline(*G.summarize(arms), 3, 24)
+    assert line.startswith("lean_records: build step A 110 s, B 115 s, C 130 s; tools' own CPU A 60 s, B 62 s, C 61 s;")
+    assert line.endswith("(medians over 1, 1 and 1 clean arms, 3 rounds, 24 cores); verdict pass")
+    assert G.headline(*G.summarize([*arms, _arm("B", 140, 62), _arm("B", 140, 62)]), 3, 24).endswith(
+        "verdict fail: B_build_s_within_1.1_A")
+
+
 def test_the_guard_swaps_every_file_of_the_plan_and_reads_reservations_by_its_units():
     """An arm runs one version of the plan whole, its rules and its figures, so `TOOLS` holds both; a reservation is read
     in the unit the plan gives its variable."""

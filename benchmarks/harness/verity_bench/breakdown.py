@@ -1,7 +1,7 @@
 """Where PoUS's bandwidth audit's time over plain goes, by part, from the spans its breakdown spec's arms record
 (`llama31-8b-fp8-1gpu-bandwidth-ablation`).
 
-Memory accounting's spans arms (`benchmarks/vllm_encoded/README.md`, "Spans") time each step by part, and each timed
+Memory accounting's spans arms (`benchmarks/vllm_encoded/DESIGN.md`, "Spans") time each step by part, and each timed
 rep's `extras` keeps a run's parts a step (`span_per_step.<kind>.<part>_ms`, `graph` for vLLM's replayed decode steps and
 `eager` for prefill and mixed steps) and its steps. A part's time an output token is its time a step times the kind's
 steps over the run's generated tokens. The top-up runs beside the step, so its cost is in no part: it shows only as the

@@ -382,6 +382,19 @@ def test_with_no_number_the_texts_headline_is_replaced_so_its_number_never_print
     assert capsys.readouterr().out.splitlines()[0] == "x: no number: refused"
 
 
+def test_a_measurement_that_gives_its_own_mark_keeps_it_unless_the_record_is_made_up(out, capsys):
+    """A chosen parameter written beside the measured numbers gives its own mark, which the call's leaves alone; a
+    made-up record's measurements are all `MADE_UP_MARK`'s, whatever each gives."""
+    measured = [*MEASURED, {"name": "error", "value": 0.01, "unit": "probability", "mark": "modeled"}]
+    assert kit.report("x", "x: 0.25", DOC, measured) == 0
+    _text, _doc, got = said(capsys, out)
+    assert [(m["mark"], m["inputs"][0]) for m in got.values()] == [("measured", "measured"), ("modeled", "modeled")]
+    (out / "result.json").unlink()
+    measured[1] = measured[1] | {"mark": "partial"}
+    assert kit.report("x", "x: 0.25", DOC, measured, made_up=True) == 0
+    assert {m["mark"] for m in said(capsys, out)[2].values()} == {kit.kit_report.MADE_UP_MARK}
+
+
 def test_given_none_of_the_interfaces_arguments_report_prints_and_writes_as_before(out, capsys):
     assert kit.report("x", "x: 0.25", DOC, MEASURED) == 0
     text, doc, got = said(capsys, out)

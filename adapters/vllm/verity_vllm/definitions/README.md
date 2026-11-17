@@ -44,7 +44,7 @@ its Definitions with their signatures.
   id go through it, so a new module's Definitions resolve everywhere, not only where someone imported the module.
 - Each Definition module has its binding file beside it, `<module>.circuit-check.py`, the small bindings `circuit-check`
   checks it at, and `<module>.circuit-check.json`, its lowering pins (`tools/verity/circuit_check/`).
-- `tests/test_catalog.py` checks what the catalog loads.
+- `tests/adapters/vllm/verity_vllm/definitions/test_catalog.py` checks what the catalog loads.
 
 ## Boolean versions
 
@@ -73,11 +73,12 @@ declines that input, and the reference computes it.
 - Row kernels (`rows.py` and the `*_rows.py` modules, registered as kernel `"rows"`): numpy evaluators of whole Program
   rows, one per Definition family, which the sampled replay re-evaluates.
 - Twins (`*_twin.py`, `*_twins.py`): vectorized re-implementations of single composites.
-- CPU models of the GPU kernels, independent of the Definitions (`cpp/`, loaded through ctypes by `cpu_model.py` and its
-  siblings), and the relations built on them (`*_relation.py`), which predict a kernel's committed bytes from its opened
-  inputs alone.
-- `cuda/`: probe kernels that capture, on a GPU, the approximate instructions and tensor-core tiles the CPU models and
-  primitives reproduce (MUFU's `ex2`, `rcp`, `sqrt` and `tanh`, Ampere's `mma.sync` m16n8k16).
+- CPU models of the GPU kernels, independent of the Definitions (`numerics/cpp/`, loaded through ctypes by
+  `numerics/cpu_model.py` and its siblings), and the relations built on them (`*_relation.py`), which predict a kernel's
+  committed bytes from its opened inputs alone.
+- `benchmarks/definitions/numerics/cuda/`: probe kernels that capture, on a GPU, the approximate instructions and
+  tensor-core tiles the CPU models and primitives reproduce (MUFU's `ex2`, `rcp`, `sqrt` and `tanh`, Ampere's `mma.sync`
+  m16n8k16).
 
 ## Other modules
 
@@ -90,4 +91,5 @@ declines that input, and the reference computes it.
 
 ## Tests
 
-`tests/` is the package's suite (`uv run tools/check/suites.py adapters/vllm/verity_vllm/definitions`).
+`tests/adapters/vllm/verity_vllm/definitions/` is the package's suite
+(`uv run tools/check/suites.py tests/adapters/vllm/verity_vllm/definitions`).

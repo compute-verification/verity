@@ -374,7 +374,7 @@ def test_a_registrations_file_without_the_hash_or_the_session_is_refused_before_
     key, session = bytes(64), bytes(32)
     for check in (lambda: ws.check(none, file), lambda: CRC.check(none, {}, PLAIN, [], [], [], ws.LINK, file)):
         file.write_text("an earlier check's\n")
-        with pytest.raises(ValueError, match="only by a check that is handed the SHA-512 of the network certifier's "
+        with pytest.raises(ValueError, match="only by a check that is handed the SHA-512 of the network attester's "
                                              "public key and its session"):
             check()
         assert not file.exists()
@@ -802,7 +802,7 @@ def test_the_note_that_a_line_missed_takes_a_head_away_and_only_a_schedule_with_
         counts == (0, 4, [])
     outside = {CRC.MISSED: [ws.LINK, "egress", 4]}
     assert edited(out, lambda lines, salts: (lines.append(outside), salts.append(b""))) == \
-        (["execution phase 4 has neither connection rows nor the network certifier's word that it has none"],
+        (["execution phase 4 has neither connection rows nor the network attester's word that it has none"],
          (4, 4, []))
     plain = tmp_path / "plain"
     served(plain, tmp_path / "key-2", params=ENDS)
@@ -810,7 +810,7 @@ def test_the_note_that_a_line_missed_takes_a_head_away_and_only_a_schedule_with_
         (["execution phase 2's connection rows aren't registered"], (3, 4, None))
     for params, back in ((TIMED, None), (ENDS, lambda window, line: None)):
         with pytest.raises(ValueError, match="in a schedule with a head offset, and in no other, the network "
-                                             "certifier's tick writes each execution phase's line"):
+                                             "attester's tick writes each execution phase's line"):
             rp.Keeper(tmp_path, None, params, ws.LINK, back=back)
     ws.ck.load_key(tmp_path / "key-3", 5)
     publisher = ws.PublisherProcess(tmp_path, tmp_path / "key-3", bytes(32), ENDS, base_ms=0, ordinal=0)
@@ -834,7 +834,7 @@ def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_du
         return [p for p in refused(out, lambda: edit_rows(out, change)) if "execution phase" in p]
 
     assert edited(lambda lines, salts: None) == []
-    neither = "execution phase {} has neither connection rows nor the network certifier's word that it has none"
+    neither = "execution phase {} has neither connection rows nor the network attester's word that it has none"
     unhanded = ("execution phase {} has connection rows, and it or an execution phase beside it wasn't published "
                 "complete")
     unregistered = "execution phase {}'s connection rows aren't registered"
@@ -877,7 +877,7 @@ def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_du
     def salted(lines, salts) -> None:
         salts[1] = bytes(WR.SALT_BYTES)
 
-    word = f"execution phase 1 has the network certifier's word that it has no head, and {WR.SALT_BYTES} bytes"
+    word = f"execution phase 1 has the network attester's word that it has no head, and {WR.SALT_BYTES} bytes"
     assert any("don't read" in p and word in p for p in edited(salted))
 
 

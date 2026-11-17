@@ -40,7 +40,7 @@ from fnmatch import fnmatchcase
 from itertools import permutations
 from pathlib import Path
 
-#: what `opcode_probe/probe.py`, `tensor_kinds/sm80.py` and the tests read
+#: what `opcode_probe/probe.py` and the tests read
 __all__ = [
     "GateError", "H", "VERSION", "base_name", "clock_reads", "elect_loop", "functions", "gate", "is_write",
     "judge_kernel", "loops", "parse_expect", "refusals", "sass_sha256",

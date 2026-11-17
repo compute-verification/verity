@@ -1,4 +1,4 @@
-"""P2 v4 (`verity/protocols/resource_accounting/memory/pous/verifier/README.md`, "P2") in the POUS-only harness.
+"""P2 v4 (`verity/protocols/resource_accounting/memory/pous/verifier/DESIGN.md`, "P2") in the POUS-only harness.
 
 - `harness.py`: P2's arm of the harness (`bench.py --impl p2-v3-gpu | p2-v3-mc-gpu`).
 

@@ -434,3 +434,45 @@ Each row holds its own `count`, in bits and GB.
 
 The scaling by links (`leak_bounds.at_link_rate`, which `chain_record.py leak` reads on a run) is a different count:
 every link at the rate one run certified, whatever its scope serves.
+
+## On a machine of your own
+
+From a fresh clone of the tree, with [uv](https://docs.astral.sh/uv/getting-started/installation/), at the tree's root:
+
+~~~text
+uv sync --all-packages --extra torch-cpu
+uv run --extra torch-cpu verity bench certifier_term
+~~~
+
+The runner reads files of the tree and computes: it needs no GPU, no key and no access to the evidence store, and it
+writes nothing into the tree. It prints the document of The tables, above, and `--help` lists every flag with its
+default.
+
+What you may change, each a flag:
+
+- `--requests {plan,census}`: the request a scope's requests are counted of.
+- `--world-requests N`: the world's requests a year, in place of either request's count.
+- `--response-ids N`: the most ids a response holds.
+- `--id-bits N`: an id's bits.
+- `--phase-buckets T`: an execution phase's buckets.
+- `--bucket-s S`: a bucket's seconds.
+- `--lanes N`: the connections a link holds at once, which makes the entries every slot's.
+- `--classes N`: the content classes whose held rows the count is of.
+- `--delay D`: the buckets from a connection's admission to its first egress cell's.
+- `--ingress-buckets I`: the buckets a release is within of its connection's admission.
+- `--failure-rate F`: the share of connections that fail.
+- `--scan-delta D`: each execution phase's scan's δ.
+- `--target-gb GB`: the GB the term is read against.
+- `--scope {node,datacenter,world}` and `--period {week,month,year}`: only these rows (each repeatable).
+- `--json`: the document as JSON in place of the tables.
+- `--out DIR`: also write the result through the harness kit's writer (`DIR/result.json` outside a research run).
+- `--commit`, `--run`: the commit and the run the document names.
+
+What is fixed: the inputs the Inputs table lists with their sources, the files that Where the scale comes from names
+(the census, the slowdown calculator's world fleet and hardware data, the break-even planner's case and GLM-5.3's
+workload card); the calculator's rules, in `benchmarks/network_traces/leak_bounds.py`; and the seven rows of each scope
+and monitoring period that the print lists under "The rows of a scope and a monitoring period".
+
+What it doesn't do: it serves nothing, runs no network attester, audits nothing and proves nothing. Every row is
+counted from those inputs, and it reads no verdict record, so the print says each connection's stop class is charged
+its whole schedule.
