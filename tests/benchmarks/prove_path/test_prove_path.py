@@ -2095,6 +2095,21 @@ def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_
         assert repr(fixed) in str(e.value)
 
 
+def test_pearl_b_carries_ws_b_entries_only_when_asked_and_refuses_a_w_with_none():
+    """``window-commit --pearl-b`` gives R's window the tied W's ``pearl-b/`` entries as W holds them, and nothing without
+    the flag; it is refused without a tied W, and for a W at version 1, which registers no B rows."""
+    a_entry = {"value": "pearl-a/0/0", "root": "aa", "leaves": 1, "words": 2, "domain": "dd"}
+    b_entry = {"value": "pearl-b/0", "root": "bb", "leaves": 3, "words": 2, "domain": "ee", "word_bits": 32}
+    w2 = {"window": {"kind": "served", "version": 2}, "registered": [a_entry, b_entry]}
+    on, off = argparse.Namespace(pearl_b=True), argparse.Namespace()
+    assert PP.pearl_b(on, (w2, None, None, None)) == [b_entry]
+    assert PP.pearl_b(off, (w2, None, None, None)) is None and PP.pearl_b(off, None) is None
+    with pytest.raises(ValueError, match="give --pearl-passes"):
+        PP.pearl_b(on, None)
+    with pytest.raises(ValueError, match="W is at version 1 and registers no weight's B rows"):
+        PP.pearl_b(on, ({"window": {"kind": "served"}, "registered": [a_entry]}, None, None, None))
+
+
 def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):
     """`pearl_tie`: with ``--pearl-passes DIR`` (serve_pearl's ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
     window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads

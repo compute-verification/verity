@@ -1700,6 +1700,25 @@ def window_design(rule: str, circuit: IF.Circuit, wired: bool = False) -> dict[s
     return dict(S.params_sampling_design(rule, program, query, None)[0])
 
 
+#: R's window key under ``window-commit --pearl-b``: W's weights' B entries, which Pearl+'s tie reads from R
+PEARL_B = "pearl_b"
+
+
+def pearl_b(a: argparse.Namespace, pearl: tuple[dict[str, Any], Any, Any, Any] | None) -> list[dict[str, Any]] | None:
+    """With ``--pearl-b``, the B entries of the tied W (``pearl-b/<w>``, as `pearl_c.window.record` wrote them), which R's
+    window carries under `PEARL_B`; None without. ValueError without ``--pearl-passes``, or for a W at version 1, which
+    registers no B rows."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+    if not getattr(a, "pearl_b", False):
+        return None
+    if pearl is None:
+        raise ValueError("--pearl-b carries the tied W's B entries in R's window: give --pearl-passes and its W")
+    if PWR.version_of(pearl[0]) != PWR.VERSION:
+        raise ValueError(f"--pearl-b: W is at version 1 and registers no weight's B rows ({PWR.b_value(0)}, ...), which R's "
+                         "window carries for Pearl+'s tie")
+    return [dict(e) for e in pearl[0]["registered"] if str(e.get("value")).startswith(PWR.b_value(0)[:-1])]
+
+
 def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dict[str, Any]], list[int], Any] | None:
     """With ``--pearl-passes DIR`` (serve_pearl's ``pearl/w<k>/``: the window's passes, ``served.json`` and its retention):
     Pearl+'s window record W of them (``--window-registration``, ``retain --window-record W``'s), the retained passes'
@@ -1793,6 +1812,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     requests = compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
     tie, pearl = h1_tie(a, cls), pearl_tie(a, cls)
+    b = pearl_b(a, pearl)
     tables = tie[2] if tie is not None else pearl[3] if pearl is not None else None
     try:
         compiled = compile_steps(registered, data, compiler.inner.ingress)
@@ -1866,7 +1886,8 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     lap("record")
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
-    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
+    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
+            **({PEARL_B: b} if b is not None else {})}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)), previous=previous)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
     lap("write")
@@ -2099,6 +2120,8 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
                    "at its linears (`window_class.PearlTables` under W's scheme), each cut linear's y taken as served, and "
                    "the window's "
                    "registration registers W's values, chained right after W (`pearl_c.window.reuse`)")
+    p.add_argument("--pearl-b", action="store_true", help="with --pearl-passes: R's window carries W's weights' B entries "
+                   "(pearl_b), which Pearl+'s tie reads from R; refused for a W at version 1")
     sub.choices["window-circuit"].add_argument("--pearl-tables", metavar="SCHEME", help="the circuit cut at its linears, "
                                                "as a window tied to Pearl+'s W under PoUW scheme SCHEME commits it "
                                                "(`window_class.PearlTables`)")
