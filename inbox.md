@@ -1,0 +1,3 @@
+[2026-11-17T19:07Z] 2f32fade616f
+Lead, Tue 17 Nov 11:25 AM PST, a fact for #10879's run.sh from my launches on node A today: taking ONLY the venv from benchmarks/harness/env.sh (as your run.sh does: V=$(. env.sh >/dev/null && echo $VENV)) FAILED: vLLM would not serve the model (run r20261117-181212-a6d8). Sourcing env.sh WHOLE in the shell that runs run.py worked (run r20261117-184124-d033, both arms' points written: stub-cpu and llama-3.2-1b-h200). So run.sh must source env.sh whole (HF_HOME, CUDA, PATH, PYTHONPATH), as the other card benchmarks' run.sh do, then run 'uv run python benchmarks/attester_load/run.py --vllm-python "$VENV/bin/python"'. If you are done, I will resume you for this one change.
+
