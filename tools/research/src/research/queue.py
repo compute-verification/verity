@@ -1399,9 +1399,20 @@ def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
 LOWRISK_ROW = "low-risk: lands on its mark"
 
 
+def _own_range(repo: Path, main: str, head: str) -> tuple[str, ...]:
+    if len(_git(repo, "merge-base", "--all", main, head, check=False).stdout.split()) > 1:
+        r = _git(repo, "merge-tree", "--write-tree", "--no-messages", main, head, check=False)
+        if r.returncode == 0 and r.stdout.split():
+            return main, r.stdout.split()[0]
+    return (f"{main}...{head}",)
+
+
 def own_files(repo: Path, main: str, head: str) -> frozenset[str]:
-    """The files ``head`` changes against its merge base with ``main``: the change the low-risk rule reads (`lands_on_mark`)."""
-    return frozenset(_out(repo, "diff", "--name-only", "--no-renames", f"{main}...{head}").splitlines())
+    """The files ``head`` changes against its merge base with ``main``; with more than one (a criss-cross), the files landing it
+    changes, ``main`` against its merge with ``head`` (`git merge-tree`, which follows renames, so not for one base, where a
+    path a move retired stays the head's own), unless that merge conflicts: the change the low-risk rule reads
+    (`lands_on_mark`)."""
+    return frozenset(_out(repo, "diff", "--name-only", "--no-renames", *_own_range(repo, main, head)).splitlines())
 
 
 def lands_on_mark(flags: DriveFlags, pr: PR, why: str | None, files: Iterable[str]) -> bool:
@@ -2451,7 +2462,8 @@ class Queue:
         return bool(self.ready(m.pr, m.head)) and self._same_or_fixed(m, entries)
 
     def _forces_cold(self, n: int) -> bool:
-        r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
+        r = _git(self.workdir, "diff", "--name-only",
+                 *_own_range(self.workdir, "refs/remotes/origin/main", f"refs/queue/pr/{n}"), check=False)
         return r.returncode == 0 and forces_cold(r.stdout.split())
 
     # -- building `next`
@@ -4387,8 +4399,8 @@ def lacked_moves(repo: Path, main: str, head: str, files: Iterable[str] | None =
                  maps: dict[tuple[str, str], Retired | None] | None = None) -> list[tuple[str, str, list[str] | None]]:
     """Each move ``main`` landed that ``head`` lacks (`moves_between`) whose map (`map_retires`, kept in ``maps`` by its base and
     path) retires what ``head``'s own change names, oldest first: (the move, its map, those names, or None when its map can't
-    be read).  The own change is ``head``'s against its merge base with ``main``: its files (``files``, else `own_files`) and
-    its added lines.  A head whose change names none of them crosses the moves by a plain merge of `main`, and what a map
+    be read).  The own change is ``head``'s as `own_text` reads it: its files (``files``, else `own_files`) and its added
+    lines.  A head whose change names none of them crosses the moves by a plain merge of `main`, and what a map
     can't list (a path spelled in parts, a relative one) is the check's to find."""
     if not (moves := moves_between(repo, main, head)):
         return []
@@ -4406,10 +4418,10 @@ def lacked_moves(repo: Path, main: str, head: str, files: Iterable[str] | None =
 
 
 def own_text(repo: Path, main: str, head: str, files: Iterable[str] | None = None) -> str:
-    """What `Retired.named` reads of ``head``'s own change, against its merge base with ``main``: its files (``files``, else
-    `own_files`) and its added lines."""
+    """What `Retired.named` reads of ``head``'s own change, as `own_files` reads it: its files (``files``, else `own_files`)
+    and its added lines."""
     files = own_files(repo, main, head) if files is None else files
-    diff = _out(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", f"{main}...{head}")
+    diff = _out(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", *_own_range(repo, main, head))
     return "\n".join([*sorted(files), *(x for x in diff.splitlines() if x.startswith("+") and not x.startswith("+++"))])
 
 

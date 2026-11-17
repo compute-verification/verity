@@ -2249,6 +2249,64 @@ def test_the_review_listing_gives_each_rows_minutes_since_its_mark_and_over_keep
     assert "--over is for the review listing only" in capsys.readouterr().err
 
 
+def _commit(repo: Path, files: dict[str, str | None], message: str) -> str:
+    for path, text in files.items():
+        if text is None:
+            _git(repo, "rm", "-q", path)
+        else:
+            (repo / path).parent.mkdir(parents=True, exist_ok=True)
+            (repo / path).write_text(text)
+            _git(repo, "add", path)
+    _git(repo, "commit", "-q", "-m", message)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def _repo(tmp_path: Path) -> tuple[Path, str]:
+    (repo := tmp_path / "r").mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    return repo, _commit(repo, {"lib/a.py": "a = 1\n", "lib/b.py": "b = 2\n", "x.txt": "x\n", "y.txt": "y\n"}, "base")
+
+
+def test_own_files_of_a_head_with_two_merge_bases_with_main_are_only_what_landing_it_changes(tmp_path):
+    repo, base = _repo(tmp_path)
+    _git(repo, "checkout", "-q", "-b", "x", base)
+    x1 = _commit(repo, {"x.txt": "x by X\n"}, "X")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "mv", "lib", "src")
+    move = _commit(repo, {}, "move lib to src")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "land X", x1)
+    main = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "head", x1)
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge main at the move", move)
+    head = _commit(repo, {"own.txt": "own line\n"}, "own")
+    assert len(_git(repo, "merge-base", "--all", main, head).split()) == 2
+    assert Q.own_files(repo, main, head) == {"own.txt"}
+    assert Q.own_text(repo, main, head) == "own.txt\n+own line"
+
+
+def test_own_files_of_a_head_with_one_merge_base_are_its_change_and_of_one_that_conflicts_its_change_from_that_base(tmp_path):
+    repo, base = _repo(tmp_path)
+    _git(repo, "checkout", "-q", "-b", "head", base)
+    head = _commit(repo, {"x.txt": "x by head\n", "lib/b.py": None}, "head")
+    _git(repo, "checkout", "-q", "main")
+    main = _commit(repo, {"y.txt": "y by main\n"}, "main")
+    assert Q.own_files(repo, main, head) == {"x.txt", "lib/b.py"}
+    clash = _commit(repo, {"x.txt": "x by main\n"}, "main again")
+    assert Q.own_files(repo, clash, head) == {"x.txt", "lib/b.py"}
+    assert Q.own_text(repo, clash, head) == "lib/b.py\nx.txt\n+x by head"
+
+
+def test_own_files_of_a_head_lacking_a_move_main_landed_keep_the_paths_the_move_retired(tmp_path):
+    repo, base = _repo(tmp_path)
+    _git(repo, "checkout", "-q", "-b", "head", base)
+    head = _commit(repo, {"lib/a.py": "a = 1\nmore = 3\n"}, "head")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "mv", "lib", "src")
+    main = _commit(repo, {}, "move lib to src")
+    assert Q.own_files(repo, main, head) == {"lib/a.py"}
+    assert Q.own_text(repo, main, head) == "lib/a.py\n+more = 3"
+
+
 def test_the_review_listing_says_low_risk_of_a_head_the_loops_rule_lands_on_its_mark_and_never_of_a_move_or_held_pr(world, capsys):
     """The verified queue's loop takes a marked head on its mark alone when drive.toml at `main` excludes none of its files
     (`lands_on_mark`), so its row says so instead of waiting on a reviewer: one whose owner's own land verdict doesn't count
