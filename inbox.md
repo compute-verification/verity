@@ -1,0 +1,3 @@
+[2026-11-17T17:34Z] e9b5aa4d1f35
+LEAD 9:45 AM PST: lean asks (TOP-435 9:30 AM) a FIFTH point for the final word: your stored-name audit ("none stored") was made at 5e6d854b69a, before the refit. While 7baa runs, redo it at e66859daab76 exactly (same method: each of the 54 old names against stored records/keys/tags/fixtures/evidence-store names), and send me: holds or not at e668, the method in two lines, and anything that differs from the audit at 5e6d. Lean also saw the security/Properties lock at e668 spelling 12 old and 12 new names before the records run rewrites it: confirm after 7baa that no lock holds any of the 54 old names.
+
