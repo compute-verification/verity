@@ -683,6 +683,32 @@ def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
             RA.tie_of(circuit, earlier, prefix)
 
 
+@pytest.mark.parametrize("name, prefix, w_name", [("pearl-a/0/0", None, "pearl-a/0/0"),
+                                                  (f"row-table/0/k{K}", "h1/", f"h1/a/{K}@0")])
+def test_a_value_w_registers_registered_afresh_by_the_window_is_held_to_w_and_refused(tmp_path, name, prefix, w_name):
+    """A registration that registers one of W's values (Pearl+'s A rows, an H1 table) afresh under the window's run root,
+    its rows changed, is not the execution phase's own (`PHASE_OWN`): `phase_values` and `window_pins` take nothing of it,
+    `tie_of` holds it to W's entry, and the docket's R7 refuses the window's entry. A state W registers too is refused
+    by name."""
+    got = _registered(tmp_path / "w", name=name, own=True)
+    rec, doc = (json.loads((got.dir / f).read_text()) for f in ("registration.json", "circuit.json"))
+    assert [e["value"] for e in rec["registered"]] == [name]
+    assert RA.phase_values(rec, [name]) == {} and RA.window_pins(rec["window"], doc, registration=rec) == ({}, {})
+    rows = np.arange(4 * K // 2, dtype=np.uint16).reshape(4, K // 2)
+    theirs = REG.Registered.commit("w/program", w_name, rows.tolist(), schema=REG.SCHEMA_V2).entry()
+    w = {"format": R.FORMAT_V2, "registered": [theirs], "previous": None}
+    tied, pins = RA.tie_of(doc, w, prefix, RA.phase_values(rec, [name]))
+    assert tied["outputs"] == {name: {"record": R.digest(w), "value": w_name}} and pins[name]["root"] == theirs["root"]
+    mine, _doc, _sets = RA.verifier_window(got.dir, D.parse_design(SAMPLING_DESIGN), None)
+    v = R.check(rec, mine.program, mine.query, D.parse_design(SAMPLING_DESIGN), CS.SCHEME, CS.expected_ports(mine), None, log=tied["log"],
+                work_table=mine.work_table, registered=tied["registered"], outputs=tied["outputs"],
+                schemas=tied["schemas"], window_root=RUN)
+    assert {"R7-domain", "R7-held"} & set(v.codes) and v.detail["R7-held"]["value"] == name, (v.codes, v.detail)
+    state = {"registered": {"params": {TIED: 16}, "tables": [], "reads": [], "roots": [], "openings": [], "values": [TIED]}}
+    with pytest.raises(ValueError, match="registers .* afresh, and the earlier registration registers them too"):
+        RA.tie_of(state, {**w, "registered": [{**theirs, "value": TIED}]}, None, {TIED: theirs})
+
+
 def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_seg_rows():
     """`tie_of` with no prefix ties a circuit cut at its linears, whose values are round s's call c's A rows and y
     (``pearl-a/<s>/<c>``, ``pearl-y/<s>/<c>``: FP32 words in ``row-seg/v1`` rows, `interface.Registered.formats`), to
@@ -1371,7 +1397,8 @@ def test_an_input_only_window_value_is_free_in_the_count_and_named():
 def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_ties():
     """`window_pins`: the per-window values the circuit reads are the docket's entries, each held to a domain binding
     the window's run root, split into ties (pinned) and the untied (read only by input ports, counted free); one it
-    doesn't read is neither, and one committed under another run, or naming another value, is refused."""
+    doesn't read is neither, and one committed under another run, or naming another value, is refused. The registration's
+    entries under the run root add nothing for values that are no execution phase's own (`PHASE_OWN`)."""
     rows = [[1, 2], [3, 4]]
     mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "y", "e")}
     w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
@@ -1381,10 +1408,8 @@ def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_
     elsewhere = REG.Registered.commit("test/model", "y", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
     held = REG.Registered.commit("test/model", "x", rows, schema=REG.SCHEMA_V2).entry()
     rec = {"program": "test/model", "window": {"run": RUN}, "registered": [mine["e"], held, elsewhere]}
-    assert RA.window_pins({"run": RUN}, circuit, registration=rec) == ({}, {"e": mine["e"]})
-    assert RA.window_pins({"run": RUN}, circuit, registration={**rec, "program": "test/other"}) == ({}, {})
-    with pytest.raises(ValueError, match="both in its activations and in its registration"):
-        RA.window_pins(w, circuit, registration=rec)
+    assert RA.window_pins({"run": RUN}, circuit, registration=rec) == ({}, {}) and RA.phase_values(rec, PARAMS) == {}
+    assert RA.window_pins(w, circuit, registration=rec) == RA.window_pins(w, circuit)
     for bad in ({**w, "run": "cd" * 64}, {**w, "activations": {"program": "test/model", "values": {"y": elsewhere}}},
                 {**w, "activations": {"program": "test/model", "values": {"y": mine["x"]}}}):
         with pytest.raises(ValueError, match="another value or a domain"):
