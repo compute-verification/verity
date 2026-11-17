@@ -37,9 +37,7 @@ In `uv run python` from a clone, each line gives what its comment shows. A numbe
 | NVIDIA DGX H200, a server none of our nodes is | server | `hardware/cards/dgx-h200.toml` |
 | `CLOCK_MONOTONIC_RAW` in a Nebius virtual machine, a KVM guest on `kvm-clock` or `tsc` | timebase | `hardware/cards/nebius-vm-monotonic-raw.toml` |
 
-A new SKU is a new card file. Every card of a kind has the same sections and entries. A GPU's card also has `driver`,
-the name its driver reports (nvidia-smi's), by which a leased card is matched to its card, and `short`, the one short
-name a point's member carries: lower-case letters, digits and hyphens, unique across the cards.
+A new SKU is a new card file. Every card of a kind has the same sections and entries.
 
 **The device's own report.** A ceiling is the hardware's, never its firmware's. A few entries marked `ceiling` are
 today what the device reports under its vBIOS, with no document behind them: `clock.sm` on the RTX PRO 6000 and the

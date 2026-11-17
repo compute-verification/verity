@@ -3740,16 +3740,16 @@ def hardware(model: Model) -> str:
 
 
 def card_record(name: str) -> dict:
-    """The card record (``verity.device.load_card``) whose ``driver`` is ``name``, the name nvidia-smi gives the card;
-    refused, naming what to add, unless exactly one record has it and the ``short`` a point's member carries."""
+    """The card record (``verity.device.load_card``) whose ``driver`` list holds ``name``, the name nvidia-smi gives the
+    card; refused, naming what to add, unless exactly one record holds it and has the ``short`` a point's member carries."""
     from verity.device import CARDS, load_card, skus
 
-    found = [c for c in map(load_card, skus("gpu")) if name and c.get("driver") == name]
+    found = [c for c in map(load_card, skus("gpu")) if name and name in c.get("driver", ())]
     if len(found) != 1 or not found[0].get("short"):
         raise SystemExit(
-            f"{len(found)} card records under {CARDS} have driver {name!r}, the card nvidia-smi names here: give its "
-            f"one record `driver = {json.dumps(name)}` and `short`, the card's name in a point's member, adding its "
-            "<sku>.toml there if it has none")
+            f"{len(found)} card records under {CARDS} list {name!r}, the card nvidia-smi names here, in `driver`: add "
+            f"{json.dumps(name)} to its one record's `driver` and give it a `short`, the card's name in a point's "
+            "member, adding its <sku>.toml there if it has none")
     return found[0]
 
 

@@ -2208,14 +2208,15 @@ def test_llama32_1bs_number_is_its_chat_and_long_loads_alone_as_a_point_of_glm53
     assert S.result_of(r | {"hardware": "1 × NVIDIA H200", "member": one})[3][-1]["member"] == one
 
 
-def test_a_card_no_record_has_the_driver_name_of_is_refused_naming_what_to_add(monkeypatch: pytest.MonkeyPatch):
+def test_a_card_no_record_lists_in_its_driver_is_refused_naming_what_to_add(monkeypatch: pytest.MonkeyPatch):
     """A point's member carries its card's record's `short`, never a name made from nvidia-smi's: a card whose name no
-    record has as its `driver` is refused, naming the keys and the file to add."""
+    record lists in its `driver` is refused, naming the keys and the file to add."""
     S.kit()
     from verity_bench import kit
     monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "NVIDIA Z9 80GB"})
-    with pytest.raises(SystemExit, match=r"0 card records under .*cards have driver 'NVIDIA Z9 80GB'.*"
-                                         r"`driver = \"NVIDIA Z9 80GB\"` and `short`.*<sku>\.toml"):
+    with pytest.raises(SystemExit, match=r"0 card records under .*cards list 'NVIDIA Z9 80GB'.*"
+                                         r"add \"NVIDIA Z9 80GB\" to its one record's `driver` and give it a `short`.*"
+                                         r"<sku>\.toml"):
         S.member(S.MODELS["llama32-1b"], "record", "compiled")
     with pytest.raises(SystemExit, match="0 card records"):
         S.card_record("")
