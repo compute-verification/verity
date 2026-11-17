@@ -148,7 +148,7 @@ def _sub_live(n: int, k: int) -> tuple[int, int, list[int]]:
     return min(h, c), k2, [j for j in range(h - (n % 2 == 0)) if 2 * j < k]
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def waksman_switches(n: int, k: int) -> int:
     """The settings bits of a network of n rows with outputs 0..k-1 live."""
     if n <= 2:

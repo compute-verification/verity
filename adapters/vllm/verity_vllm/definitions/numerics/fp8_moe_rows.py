@@ -6,8 +6,8 @@ twins against them word for word, and the H200 capture (tests/properties/glm53_b
 against them."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import lru_cache
-from typing import Callable
 
 import numpy as np
 from verity.circuits.kernels.tc import group_sum_total_batch

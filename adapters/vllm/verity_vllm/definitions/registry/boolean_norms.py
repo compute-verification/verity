@@ -56,8 +56,8 @@ other operand unchanged under `F32Add_v1`: those adds are not emitted.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import cache
-from typing import Callable
 
 import numpy as np
 from verity.circuits import boolean as BL

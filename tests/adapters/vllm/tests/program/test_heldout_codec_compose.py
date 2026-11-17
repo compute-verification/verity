@@ -93,7 +93,7 @@ def _fresh_decode(path: Path, imports: str) -> subprocess.CompletedProcess:
             "from verity.circuits.codec import decode_program\nfrom verity.circuits.defs import REGISTRY\n"
             f"d = decode_program(json.load(open({str(path)!r})), REGISTRY); print('gates', d.gates)")
     return subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
-                          cwd=str((Path(__file__).resolve().parents[5] / "adapters" / "vllm")))
+                          cwd=str(Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
 
 
 def test_hopper_descriptor_decodes_in_a_fresh_process_only_if_the_binding_module_is_imported(tmp_path):

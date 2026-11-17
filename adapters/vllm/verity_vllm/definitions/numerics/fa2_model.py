@@ -88,7 +88,7 @@ class MufuTables:
     source: dict
 
     @staticmethod
-    def load(directory: str | Path) -> "MufuTables":
+    def load(directory: str | Path) -> MufuTables:
         """From ``mufu_ex2_delta_int8.xz`` / ``mufu_rcp_delta_int8.xz``: int8 first differences of the
         u32 tables (platform-independent reconstruction by cumulative sum)."""
         d = Path(directory)

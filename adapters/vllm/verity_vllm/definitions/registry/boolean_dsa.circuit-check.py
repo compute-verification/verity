@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 #: GLM-5.3's DSA indexer logits on bits at its served shapes over every key count a 128k-context row takes, checked at these spots
 #: (`circuit_check.ranges`; ``circuit-check --as-call --ranges DsaMqaLogits_v4``).  Its description is the same at every N (one

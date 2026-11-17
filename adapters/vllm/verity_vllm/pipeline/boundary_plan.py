@@ -17,8 +17,9 @@ import dataclasses
 import json
 import os
 import time
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from verity_vllm.acquire import gate as G
 from verity_vllm.acquire.sources import call_boundary_plan as CBP

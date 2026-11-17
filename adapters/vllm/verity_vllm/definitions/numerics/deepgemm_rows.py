@@ -6,7 +6,8 @@ register from `rows` (kernel "rows").
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
 

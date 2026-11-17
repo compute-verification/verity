@@ -2,7 +2,8 @@
 forms (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _boolean_roots() -> list[Any]:

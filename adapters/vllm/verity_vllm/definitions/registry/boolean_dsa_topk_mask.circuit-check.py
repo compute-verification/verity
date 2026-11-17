@@ -2,7 +2,8 @@
 forms (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 #: The Boolean Definitions of `dsa_topk_mask`'s sidecar's RANGES, over the same size classes and at the same spots, each held to
 #: its word Definition there by its word view (`circuit_check.ranges`; ``circuit-check --as-call --ranges DsaTopKMask_v2 ...``).

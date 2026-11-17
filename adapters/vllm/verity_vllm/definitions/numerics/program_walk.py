@@ -23,8 +23,9 @@ unnamed node that reads it; a named one hands the run's words on.
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 from verity.circuits import boolean as BL

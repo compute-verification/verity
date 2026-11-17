@@ -479,7 +479,7 @@ def main(argv: list[str] | None = None) -> int:
     if not (a.so and a.out):
         ap.error("--so and --out are required (or --verify RECORD)")
     out = str(Path(a.out).resolve())
-    os.chdir((Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
+    os.chdir(Path(__file__).resolve().parents[5] / "adapters" / "vllm")
     return 0 if run(a.so, out, a.quick, live=not a.no_live)["ok"] else 1
 
 

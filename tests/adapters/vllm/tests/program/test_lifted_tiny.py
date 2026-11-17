@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[5] / "adapters" / "vllm")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
 
 from verity.circuits import Program, bind
 from verity.circuits.codec import decode_program, encode_program, program_digest

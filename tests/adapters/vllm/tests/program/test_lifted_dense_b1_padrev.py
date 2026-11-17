@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[5] / "adapters" / "vllm")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
 
 L = pytest.importorskip("verity_vllm.definitions.registry.lifted")
 _ = pytest.importorskip("verity_vllm.definitions.registry.lifted", reason="the lifted registry").leaf_words  # DENSE B1 additions present?

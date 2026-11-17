@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 #: GLM-5.3's served (SWAP, DOT) on one TP8 rank of the H200, by the tuned tile vLLM takes (`enable_swap_ab`, `fp8_moe.sm90_dot`):
 #: 8x32 below 4 tokens, 8x64 at 4 to 6, 16x64 and 16x128 at 7 to 768, 64x128 past 768

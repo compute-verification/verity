@@ -123,7 +123,7 @@ def _refuse_net(b: dict) -> str | None:
     return None
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def butterfly_plan(N: int, K: int) -> tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]:
     """Per stage t, (its swaps, its picks), each the switches' lower positions p (the upper is p + 2^t) in settings order: the
     module docstring's pruned inverse butterfly of N rows with K live outputs."""
@@ -139,7 +139,7 @@ def butterfly_plan(N: int, K: int) -> tuple[tuple[tuple[int, ...], tuple[int, ..
     return tuple(plan)
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def butterfly_switches(N: int, K: int) -> int:
     return sum(len(s) + len(p) for s, p in butterfly_plan(N, K))
 

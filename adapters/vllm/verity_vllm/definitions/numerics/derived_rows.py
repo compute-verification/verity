@@ -36,7 +36,7 @@ Validation: `tests/program/test_derived_rows.py` (gate-by-gate circuit evaluatio
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 import numpy as np
 
@@ -193,13 +193,13 @@ def fma_sub_ftz(a, b, c):
 # ---------------------------------------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=None)
+@cache
 def _fa2_tables():
     from verity_vllm.definitions.numerics import fa2_relation
     return fa2_relation.tables()
 
 
-@lru_cache(maxsize=None)
+@cache
 def _rms_tables():
     from verity_vllm.definitions.numerics import rms_relation
     return rms_relation.tables("cuda")  # sqrt + rcp + rsq banks
@@ -770,7 +770,7 @@ def rmsnorm_fused_v2_rows(x: np.ndarray, res: np.ndarray, w: np.ndarray, eps: fl
 # ---------------------------------------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=None)
+@cache
 def silu_mid_table() -> np.ndarray:
     """The 2^16 bf16 -> bf16 silu table of `SiluMulBf16_v1`'s interior: `bf16_rn(silu_f32(f32(g)))`,
     NaN -> 0x7FC0 — built from the registered `_silu_f32_bits` (float64-exact stand-in), not measured."""

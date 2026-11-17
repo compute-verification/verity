@@ -10,7 +10,7 @@ its residual adds. Their word views are `cuda_rmsnorm_split`'s units of the same
 """
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import elementwise as EW

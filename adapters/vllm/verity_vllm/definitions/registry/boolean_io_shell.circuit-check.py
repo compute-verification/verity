@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _scan_slots(ns: int, firsts: tuple[int, int, int, int], stride: int, lanes: int, np_: int) -> Any:

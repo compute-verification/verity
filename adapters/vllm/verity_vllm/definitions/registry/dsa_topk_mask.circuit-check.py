@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 #: GLM-5.3's rows past INDEX_TOPK in the mask form at its TOPK = K = 2,048: vLLM reads a row of more than INDEX_TOPK keys at its
 #: size class, the next multiple of INDEX_TOPK, so the served key counts are the 63 classes from 4,096 to the longest row at 128k

@@ -28,7 +28,7 @@ sub-Call is a word Definition; with these, Gemma-2's GeGLU under `registered_val
 from __future__ import annotations
 
 from decimal import ROUND_FLOOR, ROUND_HALF_EVEN, Decimal, localcontext
-from functools import lru_cache
+from functools import cache
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import (
@@ -70,7 +70,7 @@ EXP_LO = 115
 QBITS = 36
 
 
-@lru_cache(maxsize=None)
+@cache
 def constants(F: int, N: int) -> tuple[int, tuple[int, ...]]:
     """(floor(ln 2 2^F), (round(ln(1 + 2^-i) 2^F) for i = 1..N))."""
     with localcontext() as ctx:
@@ -89,7 +89,7 @@ def _k(yt: int) -> int:
     return (yt * 369) >> 14
 
 
-@lru_cache(maxsize=None)
+@cache
 def bounds(F: int, N: int) -> tuple[int, int, tuple[int | None, ...], int]:
     """(the largest k, the largest R, per step the largest R before it (None: no R reaches c_i, the step is dropped), the largest
     E) over [LO, HI), exactly: R's and E's widths come from these, so no bit is dropped that a word of the region sets."""

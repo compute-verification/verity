@@ -573,7 +573,7 @@ def main(argv: list[str] | None = None) -> int:
     if not a.out:
         ap.error("--out is required (or --check DIR, --verify RECORD)")
     out = str(Path(a.out).resolve())
-    os.chdir((Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
+    os.chdir(Path(__file__).resolve().parents[5] / "adapters" / "vllm")
     doc = run(out, a.seed, a.rows, a.min_driver, a.want_cc, a.want_sms, a.workers, a.program_sample, not a.no_sweep)
     return 0 if doc["ok"] else 1
 

@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 #: GLM-5.3's sparse MLA reads past INDEX_TOPK keys: its latent rows (W = KV_LORA + QK_ROPE = 576 bf16 words) a row's Waksman
 #: settings route to its top 2,048, over every key count from the first row past INDEX_TOPK to the longest served row, checked at

@@ -29,9 +29,10 @@ import ctypes
 import functools
 import os
 import subprocess
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
@@ -148,7 +149,7 @@ def mul_vec_f32(x, w, **_s):
     return D.mul_rn(np.asarray(x, dtype=np.uint32), np.asarray(w, dtype=np.uint32))
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _mean_layout(N: int) -> np.ndarray:
     """[blocks, 128 threads, registers] element index per register of `MeanTriton`'s body (N for a masked lane)."""
     from verity_vllm.definitions.registry import dense

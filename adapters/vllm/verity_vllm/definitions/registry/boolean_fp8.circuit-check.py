@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 #: The block-scaled FP8 GEMM on bits at GLM-5.3's served widths at TP8 (the census's: N = 4 at K = 6,144, 2,048 and 256, N = 8 at
 #: K = 1,536, G = 128), checked at these spots (`circuit_check.ranges`; ``circuit-check --ranges ScaledMmFp8BlockSharedScale_v2

@@ -4,7 +4,8 @@ is the same body over a masked block, `TritonBlockRMSNorm_v1{N, BLOCK, WARPS, EP
 kernel registers from `rows` (kernel "rows")."""
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 

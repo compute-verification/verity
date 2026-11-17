@@ -106,7 +106,7 @@ def declared_component(wp: dict[str, Any], LP: int, T: int) -> str | None:
 
 def component_dirs(wp: dict[str, Any], record_dir: str | os.PathLike[str] | None) -> dict[str, Path | None]:
     """Every declared shape -> its resolved dir (None where unresolvable)."""
-    keys = set(((wp.get("inputs") or {}).get("derived") or {}))
+    keys = set((wp.get("inputs") or {}).get("derived") or {})
     lay = wp.get("layout") if isinstance(wp.get("layout"), dict) else {}
     keys |= set((lay.get("derived") or {}) if isinstance(lay.get("derived"), dict) else {})
     out: dict[str, Path | None] = {}
