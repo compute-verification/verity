@@ -819,9 +819,12 @@ def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1, mem_
     _WARM.update(a=a, sets=sets, pd=mine.partition_digest, program=mine.partition["program"])
     got: list[dict] = []
 
+    of = len(todo)
+
     def finished(row: dict) -> None:
-        got.append(row := {**row, "n": len(got) + 1, "of": len(todo)})
-        before[row["template"]] = {"seconds": row["seconds"], "peak_gib": row["peak_gib"]}
+        got.append(row := {**row, "n": len(got) + 1, "of": of})
+        if not row["kept"]:
+            before[row["template"]] = {"seconds": row["seconds"], "peak_gib": row["peak_gib"]}
         if done:
             done(row)
 

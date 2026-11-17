@@ -51,6 +51,15 @@ def test_the_longest_measured_go_first_and_each_row_is_handed_on_as_it_finishes(
         t: {"seconds": float(len(t)), "peak_gib": 1.0} for t in ("short", "long", "new")}
 
 
+def test_a_template_the_cache_held_keeps_its_measured_seconds(tmp_path, monkeypatch):
+    """A warm that finds a template kept takes no time over it, and leaves the seconds its compose was measured at for the
+    next warm's order."""
+    monkeypatch.setattr(A5, "_warm_one", lambda t: {**_compose(t), "seconds": 0.2, "kept": True})
+    (tmp_path / A5.WARM_SECONDS).write_text(json.dumps({"long": {"seconds": 600, "peak_gib": 9}}))
+    A5.warm(SimpleNamespace(compose_cache=str(tmp_path)), *_window(["long"]))
+    assert json.loads((tmp_path / A5.WARM_SECONDS).read_text()) == {"long": {"seconds": 600, "peak_gib": 9}}
+
+
 def test_no_compose_starts_past_the_memory_bound_by_earlier_peaks(tmp_path, monkeypatch):
     """Two composes an earlier warm measured at 20 GiB each never run together under a 30 GiB bound, though there are
     jobs for both; the small ones run beside either. One past the bound alone still runs, alone."""
@@ -62,6 +71,7 @@ def test_no_compose_starts_past_the_memory_bound_by_earlier_peaks(tmp_path, monk
     A5.warm(SimpleNamespace(compose_cache=str(tmp_path)), *_window(["big1", "big2", "huge", "s0", "s1", "s2", "s3"]),
             jobs=3, mem_gib=30, done=seen.append)
     assert sorted(r["template"] for r in seen) == ["big1", "big2", "huge", "s0", "s1", "s2", "s3"]
+    assert [(r["n"], r["of"]) for r in seen] == [(n, 7) for n in range(1, 8)]
     starts = [json.loads(x) for x in (tmp_path / "starts.jsonl").read_text().splitlines()]
     assert not any({"big1", "big2"} <= set(s) for s in starts), starts
     assert all(s == ["huge"] for s in starts if "huge" in s), starts
