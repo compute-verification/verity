@@ -291,6 +291,10 @@ def test_a_rule_gate_adds_its_tokens_to_t_and_catches_up_to_the_newest_line_whil
     h.arrive("r1")
     h.lines(1, 1, 2)
     assert h.step() and h.sched.added == ["r0"]                     # the registered rule holds r1 till T closes bucket 3
+    o = Gated(rule={"catch_up": "open"})
+    o.release(0, bucket=5)
+    o.arrive("r0")
+    assert o.step() and o.sched.added == ["r0"] and o.gate.opened == "the rule orders nothing"
 
 
 def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_another_it_does_not_know(tmp_path):

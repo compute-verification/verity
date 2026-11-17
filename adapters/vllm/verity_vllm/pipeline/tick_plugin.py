@@ -31,8 +31,9 @@ __all__ = ["CATCH_UPS", "OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader"
 
 #: `register`'s and `TickFeed`'s configuration, a JSON object (`tick_config`)
 TICK_ENV = "VERITY_TICK"
-#: when T catches up: ``quiet``, the registered rule (only with nothing running or waiting), or ``marks`` (`RuleGate`)
-CATCH_UPS = frozenset({"quiet", "marks"})
+#: when T catches up: ``quiet``, the registered rule (only with nothing running or waiting), ``marks`` (`RuleGate`), or
+#: ``open``, a gate open from the start, which orders nothing: the tick's server without its order
+CATCH_UPS = frozenset({"quiet", "marks", "open"})
 #: the OpenAI server's routes whose request body carries sampling parameters, which `TickFeed` reads (`unseeded`)
 SAMPLED_PATHS = frozenset({"/v1/completions", "/v1/chat/completions"})
 #: the routes `TickFeed` passes unread besides `SAMPLED_PATHS` and the watermark's: none reaches the engine
@@ -67,6 +68,8 @@ class RuleGate(TickGate):
     def __init__(self, tick: Tick, *, token_ns: int = 0, catch_up: str = "quiet", **kw: Any) -> None:
         self.token_ns, self.catch_up = token_ns, catch_up
         super().__init__(tick, **kw)
+        if catch_up == "open":
+            self.open("the rule orders nothing")
 
     def _reset(self) -> None:
         super()._reset()
