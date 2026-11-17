@@ -190,21 +190,21 @@ def test_a_network_attester_runs_certificates_io_and_link_are_its_own(tmp_path):
 
 def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(tmp_path):
     """Of the network attester's own check, the certificates step writes the gate's end's verdict, key for key:
-    whether it accepted and the gate's own list of counts (`auditor.NETWORK_CERTIFIER_COUNTS`, its `cell_rows` cut to
+    whether it accepted and the gate's own list of counts (`auditor.NETWORK_ATTESTER_COUNTS`, its `cell_rows` cut to
     `auditor.CELL_ROWS`). The step's list is the gate's, so a key the gate does not publish is not written by the
     chain: the check's problems and their number, the summary's counts of the traffic and its other keys (a
     connection's bytes before padding, the requests' tokens, the attester's clocks) stay in the witness, and so
     does a key the summary gains later. The record's leak guard reads
     pieces of 32 bytes and sees no shorter value, so this is held by name."""
-    assert (WC.COUNTS, WC.CELL_ROWS) == (G.NETWORK_CERTIFIER_COUNTS, G.CELL_ROWS), (
-        "network_attester_chain.COUNTS is the gate's list of published counts: rule a key public in auditor.NETWORK_CERTIFIER_COUNTS "
+    assert (WC.COUNTS, WC.CELL_ROWS) == (G.NETWORK_ATTESTER_COUNTS, G.CELL_ROWS), (
+        "network_attester_chain.COUNTS is the gate's list of published counts: rule a key public in auditor.NETWORK_ATTESTER_COUNTS "
         "first, then write it here")
     assert (WC.ACCEPTED_COUNTS, WC.ACCEPTED_CELL_ROWS) == (G.ACCEPTED_COUNTS, G.ACCEPTED_CELL_ROWS), (
         "the counts only an accepted check's verdict holds are the gate's (auditor.ACCEPTED_COUNTS)")
     run = gate_run(tmp_path)
     check = WC.RC.check(run / "witness")
     got = WC.certificates(run)["warden_check"]
-    assert set(got) <= {"accepted", *G.NETWORK_CERTIFIER_COUNTS} and set(got["cell_rows"]) <= set(G.CELL_ROWS)
+    assert set(got) <= {"accepted", *G.NETWORK_ATTESTER_COUNTS} and set(got["cell_rows"]) <= set(G.CELL_ROWS)
     assert {"requests", "ended", "refused", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms",
             "data_bytes", "completion_tokens", "prompt_tokens", "finish_reasons", "arrival_lag_ms", "clocks",
             "ticker_stalls", "withheld_windows"} <= set(check["summary"]) - set(got)
@@ -300,7 +300,7 @@ def certifier_run(tmp_path_factory):
     return run
 
 
-def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path, certifier_run):
+def test_a_attester_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path, certifier_run):
     proxy = re.escape(WC.PROXY)
     for read in (WC.deployment, WC.certificates, WC.io, WC.link):
         with pytest.raises(SystemExit, match=f"{proxy}.*plan.json is there"):
@@ -399,24 +399,24 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
                          "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 32, "warden_run": rid, "rounds": {
             "honest": {"audit": {"window_accepted": True}}, "forged": {"audit": {"window_accepted": False}}}}),
-        job=put("job.json", {"path": cr.NETWORK_CERTIFIER, "rc": {"n2": "0", "scan": "0", "tie": "0"}}),
-        network_certifier_run=str(run))
+        job=put("job.json", {"path": cr.NETWORK_ATTESTER, "rc": {"n2": "0", "scan": "0", "tie": "0"}}),
+        network_attester_run=str(run))
 
 
-def test_the_network_attester_path_requires_every_step_on_one_network_attester_run_and_refuses_a_certifier_rehearsals(tmp_path,
+def test_the_network_attester_path_requires_every_step_on_one_network_attester_run_and_refuses_a_attester_rehearsals(tmp_path,
                                                                                                 certifier_run):
     steps = _steps(tmp_path, gate_run(tmp_path / "run"))
     got = cr.report(steps)
-    assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.NETWORK_CERTIFIER_STUBBED)
+    assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.NETWORK_ATTESTER_STUBBED)
     assert got["negatives_refused"] == {"tie/forged": True, "n2/tampered": True, "scan/forged": True}
     assert got["steps"]["certificates"]["clock_certificates"] == 0 and got["d1"]["acc"] == [True] * sz.W63.windows
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
     md = cr.markdown(got)
-    assert f"on the {cr.NETWORK_CERTIFIER} path" in md and "| tie | accepted |" in md and "certified I/O" in md
+    assert f"on the {cr.NETWORK_ATTESTER} path" in md and "| tie | accepted |" in md and "certified I/O" in md
     ep = json.loads(Path(steps.endpoint).read_text())
     Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
     served = cr.report(steps)
-    assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.NETWORK_CERTIFIER_SERVED_STUBBED)
+    assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.NETWORK_ATTESTER_SERVED_STUBBED)
     assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["warden_endpoint_served"]
     Path(steps.endpoint).write_text(json.dumps(ep))
 
