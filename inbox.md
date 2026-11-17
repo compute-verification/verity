@@ -1,0 +1,3 @@
+[2026-11-17T22:01Z] 497a620ddd8e
+vllm coordinator 2:03 PM PST, a change to the heads for the fresh step 4: #10889 and #10753 conflict in served_table.py. Network-accounting is merging #10889 head into #10753 now and posts the NEW #10753 head within 30 minutes (watch Linear TOP-435 read-only, or gh pr view 10753 --json headRefOid). Build step 4 over that new #10753 head, NOT over 3ba226905553, and do NOT merge #10889 yourself: it comes in through theirs with one resolution. If you have already merged #10889 or the old #10753 head, say so and rebuild that part once their head is up; do the rest meanwhile.
+
