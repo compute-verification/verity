@@ -607,12 +607,13 @@ def test_never_auto_nor_a_small_disk_machine(tmp_path, capsys):
 
 
 def test_a_command_that_takes_a_run_id_is_never_launched(tmp_path):
-    cfg = setup(tmp_path, {"benchmarks/memory": [row("memory-accounting/rate", "research run --on auto --store-read -- uv run "
-                                                                              "python benchmarks/memory/run.py --from FIRE_RUN")]})
+    cfg = setup(tmp_path, {"benchmarks/memory": [row("memory-accounting/rate", "research run --on auto --store-read -- env "
+                                                                              "CARD=CARD uv run python benchmarks/memory/run.py "
+                                                                              "--from FIRE_RUN")]})
     pod = Pod()
     run(cfg, pod)
     assert pod.launched == []
-    assert pod.lines[-1].endswith("but its command takes FIRE_RUN, which only its owner fills in")
+    assert pod.lines[-1].endswith("but its command takes CARD, FIRE_RUN, which only its owner fills in")
 
 
 def test_the_checked_in_loop_parses_and_launches_nowhere_it_must_not():
