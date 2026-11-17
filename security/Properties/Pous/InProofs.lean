@@ -10,7 +10,7 @@ public import Definitions.Core.Boolean
 # PoUS's setup and session checked inside proofs, as deployed: stated, unproved
 
 **The session.** The memory challenger's signed record never reaches the auditor. The auditor's session decides by
-SESSUNITS' `MemoryAttester.sessionInProofs` (`MemoryAttester/InProofs.lean`, memory-accounting/pous-session-inside-proof):
+SESSUNITS' `MemoryChallenger.sessionInProofs` (`MemoryChallenger/InProofs.lean`, memory-accounting/pous-session-inside-proof):
 the clear checks on what the device releases (the commitment, the coin openings, the scheme and key), the carried rows'
 leaves agreeing across the session's `c.k + 2` proof blocks, and every block's proof accepted. `RunInProofsDeployed`
 says that a fixed extractor, rerunning any prover, recovers a signed session that today's `verdict` accepts, except
