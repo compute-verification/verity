@@ -40,8 +40,9 @@ verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] 
 
 `run.sh`'s header says what each option does.
 
-On Llama 3.2 1B and one H200, the job that writes its cost and its replay match, as points of the same two metric
-ids (`record-ids` stands in for `record`: it keeps each request's ids, which a replay under vLLM's client reads):
+On Llama 3.2 1B and one H200, the job that writes its cost, its replay match and its advice, as points of the same
+three metric ids, older than their other models (`record-ids` stands in for `record`: it keeps each request's ids,
+which a replay under vLLM's client reads):
 
 ~~~text
 research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model llama32-1b \
@@ -50,7 +51,8 @@ research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run
 
 Each point names its `model` (the checkpoint, `repo@revision`), its `hardware` (the cards it was served on) and its
 `member`, the model, the card and the arm (the cost's over its stock), which tells its line from the id's other
-models' and arms'. The 1B has no speculative decoding, so no advice line.
+models' and arms'. A serve with no draft, such as the 1B's, keeps no draft, so its kept count is 0 bits and its
+advice is the arrivals'.
 
 **The method a serving cost is measured by.** Four arms, `prod`, `prod-again`, `prod-seeded` and `prod-record`, each
 served in nine server lifetimes in that alternating order, each lifetime opening with a 20-second warm-up pass that
@@ -67,8 +69,7 @@ and never subtracted.
 - **The advice line's serve is not under the network attester.** No arm of this command is served under the
   network attester's record or the certified tick, so the arrivals are charged at what they would cost without the tick. The
   kept count is charged at its code's bits: the accept test has a Definition, and no block of a served Program calls
-  it, so nothing derives the count yet. A serve with
-  no draft (every model but GLM-5.3 here) has no line: the loader's table of a draft's advice is the one read.
+  it, so nothing derives the count yet.
 - **The recipe's settings are GLM-5.3's alone.** For every other model the arms are the benchmark's own: speculative
   decoding off and a context limit of 4,096 tokens unless `--max-model-len` is given.
 - **The context limit is not the model's own.** At the recipe's settings it is the recipe's number for the cards,
