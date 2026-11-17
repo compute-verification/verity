@@ -404,7 +404,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
         if q == P.Q_WORD[0] and sampling_design.get("law") == "stratified":
-            raise ValueError(f"a word partition ({P.Q_WORD[0]}) with the stratified law: its strata are templates, which a word "
+            raise ValueError(f"a word partition ({P.Q_WORD[0]}) with the stratified sampling design: its strata are templates, which a word "
                              f"partition does not have; the serving rows' partition is {' / '.join(TEMPLATE_QUERIES)}")
         raise ValueError(f"partition query {q!r}: the serving rows' window is the template instances' partition "
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
