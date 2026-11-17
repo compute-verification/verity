@@ -56,6 +56,7 @@ if has build; then
   MODE=build GPU=1 SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 \
     || { tail -40 $O/build.log $O/build/out/build.log 2>/dev/null; exit 1; }
   sha256sum $B | tee $O/binary.sha256
+  [ -f "${RESEARCH_RUN_DIR:-/nonexistent}/result.json" ] && mv $RESEARCH_RUN_DIR/result.json $O/build/result.json
 fi
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1; UV=$HOME/.local/bin/uv; }
