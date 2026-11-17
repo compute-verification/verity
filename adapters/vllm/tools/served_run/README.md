@@ -103,9 +103,10 @@ read, may run on the endpoint's node too. Being placed needs each of them on a m
 - The load, `serve_load.py`: `served_verdicts.sh`'s one execution phase of varied requests (`--varied`, or with
   `LOAD=fixed` one full execution phase of fixed length).
 - `placement.toml`: where each run goes and what its node holds. The window serves on node A (`vy-spot-glm53`, eight
-  H200s shared by card) and its record is composed on `vy-nebius-cpu-14`. A node's table holds its venv, CUDA, HF
-  cache, taps, traced Builds and Flock's build, which `run.sh setup` leaves under the served run's directory, and a
-  run's table the flags the run recorder starts it with. `run.sh` hands a run's script these as its environment, so no
+  H200s shared by card) unless the launch names another node (`--env NODE=vy-h100-1`, one H100), and its record is
+  composed on `vy-nebius-cpu-14`. A node's table holds its venv, CUDA, HF cache, taps, traced Builds and Flock's build,
+  which `run.sh setup` leaves under the served run's directory, and the rows it serves where they are not the top's
+  (`rows`), and a run's table the flags the run recorder starts it with. `run.sh` hands a run's script these as its environment, so no
   script names a node. No file or command line holds a machine's address: `window.sh` reads the gate's
   (`VY_CHALLENGER_1_HOST`) from `CHALLENGER_ENV`, a mode-600 env file on the node. The window's card, cores and end
   are `CARD`, `CORES` and `END`, which `run.sh` fills from the environment the run is launched in.
@@ -115,7 +116,7 @@ read, may run on the endpoint's node too. Being placed needs each of them on a m
 
 ## Commands
 
-`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|compose|setup|copy|audit] [--dry-run] [--development] [--tie] [FLAG...]`).
+`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|compose|setup|copy|audit|device-pin] [--dry-run] [--development] [--tie] [FLAG...]`).
 It starts the run with the run recorder from the tree root, on the node `placement.toml` names, and returns once the
 run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--dry-run` prints the command.
 
@@ -151,6 +152,11 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    so. An application's command takes no bindings: every party runs on node A, the challenger with coins of its own. For a run
    on the auditor's coins, `uv run bash run.sh bindings applications/X.toml` prints `verity run --bindings` for that application:
    node A's `bindings` values, each to every party whose piece reads its key, the addresses such `${NAME}`s.
+
+6. `CARD=N CORES=A-B run.sh device-pin --env NODE=<node>`: `device-pin.sh`, the node's cuBLAS device pin probed on that
+   card under its lease (`verity-vllm device-pin probe`, the H200's shapes): its routes and the route conditions the
+   probe ran under, in `out/device_pin.json`, which registered as `device_pins/<device>.json` is what a Build naming
+   that device binds and what a serving process on it is held to.
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `adapters/vllm`, and run
 `verity_vllm.pipeline.cli` and the integration's tools from `adapters/vllm/`.
