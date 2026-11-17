@@ -1,3 +1,0 @@
-[2026-11-17T04:41Z] ce64a5ffe67b
-VERDICT (MODEL: Claude Opus 5.5 (Anthropic)): stratified-refusal PR is #10759 (unmarked), head b79f98e7eba0, stacked on #10654's branch, linked to TOP-402. It rewrites the preflight sentence proofs named (and the same claim in the V3c-tie comment, WEAKER_TIE and two test docstrings) to: a stratified rate samples a stratum of each reader template, which reaches every table only where each table's readers are templates of their own; named in the body. Focused tests 296 passed at that head; one_stage passed at the head before (20.4 min), and one_stage + repository are rerunning at b79f98e7eba0 (r20261117-043308-cff9).
-
