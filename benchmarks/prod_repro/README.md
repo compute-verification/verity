@@ -246,6 +246,22 @@ one card (`TOPK_CUT.jsonl`, the timing of `benchmarks/dsa_topk`'s passes at the 
 - **What it doesn't price:** prefill steps, which have no device times at prefill shapes; the host's time; and the
   cards differing (each card is taken to fail the same rows).
 
+## A stage's record
+
+`--stage` makes the job's `result.json` the record of one stage of the serving cost, which `verity bench
+serving_cost` reads by the run's id (`stage.py`: its `kind`, its fingerprint and a validation that names every gap):
+
+- **`--stage capture --minify RUN [--exact RUN]`**, on the full model: `serving-cost-capture/v1`, with the minify run
+  (and the exact run) in its fingerprint. It passes where `out/` holds what `priced.py` reads: each arm of ours on the
+  canonical top-k paired lifetime for lifetime with `prod-trace`, each lifetime with a step trace, counted passes and
+  the top-k's counts, and the job's measured `prod-trace` over `prod` with an interval.
+- **`--stage minify`**, on a stand-in (`glm53-standin`): `serving-cost-minify/v1`. After the arms, `topk_units.py`
+  times the top-k on one card under a lease of its own into `out/units.jsonl` (the form `priced.units` reads, each pass
+  the pin's `dsa_topk` offers, every trial kept), and `out/units.json` lists each pass's time a call by rows and keys
+  with its range and how it was measured, and what stays unpriced (the top-k at prefill steps). It passes where every
+  pass offered has both kinds of time and the timer reached its last shape. The stand-in writes no measurement.
+- Either fails where the run's own validation did.
+
 ## What is not yet true
 
 - **The advice line's serve is not under the network attester.** No arm of this command is served under the

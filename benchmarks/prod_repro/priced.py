@@ -37,9 +37,16 @@ ENDS = ("lo", "mid", "hi")
 
 
 def units(path: Path) -> dict:
-    """Each pass's device time a call over the fast kernel's, in µs, by (rows, keys): ``base`` where no row failed, over
-    the distributions timed, and ``failed`` where every row failed (a near miss or the pin's overflow), less ``base``;
-    each (lo, hi)."""
+    """`timed`, refused where it holds no pass."""
+    if not (out := timed(path)):
+        raise SystemExit(f"{path}: no pass's times with and without a failed row")
+    return out
+
+
+def timed(path: Path) -> dict:
+    """Each timed pass's device time a call over the fast kernel's, in µs, by (rows, keys): ``base`` where no row
+    failed, over the distributions timed, and ``failed`` where every row failed (a near miss or the pin's overflow),
+    less ``base``; each (lo, hi). A pass the file holds no times of both kinds for is left out."""
     base: dict = {"present": {}, "cut": {}}
     whole: dict = {"present": {}, "cut": {}}
     for line in path.read_text().splitlines():
@@ -48,20 +55,19 @@ def units(path: Path) -> dict:
             continue
         shape = (r.get("rows"), r.get("keys"))
         if "dist" in r:
-            for p in base:
+            for p in (p for p in base if p in r):
                 c = r[p]["per_call"]
                 if not c.get("rows_bisected") and not c.get("rows_refined"):
                     base[p].setdefault(shape, []).append(r[p]["added_us"])
         elif r.get("forced") in ("missed", "overflow"):
-            for p in whole:
+            for p in (p for p in whole if p in r):
                 whole[p].setdefault(shape, []).append(r[p]["us"])
     out = {}
     for p in base:
         b = {s: (min(v), max(v)) for s, v in base[p].items()}
         f = {s: (max(0.0, min(v) - b[s][1]), max(v) - b[s][0]) for s, v in whole[p].items() if s in b}
-        if not b or not f:
-            raise SystemExit(f"{path}: no {p} times with and without a failed row")
-        out[p] = {"base": b, "failed": f}
+        if b and f:
+            out[p] = {"base": b, "failed": f}
     return out
 
 
