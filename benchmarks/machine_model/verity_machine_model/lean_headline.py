@@ -6,8 +6,7 @@ A family's data-sheet instance (`ResourceAccounting.TS.Headline.SmNN`, read by `
 its device's data sheet (`DS-NN`) as `ResourceAccounting.TS.Sheet` data, its headline design as a TS model on it, the floor
 program ♭ with the work the proofs could miss (ε_skip), and π*, the certificate the machine model's LP finds at q* = ½.
 Every number is exact: a census value or a TOML value read as its decimal, and `skip.design_skip`'s ε_skip as the
-decimal Python prints. `FAMILIES` lists them: sm_120 (H1 + fx1). sm_80 has none: FOLD-OPT is false at its ALU-pipe
-certificate.
+decimal Python prints. `FAMILIES` lists them: sm_120 (H1 + fx1).
 
 `instance()` derives one and checks it against Python's own numbers: the sheet reproduces every DS coefficient, ♭ is
 `setup`'s floor program at ω's words, π* is one facet, and the bound the Lean proof reads off the identity is at most

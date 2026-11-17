@@ -14,7 +14,6 @@ import types
 
 import pytest
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import moe_pad as MP
 
 from tests.engine.test_gen_ov_moe import (
     INTER,
@@ -26,6 +25,7 @@ from tests.engine.test_gen_ov_moe import (
     _start,
     moe_scope_events,
 )
+from verity_vllm.definitions.registry import moe_pad as MP
 from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (
     MOE_CONSTRUCTION_PATTERNS,
     MoEFusedExperts,
@@ -90,7 +90,6 @@ def test_padded_compute_is_the_frontend_definition_and_its_operand_leaf_counts_a
     """The fold's spec IS the Definition the padded frontend rule binds (vocab kind `moe_ffn_fixed`): one id, one digest, one lift of
     record (`LMoeFfnL_v1`, hand-registered) -- the global match compares Build and record in that vocabulary."""
     from verity_vllm.definitions.registry import lifted as L
-
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
     fold_spec = bind(MP.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=8, H=H, I=INTER)
     front_spec = V.kinds["moe_ffn_fixed"](E, TOPK, 8, H, INTER)

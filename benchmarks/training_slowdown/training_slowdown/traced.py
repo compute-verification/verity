@@ -30,10 +30,8 @@ def trace_step(cfg: config.Config, route, model, optimizers, device: str) -> dic
     operands' dtypes and no price at each k of the console's dial, the ops that break P-match, the products written
     with elementwise ops, the read-backs the capture lists (`data_dependent`, `carried_scalars`; a step the capture
     takes as a function has none, since it refuses one), and the measured step's circuit as the capture measures it
-    (`circuit`, `capture.circuit.measure`): the gradient's cut and one token group's partial, the carried state no
-    token op reads, the update's profile and its cut, τ, a, and the shares of the step's gates in token ops (σ) and
-    in ops an update reaches, at the gate prices of the code that took the trace. Nothing the formalism derives is in
-    it. A step the capture refuses gives {"refused": {"reason", "op", "message"}}; any other error is raised, and the
+    (`circuit`, `capture.circuit.measure`): its gates, τ and the share of its gates in token ops an update reaches, at
+    the gate prices of the code that took the trace. A step the capture refuses gives {"refused": {"reason", "op", "message"}}; any other error is raised, and the
     job records it in the trace's place ({"failed": why}, `run.inside`).
 
     The batch is traced as its inputs and each window's last target apart, so the token axes are the batch and the
@@ -73,4 +71,4 @@ def traced_step(cfg: config.Config, route, model, optimizers, device: str) -> tu
             "elementwise_products": raw["elementwise_products"],
             "data_dependent": list(read_backs.get("data_dependent", [])),
             "carried_scalars": list(read_backs.get("carried_scalars", [])),
-            "circuit": {k: v for k, v in g.formalism.items() if k not in read_backs}}, g
+            "circuit": g.formalism}, g

@@ -5,12 +5,10 @@ from __future__ import annotations
 
 import ast
 import copy
-import importlib.util
 import math
 import operator
 import re
 import shutil
-import sys
 from fractions import Fraction
 from pathlib import Path
 
@@ -19,6 +17,9 @@ import pytest
 from verity.errors import InvalidArtifact
 from verity import device as S
 from verity.device import CARD_KINDS, MARKS, load_card, number, skus
+
+CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[3] / "hardware/nodes"
 
 
 def entries(table: dict, at: str = "") -> dict[str, dict]:
@@ -37,45 +38,29 @@ def value(card: dict, key: str) -> Fraction:
 
 
 def test_the_cards_we_run() -> None:
-    assert skus("gpu") == ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server"]
-    assert skus("host") == ["xeon-6776p-2s", "xeon-platinum-8468-2s"]
-    assert skus("server") == ["dgx-h200"]
-    assert skus("timebase") == ["nebius-vm-monotonic-raw"]
-    assert skus() == sorted(sku for kind in CARD_KINDS for sku in skus(kind))
-
-
-@pytest.mark.parametrize(("sheets", "listed"), [("CARDS", "skus"), ("NODES", "node_kinds")])
-def test_the_sheets_are_found_through_a_link_to_the_package(tmp_path, monkeypatch, sheets: str, listed: str) -> None:
-    """A `research run` job imports `verity` through a directory of links (`research.pythonpath.shim_dir`), so the
-    Site's `__file__` is the link's path, and the checkout's `hardware/` is beside the package, not the link."""
-    real = Path(S.__file__).resolve()
-    (tmp_path / "verity").symlink_to(real.parent, target_is_directory=True)
-    through = tmp_path / "verity" / real.name
-    spec = importlib.util.spec_from_file_location(f"{real.stem}_through_a_link", through)
-    linked = importlib.util.module_from_spec(spec)
-    monkeypatch.setitem(sys.modules, spec.name, linked)  # the Site's dataclasses look their module up there
-    spec.loader.exec_module(linked)
-    assert linked.__file__ == str(through)
-    assert getattr(linked, sheets) == getattr(S, sheets)
-    assert getattr(linked, listed)() == getattr(S, listed)() != []
+    assert skus("gpu", directory=CARD_FILES) == ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server"]
+    assert skus("host", directory=CARD_FILES) == ["xeon-6776p-2s", "xeon-platinum-8468-2s"]
+    assert skus("server", directory=CARD_FILES) == ["dgx-h200"]
+    assert skus("timebase", directory=CARD_FILES) == ["nebius-vm-monotonic-raw"]
+    assert skus(directory=CARD_FILES) == sorted(sku for kind in CARD_KINDS for sku in skus(kind, directory=CARD_FILES))
 
 
 #: The fewest entries a card of each kind holds, so a card whose sections didn't parse as entries fails.
 FEWEST = {"gpu": 20, "host": 20, "server": 4, "timebase": 2}
 
 
-@pytest.mark.parametrize("sku", skus())
+@pytest.mark.parametrize("sku", skus(directory=CARD_FILES))
 def test_every_number_is_sourced_and_marked(sku: str) -> None:
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     numbers = entries(card)
     assert len(numbers) >= FEWEST[card["kind"]]
     assert all(e["mark"] in MARKS and e["source"].strip() for e in numbers.values())
 
 
-@pytest.mark.parametrize("sku", skus())
+@pytest.mark.parametrize("sku", skus(directory=CARD_FILES))
 def test_sources_cite_the_store_not_runs_or_hosts(sku: str) -> None:
     """Evidence is cited by its `art:` id, and a node by its kind, never by a run id or a host name."""
-    text = (S.CARDS / f"{sku}.toml").read_text(encoding="utf-8")
+    text = (CARD_FILES / f"{sku}.toml").read_text(encoding="utf-8")
     assert not re.findall(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b|\bvy-[a-z0-9-]+", text), \
         "cite the run's record (`research data show RUN`: outputs.run_record) as art:<12 hex>, and name the node by its kind"
 
@@ -83,7 +68,7 @@ def test_sources_cite_the_store_not_runs_or_hosts(sku: str) -> None:
 def test_a_measurement_cites_the_run_that_measured_it() -> None:
     """A measured number nobody can check: an entry marked `measurement` whose source names a probe program, a census or
     a document and no run's record, so a reader of the card cannot reach the output that holds its figure."""
-    measured = {f"{sku}: {key}": entry["source"] for sku in skus() for key, entry in entries(load_card(sku)).items()
+    measured = {f"{sku}: {key}": entry["source"] for sku in skus(directory=CARD_FILES) for key, entry in entries(load_card(sku, directory=CARD_FILES)).items()
                 if entry["mark"] == "measurement"}
     assert measured, "no card marks a number `measurement`, so this test checks nothing"
     uncited = sorted(at for at, source in measured.items() if not re.search(r"\bart:[0-9a-f]{12}", source))
@@ -110,19 +95,19 @@ def test_one_schema_across_the_cards_of_a_kind(kind: str) -> None:
     is in its card alone."""
     alone = ONE_CARD.get(kind, {})
     apart = MEASURED_ONLY.get(kind, set()) | set(alone)
-    keys = {sku: sorted(set(entries(load_card(sku))) - apart) for sku in skus(kind)}
+    keys = {sku: sorted(set(entries(load_card(sku, directory=CARD_FILES))) - apart) for sku in skus(kind, directory=CARD_FILES)}
     assert len({tuple(k) for k in keys.values()}) == 1, keys
     for key in MEASURED_ONLY.get(kind, set()):
-        marks = {card[key]["mark"] for card in map(entries, map(load_card, skus(kind))) if key in card}
+        marks = {card[key]["mark"] for card in (entries(load_card(s, directory=CARD_FILES)) for s in skus(kind, directory=CARD_FILES)) if key in card}
         assert marks == {"measurement"}, (key, marks)
     for key, sku in alone.items():
-        assert [s for s in skus(kind) if key in entries(load_card(s))] == [sku], key
+        assert [s for s in skus(kind, directory=CARD_FILES) if key in entries(load_card(s, directory=CARD_FILES))] == [sku], key
 
 
-@pytest.mark.parametrize("sku", skus("gpu"))
+@pytest.mark.parametrize("sku", skus("gpu", directory=CARD_FILES))
 def test_derived_gpu_numbers(sku: str) -> None:
     """Device memory's bandwidth is its clock's transfers over the bus, which bound its read."""
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     assert value(card, "memory.bandwidth") == (value(card, "clock.memory") * 10 ** 6 * value(card, "memory.transfers")
                                                * value(card, "memory.bus") / 8)
     assert 0 < value(card, "memory.read") <= value(card, "memory.bandwidth")
@@ -133,12 +118,12 @@ def test_derived_gpu_numbers(sku: str) -> None:
 UNIFORM_REGISTERS = {"b200-sxm-180gb": 63, "h200-sxm-141gb": 63, "rtx-pro-6000-server": 80}
 
 
-@pytest.mark.parametrize("sku", skus("gpu"))
+@pytest.mark.parametrize("sku", skus("gpu", directory=CARD_FILES))
 def test_the_extra_registers_cover_the_resident_warps(sku: str) -> None:
     """`sm.warps` is the most warps resident on an SM, and `store.reg_extra` holds at least their uniform registers
     (`UNIFORM_REGISTERS` a warp) and their predicates (7 bits a thread at 32 threads a warp, and 7 bits a warp), in
     32-bit words. Its source states the count, and a count that is a run's cites the run's record."""
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     warps, uniform = value(card, "sm.warps"), UNIFORM_REGISTERS[sku]
     assert value(card, "store.reg_extra") >= uniform * warps + 7 * warps + math.ceil(7 * warps / 32)
     source = card["store"]["reg_extra"]["source"]
@@ -150,26 +135,26 @@ def test_the_registers_a_run_found_on_the_rtx_pro_6000() -> None:
     """The RTX PRO 6000's `store.reg_extra` is its 80 uniform registers a warp, its predicates and its uniform
     predicates and nothing more, pinned with the on-chip bytes its stores then give a sheet (the registers, shared
     memory and L2) so that a change to either is deliberate: every sheet of the card moves with it."""
-    card = load_card("rtx-pro-6000-server")
+    card = load_card("rtx-pro-6000-server", directory=CARD_FILES)
     assert value(card, "store.reg_extra") == 80 * 48 + 336 + 11 == 4187
     sms = value(card, "sm.count")
     words = value(card, "store.reg") + value(card, "store.reg_extra")
     assert 4 * sms * words + sms * value(card, "store.smem") + value(card, "store.l2") == 211_290_960
 
 
-@pytest.mark.parametrize("sku", skus("gpu"))
+@pytest.mark.parametrize("sku", skus("gpu", directory=CARD_FILES))
 def test_shared_memory_alone_is_part_of_its_pool(sku: str) -> None:
     """`store.smem_carveout` is the most of `store.smem`, the pool of L1 and shared memory, that a kernel can make
     shared memory, so it is no larger than the pool."""
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     assert 0 < value(card, "store.smem_carveout") <= value(card, "store.smem")
 
 
-@pytest.mark.parametrize("sku", skus("gpu"))
+@pytest.mark.parametrize("sku", skus("gpu", directory=CARD_FILES))
 def test_the_memory_on_the_board_bounds_the_memory_a_program_gets(sku: str) -> None:
     """`store.dram_installed` is the second reading of device memory, the memory on the board: a ceiling in whole GiB,
     at or above `store.dram`, the memory a program gets."""
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     installed = value(card, "store.dram_installed")
     assert card["store"]["dram_installed"]["mark"] == "ceiling" and card["store"]["dram_installed"]["unit"] == "B"
     assert 0 < value(card, "store.dram") <= installed and installed % 2 ** 30 == 0
@@ -179,31 +164,31 @@ def test_the_caches_a_run_found_are_one_cards() -> None:
     """The caches an SM serves code and constants from are on the one card a run swept, each in bytes an SM, and the
     two counted once a warp scheduler are whole multiples of `rate.issue`'s schedulers."""
     found = MEASURED_ONLY["gpu"]
-    have = {sku: {key for key in entries(load_card(sku)) if key in found} for sku in skus("gpu")}
+    have = {sku: {key for key in entries(load_card(sku, directory=CARD_FILES)) if key in found} for sku in skus("gpu", directory=CARD_FILES)}
     assert have == {"b200-sxm-180gb": set(), "h200-sxm-141gb": set(), "rtx-pro-6000-server": found}
-    card = load_card("rtx-pro-6000-server")
+    card = load_card("rtx-pro-6000-server", directory=CARD_FILES)
     assert {entries(card)[key]["unit"] for key in found} == {"B/SM"}
     assert [value(card, f"store.{k}") / value(card, "rate.issue") for k in ("l0i", "const_l0")] == [6144, 3072]
 
 
-@pytest.mark.parametrize("sku", skus("gpu"))
+@pytest.mark.parametrize("sku", skus("gpu", directory=CARD_FILES))
 def test_the_default_reading_is_the_higher_ceiling(sku: str) -> None:
     """`clock.default` names the reading of `readings(card)` every figure of the card is stated at unless it names the
     other: one of `READINGS`, and the one whose tensor peak is the highest (soundness's ruling on CMP-438), so that a
     reader that takes `readings(card)[card["clock"]["default"]]` credits no more than either reading would."""
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     peaks = S.readings(card)
     assert card["clock"]["default"] in S.READINGS, f"set clock.default to one of {S.READINGS}"
     assert peaks[card["clock"]["default"]] == max(peaks.values())
 
 
-@pytest.mark.parametrize("sku", skus("gpu"))
+@pytest.mark.parametrize("sku", skus("gpu", directory=CARD_FILES))
 def test_an_fp32_add_at_each_clock_reading(sku: str) -> None:
     """`price.fp32` is an FP32 add's price at the card's ceilings under each reading of `readings(card)`, keyed by its
     name: a SM-clock's tensor units over the adds it issues, 32 lanes a warp instruction, scaled by the reading's tensor
     peak over the peak at `clock.sm`, to the card's two places. `price.fp32_loop`, a timed loop's, is at least the
     default's."""
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     add = value(card, "rate.tensor") / (32 * value(card, "rate.issue"))
     peaks = S.readings(card)
     assert set(card["price"]["fp32"]) == set(S.READINGS)
@@ -215,7 +200,7 @@ def test_an_fp32_add_at_each_clock_reading(sku: str) -> None:
 def test_the_h200s_two_readings() -> None:
     """The H200's FP32 add at both clock readings (CMP-438), pinned so that a change to either is deliberate: 32 with
     both pipes at 1980 MHz, the default, and 29.58 with the tensor pipe at 1830 MHz, each naming its W1 price."""
-    card = load_card("h200-sxm-141gb")
+    card = load_card("h200-sxm-141gb", directory=CARD_FILES)
     fp32 = card["price"]["fp32"]
     assert card["clock"]["default"] == "sm"
     assert {r: value(fp32, r) for r in S.READINGS} == {"tensor": Fraction("29.58"), "sm": 32}
@@ -223,14 +208,14 @@ def test_the_h200s_two_readings() -> None:
     assert "Pouw.PearlC.W1.W1Prices.h100Tensor." in fp32["tensor"]["source"]
 
 
-@pytest.mark.parametrize("sku", skus("host"))
+@pytest.mark.parametrize("sku", skus("host", directory=CARD_FILES))
 def test_derived_host_numbers(sku: str) -> None:
     """A host's ops are its cores' AMX MACs at their clocks, two ops a MAC; its DRAM's bandwidth is its channels'
     transfers, which bound its reads and are its write ceiling; the second reading of the three, at the fastest memory
     the processor takes, is a ceiling at or above the first; its lanes' bandwidth is every lane into its sockets, and
     what a socket takes apart from them, at their rates less the coding, in whole bytes, which is its disks' read at
     most; and its on-chip bytes are its caches and allowances."""
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     sockets, cores, priority = (value(card, f"cpu.{k}") for k in ("sockets", "cores", "priority_cores"))
     hz = priority * value(card, "clock.priority_turbo") + (cores - priority) * value(card, "clock.turbo")
     assert value(card, "rate.ops") == 2 * value(card, "rate.amx") * sockets * hz * 10 ** 9
@@ -252,11 +237,11 @@ def test_derived_host_numbers(sku: str) -> None:
     assert value(card, "store.chip") == sockets * per_socket + sockets * cores * per_core
 
 
-@pytest.mark.parametrize("sku", skus("host"))
+@pytest.mark.parametrize("sku", skus("host", directory=CARD_FILES))
 def test_a_vm_gives_a_gpu_no_more_cores_than_the_server_has(sku: str) -> None:
     """`cpu.vm_cores`, the cores a GPU that a node's VM gives, is a measured share of the server's cores, so it is a
     measurement and no larger than them."""
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     assert card["cpu"]["vm_cores"]["mark"] == "measurement"
     assert 0 < value(card, "cpu.vm_cores") <= value(card, "cpu.sockets") * value(card, "cpu.cores")
 
@@ -266,8 +251,8 @@ def test_a_ceiling_is_no_less_than_the_measurement_beside_it() -> None:
     read under its channels' at the fastest memory the processor takes, and its disks' read under its lanes'."""
     pairs = {"memory.read": "memory.bandwidth_max", "disk.read": "disk.read_max"}
     seen = []
-    for sku in skus("host"):
-        card, numbers = load_card(sku), entries(load_card(sku))
+    for sku in skus("host", directory=CARD_FILES):
+        card, numbers = load_card(sku, directory=CARD_FILES), entries(load_card(sku, directory=CARD_FILES))
         for measured, ceiling in pairs.items():
             if measured in numbers and numbers[measured]["mark"] == "measurement":
                 assert numbers[ceiling]["mark"] == "ceiling", (sku, ceiling)
@@ -276,20 +261,20 @@ def test_a_ceiling_is_no_less_than_the_measurement_beside_it() -> None:
     assert ("xeon-6776p-2s", "memory.read") in seen and ("xeon-6776p-2s", "disk.read") in seen
 
 
-@pytest.mark.parametrize("sku", skus("server"))
+@pytest.mark.parametrize("sku", skus("server", directory=CARD_FILES))
 def test_derived_server_numbers(sku: str) -> None:
     """A server's line rate is its network ports' together, every class of them, each in bits a second."""
-    link = load_card(sku)["link"]
+    link = load_card(sku, directory=CARD_FILES)["link"]
     assert {e["unit"] for e in link.values()} == {"bit/s"}
     assert value(link, "rate") == sum(value(link, k) for k in link if k != "rate")
 
 
-@pytest.mark.parametrize("sku", skus("timebase"))
+@pytest.mark.parametrize("sku", skus("timebase", directory=CARD_FILES))
 def test_a_time_base_states_its_drift_and_the_largest_reading_of_it(sku: str) -> None:
     """A time base's one section is `drift`, both entries in seconds a second: `max`, the most its clock's rate may
     differ from the SI second's, a ceiling where a page bounds it and a premise where none does, and `read`, the largest
     reading on record, a measurement, which a `max` below it would contradict."""
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     assert [key for key, item in card.items() if isinstance(item, dict)] == ["drift"]
     assert sorted(entries(card)) == ["drift.max", "drift.read"]
     most, read = card["drift"]["max"], card["drift"]["read"]
@@ -302,7 +287,7 @@ def test_the_drift_an_auditor_reads_for_a_provider_virtual_machine() -> None:
     """The one time base on record, pinned so that a change to it is deliberate: the figure a reader takes for its
     device's drift is exactly 1/2000, on a premise its source states by name, for the device's host, beside the trust
     in that host; and the reading beside it is 31.2 ppm."""
-    drift = load_card("nebius-vm-monotonic-raw")["drift"]
+    drift = load_card("nebius-vm-monotonic-raw", directory=CARD_FILES)["drift"]
     assert S.number(drift["max"]) == Fraction(1, 2000) and drift["max"]["mark"] == "premise"
     assert "ClockRateWithin(host, 5e-4)" in drift["max"]["source"] and "trusted-device" in drift["max"]["source"]
     assert S.number(drift["read"]) == Fraction(312, 10 ** 7)
@@ -315,8 +300,8 @@ PREMISES = ["cards/nebius-vm-monotonic-raw.toml: drift.max"]
 def test_every_premise_is_listed() -> None:
     """A premise is a number no page and no run bounds, assumed of whom its source names, so each one in a card or a
     node file is listed here: a new one is a change to this list, which someone reads."""
-    marked = {f"cards/{sku}.toml": entries(load_card(sku)) for sku in skus()}
-    marked |= {f"nodes/{kind}.toml": entries(S.load_node(kind)) for kind in S.node_kinds()}
+    marked = {f"cards/{sku}.toml": entries(load_card(sku, directory=CARD_FILES)) for sku in skus(directory=CARD_FILES)}
+    marked |= {f"nodes/{kind}.toml": entries(S.load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES)) for kind in S.node_kinds(directory=NODE_FILES)}
     found = sorted(f"{file}: {key}" for file, numbers in marked.items() for key, entry in numbers.items()
                    if entry["mark"] == "premise")
     assert found == PREMISES, (
@@ -330,7 +315,7 @@ def test_the_quoted_numbers() -> None:
     change to one is deliberate: among them PoUB's verifier's `timing.py` HOST_ figures, which the RTX node's host card
     states beside the disks' read that PoUB's verifier rounds up, and its GPU's measured read, which the RTX PRO 6000's
     card states."""
-    server, h200, b200 = load_card("rtx-pro-6000-server"), load_card("h200-sxm-141gb"), load_card("b200-sxm-180gb")
+    server, h200, b200 = load_card("rtx-pro-6000-server", directory=CARD_FILES), load_card("h200-sxm-141gb", directory=CARD_FILES), load_card("b200-sxm-180gb", directory=CARD_FILES)
     clocks = ("clock.sm", "clock.tensor", "clock.memory")
     assert [value(server, k) for k in clocks] == [2430, 2430, 12481]
     assert [value(h200, k) for k in clocks] == [1980, 1830, 3201]
@@ -338,7 +323,7 @@ def test_the_quoted_numbers() -> None:
     assert value(server, "memory.bandwidth") == 1597568 * 10 ** 6
     assert value(h200, "memory.bandwidth") == 4916736 * 10 ** 6
     assert [float(value(card, "memory.read")) for card in (server, h200)] == [1.539e12, 4.26e12]
-    granite, sapphire = load_card("xeon-6776p-2s"), load_card("xeon-platinum-8468-2s")
+    granite, sapphire = load_card("xeon-6776p-2s", directory=CARD_FILES), load_card("xeon-platinum-8468-2s", directory=CARD_FILES)
     assert round(float(value(granite, "rate.ops")), -11) == 1.0453e15
     assert round(float(value(sapphire, "rate.ops")), -11) == 7.471e14
     timing = ("memory.read", "memory.bandwidth", "memory.write", "store.chip")
@@ -354,13 +339,13 @@ def test_the_second_readings() -> None:
     gib = 2 ** 30
     boards = {"rtx-pro-6000-server": (96, 96), "h200-sxm-141gb": (141, 144), "b200-sxm-180gb": (180, 192)}
     for sku, (dram, installed) in boards.items():
-        card = load_card(sku)
+        card = load_card(sku, directory=CARD_FILES)
         assert [value(card, "store.dram"), value(card, "store.dram_installed")] == [dram * gib, installed * gib], sku
     second = ("memory.speed_max", "memory.bandwidth_max", "memory.write_max")
-    assert [float(value(load_card("xeon-6776p-2s"), k)) for k in second] == [8800, 1.1264e12, 1.1264e12]
-    assert [float(value(load_card("xeon-platinum-8468-2s"), k)) for k in second] == [4800, 6.144e11, 6.144e11]
+    assert [float(value(load_card("xeon-6776p-2s", directory=CARD_FILES), k)) for k in second] == [8800, 1.1264e12, 1.1264e12]
+    assert [float(value(load_card("xeon-platinum-8468-2s", directory=CARD_FILES), k)) for k in second] == [4800, 6.144e11, 6.144e11]
     caches = ("store.l15", "store.l1i", "store.l0i", "store.const_l0")
-    assert [value(load_card("rtx-pro-6000-server"), k) for k in caches] == [147_456, 65_536, 24_576, 12_288]
+    assert [value(load_card("rtx-pro-6000-server", directory=CARD_FILES), k) for k in caches] == [147_456, 65_536, 24_576, 12_288]
 
 
 def test_the_lanes_into_the_sockets() -> None:
@@ -368,8 +353,8 @@ def test_the_lanes_into_the_sockets() -> None:
     most on the one with no chipset, the chipset link on the other) and the bytes a second they carry together, which
     is the most its disks are read back at, pinned so that a change to one is deliberate."""
     lanes = ("pcie.lanes", "pcie.speed", "pcie.other", "pcie.bandwidth", "disk.read_max")
-    assert [value(load_card("xeon-6776p-2s"), k) for k in lanes] == [88, 32, 20, 698_092_307_693, 698_092_307_693]
-    assert [value(load_card("xeon-platinum-8468-2s"), k) for k in lanes] == [80, 32, 128, 661_661_538_462, 661_661_538_462]
+    assert [value(load_card("xeon-6776p-2s", directory=CARD_FILES), k) for k in lanes] == [88, 32, 20, 698_092_307_693, 698_092_307_693]
+    assert [value(load_card("xeon-platinum-8468-2s", directory=CARD_FILES), k) for k in lanes] == [80, 32, 128, 661_661_538_462, 661_661_538_462]
 
 
 def test_the_rates_readers_quote() -> None:
@@ -377,7 +362,7 @@ def test_the_rates_readers_quote() -> None:
     MACs, at the tensor's own clock (the H200's 1830 MHz, under its 1980 MHz SM clock), at the SM clock on a card
     without a `clock.tensor`, and at a clock a reader names; every other resource at the SM clock, and device memory's
     words a second."""
-    server, h200 = load_card("rtx-pro-6000-server"), load_card("h200-sxm-141gb")
+    server, h200 = load_card("rtx-pro-6000-server", directory=CARD_FILES), load_card("h200-sxm-141gb", directory=CARD_FILES)
     assert S.rate(server) == 188 * 1024 * 2430 * 10 ** 6
     assert S.rate(h200) == 132 * 4096 * 1830 * 10 ** 6
     assert S.rate(h200, fmt="bf16") == 132 * 4096 * 1830 * 10 ** 6 / 2
@@ -389,8 +374,8 @@ def test_the_rates_readers_quote() -> None:
     assert S.rate(server, "issue", mhz=2092) == 4 * 188 * 2092 * 10 ** 6
     assert S.rate(server, fmt="nvf4", mhz=2092.5) == 188 * 1024 * Fraction("2092.5") * 10 ** 6 * 2
     assert S.rate(h200, "dram") == 4916736 * 10 ** 6 / 4
-    for call, refusal in ((lambda: S.rate(load_card("xeon-6776p-2s")), "is a host card"),
-                          (lambda: S.rate(load_card("nebius-vm-monotonic-raw")), "is a timebase card"),
+    for call, refusal in ((lambda: S.rate(load_card("xeon-6776p-2s", directory=CARD_FILES)), "is a host card"),
+                          (lambda: S.rate(load_card("nebius-vm-monotonic-raw", directory=CARD_FILES)), "is a timebase card"),
                           (lambda: S.rate(h200, "dram", mhz=1500), "no SM clock"),
                           (lambda: S.rate(h200, "tensr"), "no rate.tensr"),
                           (lambda: S.rate(h200, "issue", fmt="s8"), "weighs tensor MACs only"),
@@ -404,7 +389,7 @@ def test_the_readings_of_the_tensors_clock() -> None:
     clock, 1830 MHz, then at its SM clock, 1980 MHz, in s8 MACs and in another format's; one peak twice on a card that
     gives the tensor no clock of its own or the SM clock again; the first always `rate`'s own; and what `rate` refuses
     refused."""
-    h200 = load_card("h200-sxm-141gb")
+    h200 = load_card("h200-sxm-141gb", directory=CARD_FILES)
     assert S.READINGS == ("tensor", "sm")
     assert S.readings(h200) == {"tensor": 132 * 4096 * 1830 * 10 ** 6, "sm": 132 * 4096 * 1980 * 10 ** 6}
     assert S.readings(h200, fmt="bf16") == {"tensor": 132 * 2048 * 1830 * 10 ** 6, "sm": 132 * 2048 * 1980 * 10 ** 6}
@@ -412,13 +397,13 @@ def test_the_readings_of_the_tensors_clock() -> None:
     del untimed["clock"]["tensor"]
     assert S.readings(untimed) == dict.fromkeys(S.READINGS, 132 * 4096 * 1980 * 10 ** 6)
     for sku in ("rtx-pro-6000-server", "b200-sxm-180gb"):
-        assert S.readings(load_card(sku)) == dict.fromkeys(S.READINGS, S.rate(load_card(sku))), sku
-    for sku in skus("gpu"):
-        card = load_card(sku)
+        assert S.readings(load_card(sku, directory=CARD_FILES)) == dict.fromkeys(S.READINGS, S.rate(load_card(sku, directory=CARD_FILES))), sku
+    for sku in skus("gpu", directory=CARD_FILES):
+        card = load_card(sku, directory=CARD_FILES)
         peaks = S.readings(card, fmt="e4m3")
         assert list(peaks) == list(S.READINGS) and peaks["tensor"] == S.rate(card, fmt="e4m3"), sku
         assert peaks["sm"] == S.rate(card, fmt="e4m3", mhz=value(card, "clock.sm")), sku
-    for call, refusal in ((lambda: S.readings(load_card("xeon-6776p-2s")), "is a host card"),
+    for call, refusal in ((lambda: S.readings(load_card("xeon-6776p-2s", directory=CARD_FILES)), "is a host card"),
                           (lambda: S.readings(h200, fmt="fp8"), "weighs tensor MACs only")):
         with pytest.raises((KeyError, ValueError), match=refusal):
             call()
@@ -447,7 +432,7 @@ def test_the_b200_sheet_agrees_with_its_card_file() -> None:
     """``ResourceAccounting.TS.Sheets.B200`` states the B200 card's clock, SMs and pipe widths, and each format's peak as
     ``rate.tensor`` over that format's weight. The sheet's implied and FP64 clocks, its FP6 peak and its uniform pipe
     have no key in the card file."""
-    card = load_card("b200-sxm-180gb")
+    card = load_card("b200-sxm-180gb", directory=CARD_FILES)
     sheet = dict(re.findall(r"^def (\w+) : ℝ := (.+)$", SHEET.read_text(encoding="utf-8"), re.M))
     keys = {"fmaxMHz": ("clock", "sm"), "smCount": ("sm", "count"), "widthAlu": ("rate", "alu"),
             "widthImad": ("rate", "imad"), "widthShfl": ("rate", "shfl")}
@@ -462,23 +447,23 @@ def test_an_unknown_sku_names_the_cards() -> None:
     every = ["b200-sxm-180gb", "dgx-h200", "h200-sxm-141gb", "nebius-vm-monotonic-raw", "rtx-pro-6000-server",
              "xeon-6776p-2s", "xeon-platinum-8468-2s"]
     with pytest.raises(KeyError, match=re.escape(f"the cards are {every}")):
-        load_card("rtx-pro-6000-workstation")
+        load_card("rtx-pro-6000-workstation", directory=CARD_FILES)
 
 
 def test_a_copy_of_the_cards_elsewhere_loads_as_they_do(tmp_path) -> None:
     """The card files copied to another directory, named as ``directory``, give the same SKUs, of each kind, and the
     same tables as the default."""
-    shutil.copytree(S.CARDS, tmp_path / "cards", ignore=shutil.ignore_patterns("*.py", "__pycache__"))
+    shutil.copytree(CARD_FILES, tmp_path / "cards", ignore=shutil.ignore_patterns("*.py", "__pycache__"))
     there = tmp_path / "cards"
-    assert sorted(p.name for p in there.iterdir()) == [f"{sku}.toml" for sku in skus()]
-    assert skus(directory=there) == skus() and all(skus(kind, directory=there) == skus(kind) for kind in CARD_KINDS)
-    assert all(load_card(sku, directory=there) == load_card(sku) for sku in skus())
+    assert sorted(p.name for p in there.iterdir()) == [f"{sku}.toml" for sku in skus(directory=CARD_FILES)]
+    assert skus(directory=there) == skus(directory=CARD_FILES) and all(skus(kind, directory=there) == skus(kind, directory=CARD_FILES) for kind in CARD_KINDS)
+    assert all(load_card(sku, directory=there) == load_card(sku, directory=CARD_FILES) for sku in skus(directory=CARD_FILES))
 
 
 def test_a_directory_without_the_card_names_itself(tmp_path) -> None:
     """A card missing from the directory given is refused as one missing from the default is, naming that directory
     and the cards in it."""
-    shutil.copy(S.CARDS / "dgx-h200.toml", tmp_path)
+    shutil.copy(CARD_FILES / "dgx-h200.toml", tmp_path)
     with pytest.raises(KeyError, match=re.escape(f"the cards are ['dgx-h200'] ({tmp_path}/<sku>.toml)")):
         load_card("h200-sxm-141gb", directory=tmp_path)
 
@@ -499,8 +484,7 @@ def test_a_directory_without_the_card_names_itself(tmp_path) -> None:
                                             "stated at, one of ('tensor', 'sm')")),
     ('sku = "x"\nkind = "gpu"\n[clock]\ndefault = "boost"\n', re.escape("x.toml: clock.default = 'boost'")),
 ])
-def test_an_unsourced_or_unmarked_number_is_refused(tmp_path, monkeypatch, body: str, refusal: str) -> None:
+def test_an_unsourced_or_unmarked_number_is_refused(tmp_path, body: str, refusal: str) -> None:
     (tmp_path / "x.toml").write_text(body, encoding="utf-8")
-    monkeypatch.setattr(S, "CARDS", tmp_path)
     with pytest.raises(InvalidArtifact, match=refusal):
-        load_card("x")
+        load_card("x", directory=tmp_path)

@@ -79,7 +79,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
     },
     "network-accounting": {
-        # Needs: the certifier's advice format (`Advice`, `RequestAdvice`, `Row`, `Source`, `SCHEMA`), which moves out of
+        # Needs: network attestation's advice format (`Advice`, `RequestAdvice`, `Row`, `Source`, `SCHEMA`), which moves out of
         # `verity/` to the adapter by the integrations rule, its release and io-tie headers and ids, the replay step's
         # reference; PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
         "verity_vllm/pipeline/advice.py": ("resource_accounting.network.verifier.advice",),
@@ -106,7 +106,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/program/predict/steps.py": ("resource_accounting.network.verifier.advice",),
         # The compiler's (`verity_vllm/compiler/`): the replay step's and chain's circuits and row forms, the charge's
         # book and code (`charge_chain`, `arith_encode`), the IO tie's routing, the advice's form (its reader, constants
-        # and error) and head_check's circuit helpers (`_Consts`, `_coll`, `ands`), until the certifier's workload side
+        # and error) and head_check's circuit helpers (`_Consts`, `_coll`, `ands`), until network attestation's workload side
         # offers them.
         "verity_vllm/compiler/advice_check.py": (
             "resource_accounting.network.verifier.advice.FINISHES", "resource_accounting.network.verifier.advice.MalformedAdvice",

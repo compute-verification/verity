@@ -32,7 +32,9 @@ from pathlib import Path
 
 from verity.device import load_card, number
 
-CARD = load_card("h200-sxm-141gb")
+CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+
+CARD = load_card("h200-sxm-141gb", directory=CARD_FILES)
 FMAX_MHZ = CARD["clock"]["sm"]["value"]
 PEAK = {f.upper(): int(number(CARD["rate"]["tensor"]) / number(CARD["weight"][f]))
         for f in ("s8", "u8", "e4m3", "e5m2", "f16", "bf16", "tf32")}

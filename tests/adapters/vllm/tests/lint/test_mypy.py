@@ -1,5 +1,5 @@
 """mypy's errors on the integration, held to ``allowlists/mypy.json``: mypy under vLLM's settings (``[tool.mypy]`` in
-``adapters/vllm/pyproject.toml``), run from ``adapters/vllm`` with the mypy the root ``mypy`` dependency group pins,
+``adapters/vllm/pyproject.toml``), run from ``adapters/vllm`` with the mypy the root ``dev`` group pins,
 in two groups as vLLM's ``tools/pre_commit/mypy.py`` runs them: the library at its configured ``follow_imports = "silent"``,
 and ``tests/`` on its own at ``skip``.
 
@@ -70,7 +70,7 @@ def recorded() -> dict:
 
 def assert_recorded_environment() -> None:
     was, now = recorded().get("environment"), environment()
-    assert now["mypy"], "no mypy here: `uv sync --all-packages --extra torch-cpu` installs the one the root `mypy` group pins"
+    assert now["mypy"], "no mypy here: `uv sync --all-packages --extra torch-cpu` installs the one the root `dev` group pins"
     assert was == now, (f"allowlists/{LIST}.json was recorded under {was}, and this is {now}: run the suite in its own "
                         "environment (`uv sync --all-packages --extra torch-cpu`), or, where a pin moved, re-record the list "
                         "with `python -m tests.lint.test_mypy --record` from adapters/vllm")

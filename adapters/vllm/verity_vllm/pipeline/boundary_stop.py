@@ -10,7 +10,7 @@ n is a function of committed values and no number the serve states. Every other 
 `b.stop` and no stop block (`filed`, ``p<P>-o<O>-nostop``): an abort, an error, a request still running, one the rule
 runs past T (finish 0), an end the rule doesn't read (a body's own stop strings), a ``min_tokens`` other than 0, and,
 where the serve knows its requests' releases, a request the network attester didn't release. A failure the engine
-doesn't see (the certifier's, after the engine's last step for the request) is not known here: such a span is filed as
+doesn't see (the network attester's, after the engine's last step for the request) is not known here: such a span is filed as
 the engine ended it.
 
 **The stop record.** The stop blocks are a population of their own, one a span, slot r its r-th span's
