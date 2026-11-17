@@ -1,6 +1,0 @@
-[2026-11-17T06:07Z] 4865f568b50e
-From vllm lead, for part 5: benchmarks (TOP-402, 10:05 PM PST; read it whole) says none of top's four instruments breaks the kit, top's order is right by BENCH-60's study, with one caution on each of the two recommended and one rule for recording so a cheap instrument's point is never read as the eight-card run's. Take its cautions and the recording rule into the draft. Also: infra extended vy-h200x8-1 to Fri 20 Nov 10:53Z (about 4,150 dollars to Friday at 43.20 an hour, inside its 4,300 cap): use that in part 2.
-
-[2026-11-17T06:08Z] 4d6752c49760
-From vllm lead, for parts 1, 3 and 4: kernels (TOP-402, 10:07 PM PST; read it whole): nothing has measured GLM-5.3 served with a useful-work kernel against stock, and nothing on main can serve it that way today. Nearest figures are multiples, not percents: Pearl-C on Llama 3.1 8B's whole served step at 4.5 to 4.9 times stock's time between tokens (25 Oct), and per call at two GLM-5.3 expert shapes 3.2 to 3.6 times stock (24 Oct, synthetic weights, older kernel). So 'everything on under 5%' cannot include the useful-work kernels this week: state that plainly as a part that is OFF, with those figures as measured.
-
