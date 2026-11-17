@@ -43,7 +43,7 @@ GUARD = span.Schedule(cell_bytes=256, slots=2, bucket_ms=100, delay=8, lanes=16,
 GUARD_PARAMS = {"key": "00" * 24, "link": "eth0", "lms": {"H": 1, "N": 8, "W": 8, "toy": True},
                 "schedule": schedule_json(GUARD), "session": "00" * 32}
 #: The registered hardware of the Lean's `#guard`s (`guardSite`): `eth0` joins the host `node0` and the network
-#: certifier `cert0`, which registers the parameters' key, and `out0` is the attester's other half, to the outside.
+#: attester `cert0`, which registers the parameters' key, and `out0` is the attester's other half, to the outside.
 _GUARD_LOC = {"bw": None, "bytes": 0, "chip": None, "drift": None, "key": "", "owner": "prover", "parent": None,
               "scheme": "", "shared": [], "sheet": "", "tier": None, "time_unit": None, "timebase": None}
 GUARD_SITE = {

@@ -253,7 +253,7 @@ def test_commit_refuses(fresh):
         O.commit_out([*VALUES[:-1], VALUES[-1][:-1]], shape=SHAPE, key=fresh(), session=S.SESSION, window=0)
     with pytest.raises(ValueError, match="4 rows of 8 leaves"):
         O.commit_out(VALUES[:-1], shape=SHAPE, key=fresh(), session=S.SESSION, window=0)
-    with pytest.raises(ValueError, match="another certifier session"):
+    with pytest.raises(ValueError, match="another attester session"):
         O.commit_out(VALUES, shape=SHAPE, key=Issuer(fresh(), S.OTHER_SESSION), session=S.SESSION, window=0)
     with pytest.raises(ValueError, match="program digest"):
         O.OutShape("ab", "out", WORDS, ROWS)

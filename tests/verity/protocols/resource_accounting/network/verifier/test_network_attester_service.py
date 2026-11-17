@@ -38,7 +38,7 @@ EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 DELTA = 2.0 ** -40
 SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(3)]
 #: the network attester's parameters digest (`network_attester.NetworkAttesterParams.digest`), which both ends' heads bind
-NETWORK_CERTIFIER_DIGEST = bytes(range(64))
+NETWORK_ATTESTER_DIGEST = bytes(range(64))
 
 
 @pytest.fixture(autouse=True)
@@ -63,7 +63,7 @@ def ingress_records(arrivals=([1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0])):
 
 
 class Run:
-    """A network attester's link (an LMS signer on a small tree, its records under `NETWORK_CERTIFIER_DIGEST`), the protocol's
+    """A network attester's link (an LMS signer on a small tree, its records under `NETWORK_ATTESTER_DIGEST`), the protocol's
     parameters, and the challenger's stream. The attester's coins give each record a fresh salt, the same in every
     run."""
 
@@ -73,17 +73,17 @@ class Run:
         sampled = itertools.count(0xc0)
         self.issuer = Issuer(self.signer, signers.SESSION, coins=lambda n: bytes([next(sampled) % 256]) * n)
         self.lw = TransferBlocks(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
-                              proof_deadline=proof_deadline, network_attester=SVC.NetworkAttesterProfile(3, NETWORK_CERTIFIER_DIGEST))
+                              proof_deadline=proof_deadline, network_attester=SVC.NetworkAttesterProfile(3, NETWORK_ATTESTER_DIGEST))
         self.clock = Clock()
         self.stream = self.lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: coins * n,
                                      clock=self.clock)
         self.previous = None
 
     def egress(self, record: BlockGrid, **kw) -> CertifiedRecord:
-        return self.issuer.certify(record, EGRESS, PARAMS, NETWORK_CERTIFIER_DIGEST, **kw)
+        return self.issuer.certify(record, EGRESS, PARAMS, NETWORK_ATTESTER_DIGEST, **kw)
 
     def ingress(self, record: BlockGrid, **kw) -> CertifiedRecord:
-        return self.issuer.certify(record, INGRESS, PARAMS, NETWORK_CERTIFIER_DIGEST, **kw)
+        return self.issuer.certify(record, INGRESS, PARAMS, NETWORK_ATTESTER_DIGEST, **kw)
 
     def honest(self, w: int):
         return self.lw.commit(w, self.egress(egress_records()[w]), self.ingress(ingress_records()[w]), SALTS[w])
@@ -203,9 +203,9 @@ def test_the_spec_declares_each_public_item_with_its_reason(tmp_path):
     assert lw.spec.public == PUBLIC and lw.spec.check.public_outputs == OUTPUTS and isinstance(lw.spec.selection, S.All)
     assert lw.spec.check.program == P.program_sha512(Program(lw.unit))
     assert lw.spec.digest() != replace(lw, run="another").spec.digest()
-    assert lw.spec.digest() != replace(lw, certifier_session=signers.OTHER_SESSION).spec.digest()
+    assert lw.spec.digest() != replace(lw, attester_session=signers.OTHER_SESSION).spec.digest()
     assert lw.spec.digest() != replace(lw, network_attester=SVC.NetworkAttesterProfile(3, bytes(64))).spec.digest()
-    assert lw.spec.digest() != replace(lw, network_attester=SVC.NetworkAttesterProfile(4, NETWORK_CERTIFIER_DIGEST)).spec.digest()
+    assert lw.spec.digest() != replace(lw, network_attester=SVC.NetworkAttesterProfile(4, NETWORK_ATTESTER_DIGEST)).spec.digest()
 
 
 def test_n2_compares_no_grid_and_holds_no_frames(tmp_path):
@@ -466,7 +466,7 @@ def test_a_bad_signature_is_a_reject(tmp_path):
     assert reject(run.round(run.lw.commit(0, zeros, ig, SALTS[0])))
     (tmp_path / "stranger").mkdir()
     stranger = Issuer(signers.signer(tmp_path / "stranger", seed=b"other"), signers.SESSION)
-    signed = stranger.certify(ingress_records()[1], INGRESS, PARAMS, NETWORK_CERTIFIER_DIGEST)
+    signed = stranger.certify(ingress_records()[1], INGRESS, PARAMS, NETWORK_ATTESTER_DIGEST)
     assert reject(run.round(run.lw.commit(1, run.egress(egress_records()[1]), signed, SALTS[1])))
     assert run.round(run.honest(2)).accepted and run.stream.symbols == ("reject", "reject", "accept")
 
@@ -476,7 +476,7 @@ def test_a_certificate_from_another_session_is_a_reject(tmp_path):
     certificate signs another message than this session's, so it is rejected."""
     run = Run(tmp_path)
     earlier = LmsSigner(run.signer.key, run.signer.state)
-    replayed = Issuer(earlier, signers.OTHER_SESSION).certify(egress_records()[0], EGRESS, PARAMS, NETWORK_CERTIFIER_DIGEST)
+    replayed = Issuer(earlier, signers.OTHER_SESSION).certify(egress_records()[0], EGRESS, PARAMS, NETWORK_ATTESTER_DIGEST)
     earlier.close()
     assert replayed.verify(run.signer.public_key(), signers.OTHER_SESSION)
     assert reject(run.round(run.lw.commit(0, replayed, run.ingress(ingress_records()[0]), SALTS[0])))
@@ -595,7 +595,7 @@ def test_the_opening_must_be_the_registered_phases(tmp_path):
             run.lw.commit(0, *opening.records, salts=salts)
 
 
-def test_a_link_is_a_network_certifiers_with_both_heads_under_its_digest_and_no_sync(tmp_path):
+def test_a_link_is_a_network_attesters_with_both_heads_under_its_digest_and_no_sync(tmp_path):
     """A link (`NetworkAttesterProfile`) is the network attester's records: its public items are `PUBLIC`, a window whose two
     records the network attester certified under its parameters digest is accepted with no sync declared, by the
     Lean's verdict of record, the Python beside it and the in-the-clear check alike, and a window whose egress record was
@@ -621,7 +621,7 @@ def test_a_link_is_a_network_certifiers_with_both_heads_under_its_digest_and_no_
     with pytest.raises(ValueError, match="one grid"):
         replace(lw, ingress=replace(PARAMS, buckets=PARAMS.buckets + 1))
     with pytest.raises(ValueError, match="one or more windows"):
-        SVC.NetworkAttesterProfile(0, NETWORK_CERTIFIER_DIGEST)
+        SVC.NetworkAttesterProfile(0, NETWORK_ATTESTER_DIGEST)
     with pytest.raises(ValueError, match="64 bytes"):
         SVC.NetworkAttesterProfile(3, bytes(32))
 

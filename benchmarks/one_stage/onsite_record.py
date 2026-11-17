@@ -33,7 +33,7 @@ run wrote no answer, ``missing`` and ``why``:
   ALPHA and GAMMA where the case has none, and ``missing`` where the record wasn't handed it;
 * remote: remote's Lean verdict, ``composite/remote/composite.json`` (`composite.py`), with what it couldn't establish;
 * the network attester: the ``communication`` row, `NetworkCheck.Period`'s answer (`NETWORK`), or, where the run's
-  product drops it (remote's, with the split certifier behind its front) and its period check answered, the row that
+  product drops it (remote's, with the split attester behind its front) and its period check answered, the row that
   answer gives (``pieces/certifier/answer.json``, `served_verdicts.piece_row`), as onsite's report composes it;
 * onsite: the composite of record's Lean verdict, its id the verdict's ``protocol``: the network attester's composite
   without PoUW where the run has one (`WITHOUT_POUW`), else the Lean composition of remote's three subprotocols and the
@@ -229,7 +229,7 @@ ONSITE = "verity/remote-network/v0"
 VERDICTS = ("sampled proofs", "PoUW", "inference-only", "remote", "the network certifier", "onsite")
 #: the window report's rows, by verdict
 ROWS = {"sampled proofs": "integrity", "PoUW": "work", "the network certifier": "communication"}
-#: where the network attestation piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
+#: where the network attestation piece leaves its period's case (`attester_piece.CASE`), whose params carry the schedule and caps
 CASE = Path("pieces") / "certifier" / "case.json"
 #: the run's advice registration as it publishes it (`served_verdicts.py public-registration`), its compiler's cap ℓ_a
 REGISTRATION = "registration.json"
@@ -421,7 +421,7 @@ MULTI = ("a window of more than one member, whatever its draw: its case of verit
          "that form (MULTI_REFUSED) until a guarantee for a sample over several members' statements under one draw is "
          "in the lock, so each composite that reads the case rejects naming it. A run of record's window is one "
          "member, one statement, and this is that window's guarantee")
-#: the network attester's chain report as its piece publishes it (`certifier_piece.PUBLIC`), and its draws by step
+#: the network attester's chain report as its piece publishes it (`attester_piece.PUBLIC`), and its draws by step
 CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
 DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}
 CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's, `TransferBlocks.period_draw`) "
@@ -749,9 +749,9 @@ PREMISES: dict[str, dict[str, Any]] = {
 #: the premises no charge covers: while one is open the bound, the figure of record, its periods and the composite's
 #: error are conditional on it by name, never charged for it
 UNCHARGED = ("certifier-key",)
-CERTIFIER_KEY = "certifier-key"
+ATTESTER_KEY = "certifier-key"
 NOT_ESTABLISHED = "not established"
-KEY_OPEN = (f"{CERTIFIER_KEY} is open: no Lean statement ties the accepted period's commitment and evidence to the "
+KEY_OPEN = (f"{ATTESTER_KEY} is open: no Lean statement ties the accepted period's commitment and evidence to the "
             "leak bound's quantities (`RESTATE_PERIOD`), so no lock holds PeriodLeakRegistered at a statement "
             f"`RESTS_ON` pins, taking the auditor's record as {AUDITOR_RECORD} (hA, hr and hkey); or the run's check "
             "of that record doesn't hold (``checked``). So the Lean answer's accept (``answer``) establishes no "
@@ -1153,7 +1153,7 @@ def phase_of(s: Mapping[str, Any]) -> Fraction:
 
 
 def phase_seconds(out: Path) -> tuple[Fraction | None, str]:
-    """An execution phase's seconds from OUT's certifier case (`phase_of`), or None and why it can't be read."""
+    """An execution phase's seconds from OUT's attester case (`phase_of`), or None and why it can't be read."""
     try:
         return phase_of(json.loads((out / CASE).read_text())["params"]["schedule"]), ""
     except FileNotFoundError:
@@ -1163,7 +1163,7 @@ def phase_seconds(out: Path) -> tuple[Fraction | None, str]:
 
 
 def period_case(out: Path) -> tuple[Mapping[str, Any] | None, str]:
-    """OUT's certifier case, whose params are the parameters the period's check read, or None and why the run has
+    """OUT's attester case, whose params are the parameters the period's check read, or None and why the run has
     none."""
     try:
         case = json.loads((out / CASE).read_text())
@@ -1515,7 +1515,7 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
     `network_attester_chain.RECORD`) and its registration at ``site``, ``{"params", "log"}``: the registration log's params,
     ``{"auditor", "composite"}``, and the log, which its check accepts (`registration.check_log`, held to
     `Core.Registration` by difftest), whose auditor holds the record's key for a network attester the log places.
-    ``holds``, that ``certifier`` where it does and ``why`` where it doesn't, and ``from``, each input's SHA-512."""
+    ``holds``, that ``attester`` where it does and ``why`` where it doesn't, and ``from``, each input's SHA-512."""
     import composite as CO
     from benchmarks.network_traces import network_attester_chain as WC
     from verity.protocols.registration.verifier import registration as REG
@@ -1970,7 +1970,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     if cond:
         v["sampled proofs"]["conditional_on"] = cond
     unlisted = [LISTING_UNMET] * (not listed["holds"]) + [FILES_UNMET] * (not files["holds"])
-    unmet = {n: why for n, why, x in ((CERTIFIER_KEY, KEY_OPEN, CERTIFIER_KEY in prem["open"]),
+    unmet = {n: why for n, why, x in ((ATTESTER_KEY, KEY_OPEN, ATTESTER_KEY in prem["open"]),
                                       (AUDITOR_LISTING, "; ".join(unlisted), bool(unlisted)),
                                       (SCAN_STATE_PINNED, STATE_UNPINNED, not state["holds"])) if x}
     if nv["verdict"] == "accept" and unmet:
@@ -2164,7 +2164,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="the run ties its window to H1's W (H1_TIE): the re-proof's circuit is the record reading "
                          "H1's tables (`REPROOF`'s <tie>)")
     ap.add_argument("--certifier-key", type=Path, metavar="RECORD",
-                    help="the auditor's record of its network certifier (certifier-key/v1, CERTIFIER_KEY), never the "
+                    help="the auditor's record of its network certifier (certifier-key/v1, ATTESTER_KEY), never the "
                          "prover's node's: the run's auditor-record check holds the period's key, LMS parameters and "
                          "session to it (`CHECKED`)")
     ap.add_argument("--site-registration", type=Path, metavar="FILE",

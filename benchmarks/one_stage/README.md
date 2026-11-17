@@ -73,7 +73,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   named by the proof blocks' value and each proof block's read (connection, cell) placed by the wiring the network attester signed
   (`network_attester_rows.port`, after `check_registration` under the network attester's key), which refuses a foreign, a duplicate and a
   padding-slot read by name; the altered run, and a statement made for another wiring of the proof blocks (a pad in a data cell's place,
-  its rows under the Program's value, two proof blocks swapped: `--made-for`), are refused by Lean's registered reads. Its certifier run
+  its rows under the Program's value, two proof blocks swapped: `--made-for`), are refused by Lean's registered reads. Its attester run
   is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `network_attester_replay.py`'s: a served window's requests through the
   network attester, each answered with the tokens the server streamed it.
 - `a5_tp_gates.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
@@ -137,8 +137,8 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   directory that names: a kept compose cache, from which a later window under the same tree takes the circuits it
   shares and composes only the rest. No step removes a kept cache, and it holds every template's circuit composed into
   it, one of which can be past 100 GB.
-  With network attestation's piece split in two (`CERTIFIER_CHAIN_CMD` and
-  `CERTIFIER_PERIOD_CMD`), V3c runs before the pieces instead: the chain after its window commit, beside its audit
+  With network attestation's piece split in two (`ATTESTER_CHAIN_CMD` and
+  `ATTESTER_PERIOD_CMD`), V3c runs before the pieces instead: the chain after its window commit, beside its audit
   (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its `period.json` once both are done, whose answer
   network attestation's piece reads. Each
   step's verdict line is in `out/verdicts.txt`. The network attester's piece, the longest, starts as soon as the window is

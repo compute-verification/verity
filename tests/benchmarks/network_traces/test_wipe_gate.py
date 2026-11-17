@@ -155,11 +155,11 @@ def test_a_refused_start_is_a_visible_failure_and_keeps_nothing(tmp_path):
     assert not (keep / RUN).exists() and "start.json" not in _published(tmp_path)
 
 
-def test_a_start_naming_no_certifier_run_writes_nothing_under_its_name(tmp_path):
-    """The run names a directory under KEEP, so the job holds it to the auditor's `CERTIFIER_RUN`, as the front does."""
+def test_a_start_naming_no_attester_run_writes_nothing_under_its_name(tmp_path):
+    """The run names a directory under KEEP, so the job holds it to the auditor's `ATTESTER_RUN`, as the front does."""
     sys.path.insert(0, str(ROOT / "verity/protocols/compose/verifier/live_challenger"))
     import auditor as A
-    assert f'=~ ^{A.CERTIFIER_RUN.pattern.replace(r"\d", "[0-9]")}$ ]]' in (HERE / "wipe_gate.sh").read_text()
+    assert f'=~ ^{A.ATTESTER_RUN.pattern.replace(r"\d", "[0-9]")}$ ]]' in (HERE / "wipe_gate.sh").read_text()
     keep = tmp_path / "keep"
     got = _gate(tmp_path, KEEP=str(keep), STUB_RUN="../escape")
     assert got.returncode == 1, got.stdout + got.stderr

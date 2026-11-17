@@ -2,7 +2,7 @@
 
 The challenger is auditor-trusted (`trusted-device`): it runs on a machine the prover doesn't control, and the
 prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session on the auditor device, that port is
-one of the prover machine's certifier coin link (`verity/protocols/compose/verifier/live_challenger/auditor.py`,
+one of the prover machine's attester coin link (`verity/protocols/compose/verifier/live_challenger/auditor.py`,
 the coins' path; the premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`) and `OneClock` are named in
 this package's README); in development
 (`verity/protocols/compose/verifier/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/remote_session` places
@@ -671,7 +671,7 @@ class RemoteChallenger:
 
 
 #: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
-#: has signed its commitment, before the peer's certifier coin link carries its 127.0.0.1:PORT (live_challenger/auditor.py's
+#: has signed its commitment, before the peer's attester coin link carries its 127.0.0.1:PORT (live_challenger/auditor.py's
 #: coins' path)
 TUNNEL_WAIT_S = 120
 
