@@ -92,9 +92,10 @@ whose key is the prover's after the sample, whose root and domain are not one ta
 table has another leaf count than the read's rows, is refused here. The code is reported beside the others, in every
 branch of `check`, so a run that has it still reaches its other stops.
 
-`FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
-(``two-stage-form``), and the Python flipped alone disagrees with the run of record. `complete_twin` is what a two-stage
-outcome may say of itself: nothing while `FORM` is off or its replay block is a stand-in for the request Definition."""
+`FORM` is `SecondStage.FORM`, which the run of record reads: on, a two-stage run whose every check passes is accepted,
+ahead of its form's soundness proof; off, every two-stage run is refused last (``two-stage-form``), and the Python
+flipped alone disagrees with the run of record. `complete_twin` is what a two-stage outcome may say of itself: nothing
+while `FORM` is off or its replay block is a stand-in for the request Definition."""
 
 from __future__ import annotations
 
@@ -113,12 +114,12 @@ from .one_stage import verifier as V
 from .one_stage.verdict import Verdict, _Collect
 from .schedule import failure as schedule_failure
 
-#: `SecondStage.FORM`, off. Three things withhold a two-stage run's accept: SPOT[Flock]'s two-stage guarantee takes as
-#: a premise that each gate's value has one address fixed before the run, which nothing proves from round 2's check;
-#: no theorem says a run the verifier accepts is one the verifier that guarantee is stated about accepts; and the
-#: composite's sampled component has no two-stage form, nor a subprotocol for one, under the one soundness theorem. It turns
-#: on only once the two-stage form is under that theorem: SPOT[Flock]'s own two-stage theorem does not turn it on.
-FORM = False
+#: `SecondStage.FORM`, on: the verifier accepts the two-stage form ahead of its proof, by Daniel's ruling of Mon 16
+#: Nov. Three things stand between the form and its proof: SPOT[Flock]'s two-stage guarantee takes as a premise that each
+#: gate's value has one address fixed before the run, which nothing proves from round 2's check; no theorem says a run
+#: the verifier accepts is one the verifier that guarantee is stated about accepts; and the composite's sampled
+#: component has no two-stage form, nor a subprotocol for one, under the one soundness theorem.
+FORM = True
 FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
             "soundness proof does not cover")
 CELLS_WHY = "the interior program's strata are not one range each, of a positive multiple of the replay sample's size"
@@ -192,7 +193,7 @@ RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame
 def complete_twin(form: bool, request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
     """Whether a two-stage outcome is complete, in the sense one-stage's accept publishes (`one_stage.audit.COMPLETE`:
     every verdict ran). It is only when all three hold. The two-stage form is allowed (`form`: `FORM` in a run of
-    record, on only once the soundness proof covers the form). The replay block is the registered request Definition
+    record). The replay block is the registered request Definition
     (`request_definition`): a sample of a stand-in audits the stand-in, never the request. Each stage's audit record
     (`records`, at least one, none missing) accepted and is itself complete. So it is false of every two-stage outcome
     while `FORM` is off, and of every one whose replay block is a stand-in, whatever its audit records say."""

@@ -20,8 +20,8 @@
   and `second-verified`, read against the rank member in place of an interior part, with the window-domain binding at
   the rank's program, partition digest and run (`portBinding`); and `ranks-wire-tree`: the writer rows a sampled reader
   member reads through a port lie in one rank's window, so its session reads the port from one committed tree.
-* **The form**: it runs behind `Spot.SecondStage.FORM`, the one switch, and is refused last (`two-stage-form`) while
-  that is off.
+* **The form**: it runs behind `Spot.SecondStage.FORM`, the one switch, and is refused last (`two-stage-form`) were
+  that off.
 
 * **A member's session** (`ownFor`) is `Spot.SecondStage`'s part of one block: the member's units in its rank's
   window, the interior its rank's docket record (`Given.dockets`). Each port it reads through a wire reads through the
