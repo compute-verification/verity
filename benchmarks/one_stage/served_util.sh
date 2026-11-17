@@ -16,7 +16,7 @@
 #   seal    the Commit with --seal: each closed window sealed to UTIL_ROOT's scratch (deleted after the run)
 #   h1      the Commit (sealed iff H1_SEAL=1) and PoUW H1 at T and S 1 with the epoch's in-process coins (no challenger
 #           gate: it credits nothing; the gate's own costs are not in this run). H1's verifier is the Lean
-#           `pouw-check-difftest`, built here with lake (elan under $HOME), so run this arm with `--cwd clone`
+#           `pouw-verifier-difftest`, built here with lake (elan under $HOME), so run this arm with `--cwd clone`
 #   graphs  stock with the engine's options overridden by UTIL_ENGINE_JSON (default: enforce_eager off, so torch.compile
 #           with CUDA graphs captured at every power of two up to T, and async scheduling on), without the bench row. Not
 #           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off. Under async
@@ -93,8 +93,8 @@ if [ "${1:-}" != leased ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
       | sh -s -- -y --default-toolchain none > "$OUT/lean.txt" 2>&1
-    (cd "$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-check-difftest) >> "$OUT/lean.txt" 2>&1
-    lrc=$?; say "LEAN pouw-check-difftest built (exit $lrc): $(tail -1 "$OUT/lean.txt" | cut -c1-200)"
+    (cd "$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-verifier-difftest) >> "$OUT/lean.txt" 2>&1
+    lrc=$?; say "LEAN pouw-verifier-difftest built (exit $lrc): $(tail -1 "$OUT/lean.txt" | cut -c1-200)"
     [ "$lrc" = 0 ] || exit 4
   fi
   if [ "${PYSPY:-0}" = 1 ] && [ ! -x "$ROOT/tools/pyspy/bin/py-spy" ]; then

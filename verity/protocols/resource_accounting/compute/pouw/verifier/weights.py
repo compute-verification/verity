@@ -79,7 +79,7 @@ def chunks(k: int) -> int:
     """The chunks an H1 lane at contraction ``k`` is proved in (`h1zy.lane_statements`), and so the chunk rows a table at
     ``k`` commits each row as (`h1zy.chunk_leaves`): 1, the whole lane, at K <= `CHUNK_MAX`; past it the least n >= 2
     whose chunks K / n are at most `CHUNK_MAX` entries and a multiple of `CHUNK_ALIGN`. ValueError at a K with no such n.
-    `PouwCheck.Chunks.chunks` is its Lean twin."""
+    `PouwVerifier.Chunks.chunks` is its Lean twin."""
     k = int(k)
     if k < 1:
         raise ValueError(f"K = {k}: a lane is proved only at a positive K")

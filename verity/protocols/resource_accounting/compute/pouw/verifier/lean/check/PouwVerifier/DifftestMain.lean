@@ -1,11 +1,11 @@
 module
 
-public import PouwCheck.VerifiedDifftest
+public import PouwVerifier.VerifiedDifftest
 
 /-!
-# `pouw-check-difftest`: PoUW's checks of record, and the challenger's coins
+# `pouw-verifier-difftest`: PoUW's checks of record, and the challenger's coins
 
-The port's functions (`PouwCheck.Difftest`'s, then `PouwCheck.CreditDifftest`'s and `PouwCheck.VerifiedDifftest`'s:
+The port's functions (`PouwVerifier.Difftest`'s, then `PouwVerifier.CreditDifftest`'s and `PouwVerifier.VerifiedDifftest`'s:
 `VerifiedDifftest.all`) behind `Difftest.respond`'s line protocol, which `tests/test_difftest.py` drives against
 `core_check.py`, `benchmarks/pouw/served_zk/of_record.py` runs as the challenger's checks of record and
 `credit._lean_verified` asks for a served execution phase's statements' verdict (`credit-verified`), and one
@@ -17,7 +17,7 @@ from the operating system itself.
 
 @[expose] public section
 
-namespace PouwCheck.DifftestMain
+namespace PouwVerifier.DifftestMain
 
 open Lean (Json)
 
@@ -40,10 +40,10 @@ def respond (request : String) : IO String :=
   | .ok req =>
     match req.getObjValAs? String "fn", req.getObjVal? "input" with
     | .ok "coins", .ok input => coins input
-    | _, _ => pure (Difftest.respond PouwCheck.VerifiedDifftest.all request)
-  | .error _ => pure (Difftest.respond PouwCheck.VerifiedDifftest.all request)
+    | _, _ => pure (Difftest.respond PouwVerifier.VerifiedDifftest.all request)
+  | .error _ => pure (Difftest.respond PouwVerifier.VerifiedDifftest.all request)
 
-end PouwCheck.DifftestMain
+end PouwVerifier.DifftestMain
 
 /-- Answer requests from stdin until it ends, flushing each response. -/
 def main : IO Unit := do
@@ -52,5 +52,5 @@ def main : IO Unit := do
   repeat
     let request ← stdin.getLine
     if request.isEmpty then break
-    stdout.putStrLn (← PouwCheck.DifftestMain.respond request)
+    stdout.putStrLn (← PouwVerifier.DifftestMain.respond request)
     stdout.flush

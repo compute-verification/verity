@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.WindowSalt
+public import PouwVerifier.WindowSalt
 
 /-!
 # PoUW's rule (`core_check.py`, "the check")
@@ -21,7 +21,7 @@ profile is the service's `Core.Integrity`, passed through.
 
 @[expose] public section
 
-namespace PouwCheck
+namespace PouwVerifier
 
 open Lean (Json)
 open PouwWindow (Work Sampling)
@@ -178,4 +178,4 @@ def check (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) : Cor
 written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
 example : oneStage = Domains.ONE_STAGE_PROTOCOL := rfl
 
-end PouwCheck
+end PouwVerifier
