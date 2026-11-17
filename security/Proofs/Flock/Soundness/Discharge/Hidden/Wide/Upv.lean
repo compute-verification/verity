@@ -21,12 +21,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 
-/-!
-# A unit per template instance, from acceptance
-
-`HmRow.check` refuses an untyped circuit of `units_per_vu = 0` (`Flock.HmRow`, D8), the one check that does when a
-tail returns the outputs (`check_upv_pos`), and `Stmt.setupHidden` parses its circuit through it (`setupHidden_upv_pos`).
--/
+/-! `HmRow.check` refuses an untyped circuit of `units_per_vu = 0`, so a statement `Stmt.setupHidden`
+accepts has a unit per template instance. -/
 
 @[expose] public section
 
@@ -36,7 +32,6 @@ namespace FlockSoundness.Discharge.Hidden
 
 open FlockSoundness.Discharge.Layout (ite_throw_cond)
 
-/-- **`check_upv_pos`**: an untyped circuit `HmRow.check` accepts has a unit per template instance. -/
 theorem check_upv_pos {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
     (h : HmRow.check c tags ls = .ok ()) : 0 < c.upv := by
   unfold HmRow.check at h
@@ -62,8 +57,6 @@ theorem check_upv_pos {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed
   simp only [beq_iff_eq] at hupv
   exact Nat.pos_of_ne_zero hupv
 
-/-- **`setupHidden_upv_pos`**: a statement `Stmt.setupHidden` accepts with untyped tags has a unit per template
-instance. -/
 theorem setupHidden_upv_pos {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (hi : tags.isTmpl = false) (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :

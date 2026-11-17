@@ -18,21 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
 
-/-!
-# `Zk.replay`'s lincheck terms are `Lincheck`'s at the transcript's coins
-
-`replay_lincheck`: on a run of `Zk.replay` from `t`, the "lincheck final" constraint (`cons[2]`), the `ab` claim's value
-`abValue` and the `ab` claim `claims[0]` are `lcFinal`, `lcAbValue` and `lcAbClaim` at the coins of the rounds the run
-consumed, and the circuit fold the replay called returned the entries `lcFinal` reads. Round `t.k + i`'s first coin is
-`coinAt t i` (`(t.rounds[t.k + i]!).coins.getD 0 0`, what `sample` reads; `zk_replay_plays`'s numbering): the
-zerocheck's `rSkip`, `rOuter`, `z` at `0, 1, 2`, its residual coins `ρ_j` at `3 + j` (`rhoOf`), then the lincheck's
-`α`, `β` at
-`3 + (m − 6)`, `4 + (m − 6)`, its round coins `t_j` at `5 + (m − 6) + j` (`tsOf`) and `r′` after them.
-
-`foldAll_lcV`: `lincheck_complete`'s honest `z_partial` (`hzp`), the witness's block-folded columns folded at the round
-coins, is entry `i` of the witness evaluated at the `ab` claim's point beyond the skip bits, `Σ_u eq(x, u)·w[64u + i]`
-(the ring switch's `zPartialOf (claimOf m (lcAbClaim …)) w i`, written out).
--/
+/-! `Zk.replay`'s lincheck terms are `Lincheck`'s at the coins of the transcript's rounds. -/
 
 @[expose] public section
 
@@ -42,17 +28,13 @@ open Flock FlockLevel3 Model Refine
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- Round `t.k + i`'s first coin, as `sample` reads it. -/
 abbrev coinAt (t : Flock.Transcript) (i : ℕ) : F128 := (t.rounds[t.k + i]!).coins.getD 0 0
 
-/-- The zerocheck's `m − 6` residual coins `ρ_j` (rounds `t.k + 3 + j`). -/
 def rhoOf (m : ℕ) (t : Flock.Transcript) : Array F128 := Array.ofFn fun j : Fin (m - 6) => coinAt t (3 + j.val)
 
-/-- The lincheck's `k_log − 6` round coins `t_j` (rounds `t.k + 5 + (m − 6) + j`). -/
 def tsOf (m kLog : ℕ) (t : Flock.Transcript) : Array F128 :=
   Array.ofFn fun j : Fin (kLog - 6) => coinAt t (5 + (m - 6) + j.val)
 
-/-- One round of `Zk.replay`'s lincheck loop on its state `(running, ts)`, at the round's coins `c`. -/
 def lcLoopStep (lay : Zk.PadLayout) (rounds : Array (F128 × F128)) (j : ℕ) (s : Zk.Lin × Array F128)
     (c : Array F128) : Zk.Lin × Array F128 :=
   let (e1v, einfv) := rounds[j]!
@@ -63,7 +45,6 @@ def lcLoopStep (lay : Zk.PadLayout) (rounds : Array (F128 × F128)) (j : ℕ) (s
   let c1 := (e0.add e1).add einf
   (((einf.scale (rr * rr)).add (c1.scale rr)).add e0, s.2.push rr)
 
-/-- The loop's running claim is `lcStep`'s fold, on any coin array that holds the rounds' coins. -/
 theorem lcLoopStep_fold (lay : Zk.PadLayout) (rounds : Array (F128 × F128)) (C : ℕ → Array F128) (ts : Array F128)
     (x : Zk.Lin) (acc : Array F128) : ∀ n, (∀ j < n, ts[j]! = (C j).getD 0 0) →
       ((List.range n).foldl (fun s i => lcLoopStep lay rounds i s (C i)) (x, acc)).1 =
@@ -74,10 +55,7 @@ theorem lcLoopStep_fold (lay : Zk.PadLayout) (rounds : Array (F128 × F128)) (C 
         List.foldl_nil, ← lcLoopStep_fold lay rounds C ts x acc n (fun j hj => hC j (by omega))]
       simp only [lcLoopStep, lcStep, hC n (by omega)]
 
-/-- **`Zk.replay`'s lincheck terms at the transcript's coins.** On a run of `Zk.replay` from `t` (at `m ≥ 14`, where the
-outer coins are one round), the circuit fold at the lincheck's `α`, `β`, the skip weights at `z`, `ρ[.. k_log − 6]` and
-the round coins returned some `combv`, and `cons[2]`, `abValue` and `claims[0]` are `lcFinal`, `lcAbValue` and
-`lcAbClaim` on the proof's masked messages at those coins. -/
+/-- Takes `m ≥ 14`, where the outer coins are one round. -/
 theorem replay_lincheck (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) (hm : 14 ≤ st.m)
     {t t' : Flock.Transcript} {rp : Zk.Replayed} (h : Zk.replay st lay p root t = .ok (rp, t')) :
     ∃ combv : Array F128,
@@ -152,7 +130,6 @@ theorem replay_lincheck (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : By
       refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_⟩
       rw [← e1, ← e2]
       rfl) (st.kLog - 6) 0 t₁₇.k _ t₁₇ t₁₈ s' (by omega) hloop'
-  -- the rounds and the counter, in terms of `t`
   have hr₆ : t₆.rounds = t.rounds := by rw [k₆.2, k₅.2, k₄.2, k₃.2, k₂.2, k₁.2]
   have hk₆ : t₆.k = t.k := by rw [k₆.1, k₅.1, k₄.1, k₃.1, k₂.1, k₁.1]
   have hr₁₀ : t₁₀.rounds = t.rounds := by rw [k₁₀.2, k₉.2, r₈, r₇, hr₆]
@@ -191,7 +168,6 @@ theorem replay_lincheck (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : By
     exact ⟨a.trans hr₁₇, by rw [b, hk₁₇]⟩
   have hr₁₉ : t₁₉.rounds = t.rounds := by rw [k₁₉.2, hr₁₈.1]
   have hk₁₉ : t₁₉.k = t.k + 3 + (st.m - 6) + 2 + (st.kLog - 6) := by rw [k₁₉.1, hr₁₈.2]
-  -- the coins
   have hz : (t₁₀.rounds[t₁₀.k]!).coins.getD 0 0 = coinAt t 2 := by rw [hr₁₀, hk₁₀]
   have hα : (t₁₅.rounds[t₁₅.k]!).coins.getD 0 0 = coinAt t (3 + (st.m - 6)) := by
     rw [hr₁₅, hk₁₅, Nat.add_assoc]
@@ -229,13 +205,10 @@ theorem replay_lincheck (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : By
     show lcAbClaim _ _ s.2 s'.2 _ = _
     rw [hrho, hts, hrP]
 
-/-! ## The honest `z_partial` -/
-
 section Generic
 
 variable {F : Type} [Field F] [Fintype F] [DecidableEq F]
 
-/-- `abEval_eq` at any skip weights: a claim at the `ab` point evaluates through the folded columns. -/
 theorem eval_abPoint (S : Statement) (zc : ZcOut F S.m) (ts : Fin (S.kLog - 6) → F) (v : F) (sk : Fin 64 → F)
     (z : Witness S.m) :
     (⟨v, sk, abPoint S zc ts⟩ : Model.Claim F S.m).eval z =
@@ -259,14 +232,12 @@ theorem eval_abPoint (S : Statement) (zc : ZcOut F S.m) (ts : Fin (S.kLog - 6) �
       not_false_eq_true]
     rw [dite_eq_left]
 
-/-- Address `64u + i`: skip position `i` of high address `u`. -/
 def addrW {m : ℕ} (hm : 6 ≤ m) (u : Fin (2 ^ (m - 6))) (i : Fin 64) : Fin (2 ^ m) :=
   ⟨64 * u.val + i.val, by
     rw [show 2 ^ m = 2 ^ (m - 6) * 64 by rw [show (64 : ℕ) = 2 ^ 6 by norm_num, ← pow_add, Nat.sub_add_cancel hm]]
     have := u.isLt; have := i.isLt; omega⟩
 
 omit [Fintype F] [DecidableEq F] in
-/-- A claim's value is its skip weights' combination of the witness's skip positions at its point. -/
 theorem eval_skip {m : ℕ} (hm : 6 ≤ m) (c : Model.Claim F m) (z : Witness m) :
     c.eval z =
       ∑ i : Fin 64, c.skip i * ∑ u : Fin (2 ^ (m - 6)), Model.eqAt c.x u.val * ((z (addrW hm u i)).val : F) := by
@@ -291,9 +262,6 @@ theorem eval_skip {m : ℕ} (hm : 6 ≤ m) (c : Model.Claim F m) (z : Witness m)
 
 end Generic
 
-/-- **The honest `z_partial` is the witness at the `ab` claim's point** (§10): the block-folded columns `lcV` folded at
-the round coins are, at skip position `i`, `Σ_u eq(x, u)·w[64u + i]` for the `ab` claim's point `x` (the ring switch's
-`zPartialOf`). -/
 theorem foldAll_lcV (S : Statement) (w : Witness S.m) (rho ts : Array F128) (hrho : rho.size = S.m - 6)
     (hts : ts.size = S.kLog - 6) (rPrime : F128) (i : Fin 64) :
     foldAll (ts.toList.map fOf) (2 ^ S.kLog) (lcV S rho w) i.val =

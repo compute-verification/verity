@@ -18,16 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
-/-!
-# Δ's copies at the rows, for rows of every kind
-
-Each of `HmRow.delta`'s writes at a row is a copy (`rowCopiesAny`, whose pairs are `rowPairsAnyAll`): an unsegmented
-row's `rowCopiesOf`, a segmented row's `segCopiesOf` (each chain start's midstate, and its compressions' constant and
-digest bits). Every copy into template instance `g`'s row `p` and every wire `rowWiresOf` gives it lands in that row's
-slots (`Dst`), so Δ's copies at a column of row `p` are row `p`'s (`filter_rowsAny`), and at an unsegmented row they are
-`filter_rows`' of `Wide.Copies`, whatever the other rows. `Any` restates `Wide.Copies`' copies at an unsegmented row's own
-columns (`cv0_filterAll` … `msg_filterAll`) for circuits whose other rows may be segmented.
--/
+/-! Δ's copies at the rows of a circuit whose rows may be segmented. -/
 
 @[expose] public section
 
@@ -39,36 +30,29 @@ namespace FlockSoundness.Discharge.Hidden
 
 open Hm Compose Flock.DeriveAll Types.Dag
 
-/-- Δ's copy at column `x` of a segmented row's message bit. -/
 def segBitCopy (c : Circuit) (pin g p x : ℕ) : HmRow.MsgBit → List (ℕ × ℕ)
   | .const v => [(x, if v then pin else zeroCol c)]
   | .digest kk col => [(x, digestSrc c g p kk col)]
   | .row _ => []
 
-/-- Δ's copies into compression `k`'s `cv` of template instance `g`'s segmented row `p`: at a chain start, its
-midstate. -/
 def segCvCopies (c : Circuit) (pin g p : ℕ) (segs : Array (ℕ × ℕ)) (k : ℕ) : List (ℕ × ℕ) :=
   match HmRow.chainStart c.ports[p]! k with
   | some j => (List.range 512).map fun t => (segCvCol c g p k + t, constSrc c pin
       (if j < segs.size then HmRow.segMidstate c.ports[p]! j else HmRow.midstateOf c.ports[p]!) t)
   | none => []
 
-/-- Δ's copies into compression `k`'s `msg` of template instance `g`'s segmented row `p`. -/
 def segMsgCopies (c : Circuit) (pin g p k : ℕ) : List (ℕ × ℕ) :=
   (List.range 1024).flatMap fun t => segBitCopy c pin g p (segMsgCol c g p k + t) (HmRow.msgBit c.ports[p]! k t)
 
-/-- Δ's copies into template instance `g`'s segmented row `p` (`segPairsOf`'s). -/
 def segCopiesOf (c : Circuit) (pin g p : ℕ) (segs : Array (ℕ × ℕ)) : List (ℕ × ℕ) :=
   (List.range (((HmRow.rowSlots c.ports).2[p]!).size + 1)).flatMap fun k =>
     segCvCopies c pin g p segs k ++ segMsgCopies c pin g p k
 
-/-- Δ's copies into template instance `g`'s row `p`, of either kind. -/
 def rowCopiesAnyOf (c : Circuit) (pin g p : ℕ) : List (ℕ × ℕ) :=
   match c.ports[p]!.segs with
   | none => rowCopiesOf c pin g p
   | some segs => segCopiesOf c pin g p segs
 
-/-- Δ's copies into the rows, of every kind. -/
 def rowCopiesAny (c : Circuit) (pin : ℕ) : List (ℕ × ℕ) :=
   (List.range c.g).flatMap fun g => (List.range (HmRow.rowSlots c.ports).2.size).flatMap fun p => rowCopiesAnyOf c pin g p
 
@@ -191,7 +175,6 @@ theorem chainDst_pos {g p k : ℕ} (hp : p < c.ports.size) (hk : k < c.ports[p]!
   rw [chainDst_eq R.rowNets (rowSlot_lt hp hk).2]
   exact shaIn_pos R hp hk t
 
-/-- Distinct rows' columns are distinct. -/
 theorem dst_inj {g p g' p' x : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hg' : g' < c.g)
     (hp' : p' < c.ports.size) (h : Dst c g p x) (h' : Dst c g' p' x) : g = g' ∧ p = p' := by
   rcases h with ⟨k, off, hk, ho, rfl⟩ | ⟨off, ho, rfl⟩ <;>
@@ -267,7 +250,6 @@ theorem wireFAll_dst {g p : ℕ} {e : ℕ × ℕ} (hp : p < c.ports.size) (he : 
   · exact Or.inl ⟨k, t, hk, by omega, rfl⟩
   · exact Or.inr ⟨t, by omega, rfl⟩
 
-/-- A segmented row's compression `k`'s `cv` and `msg` columns in its `sha512x3` slot. -/
 theorem segCols_sha {g p k : ℕ} (hp : p < c.ports.size) (hk : k < c.ports[p]!.chunks) (t : ℕ) :
     segCvCol c g p k + t = shaPos c g p k t ∧ segMsgCol c g p k + t = shaPos c g p k (512 + t) := by
   have hs := (rowSlot_lt hp hk).2
@@ -282,7 +264,6 @@ theorem segCols_sha {g p k : ℕ} (hp : p < c.ports.size) (hk : k < c.ports[p]!.
     rw [e.2, shaPos]
     omega
 
-/-- A segmented row's `hm96` slot's `cv` and `pad` columns (compression `w.size`). -/
 theorem segCols_hm {g p k : ℕ} (hp : p < c.ports.size) (hk : ¬ k < c.ports[p]!.chunks) (t : ℕ) :
     segCvCol c g p k + t = c.slotCol c.hmNet g p + t ∧ segMsgCol c g p k + t = c.slotCol c.hmNet g p + (512 + t) := by
   have hk' : ¬ k < ((HmRow.rowSlots c.ports).2[p]!).size := by rw [rowSlots_size hp]; exact hk
@@ -362,8 +343,6 @@ theorem wireFAny_dst {g p : ℕ} {e : ℕ × ℕ} (hp : p < c.ports.size) (he : 
       rw [hmWireDst_eq R.rowNets]
     · cases hw
 
-/-- **Δ's copies at a column of template instance `g`'s row `p`**, for rows of every kind, are that row's: its constant
-bits' and its wires'. -/
 theorem filter_rowsAny {pin g p x : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hx : Dst c g p x) :
     (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
         (fun e => e.1 = x) =
@@ -376,8 +355,6 @@ theorem filter_rowsAny {pin g p x : ℕ} (hg : g < c.g) (hp : p < c.ports.size) 
     filter_flatMap2_single _ _ (fun g p => wireFAny c g p) x g p hg (hsz ▸ hp) fun g' hg' p' hp' hne e he hex =>
       hne (dst_inj R hg' (hsz ▸ hp') hg hp (hex ▸ wireFAny_dst R (hsz ▸ hp') he) hx)]
 
-/-- **Δ's copies at a column of template instance `g`'s unsegmented row `p`**, whatever the other rows, are that row's
-(`filter_rows` of `Wide.Copies`, which takes every row unsegmented). -/
 theorem filter_rows {pin g p x : ℕ} (hup : c.ports[p]!.segs = none) (hg : g < c.g) (hp : p < c.ports.size)
     (hx : Dst c g p x) :
     (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
@@ -393,15 +370,11 @@ theorem cvCopies_fst {pin g p : ℕ} {e : ℕ × ℕ} (hp : p < c.ports.size) (h
   · exact Or.inl ⟨h0, t, ht, cvColOf_pos R hp h0 t⟩
   · exact Or.inr ⟨by omega, t, ht, cvColOf_zero R hp (by omega) t⟩
 
-/-! ## Δ's copies at a row's own columns -/
-
 omit R in
 theorem filter_bitCopy (c : Circuit) (pin x : ℕ) (v : Option Bool) :
     (bitCopy c pin x v).filter (fun e => e.1 = x) = bitCopy c pin x v := by
   cases v <;> simp [bitCopy]
 
-/-- **Δ's one copy into template instance `g`'s row `p`'s first compression's `cv` bit `t₀`**: the row prefix's midstate
-bit. -/
 theorem cv0_filterAll {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hup : c.ports[p]!.segs = none) (h0 : 0 < c.ports[p]!.chunks)
     (ht₀ : t₀ < 512) :
     (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
@@ -434,7 +407,6 @@ theorem cv0_filterAll {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size
   rw [List.filter_append, List.filter_append, hcv, hpad, hmsg]
   rfl
 
-/-- **Δ's one copy into compression `k ≥ 1`'s `cv` bit `t₀`**: the chain from compression `k − 1`'s output. -/
 theorem chain_filterAll {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hup : c.ports[p]!.segs = none) (hk1 : 1 ≤ k)
     (hk : k < c.ports[p]!.chunks) (ht₀ : t₀ < 512) :
     (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
@@ -495,8 +467,6 @@ theorem chain_filterAll {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.
   rw [List.flatMap_cons, List.flatMap_nil, List.append_nil, hh, List.append_nil, chainWidth_eq R.rowNets hs,
     filter_map_single _ _ _ _ ht₀]
 
-/-- **Δ's one copy into the `hm96` slot's `cv` bit `t₀`** of a row of a compression or more: the wire from the last
-compression's output. -/
 theorem hmcv_filterAll {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hup : c.ports[p]!.segs = none) (h0 : 0 < c.ports[p]!.chunks)
     (ht₀ : t₀ < 512) :
     (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
@@ -542,7 +512,6 @@ theorem hmcv_filterAll {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.siz
   simp only [h0, ↓reduceIte]
   rw [List.flatMap_cons, List.flatMap_nil, List.append_nil, hmWidth_eq R.rowNets, filter_map_single _ _ _ _ ht₀]
 
-/-- **Δ's one copy into the `hm96` slot's `cv` bit `t₀`** of a row of no compression: the row prefix's midstate bit. -/
 theorem hmcv0_filterAll {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hup : c.ports[p]!.segs = none) (h0 : c.ports[p]!.chunks = 0)
     (ht₀ : t₀ < 512) :
     (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
@@ -572,7 +541,6 @@ theorem hmcv0_filterAll {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.si
   rw [List.filter_append, List.filter_append, hcv, hpad, hmsg]
   rfl
 
-/-- **Δ's copy into the `hm96` slot's `pad` bit `t₀`**: the constant bit of the row's last block there. -/
 theorem pad_filterAll {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hup : c.ports[p]!.segs = none) (ht₀ : t₀ < 1024) :
     (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
         (fun e => e.1 = padCol c g p + t₀) =
@@ -611,8 +579,6 @@ theorem pad_filterAll {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size
   unfold rowCopiesOf
   rw [List.filter_append, List.filter_append, hcv, hpad, hmsg, List.nil_append, List.append_nil]
 
-/-- **Δ's copy into compression `k`'s message bit `t₀`**, from the block that holds the row's length on: the constant bit
-of the row's block `k + 1` there (a row whose padding spills into its last compression has some). -/
 theorem msgConst_filterAll {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hup : c.ports[p]!.segs = none)
     (hkb : c.ports[p]!.bits / 1024 ≤ k) (hk : k < c.ports[p]!.chunks) (ht₀ : t₀ < 1024) :
     (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
@@ -660,8 +626,6 @@ theorem msgConst_filterAll {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.por
   rw [List.filter_append, List.filter_append, hcv, hpad, hmsg]
   rfl
 
-/-- **No copy of `HmRow.delta`'s rows or of the rows' wires is at a data bit of an unsegmented row in its compressions'
-blocks**, whatever its last compression's block holds past its bytes. -/
 theorem msgData_filterAll {pin g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hup : c.ports[p]!.segs = none)
     (hbits : c.ports[p]!.bits = 16 * c.ports[p]!.words) (hb : b < 2 * c.ports[p]!.words)
     (hk : b / 128 < c.ports[p]!.chunks) (ht : t < 8) :
@@ -705,8 +669,6 @@ theorem msgData_filterAll {pin g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.s
       omega
   rw [hw, hr, List.append_nil]
 
-/-- **No copy of `HmRow.delta`'s rows or of the rows' wires is at a message bit of a row whose message has no constant
-bit before its last block** (an output row: `bits = 16 · words`, `2 · words = 128 · chunks`). -/
 theorem msg_filterAll {pin g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hup : c.ports[p]!.segs = none)
     (hkb : c.ports[p]!.chunks ≤ c.ports[p]!.bits / 1024) (hb : b < 128 * c.ports[p]!.chunks) (ht : t < 8) :
     (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter

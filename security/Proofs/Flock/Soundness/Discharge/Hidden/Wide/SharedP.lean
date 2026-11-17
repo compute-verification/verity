@@ -26,14 +26,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# The registered `b ‖ c` at a sampled proof block, at public inputs
-
-`HmIn.loadPublic` and `HmIn.drawn` are `HmRow`'s on the circuit whose output ports are the public input words
-(`inRows`), so the `b ‖ c` a sampled statement's regions pin at a proved unit's `hm96` slot is the unit's in the
-population's public file (`bc_sampledWP`, `bc_sampledW` at `Hidden.SpecP`), and the public word the in regions hold at a
-proved slot's public leaf is the unit's public input word there (`inVal_sampledP`).
--/
+/-! The registered `b ‖ c` and public input words at a sampled proof block's proved unit, at public inputs. -/
 
 @[expose] public section
 
@@ -45,11 +38,9 @@ namespace FlockSoundness.Discharge.Hidden
 
 open FlockSoundness.Discharge.Layout Refine
 
-/-- The circuit `HmIn.loadPublic` and `HmIn.drawn` read the public file under: its output ports the public input words. -/
 abbrev inRows (c : Circuit) (pi : HmIn.Ports) : Circuit :=
   { c with outPorts := if pi.ports.isEmpty then #[] else #[("public inputs", pi.words)] }
 
-/-- `HmIn.loadPublic` is `HmRow.loadPublic` on `inRows`, then checks. -/
 theorem loadPublic_inRows {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {pf : ByteArray} {pop : Public}
     (h : HmIn.loadPublic tags c pi pf = .ok pop) : HmRow.loadPublic tags (inRows c pi) pf = .ok pop := by
   unfold HmIn.loadPublic at h
@@ -61,9 +52,6 @@ theorem loadPublic_inRows {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {pf : By
     subst h
     assumption
 
-/-- **`bc_sampledW` at public inputs**: the `b ‖ c` the regions pin at a proved unit's `hm96` slot, in a satisfying
-witness of a sampled hidden-output statement at public inputs, is the unit's `b ‖ c` in the population's public file, at
-every row. -/
 theorem bc_sampledWP {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {own : Option ByteArray} {pi : HmIn.Ports} {st : Stmt} (s : SpecP tags cf pf coins tables (some d) own pi st)
     {pop : Public} (hpop : HmIn.loadPublic tags st.c pi pf = .ok pop) {D : Draw.UnitSample}
@@ -102,15 +90,10 @@ theorem bc_sampledWP {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
   rw [← hchunk g hr]
   exact bc_pinned' L regs hregs hz o hg hg2 hmem (hall _ hpr) hsz128
 
-/-- `inRows`' output words are the public input words. -/
 theorem outWords_inRows {c : Circuit} {pi : HmIn.Ports} (hne : pi.ports.isEmpty = false) :
     (inRows c pi).outWords = pi.words := by
   simp [inRows, hne, Circuit.outWords]
 
-/-- **A public leaf's word at a proved slot is the population's**: in a sampled hidden-output statement at public inputs,
-at block `b` and unit slot `k` whose instance `b · c.g + k / upv` is proved, public leaf `jj` of the slot's unit, public
-word `q`, holds word `q` of the proved unit `D.proved[b · c.g + k / upv]`'s public inputs in the population's public file
-(`HmRow.drawn` on `inRows`, `parse_leaf_lt`). -/
 theorem inVal_sampledP {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {d : Lean.Json} {own : Option ByteArray} {pi : HmIn.Ports} {st : Stmt}
     (s : SpecP tags cf pf coins tables (some d) own pi st) {pop : Public}
