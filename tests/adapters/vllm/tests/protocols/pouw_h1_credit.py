@@ -1,4 +1,4 @@
-"""Core credit's statement steps over a served H1 window with receipts on (SERVEH1): `pouw_h1_gpu.py --credit`'s check.
+"""Core credit's statement steps over a served H1 window with receipts on (SERVEH1).
 
 A window's ``receipt@<c>``, ``pub@<c>`` and ok rows are bound only where credit verifies a sampled call's statement
 (`credit._verified`): on the ``--registered`` file credit builds itself from the descriptor and the window's entries

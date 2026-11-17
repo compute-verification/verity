@@ -398,8 +398,6 @@ KNOWN = frozenset({
     "verity_vllm.engine.int8_attention",
     "verity_vllm.engine.int8_exact",
     "verity_vllm.engine.int8_fused",
-    "verity_vllm.engine.int8_ops",
-    "verity_vllm.engine.int8_vllm",
     "verity_vllm.engine.profiles.engine_classes",
     "verity_vllm.engine.served",
     "verity_vllm.engine.vllm_adapter",

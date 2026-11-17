@@ -55,17 +55,9 @@ untraced = [
 # builds (`artifacts`), and the C++ the tests compile is this suite's own but for the SHA-512 pearl_c/sha512.cuh includes
 # (verity/commitments/cuda/sha512.cuh). verity/protocols/resource_accounting/compute/pouw/verifier/receipts, filler and
 # machine_model are suites of their own, which this suite's tests read (test_receipts_adopters, test_opcode_probe),
-# so they're named here. The theory scripts (`theory/`) import the exact kit's package. test_dither_a_step_chunks
-# imports dither_one (and forms.py through dither_fused) on the CPU. test_contents reads the README,
-# which holds no table (`contents.py` prints them). test_dither_zy_h1zy imports int8_exact, which imports
-# verity_vllm.program.frontend's kernel_readback (the program files named below), and its CUDA tests import dither-a
-# (benchmarks/hash/dither's dither_a.py and the modules it imports, int8_fused's among the engine's): its files alone, not their kernels'
-# CUDA sources, and dither's registry (settings.py), which they read their variables through. test_served_h1_producer's
-# H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose ChaCha20 is verity.commitments.periods.rows'
-# (the commit files named below: serving_rows and what it imports).
+# so they're named here. The theory scripts (`theory/`) import the exact kit's package. test_contents reads the README,
+# which holds no table (`contents.py` prints them).
 # test_served_units_summarize runs served_units' summarize.py, which scores the hidden_zk controls its job.sh sources.
-# served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
-# test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
 # before and after vllm's layout move. bench_arm's live coins open their session through verity_vllm.pipeline.commit_coins.
 # test_pearl_c_sm90_overhead_arm reads the overhead door's schemes and linears (verity_bench's overhead.py), which name
@@ -76,10 +68,8 @@ untraced = [
 # (verity_vllm.definitions' boolean.py), which loads no registry module for a Program already Boolean.
 # test_pearl_c_vllm holds a Pearl+ answer's named assumption to its def in Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean
 # and the H100's record of it in Proofs/Pouw/PearlC/Records.lean.
-# test_lane_refs (through served_h1's partials) and test_pearl_c_sm90_grouped import verity_torch.pouw's packages, the
-# latter its Pearl-C device run (run_device, lanes_device, served_y_device), and test_served_h1_producer H1's device
-# halves (h1_device, records_device, credit_gate_device, row_table_device); Pearl-C4's and dither's tests import
-# verity.protocols.experimental's package files above the modules named below.
+# test_pearl_c_sm90_grouped imports verity_torch.pouw's packages and its Pearl-C device run (run_device, lanes_device,
+# served_y_device); Pearl-C4's tests import verity.protocols.experimental's package files above the modules named below.
 inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/resource_accounting/compute/pouw/verifier", "verity/protocols/proofs/spot",
@@ -174,17 +164,10 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "security/Proofs/ResourceAccounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts", "benchmarks/pouw/filler", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler",
           "benchmarks/machine_model", "benchmarks/pouw/README.md",
-          "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
-          "verity/protocols/experimental/dither/prover/j10r_ws.py",
           # test_mma_gate runs torch_gpu's build gate, which reads the build through verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py's mma_gate
           "benchmarks/kernels/s8_linear/sass_gate.py",
-          "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
-          "verity/protocols/experimental/dither/prover/h1r.py", "benchmarks/hash/dither/h1r_torch.py",
           # ../../../benchmarks/pouw/pearl_c4/replay.py, ../../../benchmarks/pouw/hidden_zk/stage.py and test_pearl_c4_replay load Pearl-C4's scheme, circuit and vectors
           "verity/protocols/experimental/pearl_c4", "verity/protocols/experimental/__init__.py",
-          "verity/protocols/experimental/dither/__init__.py", "verity/protocols/experimental/dither/prover/__init__.py",
-          "benchmarks/hash/dither/j10r_units.py",
-          "benchmarks/hash/dither/settings.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
           "adapters/torch/verity_torch/pouw/h1/tables_device.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/words.py",
@@ -224,11 +207,8 @@ paths = ["benchmarks/pouw/opcode_probe"]
 
 [[tool.verity.tests.reads]]
 tests = [
-    "test_dither_j10r_form.py",
     "test_pearl_c4_real.py",
     "test_pearl_c_sm90_glm53.py",
-    "test_served_h1.py",
-    "test_served_h1_producer.py",
 ]
 paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
 

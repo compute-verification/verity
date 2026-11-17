@@ -1,6 +1,6 @@
 """`pouw_h1_gpu.py`'s engine flags reach the engine it builds: ``--engine-arg KEY=VALUE`` over the workload's ``LLM()``
 keywords, and ``--no-batch-invariant`` as the target's ``batch_invariant``. Its ``--check-challenger``, the verifier's side
-on no GPU, fails closed, and its ``--receipts`` refuses a run handed no producer."""
+on no GPU, fails closed."""
 from __future__ import annotations
 
 import hashlib
@@ -169,10 +169,3 @@ def test_check_challenger_fails_closed_and_its_record_says_why(tmp_path, capsys)
         G.main(["--out", str(tmp_path / "out"), "--check-challenger", str(calls), str(tree), "--key-sha512", pin])
     assert "--check-challenger needs --key-sha512" in capsys.readouterr().err
 
-
-def test_receipts_need_the_producer_handed_in(tmp_path, capsys):
-    """``--receipts`` computes and checks receipts with kernels' producer, which this package never loads itself: a run
-    whose ``main`` was handed none refuses before it builds an engine."""
-    with pytest.raises(SystemExit):
-        G.main(["--workload", "fill", "--served", "--receipts", str(tmp_path / "h1u_hbc.so"), "--out", str(tmp_path)])
-    assert "--receipts needs kernels' producer" in capsys.readouterr().err

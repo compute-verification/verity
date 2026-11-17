@@ -1203,7 +1203,7 @@ def test_the_harness_takes_commit_with_the_challenger_only_with_a_session_a_wind
 
 
 def test_credit_reads_round_zero_under_the_gate_session_the_window_was_served_in(tmp_path, monkeypatch):
-    """`pouw_h1_gpu.py --credit` on a challenger window: round 0's input-ids and request tables bind the gate's reserved
+    """On a challenger window, round 0's input-ids and request tables bind the gate's reserved
     challenge phase, so the stand-in's registration step (`pouw_h1_credit.check`) reads them under that challenge phase, never under the
     in-process one (`LOCAL_SESSION`), which gives them another domain."""
     gate = _Gate(tmp_path, monkeypatch)
