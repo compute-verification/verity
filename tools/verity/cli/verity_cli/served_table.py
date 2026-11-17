@@ -644,9 +644,8 @@ def _local_gate(cfg: Mapping[str, Any], state: Path, machines: Sequence[str] = (
     part.replace(f)
 
 
-#: the parties `verity run` starts first where ``--bindings`` gives none of what they write
-STARTS = {NETWORK_ATTESTER: Start(writes={"certifier": ("gate", "peer")}, serve=_local_gate,
-                                   stop=lambda cfg, state: None, within=60)}
+STARTS[NETWORK_ATTESTER] = Start(writes={"certifier": ("gate", "peer")}, serve=_local_gate,
+                                  stop=lambda cfg, state: None, within=60)
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
