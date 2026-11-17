@@ -4,8 +4,8 @@
 
 Each window holds MEMBERS members of one unit: `test_audit_two_members`' two templates (`ScaledMmS8Coordinate` at
 K = 128 and K = 256) with half the units each, recorded, committed and written as serving writes a window, under the
-rule ``stratified-rate:1/1`` (`RULE`): a template is a stratum and every member is sampled, since `link-points` refuses a
-member some sample misses, and the members share their template's circuit file. The served harness's audit step
+rule ``stratified-rate:1/1`` (`RULE`): a template is a stratum and every member is sampled, and the members share their
+template's circuit file. The served harness's audit step
 (``records_audit.py audit`` on a local challenger, ``--deployed-key``, FLOCK_CHALLENGER=1) audits it and writes the case;
 `case_files.run` then runs v2's ``check`` on it. Per window, OUT/m<MEMBERS>/result.json holds the audit's exit, seconds
 and peak, the members' staged directories with no circuit file of their own (each a file the per-member case named
@@ -91,8 +91,8 @@ def one(root: Path, members: int, flock: Path, lean: Path) -> dict:
                     "peak_rss_kb": resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss}
     staged = [x for x in (work / "audit" / "window").glob("m*") if x.is_dir() and x.name[1:].isdigit()]
     res["staged"] = {"members": len(staged), "no_own_circuit": sum(not (x / "circuit.txt").exists() for x in staged)}
-    cfile = work / "audit" / "window" / "case-v2-members.json"
-    for name in ("case-v2-members-error.txt", "summary.json"):
+    cfile = work / "audit" / "window" / "case-v2.json"
+    for name in ("case-v2-error.txt", "summary.json"):
         if (work / "audit" / "window" / name).is_file():
             (d / name).write_bytes((work / "audit" / "window" / name).read_bytes())
     if cfile.is_file():
