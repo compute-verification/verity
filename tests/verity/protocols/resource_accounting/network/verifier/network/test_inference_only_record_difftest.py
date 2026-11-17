@@ -1,10 +1,10 @@
-"""The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyVerifier.Record`) against the Python
+"""The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
 `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 708 cases (600 random circuits,
 two in five broken in one way, and 108 shaped ones, most in the shape of a served class) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
-Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyVerifier/RecordDifftestMain.lean` fails unless
+Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
 same wiring from the form's instance and from the one Python builds from its own layout of each template. The audit
 checks the data against the record's SHA-256 and caches its pass on the Lean package's files alone, so the first test

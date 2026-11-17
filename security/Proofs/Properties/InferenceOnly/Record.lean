@@ -8,8 +8,8 @@ import Mathlib.Algebra.Order.Field.Basic
 
 `complies_of`: the rate rule on a record's circuit (`Complies`) from four statements about the check, that a record it
 reads carries its instance's fields (`Owns`) and lays out a circuit (`LaidOut`), that its summary counts every block
-(`Counts`), and that its rate rule is the policy's on a summary (`Rates`). `InferenceOnlyVerifier.SecurityProofs.ServedComplies` is
-that theorem as the guarantee `InferenceOnlyVerifier.Guarantees.ServedComplies` states it.
+(`Counts`), and that its rate rule is the policy's on a summary (`Rates`). `InferenceOnlyCheck.SecurityProofs.ServedComplies` is
+that theorem as the guarantee `InferenceOnlyCheck.Guarantees.ServedComplies` states it.
 
 `pinnedOpens_of`: what a pinned reader opens (`PinnedOpens`) from the closure digest's pin (`DigestPins`), the
 check's provenance (`Provenance`) and a layout that reads a Definition's signature alone (`LayoutReads`).

@@ -1,5 +1,5 @@
 """A served run's inference-only verdict: its registered circuit accepted as at most n (c, k)-inference blocks, or refused,
-by `InferenceOnlyVerifier.Count`'s rule (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/Count.lean`), against a policy the run
+by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
 registered before it served.
 
     inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U]
@@ -50,7 +50,7 @@ once the serve had begun (unless ``--retroactive`` says why it's read anyway), a
 unpriced primitive, a closed window with no seal, a sealed window the class doesn't take, no ``--lean``, or a Lean
 verifier that gives no verdict, is not started on a host that gives it no memory limit, or counts other gates a block
 than the table does.
-The verdict is the Lean verifier's: `inference-only-verifier --count` on one window's session Program (`lean_count`),
+The verdict is the Lean verifier's: `inference-only-check --count` on one window's session Program (`lean_count`),
 under the memory limit `served_cases.limits` gives a check on this host, with ``--detail`` where the binary takes it,
 as its usage says (`takes_detail`), the Program's parameters whose every row is a registered read of a pinned parameter
 bound at registration and named in θ (`held_inputs`, `count_instance`). Which parameters those are is the record's
@@ -67,7 +67,7 @@ holds the verdict, ``complies``, ``failure`` and ``reason``, each block class's 
 and fresh bits a block (``classes``), the record's count a block, the inputs named in θ and how they were chosen
 (``theta``), the class's slots and positions, and ``counts`` saying that n was judged on the exact count, which it doesn't publish. ``--private`` (the serve dir's, 0600) holds it with the
 exact counts (``blocks``, the record's rows, and ``total``), each window the class doesn't take and why, and the
-`inference-only-verifier --count` call (``lean_detail``).
+`inference-only-check --count` call (``lean_detail``).
 """
 from __future__ import annotations
 
@@ -404,7 +404,7 @@ def class_windows(serve_dir: Path, cls: Mapping[str, int]) -> tuple[int, dict[in
 
 
 def judge(rows: Sequence[Sequence[Any]], c: int, k: int, n: int) -> dict[str, Any]:
-    """`InferenceOnlyVerifier.Count`'s verdict on its rows (``[key, gates, fresh, blocks]``): it complies when every row with a block
+    """`InferenceOnlyCheck.Count`'s verdict on its rows (``[key, gates, fresh, blocks]``): it complies when every row with a block
     has at most ``c`` gates and ``k`` fresh bits and the blocks are at most ``n``; ``failure`` the first that fails,
     ``[row, "gates"|"fresh"]``, else ``[None, "count"]`` (`inference_only_reference.evaluate_count`)."""
     total = sum(r[3] for r in rows)
@@ -457,7 +457,7 @@ def record_count(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None,
 
 def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int,
                    held: Sequence[str] = ()) -> dict[str, Any]:
-    """`InferenceOnlyVerifier.Count`'s instance on one window: its session Definition activated at its m slots (the session
+    """`InferenceOnlyCheck.Count`'s instance on one window: its session Definition activated at its m slots (the session
     Program, `population.population`), its parameters ``held`` bound at registration and named in θ, its block that
     Definition."""
     from verity_vllm.program.predict import block_counts as BC
@@ -487,7 +487,7 @@ def takes_detail(exe: Path, timeout_s: int, behind: Sequence[str] = ()) -> bool:
 
 def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int = 1800,
                within: Any = None) -> dict[str, Any]:
-    """`inference-only-verifier --count` on ``inst``, in ``scratch``, with ``--detail`` where ``exe`` takes it (`takes_detail`): its
+    """`inference-only-check --count` on ``inst``, in ``scratch``, with ``--detail`` where ``exe`` takes it (`takes_detail`): its
     ``flags`` and the JSON object it printed (``out``), its whole verdict or its refusal, else ``error``, why it printed
     none, and where it said something, its tail (``said``). Each call runs under ``within`` (default
     `served_cases.limits`, this host's memory limit, under which ``memory`` says it ran), and none starts where the host

@@ -7,16 +7,16 @@ public import InferenceOnlyVerifier.Desc
 
 `InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`) holds of a Boolean declaration `(D, θ)` when `D`'s
 computed gates divide into at most `n` proof blocks of a `(c, k)`-partition (`Verity.Partition.IsCK`), each reading at
-most `k` bits from outside it that are not θ (`|in(I) \ θ| ≤ k`). `InferenceOnlyVerifier.Count.evaluate` checks the division the
+most `k` bits from outside it that are not θ (`|in(I) \ θ| ≤ k`). `InferenceOnlyCheck.Count.evaluate` checks the division the
 declaration names, on its word-level Program, with blocks of at most `c` gates: each activation of a block Definition
 that no other block holds is one block. It reads the description, never the unrolled circuit (AGENTS.md "Verifier cost"): one pass over the
-Definitions in the decoder's order and one against it, and `InferenceOnlyVerifier.Desc`'s summaries for what a block reads.
+Definitions in the decoder's order and one against it, and `InferenceOnlyCheck.Desc`'s summaries for what a block reads.
 
 ## The instance
 
 One JSON object:
-* `program`: the declaration's word-level circuit, a descriptor v1 Program as text (`InferenceOnlyVerifier.Check`).
-* `theta`: θ as root nodes, each an input node bound at registration, none twice (`InferenceOnlyVerifier.Desc`).
+* `program`: the declaration's word-level circuit, a descriptor v1 Program as text (`InferenceOnlyCheck.Check`).
+* `theta`: θ as root nodes, each an input node bound at registration, none twice (`InferenceOnlyCheck.Desc`).
 * `blocks`: the block Definitions, by descriptor key (`Flock.Program.Defn.key`: a primitive's id, or a composite's
   `Name_vN` with its static bindings, one specialized Definition), none twice. A block Definition activated inside a
   block is part of that block.
@@ -35,7 +35,7 @@ One JSON object:
   only such parameters of the body; never a scan's carry. A member of a primitive that is no block, in such a body, is a
   computed gate in no block, and refused.
 * Per block Definition, a row (`fresh`): its Boolean gates; its fresh bits, the total width of the parameter leaves its
-  gates read (`InferenceOnlyVerifier.Desc.Summary.used`; a primitive reads all of them) over its parameters that are not θ; and its
+  gates read (`InferenceOnlyCheck.Desc.Summary.used`; a primitive reads all of them) over its parameters that are not θ; and its
   blocks. The fresh bits bound `|in(I) \ θ|` for every block `I` of the Definition: a bit outside `I` and θ that `I`
   reads is a bit of a word gate that one of those leaves names, and no wider. Leaves naming one gate are counted once
   each, and a parameter θ at some call sites and not others counts at all of them.
@@ -53,9 +53,9 @@ declaration's blocks and name the one that failed, and stay in the private recor
 ## Refusals
 
 In the order checked: `instance` (a field missing or of the wrong JSON kind), `params` (`c`, `k` or `n` not a natural, an
-entry of `blocks` not a string, a value of `table` not a natural), then the Program's refusals in `InferenceOnlyVerifier.Desc`'s order
+entry of `blocks` not a string, a value of `table` not a natural), then the Program's refusals in `InferenceOnlyCheck.Desc`'s order
 (`program`, `not-topological`, `program` for `rootLaidOut`, `inputsAtRoot` and `walkable`, and `program` or `unwalked`
-from the summaries), then θ entry by entry as `InferenceOnlyVerifier.Desc` reads it (`theta-unknown`, `theta-not-input`,
+from the summaries), then θ entry by entry as `InferenceOnlyCheck.Desc` reads it (`theta-unknown`, `theta-not-input`,
 `theta-not-registered`, `theta-duplicate`), then `blocks` entry by entry (`block-unknown`: no Definition the root
 reaches, `block-root`, `block-input`: an input primitive, `block-duplicate`), then `gate-in-no-block`, then `gate-table`
 (a primitive a block Definition computes, with a member, that the table lacks).
@@ -113,7 +113,7 @@ def blockStep (P : Prog) (seen : Array Bool) (mask : Array Bool) (key : String) 
   if mask[d]! then throw "block-duplicate"
   return mask.set! d true
 
-/-- `InferenceOnlyVerifier.Desc.analyze`'s summaries of the reached Definitions, callees first, and a default one for the root and the
+/-- `InferenceOnlyCheck.Desc.analyze`'s summaries of the reached Definitions, callees first, and a default one for the root and the
 rest. -/
 def summaries (P : Prog) : Except String (Array Desc.Summary) := do
   let seen := Desc.reached P
@@ -288,7 +288,7 @@ def reinterpretationOf (j : Json) : Option String :=
   | _ => none
 
 /-- A refusal of `j` as JSON: `unwalked` with its reason as the `message`, a `program` refusal of a reinterpretation with
-the decoder's, else as `InferenceOnlyVerifier.refusal` writes it. -/
+the decoder's, else as `InferenceOnlyCheck.refusal` writes it. -/
 def refusal (j : Json) (code : String) : Json :=
   if code.startsWith Desc.UNWALKED then
     Json.mkObj [("error", Json.str "unwalked"), ("message", Json.str ((code.drop Desc.UNWALKED.length).toString))]
