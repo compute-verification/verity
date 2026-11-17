@@ -21,6 +21,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "security/Proofs/Properties/Verity/Sampled/OpensAt.lean",
           "security/Proofs/Flock/Soundness/Discharge/ZkLink/StrictZ.lean",
           "security/Proofs/Flock/Soundness/Discharge/ZkLink/Compiled.lean",
+          "security/Proofs/Flock/Soundness/Discharge/ZkLink/CompiledLink.lean",
           "security/Proofs/Flock/Claims/NumbersTable.lean",
           "security/Proofs/Flock/Soundness/Discharge/ZkSession/Numbers.lean",
           "security/Properties/Verity/Game.lean", "security/Definitions/Core/Interaction.lean",
