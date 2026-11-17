@@ -1554,17 +1554,26 @@ class StoreLabels:
                                  f"so ready marks on #{pr}'s other heads here may be old") from None
             self._pulled.add(pr)
             self._dirs = None
+        out = {}
+        for old in self._listed().get(ids.target_dirname(prefix), ()):
+            if old != head and ids.is_pr(label_target(pr, old)) and (labs := self.store.labels(label_target(pr, old), key=key)):
+                out[old] = labs
+        return out
+
+    def at(self, head: str) -> list[int]:
+        """The PRs with labels at ``head`` here (`pr:{n}@{head}`), from what this store pulled so far."""
+        return sorted(int(m.group(1)) for prefix, heads in self._listed().items()
+                      if head in heads and (m := re.fullmatch(r"pr_(\d+)@", prefix)))
+
+    def _listed(self) -> dict[str, list[str]]:
+        """{a label directory's prefix (`pr_12@`): its heads}, listed again after a pull."""
         if self._dirs is None:
             root, self._dirs = Path(self.store.root) / "labels", {}
             for name in sorted(os.listdir(root)) if root.is_dir() else ():
                 at, sep, old = name.rpartition("@")
                 if sep:
                     self._dirs.setdefault(at + sep, []).append(old)
-        out = {}
-        for old in self._dirs.get(ids.target_dirname(prefix), ()):
-            if old != head and ids.is_pr(label_target(pr, old)) and (labs := self.store.labels(label_target(pr, old), key=key)):
-                out[old] = labs
-        return out
+        return self._dirs
 
     def _labels(self, pr: int, head: str, key: str) -> list:
         from .store import labels_sync
