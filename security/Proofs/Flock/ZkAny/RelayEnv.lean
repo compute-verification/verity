@@ -12,7 +12,7 @@ At the `Hello` the relay frames the session's `Hello` message at a nonce it samp
 the tape's.
 
 At a `Commit` the relay holds the worker's roots to the loop's level 0 (`Level0.commit`): the root it carries for table
-`i` must be a level 0 the loop sampled for that table of the session, at the table's `m`, which the session then owns. What
+`i` must be a level 0 the loop drew for that table of the session, at the table's `m`, which the session then owns. What
 leaves is the loop's own `Commit`: for each table, the root of the level 0 bound to it (`Level0.ofSession`). Here that
 root is the loop's sample for that table, whatever roots the worker sent, and whatever the loop's other sessions do.
 
@@ -21,7 +21,7 @@ root is the loop's sample for that table, whatever roots the worker sent, and wh
   branch (`Env.commit`).
 * `CommitInv`, `commit_inv`: once `Level0.commit` passes, each slot is one of the loop's as sampled, but for what it is
   bound to; a level 0 bound to the session is bound by this `Commit`, at its table's index; and each table has one.
-* `commitRead_sampled`: where the loop sampled `ls` for the session (`SessionSamples`) and nothing is bound to it yet
+* `commitRead_sampled`: where the loop drew `ls` for the session (`SessionSamples`) and nothing is bound to it yet
   (`Unbound`), a `Commit` that leaves carries each table's name and the root of `ls` there, at tables of distinct names
   (`streamsOk_tables`: the coin tree's rep streams, `"{table}/rep{r}"`, are distinct, `SessionPlan.streamsOk`).
 * `SlotsReach`: the loop's slots as its four updates of them leave them, across all its sessions: `Slots.name` at a
@@ -30,7 +30,7 @@ root is the loop's sample for that table, whatever roots the worker sent, and wh
   of tables (`Named`).
 * `AfterSample`, `afterSample_inv`: from the session's sample of `ls` to its `Commit`, through any level-0 request's sample and
   other sessions' updates, the session's level 0 stay `ls`'s and nothing is bound to it (`SampleInv`): a level-0 request
-  for a session the loop sampled is refused (`Slots.admit`), or samples none where it has no tables.
+  for a session the loop drew is refused (`Slots.admit`), or samples none where it has no tables.
 * `envOk_commit_after`: `EnvOk` at the model's link whose roots are the sample's, where the relay read the `Commit`
   against the loop's slots after the session's sample.
 -/
@@ -43,7 +43,7 @@ open _root_.Flock (SessionSpec Stmt)
 open _root_.Flock.ZkServer.Level0 (Level0 Slot Slots commit ofSession)
 
 /-- **At the model's `Hello`, `EnvOk` where the relay's nonce is the tape's**: where `x` sets up the session on `spec`
-and the nonce the relay sampled from the operating system is the tape's `ν`, the `Hello` it frames is the model's. -/
+and the nonce the relay drew from the operating system is the tape's `ν`, the `Hello` it frames is the model's. -/
 theorem envOk_hello_tape {x : Claims.Msg} {ν : Claims.ZKMal.CoinLayer.Nonce} {spec : SessionSpec} {sts : Array Stmt}
     {seen : List String} {ins : _} {e : Env} (hs : FlockDeploy.setupOf true x = some (ins, spec, sts))
     (hn : e.nonce = ⟨(Claims.ZKMal.CoinLayer.nb ν).toArray⟩) :
@@ -176,12 +176,12 @@ theorem commit_inv {R R' : Slots} {sid : Nat} {tables : Array (String × Nat)}
               exact ⟨_, Array.mem_setIfInBounds hks, rfl⟩
   · simp [hc, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
-/-- **The loop sampled `ls` for the session `sid`**, table `i`'s at index `i`: every level 0 of the session is `ls`'s at
+/-- **The loop drew `ls` for the session `sid`**, table `i`'s at index `i`: every level 0 of the session is `ls`'s at
 its table. -/
 def SessionSamples (R : Slots) (sid : Nat) (ls : Array Level0) : Prop :=
   ∀ s ∈ R.slots, s.owner = sid → ∃ h : s.table < ls.size, s.l0 = ls[s.table]
 
-/-- **A `Commit` that leaves carries the session's samples' roots**: where the loop sampled `ls` for the session `sid` and
+/-- **A `Commit` that leaves carries the session's samples' roots**: where the loop drew `ls` for the session `sid` and
 nothing in its slots is bound to the session yet, at tables of distinct names, the roots the relay reads at a `Commit`
 that passes are each table's name and the root of `ls` at it, whatever roots the worker sent. -/
 theorem commitRead_sampled {R : Slots} {sid : Nat} {tables : Array (String × Nat)}
