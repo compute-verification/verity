@@ -941,8 +941,9 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert row["answer"]["profile"]["named_terms"] == bw["profile"]["named_terms"] == ledger.NAMED_TERMS
     assert bw["profile"]["gamma_terms"] and json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
     summary = json.loads((public / "bandwidth.json").read_text())
-    assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"]) == (BW_KEY, True, "configuration")
-    assert summary[mc.PREMISE].startswith(f"holds: the session is signed under the key configuration {CONF} pins")
+    assert (summary["key_pin"], summary["pins_matched"], summary["key_pinned"]) == ("run", True, True)
+    assert not mc.holds(summary) and summary["key_sha512"] == BW_KEY
+    assert summary[mc.PREMISE].startswith(f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins")
     assert case["params"]["trusted"] == [ts.AtLeaf(b"p2-party-at-leaf").public_key.hex()]
     assert not any((d / f).exists() for d, f in ((private, SP.HB.HELD), (s.private, SP.STORE), (s.private, SP.HELD)))
     assert _stamps(s.out) == [
@@ -1061,7 +1062,8 @@ def test_a_key_the_run_names_and_the_configuration_does_not_pin_is_a_rehearsals(
     assert answer["verdict"] == "accept", answer["reason"]
     _, bw, summary = _bandwidth_files(s)
     assert bw["verdict"] == "accept", bw["reason"]
-    assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"]) == (BW_KEY, True, "run")
+    assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"], summary["pins_matched"]) == (
+        BW_KEY, True, "run", False)
     assert summary[mc.PREMISE].startswith(mc.REHEARSAL) and "holds" not in summary[mc.PREMISE]
 
 
