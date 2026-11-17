@@ -23,12 +23,12 @@ network-certifier -> verifier   out-record {link, window}, the output value's re
 - The challenger stays SPOT's party. It runs on the network attester's device, the auditor's, which a
   configuration's table states (`config.Component.colocated`): a manifest names only its own parties.
 
-The two messages are the two parts of the output value the attester relayed (`out_commit.CertifiedOut`), for the egress
+The two messages are the two parts of the output value the attester relayed (`out_commit.AttestedOut`), for the egress
 execution phase ``(link, window)`` their heads name:
 
-- ``out-opening`` carries the witness (`CertifiedOut.witness`): the rows' salts in order, `out_commit.SALT_BYTES` bytes
+- ``out-opening`` carries the witness (`AttestedOut.witness`): the rows' salts in order, `out_commit.SALT_BYTES` bytes
   a row. The attester hands it to the prover alone, so it is private and never enters a record.
-- ``out-record`` carries the record (`CertifiedOut.public`) as canonical JSON: the value's signed head, which the
+- ``out-record`` carries the record (`AttestedOut.public`) as canonical JSON: the value's signed head, which the
   verifier reads with `out_commit.check_out`. Its root is a hiding commitment, so it is public. It is a body and not a
   head's fields because its signature alone, in hex, is past a head's bound (`channel.MAX_HEAD`) at the deployed LMS
   parameters.
