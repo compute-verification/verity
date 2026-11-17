@@ -1,5 +1,5 @@
 """`sampled_accepted.py`: the share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the
-host that composed its record, 100 only for SPOT's accept recomputed there on a commit of main, else 0 with the
+auditor's machine, 100 only for SPOT's accept recomputed there off the served node on a commit of main, else 0 with the
 first condition it fails."""
 from __future__ import annotations
 
@@ -65,11 +65,9 @@ def test_lean_here_is_the_head_of_served_verdicts_own():
     assert whole.startswith(M.LEAN_HERE)
 
 
-@pytest.mark.parametrize("served_node", [False, True])
-def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_sampled_proof_block(tmp_path, repo, monkeypatch, capsys,
-                                                                                            served_node):
+def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_sampled_proof_block(tmp_path, repo, monkeypatch, capsys):
     r, on, _ = repo
-    runs = demo(tmp_path / "runs", on, spot(), served_node)
+    runs = demo(tmp_path / "runs", on, spot())
     out = tmp_path / "me"
     out.mkdir()
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(out))
@@ -80,23 +78,20 @@ def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_sampled
     (m,) = doc["measurements"]
     assert (m["name"], m["value"], m["target"], m["sampled"], m["accepted"], m["reason"]) == (M.METRIC, 100, 100, 6, 6, None)
     assert m["inputs"][0].startswith("measured: ") and m["mark"] == "measured"
-    where = ("its record was composed on the workload's node (auditor), which the prover controls, so no guarantee "
-             "applies to it" if served_node else "its record was composed off the workload's node, on auditor")
-    assert m["composed_on"] == {"host": "auditor", "served_node": served_node}
-    assert (doc["validation"]["status"], doc["validation"]["detail"]) == ("passed",
-                                                                         f"6 of 6 sampled proof blocks accepted; {where}")
+    assert (doc["validation"]["status"], doc["validation"]["detail"]) == ("passed", "6 of 6 sampled proof blocks accepted")
     assert capsys.readouterr().out.startswith("ACCEPTED {")
 
 
 @pytest.mark.parametrize("row, served_node, off, why", [
     (spot(), False, True, "served from .*, not a commit of main"),
+    (spot(), True, False, "composed on the served node"),
     (spot(answer_from="as the served node wrote it"), False, False, "not recomputed there by the Lean verifier"),
     (spot(verdict="reject"), False, False, "the Lean verifier's verdict is reject"),
 ])
 def test_anything_short_of_that_accepts_no_unit_and_says_why(tmp_path, repo, row, served_node, off, why):
     r, on, off_sha = repo
     m = M.share(demo(tmp_path / "runs", off_sha if off else on, row, served_node), tmp_path / "runs", "main", r)
-    assert (m["value"], m["accepted"]) == (0, 0) and m["composed_on"]["served_node"] is served_node
+    assert (m["value"], m["accepted"]) == (0, 0)
     assert re.search(why, m["reason"]), m["reason"]
 
 

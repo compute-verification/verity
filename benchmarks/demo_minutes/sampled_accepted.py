@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""The share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the host that composed
-its record, read off its runs' records: the metric ``vllm/served-sampled-proofs-accepted`` (`benchmarks/demo_minutes/metrics.toml`).
+"""The share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the auditor's machine, read off
+its runs' records: the metric ``vllm/served-sampled-proofs-accepted`` (`benchmarks/demo_minutes/metrics.toml`).
 Standard library only; finding the runs and the served commit, and what it writes, are `minutes.py`'s.
 
     research run --cwd source -- python3 benchmarks/demo_minutes/sampled_accepted.py SERVED_RUN VERDICT_RUN
@@ -13,11 +13,10 @@ the checked one (`Core.Integrity`). A proof block counts as accepted only where 
 measurement's ``reason``, its value then 0:
 
 - the served commit is a commit of ``--main`` (default ``origin/main``) in the tree this file is in;
+- the record was composed off the served node (``composed_on.served_node`` false);
 - SPOT's row was recomputed by the Lean verifier on the host that composed it (its ``answer_from``, `LEAN_HERE`);
 - that verdict is accept, which the Lean verifier gives only when every sampled proof block's proof passes.
 
-Each point says where its record was composed (``composed_on``: the host, and ``served_node`` true where it is the
-workload's node, which the prover controls, so no guarantee applies to that point), and its ``detail`` says it in words.
 So a run's share is 100 or 0 today: the answer holds one verdict over every sampled proof block, and a rejection names no count.
 It refuses, with no measurement and the reason (exit 1), a run without its record, a VERDICT_RUN with no
 ``out/record/verdicts.json``, a record whose SPOT row is missing or empty or with no ``composed_on.served_node``, and an accepting answer that
@@ -73,13 +72,6 @@ def off_main(sha: str, ref: str, repo: Path) -> bool:
     return p.returncode == 1
 
 
-def composed(on: dict) -> str:
-    if on["served_node"]:
-        return (f"its record was composed on the workload's node ({on['host']}), which the prover controls, so no "
-                "guarantee applies to it")
-    return f"its record was composed off the workload's node, on {on['host']}"
-
-
 def share(runs: list[str], root: Path, ref: str, repo: Path | None = None) -> dict:
     """The measurement for ``runs`` (SERVED_RUN, VERDICT_RUN); `Refused` where it can't stand."""
     served, verdicts = (R.run_dir(r, root) for r in runs)
@@ -97,6 +89,7 @@ def share(runs: list[str], root: Path, ref: str, repo: Path | None = None) -> di
     n = sampled(row.get("answer") or {})
     reasons = [
         off_main(sha, ref, repo or R.ROOT) and f"served from {sha}, not a commit of {ref}",
+        on["served_node"] and "composed on the served node, not on the auditor's machine",
         not str(row.get("answer_from") or "").startswith(LEAN_HERE)
         and f"SPOT's verdict was not recomputed there by the Lean verifier: {row.get('answer_from') or 'no answer_from'}",
         row.get("verdict") != "accept" and f"the Lean verifier's verdict is {row.get('verdict')}",
@@ -105,10 +98,9 @@ def share(runs: list[str], root: Path, ref: str, repo: Path | None = None) -> di
     if reason is None and not n:
         raise R.Refused(f"{verdicts.name}: SPOT's accepting answer names no sampled proof block at its finest level")
     accepted = n if reason is None else 0
-    where = {"host": on.get("host"), "served_node": on["served_node"]}
     return {"name": METRIC, "value": 100 * accepted / n if n else 0, "unit": UNIT, "mark": "measured",
             "better": "higher", "target": TARGET, "verdict": row.get("verdict"), "sampled": n, "accepted": accepted,
-            "reason": reason, "composed_on": where, "runs": [served.name, verdicts.name], "commit": sha,
+            "reason": reason, "runs": [served.name, verdicts.name], "commit": sha,
             "inputs": [f"measured: SPOT's row in {verdicts.name}'s {RECORD}, of the run {served.name} served"]}
 
 
@@ -127,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         doc = R.result(R.settings.run_id() or d.name, a.runs, m, why, METRIC, "benchmarks/demo_minutes/sampled_accepted.py")
         if m:
             doc["validation"]["detail"] = (f"{m['accepted']} of {m['sampled'] or 'no'} sampled proof blocks accepted"
-                                           + (f": {m['reason']}" if m["reason"] else "") + f"; {composed(m['composed_on'])}")
+                                           + (f": {m['reason']}" if m["reason"] else ""))
         f = d / "result.json"
         tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")
         tmp.write_text(json.dumps(doc, indent=1) + "\n")
