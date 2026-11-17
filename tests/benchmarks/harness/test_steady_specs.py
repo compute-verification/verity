@@ -101,7 +101,7 @@ def real(tmp_path: Path, **changes: str) -> tuple[Path, str]:
     return root, path
 
 
-def launches(root: Path, path: str, node: str = "vy-dc-h200") -> tuple[list, list[list[str]]]:
+def launches(root: Path, path: str, node: str = "vy-spot-glm53") -> tuple[list, list[list[str]]]:
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
     commands: list[list[str]] = []
     assert P.dispatch(plan, root / path, root=root, direct=node,
