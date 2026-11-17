@@ -14,7 +14,8 @@ the theorem charges (the products whose two operands both depend on the update).
 share of the start's parameters its step trains (`trains`), the dtypes the step's matrix products are priced in
 (`priced_in`), its slowdown and what binds, and how much of the step's gates the capture approximates where it
 does (`approximated`); then the entry's planned run at that slowdown over each fleet and period (`periods`). With
-`--out` it writes the rows with what each read to `DIR/library.json`.
+`--out` it writes the rows with what each read to `DIR/library.json` and, for every entry or one, the metric's point
+into the run's result, which it prints as its last line (`write_metric`).
 
 An entry's program is its job's: a route's step runs under bf16 autocast on a CPU as on a GPU. The row prints the
 dtypes the traced products are priced in. Attention's are priced at the dtype the call computes in, the width the
@@ -242,8 +243,8 @@ def main(argv=None) -> int:
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "library.json").write_text(json.dumps(
             {"schema": SCHEMA, "rows": [r | {"periods": periods(r)} for r in rows], "parts": PARTS}, indent=1) + "\n")
-        if not a.entry and a.starts == starts.REGISTRY:
-            write_metric(a.out, rows)
+        if a.starts == starts.REGISTRY and (not a.entry or len(rows) == 1):
+            write_metric(a.out, rows, one=bool(a.entry))
     return 0
 
 
@@ -251,10 +252,11 @@ def main(argv=None) -> int:
 METRIC = "training/library-least-slowdown"
 
 
-def write_metric(out: Path, rows: list[dict]) -> None:
-    """The least slowdown over the rows that have one, written into the run's result under `METRIC` in its row's unit:
-    partial where a row has none, since the least is then over part of the library. Written only for a run of every
-    entry at the registered starts."""
+def write_metric(out: Path, rows: list[dict], one: bool = False) -> None:
+    """The least slowdown over the rows that have one, written into the run's result under `METRIC` in its row's unit
+    and printed as one line: partial where a row has none, since the least is then over part of the library. Written
+    for a run of every entry at the registered starts, and, with `one`, for a run of one named entry there: partial,
+    for that entry (`member`), with its start as the point's `model`."""
     import tomllib
 
     from verity_bench import kit
@@ -263,8 +265,12 @@ def write_metric(out: Path, rows: list[dict]) -> None:
     unit = next(m["unit"] for m in rows_of if m["id"] == METRIC)
     priced = [r for r in rows if r["slowdown"] is not None]
     least = min((r["slowdown"] for r in priced), default=None)
-    kit.writer(out).measurement(METRIC, least, unit, mark="measured" if len(priced) == len(rows) else "partial",
-                                why=None if priced else "no entry has a slowdown")
+    m = kit.writer(out).measurement(METRIC, least, unit, mark="measured" if len(priced) == len(rows) and not one
+                                    else "partial", why=None if priced else "no entry has a slowdown",
+                                    member=rows[0]["entry"] if one else None,
+                                    extra={"model": rows[0]["start"]} if one else None)
+    print(json.dumps({k: m[k] for k in ("name", "value", "unit", "mark", "member", "model") if k in m}
+                     | {"card": m["host"].get("card")}), flush=True)
 
 
 if __name__ == "__main__":

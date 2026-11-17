@@ -101,7 +101,7 @@ def real(tmp_path: Path, **changes: str) -> tuple[Path, str]:
     return root, path
 
 
-def launches(root: Path, path: str, node: str = "vy-dc-h200") -> tuple[list, list[list[str]]]:
+def launches(root: Path, path: str, node: str = "vy-spot-glm53") -> tuple[list, list[list[str]]]:
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
     commands: list[list[str]] = []
     assert P.dispatch(plan, root / path, root=root, direct=node,
@@ -121,7 +121,7 @@ def test_each_point_of_the_head_blocks_spec_is_launched_with_the_stores_key_with
         assert job[-8:] == ["bash", LAUNCHER, "--spec", path, "--point", item.point.id, "--identity", item.identity]
 
 
-@pytest.mark.parametrize("node", ["vy-spot-glm53", "vy-dc-h200-3"])
+@pytest.mark.parametrize("node", ["vy-spot-glm53", "vy-h200x8-1", "vy-dc-h200-3"])
 def test_the_head_blocks_spec_runs_direct_on_the_h200_nodes_whose_slots_give_ten_cores_of_one_numa_node(tmp_path, node):
     from research.pods.nebius.slot_only import through_slot
 
