@@ -5,19 +5,7 @@ public import Proofs.Flock.SessionLoop.LiveInnerAt
 public import Proofs.Flock.SessionLoop.FinL0Vals
 public import Proofs.Flock.SessionLoop.RepSrc
 
-/-!
-# A pad-blind worker meets `TakesVals` at its own values
-
-* **`Loop.takesVals_vsOf`**: at `SessionLoopZKDeployed`'s release with the loop's own inner rounds (`withInner`), at
-  every statement the loop serves, `phased bx post` meets `TakesVals` at `vsOf bx`, at every witness at which
-  `vsServed bx`'s rows hold (`RowsOK`, where `vsOf bx` is `vsServed bx`), every `bx` and whatever `post` reads.
-* `Loop.freedAt_unique`: two rounds that free pad `i` of rep stream `2j + r` along one coin vector free it as one word.
-  At the same prefix the worker's round (`bwOf` hands `bx` the answers after `Hello`'s), the frame's state and the free
-  list are the same (`frameAnswer_congr`, `Free.roundFree_agree`), so the place in the absorbed order is the same; at a
-  longer prefix the frame's state has moved past every place the shorter one frees (`Free.roundFree_pos`, the rep's
-  later rounds each leaving the state their check returns: `ProgChecks`, `step_pos`), and the absorbed order is
-  injective (`absorbed_inj`).
--/
+/-! A pad-blind worker meets `TakesVals` at its own values (`Loop.takesVals_vsOf`). -/
 
 @[expose] public section
 
@@ -48,8 +36,6 @@ theorem locate_fst_mono : ∀ (rs : List ℕ) (k i i' : ℕ), i ≤ i' →
       · rw [locate_cons_ge h2]
         exact locate_fst_mono cs (k + 1) (i - c) (i' - c) (by omega)
 
-/-- **Past a rep stream's first round its rounds are not first**: where two rounds `i < i'` are of one rep stream,
-`i'` is not the stream's round `0`. -/
 theorem locate_snd_ne_zero : ∀ (rs : List ℕ) (k i i' : ℕ), i < i' →
     (CoinLayer.locate rs k i).1 = (CoinLayer.locate rs k i').1 → (CoinLayer.locate rs k i').2 ≠ 0
   | [], _, i, i', h, _ => by
@@ -69,7 +55,6 @@ theorem locate_snd_ne_zero : ∀ (rs : List ℕ) (k i i' : ℕ), i < i' →
       · rw [locate_cons_ge h2] at he
         exact locate_snd_ne_zero cs (k + 1) (i - c) (i' - c) (by omega) he
 
-/-- **The frame's check never moves the state back.** -/
 theorem check_pos {c : Cfg} {m : Masker} {st : Bool} {v r : ByteArray} {n : ℕ} {out : ByteArray} {s' : Masker}
     {why : Option String} (h : _root_.Flock.ZkServer.Frame.check c { m with stopped := st } v r n = .ok (out, s', why)) :
     m.pos ≤ s'.pos := by
@@ -81,7 +66,6 @@ theorem check_pos {c : Cfg} {m : Masker} {st : Bool} {v r : ByteArray} {n : ℕ}
     obtain ⟨fr, hf⟩ := Free.roundFree_of_round (check_some h)
     exact le_trans (Nat.le_add_right _ _) (Free.roundFree_pos hf).1
 
-/-- **Two checks against one scheduled round leave the state at one place.** -/
 theorem check_pos_eq {c : Cfg} {m : Masker} {r : ByteArray} {n : ℕ} {st₁ st₂ : Bool} {v₁ v₂ o₁ o₂ : ByteArray}
     {s₁ s₂ : Masker} {w₁ w₂ : Option String}
     (hr : ∃ q, _root_.Flock.ZkServer.Frame.roundFree c { m with stopped := false } r n = .ok q)
@@ -99,7 +83,6 @@ theorem bind_const_ok {ε α β : Type} {e : Except ε α} {f : Except ε β} {b
   | error _ => cases h
   | ok _ => exact h
 
-/-- Two rounds of one rep stream are checked at alike configurations, whatever the tapes. -/
 theorem cfgAlike_rep {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : R) (h h' : List (Msg × Msg))
     (he : L.rep x h.length = L.rep x h'.length) : CfgAlike (L.cfg x ρ h) (L.cfg x ρ' h') := by
   unfold LeanRelease.cfg LeanRelease.samplesAt
@@ -114,13 +97,11 @@ theorem cfg_order_of_rep {W R : Type} (L : LeanRelease W R) {x : Msg} {ρ : R} {
   rw [hk]
   exact ⟨rfl, rfl⟩
 
-/-- **The absorbed order is injective.** -/
 theorem absorbed_inj (l : _root_.Flock.Zk.PadLayout) {P P' : ℕ} (h : P < (absorbed l).size)
     (h' : P' < (absorbed l).size) (he : (absorbed l)[P]! = (absorbed l)[P']!) : P = P' := by
   rw [absorbed_getElem! l h, absorbed_getElem! l h'] at he
   split_ifs at he <;> omega
 
-/-- **The algebraic phase's pads are below `n_E` and not `final_c`'s.** -/
 theorem absorbed_lt_hab (l : _root_.Flock.Zk.PadLayout) {P : ℕ} (h : P < (absorbed l).size - nLig l) :
     (absorbed l)[P]! < l.hab ∧ (absorbed l)[P]! ≠ l.fc := by
   have hs := absorbed_size l
@@ -135,8 +116,6 @@ theorem tail_snoc_take {α : Type} (e0 : Msg × Msg) (ops : List (Msg × Msg)) {
   rw [List.cons_append, List.tail_cons, ← List.take_append_getElem hq, List.map_append, List.map_append]
   rfl
 
-/-- **The frame takes the coins after two histories with the same answers alike**: the loop's frame reads the history
-past `Hello` only through the decoded coins. -/
 theorem frameAnswer_congr (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
@@ -158,8 +137,6 @@ theorem frameAnswer_congr (T : CoinLayer.TableData)
     LeanRelease.cfg_eq_cfgAt]
   simp only [List.length_cons, hl]
 
-/-- **At a rep's round past its first the frame takes the coins at the state the last round left**: the loop's
-state at the answers so far (`Loop.progOf`), its place unmoved by the answer (`Free.answer_pos`). -/
 theorem answered_pos_same (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
@@ -175,8 +152,6 @@ theorem answered_pos_same (T : CoinLayer.TableData)
   rw [LeanRelease.ofLoop_frameAnswer_same T L₀ real x ρ e0 h1 hx hq hj] at hF
   exact Free.answer_pos (LeanRelease.bind_rankStop_ok hF).1
 
-/-- **A round's check leaves the frame's next state at the check's place**: where the frame takes the coins after `h`
-and the check of the worker's round `v` passes, the loop's state one round on is at the place the check left. -/
 theorem step_pos {W R : Type} {L : LeanRelease W R} {x : Msg} {w : W} (hP : L.ProgChecks x w) (ρ : R)
     (h : List (Msg × Msg)) (a : Msg) {m : Masker} {out : ByteArray} {s' : Masker} {v : Msg}
     (hA : L.answered x ρ h = .ok m) (hk : L.kindAt x h.length = .masked)
@@ -188,8 +163,6 @@ theorem step_pos {W R : Type} {L : LeanRelease W R} {x : Msg} {w : W} (hP : L.Pr
   have e : (L.prog x (h ++ [(0 :: out.data.toList, a)])).pos = s''.pos := (congrArg Masker.pos hp).trans rfl
   exact e.trans (check_pos_eq ⟨q, hq⟩ hc' hc)
 
-/-- **Where the frame takes the coins, the next round's rep starts**: at a rep's first round the frame's fresh state,
-past it the rep's own (`ofLoop_start_at`). -/
 theorem start_of_answered (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
@@ -275,9 +248,6 @@ theorem vsOfWord_of_none (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : Coin
 
 end Takes
 
-/-- **A live history's round `q` passes the frame's check**: at its first `q ≥ 1` openings past `Hello`, the worker's
-round passes the check from the state the frame takes the coins at, and the loop's state one opening on is at the place
-the check leaves (`step_pos`). -/
 theorem round_at
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
@@ -312,9 +282,6 @@ theorem round_at
   rw [← tail_snoc_take (m₀, ρ₀) ops h2 (0 :: o.data.toList) CoinLayer.rd]
   exact e
 
-/-- **Through a rep's rounds past its first the loop's place only moves on**: along a live history, from its first
-`n₁ ≥ 1` openings to its first `n₂`, where each round between is a rep stream's round past its first, the loop's state
-at the answers is no earlier at `n₂` (`round_at`, `answered_pos_same`, `check_pos`). -/
 theorem progOf_pos_mono
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
@@ -353,13 +320,6 @@ theorem progOf_pos_mono
   have h := hwalk (n₂ - n₁) (by omega)
   rwa [show n₁ + (n₂ - n₁) = n₂ by omega] at h
 
-/-- **Two rounds that free one pad along one coin vector free it as one word**: where pad `i` of rep stream `2j + r` is
-freed after a history opening the coins' first `n₁` and after one opening their first `n₂ ≥ n₁` (`FreedAt`, at the
-same nonce and what the workers see), by a worker of the algebraic phase, the two words are one. At `n₁ = n₂` the
-worker's round (it reads the answers after `Hello`'s, `bwOf`), the frame's state (`frameAnswer_congr`) and its free
-list (`Free.roundFree_agree`) are the same, and so is the word's place in the absorbed order (`absorbed_inj`). At
-`n₁ < n₂` the rep's rounds `n₁ + 1, …, n₂` each start where the last left the frame (`answered_pos_same`, `step_pos`),
-past the places round `n₁` frees (`Free.roundFree_pos`), so no place is freed twice. -/
 theorem freedAt_unique
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
@@ -426,7 +386,7 @@ theorem freedAt_unique
   rw [hl₁'] at hf₁
   rw [hl₂'] at hf₂
   rcases Nat.eq_or_lt_of_le hn with heq | hlt
-  · -- one prefix: one round, one state, one free list
+  ·
     have hD : ops₂.map (fun p => CoinLayer.rd p.2) = ops₁.map (fun p => CoinLayer.rd p.2) := by
       have e : (ops₂.map fun p => CoinLayer.rd p.2).length ≤ n₁ := by
         rw [List.length_map]
@@ -455,7 +415,7 @@ theorem freedAt_unique
       rw [hm] at hE
       omega
     rw [hv, hfr, hk]
-  · -- a longer prefix: the rep's later rounds start past every place round `n₁` frees
+  ·
     exfalso
     obtain ⟨vG, MG, oG, sG, hvG, hMG, hcG, hpG⟩ :=
       round_at L₀ real hP _ (ν, t₂) κ₂ m₀₂ ρ₀₂ ops₂ hl₂ hlt₂ (q := n₁) (by omega) (by omega)
@@ -498,13 +458,6 @@ theorem freedAt_unique
     rw [← hl₂', List.take_length] at hw
     omega
 
-/-- **A pad-blind worker of the algebraic phase meets `TakesVals` at its own values**: at `SessionLoopZKDeployed`'s
-release with the loop's own inner rounds (`withInner`), its tables `realOf src`, at every statement the loop serves, every
-algebraic phase's worker `bx`, every witness at which `vsServed bx`'s rows hold (`RowsOK`, so `vsOf bx` is
-`vsServed bx` there) and any worker `post` after the phase, `phased bx post` meets `TakesVals` at `vsOf bx`. Each word
-the frame frees in the worker's round is at a pad
-below `n_E` other than `final_c`'s (`absorbed_lt_hab`, at the rep's layout: `lay_ofLoopLink`), where `vsOf` is the word
-some round frees there along the coins (`freeWord`), and that round frees it as this word (`freedAt_unique`). -/
 theorem takesVals_vsOf
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))

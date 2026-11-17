@@ -2,21 +2,8 @@ module
 
 public import Proofs.Flock.Claims.ZK.FrameLoop
 
-/-!
-# Schedule totality
-
-`Loop.repState` schedules a rep's rounds on the coins of the rounds the frame has taken (`schedSoFar` on `cr.pop`), and the
-round in the device's place after them is the schedule's next on one more round's coins (`Loop.schedOf`, on `cr`). That
-the second is not refused where the first is not is a fact about the opening program alone (`Drive.openStep`), not about
-the frame:
-
-* `Loop.ScheduleTotal`: at each rep stream's placeholder table and salts (`Loop.placeholder`, at a link of the session's
-  `points` link points, `Drive.linkPoints`, as the ring switch's round count reads them), a schedule
-  not refused on `cr.pop` is not refused on `cr`, where `cr` holds each scheduled round's coin count (`Drive.stepAsks`'
-  check) and level 0's pair `ρ₀, ρ₁` is independent over F128 once `cr` holds both (`Finish.ligeritoPZk`'s stop). Their
-  rounds are Ligerito's `k₀ + 2` and the next, after the rep's `piopRoundsZk` rounds (`FlockComplete.rhoSlotsZk`).
-  `schedSoFar_alike` carries it to the rep's real table.
--/
+/-! `Loop.ScheduleTotal`: a rep's schedule not refused on the coins the frame took is not refused on one more round's, a
+fact about the opening program alone. -/
 
 @[expose] public section
 
@@ -26,11 +13,6 @@ open _root_.Flock (F128)
 
 namespace Loop
 
-/-- **Schedule totality at `x`**: at each rep stream `k` of `x`'s session, at its placeholder table and salts at a link
-of the session's `points` link points (so its ring switch has `piopRoundsZk`'s claims), a rep's schedule not refused on
-its rounds' coins `cr.pop` is not refused on `cr`, where each array of `cr` holds its scheduled round's coin count and
-level 0's pair coins (words `0` and `1` of rounds `piopRoundsZk + k₀ + 2` and the next) are independent over F128 once
-`cr` holds both. -/
 def ScheduleTotal (x : Msg) : Prop :=
   ∀ (s0 : FlockDeploy.Ins) (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt),
     FlockDeploy.setupOf true x = some (s0, spec, sts) →

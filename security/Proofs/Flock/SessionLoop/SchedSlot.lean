@@ -4,21 +4,7 @@ public import Proofs.Flock.SessionLoop.InnerSlot
 public import Proofs.Flock.Claims.ZK.L0PinLive
 public import Proofs.Flock.SessionLoop.TakenVals
 
-/-!
-# Where the loop's own rounds sit in the session
-
-`Loop.schedOf` schedules a round of the loop's own at every history past the link but the inner proof's rounds
-(`Loop.InnerAt`, `Loop.schedOf_eq_none_iff`). At a live history the frame passed the round against the rep's schedule so
-far on its own table, and that schedule ends where the inner proof's rounds begin:
-
-* `Loop.sched_slot_at`: at a `Live` statement the loop serves, a history of `q + 1 < refK x` decoded coins at rep stream
-  `k`'s round `i`, within its schedule so far `rsched` on a table `real` answers as the loop's own (`Count.RealTabs`), is
-  table `k / 2`'s rep `k % 2`'s round from its first (`repBase`) to the one before its inner proof's
-  (`repSlot … (innerOff 0)`). The schedule so far holds at most the rep's algebraic phase and opening
-  (`Count.schedSoFar_size`), `piopRoundsZk + innerOff 0` rounds.
-* **`LeanRelease.sched_slot`**: at a live history past the link at which the loop schedules a round of its own, the
-  history's length is such a round of some rep `2j + r`.
--/
+/-! The loop's own rounds sit within a rep's rounds, before its inner proof's (`LeanRelease.sched_slot`). -/
 
 @[expose] public section
 
@@ -33,12 +19,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, 
 
 namespace Loop
 
-/-- **A round within the rep's schedule so far is before its inner proof's**: at a `Live` statement the loop serves, a
-history of `q + 1 < refK x` decoded coins at rep stream `k`'s round `i`, below the end of its schedule so far `rsched` on
-a table `real` answers as the loop's own (`Count.RealTabs`), is table `k / 2`'s rep `k % 2`'s round, from its first
-(`repBase`) to the one before its inner proof's first (`repSlot … (innerOff 0)`). A schedule so far fed the coins of
-the rep's whole algebraic phase and opening is exactly those rounds (`Count.schedSoFar_size`, `Count.repPlan_list`), so
-`i` is below their count, `piopRoundsZk + k₀ + 7 + 11(R − 1)`. -/
 theorem sched_slot_at {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx : Masked.Live x) (hSv : Serves x)
     {cs : List FlockDeploy.Coin} {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} {q k i : ℕ}
     {tr : Tab} {hr : Array ByteArray} {rsched : Array (ByteArray × ℕ)}
@@ -84,7 +64,6 @@ theorem sched_slot_at {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx 
     exact y.wf.1.hk6
   obtain ⟨N, hN⟩ : ∃ N, N = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[k / 2]! +
       (y.sch.k0 + 7 + 11 * (y.sch.levels.size - 1)) := ⟨_, rfl⟩
-  -- the rep's own table, `tabOfLevel0` at a sampled level 0, and its bounds
   obtain ⟨g, d, l, hl, htr⟩ := hR k tr hr hreal
   obtain ⟨hts, hsch⟩ := Count.tabOfLevel0_sched htr
   have htsch : tr.sch = y.sch := by
@@ -132,7 +111,6 @@ theorem sched_slot_at {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx 
     have := Nat.mul_le_mul_left (Masked.stsOf x)[k / 2]!.regions.size
       ((linkPoints_size_le (Masked.stsOf x)[k / 2]! (wordsAt x cs 0)).trans (hls.trans_le (Nat.min_le_right _ _)))
     omega
-  -- the rep's whole schedule: the algebraic phase and the opening, `N` rounds
   obtain ⟨alg, hal⟩ := schedSoFar_ok_rounds hrs
   have hA : alg.size = ((_root_.Flock.ZkServer.Session.replayCoins (Masked.stsOf x)[k / 2]!.m
       (Masked.stsOf x)[k / 2]!.c.kLog).toList.filter (· != 0)).length := by
@@ -185,12 +163,6 @@ end Loop
 namespace LeanRelease
 
 open Loop in
-/-- **The loop's own rounds are within a rep's rounds, before its inner proof's**: at a `Live` statement the loop serves,
-on tables `real` answers as the loop's own (`Count.RealTabs`), a live history past the link at which the loop schedules a
-round of its own (`Loop.schedOf`) has the length of some rep `2j + r`'s round from its first (`repBase`) to the one
-before its inner proof's (`repSlot … (innerOff 0)`). Live there, the frame's check passed the worker's round against
-the rep's schedule so far (`ofLoop_sched_live`), which holds the round (`Loop.schedOf_none_of_innerAt`, `Loop.InnerAt`),
-so `Loop.sched_slot_at`. -/
 theorem sched_slot (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
     (real : Msg → Flock.Wit →

@@ -6,22 +6,7 @@ public import Proofs.Flock.Soundness.Refine.Arith
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 
-/-!
-# The opening's PIOP takes the algebraic phase's coins
-
-On the opening's PIOP channel (`Drive.stepAsks coins false`) the masked zerocheck and lincheck take the algebraic
-phase's coins in order, and stop only where a coin is missing or holds the wrong count, or where the statement's fold
-refuses the zerocheck's point. This file shows they don't stop where the coins hold the rounds' counts and the fold
-returns, and that the fold returns at the opening's point wherever it returned at the skeleton's: it refuses on sizes
-alone.
-
-* `Fits coins j ns`: the coins from `j` on hold the counts `ns`. `PT coins ns Q p`: from a channel state whose next
-  coins fit `ns`, `p` returns, in `Q`, having taken `ns.length` of them (`pt_*`).
-* **`repPiop_pt`**: the PIOP takes `zcCounts m ++ lcCounts kLog` coins and leaves `abcClaims`' two claims and the extra
-  ones, where the fold returns at every zerocheck point of `m - 6` coins.
-* **`fold_ok_of`**: `Stmt.fold` returns at any point of the sizes of one where it returned.
-* **`rounds_fold`**: the skeleton's run went through the fold, at a zerocheck point of `m - 6` coins.
--/
+/-! The opening's PIOP takes the algebraic phase's coins, and the fold refuses on sizes alone (`repPiop_pt`, `fold_ok_of`). -/
 
 @[expose] public section
 
@@ -34,14 +19,9 @@ open _root_.Flock.ZkServer.Skeleton (RecM recAsks)
 
 variable {wideLeaf : Bool}
 
-/-! ## Taking the algebraic phase's coins -/
-
-/-- **The coins from `j` fit the counts `ns`**: the `i`-th is there and holds `ns[i]` coins. -/
 def Fits (coins : Got) (j : ℕ) (ns : List ℕ) : Prop :=
   ∀ i (h : i < ns.length), ∃ cs, coins[j + i]? = some cs ∧ cs.size = ns[i]
 
-/-- **A PIOP program that takes its coins**: from a channel state whose next coins fit `ns`, `p` returns, with a value
-in `Q`, having taken `ns.length` coins. -/
 def PT {α : Type} (coins : Got) (ns : List ℕ) (Q : α → Prop) (p : TMW OpenM α) : Prop :=
   ∀ t (got : Got), Fits coins got.size ns →
     ∃ r, ((p.run t).run got) = .done r ∧ Q r.1.1 ∧ r.2.size = got.size + ns.length
@@ -70,12 +50,10 @@ theorem pt_eq {α : Type} {ns ns' : List ℕ} {Q : α → Prop} {p : TMW OpenM �
     PT coins ns' Q p :=
   e ▸ h
 
-/-- A transcript step: every one is a `modify`. -/
 theorem pt_modify (g : Flock.Transcript → Flock.Transcript) :
     PT coins [] (fun _ => True) (liftTM (modify g : Flock.Transcript.TM Unit) : TMW OpenM Unit) :=
   fun t got _ => ⟨(((), g t), got), rfl, trivial, rfl⟩
 
-/-- **A PIOP round** takes its coin where it fits the count its squeeze header holds. -/
 theorem round_false (got : Got) (c : ByteArray) {cs : Array F128} (hc : coins[got.size]? = some cs)
     (hn : cs.size = (_root_.Flock.u64OfLE c (c.size - 8)).toNat) :
     ((stepAsks coins false).round c).run got = .done ((fun i => cs[i]!), got.push cs) := by
@@ -108,7 +86,6 @@ theorem pt_sampleVecP (n : ℕ) (hn : n < 2 ^ 64) :
     PT coins (sq n) (fun v => v.size = n) (sampleVecP (stepAsks coins false) n) :=
   pt_squeezeP 2 n hn
 
-/-- **A loop over `[0:n]`**, step `i` from `J i` yielding into `J (i + 1)` and taking `ms`. -/
 theorem pt_forIn {σ : Type} (n : ℕ) (ms : List ℕ) (J : ℕ → σ → Prop) (body : ℕ → σ → TMW OpenM (ForInStep σ))
     (hb : ∀ i < n, ∀ u, J i u → PT coins ms (fun r => ∃ v, r = .yield v ∧ J (i + 1) v) (body i u)) (u : σ)
     (hu : J 0 u) : PT coins (List.replicate n ms).flatten (J n) (forIn [:n] u body) := by
@@ -201,8 +178,6 @@ theorem lincheckFw_pt (c : _root_.Flock.CircuitFold) (lay : _root_.Flock.Zk.PadL
       exact FlockComplete.JsonRT.fold_ne_error hfold ‹_›
   · simp [lcCounts]
 
-/-- **The PIOP takes its coins** and leaves `abcClaims`' two claims and the extra ones, where the statement's fold
-returns at every zerocheck point of `m - 6` coins. -/
 theorem repPiop_pt (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap root : ByteArray)
     (extras : Array _root_.Flock.Claim) (mk : ℕ → F128) (hm : st.m < 2 ^ 64)
     (hfold : ∀ zc : _root_.Flock.ZcOut, zc.rho.size = st.m - 6 → ∀ α, ∃ v,
@@ -222,8 +197,6 @@ theorem repPiop_pt (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (
     rw [Array.size_append, Nat.add_comm]
     rfl
   · simp
-
-/-! ## The fold refuses on sizes alone -/
 
 theorem slotBase_ok_of {st : _root_.Flock.Stmt} {α α' : F128} {lw lw' ρ ρ' : Array F128}
     {key : _root_.Flock.Kind × ℕ} {b : Array F128} (h : st.slotBase α lw ρ key = .ok b) :
@@ -288,7 +261,6 @@ theorem foldRanges_ok_of {st : _root_.Flock.Stmt} {α α' : F128} {lw lw' ρ ρ'
           simp only [bind, Except.bind, pure, Except.pure] at h ⊢
           exact foldRanges_ok_of rs _ _ _ _ _ (by simp [hb]) h
 
-/-- **The fold's sizes**: it returned only at a point of the block's size. -/
 theorem fold_size {st : _root_.Flock.Stmt} {α : F128} {lw ρ v : Array F128} (h : st.fold α lw ρ = .ok v) :
     ρ.size + 6 = st.c.kLog ∧ lw.size = 64 := by
   by_cases hck : (ρ.size + 6 != st.c.kLog || lw.size != 64) = true
@@ -297,7 +269,6 @@ theorem fold_size {st : _root_.Flock.Stmt} {α : F128} {lw ρ v : Array F128} (h
     simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   · simpa using hck
 
-/-- **The fold refuses on sizes alone**: it returns at any point of the sizes of one where it returned. -/
 theorem fold_ok_of {st : _root_.Flock.Stmt} {α α' : F128} {lw lw' ρ ρ' v : Array F128} (h : st.fold α lw ρ = .ok v)
     (hl : lw'.size = lw.size) (hρ : ρ'.size = ρ.size) : ∃ v', st.fold α' lw' ρ' = .ok v' := by
   by_cases hck : (ρ.size + 6 != st.c.kLog || lw.size != 64) = true
@@ -315,9 +286,6 @@ theorem fold_ok_of {st : _root_.Flock.Stmt} {α α' : F128} {lw lw' ρ ρ' v : A
       simp only [bind, Except.bind, pure, Except.pure, hres']
       exact ⟨_, rfl⟩
 
-/-! ## The skeleton's run went through the fold -/
-
-/-- **A loop over `[0:n]`'s counts**, step `i` from `J i` yielding into `J (i + 1)`. -/
 theorem tally_forIn_inv {σ : Type} (n : ℕ) (ms : List ℕ) (J : ℕ → σ → Prop) (body : ℕ → σ → TMW RecM (ForInStep σ))
     (hb : ∀ i < n, ∀ u, J i u → Tally ms (fun r => ∃ v, r = .yield v ∧ J (i + 1) v) (body i u)) (u : σ)
     (hu : J 0 u) : Tally (List.replicate n ms).flatten (J n) (forIn [:n] u body) := by
@@ -409,7 +377,6 @@ theorem lincheckFw_fold (c : _root_.Flock.CircuitFold) (lay : _root_.Flock.Zk.Pa
     · exact tally_throw_bind _ _
   · simp [lcCounts]
 
-/-- **The fold returned** at a zerocheck point of `m - 6` coins. -/
 def FoldAt (st : _root_.Flock.Setup) : Prop :=
   ∃ (zc : _root_.Flock.ZcOut) (α : F128) (v : Array F128), zc.rho.size = st.m - 6 ∧
     st.fold.fold α (_root_.Flock.skipWeights zc.z) (zc.rho.extract 0 (st.fold.kLog - 6)) = .ok v
@@ -430,7 +397,6 @@ theorem repPiop_fold (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout)
     exact tally_pure ⟨zc, α, v, ha, hv⟩
   · simp
 
-/-- **The skeleton's run went through the fold**, at a zerocheck point of `m - 6` coins. -/
 theorem rounds_fold {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
     (hm : st.m < 2 ^ 64) (h : _root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom = .ok alg) : FoldAt st := by
   have hT := tally_bind (repPiop_fold st (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) cap
@@ -443,7 +409,6 @@ theorem rounds_fold {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {
   · rename_i v hv
     exact (tally_run' (p := _) hT hv).1
 
-/-- `--zk` needs `m ≥ 25`. -/
 theorem schedule_m {m : ℕ} {r : _root_.Flock.Schedule × ℕ} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok r) : 25 ≤ m := by
   by_contra hc
   unfold _root_.Flock.Zk.schedule _root_.Flock.Zk.queries0 at h

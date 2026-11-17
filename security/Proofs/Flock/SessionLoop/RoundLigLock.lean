@@ -3,22 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.SimLig
 public import Proofs.Flock.Claims.Complete.Link
 
-/-!
-# Ligerito past the restart, in lockstep (`ligeritoCut_lock`)
-
-`ligeritoCut` (the cut's opening, from the source) and `ligeritoPZk` (the session's, at any pads `h`) answered by the same
-`asksCut coin N` squeeze at the same rounds, so their logs have the same length throughout, and they refuse the same
-pair `ρ₀, ρ₁`. Before the restart they absorb different values (the source's masked values against the session's, and
-the header's `T` and `cm0`), so their bodies differ; from the pair's coins on both pendings are empty, and where the
-source holds the session's `y₁'`, `ȳ` and levels ≥ 1's salts at the coins (`LigHyp`'s three fields), they absorb the same
-from the same tables and weights, so every body from the restart on is the same.
-
-* **Two runs whose logs agree from body `B` on** (`LogEq`, `Lk`): the same length and the same bodies from `B`, both
-  refused or both returned, the pendings equal where `Q` holds of the length.
-* **Steps** in lockstep: binds (`lk_bind`, `lk_lbind`), absorbs (`lk_tabs`, `lk_lF`, `lk_lK`, …), squeezes (`lk_lsq`,
-  `lk_lsqAny`), commitments (`lk_commit`), loops (`lk_forIn`, `lk_absorbs`), and the opening's blocks (`lk_challenge`,
-  `lk_ood`, `lk_query`).
--/
+/-! Ligerito past the restart: the cut's opening and the session's agree from the restart on (`ligeritoCut_lock`). -/
 
 @[expose] public section
 
@@ -29,9 +14,6 @@ namespace FlockComplete.LigPast
 
 open Flock Transcript Replay LigLock
 
-/-! ## Logs that agree from a body on -/
-
-/-- **Two logs agreeing from body `B` on**: the same length, and the same body at each index `≥ B`. -/
 structure LogEq (B : ℕ) (l l' : Array Claims.Msg) : Prop where
   size : l.size = l'.size
   get : ∀ k, B ≤ k → l[k]? = l'[k]?
@@ -48,8 +30,6 @@ theorem LogEq.push {B : ℕ} {l l' : Array Claims.Msg} (h : LogEq B l l') {m m' 
   · rw [if_neg he, if_neg he]
     exact h.get k hk
 
-/-- **Two runs in lockstep from body `B` on**: logs agreeing from `B` on; both refused, or both returned, with pendings
-equal where `Q` holds of the log's length and values related by `R`. -/
 structure Lk {α β : Type} (B : ℕ) (Q : ℕ → Prop) (R : α → β → Array Claims.Msg → Prop)
     (x : Except String (α × Transcript) × Array Claims.Msg) (y : Except String (β × Transcript) × Array Claims.Msg) :
     Prop where
@@ -59,7 +39,6 @@ structure Lk {α β : Type} (B : ℕ) (Q : ℕ → Prop) (R : α → β → Arra
 
 variable {α β γ δ : Type} {B : ℕ} {Q Q' : ℕ → Prop}
 
-/-- **A bind in lockstep**, the continuations from every pair of returns. -/
 theorem lk_bind {R : α → β → Array Claims.Msg → Prop} {S : γ → δ → Array Claims.Msg → Prop} {x : TMW PS α}
     {y : TMW PS β} {f : α → TMW PS γ} {g : β → TMW PS δ} {t t' : Transcript} {l l' : Array Claims.Msg}
     (hxy : Lk B Q R ((x.run t).go l) ((y.run t').go l'))
@@ -82,7 +61,6 @@ theorem lk_pure {R : α → β → Array Claims.Msg → Prop} {a : α} {b : β} 
     Lk B Q R (((pure a : TMW PS α).run t).go l) (((pure b : TMW PS β).run t').go l') :=
   ⟨hL, .inr ⟨a, b, t, t', rfl, rfl, hp, hR⟩⟩
 
-/-- **An `LP` bind in lockstep.** -/
 theorem lk_lbind {R : α × LigState → β × LigState → Array Claims.Msg → Prop}
     {S : γ × LigState → δ × LigState → Array Claims.Msg → Prop} {x : LP PS α} {y : LP PS β} {f : α → LP PS γ}
     {g : β → LP PS δ} {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}
@@ -100,9 +78,6 @@ theorem lk_lpure {S : α × LigState → β × LigState → Array Claims.Msg →
     Lk B Q S ((((pure a : LP PS α).run s).run t).go l) ((((pure b : LP PS β).run s').run t').go l') :=
   ⟨hL, .inr ⟨(a, s), (b, s'), t, t', rfl, rfl, hp, hS⟩⟩
 
-/-! ## Absorbs -/
-
-/-- A transcript action that only appends to the pending bytes, by `P`. -/
 def PendOnly (x : TM Unit) (P : ByteArray → ByteArray) : Prop :=
   ∀ t : Transcript, x t = .ok ((), { t with pending := P t.pending })
 
@@ -115,7 +90,6 @@ theorem pend_pow (n : UInt64) : PendOnly (pow n) (pBytes (le64 n)) := fun _ => r
 
 variable {S : γ → δ → Array Claims.Msg → Prop}
 
-/-- **Two absorbs** of the transcript's monad. -/
 theorem lk_tabs {x x' : TM Unit} {P P' : ByteArray → ByteArray} (hx : PendOnly x P) (hx' : PendOnly x' P')
     {f : Unit → TMW PS γ} {g : Unit → TMW PS δ} {t t' : Transcript} {l l' : Array Claims.Msg}
     (k : Lk B Q S (((f ()).run { t with pending := P t.pending }).go l)
@@ -126,7 +100,6 @@ theorem lk_tabs {x x' : TM Unit} {P P' : ByteArray → ByteArray} (hx : PendOnly
 
 variable {S : γ × LigState → δ × LigState → Array Claims.Msg → Prop}
 
-/-- **Two absorbs** of the opening's monad. -/
 theorem lk_labsorb {x x' : TM Unit} {P P' : ByteArray → ByteArray} (hx : PendOnly x P) (hx' : PendOnly x' P')
     {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}
     (k : Lk B Q S ((((f ()).run s).run { t with pending := P t.pending }).go l)
@@ -183,7 +156,6 @@ theorem lk_lLab (str : String) {f : Unit → LP PS γ} {g : Unit → LP PS δ} {
       ((((liftT (liftTM (label str)) >>= g).run s').run t').go l') :=
   lk_labsorb (pend_label str) (pend_label str) (k _ _ fun hp => congrArg (pLabel str) hp)
 
-/-- **Two messages sent**: each state records its own; the pendings agree where the messages and the pendings did. -/
 theorem lk_send {m m' : F256 × F256} {f : Unit → LP PS γ} {g : Unit → LP PS δ} {s s' : LigState}
     {t t' : Transcript} {l l' : Array Claims.Msg}
     (k : ∀ t₁ t₁' : Transcript, (m = m' → t.pending = t'.pending → t₁.pending = t₁'.pending) →
@@ -197,7 +169,6 @@ theorem lk_send {m m' : F256 × F256} {f : Unit → LP PS γ} {g : Unit → LP P
     subst hm
     exact h₂ rfl (h₁ rfl hp)
 
-/-- **Two grinding nonces**: the tables and weights untouched. -/
 theorem lk_powP {nonce nonce' : ℕ → ℕ → UInt64} {kind : ℕ} {f : Unit → LP PS γ} {g : Unit → LP PS δ}
     {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}
     (k : ∀ s₁ s₁' : LigState, s₁.tab = s.tab → s₁.w = s.w → s₁'.tab = s'.tab → s₁'.w = s'.w →
@@ -208,10 +179,6 @@ theorem lk_powP {nonce nonce' : ℕ → ℕ → UInt64} {kind : ℕ} {f : Unit �
   refine lk_labsorb (pend_pow 0) (pend_pow 0) (k _ _ ?_ ?_ ?_ ?_ _ _ fun hp => congrArg (pBytes (le64 0)) hp) <;>
     rcases kind with _ | _ | _ <;> rfl
 
-/-! ## Squeezes -/
-
-/-- **Two squeezes of `k ≠ 0` coins** at the same round: both refused past round `N`, else the same coins and both
-pendings empty; the bodies agree from `B` on where the pendings did. -/
 theorem lk_tsq {S : γ → δ → Array Claims.Msg → Prop} (coin : ℕ → ℕ → F128) (N : ℕ) (kind : UInt8) {k : ℕ}
     (hk : k ≠ 0) {f : Array F128 → TMW PS γ} {g : Array F128 → TMW PS δ} {t t' : Transcript}
     {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : B ≤ l.size → t.pending = t'.pending)
@@ -288,7 +255,6 @@ theorem lk_lsampleKP (coin : ℕ → ℕ → F128) (N : ℕ) {f : F256 → LP PS
   rw [h0, h1]
   exact kont hn t₁ t₁' ht l₁ l₁' hL₁ hs
 
-/-- **Two squeezes of any count from equal pendings**: the same coins, equal pendings after, logs agreeing. -/
 theorem lk_lsqAny (coin : ℕ → ℕ → F128) (N : ℕ) (kind : UInt8) (k : ℕ)
     {f : Array F128 → LP PS γ} {g : Array F128 → LP PS δ} {s s' : LigState} {t t' : Transcript}
     {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
@@ -339,14 +305,11 @@ theorem lk_lsampleKPAny (coin : ℕ → ℕ → F128) (N : ℕ) {f : F256 → LP
       ((((liftT (sampleKP (asksCut coin N)) >>= g).run s').run t').go l') :=
   lk_lsampleKP coin N hL (fun _ => hp) fun _ t₁ t₁' h₁ l₁ l₁' hL₁ _ => kont t₁ t₁' h₁ l₁ l₁' hL₁
 
-/-! ## Commitments and loops -/
-
 theorem lift_quiet_go {m : PS α} {r : Except String α} (h : ∀ l, m.go l = (r, l)) (t : Transcript)
     (l : Array Claims.Msg) : ((StateT.lift m : TMW PS α).run t).go l = ((fun a => (a, t)) <$> r, l) := by
   rw [StateT.run_lift, go_bind, h l]
   cases r <;> rfl
 
-/-- A commitment reads its salt function only on its positions, cut to the scheme's width. -/
 theorem commitV_congr (hs : Hashes V) (ms : MerkleScheme) (lv : Level) (g : Array F128) {s s' : ℕ → ByteArray}
     (h : ∀ q < 2 ^ lv.d, fitBytes ms.saltBytes (s q) = fitBytes ms.saltBytes (s' q)) :
     (commitP hs ms lv g s : V Commit) = commitP hs ms lv g s' := by
@@ -358,7 +321,6 @@ theorem commitV_congr (hs : Hashes V) (ms : MerkleScheme) (lv : Level) (g : Arra
     exact h i (by simpa using h1)
   simp only [commitP, hsalts]
 
-/-- **Two equal commitments**: they send nothing and return the same. -/
 theorem lk_commit (H : ByteArray → ByteArray) {ms ms' : MerkleScheme} {lv lv' : Level} {g g' : Array F128}
     {salt salt' : ℕ → ByteArray}
     (hc : (commitP (Hashes.ofSha512 H) ms lv g salt : V Commit) = commitP (Hashes.ofSha512 H) ms' lv' g' salt')
@@ -372,8 +334,6 @@ theorem lk_commit (H : ByteArray → ByteArray) {ms ms' : MerkleScheme} {lv lv' 
   · exact ⟨hL, .inl ⟨e, e, rfl, rfl⟩⟩
   · exact k cm
 
-/-- **A loop in lockstep**: if step `i`, from values, states and logs related by `I i`, yields ones related by
-`I (i + 1)`, the loops over `[0:n]` end related by `I n`. -/
 theorem lk_forIn {σ τ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (body' : ℕ → τ → LP PS (ForInStep τ))
     (I : ℕ → σ × LigState → τ × LigState → Array Claims.Msg → Prop) (n : ℕ)
     (hb : ∀ i < n, ∀ (u : σ) (s : LigState) (u' : τ) (s' : LigState) (t t' : Transcript) (l l' : Array Claims.Msg),
@@ -408,7 +368,6 @@ theorem lk_forIn {σ τ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (bo
     subst hv hv'
     exact ih (a + 1) v s₁ v' s₁' t₁ t₁' l₁ l₁' (by omega) hL₁ hp₁ hI₁
 
-/-- Absorbing a list of values one by one. -/
 theorem absorbs_go (body : F128 → PUnit → LP PS (ForInStep PUnit))
     (hb : ∀ x u, body x u = liftT (liftTM (absorbF x)) >>= fun _ => pure (ForInStep.yield PUnit.unit))
     (xs : List F128) (s : LigState) :
@@ -423,7 +382,6 @@ theorem absorbs_go (body : F128 → PUnit → LP PS (ForInStep PUnit))
     rw [liftT_bind_run, bind_go (liftTM_ok (pend_absorbF x t) l), ih]
     rfl
 
-/-- **Two loops absorbing values one by one.** -/
 theorem lk_absorbs (body body' : F128 → PUnit → LP PS (ForInStep PUnit))
     (hb : ∀ x u, body x u = liftT (liftTM (absorbF x)) >>= fun _ => pure (ForInStep.yield PUnit.unit))
     (hb' : ∀ x u, body' x u = liftT (liftTM (absorbF x)) >>= fun _ => pure (ForInStep.yield PUnit.unit))
@@ -441,9 +399,6 @@ theorem lk_absorbs (body body' : F128 → PUnit → LP PS (ForInStep PUnit))
     show xs.toList.foldl (fun P x => pF x P) t.pending = xs.toList.foldl (fun P x => pF x P) t'.pending
     rw [hp]
 
-/-! ## The opening's blocks from equal tables, weights and pendings -/
-
-/-- **Two challenges** (no split) from equal tables and weights: the same coin, equal tables and weights after. -/
 theorem lk_challenge (coin : ℕ → ℕ → F128) (N : ℕ) {f : F256 → LP PS γ} {g : F256 → LP PS δ}
     {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l')
     (hp : t.pending = t'.pending) (htab : s.tab = s'.tab) (hw : s.w = s'.w)
@@ -458,7 +413,6 @@ theorem lk_challenge (coin : ℕ → ℕ → F128) (N : ℕ) {f : F256 → LP PS
   refine lk_send fun t₂ t₂' hp₂ => ?_
   exact k _ _ _ _ _ _ _ hL₁ (hp₂ (by simp only [htab, hw]) hp₁) (by simp only [htab]) (by simp only [hw])
 
-/-- **Two out-of-domain samples** of equal tables from equal tables, weights and pendings. -/
 theorem lk_ood (coin : ℕ → ℕ → F128) (N : ℕ) (nonce nonce' : ℕ → ℕ → UInt64) {g g' : Array F128}
     (hg : g = g') {dim : ℕ} (hdim : dim ≠ 0) {f : Unit → LP PS γ} {f' : Unit → LP PS δ} {s s' : LigState}
     {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l') (hp : t.pending = t'.pending)
@@ -479,8 +433,6 @@ theorem lk_ood (coin : ℕ → ℕ → F128) (N : ℕ) (nonce nonce' : ℕ → �
   rw [modify_bind_run, modify_bind_run]
   exact k _ _ _ _ _ _ hL₅ hp₅ (by simp only [h4t, h4t', htab]) (by simp only [h4w, h4w', hw])
 
-/-- **Two levels' queries** from equal tables, weights and pendings: the same consistency weight, the openings the same
-where the commitments are. -/
 theorem lk_query (coin : ℕ → ℕ → F128) (N : ℕ) (nonce nonce' : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level)
     (cm cm' : Commit) {f : LevelProof × Array F128 → LP PS γ} {f' : LevelProof × Array F128 → LP PS δ}
     {s s' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg} (hL : LogEq B l l')
@@ -499,11 +451,6 @@ theorem lk_query (coin : ℕ → ℕ → F128) (N : ℕ) (nonce nonce' : ℕ →
   exact k _ _ _ _ _ _ _ _ _ (fun hc => by rw [hc]) hL₄ hp₄ (by rw [h3t, h3t', h1t, h1t', htab])
     (by rw [h3w, h3w', h1w, h1w', hw])
 
-/-! ## The two openings -/
-
-/-- **The cut's opening and the session's in lockstep from the restart on**: answered by `asksCut coin N` from logs of
-one length `p₀`, where the source holds the session's `y₁'`, `ȳ` and levels ≥ 1's salts at the coins from round `p₀`
-(`LigHyp`'s `y1`, `ybar`, `salt`), the two logs agree from body `p₀ + k₀ + 4` on, and both refuse or both return. -/
 theorem ligeritoCut_lock (H : ByteArray → ByteArray) (coin : ℕ → ℕ → F128) (N : ℕ) (ms : MerkleScheme)
     (sch : Schedule) (T T' : F128) (cm0 cm0' : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
@@ -543,7 +490,6 @@ theorem ligeritoCut_lock (H : ByteArray → ByteArray) (coin : ℕ → ℕ → F
     obtain ⟨⟨_, _, _, _, _, _, _, _, _⟩, _⟩ := a'
     exact ⟨hL₁, .inr ⟨_, _, _, _, rfl, rfl, fun _ => hp₁ trivial, trivial⟩⟩
   case prog =>
-    -- level 0's out-of-domain point, its value, the claim nonce and `b₀`
     refine lk_lsampleVec coin N hn0 hL0 (fun h => absurd h (by omega)) fun _ t₁ t₁' _ l₁ l₁' hL₁ hs₁ => ?_
     rw [modify_bind_run, modify_bind_run]
     refine lk_lF fun t₂ t₂' _ => ?_
@@ -551,7 +497,6 @@ theorem ligeritoCut_lock (H : ByteArray → ByteArray) (coin : ℕ → ℕ → F
     refine lk_lsampleP coin N hL₁ (fun h => absurd h (by omega)) fun _ t₄ t₄' _ l₂ l₂' hL₂ hs₂ => ?_
     rw [modify_bind_run, modify_bind_run, get_bind_run]
     refine lk_send fun t₅ t₅' _ => ?_
-    -- the lane rounds and the restart
     refine lk_lbind (Q := fun k => l.size + sch.k0 + 4 ≤ k)
       (lk_forIn _ _ (fun j (p p' : (Array F256 × (F256 × F256) × Zk.Level0Msgs) × LigState) (L : Array Claims.Msg) =>
         (j < sch.k0 → L.size = l.size + 2 + j ∧ p.2.w = wS coin l.size b sch.n j ∧
@@ -652,7 +597,6 @@ theorem ligeritoCut_lock (H : ByteArray → ByteArray) (coin : ℕ → ℕ → F
       rw [modify_bind_run, modify_bind_run]
       have htab₈ : s₇.tab = s₇'.tab := by rw [h7t, h7t']; exact htab₅
       have hw₈ : s₇.w = s₇'.w := by rw [h7w, h7w']; exact hw₅
-      -- the levels ≥ 1
       refine lk_lbind (Q := fun _ => True)
         (lk_forIn _ _ (fun _ p p' _ => p.1 = p'.1 ∧ p.2.tab = p'.2.tab ∧ p.2.w = p'.2.w) _ ?lvl hL₈
           (fun _ => hp₈) ⟨rfl, htab₈, by dsimp only; rw [hw₈]⟩)

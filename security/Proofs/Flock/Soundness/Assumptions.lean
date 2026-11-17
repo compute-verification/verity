@@ -7,38 +7,8 @@ public import Definitions.Flock.Arith
 public import Definitions.Core.Hm96
 public import Definitions.Assumptions.Flock
 
-/-!
-# Named assumptions
-
-The results the soundness proof takes without proof. Each is a `Prop`, and each theorem that
-uses one takes it as a hypothesis: the development declares no `axiom`, so `#print axioms`
-lists only Lean's three standard axioms, and a mis-stated assumption can make a theorem
-vacuous but can never make Lean prove something false.
-
-Soundness rests on three: SHA-512's collision resistance in two forms, each a hypothesis about one explicit finder, and
-the verifier's randomness. They are named assumptions, declared with their names in `Definitions.Assumptions.Flock`, a
-module under the one the lock reads named assumptions from: `SHA512CRStrict` (`cr/sha-512`) bounds a finder by its
-worst-case number of evaluations (the compiled and knowledge terms' collision finders and `δ_tree`'s), and
-`SHA512CRExpected` (`ecr/sha-512`, Assumption 2) by its expected number (the binding error's). Assumption 3,
-`UniformRandomBytes`, is a hypothesis about the byte source the verifier samples its units from, the operating system's;
-its per-test form, `UniformRandomBytesTest`, is one about the same source's bytes for the commitments' salts and the ZK
-server's tape, up to a slack `η`. The round coins' uniformity (A6, `uniform/flock-coin-server`) is not a `Prop` here:
-the session game flips its coins itself, so the model embodies it (`ASSUMPTIONS.md`).
-
-The rest are not soundness's hardness assumptions. Assumption 4 is a hypothesis about one test of a keyed SHA-512
-function, `verity.randomness`'s keyed streams for the PoUW window sample or the streamed wipe's labels, and Assumption 5
-one about the window's secret. `HmRowComputes` is not
-cryptographic: it says the circuit's row-hashing slots compute SHA-512, a fact about the circuit that is still to prove
-(phase 2i), named here so that the value binding's theorems take it as a hypothesis. Zero knowledge's are hm96 leaf hiding
-(T1, the spec's `Claims.Hm96Hiding`, read here by `hm96Hiding_apply`) and `X_L + κ ≠ 0` on the level-0 domain
-(`PadNonvanishing`), with A3 per test for the salts' and the masks' bytes. None of them is a computational property of SHA-512: hm96's hiding is
-statistical (`CROnly.hm96Hiding_gap`), and the one premise left on it, `hash-derived-key`, is a fact about one fixed key
-and salt hash (the common-reference-string step), not a hardness property.
-
-Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved (`mcaError_le_bchks25`, from DKT26).
-Merkle binding is proved too (VCVio's binding theorem, `Merkle`): a conflict of two verifying openings is a collision, which
-is what lets each finder's success be read as a collision of SHA-512.
--/
+/-! The named assumptions the soundness proof takes as hypotheses, never as an `axiom`; the round coins' uniformity is
+not among them, since the session game flips its coins itself. -/
 
 @[expose] public section
 
@@ -47,52 +17,29 @@ namespace FlockSoundness.Assumptions
 open Game
 open scoped ENNReal
 
-/-- The keyed SHA-512 functions Assumption 4 is about, each at `m` outputs computed from a key: `verity.randomness`'s
-keyed streams at the indices `idx`, read to `L i` bytes (`Randomness.stream`, the PoUW window sample's), and the streamed
-wipe's labels at the indices `idx`, `SHA-512(tag ‖ key ‖ u64 (idx i))` whole (`streamed_wipe.label`, the memory
-challenger's fill). -/
 inductive Keyed (m : ℕ) where
   | streams (idx : Fin m → List Randomness.Part) (L : Fin m → ℕ)
   | labels (tag : ByteArray) (idx : Fin m → ℕ)
 
-/-- Each output's length in bytes: a label is a whole SHA-512 digest. -/
 def Keyed.len {m : ℕ} : Keyed m → Fin m → ℕ
   | .streams _ L => L
   | .labels _ _ => fun _ => 64
 
-/-- The `i`-th output under `key`. -/
 def Keyed.out {m : ℕ} : Keyed m → ByteArray → Fin m → ByteArray
   | .streams idx L, key, i => Randomness.stream key (idx i) (L i)
   | .labels tag idx, key, i => Flock.Sha512.hash (tag ++ key ++ Randomness.be8 (idx i))
 
-/-- The outputs' inputs after the key are pairwise distinct: the streams' framings (`Randomness.frames`), and the labels'
-indices, each a u64. -/
 def Keyed.Distinct {m : ℕ} : Keyed m → Prop
   | .streams idx _ => ∀ i j, Randomness.frames (idx i) = Randomness.frames (idx j) → i = j
   | .labels _ idx => (∀ i j, idx i = idx j → i = j) ∧ ∀ i, idx i < 2 ^ 64
 
-/-- **Assumption 4 (`prf/sha-512`): a keyed SHA-512 function's outputs at distinct inputs pass a test as independent
-uniform bytes do, up to `η`**, for `verity.randomness`'s keyed streams (the PoUW window sample, `KeyedStreamsUniform`) and
-the streamed wipe's labels (`WipeLabelsUniform`).
+/-- **Assumption 4 (`prf/sha-512`)**: a keyed SHA-512 function's outputs under `Randomness.derive source domain context`, at
+pairwise distinct inputs (`F.Distinct`) and a uniform source, pass the test `E` with at most the probability that
+independent uniform byte strings do, plus `η`.
 
-A verifier secret `source` of `S` bytes gives the key `Randomness.derive source domain context`. The function `F`'s
-outputs under that key (`F.out`, of `F.len i` bytes; the streams' spec is that of `Key.stream`, which
-`backends/flock/tests/lean/RandomnessVectors.lean` ties to the Python) pass the test `E` with at most the probability that
-independent uniform byte strings of those lengths do, plus `η`, when the source is uniform and the inputs each output
-hashes after the key are pairwise distinct (`F.Distinct`).
-
-It is a predicate on one test, as `SHA512CRExpected` is on one finder. A statement for every test would be refutable, since `2^(8S)`
-sources give at most that many output tuples. The theorems take it for the test they need, whether the sample computed
-from the streams misses a given set, or what a server holds of the labels, and `η` enters their bound.
-
-What A4 assumes of SHA-512 is that its compression function `f` (a 1024-bit message block, a 512-bit chaining value) is a
-pseudorandom function in two ways. Keyed by its chaining value, it makes the cascade a PRF on prefix-free inputs
-(Bellare, Canetti and Krawczyk 1996). Keyed by the secret bytes in its first message block, after a fixed public tag (28
-bytes for `stream`, 37 for `derive` with the source's frame header, 35 for the wipe's label tag; a 32-byte secret sits
-whole in that block), it is a dual PRF, as the HMAC analyses use. The inputs are prefix-free: `frames` is length-framed and
-the counter is 8 bytes, and a label's input is 75 bytes, one block, for every index, so length extension doesn't apply.
-The key `derive` returns is SHA-512 truncated to 32 bytes, which costs a test nothing: a test of the truncated output is
-one of the full output. The secret's uniformity is not A4's: it is A5 (`UniformSecret`). -/
+It is a predicate on one test: a statement for every test would be refutable, since `2^(8S)` sources give at most that
+many output tuples. It assumes SHA-512's compression function is a PRF keyed by its chaining value and a dual PRF keyed
+by the secret in its first block, on prefix-free inputs. The secret's uniformity is not A4's: it is A5 (`UniformSecret`). -/
 def KeyedUniform (S : ℕ) (domain : String) (context : List (String × Randomness.Part)) {m : ℕ} (F : Keyed m)
     (E : (Fin m → ByteArray) → Prop) (η : ℝ≥0∞) : Prop :=
   F.Distinct →
@@ -107,27 +54,17 @@ def KeyedStreamsUniform (S : ℕ) (domain : String) (context : List (String × R
     (idx : Fin m → List Randomness.Part) (L : Fin m → ℕ) (E : (Fin m → ByteArray) → Prop) (η : ℝ≥0∞) : Prop :=
   KeyedUniform S domain context (.streams idx L) E η
 
-/-- **Assumption 4 (`prf/sha-512`) for the streamed wipe's labels** (`KeyedUniform` at `Keyed.labels`): the labels
-`SHA-512(tag ‖ key ‖ u64 (idx i))` at distinct u64 indices pass the test `E` as independent uniform 64-byte strings do, up
-to `η`. -/
 def WipeLabelsUniform (S : ℕ) (domain : String) (context : List (String × Randomness.Part)) {m : ℕ} (tag : ByteArray)
     (idx : Fin m → ℕ) (E : (Fin m → ByteArray) → Prop) (η : ℝ≥0∞) : Prop :=
   KeyedUniform S domain context (.labels tag idx) E η
 
-/-- **Assumption 5 (`uniform/python-secrets`): the PoUW window's secret is `S` uniform bytes**, sampled fresh for the
-window. A source is a finite probability space `Ω` (`prCoin` weighs its outcomes evenly) and, on outcome `ω`, the secret
-`sec ω`. The source is uniform when every event about the secret has the probability it has for `S` uniform bytes.
+/-- **Assumption 5 (`uniform/python-secrets`)**: every event about the PoUW window's secret `sec` has the probability it has
+for `S` uniform bytes.
 
-What A5 assumes of the verifier is that its window secret is such a source: `secrets.token_bytes(32)` from the operating
-system's CSPRNG, sampled once the window's receipt is complete and used for that window alone (`Ledger.open`). A
-secret reused across windows is outside it, since later windows would be committed after earlier samples were seen.
-
-The verifier's platform is Linux, with CPython 3.12 or later. There `secrets.token_bytes` reads `os.urandom`, which is
-`getrandom(2)`, the kernel's CSPRNG, and blocks until that is initialized. It keeps no user-space state, so a forked
-process doesn't repeat its output. A VM snapshot restored more than once must not repeat the kernel's CSPRNG state, which
-holds when the kernel reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support). A
-hardware RNG doesn't make it hold: the kernel mixes RDSEED in only when it reseeds, about once a minute. The CSPRNG is
-idealized as exactly uniform; the true bound carries its distinguishing advantage. Re-read this on any other platform. -/
+It holds for `secrets.token_bytes(32)` (`getrandom(2)`) on Linux with CPython 3.12 or later, sampled once the window's
+receipt is complete and used for that window alone. A secret reused across windows is outside it, as is a VM snapshot
+restored more than once where the kernel does not reseed on a VM generation change. The CSPRNG is idealized as exactly
+uniform; the true bound carries its distinguishing advantage. Re-read this on any other platform. -/
 def UniformSecret {Ω : Type} [Fintype Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) : Prop :=
   ∀ E : (Fin S → Fin 256) → Prop, prCoin (fun ω => E (sec ω)) = prCoin E
 
@@ -155,28 +92,15 @@ def HmRowComputes {W : Type} (H : List UInt8 → List UInt8) (saltPrefix : List 
     (sat : W → Prop) (row salt bc : W → List UInt8) : Prop :=
   ∀ w, sat w → bc w = List.zipWith (· ^^^ ·) (H (row w)) (mask (salt w)) ++ H (saltPrefix ++ salt w)
 
-/-- The spec's probability is `prCoin`. -/
 theorem prENNReal_eq_prCoin {α : Type} [Fintype α] (p : α → Prop) : Claims.PrENNReal p = prCoin p := rfl
 
-/-- **Zero knowledge's T1 (`hash-derived-key`), read in `prCoin`'s terms**: the spec's `Claims.Hm96Hiding`
-(`Definitions/Core/Hm96.lean`; `docs/zk-proof-public.md` §1.2, §1.5 HDK, §4.1 T1), applied to one test.
-
-`My y` is `M(K*)·y` for the pinned key `K*`, and `c y` the salt's own hash `H(sp ‖ y)`. An ideal leaf replaces `b` by a
-fresh uniform `U`. It is a statement about uniform salts, and it needs no computational property of SHA-512. At
-`δ₁ = hidingGap My c`, the statistical distance itself, it holds with no premise (`CROnly.hm96Hiding_gap`); hm96 §3's
-leftover hash lemma (`CROnly.sum_hidingGap_le`) reads of `c(y) = H(sp ‖ y)` only that it takes at most `2^512` values. The
-salts are the operating system's bytes, which A3 per test (`UniformRandomBytesTest`) takes to uniform salts, up to its
-slack (`Discharge.ZkView.hm96Hiding_os`).
-
-It is a predicate on one pair of functions, `M(K*)·` and `H(sp ‖ ·)`. `Table.view` takes the leaves the final message
-doesn't open as ideal (world `W₁`); this assumption, through §4.1's T1, is what moves the real prover there, at `δ₁` per
-leaf, and so gives Lemma B's bound, `2·|Hid|·δ₁`, at most the paper's `2·δ₁·N_hid`. -/
+/-- At `δ₁ = hidingGap My c` it holds with no premise (`CROnly.hm96Hiding_gap`): it needs no computational property of
+SHA-512. -/
 theorem hm96Hiding_apply {Y B C : Type} [Fintype Y] [Fintype B] {My : Y → B} {c : Y → C} {δ₁ : ℝ≥0∞}
     (h : Claims.Hm96Hiding My c δ₁) (E : B × C → Prop) :
     prCoin (fun y : Y => E (My y, c y)) ≤ prCoin (fun p : B × Y => E (p.1, c p.2)) + δ₁ :=
   h E
 
-/-- `Claims.Hm96Hiding` from its `prCoin` form. -/
 theorem hm96Hiding_of {Y B C : Type} [Fintype Y] [Fintype B] {My : Y → B} {c : Y → C} {δ₁ : ℝ≥0∞}
     (h : ∀ E : B × C → Prop, prCoin (fun y : Y => E (My y, c y)) ≤ prCoin (fun p : B × Y => E (p.1, c p.2)) + δ₁) :
     Claims.Hm96Hiding My c δ₁ :=
@@ -199,12 +123,8 @@ committed coins' bound at a fresh uniform key already is (`ZkCoins.CommittedLeHm
 def HashDerivedKey {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) : Prop :=
   Claims.Hm96Hiding My c ((2 : ℝ≥0∞) ^ (-193 : ℤ))
 
-/-- **Zero knowledge's `X_L + κ ≠ 0` on the level-0 domain** (`docs/zk-proof-public.md` §1.2).
-
-M1 pads a level-0 lane with `(X_L + κ)·μ`, where `X_L = Ŵ_cols` and `κ` is the element `PAD_C`. On the domain `X_L(ω_q)` is
-bit `cols` of `q`, so it is 0 or 1, and `κ` lies outside GF(2); so `X_L + κ` is `κ` or `1 + κ`, never 0. It was checked
-on upstream's NTT. It is a fact about the concrete arithmetic that `Arith.Correct` doesn't list, stated here for the
-`2^(cols+1)` positions of a level-0 codeword; `ZK.padOnto_M1` takes it for Lemma B's row (ii). -/
+/-- `X_L + κ ≠ 0` at the `2^(cols+1)` positions of a level-0 codeword: `X_L` is 0 or 1 there and `κ` lies outside
+GF(2). A fact about the concrete arithmetic that `Arith.Correct` doesn't list. -/
 def PadNonvanishing {F K : Type} [Field F] [Field K] (A : Model.Arith F K) (cols : ℕ) (κ : F) : Prop :=
   ∀ q < 2 ^ (cols + 1), A.What cols (A.omega q) + κ ≠ 0
 

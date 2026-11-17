@@ -34,19 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FramePass
 
-/-!
-# The worker's `τ` commitment
-
-`Loop.TakesTau` is a worker premise of `TakesVals`'s and `TakesFinalC`'s kind: at the inner proof's round 2 (the frame's
-state counts that round, and the worker's round is `τ`'s 64-byte commitment between its frame's header and `β`'s squeeze,
-the only shape `Frame.innerOwn` takes there), the commitment is `vs`'s (`Loop.vsTau`, the switched source's at the rep
-stream's table and rep), at the coins the openings open and the tape. Where the rows hold that commitment is the hiding
-leaf of the worker's view's `τ` under the rep's salt (`Masked.swSrcE_tauCom`).
-
-`Loop.takesTau_valsWk`: `Loop.valsWk vs` meets it at every `vs` and every release whose `Finish` comes after the scheduled
-rounds, because `valsDev` sets round 2's commitment to `vs`'s (`Loop.setTau`); at the honest values at the session loop
-among them (`Loop.takesTau_honestVals_ofLoopLink`), beside `TakesVals` and `TakesFinalC` at the same worker.
--/
+/-! `Loop.TakesTau`, the worker premise that its `τ` commitment is `vs`'s, met by `Loop.valsWk` at every `vs`. -/
 
 @[expose] public section
 
@@ -61,11 +49,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, 
 
 namespace Loop
 
-/-- **The worker's `τ` commitment is the switched source's**: after every history `LiveRoundEq` reads (`0 < ops.length <
-refK x` openings, live, whose openings pass under the tape's nonce), where the frame takes the stream's coins at the
-inner proof's round 2 (`answered`, `Masker.inner`) and the worker's round `v` of rep stream `2j + r` is `τ`'s 64-byte
-commitment `w'` between its frame's header and `β`'s squeeze, `w'` is `vs`'s `τ` commitment there (`vsTau`), at the
-coins the openings open and the tape. -/
 def TakesTau (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -84,7 +67,6 @@ def TakesTau (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     w' = vsTau vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
       (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r
 
-/-- At the inner proof's round 2 a round of that round's shape comes out of `setTau` with its commitment set. -/
 theorem setTau_inner2 {m : Masker} {t w' : ByteArray} {u : List UInt8} (hm : m.inner = some 2) (hw : w'.size = 64)
     (h : setTau m t u = (inner2 w').data.toList) : (inner2 t).data.toList = (inner2 w').data.toList := by
   unfold setTau at h
@@ -92,7 +74,6 @@ theorem setTau_inner2 {m : Masker} {t w' : ByteArray} {u : List UInt8} (hm : m.i
   · exact h
   · exact absurd ⟨hm, w', hw, h⟩ hc
 
-/-- Round 2's bytes determine its commitment. -/
 theorem inner2_inj {t t' : ByteArray} (h : (inner2 t).data.toList = (inner2 t').data.toList) : t = t' := by
   simp only [inner2, ByteArray.toList_data_append, List.append_assoc, List.append_cancel_left_eq,
     List.append_cancel_right_eq] at h
@@ -101,9 +82,6 @@ theorem inner2_inj {t t' : ByteArray} (h : (inner2 t).data.toList = (inner2 t').
   cases t'
   exact congrArg ByteArray.mk e
 
-/-- **`valsWk` takes `vs`'s `τ` commitment**: at every `vs` and every release whose `Finish` comes after the scheduled
-rounds (`refK x < L.last x`), `valsWk vs L` meets `TakesTau`: where its round is the inner proof's round 2, `setTau`
-wrote `vs`'s commitment there (`vsTauAt`). -/
 theorem takesTau_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -134,8 +112,6 @@ theorem takesTau_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVal
       List.length_nil] at e
     omega
 
-/-- **`TakesTau` holds at the honest values** at the session loop: `valsWk honestVals`, which meets `TakesVals` and
-`TakesFinalC` (`takes_honestVals_ofLoopLink`), meets it too. -/
 theorem takesTau_honestVals_ofLoopLink (L₀ src real) {x : Msg} {w : Flock.Wit} :
     TakesTau (CoinLayer.session Loop.loopNr Masked.dataE).honestVals (LeanRelease.ofLoopLink L₀ src real)
       (valsWk (CoinLayer.session Loop.loopNr Masked.dataE).honestVals (LeanRelease.ofLoopLink L₀ src real)) x w := by

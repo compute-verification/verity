@@ -7,22 +7,7 @@ public import Proofs.Flock.SessionLoop.PcsRank
 public import Proofs.Flock.Claims.ZK.FinishFwTarget
 public import Proofs.Flock.Claims.ZK.PiopFree
 
-/-!
-# The opening's binding at a rep's round after its PIOP
-
-At rep stream `2j + r`'s round after its algebraic phase and PIOP (`Masked.repSlot` `0`, `Masked.ligP0`), the frame
-releases the opening's binding (`openBind`) at the ring switch's target `T` and level 0's cap, and the switched session
-sends the same binding: both targets are `Σ_k γ_k·dot (eq r''_k) (t(s_k))` at the opened coins from `Masked.rankSlot`,
-and the switched vectors agree at every claim (`Loop.switch_sv`).
-
-* `FlockComplete.rsTarget`: that target at the coins `coin` from `L`; `piopCut_T`: a returned cut PIOP's target.
-* `Bind.sched_openBind`: the loop schedules the binding at the target of its zerocheck's and lincheck's claims.
-* `LeanRelease.unrefused_open`: the coins show no refusal by the round.
-* `Masked.runCut_openBody`, `Loop.enc_openBind`: the switched session sends the binding there, tagged `0`.
-* `Loop.rsTarget_raw`: the target at the schedule's coins past the algebraic phase is the one at the opened coins.
-* `LeanRelease.openBind_frame`: the frame releases the loop's binding as it came (`roundFree_openBind`).
-* **`LeanRelease.release_sched_openBind_pf`**: `release_sched_openBind`'s statement.
--/
+/-! `LiveSched`'s equation at the opening's binding, a rep's round after its PIOP (`LeanRelease.release_sched_openBind_pf`). -/
 
 @[expose] public section
 
@@ -33,8 +18,6 @@ namespace FlockComplete
 
 open Flock Transcript Replay
 
-/-- **The ring switch's target at coins from `L`**: `Σ_k γ_k·dot (eq r''_k) (t(s_k))` over `N` claims, claim `k`'s
-`r''` at `L + k` and the batching `γ` at `L + N`. -/
 def rsTarget (coin : ℕ → ℕ → F128) (L : ℕ) (sv : ℕ → Array F128) (N : ℕ) : F128 :=
   dot ((Array.range N).map (coin (L + N)))
     (pushes (fun k => dot (eqTable ((Array.range 7).map (coin (L + k)))) (FlockSoundness.Refine.tOf (sv k))) N)
@@ -53,8 +36,6 @@ theorem rsTarget_congr {coin coin' : ℕ → ℕ → F128} {L L' N : ℕ} {sv sv
       rw [e3, hs k hk]
   rw [e1, e2]
 
-/-- **A returned cut PIOP's ring-switch target** is `rsTarget` at the coins past its zerocheck's `3 + (m − 6)` and
-lincheck's `3 + (k_log − 6)` rounds, over the source's switched vectors, with nothing pending after it. -/
 theorem piopCut_T {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (hm : 14 ≤ st.m) {lay : Zk.PadLayout}
     {src : RepSrc} {cap root : ByteArray} {extras : Array Claim} {prior : Array (List F128)} {words : List ℕ}
     {t₀ : Transcript} {l : Array Claims.Msg} {res t₃ l₃}
@@ -97,9 +78,6 @@ open FlockComplete.LigLock.Fed (feedR sentQ pendC feed_eq CoinAt repOpening_feed
 open Switch (rsBody)
 open Loop
 
-/-- **The loop schedules the opening's binding at its own target** (`sched_binding`): the target is `rsTarget` at the
-schedule's coins past the algebraic phase, over the table's switched vectors of its zerocheck's and lincheck's claims,
-which are at the points of the algebraic phase's coins (`repPiop_rec`), and the extra claims. -/
 theorem sched_openBind {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -187,9 +165,7 @@ open FlockSoundness.Refine (Frame encs)
 namespace LeanRelease
 
 open Loop in
-/-- **The coins show no refusal by a rep's round after its PIOP**: at a live history of `Masked.repSlot` `0` of rep
-stream `2j + r` openings, no outer coin is `1` (`outer_unrefused`), no rank check fails (`rank_unrefused_sched`), and no
-`ρ` or `β` check of a rep before it fails (`rho_unrefused`, `beta_unrefused`); the rep's own `ρ` and `β` are later. -/
+/-- The rep's own `ρ` and `β` checks come later, so only earlier reps' are among the refusals this covers. -/
 theorem unrefused_open (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -279,10 +255,6 @@ open CoinLayer
 namespace Masked
 
 set_option maxHeartbeats 1000000 in
-/-- **The cut session at rep `2j + r`'s round after its PIOP, on the opened coins alone**: where the coins show no
-refusal by it, the cut session stopped there sends the opening's binding at the PIOP's target, which is `rsTarget` at
-the opened coins from `rankSlot` over the source's switched vectors (`piopCut_T`), and level 0's cap: level 0's body `0`
-(`runCut_cutL0_of_ret`, `l0BodyAt_zero`), the PIOP returning as the rank check passes (`rank_at_unrefused`). -/
 theorem runCut_openBody {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -428,9 +400,7 @@ open FlockSoundness.Refine (Frame encs)
 namespace Loop
 
 set_option maxHeartbeats 1000000 in
-/-- **The switched session's round after rep stream `2j + r`'s PIOP**: where the coins show no refusal by it, the
-session sends the opening's binding at the switched source's ring-switch target from `rankSlot` and level 0's cap,
-tagged `0` (`Masked.runCut_openBody`: the views' level-0 commitments and the pads commitment return quietly). -/
+/-- Holds where the coins show no refusal by the round. -/
 theorem enc_openBind (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins}
     {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (ν : finS.Nonce)
     (t : finS.Tape) (C : Fin (refK x) → finS.Coin) (j : Fin (Masked.jOf x)) (r : Fin 2)
@@ -520,8 +490,6 @@ theorem enc_openBind (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
   rw [enc_finS_of C h0 (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) hsx hN
     (by rw [← hsrc]; exact hrc.1), ← hsrc, hrc.2, hci, hcap', hlv]
 
-/-- **The ring switch's target at the schedule's coins past `A` is the one at the opened coins from `R + A`**
-(`coin_raw`). -/
 theorem rsTarget_raw (W : ℕ → Array F128) {R A C L N : ℕ} (sv : ℕ → Array F128) (hN : A + N < C)
     (hL : L = R + A) :
     FlockComplete.rsTarget (fun j i => ((((Array.range C).map fun q => W (R + q)).extract A
@@ -542,14 +510,6 @@ namespace LeanRelease
 
 open Loop in
 set_option maxHeartbeats 4000000 in
-/-- **The frame releases the opening's binding as the loop schedules it**: at a live history whose next round is rep
-stream `2j + r`'s round after its PIOP (`Masked.repSlot` `0`), on the rep's own tables where `real` answers the loop's,
-the loop's table there is of the rep's setup and the rep's schedule, its zerocheck's and lincheck's claims are at the
-points of the openings' words from the rep's start, and the release is the opening's binding at the target `rsTarget`
-of the openings' words from `rankSlot` over the table's switched vectors of those claims and the extra claims, and the
-table's cap. The frame is past the algebraic phase there (`Bind.repState_opened`); the loop scheduled the binding
-(`Bind.sched_openBind`) and asks for `z`'s coins (`Loop.loopNr_l0`), and the check passes it as it came
-(`roundFree_openBind`). -/
 theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
     (wk : (ofLoop Masked.dataE L₁ real).toSrv.Worker) {x : Msg} {w : Flock.Wit} (hx : Masked.Live x)
@@ -597,7 +557,6 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold roundsOf
     rw [List.getD_eq_getElem _ _ (by simp only [List.length_map, List.length_range]; omega)]
     simp
-  -- the round's place: `A + k` into the rep's rounds, `A` the algebraic phase's, `k` past the ring switch
   obtain ⟨A, hAd⟩ : ∃ A, A = (Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6 := ⟨_, rfl⟩
   obtain ⟨k, hkk⟩ : ∃ k, k = 3 + spec.points * (Masked.stAt x j).regions.size := ⟨_, rfl⟩
   have hRk : Masked.rankSlot x j.val r.val = Masked.repBase x (2 * j.val + r.val) + A := by
@@ -616,7 +575,6 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold FlockComplete.repStartZk
     omega
   have hpos : 0 < ops.length := by omega
-  -- the extra claims: the table's regions at each link point
   obtain ⟨hmp, hmp0, hpc⟩ := Masked.live_links hx hsx hq2
   have hmp' : (Masked.stAt x j).mPts = spec.mPts := by rw [← hst]; exact hmp
   have hl0 : loopNr x 0 = spec.points * spec.mPts := by
@@ -641,7 +599,6 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
       ((Loop.linkPoints_size_le (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)).trans
         (show _ ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by rw [hW0]; exact hpc))
     omega
-  -- the located round
   obtain ⟨NR, hNd⟩ : ∃ NR, NR = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j.val + r.val) / 2]! +
       ((Masked.zkTab x j).sch.k0 + 7 + 11 * ((Masked.zkTab x j).sch.levels.size - 1)) := ⟨_, rfl⟩
   have hR4 : (roundsOf spec (Masked.stsOf x)).getD (2 * j.val + r.val) 0 = NR + 4 := by
@@ -670,7 +627,6 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
       rw [Masked.repBase_eq hsx, repStartZk_eq spec _ hq2.le]
     omega
   have hj1 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i + 1)).2 = a + 1 := by rw [hloc]
-  -- the frame's check
   have hlast : (ofLoop Masked.dataE L₁ real).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ real) x
   have hkd : (ofLoop Masked.dataE L₁ real).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
@@ -681,7 +637,6 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hA' := hA
   rw [ofLoop_answered_same Masked.dataE L₁ real x (ν, t) (m₀, ρ₀) ops hsx (q := i + 1) (by omega) hj1 ho ht] at hA'
   replace hA' := (bind_rankStop_ok hA').1
-  -- the loop's placeholder table and its state there
   have hcs : (ops.map fun p => ZKMal.CoinLayer.rd p.2).length = i + 2 := by rw [List.length_map]; omega
   have ho' : (progOf x (ops.map fun p => ZKMal.CoinLayer.rd p.2)).owed ≠ none := fun h => answer_owed_none _ h hA'
   obtain ⟨c', tb, dom, xs, his, hph0⟩ := progOf_placeholder x _ hsx hcs ho'
@@ -711,7 +666,6 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     exact Claims.ZKServer.ofSamples_order _ _ _
   have hAA : alg.size = A := by
     rw [(Ranked.alg_cnt (by rw [htm]; omega) (by rw [htk]; omega) hmb hal).1, htm, htk, hAd]
-  -- past the ring switch the frame is outside every masked phase, the algebraic phase done
   have hA'' := hA'
   rw [show a + 1 = alg.size + (xs.size + 2) + 1 by rw [hxs, hXS]; omega] at hA''
   obtain ⟨hdA, honA, -, hl0A, hiA, -, -⟩ := Bind.repState_opened hcc hal (by rw [htm]; omega) hmb hdg
@@ -724,7 +678,6 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     show decide (lay.k0 > 0) = true
     rw [hlay1]
     exact decide_eq_true (Count.sched_facts hsch1).2.1
-  -- the loop's own round there
   obtain ⟨tr, hir, sched', hre, hs'⟩ := ofLoop_sched_live Masked.dataE L₁ real wk x w (ν, t) κ (m₀, ρ₀) ops hl hkd
     hsx (q := i + 1) (by omega)
   have hre' : real x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by
@@ -792,11 +745,6 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
 
 open Loop in
 set_option maxHeartbeats 2000000 in
-/-- **The opening's binding**: at rep stream `2j + r`'s round after its algebraic phase and PIOP
-(`Masked.repSlot` `0`), the release of the worker's round is the switched session's message without its leading domain
-frame. The frame releases the loop's binding (`openBind_frame`) and the session sends its own (`Loop.enc_openBind`):
-the caps are level 0's of the switched source (`Loop.cap_zcBind`), and the targets agree, the coins as the openings'
-words (`Loop.wordsAt_slot`) and the switched vectors at every claim (`Loop.switch_sv`). -/
 theorem release_sched_openBind_pf (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
@@ -865,7 +813,6 @@ theorem release_sched_openBind_pf (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
   have hcap := Loop.cap_zcBind hL0 ν t (Loop.finS.pad (K := refK x) cs)
     (vs x w ν (Loop.finS.pad (K := refK x) cs) (Loop.finS.seenOf x t)) j r hre
   have hcap2 : tr.cm0.toC.cap = _ := hcap
-  -- the targets agree: the coins are the openings' words, the switched vectors the session's
   have hT : TL = TR := by
     have hsw := Loop.switch_sv vs hR hx hsx hL0 ν t ops hpos hlt.le hcs j r hre hst' hpts (k := 0) (by omega) hN0
       hext

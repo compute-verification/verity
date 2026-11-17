@@ -3,15 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.RoundsPassTaken
 public import Proofs.Flock.SessionLoop.RoundPiop
 
-/-!
-# A rep's PIOP round past its first, taken without liveness
-
-`LeanRelease.SchedTaken` at rep stream `2j + r`'s PIOP round `jj ≥ 1`, wherever the frame takes its coins
-(**`LeanRelease.schedTaken_piop`**): the frame is in the masked phase at the values before round `jj`
-(`repState_piop`), the scheduled round on the rep's own table is the PIOP's frames and squeeze
-(`ofLoop_sched_unrefused`, `Sched.rounds_piop`), and the frame takes it (`roundFree_on`). This is `piop_frame`'s
-argument with the frame's answer from `refusesCoins` in liveness's place.
--/
+/-! The frame takes a rep's PIOP round past its first without liveness (`LeanRelease.schedTaken_piop`). -/
 
 @[expose] public section
 
@@ -30,11 +22,6 @@ namespace LeanRelease
 
 open Loop in
 set_option maxHeartbeats 2000000 in
-/-- **The frame takes a rep's PIOP round past its first where it takes its coins**: at a history whose next round is
-rep stream `2j + r`'s PIOP round `jj ≥ 1`, whose coins the loop's frame takes, on the loop's own tables where `src`
-samples the tape's level 0. The frame is in the masked phase at the values before round `jj` (`repState_piop`), the
-scheduled round is the PIOP's frames and squeeze on the rep's own table (`ofLoop_sched_unrefused`,
-`Sched.rounds_piop`), and the frame takes it (`roundFree_on`). -/
 theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hSv : Loop.Serves x) (hS0 : Loop.Level0Src src x w)
@@ -87,7 +74,6 @@ theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
     congr 1
     omega
   have hj1 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i + 1)).2 = a + 1 := by rw [hloc]
-  -- the frame's answer
   have hlast : (ofLoop Masked.dataE L₁ (Loop.realOf src)).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ (Loop.realOf src)) x
   have hk : (ofLoop Masked.dataE L₁ (Loop.realOf src)).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
@@ -98,7 +84,6 @@ theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
   rw [ofLoop_answered_same Masked.dataE L₁ (Loop.realOf src) x (ν, t) (m₀, ρ₀) ops hsx (q := i + 1) (by omega) hj1
     ho ht] at hA'
   replace hA' := (bind_rankStop_ok hA').1
-  -- the loop's placeholder table and its state there
   have hcs : (ops.map fun p => ZKMal.CoinLayer.rd p.2).length = i + 2 := by rw [List.length_map]; omega
   have ho' : (progOf x (ops.map fun p => ZKMal.CoinLayer.rd p.2)).owed ≠ none := fun h => answer_owed_none _ h hA'
   obtain ⟨c', tb, dom, xs, his, hph0⟩ := progOf_placeholder x _ hsx hcs ho'
@@ -145,7 +130,6 @@ theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
   obtain ⟨-, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨hon, hin, -, hpos⟩ := repState_piop hcc hal hs (by omega) hmb hdg (placeholder_cap hph0)
     (hdm ▸ hdom') hjjT' hb hA'
-  -- the loop's own round there
   obtain ⟨tr, hir, sched', hre, hs'⟩ := ofLoop_sched_unrefused L₁ src x w hx hSv hS0 hST ν t m₀ ρ₀ ops href hk
     hsx (q := i + 1) (by omega)
   have hre' : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by
@@ -174,7 +158,6 @@ theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
     rw [hrest, Array.getD_eq_getD_getElem?, Array.getElem?_append_left (by rw [hsz']; exact hjjR),
       hpi' (a + 1) (by omega) hjjR]
     simp only [Option.getD_some, List.toList_toArray]
-  -- the loop's coin counts there
   have hpl := Count.piop_list (kLog := (Masked.stAt x j).c.kLog) (by omega : 14 ≤ (Masked.stAt x j).m)
   have hpL := congrArg List.length hpl
   simp only [List.length_cons, List.length_append, List.length_replicate, List.length_nil] at hpL
@@ -191,7 +174,6 @@ theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
       piopN tr.st.m (a + 1) := by
     show loopNr x (((m₀, ρ₀) :: ops).length - 1) = _
     rw [List.length_cons, Nat.add_sub_cancel, hn, hNR (a + 1) hjj, htrm]
-  -- the frame takes it
   have hF0 : ∀ f ∈ piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap)
       Sched.root0 (_root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0) (fun _ => 0) (a + 1),
       midFrame f ∧ plainFrame f := by

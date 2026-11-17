@@ -33,19 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The link at the session loop's own level 0
-
-The loop's `Commit` carries each table's level-0 root that `Level0.ofSamples` drew for the session (`Session.relay`'s
-`commitFrame` of `Level0.ofSession`'s roots). Here that link is held to `LeanRelease.LinkIs` at the deployed tables:
-
-* `Loop.level0Of_root`: a sampled level 0's root is `Link.root` of its own inputs (`Level0.ofSamples_ok`).
-* **`LeanRelease.linkIs_ofLoop`**: at a `Live` statement, where the release's link is the loop's (`Loop.linkOf src`,
-  `Statement`) and `src` samples the tape's level 0 (`Loop.LinkLevel0`), the ZK server's link is `linkMsg` (`LinkIs`), so
-  `LinkRoundEq` holds (`linkRoundEq_ofLoop`, by `linkRoundEq_of_linkIs`).
-* **`LeanRelease.linkRoundEq_ofLoopLink`**: that at `ofLoopLink`, whose link is the loop's by definition, at a statement
-  in the masked scope with a witness (`Masked.live_of`).
--/
+/-! The link at the session loop's own level 0 is the recheck's link message, so `LinkRoundEq` holds there. -/
 
 @[expose] public section
 
@@ -58,7 +46,6 @@ open _root_.Flock (V F128 Stmt)
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- A sampled level 0's root is `Link.root` of its own inputs (`Level0.ofSamples_ok`). -/
 theorem Loop.level0Of_root {R : Type} {src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
     {x : Msg} {w : Flock.Wit} {ρ : R} {sts : Array Stmt} {j : ℕ} {l : _root_.Flock.ZkServer.Level0.Level0}
     (h : Loop.level0Of src x w ρ sts j = .ok l) : l.root = _root_.Flock.ZkServer.Link.root l.toIn := by
@@ -68,14 +55,12 @@ theorem Loop.level0Of_root {R : Type} {src : Msg → Flock.Wit → R → ℕ →
   · rw [hs] at h
     exact (_root_.Flock.ZkServer.Level0.ofSamples_ok h).2.2.2.2.2
 
-/-- The link's level 0 is rep stream `2j`'s (`Loop.level0At`). -/
 theorem Loop.level0Of_eq_level0At {R : Type}
     (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)) (x : Msg) (w : Flock.Wit) (ρ : R)
     (sts : Array Stmt) (j : ℕ) : Loop.level0Of src x w ρ sts j = Loop.level0At src x w ρ sts (2 * j) := by
   unfold Loop.level0Of Loop.level0At
   rw [Nat.mul_div_cancel_left j (by omega : 0 < 2)]
 
-/-- **`Loop.Src`'s level-0 half gives the link's level 0**: rep `0`'s. -/
 theorem Loop.Level0Src.linkLevel0 {src : Msg → Flock.Wit →
       (session Loop.loopNr dataE).refP.Nonce × (session Loop.loopNr dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
@@ -86,8 +71,6 @@ theorem Loop.Level0Src.linkLevel0 {src : Msg → Flock.Wit →
 
 namespace LeanRelease
 
-/-- **The loop's link is the recheck's link message** at a `Live` statement, where the release's link is the loop's
-(`Loop.linkOf src`) and `src` samples the tape's level 0 (`Loop.LinkLevel0`). -/
 theorem linkIs_ofLoop
     (L₀ : LeanRelease Flock.Wit ((session Loop.loopNr dataE).refP.Nonce × (session Loop.loopNr dataE).refP.Rand))
     (src : Msg → Flock.Wit →
@@ -122,7 +105,6 @@ theorem linkIs_ofLoop
       rfl
     · rw [hn]
 
-/-- **`LinkRoundEq` at the loop's own link**: `linkIs_ofLoop`, then `linkRoundEq_of_linkIs`. -/
 theorem linkRoundEq_ofLoop (vs : (session Loop.loopNr dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit ((session Loop.loopNr dataE).refP.Nonce × (session Loop.loopNr dataE).refP.Rand))
     (src : Msg → Flock.Wit →
@@ -135,8 +117,6 @@ theorem linkRoundEq_ofLoop (vs : (session Loop.loopNr dataE).SwVals)
     (hs : Loop.LinkLevel0 src x w) : LinkRoundEq (session Loop.loopNr dataE) vs (ofLoop dataE L₀ real) x w :=
   linkRoundEq_of_linkIs Loop.loopNr vs _ x w (linkIs_ofLoop L₀ src real hL hx hs)
 
-/-- **`LinkRoundEq` at the loop's own frames and link**: at a statement in the masked scope with a witness, which is
-`Live` (`Masked.live_of`), where `src` samples the tape's level 0. -/
 theorem linkRoundEq_ofLoopLink (vs : (session Loop.loopNr dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit ((session Loop.loopNr dataE).refP.Nonce × (session Loop.loopNr dataE).refP.Rand))
     (src : Msg → Flock.Wit →

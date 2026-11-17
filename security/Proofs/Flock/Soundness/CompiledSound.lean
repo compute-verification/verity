@@ -9,18 +9,7 @@ public import Proofs.Flock.Soundness.Soundness
 public import Definitions.Flock.MerklePair
 import Proofs.Flock.Soundness.MerklePair
 
-/-!
-# Compiled soundness under collision resistance (README.md §1.2)
-
-The oracle prover `P̃` sends, at each commitment, the plurality table of the openings the
-compiled prover `P*` makes there (`Lock.oracleStrat`). A compiled run that accepts while some
-opening disagrees with the fixed tables either opens a position two ways within the run
-(`SelfClash`) or opens a position off the table fixed at some cap (`bad_split`). By rewinding at
-every cap (`Lock.leafE_off_le`), the second costs `√(N · Q · Adv)` per cap, where `Adv` is the
-probability that two continuations from the cap open a position differently; each such pair,
-like each self-clash, is a SHA-512 collision (`Merkle.openCollPair_spec`). The two colliding strings are functions of
-the openings: `opOfPair` for two runs at a position, and `clashCands` for two openings of one run.
--/
+/-! Compiled soundness under SHA-512's collision resistance (`table_sound_compiled`). -/
 
 @[expose] public section
 
@@ -34,8 +23,6 @@ variable {D : Type}
 /-- A level's parameters. -/
 abbrev lvOf (sch : Schedule) (ℓ : ℕ) : Level := sch.levels.getD ℓ default
 
-/-- The openings of rep `r`'s first level-`ℓ` request, `(position, row, path)` for its first `Q`
-queries. -/
 def slotOpens (out : OutC F D) (r ℓ Q : ℕ) : List (ℕ × List F × List D) :=
   match ((if r = 0 then out.pend.1 else out.pend.2).reqs.find? fun req => req.level == ℓ) with
   | none => []
@@ -49,7 +36,6 @@ theorem slotOpens_length (out : OutC F D) (r ℓ Q : ℕ) : (slotOpens out r ℓ
   · simp only [List.length_map, List.length_zipIdx, List.length_take]
     exact min_le_left _ _
 
-/-- An opening verifies against `cap`: a row of `2^lanes` elements whose path verifies. -/
 def Verified (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap : Cap D) (lanes depth : ℕ)
     (x : ℕ × List F × List D) : Prop :=
   x.2.1.length = 2 ^ lanes ∧ Merkle.Verifies H E cap depth x.1 x.2.1 x.2.2
@@ -58,21 +44,18 @@ def Verified (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap : Cap D) (l
 def rowFin (lanes : ℕ) (row : List F) : Fin (2 ^ lanes) → F := fun lane => row.getD lane.val 0
 
 open Classical in
-/-- The row a run opens at `p`: its first verifying opening there. -/
 noncomputable def opOf (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (lanes depth d : ℕ)
     (xs : List (ℕ × List F × List D)) (cap : Cap D) (p : Fin (2 ^ d)) :
     Option (Fin (2 ^ lanes) → F) :=
   ((xs.filter fun x => decide (x.1 = p.val ∧ Verified H E cap lanes depth x)).head?).map
     fun x => rowFin lanes x.2.1
 
-/-- Two verifying openings of one position to different rows. -/
 def Clash (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap : Cap D) (lanes depth : ℕ)
     (xs : List (ℕ × List F × List D)) : Prop :=
   ∃ x ∈ xs, ∃ y ∈ xs, x.1 = y.1 ∧ Verified H E cap lanes depth x ∧
     Verified H E cap lanes depth y ∧ x.2.1 ≠ y.2.1
 
 open Classical in
-/-- A run opens at most as many positions as it has openings. -/
 theorem opOf_count (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (lanes depth d : ℕ)
     (xs : List (ℕ × List F × List D)) (cap : Cap D) :
     (Finset.univ.filter fun p => (opOf H E lanes depth d xs cap p).isSome).card ≤ xs.length := by
@@ -91,8 +74,6 @@ theorem opOf_count (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (lanes dep
     _ ≤ (xs.map fun x => x.1).length := List.toFinset_card_le _
     _ = xs.length := List.length_map _
 
-/-- **Off or clash.** A verifying opening of `p` whose row is not `v`: the run opens `p` to a row
-other than `v`, or it opens `p` two ways. -/
 theorem off_or_clash (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (lanes depth d : ℕ)
     (xs : List (ℕ × List F × List D)) (cap : Cap D) (x : ℕ × List F × List D) (hx : x ∈ xs)
     (p : Fin (2 ^ d)) (hxp : x.1 = p.val) (hv : Verified H E cap lanes depth x)
@@ -118,7 +99,6 @@ theorem off_or_clash (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (lanes d
   · right
     exact ⟨h, hmem.1, x, hx, hmem.2.1.trans hxp.symm, hmem.2.2, hv, hrow⟩
 
-/-- The unique request at its level is the one found. -/
 theorem find_level {reqs : List Req} (h : reqs.map Req.level = List.range reqs.length) {req : Req}
     (hr : req ∈ reqs) : reqs.find? (fun q => q.level == req.level) = some req := by
   have hnd : (reqs.map Req.level).Nodup := by rw [h]; exact List.nodup_range
@@ -129,26 +109,20 @@ theorem find_level {reqs : List Req} (h : reqs.map Req.level = List.range reqs.l
   have hql : q.level = req.level := by simpa using List.find?_some hq
   exact congrArg some (List.inj_on_of_nodup_map hnd hqm hr hql)
 
-/-! ## Per-cap openings -/
-
-/-- Both reps' level-0 openings. -/
 def opens₀ (sch : Schedule) (out : OutC F D) : List (ℕ × List F × List D) :=
   slotOpens out 0 0 (lvOf sch 0).queries ++ slotOpens out 1 0 (lvOf sch 0).queries
 
-/-- The level-0 cap's openings, by position. -/
 noncomputable def op₀ (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule)
     (cap : Cap D) (out : OutC F D) :
     Fin (2 ^ (lvOf sch 0).logLen) → Option (Fin (2 ^ (lvOf sch 0).lanes) → F) :=
   opOf H E (lvOf sch 0).lanes (pathLen (lvOf sch 0)) (lvOf sch 0).logLen (opens₀ sch out) cap
 
-/-- Rep `r`'s level-`ℓ` cap's openings, by position. -/
 noncomputable def opR (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) (r ℓ : ℕ)
     (cap : Cap D) (out : OutC F D) :
     Fin (2 ^ (lvOf sch ℓ).logLen) → Option (Fin (2 ^ (lvOf sch ℓ).lanes) → F) :=
   opOf H E (lvOf sch ℓ).lanes (pathLen (lvOf sch ℓ)) (lvOf sch ℓ).logLen
     (slotOpens out r ℓ (lvOf sch ℓ).queries) cap
 
-/-- A table's rows on a level's domain. -/
 def rowT (lanes d : ℕ) (t : Oracle F) : Fin (2 ^ d) → Fin (2 ^ lanes) → F :=
   fun p lane => t lane.val p.val
 
@@ -161,8 +135,6 @@ theorem rowT_tabOf (lanes d : ℕ) (v : Fin (2 ^ d) → Fin (2 ^ lanes) → F) :
   funext p lane
   simp [rowT, tabOf, p.isLt, lane.isLt]
 
-/-- **A self-clash**: within one run, two verifying openings of a position to different rows, at
-the level-0 cap or at a rep's recorded cap. -/
 def SelfClash (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule)
     (out : OutC F D) : Prop :=
   Clash H E out.cap₀ (lvOf sch 0).lanes (pathLen (lvOf sch 0)) (opens₀ sch out) ∨
@@ -170,8 +142,6 @@ def SelfClash (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule
       (if r = 0 then out.pend.1 else out.pend.2).caps[ℓ - 1]? = some cap ∧
         Clash H E cap (lvOf sch ℓ).lanes (pathLen (lvOf sch ℓ))
           (slotOpens out r ℓ (lvOf sch ℓ).queries)
-
-/-! ## Where a bad run goes wrong -/
 
 theorem mem_slotOpens {out : OutC F D} {r : ℕ} {req : Req}
     (hfind : (if r = 0 then out.pend.1 else out.pend.2).reqs.find? (fun q => q.level == req.level) =
@@ -188,8 +158,6 @@ theorem mem_slotOpens {out : OutC F D} {r : ℕ} {req : Req}
   rw [List.getElem_zipIdx]
   simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj]
 
-/-- **A rep's disagreeing opening**, on an accepted run: at level 0, off `C₀` or a clash at the
-level-0 cap; at a level `ℓ ≥ 1`, off the table fixed there or a clash at its recorded cap. -/
 theorem rep_bad (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) (C₀ : Oracle F)
     (cap₀ : Cap D) (out : OutC F D) (r : ℕ) (hr : r < 2) (ir : IRep F D)
     (hs : RecStruct sch ir (if r = 0 then out.pend.1 else out.pend.2))
@@ -257,9 +225,6 @@ theorem rep_bad (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedu
     · exact Or.inl ⟨_, hoff⟩
     · exact Or.inr hcl
 
-/-- **Where a bad run goes wrong.** An accepted run that disagrees with the fixed tables either
-clashes within the run, or opens a position off `C₀`, or opens a position off the table fixed at
-one of the reps' caps. -/
 theorem bad_split (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule)
     (C₀ : Oracle F) (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F)
     (out : OutC F D) (hR : TopRel H E sch C₀ cap₀ i a out) (hacc : out.accepted = true)
@@ -303,21 +268,15 @@ theorem bad_split (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Sche
       unfold getRep slotOf; rw [if_neg (by omega)]
     cases i.1 ℓ <;> simp [h1]
 
-/-! ## Clashes and conflicts are collisions -/
-
-/-- `Clash`'s test at two openings: one position, both verify, different rows. -/
 abbrev ClashAt (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap : Cap D) (lanes depth : ℕ)
     (w : (ℕ × List F × List D) × (ℕ × List F × List D)) : Prop :=
   w.1.1 = w.2.1 ∧ Verified H E cap lanes depth w.1 ∧ Verified H E cap lanes depth w.2 ∧ w.1.2.1 ≠ w.2.2.1
 
-/-- **A clash's candidates**: for each two of the openings, the test that they clash and the pair of the two openings
-(`Merkle.openCollPair`). -/
 def clashCands (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap : Cap D) (lanes depth : ℕ)
     (xs : List (ℕ × List F × List D)) : List (Prop × (List UInt8 × List UInt8)) :=
   (Merkle.pairsOf xs).map fun w =>
     (ClashAt H E cap lanes depth w, Merkle.openCollPair H E w.1.1 w.1.2.1 w.2.2.1 w.1.2.2 w.2.2.2)
 
-/-- **A clash is a collision**: a candidate whose test passes is one. -/
 theorem clashCands_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {cap : Cap D} {lanes depth : ℕ}
     {xs : List (ℕ × List F × List D)} {c : Prop × (List UInt8 × List UInt8)}
     (hc : c ∈ clashCands H E cap lanes depth xs) (h : c.1) : Hash.Collision H c.2.1 c.2.2 := by
@@ -326,14 +285,12 @@ theorem clashCands_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {cap 
   obtain ⟨h1, h2, h3, h4⟩ := hw
   exact Merkle.openCollPair_spec H E cap depth w.1.1 w.1.2.1 w.2.2.1 w.1.2.2 w.2.2.2 h4 h2.2 (h1 ▸ h3.2)
 
-/-- A clash has a candidate whose test passes. -/
 theorem Clash.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {cap : Cap D} {lanes depth : ℕ}
     {xs : List (ℕ × List F × List D)} (h : Clash H E cap lanes depth xs) :
     ∃ c ∈ clashCands H E cap lanes depth xs, c.1 := by
   obtain ⟨x, hx, y, hy, hxy, hvx, hvy, hne⟩ := h
   exact ⟨_, List.mem_map.2 ⟨(x, y), Merkle.mem_pairsOf hx hy, rfl⟩, hxy, hvx, hvy, hne⟩
 
-/-- **A self-clash's candidates**: the level-0 cap's, then each rep's at each of its recorded caps. -/
 def selfCands (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) (out : OutC F D) :
     List (Prop × (List UInt8 × List UInt8)) :=
   clashCands H E out.cap₀ (lvOf sch 0).lanes (pathLen (lvOf sch 0)) (opens₀ sch out) ++
@@ -341,7 +298,6 @@ def selfCands (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule
       clashCands H E ci.1 (lvOf sch (ci.2 + 1)).lanes (pathLen (lvOf sch (ci.2 + 1)))
         (slotOpens out r (ci.2 + 1) (lvOf sch (ci.2 + 1)).queries)
 
-/-- **A self-clash is a collision**: a candidate whose test passes is one. -/
 theorem selfCands_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {sch : Schedule} {out : OutC F D}
     {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ selfCands H E sch out) (h : c.1) :
     Hash.Collision H c.2.1 c.2.2 := by
@@ -351,7 +307,6 @@ theorem selfCands_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {sch :
     obtain ⟨ci, -, hc⟩ := List.mem_flatMap.1 hc
     exact clashCands_spec hc h
 
-/-- A self-clash has a candidate whose test passes. -/
 theorem SelfClash.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {sch : Schedule}
     {out : OutC F D} (h : SelfClash H E sch out) : ∃ c ∈ selfCands H E sch out, c.1 := by
   rcases h with h | ⟨r, hr, ℓ, hℓ, cap, hcap, h⟩
@@ -367,13 +322,10 @@ theorem SelfClash.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {sch :
     exact ⟨c, List.mem_append_right _ (List.mem_flatMap.2 ⟨r, hr', List.mem_flatMap.2 ⟨(cap, k), hk, hc⟩⟩), hp⟩
 
 open Classical in
-/-- A run's first verifying opening at `p`: the opening whose row `opOf` returns. -/
 noncomputable def firstOpening (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (lanes depth d : ℕ)
     (xs : List (ℕ × List F × List D)) (cap : Cap D) (p : Fin (2 ^ d)) : Option (ℕ × List F × List D) :=
   (xs.filter fun x => decide (x.1 = p.val ∧ Verified H E cap lanes depth x)).head?
 
-/-- **The pair of two runs at a position**: the pair of their first verifying openings there (`Merkle.openCollPair`), and
-the empty pair when either run has none. -/
 noncomputable def opOfPair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (lanes depth d : ℕ)
     (xs xs' : List (ℕ × List F × List D)) (cap : Cap D) (p : Fin (2 ^ d)) : List UInt8 × List UInt8 :=
   match firstOpening H E lanes depth d xs cap p, firstOpening H E lanes depth d xs' cap p with
@@ -396,7 +348,6 @@ theorem firstOpening_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {la
   rw [List.mem_filter, decide_eq_true_eq] at hmem
   exact hmem.2
 
-/-- **The pair of two runs that open a position to different rows under one cap is a collision.** -/
 theorem opOf_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {lanes depth d : ℕ} {cap : Cap D} {xs xs' : List (ℕ × List F × List D)} {p : Fin (2 ^ d)}
     (h1 : (opOf H E lanes depth d xs cap p).isSome) (h2 : (opOf H E lanes depth d xs' cap p).isSome)
@@ -418,32 +369,26 @@ theorem opOf_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) 
     (hxp ▸ hxv.2) (hyp ▸ hyv.2)
   rw [hox, hoy, hxy]
 
-/-- **The pair of two runs at a level-0 position.** -/
 noncomputable def op₀Pair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) (cap : Cap D)
     (x : OutC F D × OutC F D) (p : Fin (2 ^ (lvOf sch 0).logLen)) : List UInt8 × List UInt8 :=
   opOfPair H E (lvOf sch 0).lanes (pathLen (lvOf sch 0)) (lvOf sch 0).logLen (opens₀ sch x.1) (opens₀ sch x.2) cap p
 
-/-- **The pair of two runs at a position of rep `r`'s level-`ℓ` cap.** -/
 noncomputable def opRPair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) (r ℓ : ℕ)
     (cap : Cap D) (x : OutC F D × OutC F D) (p : Fin (2 ^ (lvOf sch ℓ).logLen)) : List UInt8 × List UInt8 :=
   opOfPair H E (lvOf sch ℓ).lanes (pathLen (lvOf sch ℓ)) (lvOf sch ℓ).logLen
     (slotOpens x.1 r ℓ (lvOf sch ℓ).queries) (slotOpens x.2 r ℓ (lvOf sch ℓ).queries) cap p
 
-/-- **Every pair the level-0 collision finder outputs is a collision.** -/
 theorem op₀_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {sch : Schedule}
     {cap : Cap D} {x : OutC F D × OutC F D} {p : Fin (2 ^ (lvOf sch 0).logLen)}
     (h : Rewinding.ConflictAt (op₀ H E sch cap) x p) :
     Hash.Collision H (op₀Pair H E sch cap x p).1 (op₀Pair H E sch cap x p).2 :=
   opOf_conflict_collision h.1 h.2.1 h.2.2
 
-/-- **Every pair a rep's collision finder outputs is a collision.** -/
 theorem opR_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {sch : Schedule}
     {r ℓ : ℕ} {cap : Cap D} {x : OutC F D × OutC F D} {p : Fin (2 ^ (lvOf sch ℓ).logLen)}
     (h : Rewinding.ConflictAt (opR H E sch r ℓ cap) x p) :
     Hash.Collision H (opRPair H E sch r ℓ cap x p).1 (opRPair H E sch r ℓ cap x p).2 :=
   opOf_conflict_collision h.1 h.2.1 h.2.2
-
-/-! ## The plurality prover and the collision finders -/
 
 theorem tableError_nonneg (s : Schedule) (st : Stmt) : 0 ≤ tableError s st := by
   unfold tableError linkError; positivity
@@ -453,7 +398,6 @@ theorem expect_cast {α : Type} (f : α → ℝ) : ∀ {g₁ g₂ : Game α} (h 
   | _, _, rfl, _ => rfl
 
 open Classical in
-/-- The table `P̃` sends at a rep's cap: the plurality of the openings there. -/
 noncomputable def plurC (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) :
     Lock.Chooser (Oracle F) (Cap D) (OutC F D) :=
   fun s d g σ => tabOf (lvOf sch (s / 2)).lanes (lvOf sch (s / 2)).logLen
@@ -476,15 +420,12 @@ theorem plurC_plurality (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch 
   exact this
 
 open Classical in
-/-- **`T*(P*)`**: the plurality of the level-0 openings over the coins after the level-0 cap. -/
 noncomputable def C0star (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Cap D)
     (σ : Strategy (tableCmp A H E S sch hm ptLocal mPts cap₀)) : Oracle F :=
   tabOf (lvOf sch 0).lanes (lvOf sch 0).logLen
     (Classical.choose (Rewinding.exists_pluralityE (op₀ H E sch cap₀) _ σ))
 
-/-- **`Adv₀`**: the collision finder at the level-0 cap. Two continuations after `P*`'s level-0
-cap open a level-0 position to different rows. -/
 noncomputable def adv₀ (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (σ : Strategy (tableC A H E S sch hm ptLocal mPts)) : ℝ :=
@@ -492,8 +433,6 @@ noncomputable def adv₀ (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
       ∃ p, Rewinding.ConflictAt (op₀ H E sch σ.1) x p) (b, b'))
     (tableCmp A H E S sch hm ptLocal mPts σ.1) σ.2
 
-/-- **`Adv_{r,ℓ}`**: the collision finder at rep `r`'s level-`ℓ` cap. Along the run, at that
-cap, two continuations open a level-`ℓ` position to different rows. -/
 noncomputable def advR [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
@@ -504,16 +443,11 @@ noncomputable def advR [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (lockTable A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts
       (C0star A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) σ.1) σ.2
 
-/-! ## The theorem -/
-
 theorem getPair_init_none (s : ℕ) :
     Lock.getPair (getRep 0) (getRep 1) ((fun _ => none, fun _ => none) : IRep F D × IRep F D) s =
       none := by
   simp [Lock.getPair, getRep]
 
-/-- **The coupling and `table_sound`.** Whatever table `C₀` the oracle prover sends at the level-0
-cap, a compiled run accepts with `C₀` uncommitted with probability at most `tableError` plus the
-probability of a bad run. -/
 theorem compiled_le_bad (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
@@ -566,8 +500,6 @@ theorem compiled_le_bad (A : Arith F K) (hA : A.Correct)
   linarith
 
 open Classical in
-/-- A bad leaf, cap by cap (`bad_split` as indicators). The bad event requires acceptance, so the
-level-0 term counts only accepted runs. -/
 theorem bad_pointwise_acc (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule)
     (C₀ : Oracle F) (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F) (b : OutC F D)
     (hR : TopRel H E sch C₀ cap₀ i a b) :
@@ -610,7 +542,6 @@ theorem bad_pointwise_acc (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sc
     linarith
 
 open Classical in
-/-- A bad leaf, cap by cap (`bad_split` as indicators). -/
 theorem bad_pointwise (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule)
     (C₀ : Oracle F) (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F) (b : OutC F D)
     (hR : TopRel H E sch C₀ cap₀ i a b) :
@@ -627,8 +558,6 @@ theorem bad_pointwise (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : 
   linarith
 
 open Classical in
-/-- **The bad runs, cap by cap**: rewinding at the level-0 cap (`expect_bad_le`) and at every
-rep's cap (`Lock.leafE_off_le`). -/
 theorem bad_le [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -714,13 +643,6 @@ theorem bad_le [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
   linarith
 
 open Classical in
-/-- **Compiled soundness under collision resistance** (README.md §1.2). For every compiled
-prover `P*` (strategy `σ`), with `T*(P*)` the plurality table of its level-0 openings:
-`Pr[accepted ∧ no codeword near T*(P*) packs a satisfying witness]` is at most `tableError`,
-plus `√(N·Q·Adv)` for the level-0 cap and for every rep's cap, plus the probability of a
-self-clash. Each `Adv` is the success probability of an explicit collision finder, and every
-pair it counts, like every self-clash, is two verifying openings of one position to different
-rows under one cap: a SHA-512 collision (`Merkle.openCollPair_spec`). -/
 theorem table_sound_compiled (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)

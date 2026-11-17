@@ -4,23 +4,7 @@ public import Proofs.Flock.SessionLoop.CutPiopLive
 public import Proofs.Flock.Claims.ZK.L0PinBind
 public import Proofs.Flock.Claims.ZK.FrameRankFault
 
-/-!
-# A rep's rank check at its opening's label, and the ring switch's rounds so far
-
-A rep's opening (`Drive.openStep`) begins with the ring switch: its first round carries the opening's label, at which
-the frame runs the rep's rank check (`Masker.label`) on the algebraic phase's coins. This file states the schedule's
-ring switch fed any number of its coins, and the rank check there:
-
-* **`Switch.forIn_go_cut`**, **`Bind.ringSwitchCut_at`**: the cut ring switch, cut at its round `i` below the claims',
-  stops having sent its first `i + 1` bodies (`rsBody`).
-* **`Bind.openStep_switch_at`**, **`Bind.sched_switch_at`**: a rep's schedule fed `a` of the opening's coins, up to
-  `γ`'s, holds the ring switch's first `a + 1` rounds, at the opening's counts.
-* **`Ranked.schedReqs_rank`**, **`Ranked.repState_rank_pcs`**: at the loop's state at a rep's opening's first round,
-  where it takes the round's coins, the frame held the algebraic phase's coins at its counts, and the rank check held on
-  them after the earlier rep's points.
-* **`LeanRelease.rank_unrefused_sched`**: on a live history past table `j`'s rep `r`'s rank check's round
-  (`Masked.rankSlot`), the rep's rank check holds at the opened coins.
--/
+/-! A rep's rank check at its opening's label holds on a live history past it (`LeanRelease.rank_unrefused_sched`). -/
 
 @[expose] public section
 
@@ -35,8 +19,6 @@ open _root_.Flock (F128 Transcript TMW)
 open FlockComplete (PS)
 open FlockComplete.Replay (bind_go)
 
-/-- **A loop cut at its step `i`**: steps before `i` yield, step `i` throws; the loop, then any continuation, throws
-having sent the first `i + 1` steps' bodies. -/
 theorem forIn_go_cut {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Flock.Transcript)
     (B : ℕ → Claims.Msg) (L n i : ℕ) (hi : i < n) {t₀ : Flock.Transcript} (hT : T 0 = t₀) (e : String)
     (hbody : ∀ k < i, ∀ (s : σ) (l : Array Claims.Msg), l.size = L + k →
@@ -90,8 +72,6 @@ open FlockComplete.LigLock.Fed (feedR sentQ feed_eq CoinAt repOpening_feed cutAs
 open Switch (rsBody)
 open Loop
 
-/-- **The cut ring switch, cut at a claim's round**: from `l`, cut at its round `i` below the claims', it stops having
-sent `rsBody`'s first `i + 1` bodies after `t`'s pending bytes. -/
 theorem ringSwitchCut_at (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128)
     (claims : Array _root_.Flock.Claim) (t : Flock.Transcript) (l : Array Claims.Msg) {i : ℕ} (hi : i < claims.size)
     (hl : n = l.size + i) :
@@ -129,9 +109,6 @@ theorem ringSwitchCut_at (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → A
     Option.some.injEq] at e
   exact e
 
-/-- **The opening's first rounds are the ring switch's, fed any of its coins**: fed coins for `a` rounds, up to `γ`'s,
-`openStep`'s first `a + 1` rounds are the switch's bodies from empty pending bytes, each claim's switched vector of
-`128` words. -/
 theorem openStep_switch_at (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) (hdom : dom.size < 2 ^ 64)
     (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
@@ -184,8 +161,6 @@ theorem openStep_switch_at (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (d
   simp only [Array.toList_append, List.nil_append, Array.size_empty, Nat.sub_zero] at e2
   exact e2.symm
 
-/-- **A rep's schedule fed `a` of the opening's coins**, up to `γ`'s: past its algebraic phase it holds the ring
-switch's first `a + 1` rounds, its bodies from empty pending bytes and the opening's counts, and nothing more. -/
 theorem sched_switch_at {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -225,9 +200,6 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker MaskSlot K_SKIP N_INNER LABEL_ZC ma
 open FlockSoundness.Refine (Frame encs)
 open Loop
 
-/-- **At a rep's scheduled round `J` past the opening's label the rank check held**: where a rep's requests up to it
-(`schedReqs`) run on with the frame past the label, the frame holds rounds `0 … d − 1`'s coins, each answered the
-round's count, and the rank check held there after the earlier rep's claim points. -/
 theorem schedReqs_rank {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (P : Array F128)
     (sched : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {digest cap dom : ByteArray}
     (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
@@ -261,11 +233,6 @@ theorem schedReqs_rank {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! <
   simp only [nnOf, show k < sched.size by omega, ↓reduceIte] at e
   exact e
 
-/-- **At a rep's opening's first round the rank check held on the algebraic phase's coins**: where the loop's state
-there takes the round's coins, the frame held the rounds `0 … m + k_log − 7`'s coins (`cr`), answered at the algebraic
-phase's counts, and the rank check held at their claim points, after the earlier rep's (`cr0`'s rounds, sent as bytes)
-at rep `1`. The round is the ring switch's first (`Bind.sched_switch_at`), the opening's label (`Flags.PcsRound`), which
-the frame takes past its quiet rounds (`Flags.sched_flags`). -/
 theorem repState_rank_pcs {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
@@ -371,13 +338,6 @@ open Loop Ranked
 variable {wideLeaf : Bool}
 
 set_option maxHeartbeats 800000 in
-/-- **The frame refuses a rank-deficient rep at its opening's label**: on a live history of at most `refK x` openings
-whose last coins the frame takes, past table `j`'s rep `r`'s rank check (`Masked.rankSlot`), the rep's rank check holds
-at the opened coins. The round at the rank check is the opening's first, whose label runs the frame's rank check on the
-coins the stream answered (`Masker.label`); the frame took that round's coins, where the rank check held
-(`repState_rank_pcs`) on the algebraic phase's coins, which are the opened ones (`wordsAt_slot`), and, at rep `1`, after
-rep `0`'s claim points, whose rounds the loop asks for the same counts (`loopNr_rep`). Both read as the session's
-(`frame_points`), as at the rep's `β` round (`rank_unrefused`). -/
 theorem rank_unrefused_sched (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

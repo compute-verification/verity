@@ -9,16 +9,8 @@ import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.ExecParse
 import Proofs.Flock.Soundness.SparseRows
 
-/-!
-# A net committed at a position map holds exactly when its logical net does
-
-`Net.ofRowsAt` (`Flock.NetAt`) commits the logical rows `Net.ofRows` checked at positions `pos`: committed row `pos[x]`
-is logical row `x` with every reference `v` read as `pos[v]`, and every other row of the slot is empty. So column values
-`z` satisfy the committed system's `2^unitLog` rows exactly when `z ∘ pos` satisfies the logical net's `useful` rows and
-`z` is zero at every column no logical column is placed at (`ofRowsAt_sat`). The logical net is a `Built` net, so its
-rows are the audit's `Rows.ofNet` (`ofRowsAt_rowsSat`), and what the soundness path proves of `Rows.ofNet` holds of the
-committed net read through `pos`. No verifier path reads `ofRowsAt` yet.
--/
+/-! A net committed at a position map holds exactly when its logical net does (`ofRowsAt_sat`); no verifier path reads
+`ofRowsAt`. -/
 
 @[expose] public section
 
@@ -26,13 +18,9 @@ namespace FlockSoundness
 
 open Flock Audit
 
-/-- **A net's first `w` rows hold at `z`**: each row's column is the AND of its `A` and `B` rows' XOR sums under `z`
-(`Rows.Sat`'s equation, read off the net's matrices). -/
 def NetSat (m : Net) (w : ℕ) (z : ℕ → Bool) : Prop :=
   ∀ p < w, z p = (Verity.Boolean.xorSum (m.a.row p).toList z && Verity.Boolean.xorSum (m.b.row p).toList z)
 
-/-- **The committed system is the logical one permuted.** For a net `ofRowsAt` built from the logical net `n`, `z`
-satisfies all of its slot's rows iff `z ∘ pos` satisfies `n`'s useful rows and `z` is zero off `pos`'s image. -/
 theorem ofRowsAt_sat {name : String} {useful constPos : ℕ} {ig og : Array Group} {ra rb : Array (Array ℕ)}
     {pos : Array ℕ} {n n' : Net} (hn : Net.ofRows name useful constPos ig og ra rb = .ok n)
     (h : Net.ofRowsAt name useful constPos ig og ra rb pos = .ok n') (hu : n.unitLog ≤ 32) (hu' : n'.unitLog ≤ 32)
@@ -78,8 +66,6 @@ theorem ofRowsAt_sat {name : String} {useful constPos : ℕ} {ig og : Array Grou
     · have hg : ∀ x, x < useful → pos.getD x 0 ≠ p := fun x h1 h2 => hx ⟨x, h1, h2⟩
       rw [hgs p hp' hg, hgap p hg]
 
-/-- **A built net's rows, holding, are its audit `Rows` holding**: `Rows.ofNet`'s computed rows are the net's rows
-below the constant. -/
 theorem rowsSat_of_netSat {net : Net} (hB : Built net) (hu : net.unitLog ≤ 32) {w : ℕ} (hw : net.constPos ≤ w)
     {z : ℕ → Bool} (hs : NetSat net w z) : (Rows.ofNet hB).Sat fun c => z c.val := by
   intro i
@@ -93,7 +79,6 @@ theorem rowsSat_of_netSat {net : Net} (hB : Built net) (hu : net.unitLog ≤ 32)
   rw [← xorSum_map, ← xorSum_map, Rows.ofNet_a hB hu i, Rows.ofNet_b hB hu i]
   exact e
 
-/-- **The committed net, holding, is the logical `Rows` holding through `pos`**, with every unplaced column zero. -/
 theorem ofRowsAt_rowsSat {name : String} {useful constPos : ℕ} {ig og : Array Group} {ra rb : Array (Array ℕ)}
     {pos : Array ℕ} {n n' : Net} (hn : Net.ofRows name useful constPos ig og ra rb = .ok n)
     (h : Net.ofRowsAt name useful constPos ig og ra rb pos = .ok n') (hu : n.unitLog ≤ 32) (hu' : n'.unitLog ≤ 32)

@@ -2,17 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.RoundSwitchRank
 
-/-!
-# The frame's release at a rep's ring switch's rounds
-
-At rep stream `2j + r`'s ring switch's round `k`, `rankSlot + k`, the loop schedules the switch's body `k` at its own
-table's switched vectors, and the frame releases it as it came.
-
-* **`LeanRelease.switch_frame`**: on a live history whose next round is the ring switch's round `k`, the loop's table
-  there has the rep's setup, its zerocheck's and lincheck's claims are at the points of the openings' words from the
-  rep's start, and the release is the switch's body `k` at the table's switched vectors of those claims and the extra
-  claims at the link points off the first opening's words (`Bind.sched_switch_sv`, `Loop.check_rs`).
--/
+/-! The frame releases a rep's ring-switch rounds as the loop schedules them (`LeanRelease.switch_frame`). -/
 
 @[expose] public section
 
@@ -29,14 +19,6 @@ namespace LeanRelease
 
 open Loop Ranked in
 set_option maxHeartbeats 2000000 in
-/-- **The frame releases a rep's ring switch's round as the loop schedules it**: at a live history whose next round is
-rep stream `2j + r`'s ring-switch round `k` (`rankSlot + k`, before the rep's Ligerito rounds), on the rep's own tables
-where `real` answers the loop's, the loop's table there is of the rep's setup, the zerocheck's and lincheck's claims of
-the schedule are at the points of the openings' words from the rep's start (`Loop.pts_raw`), and the release is the
-switch's body `k` (`Switch.rsBody`) at the table's switched vectors of those claims and the extra claims at the link
-points off the first opening's words. The frame took the round's coins in the algebraic phase at `k = 0`, past it later
-(`Ranked.repState_switched`); the loop scheduled the body (`Bind.sched_switch_sv`), whose coins it asks for
-(`Loop.loopNr_piop`), and the check passes it as it came (`Loop.check_rs`). -/
 theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
     (wk : (ofLoop Masked.dataE L₁ real).toSrv.Worker) {x : Msg} {w : Flock.Wit} (hx : Masked.Live x)
@@ -83,7 +65,6 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold roundsOf
     rw [List.getD_eq_getElem _ _ (by simp only [List.length_map, List.length_range]; omega)]
     simp
-  -- the round's place: `A + k` into the rep's rounds, `A` the algebraic phase's
   obtain ⟨A, hAd⟩ : ∃ A, A = (Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6 := ⟨_, rfl⟩
   have hRk : Masked.rankSlot x j.val r.val = Masked.repBase x (2 * j.val + r.val) + A := by
     rw [hAd]
@@ -101,7 +82,6 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold FlockComplete.repStartZk
     omega
   have hpos : 0 < ops.length := by omega
-  -- the extra claims: the table's regions at each link point
   obtain ⟨hmp, hmp0, hpc⟩ := Masked.live_links hx hsx hq2
   have hmp' : (Masked.stAt x j).mPts = spec.mPts := by rw [← hst]; exact hmp
   have hl0 : loopNr x 0 = spec.points * spec.mPts := by
@@ -126,7 +106,6 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
       ((Loop.linkPoints_size_le (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)).trans
         (show _ ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by rw [hW0]; exact hpc))
     omega
-  -- the located round
   have hbase : Masked.repBase x (2 * j.val + r.val) =
       1 + ((roundsOf spec (Masked.stsOf x)).take (2 * j.val + r.val)).sum := by
     rw [Masked.repBase_eq hsx, repStartZk_eq spec _ hq2.le]
@@ -155,7 +134,6 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     congr 1
     omega
   have hj1 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i + 1)).2 = a + 1 := by rw [hloc]
-  -- the frame took the round's coins
   have hlast : (ofLoop Masked.dataE L₁ real).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ real) x
   have hkd : (ofLoop Masked.dataE L₁ real).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
@@ -166,7 +144,6 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hA' := hA
   rw [ofLoop_answered_same Masked.dataE L₁ real x (ν, t) (m₀, ρ₀) ops hsx (q := i + 1) (by omega) hj1 ho ht] at hA'
   replace hA' := (bind_rankStop_ok hA').1
-  -- the loop's placeholder table and its state there
   have hcs : (ops.map fun p => ZKMal.CoinLayer.rd p.2).length = i + 2 := by rw [List.length_map]; omega
   have ho' : (progOf x (ops.map fun p => ZKMal.CoinLayer.rd p.2)).owed ≠ none := fun h => answer_owed_none _ h hA'
   obtain ⟨c', tb, dom, xs, his, hph0⟩ := progOf_placeholder x _ hsx hcs ho'
@@ -196,7 +173,6 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     exact Claims.ZKServer.ofSamples_order _ _ _
   have hAA : alg.size = A := by
     rw [(alg_cnt (by rw [htm]; omega) (by rw [htk]; omega) hmb hal).1, htm, htk, hAd]
-  -- past the ring switch's first round the frame is outside every masked phase
   have hon : k ≠ 0 → m.on = false := by
     intro hk0'
     have hA'' := hA'
@@ -204,7 +180,6 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     exact repState_switched hcc hal (by rw [htm]; omega) hmb hdg (placeholder_cap hph0) (hdm ▸ hdom') hmkt
       (by rw [hxs]; exact hXb) hk0 hnn hq hk0' (by rw [hxs, hXS]; omega)
       (by rw [Array.size_map, Array.size_range]) hA''
-  -- the loop's own round there
   obtain ⟨tr, hir, sched', hre, hs'⟩ := ofLoop_sched_live Masked.dataE L₁ real wk x w (ν, t) κ (m₀, ρ₀) ops hl hkd
     hsx (q := i + 1) (by omega)
   have hre' : real x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by
@@ -255,7 +230,6 @@ theorem switch_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     rw [ofLoop_scheduled Masked.dataE L₁ real x w (ν, t) (m₀, ρ₀) ops vals hsx (q := i + 1) (by omega) hre hs' hlt',
       hj1, show a + 1 = alg'.size + k by omega, (hbody k le_rfl).1]
     all_goals exact (List.toList_toArray _).symm
-  -- the release: the scheduled body as it came
   obtain ⟨m2, out, s', hA2, hck, hrel⟩ := release_of_live (ofLoop Masked.dataE L₁ real) wk x w (ν, t) κ
     ((m₀, ρ₀) :: ops) v hl hkd hv hsc
   have hm2 : m2 = m := Except.ok.inj (hA2.symm.trans hA)

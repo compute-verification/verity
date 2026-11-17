@@ -2,12 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.FinRepCm
 
-/-!
-# The loop's level-0 cap at a rep
-
-* **`Loop.cap_zcBind`**: on the loop's table at rep stream `2j + r` (`Level0Src.realOf`), the level-0 cap is the switched
-  source's: the tree of its level-0 leaves (`Masked.leafAt_linkIn`).
--/
+/-! The loop's level-0 cap at a rep is the switched source's (`Loop.cap_zcBind`). -/
 
 @[expose] public section
 
@@ -22,8 +17,6 @@ open _root_.Flock.ZkServer.Finish (Tab)
 
 namespace Loop
 
-/-- **The loop's level-0 cap at rep stream `2j + r` is the switched source's**: the recheck's tree of `linkIn`
-(`Level0Src.realOf_cm0`), whose leaves are the switched cut's level-0 leaves (`Masked.leafAt_linkIn`). -/
 theorem cap_zcBind {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg}
     {w : Flock.Wit} (hS : Level0Src src x w) (ν : finS.Nonce) (t : finS.Tape) (C : Fin (refK x) → finS.Coin)
     (v : ∀ j, ((Masked.tabC Masked.PE x j).T (Masked.czExe Masked.PE x C j)).tab.Vals) (j : Fin (Masked.jOf x))

@@ -3,20 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.CutPrefix
 public import Proofs.Flock.Claims.ZK.SimLig
 
-/-!
-# Ligerito past level 0 reads its coins only below each round's count (`ligeritoPZk_coin`)
-
-`ligeritoPZk` answered by `asksCut coin N` reads, at a round sent at log index `p < N` as a squeeze of `k` coins, only
-`coin p i` for `i < k`. Two coin functions that agree there (`Good`) give the same run: the same result, the same
-transcript and the same log.
-
-* `CR Q x y`: the coin side `x` shifts with its history (`CutPrefix.Shift`), ends in `Q` where it returns, and equals the
-  other side `y` from every history whose log after `x` is `Good` from its length on; `CRT` and `CRL` lift it through the
-  transcript and the prover's state.
-* Steps: binds, pure, throws, the coin-free steps (`crl_refl`), the squeezes (`crt_squeeze`, below `2 ^ 64` coins, the
-  header's count), loops with an invariant (`crl_forIn`), and the opening's blocks.
-* `ligeritoPZk_coin`: the opening's walk, its split dimension bounded by `sch.n + 1` through the levels.
--/
+/-! Ligerito past level 0 reads its coins only below each round's count (`ligeritoPZk_coin`). -/
 
 @[expose] public section
 
@@ -27,10 +14,6 @@ namespace FlockComplete.LigCoin
 
 open Flock Transcript Replay
 
-/-! ## Two coin functions agreeing on what a log's rounds read -/
-
-/-- **`coin` and `coin'` agree on the rounds of `L` from index `P` to before `N`**: at a round framed as a squeeze of
-`k < 2 ^ 64` coins, on the coins below `k`. -/
 def Good (coin coin' : ℕ → ℕ → F128) (N P : ℕ) (L : Array Claims.Msg) : Prop :=
   ∀ p, P ≤ p → p < N → ∀ (t : Transcript) (kind : UInt8) (k : ℕ), k < 2 ^ 64 →
     L[p]? = some (Claims.toMsg (framed t kind k)) → ∀ i < k, coin p i = coin' p i
@@ -50,12 +33,8 @@ theorem Good.of_append {P : ℕ} {L bs : Array Claims.Msg} (h : Good coin coin' 
     rw [hn] at hL
     cases hL
 
-/-! ## Runs equal under two coin functions -/
-
 variable {α β σ : Type}
 
-/-- **`x` with `coin`, `y` with `coin'`**: `x` shifts with its history and ends in `Q` where it returns, and the two
-runs are equal from any history whose log after `x` is `Good` from its length on. -/
 structure CR (coin coin' : ℕ → ℕ → F128) (N : ℕ) (Q : α → Prop) (x y : PS α) : Prop where
   shift : CutPrefix.Shift x x
   same : ∀ l, Good coin coin' N l.size (x.go l).2 → x.go l = y.go l
@@ -110,9 +89,6 @@ theorem cr_bind {Q : α → Prop} {R : β → Prop} {x y : PS α} {f g : α → 
     obtain ⟨a, l', h1, h2⟩ := JsonRT.go_bind_ok h
     exact (hf a (hx.post l a l' h1)).post l' b L h2
 
-/-! ## Through the transcript -/
-
-/-- `CR` from every transcript. -/
 def CRT (coin coin' : ℕ → ℕ → F128) (N : ℕ) (Q : α → Prop) (x y : TMW PS α) : Prop :=
   ∀ t, CR coin coin' N (fun r => Q r.1) (x.run t) (y.run t)
 
@@ -133,7 +109,6 @@ theorem crt_refl {x : TMW PS α} (h : (CutPrefix.shiftS.st Transcript).R x x) :
 theorem crt_liftTM (x : Transcript.TM α) : CRT coin coin' N (fun _ => True) (liftTM x) (liftTM x) :=
   crt_refl (With.Sim.liftTM CutPrefix.shiftS x)
 
-/-- **Two squeezes of `k < 2 ^ 64` coins**: equal where the log's round is `Good`. -/
 theorem crt_squeeze (coin coin' : ℕ → ℕ → F128) (N : ℕ) (kind : UInt8) {k : ℕ} (hk : k < 2 ^ 64) :
     CRT coin coin' N (fun _ => True) (squeezeP (asksCut coin N) kind k) (squeezeP (asksCut coin' N) kind k) := by
   intro t
@@ -170,9 +145,6 @@ theorem crt_sampleKP (coin coin' : ℕ → ℕ → F128) (N : ℕ) :
   unfold sampleKP
   exact crt_bind (crt_squeeze coin coin' N 2 (by decide)) fun _ _ => crt_pure trivial
 
-/-! ## Through the prover's state -/
-
-/-- `CRT` from every prover state. -/
 def CRL (coin coin' : ℕ → ℕ → F128) (N : ℕ) (Q : α → Prop) (x y : LP PS α) : Prop :=
   ∀ s, CRT coin coin' N (fun r => Q r.1) (x.run s) (y.run s)
 
@@ -242,7 +214,6 @@ theorem crl_throw_bind {R : β → Prop} (e : String) {f g : α → LP PS β} :
     CRL coin coin' N R (throw e >>= f) (throw e >>= g) :=
   crl_bind (Q := fun _ => False) (crl_throw e) fun _ h => h.elim
 
-/-- **A loop over `[0:n]`**, step `i` from a value in `J i` yielding one in `J (i + 1)`. -/
 theorem crl_forIn (n : ℕ) (J : ℕ → σ → Prop) (body body' : ℕ → σ → LP PS (ForInStep σ))
     (hb : ∀ i < n, ∀ u, J i u →
       CRL coin coin' N (fun r => ∃ v, r = .yield v ∧ J (i + 1) v) (body i u) (body' i u))
@@ -290,8 +261,6 @@ theorem crl_forIn_array {τ : Type} (l : Array τ) (body body' : τ → σ → L
   rw [← Array.forIn_toList, ← Array.forIn_toList]
   exact crl_forIn_list l.toList body body' hb u
 
-/-! ## The opening's blocks -/
-
 theorem crl_challengeP (coin coin' : ℕ → ℕ → F128) (N : ℕ) (split : Bool) :
     CRL coin coin' N (fun _ => True) (challengeP (asksCut coin N) split) (challengeP (asksCut coin' N) split) := by
   unfold challengeP
@@ -336,11 +305,7 @@ theorem crt_run_bind {Q : α → Prop} {R : β → Prop} {p p' : LP PS α} {st :
     CRT coin coin' N R (p.run st >>= f) (p'.run st >>= f') :=
   crt_bind (hp st) hf
 
-/-! ## The opening -/
-
 set_option maxHeartbeats 4000000 in
-/-- **Ligerito's opening under two coin functions**: with the schedule's sizes below the headers' range, equal from
-any history whose log after it is `Good`. -/
 theorem ligeritoPZk_coin (coin coin' : ℕ → ℕ → F128) (N : ℕ) (H : ByteArray → ByteArray) (ms : MerkleScheme)
     (sch : Schedule) (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
@@ -444,8 +409,6 @@ theorem ligeritoPZk_coin (coin coin' : ℕ → ℕ → F128) (N : ℕ) (H : Byte
   · intro _ _
     exact crt_pure trivial
 
-/-- **The opening's run under two coin functions** is the same from any history whose log after it is `Good` from its
-length on. -/
 theorem ligeritoPZk_go_coin (coin coin' : ℕ → ℕ → F128) (N : ℕ) (H : ByteArray → ByteArray) (ms : MerkleScheme)
     (sch : Schedule) (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)

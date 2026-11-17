@@ -12,20 +12,8 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Extract
 meta import Lean.Meta.Tactic.NormCast
 
-/-!
-# The expected-time extractor as an algorithm: waits of at most `R` runs
-
-The extractor's sampling design `Extract.expectAcc` is `k` independent accepted runs. An algorithm gets them by
-waiting: it runs the session until a run accepts, at most `R` times, and does that `k` times. This
-file is that algorithm's sampling design and cost, the form a collision finder runs.
-
-* `expectN_find`: over `R` runs, the first accepted one is found with probability
-  `ε·geom ε R = 1 − (1 − ε)^R` (`mul_geom`), distributed as an accepted run;
-* `expectN_firsts`: `k` waits that all find one give `k` independent accepted runs, weighted by
-  `geom ε R ^ k`, so their sampling design is `(1 − (1 − ε)^R)^k` times `expectAcc`;
-* `expectN_waitCost`: a wait plays `geom ε R` runs in expectation, so after an accepted run the `k`
-  waits play `k·geom ε R` runs, and `ε·k·geom ε R = k·(1 − (1 − ε)^R) ≤ k`, whatever `ε`.
--/
+/-! The expected-time extractor as an algorithm, `k` waits of at most `R` runs each: its sampling design and cost
+(`expectN_firsts`, `expectN_waitCost`). -/
 
 @[expose] public section
 
@@ -37,7 +25,6 @@ open Game
 
 variable {α : Type} (g : Game α) (s : Strategy g) (acc : α → Prop)
 
-/-- `Σ_{i<R} (1 − ε)^i`, the expected length of a wait of at most `R` runs. -/
 noncomputable def geom (ε : ℝ) (R : ℕ) : ℝ := ∑ i ∈ Finset.range R, (1 - ε) ^ i
 
 theorem geom_succ (ε : ℝ) (R : ℕ) : geom ε (R + 1) = 1 + (1 - ε) * geom ε R := by
@@ -56,7 +43,6 @@ theorem mul_geom (ε : ℝ) (R : ℕ) : ε * geom ε R = 1 - (1 - ε) ^ R := by
 theorem geom_nonneg {ε : ℝ} (h1 : ε ≤ 1) (R : ℕ) : 0 ≤ geom ε R :=
   Finset.sum_nonneg fun i _ => pow_nonneg (by linarith) i
 
-/-- **One wait**: over `R` runs, the first accepted one. -/
 theorem expectN_find [DecidablePred acc] (F : Option α → ℝ) : ∀ R : ℕ,
     expectN g s R (fun bs => F (bs.find? fun b => decide (acc b))) =
       geom (expect (ind acc) g s) R * expect (fun b => ind acc b * F (some b)) g s +
@@ -89,8 +75,6 @@ noncomputable def firsts : List (List α) → Option (List α)
   | b :: bl => (b.find? fun x => decide (acc x)).bind fun x => (firsts bl).map (x :: ·)
 
 open Classical in
-/-- **`k` waits of at most `R` runs**: when all find an accepted run, the runs they find are `k`
-independent accepted runs, weighted by `geom ε R ^ k`. -/
 theorem expectN_firsts (R : ℕ) : ∀ (k : ℕ) (Φ : List α → ℝ),
     expectN (runsG g R) (runsStrat g s R) k (fun bl => (firsts acc bl).elim 0 Φ) =
       geom (expect (ind acc) g s) R ^ k *
@@ -178,8 +162,6 @@ theorem expectAcc_zero (k : ℕ) : expectAcc g s acc k (fun _ => 0) = 0 := by
   unfold expectAcc
   simp only [mul_zero, expectN_const, zero_div]
 
-/-- **The waits against the ideal sampling design**: when each of the `k` waits gives up after `R` runs, at
-most `k/(eR)` of `ε · expectAcc Ψ` is lost, for `0 ≤ Ψ ≤ 1`. -/
 theorem expectAcc_le_waits (k R : ℕ) (hR : 1 ≤ R) (Ψ : List α → ℝ) (h0 : ∀ bs, 0 ≤ Ψ bs)
     (h1 : ∀ bs, Ψ bs ≤ 1) :
     expect (ind acc) g s * expectAcc g s acc k Ψ ≤
@@ -209,7 +191,6 @@ theorem expectAcc_le_waits (k R : ℕ) (hR : 1 ≤ R) (Ψ : List α → ℝ) (h0
     rw [ha1]; have := pow_le_one₀ (by linarith : 0 ≤ 1 - ε) (by linarith : 1 - ε ≤ 1) (n := R)
     linarith
   have ha1' : a ≤ 1 := by rw [ha1]; have := pow_nonneg (by linarith : 0 ≤ 1 - ε) R; linarith
-  -- Bernoulli: 1 − a^k ≤ k(1 − a)
   have hber : 1 - a ^ k ≤ k * (1 - a) := by
     have := one_add_mul_le_pow (by linarith : (-2 : ℝ) ≤ a - 1) k
     simp only [add_sub_cancel] at this
