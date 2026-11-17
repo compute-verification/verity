@@ -3155,24 +3155,6 @@
    "issue": "TRN-168",
    "due": "2026-11-30"
   },
-  "Slowdown.Cover.Assumptions.BlockFits": {
-   "owner": "@training",
-   "digest": "d3961db952e3c126bd889c2a397edc9ac7b932fd9bcae4d5509558a08bd45256",
-   "issue": "TRN-167",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Cover.Assumptions.CapBelowDepth": {
-   "owner": "@training",
-   "digest": "c0129077e2ad931b0722c5c52ee0bc1bad5fea62e6ab172a242e712d593441a5",
-   "issue": "TRN-167",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Cover.Assumptions.UpdateHardness": {
-   "owner": "@training",
-   "digest": "320c3e1c89ef1e210271cc490151deecded13279ca9f7514b47b7f65b4efaf89",
-   "issue": "TRN-167",
-   "due": "2026-11-30"
-  },
   "Slowdown.Cover.MulBlocks.Upstream": {
    "owner": "@training",
    "digest": "56a4eaf3bd6d46fab7599fd8370ce2f50d8f2473f007100a30dc08103aa537c8",
@@ -4367,11 +4349,6 @@
   "Flock.SecurityProofs.RecursiveKSEvery": {
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKSEvery_nontrivial"
-  },
-  "Slowdown.Cover.SecurityProofs.CoverTraining": {
-   "honest": ["Slowdown.Cover.SecurityProofs.CoverTraining_honest"],
-   "nontrivial": "Slowdown.Cover.SecurityProofs.CoverTraining_nontrivial",
-   "kind": "exclusion"
   },
   "Slowdown.SecurityProofs.SlowdownRemote": {
    "honest": ["Slowdown.SecurityProofs.SlowdownRemote_honest"],
@@ -24180,67 +24157,6 @@
    "type_hash": "908868928e02a07e15f6f33f028d0ec04fa73ec311391cc252eda6809f342c39",
    "unfolded_hash": "5f0bf3ac594832fbdd6f53970d6be034ac13ad68742ce39226c044247042636a"
   },
-  "Slowdown.Cover.SecurityProofs.CoverTraining": {
-   "owner": "@training",
-   "signature": ["Slowdown.Cover.SecurityProofs.CoverTraining : Slowdown.Cover.Guarantees.CoverTraining"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.Coverage",
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnly.CompliesRate",
-     "Slowdown.Cover.Assumptions.BlockFits",
-     "Slowdown.Cover.Assumptions.CapBelowDepth",
-     "Slowdown.Cover.Assumptions.UpdateHardness",
-     "Slowdown.Cover.MulBlocks.Upstream"
-    ],
-    "reads": []
-   },
-   "type_hash": "b6a744d3fdbb02cffe8b41f6c18daeba2ac7135e91a64c5e82f19007293a0393",
-   "unfolded_hash": "15dbe8a28f513f535dc7de453f8776fde76d5dc8e3b17908e9b16d6367c6b4f6"
-  },
-  "Slowdown.Cover.SecurityProofs.CoverTraining_honest": {
-   "owner": "@training",
-   "signature": ["Slowdown.Cover.SecurityProofs.CoverTraining_honest : Slowdown.Cover.Guarantees.CoverTraining_honest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "InferenceOnly.Assumptions.Coverage",
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "Slowdown.Cover.Assumptions.BlockFits",
-     "Slowdown.Cover.Assumptions.CapBelowDepth",
-     "Slowdown.Cover.Assumptions.UpdateHardness"
-    ]
-   },
-   "type_hash": "bc557efb4dc5a356c41c1032d1366cbc5ef3fc4ed2662b4fc6f053b7e763f216",
-   "unfolded_hash": "c1dfdd38e7b4d9abd7bf3cd0afd9b09ac939f881a6827e920619475ddf570c3e"
-  },
-  "Slowdown.Cover.SecurityProofs.CoverTraining_nontrivial": {
-   "owner": "@training",
-   "signature": [
-    "Slowdown.Cover.SecurityProofs.CoverTraining_nontrivial : Slowdown.Cover.Guarantees.CoverTraining_nontrivial"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "InferenceOnly.Assumptions.Coverage",
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "Slowdown.Cover.Assumptions.BlockFits",
-     "Slowdown.Cover.Assumptions.CapBelowDepth",
-     "Slowdown.Cover.Assumptions.UpdateHardness"
-    ]
-   },
-   "type_hash": "d4cf7b80775a9ae1510847ab709f663e411c2a4389c87410de0bcade5a95d1c4",
-   "unfolded_hash": "996e2d4ee4cbc32d3eda171cb28127076c54216b960f99521e7a5898f6b27a11"
-  },
   "Slowdown.Cut.SecurityProofs.Bound": {
    "owner": "@training",
    "signature": ["Slowdown.Cut.SecurityProofs.Bound : Slowdown.Cut.Guarantees.Bound"],
@@ -28551,7 +28467,6 @@
    "Slowdown.SecurityProofs.SlowdownRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag, the escape slack and CountHE bounding the declared source on its count verdict (InferenceOnly.CompliesAtMost), under the named PouwSound, TerminalDetection, SampledDetection (security/Definitions/Slowdown/Assumptions/Remote.lean) and (H) and (E) (Slowdown.Cut.Assumptions.Hardness and Exports, security/Definitions/Assumptions.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
    "Slowdown.SecurityProofs.CoveringBound": "frozen (no-function): It is about an arbitrary declaration, its multiplication blocks and token computations (Slowdown.Covering.MulBlocks) and a covering by inference blocks (Slowdown.Covering.Covers, security/Definitions/Slowdown/Covering.lean), under the named ParameterHard and with ActivationChained read in its statement (security/Definitions/Slowdown/Assumptions/Covering.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "Slowdown.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Slowdown.Covering.MulBlocks) and a covering by inference blocks (Slowdown.Covering.Covers, security/Definitions/Slowdown/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (security/Definitions/Slowdown/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Slowdown.Cover.SecurityProofs.CoverTraining": "frozen (no-function): It is about an arbitrary reference training circuit, its circuit bit by bit (Circuit.ofDecl, security/Definitions/Slowdown/BitView.lean) with its products and an upstream certificate, and a declaration that contains it with its baseline registered (the named ThetaRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named UpdateHardness on the bit view (security/Definitions/Slowdown/Assumptions/Cover.lean), not about the NCI check's code; security/Proofs/InferenceOnly/Cover/Checked.lean joins it to a verdict (coverTrained, from InferenceOnlyCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
    "InferenceOnly.SecurityProofs.PartitionCovers": "frozen (no-function): It is the working draft's Lemma A.1, about an arbitrary (c,k)-partition (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean) and the covering its completed blocks give (Slowdown.Covering.Covers, security/Definitions/Slowdown/Covering.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "InferenceOnly.SecurityProofs.CompliesCK": "frozen (no-function): It is about an arbitrary Boolean declaration that complies with the inference-only policy at a rate (InferenceOnly.CompliesRate, security/Definitions/InferenceOnly.lean), whose division into inference blocks is a (c,k)-partition (Verity.Partition.IsCK), not about the NCI check's code; InferenceOnlyCheck.Properties.Witnesses joined to it is what would give it an acceptance.",
    "InferenceOnly.SecurityProofs.ExpandComplies": "frozen (no-function): It is about an arbitrary multi-bit registered circuit that complies with the inference-only policy at a rate (InferenceOnly.CompliesRate, security/Definitions/InferenceOnly.lean) and its bit-level expansion (Verity.RegisteredCircuit.expand, security/Definitions/Core/Expand.lean), not about the NCI check's code.",
@@ -41040,19 +40955,6 @@
     "Slowdown.Assumptions.SourceHard": "dd31da45c70ea0a1f2769cddea4bebca15841ecaf9edc688834049cae03e6758"
    }
   },
-  "Definitions.Slowdown.Assumptions.Cover": {
-   "digest": "806f719f454c544144c7b81f7e23503ceba17cb59a99e3fae748476cac32a786",
-   "definitions": {
-    "Slowdown.Cover.Assumptions.UpdateHardness": "320c3e1c89ef1e210271cc490151deecded13279ca9f7514b47b7f65b4efaf89"
-   }
-  },
-  "Definitions.Slowdown.Assumptions.CoverTraining": {
-   "digest": "4bef9e64f91fabf562a9d3701c50491408a8cd975019b63367bb1dc7f01c5a95",
-   "definitions": {
-    "Slowdown.Cover.Assumptions.BlockFits": "d3961db952e3c126bd889c2a397edc9ac7b932fd9bcae4d5509558a08bd45256",
-    "Slowdown.Cover.Assumptions.CapBelowDepth": "c0129077e2ad931b0722c5c52ee0bc1bad5fea62e6ab172a242e712d593441a5"
-   }
-  },
   "Definitions.Slowdown.Assumptions.Coverage": {
    "digest": "6a8f041fb6f1eb38bd452d67ee149b797bce4f1a9a06c158fd9b38a3304ba694",
    "definitions": {
@@ -41121,18 +41023,6 @@
     "Slowdown.Assumptions.WeightsIncompressibleSlots": "d6e434b3bed5d4cd3385ffbbf2d4244535dbf98347ecbc869f52a3a2d9ba771f"
    }
   },
-  "Definitions.Slowdown.BitView": {
-   "digest": "fafa54a9cbfbde4eb54049b36735fc158fec411a86482138e0aba948f3e949e8",
-   "definitions": {
-    "Slowdown.Cover.BitView.Bit": "c2ead428f84701e63c39d075ee2ff9e00664fba7fe8e3d7c5db942a41c543fde",
-    "Slowdown.Cover.BitView.W": "99daec6dfbbc61ffc9bd742d5a4de649cdd821eb3a7930b1de30ec42f7851dc8",
-    "Slowdown.Cover.BitView.bitPred": "a3e7f887d24e6b63071a5e2be5f2df121fc65b7d28f945e5491fa119e7b6b02b",
-    "Slowdown.Cover.BitView.bits": "30603690b7bb0f3e533a96ceb7aab6a2417c0fd733655dc2cb6dc6af8ac8e5bf",
-    "Slowdown.Cover.BitView.enc": "8faeabe9c8bb482b3aa4246acab8fd9cc451b63d4f4915601528176d6dc7bccb",
-    "Slowdown.Cover.BitView.free": "9fe96fba84de5329c4d9421bebcd14606bcab1510f05f869f3db0fc02e8f0ea9",
-    "Slowdown.Cover.Circuit.ofDecl": "b2ae990d6da8a34b405eb0ea4880cb4f69100d5cc7dcff2e4294c6889ca57c4a"
-   }
-  },
   "Definitions.Slowdown.Capability.Consumers": {
    "digest": "2e7ebe07bc718a0a97cce1fc48a7367d99bbe3215dcfeb7ee10cd0aa2d361ace",
    "definitions": {
@@ -41179,27 +41069,6 @@
     "Slowdown.Capability.Toy.tok": "7b7fb49c608c1d9700f8a6c5d6d6aaccd1ee1f12787e1c8c94707c1fc9f1ff3f",
     "Slowdown.Capability.Toy.z": "9c0d948cfe7325115d02f9c8668ea8761885563f7e9e8a703867f9f66d01a397",
     "Slowdown.Capability.Toy.μ": "1b846a481b845336ce0865c2049a9915dc6a08b8a2ccae7db7e5385288378d63"
-   }
-  },
-  "Definitions.Slowdown.Cover": {
-   "digest": "8f727931df35d5e545f92f1e6cdd186a842e11b5bddb029e73be74a9bf849c78",
-   "definitions": {
-    "Slowdown.Cover.Circuit": "73de61d4add26c133fbacd8a539028c411e72a19c48a2b7327dbcd4fd46a5f63",
-    "Slowdown.Cover.Circuit.IsPath": "8ff06accb7ecbb05de57dff1b84f0c216de00cdfbd92474508e6df0ab8f42a42",
-    "Slowdown.Cover.Circuit.N": "cfeccd842a29f8f109bad40c1117102756e916c74ca5cb5ffd4a0b0e4a726abd",
-    "Slowdown.Cover.Circuit.ReachesIn": "809e8200af63af9cfeca28e82f050450627555cf813ca67bf5992da75aa70f19",
-    "Slowdown.Cover.Circuit.computed": "0d0e0b13ad085ff2200dcbd174d85674c025b6d4aedc020e8ee9e9b969d4961c",
-    "Slowdown.Cover.Circuit.inputs": "cf33f70d11212aad62d0ea64beaaea5fb83e560e3fecf95ce49715f52029af8e",
-    "Slowdown.Cover.Circuit.outputs": "f6426221bdce28c219ccce444c82a7e8a8ae15eb1f4f7f70acc0842c84b5b248",
-    "Slowdown.Cover.Circuit.pred": "47a95dc44cd4cf92ce86f12cc51b25da0d67a6f7262ef5cee540859417d74743",
-    "Slowdown.Cover.Circuit.θ": "34577c7adf0b751fb3715cec394d1b78c145dc9cf148ce7e2d0d826996b0e8d3",
-    "Slowdown.Cover.MulBlocks": "be58be6023b1355e4ada34af6c3c69413115798defce31d8654eb5635f08e872",
-    "Slowdown.Cover.MulBlocks.P": "5e2b9957e6f4994d8b6a30dbec3b5b835a013dcddb866d795dad0425fde18e89",
-    "Slowdown.Cover.MulBlocks.Pall": "d03fc0f1569ea5ed2a9a7e9ccae0653c39d04984c1c3fb8a5e2784eaedccc22b",
-    "Slowdown.Cover.MulBlocks.Upstream": "56a4eaf3bd6d46fab7599fd8370ce2f50d8f2473f007100a30dc08103aa537c8",
-    "Slowdown.Cover.MulBlocks.m": "e36953d716a21577da75ab2406d7ce36b550a7c5dae435ae568bea983c369594",
-    "Slowdown.Cover.MulBlocks.o": "f3a1a6ec8e895af516913a0c22deb575cea8408c302c18e359eefd89f0865155",
-    "Slowdown.Cover.MulBlocks.uses": "2260719b2d46c629b9a2200e53968b195efc7d6421c2a357d01f2264e5aa1f5a"
    }
   },
   "Definitions.Slowdown.CoverageToy": {
@@ -41463,12 +41332,6 @@
     "Slowdown.Guarantees.RecoveredBudgetNontrivial": "db07a2cdaea8cc4f40c81766c0218bd5ab95d23c9fba420b4290697b15bb17b3",
     "Slowdown.Guarantees.StatHeldBudgetHonest": "161f522fcd9470271c9d0d6ad18b005396ce66a50f89dd73fb2e95116f3b0260",
     "Slowdown.Guarantees.StatHeldBudgetNontrivial": "1b39fa12a7b181922d98f89891a03e2b15d055875c390d4fd789a41433172543"
-   }
-  },
-  "Definitions.Slowdown.Guarantees.CoverTraining": {
-   "digest": "f35e85967edff8ee53a2a3b7899928e280244ce7c2f0e86cc4269e7a9b0536dd",
-   "definitions": {
-    "Slowdown.Cover.Guarantees.CoverTraining": "2a4fa9fbdd4d6f513289feeabb30a016213e96ec9ebe7838ce9ec77f18547a08"
    }
   },
   "Definitions.Slowdown.Guarantees.Coverage": {

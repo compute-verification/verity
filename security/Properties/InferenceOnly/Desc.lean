@@ -17,8 +17,7 @@ import Mathlib.Data.NNRat.Floor
   `SecurityProofs.DescAgrees` (`Proofs.Properties.InferenceOnly.Agrees`) proves it from the three statements
   `descAgrees_of_open` (`Proofs.Properties.InferenceOnly.Fresh`) takes: `Resolve.bodiesOk` proves `Resolve.BodiesOk`,
   `operandsResolve_of` `Walk.OperandsResolve` from it, and `Fresh.readsExact` `Fresh.ReadsExact`.
-  `Properties.InferenceOnly.Desc.Verdict` restates `Reports`, `Witnesses` and the thread bounds of `InferenceOnlyCheck.Desc.evaluate` from it,
-  and `Properties.InferenceOnly.Desc.Cover` states the cover theorem's factor of the check of record's verdict.
+  `Properties.InferenceOnly.Desc.Verdict` restates `Reports`, `Witnesses` and the thread bounds of `InferenceOnlyCheck.Desc.evaluate` from it.
 -/
 
 @[expose] public section

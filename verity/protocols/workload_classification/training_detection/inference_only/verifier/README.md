@@ -142,7 +142,7 @@ the rows protocol read them with.
 The check's agreement with `InferenceOnly.CompliesRate` is proved: its verdict is the definition's (`DescReports`), and a
 compliance verdict witnesses the policy at its rate (`DescWitnesses`); on a verdict of the unrolled check that complies,
 every block meets the (c, k) budgets at c = `gamma` and k = α·c (`refines`, a lemma of `Reports`). What is open is the step from the check's
-accept to that verdict as a property (`theta_desc` is a proof lemma), and remote doesn't run the check yet. `benchmarks/nci` holds the
+accept to that verdict as a property, and remote doesn't run the check yet. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.
 
 ## Names

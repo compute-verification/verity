@@ -87,7 +87,6 @@ public import Definitions.Slowdown.Guarantees.Coverage
 public import Definitions.Slowdown.Guarantees.Covering
 public import Definitions.Slowdown.Guarantees.CoveringTwoCosts
 public import Definitions.Slowdown.Guarantees.Cut
-public import Definitions.Slowdown.Guarantees.CoverTraining
 public import Definitions.InferenceOnly.Guarantees.PartitionCovers
 public import Definitions.InferenceOnly.Guarantees.CompliesCK
 public import Definitions.Slowdown.Guarantees.Witnesses
