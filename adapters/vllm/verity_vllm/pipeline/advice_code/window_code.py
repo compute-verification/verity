@@ -211,7 +211,7 @@ def _charge(lens: list[int], w: int | None, n: int) -> None:
         lens.append(0)
     lens[w] += n
     if lens[w] >> CW:
-        raise ValueError(f"window {w}: its charge is {lens[w]} bits, and network certification counts a window's charge in {CW} bits, "
+        raise ValueError(f"window {w}: its charge is {lens[w]} bits, and network attestation counts a window's charge in {CW} bits, "
                          f"so it is under {1 << CW}; register a shorter window, so that less is charged to one")
 
 
