@@ -366,7 +366,7 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
 
 # --- the records from the runs' outputs ----------------------------------------------------------------------------------
 
-#: `benchmarks/census/deployments.json`'s reference deployment as the runs' monitoring reports recorded it
+#: `calibration/census/deployments.json`'s reference deployment as the runs' monitoring reports recorded it
 REFERENCE = {"id": "dc-12500-machines-600s", "machines": 12500, "gpus_per_machine": 8, "window_s": 600, "role": "reference",
              "label": "reference datacenter: 12,500 eight-GPU machines (100,000 GPUs), every machine audited in 10-minute windows"}
 
