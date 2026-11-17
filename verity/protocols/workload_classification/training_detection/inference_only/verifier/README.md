@@ -140,12 +140,11 @@ the rows protocol read them with.
 The check's agreement with `InferenceOnly.CompliesRate` is proved: its verdict is the definition's (`DescReports`), and a
 compliance verdict witnesses the policy at its rate (`DescWitnesses`); on a verdict of the unrolled check that complies,
 every block meets the (c, k) budgets at c = `gamma` and k = α·c (`refines`, a lemma of `Reports`). What is open is the step from the check's
-accept to that verdict as a property, and remote doesn't run the check yet. `benchmarks/nci` holds the
-literature index and the training algorithms' traits.
+accept to that verdict as a property, and remote doesn't run the check yet.
 
 ## Names
 
-A few older names stay here until a change of their own renames each (`GLOSSARY.md`, Older names): `benchmarks/nci`;
+A few older names stay here until a change of their own renames each (`GLOSSARY.md`, Older names):
 a verdict's failure rule `"nci"`, its key `ius` for its inference blocks with the names that compute it, and the
 refusal codes `input-in-iu`, `gate-in-no-iu` and `empty-iu`; the toy Definitions the vector generators build
 (`NciHandBlk`, `NciDecl…`); `baseline_difftest/`, the θ difftest's directory, whose bytes the lock pins; "baseline"

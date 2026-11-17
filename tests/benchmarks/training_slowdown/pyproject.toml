@@ -13,8 +13,7 @@ untraced = ["test_command.py", "test_grade.py", "test_job_shell.py", "test_repea
 # `verity`: the circuits' Definitions the gate prices compile and the Boolean gather the counter's tests price; the lf
 # model (`train_step_lf.py`), loaded by path, whose shapes the policy states; the slowdown calculator
 # (`benchmarks/slowdown`), whose registry, fleets, periods and min-cut module (the bound and its rows
-# of β(k)) `calculator.py` reads, and nothing else here does (tests/test_one_calculator.py); the inference-only
-# policy's calibrations, which the calculator's registry loads from outside its directory; and the census's
+# of β(k)) `calculator.py` reads, and nothing else here does (tests/test_one_calculator.py); and the census's
 # deployments, whose reference window `calculator.py` reads
 # The command's and the config's: of that registry too, the [policy.*] tables, whose names are the policies a config
 # may give (`config.py`); and `tools/config/verity_config`, the command's $OUT through its SHARED settings
@@ -31,7 +30,7 @@ inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/ver
           "tests/adapters/vllm/tests/__init__.py", "tests/adapters/vllm/tests/program/__init__.py",
           "benchmarks/slowdown", "hardware/cards/h200-sxm-141gb.toml", "hardware/cards/dgx-h200.toml",
           "benchmarks/census/deployments.json",
-          "benchmarks/nci/calibrations.json", "tools/config/verity_config",
+          "tools/config/verity_config",
           "benchmarks/training_slowdown/grader", "benchmarks/circuit_properties/circuit_properties", "adapters/torch", "benchmarks/training_slowdown"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

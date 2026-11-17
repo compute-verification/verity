@@ -26,7 +26,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `adapters/torch/verity_torch`: what `verity_vllm` imports.
 inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
           "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
-          "benchmarks/slowdown/slowdown", "benchmarks/slowdown/data", "benchmarks/nci/calibrations.json",
+          "benchmarks/slowdown/slowdown", "benchmarks/slowdown/data",
           "hardware/cards/h200-sxm-141gb.toml", "hardware/cards/dgx-h200.toml",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
           "adapters/torch/verity_torch", "verity/__init__.py",

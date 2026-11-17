@@ -1,5 +1,5 @@
 # Model architectures and training runs (slowdown/instances.py): the one place a model's shape is stated, which the other
-# benchmarks read through instances.models (benchmarks/nci/kappa.py, benchmarks/circuit_properties' references). A model's
+# benchmarks read through instances.models (benchmarks/circuit_properties' references). A model's
 # matrices are, by group, rows of [name, d_in, d_out, copies in the model, copies a token uses]; fanin and fanout are
 # derived from them (instances.derived_fanin, instances.derived_fanout) wherever their status is "derived". Its attention
 # table is the attention as its config.json states it (kind "gqa" or "mla"), which the attention matrices follow from
@@ -191,8 +191,7 @@ experts = [["gate", 4096, 1536, 12032, 752], ["up", 4096, 1536, 12032, 752], ["d
 router = [["gate", 4096, 128, 94, 94]]
 head = [["head", 4096, 151936, 1, 1]]
 
-# The thread draft's dense example, which benchmarks/nci prices (its models.json dense-100b and the
-# dense-pretrain-thread-draft row): no released model, so every number is assumed. 96 heads of 128 and a 4x GELU MLP, 12 d^2
+# The thread draft's dense example: no released model, so every number is assumed. 96 heads of 128 and a 4x GELU MLP, 12 d^2
 # weights a layer.
 [model.dense-100b]
 n_total = { value = 1e11, unit = "param", source = "the thread draft's dense example: 1e11 parameters", status = "assumed" }
@@ -244,12 +243,12 @@ tokens = { value = 1.8e13, unit = "token", source = "Qwen2.5 technical report: 1
 [run.kimi-k2-rl]
 model = "kimi-k2"
 kind = "rl-agentic"
-compute = { value = 1e25, unit = "FLOP", source = "frontier agentic RL at about pretraining's compute (benchmarks/nci/parameters.json rl.compute_share/frontier-2025 high 1.0; about 1e25), over three times Kimi K2's own 3e24", status = "assumed" }
+compute = { value = 1e25, unit = "FLOP", source = "frontier agentic RL at about pretraining's compute, over three times Kimi K2's own 3e24", status = "assumed" }
 
 [run.kimi-k2-rlvr]
 model = "kimi-k2"
 kind = "rl-elicit"
-compute = { value = 3e23, unit = "FLOP", source = "benchmarks/nci/parameters.json rl.compute_share/frontier-2025 (0.01, 0.1, 1.0) of Kimi K2's 6 x 3.2e10 x 1.55e13 = 3e24 pretraining FLOP", status = "derived" }
+compute = { value = 3e23, unit = "FLOP", source = "frontier RL's compute share in 2025 (0.01, 0.1, 1.0) of Kimi K2's 6 x 3.2e10 x 1.55e13 = 3e24 pretraining FLOP", status = "derived" }
 
 [run.qwen25-1b5-grpo]
 model = "qwen25-1b5"

@@ -53,7 +53,6 @@ runs/
 
 # Fetched fixtures: registered in artifacts.json, fetched by `research data fetch-fixtures` (store README §7.3)
 tests/verity/commitments/fixtures/layouts
-benchmarks/nci/sources
 tests/benchmarks/one_stage/fixtures/bundle-window
 tests/benchmarks/two_stage/fixtures/guard.tar.xz
 tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate

@@ -10,7 +10,7 @@ range), `source` (a datasheet, a measurement, a Lean name, a ruling) and `status
 
 What another file states is read from it, not restated in a layer (`sourced`; a file that sets one of these keys is
 refused). From `verity`: the monitoring periods are core's (`PERIODS`), each the registry's `horizon.<name>.seconds`. From the
-inference-only policy's calibrations (`benchmarks/nci/calibrations.json`): the calibrated policy's `K`, its range, and
+inference-only policy's calibrations (`data/calibrations.json`): the calibrated policy's `K`, its range, and
 `Γ`. The session policy's `K` is a ruling its layer states, and only its range is the calibrations' (`ranges`; a file
 that gives such a key a range is refused). From the cards (`verity.device`): the memory of the H200 servers' devices
 and their boundary links' line rate (`carded`, from each location's `devices` and `hosts`; a file that sets one is
@@ -40,8 +40,7 @@ from verity.protocol import MONITORING_PERIODS
 from verity.device import load_card, number
 
 DATA = Path(__file__).resolve().parent.parent / "data"
-#: the inference-only policy's calibrations, in the directory beside this package's
-CALIBRATIONS = Path(__file__).resolve().parents[2] / "nci" / "calibrations.json"
+CALIBRATIONS = DATA / "calibrations.json"
 
 STATUSES = frozenset({"datasheet", "measured", "declared", "assumed", "ruled", "conjecture", "derived"})
 
@@ -227,7 +226,7 @@ def _k_range() -> tuple[float, float]:
 def _policies() -> list[Param]:
     cal = entry(CALIBRATIONS, CALIBRATION)
     low, high = _k_range()
-    where = f"benchmarks/nci/calibrations.json {CALIBRATION}"
+    where = f"benchmarks/slowdown/data/calibrations.json {CALIBRATION}"
     return [
         Param(f"policy.{CALIBRATION}.gamma", cal["Gamma"], "FLOP", status="declared",
               source=f"{where} Gamma: 1M tokens x 2 x 32B active"),

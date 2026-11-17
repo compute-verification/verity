@@ -124,7 +124,7 @@ measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/slo
 The package reads `verity.circuits` (Programs, the canonical layout) and `verity_vllm.definitions` (the Boolean GEMM and
 the served b1 Definitions on bits). For a model's shapes it loads the slowdown calculator where it sits, with
 `benchmarks/slowdown` put on `sys.path`: `slowdown.instances`, and `slowdown.params` for the registry, which
-loads the inference-only policy's calibrations (`benchmarks/nci/calibrations.json`). The suite
+loads the inference-only policy's calibrations (`benchmarks/slowdown/data/calibrations.json`). The suite
 names what it reads of both among its `inputs`.
 
 The runner prints one JSON line a circuit and, with `--out DIR` (or `$OUT`), writes `DIR/properties.json`, and on a

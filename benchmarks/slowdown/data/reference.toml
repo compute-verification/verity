@@ -24,16 +24,16 @@ tokens = { value = 3.3e13, unit = "token", source = "ruled: the work reference (
 compute = { value = 9.7e24, unit = "FLOP", source = "ruled: 6 x 49e9 x 33e12", status = "ruled" }
 
 # k's range is not set here: the registry reads it from the inference-only policy's calibrations
-# (benchmarks/nci/calibrations.json: low kimi-k2-1m-coded, high kimi-k2-11mb-raw; slowdown/params.py). gamma is the
+# (benchmarks/slowdown/data/calibrations.json: low kimi-k2-1m-coded, high kimi-k2-11mb-raw; slowdown/params.py). gamma is the
 # session's tokens at the census's FLOP per active parameter per token and active parameters, stated here: the registry
 # reads no census, and tests/test_params.py holds it equal to that product.
 [policy.v4-pro-session]
-gamma = { value = 9.8e16, unit = "FLOP", source = "a 1M-token session (benchmarks/nci/calibrations.json kimi-k2-1m-raw's K at its b_tok bits a token) at benchmarks/census/adversary.json world-inference-2027's FLOP per active parameter per token and active parameters", status = "derived" }
+gamma = { value = 9.8e16, unit = "FLOP", source = "a 1M-token session (benchmarks/slowdown/data/calibrations.json kimi-k2-1m-raw's K at its b_tok bits a token) at benchmarks/census/adversary.json world-inference-2027's FLOP per active parameter per token and active parameters", status = "derived" }
 k = { value = 2e7, unit = "bit", source = "ruled: a session returns at most 2.5 MB (1M tokens at 20 bits)", status = "ruled" }
 inference_overhead = { value = nan, unit = "x", source = "not modeled: a placeholder for the honest inference workload's overhead under this partition; this package models no honest inference circuit to partition" }
 
 # A policy's k, its range, and gamma are not set here: the registry reads them from the inference-only policy's
-# calibrations (benchmarks/nci/calibrations.json, slowdown/params.py).
+# calibrations (benchmarks/slowdown/data/calibrations.json, slowdown/params.py).
 [policy.kimi-k2-1m-raw]
 inference_overhead = { value = nan, unit = "x", source = "not modeled: a placeholder for the honest inference workload's overhead under this partition; this package models no honest inference circuit to partition" }
 

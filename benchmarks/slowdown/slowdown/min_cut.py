@@ -623,9 +623,9 @@ def best_w(c: float, k: float, n: float | None = None, *, blocks: float, untied:
 def capped(slowdown: float, uncredited: float) -> float:
     """A slowdown beside the work no block is credited for: where a share `uncredited` of a block's work is checked by
     nothing, a developer gets that share whole and the rest at one in `slowdown`, so the slowdown is at most
-    `1 / (uncredited + 1 / slowdown)`, and no more than `1 / uncredited` whatever `slowdown` is. It is the unregistered share
-    of `theorem.multiple_bound`, which no count of `bound` or `bound_charged` covers: a figure of theirs is quoted
-    beside this one, at a stated share, never alone."""
+    `1 / (uncredited + 1 / slowdown)`, and no more than `1 / uncredited` whatever `slowdown` is. It is the unregistered share,
+    which no count of `bound` or `bound_charged` covers: a figure of theirs is quoted beside this one, at a stated share,
+    never alone."""
     if slowdown == math.inf:
         return max(1.0, 1 / uncredited) if uncredited > 0 else math.inf
     return max(1.0, slowdown / (1 + uncredited * slowdown))

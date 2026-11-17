@@ -724,8 +724,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/remote_session/serve.py::Trace":
         "homonym, the engine's steps as a remote session runs them: rename (memory-accounting)",
     "benchmarks/slowdown/slowdown/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
-    "benchmarks/slowdown/slowdown/theorem.py::Partition":
-        "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
     "verity/protocols/proofs/spot/prover/cost/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "verity/protocols/proofs/spot/prover/cost/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",

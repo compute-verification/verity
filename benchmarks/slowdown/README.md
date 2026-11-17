@@ -2,9 +2,8 @@
 
 This package is what the training and inference-only benchmarks read to price a policy: the min-cut bound
 (`min_cut.py`), the physical model's locations, fleets and monitoring periods (`hardware.py`), the models' shapes and
-the runs' targets (`instances.py`), the registry of every number they read (`params.py`, `data/*.toml`), each
-citation's status in the locks (`lean.py`), and `theorem.multiple_bound`, the slowdown a bound gives: `max(1, 1/(s + a
-x))`, Lean's `remoteSlowdown`, which `benchmarks/nci` reads for its slowdown `D`. It has no runner.
+the runs' targets (`instances.py`), the registry of every number they read (`params.py`, `data/*.toml`) and each
+citation's status in the locks (`lean.py`). It has no runner.
 
 **The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE`, `HEShared` and `HECharged`
 (`min_cut.HE`, `min_cut.HE_SHARED`, `min_cut.HE_CHARGED`), each function one side of an inequality they conclude or
@@ -59,7 +58,7 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
   | a `β_x` a block, no threshold (`rows=True`) | of each block at the table's row for what it reads | nothing | no block is charged | `min_cut.HE_ROWS`, which no guarantee states: `HECharged` asks (H) once |
 
 - `min_cut.capped(slowdown, uncredited)` is a slowdown beside the share of a block's work no block is credited for,
-  `1 / (uncredited + 1 / slowdown)`: the unregistered share of `theorem.multiple_bound`, which no count covers. A figure of
+  `1 / (uncredited + 1 / slowdown)`: the unregistered share, which no count covers. A figure of
   `bound` or `bound_charged` is quoted beside it at a stated share, never alone.
 
 ## Inputs
@@ -67,7 +66,7 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
 - `data/*.toml`, the registry (`params.py`): every number the package reads, addressed by a dotted key, each with
   `value`, `unit`, a plausible range (`low`, `high`), `source` and `status` (`datasheet`, `measured`, `declared`,
   `assumed`, `ruled`, `conjecture`, `derived`). What another file states is read from it, never restated in a file
-  (`params.sourced`): core's monitoring periods, `benchmarks/nci/calibrations.json`'s calibrated `K`, its range and
+  (`params.sourced`): core's monitoring periods, `data/calibrations.json`'s calibrated `K`, its range and
   `Γ`, and the cards' memory and line rates of the H200 servers (`params.carded`). The registry reads no census:
   `data/` states the reference datacenter's machines, the world's active parameters and the session policy's `Γ`, each
   naming the census entry it is, and the tests hold each equal to `benchmarks/census`. `data/reference.toml` states
@@ -83,10 +82,9 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
 |---|---|
 | `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `clique`, `slowdown_of(c, k, n, size, work) → Chosen`; `bound_charged(c, k, n, blocks, untied, untied_macs, w, N, O, size, rows) → Charged`, `best_w`, `capped` |
 | `hardware.py` | `Units`, `Location`, `Fleet`, `MonitoringPeriod` |
-| `instances.py` | `Model`, `Run` (a target and its kind); `models`, every model's shape, which `benchmarks/nci/kappa.py` and `benchmarks/circuit_properties` read |
+| `instances.py` | `Model`, `Run` (a target and its kind); `models`, every model's shape, which `benchmarks/circuit_properties` reads |
 | `params.py` | `Registry` (`override`, `fields`), `sourced`, `ranges`; core's `PERIODS`, the `FLEETS` a figure is quoted over, `Policy` and `policy` |
 | `lean.py` | `status(name)`, `weakest(cites)` |
-| `theorem.py` | `multiple_bound` |
 
 ## What loads it
 

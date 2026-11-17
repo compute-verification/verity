@@ -9,7 +9,7 @@ Every such file is in `ALLOWED`, which only shrinks, with what of `min_cut` past
 No file that is not a test reads `bound`, `blocks_at_least` or `slowdown_at_least` (`FORBIDDEN`), and none passes `F`
 to `slowdown_of`, which is for a test's comparison at one `F`; a test that reads them holds the one function to them,
 a reference.  The period's bound and its parts (`SIBLINGS`) are read only where `ALLOWED` says.  Nothing is executed
-(AST only).  `nci/bracket.py`'s thread-theorem and construction bounds are a separate calculation it does not hold."""
+(AST only)."""
 
 from __future__ import annotations
 
