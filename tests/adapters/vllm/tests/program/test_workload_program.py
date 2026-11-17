@@ -239,7 +239,7 @@ def test_a_workload_without_registered_values_keeps_its_digest():
 
 
 def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_workload_digest():
-    """The inference-only check reads only registered inputs as θ (the inference-only policy's check `theta-not-registered`): `theta_registered` lowers the
+    """The inference-only verifier reads only registered inputs as θ (the inference-only policy's check `theta-not-registered`): `theta_registered` lowers the
     weights as `RegisteredInput<w>_v1`, still θ, and every other input as before. The components are the same Definitions, so
     their request digests stand and only the workload digest moves; off, it is the digest pinned above."""
     from verity.circuits.constants import REGISTRATION, RUN
@@ -269,7 +269,7 @@ def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_w
 
 def test_theta_registered_keeps_a_tp_rank_programs_peers_bound_per_run():
     """A TP rank workload (B1's shape: `peers_*` before the weights, at shifting positions): only the weights move to
-    registration; every request's prompt and peers stay `Input<w>_v1`, the inputs the inference-only check counts against the limit."""
+    registration; every request's prompt and peers stay `Input<w>_v1`, the inputs the inference-only verifier counts against the limit."""
     from verity.circuits.program import INPUT_ID, REGISTERED_ID
     ca = W.request_component(encode_program(Program(_toy_rank_request(3, 2))), REGISTRY, _WP_rank(3, 2))
     cb = W.request_component(encode_program(Program(_toy_rank_request(5, 0))), REGISTRY, _WP_rank(5, 0))

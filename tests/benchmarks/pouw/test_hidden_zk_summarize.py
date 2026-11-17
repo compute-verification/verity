@@ -36,7 +36,7 @@ NO_PROGRAM = ("refused: a session without the verifier's program (--program): a 
 
 
 def _proved(d: Path, verdicts: dict[str, bool | str | None]) -> None:
-    """``verdicts``: each check's accepted, or its refusal's reason, or None for no verdict."""
+    """``verdicts``: each verifier's accepted, or its refusal's reason, or None for no verdict."""
     live = {"accepted": True, "instances": 2, "ands_per_vu": 10, "k_log": 10, "proof_bytes": [100], "prove_total_s": 1.0,
             "prove_s": [0.5], "witness_s": 0.1, "verdict": {"verify_s": 0.2}, "e2e_s": 1.2, "wire_sent": 1, "wire_recv": 1,
             "statement_digest": "cd", "circuit_sha512": "ab"}

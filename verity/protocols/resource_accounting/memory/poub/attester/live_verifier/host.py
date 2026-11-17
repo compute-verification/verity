@@ -62,7 +62,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   `party_log wipe|pous|bw [LOG]`, to root on the host alone (`PARTY_LOG_REFUSED` over ssh, to every key), the sessions and each one's stdout as the host kept it (its signed t0 and
   t1). A lane
   never names a path, an address or an egress count: a session signs no egress count and its party takes none (the
-  count is evidence the wipe's check takes beside the signed session). A session waits for no verifier unit to run, each party serves one session at a time, and the
+  count is evidence the wipe's verifier takes beside the signed session). A session waits for no verifier unit to run, each party serves one session at a time, and the
   gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
 - **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` in the
   evidence store (a preserved tree of kind `verifier-run/v1`, by the store's reader in the pinned tree, `research.store.local`, never

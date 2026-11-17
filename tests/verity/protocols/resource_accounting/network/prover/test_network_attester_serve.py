@@ -1018,7 +1018,7 @@ def test_a_run_under_another_key_gets_no_file_under_the_keys_hash_and_one_under_
 def test_a_registration_with_a_wrong_signature_gives_no_file_and_the_reader_holds_nothing(tmp_path, monkeypatch):
     """A registration whose signature is changed still names its own head's digest, so the reader's `head_of` reads
     the head it read before, and a reader handed that registration would hold its execution phase: the reader
-    checks no signature. The check refuses it under the key, so it writes no file and removes the one an earlier
+    checks no signature. The verifier refuses it under the key, so it writes no file and removes the one an earlier
     check wrote, with the lines of the two execution phases it still holds; the reader, handed what the check left,
     charges every class its whole schedule and says no registration was read. With the run's files put back the
     check writes the file it wrote before."""

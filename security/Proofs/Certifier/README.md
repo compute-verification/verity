@@ -305,7 +305,7 @@ last three by `pooledIncorrectBlocks`, `pooledLeak` and `pooledLeakRegistered`).
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `EgressPrediction`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 possible incorrect set; the period's also over the network attester's code as `Definitions` states it, which no compiled
-program implements yet), not over the network check's code, and no Lean states that an accepted run of the check is
+program implements yet), not over the network verifier's code, and no Lean states that an accepted run of the check is
 a run the first 6 count. Two are the
 ingress theorems (`PROTOCOL.md`'s "Capacity"):
 

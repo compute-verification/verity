@@ -91,7 +91,7 @@
   compiler reads is refused by name. A verifier that reads no log's compiler passes `UNREAD`, the default, and the
   caller's check holds the window to nothing here.
 * **Output values**: a registered value that is an output of an earlier run (`outputs`: `{value: {"record": D, "port":
-  P}}`; never the inference-only check's θ, which holds registered public data only) reuses that output's commitment instead of
+  P}}`; never the inference-only verifier's θ, which holds registered public data only) reuses that output's commitment instead of
   committing it afresh: its entry takes port P's domain and root from the `roots` of the log's record with digest D, and
   P's leaf count must be the value's rows (`R7-output` when the log holds no such record or port, or the counts differ).
   Its rows stay under the earlier run's hiding leaves, so nothing about the value is opened, and the reads open against

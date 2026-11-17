@@ -5,7 +5,7 @@ It prints two policies. First the served one, priced from its stated numbers (`s
 tree builds no circuit of the served class, so no check runs on it, and its number is the command's. Then the class this
 tree builds, which is not served (`built.py`): its policy by the integration's code, the Lean count's verdict and cost,
 its number, and the record's three divisions. Then both over monitoring periods. Then the served class under the value
-tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW check credits: `--uncredited-share`, which has
+tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW verifier credits: `--uncredited-share`, which has
 no default, so without it no figure of the tied policy prints, and with it every one prints under a label saying it
 rests on no PoUW verdict. Then one JSON object, printed last and written to `--out`, whose `value` is the command's
 number, also written into the run's result under the metric's id (`METRIC`).
