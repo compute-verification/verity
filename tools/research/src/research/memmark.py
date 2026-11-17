@@ -33,6 +33,7 @@ A GB is 10^9 bytes; a slot's booking and a queue job's memory are GiB, 2^30 byte
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
@@ -202,9 +203,11 @@ def process_records(lines: Iterable[str]) -> Iterator[dict[str, Any]]:
         if '"kind":"process","scope":"process"' not in ln:
             continue
         try:
-            yield json.loads(ln)
-        except ValueError:
+            rec = json.loads(ln)
+        except ValueError as e:
+            print(f"memmark: a process sample line is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
+        yield rec
 
 
 def _scope_peak(run_dir: Path) -> int | None:
