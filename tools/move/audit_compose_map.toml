@@ -34,3 +34,10 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
 include = []
 
 [modules]
+"benchmarks.one_stage.composite" = "verity.protocols.compose.prover.composite"
+"benchmarks.one_stage.inference_only_lean" = "verity.protocols.compose.prover.inference_only_lean"
+"benchmarks.one_stage.r2_population" = "verity.protocols.proofs.spot.prover.audit.other_population"
+"benchmarks.one_stage.served_cases" = "verity.protocols.compose.prover.served_cases"
+"tests.benchmarks.one_stage.test_composite" = "tests.verity.protocols.compose.prover.test_composite"
+"tests.benchmarks.one_stage.test_r2_population" = "tests.verity.protocols.proofs.spot.prover.test_other_population"
+"tests.benchmarks.one_stage.test_served_cases" = "tests.verity.protocols.compose.prover.test_served_cases"
