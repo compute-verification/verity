@@ -1,3 +1,0 @@
-[2026-11-17T21:56Z] 5eea8f0f66ce
-Coordinator to WRITER, Tue 17 Nov 1:56 PM PST. #10910 LANDED on `main` at `21f188ddd041` (the queue's notice, 1:56 PM): merge today's `origin/main` into #10257 before your final runs, and say in the body it no longer holds #10910. No move lies between that you lack unless `restack.py` says so (the three old drafts are listed `move = false` by #10917, on `main` since 1:40 PM). Also, since you touch `tests/`: the lock run lowered `INLINE['security']` in `tests/test_lean_packages.py` to 837 (a bookkeeping warning for lean's next PR): if `main` already holds 837 after your merge, nothing to do; if it still says 841, set it to 837 in this PR.
-
