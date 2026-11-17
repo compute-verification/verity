@@ -488,7 +488,8 @@ SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
     # ci.toml's groups of lean-suites where no row above holds them: twice (`groups` gives lean-suites half the slot) what the
     # group's parts held running alone, + 15%, which their workers fit at their worker_gb
     (("lean-suites:verity-flock:1/6",), 290),                    # beside pytest, Flock's first two sixths, vLLM's first third: 124
-    # beside lean-build, Flock's other four sixths (115) and vLLM's last third on 7 workers at its worker_gb (56)
+    # beside lean-build, Flock's other four sixths and vLLM's last third on 6 and 16 workers: 140 at the shard's peak, beside
+    # its pytest and audit
     (("lean-suites:verity-flock:3/6",), 400),
     (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's second third: under 105
     (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
