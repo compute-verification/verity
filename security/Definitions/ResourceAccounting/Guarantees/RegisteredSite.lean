@@ -157,14 +157,14 @@ def LeakPartsRegistered : Prop :=
         (S.placeEnds e).1 ∉ S.placesIn (S.auditorsOf pinned i) ∧
           (S.placeEnds e).2 ∉ S.placesIn (S.auditorsOf pinned i)) →
       CausalStrategy R ℓ → DeclaredLinks R S.placeEnds β link →
-      TrustedUnits R 𝒱 (S.placesIn (S.certifiersOf i ∪ units)) spec record bucket jitter →
-      Secrets R (S.placesIn (S.certifiersOf i ∪ units))
+      TrustedUnits R 𝒱 (S.placesIn (S.attestersOf i ∪ units)) spec record bucket jitter →
+      Secrets R (S.placesIn (S.attestersOf i ∪ units))
         (S.placesIn (S.proverUnder i ∪ (S.challengersOf pinned i \ units))) a →
-      RecordsWithin R (S.placesIn (S.certifiersOf i ∪ units)) record a b K →
+      RecordsWithin R (S.placesIn (S.attestersOf i ∪ units)) record a b K →
       (Set.range fun r => (R r).acts (S.placesIn (S.proverUnder i ∪ (S.challengersOf pinned i \ units)) ∪
-          S.placesIn (S.certifiersOf i ∪ units))ᶜ (Set.Ico a b)).encard ≤
-        ((2 ^ ((∑ y ∈ S.placesIn (S.certifiersOf i ∪ units), K y) +
-          jitter * ((Finset.Ico a b).image bucket).card * (S.placesIn (S.certifiersOf i ∪ units)).card +
+          S.placesIn (S.attestersOf i ∪ units))ᶜ (Set.Ico a b)).encard ≤
+        ((2 ^ ((∑ y ∈ S.placesIn (S.attestersOf i ∪ units), K y) +
+          jitter * ((Finset.Ico a b).image bucket).card * (S.placesIn (S.attestersOf i ∪ units)).card +
           uncertifiedLinkCapacity S.placeEnds β (S.placesIn (S.auditorsOf pinned i))
             (S.placesIn (S.proverUnder i)) * (b - a)) : ℕ) : ℕ∞)
 
