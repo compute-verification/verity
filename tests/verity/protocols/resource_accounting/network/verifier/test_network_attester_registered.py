@@ -1,8 +1,8 @@
 """The network attester's link and key read from the registered hardware (`registered.py`): the accepting case, each
 refusal by its message, a site that is no site, and the Python held to the Lean (`NetworkCheck.Registered`) on the same
-vectors: the cases below and seeded sites around them, each answered by `tests/lean/RegisteredVectors.lean` in network
-certification's check's Lake package and by the Python, which agree on the registered link, on each refusal's message
-and on which sites are malformed."""
+vectors: the cases below and seeded sites around them, each answered by `tests/lean/RegisteredVectors.lean` in
+network attestation's check's Lake package and by the Python, which agree on the registered link, on each refusal's
+message and on which sites are malformed."""
 
 from __future__ import annotations
 
