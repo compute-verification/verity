@@ -1,7 +1,7 @@
 # native_peak: a GPU's measured dense peak
 
 `measure.py` measures what a card sustains on dense tensor-core work for one dtype, beside the data-sheet peak for that card
-and dtype. Verity takes hardware peak rates from data sheets (`benchmarks/census/hardware.json`); this is their measured
+and dtype. Verity takes hardware peak rates from data sheets (`calibration/census/hardware.json`); this is their measured
 counterpart, and the native anchor that overhead figures such as `overhead.vs_native_peak` compare against. Nothing here is
 a proof.
 

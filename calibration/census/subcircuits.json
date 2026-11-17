@@ -10,7 +10,7 @@
       },
       "datatype": {
         "type": "string",
-        "description": "the operand datatype (benchmarks/census/datatypes.json)"
+        "description": "the operand datatype (calibration/census/datatypes.json)"
       },
       "semantics": {
         "type": "string",
@@ -35,7 +35,7 @@
       "variables": {},
       "source": "verity.circuits.ops.gemm GemmCoordinate: K/16 tensor-core steps of 16 multiply-adds",
       "bytes_per_input": "K*BITS//8",
-      "bytes_basis": "reads the coordinate's weight row w[K] at the operand datatype's width (BITS, benchmarks/census/datatypes.json); x[K] is shared by every coordinate of its row and y is one word, so neither is counted per coordinate (the batch-1 decode reading: GEMM streams its weights)",
+      "bytes_basis": "reads the coordinate's weight row w[K] at the operand datatype's width (BITS, calibration/census/datatypes.json); x[K] is shared by every coordinate of its row and y is one word, so neither is counted per coordinate (the batch-1 decode reading: GEMM streams its weights)",
       "bytes_source": "bench-spine's port definitions (verity_flock.subcircuit_templates): gemm-coordinate x[K], w[K] -> y"
     },
     "subcircuits": [
@@ -149,7 +149,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "vLLM's reduction lengths (benchmarks/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
+            "label": "vLLM's reduction lengths (calibration/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
           }
         ]
       },
@@ -164,7 +164,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "vLLM's reduction lengths (benchmarks/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
+            "label": "vLLM's reduction lengths (calibration/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
           }
         ]
       },
@@ -179,7 +179,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "vLLM's reduction lengths (benchmarks/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
+            "label": "vLLM's reduction lengths (calibration/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
           }
         ]
       },
@@ -194,7 +194,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "vLLM's reduction lengths (benchmarks/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
+            "label": "vLLM's reduction lengths (calibration/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
           }
         ]
       },
@@ -209,7 +209,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "vLLM's reduction lengths (benchmarks/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
+            "label": "vLLM's reduction lengths (calibration/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
           }
         ]
       },
@@ -224,7 +224,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "vLLM's reduction lengths (benchmarks/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
+            "label": "vLLM's reduction lengths (calibration/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
           }
         ]
       },
@@ -239,7 +239,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "vLLM's reduction lengths (benchmarks/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
+            "label": "vLLM's reduction lengths (calibration/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
           }
         ]
       },
@@ -254,7 +254,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "vLLM's reduction lengths (benchmarks/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
+            "label": "vLLM's reduction lengths (calibration/census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend's and bligero-real-k's), keyed by statement (docs ontology, 'A result')"
           }
         ]
       },
@@ -269,7 +269,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #60 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -284,7 +284,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #57 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #57 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -299,7 +299,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in rows #73, #74 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -314,7 +314,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #60 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -329,7 +329,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #73 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #73 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -344,7 +344,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #39 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -359,7 +359,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #57 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #57 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -374,7 +374,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #73 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #73 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -464,13 +464,13 @@
           "T": {
             "min": 1,
             "max": 4607,
-            "source": "the Attention strata of rows #11, #101 (benchmarks/census/workloads.json), by the template's variable_bounds"
+            "source": "the Attention strata of rows #11, #101 (calibration/census/workloads.json), by the template's variable_bounds"
           }
         },
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates.attention_head)"
+            "label": "row #101 (Llama-3.2-1B, calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates.attention_head)"
           }
         ]
       },
@@ -486,13 +486,13 @@
           "T": {
             "min": 1,
             "max": 1151,
-            "source": "the Attention strata of rows #73, #74 (benchmarks/census/workloads.json), by the template's variable_bounds"
+            "source": "the Attention strata of rows #73, #74 (calibration/census/workloads.json), by the template's variable_bounds"
           }
         },
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in rows #73, #74 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       },
@@ -508,13 +508,13 @@
           "T": {
             "min": 1,
             "max": 4607,
-            "source": "the Attention strata of rows #39, #60, #67, #68 (benchmarks/census/workloads.json), by the template's variable_bounds"
+            "source": "the Attention strata of rows #39, #60, #67, #68 (calibration/census/workloads.json), by the template's variable_bounds"
           }
         },
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #39, #60, #67, #68 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in rows #39, #60, #67, #68 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -563,7 +563,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
+            "label": "row #101 (Llama-3.2-1B, calibration/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
           }
         ]
       },
@@ -576,7 +576,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #39, #60, #67, #68, #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in rows #39, #60, #67, #68, #73, #74 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -589,7 +589,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #57 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #57 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -656,7 +656,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
+            "label": "row #101 (Llama-3.2-1B, calibration/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
           }
         ]
       },
@@ -670,7 +670,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #60 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -684,7 +684,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #39 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -698,7 +698,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in rows #73, #74 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -765,7 +765,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
+            "label": "row #101 (Llama-3.2-1B, calibration/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
           }
         ]
       },
@@ -779,7 +779,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #60 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -793,7 +793,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in rows #73, #74 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -807,7 +807,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #39 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -821,7 +821,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in rows #73, #74 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -872,7 +872,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
+            "label": "row #101 (Llama-3.2-1B, calibration/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
           }
         ]
       },
@@ -885,7 +885,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #67, #68 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in rows #67, #68 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -898,7 +898,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #60 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -911,7 +911,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in row #39 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -924,7 +924,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
+            "label": "served in rows #73, #74 (calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -984,7 +984,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates, the gumbel-top-p-token-select row)"
+            "label": "row #101 (Llama-3.2-1B, calibration/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates, the gumbel-top-p-token-select row)"
           }
         ]
       }
@@ -1031,7 +1031,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #11 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in row #11 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       },
@@ -1044,7 +1044,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #39, #73, #74 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in rows #39, #73, #74 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       },
@@ -1057,7 +1057,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #57 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in row #57 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       },
@@ -1070,7 +1070,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in row #60 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       },
@@ -1083,7 +1083,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #67, #68 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in rows #67, #68 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       }
@@ -1149,7 +1149,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #67, #68 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in rows #67, #68 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       }
@@ -1201,7 +1201,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #67, #68 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in rows #67, #68 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       }
@@ -1253,7 +1253,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #67, #68 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in rows #67, #68 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       }
@@ -1307,7 +1307,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #67, #68 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in rows #67, #68 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       }
@@ -1364,7 +1364,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #74 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in row #74 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       },
@@ -1379,7 +1379,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #74 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in row #74 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       },
@@ -1394,7 +1394,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #74 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in row #74 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       }
@@ -1441,7 +1441,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #39 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in row #39 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       }
@@ -1488,7 +1488,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #57 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in row #57 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       }
@@ -1548,7 +1548,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<datatype> form (bench-spine has no embedding template: a commitment opening)"
+            "label": "row #101 (Llama-3.2-1B, calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<datatype> form (bench-spine has no embedding template: a commitment opening)"
           }
         ]
       },
@@ -1562,7 +1562,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #39 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in row #39 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       },
@@ -1576,7 +1576,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #67, #68 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in rows #67, #68 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       },
@@ -1590,7 +1590,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #57 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in row #57 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       },
@@ -1604,7 +1604,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in rows #73, #74 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       },
@@ -1618,7 +1618,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+            "label": "served in row #60 (calibration/census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       }
