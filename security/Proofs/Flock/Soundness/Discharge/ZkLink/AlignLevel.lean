@@ -5,12 +5,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.CompiledAlign
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The masked level 0's locksteps for two level-0 tables are aligned
-
-`LockLevel`'s locksteps take the level-0 table `C₀` into the oracle games and the leaf relations only, never the
-compiled side or the slots, so two tables give `Lock.Aligned` locksteps (`CompiledAlign` for the masked level 0).
--/
+/-! The masked level 0's locksteps for two level-0 tables are aligned. -/
 
 @[expose] public section
 

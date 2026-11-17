@@ -31,21 +31,7 @@ import Proofs.Flock.Soundness.Refine.Opening
 import Proofs.Flock.Soundness.Refine.Plays
 import Proofs.Flock.Soundness.Refine.Zerocheck
 
-/-!
-# A `--zk` rep's inner check holds on its inner openings
-
-`ZkRepAccepts`'s second conclusion. The compiled rep's seven level-0 rows are the seven constraints `repProg` hands
-`Zk.verifyInner`, in their order: the replay's three (`zk_replay_rows`), the two ring switches' (the masked opening's
-values are the claim checks, `openingZK_plays'`) and level 0's two lane rows (`ligeritoPadZC_row`). So
-`zk_inner_accepts` applies to the compiled rep's inner proof.
-
-* `zk_decode_paths`: a decoded proof's path entries are 64 bytes.
-* `zk_inner_rows`: the run of the compiled rep that `zk_rep_plays` builds has an inner check that holds on the proof's
-  inner openings.
-* `zk_inner_of_rep`: at `ZkRepAccepts`'s hypotheses, every result of the compiled rep does (`plays_det`).
-* `zk_inner_qpos`, `zk_qpos_of_rep`: the position a result of the compiled rep records for inner query `jj` is the
-  table's `pos` at the rounds' last coin `jj`, the query word `Zk.verifyInner` samples.
--/
+/-! A `--zk` rep's inner check holds on its inner openings (`ZkRepAccepts`'s second conclusion). -/
 
 @[expose] public section
 
@@ -56,8 +42,6 @@ open FlockSoundness.Refine (ebind_ok)
 
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
-
-/-! ## The decoded paths -/
 
 theorem yields_vecAny {α : Type} {minSize : ℕ} {elem : Reader.M α} {w : String} {a : Array α}
     (h : Yields (vecAny minSize elem w) a) : ∀ e ∈ a, Yields elem e := by
@@ -90,7 +74,6 @@ theorem post_inner_paths :
   rw [getElem!_pos paths k hk] at hb
   exact yields_bytes (yields_vecAny (yields_vecAny hp _ (Array.getElem_mem hk)) b (Array.mem_toList_iff.1 hb))
 
-/-- **A decoded proof's path entries are 64 bytes.** -/
 theorem zk_decode_paths {sh : Shape} {bytes : ByteArray} {zp : Zk.ZkProof} (h : Zk.decode sh bytes = .ok zp) :
     ∀ k < zp.inner.paths.size, ∀ b ∈ (zp.inner.paths[k]!).toList, b.size = 64 := by
   unfold Zk.decode at h
@@ -128,8 +111,6 @@ theorem zk_decode_paths {sh : Shape} {bytes : ByteArray} {zp : Zk.ZkProof} (h : 
     refine post_bind fun _ _ => post_bind fun inner hinner => ?_
     exact post_pure (post_inner_paths inner hinner)
 
-/-! ## The layout's positions -/
-
 theorem lay_lt (l : Zk.PadLayout) :
     (∀ i < 64, l.r1ab i < l.len) ∧ (∀ i < 64, l.r1c i < l.len) ∧ (∀ j < l.nMlv, ∀ t < 2, l.ml j t < l.len) ∧
       l.fc < l.len ∧ (∀ j < l.nLc, ∀ t < 2, l.lc j t < l.len) ∧ (∀ i < 64, l.zp i < l.len) ∧
@@ -141,9 +122,6 @@ theorem lay_lt (l : Zk.PadLayout) :
   refine ⟨fun _ _ => ?_, fun _ _ => ?_, fun _ _ _ _ => ?_, ?_, fun _ _ _ _ => ?_, fun _ _ => ?_, ?_,
     fun _ _ _ _ => ?_, fun _ _ _ _ => ?_, ?_, ?_, ?_⟩ <;> omega
 
-/-! ## The masked opening's values -/
-
-/-- `openingZK_plays` with the values the masked opening gives the two claims: the claim checks `va`, `vc`. -/
 theorem openingZK_plays' {m : ℕ} (hm : 7 ≤ m) (va vc : 𝔽) (a c : Model.Claim 𝔽 m) (extra : List (Model.Claim 𝔽 m))
     {ms : List Msg} {cs : List (Array F128)} {op : OpenOut 𝔽}
     (h : Plays fOf (Model.opening execArith hm (⟨va, a.skip, a.x⟩ :: ⟨vc, c.skip, c.x⟩ :: extra)) ms cs (some op)) :
@@ -166,8 +144,6 @@ theorem openingZK_plays' {m : ℕ} (hm : 7 ≤ m) (va vc : 𝔽) (a c : Model.Cl
       exact Plays.bind' (hxa a) (Plays.bind' (hyc c) (Plays.bind' hE (Plays.bind' h₃ (Plays.pure _) rfl rfl) rfl rfl)
         rfl rfl) (by simp) (by simp), by exact hop.symm, by rw [← hck.1, ← hck.2]⟩
 
-/-! ## Level 0's lane rows, at the rounds `Zk.ligerito` consumed -/
-
 theorem consumed_lig (rs : Array Round) (k K k' : ℕ) (h : k + 4 + K ≤ k') :
     consumed rs k k' = (rs[k]!).coins :: (rs[k + 1]!).coins :: ((List.range' 0 K).map (fun i => (rs[k + 2 + i]!).coins) ++
       (rs[k + 2 + K]!).coins :: (rs[k + 3 + K]!).coins :: consumed rs (k + 4 + K) k') := by
@@ -188,9 +164,6 @@ theorem getElem!_map_range' {β : Type} [Inhabited β] (f : ℕ → β) (K : ℕ
   rw [getElem!_pos ((List.range' 0 K).map f) i (by simpa using hi)]
   simp
 
-/-- **Level 0's lane row, at a run of `Zk.ligerito`**: a run of the compiled masked level 0 on the rounds the run
-consumed, at pads the layout places and the target the opening's `T` is, returns the lane phase's row (`laneLhs`) at the
-run's record. -/
 theorem zk_lig_row (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0) (t t' : Flock.Transcript)
     (rec : Zk.L0Rec) (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -232,8 +205,6 @@ theorem zk_lig_row (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : 
   · rw [RoundsWF.get hwf, hnρ₁]
   · exact hρ
 
-/-! ## The seven rows -/
-
 theorem cons7_get {α : Type} [Inhabited α] (xs lg : Array α) (a b : α) (hX : xs.size = 3) (hlg : lg.size = 2) :
     (xs ++ #[a, b] ++ lg)[0]! = xs[0]! ∧ (xs ++ #[a, b] ++ lg)[1]! = xs[1]! ∧ (xs ++ #[a, b] ++ lg)[2]! = xs[2]! ∧
       (xs ++ #[a, b] ++ lg)[3]! = a ∧ (xs ++ #[a, b] ++ lg)[4]! = b ∧ (xs ++ #[a, b] ++ lg)[5]! = lg[0]! ∧
@@ -252,11 +223,6 @@ theorem rows7 {np : ℕ} {β : Type} (row row' A B C D E : ZkSession.Lin 𝔽 np
   fin_cases i
   exacts [h0, h1, h2, h3, h4, h5, h6]
 
-/-! ## The rep's inner check -/
-
-/-- **The positions the compiled inner proof records are the query words'**: on the coins a successful
-`Zk.verifyInner` consumed, a run of `innerGameC` records at query `jj` the position `pos` gives the fourth round's coin
-`jj`; the inner proof reads exactly four rounds. -/
 theorem zk_inner_qpos {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128} {cons : Array (String × Zk.Lin)}
     {t t' : Flock.Transcript} (hcons : cons.size = 7) (hwf : RoundsWF t.rounds)
     (h : Zk.verifyInner lay pr finalC cons t = .ok ((), t')) {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) {N : ℕ}
@@ -277,9 +243,6 @@ theorem zk_inner_qpos {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128} 
 -- one proof of over a hundred lines down the rep's masked and rest programs (`repProg`), `rw` and `omega` on the rows'
 -- indices
 set_option maxHeartbeats 1000000 in
-/-- **`repProg`'s run has an inner check that holds** (`zk_rep_plays` with its inner check): the run of the compiled
-rep that `zk_rep_plays` builds, at a table whose pads and inner code are the executable's and whose statement's fold
-the setup's circuit fold realizes, on a decoded proof, has an inner check that holds on the proof's inner openings. -/
 theorem zk_inner_rows {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
     (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
@@ -442,9 +405,6 @@ theorem zk_inner_rows {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 
   show v.2 jj = _
   rw [hq jj hjj, ht₃, show t₃.k + 3 = rounds.size - 1 by omega]
 
-/-- **A `--zk` rep's inner check holds on its inner openings** (`ZkRepAccepts`'s second conclusion, at its
-hypotheses): every result of the compiled rep, played with the rep's messages and the rounds' coins, has an inner check
-that holds at openings whose rep-`r` inner openings are the proof's. -/
 theorem zk_inner_of_rep {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2)
     (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
     (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript) (cap₀ : Cap Dig)
@@ -469,8 +429,6 @@ theorem zk_inner_of_rep {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 
   rw [hinner]
   exact hin
 
-/-- **A `--zk` rep's result records the query words' positions**: every result of the compiled rep, played with the
-rep's messages and the rounds' coins, records at inner query `jj` the table's `pos` at the rounds' last coin `jj`. -/
 theorem zk_qpos_of_rep {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2)
     (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
     (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)

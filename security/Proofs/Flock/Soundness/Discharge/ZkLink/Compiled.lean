@@ -4,36 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
 public import Proofs.Flock.Soundness.CompiledSound
 public import Proofs.Flock.Soundness.ExtractAcc
 
-/-!
-# The compiled `--zk` table and session (live/PROTOCOL.md §1, §3, §5, §7; PROTOCOL.md §5, §14)
-
-`sessionZK` (`Discharge/ZkSession/Session.lean`) is the protocol as Lean defines it at the interactive-oracle layer:
-`Commit` sends each table's level-0 oracle, each rep receives its pads as two words, level 1's oracle as a table, and
-the inner proof's `τ` in the clear. Here is the protocol as run, with every oracle a commitment:
-
-* `Commit` sends each table's **witness cap**, the level-0 tree of 68 lanes (`2^k₀` witness lanes and the reps' `2e`
-  extra lanes, one tree);
-* each rep (`repZC`) starts with the **pads root** (`recv D`, §3), runs the masked algebraic phase as in `repMaskedZK`,
-  and level 0 masked with Ligerito's levels compiled (`ligeritoPadZC`: level 1 onward commit by caps, and level 0's
-  consistency value is computed from the opened 68-lane rows, `padColumnO`), then `final_c'`;
-* the **inner proof** (`innerGameC`, §5) sends `τ`'s commitment (`recv D`) where the interactive-oracle layer sends `τ`;
-* after the last coin of both reps, one message (`OpensZ`) carries every opening: the queried rows of every level with
-  their salts and paths, and per rep the queried pads pairs `(C_h[j], C_mu[j])` with their salts and paths, and `τ`
-  with its salt.
-
-The table accepts (`tabAfterZC`) when both reps' Ligerito verdicts accept on the opened rows, both inner checks hold on
-the opened pads and `τ` (`innerCheckC`: `τ` opens its commitment, the batched constraint with the opened `τ`, the code
-identity at every query, and every pads path to the pads root), and every row path verifies from its row's leaf under
-its salt, level 0's rows being 68 lanes wide (`OpensOKZ`).
-
-`sessionZG` is `Exec.sessionG` over `--zk` tables: `sessionZK` is its instance at `TabZK.after` (`sessionZK_eq`), and the
-compiled session `sessionZC` its instance at `tabAfterZC`. `batchedSessionZC` is the compiled session on a sample, as
-`batchedSessionZK` is the interactive-oracle one.
-
-**Extraction** (as `SessionBatchAcc.lean` at M0): table `j`'s extractor fills its level-0 oracle from the verifying
-level-0 openings of `k` reruns of everything after `Commit` in which the session accepts (`extractTableZ`), and
-`extractProbAccZ` is the probability of an event of that oracle over those reruns.
--/
+/-! The compiled `--zk` table and session, with every oracle a commitment. -/
 
 @[expose] public section
 
@@ -44,8 +15,6 @@ open scoped ENNReal NNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type}
-
-/-! ## Level 0, compiled -/
 
 /-- **The padded level-0 column from an opened row**: `Model.padColumn` with the row's lanes for the oracle's. -/
 def padColumnO (A : Arith F K) (d cols t : ℕ) (c₀ : F) (ch : List K) {e : ℕ} (ρ : Fin e → K) (xl : Fin e → ℕ)
@@ -146,8 +115,6 @@ noncomputable def repMaskedZC (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (
       (restZC (D := D) A P₀ PA S sch hm t c₀ r extra o.1 o'.1).map (consRowC o'.2.toLin)).map (consRowC o.2.toLin)).map
     fun o => (o.1 ∘ ![3, 0, 1, 2, 4, 5, 6], o.2)
 
-/-! ## The inner proof, compiled -/
-
 /-- **A rep's inner-proof openings**: per query, the pads pair `(C_h[j], C_mu[j])` with its salt and its path to the
 pads root; and `τ` with its salt (§5, step 4). -/
 structure InnerOpens (F D Sl : Type) where
@@ -186,8 +153,6 @@ def innerGameC (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.
   let y ← recv (Fin (s + nP) → F)
   let w ← draw (Fin q → F)
   pure (innerCheckC H Ep Lp Lτ dom pos rows tr root cτ ε ρσ γ β y w, qposOf pos w)
-
-/-! ## The table -/
 
 /-- **The commitments' hash and leaf schemes**: `H` and its node encoding `E` for every tree, the row leaf `Lf` (the
 level-0 rows of 68 lanes and every level's rows), the pads-pair leaf `Lp` (with `Ep`, its tree's encoding) and `τ`'s
@@ -277,17 +242,12 @@ def dfltOutZC [Inhabited D] [Inhabited Sl] : OutZC F D Sl :=
   ⟨false, fun _ => default, (PendZ.reject, PendZ.reject),
     ⟨fun _ _ _ => ([], []), fun _ _ _ => default, fun _ => ⟨fun _ => ((0, 0), default, []), (0, default)⟩⟩⟩
 
-/-! ## The session -/
-
-/-- **A batched session over `--zk` tables and any table run** (`Flock.Record`; `Exec.sessionG` over `TabZK`): `Commit`
-sends every table's commitment `Cm`, then one link-point sample, then every table's run `tab` after them, concurrently. -/
 def sessionZG {Cm Out : Type} (tab : TabZK F mPts → Cm → (Fin 2 → Fin mPts → F) → Game Out)
     (ts : List (TabZK F mPts)) : Game (List Out) :=
   Game.send (Fin ts.length → Cm) fun cms =>
     Game.coin (Fin 2 → Fin mPts → F) fun pts => batch ((List.ofFn fun i => tab (ts.get i) (cms i)).map (· pts))
 
 omit [Fintype K] in
-/-- The interactive-oracle session is `sessionZG` at `TabZK.after`. -/
 theorem sessionZK_eq (A : Arith F K) (ts : List (TabZK F mPts)) :
     sessionZK A ts = sessionZG (fun T C pts => T.after A C pts) ts := by
   unfold sessionZK sessionZG
@@ -311,7 +271,6 @@ noncomputable def sessionZC (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (Tab
   Game.send (Fin ts.length → Cap D) fun caps => sessAfterZC (gamesZC A Hs ts caps)
 
 omit [Fintype K] in
-/-- The compiled session is `sessionZG` at `tabAfterZC`, as `sessionZK` is at `TabZK.after`. -/
 theorem sessionZC_eq (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts)) :
     sessionZC A Hs ts = sessionZG (tabAfterZC A Hs) ts :=
   rfl
@@ -337,8 +296,6 @@ noncomputable def zcStrat {S : Finset (Fin n)} {R : Reg} (τ : Strategy (batched
   Strategy.ofMap _ _ τ
 
 end Batched
-
-/-! ## Extraction from accepted reruns -/
 
 /-- Rep `r`'s first level-`ℓ` request's openings, `(position, row, salt, path)` for its first `Q` queries. -/
 def slotOpensZ (out : OutZC F D Sl) (r ℓ Q : ℕ) : List (ℕ × List F × Sl × List D) :=
@@ -382,21 +339,15 @@ section Acc
 
 variable [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts))
 
-/-- The probability that the compiled session accepts, after `Commit`. -/
 noncomputable def accProbZC (τ : Strategy (sessionZC A Hs ts)) : ℝ :=
   expect (ind (acceptedZC ts)) (sessAfterZC (gamesZC A Hs ts τ.1)) τ.2
 
 open Classical in
-/-- **An event of table `j`'s extraction, from accepted reruns**: the probability, over `k` reruns of everything after
-`Commit` in which the compiled session accepts, that the level-0 oracle the extractor fills from table `j`'s openings
-satisfies `G`. -/
 noncomputable def extractProbAccZ (j : Fin ts.length) (k : ℕ) (τ : Strategy (sessionZC A Hs ts))
     (G : Oracle F → Prop) : ℝ :=
   Extract.expectAcc (sessAfterZC (gamesZC A Hs ts τ.1)) τ.2 (acceptedZC ts) k
     (ind fun bs => G (extractTableZ Hs (ts.get j) j (τ.1 j) bs))
 
-/-- **Table `j`'s extraction from accepted reruns fails**: no padded witness near the extracted oracle satisfies the
-table's statement. -/
 noncomputable def failProbAccZ (j : Fin ts.length) (k : ℕ) (τ : Strategy (sessionZC A Hs ts)) : ℝ :=
   extractProbAccZ A Hs ts j k τ fun C => ¬ (ts.get j).Committed A C
 

@@ -20,14 +20,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 set_option Elab.async false
 
-/-!
-# The rows at the hidden-output `--zk` tables of `J` tables, with or without shared rows
-
-`ZkHidden.rsZHJ` takes `pub.tables = none`, as `ZkHidden.rsZH` does at one table (`BindH.lean`), so here are `rsShHJ`,
-`rsZHJ` and their `Computes` without it: `tableShHJ_bcSiteS` is `ZkHidden.tableShHJ_bcSite` from
-`HiddenExec.tableH_bcSiteS`, at table `j`'s inputs. `layShHJ` is the shadow layout `layZHJ` moves to the `--zk` tables,
-where the registered reads (`Registered.ReadsX`) are read.
--/
+/-! The rows at the hidden-output `--zk` tables of `J` tables, with or without shared rows. -/
 
 namespace FlockSoundness.Discharge.ZkReg
 
@@ -43,7 +36,6 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
   (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
 include hU hpub in
-/-- `BcSiteH` at a table set up at table `j`'s inputs, with or without shared rows (`tableH_bcSiteS`). -/
 theorem tableShHJ_bcSiteS {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parse Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
     (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
@@ -53,7 +45,6 @@ theorem tableShHJ_bcSiteS {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I'
   exact tableH_bcSiteS p₁ p₂ hscope (fun _ => d) hU ((loadPublicH_tagsAt _ _ _ _ _).trans hpub) x h
 
 include hU hpub in
-/-- **`BcSiteH` at every satisfiable public site** at `J` tables, with or without shared rows. -/
 theorem sitesShHJ_bcSiteS :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShHJ dj y₀) (tabShHJ dj y₀) S R u),
@@ -93,7 +84,6 @@ theorem rsShHJS_computes : (rsShHJS dj y₀ ht hc hscope hU hpub (Reg := Reg)).C
 noncomputable abbrev rsZHJS : HmRowsZX (layZHJ dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
   HmRowsZX.ofShadow (planZHJ_S dj y₀) (decAgreeHJ dj y₀ ht hc hscope hU) (rsShHJS dj y₀ ht hc hscope hU hpub)
 
-/-- **`hHm` at the hidden-output `--zk` tables' rows of `J` tables, with or without shared rows** (`rsZHJ_computes`). -/
 theorem rsZHJS_computes : (rsZHJS dj y₀ ht hc hscope hU hpub (Reg := Reg)).Computes :=
   HmRowsZX.ofShadow_computes (planZHJ_S dj y₀) (decAgreeHJ dj y₀ ht hc hscope hU) _
     (rsShHJS_computes dj y₀ ht hc hscope hU hpub)

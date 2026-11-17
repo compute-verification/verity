@@ -22,17 +22,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
-/-!
-# `RunsZC`'s verdict half: the compiled `--zk` table accepts at the two reps' results
-
-* `zk_table_verdict_of`: `ZkTableVerdict` from its per-rep half `ZkRepAccepts`, through `Zk.verifyRep`'s acceptance
-  (`zk_verifyRep_ok`): both reps share the statement's extra claims, their proofs decode at one shape, their caps are
-  the one `root_B` (`capOfRoot_eq`), `opnZ` reads each rep's rows, salts and inner openings off its own proof, and the
-  results exist (`zk_rep_plays`).
-* `zk_rep_accepts`: `ZkRepAccepts`'s three conclusions, each its own lemma: the Ligerito verdict (`zk_lig_accepts`,
-  `VerdictLig.lean`), the inner check (`zk_inner_of_rep`, `VerdictRows.lean`, through `zk_inner_accepts`) and the
-  requested rows (`zk_opens_ok`, `VerdictOpens.lean`).
--/
+/-! `RunsZC`'s verdict half: the compiled `--zk` table accepts at the two reps' results. -/
 
 @[expose] public section
 
@@ -69,7 +59,6 @@ theorem opnZ_pair (h₀ : Zk.decode (shapeZKn st sch n) b₀ = .ok zp₀) (h₁ 
 end Opn
 
 open Classical in
-/-- **The compiled `--zk` table accepts** when both reps' results accept, at one level-0 cap. -/
 theorem accZ_of {n mPts : ℕ} {Reg : Type} {T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts} {S : Finset (Fin n)}
     {R : Reg} {cap₀ : Cap Dig} {pend : ZkLink.PendZ 𝔽 Dig (List UInt8) × ZkLink.PendZ 𝔽 Dig (List UInt8)}
     {os : ZkLink.OpensZ 𝔽 Dig (List UInt8)}
@@ -85,7 +74,6 @@ theorem accZ_of {n mPts : ℕ} {Reg : Type} {T : Finset (Fin n) → Reg → ZkSe
   simp only [ZkLink.outZC, h₀.1, h₁.1, Bool.true_and, decide_eq_true_eq]
   exact ⟨h₀.2.1, h₁.2.1, h₀.2.2, h₁.2.2⟩
 
-/-- **`ZkTableVerdict` from its per-rep half.** -/
 theorem zk_table_verdict_of (hrep : ZkRepAccepts) : ZkTableVerdict := by
   intro n mPts Reg T S R pts spec st sch tPad sess i b₀ b₁ c hz hms hseam hlay hfold hext hwf h0 h1
   obtain ⟨s₀, ex, zp₀, tr₀, hs₀, hx₀, hd₀, -, -, hrun₀, hk₀, hc₀, hb₀⟩ :=
@@ -128,7 +116,6 @@ theorem zk_table_verdict_of (hrep : ZkRepAccepts) : ZkTableVerdict := by
         hrun₁ hk₁ (hcap hd₁ hc₁) (fun ℓ j => by rw [hro]; simp [opensOf])
         (fun ℓ j => by rw [hsa]; simp [saltsOf]) hi₁ pend.2 hp₁
 
-/-- **The compiled `--zk` table accepts at the two reps' results.** -/
 theorem zk_table_verdict : ZkTableVerdict := zk_table_verdict_of zk_rep_accepts
 
 end FlockSoundness.Discharge.ZkExec

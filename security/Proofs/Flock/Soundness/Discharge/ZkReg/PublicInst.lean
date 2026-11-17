@@ -33,18 +33,7 @@ import Proofs.Flock.Soundness.Game
 
 set_option Elab.async false
 
-/-!
-# One hidden-output `--zk --registered` sampled session of `J` tables, at the template instance's program
-
-`checked_of_acceptsHJ`, `zk_session_soundHJR_custody_reg` and `zk_session_soundHJR_custody_sampled_reg` at `instProg c n`
-in place of `Placed.keyProg c hU n` (`ZkHidden.SoundInst`), with the circuit conditions `hrf`, `hpr` and `hw` in place
-of `scopeOkH`.
-
-* `checked_of_acceptsHJI`: the registered reads are checked at every accepted outcome. The registered leaf at a row of
-  `instLayoutH` is the public file's, as at `keyLayoutH`, so `checked_of_acceptsHJ`'s argument reads unchanged.
-* `zk_session_soundHJR_custody_regI`, `zk_session_soundHJR_custody_sampled_regI`: the session's bound with "wrong"
-  `incorrectRegZ` at `rsZHJI`, and the registered check at every accepted outcome.
--/
+/-! One hidden-output `--zk --registered` sampled session of `J` tables at the template instance's program. -/
 
 namespace FlockSoundness.Discharge.ZkReg
 
@@ -57,10 +46,6 @@ open scoped ENNReal
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **The registered reads are checked at every accepted hidden-output outcome of `J` tables, at `instProg`.** At an
-outcome `verify --zk --registered F` accepts (`own` F's ports), each registered read of `layShHJI` that is the
-verifier's own at the sample of the table its unit is sampled into (`OwnReadsHJ`) has its registered leaf open the root
-`own` holds at the position `own` gives, through `regPathsHJ`. -/
 theorem checked_of_acceptsHJI (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
@@ -131,9 +116,6 @@ theorem checked_of_acceptsHJI (I : Inputs) (ht : I.tags.typed = false) (own : Ar
   rw [hleaf, hra, hpath, hdig]
   exact hopens
 
-/-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound against the registration under
-`live-verifier`, and its registered reads are checked, at `instProg`.** `zk_session_soundHJR_custody_reg` with the
-template instance's program: "wrong" is `incorrectRegZ` at the prover's registration `reg σ`, read through `rsZHJI`. -/
 theorem zk_session_soundHJR_custody_regI
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -183,9 +165,7 @@ theorem zk_session_soundHJR_custody_regI
     (zk_session_soundHJ_custody_regI I ht hc hU hpub hrf hpr hw kd hkd hdiv dj y₀ wr dg N Lb src hA3 hTags hCust
       hk hRw hM hρ hr ht' K₀ τ hCR)
 
-/-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound at the units it samples, and its
-registered reads are checked, at `instProg`.** `zk_session_soundHJR_custody_sampled_reg` with the template instance's
-program. The sample is the session's, so no sampling design over it is assumed (no A3, no `kd ≤ n`). -/
+/-- The sample is the session's, so no sampling design over it is assumed (no A3, no `kd ≤ n`). -/
 theorem zk_session_soundHJR_custody_sampled_regI
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)

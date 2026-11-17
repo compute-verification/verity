@@ -6,25 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The rows link at the compiled `--zk` audit
-
-`analysisZCReg` counts a sampled proof block incorrect when it is incorrect on the registration (`incorrectRegZ`). This file adds the units
-whose value layer differs, at a registered read, from the registrant's row (`rowsWrongZ`), and bounds the sampled proof blocks of
-both kinds by `ε_ks + ε_bind + δ_rows`, at a registrant's openings `wo` of the registered reads `isRead` whose
-commitments are the registered ones:
-
-* `RowsLinkEvZK`: the link event with the rows added: every close satisfying message decodes off the value layer on
-  some wire of the unit, or opens a registered read to a value other than the registrant's;
-* `psiRowsZC`, `rowsLinkEv_le_psiZC`: its trace at the commit strings, the link's (`psiZC`) plus the rows' (an
-  extraction reads, at a registered read, a value other than the registrant's);
-* `trial_rows_leZC`: the trial's rows mass at a registered read is at most `t'(1 + k)/2^256`, under A2 for the rows
-  finder (`RowsCRZC`), since the trial's opening and the registrant's then collide (`ValueBindingZ.collide_spec`);
-* `ideal_le_trialZC`: `ideal_mass_leZC`'s step from the trial to the audit's extractor, for any trace;
-* `analysisZCRows`, `zk_rowsBindSoundC`: the analysis, and its binding error at `rowsBoundZC`, `ε_bind + δ_rows` with
-  `δ_rows` at most `ε_bind`'s closed form;
-* `zk_flock_sampledC_rows`: `Audit.extraction_audit_sampled` at it.
--/
+/-! The rows link at the compiled `--zk` audit. -/
 
 @[expose] public section
 
@@ -43,9 +25,6 @@ variable {L : SamplingDesign n} {decode : DecoderZK (C := C) planZ tab} {Dh : Ty
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc)
   (isRead : vb.Pos → Prop) (wo : vb.Pos → vb.Opening)
 
-/-- **The link event with the rows**: on the oracle of unit `u`'s table, `CommittedPad`, and every padded witness near
-it that satisfies the statement decodes, on some wire of `u`, to a value other than `Xc`'s, or opens a registered read
-on `u`'s wires to a value other than the registrant's (`wo`). -/
 def RowsLinkEvZK (S : Finset (Fin n)) (R : Reg) (u : Fin n) (Xc : Fin C.N → Bool) (C₀ : Oracle F) : Prop :=
   (tabOfZ planZ tab S R u).Committed A C₀ ∧
     ∀ M ∈ padWits A (tabOfZ planZ tab S R u).sch (tabOfZ planZ tab S R u).t (tabOfZ planZ tab S R u).c₀ C₀,
@@ -54,8 +33,6 @@ def RowsLinkEvZK (S : Finset (Fin n)) (R : Reg) (u : Fin n) (Xc : Fin C.N → Bo
           ∃ g ∈ P.io u, isRead (vb.pos g) ∧ vb.val (vb.opening S R u M (vb.pos g)) ≠ vb.val (wo (vb.pos g))
 
 open Classical in
-/-- **The units off the registrant's rows** at the value layer `Xv`: those with a committed wire at a registered read
-whose bit in `Xv` is not the registrant's row's. -/
 noncomputable def rowsWrongZ (Xv : Fin C.N → Bool) : Finset (Fin n) :=
   Finset.univ.filter fun u => ∃ g ∈ P.io u, isRead (vb.pos g) ∧ Xv g ≠ vb.bit (vb.val (wo (vb.pos g))) g
 
@@ -73,8 +50,6 @@ section Trial
 variable (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 
 open Classical in
-/-- **The rows' trace at commit string `c`**: `c` is a registered read, and the extraction from the reruns `bs` reads
-a value there other than the registrant's. -/
 noncomputable def psiRowsZC (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) : ℝ :=
   if isRead c ∧ ∃ v ∈ readsAtZC A Hs P planZ tab vb R τ ω bs c, v ≠ vb.val (wo c) then 1 else 0
 
@@ -100,9 +75,6 @@ theorem trialVal_psiRowsZC (c : vb.Pos) (e : TrialOutZC F L D Sl) :
     | some bs => simp [ind, ha, hf, psiRowsZC]
   · simp [ind, ha]
 
-/-- **The trial's rows mass at a registered read `c`**, under A2 for the rows finder: at most `t'(1 + k)/2^256`. A
-value the trial reads at `c` other than the registrant's comes with an opening of `c`'s registered commitment
-(`opOfVZC_spec`), which is the registrant's opening's (`hon`), so the binding's extractor collides on the two. -/
 theorem trial_rows_leZC {t' : ℝ} (ht : 0 ≤ t') (k Rw : ℕ) (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)]
     (_hrc : isRead c) (hon : vb.com (wo c) = vb.cs R c)
     (hCR : Assumptions.SHA512CRExpected Hc (trialGZC A Hs P planZ tab vb R τ c k Rw)
@@ -135,9 +107,6 @@ theorem trial_rows_leZC {t' : ℝ} (ht : 0 ≤ t') (k Rw : ℕ) (c : vb.Pos) [No
           (trialStratZC A Hs P planZ tab vb R τ c k Rw) / 2 ^ (256 : ℝ) := hCR
     _ ≤ _ := div_le_div_of_nonneg_right hcost (by positivity)
 
-/-- **From the trial to the audit's extractor, for any trace `Ψ` at `c`** (`ideal_mass_leZC`'s step): a trace in
-`[0, 1]` that vanishes at samples that do not read `c`, jointly with acceptance and averaged over the sample, is at most
-`π c` times the trial's bound `Bt` plus `k/(eRw)` for the waits that give up. -/
 theorem ideal_le_trialZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω → List (List (OutZC F D Sl)) → ℝ)
     (h0 : ∀ ω bs, 0 ≤ Ψ ω bs) (h1 : ∀ ω bs, Ψ ω bs ≤ 1)
     (hoff : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → Ψ ω = fun _ => 0) {Bt : ℝ} (hBt : 0 ≤ Bt)
@@ -197,9 +166,6 @@ theorem ideal_le_trialZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω �
     rw [h0']
     exact mul_nonneg (mul_nonneg (div_nonneg (Nat.cast_nonneg _) hΩ.le) hB) hΩ.le
 
-/-- **The ideal rows mass at `c`**: the audit extractor's reading, at a registered read `c` whose registrant's
-commitment is the registered one, of a value other than the registrant's, jointly with acceptance and averaged over the
-sample, is at most `π c (t'(1 + k)/2^256 + k/(eRw))` under A2 for the rows finder. -/
 theorem ideal_rows_leZC (k Rw : ℕ) (hRw : 1 ≤ Rw) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     (hon : isRead c → vb.com (wo c) = vb.cs R c)
     (hCR : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), isRead c →
@@ -223,10 +189,6 @@ theorem ideal_rows_leZC (k Rw : ℕ) (hRw : 1 ≤ Rw) {t' : ℝ} (ht : 0 ≤ t')
       rw [h0, expect_const]
       exact hBt
 
-/-- **The rows link event leaves a trace**: if sampled proof block `u`'s extracted table is committed but every close satisfying
-message decodes off the value layer on some wire of `u`, or opens a registered read to a value other than the
-registrant's, then some commit string reads a value other than its plurality, or a registered read a value other than
-the registrant's. -/
 theorem rowsLinkEv_le_psiZC (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw ω)
     (bs : List (List (OutZC F D Sl))) :
     ind (fun bs => RowsLinkEvZK A P planZ tab vb isRead wo (L.draw ω) R u (XplurZC A Hs P planZ tab vb R τ k Rw)
@@ -284,11 +246,7 @@ theorem rowsLinkEv_le_psiZC (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.d
 
 end Trial
 
-/-! ## The analysis, and its binding error -/
-
 open Classical in
-/-- **The compiled `--zk` audit's analysis, "wrong" against the registration and the registrant's rows**:
-`analysisZCReg` with `rowsWrongZ` added to "wrong", and the rows added to its link event (`RowsLinkEvZK`). -/
 noncomputable def analysisZCRows
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) (k : ℕ)
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)
@@ -353,7 +311,6 @@ noncomputable def analysisZCRows
     exact ENNReal.ofReal_le_ofReal key
 
 omit [Fintype K] in
-/-- `analysisZCRows`'s knowledge term is `analysisZC`'s, `ksAvgZC`. -/
 theorem zc_knowledgeSound_rows
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) {k : ℕ}
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)
@@ -369,9 +326,6 @@ theorem zc_knowledgeSound_rows
     (tab (L.draw ω) R u)
 
 open Classical in
-/-- **The link and rows bound, prover by prover**: twice `linkBoundZC`'s closed form at a prover whose link finders
-(`LinkCRZC`) and rows finders (`RowsCRZC`) satisfy A2 and whose registration's commitments at the registered reads are
-the registrant's, and `⊤` at any other. -/
 noncomputable def rowsBoundZC (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) :
     ℝ≥0∞ :=
   if LinkCRZC A Hs P planZ tab vb R τ k Rw M t' ∧ RowsCRZC A Hs P planZ tab vb R τ isRead wo k Rw t' ∧
@@ -382,9 +336,6 @@ noncomputable def rowsBoundZC (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont 
       (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
   else ⊤
 
-/-- **The rows link theorem**: `zk_linkSoundC` at `analysisZCRows`, whose binding error carries the rows: at a prover whose
-link and rows finders satisfy A2 and whose registered reads' commitments are the registrant's, `ε_bind + δ_rows` with
-each at most `Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))` (`rowsBoundZC`). -/
 theorem zk_rowsBindSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k : ℕ}
     {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
@@ -488,8 +439,6 @@ theorem zk_rowsBindSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : 
         div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => hc c) hρ1.le
     _ = _ := by rw [← Finset.sum_mul]; ring
 
-/-- **The sampled proof blocks of the compiled `--zk` audit, against the registration and the registrant's rows**: it accepts
-with a sampled proof block in `incorrectRegZ` or in `rowsWrongZ` with probability at most `ε_ks + ε_bind + δ_rows`. -/
 theorem zk_flock_sampledC_rows (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}

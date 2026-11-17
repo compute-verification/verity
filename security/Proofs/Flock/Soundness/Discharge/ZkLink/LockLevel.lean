@@ -3,15 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# The compiled masked level 0 in lockstep with the oracle one
-
-`CompiledLock`'s lockstep with level 0's rows `w₀` lanes wide (`AgreeZ`: `AgreeRep` with level 0's lanes `< w₀`, the
-witness lanes and both reps' extra lanes of one tree). `lockRecZ` is `lockRec` over `AgreeZ`; `lockLigPadZ` runs Flock
-ZK's masked level 0 (`ligeritoPadZK`) beside its compiled form (`ligeritoPadZC`), whose level-0 consistency value is
-computed from the opened rows (`padColumnO_eq`). The folds and the OOD samples are `CompiledLock`'s (`lockFold`,
-`lockTwoOod`), the masked lane rounds and `ρ` the same game on both sides (`lockFoldZK`, `Lock.same`).
--/
+/-! The compiled masked level 0 in lockstep with the oracle one. -/
 
 @[expose] public section
 
@@ -21,8 +13,6 @@ open Game Model Accounting ZkSession
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D : Type}
-
-/-! ## Agreement with level 0's wide rows -/
 
 /-- The openings agree with the fixed tables at every position rep `r` requested, level 0's rows on their `w₀` lanes
 and level `ℓ ≥ 1`'s on `2^lanes`. -/
@@ -115,8 +105,6 @@ where
       .coin F fun β =>
         .ret (queryRel_leafZ A r C₀ w₀ i lv ch start st stC h hlev w α β _ _ fun o ho =>
           (h.sq o ho.of_append).2)
-
-/-! ## The recursive rounds -/
 
 /-- `RecRel` over `AgreeZ`. -/
 def RecRelZ (r : ℕ) (C₀ : Oracle F) (w₀ : ℕ) (sch : Schedule) (i : IRep F D) (v : Bool) (p : PendL F D) : Prop :=
@@ -326,8 +314,6 @@ theorem RecRelZ.reject (r : ℕ) (C₀ : Oracle F) (w₀ : ℕ) (sch : Schedule)
   ⟨fun _ _ => rfl, rfl, by simp [PendL.reject], fun ℓ _ h => by simp [PendL.reject] at h,
     by simp [PendL.reject]⟩
 
-/-! ## Level 0 -/
-
 /-- **The masked lane rounds**, the same game on both sides, `k` challenges. -/
 def lockFoldZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (r : ℕ) (i : IRep F D) :
     (k j : ℕ) → (s : LinK K np) → (q : QuadL K np) →
@@ -345,7 +331,6 @@ def lockFoldZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (r : ℕ) (i : IRep
         (lockFoldZK A P r i (k + 1) (j + 1) _ _)
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
-/-- On a row agreeing with `C` at `p` on its `w₀` lanes, the padded column from the row is the oracle's. -/
 theorem padColumnO_eq (A : Arith F K) (d cols t : ℕ) (c₀ : F) (ch : List K) {e : ℕ} (ρ : Fin e → K)
     (xl : Fin e → ℕ) (ybar : Fin t → K) (row : List F) (C : Oracle F) (p w₀ : ℕ)
     (h : ∀ lane < w₀, row.getD lane 0 = C lane p) (hch : 2 ^ ch.length ≤ w₀) (hxl : ∀ i, xl i < w₀) :
@@ -358,7 +343,6 @@ theorem padColumnO_eq (A : Arith F K) (d cols t : ℕ) (c₀ : F) (ch : List K) 
   · exact Finset.sum_congr rfl fun i _ => by rw [h _ (hxl i)]
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
-/-- On agreeing rows, the batched value of a column function of the rows is the oracle column's. -/
 theorem consValuePad_eq (A : Arith F K) (α : List F) (col : List F → ℕ → K) (v : ℕ → K) (rows : ℕ → List F)
     (pos : List ℕ) (h : ∀ j < pos.length, col (rows j) (pos.getD j 0) = v (pos.getD j 0)) :
     ((pos.zipIdx).map fun pj => A.embed (eqList α pj.2) * col (rows pj.2) pj.1).sum = consValueV A α v pos := by
@@ -400,7 +384,6 @@ def lockQuery0Z (A : Arith F K) (r : ℕ) (C₀ : Oracle F) (w₀ : ℕ) (i : IR
       rw [(h.sq o ho.of_append).1, (h.sq o ho.of_append).2, he o ho]
       exact ⟨rfl, rfl⟩)
 
-/-- Rep `r`'s extra lanes lie in level 0's rows. -/
 theorem extraLane_lt (k0 e r : ℕ) (hr : r < 2) (i : Fin e) : extraLane k0 e r i < 2 ^ k0 + 2 * e := by
   unfold extraLane
   have : e * r ≤ e := by

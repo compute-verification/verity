@@ -21,12 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.CROnly.ZK
 import VCVio.Prelude.Core
 
-/-!
-# Lemma B at the `--zk` wire
-
-`Coined.hm96` is `Table.Hm96` at a `--zk` table: its leaves are `H(x ⊕ M·y, c(y))` by `leafSplit`, so `viewExe` and
-`simExe` are `Hm96.viewR` and `Hm96.simR`, and `CROnly.session_shvzk_gap` bounds any event of their encoding.
--/
+/-! Lemma B at the `--zk` wire. -/
 
 @[expose] public section
 

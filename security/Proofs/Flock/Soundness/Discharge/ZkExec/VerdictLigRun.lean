@@ -19,16 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Refine.LigeritoRun
 
-/-!
-# The hiding Ligerito's run, with its values
-
-`zk_ligerito_plays` with the values: the run of the compiled masked phase's Ligerito that the executable's coins give has,
-at the openings, the executable's claim, polynomial, out-of-domain and consistency contexts from level 0's queries on,
-so its verdict is the executable's final check (`final_refinesZ`). The lane phase is masked, so only its coins, `ρ`
-and the blinded claim `T'` carry over (`lane_vals`); level 0's enforced sum is `consE0` (`queryLevel0_val`), and with
-the extra lanes' terms it is the model's padded column (`consPad_eq`). Levels ≥ 1 are the non-ZK session's
-(`LigeritoRun.lean`).
--/
+/-! The hiding Ligerito's run with its values, whose verdict is the executable's final check. -/
 
 @[expose] public section
 
@@ -41,11 +32,8 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {β : Type}
 
-/-- A round's two coins as an element of K, as `sampleK` reads them. -/
 def kOf (c : Array F128) : F256 := ⟨c.getD 0 0, c.getD 1 0⟩
 
-/-- **The lane rounds' values**: each pushes its K coin and reads the next message; the last also takes the two `ρ`
-coins and sets the claim to `T'` before its message. -/
 theorem lane_vals (p : LigeritoProof) (tP : F256)
     (body : ℕ → Array F256 × F256 × F256 → LM (ForInStep (Array F256 × F256 × F256))) (K : ℕ)
     (hbody : ∀ i s st t b st' t', i < K → body i s st t = .ok ((b, st'), t') →
@@ -98,8 +86,6 @@ theorem lane_vals (p : LigeritoProof) (tP : F256)
       · rw [hρ', hr, hk, show t.k + 0 + 1 + (n + 1) = t.k + (n + 2) by omega]
       · rw [hqS, hmsg, show st.msg + 1 + (n + 1) - 1 = st.msg + (n + 2) - 1 by omega]
 
-/-- **Level 0's queries with their values**: `queryLevel0_bind` with the Merkle check on the `2^lanes + EXTRA_LANES`
-rows and the enforced sum, `consE0` over the first `2^lanes` entries of each row. -/
 theorem queryLevel0_val {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level} {cap : Array ByteArray}
     {fold : Array F256} (hq : lv.q ≠ 0)
     {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState} {t t' : Flock.Transcript} {b : β}

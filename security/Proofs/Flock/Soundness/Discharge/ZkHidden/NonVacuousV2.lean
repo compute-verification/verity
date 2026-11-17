@@ -25,26 +25,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 set_option Elab.async false
 
-/-!
-# The hidden-output headlines over `sha512/row/v2` rows hold of a circuit
-
-`Layout.scopeOkH` widens `Layout.scopeOk` by circuits whose rows are `sha512/row/v2` or `sha512/row-seg/v1` rows. The
-pins here say the widening by v2 rows alone is not empty and the widened headlines' premises meet there, so their
-guarantees over v2 rows hold of something (row-seg rows and a mix: `NonVacuousSeg.lean`).
-
-* `witnessV2`: a unit of one 1,024-bit input row whose one computed row is the AND of the row's bits 0 and 1, with its
-  input row `w` and its output row `y` each a `sha512/row/v2` row of 64 u16 words (1,024 bits) in one compression, one
-  output port per output row (the toy bit-row circuit's shape).
-* `witnessV2_scope`: every row of `witnessV2` is a `sha512/row/v2` row, `scopeOkH` admits it and `scopeOk` refuses it,
-  checked by evaluation.
-* `zk_session_soundHJ_nonvacuous_v2`: at a session `verify --zk` accepts whose circuit file parses as `witnessV2`, the
-  premises the hidden-output headlines read of the circuit hold together (`Built`, `scopeOkH`, the rows that fit,
-  `Hidden.Any.RowsFitS`, with every row a v2 row), with `zk_session_soundHJ_nonvacuous`'s `y₀` and sample hypotheses.
-
-Not covered: that a session over `witnessV2` exists (the verifier accepting one; the `_bit_row_toy` sessions show it at
-run time), `hRec`, `hpub`, `hpt`, `hkd`, `hA3`, the count curve's parameters and `TableCRZ`, as for
-`zk_session_soundHJ_nonvacuous`.
--/
+/-! The hidden-output headlines over `sha512/row/v2` rows hold of a circuit (`witnessV2`). -/
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -52,7 +33,6 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink 
 
 variable {n : ℕ}
 
-/-- One column per row: row 1024 is `[col]`, every other row empty. -/
 def witnessV2Rows (col : ℕ) : Sparse where
   rows := 2048
   width := 1026
@@ -60,8 +40,6 @@ def witnessV2Rows (col : ℕ) : Sparse where
   start := Array.replicate 1025 0
   len := (Array.replicate 1024 0).push 1
 
-/-- A unit of one 1,024-bit input row (input words 0 … 7, columns 0 … 1023), one computed row (column 1024, the AND of
-the row's bits 0 and 1), the constant (column 1025) and one output bit. -/
 def witnessV2Net : Net where
   name := "witness-v2"
   useful := 1026
@@ -73,29 +51,20 @@ def witnessV2Net : Net where
   bT := .pure (witnessV2Rows 1)
   unitLog := 11
 
-/-- A `sha512/row/v2` row of 64 u16 words (1,024 bits) in one compression. -/
 def witnessV2Port (name : String) : Flock.Port :=
   { name := name, words := 64, chunks := 1, nb := 1, bits := 1024, v2 := true }
 
-/-- A circuit whose unit is `witnessV2Net`, whose input row `w` and output row `y` are `sha512/row/v2` rows, one output
-port per output row. -/
 def witnessV2 : Flock.Circuit :=
   { (default : Flock.Circuit) with
     name := "witness-v2", nets := #[("unit", witnessV2Net)], unitNet := 0, outNet := 0,
     ports := #[witnessV2Port "w", witnessV2Port "y"], outPorts := #[("y", 1)], outRowPorts := #[1], g := 1, upv := 1 }
 
-/-- **`scopeOkH` admits a circuit of `sha512/row/v2` rows that `scopeOk` refuses.** -/
 theorem witnessV2_scope :
     witnessV2.ports.all (·.v2) = true ∧ Layout.scopeOkH witnessV2 = true ∧ Layout.scopeOk witnessV2 = false := by
   decide +kernel
 
-/-- **The hidden-output headlines' circuit premises and sample hypotheses hold together at `witnessV2`.** At the challenger's
-live-coin part's sample file (`SampleFileZK`, `subset kd`, the tables dividing `kd`) and one session `verify --zk` accepts at the
-sample `dj S`, on untyped inputs under `TagsOkZHJ`'s tags whose circuit file parses as `witnessV2`: its unit is built,
-`scopeOkH` admits it and `scopeOk` refuses it, its rows fit with every row a `sha512/row/v2` row
-(`Hidden.Any.RowsFitS`, `Hidden.rowV2`), and at `mPtsOf witnessV2.g (kd / nTab I)` link points there is a `y₀` (table
-0's setup), every table is set up, and `SampleOkZKHJ` holds at every sample (`zk_session_soundHJ_nonvacuous`, which applies
-`zk_session_soundHJ` to them). -/
+/-- Not covered: that a session over `witnessV2` exists, `hRec`, `hpub`, `hpt`, `hkd`, `hA3`, the count curve's
+parameters and `TableCRZ`. -/
 theorem zk_session_soundHJ_nonvacuous_v2 (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok witnessV2) (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) n)

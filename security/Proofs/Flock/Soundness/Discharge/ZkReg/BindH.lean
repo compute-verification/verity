@@ -22,14 +22,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
 
 set_option Elab.async false
 
-/-!
-# The rows at the hidden-output `--zk` tables, with or without shared rows
-
-`ZkHidden.rsZH` takes `pub.tables = none`, as `ZkBind.rsZAt` does (`Bind.lean`), so here are `rsShH`, `rsZH`, their
-`Computes` and `zk_flock_countC_execOS_atH` without it: `sitesShH_bcSiteS` is `sitesShH_bcSite` from
-`HiddenExec.tableH_bcSiteS`. `layShH` is the shadow layout `layZH` moves to the `--zk` tables, where the registered reads
-(`Registered.ReadsX`) are read.
--/
+/-! The rows at the hidden-output `--zk` tables, with or without shared rows. -/
 
 namespace FlockSoundness.Discharge.ZkReg
 
@@ -46,7 +39,6 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
   (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
 include hU hpub in
-/-- **`BcSiteH` at every satisfiable site** of the public plan, with or without shared rows (`tableH_bcSiteS`). -/
 theorem sitesShH_bcSiteS :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShH dj y₀) (tabShH dj y₀) S R u), Binding.Sat (planShH dj y₀) (tabShH dj y₀) S R u M →
@@ -69,7 +61,6 @@ theorem sitesShH_bcSiteS :
       exact y₀.x.refused_unsat S
     exact absurd hM (hns _)
 
-/-- **`rs` at the public plan, with or without shared rows**: `rsShH` with `hsite` from `sitesShH_bcSiteS`. -/
 noncomputable abbrev rsShHS : Binding.HmRowsX (layShH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
   keyRowsH (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH (zkTyped ht) hc hscope) (Layout.outsOut_outsOf c hU n)
@@ -84,17 +75,13 @@ theorem rsShHS_computes : (rsShHS dj y₀ ht hc hscope hU hpub (Reg := Reg)).Com
     (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOkH_spec hU hscope).1
       (Layout.scopeOkH_spec hU hscope).2.2)
 
-/-- **`rs` at the hidden-output `--zk` tables, with or without shared rows**: `rsShHS` moved along `planAtZKH_S`. -/
 noncomputable abbrev rsZHS : HmRowsZX (layZH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
   HmRowsZX.ofShadow (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) (rsShHS dj y₀ ht hc hscope hU hpub)
 
-/-- **`hHm` at the hidden-output `--zk` tables' rows, with or without shared rows** (`rsZH_computes`). -/
 theorem rsZHS_computes : (rsZHS dj y₀ ht hc hscope hU hpub (Reg := Reg)).Computes :=
   HmRowsZX.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) _
     (rsShHS_computes dj y₀ ht hc hscope hU hpub)
 
-/-- **The compiled `--zk` count curve at the hidden-output `--zk` tables, with or without shared rows**:
-`zk_flock_countC_execOS_atH` without `pub.tables = none`, at `rsZHS`. -/
 theorem zk_flock_countC_execOS_atHS (Hs : Hashes 𝔽 Dig (List UInt8))
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)

@@ -4,15 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep
 public import Proofs.Flock.Soundness.Game.LockChoose
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# The masked session's fork probabilities do not read the chooser
-
-Below every table node of `lockSessZ` (a level's cap, a pads root, a `τ` commitment) the lockstep's structure is the
-same whatever table is chosen there: the table enters the index, the oracle games and the leaf relations, never the
-compiled side or the slots. So the locksteps are `Lock.AlignedT`, builder by builder as `aligned_lockSessZ` is
-`Lock.Aligned`, and a fork probability in the session is the same under any two choosers and any two level-0 tables
-(`forkE_lockSessZ_choose`).
--/
+/-! The masked session's fork probabilities do not read the chooser. -/
 
 @[expose] public section
 
@@ -42,8 +34,6 @@ theorem AlignedT.reindex {R₁ R₂ : I → α → β → Prop} (e₁ e₂ : I �
   | table s _ ih => exact .table (sl s) ih
 
 end Reindex
-
-/-! ## Level `ℓ ≥ 1` and the masked level 0 -/
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
 theorem alignedT_lockFold (A : Arith F K) (r : ℕ) :
@@ -230,8 +220,6 @@ theorem alignedT_lockLigPadZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ}
       intro _ _ _ _ _ _ _
       exact .ret _ _
 
-/-! ## A rep, the table and the session -/
-
 theorem alignedT_lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₁ C₂ : Oracle F)
     (extra : List (Claim F S.m)) (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) :
@@ -313,7 +301,6 @@ theorem alignedT_lockSessZ [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Ha
   .coin _ fun pts => Lock.AlignedT.mono (Lock.AlignedT.batchLock dfltOutZC
     (Lock.AlignedT.mapL (alignedT_lockAfterZ A Hs T C₁ C₂ cap₀ pts)) _ _)
 
-/-- **A fork probability in the masked session reads neither the chooser nor the level-0 table.** -/
 theorem forkE_lockSessZ_choose [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl))) (C₁ C₂ : Oracle F) (cap₀ : Cap D)
     (plur₁ plur₂ : Lock.Chooser (Oracle F) (Cap D) (List (OutZC F D Sl))) (slot : ℕ)

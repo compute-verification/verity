@@ -10,12 +10,7 @@ import Proofs.Flock.Soundness.LigeritoQueries
 import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase
 
-/-!
-# The `--zk` inner proof is sound: the code lemmas and `inner_sound`
-
-`Inner` states the inner proof (`innerGame`, `InnerGood`, `εInner`) on Mathlib. Its soundness reads the pads code as
-ArkLib's Reed–Solomon code and uses BCIKS20's correlated agreement on lines in the unique-decoding regime.
--/
+/-! The `--zk` inner proof is sound: the code lemmas and `inner_sound`, on ArkLib's Reed–Solomon code and BCIKS20. -/
 
 @[expose] public section
 
@@ -25,8 +20,6 @@ open Game
 open scoped ENNReal NNReal
 
 variable {F : Type} [Field F]
-
-/-! ## The code -/
 
 section Code
 
@@ -75,8 +68,6 @@ theorem enc_add_mul (m m' : Fin L → F) (β : F) :
 
 end Code
 
-/-! ## Distance, queries and coins -/
-
 section Sound
 
 variable [Fintype F] [DecidableEq F]
@@ -84,7 +75,6 @@ variable [Fintype F] [DecidableEq F]
 open Code ProximityGap
 
 omit [Fintype F] in
-/-- Agreement on `(1 − δ)·N` positions with a codeword puts a word within relative distance `δ` of the code. -/
 theorem relDist_le_of_agree {N L : ℕ} [NeZero N] (dom : Fin N ↪ F) (δ : ℝ≥0) {u v : Fin N → F}
     (hv : v ∈ ReedSolomon.code dom L) (h : Agree δ u v) :
     δᵣ(u, (ReedSolomon.code dom L : Set (Fin N → F))) ≤ δ := by
@@ -98,8 +88,6 @@ theorem relDist_le_of_agree {N L : ℕ} [NeZero N] (dom : Fin N ↪ F) (δ : ℝ
         relDistFromCode_le_relDist_to_mem u v hv
     _ ≤ δ := by exact_mod_cast h1
 
-/-- **BCIKS20 in the unique-decoding regime, as a coin bound.** If two words are not jointly `δ`-close to the code, a
-uniform `z` puts `U₀ + z·U₁` within `δ` of a codeword with probability at most `N/|F|`. -/
 theorem prCoin_close_le {N L : ℕ} [NeZero N] (dom : Fin N ↪ F) (δ : ℝ≥0)
     (hδ : δ ≤ relativeUniqueDecodingRadius (ReedSolomon.code dom L : Set (Fin N → F)))
     (U : Fin 2 → Fin N → F) (hU : ¬ jointAgreement (ReedSolomon.code dom L : Set (Fin N → F)) δ U) :
@@ -123,7 +111,6 @@ theorem prCoin_close_le {N L : ℕ} [NeZero N] (dom : Fin N ↪ F) (δ : ℝ≥0
     simp
 
 omit [DecidableEq F] in
-/-- `q` independent query words land in the positions satisfying `P` with probability at most `(|P|/N)^q`. -/
 theorem prCoin_queries_le {N q : ℕ} (pos : F → Fin N)
     (hpos : ∀ D : Finset (Fin N), prCoin (fun x => pos x ∈ D) ≤ (D.card : ℝ≥0∞) / N)
     (P : Fin N → Prop) [DecidablePred P] :
@@ -141,8 +128,6 @@ theorem prCoin_false {C : Type} [Fintype C] : prCoin (fun _ : C => False) = 0 :=
   simp [prCoin, avg]
 
 omit [DecidableEq F] in
-/-- **The queries.** If `C(y)` agrees with `Ch + β·Cμ` on at most `(1 − δ)·N` positions, a check that needs every query
-to land on an agreeing position passes with probability at most `(1 − δ)^q`. -/
 theorem value_queries_le {N L q : ℕ} [NeZero N] (dom : Fin N ↪ F) (pos : F → Fin N)
     (hpos : ∀ D : Finset (Fin N), prCoin (fun x => pos x ∈ D) ≤ (D.card : ℝ≥0∞) / N) (δ : ℝ≥0)
     (y : Fin L → F) (Ch Cμ : Fin N → F) (β : F) (acc : (Fin q → F) → Prop) [DecidablePred acc]
@@ -158,14 +143,12 @@ theorem value_queries_le {N L q : ℕ} [NeZero N] (dom : Fin N ↪ F) (pos : F �
   rw [ENNReal.div_le_iff (by simp [NeZero.ne N]) (by simp)]
   exact_mod_cast hfar
 
-/-- A check that never passes. -/
 theorem value_coin_ret_false {C : Type} [Fintype C] [Nonempty C] (acc : C → Prop) [DecidablePred acc]
     (h : ∀ c, ¬ acc c) : value (· = true) (Game.coin C fun c => .ret (decide (acc c))) ≤ 0 := by
   rw [value_coin_ret]
   refine (prCoin_mono fun c hc => h c (of_decide_eq_true hc)).trans (le_of_eq prCoin_false)
 
 omit [Fintype F] [DecidableEq F] in
-/-- The unique-decoding radius of the pads code: `2δN ≤ N − L`. -/
 theorem udr_bound {N L : ℕ} [NeZero L] [DecidableEq F] (dom : Fin N ↪ F) (hL : L ≤ N) (δ : ℝ≥0)
     (hδ : δ ≤ relativeUniqueDecodingRadius (ReedSolomon.code dom L : Set (Fin N → F))) :
     2 * (δ : ℝ) * N ≤ N - L := by
@@ -218,11 +201,6 @@ theorem innerGame_eq {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → F
         .coin F fun β => .send (Fin (s + nP) → F) fun y => .coin (Fin q → F) fun w =>
           .ret (decide (innerCheck dom pos rows tr Ch Cμ ε ρσ γ τ β y w)) := rfl
 
-/-! ## Soundness -/
-
-/-- **The coin `β` and the queries, decoded case.** The words `Ch, Cμ` agree with the codewords `C(mh), C(mμ)` on `S`, and
-the batch at `mh`'s pads is nonzero (`hD`). Except for one `β`, the decoded answer `mh + β·mμ` fails the batched check,
-and every other `y` disagrees with `Ch + β·Cμ` on more than `δN` positions. -/
 theorem step_beta_close [CharP F 2] {N : ℕ} [NeZero N] (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N)
     (hpos : ∀ D : Finset (Fin N), prCoin (fun x => pos x ∈ D) ≤ (D.card : ℝ≥0∞) / N)
     {nA : ℕ} (rows : Fin nA → Lin F s) (tr : Triple s) (Ch Cμ : Fin N → F) (δ : ℝ≥0) (hL : s + nP ≤ N)
@@ -253,7 +231,7 @@ theorem step_beta_close [CharP F 2] {N : ℕ} [NeZero N] (dom : Fin N ↪ F) (s 
   rw [value_send]
   refine iSup_le fun y => ?_
   by_cases hB : ∑ i, c i * head y i = t + β * τ
-  · -- `y` passes the batched check, so it is not the decoded `mh + β·mμ`.
+  ·
     have hne : y ≠ fun i => mh i + β * mμ i := by
       rintro rfl
       apply hβ
@@ -293,8 +271,6 @@ theorem step_beta_close [CharP F 2] {N : ℕ} [NeZero N] (dom : Fin N ↪ F) (s 
     nlinarith
   · exact (value_coin_ret_false _ fun w hw => hB hw.1).trans zero_le
 
-/-- **Decoded case.** The words are jointly `δ`-close to the code, so the decoded pads fail a row or the product: the
-sacrifice's `ε`, the batch's `γ` and `β` each leave that visible except with probability `1/|F|`. -/
 theorem inner_close [CharP F 2] {N : ℕ} [NeZero N] (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N)
     (hpos : ∀ D : Finset (Fin N), prCoin (fun x => pos x ∈ D) ≤ (D.card : ℝ≥0∞) / N)
     {nA : ℕ} (rows : Fin nA → Lin F s) (tr : Triple s) (Ch Cμ : Fin N → F) (δ : ℝ≥0) (hL : s + nP ≤ N)
@@ -321,7 +297,6 @@ theorem inner_close [CharP F 2] {N : ℕ} [NeZero N] (dom : Fin N ↪ F) (s nP q
   have hfail : ¬ ((∀ k, (rows k).eval hh = 0) ∧ hh tr.ab = hh tr.fa * hh tr.fb) := fun hg =>
     h ⟨mh, ⟨S, hS', fun j hj => (hSh j hj).symm⟩, hg⟩
   refine le_trans ?_ (εInner_caseA N q δ)
-  -- The sacrifice's coin `ε`.
   refine value_coin_le (· = true) F _ (fun ε => (∀ k, (rows k).eval hh = 0) ∧
       hh tr.ab ≠ hh tr.fa * hh tr.fb ∧
       (hh tr.ab + hh tr.fa * hh tr.fb) * ε + (hh tr.tw - hh tr.tx * hh tr.ty) = 0) _ _ ?_ ?_
@@ -345,7 +320,6 @@ theorem inner_close [CharP F 2] {N : ℕ} [NeZero N] (dom : Fin N ↪ F) (s nP q
     have hab : hh tr.ab ≠ hh tr.fa * hh tr.fb := fun hab => hfail ⟨h1, hab⟩
     exact hε ⟨h1, hab, by linear_combination -hsac⟩
   obtain ⟨k₀, hk₀⟩ := hrow
-  -- The batch's coins `γ`.
   refine value_coin_le (· = true) (Fin (nA + 3) → F) _
     (fun γ => ∑ k, γ k * (Fin.append rows (tripleRows tr ε ρσ.1 ρσ.2) k).eval hh = 0)
     (1 / Fintype.card F) _
@@ -355,8 +329,6 @@ theorem inner_close [CharP F 2] {N : ℕ} [NeZero N] (dom : Fin N ↪ F) (s nP q
   rw [batch_eval]
   exact hγ
 
-/-- **Far case.** The words are not jointly `δ`-close to the code: by BCIKS20, `Ch + β·Cμ` is `δ`-far from it except
-with probability `N/|F|`, and then every `y` fails a query with probability at least `δ`. -/
 theorem inner_far {N : ℕ} [NeZero N] (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N)
     (hpos : ∀ D : Finset (Fin N), prCoin (fun x => pos x ∈ D) ≤ (D.card : ℝ≥0∞) / N)
     {nA : ℕ} (rows : Fin nA → Lin F s) (tr : Triple s) (Ch Cμ : Fin N → F) (δ : ℝ≥0)
@@ -384,9 +356,6 @@ theorem inner_far {N : ℕ} [NeZero N] (dom : Fin N ↪ F) (s nP q : ℕ) (pos :
   push Not at hlt
   exact hβ ⟨enc dom y, enc_mem dom y, _, hlt.le, fun j hj => ((Finset.mem_filter.1 hj).2).symm⟩
 
-/-- **The inner proof is sound.** Against committed pads words `Ch, Cμ`, unless some pads message within relative
-distance `δ` of `Ch` has every row vanish at its pads and `h_ab = h_fa·h_fb`, the verifier accepts with probability at
-most `(N + 3)/|F| + (1 − δ)^q`, for `δ` up to the code's unique-decoding radius. -/
 theorem inner_sound [CharP F 2] {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) [NeZero (s + nP)]
     (pos : F → Fin N) (hpos : ∀ D : Finset (Fin N), prCoin (fun x => pos x ∈ D) ≤ (D.card : ℝ≥0∞) / N)
     {nA : ℕ} (rows : Fin nA → Lin F s) (tr : Triple s) (Ch Cμ : Fin N → F) (δ : ℝ≥0) (hL : s + nP ≤ N)

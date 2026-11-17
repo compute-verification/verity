@@ -17,23 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Tables.Headline
 import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 
-/-!
-# The soundness half of one hidden-output `--zk` sampled session of `J` tables
-
-`zk_session_soundHJ`: `zk_session_soundJ` under hidden outputs, the configuration the prover's `--zk` runs (the default
-`--statement`, whose tables `Stmt.setupTables` sets up with `Stmt.setupHidden`, at `--session-tables J`). For any live
-prover `τ` of a hidden-output `--zk` session of `J ≥ 1` tables (`J = nTab I`),
-`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key program's
-partition, each read at its site in the hidden-output table it is sampled into (`placeZHJ`, `tabZHJ`) and bound to the
-rows it commits, input or output (`rsZHJ`), at the simulated prover `simZJ … τ` in the compiled batched session of the
-`J` tables `planZHJ`.
-
-The sampling design, `miss(K)`, `ε_ks` and `ε_bind` are `zk_session_soundJ`'s: the live subset sample `SamplingDesign.execOS src (.subset kd) n`,
-under A3 at its one byte source. What changes is what hidden outputs change at one table (`zk_session_soundH`): the
-circuit and public file are `HmOut`'s, each table is `setupHidden`'s (`setupTables_partsH` at `J > 1`), the sites and
-rows are HiddenExec's `keyPlaceH` and `keyRowsH` (`rsZHJ`), the tags are `TagsOkZHJ`, and the challenger's live-coin part's samples are
-`SampleOkZKHJ`. The record is `RecordsLiveZKJ`, unchanged.
--/
+/-! The soundness half of one hidden-output `--zk` sampled session of `J` tables (`zk_session_soundHJ`). -/
 
 @[expose] public section
 
@@ -46,35 +30,27 @@ open scoped ENNReal
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound.** -/
 theorem zk_session_soundHJ
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOkH c = true)
-    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hRec hDraw)) τ
-    -- cr/sha-512 for the knowledge finders of its simulation
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧

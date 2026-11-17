@@ -5,23 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.MerklePair
 
-/-!
-# Where a bad compiled `--zk` run goes wrong
-
-`CompiledL`'s bad split for the compiled `--zk` table (`TopRelZ`): an accepted run whose openings disagree with the
-fixed tables (`AgreeAllZ`) either clashes within the run (`SelfClashZ`), or opens a position of one fixed table to
-something else. Each committed kind has its openings by position:
-
-* the level-0 oracle at the witness cap, its rows `width₀` lanes wide (`op₀Z`, `opOfW`), and each level's table at its
-  cap (`opRZ`, `Exec.opOfL` on `slotOpensZ`);
-* rep `r`'s pads oracle at its root (`opPadsAtZ`): at each pads position, the pair of the first query that drew that
-  position and whose opening verifies there;
-* rep `r`'s `τ` oracle at its commitment (`opTauZ`): on an accepted output, `τ`, if it opens the commitment.
-
-Every clash, and every pair of runs opening one position of one cap, root or commitment two ways, names two byte
-strings, a function of the openings (`selfCandsZ`, `opOfWPair`, `opPadsAtZPair`, `tauPairZ`), and they are a collision
-of `H` (`selfCandsZ_spec`, `opOfW_conflict_collision`, `opPadsAtZ_conflict_collision`, `opTauZ_conflict_collision`).
--/
+/-! Where a bad compiled `--zk` run goes wrong: every clash it names is a collision of `H`. -/
 
 @[expose] public section
 
@@ -32,12 +16,8 @@ open Game Model Accounting ZkSession
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type}
 
-/-! ## Level 0's wide rows -/
-
-/-- A row's first `w` lanes. -/
 def rowW (w : ℕ) (row : List F) : Fin w → F := fun lane => row.getD lane.val 0
 
-/-- An oracle's `w`-lane rows on a level's domain. -/
 def rowTW (w d : ℕ) (t : Oracle F) : Fin (2 ^ d) → Fin w → F := fun p lane => t lane.val p.val
 
 omit [Fintype F] [DecidableEq F] in
@@ -46,7 +26,6 @@ theorem rowTW_tabOfW (w d : ℕ) (v : Fin (2 ^ d) → Fin w → F) : rowTW w d (
   simp [rowTW, tabOfW, p.isLt, lane.isLt]
 
 open Classical in
-/-- The `w`-lane row a run opens at `p`: its first verifying opening there. -/
 noncomputable def opOfW (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (w depth d : ℕ) (xs : List (ℕ × List F × Sl × List D)) (cap : Cap D) (p : Fin (2 ^ d)) : Option (Fin w → F) :=
   ((xs.filter fun x => decide (x.1 = p.val ∧ VerifiedZ H E Lf cap w depth x)).head?).map fun x => rowW w x.2.1
@@ -57,14 +36,12 @@ theorem op₀Z_eq (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkl
       opOfW H E Lf (width₀ T) (pathLen (lvOf T.sch 0)) (lvOf T.sch 0).logLen (opens₀Z T.sch out) cap :=
   rfl
 
-/-- Two verifying `w`-lane openings of one position to different rows, under any salts. -/
 def ClashW (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cap : Cap D)
     (w depth : ℕ) (xs : List (ℕ × List F × Sl × List D)) : Prop :=
   ∃ x ∈ xs, ∃ y ∈ xs, x.1 = y.1 ∧ VerifiedZ H E Lf cap w depth x ∧ VerifiedZ H E Lf cap w depth y ∧ x.2.1 ≠ y.2.1
 
 omit [Fintype F] [DecidableEq F] in
 open Classical in
-/-- A run opens at most as many positions as it has openings. -/
 theorem opOfW_count (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (w depth d : ℕ) (xs : List (ℕ × List F × Sl × List D)) (cap : Cap D) :
     (Finset.univ.filter fun p => (opOfW H E Lf w depth d xs cap p).isSome).card ≤ xs.length := by
@@ -84,8 +61,6 @@ theorem opOfW_count (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Mer
     _ = xs.length := List.length_map _
 
 omit [Fintype F] in
-/-- **Off or clash.** A verifying `w`-lane opening of `p` whose row is not `v`: the run opens `p` to a row other than
-`v`, or it opens `p` two ways. -/
 theorem off_or_clashW (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (w depth d : ℕ) (xs : List (ℕ × List F × Sl × List D)) (cap : Cap D) (x : ℕ × List F × Sl × List D)
     (hx : x ∈ xs) (p : Fin (2 ^ d)) (hxp : x.1 = p.val) (hv : VerifiedZ H E Lf cap w depth x)
@@ -137,7 +112,6 @@ def clashCandsW (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.
   (Merkle.pairsOf xs).map fun x => (ClashWAt H E Lf cap w depth x, Exec.pairL H E Lf x.1.1 x.1 x.2)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A clash is a collision**, under any salts: a candidate whose test passes is one (`Merkle.openCollPairL_spec`). -/
 theorem clashCandsW_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {cap : Cap D} {w depth : ℕ} {xs : List (ℕ × List F × Sl × List D)} {c : Prop × (List UInt8 × List UInt8)}
     (hc : c ∈ clashCandsW H E Lf cap w depth xs) (h : c.1) : Hash.Collision H c.2.1 c.2.2 := by
@@ -148,7 +122,6 @@ theorem clashCandsW_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf 
     (h1 ▸ h3.2)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- A clash has a candidate whose test passes. -/
 theorem ClashW.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {cap : Cap D} {w depth : ℕ} {xs : List (ℕ × List F × Sl × List D)} (h : ClashW H E Lf cap w depth xs) :
     ∃ c ∈ clashCandsW H E Lf cap w depth xs, c.1 := by
@@ -191,7 +164,6 @@ theorem firstOfW_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : M
   exact hmem.2
 
 omit [Fintype F] [DecidableEq F] in
-/-- **The pair of two runs that open a position to different `w`-lane rows under one cap is a collision.** -/
 theorem opOfW_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {w depth d : ℕ} {cap : Cap D} {xs xs' : List (ℕ × List F × Sl × List D)}
     {p : Fin (2 ^ d)} (h1 : (opOfW H E Lf w depth d xs cap p).isSome)
@@ -221,14 +193,11 @@ noncomputable def op₀ZPair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) 
   opOfWPair H E Lf (width₀ T) (pathLen (lvOf T.sch 0)) (lvOf T.sch 0).logLen (opens₀Z T.sch x.1) (opens₀Z T.sch x.2)
     cap p
 
-/-- **Every pair the witness cap's collision finder outputs is a collision.** -/
 theorem op₀Z_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {T : TabZK F mPts} {cap : Cap D} {x : OutZC F D Sl × OutZC F D Sl}
     {p : Fin (2 ^ (lvOf T.sch 0).logLen)} (h : Rewinding.ConflictAt (op₀Z H E Lf T cap) x p) :
     Hash.Collision H (op₀ZPair H E Lf T cap x p).1 (op₀ZPair H E Lf T cap x p).2 :=
   opOfW_conflict_collision h.1 h.2.1 h.2.2
-
-/-! ## The levels' caps -/
 
 /-- Rep `r`'s level-`ℓ` cap's openings, by position. -/
 noncomputable def opRZ (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
@@ -269,14 +238,11 @@ noncomputable def opRZPair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (L
     (slotOpensZ x.1 r ℓ (lvOf sch ℓ).queries) (slotOpensZ x.2 r ℓ (lvOf sch ℓ).queries) cap p
 
 omit [Fintype F] [DecidableEq F] in
-/-- **Every pair a rep's collision finder outputs is a collision.** -/
 theorem opRZ_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {sch : Schedule} {r ℓ : ℕ} {cap : Cap D} {x : OutZC F D Sl × OutZC F D Sl}
     {p : Fin (2 ^ (lvOf sch ℓ).logLen)} (h : Rewinding.ConflictAt (opRZ H E Lf sch r ℓ cap) x p) :
     Hash.Collision H (opRZPair H E Lf sch r ℓ cap x p).1 (opRZPair H E Lf sch r ℓ cap x p).2 :=
   Exec.opOfL_conflict_collision h.1 h.2.1 h.2.2
-
-/-! ## The pads roots -/
 
 open Classical in
 /-- **Rep `r`'s pads openings, by position**: at `p`, the pair of the first query that drew `p` (rep `r`'s
@@ -288,7 +254,6 @@ noncomputable def opPadsAtZ (Hs : Hashes F D Sl) (N q r : ℕ) (c : Cap D) (out 
         ((out.opens.inner r).pads jj).2.1 ((out.opens.inner r).pads jj).2.2)).head?).map
     fun jj => ((out.opens.inner r).pads jj).1
 
-/-- A pads oracle's pairs, lanes `0` and `1` at each position. -/
 def rowPads (N : ℕ) (t : Oracle F) (p : Fin N) : F × F := (t 0 p.val, t 1 p.val)
 
 /-- The pads oracle with the given pairs on `N` positions, zero elsewhere. -/
@@ -300,8 +265,6 @@ theorem rowPads_padsTab (N : ℕ) (v : Fin N → F × F) : rowPads N (padsTab N 
   funext p
   simp [rowPads, padsTab, p.isLt]
 
-/-- **A pads clash**: within one run, two of a rep's pads openings, both sampled at one position (rep `r`'s
-`PendZ.qpos`), verify there to one root with different pairs, under any salts. -/
 def PadsClashAtZ (Hs : Hashes F D Sl) (N q : ℕ) (out : OutZC F D Sl) : Prop :=
   ∃ r < 2, ∃ root : D, ∃ jj < q, ∃ jj' < q, ∃ p : Fin N,
     (if r = 0 then out.pend.1 else out.pend.2).qpos jj = p.val ∧
@@ -344,7 +307,6 @@ def padsCands (Hs : Hashes F D Sl) (N q : ℕ) (out : OutZC F D Sl) : List (Prop
       padsPairZ Hs r ((if r = 0 then out.pend.1 else out.pend.2).qpos jj.1) out out jj.1 jj.2)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A pads clash is a collision**: a candidate whose test passes is one (`Merkle.openCollPairL_spec`). -/
 theorem padsCands_spec {Hs : Hashes F D Sl} {N q : ℕ} {out : OutZC F D Sl} {c : Prop × (List UInt8 × List UInt8)}
     (hc : c ∈ padsCands Hs N q out) (h : c.1) : Hash.Collision Hs.H c.2.1 c.2.2 := by
   obtain ⟨r, -, hc⟩ := List.mem_flatMap.1 hc
@@ -355,7 +317,6 @@ theorem padsCands_spec {Hs : Hashes F D Sl} {N q : ℕ} {out : OutZC F D Sl} {c 
     hne h1 h2
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- A pads clash has a candidate whose test passes. -/
 theorem PadsClashAtZ.cand {Hs : Hashes F D Sl} {N q : ℕ} {out : OutZC F D Sl} (h : PadsClashAtZ Hs N q out) :
     ∃ c ∈ padsCands Hs N q out, c.1 := by
   obtain ⟨r, hr, root, jj, hjj, jj', hjj', p, hq, -, h1, h2, hne⟩ := h
@@ -435,7 +396,6 @@ theorem firstPadsZ_some {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D} {out : Ou
   exact hmem.2.2
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **Every pair a pads root's collision finder outputs is a collision.** -/
 theorem opPadsAtZ_conflict_collision {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D}
     {x : OutZC F D Sl × OutZC F D Sl} {p : Fin N} (h : Rewinding.ConflictAt (opPadsAtZ Hs N q r c) x p) :
     Hash.Collision Hs.H (opPadsAtZPair Hs N q r c x p).1 (opPadsAtZPair Hs N q r c x p).2 := by
@@ -454,8 +414,6 @@ theorem opPadsAtZ_conflict_collision {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap
   rw [e1, e2, e']
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A rep's disagreeing pads opening**, at a position its query drew: a pads clash within the run, or the run opens
-a pads position of the fixed pads oracle to another pair. -/
 theorem pads_badAtZ (Hs : Hashes F D Sl) (N q r : ℕ) (hr : r < 2) (j : IZ F D) (out : OutZC F D Sl)
     (hnot : ¬ PadsAgreeAt Hs N q (if r = 0 then out.pend.1 else out.pend.2).qpos j (out.opens.inner r)) :
     PadsClashAtZ Hs N q out ∨
@@ -470,8 +428,6 @@ theorem pads_badAtZ (Hs : Hashes F D Sl) (N q r : ℕ) (hr : r < 2) (j : IZ F D)
       ⟨by rw [hop]; rfl, by rw [hop]; exact fun e => heq (Option.some.inj e)⟩
     exact Or.inr ⟨O, c, hpads, p, hoff⟩
 
-/-! ## `τ`'s commitments -/
-
 open Classical in
 /-- **Rep `r`'s `τ` opening**: on an accepted output, `τ`, if it opens the commitment `c 0` under its salt. A rejected
 output opens no `τ`: the dead branches answer `τ` with `(0, default)`, which opens every commitment whose `c 0` is its
@@ -481,7 +437,6 @@ noncomputable def opTauZ (Hs : Hashes F D Sl) (r : ℕ) (c : Cap D) (out : OutZC
     some (out.opens.inner r).tau.1
   else none
 
-/-- A `τ` oracle's value, at `(0, 0)`. -/
 def rowTau (t : Oracle F) (_ : Unit) : F := t 0 0
 
 /-- The `τ` oracle with the given value everywhere. -/
@@ -496,7 +451,6 @@ def tauPairZ (Hs : Hashes F D Sl) (r : ℕ) (x : OutZC F D Sl × OutZC F D Sl) :
   Hs.Lτ.pair (x.1.opens.inner r).tau.1 (x.1.opens.inner r).tau.2 (x.2.opens.inner r).tau.1 (x.2.opens.inner r).tau.2
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **Every pair a `τ` commitment's collision finder outputs is a collision** (`Leaf.pair_spec`). -/
 theorem opTauZ_conflict_collision {Hs : Hashes F D Sl} {r : ℕ} {c : Cap D} {x : OutZC F D Sl × OutZC F D Sl}
     {p : Unit} (h : Rewinding.ConflictAt (opTauZ Hs r c) x p) :
     Hash.Collision Hs.H (tauPairZ Hs r x).1 (tauPairZ Hs r x).2 := by
@@ -512,7 +466,6 @@ theorem opTauZ_conflict_collision {Hs : Hashes F D Sl} {r : ℕ} {c : Cap D} {x 
     simp at h1
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A rep's disagreeing `τ` opening**: an accepted run opens the fixed `τ` oracle's commitment to another value. -/
 theorem tau_badZ (Hs : Hashes F D Sl) (r : ℕ) (j : IZ F D) (out : OutZC F D Sl) (hacc : out.accepted = true)
     (hnot : ¬ TauAgree Hs j (out.opens.inner r)) :
     ∃ t d, j.tau = some (t, d) ∧ ∃ p, Rewinding.Off (opTauZ Hs r d) (rowTau t) out p := by
@@ -526,10 +479,6 @@ theorem tau_badZ (Hs : Hashes F D Sl) (r : ℕ) (j : IZ F D) (out : OutZC F D Sl
     ⟨by rw [hop]; rfl, by rw [hop]; exact fun e => hne (Option.some.inj e)⟩
   exact ⟨Oτ, cτ, htau, (), hoff⟩
 
-/-! ## Self-clashes -/
-
-/-- **A self-clash**: within one run, two verifying openings of a position to different rows (at the witness cap or at
-a rep's recorded cap), or a pads clash. -/
 def SelfClashZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (out : OutZC F D Sl) : Prop :=
   ClashW Hs.H Hs.E Hs.Lf out.cap₀ (width₀ T) (pathLen (lvOf T.sch 0)) (opens₀Z T.sch out) ∨
     (∃ r < 2, ∃ ℓ, 1 ≤ ℓ ∧ ∃ cap, (if r = 0 then out.pend.1 else out.pend.2).lig.caps[ℓ - 1]? = some cap ∧
@@ -546,7 +495,6 @@ def selfCandsZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (out : OutZC F D Sl) :
         (slotOpensZ out r (ci.2 + 1) (lvOf T.sch (ci.2 + 1)).queries)) ++
     padsCands Hs T.N T.q out
 
-/-- **A self-clash is a collision**: a candidate whose test passes is one. -/
 theorem selfCandsZ_spec {Hs : Hashes F D Sl} {T : TabZK F mPts} {out : OutZC F D Sl}
     {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ selfCandsZ Hs T out) (h : c.1) :
     Hash.Collision Hs.H c.2.1 c.2.2 := by
@@ -558,7 +506,6 @@ theorem selfCandsZ_spec {Hs : Hashes F D Sl} {T : TabZK F mPts} {out : OutZC F D
       exact Exec.clashCandsL_spec hc h
   · exact padsCands_spec hc h
 
-/-- A self-clash has a candidate whose test passes. -/
 theorem SelfClashZ.cand {Hs : Hashes F D Sl} {T : TabZK F mPts} {out : OutZC F D Sl} (h : SelfClashZ Hs T out) :
     ∃ c ∈ selfCandsZ Hs T out, c.1 := by
   rcases h with h | ⟨r, hr, ℓ, hℓ, cap, hcap, h⟩ | h
@@ -576,10 +523,6 @@ theorem SelfClashZ.cand {Hs : Hashes F D Sl} {T : TabZK F mPts} {out : OutZC F D
   · obtain ⟨c, hc, hp⟩ := h.cand
     exact ⟨c, List.mem_append_right _ hc, hp⟩
 
-/-! ## Where a bad run goes wrong -/
-
-/-- **A rep's disagreeing row opening**, on an accepted run: at level 0, off `C₀` or a clash at the witness cap; at a
-level `ℓ ≥ 1`, off the table fixed there or a clash at its recorded cap. -/
 theorem rep_badZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F) (cap₀ : Cap D) (out : OutZC F D Sl)
     (r : ℕ) (hr : r < 2) (ir : IRep F D)
     (hs : RecStruct T.sch ir (if r = 0 then out.pend.1 else out.pend.2).lig)
@@ -707,8 +650,6 @@ theorem getPairZ_tau (r : ℕ) (hr : r < 2) (i : IZ F D × IZ F D) :
     rw [show getZ 0 i.1 (2 + 1) = none by simp [getZ], show getZ 1 i.2 (2 + 1) = i.2.tau by simp [getZ]]
     rfl
 
-/-- **The openings agree with every fixed table**: both reps' rows (`AgreeZ`), pads pairs at the positions their queries
-drew (`PadsAgreeAt`) and `τ` (`TauAgree`). -/
 def AgreeAllZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F) (i : IZ F D × IZ F D) (out : OutZC F D Sl) :
     Prop :=
   AgreeZ 0 C₀ (width₀ T) i.1.lev out.pend.1.lig.reqs out.opens.rows ∧
@@ -717,9 +658,6 @@ def AgreeAllZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F) (i : IZ 
     PadsAgreeAt Hs T.N T.q out.pend.2.qpos i.2 (out.opens.inner 1) ∧
     TauAgree Hs i.1 (out.opens.inner 0) ∧ TauAgree Hs i.2 (out.opens.inner 1)
 
-/-- **Where a bad run goes wrong.** An accepted run that disagrees with the fixed tables either clashes within the run,
-or opens a position off `C₀`, off the table fixed at one of the reps' caps, off a rep's fixed pads oracle, or off a
-rep's fixed `τ` oracle. -/
 theorem bad_splitZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F) (cap₀ : Cap D) (i : IZ F D × IZ F D)
     (a : Bool × Oracle F) (out : OutZC F D Sl) (hR : TopRelZ Hs T C₀ cap₀ i a out) (hacc : out.accepted = true)
     (hbad : ¬ AgreeAllZ Hs T C₀ i out) :

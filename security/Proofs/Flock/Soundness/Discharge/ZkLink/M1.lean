@@ -20,20 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
-/-!
-# The live `--zk` tables are at Flock ZK's parameters
-
-Every `--zk` table `tableAtZK` builds meets `TabZK.M1`, from what `verify --zk` checks at setup:
-
-* `Zk.schedule m`'s schedule is `m1Schedule m` and its `t_pad` is `m1Pad m`, at every `m` it accepts (`schedule_m1`,
-  from `zkM1Facts_all`, checked by `decide +kernel` at each `m`);
-* setupH's `checkInRange` puts `k_log`, the statement's region count and `m_pts` in `Stmt.InRange` (`setupH_spec`);
-* the inner code's length is `8·next_pow2(len + K_PAD)`, at most `2^13` (`innerN_pow`), so its radius is at least `7/16`
-  (`relUDR_ge_m1`); 168 queries (`Zk.Q`).
-
-A sample's table carries setupH's regions (`table_M1`), a refused sample's `contra`'s two (`refused_M1`), so both are in
-range; `tableAtZK_M1` is either.
--/
+/-! The live `--zk` tables are at Flock ZK's parameters (`TabZK.M1`). -/
 
 @[expose] public section
 
@@ -46,18 +33,15 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {wideLeaf : Bool}
 
-/-- What `TabZK.M1` needs of `Zk.schedule m`'s schedule and `t_pad`, as a `Bool` (`true` where it refuses `m`). -/
+/-- `true` also where `Zk.schedule` refuses `m`. -/
 def zkM1Facts (wideLeaf : Bool) (m : ℕ) : Bool :=
   match Zk.schedule wideLeaf m with
   | .ok (s, t) => decide (schedOf s = m1Schedule wideLeaf m) && decide (t = m1Pad wideLeaf m)
   | .error _ => true
 
-/-- **The m check**: at every `m` `Zk.schedule` accepts (25 to 35), its schedule and `t_pad` are Flock ZK's, by the
-kernel's `decide`. -/
 theorem zkM1Facts_all : ∀ m, 25 ≤ m → m ≤ 35 → zkM1Facts wideLeaf m = true := by
   intro m h1 h2; cases wideLeaf <;> interval_cases m <;> decide +kernel
 
-/-- **`Zk.schedule`'s schedule is `m1Schedule`, its `t_pad` `m1Pad`.** -/
 theorem schedule_m1 {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Zk.schedule wideLeaf m = .ok (sch, tPad)) :
     schedOf sch = m1Schedule wideLeaf m ∧ tPad = m1Pad wideLeaf m := by
   obtain ⟨h1, h2, -⟩ := schedule_spec h
@@ -72,14 +56,12 @@ namespace SampleSetupZK
 
 variable {S : Finset (Fin n)} {d : Lean.Json} (y : SampleSetupZK I mPts S d)
 
-/-- **The range setupH checked** (`checkInRange`): `k_log ≤ 27`, at most 1024 regions and `m_pts ≤ 64`. -/
 theorem inRange (ht : I.tags.typed = false) :
     y.x.st.c.kLog ≤ 27 ∧ y.x.st.regions.size ≤ 1024 ∧ mPts ≤ 64 := by
   obtain ⟨hk, hr, hp⟩ :=
     (checkInRange_ok _ _ _).1 (setupH_spec ((zkTags_typed I).trans ht) y.x.h).2.2.2.2.2.2
   exact ⟨hk, hr, y.x.hmPts ▸ hp⟩
 
-/-- **A `--zk` table of a sample `verify --zk` sets up is at Flock ZK's parameters**, at any regions of at most 1024. -/
 theorem tabAt_M1 (ht : I.tags.typed = false) (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) (hR : regs.length ≤ 1024) :
     (y.tabAt regs hregs).M1 := by
@@ -102,19 +84,16 @@ theorem tabAt_M1 (ht : I.tags.typed = false) (regs : List (Model.Region y.x.st.c
   rw [hb]
   exact Nat.pow_le_pow_right (by norm_num) hb13
 
-/-- **The sample's `--zk` table is at Flock ZK's parameters**: setupH's regions, at most 1024 (`checkInRange`). -/
 theorem table_M1 (ht : I.tags.typed = false) : y.table.M1 :=
   y.tabAt_M1 ht _ _ (by
     have := (y.inRange ht).2.1
     simpa [regionsOf] using this)
 
-/-- **A refused sample's `--zk` table is at Flock ZK's parameters**: `contra`'s two regions. -/
 theorem refused_M1 (ht : I.tags.typed = false) : y.refused.M1 :=
   y.tabAt_M1 ht _ _ (by simp [SampleSetup.contra])
 
 end SampleSetupZK
 
-/-- **Every `--zk` table `tableAtZK` builds is at Flock ZK's parameters**: the sample's table, or the refused one. -/
 theorem tableAtZK_M1 (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) : (tableAtZK dj y₀ S).M1 := by
   unfold tableAtZK
