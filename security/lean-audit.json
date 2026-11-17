@@ -3155,12 +3155,6 @@
    "issue": "TRN-168",
    "due": "2026-11-30"
   },
-  "Slowdown.Cover.MulBlocks.Upstream": {
-   "owner": "@training",
-   "digest": "56a4eaf3bd6d46fab7599fd8370ce2f50d8f2473f007100a30dc08103aa537c8",
-   "issue": "TRN-167",
-   "due": "2026-11-30"
-  },
   "Slowdown.Covering.Covers": {
    "owner": "@compute-accounting",
    "digest": "69dd86aea0c7081406c15b337e9b0a651f5f6da40b74bbd42cd8ce4ee7c724cd",
@@ -41504,10 +41498,8 @@
    }
   },
   "Definitions.Slowdown.Guarantees.Witnesses": {
-   "digest": "7ee74ce25ca4ae97edf961d0ebd410274488ea35053147b6b13fdd9166c24b06",
+   "digest": "c36fd3ed5990c77ba38251ddb1bb37c382f200e231fa72791794e44c028539ef",
    "definitions": {
-    "Slowdown.Cover.Guarantees.CoverTraining_honest": "ac68f4da06862d8a97034088051f3771505314bb08f6982f88a26e4a7d691c4c",
-    "Slowdown.Cover.Guarantees.CoverTraining_nontrivial": "72a2f1006251a4fa0efe304eaa37af6ce51ef603c0c64d71c74a64868563d334",
     "Slowdown.Guarantees.LayeredTraining_honest": "800f91f919853ddd516010c9c42f1411069562804947b23f4500109f1e9d224b",
     "Slowdown.Guarantees.LayeredTraining_nontrivial": "96f254410c5edac32d7a60a6e05d0ca7c0639cda10da565c49339e2232d1b988",
     "Slowdown.Guarantees.SlowdownRemote_honest": "ee2a50572fa75ac995ba48206088d76932c10e7d22992d991434a9e5f94bea0d",
@@ -41639,7 +41631,7 @@
    }
   },
   "Definitions.Slowdown.Witness": {
-   "digest": "c40176e688c9198f5e17c30bf921b908a7f68d2e4e35373b0f961be83a86a495",
+   "digest": "d7a7d272931062fe2669d035085652e25c47dc7943d23a60fe0511c764d37876",
    "definitions": {
     "Slowdown.Witness.Dθ": "871bd8c72a6a98e29510c301ce7dd91bdd2cdda15acf49bc92c82ca067d77218",
     "Slowdown.Witness.M1": "58d5c4b55d6d279983adbabad0648d0a20c3573b0a317cf8708f3aaf4cb36ac5",
@@ -41653,7 +41645,6 @@
     "Slowdown.Witness.T0": "2df7304281572d2a9eb9075dddd2154cc5605e97f09ac5254799ff5d83852b46",
     "Slowdown.Witness.T1": "b58a1b6afb28d0c276e230e6fa38c91affe44960e9a47f6702d7136f6c2e0a8c",
     "Slowdown.Witness.idC": "b013eaf1a73651011d31a5090567c19547d4cff1b3054dd0693763d718ebcb17",
-    "Slowdown.Witness.mb0": "20c4b0220970c6f9e99b03bd2751090a13e52c9070dcfb0bca1dfaae4930df65",
     "Slowdown.Witness.σ0": "4fa0b802391744fefc069f6f54b9dafab2e34dedca21752297a2eb03eb88a138",
     "Slowdown.Witness.σ1": "816e5a1a8cfd546ff18f7a82493c72d09037270e114fef9cb5073661f3f096b6"
    }
