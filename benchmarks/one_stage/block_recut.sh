@@ -4,7 +4,7 @@
 # recomputed from its spec at this tree (`serving_rows.unit_templates`, `serving_rows.template`), each rank sized
 # (`m1_families.py --estimate`) and cut (`block_census.py`), which writes census.json, table.md and card.json under $OUT.
 # The Programs, rows and steps are the census's, so a change to the cut or to a family's units needs no Commit Build or row
-# directory. The card takes the model and the Build of the planner's card (`benchmarks/sampling_plan/glm53_blocks.json`)
+# directory. The card takes the model and the Build of the planner's card (`calibration/sampling_plan/glm53_blocks.json`)
 # and, as its census, census.json put in the store from $OUT; `compare.json` holds the Definitions the new card adds, drops
 # or changes against the planner's card, and both cards' totals per request. It needs the store:
 #   research run --on auto --store-read --cwd source -- bash benchmarks/one_stage/block_recut.sh ART
@@ -58,7 +58,7 @@ rc=${PIPESTATUS[0]}; echo "block_recut: rc $rc in $(( $(date +%s) - start )) s" 
 CENSUS=$("${R[@]}" run-preserve "$O/census.json" 2>"$O/preserve.log" | grep -oE '[0-9a-f]{64}' | head -1)
 [ -n "$CENSUS" ] || { cat "$O/preserve.log"; exit 6; }
 CENSUS=art:$CENSUS; echo "census $CENSUS"
-$PY - "$O/card.json" benchmarks/sampling_plan/glm53_blocks.json "$CENSUS" "$O/compare.json" <<'PYEOF'
+$PY - "$O/card.json" calibration/sampling_plan/glm53_blocks.json "$CENSUS" "$O/compare.json" <<'PYEOF'
 import json, sys
 new, old = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
 json.dump({"model": old["model"], "source": sys.argv[3], "build": old["build"]} | new, open(sys.argv[1], "w"), indent=1)
