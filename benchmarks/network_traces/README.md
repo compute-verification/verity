@@ -32,7 +32,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   checked under and then each registration it held, and `cost`, which measures a close); `network_attester_chain.py` is
   the chain's reads of a relay run, and network certification's `prover/network_attester_zk.py` reads the relay's bucket rows
   in the proof system.
-- **Proofs in zero knowledge.** Each driver, in network certification's `prover/`, proves its
+- **Proofs in zero knowledge.** Each driver, in network attestation's `prover/`, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
   `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of record), `n2_tie_zk.py`
   (the ingress tie), `scan_zk.py` (the step-indexed scan) and `scan_period.py` (the
