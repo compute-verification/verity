@@ -1,7 +1,7 @@
 """`proof_layers.sh` runs the proof-layers table's three benchmarks as one command: its runs carry the settings and
 sampling designs of the README's section on them, its steps run in that section's order, it reads only the settings it
 names, and it refuses before its first step, a missing setting by name. Read as text, and run only as far as a refusal:
-nothing is built. The suite keys without its Markdown, so the section's runs are written out here (`LAWS`, `PLAIN`)."""
+nothing is built. The suite keys without its Markdown, so the section's runs are written out here (`DESIGNS`, `PLAIN`)."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ ROOT = HERE.parents[2]
 SCRIPT = ROOT / "benchmarks" / "one_stage" / "proof_layers.sh"
 TEXT = SCRIPT.read_text()
 SETTINGS = ["A5_CARD", "A5_CORES", "WORK", "GPU_LEASE_WHO", "A5_STEPS"]
-LAWS = {"flock": "stratified-rate:880/880", "zk": "$ZK_LAW", "sampling": "subset:256"}
+DESIGNS = {"flock": "stratified-rate:880/880", "zk": "$ZK_DESIGN", "sampling": "subset:256"}
 PLAIN = {"flock": "A5_PLAIN=1 ", "zk": "", "sampling": ""}
 
 
@@ -27,9 +27,9 @@ def test_the_script_parses():
 
 
 def test_its_runs_and_partitions_are_the_readmes():
-    script_laws = {name: law for law, name in re.findall(r"\$\(part (\S+) (\w+)\)", TEXT)}
+    script_designs = {name: design for design, name in re.findall(r"\$\(part (\S+) (\w+)\)", TEXT)}
     script_runs = {name: plain for plain, name in re.findall(r'\$\(run "(A5_PLAIN=1 )?" (\w+)\)', TEXT)}
-    assert script_laws == LAWS and "ZK_LAW=subset:880 " in TEXT
+    assert script_designs == DESIGNS and "ZK_DESIGN=subset:880 " in TEXT
     assert script_runs == PLAIN
     assert "A5_COINS=challenger $1A5_PARTITION=" in TEXT and "bash benchmarks/one_stage/a5_llama1b_h200.sh" in TEXT
     assert "pod_bootstrap.sh --cases LLAMA32_1B_INT8" in TEXT
@@ -37,22 +37,24 @@ def test_its_runs_and_partitions_are_the_readmes():
 
 
 @pytest.mark.parametrize("steps", ["", "1-16"])
-def test_its_partition_files_are_the_trees_with_the_layers_law_and_a5_steps_scope(steps, tmp_path):
-    """Unset, A5_STEPS leaves the tree's partition file as it is but for its law; set, it gives each file its scope's
-    steps, and the zero-knowledge layer every proof block by rate."""
+def test_its_partition_files_are_the_trees_with_the_layers_sampling_design_and_a5_steps_scope(steps, tmp_path):
+    """Unset, A5_STEPS leaves the tree's partition file as it is but for its sampling design; set, it gives each file its
+    scope's steps, and the zero-knowledge layer every proof block by rate."""
 
     lines = TEXT.splitlines()
     start = lines.index(next(x for x in lines if x.startswith("part() {")))
-    defs = "\n".join([x for x in lines if x.startswith(("q() {", "PART=", "ZK_LAW="))] + lines[start:lines.index("}", start) + 1])
-    made = {}
-    for law, name in (("stratified-rate:880/880", "flock"), ("$ZK_LAW", "zk")):
-        script = f'WORK={tmp_path}; A5_STEPS={steps}\n{defs}\neval "$(part {law} {name})"'
-        subprocess.run(["bash", "-c", script], cwd=ROOT, check=True)
-        made[name] = json.loads((tmp_path / f"partition-{name}.json").read_text())
+    defs = "\n".join([x for x in lines if x.startswith(("q() {", "PART=", "ZK_DESIGN="))] + lines[start:lines.index("}", start) + 1])
     tree = json.loads((ROOT / "benchmarks" / "one_stage" / "llama32_1b_rope_d64_l0.json").read_text())
-    scope = {**tree["scope"], "steps": [1, 16]} if steps else tree["scope"]
-    assert made == {"flock": {**tree, "law": "stratified-rate:880/880", "scope": scope},
-                    "zk": {**tree, "law": "rate:1/1" if steps else "subset:880", "scope": scope}}
+    want = {"flock": "stratified-rate:880/880", "zk": "rate:1/1" if steps else "subset:880"}
+    for name, design in (("flock", want["flock"]), ("zk", "$ZK_DESIGN")):
+        script = f'WORK={tmp_path}; A5_STEPS={steps}\n{defs}\neval "$(part {design} {name})"'
+        subprocess.run(["bash", "-c", script], cwd=ROOT, check=True)
+        made = json.loads((tmp_path / f"partition-{name}.json").read_text())
+        assert made.pop("scope") == ({**tree["scope"], "steps": [1, 16]} if steps else tree["scope"])
+        assert list(made) == [k for k in tree if k != "scope"] and want[name] in made.values()
+        assert all(made[k] == tree[k] for k in made if made[k] != want[name])
+
+
 
 def test_its_steps_run_in_the_readmes_order():
     steps = re.search(r"^STEPS=\((.*?)\)$", TEXT, re.M).group(1).split()

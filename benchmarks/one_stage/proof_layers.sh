@@ -89,10 +89,10 @@ done
 q() { printf '%q' "$1"; }
 PART=benchmarks/one_stage/llama32_1b_rope_d64_l0.json
 if [ -n "$LEASE" ]; then ON="gpu-lease 1 --wait --on $A5_CARD --cores $(q "$A5_CORES") --"; else ON="taskset -c $(q "$A5_CORES")"; fi
-part() {  # LAW NAME: the tree's partition file with its sampling design (its `law` key) set to LAW, and its scope's steps to A5_STEPS's
+part() {  # DESIGN NAME: the tree's partition file with its sampling design set to DESIGN, and its scope's steps to A5_STEPS's
   echo "python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); p[\"law\"] = sys.argv[2]; s = sys.argv[4:] and sys.argv[4].split(\"-\"); s and p[\"scope\"].update(steps=[int(s[0]), int(s[1])]); json.dump(p, open(sys.argv[3], \"w\"))' $PART $1 $(q "$WORK/partition-$2.json")${A5_STEPS:+ $A5_STEPS}"
 }
-ZK_LAW=subset:880 BATCH="of the partition file's scope"; [ -z "$A5_STEPS" ] || ZK_LAW=rate:1/1 BATCH=$A5_STEPS
+ZK_DESIGN=subset:880 BATCH="of the partition file's scope"; [ -z "$A5_STEPS" ] || ZK_DESIGN=rate:1/1 BATCH=$A5_STEPS
 run() {  # SETTINGS NAME: one run of a5_llama1b_h200.sh on NAME's partition file, its record in WORK/out-NAME
   echo "A5_COINS=challenger $1A5_PARTITION=$(q "$WORK/partition-$2.json") OUT=$(q "$WORK/out-$2") taskset -c $(q "$A5_CORES") bash benchmarks/one_stage/a5_llama1b_h200.sh"
 }
@@ -100,7 +100,7 @@ STEPS=(bootstrap partition-flock partition-zk partition-sampling flock zk sampli
 declare -A CMD=(
   [bootstrap]="cd adapters/vllm && $ON bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B_INT8 --out $(q "$WORK/bootstrap")"
   [partition-flock]=$(part stratified-rate:880/880 flock)
-  [partition-zk]=$(part $ZK_LAW zk)
+  [partition-zk]=$(part $ZK_DESIGN zk)
   [partition-sampling]=$(part subset:256 sampling)
   [flock]=$(run "A5_PLAIN=1 " flock)
   [zk]=$(run "" zk)

@@ -381,8 +381,8 @@ clone: run it from a full clone. Each row prints an interim `config FAIL` before
 `A5_CARD` is the jobs' card, `A5_CORES` their cores, `WORK` a new or empty work directory and `GPU_LEASE_WHO` who their
 leases are recorded for. `A5_STEPS=LO-HI`, optional, is the prover's batch: it sets each partition file's
 `scope.steps` to the request steps [LO, HI), so the window's proof blocks, which each layer's Flock statement holds
-(unset, the file's [1, 8), 880 proof blocks); with it set, the zero-knowledge layer's law is `rate:1/1`, every proof
-block, in place of `subset:880`. `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
+(unset, the file's [1, 8), 880 proof blocks); with it set, the zero-knowledge layer's sampling design is `rate:1/1`,
+every proof block, in place of `subset:880`. `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
 `research run`), and `--dry-run` makes every check and prints each step's command without running it. What it does:
 before anything is downloaded or built, it refuses a missing setting, a card that is not an H200, under 96 GB of host
 memory available, cores this job may not run on, under 96 GB free under `WORK`, a `WORK` that is not empty and results
