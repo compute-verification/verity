@@ -1,5 +1,5 @@
 """The served Pearl+ flow's Lean step end to end (`served_pearlplus.sh` step 4b) with the real Lean verifier,
-PouwVerifier.PearlPlus's ``pouw-pearlplus`` (PR #7221's package, built here as its difftest builds it), and the row PoUW's
+PouwCheck.PearlPlus's ``pouw-pearlplus`` (PR #7221's package, built here as its difftest builds it), and the row PoUW's
 compose then makes of the piece.
 
 A toy serve stands in for the GPU's: a warm-up pass and two timed passes of one epoch (the pouw suite's `proved_pass`, the

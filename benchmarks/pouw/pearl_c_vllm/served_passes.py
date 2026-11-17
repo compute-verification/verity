@@ -113,10 +113,10 @@ of one salt and, but under ``--test-instance`` (a test instance's passes, whose 
 alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at the scheme's named assumption (TT_OUT rev1) at ``--delta``) to ``--answer``
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
 and exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
-PouwVerifier).  The document's ``check_cost`` is the check's own (`check_cost`): its wall seconds, from the sample through the
+PouwCheck).  The document's ``check_cost`` is the check's own (`check_cost`): its wall seconds, from the sample through the
 last replayed tile, on the node it ran on and in how many processes.
 
-``lean`` is the Lean verdict of record on the run `verify` judged (`PouwVerifier.PearlPlus`, ``--exe`` its ``pouw-pearlplus``,
+``lean`` is the Lean verdict of record on the run `verify` judged (`PouwCheck.PearlPlus`, ``--exe`` its ``pouw-pearlplus``,
 or ``build``: built first in its package, `LEAN_PACKAGE`, where a build that fails answers nothing):
 the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them (``--manifest`` as it named them)
 and held to the names and SHA-256s
@@ -150,7 +150,7 @@ are its ``macs``, and their ``credited`` is at least its ``credited`` and at mos
 padding takes off past the totals' credit is the cause ``grid``.
 
 ``case`` writes, from the Lean verdict of record ``lean`` wrote (``--lean``), the parts of the run's case in the form
-remote's composite of record reads it (`PouwVerifier.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
+remote's composite of record reads it (`PouwCheck.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
 registration record, to ``--out`` (0700, its files 0600: the manifests carry the passes' salt key, and the files their
 values): ``parts.json`` (`CASE_SCHEMA`: the params, of the epoch's ``DIR/coins.json``, the document's samples and its coin
 record's four fields the protocol's params name (`CASE_RECORD`); the retained manifests, in order; the window, the
@@ -204,12 +204,12 @@ OVER_INERT_BOUND = ("reject", "uncredited")
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
 #: the verifier's record of its coin (`verify_run.verify_passes`' ``record``) and the prover's retention, in DIR
 COIN, RETENTION = "coin.json", "retention.json"
-#: the fields of the Lean `PouwVerifier.PearlPlus` printout `lean` holds to the Python's verdict, as its difftest does
+#: the fields of the Lean `PouwCheck.PearlPlus` printout `lean` holds to the Python's verdict, as its difftest does
 #: (`benchmarks/pouw/pearlplus_lean`'s ``answer``)
 LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "over_cap", "verdicts", "work", "exact_work")
 #: `lean`'s record of both verdicts, beside its answer
 LEAN_CHECK = "pearlplus-lean-check.json"
-#: ``lean --exe build``: PouwVerifier.PearlPlus's Lake package, built there, and the executable the build makes
+#: ``lean --exe build``: PouwCheck.PearlPlus's Lake package, built there, and the executable the build makes
 BUILD = "build"
 LEAN_PACKAGE = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
 LEAN_EXE = LEAN_PACKAGE / ".lake" / "build" / "bin" / "pouw-pearlplus"
@@ -218,7 +218,7 @@ LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
 LEAN_DISAGREES = "the Lean verdict and the Python's disagree, so no Lean answer is written"
 #: `case`'s parts of the run's case, and its directory of the files they name, each under the SHA-512 of its bytes
 CASE_SCHEMA = "verity-pouw/pearl-plus-case-parts/v1"
-#: the coin record's fields the protocol's params name (`PouwVerifier.PearlPlus.Protocol.recordKeys`)
+#: the coin record's fields the protocol's params name (`PouwCheck.PearlPlus.Protocol.recordKeys`)
 CASE_RECORD = ("commitment", "draw", "schema", "source")
 CASE_PARTS, CASE_BLOBS = "parts.json", "blobs"
 #: why `retain` and `volunteer` refuse once the verifier's coin is flipped

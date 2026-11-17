@@ -3,9 +3,9 @@ module
 public import PouwVerifier.VerifiedDifftest
 
 /-!
-# `pouw-verifier-difftest`: PoUW's checks of record, and the challenger's coins
+# `pouw-check-difftest`: PoUW's checks of record, and the challenger's coins
 
-The port's functions (`PouwVerifier.Difftest`'s, then `PouwVerifier.CreditDifftest`'s and `PouwVerifier.VerifiedDifftest`'s:
+The port's functions (`PouwCheck.Difftest`'s, then `PouwCheck.CreditDifftest`'s and `PouwCheck.VerifiedDifftest`'s:
 `VerifiedDifftest.all`) behind `Difftest.respond`'s line protocol, which `tests/test_difftest.py` drives against
 `core_check.py`, `benchmarks/pouw/served_zk/of_record.py` runs as the challenger's checks of record and
 `credit._lean_verified` asks for a served execution phase's statements' verdict (`credit-verified`), and one

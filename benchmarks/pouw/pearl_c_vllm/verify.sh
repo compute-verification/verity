@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The window's verify passes judged after the window, CPU only: each retained pass under $WORK/passes/<window run id>
-# alone gets Pearl+'s verdict in Lean (PouwVerifier.PearlPlus's pouw-pearlplus, through `served_passes.py lean`), the verdict
+# alone gets Pearl+'s verdict in Lean (PouwCheck.PearlPlus's pouw-pearlplus, through `served_passes.py lean`), the verdict
 # this job acts on, beside the Python twin the Lean is held to (`served_passes.py verify --manifest`, J processes), whose
 # own verdict nothing here reads; each pass's documents are copied into $OUT (this run's out/).
 #   research run --on MACHINE --project verity --source <run tree> --cwd clone \
@@ -19,7 +19,7 @@
 # Exits 0 only where the Lean accepted the prefill and decode passes and rejected every negative control's pass (control,
 # and control-leaves where the window retained it); a pass the Lean gave no verdict on (it refused, disagreed with the twin
 # or didn't build) fails it.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
-# PouwVerifier).
+# PouwCheck).
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=${VERITY_BENCH_VENV:-$WORK/venv312}/bin/python
 PASSES=$WORK/passes/${1:?the window run id}; JOBS=${2:-48}; OUT=${OUT:-${RESEARCH_RUN_DIR:-.}}

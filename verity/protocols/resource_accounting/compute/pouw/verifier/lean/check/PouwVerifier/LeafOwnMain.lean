@@ -3,7 +3,7 @@ module
 public import PouwVerifier.LeafOwn
 
 /-! `pouw-leaf-own-window`: the leaf verifier's check of an execution phase unit's leaf statement's `--registered` file at the
-unit's placement, from the execution phase's descriptor and round log (`PouwVerifier.LeafOwn.leafOwnCmd`). -/
+unit's placement, from the execution phase's descriptor and round log (`PouwCheck.LeafOwn.leafOwnCmd`). -/
 
 @[expose] public section
 
