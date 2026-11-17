@@ -3,11 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.TS
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# The tensor–scalar model's facet guarantees
-
-Lemma 1 and Corollaries D1 and D2 (EPS1-SPEC §1.1, §2.5).
--/
+/-! The tensor–scalar model's facet guarantees: Lemma 1 and Corollaries D1 and D2. -/
 
 @[expose] public section
 
@@ -28,26 +24,22 @@ theorem TimeBound : ResourceAccounting.Guarantees.TS.TimeBound := by
         rw [Run.time, div_mul_eq_mul_div, le_div_iff₀ hclk]
         exact mul_le_mul_of_nonneg_left hfmax hcyc
 
-/-- The certificate on one facet prices counts at that facet's load. -/
 theorem price_onFacet {K R : Type} [Fintype K] [Fintype R] [DecidableEq R] (G : Machine K R) (r : R)
     (n : K → ℝ) : G.price (onFacet r) n = G.load n r := by
   simp [Machine.price, onFacet]
 
-/-- Corollary D1, one binding facet. -/
 theorem BindingFacetD1 : ResourceAccounting.Guarantees.TS.BindingFacetD1 := by
   intro K R T L U F X _ _ _ _ _ _ _ _ Z H r hload hpos hw hphi hchi
   unfold Model.epsMachine Model.epsCert Model.epsRoute
   rw [hw, hphi, hchi, price_onFacet, hload, div_self hpos.ne']
   simp
 
-/-- Corollary D1, the vector route's threshold. -/
 theorem VectorThresholdD1 : ResourceAccounting.Guarantees.TS.VectorThresholdD1 := by
   intro K R T L U F X _ _ _ _ _ _ _ Z t phiDel r hβ hω
   simp only [Model.tensorDemandDel, Model.demand]
   rw [div_le_iff₀ hω, div_le_iff₀ (mul_pos hβ hω)]
   constructor <;> intro h <;> linarith
 
-/-- Corollary D2. -/
 theorem RoutesOffD2 : ResourceAccounting.Guarantees.TS.RoutesOffD2 := by
   intro K R ι _ _ _ G n rs cap N s κ B₀ _ hs hκ hB₀ hN
   have hle : ∀ r, G.load n r ≤ G.bound n := fun r => le_ciSup (Set.finite_range _).bddAbove r

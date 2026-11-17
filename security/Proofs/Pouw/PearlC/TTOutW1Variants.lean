@@ -6,12 +6,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 import Proofs.Pouw.PearlC.TTOutW1
 
-/-!
-# TT_OUT's chain-only, chain-cap and U-only forms at W1 are those forms at the cost model `W1.w1Priced`
-
-As `TTOutW1`'s device forms: each W1 form is its abstract form at `CM := W1.w1Priced dv salt` with `CM.Queries`
-(`w1Priced_queries`) dropped, so each reader at W1 is its reduction at that cost model.
--/
+/-! TT_OUT's chain-only, chain-cap and U-only forms at W1 are those forms at the cost model `W1.w1Priced`. -/
 
 @[expose] public section
 

@@ -5,19 +5,8 @@ public import Definitions.Assumptions.ResourceAccounting
 public import Proofs.Pouw.Witness
 import Proofs.Pouw.Prob
 
-/-!
-# PoUW's compute guarantees say something (witnesses)
-
-`ResourceAccounting.Guarantees.ComputeOfPouw` and `ResourceAccounting.Guarantees.ComputeOfPouwPerRun`:
-
-* honest (one lemma for both): the milestone's sixteen units are in `D1.m1Domain`, and the output-priced model, where
-  TT holds and the honest reference runs at `≤ W_ref` (`Pouw.Proofs.ttWitness`), truncates (`ResourceAccounting.BudgetAbort`):
-  the copy runs the program and commits its transcript when its committed units' GEMMs fit the budget, and blanks
-  otherwise (`PouwWitness.truncated`);
-* nontrivial: on a device with no capacity and an idle schedule, a run whose every audit accepts does no work, so its
-  compute audit accepts short of the certificate `W = 1` with probability 1, above the error 0
-  (`ResourceAccounting.PouwWitness.acceptAllRun`).
--/
+/-! Witnesses that `ComputeOfPouw` and `ComputeOfPouwPerRun` say something: honest at the milestone's sixteen units,
+and nontrivial on a device with no capacity and an idle schedule. -/
 
 @[expose] public section
 
@@ -61,7 +50,6 @@ theorem calls_truncated (prog : (Pouw.outputPriced Q R S).Prog) (b : ℝ) (H : Q
   rw [Pouw.QTree.calls_bind]
   rfl
 
-/-- **The output-priced model truncates.** -/
 theorem outputPriced_budgetAbort : ResourceAccounting.BudgetAbort (Pouw.outputPriced Q R S) := by
   refine ⟨fun prog H U act σ s => ?_, fun prog U act b hb => ⟨truncated prog b, fun H σ s => ?_⟩⟩
   · rw [outputPriced_cost]

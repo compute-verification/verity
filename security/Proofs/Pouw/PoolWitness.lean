@@ -2,33 +2,8 @@ module
 
 public import Proofs.Pouw.DitherWitness
 
-/-!
-# `WorkSound`, `WorkMoment` and `FleetSound` say something
-
-Each guarantee's honest and nontrivial witnesses, at `Definitions.Pouw.Witness`'s machine `tw`, protocol `twRound`
-and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`, `η = 1/7`), with `k = 2` sampling blocks:
-
-* `WorkSound_honest`: every premise of `WorkSound` holds there, `AnswersFit` among them, and the verdict accepts the
-  honest prover on every oracle and coins, within the cap with its answers' calls. `WorkSound_nontrivial`: the
-  conclusion there (`witness_freed`) is false at the verifier that accepts everything, since the idle prover's other
-  work is worth 46 against at most `32 + ε_A C < 46`.
-* `WorkMoment_honest`: every premise of `WorkMoment` outside the named assumptions holds there (the dual price, the
-  cost split, the cap, G1–G3, P1, P2), so do the named assumptions, and the verdict `twVerdict` (the rounds' checks)
-  accepts the honest prover on every oracle and coins. `WorkMoment` at these premises is `MomentSound` with
-  `ε = 1/7` (the slack `(7 − 4 − 2)/7`, no luck, no walk), `C = 14` and `κ = 0` (`witness_moment`).
-* `WorkMoment_nontrivial`: that conclusion, at the same period and parameters, is false at the verifier that accepts
-  everything. A prover that does nothing (`idle`) leaves the period's capacity to other work worth 46, against at most
-  32 for any honest strategy (`value_le`), so wherever it is accepted its shortfall is at least 12 (`shortfall_ge`) and
-  its moment at least `e^{12/7} > 1`, which no moment of average at most 1 is everywhere.
-* `FleetSound_honest_at n`: at a fleet of `n + 1` replicas of the witness, each with its own coins (the challenger's
-  randomness is every replica's coins, `coin = id`), each replica's moment holds at the honest verdict, the coins are
-  the replicas' own (`OwnDither`), and the honest fleet reads no replica's coins (`CoinsConfidential`).
-* `FleetSound_nontrivial_at n`: at that fleet, the verifier that accepts everything, `δ_coin = 1/2` and `κ_max = 0`,
-  the idle fleet is accepted with every replica's shortfall at least 12, past the fleet's luck `7 (n + 1) ln 2`, on
-  every oracle and coins, so `FleetSound`'s event has probability 1.
-* `FleetSound_honest` and `FleetSound_nontrivial`, the witnesses the lock lists: both at a fleet of two replicas
-  (`n = 1`), closed at that one instance.
--/
+/-! Witnesses that `WorkSound`, `WorkMoment` and `FleetSound` say something, at `Definitions.Pouw.Witness`'s machine
+`tw`, protocol `twRound` and period `twPd`. -/
 
 @[expose] public section
 
@@ -54,7 +29,6 @@ theorem idle_timedUse (o : Unit) (x : Fin 2 → TDraw × Fin 2) (r : Fin 3) : id
   show ∑ _b : Fin 2, ((0 : ℝ) + 0) = 0
   simp
 
-/-- The idle prover's sampling blocks leave the whole period to other work: 8 units of each job. -/
 theorem idle_fits (o : Unit) (x : Fin 2 → TDraw × Fin 2) : twPd.Fits (idle.timedUse o x) fun _ => 8 := by
   refine ⟨fun _ => by norm_num, fun r => ?_⟩
   rw [idle_timedUse]
@@ -65,8 +39,6 @@ end Idle
 
 section Value
 
-/-- Every honest strategy on the witness period is worth at most 32: `μ · cap`, the period's capacity at the dual
-price. -/
 theorem value_le (W' : ℝ) (z' : twPd.J → ℝ) (h : twPd.Fits (fun r => W' * twPd.hon r) z') : twPd.value W' z' ≤ 32 := by
   have hr : ∀ r : Fin 3, W' * twHon r + ∑ j : Fin 3, z' j * (if j = r then 1 else 0) ≤ 1 * 8 := h.2
   have h0 := hr 0
@@ -76,13 +48,10 @@ theorem value_le (W' : ℝ) (z' : twPd.J → ℝ) (h : twPd.Fits (fun r => W' * 
   norm_num [twHon, twμ, Fin.sum_univ_three] at h0 h1 h2 ⊢
   linarith
 
-/-- The idle prover's other work, 8 units of each job, is worth `14 + 32 = 46`. -/
 theorem value_eight : twPd.value 1 (fun _ => 8) = 46 := by
   change 1 * 14 + ∑ j : Fin 3, twμ j * 8 = 46
   norm_num [twμ, Fin.sum_univ_three]
 
-/-- Where the idle prover's other work is freed within `ε = 1/7` plus its shortfall `x` over `C = 14`, the shortfall
-is at least 12. -/
 theorem shortfall_ge (x : ℝ) (h : twPd.FreedWithin 1 (fun _ => 8) (1 / 7 + x / 14) 14) : 12 ≤ x := by
   obtain ⟨W', z', -, hfit, hval⟩ := h
   have h32 := value_le W' z' hfit
@@ -116,7 +85,6 @@ theorem one_lt_avg {Ω : Type} [Fintype Ω] [Nonempty Ω] {M : Ω → ℝ} (h : 
 
 end Probability
 
-/-- `WorkMoment`'s conclusion at the witness: the moment at `ε = 1/7`, `C = 14`, `η = 1/7` and `κ = 0`. -/
 theorem witness_moment :
     MomentSound tw twRound 2 twVerdict twDev twPd 1 (fun _ => 1 / 7) 14 twη (fun _ => 0) := by
   obtain ⟨hdual, hinst, hC, -, -, -, hβ, hK, hξ, hdeg, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,

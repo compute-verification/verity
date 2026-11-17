@@ -3,20 +3,7 @@ module
 public import Proofs.Pouw.TS.Stages
 public import Proofs.ResourceAccounting.Lemmas.TS.Steer
 
-/-!
-# Steering under one σ: proofs
-
-A segmented consumer's noise-active coordinates split by segment (`Steer.card_act`: `|act| = Σ_g segCount g` over the
-active segments). Zeroing `Z` saves exactly the active segments whose active coordinates all lie in `Z`; their counts
-sum to at most `|Z|` (`Steer.saved_mul_le`), which is `SegmentSteer`. Zeroing one whole segment `g` saves one segment
-for `segCount g` coordinates (`Steer.segActive_seg`), so LIN-STEER needs `segCount g · G_act ≥ |act|` at every active
-segment, which with the sum forces equal counts (`Steer.linSteer_fail`, the least count against the mean).
-
-The union bound runs over `κ ∈ K` and the `C(G, n)` sets of `n` segments; for each, the segments' fresh noises are
-independent of each other and of `ω₀` (`Steer.prob_pi_mem`), so all `n` hit their targets with probability at most
-`μ^n`. The grinding bound is that union over the `T` queries: split query `q`'s seed off the coins (`Steer.splitAt`),
-and since its target doesn't read its own seed, `SteerUnion` with one configuration bounds it by `C(G, n)·μ^n`.
--/
+/-! Steering under one σ. -/
 
 @[expose] public section
 
@@ -49,7 +36,6 @@ theorem card_act (seg : Fin m → Fin G) (act : Finset (Fin m)) :
   rw [segCount, Finset.card_pos]
   exact ⟨i, Finset.mem_filter.mpr ⟨Finset.mem_coe.mp hi, rfl⟩⟩
 
-/-- The active segments `Z` saves hold, together, at most `|Z|` active coordinates. -/
 theorem saved_sum_le (seg : Fin m → Fin G) (act Z : Finset (Fin m)) :
     ∑ g ∈ segActive seg act ∅ \ segActive seg act Z, segCount seg act g ≤ Z.card := by
   classical
@@ -96,7 +82,6 @@ theorem segment_steer (seg : Fin m → Fin G) (act : Finset (Fin m)) (c : ℝ) (
   calc c * T.card ≤ c * (Z.card / a) := mul_le_mul_of_nonneg_left hT hc
     _ = Z.card / a * c := mul_comm _ _
 
-/-- Zeroing one whole segment's active coordinates leaves every other active segment. -/
 theorem segActive_seg (seg : Fin m → Fin G) (act : Finset (Fin m)) (g : Fin G) :
     segActive seg act (act.filter fun i => seg i = g) = (segActive seg act ∅).erase g := by
   ext g'
@@ -154,7 +139,6 @@ theorem linSteer_of_even (seg : Fin m → Fin G) (act : Finset (Fin m)) (c : ℝ
   rw [hrhs]
   exact hs
 
-/-- Unequal counts put the least count below the mean. -/
 theorem exists_below_mean (seg : Fin m → Fin G) (act : Finset (Fin m))
     (hne : ¬ ∀ g g', 0 < segCount seg act g → 0 < segCount seg act g' → segCount seg act g = segCount seg act g') :
     ∃ g, 0 < segCount seg act g ∧ segCount seg act g * (segActive seg act ∅).card < act.card := by
@@ -182,7 +166,6 @@ theorem segUntouched_single (seg : Fin m → Fin G) (act : Finset (Fin m)) (i : 
     Finset.mem_erase, Finset.notMem_empty, IsEmpty.forall_iff, implies_true, and_true]
   exact ⟨fun ⟨h, hne⟩ => ⟨Ne.symm hne, h⟩, fun ⟨hne, h⟩ => ⟨h, Ne.symm hne⟩⟩
 
-/-- `s` coordinates sampled independently, each landing in its own event: the probability is the product. -/
 theorem prob_pi_mem {B : Type} [Fintype B] [Nonempty B] (S : Finset (Fin G)) (q : Fin G → B → Prop) :
     prob (fun b : Fin G → B => ∀ g ∈ S, q g (b g)) = ∏ g ∈ S, prob (q g) := by
   classical
@@ -224,7 +207,6 @@ theorem prob_pi_le {B : Type} [Fintype B] (S : Finset (Fin G)) (q : Fin G → B 
   · rw [prob_pi_mem, ← Finset.prod_const]
     exact Finset.prod_le_prod₀ (fun g _ => prob_nonneg _) fun g _ => hq g
 
-/-- The coins with query `q`'s seed split off. -/
 def splitAt {Ω₀ X : Type} {T : ℕ} (q : Fin T) : Ω₀ × (Fin T → X) ≃ (Ω₀ × ({j // j ≠ q} → X)) × X where
   toFun ω := ((ω.1, fun j => ω.2 j), ω.2 q)
   invFun z := (z.1.1, fun j => if h : j = q then z.2 else z.1.2 ⟨j, h⟩)

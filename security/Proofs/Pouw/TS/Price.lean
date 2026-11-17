@@ -37,12 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The tensor–scalar model's price lemmas
-
-The certificate's price against the bound, the stars' signs, (RD) in price form and the identity of Theorem D(a)
-(EPS1-SPEC §1.1, §2.2).
--/
+/-! The tensor–scalar model's price lemmas. -/
 
 @[expose] public section
 
@@ -81,14 +76,12 @@ private theorem price_mono (G : Machine K R) (lam : R → ℝ) {f g : K → ℝ}
   Finset.sum_le_sum fun r _ => mul_le_mul_of_nonneg_left
     (Finset.sum_le_sum fun k _ => mul_le_mul_of_nonneg_left (hfg k) (ha r k)) (hlam r)
 
-/-- `Σ_i c_i (π·d_i) = Σ_r λ_r Σ_i c_i d_{i,r}`. -/
 private theorem sum_demandPrice {ι : Type} [Fintype ι] (lam : R → ℝ) (c : ι → ℝ) (d : ι → R → ℝ) :
     ∑ i, c i * demandPrice lam (d i) = ∑ r, lam r * ∑ i, c i * d i r := by
   simp only [demandPrice, Finset.mul_sum]
   rw [Finset.sum_comm]
   exact Finset.sum_congr rfl fun _ _ => Finset.sum_congr rfl fun _ _ => by ring
 
-/-- Step 1 of Theorem D(a): a certificate's price is at most the bound, `π·n ≤ B(n)`. -/
 theorem price_le_bound [Nonempty R] (G : Machine K R) (lam : R → ℝ) (n : K → ℝ) (h : IsCert lam) :
     G.price lam n ≤ G.bound n := by
   obtain ⟨hlam, hsum⟩ := h
@@ -99,7 +92,6 @@ theorem price_le_bound [Nonempty R] (G : Machine K R) (lam : R → ℝ) (n : K �
         Finset.sum_le_sum fun r _ => mul_le_mul_of_nonneg_left (hle r) (hlam r)
     _ = G.bound n := by rw [← Finset.sum_mul, hsum, one_mul]
 
-/-- The demands, `w*`, `φ*` and `χ*` are `≥ 0` on a well-formed model at a certificate. -/
 theorem stars_nonneg [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K) (lam : R → ℝ)
     (hZ : Z.Wf P) (h : IsCert lam) :
     (∀ hd r, 0 ≤ Z.demand hd r) ∧ 0 ≤ Z.wStar lam ∧ 0 ≤ Z.phiStar lam ∧ 0 ≤ Z.chiStar lam := by
@@ -117,8 +109,6 @@ theorem stars_nonneg [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : La
   exact ⟨hd, Real.iInf_nonneg fun hd' => hp _ (hd hd'), Real.iInf_nonneg fun φ => hp _ (hfold φ),
     Real.iInf_nonneg fun ψ => hp _ (hfill ψ)⟩
 
-/-- Each head's words dominate its route facet by facet, from (I2)/(I4) `WordsWritten`, (I3) `ScalarRoute` and (I5)
-`SideUnits` (the per-head part of (RD)). -/
 theorem head_dominates (Z : Model K R T L U F X) (P : Labelled K) (A : Anatomy K T L U) (hZ : Z.Wf P)
     (hA : A.Split) (hW : WordsWritten Z A) (hS : ScalarRoute Z A) (hU : SideUnits Z A) :
     ∀ hd r, A.words hd * Z.demand hd r ≤ Z.G.load (A.nword hd) r := by
@@ -178,8 +168,6 @@ theorem head_dominates (Z : Model K R T L U F X) (P : Labelled K) (A : Anatomy K
             ring
         _ ≤ Z.G.a r k * A.nword (.side u) k := mul_le_mul_of_nonneg_left (hU u k) (ha r k)
 
-/-- (RD) in price form from the parts (I2)–(I6), FOLD-OPT per word folded at the certificate: at every certificate
-`π` where it holds, `fixed·w* + (1 − μ_f)·folded·φ* + (1 − μ_x)χ* ≤ π·n(M)`. -/
 theorem price_of_parts_folded [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K)
     (A : Anatomy K T L U) (lam : R → ℝ) (folded : ℝ) (h : IsCert lam) (hZ : Z.Wf P) (hA : A.Split)
     (hW : WordsWritten Z A) (hS : ScalarRoute Z A) (hU : SideUnits Z A) (hN : NoSum A)
@@ -215,8 +203,6 @@ theorem price_of_parts_folded [Nonempty F] [Nonempty X] (Z : Model K R T L U F X
         rw [price_add, price_add, price_sum]
     _ ≤ Z.G.price lam A.run.n := price_mono Z.G lam ha hlam hsplit
 
-/-- (RD) in price form from the parts (I2)–(I6): at every certificate,
-`fixed·w* + (1 − μ_f)N_w φ* + (1 − μ_x)χ* ≤ π·n(M)`. -/
 theorem price_of_parts [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K)
     (A : Anatomy K T L U) (lam : R → ℝ) (h : IsCert lam) (hZ : Z.Wf P) (hA : A.Split)
     (hW : WordsWritten Z A) (hS : ScalarRoute Z A) (hU : SideUnits Z A) (hN : NoSum A) (hF : FoldOpt Z A)
@@ -225,7 +211,6 @@ theorem price_of_parts [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : 
       Z.G.price lam A.run.n :=
   price_of_parts_folded Z P A lam Z.Nw h hZ hA hW hS hU hN (hF lam h) hX
 
-/-- (RD) in its per-facet form gives the same price bound (step 2 of Theorem D(a)). -/
 theorem price_of_rd [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K) (n : K → ℝ)
     (fixed : ℝ) (lam : R → ℝ) (h : IsCert lam) (hZ : Z.Wf P) (hRD : Z.RouteDominated n fixed) :
     fixed * Z.wStar lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam ≤ Z.G.price lam n := by
@@ -256,8 +241,6 @@ theorem price_of_rd [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Lab
         Finset.sum_le_sum fun r _ => mul_le_mul_of_nonneg_left (hdom r) (hlam r)
     _ = Z.G.price lam n := rfl
 
-/-- Step 4 of Theorem D(a), the identity: `Φ(π)/B(L) = 1 − ε_cert − ε_skip − ε_route − ε_mand − ε_luck − ε_adapt`
-for any labelled program `L`, with `Φ(π) = (1 − d̄ − ā)N_w w* + (1 − μ_f)N_w φ* + (1 − μ_x)χ*`. -/
 theorem identity (Z : Model K R T L U F X) (P : Labelled K) (lam : R → ℝ) (dbar abar : ℝ) (hZ : Z.Wf P) :
     ((1 - dbar - abar) * Z.Nw * Z.wStar lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam +
         (1 - Z.muX) * Z.chiStar lam) / Z.bnd P =

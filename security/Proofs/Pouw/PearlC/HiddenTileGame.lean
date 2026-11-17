@@ -4,14 +4,7 @@ public import Definitions.Pouw.PearlC.HiddenTileGame
 public import Proofs.Pouw.PearlC.HiddenGap
 public import Proofs.Core.Game
 
-/-!
-# The hidden audit's open obligation from what a proof system gives per tile
-
-`tileProofSoundAll_of_tileGame`: a hidden audit whose class is `BoundedByInduced Cls`, with a `TileGame` for every tile
-of every in-domain workload, meets `TileProofSoundAll` at `δzk`. Per sample `i`, a tile that is neither good nor blank has
-its verdict accept only on a run in `Bad` (`TileGame.prob_le`); and the batch prover, read at position `i`, does no
-better than some strategy it induces on that tile's game, which is in `Cls` (core's `ProbBatchInduced`).
--/
+/-! The hidden audit's `TileProofSoundAll` from what a proof system gives per tile. -/
 
 @[expose] public section
 
@@ -30,8 +23,6 @@ theorem prob_cast_game {α : Type} (p : α → Prop) {g₁ g₂ : Verity.Game α
   subst e
   rfl
 
-/-- One position of a batch prover in the class `BoundedByInduced Cls`: a bound for every strategy in `Cls` holds
-there. -/
 theorem prob_getD_le_of_boundedByInduced {O : Type}
     (Cls : Trace → O → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (τ : Trace) (o : O)
     (G : Verity.Game (List Bool)) (σ : Verity.Game.Strategy G) (q : ℕ) (hσ : BoundedByInduced Cls τ o G σ q)
@@ -44,8 +35,6 @@ theorem prob_getD_le_of_boundedByInduced {O : Type}
   exact Verity.SecurityProofs.ProbBatchInduced pre post g false p (fun s => Cls τ o g s q) ε hg σ
     (fun s hs => hσ pre g post rfl s hs)
 
-/-- On a tile neither good nor blank, the verdict is accept with probability at most `δzk q` for every strategy in
-`Cls` at `q`. -/
 theorem TileGame.prob_le [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {P : Protocol Q R S}
     {TR : TileRules Q R S} {HA : HiddenAudit Q R S}
     {Cls : Trace → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop} {δzk : ℕ → ℝ}
@@ -78,9 +67,6 @@ theorem ex_const_le {α : Type} [Fintype α] {c : ℝ} (hc : 0 ≤ c) : ex (fun 
   · simp [h, hc]
   · rw [mul_div_cancel_left₀ c (ne_of_gt (by exact_mod_cast h))]
 
-/-- **The hidden audit's open obligation from what a proof system gives per tile.** A hidden audit whose class at `q`
-is within `BoundedByInduced Cls`, with a `TileGame` for every tile of every in-domain workload, transcript and opening,
-meets `TileProofSoundAll` at `δzk`, given `0 ≤ δzk`. -/
 theorem tileProofSoundAll_of_tileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (HA : HiddenAudit Q R S)
     (Cls : Trace → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (δzk : ℕ → ℝ)

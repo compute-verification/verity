@@ -4,16 +4,7 @@ public import Definitions.Pouw.Guarantees.TS
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# (I8) from its pieces
-
-`ResourceAccounting.SecurityProofs.TS.ProofsSoundOfPinned : ResourceAccounting.Guarantees.TS.ProofsSoundOfPinned`: the event `E` of
-`ProofsSound` is "some round's binding fails or some proof is unsound", whose probability the union bound
-(`prob_exists_le`) puts at `S·(δ_bind + n_π·δ_ZK)`. Off it, on an accepted path, every proof of every round is accepted
-(`Of`), so each opens its round's leaves to the committed values (not `Moved`) and its opening satisfies its relation
-(not `Unsound`): the committed values satisfy every relation, the ideal game accepts (`Of`), they are right (`Pins`),
-and the fixed words follow (`RightFixed`).
--/
+/-! (I8) from its pieces. -/
 
 @[expose] public section
 
@@ -21,7 +12,6 @@ namespace ResourceAccounting.SecurityProofs.TS
 
 open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
-/-- Off binding failures and unsound proofs, an accepted path's committed values satisfy every proof's relation. -/
 theorem rel_committed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (x : Paths Ω S)
     (hp : ∀ w, pf.Proved x w) (hM : ∀ w, ¬ pf.Moved x w) (hU : ∀ w i, ¬ pf.Unsound x w i) (w : Fin S)
     (i : Fin nπ) : pf.rel x w i (pf.committed x w i) := by
@@ -32,7 +22,6 @@ theorem rel_committed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : Pr
   by_contra hr
   exact hU w i ⟨hp w i, hr⟩
 
-/-- (I8) from binding at `δ_bind`, proof soundness at `δ_ZK`, the Definitions' pinning and E1(c). -/
 theorem ProofsSoundOfPinned : ResourceAccounting.Guarantees.TS.ProofsSoundOfPinned := by
   intro K T L U V _ _ _ _ Ω _ S nπ P pf Nw δbind δzk hOf hB hZ hPin hRF
   refine ⟨fun x => ∃ w ∈ (Finset.univ : Finset (Fin S)),

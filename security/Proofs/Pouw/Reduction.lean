@@ -4,9 +4,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 public import Definitions.Pouw.Assumptions.GameStatements
 
-/-!
-# (a) `G_γ` from TT, and the overhead budget
--/
+/-! `G_γ` from TT, and the overhead budget. -/
 
 @[expose] public section
 
@@ -34,7 +32,6 @@ theorem reductionGap_lt_one {g₀ Ωmax : ℝ} (hg₀ : g₀ < 1) (hΩ : 0 < Ωm
   have : 0 < (1 - g₀) / Ωmax := div_pos (by linarith) hΩ
   unfold reductionGap; linarith
 
-/-- The pointwise reduction: a win at `g = 1 − (1 − g₀)/Ω_max` is a TT event. -/
 theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) {g₀ Ωmax T : ℝ}
     (hΩ : 0 < Ωmax)
     (hW : ∀ u < U.layout.N, (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ))
@@ -55,14 +52,12 @@ theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (�
     lt_of_lt_of_le hwin (h1.trans (mul_le_mul_of_nonneg_left h2 hΩ.le))
   exact lt_of_mul_lt_mul_left h4 hΩ.le
 
-/-- **(a)** `G_g` from TT, with `g = 1 − (1 − g₀)/Ω_max` and `δ = ε_TT(q)`. -/
 theorem gapFromTT : GameStatements.GapFromTT := by
   intro Q R S _ _ _ _ CM P D g₀ Ωmax ε hg₀ hΩ hW hTT U hU T hT q hq A hA
   refine le_trans (pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
   rintro ⟨H, s⟩ ⟨hwin, hb⟩
   exact ⟨wins_imp_tt P U H s _ hΩ (hW U hU) hwin, hb⟩
 
-/-- **The overhead budget**: `g ≤ 1%` under TT(0.5%) iff `Ω_max ≤ 199/198`. -/
 theorem gapBudget : GameStatements.GapBudget := by
   intro Ωmax hΩ
   unfold reductionGap Params.gap0

@@ -7,25 +7,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Core.Circuit
 import Proofs.Pouw.PearlC.Tile4Circuit
 
-/-!
-# `pc4`'s tile check: its units are its templates (proofs)
-
-`WholeCircuit.whole4` is `Pc4Check`'s table, its units the instances of `Pc4RowB_v1`, `Pc4RowA_v1` and `Pc4Tile_v1`.
-As for `pc8` (`TileCheck8`), each unit an entry's words depend on is cut out as its template's transcript
-(`Whole.cut`), and the cuts are chained along the ports, so the unit lemmas proved of each template's own table apply to
-the composed table unchanged:
-
-* every port reads a gate of its input's width (`hfit4B`, `hfit4A`, and `hfit4T` where `16 ∣ K`, so the tile's scale
-  bytes are the rows' `UE4M3` casts), so a cut holds on its inputs the transcript's values at its ports (`cutB4_input`,
-  `cutA4_input`, `cutT4_input`) and, where its unit is correct, the transcript holds on the unit's committed gates the
-  cut's values (`cutB4_at`, `cutA4_at`, `cutT4_at`);
-* entry `(i, j)`'s tile unit is in the cone of its `C̃` (`cone4T`), and RowA `i` and RowB `j` in the cone of its `U`,
-  whose last K16 step reads their `P_A` and `P_B` words (`cone4A`, `cone4B`);
-* where the three units are correct, the entry's `C̃` and `U` hold the tile cut's (`chain4_C`, `chain4_U`), and the tile
-  cut's `A′` and `B̃` rows, codes and scale bytes, and its `P_A` and `P_B` rows are the row cuts' (`chain4_A`,
-  `chain4_SA`, `chain4_B`, `chain4_SB`, `chain4_PA`, `chain4_PB`), each gate a tile reads being committed
-  (`Whole.port_committed`).
--/
+/-! `pc4`'s tile check: its units are its templates. -/
 
 @[expose] public section
 
@@ -34,8 +16,6 @@ namespace Pouw.PearlC.WholeCircuit
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit Pouw.PearlC.RowCircuit
 
 variable (ops : RowOps)
-
-/-! ## The row tables' gates -/
 
 theorem pre4Runs_blk (K b : ℕ) (rest : List Run) :
     pre4Runs K b ++ rest = (statsRuns .bf16Fabs .bf16 K b ++ [alpha4Run K b, d4Run K b]) ++ blk4Run K b :: rest := by
@@ -48,7 +28,6 @@ theorem bk4At_len (K b : ℕ) :
   simp [runsLen, alpha4Run, d4Run, Run.ofList, bk4At, d4At, a4At]
   omega
 
-/-- A `pc4` row's code gates are E2M1 casts, 4 bits wide. -/
 theorem rows4_code_w (T : Rows) {K : ℕ} {rest : List Run} (hT : T.runs = pre4Runs K T.nIn ++ rest)
     {t : ℕ} (ht : t < 16 * (K / 16)) : ((T.spec ops).gate (code4 K T.nIn t)).w = 4 := by
   have hl := bk4At_len K T.nIn
@@ -65,7 +44,6 @@ theorem rows4_code_w (T : Rows) {K : ℕ} {rest : List Run} (hT : T.runs = pre4R
     show 21 + 2 * (t % 16) ≠ 18 by omega, show 21 + 2 * (t % 16) ≠ 19 by omega,
     show (21 + 2 * (t % 16) - 20) % 2 ≠ 0 by omega, ↓reduceIte, RGate.toGate, Prim.w]
 
-/-- A `pc4` row's scale bytes are UE4M3 casts, 8 bits wide. -/
 theorem rows4_scale_w (T : Rows) {K : ℕ} {rest : List Run} (hT : T.runs = pre4Runs K T.nIn ++ rest)
     {q : ℕ} (hq : q < K / 16) : ((T.spec ops).gate (scale4 K T.nIn q)).w = 8 := by
   have hl := bk4At_len K T.nIn
@@ -96,7 +74,6 @@ theorem row4B_scale_w {K q : ℕ} (hq : q < K / 16) :
     (((row4B K).spec ops).gate (scale4 K (rowIn K true) q)).w = 8 :=
   rows4_scale_w ops (row4B K) rfl hq
 
-/-- RowA's `P_A` words are BF16 words: its `Ẽ` (`PouwETilde_v1`) and its chains' `f2fpBf16` casts, 16 bits wide. -/
 theorem row4A_pa_w {K w : ℕ} (hw : w < 64) : (((row4A K).spec ops).gate (paOut4 K w)).w = 16 := by
   have hl := pre4Runs_len K (rowIn K false)
   unfold paOut4
@@ -125,7 +102,6 @@ theorem row4A_pa_w {K w : ℕ} (hw : w < 64) : (((row4A K).spec ops).gate (paOut
     rw [e1]
     simp only [af4Run, Run.rep, e2, e3, lt_irrefl, ↓reduceIte, RGate.toGate, Prim.w]
 
-/-- RowB's `P_B` words are BF16 words: its blocks' `f2fpBf16` casts and its `bf16Neg`s, 16 bits wide. -/
 theorem row4B_pb_w {K w : ℕ} (hw : w < 64) : (((row4B K).spec ops).gate (pbOut4 K w)).w = 16 := by
   have hl := pre4Runs_len K (rowIn K true)
   unfold pbOut4
@@ -160,19 +136,14 @@ theorem row4B_pb_w {K w : ℕ} (hw : w < 64) : (((row4B K).spec ops).gate (pbOut
       (by rw [hn]; show _ < rowIn K true + _ + _; simp only [nb4Run]; omega)]
     simp only [nb4Run, RGate.toGate, Prim.w]
 
-/-! ## `whole4`'s blocks -/
-
 section Whole4
 
 variable (M K N TM TN : ℕ)
 
-/-- `whole4`'s RowB block. -/
 def blockB4 : BlockKind := ⟨(row4B K).spec ops, rowIn K true, N, portB8 M N K⟩
 
-/-- `whole4`'s RowA block. -/
 def blockA4 : BlockKind := ⟨(row4A K).spec ops, rowIn K false, M, portA8 M N K⟩
 
-/-- `whole4`'s tile block. -/
 def blockT4 : BlockKind := ⟨tile4Spec K TM TN, tile4In K TM TN, M / TM * (N / TN), portT4 M N K TM TN⟩
 
 theorem whole4_B : (whole4 ops M K N TM TN).blocks =
@@ -203,8 +174,6 @@ theorem whole4_N : (whole4 ops M K N TM TN).spec.toCircuit.N = in8 M N K + N * (
   show in8 M N K + blocksLen _ = _
   simp only [blocksLen, BlockKind.len, whole4, add_zero, Nat.add_assoc]
   rfl
-
-/-! ### Inputs -/
 
 theorem inW4_portA8 {i a : ℕ} (hi : i < M) (ha : a < rowIn K false) :
     inW4 M N K (portA8 M N K i a) = (row4A K).inW a := by
@@ -267,8 +236,6 @@ theorem hnA4 : (blockA4 ops M K N).nIn ≤ (blockA4 ops M K N).S.N :=
 theorem hnT4 : (blockT4 M K N TM TN).nIn ≤ (blockT4 M K N TM TN).S.N := by
   show tile4In K TM TN ≤ tile4N K TM TN
   unfold tile4N; omega
-
-/-! ### Every port reads a gate of its input's width -/
 
 theorem hfit4B (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N) :
     ∀ a < (blockB4 ops M K N).nIn,
@@ -364,13 +331,10 @@ theorem hfit4T (h16 : 16 ∣ K) (X : (whole4 ops M K N TM TN).spec.toCircuit.Tra
 
 end Whole4
 
-/-! ## What a tile's entry reads -/
-
 section Reads4
 
 variable (K TM TN : ℕ)
 
-/-- Entry `(i, j)`'s firing `l / 64` reads code `l` of `A′_i` and of `B̃_j`. -/
 theorem tile4_reads_code {i j l : ℕ} (hj : j < TN) (hl : l < 64 * (K / 64)) :
     i * K + l ∈ (tile4Gate K TM TN (entry4Base K TM TN i j + l / 64)).rd ∧
       TM * row4 K + j * K + l ∈ (tile4Gate K TM TN (entry4Base K TM TN i j + l / 64)).rd := by
@@ -381,7 +345,6 @@ theorem tile4_reads_code {i j l : ℕ} (hj : j < TN) (hl : l < 64 * (K / 64)) :
     List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
       (List.mem_map.2 ⟨l % 64, List.mem_range.2 (by omega), by omega⟩)))⟩
 
-/-- Entry `(i, j)`'s firing `l / 4` reads scale byte `l` of `A′_i` and of `B̃_j`. -/
 theorem tile4_reads_scale {i j l : ℕ} (hj : j < TN) (hl : l < 4 * (K / 64)) :
     TM * K + i * (K / 16) + l ∈ (tile4Gate K TM TN (entry4Base K TM TN i j + l / 4)).rd ∧
       TM * row4 K + TN * K + j * (K / 16) + l ∈ (tile4Gate K TM TN (entry4Base K TM TN i j + l / 4)).rd := by
@@ -391,7 +354,6 @@ theorem tile4_reads_scale {i j l : ℕ} (hj : j < TN) (hl : l < 4 * (K / 64)) :
       (List.mem_map.2 ⟨l % 4, List.mem_range.2 (by omega), by omega⟩)),
     List.mem_append_right _ (List.mem_map.2 ⟨l % 4, List.mem_range.2 (by omega), by omega⟩)⟩
 
-/-- Entry `(i, j)`'s K16 step `q / 16` reads word `q` of `P_A,i` and of `P_B,j`. -/
 theorem tile4_reads_P {i j q : ℕ} (hj : j < TN) (hq : q < 64) :
     (TM + TN) * row4 K + 64 * i + q ∈ (tile4Gate K TM TN (entry4Base K TM TN i j + (K / 64 + q / 16))).rd ∧
       (TM + TN) * row4 K + 64 * TM + 64 * j + q ∈
@@ -496,34 +458,28 @@ theorem portT4_PB {tj q : ℕ} (_htj : tj < TN) (hq : q < 64) :
 
 end Ports4
 
-/-! ## The units' cuts -/
-
 section Cuts4
 
 variable (M K N TM TN : ℕ)
 
-/-- RowB `j`'s cut holds on its inputs the transcript's values at its ports. -/
 theorem cutB4_input (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N) {a : ℕ}
     (ha : a < rowIn K true) :
     val ((whole4 ops M K N TM TN).cut X (blockB4 ops M K N) j) a = val X (portB8 M N K j a) :=
   (whole4 ops M K N TM TN).cut_input (whole4_B ops M K N TM TN) hj X (hinB4 ops M K N)
     (hfit4B ops M K N TM TN X hj) (hnB4 ops M K N) ha
 
-/-- RowA `i`'s cut holds on its inputs the transcript's values at its ports. -/
 theorem cutA4_input (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {i : ℕ} (hi : i < M) {a : ℕ}
     (ha : a < rowIn K false) :
     val ((whole4 ops M K N TM TN).cut X (blockA4 ops M K N) i) a = val X (portA8 M N K i a) :=
   (whole4 ops M K N TM TN).cut_input (whole4_A ops M K N TM TN) hi X (hinA4 ops M K N)
     (hfit4A ops M K N TM TN X hi) (hnA4 ops M K N) ha
 
-/-- Tile `e`'s cut holds on its inputs the transcript's values at its ports. -/
 theorem cutT4_input (h16 : 16 ∣ K) (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {e : ℕ}
     (he : e < M / TM * (N / TN)) {a : ℕ} (ha : a < tile4In K TM TN) :
     val ((whole4 ops M K N TM TN).cut X (blockT4 M K N TM TN) e) a = val X (portT4 M N K TM TN e a) :=
   (whole4 ops M K N TM TN).cut_input (whole4_T ops M K N TM TN) he X (hinT4 M K N TM TN)
     (hfit4T ops M K N TM TN h16 X he) (hnT4 M K N TM TN) ha
 
-/-- Where RowB `j` is correct, its committed gates hold its cut's values. -/
 theorem cutB4_at (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N)
     (hX : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_B ops M K N TM TN) hj⟩)
@@ -535,7 +491,6 @@ theorem cutB4_at (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (
   exact (whole4 ops M K N TM TN).cut_committed (whole4_B ops M K N TM TN) hj X (hinB4 ops M K N)
     (hfit4B ops M K N TM TN X hj) hX ha1 ha2 (fin_mem (rowB4_eq ops M K N TM TN j a) hcom)
 
-/-- Where RowA `i` is correct, its committed gates hold its cut's values. -/
 theorem cutA4_at (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {i : ℕ} (hi : i < M)
     (hX : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_A ops M K N TM TN) hi⟩)
@@ -547,7 +502,6 @@ theorem cutA4_at (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {i : ℕ} (
   exact (whole4 ops M K N TM TN).cut_committed (whole4_A ops M K N TM TN) hi X (hinA4 ops M K N)
     (hfit4A ops M K N TM TN X hi) hX ha1 ha2 (fin_mem (rowA4_eq ops M K N TM TN i a) hcom)
 
-/-- Where tile `e` is correct, its committed gates hold its cut's values. -/
 theorem cutT4_at (h16 : 16 ∣ K) (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {e : ℕ}
     (he : e < M / TM * (N / TN))
     (hX : (whole4 ops M K N TM TN).part.Correct X
@@ -561,8 +515,6 @@ theorem cutT4_at (h16 : 16 ∣ K) (X : (whole4 ops M K N TM TN).spec.toCircuit.T
     (hfit4T ops M K N TM TN h16 X he) hX ha1 ha2 (fin_mem (tile4_eq ops M K N TM TN e a) hcom)
 
 end Cuts4
-
-/-! ## An entry's cone -/
 
 section Cone4
 
@@ -581,13 +533,11 @@ theorem tile4_ltN {e a : ℕ} (he : e < M / TM * (N / TN)) (ha1 : tile4In K TM T
   rw [tile4_eq ops M K N TM TN]
   exact (whole4 ops M K N TM TN).inst_lt (whole4_T ops M K N TM TN) he ha1 ha2
 
-/-- Entry `(i, j)`'s `U` is its tile's copy of the block's gate `K / 64 + 3`. -/
 theorem uGlob4_eq (i j : ℕ) : uGlob4 M N K TM TN i j = (whole4 ops M K N TM TN).nIn +
     blocksLen [blockB4 ops M K N, blockA4 ops M K N] + (i / TM * (N / TN) + j / TN) * (blockT4 M K N TM TN).len +
       (entry4Base K TM TN (i % TM) (j % TN) + (K / 64 + 48 / 16) - (blockT4 M K N TM TN).nIn) := by
   unfold uGlob4; rw [u4Gate_eq]; exact tile4_eq ops M K N TM TN _ _
 
-/-- Entry `(i, j)`'s tile unit is in the cone of its `C̃`. -/
 theorem cone4T {T : Finset (Fin (whole4 ops M K N TM TN).spec.toCircuit.N)} {i j : ℕ} (hTM : TM ∣ M)
     (hTN : TN ∣ N) (hi : i < M) (hj : j < N) (hK : 0 < K / 64)
     (hc : ∀ g : Fin (whole4 ops M K N TM TN).spec.toCircuit.N, g.val = cGlob4 M N K TM TN i j → g ∈ T) :
@@ -600,7 +550,6 @@ theorem cone4T {T : Finset (Fin (whole4 ops M K N TM TN).spec.toCircuit.N)} {i j
   exact (whole4 ops M K N TM TN).part.mem_cone (hc _ (tile4_eq ops M K N TM TN _ _).symm) (.refl _)
     ((whole4 ops M K N TM TN).unit_inst (whole4_T ops M K N TM TN) (tile_index hTM hTN hi hj).1 hb.1 hb.2)
 
-/-- Entry `(i, j)`'s RowA unit is in the cone of its `U`, whose last K16 step reads `P_A,i`'s word 48. -/
 theorem cone4A {T : Finset (Fin (whole4 ops M K N TM TN).spec.toCircuit.N)} {i j : ℕ} (hTM : TM ∣ M)
     (hTN : TN ∣ N) (hi : i < M) (hj : j < N)
     (hu : ∀ g : Fin (whole4 ops M K N TM TN).spec.toCircuit.N, g.val = uGlob4 M N K TM TN i j → g ∈ T) :
@@ -621,7 +570,6 @@ theorem cone4A {T : Finset (Fin (whole4 ops M K N TM TN).spec.toCircuit.N)} {i j
   show portT4 M N K TM TN _ _ = _
   rw [portT4_PA _ hti (by norm_num), hie, rowA4_eq ops M K N TM TN]
 
-/-- Entry `(i, j)`'s RowB unit is in the cone of its `U`, whose last K16 step reads `P_B,j`'s word 48. -/
 theorem cone4B {T : Finset (Fin (whole4 ops M K N TM TN).spec.toCircuit.N)} {i j : ℕ} (hTM : TM ∣ M)
     (hTN : TN ∣ N) (hi : i < M) (hj : j < N)
     (hu : ∀ g : Fin (whole4 ops M K N TM TN).spec.toCircuit.N, g.val = uGlob4 M N K TM TN i j → g ∈ T) :
@@ -654,8 +602,6 @@ theorem outs4_U {i j : ℕ} (hi : i < M) (hj : j < N) : uGlob4 M N K TM TN i j �
 
 end Cone4
 
-/-! ## A tile's cut reads its rows' cuts -/
-
 theorem h16_of {K : ℕ} (hk : 64 ∣ K) : 16 ∣ K := Nat.dvd_trans (by norm_num) hk
 
 section Chain4
@@ -665,7 +611,6 @@ variable (M K N TM TN : ℕ) (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace)
 
 include hTM hTN hi hj hk
 
-/-- Where its tile unit is correct, entry `(i, j)`'s `C̃` holds the tile cut's. -/
 theorem chain4_C (hK : 0 < K / 64)
     (hXT : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_T ops M K N TM TN) (tile_index hTM hTN hi hj).1⟩) :
@@ -681,7 +626,6 @@ theorem chain4_C (hK : 0 < K / 64)
       simp only [Spec.toCircuit, Finset.mem_filter, Finset.mem_univ, true_and]
       exact outs4_C M K N TM TN hi hj))
 
-/-- Where its tile unit is correct, entry `(i, j)`'s `U` holds the tile cut's. -/
 theorem chain4_U
     (hXT : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_T ops M K N TM TN) (tile_index hTM hTN hi hj).1⟩) :
@@ -697,7 +641,6 @@ theorem chain4_U
       simp only [Spec.toCircuit, Finset.mem_filter, Finset.mem_univ, true_and]
       exact outs4_U M K N TM TN hi hj))
 
-/-- Where RowA `i` is correct, the tile cut's row `i mod TM` of `A′`'s codes is RowA `i`'s cut's. -/
 theorem chain4_A
     (hXA : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_A ops M K N TM TN) hi⟩) {l : ℕ} (hl : l < K) :
@@ -722,7 +665,6 @@ theorem chain4_A
     (h := rowA4_ltN ops M K N TM TN hi (code4A_lt hl))
     (fin_mem (by show portT4 M N K TM TN _ _ = _; rw [portT4_A _ hti hl, hie]) hcom)
 
-/-- Where RowA `i` is correct, the tile cut's row `i mod TM` of `A′`'s scale bytes is RowA `i`'s cut's. -/
 theorem chain4_SA
     (hXA : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_A ops M K N TM TN) hi⟩) {l : ℕ} (hl : l < K / 16) :
@@ -749,7 +691,6 @@ theorem chain4_SA
     (h := rowA4_ltN ops M K N TM TN hi (scale4A_lt hl))
     (fin_mem (by show portT4 M N K TM TN _ _ = _; rw [portT4_SA _ hti hl, hie]) hcom)
 
-/-- Where RowB `j` is correct, the tile cut's row `j mod TN` of `B̃`'s codes is RowB `j`'s cut's. -/
 theorem chain4_B
     (hXB : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_B ops M K N TM TN) hj⟩) {l : ℕ} (hl : l < K) :
@@ -777,7 +718,6 @@ theorem chain4_B
     (h := rowB4_ltN ops M K N TM TN hj (code4B_lt hl))
     (fin_mem (by show portT4 M N K TM TN _ _ = _; rw [portT4_B _ htj hl, hje]) hcom)
 
-/-- Where RowB `j` is correct, the tile cut's row `j mod TN` of `B̃`'s scale bytes is RowB `j`'s cut's. -/
 theorem chain4_SB
     (hXB : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_B ops M K N TM TN) hj⟩) {l : ℕ} (hl : l < K / 16) :
@@ -805,7 +745,6 @@ theorem chain4_SB
     (h := rowB4_ltN ops M K N TM TN hj (scale4B_lt hl))
     (fin_mem (by show portT4 M N K TM TN _ _ = _; rw [portT4_SB _ htj hl, hje]) hcom)
 
-/-- Where RowA `i` is correct, the tile cut's `P_A` row `i mod TM` is RowA `i`'s cut's `P_A` words. -/
 theorem chain4_PA
     (hXA : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_A ops M K N TM TN) hi⟩) {q : ℕ} (hq : q < 64) :
@@ -826,7 +765,6 @@ theorem chain4_PA
   exact cutA4_at ops M K N TM TN X hi hXA hc.1 hc.2 (h := rowA4_ltN ops M K N TM TN hi hc.2)
     (fin_mem (by show portT4 M N K TM TN _ _ = _; rw [portT4_PA _ hti hq, hie]) hcom)
 
-/-- Where RowB `j` is correct, the tile cut's `P_B` row `j mod TN` is RowB `j`'s cut's `P_B` words. -/
 theorem chain4_PB
     (hXB : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_B ops M K N TM TN) hj⟩) {q : ℕ} (hq : q < 64) :

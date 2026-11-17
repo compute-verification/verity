@@ -5,53 +5,8 @@ import Mathlib.Tactic.LinearCombination
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
-/-!
-# P2: Pearl-C's clean-up chain (staging, nothing pinned)
-
-**(a) The cancellation identities, exact.** Pearl's U with the exact `C̃ = A′·B̃ᵀ` is the product of the denoised
-operands, `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ` (`peelU_cancel`, `peelU_cancel_codes`); the Gram order's right factor is
-`β·E_B·(F_Bᵀ·F_A) − B̃·F_A` (`peelRight_gram`). The whitepaper's raw-A form is `A·Bᵀ` plus `C̃ − (A + N_A)·(B + N_B)ᵀ`
-(`rawU_eq`), so it is `A·Bᵀ` exactly when `C̃` is the exact product of the unquantized noisy operands (`rawU_cancel`).
-Under §5's atom-mix forming the peel reuses the noise lines `E′` the atom read (`atomMix_lines`), and the identity holds
-with unit `β` on `Noise.atomLines`, `N_A = E′_A·F_Aᵀ` (`peelU_cancel_atomMix`).
-
-**(b) Where the rounding is.** A product of significands of `p` and `q` bits has `p + q` bits (`hasSig_mul`), so
-BF16 × BF16, E4M3 × BF16 and E4M3 × E4M3 products are FP32-representable (`bf16_mul_representable`) and FP32 rounds
-them to themselves (`rn_mul_exact`); `bf16Rn` and the E4M3 codes give such values (`bf16Rn_hasSig`,
-`codeVal_hasSig`). So the peel's rounding is the accumulation's, and the BF16 cast of its FP32 factors. For a sequential
-`rnAdd` accumulation of exact products (`accum`), the error is at most half an ulp of each step's exact sum
-(`accum_error_ulp`), at most `n/2` ulps of a bound on them (`accum_error_ulp_le`), and at most
-`((1 + 2^−24)^n − 1)·(|s| + Σ|p|)` a priori (`accum_error`). The peel's order is the parameter `ord`, a K order of the
-`2r` columns (`peelAccum`); `peel_error` bounds Pearl's U in any such order, and `peelAccum_rn_products` says rounding each
-BF16 product to FP32 first changes nothing.
-
-The pinned order's shape (the Gram order's FP32 factors, cast to BF16, then the BF16 wgmma K16 into the nonzero FP32
-accumulator `C̃`) is `peelSteps`: the K order split into steps, each step one call of a step function within a relative
-error `ε` (`StepBound`). `chunkAccum_error` bounds `n` such steps by `((1 + ε)^n − 1)·(|s| + Σ|p|)`; the BF16 cast moves
-a value by at most `|x|/2^8` (`bf16Rn_sub_le`), so a product of casts by at most `(2^−7 + 2^−16)·|x·y|`
-(`bf16_mul_sub_le`); and `peel_error_pinned` bounds Pearl's U in that shape. The wgmma K16 step truncates (a 26-bit
-aligned adder, `HOPPER_BF16_WGMMA_K16` in `verity.ml.tc`), so it is not `rnAdd`. (d) models it bit-exactly
-(`PeelExact.k16Step`, in U's pinned order `PeelExact.peelExact`), but its `ε` is still this file's parameter:
-`StepBound` quantifies over all inputs, and the step's exponent floor drops a lone term below `2^−158` entirely
-(`PeelExactChecks.floor_drops`), so no `ε < 1` holds everywhere and the model's `ε` needs a bound on a range. `rnStep`
-(exact sum, one FP32 rounding) meets the bound with `ε = 2^−24` (`rnStep_bound`).
-
-**(c) Liveness at degenerate inputs.** Pearl's clean-up splits into the `E_A` term and the `F_B` term (`peel_split`).
-Each of the four clean-up quantities (`A′·F_B`, `(β·N_B − B̃)·F_A` and the two terms) changes when one entry of one noise
-factor changes sign, with the other factors, and so `A′` or `B̃` where the quantity reads them, unchanged
-(`fused_live`, `gramCols_live`, `cleanE_live`, `cleanF_live`). The hypotheses are nonzero noise entries and a nonzero
-entry of the quantity's other factor, and they read the inputs only through `A′` and `B̃`. The theorems hold for every
-input, so in particular at the degenerate inputs the domain admits: rank-1 rows, rows with few nonzeros, and `B = 0`
-where `B`'s own noise floor allows it. The hypotheses are satisfiable there with the real encoder: `live_witness_sparse`
-at a row with one nonzero among 64 that meets `LiveRow 1`, with `β` from the row's own `rms` (`sparse_beta`); `live_witness` at `B = 0`
-with `B`'s floor `σ = 1/3`, and at `x = 0` with the floor's `σ = 1` (a zero row is outside the domain unless a floor
-sets its `σ`). The raw-A form's `A·F_B` columns and `A·N_Bᵀ` term are `0` at `A = 0` for every noise, and its `N_A·Bᵀ`
-term at `B = 0` (`raw_cols_zero`, `raw_terms_const`, `rawU_zero_inputs`): the negative control.
-
-What this does not prove: that a program must *spend* the work of a live term, which is Theorem B0's work accounting
-and TT_OUT's; the error of the FP32 factors before their cast (the fused `A′·F_B` chain's and the Gram order's own FP32
-steps), and of `C̃` against `A′·B̃ᵀ`, which pass through additively; and the wgmma K16 step's `ε` (see (b)).
--/
+/-! P2, staged and nothing pinned: Pearl-C's clean-up chain, its cancellation identities, where its rounding is and
+its liveness at degenerate inputs. -/
 
 @[expose] public section
 
@@ -61,9 +16,6 @@ open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.PearlC Matrix
 
 variable {m n k r : Nat}
 
-/-! ## (a) The cancellation identities -/
-
-/-- **Pearl's cancellation identity**: with `C̃ = A′·B̃ᵀ` exact, Pearl's U is `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ`. -/
 theorem peelU_cancel (βA : Fin m → ℚ) (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ)
     (B' : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) :
     peelU (A' * B'ᵀ) βA βB A' B' z = (A' - rowScale βA z.NA) * (B' - rowScale βB z.NB)ᵀ := by
@@ -72,15 +24,12 @@ theorem peelU_cancel (βA : Fin m → ℚ) (βB : Fin n → ℚ) (A' : Matrix (F
     Matrix.mul_assoc]
   abel
 
-/-- Pearl's cancellation identity on the codes: `peelU (ctExact A′ B̃)` is `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ` on their values. -/
 theorem peelU_cancel_codes (βA : Fin m → ℚ) (βB : Fin n → ℚ) (Aq : Matrix (Fin m) (Fin k) Code)
     (Bq : Matrix (Fin n) (Fin k) Code) (z : Noise m n k r) :
     peelU (ctExact Aq Bq) βA βB (vals Aq) (vals Bq) z =
       (vals Aq - rowScale βA z.NA) * (vals Bq - rowScale βB z.NB)ᵀ :=
   peelU_cancel βA βB (vals Aq) (vals Bq) z
 
-/-- The atom-mix and the peel read the same noise lines: `A′`'s atom takes the codes `lineCodes (β_A i) (E_A i)`, and
-`Noise.atomLines` holds them. -/
 theorem atomMix_lines (αA βA : Fin m → ℚ) (βB : Fin n → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k 32)
     (i : Fin m) (l : Fin k) :
     FormChain.atomMix.quantA αA βA X z i l =
@@ -88,8 +37,6 @@ theorem atomMix_lines (αA βA : Fin m → ℚ) (βB : Fin n → ℚ) (X : Matri
       ∀ t, (z.atomLines βA βB).EA i t = lineCodes (βA i) (z.EA i) t :=
   ⟨rfl, fun _ => rfl⟩
 
-/-- **§5's cancellation identity**: with the atom-mix forming, the peel reuses the noise lines `E′` exactly (unit `β`
-on `Noise.atomLines`), and Pearl's U with the exact `C̃ = A′·B̃ᵀ` is `(A′ − E′_A·F_Aᵀ)·(B̃ − E′_B·F_Bᵀ)ᵀ`. -/
 theorem peelU_cancel_atomMix (αA βA : Fin m → ℚ) (αB βB : Fin n → ℚ) (X : Matrix (Fin m) (Fin k) ℚ)
     (B : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k 32) :
     peelU (ctExact (FormChain.atomMix.quantA αA βA X z) (FormChain.atomMix.quantB αB βB B z)) (fun _ => 1)
@@ -100,26 +47,20 @@ theorem peelU_cancel_atomMix (αA βA : Fin m → ℚ) (αB βB : Fin n → ℚ)
   rw [peelU_cancel_codes]
   simp only [rowScale, Noise.NA, Noise.NB, Noise.atomLines, diagonal_one, Matrix.one_mul]
 
-/-- The Gram order: the right factor's first block `(β·N_B − B̃)·F_A` is `β·E_B·(F_Bᵀ·F_A) − B̃·F_A`. -/
 theorem peelRight_gram (βB : Fin n → ℚ) (B' : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) :
     (rowScale βB z.NB - B') * vals z.FA = rowScale βB (vals z.EB * z.gram) - B' * vals z.FA := by
   simp only [rowScale, Noise.NB, Noise.gram, Matrix.sub_mul, Matrix.mul_assoc]
 
-/-- **The raw-A form's identity**: `C̃ − A·N_Bᵀ − N_A·Bᵀ − N_A·N_Bᵀ = A·Bᵀ + (C̃ − (A + N_A)·(B + N_B)ᵀ)`. -/
 theorem rawU_eq (Ct : Matrix (Fin m) (Fin n) ℚ) (A : Matrix (Fin m) (Fin k) ℚ) (B : Matrix (Fin n) (Fin k) ℚ)
     (NA : Matrix (Fin m) (Fin k) ℚ) (NB : Matrix (Fin n) (Fin k) ℚ) :
     rawU Ct A B NA NB = A * Bᵀ + (Ct - (A + NA) * (B + NB)ᵀ) := by
   simp only [rawU, transpose_add, Matrix.add_mul, Matrix.mul_add]
   abel
 
-/-- The raw-A form cancels exactly when `C̃` is the exact product of the unquantized noisy operands. -/
 theorem rawU_cancel (A : Matrix (Fin m) (Fin k) ℚ) (B : Matrix (Fin n) (Fin k) ℚ) (NA : Matrix (Fin m) (Fin k) ℚ)
     (NB : Matrix (Fin n) (Fin k) ℚ) : rawU ((A + NA) * (B + NB)ᵀ) A B NA NB = A * Bᵀ := by
   rw [rawU_eq, sub_self, add_zero]
 
-/-! ## (b) Where the rounding is -/
-
-/-- A product of a `p`-bit and a `q`-bit significand has a `(p + q)`-bit significand. -/
 theorem hasSig_mul {p q : Nat} {x y : ℚ} (hx : HasSig p x) (hy : HasSig q y) : HasSig (p + q) (x * y) := by
   obtain ⟨a, e, ha, rfl⟩ := hx
   obtain ⟨b, f, hb, rfl⟩ := hy
@@ -128,29 +69,23 @@ theorem hasSig_mul {p q : Nat} {x y : ℚ} (hx : HasSig p x) (hy : HasSig q y) :
     exact mul_lt_mul'' ha hb (abs_nonneg _) (abs_nonneg _)
   · rw [zpow_add₀ two_ne_zero]; push_cast; ring
 
-/-- More significand bits allow more values. -/
 theorem hasSig_mono {p q : Nat} {x : ℚ} (h : p ≤ q) (hx : HasSig p x) : HasSig q x := by
   obtain ⟨a, e, ha, rfl⟩ := hx
   exact ⟨a, e, lt_of_lt_of_le ha (pow_le_pow_right₀ (by norm_num) h), rfl⟩
 
-/-- A value with at most 24 significand bits is FP32-representable. -/
 theorem representable_of_hasSig {p : Nat} {x : ℚ} (h : p ≤ 24) (hx : HasSig p x) : Representable x :=
   hasSig_mono h hx
 
-/-- **BF16 × BF16 is exact in FP32**: an 8-bit by 8-bit significand product has 16 bits. -/
 theorem bf16_mul_representable {x y : ℚ} (hx : HasSig 8 x) (hy : HasSig 8 y) : Representable (x * y) :=
   representable_of_hasSig (by norm_num) (hasSig_mul hx hy)
 
-/-- FP32 rounding leaves a product of significands of at most 24 bits in all unchanged. -/
 theorem rn_mul_exact {p q : Nat} {x y : ℚ} (h : p + q ≤ 24) (hx : HasSig p x) (hy : HasSig q y) :
     rn (x * y) = x * y :=
   rn_exact (representable_of_hasSig h (hasSig_mul hx hy))
 
-/-- The E4M3 significand is below 16. -/
 theorem sig_lt (c : Code) : c.sig < 16 := by
   unfold Code.sig Code.manField; split <;> omega
 
-/-- A code's value has a 4-bit significand. -/
 theorem codeVal_hasSig (c : Code) : HasSig 4 (codeVal c) := by
   have h16 : ((c.sig : ℤ)) < 16 := by exact_mod_cast sig_lt c
   unfold codeVal decode
@@ -162,7 +97,6 @@ theorem codeVal_hasSig (c : Code) : HasSig 4 (codeVal c) := by
     · split_ifs <;> simpa using h16
     · split_ifs <;> push_cast <;> ring
 
-/-- `bf16Rn`'s results are BF16 values: an 8-bit significand. -/
 theorem bf16Rn_hasSig (x : ℚ) : HasSig 8 (bf16Rn x) := by
   rcases eq_or_ne x 0 with rfl | hx
   · refine ⟨0, 0, by norm_num, ?_⟩
@@ -193,8 +127,6 @@ theorem bf16Rn_hasSig (x : ℚ) : HasSig 8 (bf16Rn x) := by
     · linear_combination -h8
     · linear_combination h8
 
-/-! ### Sequential `rnAdd` accumulation -/
-
 /-- The sequential FP32 accumulation of `ps` into `s`: `rnAdd` in list order. -/
 def accum (s : ℚ) (ps : List ℚ) : ℚ := ps.foldl rnAdd s
 
@@ -209,7 +141,6 @@ theorem roundEven_sub_le (t : ℚ) : |(roundEven t : ℚ) - t| ≤ 1 / 2 := by
   unfold roundEven; dsimp only
   split_ifs with ha hb hc <;> push_cast <;> rw [abs_le] <;> constructor <;> (try simp only [not_lt] at *) <;> linarith
 
-/-- FP32 rounding moves a value by at most half an ulp. -/
 theorem rn_sub_le_ulp (x : ℚ) : |rn x - x| ≤ ulp x / 2 := by
   have hu := ulp_pos x
   have hr := roundEven_sub_le (|x| / ulp x)
@@ -232,7 +163,6 @@ theorem ulp_le_abs {x : ℚ} (hx : x ≠ 0) : ulp x ≤ |x| / 2 ^ 23 := by
   rw [le_div_iff₀ (by norm_num), mul_comm, ulp, two_pow_23]
   exact (binade_spec (abs_pos.2 hx)).1
 
-/-- FP32 rounding's relative error is at most `2^−24`. -/
 theorem rn_sub_le (x : ℚ) : |rn x - x| ≤ |x| / 2 ^ 24 := by
   rcases eq_or_ne x 0 with rfl | hx
   · rw [rn_exact ⟨0, 0, by norm_num, by simp⟩]; simp
@@ -240,7 +170,6 @@ theorem rn_sub_le (x : ℚ) : |rn x - x| ≤ |x| / 2 ^ 24 := by
       _ ≤ |x| / 2 ^ 23 / 2 := by gcongr; exact ulp_le_abs hx
       _ = |x| / 2 ^ 24 := by ring
 
-/-- Within a bound `M` on `|x|`, FP32 rounding moves `x` by at most half an ulp of `M`. -/
 theorem rn_sub_le_ulp_of_le {x M : ℚ} (h : |x| ≤ M) : |rn x - x| ≤ ulp M / 2 := by
   rcases eq_or_ne x 0 with rfl | hx
   · rw [rn_exact ⟨0, 0, by norm_num, by simp⟩, sub_self, abs_zero]
@@ -250,7 +179,6 @@ theorem rn_sub_le_ulp_of_le {x M : ℚ} (h : |x| ≤ M) : |rn x - x| ≤ ulp M /
     have : ulp x ≤ ulp M := zpow_le_zpow_right₀ one_le_two (by omega)
     linarith
 
-/-- **The error in ulps**: a sequential `rnAdd` accumulation is off by at most half an ulp of each step's exact sum. -/
 theorem accum_error_ulp (s : ℚ) (ps : List ℚ) :
     |accum s ps - (s + ps.sum)| ≤ ((stepSums s ps).map fun y => ulp y / 2).sum := by
   induction ps generalizing s with
@@ -264,7 +192,6 @@ theorem accum_error_ulp (s : ℚ) (ps : List ℚ) :
       _ ≤ _ := abs_add_le _ _
       _ ≤ _ := by rw [add_comm (ulp (s + p) / 2)]; exact add_le_add (ih _) e
 
-/-- With every step's exact sum within `M`, the error is at most `n/2` ulps of `M`. -/
 theorem accum_error_ulp_le (s : ℚ) (ps : List ℚ) {M : ℚ} (h : ∀ y ∈ stepSums s ps, |y| ≤ M) :
     |accum s ps - (s + ps.sum)| ≤ ps.length * (ulp M / 2) := by
   induction ps generalizing s with
@@ -280,7 +207,6 @@ theorem accum_error_ulp_le (s : ℚ) (ps : List ℚ) {M : ℚ} (h : ∀ y ∈ st
       _ ≤ ps.length * (ulp M / 2) + ulp M / 2 := add_le_add (ih _ h.2) e
       _ = _ := by push_cast; ring
 
-/-- **The a-priori bound**: `|accum s ps − (s + Σ p)| ≤ ((1 + 2^−24)^n − 1)·(|s| + Σ |p|)`, for `n` products. -/
 theorem accum_error (s : ℚ) (ps : List ℚ) :
     |accum s ps - (s + ps.sum)| ≤ ((1 + 1 / 2 ^ 24) ^ ps.length - 1) * (|s| + (ps.map fun p => |p|).sum) := by
   induction ps generalizing s with
@@ -306,8 +232,6 @@ theorem accum_error (s : ℚ) (ps : List ℚ) :
       _ ≤ (c * (1 + 1 / 2 ^ 24) - 1) * (|s| + (|p| + P)) := by nlinarith [abs_nonneg s, abs_nonneg p]
       _ = _ := by rw [hcdef, ← pow_succ]
 
-/-! ### The peel's combine in a parameter order -/
-
 /-- The peel's combine for output `(i, j)` in the K order `ord`: `C̃ i j`, then `L i t · R j t` for `t` in `ord`, each added by `rnAdd`. -/
 def peelAccum (ord : List (Fin r ⊕ Fin r)) (Ct : Matrix (Fin m) (Fin n) ℚ) (L : Matrix (Fin m) (Fin r ⊕ Fin r) ℚ)
     (R : Matrix (Fin n) (Fin r ⊕ Fin r) ℚ) (i : Fin m) (j : Fin n) : ℚ :=
@@ -327,13 +251,11 @@ theorem length_order {ord : List (Fin r ⊕ Fin r)} (h : IsOrder ord) : ord.leng
   have : ord.toFinset = Finset.univ := by ext t; simp [h.2 t]
   rw [this, Finset.card_univ, Fintype.card_sum, Fintype.card_fin]
 
-/-- The combine's exact value is `(C̃ + L·Rᵀ) i j`. -/
 theorem peelAccum_exact_value {ord : List (Fin r ⊕ Fin r)} (h : IsOrder ord) (Ct : Matrix (Fin m) (Fin n) ℚ)
     (L : Matrix (Fin m) (Fin r ⊕ Fin r) ℚ) (R : Matrix (Fin n) (Fin r ⊕ Fin r) ℚ) (i : Fin m) (j : Fin n) :
     Ct i j + (ord.map fun t => L i t * R j t).sum = (Ct + L * Rᵀ) i j := by
   rw [sum_order h, Matrix.add_apply, Matrix.mul_apply]; rfl
 
-/-- **The combine's error in any K order**: within `((1 + 2^−24)^(2r) − 1)·(|C̃ i j| + Σ_t |L i t · R j t|)` of `(C̃ + L·Rᵀ) i j`. -/
 theorem peelAccum_error {ord : List (Fin r ⊕ Fin r)} (h : IsOrder ord) (Ct : Matrix (Fin m) (Fin n) ℚ)
     (L : Matrix (Fin m) (Fin r ⊕ Fin r) ℚ) (R : Matrix (Fin n) (Fin r ⊕ Fin r) ℚ) (i : Fin m) (j : Fin n) :
     |peelAccum ord Ct L R i j - (Ct + L * Rᵀ) i j| ≤
@@ -343,7 +265,6 @@ theorem peelAccum_error {ord : List (Fin r ⊕ Fin r)} (h : IsOrder ord) (Ct : M
   rw [← peelAccum_exact_value h, peelAccum, ← sum_order h (fun t => |L i t * R j t|)]
   exact e
 
-/-- **Pearl's U in any K order**: the `rnAdd` combine over `C̃` and Pearl's factors is within the bound of `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ`. -/
 theorem peel_error {ord : List (Fin r ⊕ Fin r)} (h : IsOrder ord) (βA : Fin m → ℚ) (βB : Fin n → ℚ)
     (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (z : Noise m n k r) (i : Fin m) (j : Fin n) :
     |peelAccum ord (ctExact Aq Bq) (peelLeft βA (vals Aq) z) (peelRight βB (vals Bq) z) i j -
@@ -353,7 +274,6 @@ theorem peel_error {ord : List (Fin r ⊕ Fin r)} (h : IsOrder ord) (βA : Fin m
   rw [← peelU_cancel_codes]
   exact peelAccum_error h _ _ _ i j
 
-/-- With BF16 factors, rounding each product to FP32 before the add changes nothing: the rounding is the accumulation's. -/
 theorem peelAccum_rn_products (ord : List (Fin r ⊕ Fin r)) (Ct : Matrix (Fin m) (Fin n) ℚ)
     (L : Matrix (Fin m) (Fin r ⊕ Fin r) ℚ) (R : Matrix (Fin n) (Fin r ⊕ Fin r) ℚ) (i : Fin m) (j : Fin n)
     (hL : ∀ t, HasSig 8 (L i t)) (hR : ∀ t, HasSig 8 (R j t)) :
@@ -362,16 +282,12 @@ theorem peelAccum_rn_products (ord : List (Fin r ⊕ Fin r)) (Ct : Matrix (Fin m
   congr 1
   exact List.map_congr_left fun t _ => rn_mul_exact (by norm_num) (hL t) (hR t)
 
-/-! ### The pinned order's shape: the BF16 cast and the wgmma steps -/
-
-/-- `bf16Rn`'s ulp is at most `|x| / 2^7`. -/
 theorem ulpBf16_le {x : ℚ} (hx : x ≠ 0) : ulpBf16 x ≤ |x| / 2 ^ 7 := by
   rw [le_div_iff₀ (by norm_num), ulpBf16]
   calc (2 : ℚ) ^ (binade |x| - 7) * 2 ^ 7 = 2 ^ binade |x| := by
         rw [← zpow_natCast, ← zpow_add₀ two_ne_zero]; congr 1; push_cast; ring
     _ ≤ |x| := (binade_spec (abs_pos.2 hx)).1
 
-/-- **The BF16 cast's relative error**: `bf16Rn` moves `x` by at most `|x| / 2^8`. -/
 theorem bf16Rn_sub_le (x : ℚ) : |bf16Rn x - x| ≤ |x| / 2 ^ 8 := by
   rcases eq_or_ne x 0 with rfl | hx
   · have h : roundEven 0 = 0 := by simpa using roundEven_intCast 0
@@ -394,7 +310,6 @@ theorem bf16Rn_sub_le (x : ℚ) : |bf16Rn x - x| ≤ |x| / 2 ^ 8 := by
     rw [abs_of_neg h] at key hle ⊢
     rw [show -1 * N * u - x = -(N * u - -x) by ring, abs_neg]; linarith
 
-/-- The triangle inequality over a list. -/
 theorem abs_sum_le (c : List ℚ) : |c.sum| ≤ (c.map fun p => |p|).sum := by
   induction c with
   | nil => simp
@@ -404,12 +319,11 @@ theorem abs_sum_le (c : List ℚ) : |c.sum| ≤ (c.map fun p => |p|).sum := by
 one wgmma step per 16 products. -/
 def chunkAccum (step : ℚ → List ℚ → ℚ) (s : ℚ) (cs : List (List ℚ)) : ℚ := cs.foldl step s
 
-/-- A step's error bound: `step a ps` is within `ε·(|a| + Σ|p|)` of `a + Σ p`. The BF16 wgmma K16 step's bit-exact
-model is `PeelExact.k16Step`; its `ε` is not derived here (see (b)). -/
+/-- A step's error bound: `step a ps` is within `ε·(|a| + Σ|p|)` of `a + Σ p`. The BF16 wgmma K16 step's `ε` is not
+derived here: no `ε < 1` holds on every input (`PeelExactChecks.floor_drops`). -/
 def StepBound (step : ℚ → List ℚ → ℚ) (ε : ℚ) : Prop :=
   ∀ a ps, |step a ps - (a + ps.sum)| ≤ ε * (|a| + (ps.map fun p => |p|).sum)
 
-/-- **A chunked combine's error**: with every step within `ε`, `n` steps are within `((1 + ε)^n − 1)·(|s| + Σ|p|)`. -/
 theorem chunkAccum_error {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε : 0 ≤ ε) (h : StepBound step ε) (s : ℚ)
     (cs : List (List ℚ)) :
     |chunkAccum step s cs - (s + (cs.map List.sum).sum)| ≤
@@ -444,7 +358,6 @@ theorem chunkAccum_error {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε : 0 �
 /-- A step that adds its chunk exactly and rounds once to FP32. -/
 def rnStep (a : ℚ) (ps : List ℚ) : ℚ := rn (a + ps.sum)
 
-/-- `rnStep` meets the step bound with `ε = 2^−24`. -/
 theorem rnStep_bound : StepBound rnStep (1 / 2 ^ 24) := by
   intro a ps
   have e := rn_sub_le (a + ps.sum)
@@ -461,8 +374,6 @@ def peelSteps (step : ℚ → List ℚ → ℚ) (cs : List (List (Fin r ⊕ Fin 
     (L : Matrix (Fin m) (Fin r ⊕ Fin r) ℚ) (R : Matrix (Fin n) (Fin r ⊕ Fin r) ℚ) (i : Fin m) (j : Fin n) : ℚ :=
   chunkAccum step (Ct i j) (cs.map fun c => c.map fun t => L i t * R j t)
 
-/-- **The combine's error in steps**: within `((1 + ε)^steps − 1)·(|C̃ i j| + Σ_t |L i t · R j t|)` of
-`(C̃ + L·Rᵀ) i j`. -/
 theorem peelSteps_error {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε : 0 ≤ ε) (h : StepBound step ε)
     {cs : List (List (Fin r ⊕ Fin r))} (hcs : IsOrder cs.flatten) (Ct : Matrix (Fin m) (Fin n) ℚ)
     (L : Matrix (Fin m) (Fin r ⊕ Fin r) ℚ) (R : Matrix (Fin n) (Fin r ⊕ Fin r) ℚ) (i : Fin m) (j : Fin n) :
@@ -480,7 +391,6 @@ theorem peelSteps_error {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε : 0 �
   rw [← peelAccum_exact_value hcs]
   exact e
 
-/-- A product of two BF16 casts is within `(2^−7 + 2^−16)·|x·y|` of `x·y`. -/
 theorem bf16_mul_sub_le (x y : ℚ) : |bf16Rn x * bf16Rn y - x * y| ≤ (2 / 2 ^ 8 + 1 / 2 ^ 16) * |x * y| := by
   have e1 := bf16Rn_sub_le x
   have e2 := bf16Rn_sub_le y
@@ -496,8 +406,6 @@ theorem bf16_mul_sub_le (x y : ℚ) : |bf16Rn x * bf16Rn y - x * y| ≤ (2 / 2 ^
 /-- A matrix cast to BF16 entry by entry: the peel's factors as the BF16 wgmma reads them. -/
 def bf16Mat {p q : Type} (M : Matrix p q ℚ) : Matrix p q ℚ := M.map bf16Rn
 
-/-- **The combine with BF16 factors**: the steps' bound on the cast factors, plus the cast's
-`(2^−7 + 2^−16)·Σ_t |L i t · R j t|`. -/
 theorem peelSteps_bf16_error {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε : 0 ≤ ε) (h : StepBound step ε)
     {cs : List (List (Fin r ⊕ Fin r))} (hcs : IsOrder cs.flatten) (Ct : Matrix (Fin m) (Fin n) ℚ)
     (L : Matrix (Fin m) (Fin r ⊕ Fin r) ℚ) (R : Matrix (Fin n) (Fin r ⊕ Fin r) ℚ) (i : Fin m) (j : Fin n) :
@@ -515,8 +423,6 @@ theorem peelSteps_bf16_error {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε :
         |(Ct + bf16Mat L * (bf16Mat R)ᵀ) i j - (Ct + L * Rᵀ) i j| := abs_sub_le _ _ _
     _ ≤ _ := add_le_add e hc
 
-/-- **Pearl's U in the pinned order's shape**: FP32 factors `L`, `R` cast to BF16 and combined into `C̃` in wgmma
-steps are within the bound of `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ`, with the step's `ε` a parameter. -/
 theorem peel_error_pinned {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε : 0 ≤ ε) (h : StepBound step ε)
     {cs : List (List (Fin r ⊕ Fin r))} (hcs : IsOrder cs.flatten) (βA : Fin m → ℚ) (βB : Fin n → ℚ)
     (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (z : Noise m n k r) (i : Fin m) (j : Fin n) :
@@ -529,8 +435,6 @@ theorem peel_error_pinned {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε : 0 
   exact peelSteps_bf16_error hε h hcs _ _ _ i j
 
 
-/-! ## (c) Liveness at degenerate inputs -/
-
 /-- Pearl's `E_A` clean-up term, `(β·E_A)·((β·N_B − B̃)·F_A)ᵀ`. -/
 def cleanE (βA : Fin m → ℚ) (βB : Fin n → ℚ) (B' : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) :
     Matrix (Fin m) (Fin n) ℚ :=
@@ -540,7 +444,6 @@ def cleanE (βA : Fin m → ℚ) (βB : Fin n → ℚ) (B' : Matrix (Fin n) (Fin
 def cleanF (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k r) : Matrix (Fin m) (Fin n) ℚ :=
   (A' * vals z.FB) * (-rowScale βB (vals z.EB))ᵀ
 
-/-- Pearl's clean-up is the sum of its `E_A` term and its `F_B` term. -/
 theorem peel_split (βA : Fin m → ℚ) (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (B' : Matrix (Fin n) (Fin k) ℚ)
     (z : Noise m n k r) : peelLeft βA A' z * (peelRight βB B' z)ᵀ = cleanE βA βB B' z + cleanF βB A' z := by
   simp only [peelLeft, peelRight, cleanE, cleanF, transpose_fromCols, fromCols_mul_fromRows]
@@ -595,7 +498,6 @@ theorem cleanF_apply (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (z 
 
 variable (fc : FormChain r)
 
-/-- **The fused columns `A′·F_B` are live**: flipping one entry `F_B l t` changes `(A′·F_B) i t` when `A′ i l ≠ 0` (`A′` reads no `F_B`). -/
 theorem fused_live (αA βA : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k r) (i : Fin m) (l : Fin k)
     (t : Fin r) (hA : vals (fc.quantA αA βA X z) i l ≠ 0) (hF : codeVal (z.FB l t) ≠ 0) :
     ∃ z' : Noise m n k r, z'.EA = z.EA ∧ z'.FA = z.FA ∧ z'.EB = z.EB ∧
@@ -608,7 +510,6 @@ theorem fused_live (αA βA : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) (z
   simp only [flip, and_true]
   split_ifs <;> ring
 
-/-- **The Gram columns `(β·N_B − B̃)·F_A` are live**: flipping `F_A l t` changes entry `(j, t)` when the residual `(β·N_B − B̃) j l ≠ 0` (`N_B`, `B̃` read no `F_A`). -/
 theorem gramCols_live (αB βB : Fin n → ℚ) (B : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) (j : Fin n) (l : Fin k)
     (t : Fin r) (hR : (rowScale βB z.NB - vals (fc.quantB αB βB B z)) j l ≠ 0) (hF : codeVal (z.FA l t) ≠ 0) :
     ∃ z' : Noise m n k r, z'.EA = z.EA ∧ z'.EB = z.EB ∧ z'.FB = z.FB ∧
@@ -623,7 +524,6 @@ theorem gramCols_live (αB βB : Fin n → ℚ) (B : Matrix (Fin n) (Fin k) ℚ)
   simp only [flip, and_true]
   split_ifs <;> ring
 
-/-- **The `E_A` term is live**: flipping `E_A i t` changes `cleanE i j` when `β_A i ≠ 0` and `((β·N_B − B̃)·F_A) j t ≠ 0` (`B̃` reads no `E_A`). -/
 theorem cleanE_live (βA : Fin m → ℚ) (αB βB : Fin n → ℚ) (B : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r)
     (i : Fin m) (j : Fin n) (t : Fin r) (hβ : βA i ≠ 0) (hE : codeVal (z.EA i t) ≠ 0)
     (hR : ((rowScale βB z.NB - vals (fc.quantB αB βB B z)) * vals z.FA) j t ≠ 0) :
@@ -639,7 +539,6 @@ theorem cleanE_live (βA : Fin m → ℚ) (αB βB : Fin n → ℚ) (B : Matrix 
   · rw [codeVal_negCode]; ring
   · rfl
 
-/-- **The `F_B` term is live**: flipping `E_B j t` changes `cleanF i j` when `β_B j ≠ 0` and `(A′·F_B) i t ≠ 0` (`A′` reads no `E_B`). -/
 theorem cleanF_live (αA βA : Fin m → ℚ) (βB : Fin n → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k r)
     (i : Fin m) (j : Fin n) (t : Fin r) (hβ : βB j ≠ 0) (hE : codeVal (z.EB j t) ≠ 0)
     (hL : (vals (fc.quantA αA βA X z) * vals z.FB) i t ≠ 0) :
@@ -654,7 +553,6 @@ theorem cleanF_live (αA βA : Fin m → ℚ) (βB : Fin n → ℚ) (X : Matrix 
   · rw [codeVal_negCode]; ring
   · rfl
 
-/-- The raw-A form's correction columns `A·F_B` are `0` at `A = 0` for every noise. -/
 theorem raw_cols_zero (FB : Matrix (Fin k) (Fin r) ℚ) : (0 : Matrix (Fin m) (Fin k) ℚ) * FB = 0 := Matrix.zero_mul _
 
 /-- **The negative control**: the raw-A form's `A·N_Bᵀ` at `A = 0` and `N_A·Bᵀ` at `B = 0` are the same for any two noises. -/
@@ -663,7 +561,6 @@ theorem raw_terms_const (NA NA' : Matrix (Fin m) (Fin k) ℚ) (NB NB' : Matrix (
       NA * (0 : Matrix (Fin n) (Fin k) ℚ)ᵀ = NA' * (0 : Matrix (Fin n) (Fin k) ℚ)ᵀ := by
   simp only [Matrix.zero_mul, transpose_zero, Matrix.mul_zero, and_self]
 
-/-- At `A = 0` and `B = 0` the raw-A form keeps only `C̃ − N_A·N_Bᵀ`. -/
 theorem rawU_zero_inputs (Ct : Matrix (Fin m) (Fin n) ℚ) (NA : Matrix (Fin m) (Fin k) ℚ) (NB : Matrix (Fin n) (Fin k) ℚ) :
     rawU Ct 0 0 NA NB = Ct - NA * NBᵀ := by
   simp [rawU]
@@ -689,7 +586,6 @@ def sparseRow : Matrix (Fin 1) (Fin 64) ℚ := fun _ l => if l.val = 0 then 1 el
 /-- The second witness's noise: every factor entry the code of `1` (`m = n = 1`, `k = 64`, rank 1). -/
 def oneNoise64 : Noise 1 1 64 1 := ⟨fun _ _ => e4m3 1, fun _ _ => e4m3 1, fun _ _ => e4m3 1, fun _ _ => e4m3 1⟩
 
-/-- The sparse row's noise scale at `δ = α = 1` under `Stat.rms` is `1/8`, for any square root with `√(1/64) = 1/8`. -/
 theorem sparse_beta (root : ℚ → ℚ) (hroot : root (1 / 64) = 1 / 8) :
     betaOf Stat.rms root 1 1 (sparseRow 0) = 1 / 8 := by
   show 1 * 1 * root (meanSq (sparseRow 0)) = 1 / 8

@@ -7,35 +7,7 @@ import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# P2 on Pearl-C4's U, `Fp4Dev.peelFp4` (staging, nothing pinned)
-
-`PeelExactProofs` proves P2 on Pearl-C's U at the E4M3 atom. Pearl-C4's peel factors use the FP4 atom: `C̃`, `A′·F_B`,
-`B̃·F_A` and `G = F_Bᵀ·F_A` are `cTilde` chains on block-scaled E2M1 rows (`F`'s columns at scale `1.0`), while `P_A`,
-`P_B` and U's four BF16 K16 steps are `PeelExact`'s (`paRow?`, `pbRow?`, `uWord?`). So the facts carry over with the chain
-words' error left as a parameter.
-
-**(a) The noise cancels exactly.** The exact counterpart in the pinned order (`uQ4`: every chain, FMA, add, `RN_bf16` and
-K16 step exact) is `(A′ − E_A·F_Aᵀ)·(B̃ − E_B·F_Bᵀ)ᵀ` on any values (`uQ4_cancel`, by
-`PeelExactProofs.peelUQ_cancel`). On the served operands (`opVal`: code value times block scale; `basisVal`; the peel's noise rows `beVal`), with Pearl-C4's rows
-`Ẽ = eTilde E a_E`, each row entry is `E·a_E/16` exactly (`bfVal_eTilde`, all 16 codes × 128 scale bytes by the kernel),
-so the noise the peel cancels is the noise atom's, `E′ = E·a_E·2⁻⁴` against `F` (`uQ4_cancel_served`).
-
-**(b) The rounding is bounded.** Wherever the served entry is finite, `peelFp4_err` puts it within `peelBound4` of `uQ4`
-on the named range `PeelRange4`: each FP4 chain word of the entry within its `δ` of its exact dot (`ChainsNear4`), and
-U's four K16 steps on the K16 range (`URange4`, `PeelExactProofs.URange`). The FP32 FMAs and add, `RN_bf16` and the K16
-steps (width 26, `eps16`) are bounded by `PeelExactProofs`' lemmas as they stand. Where the chains are exact runs
-(`ExactRuns4`: `Fp4Freeze.ExactRun` on each chain from `+0`), the exactness lemma `Fp4Freeze.cTilde_dot` puts
-every chain word on its exact dot (`chainNear_exact`, through `atomDot_sum`), so the bound is U's own rounding
-(`peelFp4_err_exact`, `peelBound4Exact`). `Fp4Freeze` shows D₄ gives no exact run (`noLoss_gap`), so `ExactRuns4` is a
-per-run hypothesis, not a consequence of the domain. This is option (b) of the exactness ruling: a claim that
-equates `C̃` with the exact product carries a per-word exact-run condition, here `ExactRuns4 i j` on entry `(i, j)`
-alone, and it loses the inexact words. `peelFp4_err` itself needs no exactness.
-
-**(c) Salt-dependence**, by witness at `sm120Nvf4` (`served4_salt_dependent`): the row `x ≡ 1` of `k = 128` with the
-pin's scales (`α = 1344`, `β = f32(336·f32(16/√2346.125))`), formed by `formRow` and served by `peelFp4` with
-`Ẽ = eTilde E a_E`, under two salts whose lines differ in one code: the served words differ.
--/
+/-! P2 on Pearl-C4's U, `Fp4Dev.peelFp4`, staged and nothing pinned. -/
 
 @[expose] public section
 
@@ -45,8 +17,6 @@ open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.Fp4 Pouw.PearlC.Fp4Dev Pouw.PearlC.Pee
   Matrix
 
 variable {m n k : Nat}
-
-/-! ## Values -/
 
 /-- A formed row's value at position `l`: its code's value times its block's scale (`Fp4Freeze.scaleAt`, `0` where the
 byte is absent or invalid). -/
@@ -68,8 +38,6 @@ def beVal (be : Matrix (Fin m) (Fin 32) Nat) : Matrix (Fin m) (Fin 32) ℚ := be
 /-- The noise the atom adds, per row: `E′ = E·a_E·2⁻⁴`, the line at its scale byte times `F`'s scale `2⁻⁴`. -/
 def noiseE (E : Fin m → Fin 32 → Nib) (aE : Fin m → Fin 256) : Matrix (Fin m) (Fin 32) ℚ :=
   fun i r => decode (E i r) * codeVal (aE i) / 16
-
-/-! ## (a) The noise cancels exactly -/
 
 section Exact
 
@@ -110,7 +78,6 @@ theorem uQ4_eq_sum (i : Fin m) (j : Fin n) :
     uQ4 A' B' FA FB EA EB i j = cQ4 A' B' i j + ∑ t, paQ4 A' FB EA i t * pbQ4 B' FA FB EB j t := by
   unfold uQ4; exact foldl_k16Q _ _ _
 
-/-- The exact counterpart is Pearl's U with unit `β`, `C̃ = A′·B̃ᵀ` and the noise `E_A, F_A, E_B, F_B` (`peelUQ`). -/
 theorem uQ4_eq_peelUQ (i : Fin m) (j : Fin n) :
     uQ4 A' B' FA FB EA EB i j = peelUQ (A' * B'ᵀ) A' B' EA FA EB FB i j := by
   rw [uQ4_eq_sum]
@@ -137,20 +104,16 @@ theorem uQ4_eq_peelUQ (i : Fin m) (j : Fin n) :
     rw [e1, e2]
     simp only [fromCols_apply_inr, afQ4, Matrix.mul_apply, Matrix.neg_apply, mul_neg]
 
-/-- **(a) The noise cancels exactly**: U's exact counterpart in the pinned order is `(A′ − E_A·F_Aᵀ)·(B̃ − E_B·F_Bᵀ)ᵀ`. -/
 theorem uQ4_cancel (i : Fin m) (j : Fin n) :
     uQ4 A' B' FA FB EA EB i j = ((A' - EA * FAᵀ) * (B' - EB * FBᵀ)ᵀ) i j := by
   rw [uQ4_eq_peelUQ, peelUQ_cancel]
 
 end Exact
 
-/-- **Ẽ is exact**: for every code `c` and every UE4M3 scale byte `s` (sign bit clear), the BF16 word
-`bf16(|c|·s/16)` with `c`'s sign has the value `c·s/16`. -/
 theorem bfVal_eTilde_elem : ∀ c : Nib, ∀ s : Fin 256, s.val < 128 →
     bfVal (bf16WordOf (|decode c| * codeVal s / 16) ||| (if c.sign then 0x8000 else 0)) = decode c * codeVal s / 16 := by
   decide +kernel
 
-/-- `eTilde`'s entries are `E·a_E/16` exactly. -/
 theorem bfVal_eTilde (e : Fin 32 → Nib) (aE : Fin 256) (h : aE.val < 128) (q : Fin 32) :
     bfVal (eTilde e aE q) = decode (e q) * codeVal aE / 16 :=
   bfVal_eTilde_elem (e q) aE h
@@ -160,9 +123,6 @@ theorem beVal_eTilde (E : Fin m → Fin 32 → Nib) (aE : Fin m → Fin 256) (h 
   funext i r
   exact bfVal_eTilde (E i) (aE i) (h i) r
 
-/-- **(a) on the served operands**: with Pearl-C4's noise rows `Ẽ = eTilde E a_E`, U's exact counterpart is
-`(A′ − E′_A·F_Aᵀ)·(B̃ − E′_B·F_Bᵀ)ᵀ`, where `A′`, `B̃` are the formed operands' values, `F` the bases' values and
-`E′ = E·a_E·2⁻⁴` the noise the atom adds (`noiseE`). -/
 theorem uQ4_cancel_served (p : Fp4Atom) (A : Op4 m) (B : Op4 n) (FA FB : Matrix (Fin k) (Fin 32) Nib)
     (EA : Fin m → Fin 32 → Nib) (EB : Fin n → Fin 32 → Nib) (aA : Fin m → Fin 256) (aB : Fin n → Fin 256)
     (hA : ∀ i, (aA i).val < 128) (hB : ∀ j, (aB j).val < 128) (i : Fin m) (j : Fin n) :
@@ -170,8 +130,6 @@ theorem uQ4_cancel_served (p : Fp4Atom) (A : Op4 m) (B : Op4 n) (FA FB : Matrix 
         (beVal fun j => eTilde (EB j) (aB j)) i j =
       ((opVal p k A - noiseE EA aA * (basisVal FA)ᵀ) * (opVal p k B - noiseE EB aB * (basisVal FB)ᵀ)ᵀ) i j := by
   rw [uQ4_cancel, beVal_eTilde EA aA hA, beVal_eTilde EB aB hB]
-
-/-! ## `peelFp4` as rows and steps -/
 
 /-- An FP4 chain word of the peel: `cTilde`, finite. -/
 def ch4 (p : Fp4Atom) (x y : List Nib) (sx sy : List (Fin 256)) : Option Nat :=
@@ -198,8 +156,6 @@ theorem peelFp4_eq_rows (p : Fp4Atom) (A : Op4 m) (B : Op4 n) (FA FB : Matrix (F
   unfold peelFp4 peelRows4 ch4
   simp only [Option.bind_eq_bind, Option.bind_assoc, Option.pure_def, Option.bind_some]
 
-/-- **`peelFp4` from its parts**: the entry is `uWord? c pa pb` when the rows, chains and peel rows are as given. The
-conformance checks assemble `peelFp4`'s entries from their parts this way. -/
 theorem peelFp4_of_parts {p : Fp4Atom} {A : Op4 m} {B : Op4 n} {FA FB : Matrix (Fin k) (Fin 32) Nib}
     {beA : Matrix (Fin m) (Fin 32) Nat} {beB : Matrix (Fin n) (Fin 32) Nat} {i : Fin m} {j : Fin n} {a b : Row4}
     {c : Nat} {af bf pa pb : List Nat} {g : List (List Nat)} (hA : A i = some a) (hB : B j = some b)
@@ -213,8 +169,6 @@ theorem peelFp4_of_parts {p : Fp4Atom} {A : Op4 m} {B : Op4 n} {FA FB : Matrix (
   rw [peelFp4_eq_rows]
   simp only [peelRows4, hA, hB, hc, haf, hbf, hg, hpa, hpb, Option.bind_eq_bind, Option.bind_some, Option.pure_def]
 
-/-- A list of `N` options, each `some`, is `some` of their values: how the conformance checks and the witness assemble a
-factor row or `G` from checks of its rows or entries. -/
 theorem mapM_ofFn_some {β : Type} {N : Nat} (f : Fin N → Option β) (g : Fin N → β) (h : ∀ q, f q = some (g q)) :
     (List.ofFn f).mapM id = some (List.ofFn g) := by
   induction N with
@@ -237,8 +191,6 @@ theorem peelRows4_spec {p : Fp4Atom} {A : Op4 m} {B : Op4 n} {FA FB : Matrix (Fi
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq, Prod.mk.injEq] at h
   obtain ⟨a, hA, b, hB, c', hc, af, haf, bf, hbf, g, hg, pa', hpa, pb', hpb, rfl, rfl, rfl⟩ := h
   exact ⟨a, b, af, bf, g, hA, hB, hc, haf, hbf, hg, hpa, hpb⟩
-
-/-! ## (b) The rounding is bounded -/
 
 /-- **An FP4 chain word within `δ` of `v`**: wherever the chain is finite, its word has a value within `δ` of `v`. -/
 def ChainNear (p : Fp4Atom) (x y : List Nib) (sx sy : List (Fin 256)) (v δ : ℚ) : Prop :=
@@ -293,8 +245,6 @@ theorem div_group {g B j r : ℕ} (hg : 0 < g) (hgB : g ∣ B) (hr : r < g) : (j
   congr 1
   rw [add_comm, Nat.add_mul_div_right _ _ hg, Nat.div_eq_of_lt hr, zero_add]
 
-/-- **The atoms' exact dots are the flat exact dot**: `Fp4Freeze.atomDot`, summed over a shaped chain's atoms, is
-`flatDot`, on an atom whose groups lie inside its blocks inside its firings (`Fp4Freeze.BlockShape`). -/
 theorem atomDot_sum (p : Fp4Atom) (hp : Fp4Freeze.BlockShape p) {x y : List Nib} {sx sy : List (Fin 256)}
     (hs : Fp4Freeze.Shaped p x y sx sy) :
     ∑ u ∈ Finset.range (x.length / p.k), Fp4Freeze.atomDot p x y sx sy u = flatDot p x y sx sy := by
@@ -339,8 +289,6 @@ theorem atomDot_sum (p : Fp4Atom) (hp : Fp4Freeze.BlockShape p) {x y : List Nib}
     scaleAt_slice _ _ _ _ _ hjS, scaleAt_slice _ _ _ _ _ hjS, hdiv]
   ring
 
-/-- **The exactness lemma on one chain** (`Fp4Freeze.cTilde_dot`): on an exact run from `+0`, the peel's chain
-word is `flatDot`. -/
 theorem chainNear_exact {p : Fp4Atom} (hp : Fp4Freeze.BlockShape p) {x y : List Nib} {sx sy : List (Fin 256)}
     (hs : Fp4Freeze.Shaped p x y sx sy) (hr : Fp4Freeze.ExactRun p [] 0 x y sx sy (x.length / p.k)) :
     ChainNear p x y sx sy (flatDot p x y sx sy) 0 := by
@@ -397,15 +345,12 @@ def ChainsNear4 (i : Fin m) (j : Fin n) : Prop :=
     ∀ q q', ChainNear p (colF FB q) (colF FA q') (onesScales p k) (onesScales p k)
       (gQ4 (basisVal FA) (basisVal FB) q q') (δG q q')
 
-/-- **The entry's FP4 chains exact** (every `δ = 0`): each chain word's value is its exact dot. It follows from exact
-runs (`chainsExact4_of_runs`). -/
+/-- **The entry's FP4 chains exact** (every `δ = 0`): each chain word's value is its exact dot. -/
 def ChainsExact4 (i : Fin m) (j : Fin n) : Prop :=
   ChainsNear4 p A B FA FB 0 (fun _ => 0) (fun _ => 0) (fun _ _ => 0) i j
 
-/-- **The entry's FP4 chains are exact runs** (`Fp4Freeze.ExactRun` from `+0`): on the entry's rows `a = A i`,
-`b = B j`, of length `k` and shaped for the chain (`Fp4Freeze.Shaped`), the chains of `C̃_ij`, `(A′·F_B)_ip`,
-`(B̃·F_A)_jq` and `G_pq`. D₄ gives no exact run (`Fp4Freeze.noLoss_gap`); it is a per-run hypothesis, which the census
-measures. -/
+/-- **The entry's FP4 chains are exact runs** (`Fp4Freeze.ExactRun` from `+0`) of length `k`, shaped for the chain.
+D₄ gives no exact run (`Fp4Freeze.noLoss_gap`), so it is a per-run hypothesis. -/
 def ExactRuns4 (i : Fin m) (j : Fin n) : Prop :=
   ∀ a b, A i = some a → B j = some b → a.1.length = k ∧ Fp4Freeze.Shaped p a.1 b.1 a.2 b.2 ∧
     Fp4Freeze.ExactRun p [] 0 a.1 b.1 a.2 b.2 (k / p.k) ∧
@@ -413,7 +358,6 @@ def ExactRuns4 (i : Fin m) (j : Fin n) : Prop :=
     (∀ q, Fp4Freeze.ExactRun p [] 0 b.1 (colF FA q) b.2 (onesScales p k) (k / p.k)) ∧
     ∀ q q', Fp4Freeze.ExactRun p [] 0 (colF FB q) (colF FA q') (onesScales p k) (onesScales p k) (k / p.k)
 
-/-- **Exact runs make the chains exact**, by the exactness lemma (`Fp4Freeze.cTilde_dot`) on each chain. -/
 theorem chainsExact4_of_runs (hp : Fp4Freeze.BlockShape p) (hk : p.k ∣ k) (i : Fin m) (j : Fin n)
     (h : ExactRuns4 p A B FA FB i j) : ChainsExact4 p A B FA FB i j := by
   intro a b hA hB
@@ -496,8 +440,6 @@ def peelBound4 (i : Fin m) (j : Fin n) : ℚ :=
 def peelBound4Exact (i : Fin m) (j : Fin n) : ℚ :=
   peelBound4 p A B FA FB beA beB 0 (fun _ => 0) (fun _ => 0) (fun _ _ => 0) i j
 
-/-- **(b) The rounding is bounded**: wherever `peelFp4`'s entry is finite, on `PeelRange4`, it is within `peelBound4` of
-its exact counterpart `uQ4` on the served operands. -/
 theorem peelFp4_err (i : Fin m) (j : Fin n) {v : ℚ} (hv : (peelFp4 p A B FA FB beA beB i j).bind wordQ = some v)
     (hR : PeelRange4 p A B FA FB beA beB δC δA δB δG i j) :
     |v - uQ4 (opVal p k A) (opVal p k B) (basisVal FA) (basisVal FB) (beVal beA) (beVal beB) i j| ≤
@@ -583,9 +525,6 @@ theorem peelFp4_err (i : Fin m) (j : Fin n) {v : ℚ} (hv : (peelFp4 p A B FA FB
         unfold peelBound4
         exact add_le_add (add_le_add (mul_le_mul_of_nonneg_left (by linarith) hK) le_rfl) le_rfl
 
-/-- **(b) on exact runs**: where the entry's FP4 chains are exact runs (`ExactRuns4`, through `Fp4Freeze.cTilde_dot`)
-and U's steps are on the K16 range, the served entry is within `peelBound4Exact`, U's own rounding, of `uQ4`. At
-`sm120Nvf4`, `hp` is `Fp4Freeze.sm120Nvf4_blockShape` and `hk` is `64 ∣ k`. -/
 theorem peelFp4_err_exact (hp : Fp4Freeze.BlockShape p) (hk : p.k ∣ k) (i : Fin m) (j : Fin n) {v : ℚ}
     (hv : (peelFp4 p A B FA FB beA beB i j).bind wordQ = some v) (hX : ExactRuns4 p A B FA FB i j)
     (hU : URange4 p A B FA FB beA beB i j) :
@@ -594,8 +533,6 @@ theorem peelFp4_err_exact (hp : Fp4Freeze.BlockShape p) (hk : p.k ∣ k) (i : Fi
   peelFp4_err p A B FA FB beA beB 0 _ _ _ i j hv ⟨chainsExact4_of_runs p A B FA FB hp hk i j hX, hU⟩
 
 end Bound
-
-/-! ## (c) Salt-dependence at `sm120Nvf4` -/
 
 /-- The witness row: `x ≡ 1` (BF16 `1.0`), `k = 128`. -/
 def wX : Fin 128 → ℚ := fun _ => 1
@@ -646,7 +583,6 @@ theorem wAF0 : ch4 sm120Nvf4 wRow.1 (colF wBasis 0) wRow.2 (onesScales sm120Nvf4
 theorem wG0 : ch4 sm120Nvf4 (colF wBasis 0) (colF wBasis 0) (onesScales sm120Nvf4 128) (onesScales sm120Nvf4 128) =
     some 0x43000000 := by decide +kernel
 
-/-- `A′·F_B` (and `B̃·F_A`): every column of the constant basis is column 0. -/
 theorem wAF : (List.ofFn fun q => ch4 sm120Nvf4 wRow.1 (colF wBasis q) wRow.2 (onesScales sm120Nvf4 128)).mapM id =
     some (List.ofFn fun _ : Fin 32 => 0x48400000) :=
   mapM_ofFn_some _ _ fun _ => wAF0
@@ -669,7 +605,6 @@ theorem wU1 : uWord? 0x4D900000 wPa1 wPb = some 0x4D522000 := by decide +kernel
 
 theorem wU2 : uWord? 0x4D900000 wPa2 wPb = some 0x4D510100 := by decide +kernel
 
-/-- A salt's served word from its parts: both rows formed to `wRow`, then `P_A`, `P_B` and U's steps. -/
 theorem wServed4_of_parts {EA EB : Fin 32 → Nib} {pa pb : List Nat} {u : Nat}
     (hA : formRow wAlpha wBeta wX EA wBasis = some wRow) (hB : formRow wAlpha wBeta wX EB wBasis = some wRow)
     (hpa : paRow? (List.ofFn (eTilde EA (e4m3 wBeta))) (List.ofFn fun _ : Fin 32 => 0x48400000) = some pa)
@@ -680,15 +615,12 @@ theorem wServed4_of_parts {EA EB : Fin 32 → Nib} {pa pb : List Nat} {u : Nat}
     (B := fun _ : Fin 1 => formRow wAlpha wBeta wX EB wBasis) (beA := fun _ => eTilde EA (e4m3 wBeta))
     (beB := fun _ => eTilde EB (e4m3 wBeta)) (i := 0) (j := 0) hA hB wC wAF wAF wG hpa hpb).trans hu
 
-/-- **The two salts' served words**: `0x4D522000` (`220,332,032`) under the all-`1.0` lines and `0x4D510100`
-(`219,156,480`) with `E_A`'s first code `2.0`, assembled from their parts by `peelFp4_of_parts`, each part by the kernel.
-`pearl_c4.py` gives the same two words. The formed rows and `C̃ = 0x4D900000` are the same under both salts (the codes
-saturate at `6`), so U moves with the noise it cancels. -/
+/-- **The two salts' served words**: `0x4D522000` under the all-`1.0` lines and `0x4D510100` with `E_A`'s first
+code `2.0`, assembled from their parts by `peelFp4_of_parts`; `pearl_c4.py` gives the same two words. -/
 theorem wServed4_words : wServed4 (wLine 2) (wLine 2) wBasis wBasis = some 0x4D522000 ∧
     wServed4 wLine2 (wLine 2) wBasis wBasis = some 0x4D510100 :=
   ⟨wServed4_of_parts wForm1 wForm1 wPA1 wPB wU1, wServed4_of_parts wForm2 wForm1 wPA2 wPB wU2⟩
 
-/-- **(c) Salt-dependence at `sm120Nvf4`**: the two salts' served entries differ, as values. -/
 theorem served4_salt_dependent :
     (wServed4 (wLine 2) (wLine 2) wBasis wBasis).bind wordQ ≠ (wServed4 wLine2 (wLine 2) wBasis wBasis).bind wordQ := by
   rw [wServed4_words.1, wServed4_words.2]

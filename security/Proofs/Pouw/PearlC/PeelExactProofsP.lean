@@ -4,31 +4,7 @@ public import Proofs.Pouw.PearlC.FormingP
 public import Proofs.Pouw.PearlC.PeelExactProofs
 public import Proofs.Pouw.PearlC.AccumProofs
 
-/-!
-# P2(b) and (c) on `PeelExactP`'s U, at any step width (sm_120 at width 26)
-
-`PeelExactProofs` proves P2(b), the served U within `peelBound` of its exact counterpart, at Π's E4M3 step
-(`hopperE4m3K32`, width 14) in windows of `G = 4`. Here the same bound is proved for `PeelExactP.peelExactP p G`, on any
-step `p` that has a relative error on a range, and for every `G`, with `G = 0` the pure chain (`AccumProofs`).
-
-* **The step at width `w`** (`pipeStep_rel`): the step of `⟨[32], w, z⟩`, for `2 ≤ w` and a floor `z < w − 127`, on
-  `HRangeW w z` (`PeelExactProofs.H8Range` with `w − 127` for `−113`) writes a finite word within
-  `epsW w·(|c| + Σ_l |a_l·b_l|)` of `c + Σ_l a_l·b_l`, where
-  `epsW w = 33·2^−(w−1) + (1 + 33·2^−(w−1))·2^−(min w 24 − 1)`. It is built on `FormingP.pipeStep_value` and
-  `FormingP.pipeStep_err`. `epsW 14 = eps8`; `epsW 26` is `33·2^−25 + (1 + 33·2^−25)·2^−23`, about `2^−19.8`.
-* **A chain on any step** (`StepRel p R ε`: the step's relative error `ε` on the range `R`). A window's word is within
-  `((1 + ε)^n − 1)·Σ|a·b|` of its `n` atoms' sum (`windowWordP_err`); so is the pure chain (`pureWordP_err`,
-  `pureBound`). In windows of `G ≥ 1` the chain is within `chainBoundP ε G`, `PeelExactProofs.chainBound`'s form with
-  `epsCP ε G = (1 + 2^−24)·(1 + ε)^G − 1` (`chainWordP_err`). `chainBoundAt ε G` and `ChainRangeAt p R G` take the
-  pure form at `G = 0` (`chainWordAt_err`).
-* **U** (`peelExactValP_err`): `peelExactValP p G` within `peelBoundP ε G`, `peelBound` with `chainBoundAt ε G` for
-  `chainBound`, on `PeelRangeP p R G`.
-* **sm_120** (`sm120E4m3`, width 26, floor −133): `peelExactValP_sm120_err` for every `G`, with `G = 4`
-  (`peelExactValP_sm120_four`) and `G = 0` (`peelExactValP_sm120_zero`, `peelExactPureValP_sm120_err`).
-* **(c) at sm_120** (`served120_salt_dependent_four`, `_zero`): `PeelExactProofs.served_salt_dependent`'s witness
-  formed by sm_120's atom-mix (`FormingP.atomMixP sm120E4m3`) and served by `peelExactValP sm120E4m3 G`; the two salts
-  give `0` and `10` at `G = 4` and at `G = 0`, by kernel evaluation.
--/
+/-! P2(b) and (c) on `PeelExactP`'s U, at any step width, sm_120 at width 26. -/
 
 @[expose] public section
 
@@ -38,13 +14,10 @@ open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact Matrix
 
 variable {m n k : Nat}
 
-/-- Π's chain on words (windows of `Params.pi.G = 4`) is the chain twin at `hopperE4m3K32`. -/
 theorem chainWordP?_hopper : chainWordP? hopperE4m3K32 4 = chainWord? := rfl
 
-/-- Π's U is U's twin at `hopperE4m3K32` and `G = 4`. -/
 theorem peelExactP_hopper : @peelExactP m n k hopperE4m3K32 4 = @peelExact m n k := rfl
 
-/-- Π's U as values is U's twin's at `hopperE4m3K32` and `G = 4`. -/
 theorem peelExactValP_hopper : @peelExactValP m n k hopperE4m3K32 4 = @peelExactVal m n k := rfl
 
 end Pouw.PearlC.PeelExactP
@@ -56,20 +29,16 @@ open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs P
 
 variable {m n k : Nat}
 
-/-! ## The step at width `w` -/
-
 /-- **The step's range at width `w` and floor `z`** (`H8Range` at `w = 14`, `z = −139`): every code is zero or normal,
 and the step's exponent is at most 120, and at least `w − 127` unless every term is zero. -/
 def HRangeW (w : Nat) (z : ℤ) (tc : Term) (a b : Fin 32 → Code) : Prop :=
   (∀ l, ZeroOrNormal8 (a l)) ∧ (∀ l, ZeroOrNormal8 (b l)) ∧ FormingP.stepExpP z tc a b ≤ 120 ∧
     ((w : ℤ) - 127 ≤ FormingP.stepExpP z tc a b ∨ (tc.mag = 0 ∧ ∀ l, (product (a l) (b l)).mag = 0))
 
-/-- The step's relative error at width `w` on its range: `33·2^−(w−1) + (1 + 33·2^−(w−1))·2^−(min w 24 − 1)`. -/
 def epsW (w : Nat) : ℚ := 33 / 2 ^ (w - 1) + (1 + 33 / 2 ^ (w - 1)) / 2 ^ (min w 24 - 1)
 
 theorem epsW_nonneg (w : Nat) : 0 ≤ epsW w := by unfold epsW; positivity
 
-/-- On the range, the step's grid is bounded by its terms: `2^E ≤ |c| + Σ_l |a_l·b_l|`. -/
 theorem two_zpow_stepExpW_le {w : Nat} {z : ℤ} (hw2 : 2 ≤ w) (hz : z < (w : ℤ) - 127) {acc : Nat} {tc : Term}
     (hw : fp32Value acc = .fin tc) {a b : Fin 32 → Code} (ha : ∀ l, ZeroOrNormal8 (a l))
     (hb : ∀ l, ZeroOrNormal8 (b l)) (hE1 : (w : ℤ) - 127 ≤ FormingP.stepExpP z tc a b) :
@@ -92,7 +61,6 @@ theorem two_zpow_stepExpW_le {w : Nat} {z : ℤ} (hw2 : 2 ≤ w) (hz : z < (w : 
           (Finset.mem_univ l)
       linarith
 
-/-- The step on zero terms writes `+0`, at any width and floor. -/
 theorem pipeStep_zero {w : Nat} {z : ℤ} {acc : Nat} {tc : Term} (hw : fp32Value acc = .fin tc) (a b : Fin 32 → Code)
     (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) (h0 : tc.mag = 0)
     (hp : ∀ l, (product (a l) (b l)).mag = 0) :
@@ -132,8 +100,6 @@ theorem rel_of_errW {w : Nat} (hw1 : 1 ≤ w) {v S B : ℚ} {E : ℤ}
     _ ≤ 33 * (B / 2 ^ (w - 1)) + (B + 33 * (B / 2 ^ (w - 1))) / 2 ^ (min w 24 - 1) := by gcongr
     _ = epsW w * B := by unfold epsW; ring
 
-/-- **The step's relative error at width `w` on the range** (`hopperStep_rel` at `w = 14`): the word is finite, and
-within `epsW w·(|c| + Σ_l |a_l·b_l|)` of `c + Σ_l a_l·b_l`. -/
 theorem pipeStep_rel {w : Nat} {z : ℤ} (hw2 : 2 ≤ w) (hz : z < (w : ℤ) - 127) {acc : Nat} {tc : Term}
     (hw : fp32Value acc = .fin tc) {a b : Fin 32 → Code} (hR : HRangeW w z tc a b) :
     ∃ v, wordQ ((⟨[32], w, z⟩ : Pipeline).step acc (List.ofFn a) (List.ofFn b)) = some v ∧
@@ -158,8 +124,6 @@ theorem pipeStep_rel {w : Nat} {z : ℤ} (hw2 : 2 ≤ w) (hz : z < (w : ℤ) - 1
       simp [Term.value, hp l]
     simp only [hc, hp', Finset.sum_const_zero, add_zero, sub_zero, abs_zero, mul_zero, le_refl]
 
-/-! ## A chain on any step with a relative error -/
-
 /-- **A step's relative error `ε` on a range `R`** of accumulator terms and atoms: on a finite accumulator term `tc`
 with `R tc x`, the step writes a finite word within `ε·(|c| + Σ_l |a_l·b_l|)` of `c + Σ_l a_l·b_l`. -/
 def StepRel (P : Pipeline) (R : Term → AtomIn → Prop) (ε : ℚ) : Prop :=
@@ -167,12 +131,10 @@ def StepRel (P : Pipeline) (R : Term → AtomIn → Prop) (ε : ℚ) : Prop :=
     ∃ v, wordQ (P.step acc (List.ofFn x.1) (List.ofFn x.2)) = some v ∧
       |v - (tc.value + atomQ x)| ≤ ε * (|tc.value| + atomAbs x)
 
-/-- The step `⟨[32], w, z⟩` has relative error `epsW w` on `HRangeW w z`. -/
 theorem stepRel_pipe {w : Nat} {z : ℤ} (hw2 : 2 ≤ w) (hz : z < (w : ℤ) - 127) :
     StepRel ⟨[32], w, z⟩ (fun tc x => HRangeW w z tc x.1 x.2) (epsW w) :=
   fun _ _ _ hw hR => pipeStep_rel hw2 hz hw hR
 
-/-- One window's step on `P`, the word finite. -/
 def winStepP (P : Pipeline) (w : Nat) (x : AtomIn) : Option Nat := finite? (P.step w (List.ofFn x.1) (List.ofFn x.2))
 
 /-- The range along a window's steps from `+0`. -/
@@ -181,8 +143,6 @@ def WindowRangeP (P : Pipeline) (R : Term → AtomIn → Prop) (g : List AtomIn)
 
 variable {P : Pipeline} {R : Term → AtomIn → Prop} {ε : ℚ}
 
-/-- **A window's error** (`windowWord_err` on any step): its word is within `((1 + ε)^n − 1)·Σ |a·b|` of its `n`
-atoms' exact sum. -/
 theorem windowWordP_err (hS : StepRel P R ε) (hε : 0 ≤ ε) {g : List AtomIn} {w : Nat}
     (h : windowWordP? P g = some w) (hR : WindowRangeP P R g) :
     ∃ v, wordQ w = some v ∧ |v - (g.map atomQ).sum| ≤ ((1 + ε) ^ g.length - 1) * (g.map atomAbs).sum := by
@@ -198,24 +158,19 @@ theorem windowWordP_err (hS : StepRel P R ε) (hε : 0 ≤ ε) {g : List AtomIn}
   rw [zero_add, abs_zero, zero_add] at he
   exact he
 
-/-- **The pure chain's bound** over `n` atoms: `((1 + ε)^n − 1)·Σ |a·b|`; every step's error compounds. -/
 def pureBound (ε : ℚ) (atoms : List AtomIn) : ℚ := ((1 + ε) ^ atoms.length - 1) * (atoms.map atomAbs).sum
 
-/-- **The pure chain's error**: `pureWordP? P`'s word is within `pureBound ε` of the exact chain. -/
 theorem pureWordP_err (hS : StepRel P R ε) (hε : 0 ≤ ε) {atoms : List AtomIn} {w : Nat}
     (h : pureWordP? P atoms = some w) (hR : WindowRangeP P R atoms) :
     ∃ v, wordQ w = some v ∧ |v - chainQ atoms| ≤ pureBound ε atoms :=
   windowWordP_err hS hε h hR
 
-/-- The chain's step on `P`: a window's word promoted into the total. -/
 def chainStepP (P : Pipeline) (t : Nat) (g : List AtomIn) : Option Nat := (windowWordP? P g).bind (promoteWord? t)
 
 /-- **The chain's range in windows of `G`**: every window's range, along the chain's windows. -/
 def ChainRangeP (P : Pipeline) (R : Term → AtomIn → Prop) (G : Nat) (atoms : List AtomIn) : Prop :=
   FoldRange (chainStepP P) (fun _ g => WindowRangeP P R g) (atoms.toChunks G) 0
 
-/-- A promotion's relative error over a window of at most `G` atoms: `(1 + 2^−24)·(1 + ε)^G − 1` (`epsC` at `eps8`,
-`G = 4`). -/
 def epsCP (ε : ℚ) (G : Nat) : ℚ := (1 + 1 / 2 ^ 24) * (1 + ε) ^ G - 1
 
 theorem epsCP_ge (hε : 0 ≤ ε) (G : Nat) : 1 / 2 ^ 24 ≤ epsCP ε G := by
@@ -248,15 +203,11 @@ theorem chainStepP_err (hS : StepRel P R ε) (hε : 0 ≤ ε) {G c c' : Nat} {g 
         gcongr; exact le_trans hse (by gcongr)
     _ = _ := by unfold epsCP; ring
 
-/-- **The chain's bound in windows of `G`** over its `W` windows (`chainBound` at `eps8`, `G = 4`):
-`((1 + 2^−24)^W − 1)·Σ |a·b| + (1 + 2^−24)^W·(epsCP ε G·Σ |a·b| + W·2^−150)`. -/
 def chainBoundP (ε : ℚ) (G : Nat) (atoms : List AtomIn) : ℚ :=
   ((1 + 1 / 2 ^ 24) ^ (atoms.toChunks G).length - 1) * (atoms.map atomAbs).sum +
     (1 + 1 / 2 ^ 24) ^ (atoms.toChunks G).length *
       (epsCP ε G * (atoms.map atomAbs).sum + (atoms.toChunks G).length * 2 ^ (-150 : ℤ))
 
-/-- **The chain's error in windows of `G ≥ 1`** (`chainWord_err` on any step): `chainWordP? P G`'s word is within
-`chainBoundP ε G` of the exact chain. -/
 theorem chainWordP_err (hS : StepRel P R ε) (hε : 0 ≤ ε) {G : Nat} (hG : 1 ≤ G) {atoms : List AtomIn} {w : Nat}
     (h : chainWordP? P G atoms = some w) (hR : ChainRangeP P R G atoms) :
     ∃ v, wordQ w = some v ∧ |v - chainQ atoms| ≤ chainBoundP ε G atoms := by
@@ -290,11 +241,9 @@ theorem chainWordP_err (hS : StepRel P R ε) (hε : 0 ≤ ε) {G : Nat} (hG : 1 
 def ChainRangeAt (P : Pipeline) (R : Term → AtomIn → Prop) (G : Nat) (atoms : List AtomIn) : Prop :=
   if G = 0 then WindowRangeP P R atoms else ChainRangeP P R G atoms
 
-/-- **The chain's bound at `G`**: `pureBound ε` at `G = 0`, `chainBoundP ε G` otherwise. -/
 def chainBoundAt (ε : ℚ) (G : Nat) (atoms : List AtomIn) : ℚ :=
   if G = 0 then pureBound ε atoms else chainBoundP ε G atoms
 
-/-- **The chain's error at any `G`**: `chainWordP? P G`'s word is within `chainBoundAt ε G` of the exact chain. -/
 theorem chainWordAt_err (hS : StepRel P R ε) (hε : 0 ≤ ε) (G : Nat) {atoms : List AtomIn} {w : Nat}
     (h : chainWordP? P G atoms = some w) (hR : ChainRangeAt P R G atoms) :
     ∃ v, wordQ w = some v ∧ |v - chainQ atoms| ≤ chainBoundAt ε G atoms := by
@@ -306,9 +255,6 @@ theorem chainWordAt_err (hS : StepRel P R ε) (hε : 0 ≤ ε) (G : Nat) {atoms 
     exact pureWordP_err hS hε h hR
   · exact chainWordP_err hS hε (by omega) h hR
 
-/-! ## U on the step `P` in windows of `G` -/
-
-/-- `peelRows` on `chainWordP? P G`: `C̃`'s word and the rows `P_A,i`, `P_B,j` before U's four steps. -/
 def peelRowsP (P : Pipeline) (G : Nat) (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code)
     (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat)
     (i : Fin m) (j : Fin n) : Option (Nat × List Nat × List Nat) := do
@@ -343,8 +289,6 @@ theorem peelRowsP_spec {G : Nat} {Aq : Matrix (Fin m) (Fin k) Code} {Bq : Matrix
   obtain ⟨c', hc, af, haf, bf, hbf, g, hg, pa', hpa, pb', hpb, rfl, rfl, rfl⟩ := h
   exact ⟨af, bf, g, hc, haf, hbf, hg, hpa, hpb⟩
 
-/-- **U's steps, `C̃`'s chain and the rows** (`peelExact_err` on `peelExactValP P G`), with `C̃`'s word `c` of value
-`cv`. -/
 theorem peelExactP_err (G : Nat) (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code)
     (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat)
     (i : Fin m) (j : Fin n) {c : Nat} {pa pb : List Nat} {v cv : ℚ}
@@ -380,22 +324,18 @@ section Bound
 variable (P) (R) (ε) (G : Nat) (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code)
   (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat)
 
-/-- `P_A,i`'s rounded entry `32 + p` (`paErr` with `chainBoundAt ε G`). -/
 def paErrP (i : Fin m) (p : Fin 32) : ℚ :=
   chainBoundAt ε G (rowAtoms (Aq i) (FBᵀ p)) +
     (|afQ Aq FB i p| + chainBoundAt ε G (rowAtoms (Aq i) (FBᵀ p))) / 2 ^ 8 + 2 ^ (-134 : ℤ)
 
-/-- `P_B,j`'s rounded entry `q` (`pbErr` with `chainBoundAt ε G`). -/
 def pbErrP (j : Fin n) (q : Fin 32) : ℚ :=
   pbErrOf (beB j) (fun p => gQ FA FB p q) (fun p => chainBoundAt ε G (rowAtoms (FBᵀ p) (FAᵀ q))) (bfQ Bq FA j q)
     (chainBoundAt ε G (rowAtoms (Bq j) (FAᵀ q)))
 
-/-- Position `t`'s row error (`rowErr` with `chainBoundAt ε G`). -/
 def rowErrP (i : Fin m) (j : Fin n) (t : Fin 64) : ℚ :=
   if h : t.val < 32 then |paQ Aq FB beA i t| * pbErrP ε G Bq FA FB beB j ⟨t.val, h⟩
   else paErrP ε G Aq FB i ⟨t.val - 32, by have := t.isLt; omega⟩ * |pbQ Bq FA FB beB j t|
 
-/-- **The served entry's bound at step error `ε` and windows of `G`** (`peelBound` with `chainBoundAt ε G`). -/
 def peelBoundP (i : Fin m) (j : Fin n) : ℚ :=
   ((1 + eps16) ^ 4 - 1) * (|cQ Aq Bq i j| + chainBoundAt ε G (rowAtoms (Aq i) (Bq j)) +
       ∑ t, (|paQ Aq FB beA i t * pbQ Bq FA FB beB j t| + rowErrP ε G Aq Bq FA FB beA beB i j t)) +
@@ -409,8 +349,6 @@ def PeelRangeP (i : Fin m) (j : Fin n) : Prop :=
     (∀ p q, ChainRangeAt P R G (rowAtoms (FBᵀ p) (FAᵀ q))) ∧
     ∀ c pa pb, peelRowsP P G Aq Bq FA FB beA beB i j = some (c, pa, pb) → URange pa pb (List.range 4) c
 
-/-- **(b) on the step `P` in windows of `G`**: when `P`'s step has relative error `ε` on `R`, the served U
-`peelExactValP P G` is within `peelBoundP ε G` of its exact counterpart on the range, wherever the entry is finite. -/
 theorem peelExactValP_err (hS : StepRel P R ε) (hε : 0 ≤ ε) (i : Fin m) (j : Fin n) {v : ℚ}
     (hv : peelExactValP P G Aq Bq FA FB beA beB i j = some v) (hR : PeelRangeP P R G Aq Bq FA FB beA beB i j) :
     |v - uQ Aq Bq FA FB beA beB i j| ≤ peelBoundP ε G Aq Bq FA FB beA beB i j := by
@@ -485,13 +423,10 @@ theorem peelExactValP_err (hS : StepRel P R ε) (hε : 0 ≤ ε) (i : Fin m) (j 
 
 end Bound
 
-/-! ## sm_120: width 26, floor −133 -/
-
 /-- **sm_120's step range**: `HRangeW 26 (−133)` on the atom, the step's exponent in `[−101, 120]` unless every term is
 zero. -/
 def Sm120Range (tc : Term) (x : AtomIn) : Prop := HRangeW 26 (-133) tc x.1 x.2
 
-/-- sm_120's step has relative error `epsW 26 = 33·2^−25 + (1 + 33·2^−25)·2^−23`, about `2^−19.8`, on its range. -/
 theorem sm120_stepRel : StepRel sm120E4m3 Sm120Range (epsW 26) := stepRel_pipe (by norm_num) (by norm_num)
 
 section Sm120
@@ -499,29 +434,24 @@ section Sm120
 variable (G : Nat) (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code)
   (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat)
 
-/-- **(b) at sm_120, any `G`**: the served U `peelExactValP sm120E4m3 G` is within `peelBoundP (epsW 26) G` of its
-exact counterpart, on `PeelRangeP sm120E4m3 Sm120Range G`, wherever the entry is finite. -/
 theorem peelExactValP_sm120_err (i : Fin m) (j : Fin n) {v : ℚ}
     (hv : peelExactValP sm120E4m3 G Aq Bq FA FB beA beB i j = some v)
     (hR : PeelRangeP sm120E4m3 Sm120Range G Aq Bq FA FB beA beB i j) :
     |v - uQ Aq Bq FA FB beA beB i j| ≤ peelBoundP (epsW 26) G Aq Bq FA FB beA beB i j :=
   peelExactValP_err sm120E4m3 Sm120Range (epsW 26) G Aq Bq FA FB beA beB sm120_stepRel (epsW_nonneg 26) i j hv hR
 
-/-- **(b) at sm_120 in windows of 4** (`pearl-c-sm120-v1`'s chain). -/
 theorem peelExactValP_sm120_four (i : Fin m) (j : Fin n) {v : ℚ}
     (hv : peelExactValP sm120E4m3 4 Aq Bq FA FB beA beB i j = some v)
     (hR : PeelRangeP sm120E4m3 Sm120Range 4 Aq Bq FA FB beA beB i j) :
     |v - uQ Aq Bq FA FB beA beB i j| ≤ peelBoundP (epsW 26) 4 Aq Bq FA FB beA beB i j :=
   peelExactValP_sm120_err 4 Aq Bq FA FB beA beB i j hv hR
 
-/-- **(b) at sm_120 with no promotion** (`G = 0`, the pure chains; v2). -/
 theorem peelExactValP_sm120_zero (i : Fin m) (j : Fin n) {v : ℚ}
     (hv : peelExactValP sm120E4m3 0 Aq Bq FA FB beA beB i j = some v)
     (hR : PeelRangeP sm120E4m3 Sm120Range 0 Aq Bq FA FB beA beB i j) :
     |v - uQ Aq Bq FA FB beA beB i j| ≤ peelBoundP (epsW 26) 0 Aq Bq FA FB beA beB i j :=
   peelExactValP_sm120_err 0 Aq Bq FA FB beA beB i j hv hR
 
-/-- The same on `peelExactPureValP sm120E4m3`, U with pure chains. -/
 theorem peelExactPureValP_sm120_err (i : Fin m) (j : Fin n) {v : ℚ}
     (hv : peelExactPureValP sm120E4m3 Aq Bq FA FB beA beB i j = some v)
     (hR : PeelRangeP sm120E4m3 Sm120Range 0 Aq Bq FA FB beA beB i j) :
@@ -531,9 +461,6 @@ theorem peelExactPureValP_sm120_err (i : Fin m) (j : Fin n) {v : ℚ}
 
 end Sm120
 
-/-! ## (c) at sm_120 -/
-
-/-- **`peelExactP` on constant operand and basis rows** (`peelExact_const` on `chainWordP? P G`). -/
 theorem peelExactP_const (P : Pipeline) (G : Nat) (a b f g : Code) (beA : Matrix (Fin m) (Fin 32) Nat)
     (beB : Matrix (Fin n) (Fin 32) Nat) (i : Fin m) (j : Fin n) :
     peelExactP (k := k) P G (fun _ _ => a) (fun _ _ => b) (fun _ _ => f) (fun _ _ => g) beA beB i j =
@@ -576,10 +503,10 @@ theorem wServed120_eq (G : Nat) (a b : ℚ) (cA cB : Code)
   rw [hA', hB']
   rfl
 
--- the kernel `decide`s evaluate the K = 32 peel at sm_120's atom-mix, past the default bound; not yet measured
+-- the kernel `decide`s evaluate the K = 32 peel at sm_120's atom-mix, past the default bound
 set_option maxHeartbeats 0 in
-/-- **(c) at sm_120 in windows of 4**: at `Peel.lean`'s degenerate inputs, formed by sm_120's atom-mix, two salts give
-the served entries `0` (all-ones noise) and `10` (`E_A`'s row starting with `2`, `E_B`'s with `−1`). -/
+/-- **(c) at sm_120 in windows of 4**: at `Peel.lean`'s degenerate inputs, formed by sm_120's atom-mix, two salts
+give the served entries `0` and `10`. -/
 theorem served120_live_four : wServed120 4 (wNoise 1 1) = some 0 ∧ wServed120 4 (wNoise 2 (-1)) = some 10 := by
   constructor
   · rw [wServed120_eq 4 1 1 (e4m3 32) (e4m3 11) (by decide +kernel) (by decide +kernel), peelExactP_const]
@@ -587,9 +514,8 @@ theorem served120_live_four : wServed120 4 (wNoise 1 1) = some 0 ∧ wServed120 
   · rw [wServed120_eq 4 2 (-1) (e4m3 32) (e4m3 10) (by decide +kernel) (by decide +kernel), peelExactP_const]
     decide +kernel
 
--- the kernel `decide`s evaluate the K = 32 peel at sm_120's atom-mix, past the default bound; not yet measured
+-- the kernel `decide`s evaluate the K = 32 peel at sm_120's atom-mix, past the default bound
 set_option maxHeartbeats 0 in
-/-- **(c) at sm_120 with no promotion** (`G = 0`): the same two salts give `0` and `10`. -/
 theorem served120_live_zero : wServed120 0 (wNoise 1 1) = some 0 ∧ wServed120 0 (wNoise 2 (-1)) = some 10 := by
   constructor
   · rw [wServed120_eq 0 1 1 (e4m3 32) (e4m3 11) (by decide +kernel) (by decide +kernel), peelExactP_const]
@@ -597,7 +523,6 @@ theorem served120_live_zero : wServed120 0 (wNoise 1 1) = some 0 ∧ wServed120 
   · rw [wServed120_eq 0 2 (-1) (e4m3 32) (e4m3 10) (by decide +kernel) (by decide +kernel), peelExactP_const]
     decide +kernel
 
-/-- The two salts' served entries differ at sm_120 in windows of 4. -/
 theorem served120_salt_dependent_four : wServed120 4 (wNoise 1 1) ≠ wServed120 4 (wNoise 2 (-1)) := by
   rw [served120_live_four.1, served120_live_four.2]
   decide

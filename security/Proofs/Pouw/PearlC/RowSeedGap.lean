@@ -12,37 +12,14 @@ import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.DeviceRev1Gap
 public import Proofs.Pouw.PearlC.DeviceSm120Gap
 
-/-!
-# Row additivity: rev1's TT_OUT gives the row-seeded one (staging, nothing pinned)
-
-The per-row seed is not a new assumption: rev1's TT_OUT on the split workload, where every row is a unit of its own,
-gives `TTOutRowSeed`, and the g theorems carry over with the error at the row count.
-
-* **Transport:** at a row-local record (C0, `devAt_rowLocal`, by `rfl` at every captured step) and under C1, row `i`'s
-  ticket and useful words (`split_ticket`, `split_useful`) and its debit (`split_inert_work`, `split_tileInertWork`) are those of
-  the split unit `rowIdx L u i`.
-* **Per unit:** a unit's credit is the sum of its rows' credits as split units (`split_credit`); a correct row under
-  C2 is a correct split unit (`split_correct`), and the per-row cap implies rev1's (`rowInertBound_agg`). So the rows' credit
-  is at most the split trace's (`split_credit_le`), and with C3 `ttOutRowSeed_of_ttOut` follows.
-* **Per audit tile:** the same through the split layout's 64×64 tiles (`split_tileCredit_le`),
-  `ttOutTileRowSeed_of_ttOutTile`.
-* **One-row units are admitted:** `pearlCDomainDev_split`, `devSm120v1_domain_row`, `devSm120v2_domain_row`.
-* **The gap at any record,** on the one-shape domain with at most `2^64` rows, at `g = 1 − (399/400)/ω` and error
-  `δPearlC q (N·m)` (`ttOut_of_ttOutRowSeed`, `ttOutTile_of_ttOutTileRowSeed`): `pearlCGapDevRev1RowSeedAt` and
-  `pearlCSampledDevRev1RowSeedAt`.
-* **The gap at the sm_120 records**, from rev1's TT_OUT (per unit or per tile), C1 and C3 alone:
-  - v1 (`devSm120v1 Prices.sm120`), cap 1/400: `16223/3177500` at 8192³ and `2963/586700` at 16384³;
-  - v2 (`devSm120v2 Prices.sm120`), cap 1/1,000: `216793/59950000` at 8192³ and `2950127/829250000` at 16384³;
-  per unit and per audit tile, the rev1 values at both records.
--/
+/-! Row additivity, staged and nothing pinned: rev1's TT_OUT on the split workload gives `TTOutRowSeed`, with the
+error at the row count. -/
 
 @[expose] public section
 
 namespace Pouw.PearlC
 
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-! ## The split layout's indices -/
 
 theorem rowOffset_succ (L : Layout) (u : ℕ) : rowOffset L (u + 1) = rowOffset L u + (L.shape u).m := by
   unfold rowOffset; exact sum_range_succ _ _
@@ -91,7 +68,6 @@ theorem unitOfRow_lt {L : Layout} {v : ℕ} (hv : v < rowsOf L) : unitOfRow L v 
   have := Nat.findGreatest_le (P := fun u => rowOffset L u ≤ v) (L.N - 1)
   unfold unitOfRow; omega
 
-/-- On a one-shape layout the declared rows are `N·m`. -/
 theorem rowsOf_const {L : Layout} {s : Shape} (h : ∀ u < L.N, L.shape u = s) : rowsOf L = L.N * s.m := by
   unfold rowsOf rowOffset
   rw [sum_congr rfl fun u hu => by rw [h u (mem_range.mp hu)], sum_const, card_range, smul_eq_mul]
@@ -121,39 +97,28 @@ theorem splitShapeW_k {U : Workload} {u i : ℕ} (hu : u < U.layout.N) (hi : i <
     ((splitWorkload U).layout.shape (rowIdx U.layout u i)).k = (U.layout.shape u).k :=
   splitShape_k hu hi
 
-/-! ## One-row units are in the domain -/
-
-/-- **The split layout of an in-domain layout is in the domain**: one-row units are admitted. -/
 theorem pearlCDomainDev_split {d : PearlCDevice} {L : Layout} (h : pearlCDomainDev d L) :
     pearlCDomainDev d (splitLayout L) := fun _ hv =>
   have hw := h _ (unitOfRow_lt hv)
   ⟨Nat.one_pos, hw.2.1, hw.2.2.1, hw.2.2.2.1, hw.2.2.2.2.1, hw.2.2.2.2.2⟩
 
-/-- An in-domain unit has positive `m` and `n`. -/
 theorem pearlCDomainDev_pos {d : PearlCDevice} {L : Layout} (h : pearlCDomainDev d L) {u : ℕ} (hu : u < L.N) :
     0 < (L.shape u).m ∧ 0 < (L.shape u).n :=
   ⟨(h u hu).1, lt_of_lt_of_le (by norm_num) (h u hu).2.1.1⟩
 
-/-- A one-row unit at either headline depth is in v1's domain. -/
 theorem devSm120v1_domain_row (s : Shape) (hs : s = sh8192 ∨ s = sh16384) :
     pearlCDomainDev (devSm120v1 Prices.sm120) ⟨1, fun _ => ⟨1, s.n, s.k⟩, fun _ => 0⟩ := by
   intro u _
   rcases hs with rfl | rfl <;> dsimp only <;>
     exact ⟨by decide, by decide, by decide, by decide, Or.inr (by decide), by decide⟩
 
-/-- A one-row unit at either headline depth is in v2's domain. -/
 theorem devSm120v2_domain_row (s : Shape) (hs : s = sh8192 ∨ s = sh16384) :
     pearlCDomainDev (devSm120v2 Prices.sm120) ⟨1, fun _ => ⟨1, s.n, s.k⟩, fun _ => 0⟩ := by
   intro u _
   rcases hs with rfl | rfl <;> dsimp only <;> exact ⟨by decide, by decide, by decide, by decide, Or.inl rfl, by decide⟩
 
-/-! ## Row-local records -/
-
-/-- **(C0) holds at every captured step's record**, by `rfl`: its ticket, U and flags read `A′`'s row `i` only. -/
 theorem devAt_rowLocal (p : Pipeline) (G : ℕ) (pr : Prices) : (devAt p G pr).RowLocal :=
   ⟨fun _ _ _ _ => ⟨rfl, fun _ => rfl⟩, fun _ _ _ _ _ _ _ _ => rfl⟩
-
-/-! ## Transport across propositionally equal dimensions -/
 
 /-- Two vectors of propositionally equal lengths with the same entries at every natural index. -/
 def VecEq {α : Type} {q q' : ℕ} (v : Fin q → α) (v' : Fin q' → α) : Prop :=
@@ -223,8 +188,6 @@ theorem FormChain.elem_congr {r : ℕ} {fc fc' : FormChain r} (hfc : fc = fc') {
     {e e' f f' : Fin r → Code} (ha : a = a') (hx : x = x') (hb : b = b') (he : e = e') (hf : f = f') :
     fc.elem a x b e f = fc'.elem a' x' b' e' f' := by
   subst hfc ha hx hb he hf; rfl
-
-/-! ## Row views of the ticket and U -/
 
 section Split
 
@@ -298,7 +261,6 @@ theorem splitWeight_row {U : Workload} {u i : ℕ} (hu : u < U.layout.N) (hi : i
 
 variable {sem sem' : PearlCSem Q R S}
 
-/-- Row `i` of unit `u`'s `A′` under the row seeds is the split unit's one row. -/
 theorem splitRow_fst (hN : RowSeedNoise sem sem') (H : Q → R) (s : S) {U : Workload} {u i : ℕ}
     (hu : u < U.layout.N) (hi : i < (U.layout.shape u).m) (act : Codes) :
     VecEq ((sem'.unitChain H s U u act).1 ⟨i, hi⟩)
@@ -310,7 +272,6 @@ theorem splitRow_fst (hN : RowSeedNoise sem sem') (H : Q → R) (s : S) {U : Wor
     (finFun_congr hN.2.2.1 (splitShape_k hu hi).symm fun _ _ _ => rfl) (funext hz.1)
     (funext fun t => (hz.2.1 l hl hl' t).1)
 
-/-- Unit `u`'s `B̃` under the row seeds is the split unit's. -/
 theorem splitRow_snd (hN : RowSeedNoise sem sem') (H : Q → R) (s : S) {U : Workload} {u i : ℕ}
     (hu : u < U.layout.N) (hi : i < (U.layout.shape u).m) (act : Codes) :
     MatEq (sem'.unitChain H s U u act).2
@@ -324,7 +285,6 @@ theorem splitRow_snd (hN : RowSeedNoise sem sem') (H : Q → R) (s : S) {U : Wor
     (finFun_congr hN.2.2.1 (splitShape_k hu hi).symm fun l hl hl' => splitWeight_row hu hi b l hb hl hb' hl')
     (funext (hz.2.2 b hb hb')) (funext fun t => (hz.2.1 l hl hl' t).2)
 
-/-- **Row `i`'s ticket words** under the row seeds are the split unit's. -/
 theorem split_ticket {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') (ρ : ℚ) (H : Q → R)
     (s : S) {U : Workload} {u i : ℕ} (hu : u < U.layout.N) (hi : i < (U.layout.shape u).m) (act : Codes)
     (j : ℕ) :
@@ -335,7 +295,6 @@ theorem split_ticket {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem
   exact congrFun (congrFun (MatEq.atNat_eq
     (MatEq.ticket d (matEq_row (splitRow_fst hN H s hu hi act)) (splitRow_snd hN H s hu hi act))) 0) j
 
-/-- **Row `i`'s useful words** under the row seeds are the split unit's. -/
 theorem split_useful {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') (ρ : ℚ) (H : Q → R)
     (s : S) {U : Workload} {u i : ℕ} (hu : u < U.layout.N) (hi : i < (U.layout.shape u).m) (act : Codes)
     (j : ℕ) :
@@ -355,8 +314,6 @@ theorem split_useful {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem
     exact congrFun (congrArg₂ beRow
       (finFun_congr hN.2.2.1 hk fun l hl hl' => splitWeight_row hu hi b l hb hl hb' hl')
       (funext (hz.2.2 b hb hb'))) ⟨p, hp⟩
-
-/-! ## The debit, row by row -/
 
 open Classical in
 /-- rev1's replayed debit of row `i` of a unit's words in the columns `cols`, from the unit's noisy codes `A`, `B`, the
@@ -398,7 +355,6 @@ theorem card_filter_prod {m k : ℕ} (p : Fin m × Fin k → Prop) (q : Fin m �
   rw [card_filter]
   exact sum_congr rfl fun l _ => if_congr (h i l) rfl rfl
 
-/-- **A tile's debit on one row** is the row's debit. -/
 theorem tileInertWorkRev1_row (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
     (act : Codes) {i : ℕ} (hi : i < (U.layout.shape u).m) (cols : Finset ℕ) :
     sem.tileInertWorkRev1 d H s U u {i} cols act =
@@ -413,7 +369,6 @@ theorem tileInertWorkRev1_row (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q 
       (wordsVal (U.layout.shape u).m (U.layout.shape u).k act a) l ∨ ∀ j : Fin (U.layout.shape u).n,
         (j : ℕ) ∈ cols → d.flags (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2 a j ((l : ℕ) / 32) = true)]
 
-/-- **A unit's debit is the sum of its rows' debits** over all its columns. -/
 theorem unitInertWorkRev1_eq_sum_rows (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S) (U : Workload)
     (u : ℕ) (act : Codes) (hn : 0 < (U.layout.shape u).n) :
     sem.unitInertWorkRev1 d H s U u act =
@@ -444,7 +399,6 @@ theorem laterZeroPromos_row {d : PearlCDevice} (hd : d.RowLocal) {m n k : ℕ} (
       rw [(hd.1 (prefixCols A _ h) (prefixCols B _ h) i j).1]; rfl)
 
 open Classical in
-/-- A row's debit reads that row of `A` only, at a row-local record. -/
 theorem rowInertWork_row {d : PearlCDevice} (hd : d.RowLocal) (α β : (k : ℕ) → (Fin k → ℚ) → ℚ) {m n k : ℕ}
     (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code) (i : Fin m) (cols : Finset ℕ)
     (x : Fin k → ℚ) (W : Matrix (Fin n) (Fin k) ℚ) :
@@ -462,7 +416,6 @@ theorem rowInertWork_congr (d : PearlCDevice) (α β : (k : ℕ) → (Fin k → 
   subst hk hn
   rw [hA.eq, hB.eq, hx.eq, hW.eq]
 
-/-- **Row `i`'s debit** under the row seeds, on any columns, is the split unit's. -/
 theorem split_tileInertWork {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') (H : Q → R) (s : S)
     {U : Workload} {u i : ℕ} (hu : u < U.layout.N) (hi : i < (U.layout.shape u).m) (cols : Finset ℕ)
     (act : Codes) :
@@ -476,7 +429,6 @@ theorem split_tileInertWork {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
     ⟨(splitShape_k hu hi).symm, fun _ _ _ => rfl⟩
     ⟨(splitShape_n hu hi).symm, (splitShape_k hu hi).symm, fun b l hb hl hb' hl' => splitWeight_row hu hi b l hb hl hb' hl'⟩).symm
 
-/-- A unit's debit is the sum of its one-row tiles' debits. -/
 theorem unitInertWorkRev1_eq_sum_tiles (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S) (U : Workload)
     (u : ℕ) (act : Codes) (hn : 0 < (U.layout.shape u).n) :
     sem.unitInertWorkRev1 d H s U u act =
@@ -484,7 +436,6 @@ theorem unitInertWorkRev1_eq_sum_tiles (sem : PearlCSem Q R S) (d : PearlCDevice
   rw [unitInertWorkRev1_eq_sum_rows sem d H s U u act hn, ← Fin.sum_univ_eq_sum_range]
   exact sum_congr rfl fun i _ => (tileInertWorkRev1_row sem d H s U u act i.2 _).symm
 
-/-- **The split unit's debit is row `i`'s debit** under the row seeds. -/
 theorem split_inert_work {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') (H : Q → R) (s : S)
     {U : Workload} {u i : ℕ} (hu : u < U.layout.N) (hi : i < (U.layout.shape u).m) (hn : 0 < (U.layout.shape u).n)
     (act : Codes) :
@@ -497,22 +448,17 @@ theorem split_inert_work {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise
 
 end Split
 
-/-! ## The credit, row by row -/
-
 theorem creditDevRev1_rows (d : PearlCDevice) (sh : Shape) :
     creditDevRev1 d sh = sh.m * creditDevRev1 d ⟨1, sh.n, sh.k⟩ := by
   simp only [creditDevRev1, creditDev, firstAddDev]
   split_ifs <;> push_cast <;> ring
 
-/-- A row's share of the credit is the one-row unit's credit. -/
 theorem rowShare_credit (d : PearlCDevice) (ρ : ℚ) (sh : Shape) (i : ℕ) (hm : 0 < sh.m) (hn : 0 < sh.n) :
     ρ * creditDevRev1 d sh * tileShare sh {i} (range sh.n) = ρ * creditDevRev1 d ⟨1, sh.n, sh.k⟩ := by
   rw [creditDevRev1_rows d sh, tileShare, card_singleton, card_range, Nat.cast_one]
   have hm' : (sh.m : ℚ) ≠ 0 := by exact_mod_cast hm.ne'
   have hn' : (sh.n : ℚ) ≠ 0 := by exact_mod_cast hn.ne'
   field_simp
-
-/-! ## Correct rows -/
 
 section Reduction
 
@@ -522,7 +468,6 @@ theorem rowOK_of_floor (h : sem'.floor = sem.floor) {p q i : ℕ} {W : Codes} (h
     sem.RowOK p q W i :=
   ⟨hW.1, fun hi => ⟨(hW.2 hi).1, h ▸ (hW.2 hi).2⟩⟩
 
-/-- A row of admissible activations is admissible as its own unit. -/
 theorem split_actOK (hN : RowSeedNoise sem sem') {U : Workload} {u i : ℕ} (hu : u < U.layout.N)
     (hi : i < (U.layout.shape u).m) {act : Codes} (h : sem'.OperandOK (U.layout.shape u).m (U.layout.shape u).k act) :
     sem.OperandOK ((splitWorkload U).layout.shape (rowIdx U.layout u i)).m
@@ -538,7 +483,6 @@ theorem split_actOK (hN : RowSeedNoise sem sem') {U : Workload} {u i : ℕ} (hu 
       (f := wordsVal (U.layout.shape u).m (U.layout.shape u).k act ⟨i, hi⟩)
       (f' := wordsVal _ _ (rowCodes act i) a) fun _ _ _ => rfl) (h.2 ⟨i, hi⟩)
 
-/-- **The per-row cap implies rev1's cap.** -/
 theorem rowInertBound_agg (sem : PearlCSem Q R S) (d : PearlCDevice) (ρ : ℚ) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
     (act : Codes) (hm : 0 < (U.layout.shape u).m) (hn : 0 < (U.layout.shape u).n)
     (h : (pearlCProtocolDevRev1RowInertBound d sem ρ).inertBoundOK H s U u act) :
@@ -552,7 +496,6 @@ theorem rowInertBound_agg (sem : PearlCSem Q R S) (d : PearlCDevice) (ρ : ℚ) 
     _ = ρ * creditDevRev1 d (U.layout.shape u) := by
         rw [sum_const, card_range, nsmul_eq_mul, creditDevRev1_rows d (U.layout.shape u)]; ring
 
-/-- A weight row of a unit passes as a weight row of each of its rows' split units. -/
 theorem split_fixedOK (hN : RowSeedNoise sem sem') {d : PearlCDevice} (ρ : ℚ) {U : Workload} {u i j : ℕ}
     (hu : u < U.layout.N) (hi : i < (U.layout.shape u).m)
     (h : (pearlCProtocolDevRev1RowInertBound d sem' ρ).fixedOK (U.layout.shape u) (U.fixed (U.layout.fixedId u)) j) :
@@ -564,7 +507,6 @@ theorem split_fixedOK (hN : RowSeedNoise sem sem') {d : PearlCDevice} (ρ : ℚ)
   rw [unitOfRow_rowIdx hu hi]
   exact rowOK_of_floor hN.2.2.2.1 h
 
-/-- **A row of a correct unit is a correct unit of the split workload.** -/
 theorem split_correct {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') (ρ : ℚ) (H : Q → R) (s : S)
     {U : Workload} {u i : ℕ} (hu : u < U.layout.N) (hi : i < (U.layout.shape u).m) (hn : 0 < (U.layout.shape u).n)
     {c : Commit} (hc : Correct (pearlCProtocolDevRev1RowInertBound d sem' ρ) U H s u c) :
@@ -593,9 +535,6 @@ theorem actOf_split {L : Layout} (τ : Trace) {u i : ℕ} (hu : u < L.N) (hi : i
   rw [splitTrace_rowIdx τ hu hi]
   rcases τ u with _ | c <;> rfl
 
-/-! ## The credit, row by row, and the reduction -/
-
-/-- **A unit's credit is the sum of its rows' credits as split units.** -/
 theorem split_credit {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') (ρ : ℚ) (H : Q → R) (s : S)
     {U : Workload} {u : ℕ} (hu : u < U.layout.N) (hn : 0 < (U.layout.shape u).n) (act : Codes) :
     (pearlCProtocolDevRev1RowInertBound d sem' ρ).credit H s U u act =
@@ -616,7 +555,6 @@ theorem split_credit {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem
         rw [splitShapeW_eq hu (mem_range.mp hi), split_inert_work hd hN H s hu (mem_range.mp hi) hn act]
 
 open Classical in
-/-- **The row-seeded credit is at most the split game's**, on every trace. -/
 theorem split_credit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') {ρ : ℚ} (hρ : ρ ≤ 1)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) {U : Workload} (hU : pearlCDomainDev d U.layout)
     (H : Q → R) (s : S) (τ : Trace) :
@@ -670,10 +608,6 @@ theorem split_credit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise 
       sub_nonneg.mpr (h2.trans (mul_le_of_le_one_left hcr hρ))
     exact_mod_cast h3
 
-/-- **Row additivity for P2 (a theorem).** rev1's TT_OUT at `sem` bounds the row-seeded game at `sem'`, with the cap
-checked per row: the row-seeded adversary is the split game's, relabelled row by row (C3), each row of a correct unit is
-a correct one-row unit whose credit is the row's (C0, C1), and the error is the split layout's, at `R = Σ_u m_u` units.
-One-row units are in the domain (`pearlCDomainDev_split`). -/
 theorem ttOutRowSeed_of_ttOut [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
     {d : PearlCDevice} {ρ : ℚ} (hTT : TTOutPearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) (hd : d.RowLocal) (hρ : ρ ≤ 1) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) :
@@ -693,8 +627,6 @@ theorem ttOutRowSeed_of_ttOut [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S
   exact split_credit_le hd hN hρ hadd hbf hU.2 x.1 x.2 (A.trace U x.1 x.2)
 
 end Reduction
-
-/-! ## The audit's grid on the split layout -/
 
 theorem mem_gridTiles {tm tn : ℕ} {L : Layout} {u bi bj : ℕ} :
     (u, bi, bj) ∈ gridTiles tm tn L ↔
@@ -787,7 +719,6 @@ section TileReduction
 
 variable {Q R S : Type} {sem sem' : PearlCSem Q R S}
 
-/-- A row that passes Π's rules passes them as its own unit. -/
 theorem split_rowOK (hN : RowSeedNoise sem sem') {U : Workload} {u i : ℕ} (hu : u < U.layout.N)
     (hi : i < (U.layout.shape u).m) {act : Codes} (h : sem'.RowOK (U.layout.shape u).m (U.layout.shape u).k act i) :
     sem.RowOK ((splitWorkload U).layout.shape (rowIdx U.layout u i)).m
@@ -806,7 +737,6 @@ theorem split_passRows (hN : RowSeedNoise sem sem') {U : Workload} {u i : ℕ} (
   unfold PearlCSem.passRows
   rw [filter_singleton, ite_eq_left (split_rowOK hN hu hi h)]
 
-/-- A tile's credit is its credited rows' one-row credits. -/
 theorem tileCredit_rows (d : PearlCDevice) (ρ : ℚ) (sh : Shape) (hm : 0 < sh.m) (hn : 0 < sh.n)
     (rows cols : Finset ℕ) :
     (1 - ρ) * creditDevRev1 d sh * tileShare sh rows cols =
@@ -819,7 +749,6 @@ theorem tileCredit_rows (d : PearlCDevice) (ρ : ℚ) (sh : Shape) (hm : 0 < sh.
   have hn' : (sh.n : ℚ) ≠ 0 := by exact_mod_cast hn.ne'
   field_simp
 
-/-- A row's share of a tile's cap is the one-row tile's. -/
 theorem rowTile_inert_bound (d : PearlCDevice) (ρ : ℚ) (sh : Shape) (i : ℕ) (hm : 0 < sh.m) (hn : 0 < sh.n)
     (cols : Finset ℕ) :
     ρ * creditDevRev1 d sh * tileShare sh {i} cols =
@@ -905,7 +834,6 @@ theorem splitTileW_cols : (auditTiling 64 64 (splitWorkload U).layout).cols (spl
     Ico (bj * 64) (min ((bj + 1) * 64) (U.layout.shape u).n) :=
   splitTile_cols hu hi hbj
 
-/-- The split tile's credit, for a row that passes Π's rules. -/
 theorem splitTile_credit (hN : RowSeedNoise sem sem') (d : PearlCDevice) (ρ : ℚ) (H : Q → R) (s : S) {act : Codes}
     (hrow : sem'.RowOK (U.layout.shape u).m (U.layout.shape u).k act i) :
     (pearlCTilesDevRev1 d sem ρ).credit H s (splitWorkload U) (splitTile U.layout u i bj) (rowCodes act i) =
@@ -918,8 +846,6 @@ theorem splitTile_credit (hN : RowSeedNoise sem sem') (d : PearlCDevice) (ρ : �
 end SplitTileW
 
 open Classical in
-/-- **The row-seeded tile credit is at most the split game's**, on every trace: each credited row of a good tile
-is a good one-row tile of the split layout with the row's share of the credit. -/
 theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') {ρ : ℚ} (hρ : ρ ≤ 1)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) {U : Workload} (hU : pearlCDomainDev d U.layout)
     (H : Q → R) (s : S) (τ : Trace) :
@@ -1057,9 +983,6 @@ theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
     rw [tilesCredit_eq]
     exact_mod_cast mul_nonneg (mul_nonneg (sub_nonneg.mpr hρ) hcr) (tileShare_nonneg' _ _ _)
 
-/-- **Row additivity for P2 per audit tile (a theorem).** rev1's TT_OUT per tile at `sem` bounds the row-seeded game
-per tile at `sem'`, with the cap checked per credited row: each credited row of a good tile is a good one-row tile of
-the split layout carrying that row's credit, and the error is the split layout's, at `R = Σ_u m_u` units. -/
 theorem ttOutTileRowSeed_of_ttOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
     {d : PearlCDevice} {ρ : ℚ} (hTT : TTOutTilePearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) (hd : d.RowLocal) (hρ : ρ ≤ 1) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) :
@@ -1081,14 +1004,10 @@ theorem ttOutTileRowSeed_of_ttOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [F
 
 end TileReduction
 
-/-! ## The g theorems, with the error at the row count -/
-
 section Gap
 
 variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
-/-- **The row-seeded TT_OUT is a TT_OUT at the row count** on a one-shape domain of at most `2^64` rows: its error is
-`δPearlC q (N·m)`, `(q + R)/2^128` at the `R = N·m` declared rows. -/
 theorem ttOut_of_ttOutRowSeed {CM : CostModel Q R S} {P : Protocol Q R S} {d : PearlCDevice} {s : Shape} {g₀ : ℝ}
     (h : TTOutRowSeed CM P (pearlCDomainDev d) g₀) :
     TTOut CM P (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) g₀ (fun q N => δPearlC q (N * s.m)) :=
@@ -1096,7 +1015,6 @@ theorem ttOut_of_ttOutRowSeed {CM : CostModel Q R S} {P : Protocol Q R S} {d : P
     have h' := h.2 U ⟨hU.1, hU.2.1.1⟩ hU.2.2 T hT q hq A hA
     rwa [rowsOf_const hU.2.1.2] at h'⟩
 
-/-- **The row-seeded TT_OUT per audit tile is a TT_OUT per tile at the row count**, as `ttOut_of_ttOutRowSeed`. -/
 theorem ttOutTile_of_ttOutTileRowSeed {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S}
     {d : PearlCDevice} {s : Shape} {g₀ : ℝ} (h : TTOutTileRowSeed CM P TR (pearlCDomainDev d) g₀) :
     TTOutTile CM P TR (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) g₀ (fun q N => δPearlC q (N * s.m)) :=
@@ -1104,22 +1022,16 @@ theorem ttOutTile_of_ttOutTileRowSeed {CM : CostModel Q R S} {P : Protocol Q R S
     have h' := h.2 U ⟨hU.1, hU.2.1.1⟩ hU.2.2 T hT q hq A hA
     rwa [rowsOf_const hU.2.1.2] at h'⟩
 
-/-- The row-seeded TT_OUT does not read `W_ref`. -/
 theorem ttOutRowSeed_wref {CM : CostModel Q R S} {P : Protocol Q R S} {D : Layout → Prop} {g₀ : ℝ}
     (W : Layout → ℕ → ℝ) (h : TTOutRowSeed CM P D g₀) : TTOutRowSeed CM { P with Wref := W } D g₀ :=
   h
 
-/-- The row-seeded TT_OUT per tile reads neither `W_ref` nor the credited rows' `W_ref`. -/
 theorem ttOutTileRowSeed_wref {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S}
     {D : Layout → Prop} {g₀ : ℝ} (W W' : Layout → ℕ → ℝ) (Wc : Layout → ℕ → Codes → ℝ)
     (h : TTOutTileRowSeed CM P TR D g₀) :
     TTOutTileRowSeed CM { P with Wref := W } { TR with Wref := W', Wcred := Wc } D g₀ :=
   h
 
-/-- **The row-seeded TT_OUT gives `G_g` at any per-shape `W_ref`** `W`: rev1 with the per-row cap and `W_ref` at `W`, on
-the one-shape domain at `g = 1 − (399/400)/ω`, where `W s = ω·(1 − ρ)·creditDevRev1`, with the error at the row count
-(`gapFromTTOut`). The reduction doesn't read `W_ref` (`ttOutRowSeed_wref`); `W` enters only through the per-unit bound
-`W_ref ≤ ω·credit` on the original layout. rev1 (`wrefDevRev1`) and the honest kernel's `wrefDevRev1K` instantiate it. -/
 theorem pearlCGapDevRev1RowSeedWAt (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ)
     (W : Shape → ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω) (hω : W s = ω * ((1 - ρ) * creditDevRev1 d s))
     (hg : g = 1 - (1 - 1 / 400) / ω)
@@ -1143,10 +1055,6 @@ theorem pearlCGapDevRev1RowSeedWAt (CM : CostModel Q R S) (d : PearlCDevice) (se
     mul_le_mul_of_nonneg_left (by linarith) hω0.le
   exact_mod_cast this
 
-/-- **The row-seeded TT_OUT per audit tile gives `GGapSampled` at any per-shape `W_ref`** `W`: rev1's tiles with the
-per-row cap and `W_ref` and the credited rows' `W_ref` at `W`, on the one-shape domain at `γ = 1 − (399/400)/ω`, where
-`W s = ω·(1 − ρ)·creditDevRev1 ≥ 0`, with the error at the row count (`gapSampled`), as
-`pearlCGapDevRev1RowSeedWAt`. -/
 theorem pearlCSampledDevRev1RowSeedWAt (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ)
     (W : Shape → ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω) (hw0 : 0 ≤ W s)
     (hω : W s = ω * ((1 - ρ) * creditDevRev1 d s)) (hγ : γ = 1 - (1 - 1 / 400) / ω)
@@ -1189,9 +1097,6 @@ theorem pearlCSampledDevRev1RowSeedWAt (CM : CostModel Q R S) (d : PearlCDevice)
     rw [hsh]
     exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ _ _) _) hw0
 
-/-- The row-seeded TT_OUT gives `G_g` for rev1 with the per-row cap on the one-shape domain at
-`g = 1 − (399/400)/ω`, where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`, with the error at the row count
-(`gapFromTTOut`). -/
 theorem pearlCGapDevRev1RowSeedAt (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ)
     (s : Shape) (ω g : ℚ) (hω0 : 0 < ω) (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s))
     (hg : g = 1 - (1 - 1 / 400) / ω)
@@ -1200,9 +1105,6 @@ theorem pearlCGapDevRev1RowSeedAt (CM : CostModel Q R S) (d : PearlCDevice) (sem
       (fun q N => δPearlC q (N * s.m)) :=
   pearlCGapDevRev1RowSeedWAt CM d sem ρ (wrefDevRev1 d) s ω g hω0 hω hg hTT
 
-/-- The row-seeded TT_OUT per audit tile gives `GGapSampled` for rev1's tiles with the per-row cap on the one-shape
-domain at `g = 1 − (399/400)/ω`, where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1 ≥ 0`, with the error at the row count
-(`gapSampled`). -/
 theorem pearlCSampledDevRev1RowSeedAt (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ)
     (s : Shape) (ω g : ℚ) (hω0 : 0 < ω) (hw0 : 0 ≤ wrefDevRev1 d s)
     (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
@@ -1212,8 +1114,6 @@ theorem pearlCSampledDevRev1RowSeedAt (CM : CostModel Q R S) (d : PearlCDevice) 
       (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (g : ℝ) (fun q N => δPearlC q (N * s.m)) :=
   pearlCSampledDevRev1RowSeedWAt CM d sem ρ (wrefDevRev1 d) s ω g hω0 hw0 hω hg hTT
 
-/-! ## The sm_120 corollaries -/
-
 variable (CM : CostModel Q R S) {sem sem' : PearlCSem Q R S}
 
 theorem devSm120_add (G : ℕ) : 0 ≤ (devAt sm120E4m3 G Prices.sm120).prices.add := by
@@ -1222,8 +1122,6 @@ theorem devSm120_add (G : ℕ) : 0 ≤ (devAt sm120E4m3 G Prices.sm120).prices.a
 theorem devSm120_bf16 (G : ℕ) : 0 ≤ (devAt sm120E4m3 G Prices.sm120).prices.bf16 := by
   show (0 : ℚ) ≤ Prices.sm120.bf16; norm_num [Prices.sm120]
 
-/-- **v1 with per-row seeds at 8192³**, from rev1's TT_OUT: `g = 16223/3177500`, rev1's, with the error at the
-`8192·N` rows. -/
 theorem pearlCGapSm120v1RowSeed_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :
@@ -1236,8 +1134,6 @@ theorem pearlCGapSm120v1RowSeed_8192
     (by norm_num)
     (ttOutRowSeed_of_ttOut hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 4) (devSm120_bf16 4))
 
-/-- **v1 with per-row seeds at 16384³**, from rev1's TT_OUT: `g = 2963/586700`, rev1's, with the error at the
-`16384·N` rows. -/
 theorem pearlCGapSm120v1RowSeed_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :
@@ -1250,8 +1146,6 @@ theorem pearlCGapSm120v1RowSeed_16384
     (by norm_num)
     (ttOutRowSeed_of_ttOut hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 4) (devSm120_bf16 4))
 
-/-- **v2 with per-row seeds at the cap 1/1,000 at 8192³**, from rev1's TT_OUT (rev1 is v2's row at `G = 0`):
-`g = 216793/59950000`, rev1's, with the error at the `8192·N` rows. -/
 theorem pearlCGapSm120v2RowSeedInertShare1000_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v2 Prices.sm120) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :
@@ -1264,8 +1158,6 @@ theorem pearlCGapSm120v2RowSeedInertShare1000_8192
     (by norm_num)
     (ttOutRowSeed_of_ttOut hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 0) (devSm120_bf16 0))
 
-/-- **v2 with per-row seeds at the cap 1/1,000 at 16384³**, from rev1's TT_OUT: `g = 2950127/829250000`, rev1's,
-with the error at the `16384·N` rows. -/
 theorem pearlCGapSm120v2RowSeedInertShare1000_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v2 Prices.sm120) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :
@@ -1278,7 +1170,6 @@ theorem pearlCGapSm120v2RowSeedInertShare1000_16384
     (by norm_num)
     (ttOutRowSeed_of_ttOut hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 0) (devSm120_bf16 0))
 
-/-- **v1 with per-row seeds per audit tile at 8192³**, from rev1's TT_OUT per tile: `g = 16223/3177500`. -/
 theorem pearlCSampledSm120v1RowSeed_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :
@@ -1295,7 +1186,6 @@ theorem pearlCSampledSm120v1RowSeed_8192
     (ttOutTileRowSeed_of_ttOutTile hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 4)
       (devSm120_bf16 4))
 
-/-- **v1 with per-row seeds per audit tile at 16384³**, from rev1's TT_OUT per tile: `g = 2963/586700`. -/
 theorem pearlCSampledSm120v1RowSeed_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 400)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :
@@ -1312,8 +1202,6 @@ theorem pearlCSampledSm120v1RowSeed_16384
     (ttOutTileRowSeed_of_ttOutTile hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 4)
       (devSm120_bf16 4))
 
-/-- **v2 with per-row seeds at the cap 1/1,000 per audit tile at 8192³**, from rev1's TT_OUT per tile:
-`g = 216793/59950000`. -/
 theorem pearlCSampledSm120v2RowSeedInertShare1000_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v2 Prices.sm120) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :
@@ -1330,8 +1218,6 @@ theorem pearlCSampledSm120v2RowSeedInertShare1000_8192
     (ttOutTileRowSeed_of_ttOutTile hTT hN hCM (devAt_rowLocal _ _ _) (by norm_num) (devSm120_add 0)
       (devSm120_bf16 0))
 
-/-- **v2 with per-row seeds at the cap 1/1,000 per audit tile at 16384³**, from rev1's TT_OUT per tile:
-`g = 2950127/829250000`. -/
 theorem pearlCSampledSm120v2RowSeedInertShare1000_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v2 Prices.sm120) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed) :

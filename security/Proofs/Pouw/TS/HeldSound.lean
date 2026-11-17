@@ -36,20 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A checked unit's proof layer with its served checks is sound through its Flock sessions (the proof)
-
-`ResourceAccounting.SecurityProofs.TS.HeldSessionSound`. The held layer accepts where the checked layer does and verity-verify-proof's
-known-content check passes, and opens the same rows, so `AcceptedLive` is its acceptance's first half. Its unsound event
-is inside the checked layer's (`Pouw.RelativeSecurity.prob_mono`), because on every path an accepted proof whose rows
-meet `CheckedRel` meets `HeldRel` (`held_of_checked`):
-
-* (a) at each `ok` wire of a unit, the registrant's opening was registered at `own`'s port of that name
-  (`RowsSession.ServedRegistered`), which `checkKnownAll` accepted at the known rows; so its row bytes are the word
-  `1`'s, or `knownColl` exhibits a SHA-512 collision (`FlockC3.RegLevels.knownColl_spec`, `tie_ok`);
-* (b) the checked relation's assignment is the opened rows at each such wire, so its `ok` wires carry the `ok` row,
-  and `ResourceAccounting.Assumptions.TS.OkRealizes` gives each sampled proof block's checks of `Cd`.
--/
+/-! A checked unit's proof layer with its served checks is sound through its Flock sessions. -/
 
 @[expose] public section
 
@@ -76,9 +63,6 @@ theorem find_name_eq {l : List Flock.Registered.Port} {n : String} {pt : Flock.R
     have := List.find?_some h
     simpa using this
 
-/-- **The `ok` tie**: where verity-verify-proof's known-content check accepted `own` at `known`, which names the port `ok` with
-rows each the word `1`, every `ok` wire of unit `u` is at a registrant's row that is the `ok` row, unless the `ok` tie
-collides. -/
 theorem tie_ok (s : RowsSession) (ok : String) {known : Array (String × Array (Array ℕ × ByteArray))}
     {ks : Array (Array ℕ × ByteArray)} (hk : Flock.Registered.checkKnownAll s.own known = .ok ())
     (hm : (ok, ks) ∈ known) (hks : ∀ r ∈ ks, r.1 = okRow) (hS : ∀ u, s.ServedRegistered u)
@@ -109,8 +93,6 @@ theorem tie_ok (s : RowsSession) (ok : String) {known : Array (String × Array (
     rw [hb, hks _ hmem]
   · exact (hcol ⟨u, _, hr, hn, a, b, by rw [hport, hreg]; exact hc, hab, hh⟩).elim
 
-/-- **An accepted proof's rows that meet `CheckedRel` meet `HeldRel`**: at a session whose known-content check passed,
-naming `ok` with rows each the word `1`, whose served roots are registered and whose key program realizes `Cd`. -/
 theorem held_of_checked {ι : Type} (s : RowsSession) (o : s.Out) (ok : String)
     (known : Array (String × Array (Array ℕ × ByteArray))) {ks : Array (Array ℕ × ByteArray)}
     {Cd : ResourceAccounting.Compose.Declared ι} {cls : ℕ → ResourceAccounting.Served.Cls} {unitOf : Fin s.n → ℕ}

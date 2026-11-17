@@ -4,14 +4,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# TT_OUT at W1 is TT_OUT at the cost model `W1.w1Priced`
-
-`W1.w1Priced` makes no oracle call, so it meets `CostModel.Queries` (`w1Priced_queries`), and each TT_OUT form at W1
-(`Definitions.Pouw.Assumptions.PearlC.TTOutW1`) is the abstract form at `CM := W1.w1Priced dv salt` (`ttOutW1_iff`,
-`ttOutTileW1_iff`). The `_of_w1` lemmas give the six named forms the g readers' reductions take, so each reader at W1
-is its reduction at that cost model.
--/
+/-! TT_OUT at W1 is TT_OUT at the cost model `W1.w1Priced`. -/
 
 @[expose] public section
 
@@ -21,7 +14,6 @@ open Pouw.PearlC.Assumptions
 
 variable {Q R S : Type}
 
-/-- W1 priced makes no oracle call, so its runs are oracle trees with no query. -/
 theorem w1Priced_queries (dv : W1.W1Device) (salt : S → List ℕ) :
     (W1.w1Priced dv salt : CostModel Q R S).Queries := by
   intro pr U act σ s

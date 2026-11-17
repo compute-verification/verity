@@ -6,17 +6,7 @@ import Mathlib.Tactic.NormNum.Ineq
 import Mathlib.Tactic.Ring.RingNF
 import Proofs.Pouw.Receipt.Duo
 
-/-!
-# li's words are bound in a checkpoint, at every width and length
-
-li's half step `y ↦ (y ⊕ d₀ ⊕ k)·a + d₁` is a T-function: bit `i` of its output reads only bits `≤ i` of its inputs.
-Say `q` is `p` moved at bit `v` (`LowDiff v p q`) when they agree below bit `v` and differ at it: modulo `2^(v+1)`,
-`q = p + 2^v`, or equally `q = p ⊕ 2^v`, since adding the top bit of `v + 1` bits carries out of them. A common XOR, a
-common addend and an odd multiplier each keep it: `(p + 2^v)·a ≡ p·a + 2^v` for odd `a`. So a change of `d₀` (odd `a`)
-or of `d₁` (any `a`) whose lowest set bit is `v` moves the half step's output at bit `v`; every later half step with an
-odd multiplier keeps the move; and XOR with the other chains' final states keeps it. A nonzero change has a lowest set
-bit, so the checkpoint is injective in each word.
--/
+/-! li's words are bound in a checkpoint, at every width and length. -/
 
 @[expose] public section
 
@@ -102,7 +92,6 @@ theorem lowDiff_mul {n v : ℕ} (hv : v + 1 ≤ n) {p q a : BitVec n} (ha : a.to
     exact ha
   rw [BitVec.setWidth_mul _ _ hv, BitVec.setWidth_mul _ _ hv, h, add_mul, twoPow_mul_odd hb]
 
-/-- A change of `d₀` whose lowest set bit is `v` moves a half step with an odd multiplier at bit `v`. -/
 theorem liHalf_word₀ {n v : ℕ} (hv : v + 1 ≤ n) (k : BitVec n) {a : BitVec n} (ha : a.toNat % 2 = 1)
     (y d₀ d₀' d₁ : BitVec n) (h : (d₀ ^^^ d₀').setWidth (v + 1) = BitVec.twoPow (v + 1) v) :
     LowDiff v (liHalf k a y (d₀, d₁)) (liHalf k a y (d₀', d₁)) := by
@@ -110,7 +99,6 @@ theorem liHalf_word₀ {n v : ℕ} (hv : v + 1 ≤ n) (k : BitVec n) {a : BitVec
   refine lowDiff_add hv _ (lowDiff_mul hv ha (lowDiff_xor _ ?_))
   rwa [lowDiff_iff, xor_xor_cancel_left]
 
-/-- A change of `d₁` whose lowest set bit is `v` moves a half step at bit `v`, whatever its multiplier. -/
 theorem liHalf_word₁ {n v : ℕ} (hv : v + 1 ≤ n) (k a y d₀ d₁ d₁' : BitVec n)
     (h : (d₁ ^^^ d₁').setWidth (v + 1) = BitVec.twoPow (v + 1) v) :
     LowDiff v (liHalf k a y (d₀, d₁)) (liHalf k a y (d₀, d₁')) := by
@@ -118,13 +106,11 @@ theorem liHalf_word₁ {n v : ℕ} (hv : v + 1 ≤ n) (k a y d₀ d₁ d₁' : B
   rw [add_comm _ d₁, add_comm _ d₁']
   exact lowDiff_add hv _ (lowDiff_iff.mpr h)
 
-/-- A half step with an odd multiplier keeps a move of the state. -/
 theorem liHalf_state {n v : ℕ} (hv : v + 1 ≤ n) (k : BitVec n) {a : BitVec n} (ha : a.toNat % 2 = 1)
     (d : BitVec n × BitVec n) {y y' : BitVec n} (h : LowDiff v y y') :
     LowDiff v (liHalf k a y d) (liHalf k a y' d) :=
   lowDiff_add hv _ (lowDiff_mul hv ha (lowDiff_xor _ (lowDiff_xor _ h)))
 
-/-- Half steps with odd multipliers keep a move of the state. -/
 theorem liChain_state {n v : ℕ} (hv : v + 1 ≤ n) (post : List (LiOddHalfStep n)) {y y' : BitVec n}
     (h : LowDiff v y y') :
     LowDiff v (liChain (post.map LiOddHalfStep.val) y) (liChain (post.map LiOddHalfStep.val) y') := by
@@ -162,8 +148,6 @@ theorem xor_mid_cancel {n : ℕ} (b p q c : BitVec n) : b ^^^ p ^^^ c ^^^ (b ^^^
   simp only [BitVec.getLsbD_xor]
   cases b.getLsbD i <;> cases p.getLsbD i <;> cases q.getLsbD i <;> cases c.getLsbD i <;> rfl
 
-/-- A change of the middle half step's words that moves it at bit `v` from every state moves the checkpoint at bit
-`v` and at no bit below it. -/
 theorem liCheckpoint_lowDiff {n v : ℕ} (hv : v + 1 ≤ n) (before after : List (List (LiHalfStep n) × BitVec n))
     (pre : List (LiHalfStep n)) (k a : BitVec n) (d d' : BitVec n × BitVec n) (post : List (LiOddHalfStep n))
     (y : BitVec n) (hstep : ∀ s, LowDiff v (liHalf k a s d) (liHalf k a s d')) :
@@ -203,7 +187,6 @@ theorem ne_of_lowBit {n v : ℕ} {X X' : BitVec n}
   simp only [BitVec.toNat_zero, Nat.zero_mod] at h1
   exact (Nat.two_pow_pos v).ne h1
 
-/-- One half step is a bijection of the state, for an odd multiplier. -/
 theorem liHalf_bijective {n : ℕ} (k : BitVec n) (a : OddKey n) (d : BitVec n × BitVec n) :
     Function.Bijective (fun y => liHalf k a.1 y d) := by
   have hinj : Function.Injective (fun y => liHalf k a.1 y d) := by
@@ -214,7 +197,6 @@ theorem liHalf_bijective {n : ℕ} (k : BitVec n) (a : OddKey n) (d : BitVec n �
   have : Finite (BitVec n) := Finite.of_equiv _ BitVec.equivFin.symm.toEquiv
   exact hinj.bijective_of_finite
 
-/-- Either word's change by `x`, whose lowest set bit is `v`, moves the checkpoint at bit `v` and below it nowhere. -/
 theorem liCheckpoint_lowBit {n v : ℕ} (x : LowBit n v) (before after : List (List (LiHalfStep n) × BitVec n))
     (pre : List (LiHalfStep n)) (k : BitVec n) (a : OddKey n) (d : BitVec n × BitVec n) (post : List (LiOddHalfStep n))
     (y : BitVec n) :
@@ -231,7 +213,6 @@ theorem liCheckpoint_lowBit {n v : ℕ} (x : LowBit n v) (before after : List (L
   · exact liCheckpoint_lowDiff hv before after pre k a.1 d _ post y fun s =>
       liHalf_word₁ hv k a.1 s d.1 d.2 _ (by rw [xor_xor_self_left]; exact x.2)
 
-/-- The checkpoint is injective in either word of every half step it absorbed. -/
 theorem liCheckpoint_word_injective {n : ℕ} (before after : List (List (LiHalfStep n) × BitVec n))
     (pre : List (LiHalfStep n)) (k : BitVec n) (a : OddKey n) (d : BitVec n × BitVec n) (post : List (LiOddHalfStep n))
     (y : BitVec n) :

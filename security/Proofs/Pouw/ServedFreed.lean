@@ -5,20 +5,7 @@ public import Proofs.Pouw.ServedWork
 public import Proofs.Pouw.OnsiteFreed
 public import Proofs.Pouw.Lemmas.Dither
 
-/-!
-# Proof of `ServedFreed`
-
-`Properties.Pouw.Served.ServedFreed` from `ServedWork` and `FreedOfFloor`:
-
-* `outsourceServed_of_perProgram`: main's per-program `OutsourceWithinEgress` implies `OutsourceWithinEgressServed`.
-  Each window program is replaced by its exchange-free one, which is a function of the program, so the replacement is
-  fixed before the salt wherever the program is; its outputs are the program's, and its priced work is at most `β` a
-  bit the program exchanged more.
-* `servedFreed`: the outsourcing premise gives an exchange-free family of window programs with the same outputs, fixed
-  before the salts, which `ServedWork` prices: off its event they spent at least `p · creditPrefix − Σ lam`, so the
-  originals spent at least that less `β · ext`, and off the certifier's event `ext ≤ K`. `FreedOfFloor` turns the
-  floor into freed compute, and the union bound adds the certifier's `δ`.
--/
+/-! Proof of `ServedFreed` from `ServedWork` and `FreedOfFloor`. -/
 
 @[expose] public section
 
@@ -27,8 +14,6 @@ namespace Properties.Pouw.Served.SecurityProofs
 open Properties.Pouw.Served Properties.Pouw.MonitoringPeriodJ10R
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
-/-- **The per-program price of an exchanged bit gives its period form at the served check**: each window program
-replaced by its exchange-free one. -/
 theorem outsourceServed_of_perProgram {C B I St : Type} (O : Type) {m n : ℕ} (hm : 0 < m) (G : Pouw.Dither.Accel)
     (μ : G.Res → ℝ) (β : ℝ) (inst : Paths (Paths C m × B) n → Fin n → I)
     (state : Paths (Paths C m × B) n → Fin n → St) (h : Pouw.Assumptions.OutsourceWithinEgress G μ β) :

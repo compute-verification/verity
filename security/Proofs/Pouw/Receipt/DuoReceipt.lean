@@ -2,21 +2,7 @@ module
 
 public import Proofs.Pouw.Receipt.Duo
 
-/-!
-# duo's served receipt `y ⊕ rotl(z, h)` binds one word up to no XOR constant
-
-Two words `d ≠ e` whose receipts differ by one XOR constant `κ` on every start state would cancel in two chains of a
-parity group, which absorb with the same keys. Write `c = d ⊕ e`, `δ = c·a` and `ε = rotl(c, r) + c·a`. From the start
-states with `u = y ⊕ d ⊕ k = 0` and `z = x`, the runs end at `(x, x)` and `(x + δ, x + ε)`, so for every `x`
-
-    (x ⊕ (x + δ)) ⊕ rotl(x ⊕ (x + ε), h) = κ.
-
-Bit `n − 1` says the carry into bit `n − 1` of `x + δ` equals the carry into bit `n − 1 − h` of `x + ε` for every `x`;
-the second depends only on `x mod 2^(n−1−h)`, so the first can't step from `0` to `1` as `x` rises, and
-`δ ≡ 0 (mod 2^(n−1))` (`carry_top_const`). Bit `h − 1` gives `ε ≡ 0 (mod 2^(n−1))` the same way. So `δ ∈ {0, t}`,
-`t = 2^(n−1)`; `δ = 0` is `c = 0`, and `δ = t` is `c = t`, where `ε = 2^(r−1) + t`, which `0 < r < n` keeps off
-`{0, t}`.
--/
+/-! duo's served receipt `y ⊕ rotl(z, h)` binds one word up to no XOR constant. -/
 
 @[expose] public section
 
@@ -24,9 +10,6 @@ namespace Pouw.ReceiptProofs
 
 open Pouw.Receipt
 
-/-- The carry threshold: if the carry into bit `n − 1` of `X + δ` equals the carry into a lower bit `i` of `X + ε` for
-every `X`, then `δ ≡ 0 (mod 2^(n−1))`. Otherwise `X = 2^(n−1) − (δ mod 2^(n−1)) − 2^i` (or `0`) and `X + 2^i` agree
-modulo `2^i` and straddle the threshold. -/
 theorem carry_top_const {n i : ℕ} (hi : i + 1 < n) (δ ε : BitVec n)
     (h : ∀ X : BitVec n, BitVec.carry (n - 1) X δ false = BitVec.carry i X ε false) :
     δ.toNat % 2 ^ (n - 1) = 0 := by
@@ -75,8 +58,6 @@ theorem bool_carry {p q x y c₁ c₂ : Bool}
     (h : (p ^^ q) = (((p ^^ (x ^^ c₁)) ^^ (q ^^ (y ^^ c₂))) ^^ (x ^^ y))) : c₁ = c₂ := by
   revert h; cases p <;> cases q <;> cases x <;> cases y <;> cases c₁ <;> cases c₂ <;> decide
 
-/-- One word: two words whose served receipts differ by one XOR constant on every start state are equal, for an odd
-multiplier, a rotation `0 < r < n` and a receipt rotation `0 < h < n`. -/
 theorem duoWordProj_injective {n : ℕ} (k : BitVec n) (a : OddKey n) (r h : Rotation n) :
     Function.Injective (duoWordSpread k a.1 r.1 h.1) := by
   obtain ⟨a, ha⟩ := a
@@ -87,7 +68,6 @@ theorem duoWordProj_injective {n : ℕ} (k : BitVec n) (a : OddKey n) (r h : Rot
   obtain ⟨c, hc⟩ : ∃ c, c = d ^^^ e := ⟨_, rfl⟩
   obtain ⟨δ, hδ⟩ : ∃ δ, δ = c * a := ⟨_, rfl⟩
   obtain ⟨ε, hε⟩ : ∃ ε, ε = c.rotateLeft r + c * a := ⟨_, rfl⟩
-  -- from u = 0 and z = x, the runs end at (x, x) and (x + δ, x + ε)
   have E : ∀ x : BitVec n,
       x ^^^ x.rotateLeft h = ((x + δ) ^^^ (x + ε).rotateLeft h) ^^^ (δ ^^^ ε.rotateLeft h) := by
     intro x

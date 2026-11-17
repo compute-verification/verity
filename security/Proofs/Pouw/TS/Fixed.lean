@@ -3,22 +3,7 @@ module
 public import Proofs.Pouw.TS.Sampled
 public import Proofs.ResourceAccounting.Lemmas.TS.Fixed
 
-/-!
-# `UnitFixed` from a fixed word, and the additive lemma
-
-`ResourceAccounting.SecurityProofs.TS.UnitFixedOfWords : ResourceAccounting.Guarantees.TS.UnitFixedOfWords` and
-`ResourceAccounting.SecurityProofs.TS.AdditiveFixed : ResourceAccounting.Guarantees.TS.AdditiveFixed`.
-
-`UnitFixedOfWords` compares the two sums unit by unit. A good unit of positive weight has fixed words
-(`fixedWords_of_good`): it is fixed (the hypothesis), computed (`ModesRun` at itself, its late cone's first member), and
-every unit steering it is in its late cone (`steers_late`: a multiplicative operand written after the coin is a `Late`
-edge), so paid and computed. A unit not skipped whole folds its words (`ModesRun`). `CountsFixed` bounds both sums.
-
-`AdditiveFixed`: a computed unit's words less what its additive operands add are its work (`add_sub_cancel_right`). A
-position committed no later than the unit's coin keeps its committed value on every continuation from that coin
-(`committed_spliceAt`): such a continuation is one from the position's own cut too (`spliceAt_mono`), and every
-continuation from the cut has the path's plurality (`Plurality.plural_sp`).
--/
+/-! `UnitFixed` from a fixed word, and the additive lemma. -/
 
 @[expose] public section
 
@@ -26,13 +11,11 @@ namespace ResourceAccounting.SecurityProofs.TS
 
 open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
-/-- A path spliced with itself is the path. -/
 theorem splice_self {Ω : Type} : ∀ {n : ℕ} (k : ℕ) (x : Paths Ω n), splice k x x = x
   | 0, _, _ => rfl
   | _ + 1, 0, _ => rfl
   | _ + 1, k + 1, x => by simp only [splice, splice_self k x.2, Prod.mk.eta]
 
-/-- A continuation from a later coin is a continuation from an earlier one. -/
 theorem splice_mono {Ω : Type} : ∀ {n : ℕ} (b c : ℕ) (x z : Paths Ω n), b ≤ c →
     splice b x (splice c x z) = splice c x z
   | 0, _, _, _, _, _ => rfl
@@ -41,7 +24,6 @@ theorem splice_mono {Ω : Type} : ∀ {n : ℕ} (b c : ℕ) (x z : Paths Ω n), 
   | _ + 1, b + 1, c + 1, x, z, h => by
     simp only [splice, splice_mono b c x.2 z.2 (Nat.le_of_succ_le_succ h)]
 
-/-- A continuation from round `w`'s coin `c` is a continuation from every earlier coin (round first, then coin). -/
 theorem spliceAt_mono {C B : Type} {m : ℕ} : ∀ {n : ℕ} (a b w c : ℕ) (x z : Paths (Paths C m × B) n),
     (a < w ∨ a = w ∧ b ≤ c) → spliceAt a b x (spliceAt w c x z) = spliceAt w c x z
   | 0, _, _, _, _, _, _, _ => rfl
@@ -55,8 +37,6 @@ theorem spliceAt_mono {C B : Type} {m : ℕ} : ∀ {n : ℕ} (a b w c : ℕ) (x 
     have h' : a < w ∨ a = w ∧ b ≤ c := h.imp Nat.lt_of_succ_lt_succ fun h => ⟨Nat.succ.inj h.1, h.2⟩
     simp only [spliceAt, spliceAt_mono a b w c x.2 z.2 h']
 
-/-- **A position committed no later than round `w`'s coin `c` keeps its committed value on every continuation from that
-coin.** -/
 theorem committed_spliceAt {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V : Type} [Nonempty V]
     (pf : SampledLayer C B S m s J Q Pos V) (x z : Paths (Paths C m × B) S) (ℓ : Pos) (w : Fin S) (c : Fin m)
     (h : (pf.cut ℓ).1 < w ∨ (pf.cut ℓ).1 = w ∧ (pf.cut ℓ).2 ≤ c.castSucc) :
@@ -72,7 +52,6 @@ theorem committed_spliceAt {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J
   exact Plurality.plural_sp (sp := pf.cont ℓ) (opens := fun y v => pf.Opens y ℓ v)
     (spliceAt_left (pf.cut ℓ).1 (pf.cut ℓ).2) x _
 
-/-- A unit that steers `u` is in `u`'s late cone. -/
 theorem steers_late {C B : Type} {S m s : ℕ} {J Q Pos V N W : Type} (pf : WordLayer C B S m s J Q Pos V N W)
     {t u : Fin S × J} (h : pf.Steers t u) : Relation.ReflTransGen pf.Late t u := by
   obtain ⟨v, hv, k, -, hs, hb⟩ := h
@@ -85,7 +64,6 @@ theorem steers_late {C B : Type} {S m s : ℕ} {J Q Pos V N W : Type} (pf : Word
     exact hb (Or.inr ⟨h1, not_lt.1 h2⟩)
   · exact Or.inl h1
 
-/-- **A good fixed unit has fixed words** when the modes are the run's. -/
 theorem fixedWords_of_good {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V N W : Type} [Fintype J]
     [Nonempty V] [AddCommGroup W] (pf : WordLayer C B S m s J Q Pos V N W) {wt : Fin S → J → ℝ}
     (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (hM : ModesRun pf mode) (x : Paths (Paths C m × B) S)
@@ -93,7 +71,6 @@ theorem fixedWords_of_good {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J
   ⟨hF, (hM x u).1 (hG u Relation.ReflTransGen.refl), fun t ht => (hM x t).1 (hG t (steers_late pf ht))⟩
 
 open Classical in
-/-- **`UnitFixed` from option A's fixed word.** -/
 theorem UnitFixedOfWords : ResourceAccounting.Guarantees.TS.UnitFixedOfWords := by
   intro K T L U _ _ _ _ C B _ _ S m s J Q Pos V N W _ _ _ P pf mode wt folded hwt hfix hM hC _ x hx
   obtain ⟨h1, h2⟩ := hC x hx
@@ -115,7 +92,6 @@ theorem UnitFixedOfWords : ResourceAccounting.Guarantees.TS.UnitFixedOfWords := 
       · exact le_of_eq (ite_eq_right hf).symm
     · exact le_of_eq ((ite_eq_right hw).trans (ite_eq_left ((hM x (w, j)).2 hw)).symm)
 
-/-- **Additive operands don't decide fixedness.** -/
 theorem AdditiveFixed : ResourceAccounting.Guarantees.TS.AdditiveFixed := by
   intro C B _ _ S m s J Q Pos V N W _ _ pf u hb x hC
   refine ⟨?_, fun z => ?_⟩

@@ -3,16 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.TS
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# The tensor slots and the output count
-
-T1, its tightness and Lemma 2's count (EPS1-TENSOR).
-
-* `TensorSlotCount`: an injective map of `N` committed words into slot writes gives `N ≤ Σ_i w_i n_i`, and
-  `w_i ≤ ρ_T c_i` (`div_le_rhoT`) turns it into `N/ρ_T ≤ Σ_i c_i n_i`.
-* `TensorSlotTight`: both ratios lie in `(0, 1]`, so their product is `1` iff both are.
-* `OutputCount`: the head writes number `Σ_t ω(cls t) = Σ_k ω_k n_k`, and an image is no larger than its type.
--/
+/-! The tensor slots and the output count: T1, its tightness and Lemma 2's count. -/
 
 @[expose] public section
 
@@ -20,14 +11,12 @@ namespace ResourceAccounting.SecurityProofs.TS
 
 open ResourceAccounting.TS Finset
 
-/-- Every form writes at most `ρ_T` slots a pipe cycle. -/
 theorem div_le_rhoT {ι : Type} [Fintype ι] (w c : ι → ℕ) (i : ι) : (w i : ℝ) / c i ≤ rhoT w c :=
   le_ciSup (f := fun i => (w i : ℝ) / c i) (Set.finite_range _).bddAbove i
 
 theorem rhoT_nonneg {ι : Type} [Fintype ι] [Nonempty ι] (w c : ι → ℕ) : 0 ≤ rhoT w c :=
   le_trans (by positivity) (div_le_rhoT w c (Classical.arbitrary ι))
 
-/-- `N` distinct slot writes need `N ≤ Σ_i n_i w_i`. -/
 theorem card_le_slots {ι : Type} [Fintype ι] (w n : ι → ℕ) (N : ℕ) (slot : Fin N → SlotWrite ι w n)
     (hinj : Function.Injective slot) : N ≤ ∑ i, n i * w i := by
   simpa [SlotWrite, Fintype.card_sigma, Fintype.card_prod] using Fintype.card_le_of_injective slot hinj
@@ -46,7 +35,6 @@ theorem TensorSlotCount : ResourceAccounting.Guarantees.TS.TensorSlotCount := by
     calc (n i : ℝ) * w i ≤ n i * (rhoT w c * c i) := mul_le_mul_of_nonneg_left (hw i) (by positivity)
       _ = c i * n i * rhoT w c := by ring
 
-/-- T1's tightness. -/
 theorem TensorSlotTight : ResourceAccounting.Guarantees.TS.TensorSlotTight := by
   intro ρH ρT dH L hρH hle hdH hdL
   have hρT : 0 < ρT := hρH.trans_le hle
@@ -69,7 +57,6 @@ theorem TensorSlotTight : ResourceAccounting.Guarantees.TS.TensorSlotTight := by
     rw [hL1, hρ1, div_self hρT.ne', div_self hdH.ne']
     ring
 
-/-- The head writes number `Σ_k ω_k n_k`. -/
 theorem card_headWrite {K : Type} [Fintype K] [DecidableEq K] (ω : K → ℕ) (G : ℕ) (cls : Fin G → K) :
     Fintype.card (HeadWrite ω G cls) = ∑ k, ω k * classCount cls k := by
   rw [Fintype.card_sigma, ← sum_fiberwise univ cls fun t => Fintype.card (Fin (ω (cls t)))]
