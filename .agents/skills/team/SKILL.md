@@ -88,8 +88,8 @@ fast-forwards `main` to one with no new failure:
   loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
 - Anyone may do whatever it takes to cut check time: a change to how `check` runs lands without its file owner's review,
-  and the owner is told. infra owns check time and its spend, and ci owns landing: no agent acts between a ready mark
-  and `main` moving unless the automation refuses.
+  and the owner is told. infra owns check time and its spend, and ci owns landing, with full autonomy (`AGENTS.md`,
+  "Checking and merging"): no agent acts between a ready mark and `main` moving unless the automation refuses.
 
 ## Outside the tree
 

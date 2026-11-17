@@ -2997,6 +2997,31 @@ def test_the_run_beside_starts_with_each_candidate_s_build_up_to_depth_once_acro
     assert again.tick() == [] and len(slim.started) == 3 and slim.below == [("drive", main)]
 
 
+def test_under_fill_one_tick_builds_each_batch_on_what_the_one_before_it_pushed_and_starts_each_run_beside(env):
+    """Room for three and `fill` 3: one tick builds three candidates, each merged onto what the build named as its base
+    (`vqueue.Build.name`) pushed, each with the run beside its check started on that base."""
+    main = env.main()
+    for n in range(1, 5):
+        env.put(n, {f"{n}.txt": f"{n}\n"})
+    slim = Slim()
+    loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=3, fill=3)
+    loop.world.slim_driver = lambda: "drive"
+    built = [r for r in loop.tick() if r["action"] == "build"]
+    assert [(b["members"], b["base"]) for b in built] == [([1], main), ([2], built[0]["sha"]), ([3], built[1]["sha"])]
+    assert slim.started == [("drive", b["sha"], b["base"]) for b in built] and loop.tick() == []
+
+
+def test_a_build_named_on_one_built_nowhere_is_built_nowhere(env):
+    """A Build after a Commit that put nothing on main's chain is built nowhere (`vqueue.Build.after`), and so is the next
+    Build of its tick, which names it as its base."""
+    env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    name = f"{vqueue.BUILT}1"
+    loop = env.loop(lambda s: [Build((1,), s.main, 2, after="staged", name=name), Build((2,), name, 1)])
+    assert loop.tick() == [] and not [r for r in env.lines() if r["action"] == "build"]
+
+
 def test_a_candidate_on_main_s_chain_the_log_holds_no_start_of_starts_its_run_beside_once_and_one_off_it_none(env):
     """A build whose tick stopped before the start, or one by a loop without slim, leaves a candidate with no run beside its
     check: one on `main`'s chain starts it once, and one off it, which the policy drops, none."""

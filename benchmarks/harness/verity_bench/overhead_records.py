@@ -45,9 +45,11 @@ NODES = {"h200": "vy-spot-glm53"}
 NODE_JOB = "benchmarks/harness/overhead_node.sh"
 #: the options the door gives each node job (`launch_points`, `launch_run`); the node job sets the rest itself
 DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
-                "run": {"--card", "--scheme", "--points", "--points-art", "--point", "--cubin", "--cubin-art"}}
-#: the one variable a run of the door sets with `--env` (`launch_argv`): any other could change what the node job runs
-DOOR_ENV = frozenset({"VERITY_BENCH_VENV"})
+                "run": {"--card", "--scheme", "--points", "--points-art", "--point", "--cubin", "--cubin-art",
+                        "--keep-reports"}}
+#: the variables a run of the door sets with `--env` (`launch_argv`): its interpreter, and whether it is a trial; any other
+#: could change what the node job runs
+DOOR_ENV = frozenset({"VERITY_BENCH_VENV", kit.TRIAL})
 #: what `research run` records in every job's `params.env` (`research.result.ONEDNN_ISA`), admitted at that value alone
 RUN_DEFAULT_ENV = {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
 #: the run's bound, which its GPU lease enforces too: the sweep's and a timed run's
@@ -76,6 +78,7 @@ def launch_argv(root: Path, node: str, minutes: float, job: Sequence[str], sends
     checkout."""
 
     env = [f"VERITY_BENCH_VENV={v}"] if (v := settings.VERITY_BENCH_VENV) else []
+    env += [f"{kit.TRIAL}=1"] if kit.is_trial() else []
     return ["research", "run", "--on", node, "--project", "verity", "--campaign", "overhead",
             "--source", str(root), "--cwd", "source", "--timeout", f"{minutes:g}m", "--require-result",
             *[x for f in sends for x in ("--send", str(f))], *[x for e in env for x in ("--env", e)],
@@ -90,10 +93,11 @@ def launch_points(root: Path, node: str, card: str, model: str, precision: str, 
 
 def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point: str, points: str | None = None,
                minutes: float | None = None, execute: Executor | None = None, cubin: str | None = None, *,
-               model: str = O.KERNEL_MODEL, gpu: str | None = None, cores: str | None = None) -> int:
+               model: str = O.KERNEL_MODEL, gpu: str | None = None, cores: str | None = None,
+               keep_reports: bool = False) -> int:
     """A scheme's timed run at the card's and `model`'s points of record (or the art `points`, which must be theirs), which
     it ships to the node with the art `cubin`, the one cubin the scheme's arm loads (without it the run is development
-    only)."""
+    only); with `keep_reports`, a profiling pass that keeps its Nsight reports in `$OUT` and is never of record."""
 
     if cubin is not None:
         if O.scheme(scheme).arm is None:
@@ -121,6 +125,8 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
             (Path(tmp) / "cubin").mkdir()
             sent.append(Path(store.fetch(cubin, Path(tmp) / "cubin")))
             job += ["--cubin", sent[-1].name, "--cubin-art", cubin]
+        if keep_reports:
+            job.append("--keep-reports")
         return (execute or _execute)(launch_argv(root, node, minutes or MINUTES["run"], job, sent, gpu=gpu, cores=cores),
                                      root)
 
@@ -166,6 +172,19 @@ def run_files(store: Any, run: str, sub: str) -> tuple[dict | None, str]:
 
 def _json(store: Any, files: str, path: str) -> dict:
     return json.loads((Path(store.fetch(files, paths=[path])) / path).read_text())
+
+
+def trial_why(store: Any, attempt: Mapping, files: str, run: str) -> str | None:
+    """Why `run` is never of record as a trial: its result says ``trial`` or its attempt set `kit.TRIAL`; or why its
+    result can't tell."""
+
+    try:
+        said = _json(store, files, kit.RESULT).get("trial") is True
+    except Exception as ex:  # noqa: BLE001 - the store's NotFound, named in the why
+        return f"{run}'s {kit.RESULT} can't be read ({type(ex).__name__}: {ex}), so not whether it is a trial"
+    if said or kit.trial_attempt(attempt):
+        return f"{run} is a trial run ({kit.TRIAL}): its measurements are its own, and a trial is never of record"
+    return None
 
 
 def _superseded(store: Any, target: str) -> list[str]:
@@ -262,8 +281,8 @@ def store_points(store: Any, run: str, by: str = BY) -> str:
     record; the version it replaces is labelled `superseded_by` it."""
 
     attempt, files = run_files(store, run, "points")
-    if attempt is None:
-        raise ValueError(files)
+    if attempt is None or (why := trial_why(store, attempt, files, run)):
+        raise ValueError(files if attempt is None else why)
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(store.fetch(files, paths=["out/points.json"])) / "out" / "points.json"
         doc = json.loads(path.read_text())
@@ -292,6 +311,9 @@ def record_run(store: Any, run: str, by: str = BY) -> list[str]:
 
     doc, whys = of_record(store, run)
     whys = [w for w in whys if not w.endswith(f"isn't labelled {RUN_OF_RECORD}={RUN_RECORD}")]
+    attempt, files = run_files(store, run, "run")
+    if attempt is not None and (why := trial_why(store, attempt, files, run)):
+        whys.append(why)
     if doc is None or whys:
         raise ValueError(f"{run} can't be of record: {'; '.join(whys)}")
     store.add_label(run, RUN_OF_RECORD, RUN_RECORD, by=by)
@@ -339,8 +361,8 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
     for each model that row's γ of record with its interval (the kernel model's as the metric's own reading, every other
     model's as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
-    as its target, from its run and its points' art, with its note and what the γ is over; where the table has no γ of
-    record there, no value and why."""
+    as its target, from its run and its points' art, with its note, whether its run timed y's commitment (`commits_y`,
+    where the row says) and what the γ is over; where the table has no γ of record there, no value and why."""
 
     rows = {(r["scheme"], r["card"], r["model"], r["point"]): r for r in table["rows"]}
     out = []
@@ -362,7 +384,8 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
             verdict = "within target" if g["gamma"] <= O.GAMMA_MAX else "over target"
             out.append(m | {"value": g["gamma"], "interval": g.get("ci95"), "verdict": verdict,
                             "inputs": [r["run"], r["points_art"]],
-                            "extra": m["extra"] | ({"note": r["note"]} if r.get("note") else {})})
+                            "extra": m["extra"] | ({"note": r["note"]} if r.get("note") else {})
+                            | ({"commits_y": r["commits_y"]} if r.get("commits_y") is not None else {})})
     return out
 
 

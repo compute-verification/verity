@@ -19,7 +19,7 @@ from typing import Any
 
 from verity_config import dumps, sha256, value
 
-from verity_bench import settings
+from verity_bench import kit, settings
 from verity_bench.steady_spec import SteadyPoint, SteadySpec
 from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, former_name, resolve_spec
 
@@ -109,7 +109,8 @@ def _show(root: Path, commit: str, field: str) -> str:
 
 class StoreCompletion:
     """The newest attempt `research data lookup` finds for a point at its commit's tree, with validation passed and rc 0
-    (a killed run's result.json may read as passed; a dirty tree has no reuse key): from this machine's catalog, else,
+    (a killed run's result.json may read as passed; a dirty tree has no reuse key), and not started as a trial
+    (`kit.trial_attempt`): from this machine's catalog, else,
     unless `local_only`, from the store's remote, pulled once per commit since `COMMIT_MARGIN_S` before it; no reindex."""
 
     def __init__(self, store: Any = None, *, root: Path | None = None, local_only: bool = False,
@@ -142,7 +143,8 @@ class StoreCompletion:
         root = self.root or repository_root()
         attempts = cli_prov.lookup(tools_registry.load("verity_bench.tool:VLLM_BENCH_POINT", root), root, store=self.store,
                                    params={"identity": identity}, source_tree=_show(root, commit, "%T"))["attempts"]
-        passing = [a["id"] for a in attempts if a["status"].get("validation") == "passed" and a["status"].get("rc") == 0]
+        passing = [a["id"] for a in attempts if a["status"].get("validation") == "passed" and a["status"].get("rc") == 0
+                   and not kit.trial_attempt(a)]
         return passing[-1] if passing else None
 
     def pull_since(self, started: int) -> int:
@@ -320,6 +322,8 @@ def _env_flags(spec: ResolvedSpec) -> list[str]:
     flags = []
     if venv := settings.VERITY_BENCH_VENV:
         flags += ["--env", f"VERITY_BENCH_VENV={venv}"]
+    if kit.is_trial():
+        flags += ["--env", f"{kit.TRIAL}=1"]
     for name, setting in point_environment(spec).items():
         flags += ["--env", f"{name}={setting}"]
     return flags

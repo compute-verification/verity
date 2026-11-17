@@ -66,3 +66,9 @@ the next one reads, the middle one naming the part and its script:
     python3 tools/move/restack.py RESULT1 --move-commit 5916146988e4 --script tools/move/lean_names_pass.py \
       --script-arg=--apply --script-arg docket --dry-run
     python3 tools/move/restack.py RESULT2 --push-to NEWBRANCH --kept
+
+A move's `hand` changes (its paths in `move_lines.toml`) ride with the crossing. Where one meets a line the branch
+changed, as the Lean names pass's restored comments meet a branch's own comment, `restack.py` stops `conflicted` at
+step `hand`. `--hand-ours` keeps the branch's side of each such hunk, in the script's names, and every other hand change
+as the move has it; the result's `hand_ours` names those files, and the owner reads their hunks before pushing. A file
+the merge cannot resolve (a binary file, or one a side lacks) stays conflicted.

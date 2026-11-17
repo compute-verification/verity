@@ -21,7 +21,7 @@ ANDs lowered alone, table reads counted apart: not a statement's ``ands`` with i
 its served MACs and the bytes of the rows it opens (a row per parameter and per returned field). Beside them, every row's
 own estimate unsplit (the circuit's ANDs and MACs, whatever the cut).
 
-    python benchmarks/one_stage/block_census.py --sized sized-rank0.json [sized-rank1.json ...] --out DIR
+    python benchmarks/one_stage/block_census.py --sized sized-rank0.json [sized-rank1.json ...] --out DIR [--request RID]
 """
 from __future__ import annotations
 
@@ -167,9 +167,15 @@ def _per_unit(u: dict) -> dict:
 SUMS = ("out_bits", "class_bits", "ands", "macs", "row_bytes", "open_ands")
 
 
-def census(docs: list[dict]) -> dict:
+def census(docs: list[dict], request: str | None = None) -> dict:
     """The census of the sized rank censuses ``docs``: every proof-block Definition with its counts per phase, the totals
-    per phase, per token and per request, the per-rank totals, and the gaps."""
+    per phase, per token and per request, the per-rank totals, and the gaps. ``request``: that request's alone, for a row
+    whose requests are of several shapes."""
+    if request is not None:
+        if not all(request in d["requests"] for d in docs):
+            raise ValueError(f"--request {request}: not a request of every rank (they hold "
+                             f"{sorted({r for d in docs for r in d['requests']})})")
+        docs = [{**d, "requests": {request: d["requests"][request]}} for d in docs]
     defs: dict[str, dict] = {}
     gaps: dict[str, dict] = {}
     other: dict[str, dict] = {}
@@ -213,7 +219,8 @@ def census(docs: list[dict]) -> dict:
                             rk[p][k] += by[p] * u["n"] * d[k]
                         rk[p]["blocks"] += by[p] * u["n"]
     if len(lengths) != 1:
-        raise ValueError(f"the ranks' requests are of {sorted(lengths)} (prompt, steps): one request shape a census")
+        raise ValueError(f"the ranks' requests are of {sorted(lengths)} (prompt, steps): one request shape a census, so "
+                         f"name one with --request (of {sorted({r for d in docs for r in d['requests']})})")
     (prompt, steps), = lengths
     tot = {p: {"blocks": sum(d[p] for d in defs.values()), **{k: sum(d[p] * d[k] for d in defs.values()) for k in SUMS},
                **rows[p]} for p in PHASES}
@@ -302,8 +309,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sized", nargs="+", required=True, help="each rank's `m1_families.py --estimate` output")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--request", default=None, metavar="RID", help="this request's census alone (a row of several request shapes)")
     a = ap.parse_args()
-    c = census([json.loads(Path(p).read_text()) for p in a.sized])
+    c = census([json.loads(Path(p).read_text()) for p in a.sized], a.request)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "census.json").write_text(json.dumps(c, indent=1, default=str) + "\n")
     (a.out / "table.md").write_text(table(c))

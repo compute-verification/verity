@@ -922,6 +922,7 @@
         "benchmarks/recursion_e2e/",
         "benchmarks/recursion_figures/",
         "benchmarks/exfiltration/",
+        "benchmarks/serving_cost/", "tests/benchmarks/serving_cost/",
         "benchmarks/harness/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/README.md"
@@ -1008,6 +1009,7 @@
       "owns": [
         "verity/protocols/compose/verifier/onsite/",
         "verity/protocols/compose/verifier/remote/",
+        "benchmarks/remote_error/",
         "security/Definitions/Claims.lean",
         "security/Definitions/Claims/",
         "security/Definitions/WeightSecurity.lean",
