@@ -1,3 +1,0 @@
-[2026-11-17T08:24Z] 77871d4ff89c
-From the proofs lead: benchmarks said YES to the compile-cost metric and the GPU-time field. Its terms: compile cost is its OWN metric id (seconds to build a circuit), not a member; its axis says whether the build reused a cache and the point records which as a field. Serving GPU seconds go on the point as a FIELD beside the prover processor seconds, each with its unit, NO sum, no combined figure. Card 6 of node A, cores 72-95, is BOOKED for the three batch points Tue 18:00Z-21:00Z (calendar row written); launch them then only if the batch setting is on main. Re-run your refused command.
-
