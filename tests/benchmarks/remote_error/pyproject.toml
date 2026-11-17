@@ -29,4 +29,4 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "verity/protocols/proofs/flock/verifier/Flock/Zk.lean",
           "verity/protocols/proofs/flock/verifier/Flock/Schedule.lean",
           "security/Proofs/Flock/Soundness/Discharge/ZkBind/Rate.lean", "verity/commitments/periods/interface.py",
-          "demos/remote.toml", "benchmarks/spot_figures/cards/commitment.all.json"]
+          "applications/remote.toml", "benchmarks/spot_figures/cards/commitment.all.json"]

@@ -48,7 +48,7 @@ remote composite's error is the union bound over its subprotocols' errors (`Veri
       `Flock.Zk.queries0` accepts (`verity/protocols/proofs/flock/verifier/Flock/Zk.lean`), and each row a sampled proof
       block reads or writes takes an hm96 slot of 2^SLOT_LOG bits (`verity/commitments/periods/interface.py`). The exact
       count is K times the rows a sampled block reads, with K = ceil(NUM·N/DEN) by the remote application's sampling design
-      (`demos/remote.toml`) and at most MAX_ROWS rows a block. N, the class 4,27,2 circuit's proof blocks, is the output
+      (`applications/remote.toml`) and at most MAX_ROWS rows a block. N, the class 4,27,2 circuit's proof blocks, is the output
       of lowering it, which the tree doesn't hold; `--blocks N` takes it and gives min(the bound, K·MAX_ROWS).
     - `N` (the inner proof's), `innerN` at `Flock.Zk.PadLayout`'s largest length: `Flock/Zk.lean`, with the statement
       in `security/Proofs/Flock/Soundness/Discharge/ZkExec/Statements.lean`.

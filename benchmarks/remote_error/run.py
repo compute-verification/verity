@@ -47,7 +47,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CENSUS = ROOT / "benchmarks" / "census"
 LOCKS = (ROOT / "security" / "lean-audit.json", ROOT / "security" / "Properties" / "lean-audit.json")
 #: the remote application's configuration, whose sampling design the sample follows
-APPLICATION = ROOT / "demos" / "remote.toml"
+APPLICATION = ROOT / "applications" / "remote.toml"
 #: the measured SHA-512 rate the adversary's rate is stated against
 HASH_CARD = ROOT / "benchmarks" / "spot_figures" / "cards" / "commitment.all.json"
 #: the lock guarantee whose δ these terms are, and the composite's union bound it instantiates
