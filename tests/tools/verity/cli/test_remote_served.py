@@ -148,12 +148,6 @@ def test_the_workload_runs_once_with_pearl_pluss_hooks(tmp_path, capsys, monkeyp
 
 
 HANDED = "HANDOFF the final record, composed off this node: on COMPOSE_NODE (auditor-2)"
-ONSITE_BINDINGS = {
-    "challenger": {"pouw": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}},
-    "memory-challenger": {"pous": {"address": "192.0.2.1:7000"}, "wipe": {"address": "192.0.2.1:7001"}},
-    "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}},
-    "network-certifier": {"certifier": {"gate": "user@gate-1"}},
-}
 
 
 def ends(tmp: Path, monkeypatch, rc: int, *lines: str) -> None:
@@ -161,6 +155,14 @@ def ends(tmp: Path, monkeypatch, rc: int, *lines: str) -> None:
     runner.write_text('mkdir -p "$OUT"\n' + "".join(f"echo {json.dumps(x)} >> \"$OUT/verdicts.txt\"\n" for x in lines)
                       + f"exit {rc}\n")
     monkeypatch.setattr(T, "RUNNER", str(runner))
+
+
+def onsite_bindings() -> dict:
+    tables: dict = {}
+    for key in T.unbound(R.load(ONSITE, REG), {}):
+        p, c, k = key.split(".")
+        tables.setdefault(p, {}).setdefault(c, {})[k] = "192.0.2.1:7000"
+    return tables
 
 
 def parties(capsys) -> dict:
@@ -186,9 +188,9 @@ def test_any_other_end_of_the_runner_stays_refused_under_remote(tmp_path, capsys
 
 def test_onsites_exit_2_stays_refused_with_the_hand_off_written(tmp_path, capsys, monkeypatch):
     ends(tmp_path, monkeypatch, 2, HANDED)
-    rc = R.run_main([str(ONSITE), "--on", T.PROVER_NODE, "--party", "workers", "--party", "firewall", "--bindings",
-                     bindings(tmp_path, ONSITE_BINDINGS), "--state", str(tmp_path / "state")], REG)
-    assert rc == 2 and parties(capsys) == {"firewall": T.SERVED_WINDOW, "workers": T.SERVED_WINDOW}
+    rc = R.run_main([str(ONSITE), "--on", T.PROVER_NODE, "--party", T.WORKERS, "--party", T.ZK_SERVER, "--bindings",
+                     bindings(tmp_path, onsite_bindings()), "--state", str(tmp_path / "state")], REG)
+    assert rc == 2 and parties(capsys) == {T.WORKERS: T.SERVED_WINDOW, T.ZK_SERVER: T.SERVED_WINDOW}
     assert T.pending(R.load(ONSITE, REG), tmp_path / "state", 2) is None
 
 
@@ -203,6 +205,7 @@ def written(base: Path, line: dict | None, rows: dict | None, inference_only: di
 
 
 ACCEPTED = {"integrity": {"verdict": "accept"}, "work": {"verdict": "accept"}}
+ALL_ACCEPTED = {c: "accept" for c in T.DEMOS["remote"]}
 
 
 def test_remotes_verifier_reads_the_compose_answers_record_pearl_plus_under_work(tmp_path):
@@ -211,7 +214,7 @@ def test_remotes_verifier_reads_the_compose_answers_record_pearl_plus_under_work
     written(tmp_path / "out" / "compose", {"composed": "accept", "product": "remote"}, ACCEPTED, {"verdict": "accept"})
     got = T.remote_check(cfg, tmp_path)
     assert (got["verdict"], got["product"], got["block"], got["reason"]) == ("accept", T.REMOTE, 3, None)
-    assert got["components"] == {"sampled-proofs": "accept", "pearl-plus": "accept", "inference-only": "accept"}
+    assert got["components"] == ALL_ACCEPTED
     written(tmp_path / "out" / "compose", {"composed": "reject", "product": "remote"},
             {**ACCEPTED, "work": {"verdict": "reject"}})
     assert T.remote_check(cfg, tmp_path)["verdict"] == "reject"
@@ -236,7 +239,7 @@ def test_without_a_compose_answer_remotes_verdict_is_undecided_and_says_why(tmp_
     written(tmp_path / "out", {"composed": "accept", "product": "remote"}, ACCEPTED, {"verdict": "accept"})
     got = T.remote_check(cfg, tmp_path)
     assert got["verdict"] == "undecided" and got["reason"].startswith(f"no compose answer in {tmp_path / 'out' / 'compose'}")
-    assert got["components"] == {"sampled-proofs": "accept", "pearl-plus": "accept", "inference-only": "accept"}
+    assert got["components"] == ALL_ACCEPTED
 
 
 def test_remotes_verifier_refuses_by_name_a_record_it_cannot_read_or_of_another_product(tmp_path):
