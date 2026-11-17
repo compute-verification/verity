@@ -63,11 +63,15 @@ tests/verity/protocols/proofs/flock/prover/fixtures/honest-session
 tests/verity/protocols/proofs/flock/prover/fixtures/honest-plain
 tests/verity/protocols/proofs/flock/prover/fixtures/plain-tree
 tests/verity/protocols/compose/verifier/lean/fixtures/sampled-two-case
+calibration/machine_model/data/cover/corpus.json
+calibration/machine_model/data/cover/bu_12_9.json
+calibration/machine_model/data/cover/sass_isa_tables.json
+calibration/training/data/v3-selection.json
+benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json
 benchmarks/machine_model/data/cover/corpus.json
 benchmarks/machine_model/data/cover/bu_12_9.json
 benchmarks/machine_model/data/cover/sass_isa_tables.json
 benchmarks/training_slowdown/data/v3-selection.json
-benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json
 tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs
 tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs-blocks
 tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner
@@ -80,7 +84,7 @@ tests/benchmarks/network_e2e/encodings/fixtures
 tests/benchmarks/network_e2e/encodings/fixtures_draft
 tests/benchmarks/network_e2e/data/endpoint_carry/advice_trace.jsonl
 tests/verity/protocols/resource_accounting/network/attester/fixtures/weights-v1-h200-digests.json
-tests/benchmarks/tc_probe_fp4/fixtures/tc-sm100-f8-2026-10-19.json
+tests/calibration/tc_probe_fp4/fixtures/tc-sm100-f8-2026-10-19.json
 tests/verity/protocols/resource_accounting/network/verifier/fixtures/arith_encode_vectors.json
 tests/verity/protocols/resource_accounting/network/verifier/fixtures/cache_step_vectors.json
 tests/verity/protocols/resource_accounting/network/verifier/fixtures/replay_step_vectors.json
@@ -123,9 +127,6 @@ tests/adapters/vllm/tests/program/predict/fixtures/naming_traces.json
 tests/adapters/vllm/tests/program/data/dsa_h200_logits.npz
 tests/adapters/vllm/tests/program/data/dsa_glm53_kslots.npz
 adapters/vllm/docs/data/ref-prims
-adapters/vllm/manifests/semantic-profiles/qwen2-eager-batch-invariant-v1.json
-adapters/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v2.json
-adapters/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v1.json
 tests/adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json
 tests/adapters/vllm/tests/records/data
 tests/adapters/vllm/tests/commit/serving_row_leaf_vector.json

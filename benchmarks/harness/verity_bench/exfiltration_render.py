@@ -43,19 +43,6 @@ from verity_bench.exfiltration_text import (
 )
 from verity_bench.served_table import RUN_OF_RECORD
 
-#: a word the network attester's calculator still writes in the sources the document copies from its inputs, until
-#: that document's next format version (`TERM_SCHEMA`), and the Glossary's word the print says for it (GLOSSARY.md,
-#: Older names)
-HELD_WORDS = {"network certifier": "network attester"}
-
-
-def _said(text: str) -> str:
-    """A document's input source as the print says it: each held word (`HELD_WORDS`) in the Glossary's."""
-
-    for held, word in HELD_WORDS.items():
-        text = text.replace(held, word)
-    return text
-
 
 def _amount(x: Any, error: float | None) -> str:
     """A figure's amount as a table prints it: `NO_BOUND` where its error, summed over everything it covers, is 1 or
@@ -65,9 +52,9 @@ def _amount(x: Any, error: float | None) -> str:
 
 
 def _readers(share: float) -> str:
-    """Which of the three readers of the planner's rows is the headline figure, and why the other two differ."""
+    """Which of the three readers of the planner's rows is the compute audit's part, and why the other two differ."""
 
-    return (f"this is the headline figure: λ times the bound where the row's total is {_pct(share)} of compute, on a "
+    return (f"the part is λ times the bound where the row's total is {_pct(share)} of compute, on a "
             "least-squares line of the total through every pinned budget. The planner's driver reads the same rows two "
             "other ways: `headline plan` prints the bound at one pinned budget, the plan's, whose total is that row's and "
             f"not set to {_pct(share)}, at λ = 1; `headline rows` prints λ times the bound at {_pct(share)}, with the total read "
@@ -342,7 +329,7 @@ def render(doc: Mapping[str, Any]) -> str:
         "is, in the table below"), "",
         "## Inputs", "",
         *_table(("part", "input", "value", "unit", "mark", "source"),
-                [(i["part"], i["input"], _n(i["value"]), i["unit"], PRINTED.get(i["mark"], i["mark"]), _said(i["source"]))
+                [(i["part"], i["input"], _n(i["value"]), i["unit"], PRINTED.get(i["mark"], i["mark"]), i["source"])
                  for i in doc["inputs"]]), "",
         *parts,
         f"## The compute audit's part at {_pct(share)} of total compute", "",

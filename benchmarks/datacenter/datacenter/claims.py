@@ -8,7 +8,7 @@ trusted clock:
 - `Computed(part, work)`: the values committed for a part of the Program are its evaluation (here by re-execution; in
   Verity, SPOT at ε and δ over the part's proof blocks, `units` of the partition the profile names), `work`
   its ANDs.
-- `Carried(port, bits)`: a certifier port carried exactly the committed crossings in the declared occupancy, so its only
+- `Carried(port, bits)`: a network attester port carried exactly the committed crossings in the declared occupancy, so its only
   freedom was `bits` of timing advice.
 - `Entered(input, bits)`: a run input's bits entered the computation from outside the blocks or from a device in one
   (registered inputs open the registration instead, and a trusted device's are the verifier's coins).
@@ -22,7 +22,7 @@ trusted clock:
 - `Refused(on, why)`: something didn't check, and `on` says what: a port's window, a store, a part, an input (a
   registered one whose bytes aren't the registration's), the occupancy profile.
 
-A record must exist for every certifier port and every window of the epoch: a missing one is refused, never silence.
+A record must exist for every attester port and every window of the epoch: a missing one is refused, never silence.
 The one exception is a block the verifier's plan has out for maintenance, whose ports owe no records then; the account
 charges what that costs.
 """
@@ -92,7 +92,7 @@ class Read:
 
 @dataclass(frozen=True)
 class On:
-    """What a refusal is about: a certifier port during a window, a store, a part of the circuit, an input, or the
+    """What a refusal is about: a network attester port during a window, a store, a part of the circuit, an input, or the
     occupancy profile."""
 
     kind: Literal["port", "store", "part", "input", "profile"]
@@ -121,7 +121,7 @@ def check_records(records: list[PortRecord], declared: dict[tuple[Port, int], Po
     port-window needs a record, with the declared counts and content digest, and is then carried with log2 of the
     jitter classes' number bits of timing advice. Records of other windows are other epochs' to check. The digest is
     whatever the attester signs (here `observe.digest` of the committed crossings; in the mock datacenter, the real
-    certifier's)."""
+    network attester's)."""
     per = cadence.window_ticks
     have = {(r.port, r.window): r for r in records}
     out: list[Carried | Refused] = []

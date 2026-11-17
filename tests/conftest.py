@@ -29,7 +29,7 @@ BOOKKEEPING = {
                                     "test_no_retired_word_in_a_new_lean_name", "test_the_glossary_records_the_retired_terms",
                                     "test_spot_s_older_name_only_falls",
                                     "test_the_network_attester_s_older_name_stays_only_where_the_glossary_keeps_it",
-                                    "test_the_certifier_scan_leaves_out_only_files_that_hold_the_name",
+                                    "test_the_attester_scan_leaves_out_only_files_that_hold_the_name",
                                     "test_the_slowdown_s_older_name_is_gone"),
     "tests/test_doc_paths.py": ("test_every_path_a_document_names_exists", "test_not_paths_are_current"),
     "tests/test_documented_commands.py": ("test_every_documented_command_line_parses",
@@ -85,7 +85,7 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
 @pytest.fixture(autouse=True)
 def _no_run_result(monkeypatch):
     """No test writes into a research run's result: under `research run` a test inherits `RESEARCH_RUN_DIR` and `OUT`,
-    where the kit writes the run's measurements whatever directory its caller names, so each test starts with both
-    unset, and a test that writes as a run sets its own (`tests/test_tests_write_no_measurement.py`)."""
+    where a command a test starts writes the run's measurements whatever directory its caller names, so each test starts
+    with both unset, and a test that writes as a run sets its own (`tests/test_tests_write_no_measurement.py`)."""
     for name in ("RESEARCH_RUN_DIR", "OUT"):
         monkeypatch.delenv(name, raising=False)

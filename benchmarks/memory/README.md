@@ -2,7 +2,7 @@
 
 This benchmark measures how much of a card's memory read rate a memory audit, PoUB, leaves uncertified. The audit has
 the card read its store, here most of the card's memory, in timed passes, while vLLM serves Llama 3.2 1B from that
-store. It runs on one GPU machine of your own. Lower is better.
+store at two engine steps a second. It runs on one GPU machine of your own. Lower is better.
 
 The session is the node's own, on one card. A vLLM engine loads the checkpoint and copies its weights into one arena of
 most of the card's memory, which is the store, and serves from it. The node prover reads the whole arena in passes, each
@@ -24,7 +24,7 @@ what the session ran with. `verity bench memory --help` lists its other ways in.
 
 - **[uv](https://docs.astral.sh/uv/getting-started/installation/)**, which runs every command here.
 - **A Linux machine with one NVIDIA H200 or RTX PRO 6000 Blackwell.** These are the cards the tree has a data sheet
-  (`hardware/nodes/`) for, and the share is of the card's own sheet. An H100 has none, so `--local` prints no number
+  (`calibration/hardware/nodes/`) for, and the share is of the card's own sheet. An H100 has none, so `--local` prints no number
   there, saying so, before it starts anything. Another card needs a data sheet (named with `LOCAL_NODE`), and a result
   against a sheet that is not `main`'s is not comparable.
 - **A vLLM environment, `VLLM_PY`:** a Python with vLLM installed (`uv venv V && uv pip install --python V/bin/python
@@ -59,15 +59,15 @@ what the session ran with. `verity bench memory --help` lists its other ways in.
 
 The first line is the share of the card's memory read rate, at its data sheet's read bandwidth, that one accepted
 session leaves uncertified: the session's γ in its verifier's ledger at the specification's rate. 0 would mean the
-whole read rate over the session was certified as spent reading the store, the arena the card serves from. **The
-target is 0.14 at an error of at most 2^-100.**
+whole read rate over the session was certified as spent reading the store, the arena the card serves from. **One
+card's share at its own sheet has no target; the goal's 0.14 at an error of at most 2^-100 is a node's.**
 
 - **Its error** is printed beside it with its power of two, as `δ = 2.8e-05 (2^-15.1)`. It reads
   `δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)`: δ is the chance, over the verifier's coins, that
   the share is wrong, and each window's adv_t is a prover's edge at telling SHA-512's output from random, which the
   number names but neither prices nor assumes away. The error is priced against one prover, one that makes at most
   2^80 SHA-512 compressions over the session on any hardware (`audit.QUERIES_LOG2`). At the 16 sketch rows a `--local`
-  session registers, the sketch term is the largest, about 2^-15.1, far above the target's 2^-100; the deployed
+  session registers, the sketch term is the largest, about 2^-15.1, far above the node's 2^-100; the deployed
   registration's 64 rows (`node.py --rows 64`), which `run.sh` doesn't pass yet, bring that term below it.
 - **It varies from run to run** with the lateness allowance each session's calibration sets, through the timing term,
   and its error is a probability, the chance the share is wrong, not a band around it: two runs' shares can differ by
@@ -81,10 +81,9 @@ target is 0.14 at an error of at most 2^-100.**
 - **It is a measurement to improve on, not an audit.** The verifier and its coins run on the machine being measured,
   so you could re-roll them. The line under it says so, and the JSON's `audit` is false.
 - **Who decided each number is in the document.** `gamma_decided_by` is `lean` where PoUB's Lean verifier decided the
-  share. Where it is `python-ledger`, the share and its error are the Python ledger's reading of the accepted session,
-  which the verifier records beside its own, and a line of the text says so. Where the document holds
-  `numbers_decided_by`, it lists by key which printed numbers are the Lean verifier's and which are the Python
-  ledger's: the error's sketch and sample terms are among the latter.
+  share. Where the document holds `numbers_decided_by`, it lists by key which printed numbers are the Lean verifier's
+  and which are the Python ledger's: the error's sketch and sample terms are among the latter. A record whose reading
+  holds no `gamma_decided_by`, as none made before PoUB's Lean decided γ does, prints no number.
 - **It certifies reads, not contents.** The audit certifies reads of the registered store whatever it holds; the
   verifier holds no checkpoint, so the store's bytes are the developer's choice, which the store's line says.
 - **The store is the card's memory, not a request's.** A session whose store is below half the card's memory
@@ -93,8 +92,9 @@ target is 0.14 at an error of at most 2^-100.**
   not a number from another.
 - The share is of the one card's read rate and its host's: the verifier's node is one card of the card's node sheet,
   handed to it as `--node`. A line names the card and the sheet with the SHA-256 of the tree's data sheets
-  (`hardware/`) and of the verifier (`verity/protocols/resource_accounting/memory/poub/verifier/`), Markdown left out, in the JSON's
-  `machine` with the arena's GiB and vLLM's share of the card.
+  (`calibration/hardware/`) and of the verifier (`verity/protocols/resource_accounting/memory/poub/verifier/`), Markdown left out, in the JSON's
+  `machine` with the arena's GiB, vLLM's share of the card, the engine's steps a second at most and the share of the
+  session its steps took (`step_hz`, `busy`), and the `vllm` and `torch` versions `VLLM_PY` holds.
 
 **Exit codes:**
 
@@ -107,7 +107,10 @@ target is 0.14 at an error of at most 2^-100.**
 
 **Where the result goes:** the text and one line of JSON on stdout. With `OUT=DIR`, the JSON goes to `DIR/memory.json`
 and the benchmark result to `DIR/result.json`, its metric `memory-accounting/one-machine-read-rate-uncertified` (`metrics.toml`)
-beside the bytes and the error. The session's records (the verifier's `verifier.json`, every process's log) go to a new
+beside the bytes and the error, and two metrics of their own from the session's calibration as the prover reports it:
+`memory-accounting/one-card-pass-time`, the median pass in ms, and `memory-accounting/one-card-bare-read-rate`, the
+bare read of the card's memory in TB a second, each point's `member` its model and card (`llama-3.2-1b-h200`).
+The session's records (the verifier's `verifier.json`, every process's log) go to a new
 directory under `LOCAL_WORK/runs/`, which stderr names; `verity bench memory --from DIR` reads it again with nothing of
 ours. The two reference numbers printed beside a node's number are runs in our evidence store, so `--local` prints
 them as not read, with that reason.
@@ -133,9 +136,9 @@ at its end. The sample term is next; it falls with more openings a stretch, whic
 line prints the measured pass and the lateness allowed.
 
 - the pass that reads the arena, and its pacing against the verifier's coins
-  (`verity/protocols/resource_accounting/memory/poub/prover/remote_session/session.cu`, `benchmarks/remote_session/node.py`);
+  (`verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu`, `benchmarks/poub_session/node.py`);
 - how the arena is encoded and decoded on the GPU (`verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu`), and
-  how the engine serves from it (`benchmarks/remote_session/engine.py`);
+  how the engine serves from it (`benchmarks/poub_session/engine.py`);
 - the arena's size: `ARENA_GIB` (default 0.88 of the card's memory less 12 GiB, `arena_of`; 112 GiB on an H200, 72
   on an RTX PRO 6000) and vLLM's share `UTIL` (default 0.88). The document says what it was;
 - the deadline's margin: `JITTER_MS` (default 50) and `QUANTILE` (default `max`). A smaller A shortens the span only
@@ -150,6 +153,9 @@ line prints the measured pass and the lateness allowed.
   of a second at 2773 openings each, its groups counted at the pass the session's calibration measures on the card,
   `PACE_PASS_MS=0`). `--local` refuses any other `PACED` or `PACE_PASS_MS`, and any `UNPACED`, `SESSIONS`, `WINDOWS`,
   `WINDOW_MS` or `SAMPLES`;
+- the load it is measured beside: the engine at most two steps a second (`--step-hz 2 --align-steps`). A lighter
+  load lowers the share by serving less, not by a better prover; a `--step-hz` in `ENGINE_ARGS` measures beside
+  another load, which the `ran with` line and `machine.step_hz` state;
 - the data sheets the share is of, and this command.
 
 A number from a changed verifier or sheet is not a result, and the digests in its `machine` line say which changed.

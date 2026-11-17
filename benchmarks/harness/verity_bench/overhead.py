@@ -36,7 +36,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cached_property
+from pathlib import Path
 from typing import Any
+
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
 RUN_SCHEMA = "verity-bench/overhead/v1"
@@ -61,7 +64,7 @@ class Gpu:
     harness's build target, host CPU core-seconds' weight in SM-seconds (the
     node's CPU capacity over its GPUs'), and the scalings and libraries its
     fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch (`bench.py --bridge`),
-    since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `benchmarks/census/hardware.json`
+    since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `calibration/census/hardware.json`
     (the H200's is the H100's: the same compute with more HBM)."""
 
     gpu: str
@@ -87,7 +90,7 @@ class Gpu:
         # imported here, so the rules above load alone by this file's path, with no package beside them
         from verity.device import load_card, number
 
-        return number(load_card(self.sku)[table][key])
+        return number(load_card(self.sku, directory=CARD_FILES)[table][key])
 
 
 #: each precision's scalings, as the PoUW harness names its baseline families: per-tensor, rowwise and 128-block FP8

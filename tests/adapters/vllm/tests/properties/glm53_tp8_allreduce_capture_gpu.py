@@ -82,8 +82,6 @@ versions, each owner's tree and FTZ, NCCL's fit, tuning and runs past 64 MiB, an
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import bisect
 import itertools

@@ -16,7 +16,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
 | `record` | the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`), written by a thread of its own | `compiled` |
-| `release-order` | requests added in the certifier's release order (`serve_admit.ReleaseOrder`, in the engine core) | `record` |
+| `release-order` | requests added in the network attester's release order (`serve_admit.ReleaseOrder`, in the engine core) | `record` |
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.tick_plugin`), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
@@ -256,7 +256,7 @@ an engine of another limit than the two loads', so its number waits for no row (
   it, and no target is made of the parts that are on. The `two-stage` arm leaves off admission on the certified
   tick and the edge snapshot, which need the corpus's client, and turns on prefix caching off, which GLM-5.3's
   target has no part for, so its cost against the model's target is not comparable. `two-stage-tick` is that line with the tick on, and no cost
-  here is of it: vLLM's own client can't drive a tick arm whose certifier the corpus's client stands in for.
+  here is of it: vLLM's own client can't drive a tick arm whose attester the corpus's client stands in for.
   `tick-certifier` is not comparable either (below). A target given with `--target` has no parts.
 - **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and so does
   `boundary-rows`: a request's boundary is its own prompt ids and the ids it was served, whichever KV pages its
@@ -282,11 +282,11 @@ an engine of another limit than the two loads', so its number waits for no row (
   them.
 - **What it leaves out.** `serve_tax.NO_ARM` lists what a served engine of ours changes that no arm turns on; the output
   prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's fed by the
-  stand-in certifier, and the restore arms' seeded sampling) aren't served by vLLM's.
-- **The arm behind the network attester,** `tick-certifier`, is the tick arm with the certifier itself in front
-  (`serve_tax.CERTIFIER`), which vLLM's client drives through a shim (`cell_shim`). Two commands serve it, since the
-  certifier never runs on the node it certifies: `--side server` there, `--side client` on the certifier's host.
-  The certifier's schedule (`serve_tax.CELLS`) paces every answer, so its verdict is `not comparable`;
+  stand-in attester, and the restore arms' seeded sampling) aren't served by vLLM's.
+- **The arm behind the network attester,** `tick-certifier`, is the tick arm with the network attester itself in front
+  (`serve_tax.ATTESTER`), which vLLM's client drives through a shim (`cell_shim`). Two commands serve it, since the
+  network attester never runs on the node it certifies: `--side server` there, `--side client` on the network attester's host.
+  The network attester's schedule (`serve_tax.CELLS`) paces every answer, so its verdict is `not comparable`;
   `serve_tax.py`'s docstring has the rest.
 
 It writes `serving_cost.txt`, whose first line is the number with its label, interval, target and verdict and whose
@@ -424,9 +424,9 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
 `run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit period and the KV edge's window).
 `MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
 edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
-The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier,
+The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in attester,
 and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=server`, in `run.sh`'s header),
-then the certifier's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
+then the network attester's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
 
 On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b`, `qwen3-30b` or `llama32-1b`, the last three read from their pinned

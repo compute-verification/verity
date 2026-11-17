@@ -75,8 +75,6 @@ NP-65 token), about 12 minutes and 3 GB each; under --quick, `max`'s reference i
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import argparse
 import hashlib
 import json

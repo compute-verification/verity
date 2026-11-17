@@ -15,6 +15,7 @@ from verity_bench import jobs
 from verity_bench.cli import main
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import (
+    GPUS,
     expand_sweep,
     resolve_spec,
 )
@@ -23,6 +24,7 @@ from verity_bench.vllm.runner import (
 )
 
 COMMITTED = calendar.timegm((2026, 10, 21, 12, 0, 0))
+RTX = GPUS["rtx-pro-6000"].nvidia_smi_name
 
 
 def _repo(tmp_path):
@@ -173,6 +175,7 @@ def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tm
         raise RuntimeError("preempted")
 
     monkeypatch.setattr(cli, "run_benchmark", preempted)
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"card": RTX})
     with pytest.raises(RuntimeError, match="preempted"):
         cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id, "--identity", item.identity])
     assert not (tmp_path / "result.json").exists()
@@ -198,7 +201,7 @@ def test_a_timed_point_records_its_numbers_in_its_runs_result(tmp_path, monkeypa
         return run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
 
     monkeypatch.setattr(cli, "run_benchmark", timed)
-    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": "none"})
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": RTX})
     assert cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id,
                      "--identity", item.identity]) == 0
     assert ran == [(item.point,)]

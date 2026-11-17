@@ -31,6 +31,7 @@ CANARY_SENT = "canary-sent-at"                                   # when the watc
 CANARY_DONE = "canary-done-at"                                   # when the consumer last finished one
 DEAD = "dead-letters"                                            # {"count", "since"}: dead letters since the record began
 OLDEST = "oldest-unrouted"                                       # {"ts", "at"}: reconcile's oldest unrouted post, or ts None
+COMMENTS_RUNG = "linear-comments-rung"
 LINEAR_API = "https://api.linear.app/graphql"
 
 Linear = Callable[[str, dict], dict]                             # a GraphQL query and its variables to the answer's `data`

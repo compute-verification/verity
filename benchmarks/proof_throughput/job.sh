@@ -52,8 +52,9 @@ SWEEP=verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh
 BUNDLED="results.jsonl law.json gpu-mem.txt gpu.csv hardware.json software.json binary.sha256 staged.jsonl instances.json
 stage-rec.json phases.tsv point.json index.jsonl"
 
+SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-120}
 ph build start
-OUT=$O/build bash $SWEEP BUILD_ONLY=1 GPU=1 SM=120 > "$O/build.txt" 2>&1 || { tail -20 "$O/build.txt"; log "build failed"; exit 1; }
+OUT=$O/build bash $SWEEP BUILD_ONLY=1 GPU=1 SM="$SM" > "$O/build.txt" 2>&1 || { tail -20 "$O/build.txt"; log "build failed"; exit 1; }
 BIN=$(sed -n 's/^BINARY=//p' "$O/build.txt" | tail -1); SBIN=$(sed -n 's/^SELFTEST_BINARY=//p' "$O/build.txt" | tail -1)
 PYBIN=$FLOCK_WORK/flock-circuit/py/bin/python3   # the class sweep's venv (numpy, blake3), made here when this node has none yet
 if [ ! -x "$PYBIN" ]; then
@@ -64,7 +65,7 @@ fi
 [ -x "$BIN" ] && [ -x "$PYBIN" ] || { log "missing the prover ($BIN) or the venv ($PYBIN)"; exit 1; }
 sha256sum "$BIN" | cut -d' ' -f1 > "$O/binary.sha256"
 ph build end
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
+export PYTHONPATH=$REPO:$REPO/tools/config:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
 PT() { "$PYBIN" -m verity_proof_throughput "$@"; }
 # the population (the class sweep's PT_VU, PT_N) and the verifier's stratified sampling design for B (law.json)
 read -r PT_VU PT_N < <(PT population --workload "$WORKLOAD" --B "$B" --out "$O") && [ -n "${PT_N:-}" ] || { log "no such workload or B"; exit 1; }
@@ -79,7 +80,7 @@ ARGS=(PROGRAM="$REPO/benchmarks/proof_throughput/verity_proof_throughput/populat
       BATCH=fixed N="$PT_N" MAX_STATEMENT_BITS=34359738368 MAX_ANDS=33554432 SELFTEST=0 WARM="${WARM:-1}" RUNS="${RUNS:-3}"
       BINARY="$BIN" SELFTEST_BINARY="$SBIN" PYBIN="$PYBIN")
 ph stage start
-OUT=$S/stage RESEARCH_RUN_DIR=$S/stage bash $SWEEP "${ARGS[@]}" STAGE_ONLY=1 SM=120 > "$O/stage.txt" 2>&1
+OUT=$S/stage RESEARCH_RUN_DIR=$S/stage bash $SWEEP "${ARGS[@]}" STAGE_ONLY=1 SM="$SM" > "$O/stage.txt" 2>&1
 cp "$S/stage/classes/staged.jsonl" "$O/staged.jsonl" 2>/dev/null
 ph stage end
 PT staged --results "$O/staged.jsonl" > "$O/staged.txt" || { tail -20 "$O/stage.txt"; log "staging failed"; exit 1; }
@@ -104,7 +105,7 @@ fi
 export GPU_LEASE_WHO=${GPU_LEASE_WHO:-proofs/proof_throughput/${RESEARCH_RUN_ID:-local}}
 ph lease wait
 # one point's sessions at a time on this node (their staging overlaps): two would share its host CPUs and memory bandwidth
-flock "$FLOCK_WORK/sessions.lock" "${LEASE[@]}" 1 --wait --max-min "${LEASE_MAX_MIN:-30}" -- bash -c '
+flock "${SESSIONS_LOCK:-$FLOCK_WORK/sessions.lock}" "${LEASE[@]}" 1 --wait ${LEASE_CORES:+--cores "$LEASE_CORES"} --max-min "${LEASE_MAX_MIN:-30}" -- bash -c '
   set -u; O=$1; shift
   printf "lease\tstart\t%s\n" "$(date +%s.%N)" >> "$O/phases.tsv"
   G=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-0}}
@@ -121,14 +122,15 @@ D=$(ls -d "$S"/prove/classes/*/ 2>/dev/null | head -1)
 cp "$S/prove/classes/results.jsonl" "$O/results.jsonl" 2>/dev/null
 [ -n "$D" ] && for f in prove.out prove.err serve.log sessions/index.jsonl; do [ -e "$D/$f" ] && cp "$D/$f" "$O/$(basename "$f")"; done
 PT probe --out "$O/hardware.json" --gpu-csv "$O/gpu.csv"
-printf '{"workload": "%s", "B": %s, "warm": %s, "runs": %s, "run": "%s"}\n' "$WORKLOAD" "$B" "${WARM:-1}" "${RUNS:-3}" "${RESEARCH_RUN_ID:-local}" > "$O/point.json"
+printf '{"workload": "%s", "B": %s, "warm": %s, "runs": %s, "run": "%s", "prover_node": "%s"}\n' "$WORKLOAD" "$B" "${WARM:-1}" "${RUNS:-3}" \
+  "${RESEARCH_RUN_ID:-local}" "${PT_PROVER_NODE:-vy-nebius-1}" > "$O/point.json"
 if [ "${ZK:-0}" = 1 ]; then
-  PT zk-point --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESEARCH_RUN_DIR:-$O}/result.json" | tee -a "$O/job.log" || rc=1
+  PT zk-point --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESULT:-${RESEARCH_RUN_DIR:-$O}/result.json}" | tee -a "$O/job.log" || rc=1
   log "done"; [ $rc = 0 ]; exit
 fi
 C=$(PT staged --results "$O/results.jsonl" --cache-dir 2>/dev/null)
 [ -n "$C" ] && cp "$C/rec.json" "$O/stage-rec.json"
-PT point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESEARCH_RUN_DIR:-$O}/result.json"
+PT point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESULT:-${RESEARCH_RUN_DIR:-$O}/result.json}"
 
 # the bundle verify.sh needs: the statement as the verifier builds it (circuit, public file), every session and this run's records
 if [ "${BUNDLE:-1}" = 1 ] && [ -n "$D" ] && [ -n "$C" ] && [ -s "$O/results.jsonl" ]; then

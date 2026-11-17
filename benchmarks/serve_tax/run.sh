@@ -57,9 +57,9 @@
 # An arm behind the network attester (tick-certifier) is served by two commands, and this script is the node's:
 #   ARMS="[compiled] tick-certifier" SIDE=server LOADS=chat=RUNG TICK_MS=SAT,FREE [FRONT=PORT] [CELLS=NAME=N,...]
 #     [STOP_AT=TIME] bash benchmarks/serve_tax/run.sh --model glm53
-# starts the arm's engine and the id front before it on loopback port FRONT and holds them until the certifier's run
+# starts the arm's engine and the id front before it on loopback port FRONT and holds them until the network attester's run
 # has ended or STOP_AT (serve_tax.certified_server); OUT/tick-certifier/server.json is its record, and it has no table
-# and no cost here. The other command runs where the certifier does, a host that reaches FRONT and is never this node:
+# and no cost here. The other command runs where the network attester does, a host that reaches FRONT and is never this node:
 # serve_tax.py run --arm tick-certifier --side client, with the same LOADS and CELLS. Its directory is the arm's, and
 # `serve_tax.py cost` over it and this job's compiled gives its cost. SIDE is its arms' alone: stock named before it
 # is served whole, under the same lease.
@@ -348,9 +348,10 @@ if command -v gpu-lease > /dev/null; then
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" -- bash "$here/run.sh" leased
   rc=$?
 else
-  # a node without gpu-lease queues its jobs by other means: refuse to start on GPUs another job still holds
+  # a node without gpu-lease queues its jobs by other means: refuse to start on GPUs another job still holds, of those
+  # this job may use (CUDA_VISIBLE_DEVICES, as a scheduler such as Slurm sets it), else of all
   for _ in $(seq 31); do
-    used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1)
+    used=$(nvidia-smi ${CUDA_VISIBLE_DEVICES:+-i "$CUDA_VISIBLE_DEVICES"} --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1)
     [ "${used:-0}" -lt "${FREE_MIB:-2048}" ] && break
     sleep 20
   done

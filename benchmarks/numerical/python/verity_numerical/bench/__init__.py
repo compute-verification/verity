@@ -1,5 +1,5 @@
-"""verity_numerical.bench: what the proof backends' measurements share: the result contract, the census, input sets, a measured
-cell and the per-unit-type cost inventory.
+"""verity_numerical.bench: what the proof backends' measurements share: the result contract, the census, input sets, a benchmark
+result and the per-unit-type cost inventory.
 
 ``contract`` says what a measured number must say about itself (fingerprint fields, measurement names, the six timing
 buckets) and validates a ``research`` ``result.json`` against it.  ``research`` itself never learns any of this: it

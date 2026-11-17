@@ -16,7 +16,7 @@ step whose every `FAIL` line's key (`circuit_keys`: `CHECK/CODE FAMILY`, the Def
 is as if absent, and the judge names it (each Coverage's ``expired``).
 
 The verified queue's loop reads its allowances at the base of the candidate it judges (`at`; `Landing._allowed` and
-`Landing._task_allowed` judge its failures), so no candidate's own allowance covers its own failure; `research merge` reads
+`Landing._task_allowed` judge its failures), so no candidate's own allowance covers its own failure; `research.merge` reads
 `off_gate` at the commit it merges (`merge.declared_jobs`), and the quick tier's judge reads it at the tier's base, a commit of
 `main`.  Stdlib only."""
 from __future__ import annotations

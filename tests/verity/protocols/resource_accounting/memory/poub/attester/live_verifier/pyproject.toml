@@ -25,8 +25,8 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/proofs/spot",
           # verifier.py and its in-process harness, which the stub verifier runs
           "tests/verity/protocols/resource_accounting/memory/poub/__init__.py", "tests/verity/protocols/resource_accounting/memory/poub/session_harness.py",
-          "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py", "verity/protocols/resource_accounting/memory/poub/prover/__init__.py",
-          "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py", "verity/protocols/resource_accounting/memory/poub/prover/remote_session/device.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py", "verity/protocols/resource_accounting/memory/poub/prover/__init__.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py", "verity/protocols/resource_accounting/memory/poub/prover/poub_session/device.py",
           # the challenger's tunnel client, whose forced pty the challenger's tunnel key allows
           "verity/protocols/compose/verifier/live_challenger/serve.py",
           # the store's reader its publish imports from the pinned tree

@@ -2,22 +2,11 @@
 # enforces it.
 
 [[metric]]
-id = "benchmarks/exfiltration-gb-world-year"
-title = "Total exfiltration capacity"
-owner = "benchmarks"
-unit = "GB"
-axis = "GB a year across the world's compute, for GLM-5.3 with verification at 10% of compute."
-better = "lower"
-command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py"
-every = "7d"
-goal = "accounting/network-glm53"
-
-[[metric]]
 id = "benchmarks/exfiltration-compute-audit-gb"
 title = "Exfiltration capacity, compute audit"
 owner = "benchmarks"
 unit = "GB"
-axis = "GB a year across the world's compute: the compute audit's part."
+axis = "GB a year across the world's compute, for GLM-5.3 with verification at 10% of compute: the compute audit's part."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py"
 every = "7d"
@@ -28,7 +17,18 @@ id = "benchmarks/exfiltration-network-attester-gb"
 title = "Exfiltration capacity, network attestation"
 owner = "benchmarks"
 unit = "GB"
-axis = "GB a year across the world's compute: network attestation's part."
+axis = "GB a year across the world's compute, for GLM-5.3 with verification at 10% of compute: network attestation's part."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py"
+every = "7d"
+goal = "accounting/network-glm53"
+
+[[metric]]
+id = "benchmarks/exfiltration-total-gb"
+title = "Total exfiltration capacity"
+owner = "benchmarks"
+unit = "GB"
+axis = "GB a year across the world's compute, for GLM-5.3 with verification at 10% of compute: the compute audit's and network attestation's parts together."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py"
 every = "7d"
