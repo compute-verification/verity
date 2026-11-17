@@ -342,10 +342,9 @@ def build(store: Any = None, *, root: Path | None = None, local_only: bool = Fal
 def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
     for each model that row's γ of record with its interval (the kernel model's on the kernel card as the metric's own
-    reading, every other as its `member`, `MEMBER_MODEL`'s words and the card), measured (partial on a card with a note:
-    a figure it carries is another card's), held to the scheme gate (`overhead.GAMMA_MAX`) as its target, from its run
-    and its points' art, with its note, whether its run timed y's commitment (`commits_y`, where the row says) and what
-    the γ is over; where the table has no γ of record there, no value and why."""
+    reading, every other as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
+    as its target, from its run and its points' art, with its note, whether its run timed y's commitment (`commits_y`,
+    where the row says) and what the γ is over; where the table has no γ of record there, no value and why."""
 
     rows = {(r["scheme"], r["card"], r["model"], r["point"]): r for r in table["rows"]}
     out = []
@@ -355,8 +354,7 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
             own = model == O.KERNEL_MODEL and card == O.KERNEL_CARD
             r = rows.get((scheme, card, model, point))
             g = (r or {}).get("gamma") or {}
-            mark = "partial" if getattr(O.CARDS.get(card), "note", None) else "measured"
-            m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": mark, "target": O.GAMMA_MAX,
+            m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
                                  "extra": {"covers": table["covers"] if model == O.KERNEL_MODEL else O.covers(model)}}
             if not own:
                 m["member"] = f"{MEMBER_MODEL[model]}-{card}"
