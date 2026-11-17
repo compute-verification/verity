@@ -2,7 +2,7 @@
 
 `benchmarks/` holds measurement only: each directory measures something, or holds the data measurements are computed
 against. A benchmark is never the verifier, writes no verdict and computes no number a guarantee reads, and
-nothing outside `benchmarks/` reads it. A demo is one configuration file in `demos/`, which `verity run`
+nothing outside `benchmarks/` reads it. An application is one configuration file in `applications/`, which `verity run`
 reads. This file is the directory's interface: its entry points, the shared harness, what a benchmark may import
 and write, and the index of every directory.
 
@@ -39,7 +39,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.py` or else its `run.sh`; given no NAME, the names |
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request; on Llama 3.2 1B and one H200, `--client vllm-bench --model llama32-1b` (its README's command) |
-| `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
+| `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size, and on one node's H200s with one prover and with two at once (`record`) |
 | `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`) for each block type, and the Lean verifier timed on one kept proof (`lean-verify`); and the proof benchmark by layer, Flock, with zero knowledge, with sampling and with recursion, the benchmark result for each layer read from its own run's output (`layers`). From a clone, in order: `benchmarks/one_stage/proof_layers.sh`, the Flock, zero-knowledge and sampling runs (`benchmarks/one_stage/README.md`'s section "The three benchmarks of the proof-layers table"); the recursion job, `bash benchmarks/recursion_e2e/job.sh K=2048 N=2 GPU=0 FLOCK_WORK=DIR` (`benchmarks/prove/README.md`'s "On a machine of your own"); then `verity bench prove layers --flock A --zk B --sampling C --recursion E` on the four runs' `OUT` directories |
 | `verity bench prove_path` | a served run's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
 | `verity bench rate_squaring` | squarings a second modulo the store codec's primes, each form gated before it is timed: `sq` on one GPU, `ifma` on the host's CPUs |
@@ -170,13 +170,12 @@ directory and its README among its inputs, which the test checks too.
 
 ## Metrics
 
-Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
-(the first `.py` or `.sh` under `benchmarks/`, `demos/`, `infra/` or `tools/` the command names:
-`benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
+Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the code that records them
+(`benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
 `infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each metric's `owner` owns its
 file: the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a
 lead's numbers in another lead's directory take a file entry of their own there. The console's Metrics tab reads every
-`metrics.toml` on `main` under `benchmarks/`, `demos/`, `infra/` or `tools/`, and `research metrics show` reads the
+`metrics.toml` on `main` under `benchmarks/`, `applications/`, `infra/` or `tools/`, and `research metrics show` reads the
 tab's report.
 
 A metric's value has one of two sources. A run's value is the measurement its `id` names in the run's `result.json`,
@@ -203,7 +202,7 @@ metric's keys:
   not the unit.
 - `axis`: one sentence, on one line and ending with a period, saying what the chart's y axis is.
 - `better`: `lower` or `higher`.
-- `command`: the one command that measures it, whose script's directory records it under `id`.
+- `command`: the one command that measures it, naming a script under `benchmarks/`, `applications/`, `infra/` or `tools/`.
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
   stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
@@ -238,9 +237,40 @@ that nothing waits on, other than `top/parked`. A number whose goal sits under `
 `tests/test_metrics_registry.py` refuses a metric that lacks a key the list above doesn't mark optional or holds one it
 doesn't list, an id declared twice across all the files, an unknown owner, an owner who doesn't own the metric's file,
 an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a `better` other than `lower`
-or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing or whose
-directory never names the id, a metric whose command's first script is outside the directory of the file declaring it,
-and a shared `metrics.toml` directly under `benchmarks/`.
+or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing, a metric
+the directory of the file declaring it never names, and a shared `metrics.toml` directly under `benchmarks/`.
+
+## On VCF's Slurm cluster
+
+The Verifiable Compute Foundation's cluster (`vcf.lucidcomputing.ai`: the 8-H100 node `h100-sxm-8-0` and the one-card
+nodes `h100-nvl-1-0-cc` and `h100-nvl-1-1-cc`) runs a benchmark from a commit as one Slurm job under the account its credentials name.
+Only the control pod holds the login key, so a lead sends the job from there with `infra/vcf/` (deployed under
+`/data/vcf/`). From a checkout, build the payload, `git archive` of the commit and the command, and copy it to the pod:
+
+~~~text
+infra/vcf/payload.sh origin/main --tool native_peak -- python benchmarks/native_peak/measure.py --dtype bf16 --sizes 8192 \
+  | research pods ssh vy-control-verity -- 'cat > /data/vcf/payloads/NAME.tar.gz'
+research pods ssh vy-control-verity -- 'cd /data/vcf-jobs && SEND=/data/vcf/payloads/NAME.tar.gz setsid -f bash \
+  /data/vcf/vcf-job-run.sh NAME main 30 /data/vcf/vcf-bench.sh --nodelist=h100-sxm-8-0 --gres=gpu:1 --cpus-per-task=16 \
+  --mem=64G > NAME.launch.log 2>&1 < /dev/null'
+~~~
+
+The job builds the tree's environment with uv on the node's disk (`--sync`, default `--all-packages --extra torch`:
+CUDA torch from PyPI) and runs the command under `research run --local-only`, so its run directory is the one our
+machines write. `vcf-job-run.sh` copies it to `/data/vcf-jobs/NAME-STAMP/result/runs/RUN/`, publishes it with
+`research data custody RUN_DIR --publish` (`vcf-publish.sh OUT PAYLOAD` retries that), and removes the job's
+directory on the cluster; `NAME.launch.log` and `sacct.txt` give the Slurm job, the node and its wait and run times.
+Read it back as any run: `research data show RUN`.
+
+Such a record names its machine `vcf-NODE` (`execution.machine`) and its cost provider `vcf`. It has no lease and
+no slot of ours (its memory limit is Slurm's `--mem`), its node is shared with other users, it has no rate, and
+nothing preserves it while it runs (`research run-preserve` and `research status` from a VM don't reach it). The nodes
+have network, Python 3.12 and no root. The DGX's driver is CUDA 13.0's, which `main`'s torch needs;
+`h100-nvl-1-1-cc`'s is CUDA 12.8's, too old for it, and `h100-nvl-1-0-cc` refuses any GPU request. No node has `nvcc` or `ncu` on
+its PATH, and the H100 has no card file in `hardware/cards/`, so a card-bound benchmark refuses there. Use only idle
+capacity: one job at a time, at most 30 minutes, one GPU and 16 CPUs; `vcf-job-run.sh` cancels a job still pending
+after 20 minutes. A job that pends on `Resources` while the DGX's GPUs are idle may find them held by a reservation
+of the account (`scontrol show reservation`), which `--reservation=NAME` runs it in.
 
 ## Index
 
@@ -261,7 +291,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `application_runs/` | one application run's verdicts that accept, of how many, and its minutes, written by the run that measures (`run.py`, which runs `verity run`) | maintained |
-| `demo_minutes/` | the onsite demo's minutes from its first command to its verdict, read off its two `verity run` runs' records (`onsite_minutes.py`, on `run_minutes.py`) | maintained |
+| `demo_minutes/` | the onsite application's minutes from its first command to its verdict, read off its two `verity run` runs' records (`onsite_minutes.py`, on `run_minutes.py`) | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
 | `serve_tax/` | what each change to serving (step trace, release order, the certified tick, committing tokens and the KV cache) costs vLLM's own server against stock compiled vLLM at three loads, the serving cost (one number with a target: the served engine's best goodput against stock's, by vLLM's own benchmark client), and replaying a recorded window under its committed schedule | maintained |
@@ -300,7 +330,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `flock_s8_block/` | Flock `--zk`'s price for a proof block of adjacent cells of one int8 GEMM output row, on one GPU node and on the CPU | maintained |
 | `unit_block/` | a word primitive's Boolean version built as one Flock proof block: the select's slot alone and with its rows' openings, against the 2^27 block | maintained |
 | `prove/` | `verity bench prove`, the one command for a proof system's prover on a workload: per block type the blocks proved per token, the ms per block and that figure's source, and the prover GPUs per serving GPU with every block proved or at a sampling plan, from the store's labelled records | maintained |
-| `proof_throughput/` | the proof blocks a second Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |
+| `proof_throughput/` | the proof blocks a second Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size and the number of provers at once | maintained |
 | `commitments/` | the commitment schemes' cost: hashing leaves and building the tree, hiding leaves per row, and serving's per-step row tables | maintained |
 | `sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |
 | `spot_figures/` | the SPOT post's Figures 1-3 for a model from its cards (`spot-card/v1`) and SPOT's planner: what an adversary serving it on all of a scope's compute can exfiltrate, infiltrate or skip against total cost (each server configuration's serve tax plus the share of compute for verification) and against proof overhead, proof overhead per proof-block type, and the serve-time commitment's cost over fast serving (a model, not a measurement) | maintained |
@@ -353,10 +383,9 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `pous/` | every PoUS implementation on one dataset, by its effective weight bandwidth | maintained |
 | `bandwidth/` | the device ceilings PoUB's timing cites: how fast a card and a host write labels, and the chip's on-chip stores; and a node's own report of its interfaces' line rates, its disks' interfaces and its cards' usable memory | maintained |
-| `poub_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's demo is `demos/remote.toml`, not this | maintained |
+| `poub_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's application is `applications/remote.toml`, not this | maintained |
 | `memory/` | `verity bench memory`, the front door for the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, at the data sheet's read bandwidth, from a gate run on the whole node, a recorded run or a loopback | maintained |
 | `kv_filler/` | the filler top-up beside vLLM serving, and what it costs inference | maintained |
-| `stacked_share/` | the share of a node's live KV a prover could hold as encoded carriers inside the audit's compute budget | maintained |
 | `word_codec/` | the store's Sloth codecs (the word codec, the KV codec that PoUB's `codec.py` mirrors, the wide codecs): each a byte-exact reference, a CUDA kernel and its benchmark | maintained |
 | `codec_tensor/` | PoUB's receipts, leaves and receipt tree on the GPU, and the tensor-core wide-word codec | maintained |
 | `property_redteam/` | attacks on the stacking property and on the gate model's counts behind the encode bound | maintained |
