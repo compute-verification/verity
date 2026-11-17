@@ -4,7 +4,7 @@ public import Aesop.BuiltinRules
 public import Mathlib.Data.Nat.Notation
 public import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
-public import NetworkCheck.Period
+public import NetworkVerifier.Period
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -41,7 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-! What `NetworkCheck.Period.scanOf`'s acceptance gives of the scan's Program (`Accepted`). -/
+/-! What `NetworkVerifier.Period.scanOf`'s acceptance gives of the scan's Program (`Accepted`). -/
 
 @[expose] public section
 
@@ -49,7 +49,7 @@ namespace Properties.NetworkScan.Fits
 
 open Flock.Program (Prog Node Part Ty Defn)
 open InferenceOnlyVerifier.Properties.SecurityProofs
-open NetworkCheck.Period
+open NetworkVerifier.Period
 
 abbrev node (P : Prog) (k : ℕ) : Node := (P.defs[P.root]!).body.nodes[k]!
 

@@ -3,7 +3,7 @@ module
 public import Properties.Verity.Game
 public import Definitions.Registration.View
 public import Flock.ProvedScope
-public import NetworkCheck.Check
+public import NetworkVerifier.Check
 
 /-! What a protocol names of the registration, each tie in the shape `Registration.NamesRegistered`: no theorem reads one,
 and no code checks one. -/
@@ -47,10 +47,10 @@ def certifiedKeys (v : View) : Set (String × String) :=
 /-- An equality, so a registered certified link the check doesn't read fails it; the check's parameters hold one key, so it
 holds only where every registered certifier pins that key. No theorem reads it, and nothing holds the check's
 parameters to the registered Site. -/
-def CertifiedIn (p : NetworkCheck.Check.Params) (v : View) : Prop :=
+def CertifiedIn (p : NetworkVerifier.Check.Params) (v : View) : Prop :=
   certifiedKeys v = (fun l => (l, Flock.hexOf p.key)) '' {l | l ∈ p.egress.toList ++ p.ingress.toList}
 
-def CertifiedIsParams (p : NetworkCheck.Check.Params) (D : Digests) (c : Composite) (log : Registration) (h : String) :
+def CertifiedIsParams (p : NetworkVerifier.Check.Params) (D : Digests) (c : Composite) (log : Registration) (h : String) :
     Prop :=
   AtHead D c log h (CertifiedIn p)
 

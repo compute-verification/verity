@@ -11,7 +11,7 @@ class Verdict:
     check publishes under a template query: the fan-out F it computed on its own program (R8, `partition.fanout`).
     `rests_on_period_check`, what it publishes beside F: the tied parameters whose run Input R8 let through though
     several proof blocks read it (`registration.check`'s `tied`). Its acceptance rests on the network period check,
-    which ties their rows to the dockets that computed them (`NetworkCheck.Period`'s `wired`): with any, `ok` is
+    which ties their rows to the dockets that computed them (`NetworkVerifier.Period`'s `wired`): with any, `ok` is
     no acceptance on its own."""
 
     ok: bool

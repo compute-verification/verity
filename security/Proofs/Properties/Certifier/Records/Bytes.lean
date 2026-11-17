@@ -1,13 +1,13 @@
 module
 
-public import NetworkCheck.RecordsGrid
+public import NetworkVerifier.RecordsGrid
 public import Proofs.Properties.Certifier.Check.Bytes
 
 /-! Bytes the committed digest is written in; the hex lemmas its checks read live in `Proofs.Flock.Bytes`. -/
 
 @[expose] public section
 
-open NetworkCheck.Check (bytesOfBits bytesOfBitsList)
+open NetworkVerifier.Check (bytesOfBits bytesOfBitsList)
 
 set_option maxRecDepth 20000
 

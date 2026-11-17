@@ -10,7 +10,7 @@ read. -/
 
 namespace Properties.NetworkScan
 
-open NetworkCheck.Period
+open NetworkVerifier.Period
 
 def ScanCausal : Prop :=
   ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String) (P : Flock.Program.Prog)
@@ -26,7 +26,7 @@ namespace Properties.NetworkScan.CausalProof
 
 open Flock.Program
 open InferenceOnlyVerifier.Properties.SecurityProofs
-open NetworkCheck.Period
+open NetworkVerifier.Period
 open Properties.NetworkScan.WalkProof
 
 theorem fuel_succ : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega

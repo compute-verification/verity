@@ -7,7 +7,7 @@ rate. -/
 
 @[expose] public section
 
-open NetworkCheck (Registered)
+open NetworkVerifier (Registered)
 
 namespace Properties.Certifier.Registered
 

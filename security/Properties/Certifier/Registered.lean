@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.Registered
+public import NetworkVerifier.Registered
 
 /-! The network attester's link, read off the registered hardware, states its rate; nothing here is said of `S`'s
 other links, which may state none, nor that the rate is positive or the link's true line rate. -/
@@ -9,7 +9,7 @@ other links, which may state none, nor that the rate is positive or the link's t
 
 namespace Properties.Certifier.Registered
 
-open NetworkCheck (Registered)
+open NetworkVerifier (Registered)
 
 /-- This is of the named link only; `S`'s other links, a certifier's other half to the outside and the links of
 another certifier among them, may state none. -/

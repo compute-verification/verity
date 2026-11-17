@@ -65,7 +65,7 @@ theorem scanFits : ScanFits := by
 /-- **An accepted scan's statements are in the sampled audit's scope.** -/
 theorem scanScopeAcc : ScanScopeAcc := scanScopeAcc_of_scanFits scanFits
 
-def oneSlot : NetworkCheck.Period.Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 2, none, none, none, false⟩
+def oneSlot : NetworkVerifier.Period.Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 2, none, none, none, false⟩
 
 theorem not_fits_of_no_outs {L S : ℕ} (lay : NetTiming.BoundaryGates L S) (gs : List Claims.Sampling.BGate) {k : ℕ}
     (hk : 0 < k) (ℓ : Fin L) (σ : Fin S) : ¬ lay.Fits ⟨gs, []⟩ k := by
@@ -105,7 +105,7 @@ it, built by hand, which a scan check accepting everything would pass, the layou
 definitions, so its flattening returns nothing (`empty_flattens`, `not_fits_of_no_outs`). The instance is the model's:
 it is built by hand, and no file decoding to it is exhibited. -/
 theorem scanFits_nontrivial :
-    ∃ (P : Flock.Program.Prog) (C : Claims.Sampling.Prog) (s : NetworkCheck.Period.Schedule) (_ : Flattens P C),
+    ∃ (P : Flock.Program.Prog) (C : Claims.Sampling.Prog) (s : NetworkVerifier.Period.Schedule) (_ : Flattens P C),
       ¬ (scanLayout P s).Fits C s.window :=
   ⟨default, ⟨[], []⟩, oneSlot, empty_flattens, not_fits_of_no_outs _ [] (by decide) 0 ⟨0, by decide⟩⟩
 
@@ -134,7 +134,7 @@ canonicalizes as `null` and a compiled sampled verifier that accepts everything 
 their descriptor, a statement in its sampling scope is not in `ScopeAcc` at a schedule (`oneSlot`): the only gate its
 circuit returns is an input (`not_fits_of_outs_inputs`). -/
 theorem scanScopeAcc_nontrivial :
-    ∃ (s : NetworkCheck.Period.Schedule) (j : Lean.Json) (c : String) (_ : Flock.canon j = .ok c)
+    ∃ (s : NetworkVerifier.Period.Schedule) (j : Lean.Json) (c : String) (_ : Flock.canon j = .ok c)
       (A : Claims.SamplingGeneric.Arg Bool) (D : Claims.SamplingGeneric.Compiled Bool A) (x : Claims.Msg)
       (_ : D.Scope x)
       (_ : ∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8),

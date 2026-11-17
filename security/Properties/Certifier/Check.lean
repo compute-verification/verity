@@ -1,14 +1,14 @@
 module
 
-public import NetworkCheck.Check
+public import NetworkVerifier.Check
 public import Properties.Hash.Identity
 
-/-! The network certificate check: what its Lean code (`NetworkCheck.Check`) does. -/
+/-! The network certificate check: what its Lean code (`NetworkVerifier.Check`) does. -/
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check
 open NetworkAttester (ClockSync LogicalFrame expectedRow)
 
 namespace Properties.Certifier

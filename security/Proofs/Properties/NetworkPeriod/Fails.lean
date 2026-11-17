@@ -14,7 +14,7 @@ parameters' count and the failed connections' fail patterns. -/
 
 namespace NetTiming.MonitoringPeriodTerms
 
-open NetworkCheck.Period Properties.NetworkPeriod
+open NetworkVerifier.Period Properties.NetworkPeriod
 
 def boundMax (cells : Array ℕ) : ℕ := cells.foldl max 0
 

@@ -13,8 +13,8 @@ import Proofs.Properties.Certifier.Check.Bytes
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check
 open Flock
 open NetworkAttester (ClockSync LogicalFrame expectedRow)
 

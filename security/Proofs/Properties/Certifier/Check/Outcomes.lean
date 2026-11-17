@@ -16,8 +16,8 @@ their converses. -/
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check
 open NetworkAttester (ClockSync)
 
 namespace Properties.Certifier

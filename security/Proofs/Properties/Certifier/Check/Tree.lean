@@ -8,9 +8,9 @@ public import Proofs.Properties.Certifier.Check.Strings
 
 @[expose] public section
 
-open NetworkCheck hiding Params
+open NetworkVerifier hiding Params
 open Flock
-open NetworkCheck.Check (Grid)
+open NetworkVerifier.Check (Grid)
 
 namespace Properties.Certifier.Tree
 
