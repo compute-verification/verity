@@ -562,7 +562,7 @@ theorem x_len_le {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidence} {bs
   have e11 : w.recInner.size = shapeB.size := by rw [Except.ok.inj ((hI.recInnerB h hh).symm.trans hsh)]
   have e12 : osz w.registration = osz regB := by
     have hr := hI.registration
-    cases hor : p.own.registration with
+    cases hor : p.own.docket with
     | none =>
       rw [hor] at hr hreg
       have a1 : regB = none := (Except.ok.inj hreg).symm
