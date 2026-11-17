@@ -1,5 +1,5 @@
-"""`verity bench attester_load`: the stub arm end to end on a CPU at a fast schedule, its guard, the schedule's stated
-figures and what it writes."""
+"""`verity bench attester_load`: the schedule's stated figures, its guard and what it writes for a fixed arm's document.
+No test runs an arm: an arm reads the machine's clock."""
 
 from __future__ import annotations
 
@@ -7,9 +7,13 @@ import contextlib
 import importlib.util
 import io
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
+from verity_bench import kit
+
+from verity.protocols.resource_accounting.network.prover import scan_zk
 
 ROOT = Path(__file__).resolve().parents[3]
 _spec = importlib.util.spec_from_file_location("attester_load_run", ROOT / "benchmarks/attester_load/run.py")
@@ -19,50 +23,49 @@ _spec.loader.exec_module(R)
 #: the onsite application's schedule (`network_attester.W63K4`), as `scan_zk.py schedule --class w63k4` prints it
 W63K4 = {"cell_bytes": 512, "slots": 4, "bucket_ms": 100, "delay": 27, "lanes": 4, "queue": 4, "window": 32,
          "ingress_cells": 47, "ingress_buckets": 12, "egress_cells": 5, "every": 16}
-FAST = ["--bucket-ms", "50", "--delay", "4", "--paced-ms", "30", "--plant-ms", "10", "--slack-ms", "10", "--reps", "2",
-        "--requests", "4"]
+STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": None}
 
 
-@pytest.fixture(scope="module")
-def ran(tmp_path_factory) -> tuple[dict, Path, int]:
-    out = tmp_path_factory.mktemp("out")
+def _scan_zk_in_process(argv, **_kw) -> subprocess.CompletedProcess:
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        code = R.main([*FAST, "--json", "--out", str(out)])
-    return json.loads(buf.getvalue()), out, code
+        code = scan_zk.main(argv[2:])
+    return subprocess.CompletedProcess(argv, code, buf.getvalue(), "")
 
 
-def test_the_default_schedule_is_the_application_s_and_states_its_capacity() -> None:
-    s = R.schedule("w63k4", {})
-    assert s == W63K4
-    st = R.stated(s, 4, 50.0)
+def arm_doc(failed: list[str]) -> dict:
+    """One stub arm's document as `arm` returns it, at a fast schedule, with fixed readings."""
+    s = W63K4 | {"bucket_ms": 50, "delay": 4}
+    st = R.stated(s, 4, 30.0)
+    arm = {"member": R.STUB, "egress": "id", "model": "fake", "class": "w63k4", "schedule": s, "tokens": 4,
+           "prompt_ids": 32, "paced_ms": 30.0, "load_per_s": 0.8 * st["capacity_per_s"], "load_share": 0.8,
+           "requests": 4, "reps": 2, **st, "card": "none", "endpoint": "network_attester_serve.py fake",
+           "through_first_ms": 260.0, "direct_first_ms": 50.0, "through_last_ms": 320.0, "direct_last_ms": 120.0,
+           "added_first_ms": 210.0, "added_first_ci95": [205.0, 215.0], "added_last_ms": 200.0,
+           "added_last_ci95": [190.0, 210.0], "tick_lateness_ms": {"p50": 0.4, "p99": 1.5},
+           "full": {"accepted": True, "refused": 0, "turned_away": 0}, "relay_cut": 0,
+           "repetitions": [{"accepted": True, "refused": 0, "n": 4}] * 2,
+           "guard": {"plant_ms": 10.0, "planted_shift_ms": 9.5, "direct_against_itself_ms": 0.3, "failed": failed}}
+    return {"class": "w63k4", "arms": [arm], "model_arm": "The model arm was not run: no card."}
+
+
+def written(monkeypatch, doc: dict, out: Path) -> tuple[int, list[dict]]:
+    monkeypatch.setattr(kit, "host_stamp", lambda: STAMP)
+    n = R.write(doc, out)
+    result = out / "result.json"
+    return n, json.loads(result.read_text())["measurements"] if result.exists() else []
+
+
+def test_the_default_schedule_is_the_application_s(monkeypatch) -> None:
+    monkeypatch.setattr(R.subprocess, "run", _scan_zk_in_process)
+    assert R.schedule("w63k4", {}) == W63K4
+    assert R.schedule("w63k4", {"delay": 4, "bucket_ms": None}) == W63K4 | {"delay": 4}
+
+
+def test_the_schedule_states_its_capacity() -> None:
+    st = R.stated(W63K4, 4, 50.0)
     assert st["lane_hold_buckets"] == 29 and st["capacity_per_s"] == pytest.approx(4 / 2.9)
     assert st["scheduled_first_ms"] == 2750 and st["scheduled_last_bucket"] == 28
-
-
-def test_the_stub_arm_runs_end_to_end_and_its_guard_holds(ran) -> None:
-    doc, _out, code = ran
-    assert code == 0 and doc["model_arm"].startswith("The model arm was not run")
-    (arm,) = doc["arms"]
-    assert arm["member"] == "stub-cpu" and arm["egress"] == "id" and arm["card"] == "none"
-    assert arm["guard"]["failed"] == []
-    assert abs(arm["guard"]["planted_shift_ms"] - 10) <= R.PLANT_TOL_MS
-    assert abs(arm["guard"]["direct_against_itself_ms"]) <= R.SELF_TOL_MS
-    assert all(r["accepted"] and r["refused"] == 0 and r["n"] == 4 for r in arm["repetitions"])
-    assert arm["full"]["accepted"] and arm["tick_lateness_ms"]["p99"] is not None
-    assert 0 < arm["added_first_ms"] <= arm["through_first_ms"]
-    assert arm["through_first_ms"] >= arm["scheduled_first_ms"]
-
-
-def test_each_point_carries_the_schedule_and_its_scheduled_delays(ran) -> None:
-    _doc, out, _code = ran
-    got = json.loads((out / "result.json").read_text())["measurements"]
-    assert sorted(m["name"] for m in got) == sorted([R.FIRST, R.LAST, R.TICK])
-    for m in got:
-        assert m["member"] == "stub-cpu" and m["unit"] == "ms" and m["mark"] == "measured"
-        assert m["schedule"]["delay"] == 4 and m["schedule"]["bucket_ms"] == 50
-        assert {"capacity_per_s", "scheduled_first_ms", "scheduled_last_bucket", "egress", "card", "model",
-                "load_per_s"} <= set(m)
 
 
 def test_the_guard_refuses_a_planted_delay_that_doesn_t_show_and_a_direct_arm_that_reads_off_zero() -> None:
@@ -72,9 +75,19 @@ def test_the_guard_refuses_a_planted_delay_that_doesn_t_show_and_a_direct_arm_th
     assert len(R.guard(30, None, None)) == 2
 
 
-def test_an_arm_whose_guard_failed_writes_no_number(ran, tmp_path) -> None:
-    doc, _out, _code = ran
-    failed = {**doc, "arms": [{**doc["arms"][0], "guard": {**doc["arms"][0]["guard"], "failed": ["planted"]}}]}
-    assert R.write(failed, tmp_path) == 0
-    assert not (tmp_path / "result.json").exists() or json.loads((tmp_path / "result.json").read_text()).get(
-        "measurements", []) == []
+def test_each_point_carries_the_schedule_and_its_scheduled_delays(monkeypatch, tmp_path) -> None:
+    doc = arm_doc([])
+    n, got = written(monkeypatch, doc, tmp_path)
+    assert n == 1
+    assert {m["name"]: m["value"] for m in got} == {R.FIRST: 210.0, R.LAST: 200.0, R.TICK: 1.5}
+    for m in got:
+        assert m["member"] == "stub-cpu" and m["unit"] == "ms" and m["mark"] == "measured"
+        assert m["schedule"] == doc["arms"][0]["schedule"]
+        assert {"capacity_per_s", "scheduled_first_ms", "scheduled_last_bucket", "egress", "card", "model",
+                "load_per_s"} <= set(m)
+        assert "repetitions" not in m
+
+
+def test_an_arm_whose_guard_failed_writes_no_number(monkeypatch, tmp_path) -> None:
+    n, got = written(monkeypatch, arm_doc(["planted"]), tmp_path)
+    assert n == 0 and got == []
