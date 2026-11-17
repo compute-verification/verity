@@ -71,7 +71,7 @@ ALLOWED: dict[str, int] = {
     # links in the locks and data, and the Lean cache's route
     "security/Properties/lean-audit.json": 2,
     "security/lean-audit.json": 1,
-    "benchmarks/census/adversary.json": 1,
+    "calibration/census/adversary.json": 1,
     "tools/verity/lean/cache.py": 1,
 }
 
