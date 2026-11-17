@@ -212,7 +212,7 @@ def test_past_until_nothing_starts_a_chunk_granted_before_it_finishes_and_the_re
 
 def test_nothing_starts_in_a_booked_window_or_where_its_max_min_would_reach_one(node, tmp_path):
     k, sd, now, _ = node
-    (tmp_path / "windows").write_text("# start UTC, minutes\n2026-10-04T01:00Z 30 # served window, bc-x\n")
+    (tmp_path / "windows").write_text("# start UTC, minutes\n2026-10-04T01:00Z 30 # workload, bc-x\n")
     k.set_target("sweep", target(k, n=1, max_min=30))
     now[0] = t("2026-10-04T00:45")                # a 30-minute chunk would run into the window at 01:00
     k.tick()
@@ -443,7 +443,7 @@ def test_a_chunk_still_waiting_is_cancelled_once_a_grant_then_would_reach_a_hold
     """max_min counts from the lease's grant, so a chunk queued at 00:00 with max_min 30 that waited to 00:50 would run into a
     01:00 window: it is cancelled the first tick a grant would reach the window, and nothing takes its place."""
     k, sd, now, _ = node
-    (tmp_path / "windows").write_text("2026-10-04T01:00Z 30 # served window\n")
+    (tmp_path / "windows").write_text("2026-10-04T01:00Z 30 # workload\n")
     k.set_target("sweep", target(k, n=1, max_min=30))
     k.tick()
     unit = sd.started[0][0]

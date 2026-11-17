@@ -15,7 +15,7 @@
 #     RTX PRO 6000 B4 row below; LROW=llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager for the int8 H200
 #     B4 row), the sealed bundle commit/replay_bundle_p0 and the Builds of I2's Programs (build_request_<shape>_<policy>*). A row
 #     dir `verity-vllm row run` made (benchmarks/one_stage/a5_llama1b_h200.sh's among them) holds the row's declared Programs,
-#     without I2's length rule, and is refused before any build: prove such a row's serve with PP_SERVE_RUN. Its workload is the stored one of that name, the served run's (adapters/vllm/tools/served_run/workloads/)
+#     without I2's length rule, and is refused before any build: prove such a row's serve with PP_SERVE_RUN. Its workload is the stored one of that name, the workload's (adapters/vllm/tools/workload/workloads/)
 #     or the integration's (adapters/vllm/workloads/), whichever SHA256SUMS lists it, fetched by its art id where absent; a
 #     name neither lists is refused before anything is written, and a workload that isn't the one the Commit's record served
 #     is refused by its digest. φ reads the config.json of record of the workload's pin (prove_path.workload_hf_config: an
@@ -28,7 +28,7 @@
 #     PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json (rate:1/1); with PP_PLAIN=1, whose
 #     sample is stratified, ..._step1_all_stratified.json and PP_FORGED_PARTITION=..._step24_stratified.json (stratified-rate:1/1).
 #     With PP_SERVE_STANDIN=1, the same
-#     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
+#     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a workload.
 #   PP_SERVE_RUN=DIR PP_WINDOW=K PP_SERVE_ROWS=DIR: a serve-openai run's closed Commit window K (default 0), its
 #     advice, requests and engine from the run dir, its Commit from the window's sealed row dir; PP_TARGET=F the
 #     serving device's target profile where serve.json records none. The honest partition is PP_PARTITION (default the Llama
@@ -38,12 +38,12 @@
 #     PP_ONLY=honest prints a PROVE-PATH line saying "no forged run". The window's compiler lists its
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
 #     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
-#     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
+#     `prove_path.py compiler` prints). With PP_RECORDS=1 (a workload, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
 #     audited from its records alone (records_audit.py: circuit.json, the docket and the values, the advice's opening),
 #     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
 #   PP_LLAMA, PP_SERVE_RUN and PP_SERVE_ROWS name directories on this node, the serve directory's; an art: id is refused,
 #     since a published row dir's sealed bundle and a published run's requests.jsonl hold request values.
-#   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or served window's verifier writes its
+#   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or workload's verifier writes its
 #     own Build of each Program I2 compiles from its compile, with no vLLM, since the rows' names, the parameters' names and
 #     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
 #   PP_WEIGHTS_TIE=1: the checkpoint tie of vLLM's weights registration at TINY (verity_vllm.program.predict.weights_tie;
@@ -75,7 +75,7 @@
 #     and lists the partition files, this benchmark's and the one-stage audit's, that still state a fixed design: among them
 #     the transfer-gate example's forged partition below.
 #   PP_KEEP_WINDOWS=DIR: each run's committed windows copied whole to DIR/<name>-windows (the prover's files with them, so
-#   DIR stays on the node, under `research keep`), for a later job such as recursion_e2e/stage.sh WINDOW=DIR/served-windows/rank0.
+#   DIR stays on the node, under `research keep`), for a later job such as recursion_e2e/stage.sh WINDOW=DIR/workloads/rank0.
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_ONLY=honest|forged that run alone; PP_FLOCK_WORK=DIR keeps M0's
 #   build across runs. The Llama honest audit peaks at ~20 GB (one process), its forged one well under.
@@ -104,12 +104,12 @@ for v in PP_LLAMA PP_SERVE_RUN PP_SERVE_ROWS; do
 done
 LROW=${LROW:-llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 LWL=
-for d in adapters/vllm/tools/served_run/workloads adapters/vllm/workloads; do
+for d in adapters/vllm/tools/workload/workloads adapters/vllm/workloads; do
   awk -v f="$LROW.json" '{ sub(/^\*/, "", $2) } $2 == f { found = 1 } END { exit !found }' $d/SHA256SUMS 2>/dev/null \
     && { LWL=$d/$LROW.json; break; }
 done
 if [ -n "${PP_LLAMA:-}" ] && [ -z "${PP_TP:-}${PP_SERVE_RUN:-}" ] && [ -z "$LWL" ]; then
-  echo "LROW=$LROW: no stored workload of that name (adapters/vllm/tools/served_run/workloads/SHA256SUMS or" \
+  echo "LROW=$LROW: no stored workload of that name (adapters/vllm/tools/workload/workloads/SHA256SUMS or" \
     "adapters/vllm/workloads/SHA256SUMS lists it); give LROW the row id of PP_LLAMA's Commit"; exit 2
 fi
 if [ -z "${PP_TP:-}" ] && [ -n "${PP_SERVE_RUN:-}" ]; then
@@ -241,7 +241,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   keep $name
   return $rc
 }
-records() {  # NAME PARTITION [--forged]: records_audit.py on the served window REC_RUN's window REC_K, the registered compiler
+records() {  # NAME PARTITION [--forged]: records_audit.py on the workload REC_RUN's window REC_K, the registered compiler
              # the served one as a command (prove_path.py circuit), the run root the one windows.jsonl publishes
   local name=$1 part=$2 forged=${3:-}
   $PY -c 'import json, sys
@@ -273,7 +273,7 @@ if [ -n "${PP_TP:-}" ]; then
 elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
   D=${PP_SERVE_ROWS:-${PP_LLAMA:-}}
   [ -d "$D" ] || { echo "no row dir ${D:-(PP_SERVE_ROWS or PP_LLAMA)}: give the Commit's row dir on this node"; exit 8; }
-  served() {  # NAME SERVE_RUN K: the served window's honest and forged audits, its public records and its compiler kept
+  served() {  # NAME SERVE_RUN K: the workload's honest and forged audits, its public records and its compiler kept
     mkdir -p $O/$1-records
     cp $2/serve.json $2/windows.jsonl $2/advice/w$3/registration.json $O/$1-records/
     $PP compiler --serve-run $2 ${PP_TARGET:+--target $PP_TARGET} "${TG[@]}" | tee $O/$1-records/compiler.json || return 1

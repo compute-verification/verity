@@ -109,8 +109,7 @@ at a time and before it times the items' pickling. Under `heads` it counts the l
 within N + W (`late`) and those later still (`missed`: at W = 0, the heads that missed their tick), of the
 `phases` it ran, with the least offset at which none of them would be late (`least_offset`). The cost has no
 ticker: it counts by the host's clock from the hand, and its publisher does nothing else, where a served close has
-it keep the closing window's three records before the hand. So its count is a floor on a served run's; a served
-run's own count is its `missed` lines, and the network attester's own log has the tick each line left at
+it keep the closing window's three records before the hand. So its count is a floor on a workload's; a workload's own count is its `missed` lines, and the network attester's own log has the tick each line left at
 (`warden.json`'s `heads`).
 """
 

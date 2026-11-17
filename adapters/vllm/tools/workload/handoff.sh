@@ -19,7 +19,7 @@ window_exit() {
   if [ "$h" = 4 ]; then return 4
   elif [ "$h" = 0 ]; then pending="composed off this node: \`run.sh compose\` with this run's out/handoff/"
   elif [ -f "$D/private/deferred/deferred.env" ]; then
-    pending="audited and composed off this node: \`run.sh copy\` and \`run.sh audit\` with SERVED_RUN=$RESEARCH_RUN_ID, then \`run.sh compose\`"
+    pending="audited and composed off this node: \`run.sh copy\` and \`run.sh audit\` with WORKLOAD_RUN=$RESEARCH_RUN_ID, then \`run.sh compose\`"
   elif [ "$COMPOSE_OFF_NODE" = 1 ]; then [ "$rc" != 0 ] || rc=4
   fi
   [ "$rc" = 2 ] && [ -n "$pending" ] && { log "pending: $pending"; return 0; }

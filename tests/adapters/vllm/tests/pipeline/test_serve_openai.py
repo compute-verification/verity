@@ -924,7 +924,7 @@ def recommit(statics: dict, by_step: dict, ids: dict, steps: int, run_root: str,
     return sc.commit_served(statics, by_step, ids, steps, bytes.fromhex(run_root), salts=[bytes.fromhex(s) for s in priv["salts"]])
 
 
-def served_run(out: Path, statics: dict, marks: Any = None,
+def workload(out: Path, statics: dict, marks: Any = None,
                no_slice: str | None = None) -> tuple[list[dict], list[dict], list[dict]]:
     bodies = [dict(CERTIFIER_BODY, prompt=[128000, 10 + i, 20 + i], max_tokens=3 + i, min_tokens=3 + i) for i in range(4)]
     with Serving(out, window_steps=4, served=statics, marks=marks, no_slice=no_slice) as s:
@@ -947,7 +947,7 @@ def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp
             assert line["window"] == w
             closed.append(line)
 
-    wins, reqs, trace = served_run(tmp_path, statics, marks)
+    wins, reqs, trace = workload(tmp_path, statics, marks)
     full = [w for w in wins if not w.get("empty")]
     assert len(full) > 1 and all(w["passed"] for w in wins) and [w["window"] for w in closed] == [w["window"] for w in wins]
     assert all("served_rows" in w for w in closed if not w.get("empty"))
@@ -985,7 +985,7 @@ def test_a_window_the_tick_admitted_names_no_slice_and_says_why(tmp_path):
     statics = served_statics()
     for name, no_slice, named in (("named", None, {"slice": "CompileSlice_v7"}), ("tick", why, {"slice": None, "no_slice": why})):
         (out := tmp_path / name).mkdir()
-        wins, reqs, trace = served_run(out, statics, no_slice=no_slice)
+        wins, reqs, trace = workload(out, statics, no_slice=no_slice)
         arrival = {rid: r["arrival"] for r in reqs for rid in r["runner_ids"]}
         full = [w for w in wins if not w.get("empty")]
         assert len(full) > 1 and all(w["passed"] for w in wins)
@@ -1003,7 +1003,7 @@ def test_a_window_the_tick_admitted_names_no_slice_and_says_why(tmp_path):
 
 def test_rows_it_cant_commit_fail_their_window_by_name(tmp_path):
     """An arrival id wider than the class's IW can't be packed: the window that holds it fails, named, and the run fails."""
-    wins, _, _ = served_run(tmp_path, served_statics(IW=1))
+    wins, _, _ = workload(tmp_path, served_statics(IW=1))
     bad = [w for w in wins if "error" in w.get("served_rows", {})]
     assert bad and all(not w["passed"] and "doesn't fit its 1 bits" in w["served_rows"]["error"] for w in bad)
 

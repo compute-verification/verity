@@ -10,7 +10,7 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   `SHA-512("verity/partition/v1\\0" || canon(object))`, which the roots registered with it bind.
 * **Proof blocks** are core's evaluation (`partition_object.evaluate`) of a query of valid form (`partition_object.validate`):
   `QueryRefused` for a program that is not topological, or one the query does not apply to. The template queries (the
-  served ones: a served window registers a population program under one), `Q_word` v1 at `X = 16` and `Q_call` v1 at
+  served ones: a workload registers a population program under one), `Q_word` v1 at `X = 16` and `Q_call` v1 at
   `X <= 16` are the ones applied here. A template query reads the root body only; `Q_word` and `Q_call` lay out one
   activation of each distinct Call's Definition gate by gate, so they cost its unrolled size
   (`benchmarks/verifier_cost/`'s `partition`). Every proof block's committed bits fit a public size class

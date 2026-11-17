@@ -1,4 +1,4 @@
-"""How H1's served window names and salts its registered tables (`pouw_h1_served`'s, which re-exports these): the window
+"""How H1's workload names and salts its registered tables (`pouw_h1_served`'s, which re-exports these): the window
 Program's parameter prefix (`PREFIX`) and each table's nonce in the hm96 salt stream of the
 period's key (`nonce`, `B_NONCE`, `IDS_NONCE`, `RECEIPT_NONCE`, `LIVE_NONCE`), and the salt of the install's Programs
 (`program_salt`, an epoch's under `SALT_TAG`). It imports nothing that imports `pouw_h1`, so the Commit's tie

@@ -495,7 +495,7 @@ SCHEDULE_PARAM = "schedule"
 SCHEDULE_READERS = frozenset({"MoeAlignRanks_v1"})
 
 
-#: a Program's `run` Input (`registration.RunInputs`): values the served run decides and the Program checks in gates, one field each.
+#: a Program's `run` Input (`registration.RunInputs`): values the workload decides and the Program checks in gates, one field each.
 #: A field named `<op_path>/<member>` is one request-owned value of the engine step whose forward reads it, committed then (identity
 #: `<op_path>/<member>`, element range [0, its leaves), family `run_values`; the row also names its leaves in `run`, the module its
 #: first reader is lowered from, `attention_module`, and that reader's `statics`): a DSA row's top-k order past INDEX_TOPK is

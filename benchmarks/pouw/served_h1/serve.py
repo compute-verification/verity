@@ -43,7 +43,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   s's coin opens (`spot.challenger.LiveRecord`), and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the sampling coin, opened after the window's receipts root (`receipts_root`).
-  This window has no gated session of its own: the gated served window of record is vllm's
+  This window has no gated session of its own: the gated workload of record is vllm's
   H1 path, `verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py`, which holds the salt, round-0 request
   table, open root R, session S and requests_root rules, so ``--gate USER@HOST`` (or
   ``$POUW_CHALLENGER_GATE``) is refused.  ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and
@@ -419,7 +419,7 @@ def run(a: argparse.Namespace) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     rec = Record(out)
     if a.gate:
-        raise ValueError(f"--gate {a.gate}: served_h1's own gated window is superseded; the gated served window of "
+        raise ValueError(f"--gate {a.gate}: served_h1's own gated window is superseded; the gated workload of "
                          "record is vllm's H1 path, verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py, "
                          "which holds the salt, round-0 request table, R, S and requests_root rules; "
                          "here a window's coins are in-process, or a development session's (--challenger, --session)")
@@ -1089,7 +1089,7 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"the challenger session's id (default ${CO.SESSION_ENV}, its secret ${CO.SECRET_ENV}); "
                          "development only, since its salt coin opens after the registration root, not a window's root")
     ap.add_argument("--gate", default=settings.get(CO.GATE_ENV), metavar="USER@HOST",
-                    help=f"refused (default ${CO.GATE_ENV}): the gated served window of record is vllm's H1 path, "
+                    help=f"refused (default ${CO.GATE_ENV}): the gated workload of record is vllm's H1 path, "
                          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 

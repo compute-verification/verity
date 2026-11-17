@@ -38,7 +38,7 @@ Writes ``<out>/<label>.tiles.jsonl`` (a line a tile, as each finishes; the label
 ``<out>/summary.json``.  Its gate is that every sampled tile's openings and checked values hold (`Verifier.check_tile`):
 the measurement is of the committed pass.
 
-**On a served pass.** `window.sh` keeps each served window's verify pass outside its run directory, under
+**On a served pass.** `window.sh` keeps each workload's verify pass outside its run directory, under
 ``$WORK/passes/<run id>/{prefill,decode}/manifest.json`` on window.sh's node (``WORK=/workspace/pouw/mvp-e2e``, about 45
 GB a run, so a pass lasts only until it is cleaned).  Run on the machine that holds it, through the queue's CPU cores,
 with one BLAS thread a worker (``--jobs`` defaults to the CPUs this process may use)::

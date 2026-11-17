@@ -86,7 +86,7 @@ stage() {
 stage_window() {
   local o=$O/stage/served n s
   mkdir -p $o $O/stage/served-plain
-  if [ -n "${SERVE_RUN:-}" ]; then   # the window's rows the served run's: its run root the one windows.jsonl published
+  if [ -n "${SERVE_RUN:-}" ]; then   # the window's rows the workload's: its run root the one windows.jsonl published
     $PY -c 'import json, sys
 w = json.load(open(sys.argv[1] + "/window.json"))
 pub = [x for x in map(json.loads, open(sys.argv[2] + "/windows.jsonl")) if int(x["window"]) == int(sys.argv[3])]

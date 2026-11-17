@@ -5154,6 +5154,18 @@
       "paths": {
         "demos/": "applications/"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tools/served_run/": "adapters/vllm/tools/workload/",
+        "benchmarks/sampling_plan/served_window_inputs.json": "benchmarks/sampling_plan/workload_inputs.json",
+        "tests/adapters/vllm/tests/tools/test_served_run.py": "tests/adapters/vllm/tests/tools/test_workload.py",
+        "tests/benchmarks/network_e2e/encodings/test_served_window.py": "tests/benchmarks/network_e2e/encodings/test_workload.py",
+        "tests/benchmarks/one_stage/fixtures/served-window-m0/": "tests/benchmarks/one_stage/fixtures/workload-m0/",
+        "tests/benchmarks/sampling_plan/test_served_window.py": "tests/benchmarks/sampling_plan/test_workload.py",
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/served_window.json": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/workload.json",
+        "verity/protocols/proofs/spot/prover/cost/served_window.py": "verity/protocols/proofs/spot/prover/cost/workload.py"
+      }
     }
   ]
 }

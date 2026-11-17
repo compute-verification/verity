@@ -3,7 +3,7 @@
 # serve.py on one leased GPU for at most 28 minutes.  Extra arguments go to serve.py.
 #   research run --on MACHINE --project verity --source <tree> --cwd source \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/served_h1/serve.sh
-# Coins off the node: a gated window's session (POUW_CHALLENGER_GATE) is refused, exit 13, since the gated served window
+# Coins off the node: a gated window's session (POUW_CHALLENGER_GATE) is refused, exit 13, since the gated workload
 # of record is vllm's H1 path, verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py, not this one.
 # For development and timing, a session opened before the run: POUW_CHALLENGER=
 # 127.0.0.1:PORT and POUW_CHALLENGER_SESSION=ID (with POUW_CHALLENGER_SECRET_FILE for a session with a secret), its layout
@@ -43,7 +43,7 @@ if [ -n "${POUW_CHALLENGER:-}" ]; then
   ss -Hltn "sport = :$port" | grep -q . || { echo "served-h1: NO_CHALLENGER: nothing listens on $POUW_CHALLENGER"; exit 13; }
   echo "served-h1: coins from challenger session $POUW_CHALLENGER_SESSION at $POUW_CHALLENGER (development: its root isn't this window's)"
 elif [ -n "${POUW_CHALLENGER_GATE:-}" ]; then
-  echo "served-h1: NO_CHALLENGER: POUW_CHALLENGER_GATE is refused; the gated served window of record is verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py"; exit 13
+  echo "served-h1: NO_CHALLENGER: POUW_CHALLENGER_GATE is refused; the gated workload of record is verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py"; exit 13
 else
   echo "served-h1: coins=in-process (not certified)"
 fi

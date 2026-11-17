@@ -298,7 +298,7 @@ def test_auto_takes_the_gpu_where_it_runs(monkeypatch):
     assert D.available() and NR.path() == "gpu"
 
 
-def test_a_served_window_registers_the_same_on_either_path(monkeypatch):
+def test_a_workload_registers_the_same_on_either_path(monkeypatch):
     """A small H1 window (`test_pouw_h1_served._window`) and the period's weights registered on the GPU and with NumPy: every
     entry, the served digest, each call's manifest row, each public table's salts and rows and the ok rows' root are the
     same."""

@@ -3,7 +3,7 @@ whose top-k keeps only some of them, and the rest.
 
     long_rows.py --tree TREE --arm-dir ARM --load NAME --replay OUT/replay [--keys 2048] [--out FILE]
 
-TREE holds ``benchmarks/serve_tax/replay.py``, whose `window` reads the served window from the record arm. A row
+TREE holds ``benchmarks/serve_tax/replay.py``, whose `window` reads the workload from the record arm. A row
 ``(request, first position, tokens)`` attends to ``first position + tokens`` keys at its last token, and output token i of a
 request was sampled from the row attending to ``len(prompt) + i`` keys. For each side of the split it counts the served
 steps (a step is long when any of its rows is), the rows and the sampled tokens, and how many of each the replay

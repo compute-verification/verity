@@ -7,9 +7,9 @@ prediction. The package's docstring lists every module.
 
 - **Provides:** the predicted Program (`build`) of a workload's facts φ (`phi`; `score.phi_of` reads a workload's from
   its declared inputs) and its comparison with the traced one (`aot`); a workload's ahead-of-time Build (`aot`,
-  `compiled`), with the names the audit reads written down from φ (`naming`); `steps`, which compiles a served run's
+  `compiled`), with the names the audit reads written down from φ (`naming`); `steps`, which compiles a workload's
   advice into the Programs its committed rows must pass, with what one served engine step calls for (`step_needs`); a
-  served window as its class's one Circuit (`window_circuit`, with `window_class`, `window_rows`, `window_weights` and
+  workload as its class's one Circuit (`window_circuit`, with `window_class`, `window_rows`, `window_weights` and
   `scan_state`); the checkpoint tie of the weights registration (`weights_tie`); a day's inference blocks counted from
   its windows' circuit records (`block_counts`); and the commands `verity-vllm predict`, `verity-vllm block-counts` and
   `verity-vllm weights-tie`.

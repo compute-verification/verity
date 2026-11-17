@@ -1,4 +1,4 @@
-"""A window of a class before any serve, through the three reads a served window's close makes of it that need no card,
+"""A window of a class before any serve, through the three reads an execution phase's close makes of it that need no card,
 no gate and no checkpoint (`rehearsal.sh check`):
 
     rehearsal_window.py SERVE_PHI CLASS SCHEME MAX_MODEL_LEN,T OUT
@@ -43,7 +43,7 @@ MADE_UP = "00" * 64
 
 
 def advice_compile() -> Any:
-    """vllm's ``tools/advice_compile.py``, which writes a served window's row dir's Builds, loaded by its file."""
+    """vllm's ``tools/advice_compile.py``, which writes a workload's row dir's Builds, loaded by its file."""
     spec = importlib.util.spec_from_file_location("advice_compile", ROOT / "adapters/vllm/tools/advice_compile.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

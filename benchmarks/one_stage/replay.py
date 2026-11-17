@@ -1623,7 +1623,7 @@ print(json.dumps(out))
 #: served_zk's registered scheme before the proof system (`served_commit.SCHEME`); in it, the service's (`SCHEME`)
 SERVED_ZK_SCHEME = "verity/pouw/served-zk/window/hm96-sha512+frame-v3-sha512/v1"
 SERVED_ZK_W_DOMAIN = "verity/pouw/served-zk/weights-domain/v0"
-#: served windows' recorded refusals that are not the protocol's, by name, with why
+#: workloads' recorded refusals that are not the protocol's, by name, with why
 SERVED_OUTSIDE = (
     (r"register-extra", "the service's public-items rule at registration (`public_problem`), before any record exists"),
     (r"receive-extra", "the service's public-items rule (`public_problem`): one-stage's record carries the window's items "
@@ -1644,7 +1644,7 @@ SERVED_OUTSIDE = (
 )
 
 
-def served_window(run: Run) -> Iterator[Case]:
+def workload(run: Run) -> Iterator[Case]:
     """served_zk's window through the proof system (`ERA_PARTS`' served_zk at the run's commit): the request's docket of PoUW's
     tiles (`population_program` of the tile template over the registered level's N, `Q_template_instance`), received
     under the verifier's own copies (its `params.json`: the program at the record's level, the sampling design of `pouw.window.sampling`,
@@ -1747,7 +1747,7 @@ def served_window(run: Run) -> Iterator[Case]:
         e = evidence(a, instances=len(a["proved_units"]), sessions=sessions, session_roots=None, served=None)
         name = path.split("/")[1]
         honest = name in ("outcome-honest", "outcome-st-honest")
-        c = Case(run.id, "served-window", first.get("format", ""), name, "audit" if honest else "negative", program, p,
+        c = Case(run.id, "workload", first.get("format", ""), name, "audit" if honest else "negative", program, p,
                  rec, e, recorded_audit(a, path),
                  {**prov, "evidence": f"{path}; instances the proved units; sessions "
                                       + ("the delivered ones" if service else "none (before the proof system)")})
@@ -1780,11 +1780,11 @@ def served_window(run: Run) -> Iterator[Case]:
         if v.get("expected") not in ("REFUSED", "REJECT") or name.startswith("outcome-"):
             continue
         if name == "receive-raised" and ours:
-            run.outside.append({"run": run.id, "driver": "served-window", "name": "receive-raised (public-value)",
+            run.outside.append({"run": run.id, "driver": "workload", "name": "receive-raised (public-value)",
                                 "why": "PoUW's rule (`public_problem`) beside one-stage's R2 and R3, which are replayed"})
             continue
         why = next((w for pat, w in SERVED_OUTSIDE if re.fullmatch(pat, name)), "UNHANDLED: the replay has no case for it")
-        run.outside.append({"run": run.id, "driver": "served-window", "name": name, "why": why})
+        run.outside.append({"run": run.id, "driver": "workload", "name": name, "why": why})
 
 
 #: served_zk's first window's registered scheme, sampling design and δ (`served_commit.SCHEME`, `SAMPLING_DESIGN`, `DELTA` before `params.json`)
@@ -2243,7 +2243,7 @@ def a7(run: Run) -> Iterator[Case]:
 DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a0-lean": a0_lean, "a2": a2, "a3": a3, "a4": a4,
                                                        "a5": a5, "a6": a6, "a7": a7,
                                                        "registered-gemm": registered_gemm, "served-audit": served_audit,
-                                                       "served-window": served_window, "serving-bundle": serving_bundle,
+                                                       "workload": workload, "serving-bundle": serving_bundle,
                                                        "a2-unaudited": a2_unaudited, "a4-unaudited": a4_unaudited}
 #: the runs that recorded no verdict, read after the others (a serving bundle reads under their copies)
 READS_NOTHING = {"no-registration-record": "run/summary.json's windows is empty: the run timed the registered GEMM's "

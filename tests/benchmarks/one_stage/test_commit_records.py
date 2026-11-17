@@ -1,6 +1,6 @@
 """A Commit run publishes only listed files. `research run` publishes what a script leaves under $OUT, its stdout and the
 other files of its run dir, so `a5_llama1b_h200.sh` puts a row's file there only when
-`adapters/vllm/tools/served_run/published.sh` lists it with the reason it holds nothing of a request, and names the files it leaves on the node.
+`adapters/vllm/tools/workload/published.sh` lists it with the reason it holds nothing of a request, and names the files it leaves on the node.
 Here the list never matches a file known to hold a value, and the script's `row` and `records` run over a stand-in row dir with
 values planted in every file a stage leaves. A file the published set gains without an entry fails `unlisted`."""
 from __future__ import annotations
@@ -16,7 +16,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-PUBLISHED_SH = ROOT / "adapters" / "vllm" / "tools" / "served_run" / "published.sh"
+PUBLISHED_SH = ROOT / "adapters" / "vllm" / "tools" / "workload" / "published.sh"
 A5_SH = ROOT / "benchmarks" / "one_stage" / "a5_llama1b_h200.sh"
 ROW = "llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 #: what every file a stage leaves carries here, and no path can

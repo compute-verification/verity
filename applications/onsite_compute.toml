@@ -1,4 +1,4 @@
-# The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory
+# The workload under SPOT, PoUW, the inference-only policy, the network certifier and the memory
 # wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,
 # each party on its machine, and the key the auditor pinned for its memory attester.
 # `verity run` records each period's verdict under that id, undecided unless the line says who
@@ -7,7 +7,7 @@ format = "verity/config/v0"
 protocols = ["sampled-proofs", "pouw", "inference-only", "certifier", "wipe"]
 
 [workload]
-name = "served-window"
+name = "workload"
 
 [workload.params]
 model = "verity-int8/Llama-3.2-1B-INT8"

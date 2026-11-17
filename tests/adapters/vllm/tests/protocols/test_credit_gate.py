@@ -229,7 +229,7 @@ PERIOD = "p1"
 #: the fixed length `_serve`'s one request serves (its max_tokens 1, the public-cap done source), as the period's
 #: open commits it (`credit.committed_length`)
 LENGTH = {"max_tokens": [1], "stop": Wd.STOP_FIXED}
-#: the served window's layout (`_serve`'s one call of N = 64 over T = `ROWS` slots), as the period declares it: 2 proof blocks
+#: the workload's layout (`_serve`'s one call of N = 64 over T = `ROWS` slots), as the period declares it: 2 proof blocks
 LAYOUT = SV.declared_layout([(64, K)], {0: "q"}, ROWS, 1)
 
 
@@ -540,7 +540,7 @@ def _another_calls(y, zy, xq, s_a, w, s_w):
 
 def _consistent_but_not_served(y, zy, xq, s_a, w, s_w):
     """Proof block 0's z with one served cell moved and its y redone as dq of it, so the records hold together but aren't what
-    was served."""
+    the workload served."""
     z, yr = E.zy_split(zy, ROWS, w.shape[0])
     z[0, 0] += 1 << 20
     sa = torch.zeros(ROWS)
@@ -700,8 +700,8 @@ def test_a_window_with_no_served_tables_credits_nothing(periodic):
     assert out["credit"] is None and out["eps"] is None
 
 
-def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carries_proof_files(periodic):
-    """A served window whose b/<K> it registered at install under the auditor's
+def test_an_honest_workloads_weights_are_its_periods_and_its_evidence_carries_proof_files(periodic):
+    """A workload whose b/<K> it registered at install under the auditor's
     registration's key (`model-key`) registers the registration's ``b/<K>`` entries, its open root over their root (the
     one the period's ``--model`` open signed), its round-0 request table and its challenge phase; its evidence
     (`window_evidence`) is core's `credit.WINDOW_KEYS`, its registered ``entries`` and its sampled calls' statements
@@ -851,7 +851,7 @@ def test_a_window_opened_over_round_0s_bare_request_table_is_refused_by_core(per
 @pytest.mark.parametrize("other", [False, True], ids=["its-session", "another-session"])
 def test_round_0s_input_ids_bind_the_windows_session(periodic, monkeypatch, other):
     """ROOTS1's ids@0 binds the window's challenge phase in place of the open root that contains it: core's registration
-    (`credit._registration`) holds the served window's entries to it, and refuses an ids@0 bound to another challenge phase."""
+    (`credit._registration`) holds the workload's entries to it, and refuses an ids@0 bound to another challenge phase."""
     auditor = periodic(PHC.draw_k(LAYOUT), files=FILES)
     if other:
         _other_session(monkeypatch)

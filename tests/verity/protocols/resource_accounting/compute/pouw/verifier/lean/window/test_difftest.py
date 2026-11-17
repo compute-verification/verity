@@ -12,7 +12,7 @@ the row format, records that are their entries' and each way they are not, small
 (the side trees' code is the same at 2^13 and 2^17, which the pinned execution phase exercises), and execution phases built honestly
 (`_window`: one to four calls, the filler, empty entries, records and side indices) and then broken in one of the ways
 `window_problem` names. Each problem-returning function must reach every one of its reasons (`REACHES`). The pinned
-execution phase of `tests/vectors/window.json` (`window_vectors.py`) and the execution phases of served runs (`SERVED`, from the evidence
+execution phase of `tests/vectors/window.json` (`window_vectors.py`) and the execution phases of workloads (`SERVED`, from the evidence
 store) are fixed vectors on top of the sampled ones.
 """
 from __future__ import annotations
@@ -898,7 +898,7 @@ SERVED = [
 
 
 @pytest.mark.parametrize("run,work,k,domain", SERVED, ids=[s[0] for s in SERVED])
-def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -> None:
+def test_the_workloads(run: str, work: dict, k: int, domain: str, server) -> None:
     """Lean and Python agree on each recorded execution phase's level, work, sampling and side domains, and give what it
     registered."""
     tw, eps, delta = 4096, [1, 2], [1, 10]

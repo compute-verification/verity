@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Remote's and onsite's Lean verdicts (`remote check`, `onsite check`) on a served run's kept records, through
+# Remote's and onsite's Lean verdicts (`remote check`, `onsite check`) on a workload's kept records, through
 # composite.py. Run in the tree, on a CPU node (the Lean builds), with OUT set:
 #     bash benchmarks/one_stage/kept_composite.sh SRC [K]
-# SRC is the served run's out/ (`served_verdicts.sh`'s $OUT), or a .tgz of the part of it read here: serve/windows.jsonl
+# SRC is the workload's out/ (`served_verdicts.sh`'s $OUT), or a .tgz of the part of it read here: serve/windows.jsonl
 # and serve/h1/, sampled-proofs/served/window/, and pieces/NAME/ for each kept piece. K is the window (default 0).
 # It builds remote, onsite, pouw-check, pouw-period and spot-one-stage-zk, then writes each case private in
 # scratch (0700, files 0600; a case's evidence is witness):
@@ -17,7 +17,7 @@
 # lines, commitments, params digests), and $OUT/kept_composite.txt every line printed here.
 set -uo pipefail
 OUT=${OUT:?set OUT}
-SRC=${1:?SRC: the served run out/ dir or a .tgz of it}
+SRC=${1:?SRC: the workload out/ dir or a .tgz of it}
 K=${2:-0}
 TREE=$PWD
 export PATH=$HOME/.elan/bin:$HOME/.local/bin:$PATH

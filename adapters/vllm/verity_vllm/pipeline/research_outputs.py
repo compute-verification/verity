@@ -35,7 +35,7 @@ No entry holds a private file (`private`), wherever it sits, and these stay on t
 - the requests' prompt and served token ids: the Match's token records (`tokens.json`), the Commit's token record
   (`tokens_p<pair>.json`), the sampler value check's rows (`match_stoch.json`) and the C2 replay's executed-prefix facts
   (`sampled_replay*.json`);
-- a served run's requests (`requests.jsonl`), its step traces (`step_trace.jsonl`, `advice_trace.jsonl`: each request's prompt
+- a workload's requests (`requests.jsonl`), its step traces (`step_trace.jsonl`, `advice_trace.jsonl`: each request's prompt
   length, sampling parameters, rows a step and emitted ids) and the load's client records (`load*.jsonl`);
 - where each rank ran, its process and device (`topology.json`), and when each process ran (`timeline.jsonl`,
   `timeline_report.json`).

@@ -1,4 +1,4 @@
-"""The bandwidth audit's answer on one served window (`served_verdicts.sh`'s BANDWIDTH_CMD):
+"""The bandwidth audit's answer on one workload (`served_verdicts.sh`'s BANDWIDTH_CMD):
 
     served_bandwidth.py collect --serve-dir SERVE_DIR --window K --out DIR
     served_bandwidth.py answer --session FILE --serve-dir SERVE_DIR --window K --out DIR [--r-bytes-per-s R]
@@ -44,12 +44,12 @@ from verity.protocols.resource_accounting.memory.poub.verifier import ledger, p2
 
 #: an H200's specified HBM read rate, bytes a second
 H200_BYTES_PER_S = 4_800_000_000_000
-#: what the session certifies of the served window
-SCOPE = ("beside the served window: the session ran on the card after window {k} was served, over the node's registered "
+#: what the session certifies of the workload
+SCOPE = ("beside the workload: the session ran on the card after window {k} was served, over the node's registered "
          "store, and was not interleaved with the engine's reads (serving is not hooked), so it certifies the session's "
          "own reads, not the window's")
 #: what it certifies when the window it was asked about wasn't served
-UNSERVED = ("with no served window: window {k} of {serve_dir} is not served ({error}), so the session ran on the card over "
+UNSERVED = ("with no workload: window {k} of {serve_dir} is not served ({error}), so the session ran on the card over "
             "the node's registered store with no window served before it, and certifies its own reads only")
 
 

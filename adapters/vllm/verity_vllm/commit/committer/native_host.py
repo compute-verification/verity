@@ -296,7 +296,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                  geo_digest: bytes | None = None, populate_threads: int | None = None, commit_scheme: str | None = None) -> None:
         """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `populate_threads`: the pinned pool's (`PinnedPool`).
         Every step is committed under rows-sha512 (`step_rows`), the one `commit_scheme`: the offline core's steps (`commit_offline`,
-        `commit_block_offline`) as the windowed collector commits a served run's (`NativeCollectCommitter`)."""
+        `commit_block_offline`) as the windowed collector commits a workload's (`NativeCollectCommitter`)."""
         if (commit_scheme or step_rows.NAME) != step_rows.NAME:
             raise ValueError(f"unknown commit scheme {commit_scheme!r}: the committer commits {step_rows.NAME}")
         self.engine = engine
@@ -349,7 +349,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             self.name = f"{self.name}_fast"
         self._dtype_names: dict = {}
         # every step's tree levels and retained bytes kept per step (`_gpu_levels`, `_gpu_blocks`), openings served lazily from them.  A
-        # served run's are the windowed collector's (`native_collect`); the host path's and the offline core's (`commit_block_offline`)
+        # workload's are the windowed collector's (`native_collect`); the host path's and the offline core's (`commit_block_offline`)
         # the same per-step state from `step_rows` on the CPU
         self.gpu_tree = bool(gpu_tree)
         self._gpu_levels: dict[int, list] = {}

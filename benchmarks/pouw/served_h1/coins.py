@@ -1,4 +1,4 @@
-"""A served window's live coins: where they come from, and the verifier's check of them from the challenger's own run.
+"""A workload's live coins: where they come from, and the verifier's check of them from the challenger's own run.
 
 * **Off the node** (`Endpoint`: its id, the HOST:PORT its challenger listens on, the secret its hello carries and the
   coin commitment's root the gate's open answered): the proof system's challenger on its auditor device
@@ -8,7 +8,7 @@
   that period's refused window. `open_window` (``ssh GATE open --session S --root R``) opens it on the window's root R,
   which the caller gives (128 lowercase hex digits, no other open's, ever), and gives the port its challenger listens on
   at the peer's 127.0.0.1, the session's secret, which only that answer carries and nothing here prints, and the root of
-  the coin commitment its challenger signed; the challenger opens the salt coin only after R. The gated served window
+  the coin commitment its challenger signed; the challenger opens the salt coin only after R. The gated workload
   of record is vllm's H1 path, `verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py`, which holds its
   salt, round-0 request table, R, session S and requests_root rules; serve.py refuses ``--gate``.
   ``coins.py open`` reserves and opens a session by hand, for development and timing rows only, on `stand_in_root` of
@@ -215,7 +215,7 @@ def withheld_open_reason(got: dict, withhold: bool) -> str | None:
 
 def stand_in_root(sid: str) -> bytes:
     """A development window's root for session `sid`: SHA-512(`STAND_IN_TAG` ‖ SHA-512(sid)), a stand-in and never a
-    window's (a served window's is `salt.window_open_root`); its session's alone, as an open's root must be, so a check
+    window's (a workload's is `salt.window_open_root`); its session's alone, as an open's root must be, so a check
     recomputes it from the session id."""
     return hashlib.sha512(STAND_IN_TAG + hashlib.sha512(sid.encode()).digest()).digest()
 

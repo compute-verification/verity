@@ -16,7 +16,7 @@ A period's credit is (1 − ε(j))₊ of its accepted prefix's live words, at th
 earns nothing until ε(j) < 1 (`first_credit`: 202 windows today). A window that skips every sampled tile passes with
 p0^K_d, which past 1 − b (K_d ≤ 8) would out-earn an honest window if credited without that discount (`all_skip_pays`).
 
-**The served window** (served_h1 on an RTX PRO 6000 node): 18 rounds, 16 served steps and 2 empty, 64 rows a
+**The workload** (served_h1 on an RTX PRO 6000 node): 18 rounds, 16 served steps and 2 empty, 64 rows a
 step; 2,304 GEMM calls and 1,548,288 units of 32×32 outputs (86,016 a step: qkv 384, o 256, gate_up 1,792 at K = 4,096
 and down 256 at K = 14,336, a layer, 32 layers). 5 sequences fill 119 of its 1,152 row slots (u = 119/1152; 731,136 units
 live). Its 485.5 s serve is 439.1 s of receipts (284 µs a unit, launch-bound torch, on a node at load 500 to 615), 1.7 s of
@@ -41,7 +41,7 @@ certification: its statements in parallel, but no sooner than one statement's pr
 **One window long enough on its own** (`long_window`) is n = 1: Compose's `CircuitWork`, with no period statement and
 no record check. It needs Λ·ln(1/δ_s)/u under the budget, and Λ falls with M only to `lam_limit`, so a K_d below
 r·max(a/(1 − p), b/(1 − p0))·ln(1/δ_s)/(u·budget) never gets there. Its certification starts when its serving ends,
-and it holds custody of M/18 served windows' values until its sample.
+and it holds custody of M/18 workloads' values until its sample.
 
 **Levers** (`LEVERS`): one change each, with its owner and a work class (1 a parameter, 2 one module, 3 a new path in one
 component, 4 a new circuit or proof form), applied alone to today's configuration and in sequence along `route`. δ_s is

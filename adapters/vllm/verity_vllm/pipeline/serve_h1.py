@@ -3,7 +3,7 @@ own Commit.
 
 * **One Commit.** H1 builds no committer: its tap goes on the server's rows-sha512 collector (`acquire.h1_commit.tap`),
   which already acquires each linear's x_q and s_a (the bench row's int8 source) and each step's input ids (its step-input
-  port), so ROOTS1 holds H1's A tables and input ids to the values the served window commits.
+  port), so ROOTS1 holds H1's A tables and input ids to the values the workload commits.
 * **One window a Commit period.** `serve_commit.CommitWindows` opens the arm once the committer is installed, so H1's
   hooks sit on top of the committer's, and closes it first thing at the window's close, before the committer comes off.
   The H1 window's T is the engine's token budget (``--max-num-batched-tokens``) and its S the Commit period's steps

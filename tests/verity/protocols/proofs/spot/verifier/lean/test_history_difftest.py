@@ -575,7 +575,7 @@ def _window_roots(window: tuple, root: str, held: dict | None = None) -> dict:
 
 
 def test_roots_of_a_windows_history_table(pieces):
-    """A served window's history table (`ml.windows.history.params`): the first window's root from its writer's bodies,
+    """A workload's history table (`ml.windows.history.params`): the first window's root from its writer's bodies,
     and a later window's from its own and the rows it holds of the first, are the table's, in the Lean and its mirror
     alike."""
     table = H.HistoryTable("program", "latent", 8, 16)
@@ -590,7 +590,7 @@ def test_roots_of_a_windows_history_table(pieces):
 
 
 def test_a_wrong_root_of_a_windows_history_table_is_refused(pieces):
-    """The root a served window registers for its history table is refused, by the Lean and its mirror alike, where it
+    """The root a workload registers for its history table is refused, by the Lean and its mirror alike, where it
     isn't the one over the table's strings: the root over the same rows in another order, the root with a bit flipped,
     a later window registering the earlier one's root, and a later window's root over held rows in another order."""
     import numpy as np

@@ -2,7 +2,7 @@
 division needs of a window's records audit, before any window is served.
 
 `v1_case` writes the case as a5 writes a window's (`replay.Case.case`'s params, a v2 record, its evidence), over one
-stand-in port and one stand-in registered value: its record names the Program and nothing of a served window. The
+stand-in port and one stand-in registered value: its record names the Program and nothing of a workload. The
 suite's cases start from it (`tests/test_served_cases.py`), and `rehearsal_limits.py` asks the inference-only policy's
 Lean check of a window class's own Program through it.
 """

@@ -40,7 +40,7 @@ def test_kernel_runs_the_kernel_check_in_a_directory_the_command_makes(tmp_path,
 
 
 @pytest.mark.parametrize(("ok", "code"), [(True, 0), (False, 1)])
-def test_served_runs_the_served_check_on_its_workload(tmp_path, monkeypatch, ok, code):
+def test_workloads_the_served_check_on_its_workload(tmp_path, monkeypatch, ok, code):
     out, workload = tmp_path / "out", str(tmp_path / "w.json")
     calls, rc = _run(monkeypatch, ["served", "--workload", workload, "--out", str(out)], ok)
     assert calls == [("served", workload, out, True)] and rc == code

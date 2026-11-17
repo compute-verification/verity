@@ -1,4 +1,4 @@
-"""A call's public table's rows as H1's served window registers them (`pouw_h1_served.Served._pubs`): `PublicRows`, built
+"""A call's public table's rows as H1's workload registers them (`pouw_h1_served.Served._pubs`): `PublicRows`, built
 again on read, on the host or on the workload's device, rather than held."""
 from __future__ import annotations
 

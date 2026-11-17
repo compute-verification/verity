@@ -18,7 +18,7 @@
 #     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under salts sampled from the committer's
 #     key $D/private/weights.key, 0600, neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
-#  2. requests: REQUESTS greedy requests (default SLOTS) from the network attester's traffic generator (`adapters/vllm/tools/served_run/serve_load.py --varied`:
+#  2. requests: REQUESTS greedy requests (default SLOTS) from the network attester's traffic generator (`adapters/vllm/tools/workload/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
 #     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
@@ -73,7 +73,7 @@
 #     Every unit of a template the served model's compiler of record lists as a transfer gate (prove_path.GATES_OF_RECORD)
 #     is proved beside the sampled rest, which only a work rate (work-rate:NUM/DEN) samples, so the preflight refuses a partition of another sampling design
 #     or without them; PP_SETS names their input sets.
-#  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own served run, below), PoUS, the bandwidth audit and the network
+#  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own workload, below), PoUS, the bandwidth audit and the network
 #     certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the network attester's alone, the longest,
 #     from the moment the window is picked, beside step 3, its lines said after the others'; split in two, the answer step
@@ -185,7 +185,7 @@
 # (`handoff_inputs`: verifier-side files alone, the records audits' cases and the blobs they name, H1's log and records,
 # the serve's first registration record and each window's Pearl+ record W and audit's record R, PoUW's period case,
 # SPOT's summary and docket), listed (inputs.txt) and hashed (inputs.sha256). A list
-# holding a served run's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
+# holding a workload's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
 # the advice, a key, a row dir, the requests) or a blob outside the serve dir is refused, and the run fails. Those files alone
 # are copied to the same path on COMPOSE_NODE, an auditor device the prover doesn't control and where no witness goes
 # (default vy-auditor-2; never a prover node such as a deferral's follow-on), outside any run dir (`served_verdicts.sh
@@ -1152,7 +1152,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
     local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
     [ "$LOAD" = fixed ] && load=(--fixed "$SLOTS" --window-steps "$WINDOW_STEPS")
-    "$PY" "$TREE/adapters/vllm/tools/served_run/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
+    "$PY" "$TREE/adapters/vllm/tools/workload/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
       --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$D/load.log" 2>&1
     rc=$?
     local sent all
@@ -1268,7 +1268,7 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
 # they prove where LIMITS_PROVE says it: the file's `proves` and the line, in the run's own words). They go to
 # IO_LIMITS beside the policy, with the count rule's (c, k, n) and the policy file's SHA-512, and the deferral, the
 # compose hand-off and the composite take them as ALPHA and GAMMA (`fixed_limits`), so no later step reads them off the
-# served window's division. The developer writes them, and no auditor's device signs them.
+# workload's division. The developer writes them, and no auditor's device signs them.
 # Beside them, where the run sets both HELD_ALPHA and HELD_GAMMA, the file's `held` and one clause of the line state a
 # second pair, the record form's: a block a slot, θ the weights the serve's first registration record registers, so a
 # registered weight's bit is not fresh (the class's numbers alone: slots × k over Γ, and Γ a slot; `rehearsal.sh check`
@@ -1320,7 +1320,7 @@ print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}" + 
       + held)
 EOF
 ) || { say "INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case is at the run's ALPHA and" \
-           "GAMMA, or at what it reads off the served window's division:" \
+           "GAMMA, or at what it reads off the workload's division:" \
            "$(echo "$out" | tail -1 | cut -c1-300)"; return 0; }
   say "INFERENCE-ONLY LIMITS $out: fixed with the policy before the serve, written by the developer and signed by no" \
       "auditor's device (inference-only-limits.json)"
@@ -1619,7 +1619,7 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
   rc=$?
   [ "$rc" = 0 ] || { say "HANDOFF refused: $(tail -1 "$COMPOSE_DIR/inputs.err" | cut -c1-600)"; return 1; }
   why=$("$SAY_PY" "$SV" witness < "$COMPOSE_DIR/inputs.txt") \
-    || { say "HANDOFF refused: it would carry the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 1; }
+    || { say "HANDOFF refused: it would carry the workload's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 1; }
   (cd "$D" && tr '\n' '\0' < "$COMPOSE_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$COMPOSE_DIR/inputs.sha256" || return 1
   echo private/compose/inputs.sha256 >> "$COMPOSE_DIR/inputs.txt"
   say "HANDOFF $HANDED_WHAT, composed off this node: on COMPOSE_NODE ($COMPOSE_NODE), from the serve dir's verifier-side" \
@@ -1694,7 +1694,7 @@ copy() {  # `served_verdicts.sh copy deferred|compose HOST[:DIR]`: each file the
     [ "${host%%.*}" != "$served" ] \
       || { say "COPY refused: $host is the served node, which the prover controls: copy the hand-off to COMPOSE_NODE ($composer)"; return 3; }
     why=$("$SAY_PY" "$SV" witness < "$dir/inputs.txt") \
-      || { say "COPY refused: the hand-off's list names the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
+      || { say "COPY refused: the hand-off's list names the workload's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
   fi
   n=$(count "$dir/inputs.txt")
   if [[ $2 == *:* ]]; then
@@ -1718,7 +1718,7 @@ gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: t
   local rc why answer=$OUT/compose/answer.json
   handoff "$1" "${2:-}" || return 1
   why=$("$SAY_PY" "$SV" witness < "$COMPOSE_DIR/inputs.txt") \
-    || { say "GATE-COMPOSE refused: the hand-off's list names the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
+    || { say "GATE-COMPOSE refused: the hand-off's list names the workload's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
   mkdir -p "$OUT/compose" && rm -f "$answer"
   # shellcheck disable=SC2086
   (cd "$D" && tar --create --dereference --no-recursion --file=- --files-from="$COMPOSE_DIR/inputs.txt") \
@@ -1804,7 +1804,7 @@ for s in seals:
         opened, store, good = f"REFUSED ({type(e).__name__}: {e})"[:400], None, False
     rr = v.get("run_root") or ""
     good = good and v.get("commit_scheme") == c.get("commit_scheme") == store == "rows-sha512" and len(rr) == 128
-    bound = r.ctx["served_window"].get("required_manifest", {}) if good else {}
+    bound = r.ctx["workload_window"].get("required_manifest", {}) if good else {}
     b = (bound.get("path"), bound.get("program_digest")) == b_of_record
     # a seal before serve_seal.manifest_refusal recorded the manifest's digest as "digest", always None: its path and
     # Program digest bind it alone
@@ -1979,7 +1979,7 @@ elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or 
   [ -n "$COMPOSE_TREE" ] && { [ "$sha" = "$COMPOSE_TREE" ] || [ -n "${FOLLOW_ANY_TREE:-}" ]; } \
     || { say "PREFLIGHT: the compose follow-on composes with the served node's tree ${COMPOSE_TREE:-(unknown)}, and this tree is ${sha:-(unknown)}: run it at that commit, or set FOLLOW_ANY_TREE=1"; exit 3; }
   held=$(cd "$D" && find . -type f -printf '%P\n' | "$SAY_PY" "$SV" witness) \
-    || { say "PREFLIGHT: the compose follow-on holds no witness of the served run, and this node's serve dir does ($(echo "$held" | head -1 | cut -c1-400)): compose on a node that holds the hand-off alone"; exit 3; }
+    || { say "PREFLIGHT: the compose follow-on holds no witness of the workload, and this node's serve dir does ($(echo "$held" | head -1 | cut -c1-400)): compose on a node that holds the hand-off alone"; exit 3; }
 elif [ "${1:-}" = v3c ]; then  # V3c alone on an existing serve dir serves nothing: no row dir, taps or gpu-lease
   [ -e "$PY" ] || { say "PREFLIGHT: no $PY (VENV, which a node without vLLM's venv sets to the tree's .venv)"; exit 3; }
 else
@@ -2204,7 +2204,7 @@ if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its 
 fi
 
 H1_COINS="PoUW H1: not served (H1_GATE empty)"
-PEARLPLUS="PoUW: Pearl+'s own served run on this card after the window's (POUW=pearlplus)"
+PEARLPLUS="PoUW: Pearl+'s own workload on this card after the window's (POUW=pearlplus)"
 [ -z "$PEARLPLUS_TIE" ] || PEARLPLUS="PoUW: Pearl+ on the window's own engine, its passes the window's linears (POUW=pearlplus, PEARLPLUS_TIE)"
 LIVE_GATE=$H1_GATE LIVE_LANE=${H1_LANE:-vllm} LEAD=
 if [ "$POUW" = pearlplus ] && [ -n "$PEARLC_CHALLENGER_GATE" ]; then

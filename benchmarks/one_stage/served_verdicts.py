@@ -1,4 +1,4 @@
-"""The verdicts on one served window (`served_verdicts.sh`): the window it audits, the subprotocols after
+"""The verdicts on one workload (`served_verdicts.sh`): the window it audits, the subprotocols after
 SPOT, and the one record of every verdict (the block record).
 
     served_verdicts.py window SERVE_DIR [--slots N] [--window K]
@@ -78,7 +78,7 @@ opens on, V3c's audit's) once an open in the ledger names that root, since the g
 ``GATE`` line with the gate's latest pin and, with ``--main``, whether that pin is on the verifier's first-parent line of
 main (a session pinned off it is refused).
 
-``period open``: the period the served windows join, opened once serve-openai listens and before its first window
+``period open``: the period the workloads join, opened once serve-openai listens and before its first window
 reserves (a window opens at its first engine step): its circuit is the Program digest serve-openai declared and wrote
 (serve.json's ``protocols.program``, ``h1/window-program.meta.json``), its rows and rounds the server's T and S, and its
 circuit files those of ``--circuits`` (``pouw_h1_circuits --program SERVE_DIR/h1 --out DIR --live T,S``'s manifest),
@@ -111,7 +111,7 @@ window meets the two premises of `security`'s that no check here discharges, ``A
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
 
 ``pearlplus``: PoUW's development piece under POUW=pearlplus (`served_pearlplus.sh`, POUW_CMD's default then), from Pearl+'s
-own served run on the card after the window's serve: ``--served`` (`served_passes.py serve`'s document: every pass retained)
+own workload on the card after the window's serve: ``--served`` (`served_passes.py serve`'s document: every pass retained)
 and ``--verify`` (its ``verify``'s: Pearl+'s verdict over all the passes, the reference replay of the tiles it samples).
 Its verdict is accept when that run served within its caps across at least two pass boundaries, Pearl+'s verdict
 accepts, and each pass's salt is the live session's that the serve names (`pearlplus_coins`: the session's tree as the gate
@@ -132,7 +132,7 @@ first condition it fails.
 
 ``pearlplus-period open``: the lane's Pearl-C period P, opened at ``--gate`` before Pearl+'s serve with cap 1 (the serve's
 one salt session joins it) and circuit the SHA-512 of ``DIR/pearlplus-descriptor.json``: with ``--circuit-record``, the
-served window's circuit record (served_verdicts.sh's PEARLPLUS-CIRCUIT, the circuit cut at Pearl+'s linears that step 3's
+workload's circuit record (served_verdicts.sh's PEARLPLUS-CIRCUIT, the circuit cut at Pearl+'s linears that step 3's
 window-circuit writes), byte for byte; without it, `pearlplus_descriptor` (Pearl+'s protocol, ``--scheme`` and
 ``--cubin``'s SHA-512), which names no model. Its answer goes in ``DIR/period.json``; ``pearlplus-period close`` closes it
 once the serve's session has ended (the untied piece's right before the verifier's sample), and the sample, which joins no
@@ -196,7 +196,7 @@ verdict of record, or `AS_WRITTEN` and the files it was read from.
 ``--tree SHA`` names the commit of the tree that composed it, and ``--tree-on`` the branch its host pinned it from, both in
 ``composed_on`` (the compose gate's: its pin line's).
 
-``witness``: each path of stdin (relative to a serve dir) that is a served run's witness (`witness`: a committed value,
+``witness``: each path of stdin (relative to a serve dir) that is a workload's witness (`witness`: a committed value,
 a prover's instance, private or salts file, the advice, a key, a sealed row dir, the requests and their traces), one ``WITNESS
 PATH: WHY`` line each; exit 1 when there is one. A compose hand-off lists none, and its follow-on's serve dir holds none.
 
@@ -247,8 +247,8 @@ INTEGRITY_OWNER = "compute-accounting"
 #: does), in the chain's order
 PIECES: dict[str, tuple[str, str, str, str]] = {
     "work": ("PoUW", "pouw", "compute-accounting",
-             ("H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE), or with POUW=pearlplus "
-              "the reference replay of Pearl+'s own served run (served_pearlplus.sh)")),
+             ("H1's credit on the workload, its coins from vy-challenger-1's gate (H1_GATE), or with POUW=pearlplus "
+              "the reference replay of Pearl+'s own workload (served_pearlplus.sh)")),
     "space": ("PoUS", "pous", "memory-accounting",
               ("PoUS over the served model's int8 weights on the serving card, against the memory attester on "
                "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/pous/served_piece.sh and this node "
@@ -314,7 +314,7 @@ PEARLPLUS_EPOCH_TIED_IN_PROCESS = ("an in-process challenger of the window's epo
 
 
 def challenger_of(served: Mapping[str, Any] | None) -> str:
-    """The challenger whose session the served run's coins are from: the host its gate's open answer names
+    """The challenger whose session the workload's coins are from: the host its gate's open answer names
     (``coins.session.host``, ``<host>.<session>``, the string the challenger's own record signs), the deployed auditor's
     or a local gate's scratch host alike; `UNNAMED_CHALLENGER` where the answer carries none."""
     session = ((served or {}).get("coins") or {}).get("session") or {}
@@ -405,7 +405,7 @@ WEAKER_TIE = ("a weaker tie, not the tied guarantee: the window's records audit 
               "values at W's roots, not that every table W registers does")
 #: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
-#: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
+#: A workload's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
                 "served_rows": "a window's committed rows and salts", "certifier-front": "the certifier front's group (its prompts)"}
 #: ... by the serve dir's top directory
@@ -503,7 +503,7 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
             "refused": {str(j): why for j, why in refused.items()}}
 
 
-#: A served window's own fields, never published: the windows (closed, sealed or joined), its users, its engine steps and
+#: A workload's own fields, never published: the windows (closed, sealed or joined), its users, its engine steps and
 #: whether its requests filled the slots, its unpadded population, its advice's length and its windows' advice by number.
 #: And the exact credit of a Pearl+ run held to its class's fixed load (``exact_work``: `verify_run.verify_passes`'
 #: profile's, the Lean's printout's and `served_passes.py lean`'s record of both): the credit, credited tiles and MACs the
@@ -1020,7 +1020,7 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
     length = {"max_tokens": [int(max_tokens)] * int(slots), "stop": "fixed"}
     weights = ["--model", model] if model else []
     compact = {"sort_keys": True, "separators": (",", ":")}
-    # One served window is two of the gate's sessions, its own and its withheld sample session, and the gate counts
+    # One workload is two of the gate's sessions, its own and its withheld sample session, and the gate counts
     # each against the period's cap; credit reads the close's list as window, then sample (credit._period_of).
     argv = ["period-open", "--name", name, "--cap", "2", "--circuit", circuit, "--draw-k", str(k), "--rows", str(rows),
             *weights, "--circuit-files", json.dumps(files, **compact), "--length", json.dumps(length, **compact)]
@@ -1083,7 +1083,7 @@ def pearlplus_period_open(piece_dir: Path, gate: str, name: str, scheme: str, cu
                           record: Path | None = None) -> dict[str, Any]:
     """``pearlplus-period open``: the lane's Pearl-C period `name` opened at `gate` before Pearl+'s serve, of cap 1 (the
     serve's one salt-only session, `bench_arm._LiveSession` or a tied window's `serve_pearl.live`, which joins it) and
-    circuit the SHA-512 of its descriptor, written to ``piece_dir/PEARLPLUS_DESCRIPTOR``: the served window's circuit
+    circuit the SHA-512 of its descriptor, written to ``piece_dir/PEARLPLUS_DESCRIPTOR``: the workload's circuit
     record `record` byte for byte where it is given, else `pearlplus_descriptor`. That descriptor is each pass's
     ``descriptor`` for credit's circuit clause (`challenger.circuit_reason`). The open and what it committed go to
     ``piece_dir/PERIOD``, which `period_close` closes. The run's sample session is reserved after the close, so it joins
@@ -1340,7 +1340,7 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
 
 def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key: str | None,
                     main: Path | None) -> dict[str, Any]:
-    """Whether every pass with calls of Pearl+'s served run (``served``, `served_passes.py serve`'s document) has its
+    """Whether every pass with calls of Pearl+'s workload (``served``, `served_passes.py serve`'s document) has its
     epoch's salt from the live session its ``coins`` names (`served_step.coins_of`'s): the session's tree as the gate
     `gate`'s ``fetch`` gives it, and the auditor's ledger and the host's pins log as the gate answers now, written to
     `out`, with main's first-parent line `main` (`remote.main_lines`), each pass's manifest held by
@@ -1358,7 +1358,7 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
             raise ValueError("no gate, key pin or main's first-parent line to check the session by (--gate, --key-sha512, "
                              "--main)")
         if not sid:
-            raise ValueError("the served run names no live session")
+            raise ValueError("the workload names no live session")
         tgz, tree = out / "session.tgz", out / "session"
         tgz.write_bytes(_gate_out(gate, "fetch", sid))
         with tarfile.open(tgz) as t:
@@ -1380,7 +1380,7 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
                 break
         else:
             if not got["passes"]:
-                got["reason"] = "the served run has no pass with calls to check"
+                got["reason"] = "the workload has no pass with calls to check"
     except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
         got["reason"] = f"{type(e).__name__}: {e}"[:600]
     return got
@@ -1640,7 +1640,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
               gate: str | None = None, key: str | None = None, main: Path | None = None,
               coin: Path | None = None, tie: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece under POUW=pearlplus (``served_pearlplus.sh``), its document written to
-    ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document) and Pearl+'s
+    ``out/development.json``: Pearl+'s own workload (``served``, `served_passes.py serve`'s document) and Pearl+'s
     verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Its verdict is
     accept when the run served within its caps across at least two pass boundaries, Pearl+'s verdict accepts, and its
     epoch's salt coin is its live session's (`pearlplus_coins` through the gate `gate`, the key pin `key` and main's line
@@ -1681,12 +1681,12 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     source = None if served is None else (served.get("coins") or {}).get("source", "in-process")
     live = bool(gate) if served is None else source == LIVE_SOURCE
     if served is None:
-        reasons.append("no served run: " + ("serve-openai's Pearl+ arm wrote no served.json for the window"
+        reasons.append("no workload: " + ("serve-openai's Pearl+ arm wrote no served.json for the window"
                                             if tie is not None else "served_passes.py serve wrote no document"))
     elif not served.get("ok"):
         reasons.append(f"the window's Pearl+ epoch isn't one round a Commit step: {served.get('error')}"[:800]
                        if tie is not None else
-                       f"the served run crossed fewer than two pass boundaries or ran over its caps (passes over their "
+                       f"the workload crossed fewer than two pass boundaries or ran over its caps (passes over their "
                        f"caps: {served.get('over_caps')})")
     answer = (verified or {}).get("answer") or {}
     if verified is None:
@@ -2250,7 +2250,7 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
 
 
 def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
-    """Each of ``paths`` (relative to a serve dir) that is a served run's witness, with why (`WITNESS_DIRS`,
+    """Each of ``paths`` (relative to a serve dir) that is a workload's witness, with why (`WITNESS_DIRS`,
     `WITNESS_TOPS`, `WITNESS_NAMES`, and H1's prover state under ``private/h1``)."""
     out = []
     for p in paths:
@@ -2588,7 +2588,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ppe.add_argument("--scheme", default="pearl-c-h100-v1-h3")
     described = ppe.add_mutually_exclusive_group()
     described.add_argument("--cubin", type=Path)
-    described.add_argument("--circuit-record", type=Path, help="the served window's circuit record (PEARLPLUS-CIRCUIT's), "
+    described.add_argument("--circuit-record", type=Path, help="the workload's circuit record (PEARLPLUS-CIRCUIT's), "
                                                                "whose bytes are the period's descriptor")
     ppe.add_argument("--lane", help="close, rule: the lane whose gate key reserves the run's sessions (PEARLC_CHALLENGER_LANE)")
     ppe.add_argument("--windows", type=Path, help="close, with --lane: the serve dir's pearl/, whose w<k>/served.json name "

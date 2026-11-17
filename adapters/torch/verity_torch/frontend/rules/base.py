@@ -83,7 +83,7 @@ class Rule:
         return ()
 
     def run_inputs(self, ep, mode: str) -> bool:
-        """Whether this rule reads values the served run decides (`Ctx.run_value`) for the exported graph `ep`: values no circuit
+        """Whether this rule reads values the workload decides (`Ctx.run_value`) for the exported graph `ep`: values no circuit
         computes, which the Program takes as fields of its `run` parameter, as a training survey's holes (`training_survey`).
         Default: none."""
         return False

@@ -49,7 +49,7 @@ Files:
   census type's size may be `full` or `full/D` (the most instances a statement holds at the block's k_log, over D).
   `PT_STATEMENTS` proves statements staged elsewhere as they are. It times one prover on the device; K provers at once are
   `benchmarks/one_stage/server_rate.py`'s, which times them on the verifier's clock.
-- `stage_window.py WINDOW_DIR OUT (--member K | --pick P N)`: a served window's member (a TP Commit's `--serving-rows`
+- `stage_window.py WINDOW_DIR OUT (--member K | --pick P N)`: a workload's member (a TP Commit's `--serving-rows`
   window, or `verity-vllm tp-serving-rows`') as its served statement for `PT_STATEMENTS`: the verifier's circuit for its
   template bound to the window's digests, and the window's own bodies (its `inst.bin` is the prover's: keep OUT private).
   `benchmarks/one_stage/server_rate.py` takes OUT as `Z/<type>/c<n>/stage`.

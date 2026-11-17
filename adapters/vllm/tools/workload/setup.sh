@@ -2,7 +2,7 @@
 # What a row's window reads, made on its node (`run.sh setup`); a step STEPS names reruns even where its result exists.
 set -uo pipefail
 for v in CARD CORES END ROW_ID ROLE REPO REV VENV CUDA_HOME HF_HOME LLAMA_ROOT FLOCK_WORK HIDDEN_SO NORM_TAP_SO; do
-  [ -n "${!v:-}" ] || { echo "setup.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh setup\`"; exit 2; }
+  [ -n "${!v:-}" ] || { echo "setup.sh: no $v: start it with \`adapters/vllm/tools/workload/run.sh setup\`"; exit 2; }
 done
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs OUT=$RESEARCH_RUN_DIR/out
 mkdir -p "$OUT"
@@ -15,7 +15,7 @@ export CUDA_VISIBLE_DEVICES= OMP_NUM_THREADS=$(nproc) HF_HUB_OFFLINE=1 PATH=$VEN
 paths=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/tools/research/src
 vv() { (cd "$TREE/adapters/vllm" && PYTHONPATH=$paths nice -n 5 "$PY" -m verity_vllm.pipeline.cli "$@"); }
 mkdir -p "$R" && chmod 700 "$R" || { log "can't make $R"; exit 2; }
-research keep "$R" --owner @vllm --expires 3d --priority high --why "the served run's pin, taps, traced Builds and Flock build" 2>&1 | tail -1 | tee -a "$OUT/job.log"
+research keep "$R" --owner @vllm --expires 3d --priority high --why "the workload's pin, taps, traced Builds and Flock build" 2>&1 | tail -1 | tee -a "$OUT/job.log"
 cp "$IN/$ROW_ID.json" adapters/vllm/workloads/ || exit 2
 log "setup of $ROW_ID from $(git rev-parse HEAD) on $(hostname), cores $CORES, card $CARD only under its lease"
 
@@ -26,7 +26,7 @@ if on pin && [[ $REPO == verity-int8/* ]] && { [ -n "${STEPS:-}" ] || [ ! -f "$H
     || { log "pin: NOT made: $(tail -n 1 "$OUT/pin.log" | cut -c1-300)"; exit 3; }
   touch "$HF_HOME/.made"; log "pin: made, every file's sha256 the manifest's"
 fi
-. adapters/vllm/tools/served_run/workload_env.sh || exit 2
+. adapters/vllm/tools/workload/workload_env.sh || exit 2
 if on taps && { [ -n "${STEPS:-}" ] || [ ! -s "$HIDDEN_SO" ] || [ ! -s "$NORM_TAP_SO" ]; }; then
   S=$R/taps-staged
   rm -rf "$S/exactness" && mkdir -p "$S"

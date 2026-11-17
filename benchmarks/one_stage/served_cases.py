@@ -1,4 +1,4 @@
-"""A served window's cases, each on the window's docket R and beside its own Lean answer, in the directory
+"""A workload's cases, each on the window's docket R and beside its own Lean answer, in the directory
 form a composition of the window's subprotocols reads as a case: SPOT's one-stage v1 case (no composite's),
 both composites' SPOT case (one-stage v2's in the form ``one-stage``) and the inference-only case from its
 records audit, PoUW's period case held to the same record, Pearl+'s run case naming it, and with ``--v2`` one-stage v2's

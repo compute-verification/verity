@@ -1,4 +1,4 @@
-"""The replay's served window, cut from a synthetic arm's step trace, and its comparison with a replay."""
+"""The replay's workload, cut from a synthetic arm's step trace, and its comparison with a replay."""
 from __future__ import annotations
 
 import gzip

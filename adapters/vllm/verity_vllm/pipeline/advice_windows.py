@@ -41,7 +41,7 @@ Flock proves today: the toy Commit's ``RoPEHead_v1{D=64}`` (its egress render, `
 The advice is I1's (``codec``, default `I1`): `of_advice` reads its bytes, which must be its canonical encoding, commits them and
 binds the root and the advice's length, ``total_bits``; `opened` recomputes that binding from an opening without the stand-in's
 requests, for a compiler that compiles the advice itself.  `advice_of_workload` is the stand-in's advice, the prover's, for a
-fixed-length workload; a served run's is ADVICE-SRC's, from the scheduler's step trace.
+fixed-length workload; a workload's is ADVICE-SRC's, from the scheduler's step trace.
 
     verity-vllm advice-windows COMMIT_OUT --advice FILE --opening FILE --partition F --out O --build-root B [--ranks 0,1]
         [--transfer-gate TEMPLATE ...] [--write-from-workload WORKLOAD [--drop r1 ...]]

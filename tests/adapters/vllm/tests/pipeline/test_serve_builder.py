@@ -1,4 +1,4 @@
-"""A served run's registration log registers its compiler (`serve_day.register_compiler`, which `advice.write` calls before it
+"""A workload's registration log registers its compiler (`serve_day.register_compiler`, which `advice.write` calls before it
 binds any advice): the log a run declared its day in holds one item of kind ``builder``, core's check accepts the log with it,
 and that item is what the run's advice windows are bound under: its digest the one each window's binding names the compiler by,
 its ℓ at least each window's advice bits, its format the one that decodes each window's advice. Under the tie the item stands
@@ -74,7 +74,7 @@ def _bindings(out: Path, rep: dict) -> dict[int, tuple[dict, bytes]]:
                      (out / "advice" / f"w{w}" / "private" / "advice.bin").read_bytes()) for w in rep["windows"]}
 
 
-def test_a_served_runs_log_registers_the_compiler_its_advice_windows_are_bound_under(tmp_path):
+def test_a_workloads_log_registers_the_compiler_its_advice_windows_are_bound_under(tmp_path):
     out = _declared(tmp_path)
     rep = ADV.write(out, compiler=C)
     view, log = _view(tmp_path)

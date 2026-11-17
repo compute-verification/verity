@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# The served window on its node (`run.sh window`): served_verdicts.sh under the card's lease, then its hand-off packed.
+# The workload on its node (`run.sh window`): served_verdicts.sh under the card's lease, then its hand-off packed.
 set -uo pipefail
 for v in CARD CORES END COMPOSE_OFF_NODE COMPOSE_NODE ROW REPO REV VENV CUDA_HOME HF_HOME SERVE_ROOT FLOCK_WORK HIDDEN_SO NORM_TAP_SO; do
-  [ -n "${!v:-}" ] || { echo "window.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh window\`"; exit 2; }
+  [ -n "${!v:-}" ] || { echo "window.sh: no $v: start it with \`adapters/vllm/tools/workload/run.sh window\`"; exit 2; }
 done
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs OUT=$RESEARCH_RUN_DIR/out
 mkdir -p "$OUT"
@@ -33,15 +33,15 @@ LEASE_MIN=${LEASE_MIN:-$(( lease_min < 150 ? lease_min : 150 ))}
 log "coins: ${PP_CHALLENGER:-local} (peer ${PP_PEER:-none}${DEVELOPMENT:+, a development run})"
 log "window run of $row_id from $SHA on $(hostname), card $CARD (free: 0 processes, ${used} MiB, lease: $lease), cores $CORES, lease at most $LEASE_MIN min, COMPOSE_NODE $COMPOSE_NODE${PEARLPLUS_TIE:+, tied to Pearl+}"
 export PATH=$RESEARCH_RUN_DIR/bin:$PATH LEASE_MIN OUT
-mkdir -p "$SERVE_ROOT" /dev/shm/vllm-served-run && chmod 700 "$SERVE_ROOT" /dev/shm/vllm-served-run
-D=/dev/shm/vllm-served-run/${RESEARCH_RUN_ID:?run under research run}; export D
+mkdir -p "$SERVE_ROOT" /dev/shm/vllm-workload && chmod 700 "$SERVE_ROOT" /dev/shm/vllm-workload
+D=/dev/shm/vllm-workload/${RESEARCH_RUN_ID:?run under research run}; export D
 echo "$D" > "$OUT/serve_dir.txt"
 t0=$(date +%s)
-bash adapters/vllm/tools/served_run/run.sh settings "$REPO" -- bash benchmarks/one_stage/served_verdicts.sh > "$OUT/served_verdicts.log" 2>&1
+bash adapters/vllm/tools/workload/run.sh settings "$REPO" -- bash benchmarks/one_stage/served_verdicts.sh > "$OUT/served_verdicts.log" 2>&1
 rc=$?
 log "served_verdicts.sh exit $rc after $(( ($(date +%s) - t0) / 60 )) min; its lines in out/verdicts.txt"
 if [ "${PREFLIGHT_ONLY:-}" = 1 ] && [ "$rc" = 0 ]; then
   log "the preflight passed, nothing served: $(grep -h -m1 'PREFLIGHT passed' "$OUT/served_verdicts.log" | cut -c1-300)"; exit 0
 fi
-. adapters/vllm/tools/served_run/handoff.sh
+. adapters/vllm/tools/workload/handoff.sh
 window_exit "$rc"

@@ -88,7 +88,7 @@ def refusals(scheme: str, settings: Any, stage: str, opens: str | None = None) -
                    "salt and round coins) or, in tests, 'coins' and 'rounds' held in this process, not both")
     if stage == "capture":
         out.append("a capture records nothing, so it opens no session on the auditor device's challenger (the pouw "
-                   "setting 'challenger' is a served window's)")
+                   "setting 'challenger' is a workload's)")
     return out
 
 

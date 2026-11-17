@@ -2,7 +2,7 @@
 (each row-parallel reduction's partials, which rank 1 − r receives from rank r) are registered values, and whose reductions are
 transfer-gate units reading both ranks' partials through ``--registered`` ports, audited by `a5.audit` as each rank's
 window on that rank's `service.Stream`, on one local challenger session's coins (``--challenger local``), both ranks
-sampling at once as a TP step's do. No served window is TP2 with
+sampling at once as a TP step's do. No workload is TP2 with
 committed advice yet (the registered compiler's TP2 rank Programs, `b1_tp2`, bind a rank's peer input to the other rank's
 partial only by the host's Match, in the clear), so this step stands in for one.
 

@@ -1,4 +1,4 @@
-"""period_cost: the windows and node-days come back, the served window's units are 32×32, n_min is the least
+"""period_cost: the windows and node-days come back, the workload's units are 32×32, n_min is the least
 n under 1%, the period only shortens with load, the sample and nodes, and every lever names what it changes."""
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def test_int_periods_line_costs_its_node_days():
     assert p["serving_days"] == pytest.approx(236.85, abs=0.01)
 
 
-def test_the_served_window_is_32x32_units():
+def test_the_workload_is_32x32_units():
     per_step = PC.LAYERS * sum(c for c, _ in PC.SERVED_UNITS_PER_LAYER.values())
     assert per_step == 86016 and per_step * PC.ROUNDS == 1548288
     # step 0's 44 rows reach both 32-row tiles, steps 1-15's 5 rows one, the 2 empty rounds none

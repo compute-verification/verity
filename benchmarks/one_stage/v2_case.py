@@ -1,9 +1,9 @@
-"""SPOT v2's case (`verity/sampled-proofs/one-stage/v2`) of a served window from the files its run kept, for
+"""SPOT v2's case (`verity/sampled-proofs/one-stage/v2`) of a workload from the files its run kept, for
 `composite.py --cases`, and with ``--exe`` its own Lean answer on it.
 
     v2_case.py --window DIR --out DIR --scratch DIR [--exe PATH]
 
-``--window`` is the window directory a5 writes and a served run keeps (``out/sampled-proofs/served/window``): its v1
+``--window`` is the window directory a5 writes and a workload keeps (``out/sampled-proofs/served/window``): its v1
 case (``case.json``), the verifier's partition (``partition.json``), a5's ``summary.json`` (its ``members``, each ``k``
 and ``template``, and each template's pin under ``circuits``), the member's ``m<k>/`` with its public file, its
 ``compose.log``, its circuit file and, where it reads registered values, the verifier's ``registered.json``, and its

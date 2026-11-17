@@ -79,7 +79,7 @@ _RUN_FIELD = re.compile(r"model\.layers\.(\d+)\.self_attn\.attn/topk_switches\[t
 
 
 def run_bits(layout: dict, orders: Mapping[tuple[int, int], Sequence[int]], topk: int, pos0: int = 0) -> list[int]:
-    """The leaves of a `run` input (one bit each, in its record's field order) from what the served run did: `layout` is its
+    """The leaves of a `run` input (one bit each, in its record's field order) from what the workload did: `layout` is its
     `RunInputs.layout`, and `orders[(layer, pos)]` the `topk` (INDEX_TOPK) key indices that layer `layer`'s indexer
     wrote for the row at position `pos`, in the order it wrote them (its `topk_indices_buffer` row), each index one of the row's
     own keys, the wrapper's rows pos0..pos (a request's pos0 is 0). Each field is the Waksman settings that route those keys to

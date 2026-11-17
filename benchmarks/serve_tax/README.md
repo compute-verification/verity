@@ -464,7 +464,7 @@ scheduled and the rows each sampled, from the server's `/metrics` before and aft
 compute per token over the reference's at the same load less one, against `compiled` and against its parent. Below capacity the throughput is set
 by the arrivals, so the tax there reads the drain and the cost shows in the latencies; a tax beside unserved requests
 isn't over the same requests. `replay-{compiled,eager}/replay.json` has the replay's counts, its differing requests,
-its wall time beside the served window's and the same record of its engine's environment (`settings`), and
+its wall time beside the workload's and the same record of its engine's environment (`settings`), and
 `replay_tokens.jsonl.gz` its tokens. Each request decodes to its max_tokens, so the
 schedule doesn't depend on the tokens: a replay with no differing step can still sample other tokens. A mode listed twice
 in `REPLAY_MODES` replays again and compares its tokens with the first replay's too, which tells a replay that differs from

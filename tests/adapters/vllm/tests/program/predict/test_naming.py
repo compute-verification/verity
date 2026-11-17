@@ -2,7 +2,7 @@
 commit alone.
 
 * Against the pinned vLLM's traces (`fixtures/naming_traces.json`: Llama-3.2-1B's request Programs on the H200 target, int8 and
-  bf16, greedy, cached, stochastic and the served window's shape, each as digests): the predicted Program is the trace's, and so
+  bf16, greedy, cached, stochastic and the workload's shape, each as digests): the predicted Program is the trace's, and so
   is what its Build says beside it: its rows' names, its parameters' names and types (the weights under the wrapper's
   ``model.``), its correspondence record as `recorded_names` reads it (each Call's name, the tensorless Calls, each placed Call's
   row and columns) with the record's inputs, weights, rank and body, and its cached-prefix layout.

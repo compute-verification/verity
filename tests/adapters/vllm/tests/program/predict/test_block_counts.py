@@ -1,4 +1,4 @@
-"""verity_vllm.program.predict.block_counts: a day's (c, k)-inference blocks from its served windows' circuit records,
+"""verity_vllm.program.predict.block_counts: a day's (c, k)-inference blocks from its workloads' circuit records,
 judged against its declared c, k and n. On a small circuit (two catalog templates over two slots) its count, a block's
 gates, its gate table and its verdict agree with `InferenceOnlyCheck.Count`'s Python reference (`inference_only_reference.check_count_detail`
 and `check_count`, which `inference-only-count-difftest` holds the Lean to) on the session Program, m activations of the block
@@ -99,7 +99,7 @@ def test_the_count_is_ncicheck_counts_on_the_session_program(small):
 
 
 def _run(tmp_path: Path, record: dict, windows: int, decl: dict, tag: str) -> tuple[bytes, Path]:
-    """`main` on ``windows`` served windows of ``record``, each with a registration: its public file's bytes and its
+    """`main` on ``windows`` workloads of ``record``, each with a registration: its public file's bytes and its
     private file."""
     (tmp_path / "circuit.json").write_text(json.dumps(record))
     (tmp_path / "registration.json").write_text("{}")

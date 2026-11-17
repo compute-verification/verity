@@ -14,7 +14,7 @@ units a sample samples), never a free input: `interface.input_count` counts ever
   row's chunks, and the fused all-reduce's norm, one unit for every rank;
 * its readers, per rank: a call of a rank Program reading a combine's output is a unit of its own Definition, placed at the
   last site it reads, and a batch of n such calls n units, a mapped argument laid unit after unit and a shared one read
-  alike by each. A token select (`TokenSelect_v4{V}`) is instead the served window's split of it
+  alike by each. A token select (`TokenSelect_v4{V}`) is instead the workload's split of it
   (`grain.GROUP`): V / C units `TokenSelectGroups_v1{C, GROUP}` reading its logits as their writers' rows, C
   `grain.select_width`, and one `TokenSelectCombine_v2{V, GROUP}` reading their bests and indices and ``x0``, logits[0]'s
   producer unit's word. A call producing a later site's partial (the LM head reading the last norm) is its producer units,

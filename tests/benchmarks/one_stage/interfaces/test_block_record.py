@@ -72,7 +72,7 @@ def test_the_integrity_bound_counts_a_sampling_term_equal_to_delta() -> None:
 
 def test_a_stratified_sample_is_bounded_by_its_strata_and_not_as_a_uniform_one() -> None:
     """An answer whose profile samples each stratum on its own is bounded by that sampling design. The fixture profile
-    is a served run's: all 160 units of one template and 2 of another's 4. An incorrect proof block among the 160 is
+    is a workload's: all 160 units of one template and 2 of another's 4. An incorrect proof block among the 160 is
     always caught; among the 4, one escapes with C(3, 2)/C(4, 2) = 1/2, two with C(2, 2)/C(4, 2) = 1/6 and three never.
     So at most 2 of the 164 are incorrect at δ = 1/100 and at 1/10^6, 1 only for δ above 1/6 and none above 1/2. Read
     as a uniform sample of 162 of 164, where one escapes with 1/82 and two with 1/13,366, the same counts gave 1 at

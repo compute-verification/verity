@@ -36,14 +36,14 @@ the blocks' sources and the stream's witness) at their widths.
   charge's context, counts decisions only, as `code_v1`'s does, and the admission doesn't reset it as it resets the
   scan's ``pc``. Each of 8eb1's 339 execution phases opens with one. Over them the chain is `code_v1`'s charge of the decisions
   alone (its other counts 0) on every execution phase, 5,500 bits; charged as a 1, the forced admissions would change 330
-  execution phases' charges (`tests/benchmarks/network_e2e/encodings/test_served_window.py`).
+  execution phases' charges (`tests/benchmarks/network_e2e/encodings/test_workload.py`).
 - The slice has no coder state, codeword or context counter: ChargeLink_v1 reads its contexts and estimates from ``cin``
   and the committed decisions. Its counts other than the decisions are coded as 0 (`arith_encode.ZERO_COUNTS`, the
   still-sent fields' stand-in).
 - **What a proof of the slice covers** (the phase-18 attack): the compile slice's charge, the execution phase's
   decisions. The chain is `code_v1`'s whole charge only where an execution phase's hits and order are 0 as well.
   - Hits are 0 on 8eb1, which serves without prefix caching: its trace header says so (``enable_prefix_caching``
-    false, `test_served_window.py`).
+    false, `test_workload.py`).
   - Order is 0 only under release-order serving, and 8eb1 wasn't served in release order. The order's charge is the
     I/O tie's (`io_tie`, a draft), outside the slice's proof.
 
@@ -96,7 +96,7 @@ decisions past the count with en 0, and 33 idle steps). The seal's rows are in `
 - The honest execution phase charges 27 bits from the session's carry into it, ((58, 50), (58, 0), (392, 48)) at run 0. It
   would charge 28 from the priors and 25 from counts fitted to it.
 - That carry is the chain over execution phases 0 … 211, each one's decisions as its own async replay asks them
-  (`replay.decisions` on `replay_vectors.served_window`), 3,448 bits.
+  (`replay.decisions` on `replay_vectors.workload`), 3,448 bits.
   - Over all 339 execution phases the chain charges 5,500 bits, against 5,593 if every one restarted at the priors.
   - The sync replay (`slice_inputs` at AS = 0) asks the same decisions on 309 execution phases, asks others on 5 (30, 59, 118,
     147 and 235) and refuses 25. So the chain is the class's, each execution phase's decisions as the AsyncScheduler asks them.

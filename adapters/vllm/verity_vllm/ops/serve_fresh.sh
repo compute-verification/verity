@@ -2,7 +2,7 @@
 # Serve Llama 3.2 1B INT8 through the vLLM adapter from a clone of this tree, on a machine of your own, and seal what it served:
 # the environment and the taps (pod_bootstrap.sh), the public base from Hugging Face with no token and the INT8 pin by the
 # tree's recipe, the workload file by the store's public fetch with no key, `predict row`, the traced Build, `serve-openai`
-# committing every value, one request (tools/served_run/serve_load.py), and the server stopped by its pid so it seals its window.
+# committing every value, one request (tools/workload/serve_load.py), and the server stopped by its pid so it seals its window.
 #
 #   bash adapters/vllm/verity_vllm/ops/serve_fresh.sh [--work DIR] [--gpu N] [--dry-run]
 #
@@ -132,7 +132,7 @@ SERVE=("$VENV/bin/verity-vllm" serve-openai --model "$MODEL" --revision "$REV" -
   --window-steps 256 --required-manifest "$W/predicted/manifest.json" --hidden-so "$HSO" --norm-tap-so "$NSO" --tap-cap-mb 2048
   --admit release-order --window-requests 1 --max-model-len 512 --window-gb 4 --disk-floor-gb 5 --seal-hold-gb 8
   --seal-warm-gb 0 --copy-records-to "$W/records")
-LOAD=("$PY" adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODEL" --varied 1 --rate 1000 --max-tokens 4
+LOAD=("$PY" adapters/vllm/tools/workload/serve_load.py --port "$PORT" --model "$MODEL" --varied 1 --rate 1000 --max-tokens 4
   --prompt-range 16:24 --seed 1 --out "$W/load.jsonl")
 if [ "$DRY" = 1 ]; then
   echo "step serve: ${SERVE[*]}"; echo "step request: ${LOAD[*]} --release UUID"

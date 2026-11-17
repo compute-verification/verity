@@ -517,10 +517,9 @@ the figures: this page keeps none.
 ## The application
 
 **No run of record of the remote verifier yet:** `remote-v1 check` (to be `verity verify remote`) has none. The remote application
-is `applications/remote.toml` (`applications/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The vLLM served
-run runs both halves on one served run, PoUW's as a development run:
+is `applications/remote.toml` (`applications/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The vLLM workload runs both halves on one workload, PoUW's as a development run:
 
-- the vLLM served run (`adapters/vllm/tools/served_run/README.md`): Llama-3.2-1B INT8 served by vLLM on one H200, its
+- the vLLM workload (`adapters/vllm/tools/workload/README.md`): Llama-3.2-1B INT8 served by vLLM on one H200, its
   values committed while serving, a verification phase's proof blocks sampled by live coins, proved by Flock `--zk` and
   checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
   challenger's development key and credits nothing, and an H1 commitment's served execution blocks aren't yet a

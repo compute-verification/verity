@@ -7,7 +7,7 @@ execution phases need: `ReplayStep_v1` (`verity_vllm.compiler.replay_step`), wit
 `ReplayAdvance` beside each step and `ReplayLoad` once an execution phase.
 
 **A served execution phase as the slice's input** (`benchmarks/network_e2e/encodings/replay_vectors.py`):
-- `served_window(records, w)` cuts execution phase w out of a served scheduler trace (the recorder's `advice_trace.jsonl`): the
+- `workload(records, w)` cuts execution phase w out of a served scheduler trace (the recorder's `advice_trace.jsonl`): the
   header, the arrivals the engine core added before the execution phase's first step, and its steps, renumbered from that step.
   It also returns the session index of the execution phase's first arrival. It refuses an execution phase the trace doesn't open and
   close, and one that opens on an engine still holding a request.
@@ -47,7 +47,7 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
   reference on it and on its negatives ([compile-slice.md](compile-slice.md))
   (`tests/adapters/vllm/tests/compiler/test_network_attester_compile_slice_w212.py`).
 - `ReplayStep_v1` at AS = 1 is w212's served scheduler on all 22 of its async units, circuit and reference
-  (`tests/benchmarks/network_e2e/encodings/test_served_window.py`).
+  (`tests/benchmarks/network_e2e/encodings/test_workload.py`).
 - At 8eb1's engine class, its AsyncScheduler included (AS = 1, the trace's: `--slice 212 --served SEAL --R 8 --W 1
   --A 9 --Q 4 --D 32 --P 54 --K 4`), w212 is
   `tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class_async.json`: its 3 arrivals in 4 slots,
@@ -133,7 +133,7 @@ decisions `[1, 1, 1]`, 38 steps; its sync replay diverges from the trace at step
   caching), 38 proof blocks, the last schedule on the drained engine dropped. Its charge is from the session's carry
   after execution phase 0, whose decisions `[1, 1, 1]` charge 24 bits; w1's then charge 21.
 - `ReplayStep_v1` at AS = 1 and the class is w1's served scheduler on all 39 of its async units, circuit and reference
-  (`tests/benchmarks/network_e2e/encodings/test_served_window.py`).
+  (`tests/benchmarks/network_e2e/encodings/test_workload.py`).
 - `CompileSlice_v1` takes it at AS = 1, with two parts that sync didn't need:
   - **The reference at AS = 1.** It reads its entries by `verity_vllm.compiler.replay_chain`'s names at its shape
     (`running_names`, `waiting_names`, `arrival_names`) in `_state`, `_row`, `_inputs` and `check`'s decoding of `cert`
