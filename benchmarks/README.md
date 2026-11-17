@@ -268,7 +268,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `inference_only/` | the inference-only policy of Llama 3.2 1B as served, stated, and of the class this tree builds, with the Lean count's verdict on it, and each one's number: the least slowdown of training run inside the policy's inference blocks, under the min-cut bound | maintained |
 | `slowdown/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
 | `nci/` | the sources, parameters and policies the inference-only policy's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
-| `training_slowdown/` | the grader (`grader/`): a training step's matrix products, their multiply-adds and output wires, and the circuit's size, read off the Boolean circuit a lane hands over, beside training's slowdown code's trace of the same step; `verity bench training-slowdown CONFIG`, an attack config's jobs, each found by its label and run where it is missing | maintained |
+| `../calibration/training/` | the grader (`grader/`): a training step's matrix products, their multiply-adds and output wires, and the circuit's size, read off the Boolean circuit a lane hands over, beside training's slowdown code's trace of the same step; `verity bench training-slowdown CONFIG`, an attack config's jobs, each found by its label and run where it is missing | maintained |
 
 ### Kernels
 
@@ -281,10 +281,10 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`) and the store's load with bandwidth receipts (`p2_stage`) | maintained |
 | `kernels/` | the served path's exact kernels and what a kernel build ships with: the exact W8A8 linear (`s8_linear`), vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`), the nvcc a job's own library compiles with (`job_nvcc.sh`), and the Marlin MoE path's `moe_align_block_size` made a function of its inputs by the integration's `verity_vllm.engine.moe_align`, checked run to run and against the pin's op and timed against it (`moe_align`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
-| `tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
-| `tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and each sm_120a multiplier priced against dense NVFP4 | maintained |
-| `native_peak/` | a card's measured dense-GEMM throughput for one datatype (`native-peak/v1`) | maintained |
-| `tensor_duty/` | the falsification test of the H200 card's tensor clock: dense tensor MACs a second over the host's wall clock by tensor duty cycle, operand class and fill, at maximum power, against 132 x 4096 x `clock.tensor` (timings only) | maintained |
+| `../calibration/tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
+| `../calibration/tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and each sm_120a multiplier priced against dense NVFP4 | maintained |
+| `../calibration/native_peak/` | a card's measured dense-GEMM throughput for one datatype (`native-peak/v1`) | maintained |
+| `../calibration/tensor_duty/` | the falsification test of the H200 card's tensor clock: dense tensor MACs a second over the host's wall clock by tensor duty cycle, operand class and fill, at maximum power, against 132 x 4096 x `clock.tensor` (timings only) | maintained |
 
 ### Proving and recursion
 
@@ -301,7 +301,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `prove/` | `verity bench prove`, the one command for a proof system's prover on a workload: per block type the blocks proved per token, the ms per block and that figure's source, and the prover GPUs per serving GPU with every block proved or at a sampling plan, from the store's labelled records | maintained |
 | `proof_throughput/` | the proof blocks a second Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |
 | `commitments/` | the commitment schemes' cost: hashing leaves and building the tree, hiding leaves per row, and serving's per-step row tables | maintained |
-| `sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |
+| `../calibration/sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |
 | `spot_figures/` | the SPOT post's Figures 1-3 for a model from its cards (`spot-card/v1`) and SPOT's planner: what an adversary serving it on all of a scope's compute can exfiltrate, infiltrate or skip against total cost (each server configuration's serve tax plus the share of compute for verification) and against proof overhead, proof overhead per proof-block type, and the serve-time commitment's cost over fast serving (a model, not a measurement) | maintained |
 | `exfiltration/` | `verity bench exfiltration`: GLM-5.3's exfiltration capacity in GB over a monitoring period at 10% of total compute, the compute audit's part (the break-even planner's rows of record, from the store) beside the network attester's part (`certifier_term/`'s rows), every input labelled with its mark | maintained |
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
@@ -320,7 +320,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `bool_build_cost/` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule | maintained |
 | `compile_cost/` | what compiling a class-G window's Programs costs (`predict.steps.compile_steps`, GLM-5.3 at TP8 on one rank): wall time and peak RSS, by phase, its digests held to their pins | maintained |
-| `circuit_properties/` | structural properties of a Boolean circuit's counted operations, measured exactly: fan-out, fan-in, their count and s_× | maintained |
+| `../calibration/circuit_properties/` | structural properties of a Boolean circuit's counted operations, measured exactly: fan-out, fan-in, their count and s_× | maintained |
 | `route_capture/` | what a model executes when served: every engine step's launch-shape class under CUDA-graph serving, and the kernels of the first steps of each class; and the gap: every (route, statics) pair the captured steps need that class G's registered Definitions don't cover, with its owner | maintained |
 | `unit_lowering/` | writing a PoUW H1 circuit file (a leaf's lane and combine, or the whole tile unit, at any tile R × C): peak memory and wall time by K, the file's AND rows, bytes and block (k_log), its SHA-512 held to a reference, and where the memory goes | maintained |
 
@@ -340,7 +340,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `network_e2e/` | the network chain's steps after N2 (`chain.py`) held on fakes and recorded endpoint runs, the advice encodings (`encodings/`) and vLLM's scheduler traces (`traces/`) | maintained |
 | `certifier_term/` | the network attester's term for GLM-5.3 at the load of a node, a datacenter and the world, in bits and GB, each row by its check's own counting rule: the scan as the monitoring-period check charges it, the scan under each change to its check, and the design with no run behind it, without its stop block and with it (`network_traces/leak_bounds.py`'s runner) | maintained |
 | `network_sim/` | the workload's Programs (`workload/`): a Boolean MLP and vLLM's serving Program, which `verifier_cost` measures a verifier on | maintained |
-| `certifier_timing/` | the bits an interval a server moves through when the network attester releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
+| `../calibration/certifier_timing/` | the bits an interval a server moves through when the network attester releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
 | `scan_cost/` | what the network attester's scan costs for each second of execution phase it covers: proving seconds (the round's sessions and their staging) and the Lean verifier's CPU seconds on one core, at a fixed identity, each with its stages, a guard on the round's answer, a baseline and two targets | maintained |
 | `mempool/` | the network attester's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces; `stream.py` holds `CacheStep_v3`'s stream to it after every call): a window's cost at its busiest stretch, and `MemCheck_v1`'s and `CacheStep_v3`'s vectors | maintained |
 | `datacenter/` | a datacenter as Verity accounts for it, in a small Python API: the Program, hardware, binding, plan, run, claims and account | maintained |
@@ -350,7 +350,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `pous/` | every PoUS implementation on one dataset, by its effective weight bandwidth | maintained |
-| `bandwidth/` | the device ceilings PoUB's timing cites: how fast a card and a host write labels, and the chip's on-chip stores; and a node's own report of its interfaces' line rates, its disks' interfaces and its cards' usable memory | maintained |
+| `../calibration/bandwidth/` | the device ceilings PoUB's timing cites: how fast a card and a host write labels, and the chip's on-chip stores; and a node's own report of its interfaces' line rates, its disks' interfaces and its cards' usable memory | maintained |
 | `poub_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's demo is `demos/remote.toml`, not this | maintained |
 | `memory/` | `verity bench memory`, the front door for the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, at the data sheet's read bandwidth, from a gate run on the whole node, a recorded run or a loopback | maintained |
 | `kv_filler/` | the filler top-up beside vLLM serving, and what it costs inference | maintained |
@@ -358,14 +358,14 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `word_codec/` | the store's Sloth codecs (the word codec, the KV codec that PoUB's `codec.py` mirrors, the wide codecs): each a byte-exact reference, a CUDA kernel and its benchmark | maintained |
 | `codec_tensor/` | PoUB's receipts, leaves and receipt tree on the GPU, and the tensor-core wide-word codec | maintained |
 | `property_redteam/` | attacks on the stacking property and on the gate model's counts behind the encode bound | maintained |
-| `rate_squaring/` | squaring rates modulo the codec's primes on the GPU and on the host's AVX-512 IFMA, the evidence for PoUB's stated squaring ceiling | maintained |
+| `../calibration/rate_squaring/` | squaring rates modulo the codec's primes on the GPU and on the host's AVX-512 IFMA, the evidence for PoUB's stated squaring ceiling | maintained |
 
 ### Numerics
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `ppl/` | the perplexity an intervention on a served model's matmuls or attention costs, against bf16 and plain int8 | maintained |
-| `f32_exhaustive/` | a correctly rounded reference primitive (`F32LogRn_v1`, `F32ExpRn_v1`) against MPFR, or a Boolean version (`F32Sqrt_v2`) against its word, on all 2^32 binary32 words | maintained |
+| `../calibration/f32_exhaustive/` | a correctly rounded reference primitive (`F32LogRn_v1`, `F32ExpRn_v1`) against MPFR, or a Boolean version (`F32Sqrt_v2`) against its word, on all 2^32 binary32 words | maintained |
 | `definitions/` | the GPU probes behind the numerics Definitions: the approximate instructions FlashAttention-2 and the RMSNorm kernel run (`MUFU` exp2, reciprocal, square root and tanh), measured on every 32-bit input | maintained |
 | `numerical/` | the bench spine (`verity_numerical.bench`) that Flock and `circuit-check` import, and the per-unit-type cost inventory; the archived proof systems' tables are in the evidence store | frozen |
 

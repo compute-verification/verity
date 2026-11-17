@@ -176,7 +176,7 @@
   "art:80d0fa3b94c1d022767ce27f240113d9217adeb1530c4fa0c548639ed41224de": "tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate",
   "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-links",
   "art:b3c6b626af8e260c5d51316ab4cb69b8059cb2823a4dd16e4e57b11f6c7711b4": "tests/verity/protocols/proofs/spot/verifier/fixtures/form-refusals",
-  "art:5b4ba00d45618b4cf4aca1ccc01003e504f1e4dcfd517b9744e9f87ee31a6b0a": "verity/circuits/silicon/discrepancy_log.json",
+  "art:d351a150a5b589d8ab65ab0ba90502150193d4bd84992e177db38c578bf8e1fd": "verity/circuits/silicon/discrepancy_log.json",
   "art:7dd1c98def937458596a43889730245b4b2dff3c71af75cec5ae9e8dee0e9190": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/arith_encode_vectors.json",
   "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "calibration/training/data/v3-selection.json",
   "art:1881d170c2833e3de28fa41662946272c99ca3e7edd13f10a3219b51bc657892": "tests/benchmarks/network_e2e/encodings/fixtures_draft",
@@ -253,7 +253,7 @@
       "art:824640c83f0408af007797dc8b5ceb902aafac8aaaeb81ae0f4859f89d5f3560",
       "art:b87fde52ae9f7ac0d129141534fcd4e56cc9bd06728bb0b658d155b521c3cdf9"
     ],
-    "art:5b4ba00d45618b4cf4aca1ccc01003e504f1e4dcfd517b9744e9f87ee31a6b0a": [
+    "art:d351a150a5b589d8ab65ab0ba90502150193d4bd84992e177db38c578bf8e1fd": [
       "art:aac898b703462ecb19c5d7460baf4690980d8e121a8b40e1745a4759a05d8fe6",
       "art:e960ec04a528595710d77cf274c57edc1a0b9be2d475b64a4a27ef0b93a68a8a",
       "art:5bf4b57b082bd187fe07849babf4db172843c5c71efd2ffbb0ee65b3bbd9105f",
@@ -265,7 +265,8 @@
       "art:92fc75530885f63076a7a5770ee5fc0e9d3259e7b8738ca82fd37c7047a8de58",
       "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903",
       "art:0f06d319352cda8ee686374ee342ad0e6ffd16ee19cd845b365ca33e09af8cc5",
-      "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d"
+      "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d",
+      "art:5b4ba00d45618b4cf4aca1ccc01003e504f1e4dcfd517b9744e9f87ee31a6b0a"
     ]
   }
 }

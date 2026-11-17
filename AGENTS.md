@@ -50,7 +50,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     over channels. `verity_config`, its own distribution, is `tools/config/`.
   - `tools/difftest/`: the differential tests that hold the Python to each Lean (`verity_difftest`).
     `verity/protocols/compose/verifier/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
-- `calibration/hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
+- `calibration/`: the cards, the probes and the measurements that choose parameters. `calibration/hardware/` is the
+  data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
   base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design

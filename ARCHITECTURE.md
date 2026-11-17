@@ -282,7 +282,6 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | vLLM's scheduler and the advice format, which rule 1 keeps out of `verity/` | The modules that restate the scheduler (the replay step and chain, the compile slices, the cache step, the served rows, tie and statics, the advice check) are in `adapters/vllm/verity_vllm/compiler/`. Four files of the advice's format and its charge are in network attestation's `verifier/` and `prover/` (`advice.py`, `arith_encode.py`, `charge_chain.py`, `window_charge.py`) | The four stay until network attestation takes the advice through an interface: the trusted tie service reads the format, and the charge is mirrored in network attestation's Lean (`AdviceV1`, `WindowCharge`), so moving it changes a Lean statement |
 | The areas of `security/` | named before the carve | each carries its protocol's name, and the accounting area holds one protocol's files |
 | Applications | `demos/`, the name sections 3 to 6 still use | `applications/`, one file per application, run by `verity run NAME` |
-| Calibration | `calibration/hardware/`'s data sheets, and under `benchmarks/` the probes and harnesses that choose a parameter or test an assumption one rests on | `calibration/`, which nothing imports |
 
 **Code that has to be written**
 

@@ -609,15 +609,15 @@ def _benchmarks_packages() -> set[str]:
     ``__init__.py``) on its suites' ``pythonpath`` roots inside it, and ``benchmarks`` itself, a namespace from the
     repository root.  A bare module on such a root (``run``, ``inputs``, ``pous``) is too common a name to match by name;
     reaching one takes a path into ``benchmarks/``, which ``_path_loads`` finds."""
-    out = {"benchmarks"}
-    tracked = subprocess.run(["git", "ls-files", "-z", "--", "benchmarks/*pyproject.toml"], cwd=ROOT, check=True,
+    out = {"benchmarks", "calibration"}
+    tracked = subprocess.run(["git", "ls-files", "-z", "--", "benchmarks/*pyproject.toml", "calibration/*pyproject.toml"], cwd=ROOT, check=True,
                              capture_output=True).stdout
     for rel in (p for p in tracked.decode().split("\0") if p):
         base = (ROOT / rel).parent
         tool = tomllib.loads((ROOT / rel).read_text(encoding="utf-8")).get("tool", {})
         out |= {Path(p).name for p in tool.get("hatch", {}).get("build", {}).get("targets", {}).get("wheel", {}).get("packages", [])}
         for entry in tool.get("pytest", {}).get("ini_options", {}).get("pythonpath", []):
-            if (root := (base / entry).resolve()).is_relative_to(ROOT / "benchmarks"):
+            if any((root := (base / entry).resolve()).is_relative_to(ROOT / d) for d in ("benchmarks", "calibration")):
                 out |= {init.parent.name for init in root.glob("*/__init__.py")}
     return out
 
@@ -627,7 +627,7 @@ def _benchmarks_packages() -> set[str]:
 PATH_LOADERS = {"spec_from_file_location", "SourceFileLoader", "run_path", "addsitedir"}
 #: Calls whose result is a path built from their arguments.
 PATH_CALLS = {"Path", "PurePath", "str", "fspath", "join", "joinpath", "abspath", "realpath", "normpath", "expanduser"}
-BENCHMARKS_PATH = re.compile(r"(?:^|[/\\])benchmarks(?:[/\\]|$)")
+BENCHMARKS_PATH = re.compile(r"(?:^|[/\\])(?:benchmarks|calibration)(?:[/\\]|$)")
 
 
 def _into_benchmarks(e: ast.AST, names: Set[str] = frozenset(), constants: Set[str] = frozenset()) -> bool:
@@ -722,9 +722,9 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
     alt = "|".join(map(re.escape, sorted(packages)))
     named = [re.compile(rf"""(?:import|from)\s+(?:{alt})\b|(?:{"|".join(IMPORT_CALLS)})\(\s*["'](?:{alt})\b"""),
              re.compile(rf"""["'](?:{alt})(?:\.\w+)*[.:]\w+["']""")]
-    quoted = re.compile(r"""["'][^"'\n]*\bbenchmarks\b[^"'\n]*["']""")
+    quoted = re.compile(r"""["'][^"'\n]*\b(?:benchmarks|calibration)\b[^"'\n]*["']""")
     loads = ("sys.path", *PATH_LOADERS)
-    ours = {rel: text for rel, text in texts.items() if not rel.removeprefix("tests/").startswith("benchmarks/")}
+    ours = {rel: text for rel, text in texts.items() if not rel.removeprefix("tests/").startswith(("benchmarks/", "calibration/"))}
     trees: dict[str, ast.AST] = {}
     #: Each upper-case module constant bound to a path into benchmarks/, with the modules (by last name) that bind it.
     owners: dict[str, set[str]] = {}
@@ -754,7 +754,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
         return _into_benchmarks(e, names, visible[rel])
 
     by_name = {rel for rel, text in ours.items() if any(p in text for p in packages) and any(r.search(text) for r in named)}
-    new = sorted(by_name | {rel for rel, text in ours.items() if "benchmarks" in text and quoted.search(text)})
+    new = sorted(by_name | {rel for rel, text in ours.items() if ("benchmarks" in text or "calibration" in text) and quoted.search(text)})
     nodes: dict[str, list[ast.AST]] = {}
     assigned: dict[str, list[tuple[str, ast.AST]]] = {}
     while True:
@@ -858,7 +858,7 @@ def test_a_benchmarks_import_is_found() -> None:
         "x/other.py": "import sys\nfrom y import settings\nsys.path.insert(0, str(settings.SESSION))\n",
         "x/local.py": "from x import config, tool as platform\nplatform.run(config.SESSION)\n",
     }
-    found = _benchmarks_importers(texts, {"benchmarks", "verity_bench", "datacenter"})
+    found = _benchmarks_importers(texts, {"benchmarks", "calibration", "verity_bench", "datacenter"})
     assert found == {
         "x/names.py": ["1: verity_bench.vllm", "2: calibration.tc_probe", "4: datacenter.graph", "5: benchmarks.commitments.tool"],
         "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/census']"],
@@ -1119,6 +1119,10 @@ WORLD_PATH = re.compile(r"(?<![\w.\-])(hardware|calibration)[/\\]")
 WORLD_PATHS_ALLOWED = {
     "device.py": "proofs: the card and node readers' built-in directories, `CARDS` and `NODES`, until every caller names "
                  "its own",
+    "protocols/resource_accounting/memory/poub/verifier/timing.py": "memory-accounting: each bound's note cites the probe that measured it",
+    "protocols/proofs/spot/prover/cost/inputs.py": "proofs: `MEASURED`, the sampling plan's measured inputs, read by default until every caller passes them",
+    "circuits/silicon/models.py": "circuits: each model's source string cites the probe run that measured it",
+    "circuits/silicon/instructions.py": "circuits: each instruction's source string cites the probe run that measured it",
 }
 
 

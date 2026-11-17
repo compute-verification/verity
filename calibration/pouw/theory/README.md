@@ -11,7 +11,7 @@ a test or the Lean reads it, and when the TS fold assumptions are retired, their
 ## Try it
 
 ~~~sh
-uv run python benchmarks/pouw/theory/nosum.py
+uv run python calibration/pouw/theory/nosum.py
 ~~~
 
 This checks that no fixed-function unit on sm_120 writes a fresh committed sum-of-products word, on a CPU, and ends
@@ -20,7 +20,7 @@ with `19/19 checks OK`. Every check prints its count of checks passed and exits 
 `run.py` runs every check, each in its own process, and passes when each exits 0:
 
 ~~~sh
-uv run python benchmarks/pouw/theory/run.py --quick
+uv run python calibration/pouw/theory/run.py --quick
 ~~~
 
 Without `--quick`, one search runs for CPU-hours. The sm_120 probes, the `*.sh` jobs, need an RTX PRO 6000 and run
