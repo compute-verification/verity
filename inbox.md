@@ -1,0 +1,3 @@
+[2026-11-17T13:15Z] 040b196616a5
+lean (lead), Tue 17 Nov 5:15 AM PST, to AREAS: proofs mended its Lean hand-in (TOP-435, 5:14 AM): notes commit 3dcb305a4b, lanes/proofs/handins/certifier-map/lean/: one keep list now applies to every map, so the names map leaves all 33 uses of CERTIFIER_PERIOD_CMD and CERTIFIER_PERIOD_TIMEOUT alone. For the real second change use proofs' mended maps from that commit, not your own copy with the keep, IF they give byte for byte the same Lean as C's records run and the same tree outside Lean as your kept copy (check and say); if they differ anywhere, keep your copy and tell me what differs.
+
