@@ -66,6 +66,7 @@ from typing import Any
 import jsonschema
 import pytest
 from verity import device as SITE
+from verity.commitments.periods import interface as IF
 from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
@@ -3415,7 +3416,8 @@ if a[0] == "window-circuit":
         open(os.environ["ORDER"] + ".circuit", "w").write(json.dumps([out.name, *a[a.index("--window-registration"):]]))
     else:
         open(os.environ["ORDER"] + ".circuit", "w").write("\\n".join(a))
-    out.write_text(json.dumps(tables))
+    out.write_text(json.dumps({{**tables, **({{"tables": os.environ["RECORD_TABLES"]}} if os.environ.get("RECORD_TABLES") else {{}}),
+                               **json.loads(os.environ.get("RECORD_RUN_FIELDS", "{{}}"))}}))
     print(json.dumps({{"bits": 772, "count": {{"free": 3, "inputs": 10, "registered": 7, "units": 1}}}}))
 else:
     assert a[0] == "window-commit"
@@ -3666,17 +3668,22 @@ TIED_SAMPLING_DESIGN = {"law": "stratified", "k": 1, "strata": [{"template": t, 
                                                    for i, t in enumerate(("a@0", "ids@0", "ids@1"))]}
 
 
-def _tied_commit(tmp_path: Path, bound: str | None, sampling_design: dict | None = TIED_SAMPLING_DESIGN) -> None:
+#: every run field a circuit record keeps beside its circuit, each at a toy value
+RUN_FIELDS = {k: 4 for k in IF.RUN_FIELDS}
+
+
+def _tied_commit(tmp_path: Path, bound: str | None, sampling_design: dict | None = TIED_SAMPLING_DESIGN,
+                 run_fields: Mapping[str, Any] | None = None) -> None:
     """Window 7's commit as the tie left it in the toy serve dir: its docket R (its sample ``sampling_design``; None, none) and
-    circuit, which reads H1's tables, its answer, and H1's log naming W and, unless ``bound`` is None, the record H1 bound
-    (``same``: R; ``other``: another)."""
+    circuit, which reads H1's tables (with ``run_fields`` beside its own), its answer, and H1's log naming
+    W and, unless ``bound`` is None, the record H1 bound (``same``: R; ``other``: another)."""
     d = tmp_path / "serve"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     vw.mkdir(parents=True)
     (d / "h1" / "w7").mkdir(parents=True)
     r = {"format": "toy", "after": W_OF_7, **({"law": sampling_design} if sampling_design else {})}
     (vw / "registration.json").write_text(json.dumps(r))
-    (vw / "circuit.json").write_text(json.dumps({"run": "ab", "tables": "h1"}))
+    (vw / "circuit.json").write_text(json.dumps({"run": "ab", "tables": "h1", **(run_fields or {})}))
     (d / "h1" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
     log = [{"window": 7, "kind": "registration", "file": "w7/registration.json", "digest": "aa" * 64}]
     if bound is not None:
@@ -3701,8 +3708,29 @@ def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(t
     assert lines[1].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close, its registration the Commit record H1 bound "
                                "before the sample coin (R ") and '"run": "ab"' in lines[1] and "population" not in lines[1]
     assert lines[2] == (f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the "
-                        "verifier's own window-circuit record: PASS")
+                        "verifier's own window-circuit record less its run fields: PASS")
     assert "--pearl-tables" not in (tmp_path / "order.circuit").read_text().split("\n")
+
+
+def test_under_h1_tie_the_circuit_is_held_less_the_run_fields_the_record_and_the_commit_both_keep(tmp_path):
+    """Both records keep every run field (`interface.RUN_FIELDS`), as `interface.descriptor_record` keeps the one its
+    members are stated by: the registration binds them and a circuit's digest leaves them out, so the commit's circuit is
+    held to the verifier's with neither's and the audit goes on."""
+    _tied_commit(tmp_path, "same", run_fields=RUN_FIELDS)
+    rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1", RECORD_RUN_FIELDS=json.dumps(RUN_FIELDS))
+    assert rc == 0 and "audit" in order, (lines, order)
+    assert f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the verifier's own " \
+           "window-circuit record less its run fields: PASS" in lines, lines
+
+
+def test_under_h1_tie_a_committed_circuit_other_than_the_verifiers_is_refused_before_the_audit(tmp_path):
+    """A committed circuit that differs from the verifier's record in anything but its run fields fails the hold, and no
+    audit runs."""
+    _tied_commit(tmp_path, "same", run_fields=RUN_FIELDS)
+    rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1", RECORD_RUN_FIELDS=json.dumps(RUN_FIELDS), RECORD_TABLES="another")
+    assert (rc, order) == (16, ["window-circuit"]), (lines, order)
+    assert f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the verifier's own " \
+           "window-circuit record less its run fields: FAIL" in lines, lines
 
 
 #: the flags naming the challenger whose coins records_audit's audit takes
@@ -4507,7 +4535,7 @@ def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records
                                   "--tie-prefix": None, "--ports": "3"}
     assert f"V3C-TIE: the audit read its records tied to W {'cd' * 8}…, R chained right after it: PASS" in lines
     d, tag = tmp_path / "serve", W63K4.replace(",", "-")
-    assert any(x.endswith("window-circuit record: PASS") for x in lines), lines
+    assert any(x.endswith("window-circuit record less its run fields: PASS") for x in lines), lines
     assert (d / "pearlplus" / "w7" / "tie" / S.CIRCUIT_RECORD).read_bytes() == \
         (d / f"window-circuit-w7-{tag}.json").read_bytes(), "the record reads the period's circuit against V3c's record"
 
