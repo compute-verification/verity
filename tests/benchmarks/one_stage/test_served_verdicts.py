@@ -888,7 +888,7 @@ def test_a_development_runs_record_says_so_in_its_report_and_its_line(tmp_path, 
 
 @pytest.mark.parametrize("development", [False, True])
 @pytest.mark.parametrize("verdict", ["accept", "reject"])
-def test_a_development_runs_sampled_proofs_row_and_combined_verdict_are_not_of_record(tmp_path, development, verdict):
+def test_a_development_runs_spot_row_and_combined_verdict_are_not_of_record(tmp_path, development, verdict):
     row = {**_accepted(), "verdict": verdict, "answer_from": S.LEAN_HERE}
     answer = {"protocol": "verity/remote/v1", "verdict": "reject", "reason": "params"}
     report, _rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
@@ -900,7 +900,8 @@ def test_a_development_runs_sampled_proofs_row_and_combined_verdict_are_not_of_r
         return
     assert (got["verdict"], got["development"]["verdict"], got["answer_from"]) == ("missing", verdict, S.LEAN_HERE)
     assert got["why"] == f"{S.DEV_VERDICT}: {S.DEVELOPMENT_RUN}"
-    assert line["verdicts"]["sampled proofs"] == S.DEV_VERDICT and line["development"] == {"sampled proofs": verdict}
+    spot = S.NAMES["integrity"]
+    assert line["verdicts"][spot] == S.DEV_VERDICT and line["development"] == {spot: verdict}
     assert line["composed"] == "pending" and report["composed"]["verdict"] == "pending"
     assert line["lean"] == f"read; {S.DEVELOPMENT_RUN}, so Lean's answer reject is not the record's"
 
