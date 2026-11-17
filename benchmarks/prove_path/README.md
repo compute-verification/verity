@@ -168,9 +168,8 @@ the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc 
   sequence the trace's transfer gates carry (`Carries`), with every status complete (`Covered`). With no proof block incorrect,
   `free` is empty and `Accepted` is exact.
 
-**The leak bound.** `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted`
-(`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any compiled
-verifier. Given `SampledAuditAccepted` and `Compiled.KS` there, except with probability δ + ε_ks + ε_bind, an accepted
+**The leak bound.** `NetTiming.sampledLeak_reg` composes the property with the count
+`NetTiming.encard_accSeqsSampled_le`, over any compiled verifier. Given `SampledAuditAccepted` and `Compiled.KS` there, except with probability δ + ε_ks + ε_bind, an accepted
 audit's carried sequences, cut at the monitoring period's end, number at most 2^c · #incorrectSets(δ) · 2^β · D^n, at whatever values the
 statement's registered inputs `reg` hold (`AsReg`). So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
 - c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the monitoring period's end lists as
@@ -186,7 +185,7 @@ stand-in partition rather than the whole execution phase, its free inputs are it
 declares, and `records_audit` labels the bound `vacuous` whenever they exceed the declared charge.
 
 Over a monitoring period, `NetTiming.SecurityProofs.PooledLeakAccepted` composes the execution phases. It takes each one's
-conditional miss probability and its leak relation as hypotheses, which `SampledKSLive` and `SampledLeakAccepted` at its
+conditional miss probability and its leak relation as hypotheses, which `SampledKSLive` and `sampledLeak_reg` at its
 history would discharge, and doesn't discharge them yet.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; each rank's `ranks.<r>.charge` holds

@@ -11,7 +11,7 @@ import Proofs.Certifier.Occupancy
 
 `docs/network-transparency/timing-channel.md` §2.5 ("Ingress content") and §3.2. The interaction is read inward
 (`NetTiming.Protocol.Ingress`): the outside holds the message and reacts to every record, and a decoder inside X reads
-the wire. On runs whose statuses are complete and whose frames follow the prescribed content, a record sequence is
+the records. On runs whose statuses are complete and whose frames follow the prescribed content, a record sequence is
 determined by its occupancy counts and its jitter classes.
 -/
 
@@ -184,46 +184,5 @@ theorem encard_ingress_obsDecodable_le_contents (I : Interaction L K S Msg In Ac
         exact Set.mk_mem_prod (hcOf m hm).1 (Finset.mem_coe.mpr (hT m))
     _ = Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
         rw [Set.encard_prod, Set.encard_coe_eq_coe_finsetCard, hcard]
-
-/-- **The ingress timing bound, from the records.** On runs whose statuses are complete up to `n` and whose frames on
-each link are a prefix of the prescribed content, a decoder inside X that reads the records tells apart at most
-`(∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
-theorem encard_ingress_obsDecodable_le (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
-    (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
-    (c : Fin L → List (List Bool)) (Ms : Set Msg)
-    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
-    (hc : ∀ m ∈ Ms, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
-    (dec : List (Obs L K S) → Msg) (hdec : ∀ m ∈ Ms, dec (I.obsRun m n) = m) :
-    Ms.encard ≤ (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) := by
-  have := encard_ingress_obsDecodable_le_contents I n D r hW4 hr hJ {c} Ms hacc
-    (fun m hm => ⟨c, rfl, hc m hm⟩) dec hdec
-  rwa [Set.encard_singleton, one_mul] at this
-
-/-- **The ingress timing bound.** On runs whose statuses are complete up to `n` and whose frames on each link are a
-prefix of the prescribed content, a decoder inside X that reads the wire tells apart at most
-`(∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
-theorem encard_ingress_decodable_le (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
-    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hW4 : Packed I.certifier)
-    (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
-    (c : Fin L → List (List Bool)) (Ms : Set Msg)
-    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
-    (hc : ∀ m ∈ Ms, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
-    (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m) :
-    Ms.encard ≤ (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) :=
-  encard_ingress_obsDecodable_le I n D r hW4 hr hJ c Ms hacc hc (fun o => dec (o.mapIdx view))
-    (fun m hm => by rw [← I.wireRun_eq view hW2]; exact hdec m hm)
-
-/-- **Content plus timing.** When each message's frames follow some content assignment in `Cs`, a decoder inside X
-that reads the wire tells apart at most `#Cs · (∏_ℓ (r ℓ + 1))^n · D^n` messages. -/
-theorem encard_ingress_decodable_le_contents (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
-    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hW4 : Packed I.certifier)
-    (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
-    (Cs : Set (Fin L → List (List Bool))) (Ms : Set Msg)
-    (hacc : ∀ m ∈ Ms, StatusComplete n (I.obsRun m n))
-    (hc : ∀ m ∈ Ms, ∃ c ∈ Cs, ∀ ℓ, linkFrames (I.obsRun m n) ℓ <+: c ℓ)
-    (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m) :
-    Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞) :=
-  encard_ingress_obsDecodable_le_contents I n D r hW4 hr hJ Cs Ms hacc hc (fun o => dec (o.mapIdx view))
-    (fun m hm => by rw [← I.wireRun_eq view hW2]; exact hdec m hm)
 
 end NetTiming

@@ -22,13 +22,13 @@ device model (`ResourceAccounting.Wipe.Strategy`), with the labels `prf K` of th
   `eps + prfAdvantage prf (τ.distinguisher …) + τ.deltaNet …`,
 
 on the event the auditor's devices observe (`ResourceAccounting.Wipe.Strategy.Observed`): every spot read answered with its
-label, as the memory challenger signs it, and the certifiers' count of the egress at most `E`. No term is zero:
+label, as the memory challenger signs it, and the network attesters' count of the egress at most `E`. No term is zero:
 
 * the labels' PRF advantage (`Pous.StreamedWipe.prfAdvantage`) against the distinguisher the adversary's moves make
   (`ResourceAccounting.Wipe.Strategy.distinguisher`), SHA-512's under `prf/sha-512`;
 * `δ_net` (`ResourceAccounting.Wipe.Strategy.deltaNet`), the probability that the observed event holds while the egress is
   outside a set `A` of at most `2^E` strings, which the network attester's guarantee bounds
-  (`NetTiming.Guarantees.SampledLeakAccepted`).
+  (`NetTiming.sampledLeak_reg`).
 
 The strategy is arbitrary, its fill any bits of the store up to `memory_bits`. The state the fill leaves out
 (`Verity.Wipe.unfilled`) is counted beside `foreign_bits`, as `SurvivorBound` counts it. The commitment is the one its

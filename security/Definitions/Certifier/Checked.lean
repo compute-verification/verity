@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # Checked inputs: free inputs a check on the whole run pins
 
-The leak bounds charge every free input outside the registered ones (`SampledLeakAccepted`, `PooledLeakAccepted`). A
+The leak bounds charge every free input outside the registered ones (`SampledLeakRegistered`, `PooledLeakAccepted`). A
 statement's *checked inputs* `chk` are free inputs whose values a check on the run fixes, given everything else the run
 reads: a memory-checked pool's reads, each the latest write before it, say. They cost no advice bits once the check holds
 on the whole run, since the run's other values then fix every egress row.

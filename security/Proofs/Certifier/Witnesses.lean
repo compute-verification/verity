@@ -63,7 +63,7 @@ Each guarantee that says what an accepted run establishes has two lemmas (the tw
 `G_honest`, its premises at an honest instance, and `G_nontrivial`, its conclusion false at an instance whose verifier
 accepts everything. Each builds its instance and takes no hypothesis.
 
-* `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`, `MonitoringPeriodLeakAccepted` (and
+* `SampledAuditAccepted`, `SampledLeakRegistered`, `MonitoringPeriodLeakAccepted` (and
   `ResourceAccounting.Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted`). Their premise `Compiled.KS` holds at SHA-512 at the
   deployed compiled form over the masked Flock record at the deployed relation, at a toy code that parses no statement,
   accepts no run and opens no session (`SamplingDeploy.toyCode`): `ks_toy`, from the compiler at Flock's KS there
@@ -140,7 +140,7 @@ theorem ks_toy : (toyL).KS shaD :=
       simp at hx)
 
 set_option synthInstance.maxSize 1024 in
-/-- **`SampledAuditAccepted`'s premise at the toy code**, which is `SampledLeakAccepted`'s too: `Compiled.KS`
+/-- **`SampledAuditAccepted`'s premise at the toy code**: `Compiled.KS`
 (`ks_toy`). The code accepts no run (`SamplingDeploy.run_rejV2_out`) and parses no statement, so the facts behind
 `Compiled.KS` hold there with nothing to check. At a code that accepts a run `Compiled.KS` stays the guarantee's
 hypothesis, which this lemma does not discharge. -/
@@ -465,16 +465,6 @@ theorem SampledAuditAccepted_nontrivial : ¬ KSAccepted shaD (sksL Bool) 1 1 1 (
   exact sksL_bound_fails (Coin := Bool) shaD _ _ []
     (fun w ⟨s, P, hs, hP, hrel, _⟩ => sksD_noR (Coin := Bool) shaD 0 le_rfl [] w ⟨s, P, hs, hP, hrel⟩)
     (by linarith [sksL_κ (Coin := Bool) []]) (h 0 le_rfl [] hscope Unit silentP)
-
-/-- **`SampledLeakAccepted`'s acceptance conclusion fails at the accepting verifier** `leakL`, at one step at `δ = 0`,
-with no input registered (`leakL_noRLeak`). -/
-theorem SampledLeakAccepted_nontrivial :
-    ¬ KSLinOn shaD (leakL Bool).V (ScopeAcc (leakL Bool) (fun _ => notLay) (fun _ => 1))
-      (RLeak shaD (leakL Bool).commit (leakL Bool).parse (leakL Bool).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0
-        (fun s => AsReg s.prog notLay 1 ∅) 1)
-      (leakL Bool).E ((leakL Bool).κ 0) (leakL Bool).γ (fun _ => 1) (Bext shaD (leakL Bool).V (leakL Bool).E) :=
-  fun h => leakL_bound_fails shaD _ _ [] (leakL_noRLeak shaD _ []) (by linarith [leakL_κ (Coin := Bool) []])
-    (h [] (leakL_scopeAcc []) Unit silentP)
 
 /-- **`SampledLeakRegistered`'s acceptance conclusion fails at the accepting verifier** `leakL`, at one step at
 `δ = 0`, with no input registered: at the statement `[]`, its silent prover's bound fails. -/

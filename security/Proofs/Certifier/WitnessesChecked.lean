@@ -39,7 +39,7 @@ import Proofs.Certifier.Checked
 /-!
 # The nontrivial lemma of the leak bound with checked inputs
 
-`SampledLeakChecked`'s acceptance conclusion fails at the accepting compiled verifier `leakL`, as `SampledLeakAccepted`'s
+`SampledLeakChecked`'s acceptance conclusion fails at the accepting compiled verifier `leakL`, as `SampledLeakRegistered`'s
 does, at the check every run passes, where the check misses with probability `0` on any runs (`checkedWitness_true`),
 the trace's among them: a witness in `RLeakChecked` is in `RLeak` (`rLeak_of_rLeakChecked`), and none is
 (`leakL_noRLeak`).

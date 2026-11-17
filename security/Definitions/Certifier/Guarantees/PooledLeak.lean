@@ -67,7 +67,7 @@ format holds the client's cells read back from the record. Its one named assumpt
 
 The statement is conditional: it holds for any audits that satisfy the two inputs. Over a monitoring period of live
 audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K₀ = |W_i|`) and the live
-`SampledLeakAccepted` (P2), neither discharged yet, so nothing here bounds the deployed system over a monitoring period
+`NetTiming.sampledLeak_reg` (P2), neither discharged yet, so nothing here bounds the deployed system over a monitoring period
 until that discharge lands.
 -/
 
@@ -98,7 +98,7 @@ after the earlier windows' coins `ω`, and `W z ω i ⊆ range (n i)` is the inc
 * `hesc`, the conditional escape: `Pr_x[acc z i ω x] ≤ (1 - q)^|W z ω i| + e i`, `q` the design's per-window
   detection probability (`Flock.Guarantees.SampledKSLive` at the history, not yet discharged);
 * `hleak`, the leak relation at that witness: `Pr[acc_i ∧ ¬LeakAt (W z ω i)] ≤ e' i` on the record's observations,
-  at the window's operator at the record's earlier windows (the live `SampledLeakAccepted`, P2, not yet discharged);
+  at the window's operator at the record's earlier windows (the live `NetTiming.sampledLeak_reg`, P2, not yet discharged);
 
 for `0 ≤ q ≤ 1` and `Fmax ≥ ln(1/δ)/q`:
 

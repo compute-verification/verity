@@ -35,7 +35,7 @@ spot reads one at a time and reads each label back under a deadline.
   runs the strategy on the labels it is given and outputs whether the run is accepted, keeps the foreign content and
   sends an egress in `A`). The network attesters' miss, `δ_net` (`Strategy.deltaNet`): the probability that the
   verdict accepts while the egress the strategy sent is outside `A`, a set of at most `2^E` strings for the published
-  `E`. The network attester's guarantee bounds it (`NetTiming.Guarantees.SampledLeakAccepted`: except with probability
+  `E`. The network attester's guarantee bounds it (`NetTiming.sampledLeak_reg`: except with probability
   `δ + ε_ks + ε_bind`, the accepted observation sequences number at most `2^bits`).
 -/
 

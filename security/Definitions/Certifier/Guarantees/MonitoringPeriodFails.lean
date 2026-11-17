@@ -43,7 +43,7 @@ patterns:
 
 * `failCount`, `FailsBelow`, `failPatterns`: the failed connections of a pattern, a bound on each fail cell, and the
   number of patterns of exactly `j` failures below their bounds;
-* `MonitoringPeriodLeakFails`: exactly `j` failures; `MonitoringPeriodLeakFailsAtMost`: at most `j`, with the held conclusion on every run;
+* `MonitoringPeriodLeakFailsAtMost`: at most `j` failures, with the held conclusion on every run;
   `MonitoringPeriodLeakCharged`: a charge that adds over periods, under weights on the number of failures (`KraftWeights`).
 
 **The pattern covers the operator and nothing else.** `op` and `ρ` are bound before the secrets and read the fail
@@ -88,60 +88,6 @@ open scoped NNRat
 
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
-
-/-- **The leak over a monitoring period, each failure charged as it happens: exactly `j` failures.**
-`MonitoringPeriodLeakChecked`, where each window's operator and registered values may follow the network attester's fail cells
-over the period (`op φ i` and `ρ φ i`, `φ` the fail cell of each connection, `failCell`): the secrets whose run
-fails exactly `j` connections, each below its bound, and whose every window meets `ExecutionPhaseGoodChecked`, number
-at most `failPatterns bound j` times `MonitoringPeriodLeakChecked`'s count. At `j = 0` the factor is one.
-
-`op` and `ρ` are bound before the secrets and read the fail pattern alone: a window's operator and registered values
-are fixed for each pattern before the run, so they carry nothing of the secret beyond the pattern, which the factor
-counts. Nothing else of the statement reads the pattern. -/
-def MonitoringPeriodLeakFails : Prop :=
-  ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-    (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg chk : AuditStatement → Finset ℕ)
-    (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Claims.Msg → ℝ) (Dj : ℕ)
-    {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
-    (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
-    (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
-      (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r))
-    {Conn : Type} [Fintype Conn] (ρ : (Conn → Option ℕ) → Fin n → ℕ → Bool)
-    (op : (Conn → Option ℕ) → Fin n → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool)
-    {Cell Srv Dev Z Par : Type} (arr : Srv → Conn → Arrivals Cell)
-    (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
-    (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
-    (rd : Par → (Fin n → List (Obs L K S)) → Conn → List (ℕ × CellView Cell))
-    (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
-    (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
-    (dec : (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : MonitoringPeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
-    (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
-    (hb : D.commit.Binds H) (bound : Conn → ℕ)
-    (j : ℕ),
-    (∀ m, ScopeAcc D lay k m →
-        CheckedWitness H D (certifierRun H D.commit L K S lay k tops) valid₁ ε₁ m →
-        CheckedWitness H D (certifierRun H D.commit L K S lay k tops) valid₂ ε₂ m →
-        ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
-      Claims.PrBad H D.V
-          (RLeakCertifierChecked H D.commit D.parse D.partition L K S lay k δ
-            (fun s => AsReg s.prog (lay s) (k s) (reg s)) (fun s r => valid₁ s r ∧ valid₂ s r) Dj tops)
-          D.E m P ≤
-        D.κ δ m + ε₁ m + ε₂ m + Real.sqrt (D.γ m * Claims.PrB H D.V P m) + (Bext H D.V D.E Ω P m).Pr H +
-          (Btap H D.V D.E D.commit D.parse tops Ω P m).Pr H) ∧
-      ((∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s)
-          (op (failCell (schedOf z) (arr (srvOf z))) i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) s (tops s)
-          ((run tap (schedOf z, srvOf z)).2 i)) →
-        {z | z ∈ Zs ∧ failCount (failCell (schedOf z) (arr (srvOf z))) = j ∧
-            FailsBelow bound (failCell (schedOf z) (arr (srvOf z))) ∧
-            ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
-              (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i)
-              ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
-          ((failPatterns bound j : ℕ) : ℕ∞) *
-            (Θ.encard * ((executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞)))
 
 /-- **The leak over a monitoring period, each failure charged as it happens.** `MonitoringPeriodLeakChecked`, where each
 window's operator and registered values may follow the network attester's fail cells over the period (`op φ i` and

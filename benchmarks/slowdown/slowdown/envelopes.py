@@ -366,7 +366,7 @@ class Certifier:
     #: the declared-ingress rule, and line rate the upper end until Lean proves the per-server bound
     declared_x: float = 1.0
 
-    CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "ResourceAccounting.Covered", "ResourceAccounting.TrustedUnits")
+    CITES = ("NetTiming.Guarantees.EncardIngressObsDecodableLeContents", "ResourceAccounting.Covered", "ResourceAccounting.TrustedUnits")
     INTAKE = ("draft:declared-ingress",)
     DECLARED = ("draft:declared-ingress", "draft:per-server-ingress")
 

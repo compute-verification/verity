@@ -20,13 +20,10 @@ conclusion false at an audit that accepts everything. Those statements read thes
   bound fails;
 * `obs0`, `obs1`: one step of one link of one slot, with no frame and with an empty frame;
 * `unitOp`: the operator, which sends nothing;
-* `acceptAll`, the verifier that accepts everything: `AccSeqsAt acceptAll` is `AccSeqs` with it in place of the
-  Program's acceptance;
+* `acceptAll`, the verifier that accepts everything;
 * `fxLeakI`: a sender whose secret is its every step's frame length, which `fxLeakDec` reads back from the last step of
-  the wire or the record;
-* `inI`: a certifier recording one frame a bucket (`oneRow`) in the first of two slots, every status complete;
-* `sampProg`: two inputs and the negation of the first, with one proof block `{0, 1, 2}` (`sampPart`) sampled Bernoulli
-  at rate `1/2` (`sampDesign`);
+  the record;
+* `inI`: a network attester recording one frame a bucket (`oneRow`) in the first of two slots, every status complete;
 * `fxRows`: a rows format of the Python network attester's fixture `fxQueue` (three connections), one window of ten
   buckets, whose schedule is `fxQueueSched`;
 * `noFormat`: the record format of a network attester with no connection over a monitoring period of no execution
@@ -74,15 +71,10 @@ def unitOp {L K S : ℕ} : ℕ → List (Obs L K S) → Unit := fun _ _ => ()
 
 /-! ## The verifier that accepts everything -/
 
-/-- The observation sequences of length `n` with jitter below `D` that the acceptance `acc` passes: `AccSeqs` with
-`acc` in place of the Program's acceptance (`accSeqs_eq_at`). -/
-def AccSeqsAt {L K S : ℕ} (acc : List (Obs L K S) → Prop) (n D : ℕ) : Set (List (Obs L K S)) :=
-  {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ acc o}
-
 /-- The verifier that accepts everything. -/
 def acceptAll {L K S : ℕ} (_ : List (Obs L K S)) : Prop := True
 
-/-- **A sender whose secret shows**: its secret `z` is its every action, and the certifier records and puts on the wire
+/-- **A sender whose secret shows**: its secret `z` is its every action, and the network attester records and puts on the wire
 one frame of `z` bits in the first slot, jitter class 0, its one status complete. -/
 def fxLeakI : Interaction 1 1 2 ℕ Unit ℕ (Obs 1 1 2) where
   certifier :=
@@ -102,7 +94,7 @@ def fxLeakDec (w : List (Obs 1 1 2)) : ℕ := ((w.getLast?.bind fun o => o.rows 
 /-- One frame `[true]` in the first of two slots. -/
 def oneRow : Row 2 (List Bool) := fun σ => if σ = 0 then some [true] else none
 
-/-- **A certifier at one frame a bucket**: at every step it records and puts on the wire `oneRow` on its one link,
+/-- **A network attester at one frame a bucket**: at every step it records and puts on the wire `oneRow` on its one link,
 jitter class 0, its one status complete. -/
 def inI : Interaction 1 1 2 Unit Unit Unit (Obs 1 1 2) where
   certifier :=
@@ -111,17 +103,6 @@ def inI : Interaction 1 1 2 Unit Unit Unit (Obs 1 1 2) where
       fault := fun _ => False }
   op := unitOp
   snd := fun _ _ _ => ()
-
-/-! ## A sampled audit with a possible incorrect proof block -/
-
-/-- Two inputs and the negation of the first, the negation returned. -/
-def sampProg : Claims.Sampling.Prog := ⟨[.input, .not 0, .input], [1]⟩
-
-/-- One class of one stratum of one proof block, `{0, 1, 2}`. -/
-def sampPart : Claims.Sampling.Partition := ⟨[[[[0, 1, 2]]]]⟩
-
-/-- The one class sampled Bernoulli at rate `1/2`. -/
-def sampDesign : Claims.Sampling.Design := ⟨[.bernoulli 1 2]⟩
 
 /-! ## The Python network attester's fixture -/
 
