@@ -169,7 +169,7 @@ theorem oneStageZk_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commit
         | none => exact absurd h1 (hthrow _)
         | some w => exact ⟨_, rfl⟩
 
-/-- **What v2 accepts on the blobs `bs`, it accepts at coins its challenger device sampled, or the run carries a break**
+/-- **What v2 accepts on the blobs `bs`, it accepts at coins its challenger device drew, or the run carries a break**
 (`CoinsFromLog` for v2): its answer's byte strings decode, and it accepts at the coins `ξ` its evidence's record shows,
 read under the challenger and window its parameters name (`d`); `ξ` is what a run of the device under that key released
 of the family after the registration's digest, a run the device's own ledger opens on the window, or the fixed finder

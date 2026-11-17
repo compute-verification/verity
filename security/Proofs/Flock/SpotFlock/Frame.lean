@@ -21,7 +21,7 @@ roots `Reveals` names):
   table's port `q` is named like (at `P`'s root and the position the session header gives for the row, among ports
   whose first with that root is `P`, through the path the header gives for it), or, at a one-table session, at a port
   `P` of port `q`'s published tree over the session's population (`pubPort`'s root, leaf count, domain and schema): at
-  `P`'s root and the row of the unit the sample sampled as `n`, among ports whose first with that root is `P`, through the
+  `P`'s root and the row of the unit the sample drew as `n`, among ports whose first with that root is `P`, through the
   path from that row (`pubPath`). Either port is the frame's own, read off the roots, so it need agree with `reg` or
   `pubPort` only on the four fields a registered read reads.
 
@@ -78,7 +78,7 @@ holds it, and is checked by the frame either
   ports `own` that the table's port `q` is named like: at `P`'s root and the position the session header gives for the
   row, among ports whose first with that root is `P`, through the path the header gives for it; or
 * at a one-table session, at a port `P` with the root, leaf count, domain and schema of port `q`'s published tree over
-  the session's population (`pubPort`): at `P`'s root and the row of the unit the sample sampled as `n`, among ports whose
+  the session's population (`pubPort`): at `P`'s root and the row of the unit the sample drew as `n`, among ports whose
   first with that root is `P`, through the path from that row (`pubPath`).
 
 A session of more than one table needs only the first: round 2 refuses a session split across Flock tables

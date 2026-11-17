@@ -50,7 +50,7 @@ the pieces their owners, and `decompB_lastSplitP` is `decompB_nextR` at it: the 
 
 `staged_rep_sampled` is the coin side of a `rec-residuals` piece: at a staged part whose statement shows coins `c`,
 the rep that check 5 builds (`RecCoins.Inner.rep`, whose `verifierRows` give the `v` it pins) has, at each round `m`,
-the values the coin sampled at the one inner round `g + 1` of its stream at round `sp m` (`staged_coinTie_sampled_unique`).
+the values the coin drew at the one inner round `g + 1` of its stream at round `sp m` (`staged_coinTie_sampled_unique`).
 -/
 
 @[expose] public section
@@ -172,7 +172,7 @@ theorem rep_ok {inn : RecCoins.Inner} {sh : Flock.Shape} {extras : Array Flock.C
 /-- **The rep check 5 builds is at the coins the transcript shows**: at a staged part whose statement shows coins `c`,
 wherever check 5 loads the inner statement from its source and builds rep `r` (`Inner.rep`, the rep whose
 `verifierRows` give the `v` a `rec-residuals` part's port must hold), each of the rep's rounds `m` is what the coin
-sampled at the inner round `g + 1`, the one round of `R` of rep `r`'s stream at round `sp m`, and the rep's `v` is
+drew at the inner round `g + 1`, the one round of `R` of rep `r`'s stream at round `sp m`, and the rep's `v` is
 `verifierRows` at those rounds. -/
 theorem staged_rep_sampled {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
     (hc : showsTr recRead s x xO c) :

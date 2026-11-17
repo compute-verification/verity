@@ -13,7 +13,7 @@ public import PouwPearlPlus.Credit
 
 * **Input** (`Input`): the epoch's coin commitment (an in-process challenger's or a live session's, `EpochCoins`), the
   retained passes' manifests (their records, the voluntary rows among them, and what each published), the number of
-  samples, the verifier's coin: a source, or its record of the coin it sampled on this run's commitment (`CoinRecord`), which
+  samples, the verifier's coin: a source, or its record of the coin it drew on this run's commitment (`CoinRecord`), which
   pins the source, the window record W the passes are tied to where there is one, with the passes' rounds and the
   dropped rounds (the coin record's) and the window's class where the passes are to be its fixed load (`load`), and
   whether the verdict is to be of record (`ofRecord`).

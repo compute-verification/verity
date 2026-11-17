@@ -16,7 +16,7 @@ checks first, and what the other verdicts mean. That the check accepts every suc
 `Proofs.Properties.Pouw.Check.acceptMeans_complete`.
 
 What the window's sample guarantees (`Properties.Pouw.Window.DrawMisses`) is the window's property, not the check's: the
-check establishes that the service sampled exactly `K′ = kPrime ε δ` distinct units of the registered `N`, all passed.
+check establishes that the service drew exactly `K′ = kPrime ε δ` distinct units of the registered `N`, all passed.
 -/
 
 @[expose] public section

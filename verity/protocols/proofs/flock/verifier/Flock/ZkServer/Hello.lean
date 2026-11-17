@@ -48,7 +48,7 @@ def msg (spec : SessionSpec) (nonce : ByteArray) : List UInt8 :=
 /-- The bytes of a coin-tree nonce. -/
 def NONCE_BYTES : Nat := 32
 
-/-- A request's sample: the verifier's answer to `Register`, JSON text, `null` where it sampled none. -/
+/-- A request's sample: the verifier's answer to `Register`, JSON text, `null` where it drew none. -/
 def drawOf (text : String) : Except String (Option Json) :=
   match JsonParse.parse text with
   | .ok Json.null => .ok none

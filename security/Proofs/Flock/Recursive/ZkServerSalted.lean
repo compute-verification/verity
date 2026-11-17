@@ -22,7 +22,7 @@ import Proofs.Flock.Soundness.ZK.Hiding
 /-!
 # The ZK server's commitments when the worker reads the salts
 
-The live zk_server answers the worker each salt it sampled, so a worker's later messages may read it: digest `i` reads the
+The live zk_server answers the worker each salt it drew, so a worker's later messages may read it: digest `i` reads the
 salts before `i` (`encSalted`). `ZkServerZK.recursiveZK_salted` is `recursiveZK_enc` there, at the same
 `ε_o + n_h·δ`, with T1 over leaves whose digests read the earlier salts (`ZK.ideal_leaves_salted`) in place of T1 over
 adaptive leaves.

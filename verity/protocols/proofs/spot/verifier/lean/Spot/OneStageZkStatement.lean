@@ -375,7 +375,7 @@ theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHel
       · rfl
 
 /-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`, as the population check reads
-them: `FilePart.indicesOf` of `FilePart.header`) of the instances the session's record sampled (`unit_draw.units`),
+them: `FilePart.indicesOf` of `FilePart.header`) of the instances the session's record drew (`unit_draw.units`),
 ascending. -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
   let is ← FilePart.indicesOf (← FilePart.header pubB)
@@ -645,7 +645,7 @@ def verdictJson (rd : Reads) (programSha : Option String) (s : RunFiles) (st : S
     (if opened.isNull then [] else [("openings", opened)])))
 
 /-- `r` with one more session's verdict `verdict`: a session that did not accept fails the run; one that did proves the
-units its record sampled, once it names the partition object's program (`programSha` against `want`, else a refusal). -/
+units its record drew, once it names the partition object's program (`programSha` against `want`, else a refusal). -/
 def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (want : Json) (r : Run) (s : RunFiles)
     (record : String) (st : SetUp) (coinKey : Option String) (verdict : V Unit) : V Run := do
   let coinKeys := match coinKey with | some k => r.coinKeys.push k | none => r.coinKeys

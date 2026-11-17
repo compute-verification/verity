@@ -9,7 +9,7 @@ public import Flock.ZkServer.Coins
 # The ZK server's release is the Lean frame, at the Lean frame's samples
 
 The outer ZK server releases only what each rep's Lean frame returns (`flock-zk-server frame`, PROTOCOL.md §10.1 and
-§10.4), and the frame masks with randomness it sampled itself. At the rep's start it reads bytes from the operating system,
+§10.4), and the frame masks with randomness it drew itself. At the rep's start it reads bytes from the operating system,
 parses them into the rep's samples (`Flock.ZkServer.Frame.Draws.ofBytes`: the pads `h`, `μ`, the inner rows' padding, `τ`'s
 salt and the pads tree's salts) and commits them (`padsRoot`). `LeanRelease` is the ZK server whose release is that frame
 at the samples on the server's tape (`LeanRelease.draws`):
