@@ -24,11 +24,11 @@ import json
 from typing import Any
 
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
-from verity_vllm.engine.profiles.devices import DEVICE_NAME
+from verity_vllm.engine.profiles.devices import class_device_name
 from verity_vllm.errors import Refused
 
 #: class G's registration: the model type, tensor-parallel world, default execution label and device name (`predict.steps.launch_class`)
-CLASS_G = {"model_type": "glm_moe_dsa", "world": 8, "execution": "eager", "device_name": DEVICE_NAME["h200"]}
+CLASS_G = {"model_type": "glm_moe_dsa", "world": 8, "execution": "eager", "device_name": class_device_name("h200")}
 #: the execution labels class G serves, each with the target compilation it runs at: compiled is vLLM's breakable CUDA graphs over
 #: the eager kernels, the one compiled execution vLLM serves glm_moe_dsa at (`TargetProfile.COMPILATIONS`, `predict.dsa`)
 CLASS_G_EXECUTIONS: dict[str, str | None] = {"eager": None, "compiled": "breakable"}
