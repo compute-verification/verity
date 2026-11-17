@@ -170,7 +170,7 @@ def test_land_into_takes_checked_or_main_and_only_drives_app_pushes_checked(tmp_
     with pytest.raises(QueueError, match="land_into"):
         DriveFlags.parse('land_into = "staging"\n')
     monkeypatch.delenv("RESEARCH_DRIVE", raising=False)
-    with pytest.raises(QueueError, match="`checked` is moved only by drive's App"):
+    with pytest.raises(QueueError, match="`checked` is moved only by the verity-drive App"):
         World(tmp_path).queue(land_into="checked")._drive_only("checked", "once", False)
 
 
@@ -191,8 +191,9 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
     (`DriveFlags.plain_excludes`) is `lowrisk_excludes` without the entries `verdict_plain` lists, and then
     `verdict_excludes`, each entry once; with `lowrisk_excludes` or `verdict_excludes` absent, nothing, whatever
     `verdict_plain` holds.  Over this tree's drive.toml, a change to Lean, a lock, a Lake file or the trusted hashes, the
-    check, the research tool (the code that lands and reverts among it), the Lean check, the circuit language, a verifier or
-    a device takes the whole check before it lands, whatever its land verdicts."""
+    Lean check, the circuit language, a verifier, a device or the verifier machine's deployment takes the whole check before
+    it lands, whatever its land verdicts; the landing system's own code (the check, the research tool, the move tool, the
+    merge drivers) lands on its land verdicts and the quick tier."""
     flags = DriveFlags.parse('lowrisk_excludes = ["*.lean", "a/"]\nverdict_excludes = ["a/", "b/x.py"]\n')
     assert flags.plain_excludes == ("*.lean", "a/", "b/x.py")
     flags = DriveFlags.parse('lowrisk_excludes = ["*.lean", "a/", "c/", "x.toml"]\nverdict_plain = ["c/", "x.toml"]\n'
@@ -206,15 +207,16 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
     root = Path(__file__).resolve().parents[3]
     flags = DriveFlags.parse((root / "tools/check/drive.toml").read_text())
     for path in ("security/Proofs/Core/X.lean", "tools/pous_grader/lean-audit.json", "security/lakefile.toml",
-                 "security/lean-toolchain", "security/lake-manifest.json", "x/TRUSTED.sha256", ".gitattributes",
-                 "tools/check/check.py", "tools/check/drive.toml", "tools/check/policy.toml",
-                 *(f"tools/research/src/research/{m}.py" for m in ("queue", "landing", "vqueue", "vqueue_loop", "vqueue_slim",
-                                                                    "cli", "merge", "carry", "labelauth")),
+                 "security/lean-toolchain", "security/lake-manifest.json", "x/TRUSTED.sha256",
+                 "tools/research/src/research/pods/nebius/verifier/setup.sh",
                  "tools/verity/lean/check.py", "verity/circuits/program.py", "verity/commitments/x.py",
                  "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py",
                  "verity/protocols/compose/verifier/live_challenger/auditor.py"):
         assert not lowrisk([path, "README.md"], flags.plain_excludes), f"drive.toml's excludes let {path} land on a verdict"
-    for path in ("GLOSSARY.md", "calibration/census/README.md"):
+    for path in ("GLOSSARY.md", "calibration/census/README.md", ".gitattributes", "tools/check/check.py",
+                 "tools/check/drive.toml", "tools/check/policy.toml", "tools/move/restack.py",
+                 *(f"tools/research/src/research/{m}.py" for m in ("queue", "landing", "vqueue", "vqueue_loop", "vqueue_slim",
+                                                                    "cli", "merge", "carry", "labelauth"))):
         assert lowrisk([path], flags.plain_excludes), f"drive.toml's excludes keep {path} on the whole check"
 
 
@@ -227,18 +229,19 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
     ("benchmarks/one_stage/a5.py", None),
     ("verity/protocols/resource_accounting/network/attester/network_attester_serve.py", None),
     ("benchmarks/poub_session/auditor_line.py", None),
-    ("tools/move/restack.py", None),
+    ("tools/move/restack.py", "tools/move/"),
     ("verity/circuits/program.py", None),
-    ("tools/research/src/research/vqueue_loop.py", None),
-    ("tools/check/drive.toml", None),
+    ("tools/research/src/research/vqueue_loop.py", "tools/research/"),
+    ("tools/research/src/research/pods/nebius/verifier/setup.sh", None),
+    ("tools/check/drive.toml", "tools/check/"),
     ("verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", None),
     ("tests/verity/protocols/compose/verifier/lean/pyproject.toml", None),
 ], ids=lambda x: x or "-")
 def test_each_verdict_plain_entry_frees_its_files_for_the_gate_and_the_rest_stay_on_the_whole_check(path, entry):
     """Over this tree's drive.toml and files: a file kept off the low-risk lane only by an entry of `verdict_plain` (``entry``)
-    is plain where the land verdicts gate, and still off the low-risk lane; the code an auditor's device runs, the move tool,
-    the circuit language, the research tool, the check, a verifier's `__init__.py` and a Lean package's `pyproject.toml`,
-    which entries the gate reads keep off, are not plain."""
+    is plain where the land verdicts gate, and still off the low-risk lane; the code an auditor's device runs, the circuit
+    language, the verifier machine's deployment, a verifier's `__init__.py` and a Lean package's `pyproject.toml`, which
+    entries the gate reads keep off, are not plain."""
     root = Path(__file__).resolve().parents[3]
     flags = DriveFlags.parse((root / DRIVE_FLAGS).read_text())
     assert (root / path).is_file() and not lowrisk([path], flags.lowrisk_excludes)

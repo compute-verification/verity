@@ -4,10 +4,11 @@ slot, from the slot's warm `.lake`: `build`), then CMD (`suites.py --quick`) wit
 the lowest core (`confined`).  `tier` gathers the facts; `judge` reads them as the refusal `research queue ready` prints, or
 None for a pass, the same way wherever the tier ran.
 
-    python3 quick_tier.py --head SHA --base SHA [--merged SHA] [--lean DIR ...] [--lean-audit AUDIT] -- CMD...
+    python3 quick_tier.py --head SHA --base SHA [--merged SHA] [--lean DIR ...] [--lean-audit AUDIT] [--note TEXT] -- CMD...
 
 runs it in the working directory inside a `research run` (``--merged``: the PR head that HEAD, SHA, merges onto BASE;
-``--lean-audit``: a command, shell-quoted, run after the builds and before CMD as `AUDIT --base BASE --out DIR`: `lean_audit`), in
+``--lean-audit``: a command, shell-quoted, run after the builds and before CMD as `AUDIT --base BASE --out DIR`: `lean_audit`;
+``--note``: a line the run's log starts with, such as the older head's tier the launch stopped), in
 the environment check.py gives its steps there (`run_env`: the store required, through the run's custody key, and the vLLM
 reference regression run), and writes the facts to `$RESEARCH_RUN_DIR/result.json` (kind `quick-tier/v1`, under
 `tier`), with the suites' report and logs under `$RESEARCH_RUN_DIR/out/`.  `research queue ready --on MACHINE` sends this file with
@@ -233,7 +234,7 @@ def judge(doc, head: str, output: str = "its output is above", covers=None) -> s
 
 
 def main(argv: list[str]) -> int:
-    usage = ("usage: quick_tier.py --head SHA --base SHA [--merged SHA] [--lean DIR ...] [--lean-audit AUDIT] -- CMD...  "
+    usage = ("usage: quick_tier.py --head SHA --base SHA [--merged SHA] [--lean DIR ...] [--lean-audit AUDIT] [--note TEXT] -- CMD...  "
              "(inside a `research run`)")
     if "--" not in argv:
         print(usage, file=sys.stderr)
@@ -241,7 +242,7 @@ def main(argv: list[str]) -> int:
     opts, command = argv[:argv.index("--")], argv[argv.index("--") + 1:]
     pairs = list(zip(opts[::2], opts[1::2]))
     run_dir, rid = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
-    keys = {"--head", "--base", "--merged", "--lean", "--lean-audit"}
+    keys = {"--head", "--base", "--merged", "--lean", "--lean-audit", "--note"}
     if len(opts) % 2 or {k for k, _ in pairs} - keys or not command or not run_dir or not rid:
         print(usage, file=sys.stderr)
         return 2
@@ -250,6 +251,8 @@ def main(argv: list[str]) -> int:
         print(usage, file=sys.stderr)
         return 2
     lean = [v for k, v in pairs if k == "--lean"]
+    if note := dict(pairs).get("--note"):
+        print(f"quick tier: {note}", flush=True)
     d = Path(run_dir)
     doc = tier(Path.cwd(), d / "out", head, base, command, lean, run_env(os.environ, run_dir, rid), merged,
                shlex.split(audit) if audit else None)

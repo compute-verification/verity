@@ -50,7 +50,11 @@
 # (`served_verdicts.sh`'s) reads no PoUS or wipe case and no ONSITE_PIECES, and runs remote's Lean alone: under
 # POUW=pearlplus remote's composite of record (`remote-v1`, `Core.Remote.V1`, whose work
 # subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case; composite.py remote-v1), and where the tree
-# lacks it none (`COMPOSITE: not run`, exit 1), else v0.
+# lacks it none (`COMPOSITE: not run`, exit 1), else v0. PRODUCT=onsite runs remote beside onsite: under
+# POUW=pearlplus, where the tree has it, remote-v1, whose work is Pearl+'s run verdict as onsite's is, else v0, so that
+# under POUW=h1 onsite's Lean rejects naming Pearl+'s case missing.
+# On the served node itself (SERVED_NODE unset or its own host), which the prover controls, it is composed and its first
+# line, COMPOSITE ON-NODE, says so; COMPOSE_ON_NODE=WHY says WHY there instead (a deferral's follow-on, on a prover node).
 # The cases under the serve dir's private/compose and private/deferred (a hand-off's or a deferral's copies) are no
 # product's.
 set -uo pipefail
@@ -62,9 +66,16 @@ TPY=${TPY:-$TREE/.venv/bin/python}
 [ -x "$TPY" ] || TPY=$PY
 P=$D/private/composite
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
+if [ -n "${COMPOSE_ON_NODE:-}" ]; then
+  say "COMPOSITE ON-NODE: $COMPOSE_ON_NODE"
+elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
+  say "COMPOSITE ON-NODE: composed on the served node $(hostname -s), which the prover controls"
+fi
 PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
-  onsite) products=(remote onsite) ;;
+  onsite) products=(remote onsite)
+    [ "${POUW:-}" = pearlplus ] && [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] \
+      && products=(remote-v1 onsite) ;;
   remote) products=(remote)
     if [ "${POUW:-}" = pearlplus ]; then
       [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] \

@@ -1,7 +1,7 @@
 """`check.py`: the Lean audit, one run over every Lake package that carries a `lean-audit.json`.
 
     python tools/verity/lean/check.py [--build] [--update [--owner @LANE] [--moved FILE]] [--out DIR] [--facts all|named|none] PACKAGE_DIR...
-    python tools/verity/lean/check.py --regenerate [--bookkeeping warn] [--out DIR] PACKAGE_DIR...   the Lean check of `next`;
+    python tools/verity/lean/check.py --regenerate [--bookkeeping warn] [--out DIR] PACKAGE_DIR...   a candidate's Lean check;
                                                     with --bookkeeping warn, drive's lock run (bookkeeping repaired, warned)
     python tools/verity/lean/check.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
     python tools/verity/lean/check.py --name-instances [--build] PACKAGE_DIR...  write each anonymous instance's name into its source
@@ -456,7 +456,7 @@ def memory_refusal(pkgs: list[Path], have: tuple[float | None, str], env=os.envi
 ARTIFACTS: Path | None = None
 #: `--dev-cache`: the dependencies come from the verified build cache, so the result is not a Lean verdict
 DEV_CACHE = False
-#: the kind a `--dev-cache` run's reports carry: `lean_changed.FAST_KIND`, which `check` and `research merge` refuse
+#: the kind a `--dev-cache` run's reports carry: `lean_changed.FAST_KIND`, which `check` and `research.merge` refuse
 DEV_KIND = "lean-fast/v1"
 
 
@@ -7266,7 +7266,24 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
 
 def controls_of(fixture: str, toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
     """`controls` of the package ``fixture``."""
-    fails = []
+    work, fails = control_clean(fixture, toolchain, out, install)
+    if work is None:
+        return fails
+    for name in control_cases(fixture):
+        fails += control_case(work, fixture, name)
+    log(f"audit: controls of {fixture} with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, "
+        f"{', '.join(control_cases(fixture))}; builds {'in the sandbox' if sandboxed() else 'without a sandbox'})")
+    return fails
+
+
+def control_cases(fixture: str) -> dict[str, dict]:
+    """The violations `controls` adds to the package ``fixture``, by name."""
+    return json.loads((FIXTURES / CONTROLS[fixture]).read_text())
+
+
+def control_clean(fixture: str, toolchain: str, out: Path, install: bool = False) -> tuple[Path | None, list[str]]:
+    """The clean copy of ``fixture`` under ``out``, built and audited, which each `control_case` copies, and its failures;
+    no copy when it could not be built."""
     work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}" / fixture
     shutil.rmtree(work, ignore_errors=True)
     shutil.copytree(FIXTURES / fixture, work / "pkg")
@@ -7275,67 +7292,67 @@ def controls_of(fixture: str, toolchain: str, out: Path, install: bool = False, 
     if install:
         rc, text = setup(pkg, toolchain, work / "setup.log")
         if rc:
-            return [f"controls: installing {toolchain} failed:\n{text[-2000:]}"]
+            return None, [f"controls: installing {toolchain} failed:\n{text[-2000:]}"]
     rc, text = run(in_sandbox(pkg, ["lake", "build"]), pkg, work / "build.log")
     if rc:
-        return [f"controls: the clean fixture {fixture} does not build with {toolchain}:\n{text[-2000:]}"]
-    reports = work / "reports"
-    audit(pkg, reports, update=True, log=lambda *_: None)
-    clean = audit(pkg, reports)["failures"]
-    if clean:
-        fails.append(f"controls: the clean fixture {fixture} fails the audit:\n" + "\n".join(clean))
-    expect = json.loads((FIXTURES / CONTROLS[fixture]).read_text())
+        return None, [f"controls: the clean fixture {fixture} does not build with {toolchain}:\n{text[-2000:]}"]
+    audit(pkg, work / "reports", update=True, log=lambda *_: None)
+    clean = audit(pkg, work / "reports")["failures"]
+    return work, [f"controls: the clean fixture {fixture} fails the audit:\n" + "\n".join(clean)] if clean else []
+
+
+def control_case(work: Path, fixture: str, name: str) -> list[str]:
+    """Violation ``name`` of ``fixture`` added to a copy of `control_clean`'s ``work``: what it fails that it should not,
+    or should and does not."""
+    v, fails = control_cases(fixture)[name], []
+    pkg, reports = work / "pkg", work / "reports"
 
     def beside(failures: list[str]) -> list[str]:
         """The failures other than the dependency record's: it covers the imported modules, so a violation that adds an
         import changes it (its own test covers that check)."""
         return [f for f in failures if not f.startswith("dependencies:")]
 
-    for name, v in expect.items():
-        bad = work / f"bad-{name}"
-        shutil.rmtree(bad, ignore_errors=True)
-        shutil.copytree(pkg, bad)
-        for rel, text in v.get("write", {}).items():
-            (bad / rel).parent.mkdir(parents=True, exist_ok=True)
-            (bad / rel).write_text(text)
-        for rel, (old, new) in v.get("replace", {}).items():
-            src = (bad / rel).read_text()
-            assert old in src, (name, rel, old)
-            (bad / rel).write_text(src.replace(old, new))
-        if "policy" in v:
-            dump(bad, load(bad) | v["policy"])
-        for rel in v.get("delete", []):
+    bad = work / f"bad-{name}"
+    shutil.rmtree(bad, ignore_errors=True)
+    shutil.copytree(pkg, bad)
+    for rel, text in v.get("write", {}).items():
+        (bad / rel).parent.mkdir(parents=True, exist_ok=True)
+        (bad / rel).write_text(text)
+    for rel, (old, new) in v.get("replace", {}).items():
+        src = (bad / rel).read_text()
+        assert old in src, (name, rel, old)
+        (bad / rel).write_text(src.replace(old, new))
+    if "policy" in v:
+        dump(bad, load(bad) | v["policy"])
+    for rel in v.get("delete", []):
+        (bad / rel).unlink()
+    rc, text = run(in_sandbox(bad, ["lake", "build"]), bad, work / f"bad-{name}.log")
+    if rc:
+        return [f"controls: `{name}` does not build:\n{text[-1000:]}"]
+    for rel in v.get("not_written", []):
+        if (bad / rel).exists():
+            if sandboxed():
+                fails.append(f"controls: `{name}`'s build wrote {rel} into the package through the sandbox")
             (bad / rel).unlink()
-        rc, text = run(in_sandbox(bad, ["lake", "build"]), bad, work / f"bad-{name}.log")
-        if rc:
-            fails.append(f"controls: `{name}` does not build:\n{text[-1000:]}")
-            continue
-        for rel in v.get("not_written", []):
-            if (bad / rel).exists():
-                if sandboxed():
-                    fails.append(f"controls: `{name}`'s build wrote {rel} into the package through the sandbox")
-                (bad / rel).unlink()
-        if v.get("replay_only"):
-            if missed := beside(audit(bad, reports, replay=False)["failures"]):
-                fails.append(f"controls: `{name}` should pass every check but the replay; it failed:\n" + "\n".join(missed))
-        if v.get("closure_only"):
-            if missed := beside(audit(bad, reports)["failures"]):
-                fails.append(f"controls: `{name}` should pass every check but the import closure's replay; it failed:\n" +
-                             "\n".join(missed))
-        got = audit(bad, reports, replay=v.get("replay", False) or v.get("replay_only", False) or v.get("closure_only", False),
-                    closure=v.get("closure_only", False))["failures"]
-        for rel in v.get("not_written", []):
-            if (bad / rel).exists():
-                fails.append(f"controls: `{name}` wrote {rel} while the audit read the package: its code ran there")
-        if v.get("passes"):
-            if beside(got):
-                fails.append(f"controls: `{name}` should pass; the audit said:\n" + "\n".join(got))
-        elif not any(f.startswith(v["fails"]) for f in got):
-            fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
-        if wrong := [f for f in got if any(f.startswith(n) for n in v.get("not", []))]:
-            fails.append(f"controls: `{name}` should not fail these:\n" + "\n".join(wrong))
-    log(f"audit: controls of {fixture} with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; "
-        f"builds {'in the sandbox' if sandboxed() else 'without a sandbox'})")
+    if v.get("replay_only"):
+        if missed := beside(audit(bad, reports, replay=False)["failures"]):
+            fails.append(f"controls: `{name}` should pass every check but the replay; it failed:\n" + "\n".join(missed))
+    if v.get("closure_only"):
+        if missed := beside(audit(bad, reports)["failures"]):
+            fails.append(f"controls: `{name}` should pass every check but the import closure's replay; it failed:\n" +
+                         "\n".join(missed))
+    got = audit(bad, reports, replay=v.get("replay", False) or v.get("replay_only", False) or v.get("closure_only", False),
+                closure=v.get("closure_only", False))["failures"]
+    for rel in v.get("not_written", []):
+        if (bad / rel).exists():
+            fails.append(f"controls: `{name}` wrote {rel} while the audit read the package: its code ran there")
+    if v.get("passes"):
+        if beside(got):
+            fails.append(f"controls: `{name}` should pass; the audit said:\n" + "\n".join(got))
+    elif not any(f.startswith(v["fails"]) for f in got):
+        fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
+    if wrong := [f for f in got if any(f.startswith(n) for n in v.get("not", []))]:
+        fails.append(f"controls: `{name}` should not fail these:\n" + "\n".join(wrong))
     return fails
 
 
@@ -7382,7 +7399,7 @@ def main(argv: list[str]) -> int:
                     "\"into\": spec module[, \"beside\": module]}}; write each as `def G : Prop` in the spec module and "
                     "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
                     "auditing, and FILE.moved.json for `--update --moved`")
-    ap.add_argument("--regenerate", action="store_true", help="the Lean check of a commit of `next`: a package whose every "
+    ap.add_argument("--regenerate", action="store_true", help="a candidate's Lean check: a package whose every "
                     "failure is a record difference (a code in `RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names "
                     "the record `--update` writes for it under --out, which drive commits when it lands that commit; the "
                     "package's own lock is never written")

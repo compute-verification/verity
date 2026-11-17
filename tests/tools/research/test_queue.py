@@ -326,7 +326,7 @@ def test_a_pull_ref_github_left_behind_takes_the_head_from_its_branch_when_the_b
 
 def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
     """GitHub can list an open PR before it makes refs/pull/N/head, and one missing ref would fail the whole fetch, and every
-    drive tick with it: that PR waits, and the rest of the queue syncs."""
+    tick with it: that PR waits, and the rest of the queue syncs."""
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, two := world.change({"b.txt": "two\n"}))
     _git(world.origin, "update-ref", "-d", "refs/pull/2/head")
@@ -603,7 +603,7 @@ def test_a_sync_on_a_git_without_attr_source_raises_rather_than_merging_without_
 
 def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):
     """A sync writes no conflict handoff into the notes clone of the VM it runs on, where it would wait for that VM's next notes
-    push; drive tells each conflict in the merge thread (`Driver.refuse`)."""
+    push; the loop tells each conflict in the merge thread."""
     monkeypatch.setenv("RESEARCH_NOTES", str(world.tmp / "notes"))
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, world.change({"a.txt": "two\n", "b.txt": "b2\n"}))
@@ -1975,7 +1975,7 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
 
 
 def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that_fails(tmp_path, monkeypatch):
-    """One listing of the store's remote per open PR, in turn, would take seconds of every drive tick; and one GET at a time
+    """One listing of the store's remote per open PR, in turn, would take seconds of every tick; and one GET at a time
     took a fresh VM's listing four minutes for `next`'s ~1,000 labels, so the listings and the GETs each run
     `PREFETCH_JOBS` at once."""
     from research.queue import PREFETCH_JOBS, StoreLabels
@@ -2431,7 +2431,7 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
 
 def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, capsys):
     """GitHub's rulesets let only drive's App move `main` and `next`, yet don't stop verity-agents[bot] force-pushing `next` from a
-    VM's `research queue eject` that syncs. Off drive an eject only withdraws the mark; sync refuses."""
+    VM's `research queue eject`. Off drive an eject only withdraws the mark."""
     import research.landing as L
     import research.queue as Qm
 
@@ -2441,9 +2441,6 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     base = ["--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
             "--store", str(world.tmp / "queue-store")]
-    for verb in ("sync",):
-        assert research_main(["queue", verb, *base]) == 1
-        assert f"/data/infra/drive.sh queue {verb}" in capsys.readouterr().err
     def refs() -> str:
         return _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
 
@@ -4455,6 +4452,21 @@ def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map
     assert not capsys.readouterr().err
 
 
+def test_a_landed_move_that_adds_its_own_map_judges_a_head_lacking_it_by_that_map_read_at_the_move(world):
+    """A move may add the map it runs by, which its base lacks (restack.py's `own_map`): `lacked_moves` reads that map at the
+    move, so a head below it whose own change names none of its retired names is taken, and one that names one is left out
+    for that name, not for a map it couldn't read."""
+    base = _move_main(world, {"base.txt": "b\n"})
+    files = {"c.txt": None, "moved/c.txt": "c\n", "tools/move/own_map.toml": '[paths]\n"c.txt" = "moved/c.txt"\n'}
+    tree = _git(world.dev, "rev-parse", f"{world.change(files, base=base)}^{{tree}}")
+    move = _git(world.dev, "commit-tree", tree, "-p", base, "-m", "Move\n\nLayout-move: tools/move/own_map.toml")
+    _git(world.dev, "push", "-q", "origin", f"{move}:refs/heads/main")
+    clean = world.change({"b.txt": "1\n"}, base=base)
+    names = world.change({"e.txt": "reads c.txt\n"}, base=base)
+    assert Q.lacked_moves(world.origin, move, clean) == []
+    assert Q.lacked_moves(world.origin, move, names) == [(move, "tools/move/own_map.toml", ["c.txt"])]
+
+
 def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
     """`crossed` reads `lacked_moves`'s predicate against a move PR's map at its head, and `main`'s copy beside it: a head
     whose files or added lines name neither copy's retired names crosses it, and none crosses a move whose map can't be read
@@ -4610,6 +4622,8 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     assert int(ttl) >= Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S + Q.REMOTE_GRACE_S and _custody_ttl_problem(ttl, flags) is None, \
         "the custody key outlasts the run and the wait for its upload, so `research run` takes the launch"
     assert [Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send"] == ["quick_tier.py"]
+    assert [flags[i + 1] for i, x in enumerate(flags) if x == "--env"] == ["CHECK_RUN_CORES=8", "CHECK_RUN_BOOK_GB=6"], \
+        "the tier asks its slot for 8 cores and books 6 GiB of it (slot.py's RUN_CORES_ENV and RUN_BOOK_ENV)"
     assert slot_only.through_slot(argv[argv.index("--") + 1:]), "cpu-1's launcher refuses a run whose command isn't slot.py's"
     assert json.loads((world.tmp / "slot-seen.json").read_text())[:8] == [
         "--by", "lane-1", "--wait-max", f"{Q.REMOTE_WAIT_S:g}", "--run-max", f"{Q.REMOTE_TIMEOUT_S:g}", "--", "sh"]
@@ -4950,6 +4964,129 @@ def test_a_remote_quick_tier_placed_in_a_research_pool_runs_through_that_pools_s
     assert "in a slot of its research pool" in capsys.readouterr().out
 
 
+class TwinLines:
+    """Each machine's check-slot line as slot.py's `--twin` serves the tier's runs on ``machine``: a run on a machine of ``busy``
+    never takes a slot and leaves its line (exit SLOT_NOT_STARTED), and one on another runs only if it claims its pair first
+    (`mkdir TWINS/PAIR`, atomic, on the pair's home for all of them), else it leaves its line too.  ``ran``: the runs that ran
+    the tier; ``seen``: each launch's run id, machine, `--twin` and `--twin-after`."""
+
+    def __init__(self, machine: Machine, busy: tuple[str, ...] = ()):
+        self.machine, self.busy, self.ran, self.seen, self.outcome = machine, busy, [], [], machine.outcome
+        self.claims, self.lock = machine.root / "twins", threading.Lock()
+        self.claims.mkdir(parents=True)
+        machine.outcome = self.line
+
+    def launch(self, argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
+        flags, slot = argv[:argv.index("--")], argv[argv.index("--") + 1:]
+        twin, after = (slot[slot.index(k) + 1] if k in slot else None for k in ("--twin", "--twin-after"))
+        with self.lock:
+            self.seen.append((flags[flags.index("--id") + 1], flags[flags.index("--on") + 1], twin, after))
+        return self.machine.launch(argv, cwd)
+
+    def line(self, run: Path, rid: str, head: str) -> None:
+        with self.lock:
+            _, on, twin, _ = next(x for x in self.seen if x[0] == rid)
+            claim = self.claims / (twin or rid).partition("@")[0]
+            taken = on not in self.busy and not claim.exists() and claim.mkdir() is None
+            if taken:
+                self.ran.append(rid)
+        if not taken:
+            (run / "status.json").write_text(json.dumps({"state": "failed", "rc": Q.SLOT_NOT_STARTED}))
+            return
+        self.outcome(run, rid, head)
+
+
+def test_a_quick_tier_whose_machine_has_no_free_slot_runs_as_its_twin_where_one_is_free(world, monkeypatch, capsys):
+    """A PR's quick tier waited in one machine's check line while another machine's check slot stood free: `--on auto` or
+    `M1,M2` launches twins of it where check.py's `twins` puts a check's, the first to take a slot runs, and the tier is
+    judged from the run that ran."""
+    machine = Machine(world.tmp, outcome=_reports())
+    lines = TwinLines(machine, busy=("vy-home",))
+    tier, _ = _remote_tier(world, monkeypatch, machine, launch=lines.launch,
+                           place=lambda spec, repo: ("vy-home", "the most free check slots", ["vy-home", "vy-a", "vy-b"], 0))
+    tier.on = "vy-home,vy-a,vy-b"
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    (home, _, pair, _), *twins = lines.seen
+    assert [(on, twin, after) for _, on, twin, after in lines.seen] == [
+        ("vy-home", home, None), ("vy-a", f"{home}@vy-home", None), ("vy-b", f"{home}@vy-home", None)]
+    assert len(lines.ran) == 1 and lines.ran[0] != home, "a twin off the busy home ran the tier"
+    out = capsys.readouterr().out
+    assert "twins of the quick tier on vy-home, vy-a, vy-b: the first to take a check slot runs" in out
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
+    assert Q.judge(world.gh, world.store, home, "lane-1", fetch=machine.fetch, twins=[t for t, *_ in twins]) == 0, \
+        "judge, given the twins, judges the one that ran"
+
+
+@pytest.mark.parametrize("busy, after", [((), 600), (("vy-home",), 0)], ids=["home free", "twins at once"])
+def test_a_quick_tiers_twins_never_run_alongside_each_other(world, monkeypatch, busy, after):
+    """Twins launched at once on machines with a slot free each may take one at the same moment: only the one that claims
+    its pair first runs, and the others leave their lines without running; with a slot free on the home, the twins off it
+    join their lines only `--twin-after` later."""
+    machine = Machine(world.tmp, outcome=_reports())
+    lines = TwinLines(machine, busy=busy)
+    tier, _ = _remote_tier(world, monkeypatch, machine, launch=lines.launch,
+                           place=lambda spec, repo: ("vy-home", "free", ["vy-home", "vy-a", "vy-b"], after))
+    tier.on = "auto"
+    world.gh.put(1, h := world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    assert len(lines.ran) == 1, f"one twin ran the tier, not {lines.ran}"
+    assert [a for *_, a in lines.seen] == [None, *[f"{after:g}" if after else None] * 2]
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h) is True
+
+
+def _still_going(world, monkeypatch, stopped: list):
+    """A remote tier whose runs wait in their line past the caller's wait (`ready` exits STILL_GOING), its stops recorded in
+    ``stopped``; and its machine."""
+    machine = Machine(world.tmp, outcome=lambda run, rid, head: (run / "status.json").write_text('{"state": "running"}'))
+    tier, _ = _remote_tier(world, monkeypatch, machine, max_wait_s=60,
+                           stop=lambda d, reason: stopped.append((d.name, reason)) or None)
+    return tier, machine
+
+
+def test_a_quick_tier_for_a_newer_head_stops_the_older_heads_tier_and_says_so(world, monkeypatch, capsys):
+    """A PR re-marked at a new head left its older head's tier waiting in the check line ahead of the new one, for a head no
+    mark can land: the newer head's tier stops it, and says so in its own output and its run's log."""
+    stopped = []
+    tier, machine = _still_going(world, monkeypatch, stopped)
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == Q.waitcap.STILL_GOING and stopped == []
+    old = (flags := machine.launched[-1])[flags.index("--id") + 1]
+    world.gh.put(2, world.change({"c.txt": "c2\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 2, "lane-1", tier) == Q.waitcap.STILL_GOING and stopped == [], "another PR's tier stays"
+    world.gh.put(1, h2 := world.change({"a.txt": "a2\n"}), ready=False)
+    capsys.readouterr()
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == Q.waitcap.STILL_GOING
+    assert stopped == [(old, f"#1's quick tier at its newer head {h2[:12]} supersedes it")]
+    note = f"#1's quick tier at its older head {h1[:12]}: stopped {old} on vy-test"
+    assert f"research queue: {note}" in capsys.readouterr().out
+    job = shlex.split(machine.launched[-1][-1])
+    assert job[job.index("--note") + 1] == note, "the newer run's log starts with it"
+
+
+def test_a_quick_tier_re_marked_at_the_same_head_stops_nothing(world, monkeypatch, capsys):
+    stopped = []
+    tier, machine = _still_going(world, monkeypatch, stopped)
+    world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
+    for _ in range(2):
+        assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == Q.waitcap.STILL_GOING
+    assert stopped == [] and len(machine.launched) == 2 and "--note" not in machine.launched[-1][-1]
+    world.gh.put(1, world.change({"a.txt": "a2\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == Q.waitcap.STILL_GOING
+    assert [rid for rid, _ in stopped] == [f[f.index("--id") + 1] for f in machine.launched[:2]], \
+        "both of the older head's tiers stop at a newer head"
+
+
+def test_place_gives_the_twins_check_py_would_launch_a_check_with(tmp_path):
+    repo = tmp_path / "repo"
+    (repo / "tools/check").mkdir(parents=True)
+    (repo / "tools/check/check.py").write_text(
+        'AUTO = ("vy-nebius-2",)\n'
+        "def choose(names, docs, priority=False):\n    return names[0], 'free', []\n"
+        "def twins(names, docs, home, priority=False):\n    return [home, *[n for n in names if n != home]], 0\n")
+    assert Q.place("vy-a,vy-b", repo, read=lambda names: {n: {} for n in names}) == ("vy-a", "free", ["vy-a", "vy-b"], 0)
+
+
 def test_place_on_auto_spills_to_a_research_pool_only_when_no_auto_machine_can_be_read(tmp_path):
     from research import queue as Q
 
@@ -4965,13 +5102,13 @@ def test_place_on_auto_spills_to_a_research_pool_only_when_no_auto_machine_can_b
     def spill(r):
         spilled.append(r)
         return ("vy-nebius-cpu-1", "research"), "vy-nebius-cpu-1's research pool has a free slot"
-    got, why = Q.place("auto", repo, read=lambda names: {n: "ssh: connect timed out" for n in names}, spill=spill)
-    assert got == "vy-nebius-cpu-1:research" and spilled == [repo]
+    got, why, twins, _ = Q.place("auto", repo, read=lambda names: {n: "ssh: connect timed out" for n in names}, spill=spill)
+    assert got == "vy-nebius-cpu-1:research" and spilled == [repo] and twins == [], "a pool's tier has no twins"
     assert why.startswith("vy-nebius-cpu-1's research pool has a free slot, as none of vy-nebius-2 could be read")
-    got, why = Q.place("auto", repo, read=lambda names: {n: "ssh: connect timed out" for n in names},
-                       spill=lambda r: (None, "no pool fits"))
+    got, why, *_ = Q.place("auto", repo, read=lambda names: {n: "ssh: connect timed out" for n in names},
+                           spill=lambda r: (None, "no pool fits"))
     assert got is None and why.endswith("; no research pool either: no pool fits")
-    got, _ = Q.place("vy-a,vy-b", repo, read=lambda names: {n: "down" for n in names}, spill=spill)
+    got, *_ = Q.place("vy-a,vy-b", repo, read=lambda names: {n: "down" for n in names}, spill=spill)
     assert got is None and len(spilled) == 1, "a named list never spills"
 
 
@@ -4993,10 +5130,10 @@ def test_a_runner_seen_gone_just_after_it_recorded_its_end_is_not_lost(tmp_path)
 
     (d := tmp_path / "runs" / "r1").mkdir(parents=True)
     tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", poll_s=30, fetch=fetch, sleep=lambda s: None)
-    assert tier._wait(d, "vy-test") == ({"state": "done", "rc": 0}, None) and len(fetched) == 2
+    assert tier._wait([(d, "vy-test")]) == (d, "vy-test", {"state": "done", "rc": 0}, None) and len(fetched) == 2
     fetched.clear()
     tier.fetch = lambda d: fetch(d, ended=False)
-    _, why = tier._wait(d, "vy-test")
+    *_, why = tier._wait([(d, "vy-test")])
     assert why == "run r1 on vy-test ended without recording it: its runner (pid 7) is gone without recording an end"
     assert len(fetched) == 2
 
@@ -5020,12 +5157,12 @@ def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_ta
     tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", timeout_s=3600, wait_s=1800, max_wait_s=bound + 1, poll_s=30,
                              fetch=hung_fetch, sleep=advance, clock=lambda: clock[0])
     (d := tmp_path / "runs" / "r1").mkdir(parents=True)
-    _, why = tier._wait(d, "vy-test")
+    *_, why = tier._wait([(d, "vy-test")])
     assert why == f"run r1 on vy-test didn't end within {bound:g} s (last seen without a status): `research inspect r1`"
     assert bound <= clock[0] <= bound + 30 + 900, "it ends with the poll under way at the deadline"
     clock[0] = 0.0
     tier.max_wait_s = Q.waitcap.WAIT_LIMIT_S
-    _, why = tier._wait(d, "vy-test")
+    *_, why = tier._wait([(d, "vy-test")])
     assert isinstance(why, Q.StillGoing) and Q.waitcap.WAIT_LIMIT_S <= clock[0] <= Q.waitcap.WAIT_LIMIT_S + 900
 
 
@@ -5121,9 +5258,8 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync only: `eject` would act"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync only: `ready` would act"),
-                      (["queue", "status", "--priority-file", "p"], "--priority-file is for sync only")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for open and edit only: `eject` would act"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for open and edit only: `ready` would act")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
@@ -5248,7 +5384,7 @@ def test_one_pr_is_read_open_or_not_and_a_failed_read_names_it(monkeypatch):
 
 
 def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
-    """A review tick asks `handle` of every member of `next` (`Driver._owners`), and each read of main's registry is a
+    """A review tick asks `handle` of every member of a candidate, and each read of main's registry is a
     `git show` of ~70 ms in drive's clone on the network volume, times over a hundred members a tick.  A fetch reads it afresh."""
     from research import queue as Q
 
@@ -5571,18 +5707,7 @@ def test_first_is_refused_naming_the_priority_file_which_holds_the_landing_order
     the fix."""
     monkeypatch.chdir(world.dev)
     with pytest.raises(SystemExit) as e:
-        Q.main(["sync", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/r",
+        Q.main(["status", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/r",
                 "--store", str(world.tmp / "store"), "--first", "7,8"])
     assert e.value.code == 2 and not (world.tmp / "q").exists()
     assert Q.FIRST_RETIRED in capsys.readouterr().err
-
-
-def test_sync_takes_the_priority_file_it_is_given(world, monkeypatch):
-    seen = []
-    monkeypatch.setattr(Q.Queue, "sync", lambda self, dry_run=False: seen.append((self.priority_file, dry_run)))
-    monkeypatch.chdir(world.dev)
-    path = world.tmp / "priority"
-    assert Q.main(["sync", "--dry-run", "--priority-file", str(path), "--workdir", str(world.tmp / "q" / "verity"), "--remote",
-                   str(world.origin), "--repo", "o/r", "--store", str(world.tmp / "store")]) == 0
-    assert [(str(p), d) for p, d in seen] == [(str(path), True)]
-

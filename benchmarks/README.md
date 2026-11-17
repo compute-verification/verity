@@ -49,6 +49,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench route_capture` | what a model executes when served, step by step, and the routes class G's Definitions don't cover |
 | `verity bench scan_cost` | one scan of the network attester's synthetic run with every block proved, and what it costs for each second of execution phase: the prover's seconds and the Lean verifier's CPU seconds on one core |
 | `verity bench serve_tax` | what each change to serving costs vLLM's own server against stock compiled vLLM, at three loads; on Llama 3.2 1B and one H200, `--model llama32-1b --arms 'compiled compiled-again record'` |
+| `verity bench serving_cost` | the serving cost in five stages, each run's record read by the next by its run id: `minify RUN` and `capture RUN` check a stored record and print what it holds, `exact` stores the replay's and circuit-check's verdicts, `price` and `confirm` compute ("The serving cost in five stages") |
 | `verity bench served_commit` | served vLLM against served vLLM with every value committed, interleaved, through `verity-bench vllm` |
 | `verity bench served_errors` | error terms of the quoted guarantees that had no value, evaluated at the served sizes, each with its formula and premises |
 | `verity bench served_units` | a served model's proof blocks proved one type at a time from synthetic values and verified by the Lean verifier, forgeries included: `fp8-coord:K=6144` at one input unless given other units |
@@ -175,8 +176,8 @@ Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml
 `infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each metric's `owner` owns its
 file: the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a
 lead's numbers in another lead's directory take a file entry of their own there. The console's Metrics tab reads every
-`metrics.toml` on `main` under `benchmarks/`, `applications/`, `infra/` or `tools/`, and `research metrics show` reads the
-tab's report.
+`metrics.toml` on `main` under `benchmarks/`, `calibration/`, `applications/`, `infra/` or `tools/`, and `research
+metrics show` reads the tab's report.
 
 A metric's value has one of two sources. A run's value is the measurement its `id` names in the run's `result.json`,
 which the benchmark records it under (`serve_tax`'s `Model.metric`) and `research run` preserves to the evidence store;
@@ -194,7 +195,9 @@ the `command` of a metric whose newest value is older than its `every` as a `res
 docstring lists, and a metric whose command's script is under `infra/control/` is a loop's, which the loop sends. A
 metric's keys:
 
-- `id`: `OWNER/NAME`, under its owner's prefix.
+- `id`: `OWNER/NAME`, under its owner's prefix. A metric's line holds one quantity: when its meaning changes (a
+  denominator, a ceiling), it keeps its `id`, and the runs of the old quantity are labelled `superseded_by` the first
+  run from `main` that writes the new one.
 - `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
 - `owner`: a handle in the registry.
 - `unit`: the unit its value is in, at most three words (`hours`, `GB`), a rate's two sides, either side of " a ",
@@ -202,7 +205,8 @@ metric's keys:
   not the unit.
 - `axis`: one sentence, on one line and ending with a period, saying what the chart's y axis is.
 - `better`: `lower` or `higher`.
-- `command`: the one command that measures it, naming a script under `benchmarks/`, `applications/`, `infra/` or `tools/`.
+- `command`: the one command that measures it, naming a script under `benchmarks/`, `calibration/`, `applications/`, `infra/` or
+  `tools/`.
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
   stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
@@ -239,6 +243,68 @@ doesn't list, an id declared twice across all the files, an unknown owner, an ow
 an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a `better` other than `lower`
 or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing, a metric
 the directory of the file declaring it never names, and a shared `metrics.toml` directly under `benchmarks/`.
+
+## The serving cost in five stages
+
+The serving cost of a model too large to optimize on (`serve_tax/README.md`'s "The serving cost") is had in five
+stages, each `verity bench serving_cost STAGE` (`serving_cost/run.py`) run under `research run --store-read`. A stage
+reads the record of the stage before it from the evidence store by the id of the run that stored it, never by a path,
+and refuses a run whose result is not that record's kind or did not pass, naming what makes the missing record and
+stating the record's contract below. The records the door reads are stored by the runs that make them, and the door
+launches none: minify's by a run of `serve_tax`'s stand-in `glm53-standin` (`prod_repro/run.sh --model glm53-standin`),
+capture's by `prod_repro/run.sh` on the real model, the replay's by `serve_tax/replay.py --result`, and circuit-check's
+report by `circuit-check --out` under `research run`. `minify RUN` and `capture RUN` check that a run is a passed record
+of their kind and print what it holds. `exact` checks the replay and the circuit-check report and stores the verdict.
+Price and confirm compute their figures. A stage's numbers are measurements under "Metrics"' rules, and a
+stage whose record is a verdict is to record what the check or the verifier returned ("What a benchmark may import
+and write").
+
+| Stage | What it runs | What it stores |
+| --- | --- | --- |
+| 1. Minify | a small copy of the model from random weights on one card, keeping the selectors that choose each code path (`serve_tax`'s `glm53-standin`) | the copy's identity, the selectors it keeps and its size class; and for each part and each code path the part can take, a unit cost in seconds a call or a step, `measured`, with the count of calls behind it |
+| 2. Exact | `circuit-check` on the full model's bindings, and a replay on the copy | a verdict, not a number: `circuit-check`'s on the bindings, and the replay's on the copy (its tokens equal to the served tokens, its steps reproduced), saying whether the replay was the Python replay or a proof the Lean verifier accepted, so that exact is not read as proved |
+| 3. Capture | a short run of the real model | for each part and code path its counts (calls a step, steps a request), the baseline step time, and the value-dependent inputs a price needs |
+| 4. Price | minify's unit costs times capture's counts, over capture's baseline step time | the priced serving cost under `benchmarks/serving-cost-priced` (`serving_cost/metrics.toml`), never under the measured line, its `member` model, card, then arm (`glm-5.3-h200-prod-record`), `partial` while any (part, code path) is unpriced and `modeled` otherwise, with the capture, minify and units runs among its `inputs`, every (part, code path) it could not price, and the runs each priced one's unit costs came from |
+| 5. Confirm | a stored run of the real model at scale (`--measured RUN`), and price's | the measured minus the priced as a measurement of its own, in percentage points, with both runs among its `inputs`: the measured figure under `vllm/prod-serving-cost-glm53` of the price's member over its stock unless `--member` names another; the measured serving cost stays the measuring run's |
+
+Stage 1 is to write no serving-cost percentage and no point under the real model's metric: a `member` tells apart
+configurations that read the same quantity, and a copy from random weights does not read the real model's serving
+cost. Stage 4 names the runs it read in its `inputs` and not as `from_run`, since its number is its own and
+`from_run` writes no measurement.
+
+The records the door reads from the runs that make them:
+
+- **minify:** a result of kind `serving-cost-minify/v1`, validation `passed`, holding `out/units.jsonl` in the form
+  `priced.units` reads (each top-k pass's device time a call by rows and keys, with no row failed and with every row
+  failed), at decode shapes unless its fingerprint's `shapes` says `prefill`. It writes no serving-cost percentage.
+- **units** (`--units RUN`, repeatable, on `price` and `minify`): a result of kind `dsa-topk-units/v1`, validation
+  `passed`, holding `out/units.jsonl` in the same form, its fingerprint naming the shapes it timed under `shapes`:
+  `decode` or `prefill`.
+- **replay** (`exact --replay RUN`): a result of kind `serve-tax-replay/v1`, validation `passed`, as
+  `serve_tax/replay.py --result` stores it. Where its fingerprint names the minify run under `minify`, exact holds it
+  to that run; where it names none, exact records `held_to_minify` false and says so. Its fingerprint's `replay` says
+  `lean` for a proof the Lean verifier accepted, and anything else is the Python replay.
+- **circuit-check** (`exact --circuit-check RUN --bindings NAME...`): a run holding `out/circuit-check.json`,
+  circuit-check's report (`verity-circuit-check/v1`), whose targets include every binding named.
+- **capture:** a result of kind `serving-cost-capture/v1`, validation `passed`, holding the run's `out/` as
+  `priced.py` reads it: each arm's lifetimes (`ARM.N/`), `topk_counters.json` and `prod_repro.json`. Its fingerprint
+  names the minify run under `minify`, the exact run under `exact` once an exact record exists, and the member's model
+  and card under `served` and `card`, as `serve_tax.member` gives them (`glm-5.3`, `h200`).
+
+Exact stores a result of kind `serving-cost-exact/v1`, passed only where the replay passed and circuit-check's report
+passed and holds every binding named, its fingerprint naming the minify, replay and circuit-check runs, the bindings,
+`replay_kind` (`python` or `lean`) and `held_to_minify`. Price merges the minify run's unit costs with each units
+run's, refusing where two runs give one shape of one pass and path different costs, or where together they time no
+rows × keys grid. A capture that names an exact run is refused unless that run is a passed exact record.
+
+Two cases decide where a price comes from:
+
+- **A cost that depends on the load,** such as the attested tick's holding a request back until its admission step,
+  is stored as a count from stage 3, the steps an admission was held under the captured load, times the step time,
+  and never as a unit cost from the copy.
+- **A code path the copy never takes** is listed as unpriced, and the price is `partial`, not `modeled`, until a
+  unit cost for that path comes from another source: the top-k at prefill steps is unpriced while the capture has
+  prefill steps and no source's `shapes` is `prefill`.
 
 ## On VCF's Slurm cluster
 
@@ -296,6 +362,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
 | `serve_tax/` | what each change to serving (step trace, release order, the certified tick, committing tokens and the KV cache) costs vLLM's own server against stock compiled vLLM at three loads, the serving cost (one number with a target: the served engine's best goodput against stock's, by vLLM's own benchmark client), and replaying a recorded window under its committed schedule | maintained |
 | `prod_repro/` | one command over the serving cost benchmark's serve, load and replay: what the serve turned on (prefix caching, speculative decoding, the context limit), whether the replayed window's tokens are the served ones, what our changes cost over stock with its interval, and the advice a request, each measured or said not to be | maintained |
+| `serving_cost/` | `verity bench serving_cost`, the serving cost of a model too large to optimize on in five stages, each refusing without the stored record of the stage before it: the priced figure from a copy's unit costs and a capture's counts (`benchmarks/serving-cost-priced`), and the measured less the priced | maintained |
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
 | `inference_only/` | the inference-only policy of Llama 3.2 1B as served, stated, and of the class this tree builds, with the Lean count's verdict on it, and each one's number: the least slowdown of training run inside the policy's inference blocks, under the min-cut bound | maintained |
 | `slowdown/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
@@ -309,7 +376,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses) and the served path's SHA-512 commitment library (`lib/`) | maintained |
-| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`) and the store's load with bandwidth receipts (`p2_stage`) | maintained |
 | `kernels/` | the served path's exact kernels and what a kernel build ships with: the exact W8A8 linear (`s8_linear`), vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`), the nvcc a job's own library compiles with (`job_nvcc.sh`), and the Marlin MoE path's `moe_align_block_size` made a function of its inputs by the integration's `verity_vllm.engine.moe_align`, checked run to run and against the pin's op and timed against it (`moe_align`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
 | `../calibration/tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
@@ -321,8 +387,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a served window's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics) | maintained |
-| `two_stage/` | the two-stage audit end to end on a toy replay block: the boundary registered, a first-stage sample of replay blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome, with its negatives | maintained |
+| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a served window's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics); and the two-stage audit end to end on a toy replay block (`toy.py`, `audit.py`): the boundary registered, a first-stage sample of replay blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome, with its negatives | maintained |
 | `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
 | `unit_walk/` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds a statement at each width (lane groups a pass), distance asked ahead and pool size, with and without its row vectors kept, every walk's packed words held to the first's | maintained |
@@ -338,6 +403,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
 | `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
 | `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
+| `remote_error/` | SPOT's cryptographic error in the remote application: the remote guarantee's cryptographic terms of SPOT, evaluated at the application's parameters against a prover's SHA-512 calls, per window and pooled over the census's fleets and the monitoring periods (bound's formula proved in Lean under four open premises; value evaluated in Python; PoUW's and the policy's parts open) | maintained |
 
 ### Checks
 

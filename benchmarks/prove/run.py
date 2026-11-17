@@ -34,11 +34,12 @@ METRICS = {"benchmarks/prover-gpus-per-serving-gpu": "gpus_per_serving_gpu",
            "benchmarks/lean-verifier-seconds-per-token": "lean_verifier_seconds_per_token",
            "benchmarks/proof-bytes-per-token": "proof_bytes_per_token",
            "benchmarks/prover-gpus-per-serving-gpu-at-record": "gpus_per_serving_gpu_at_record"}
-#: the metrics `layers` writes, by id: each the figure a proof block it holds (`proof_layers.FIGURES`), one member a
-#: layer (`proof_layers.MEMBERS`)
+#: the metrics `layers` writes, by id: each the figure it holds (`proof_layers.FIGURES`), one member a layer
+#: (`proof_layers.MEMBERS`)
 LAYER_METRICS = {"benchmarks/proof-layer-prover-seconds": "prover_s",
                  "benchmarks/proof-layer-lean-seconds": "lean_s",
-                 "benchmarks/proof-layer-proof-bytes": "proof_bytes"}
+                 "benchmarks/proof-layer-proof-bytes": "proof_bytes",
+                 "benchmarks/proof-layer-build-seconds": "build_s"}
 
 if __name__ == "__main__":
     argv = sys.argv[1:]
