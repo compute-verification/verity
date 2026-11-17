@@ -1811,7 +1811,7 @@ def test_the_runner_stores_a_stage_record_after_the_report_and_refuses_a_stage_i
     lease.write_text('#!/usr/bin/env bash\necho "$*" > "$RESEARCH_RUN_DIR/leased"\n'
                      'while [ "$1" != -- ]; do shift; done; shift; exec "$@"\n')
     lease.chmod(0o755)
-    path = {"PATH": f"{lease.parent}:{os.environ['PATH']}", "STAND_IN_UNITS": str(units_file(tmp_path))}
+    path = {"PATH": os.pathsep.join([str(lease.parent), *os.get_exec_path()]), "STAND_IN_UNITS": str(units_file(tmp_path))}
     line = ("--client", "vllm-bench", "--load", "chat=16", "--model", "glm53-standin", "--reps", "1",
             "--arms", "prod prod-record", "--again", "none")
     run_dir = tmp_path / "run"
@@ -1837,6 +1837,7 @@ def test_the_runner_stores_a_stage_record_after_the_report_and_refuses_a_stage_i
     p = bash(script, *line, "--stage", "capture", "--minify", "r20261117-110000-0001", run_dir=run_dir)
     assert p.returncode == 1 and "stage capture: FAILED: no lifetime of the reference prod-trace" in p.stdout, p.stderr
     assert "prod-record: 1 pass records lack load, rep, t0_unix, wall_s" in p.stdout
+    assert "glm53-standin is a stand-in: a capture serves the full model" in p.stdout
     r = json.loads((run_dir / "result.json").read_text())
     assert r["kind"] == "serving-cost-capture/v1" and r["workload_fingerprint"]["minify"] == "r20261117-110000-0001"
     assert not (run_dir / "leased").exists()

@@ -14,6 +14,7 @@ import json
 import sys
 import time
 import zlib
+from importlib import metadata
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -91,9 +92,8 @@ def counts(canon) -> dict:
 def main(argv: list[str]) -> int:
     out, quick = Path(argv[1]), "--quick" in argv
     out.mkdir(parents=True, exist_ok=True)
-    import vllm
-    import vllm._custom_ops  # registers torch.ops._C's top-k ops
-    real = SimpleNamespace(**{op: getattr(torch.ops._C, op) for op in dsa_topk.OPS if hasattr(torch.ops._C, op)})
+    dsa_topk.install()
+    real = SimpleNamespace(**{op: getattr(torch.ops._C, op).real for op in dsa_topk.OPS if hasattr(torch.ops._C, op)})
     wrapped = {}
     for name, kw in PASSES.items():
         ns = SimpleNamespace(**vars(real))
@@ -105,7 +105,7 @@ def main(argv: list[str]) -> int:
         log.write(json.dumps(rec) + "\n")
         log.flush()
 
-    emit({"vllm": vllm.__version__, "torch": torch.__version__, "device": torch.cuda.get_device_name(),
+    emit({"vllm": metadata.version("vllm"), "torch": torch.__version__, "device": torch.cuda.get_device_name(),
           "sms": torch.cuda.get_device_properties(0).multi_processor_count, "K": K, "width": W, "passes": PASSES,
           "how": "device time a call inside a CUDA graph: the median of 5 trials of 20 replays"})
     dists = ["randn", "shift32"] if quick else ["randn", "indexer", "shift8", "shift32"]
