@@ -401,8 +401,9 @@ PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdi
 #: what the composed verdict's reason (`said`) says of that row's accept
 PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor device re-checks"
 WEAKER_TIE = ("a weaker tie, not the tied guarantee: the window's records audit tied to W sampled {design}, not a stratified "
-              "rate, so its accept shows only that the tables its sampled proof blocks read hold the served model's own "
-              "values at W's roots, not that every table W registers does")
+              "rate over a cut whose tables' readers are templates of their own, so its accept shows only that the tables "
+              "its sampled proof blocks read hold the served model's own values at W's roots, not that every table W "
+              "registers does")
 #: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
@@ -1981,7 +1982,9 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        and the verdict is over the coin published at its sample (`pearlplus_coin`).
        Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
        window's docket R under `spot` is chained right after W, and its records audit is tied to W
-       (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The period's
+       (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The rule that audit's
+       summary states is the sampling design R commits (its kind, and its K unless stratified), and only a stratified
+       rate's leaves the answer without a weaker tie. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
     4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
@@ -1992,6 +1995,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.protocols.proofs.spot.verifier.challenger import remote
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as D
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
@@ -2060,6 +2064,14 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if (accepted := (summary.get("audit") or {}).get("accepted")) is not True:
         return None, (f"the window's records audit tied to W didn't accept ({AUDIT_SUMMARY}'s audit.accepted is "
                       f"{accepted!r}), so nothing shows the window SPOT audited reads the roots Pearl+ credits")
+    design, committed, n = summary.get("sampling_design"), reg.get("law"), reg.get("population")
+    rate, strata = D.parse_rate(design), D.parse_strata_rate(design)
+    kind = "subset" if rate else None if strata is None else "work" if strata[0] else "stratified"
+    k = (None if kind in (None, "stratified") else -1 if type(n) is not int else D.rate_count(*rate, n) if rate
+         else D.rate_count(strata[1], strata[2], 1, n))
+    if not (isinstance(committed, Mapping) and kind and committed.get("law") == kind and k in (None, committed.get("k"))):
+        return None, (f"the window's records audit states the rule {design!r}, not the one its registration R commits "
+                      f"({committed!r} over {n!r} proof blocks): what Pearl+'s tie covers is read from R's rule")
     try:
         held = hashlib.sha512((spot / CIRCUIT_RECORD).read_bytes()).hexdigest()
     except OSError as e:
@@ -2090,8 +2102,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     eps = _rational(work.get("epsilon"))
     if eps is None or eps != _rational(ref.get("epsilon")):
         return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
-    design = summary.get("sampling_design")
-    weaker = {} if str(design).startswith("stratified-rate:") else {"weaker_tie": WEAKER_TIE.format(design=design)}
+    weaker = {} if kind == "stratified" else {"weaker_tie": WEAKER_TIE.format(design=design)}
     return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
                                                               ("credited", "credited_tiles", "macs", "rho", "epsilon")}
                                  | ({"give_up": work["give_up"]} if "give_up" in work else {})},
@@ -2183,8 +2194,8 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
     of the checkpoint they are, those; where it says which host ran each party (the network attester's ``placement``),
     the link K counts, named, with every other link of the node uncounted and uncertified, and what its `trusted-device`
-    premise rests on (the wipe's holds only under the key its challenger's host is pinned to, and reads a rehearsal's
-    otherwise); and each δ of the block record's at which its subprotocol's quantity is not established. A placement
+    premise rests on (the wipe's never holds: under the key its challenger's host is pinned to, it reads that the key
+    matched the pins this machine was handed, and otherwise rehearsal, either with no bound); and each δ of the block record's at which its subprotocol's quantity is not established. A placement
     with no links (the front's ``--gate local``) states no link."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None

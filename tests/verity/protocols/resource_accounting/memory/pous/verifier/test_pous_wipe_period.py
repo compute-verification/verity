@@ -11,10 +11,11 @@ keeping one label past it and a late read rejected, a session the prover left un
 whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
 (the links leaving the node, the undeclared tiers, the egress, what a joint store's disks leave outside the
 boundary), the reads and the session's window. The verifier trusts the one key its pin names (`wipe.trusted_sha512`): a
-session signed under another is rejected, and a challenger on its own host with no key pinned is refused. The record
-says `trusted-device` holds only under a committed configuration, for a session signed under a key its `[[pin]]` entries
-give the memory attester for the wipe (`period.json`'s `deployment`): a run's own pin, a rehearsal's host name or a
-configuration nobody committed gives a rehearsal with no bound."""
+session signed under another is rejected, and a challenger on its own host with no key pinned is refused. The record's
+`trusted-device` never holds: under a committed configuration, when the session's key is one its `[[pin]]` entries give
+the memory attester for the wipe (`period.json`'s `deployment`), it reads that the key matched the pins this machine was
+handed (`memory_attester.MATCHED`), and otherwise (a run's own pin, a rehearsal's host name or a configuration nobody
+committed) rehearsal, either with no bound."""
 
 from __future__ import annotations
 
