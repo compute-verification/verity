@@ -641,9 +641,18 @@ class Past:
 
     def launching(self, key: str = "beside_launching", action: str = "slim") -> dict[str, dict]:
         """The drops whose candidate's run beside its check (or, with ``key`` `records_launching` and ``action`` `regenerate`,
-        its records run) was still launching (``key``), by sha, but those a line of ``action`` has settled since (`dropped`)."""
-        settled = {r.get("sha") for r in self.of(action) if r.get("dropped")}
-        return {r["sha"]: r for r in self.of("drop") if isinstance(r.get(key), dict) and r["sha"] not in settled}
+        its records run) was still launching (``key``), by sha, but those a line of ``action`` has settled since (`dropped`),
+        each with what is left launching as the newest line of ``action`` since logged it (``key``)."""
+        out: dict[str, dict] = {}
+        for r in self.lines:
+            if r.get("action") == "drop" and isinstance(r.get(key), dict) and r.get("sha"):
+                out[r["sha"]] = r
+            elif r.get("action") == action and r.get("sha") in out:
+                if r.get("dropped"):
+                    del out[r["sha"]]
+                elif isinstance(r.get(key), dict):
+                    out[r["sha"]] = {**out[r["sha"]], key: r[key]}
+        return out
 
     def followed(self) -> dict[str, dict]:
         """The drops whose candidate's graph2 check was left running, to be compared with its check's verdict (`follow`), by
@@ -2248,6 +2257,12 @@ def _running(j: Judged | None) -> dict:
     return j.record or {}
 
 
+def _launching(rec: dict) -> bool:
+    """Whether a shard of the run ``rec`` records still launches: one with no run ids yet, which a verdict kept for the whole
+    run (a shard that registered none, `vqueue_slim.judge`) leaves launching."""
+    return any("launch" in s for s in rec.get("shards") or ())
+
+
 #: where a check that takes lean-audit's verdict from candidate ``sha``'s reads it (`_lent`): the record, and whether
 #: ``sha`` has landed
 Lent = Callable[[str], tuple[dict | None, bool]]
@@ -3658,7 +3673,8 @@ class Loop:
         if stop := a.why != ON_MAIN and bool(kept.get("still_running")):
             rec = kept
         base = t.below if c.base == t.main else t.past.slim(c.base)[1]
-        unread = not stop and "verdict" in kept and (kept.get("still_running") or isinstance(base, dict) and (
+        launching = rec if "launch" in rec or "shards" in rec else kept if _launching(kept) else {}
+        unread = not launching and not stop and "verdict" in kept and (kept.get("still_running") or isinstance(base, dict) and (
             "verdict" not in base or base.get("still_running")))
         if "plan" in rec:
             self.slim.abandon(rec)
@@ -3674,7 +3690,7 @@ class Loop:
                            **({"graph2": _ended(shadow) or PENDING} if shadow is not None else {}),
                            **({"follow": follow} if follow is not None else {}),
                            **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}),
-                           **({"beside_launching": rec} if "launch" in rec or "shards" in rec else {}),
+                           **({"beside_launching": launching} if launching else {}),
                            **({"off_gate_running": kept} if unread else {}),
                            **({"records_cancelled": rids} if rids else {}),
                            **({"records_cancel_failed": rfailed} if rfailed else {}),
@@ -3726,14 +3742,31 @@ class Loop:
     def _launched(self, t: Tick) -> list[dict]:
         """The run beside each dropped candidate's check, and its records run, that was still launching at its drop
         (`Past.launching`), judged each tick until its launch ends: cancelled once it printed its run ids while it runs, and
-        settled (`dropped`) either way; one that registered no run or already ended has nothing to cancel."""
+        settled (`dropped`) either way; one that registered no run or already ended has nothing to cancel.  Of the run beside
+        it, each shard still launching, whatever the others did (one that registered no run kept a verdict for the whole run),
+        is cancelled as it registers (`vqueue_slim.shards_registered`), logged with the shards left launching until none is."""
         out = []
         for run, key, action, prefix in ((self.slim, "beside_launching", "slim", "beside"),
                                          (self.records, "records_launching", "regenerate", "records")):
             if run is None:
                 continue
             for sha, drop in t.past.launching(key, action).items():
-                rec = dict(drop[key])
+                rec = json.loads(json.dumps(drop[key]))
+                if action == "slim" and _launching(rec):
+                    was = json.dumps(rec, sort_keys=True)
+                    ids, left = run.shards_registered(self.world.slim_driver(), rec), _launching(rec)
+                    if was == json.dumps(rec, sort_keys=True):
+                        continue
+                    failed = self.world.cancel_runs(ids, f"vqueue: candidate {sha[:12]} was dropped: {drop.get('why')}") \
+                        if ids else {}
+                    out.append(self.record(t, action, sha=sha, base=drop.get("base"), members=drop.get("members") or (),
+                                           heads=drop.get("heads") or (), record=rec, dropped=not left, done=not left,
+                                           why="its candidate was dropped while it launched: "
+                                               + ("a shard's run cancelled" if ids else "a shard registered no run")
+                                               + (", others still launch" if left else ""),
+                                           **({key: rec} if left else {}), **({f"{prefix}_cancelled": ids} if ids else {}),
+                                           **({f"{prefix}_cancel_failed": failed} if failed else {})))
+                    continue
                 v = run.judge(self.world.slim_driver(), rec)
                 ids = list(rec.get("ids") or ())
                 if v.state == PENDING and not ids:
