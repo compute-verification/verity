@@ -11,7 +11,8 @@ optimizer circuit.
 
 ## Try it
 
-    uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
+    uv sync --all-packages --extra torch-cpu
+    uv run verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 
 It needs only a CPU. For each circuit it prints one JSON line: its gates, its counted products, s_×, a_out and a_in,
 and whether each agrees with the slowdown calculator's. A served layer of 10^9 to 10^12 gates measures in seconds. With

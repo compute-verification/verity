@@ -12,10 +12,11 @@ are, and none of them is a routine step.
 ## Try it
 
 The library of training algorithms traces each entry's step on a CPU, on fake tensors, and reads its slowdown under
-its policy. It trains nothing. From this directory:
+its policy. It trains nothing. From the repository's root:
 
 ~~~sh
-uv run --project ../.. python -m training_slowdown.library s-t20-1.1x-adamw
+uv sync --all-packages --extra torch-cpu
+uv run python benchmarks/training_slowdown/training_slowdown/library.py s-t20-1.1x-adamw
 ~~~
 
 It prints one line an entry: the share of the start's parameters its step trains, the dtypes its products are priced
@@ -39,7 +40,7 @@ no entry, it reads every entry of `attacks/`.
 Their commands, as the search ran them:
 
 ~~~text
-python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DIR]
+uv run python benchmarks/training_slowdown/training_slowdown/library.py [ENTRY ...] [--starts starts.toml] [--out DIR]
 python -m training_slowdown.of_record [ENTRY ...] --records DIR [--held of_record.toml] [--starts starts.toml] \
     [--out DIR]
 verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]] \
@@ -55,9 +56,10 @@ python -m training_slowdown.grade --config attacks/NAME.toml --starts starts.tom
     [--also NAME=DIR ...] [--out OUT] [--as-if-assumed]
 ~~~
 
-Run the `python -m` commands from this directory in the workspace's environment, `uv run --project ../.. python -m
-training_slowdown.MODULE` (a bare `uv run` here makes an environment of this directory's own, without the workspace's
-packages). The grader runs from `grader/`:
+Run `verity bench` from the repository's root and the `python -m` commands from this directory, each in the
+workspace's environment, which `uv sync --all-packages --extra torch-cpu` at the root makes: `uv run verity bench ...`
+and `uv run --project ../.. python -m training_slowdown.MODULE` (a bare `uv run` here makes an environment of this
+directory's own, without the workspace's packages). The grader runs from `grader/`:
 
 ~~~text
 python grader.py HANDOVER --slowdown-code DIR --commit SHA [--trace STEP.products.json] --out OUT.json
