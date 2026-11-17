@@ -1210,6 +1210,37 @@ def test_the_arena_is_most_of_the_cards_memory_from_its_sheet(store, work, card,
     assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {arena} --util 0.88"
 
 
+@pytest.mark.parametrize("card, arena, member", [("NVIDIA H200, 9.0", 112, "llama-3.2-1b-h200"),
+                                                 ("NVIDIA RTX PRO 6000 Blackwell Server Edition, 12.0", 72,
+                                                  "llama-3.2-1b-rtx-pro-6000")])
+def test_local_writes_its_pass_time_and_bare_read_beside_the_share_as_metrics_of_their_own(
+        store, capsys, work, monkeypatch, tmp_path, card, arena, member):
+    """Beside the share, a `--local` session's result holds the calibration's median pass in ms and its bare read of
+    the card's memory in TB a second, each a metric of `metrics.toml` with no target, its member the model and the
+    card, the card's name and the store's bytes its fields; neither is in the printed JSON."""
+    held = a_run(monkeypatch, tmp_path)
+    record = a_local_record(with_amounts(a_session(gamma=0.199)), arena=arena)
+    record["calibration"] = {"pass_ns": {"p50": 79_160_000, "max": 87_000_000},
+                             "read_tiers": {"hbm": {"bytes": arena * GIB, "ms": 26.5}}}
+    assert bench(store, "--local", run=Machine(card=card, record=record)) == 0
+    assert "calibration" not in printed(capsys)[1]
+    got = written(held)
+    rows = {m["id"]: m for m in tomllib.loads((ROOT / "benchmarks" / "memory" / "metrics.toml").read_text())["metric"]}
+    for name, value, better in ((M.PASS_METRIC, 79.16, "lower"), (M.READ_METRIC, arena * GIB / 26.5 / 1e9, "higher")):
+        m = got[name]
+        assert (m["value"], m["mark"], m["member"], m["card"], m["store_bytes"]) == (
+            pytest.approx(value), "measured", member, card.rpartition(",")[0], arena * GIB)
+        assert m.get("target") is None and m["unit"].startswith(rows[name]["unit"]) and rows[name]["better"] == better
+    assert got[M.LOCAL_METRIC]["value"] == 0.199 and "member" not in got[M.LOCAL_METRIC]
+
+
+def test_a_local_record_with_no_calibration_writes_the_share_alone(store, work, monkeypatch, tmp_path):
+    held = a_run(monkeypatch, tmp_path)
+    assert bench(store, "--local", run=Machine(record=a_local_record(with_amounts(a_session(gamma=0.199))))) == 0
+    got = written(held)
+    assert M.LOCAL_METRIC in got and M.PASS_METRIC not in got and M.READ_METRIC not in got
+
+
 def test_the_arena_vllm_py_gpu_and_cores_are_the_persons_to_set(store, capsys, work, monkeypatch, tmp_path):
     """ARENA_GIB and UTIL size the arena, GPU names the card nvidia-smi is asked about (and `run.sh` leases), the
     person's own cores win, an installed `gpu-lease` keeps its own locks, and a checkpoint already there is not

@@ -103,7 +103,7 @@ node's target is 0.14 at an error of at most 2^-100; one card's share at its own
 
 **Where the result goes:** the text and one line of JSON on stdout. With `OUT=DIR`, the JSON goes to `DIR/memory.json`
 and the benchmark result to `DIR/result.json`, its metric `memory-accounting/one-machine-read-rate-uncertified` (`metrics.toml`)
-beside the bytes and the error. The session's records (the verifier's `verifier.json`, every process's log) go to a new
+beside the bytes and the error, and the pass time and the bare read's rate as two metrics of their own. The session's records (the verifier's `verifier.json`, every process's log) go to a new
 directory under `LOCAL_WORK/runs/`, which stderr names; `verity bench memory --from DIR` reads it again with nothing of
 ours. The two reference numbers printed beside a node's number are runs in our evidence store, so `--local` prints
 them as not read, with that reason.
@@ -258,7 +258,11 @@ and its unit says so. The printed number is written once more under
 That entry also carries the goal's target, 0.14, and says whether the number is within it or past it, with its error
 (`within target; error 7.89e-31 (2^-100.0)`). A `--local` session's entry is
 `memory-accounting/one-machine-read-rate-uncertified`, one card's share at its own data sheet, with no target and its
-error in its unit. A session whose
+error in its unit. Beside it a `--local` session writes `memory-accounting/one-card-pass-time`, the calibration's
+median pass over the store in ms, and `memory-accounting/one-card-bare-read-rate`, the calibration's bare read of the
+store on the card's memory in TB a second, both as the prover reports them in the verifier's record, each with no
+target, its `member` the model and the card (`llama-3.2-1b-h200`) and its fields the card's name and the store's
+bytes; each is left out where the record's calibration lacks it. A session whose
 verifier held no checkpoint, every session now, still writes it, with `"bound": false` and its verdict naming that premise
 (`within target; error 3.94e-31 (2^-101.0); the verifier held no checkpoint`); a bound session's entry, from a record made while the verifier could bind
 the store, holds neither. Where the number's error

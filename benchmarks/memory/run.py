@@ -111,6 +111,12 @@ METRIC, TARGET = "memory-accounting/node-read-rate-uncertified", 0.14
 #: a `--local` session's metric: a share of one card's read rate against its own sheet, another quantity from a node's
 LOCAL_METRIC = "memory-accounting/one-machine-read-rate-uncertified"
 LOCAL_UNIT = "share of one card's memory read rate left uncertified, at its own data sheet's read bandwidth"
+PASS_METRIC = "memory-accounting/one-card-pass-time"
+PASS_UNIT = "ms a pass: the calibration's median pass over the store, as the prover reports it"
+READ_METRIC = "memory-accounting/one-card-bare-read-rate"
+READ_UNIT = "TB a second: the calibration's bare read of the store on the card's memory, as the prover reports it"
+#: the model ROLE serves, as the first word of a --local point's `member`
+MEMBER_MODEL = "llama-3.2-1b"
 #: how the number's error reads, in PoUB's ledger's words (its `DELTA_FORM`): δ is the session's, in its verifier's
 #: ledger, and the windows' PRF advantages are in no δ
 ERROR_FORM = "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
@@ -324,7 +330,8 @@ def session(record: Path, k: int | None) -> dict:
             "store_bytes": blocks * BLOCK_BYTES,
             "node_gpu_bytes": (ledger.get("memory") or {}).get("hbm_bytes"),
             "model": binding.get("name") if binding.get("bound") is True else None,
-            "bound": binding.get("bound") is True, "parameters": parameters(v, vs), "ledger": ledger}
+            "bound": binding.get("bound") is True, "parameters": parameters(v, vs), "ledger": ledger,
+            "calibration": v.get("calibration") or {}}
 
 
 def parameters(v: dict, vs: dict) -> dict:
@@ -875,6 +882,28 @@ def amounts(doc: dict, ledger: dict, metric: str = METRIC) -> list[dict]:
     return out
 
 
+def member(machine: dict) -> str:
+    card = next((word for word in LOCAL_SHEETS if word in machine["card"]), machine["sheet"])
+    return "-".join([MEMBER_MODEL, *card.lower().split()])
+
+
+def pass_points(doc: dict, calibration: dict) -> list[dict]:
+    """A `--local` session's pass time and bare read from its record's `calibration`, each left out where it lacks
+    it."""
+    run = [doc["run"]] if doc["run"] else []
+    pass_ns = _at(calibration, "pass_ns", "p50")
+    read_bytes, read_ms = (_at(calibration, "read_tiers", "hbm", k) for k in ("bytes", "ms"))
+    out = []
+    if pass_ns is not None:
+        out.append({"name": PASS_METRIC, "value": pass_ns / 1e6, "unit": PASS_UNIT,
+                    "inputs": [*run, "calibration.pass_ns.p50"]})
+    if read_bytes and read_ms:
+        out.append({"name": READ_METRIC, "value": read_bytes / read_ms / 1e9, "unit": READ_UNIT,
+                    "inputs": [*run, "calibration.read_tiers.hbm.bytes", "calibration.read_tiers.hbm.ms"]})
+    return [m | {"member": member(doc["machine"]),
+                 "extra": {"card": doc["machine"]["card"], "store_bytes": doc["store_bytes"]}} for m in out]
+
+
 def text(doc: dict) -> str:
     """The printed lines of a document: the number and how its error reads, what it was measured on, and the
     references."""
@@ -1025,7 +1054,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
         held = SETTINGS.RESEARCH_RUN_DIR
         # a run that ran the loopback or --local keeps that document, the mark `--from` that run reads
         kept = bool(held) and (was := kind(left(Path(held)))) is not None and was != kind(doc)
-        ledger = doc.pop("ledger")
+        ledger, calibration = doc.pop("ledger"), doc.pop("calibration", {})
     except NoNumber as e:
         code = 3 if isinstance(e, CouldNotRun) else 1
         if a.local or a.loopback:
@@ -1040,7 +1069,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     # a loopback certifies nothing, so it writes no result, and a --local session writes its own metric; a result holds
     # one measurement a name, so a run that prints a second session keeps its first one's result
     printed = text(doc)
-    measured = [] if doc["loopback"] else amounts(doc, ledger, LOCAL_METRIC if doc["local"] else METRIC)
+    measured = ([] if doc["loopback"] else amounts(doc, ledger, LOCAL_METRIC if doc["local"] else METRIC)
+                + (pass_points(doc, calibration) if doc["local"] and doc.get("machine") else []))
     try:
         kit.report("memory", printed, doc, measured, document=not kept, ran_with=ran(doc), accepted=True,
                    from_run=a.run and (doc["run"] or a.run))
