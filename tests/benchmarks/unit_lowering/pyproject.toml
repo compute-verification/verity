@@ -12,11 +12,13 @@ untraced = ["test_unit_lowering.py"]
 # The lowering the guard runs, in a child: `lanes.py tile` (h1_prove's h1form, hidden_zk's fast_stage, and H1's lowering
 # under `verity`, verity_flock's ir_lower and class_statement with it), which the AND-row test reads too; mem_profile.py
 # names the statement as `pouw_h1_circuits` does (adapters/vllm, its tests package's two __init__.py on the way); run.py
-# reads the run's commit through verity_config.settings; h1form.py reads its tile and form from PoUW's settings.py.
+# reads the run's commit through verity_config.settings, and writes its metric with the harness kit's writer; h1form.py
+# reads its tile and form from PoUW's settings.py.
 inputs = ["verity", "benchmarks/pouw/h1_prove", "benchmarks/pouw/hidden_zk", "benchmarks/pouw/settings.py",
           "tests/adapters/vllm/tests/__init__.py",
           "tests/adapters/vllm/tests/protocols/__init__.py", "tests/adapters/vllm/tests/protocols/pouw_h1_circuits.py",
-          "tools/config/verity_config", "benchmarks/unit_lowering"]
+          "tools/config/verity_config", "benchmarks/unit_lowering", "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
+          "benchmarks/harness/verity_bench/settings.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

@@ -28,8 +28,6 @@ batch a request's blocks read the other requests' routing, which the launch-leve
 
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -38,7 +36,6 @@ from typing import Any
 
 from verity_vllm.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.definitions.registry import marlin_moe as MM
-
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (
     SCRATCH_INT_FILLS,

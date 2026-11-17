@@ -202,7 +202,8 @@ def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_from_every_b
             _reported(argv, True, failing=("Req",) if rc else ())
         return type("P", (), {"returncode": rc})()
 
-    def fake_put(self, reports, since=None, log=print):
+    def fake_put(self, reports, since=None, log=print, staged=None):
+        assert staged is not None and all(staged.resolve() in Path(at).resolve().parents for at in reports), staged
         put.append((self.store, reports, since))
         return 3
 
@@ -240,7 +241,7 @@ def test_a_run_stores_what_the_run_before_it_compiled_and_never_stored_before_it
     sync = LC.sync
     monkeypatch.setattr(LC, "sync", lambda *a: events.append("sync") or sync(*a))
     monkeypatch.setattr(LC.LA.LakeArtifacts, "put",
-                        lambda self, reports, since=None, log=print: events.append(("put", reports, since)) or 2)
+                        lambda self, reports, since=None, log=print, staged=None: events.append(("put", reports, since)) or 2)
     said = []
     for left in ({"phase": "check", "since": 1234.5, "out": str(old)}, {"phase": "try"}, {"phase": "build"},
                  {"phase": "deps"}, {"phase": "check", "killed": -9}):
@@ -1460,6 +1461,24 @@ def test_a_kept_module_its_source_compiles_to_other_bytes_is_compiled_and_its_pa
     assert (out / "audit-pkg" / "sampled.log").read_text() == "audit 2"
     assert any("compiled P.M to other outputs" in s and "audits pkg once more" in s and str(aside) in s for s in said)
     assert outcome_line(said)["outcome"] == LC.PASS
+    assert outcome_line(said)["mismatched"] == {"P.M": "pkg"}, "the run that caught the module names it, and its package"
+
+
+def test_a_recorded_run_whose_sample_caught_a_module_names_it_in_its_result(tmp_path, monkeypatch):
+    """A caught module is compiled again and the run's outcome is the second audit's, so nothing but the result says a
+    restored or kept module was not what its source compiles to: `result.json` names each one with its package, in
+    `mismatched` and in its validation's detail, as the last line does. A run that caught none says nothing of it."""
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-caught")
+    for caught in ({"P.M": "pkg", "Q.N": "pkg/Proofs"}, {}):
+        said: list[str] = []
+        assert LC.finish("pkg", LC.PASS, 0, run_dir / "lean-audit", False, "slot", {}, said.append, mismatched=caught) == 0
+        doc = json.loads((run_dir / "result.json").read_text())
+        assert doc.get("mismatched") == (caught or None) and outcome_line(said).get("mismatched") == (caught or None)
+        assert doc["validation"]["status"] == "passed"
+        assert ("caught P.M, Q.N, whose restored or kept outputs" in doc["validation"]["detail"]) == bool(caught)
 
 
 SEALED = ("sampled: P.M: the build's .lake/build/lib/lean/P/M.olean differs from what its source compiles to (olean "
@@ -1642,7 +1661,8 @@ def test_a_spec_failing_only_because_its_provers_sampled_recompile_did_is_audite
              "sampled": {"mismatched": {"P.M": str(real / "Proofs")}}}]}))
         return LC.mismatched(tmp_path, tree)
 
-    assert found(["proved_in.unpassed"]) == found(["proved_in.sampled"]) == found([]) == {"P.M": (real / "Proofs").resolve()}
+    assert found(["proved_in.unpassed"]) == found(["proved_in.sampled"]) == found(["requires.sampled"]) == found([]) == \
+        {"P.M": (real / "Proofs").resolve()}
     assert found(["proved_in.unpassed", "lean"]) == {}
     (tmp_path / "audit.json").write_text("{")
     said: list[str] = []
@@ -1813,7 +1833,7 @@ def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox
     (slots := tmp_path / "lean-slots").write_text("build 1\n")
     monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
     put, marks, ran = [], [], []
-    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: (
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print, staged=None: (
         ran.append(len(calls["build"])), put.append((self.store, reports, since))) and 4)
     mark = LC.mark
     monkeypatch.setattr(LC, "mark", lambda t, **what: marks.append(what) or mark(t, **what))
@@ -2519,6 +2539,54 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
                                                    str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
 
 
+@pytest.mark.parametrize("file, text", [
+    ("lake-manifest.json", json.dumps({"packages": [{"type": "path", "name": "v", "dir": "../../var/tmp/victim"}]})),
+    ("lake-manifest.json", json.dumps({"packages": [{"type": "path", "name": "v", "dir": "/var/tmp/victim"}]})),
+    ("lean-audit.json", json.dumps({"proved_in": ["../.."]})),
+], ids=["manifest-up", "manifest-absolute", "proved-in-up"])
+def test_a_package_the_audit_would_build_from_outside_the_tree_is_refused(file, text):
+    """A path dependency's `dir` or a `proved_in` entry is the tree's own content, and the audit writes the `.lake` of
+    each package of the `closure`: one that names a directory outside the tree (another slot's build, a cache) is refused,
+    naming the file and the entry, before any sandbox is built."""
+    files = {f"Sec/{file}": text.encode()}
+    with pytest.raises(LC.AUDIT.OutsideTree, match=f"Sec/{file}: .*outside the tree"):
+        LC.closure("Sec", files.get)
+
+
+def test_a_package_directory_the_tree_holds_as_a_link_out_of_it_is_refused(tmp_path, monkeypatch):
+    """`Dep -> /elsewhere`, a package directory the tree holds as a link: its `.lake` would be outside the tree, so the
+    sandbox is never built for it. A link above the packages (a slot tree) stays."""
+    real, link = tmp_path / "cache-root" / "build-2", tmp_path / "build-2"
+    (real / "Sec").mkdir(parents=True)
+    (elsewhere := tmp_path / "elsewhere").mkdir()
+    (real / "Dep").symlink_to(elsewhere)
+    link.symlink_to(real)
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "Dep"])
+    with pytest.raises(LC.AUDIT.OutsideTree, match=f"resolves to {elsewhere}, outside the tree"):
+        LC.in_sandbox("Sec", link, ["lake", "build"])
+
+
+@pytest.mark.skipif(subprocess.run([*LC.UNSHARE, "--", "true"], capture_output=True).returncode != 0,
+                    reason="no unprivileged user namespaces here")
+def test_a_lake_the_tree_holds_as_a_link_reaches_the_sandbox_as_the_link_which_refuses_it(tmp_path, monkeypatch):
+    """`Sec/.lake -> ../src` in a slot tree: the sandbox is handed the `.lake` as it is (only the package's directory
+    resolved), so it sees the link and refuses it; handed the link's target, it bound the tree's sources read-write and
+    the command rewrote one."""
+    real, link = tmp_path / "cache-root" / "build-2", tmp_path / "build-2"
+    (real / "src").mkdir(parents=True)
+    (real / "src" / "Main.lean").write_text("orig\n")
+    (real / "Sec").mkdir()
+    (real / "Sec" / ".lake").symlink_to("../src")
+    link.symlink_to(real)
+    monkeypatch.setattr(LC, "closure", lambda p: [p])
+    argv = LC.in_sandbox("Sec", link, ["bash", "-c", "echo pwned > .lake/Main.lean"])
+    assert str(real / "Sec" / ".lake") in argv and str(real / "src") not in argv
+    r = subprocess.run(argv, cwd=link / "Sec", capture_output=True, text=True)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert "is a symbolic link" in r.stderr, r.stderr
+    assert (real / "src" / "Main.lean").read_text() == "orig\n"
+
+
 def test_a_build_s_sandbox_binds_its_tree_at_the_fixed_path_with_its_fetched_dependencies_read_only_there_too(
         tmp_path, monkeypatch):
     """A build reads its tree at check.py's `FIXED` (`sandbox.sh --at`), so what it compiles doesn't depend on where the
@@ -2544,8 +2612,10 @@ def test_a_build_s_sandbox_binds_its_tree_at_the_fixed_path_with_its_fetched_dep
         "sandbox": True, "bound": [str(fixed), str(real)], "compiled": ["Sec.A"]}
     monkeypatch.setattr(LC, "closure", lambda p: [p, "../elsewhere"])
     (tmp_path / "cache-root" / "elsewhere").mkdir()
-    assert LC.bound("Sec", link) == [] and "--at" not in LC.in_sandbox("Sec", link, ["lake", "build"], LC.bound("Sec", link)), \
-        "a package required from outside the tree has no place under the fixed path"
+    with pytest.raises(LC.AUDIT.OutsideTree, match="outside the tree"):
+        LC.bound("Sec", link)
+    with pytest.raises(LC.AUDIT.OutsideTree, match="elsewhere, outside the tree"):
+        LC.in_sandbox("Sec", link, ["lake", "build"])
 
 
 def test_every_lake_build_reads_the_tree_at_the_fixed_path_and_a_lake_command_its_own(tmp_path, monkeypatch):
@@ -2703,3 +2773,47 @@ def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
     assert LC.matching("network/verifier/lean", pkgs, tmp_path) == ["verity/protocols/resource_accounting/network/verifier/lean"]
     assert LC.matching("verifier", pkgs, tmp_path) == pkgs[:2]
     assert LC.matching("network_check", pkgs) == []
+
+
+def test_sync_refuses_a_tracked_link_and_removes_one_the_slot_tree_kept_from_before(tmp_path, monkeypatch):
+    """`sync` recreated a tracked link in the slot tree, through which `link` emptied and `lake_dirs` made directories
+    outside it. A tracked link is refused, naming it; a link the slot tree still holds from before, in a package or above
+    it, is removed rather than written through."""
+    root, tree, victim = tmp_path / "root", tmp_path / "slot", tmp_path / "victim"
+    for d in (root / "top" / "Sec", tree, victim):
+        d.mkdir(parents=True)
+    (root / "top" / "Sec" / "A.lean").write_text("a\n")
+    (root / "top" / "Sec" / "Out").symlink_to(victim)
+    monkeypatch.setattr(LC, "ROOT", root)
+    with pytest.raises(LC.AUDIT.OutsideTree, match=r"'top/Sec/Out' is a symbolic link .*the tree holds no links"):
+        LC.sync(["top/Sec"], ["top/Sec/A.lean", "top/Sec/Out"], tree)
+    (root / "top" / "Sec" / "Out").unlink()
+    (root / "top" / "Sec" / "Sub").mkdir()
+    (root / "top" / "Sec" / "Sub" / "B.lean").write_text("b\n")
+    shutil.rmtree(tree / "top")
+    (tree / "top").symlink_to(victim)
+    (victim / "Sec" / "Sub").mkdir(parents=True)
+    (victim / "Sec" / ".lake").symlink_to(victim)
+    assert LC.sync(["top/Sec"], ["top/Sec/A.lean", "top/Sec/Sub/B.lean"], tree) == 2
+    assert not (tree / "top").is_symlink() and (tree / "top" / "Sec" / "Sub" / "B.lean").read_text() == "b\n"
+    assert sorted(p.name for p in victim.rglob("*")) == [".lake", "Sec", "Sub"]
+    (tree / "top" / "Sec" / "Sub").rename(tree / "top" / "Sec" / "Gone")
+    (tree / "top" / "Sec" / "Sub").symlink_to(victim)
+    (tree / "top" / "Sec" / ".lake").symlink_to(victim)
+    assert LC.sync(["top/Sec"], ["top/Sec/A.lean", "top/Sec/Sub/B.lean"], tree) == 1
+    assert not (tree / "top" / "Sec" / "Sub").is_symlink() and not (tree / "top" / "Sec" / ".lake").is_symlink()
+    assert sorted(p.name for p in victim.rglob("*")) == [".lake", "Sec", "Sub"]
+
+
+def test_a_path_dependency_inside_the_tree_by_name_that_resolves_out_of_it_is_refused(tmp_path, monkeypatch):
+    """`in_tree` compared the normalized name alone: `Sec/out`, a link in the tree to a directory outside it, passed."""
+    root = tmp_path / "root"
+    (root / "Sec").mkdir(parents=True)
+    (elsewhere := tmp_path / "elsewhere").mkdir()
+    (root / "Sec" / "out").symlink_to(elsewhere)
+    monkeypatch.setattr(LC, "ROOT", root)
+    files = {"Sec/lake-manifest.json": json.dumps({"packages": [{"type": "path", "name": "v", "dir": "out"}]}).encode()}
+    with pytest.raises(LC.AUDIT.OutsideTree, match=f"'Sec/out', which resolves to '{elsewhere}', outside the tree"):
+        LC.closure("Sec", files.get)
+    files = {"Sec/lake-manifest.json": json.dumps({"packages": [{"type": "path", "name": "v", "dir": "in"}]}).encode()}
+    assert LC.closure("Sec", files.get) == ["Sec", "Sec/in"]

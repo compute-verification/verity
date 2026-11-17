@@ -1,5 +1,5 @@
 """PoUS, proof of useful space for model weights, as a spec-level reference: the schemes behind one codec API (the band
-first, then dense, P2 and P3), setup, the timed audit, and the memory challenger that signs its rounds.  It matches the
+first, then dense, P2 and P3), setup, the timed audit, and the memory attester that signs its rounds.  It matches the
 Lean models' definitions and is the oracle for the GPU kernels.
 
 Import from the owning module: `params`, `labels` (the bit layout), `oracle` (queries, programs and their rounds),
@@ -8,6 +8,6 @@ per-tensor decode), `setup` (commit to `W`, the verifier's salt and `vk`), `veri
 Merkle root), `audit` (the challenge key, responders and the unsigned timed rounds) and `adversary` (partial holdings
 replayed against the real labels).  `protocol` is the generic protocol over any scheme (abstract `Scheme`,
 `CapacityBound`, `TimedAudit`, `StorageProfile`), and `schemes` the registered schemes behind it (the band first).
-The memory challenger, which signs its rounds, is the device's: `verity.protocols.resource_accounting.memory.pous.attester.memory_challenger`.
+The memory attester, which signs its rounds, is the device's: `verity.protocols.resource_accounting.memory.pous.attester.memory_attester`.
 `PROTOCOL.md` says what is here, and `DISCREPANCIES.md` where the Lean model and the prose spec differ.
 """

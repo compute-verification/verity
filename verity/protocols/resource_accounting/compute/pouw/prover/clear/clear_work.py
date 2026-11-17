@@ -163,7 +163,7 @@ DRAW_WREF = {(SM120.name, SM120.prices, SM120.cap): SM120_LOOP_CAST_8P72}
 
 def draw_wref(scheme: C.PearlC) -> DrawWref | None:
     """The statement the scheme's sample weighs by, or None for the scheme's own `wref` (Lean's at its record, c = 0)."""
-    if type(scheme) is not C.PearlC or scheme.forming != "v1":
+    if type(scheme) is not C.PearlC:
         return None
     return DRAW_WREF.get((scheme.device.name, scheme.prices, scheme.cap))
 

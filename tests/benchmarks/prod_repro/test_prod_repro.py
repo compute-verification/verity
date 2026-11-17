@@ -999,6 +999,9 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
     assert block + counted + off in txt
     assert json.loads((out / P.TOPK_KEPT).read_text()) == {
         "dirs": {"prod-record": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3, "rows_at": 9000}}}
+    # and each process's own file whole, its rows by device
+    assert (out / P.TOPK_FILES / "prod-record" / "dsa_topk.21.json").read_bytes() == (
+        private / "prod-record/topk-log/dsa_topk.21.json").read_bytes()
     assert r["ran"]["passes"]["topk"]["on"] == {"prod": False, "prod-record": True, "prod-seeded": False, "prod-trace": False}
     # a later reading has no private directory, and one whose private directory holds none for it has the kept ones
     shutil.rmtree(private)
@@ -1195,26 +1198,44 @@ def test_under_research_run_the_runs_result_names_what_the_report_rests_on(tmp_p
     # the run's own out/: a job with no result gets one, whose validation is the tokens line's
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-1")
-    run(out)
+    _, _, r = run(out)
     doc = json.loads((tmp_path / "result.json").read_text())
     files = ["out/prod_repro.json", "out/prod_repro.txt", "out/replay-compiled/replay.json"]
     assert doc["artifacts"] == files and (doc["schema"], doc["run_id"]) == ("research/result/v0.1", "r-1")
+    # its validation carries the cost's verdict against its target as a field of its own, and its detail says it
+    against = {"value": S._pct(r["cost"]["value"]), "target": 1.0, "verdict": "not shown"}
     assert doc["validation"] == {
         "status": "passed", "checker": "verity bench prod_repro", "evidence": ["out/prod_repro.json"],
-        "detail": "tokens: reproduced: 2 requests replayed, 4 served tokens compared with 4 replayed, 0 differ in 0 requests"}
+        "detail": "tokens: reproduced: 2 requests replayed, 4 served tokens compared with 4 replayed, 0 differ in 0 "
+                  "requests; the cost against its target of under 1%: not shown", "target": against}
     assert all((tmp_path / f).is_file() for f in files)
     # a result the benchmark's cost wrote keeps what it says, with the files added to its own
     (tmp_path / "result.json").write_text(json.dumps({"schema": "research/result/v0.1", "run_id": "r-1", "validation": {"status": "failed"},
                                                       "measurement_files": ["out/serving_cost.json"], "artifacts": ["out/kept"]}))
     run(out)
     doc = json.loads((tmp_path / "result.json").read_text())
-    assert doc["artifacts"] == ["out/kept", *files] and doc["validation"] == {"status": "failed"}
+    assert doc["artifacts"] == ["out/kept", *files] and doc["validation"] == {
+        "status": "failed", "detail": "the cost against its target of under 1%: not shown", "target": against}
     assert doc["measurement_files"] == ["out/serving_cost.json"]
     # replayed tokens that differ fail the validation of a result the report writes
     (tmp_path / "result.json").unlink()
     shutil.rmtree(out / "replay-compiled")
     replayed(out, tokens={rid(f"{LOAD}1", 0): [8, 0]})
     assert run(out)[0] == 1 and json.loads((tmp_path / "result.json").read_text())["validation"]["status"] == "failed"
+
+
+def test_a_cost_over_its_target_says_so_in_the_validation_whose_status_stays_the_gates():
+    """The validation reads "passed" where the run's own gates held, whatever the cost: the verdict against the target
+    is its own field, and a miss is in the detail too."""
+    c = {"measured": True, "value": 0.0918, "target": 1.0, "verdict": P.OVER, "metric": "vllm/prod-serving-cost-glm53"}
+    v = P.against_target({"status": "passed", "checker": "c", "detail": "tokens: reproduced", "evidence": []}, c)
+    assert v["status"] == "passed" and v["target"] == {"value": 9.18, "target": 1.0, "verdict": "over"}
+    assert v["detail"] == "tokens: reproduced; MISSES its target: +9.18% of stock's serving time, against under 1%"
+    assert P.against_target({}, {"measured": False})["target"] == {"value": None, "target": P.TARGET, "verdict": P.NOT_SHOWN}
+
+
+#: GLM-5.3's checkpoint as a report names it (``model``)
+GLM = f"{S.MODELS['glm53'].repo}@{S.MODELS['glm53'].revision}"
 
 
 def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: str = "prod", ours: str = "prod-record") -> list[dict]:
@@ -1228,8 +1249,9 @@ def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: st
         "measurements": [{"name": S.AGENTIC, "value": 0.5}, {"name": "vllm/prod-serving-cost-glm53", "value": 9.0},
                          {"name": "vllm/prod-replay-match-glm53", "value": 9.0},
                          {"name": "vllm/prod-advice-bits-glm53", "value": 9.0}]}))
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
     r = {"cost": c, "tokens": P.not_measured("no replay ran"), "load": S.AGENTIC, "commit": "c" * 40, "run": "r-1",
-         "arms": {"stock": stock, "again": None, "ours": ours}}
+         "arms": {"stock": stock, "again": None, "ours": ours}, "model": GLM}
     assert P.declare(tmp_path / "out", r, tmp_path / "out" / "replay-compiled") == tmp_path / "result.json"
     return json.loads((tmp_path / "result.json").read_text())["measurements"]
 
@@ -1247,9 +1269,12 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
     assert got == [theirs, {
         "name": "vllm/prod-serving-cost-glm53", "value": own["value"], "unit": "percent of stock's serving time",
         "mark": "measured", "better": "lower", "target": 1.0, "ci95": own["ci95"], "verdict": "under", "load": S.AGENTIC, "stock": "prod",
-        "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1",
+        "ours": "prod-record", "lifetimes": 3, "counted_passes": 6, "left_out": None, "interval": P.INTERVAL,
+        "noise_floor": {"arm": "prod", "over": "lifetimes", "value": -0.5, "ci95": None, "pairs": 1},
+        "commit": "c" * 40, "run": "r-1", "model": GLM, "hardware": "8 × NVIDIA H200",
+        "member": "glm-5.3-h200-prod-record-over-prod",
         "inputs": [f"measured: prod-record's serving time over prod's on the {S.AGENTIC} load, the mean over 3 server "
-                   "lifetimes an arm"]}]
+                   "lifetimes an arm (serving time, one node, one load at 4 users, unsaturated)"]}]
     # the first input opens with the entry's mark, which the Metrics tab shows beside the value
     assert got[1]["inputs"][0].startswith("measured: ")
     assert P._pct(c["value"]) == f"{got[1]['value']:+.2f}%" == "+0.52%"
@@ -1260,7 +1285,7 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
     got = declared(tmp_path, monkeypatch, c)
     assert [(x["name"], x["value"]) for x in got] == [(S.AGENTIC, 0.5), ("vllm/prod-serving-cost-glm53", 0.5)]
     assert (got[1]["ci95"], got[1]["verdict"], got[1]["lifetimes"]) == (None, "not shown", 1)
-    assert got[1]["inputs"][0].startswith("measured: ") and got[1]["inputs"][0].endswith("over 1 server lifetime an arm")
+    assert got[1]["inputs"][0].startswith("measured: ") and got[1]["inputs"][0].endswith("over 1 server lifetime an arm (serving time, one node, one load at 4 users, unsaturated)")
     # the arms at other settings: the figure is not our changes' cost, and the entry an earlier report wrote is dropped
     assert declared(tmp_path, monkeypatch, c | {"settings_differ": ["the context limit"]}) == [theirs]
     # the arms did not do the same work: the benchmark's own cost does not stand, nor does the line
@@ -1330,7 +1355,7 @@ def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where
     assert (t["tokens_served"], t["tokens_before_first_difference"], t["tokens_given_back"], t["tokens_differing"]) == \
         (4, 2, 3, 2)
     assert r["cost"]["measured"] and not r["cost"]["stands"]
-    on = {"load": LOAD, "ours": "prod-record", "commit": "c" * 40, "run": "r-1", "rep": 1}
+    on = {"load": LOAD, "ours": "prod-record", "commit": "c" * 40, "run": "r-1", "model": "repo@rev", "hardware": None, "rep": 1}
     assert got == [
         {"name": "vllm/prod-replay-match-glm53", "value": 50.0, "unit": "percent of served tokens", "mark": "measured",
          "better": "higher", "target": 100.0, "tokens_served": 4, "tokens_before_first_difference": 2, "requests": 2,
@@ -1398,6 +1423,37 @@ def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_b
     assert P.default_arms("glm53", tmp_path, ("compiled", "record")) == P.TODAY
     assert P.default_arms("moonlight", tmp_path) == P.PROD
     assert P.main(["arms", "--out", str(tmp_path)]) == 0 and capsys.readouterr().out == "prod prod-again prod-record\n"
+
+
+def test_llama32_1bs_arms_keep_each_requests_ids_and_its_cost_is_a_point_of_glm53s_metric(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Llama 3.2 1B has no recipe: its default arms are `KEPT`, whose ours keeps each request's ids, which a replay under
+    vLLM's client reads. Its cost of `record-ids` over `compiled`, its replay match and its advice are points of
+    GLM-5.3's ids, and the cost of no other arms is; each point's member names the model, the card and the arm, the
+    cost's over its reference, so that the two models' points are two lines of one metric."""
+    assert P.default_arms("llama32-1b") == P.KEPT and not S.MODELS["llama32-1b"].published
+    assert all(a in S.ARMS for a in P.KEPT) and "ids" in S.ARMS[P.KEPT[2]].plugin
+    (tmp_path / "out" / "record-ids.1").mkdir(parents=True)
+    assert P.default_arms("llama32-1b", tmp_path / "out") == P.KEPT
+    assert (P.METRICS["llama32-1b"], P.MATCH["llama32-1b"], P.ADVICE["llama32-1b"]) == (
+        P.METRICS["glm53"], P.MATCH["glm53"], P.ADVICE["glm53"])
+
+    def cost(stock: str, ours: str) -> dict:
+        arms = S.lifetimes([a | {"model_id": "llama32-1b"} for a in
+                            lifetimes_of(stock, [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]])
+                            + lifetimes_of(ours, [[1.99, 1.99], [1.998, 1.998], [1.981, 1.981]])])
+        return P.cost(tmp_path, {a["arm"]: a for a in arms}, stock, ours, None, S.AGENTIC, 1.0)
+
+    assert cost("compiled", "record-ids")["metric"] == "vllm/prod-serving-cost-glm53"
+    assert cost("compiled", "record")["metric"] is None
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
+    one, glm = S.MODELS["llama32-1b"], S.MODELS["glm53"]
+    assert (S.member(one, "record-ids", "compiled"), S.member(one, "record-ids")) == (
+        "llama-3.2-1b-h200-record-ids-over-compiled", "llama-3.2-1b-h200-record-ids")
+    assert (S.member(glm, "prod-record", "prod"), S.member(glm, "prod-record")) == (
+        "glm-5.3-h200-prod-record-over-prod", "glm-5.3-h200-prod-record")
+    assert (P.member({"members": {"cost": "c", "arm": "a"}}, "arm"), P.member({"members": None}, "cost")) == (
+        {"member": "a"}, {})
 
 
 # --------------------------------------------------------------------------------------------------------- the runner
@@ -1591,6 +1647,8 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
             "rows of more than its keys rewritten, 0 of them with a tie across the k-th key\n") in p.stdout
     assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {
         "processes": 1, "calls": 7, "rows_long": 5, "rows_tied": 2, "rows_at": 7}
+    assert sorted(p.parent.name for p in (run_dir / "out" / P.TOPK_FILES).glob("*/dsa_topk.*.json")) == [
+        "prod-record", "replay-compiled"]
     assert "stock prod, stock again not served, ours prod-record" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
     assert "advice: not measured: the scheduler replay refuses the pass: " in p.stdout
     # read again without a GPU and without the node's directory, the earlier job says the same
