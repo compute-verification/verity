@@ -9,11 +9,13 @@ included, and that its verdicts are the reference's. The second is each option's
 every made case that states a format. The fourth is that the reference form-only, which the script runs, gives the
 whole reference's verdict on every shaped case and walks no leaf. The fifth runs the compiled command on the
 script's cases and on a refusal of each of the form's two expanded rules, and holds its two lines to the
-reference's verdicts on every field.
+reference's verdicts on every field. The sixth is the reference on a record as `descriptor_record` writes it, its
+wires, cuts and inference blocks in its text, on its population Program.
 """
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import re
@@ -24,6 +26,10 @@ from pathlib import Path
 import pytest
 
 import verity.circuits.layout
+from verity.circuits import codec
+from verity.circuits.defs import bind
+from verity.circuits.ops import gemm as G
+from verity.commitments.periods import interface as IF
 
 LEAN = Path(__file__).resolve().parents[7] / "verity" / "protocols" / "workload_classification" / "training_detection" / "inference_only" / "verifier" / "lean"
 
@@ -225,3 +231,30 @@ def test_the_compiled_command_gives_the_references_verdicts(shaped, tmp_path):
         assert p.returncode == 0, (name, p.stderr)
         got = dict(m.groups() for m in map(LINE.fullmatch, p.stdout.splitlines()) if m)
         assert {k: json.loads(v) for k, v in got.items()} == want, name
+
+
+def _sliced_verdict(blocks: bool) -> dict:
+    """The form's verdict on a period's record as `descriptor_record` writes it: six ``Gemm_v2{K=16, N=8}`` slices, two
+    a position, wired into the ``x`` of a ``Gemm_v2{K=16, N=16}`` a position cut in two, with a slot a position where
+    ``blocks``, on its population Program and a log of the run's own record alone."""
+    g8, g16 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE), bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
+    t8, t16 = codec.descriptor_id(g8), codec.descriptor_id(g16)
+    slots = IF.Blocks(3, 1, (IF.InferenceEntry(t8, 0, (3, 2), ("slot", "-"), 0), IF.InferenceEntry(t16, 0, (3,), ("slot",), 0)))
+    c = IF.Circuit("sliced", ((g8, 6), (g16, 3)), cuts={t16: {"x": 2}}, blocks=slots if blocks else None,
+                   wires=(IF.Wire(t16, "x", t8, "o0", at=0, radix=(3, 2), base=0, step=(2, 1), cut=(0, 2)),))
+    desc = codec.encode_program(c.program()[0])
+    record = IF.circuit_bytes(IF.descriptor_record(c, 2)).decode()
+    run = {"format": vectors.V2, "protocol": "verity/sampled-proofs/one-stage/v1", "program": codec.program_digest(desc),
+           "registered": [], "previous": None,
+           "window": {"circuit": hashlib.sha512(record.encode()).hexdigest(), "registered_roots": {}}}
+    case, _ = script.served_case(codec.canonical_json(desc).decode(), record, [run], {"gamma": 1 << 20, "alpha": [1, 2]})
+    return script.verdicts(case)["check"]
+
+
+def test_the_form_gives_a_verdict_on_a_descriptor_record_with_its_wires_and_inference_blocks():
+    """A slot a position: the descriptor record states its wires, cuts and inference blocks, and the form takes its
+    population Program to a verdict, three blocks with every input row free (it registers nothing). Without blocks it
+    refuses it at ``blocks``."""
+    got = _sliced_verdict(True)
+    assert "error" not in got and (got["blocks"], got["free"], got["wired_rows"]) == (3, got["fresh"], 6), got
+    assert _sliced_verdict(False) == {"error": "blocks"}
