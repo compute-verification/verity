@@ -17,6 +17,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/harness/verity_bench/settings.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/remote_error",
           "security/Proofs/Properties/Verity/Sampled.lean", "security/Proofs/Properties/Verity/Sampled/Instance.lean",
+          "security/Proofs/Properties/Verity/Sampled/OpensAt.lean",
           "security/Proofs/Flock/Soundness/Discharge/ZkLink/StrictZ.lean",
           "security/Proofs/Flock/Soundness/Discharge/ZkLink/Compiled.lean",
           "security/Proofs/Flock/Claims/NumbersTable.lean",
