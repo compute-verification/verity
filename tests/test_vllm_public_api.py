@@ -81,7 +81,7 @@ PUBLIC = {
     "verity_vllm.engine.env": "I1: the engine's environment, written before torch and vLLM are imported: vLLM's pinned and served "
                               "variables (ENGINE, pin, served_defaults, apply_engine), a target's (apply_target), a fresh "
                               "compile and its directories (apply_compile_fresh, compile_dirs, own_compile_dirs, own_inductor_dir, "
-                              "INDUCTOR_DIR_MARK), which the harness's engine and benchmarks/replay_determinism write",
+                              "INDUCTOR_DIR_MARK), which the harness's engine writes",
     "verity_vllm.engine.arrivals": "I1: an engine driven over a step-indexed arrival schedule (run_requests_arrivals), its "
                                    "forwards counted (ForwardCounter) and the steps each request arrived at "
                                    "(realized_arrive_steps), which the harness's engine serves under",

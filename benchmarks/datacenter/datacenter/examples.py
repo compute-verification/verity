@@ -21,15 +21,19 @@ the outside world over a WAN. `two_sites` is a fleet: two leaf-spines joined by 
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 from verity.device import load_card, load_node, number
 from verity.protocols.resource_accounting.memory.poub.verifier import timing as T
 
 from .physical import Assumption, Cadence, Datacenter, DeviceEntry, Fleet, LinkEntry, Zone
 
-NODE = load_node("rtx-pro-6000-server-x8")
-GPU_CARD = load_card(NODE["device"]["sku"])
-HOST_CARD = load_card(NODE["host"]["sku"])
+CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[3] / "hardware/nodes"
+
+NODE = load_node("rtx-pro-6000-server-x8", directory=NODE_FILES, cards_directory=CARD_FILES)
+GPU_CARD = load_card(NODE["device"]["sku"], directory=CARD_FILES)
+HOST_CARD = load_card(NODE["host"]["sku"], directory=CARD_FILES)
 UPLINK_GBPS = int(number(NODE["interface"]["eth0"]["rate"]) / 10 ** 9)
 
 GB = 8e9

@@ -3,7 +3,7 @@
 # (members_files/Main.lean, built in a scratch Lake package against the checkout's verifier) times `membersFiles` as the
 # compiled check runs it and the pass as stated (`Member.files` a member, up to REF_MAX members, default 150) on one
 # per-member case, at its first N members of one circuit file (`all`: every member of the case), and exits 1 where the
-# two disagree or a member's files are not held. The case is MF_CASE's (a driver's case-v2-members.json), or the one
+# two disagree or a member's files are not held. The case is MF_CASE's (a driver's case-v2.json), or the one
 # members_files.py makes: a stand-in window of MEMBERS members (default 300) over two templates
 # (benchmarks/one_stage/members_standin.py's), audited on Flock's prover (check_build.sh bin: the machine must hold the
 # Flock checkout and the toolchain check's flock-circuit-build step leaves), this tree's Lean verifier and ZK server.

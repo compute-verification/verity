@@ -45,8 +45,6 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 BF16, F32, I32, U8 = torch.bfloat16, torch.float32, torch.int32, torch.uint8
 
 #: the roles the vocabulary may lack, and which kernel each states

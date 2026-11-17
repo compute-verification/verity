@@ -40,10 +40,8 @@ named below are proved in `Proofs.Core.Structure`.
   (`Method.profile`) is the vectors whose cell it lies in.
 
 **Where it meets ResourceAccounting.** Core cannot import ResourceAccounting, so ResourceAccounting reads these. An `Actual.Run` is an
-`Execution` (`A.toCircuit`, `val`, `faithful`) once its protocol's baseline is given. `Slowdown.Task`'s coin samples the
-task's input, a method's external input here; a method's `coins` are its own randomness, neither the task's nor the
-verifier's (`Verity.Coins`). A class of methods `𝔐` gives the `Slowdown.Class` of pairs `(C, x)` whose runs on every
-input realize evaluations of one method of `𝔐`, the same for every `x`.
+`Execution` (`A.toCircuit`, `val`, `faithful`) once its protocol's baseline is given. A method's `coins` are its own
+randomness, neither the task's nor the verifier's (`Verity.Coins`).
 
 Memory is not a block quantity: what wipes and bandwidth bound is what a time-ordered partition's blocks carry and send.
 

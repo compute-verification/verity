@@ -22,8 +22,6 @@ identity on its latent (`LD = NH * (P + VD)`), so its k_nope and v are the norme
 is `DynamicDeepGemmFp8Linear[vllm-default]`'s, tested with it."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import sys
 import types
 
