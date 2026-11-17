@@ -258,7 +258,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     ingress and receipt times are read on one clock. Deployed, that is the auditor device's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the network attester's, the offset ACCEL's timing allows.
 - **The Python.** `verity.protocols.proofs.spot.verifier.one_stage` is the one-stage audit's reference and `service` the
-  proof system over it; `optimize`, `candidates` and `costfit` plan a sampling design (`benchmarks/sampling_plan`).
+  proof system over it; `optimize`, `candidates` and `costfit` plan a sampling design (`calibration/sampling_plan`).
   Core API lists each module.
 - **The Lean-generated vectors.** `tests/fixtures/exfiltration_lean.json` is `audit_exfiltration` and
   `stratified_miss_eq_greedy` evaluated by Lean, and `exfiltration_two_lean.json` `card_influenceTwo_le_uniform`'s
