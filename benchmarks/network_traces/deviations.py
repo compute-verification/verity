@@ -33,7 +33,7 @@ stream's next output, and the Commit is the ids given (``--ids``, the server's r
 or under ``--stand-in`` the stand-in endpoint's own (`network_attester_serve.fake_ids` of each request). Without either the tie
 isn't run, and the row says so. ``--ids`` is JSON lines, a request each with its `output_ids`: under its `user`, or
 under its `id` ``verity-<run>-<N>``, the name the certified tick gives a request that brings none (`tick_plugin`), the
-certifier's run id and the request's release number, so the server's own record of its requests is read as it is.
+attester's run id and the request's release number, so the server's own record of its requests is read as it is.
 
 **A refusal counts only where it is the deviation's** (`row`). The tie's content refuses exactly the ids the planted
 bits changed, or exactly the connections whose last event was dropped, in a try the relay's check accepts. The relay
@@ -45,7 +45,7 @@ is never a deviation refused.
 **What the bound charges** (`leak_bounds.terms`): a connection's schedule and its fail cell, each ⌈log2(cells + 1)⌉
 bits, and the jitter, 0 at a jitter bound of 1; a refused class is charged nothing.
 
-**What a try keeps** (`keep`). ``--out`` gets a file a class, ``CLASS.json``: the schedule, the certifier's run id,
+**What a try keeps** (`keep`). ``--out`` gets a file a class, ``CLASS.json``: the schedule, the attester's run id,
 the check's verdict in its words and its counts; of each connection its request's name, its release number, its cells'
 kinds, the ids it was sent, whether and why it failed, the bits planted on it and whether the front's response to
 it was whole; the egress record's cells, each as (bucket, slot, kind, stream, id); what the network attester logged
@@ -427,10 +427,10 @@ def stop_words(cls: str, lost: Sequence[int], error: str | None) -> str | None:
     why = []
     if lost:
         more = "" if len(lost) <= 8 else f" and {len(lost) - 8} more"
-        why.append(f"a lost release: its network certifier's log names {len(lost)} lost on the watermark "
+        why.append(f"a lost release: its network attester's log names {len(lost)} lost on the watermark "
                    f"({', '.join(map(str, lost[:8]))}{more}), so the try did not reach its server whole")
     if error:
-        why.append(f"a watermark error ({error}): its network certifier's log says the stream stopped, so its server "
+        why.append(f"a watermark error ({error}): its network attester's log says the stream stopped, so its server "
                    "did not get the watermark whole")
     return f"{cls}: STOPPED at {'; and at '.join(why)}" if why else None
 
@@ -442,7 +442,7 @@ def watermark_stop(cls: str, run: Path, watermark: bool) -> str | None:
     what its watermark named isn't known."""
     mark = watermark_log(run)
     if mark is None and watermark and (run / "deployment.json").exists():
-        return (f"{cls}: STOPPED: its network certifier ran with the watermark and wrote no log ({RELAY_LOG}), so "
+        return (f"{cls}: STOPPED: its network attester ran with the watermark and wrote no log ({RELAY_LOG}), so "
                 "whether a line named a lost release isn't known")
     return stop_words(cls, mark["lost"], mark["error"]) if mark else None
 
@@ -791,7 +791,7 @@ def tries(classes: Sequence[str], args, attempt: Callable[[str, Path, Any], floa
             kept = keep(cls, scratch / cls, stand_in=args.stand_in, seconds=seconds, hold_ms=args.hold_ms)
             (args.out / f"{cls}.json").write_text(json.dumps(kept))
             tried.append(cls)
-            print(f"{cls}: tried in {seconds:.1f} s, the certifier's run {str(kept['run_id'])[:12]}", flush=True)
+            print(f"{cls}: tried in {seconds:.1f} s, the attester's run {str(kept['run_id'])[:12]}", flush=True)
             if stop := watermark_stop(cls, scratch / cls, watermark):
                 return tried, stop + left(cls)
             if cls == "honest" and len(classes) > 1 and not row(kept, committed_of(kept, sampled, args.stand_in))["ok"]:
@@ -840,7 +840,7 @@ def rows_of(out: Path, classes: Sequence[str], ids: Path | None, stand_in: bool)
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="deviations.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    t = sub.add_parser("try", help="each class as one try through a network certifier of its own, and the table")
+    t = sub.add_parser("try", help="each class as one try through a network attester of its own, and the table")
     r = sub.add_parser("relay", help="the deviating process alone")
     x = sub.add_parser("table", help="the table of the tries a directory keeps")
     for q in (t, x):
@@ -865,7 +865,7 @@ def parser() -> argparse.ArgumentParser:
     t.add_argument("--rate", type=float, default=2.0, help="Poisson arrivals a second")
     t.add_argument("--max-tokens", type=int, default=16, help="the most max_tokens a request samples")
     t.add_argument("--tail", type=float, default=8.0, help="seconds a try's run lasts past its last request's time")
-    t.add_argument("--cell-bytes", type=int, default=NetworkAttesterParams().cell_bytes, help="the network certifier's B")
+    t.add_argument("--cell-bytes", type=int, default=NetworkAttesterParams().cell_bytes, help="the network attester's B")
     t.add_argument("--first-ms", type=float, default=100.0, help="the stand-in's milliseconds to its response")
     t.add_argument("--scratch", type=Path, help="where each try's run directory goes, and stays (default: a temporary "
                                                 "directory, removed when the command ends)")
@@ -873,7 +873,7 @@ def parser() -> argparse.ArgumentParser:
                    help="after --: network_attester_serve.py rehearse's own flags, the schedule's among them (default: "
                         "--window 60 --lanes 64)")
     r.add_argument("--class", dest="cls", choices=CLASSES, required=True)
-    r.add_argument("--payload", type=int, required=True, help="an id event's bytes, the network certifier's B - 9")
+    r.add_argument("--payload", type=int, required=True, help="an id event's bytes, the network attester's B - 9")
     r.add_argument("--listen", type=_address, default=("127.0.0.1", 0), help="HOST:PORT (port 0: any)")
     r.add_argument("--log", type=Path, help="one JSON line an id request, when its connection ends")
     return ap

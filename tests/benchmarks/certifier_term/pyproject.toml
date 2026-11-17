@@ -6,7 +6,7 @@ testpaths = ["."]
 
 [tool.verity.tests]
 # The runner loads the calculator of K by its file, benchmarks/network_traces/leak_bounds.py. It imports the network
-# certifier's classes and calibration and the reporting δ, with the modules of `verity` those import (the circuits, the
+# attester's classes and calibration and the reporting δ, with the modules of `verity` those import (the circuits, the
 # commitments, SPOT), and reads the slowdown calculator's world fleet and hardware data and the census; a scope's requests are by
 # default the break-even planner's case, built from Figure 1's lines, the cost model, the second stage's bound it
 # imports and the cards they read. The result is written by

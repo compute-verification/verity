@@ -697,11 +697,11 @@ def _plan_doc(n: int) -> dict:
 
 def test_a_check_of_a_candidate_sends_the_upstream_build_only_when_what_lean_agreement_checks_changed(world, monkeypatch):
     """`beside_args`: lean-agreement runs (`--agreement`) only when the merges above the base change what it checks, as
-    check.py finds against that base, and is skipped by name else; lean-audit fails on a record difference
+    the base's own declaration names it, and is skipped by name else; lean-audit fails on a record difference
     (`--no-regenerate`); ratchet-gate judges the merges above `--base`: the base given, the tip's first parent when the tip is
     the base, and none for a root."""
     asked, changed = [], [False]
-    monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
+    monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool, at=None: asked.append((base, commit, tool, at)) or (
         {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]} if changed[0] else {}))
     h = Harness(world, monkeypatch)
     h.q._clone()
@@ -712,7 +712,7 @@ def test_a_check_of_a_candidate_sends_the_upstream_build_only_when_what_lean_agr
     changed[0] = True
     assert h.d.beside_args(sha, base) == ({"base": base, "agreement": True, "no_regenerate": True}, [],
                                           f" --base {base[:12]} --agreement --no-regenerate")
-    assert asked == [(base, sha, "check")] * 2
+    assert asked == [(base, sha, "check", base)] * 2
     assert h.d.beside_args(sha, sha)[0]["base"] == _git(h.q.workdir, "rev-parse", f"{sha}^1") == base
     root = _git(h.q.workdir, "rev-list", "--max-parents=0", base)
     assert h.d.beside_args(root, root) == ({"base": None, "agreement": True, "no_regenerate": True}, [],

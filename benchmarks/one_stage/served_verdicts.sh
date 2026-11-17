@@ -71,7 +71,7 @@
 #     ZK server, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
 #     Every unit of a template the served model's compiler of record lists as a transfer gate (prove_path.GATES_OF_RECORD)
-#     is proved beside the sampled rest, which only a work:K sampling design samples, so the preflight refuses a partition of another sampling design
+#     is proved beside the sampled rest, which only a work rate (work-rate:NUM/DEN) samples, so the preflight refuses a partition of another sampling design
 #     or without them; PP_SETS names their input sets.
 #  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own served run, below), PoUS, the bandwidth audit and the network
 #     certifier: `served_verdicts.py pieces` runs each one's piece
@@ -348,7 +348,7 @@
 # reads Pearl+'s tables at those rows; the preflight refuses another) and PEARLC_BF16_ROWS=0; V3C_LAW has none (the launch
 # states it, a stratified rate over the cut window's templates, and the preflight refuses a launch without one), and
 # step 3's partition layer 0's RoPE heads, the BF16 1B's transfer gates of record, every one proved, beside its
-# SiluMul_v2 under work:2 at step 1 (llama32_1b_tg_l0_step1.json, PP_SETS rope-head/d64/bf16). The preflight refuses
+# SiluMul_v2 under work-rate:2/164 at step 1 (llama32_1b_tg_l0_step1.json, PP_SETS rope-head/d64/bf16). The preflight refuses
 # another PRECISION or row (its id names __bf16__), a V3C_CLASS CLASSES doesn't count, vLLM's prefix cache (SERVE_ARGS'
 # --prefix-caching: a hit leaves rows of a prompt uncomputed where the cut circuit reads Pearl+'s tables), a
 # certifier front (its group closes into a window of its own), and a serve dir whose filesystem has fewer than
@@ -502,7 +502,7 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE); PEARLPLUS_CLASS is the class
   # Pearl+'s verdict holds the window's passes to (served_pearlplus.sh's `verify --class`)
   export PEARLPLUS_TIE PEARLPLUS_CLASS=${V3C_CLASS-4,32,4} PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
-  # the BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of which step 3 proves (work:K)
+  # the BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of which step 3 proves (work-rate:NUM/DEN)
   PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_tg_l0_step1.json} PP_SETS=${PP_SETS:-rope-head/d64/bf16}
   # the row's Build of record, PROGRAM_DIGEST:MANIFEST_DIGEST, which the served compare holds PRED to (BUILD)
   BUILD_OF_RECORD=${BUILD_OF_RECORD:-95ba0fab376a62f5421ed21ced4e650afa516531508ecb802d065f44fd4f8ab451ba422c75312d8052b9087ff28826aa43edfc945435528856b97c8952903eb7:65ce5a6ccc1fd943c23a6d78b4eb80936d32c1043306ec3aab640b279eee419ef778205bd83b81721ad2c301114bd0e338e04b95acc959f8ba1188dcfa1ceac3}
@@ -962,12 +962,14 @@ compiler_args() {  # the prove path's registered compiler, as verity-vllm advice
     | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
 }
 advice_of() {  # window $1's advice under the compiler $2 in $D/advice/w$1, unless it is there already (the tie wrote it):
-  # verity-vllm advice's exit, 3 while the window waits on a Commit record the running server hasn't written
+  # verity-vllm advice's exit, 3 while the window waits on a Commit record the running server hasn't written. Under DAY
+  # the call registers the compiler in the day's log, which a log with site entries checks under DAY_PARAMS' auditor
   [ -f "$D/advice/w$1/registration.json" ] && return 0
-  local wa=() rc
+  local wa=() dp=() rc
   [ -f "$WREG" ] && wa=(--weights-of-record "$WREG")
+  [ -n "${DAY:-}" ] && [ -n "${DAY_PARAMS:-}" ] && dp=(--day-params "$DAY_PARAMS")
   # shellcheck disable=SC2086
-  (cd "$TREE/adapters/vllm" && vv advice "$D" --window "$1" --cap "$CAP" $2 "${wa[@]}" --out "$D/advice/.w$1") \
+  (cd "$TREE/adapters/vllm" && vv advice "$D" --window "$1" --cap "$CAP" $2 "${wa[@]}" "${dp[@]}" --out "$D/advice/.w$1") \
     >> "$D/advice.log" 2>&1
   rc=$?
   [ -d "$D/advice/.w$1/w$1" ] && mv "$D/advice/.w$1/w$1" "$D/advice/w$1"
@@ -1942,10 +1944,10 @@ record = next((ast.literal_eval(n.value) for n in ast.parse(open(src).read()).bo
                and "GATES_OF_RECORD" in [t.id for t in getattr(n, "targets", [getattr(n, "target", None)]) if isinstance(t, ast.Name)]), {})
 gates = list(record.get(model, ()))
 p = json.load(open(part)) if gates else None
-if p is not None and not (str(p["law"]).startswith("work:") and set(gates) <= set(p["templates"])):
+if p is not None and not (str(p["law"]).startswith("work-rate:") and set(gates) <= set(p["templates"])):
     print(f"{model}'s compiler of record lists {gates} as transfer gates (prove_path.GATES_OF_RECORD), every unit of which "
-          f"step 3 proves beside work:K of the rest, and PP_PARTITION {part} is {p['law']} over {p['templates']}: give a "
-          "work:K partition that holds them, and in PP_SETS their input sets")
+          f"step 3 proves beside work-rate:NUM/DEN of the rest, and PP_PARTITION {part} is {p['law']} over {p['templates']}: "
+          "give a work-rate:NUM/DEN partition that holds them, and in PP_SETS their input sets")
 EOF
 ) || { say "PREFLIGHT: step 3's partition PP_PARTITION $PP_PARTITION can't be read: $(tail -1 <<< "$why" | cut -c1-400)"; exit 3; }
   [ -z "$why" ] || { say "PREFLIGHT: $why"; exit 3; }
