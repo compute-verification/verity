@@ -61,6 +61,10 @@ OPEN = ("pouw (Pearl+): open, not in the total (Verity.Vocab.PouwSound, an open 
         "inference-only policy: open, not in the total (Verity.Vocab.InferenceOnlySound, proved by "
         "Verity.Vocab.inferenceOnlySound with an empty event; its error is the base vocabulary's δ and ε_forge at its "
         "forger's budget, none of which Lean gives a value)")
+#: what `ecr/sha-512` is taken at in the binding term, and why M and Rw may be as large as the bound likes
+ECR_NOTE = ("The premise `ecr/sha-512` is taken at a finder that plays up to M extraction trials and Rw waits, which nobody "
+            "could run to its end; the premise bounds it by its expected SHA-512 evaluations over 2^256 "
+            "(`Assumptions.SHA512CRExpected`), and that expected cost does not read M or Rw.")
 #: the metrics `metrics.toml` declares: the total over each fleet and period, and its share a machine-window
 METRICS = {"soundness/remote-spot-crypto-error-log2": "total", "soundness/remote-spot-crypto-error-share-log2": "share"}
 #: the metrics' fleet and period each id names, written last, and the one the free parameters are chosen at
@@ -231,9 +235,9 @@ def params(blocks: int | None = None) -> dict[str, Param]:
         "roots_calls": Param(Fraction(2 ** 40), "a, not derived", "SHA-512 calls recomputing the registration's roots "
                              "from the public file (Flock.Bridge.rootsCostL): " + stated),
         "M": Param(Fraction(2 ** 256), "b", "the link finder's extraction trials (SessionBound.M, any M ≥ 1); the bound "
-                   "falls as M grows and has no minimum, and its expected cost doesn't read M"),
+                   "falls as M grows and has no minimum. " + ECR_NOTE),
         "Rw": Param(Fraction(2 ** 256), "b", "the link finder's rewinding trials (SessionBound.Rw, any Rw ≥ 1); the bound "
-                    "falls as Rw grows and has no minimum, and its expected cost doesn't read Rw"),
+                    "falls as Rw grows and has no minimum. " + ECR_NOTE),
         "k": Param(Fraction(1), "b", "the extraction budget (SessionBound.k, any k ≥ 1 with level 0's rate within ρ); "
                    "chosen where the headline's total is least"),
         "rho": Param(Fraction(1), "b", "the rate margin (SessionBound.ρ < 1), the least the rate condition "
@@ -285,6 +289,7 @@ class Term:
     params: tuple[str, ...] = ()
     coeffs: tuple[Fraction, Fraction, Fraction] | None = None
     left_out: str = field(default="")
+    note: str = ""
 
     def at(self, plays: int, calls: int) -> Fraction | None:
         if self.coeffs is None:
@@ -328,7 +333,8 @@ def terms(p: dict[str, Param]) -> list[Term]:
         Term("binding", "the link finders and extraction over the commit strings a sample reads: "
              "Σ_p ratio_p · (2t(1 + k)/2^256 + 1/(eM) + k/(e·Rw)) / (1 − ρ)", link, ("ecr/sha-512",),
              ("positions", "rho", "k", "M", "Rw"),
-             (bind * (1 / (E_LOW * v["M"]) + v["k"] / (E_LOW * v["Rw"])), bind * 2 * (1 + v["k"]) * q256, zero)),
+             (bind * (1 / (E_LOW * v["M"]) + v["k"] / (E_LOW * v["Rw"])), bind * 2 * (1 + v["k"]) * q256, zero),
+             note=ECR_NOTE),
         Term("binding_w", "the link finders' share from the acceptance check's calls: Σ_p ratio_p · 2w(1 + k)/2^256 / (1 − ρ)",
              link, ("ecr/sha-512",), ("positions", "rho", "k", "w"), (bind * 2 * v["w"] * (1 + v["k"]) * q256, zero, zero)),
         Term("roots", "the finder recomputing the registration's roots", (("Verity.Sampled.Live.rootsErr", S),
@@ -433,7 +439,7 @@ def report(p: dict[str, Param]) -> dict[str, Any]:
             "params": {k: {"value": str(x.value), "value_log2": round(log2(x.value), 2), "kind": x.kind, "source": x.source}
                        for k, x in p.items()},
             "terms": [{"name": t.name, "what": t.what, "basis": basis(t, p), "lean": [n for n, _ in t.lean],
-                       "assumptions": list(t.assumptions), "params": list(t.params)} for t in ts],
+                       "assumptions": list(t.assumptions), "params": list(t.params), "note": t.note} for t in ts],
             "sensitivity": sensitivity(p, fl), "fleets": figures(ts, fl, p["hash_rate"].value)}
 
 
@@ -460,6 +466,7 @@ def markdown(r: dict[str, Any]) -> str:
     lines += ["", f"| term | basis | log₂ over the {over}'s {period} | parameters | Lean |", "| --- | --- | --- | --- | --- |"]
     lines += [f"| {t['name']} | {t['basis']} | {head['terms_log2'].get(t['name'], 'not in the total')} | "
               f"{', '.join(t['params'])} | {', '.join(t['lean'])} |" for t in r["terms"]]
+    lines += [""] + [f"- {t['name']}: {t['note']}" for t in r["terms"] if t["note"]]
     lines += ["", "| parameter | value | kind | source |", "| --- | --- | --- | --- |"]
     lines += [f"| {k} | {shown(Fraction(p['value']))} | {p['kind']} | {p['source']} |" for k, p in r["params"].items()]
     lines += ["", f"The commitment card's measured rate is 2^{r['card_rate_log2']} compressions a second a GPU.", "",

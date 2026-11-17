@@ -120,7 +120,7 @@ def test_the_output_says_which_part_it_is_and_what_is_left_out(capsys: pytest.Ca
     for phrase in ("bound's formula proved in Lean under four open premises", "value evaluated in Python",
                    "SPOT's part only", "pouw (Pearl+): open, not in the total", "Verity.Vocab.PouwSound",
                    "inference-only policy: open, not in the total", "Verity.Vocab.InferenceOnlySound",
-                   "without the forgery term"):
+                   "without the forgery term", f"- binding: {R.ECR_NOTE}"):
         assert phrase in out, phrase
     head = R.report(P)["fleets"]["world"]["periods"]["month"]
     assert head["total_without_forgery_log2"] <= head["total_log2"]
