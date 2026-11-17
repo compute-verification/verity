@@ -35,11 +35,11 @@ def _fn(name: str, *loop_bodies: list[str]) -> str:
 def test_loops_counts_a_backward_branch_by_address_and_by_label():
     sass = _fn("f", ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8", "IADD3 R3, R3, R4, R5", "NOP", "ISETP.GE.AND P0, PT, R0, R9, PT"])
     [loop] = TK.loops(TK.parse_sass(sass)["f"])
-    assert loop == {"mma": 1, "mma_ops": ["IMMA.16832.S8.S8"], "other": 3, "iadd3": 1, "ffma": 0}
+    assert loop == {"mma": 1, "mma_ops": ["IMMA.16832.S8.S8"], "other": 3, "iadd3": 1, "ffma": 0, "order": "I"}
     labelled = ("\tFunction : g\n.L_x_0:\n        /*0000*/  HMMA.16816.F32 R8, R4, R2, R8 ;\n"
                 "        /*0010*/  @P0 BRA `(.L_x_0) ;\n")
     assert TK.loops(TK.parse_sass(labelled)["g"]) == [
-        {"mma": 1, "mma_ops": ["HMMA.16816.F32"], "other": 1, "iadd3": 0, "ffma": 0}]
+        {"mma": 1, "mma_ops": ["HMMA.16816.F32"], "other": 1, "iadd3": 0, "ffma": 0, "order": ""}]
 
 
 # 64 lane ops, the counter and its compare; _fn closes the loop with a BRA, 67 instructions an iteration
@@ -253,3 +253,38 @@ def test_render_writes_a_row_a_form_and_a_dash_for_what_a_run_did_not_measure():
     assert hmma == "| hmma_f16_m16n8k16 | HMMA.16816.F16, HMMA.16816.F32 | 64 | – | – | – |  | – | 0.900 **below** | – |"
     assert lanes == ("Lane ops alone, 8 warps a SMSP, warp instructions a SMSP-cycle: iadd3+ffma 1.000, iadd3 1.000 "
                      f"(mixed points use {TK.MIXED_LANE}).")
+
+
+def test_the_lane_loops_order_leaves_the_counter_out_and_reads_ptxas_schedule():
+    # sm_89's counter (no carry predicates) and sm_120a's syntax; an IMAD.IADD lane add counts as an add
+    seg = TK.parse_sass(_fn("f", ["IADD3 R12, R12, 0x1, RZ", "IMAD.IADD R4, R11, 0x1, R4", "FFMA R5, R5, R6, 1",
+                                  "IADD3 R3, PT, PT, R3, 0x1, RZ", "IADD3 R2, PT, PT, R13, R2, RZ", "ISETP.GE.AND P0, PT, R12, R9, PT"]))["f"]
+    assert TK.lane_order(seg) == "IFI"
+    assert [TK.longest_run(o) for o in ("IFIFIF", "IFFIIF", "IIIFIIIFFIFF", "")] == [1, 2, 3, 0]
+
+
+def _mixed_alone(tmp_path: Path, body: list[str], issue: float = 0.98) -> list[str]:
+    loop = body + ["IADD3 R0, PT, PT, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    row = {"probe": "tensor_kinds", "mode": "opalone", "form": "iadd3_ffma", "macs": 0, "slots": 0, "ops_per_mma": 0,
+           "iters": 1000, "cyc_med": 1000 * 8 * (len(loop) + 1) / issue, "distinct_sms": 188, "mhz": 2100.0}
+    tmp_path.mkdir(exist_ok=True)
+    _write(tmp_path, [(row, [_fn("_Z9k_opaloneILi2EEviPjP8BlockClk", loop)])])
+    return TK.analyze(tmp_path)[1]
+
+
+def test_an_alternating_lane_loop_passes_and_one_swapped_pair_too(tmp_path: Path):
+    add, fma = "IADD3 R3, PT, PT, R4, R3, RZ", "FFMA R5, R5, R6, 1"
+    assert _mixed_alone(tmp_path / "a", [add, fma] * 32) == []
+    assert _mixed_alone(tmp_path / "b", [add, fma] * 15 + [add, fma, fma, add, add, fma] + [add, fma] * 15) == []
+
+
+def test_a_grouped_lane_loop_is_refused_naming_its_schedule(tmp_path: Path):
+    # sm_120a's loop when k_opalone's end stored the k_spec roles: runs of three IADD3 and four FFMA
+    add, fma = "IADD3 R3, PT, PT, R4, R3, RZ", "FFMA R5, R5, R6, 1"
+    order = "IIIFIIIFFIFFIFIFIFIFIFIFIFIFIFIFIFIFIFIFIIFIFIFFIFFIIFIIFIFFFFIF"
+    assert len(order) == 64 and order.count("I") == order.count("F") == 32
+    fails = _mixed_alone(tmp_path, [add if c == "I" else fma for c in order], issue=0.888)
+    assert fails == [
+        f"opalone iadd3_ffma: ptxas scheduled the lane loop as {order} (I an add, F an FFMA): 4 of a kind in a row, "
+        "over 2, binds on a pipe and not on issue",
+        "opalone: the lane op issues 0.888 a SMSP-cycle alone, below 0.9"]
