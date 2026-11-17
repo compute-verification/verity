@@ -34,6 +34,7 @@ resident_gpu_memory_utilization = 0.40
 block_gpu_memory_utilization = 0.80
 max_num_batched_tokens = 16384
 block_kv_cache_memory_bytes = 60129542144
+batch_invariant = false
 
 [admission]
 max_minutes = 120

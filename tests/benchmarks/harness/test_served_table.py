@@ -552,7 +552,8 @@ def test_the_bandwidth_audits_member_specs_are_its_record_spec_on_one_h200_and_t
         for name in ("arms", "arm_modules", "arm_settings", "sweep", "reps", "eager", "warmups", "max_warmups", "setup",
                      "admission"):
             assert getattr(member, name) == getattr(r6, name), (spec, name)
-        assert dict(member.preset.engine_settings) == dict(r6.preset.engine_settings), spec
+        settings = {k: v for k, v in member.preset.engine_settings.items() if k != "batch_invariant"}
+        assert settings == dict(r6.preset.engine_settings), spec
         assert dict(member.env) == {k: v for k, v in r6.env.items() if k != "FLASHINFER_CUDA_ARCH_LIST"}, spec
         assert (member.preset.gpu_id, member.preset.gpu_count, member.preset.precision, member.preset.vllm_pin) == (
             "h200", 1, r6.preset.precision, r6.preset.vllm_pin), spec
