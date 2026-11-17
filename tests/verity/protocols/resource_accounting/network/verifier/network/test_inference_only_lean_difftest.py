@@ -38,7 +38,7 @@ def _load(name: str):
 
 vectors = _load("difftest_vectors")
 reference = vectors.reference
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.DifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyVerifier.DifftestMain"]
 
 
 @pytest.mark.slow

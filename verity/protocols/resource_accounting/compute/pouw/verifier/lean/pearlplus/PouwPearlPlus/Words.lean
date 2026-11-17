@@ -31,7 +31,7 @@ FP32 steps `verity.circuits.silicon.fp32`, here `Evaluate.Fp32`'s; the FP8 atom 
 
 @[expose] public section
 
-namespace PouwCheck.PearlPlus.Words
+namespace PouwVerifier.PearlPlus.Words
 
 open Evaluate.Fp32 Evaluate.Casts Evaluate.TC Flock
 
@@ -271,4 +271,4 @@ def leaf (ch : Checked) : ByteArray :=
       acc) ByteArray.empty
   HmRow.segDigest (8 * joined.size) joined
 
-end PouwCheck.PearlPlus.Words
+end PouwVerifier.PearlPlus.Words

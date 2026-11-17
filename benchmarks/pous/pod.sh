@@ -81,7 +81,7 @@ export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/tools/difftest/python
 #     gpu-lease 1 --on N --max-min M -- QUIET env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
 if [ "${PREPARE:-0}" = 1 ]; then
   case $IMPL in
-    p2-v3-mc-gpu) set -- verity/protocols/resource_accounting/memory/pous/attester/lean memory-challenger-verdict ;;
+    p2-v3-mc-gpu) set -- verity/protocols/resource_accounting/memory/pous/attester/lean memory-attester-verdict ;;
     p2-v3-gpu) set -- verity/protocols/resource_accounting/memory/pous/verifier/check pous-timed-audit ;;
     *) exit 0 ;;
   esac
