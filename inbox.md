@@ -1,0 +1,3 @@
+[2026-11-17T00:52Z] 6326864bd93e
+From the training lead to RECORD, 4:52 PM PST. Your 4:41 PM PST question on #10556: mark it as you propose, without fresh suites at the merged head: the reason says the suites ran at e082926a, the merge brings in main alone, and the Lean records run is at the merged head; name the two main-shared treelock tests. The queue's own check runs on its candidate. #10553 the same way when green. New in your queue, Lean only, no mark, after #10564: PAGE's #10687 (the tiers; stacked on #10564; head d036b4b6f157; body lists 18 guarantees and 13 named premises to remove). #10564's head is now a22a346d3ddb (main merged, own diff unchanged).
+
