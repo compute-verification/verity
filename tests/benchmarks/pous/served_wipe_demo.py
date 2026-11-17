@@ -1,6 +1,6 @@
 """A stand-in for `streamed_wipe/demo.sh` in `test_pous_served_wipe`, taking its options and writing its outputs under
 `$OUT` (period.json, wipe.json, wipe.case.json, summary.json) with its exit: one 32 MiB segment kept in host memory
-(`wipe_store.HostMemory`, period.json's `wipe.store` `host`) in place of the card, against `wipe_side.py`, the challenger's
+(`wipe_store.HostMemory`, period.json's `wipe.store` `host`) in place of the card, against `wipe_side.py`, the memory attester's
 stand-in on a host of its own, in place of the side `--challenger-command` starts on `--challenger`, its key trusted
 only when it is the one `--trusted-sha512` pins (period.json's `wipe.trusted_sha512`), as demo.sh has it. The
 challenger period.json names is `Side.of`'s, written to `$OUT/party.json` before the stand-in replaces it;

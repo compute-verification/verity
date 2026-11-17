@@ -10,7 +10,7 @@ is `verity/wipe/v0`'s, under S1's LMS; `test_answer` the test signers' protocol'
 wipe's component with its count held (`MemoryChallenger.WipeProtocol.countedTest`), under the test signers' schemes:
 the same formats, its check `wipe_period.outcome_counted`.
 
-`build(m, seed)` makes one wipe with the change `m` (`EXPECT`), signed by the memory challenger's tests' key at S1's
+`build(m, seed)` makes one wipe with the change `m` (`EXPECT`), signed by the memory attester's tests' key at S1's
 deployed parameters (`mc_cases.deployed_signer`) so that `verity/wipe/v0` itself takes it: an honest wipe at a small fill
 and `READS` reads, one 32 MiB segment at `READS` reads and one at `REMOTE_READS` with a MiB declared past the fill, and
 an honest wipe whose evidence gives an egress of 0 (each accepted and not certified, its evidence giving an egress count

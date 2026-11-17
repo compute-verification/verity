@@ -8,7 +8,7 @@ it, and one opening per round made from the prover's table (`period.openings_of`
 test signer's (its setup record at the next leaf); under the deployed protocol it is a key at S1's deployed parameters
 (`mc_cases.deployed_signer`, which signs at leaf 0 alone, so both records are signed there). Each case is honest or under
 one edit that one of the check's refusals names: the point's, the session's or the setup's published outputs; the
-openings (one missing or extra, a row, a path, the opening of a round whose index an earlier round drew); a prover that
+openings (one missing or extra, a row, a path, the opening of a round whose index an earlier round sampled); a prover that
 answers every other round with zeros, or no trusted key; the setup record signed under another id, by another key, with
 its signature off, or holding other published outputs; and the case's JSON (a setup record with a `passed` key beside
 its fields, an opening's hex in capitals)."""
@@ -152,7 +152,7 @@ def signed_run(signer, coins: bytes = COINS, prover=period_prover.honest, setup_
 
 
 def _repeat(s: Signed) -> int:
-    """The first round whose index an earlier round drew."""
+    """The first round whose index an earlier round sampled."""
     seen = set()
     for j, r in enumerate(s.session.signed.rounds):
         if r.index in seen:

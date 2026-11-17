@@ -1,5 +1,5 @@
 """The memory attester's session as PoUS runs it: the wire both sides speak, the request and the id a session runs
-under, and the challenger's side as PoUS is handed it. The challenger's side is the
+under, and the memory attester's side as PoUS is handed it. The memory attester's side is the
 auditor-trusted device (`challenger_party`, on a host the developer doesn't control: the challenger host, `trusted-device`),
 which imports this module and which this module never imports; how it runs a session is its docstring's.
 
@@ -36,7 +36,7 @@ its own host under `SETUPS`, from which PoUB's verifier on the same host builds 
 
 A deployment starts the two parties from its configuration (`verity.protocol.ProtocolDef.starts`), where PoUS is
 `COMPONENT`: each with the session's request (`deployed_request`), the prover with its store
-(`verity/protocols/resource_accounting/memory/pous/prover/challenger_prover.py`'s `start`) and the challenger with its pinned key
+(`verity/protocols/resource_accounting/memory/pous/prover/challenger_prover.py`'s `start`) and the memory attester with its pinned key
 (`challenger_party.start`). The request and the store are setup's over the served store and the card's, which no
 configuration states; until those are read they raise `NotImplementedError(ONSITE_GOAL)`.
 
@@ -138,7 +138,7 @@ T = TypeVar("T")
 
 
 class Side(Protocol):
-    """The challenger's side as what starts a run hands it to PoUS (the runtime's `Side` is one): the machine it runs
+    """The memory attester's side as what starts a run hands it to PoUS (the runtime's `Side` is one): the machine it runs
     on; `ask(request)`, one request it answers with no session: the line it printed as JSON, the line and its exit
     code; and `talk(request, drive)`, one session with it: `request` sent, `drive` handed the connected socket, the
     side's report back with what `drive` returned."""
@@ -250,7 +250,7 @@ class Frames:
 
 def session_id(audit: bytes, commitment: bytes, salt: bytes) -> bytes:
     """The id an audit's session runs under: the first 32 bytes of `SHA-512(SESSION_ID_TAG ‖ audit ‖ commitment ‖ salt)`,
-    of the audit's binding, the commitment to `W` and the salt the challenger drew after it for that audit. The salt and
+    of the audit's binding, the commitment to `W` and the salt the challenger sampled after it for that audit. The salt and
     the commitment are in it because the signed header binds only the root of `C*`: an id of the audit alone would let a
     setup under a salt of the prover's pass as one under the challenger's."""
     if (len(audit), len(commitment), len(salt)) != (AUDIT_BYTES, 64, mc.SALT_BYTES):
@@ -276,7 +276,7 @@ def placement(node: str, host: str, key_sha512: str | None = None, *, pins: Sequ
     ``prover-node``), and `trusted-device`'s premise, `memory_attester.trusted_device`'s for the session's key: the
     names are the run's own, so they bound nothing, and the premise holds only for `key_sha512`, the SHA-512 of the key
     the session was signed under, when the configuration whose hash is `configuration`, one of `committed`, pins it
-    for the challenger's PoUS sessions (`pins`, its `[[pin]]` entries); and `SETUP` under ``setup``."""
+    for the memory attester's PoUS sessions (`pins`, its `[[pin]]` entries); and `SETUP` under ``setup``."""
     kind = "own-host" if host != node else "prover-node"
     names = (f"the memory attester ran on {host}, not the prover's {node}" if kind == "own-host" else
              f"the memory attester ran on the prover's node {node}")
@@ -292,7 +292,7 @@ def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:
     if rc == 0 and isinstance(doc.get("source"), str):
         return bytes.fromhex(doc["source"])
     why = doc.get("refused") or (f"it answered {line.strip()[:200]!r}" if "listening" in doc else f"it exited {rc}")
-    raise RuntimeError(f"the memory attester on {side.host} drew no salt: {why}")
+    raise RuntimeError(f"the memory attester on {side.host} sampled no salt: {why}")
 
 
 def request_of(node: str, point: R.Point, binding: bytes, *, audit: bytes | None = None,

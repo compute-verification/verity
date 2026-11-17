@@ -3,6 +3,6 @@
 - `pous_native.cu`, `native.py`: the batched SHAKE256 and Feistel kernels and the audit responder, JIT-built by torch.
 - `codec.py`, `dense.py`: the GPU twins (`dense.encode`, `dense.decode_segments`, `dense.decode_blocks`) and the kernels'
   dispatch switches; moved from the vLLM tree's `engine/pous`, with no vLLM dependency.
-- `harness.py`: encode, `C` resident, the synthetic decode loop, the timed audits (by the memory challenger's process,
+- `harness.py`: encode, `C` resident, the synthetic decode loop, the timed audits (by the memory attester's process,
   `verity.protocols.resource_accounting.memory.pous.attester.timed_audit`), the step floor.
 """

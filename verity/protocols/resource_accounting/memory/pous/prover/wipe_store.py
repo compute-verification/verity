@@ -766,7 +766,7 @@ class StoreProver:
             while got < len(stage):
                 r = f.readinto(stage[got:])
                 if not r:
-                    raise ConnectionError(f"the challenger closed in a fill frame at label {start}")
+                    raise ConnectionError(f"the memory attester closed in a fill frame at label {start}")
                 got += r
 
         self._keep(start, LABEL * count, take)

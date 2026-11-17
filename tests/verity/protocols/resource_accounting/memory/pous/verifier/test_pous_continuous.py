@@ -102,7 +102,7 @@ def test_honest_stream(world, root_only):
         v.challenge()
 
 
-# Liveness: the driver closes every challenge by the memory challenger's clock.
+# Liveness: the driver closes every challenge by the memory attester's clock.
 
 def test_a_silent_responder_cannot_hang_the_stream(world):
     """No reply ever: `run_continuous` still ends, each challenge rejected just past its hard deadline and counted

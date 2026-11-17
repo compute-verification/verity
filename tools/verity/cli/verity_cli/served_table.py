@@ -200,11 +200,11 @@ HEADERS = {
         "FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.",
         "`verity run THIS --dry-run` resolves it all."),
     "onsite_compute": (
-        "The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory",
+        "The workload under SPOT, PoUW, the inference-only policy, the network attester and the memory",
         "wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,",
         "each party on its machine, and the key the auditor pinned for its memory attester.", *_UNDECIDED),
     "onsite_network": (
-        "The served window under the network certifier, SPOT and the memory wipe (verity/onsite-network/v0, a",
+        "The workload under the network attester, SPOT and the memory wipe (verity/onsite-network/v0, a",
         "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
         "its memory attester.", *_UNDECIDED),
     "remote": (
@@ -462,7 +462,7 @@ def _bandwidth_piece(cfg, params, bound):
             "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect --serve-dir "$1" --window "$2" --out "$3"'}
 
 
-#: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the challenger's header names the
+#: PoUS's timed rounds (`challenger_session`'s parties), beside the workload: the memory attester's header names the
 #: monotonic clock
 POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.challenger_party:PROTOCOL",
                 "verity.protocols.resource_accounting.memory.pous.prover.challenger_prover:PROTOCOL"),
@@ -560,9 +560,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
                        "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
                        "period.json (CERTIFIER_PERIOD_CMD)", scripts=(ATTESTER_PIECE,), reaches=NETWORK_ATTESTER,
                        binds=("gate", "peer"), hooks=_attester_piece),
-        NETWORK_ATTESTER: Piece("certifier", NETWORK_ATTESTER, GATE, "the network certifier behind the gate, "
+        NETWORK_ATTESTER: Piece("certifier", NETWORK_ATTESTER, GATE, "the network attester behind the gate, "
                                  "in front of serve-openai before the requests"),
-        VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),
+        VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network attester's row"),
     },
     "wipe": {
         PROVER: Piece("wipe", PROVER, SERVED_WINDOW, "the streamed wipe of the card before the workload's engine loads "

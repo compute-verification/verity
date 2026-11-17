@@ -77,7 +77,7 @@ def test_a_streamer_deriving_other_labels_is_refused(tmp_path) -> None:
 
 @pytest.mark.parametrize("store", ["python", "host"])
 def test_a_native_fill_is_judged_as_the_python_fill(wipe_streamer, store: str) -> None:
-    """The challenger's side streams natively over a socket pair to `wipe_store.Prover` or to `wipe_store.StoreProver`
+    """The memory attester's side streams natively over a socket pair to `wipe_store.Prover` or to `wipe_store.StoreProver`
     on host memory, which reads each frame straight into staging; the signed session is accepted."""
     signer = ts.TestSigner(b"native fill " + store.encode(), 1)
     prover = WS.Prover(SMALL) if store == "python" else WS.StoreProver(SMALL, WS.HostMemory(), clock=Clock(10 ** 9, 1))

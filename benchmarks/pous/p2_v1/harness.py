@@ -9,7 +9,7 @@ audited one of two ways:
   else `pous_check`'s, built once a run: `timed_audit_exe`), whose verdict is the record's: where it can't run, every
   audit is undecided.  Its extra gate (`codec`) decodes segment 0 of the device's `C` with the scheme's own codec back
   to `W`'s, when that segment is wholly encoded.
-- `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_attester/live.py`) at `Δ` plus the RTT
+- `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory attester (`memory_attester/live.py`) at `Δ` plus the RTT
   cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
   of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
   Its sessions are signed with S1's LMS key in `--mc-lms-key DIR` (made there when absent), every session's id in the
@@ -130,7 +130,7 @@ class V3:
 
 
 class MC(V3):
-    """`p2-16448/v4` audited by the memory challenger (`p2-v3-mc-gpu`, `memory_attester/live.py`): sessions over a coin
+    """`p2-16448/v4` audited by the memory attester (`p2-v3-mc-gpu`, `memory_attester/live.py`): sessions over a coin
     tree committed before them, each round's whole answer hashed after its receipt time, one signature a session.  Its
     leaves are each block's `sha512/row/v2` digest (`memory_attester.block_digest`), what the verdict checks a round's
     digest against.  `sign_with` picks the

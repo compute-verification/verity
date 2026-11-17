@@ -380,7 +380,7 @@ def test_a_stale_answer_for_the_same_block(world, kind):
     assert out == (Refused(CLOSED) if kind == "continuous" else Record(1, h.index(1), HIT, 1))
 
 
-# Lean machines, run by the memory challenger.
+# Lean machines, run by the memory attester.
 
 @dataclass
 class Scripted:

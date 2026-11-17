@@ -61,7 +61,7 @@ UNPRICED = "(SHA-512 as PRF: not priced, not assumed)"
 """The words that close every mention of a PRF's advantage that a number of the table leaves out."""
 PRF_TERMS = f"labels' and coins' PRF advantage {UNPRICED}"
 """The two terms a wipe's `eps` is short by, as the table writes them beside a number."""
-EXCEPT = (f"each wipe's labels' PRF advantage and its coins' PRF advantage {UNPRICED}, δ_net (the network certifier's "
+EXCEPT = (f"each wipe's labels' PRF advantage and its coins' PRF advantage {UNPRICED}, δ_net (the network attester's "
           "error in the egress count) and the egress count's premises (every link leaving the node counted, its window "
           "the wipe's session), with the guarantee's own (every tier declared, no side channel), over the period's wipes")
 REFUSED = (f"the {EGRESS} record is refused. The memory attester signs its session's times on its raw monotonic "
