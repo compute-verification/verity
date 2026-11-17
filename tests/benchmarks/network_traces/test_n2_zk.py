@@ -1,7 +1,7 @@
 """n2_zk's execution phases on an active network attester's synthetic run (the chain tests' `gate_run`): every
 honest execution phase's output word is verdict 1 and deadline 1, and window 0's egress head one count off, committed
 by the prover, fails on its signed digest alone. The verifier's own ``pub`` row, from public fields and the
-certificates alone, is the prover's, in whole u16 words. The scan of what the verifier received leaves out exactly the
+attestations alone, is the prover's, in whole u16 words. The scan of what the verifier received leaves out exactly the
 witness pieces the public circuit holds. ``--jobs`` is 1 unless given and 2 is refused, naming the rule
 (`n2_zk.ONE_SESSION`). The printed log is public: a child's or the driver's failure text and every witness line go to
 the witness side's ``n2.log``, and without ``--witness`` nowhere. Nothing here lowers or proves (`n2_zk.prove` does, on

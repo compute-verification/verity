@@ -18,7 +18,7 @@ bytes still arrive (`read_watermark` gives t, n and the lost). The network attes
 that connection and never waits on it.
 
 The headers and the watermark are the attester's, sent to the server only. The link's frames, the network attester's
-cells and every record hold the client's bytes, so what is certified and tied (cell counts, prompt lengths, the I/O
+cells and every record hold the client's bytes, so what is attested and tied (cell counts, prompt lengths, the I/O
 tie's request frames) is the same with them or without. A lost release is the server connection's state, which the
 server sees itself. N, A and n are read back from the signed ingress records: the network attester's `END` cells in
 record order and the bucket of each (`network_attester.NetworkAttester`). A client's own release headers are dropped;
