@@ -192,7 +192,7 @@ def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_th
     from research.pods.nebius.slot_only import through_slot
 
     root = Path(__file__).resolve().parents[3]
-    node, name = "vy-dc-h200", "llama31-8b-fp8-1gpu-commit-served-width-h200"
+    node, name = "vy-spot-glm53", "llama31-8b-fp8-1gpu-commit-served-width-h200"
     spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
     assert (spec.arms, spec.arm_modules, spec.arm_settings, spec.sweep, spec.reps, spec.eager) == (
         rtx.arms, rtx.arm_modules, rtx.arm_settings, rtx.sweep, rtx.reps, rtx.eager)
