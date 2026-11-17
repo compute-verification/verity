@@ -13,9 +13,12 @@ def test_gumbel_lane_noise_is_bit_exact_against_the_gpu_probe():
     """The pod probe dumped `_gumbel_sample_kernel`'s noise (tl.rand -> log1pf/logf) for seeds/positions of the B1 runs;
     the lane's NumPy transcription and the Definition's per-lane primitive must reproduce every word."""
     import numpy as np
-    from verity_vllm.definitions.registry.sampling import GumbelNoiseLane, GumbelStreamKey
 
     from tests.engine.gumbel_oracle import gumbel_noise_exact
+    from verity_vllm.definitions.registry.sampling import (
+        GumbelNoiseLane,
+        GumbelStreamKey,
+    )
     probe = (Path(__file__).resolve().parents[5] / "adapters" / "vllm") / "out/gen/lanes/ov-sampling/runs/probe"
     cmp = probe / "compare.json"
     if not cmp.exists():

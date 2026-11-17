@@ -81,7 +81,7 @@ from verity_vllm.commit import opened as OV, step_rows as SR  # noqa: E402
 from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402
-from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
+from verity_vllm.pipeline import commit_coins as CC, poub_session as RS  # noqa: E402
 
 if TYPE_CHECKING:
     from verity_vllm.acquire.sources import call_boundary_plan as CBP
@@ -964,7 +964,7 @@ class Options:
     compiled_taps: str = option("--compiled-taps", choices=["off", "served"], default="off", help="served = the "
                                 "served-compiled row: every value of every engine step at vLLM's defaults (ServedCompiledSource), the served Build "
                                 "(--required-manifest, verity-vllm served-match) checked word for word on the committed values (served_check) with a "
-                                "seed drawn after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
+                                "seed flipped after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
                                 "--only-arm control (verity_vllm/ops/served_commit.sh)")
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it); the paired summary is produced by `verity-vllm compiled-merge` from both processes")
 
@@ -1013,7 +1013,7 @@ class Settled:
     Programs of record.  No field is written after."""
 
     args: Options
-    #: the PoUB session (`remote_session.session_of`); None without ``--remote-verifier``
+    #: the PoUB session (`poub_session.session_of`); None without ``--remote-verifier``
     session: Any | None
     #: the source identity precheck's document, which versions.json records
     source_identity: dict[str, Any]

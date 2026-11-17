@@ -1,6 +1,6 @@
 """The ingress tie through the proof system: each bucket row of an ingress execution phase of the network attester's cells proved as
 `io_request.IoTieRequest`, and the verifier that builds `IoTieVerdict`, the tie of a link's requests to its
-certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md, "The ingress
+attested ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md, "The ingress
 tie").
 
 **What is committed** is the network attester's own (`network_attester_rows`): an ingress execution phase's T bucket rows, row t
@@ -58,7 +58,7 @@ its own source (`Ties`: the tie, its stream and the release), never from what th
 names the link and its registrations, so a verdict on another link or another ingress record isn't this one's.
 
 **What it doesn't establish.** The prompt ids' values (the ingress-ids tie, `io_ids`). The release is taken in the
-clear (the named gap). That the network attester's cells are the frames the ingress certifier counted is the device's: both are
+clear (the named gap). That the network attester's cells are the frames the ingress attester counted is the device's: both are
 the auditor's device's record of the link.
 """
 from __future__ import annotations
@@ -143,8 +143,8 @@ def _unit(check) -> CompositeDefinition:
 
     return CompositeDefinition(
         "NetworkIngressTieBucket", 1, _STATICS, sig, body, register=False,
-        doc="the proof block of the ingress tie: one bucket row of the network certifier's ingress execution phase, its "
-            "`io_request.IoTieRequest` on the row the registered read holds to the network certifier's root and the verifier's "
+        doc="the proof block of the ingress tie: one bucket row of the network attester's ingress execution phase, its "
+            "`io_request.IoTieRequest` on the row the registered read holds to the network attester's root and the verifier's "
             "lanes")
 
 
@@ -169,7 +169,7 @@ def framing(B: int, n_max: int) -> tuple[int, ...]:
 class AdvisedProfile:
     """The link's public sizes the tie reads, fixed before the run: its windows; `request_frames`, the link's framing,
     whose entry n − 1 is the ingress frames a request of an n-token prompt takes, for every prompt length the link
-    admits (`framing`); and `own`, the ingress certifier's own frames at the head of every window's first bucket: 1
+    admits (`framing`); and `own`, the ingress network attester's own frames at the head of every window's first bucket: 1
     with a salt frame there, else 0. The network attester's ingress has none, so `IngressTie.tie` refuses a
     profile with one."""
 
@@ -213,11 +213,11 @@ class LinkAdvice:
 
 @dataclass(frozen=True)
 class IoTieVerdict:
-    """The tie of a link's requests to its certified ingress (`IngressTie.tie`): the `IoTieRequest` verdict on each of
+    """The tie of a link's requests to its attested ingress (`IngressTie.tie`): the `IoTieRequest` verdict on each of
     the link's ingress windows, `accepted[w]`, on the link named `link`, whose ingress windows the challenger
     registered as `registrations` (each one's `registration.digest`, in window order), on the request view the verifier
     computed from the advice whose `digest` is `advice`. An accepted verdict on every window says the link's j-th
-    certified request is advice request j and its prompt is v0's `prompt_len` ids long. Only `IngressTie.tie` builds
+    attested request is advice request j and its prompt is v0's `prompt_len` ids long. Only `IngressTie.tie` builds
     one, from IoTieRequest proofs the verifier verified itself; at a size class with no pinned IoTieRequest digest
     every window is refused (PROTOCOL.md, fail closed). Construction refuses (`advice.MalformedAdvice`) a `link` that
     isn't a non-empty string, `registrations` and an `advice` that aren't SHA-512 hex digests, and verdicts that aren't
@@ -315,7 +315,7 @@ class IngressTie:
     def __post_init__(self) -> None:
         if type(self.params) is not NetworkAttesterParams or not (isinstance(self.link, str) and self.link) or \
                 type(self.session) is not bytes:
-            raise ValueError("an ingress tie is on a named link, of a network certifier.NetworkAttesterParams and a session")
+            raise ValueError("an ingress tie is on a named link, of a network_attester.NetworkAttesterParams and a session")
         Q.Shape(self.params.cell_bytes, self.params.lanes, self.params.slots)
 
     @property
@@ -391,7 +391,7 @@ class IngressTie:
                 (head.parameters, head.cell_bytes, head.slots, head.rows) != \
                 (p.digest, p.cell_bytes, p.grid.allocation, self.T) or \
                 head.domain != self.domain(head.window).domain_id:
-            raise ValueError("the head isn't the network certifier's of this link's ingress rows under this schedule and session")
+            raise ValueError("the head isn't the network attester's of this link's ingress rows under this schedule and session")
 
     # the challenger
 

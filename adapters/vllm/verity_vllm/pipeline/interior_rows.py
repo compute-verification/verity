@@ -48,7 +48,7 @@ import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -132,6 +132,7 @@ class _Trace:
     read, in read order: `serving_rows.read_all` over it says which element each word it lays out is."""
 
     def __init__(self, d: int) -> None:
+        self.calls: list[Any]
         self.d, self.calls, self.n = d, [], 0
 
     def _next(self, source: tuple[Any, ...], lo: int, hi: int) -> np.ndarray:
@@ -175,7 +176,8 @@ def port_map(inst: dict[str, Any], template: str, rid: str, *, arrive: int = 0, 
         ports = {}
         for kind, ps in (("rows", m.rows), ("outs", m.outs)):
             for p, _w in ps:
-                at = sum(np.asarray(r[k][0][kind][p], dtype=np.uint64) << np.uint64(16 * d) for d, r in enumerate(reads))
+                at = cast(np.ndarray, sum(np.asarray(r[k][0][kind][p], dtype=np.uint64) << np.uint64(16 * d)
+                                          for d, r in enumerate(reads)))
                 n, w = at.shape
                 flat = at.reshape(-1)
                 c = np.searchsorted(bases, flat, side="right") - 1
@@ -577,9 +579,9 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                 reads = [(rows, at) for rows, (y, _k, at) in zip(took, placed, strict=True) if y.value == name]
                 given[name] = IL.operand(prog, x, reads, q, schemas[name], salt_key, window_root)
         held = {name: np.asarray(v.rows, dtype=np.uint16) for name, v in given.items()}
-        for rows, (x, k, at) in zip(took, placed, strict=True):
+        for took_rows, (x, k, at) in zip(took, placed, strict=True):
             v = given[x.value]
-            off = np.flatnonzero((rows != held[x.value][list(at)]).any(axis=1))
+            off = np.flatnonzero((took_rows != held[x.value][list(at)]).any(axis=1))
             if off.size:
                 u = int(off[0])
                 raise ValueError(f"{x.template}: unit {u} (sampled span {u // cells[k]}) takes at its {x.port!r} a row that "
@@ -591,7 +593,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         _as_served(data, cells, back, "outs")
         fresh = {} if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()
                                                  if p not in linked}
-        fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in (*back, *took_in)}
+        fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in back}
+        fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in took_in}
         c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh or None)
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
                   **({"replay": replay} if replay is not None else {})}
@@ -752,7 +755,8 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
     c, w = it.committed, it.committed.window
     held: dict[str, LK.Port] = {}
     registered: dict[str, dict[str, Any]] = {}
-    back = {(x.template, x.port): (x, v) for x, v in (*it.returns, *it.inputs)}
+    back: dict[tuple[str, str], tuple[Return | Input, LK.Port]] = {(x.template, x.port): (x, v) for x, v in it.returns}
+    back |= {(x.template, x.port): (x, v) for x, v in it.inputs}
     for k, m in enumerate(w.members):
         given, entry = c.by_value(k), {}
         for p, _w in m.all_rows:

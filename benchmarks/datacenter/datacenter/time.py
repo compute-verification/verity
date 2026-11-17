@@ -1,7 +1,7 @@
 """Time: intervals on the one trusted clock.
 
-There is one physical clock: the ticks of the trusted devices (the certifiers and the challenger), whose real duration
-is the datacenter's `Cadence.tick`. Each protocol keeps its own logical time (a placement's engine steps, a certifier's
+There is one physical clock: the ticks of the trusted devices (the attesters and the challenger), whose real duration
+is the datacenter's `Cadence.tick`. Each protocol keeps its own logical time (a placement's engine steps, a network attester's
 buckets, a challenge's deadline) and maps it monotonically onto these ticks. Every claim's `during` is an interval on
 this clock. A tick has a real duration because some guarantees read lengths, not just order: a deadline is only as good
 as the work a device can do before it.

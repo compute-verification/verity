@@ -13,8 +13,6 @@ from __future__ import annotations
 from verity_vllm.pipeline import manifest as M
 from verity_vllm.query.manifest import format as MF
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import copy
 import json
 from collections import defaultdict

@@ -252,7 +252,7 @@ def is_keys(t: str) -> bool:
     return CH.kind(SRW.template(t)) == "keys"
 
 
-def units(ms, tmpls, places: dict[str, list[int]] = PLACES, NH: int = TOY["NH"], rows: int = 1) -> dict[tuple, int]:
+def units(ms, tmpls, places: dict[str, list[int]] = PLACES, NH: int = int(TOY["NH"]), rows: int = 1) -> dict[tuple, int]:
     """The global unit of each (row, head, place) in its head's chain: a template's units row by row, then head, then its
     places; a key rows' writer's (`key_units`) are not a head's."""
     out: dict[tuple, int] = {}
@@ -587,7 +587,8 @@ def test_each_scores_and_values_unit_is_wired_to_the_units_that_wrote_what_it_re
         keys = [at[m.base + i] for i in range(m.n)]
         g = {nm: i for i, (nm, _ty) in enumerate(SRW.template(m.template).fn.signature()[0])}
         reads = pl[keys[0][2]].reads
-        cols = {"scores": [(f"kv{c}", lambda _j, c=c: c) for c in range(3)], "values": [("kv", lambda j: pl[j].col)]}.get(kind, [])
+        by_kind: dict[str, list] = {"scores": [(f"kv{c}", lambda _j, c=c: c) for c in range(3)], "values": [("kv", lambda j: pl[j].col)]}
+        cols = by_kind.get(kind, [])
         assert m.wired == tuple((f"in{g[x]}" + ("" if sp is None else f".{sp}"), o,
                                  tuple(unit[(p, h, pl[j].reads[i][3])] for p, h, j in keys)) for i, (x, sp, o, _to) in enumerate(reads)) + \
             tuple((f"in{g[x]}", "o0", tuple(writer[(p, pl[j].split, pl[j].block, c(j))] for p, _h, j in keys)) for x, c in cols)
@@ -604,10 +605,10 @@ def test_each_scores_and_values_unit_is_wired_to_the_units_that_wrote_what_it_re
     for left, why in ((UNITS[0], "block 0 (visit order)'s scores are the output of a scores template"),
                       (UNITS[5], "block 0 (visit order) of split 1's O on column block 0 is the output of a values template"),
                       (UNITS[6], "split 0's end column block 0 is the output of a column end template"),
-                      (UNITS[8], "block 0 (visit order)'s key rows' column block 0 of 32 columns are the output of a keys "
-                                 "template"),
-                      (UNITS[9], "block 0 (visit order) of split 1's key rows' column block 0 of 32 columns are the output of "
-                                 "a keys template")):
+                      (UNITS[8], ("block 0 (visit order)'s key rows' column block 0 of 32 columns are the output of a keys "
+                                  "template")),
+                      (UNITS[9], ("block 0 (visit order) of split 1's key rows' column block 0 of 32 columns are the output of "
+                                  "a keys template"))):
         with pytest.raises(ValueError, match=re.escape(f"{why} the partition does not name")):
             members(s, [t for t in UNITS if t != left], UNITS_CHUNK)
 

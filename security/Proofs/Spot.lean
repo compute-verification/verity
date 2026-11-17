@@ -10,7 +10,6 @@ public import Proofs.Spot.Instance
 public import Proofs.Spot.Oblivious
 public import Proofs.Spot.Transfer
 public import Proofs.Spot.Converse
-public import Proofs.Spot.HonestCone
 public import Proofs.Spot.LongValue
 public import Proofs.Spot.NecessitySkeleton
 public import Proofs.Spot.NecessityMatrix

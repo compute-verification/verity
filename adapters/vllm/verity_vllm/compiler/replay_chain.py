@@ -88,13 +88,22 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, fields
-from functools import lru_cache
+from functools import cache
 from types import SimpleNamespace
 from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import BIT
-from verity.circuits.boolean.forms import ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.forms import (
+    ZERO,
+    Circuit,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import SpecializedDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
@@ -727,6 +736,8 @@ def advance_arguments(S: Shape, win: QueueRow, cur: Row, ok: bool, stepped: Row,
     Z = widths(S)
     if len(bits) > S.A or any(b not in (0, 1) for b in bits):
         raise MalformedRow(f"at most {S.A} decision bits")
+    tb: list[int]
+    ub: list[int]
     tb, ub = [], []
     _put(tb, taken, Z.AC, "taken")
     _put(ub, used, Z.AC, "used")
@@ -743,6 +754,8 @@ def load_arguments(S: Shape, prev: Row, last: QueueRow, arrivals: Sequence[Arriv
         raise ValueError("the arrivals or decisions exceed the size class")
     vals: dict[str, list[int]] = {}
     _group(vals, "a", arrival_names(S), arrivals, S.K)
+    cb: list[int]
+    sb: list[int]
     cb, sb = [], []
     _put(cb, count, Z.DW, "count")
     _put(sb, steps, Z.PW, "steps")
@@ -777,9 +790,10 @@ def evaluate_close(S: Shape, cases: Sequence[list[list[int]]]) -> list[int]:
 
 # --- cost -----------------------------------------------------------------------------------------------------------------
 
-@lru_cache(maxsize=None)
+@cache
 def _counted(which: str, key: tuple) -> int:
     S = SimpleNamespace(**dict(zip(STATICS, key)))
+    build: Any
     sig, build = {"advance": (_sig_advance, _build_advance), "load": (_sig_load, _build_load),
                   "close": (_sig_close, _build_close)}[which]
     C = Circuit(cse=True)
