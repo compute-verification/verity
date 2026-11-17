@@ -117,11 +117,19 @@ def test_the_switched_rank_is_refused_naming_every_departure():
         "CUBLAS_WORKSPACE_CONFIG ':16:8' (pin: None)", "CUBLASLT_WORKSPACE_SIZE '1' (pin: None)"]
 
 
-@pytest.mark.parametrize("fact,served", [("cublas_version", 130101), ("multiprocessors", 114), ("device", "NVIDIA H100 80GB HBM3"),
-                                         ("torch", "2.12.0+cu128"), ("compute_capability", [10, 0])])
+@pytest.mark.parametrize("fact,served", [("cublas_version", 130101), ("multiprocessors", 114), ("torch", "2.12.0+cu128"),
+                                         ("compute_capability", [10, 0])])
 def test_another_library_device_or_torch_is_a_departure(fact, served):
     ok, why = _gates({**HONEST, "cublas": {**HONEST["cublas"], fact: served}})
     assert ok is False and why is not None and why.endswith(f"served otherwise: {fact} {served!r} (pin: {BC.ROUTE_CONDITIONS[fact]!r})")
+
+
+def test_another_device_departs_naming_the_pin_it_lacks():
+    """A process on a device with no route pin of its own is held to no other device's: it FAILs naming the probe."""
+    ok, why = _gates({**HONEST, "cublas": {**HONEST["cublas"], "device": "NVIDIA H100 80GB HBM3"}})
+    assert ok is False and why is not None
+    assert why.endswith("served otherwise: device 'NVIDIA H100 80GB HBM3': no route pin measured on it (no device pin of "
+                        "'NVIDIA H100 80GB HBM3'): run `verity-vllm device-pin probe` there")
 
 
 def test_a_fact_the_rank_could_not_read_or_did_not_record_is_refused_by_name():

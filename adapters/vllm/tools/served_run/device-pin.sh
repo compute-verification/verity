@@ -10,5 +10,5 @@ TREE=$PWD
 cd adapters/vllm
 PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/tools/research/src \
   gpu-lease 1 --on "$CARD" --cores "$CORES" --max-min 30 --mem-gb 32 -- \
-  "$VENV/bin/python" -m verity_vllm.pipeline.cli device-pin probe --like "${LIKE:-NVIDIA H200}" --out "$OUT/device_pin.json" \
+  "$VENV/bin/python" -m verity_vllm.pipeline.cli device-pin probe ${LIKE:+--like "$LIKE"} --out "$OUT/device_pin.json" \
   --evidence "${RESEARCH_RUN_ID:?}"

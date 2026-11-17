@@ -8,12 +8,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.definitions.registry.bf16_gemm_check import ROUTE_CONDITIONS
 from verity_vllm.log import write
 
 
 @dataclass(frozen=True, kw_only=True)
 class ProbeOptions:
-    like: str = option("--like", default="NVIDIA H200", help="the pinned device whose shapes are probed (the name its pin is filed under)")
+    like: str = option("--like", default=ROUTE_CONDITIONS["device"],
+                       help="the pinned device whose shapes are probed (the name its pin is filed under; default the route scan's)")
     out: str = option("--out", help="the pin's path (definitions/registry/device_pins/<device>.json registers it)")
     evidence: str = option("--evidence", help="the run that probes (its run id), the pin's evidence.cublas")
     cmd: str = field(default="probe", init=False)
@@ -32,7 +34,7 @@ def probe(like: str, evidence: str) -> dict[str, Any]:
     shapes = [[int(v) for v in k.split(",")] for k in BC.device_pin(like)["cublas"]]
     got = probe_routes(shapes)
     seen = engine_facts_of_record()["cublas"]
-    env = seen.get("env") or {}
+    env = seen["env"] if isinstance(seen.get("env"), dict) else {}
     conditions = {k: seen.get(k) for k in BC.ROUTE_CONDITIONS if k != "env"} | {"env": {v: env.get(v) for v in BC.ROUTE_CONDITIONS["env"]}}
     unread = {k: v for k, v in conditions.items() if v is None or (isinstance(v, str) and v.startswith("unavailable"))}
     if unread:
