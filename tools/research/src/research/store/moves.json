@@ -5152,6 +5152,11 @@
     },
     {
       "paths": {
+        "demos/": "applications/"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/two_stage/": "benchmarks/one_stage/",
         "benchmarks/two_stage/settings.py": "tests/benchmarks/one_stage/settings.py",
         "tests/benchmarks/two_stage/TwoGuard.lean": "tests/benchmarks/one_stage/TwoGuard.lean",

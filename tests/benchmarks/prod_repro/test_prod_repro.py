@@ -999,6 +999,9 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
     assert block + counted + off in txt
     assert json.loads((out / P.TOPK_KEPT).read_text()) == {
         "dirs": {"prod-record": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3, "rows_at": 9000}}}
+    # and each process's own file whole, its rows by device
+    assert (out / P.TOPK_FILES / "prod-record" / "dsa_topk.21.json").read_bytes() == (
+        private / "prod-record/topk-log/dsa_topk.21.json").read_bytes()
     assert r["ran"]["passes"]["topk"]["on"] == {"prod": False, "prod-record": True, "prod-seeded": False, "prod-trace": False}
     # a later reading has no private directory, and one whose private directory holds none for it has the kept ones
     shutil.rmtree(private)
@@ -1644,6 +1647,8 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
             "rows of more than its keys rewritten, 0 of them with a tie across the k-th key\n") in p.stdout
     assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {
         "processes": 1, "calls": 7, "rows_long": 5, "rows_tied": 2, "rows_at": 7}
+    assert sorted(p.parent.name for p in (run_dir / "out" / P.TOPK_FILES).glob("*/dsa_topk.*.json")) == [
+        "prod-record", "replay-compiled"]
     assert "stock prod, stock again not served, ours prod-record" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
     assert "advice: not measured: the scheduler replay refuses the pass: " in p.stdout
     # read again without a GPU and without the node's directory, the earlier job says the same
