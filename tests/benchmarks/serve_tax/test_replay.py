@@ -431,6 +431,24 @@ def test_the_replays_engine_takes_the_headers_cache_format_and_draft(tmp_path: P
     assert {k: v for k, v in got.items() if k not in plain} == {
         "long_prefill_token_threshold": 256, "kv_cache_dtype": "fp8_ds_mla", "speculative_config": draft}
     assert {k: got[k] for k in plain} == plain
+    assert R.engine(tmp_path, {"config": cfg}, eager=True, load_format="dummy") == {**plain, "load_format": "dummy"}
+
+
+def test_a_stand_ins_replay_loads_the_random_weights_its_served_line_named(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The served line's ``--load-format`` (a stand-in's ``dummy``) is the replay's engine's, and a line without one
+    leaves vLLM's default."""
+    seen = []
+    monkeypatch.setattr(R, "replay", lambda w, *args: seen.append(args[-1]) or {
+        "wall_s": 1.0, "ready_s": 0.5, "steps": [dict(s) for s in w["steps"]],
+        "tokens": {r["engine_id"]: list(r["served"]) for r in w["requests"]}})
+    monkeypatch.setattr(R, "sys", NS(flags=NS(hash_randomization=0), path=sys.path))
+    for name in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"):
+        monkeypatch.setenv(name, "the job's")
+    d = arm(tmp_path)
+    for line in (["--model", "ck", "--load-format", "dummy"], ["--model", "ck"]):
+        (d / "meta.json").write_text(json.dumps({"plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": line}))
+        assert R.main(["--arm-dir", str(d), "--load", "sat", "--out", str(tmp_path / "out")]) == 0
+    assert seen == ["dummy", None]
 
 
 def stub_vllm(monkeypatch: pytest.MonkeyPatch) -> None:

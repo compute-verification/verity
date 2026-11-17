@@ -102,8 +102,10 @@
 # rung (REPLAY=agentic@4) and replayed from an arm whose server kept each request's ids (REPLAY_FROM=$OUT/prod-record:
 # that client keeps none). The replay of an arm that served on the canonical top-k loads that plugin too, and keeps its
 # counters in PRIVATE/replay-<mode> where PRIVATE is set. Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
-# checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b,
-# qwen3-30b and llama32-1b their pinned snapshots under HF_HOME on one. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
+# checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; glm53-standin
+# its stand-in on one, a directory under /tmp of the cut config and that checkpoint's tokenizer; llama8b,
+# qwen3-30b and llama32-1b their pinned snapshots under HF_HOME on one. GPU_LEASE_ON and GPU_LEASE_CORES are the
+# lease's --on and --cores. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
 # pin, unless set.
 set -uo pipefail
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
@@ -165,8 +167,15 @@ case $MODEL_ID in
     REV=aca966e4e02791568aa6a4ced368624b3d897f42
     if [ -e "/workspace/cp/glm53-ckpt/$REV/.verified" ]; then CK=/workspace/cp/glm53-ckpt/$REV; else CK=/workspace/fs/glm53/$REV; fi
     CK=${CHECKPOINT:-$CK}; GPUS=8 ;;
+  glm53-standin)
+    REV=aca966e4e02791568aa6a4ced368624b3d897f42
+    if [ -e "/workspace/cp/glm53-ckpt/$REV/.verified" ]; then real=/workspace/cp/glm53-ckpt/$REV; else real=/workspace/fs/glm53/$REV; fi
+    CK=${CHECKPOINT:-/tmp/serve-tax-standin.${D##*/}}
+    [ -n "${CHECKPOINT:-}" ] || "$PY" "$here/serve_tax.py" standin --model-id "$MODEL_ID" --tokenizer-from "$real" --out "$CK" \
+      || exit 2
+    GPUS=1 ;;
   llama8b|qwen3-30b|llama32-1b) CK=${CHECKPOINT:-$("$PY" "$here/serve_tax.py" checkpoint --model-id "$MODEL_ID")}; GPUS=1 ;;
-  *) echo "serve-tax: MODEL_ID is moonlight, glm53, llama8b, qwen3-30b or llama32-1b, not $MODEL_ID"; exit 2 ;;
+  *) echo "serve-tax: MODEL_ID is moonlight, glm53, glm53-standin, llama8b, qwen3-30b or llama32-1b, not $MODEL_ID"; exit 2 ;;
 esac
 # CUDA_HOME, where unset: the toolkit of torch's own CUDA under /usr/local, which FlashInfer's JIT (vLLM's default
 # sampler) builds with; a newer toolkit can lack its headers (cuRAND)
@@ -345,7 +354,8 @@ for k in SERVE_VLLM VLLM_CACHE_ROOT FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_
   echo "has_flashinfer=$("$PY" -c 'from vllm.utils.flashinfer import has_flashinfer; print(has_flashinfer())')"
   [ -f "$PLAN" ] && echo "plan_sha256=$(sha256sum "$PLAN" | cut -c1-64)"; } >> "$OUT/engine_env.txt" 2>&1
 if command -v gpu-lease > /dev/null; then
-  GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" -- bash "$here/run.sh" leased
+  GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" ${GPU_LEASE_ON:+--on "$GPU_LEASE_ON"} \
+    ${GPU_LEASE_CORES:+--cores "$GPU_LEASE_CORES"} -- bash "$here/run.sh" leased
   rc=$?
 else
   # a node without gpu-lease queues its jobs by other means: refuse to start on GPUs another job still holds
