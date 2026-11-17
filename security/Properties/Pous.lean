@@ -1,11 +1,11 @@
 module
 
-public import PousCheck.SetupProtocol
+public import PousVerifier.SetupProtocol
 
 /-!
 # The PoUS setup check's properties, stated against the Lean code
 
-What `verity/pous/p2/v4/setup` (`PousCheck.SetupProtocol.protocol`, package `pous_check`) accepts and publishes, stated
+What `verity/pous/p2/v4/setup` (`PousVerifier.SetupProtocol.protocol`, package `pous_verifier`) accepts and publishes, stated
 against its `check` and `Accepts` (`CoreProtocol/Protocol.lean`) in the one shape a property takes: for every input, if
 the check accepts, a named conclusion holds. The check is a function of its three inputs (the parameters, the server's
 commitment and salt, and `C*` of any shape) and sees all of them, so no statement takes a premise. It refuses parameters
@@ -30,7 +30,7 @@ block decoder read as the trusted model's (`DecodeIsModel`).
 
 @[expose] public section
 
-namespace PousCheck.Properties
+namespace PousVerifier.Properties
 
 /-- Block `j` of segment `s` decodes canonically to the payload `m`: the keys of `(s, j)` under `salt` exist, the block
 is `blockBytes` bytes, its value `c` is below `p`, `D(c)` fits in the payload's bits, and `m` is `D(c)` as `payloadBytes`
@@ -82,4 +82,4 @@ def Deployed : Prop :=
   q.validate = .ok q ∧ q.p = 2 ^ 16448 - 21065 ∧ q.p = P ∧ q.blockBytes = 2056 ∧ q.blockBytes = W_BYTES ∧
     q.payloadBytes = 2054 ∧ q.blocksPerSegment = 2 ^ 16 ∧ q.segments = 8 ∧ q.blocks = 2 ^ 19
 
-end PousCheck.Properties
+end PousVerifier.Properties
