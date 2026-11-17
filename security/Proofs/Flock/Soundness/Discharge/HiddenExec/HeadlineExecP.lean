@@ -7,23 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.LiveOnP
 
 set_option Elab.async false
 
-/-!
-# The headline at the executable over hidden-output sessions at the verifier's public inputs
-
-`flock_headline_exec_hidden` (`HeadlineExec.lean`) at verity-verify-proof's acceptance at the verifier's own public input words
-`own` (`Exec.AcceptsP I own`, `--public-inputs`). `flock_headline_exec_hiddenP` instantiates
-`Prog.flock_headline_live_onXP` at the circuit's program on the keys with public inputs `Placed.keyProgP c pi hU n`
-(each unit input on the gate of its key, a public leaf's on its public word's bit), its returned outputs' bits for the
-program's outputs (`Layout.outsOfP`), and the one-table plan of the session's inputs at `own` (`planAtHP`), with:
-* `pp := ppHP`, `hConst := hConstHP`, `hZero := hZeroHP` (`SitesP.lean`);
-* `lay := layAtHP` and `rs := rsAtHP` (`RowsAtHP.lean`): every row of the circuit is a commit string whose `b ‖ c` the
-  public file registers, a unit's computed committed gate is a bit of an output row, and a public gate holds its
-  unit's public input word's bit in the population's public file `pub` (`HmIn.loadPublic`);
-* `hHm := rsAtHP_computes`.
-
-So the hypotheses left are `flock_headline_exec_hidden`'s, with `hdec` at `own` (`DecodesOnP`): `hscope`, A3,
-`cr/sha-512`, `ecr/sha-512` and the numeric conditions.
--/
+/-! The headline at the executable over hidden-output sessions at the verifier's own public input words (`flock_headline_exec_hiddenP`). -/
 
 namespace FlockSoundness.Discharge.HiddenExec
 
@@ -39,16 +23,6 @@ variable {n : ℕ} {I : Inputs} {own : Option ByteArray} {mPts : ℕ} (ht : I.ta
   (hU : Built c.unit) {pi : HmIn.Ports} (hpi : HmIn.parse c = .ok pi)
   {pub : Public} (hpub : HmIn.loadPublic I.tags c pi I.publicFile = .ok pub) {Reg : Type}
 
-/-- **The headline at the executable over hidden-output sessions at the verifier's public inputs.** Let `I` be a
-verify command's inputs (one table) under a tag with hidden outputs, whose statement circuit is an untyped circuit `c`
-in `rs`'s scope (`hcS`, `ht`, `hscope`; a templated file's committed circuit unrolled) with public input ports `pi` (`hpi`), whose public file loads to `pub` at them
-(`hpub`), and let the verifier pass its own public input words `own`. Let the challenger write sample `S` as the JSON
-`dj S` (`x₀` one sample it sets up with `Stmt.setupHidden … own`), the units be sampled with `Flock.Draw.drawWith`'s
-stratified sampling design on the challenger's coins, a byte source A3 makes uniform, and each sample's session be the live-coin
-part's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, verity-verify-proof accepts at `own`
-with at least `K` incorrect proof blocks of `Placed.keyProgP c pi hU n`, at the simulated prover's committed values (1 on the
-constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability at most
-`miss(K) + ε_ks + ε_bind`. -/
 theorem flock_headline_exec_hiddenP {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)

@@ -21,25 +21,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# `zk_session_soundJ` at the challenger's live-coin part's custody
-
-`zk_session_soundJ` takes `RecordsLiveZKJ` (`hRec`) and `SampleOkZKJ` at every sample of the live subset sampling design (`hDraw`). As
-at one table (`ZkLink/SampleOk.lean`), the record and its sample file are custody, and the rest of `SampleOkZKJ` is
-verity-verify-proof's own arithmetic. This file splits them:
-
-* `sampleOkZKJ_of_size`: from `SampleFileZK dj samplingDesign pop` at any sampling design, at a sample `S` whose file decodes only to `q` units, with
-  `nTab I` dividing `q`, `SampleOkZKJ` holds at `mPtsOf c.g (q / nTab I)` link points. The stratified sampling design meets it at
-  `q = ∑ s, k s` (`ZkReg/Guarded.lean`, `sampleOkZKJ_of_exec`).
-* `sampleOkZKJ_of_file`: from `SampleFileZK dj (subset kd) pop`, with `nTab I` dividing `kd`, `SampleOkZKJ` holds at
-  `mPtsOf c.g (kd / nTab I)` link points at every sample `S`. `UnitSample.ofJson` decodes a subset sample only at its `k`
-  units, so a sample file it decodes is a sample of `kd` units, and part `j` (`partSample`) of it decodes to its `kd / nTab I`
-  units, which are the units `partOf` sends to table `j`. No fact about the sampling design's runs is needed: the run that reads
-  past the source's bytes samples every unit, whose sample file decodes only at `kd = n`.
-* `zk_session_soundJ_custody`: `zk_session_soundJ` with `RecordCustodyZKJ` (`live-verifier`) for `hRec` and `hDraw`,
-  at `mPtsOf c.g (kd / nTab I)` link points, and `nTab I ∣ kd` (verity-verify-proof accepts a session of `count > 1` tables
-  only at a sample that splits into `count` equal parts, `accepts_tables`).
--/
+/-! `zk_session_soundJ` with the record and its sample file at the challenger's live-coin part's custody (`RecordCustodyZKJ`). -/
 
 @[expose] public section
 
@@ -55,8 +37,6 @@ variable {n : ℕ} {Reg : Type}
 
 -- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- What `UnitSample.ofJson` returns: its units are the `units` field's, it has no closure without a `closure` key, and a
-`subset k` sample has `k` units. -/
 theorem ofJson_shape {j : Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) :
     (∃ a, J.arr j "units" "unit_draw" = .ok a ∧ a.mapM (J.asNat · "U2: a drawn unit") = .ok D.units) ∧
     (j.getObjVal? "closure" = .error "property not found: closure" → D.closure = #[]) ∧
@@ -89,7 +69,6 @@ theorem mapM_asNat_toJson (s : String) (a : Array ℕ) : (a.map toJson).mapM (J.
   rw [Array.mapM_eq_mapM_toList, Array.toList_map, mapM_asNat_toJson_list]
   rfl
 
-/-- **Part `j` of a sample decodes to its units** (`partSample` has no closure). -/
 theorem ofJson_partSample {pop count j : ℕ} {units : Array ℕ} {D : Draw.UnitSample}
     (h : Draw.UnitSample.ofJson (Tables.partSample pop units count j) = .ok D) :
     D.proved = units.extract (j * (units.size / count)) (j * (units.size / count) + units.size / count) := by
@@ -105,9 +84,6 @@ theorem ofJson_partSample {pop count j : ℕ} {units : Array ℕ} {D : Draw.Unit
   rfl
 
 
-/-- **`SampleOkZKJ` from custody under any sampling design, at a sample whose decoded file has `q` units**, the session's tables
-dividing `q`: `SampleOkZKJ` at `mPtsOf c.g (q / nTab I)` link points at `S`. Part `j` of the sample (`partSample`) decodes
-to its `q / nTab I` units, which are the units `partOf` sends to table `j`. -/
 theorem sampleOkZKJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (samplingDesign : Draw.SamplingDesign) (q pop : ℕ) (hdiv : q % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj samplingDesign pop) (S : Finset (Fin n))
@@ -202,20 +178,13 @@ theorem sampleOkZKJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
     · rw [setupH_mPts_of_proved (hc' j) (fun D' h' => ?_) hst]
       rw [hpd D' h', Array.size_extract, hsz, Nat.min_eq_left hjq, Nat.add_sub_cancel_left, hn]
 
-/-- **The challenger's live-coin part's samples are `SampleOkZKJ`.** On untyped `--statement` tags whose circuit file parses under the
-`--zk` tags to `c`: when the record's sample file is the verifier's sample under the subset sampling design `subset kd` over `[0, pop)`
-(`SampleFileZK`) and the session's tables divide `kd`, every sample `S` is `SampleOkZKJ` at `mPtsOf c.g (kd / nTab I)` link
-points. -/
 theorem sampleOkZKJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
     SampleOkZKJ I dj (mPtsOf c.g (kd / nTab I)) S :=
   sampleOkZKJ_of_size I ht hc (.subset kd) kd pop hdiv dj hdj S fun D hD => (ofJson_shape hD).2.2 kd (by rw [hdj S D hD]; rfl)
 
-/-- **One `--zk` sampled session of `J` tables is sound, at the challenger's live-coin part's custody.** `zk_session_soundJ` with
-`RecordCustodyZKJ` (`live-verifier`: the record is the live session's, and its sample file the verifier's sample under the
-subset sampling design) in place of `hRec` and `hDraw`, at `mPtsOf c.g (kd / nTab I)` link points, the session's tables dividing
-`kd`. -/
+/-- Needs `nTab I ∣ kd`: verity-verify-proof accepts a session of `count > 1` tables only at a sample that splits into `count` equal parts (`accepts_tables`). -/
 theorem zk_session_soundJ_custody
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -229,7 +198,6 @@ theorem zk_session_soundJ_custody
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and the challenger's live-coin part's custody of the record and its sample file
     (hTags : TagsOkZJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

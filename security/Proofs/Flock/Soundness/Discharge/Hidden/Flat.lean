@@ -23,16 +23,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Soundness.ExecLookup
 
-/-!
-# A hidden-output statement's flat twin, and its output rows' message bits
-
-`flatTwin st` is the statement with `HmRow.delta`'s Δ alone, the one `Stmt.setupH` would build on the same circuit; it
-has the unit facts `Hm.row_bc_flat` reads (`unitFacts_of_parse`). An output row's message bit (`deltaMsgCol`) is an input
-bit of a `sha512x3` slot past the compression's `cv` (`deltaMsgCol_at`), where no copy of `HmRow.delta` is (`msg_filter`),
-so its flat Δ count is zero (`flat_count_msg`), and `outPairs` copies into it once (`outPairs_count`): the hidden
-statement's row there is a copy of `outSrc` (`msg_copy`), its flat twin's a self row (`flat_self`). So a satisfying
-witness of the hidden statement satisfies its flat twin (`sat_flat`).
--/
+/-! A hidden-output statement's flat twin (`flatTwin`, `HmRow.delta`'s Δ alone), which every satisfying witness of the hidden statement satisfies (`sat_flat`). -/
 
 @[expose] public section
 
@@ -48,8 +39,6 @@ open Hm Compose Flock.DeriveAll Types.Dag
 abbrev flatTwin (st : Stmt) : Stmt :=
   { st with da := (HmRow.delta st.c st.pin).1, db := (HmRow.delta st.c st.pin).2 }
 
-/-- **What the copy positions read, with nets `pre` first**, for a statement whose circuit `HmRow.parse` accepted with
-nets `pre` ahead of the file, whose unit's rows end at its useful rows, and whose Δ is `HmRow.delta`'s. -/
 theorem unitFacts_ofPre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} {st : Stmt} (hp : HmRow.parse tags cf tables (pre := pre) = .ok st.c)
     (hrows : st.c.unit.a.rows ≤ st.c.unit.useful ∧ st.c.unit.b.rows ≤ st.c.unit.useful)
@@ -67,17 +56,12 @@ theorem unitFacts_ofPre {tags : Tags} {cf : ByteArray} {tables : List (String ×
   · rw [← he, hname] at hhn
     exact absurd hhn (by unfold HmRow.HM_NET; decide)
 
-/-- **What the copy positions read, for a unit given ahead of the file** (a templated file's unit net `n`, which is not
-`Built`): for a statement whose circuit `HmRow.parse` accepted with `n` first, whose Δ is `HmRow.delta`'s, when `n`'s
-rows end at its useful rows. -/
 theorem unitFacts_of_parsePre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {n : Net}
     {st : Stmt} (hp : HmRow.parse tags cf tables (pre := #[("unit", n)]) = .ok st.c)
     (hrows : n.a.rows ≤ n.useful ∧ n.b.rows ≤ n.useful) (hda : st.da = (HmRow.delta st.c st.pin).1) :
     Aliased.UnitFactsPre tags #[("unit", n)] st :=
   unitFacts_ofPre hp ((unit_of_parsePre hp).2.2 ▸ hrows) hda
 
-/-- **What the copy positions read**, for a statement whose circuit `HmRow.parse` accepted and whose Δ is
-`HmRow.delta`'s: the unit is one of the file's nets, whose rows `Net.parse` ends at its useful rows. -/
 theorem unitFacts_of_parse {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {st : Stmt}
     (hp : HmRow.parse tags cf tables = .ok st.c) (hda : st.da = (HmRow.delta st.c st.pin).1) :
     Aliased.UnitFacts tags st := by
@@ -96,8 +80,6 @@ theorem unitFacts_of_parse {tags : Tags} {cf : ByteArray} {tables : List (String
       rw [h1] at h2
       cases h2
   exact (unitFacts_ofPre hp ⟨hrows.1.le, hrows.2.le⟩ hda).facts (fun _ hx => by simp at hx)
-
-/-! ## An output row's message bits -/
 
 /-- The offset of byte `b`'s bit `t` in a compression's 1024 message bits. -/
 def msgOff (b t : ℕ) : ℕ := 64 * (b % 128 / 8) + 56 - 8 * (b % 128 % 8) + t
@@ -125,8 +107,6 @@ section Cols
 variable {c : Circuit} (R : RowRanges c) (hu : ∀ p ∈ c.ports.toList, p.segs = none)
 include R hu
 
-/-- **Row `p`'s message bit `t` of byte `b`** is at its compression `b / 128`'s `sha512x3` slot, past the `cv`, below
-the net's self rows. -/
 theorem deltaMsgCol_at {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hb : b < 128 * c.ports[p]!.chunks)
     (ht : t < 8) :
     AtSlot c c.shaNet (g * c.perVu.getD c.shaNet 0 + ((HmRow.rowSlots c.ports).2[p]!)[b / 128]!.1)
@@ -145,7 +125,6 @@ theorem deltaMsgCol_lt {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (h
     (ht : t < 8) : deltaMsgCol c g p b t < 2 ^ c.kLog :=
   (deltaMsgCol_at R hu hg hp hb ht).1.lt R.bound (R.range R.shaNet).1
 
-/-- A compression's `cv` bit is no row's message bit. -/
 theorem cv_ne_msg {g' p' k' t' g p b t : ℕ} (hg' : g' < c.g) (hp' : p' < c.ports.size)
     (hk' : k' < c.ports[p']!.chunks) (ht' : t' < 512) (hg : g < c.g) (hp : p < c.ports.size)
     (hb : b < 128 * c.ports[p]!.chunks) (ht : t < 8) :
@@ -157,7 +136,6 @@ theorem cv_ne_msg {g' p' k' t' g p b t : ℕ} (hg' : g' < c.g) (hp' : p' < c.por
   have hmo := msgOff_lt (b := b) ht
   omega
 
-/-- An `hm96` slot's input bit is no row's message bit. -/
 theorem hm_ne_msg {g' p' off' g p b t : ℕ} (hg' : g' < c.g) (hp' : p' < c.ports.size) (ho' : off' < 4096)
     (hg : g < c.g) (hp : p < c.ports.size) (hb : b < 128 * c.ports[p]!.chunks) (ht : t < 8) :
     c.slotCol c.hmNet g' p' + off' ≠ deltaMsgCol c g p b t := by
@@ -167,7 +145,6 @@ theorem hm_ne_msg {g' p' off' g p b t : ℕ} (hg' : g' < c.g) (hp' : p' < c.port
   exact sha_ne_hm R.rowNets ((deltaMsgCol_at R hu hg hp hb ht).1.inj R.disj hn.1 hn.2.1 hm.1 hm.2.1
     (by rw [← h]; exact R.hmIn_at hg' hp' ho')).1
 
-/-- **Distinct message bits are distinct columns**: template instance, row, byte and bit. -/
 theorem deltaMsgCol_inj {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
     (hb : b < 128 * c.ports[p]!.chunks) (ht : t < 8) (hg' : g' < c.g) (hp' : p' < c.ports.size)
     (hb' : b' < 128 * c.ports[p']!.chunks) (ht' : t' < 8) (h : deltaMsgCol c g p b t = deltaMsgCol c g' p' b' t') :
@@ -190,7 +167,6 @@ theorem deltaMsgCol_inj {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.p
   unfold msgOff at ho
   refine ⟨rfl, rfl, ?_, ?_⟩ <;> omega
 
-/-- **No copy of `HmRow.delta`'s rows or of the rows' wires is at a row's message bit.** -/
 theorem msg_filter (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks) {pin g p b t : ℕ} (hg : g < c.g)
     (hp : p < c.ports.size) (hb : b < 128 * c.ports[p]!.chunks) (ht : t < 8) :
     (rowCopies c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
@@ -225,15 +201,11 @@ theorem msg_filter (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks) {pin g 
 
 end Cols
 
-/-! ## `HmRow.delta`'s Δ at a message bit: nothing -/
-
 section Twin
 
 variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags st)
 include L F
 
-/-- **`HmRow.delta`'s pairs at a row's message bit**: none. The slot constants, the leaf and cut bits and the wires past
-the rows' are elsewhere (`Hm.flatPairs_countL`'s), and so are the rows' copies and wires (`msg_filter`). -/
 theorem flat_count_msg (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toList, p.segs = none) (hpos : ∀ q < st.c.ports.size, 0 < st.c.ports[q]!.chunks)
     {g p b t : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) (hb : b < 128 * st.c.ports[p]!.chunks) (ht : t < 8)
     (j : ℕ) : (flatPairs st.c st.pin).count (deltaMsgCol st.c g p b t, j) = 0 := by
@@ -324,7 +296,6 @@ theorem flat_count_msg (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toList, 
   rw [← List.count_append, ← List.flatMap_append, count_pair2, hf']
   rfl
 
-/-- **The flat Δ's row at a row's message bit is a self row**, in `A` and in `B`. -/
 theorem flat_self (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     (hda : st.da = (HmRow.delta st.c st.pin).1) {g p b t : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size)
     (hb : b < 128 * st.c.ports[p]!.chunks) (ht : t < 8) (hx : deltaMsgCol st.c g p b t < 2 ^ st.c.kLog)
@@ -352,8 +323,6 @@ theorem flat_self (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 
   exact inBit_rows R (Or.inl rfl) hat (shaNet_ofRows R.rowNets) (shaLaid_self hoff) hx hδ j
 
 end Twin
-
-/-! ## `outPairs` at a message bit: one copy -/
 
 /-- `outPairs`' copies: each output row's message bit, from the output bit the circuit computes. -/
 def outCopies (c : Circuit) : List (ℕ × ℕ) :=
@@ -387,7 +356,6 @@ section Out
 variable {c : Circuit} (R : RowRanges c) (hrows : OutRows c)
 include R hrows
 
-/-- **`outPairs`' one copy at output row `j`'s message bit for word `k`, bit `t`**: from `outSrc`. -/
 theorem outCopies_filter {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.size)
     (hk : k < (c.ports.getD (HmOut.nIn c + j) default).words) (ht : t < 16) :
     (outCopies c).filter (fun e => e.1 = deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8)) =
@@ -422,7 +390,6 @@ theorem outCopies_filter {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.siz
     obtain ⟨k', hk', t', ht', rfl⟩ := he
     exact fun h => hne ⟨(hdec g' hg' j' hj' k' hk' t' ht' h).1, (hdec g' hg' j' hj' k' hk' t' ht' h).2.1⟩
 
-/-- **`outPairs`' pairs at output row `j`'s message bit for word `k`, bit `t`**: one copy from `outSrc`. -/
 theorem outPairs_count {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.size)
     (hk : k < (c.ports.getD (HmOut.nIn c + j) default).words) (ht : t < 16) (i : ℕ) :
     (outPairs c).count (deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8), i) =
@@ -433,9 +400,6 @@ theorem outPairs_count {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.size)
 
 end Out
 
-/-! ## The hidden statement and its flat twin -/
-
-/-- Δ's count at a row with no output pair is `HmRow.delta`'s. -/
 theorem deltaEntry_append_out {d : Array (ℕ × ℕ)} {c : Circuit} {r : ℕ} (hr : ∀ q ∈ outPairs c, q.1 ≠ r) (j : ℕ) :
     deltaEntry (d ++ (outPairs c).toArray) r j = deltaEntry d r j := by
   rw [deltaEntry_eq_count, deltaEntry_eq_count, Array.toList_append, List.count_append, List.toList_toArray,
@@ -448,8 +412,7 @@ variable {tags : Tags} {st : Stmt} (L : Layout st) (L0 : Layout (flatTwin st)) (
   (hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray) (hrows : OutRows st.c)
 include L L0 F0 hv1 hda hrows
 
-/-- **An output row's message bit holds its copy** in every block of a satisfying witness of the hidden statement: at
-template instance `g`, output row `j`'s word `k`, bit `t`, what the witness holds at `outSrc`. -/
+/-- An output row's message bit holds what a satisfying witness of the hidden statement holds at `outSrc`. -/
 theorem msg_copy {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
@@ -478,8 +441,6 @@ theorem msg_copy {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : 
   exact block_of_rows hz o hx fun i =>
     inBit_rows (st := st) R (Or.inl rfl) hat (shaNet_ofRows R.rowNets) (shaLaid_self hoff) hx hδ i
 
-/-- **A satisfying witness of the hidden statement satisfies its flat twin**: the rows agree past `outPairs`' message
-bits (`deltaEntry_append_out`), and there the twin's row is a self row (`flat_self`), which every bit satisfies. -/
 theorem sat_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) : (L0.model regs).Satisfies z := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check

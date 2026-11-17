@@ -22,49 +22,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ParseStmt
 
-/-!
-# What the verifier accepts: `Accepts` and its statement check
-
-`verity-verify-proof verify` refuses every session of a statement whose form the soundness proof does not cover:
-`Main.verifyCmd` runs `Flock.ProvedScope.check` on the statement in every session's verdict, after every other check but
-the draw-less session's refusal, and refuses the session when it fails. So what the verifier accepts is `Verifies`
-(under `--zk`, `VerifiesZK`; with `--registered F`, `VerifiesR` and under `--zk` `VerifiesZKR`): the setup and verdict
-`Accepts` models, and the check. Every condition on the statement's form that the headlines took as a hypothesis follows
-from the check: an untyped statement (`Checks.typed`), retained rounds, `hm96-sha512/v1` leaves or, at hidden outputs
-without `--zk`, plain SHA-512 leaves (`Checks.merkleLeaf`), at most one table without `--zk`, the circuit and public file as the headlines read them (`circ`, `pubOf`), no shared-row public file
-unless the statement has hidden outputs and `hm96-sha512/v1` leaves and the verifier holds its own registered reads
-(`Checks.tables`; without them, `Checks.tables_none`) and `Layout.scopeOk` (`Checks.scope`, by `scopeOk_eq`: the
-executable's `ProvedScope.scopeOk` is `Layout.scopeOk`, its port bits a mask), or under hidden outputs `Layout.scopeOkI`
-(`Checks.scopeI`), and wherever the wires feed the unit or the outputs, an order of them that computes
-(`Checks.wiresAcyclic`). So a circuit the wires feed neither way is in `Layout.scopeOkH` (`Checks.scopeH`), and one they
-feed, under hidden outputs, in the general form `Layout.scopeGenH` (`Checks.scopeGen`). `check_ok` gives exactly what the
-check runs: the executable's `ProvedScope.scopeOkI` is `Layout.scopeOkI` (`scopeOkI_eq`). The
-unconditional headlines (`FailClosed.Composed`, `FailClosed.ZkHidden`,
-`FailClosed.Exec`) are over `Verifies`, with no hypothesis on the statement's form, and so are the registered ones
-(`FailClosed.PlainRegistered` over `VerifiesR`, `FailClosed.ZkRegistered` over `VerifiesZKR`). Under `--plain-tables` the
-check is `ProvedScope.checkP` (`ScopeP`, `VerifiesP`): it refuses hidden outputs with plain SHA-512 leaves and more than
-`Tags.MAX_TABLES` tables, and is otherwise the check at one table (`ScopeP.checks`).
-
-`Checks` is `verifyCmd`'s call `ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome
-registered.isSome` argument for argument. `tags` is `Inputs.tags` without `--zk` and `zkTags` under it (`--statement`'s,
-with `Zk.tags` at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). The
-circuit, public file and tables are the bytes `verifyCmd` sets the session up from, and `count` is `--session-tables`.
-The public-inputs flag is `false`: with `--public-inputs` the check refuses every session, and without it `buildSession`
-passes `setupTables` no public input words, the setup `Accepts` models. The registered flag `reg` is whether the verifier
-holds `--registered F`: `Scope` and `ScopeZ` are the check without it, `ScopeR` and `ScopeZR` the check with it, which
-`VerifiesR` and `VerifiesZKR` pair with the registered check `AcceptsR` and `AcceptsZKR` model. A session's verdict is `verifyCmd`'s `setupOf` at the record's `recordDraw` (the check
-requires `hm96Rows`): `setupTables`, under `--zk` `Zk.shapeOk` on every table, then `ProvedScope.sampleDesign` on a sampled
-session's sample, `verify` or `Zk.verify`, the check, and last `ProvedScope.sampleDesign` on a session without a sample. So a session
-`verifyCmd` accepts satisfies `Verifies` without `--registered` and `VerifiesR` with it (under `--zk`, `VerifiesZK` and
-`VerifiesZKR`). `verifyCmd` refuses more, which only shrinks the
-event: a sample by a sampling design no soundness claim samples by (`ProvedScope.sampleDesign`: a bernoulli or work sample, or a subset sample
-without `--zk` or `--plain-tables` at public outputs, or under `--plain-tables` a stratified sample), a session without a sample (every claim's record hypothesis reads the record's sample), registered reads (`checkRegistered`:
-a header naming registered values without `--registered`; with it, `Registered.check` needs a shared-row public file,
-which the check passes only at hidden outputs and `hm96-sha512/v1` leaves, where `VerifiesR` and `VerifiesZKR` model the
-registered check), a coin-tree
-key an earlier session of the run used, and a session file it cannot read. Each sampled session of a run is set up at its own sample,
-and the draw-less setup, one statement, once.
--/
+/-! What the verifier accepts (`Verifies` and its kin): the setup and verdict `Accepts` models, and `Flock.ProvedScope.check`, from which every condition on the statement's form the headlines took as a hypothesis follows; `verifyCmd` refuses more, which only shrinks the event. -/
 
 @[expose] public section
 
@@ -72,14 +30,10 @@ namespace FlockSoundness.Discharge.FailClosed
 
 open Flock Exec ZkExec
 
-/-! ## The executable's `scopeOk` is `Layout.scopeOk` -/
-
-/-- **The executable's `scopeOk` is `Layout.scopeOk`.** -/
 theorem scopeOk_eq (c : Circuit) : ProvedScope.scopeOk c = Layout.scopeOk c := by
   simp only [ProvedScope.scopeOk, Layout.scopeOk, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
     ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned]
 
-/-- **The executable's `scopeOkH` is `Layout.scopeOkH`.** -/
 theorem scopeOkH_eq (c : Circuit) : ProvedScope.scopeOkH c = Layout.scopeOkH c := by
   have e : ProvedScope.v2Row = Layout.v2Row := rfl
   have e' : ProvedScope.segRow = Layout.segRow := rfl
@@ -87,15 +41,12 @@ theorem scopeOkH_eq (c : Circuit) : ProvedScope.scopeOkH c = Layout.scopeOkH c :
     ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned,
     ProvedScope.bitRows, Layout.bitRows, ProvedScope.bitRowsU, Layout.bitRowsU, e, e']
 
-/-- **The executable's `scopeOkI` is `Layout.scopeOkI`.** -/
 theorem scopeOkI_eq (c : Circuit) : ProvedScope.scopeOkI c = Layout.scopeOkI c := by
   have e : ProvedScope.v2Row = Layout.v2Row := rfl
   have e' : ProvedScope.segRow = Layout.segRow := rfl
   simp only [ProvedScope.scopeOkI, Layout.scopeOkI, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
     ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned,
     ProvedScope.bitRows, Layout.bitRows, ProvedScope.bitRowsU, Layout.bitRowsU, e, e']
-
-/-! ## The check, and what it gives -/
 
 /-- **The verifier's statement check passes** at tags `t` (the session's: under `--zk`, `zkTags`'s), with no public input
 words of the verifier's own (the setup `Accepts` models takes none), and with its own registered reads (`--registered F`)
@@ -197,8 +148,6 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
       · simp [hf, ha] at hw
       · rfl
 
-/-- At public outputs the circuit rules are the same with the verifier's own registered reads and without them:
-`sharedRowsOk` and `scopeOkT` both need hidden outputs. -/
 theorem circuitRules_reg {t : Tags} {zk : Bool} {count : ℕ} {c : Circuit} {pub : Public}
     (hh : t.hiddenOutputs = false) :
     ProvedScope.circuitRules t zk count true c pub = ProvedScope.circuitRules t zk count false c pub := by
@@ -225,12 +174,10 @@ theorem hm96Rows : t.hm96Rows = true := (check_ok h).1.1
 
 theorem retainRounds : t.retainRounds = true := (check_ok h).1.2.2.1
 
-/-- `hm96-sha512/v1` leaves, or plain SHA-512 leaves at hidden outputs without `--zk` (`ProvedScope.leafOk`). -/
 theorem merkleLeaf : t.merkleLeaf = "hm96-sha512/v1" ∨
     (zk = false ∧ t.hiddenOutputs = true ∧ t.merkleLeaf = "flock-leaf/sha512-unsalted") :=
   (check_ok h).1.2.2.2.1
 
-/-- **`hm96-sha512/v1` leaves** under `--zk` and at public outputs. -/
 theorem merkleLeaf_hm96 (hz : zk = true ∨ t.hiddenOutputs = false) : t.merkleLeaf = "hm96-sha512/v1" :=
   h.merkleLeaf.resolve_right fun ⟨h1, h2, _⟩ => by rcases hz with hz | hz <;> simp_all
 
@@ -238,7 +185,6 @@ theorem circuit_ok : ProvedScope.circuitOf t I.circuitFile I.tables = .ok (circC
   obtain ⟨c, -, hc, -⟩ := (check_ok h).2
   rw [circC_of hc, hc]
 
-/-- **The circuit the check parses is flat, or templated in the form `ProvedScope.scopeOkT` passes.** -/
 theorem form : ((circC t I).tmpl = none ∧
       (if t.hiddenOutputs then Layout.scopeOkI (circC t I) else ProvedScope.scopeOk (circC t I)) = true ∧
       (ProvedScope.wiresFeed (circC t I) = true → ProvedScope.wiresAcyclic (circC t I) = true)) ∨
@@ -247,12 +193,8 @@ theorem form : ((circC t I).tmpl = none ∧
   rw [circC_of hc]
   exact hs
 
-/-- A flat statement's circuit is the one the check parses. -/
 theorem circ_flat (hf : (circC t I).tmpl = none) : circ t I = circC t I := unrolled_flat hf
 
-/-- **A templated statement the check passes**: hidden outputs, `--zk`, at most one table and a templated statement's tags; `HmOut.parseStmt` reads its statement circuit, which carries no
-template, has a `Built` unit, is in `Layout.scopeOkI`, and whose wires feed neither the unit nor the outputs
-(`unrolled_scope`). -/
 theorem templated {tu : TmplUnit} (ht : (circC t I).tmpl = some tu) :
     t.hiddenOutputs = true ∧ zk = true ∧ I.count ≤ 1 ∧ t.isTmpl = true ∧
       HmOut.parseStmt t I.circuitFile I.tables = .ok (circ t I) ∧ (circ t I).tmpl = none ∧
@@ -264,8 +206,6 @@ theorem templated {tu : TmplUnit} (ht : (circC t I).tmpl = some tu) :
     cases ht'
     exact unrolled_scope h.typed h.circuit_ok ht hs
 
-/-- **Outside the templated form the check parses a flat circuit**: at public outputs, without `--zk`, or at more than
-one table. -/
 theorem flat (hn : t.hiddenOutputs = false ∨ zk = false ∨ 1 < I.count) : (circC t I).tmpl = none := by
   cases ht : (circC t I).tmpl with
   | none => rfl
@@ -277,8 +217,6 @@ theorem flat (hn : t.hiddenOutputs = false ∨ zk = false ∨ 1 < I.count) : (ci
     · rw [hz] at e; cases e
     · omega
 
-/-- **A statement whose tags are not a templated statement's is flat** (`Tags.isTmpl`): the check passes a templated
-circuit only at a templated statement's tags. -/
 theorem flat_of_isTmpl (hi : t.isTmpl = false) : (circC t I).tmpl = none := by
   cases ht : (circC t I).tmpl with
   | none => rfl
@@ -287,7 +225,6 @@ theorem flat_of_isTmpl (hi : t.isTmpl = false) : (circC t I).tmpl = none := by
     rw [hi] at hi'
     cases hi'
 
-/-- The statement circuit carries no template. -/
 theorem circ_tmpl : (circ t I).tmpl = none := by
   cases ht : (circC t I).tmpl with
   | none => rw [h.circ_flat ht]; exact ht
@@ -300,8 +237,6 @@ theorem public_ok : ProvedScope.publicOf t (circ t I) I.publicFile = .ok (pubOf 
   unfold pubOf
   rw [circ_of hc, publicOf_unrolled, hp]
 
-/-- No shared-row public file, or one where the check covers it: a statement with hidden outputs and `hm96-sha512/v1`
-leaves whose verifier holds its own registered reads, with or without `--zk`. -/
 theorem tables : (pubOf t I).tables = none ∨
     (t.hiddenOutputs = true ∧ reg = true ∧ t.merkleLeaf = "hm96-sha512/v1") := by
   obtain ⟨c, pub, hc, hp, ht, -⟩ := (check_ok h).2
@@ -311,7 +246,6 @@ theorem tables : (pubOf t I).tables = none ∨
   simp only [ProvedScope.sharedRowsOk, Bool.and_eq_true, beq_iff_eq] at hs
   exact ⟨hs.1.1, hs.1.2, hs.2⟩
 
-/-- Without the verifier's own registered reads, no shared-row public file. -/
 theorem tables_none (hr : reg = false) : (pubOf t I).tables = none :=
   h.tables.resolve_right fun ⟨_, h', _⟩ => by rw [hr] at h'; cases h'
 
@@ -323,7 +257,6 @@ theorem scope (hh : t.hiddenOutputs = false) : Layout.scopeOk (circ t I) = true 
   · rw [hf] at ht
     cases ht
 
-/-- **`Layout.scopeOkI`** under hidden outputs. -/
 theorem scopeI (hh : t.hiddenOutputs = true) : Layout.scopeOkI (circ t I) = true := by
   rcases h.form with ⟨hf, hs, -⟩ | ⟨tu, ht, -⟩
   · simp only [hh, ↓reduceIte] at hs
@@ -331,7 +264,6 @@ theorem scopeI (hh : t.hiddenOutputs = true) : Layout.scopeOkI (circ t I) = true
   · obtain ⟨-, -, -, -, -, -, -, hs, -⟩ := h.templated ht
     exact hs
 
-/-- **The wires compute in some order** wherever they feed the unit or the outputs. -/
 theorem wiresAcyclic (hf : ProvedScope.wiresFeed (circ t I) = true) : ProvedScope.wiresAcyclic (circ t I) = true := by
   rcases h.form with ⟨hfl, -, hw⟩ | ⟨tu, ht, -⟩
   · rw [h.circ_flat hfl] at hf ⊢
@@ -340,14 +272,11 @@ theorem wiresAcyclic (hf : ProvedScope.wiresFeed (circ t I) = true) : ProvedScop
     rw [hw] at hf
     cases hf
 
-/-- **`Layout.scopeOkH`** where the wires feed neither the unit nor the outputs, with or without hidden outputs
-(`scopeOk` gives it). -/
 theorem scopeH (hf : ProvedScope.wiresFeed (circ t I) = false) : Layout.scopeOkH (circ t I) = true := by
   cases hh : t.hiddenOutputs
   · exact Layout.scopeOkH_of_scopeOk (h.scope hh)
   · exact Layout.scopeOkH_of_scopeOkI (h.scopeI hh) hf
 
-/-- **`Layout.scopeGenH`**, the general form, under hidden outputs where the wires feed the unit or the outputs. -/
 theorem scopeGen (hh : t.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circ t I) = true) :
     Layout.scopeGenH (circ t I) = true :=
   Layout.scopeGenH_of_scopeOkI (h.scopeI hh) (h.wiresAcyclic hf)
@@ -357,15 +286,12 @@ theorem parse (hh : t.hiddenOutputs = false) : HmRow.parse t I.circuitFile I.tab
   rw [h.circ_flat (h.flat (.inl hh))]
   simpa [ProvedScope.circuitOf, hh] using this
 
-/-- **The statement circuit is the one `HmOut.parseStmt` reads**, at hidden outputs: a flat statement's `HmOut.parse`'s,
-a templated statement's committed circuit unrolled. -/
 theorem parseStmt (hh : t.hiddenOutputs = true) :
     HmOut.parseStmt t I.circuitFile I.tables = .ok (circ t I) := by
   have hc := h.circuit_ok
   rw [ProvedScope.circuitOf_hidden hh] at hc
   exact parseStmt_of_commit h.typed hc
 
-/-- At hidden outputs, a flat statement's circuit is the one `HmOut.parse` reads. -/
 theorem parseH (hh : t.hiddenOutputs = true) (hf : (circC t I).tmpl = none) :
     HmOut.parse t I.circuitFile I.tables = .ok (circ t I) := by
   rw [h.circ_flat hf]
@@ -386,7 +312,6 @@ theorem loadH (hh : t.hiddenOutputs = true) : HmOut.loadPublic t (circ t I) I.pu
   have := h.public_ok
   simpa [ProvedScope.publicOf, hh] using this
 
-/-- At hidden outputs, the circuit the check parses is the one the session commits (`HmOut.parseCommit`). -/
 theorem parseC (hh : t.hiddenOutputs = true) : HmOut.parseCommit t I.circuitFile I.tables = .ok (circC t I) := by
   have hc := h.circuit_ok
   rwa [ProvedScope.circuitOf_hidden hh] at hc
@@ -397,15 +322,11 @@ theorem loadHC (hh : t.hiddenOutputs = true) :
   rw [show circ t I = HmOut.unrolled (circC t I) from rfl, publicOf_unrolled] at this
   simpa [ProvedScope.publicOf, hh] using this
 
-/-- A flat statement's circuit parses as `HmRow.parse` reads it, with or without hidden outputs (`HmOut.parse` of an
-untyped statement is `HmRow.parse`'s, then its rows' check). -/
 theorem parseRow (hf : (circC t I).tmpl = none) : HmRow.parse t I.circuitFile I.tables = .ok (circ t I) := by
   cases hh : t.hiddenOutputs
   · exact h.parse hh
   · exact (Hidden.parse_untyped h.typed (h.parseH hh hf)).1
 
-/-- The statement circuit's unit is `Built`: a flat statement's as `HmRow.parse` builds it, a templated statement's
-`Tmpl.unroll`'s net (`unrolled_built`). -/
 theorem built : Built (circ t I).unit := by
   cases hf : (circC t I).tmpl with
   | none =>
@@ -416,14 +337,10 @@ theorem built : Built (circ t I).unit := by
     obtain ⟨-, -, -, -, -, -, hb, -⟩ := h.templated hf
     exact hb
 
-/-- **The unit returns the outputs** under public outputs (`scopeOk`); under hidden outputs, wherever the wires feed
-neither the unit nor the outputs (`Layout.outNet_of_wiresFeed`). -/
 theorem outNet (hh : t.hiddenOutputs = false) : (circ t I).outNet = (circ t I).unitNet :=
   (Layout.scopeOk_spec h.built (h.scope hh)).2.1
 
 end Checks
-
-/-! ## What the verifier accepts -/
 
 variable {n : ℕ} {Reg : Type}
 
@@ -437,7 +354,6 @@ def ScopeR (I : Inputs) : Prop := Checks I.tags false I true
 /-- **What `verity-verify-proof verify` accepts** (no `--zk`): the setup and verdict `Accepts` models, and the statement check. -/
 def Verifies (I : Inputs) (t : Exec.Transcript) : Prop := Accepts I t ∧ Scope I
 
-/-- `Verifies` at the live session's transcript. -/
 def LiveVerifies (I : Inputs) (o : Reg × Finset (Fin n) × Exec.Transcript) : Prop := Verifies I o.2.2
 
 /-- **`verity-verify-proof verify --zk`'s statement check**, at the session's tags (`zkTags`), without the verifier's own
@@ -451,7 +367,6 @@ def ScopeZR (I : Inputs) : Prop := Checks (zkTags I) true I true
 /-- **What `verity-verify-proof verify --zk` accepts**: the setup and verdict `AcceptsZK` models, and the statement check. -/
 def VerifiesZK (I : Inputs) (t : Exec.Transcript) : Prop := AcceptsZK I t ∧ ScopeZ I
 
-/-- `VerifiesZK` at the live session's transcript. -/
 def LiveVerifiesZK (I : Inputs) (o : Reg × Finset (Fin n) × Exec.Transcript) : Prop := VerifiesZK I o.2.2
 
 /-- The session's circuit (no `--zk`). -/
@@ -479,13 +394,10 @@ theorem ScopeZ.parse {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = fa
     HmRow.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
   Checks.parse h (by rw [zkTags_hiddenOutputs]; exact hh)
 
-/-- **The session's statement circuit under `--zk`**, at hidden outputs: the one `HmOut.parseStmt` reads, a templated
-statement's committed circuit unrolled (ASK-112 option A). -/
 theorem ScopeZ.parseH {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = true) :
     HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
   Checks.parseStmt h (by rw [zkTags_hiddenOutputs]; exact hh)
 
-/-- At public outputs the circuit parses as `HmRow.parse` reads it. -/
 theorem ScopeZ.parseRow {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = false) :
     HmRow.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
   Checks.parseRow h (Checks.flat h (.inl (by rw [zkTags_hiddenOutputs]; exact hh)))
@@ -524,14 +436,10 @@ theorem ScopeZR.retainRounds {I : Inputs} (h : ScopeZR I) : I.tags.retainRounds 
 theorem ScopeZR.merkleLeaf {I : Inputs} (h : ScopeZR I) : I.tags.merkleLeaf = "hm96-sha512/v1" := by
   rw [← zkTags_merkleLeaf]; exact Checks.merkleLeaf_hm96 h (Or.inl rfl)
 
-/-- **The session's statement circuit under `--zk --registered`**, at hidden outputs: the one `HmOut.parseStmt` reads,
-a templated statement's committed circuit unrolled. -/
 theorem ScopeZR.parseH {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true) :
     HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
   Checks.parseStmt h (by rw [zkTags_hiddenOutputs]; exact hh)
 
-/-- **At tags that are not a templated statement's, `HmOut.parse` reads the session's circuit** under
-`--zk --registered`, at hidden outputs (`Checks.flat_of_isTmpl`). -/
 theorem ScopeZR.parseHF {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true)
     (hi : I.tags.isTmpl = false) :
     HmOut.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
@@ -553,8 +461,6 @@ theorem ScopeZR.scopeGen {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs
     (hf : ProvedScope.wiresFeed (circZ I) = true) : Layout.scopeGenH (circZ I) = true :=
   Checks.scopeGen h (by rw [zkTags_hiddenOutputs]; exact hh) hf
 
-/-- **The check with the verifier's registered reads is the check without them at public outputs**: `sharedRowsOk`
-needs hidden outputs. -/
 theorem ScopeZR.scopeZ {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = false) : ScopeZ I := by
   unfold ScopeZ
   unfold ScopeZR Checks ProvedScope.check at h
@@ -566,12 +472,10 @@ theorem Scope.typed {I : Inputs} (h : Scope I) : I.tags.typed = false := Checks.
 
 theorem Scope.retainRounds {I : Inputs} (h : Scope I) : I.tags.retainRounds = true := Checks.retainRounds h
 
-/-- At public outputs, `hm96-sha512/v1` leaves. -/
 theorem Scope.merkleLeaf {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = false) :
     I.tags.merkleLeaf = "hm96-sha512/v1" :=
   Checks.merkleLeaf_hm96 h (Or.inr hh)
 
-/-- The leaves the non-ZK headlines cover: `hm96-sha512/v1`, or plain SHA-512 leaves (`flock-leaf/sha512-unsalted`). -/
 theorem Scope.leaf {I : Inputs} (h : Scope I) :
     I.tags.merkleLeaf = "hm96-sha512/v1" ∨ I.tags.merkleLeaf = "flock-leaf/sha512-unsalted" :=
   (Checks.merkleLeaf h).imp id fun h' => h'.2.2
@@ -636,8 +540,6 @@ include h
 
 theorem why : ProvedScope.plainTablesWhy I.tags I.count = none := (ProvedScope.checkP_ok h).1
 
-/-- **The check at one table**: `checkP` passes only where `check` passes the statement at one table. The circuit and
-public file it reads are the session's (`circ` and `pubOf` read neither the count nor anything else of `I`). -/
 theorem checks : Checks I.tags false { I with count := 1 } false := (ProvedScope.checkP_ok h).2.1
 
 theorem count : I.count ≤ Tags.MAX_TABLES := by
@@ -653,8 +555,6 @@ theorem typed : I.tags.typed = false := Checks.typed h.checks
 
 theorem retainRounds : I.tags.retainRounds = true := Checks.retainRounds h.checks
 
-/-- **`hm96-sha512/v1` leaves**, at public outputs by the check at one table, and at hidden outputs by `plainTablesWhy`,
-which refuses the plain SHA-512 leaves the check at one table also passes there. -/
 theorem merkleLeaf : I.tags.merkleLeaf = "hm96-sha512/v1" := by
   cases hh : I.tags.hiddenOutputs
   · exact Checks.merkleLeaf_hm96 (I := { I with count := 1 }) h.checks (Or.inr hh)
@@ -689,7 +589,6 @@ theorem scopeGen (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed 
     Layout.scopeGenH (circS I) = true :=
   Checks.scopeGen (I := { I with count := 1 }) h.checks hh hf
 
-/-- **The verifier's own program is the circuit's** (`ProgramOfCircuit`). -/
 theorem program : ProgramOfCircuit I := by
   obtain ⟨-, -, hp⟩ := ProvedScope.checkP_ok h
   obtain ⟨c, hc, hw⟩ := ProvedScope.programP_ok hp
@@ -703,8 +602,6 @@ theorem program : ProgramOfCircuit I := by
   subst hc
   exact ProvedScope.programWhyP_none hw
 
-/-- The tags the plain claim at `J` tables of public outputs reads: public outputs, retained rounds, `hm96-sha512/v1`
-leaves. -/
 theorem tagsOk (hh : I.tags.hiddenOutputs = false) : I.tags.hiddenOutputs = false ∧ I.tags.retainRounds = true ∧
     I.tags.merkleLeaf = "hm96-sha512/v1" :=
   ⟨hh, h.retainRounds, h.merkleLeaf⟩
@@ -739,8 +636,6 @@ theorem ScopeR.count {I : Inputs} (h : ScopeR I) : I.count ≤ 1 := by
   · cases h'
   · exact h'
 
-/-- **The check with the verifier's registered reads is the check without them at public outputs**: `sharedRowsOk`
-needs hidden outputs. -/
 theorem ScopeR.scope {I : Inputs} (h : ScopeR I) (hh : I.tags.hiddenOutputs = false) : Scope I := by
   unfold Scope
   unfold ScopeR Checks ProvedScope.check at h
@@ -748,11 +643,6 @@ theorem ScopeR.scope {I : Inputs} (h : ScopeR I) (hh : I.tags.hiddenOutputs = fa
   simp only [circuitRules_reg hh] at h
   exact h
 
-/-! ## A bound under the statement check -/
-
-/-- **A bound at every statement the check passes, lifted to the event that implies the check.** When the event `V`
-implies `A` and the statement fact `Q`, and `A ∧ E q` has probability at most `B q` for every proof `q` of `Q`, then
-`V ∧ ∀ q, E q` has probability at most `⨆ q, B q`: at a statement without `Q`, `V` is empty and the bound is `0`. -/
 theorem prob_scope {α : Type} {V A : α → Prop} {Q : Prop} (hA : ∀ o, V o → A o) (hQ : ∀ o, V o → Q)
     (E : Q → α → Prop) (B : Q → ENNReal) (g : FlockSoundness.Game α) (s : Game.Strategy g)
     (h : ∀ q, Game.prob (fun o => A o ∧ E q o) g s ≤ B q) :

@@ -5,24 +5,7 @@ public import Proofs.Flock.Soundness.Refine.Regions
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# Pieces of `DecodesAll`: the aligned tape and the cap
-
-`DecodesAll` (`Live.lean`) asks, on every live outcome verity-verify-proof accepts, for each rep's run on one typed tape
-(`PlaysT`) decoded from the round bytes and the proof file, and for the salted verdict at the cap `capOf` reads off
-`root_B`. The refinement (`verify_refines_hm96`) gives each rep's run with its messages and its coins as two lists
-(`Plays`). Two pieces of the bridge:
-
-* `Plays.toT`: a run on two lists is a run on one tape whose messages, in order, are the run's messages and whose coin
-  steps, in order, are the run's coin arrays (`CoinOf`). What remains of the alignment is that this tape is
-  `repTape`: each round's messages are those its retained bytes decode to.
-* `capOfRoot`, `capOfRoot_eq`: the cap read off `root_B`. Any array of 64-byte entries whose concatenation is `root_B`
-  has `capOfRoot root_B` as its `capDig`.
-* `verify_cap_hm96`, `verify_cap_ofCircuit_hm96`: in a one-table session verity-verify-proof accepts under `hm96-sha512/v1`,
-  rep 0's cap, which S16 compares with `root_B` and whose entries are 64-byte digests (`rep_refines`), is
-  `capOfRoot root_B`. So `capOf` can be `capOfRoot`: the cap the salted verdict of `verify_refines_hm96` reads,
-  `capDig p₀.cap`, is a function of `root_B` alone.
--/
+/-! Two pieces of `DecodesAll`: a run on two lists is a run on one tape (`Plays.toT`), and the accepted proof's cap is a function of `root_B` alone (`capOfRoot`). -/
 
 @[expose] public section
 
@@ -35,8 +18,6 @@ word. -/
 def CoinOf (ι : W → F) (x : Msg) (c : Array W) : Prop :=
   x = ⟨Fin c.size → F, fun i => ι c[i.val]!⟩ ∨ (c.size = 1 ∧ x = ⟨F, ι c[0]!⟩)
 
-/-- **A run on two lists is a run on one tape.** The tape's message steps, in order, are the run's messages, and its
-coin steps, in order, are the run's coin arrays as `CoinOf` reads them. -/
 theorem Plays.toT {α : Type} {g : Game α} {ms : List Msg} {cs : List (Array W)} {a : α} (h : Plays ι g ms cs a) :
     ∃ ts : List Step, PlaysT g ts a ∧ ts.filterMap Sum.getLeft? = ms ∧
       List.Forall₂ (CoinOf ι) (ts.filterMap Sum.getRight?) cs := by
@@ -78,7 +59,6 @@ theorem flat_length (l : List ByteArray) (hl : ∀ x ∈ l, x.size = 64) :
       rw [hl x List.mem_cons_self, ih fun y hy => hl y (List.mem_cons_of_mem _ hy)]
       ring
 
-/-- Two arrays of 64-byte entries with one concatenation are the same array. -/
 theorem entries_eq_of_foldl {a b : Array ByteArray} (ha : ∀ x ∈ a.toList, x.size = 64)
     (hb : ∀ x ∈ b.toList, x.size = 64)
     (h : a.foldl (· ++ ·) ByteArray.empty = b.foldl (· ++ ·) ByteArray.empty) : a = b := by
@@ -100,7 +80,6 @@ noncomputable def capOfRoot (rootB : ByteArray) : Cap Dig :=
     capDig (Classical.choose h)
   else capDig #[]
 
-/-- **`capOfRoot` is the cap `root_B` concatenates**: at any array of 64-byte entries whose concatenation is `root_B`. -/
 theorem capOfRoot_eq {c : Array ByteArray} {rootB : ByteArray} (hc : ∀ x ∈ c.toList, x.size = 64)
     (h : c.foldl (· ++ ·) ByteArray.empty = rootB) : capOfRoot rootB = capDig c := by
   have hex : ∃ c : Array ByteArray, (∀ x ∈ c.toList, x.size = 64) ∧ c.foldl (· ++ ·) ByteArray.empty = rootB :=
@@ -110,9 +89,6 @@ theorem capOfRoot_eq {c : Array ByteArray} {rootB : ByteArray} (hc : ∀ x ∈ c
   obtain ⟨hc', h'⟩ := Classical.choose_spec hex
   rw [entries_eq_of_foldl hc' hc (h'.trans h.symm)]
 
-/-- **The accepted proof's cap is the one `root_B` concatenates, under `hm96-sha512/v1`** (S16). When `Flock.verify`
-accepts a one-table session on the hypotheses of `verify_refines_hm96`, rep 0's proof decodes, and its cap, read as
-`capDig`, is `capOfRoot` of the table's committed `root_B`. -/
 theorem verify_cap_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : RunRecord → List (Model.Claim FlockLevel3.GF128 S.m))
@@ -137,7 +113,6 @@ theorem verify_cap_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) 
   rw [hms] at hw₀
   exact ⟨sess, sch, p₀, hsess, hf, hp₀, (capOfRoot_eq hw₀ (hc₀.symm.trans (bytes_eq_of_beq hroot))).symm⟩
 
-/-- `verify_cap_hm96` for the statements verity-verify-proof is set up with (`verify_refines_ofCircuit_hm96`'s form). -/
 theorem verify_cap_ofCircuit_hm96 (st : Flock.Stmt) (hwf : StmtWF st) (hr : RegionsWF st) (hm : 13 ≤ st.m)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (record : String) (proofs : Array ByteArray)
     (h : Flock.verify st.spec #[Setup.ofCircuit st] record proofs = .ok ()) :

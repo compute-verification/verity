@@ -5,24 +5,7 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.MerklePair
 import Proofs.Flock.Soundness.Soundness
 
-/-!
-# Compiled soundness of one table under a leaf scheme (README.md §1.2, `Flock.Merkle`)
-
-`table_sound_compiled` (`CompiledSound.lean`) bounds `tableC`, whose openings verify from the unsalted leaf
-`H(encode row)`. This file proves the same bound for `Model.tableCL A H E Lf`, whose openings carry salts and verify
-from the row's leaf under its salt (`OpensOKL`), for any leaf scheme `Lf` (`Merkle.Leaf`). At `Refine.leaf512` that
-is the `hm96-sha512/v1` table verity-verify-proof checks (`accepts_tables_hm96`).
-
-The argument is `CompiledSound`'s, and only the openings change. A salted opening is `(position, row, salt, path)`. A
-clash is two verifying openings of one position to different rows, under any salts, and the pair of the two openings
-(`Merkle.openCollPairL`) is a collision of `H` by `Merkle.openCollPairL_spec`: the leaf scheme's pair (`Leaf.pair`)
-does what the encoding's injectivity does for the unsalted leaf. The lockstep with the oracle table (`lockTableL`) is
-`lockTable` with the salts in the openings' message; the reps' locksteps (`lockRep`) are unchanged.
-
-* `table_sound_compiledL`: `Pr[accepted ∧ T*(P*) uncommitted] ≤ tableError + √(N₀·Q₀·Adv₀) + Σ √(N_ℓ·Q_ℓ·Adv_{r,ℓ})
-  + Pr[self-clash]`, with each `Adv` and the self-clash a collision of `H` (`op₀L_conflict_collision`,
-  `opRL_conflict_collision`, `selfCandsL_spec`).
--/
+/-! Compiled soundness of one table under any leaf scheme (`table_sound_compiledL`), the salted form of `table_sound_compiled`. -/
 
 @[expose] public section
 
@@ -32,8 +15,6 @@ open Game Model Accounting
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D Sl : Type}
-
-/-! ## The lockstep -/
 
 /-- The oracle table's continuation after the level-0 table `C₀`, with the salted openings' message as its dummy last
 message. -/
@@ -54,7 +35,6 @@ theorem withDummy_tableL (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 
   simp only [Game.bind_ret, Game.bind_eq, Game.pure_eq, Game.bind_assoc]
 
 open Classical in
-/-- The salted compiled table's continuation after the level-0 cap. -/
 noncomputable def tableCmpL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (cap₀ : Cap D) : Game (OutCL F D Sl) :=
@@ -82,8 +62,6 @@ def TopRelL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf
       OpensOKL H E Lf cap₀ 0 out.pend.1 out.opens out.salts ∧ OpensOKL H E Lf cap₀ 1 out.pend.2 out.opens out.salts) ∧
     RecStruct sch i.1 out.pend.1 ∧ RecStruct sch i.2 out.pend.2
 
-/-- **The salted table in lockstep** below the level-0 cap: the link points, both reps interleaved, the openings and
-their salts. -/
 noncomputable def lockTableL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
     (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₀ : Oracle F)
@@ -106,8 +84,6 @@ noncomputable def lockTableL [Inhabited D] (A : Arith F K) (H : List UInt8 → D
       (Lock.interleaveLock disjoint_reps
         (lockRep A 0 (by norm_num) S m k0 l₀ l₁ rest ext hk0 hm C₀ (extraClaims S ptLocal mPts pts))
         (lockRep A 1 (by norm_num) S m k0 l₀ l₁ rest ext hk0 hm C₀ (extraClaims S ptLocal mPts pts)))
-
-/-! ## Salted openings -/
 
 /-- The salted openings of rep `r`'s first level-`ℓ` request, `(position, row, salt, path)` for its first `Q`
 queries. -/
@@ -147,7 +123,6 @@ def ClashL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf 
 
 omit [Fintype F] [DecidableEq F] in
 open Classical in
-/-- A run opens at most as many positions as it has openings. -/
 theorem opOfL_count (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (lanes depth d : ℕ) (xs : List (ℕ × List F × Sl × List D)) (cap : Cap D) :
     (Finset.univ.filter fun p => (opOfL H E Lf lanes depth d xs cap p).isSome).card ≤ xs.length := by
@@ -167,8 +142,6 @@ theorem opOfL_count (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Mer
     _ = xs.length := List.length_map _
 
 omit [Fintype F] in
-/-- **Off or clash.** A verifying opening of `p` whose row is not `v`: the run opens `p` to a row other than `v`, or it
-opens `p` two ways. -/
 theorem off_or_clashL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (lanes depth d : ℕ) (xs : List (ℕ × List F × Sl × List D)) (cap : Cap D) (x : ℕ × List F × Sl × List D)
     (hx : x ∈ xs) (p : Fin (2 ^ d)) (hxp : x.1 = p.val) (hv : VerifiedL H E Lf cap lanes depth x)
@@ -193,8 +166,6 @@ theorem off_or_clashL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : M
     exact Option.some.inj heq
   · right
     exact ⟨h, hmem.1, x, hx, hmem.2.1.trans hxp.symm, hmem.2.2, hv, hrow⟩
-
-/-! ## Per-cap openings -/
 
 /-- Both reps' level-0 salted openings. -/
 def opens₀L (sch : Schedule) (out : OutCL F D Sl) : List (ℕ × List F × Sl × List D) :=
@@ -223,8 +194,6 @@ def SelfClashL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.L
         ClashL H E Lf cap (lvOf sch ℓ).lanes (pathLen (lvOf sch ℓ))
           (slotOpensL out r ℓ (lvOf sch ℓ).queries)
 
-/-! ## Where a bad run goes wrong -/
-
 omit [Field F] [Fintype F] [DecidableEq F] in
 theorem mem_slotOpensL {out : OutCL F D Sl} {r : ℕ} {req : Req}
     (hfind : (if r = 0 then out.pend.1 else out.pend.2).reqs.find? (fun q => q.level == req.level) =
@@ -242,8 +211,6 @@ theorem mem_slotOpensL {out : OutCL F D Sl} {r : ℕ} {req : Req}
   simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj]
 
 omit [Fintype F] in
-/-- **A rep's disagreeing opening**, on an accepted run: at level 0, off `C₀` or a clash at the level-0 cap; at a
-level `ℓ ≥ 1`, off the table fixed there or a clash at its recorded cap. -/
 theorem rep_badL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch : Schedule) (C₀ : Oracle F) (cap₀ : Cap D) (out : OutCL F D Sl) (r : ℕ) (hr : r < 2) (ir : IRep F D)
     (hs : RecStruct sch ir (if r = 0 then out.pend.1 else out.pend.2))
@@ -312,8 +279,6 @@ theorem rep_badL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle
     · exact Or.inl ⟨_, hoff⟩
     · exact Or.inr hcl
 
-/-- **Where a bad run goes wrong.** An accepted run that disagrees with the fixed tables either clashes within the run,
-or opens a position off `C₀`, or opens a position off the table fixed at one of the reps' caps. -/
 theorem bad_splitL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch : Schedule) (C₀ : Oracle F) (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F)
     (out : OutCL F D Sl) (hR : TopRelL H E Lf sch C₀ cap₀ i a out) (hacc : out.accepted = true)
@@ -357,8 +322,6 @@ theorem bad_splitL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merk
       unfold getRep slotOf; rw [if_neg (by omega)]
     cases i.1 ℓ <;> simp [h1]
 
-/-! ## Clashes and conflicts are collisions -/
-
 omit [Fintype F] [DecidableEq F] in
 open Classical in
 theorem opOfL_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
@@ -390,7 +353,6 @@ def clashCandsL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.
   (Merkle.pairsOf xs).map fun w => (ClashLAt H E Lf cap lanes depth w, pairL H E Lf w.1.1 w.1 w.2)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A clash is a collision**, under any salts: a candidate whose test passes is one (`Merkle.openCollPairL_spec`). -/
 theorem clashCandsL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {cap : Cap D} {lanes depth : ℕ} {xs : List (ℕ × List F × Sl × List D)}
     {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ clashCandsL H E Lf cap lanes depth xs) (h : c.1) :
@@ -402,7 +364,6 @@ theorem clashCandsL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf 
     (h1 ▸ h3.2)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- A clash has a candidate whose test passes. -/
 theorem ClashL.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {cap : Cap D} {lanes depth : ℕ} {xs : List (ℕ × List F × Sl × List D)} (h : ClashL H E Lf cap lanes depth xs) :
     ∃ c ∈ clashCandsL H E Lf cap lanes depth xs, c.1 := by
@@ -418,7 +379,6 @@ def selfCandsL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.L
         (slotOpensL out r (ci.2 + 1) (lvOf sch (ci.2 + 1)).queries)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A self-clash is a collision**: a candidate whose test passes is one. -/
 theorem selfCandsL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {sch : Schedule} {out : OutCL F D Sl} {c : Prop × (List UInt8 × List UInt8)}
     (hc : c ∈ selfCandsL H E Lf sch out) (h : c.1) : Hash.Collision H c.2.1 c.2.2 := by
@@ -429,7 +389,6 @@ theorem selfCandsL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf :
     exact clashCandsL_spec hc h
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- A self-clash has a candidate whose test passes. -/
 theorem SelfClashL.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {sch : Schedule} {out : OutCL F D Sl} (h : SelfClashL H E Lf sch out) :
     ∃ c ∈ selfCandsL H E Lf sch out, c.1 := by
@@ -481,7 +440,6 @@ theorem firstOfL_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : M
   exact hmem.2
 
 omit [Fintype F] [DecidableEq F] in
-/-- **The pair of two runs that open a position to different rows under one cap is a collision.** -/
 theorem opOfL_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {lanes depth d : ℕ} {cap : Cap D} {xs xs' : List (ℕ × List F × Sl × List D)}
     {p : Fin (2 ^ d)} (h1 : (opOfL H E Lf lanes depth d xs cap p).isSome)
@@ -520,7 +478,6 @@ noncomputable def opRLPair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (L
     (slotOpensL x.1 r ℓ (lvOf sch ℓ).queries) (slotOpensL x.2 r ℓ (lvOf sch ℓ).queries) cap p
 
 omit [Fintype F] [DecidableEq F] in
-/-- **Every pair the level-0 collision finder outputs is a collision.** -/
 theorem op₀L_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {sch : Schedule} {cap : Cap D} {x : OutCL F D Sl × OutCL F D Sl}
     {p : Fin (2 ^ (lvOf sch 0).logLen)} (h : Rewinding.ConflictAt (op₀L H E Lf sch cap) x p) :
@@ -528,14 +485,11 @@ theorem op₀L_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F
   opOfL_conflict_collision h.1 h.2.1 h.2.2
 
 omit [Fintype F] [DecidableEq F] in
-/-- **Every pair a rep's collision finder outputs is a collision.** -/
 theorem opRL_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {sch : Schedule} {r ℓ : ℕ} {cap : Cap D} {x : OutCL F D Sl × OutCL F D Sl}
     {p : Fin (2 ^ (lvOf sch ℓ).logLen)} (h : Rewinding.ConflictAt (opRL H E Lf sch r ℓ cap) x p) :
     Hash.Collision H (opRLPair H E Lf sch r ℓ cap x p).1 (opRLPair H E Lf sch r ℓ cap x p).2 :=
   opOfL_conflict_collision h.1 h.2.1 h.2.2
-
-/-! ## The plurality prover and the collision finders -/
 
 open Classical in
 /-- The table `P̃` sends at a rep's cap: the plurality of the openings there. -/
@@ -589,10 +543,6 @@ noncomputable def advRL [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E 
     (lockTableL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts
       (C0starL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) σ.1) σ.2
 
-/-! ## The theorem -/
-
-/-- **The coupling and `table_sound`.** Whatever table `C₀` the oracle prover sends at the level-0 cap, a salted
-compiled run accepts with `C₀` uncommitted with probability at most `tableError` plus the probability of a bad run. -/
 theorem compiled_le_badL (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
@@ -646,8 +596,6 @@ theorem compiled_le_badL (A : Arith F K) (hA : A.Correct)
   linarith
 
 open Classical in
-/-- A bad leaf, cap by cap (`bad_splitL` as indicators). The bad event requires acceptance, so the level-0 term counts
-only accepted runs. -/
 theorem bad_pointwise_accL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch : Schedule) (C₀ : Oracle F) (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F)
     (b : OutCL F D Sl) (hR : TopRelL H E Lf sch C₀ cap₀ i a b) :
@@ -690,7 +638,6 @@ theorem bad_pointwise_accL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (L
     linarith
 
 open Classical in
-/-- A bad leaf, cap by cap (`bad_splitL` as indicators). -/
 theorem bad_pointwiseL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch : Schedule) (C₀ : Oracle F) (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F)
     (b : OutCL F D Sl) (hR : TopRelL H E Lf sch C₀ cap₀ i a b) :
@@ -707,8 +654,6 @@ theorem bad_pointwiseL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : 
   linarith
 
 open Classical in
-/-- **The bad runs, cap by cap**: rewinding at the level-0 cap (`expect_bad_le`) and at every rep's cap
-(`Lock.leafE_off_le`). -/
 theorem bad_leL [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -794,14 +739,6 @@ theorem bad_leL [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle
   linarith
 
 open Classical in
-/-- **Compiled soundness of a salted table under collision resistance** (README.md §1.2). For every prover `P*`
-(strategy `σ`) of the salted compiled table `tableCL A H E Lf`, with `T*(P*)` the plurality table of its level-0
-openings: `Pr[accepted ∧ no codeword near T*(P*) packs a satisfying witness]` is at most `tableError`, plus
-`√(N·Q·Adv)` for the level-0 cap and for every rep's cap, plus the probability of a self-clash. Each `Adv` is the
-success probability of an explicit collision finder, and every pair it counts, like every self-clash, is two verifying
-openings of one position to different rows under one cap, under any salts: a collision of `H`
-(`Merkle.openCollPairL_spec`). At `Leaf.plain` it is `table_sound_compiled`'s bound; at `Refine.leaf512`,
-`hm96-sha512/v1`'s. -/
 theorem table_sound_compiledL (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)

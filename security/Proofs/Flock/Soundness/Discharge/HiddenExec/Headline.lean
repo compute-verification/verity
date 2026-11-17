@@ -2,23 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 
-/-!
-# The headline over hidden-output sessions, with every open guarantee named
-
-`Prog.flock_headline_live_on` at the one-table plan of a hidden-output session's inputs (`planAtH`, `tablesAtH`): at a
-sample verity-verify-proof sets up under hidden outputs, the table is `stmtOf` of the `Stmt.setupHidden` statement it accepted
-(`tableAtH_of_accepts`), and elsewhere no witness satisfies it (`tableAtH_unsat`).
-
-`flock_headline_hidden` is that instance for any program `p`, outputs `outs`, places `pp`, constant and zero gates and
-binding (`lay`, `rs`, `hHm`) at those tables. What it leaves open is named in its hypotheses:
-
-* `hdec` (`DecodesOn`, at the sampling design's samples only), as in `flock_headline_exec`, at the hidden tables;
-* `pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm` at the hidden tables: what `Discharge/Hidden` establishes about
-  `setupHidden`'s statements (the program's places in `stmtOf` of the hidden statement, its constant and zero
-  columns, and the binding of each sampled proof block's rows, outputs included, through the rows' `b ‖ c`), through its
-  interface;
-* the assumptions of record: A3 (`hA3`), `cr/sha-512` (`hKS`), `ecr/sha-512` (`hCR`); A6 is the live session.
--/
+/-! The headline over hidden-output sessions (`flock_headline_hidden`), with every open guarantee named in its hypotheses. -/
 
 @[expose] public section
 
@@ -33,13 +17,6 @@ local notation "𝔽" => FlockLevel3.GF128
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
 
-/-- **The headline over hidden-output sessions.** Let `I` be a verify command's inputs (one table) under a tag with
-hidden outputs, and let the challenger write sample `S` as the JSON `dj S` (`x₀` one sample it sets up with
-`Stmt.setupHidden`). Let the units be sampled with `Flock.Draw.drawWith`'s stratified sampling design on the challenger's coins, a
-byte source A3 makes uniform, and let each sample's session be the challenger's one table (`liveTable`, A6), written out
-by `wr`. Against any live prover `τ`, verity-verify-proof accepts with at least `K` incorrect proof blocks of the program `p`, at the
-simulated prover's committed values, with probability at most `miss(K) + ε_ks + ε_bind`, given the program's places,
-constant and zero columns and binding at the hidden tables (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`) and `hdec`. -/
 theorem flock_headline_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)

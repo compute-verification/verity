@@ -5,14 +5,7 @@ public import Mathlib.Algebra.Field.Defs
 public import Mathlib.Data.Fintype.Basic
 import Mathlib.LinearAlgebra.Vandermonde
 
-/-!
-# The pads code reaches every value at its opened positions
-
-The inner code (`Zk.codeAt`) is `Σ yᵢ Xⁱ` at `X = j + 1`, its message the pads `h` then `K_PAD` padding symbols, so
-padding symbol `j` contributes `x^(len + j)` at an opened point `x`. `padsOnto_pow`: at at most `nPad` distinct nonzero
-opened points, the padding reaches every vector of values there (a scaled Vandermonde matrix), as `Table.PadsOnto`
-states for each rep.
--/
+/-! The pads code (`Zk.codeAt`) reaches every vector of values at at most `nPad` distinct nonzero opened points (`padsOnto_pow`). -/
 
 @[expose] public section
 

@@ -15,17 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The coin facts of `CoinedOK`, from `Admits`
-
-At a coin vector the honest prover doesn't refuse (`CoinedSetup.Admits`), a `Coined` table that reads its coins (`β`,
-`ρ`, the rank check's weights and `embed` the inclusion of F128 in F256: `CoinedOK`'s coin ties) passes Lemma B's coin
-checks:
-
-* `rank_of_maskRankOk`: the rank check (`Table.Rank`) is `MaskRankOk` at the table's weights.
-* `fOf_ne_zero`: `β ≠ 0` from `beta.isZero = false`.
-* `wr_bijective`: `W^r` bijective from `Zk.rhoIndependent`, the determinant of `(a, b) ↦ ρ₀·a + ρ₁·b` over F128.
--/
+/-! The coin facts of `CoinedOK` at a coin vector the honest prover doesn't refuse (`CoinedSetup.Admits`). -/
 
 @[expose] public section
 
@@ -35,7 +25,6 @@ open Flock FlockLevel3 ZkView Refine
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The rank check from the mask slot's rank**: at weights `eq(p_k, x)`, `Table.Rank` is `MaskRankOk`. -/
 theorem rank_of_maskRankOk {W Hi VL : Type} {z : Sizes} (T : Coined GF256 W Hi VL z) (pts : Fin z.nC → List F128)
     (words : Fin z.nMask → ℕ) (h : ∀ k x, T.eqw k x = fOf (eqWord (pts k) (words x))) (hM : MaskRankOk pts words) :
     T.tab.Rank := by
@@ -49,7 +38,6 @@ theorem rank_of_maskRankOk {W Hi VL : Type} {z : Sizes} (T : Coined GF256 W Hi V
 
 theorem isZero_zero : (0 : F128).isZero = true := rfl
 
-/-- **`β ≠ 0`** from the executable's test. -/
 theorem fOf_ne_zero {b : F128} (h : b.isZero = false) : fOf b ≠ 0 := by
   intro h0
   have hb : b = 0 := by
@@ -58,14 +46,12 @@ theorem fOf_ne_zero {b : F128} (h : b.isZero = false) : fOf b ≠ 0 := by
   rw [hb, isZero_zero] at h
   exact Bool.noConfusion h
 
-/-- An element of GF256 from its coordinates. -/
 theorem gf256_ext {x y : F256} (h0 : GF128.of x.c0 = GF128.of y.c0) (h1 : GF128.of x.c1 = GF128.of y.c1) :
     GF256.of x = GF256.of y := by
   cases x; cases y
   cases h0; cases h1
   rfl
 
-/-- `ρ · (a, 0)`'s coordinates over F128: `(ρ₀·a, ρ₁·a)`. -/
 theorem mul_ofF (ρ : F256) (a : F128) :
     GF128.of (ρ * ⟨a, 0⟩).c0 = GF128.of ρ.c0 * GF128.of a ∧
       GF128.of (ρ * ⟨a, 0⟩).c1 = GF128.of ρ.c1 * GF128.of a := by
@@ -78,14 +64,11 @@ theorem mul_ofF (ρ : F256) (a : F128) :
     rw [← GF128.add_eq, ← GF128.mul_eq, ← GF128.add_eq, ← GF128.add_eq, ← GF128.mul_eq, ← GF128.zero_eq]
     linear_combination (GF128.of ρ.c0 * GF128.of a) * GF128.two_eq_zero
 
-/-- `x + y`'s coordinates. -/
 theorem add_c (x y : F256) :
     GF128.of (x + y).c0 = GF128.of x.c0 + GF128.of y.c0 ∧ GF128.of (x + y).c1 = GF128.of x.c1 + GF128.of y.c1 := by
   rw [F256.add_def]
   exact ⟨(GF128.add_eq _ _).symm, (GF128.add_eq _ _).symm⟩
 
-/-- **`(a, b) ↦ ρ₀·a + ρ₁·b` is a bijection `F128² → F256`** when `ρ₀, ρ₁` are independent over F128
-(`ZkLigerito.rhoIndependent`: the determinant `ρ₀.c0·ρ₁.c1 + ρ₀.c1·ρ₁.c0` is nonzero). -/
 theorem combo_bijective (ρ : F256 × F256) (h : Zk.rhoIndependent ρ = true) :
     Function.Bijective fun p : 𝔽 × 𝔽 => GF256.of (ρ.1 * ⟨p.1, 0⟩ + ρ.2 * ⟨p.2, 0⟩) := by
   set r00 := GF128.of ρ.1.c0
@@ -136,7 +119,6 @@ theorem combo_bijective (ρ : F256 × F256) (h : Zk.rhoIndependent ρ = true) :
         r11 * ((r01 * GF128.of y.c0 + r00 * GF128.of y.c1) * (r00 * r11 + r01 * r10)⁻¹) = GF128.of y.c1
       linear_combination GF128.of y.c1 * hDi + (r01 * r11 * GF128.of y.c0 * (r00 * r11 + r01 * r10)⁻¹) * two
 
-/-- **`W^r` bijective** at a table reading `ρ` and the inclusion `embed`, from `Zk.rhoIndependent`. -/
 theorem wr_bijective {W Hi VL : Type} {z : Sizes} (T : Coined GF256 W Hi VL z) (r : Fin 2) (ρ : F256 × F256)
     (h0 : T.ρ r 0 = GF256.of ρ.1) (h1 : T.ρ r 1 = GF256.of ρ.2)
     (he : ∀ a : F128, T.embed (fOf a) = GF256.of ⟨a, 0⟩) (h : Zk.rhoIndependent ρ = true) :
@@ -150,8 +132,6 @@ theorem wr_bijective {W Hi VL : Type} {z : Sizes} (T : Coined GF256 W Hi VL z) (
   rw [e]
   exact combo_bijective ρ h
 
-/-- **The coin facts from `Admits`**: at a coin vector the honest prover doesn't refuse, a table that reads its coins
-passes the rank check, has each `W^r` bijective and each `β ≠ 0`. -/
 theorem coin_facts (C : CoinedSetup) (c : CoinsZK C.Rest) (hc : C.Admits c)
     (hβ : ∀ r, (C.T c).β r = fOf (c.beta r))
     (hρ : ∀ r, (C.T c).ρ r 0 = GF256.of (c.rho r).1 ∧ (C.T c).ρ r 1 = GF256.of (c.rho r).2)

@@ -4,33 +4,9 @@ public import Proofs.Flock.Soundness.Headline
 public import Proofs.Flock.Soundness.Discharge.Exec.Event
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
 
-/-!
-# A draft of the headline at the executable
-
-`Prog.flock_headline` bounds an event `execAccept` of the audit as Lean defines it, and carries the gap between that
-audit and verity-verify-proof as `tr`, a rewinding that covers `execAccept ∧ o.1 = false`. This file states the headline the
-other way round: on the live audit (`auditLive`, whose outcome carries the session directory), for verity-verify-proof's
-verdict (`LiveAccepts I`), with the gap a named refinement `ExecRefines` (at one strategy pair, `Event.lean`).
-
-* `exec_le_of_refines`: a bound on the audit as Lean defines it, for its acceptance conjoined with a fact `Q` fixed by
-  its strategy, carries to the live event conjoined with `Q`, plus the refinement's live event `bad`.
-* `ofNever_finderCR`: `TreeRewind.ofNever`'s finder finds nothing, so `SHA512CRStrict` holds for it at every budget.
-* `Prog.flock_headline_exec`: `Prog.flock_headline` at `execAccept := (·.1 = true)`, `tr := TreeRewind.ofNever`
-  (`δ_tree = 0`), carried to the live audit by `exec_le_of_refines`. Its hypotheses are `Prog.flock_headline`'s, with
-  `pp`, `hConst`, `hZero`, `lay`, `rs` and `hHm` still open, and `hRef` in place of `tr` and `hT`.
-* `flock_headline_exec_L`: the same carry for the salted session `batchedSessionL`, from a bound on it.
-
-**What this does not close.** `Prog.flock_headline` is about `batchedSession`, which checks openings from the unsalted
-leaf `H(encode row)`. Every `hm96Rows` statement commits its proof rows with `hm96-sha512/v1` leaves, so verity-verify-proof
-accepts an honest session that `batchedSession` rejects, and `hRef` against `batchedSession` holds only with a `bad`
-as likely as acceptance itself. For those statements the refinement targets `batchedSessionL H512 enc512 leaf512 plan`
-(`SessionL.lean`; under a tag without hidden outputs, each accepted table is one accepting run of `tableAfterL`,
-`accepts_tables_hm96`), and what is open
-is the headline restated there: knowledge soundness and the link theorem over `Merkle.Leaf`, the bound
-`flock_headline_exec_L` takes as `hB`. The other open half of the refinement is `hRef` itself: a strategy of the audit
-built from the live prover, the challenger's per-round coins (A6) as the audit's coins, and the live event `bad`
-bounded.
--/
+/-! A draft of the headline at the executable, on the live audit with the gap a named refinement `ExecRefines`. It does not
+close the refinement for `hm96Rows` statements, whose honest sessions `batchedSession` rejects: those need the salted
+session (`flock_headline_exec_L`), and `hRef` itself is not proved. -/
 
 @[expose] public section
 
@@ -42,10 +18,6 @@ open scoped ENNReal
 variable {n : ℕ}
 
 open Classical in
-/-- **A bound on the audit as Lean defines it carries to the live audit.** If `σ` accepts `Gm` with the fact `Q`
-(fixed by the strategies, such as "at least `K` units of `σ`'s committed values are incorrect") with probability at most
-`B`, and `τ`'s event `acc` refines `σ`'s acceptance up to `bad`, then `acc ∧ Q` has probability at most `B` plus
-`bad`'s. -/
 theorem exec_le_of_refines {β : Type} {G : Game β} {τ : Strategy G} {acc bad : β → Prop}
     {Gm : Game (Bool × Finset (Fin n))} {σ : Strategy Gm} (hRef : ExecRefines G τ acc bad Gm σ) (Q : Prop)
     {B : ℝ≥0∞} (hB : prob (fun o => o.1 = true ∧ Q) Gm σ ≤ B) :
@@ -57,8 +29,6 @@ theorem exec_le_of_refines {β : Type} {G : Game β} {τ : Strategy G} {acc bad 
     exact hRef.trans (add_le_add hB le_rfl)
   · simp only [hQ, ite_false, zero_le]
 
-/-- **`TreeRewind.ofNever`'s finder finds nothing**: it opens no position, so it never outputs a collision, and
-`SHA512CRStrict` holds for it at every budget, with no assumption. -/
 theorem ofNever_finderCR {D β : Type} (H : List UInt8 → D) {G : Game β} {S : Strategy G} {bad : β → Prop}
     (h : ∀ b, ¬ bad b) (q : ℝ) : (StrictCR.TreeRewind.ofNever (H := H) (G := G) (S := S) h).finder.CR H q := by
   intro _
@@ -74,13 +44,8 @@ variable {N : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg : 
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- **Draft: the headline at the executable.** Let the verifier sample the units as in `Prog.flock_headline` (`Lx`, the
-live stratified sample under A3), and let the live audit `auditLive Lx Reg live`, played by the prover `τ`, refine the
-audit with `batchedSession` played by `σ`, up to the live event `bad` (`hRef`). If `σ`'s committed values have at least
-`K` incorrect proof blocks, then verity-verify-proof accepts with probability at most
-`miss(K) + ε_ks + ε_bind + Pr[bad]`, the headline's bound at `δ_tree = 0` plus the refinement's event. `pp`, `hConst`,
-`hZero`, `lay`, `rs` and `hHm` are open as in `Prog.flock_headline`; `hRef` is the refinement. For `hm96Rows` statements
-`hRef` needs the salted session in place of `batchedSession` (the module docstring, `flock_headline_exec_L`). -/
+/-- Draft. `pp`, `hConst`, `hZero`, `lay`, `rs` and `hHm` are open as in `Prog.flock_headline`, and `hRef` is the
+refinement; for `hm96Rows` statements `hRef` needs the salted session in place of `batchedSession`. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_exec
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -123,10 +88,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_exec
   rw [StrictCR.TreeRewind.ofNever_bound, ENNReal.ofReal_zero, add_zero] at hH
   exact exec_le_of_refines hRef _ hH
 
-/-- **Draft: the headline at the executable, for the salted session.** For `hm96Rows` statements the audit verity-verify-proof
-refines is the one with `batchedSessionL H512 enc512 Lp plan`, `Lp` the model's leaf of the statement's leaf scheme. A bound `B` on its acceptance with at least `K`
-incorrect proof blocks of `σ`'s committed values (`hB`, the headline restated over `Merkle.Leaf`, which is open) carries to
-verity-verify-proof's acceptance in the live audit, plus the refinement's event. -/
+/-- Draft. Its bound `hB`, the headline restated over `Merkle.Leaf`, is open. -/
 theorem flock_headline_exec_L {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {L : SamplingDesign n} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (I : Inputs) (live : Finset (Fin n) → Reg → Game Transcript) (τ : Strategy (auditLive L Reg live))

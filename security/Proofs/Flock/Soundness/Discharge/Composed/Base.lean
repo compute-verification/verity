@@ -67,22 +67,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
 public import Proofs.Flock.Soundness.Discharge.ZkExec.LiveStatements
 public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 
-/-!
-# A sample's `--zk` table: its coins and sizes
-
-What `coinedOf` (`Composed/Coined.lean`) and `innerOf` (`Composed/Inner.lean`) both read:
-
-* `CoinsZK`: a table's coin vector, the coins `refused_coins` reads (`β`, `ρ`) and the others (`rest`).
-* `RestZK`, `RestOf`: the other coins at a sample, every coin `verify --zk` samples for a rep, in its order: level 0's queries,
-  the zerocheck's (`rSkip`, `rOuter`, `z`, the residual rounds' `ρ`), the lincheck's (`α`, `β`, its rounds', `r′`), the ring
-  switch's (`rpp` per claim, `γ` per claim), level 0's out-of-domain and lane coins, Ligerito's coins after `T'`, and the inner proof's (`ε`, its
-  constraints' `γ`, its queries).
-* `pointsOf`: the rank check's claim points, from those coins (`abcClaims`; `point_parts`: a claim's point but its first
-  coordinate), rep 0's `ab`, `c`, then rep 1's.
-* `hiCount`, `padLenOf`, `padNOf`, `HiOf`, `VLOf`: the hidden salts, the pads layout's sizes and the value lists.
-* `eqWord`, `maskWordsOf`: the rank check's weights and the mask slot's words.
-* `regionPtOf`, `pubRegOf`: the region claims' points and public ring-switch messages at the link points.
--/
+/-! A sample's `--zk` table's coins and sizes, which `coinedOf` and `innerOf` both read. -/
 
 @[expose] public section
 

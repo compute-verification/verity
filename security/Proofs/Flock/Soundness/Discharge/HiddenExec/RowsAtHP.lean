@@ -10,20 +10,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
 
 set_option Elab.async false
 
-/-!
-# The rows at the hidden tables at public inputs
-
-`HeadlineExec`'s `layAtH`, `rsAtH` and `rsAtH_computes`, and `PlainReg`'s `sitesAtH_bcSiteS`, at the verifier's public
-inputs `own`, at the session's statement circuit `c` (`HmOut.parseStmt`): the program is `Placed.keyProgP c pi hU n` (its unit inputs on the gates of their keys with public
-inputs), its outputs `Layout.outsOfP`, the sites `sitesAtHP`, and the registration the population's public file `pop`
-(`HmIn.loadPublic`, with or without shared rows):
-
-* `sitesAtHP_bcSite`: `BcSiteHP` at every satisfiable site, from `tableHP_bcSite` at a sample verity-verify-proof sets up and
-  `tableAtHP_unsat` elsewhere;
-* `layAtHP`, `rsAtHP`: `keyLayoutHP`, `keyRowsHP` at `sitesAtHP`, `KeysRowP` from the statement circuit
-  (`Layout.keysRowP_of_keysRow`, `Hidden.keysRow_stmt`);
-* `rsAtHP_computes`: `keyRowsHP_computes`.
--/
+/-! The rows at the hidden tables at the verifier's own public input words `own` (`layAtHP`, `rsAtHP`, `rsAtHP_computes`). -/
 
 namespace FlockSoundness.Discharge.HiddenExec
 
@@ -37,10 +24,6 @@ variable {n : ℕ} {I : Inputs} {own : Option ByteArray} {mPts : ℕ} (ht : I.ta
   {pop : Public} (hpub : HmIn.loadPublic I.tags c pi I.publicFile = .ok pop) {Reg : Type}
 
 include hU hpi hpub in
-/-- **The site fact at a sampled table at `own`** (`tableH_bcSiteS`): at a sample verity-verify-proof sets up with
-`Stmt.setupHidden … own`, each sampled proof block's site is `BcSiteHP`: the sample `dj S` decodes to `D`, its proved units are in
-its population, its public file loads (`HmIn.loadPublic`) to `pop`, and the unit's block and template instance index
-its rank in `D.proved`, the template instance below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2_stmt`). -/
 theorem tableHP_bcSite {S : Finset (Fin n)} (x : SampleSetupHP I own mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteHP (x.table.acc ht hcS (rowsFit_of_stmt ht hcS hscope)) pop (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : HmOut.unrolled x.st.c = c := x.table.unrolled_eq ht hcS
@@ -60,8 +43,6 @@ theorem tableHP_bcSite {S : Finset (Fin n)} (x : SampleSetupHP I own mPts S (dj 
     exact x.proved_rank h
 
 include hU hpi hpub in
-/-- **`BcSiteHP` at every satisfiable site** of the one-table hidden plan at `own`: at a sample verity-verify-proof sets up by
-`tableHP_bcSite`; at a refused sample no message satisfies the table (`tableAtHP_unsat`). -/
 theorem sitesAtHP_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planAtHP dj x₀) (tabAtHP dj x₀) S R u), Binding.Sat (planAtHP dj x₀) (tabAtHP dj x₀) S R u M →
@@ -80,7 +61,6 @@ theorem sitesAtHP_bcSite :
   · exact absurd hM (tableAtHP_unsat dj x₀ hS _)
 
 include ht hcS hscope in
-/-- **`KeysRowP` from `scopeOkH`**: `KeysRow` at the statement circuit (`Hidden.keysRow_stmt`), at public inputs. -/
 theorem keysRowP_of_scopeH :
     Layout.KeysRowP c hU pi (Layout.portRowW c) :=
   Layout.keysRowP_of_keysRow (Hidden.keysRow_stmt ht hcS (Layout.scopeOkH_spec hU hscope).1
@@ -101,7 +81,6 @@ noncomputable abbrev rsAtHP : Binding.HmRowsX (layAtHP ht hcS hscope dj x₀ hU 
     (Layout.outsOutP_outsOfP c hU n pi) (sitesAtHP_bcSite ht hcS hscope dj x₀ hU hpi hpub)
     (keysRowP_of_scopeH ht hcS hscope hU)
 
-/-- **`hHm` at the hidden tables at `own`** (`keyRowsHP_computes`). -/
 theorem rsAtHP_computes : (rsAtHP ht hcS hscope dj x₀ hU hpi hpub (Reg := Reg)).Computes :=
   keyRowsHP_computes (sitesAtHP_parse ht hcS (rowsFit_of_stmt ht hcS hscope) dj x₀) hpi (Layout.outsOfP c hU n pi)
     (fun _ => pop) (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_stmt ht hcS hscope)

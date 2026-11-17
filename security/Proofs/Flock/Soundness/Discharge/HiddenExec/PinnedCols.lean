@@ -8,22 +8,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 
 set_option Elab.async false
 
-/-!
-# A pinned statement's pinned bits, where its unit returns the outputs
-
-`Hidden.pinnedCols` lists bit `t` of each pinned output word `o` at each template instance `g`, `HmOut.outCol c g o + t`.
-Where the unit returns the outputs (`outNet = unitNet`), every output word is some copy's (`check_returned_all`), so
-`outCol c g o` is column `16 j` of copy `u`'s returned-output port in unit slot `g · upv + u`, `o` copy `u`'s output `j`
-(`outCol_leaf`); a pinned word's 16 bits are below the unit's constant (`pinned_word`, `linearRow_spec`), so inside the
-slot. Hence:
-
-* `pinnedCols_nodup`: the pinned bits are distinct (`slot_add_inj`: the slot, so `g` and `u`, and the offset, so `j`
-  and `t`), and each is in `pinnedCols` once;
-* `outCol_mem_pinned`: an output word whose port has no output row (`outPortOf` past `outRowPorts`, at
-  `Hidden.Any.OutRowsP`) is pinned, so its bits are in `pinnedCols`;
-* `pinBit_outH`: a template instance's column on such a word's bit is a pinned bit (`PinBit`), which `SitesH.pin` holds
-  at 0.
--/
+/-! Where the unit returns the outputs, a pinned statement's pinned bits are distinct (`pinnedCols_nodup`), and a template instance's column on a word without an output row is one of them (`pinBit_outH`). -/
 
 namespace FlockSoundness.Discharge.HiddenExec
 
@@ -40,7 +25,6 @@ theorem mul_add_inj_lt {P g g' u u' : ℕ} (hu : u < P) (hu' : u' < P) (h : g * 
   subst hg
   exact ⟨rfl, by omega⟩
 
-/-- A list of `f g o t` over a box is distinct when `f` is injective on the box. -/
 theorem nodup_box {a b : ℕ} (f : ℕ → ℕ → ℕ → ℕ)
     (hf : ∀ g o t g' o' t', g < a → o < b → t < 16 → g' < a → o' < b → t' < 16 → f g o t = f g' o' t' →
       g = g' ∧ o = o' ∧ t = t') :
@@ -64,8 +48,6 @@ theorem nodup_box {a b : ℕ} (f : ℕ → ℕ → ℕ → ℕ)
     obtain ⟨o', ho', t', ht', he⟩ := hx'
     exact hne (hf g' o' t' g o t hg' ho' ht' hg ho ht he).1.symm
 
-/-! ## The pinned words -/
-
 theorem split_sum (a : Array (String × ℕ)) (k : ℕ) :
     (a.extract 0 (a.size - k)).foldl (· + ·.2) 0 + (a.extract (a.size - k) a.size).foldl (· + ·.2) 0 =
       a.foldl (· + ·.2) 0 := by
@@ -75,11 +57,9 @@ theorem split_sum (a : Array (String × ℕ)) (k : ℕ) :
   rw [List.take_of_length_le (l := a.toList.drop (a.size - k)) (by simp), ← List.sum_append, ← List.map_append,
     List.take_append_drop]
 
-/-- **The pinned words are the last output words.** -/
 theorem pinnedFrom_add (c : Circuit) : HmOut.pinnedFrom c + HmOut.pinnedWords c = c.outWords :=
   split_sum c.outPorts (HmRow.pinnedCount c.metaJ)
 
-/-- **The first pinned word** is the first word of the first pinned output port. -/
 theorem pinnedFrom_eq (c : Circuit) :
     HmOut.pinnedFrom c = Hidden.outAt c (c.outPorts.size - HmRow.pinnedCount c.metaJ) := by
   unfold HmOut.pinnedFrom Hidden.outAt
@@ -92,8 +72,6 @@ theorem outAt_le (c : Circuit) {i j : ℕ} (h : i ≤ j) : Hidden.outAt c i ≤ 
   rw [List.take_add, List.map_append, List.sum_append]
   omega
 
-/-- **A committed circuit's output rows sum to its unpinned output ports** (`Hidden.parse_rowPorts`, on the circuit
-`HmRow.parse` read, after a templated file's unit net). -/
 theorem committed_rowPorts {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (ht : tags.typed = false) (hC : Hidden.Committed tags cf tables c) :
     c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size - HmRow.pinnedCount c.metaJ := by
@@ -102,8 +80,6 @@ theorem committed_rowPorts {tags : Tags} {cf : ByteArray} {tables : List (String
   · obtain ⟨tu, c₀, hp, -, -, rfl⟩ := TmplValue.parseTmpl_cases hC
     exact (Hidden.parse_rowPorts hp).2
 
-/-- **Output rows past which the ports are pinned**: at `Hidden.Any.OutRowsP`, the output rows are the output ports but
-the pinned ones (`committed_rowPorts`). -/
 theorem outRows_size {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (ht : tags.typed = false) (hC : Hidden.Committed tags cf tables c) (hrows : Hidden.Any.OutRowsP c) :
     c.outRowPorts.size = c.outPorts.size - HmRow.pinnedCount c.metaJ := by
@@ -111,7 +87,6 @@ theorem outRows_size {tags : Tags} {cf : ByteArray} {tables : List (String × By
   rw [hrows.1, Hidden.foldl_replicate_one] at this
   exact this
 
-/-- **A word of an output port without an output row is pinned**, and so are its bits at every template instance. -/
 theorem outCol_mem_pinned {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (ht : tags.typed = false) (hC : Hidden.Committed tags cf tables c) (hrows : Hidden.Any.OutRowsP c) {g w t : ℕ}
     (hg : g < c.g) (hw : w < c.outWords) (hjr : c.outRowPorts.size ≤ outPortOf c w) (ht16 : t < 16) :
@@ -124,10 +99,6 @@ theorem outCol_mem_pinned {tags : Tags} {cf : ByteArray} {tables : List (String 
   simp only [List.mem_flatMap, List.mem_range, List.mem_map]
   exact ⟨g, hg, w - HmOut.pinnedFrom c, by omega, t, ht16, by rw [Nat.add_sub_of_le hpf]⟩
 
-/-! ## Where the unit returns the outputs -/
-
-/-- `HmOut.outRow` in a circuit whose unit returns the outputs: the unit net, at the column of the returned-output port
-`ret` names. -/
 theorem outRow_eq {c : Circuit} (ho : c.outNet = c.unitNet) (o : ℕ) :
     HmOut.outRow c o = (c.unitNet, ((portCols #[c.unit.outGroups.getD 0 default]).getD
       ((retOf c (List.range c.upv) (Array.replicate c.outWords (0, 0))).getD o (0, 0)).2 default).1) := by
@@ -135,8 +106,6 @@ theorem outRow_eq {c : Circuit} (ho : c.outNet = c.unitNet) (o : ℕ) :
   simp only [ho, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
   rfl
 
-/-- **Every output word is a copy's output**, in an untyped circuit whose unit returns the outputs
-(`check_returned_all`). -/
 theorem returned_leaf {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none) (ho : c.outNet = c.unitNet)
     (h : HmRow.check c tags ls = .ok ()) {o : ℕ} (hlt : o < c.outWords) :
     ∃ u < c.upv, ∃ (j : ℕ) (hj : j < (c.leavesOut.getD u #[]).size), (c.leavesOut.getD u #[])[j] = o := by
@@ -148,9 +117,6 @@ theorem returned_leaf {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed
 
 variable {T : Model.Statement}
 
-/-- **The pinned bits are distinct**, in an accepted statement whose unit returns the outputs: pinned word `o`'s bit `t`
-at template instance `g` is column `16 j + t` of the returned-output port in unit slot `g · upv + u`, `o` copy `u`'s
-output `j`, and below the unit's constant, so the column names `g`, `u`, `j` and `t`, and `u` and `j` name `o`. -/
 theorem pinnedCols_nodup (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet) : (Hidden.pinnedCols a.st.c).Nodup := by
   obtain ⟨hty, ⟨ls, hls⟩, hcr⟩ := Hidden.Committed.check a.ht a.committed
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht', h, L, hR, regs, hT⟩ := a
@@ -204,10 +170,6 @@ theorem pinnedCols_nodup (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
   have : (st.c.leavesOut.getD u #[])[j]'hj = (st.c.leavesOut.getD u #[])[j]'hj' := rfl
   omega
 
-/-- **A template instance's column on copy `u'`'s output `j`, bit `t`** is bit `t` of output word `lo[j]`'s column
-(`HmOut.outCol` of the committed circuit), in an accepted statement whose statement circuit is `c` and whose unit returns
-the outputs: the committed column is `upos` of the logical one (`col_val_compH`, `Hidden.outCol_commit16`,
-`outCol_leaf`). -/
 theorem col_outH (a : AcceptedH T) {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c)
     (ho : c.outNet = c.unitNet) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) {u' j t : ℕ} (hu' : u' < c.upv)
     (hj : j < (c.leavesOut.getD u' #[]).size) (ht : t < 16)
@@ -244,9 +206,6 @@ theorem col_outH (a : AcceptedH T) {c : Flock.Circuit} (hce : HmOut.unrolled a.s
   unfold Layout.outCol
   omega
 
-/-- **A template instance's column on a bit of an output word without an output row is a pinned bit**, in an accepted
-statement whose statement circuit is `c` and whose unit returns the outputs (`col_outH`, `outCol_mem_pinned`, once by
-`pinnedCols_nodup`). -/
 theorem pinBit_outH (a : AcceptedH T) {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c)
     (ho : c.outNet = c.unitNet) (hrows : Hidden.Any.OutRowsP c) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
     {u' j t : ℕ} (hu' : u' < c.upv) (hj : j < (c.leavesOut.getD u' #[]).size) (ht : t < 16)

@@ -19,13 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 
-/-!
-# The opening's rounds carry its messages (`DecodesOn`'s message half)
-
-`op_carries`: the ring switches' rounds of `rsFrames`, read by `wOP`, are `opMsgs`, cut at `opShape`'s coins. Each ring
-switch's round closes at its `sq 2 7` and carries the switch's 128 values (`carries_switch`; the batch label rides in
-front of the first), the rest by induction (`carries_switches`), and the batching coin's round carries nothing.
--/
+/-! The ring switches' rounds of `rsFrames`, read by `wOP`, carry the opening's messages `opMsgs` (`op_carries`). -/
 
 @[expose] public section
 
@@ -45,7 +39,6 @@ theorem readAll_v {fs : List Frame} {a : Array F128} {n : ℕ} (ha : a.size = n)
   simp only [readAll, Wire.v, hl, Array.getElem!_toList]
   rfl
 
-/-- **A ring switch's round** carries its 128 values, behind any label-only prefix. -/
 theorem carries_switch {pre : List Frame} (hpre : ∀ f ∈ pre, closes f = false) (hpv : valsOf pre = [])
     (hpwf : ∀ f ∈ pre, f.WF) {a : Array F128} (ha : a.size = 128) :
     Carries [[.v 128]] [.msg (Fin 128 → 𝔽), .coin (Fin 7 → 𝔽)]
@@ -77,7 +70,6 @@ theorem size_at {rs : Array (Array F128)} (h : ∀ v ∈ rs, v.size = 128) {i : 
   rw [getElem!_pos rs i hi]
   exact h _ (Array.getElem_mem hi)
 
-/-- **The ring switches from `a` on** carry their values, one per round. -/
 theorem carries_switches (rs : Array (Array F128)) (h : ∀ v ∈ rs, v.size = 128) : ∀ (k a : ℕ), a + k ≤ rs.size →
     Carries (List.replicate k [.v 128]) (switches 𝔽 k)
       ((List.range' a k).flatMap fun i => [.label "flock-ring-switch-v0".toUTF8, .vec (rs[i]!).toList, .sq 2 7])

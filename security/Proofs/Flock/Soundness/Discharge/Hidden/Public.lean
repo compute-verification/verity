@@ -22,13 +22,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# What a hidden-output statement takes from the public file (`PublicExposes`)
-
-`HmOut.loadPublic` and `HmOut.drawn` are `HmRow`'s on the circuit without output ports, so a public file's output words
-are `n · 0` of them (`loadPublic_outputs_nil`, `sampled_outputs_nil`). `HmOut.regions` is one `mkRegion` per row, region
-`p` row `p`'s `b ‖ c` at its `hm96` slot, as `HmRow.regions`' region "digest p" (`regions_get`).
--/
+/-! What a hidden-output statement takes from the public file (`PublicExposes`): no output word, and one region per row's `b ‖ c`. -/
 
 @[expose] public section
 
@@ -40,7 +34,6 @@ namespace FlockSoundness.Discharge.Hidden
 
 open Refine
 
-/-- `HmOut.loadPublic` is `HmRow.loadPublic` on the circuit without output ports, then checks. -/
 theorem loadPublic_nil {tags : Tags} {c : Circuit} {pf : ByteArray} {pop : Public}
     (h : HmOut.loadPublic tags c pf = .ok pop) : HmRow.loadPublic tags { c with outPorts := #[] } pf = .ok pop := by
   unfold HmOut.loadPublic at h
@@ -52,7 +45,6 @@ theorem loadPublic_nil {tags : Tags} {c : Circuit} {pf : ByteArray} {pop : Publi
     subst h
     assumption
 
-/-- A hidden-output population holds no output word. -/
 theorem loadPublic_outputs_nil {tags : Tags} {c : Circuit} {pf : ByteArray} {pop : Public}
     (h : HmOut.loadPublic tags c pf = .ok pop) : pop.outputs = #[] := by
   have hs := (Layout.loadPublic_outputs (loadPublic_nil h)).1
@@ -70,15 +62,12 @@ theorem foldl_extract_zero (a : Array ℕ) (w : ℕ) (hw : w = 0) (L : Array ℕ
   | nil => intro acc; rfl
   | cons x l ih => intro acc; rw [List.foldl_cons, ih]; simp
 
-/-- A hidden-output statement's sampled public file holds no output word. -/
 theorem sampled_outputs_nil {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmOut.drawn c pop d = .ok pub) :
     pub.outputs = #[] := by
   obtain ⟨D, -, hout⟩ := Layout.sampled_outputs h
   rw [hout]
   exact foldl_extract_zero _ _ rfl _
 
-/-- **`HmOut.regions`** is one region per row, region `p` as `HmRow.regions`' region "digest p": `mkRegion` of
-`Layout.hmFree`, `Layout.hmFixed` and `Layout.hmBytes`. -/
 theorem regions_get {c : Circuit} {pub : Public} {regs : Array Region} (h : HmOut.regions c pub = .ok regs) :
     regs.size = c.ports.size ∧ ∀ (p : ℕ) (hp : p < regs.size),
       mkRegion c.kLog s!"digest {p}" (Layout.hmFree c) (Layout.hmFixed c p) (Layout.hmBytes c pub p) = .ok regs[p] := by

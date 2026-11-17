@@ -27,19 +27,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Layout.Region
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# An output row's registered `b ‖ c` (`OutputsCommitted`)
-
-In a satisfying witness of an untyped hidden-output statement, at block `o`, template instance `g` and output row `j`:
-* the 128 bytes at the row's `hm96` output are the population's `b ‖ c` of the sampled proof block there: `HmOut.regions`' region
-  `p` pins them (`bc_pinned'`, `Layout.bc_pinned` at the region `regions_get` gives), and `HmOut.drawn` is `HmRow.drawn`
-  on the circuit without output ports (`Layout.bcChunk_sampled`): `bc_sampledH`, at every row;
-* they are the commit string of the row prefix and the row's message bytes under its salt: the witness satisfies the flat
-  twin (`sat_flat`), where `Hm.row_bc_flat` holds;
-* the row's message bytes are the output words the template instance computes (`msg_bytes`): each message bit is a copy
-  of `outSrc` (`msg_copy`), the output word's bit below the port's words and the forced-zero row past them
-  (`Hm.zero_bit`).
--/
+/-! In a satisfying witness of an untyped hidden-output statement, an output row's `hm96` output is the population's registered `b ‖ c`: the commit string of the row prefix and the output words its template instance computes. -/
 
 @[expose] public section
 
@@ -53,8 +41,7 @@ section Pinned
 
 open Model Refine Binding FlockSoundness.Discharge.Layout
 
-/-- **The `b ‖ c` a satisfying witness holds at an `hm96` slot's output** is the one a region of the statement that
-`mkRegion` built as "digest p" pins (`Layout.bc_pinned`, for any such region rather than `HmRow.regions`'). -/
+/-- The `b ‖ c` a satisfying witness holds at an `hm96` slot's output is the one pinned by any region `mkRegion` built as `digest p`. -/
 theorem bc_pinned' {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {z : Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
@@ -104,7 +91,6 @@ end Pinned
 
 open Hm Compose Flock.DeriveAll Types.Dag
 
-/-- The bytes at the address region "digest p" pins (`Layout.bcAddr`) are the block's at `bcCol`. -/
 theorem bytesAt_bc {st : Stmt} (L : FlockSoundness.Layout st) (R : RowRanges st.c)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) (z : Model.Witness (L.model regs).m)
     (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) :
@@ -127,10 +113,6 @@ theorem bytesAt_bc {st : Stmt} (L : FlockSoundness.Layout st) (R : RowRanges st.
   rw [hin]
   exact (chunkBit_of_lt _ z o hy).symm
 
-/-- **The `b ‖ c` a satisfying witness of a sampled hidden-output statement holds at a proved unit's `hm96` slot** is the
-unit's `b ‖ c` in the registered population's public file, at every row `p`, input or output (`Layout.bc_sampled` at
-`Stmt.setupHidden`'s statement): region `p` of `HmOut.regions` pins it (`regions_get`, `bc_pinned'`), and
-`HmOut.drawn` is `HmRow.drawn` on the circuit without output ports. -/
 theorem bc_sampledH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) {pop : Public}
@@ -168,7 +150,6 @@ theorem bc_sampledH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
   rw [← hchunk g hr]
   exact bc_pinned' L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
 
-/-- A row's message column (`Typed.msgCol`, `HmRow.delta`'s) is `HmOut.delta`'s (`deltaMsgCol`). -/
 theorem msgCol_delta (c : Circuit) (g p b t : ℕ) : Typed.msgCol c g p b t = deltaMsgCol c g p b t := by
   simp only [Typed.msgCol, deltaMsgCol, getElem!_eq_getD']
 
@@ -180,8 +161,6 @@ variable {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (L0 : FlockSou
   (hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray) (hrows : OutRows st.c)
 include L L0 F0 hv1 hda hrows
 
-/-- **An output row's message bytes are the output words its template instance computes** (`outBytes`), in every block
-of a satisfying witness of the hidden statement whose forced-zero row carries 0. -/
 theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     (hzero : chunkBit (L.model regs) z o (zeroCol st.c) = false) {g j : ℕ} (hg : g < st.c.g)

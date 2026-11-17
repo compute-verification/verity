@@ -24,29 +24,12 @@ import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 
 set_option Elab.async false
 
-/-!
-# Where the circuit computes each output word
-
-`HmOut.delta` copies an output row's message bits from `HmOut.outCol c g o`, the first column of output word `o` at
-template instance `g`. In an untyped circuit whose unit returns the outputs, that is the unit copy that returns `o`, at
-the column of its returned-output port: `outCol` reads which copy and which port from `ret`, the last write of each
-output word over the copies' leaf maps. That write is the only one, because `HmRow.check` throws on an output word some
-copy returns twice:
-
-* `check_returned`: `HmRow.check`'s `seen` loop, so the copies' leaf maps, in order, are distinct (`returned`);
-* `ret_leaf`: `ret` at copy `u'`'s output `j` is `(u', j)`;
-* `outCol_leaf`: `HmOut.outCol` there is the unit slot `g · upv + u'`, column `16 j` of the returned-output group;
-* `outPortOf_spec`: output word `o` is word `o - outAt jo` of output port `jo`;
-* `checkRows_words`: each output row's words hold its port's (`HmOut.checkRows`).
--/
+/-! Where the circuit computes each output word: in an untyped circuit whose unit returns the outputs, the one unit copy that returns it, since `HmRow.check` throws on an output word some copy returns twice. -/
 
 namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 FlockSoundness.Discharge.Layout
 
-/-! ## Loop invariants -/
-
-/-- A loop in `Except` that finished keeps an invariant of the elements it walked. -/
 theorem forIn_list_inv {α σ ε : Type} (I : List α → σ → Prop) {f : α → σ → Except ε (ForInStep σ)}
     (hf : ∀ pre a s t, I pre s → f a s = .ok t → ∃ s', t = .yield s' ∧ I (pre ++ [a]) s') :
     ∀ (l pre : List α) (s v : σ), I pre s → forIn l s f = .ok v → I (pre ++ l) v
@@ -67,8 +50,6 @@ theorem forIn_range_inv {σ ε : Type} (I : List ℕ → σ → Prop) {f : ℕ �
   have := forIn_list_inv I hf _ [] s v hs h
   simp only [Std.Legacy.Range.size, List.nil_append, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one] at this
   rwa [List.range_eq_range']
-
-/-! ## `HmRow.check`'s `seen` loop -/
 
 /-- The output words copies `us` return, in order. -/
 def returned (c : Circuit) (us : List ℕ) : List ℕ := us.flatMap fun u => (c.leavesOut.getD u #[]).toList
@@ -106,8 +87,6 @@ theorem seenInv_step {c : Circuit} {L : List ℕ} {s : Array Bool} (hs : SeenInv
       · exact hset o' hm
       · exact absurd (List.mem_singleton.1 hm).symm he
 
-/-- **`HmRow.check`'s `seen` loop**: in an untyped circuit whose unit returns the outputs, the copies' leaf maps, in
-order, return each output word exactly once. -/
 theorem check_returned_all {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
     (ho : c.outNet = c.unitNet) (h : HmRow.check c tags ls = .ok ()) :
     (returned c (List.range c.upv)).Nodup ∧ ∀ o < c.outWords, o ∈ returned c (List.range c.upv) := by
@@ -153,13 +132,9 @@ theorem check_returned_all {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.
   by_contra hf
   exact hany (Array.any_eq_true.2 ⟨o, hsz, by simpa using hf⟩)
 
-/-- **`HmRow.check`'s `seen` loop**: the copies' leaf maps, in order, return each output word at most once
-(`check_returned_all`). -/
 theorem check_returned {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none) (ho : c.outNet = c.unitNet)
     (h : HmRow.check c tags ls = .ok ()) : (returned c (List.range c.upv)).Nodup :=
   (check_returned_all ht ho h).1
-
-/-! ## `ret` -/
 
 /-- `HmOut.outCol`'s step of copy `u`'s leaf map: output word `o` is returned by `u`'s output `q`. -/
 def retStep (u : ℕ) : Array (ℕ × ℕ) × ℕ → ℕ → Array (ℕ × ℕ) × ℕ := fun (r, q) o => (r.set! o (u, q), q + 1)
@@ -234,8 +209,6 @@ theorem retOf_mem (c : Circuit) : ∀ (us : List ℕ) (r : Array (ℕ × ℕ)), 
     · exact retOf_mem c us _ hnd2 u' ((List.mem_cons.1 hu).resolve_left he) j hj
         (by rw [← Array.foldl_toList, retStep_size]; exact hlt)
 
-/-- **`ret` at a copy's returned output**: copy `u'`'s output `j` is returned by `u'`'s output `j`, when the copies'
-leaf maps return each output word at most once (`check_returned`), each below `outWords`. -/
 theorem ret_leaf {c : Circuit} (hnd : (returned c (List.range c.upv)).Nodup)
     (hlt : ∀ u < c.upv, ∀ o ∈ (c.leavesOut.getD u #[]).toList, o < c.outWords) {u' j : ℕ} (hu' : u' < c.upv)
     (hj : j < (c.leavesOut.getD u' #[]).size) :
@@ -244,8 +217,6 @@ theorem ret_leaf {c : Circuit} (hnd : (returned c (List.range c.upv)).Nodup)
   rw [Array.getD_eq_getD_getElem?, retOf_mem c _ _ hnd u' (List.mem_range.2 hu') j hj
     (by rw [Array.size_replicate]; exact hlt u' hu' _ (Array.getElem_mem_toList hj))]
   rfl
-
-/-! ## `HmOut.outCol` at a returned output -/
 
 theorem portCols_16 : ∀ (L : List ℕ) (a : ℕ), (∀ w ∈ L, w = 16) →
     ((forIn L (#[], a) (fun w s => pure (ForInStep.yield (s.1.push (s.2, w), s.2 + w))) : Id _).1.toList) =
@@ -263,7 +234,6 @@ theorem portCols_16 : ∀ (L : List ℕ) (a : ℕ), (∀ w ∈ L, w = 16) →
     simp only [Function.comp, Prod.mk.injEq, and_true, Nat.succ_eq_add_one]
     omega
 
-/-- A group of 16-bit ports: port `q`'s first column is `col · WORD + 16 q`. -/
 theorem portCols_16_get {g : Group} (h16 : ∀ b ∈ g.bits.toList, b = 16) {q : ℕ} (hq : q < g.bits.size) :
     ((portCols #[g]).getD q default).1 = g.col * WORD + 16 * q := by
   have e := (Aliased.portCols_one g).trans (portCols_16 g.bits.toList _ h16)
@@ -271,8 +241,6 @@ theorem portCols_16_get {g : Group} (h16 : ∀ b ∈ g.bits.toList, b = 16) {q :
   rw [Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, List.getElem?_eq_getElem hq', Option.getD_some]
   simp [e]
 
-/-- `HmOut.outCol` in an untyped circuit whose unit returns the outputs: the copy `ret` names, at the column of its
-returned-output port. -/
 theorem outCol_eq {c : Circuit} (ht : c.typed = none) (ho : c.outNet = c.unitNet) (g o : ℕ) :
     HmOut.outCol c g o =
       c.slotCol c.unitNet g ((retOf c (List.range c.upv) (Array.replicate c.outWords (0, 0))).getD o (0, 0)).1 +
@@ -282,10 +250,6 @@ theorem outCol_eq {c : Circuit} (ht : c.typed = none) (ho : c.outNet = c.unitNet
   simp only [ht, ho, Option.isSome_none, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
   rfl
 
-/-- **`HmOut.outCol` at copy `u'`'s output `j`**: in an untyped circuit whose unit returns the outputs, its copies'
-leaf maps returning each output word at most once and below `outWords`, its returned-output group's ports 16-bit and
-one per output of each copy, and `upv` slots of the unit per template instance, it is the unit slot `g · upv + u'` at
-column `16 j` of the returned-output group. -/
 theorem outCol_leaf {c : Circuit} (ht : c.typed = none) (ho : c.outNet = c.unitNet)
     (hnd : (returned c (List.range c.upv)).Nodup)
     (hlt : ∀ u < c.upv, ∀ o ∈ (c.leavesOut.getD u #[]).toList, o < c.outWords)
@@ -297,8 +261,6 @@ theorem outCol_leaf {c : Circuit} (ht : c.typed = none) (ho : c.outNet = c.unitN
       c.unitRange.slot (g * c.upv + u') + ((c.unit.outGroups.getD 0 default).col * WORD + 16 * j) := by
   rw [outCol_eq ht ho, ret_leaf hnd hlt hu' hj, portCols_16_get h16 (by rw [← hsz u' hu']; exact hj)]
   simp only [Circuit.slotCol, Circuit.unitRange, hpv]
-
-/-! ## The output port of an output word -/
 
 /-- The output port output word `o` is in: the last whose first word is at most `o`. -/
 def outPortOf (c : Circuit) (o : ℕ) : ℕ := Nat.findGreatest (fun j => Hidden.outAt c j ≤ o) c.outPorts.size
@@ -313,7 +275,6 @@ theorem outAt_size (c : Circuit) : Hidden.outAt c c.outPorts.size = c.outWords :
   unfold Hidden.outAt Circuit.outWords
   rw [← Array.foldl_toList, foldl_snd_sum, Nat.zero_add, List.take_of_length_le (by simp)]
 
-/-- **Output word `o` is word `o - outAt jo` of output port `jo = outPortOf c o`**, for `o < outWords`. -/
 theorem outPortOf_spec (c : Circuit) {o : ℕ} (ho : o < c.outWords) :
     outPortOf c o < c.outPorts.size ∧ Hidden.outAt c (outPortOf c o) ≤ o ∧
       o - Hidden.outAt c (outPortOf c o) < (c.outPorts.getD (outPortOf c o) default).2 := by
@@ -331,10 +292,6 @@ theorem outPortOf_spec (c : Circuit) {o : ℕ} (ho : o < c.outWords) :
   rw [Hidden.outAt_succ c hlt, Hidden.getElem!_eq_getD'] at hng
   omega
 
-/-! ## An output row's words -/
-
-/-- **Each output row's words hold its port's** (`Hidden.RowsOut`: a padded lone port's are the port's, zero-padded to
-whole SHA-512 blocks; a bit row of `16 · words` bits holds exactly its port's). -/
 theorem rowsOut_wordsN {c : Circuit} (h : Hidden.RowsOut c) {N : ℕ}
     (hr : c.outRowPorts = Array.replicate N 1)
     (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < N) (hjo : j < c.outPorts.size) :
@@ -351,21 +308,18 @@ theorem rowsOut_wordsN {c : Circuit} (h : Hidden.RowsOut c) {N : ℕ}
   · rw [hw]; omega
   · omega
 
-/-- `rowsOut_wordsN` at one output row per output port. -/
 theorem rowsOut_words {c : Circuit} (h : Hidden.RowsOut c)
     (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
     (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < c.outPorts.size) :
     (c.outPorts.getD j default).2 ≤ (c.ports.getD (HmOut.nIn c + j) default).words :=
   rowsOut_wordsN h hr hb hj hj
 
-/-- **Each output row's words hold its port's** (`HmOut.checkRows`, through `rowsOut_wordsN`). -/
 theorem checkRows_wordsN {c : Circuit} (h : HmOut.checkRows c = .ok ()) {N : ℕ}
     (hr : c.outRowPorts = Array.replicate N 1)
     (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < N) (hjo : j < c.outPorts.size) :
     (c.outPorts.getD j default).2 ≤ (c.ports.getD (HmOut.nIn c + j) default).words :=
   rowsOut_wordsN (Hidden.rowsOut_of_checkRows h) hr hb hj hjo
 
-/-- **Each output row's words hold its port's** (`HmOut.checkRows`, through `rowsOut_words`). -/
 theorem checkRows_words {c : Circuit} (h : HmOut.checkRows c = .ok ())
     (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
     (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < c.outPorts.size) :

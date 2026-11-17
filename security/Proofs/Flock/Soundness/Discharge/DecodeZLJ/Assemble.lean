@@ -26,18 +26,7 @@ import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# The decoder is right at `J` tables
-
-`decodesOnJ_exec`: `DecodesOnJ` at `planJ`, table by table. At an outcome verity-verify-proof accepts, at table `j`:
-
-* `RecordsLiveJ` gives the record's sample `dj S`, the proof files, the link points, and table `j`'s root and streams.
-* `accepts_tables` sets table `j` up with setupH under `tagsAt` at `partSample` of part `j`, which is `partJson (dj S)`;
-  `SampleOkJ` gives its link points. So a `SetupJ` exists, and `planJ`'s table `j` is `stmtOf` of setupH's statement
-  (`tableJ_of`, `model_eq_stmtOf`), with its `fast100` schedule and `PT_LOCAL`.
-* `accepts_reps_at` gives each rep's run and rounds and the salted verdict; `repRun_at` (at `op_carries`,
-  `lig_carries`) makes each run a `RepRun` for `decJ`, and `playsT_of_repRun` a run on its tape `repTapeJ`.
--/
+/-! `DecodesOnJ` at `planJ`, table by table (`decodesOnJ_exec`). -/
 
 @[expose] public section
 

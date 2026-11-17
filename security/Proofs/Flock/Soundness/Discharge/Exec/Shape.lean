@@ -9,22 +9,7 @@ import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.ZerocheckPhase
 import VCVio.Prelude.Core
 
-/-!
-# The static shape of a rep
-
-`DecodesAll` (`Live.lean`) asks for each rep's run on a tape cut into rounds: the messages a round's bytes decode to,
-then the round's coin. Where a run's coins fall among its messages is the game's, not the run's: every game of a rep
-takes its steps in an order fixed by the statement and the schedule, and no step's kind depends on the values before
-it. A rep may only stop early, on a reject.
-
-* `Kind`, `kindOf`: a tape step's kind, a message or a coin, with its type.
-* `Spine g σ`: every run of `g` takes steps of the kinds of `σ`, in order, until it returns. `Exact g σ`: and it
-  returns exactly at the end of `σ`.
-* `Spine.prefix`, `Exact.kinds`: a run's kinds are a prefix of `σ` (all of `σ`, for `Exact`).
-* `zerocheck_exact`, `lincheck_exact`, `opening_exact`: the PIOP's phases have exact shapes; `ligeritoC_spine` and
-  `repC_spine`: compiled Ligerito and a whole rep have spines, `repShape`, which read only the dimensions, the number
-  of claims and the schedule.
--/
+/-! The static shape of a rep: where a run's coins fall among its messages is fixed by the statement and the schedule, and a rep may stop early only on a reject. -/
 
 @[expose] public section
 
@@ -32,12 +17,10 @@ namespace FlockSoundness.Discharge.Exec
 
 open FlockSoundness.Game FlockSoundness.Accounting FlockSoundness.Model
 
-/-- A tape step's kind: a message of type `M`, or a coin of type `C`. -/
 inductive Kind : Type 1
   | msg (M : Type)
   | coin (C : Type)
 
-/-- The kind of a step. -/
 def kindOf : Step → Kind
   | .inl x => .msg x.1
   | .inr x => .coin x.1
@@ -50,7 +33,6 @@ inductive Spine : {α : Type} → Game α → List Kind → Prop
   | coin {α C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α} {σ : List Kind} :
       (∀ x, Spine (k x) σ) → Spine (@Game.coin α C iF iN k) (.coin C :: σ)
 
-/-- **An exact shape.** Every run of `g` takes exactly the steps of the kinds of `σ`, in order. -/
 inductive Exact : {α : Type} → Game α → List Kind → Prop
   | ret {α : Type} (a : α) : Exact (.ret a) []
   | send {α M : Type} {k : M → Game α} {σ : List Kind} : (∀ m, Exact (k m) σ) → Exact (.send M k) (.msg M :: σ)
@@ -94,7 +76,6 @@ theorem Spine.recv_bind {M : Type} {f : M → Game β} {σ : List Kind} (h : ∀
 theorem Spine.draw_bind {C : Type} [Fintype C] [Nonempty C] {f : C → Game β} {σ : List Kind}
     (h : ∀ x, Spine (f x) σ) : Spine (draw C >>= f) (.coin C :: σ) := .coin h
 
-/-- **A run follows its game's spine**: its kinds, in order, are a prefix of the spine. -/
 theorem Spine.prefix {g : Game α} {ts : List Step} {a : α} (hp : PlaysT g ts a) :
     ∀ {σ : List Kind}, Spine g σ → ts.map kindOf <+: σ := by
   induction hp with
@@ -125,8 +106,6 @@ theorem weave_self : ∀ ts : List Step,
       rw [List.map_cons, List.filterMap_cons, List.filterMap_cons, Sum.getLeft?_inr, Sum.getRight?_inr]
       exact congrArg (_ :: ·) (weave_self ts)
 
-/-- **A run's tape is its messages and coins woven along the spine.** Where the coins fall among the messages is the
-spine's, not the run's. -/
 theorem Spine.tape {g : Game α} {ts : List Step} {a : α} {σ : List Kind} (hp : PlaysT g ts a) (hs : Spine g σ) :
     ts = weave (σ.take ts.length) (ts.filterMap Sum.getLeft?) (ts.filterMap Sum.getRight?) := by
   have h := List.prefix_iff_eq_take.mp (Spine.prefix hp hs)
@@ -134,7 +113,6 @@ theorem Spine.tape {g : Game α} {ts : List Step} {a : α} {σ : List Kind} (hp 
   rw [← h]
   exact (weave_self ts).symm
 
-/-- **A run takes its game's exact shape.** -/
 theorem Exact.kinds {g : Game α} {ts : List Step} {a : α} (hp : PlaysT g ts a) :
     ∀ {σ : List Kind}, Exact g σ → ts.map kindOf = σ := by
   induction hp with
@@ -150,8 +128,6 @@ theorem Exact.kinds {g : Game α} {ts : List Step} {a : α} (hp : PlaysT g ts a)
       intro σ hs
       cases hs with
       | coin hk => exact congrArg (_ :: ·) (ih (hk x))
-
-/-! ## The PIOP's phases -/
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D : Type}
 
@@ -228,8 +204,6 @@ theorem opening_exact (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (C
   unfold opening opShape
   exact Exact.bind (switches_exact claims) fun sw => Exact.draw_bind fun γ => .ret _
 
-/-! ## Compiled Ligerito -/
-
 /-- `k` folding rounds: a coin of two words (`drawK`) and a message pair of `K`. -/
 def foldShape (F K : Type) : ℕ → List Kind
   | 0 => []
@@ -245,7 +219,6 @@ theorem foldRoundsC_exact (A : Arith F K) : ∀ (k : ℕ) (s : Opens F D → K) 
       rw [← List.append_nil (foldShape F K k)]
       exact Exact.bind (foldRoundsC_exact A k _ _) fun r => .ret _
 
-/-- The two out-of-domain samples of a level of dimension `dim`. -/
 def oodShape (F K : Type) (dim : ℕ) : List Kind :=
   [.coin (Fin dim → F), .msg F, .msg (K × K), .coin F, .coin (Fin dim → F), .msg F, .msg (K × K), .coin F]
 
@@ -303,7 +276,6 @@ theorem recursiveRoundsC_spine (A : Arith F K) (r n : ℕ) (b : ℕ → F) (init
       exact Exact.bindS (queryAndBatchC_exact A r lv _ _ _ true) fun st' =>
         recursiveRoundsC_spine A r n b initial ext (lv' :: rest) _
 
-/-- Compiled Ligerito's shape, read off the schedule's levels. -/
 def ligShape (F K D : Type) (sch : Schedule) : List Kind :=
   match sch.levels with
   | [] => []
@@ -328,16 +300,12 @@ theorem ligeritoC_spine (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) (b : 
       exact Exact.bindS (queryAndBatchC_exact A r lv₀ _ _ _ true) fun st =>
         recursiveRoundsC_spine A r _ b _ sch.ext (lv₁ :: rest') _
 
-/-! ## A rep -/
-
 /-- **A rep's shape**: the zerocheck's, the lincheck's, the opening's of the `2 + nExtra` claims, then compiled
 Ligerito's. -/
 def repShape (F K D : Type) (m kLog nExtra : ℕ) (sch : Schedule) : List Kind :=
   zcShape F m ++ (lcShape F kLog ++ (opShape F (nExtra + 2) ++ ligShape F K D sch))
 
 omit [Fintype K] in
-/-- **A rep has a spine.** Every run of rep `r` takes its steps in the order of `repShape`, which reads only `m`,
-`k_log`, the number of extra claims and the schedule; it may stop early only on a reject. -/
 theorem repC_spine (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) :
     Spine (repC (D := D) A r S sch hm extra) (repShape F K D S.m S.kLog extra.length sch) := by
@@ -354,16 +322,12 @@ theorem repC_spine (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (h
       · exact ligeritoC_spine A r sch op.T op.b
 
 omit [Fintype K] in
-/-- **A rep's run follows `repShape`**: on any tape, a run of rep `r` takes steps whose kinds, in order, are a prefix
-of `repShape`. -/
 theorem repC_kinds (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) {ts : List Step} {p : PendL F D} (h : PlaysT (repC A r S sch hm extra) ts p) :
     ts.map kindOf <+: repShape F K D S.m S.kLog extra.length sch :=
   Spine.prefix h (repC_spine A r S sch hm extra)
 
 omit [Fintype K] in
-/-- **A rep's tape is determined by its messages and coins.** Two runs of rep `r`, with the same messages and coin
-steps in order, are runs on the same tape: `repShape` places the coins among the messages. -/
 theorem repC_tape (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) {ts ts' : List Step} {p p' : PendL F D} (h : PlaysT (repC A r S sch hm extra) ts p)
     (h' : PlaysT (repC A r S sch hm extra) ts' p') (hms : ts.filterMap Sum.getLeft? = ts'.filterMap Sum.getLeft?)

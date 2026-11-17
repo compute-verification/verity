@@ -24,24 +24,7 @@ import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The decoder is right at the hidden-output headline's samples
-
-`decodesOn_execH`: DecodeZL's `decodesOn_exec` at the hidden tables, from `Discharge/PlaysCoin`'s `decodesOnOfRuns`. At an
-outcome verity-verify-proof accepts under hidden outputs:
-
-* `accepts_repsH`: DecodeZL's `accepts_reps` under hidden outputs. The one table's statement `st` is setupHidden's at
-  the record's sample, and the per-rep facts come from the acceptance lemmas without `hh` (`accepts_verdict_leafAny`,
-  `accepts_rep_roundsAny`, `setupTables_okAny`, `setupTables_pointsAny`, `Discharge/HiddenExec`), the verdict at the
-  model's leaf of the tags' leaf scheme (`leafOfId`: `leaf512` under `hm96-sha512/v1`, `leafPlain` under plain SHA-512
-  leaves).
-* `tableAtH_of_acceptsU` puts `stmtOf st` at the hidden table, from the session alone (so `decodesOn_execHSt` holds at
-  the statement circuit, `HmOut.parseStmt`), `tableAtH_ptLocal` its link layout at `PT_LOCAL`, and
-  `fast100_schedOf` its schedule at `fast100`'s.
-* DecodeZL's `repRun_at`, at its wires' chunk lemmas `op_carries` and `lig_carries` (and `zl_carries`, which `repRun_at`
-  reads), makes each rep's run a `RepRun` for `decAt`; `RecordsLive` says the outcome's rounds, link points, root and
-  proof files are the record's.
--/
+/-! `decodesOn_execH`: the decoder is right at the hidden-output headline's samples. -/
 
 @[expose] public section
 
@@ -53,8 +36,6 @@ open FlockSoundness.Discharge.HiddenExec
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **verity-verify-proof's acceptance of a one-table session under hidden outputs, rep by rep**: DecodeZL's `accepts_reps`
-with setupHidden's statement `st` at the record's sample, the verdict at the model's leaf of the tags' leaf scheme. -/
 theorem accepts_repsH {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = true)
     (hrr : I.tags.retainRounds = true)
     (hl : I.tags.merkleLeaf = "hm96-sha512/v1" ∨ I.tags.merkleLeaf = "flock-leaf/sha512-unsalted") (hc1 : I.count ≤ 1)
@@ -117,13 +98,10 @@ theorem accepts_repsH {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutp
   · exact ⟨e₁, f₁, T₁, hf₁, hq₁, hpl₁, hl₁, hr₁⟩
   · omega
 
-/-- The hidden tables put the link claims at `PT_LOCAL`, at a sample that sets up and at a refused one. -/
 theorem tableAtH_ptLocal {n mPts : ℕ} {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (x₀ : SampleSetupH I mPts S₀ (dj S₀)) (S : Finset (Fin n)) : (tableAtH dj x₀ S).T.ptLocal = PT_LOCAL := by
   rcases tableAtH_cases dj x₀ S with ⟨x, e⟩ | e <;> rw [e] <;> rfl
 
-/-- **The decoder is right at the hidden-output headline's samples**, from the session alone (`DecodesOnExecH` with no
-hypothesis on the circuit: `tableAtH_of_acceptsU`). -/
 theorem decodesOn_execHU {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
     (L : SamplingDesign n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
@@ -188,8 +166,6 @@ theorem decodesOn_execHU {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {mPt
   exact hv
 
 set_option linter.unusedVariables false in
-/-- **The decoder is right at the hidden-output headline's samples**, wherever the outputs are returned
-(`DecodesOnExecH` without `c.outNet = c.unitNet`). -/
 theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
@@ -201,7 +177,6 @@ theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags
   decodesOn_execHU ht dj x₀ L wr hT hwr hdraw
 
 set_option linter.unusedVariables false in
-/-- `decodesOn_execHI` at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled). -/
 theorem decodesOn_execHISt {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
