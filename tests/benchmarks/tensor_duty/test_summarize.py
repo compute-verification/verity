@@ -12,6 +12,7 @@ import summarize as S
 
 from verity.device import load_card
 
+CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
 BOUND = 132 * 4096 * 1830e6
 SECS = 1.2
 
@@ -35,9 +36,9 @@ def run(tmp_path: Path, *pts: dict, name: str = "out") -> tuple[int, dict]:
 
 def test_the_bound_is_the_cards_tensor_rate_and_follows_its_clock(monkeypatch: pytest.MonkeyPatch) -> None:
     assert S.readings() == (BOUND, 132 * 4096 * 1980e6, 132 * 4096 * 1e6)
-    card = copy.deepcopy(load_card(S.SKU))
+    card = copy.deepcopy(load_card(S.SKU, directory=CARD_FILES))
     card["clock"]["tensor"]["value"] = 1900
-    monkeypatch.setattr(S, "load_card", lambda sku: card)
+    monkeypatch.setattr(S, "load_card", lambda sku, *, directory: card)
     assert S.readings()[0] == 132 * 4096 * 1900e6
 
 
@@ -100,3 +101,18 @@ def test_the_fills_table_gives_a_fill_and_bursts_highest_rate_and_mean_clocks() 
 def test_no_points_is_no_verdict(tmp_path: Path) -> None:
     (tmp_path / "out").mkdir()
     assert S.main([str(tmp_path / "out")]) == 2
+
+
+def test_the_metric_is_the_fastest_points_share_of_the_card_with_the_stamps_either_way() -> None:
+    t = S.top_share([point(0.5), point(0.9, clock="default", arm="wg_e4m3", **{"class": "uniform"})])
+    assert t["share"] == pytest.approx(0.9) and t["share_lo"] < 0.9 < t["share_hi"]
+    assert (t["sheet"], t["clock"], t["arm"], t["class"]) == (S.SKU, "default", "wg_e4m3", "uniform")
+
+
+def test_a_build_lease_or_point_exiting_nonzero_fails_the_gate_and_a_skipped_clock_does_not(tmp_path: Path) -> None:
+    assert S.gate_failures(tmp_path) == [f"no {tmp_path / 'rc.txt'}"]
+    (tmp_path / "rc.txt").write_text("build rc 0\nclock 1980 rc 1\nclock 1980 skipped: not locked\n"
+                                     "default wg_s8 zero idle 65536 rc 0\nlease rc 0\n")
+    assert S.gate_failures(tmp_path) == []
+    (tmp_path / "rc.txt").write_text("build rc 0\ndefault wg_s8 zero idle 65536 rc 139\nlease rc 2\n")
+    assert S.gate_failures(tmp_path) == ["default wg_s8 zero idle 65536 rc 139", "lease rc 2"]

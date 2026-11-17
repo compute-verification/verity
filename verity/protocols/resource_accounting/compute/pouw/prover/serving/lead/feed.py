@@ -1,9 +1,9 @@
 """The lead's coin feed: the coins the network attester samples for one call of the lead (layout
 ``blc4a_t64_e7_s1_rot_fold``) once it holds the call's root(A_j), packed as the served kernel reads them, and the
-in-process certifier that stands in for the certifier's coin link (`CoinLink`).
+in-process certifier that stands in for the network attester's coin link (`CoinLink`).
 
 * **A call** (`Call`): its pass, its index in the pass, its linear's index among the registered linears and its shape
-  m × K × n, which the up-link carries beside root(A_j) so the certifier can size the call's feed.
+  m × K × n, which the up-link carries beside root(A_j) so the network attester can size the call's feed.
 * **Its sizes** (`Shape`): S = 1 + ⌈max(K − 21, 0)/28⌉ k32 steps (step 0 holds 21 data lanes, each later step 28),
   H = ⌈(S + 3)/32⌉ row words, R = 16⌈m/16⌉ committed rows and C = 8⌈n/8⌉ committed columns (m and n padded to whole
   16 × 8 MMA tiles) and T = ⌈R/64⌉ coin tiles.
@@ -14,7 +14,7 @@ in-process certifier that stands in for the certifier's coin link (`CoinLink`).
 
   ============  ==================================================================================================
   row words     u32 [R, H]: row i's bit e is a1[i, e] (e < 4) and bit t + 3 is b[i, t] (t = 1 .. S − 1)
-  G words       u32 [C]: byte e is the int8 G[e, j]. The certifier samples a u32 u and keeps it below `G_KEEP`; G[e, j]
+  G words       u32 [C]: byte e is the int8 G[e, j]. The network attester samples a u32 u and keeps it below `G_KEEP`; G[e, j]
                 is digit e of u mod 2401 in base 7, less 3, so G is uniform on [−3, 3]⁴
   lane words    u32 [T, S, C]: bytes 0-2 the int8 coin lanes s[t, rt, ℓ, j]; byte 3 public, C[3, j] at step 0, else 1
   col sources   i32 [T, 2, C]: 0x4B400000 − σ, σ[rt, c, j] = Σ_t Σ_ℓ ROT_W[c][ℓ]·s[t, rt, ℓ, j], row class c = i mod 2
@@ -55,12 +55,12 @@ MAX_TILES = 2**40
 ROOT_BYTES = 64
 IN_PROCESS = "in-process"
 
-#: ``rand(n)``: n bytes from the certifier's source
+#: ``rand(n)``: n bytes from the network attester's source
 Rand = Callable[[int], bytes]
 
 
 class FeedError(ValueError):
-    """A release the certifier refuses."""
+    """A release the network attester refuses."""
 
 
 def steps(k: int) -> int:
@@ -275,7 +275,7 @@ class CoinLink(Protocol):
 
 @dataclass(frozen=True)
 class WindowSalt:
-    """What a certifier holds of a window before it samples the window's salt, and the salt."""
+    """What a network attester holds of a window before it samples the window's salt, and the salt."""
 
     key_leaf: bytes
     weights_root: bytes

@@ -11,11 +11,11 @@ harness's `ControlResponder`) and `verity.protocols.resource_accounting.memory.p
 - **The limit.** `--calibrate-only` measures the round trip with pings (a block-sized answer that touches no GPU) and writes
   `limit_ns = Δ + allowance`, the allowance a quantile of it (`--allowance`). The harness runs it before any load and hands
   that limit to every audit (`--limit-ns`), so rounds under load are judged against the same limit. An audit given no limit
-  calibrates its own. The allowance is a loopback one (`allowance_kind`): a remote memory challenger's round trip adds to it.
+  calibrates its own. The allowance is a loopback one (`allowance_kind`): a remote memory attester's round trip adds to it.
 - **An audit** is `k` challenges (`--k`, else the certificate's, else `audit.CHALLENGES`), revealed one at a time, each correct
   and within the limit. Audits run as research audits, so a limit or a store the certificate does not cover is measured
   anyway; `gaps` names what it does not cover, and `bench.py`'s certificate gate decides.  With `--strict` (P2 v3's arm)
-  the memory challenger refuses a `k` or limit the certificate does not cover, sends no challenge and records `refused`.
+  the memory attester refuses a `k` or limit the certificate does not cover, sends no challenge and records `refused`.
 - **The record** keeps what re-derives every number: each audit's challenge source (with `vk` it gives every index), and each
   answer's block, its time, the responder's reported device and server time, and its verdicts.  Every document is judged
   from that record twice (`judge`), by the Lean's verdict (`pous-timed-audit`: `--lean-exe`, else `pous_check`'s) and by
@@ -25,7 +25,7 @@ harness's `ControlResponder`) and `verity.protocols.resource_accounting.memory.p
   counts as measured, judged by no one (`NO_LEAN`), with no profile.
   Under `--clock wall`, `host_trace`
   splits every round trip over `TRACE_OVER_NS` into where its time went, on CLOCK_MONOTONIC (`hosttrace.sh`'s kernel trace
-  of the same cores reads that clock), and `memory_challenger_rusage` counts the memory challenger thread's page faults and
+  of the same cores reads that clock), and `memory_attester_rusage` counts the memory attester thread's page faults and
   context switches.
 - **Clocks.** `--clock wall` (the default) times each answer on this process's monotonic clock. `--clock logical` takes each
   answer's time to be the responder's reported server time (the CPU tests: no outcome there depends on the machine).
@@ -72,7 +72,7 @@ OP_CHALLENGE, OP_PING, OP_CLOSE = 1, 2, 3
 HEADER = 24
 ALLOWANCE_KIND = "loopback"
 TRACE_OVER_NS = 60_000
-"""A round trip over this (or an answer the memory challenger timed over it) is kept in the audit's host trace."""
+"""A round trip over this (or an answer the memory attester timed over it) is kept in the audit's host trace."""
 
 
 def seeded_source(seed: bytes, j: int) -> bytes:
@@ -194,11 +194,11 @@ class LiveResponder:
 
 
 def host_trace(log: list[tuple[int, ...]], records: list[dict[str, Any]], over_ns: int = TRACE_OVER_NS) -> dict[str, Any]:
-    """The round trips of `log` over `over_ns` (pings, and challenges whose round trip or memory challenger time is), each
+    """The round trips of `log` over `over_ns` (pings, and challenges whose round trip or memory attester time is), each
     split on the clock (CLOCK_MONOTONIC under `--clock wall`, as bpftrace's `nsecs`): `send_ns` the request's send, `wait_ns`
     from it to the answer's first byte, of which `server_ns` the responder reported and `responder_other_ns` it did not (its
-    socket calls, loopback both ways, its core lost), `recv_ns` the rest of the answer, `outside_ns` the memory challenger's
-    own work between the challenge's clock and its answer's, and the longest gap between two of the memory challenger's polls
+    socket calls, loopback both ways, its core lost), `recv_ns` the rest of the answer, `outside_ns` the memory attester's
+    own work between the challenge's clock and its answer's, and the longest gap between two of the memory attester's polls
     (its core lost) with its start."""
     answers = iter([(ai, j, a) for ai, rec in enumerate(records) for j, a in enumerate(rec["answers"])])
     kept = []
@@ -252,8 +252,8 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
           clock: Callable[[], int] = time.perf_counter_ns, research: bool = True, seed: bytes | None = None) -> dict[str, Any]:
     """Run `audits` audits (the first is the audit of record) against the limit `limit_ns`, or `Δ` plus a calibration of this
     connection when none is given; pings before and after are kept either way.  The timed part runs with the garbage
-    collector frozen and off, on core `cpu` when given, since the memory challenger's own stalls count against the server.
-    With `research=False` (`--strict`) the memory challenger refuses an audit its certificate does not cover: no challenge is
+    collector frozen and off, on core `cpu` when given, since the memory attester's own stalls count against the server.
+    With `research=False` (`--strict`) the memory attester refuses an audit its certificate does not cover: no challenge is
     sent, and the record says why (`refused`).  Each audit's challenge source is `os.urandom(32)`, or `seeded_source(seed, j)`
     with `seed` (the logical clock's runs alone)."""
     if seed is not None and not isinstance(clock, LogicalClock):
@@ -319,7 +319,7 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
             "device_s": quantiles([a["device_ns"] / 1e9 for a in answers]),
             "server_s": quantiles([a["server_ns"] / 1e9 for a in answers]),
             "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()},
-            "memory_challenger_rusage": {"before": ru_before, "after": ru_after},
+            "memory_attester_rusage": {"before": ru_before, "after": ru_after},
             **({"host_trace": host_trace(r.log, records)} if r.log is not None else {}), "records": records}
 
 

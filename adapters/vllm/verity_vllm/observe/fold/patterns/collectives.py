@@ -16,9 +16,9 @@ rank Program binds through `vllm_bindings.AllReduce2Rule` / `AllGather2Rule`, so
 from __future__ import annotations
 
 from verity.circuits.defs import bind
+
 from verity_vllm.definitions.registry import b1_tp2
 from verity_vllm.definitions.registry import tp_allreduce as T
-
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.embedding import Embedding
 from verity_vllm.observe.fold.patterns.geometry import is_int, is_row_major
