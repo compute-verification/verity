@@ -43,22 +43,7 @@ import Proofs.Flock.SessionLoop.FinRepRows
 import Proofs.Flock.SessionLoop.FinRepXs
 import Proofs.Flock.SessionLoop.FinRounds
 
-/-!
-# The views' cut rep returns where the ZK server's rep did, with no rows
-
-The cut rep is answered by the opened coins, so its control flow reads only coins, sizes and points
-(`FlockComplete.CutFree.repCut_of_repFwC`): where the session's rep on the loop's table and request returned
-(`RepAt`, as `finRepCut` runs it at the opened coins), the cut rep at the same table and schedule, from any hash,
-level-0 commitment, pads commitment and source, returns from the rep's base, at the views' extra claims, the earlier
-reps' points and the mask slot's words, and ends where the ZK server's does, at the next rep's base (`finRepCut_size`).
-No premise on the views' masked values, and none on the rows.
-
-**`Loop.repCut_views_ret`**: that return, at any rep stream `k`.
-
-**`Loop.prevCut_views`**: the earlier streams' returns from the switched views' source, in the form `FinPiop`, `FinFc`,
-`swSrcE_hmk_fw` and `swSrcE_l0_views` take as `hprev`: at table `j`'s rep `r`, every stream below `2j + r` returns
-from its base and ends at the next one's, at any pads commitment.
--/
+/-! The views' cut rep returns where the ZK server's rep did, with no premise on the views' masked values or the rows. -/
 
 @[expose] public section
 
@@ -77,12 +62,6 @@ variable (L₀ : LeanRelease Flock.Wit Tp)
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 set_option maxHeartbeats 1000000 in
-/-- **The views' cut rep returns at the next rep's base**: in the masked scope, at a witness in the relation, at a
-`Finish` `FinishIs` reads, rep stream `k`'s cut rep at its table and `--zk` schedule, answered by the opened coins, from
-any hash, level-0 commitment, pads commitment and source, at the views' extra claims, the earlier reps' points and the
-mask slot's words, returns from the rep's base and ends at rep `k + 1`'s: the ZK server's rep stream `k` returned
-(`proofsOf_at`, `proofFile_ok`, `finRepCut`) and ends there (`finRepCut_size`), and the cut rep returns with it
-(`repCut_of_repFwC`), its rank check by `rank_at_admits`. -/
 theorem repCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
@@ -107,7 +86,6 @@ theorem repCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.
     unfold Masked.jOf
     exact ite_eq_left_of_eq_true _ _ (eq_true hx)
   have hA := admits_of_finCtx L₀ src (realOf src) wk hServe hF
-  -- the ZK server's rep stream `k`, at the opened coins
   obtain ⟨files, hp⟩ := proofsOf_ok_of_ctx L₀ src (realOf src) wk x w hF hsx
   have hrs : spec.repStreams.size = 2 * spec.tables.size := FlockDeploy.repStreams_size spec
   obtain ⟨tb, hi, q, hRep⟩ := proofsOf_at hp (k := k) (by rw [hrs]; exact hk)
@@ -116,7 +94,6 @@ theorem repCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.
     tr hic' hfw l hl
   have hgo := go_of_fst (finRepCut L₀ src (realOf src) wk x w hsc ν t κ m₀ ρ₀ ops hF s0 spec hsx k hk tb hi q _ hRep
     ic' p tr hic' hfw l hl)
-  -- the session's table and schedule
   obtain ⟨htb, hsb⟩ := finRepTab (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hs hk hRep
   obtain ⟨h25, -, -, -⟩ := finRepBounds (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hk hRep
   have hst := Masked.tabsOf_stAt x ⟨k / 2, by omega⟩
@@ -130,7 +107,6 @@ theorem repCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.
   have hfk : tb.st.fold.kLog = tb.st.kLog := by
     rw [← htb, hst]
     rfl
-  -- as many extra claims as the ZK server's
   have hxs := finRepXs L₀ src (realOf src) wk x w hsc hR ν t κ m₀ ρ₀ ops hF s0 spec hsx k hk extras hex tb hi q _ hRep
   have hcx := congrArg Array.size (_root_.Flock.ZkServer.Finish.claimsOf_map_x q.xs)
   have hex' := congrArg Array.size hxs
@@ -153,10 +129,6 @@ theorem repCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.
   exact hq
 
 set_option maxHeartbeats 1000000 in
-/-- **The earlier streams' cut reps return, with no rows**: at table `j`'s rep `r`, every rep stream `k < 2j + r`'s cut
-rep from the switched views' source, at the views' extra claims and any pads commitment, returns from its base and ends
-at rep `k + 1`'s (`repCut_views_ret`): the `hprev` that `FinPiop`, `FinFc`, `swSrcE_hmk_fw` and `swSrcE_l0_views`
-take. -/
 theorem prevCut_views (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)

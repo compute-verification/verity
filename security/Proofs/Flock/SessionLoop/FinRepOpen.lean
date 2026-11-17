@@ -43,27 +43,7 @@ import Proofs.Flock.Claims.ZK.FinishTrunc
 import Proofs.Flock.Claims.ZK.Round1Root
 import Proofs.Flock.SessionLoop.RepSrc
 
-/-!
-# (c.3)'s `FinRepOpen`: the pads' opened columns and salts
-
-`Loop.FinRepOpen` asks that the run from the views and the session's rep open the pads at the same columns and salts.
-Both are answered by the opened coins (`asksCut`), so each opens its pads commitment at `padQs`, its last round's `Q`
-coins mod the commitment's size (`FlockComplete.repCut_padsAt`, `Finish.repFwC_padsAt`). Both end at rep `k + 1`'s
-first round (the views' by `Loop.FinRepRounds`, the session's as the ZK server's run does, `Loop.finRepCut_size`), so the
-queried positions are one, and at each the two commitments agree:
-
-* the views' commitment holds the views' pads columns and salts (`FlockComplete.padsTreeCut_cols`). Where table `k / 2`'s
-  rows hold at its base (`Loop.FinRows`), the switched view's are the honest view's (`Coined.swExe_padCols`,
-  `Loop.finSrc_padCols`), and at a queried position those are the codes of the tape's pads and its fitted leaf salt
-  (`Masked.srcV_padQs`);
-* the session's commitment holds the codes of the request's pads (`innerCommitP_rows`), which are the tape's
-  (`Masked.pads_frame_eq`), under the request's leaf salts, which are the tape's (`Loop.RepSrc.innerSalt`,
-  `innerSalt_fit`).
-
-**`Loop.finRepOpen`**: at a live statement where the frame samples the tape's pads (`Loop.RepSrc`), `FinRepOpen` holds
-wherever every table's rows hold at its base (`Loop.FinRepRows`) and each rep stream's run from the views ends at the next
-one's first round (`Loop.FinRepRounds`).
--/
+/-! (c.3)'s `FinRepOpen`: the pads' opened columns and salts, wherever every table's rows hold at its base. -/
 
 @[expose] public section
 
@@ -71,7 +51,6 @@ namespace FlockComplete
 
 open Flock
 
-/-- **A pads commitment from a source holds the source's columns and salts.** -/
 theorem padsTreeCut_cols {hs : Hashes PS} {n : ℕ} {S : RepSrc} {l l' : Array Claims.Msg} {ic : InnerCommit}
     (h : (padsTreeCut hs n S).go l = (.ok ic, l')) :
     ic.ch = (Array.range n).map S.ch ∧ ic.cm = (Array.range n).map S.cm ∧
@@ -87,7 +66,6 @@ theorem padsTreeCut_cols {hs : Hashes PS} {n : ℕ} {S : RepSrc} {l l' : Array C
     subst h1
     exact ⟨rfl, rfl, rfl⟩
 
-/-- `RunPost` at a run whose value is known: it holds at the run's last history. -/
 theorem RunPost.fst {α : Type} {m : TMW PS α} {P : α → Transcript → Array Claims.Msg → Prop} (h : RunPost m P)
     {s : Transcript} {l : Array Claims.Msg} {a : α} {t : Transcript} (e : ((m.run s).go l).1 = .ok (a, t)) :
     P a t ((m.run s).go l).2 :=
@@ -97,8 +75,6 @@ end FlockComplete
 
 namespace Flock.ZkServer.Finish
 
-/-- **The ZK server's rep answered by `asksCut` opens its pads commitment at the queried positions**, as the session's
-does (`FlockComplete.repPZk_padsAt`). -/
 theorem repFwC_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes FlockComplete.PS) (st : Setup)
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
     (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array F128)
@@ -117,8 +93,6 @@ theorem repFwC_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes Flock
 
 end Flock.ZkServer.Finish
 
-/-- **Where its rows hold at its base, a switched view's pads columns and salts are the honest view's**: it is the view
-at the workers' values (`Hm96.swViewR_eq`), and the pads columns and salts read the pads and seeds alone. -/
 theorem FlockSoundness.Discharge.ZkView.Coined.swExe_padCols {K W Hi VL : Type} [Field K]
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (ω : T.tab.Rand) (ys : T.tab.Hid → FlockSoundness.Discharge.ZkView.Salt)
@@ -151,10 +125,6 @@ open Claims FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge CoinLa
 
 attribute [local irreducible] Composed.treeEquiv
 
-/-- **At a queried pads position the views read the tape's pads**: where the history's last round is table `i`'s rep
-`r`'s query round (`innerOff 3`), each position `padQs` queries is below the pads tree's leaf count, and there table
-`i`'s rep `r` source from the views reads the codes of `h ‖ pad_h` and `μ ‖ pad_μ` and the tape's pads salt fitted to
-192 bytes (`srcV_pads`, at the opened position `coinedOf_sP_val` places there). -/
 theorem srcV_padQs (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i r : ℕ}
     (hi : i < jOf x) (hr : r < 2) {L : Array Msg} (hslot : L.size - 1 = repSlot x (2 * i + r) (innerOff 3)) :
     ∀ j ∈ FlockComplete.padQs (fun k i => slotAt c k i) L
@@ -202,8 +172,6 @@ theorem srcV_padQs (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims
   rw [hsp] at s1 s2 s3
   exact ⟨hjN, s1, s2, s3⟩
 
-/-- **A source reads its view's pads columns and salts**: views with the same pads columns and salts at table `i` give
-sources with the same ones at each of its reps. -/
 theorem tabSrcView_padCols (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (v v' : ∀ j, ((tabC P x j).T (cz j)).tab.View) {i r : ℕ} (hi : i < jOf x) (hr : r < 2)
     (h1 : (v ⟨i, hi⟩).ch = (v' ⟨i, hi⟩).ch) (h2 : (v ⟨i, hi⟩).cm = (v' ⟨i, hi⟩).cm)
@@ -229,21 +197,16 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
-/-- **Table `j`'s rows hold at its base**: at the opened coins, the workers' values `vs` satisfy table `j`'s rows at the
-base the tape gives it, so its switched view is the view at those values (`Hm96.swViewR_eq`). -/
 def FinRows (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape) (ops : List (Msg × Msg))
     (j : Fin (Masked.jOf x)) : Prop :=
   ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt (finS.wt x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)
     (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1
 
 open FlockSoundness.Discharge in
-/-- **Where its rows hold, the views' pads columns and salts are the honest views'**: table `i`'s rep `r` source from
-the switched views reads the switched view's pads columns and salts (`Masked.tabSrcView_padCols`), which are the honest
-view's (`Coined.swExe_padCols`). -/
 theorem finSrc_padCols (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) {i r : ℕ} (hi : i < Masked.jOf x) (hr : r < 2) (hrows : FinRows vs x w ν t ops ⟨i, hi⟩) :
     ((finSrc vs x w ν t ops i).rep r).ch = ((Masked.srcV x (finCoins x ops) w t i).rep r).ch ∧
@@ -261,14 +224,10 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **Every table's rows hold at its base** at a `Finish` `FinishIs` reads (`FinRows`). -/
 def FinRepRows : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ j, FinRows vs x w ν t ops j
 
-/-- **The session's rep ends at the next rep's first round**: in the masked scope, where the ZK server's rep on rep
-stream `k`'s table and request returns at its last coin, `repFwC` on the same inputs answered by the opened coins, from
-a history at the rep's first round, ends at rep `k + 1`'s (`repFwC_br`, at the rep's `repRounds` coins). -/
 theorem finRepCut_size (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) :
     ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -327,13 +286,6 @@ theorem finRepCut_size (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Fl
   rw [Masked.repBase_eq hsx (k + 1), FlockComplete.ZkTables.repStart_succ, ← Masked.repBase_eq hsx k]
   exact hb
 
-/-- **`FinRepOpen` holds where the rows hold**: at a live statement where the frame samples the tape's pads
-(`Loop.RepSrc`), wherever every table's rows hold at its base (`FinRepRows`) and each rep stream's run from the views
-ends at the next one's first round (`FinRepRounds`), the views and the session's rep open the pads at the queried
-positions (`repCut_padsAt`, `Finish.repFwC_padsAt`), one set since both runs end at rep `k + 1`'s first round
-(`finRepCut_size`), and there the views' commitment (`padsTreeCut_cols`, `finSrc_padCols`, `Masked.srcV_padQs`) and the
-session's (`innerCommitP_rows`, `innerCommitP_salts`, at the tape's pads `Masked.pads_frame_eq` and leaf salts
-`RepSrc.innerSalt`) agree. -/
 theorem finRepOpen (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) (hRows : FinRepRows vs L₀ src real wk x w)
     (hD : FinRepRounds vs L₀ src real wk x w) : FinRepOpen vs L₀ src real wk x w := by
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
@@ -354,14 +306,12 @@ theorem finRepOpen (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) (hRows :
     unfold Loop.frepOf
     omega
   have hi' : k / 2 < (Masked.stsOf x).size := Masked.lt_of_jOf ⟨k / 2, hj⟩
-  -- the two runs end at rep `k + 1`'s first round
   have hszV := (hD ν t κ m₀ ρ₀ ops hctx s0 spec hsx schs hschs cms hcms k hk extras hxe ic l hic hl p' tr l' hv).2
   obtain ⟨ic'', p'', tr'', hic'', hrun'', -⟩ := _root_.Flock.ZkServer.Finish.proofFile_ok hR.2.2
   have hii : ic'' = ic' := Except.ok.inj (hic''.symm.trans hic')
   rw [hii] at hrun''
   have hszF := finRepCut_size L₀ src real wk x w hx.1 ν t κ m₀ ρ₀ ops hctx s0 spec hsx k hk tb hi q f hR ic' p'' tr''
     hic' hrun'' l hl
-  -- both open their pads commitments at `padQs`
   obtain ⟨hF1, hF2⟩ := FlockComplete.RunPost.fst
     (_root_.Flock.ZkServer.Finish.repFwC_padsAt (fun k i => Masked.slotAt (finCoins x ops) k i) (refK x)
       _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
@@ -369,7 +319,6 @@ theorem finRepOpen (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) (hRows :
   unfold viewRep at hv'
   obtain ⟨hV1, hV2⟩ := FlockComplete.repCut_padsAt (fun k i => Masked.slotAt (finCoins x ops) k i) (refK x)
     _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hv'
-  -- the layout, schedule and leaf count
   have htab : (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]! = _root_.Flock.Setup.ofCircuit (Masked.stAt x ⟨k / 2, hj⟩) := by
     rw [getElem!_pos (FlockDeploy.tabsOf (Masked.stsOf x)) (k / 2) (by simpa [FlockDeploy.tabsOf] using hi')]
     simp [FlockDeploy.tabsOf, Masked.stAt]
@@ -380,7 +329,6 @@ theorem finRepOpen (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) (hRows :
     exact hall ⟨k / 2, hj⟩
   obtain ⟨N, hN⟩ : ∃ N, N = ((Masked.layE x ⟨k / 2, hj⟩).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
       2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE := ⟨_, rfl⟩
-  -- the views' commitment
   unfold padsView at hic
   rw [htab, hsj] at hic
   obtain ⟨hc1, hc2, hc3⟩ := FlockComplete.padsTreeCut_cols hic
@@ -395,7 +343,6 @@ theorem finRepOpen (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) (hRows :
     all_goals rfl
   have hicN : ic.ch.size = N := by rw [hc1', Array.size_map, Array.size_range]
   obtain ⟨hpc1, hpc2, hpc3⟩ := finSrc_padCols vs x w ν t ops hj hr (hRows ν t κ m₀ ρ₀ ops hctx ⟨k / 2, hj⟩)
-  -- the session's commitment, at the tape's pads
   obtain ⟨-, hq, -⟩ := hR
   unfold repInOf at hq
   obtain ⟨⟨lay, ms⟩, hst, hq⟩ := bok hq
@@ -443,7 +390,6 @@ theorem finRepOpen (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) (hRows :
     simp [FlockComplete.padsOf]
   rw [hP, hpdH, ← hN] at hch hcm hsl
   have hic'N : ic'.toC.ch.size = N := by rw [hch, Array.size_map, Array.size_range]
-  -- the leaf salts the session commits under are the tape's
   have hsalt : ∀ j, j < N → FlockComplete.fitBytes 192 ((Masked.UE.tapeZk t).innerSalt (k / 2) (k % 2) j) =
       FlockComplete.fitBytes 192 (_root_.Flock.ZkServer.Finish.saltAt q.draws.salts j) := by
     intro j hjN
@@ -467,7 +413,6 @@ theorem finRepOpen (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) (hRows :
       exact FlockComplete.JsonRT.fitBytes_size 192 _
     rw [Claims.ZKServer.fitBytes_of_size _ _ hsz]
     exact e
-  -- the queried positions are one
   have hslot : l'.size - 1 = Masked.repSlot x (2 * (k / 2) + k % 2) (Masked.innerOff 3) := by
     have hst' : (Masked.stsOf x)[(2 * (k / 2) + k % 2) / 2]! = Masked.stAt x ⟨k / 2, hj⟩ := by
       rw [show (2 * (k / 2) + k % 2) / 2 = k / 2 by omega]

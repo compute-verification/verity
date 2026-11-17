@@ -35,27 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ERep
 import Proofs.Flock.Claims.Sampling.Cost
 
-/-!
-# The sampled compiler's extraction: assembling and binding
-
-`Compiled.E` at an accepted run assembles the openings its sampled proof blocks' extractions keep. This file proves
-`KSOf`'s deterministic half: an extraction that fails gives the failure event the probabilistic half bounds
-(`Compiled.Fails` at `Compiled.Found`, `SamplingGeneric/Fails.lean`), or a `Bext` collision (`split`,
-`Claims.Sampling`'s `split` with Flock's `E^rep` replaced by `Arg`'s extractor at each sampled proof block's session).
-With `KS_of_sessionKS` it gives `KSOf` (`ksOf`).
-
-* `innerBody`, `outerBody`, `outerList`, `found`: **the extractor's parts**, and what it keeps (`E_eval`); the kept
-  openings pass their checks, with the checks' calls among the extractor's own (`passes_runExt`, `passes_found`,
-  `ownLog_E`), and the revealed openings that pass, at a block of a session of the sample, of the session's extracted
-  witness at its first slot's coins, are kept (`sessExt_mem`, `mem_runExt`, `mem_found`); so are a good block's
-  (`good_found`), whose slot shows its first slot's session (`Sessions.shared`).
-* `split`: **the deterministic half**. At an accepted run whose extraction fails, `Fails` holds or the extractor's own
-  calls collide. Two kept openings under one roots at one position that disagree are a collision of the calls that
-  checked them (`CommitmentScheme.Binds`), so without one the kept openings agree and assemble a witness; its incorrect
-  set is refused at `δ`, and a block of it found at a kept inner run would be correct at the kept openings
-  (`Sessions.opens`, with the interior roots fixed by the first stage, `Sessions.interior`).
-* `ksOf`: **`KSOf`**, `KS_of_sessionKS` at `split`.
--/
+/-! The deterministic half of `KSOf`: an extraction that fails gives the failure event or a `Bext` collision. -/
 
 @[expose] public section
 
@@ -71,28 +51,23 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## The extractor's parts -/
-
-/-- The extractor at one accepted inner run `li`, under the outer run `j`: every slot's extraction (`runExt`). -/
 noncomputable def innerBody (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (c : L.ECoins x) (j : Fin (L.kOut x))
     (li : Fin (L.kIn x) × ((Fin (L.V.k x) → Coin) × Seen)) :
     RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
   L.runExt x s li.2.1 li.2.2 fun p => c.2.2 (j, li.1, p)
 
-/-- The extractor at one accepted outer run `jo`: the inner wait on the second stage, and `innerBody` at each. -/
 noncomputable def outerBody (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (c : L.ECoins x)
     (jo : Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen)) :
     RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
   (waitAccC (L.kIn x) ((List.finRange (L.capIn x)).map fun l => forkOn (L.secondStage x) jo.2.1 (c.2.1 jo.1 l)) []).bind
     fun inner => flatMapRP (L.innerBody x s c jo.1) ((List.finRange (L.kIn x)).zip inner)
 
-/-- The outer wait's kept runs, indexed. -/
 noncomputable def outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (c : L.ECoins x) : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen)) :=
   (List.finRange (L.kOut x)).zip ((waitAccC (L.kOut x) ((List.finRange (L.capOut x)).map c.1) []).eval H run').1
 
-/-- **What the extractor keeps** at the outer runs `Z`: at an accepted judged run, `Z = outerList`. The list is a
-parameter so that unfolding `found` never asks the kernel to evaluate the outer wait over `List.finRange (L.kOut x)`. -/
+/-- The list is a parameter so that unfolding `found` never asks the kernel to evaluate the outer wait over
+`List.finRange (L.kOut x)`. -/
 noncomputable def found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Transcript) (c : L.ECoins x)
     (Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))) : List (List Msg × Opening Bool) :=
@@ -104,7 +79,6 @@ theorem found_eq (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditSta
     L.found H x s run' c Z = ((flatMapRP (L.outerBody x s c) Z).eval H run').1 :=
   rfl
 
-/-- The extractor's program, with its outer body named. -/
 theorem E_ext_eq (L : Compiled Coin A) (x : Msg) (r₀ : Fin (L.V.k x) → Coin) (c : L.ECoins x) :
     L.E.ext x r₀ c = .rerun r₀ fun v₀ =>
       match L.parse x with
@@ -117,7 +91,6 @@ theorem E_ext_eq (L : Compiled Coin A) (x : Msg) (r₀ : Fin (L.V.k x) → Coin)
         else .ret none :=
   rfl
 
-/-- **The extractor at an accepted run** assembles what it keeps. -/
 theorem E_eval (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (L.V.k x) → Coin) (c : L.ECoins x) {s : AuditStatement} (hs : L.parse x = some s)
     (hacc : (run H P L.V x ω r₀).out = .acc) :
@@ -129,7 +102,6 @@ theorem E_eval (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover �
   rw [ite_eq_left hacc', (RP.eval_bind _ _ _ _).1, (RP.eval_bind _ _ _ _).1]
   rfl
 
-/-- The kept openings' checks are the extractor's own calls. -/
 theorem ownLog_E (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (L.V.k x) → Coin) (c : L.ECoins x) {s : AuditStatement} (hs : L.parse x = some s)
     (hacc : (run H P L.V x ω r₀).out = .acc) :
@@ -150,7 +122,6 @@ theorem passes_sessExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' :
   | none => exact Sampling.Passes.ret_nil H run' L.commit
   | some w => exact Sampling.Passes.flatMapRP fun _ _ => Sampling.Passes.checkRevealed H run' L.commit _
 
-/-- What a run's extractions keep passes its opening check, with the check's calls their own. -/
 theorem passes_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) :
     Sampling.Passes H run' L.commit (L.runExt x s r v c) := by
@@ -166,8 +137,6 @@ theorem passes_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (
   Sampling.Passes.flatMapRP fun _ _ => Sampling.Passes.bind _ fun _ => Sampling.Passes.flatMapRP fun li _ =>
     L.passes_runExt H x run' s li.2.1 li.2.2 _
 
-/-- A revealed opening that passes, at one of a session's proof blocks `us`, of the witness the session's extraction
-returns, is among the session's extraction's. -/
 theorem sessExt_mem (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (s : AuditStatement) (us : List ℕ) (u : ℕ) (r : Fin (L.V.k x) → Coin) (c : A.EC (L.sh x u)) {xS : Msg}
     {vS : Seen} (hsess : L.session x u (run' r).seen = some (xS, vS)) (h : A.shape xS = L.sh x u) {w : A.W}
@@ -183,8 +152,6 @@ theorem sessExt_mem (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (F
   rw [flatMapRP_eval]
   exact List.mem_flatMap.2 ⟨u', hu', mem_checkRevealed H run' L.commit hq hok⟩
 
-/-- The extraction of the session at its first slot of the sample, at the slot's coins, is among the run's
-extractions'. -/
 theorem mem_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) {i : Fin (L.nPU x)} {u : ℕ}
     (hi : (L.checked x r)[i.val]? = some u) (hlt : u < L.nPU x)
@@ -208,8 +175,6 @@ theorem mem_outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : 
   rw [waitAccC_eval_nil]
   exact mem_zip_finRange (getElem?_map_pair run' hj)
 
-/-- **A session's extraction at its first slot of a kept inner run, under a kept outer run, is kept**, at the slot's
-coins. -/
 theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Transcript) (c : L.ECoins x)
     {Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))} {j : Fin (L.kOut x)} {r : Fin (L.V.k x) → Coin}
@@ -237,10 +202,6 @@ theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditSt
   · rw [List.getElem?_map, hl]; rfl
   · exact L.mem_runExt H x run' s _ _ (fun p => c.2.2 (j, l, p)) hv hvlt hfirst hq
 
-/-- **A good block's openings are kept**: at an inner run `d` kept under a kept outer run `r`, a block `v` good at the
-extractor's coins there (`GoodAt` at `Found`: its session's first slot's block found) is sampled and shows its session,
-of a witness in `A`'s relation whose revealed openings at `v` that pass are kept: `v`'s slot has its first slot's key,
-so shows its session (`hshared`, the contract's `shared`), and is among its blocks. -/
 theorem good_found (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (ω : Ω) (x : Msg)
     (s : AuditStatement) (c : L.ECoins x)
     (hshared : ∀ r i j u u', (run H P L.V x ω r).out = .acc → (L.checked x r)[i]? = some u →
@@ -268,14 +229,6 @@ theorem good_found (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prov
   exact L.mem_found H x s _ c hj hl hu₀ u₀.isLt hfirst
     (L.sessExt_mem H x _ s _ _ _ _ hsess hsh hw hvb hq hok)
 
-/-! ## The split -/
-
-/-- **The split**: at an accepted run whose extraction fails, the failure event holds or the extractor's own calls
-collide. Otherwise the kept openings agree (`agree_of_passes`); take `B` the assembled witness's incorrect set, refused
-at `δ`, and a kept outer run `r`. At the interior values the kept openings under `r`'s interior roots give, the proof
-block at each `v ∈ B` is wrong (`faulty_incorrect`); a kept inner run at which `v` is good would make it correct
-(`Sessions.opens`, its revealed openings kept by `good_found`, the interior roots `r`'s by `Sessions.interior`), so `r`
-is bad for `B`. -/
 theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H) (δ : ℝ)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (r₀ : Fin (L.V.k x) → Coin) (c : L.ECoins x)
     (hacc : (run H P L.V x ω r₀).out = .acc)
@@ -333,7 +286,6 @@ theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
 
 end Compiled
 
-/-- **`KSOf`**: the sessions' bound at `Found` (`SessionKS`) and the split give `Compiled.KS`. -/
 theorem ksOf : KSOf := by
   intro Coin _ _ _ A L H hbind hS hSK
   exact Compiled.KS_of_sessionKS hS hSK fun δ _ x _ P s hacc hfail =>

@@ -4,24 +4,7 @@ public import Proofs.Flock.SamplingGeneric.TwoOneWaitAt
 public import Proofs.Flock.SamplingGeneric.TwoOffClassAvg
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The two-stage first-hit bound on the one-wait extraction, at the prover's expected calls
-
-`eventTwoX_oneWait_le_cls_at_budget` bounds the event at the one-wait extraction's committed traces at a budget `T`
-that **every** run of the prover keeps, both parties' SHA-512 calls counted. Here the same bound reads averages alone
-(`Compiled.CallsAvg`), as `eventTwoX_le_cls_avg` does for the proof system's own extraction:
-
-* `εclsOneWaitAvg`, `eventTwoX_oneWait_le_cls_avg`: **the bound at the prover's expected calls**,
-  `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCostAvg + 4·firstHitCostAvg)/2^256`, the two costs the one-wait compiled
-  verifier's: `runCostAvg = T + e_s·A_s + n_PU·openCalls` and
-  `firstHitCostAvg = T + e_s·A_s + A_k + e_s·A_m + (1 + K_s)·n_PU·openCalls` at one wait's `e_s`.
-* `eventTwoX_oneWait_le_cls_exp`: where the sample's three counts are at most `N_s`, `K_s` and `K_m` whatever the
-  coins, `εclsOneWait`'s expression with `T` the expected calls.
-
-The averages are over the prover's tape and the run's coins and do not read the extraction, so they are stated at
-the compiled verifier itself. The other premises are `eventTwoX_oneWait_le_cls_at_budget`'s, unchanged. No statement
-of the definitions tree changes.
--/
+/-! The two-stage first-hit bound on the one-wait extraction, at the prover's expected calls. -/
 
 @[expose] public section
 
@@ -34,25 +17,13 @@ namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The one-wait by-class first-hit bound's right-hand side at the prover's expected calls**:
-`3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCostAvg + 4·firstHitCostAvg)/2^256`, with `runCostAvg` and `firstHitCostAvg`
-the one-wait compiled verifier's: `εclsAvg`'s two costs at an extraction of one wait a session. -/
 noncomputable def εclsOneWaitAvg (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (T As Ak Am Ks : ℝ) : ℝ :=
   3 * L.κs x + 2 * Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) +
     2 * (2 * L.oneWait.toCompiled.runCostAvg x T As + 4 * L.oneWait.toCompiled.firstHitCostAvg x T As Ak Am Ks) /
       2 ^ (256 : ℝ)
 
-/-- **The event at the one-wait extraction's traces, by class of gates, at the prover's expected calls.** On a
-statement in scope, under `eventTwoX_oneWait_le_cls_at_budget`'s premises with its budget on every run replaced by
-the averages of `Compiled.CallsAvg` (`T` a run's expected calls, both parties', and `A_s`, `A_k`, `A_m` the expected
-products of the run's calls and its sample's three counts), an accepted run samples a proof block of the one-wait
-compiled verifier's `FregTwoX` with probability at most `εclsOneWaitAvg`:
-
-`3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·(T + e_s·A_s + n_PU·openCalls) + 4·(T + e_s·A_s + A_k + e_s·A_m`
-`+ (1 + K_s)·n_PU·openCalls))/2^256`,
-
-the costs those of an extraction that pays one wait a session. No run of the prover is held to a budget. -/
+/-- No run of the prover is held to a budget. -/
 theorem eventTwoX_oneWait_le_cls_avg {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
     (hA : A.KS H) (hbind : L.commit.Binds H) (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
@@ -112,14 +83,6 @@ theorem eventTwoX_oneWait_le_cls_avg {H : Msg → Msg} {L : CompiledTwo Coin A} 
     linarith
   exact key2 _ _ _ _ _ _ _ h hb hc (by positivity)
 
-/-- **The event at the one-wait extraction's traces, by class of gates, at the prover's expected calls and the
-sample's counts.** Under `eventTwoX_oneWait_le_cls_avg`'s premises with a run's expected calls at most `T` and the
-sample's three counts at most `N_s`, `K_s` and `K_m` whatever the coins, an accepted run samples a proof block of
-the one-wait compiled verifier's `FregTwoX` with probability at most `εclsOneWait`'s expression at the expected
-calls:
-
-`3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·(T·(1 + e_s·N_s) + n_PU·openCalls) + 4·(T·(1 + e_s·N_s + K_s + e_s·K_m)`
-`+ (1 + K_s)·n_PU·openCalls))/2^256`, at one wait's `e_s`. -/
 theorem eventTwoX_oneWait_le_cls_exp {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
     (hA : A.KS H) (hbind : L.commit.Binds H) (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)

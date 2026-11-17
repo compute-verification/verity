@@ -3,26 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.LiveInnerOwn
 public import Proofs.Flock.SessionLoop.InnerSlot
 
-/-!
-# The finish's rounds at the honest values
-
-`withInner` takes the rounds the finish hands a rep's frame for its inner proof as a parameter `fin`, of which
-`Frame.innerSched` reads round 0's `final_c'` and round 2's `τ` commitment. The loop's finish computes them from the
-history's messages (`Loop.finOf`); at the honest values they are the words the worker that sends the scheduled rounds
-with them writes there (`Loop.valsDev`), which read the history only through its coins:
-
-* **`Loop.finHonest`**: round 0 the inner proof's label and the honest `final_c` under the rep's pad at `final_c`, round 2
-  the honest `τ` commitment (`Loop.vsAt`, `Loop.vsTauAt`), at a release's configuration and rep.
-  `Loop.innerSched_finHonest0`, `Loop.innerSched_finHonest2`: the frame's own inner rounds 0 and 2 on them are those
-  rounds. `withInner` keeps the configuration and rep of the release it wraps (`Loop.cfg_ofLoopLink_withInner`,
-  `Loop.vsAt_ofLoopLink_withInner`, `Loop.vsTauAt_ofLoopLink_withInner`), so `finHonest` is taken at the release
-  without the finish's rounds.
-* **The transfer, on the honest worker's own runs**: at every history the deferred server meets (`ZkServer.OwnHist`),
-  the finish's rounds 0 and 2 are `finHonest`'s at their own inner rounds (`LeanRelease.finOf_finHonest0_own`,
-  `LeanRelease.finOf_finHonest2_own`: `finOf_finalC_own` and `finOf_tau_own` at the honest values), so `withInner`
-  schedules the same round at the loop's finish and at `finHonest` (`LeanRelease.scheduled_finOf_own`): the frame's own
-  inner round reads the finish's rounds only at their own index (`Loop.innerSched_congr`, `Loop.innerOf_congr`).
--/
+/-! The finish's rounds at the honest values, and that `withInner` schedules the same round at them on the honest worker's own runs. -/
 
 @[expose] public section
 
@@ -34,7 +15,7 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS innerSched ownRound)
 open _root_.Flock.ZkServer.Finish (Tab)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, as in `Statement`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
@@ -65,8 +46,6 @@ theorem ownRound_two_congr (c : Cfg) (s : Masker) (w w' t : ByteArray) (n : ℕ)
     ownRound c s w t n 2 = ownRound c s w' t n 2 :=
   rfl
 
-/-- **The frame's own inner round reads the finish's rounds only at its own index**: round 0 reads round 0's, round 2
-round 2's, and rounds 1 and 3 neither. -/
 theorem innerSched_congr (c : Cfg) (s : Masker) (n : ℕ) {fin fin' : Array ByteArray} :
     ∀ k, (k = 0 → fin.getD 0 .empty = fin'.getD 0 .empty) → (k = 2 → fin.getD 2 .empty = fin'.getD 2 .empty) →
       innerSched c s fin n k = innerSched c s fin' n k
@@ -81,8 +60,6 @@ theorem innerSched_congr (c : Cfg) (s : Masker) (n : ℕ) {fin fin' : Array Byte
     exact ownRound_two_congr _ _ _ _ _ _
   | _ + 3, _, _ => rfl
 
-/-- **The frame's own inner round 0 on `finHonest`** is the inner proof's label and the honest `final_c` under the
-pad. -/
 theorem innerSched_finHonest0 (L : LeanRelease Flock.Wit Tp) (x : Msg) (w : Flock.Wit) (ρ : Tp)
     (h : List (Msg × Msg)) (c : Cfg) (s : Masker) (n : ℕ) :
     innerSched c s (finHonest L x w ρ h) n 0 = inner0 (vsAt finS.honestVals L x w ρ h (L.cfg x ρ h).lay.fc +
@@ -91,7 +68,6 @@ theorem innerSched_finHonest0 (L : LeanRelease Flock.Wit Tp) (x : Msg) (w : Floc
   rw [finHonest_getD0, wordBytes_words_inner0]
   rfl
 
-/-- **The frame's own inner round 2 on `finHonest`** is the honest `τ` commitment's, at a rep of the tables. -/
 theorem innerSched_finHonest2 (L : LeanRelease Flock.Wit Tp) (x : Msg) (w : Flock.Wit) (ρ : Tp)
     (h : List (Msg × Msg)) (c : Cfg) (s : Masker) (n : ℕ) {j : Fin (Masked.jOf x)} {r : Fin 2}
     (hrep : L.rep x h.length = 2 * j.val + r.val) :
@@ -100,7 +76,6 @@ theorem innerSched_finHonest2 (L : LeanRelease Flock.Wit Tp) (x : Msg) (w : Floc
   rw [finHonest_getD2, wordBytes_words_inner2 (vsTauAt_size _ L x w ρ h hrep)]
   rfl
 
-/-- `withInner` keeps the configuration of the release it wraps. -/
 theorem cfg_ofLoopLink_withInner (L₁ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray))
@@ -110,7 +85,6 @@ theorem cfg_ofLoopLink_withInner (L₁ : LeanRelease Flock.Wit Tp)
   unfold LeanRelease.cfg LeanRelease.samplesAt
   rfl
 
-/-- `withInner` keeps the values `vsAt` reads at the release it wraps: they read its rep. -/
 theorem vsAt_ofLoopLink_withInner (vs : finS.SwVals) (L₁ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray))
@@ -129,8 +103,6 @@ theorem vsTauAt_ofLoopLink_withInner (vs : finS.SwVals) (L₁ : LeanRelease Floc
       vsTauAt vs (LeanRelease.ofLoopLink L₁ src real) x w ρ h :=
   rfl
 
-/-- **The loop's own inner round at two finishes' rounds**: where they give the frame's own inner round alike at every
-located rep past its schedule, at its index there, `innerOf` is the same at both. -/
 theorem innerOf_congr (real : ℕ → V (Tab × Array ByteArray)) (c : Cfg) (x : Msg) (cs : List FlockDeploy.Coin)
     {fin fin' : Array ByteArray}
     (h : ∀ (s0 : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt) (q k i : ℕ) (t : Tab)
@@ -172,8 +144,6 @@ end Loop
 
 namespace LeanRelease
 
-/-- **`withInner`'s round at two finishes' rounds**: where the loop's own inner round is the same at both, so is the
-round in the device's place. -/
 theorem withInner_scheduled_congr (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -201,10 +171,6 @@ theorem withInner_scheduled_congr (T : CoinLayer.TableData)
     | none => L₀.scheduled x w ρ h vals)
   rw [e]
 
-/-- **The finish's round 0 at the honest worker's own run is `finHonest`'s**: at a history the deferred server meets
-(`ZkServer.OwnHist`), live, whose openings pass and whose coins the frame takes, whose next round is rep `2j + r`'s inner
-round 0, the loop's finish hands the frame the inner proof's label and the honest `final_c` under the configuration's
-pad (`finOf_finalC_own` at the honest values), which is `finHonest`'s at the release without the finish's rounds. -/
 theorem finOf_finHonest0_own (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
@@ -246,10 +212,6 @@ theorem finOf_finHonest0_own (L₁ : LeanRelease Flock.Wit Loop.Tp)
     Loop.finHonest_getD0, Loop.vsAt_eq _ _ x w (ν, t) ((m₀, ρ₀) :: ops) _ hrep, Loop.cfg_ofLoopLink_withInner]
   all_goals rfl
 
-/-- **The finish's round 2 at the honest worker's own run is `finHonest`'s**: at a history the deferred server meets,
-as in `finOf_finHonest0_own`, whose next round is rep `2j + r`'s inner round 2, the loop's finish hands the frame the
-honest `τ` commitment (`finOf_tau_own` at the honest values, whose rows hold: `Loop.rowsOK_honestVals`), which is
-`finHonest`'s. -/
 theorem finOf_finHonest2_own (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
@@ -292,12 +254,6 @@ theorem finOf_finHonest2_own (L₁ : LeanRelease Flock.Wit Loop.Tp)
     Loop.finHonest_getD2, Loop.vsTauAt_eq _ _ x w (ν, t) ((m₀, ρ₀) :: ops) hrep]
   all_goals rfl
 
-/-- **The transfer: `withInner` schedules the same round at the loop's finish and at `finHonest` on the honest worker's
-own runs**. At a history the deferred server meets (`ZkServer.OwnHist`), live, whose openings pass and whose coins the
-frame takes, the round in the device's place at `withInner` on the loop's finish's rounds (`Loop.finOf`) is the one at
-`finHonest`'s: past a rep's schedule the frame's own inner round reads the finish's round 0 at its round 0 and its round
-2 at its round 2 (`Loop.innerOf_congr`, `Loop.innerSched_congr`), which are `finHonest`'s there
-(`finOf_finHonest0_own`, `finOf_finHonest2_own`), and elsewhere `withInner` sends `L₁`'s round at both. -/
 theorem scheduled_finOf_own (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))

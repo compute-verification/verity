@@ -8,37 +8,7 @@ public import Proofs.Flock.SamplingGeneric.Coins
 public import Proofs.Flock.SamplingGeneric.Fails
 public import Proofs.Flock.SamplingGeneric.Split
 
-/-!
-# The sampled compiler: a sampled proof block's session
-
-At an accepted run, a session's extraction (`Compiled.sessWit`, at the session's first sampled block) is `A`'s extractor
-at the block's session, each of its reruns the compiled verifier's run with the session's rounds replaced (`place`),
-seen as the session's view
-(`serve`, `viewing`). Here its success (`Compiled.Found`) is bounded from `A`'s knowledge soundness (`Arg.KS`), its
-rounds (`Arg.wf`) and the contract's `runs` and `fixed` (`RunsFixed`, which `Compiled.Sessions` and
-`CompiledTwo.Sessions` both give).
-
-* `served_eval`, `found_of`: under `runs`, the served extraction is `A`'s extractor against the session's prover `P'`
-  at the session's coins, since the session's coins of the placed coins are the placed ones (`coinsOf_place`, `A`
-  having as many rounds at the session's statement as the session) and the coins off the session are the run's
-  (`place_of_not_mem`).
-* `session_transfer`: **the session transfer**. At coins `R0` that sample `u`, over fresh coins on the session's rounds
-  and `A`'s extractor's coins, the run accepts while the block's extraction fails (not `Found`) with probability at
-  most `κ_A + √(γ_A·Pr[B_sess])` at the session's statement, with `B_sess` the session's prover's `B` against `A`'s
-  verifier: `A.KS` at `P'`.
-* `session_fork`, `session_fork_div`: **the session's fork**. `k_A·Pr[B_sess]` is at most the sum over the compiled
-  verifier's rounds of its fork's collision probability with the coins off the session fixed: a session round is a
-  compiled round through `emb`, and `P'`'s SHA-512 calls are among the compiled verifier's. So
-  `Pr[B_sess] ≤ (k_V/k_A)·Pr[B]` at the coins off the session, `Pr[B]` there the compiled verifier's `B` at its round
-  guess (`forkCollAt`), which averages to `PrB` (`Ex_forkCollAt`).
-* `session_gamma_le`, `fiber_bound`: the two at the largest of the proof blocks' error bounds,
-  `κ_s + √(k_V·γ_s·Pr[B])`, since `A`'s errors at the session are within the block's bounds (`runs`), so `κ_A ≤ κ_s`
-  and `γ_A/k_A ≤ γ_s`, `k_A` the rounds of the block's shape (`Arg.wf`).
-* `sessionKS_of`, `sessionKSOf`: **`SessionKS`**, at the slot a selection picks among the sample's, over the second
-  stage, `κ_s + √(k_V·γ_s·β(ω, r))` with `β` averaging at most `Pr[B]`: the coins the picked slot gives its block are
-  one coordinate of the slots' and then of the blocks' (`Pr_pi_eval_dep`), and resampling the block's session's rounds
-  keeps the pick (`fixed`, `Ex_resample`).
--/
+/-! A sampled proof block's session: its extraction's success bounded from the proof system's knowledge soundness and the contract. -/
 
 @[expose] public section
 
@@ -49,16 +19,11 @@ open Claims.Sampling (forkOn LogColl Ex_comp_inj Ex_resample forkOn_empty forkOn
 open Claims.Recursion (serve viewing)
 open Finset
 
-/-! ## Coins -/
-
-/-- **One coordinate of uniform dependent coins is uniform.** -/
 theorem Pr_pi_eval_dep {ι : Type} [Fintype ι] [DecidableEq ι] {E : ι → Type} [∀ i, Fintype (E i)]
     [∀ i, Nonempty (E i)] (i : ι) (q : E i → Prop) : Pr (fun c : (j : ι) → E j => q (c i)) = Pr q := by
   rw [← Pr_fst (β := (j : {j // j ≠ i}) → E j) q]
   exact Pr_equiv (Equiv.piSplitAt i E) fun p => q p.1
 
-/-- **Uniform coins restricted along an injective map, beside `A`'s extractor's coins cast along an equation of
-shapes, are uniform.** -/
 theorem Pr_restrict_shape {Coin : Type} [Fintype Coin] [Nonempty Coin] {A : Arg Coin} {m n : ℕ}
     (emb : Fin m → Fin n) (hemb : Function.Injective emb) {s s' : A.Sh} (hs : s = s')
     (Q : (Fin m → Coin) → A.EC s → Prop) :
@@ -68,19 +33,14 @@ theorem Pr_restrict_shape {Coin : Type} [Fintype Coin] [Nonempty Coin] {A : Arg 
   rw [Pr_prod_eq_Ex, Pr_prod_eq_Ex]
   exact Ex_comp_inj emb hemb fun a => Pr (Q a)
 
-/-! ## A verifier's `B`, at given coins -/
-
 section Fork
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- A verifier's `B` collision at the tape `ω` and the judged run's coins `R`, forking on round `j` to `R2`: the SHA-512
-calls of the two runs collide. -/
 def forkColl (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (j : Fin (V.k x))
     (R R2 : Fin (V.k x) → Coin) : Prop :=
   LogColl ((run H P V x ω R).vLog ++ (run H P V x ω (forkCoins j R R2)).vLog)
 
-/-- **`B`'s collision probability at `(ω, R)`**: over its round guess and the fresh coins after it. -/
 noncomputable def forkCollAt (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (R : Fin (V.k x) → Coin) : ℝ :=
   (∑ j, Pr fun R2 => forkColl H V P x ω j R R2) / V.k x
@@ -90,7 +50,6 @@ theorem forkCollAt_nonneg (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P :
     (R : Fin (V.k x) → Coin) : 0 ≤ forkCollAt H V P x ω R :=
   div_nonneg (sum_nonneg fun _ _ => Pr_nonneg _) (Nat.cast_nonneg _)
 
-/-- `B`'s collision probability at `(ω, R)` averages to `Pr[B]`. -/
 theorem Ex_forkCollAt (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) : Ex (fun p : Ω × (Fin (V.k x) → Coin) => forkCollAt H V P x p.1 p.2) = PrB H V P x := by
   unfold PrB
@@ -114,8 +73,8 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- The contract's `fixed` and `runs`, which are all the sessions' bound reads of it, so a contract with another sampling
-design (`CompiledTwo.Sessions`) gives the bound too. -/
+/-- All of the contract the sessions' bound reads, so a contract with another sampling design (`CompiledTwo.Sessions`)
+gives the bound too. -/
 structure RunsFixed (H : Msg → Msg) (L : Compiled Coin A) : Prop where
   fixed : ∀ x r u, u ∈ L.checked x r →
     L.rounds x u ⊆ L.secondStage x ∧ ∀ d, L.checked x (forkOn (L.rounds x u) r d) = L.checked x r
@@ -132,12 +91,7 @@ omit [Nonempty Coin] in
 theorem Sessions.toRunsFixed {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) : L.RunsFixed H :=
   ⟨hS.fixed, hS.runs⟩
 
-/-! ## A session's served reruns -/
-
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **The served program is the session's prover's**: a program over `A`'s coins at the session's statement, its reruns
-served at coins `R` agreeing with `R0` off the session's rounds and seen as the session's view, returns what it returns
-against the session's prover `P'` (`runs`). -/
 theorem served_eval (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) {u : ℕ}
     {xS : Msg} (P' : Prover Unit) (R0 R : Fin (L.V.k x) → Coin) (hcard : A.V.k xS = (L.rounds x u).card)
     (hview : ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ t' ∈ L.rounds x u, t < t') → r' t = R0 t) →
@@ -153,8 +107,6 @@ theorem served_eval (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type
   rw [hview _ fun t ht _ => (L.place_of_not_mem R r' ht).trans (hR t ht), L.coinsOf_place hcard]
   rfl
 
-/-- **The block is found where `A`'s extractor finds a witness** against the session's prover, at the session's coins
-of `R` and the block's coins cast to the session's shape. -/
 theorem found_of (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω)
     {u : Fin (L.nPU x)} {xS : Msg} (P' : Prover Unit) (R0 : Fin (L.V.k x) → Coin) (hshape : A.shape xS = L.sh x u)
     (hcard : A.V.k xS = (L.rounds x u).card)
@@ -173,7 +125,6 @@ theorem found_of (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} (
   | some w => exact fun h => ⟨w, rfl, h⟩
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **The session's coins of coins fresh on the session's rounds are the fresh ones**, read through `emb`. -/
 theorem coinsOf_forkOn (L : Compiled Coin A) {x : Msg} {u : ℕ} {xS : Msg} (hcard : A.V.k xS = (L.rounds x u).card)
     (R0 σ : Fin (L.V.k x) → Coin) :
     L.coinsOf x u xS (forkOn (L.rounds x u) R0 σ) = fun i => σ (L.emb x u xS hcard i) := by
@@ -181,13 +132,6 @@ theorem coinsOf_forkOn (L : Compiled Coin A) {x : Msg} {u : ℕ} {xS : Msg} (hca
   have hm : L.emb x u xS hcard i ∈ L.rounds x u := Finset.orderEmbOfFin_mem _ _ _
   simp only [Compiled.coinsOf, dite_eq_left hcard, forkOn, ite_eq_left hm]
 
-/-! ## The session transfer and the session's fork -/
-
-/-- **The session transfer**: at coins `R0` that sample `u`, with `runs`'s session statement `xS` and prover `P'`, over
-fresh coins on the session's rounds and `A`'s extractor's coins, the run accepts while the block's extraction fails
-(not `Found`) with probability at most `κ_A + √(γ_A·Pr[B_sess])` at the session's statement: the run accepts exactly when
-`P'`'s does on the session's coins, its extraction succeeds where `A`'s extractor against `P'` does (`found_of`), and
-the session's coins and the cast extractor's coins are uniform (`Pr_restrict_shape`), so this is `A.KS` at `P'`. -/
 theorem session_transfer {H : Msg → Msg} (hKS : A.KS H) (L : Compiled Coin A) (x : Msg) {Ω : Type} (P : Prover Ω)
     (ω : Ω) (R0 : Fin (L.V.k x) → Coin) (u : Fin (L.nPU x)) (xS : Msg) (P' : Prover Unit)
     (hshape : A.shape xS = L.sh x u)
@@ -223,10 +167,6 @@ theorem session_transfer {H : Msg → Msg} (hKS : A.KS H) (L : Compiled Coin A) 
         exact (Pr_unit _).symm
     _ ≤ A.κ xS + Real.sqrt (A.γ xS * PrB H A.V P' xS) := hKS xS Unit P'
 
-/-- **The session's fork**: `k_A·Pr[B_sess]`, the session's prover's `B` against `A`'s verifier, is at most the sum over
-the compiled verifier's rounds of its fork's collision probability, the coins off the session's rounds those of `R0`: a
-fork of `P'` at round `j` is the compiled verifier's fork at round `emb j` (`emb` strictly monotone), and `P'`'s SHA-512
-calls are among the compiled verifier's (`runs`). -/
 theorem session_fork (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (R0 : Fin (L.V.k x) → Coin) (u : ℕ) (xS : Msg) (P' : Prover Unit) (hcard : A.V.k xS = (L.rounds x u).card)
     (hlog : ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ t' ∈ L.rounds x u, t < t') → r' t = R0 t) →
@@ -276,8 +216,6 @@ theorem session_fork (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Typ
   · rw [show PrB H A.V P' xS = 0 from dite_eq_right hkS, mul_zero]
     exact Ex_nonneg fun _ => sum_nonneg fun _ _ => Pr_nonneg _
 
-/-- **The session's fork, as a bound on `Pr[B_sess]`**: `Pr[B_sess] ≤ (k_V/k_A)·Pr[B]`, with `Pr[B]` the compiled
-verifier's `B` at its round guess, averaged over the session's coins with the coins off them those of `R0`. -/
 theorem session_fork_div (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (R0 : Fin (L.V.k x) → Coin) (u : ℕ) (xS : Msg) (P' : Prover Unit) (hcard : A.V.k xS = (L.rounds x u).card)
     (hlog : ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ t' ∈ L.rounds x u, t < t') → r' t = R0 t) →
@@ -307,9 +245,6 @@ theorem session_fork_div (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω :
     exact (show PrB H A.V P' xS = 0 from dite_eq_right hk).trans_le
       (le_of_eq (by rw [h0, div_zero, zero_mul]))
 
-/-- **`A`'s `γ·Pr[B_sess]` at a sampled proof block's session is within the sessions' bound**:
-`γ_A·Pr[B_sess] ≤ γ_s·k_A·Pr[B_sess] ≤ k_V·γ_s·Pr[B]`, `A`'s `γ` at the session within the block's bound (`runs`),
-`k_A` the rounds of the block's shape (`Arg.wf`), and the session's fork (`session_fork`). -/
 theorem session_gamma_le (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (R0 : Fin (L.V.k x) → Coin) (u : Fin (L.nPU x)) (xS : Msg) (P' : Prover Unit)
     (hshape : A.shape xS = L.sh x u) (hγb : A.γ xS ≤ L.γb x u) (hcard : A.V.k xS = (L.rounds x u).card)
@@ -351,9 +286,6 @@ theorem session_gamma_le (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω :
   · rw [show PrB H A.V P' xS = 0 from dite_eq_right hk, mul_zero]
     exact mul_nonneg (mul_nonneg (Nat.cast_nonneg _) hγs0) (div_nonneg hY (Nat.cast_nonneg _))
 
-/-- **At one sampled proof block's session, the others' coins fixed**: the session transfer and the session's fork at
-`runs`'s session, with `A`'s errors there within the block's bounds (`runs`), so at most the largest of the proof
-blocks' bounds: `κ_A ≤ κb ≤ κ_s`, and `γ_A·Pr[B_sess] ≤ k_V·γ_s·Pr[B]` (`session_gamma_le`). -/
 theorem fiber_bound {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS : L.RunsFixed H) (x : Msg)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (R0 : Fin (L.V.k x) → Coin) (u : Fin (L.nPU x))
     (hu : u.val ∈ L.checked x R0) :
@@ -368,16 +300,11 @@ theorem fiber_bound {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS :
   have hγ := L.session_gamma_le H x P ω R0 u xS P' hshape hγb hcard fun r' h => (hview r' h).2
   exact hT.trans (add_le_add hκ (Real.sqrt_le_sqrt hγ))
 
-/-! ## The selected slot's session, resampled -/
-
-/-- The slot a selection picks among the sample's at `R`, with the proof block there, when it holds one below
-`n_PU`. -/
 def selSlot (L : Compiled Coin A) (x : Msg) (sel : List ℕ → Option (Fin (L.nPU x))) (R : Fin (L.V.k x) → Coin) :
     Option (Fin (L.nPU x) × Fin (L.nPU x)) :=
   (sel (L.checked x R)).bind fun i =>
     ((L.checked x R)[i.val]?).bind fun u => if hu : u < L.nPU x then some (i, ⟨u, hu⟩) else none
 
-/-- Its block's session's rounds, none when no slot is picked. -/
 def selRounds (L : Compiled Coin A) (x : Msg) (sel : List ℕ → Option (Fin (L.nPU x))) (R : Fin (L.V.k x) → Coin) :
     Finset (Fin (L.V.k x)) :=
   match L.selSlot x sel R with
@@ -433,7 +360,6 @@ theorem selRounds_none {L : Compiled Coin A} {x : Msg} {sel : List ℕ → Optio
   rw [h]
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- Resampling the picked slot's block's session's rounds keeps them (`fixed`). -/
 theorem selRounds_resample {H : Msg → Msg} {L : Compiled Coin A} (hS : L.RunsFixed H) {x : Msg}
     (sel : List ℕ → Option (Fin (L.nPU x))) (r d σ : Fin (L.V.k x) → Coin) :
     L.selRounds x sel (forkOn (L.secondStage x) r (forkOn (L.selRounds x sel (forkOn (L.secondStage x) r d)) d σ)) =
@@ -445,8 +371,6 @@ theorem selRounds_resample {H : Msg → Msg} {L : Compiled Coin A} (hS : L.RunsF
     rw [selRounds_some h, forkOn_sub (hS.fixed x _ u (mem_of_selSlot h)).1]
     exact selRounds_some (selSlot_forkOn hS h σ)
 
-/-- The probability over the slots' coins that the run at `R` accepts and the block at the slot a selection picks fails
-at the slot's coins. -/
 noncomputable def selMiss (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (sel : List ℕ → Option (Fin (L.nPU x))) (R : Fin (L.V.k x) → Coin) : ℝ :=
   Pr fun c : L.SlotEC x => (run H P L.V x ω R).out = .acc ∧
@@ -459,8 +383,6 @@ theorem selMiss_none (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Pr
   rw [h]
   exact (Pr_congr fun _ => ⟨fun ⟨_, _, _, hu, _⟩ => Option.some_ne_none _ hu.symm, False.elim⟩).trans Pr_false
 
-/-- **At the picked slot's block's session's coins**, the others fixed: the coins the slot gives its block are one
-coordinate of the slots' and then of the blocks' (`Pr_pi_eval_dep`), and `fiber_bound`. -/
 theorem selMiss_fiber {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS : L.RunsFixed H)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (sel : List ℕ → Option (Fin (L.nPU x)))
     {R0 : Fin (L.V.k x) → Coin} {i u : Fin (L.nPU x)} (h : L.selSlot x sel R0 = some (i, u)) :
@@ -487,8 +409,6 @@ theorem selMiss_fiber {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS
       ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.rounds x u) R0 s.1) s.2)]
   exact fiber_bound hKS hS x P ω R0 u (mem_of_selSlot h)
 
-/-- At second-stage coins `d`, resampling the picked block's session's rounds: `selMiss_fiber`, or `0` when none is
-picked. -/
 theorem resample_bound {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS : L.RunsFixed H)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (sel : List ℕ → Option (Fin (L.nPU x)))
     (r d : Fin (L.V.k x) → Coin) :
@@ -508,10 +428,6 @@ theorem resample_bound {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (h
     simp only [forkOn_sub (hS.fixed x _ u (mem_of_selSlot h)).1]
     exact selMiss_fiber hKS hS x P ω sel h
 
-/-- **`SessionKS` from `A`'s knowledge soundness**, its rounds and the contract: `β(ω, r)` is `B`'s collision
-probability averaged over the second stage, which averages to `Pr[B]` (`Ex_forkCollAt`); at `(ω, r)`, resampling the
-picked slot's block's session's rounds (`Ex_resample`, `selRounds_resample`) gives `resample_bound` at each
-second-stage `d`, averaged by Jensen's inequality (`Ex_sqrt_le`). -/
 theorem sessionKS_of {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS : L.RunsFixed H) :
     L.SessionKS H := by
   intro x Ω _ _ P
@@ -554,7 +470,6 @@ theorem sessionKS_of {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS 
 
 end Compiled
 
-/-- **The sessions' KS from the proof system's**: `Compiled.sessionKS_of` at every compiled sampled verifier. -/
 theorem sessionKSOf : SessionKSOf := fun _ _ _ _ _ _ _ hKS hS => Compiled.sessionKS_of hKS hS.toRunsFixed
 
 end Claims.SamplingGeneric

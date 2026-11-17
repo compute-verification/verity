@@ -23,20 +23,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Recursive.ForkInnerC
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: gap 2 off a registrant's row off a verifier's value
-
-`zk_sessions_recursive_fork_on` and `zk_sessions_recursive_fork_innerL` on V*'s bridge off
-`RegColl ∨ ValueColl ∨ LeafColl ∨ SaltColl ∨ TopColl` (`Flock.Assumptions.VBridgeCOff` at
-`ValueColl zs vsrc ∨ LeafColl zs ∨ SaltColl lv cap salt zs ∨ TopColl wr st reg bcs'`, `LeafColl` at the sessions'
-outcomes, which the bridge's bad event reads: `VBridgeOffOut`), which
-`FlockC3.RegLevels.value_tie`'s collision case, a read's leaf off the table's, a read of R's level-0 top off its node's
-row under the held salts and a held top other than the registered one let the discharge use (`value_tie_coll`,
-`FlockC3.RegLevels.leaf_of_accepts`, `FlockC3.RegLevels.salt_tie`, `topOf_held`): `valueFinder`, `leafFinder`,
-`saltFinder` and `topFinder` finding a collision are four more forks, and off them and `regFinder`'s the bad event has
-probability `0` (`prob_valueColl_le`, `prob_leafColl_le`, `prob_saltColl_le`, `prob_topCollAt_le`, `prob_regColl_le` at
-no budget).
--/
+/-! Gap 2 of the recursive audit with V*'s bridge off a registrant's row, a verifier's value, a table leaf, a held salt or a held top. -/
 
 @[expose] public section
 
@@ -52,9 +39,6 @@ open Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBi
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type}
 
-/-- **`zk_sessions_recursive_fork_on` off `RegColl ∨ ValueColl ∨ LeafColl ∨ SaltColl ∨ TopColl`**: the value, the
-table leaves', the held salts' or the held top's finder finds a collision, or `zk_sessions_recursive_fork_on`'s
-conclusion. -/
 theorem zk_sessions_recursive_fork_onV
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig)
@@ -147,10 +131,6 @@ theorem zk_sessions_recursive_fork_onV
     rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul]
     exact mul_le_mul' le_rfl hsl
 
-/-- **Gap 2 at the committed rounds off `RegColl ∨ ValueColl ∨ LeafColl ∨ SaltColl ∨ TopColl`, the inner term
-given**: `zk_sessions_recursive_fork_innerL` with V*'s bridge as
-`Flock.Assumptions.VBridgeCOff (ValueColl zs vsrc ∨ LeafColl zs ∨ SaltColl lv cap salt zs ∨ TopColl wr st reg bcs')`,
-the value, the table leaves', the held salts' and the held top's finders finding a collision four more forks. -/
 theorem zk_sessions_recursive_fork_innerLV
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig)

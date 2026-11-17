@@ -7,23 +7,7 @@ public import Proofs.Flock.SessionLoop.Tables
 public import Proofs.Flock.Claims.ZK.FinishSwVals
 public import Proofs.Flock.Claims.ZK.FinishClaimsX
 
-/-!
-# `FinRepErased` at one rep stream
-
-**`Loop.finRepErased_at`**: at table `j`'s rep `r` (rep stream `2j + r`), where the session's rep on the loop's table
-and request returns `(p, tr)`, the run from the views returns `(p', tr)` with `eraseZ p' = eraseZ p`. The ZK server's
-rep is `Masked.swSrcE_repCut_v` at the views' source, on the loop's table (`finRepTab`, `Level0Src.realOf`), request
-(`RepSrc`'s samples and salts, `RepSrc.salt`) and extra claims (`repFwC_claims_x`); the view run is that cut but for
-level 0's commitment (`cms_cm0`), the pads commitment (`padsView_ic`) and what only the final message reads
-(`eraseS_cutSrc`), so `repCut_eraseZ` and `go_of_eraseZ` give it. What the rep stream's place in the session fixes is
-taken as premises:
-
-* `hmk`: below `zp 64`, the views' masked values are the request's values plus its pads (FINH's equation);
-* `hl0`: where the views' PIOP returns, level 0's masked values are `l0Clear` plus the pads (`swSrcE_l0_live`);
-* `hpri`: the prior points the view run reads from the auditor's streams are the opened coins' (`Masked.priorE`);
-* `hxs`: the extra claims from the views have the request's coordinates (`finRepXs`);
-* `hrows`: every table's rows hold at its base (`Loop.FinRows`'s body).
--/
+/-! `FinRepErased` at one rep stream, taking as premises what the stream's place in the session fixes. -/
 
 @[expose] public section
 
@@ -33,7 +17,7 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
@@ -41,15 +25,9 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
   (x : Msg) (w : Flock.Wit)
 
-/-- A run's value fixes the run but for its history. -/
 theorem go_eq_of_run_fst {α β : Type} {z : α × β} {a : α} (h : z.1 = a) : z = (a, z.2) := Prod.ext h rfl
 
 set_option maxHeartbeats 1000000 in
-/-- **The rep from the views up to `eraseZ`, at one rep stream**: in the masked scope, at a witness in the relation,
-where the frame samples the tape's pads (`RepSrc`) and the loop the tape's level 0 (`Level0Src`), at admitted opened
-coins, the session's schedules and the views' commitments, where the session's rep on the loop's table and request at
-table `j`'s rep `r` returns `(p, tr)` from `l`, the run from the views returns `(p', tr)` with `eraseZ p' = eraseZ p`,
-given `hmk`, `hl0`, `hpri`, `hxs` and `hrows`. -/
 theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w) {ν : finS.Nonce} {t : finS.Tape} {m₀ ρ₀ : Msg}
@@ -118,7 +96,6 @@ theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
   have hkr : (2 * j.val + r.val) % 2 = r.val := by
     have := r.isLt
     omega
-  -- the session's table and schedule
   obtain ⟨htb, hsb⟩ := finRepTab (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hschs hk hRep
   rw [hk2] at htb hsb
   have hst : tb.st = _root_.Flock.Setup.ofCircuit (Masked.stAt x j) := htb.symm.trans (Masked.tabsOf_stAt x j)
@@ -132,10 +109,8 @@ theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
   have hLy : _root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0 = Masked.layE x j := by
     rw [hst, hsch]
     rfl
-  -- the loop's table is the tape's
   obtain ⟨-, -, -, hg⟩ := hS0.realOf ν t j r hRep.1
   obtain ⟨hex, hlp⟩ := hS0.realOf_lanes ν t j r hRep.1
-  -- the request's samples and salts are the frame's
   have hq0 := hRep.2.1
   unfold repInOf at hq0
   obtain ⟨⟨lay, ms⟩, hstart, hq0⟩ := bok hq0
@@ -171,7 +146,6 @@ theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
     intro i h1 h2 p hp
     rw [hqh]
     exact hS.salt ν t j r hRep.1 i h1 h2 p hp
-  -- the ZK server's run at the extra claims from the views
   have hrun' := go_eq_of_run_fst hrun
   have hxe : (_root_.Flock.ZkServer.Finish.claimsOf q.xs).map (·.x) = extras.map (·.x) := by
     rw [_root_.Flock.ZkServer.Finish.claimsOf_map_x, hxs]
@@ -185,7 +159,6 @@ theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
     (vs x w ν (finCoins x ops) (finS.seenOf x t)) q hq' hlay hz hpads (hrows j)
     (fun i hi => hmk i (by rw [hLy]; exact hi)) tb.st hst _ tb.g hg tb.cm0.toC ic'.toC tb.extra tb.lanePad hex hlp
     (fun l => _root_.Flock.ZkServer.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)) hsalt rfl hl hl0 hrun'
-  -- the view run is that cut but for level 0's commitment, the pads commitment and the final-only data
   obtain ⟨hcap, hlays⟩ := cms_cm0 vs src x w hsc hR hS0 hsx hschs hcms hk hRep
   rw [hk2] at hcap hlays
   obtain ⟨hn, hroot, hilay⟩ := padsView_ic vs L₀ src x w hsc hR hS hrows hsx hschs hk hic hRep hic'

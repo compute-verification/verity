@@ -4,40 +4,15 @@ public import Proofs.Flock.SamplingGeneric.PhasesOnce
 public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbers
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The first-hit bound over a monitoring period, at numbers
-
-`CompiledTwo.phases_oneWait_le_once` bounds the event of some phase of a monitoring period by
-
-`Σ_i (3·κ_s + 2·√(k·γ_s·Pr[B_i]))`
-`+ 2·(2·(T·(1 + e·N_s) + n·c) + 4·(T·(1 + e·N_s + K_s + e·K_m) + (1 + K_s)·n·c))/2^256`.
-
-Here the expression is at rational numbers: `phasesBound n b T e N_s K_s K_m c` is `n·b` plus twice `hashBound` at
-`T` and at `n·c`, a period of at most `n` phases each paying at most `b` for the two terms that count no call of the
-prover's.
-
-* `real_phases_le`: the expression over the reals is at most a bound of `phasesBound` at numbers it is within.
-* `sqrt_le_of_le_sq`, `fork_le_sq`: a phase's fork term is at most `q` where `k·γ_s` and `Pr[B]` are within rational
-  numbers whose product is at most `q²`.
-* `CompiledTwo.phases_oneWait_le_of_phasesBound`: **the period's bound at numbers**, under
-  `phases_oneWait_le_once`'s premises, with `κ_s ≤ κ` and `k·γ_s·Pr[B_i] ≤ q²` at every phase.
-* The figures: `phasesBound` at a period's expected `2^80` SHA-512 calls in total, sessions rerun `12343987` times in
-  expectation, `N_s ≤ 2^26`, `K_s, K_m ≤ 2^38`, opening checks of `2^60` calls a phase, `κ_s ≤ 2^-202`, and the fork
-  term of a sample of one session (`q = 49234135/2^176`) or of `4096` sessions (`q = 49234135/2^170`), at six
-  numbers of phases. That `κ_s`, `k·γ_s` and `Pr[B]` are within those numbers at a deployment is each figure's
-  premise, not proved here; `forkSq_one` and `forkSq_4096` say which numbers the two values of `q` cover.
--/
+/-! The first-hit bound over a monitoring period at rational numbers; that `κ_s`, `k·γ_s` and `Pr[B]` are within the figures' numbers at a deployment is each figure's premise, not proved here. -/
 
 @[expose] public section
 
 namespace Claims.Flock.Numbers
 
-/-- **The period's expression at rational numbers**: at most `n` phases each paying at most `b`, and twice
-`hashBound` at the period's expected calls `T` and at `n` times the opening checks' own calls `c`. -/
 def phasesBound (n b T e Ns Ks Km c : ℚ) : ℚ :=
   n * b + 2 * hashBound T e Ns Ks Km (n * c)
 
-/-- **The expression over the reals**, `2^256` a real power. -/
 theorem phasesBound_cast (n b T e Ns Ks Km c : ℚ) :
     ((phasesBound n b T e Ns Ks Km c : ℚ) : ℝ) =
       (n : ℝ) * (b : ℝ) + 2 * (2 * ((T : ℝ) * (1 + (e : ℝ) * (Ns : ℝ)) + (n : ℝ) * (c : ℝ)) +
@@ -48,8 +23,6 @@ theorem phasesBound_cast (n b T e Ns Ks Km c : ℚ) :
   push_cast
   all_goals ring
 
-/-- **The period's expression over the reals is at most a bound of it at numbers**: `n ≤ n'` phases whose terms
-`β i` are each at most `b'`, at the numbers `T'`, `e'`, `N_s'`, `K_s'`, `K_m'` and `c'`. -/
 theorem real_phases_le {n : ℕ} {β : Fin n → ℝ} {n' b' T' e' Ns' Ks' Km' c' B : ℚ} (hn : (n : ℝ) ≤ n')
     (hβ : ∀ i, β i ≤ b') (hb0 : 0 ≤ b') (hKs0 : 0 ≤ Ks') (hc0 : 0 ≤ c')
     (h : phasesBound n' b' T' e' Ns' Ks' Km' c' ≤ B) :
@@ -79,12 +52,9 @@ theorem real_phases_le {n : ℕ} {β : Fin n → ℝ} {n' b' T' e' Ns' Ks' Km' c
   rw [phasesBound_cast] at hB
   exact (add_le_add hsum hdiv).trans hB
 
-/-- A square root is at most `q` where its argument is at most `q²`. -/
 theorem sqrt_le_of_le_sq {y q : ℝ} (hq : 0 ≤ q) (h : y ≤ q ^ 2) : Real.sqrt y ≤ q :=
   (Real.sqrt_le_left hq).2 h
 
-/-- **A phase's fork term's argument at numbers**: `k·γ_s ≤ G` and `Pr[B] ≤ P` with `G·P ≤ q²` give
-`k·γ_s·Pr[B] ≤ q²`. -/
 theorem fork_le_sq {g p : ℝ} {G P q : ℚ} (hp0 : 0 ≤ p) (hG0 : 0 ≤ G) (hg : g ≤ G) (hp : p ≤ P)
     (h : G * P ≤ q ^ 2) : g * p ≤ (q : ℝ) ^ 2 := by
   have h1 : g * p ≤ (G : ℝ) * (P : ℝ) := mul_le_mul hg hp hp0 (by exact_mod_cast hG0)
@@ -92,12 +62,6 @@ theorem fork_le_sq {g p : ℝ} {G P q : ℚ} (hp0 : 0 ≤ p) (hG0 : 0 ≤ G) (hg
   push_cast at h2
   exact h1.trans h2
 
-/-! ## The figures
-
-`T = 2^80` expected calls in the whole period, `e = 12343987`, `N_s = 2^26`, `K_s = K_m = 2^38`, `c = 2^60` a phase,
-and a phase's own terms `3/2^202 + 2·q`. -/
-
-/-- A sample of one session: `k·γ_s ≤ 1212·10^12` and `Pr[B] ≤ 2^-351` are within `q = 49234135/2^176`. -/
 theorem forkSq_one : (1212 * 10 ^ 12 : ℚ) * (1 / 2 ^ 351) ≤ (49234135 / 2 ^ 176) ^ 2 := by
   have ha : (0 : ℚ) < 2 ^ 175 := by positivity
   have h351 : (2 : ℚ) ^ 351 = 2 * (2 ^ 175) ^ 2 := by
@@ -110,8 +74,6 @@ theorem forkSq_one : (1212 * 10 ^ 12 : ℚ) * (1 / 2 ^ 351) ≤ (49234135 / 2 ^ 
   rw [mul_one_div, div_pow, div_le_div_iff₀ (by positivity) (by positivity)]
   nlinarith
 
-/-- A sample of `4096` sessions: `k·γ_s ≤ 4096·1212·10^12` and `Pr[B] ≤ 2^-351` are within
-`q = 49234135/2^170`. -/
 theorem forkSq_4096 : (4096 * (1212 * 10 ^ 12) : ℚ) * (1 / 2 ^ 351) ≤ (49234135 / 2 ^ 170) ^ 2 := by
   have ha : (0 : ℚ) < 2 ^ 170 := by positivity
   have h351 : (2 : ℚ) ^ 351 = 2 ^ 11 * (2 ^ 170) ^ 2 := by
@@ -122,73 +84,61 @@ theorem forkSq_4096 : (4096 * (1212 * 10 ^ 12) : ℚ) * (1 / 2 ^ 351) ≤ (49234
   rw [mul_one_div, div_pow, div_le_div_iff₀ (by positivity) (by positivity)]
   nlinarith
 
-/-- One session a sample, `59,100,000` phases: at most `2^-111`. -/
 theorem phasesBound_one_59100000 :
     phasesBound 59100000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 176)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 111 := by
   norm_num [phasesBound, hashBound, firstHitCalls]
 
-/-- One session a sample, `253,000,000` phases: at most `2^-111`. -/
 theorem phasesBound_one_253000000 :
     phasesBound 253000000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 176)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 111 := by
   norm_num [phasesBound, hashBound, firstHitCalls]
 
-/-- One session a sample, `3,080,000,000` phases: at most `2^-111`. -/
 theorem phasesBound_one_3080000000 :
     phasesBound 3080000000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 176)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 111 := by
   norm_num [phasesBound, hashBound, firstHitCalls]
 
-/-- One session a sample, `221,000,000,000` phases: at most `2^-110`. -/
 theorem phasesBound_one_221000000000 :
     phasesBound 221000000000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 176)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 110 := by
   norm_num [phasesBound, hashBound, firstHitCalls]
 
-/-- One session a sample, `949,000,000,000` phases: at most `2^-109`. -/
 theorem phasesBound_one_949000000000 :
     phasesBound 949000000000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 176)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 109 := by
   norm_num [phasesBound, hashBound, firstHitCalls]
 
-/-- One session a sample, `11,550,000,000,000` phases: at most `2^-105`. -/
 theorem phasesBound_one_11550000000000 :
     phasesBound 11550000000000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 176)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 105 := by
   norm_num [phasesBound, hashBound, firstHitCalls]
 
-/-- `4096` sessions a sample, `59,100,000` phases: at most `2^-111`. -/
 theorem phasesBound_4096_59100000 :
     phasesBound 59100000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 170)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 111 := by
   norm_num [phasesBound, hashBound, firstHitCalls]
 
-/-- `4096` sessions a sample, `253,000,000` phases: at most `2^-111`. -/
 theorem phasesBound_4096_253000000 :
     phasesBound 253000000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 170)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 111 := by
   norm_num [phasesBound, hashBound, firstHitCalls]
 
-/-- `4096` sessions a sample, `3,080,000,000` phases: at most `2^-110`. -/
 theorem phasesBound_4096_3080000000 :
     phasesBound 3080000000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 170)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 110 := by
   norm_num [phasesBound, hashBound, firstHitCalls]
 
-/-- `4096` sessions a sample, `221,000,000,000` phases: at most `2^-105`. -/
 theorem phasesBound_4096_221000000000 :
     phasesBound 221000000000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 170)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 105 := by
   norm_num [phasesBound, hashBound, firstHitCalls]
 
-/-- `4096` sessions a sample, `949,000,000,000` phases: at most `2^-103`. -/
 theorem phasesBound_4096_949000000000 :
     phasesBound 949000000000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 170)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 103 := by
   norm_num [phasesBound, hashBound, firstHitCalls]
 
-/-- `4096` sessions a sample, `11,550,000,000,000` phases: at most `2^-100`. -/
 theorem phasesBound_4096_11550000000000 :
     phasesBound 11550000000000 (3 * (1 / 2 ^ 202) + 2 * (49234135 / 2 ^ 170)) (2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38)
       (2 ^ 38) (2 ^ 60) ≤ 1 / 2 ^ 100 := by
@@ -206,13 +156,6 @@ namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The event at the one-wait extraction's traces over a monitoring period, at numbers.** Under
-`phases_oneWait_le_once`'s premises at rational numbers: a period of `n ≤ n'` phases that call `H` at most `T'`
-times on average in total, sessions' expected reruns at most `e'`, the sample's three counts at most `N_s'`, `K_s'`
-and `K_m'`, opening checks of at most `c'` calls a phase, and at every phase `κ_s ≤ κ'` and
-`k·γ_s·Pr[B_i] ≤ q'²`. Where `phasesBound` at those numbers, with `3·κ' + 2·q'` a phase, is at most `B`, some
-phase's accepted run samples a proof block of the one-wait compiled verifier's `FregTwoX` with probability at most
-`B`. -/
 theorem phases_oneWait_le_of_phasesBound {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
     (hA : A.KS H) (hbind : L.commit.Binds H) (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {n : ℕ}
     {x : Fin n → Msg} {s : Fin n → AuditStatement} {Pt : Fin n → Partition} {d : Fin n → Sampling.Design.Two}

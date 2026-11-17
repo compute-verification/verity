@@ -6,15 +6,7 @@ import all Lean.Data.Json.Basic
 import all Std.Data.Internal.List.Associative
 import Std.Data.DTreeMap.Internal.WF.Lemmas
 
-/-!
-# Objects as the ZK server builds, reads and pins them
-
-The ZK server builds objects with `Json.mkObj`, reads them with `getObjVal?` and pins them by canonical form. An object
-built from members with distinct keys holds those members in key order (`perm_ofList`, `toListModel_ofList`), two
-objects whose keys ascend and whose members have the same keys and canonical forms have one canonical form
-(`canonForm_obj_perm`), and a key of an object whose keys ascend reads its member's value (`getObjVal?_of_mem`) or
-nothing (`getObjVal?_of_not_mem`).
--/
+/-! Objects as the ZK server builds them with `Json.mkObj`, reads them with `getObjVal?` and pins them by canonical form. -/
 
 @[expose] public section
 
@@ -26,7 +18,6 @@ open Std.DTreeMap.Internal (Impl)
 
 abbrev Tree := Impl String (fun _ => Json)
 
-/-- Strictly ascending in `key`. -/
 def Asc {γ : Type} (key : γ → String) (l : List γ) : Prop := l.Pairwise fun a b => compare (key a) (key b) = .lt
 
 theorem eq_of_perm {γ : Type} (key : γ → String) {l l' : List γ} (hp : l.Perm l') (h : Asc key l)
@@ -42,7 +33,6 @@ theorem ordered_of_ascending {t : Tree} (h : ascending t = true) : t.Ordered := 
   unfold ascending at h
   exact (of_decide_eq_true h : t.toListModel.Pairwise fun a b => compare a.1 b.1 = .lt)
 
-/-- Ascending keys are distinct. -/
 theorem Asc.ne {γ : Type} {key : γ → String} {l : List γ} (h : Asc key l) : l.Pairwise fun a b => key a ≠ key b :=
   h.imp fun hab he => by
     rw [he] at hab
@@ -51,20 +41,16 @@ theorem Asc.ne {γ : Type} {key : γ → String} {l : List γ} (h : Asc key l) :
 theorem Asc.map {γ δ : Type} {key : δ → String} (f : γ → δ) {l : List γ} (h : Asc (key ∘ f) l) :
     Asc key (l.map f) := List.pairwise_map.mpr h
 
-/-- An object's members, each key with its value's canonical form. -/
 def forms (t : Tree) : List (String × List Tok) := t.toListModel.map fun e => (e.1, canonForm e.2)
 
 theorem canonForm_obj_forms (t : Tree) :
     canonForm (.obj ⟨⟨t⟩⟩) = .obj :: (forms t).flatMap (fun e => .key e.1 :: e.2) ++ [.close] := by
   rw [ZkServerJson.canonForm_obj, ZkServerJson.canonFormObj_eq, forms, List.flatMap_map]
 
-/-- **Two objects of one canonical form**: their keys ascend, and their members have the same keys and canonical forms. -/
 theorem canonForm_obj_perm {t t' : Tree} (ht : t.Ordered) (ht' : t'.Ordered) (hp : (forms t).Perm (forms t')) :
     canonForm (.obj ⟨⟨t⟩⟩) = canonForm (.obj ⟨⟨t'⟩⟩) := by
   rw [canonForm_obj_forms, canonForm_obj_forms,
     eq_of_perm Prod.fst hp (Asc.map (key := Prod.fst) _ ht) (Asc.map (key := Prod.fst) _ ht')]
-
-/-! ## Built from members -/
 
 theorem mkObj_eq (L : List (String × Json)) : Json.mkObj L = .obj ⟨⟨Impl.Const.ofList L⟩⟩ := (rfl)
 
@@ -73,7 +59,6 @@ theorem wf_ofList (L : List (String × Json)) : (Impl.Const.ofList L : Tree).WF 
 
 theorem ordered_ofList (L : List (String × Json)) : (Impl.Const.ofList L : Tree).Ordered := (wf_ofList L).ordered
 
-/-- An object built from members with distinct keys holds them. -/
 theorem perm_ofList {L : List (String × Json)} (h : L.Pairwise fun a b => a.1 ≠ b.1) :
     (Impl.Const.ofList L : Tree).toListModel.Perm (L.map fun e => ⟨e.1, e.2⟩) := by
   refine (Impl.Const.toListModel_insertMany_list Impl.WF.empty).trans ?_
@@ -87,7 +72,6 @@ theorem perm_ofList {L : List (String × Json)} (h : L.Pairwise fun a b => a.1 �
   · simp only [List.nil_append]
     rfl
 
-/-- An object built from members with ascending keys holds them in order. -/
 theorem toListModel_ofList {L : List (String × Json)} (h : Asc Prod.fst L) :
     (Impl.Const.ofList L : Tree).toListModel = L.map fun e => ⟨e.1, e.2⟩ :=
   eq_of_perm (fun e : (_ : String) × Json => e.1) (perm_ofList h.ne) (asc_ordered (ordered_ofList L))
@@ -99,14 +83,11 @@ theorem forms_ofList {L : List (String × Json)} (h : L.Pairwise fun a b => a.1 
   rw [List.map_map] at this
   exact this
 
-/-- **Two objects built from members of one canonical form** have one canonical form. -/
 theorem canonForm_mkObj_perm {L L' : List (String × Json)} (h : L.Pairwise fun a b => a.1 ≠ b.1)
     (h' : L'.Pairwise fun a b => a.1 ≠ b.1)
     (hp : (L.map fun e => (e.1, canonForm e.2)).Perm (L'.map fun e => (e.1, canonForm e.2))) :
     canonForm (Json.mkObj L) = canonForm (Json.mkObj L') :=
   canonForm_obj_perm (ordered_ofList L) (ordered_ofList L') ((forms_ofList h).trans (hp.trans (forms_ofList h').symm))
-
-/-! ## Read by key -/
 
 theorem getObjVal?_of_mem {t : Tree} (ht : t.Ordered) {k : String} {v : Json}
     (h : (⟨k, v⟩ : (_ : String) × Json) ∈ t.toListModel) : Json.getObjVal? (.obj ⟨⟨t⟩⟩) k = .ok v := by
@@ -130,7 +111,6 @@ theorem getObjVal?_of_not_mem {t : Tree} (ht : t.Ordered) {k : String} (h : ∀ 
   rw [e]
   rfl
 
-/-- A key some member has, read off an object whose keys ascend. -/
 theorem mem_of_getObjVal? {t : Tree} (ht : t.Ordered) {k : String} {v : Json}
     (h : Json.getObjVal? (.obj ⟨⟨t⟩⟩) k = .ok v) : (⟨k, v⟩ : (_ : String) × Json) ∈ t.toListModel := by
   by_cases hk : ∃ e ∈ t.toListModel, e.1 = k
@@ -142,16 +122,11 @@ theorem mem_of_getObjVal? {t : Tree} (ht : t.Ordered) {k : String} {v : Json}
     rw [h] at this
     cases this
 
-/-! ## The members of an object as `kvs.toArray.toList` reads them -/
-
 theorem toArray_toList (t : Tree) :
     (Std.TreeMap.Raw.toArray (⟨⟨t⟩⟩ : Std.TreeMap.Raw String Json)).toList = t.toListModel.map fun e => (e.1, e.2) := by
   show (Impl.Const.toArray t).toList = _
   rw [Impl.Const.toArray_eq_toArray_map, List.toList_toArray]
 
-/-! ## Rebuilt by the parser -/
-
-/-- An object whose keys ascend, as the parser rebuilds it (`ZkServerJson.norm`): each member's value rebuilt, in order. -/
 theorem norm_obj {t : Tree} (ht : t.Ordered) :
     ∃ t' : Tree, ZkServerJson.norm (.obj ⟨⟨t⟩⟩) = .obj ⟨⟨t'⟩⟩ ∧
       t'.toListModel = t.toListModel.map fun e => ⟨e.1, ZkServerJson.norm e.2⟩ := by
@@ -171,7 +146,6 @@ theorem ascending_of_ordered {t : Tree} (h : t.Ordered) : ascending t = true := 
   unfold ascending
   exact decide_eq_true (h : t.toListModel.Pairwise fun a b => compare a.1 b.1 = .lt)
 
-/-- An object built from plain members is plain. -/
 theorem plain_mkObj {L : List (String × Json)} (h : L.Pairwise fun a b => a.1 ≠ b.1)
     (hp : ∀ e ∈ L, plainStr e.1 = true ∧ plain e.2 = true) : plain (Json.mkObj L) = true := by
   rw [mkObj_eq]
@@ -181,9 +155,6 @@ theorem plain_mkObj {L : List (String × Json)} (h : L.Pairwise fun a b => a.1 �
   obtain ⟨e', he', rfl⟩ := List.mem_map.mp ((perm_ofList h).mem_iff.mp he)
   exact hp e' he'
 
-/-! ## Hello with Σ -/
-
-/-- Hello's member as `helloWith` writes it, Σ in its link. -/
 def linked (sigma : String) (e : (_ : String) × Json) : String × Json :=
   (e.1, if e.1 == "link" then helloWith.linkWith sigma e.2 else e.2)
 
@@ -200,10 +171,6 @@ theorem linkWith_obj (t : Tree) (sigma : String) :
 theorem pairwise_ne_map {γ : Type} {key : γ → String} {l : List γ} (h : Asc key l) :
     (l.map fun e => (key e, ())).Pairwise fun a b => a.1 ≠ b.1 := List.pairwise_map.mpr h.ne
 
-/-- **Hello as the ZK server reads the worker's**: at a schedule's Hello, an object whose keys ascend with plain members,
-whose link (`A ++ link :: B`) is an object whose keys ascend with plain members and no `sigma`, and which has no
-`coins`, the worker's Hello with a plain Σ is plain, the parser's value of its text has a link that names Σ and no
-`coins`, and with Σ taken out of its link it has the schedule's Hello's canonical form. -/
 theorem hello {H L : Tree} {A B : List ((_ : String) × Json)} (hH : H.Ordered) (hpH : plainObj H = true)
     (hL : L.Ordered) (hpL : plainObj L = true) (hsplit : H.toListModel = A ++ ⟨"link", .obj ⟨⟨L⟩⟩⟩ :: B)
     (hs : ∀ e ∈ L.toListModel, e.1 ≠ "sigma") (hc : ∀ e ∈ H.toListModel, e.1 ≠ "coins") {sigma : String}
@@ -216,7 +183,6 @@ theorem hello {H L : Tree} {A B : List ((_ : String) × Json)} (hH : H.Ordered) 
           (without (.obj ⟨⟨T⟩⟩) "sigma")) = canonForm (.obj ⟨⟨H⟩⟩) := by
   have hpm := ZkServerJson.plainObj_iff H |>.mp hpH
   have hpl := ZkServerJson.plainObj_iff L |>.mp hpL
-  -- the members of `A` and `B` are `H`'s, and none is the link
   have hHasc : Asc (fun e : (_ : String) × Json => e.1) (A ++ ⟨"link", .obj ⟨⟨L⟩⟩⟩ :: B) := hsplit ▸ hH
   have hAB : ∀ e ∈ A ++ B, e.1 ≠ "link" := by
     intro e he
@@ -237,7 +203,6 @@ theorem hello {H L : Tree} {A B : List ((_ : String) × Json)} (hH : H.Ordered) 
   have hlinked : ∀ e ∈ A ++ B, linked sigma e = (e.1, e.2) := by
     intro e he
     simp only [linked, beq_eq_false_iff_ne.mpr (hAB e he), Bool.false_eq_true, ite_false]
-  -- the link with Σ
   let Ls : List (String × Json) := L.toListModel.map (fun e => (e.1, e.2)) ++ [("sigma", .str sigma)]
   have hLs : Ls.Pairwise fun a b => a.1 ≠ b.1 := by
     refine List.pairwise_append.mpr ⟨?_, List.pairwise_singleton _ _, ?_⟩
@@ -256,7 +221,6 @@ theorem hello {H L : Tree} {A B : List ((_ : String) × Json)} (hH : H.Ordered) 
     · rw [List.mem_singleton] at he
       subst he
       exact ⟨by simp [plainStr], hsig⟩
-  -- Hello's members with Σ in its link
   let M := H.toListModel.map (linked sigma)
   have hMeq : M = (A.map fun e => (e.1, e.2)) ++ ("link", helloWith.linkWith sigma (.obj ⟨⟨L⟩⟩)) ::
       B.map fun e => (e.1, e.2) := by
@@ -285,7 +249,6 @@ theorem hello {H L : Tree} {A B : List ((_ : String) × Json)} (hH : H.Ordered) 
     · simp only [linked, beq_eq_false_iff_ne.mpr hk, Bool.false_eq_true, ite_false]
       exact hpm e' he'
   refine ⟨hplain, ?_⟩
-  -- the parser's value of the worker's Hello
   obtain ⟨Tj, hTj, hTjl⟩ := norm_obj (ordered_ofList M)
   rw [toListModel_ofList hMasc, List.map_map] at hTjl
   have hTjo : Tj.Ordered := by
@@ -318,7 +281,7 @@ theorem hello {H L : Tree} {A B : List ((_ : String) × Json)} (hH : H.Ordered) 
     obtain ⟨e', he', rfl⟩ := List.mem_map.mp he
     obtain ⟨h0, hh0, rfl⟩ := List.mem_map.mp he'
     exact hc h0 hh0
-  · -- Σ out of the link: the schedule's link
+  ·
     have hnormAB : ∀ e ∈ A ++ B, canonForm (ZkServerJson.norm e.2) = canonForm e.2 :=
       fun e he => ZkServerJson.canonForm_norm e.2 (hpm e (hmemH e he)).2
     let Xs := (T.toListModel.map fun e => (e.1, e.2)).filter (·.1 != "sigma")
@@ -345,7 +308,6 @@ theorem hello {H L : Tree} {A B : List ((_ : String) × Json)} (hH : H.Ordered) 
         obtain ⟨e', he', rfl⟩ := List.mem_map.mp he
         simp only [Function.comp, bne_iff_ne, ne_eq]
         exact hs e' he'
-    -- Hello with the schedule's link back in its place
     have hTjpair : (Tj.toListModel.map fun e => (e.1, e.2)) =
         (A.map fun e => (e.1, ZkServerJson.norm e.2)) ++
           ("link", ZkServerJson.norm (helloWith.linkWith sigma (.obj ⟨⟨L⟩⟩))) ::

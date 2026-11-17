@@ -44,21 +44,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# (b) `FinPoints`: the link points at the opened coins
-
-* **`Loop.viewPoints_eq`**: at a `Finish` `FinishIs` reads, at a statement in the masked scope with a witness, the link
-  points the session reads at the opened coins are the ones the auditor saw (`pointsOf`): point `p`'s word `j` is element
-  `p·mPts + j` of the `Commit`'s coin, which the loop requests `points·mPts` words of (`loopNr x 0`), within
-  `COIN_MAX` (`live_links`), and which the opened coin holds (`wordsAt_slot`).
-* **`Loop.finPoints_of`**: so `FinPoints` holds where each table's regions carry bytes of their free bits' size
-  (`FlockVBridge.Family.RegionBytes`, `extraClaims_exists`): the extra claims (`Stmt.regionValue`) refuse a region whose
-  bytes are not `2^|free|` bits, while the loop's `Finish` carries only the claims' coordinates (`Drive.extras`,
-  `Finish.claimsOf`) and never computes their values.
-* **`Masked.regionBytes_of_setup`**: every table a `Live` statement sets up has them, since `Stmt.setupH` and
-  `Stmt.setupHidden` refuse a region of any other size (`checkRegionBytes`, `setupH_regionBytes`,
-  `setupHidden_regionBytes`). So **`Loop.finPoints`**: (b) at every statement in the masked scope with a witness.
--/
+/-! (b) `FinPoints`: the link points at the opened coins are the auditor's, and each table's extra claims at them return. -/
 
 @[expose] public section
 
@@ -71,7 +57,6 @@ open CoinLayer
 open _root_.Flock FlockSoundness.Refine in
 -- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **What `Stmt.setupH` returns has each region's bytes its free bits** (its `checkRegionBytes`). -/
 theorem setupH_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : FlockVBridge.Family.RegionBytes st := by
@@ -88,7 +73,6 @@ theorem setupH_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins} {ta
 open _root_.Flock FlockSoundness.Refine in
 -- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 4000000 in
-/-- **What `Stmt.setupHidden` returns has each region's bytes its free bits** (its `checkRegionBytes`). -/
 theorem setupHidden_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
@@ -102,8 +86,6 @@ theorem setupHidden_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins
     assumption
 
 open _root_.Flock FlockDeploy FlockComplete in
-/-- **Every table a `Live` statement sets up has each region's bytes its free bits**: each is `Stmt.setupH`'s or
-`Stmt.setupHidden`'s (`setupTables_setupOne`), as in `live_bounds`. -/
 theorem regionBytes_of_setup {x : Msg} (hx : Live x) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : setupOf true x = some (s, spec, sts)) : ∀ j (hj : j < sts.size), FlockVBridge.Family.RegionBytes sts[j] := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk Readable.relation) Readable.relation (readOf true) rfl
@@ -135,7 +117,7 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
@@ -144,8 +126,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **The link points at the opened coins are the auditor's**: at a statement in the masked scope with a witness, where
-the openings are `refK x` long, the session's link points at the coins they open are `pointsOf`'s. -/
 theorem viewPoints_eq (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
     {ops : List (Msg × Msg)} (hl : ops.length = refK x) {s0 : FlockDeploy.Ins} {spec : SessionSpec}
@@ -184,9 +164,6 @@ theorem viewPoints_eq (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     simp [Array.getD, hlt, getElem!_pos]
   exact hw.symm.trans hge.symm
 
-/-- **(b) where the regions carry their bytes**: at a statement in the masked scope with a witness whose tables' regions
-each carry bytes of their free bits' size, the link points at the opened coins are the auditor's and each table's extra
-claims at them return. -/
 theorem finPoints_of (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
     (hb : ∀ j (hj : j < (Masked.stsOf x).size), FlockVBridge.Family.RegionBytes (Masked.stsOf x)[j]) :
@@ -200,8 +177,6 @@ theorem finPoints_of (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
   simp only [FlockDeploy.tabsOf, Array.getElem_map]
   exact FlockVBridge.Family.extraClaims_exists _ _ (hb (k / 2) hk2)
 
-/-- **(b) `FinPoints`**: at a statement in the masked scope with a witness, the link points at the opened coins are the
-auditor's and each table's extra claims at them return. -/
 theorem finPoints (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) :
     FinPoints L₀ src real wk x w := by

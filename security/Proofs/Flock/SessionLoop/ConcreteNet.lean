@@ -6,16 +6,7 @@ import all Init.Data.String.Defs
 import all Init.Data.String.Basic
 import all Init.Data.Repr
 
-/-!
-# A net's text reads back as the net
-
-`Net.parse` of a net's lines as V\* writes them (`VStarNets.netLs name l`: `VStar.header`, then one `VStar.rowLine` per
-useful row) is the net `HmNets.netOf name l` builds, whenever that build succeeds, the name is one word and the layout has
-one A row and one B row per useful column (`parse_netLs`). The header's tokens are its fields (`header_tokens`), `groups`
-reads each side's port groups back (`groups_ok`), each row line reads back as its row (`row_ok`), and the header checks
-`parse` runs before its rows are the ones `ofRows` passed (`ofRows_checks`). Nothing here evaluates a net: the layout is
-a variable, so the verifier's own `sha512x3` and `hm96` nets read back without the kernel building them.
--/
+/-! A net's text as V* writes it reads back as the net, the layout a variable so that the kernel never builds the verifier's own nets. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -28,7 +19,6 @@ open RecDeploy.VStarNets (netLs rowsLs)
 
 namespace FlockDeploy.ConcreteNet
 
-/-- One token: nonempty, without whitespace. -/
 def Tok (s : String) : Prop := s ≠ "" ∧ NoWs s
 
 theorem word_nat (n : Nat) : Tok (toString n) := ⟨Nat.repr_ne_empty, nat_noWs n⟩
@@ -86,11 +76,8 @@ theorem num_of {h : Array String} {i n : Nat} (hi : h[i]? = some (toString n)) :
   rw [hi, Option.bind_some, show (toString n).toNat? = some n from Nat.toNat?_repr n]
   rfl
 
-/-! ## groups -/
-
 def gNums (g : Group) : List Nat := [g.col, g.words, g.bits.size] ++ g.bits.toList
 
-/-- Numbers `L` sit in `h` from `at0` on. -/
 def At (h : Array String) (at0 : Nat) (L : List Nat) : Prop := ∀ j n, L[j]? = some n → h[at0 + j]? = some (toString n)
 
 theorem at_append {h : Array String} {at0 : Nat} {L M : List Nat} (hh : At h at0 (L ++ M)) :
@@ -205,8 +192,6 @@ theorem header_tokens {name : String} (hw : Tok name) (l : Laid) :
   · exact hw
   all_goals exact word_nat _
 
-/-! ## The header checks `ofRows` passed -/
-
 theorem ofRows_checks {name : String} {useful constPos : Nat} {ig og : Array Group} {ra rb : Array (Array Nat)}
     {n : Net} (h : Net.ofRows name useful constPos ig og ra rb = .ok n) :
     (∀ g ∈ (ig ++ og).toList, Aligned g) ∧ og.isEmpty = false ∧ (constPos + 1 != useful) = false ∧
@@ -237,8 +222,6 @@ theorem ofRows_checks {name : String} {useful constPos : Nat} {ig og : Array Gro
   cases hc : (isPow2 g.words && g.col % g.words == 0)
   · exact absurd (Array.any_eq_true'.mpr ⟨g, Array.mem_toList_iff.mp hg, by simp [hc]⟩) h1
   · rfl
-
-/-! ## The row loop -/
 
 theorem forIn_steps {β : Type} {f : Nat → β → Except String (ForInStep β)} {step : Nat → β → β} : ∀ (m k : Nat) (b : β),
     (∀ j < m, ∀ b, f (k + j) b = .ok (.yield (step (k + j) b))) →
@@ -305,8 +288,6 @@ theorem rowNums_facts (a b : Array Nat) :
     rw [List.drop_eq_nil_of_le (by simp)]
     simp only [List.nil_append]
     exact List.take_of_length_le (by simp)
-
-/-! ## The round trip -/
 
 theorem netLs_getD0 (name : String) (l : Laid) : (netLs name l).toArray.getD 0 "" = VStar.header name l := by
   simp [netLs]

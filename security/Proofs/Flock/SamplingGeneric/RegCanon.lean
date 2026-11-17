@@ -7,18 +7,7 @@ import Proofs.Flock.Claims.Sampling.Cost
 import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Flock.SamplingGeneric.RegTrace
 
-/-!
-# The rewinding lemma at the committed trace, counting each bad run at one gate
-
-`pr_off_le_canon_on` is `pr_off_le` at `Verity.Rewinding.prBad_le_canon_on` in place of `prBad_le`, over any finite
-space and a trace that is the table's plurality (`plurAt`) wherever a point opens. At one tape's runs,
-`pr_offReg_le_canon`: a run's extractions open a gate of the program off the committed trace with probability at most
-`√(N·Pr[conflict])`, `N` the program's gates, where `pr_offReg_le` gives `N·√Pr[conflict]`; `pr_regHit_le_canon`
-carries it through `KSReg`'s first half (`event_le_of_off` at the committed trace, `SamplingGeneric/RegTrace.lean`),
-so `εreg`'s `N·√Pr[B_conf]` can read `√(N·Pr[B_conf])`. The `_on` forms count only a set `S` of gates holding every
-gate some run's extractions open; `pr_regHit_le_canon_pos` takes for `S` the positions the reveals open under the
-statement's roots (`opensAt_isSome_mem`).
--/
+/-! The rewinding lemma at the committed trace, counting each bad run at one gate, so that `εreg`'s `N·√Pr[B_conf]` can read `√(N·Pr[B_conf])`. -/
 
 @[expose] public section
 
@@ -27,9 +16,6 @@ namespace Claims.SamplingGeneric
 open Claims Finset
 open Claims.Sampling (AuditStatement InScope)
 
-/-- **The rewinding lemma at a table's plurality, one position a bad point** (`Verity.Rewinding.prBad_le_canon_on`):
-`pr_off_le` with `√(#T·Pr[conflict])` in place of `N·√Pr[conflict]`, at any set `T` of positions below `N` holding
-every position a point opens. -/
 theorem pr_off_le_canon_on {S : Type} [Fintype S] [Nonempty S] (N : ℕ) (op : S → ℕ → Option Bool)
     (tr : ℕ → Option Bool) (htr : ∀ a g b, op a g = some b → tr g = some (plurAt op g)) (T : Finset (Fin N))
     (hT : ∀ (a : S) (g : Fin N), (op a g).isSome → g ∈ T) :
@@ -90,9 +76,6 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The rewinding lemma at the committed trace, one gate a bad run**: at each tape, a run's extractions open a gate
-of the program off the committed trace with probability at most `√(#S·Pr[conflict])`, at any set `S` of gates holding
-every gate some run's extractions open. -/
 theorem pr_offReg_le_canon_on (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (S : Finset (Fin (L.nG x)))
     (hS : ∀ (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)),
@@ -103,7 +86,6 @@ theorem pr_offReg_le_canon_on (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type
   pr_off_le_canon_on (L.nG x) (fun (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : ℕ) => L.opensAt H P x ω rc.1 rc.2 g)
     (L.regVal H P x ω) (fun _ _ _ h => L.regVal_eq_plur H P x ω h) S hS
 
-/-- `pr_offReg_le_canon_on` at every gate: `√(N·Pr[conflict])`, `N` the program's gates. -/
 theorem pr_offReg_le_canon (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
     Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) ≤
       Real.sqrt (L.nG x * Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
@@ -112,9 +94,8 @@ theorem pr_offReg_le_canon (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (
   rwa [card_univ, Fintype.card_fin] at h
 
 set_option synthInstance.maxSize 1024 in
-/-- `KSReg`'s first half from the sessions' bound, at `√(#S·Pr[B_conf])` where `εreg` has `N·√Pr[B_conf]`, at any set
-`S` of gates holding every gate some run's extractions open: `event_le_of_off` at the committed trace, as
-`ksReg_of_sessionKS` is, with `pr_offReg_le_canon_on` in place of `pr_offReg_le`. -/
+/-- At `√(#S·Pr[B_conf])` where `εreg` has `N·√Pr[B_conf]`, at any set `S` of gates holding every gate some run's
+extractions open. -/
 theorem pr_regHit_le_canon_on {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
     (hSK : L.SessionKS H) {x : Msg} (hsc : L.Scope x) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (S : Finset (Fin (L.nG x)))
@@ -154,7 +135,6 @@ theorem pr_regHit_le_canon_on {H : Msg → Msg} {L : Compiled Coin A} (hbind : L
   linarith
 
 set_option synthInstance.maxSize 1024 in
-/-- `pr_regHit_le_canon_on` at every gate: `KSReg`'s first half at `√(N·Pr[B_conf])`. -/
 theorem pr_regHit_le_canon {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
     (hSK : L.SessionKS H) {x : Msg} (hsc : L.Scope x) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
@@ -164,8 +144,6 @@ theorem pr_regHit_le_canon {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.co
   have h := pr_regHit_le_canon_on hbind hS hSK hsc Ω P univ fun _ _ g _ => mem_univ g
   rwa [card_univ, Fintype.card_fin] at h
 
-/-- **A run's extractions open only what the reveals open**: a gate `opensAt` opens is the position of an opening some
-reveal makes under the statement's roots. -/
 theorem opensAt_isSome_mem (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     {s : AuditStatement} (hs : L.parse x = some s) (Spos : Finset ℕ)
     (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.1 = s.roots → p.2.pos ∈ Spos)
@@ -197,8 +175,6 @@ theorem opensAt_isSome_mem (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (
     exact absurd hqo (by simp)
 
 set_option synthInstance.maxSize 1024 in
-/-- `pr_regHit_le_canon_on` at the positions the reveals open under the statement's roots: `KSReg`'s first half at
-`√(#Spos·Pr[B_conf])`, wherever every reveal under `s.roots` opens a position of `Spos`. -/
 theorem pr_regHit_le_canon_pos {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
     (hSK : L.SessionKS H) {x : Msg} (hsc : L.Scope x) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     {s : AuditStatement} (hs : L.parse x = some s) (Spos : Finset ℕ)

@@ -2,21 +2,7 @@ module
 
 public import Proofs.Flock.SampledGeneric.Statements
 
-/-!
-# The sampled audit's zero knowledge, generic in the proof system (proved)
-
-Two hybrids. First, on each commitment the prover's coins give, replace the session's honest view by its simulator's
-(`Close.coin`, at `ε_zk`, because the proof system is zero knowledge at every such statement): this is `auditSim` at the
-real trace `X`. Then replace the commitment to `X` by one to the fixed trace `X₀`: `auditSim` at a trace is the
-commitment to it post-processed by the verifier's sample and the simulator (`auditSim_eq_andThen`), so hiding (at
-`ε_hide`) moves it to `auditSim` at `X₀`. `Close.trans` adds the two.
-
-* `prob_map_strat`: relabelling the output with the strategy that plays the same moves relabels the event;
-* `Close.trans`, `Close.symm`, `Close.mono`: closeness is a pseudometric's ball, and grows with its radius;
-* `Close.coin`: closeness under a uniform coin flipped first;
-* `auditSimAfter`, `auditSim_eq_andThen`: the simulator as a post-processing of the commitment;
-* `Flock.SecurityProofs.GenericSampledZK`.
--/
+/-! Proof of the sampled audit's zero knowledge, generic in the proof system, by two hybrids. -/
 
 @[expose] public section
 
@@ -46,8 +32,6 @@ theorem symm {ε : ℝ≥0∞} (h : Close a b ε) : Close b a ε := fun E => ⟨
 theorem mono {ε ε' : ℝ≥0∞} (h : Close a b ε) (hε : ε ≤ ε') : Close a b ε' := fun E =>
   ⟨(h E).1.trans (add_le_add le_rfl hε), (h E).2.trans (add_le_add le_rfl hε)⟩
 
-/-- **Closeness under a uniform coin**: if each coin's two experiments are `ε`-close, so are the experiments that sample
-the coin first and relabel each view by the coin. -/
 theorem coin {Rnd W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → Exp V) (f : Rnd → V → W) {ε : ℝ≥0∞}
     (h : ∀ r, Close (a r) (b r) ε) :
     Close ⟨.coin Rnd fun r => (a r).g.map (f r), fun r => Strategy.map _ _ (a r).s⟩
@@ -68,14 +52,10 @@ end Close
 
 variable {n : ℕ} {Tr Rnd Com Wit VS View : Type} [Fintype Rnd] [Nonempty Rnd]
 
-/-- **The simulator after the commitment `c`**: the verifier `v`'s sample on seeing `c`, and the proof system's
-simulator on that sample's statement, with the view relabelled to carry `c` and the sample. -/
 def auditSimAfter (Z : Zk (Com × Finset (Fin n)) Wit VS View) (samp : VS → Com → Finset (Fin n)) (v : VS) (c : Com) :
     Exp (Com × Finset (Fin n) × View) :=
   ⟨(Z.sim (c, samp v c) v).g.map fun w => (c, samp v c, w), Strategy.map _ _ (Z.sim (c, samp v c) v).s⟩
 
-/-- **The audit's simulator is a post-processing of the commitment**: at any trace `X`, `auditSim` is the commitment to
-`X` followed by `auditSimAfter`, which reads only the commitment. -/
 theorem auditSim_eq_andThen (H : Hider Tr Rnd Com) (Z : Zk (Com × Finset (Fin n)) Wit VS View)
     (samp : VS → Com → Finset (Fin n)) (X : Tr) (v : VS) :
     auditSim H Z samp X v = (H.exp X).andThen (auditSimAfter Z samp v) := rfl
@@ -83,10 +63,6 @@ theorem auditSim_eq_andThen (H : Hider Tr Rnd Com) (Z : Zk (Com × Finset (Fin n
 end FlockSoundness.SampledGeneric
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
-/-- **The sampled audit's zero knowledge, generic in the proof system** (`Flock.Guarantees.GenericSampledZK`): the real
-view is `ε_zk`-close to `auditSim` at the real trace, which simulates each session on the real commitment
-(`Close.coin`), and that is `ε_hide`-close to `auditSim` at `X₀`, since both are a commitment post-processed by
-`auditSimAfter` (`auditSim_eq_andThen`, `Hider.Hiding`). -/
 theorem Flock.SecurityProofs.GenericSampledZK : Flock.Guarantees.GenericSampledZK := by
   intro n Tr Rnd Com Wit VS View _ _ H Z Rel εzk εh samp wit hZ hH X hX X₀ v
   have h1 : Close (auditView H Z samp wit X v) (auditSim H Z samp X v) εzk :=

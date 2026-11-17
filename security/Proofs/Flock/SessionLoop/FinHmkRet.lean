@@ -39,18 +39,7 @@ import Proofs.Flock.Claims.ZK.FinishSwFc
 import Proofs.Flock.SessionLoop.FinHmkCut
 import Proofs.Flock.SessionLoop.FinHmkFc
 
-/-!
-# The views' masked values below `zp 64`, `final_c`'s included, from the cut session's own return
-
-`Loop.swSrcE_hmk_fw` reaches `final_c` through the ZK server's rep, so it needs the ZK server's pads commitment to be the
-switched cut's (`hicE`), and that holds only where table `j`'s rows do: elsewhere the switched pads are shifted and the
-two roots differ. The cut session's own rep at stream `2j + r`, returning (`hprev`'s body at `k = 2j + r`), needs
-neither: its PIOP returns (`piopCut_of_repCut`, so `swSrcE_hmk_cut` applies without `hpiop`), and the same rep cut at
-its inner proof's first round stops there with that round's body (`repCut_inner_of_ret`), at `repSlot … (innerOff 0)`
-(`Masked.innerAt_slot`), which is `swSrcE_hmk_cut_fc`'s premise. It reads no rows, no ZK server run and no level-0 values.
-
-* **`Loop.swSrcE_hmk_ret`**: every masked value of the views' source below `zp 64` is the request's plus its pad.
--/
+/-! The views' masked values below `zp 64`, `final_c`'s included, from the cut session's own return, which needs no ZK server run, rows or level-0 values. -/
 
 @[expose] public section
 
@@ -69,12 +58,6 @@ variable (L₀ : LeanRelease Flock.Wit Tp)
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 set_option maxHeartbeats 4000000 in
-/-- **`swSrcE_hmk_ret`: the views' masked values below `zp 64` are the request's plus its pads, from the cut
-session's return**: at `swSrcE_hmk_cut`'s premises but `hpiop`, where the rep from the views' source at stream
-`2j + r`, cut at the opened coins, returns from `l` (`hcur`, `hprev`'s body at `k = 2j + r`), every masked value of the
-views' source below `zp 64` is the request's value there plus its pad: those but `final_c`'s by `swSrcE_hmk_cut`, at the
-PIOP `hcur` runs (`piopCut_of_repCut`), and `final_c`'s by `swSrcE_hmk_cut_fc`, at the stop `repCut_inner_of_ret`
-gives from `hcur`. -/
 theorem swSrcE_hmk_ret (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
@@ -158,15 +141,12 @@ theorem swSrcE_hmk_ret (vs : finS.SwVals)
   have hsj : schs[j.val]! = ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [← Except.ok.inj (hs'.symm.trans hs)]
     exact hschZ j
-  -- the cut session's rep at stream `2j + r` returns
   obtain ⟨p, tr, l', hret, -⟩ := hcur extras (by rw [hk2]; exact hext) ic
     (fun l' => by rw [hk2, hkr, hsj]; exact hic l') l hl
   rw [hk2, hkr, hsj] at hret
-  -- so its PIOP does, and below `zp 64` but at `final_c` the masked values are the request's plus its pads
   obtain ⟨res, tr₁, l₁, hpiop⟩ := _root_.Flock.ZkServer.Finish.piopCut_of_repCut _ _ _ _ _ _ _ _ _ _ _ _ _ _ hret
   have hmkV := swSrcE_hmk_cut L₀ src wk x w vs hsc hR hServe hE hc hF hsx hs hcms j r hexts hprev hRep hext hic hl
     hpiop hcap hroot
-  -- and cut at its inner proof's first round it stops there, sending the source's masked `final_c`
   have hSch : FlockComplete.CutEq.SchOk (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]! (Masked.zkTab x j).sch := by
     rw [Masked.tabsOf_stAt x j]
     exact Masked.schOk_of (Masked.zkTab x j)

@@ -2,17 +2,7 @@ module
 
 public import Proofs.Flock.SampledGeneric.Joint
 
-/-!
-# The textbook form's transfer, and its theorem
-
-The binding error of an extractor that is a game (`JointExtractor.toExtractor`) transfers to its trials
-(`JointExtractor.toTrials_transfers`): an accepted session whose witness for the picked proof block opens a position `c`
-to a value other than the trace's makes the extractor's game read a value other than the trace's at `c`
-(`wrongAt_eq_one`), so the binding error at the picked proof block is at most the sum over the positions the sample reads
-(`atTgt_link_le`); averaged over the sample and exchanged with the sum over positions, that is `Σ_c wt_c · errOf_c`
-(`sum_wt_errOf`), with no slack. `Flock.SecurityProofs.GenericSampledKSJoint` is then `GenericSampledKSPa` at the
-extractor and its trials, with the knowledge term at most `κ`.
--/
+/-! The transfer of an extractor that is a game, and the textbook form's theorem. -/
 
 @[expose] public section
 
@@ -36,8 +26,6 @@ namespace JointExtractor
 
 variable (J : JointExtractor PS B) (L : SamplingDesign n)
 
-/-- **What the extractor's game reads wrong at `c`** after the sample, against `x`: `1` if it reads a value there and
-not exactly `x`, else `0` (the integrand of `LinkFinder.errAt`, `errAt_eq_expect`). -/
 noncomputable def wrongAt (R : Reg) (c : B.Pos) (x : B.Val) (e : L.Ω × (Bool × (Fin n → Option J.Wit))) : ℝ :=
   ind (fun e => (J.readsOut L R c e).Nonempty) e - ind (fun e => J.readsOut L R c e = {x}) e
 
@@ -56,7 +44,6 @@ theorem wrongAt_eq_one {R : Reg} {c : B.Pos} {x : B.Val} {e : L.Ω × (Bool × (
   have h2 : J.readsOut L R c e ≠ {x} := fun h => hx (by rw [h] at hv; exact Finset.mem_singleton.1 hv)
   simp only [wrongAt, ind, h1, h2, ↓reduceIte, sub_zero]
 
-/-- What the extractor's game reads wrong at `c` after the sample `ω`, in expectation. -/
 noncomputable def wrongExp (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (ω : L.Ω) (c : B.Pos) : ℝ :=
   expect (fun o => J.wrongAt L R c (X c) (ω, o)) (J.G (L.draw ω) R) (J.strat (L.draw ω) R (τ ω))
 
@@ -64,8 +51,6 @@ theorem wrongExp_nonneg (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (
     0 ≤ J.wrongExp L R τ X ω c :=
   expect_nonneg (fun o => J.wrongAt_nonneg L R c (X c) (ω, o)) _ _
 
-/-- **The binding error at a sampled proof block** is at most what the extractor's game reads wrong, in expectation, at
-the positions it reads. -/
 theorem link_toReal_le (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (ω : L.Ω) (u : Fin n)
     (hu : u ∈ L.draw ω) :
     (J.toExtractor.link (L.draw ω) R (τ ω) u X).toReal ≤ ∑ c ∈ J.reads u, J.wrongExp L R τ X ω c := by
@@ -85,8 +70,6 @@ theorem link_toReal_le (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (�
           (fun c _ => J.wrongAt_nonneg L R c (X c) (ω, o)) hc
   · exact Finset.sum_nonneg fun c _ => J.wrongAt_nonneg L R c (X c) (ω, o)
 
-/-- **The binding error at the picked proof block**, at the sample `ω`, is at most what the extractor's game reads wrong at
-every position the sample reads. -/
 theorem atTgt_link_le (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (ω : L.Ω) (t : Option (Fin n)) :
     atTgt (L.draw ω) t (fun u => J.toExtractor.link (L.draw ω) R (τ ω) u X) ≤
       ENNReal.ofReal (∑ c ∈ Finset.univ.filter (fun c => ∃ u ∈ L.draw ω, c ∈ J.reads u), J.wrongExp L R τ X ω c) := by
@@ -101,8 +84,6 @@ theorem atTgt_link_le (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (ω
       = ENNReal.ofReal (J.toExtractor.link (L.draw ω) R (τ ω) u X).toReal := (ENNReal.ofReal_toReal hne).symm
     _ ≤ _ := ENNReal.ofReal_le_ofReal ((J.link_toReal_le L R τ X ω u hu).trans hsub)
 
-/-- **The trials' binding error at a position some sample reads**: what the extractor's game reads wrong there, averaged
-over the samples that read it (`LinkFinder.errAt_eq_expect`). -/
 theorem errOf_toTrials (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (c : B.Pos)
     (h : Nonempty (J.ReadsAt L c)) :
     (J.toTrials L).errOf R τ c (X c) =
@@ -117,8 +98,6 @@ theorem errOf_toTrials (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (c
     exact expect_map _ _ _ _
   · exact absurd h h'
 
-/-- **The trials' weighted binding error** is what the extractor's game reads wrong at the positions each sample reads,
-averaged over the sample. -/
 theorem sum_wt_errOf (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) :
     ∑ c, (J.toTrials L).wt c * (J.toTrials L).errOf R τ c (X c) =
       (∑ ω, ∑ c ∈ Finset.univ.filter (fun c => ∃ u ∈ L.draw ω, c ∈ J.reads u), J.wrongExp L R τ X ω c) /
@@ -157,8 +136,6 @@ end JointExtractor
 end FlockSoundness.SampledGeneric
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
-/-- **The textbook form** (`Flock.Guarantees.GenericSampledKSJoint`): `GenericSampledKSPa` at the extractor that is a
-game and its trials, whose knowledge term is at most `κ` at every sampled proof block. -/
 theorem Flock.SecurityProofs.GenericSampledKSJoint : Flock.Guarantees.GenericSampledKSJoint := by
   intro n Reg Dh Hc L PS B Correct J κ M hJ hS hc hks hM σ hCR
   refine (Flock.SecurityProofs.GenericSampledKSPa n Reg Dh Hc L PS B Correct J.toExtractor (J.toTrials L)

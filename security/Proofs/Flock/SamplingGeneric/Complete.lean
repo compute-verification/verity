@@ -3,21 +3,7 @@ module
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.Claims.Sampling.Reference.Complete
 
-/-!
-# The sampled compiler preserves completeness
-
-`Compiled.Complete H L` from the proof system's completeness at its honest prover, the contract (`Sessions`: its
-`fixed` and `slots`) and the completeness contract (`CompleteSessions`), as `Sampling.Reference.complete_of_sessions`
-proves it at the deployed record. Each sampled proof block's session is fixed by the coins off its rounds (`fixed`), so
-resampling a slot's session rounds (`Ex_resample`) leaves the slot's block and statement fixed, and the session's
-coins are then uniform (`Pr_comp_inj`, along `emb`), so the proof system's completeness bounds the slot's rejection by
-its error, capped at `1`. The union bound over the slots below `K x` gives `K x` times that, which the compiled error
-covers (`CompleteSessions.err`).
-
-* `Compiled.Pr_slot_le`: a sampled slot rejects with probability at most any bound on its sessions' errors.
-* `Compiled.complete_of`: **`Compiled.Complete H L`**.
-* `compilerComplete`: **`CompilerComplete`**.
--/
+/-! The sampled compiler preserves completeness. -/
 
 @[expose] public section
 
@@ -27,7 +13,6 @@ open Claims Claims.Sampling Finset Properties.Spot Properties.Spot.SecurityProof
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- The rounds of the proof block sampled at slot `p`, none when no block is. -/
 def slotRounds (L : Compiled Coin A) (x : Msg) (p : ℕ) (r : Fin (L.V.k x) → Coin) : Finset (Fin (L.V.k x)) :=
   match (L.checked x r)[p]? with
   | some u => L.rounds x u
@@ -49,9 +34,8 @@ theorem coinsOf_forkOn (L : Compiled Coin A) {x : Msg} {u : ℕ} {xS : Msg}
   funext i
   simp only [coinsOf, dite_eq_left hk, forkOn, emb, Finset.orderEmbOfFin_mem, ite_true]
 
-/-- **A sampled slot rejects with at most its sessions' error**: the event that the proof block sampled at slot `p` has
-a session that shows a rejection, at the reference prover on an honest witness, has probability at most any `e ≥ 0`
-that bounds, capped at `1`, the proof system's error at the statements of the sessions there. -/
+/-- At the reference prover on an honest witness, the bound is any `e ≥ 0` that bounds the proof system's error at the
+sessions' statements there, capped at `1`. -/
 theorem Pr_slot_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Nonempty Ω] {PA : A.W → Prover Ω}
     {ScopeA : Msg → Prop} {δA : Msg → ℝ} {K : Msg → ℕ} (hA : Claims.Complete H A.V PA A.R ScopeA δA)
     (hS : L.Sessions H) (hC : L.CompleteSessions H PA ScopeA δA K) (h64 : Out64 H) (x : Msg) (w : Wit)
@@ -109,9 +93,6 @@ theorem Pr_slot_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Nonempty
     _ ≤ Ex (fun _ : Fin (L.V.k x) → Coin => e) := Ex_mono hinner
     _ = e := Ex_const _
 
-/-- **A compiled verifier is complete** at its error, from the proof system's completeness, the contract and the
-completeness contract: the reference prover is rejected only where a slot below `K x` shows a rejecting session, each
-with probability at most `δ_c / K x` (`Pr_slot_le`), so with probability at most `δ_c` by the union bound. -/
 theorem complete_of (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Nonempty Ω] {PA : A.W → Prover Ω}
     {ScopeA : Msg → Prop} {δA : Msg → ℝ} {K : Msg → ℕ} (hA : Claims.Complete H A.V PA A.R ScopeA δA)
     (hS : L.Sessions H) (hC : L.CompleteSessions H PA ScopeA δA K) : L.Complete H := by
