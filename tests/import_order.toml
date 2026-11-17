@@ -346,9 +346,6 @@ loads = [
 reaches = [
     "verity/channel.py",
 ]
-loaded_by = [
-    "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv_bench.py",
-]
 
 [[place]]
 paths = [

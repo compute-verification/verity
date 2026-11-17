@@ -131,6 +131,7 @@ REGISTRY = Registry(
     S("VERITY_BENCH_CUBIN", str, None, WHERE, "the cubin `verity bench overhead run --cubin ART` sent (verity_bench's "
                                               "overhead_node sets it), which pearl_c_sm90's overhead arm loads; unset, the "
                                               "arm builds one, for development only"),
+    S("HZ_STAGE", str, "fast", WHERE, "how a hiding tile is staged: fast (fast_stage's patches) or library, the same bytes"),
     # ---------------------------------------------------------------- which of the served path's tests run (tests/)
     # ---------------------------------------------------------------- H1's harness (h1_prove/h1form.py)
     S("H1_TILE", str, "v1", WHERE, "the H1 tile under the unit, v1 or v3 (h1unit.tile)"),

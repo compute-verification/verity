@@ -98,6 +98,8 @@ from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+CARD_FILES = ROOT / "hardware/cards"
+NODE_FILES = ROOT / "hardware/nodes"
 RS = ROOT / "benchmarks" / "poub_session"
 
 #: this directory's registry: PACED, UNPACED, and the variables a research run sets
@@ -531,12 +533,12 @@ def one_card(kind: str) -> tuple[dict, int]:
     (`timing.Figures.of_sheets`) at one card, so the share is of that card's read rate and its host's. A host card
     that states no measured disk read is taken at its ceiling (`disk.read_max`); the figures no sheet states are
     `timing`'s."""
-    node = load_node(kind)
+    node = load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES)
     node = {**node, "device": {**node["device"], "count": {**node["device"]["count"], "value": 1}}}
-    host = load_card(node["host"]["sku"])
+    host = load_card(node["host"]["sku"], directory=CARD_FILES)
     if "read" not in host.get("disk", {}):
         host = {**host, "disk": {**host["disk"], "read": host["disk"]["read_max"]}}
-    figures = timing.Figures.of_sheets(node, load_card(node["device"]["sku"]), host)
+    figures = timing.Figures.of_sheets(node, load_card(node["device"]["sku"], directory=CARD_FILES), host)
     return poub_ledger.Node.stated(figures).to_json(), figures.hbm_bytes
 
 
