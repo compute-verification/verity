@@ -14,7 +14,7 @@ two edges. Its members are every request in the engine during it, numbered in re
 - `pool_row_trace`'s transcription of vLLM d9105ea80's `BlockPool`, held to `_KV` after every operation;
 - `_KV` itself, whose row (`pool_row_trace.kv_row`) is built from its own state;
 - CompileSlice_v6's pool window. For each window, CacheStep_v3's stream is opened from the previous edge's row
-  (`compile_slice_v6.opened`; the first window opens the empty row) over the members' certified tokens (prompt, then
+  (`compile_slice_v6.opened`; the first window opens the empty row) over the members' attested tokens (prompt, then
   outputs). It runs `_KV`'s calls in order (hit, take, alloc, cache, free), and each call's results must be `_KV`'s.
 At each edge the window's stream must hold no block and pass its memory check. The row it leaves
 (`compile_slice_v6.closed`) must be `_KV`'s, and the exported row (`pool_row.export`) and root must be the same.

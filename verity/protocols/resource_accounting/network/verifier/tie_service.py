@@ -1,6 +1,6 @@
 """The ingress tie through the proof system: each bucket row of an ingress execution phase of the network attester's cells proved as
 `io_request.IoTieRequest`, and the verifier that builds `IoTieVerdict`, the tie of a link's requests to its
-certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md, "The ingress
+attested ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md, "The ingress
 tie").
 
 **What is committed** is the network attester's own (`network_attester_rows`): an ingress execution phase's T bucket rows, row t
@@ -213,11 +213,11 @@ class LinkAdvice:
 
 @dataclass(frozen=True)
 class IoTieVerdict:
-    """The tie of a link's requests to its certified ingress (`IngressTie.tie`): the `IoTieRequest` verdict on each of
+    """The tie of a link's requests to its attested ingress (`IngressTie.tie`): the `IoTieRequest` verdict on each of
     the link's ingress windows, `accepted[w]`, on the link named `link`, whose ingress windows the challenger
     registered as `registrations` (each one's `registration.digest`, in window order), on the request view the verifier
     computed from the advice whose `digest` is `advice`. An accepted verdict on every window says the link's j-th
-    certified request is advice request j and its prompt is v0's `prompt_len` ids long. Only `IngressTie.tie` builds
+    attested request is advice request j and its prompt is v0's `prompt_len` ids long. Only `IngressTie.tie` builds
     one, from IoTieRequest proofs the verifier verified itself; at a size class with no pinned IoTieRequest digest
     every window is refused (PROTOCOL.md, fail closed). Construction refuses (`advice.MalformedAdvice`) a `link` that
     isn't a non-empty string, `registrations` and an `advice` that aren't SHA-512 hex digests, and verdicts that aren't

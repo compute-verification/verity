@@ -299,7 +299,7 @@ def workload(n: int, *, rate: float, prompt: tuple[int, int], output: tuple[int,
     """`n` Poisson arrivals at `rate` per second, prompt and output lengths uniform in their ranges; a fraction `p_eos` stop on
     EOS before `max_tokens` (default: the output range's top). With `shared_prefix` > 0 every prompt starts with the same
     tokens, over a small vocabulary, so prefix caching has hits. Each request reaches the engine `ingress_delay` after the
-    ingress attester saw it; `fifo` keeps the certified order the engine's (a frontend that reorders makes `fifo` False).
+    ingress attester saw it; `fifo` keeps the attested order the engine's (a frontend that reorders makes `fifo` False).
     A fraction `one_token` of the prompts are one token: a request whose first row is a decode row."""
     rng = random.Random(seed)
     t, jobs, seen = 0.0, [], float("-inf")
@@ -327,7 +327,7 @@ def workload(n: int, *, rate: float, prompt: tuple[int, int], output: tuple[int,
 
 
 def tokens_of(jobs: Sequence[Job], recs: Sequence[dict[str, Any]]) -> dict[str, tuple[int, ...]]:
-    """Each request's tokens as the certified I/O shows them (prompt, then the output it emitted), for `replay.load_step_trace`."""
+    """Each request's tokens as the attested I/O shows them (prompt, then the output it emitted), for `replay.load_step_trace`."""
     emitted: dict[str, int] = {}
     for r in recs:
         if r["kind"] == "step":
