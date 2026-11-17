@@ -25,7 +25,7 @@ public import Flock.FV3
 
 A network attester link (`Kind.networkAttester`, `service.NetworkAttesterProfile`) is the plain proof block under the active network
 attester's records: both ends' grids are the network attester's one grid, with no profile, and both carry the network
-attester's parameters digest (`gridBytes`) in place of a certifier's; the active network attester runs no shaper
+attester's parameters digest (`gridBytes`) in place of a network attester's; the active network attester runs no shaper
 clock, so a window declares no sync and nothing is read of the syncs (`synced`). Its outputs are a plain link's.
 
 Its public outputs are `verdict` and the proved `deadline` bit, and `digest` binds them to the registration, the
@@ -452,7 +452,7 @@ def transferBlocksFn (j : Json) : Except String Json := do
 /-! ## The client's certificates -/
 
 /-- One window's certificates and clock certificates as a reveal endpoint served them, which the client holds to the
-certifier's key in its session (`audit.certificate_refusals`): the LMS key and session, the link and window they must
+network attester's key in its session (`audit.certificate_refusals`): the LMS key and session, the link and window they must
 name, the certificates and the clock certificates in the answer's order, and the digests that earlier windows' kept
 clock certificates sign. -/
 structure Served where

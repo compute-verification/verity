@@ -19,7 +19,7 @@ table of ends and capacities. Here the Site is read as that: its places are the 
 a host; and its links are the table, each at its position in the Site (`Site.placeEnds`, `Site.linkβ`), so a bound of
 the model at these is a bound read off the registration.
 
-A registered link ends at a host, a certifier, a challenger or the outside, never at a device, a memory leaf or a site
+A registered link ends at a host, a network attester, a challenger or the outside, never at a device, a memory leaf or a site
 (`Site.Kind.links`). So a wire between two places is held to the links through the place a link may end at for each
 (`Site.linkEnd`): its host for a device and a memory leaf, and each other place for itself. A subtree that holds
 each host with all its locations or not at all (`Site.HostsWhole`) is one whose egress the links bound.
@@ -32,7 +32,7 @@ each host with all its locations or not at all (`Site.HostsWhole`) is one whose 
 * `Site.RatedOn`: a model's rates are the registered ones on a set of links, each of which has one.
 * `Site.linkEnd`, `Site.linkPlace`: the place a link may end at for a place, read through the Site's own `host?`.
 * `Site.HostsWhole`: a subtree holds each host whole.
-* `Site.proverUnder`, `Site.certifiersOf`, `Site.challengersOf`, `Site.auditorsOf`: a subtree's prover places, and the
+* `Site.proverUnder`, `Site.attestersOf`, `Site.challengersOf`, `Site.auditorsOf`: a subtree's prover places, and the
   auditor's devices at it, read off the links' far ends (`Site.far`).
 * `Site.Within`, `Site.sharedOf`: a place linked only into a subtree, and the memory challengers of a subtree that are
   not.
@@ -91,7 +91,7 @@ def RatedOn (β : Fin S.links.length → ℕ) (E : Set (Fin S.links.length)) : P
 /-- **The place a link may end at** for the place `i`: the host the location `i` is in, as the Site reads it off the
 location's parent (`host?`: the parent when that is a host, else the parent's parent), and `i` itself where that
 names none or `i` names no location. On a valid registration's Site that is its host for a device and for a memory
-leaf, and itself for a host, a site, a certifier, a challenger and the outside. -/
+leaf, and itself for a host, a site, a network attester, a challenger and the outside. -/
 def linkEnd (i : String) : String := ((S.loc? i).bind S.host?).getD i
 
 /-- The place a link may end at for a leaf of the model. -/
@@ -108,11 +108,11 @@ noncomputable def proverUnder (i : String) : Finset String :=
   (S.under i).filter fun j => ∀ k ∈ S.kind? j, k.auditor = false
 
 open Classical in
-/-- **The certifiers of the subtree at `i`**: the registered certifiers at the far end (`far`) of a link of one of the
+/-- **The network attesters of the subtree at `i`**: the registered certifiers at the far end (`far`) of a link of one of the
 subtree's prover places. On any Site, valid or not, a far end of `x` is the other end of a registered link that ends
 at `x`, `x` itself left out. Where no link joins a place to itself, as on a valid log's Site, that is every registered
 certifier a registered link joins to one of those places. -/
-noncomputable def certifiersOf (i : String) : Finset String :=
+noncomputable def attestersOf (i : String) : Finset String :=
   S.places.filter fun y => S.kind? y = some .certifier ∧ ∃ x ∈ S.proverUnder i, y ∈ S.far x
 
 open Classical in
@@ -127,7 +127,7 @@ noncomputable def challengersOf (pinned : Finset String) (i : String) : Finset S
 
 /-- **The auditor's devices at the subtree at `i`**: its certifiers and its memory challengers. -/
 noncomputable def auditorsOf (pinned : Finset String) (i : String) : Finset String :=
-  S.certifiersOf i ∪ S.challengersOf pinned i
+  S.attestersOf i ∪ S.challengersOf pinned i
 
 /-- **`y` is linked only into the subtree at `i`**: the far end (`far`) of each of `y`'s links is in the subtree. On
 any Site, valid or not, a link from `y` to `y` gives `y` no far end and so is not asked about. Where no link joins a

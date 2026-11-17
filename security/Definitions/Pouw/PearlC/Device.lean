@@ -53,7 +53,7 @@ structure Prices where
 32 is the default clock reading, both pipes at `h100SmMHz` (CMP-438). -/
 def Prices.h100 : Prices := ⟨32, 2, Costs.adopted⟩
 
-/-- The H100's SM clock, 1980 MHz: `clock.sm` in `hardware/cards/h200-sxm-141gb.toml` (the H200 is the same GH100), from
+/-- The H100's SM clock, 1980 MHz: `clock.sm` in `calibration/hardware/cards/h200-sxm-141gb.toml` (the H200 is the same GH100), from
 NVIDIA's H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, the boost clock its FP32 and FP64 non-tensor peaks
 are quoted at. With the tensor pipe at it too, it is the default reading of the prices (CMP-438). -/
 def h100SmMHz : ℚ := 1980

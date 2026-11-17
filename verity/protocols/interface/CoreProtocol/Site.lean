@@ -220,8 +220,8 @@ def SCHEMES : List String := ["lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1
 /-- A link between two ends, with its capacity `β` in bits a second each way and its latency in the Site's units of
 time. `unmediated` is the reason no certifier splits the link, where the link states one. A link states no capacity
 (`β` none) only where it carries `unmediated`: an interface that reads no line rate has none, and no amount is read
-from it. The checks hold `unmediated` to nothing else: a link that carries it may be any link, a certifier's own among
-them, at a capacity or at none; a reader that needs a certifier's link's capacity refuses one that states none. -/
+from it. The checks hold `unmediated` to nothing else: a link that carries it may be any link, a network attester's own among
+them, at a capacity or at none; a reader that needs a network attester's link's capacity refuses one that states none. -/
 structure Link where
   id : String
   ends : String × String
@@ -310,10 +310,10 @@ def held (i : String) : Nat := ((S.locs.filter fun x => x.kind = .memory ∧ x.p
 def Joins (k : Link) (a b : Kind) : Prop :=
   (S.kind? k.ends.1, S.kind? k.ends.2) = (some a, some b) ∨ (S.kind? k.ends.1, S.kind? k.ends.2) = (some b, some a)
 
-/-- A boundary link of the prover's: a host's link to the outside, or to the certifier that splits its uplink. -/
+/-- A boundary link of the prover's: a host's link to the outside, or to the network attester that splits its uplink. -/
 def Boundary (k : Link) : Prop := S.Joins k .host .outside ∨ S.Joins k .certifier .host
 
-/-- A certified link: a certifier is at one of its ends. -/
+/-- A certified link: a network attester is at one of its ends. -/
 def Certified (k : Link) : Prop := S.kind? k.ends.1 = some .certifier ∨ S.kind? k.ends.2 = some .certifier
 
 /-- The far ends of `i`'s links. -/
@@ -348,7 +348,7 @@ abbrev Composite : Type := List String
 
 /-- **Onsite**, the spec's `Verity.Registration.Composite.onsite`: the ids of `Core.Onsite.components`. -/
 def Composite.onsite : Composite :=
-  ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+  ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/pearl-plus/v1",
     "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
 
 /-- **Remote**, the spec's `Verity.Registration.Composite.remote`: the ids of `Core.Remote.V1.components`. -/

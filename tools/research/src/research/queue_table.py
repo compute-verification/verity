@@ -4,8 +4,9 @@ Each row is one number with its unit, over three windows: now, the last hour, an
 
   the loop's decision log   `decisions.jsonl` beside the verified queue's loop on the control pod (`vqueue_loop`): each
                             candidate's build, its verdict as the loop judged it, its drop and why, each move of `main`, each
-                            head it left out of a build for a conflict, and each marked head it left out of every candidate
-                            and why (`leave`); and the loop's own log for the time each tick ended
+                            head it left out of a build for a conflict, each marked head it left out of every candidate
+                            and why (`leave`), and each land verdict it carried to a head (`carry`); and the loop's own log
+                            for the time each tick ended
   the labels                `ready` and `reviewed` on `pr:N@HEAD` in the evidence store: a PR's mark and its land verdict
   the run directories       on every node, each run's `job.json` (its command and commit), `slot.json` (when it took a check
                             slot, and for a check's shard what its scope used at its most, `used`), `status.json` (when it
@@ -20,8 +21,9 @@ Each row is one number with its unit, over three windows: now, the last hour, an
 
 A mark is the first `ready = true` label after the last `ready = false` among the labels the head that landed stands on: its
 own, and those of each head a restack across a move made it from (`carried`), since the queue carries a mark and a land verdict
-across a restack and the owner's wait began at the first. A head with the same change made another way (a merge of `main`) is
-not followed. A landing is the loop's `advance` of `main` to a candidate holding the PR. A candidate's verdict is the loop's
+across a restack and the owner's wait began at the first, or that the loop's `carry` line says it carried the head's land
+verdict from (`carries`): a merge of `main` that takes it by its own change, or drive.toml's `verdict_carry`. A head with the
+same change made another way and no such line is not followed. A landing is the loop's `advance` of `main` to a candidate holding the PR. A candidate's verdict is the loop's
 first `judged pass` or `judged fail` of the run beside its check. A red's first failure is the earliest failed suite's result
 file, or failed step's end, among the candidate's shards.
 
@@ -95,11 +97,13 @@ for line in open(live + "/decisions.jsonl", errors="replace"):
         r = json.loads(line)
     except ValueError:
         continue
-    if r.get("at", "") < since or r.get("action") not in ("build", "advance", "drop", "slim", "compare", "retry", "eject",
-                                                           "conflict", "skip", "leave"):
+    if r.get("at", "") < since and r.get("action") != "carry" or r.get("action") not in (
+            "build", "advance", "drop", "slim", "compare", "retry", "eject", "conflict", "skip", "leave", "carry"):
         continue
     keep = {k: r.get(k) for k in ("action", "at", "sha", "base", "members", "heads", "why", "shadow", "done", "cancel", "check",
                                   "graph2", "voided_why", "number", "cause")}
+    if r["action"] == "carry":         # a head stands on the verdict it carried however long ago it was logged
+        keep.update(old=r.get("old"), carries=r.get("carries"))
     if r["action"] == "conflict":      # a head that doesn't merge onto `main`: its line gives the files and no reason
         keep["why"] = "conflicts with `main` in " + ", ".join(map(str, r.get("files") or []))
     keep["why"] = (keep["why"] or "")[:400]
@@ -612,7 +616,7 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
                                           for pr, head in zip(r.get("members") or [], r.get("heads") or [])}
     doc["restacks"], unread = restacks(sorted({head for _, head in counted}))
     doc["errors"] += unread
-    pairs = sorted(built | counted | {(pr, old) for pr, head in counted for old in chain(doc["restacks"], head)[1:]})
+    pairs = sorted(built | counted | {(pr, old) for pr, head in counted for old in chain(stands_on(doc), head)[1:]})
     labels = _labels(store_root, [label_target(int(pr), head) for pr, head in pairs])
     doc["labels"] = {f"{pr}@{head}": labels[label_target(int(pr), head)] for pr, head in pairs}
     if until is not None:
@@ -624,7 +628,7 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
     with ThreadPoolExecutor(8) as ex:
         known.update({sha[:12]: got for sha, got in zip(ask, ex.map(lambda sha: lean_files(builds[sha], sha), ask)) if got})
     doc["lean"] = {sha[:12]: known[sha[:12]] for sha in builds if sha[:12] in known}
-    doc["lowrisk"] = lowrisk_heads(doc["open"], {f"{pr}@{head}": carried(doc["labels"], doc["restacks"], pr, head)
+    doc["lowrisk"] = lowrisk_heads(doc["open"], {f"{pr}@{head}": carried(doc["labels"], stands_on(doc), pr, head)
                                                  for pr, head in doc["open"].items()}, now)
     return doc
 
@@ -683,9 +687,29 @@ def chain(restacks: dict[str, str], head: str) -> list[str]:
     return out
 
 
-def carried(labels: dict[str, list[dict]], restacks: dict[str, str], pr: str, head: str) -> list[dict]:
-    """The labels a PR's head stands on: its own, and those of each head a restack made it from."""
-    return [lab for h in chain(restacks, head) for lab in labels.get(f"{pr}@{h}") or []]
+def carries(decisions: list[dict]) -> dict[str, str]:
+    """{head: the head the loop's newest `carry` line of it carried its land verdict from}, for each head whose newest one
+    carried it: "would carry", under drive.toml's `verdict_carry = "shadow"`, counted it as reviewed no more than "did not"."""
+    out: dict[str, str] = {}
+    for r in decisions:
+        if r["action"] == "carry" and not r.get("shadow"):
+            for head in r.get("heads") or []:
+                if r.get("carries") and r.get("old") and (r.get("why") or "").startswith("carried "):
+                    out[head] = r["old"]
+                else:
+                    out.pop(head, None)
+    return out
+
+
+def stands_on(doc: dict) -> dict[str, str]:
+    """{head: the head whose labels it stands on}: the one a restack made it from (`restacks`), else the one the loop carried its
+    land verdict from (`carries`)."""
+    return {**carries(doc["control"].get("decisions") or []), **(doc.get("restacks") or {})}
+
+
+def carried(labels: dict[str, list[dict]], stands: dict[str, str], pr: str, head: str) -> list[dict]:
+    """The labels a PR's head stands on: its own, and those of each head it stands on in turn (``stands``, `stands_on`)."""
+    return [lab for h in chain(stands, head) for lab in labels.get(f"{pr}@{h}") or []]
 
 
 def left_out(decisions: list[dict], open_prs: dict[str, str]) -> dict[str, dict]:
@@ -854,7 +878,7 @@ def parts(doc: dict) -> list[dict]:
     candidate holding it, at that head or one a restack made it from), `rework` (that build to the build of the candidate it
     landed in), `check` (that build to the candidate's verdict) and `to_main` (the verdict to the move of `main`)."""
     decisions, labels, restacked = doc["control"].get("decisions") or [], doc["labels"], doc.get("restacks") or {}
-    day = window_start(doc)
+    stands, day = stands_on(doc), window_start(doc)
     built: dict[tuple[str, str], list[float]] = {}
     build_at, judged = {}, {}
     for r in decisions:
@@ -872,7 +896,7 @@ def parts(doc: dict) -> list[dict]:
             continue
         landed = ts(r["at"])
         for pr, head in zip(map(str, r.get("members") or []), r.get("heads") or []):
-            labs = carried(labels, restacked, pr, head)
+            labs = carried(labels, stands, pr, head)
             mark = mark_at(labs, landed)
             if mark is None or r["sha"] not in build_at:
                 continue
@@ -1056,7 +1080,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     hours = max(1e-9, (now - day) / 3600)
     decisions = doc["control"].get("decisions") or []
     labels, open_prs, lowrisk = doc["labels"], doc["open"], doc.get("lowrisk") or {}
-    restacked, past = doc.get("restacks") or {}, PAST if doc.get("until") else ""
+    restacked, stands, past = doc.get("restacks") or {}, stands_on(doc), PAST if doc.get("until") else ""
     off_gate = tuple(doc.get("off_gate") or OFF_GATE)
     checks = [n for n in doc["check_nodes"] if n in doc["nodes"]]
     runs = window_runs(doc)
@@ -1072,21 +1096,21 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     landings = [(ts(r["at"]), str(pr), head) for r in decisions if r["action"] == "advance" and r.get("done") and not r.get("shadow")
                 for pr, head in zip(r.get("members") or [], r.get("heads") or [])]
     moves = [ts(r["at"]) for r in decisions if r["action"] == "advance" and r.get("done") and not r.get("shadow")]
-    m2m = [(at, _m(at - mark) if (mark := mark_at(carried(labels, restacked, pr, head), at)) else None) for at, pr, head in landings]
-    waiting = {pr: mark for pr, head in open_prs.items() if (mark := mark_at(carried(labels, restacked, pr, head), now))}
+    m2m = [(at, _m(at - mark) if (mark := mark_at(carried(labels, stands, pr, head), at)) else None) for at, pr, head in landings]
+    waiting = {pr: mark for pr, head in open_prs.items() if (mark := mark_at(carried(labels, stands, pr, head), now))}
     waits = sorted(_m(now - m) for m in waiting.values())
     marks = [*waiting.values(), *(at - v * 60 for at, v in m2m if v is not None)]
     cands = candidates(decisions, runs, day, off_gate)
     flying = [c for c in cands if c["outcome"] == "running"]
     in_flight = {str(pr) for c in flying for pr in c["members"]}
-    has_verdict = {pr for pr in waiting if verdict_at(carried(labels, restacked, pr, open_prs[pr]))[0]}
+    has_verdict = {pr for pr in waiting if verdict_at(carried(labels, stands, pr, open_prs[pr]))[0]}
     out = {pr: line for pr, line in left_out(decisions, open_prs).items() if pr in waiting}
     refused = {pr for pr, line in out.items() if with_main(line)}
 
     def moved(since: float) -> str:
         """How many of the heads landed since ``since`` a restack made, and how many of those were marked before it."""
         made = [(at, pr, head) for at, pr, head in landings if at >= since and head in restacked]
-        early = sum(1 for at, pr, head in made if (first := mark_at(carried(labels, restacked, pr, head), at))
+        early = sum(1 for at, pr, head in made if (first := mark_at(carried(labels, stands, pr, head), at))
                     and first < (mark_at(labels.get(f"{pr}@{head}") or [], at) or at + 1))
         return f"; {len(made)} of the heads a restack's, {early} marked before it" if made else ""
 
@@ -1107,7 +1131,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
             f"; counting the {late} marked in the window and waiting over 2 h as misses, {inside / (len(got) + late):.0%}" if late else "")
 
     how = ("mark: the `ready` label at the head that landed, or at the head a restack across a move made it from (the commit's "
-           "subject and parents, GitHub); landing: the loop's `advance` of `main`; by landing time")
+           "subject and parents, GitHub) or the loop's `carry` line carried its land verdict from; landing: the loop's `advance` of `main`; by landing time")
     add("1", "Mark to `main`", "", _dist(win(m2m, hour)) + moved(hour), _dist(win(m2m, day)) + moved(day), "", how)
     add("1", "Share on `main` within 2 h of the mark", "", share(hour), share(day), f"{TARGET_SHARE:.0%}", "of PRs landed in the window")
     add("1", "Marks an hour", "", f"{sum(m >= hour for m in marks)}", f"{sum(m >= day for m in marks) / hours:.1f}",
@@ -1117,7 +1141,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     add("1", "Marked and waiting now (the backlog)", (f"{len(waiting)} PRs: {len(has_verdict)} with a land verdict, {len(waiting) - len(has_verdict)} "
         f"without; {len(in_flight & set(waiting))} in a candidate being checked; oldest {waits[-1] / 60:.1f} h; {sum(w > TARGET_MIN for w in waits)} over 2 h"
         + ("; a floor: a PR pushed to since, unless by a restack, or closed since without landing is not counted" if past else ""))
-        if waits else "0", "", "", "", "open PRs whose head has a mark in force, its own or carried across a restack")
+        if waits else "0", "", "", "", "open PRs whose head has a mark in force, its own or carried across a restack or by the loop's `carry` line")
     stuck = sorted(_m(now - waiting[pr]) for pr in refused)
     add("1", "Marked heads the loop leaves out now", (f"{len(refused)} refused until the owner merges `main` in: conflict with `main`"
         + (f", {len(refused & has_verdict)} of them with a land verdict, marked up to {stuck[-1] / 60:.1f} h ago" if stuck else "")
@@ -1131,7 +1155,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         mark, v = mark_at(labs, now), verdict_at(labs)[0]
         if mark and v:
             review.append((v, max(0.0, _m(v - mark))))
-    no_verdict = [(_m(now - mark), verdict_at(carried(labels, restacked, pr, open_prs[pr]))[1]) for pr, mark in waiting.items()
+    no_verdict = [(_m(now - mark), verdict_at(carried(labels, stands, pr, open_prs[pr]))[1]) for pr, mark in waiting.items()
                   if pr not in has_verdict and pr not in refused and not lowrisk.get(f"{pr}@{open_prs[pr]}")]
     unheld = [w for w, hold in no_verdict if not hold]
     admitted = sum(1 for low in lowrisk.values() if low)

@@ -117,13 +117,13 @@ SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (
 Tap.lean        what the network attester recorded is what its relay sent: under trusted-device, on a schedule its
     record format holds, its cells read back from the record its same run writes
     (certifier_cells_read), and each data cell its lane sends before the fail cell is
-    in it (certifier_data_read)
+    in it (attester_data_read)
 RecordRows.lean  the rows format reads back the code's cells on every schedule that fits it (read_record), so it
     is a record format (recordFormat); #guards hold it to the Python network
     attester's egress records
 TapRows.lean    at the network attester's rows: the trace filled in with its values carries its records
     (carries_fillTrace), and a disagreement between the two is a collision
-    (certifierColl_of_disagree, Pr_certifierColl_le_Btap)
+    (attesterColl_of_disagree, Pr_attesterColl_le_Btap)
 MonitoringPeriodChecked.lean  the period's leak with the checked inputs left out (monitoringPeriodLeakChecked): each window's
     bound at the network attester's rows with a valid run
     (monitoringPeriodChecked_first), and the records counted by Carried's count at the

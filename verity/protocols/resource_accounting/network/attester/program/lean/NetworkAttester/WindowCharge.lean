@@ -3,7 +3,7 @@ module
 public import NetworkAttester.AdviceV1
 
 /-!
-# The certifier program: advice v1's whole execution phase charged (`ChargeCount_v2`)
+# The network attester program: advice v1's whole execution phase charged (`ChargeCount_v2`)
 
 The executable forms of `security/Definitions/Certifier/WindowCharge.lean` that the execution phase charge's difftest
 runs, under the same names in `NetworkAttester.WindowCharge`, on `NetworkAttester.AdviceV1`'s counting encoder. Lean
