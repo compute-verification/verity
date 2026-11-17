@@ -89,7 +89,7 @@ FORMAT = "verity-network-negatives/v1"
 ADVICE_MODULE = "verity.protocols.resource_accounting.network.verifier.advice"
 IO_TIE_MODULE = "verity.protocols.resource_accounting.network.verifier.io_tie"
 IO_REQUEST_MODULE = "verity.protocols.resource_accounting.network.verifier.io_request"
-NETWORK_CERTIFIER_ROWS_MODULE = "verity.protocols.resource_accounting.network.verifier.network_attester_rows"
+NETWORK_ATTESTER_ROWS_MODULE = "verity.protocols.resource_accounting.network.verifier.network_attester_rows"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
@@ -97,7 +97,7 @@ TIE = "IoTieWindow"
 REQUEST_TIE = "IoTieRequest"
 #: the verifier's registered read of a network attester cell at its position under the network attester's signed root
 #: (`network_attester_rows.opens`, the Lean verifier's check of a proof block's registered port)
-NETWORK_CERTIFIER_READ = "Flock.Registered.checkPort"
+NETWORK_ATTESTER_READ = "Flock.Registered.checkPort"
 #: the part of the I/O tie (`TIE`) that refuses each negative it reads; None: one it must accept while its outputs are
 #: honest's (each one's step, batch row, request, index and bucket), which content refuses once the edit moves them
 TIE_PARTS = {"drop": "content", "token": "content", "frame": "cells_root", "advice-length": "content",
@@ -139,9 +139,9 @@ def network_attester_frame(run: Path, at: int | None = None) -> dict:
     registration (v2) checked under the network attester's key and the schedule, and its record's bucket rows and
     wiring committed under their salts to the registered head; then byte `at` of that cell (its first payload byte by
     default) changed in its bucket's row, and the row opened at its position. The honest row's read climbs to the
-    signed root and the changed one's doesn't (`NETWORK_CERTIFIER_READ`)."""
+    signed root and the changed one's doesn't (`NETWORK_ATTESTER_READ`)."""
     try:
-        WR = importlib.import_module(NETWORK_CERTIFIER_ROWS_MODULE)
+        WR = importlib.import_module(NETWORK_ATTESTER_ROWS_MODULE)
         WS = importlib.import_module("verity.protocols.resource_accounting.network.attester.network_attester_serve")
     except ModuleNotFoundError as err:
         raise NotApplicable(f"no network attester cells: {err.name} isn't in this tree") from None
@@ -170,7 +170,7 @@ def network_attester_frame(run: Path, at: int | None = None) -> dict:
         bad[j * B + (HEADER.size if at is None else at % B)] ^= 1
         honest, tampered = cell_reads(WR, cells, t, rows[t]), cell_reads(WR, cells, t, bytes(bad))
         return {"negative": "frame", "window": w, "row": t, "slot": j, "rows": len(rows), "cell_bytes": B,
-                "row_bytes": len(rows[t]), "code": NETWORK_CERTIFIER_READ, "honest_reads": honest, "tampered_reads": tampered,
+                "row_bytes": len(rows[t]), "code": NETWORK_ATTESTER_READ, "honest_reads": honest, "tampered_reads": tampered,
                 "ok": honest and not tampered}
     raise NotApplicable(f"{run}: no registered egress execution phase with a data cell")
 
