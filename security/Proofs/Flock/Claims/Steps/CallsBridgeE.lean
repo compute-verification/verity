@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Bridge.Custody
 public import Proofs.Flock.Claims.Complete.Encode
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.ConflictRun
