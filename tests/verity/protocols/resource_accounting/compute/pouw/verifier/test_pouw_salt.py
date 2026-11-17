@@ -207,9 +207,9 @@ def test_revealed_fails_closed():
     for r in unregistered:
         with pytest.raises(PS.Unrevealed, match="unregistered"):
             PS.revealed(c, 0, r)
-    with pytest.raises(PS.Unrevealed, match="the certifier doesn't reveal PoUW window 1's salt"):
+    with pytest.raises(PS.Unrevealed, match="the network attester doesn't reveal PoUW window 1's salt"):
         PS.revealed(c, 1, registration(1))
-    with pytest.raises(PS.Unrevealed, match="the certifier doesn't give what PoUW recorded for window 0"):
+    with pytest.raises(PS.Unrevealed, match="the network attester doesn't give what PoUW recorded for window 0"):
         PS.committed(c, 0, reg)
     record = PS.pouw_record(bytes(64), STREAM, PROVER)
     assert PS.committed(certifier(1, {0: record})[0], 0, reg) == record
@@ -372,7 +372,7 @@ def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_it
 
     raw1, ctx1 = manifest(work, roots, 1, Epoch.certified(work, roots, [2, 3], 2, sampled[1], STREAM, PROVER).salt)
     late = PS.revealed(c, 1, registration(1, ctx=ctx1))
-    with pytest.raises(PS.Unrevealed, match="the certifier doesn't give what PoUW recorded for window 1"):
+    with pytest.raises(PS.Unrevealed, match="the network attester doesn't give what PoUW recorded for window 1"):
         PS.committed(c, 1, registration(1, ctx=ctx1))
     unrecorded = (None, ("coin", "the verifier holds no record the certifier made before it drew the window's salt"))
     assert CC.pass_epoch_twin(None, raw1, ctx1, reveal=late, committed=None, stream=STREAM, prover=PROVER) == unrecorded

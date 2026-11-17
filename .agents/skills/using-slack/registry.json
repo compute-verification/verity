@@ -710,7 +710,7 @@
         "What does the network certifier record about each link, and who has to trust it?",
         "How many bits could a cheating machine leak just through when it sends packets?",
         "If two machines exchange model activations, how do you check the traffic is only what the model computes?",
-        "What happens to the audit if a certifier goes down or a node is under maintenance?"
+        "What happens to the audit if a network attester goes down or a node is under maintenance?"
       ]
     },
     {
