@@ -1,6 +1,6 @@
 module
 
-public import MemoryChallenger.WipeProtocol
+public import MemoryAttester.WipeProtocol
 public import Definitions.Pous.Accounting.Wipe
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
@@ -8,7 +8,7 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # An accepted wipe meets the survivor bound it publishes
 
-For a session it accepts and certifies, `MemoryChallenger.WipeProtocol.check` (`verity/wipe/v0`, whose verdict is
+For a session it accepts and certifies, `MemoryAttester.WipeProtocol.check` (`verity/wipe/v0`, whose verdict is
 `StreamedWipe.verdict`) publishes `foreign_bits = 512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128`
 (`certify`): `n` labels, `k` timed reads, `r = ratio k`, `R` the declared memory past the fill, `E` the egress count
 the evidence gives the check (`WipeProtocol.Evidence.egress`; no session signs one), `egress_mib` whole MiB. No network
@@ -44,7 +44,7 @@ its honest and nontrivial lemmas, `WipeSurvivorBoundHonest` and `WipeSurvivorBou
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties
+namespace MemoryAttester.Properties
 
 open Verity
 open scoped ENNReal
@@ -121,4 +121,4 @@ def segmentDevice : ResourceAccounting.Device Unit := ⟨0, 2 ^ 19 * 512, fun _ 
 `certify` takes them. -/
 def segmentParams : StreamedWipe.Params := ⟨2 ^ 19, 2152, 1, 1000, #[("gpu", 2 ^ 25)]⟩
 
-end MemoryChallenger.Properties
+end MemoryAttester.Properties

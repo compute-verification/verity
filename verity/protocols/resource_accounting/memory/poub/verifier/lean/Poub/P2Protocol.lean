@@ -5,14 +5,14 @@ public import CoreProtocol.Cli
 public import CoreProtocol.Protocol
 public import CoreProtocol.Ratio
 public import Lms.Sign
-public import MemoryChallenger.Verdict
+public import MemoryAttester.Verdict
 public import Poub.P2Close
 public import Poub.Verifier
 meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Ratio
 meta import Lms.Sign
-meta import MemoryChallenger.Verdict
+meta import MemoryAttester.Verdict
 meta import Poub.P2Close
 meta import Poub.Verifier
 
@@ -43,7 +43,7 @@ store it audits is the one PoUS's setup published. Its bytes are canonical JSON 
   challenger role's message of the params' session and P2's raw record. The log is the verifier's own: its clock's
   readings and its coins never come from the prover;
 * the check, in order: the close (`closeRefusal`) is under a trusted key, counts the log's lines, holds the case's
-  chain and verifies under S1's LMS at its deployed parameters (`Lms.deployed`, `MemoryChallenger.LMS`) on the params'
+  chain and verifies under S1's LMS at its deployed parameters (`Lms.deployed`, `MemoryAttester.LMS`) on the params'
   session; every coin is the challenger's `COIN_BYTES` (`coinRefusal`); then the log replayed from the session's first
   state (`P2Session.init`), each coin read at its first `Codec.COIN_BYTES`. Each refusal is named. The replay rejects
   when an entry is a request the process would have answered with an error, and with the failure that rejected the
@@ -187,13 +187,13 @@ def headOf (p : Params) (c : Commitment) : ByteArray := c.digest ++ (toString p.
 /-- Why the close doesn't sign the case whose head is `head` (`headOf`) under `lp`, none when it does: its key isn't
 trusted, it counts other lines than the log's, its chain isn't the case's (`P2Close.chainOf` of the head and then the
 log's entries), or its signature doesn't verify on `P2Close.closeMessage` of the params' session
-(`MemoryChallenger.lmsVerify`, the check PoUS's sessions and the wipe run). -/
+(`MemoryAttester.lmsVerify`, the check PoUS's sessions and the wipe run). -/
 def closeRefusal (lp : Lms.Params) (p : Params) (head : ByteArray) (e : Evidence) : Option String :=
   let c := e.close
   if !p.trusted.contains c.publicKey then some UNTRUSTED
   else if c.lines != e.log.size then some s!"the close counts {c.lines} lines, not the log's {e.log.size}"
   else if c.chain != P2Close.chainOf (#[head] ++ e.log.map (·.bytes)) then some UNCHAINED
-  else match MemoryChallenger.lmsVerify lp c.publicKey p.session (P2Close.closeRecord e.log.size c.chain)
+  else match MemoryAttester.lmsVerify lp c.publicKey p.session (P2Close.closeRecord e.log.size c.chain)
       c.signature with
     | .ok true => none
     | _ => some UNSIGNED
@@ -322,7 +322,7 @@ private def refusal (signedOn : ByteArray) (trust : Bool) (edit : SignedClose �
     Option (Option String) := do
   let k ← (Lms.keygen toy (ByteArray.mk (Array.replicate 8 7))).toOption
   let chain := P2Close.chainOf (#[toyHead] ++ toyLog.map (·.bytes))
-  let m ← (MemoryChallenger.memoryChallengerMessage k.I signedOn
+  let m ← (MemoryAttester.memoryAttesterMessage k.I signedOn
     (record.getD (P2Close.closeRecord toyLog.size chain))).toOption
   let s ← (Lms.signAt k 0 m).toOption
   let close := edit ⟨k.publicKey, toyLog.size, chain, s.encode⟩
@@ -330,12 +330,12 @@ private def refusal (signedOn : ByteArray) (trust : Bool) (edit : SignedClose �
 
 /-- A PoUS session record and a wipe record of the toy session, each a digest. -/
 private def pousRecord : Option ByteArray :=
-  (MemoryChallenger.message { (default : MemoryChallenger.ChallengePhaseCommitment) with session := toyRecord }
-    MemoryChallenger.COMPLETE #[]).toOption
+  (MemoryAttester.message { (default : MemoryAttester.ChallengePhaseCommitment) with session := toyRecord }
+    MemoryAttester.COMPLETE #[]).toOption
 private def wipeRecord : Option ByteArray :=
-  (MemoryChallenger.StreamedWipe.message
-    { (default : MemoryChallenger.StreamedWipe.Commitment) with session := toyRecord }
-    MemoryChallenger.StreamedWipe.COMPLETE .empty 0 0 #[]).toOption
+  (MemoryAttester.StreamedWipe.message
+    { (default : MemoryAttester.StreamedWipe.Commitment) with session := toyRecord }
+    MemoryAttester.StreamedWipe.COMPLETE .empty 0 0 #[]).toOption
 
 private def flipLast (b : ByteArray) : ByteArray := b.set! (b.size - 1) (b[b.size - 1]! ^^^ 1)
 

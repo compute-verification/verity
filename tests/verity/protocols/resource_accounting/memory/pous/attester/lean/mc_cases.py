@@ -1,7 +1,7 @@
 """The Python side of the memory attester's difftests: `memory_attester.py` (the reference, unchanged) behind the Lean
 port's JSON formats, and the sessions the tests sample.
 
-The decoders mirror `MemoryChallenger.Protocol`'s: byte strings lowercase hex, integers naturals, and where the protocol
+The decoders mirror `MemoryAttester.Protocol`'s: byte strings lowercase hex, integers naturals, and where the protocol
 decodes its inputs (`params`, `commitment`, `evidence`) each input exactly the canonical JSON of what it decodes to. Past
 decoding every reference is the Python's own function on the decoded objects.
 
@@ -45,7 +45,7 @@ TEST_ID = mc.TEST_PREFIX + mc.PROTOCOL
 SCHEMES_ALL = {**mc.SCHEMES, **ts.SCHEMES}
 
 
-# --- decoding, as `MemoryChallenger.Protocol` and `.Difftest` decode -------------------------------------------------------
+# --- decoding, as `MemoryAttester.Protocol` and `.Difftest` decode -------------------------------------------------------
 
 def _get(j: Any, k: str) -> Any:
     if not isinstance(j, dict) or k not in j:
@@ -77,7 +77,7 @@ def list_(j: Any, k: str) -> list:
 
 
 def digests(j: Any, k: str) -> dict[int, bytes]:
-    """`MemoryChallenger.Digests.ofJson`: an object of hex digests keyed by label index, decimal with no leading zero."""
+    """`MemoryAttester.Digests.ofJson`: an object of hex digests keyed by label index, decimal with no leading zero."""
     v = _get(j, k)
     if not isinstance(v, dict):
         raise D.Reject(f"{k}: not an object")
@@ -169,7 +169,7 @@ def judge(p: Params, c: mc.SessionCommitment, e: Evidence, schemes) -> mc.Verdic
 
 
 def protocol_reference(protocol_id: str, schemes):
-    """`MemoryChallenger.mkProtocol protocol_id schemes` in Python: `P.answer` over the decoders and `verdict`."""
+    """`MemoryAttester.mkProtocol protocol_id schemes` in Python: `P.answer` over the decoders and `verdict`."""
 
     def check(p, c, e):
         v = judge(p, c, e, schemes)
@@ -343,7 +343,7 @@ def _replayed(s: Session, x: int) -> Session:
 
 
 #: Schemes a session may name, accepted or not; the last is non-printable past ASCII, which Python's `repr` escapes and
-#: `MemoryChallenger.pyRepr` doesn't.
+#: `MemoryAttester.pyRepr` doesn't.
 SCHEME_NAMES = ["none", mc.LMS, *(ts.scheme(h) for h in (1, 2, 3, 10, 11)), "x'y", 'a"b', "a'\"b\\", "\t\n\r\x00\x7f",
                 "é ünï ☃ 𝄞", "\x85\u2028"]
 PRINTABLE_SCHEMES = SCHEME_NAMES[:-1]
@@ -479,7 +479,7 @@ JSON_MUTATIONS = [
 
 def cases(signer: AtLeaf | None = None, json_mutations: bool = True, printable: bool = False) -> st.SearchStrategy:
     """Protocol cases: honest sessions, sessions under one adversarial edit, and (with `json_mutations`) cases under one JSON
-    edit. `printable` names only printable schemes, whose reason `MemoryChallenger.pyRepr` writes as Python's `repr`."""
+    edit. `printable` names only printable schemes, whose reason `MemoryAttester.pyRepr` writes as Python's `repr`."""
     mutations = [_printable_scheme if printable and m is _scheme else m for m in MUTATIONS]
     edited = st.builds(lambda s, m, x: m(s, x).case(), sessions(signer), st.sampled_from(mutations), st.integers(0, 2 ** 16))
     honest = sessions(signer).map(Session.case)
