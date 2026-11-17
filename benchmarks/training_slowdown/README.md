@@ -2,8 +2,8 @@
 
 This is the harness of the paused attack search. An attack is one way of training a model: a route and its dials,
 from a registered start. The harness trains it, counts every multiplication the run computes through torch, traces
-one training step, and reads the run's slowdown at a policy off that step. The search scores a config by S:
-its counted gates to a target gain over its honest config's, times that slowdown.
+one training step, and gives ρ at a policy, the bound evaluated on that step. The search scores a config by S = p × ρ,
+p its counted gates to a target gain over its honest config's.
 
 What it gives is the attack search's own measurement of a run, not the slowdown's definition. The slowdown is the
 Glossary's. Nothing runs the attack search
@@ -31,8 +31,8 @@ no entry, it reads every entry of `attacks/`.
 - **An entry beside its run of record**: an entry that ports a run, held to that run's record by its step.
 - **An attack's jobs**: a config and its honest config expanded into jobs, one per seed and split, each run where the
   store lacks its record, its route's code inside a sandbox with no network and no final set.
-- **The grade**: the search's score of a config, S, p times the record's slowdown. It is neither the Glossary's slowdown
-  nor the slowdown lower bound.
+- **The grade**: the search's score of a config, S = p × ρ, ρ the bound on its search record's own traced step. It is
+  neither the Glossary's slowdown nor the slowdown lower bound.
 - **The grader** (`grader/`): a run's training step read off the Program the training-step frontend derives for it,
   beside this package's trace of the same step.
 

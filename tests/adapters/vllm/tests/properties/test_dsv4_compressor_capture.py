@@ -3,8 +3,6 @@ the state rows and cache rows it reads back, its launch checks and comparison jo
 edge words, its verdicts and its main loop with the GPU stood in for."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import contextlib
 import copy
 import hashlib

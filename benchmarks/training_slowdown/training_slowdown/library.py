@@ -188,7 +188,7 @@ def periods(r: dict) -> dict | None:
     presents a run (`grade.per_period`). None for a row with no slowdown."""
     if r.get("slowdown") is None:
         return None
-    over = per_period(r["budget"]["steps"] * r["step"]["gates"] * r["slowdown"], {"binding_kind": "products"})
+    over = per_period(r["budget"]["steps"] * r["step"]["gates"] * r["slowdown"], {"binds": "products"})
     return {"run_and_gates": over["run_and_gates"], "shares": over["rows"]}
 
 

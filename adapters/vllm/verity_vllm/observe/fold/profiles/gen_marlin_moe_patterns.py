@@ -28,8 +28,6 @@ batch a request's blocks read the other requests' routing, which the launch-leve
 
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
