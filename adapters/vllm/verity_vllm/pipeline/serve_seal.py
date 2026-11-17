@@ -7,7 +7,7 @@ acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_rec
 hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
 the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``) and a part the manifest names that did not
 attach is refused (`parts_missing`). Then `served_record.StepInputPort` (each step's
-stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port the certifier's
+stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port network attestation's
 served-rows tie reads) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
 the weights. The port is the step's one copy of its ids (`single_ids`): the embedding's own input isn't committed beside it.
 It writes the engine's rotary table to ``OUT/private/cos_sin_cache.npy`` (`match_capture.dump_cos_sin`), which no record copies:

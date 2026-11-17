@@ -19,7 +19,8 @@ from typing import Any
 from verity.circuits.defs import SpecializedDefinition
 from verity.commitments import history as HT
 
-from verity_vllm.pipeline import boundary_logits as BL, boundary_tables as BT
+from verity_vllm.pipeline import boundary_logits as BL
+from verity_vllm.pipeline import boundary_tables as BT
 from verity_vllm.pipeline.boundary_rows import (
     FORMAT,
     ONE_RETURN,
@@ -103,7 +104,7 @@ class BoundaryWindows:
     which rank 0 commits once the class sends it its spans in slot order (`boundary_logits.assignment`). ``stop``: the serve's registered stop rule, with no tables; the spans it ends as
     they were served are committed in the stop classes, (P, T), and the rest by size class without a stop block, under
     ``p<P>-o<O>-nostop`` (`filed`). ``release``: for a serve behind a network attester, a request's release by its engine
-    id, (run, N) or None for a request the certifier didn't release (`serve_admit.release_of`'s, as the serve's admission
+    id, (run, N) or None for a request the network attester didn't release (`serve_admit.release_of`'s, as the serve's admission
     keeps it); each span keeps its own, and one without is in no stop class. Under a rule every line of a window says
     how many of its spans were filed with a stop block and how many without (``filed``), so a rule that ends no response
     as the engine does shows as a count. A failed commit is reported to ``sink`` (``error``) and registers nothing."""

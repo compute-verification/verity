@@ -1,13 +1,13 @@
-"""The Python side of the memory challenger's difftests: `memory_challenger.py` (the reference, unchanged) behind the Lean
+"""The Python side of the memory attester's difftests: `memory_attester.py` (the reference, unchanged) behind the Lean
 port's JSON formats, and the sessions the tests sample.
 
 The decoders mirror `MemoryChallenger.Protocol`'s: byte strings lowercase hex, integers naturals, and where the protocol
 decodes its inputs (`params`, `commitment`, `evidence`) each input exactly the canonical JSON of what it decodes to. Past
 decoding every reference is the Python's own function on the decoded objects.
 
-Sessions are run by `memory_challenger.MemoryChallenger` itself, on an injected clock, and signed by a test signer's key
+Sessions are run by `memory_attester.MemoryAttester` itself, on an injected clock, and signed by a test signer's key
 (`pous_test_signer`'s derivation) at a leaf the test picks (`AtLeaf`), or by a deployed-parameter key whose tree is sparse
-(`deployed_key`, as `test_pous_memory_challenger._SparseTree`). No real key is read: every key here is derived from a
+(`deployed_key`, as `test_pous_memory_attester._SparseTree`). No real key is read: every key here is derived from a
 constant in this file."""
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from hypothesis import strategies as st
 from verity_difftest import protocol as P
 
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parents[7] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean"
@@ -197,7 +197,7 @@ def test_key(secret: bytes, height: int) -> lms.PrivateKey:
 
 
 class _SparseTree:
-    """A deployed key's tree for leaf 0 alone (`test_pous_memory_challenger._SparseTree`)."""
+    """A deployed key's tree for leaf 0 alone (`test_pous_memory_attester._SparseTree`)."""
 
     def __init__(self, identifier: bytes, seed: bytes) -> None:
         self.root = b""
@@ -228,7 +228,7 @@ class AtLeaf:
         return lms.public_key(self.key)
 
     def sign(self, session: bytes, record: bytes) -> bytes:
-        return lms.sign_at(self.key, self.q, lms.memory_challenger_message(self.key.I, session, record)).encode()
+        return lms.sign_at(self.key, self.q, lms.memory_attester_message(self.key.I, session, record)).encode()
 
 
 def test_signer(secret: bytes, height: int, q: int) -> AtLeaf:
@@ -294,7 +294,7 @@ def sessions(sample, signer: AtLeaf | None = None) -> Session:
     spends = sample(st.lists(st.one_of(st.integers(0, limit), st.just(limit), st.just(limit + 1)), min_size=k, max_size=k))
     tampered = sample(st.sets(st.integers(0, k - 1), max_size=1))
     clock = Clock(sample(st.integers(0, 2 ** 40)))
-    c = mc.MemoryChallenger(tree, signer, log=ts.session_log(), limit_ns=limit, block_bytes=block_bytes,
+    c = mc.MemoryAttester(tree, signer, log=ts.session_log(), limit_ns=limit, block_bytes=block_bytes,
                             binding=sample(st.sampled_from(SETUP_ROOTS)), clock=clock)
     while not c.done:
         j = len(c.rounds)

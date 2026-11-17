@@ -167,7 +167,7 @@ PHASE_K = {
 
 @dataclass
 class PFillKPhase(PFillK):
-    """pfill-k on the leader's placement (psched's fill-v1-phase-att, SCORER's port): its split, re-chosen per point,
+    """pfill-k on the phase placement: its split, re-chosen per point,
     plus pfill-k's own dfill_p at 4 warps (-DPF_PW=4) forked into each decode layer's attention on the step's SMs, at the
     graph's highest node priority, joined before o. Prefill keeps pfill-k's 4-SM split. Run through psched_score.py:
 

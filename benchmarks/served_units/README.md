@@ -39,6 +39,8 @@ Files:
 - `job.sh`: builds, stages, proves and verifies every proof block of `SU_UNITS` (its header lists the checks and the environment);
   the builds, the run and the controls are `benchmarks/pouw/hidden_zk/job.sh`'s.
 - `summarize.py`: `out/<tag>/summary.json` and one table row per proof block.
+- `run.sh`: `verity bench served_units`; `record.py` writes each proof block's prove seconds and peak memory
+  (`metrics.toml`) into the run's result, only where every check gave the verdict it must.
 - `prove_time.sh`: the prover's time on statements of each `PT_UNITS` type (`TYPE[:S=V,...]`, `+public-weights` or
   `+packed-weights` for those arms)
   at each size of `PT_NS`, on one leased GPU (`PT_DEVICE=gpu`) or the CPU prover (`cpu`); `prove_time.py` fits each type's
@@ -50,7 +52,7 @@ Files:
 - `stage_window.py WINDOW_DIR OUT (--member K | --pick P N)`: a served window's member (a TP Commit's `--serving-rows`
   window, or `verity-vllm tp-serving-rows`') as its served statement for `PT_STATEMENTS`: the verifier's circuit for its
   template bound to the window's digests, and the window's own bodies (its `inst.bin` is the prover's: keep OUT private).
-  `server_rate.py` takes OUT as `Z/<type>/c<n>/stage`.
+  `benchmarks/one_stage/server_rate.py` takes OUT as `Z/<type>/c<n>/stage`.
 - `window.py stage|prove UNITS_FILE`: `prove_time.sh`'s stage and prove steps for many types on a shared node, inside
   host limits the job enforces itself (cores, niceness, host memory, disk, a deadline, device memory a GPU); its
   docstring has the file's format and each limit. `prove` keeps what a Lean verifier on another node reads of each
@@ -67,8 +69,8 @@ Files:
   the break-even planner reads a measured row in (`benchmarks/spot_figures/breakeven/headline.py --steady`): a type's
   largest statement whose prover exited 0 with every session accepted, one prover on a GPU; the statements that gave
   no time are listed with their reasons.
-- `cover_count.py (COVER | art:ID) [--card CARD] [--form listed] [--check]`: how many of a request's block types have
-  no statement the Lean verifier accepted, from its request cover record (below).
+- `cover_count.py (COVER | art:ID) [--card CARD] [--form listed] [--check]`: how many of a request's proof-block types
+  have no statement the Lean verifier accepted, from its request cover record (below).
 - `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `prove_rows.py` on a stand-in run, `settings.py`,
   `cover_count.py` on a small hand-written cover record,
   `ks_form.py` on synthetic circuit heads,
@@ -97,12 +99,12 @@ research run --on NODE --cwd source -- bash benchmarks/served_units/prove_time.s
 ## The request cover record
 
 `cover.json` (schema `circuits/request-cover/v7`, or v8, which names the card it is of under `card`) is one served
-request's block types, each with how many blocks it holds, whether it is on the card, the outcome of staging and
-verifying it in its listed form (`bound_outcome`, its run in `bound_runs`) and, for a type whose listed form was not
-run, the run of its Boolean version (`beside_extras`), with each run's Lean verdicts and their two controls. It lives
-in the evidence store, never in the tree. `cover_count.py` recounts it from those entries, refuses it when the recount
-and its stored totals disagree, and prints the types with none accepted, by family, ending in a line that starts with
-their count:
+request's proof-block types, each with how many proof blocks it holds, whether it is on the card, the outcome of staging
+and verifying it in its listed form (`bound_outcome`, its run in `bound_runs`) and, for a type whose listed form was not
+run, the run of its Boolean version (`beside_extras`), with each run's Lean verdicts and their two controls. It lives in
+the evidence store, never in the tree. `cover_count.py` recounts it from those entries, refuses it when the recount and
+its stored totals disagree, and prints the types with none accepted, by family, ending in a line that starts with their
+count:
 
 ~~~text
 uv run -q python benchmarks/served_units/cover_count.py art:ID              # the Boolean version counted where the listed form has none

@@ -451,14 +451,14 @@ def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothi
 
 
 #: each file a network attester run publishes to `out/` (`NETWORK_CERTIFIER_PUBLIC`, and `network_attester_outcome`'s `certificates.jsonl`,
-#: `ROW_CERTIFICATES` and `ROW_REGISTRATIONS`) by the certifier's message that carries it to the verifier
+#: `ROW_CERTIFICATES` and `ROW_REGISTRATIONS`) by the network attester's message that carries it to the verifier
 PUBLISHED = {"deployment.json": NC.DEPLOYMENT, "certificates.jsonl": NC.CERTIFICATE,
              "cells-certificates.jsonl": NC.CERTIFICATE, "rows-certificates.jsonl": NC.CERTIFICATE,
              "cells-registrations.jsonl": NC.REGISTRATION, "groups.json": NC.GROUPS}
 
 
 def test_the_certifiers_manifest_declares_exactly_the_files_a_network_attester_run_publishes():
-    """Every file a network attester run publishes is one of the certifier's messages to the verifier, and the verifier's channel
+    """Every file a network attester run publishes is one of the network attester's messages to the verifier, and the verifier's channel
     carries those messages and the out side's record, nothing else."""
     assert set(A.NETWORK_CERTIFIER_PUBLIC) | {"certificates.jsonl", *A.ROW_CERTIFICATES.values(),
                                    *A.ROW_REGISTRATIONS.values()} == set(PUBLISHED)

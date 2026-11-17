@@ -1,0 +1,24 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "circuits/proof-block-prove-seconds"
+title = "Proof block prove time"
+owner = "circuits"
+unit = "seconds"
+axis = "Seconds the zero-knowledge prover takes to prove one proof block whose proof the Lean verifier accepted, each point naming its model and machine."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --timeout 45m -- uv run --extra torch-cpu bash benchmarks/served_units/run.sh"
+every = "7d"
+goal = "circuits/proof-block-benchmark-on-dashboard"
+
+[[metric]]
+id = "circuits/proof-block-peak-memory"
+title = "Proof block prover memory"
+owner = "circuits"
+unit = "GiB"
+axis = "Peak resident memory of the zero-knowledge prover proving one proof block whose proof the Lean verifier accepted, each point naming its model and machine."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --timeout 45m -- uv run --extra torch-cpu bash benchmarks/served_units/run.sh"
+every = "7d"
+goal = "circuits/proof-block-benchmark-on-dashboard"

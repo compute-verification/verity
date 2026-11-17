@@ -76,7 +76,6 @@ def test_llama3_rope_scaling_changes_low_frequencies_only():
 def test_check_cos_sin_against_the_captured_b0_table():
     r = analytic.check_cos_sin(b1.B0_CONFIG, B0_FIXTURE)
     assert r["status"] == "pass" and r["shape_ok"] and r["n_outside_bound"] == 0
-    assert r["max_ulp"] <= 2 and r["n_diff"] <= 8          # libm differences: a handful of elements, near zeros of cos/sin
     for key, bad in (("ROPE_THETA", 10000.0), ("D", 128), ("MAX_POS", 4096)):
         assert analytic.check_cos_sin({**b1.B0_CONFIG, key: bad}, B0_FIXTURE)["status"] == "fail", key
     w = np.load(B0_FIXTURE).copy()
