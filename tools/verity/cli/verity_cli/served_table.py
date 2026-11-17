@@ -589,8 +589,8 @@ def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], pi
 def placement(cfg: Mapping[str, Any], piece: Piece, outcome: Mapping[str, Any] | None) -> dict[str, str] | None:
     """`trusted-device`'s premise for a memory attester's ``piece``, from its outcome: the key its session is signed
     under (the outcome's ``public_key``) against the pins the configuration gives that party for that protocol, under the
-    configuration's hash (`memory_attester.trusted_device`, `committed` its committed set). ``None`` for a party that
-    signs no session; a session that reports no key reads rehearsal."""
+    configuration's hash (`memory_attester.trusted_device`, `committed` its committed set), which never holds here.
+    ``None`` for a party that signs no session; a session that reports no key reads rehearsal."""
     if piece.party != MEMORY_ATTESTER:
         return None
     key = (outcome or {}).get("public_key")

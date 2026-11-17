@@ -113,10 +113,11 @@ def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Ma
               store_gaps: Sequence[str] = (), simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-device`'s premise holds: that the memory attester ran on a
-    machine the developer doesn't control (`memory_attester.trusted_device`). It holds (`holds: …`) only under a
+    machine the developer doesn't control (`memory_attester.trusted_device`). It never holds here: under a
     configuration whose hash `configuration` is one of `committed`, when `key_sha512`, the SHA-512 of the key the
-    session was signed under, is a key that configuration's `pins` (its `[[pin]]` entries) give `PARTY` for the wipe;
-    under any other configuration or key, a run's own pin included, it reads rehearsal, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
+    session was signed under, is a key that configuration's `pins` (its `[[pin]]` entries) give `PARTY` for the wipe,
+    it reads `memory_attester.MATCHED`; under any other configuration or key, a run's own pin included, it reads
+    rehearsal, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
     `simulated` (the challenger a process of its own on the developer's node, standing in for its own host) or
     `prover-node`. `store_gaps` is what the memory the prover kept the fill in leaves outside the bound
     (`wipe_period.store_gaps`), by tier and never by device: the placement names no device. `links` are the links
@@ -137,7 +138,7 @@ def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Ma
 
 
 def holds(where: Mapping[str, Any]) -> bool:
-    """Whether a placement's `trusted-device` holds: the session signed under a key the committed configuration pins."""
+    """Whether a placement's `trusted-device` holds, which no placement made on the workload's machine does."""
     return mc.holds(where)
 
 

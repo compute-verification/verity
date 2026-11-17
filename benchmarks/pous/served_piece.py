@@ -40,8 +40,9 @@ same sessions, which no second session replaces. With neither, one process does 
    never the report's (a report of a session under any other id is a reject), and its answer on that case's bytes
    (`served_case.pous_answer`, `period.answer`): the tie, the run's
    check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused;
-   ``pous.json``'s ``key_pinned`` says whether it was signed under that pin, and ``key_pin`` whether the pin is the
-   configuration's for the memory attester's PoUS sessions, ``configuration``, or the run's own, ``run``), and what
+   ``pous.json``'s ``key_pinned`` says whether it was signed under that pin, ``pins_matched`` whether the pins this
+   machine was handed give it the memory attester's PoUS sessions, and ``key_pin`` is ``run``: those pins are used only
+   to refuse, and a record vouching for the key needs the auditor's compose gate), and what
    an accepted run certifies (`period.certify`): ``⌊ρ·|C|⌋`` bits at ``1% + 2^-128``, at `ROUNDS` challenges as at
    105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The check's cost is the tie, which reads all of
    ``C*``, not the rounds. With ``--case-exe``
@@ -56,10 +57,10 @@ same sessions, which no second session replaces. With neither, one process does 
    the run protocol's own answer on it (``case.json``, ``answer.json``: the composite's piece, `served_case.write`) go to
    ``--private`` (by default
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
-   placement and the weights' public properties: their model, count and size. The placement's `trusted-device` holds
-   only under a committed configuration, for a session signed under a key its ``[[pin]]`` entries give the memory
-   attester (`memory_attester.trusted_device`, the run's deployment by `from_runner`): a run's own
-   ``--trusted-sha512`` gets its session accepted, but its record is a rehearsal's, with no bound. Its ``setup``
+   placement and the weights' public properties: their model, count and size. The placement's `trusted-device` never
+   holds here (`memory_attester.trusted_device`, the run's deployment by `from_runner`): a session signed under a
+   key the pins give the memory attester, or under the run's own ``--trusted-sha512``, is accepted, but its record is a
+   rehearsal's, with no bound. Its ``setup``
    is `challenger_session.SETUP`: the tie ran on the developer's node, so every verdict rests on setup checked by the
    developer, not the auditor, which the ``POUS`` line prints after the premise.
 
@@ -621,7 +622,7 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
                                                      "on, after its serve ended"},
             "outside": summary["outside"], "window": window}
     _done(out, summary, answer, answer_s=answer_s, case_bytes=case_bytes, key_sha512=key_sha,
-          key_pinned=bool(trusted), key_pin="configuration" if trusted_sha512 in pinned else "run",
+          key_pinned=bool(trusted), key_pin="run", pins_matched=trusted_sha512 in pinned,
           private=str(private), public=inner["public"], bandwidth=bandwidth,
           decided_by=decided, setup=CS.SETUP, **lean)
     # last, and only once each Lean asked for has answered its case: until then the same sessions can be answered again

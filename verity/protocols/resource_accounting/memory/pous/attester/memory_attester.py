@@ -386,6 +386,8 @@ PREMISE = "trusted-device"
 PREMISE_BEFORE = "trusted-host"
 REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 UNCOMMITTED = "rehearsal, no bound: the configuration is not a committed one"
+MATCHED = ("rehearsal, no bound: the key matched the pins this machine was handed, which no record vouches for until the "
+           "auditor's compose gate gives its signal")
 COMMITTED = Path(__file__).resolve().parents[6] / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
 """The committed configurations' hashes, each demo's configuration by its path: the only configurations under which
 `trusted_device` says `PREMISE` holds."""
@@ -404,17 +406,17 @@ def pinned(pins: Sequence[Mapping[str, str]], party: str, protocol: str) -> froz
 def trusted_device(pins: Sequence[Mapping[str, str]], party: str, protocol: str, key_sha512: str | None, names: str, *,
                    configuration: str | None, committed: Collection[str]) -> str:
     """`PREMISE` for a session of `protocol` signed under the key whose SHA-512 is `key_sha512`, its device the
-    configuration's party `party`: that the device ran on a machine the developer doesn't control. It holds only under a
-    configuration whose hash `configuration` is one of `committed`, and only when the key is one the configuration's
-    `pins` give that party for that protocol. Under any other configuration it reads `UNCOMMITTED`, and under any other
-    key `REHEARSAL`, a run's own pin included, whatever the names say. `names` is what the run's names say of where each
-    party ran, a label and never the reason. Every protocol whose device signs its sessions reads its premise here,
-    with the same pins."""
+    configuration's party `party`: that the device ran on a machine the developer doesn't control. It never holds here:
+    the pins and the configuration's hash are what the workload's machine was handed. Under a configuration whose hash
+    `configuration` is not one of `committed` it reads `UNCOMMITTED`; under one that is, `MATCHED` when the key is one
+    its `pins` give that party for that protocol, else `REHEARSAL`, a run's own pin included, whatever the names say.
+    `names` is what the run's names say of where each party ran, a label and never the reason. Every protocol whose
+    device signs its sessions reads its premise here, with the same pins."""
     under = f"configuration {configuration}" if configuration else "no configuration"
     if configuration is None or configuration not in committed:
         return f"{UNCOMMITTED} ({under}); {names}"
     if key_sha512 is not None and key_sha512 in pinned(pins, party, protocol):
-        return f"holds: the session is signed under the key {under} pins for {party}'s {protocol} sessions; {names}"
+        return f"{MATCHED}: the session is signed under the key {under} pins for {party}'s {protocol} sessions; {names}"
     return f"{REHEARSAL} ({under}); {names}"
 
 
@@ -876,7 +878,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 
-__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "PREMISE",
+__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "MATCHED", "PREMISE",
            "PREMISE_BEFORE", "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
            "deployed_key", "holds", "key_tree", "pinned", "premise", "trusted_device",
            "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",

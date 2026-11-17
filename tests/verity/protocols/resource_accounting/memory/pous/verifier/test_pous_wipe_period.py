@@ -294,10 +294,13 @@ def test_a_rehearsal_on_the_prover_node_names_another_host_and_has_no_bound() ->
     assert not WP.holds(WP.placement("node-a", "on-node-rehearsal", None, **UNDER))
 
 
-def test_the_auditor_host_under_its_pinned_key_holds() -> None:
+def test_the_auditor_host_under_its_pinned_key_reads_the_match_and_never_holds() -> None:
+    """The pins and the configuration's hash are what the workload's machine was handed: a session signed under the key
+    they give the wipe reads that it matched them, never ``holds``, and its key custody stays outside the bound."""
     where = WP.placement("vy-dc-h200", AUDITOR, PINNED, **UNDER)
-    assert where["kind"] == "own-host" and WP.holds(where) and W.uncertified(where, None) == []
-    assert where[WP.PREMISE] == (f"holds: the session is signed under the key configuration {CONF} pins for "
+    assert where["kind"] == "own-host" and not WP.holds(where)
+    assert W.uncertified(where, None) == [f"key custody: {where[WP.PREMISE]}"]
+    assert where[WP.PREMISE] == (f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins for "
                                  "memory-challenger's wipe sessions; the memory attester ran on vy-auditor-2, not the "
                                  "developer's vy-dc-h200")
 
@@ -366,7 +369,7 @@ def _side(tmp_path, wipe: dict, pins: list | None = None) -> tuple[Path, Callabl
 def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
     """The subprotocol whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
     (`wipe_side.py`, its key here one the configuration pins for the wipe), its case and record written, the premise
-    recorded as held. No network attester counted the
+    recorded as matching the pins handed, never held. No network attester counted the
     egress and period.json names no count, so the check is given none and its bound is vacuous. The record names what the bound doesn't cover: the egress, the host's DRAM and
     the two links leaving the node (period.json's control link, and the challenger's as the prover connected), and
     carries the session's window on the challenger's clock."""
@@ -376,8 +379,8 @@ def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypat
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
     assert answer["profile"]["placement"]["trusted-device"] == (
-        f"holds: the session is signed under the key configuration {CONF} pins for memory-challenger's wipe sessions; "
-        "the memory attester ran on auditor, not the developer's n0")
+        f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins for memory-challenger's wipe "
+        "sessions; the memory attester ran on auditor, not the developer's n0")
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]
     assert json.loads(bytes.fromhex(case["evidence"]))["egress_mib"] is None
@@ -400,7 +403,7 @@ def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypat
     assert record["window"]["challenger"] == record["report"]["window"] and set(record["window"]["prover"]) == {
         "clock", "t0", "t1"}
     gaps = record["uncertified"]
-    assert not any(g.startswith("key custody") for g in gaps) and gaps[0] == UNCOUNTED
+    assert gaps[0].startswith(f"key custody: {mc.MATCHED}") and gaps[1] == UNCOUNTED
     assert any(g.startswith("tier host-dram: the host's DRAM outside the declared tier (") for g in gaps)
     assert [g.split(":")[0] for g in gaps if g.startswith("link ")] == ["link control", "link challenger"]
     s = wipe_run.summary(record)
@@ -458,18 +461,18 @@ def writers(egress_mib: int) -> str:
 
 
 def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypatch) -> None:
-    """A session signed under the challenger host's pinned key, with period.json's `wipe.egress_bits = 0`: the premise
-    holds and the count is 0, which no network attester signed, so the wipe is accepted and not certified, and the
-    record names the egress as the evidence writer's count."""
+    """A session signed under the challenger host's pinned key, with period.json's `wipe.egress_bits = 0`: the count is
+    0, which no network attester signed, so the wipe is accepted and not certified, and the record names the egress as
+    the evidence writer's count, after the key custody, which the premise, never held here, leaves out."""
     period, side_of = _side(tmp_path, {"egress_bits": 0}, side_pin())
     out = tmp_path / "out"
     wipe_judge.judge(period, monkeypatch)
     answer = wipe_run.subprotocol(period, "n0", out, side_of=side_of)
     assert answer["verdict"] == "accept", answer
-    assert WP.holds(answer["profile"]["placement"]) and answer["public"] == VACUOUS
+    assert not WP.holds(answer["profile"]["placement"]) and answer["public"] == VACUOUS
     assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0
     gaps = json.loads((out / "wipe.json").read_text())["uncertified"]
-    assert gaps[0] == writers(0) and not any(g.startswith("key custody") for g in gaps)
+    assert gaps[0].startswith(f"key custody: {mc.MATCHED}") and gaps[1] == writers(0)
     assert answer["profile"]["gaps"] == [writer(0)]
 
 

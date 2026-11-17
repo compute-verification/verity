@@ -134,10 +134,11 @@ def test_the_memory_attester_s_two_keys_are_pinned_and_hashed():
     assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
 
 
-def test_a_memory_attesters_placement_reads_the_configurations_pins_under_its_hash(monkeypatch):
-    """The table's placement of a memory attester's session: `trusted-device` holds only for the key the onsite
-    configuration pins for that protocol, under its committed hash; another protocol's pin, no key or a configuration
-    nobody committed reads rehearsal. No other party gets a placement."""
+def test_a_memory_attesters_placement_reads_the_configurations_pins_under_its_hash_and_never_holds(monkeypatch):
+    """The table's placement of a memory attester's session: `trusted-device` never holds, the pins being what this
+    machine was handed; the key the onsite configuration pins for that protocol, under its committed hash, reads that it
+    matched them, and another protocol's pin, no key or a configuration nobody committed reads rehearsal. No other party
+    gets a placement."""
     cfg = R.load(CONFIG, REG)
     piece = {c: p for c in ("pous", "wipe") for p in [T.PARTIES[c]["memory-challenger"]]}
     pin = {p["protocol"]: p["key-sha512"] for p in cfg["pin"]}
@@ -147,9 +148,10 @@ def test_a_memory_attesters_placement_reads_the_configurations_pins_under_its_ha
     monkeypatch.setattr(mc, "committed", lambda: frozenset({K.digest(cfg)}))
     for c in ("pous", "wipe"):
         where = T.placement(cfg, piece[c], {"public_key": key[c]})
-        assert mc.holds(where) and K.digest(cfg) in where[mc.PREMISE] and f"{c} sessions" in where[mc.PREMISE]
+        assert not mc.holds(where) and where[mc.PREMISE].startswith(mc.MATCHED), where
+        assert K.digest(cfg) in where[mc.PREMISE] and f"{c} sessions" in where[mc.PREMISE]
         other = "wipe" if c == "pous" else "pous"
-        assert not mc.holds(T.placement(cfg, piece[c], {"public_key": key[other]}))
+        assert T.placement(cfg, piece[c], {"public_key": key[other]})[mc.PREMISE].startswith(mc.REHEARSAL)
         assert not mc.holds(T.placement(cfg, piece[c], None))
     monkeypatch.setattr(mc, "committed", lambda: frozenset())
     assert T.placement(cfg, piece["wipe"], {"public_key": key["wipe"]})[mc.PREMISE].startswith(mc.UNCOMMITTED)
@@ -371,8 +373,8 @@ def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, mo
 
 def test_the_onsite_lines_trusted_device_is_each_memory_attesters_placement(tmp_path, monkeypatch):
     """The verifier's line carries each memory attester's `trusted-device` premise as `placement` reads it from the
-    challenger's outcome here: under a committed configuration, ``holds`` for a session signed under the pinned key, and
-    rehearsal for one that reports no key."""
+    challenger's outcome here: under a committed configuration, that the key matched the pins this machine was handed
+    for a session signed under the pinned key, never ``holds``, and rehearsal for one that reports no key."""
     key = b"a stand-in memory attester key"
     cfg = R.load(CONFIG, REG)
     cfg = {**cfg, "pin": [{**p, "key-sha512": hashlib.sha512(key).hexdigest()} if p["protocol"] == "pous" else p
@@ -386,7 +388,7 @@ def test_the_onsite_lines_trusted_device_is_each_memory_attesters_placement(tmp_
     (tmp_path / T.BINDINGS).write_text(json.dumps(BINDINGS))
     line, = T.live(cfg, tmp_path, [T.MEMORY_ATTESTER, T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
     assert set(line[mc.PREMISE]) == {"pous", "wipe"} and line["verdict"] == "undecided"
-    assert line[mc.PREMISE]["pous"].startswith("holds")
+    assert line[mc.PREMISE]["pous"].startswith(mc.MATCHED)
     assert line[mc.PREMISE]["wipe"].startswith(mc.REHEARSAL)
 
 

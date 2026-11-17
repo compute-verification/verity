@@ -20,8 +20,8 @@
 #                    JSON, which the runner passes beside VERITY_CONFIGURATION, its hash), so another challenger needs
 #                    its own. The pin is the deployment's, never read from the session it judges: set empty, or with
 #                    no such pin, no key is pinned and the piece refuses. It decides only which session is accepted:
-#                    the record says trusted-device holds only under a committed configuration, for a key its pins
-#                    give the wipe (period.json's deployment), and otherwise reads a rehearsal with no bound
+#                    the record's trusted-device never holds, a key the pins give the wipe (period.json's deployment)
+#                    reading that it matched the pins this machine was handed, a rehearsal with no bound
 #   WIPE_READS       the reads the gate's verb runs, which the subprotocol holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
 # Further arguments go to demo.sh. The Lean judge (wipe-protocol) is built before the card is checked, in a
