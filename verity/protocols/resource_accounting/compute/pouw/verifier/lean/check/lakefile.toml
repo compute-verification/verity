@@ -8,8 +8,8 @@
 # `verity/pouw/period/v1`, onsite's work component), held to `period_check.py` by `tests/test_period_difftest.py`.
 # `pouw-leaf-own-window` is the leaf verifier's check of a window unit's leaf statement's `--registered` file at the
 # unit's placement, from the window's descriptor and round log (`PouwCheck.LeafOwn`).
-name = "pouw_check"
-defaultTargets = ["PouwCheck", "pouw-check", "pouw-period", "pouw-check-difftest", "pouw-leaf-own-window"]
+name = "pouw_verifier"
+defaultTargets = ["PouwVerifier", "pouw-verifier", "pouw-period", "pouw-verifier-difftest", "pouw-leaf-own-window"]
 
 [leanOptions]
 autoImplicit = false
@@ -36,22 +36,22 @@ path = "models.json"
 text = true
 
 [[lean_lib]]
-name = "PouwCheck"
-roots = ["PouwCheck", "PouwCheck.Difftest", "PouwCheck.CreditDifftest", "PouwCheck.VerifiedDifftest"]
+name = "PouwVerifier"
+roots = ["PouwVerifier", "PouwVerifier.Difftest", "PouwVerifier.CreditDifftest", "PouwVerifier.VerifiedDifftest"]
 needs = ["models"]
 
 [[lean_exe]]
-name = "pouw-check"
-root = "PouwCheck.Main"
+name = "pouw-verifier"
+root = "PouwVerifier.Main"
 
 [[lean_exe]]
 name = "pouw-period"
-root = "PouwCheck.PeriodMain"
+root = "PouwVerifier.PeriodMain"
 
 [[lean_exe]]
-name = "pouw-check-difftest"
-root = "PouwCheck.DifftestMain"
+name = "pouw-verifier-difftest"
+root = "PouwVerifier.DifftestMain"
 
 [[lean_exe]]
 name = "pouw-leaf-own-window"
-root = "PouwCheck.LeafOwnMain"
+root = "PouwVerifier.LeafOwnMain"
