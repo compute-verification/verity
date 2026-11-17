@@ -13,6 +13,21 @@ no kernel or table of its own. `benchmarks/hash/dither/dither_a.py` inlines `int
 (`rni_s32`, `membar_gl`, `epilogue`) into its kernels; `tests/test_dither_a_helpers.py` holds each name it reads to
 one `int8_fused` binds. Nothing a verifier runs reads this directory.
 
+## The metric
+
+From the tree's root on one card, in the pinned-vLLM Python `benchmarks/harness/env.sh` finds (made by
+`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`) with CUDA 13 at `/usr/local/cuda-13.0`:
+
+~~~text
+RESEARCH_RUN_DIR=DIR bash benchmarks/kernels/exactlin/kbench.sh --models llama-3.2-1b
+~~~
+
+It gates, then times, and writes `kernels/exact-linear-decode-over-stock` (`metrics.toml`) into the run's `result.json`:
+the fused arm's linears (the ops' CUDA bodies, as served) for one decode step of the first `--models` model at batch 32
+over stock vLLM int8's (`triton_scaled_mm`), its `member` the model and the card (`llama-3.2-1b-h200`), with both arms'
+ms beside it. The result's validation is the gate's verdict; a failed gate writes no measurement and exits 4.
+With no `gpu-lease` on PATH it runs on the visible card and says so.
+
 ## Entry points
 
 Each launcher takes one leased GPU for a bounded time, writes under `$RESEARCH_RUN_DIR/out`, and passes extra arguments to

@@ -92,6 +92,8 @@ GONE = ("unread", "unread aggregator")
 #: the locale git runs under: its patterns match characters, whatever the host's default (`C`'s match bytes, and cut a name
 #: inside a character)
 LOCALE = "C.UTF-8"
+#: how long `archive` waits for git once its tar has ended: it has at most a record of zeros left to write
+ARCHIVE_TAIL_S = 120
 
 
 class GitError(RuntimeError):
@@ -148,14 +150,22 @@ def blobs(rev: str, paths: list[str]) -> dict[str, bytes | None]:
 
 
 def archive(rev: str, dest: Path, *paths: str) -> Path:
-    """``rev``'s tree (its ``paths``, as git pathspecs, when given) written under ``dest``."""
+    """``rev``'s tree (its ``paths``, as git pathspecs, when given) written under ``dest``.  The tar reader stops at the end
+    marker, and git writes a record of zeros after it when the marker leaves under 1024 bytes of its record: that record is
+    read off before the wait, since a pipe holds less than a record where its user is over `fs.pipe-user-pages-soft`."""
     dest.mkdir(parents=True, exist_ok=True)
     p = subprocess.Popen(["git", "archive", "--format=tar", rev, *(["--", *paths] if paths else [])], stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE, env=git_env())
     with tarfile.open(fileobj=p.stdout, mode="r|") as t:
         t.extractall(dest, filter="data")
-    if p.wait():
-        raise GitError(f"git archive {rev[:12]}: {p.stderr.read().decode(errors='replace').strip()[-300:]}")
+    try:
+        _, err = p.communicate(timeout=ARCHIVE_TAIL_S)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        p.communicate()
+        raise GitError(f"git archive {rev[:12]}: still running {ARCHIVE_TAIL_S} s after its tar ended (killed)") from None
+    if p.returncode:
+        raise GitError(f"git archive {rev[:12]}: {err.decode(errors='replace').strip()[-300:]}")
     return dest
 
 
