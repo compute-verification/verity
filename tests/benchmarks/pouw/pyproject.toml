@@ -87,7 +87,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/resource_accounting/network",
           "tools/difftest", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/circuits/kernels", "verity/commitments/randomness", "verity/protocols/proofs/flock/prover/python", "verity/commitments/periods",
-          "hardware/cards",
+          "calibration/hardware/cards",
           "tools/config/verity_config",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/commit/__init__.py", "verity/commitments/periods/hiding.py",
@@ -173,7 +173,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "security/Definitions/Pouw", "security/Proofs/Pouw", "security/Proofs/Properties/Pouw", "security/lean-audit.json",
           "security/Proofs/ResourceAccounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts", "benchmarks/pouw/filler", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler",
-          "benchmarks/machine_model", "benchmarks/pouw/README.md",
+          "calibration/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "verity/protocols/experimental/dither/prover/j10r_ws.py",
           # test_mma_gate runs torch_gpu's build gate, which reads the build through verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py's mma_gate
@@ -198,7 +198,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "benchmarks/harness/verity_bench/__init__.py", "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_work.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear/__init__.py",
-          "verity/circuits/ops/boolean/versions.py", "benchmarks/pouw"]
+          "verity/circuits/ops/boolean/versions.py", "benchmarks/pouw", "calibration/pouw"]
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
 # check runs it as three parts by test id (`lean-suites:verity-pouw-benchmarks:K/3`, `suites.py`'s `id_part_of`), each
@@ -220,7 +220,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_dc.py"]
-paths = ["benchmarks/pouw/opcode_probe"]
+paths = ["calibration/pouw/opcode_probe"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -238,7 +238,7 @@ paths = ["security/Definitions/Pouw", "security/Proofs/Pouw", "security/Proofs/P
 
 [[tool.verity.tests.reads]]
 tests = ["test_facet_break.py"]
-paths = ["benchmarks/machine_model/verity_machine_model", "benchmarks/pouw/opcode_probe"]
+paths = ["calibration/machine_model/verity_machine_model", "calibration/pouw/opcode_probe"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_ffill.py"]

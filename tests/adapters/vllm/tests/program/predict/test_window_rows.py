@@ -919,6 +919,6 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
     scan = CR.Registered.commit(digest, SS.SCAN_STATE, list(state.rows), list(state.salts), schema=CR.SCHEMA_V2, window=RUN)
     want = CR.registered_entries(program, {SS.SCAN_STATE: words}, {SS.SCAN_STATE: CR.SCHEMA_V2}, RUN)[SS.SCAN_STATE]
     assert rec["format"] == REG.FORMAT_V2 and e == state.entry() == scan.entry()
-    assert e["value"] == "verity/certifier/scan-state/v1" and e["root"] == rec["window"]["registered_roots"][SS.SCAN_STATE]
+    assert e["value"] == SS.SCAN_STATE and e["root"] == rec["window"]["registered_roots"][SS.SCAN_STATE]
     assert (e["leaves"], e["words"], e["domain"]) == (want["leaves"], want["words"], want["domain"]) == (
         CLASS.buckets, words, CR.domain(digest, SS.SCAN_STATE, words, CLASS.buckets, window=RUN).domain_id.hex())
