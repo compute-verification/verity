@@ -1,3 +1,0 @@
-[2026-11-17T07:04Z] f8d6c7e76b8d
-From the coordinator, URGENT, before you return: benchmarks #10762 is on main (a6b32912aa5): the proof benchmark records each layer as its own member (flock, flock-zero-knowledge, sampling). A run of OUR script benchmarks/one_stage/proof_layers.sh from a clean checkout of main now writes all three: 51 minutes on one H200. Node A may be STOPPED at 1:00 AM PST (09:00Z) tonight: launch it NOW on node A (the same way you ran r20261116-223742-a8fb: one free card under its own lease, its cores, the 96 GB free-disk floor), detached, so it ends before 09:00Z; if no card of node A is free or it cannot end by then, say so at once. Give me its run id with the recursion run id in your return.
-
