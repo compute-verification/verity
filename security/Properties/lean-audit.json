@@ -7252,15 +7252,33 @@
     "reads": []
    },
    "type_hash": "24966b9a2a442fc1bfd14ea399cf06b60c45246e014d93fe2eccf7789454dc6d",
-   "unfolded_hash": "64ed7c7948d4c6808e470ef89624c5e6f6782bb446f567a6e6fd751dd4aa954f"
+   "unfolded_hash": "a1a6d1c6e67098a6d45b2e4033f00b02bde6b40b8ac74f3cc3b5ebffafba9c74"
   },
   "Properties.Poub.Subprotocol.acceptIsVerified_acceptAll": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.Poub.Subprotocol.acceptIsVerified_acceptAll : False"
+    "Properties.Poub.Subprotocol.acceptIsVerified_acceptAll (params : Poub.Session.Params) (g : Nat)",
+    "  (coins appendCoins : Array ByteArray) (notBeforeNs : Nat) (events : Array Poub.Session.Event)",
+    "  (rs : Array Poub.Session.Result) (s : Poub.Session.State) (sm : Poub.Session.Summary) :",
+    "  Not",
+    "    (Eq { eps := { num := 0, den := 1 }, qBytes := 1 }",
+    "      (Poub.Protocol.certify params g",
+    "          { node := ByteArray.empty, blocks := 1, payloadRoot := ByteArray.empty, codecSeed := ByteArray.empty,",
+    "            codec := { field := Poub.Codec.P512, rounds := 2, masked := Bool.false }, receipt := Poub.Kind.sketch,",
+    "            rows := 0,",
+    "            key :=",
+    "              { codec := { field := Poub.Codec.P512, rounds := 2, masked := Bool.false }, c := List.nil.toArray,",
+    "                tau := 0, mask := Option.none, seed := ByteArray.empty } }",
+    "          appendCoins.size sm).fst)"
    ],
    "assumptions": [],
-   "type_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "c52b3fb608498cadcddb6769a93d7b5b584b6d4d4ac80f7aa0163956f5764586"
   },
   "Properties.Poub.Subprotocol.acceptIsVerified_accepts": {
    "owner": "@memory-accounting",
@@ -7275,15 +7293,11 @@
     "              Properties.Poub.Subprotocol.HonestLog.evidence)",
     "            (Core.Outcome.accept pub prof))"
    ],
-   "assumptions": [
-    "Properties.Poub.Subprotocol.HonestLogAccepted"
-   ],
+   "assumptions": ["Properties.Poub.Subprotocol.HonestLogAccepted"],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": [
-     "Properties.Poub.Subprotocol.HonestLogAccepted"
-    ],
+    "open": ["Properties.Poub.Subprotocol.HonestLogAccepted"],
     "reads": []
    },
    "type_hash": "cf4583908d6642e0345b4a93c7c43ad834a871cf26e1ca4e1f86addf1056a0fe"
@@ -7307,7 +7321,8 @@
     "      (Except.ok { fst := rs, snd := s }))",
     "  (ho : Eq s.outcome (Option.some \"accepted\")) (hsm : Eq s.summary (Option.some sm)) :",
     "  Eq (Poub.Protocol.check p reg e)",
-    "    (Core.Outcome.accept (Poub.Protocol.certify params g sm).fst (Poub.Protocol.certify params g sm).snd)"
+    "    (Core.Outcome.accept (Poub.Protocol.certify params g reg appendCoins.size sm).fst",
+    "      (Poub.Protocol.certify params g reg appendCoins.size sm).snd)"
    ],
    "assumptions": [],
    "premises": {
@@ -7316,7 +7331,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "d8f7f845aa1323cec682921f5b8742524ae66b14d01e1d809e58411a0f7e8af0"
+   "type_hash": "30621dca5c427c1c8234313d7474b7b3887a4898b58fdc684b9fd40431283f16"
   },
   "Properties.Poub.Subprotocol.acceptIsVerified_honest": {
    "owner": "@memory-accounting",
@@ -7554,26 +7569,28 @@
     "reads": []
    },
    "type_hash": "15ebef425510bcf7bd868d9a6db984bb76052200ea09f3c327fd44e25ad0dc13",
-   "unfolded_hash": "e65c9f398882d453a80cb2c50cfa9a1bb4e15acb4b2e6aa7b3b70d406068b1d8"
+   "unfolded_hash": "4b5cb86e28df16765129b8136176b2300d2e156e150ca899e8a0c1794108790c"
   },
   "Properties.Poub.Subprotocol.publishedEps_acceptAll": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.Poub.Subprotocol.publishedEps_acceptAll (params : Poub.Session.Params) (g : Nat) :",
-    "  ∀ (x x✝ : Array ByteArray) (x✝¹ : Nat) (x✝² : Array Poub.Session.Event),",
-    "    Not",
-    "      (Or",
-    "        (And (Eq { eps := { num := 0, den := 1 }, qBytes := 1 }.eps { num := 0, den := 1 })",
-    "          (Eq { eps := { num := 0, den := 1 }, qBytes := 1 }.qBytes 0))",
-    "        (∀ (node : Properties.Poub.Line.Node),",
-    "          Eq node.params params →",
-    "            Eq node.groupsPerCoin g →",
-    "              Eq node.delta.cast Poub.Protocol.DELTA →",
-    "                Eq",
-    "                  (instHDiv.hDiv { eps := { num := 0, den := 1 }, qBytes := 1 }.eps.num.cast",
-    "                    { eps := { num := 0, den := 1 }, qBytes := 1 }.eps.den.cast)",
-    "                  (instHAdd.hAdd node.delta.cast",
-    "                    (instHDiv.hDiv (Finset.univ.sum fun _c => node.params.samples).cast (instHPow.hPow 2 256)))))"
+    "Properties.Poub.Subprotocol.publishedEps_acceptAll (params : Poub.Session.Params) (g : Nat)",
+    "  (coins appendCoins : Array ByteArray) (notBeforeNs : Nat) (events : Array Poub.Session.Event) :",
+    "  Not",
+    "    (Or",
+    "      (And (Eq { eps := { num := 0, den := 1 }, qBytes := 1 }.eps { num := 0, den := 1 })",
+    "        (Eq { eps := { num := 0, den := 1 }, qBytes := 1 }.qBytes 0))",
+    "      (And (Eq { eps := { num := 0, den := 1 }, qBytes := 1 }.eps (Poub.Protocol.ratio Poub.Protocol.EPS))",
+    "        (Real.instLE.le",
+    "          (Properties.Poub.Subprotocol.constantTerms params g",
+    "            { node := ByteArray.empty, blocks := 1, payloadRoot := ByteArray.empty, codecSeed := ByteArray.empty,",
+    "              codec := { field := Poub.Codec.P512, rounds := 2, masked := Bool.false }, receipt := Poub.Kind.sketch,",
+    "              rows := 0,",
+    "              key :=",
+    "                { codec := { field := Poub.Codec.P512, rounds := 2, masked := Bool.false }, c := List.nil.toArray,",
+    "                  tau := 0, mask := Option.none, seed := ByteArray.empty } }",
+    "            appendCoins.size Poub.Protocol.DELTA.cast)",
+    "          Poub.Protocol.EPS.cast)))"
    ],
    "assumptions": [],
    "premises": {
@@ -7582,7 +7599,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "edcfd15042a45baea6b9fdab7b4ea4cfbe86d1f186622753e21724f2f521b380"
+   "type_hash": "926b605b45521893499ebb47c0e2c09110f3ed6470529b6bb4248c7ff5742317"
   },
   "Properties.Poub.Subprotocol.publishedEps_honest": {
    "owner": "@memory-accounting",
@@ -23685,28 +23702,34 @@
    }
   },
   "Poub.Protocol": {
-   "digest": "5f6dbd96951d30a59dd5781fbdb1a54fc3796584300c4289aee19b03a8859ff3",
+   "digest": "d2a2f1806c65206f2c19f794effbe865530c5b38f08b3d66fc1908977c65ffa9",
    "definitions": {
+    "Poub.Protocol.BINDING_SQ_MAX": "e625e4414e696e5fe8ae9c113d71c26b9ce04dd4f462efea465736a34bb554f5",
     "Poub.Protocol.DELTA": "23192b0bf473651ba69d1321f51f36752bd094cf4e5f762029509fe6ba2d3944",
+    "Poub.Protocol.EPS": "ae068a54d74d19478b698acf279ded41d6a311f00f8c96e77bed20920cbfa16b",
     "Poub.Protocol.Evidence": "3a44a76d7aa604cd4112cadca1bd972535584be84312a889951cf3e73e35ce58",
     "Poub.Protocol.Evidence.appendCoins": "8b65a2ddc12d6622ba7cdec1c9ad1f84d5aa2605de1f114d478e316c6ced1303",
     "Poub.Protocol.Evidence.coins": "0fbecfc24a25d972758e8d87a8fe8ced028acf99a4dd4f0e2c49ccc280cea354",
     "Poub.Protocol.Evidence.events": "a5d617374cb5e091882f4e8a6c735d109746fae100af565fa00fced08ed676a8",
+    "Poub.Protocol.PASSES_MAX": "73a6dda56fc81d816b209999dd47ef3130be2e2510120e7858dacd5db56dc38b",
     "Poub.Protocol.Params": "30e568122c75cbab6549e35fe350e48a11b2832e7916fcd15980ba90b9f7213a",
     "Poub.Protocol.Params.notBeforeNs": "e6c7ab2d13b40417f19121fabf65dab949e6ecf1ec09c6b982c0bc1a36322c75",
     "Poub.Protocol.Params.params": "1917db3b57b5cf91382cf4166efb2cdae9178cd49e4bf34fdd8b89620774598d",
     "Poub.Protocol.Public": "8afab52bf7ed7d64c7ad799b8fdd4884e35e6eeaf96522e6438768c924c7e0e8",
     "Poub.Protocol.Public.eps": "0032f17c7f4eb50c38fa7eebab1667a413bb8ab698d41ca3b9669914a4a76efb",
     "Poub.Protocol.Public.qBytes": "87fe8fcd8c908c0af3f0dbb5e6ca287043dc66f3932d0d016f910013929b2c08",
-    "Poub.Protocol.certify": "9816686ded94a7531de5ce26d85d361ea4c9a3031a4c3c1508e87e42238f1318",
-    "Poub.Protocol.check": "cacd175838c0f976476e2742b15b7cd18aa8d89e01dda7ee0555b1d1dd9ca60f",
+    "Poub.Protocol.REJECTION_MAX": "705e33580e1dbafca7fc07b7432b7ff24a691cd9b10a67187563c43356989eea",
+    "Poub.Protocol.certify": "d88332ff1e4340d4c4e990c53040fdcb9b15017a39baeb8be120fc0d35f7d327",
+    "Poub.Protocol.check": "f38a6d3246323f4c63716daade9ba429b8865b9f9adf514261dedc083c325918",
     "Poub.Protocol.decodeCommitment": "ce97abcbfea39be188b0af1a0a8117b520abf906c6f62f3fdcaad8210c33a1c9",
     "Poub.Protocol.decodeEvidence": "eaae23fc40cff2e0b81a765e05a966f601d97889d952d26853571059a148351e",
     "Poub.Protocol.decodeParams": "b3127cfa9428e08168696c822887644ab1c76e7b5b7463375014fa563d4ea03b",
-    "Poub.Protocol.eps": "6f98eca43bb8c2319d0bcb5f5ec32a6c3ca6cf115f08b05b86359a322a2821ca",
+    "Poub.Protocol.mostBlocks": "8acb61410d3bb4b9d07c5961b53ca33856c073acf1f7a7640f29fe3ec06aadd3",
     "Poub.Protocol.openingsCoins": "3a978a3284c20d1bd2278ef65e1071271cfe32da069a48d65d8e27c559b00117",
     "Poub.Protocol.ratio": "46da1eda670efc8f4a92976076a11f07a27c783bc7a59b7baa909d5dcc8a7d83",
-    "Poub.Protocol.replay": "53c92c061747d87540f9bf0acb44f64164d30d32f3023ae30ccf1a11ff8c7b7b",
+    "Poub.Protocol.refusal": "b3e8a9a15fdd8f88724643392cdf204e60cce65023b6d590c5ba3b7038111bb2",
+    "Poub.Protocol.replay": "41a080df50c9587a091cf0b645739ba956c76ddb88d4cbc24996d4319d231da4",
+    "Poub.Protocol.sampleReceipts": "85dd34dd6ce98e4742d51b8059122fc38bc20678e29bdd9fcaf5873474315734",
     "Poub.Protocol.sessionOf": "cb8dc89e53eef49b23c94fe4ab65765f654341737e7c6dfcbcb504f774b4e486",
     "Poub.Protocol.windowsOf": "76524a35dbe836e688a3c311ef0b6ca38c804b945185c407fbf215445487d118",
     "_private.Poub.Protocol.0.Poub.Protocol.keys": "a9d489862eb61cf26db69b41360b356b44092caf1f2c73e133554c60de0d36fd",
@@ -23714,7 +23737,7 @@
    }
   },
   "Poub.Receipts": {
-   "digest": "c479497fcc74026295857db30cbc72eedcd83fd640476b31358b2e36f9471739",
+   "digest": "e128e479d3f15717e642f7df8fcb3034d3a99fefa81a08ddeaa291ed2b607d7f",
    "definitions": {
     "Poub.APPENDS_DOMAIN": "42a18e4bb5d00d1628f03bb0baeb0e0dc48ec41cc53843753e29de6ba79e195d",
     "Poub.CHAINED_DOMAIN": "6a24b6e5a33f3664d12c1b36667babe40ede87cadc8c4ed8b7af3f857f4a2438",
@@ -23722,6 +23745,7 @@
     "Poub.Kind": "2ce779aba92e7e4272c633cca84aad7b4e5c6cd9ca89b8b8626b069f1a2107a7",
     "Poub.Kind.block": "39e84c7a54fba24b335a1a0437934747f0ad12f9c8d919d03208efd43ba8ed50",
     "Poub.Kind.casesOn": "dc1fb1d7678aea77f28f8aaeaef4aff8e451f3e2579564ad4c36da53a1453e6e",
+    "Poub.Kind.ctorIdx": "b015bf9ffd2408b27e0f0cb874834b218254937ac4bd869e5814a55c572d8033",
     "Poub.Kind.name": "791df4c580e0f65ac80268e2e5a1db6e88f23a2dffcd11e9dff92fa2c9a6a1d0",
     "Poub.Kind.ofName?": "bc62f703a3abaa33a981d4cfffbaa6330637621e0efb3dccb3da681c337fb602",
     "Poub.Kind.rec": "ab789b960be3382a806b8bd241b514b0ad21cbf84a66d4cd3ea3e0c920363f28",
@@ -23746,6 +23770,8 @@
     "Poub.chained": "4461a83c4f55dd07c4fe5150eaeef62aba2018180bf515265155917bb1536e97",
     "Poub.hidden": "e0c236544cc100170e24efca216912017b8244f511fe77481b78c35ab4872a23",
     "Poub.hiddenDigest": "b33e5860ae6b20dc857cb0268df15faa736e547a5c98f781ce5fb954d1d97d22",
+    "Poub.instBEqKind": "d07c7c29428e20fef193e4e81a59ed42109173cc125bf32fbc6775ec4a4d698c",
+    "Poub.instBEqKind.beq": "d7cb29f5a57dc73349cfa1ac39cf49fee9dad1c1428eeefef3f791f41a34a124",
     "Poub.leafReceipt": "8ad2156a7e2b384c6fda650909bc5e8e34a480f9bffdacbe22cfc37782a5a6c1",
     "Poub.leaves": "356feec9399e52ed92b8e4967e81c2882289b2d604ae643c60644bb9961099b5",
     "Poub.receiptPrefix": "685345a61efd977ab9c8037a0f5c02b1a85242475d984ba50668a91391dea9f0",
@@ -26469,19 +26495,20 @@
    }
   },
   "Properties.Poub.Remote.Subprotocol": {
-   "digest": "c0047b64f891879cad8f75a99c323f154d78694235d7d79da9d064404c0bfb0e",
+   "digest": "7d6139d25636f545d87ed79b5d8feaf9066ce9e719d9594a6bfa84f735ae21d4",
    "definitions": {
-    "Properties.Poub.Subprotocol.AcceptIsVerifiedFor": "c86af8f52523a7fb5a58d26b6b67145dac500def8ca04e50da89ab57de4c97d8",
+    "Properties.Poub.Subprotocol.AcceptIsVerifiedFor": "5262a1158056127878be99c798a348849889cb09e47e01020ffded41b4fa2db4",
     "Properties.Poub.Subprotocol.HonestSchedule": "2a33f0f20521517f1fa1480d6baf5dd93c2b8399d654c75ec65ff96d15d19c9a",
     "Properties.Poub.Subprotocol.LineHeldAtSubprotocolBy": "175d26d5cdd1f3b17686a211b83a968da4796e5a84ddb69c2730db2238267d19",
     "Properties.Poub.Subprotocol.LineHeldBy": "857262c8a2086db4adc2ebdc5aea72d78bdefc3923416af6b317162a1590789c",
     "Properties.Poub.Subprotocol.Plays": "8b3a2bd8dbff1d4b28e6e4d71639dd5ef7218fa72273e79e3b4c897798519b82",
-    "Properties.Poub.Subprotocol.PublishedEpsFor": "c5bde146e6da8945654fcc4a8ce5b662880427b8afe047d2626dff320c7cc7ea",
+    "Properties.Poub.Subprotocol.PublishedEpsFor": "54f2c0313b440123c50508fdf9412483fd70b0c43223d136aa879c18b25b9b92",
     "Properties.Poub.Subprotocol.QBytesAtSubprotocolBy": "db86b7a0629eae01b4a69c52a31e8634ade566b42ca8e20942c5b90fa7e1763f",
     "Properties.Poub.Subprotocol.QBytesBy": "0a04e7c6d4dbcb267021d35fba50d11e3437272db114b99dc4128cf25d8c91c9",
     "Properties.Poub.Subprotocol.ReadBy": "acf2ccaf0bd8abdb02dbaa03ef22fe4dece2095d45a4c36e8c8aba89e3203c9a",
     "Properties.Poub.Subprotocol.Toy.sm": "a36886c7669323f18c4d1e85c55e65f7b9601e6b1e0a3ef2fa3873dd923f04bb",
     "Properties.Poub.Subprotocol.Toy.win": "b16fd78398a912e59e6170eb8c9fe7bb89fce8bf58886427ea2bda1818a34518",
+    "Properties.Poub.Subprotocol.constantTerms": "17ef14f8a7640b9106e0f0bd75640c58d69decc9bc53015c0547605fdbc77fdd",
     "Properties.Poub.Subprotocol.groupsBy": "8aaeb118c203cfc01fe939b2019723ec259129f0cc6937ef791d9a92d9668c95",
     "Properties.Poub.Subprotocol.honestEvidence": "d2a67efccb889b736f31fba8ad566d99df759b8658066a07174fd020979fa323",
     "Properties.Poub.Subprotocol.honestParams": "397df3eb52f6e7f7dd50d27b93f309c57ea8d8e6ee6b2cb3e281904d500b8a21",
@@ -26495,11 +26522,11 @@
    }
   },
   "Properties.Poub.Remote.SubprotocolDeployed": {
-   "digest": "7a898019370a644d0e611d4b8af730778ddc6eda43d8378d02c19dfe564db54d",
+   "digest": "1a34b4c3cf8362128224b95f952b770d3eb352544597d84464f95de0bbb5678a",
    "definitions": {
-    "Properties.Poub.Subprotocol.AcceptIsVerified": "be65ee35f12a2678462c58864cef70e7a516a91fb71c1d666ce50a112ba9722b",
+    "Properties.Poub.Subprotocol.AcceptIsVerified": "2cf880fe92f13ef6069c0cf0e19a3ec6db3e61b9c2bcc06bbf0c3d208592f847",
     "Properties.Poub.Subprotocol.LineHeldAtSubprotocol": "3f9f7db6b7572159e92656c4326154e83d40d9005fe502eaedf00ca3a5756257",
-    "Properties.Poub.Subprotocol.PublishedEps": "93cc6b08c91cc1b5ce467e0c3014e0c6907b37c14b1409a8aa3563a3ef55a71c"
+    "Properties.Poub.Subprotocol.PublishedEps": "d1a402538d6a0306d614da769a5abc5eeb5c26d364be4abc65455018eb0a106b"
    }
   },
   "Properties.Pous": {
