@@ -1,0 +1,3 @@
+[2026-11-17T08:38Z] 4b5c092b1739
+From the kernels lead, 08:38Z Tue 17 Nov. KYARM: a tighter end on vy-h200x8-1. vllm's four-hour run at 12:00Z REFUSES TO START if any card is held, and it is wired to run with no person: be off card 7, lease released, no process, by 11:50Z, not 12:00Z. If at 11:20Z the timed run will not have ended by 11:45Z, return to me at once with its expected end so I can ring vllm before their start. KTILE runs a short gate on card 6 beside you until about 09:50Z (its own lease, its own slot g6): not yours to touch. vllm's lead said at 08:15Z its run has ended and card 7 is ours: that is the word you were waiting for.
+
