@@ -18,7 +18,9 @@ testpaths = ["."]
 pythonpath = ["../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The suite also tests PoUW's pieces of composite's cases (`pouw_piece.py`, on PoUW's difftest cases and a served H1
-# window's line), and v2's case (`v2_case.py`, on a served window's compose.log).
+# window's line), and v2's case (`v2_case.py`, on a served window's compose.log), and the two-stage audit's second stage on
+# a toy replay block (`toy.py`, `test_toy.py`; `audit.py` proves it on a node), and, opt-in (`VERITY_TWO_STAGE_GUARD`;
+# `guard_node.py --pytest` on a node), SPOT[Flock]'s two-stage Lean model on a run's guard export (`test_guard.py`).
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
@@ -40,6 +42,7 @@ untraced = [
     "test_served_overhead.py",
     "test_served_verdicts.py",
     "test_proof_layers_script.py",
+    "test_toy.py", "test_guard.py",
 ]
 # The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step
 # builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/proofs/flock/prover/check_build.sh bin`'s,
