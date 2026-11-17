@@ -3,22 +3,7 @@ module
 public import Definitions.Pouw.PearlC.HiddenTileGame
 public import Definitions.Core.Game
 
-/-!
-# Flock's hidden audit: the TileRead session per sampled tile
-
-The hidden audit (`HiddenAudit`) plays, for each sampled tile, a proof game on the window's commitment. For Flock that
-game is the live `--zk` session of the TileRead statement at the tile's public `t_s`, which reads the window's committed
-rows at `tile_at(t_s)`, relabelled to verity-verify-proof's verdict.
-
-TileRead's Definition and its Flock soundness (the restack plan's T1 and T3) are not in Lean yet, so the session is a
-parameter (`TileReadSession`): its window root, its live game per tile, its verdict, the class of strategies its
-soundness speaks of, and the event that soundness bounds. From it:
-
-* `TileReadSession.audit`: the `HiddenAudit` value, with `Bounded = BoundedByInduced TileReadSession.cls`;
-* `TileReadSound` (T3) and `TileReadBinds` (the binding): the two open obligations, from which
-  `Proofs.Pouw.PearlC.FlockTile.Audit` builds a `TileGame` for every tile of every in-domain workload
-  (`TileReadSession.tileGame`).
--/
+/-! Flock's hidden audit with the TileRead session per sampled tile as a parameter, because TileRead's Definition and its Flock soundness are not stated in Lean. -/
 
 @[expose] public section
 

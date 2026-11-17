@@ -3,20 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.Dimension.H100W
 public import Definitions.Pouw.Fp8Atom.H1T
 
-/-!
-# H-1T's gap corollary: several units in `MH100w` (trusted statements)
-
-A matmul's output is split into units (`Unit`) of at most 88,412 columns. Each unit's salt context binds its id, so
-each unit's salt is its own coordinate of the joint salt (`MSalt`). The free values
-(`mfree`) are W1's: the constants, which include every salt-independent function of the committed inputs, and every
-unit's raw XOF words. The grid is every joint salt.
-
-* **`H1TUnitsDistinct`** (under `DistinctLiveH1T`): the credited words of all the units are pairwise distinct
-  functions of the joint salt, and none is free. So per-unit Target A lifts to any number of units.
-* **`H1TGap`** (under `DistinctLiveH1T`): an `MH100w` program (`Pouw.Dimension.H100W`, draft semantics) under `H32`
-  whose registers include every credited word of every unit costs at least 32 per credited word: `32·Σ m·n·(4T − 3)`
-  (`H1TPosCard`). This is `DistinctLiveMH100` at `ε = 0`.
--/
+/-! H-1T's gap corollary over several units in `MH100w` (draft semantics), under `DistinctLiveH1T`. -/
 
 @[expose] public section
 
@@ -38,8 +25,7 @@ def mfree {N : ℕ} (Us : Fin N → Unit) : Set (MSalt Us → ℚ) :=
   {f | (∃ q : ℚ, f = fun _ => q) ∨
     ∃ (u : Fin N) (i : Fin (Us u).m) (τ : Fin (Us u).T) (ℓ : Fin 18), f = fun G => ((G u i τ ℓ : ℕ) : ℚ)}
 
-/-- **Several units** (under `DistinctLiveH1T`): on legal units, the credited words are pairwise distinct functions of
-the joint salt, and none is free. -/
+/-- **Several units**, under `DistinctLiveH1T`: per-unit Target A lifts to any number of units. -/
 def H1TUnitsDistinct : Prop :=
   ∀ (N : ℕ) (Us : Fin N → Unit), (∀ u, (Us u).Legal) → Function.Injective (mword Us) ∧ ∀ x, mword Us x ∉ mfree Us
 

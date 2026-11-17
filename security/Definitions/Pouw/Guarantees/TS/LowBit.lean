@@ -3,21 +3,7 @@ module
 public import Definitions.Pouw.TS.Fold
 public import Definitions.Pouw.Receipt.Li
 
-/-!
-# A one-register fold's low bit (trusted)
-
-What a lower bound that reads a fold through its low bit can see, each `def G : Prop` proved as
-`ResourceAccounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS.LowBit`:
-
-* `LiLowBit`: li's chain with odd multipliers has bit 0 the XOR of its start's, its keys' and its words' bits 0.
-
-A step that binds its word and its state on one register has no other choice at bit 0: a function of two bits that is a
-bijection in each is their XOR or its negation. So a fold of such steps, reduced modulo 2, is an XOR of its words' low
-bits, and any lower bound read off that reduction (its multiplicative complexity, its degree, or a Boolean circuit bound
-on bit 0) is a bound on XOR. A tree of `f`-input nodes computes that XOR with `⌈(N − 1)/(f − 1)⌉` of them, which is no
-more than `FoldFanIn` gives. A residue argument beats the fan-in floor only on a fold whose state has more than one
-register.
--/
+/-! A one-register fold's low bit is an XOR of its words' low bits, so a lower bound read off it gives no more than `FoldFanIn`. -/
 
 @[expose] public section
 
