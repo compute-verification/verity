@@ -34,7 +34,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier import timing  # 
 from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers  # noqa: E402
 import host as H  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier as V  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
 
 T0 = datetime(2026, 10, 21, 13, 0, 0, tzinfo=timezone.utc)
 T1 = datetime(2026, 10, 21, 13, 30, 0, tzinfo=timezone.utc)
@@ -124,7 +124,7 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
     argv = req["argv"]
     assert argv == doc["argv"]
     assert argv[:3] == ["/usr/bin/python3", "-I",
-                        str(H.TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "remote_session" / "verifier_process.py")]
+                        str(H.TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "poub_session" / "verifier_process.py")]
     i = argv.index("--paced")
     assert dict(zip(argv[3:i:2], argv[4:i:2])) == {
         "--host": "127.0.0.1", "--port": "7951", "--out": str(svc.runs / RUN / "out"), "--registry": str(svc.registry),
@@ -417,7 +417,7 @@ def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_
         svc, tmp_path):
     """The one test that runs a session (with the Lean verdict, so it builds the Lean verifier and the difftest): what
     the cheaper tests can't show is that the runner's out/ is the one `replay.py` reads, from a real transcript, gzipped,
-    summed and shipped (that `auditor_line.py` reads it is `tests/benchmarks/remote_session/test_live_verifier_host.py`'s)."""
+    summed and shipped (that `auditor_line.py` reads it is `tests/benchmarks/poub_session/test_live_verifier_host.py`'s)."""
     units = Units()
     rc, out = call(svc, [*BASE, "--paced", "2:8:40:2"], units)
     assert rc == 0, out

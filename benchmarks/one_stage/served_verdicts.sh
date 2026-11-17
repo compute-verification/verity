@@ -18,7 +18,7 @@
 #     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under salts sampled from the committer's
 #     key $D/private/weights.key, 0600, neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
-#  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`adapters/vllm/tools/served_run/serve_load.py --varied`:
+#  2. requests: REQUESTS greedy requests (default SLOTS) from the network attester's traffic generator (`adapters/vllm/tools/served_run/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
 #     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
@@ -26,7 +26,7 @@
 #     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the network attester, is the run's one load and its execution
 #     block the one the run audits (a period that admits a single block, say). A front that failed before a window
 #     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
-#     say) leaves its exit to the certifier's verdict, and the run goes on with the window it sealed.
+#     say) leaves its exit to the network attester's verdict, and the run goes on with the window it sealed.
 #     With LOAD=session the load is the caller's own, through a relay session of the network attester's, and the run
 #     sends nothing itself: CERTIFIER_FRONT, passing `--session` to `certifier_piece.py front`, opens the session and
 #     returns once its relay listens; LOAD_CMD, the caller's command, run as `bash -c LOAD_CMD _ RELAY D` in TREE within
@@ -42,7 +42,7 @@
 #     `--protocol ids`), is refused before the lease. The
 #     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
 #     seals.jsonl, requests.jsonl and serve.json, each window's PoUW calls record, the load's records, timings file and
-#     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
+#     log, and the network attester front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
 #     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
 #     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose network attester-paced load no stock
 #     control compares to, and LOAD=session, whose relay-paced one none does either) less the load's counts and span, and verdict lines that name no window and count none of a
@@ -60,7 +60,7 @@
 #     them.
 #  3. SPOT, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
 #     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
-#     the window circuit's classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
+#     the window circuit's classes beside network attestation's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
 #     --pins` the docket, and PIN's NAME=ROOT if set), its registered and free input bits at those
@@ -75,7 +75,7 @@
 #     or without them; PP_SETS names their input sets.
 #  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own served run, below), PoUS, the bandwidth audit and the network
 #     certifier: `served_verdicts.py pieces` runs each one's piece
-#     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the certifier's alone, the longest,
+#     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the network attester's alone, the longest,
 #     from the moment the window is picked, beside step 3, its lines said after the others'; split in two, the answer step
 #     6's period check wrote, V3c having run before this step), each within <COMPONENT>_TIMEOUT
 #     (else PIECE_TIMEOUT, default 60m), else names it MISSING with the command it lacks and its owner. No verdict is made
@@ -100,7 +100,7 @@
 #     wrote to the composite's public output, which the record reads (--composite) where the composite ran before it,
 #     wherever it was composed (the record's composed_on names the host), and names the window's
 #     docket R that the record's SPOT audit sampled against: one of another window, or bound to
-#     no record, is refused, exit 1; any other server's answer is carried as elsewhere. The certifier's chain files
+#     no record, is refused, exit 1; any other server's answer is carried as elsewhere. Network attestation's chain files
 #     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/certifier. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
 #     verdicts on the run's cases (`served_composite.sh`'s docstring): a composite that didn't run (a tree without
 #     composite.py) or whose Lean didn't answer fails the run. Under COMPOSE_OFF_NODE=0, the default, the composite is
@@ -112,17 +112,18 @@
 #     nonzero: 1 where it is `reject`, a composite is refused or a step around it failed, the step's own code where one
 #     stopped the run before it.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote SPOT and PoUW
-#     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
+#     alone, its other pieces dropped (not run, no default command, the wipe's and the network attester's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
 #     Beside them, the inference-only verdict (`inference_only.py`), at IO_CLASS (default the first class of CLASSES but
 #     `record`): its policy, (c, k, n) and every input to them, is written before the lease from the run's settings alone
 #     (the class, REPO at REV, LEASE_MIN; under PEARLPLUS_TIE in serve(), under the lease before serve-openai starts, from
 #     PEARLPLUS-CIRCUIT's statement of φ on the card, serve-phi.json, its circuit cut at Pearl+'s linears, as a BF16
 #     checkpoint's needs), $OUT/inference-only-policy.json and its INFERENCE-ONLY POLICY line; once the
-#     build is done, step 3's window circuit record at the class is judged by `InferenceOnlyCheck.Count`'s rule beside SPOT,
-#     with `inference-only-check --count` where the build built it, into $OUT/record/inference-only.json (the judgment against n and
-#     no count, n judged on the exact count) and its INFERENCE-ONLY line, in full with the exact counts in the serve dir's
-#     private/inference-only.json. It gates nothing.
+#     build is done, step 3's window circuit record at the class is judged beside SPOT by the Lean verifier,
+#     `inference-only-check --count`, where the build built it (and refused as undecided where it didn't), into
+#     $OUT/record/inference-only.json (the judgment against n and no count, n judged on the exact count, the record's
+#     count beside it) and its INFERENCE-ONLY line, in full with the exact counts in the serve dir's
+#     private/inference-only.json. The record carries it as its inference-only row, which the combined verdict doesn't read.
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
@@ -164,13 +165,13 @@
 #     window at V3C_LAW's sampling design, the one its audit samples by (R1 holds the sample to it). V3C_CLASS set empty leaves
 #     V3c out of the run, for a `served_verdicts.sh v3c` started once the window's advice is written.
 #     With the network attester's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (CERTIFIER_CMD then
-#     unset, and V3C_CLASS the certifier's scan class, which CLASSES holds), V3c runs before step 4, since the certifier's
+#     unset, and V3C_CLASS network attestation's scan class, which CLASSES holds), V3c runs before step 4, since the network attester's
 #     answer reads its period.json: the chain after the window commit, beside V3c's audit and period.json, within
 #     CERTIFIER_TIMEOUT (default 4h), and the period check once both are done and V3c wrote period.json, within
 #     CERTIFIER_PERIOD_TIMEOUT (default 60m), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier
 #     and V3C V3c's $D/v3c-w<K>-<class>. V3c then takes the window commit, the longer of the chain and V3c's audit,
 #     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
-#     certifier's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`, which writes no
+#     network attester's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`, which writes no
 #     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
 # Composed off the served node: with COMPOSE_OFF_NODE=1 (0, the default, composes both on the served node) the run's
 # last step (`handoff`, after V3c in every run, so the composite reads V3c's audit's cases where it ran, the class window
@@ -346,7 +347,7 @@
 # SiluMul_v2 under work-rate:2/164 at step 1 (llama32_1b_tg_l0_step1.json, PP_SETS rope-head/d64/bf16). The preflight refuses
 # another PRECISION or row (its id names __bf16__), a V3C_CLASS CLASSES doesn't count, vLLM's prefix cache (SERVE_ARGS'
 # --prefix-caching: a hit leaves rows of a prompt uncomputed where the cut circuit reads Pearl+'s tables), a
-# certifier front (its group closes into a window of its own), and a serve dir whose filesystem has fewer than
+# network attester front (its group closes into a window of its own), and a serve dir whose filesystem has fewer than
 # PEARLPLUS_INODES inodes free (default 772388, two commits of the tied window at the class of record, three files a
 # member; 0 checks none), naming the shortfall, the tied windows the serve root's other serve dirs keep that hold it
 # (the largest first, with their entries) and the command that removes one (`research retention rm`). Step
@@ -976,12 +977,14 @@ compiler_args() {  # the prove path's registered compiler, as verity-vllm advice
     | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
 }
 advice_of() {  # window $1's advice under the compiler $2 in $D/advice/w$1, unless it is there already (the tie wrote it):
-  # verity-vllm advice's exit, 3 while the window waits on a Commit record the running server hasn't written
+  # verity-vllm advice's exit, 3 while the window waits on a Commit record the running server hasn't written. Under DAY
+  # the call registers the compiler in the day's log, which a log with site entries checks under DAY_PARAMS' auditor
   [ -f "$D/advice/w$1/registration.json" ] && return 0
-  local wa=() rc
+  local wa=() dp=() rc
   [ -f "$WREG" ] && wa=(--weights-of-record "$WREG")
+  [ -n "${DAY:-}" ] && [ -n "${DAY_PARAMS:-}" ] && dp=(--day-params "$DAY_PARAMS")
   # shellcheck disable=SC2086
-  (cd "$TREE/adapters/vllm" && vv advice "$D" --window "$1" --cap "$CAP" $2 "${wa[@]}" --out "$D/advice/.w$1") \
+  (cd "$TREE/adapters/vllm" && vv advice "$D" --window "$1" --cap "$CAP" $2 "${wa[@]}" "${dp[@]}" --out "$D/advice/.w$1") \
     >> "$D/advice.log" 2>&1
   rc=$?
   [ -d "$D/advice/.w$1/w$1" ] && mv "$D/advice/.w$1/w$1" "$D/advice/w$1"

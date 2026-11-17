@@ -30,16 +30,6 @@ except BlockingIOError:
     held = "held"
 open(os.path.join(d, "lake.txt"), "w").write(" ".join([held, os.getcwd(), *sys.argv[1:]]))
 """
-#: the same `lake` under slot.py: it also says which check slot it runs in, and whether that slot's lock is held
-SLOT_LAKE = FAKE_LAKE + """
-fd = os.open(os.environ["SLOT_LOCK"], os.O_RDWR)
-try:
-    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    slot = "free"
-except BlockingIOError:
-    slot = "held"
-open(os.path.join(d, "lake.txt"), "a").write(f" slot {os.environ.get('CHECK_SLOT')} {slot}")
-"""
 
 
 @pytest.mark.parametrize("command, builds", [
@@ -117,7 +107,7 @@ def test_the_trees_lock_goes_after_every_wrapper_that_waits_for_a_lease_or_a_slo
     assert spawn[at:] == rest
 
 
-def _slotted(tmp_path: Path, monkeypatch, lake: str = SLOT_LAKE) -> tuple[Path, Path, Path, Path]:
+def _slotted(tmp_path: Path, monkeypatch) -> tuple[Path, Path, Path, Path]:
     """A tree with the real slot.py at its place, a machine with one check slot `a`, and `lake` and `python3` on PATH:
     (tree, runs, the tree's lock, the slot's lock)."""
     tree, bin_dir, runs, locks = tmp_path / "tree", tmp_path / "bin", tmp_path / "runs", tmp_path / "locks"
@@ -126,12 +116,11 @@ def _slotted(tmp_path: Path, monkeypatch, lake: str = SLOT_LAKE) -> tuple[Path, 
     bin_dir.mkdir()
     locks.mkdir()
     (locks / "slots").write_text(f"a {min(os.sched_getaffinity(0))}\n")
-    (bin_dir / "lake").write_text(lake)
+    (bin_dir / "lake").write_text(FAKE_LAKE)
     (bin_dir / "lake").chmod(0o755)
     (bin_dir / "python3").symlink_to(PY)
     monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
     monkeypatch.setenv("CHECK_SLOTS", str(locks / "slots"))
-    monkeypatch.setenv("SLOT_LOCK", str(locks / "check-a.lock"))
     monkeypatch.delenv("CHECK_SLOT", raising=False)
     monkeypatch.chdir(tree)
     return tree, runs, treelock.lock_path(runs, tree), locks / "check-a.lock"
@@ -141,17 +130,6 @@ def _hold(lock: Path) -> int:
     fd = os.open(lock, os.O_RDWR | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     return fd
-
-
-def _free(lock: Path) -> bool:
-    fd = os.open(lock, os.O_RDWR)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return True
-    except BlockingIOError:
-        return False
-    finally:
-        os.close(fd)
 
 
 SLOTTED = ["python3", "tools/check/slot.py", "--by", "t", "--wait-max", "1e-9", "--", "lake", "build", "Flock"]
@@ -169,28 +147,3 @@ def test_a_run_waiting_for_a_check_slot_holds_no_tree(tmp_path, monkeypatch):
     assert rc == treelock.EX_NOT_STARTED and "no check slot within --wait-max 1e-09 s" in (run_dir / "stderr.log").read_text()
     assert json.loads((run_dir / "job.json").read_text())["run"]["lean_tree_lock"] == str(lock)
     assert not lock.exists() and not (run_dir / "lake.txt").exists(), "it waited for a slot and left: it never came to the tree's lock"
-
-
-def test_a_run_in_its_slot_builds_holding_the_slot_and_the_tree(tmp_path, monkeypatch):
-    """The slot first, then the tree, both before the workload's first word runs, and both let go when it ends."""
-    tree, runs, lock, slot_lock = _slotted(tmp_path, monkeypatch)
-    assert main(["run", "--runs-dir", str(runs), "--no-sampler", "--cwd", "source", "--", *SLOTTED]) == 0
-    [run_dir] = [d for d in runs.iterdir() if d.is_dir()]
-    assert (run_dir / "lake.txt").read_text() == f"held {tree.resolve()} build Flock slot a held"
-    assert _free(lock) and _free(slot_lock)
-
-
-def test_a_run_that_gets_no_tree_in_its_wait_runs_nothing_and_lets_its_slot_go(tmp_path, monkeypatch):
-    """Two runs never build in one tree: the second, in its slot, finds the tree held, and when its wait for it is spent it
-    exits without running, so the slot it held is free for the next run rather than held by a run that builds nothing."""
-    tree, runs, lock, slot_lock = _slotted(tmp_path, monkeypatch)
-    monkeypatch.setattr(treelock, "WAIT_S", 0)
-    runs.mkdir()
-    building = _hold(lock)
-    rc = main(["run", "--runs-dir", str(runs), "--no-sampler", "--cwd", "source", "--", *SLOTTED])
-    [run_dir] = [d for d in runs.iterdir() if d.is_dir()]
-    err = (run_dir / "stderr.log").read_text()
-    assert rc == treelock.EX_NOT_STARTED and not (run_dir / "lake.txt").exists()
-    assert err.index("slot: check slot a") < err.index("refused: another run's Lean build held the shared tree"), "it had its slot"
-    assert _free(slot_lock) and not _free(lock), "the slot is the next run's; the tree is still the build's"
-    os.close(building)

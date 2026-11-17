@@ -326,7 +326,7 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
 
 def _answer(out: Path) -> dict:
     """SPOT's answer on the audit under ``out`` (`served_integrity.answer`, as the served run's record and the
-    certifier's period read it), its docket the one the audit registered."""
+    attestation period read it), its docket the one the audit registered."""
     from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # beside a5, on the path `records_audit` put there
 
     return SI.answer(out, json.loads((out / "window" / "registration.json").read_text()))

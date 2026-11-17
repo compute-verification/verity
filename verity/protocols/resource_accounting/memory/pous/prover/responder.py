@@ -2,7 +2,7 @@
 
 `server_root` is the root the server reports for its `C` at setup, which the verifier's `setup.check_server_root`
 compares with its own. `HonestResponder` answers an `audit.simulate` round as an oracle program with no queries, and gives a root-only memory
-challenger the audit path; `responder` answers a `protocol.TimedAudit` run through its scheme's `respond`.
+attester the audit path; `responder` answers a `protocol.TimedAudit` run through its scheme's `respond`.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier.verifier import M
 
 @dataclass(frozen=True, slots=True)
 class HonestResponder:
-    """Answers from `C`, with no queries; `path` gives a root-only memory challenger the audit path."""
+    """Answers from `C`, with no queries; `path` gives a root-only memory attester the audit path."""
 
     encoding: Encoding
     tree: MerkleTree | None = None

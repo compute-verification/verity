@@ -785,7 +785,7 @@ def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dic
     """The window's audit as one compute audit of the network attester's period (module docstring's ``period``):
     ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ``tied`` is the window
     value the period ties to its scan's state tree (``stateTied``): the network attester's scan-state value, which the
-    caller passes, since SPOT reads the certifier's output as a certified input and never imports it. ValueError where the
+    caller passes, since SPOT reads the attester's output as a certified input and never imports it. ValueError where the
     circuit isn't the one the docket binds, the window commits no ``tied`` value its circuit reads, the audit wrote no
     Program or another than the docket names, or its answer commits to another docket."""
     from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI
@@ -1268,7 +1268,7 @@ def main(argv: list[str] | None = None) -> int:
                    "window_weights.weights_registration), with --pin's (repeatable)")
     p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
                    "to the pins (none: no root is the window's, and every registered read is free)")
-    p = sub.add_parser("period", help="a window's audit as one compute audit of the network certifier's period (`period`)")
+    p = sub.add_parser("period", help="a window's audit as one compute audit of the network attester's period (`period`)")
     p.add_argument("--window", required=True, type=Path, help="the window's directory: circuit.json, registration.json")
     p.add_argument("--audit", required=True, type=Path, help="the audit's --out: summary.json, window/program.json, "
                    "window/audit.json")
@@ -1276,7 +1276,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="as count's")
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="as count's")
     p.add_argument("--tied", required=True, metavar="VALUE", help="the value the period ties to its scan's state tree: the "
-                   "network certifier's scan-state value (its verifier's `blocks.SCAN_STATE`)")
+                   "network attester's scan-state value (its verifier's `blocks.SCAN_STATE`)")
     a = ap.parse_args(argv)
     if a.cmd == "period":
         try:

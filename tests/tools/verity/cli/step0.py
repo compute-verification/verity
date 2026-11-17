@@ -96,8 +96,8 @@ def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
 
 
 _VERIFIER = (Role("verifier", "auditor"),)
-#: the certifier's parties less the workers: the step-0 toy is the workload's party and runs no component's developer
-#: side, the certifier's included
+#: the network attester's parties less the workers: the step-0 toy is the workload's party and runs no component's developer
+#: side, the network attester's included
 _CERTIFIER = tuple(r for r in NC.MANIFEST.parties if r.name != NC.WORKERS)
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"],
@@ -153,7 +153,7 @@ CHECKS: dict[str, Check] = {"certifier": unserved("network-period check"), "pouw
                             "pearl-plus": unserved("Pearl+ run verdict"),
                             "inference-only": unserved("inference-only policy check"),
                             "pous": unserved("PoUS run check"), "bandwidth": unserved("PoUB session"),
-                            "wipe": unserved("memory challenger's wipe check")}
+                            "wipe": unserved("memory attester's wipe check")}
 
 
 class Machine:

@@ -6,7 +6,7 @@ Every channel has a SHA-512 chain key. An onsite device's is its imprint key, a 
 installed over the cable once per auditor device, then ratcheted. A remote party with no cable holds a chain key
 installed at provisioning, and each of its sessions also XORs in an ML-KEM-1024 shared secret (``ind-cca/ml-kem-1024``,
 the one-hash rule's transport exception), so its security never drops below the chain key's alone. No session runs on a
-KEM secret alone, and the certifiers' pair links never use this module.
+KEM secret alone, and the network attesters' pair links never use this module.
 
 H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104), [x] is u16be len(x) ‖ x and ⟨x⟩ is u32be len(x) ‖ x.
 

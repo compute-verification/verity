@@ -290,7 +290,7 @@ def test_remote_composes_spot_and_pouw_alone_its_other_subprotocols_dropped() ->
 
 
 def test_a_subprotocol_carries_its_answers_placement_and_no_other_profile() -> None:
-    """The certifier's answer names which host ran each party (``profile.placement``): its subprotocol carries that and the
+    """The network attester's answer names which host ran each party (``profile.placement``): its subprotocol carries that and the
     record still fits its schema and checks clean; a subprotocol whose profile names no placement carries no profile."""
     report, wipe = _accepting_report()
     placement = {"kind": "not-placed", "parties": {"network_certifier": "gate", "prover": "n0", "verifier": "n0"}}

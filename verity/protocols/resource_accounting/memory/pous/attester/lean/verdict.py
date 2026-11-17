@@ -1,11 +1,11 @@
-"""`memory_challenger.verdict` computed by its Lean port, behind the Python's signature: `verdict(signed, commitment, openings,
+"""`memory_attester.verdict` computed by its Lean port, behind the Python's signature: `verdict(signed, commitment, openings,
 expected, trusted=..., schemes=...)` sends the record to `memory-challenger-verdict` (`MemoryChallenger.Judge`, built here
-with `lake` on first use) and returns its `Verdict`, the reasons the Python's word for word.  `memory_challenger.verdict`
-stays the reference: `tests/test_verdict.py` holds this to it, and `benchmarks/pous/memory_challenger/live.py`'s `judge`
+with `lake` on first use) and returns its `Verdict`, the reasons the Python's word for word.  `memory_attester.verdict`
+stays the reference: `tests/test_verdict.py` holds this to it, and `benchmarks/pous/memory_attester/live.py`'s `judge`
 runs both on every session, records both, and rejects a session they disagree on.
 
 The record goes as `to_json` writes its parts.  `expected` is read only at the labels the rounds name, so C's whole table
-never crosses; `schemes` goes by id, each one the port verifies (`MemoryChallenger.KNOWN_SCHEMES`: `memory_challenger.LMS`
+never crosses; `schemes` goes by id, each one the port verifies (`MemoryChallenger.KNOWN_SCHEMES`: `memory_attester.LMS`
 and the test signers' ids).  Where the Lean refuses the record (a scheme id it doesn't verify, a field `to_json` can't
 have written, such as a negative integer), this raises `ValueError`: it fails closed, never to the Python."""
 
@@ -19,7 +19,7 @@ from typing import Any
 
 import verity_difftest as D
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 PACKAGE = Path(__file__).resolve().parent
 EXE = "memory-challenger-verdict"
@@ -47,7 +47,7 @@ def server() -> D.Server:
 def verdict(signed: mc.SignedSession, commitment: mc.SessionCommitment, openings: Sequence[mc.CoinOpening],
             expected: Callable[[int], bytes], *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Any] = mc.SCHEMES) -> mc.Verdict:
-    """`memory_challenger.verdict`, by the Lean."""
+    """`memory_attester.verdict`, by the Lean."""
     kind, body = server().call("verdict", record(signed, commitment, openings, expected, trusted=trusted, schemes=schemes))
     if kind != "output":
         raise ValueError(f"the Lean verdict refuses the record: {body}")
