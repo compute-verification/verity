@@ -69,7 +69,7 @@ def _needles(blobs: dict[str, bytes]) -> dict[bytes, str]:
 def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     scan = SimpleNamespace(PIECE=16, needles=_needles, find=lambda data, t: {n: 1 for nd, n in t.items() if nd in data})
     blobs, held = n2.blobs_of(runs["honest"])
-    assert {k.rsplit(" ", 1)[0] for k in blobs} >= {"head egress", "head salt ingress", "certifier salt egress",
+    assert {k.rsplit(" ", 1)[0] for k in blobs} >= {"head egress", "head salt ingress", "attester salt egress",
                                                      "record salt ingress", "sibling 1 egress"}
     assert any(len(b) % 16 for b in blobs.values())  # a head's tail (403 bytes), which only the last pieces cover
     every = {b[o:o + 16].ljust(16, b"\0") for b in blobs.values()
@@ -115,7 +115,7 @@ def test_the_summary_holds_its_released_keys_and_the_rest_goes_to_the_witness(tm
     assert "failed parts" in (tmp_path / "witness" / "n2" / "n2.log").read_text()
     assert _released(doc, tmp_path / "public") == (0, "released keys: 1 files checked by key, 0 with a key not declared "
                                                       "public; 0 not yet checked; 0 with no keys\n")
-    assert {m["certifier_refused"] for m in doc["members"].values()} == {False} and "issuer_refused" not in str(doc)
+    assert {m["attester_refused"] for m in doc["members"].values()} == {False} and "issuer_refused" not in str(doc)
     assert {"run", "gpu", "instances_s"} <= set(witness) and not {"run", "gpu", "instances_s"} & set(doc)
     assert {k: v["issuer_refused"] for k, v in witness["members"].items()} == {k: [] for k in doc["members"]}
     assert all(set(r) == {"failed"} for m in witness["members"].values() for r in m["reference"].values())
@@ -146,7 +146,7 @@ def test_a_refused_execution_phase_leaves_the_public_summary_the_same_wherever_i
         doc, witness = _summary(run, tmp_path / str(w))
         printed.append(_public_lines(capfd.readouterr().out))
         assert "execution phases" in (tmp_path / str(w) / "witness" / "n2" / "n2.log").read_text()
-        assert doc["members"] == {k: {"certifier_refused": True} for k in doc["members"]} and "windows" not in doc["link"]
+        assert doc["members"] == {k: {"attester_refused": True} for k in doc["members"]} and "windows" not in doc["link"]
         assert witness["members"]["honest"]["issuer_refused"] == [w] and witness["link"]["windows"]
         assert _released(doc, tmp_path / str(w) / "record")[0] == 0
         seen.append(doc)

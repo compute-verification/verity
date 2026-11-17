@@ -218,7 +218,7 @@ def aborts(d: Path, T: int = 600) -> dict[str, Any]:
     out: dict[str, Any] = {"freed": len(reqs), "finishes": dict(sorted(finishes.items())),
                            "aborted": sum(n for k, n in finishes.items() if k not in ("stop", "length")),
                            "windows_released": None, "by_window": None,
-                           "released_never_freed": None, "certifier_failed": None}
+                           "released_never_freed": None, "attester_failed": None}
     if reqs and all(type(r.get("bucket")) is int for r in reqs):
         base = min(r["bucket"] for r in reqs)
         by: dict[int, int] = {}
@@ -237,7 +237,7 @@ def aborts(d: Path, T: int = 600) -> dict[str, Any]:
             if c.get("failed"):
                 by = failed["unreleased" if c.get("release") is None else "released"]
                 by[c["failed"]] = by.get(c["failed"], 0) + 1
-        out["certifier_failed"] = failed
+        out["attester_failed"] = failed
     return out
 
 
@@ -433,9 +433,9 @@ def _aborts(a: dict[str, Any]) -> str:
     out = f"the engine freed {a['freed']:,} requests ({ends}), {a['aborted']:,} of them aborted"
     if a["released_never_freed"] is not None:
         out += f"; {a['released_never_freed']:,} released requests it never freed"
-    if a["certifier_failed"] is not None:
+    if a["attester_failed"] is not None:
         def by(kind: str) -> str:
-            return ", ".join(f"{n:,} `{k}`" for k, n in sorted(a["certifier_failed"][kind].items())) or "none"
+            return ", ".join(f"{n:,} `{k}`" for k, n in sorted(a["attester_failed"][kind].items())) or "none"
         out += (f"; the network certifier failed connections after their request's release: {by('released')}; and before "
                 f"it: {by('unreleased')}")
     return out

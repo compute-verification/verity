@@ -20,7 +20,7 @@ the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness
   attester link (`service.NetworkAttesterProfile`: both heads at the network attester's grid and parameters digest, no sync
   declared or charged), a network attester rehearsal's run refused by name. Which execution phases its signer refused follows
   what the node sent, so the public summary of a run whose signer refused any holds each member's
-  ``certifier_refused`` and ``ok`` alone, nothing per window, and the members whole go to ``--witness``.
+  ``attester_refused`` and ``ok`` alone, nothing per window, and the members whole go to ``--witness``.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
   with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
   still the network attester's, its head failing its signed digest alone. The prover's references
@@ -50,7 +50,7 @@ the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness
   outcome record. Its own: the circuit file's SHA-512 (its lowering, which prover and verifier share here), the Program's
   descriptor and the partition object. Never the opening (records, heads, leaf salts, siblings, the attester's salt)
   nor the ``wit`` row's salt. Every file there is scanned for every piece of every head, leaf salt, sibling and
-  certifier salt of the member (`a8.received`) but the pieces the public circuit or a window's ``pub`` row holds
+  attester salt of the member (`a8.received`) but the pieces the public circuit or a window's ``pub`` row holds
   (`public_pieces`), which the verifier has whatever the witness, and a member fails on a ``leaked`` piece under the
   rule every zero-knowledge driver's scan follows (`leak_scan.scan`); the prover's instance files, which hold the heads,
   are the control.
@@ -278,7 +278,7 @@ def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
             blobs[f"head {end} {x.window}"] = inst.head
             held.add(f"head {end} {x.window}")
             blobs[f"head salt {end} {x.window}"] = inst.salt
-            blobs[f"certifier salt {end} {x.window}"] = inst.salt_c
+            blobs[f"attester salt {end} {x.window}"] = inst.salt_c
             blobs[f"record salt {end} {x.window}"] = x.opening.salts[d]
             for k, s in enumerate(inst.path):
                 blobs[f"sibling {k} {end} {x.window}"] = s
@@ -550,7 +550,7 @@ def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    run = Path(a.network_certifier_run)
+    run = Path(a.network_attester_run)
     summary: dict = {"run": str(run), "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
     # what the public summary leaves to --witness: the run's path, the prover's device, timings and memory, values in
     # the clear, the prover's own reference parts and scan files, and which execution phases the signer refused
@@ -580,10 +580,10 @@ def prove(a) -> int:
         public, private = json.loads(json.dumps(full)), {}
         for path in kept:
             take(public, path.split("/"), private)
-        if any(m.get("certifier_refused") for m in public.get("members", {}).values()):
+        if any(m.get("attester_refused") for m in public.get("members", {}).values()):
             private |= {"members": full["members"], "link": {"windows": full["link"]["windows"]},
                         **({"sampled": public.pop("sampled")} if "sampled" in public else {})}
-            public["members"] = {k: {"certifier_refused": True, **({"ok": m["ok"]} if "ok" in m else {})}
+            public["members"] = {k: {"attester_refused": True, **({"ok": m["ok"]} if "ok" in m else {})}
                                  for k, m in public["members"].items()}
             public["link"].pop("windows", None)
         (out / "summary.json").write_text(json.dumps(public, indent=1, sort_keys=True))
@@ -622,7 +622,7 @@ def prove(a) -> int:
             raise SystemExit(f"{name}: its link's registered unit is not the honest run's")
         summary.setdefault("members", {})[name] = {
             "reference": [{"window": x.window, "word": x.word, "expect": x.expect, "failed": x.failed} for x in rd.windows],
-            "certifier_refused": bool(rd.issuer_refused), "issuer_refused": rd.issuer_refused}
+            "attester_refused": bool(rd.issuer_refused), "issuer_refused": rd.issuer_refused}
         plog(a, f"{name}: {len(rd.windows)} execution phases, words {[x.word for x in rd.windows]}, expected "
              f"verdicts {[x.expect for x in rd.windows]}")
         wlog(a, f"{name}: failed parts {[x.failed for x in rd.windows if any(x.failed.values())]}")
@@ -697,9 +697,9 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("prove", help="each execution phase's proof block proved --zk and decided by N2's verifier of "
                                      "record")
-    p.add_argument("--warden-run", dest="network_certifier_run", type=Path, required=True,
+    p.add_argument("--warden-run", dest="network_attester_run", type=Path, required=True,
                    help="an active network attester's run (network_attester_serve.py's, or the gate's warden-rehearse's): "
-                        "its own certified records, no certifier rehearsal (network_attester_chain)")
+                        "its own certified records, no attester rehearsal (network_attester_chain)")
     p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")
     p.add_argument("--bin")
     p.add_argument("--lean")

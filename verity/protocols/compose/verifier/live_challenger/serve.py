@@ -21,7 +21,7 @@ log signed when the session ends.
   `--epoch`, `--families` as `[[label, count], ...]`), signs and writes `record.json`, `key.json` and the head of
   `releases.jsonl` to `--out` (`remote.open_session`), makes `hellos.jsonl` (empty), and only then listens on
   127.0.0.1:PORT and prints `listening 127.0.0.1:PORT` (PORT 0: one the system picks).  A window's session (`--root`)
-  opens no tunnel: PORT is one of its peer's certifier coin link, which carries it to the peer (`auditor.py`, the coins'
+  opens no tunnel: PORT is one of its peer's attester coin link, which carries it to the peer (`auditor.py`, the coins'
   path), and `--peer` with `--root` is refused (`CoinsConfidential`).  Only a development session (`run.sh`) takes
   `--peer`: it then opens `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as
   `benchmarks/remote_session/run.sh` does for its verifier), whose own 127.0.0.1:PORT the client connects to.  It
@@ -188,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.root is not None and args.peer is not None:
         print("the challenger refused to start: a window's session (--root) reaches its peer through the peer's "
-              "certifier coin link, never its own ssh -R (--peer; CoinsConfidential)", file=sys.stderr)
+              "attester coin link, never its own ssh -R (--peer; CoinsConfidential)", file=sys.stderr)
         return 2
     try:
         secret = read_secret(args.secret_file)

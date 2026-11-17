@@ -217,7 +217,7 @@ class Terms(NamedTuple):
     count: Any = 0
 
     @property
-    def certifier(self) -> Any:
+    def attester(self) -> Any:
         """The network attester's own term."""
         return self.schedules + self.cells + self.jitter + self.count
 
@@ -367,7 +367,7 @@ class LinkLoad:
         """K over ``period`` (a `PERIODS` name, or its seconds) in ``reading``: the per-period form, or with ``delta``
         the pooled form."""
         t = self.terms(period, reading)
-        k = float(t.certifier + t.entries)
+        k = float(t.attester + t.entries)
         if delta is None:
             return k
         f = fmax(delta)
@@ -510,7 +510,7 @@ JITTERS = (1, 2)
 #: It and `JITTER_BOUND`, which K by links is charged at, are one bound, defined there
 OF_RECORD = JITTER_BOUND
 #: the label every figure that rests on a set-time card is printed under: a figure at D_j = 1, what a network
-#: certifier whose network card releases at a set time would be charged, and at either D_j a figure of a row whose
+#: attester whose network card releases at a set time would be charged, and at either D_j a figure of a row whose
 #: release times are taken once (`CHANGES`' timing). The card is simulated (`SET_TIME_CLAUSE`)
 SET_TIME = "with a simulated set-time card"
 #: the mark of the set-time card and of the figure printed under its label, one of `MARKS`
@@ -1009,7 +1009,7 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
                "given (--scan-delta), and no scan has run at it")
 
     def term(r: Row, dj: int) -> dict:
-        t = Fraction(r.terms[dj].certifier)
+        t = Fraction(r.terms[dj].attester)
         return {**_size(t), "of_target": float(t / target), "of_weights": float(t / WEIGHTS.bits),
                 "bits_a_phase": float(t / r.phases), "bits_a_request": float(t / r.requests) if r.requests else None}
 

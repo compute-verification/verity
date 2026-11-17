@@ -6,7 +6,7 @@ this one by path. This module builds advice v0's residual with them: `residual` 
 `rebuild` (the compile slice's proof block), the same walk, so they can't drift apart. `FIELDS` is the table of every I1 field: its
 verdict, derivation, checker and cost.
 
-`bits_table` measures v0 (I1's own `bits_by_window`) and the residual per certifier window, the residual at its own least
+`bits_table` measures v0 (I1's own `bits_by_window`) and the residual per attester window, the residual at its own least
 widths and charged by I1's rule (`charge`), after checking that `rebuild(residual(a)) == a`.
 
     python derived.py table --trace TRACE.json[.gz] ... --out TABLE.json [--T 600 --bucket-ms 100]

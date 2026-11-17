@@ -193,8 +193,8 @@ line rate stated"), and the storage path ("storage path"). `onsite` takes their 
 not mediated (`Site.mediated`). An interface with a rate says none, so `onsite` refuses the node by `uncertified`
 until a network attester splits it. Where a network attester stands in front of such a node without splitting its
 interface (a process on another machine that reaches the server through a forward),
-`node_entry(..., certifier=(id, key, scheme))` registers it too: the network attester under the site (a location of
-kind `certifier`) and a certified
+`node_entry(..., attester=(id, key, scheme))` registers it too: the network attester under the site (a location of
+kind `attester`) and a certified
 way out, host to network attester and network attester to outside, each at the interfaces' rates summed. The ways' own
 links stay beside them, so `onsite` still refuses the node, and no registration says that every bit leaves through a
 network attester that does not hold the wire. The storage path's rate is not in a network attester's links and no
@@ -212,7 +212,7 @@ figure the host states and `Auditor.drift` holds it to. A number marked `premise
 that reads a drift the auditor registered names no premise. A `measurement` or a `placeholder` bounds no clock and is
 refused. `auditor_host(host, key, scheme, load_card(sku))` is the host's location (kind `auditor-host`, at the site):
 it states the card's SKU as its time base and the figure as its drift, or no drift for a premise.
-`node_entry(..., certifier=..., certifier_host=that location)` registers the network attester in the host, so the
+`node_entry(..., attester=..., attester_host=that location)` registers the network attester in the host, so the
 clock the network attester reads is the host's (`Site.clock`, `Site.drift`); a network attester under the site reads
 none and times nothing.
 `Auditor.of_files(..., timebases={host: card})` holds the host's time base and drift, and `ClockPremise.premised()` is

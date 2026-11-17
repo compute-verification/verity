@@ -32,7 +32,7 @@ HOST = "host0"
 """The id a test registers a node's host under: a node file names none."""
 CHALLENGER = "challenger0"
 SCHEME = SCHEMES[0]
-CERTIFIER = ("certifier0", "dummy-certifier0-key", SCHEME)
+ATTESTER = ("attester0", "dummy-attester0-key", SCHEME)
 """A network attester's id, key and the key's scheme, as whoever registers a node gives them: a node file names
 none of them."""
 READ = [kind for kind in S.node_kinds()
@@ -68,11 +68,11 @@ def auditor(kind: str, **keys: str) -> Auditor:
                             memory=memory, hosts=[(HOST, host)])
 
 
-def log_of(kind: str, composite: str, certifier: tuple[str, str, str] | None = None) -> Registration:
+def log_of(kind: str, composite: str, attester: tuple[str, str, str] | None = None) -> Registration:
     """The composite's log of one entry, the node's, with this network attester standing in front of the node."""
     node = S.load_node(kind)
     log = Registration(composite)
-    return log.append(log.node_entry(node, S.load_card(node["device"]["sku"]), HOST, certifier=certifier,
+    return log.append(log.node_entry(node, S.load_card(node["device"]["sku"]), HOST, attester=attester,
                                      host_card=S.load_card(node["host"]["sku"]), ways=S.ways_out(node, HOST),
                                      leaves=S.leaves(node, HOST)))
 
@@ -180,7 +180,7 @@ def test_remote_accepts_a_nodes_log(kind: str) -> None:
 
 
 @pytest.mark.parametrize("kind", sorted(set(READ) - set(WIRED)))
-def test_a_node_whose_interface_reads_no_rate_says_why_no_certifier_splits_it(kind: str) -> None:
+def test_a_node_whose_interface_reads_no_rate_says_why_no_attester_splits_it(kind: str) -> None:
     """The H200 node's one interface reads no line rate, so its link states no capacity and says so, and the storage
     path's link says it is the storage path. Each says why no certifier splits it, so `onsite` refuses neither: it
     refuses the node by `challenger-reach` alone, and accepts it once a challenger reaches the host, with a site that
@@ -194,20 +194,20 @@ def test_a_node_whose_interface_reads_no_rate_says_why_no_certifier_splits_it(ki
     assert refusal(Registration("onsite"), entry, keys) == "challenger-reach"
     assert not check(Registration("onsite", (reached(entry),)), keys).mediated
     for composite in ("remote", "onsite"):
-        with pytest.raises(Malformed, match=rf"network attester '{CERTIFIER[0]}': the interfaces \['{HOST}/eth0'\].*"
-                                            "takes no certifier"):
-            log_of(kind, composite, CERTIFIER)
+        with pytest.raises(Malformed, match=rf"network attester '{ATTESTER[0]}': the interfaces \['{HOST}/eth0'\].*"
+                                            "takes no attester"):
+            log_of(kind, composite, ATTESTER)
 
 
-@pytest.mark.parametrize("certifier", [None, CERTIFIER])
+@pytest.mark.parametrize("attester", [None, ATTESTER])
 @pytest.mark.parametrize("kind", WIRED)
-def test_onsite_refuses_a_nodes_own_ways_out(kind: str, certifier: tuple[str, str] | None) -> None:
-    """The node's interface is a boundary link that no certifier splits and that says no reason, so `onsite` refuses
+def test_onsite_refuses_a_nodes_own_ways_out(kind: str, attester: tuple[str, str] | None) -> None:
+    """The node's interface is a boundary link that no attester splits and that says no reason, so `onsite` refuses
     the node by `uncertified`, naming it and not the storage path, which says why, before and once a challenger
     reaches the host, and with a network attester standing in front of the node as without one: the network attester's
     links are registered beside the node's own, which stay."""
-    keys = {CHALLENGER: "dummy-key", **({} if certifier is None else {certifier[0]: certifier[1]})}
-    entry = log_of(kind, "onsite", certifier).entries[0]
+    keys = {CHALLENGER: "dummy-key", **({} if attester is None else {attester[0]: attester[1]})}
+    entry = log_of(kind, "onsite", attester).entries[0]
     bare = [f"{HOST}/{name}" for name in S.load_node(kind)["interface"]]
     for e in (entry, reached(entry)):
         with pytest.raises(Refused) as refused:
@@ -217,40 +217,40 @@ def test_onsite_refuses_a_nodes_own_ways_out(kind: str, certifier: tuple[str, st
 
 
 @pytest.mark.parametrize("kind", WIRED)
-def test_a_certifier_links_to_one_host_and_the_outside(kind: str) -> None:
+def test_a_attester_links_to_one_host_and_the_outside(kind: str) -> None:
     """The stand-in's two links are the Site's shape of a certified way out, at the interfaces' rates summed: the
-    storage path's rate is not in the sum, and no certifier is at an end of its link. A network attester with its link to
+    storage path's rate is not in the sum, and no attester is at an end of its link. A network attester with its link to
     the outside missing, or linked to a second host, is refused by `kind`."""
-    log = log_of(kind, "remote", CERTIFIER)
-    cert, entry = CERTIFIER[0], log.entries[0]
+    log = log_of(kind, "remote", ATTESTER)
+    cert, entry = ATTESTER[0], log.entries[0]
     beta = sum(way.bw for way in S.ways_out(S.load_node(kind), HOST) if way.split)
     assert entry.links[-2:] == (Link(f"{HOST}/{cert}", (HOST, cert), beta, 0),
                                 Link(f"{cert}/{OUTSIDE}", (cert, OUTSIDE), beta, 0))
-    assert check(log, auditor(kind, **{CERTIFIER[0]: CERTIFIER[1]})).far(cert) == [HOST, OUTSIDE]
+    assert check(log, auditor(kind, **{ATTESTER[0]: ATTESTER[1]})).far(cert) == [HOST, OUTSIDE]
     assert [k.id for k in entry.links if cert in k.ends] == [f"{HOST}/{cert}", f"{cert}/{OUTSIDE}"]
     blind = replace(entry, links=entry.links[:-1])
     second = replace(entry, locs=(*entry.locs, Loc("host1", "host", "site")),
                      links=(*entry.links, Link(f"host1/{cert}", ("host1", cert), beta, 0)))
     for e in (blind, second):
-        assert refusal(Registration("remote"), e, auditor(kind, **{CERTIFIER[0]: CERTIFIER[1]})) == "kind"
+        assert refusal(Registration("remote"), e, auditor(kind, **{ATTESTER[0]: ATTESTER[1]})) == "kind"
 
 
 @pytest.mark.parametrize("kind", WIRED)
-def test_only_onsites_uncertified_refuses_a_host_with_a_bare_link_beside_its_certifier(kind: str) -> None:
+def test_only_onsites_uncertified_refuses_a_host_with_a_bare_link_beside_its_attester(kind: str) -> None:
     """No rule of the Site refuses a host that has a bare link out beside a certified one: `remote` accepts the entry
     with both. `onsite` refuses it by `uncertified`. With a network attester named and the interface's bare link taken out,
     takes the eight-card node's entry, storage path and all, since that link says why no certifier splits it: a
     network attester on the interface does not mediate the disks, so the site is not mediated. Without the path's link too,
     it is. Either log is refused at its end by `inventory`: the auditor's figures list the ways the entry left out."""
-    keys = {CHALLENGER: "dummy-key", **{CERTIFIER[0]: CERTIFIER[1]}}
+    keys = {CHALLENGER: "dummy-key", **{ATTESTER[0]: ATTESTER[1]}}
     ports = [f"{HOST}/{name}" for name in S.load_node(kind)["interface"]]
-    site = check(log_of(kind, "remote", CERTIFIER), auditor(kind, **keys))
+    site = check(log_of(kind, "remote", ATTESTER), auditor(kind, **keys))
     assert [(k.id, site.certified(k)) for k in site.boundary(HOST)] == [
-        *((port, False) for port in ports), (f"{HOST}/storage", False), (f"{HOST}/{CERTIFIER[0]}", True)]
-    entry = reached(log_of(kind, "onsite", CERTIFIER).entries[0])
+        *((port, False) for port in ports), (f"{HOST}/storage", False), (f"{HOST}/{ATTESTER[0]}", True)]
+    entry = reached(log_of(kind, "onsite", ATTESTER).entries[0])
     assert refusal(Registration("onsite"), entry, auditor(kind, **keys)) == "uncertified"
     stored = replace(entry, links=tuple(k for k in entry.links if k.id not in ports))
-    certified = replace(entry, links=tuple(k for k in entry.links if OUTSIDE not in k.ends or CERTIFIER[0] in k.ends))
+    certified = replace(entry, links=tuple(k for k in entry.links if OUTSIDE not in k.ends or ATTESTER[0] in k.ends))
     for e, mediated in ((stored, False), (certified, True)):
         assert refusal(Registration("onsite"), e, auditor(kind, **keys)) is None
         assert Site.of_log([e]).mediated is mediated
@@ -260,15 +260,15 @@ def test_only_onsites_uncertified_refuses_a_host_with_a_bare_link_beside_its_cer
 
 
 @pytest.mark.parametrize("kind", WIRED)
-@pytest.mark.parametrize("held", [{}, {CERTIFIER[0]: "dummy-another-key"}, {"certifier1": CERTIFIER[1]}])
-def test_a_certifiers_key_is_the_one_the_auditor_holds_for_its_id(kind: str, held: dict[str, str]) -> None:
+@pytest.mark.parametrize("held", [{}, {ATTESTER[0]: "dummy-another-key"}, {"attester1": ATTESTER[1]}])
+def test_a_attesters_key_is_the_one_the_auditor_holds_for_its_id(kind: str, held: dict[str, str]) -> None:
     """An auditor that holds no key for the network attester's id, another key for it, or the key under another id
     refuses the entry by `owner`; with the caller's key under the caller's id it is accepted."""
-    log = log_of(kind, "remote", CERTIFIER)
+    log = log_of(kind, "remote", ATTESTER)
     with pytest.raises(Refused) as refused:
         check(log, auditor(kind, **held))
-    assert refused.value.name == "owner" and CERTIFIER[0] in refused.value.detail
-    assert check(log, auditor(kind, **{CERTIFIER[0]: CERTIFIER[1]})).registered(CERTIFIER[0])
+    assert refused.value.name == "owner" and ATTESTER[0] in refused.value.detail
+    assert check(log, auditor(kind, **{ATTESTER[0]: ATTESTER[1]})).registered(ATTESTER[0])
 
 
 def test_the_quoted_bytes() -> None:
@@ -283,7 +283,7 @@ def test_the_quoted_rates() -> None:
     """Each node's links out, in bits a second: the eight-card node's one interface at 400 Gbit/s and its storage path
     at the 5,584,738,461,544 bit/s that bound its disks together, and the H200 node's interface at none, since it
     reads no rate, and its storage path at 5,293,292,307,696 bit/s. The storage paths and the interface that reads no
-    rate say why no certifier splits them."""
+    rate say why no attester splits them."""
     assert check(log_of("rtx-pro-6000-server-x8", "remote"), auditor("rtx-pro-6000-server-x8")).links == (
         Link(f"{HOST}/eth0", (HOST, OUTSIDE), 400_000_000_000, 0),
         Link(f"{HOST}/storage", (HOST, OUTSIDE), 5_584_738_461_544, 0, "storage path"))
@@ -757,27 +757,27 @@ def test_an_auditor_holds_its_hosts_time_bases_by_their_cards() -> None:
 
 
 def _clocked(kind: str, card: dict) -> tuple[Registration, Auditor]:
-    """Node `kind`'s remote log with `CERTIFIER` in front of it, in the auditor's device `VM` whose time base's card is
+    """Node `kind`'s remote log with `ATTESTER` in front of it, in the auditor's device `VM` whose time base's card is
     `card`, and the auditor holding the network attester's and the host's keys and the host's time base."""
     node, log = S.load_node(kind), Registration("remote")
-    log = log.append(log.node_entry(node, S.load_card(node["device"]["sku"]), HOST, certifier=CERTIFIER,
-                                    certifier_host=auditor_host(*VM, card),
+    log = log.append(log.node_entry(node, S.load_card(node["device"]["sku"]), HOST, attester=ATTESTER,
+                                    attester_host=auditor_host(*VM, card),
                                     host_card=S.load_card(node["host"]["sku"]), ways=S.ways_out(node, HOST),
                                     leaves=S.leaves(node, HOST)))
     clocked = Auditor.of_files((), timebases={VM[0]: card})
-    return log, replace(auditor(kind, **{CERTIFIER[0]: CERTIFIER[1], VM[0]: VM[1]}), drift=clocked.drift,
+    return log, replace(auditor(kind, **{ATTESTER[0]: ATTESTER[1], VM[0]: VM[1]}), drift=clocked.drift,
                         timebases=clocked.timebases)
 
 
 @pytest.mark.parametrize("kind", WIRED)
-def test_a_certifier_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str) -> None:
+def test_a_attester_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str) -> None:
     """A network attester registered in an auditor's device reads that host's clock. Where the time base's drift is a premise
     the host states its time base and no drift, the auditor takes none for it, the log is accepted, the network attester
     reads no drift from the Site, and the premise is the host's `Account.Premised`. Marked a ceiling, the same number
     is the host's drift and the auditor's, the network attester's as the Site reads it, and the log is accepted only by
     an auditor that holds it. Held as the auditor's figure while the host states none, the premise's number is refused
     by `owner`, as is another time base than the host's."""
-    cert, vm = CERTIFIER[0], VM[0]
+    cert, vm = ATTESTER[0], VM[0]
     premise = clock_drift(vm, S.load_card(TIMEBASE))
     log, held = _clocked(kind, S.load_card(TIMEBASE))
     site = Site.of_log(log)
@@ -800,13 +800,13 @@ def test_a_certifier_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str)
     assert (e.value.name, e.value.entry) == ("owner", 0)
 
 
-def test_a_certifier_at_the_site_reads_no_clock() -> None:
+def test_a_attester_at_the_site_reads_no_clock() -> None:
     """A network attester registered with no host of the auditor's is under the site, where it reads no clock and no drift.
-    A host given with no certifier, and one that is no auditor's device at the entry's site, are refused; a host the log
+    A host given with no attester, and one that is no auditor's device at the entry's site, are refused; a host the log
     already holds is not registered twice."""
     kind = WIRED[0]
-    node, cert = S.load_node(kind), CERTIFIER[0]
-    site = Site.of_log(log_of(kind, "remote", CERTIFIER))
+    node, cert = S.load_node(kind), ATTESTER[0]
+    site = Site.of_log(log_of(kind, "remote", ATTESTER))
     assert (site.loc(cert).parent, site.clock(cert), site.drift(cert)) == ("site", None, None)
 
     def entry(log: Registration, host: str = HOST, **given: object):
@@ -815,13 +815,13 @@ def test_a_certifier_at_the_site_reads_no_clock() -> None:
                               leaves=S.leaves(node, host))
 
     vm = auditor_host(*VM, S.load_card(TIMEBASE))
-    with pytest.raises(Malformed, match="no certifier is given"):
-        entry(Registration("remote"), certifier_host=vm)
+    with pytest.raises(Malformed, match="no attester is given"):
+        entry(Registration("remote"), attester_host=vm)
     for other in (replace(vm, parent="site1"), replace(vm, kind="host"), VM[0]):
         with pytest.raises(Malformed, match="an auditor's device at site site"):
-            entry(Registration("remote"), certifier=CERTIFIER, certifier_host=other)
+            entry(Registration("remote"), attester=ATTESTER, attester_host=other)
     log = Registration("remote")
-    log = log.append(entry(log, certifier=CERTIFIER, certifier_host=vm))
-    second = entry(log, "host1", certifier=("certifier1", "dummy-certifier1-key", SCHEME), certifier_host=vm)
+    log = log.append(entry(log, attester=ATTESTER, attester_host=vm))
+    second = entry(log, "host1", attester=("attester1", "dummy-attester1-key", SCHEME), attester_host=vm)
     assert [x.id for x in second.locs if x.kind == "auditor-host"] == []
-    assert Site.of_log(log.append(second)).clock("certifier1") == VM[0]
+    assert Site.of_log(log.append(second)).clock("attester1") == VM[0]

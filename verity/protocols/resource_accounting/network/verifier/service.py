@@ -87,7 +87,7 @@ alone. It accepts when
 - the proof's ``pub`` row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the registered
   root, the execution phase's public fields and both certificates' signed digests), and its ``o0`` row to the output
   word delivered, whose verdict and deadline bits are both 1;
-- the certificates' check accepts (`certified`: each verifies under the network attester's public key in its certifier
+- the certificates' check accepts (`certified`: each verifies under the network attester's public key in its attester
   session over its public fields and its signed digest, and names the registered execution phase).
 
 What the verifier receives: the registration (the salted root), the sample, the two certificates' public fields and
@@ -479,7 +479,7 @@ class TransferBlocks:
     sync_set: SyncSet
     key: PublicKey
     run: str
-    certifier_session: bytes
+    attester_session: bytes
     ingress: GridParams | None = None
     proof_deadline: float | None = None
     network_attester: NetworkAttesterProfile | None = None
@@ -544,7 +544,7 @@ class TransferBlocks:
     def spec(self) -> S.Spec:
         context = canonical_json({
             "format": SPEC, "link": self.link, "run": self.run, "key": self.key.key_id.hex(),
-            "certifier_session": self.certifier_session.hex(), "charge": 0.0,
+            "attester_session": self.attester_session.hex(), "charge": 0.0,
             "parameters": {"egress": self.grid(0)[-HC.DIGEST_BYTES:].hex(),
                            "ingress": self.grid(1)[-HC.DIGEST_BYTES:].hex()},
             "occupancy": [None, None], "warden": [self.network_attester.windows, self.network_attester.digest.hex()]})
@@ -758,7 +758,7 @@ class TransferBlocks:
         (`public_arguments`), which a proof holds to the head it opens."""
         return len(certificates) == 2 and all(
             isinstance(c, Certificate) and (c.link, c.direction.code, c.window) == (self.link, d, window)
-            and c.verify(self.key, self.certifier_session) for d, c in enumerate(certificates))
+            and c.verify(self.key, self.attester_session) for d, c in enumerate(certificates))
 
     @staticmethod
     def _decided(sample: S.Draw, sessions: Sequence[str], accepted: bool, public: dict[str, Any]) -> dict[str, Any]:
@@ -830,7 +830,7 @@ class TransferBlocks:
             "sync_set": {"deltas": list(self.sync_set.deltas),
                          "rhos": [[r.numerator, r.denominator] for r in self.sync_set.rhos]},
             "lms": {"N": p.N, "W": p.W, "H": p.H, "toy": p.toy}, "key": self.key.public.hex(),
-            "session": bytes(self.certifier_session).hex(),
+            "session": bytes(self.attester_session).hex(),
             "egress": {"grid": LA._grid_json(self.params), "profile": None},
             "ingress": {"grid": LA._grid_json(self.ingress_params), "profile": None},
             "warden": self.network_attester.digest.hex()}

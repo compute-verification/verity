@@ -162,7 +162,7 @@ def test_the_lean_verdict_is_the_pythons(tmp_path):
     assert rejected >= len(cases) - 30
 
 
-def test_a_network_attester_phase_reads_the_network_certifiers_digest_and_no_sync(tmp_path):
+def test_a_network_attester_phase_reads_the_network_attesters_digest_and_no_sync(tmp_path):
     """On a network attester link the Lean holds both ends' grids to the network attester's parameters digest and
     reads no sync, as the Python does: syncs missing or off Σ_sync change neither verdict; the link under another
     network attester's digest is a reject by both; and a network attester case the Python never makes (a digest of another length or none, an end with a profile, two
@@ -180,7 +180,7 @@ def test_a_network_attester_phase_reads_the_network_certifiers_digest_and_no_syn
     assert lean == python and not python["accepted"]
     c.lw = lw
     case = lw.lean_case(c.sample, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions())
-    assert case["kind"] == "warden" and case["warden"] == plain.NETWORK_CERTIFIER_DIGEST.hex()
+    assert case["kind"] == "warden" and case["warden"] == plain.NETWORK_ATTESTER_DIGEST.hex()
     assert SVC.LA.SERVER.call("link-window", case)["accepted"]
     grid = case["ingress"]["grid"]
     for edit in ({"warden": case["warden"][:-2]}, {"warden": case["warden"] + "00"}, {"warden": None},
