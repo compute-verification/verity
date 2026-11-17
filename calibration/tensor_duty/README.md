@@ -14,7 +14,7 @@ limit at the board's maximum. Throughput rests on the host's wall clock alone.
 It needs one H200, under `research run`:
 
 ~~~text
-research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
+research run --on NODE --project verity --source . --cwd source --mem-gb 1 --env GPU_LEASE_WHO=LANE \
   -- bash calibration/tensor_duty/run.sh
 PYTHONPATH=. python3 calibration/tensor_duty/summarize.py ~/.research/runs/RUN/out
 ~~~

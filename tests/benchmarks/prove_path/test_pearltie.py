@@ -205,7 +205,7 @@ def make_toy() -> SimpleNamespace:
     reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=H200), default_seed=7)
     low = WC.lower(reg, CLASS, None, GRAIN, tables=PEARL)
     fields = _weights(low.fn)
-    state = WRS.standin_state(WC.NAME, CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)], KEY, 0, window=RUN)
+    state = WRS.standin_state(WC.population_digest(low.circuit), CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)], KEY, 0, window=RUN)
     values = {**WW.weight_values(reg, fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi], cut=low.cut)
              for row, _ in WRS.scan_slots(low, state.rows)]
@@ -231,7 +231,7 @@ def _reuse(toy, W: dict, manifests: list[dict] | None = None) -> dict:
 def _reads(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
     """Each row a read of a value holds or fills, ``(template, port, proof block)``, as its value and row."""
     out = {}
-    for r in (r for r in circuit.registered.reads if r.param in circuit.registered.values):
+    for r in (r for r in circuit.registered.reads if r.param in circuit.registered.values and r.param != SS.SCAN_STATE):
         lay = circuit.layouts[r.reader][0]
         words = dict(lay.rows + lay.outs)[r.port]
         for i, leaf in enumerate(r.source(range(r.units))):
@@ -246,14 +246,14 @@ def test_the_circuit_reads_each_calls_committed_rows_and_the_verdict_and_reuse_t
     rows' filler rows never. The verdict's W check accepts W on the passes, on all 16 values and the 4 weights' B rows,
     and `reuse` makes each value, from the rows its proof blocks make, W's entry."""
     c = toy.low.circuit
-    assert c.registered.values == tuple(v for s in range(CLASS.outputs) for k in range(CALLS) for v in (PEARL.a(s, k),
-                                                                                                       PEARL.y(s, k)))
-    assert c.registered.formats == {v: {"row_schema": IF.SEG, "word_bits": 32} for v in c.registered.values}
+    pearl = tuple(v for s in range(CLASS.outputs) for k in range(CALLS) for v in (PEARL.a(s, k), PEARL.y(s, k)))
+    assert c.registered.values == (*pearl, SS.SCAN_STATE)
+    assert c.registered.formats == {v: {"row_schema": IF.SEG, "word_bits": 32} for v in pearl}
     assert {v: r.shape for v, r in toy.pearl.items() if v.endswith("/1")} == {
         "pearl-a/0/1": (32, 256), "pearl-y/0/1": (27, 256), "pearl-a/1/1": (16, 256), "pearl-y/1/1": (1, 256)}
     reads = _reads(c)
     assert {port for _t, port, _u in reads} == {"o0", "y"}
-    real = {(v, i) for v in c.registered.values for i in range(PEARL.rows(CLASS, int(v.split("/")[1])))}
+    real = {(v, i) for v in pearl for i in range(PEARL.rows(CLASS, int(v.split("/")[1])))}
     assert sorted(reads.values()) == sorted(real)
     VR = _verify_run()
     assert VR.tie(toy.W, _passes(toy.manifests)) == {"record": REG.digest(toy.W), "tables": (2 * CLASS.outputs + 1) * CALLS}
@@ -295,24 +295,23 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     win.supply(G)
     toy.rows.record(win)
     committed = win.close()
-    prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
-            "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()}}}
+    prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0}}
     win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.W))
     mine, doc = IF.of_records(out, SAMPLING_DESIGN, WT.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine, doc=doc,
-                           leaf_layer=CS.leaf_layer(publics))
+                           leaf_layer=CS.leaf_layer(publics), own={SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()})
 
 
 def _by_hand(written, W: dict) -> dict:
     """The window's record R chained after ``W`` instead and registering ``W``'s entries, written by hand."""
     theirs = {e["value"]: e for e in W["registered"]}
-    return {**written.R, "previous": REG.digest(W), "registered": [theirs[e["value"]] for e in written.R["registered"]]}
+    return {**written.R, "previous": REG.digest(W), "registered": [theirs.get(e["value"], e) for e in written.R["registered"]]}
 
 
 def _check(written, W: dict, R: dict):
     """R1-R7 on ``R`` against the verifier's own window, tied to ``W`` as the window's audit ties it (`window_tie.tie_of`)."""
-    tied, _pins = WT.tie_of(written.doc, W)
+    tied, _pins = WT.tie_of(written.doc, W, written.own)
     mine = written.mine
     return REG.check(R, mine.program, mine.query, SAMPLING_DESIGN, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (),
                      tied["log"], registered=tied["registered"], outputs=tied["outputs"], schemas=tied["schemas"],
@@ -322,13 +321,14 @@ def _check(written, W: dict, R: dict):
 @pytest.mark.slow
 @RECORDS
 def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_another_root(toy, written):
-    """R registers the 16 values at W's entries and nothing else, chained right after W; its sampling design (R1 holds it to
+    """R registers the 16 values at W's entries and its scan state afresh, and nothing else, chained right after W; its sampling design (R1 holds it to
     the verifier's own) samples a reader of every value, each value's readers templates of their own. R1-R7 tied to W accept
     it, and tied to W' refuse it: it is chained after W (``R6-previous``), and of its values only the flipped one's root is
     not the one W' registers (``R7-held``)."""
     R, W = written.R, toy.W
     assert R["format"] == REG.FORMAT_V2 and R["previous"] == REG.digest(W)
-    assert sorted(R["registered"], key=lambda e: e["value"]) == sorted(_calls(W), key=lambda e: e["value"])
+    assert sorted(R["registered"], key=lambda e: e["value"]) == sorted([*_calls(W), *written.own.values()],
+                                                                       key=lambda e: e["value"])
     strata, readers = {s["template"]: s for s in R["law"]["strata"]}, {}
     for (tid, _port, _u), (v, _row) in _reads(toy.low.circuit).items():
         readers.setdefault(v, set()).add(tid)
@@ -381,7 +381,7 @@ def _v1_case(one, written, W: dict, R: dict) -> dict:
     verifier's params): `_check`'s params; a stratified sample's first proof blocks of each stratum, the verifier's
     receipt of R, and a verdict of record that accepted, reporting R's values' roots as the ones its readers opened
     against, standing in for their proofs."""
-    mine, (tied, _pins) = written.mine, WT.tie_of(written.doc, W)
+    mine, (tied, _pins) = written.mine, WT.tie_of(written.doc, W, written.own)
     program, query = mine.program, mine.query
     drawn = D.derive(program, query, SAMPLING_DESIGN)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])

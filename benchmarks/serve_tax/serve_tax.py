@@ -328,6 +328,10 @@ ARMS = {
                        "what a seed moves in vLLM's sampling, read apart", published=True, seeds=True),
     "prod-trace": Arm("prod", "+ the step trace and each request's ids, prod-record with the canonical top-k off: what "
                       "the canonical top-k moves, read apart", plugin=("record", "ids"), published=True),
+    "prod-record-bisect": Arm("prod", "prod-record with the canonical top-k's every failed row bisected by one program "
+                              "(VERITY_DSA_TOPK=canonical-bisect): what its refinement saves, read apart",
+                              plugin=("record", "ids"), env={**TOPK_ENV, "VERITY_DSA_TOPK": "canonical-bisect"},
+                              general=TOPK, published=True),
 }
 ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
 ARMS["tick-certifier"] = replace(ARMS["tick"], parent="tick", what="+ the network certifier in front: every request "
@@ -343,7 +347,7 @@ CHANGES: dict[str, Callable[[Arm], bool]] = {
     "prefix caching off": lambda a: "--no-enable-prefix-caching" in a.args,
     "the two-stage boundary commitment": lambda a: "boundary_rows" in a.plugin,
     "the history tables": lambda a: bool(a.rows.get("tables")),
-    "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK") == "canonical",
+    "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK", "").startswith("canonical"),
     "admission on the certified tick": lambda a: a.tick,
     "the edge snapshot": lambda a: a.edges,
     "the network certifier in front": lambda a: a.attester,
@@ -476,15 +480,18 @@ MODELS = {
     # glm53's target is the cost model's share for serving (the spot figures' serving cost card, its `tokens`
     # configuration): extra GPU time at equal tokens, which reads no SLO, for a server that does not cut its cache at a
     # phase edge and keeps vLLM's prefix cache on, priced at one engine across eight H200s under the chat load at 384
-    # requests at once. None of its parts is measured here: a run measures a part where one of its arms turns on that
-    # part's changes alone (`cost_report`'s `measured`). It has no part for prefix caching off, the served ids or
-    # the network attester in front.
+    # requests at once, but for the canonical top-k's, which is measured (`total_cost.TOPK_SHARE`): a run measures a
+    # part where one of its arms turns on that part's changes alone (`cost_report`'s `measured`). It has no part for
+    # prefix caching off, the served ids or the network attester in front.
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
-                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=2.13, target_basis="modeled",
+                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=10.25, target_basis="modeled",
                    target_parts=(
                        Part("the certified tick", 1.63, ("admission on the certified tick",),
                             "the queue-dependent tick's throughput, simulated on traces", "simulated"),
-                       Part("the tie order", 0.25, ("the canonical top-k",)),
+                       Part("the canonical top-k", 8.37, ("the canonical top-k",),
+                            "the old pass's cost, which bisects every wrong fast selection by one program: prod-record "
+                            "over prod-trace on the agentic load at 4 users; right for main today and an upper bound "
+                            "once the new select lands, until prod-record-bisect measures the new one", "measured"),
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on"),
