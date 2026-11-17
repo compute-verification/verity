@@ -64,6 +64,7 @@ from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, par
 from verity.channel import Refused
 from verity.runtime import runner
 from verity.runtime.sources import MONOTONIC, RealClock
+from verity_cli import settings
 
 ROOT = Path(__file__).resolve().parents[4]
 SERVED_WINDOW, GATE, RUNTIME, CHECK = "served-window", "gate", "runtime", "check"
@@ -385,7 +386,7 @@ def _spot_challenger(cfg, params, bound):
     """The live challenger's bindings; with no gate bound the sample's coins are a local development session's,
     simulated, which served_verdicts.sh takes under VERITY_HOLD_PLACEMENT=1 only in a development run."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
-    return hooks if "gate" in bound or os.environ.get("VERITY_HOLD_PLACEMENT") != "1" else {**hooks, "DEVELOPMENT": "1"}
+    return hooks if "gate" in bound or not settings.hold_placement() else {**hooks, "DEVELOPMENT": "1"}
 
 
 def _pouw(cfg, params, bound):
