@@ -1,4 +1,4 @@
-"""The served window's onsite configuration (`demos/onsite_full.toml`) and its table (`served_table.py`):
+"""The served window's onsite configuration (`applications/onsite_full.toml`) and its table (`served_table.py`):
 the file is the table's configuration byte for byte and names no host; the network attester's and the inference-only
 policy's parties and channels are their manifests'; `verity run --dry-run` resolves every party, channel and piece with
 no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a binding the configuration
@@ -32,7 +32,7 @@ from verity.protocols.proofs.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
-CONFIG = ROOT / "demos" / "onsite_full.toml"
+CONFIG = ROOT / "applications" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
 KEY = "0" * 128
@@ -41,7 +41,7 @@ BINDINGS = {
     "challenger": {"pouw": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}},
     "memory-challenger": {"pous": {"address": "192.0.2.1:7000"}, "wipe": {"address": "192.0.2.1:7001"}},
     "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}},
-    "network-certifier": {"certifier": {"gate": "user@gate-1"}},
+    "network-certifier": {"certifier": {"gate": "user@gate-1", "peer": "peer-1"}},
 }
 UNBOUND = sorted(f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c, ks in cs.items() for k in ks)
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
@@ -50,14 +50,15 @@ VARIABLES = {
     "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py period "$@"',
     "CLASSES": "4,32,4 8,32,4,4,16", "V3C_CLASS": "8,32,4,4,16",
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" '
-                       "--gate user@gate-1",
+                       "--gate user@gate-1 --peer peer-1",
     "DEVELOPMENT": "1", "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
     "PRECISION": "verity_int8", "REPO": "verity-int8/Llama-3.2-1B-INT8",
     "REV": "15b0976d400d796ee589e7737d03a919526bf800", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
     "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16",
 }
 KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "memory-challenger.pous.address",
-        "bandwidth-verifier.bandwidth.address", "network-certifier.certifier.gate", "memory-challenger.wipe.address"]
+        "bandwidth-verifier.bandwidth.address", "network-certifier.certifier.gate", "network-certifier.certifier.peer",
+        "memory-challenger.wipe.address"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
 RUNTIME = {
     ("memory-challenger", "wipe"): ("verity/pous/streamed-wipe", "memory-challenger", "auditor-host",
@@ -104,9 +105,9 @@ def test_the_configuration_is_the_tables_byte_for_byte():
 
 @pytest.mark.parametrize("demo", sorted(set(T.DEMOS) - {"onsite_full"}))
 def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(demo):
-    """Each other demo file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
+    """Each other application's file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
     (or onsite's smaller set) is its own id; only the subprotocols it lists have parameters and pins."""
-    path = ROOT / "demos" / f"{demo}.toml"
+    path = ROOT / "applications" / f"{demo}.toml"
     cfg = T.configuration(K.parse(CONFIG.read_text())["program"]["commit"], demo)
     assert K.render(cfg, T.HEADERS[demo]) == path.read_text()
     assert K.composite(cfg["protocols"], REG.components) in {**K.COMPOSITES, **K.UNACCEPTED}
@@ -126,10 +127,12 @@ def test_the_configuration_states_no_host_or_address():
 def test_the_memory_attester_s_two_keys_are_pinned_and_hashed():
     cfg = R.load(CONFIG, REG)
     assert [(p["party"], p["protocol"], p["scheme"]) for p in cfg["pin"]] == [
-        ("memory-challenger", "pous", K.SCHEMES[0]), ("memory-challenger", "wipe", K.SCHEMES[0])]
+        (T.BANDWIDTH_VERIFIER, T.P2.COMPONENT, K.SCHEMES[0]), ("memory-challenger", "pous", K.SCHEMES[0]),
+        ("memory-challenger", "wipe", K.SCHEMES[0])]
     stated = {p["protocol"]: p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"]}
     assert {p["protocol"]: p["key-sha512"] for p in cfg["pin"]} == stated
     assert all(re.fullmatch("[0-9a-f]{128}", k) for k in stated.values()) and stated["pous"] != stated["wipe"]
+    assert stated["bandwidth"] == stated["pous"]   # the bandwidth close is signed with the PoUS key
     assert T.configuration(cfg["program"]["commit"])["pin"] == cfg["pin"]   # the table states no key of its own
     bare = {k: v for k, v in K.parse(CONFIG.read_text()).items() if k != "pin"}
     assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
@@ -155,7 +158,7 @@ def test_a_memory_attesters_placement_reads_the_configurations_pins_under_its_ha
     monkeypatch.setattr(mc, "committed", lambda: frozenset())
     assert T.placement(cfg, piece["wipe"], {"public_key": key["wipe"]})[mc.PREMISE].startswith(mc.UNCOMMITTED)
     assert T.placement(cfg, T.PARTIES["pous"]["prover"], {"public_key": key["pous"]}) is None
-    assert pin.keys() == {"pous", "wipe"}
+    assert pin.keys() == {"pous", "wipe", "bandwidth"}
 
 
 def test_the_registration_names_the_runs_own_configuration_and_is_not_written_yet(tmp_path):
@@ -223,7 +226,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
             if "SERVE_ARGS" in e["hooks"]} == {"certifier": T.ID_FORM}
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
-    assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1") and "PP_CHALLENGER" not in hooks
+    assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1") and "PP_CHALLENGER" not in hooks
     assert hooks["DEVELOPMENT"] == "1"
 
 
@@ -270,6 +273,17 @@ def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
                 if e["component"] == "pous") == "<memory-challenger.pous.address>"
 
 
+@pytest.mark.parametrize("demo", ["onsite_network", "onsite_compute"])
+def test_a_dry_run_of_a_smaller_onsite_demo_resolves_every_party_and_channel(capsys, demo):
+    path = ROOT / "applications" / f"{demo}.toml"
+    rc, got, err = dry(capsys, config=path)
+    cfg = R.load(path, REG)
+    assert rc == 0, err
+    assert K.composite(cfg["protocols"], REG.components) in K.UNACCEPTED
+    assert sorted(x["party"] for x in got["plan"]) == sorted(p["name"] for p in cfg["party"])
+    assert len(got["channel"]) == len(cfg["channel"]) and got["dry"][0]["configuration"] == K.digest(cfg)
+
+
 def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
     rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
     assert rc == 0 and [x["party"] for x in got["plan"]] == ["workers", "firewall", "prover"]
@@ -284,7 +298,8 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(KEYS) == UNBOUND
     unbound = T.variables(cfg, {})
     assert set(unbound) == set(VARIABLES) | set(deployed)
-    assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>'")
+    assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>' "
+                                               "--peer '<network-certifier.certifier.peer>'")
     assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
 
 
@@ -292,7 +307,7 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
     cfg = R.load(CONFIG, REG)
     side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_CERTIFIER]
     assert (side.runs, side.scripts, side.reaches, side.binds) == (T.SERVED_WINDOW, (T.CERTIFIER_PIECE,),
-                                                                    NC.NETWORK_CERTIFIER, ("gate",))
+                                                                    NC.NETWORK_CERTIFIER, ("gate", "peer"))
     assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD",
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
@@ -334,7 +349,7 @@ def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_i
 
 def test_the_memory_attesters_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
                                                                                                      capsys):
-    """On the auditor's device each memory attester's start checks its key against `demos/onsite_full.toml`'s pin
+    """On the auditor's device each memory attester's start checks its key against `applications/onsite_full.toml`'s pin
     first: a state with no key is refused ``key``, and one whose key the configuration doesn't pin ``pin``, before any
     request is read or any party or the served window starts."""
     state = tmp_path / T.AUDITOR_HOST
@@ -408,16 +423,10 @@ def test_the_bandwidth_verifiers_start_reads_the_memory_attesters_run_beside_it(
     assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
 
 
-def test_the_bandwidth_verifiers_start_is_handed_pouss_pin_check(tmp_path):
-    """The table hands PoUB's verifier PoUS's device's pin check (`onsite.pin`, `onsite.signer`), which `p2_parties`
-    may not load: a configuration that pins no PoUS key is refused before the directory is read, and a directory holding
-    no key after."""
+def test_the_bandwidth_verifiers_start_is_not_yet_a_path_that_runs(tmp_path):
     start = T.POUB.protocol().starts[T.P2.VERIFIER]
-    with pytest.raises(Refused, match="pins no key"):
+    with pytest.raises(NotImplementedError, match=T.P2.GOAL):
         start({}, {"challenger": str(tmp_path)}, None)
-    pin = {"party": T.CS.CHALLENGER, "protocol": T.CS.COMPONENT, "key-sha512": "00" * 64}
-    with pytest.raises(Refused, match="holds no memory attester's key"):
-        start({"pin": [pin]}, {"challenger": str(tmp_path)}, None)
 
 
 def test_the_runtime_components_channels_are_their_protocols_manifests():
@@ -533,6 +542,36 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
 
 #: the prover node's parties whose pieces are the served window's alone: its prover's are runtime parties (`live`)
 SERVED_PARTIES = ("--party", "workers", "--party", "firewall")
+
+
+def test_the_workloads_piece_is_the_prover_nodes_first_and_each_verb_it_names_is_the_runners(capsys):
+    rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
+    first = got["plan"][0]["entries"][0]
+    assert rc == 0 and (got["plan"][0]["party"], first["component"]) == (T.WORKERS, T.SERVED_WINDOW)
+    assert first["verbs"] == ["predict", "serve", "seal", "window", "advice", "circuits", "publish"]
+    runner = (ROOT / T.RUNNER).read_text()
+    assert [v for v in first["verbs"] if f'if [ "${{1:-}}" = {v} ]; then' not in runner] == []
+    assert first["writes"] and all(w.split("/", 1)[0] in ("D", "OUT") for w in first["writes"])
+    assert all("verbs" not in e for x in got["plan"] for e in x["entries"] if e is not first)
+
+
+#: what the adapter's `run.sh settings MODEL -- verity run ...` sets of the node the workload runs on
+NODE_SETTINGS = ("VENV", "CUDA_HOME", "HF_HOME", "FLOCK_WORK", "DISK_FLOOR_GB", "HIDDEN_SO", "NORM_TAP_SO",
+                 "SERVE_ROOT", "ROW", "ROW_ID")
+
+
+def test_the_workloads_piece_hands_the_runner_the_nodes_settings(tmp_path, capsys, monkeypatch):
+    settings = {k: str(tmp_path / "node" / k.lower()) for k in NODE_SETTINGS}
+    for k, v in settings.items():
+        monkeypatch.setenv(k, v)
+    names = "|".join(NODE_SETTINGS)
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", f'mkdir -p "$OUT"\n/usr/bin/env | grep -E '
+                                                                    f"'^({names})=' | sort > \"$OUT/node.txt\"\n"))
+    state = tmp_path / "state"
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path), "--state",
+                     str(state)], REG)
+    assert rc == 0, capsys.readouterr().err
+    assert dict(x.split("=", 1) for x in (state / "out" / "node.txt").read_text().splitlines()) == settings
 
 
 def test_serve_openais_flags_are_every_listed_pieces():
@@ -670,7 +709,7 @@ def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monk
 
 
 def test_a_smaller_demos_check_reads_no_onsite_composite(tmp_path, monkeypatch):
-    """A demo whose product isn't onsite's hands the record no composite: onsite's Lean answer is not its product's."""
+    """An application whose product isn't onsite's hands the record no composite: onsite's Lean answer is not its product's."""
     monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(ALL_ROWS)))
     cfg = T.configuration(R.load(CONFIG, REG)["program"]["commit"], "onsite_compute")
     (tmp_path / "out").mkdir()

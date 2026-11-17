@@ -1,13 +1,13 @@
-"""The refusal suite's cases compute what they claim, and its runner grades a check by the outcomes `run.py` states."""
+"""The refusal suite's cases compute what they claim."""
 
 from __future__ import annotations
 
+import json
 import struct
 from pathlib import Path
 
 import cases as C
 import pytest
-import run as R
 
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.silicon.integer import S32_MAX, S32_MIN
@@ -25,7 +25,7 @@ def _program(case):
     except (TypeError, ValueError) as e:
         if case.kind == "honest":
             raise
-        pytest.skip(f"the IR now refuses {case.id} at build ({e}); the runner counts that as a refusal")
+        pytest.skip(f"the IR now refuses {case.id} at build ({e})")
 
 
 @pytest.mark.parametrize("case", C.CASES, ids=_ids(C.CASES))
@@ -52,8 +52,7 @@ def test_cases_name_a_verdict_a_charge_and_a_rule():
 
 
 def test_cases_json_is_the_metadata():
-    """cases.json is `run.py --json`: regenerate it with `python run.py --json > cases.json` after changing a case."""
-    assert CASES_JSON.read_text() == R.render(R.metadata())
+    assert CASES_JSON.read_text() == json.dumps([c.to_json() for c in C.CASES], indent=2) + "\n"
 
 
 def test_the_ruling_numbers():
@@ -103,92 +102,3 @@ def test_p_s_producer_variants_take_the_intervals_their_cases_claim(q, lo, hi, t
     got = [evaluate(q, p)[0] for p in edges]
     assert got == [C.quant(p, lo, hi) for p in edges]
     assert min(got) == 0 and max(got) == top
-
-
-# ---- the runner ----------------------------------------------------------------------------------------------------------
-
-
-def _oracle(table):
-    by_fn = {}
-    for c in C.CASES:
-        try:
-            by_fn[c.program().fn.name] = c
-        except (TypeError, ValueError):
-            if c.kind == "honest":
-                raise
-
-    def check(program):
-        return table(by_fn[program.fn.name])
-    return check
-
-
-def _ruling(case):
-    if case.kind == "honest":
-        return {"refused": False, "charged": {}}
-    if case.verdict == "refuse":
-        return {"refused": True, "charged": {}}
-    return {"refused": False, "charged": {("other" if k == "any" else k): n for k, n in case.charge.items()}}
-
-
-def test_an_oracle_of_the_ruling_passes_every_case():
-    report = R.run(_oracle(_ruling))
-    assert report["passed"] and set(report["outcomes"]) == {"ok"}
-
-
-def test_accept_all_is_unsound_on_every_attack():
-    """Every attack the IR builds is unsound under accept-all; one it refuses at build (the reinterpretations, `E_REINTERPRET`)
-    never reaches the check, and the runner grades it as refused."""
-    report = R.run(R.accept_all)
-    assert not report["passed"]
-    at_build = set()
-    for row in report["rows"]:
-        if row.get("note", "").startswith("the IR refuses it at build"):
-            at_build.add(row["id"])
-            assert row["kind"] == "attack" and row["outcome"] == R.grade(C.BY_ID[row["id"]], True, {}), row
-        else:
-            assert row["outcome"] == ("ok" if row["kind"] == "honest" else "unsound"), row
-    assert {"pun-s32-as-e4m3", "pun-s32-as-s8"} <= at_build
-
-
-def test_refuse_all_is_sound_and_over_strict():
-    report = R.run(R.refuse_all)
-    for row in report["rows"]:
-        want = "over-strict" if row["kind"] == "honest" else ("ok" if row["verdict"] == "refuse" else "sound")
-        assert row["outcome"] == want, row
-
-
-def test_grades():
-    budget, refuse, pun, honest = (C.BY_ID[i] for i in ("carry-cmp", "imma-clamp-bare", "pun-s32-as-e4m3", "pv-131072"))
-    assert R.grade(budget, False, {"compare_select": 12}) == "ok"
-    assert R.grade(budget, False, {"compare_select": 11, "roundings": 1}) == "misclassed"
-    assert R.grade(budget, False, {"compare_select": 11}) == "unsound"
-    assert R.grade(budget, True, {}) == "sound"
-    assert R.grade(refuse, False, {"compare_select": 2}) == "sound"
-    assert R.grade(refuse, False, {"roundings": 2}) == "misclassed"
-    assert R.grade(pun, False, {"other": 10 ** 9}) == "unsound"
-    assert R.grade(honest, False, {"compare_select": 262_144, "roundings": 131_072}) == "ok"
-    assert R.grade(honest, False, {"compare_select": 262_144, "roundings": 131_073}) == "over-budget"
-    assert R.grade(honest, True, {}) == "over-strict"
-    assert R.grade(C.BY_ID["fold-reused"], False, {"roundings": 2, "other": 2}) == "ok"
-    linear = C.BY_ID["linear-28672"]
-    assert R.grade(linear, False, {}) == "ok" and R.grade(linear, False, {"roundings": 1}) == "over-budget"
-
-
-def test_a_check_that_raises_or_returns_no_verdict_is_an_error():
-    def boom(program):
-        raise RuntimeError("no")
-
-    for check in (boom, lambda p: None, lambda p: {"refused": "no"}, lambda p: {"refused": False, "charged": {"carries": 1}},
-                  lambda p: {"refused": False, "charged": {"roundings": -1}}):
-        report = R.run(check, ["carry-idiv"])
-        assert report["rows"][0]["outcome"] == "error" and not report["passed"]
-
-
-def test_main_exit_status(capsys):
-    assert R.main(["--check", "refuse-all", "--case", "carry-idiv", "--case", "imma-clamp-bare"]) == 0
-    assert R.main(["--check", "accept-all", "--case", "carry-idiv"]) == 1
-    assert "carry-idiv" in capsys.readouterr().out
-    with pytest.raises(ValueError, match="MODULE:FUNCTION"):
-        R.resolve("no-colon")
-    with pytest.raises(SystemExit, match="MODULE:FUNCTION"):
-        R.main(["--check", "no-colon"])

@@ -2,7 +2,8 @@
 # The write ceilings' host half (cwd = the source tree): builds write_host.c (bwwrite_host) and, on the CPUs the job was
 # given, writes host DRAM with KERNELS (default nt st stosb) at one thread a core, for 1, 2, 4, ... cores and then every
 # core given, by NUMA node and together, REPS times (default 2) for SECONDS each (default 2), MIB a thread (default 512,
-# above a socket's L3 at one thread). Outputs in $OUT: env.txt, build.txt, write_host.jsonl, rc.txt.
+# above a socket's L3 at one thread). Outputs in $OUT: env.txt, build.txt, write_host.jsonl, rc.txt; result.py then
+# writes the run's result.json, the fastest record as metrics.toml's number where no record has a wrong byte (else exit 5).
 #
 #   research run --on auto --cpus 48 --mem-gb 64 --project verity --cwd source \
 #     -- bash benchmarks/bandwidth/run_write_host.sh
@@ -52,5 +53,7 @@ for r in $(seq "${REPS:-2}"); do
   done
 done
 uptime >> "$O/env.txt"
+uv run -q python "$BW/result.py" "$O"; wrote=$?
+[ "$rc" = 0 ] && rc=$wrote
 echo "$rc" > "$O/rc.txt"
 exit "$rc"

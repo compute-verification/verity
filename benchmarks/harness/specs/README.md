@@ -69,6 +69,9 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   two and four provers on one H200 with ten cores, each statement fetched from the store.
 - `glm53-flock-steady-head-block-h200-c24`: the same two forms at four provers on 24 cores, six a prover, so a node
   whose NUMA nodes hold 24 cores keeps all of a point on the card's node.
+- `glm53-flock-steady-head-block-h200-walk`: the first spec's `FIRST=false` point at one prover with the units' level
+  walk on the card (`FC_UNIT_WALK=1`); `benchmarks/kernels/steady_walk.py` reads the two points' runs as kernels'
+  metric.
 
 ## Sweeps
 
