@@ -4,7 +4,7 @@ public import Properties.Pous.MemoryAttester.Session
 public import Proofs.Properties.Pous.MemoryAttester.Attest
 
 /-!
-# Proofs of what the auditor sees of the memory challenger in a session (`Properties.Pous.MemoryAttester.Session`)
+# Proofs of what the auditor sees of the memory challenger in a session (`Properties.Pous.MemoryChallenger.Session`)
 
 **The tie.** Soundness's record of a round (`Recorded.round`) is `roundSeen` on what it reads of the round, its size
 and its `blockDigest` (`round_eq_roundSeen`), so a change to soundness's function breaks the build here.
