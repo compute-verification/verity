@@ -2191,15 +2191,15 @@ def _moved_data(repo: Repo) -> None:
 
 
 def test_a_new_use_in_a_name_is_refused(repo):
-    """A name that says a retired word in one of its humps (``overInertBoundDraws``) is a new use, refused with the term
+    """A name that says a retired word in one of its humps (``overInertBoundGizmos``) is a new use, refused with the term
     to say."""
     repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(),
-                                  "GLOSSARY.md": TOY_GLOSSARY + '| "draws" | samples |\n', REPO_TERMS_JSON: _allowlist(),
+                                  "GLOSSARY.md": TOY_GLOSSARY + '| "gizmos" | widgets |\n', REPO_TERMS_JSON: _allowlist(),
                                   "tools/bound.py": "BOUND = 1\n"})
     repo.git("checkout", "-q", "-b", "pr")
-    repo.commit("a name that says the old word", {"tools/bound.py": "BOUND = 1\noverInertBoundDraws = 2\n"})
+    repo.commit("a name that says the old word", {"tools/bound.py": "BOUND = 1\noverInertBoundGizmos = 2\n"})
     [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["fix"]) == ("failed", ["tools/bound.py:2 'Draws' is retired; say samples (GLOSSARY.md)"]), c["why"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["tools/bound.py:2 'Gizmos' is retired; say widgets (GLOSSARY.md)"]), c["why"]
 
 
 def test_an_edited_line_of_a_moved_file_that_keeps_its_use_is_no_new_site(terms_linted):
