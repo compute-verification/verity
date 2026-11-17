@@ -15,12 +15,12 @@ public import Flock.ReadNet.Template
 `PinnedReadAt`, a pinned read as a check holds it and its circuit file lays it out, at a verdict bit; `PinnedRead`, at
 the verdict bit 1; `ReturnsRow`, that the unit returns its table's row, the fill row, or a SHA-512 collision;
 `PinnedReadBinds`, that a pinned read returns its row; `PinnedReadNontrivial`, that at the verdict bit 0 some pinned
-read does not; `PinnedReadHonest`, that the check's own form (`InferenceOnlyVerifier.Record.SecurityProofs.form`) has a pinned
+read does not; `PinnedReadHonest`, that the check's own form (`InferenceOnlyCheck.Record.SecurityProofs.form`) has a pinned
 read; and `OpenedRowReturned`, that an opening's declared row is the row its reader returns. The proofs are
 `Proofs.Properties.InferenceOnly.Lemmas.Opening`'s.
 
 A pinned read is a read by a pinned reader: the pin is the closure digest of the reader's Definition
-(`InferenceOnlyVerifier.Record.pinOf`), and pins no table and no root.
+(`InferenceOnlyCheck.Record.pinOf`), and pins no table and no root.
 -/
 
 @[expose] public section
@@ -144,7 +144,7 @@ def PinnedReadNontrivial : Prop :=
         Hash.EmbeddingRead.h q.count q.words (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u))
           (table (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)))
 
-/-- **An honest pinned read**: of the check's own form (`InferenceOnlyVerifier.Record.SecurityProofs.form`), some instance, record,
+/-- **An honest pinned read**: of the check's own form (`InferenceOnlyCheck.Record.SecurityProofs.form`), some instance, record,
 circuit file and transcript meet `PinnedRead`, so `PinnedReadBinds` is not vacuous of it. So that it does not hold
 emptily, by a table of one constant row: the check accepts the record (`Accepts`); the table has two different rows
 within its count; and the transcript chooses the index, which no index gate's registered constant fixes and which

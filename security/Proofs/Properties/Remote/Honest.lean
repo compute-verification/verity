@@ -61,7 +61,7 @@ theorem push_zero (x : ByteArray) : x.push 0 = x ++ ByteArray.mk #[0] := by
   apply ByteArray.ext
   simp [ByteArray.data_push, ByteArray.data_append]
 
-/-- The policy's digest is the window record's (`Flock.WindowRecord.digestHex`): `InferenceOnlyVerifier.Theta.digest` is that
+/-- The policy's digest is the window record's (`Flock.WindowRecord.digestHex`): `InferenceOnlyCheck.Theta.digest` is that
 function, or else tags the record by its `format` as `Flock.WindowRecord.tagOf` does and hashes its canonical text as
 `Flock.WindowRecord.digest` does, and either form is proved here. -/
 theorem baseline_digest (rec : Json) : InferenceOnlyVerifier.Theta.digest rec = Flock.WindowRecord.digestHex rec := by

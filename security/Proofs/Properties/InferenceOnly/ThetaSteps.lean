@@ -5,7 +5,7 @@ public import Properties.InferenceOnly.Theta
 /-!
 # θ's provenance check, step by step
 
-What each step of `InferenceOnlyVerifier.Theta.evaluate` establishes when it returns: the trusted input's reading (`trustedOf_ok`:
+What each step of `InferenceOnlyCheck.Theta.evaluate` establishes when it returns: the trusted input's reading (`trustedOf_ok`:
 the log in R6's chain, each record's digest, the run's record and the parameters), the provenance's (`provenanceOf_ok`),
 one θ entry's checks (`entryStep_ok`), and the loop over θ (`provenance_ok`). `Proofs.Properties.InferenceOnly.Theta` joins them
 with the policy check's θ fold into `ThetaProvenance`.

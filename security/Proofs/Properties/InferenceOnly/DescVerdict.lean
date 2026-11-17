@@ -35,7 +35,7 @@ namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 open Lean (Json)
 
-/-- **A property of every verdict of `InferenceOnlyVerifier.evaluate` holds of every verdict of `InferenceOnlyVerifier.Desc.evaluate`, on each
+/-- **A property of every verdict of `InferenceOnlyCheck.evaluate` holds of every verdict of `InferenceOnlyCheck.Desc.evaluate`, on each
 expansion**, given `DescAgrees`. -/
 theorem onExpansions_of (h : Properties.DescAgrees) {Q : Json → Json → Prop}
     (hQ : ∀ j out, evaluate j = .ok out → Q j out) {j out : Json} (hev : Desc.evaluate j = .ok out) :

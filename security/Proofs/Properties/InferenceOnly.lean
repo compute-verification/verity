@@ -19,7 +19,7 @@ import all Init.Data.Ord.String
 /-!
 # The inference-only check's properties, proved
 
-Each statement of `Properties.InferenceOnly`, proved of `InferenceOnlyVerifier.evaluate` from the lemmas about its steps
+Each statement of `Properties.InferenceOnly`, proved of `InferenceOnlyCheck.evaluate` from the lemmas about its steps
 (`Proofs.Properties.InferenceOnly.Lemmas`), and the description-sized check's summaries against it (`sizes_eq_tally`, with
 `Proofs.Properties.InferenceOnly.Desc`); and the day's bound a published count gives once `DescCountsCK` holds
 (`Proofs.Properties.InferenceOnly.Count`). It also brings in which branch a Definition's digests take
@@ -337,9 +337,9 @@ theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s
 
 /-! ## The description-sized check -/
 
-/-- **`InferenceOnlyVerifier.Desc.sizes` is the unrolled tally.** On a division that is the expansion of the root nodes' inference blocks `own`
+/-- **`InferenceOnlyCheck.Desc.sizes` is the unrolled tally.** On a division that is the expansion of the root nodes' inference blocks `own`
 (root node `k` holding gates `[offs[k], offs[k + 1])`, `offs` from `0` to the circuit's `N`, each of them in inference block
-`own[k]`), the description-sized check's size of each inference block is the one `InferenceOnlyVerifier.tally` counts gate by gate. -/
+`own[k]`), the description-sized check's size of each inference block is the one `InferenceOnlyCheck.tally` counts gate by gate. -/
 theorem sizes_eq_tally (c : GateTable) (d : Division) (offs : Array ℕ) (own : Array (Option ℕ))
     (h0 : offs[0]! = 0) (hN : offs[own.size]! = c.N) (hmono : ∀ k < own.size, offs[k]! ≤ offs[k + 1]!)
     (hexp : ∀ k < own.size, ∀ g, offs[k]! ≤ g → g < offs[k + 1]! → d.owner[g]! = own[k]!) (u : ℕ) (hu : u < d.n) :

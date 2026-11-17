@@ -3,8 +3,8 @@ the size of the circuit that description unrolls to (README.md).
 
   measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an inference-only check instance (θ its registered inputs, one
-      inference block per Call), checked by `inference-only-verifier --policy` (`InferenceOnlyVerifier.Desc`) and, where the unrolled circuit has at most GATES
-      gates, by `inference-only-verifier --policy --unrolled` (`InferenceOnlyVerifier.check`) on the instance expanded gate by gate;
+      inference block per Call), checked by `inference-only-check --policy` (`InferenceOnlyCheck.Desc`) and, where the unrolled circuit has at most GATES
+      gates, by `inference-only-check --policy --unrolled` (`InferenceOnlyCheck.check`) on the instance expanded gate by gate;
       DIR/results.json.
   partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       the one-stage verifier's partition (`spot-difftest`'s `partition`: `Partition.units`, `strata`, the sampling design
@@ -96,7 +96,7 @@ def program(name: str, ir: str) -> str:
 
 
 def instance(ref, text: str) -> tuple[dict, dict]:
-    """`InferenceOnlyVerifier.Desc`'s instance (θ the registered inputs, one inference block per Call, a gate-less node in none) and the
+    """`InferenceOnlyCheck.Desc`'s instance (θ the registered inputs, one inference block per Call, a gate-less node in none) and the
     description's sizes."""
     inp, reg, spans = ref.root_nodes(text)
     desc = json.loads(text)

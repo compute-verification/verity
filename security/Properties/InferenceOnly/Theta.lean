@@ -5,7 +5,7 @@ public import InferenceOnlyVerifier.Theta
 /-!
 # What θ's provenance check's acceptance means
 
-`InferenceOnlyVerifier.Theta.evaluate` (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyVerifier/Theta.lean`) is the inference-only check of
+`InferenceOnlyCheck.Theta.evaluate` (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Theta.lean`) is the inference-only check of
 record: the policy check, then each θ entry's provenance against the trusted input, the service's registration log, the
 run's own record and the program function's parameters. `InferenceOnly.Assumptions.ThetaRegistered`
 (`Definitions/InferenceOnly/Assumptions/Theta.lean`, [THETA-REGISTERED]) states what θ must hold: registered information,
@@ -24,7 +24,7 @@ the auditor knows which log is the deployment's, and how the reference training 
 `theta-width` (the cited value's dimensions give the parameter's gates) is checked but not stated here: under the
 binding premise equal roots already give equal rows.
 
-Proved as `InferenceOnlyVerifier.Properties.SecurityProofs.ThetaProvenance : InferenceOnlyVerifier.Properties.ThetaProvenance` in
+Proved as `InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance : InferenceOnlyCheck.Properties.ThetaProvenance` in
 `Proofs.Properties.InferenceOnly.Theta`.
 -/
 
@@ -80,7 +80,7 @@ def ProvenanceHeld (j tr : Json) : Prop :=
       strAt run "program" = some (Flock.hexOf P.sha512) ∧ ∀ t < i.theta.size, HeldAtStart j i P log run ps t
 
 /-- **θ holds what the deployment's first record registers.** On every instance `j` and trusted input `tr` that
-`InferenceOnlyVerifier.Theta.evaluate` accepts, `ProvenanceHeld j tr`. -/
+`InferenceOnlyCheck.Theta.evaluate` accepts, `ProvenanceHeld j tr`. -/
 def ThetaProvenance : Prop :=
   ∀ (j tr out : Json), Theta.evaluate j tr = .ok out → ProvenanceHeld j tr
 
