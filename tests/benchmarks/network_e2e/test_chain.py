@@ -73,7 +73,7 @@ def test_the_advice_is_read_as_v0_json_as_its_bytes_and_as_an_upgraded_standin(t
         chain.advice(tmp_path / "c.json")
 
 
-def test_the_bits_per_window_are_v0s_and_the_residuals_and_the_certified_io_binds_and_rebuilds_the_advice():
+def test_the_bits_per_window_are_v0s_and_the_residuals_and_the_attested_io_binds_and_rebuilds_the_advice():
     adv = _advice()
     unbound = chain.bits(adv, T, 3, CONFIG, None)
     assert unbound["bound"] is None and unbound["public_fields"] is None and unbound["rebuilt"] is None
