@@ -1,7 +1,7 @@
 schema = "verity-bench/steady-spec/v0"
 id = "llama32-1b-flock-steady-small-h200"
-# Llama 3.2 1B's census block types other than its int8 coordinates and its attention, each under its census name, at one
-# prover on one H200 with ten cores: a statement of `full` instances (`benchmarks/served_units/stage.py`) for a type at
+# Llama 3.2 1B's census block types other than its attention, each under its census name, at one prover on one H200 with
+# ten cores: a statement of `full` instances (`benchmarks/served_units/stage.py`) for a type at
 # k_log 24 or below, one block a statement for one at 2^25 or 2^26. Launch with `verity-bench run SPEC --direct NODE`.
 workload = "llama32-1b"
 card = "h200"
@@ -18,6 +18,20 @@ RUST_MIN_STACK = "67108864"
 [admission]
 max_minutes = 60
 mem_gb = 300
+
+[[row]]
+type = 'census:ScaledMmS8Coordinate_v1{K=2048,DOT={"fn":"BlackwellS8ImmaDot32_v1"}}'
+n = 4096
+pin = "cddc228960b50d110d33b7d34cc6e124c8e66e09f1c6af04dd531de7c498a247cfff5ed22660dcc5d85f232ed1de77341de2d4cd1e6405543c3aeb52315ef5ca"
+provers = [1]
+warm = 3
+
+[[row]]
+type = 'census:ScaledMmS8Coordinate_v1{K=8192,DOT={"fn":"BlackwellS8ImmaDot32_v1"}}'
+n = 2048
+pin = "6d64749a9fb3732f3320b6146b987dc33c66ceab45f12d45c526f7a773484975ccd2377d4fd1e2ca65e39e1db055f9b324a03773ceeb4c6e8834e74db9bd323b"
+provers = [1]
+warm = 3
 
 [[row]]
 type = 'census:Gemm_v2{K=2048,N=1,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
