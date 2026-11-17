@@ -7,7 +7,9 @@ capture sizes, `CLASS_G_EXECUTIONS`), on H200 (`predict.dsa`'s domain).  A regis
 only the step's), and the prefix cache on or off.  The step compiler admits
 such a registration (`predict.steps.launch_class`), compiles a long prompt as its prefill chunks, each at the launch it ran in, and
 a prefix-cache hit or a request a Commit window carries as the request's Program after its history, and refuses by name, request by
-request, a launch `predict.dsa` doesn't write: a step past the 2,048 tokens its captured all-reduce and cuBLAS routes cover.  A row
+request, a launch `predict.dsa` doesn't write, such as an all-reduce no capture covers (`tp_allreduce.covered`: at vLLM's
+defaults GLM-5.3's to 8,192 tokens on a recorded node tree, with the custom all-reduce off to 2,048); cuBLAS's route scan
+records its routes to 8,192 (`cublas_routes.json`).  A row
 past INDEX_TOPK (2,048) keys compiles, its top-k computed from its logits in the Program and its rows read in ascending index
 order, the canonical row an engine under `DSA_TOPK_ENV` serves, so the served `max_model_len` can pass INDEX_TOPK.
 `verity_vllm.LLM(engine_class="G", max_model_len=N)` serves it at `CLASS_G_SERVED`, the limits within which every launch is
@@ -36,9 +38,8 @@ CLASS_G_EXECUTIONS: dict[str, str | None] = {"eager": None, "compiled": "breakab
 #: class G's engine limits: a registration states each, at most these.  Its `max_model_len` is the step compiler's alone, the
 #: positions the Definitions a request's rows bind are circuit-checked to; a served engine's is its launch's (`CLASS_G_SERVED`)
 CLASS_G_LIMITS = {"max_num_batched_tokens": 8192, "max_model_len": 131072, "long_prefill_token_threshold": 256, "max_num_seqs": 1024}
-#: the engine limits a served class-G engine runs at, its `max_num_seqs` at most the class's: within `CLASS_G_LIMITS`, where every
-#: launch `predict.dsa` writes is captured (steps of at most 2,048 tokens), a long prompt prefilled in chunks of at most 256 rows;
-#: its `max_model_len` is the launch's
+#: the engine limits a served class-G engine runs at, its `max_num_seqs` at most the class's: within `CLASS_G_LIMITS`, steps of
+#: at most 2,048 tokens, a long prompt prefilled in chunks of at most 256 rows; its `max_model_len` is the launch's
 CLASS_G_SERVED = {"max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256}
 #: the experts class G's decoder writes (`predict.dsa` refuses another): vLLM's own selection for GLM-5.3's block-FP8 experts on
 #: the H200, given to the served engine so it applies it and its target declares it
