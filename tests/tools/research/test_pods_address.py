@@ -1,8 +1,8 @@
 """How `research` reaches a RunPod machine without asking RunPod at every call (pods/runpod.py, remote.pod_target): the address
 last read is kept and used only where the host there proves the host key recorded for it, by ssh commands that check that key; a
-read asks GraphQL when REST gives no answer; and every call sent to RunPod is one line of the call log, with the counts RunPod
-says are left. No network and no ssh: `urlopen` answers from a queue, OpenSSH's client is a function that says what ssh says of a
-command built here, and the clock is the test's."""
+read asks GraphQL and answers in the REST API's shape; a write is refused by name; and every call sent to RunPod is one line of
+the call log, with the counts RunPod says are left. No network and no ssh: `urlopen` answers from a queue, OpenSSH's client is a
+function that says what ssh says of a command built here, and the clock is the test's."""
 from __future__ import annotations
 
 import email.message
@@ -20,12 +20,9 @@ from research import remote
 from research.pods import connect, guard, runpod
 
 POD = "abc123def45678"
-#: the headers as RunPod sends them: REST's one `ratelimit` header, GraphQL's one header a window
-REST_LEFT = {"ratelimit": '"minute";r=21;t=30, "hour";r=400;t=1800, "day";r=5000;t=43200',
-             "ratelimit-policy": '"minute";q=22;w=60, "hour";q=450;w=3600, "day";q=5400;w=86400'}
-REST_SPENT = {"ratelimit": '"minute";r=20;t=29, "hour";r=399;t=1799, "day";r=0;t=43199', "retry-after": "43199"}
 GRAPHQL_LEFT = {"x-ratelimit-remaining-minute": "170", "x-ratelimit-remaining-hour": "3500", "x-ratelimit-remaining-day": "43000"}
-REFUSED = (429, {"error": "rate limit exceeded for the day window", "status": 429}, REST_SPENT)
+GRAPHQL_SPENT = (429, {"error": "rate limit exceeded for the day window", "status": 429},
+                 {"x-ratelimit-remaining-minute": "0", "x-ratelimit-remaining-hour": "0", "x-ratelimit-remaining-day": "0"})
 REST_POD = {"id": POD, "name": "vy-x-veritor-campaign", "desiredStatus": "RUNNING", "costPerHr": 0.16, "publicIp": "203.0.113.7",
             "portMappings": {"22": 40123}, "machine": {}, "machineId": "m1", "createdAt": "2025-01-02 03:04:05.678 +0000 UTC",
             "env": {"PUBLIC_KEY": "ssh-ed25519 dummy"}}
@@ -35,6 +32,10 @@ GRAPHQL_POD = {"id": POD, "name": "vy-x-veritor-campaign", "desiredStatus": "RUN
                                      {"ip": "203.0.113.7", "isIpPublic": True, "privatePort": 22, "publicPort": 40123, "type": "tcp"}]}}
 GRAPHQL_STOPPED = {"id": "zzz999yyy88877", "name": "vy-old-veritor-campaign", "desiredStatus": "EXITED", "costPerHr": 0.03,
                    "machineId": "m2", "createdAt": "2024-12-01T01:02:03.456Z", "machine": {"gpuTypeId": "unknown"}, "runtime": None}
+#: a pod still starting: its ssh port is mapped only on the private network so far
+GRAPHQL_STARTING = {"id": "sss111ttt22233", "name": "vy-new-veritor-campaign", "desiredStatus": "RUNNING", "costPerHr": 0.64,
+                    "machineId": "m3", "createdAt": "2026-11-17T19:02:01.022Z", "machine": {"gpuTypeId": "NVIDIA H200"},
+                    "runtime": {"ports": [{"ip": "100.65.0.4", "isIpPublic": False, "privatePort": 22, "publicPort": 22, "type": "tcp"}]}}
 AS_REST = {"id": POD, "name": "vy-x-veritor-campaign", "desiredStatus": "RUNNING", "costPerHr": 0.16, "machineId": "m1",
            "createdAt": "2025-01-02T03:04:05.678Z", "machine": {"gpuTypeId": "unknown"}, "publicIp": "203.0.113.7",
            "portMappings": {"22": 40123}}
@@ -64,30 +65,24 @@ def _headers(values: dict) -> email.message.Message:
 
 
 class Wire:
-    """`urlopen`'s stand-in. REST and GraphQL each answer from their own queue: (status, body, headers), or an exception to raise.
-    `sent` is every request: (api, method, path) for REST, (api, method, query) for GraphQL."""
+    """`urlopen`'s stand-in for GraphQL, the only API asked: each answer is (status, body, headers), or an exception to raise.
+    `sent` is every query."""
 
     def __init__(self):
-        self.rest: list = []
         self.graphql: list = []
-        self.sent: list[tuple[str, str, str]] = []
+        self.sent: list[str] = []
 
     def __call__(self, request, timeout=0):
-        api = "graphql" if request.full_url.startswith("https://api.invalid/graphql") else "rest"
-        what = json.loads(request.data)["query"] if api == "graphql" else request.full_url.removeprefix(runpod.REST)
-        self.sent.append((api, request.get_method(), what))
-        queue = self.graphql if api == "graphql" else self.rest
-        assert queue, f"an unexpected {api} call: {what}"
-        answer = queue.pop(0)
+        assert request.full_url.startswith("https://api.invalid/graphql?"), f"a call to another API: {request.get_method()} {request.full_url}"
+        self.sent.append(json.loads(request.data)["query"])
+        assert self.graphql, f"an unexpected call: {self.sent[-1]}"
+        answer = self.graphql.pop(0)
         if isinstance(answer, Exception):
             raise answer
         status, body, headers = answer
         if status >= 400:
             raise urllib.error.HTTPError(request.full_url, status, "x", _headers(headers), io.BytesIO(json.dumps(body).encode()))
         return Answer(status, body, headers)
-
-    def apis(self) -> list[str]:
-        return [api for api, _, _ in self.sent]
 
 
 @pytest.fixture
@@ -106,32 +101,33 @@ def log_lines() -> list[str]:
     return (runpod._env_dir() / runpod.CALL_LOG).read_text().splitlines()
 
 
+def listed(*pods) -> tuple:
+    return (200, {"data": {"myself": {"pods": list(pods)}}}, GRAPHQL_LEFT)
+
+
 # ---- the call log ---------------------------------------------------------------------------------------------------------------------------
 
 def test_every_call_sent_to_runpod_is_one_log_line_with_the_counts_left(wire, monkeypatch):
-    wire.rest += [(200, REST_POD, REST_LEFT), REFUSED, urllib.error.URLError(ConnectionRefusedError(111, "Connection refused"))]
-    wire.graphql += [(200, {"data": {"myself": {"clientBalance": 242.0}}}, GRAPHQL_LEFT)]
-    assert runpod._request("GET", f"/pods/{POD}") == REST_POD
-    with pytest.raises(runpod.PodError, match="GET /pods -> HTTP 429: .*rate limit exceeded for the day window") as refused:
+    wire.graphql += [(200, {"data": {"pod": GRAPHQL_POD}}, GRAPHQL_LEFT), GRAPHQL_SPENT,
+                     (200, {"data": {"myself": {"clientBalance": 242.0}}}, GRAPHQL_LEFT)]
+    assert runpod._request("GET", f"/pods/{POD}") == AS_REST
+    with pytest.raises(runpod.PodError, match="GraphQL -> HTTP 429: .*rate limit exceeded for the day window") as refused:
         runpod._request("GET", "/pods")
     assert refused.value.code == 429
     monkeypatch.setattr("sys.argv", ["/data/src/research/__main__.py", "pods", "guard", "--supervise", "--budgets", "/notes"])
     assert runpod._graphql("{ myself { clientBalance } }")["data"]["myself"]["clientBalance"] == 242.0
-    with pytest.raises(runpod.PodError, match="DELETE /pods/abc123def45678: URLError"):
-        runpod._request("DELETE", f"/pods/{POD}")
     pid = runpod.os.getpid()
     assert log_lines() == [
-        f"2023-11-14T22:13:20Z rest GET /pods/{POD} 200 day=5000 hour=400 minute=21 by=research,pods,ssh pid={pid}",
-        f"2023-11-14T22:13:20Z rest GET /pods 429 day=0 hour=399 minute=20 by=research,pods,ssh pid={pid}",
-        f"2023-11-14T22:13:20Z graphql POST myself.clientBalance 200 day=43000 hour=3500 minute=170 by=research,pods,guard pid={pid}",
-        f"2023-11-14T22:13:20Z rest DELETE /pods/{POD} none by=research,pods,guard pid={pid}"]
+        f"2023-11-14T22:13:20Z graphql POST pod.input 200 day=43000 hour=3500 minute=170 by=research,pods,ssh pid={pid}",
+        f"2023-11-14T22:13:20Z graphql POST myself.pods 429 day=0 hour=0 minute=0 by=research,pods,ssh pid={pid}",
+        f"2023-11-14T22:13:20Z graphql POST myself.clientBalance 200 day=43000 hour=3500 minute=170 by=research,pods,guard pid={pid}"]
 
 
 def test_the_api_key_is_in_no_log_line_no_message_and_no_error(wire, monkeypatch, capsys):
-    """REST's header and the GraphQL request's URL hold the key. It is written nowhere: not when RunPod's answer repeats the
-    request, not when a failure's own text holds the URL or the header, and not when the command line holds the key."""
+    """The GraphQL request's URL holds the key. It is written nowhere: not when RunPod's answer repeats the request, not when a
+    failure's own text holds the URL, and not when the command line holds the key."""
     url = f"https://api.invalid/graphql?api_key={KEY}"
-    echo = {"error": f"refused {url} with Authorization: Bearer {KEY}"}
+    echo = {"error": f"refused {url}"}
     struck = json.dumps(echo).replace(KEY, "<the API key>")
     monkeypatch.setattr("sys.argv", ["/opt/venv/bin/research", KEY, "pods"])
     invalid = http.client.InvalidURL(f"URL can't contain control characters. '/graphql?api_key={KEY} ' (found at least ' ')")
@@ -139,105 +135,89 @@ def test_the_api_key_is_in_no_log_line_no_message_and_no_error(wire, monkeypatch
     said = []
     for failure in ((429, echo, {}), (200, {"errors": [echo]}, GRAPHQL_LEFT), invalid, no_ascii,
                     http.client.IncompleteRead(KEY.encode()), urllib.error.URLError(f"unreachable: {url}")):
-        wire.rest += [(429, echo, REST_SPENT)]
         wire.graphql += [failure]
-        with pytest.raises(runpod.PodError) as both:
+        with pytest.raises(runpod.PodError) as failed:
             runpod.get(POD)
-        said.append(str(both.value).removeprefix(f"GET /pods/{POD} -> HTTP 429: {struck}; "))
+        said.append(str(failed.value))
     no_request = "the RunPod config's API URL or key holds a character no request can carry"
     assert said == [f"GraphQL -> HTTP 429: {struck}", f"GraphQL: [{struck}]", f"GraphQL: {no_request}", f"GraphQL: {no_request}",
                     "GraphQL: IncompleteRead", "GraphQL: URLError: unreachable: https://api.invalid/graphql?api_key=<the API key>"]
     wire.graphql += [invalid]
     with pytest.raises(runpod.PodError) as balance:
         runpod._graphql("{ myself { clientBalance } }")         # the balance read's callers print what it raises
-    wire.rest += [ValueError(f"Invalid header value b'Bearer {KEY}\\n'")]
-    with pytest.raises(runpod.PodError) as header:
-        runpod._request("GET", "/pods")
-    assert [str(balance.value), str(header.value)] == [
-        f"GraphQL: {no_request}", "GET /pods: the RunPod config's API key holds a character no request can carry"]
-    written = "\n".join([*said, str(balance.value), str(header.value), *log_lines(), *capsys.readouterr()])
-    assert KEY not in written and len(log_lines()) == 14 and {ln.split()[-2] for ln in log_lines()} == {"by=research"}
+    assert str(balance.value) == f"GraphQL: {no_request}"
+    written = "\n".join([*said, str(balance.value), *log_lines(), *capsys.readouterr()])
+    assert KEY not in written and len(log_lines()) == 7 and {ln.split()[-2] for ln in log_lines()} == {"by=research"}
 
 
 @pytest.mark.parametrize("key", ["", KEY], ids=["empty-key", "key"])
 def test_only_a_key_the_config_holds_is_struck_from_what_runpod_answers(wire, tmp_path, key):
     """An empty key is between every two characters of any text, so striking it would leave RunPod's answer unreadable: with no
-    key to strike, REST's answer and GraphQL's are quoted as they came."""
+    key to strike, GraphQL's answer is quoted as it came."""
     (tmp_path / "config.toml").write_text(f'apikey = "{key}"\napiurl = "https://api.invalid/graphql"\n')
     echo = {"error": f"rate limit exceeded for Bearer {KEY}"}
     answer = json.dumps(echo).replace(KEY, "<the API key>") if key else json.dumps(echo)
-    wire.rest += [(429, echo, REST_SPENT)] * 2
     wire.graphql += [(429, echo, {}), (200, {"errors": [echo]}, GRAPHQL_LEFT)]
     for graphql in (f"GraphQL -> HTTP 429: {answer}", f"GraphQL: [{answer}]"):
-        with pytest.raises(runpod.PodError) as both:
+        with pytest.raises(runpod.PodError) as failed:
             runpod.get(POD)
-        assert str(both.value) == f"GET /pods/{POD} -> HTTP 429: {answer}; {graphql}"
+        assert str(failed.value) == graphql
 
 
 def test_the_log_starts_again_past_its_size_and_a_log_that_cannot_be_written_fails_no_call(wire, monkeypatch, tmp_path, capsys):
-    wire.rest += [(200, [], REST_LEFT)] * 5
-    monkeypatch.setattr(runpod, "CALL_LOG_MAX", 150)
+    wire.graphql += [listed()] * 5
+    monkeypatch.setattr(runpod, "CALL_LOG_MAX", 200)
     for _ in range(3):
         assert runpod.pods() == []
     older = runpod._env_dir() / f"{runpod.CALL_LOG}.1"
-    assert len(older.read_text().splitlines()) == 2 and len(log_lines()) == 1, "two lines pass 150 bytes: the third starts a new log"
+    assert len(older.read_text().splitlines()) == 2 and len(log_lines()) == 1, "two lines pass 200 bytes: the third starts a new log"
 
     (tmp_path / "a-file").write_text("")
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "a-file"))
-    assert runpod.pods() == [] and runpod.pods() == [] and wire.rest == [], "no directory to log in: the calls are made and answered"
+    assert runpod.pods() == [] and runpod.pods() == [] and wire.graphql == [], "no directory to log in: the calls are made and answered"
     said, = capsys.readouterr().err.splitlines()
     assert said.startswith("research: RunPod's call log can't be written, so its calls are in none: NotADirectoryError: ")
 
 
-# ---- GraphQL when REST gives no answer -------------------------------------------------------------------------------------------------------
+# ---- the reads, from GraphQL in the REST API's shape; the writes, refused ------------------------------------------------------------------
 
-def test_one_pod_is_read_from_graphql_when_rest_refuses_and_comes_back_in_rests_shape(wire):
-    wire.rest += [REFUSED]
+def test_one_pod_is_read_from_graphql_in_the_rest_apis_shape(wire):
     wire.graphql += [(200, {"data": {"pod": GRAPHQL_POD}}, GRAPHQL_LEFT)]
     pod = runpod.get(POD)
     assert pod == AS_REST and runpod.ssh_target(pod) == runpod.ssh_target(REST_POD) == ("203.0.113.7", 40123)
-    assert wire.sent == [("rest", "GET", f"/pods/{POD}"),
-                         ("graphql", "POST", f'{{ pod(input: {{podId: "{POD}"}}) {{ {runpod.POD_FIELDS} }} }}')]
-    assert [ln.split()[1:5] for ln in log_lines()] == [["rest", "GET", f"/pods/{POD}", "429"], ["graphql", "POST", "pod.input", "200"]]
+    assert wire.sent == [f'{{ pod(input: {{podId: "{POD}"}}) {{ {runpod.POD_FIELDS} }} }}']
 
 
-def test_the_pods_are_listed_from_graphql_when_rest_refuses(wire):
-    wire.rest += [REFUSED, (503, {"error": "upstream"}, {}), urllib.error.URLError(TimeoutError("timed out"))]
-    wire.graphql += [(200, {"data": {"myself": {"pods": [GRAPHQL_POD, GRAPHQL_STOPPED]}}}, GRAPHQL_LEFT)] * 3
+def test_the_pods_are_listed_from_graphql_and_one_with_no_public_ssh_port_yet_has_no_ssh_target(wire):
+    wire.graphql += [listed(GRAPHQL_POD, GRAPHQL_STOPPED, GRAPHQL_STARTING)]
     stopped = {"id": "zzz999yyy88877", "name": "vy-old-veritor-campaign", "desiredStatus": "EXITED", "costPerHr": 0.03, "machineId": "m2",
                "createdAt": "2024-12-01T01:02:03.456Z", "machine": {"gpuTypeId": "unknown"}, "publicIp": "", "portMappings": {}}
-    for _ in range(3):                      # its rate limit, a server error, no answer at all
-        assert runpod.pods() == [AS_REST, stopped]
-    assert runpod.ssh_target(stopped) is None and wire.apis() == ["rest", "graphql"] * 3
-    assert wire.sent[1][2] == f"{{ myself {{ pods {{ {runpod.POD_FIELDS} }} }} }}"
+    starting = {"id": "sss111ttt22233", "name": "vy-new-veritor-campaign", "desiredStatus": "RUNNING", "costPerHr": 0.64,
+                "machineId": "m3", "createdAt": "2026-11-17T19:02:01.022Z", "machine": {"gpuTypeId": "NVIDIA H200"}, "publicIp": "",
+                "portMappings": {}}
+    assert runpod.pods() == [AS_REST, stopped, starting]
+    assert (runpod.ssh_target(stopped), runpod.ssh_target(starting)) == (None, None)
+    assert wire.sent == [f"{{ myself {{ pods {{ {runpod.POD_FIELDS} }} }} }}"]
     assert guard.parse_time(AS_REST["createdAt"]) == guard.parse_time(REST_POD["createdAt"]), "the guard reads a pod's age from either"
 
 
-def test_an_answer_from_rest_stands_and_a_pod_graphql_does_not_know_is_gone(wire):
-    wire.rest += [(404, {"error": "pod not found"}, REST_LEFT), (401, {"error": "unauthorized"}, {}), REFUSED]
+def test_a_pod_graphql_does_not_know_is_gone_and_an_id_that_is_not_one_is_put_in_no_query(wire):
     wire.graphql += [(200, {"data": {"pod": None}}, GRAPHQL_LEFT)]
-    with pytest.raises(runpod.PodError, match="HTTP 404: not found") as gone:
+    with pytest.raises(runpod.PodError, match=f"GraphQL pod {POD}: not found") as gone:
         runpod.get(POD)
-    with pytest.raises(runpod.PodError, match="GET /pods -> HTTP 401") as denied:
-        runpod.pods()
-    assert (gone.value.code, denied.value.code) == (404, 401) and wire.apis() == ["rest", "rest"], "REST answered: GraphQL is not asked"
-    with pytest.raises(runpod.PodError, match=f"GraphQL pod {POD}: not found") as also_gone:
-        runpod.get(POD)
-    assert also_gone.value.code == 404 and also_gone.value.pod_id == POD
-
-
-def test_when_neither_answers_the_error_names_both_and_keeps_rests_status(wire):
-    wire.rest += [REFUSED, REFUSED, REFUSED]
-    wire.graphql += [(200, {"errors": [{"message": "Cannot query field"}]}, {}), (429, {"error": "too many requests"}, {}),
-                     urllib.error.URLError(TimeoutError("timed out"))]
-    for said in ("GraphQL: .*Cannot query field", "GraphQL -> HTTP 429: .*too many requests", "GraphQL: URLError: timed out"):
-        with pytest.raises(runpod.PodError, match=f"GET /pods/{POD} -> HTTP 429: .*day window.*; {said}") as both:
-            runpod.get(POD)
-        assert both.value.code == 429 and both.value.pod_id == POD
-    wire.rest += [REFUSED]
-    with pytest.raises(runpod.PodError, match="GET /pods/no-such-id -> HTTP 429: .*; GraphQL: 'no-such-id' is not a pod id"):
+    assert gone.value.code == 404 and gone.value.pod_id == POD
+    with pytest.raises(runpod.PodError, match="GraphQL: 'no-such-id' is not a pod id"):
         runpod.get("no-such-id")
-    assert wire.apis().count("graphql") == 3, "an id that is not one is put in no query"
+    assert len(wire.sent) == 1
+
+
+@pytest.mark.parametrize(("method", "path", "pod_id"), [("POST", "/pods", None), ("DELETE", f"/pods/{POD}", POD)])
+def test_a_write_is_refused_by_name_and_sends_nothing(wire, method, path, pod_id):
+    with pytest.raises(runpod.PodError, match=rf"^{method} {path}: refused, .*rest\.runpod\.io.*INF-896.*control machine's helper") as refused:
+        runpod._request(method, path, {"name": "x"} if method == "POST" else None)
+    assert refused.value.pod_id == pod_id and wire.sent == []
+    with pytest.raises(runpod.PodError, match="INF-896"):
+        runpod.terminate(POD)
 
 
 def test_a_machine_with_no_key_asked_the_door_and_its_failure_stands(wire, monkeypatch, tmp_path):
@@ -653,12 +633,9 @@ def test_an_ssh_entry_that_names_the_pod_overrides_the_registrys_entry_and_asks_
         "without the entry the registry's is read, and RunPod asked once"
 
 
-def test_the_guard_lists_its_pods_through_graphql_while_rest_refuses(wire):
-    wire.rest += [(200, [REST_POD], REST_LEFT), REFUSED]
-    wire.graphql += [(200, {"data": {"myself": {"pods": [GRAPHQL_POD, GRAPHQL_STOPPED]}}}, GRAPHQL_LEFT)]
-    api = guard.RunPodAPI()
-    assert api.pods() == [REST_POD] and wire.apis() == ["rest"], "REST answers: it is the list, and GraphQL is not asked"
-    listed = api.pods()
-    assert [(p["id"], p["name"], p["desiredStatus"], p["costPerHr"]) for p in listed] == \
+def test_the_guard_lists_its_pods_through_graphql(wire):
+    wire.graphql += [listed(GRAPHQL_POD, GRAPHQL_STOPPED)]
+    listed_pods = guard.RunPodAPI().pods()
+    assert [(p["id"], p["name"], p["desiredStatus"], p["costPerHr"]) for p in listed_pods] == \
         [(POD, "vy-x-veritor-campaign", "RUNNING", 0.16), ("zzz999yyy88877", "vy-old-veritor-campaign", "EXITED", 0.03)]
-    assert guard.parse_time(listed[0]["createdAt"]) == guard.parse_time(REST_POD["createdAt"])
+    assert guard.parse_time(listed_pods[0]["createdAt"]) == guard.parse_time(REST_POD["createdAt"])
