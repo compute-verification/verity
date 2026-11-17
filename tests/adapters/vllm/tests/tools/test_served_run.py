@@ -307,10 +307,10 @@ def test_setup_holds_the_h200_tied_rows_predicted_build_to_the_verdicts_build_of
     assert refused.returncode == 1 and f"are not served_verdicts.sh's BUILD_OF_RECORD, {program}:{manifest}" in refused.stdout
 
 
-def test_a_tied_row_with_no_build_of_record_is_set_up_and_refused_a_window(tmp_path):
+def test_a_tied_row_with_no_build_of_record_is_set_up_with_none(tmp_path):
     row = H100["rows"]["tied_row"]
     got = build_of_record(row)
-    assert got.returncode != 0 and f"no Build of record of {row}" in got.stderr
+    assert (got.returncode, got.stdout) == (0, "\n")
     told = setup_pin(tmp_path, row, "a" * 128, "b" * 128)
     assert told.returncode == 0 and f"{row} has no served_verdicts.sh's BUILD_OF_RECORD: its predicted {'a' * 128}:{'b' * 128}" in told.stdout
 
