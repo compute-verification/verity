@@ -143,7 +143,8 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
         *((n, w) for n in metrics if n not in h200 for w in ("llama-3.1-70b-h100", "llama-3.2-1b-h100"))]
     for m in got["measurements"]:
         _, card, point = metrics[m["name"]].split("/")
-        assert m["value"] is None and m["mark"] == "measured" and m["target"] == O.GAMMA_MAX and m["verdict"] is None
+        assert m["value"] is None and m["target"] == O.GAMMA_MAX and m["verdict"] is None
+        assert m["mark"] == ("partial" if card == "h100" else "measured")
         on = f" on {words[m['member'].rsplit('-', 1)[0]]}" if m.get("member") else ""
         assert m["why"] == (f"no γ of record: no labelled run times pearl-plus at {card}'s {point}{on} "
                             "(`run_of_record=overhead`)")
@@ -283,5 +284,7 @@ def test_the_h100_s_door_sweeps_times_and_records_on_its_own_node_with_the_h200_
     assert (seven["member"], seven["value"]) == ("llama-3.1-70b-h100", rows["h100", "C"]["gamma"]["gamma"])
     assert seven["extra"]["note"] == rows["h100", "C"]["note"]
     assert (small["member"], small["value"]) == ("llama-3.2-1b-h100", None)
+    assert seven["mark"] == small["mark"] == "partial"
     own, member = R.measurements(table, {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C"})
     assert "member" not in own and own["value"] == rows["h200", "C"]["gamma"]["gamma"] and member["value"] is None
+    assert own["mark"] == member["mark"] == "measured"

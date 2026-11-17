@@ -66,7 +66,7 @@ class Gpu:
     fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch (`bench.py --bridge`),
     since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `calibration/census/hardware.json`
     (the H200's is the H100's: the same compute with more HBM); `note`: what each of its points says of the card, beside
-    its run's note."""
+    its run's note, a figure the card carries from another card's, which makes each of its points `partial`."""
 
     gpu: str
     name: str
