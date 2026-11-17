@@ -27,6 +27,14 @@ RESERVED_ENV = re.compile(r"VERITY_BENCH_\w*|RESEARCH_\w*|GPU_LEASE_\w*|CUDA_VIS
 GREEDY: Mapping[str, float] = {"temperature": 0.0}
 
 
+def wrong_card(spec_id: str, gpu_id: str, card: str) -> str | None:
+    want = GPUS[gpu_id].nvidia_smi_name
+    if all(want in name for name in card.split(", ")):
+        return None
+    return (f"the card is a {card}, not the {gpu_id} of spec {spec_id!r} ({want}): run it on a node whose card is a "
+            f"{want}, or use the spec for this card")
+
+
 @dataclass(frozen=True)
 class Preset:
     """One reproducible model, precision, machine, and engine configuration."""

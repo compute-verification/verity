@@ -128,8 +128,8 @@
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
-#     docket's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
-#     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), samples the
+#     docket's root; its circuit.json less its run fields is held to the verifier's own window-circuit record less its
+#     run fields at the class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), samples the
 #     docket's members by its rule V3C_LAW, a rate (records_audit.py refuses a fixed count): by default the rate that
 #     samples one proof block of class 4,32,4's window, under H1_TIE one of each template's, on V3C_CHALLENGER's coins
 #     (below, Coins; pinned on main's first-parent line: MAIN_FILE's, kept as $OUT/v3c-audit/main.txt, else MAIN_SHA's)
@@ -827,9 +827,9 @@ v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its c
 import json, sys
 from verity.commitments.periods import interface as IF
 mine, theirs = (json.load(open(f)) for f in sys.argv[1:3])
-ok = IF.circuit_of(theirs) == mine
+ok = IF.circuit_of(theirs) == IF.circuit_of(mine)
 print(f"WINDOW-CIRCUIT-HELD class {sys.argv[3]}: the committed circuit.json less its run fields is the verifier's own "
-      f"window-circuit record: {'PASS' if ok else 'FAIL'}")
+      f"window-circuit record less its run fields: {'PASS' if ok else 'FAIL'}")
 sys.exit(0 if ok else 1)
 EOF
   [ "${PIPESTATUS[0]}" = 0 ] && v3c_ok=1

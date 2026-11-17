@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The remote demo's served path as one command a node: each verb is the harness (`served_verdicts.sh`) at fixed
+# The remote application's served path as one command a node: each verb is the harness (`served_verdicts.sh`) at fixed
 # settings, its output through a filter that withholds a session secret after its key, so no run's log keeps one. On a
 # TERM to the run's process group the harness cleans up as it does alone: this shell waits for it, the filter outlives
 # the signal so the cleanup still has somewhere to write, and the exit status is the harness's.
