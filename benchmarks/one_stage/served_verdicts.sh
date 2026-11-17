@@ -120,10 +120,11 @@
 #     (the class, REPO at REV, LEASE_MIN; under PEARLPLUS_TIE in serve(), under the lease before serve-openai starts, from
 #     PEARLPLUS-CIRCUIT's statement of φ on the card, serve-phi.json, its circuit cut at Pearl+'s linears, as a BF16
 #     checkpoint's needs), $OUT/inference-only-policy.json and its INFERENCE-ONLY POLICY line; once the
-#     build is done, step 3's window circuit record at the class is judged by `InferenceOnlyCheck.Count`'s rule beside SPOT,
-#     with `inference-only-check --count` where the build built it, into $OUT/record/inference-only.json (the judgment against n and
-#     no count, n judged on the exact count) and its INFERENCE-ONLY line, in full with the exact counts in the serve dir's
-#     private/inference-only.json. It gates nothing.
+#     build is done, step 3's window circuit record at the class is judged beside SPOT by the Lean verifier,
+#     `inference-only-check --count`, where the build built it (and refused as undecided where it didn't), into
+#     $OUT/record/inference-only.json (the judgment against n and no count, n judged on the exact count, the record's
+#     count beside it) and its INFERENCE-ONLY line, in full with the exact counts in the serve dir's
+#     private/inference-only.json. The record carries it as its inference-only row, which the combined verdict doesn't read.
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
@@ -178,7 +179,7 @@
 # last step (`handoff`, after V3c in every run, so the composite reads V3c's audit's cases where it ran, the class window
 # of record, and step 3's audit's only in a run without V3c) writes the serve dir's private/compose: the
 # record's pieces (only the files the record reads of each, Pearl+'s verdict of record's among them), the inference-only
-# verdict, the settings the follow-on composes at (compose.env: the window and its engine steps, the product, COMPOSITE,
+# verdict, the settings the follow-on composes at (compose.env: the window and its engine steps, the product, POUW, COMPOSITE,
 # ALPHA, GAMMA, the served node, the serve dir's path, COMPOSE_NODE, the tree's commit and the host V3c's audit ran on)
 # and its every input relative to the serve dir
 # (`handoff_inputs`: verifier-side files alone, the records audits' cases and the blobs they name, H1's log and records,
@@ -437,7 +438,7 @@ DEFER_DIR=$D/private/deferred
 FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY"
 # the compose hand-off (`handoff`): the settings its follow-on composes at, its inputs' list and sums, and the pieces
 COMPOSE_DIR=$D/private/compose
-COMPOSES="K PRODUCT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
+COMPOSES="K PRODUCT POUW PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
 FOLLOW= COMPOSE= CLASH= ENV_REFUSED=
 # A compose hand-off's settings are the prover's bytes on an auditor device, so they are read as data and never run: each
 # line NAME=VALUE, NAME one of the hand-off's and set once, VALUE as handoff's printf %q writes these characters (each as
@@ -597,6 +598,8 @@ case $PRODUCT in
   *) say "PREFLIGHT: PRODUCT is onsite or remote, not $PRODUCT"; exit 3 ;;
 esac
 case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default) or 0, not $COMPOSE_OFF_NODE"; exit 3 ;; esac
+[[ -z ${V3C_GPUS:-} || $V3C_GPUS =~ ^[0-9]+(,[0-9]+)*$ ]] \
+  || { say "PREFLIGHT: V3C_GPUS is the cards V3c's audit proves on, their indices comma-separated (0,1), not $V3C_GPUS"; exit 3; }
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 # the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
 DREG=$D/deployment-registration.json
@@ -673,7 +676,7 @@ SP_CHALLENGER=${PP_CHALLENGER:-local}
 [ -n "$V3C" ] && v3c_live && SP_CHALLENGER=local
 v3c_coins() {  # where V3c's audit's coins come from, as its COINS line says
   if v3c_live; then
-    echo "the challenger $V3C_CHALLENGER (peer $([ -n "${DEFER:-}" ] && echo "the follow-on's node's" || echo "$V3C_PEER")), the window's run root's one session, the sampled-proofs audit of record"
+    echo "the challenger ${V3C_CHALLENGER%%@*} (peer $([ -n "${DEFER:-}" ] && echo "the follow-on's node's" || echo "$V3C_PEER")), the window's run root's one session, the sampled-proofs audit of record"
   else
     echo "a development challenger session where it runs (V3C_CHALLENGER $V3C_CHALLENGER), in a development run (DEVELOPMENT=1)"
   fi
@@ -867,8 +870,9 @@ v3c_warm() {  # every template of the committed window composed into $VW/compose
   fi
   say "V3C-WARM class $V3C (records_audit.py warm exit $rc, $V3C_WARM_JOBS at a time): $why"
 }
+v3c_cuda() { FLOCK_WORK=$FW . "$TREE/verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh" >&2 && echo "${CUDA_TK:-/usr/local/cuda-13.3}"; }
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
-  local run leanb m0 rc gl tie=() day=() cache=() ch=(--challenger "$V3C_CHALLENGER") ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
+  local run leanb m0 rc gl tk tie=() day=() cache=() ch=(--challenger "$V3C_CHALLENGER") ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
   [ -n "${DAY:-}" ] && day=(--day "$DAY" --day-log "$DAY_LOG" ${DAY_PARAMS:+--day-params "$DAY_PARAMS"})
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
@@ -902,13 +906,18 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     ch+=(--peer "$V3C_PEER" --challenger-key "$PP_CHALLENGER_KEY" ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"})
   fi
   V3C_AUDITED=$(hostname -s)
-  local link=()
+  local link=() gpus=() ld=() bin=$FW/flock-gpu-link/flock/target/release/flock-circuit
   [ "${V3C_ARCHIVE_LINK:-}" != 1 ] || link=(--archive-link)
-  (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
+  if [ -n "${V3C_GPUS:-}" ]; then
+    tk=$(v3c_cuda) || { say "V3C-AUDIT: V3C_GPUS=$V3C_GPUS, and this node has no CUDA 13.3 toolkit for its prover"; return 1; }
+    gpus=(--gpus "$V3C_GPUS") ld=(LD_LIBRARY_PATH="$tk/compat:$tk/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}")
+    bin=$FW/gpu/flock-gpu-link/flock/target/release/flock-circuit
+  fi
+  (cd "$TREE" && env -u PYTHONPATH "${ld[@]}" RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --sampling-design "$V3C_LAW" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" \
-    "${pool[@]}" \
-    "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/verity-verify-proof" \
+    "${pool[@]}" "${gpus[@]}" \
+    "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --ports "$ports" "${link[@]}" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
@@ -1597,7 +1606,7 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
     | "$SAY_PY" -c 'import json, sys; print(",".join(map(str, json.load(sys.stdin)["steps"])))') \
     || { say "HANDOFF refused: the window has no engine steps to hand the record (the serve dir's private/compose/window.err)"; return 1; }
   fixed_limits || return 1
-  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
+  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" POUW "$POUW" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "${SERVED_NODE:-$(hostname)}" SERVED_DIR "$D" COMPOSE_NODE "$COMPOSE_NODE" COMPOSE_TREE "$(tree_sha)" \
     AUDITED_ON "${V3C_AUDITED:-}" SAMPLED_AUDIT "$sampled" STEPS "$steps" > "$COMPOSE_DIR/compose.env" || return 1
   why=$(read_env "$COMPOSE_DIR/compose.env" "$COMPOSES" || echo "$ENV_REFUSED")
@@ -1786,6 +1795,8 @@ elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or 
     || { say "PREFLIGHT: the compose follow-on reads the record's audit in the copy, and the hand-off's SAMPLED_AUDIT, $SAMPLED_AUDIT, is no path inside it (a relative path, no part of it starting with a dot)"; exit 3; }
   [ -n "${SERVED_DIR:-}" ] \
     || { say "PREFLIGHT: the compose follow-on rebases the cases' blobs from the served node's serve dir, which the hand-off doesn't name (SERVED_DIR)"; exit 3; }
+  [ -z "$PEARLPLUS_TIE" ] || [ "$POUW" = pearlplus ] \
+    || { say "PREFLIGHT: the hand-off's window is tied to Pearl+'s W (PEARLPLUS_TIE), whose record composes under remote/v1 with POUW=pearlplus, and its POUW is $POUW"; exit 3; }
   link=$(find "$D" -type l -printf '%P\n' -quit)
   [ -z "$link" ] \
     || { say "PREFLIGHT: the compose follow-on reads the copy's own files, and its serve dir holds a link ($(printf %q "$link" | cut -c1-200)): copy the hand-off's files, never a link"; exit 3; }
@@ -1854,9 +1865,9 @@ if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live cha
         || { say "PREFLIGHT: V3c's audit is the sampled-proofs audit of record, and V3C_CHALLENGER (default PP_CHALLENGER) is $V3C_CHALLENGER, a development session, which only a development run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1"; exit 3; } ;;
     gate:?*@?*)
       [ -n "$V3C_PEER" ] \
-        || { say "PREFLIGHT: V3c's audit's session on $V3C_CHALLENGER listens on its peer's 127.0.0.1, and V3C_PEER (default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"; exit 3; }
+        || { say "PREFLIGHT: V3c's audit's session on ${V3C_CHALLENGER%%@*} listens on its peer's 127.0.0.1, and V3C_PEER (default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"; exit 3; }
       [ -n "${PP_CHALLENGER_KEY:-}" ] && [ -r "$PP_CHALLENGER_KEY" ] \
-        || { say "PREFLIGHT: V3c's audit's session on $V3C_CHALLENGER is held to the challenger key record PP_CHALLENGER_KEY, which is ${PP_CHALLENGER_KEY:-unset} and not a readable file"; exit 3; }
+        || { say "PREFLIGHT: V3c's audit's session on ${V3C_CHALLENGER%%@*} is held to the challenger key record PP_CHALLENGER_KEY, which is ${PP_CHALLENGER_KEY:-unset} and not a readable file"; exit 3; }
       if [ -n "$FOLLOW" ]; then here=${SERVED_PEER:-} what=SERVED_PEER
       elif [ -n "$H1_GATE" ]; then here=$H1_PEER what=H1_PEER
       elif [ "$POUW" = pearlplus ] && [ -n "$PEARLC_CHALLENGER_GATE" ]; then here=$PEARLC_CHALLENGER_PEER what=PEARLC_CHALLENGER_PEER
@@ -1866,7 +1877,7 @@ if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live cha
       elif [ -z "$FOLLOW" ] && [ -n "$here" ] && [ "$V3C_PEER" != "$here" ]; then
         say "PREFLIGHT: V3C_PEER (default PP_PEER) is $V3C_PEER, and $what is $here: each names the node the run serves on, where V3c's audit's session listens as the other one does"; exit 3
       fi ;;
-    *) say "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or gate:USER@HOST, not $V3C_CHALLENGER"; exit 3 ;;
+    *) say "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or gate:USER@HOST, not ${V3C_CHALLENGER%%@*}"; exit 3 ;;
   esac
 fi
 if [ -z "$V3C" ] && [ -z "$FOLLOW$COMPOSE" ] && [ "$DEVELOPMENT" != 1 ]; then  # step 3's audit is then the one of record
@@ -1984,6 +1995,13 @@ build() {  # what prove_path.sh builds, here while the endpoint serves; prove_pa
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
   RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || return 6
+  # in a work dir of its own: step 3's run.sh builds $FW's again with GPU=0 before V3c's audit
+  if [ -n "${V3C_GPUS:-}" ]; then
+    local tk
+    tk=$(v3c_cuda) || return 6
+    RESEARCH_RUN_DIR=$OUT/m0-build-gpu FLOCK_WORK=$FW/gpu CUDA_TK=$tk MODE=build GPU=1 flock "$FW/.build.lock" \
+      bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || return 6
+  fi
   # after verity-verify-proof's build, whose package it requires by path: the inference-only verdict's `inference-only-check --count`,
   # without which the verdict is the Python count's alone
   (cd verity/protocols/workload_classification/training_detection/inference_only/verifier/lean && lake build inference-only-check) || echo "inference-only-check didn't build"
@@ -2043,7 +2061,7 @@ if [ -n "$H1_GATE" ]; then
   export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3${H1_STATEMENTS:+ --statements $H1_STATEMENTS}${H1_LIVE_EVIDENCE:+ --live-evidence $H1_LIVE_EVIDENCE}"}
 fi
 if [ "$SP_CHALLENGER" != local ]; then
-  COINS="the challenger $SP_CHALLENGER (peer ${PP_PEER:-?})"
+  COINS="the challenger ${SP_CHALLENGER%%@*} (peer ${PP_PEER:-?})"
 elif [ "${PP_CHALLENGER:-local}" != local ]; then
   COINS="a local development challenger session on $(hostname -s), the served node, for step 3, a development check, since V3c's audit's live session takes the window's run root, which the gate opens once, ever"
 else

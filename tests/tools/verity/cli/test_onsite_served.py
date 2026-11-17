@@ -4,8 +4,9 @@ policy's parties and channels are their manifests'; `verity run --dry-run` resol
 no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a binding the configuration
 has no place for; the runner's variables and the bindings' keys are pinned, and no gate piece names a script, a hook or
 a binding; the served window runs once with every piece's hooks, and the onsite check
-reads the record's composed verdict, undecided while the record has no row for a listed subprotocol. The runner and the
-record are stand-ins written by each test."""
+reads the record's composed verdict, the onsite composite's Lean answer where the composite ran, undecided while the
+record has no row for a listed subprotocol or takes no Lean answer. The runner, the record and the composite's public
+output are stand-ins written by each test."""
 from __future__ import annotations
 
 import dataclasses
@@ -583,7 +584,11 @@ def test_the_served_window_with_a_binding_missing_never_starts(tmp_path, capsys,
     assert not (state / "out.started").exists()
 
 
-RECORD = """import json, sys
+#: `served_verdicts.py record` as the onsite check runs it: its rows, and its verdict the Lean answer of the one onsite
+#: composite under its ``--composite`` (``pending`` without one, with a development one or one of another product, or
+#: while a row is missing; a Lean reject rejects), with ``lean`` saying where that answer was read or why none was
+#: taken, in `served_verdicts.composite_answer`'s words; its arguments go to ``argv.json`` beside its ``--out``
+RECORD = """import glob, json, sys
 from pathlib import Path
 a = sys.argv[1:]
 if a[0] == "window":
@@ -591,25 +596,67 @@ if a[0] == "window":
     sys.exit(0)
 out = Path(a[a.index("--out") + 1])
 out.mkdir(parents=True)
+(out.parent / "argv.json").write_text(json.dumps(a))
 rows = {"integrity": "accept", "work": "accept", "space": "accept", "communication": "accept", "wipe": "accept"}
 rows.update(json.loads(%r))
-composed = "pending" if "bandwidth" not in rows else "accept"
+said, lean = None, "no composite was read"
+if "--composite" in a:
+    public = a[a.index("--composite") + 1]
+    found = [(Path(f).parent.name, json.load(open(f))) for f in sorted(glob.glob(public + "/*/composite.json"))]
+    found = [(d, doc) for d, doc in found if doc["product"] == "verity/onsite/v0"]
+    if len(found) != 1:
+        lean = f"{len(found)} composites of the onsite check (verity/onsite/v0) in {public}, not one"
+    elif found[0][1].get("development"):
+        lean = (f"{found[0][0]}/composite.json is a development check, which claims no record: "
+                + found[0][1]["development"])
+    else:
+        said = found[0][1]["verdict"]["verdict"]
+        lean = f"verity/onsite/v0's Lean check, compiled, in {found[0][0]}/composite.json"
+missing = [] if "bandwidth" in rows else ["bandwidth"]
+composed = "reject" if said == "reject" else "accept" if said == "accept" and not missing else "pending"
 (out / "verdicts.json").write_text(json.dumps({"protocols": {k: {"verdict": v} for k, v in rows.items()}}))
-print("RECORD " + json.dumps({"composed": composed, "missing": [] if "bandwidth" in rows else ["bandwidth"],
+print("RECORD " + json.dumps({"composed": composed, "missing": missing, "lean": lean,
                               "node": a[a.index("--node") + 1]}))
 """
+ALL_ROWS = {"bandwidth": "accept", "inference-only": "accept"}
+LEAN_IN = "verity/onsite/v0's Lean check, compiled, in onsite/composite.json"
 
 
-@pytest.mark.parametrize("rows, verdict, rc, reason", [
-    ({}, "undecided", 2, "missing ['bandwidth']"),
-    ({"bandwidth": "accept"}, "undecided", 2, "no row for ['inference-only']"),
-    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", 0, None),
+def onsite_composite(out: Path, product: str, verdict: str, development: str | None = None) -> None:
+    """``composite.py``'s public composite.json of ``product`` under ``out/composite``, its Lean answering
+    ``verdict``."""
+    d = out / "composite" / product.split("/")[1]
+    d.mkdir(parents=True)
+    doc = {"product": product, "verdict": {"id": product, "verdict": verdict}}
+    d.joinpath("composite.json").write_text(json.dumps({**doc, **({"development": development} if development else {})}))
+
+
+@pytest.mark.parametrize("rows, composite, verdict, rc, reason", [
+    ({}, None, "undecided", 2, "missing ['bandwidth']"),
+    ({}, ("verity/onsite/v0", "accept"), "undecided", 2, "missing ['bandwidth']"),
+    ({"bandwidth": "accept"}, ("verity/onsite/v0", "accept"), "undecided", 2, "no row for ['inference-only']"),
+    (ALL_ROWS, None, "undecided", 2, "no composite was read"),
+    (ALL_ROWS, ("verity/onsite/v0", "accept"), "accept", 0, None),
+    (ALL_ROWS, ("verity/onsite/v0", "reject"), "reject", 1, LEAN_IN),
+    (ALL_ROWS, ("verity/onsite/v0", "undecided"), "undecided", 2, LEAN_IN),
+    (ALL_ROWS, ("verity/onsite/v0", "accept", "composed on the served node"), "undecided", 2,
+     "onsite/composite.json is a development check, which claims no record: composed on the served node"),
+    (ALL_ROWS, ("verity/remote/v0", "accept"), "undecided", 2,
+     "0 composites of the onsite check (verity/onsite/v0) in {c}, not one"),
 ])
-def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monkeypatch, rows, verdict, rc, reason):
+def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monkeypatch, rows, composite, verdict, rc,
+                                                          reason):
+    """The onsite check hands the record the composite's public output where it is there (``--composite``), so the
+    period's verdict is the compiled Lean onsite check's answer as the record takes it: an accept only where that Lean
+    accepted and the record has a row for every listed subprotocol, a reject where it rejected. With no composite, a
+    development one, one of another product or an undecided one, the line is undecided and its reason is the record's
+    ``lean``, or the row it lacks."""
     monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(rows)))
     state = tmp_path / "state"
     (state / "out").mkdir(parents=True)
     (state / "out" / "machine.txt").write_text("research\nprover-1\n")
+    if composite:
+        onsite_composite(state / "out", *composite)
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
     out = capsys.readouterr().out
     assert {x["party"]: x["refused"] for x in said(out, "PARTY")} == {"verifier": None}
@@ -617,4 +664,20 @@ def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monk
     assert line["verdict"] == verdict and line["block"] == 2 and line["product"] == T.ONSITE
     assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS},
                                   **{c: rows.get(c, "absent") for c in ("bandwidth", "inference-only")}}
-    assert line["coins"] == "development" and line["reason"] == reason
+    assert line["coins"] == "development"
+    assert line["reason"] == (reason and reason.replace("{c}", str(state / "out" / "composite")))
+    argv = json.loads((state / "record" / "argv.json").read_text())
+    assert argv[argv.index("--composite") + 1:][:1] == [str(state / "out" / "composite")] if composite else \
+        "--composite" not in argv
+
+
+def test_a_smaller_demos_check_reads_no_onsite_composite(tmp_path, monkeypatch):
+    """A demo whose product isn't onsite's hands the record no composite: onsite's Lean answer is not its product's."""
+    monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(ALL_ROWS)))
+    cfg = T.configuration(R.load(CONFIG, REG)["program"]["commit"], "onsite_compute")
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "machine.txt").write_text("research\nprover-1\n")
+    onsite_composite(tmp_path / "out", "verity/onsite/v0", "accept")
+    got = T.onsite_check(cfg, tmp_path)
+    assert "--composite" not in json.loads((tmp_path / "record" / "argv.json").read_text())
+    assert got["product"] != T.ONSITE and got["verdict"] == "undecided" and got["reason"] == "no composite was read"

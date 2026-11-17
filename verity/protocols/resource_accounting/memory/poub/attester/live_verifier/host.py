@@ -167,7 +167,7 @@ LOG_LINES = 20
 COMPOSE_SUMS = "private/compose/inputs.sha256"
 COMPOSE_ENV = "private/compose/compose.env"
 """The hand-off's settings, the prover's bytes, which `served_verdicts.sh compose` reads (`compose_settings`)."""
-COMPOSE_SETTINGS = ("K", "PRODUCT", "PEARLPLUS_TIE", "COMPOSITE", "ALPHA", "GAMMA", "SERVED_NODE", "SERVED_DIR",
+COMPOSE_SETTINGS = ("K", "PRODUCT", "POUW", "PEARLPLUS_TIE", "COMPOSITE", "ALPHA", "GAMMA", "SERVED_NODE", "SERVED_DIR",
                     "COMPOSE_NODE", "COMPOSE_TREE", "AUDITED_ON", "SAMPLED_AUDIT", "STEPS")
 """The settings a hand-off may set: served_verdicts.sh's COMPOSES, in its order, which `tests/test_host.py` holds it to."""
 ENV_NAME = re.compile(r"[A-Z][A-Z0-9_]*")
