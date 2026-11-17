@@ -35,27 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The leak through the network attester over a monitoring period of sampled audits
-
-`Guarantees.MonitoringPeriodLeakAccepted` is the instance of `Guarantees.MonitoringPeriodLeakChecked` at no checked input, at a check every
-run passes (`monitoringPeriodLeak_of_checked`); `monitoringPeriodLeak` is that at `monitoringPeriodLeakChecked`.
-
-**Each window's bound** is the checked statement's at the period of no windows, whose first part reads none of the
-period: the check misses with probability `0` (`checkedWitness_true`), and the leak relation at the network
-attester's rows with a valid run gives the leak relation there (`rLeakCertifier_of_rLeakCertifierChecked`).
-
-**The count.** At a check every run passes, a window that meets `ExecutionPhaseGood` meets `ExecutionPhaseGoodChecked`
-(`executionPhaseGoodChecked_of_executionPhaseGood`), and with no checked input every check pins the rows where the layout fits
-(`checkedUnique_empty`), which it does at each window once one secret is good (`fits_of_executionPhaseGood`). The record
-format reads back under its own schedule as the parameter (`RecordFormat.readsBy_read`), so the registered parameters
-are the schedules `Ss`, and each window's operator is the checked statement's, at the windows before it
-(`runsBefore`). The checked count is then `#Ss` times the windows' count at `reg`; the statement's `∏_c (cap_c + 1)`
-is room above it.
-
-At operators that read no earlier window the statement is the one with each window's operator fixed before the
-period (`monitoringPeriodLeak_fixed`).
--/
+/-! The leak through the network attester over a monitoring period of sampled audits, as the checked statement's instance at no checked input. -/
 
 @[expose] public section
 
@@ -94,9 +74,8 @@ theorem executionPhaseGoodChecked_of_executionPhaseGood {H : Msg → Msg} {D : C
 
 end Compiled
 
-/-- **`MonitoringPeriodLeakAccepted` is `MonitoringPeriodLeakChecked` at no checked input**, at the check every run passes, the record
-format's own read-back with the schedule as the parameter, and the same operators. Each window's bound is the checked
-statement's first part at the period of no windows, which reads none of the period. -/
+/-- Each window's bound is the checked statement's first part at the period of no windows, which reads none of the
+period. -/
 theorem monitoringPeriodLeak_of_checked (hsrc : Guarantees.MonitoringPeriodLeakChecked) : Guarantees.MonitoringPeriodLeakAccepted := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Zt _
     arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf hs dec hdz x wit tops hb
@@ -139,15 +118,10 @@ theorem monitoringPeriodLeak_of_checked (hsrc : Guarantees.MonitoringPeriodLeakC
     · simp only [executionPhasesCount, Finset.union_empty]
       exact_mod_cast Nat.le_mul_of_pos_left _ hcap1
 
-/-- **The leak through the network attester over a monitoring period**: `Guarantees.MonitoringPeriodLeakAccepted`, the instance
-of `monitoringPeriodLeakChecked` at no checked input (`monitoringPeriodLeak_of_checked`). -/
 theorem monitoringPeriodLeak : Guarantees.MonitoringPeriodLeakAccepted := monitoringPeriodLeak_of_checked monitoringPeriodLeakChecked
 
 open Claims.SamplingGeneric (Arg Compiled) in
 set_option linter.unusedVariables false in
-/-- **`MonitoringPeriodLeakAccepted` at operators fixed before the period**: its statement with window `i`'s operator `op i` one
-that reads no earlier window, which is `MonitoringPeriodLeakAccepted` at the operator `fun i _ => op i`, one that ignores the
-windows before it. -/
 theorem monitoringPeriodLeak_fixed (h : Guarantees.MonitoringPeriodLeakAccepted) :
     ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
       (H : Msg → Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)

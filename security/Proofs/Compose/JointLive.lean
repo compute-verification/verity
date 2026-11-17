@@ -7,31 +7,7 @@ public import Proofs.Core.Circuit
 public import Proofs.Pouw.PearlC.WholeCircuit
 public import Proofs.ResourceAccounting.Lemmas.JointLive
 
-/-!
-# Proof of the joint guarantee over a causal game
-
-Each subprotocol's per-period guarantee over the causal game (`PeriodLive.Sound`) bounds its failure at every strategy
-of the whole game, so at a strategy the union bound over the subprotocols, the periods, the wipes and the memory terms
-sums the errors (`prob_exists_le`, `Verity.Game.prob_or_le`). Nothing here reads how the coins interleave: that is in
-each subprotocol's own guarantee. With `ecr/sha-512` at each finder, each loss is read at the finder's expected calls
-(`JointPeriodLiveECR`). A subprotocol whose own guarantee holds outside a break event gets its `Sound` with the break
-charged at its finder (`Live.sound_of_break`), not folded into its acceptance.
-
-A wipe's survivor bound (`Verity.Wipe.SurvivorBound`) is a bound in its own game. On a run whose coins at the
-boundary are the wipe's (`Verity.Wipe.OfRun.Preserves`), the run's event that the wipe accepts while foreign content
-past the survivor threshold survives is the preimage of the wipe's game's, so the survivor bound bounds it
-(`Verity.Wipe.OfRun.prob_kept_le`), and the horizon's union bound sums it (`JointPooledBlocksLive`). Read with the bits
-a strategy gives back as what it keeps (`Live.kept`: all of the foreign content when it reads it back, none otherwise),
-the survivor bound at `foreignBits` is the survivor bound at a fraction `f` (at most `f · fill + 2λ` bits plus the
-unfilled state, `λ = 128`) whenever `foreignBits ≤ f · fill + 2λ` (`Live.survives_of_survivorBound`, and on the run
-`Live.prob_survives_of_survivorBound`), and follows from it whenever `f · fill + 2λ < foreignBits`
-(`Live.survivorBound_of_survives`).
-
-The honest prover's extractor reads an evaluation, in which every unit is correct (`correct_eval`), and the commitment
-opens every gate to it, so no unit is unbound and the integrity claim holds at every nonnegative share
-(`JointPeriodLive_honest`). A one-gate circuit whose extractor reads the wrong bit fails the integrity claim on its one
-run (`JointPeriodLive_nontrivial`).
--/
+/-! Proof of the joint guarantee over a causal game, by the union bound at a strategy over the subprotocols, the periods, the wipes and the memory terms. -/
 
 @[expose] public section
 
@@ -84,11 +60,8 @@ theorem JointPeriodLiveECR : ResourceAccounting.Guarantees.JointPeriodLiveECR :=
   exact add_le_add le_rfl
     (hmono a (ENNReal.ofReal_le_ofReal (Live.pr_le_of_expectedCR (hcr a s) (hq a s))))
 
-/-- **A subprotocol's break, charged at its finder.** A subprotocol whose own guarantee bounds its failure outside an
-event `Break s` of the run (a root opened two ways, a forged release; PoUS's `RealizesSpaceOfPeriodHeld` reads its
-acceptance as `Accepts ∧ ¬ Break`) has its per-period guarantee at `PeriodLive.error`, once the break's probability at
-every strategy is at most its loss at the probability that its finder, built from that strategy, outputs a collision:
-the break is charged as its own term rather than folded into the acceptance. -/
+/-- Once the break's probability at every strategy is at most its loss at its finder's collision probability, the
+break is charged as its own term rather than folded into the acceptance. -/
 theorem Live.sound_of_break {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {O : Type}
     {G : Game O} (r : PeriodLive d α C G) (H : Claims.Msg → Claims.Msg) (c : Certificates) (a : Audit)
     (δ : Strategy G → ℝ≥0∞) (loss : ℝ≥0∞ → ℝ≥0∞) (Break : Strategy G → O → Prop)
@@ -114,7 +87,6 @@ theorem Live.unbound_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C
   · exact hw (Pouw.PearlC.WholeCircuit.correct_eval P x u)
   · exact hg (ho g)
 
-/-- **The honest prover meets every claim** (`ResourceAccounting.Guarantees.JointPeriodLive_honest`). -/
 theorem JointPeriodLive_honest : ResourceAccounting.Guarantees.JointPeriodLive_honest := by
   intro ι α _ d C O G r c s hε hX hO hW hS hQ hK
   have hall : ∀ a o, r.Holds c s a o := by
@@ -136,8 +108,6 @@ theorem JointPeriodLive_honest : ResourceAccounting.Guarantees.JointPeriodLive_h
   calc prob (fun o => ∃ a, r.accepts a o ∧ ¬ r.Holds c s a o) G s
       ≤ prob (fun _ => False) G s := prob_mono (fun o ⟨a, _, hn⟩ => hn (hall a o)) G s
     _ = 0 := prob_false G s
-
-/-! ## A period whose integrity claim fails -/
 
 /-- One computed gate, reading nothing, holding the bit `1`, and the circuit's output. -/
 def Live.toyCircuit : Verity.Circuit where
@@ -195,9 +165,6 @@ def Live.toyPeriod : PeriodLive Live.toyDevice Unit Live.toyCircuit (.ret ()) wh
 /-- The one strategy of the game with no rounds. -/
 def Live.toyStrategy : Strategy (Game.ret () : Game Unit) := PUnit.unit
 
-/-- **The bound is not vacuous** (`ResourceAccounting.Guarantees.JointPeriodLive_nontrivial`): on the one-gate circuit, a
-period whose extractor reads `0` at the gate and whose SPOT accepts is wrong at its one unit with
-probability `1`, at integrity share `0`. -/
 theorem JointPeriodLive_nontrivial : ResourceAccounting.Guarantees.JointPeriodLive_nontrivial := by
   refine ⟨Empty, Unit, inferInstance, Live.toyDevice, Live.toyCircuit, Unit, .ret (), Live.toyPeriod,
     ⟨0, 0, 0, 0, 0⟩, Live.toyStrategy, ?_⟩
@@ -239,8 +206,6 @@ theorem JointPooledBlocksLive : ResourceAccounting.Guarantees.JointPooledBlocksL
     _ ≤ _ := add_le_add hA (add_le_add hW' hM')
     _ = _ := (add_assoc _ _ _).symm
 
-/-! ## A wipe's survivor bound and the survivor bound at a fraction -/
-
 /-- **The bits of foreign content a block keeps** on the sample `x = (z, ω, c)` of the wipe's game (foreign content, seed
 and spot reads), when the device's state at the boundary holds `z` by `hold` and the block reads it back by `keep`: all
 `S_φ` bits when `keep` gives back `z`, none otherwise. -/
@@ -250,11 +215,8 @@ def Live.kept {ι : Type} {d : Device ι} {D : Verity.Circuit} {B : ℕ} {sched 
     ℕ :=
   if keep (w.filled (hold x.1) x.2.1).1 (w.filled (hold x.1) x.2.1).2 x.2.2 = x.1 then S_φ else 0
 
-/-- **The survivor bound at a fraction follows from the wipe's survivor bound.** If the wipe `w` meets its survivor
-bound at `foreignBits` and `ε`, and `foreignBits ≤ f · fill + 2λ` (`λ = 128`), then for every way `hold` of holding
-foreign content of `S_φ` bits at the boundary and `keep` of reading it back, the probability over a uniform foreign
-content, seed and spot reads that the wipe accepts while the block keeps more than `f · fill + 2λ` bits plus the
-unfilled state (`Live.kept`) is at most `ε S_φ hold keep`: the survivor bound at fraction `f`, in the wipe's own game. -/
+/-- Holds whenever `foreignBits ≤ f · fill + 2λ` (`λ = 128`), for every way of holding and reading back the foreign
+content, in the wipe's own game. -/
 theorem Live.survives_of_survivorBound {ι : Type} {d : Device ι} {D : Verity.Circuit} {B : ℕ}
     {sched : Verity.Blocks D B} {b : Fin B} {Ω Ch : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch]
     (w : Verity.Wipe d sched b Ω Ch) (foreignBits : ℕ)
@@ -288,10 +250,7 @@ theorem Live.survives_of_survivorBound {ι : Type} {d : Device ι} {D : Verity.C
       _ = 0 := Game.value_false _
       _ ≤ _ := zero_le
 
-/-- **The wipe's survivor bound follows from the survivor bound at a fraction.** If, for every way `hold` of holding
-foreign content of `S_φ` bits at the boundary and `keep` of reading it back, the wipe `w` accepts while the block keeps
-more than `f · fill + 2λ` bits plus the unfilled state (`Live.kept`, `λ = 128`) with probability at most
-`ε S_φ hold keep`, and `f · fill + 2λ < foreignBits`, then `w` meets its survivor bound at `foreignBits` and `ε`. -/
+/-- Holds whenever `f · fill + 2λ < foreignBits` (`λ = 128`). -/
 theorem Live.survivorBound_of_survives {ι : Type} {d : Device ι} {D : Verity.Circuit} {B : ℕ}
     {sched : Verity.Blocks D B} {b : Fin B} {Ω Ch : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch]
     (w : Verity.Wipe d sched b Ω Ch) (foreignBits : ℕ)
@@ -316,11 +275,8 @@ theorem Live.survivorBound_of_survives {ι : Type} {d : Device ι} {D : Verity.C
   have hU : (0 : ℝ) ≤ w.unfilled := Nat.cast_nonneg _
   linarith
 
-/-- **The survivor bound at a fraction on the run.** If the wipe `w` meets its survivor bound at `foreignBits` and `ε`,
-`foreignBits ≤ f · fill + 2λ` (`λ = 128`), and the run's coins at the boundary are the wipe's at the strategy `t`
-(`Verity.Wipe.OfRun.Preserves`), then on the run the probability that the wipe accepts while the block keeps more than
-`f · fill + 2λ` bits plus the unfilled state (`Live.kept` at the run's view) is at most `ε` at the run's moves: the
-wipe's event at a fraction `f` is inside the run's event that foreign content past the survivor threshold survives. -/
+/-- On a run whose coins at the boundary are the wipe's (`Verity.Wipe.OfRun.Preserves`), the wipe's event at a fraction
+`f` is inside the run's event that foreign content past the survivor threshold survives. -/
 theorem Live.prob_survives_of_survivorBound {ι : Type} {d : Device ι} {D : Verity.Circuit} {B : ℕ}
     {sched : Verity.Blocks D B} {b : Fin B} {Ω Ch : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch]
     {w : Verity.Wipe d sched b Ω Ch} {foreignBits : ℕ}

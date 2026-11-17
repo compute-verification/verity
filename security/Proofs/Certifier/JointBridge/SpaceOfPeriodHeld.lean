@@ -8,14 +8,7 @@ import Mathlib.Data.Sym.Sym2.Init
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 
-/-!
-# PoUS's per-period guarantee is the coins model's `.pous` input
-
-At any value `ξ` of the period's coins, PoUS's event over its own coordinate (it accepts while the capacity account held
-fewer than `S · len` bit-ticks) maps, through `RealizesSpaceOfPeriodHeld`'s coin equivalence, into `PeriodHeld`'s event
-at the other coins `other ξ`, whose probability `Pous.Period.SecurityProofs.periodHeld` bounds by `δ + ε_max`. The
-bound holds at the challenge times PoUS grades (`Definitions.Certifier.JointBridge.SpaceOfPeriodHeld`'s header).
--/
+/-! PoUS's per-period guarantee is the coins model's `.pous` input, at the challenge times PoUS grades. -/
 
 @[expose] public section
 
@@ -42,9 +35,6 @@ theorem SpaceOfPeriodHeld : ResourceAccounting.Bridge.SpaceOfPeriodHeld := by
   rw [hH', hR.len] at hn'
   exact lt_of_not_ge hn'
 
-/-- **`SpaceOfPeriodHeld` holds at the honest instance**: its premises on the code, setup's `AcceptsDecodes` and
-`PublishesRoot`, are proved, and its device premises hold at the lookup strategy on a run whose capacity account holds
-all of `C`'s bits at a tick of the capacity window on every coin (`Pous.Period.SecurityProofs.periodHeld_honest`). -/
 theorem SpaceOfPeriodHeld_honest {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
     (run : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : Audits ΩW ΩQ) (D Q L round : ℕ) (hs : P.sid.size = 32)
@@ -54,8 +44,6 @@ theorem SpaceOfPeriodHeld_honest {ι : Type} [Fintype ι] {d : ResourceAccountin
   ⟨PousCheck.Properties.SecurityProofs.acceptsDecodes, PousCheck.Properties.SecurityProofs.publishesRoot,
     Pous.Period.SecurityProofs.periodHeld_honest run P D Q L round hs hfull⟩
 
-/-- **`SpaceOfPeriodHeld` is nontrivial**: a period whose PoUS verdict accepts every coin while its claim fails is not
-`Sound` at `δ + ε_max`. -/
 theorem SpaceOfPeriodHeld_nontrivial {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
     {C : Verity.Circuit} {I : Type} [DecidableEq I] {Ω : I → Type} [∀ i, Fintype (Ω i)] [∀ i, Nonempty (Ω i)]
     (r : ResourceAccounting.PeriodRun d α C Ω) (c : ResourceAccounting.Certificates) (p : ResourceAccounting.Price)

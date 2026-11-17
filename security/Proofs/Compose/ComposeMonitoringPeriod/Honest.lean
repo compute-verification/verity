@@ -5,25 +5,7 @@ public import Proofs.Compose.Compose.SplitRateClosed
 public import Proofs.ResourceAccounting.Lemmas.Compose
 public import Properties.Pouw.MonitoringPeriod.Witnesses
 
-/-!
-# An honest period meets `CircuitWorkMonitoringPeriod`'s premises
-
-The positive twin of `ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod` and `CircuitCreditMonitoringPeriod` (brief rule I,
-as I8-COIN's `Keyed.lean` twins are of their layers), whose premises are the same at `a, b > 0`: a period of `n ≥ 1`
-windows of a circuit of one gate, one credited word, one tile and one
-live round, every tile live in every window, every stage paid with its words right and its checked values honest, and
-every sampled tile's proof accepted (`honest_meets`). It meets every premise at live numbers: `K_d = 1`, `ρ = 1`,
-`w_max = 1`, lucks `p = p0 = ½` (the operand luck pinned, `r_B = ½`, the guess bound `½`), costs `a = b = 1` and
-`SplitRateClosed`'s rate there, `Λ = 4`; binding at `δ_bind = 0` and joint soundness at `δ_ks = 0` (its openings are in
-`Unit`, so each is its committed value, and every relation holds), and `UnitFixed` at one fixed and one folded word a
-window. Its play is accepted on every path, its accepted prefix is the whole period, and its credited live words are
-`n`, so the conclusion speaks of `n` live words, not of none.
-
-That period's stopping time never moves, so its second twin (`real_meets`) is a period of `n + 1` windows whose first
-window's tile is dead and whose window `w`'s proof is refused when `w`'s round coin is `false`. It meets every premise
-at the same numbers, and its accepted prefix depends on the coins: `0` windows when the first is refused, `1` when
-the second is, and all `n + 1` when none is, with `n` credited live words then, the dead window's counting none.
--/
+/-! An honest period meets `CircuitWorkMonitoringPeriod`'s premises, and so does a period whose accepted prefix depends on the coins. -/
 
 @[expose] public section
 
@@ -35,8 +17,6 @@ theorem prob_none {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p �
   have hp : p = fun _ => False := funext fun ω => propext ⟨h ω, False.elim⟩
   rw [hp]
   exact ResourceAccounting.SecurityProofs.TS.Rounds.prob_false
-
-/-! ## The circuit and the honest period -/
 
 /-- One gate, one call site, one live round, one unit, every value committed before the round's coin. -/
 def circuit : Declared Unit where
@@ -77,8 +57,6 @@ noncomputable def play (n : ℕ) : Play (Paths Bool 1 × (Equiv.Perm (Fin 1) × 
   game := monitoringPeriodGame (tileStage circuit 1) (liveCone scheme circuit 1) 1 1 1 (period n)
   accepts := fun _ => True
   run := fun _ => anatomy
-
-/-! ## The circuit's numbers -/
 
 theorem tileWords_eq (t : Fin 1) : tileWords scheme circuit 1 t = 1 := by
   rw [Fin.fin_one_eq_zero t]
@@ -123,8 +101,6 @@ theorem splitRate : SplitRate 1 1 (1 / 2) (1 / 2) 1 1 1 4 := by
     zero_le_one (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num) one_pos one_pos
   convert h using 1
   norm_num
-
-/-! ## The honest window's claims -/
 
 theorem operandHMu_of_zero {Ω : Type} [Fintype Ω] (μ : ℝ) (d : Ω → ℝ) (pass right same : Ω → Prop)
     (hd : ∀ ω, d ω = 0) : OperandHMu μ (ReceiptGame.round d pass right same fun _ => .done) :=
@@ -197,8 +173,6 @@ theorem sum_div_le_one {n : ℕ} (hn : 0 < n) (f : Fin n → Fin 1 → ℝ) (hf 
         Finset.sum_le_sum fun w _ => by rw [Fin.sum_univ_one]; exact hf w 0
     _ = n := by simp
 
-/-! ## Every premise -/
-
 /-- **An honest period meets every premise of `CircuitWorkMonitoringPeriod`**, in its order, at `K_d = 1`, `ρ = 1`, `w_max = 1`,
 `p = p0 = ½`, `a = b = 1`, `Λ = 4`, any `δ_s > 0`, `δ_bind = δ_ks = 0`, one fixed and one folded word a window; and
 it is accepted on every path, with the whole period its accepted prefix and `n` credited live words. -/
@@ -263,8 +237,6 @@ theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
       ∑ t : Fin 1, (liveWords scheme circuit 1 ((period n).liveAt x w) t : ℝ) else 0) = n
     simp [hx, hl, liveWords, tileWords_eq]
 
-/-- **`CircuitWorkMonitoringPeriod`'s conclusion at the honest period**: `honest_meets` gives `CircuitWorkMonitoringPeriod` every premise
-in its own form. -/
 theorem honest_conclusion (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play n).accepts x ∧
       ¬ LiveWorkAt (creditedLive scheme circuit (period n) (run n) x) (wordsOf scheme circuit : ℝ) 1 1
@@ -276,7 +248,6 @@ theorem honest_conclusion (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     (play n) (run n) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk zero_le_one zero_le_one
     (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
-/-- **`CircuitCreditMonitoringPeriod`'s conclusion at the honest period**: `honest_meets` again, at `a = b = 1 > 0`. -/
 theorem honest_credit (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play n).accepts x ∧ n * ((play n).run x).fixed <
       creditPrefix scheme circuit 1 ((run n).prefixLen x) (creditedLive scheme circuit (period n) (run n) x) 1 1 4
@@ -286,8 +257,6 @@ theorem honest_credit (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
   exact ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
     (play n) (run n) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk one_pos one_pos
     (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
-
-/-! ## A period with a dead tile and a refused window -/
 
 /-- A period of `n + 1` windows whose first window's tile is dead, then `period n`. -/
 def monitoringPeriodR (n : ℕ) : ExecutionPhasePlay Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) (Fin 1) 1 (n + 1) :=
@@ -396,10 +365,8 @@ theorem creditedLive_true (n : ℕ) :
   have h0 : (monitoringPeriodR n).liveAt (constPath true (n + 1)) 0 = fun _ => false := rfl
   simp [hc, h0, hs, liveWords, tileWords_eq]
 
-/-- **A period with a dead tile and a refused window meets every premise of `CircuitWorkMonitoringPeriod`**, at
-`honest_meets`' numbers: its first window's tile is dead (`liveAt … 0`), each window's proof is refused when its
-round's coin is `false`, so its accepted prefix is `0`, `1` or all `n + 1` windows as its coins say, and on the coins
-that accept every window its credited live words are `n`, the dead window's counting none. -/
+/-- Its accepted prefix is `0`, `1` or all `n + 1` windows as its coins say, and on the coins that accept every window
+its credited live words are `n`, the dead window's counting none. -/
 theorem real_meets (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
     circuit.units ≤ 1 ∧ Scope scheme circuit δs ∧
     (∀ t : Fin 1, 1 * ((1 : ℕ) : ℝ) * shareCone scheme circuit 1 t ≤ 1) ∧
@@ -447,8 +414,6 @@ theorem real_meets (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
   · split_ifs <;> simp [tileWords_eq]
   · split_ifs <;> simp [tileWords_eq]
 
-/-- **`CircuitWorkMonitoringPeriod`'s conclusion at the period with a dead tile and a refused window**: `real_meets` gives it
-every premise. -/
 theorem real_conclusion (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (playR n).accepts x ∧
       ¬ LiveWorkAt (creditedLive scheme circuit (monitoringPeriodR n) (runR (n + 1)) x) (wordsOf scheme circuit : ℝ) 1 1
@@ -461,7 +426,6 @@ theorem real_conclusion (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
     le_rfl (monitoringPeriodR n) (playR n) (runR (n + 1)) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax
     hlk zero_le_one zero_le_one (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
-/-- **`CircuitCreditMonitoringPeriod`'s conclusion at the period with a dead tile and a refused window**, at `a = b = 1`. -/
 theorem real_credit (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (playR n).accepts x ∧ ((n + 1 : ℕ) : ℝ) * ((playR n).run x).fixed <
       creditPrefix scheme circuit 1 ((runR (n + 1)).prefixLen x)

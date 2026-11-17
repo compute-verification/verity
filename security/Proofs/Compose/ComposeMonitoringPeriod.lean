@@ -8,36 +8,7 @@ public import Proofs.ResourceAccounting.Lemmas.TS.Receipt
 public import Proofs.ResourceAccounting.Lemmas.ComposeMonitoringPeriod
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# PoUW's work over a monitoring period: proofs
-
-`ResourceAccounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodBudget` is proved here: a window's `serviceGame` is one round
-`.round d pass (fun _ => .done)`, `monitoringPeriodGame` puts the next window's game in place of its end (`consGame`), and
-`RoundGame.BudgetAt` of `.round d pass next` is the round's two conditions and `BudgetAt` of every `next ω`, so the
-period's budget is its windows', by induction on the period. The window's live tiles only pick its weights.
-
-`ResourceAccounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodTailMax` is proved here too, by induction on the game for every threshold
-`D` at once (`prob_prefix_le`): a prefix reaching `D > 0` passes its first round and has the rest reach `D − d`, so,
-conditioning on the first round's coins as `expect_weight_le` does, its probability is at most
-`E[1{pass}·e^{c·d}]·e^{−c·D} ≤ e^{−c·D}`. At `c = 1/Λ` the round bound is `BudgetAt`'s (`expBound_of_budgetAt`).
-
-`CircuitWorkMonitoringPeriod` is proved here from the period layer's covers (`MonitoringPeriodCoversStmt`, which
-`circuitWorkMonitoringPeriod_of_covers` reads as a hypothesis and `ComposeMonitoringPeriod/Covers.lean` proves as `monitoringPeriodCovers`), and
-`CircuitCreditMonitoringPeriod` from its assembly at `a, b > 0`. It is `CircuitWork`'s proof at `n` rounds, on the accepted
-prefix's live tiles:
-* per window, `ServiceBudget` at the detected live weights (`liveShare`: `0` on a tile of no live words, else
-  `liveCone`), which are at most `shareCone`, so `CircuitWork`'s `ρ`, stage-share and luck premises hold of them, with
-  its `LuckAt` from `PerLiveTile` (`luckAt_of_perLiveTile`: luck `1` on a dead tile, of weight `0`); then
-  `MonitoringPeriodBudget` (`budget_monitoringPeriod`);
-* `MonitoringPeriodTailMax` once at `t = ln(1/δ_s)`, read at the prefix `j = prefixLen` (the credited windows are the first
-  `prefixLen`, `credited_iff`); `SampledRightOff` at `n` rounds (its event `n·(δ_bind + δ_ks)`), off which every sampled
-  tile of a credited window is right at its committed values, so `PrefixOf` passes the play's first `j` rounds, and the
-  budget game's, whose checks are the play's (`acceptsUpTo_monitoringPeriodGame`);
-* per credited window, the covers, `UnitFixed`'s sums (a good tile is live in a credited window, `monitoringPeriodMode`'s
-  not-whole tiles are its live tiles not skipped whole) and `liveCone = liveShare` plus the cones of tiles of no live
-  words, at most `zeroCone` a window (`zeroS_le`: a dead tile with words reaches no live words); summed over the
-  prefix (`deficiencyUpTo_monitoringPeriodGame`), the shares in the cheaper of the two (`liveWork_of`).
--/
+/-! PoUW's work over a monitoring period: proofs. -/
 
 @[expose] public section
 
@@ -56,7 +27,6 @@ theorem budgetAt_consGame {Ω : Type} [Fintype Ω] {n : ℕ} {Λ : ℝ} (g : Rou
     simp only [consGame, RoundGame.BudgetAt] at hg ⊢
     exact ⟨hg.1, hg.2.1, hn⟩
 
-/-- `MonitoringPeriodBudget`: by induction on the period, `budgetAt_consGame` at each window. -/
 theorem MonitoringPeriodBudget : ResourceAccounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodBudget := by
   intro C Ξ _ _ N M n stg w a b K Λ Wp h
   induction Wp with
@@ -118,14 +88,11 @@ theorem prob_prefix_le {Ω : Type} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) :
         simp only [RoundGame.acceptsUpTo] at hj1
         exact hpa hj1.1
 
-/-- `MonitoringPeriodTailMax`: `prob_prefix_le` at `c = 1/Λ`, whose round bound `BudgetAt` gives. -/
 theorem MonitoringPeriodTailMax : ResourceAccounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodTailMax := by
   intro Ω _ n g Λ hΛ hB t
   have h := prob_prefix_le (c := 1 / Λ) (by positivity) g
     (ResourceAccounting.SecurityProofs.TS.Rounds.expBound_of_budgetAt g hB) (Λ * t)
   rwa [one_div, inv_mul_cancel_left₀ hΛ.ne'] at h
-
-/-! ## The live weights -/
 
 /-- **A tile's detected live weight**: its `liveCone` when it carries live words, and `0` for a tile of none, whose
 skip no sample detects. The period's budget is taken at these weights. -/
@@ -226,8 +193,6 @@ theorem stageShare_mono {N : ℕ} (stg : Fin N → ℕ) {w w' : Fin N → ℝ} (
     split_ifs
     · exact h v
     · exact le_rfl
-
-/-! ## The period's budget -/
 
 /-- **The live claims give the stages' luck**: `tileLuck` folded and `tileLuck0` whole on a live tile, as
 `luckAt_of_perTile` gives them, and `1` on a dead one. -/
@@ -333,8 +298,6 @@ theorem budget_monitoringPeriod {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc 
       (budget_executionPhase Sc Cd hLP live W hρ hρN hwmax hlk ha hb hSR hMu.1 hRB.1 hGs.1)
       fun ω => ih ω (hMu.2 ω) (hRB.2 ω) (hGs.2 ω)
 
-/-! ## The period's game, window by window -/
-
 /-- `P` of every window gives `P` of the window played at each window along every path. -/
 theorem everyExecutionPhase_at {C Ω V : Type} {M : ℕ} {P : (V → Bool) → SplitStages C V M → Prop} :
     ∀ {n : ℕ} (Wp : ExecutionPhasePlay C Ω V M n), Wp.EveryExecutionPhase P → ∀ x w, P (Wp.liveAt x w) (Wp.executionPhaseAt x w)
@@ -389,8 +352,6 @@ theorem deficiencyUpTo_monitoringPeriodGame {C Ξ : Type} {N M : ℕ} (stg : Fin
       rfl
     · rw [ite_eq_right hw, ite_eq_right (show ¬(w'.succ : ℕ) < j + 1 by rw [Fin.val_succ]; omega)]
 
-/-! ## The accepted prefix -/
-
 theorem credited_mono {C B V : Type} {m s Np n : ℕ} (pr : Outcomes C B m s Np n V) {x : Paths (Paths C m × B) n}
     {w w' : Fin n} (h : pr.Credited x w) (hw : w' ≤ w) : pr.Credited x w' :=
   fun w'' h'' i => h w'' (h''.trans hw) i
@@ -414,8 +375,6 @@ theorem credited_iff {C B V : Type} {m s Np n : ℕ} (pr : Outcomes C B m s Np n
     have hc' := Finset.card_le_card hsub
     rw [Fin.card_Iio] at hc'
     omega
-
-/-! ## One window's words -/
 
 section Window
 
@@ -564,8 +523,6 @@ theorem liveWork_of {Nlive Nw a b Λl D0 fixed fd Gt NWt SF S0 Z j : ℝ} (ha : 
       have e : j * (b * D0) = b * (j * D0) := by ring
       linarith
 
-/-! ## The period's work -/
-
 open Classical in
 /-- **One accepted run's work over the period**, off both events: per credited window, the covers, `UnitFixed`'s
 sums and the zero-word cones, summed over the accepted prefix, whose budget game's shares are below `Λl`. -/
@@ -709,8 +666,6 @@ theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np 
   rw [hdef] at hlt
   exact liveWork_of ha hb (Nat.cast_nonneg _) hSF hS0 hZ hZD hfixL hfoldL hG hNW hlt
 
-/-! ## `CircuitWorkMonitoringPeriod` -/
-
 /-- **`CircuitWorkMonitoringPeriod` from the period layer's covers**: the assembly, reading `MonitoringPeriodCoversStmt` as a hypothesis
 (`monitoringPeriodCovers` proves it). Off `SampledRightOff`'s event and the period budget's tail at its accepted prefix,
 `work_step`. -/
@@ -749,8 +704,6 @@ theorem circuitWorkMonitoringPeriod_of_covers (hC : MonitoringPeriodCoversStmt) 
         (hFix x hacc).1 (hFix x hacc).2 hlt
   refine (prob_mono hsub).trans ((prob_or_le _ _).trans ?_)
   linarith
-
-/-! ## `CircuitCreditMonitoringPeriod` -/
 
 /-- **The credit is below the work**: under `LiveWorkAt` at `r(j)` with `a, b > 0`, the words not fixed right,
 `(d_F + d₀)·N_w`, are at most `r(j)·N_w/min(a, b) = ε(j)·N_live`, so `(1 − ε(j))₊·N_live` is at most the words fixed

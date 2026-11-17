@@ -3,28 +3,7 @@ module
 public import Definitions.WeightSecurity.Cut
 public import Definitions.WeightSecurity.Served
 
-/-!
-# Weight security under SPOT's fault model: faults as inputs to the served circuit
-
-SPOT's guarantee is a fault model: an accepted server's outputs are the honest circuit's with at most `M` incorrect proof
-blocks, each writing what the server chose. Here a fault is an input to the circuit, not an overwrite of what it
-releases. A fault pattern `φ : F` names some proof blocks and the values they write instead, and `size φ` counts the
-blocks. The faulted served function `Cf θ (x, φ)` is the circuit's run at the weights `θ` and the input `x` with the
-blocks `φ` names writing `φ`'s values; a checked population's run is unique (`Population.Dataflow.RunOf`), so its
-egress is a function of the inputs and the pattern alone.
-
-* `Outsider.withFaults O φ₀`: the outsider asking the faulted function, each query with the pattern `φ₀` beside it;
-* `NoFault size φ₀`: `φ₀` is the empty pattern, of size `0`;
-* `faultChannel … κ size φ₀ T M K`: the covert channel of a deployment whose releases are faulted runs. A covert
-  string is each window's fault pattern, or a hint of the cut `κ` where `κ` cuts the window's pattern, the sizes
-  summing to at most `M`, and then the served channel's string: each window's advice and timing bucket, an overwrite of
-  at most `K` released values, and the halt;
-* `Served.Faithful Cf size Ou L θ r l`: each accepted window that releases releases the faulted function's answer to the
-  outsider's query at the window's advice and a pattern of size at most the window's incorrect proof blocks.
-
-`Faithful` replaces `Served.Local`'s reach: a faulted run's release may differ from the honest answer anywhere
-downstream of its faults, and the channel charges the faults, not what they reach.
--/
+/-! Weight security under SPOT's fault model, a fault being an input to the served circuit rather than an overwrite of what it releases, so the channel charges the faults, not what they reach. -/
 
 @[expose] public section
 

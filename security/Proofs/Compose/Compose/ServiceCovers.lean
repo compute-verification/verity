@@ -4,19 +4,7 @@ public import Definitions.Compose.Guarantees.Compose
 public import Proofs.Pouw.TS.Sampled
 public import Proofs.ResourceAccounting.Lemmas.Compose
 
-/-!
-# `ServiceCovers`: the service's share covers every tile that isn't good
-
-`ResourceAccounting.SecurityProofs.TS.SampledLayer.covers_of_cone` at the tiles' words reduces `Covers` to the unpaid tiles'
-layer cones against the game's deficiency, `Σ_{t unpaid} tileCone t`. A layer late edge into tile `v` at slot `k`
-(`SampledLayer.Late`) has its position written by `u` (`Declared.Writes`, `u` its unit) and in `v`'s slots: either one
-of `v`'s own gates, so `u = v`, or an operand of a gate `j` of `v`'s, whose round is `v`'s (`Declared.Wf`). Under
-`LayerCommitted` the position is committed by its IR cut, so the layer's cut is the IR's and `j`'s round is before it,
-`Declared.Late` and a `Declared.UnitLate` edge; or it is a computed value that only gates of its own unit read, so `j`'s
-unit `v` is `u`, and the edge adds nothing to the cone. Along `ReflTransGen` the layer's cone lies in
-`Declared.Reaches`, and a tile's cone weight is at most `N_w` times
-its `tileCone` (`0` when `N_w = 0`: a tile's words are among the circuit's).
--/
+/-! `ServiceCovers`: the service's share covers every tile that isn't good. -/
 
 @[expose] public section
 
@@ -147,8 +135,6 @@ theorem coneWt_le {K : Type} (Sc : Scheme K) (hw : Cd.Wf) (hc : LayerCommitted C
 
 end Layer
 
-/-- `ServiceCovers`: `covers_of_cone` at the tiles' words, each unpaid tile's layer cone within `N_w` times its
-`tileCone` (`coneWt_le`), and the game's deficiency the unpaid tiles' `tileCone`. -/
 theorem serviceCovers : ResourceAccounting.Guarantees.Compose.ServiceCovers := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ Sc Cd Np Kd hr hK R Pl pr hw hc hG
   refine ResourceAccounting.SecurityProofs.TS.SampledLayer.covers_of_cone (Cd.layer hr hK pr) Pl (jointMode R)

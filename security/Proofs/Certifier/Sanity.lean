@@ -6,26 +6,13 @@ public import Mathlib.Data.Set.Card
 import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Certifier.Occupancy
 
-/-!
-# Satisfiability witnesses (the project's rule: no named hypothesis without one)
-
-* `witnessCertifier` satisfies W2, W3 (`B = 1`), W4, W5, W6 and J (`D = 2`) all at once. Windows have two steps. The
-  jitter takes both values, rows vary with the sender's action, and a fault really does empty the rest of the window
-  and fail the status.
-* `ingress_witness` meets every hypothesis of the ingress bound at once (W4's allocation `Allocated` among them), with
-  27 decoded messages, and `ingress_witness_tight` shows the bound is 27: it is met exactly.
-* `allocated_witness` meets them all again with an allocation of one frame on two slots (`r = 1 < S = 2`), and
-  `allocated_witness_tight` shows its 8 messages meet the bound exactly, below the 27 of `r = S`.
-* The toy of the September draft: `(2 + 1)^6 = 729` left-packed occupancies.
--/
+/-! Satisfiability witnesses: no named hypothesis without one. -/
 
 @[expose] public section
 
 namespace NetTiming
 
 open Finset
-
-/-! ## A certifier -/
 
 /-- The witness sender's action: how many frames to release (0, 1 or 2), a jitter bit, and whether to fault. -/
 structure WAct where
@@ -58,12 +45,12 @@ theorem witnessCertifier_assumptions :
     Regenerates witnessCertifier (fun _ o => o) ∧ Padded witnessCertifier 1 ∧ Packed witnessCertifier ∧
       UntimedStatus witnessCertifier winEnd2 ∧ FailClosed witnessCertifier winEnd2 ∧ JitterBounded witnessCertifier 2 := by
   refine ⟨fun _ _ _ => rfl, ?_, ?_, ?_, ?_, ?_⟩
-  · -- W3
+  ·
     intro k xs as ℓ s f h
     simp only [witnessCertifier, witnessObs] at h
     split_ifs at h
     cases h; rfl
-  · -- W4
+  ·
     intro k xs as ℓ s s' hle h
     simp only [witnessCertifier, witnessObs] at h ⊢
     split_ifs at h with hc
@@ -71,13 +58,13 @@ theorem witnessCertifier_assumptions :
       · rfl
       · exact absurd ⟨hc.1, lt_of_le_of_lt (Fin.le_def.mp hle) hc.2⟩ hc'
     · simp at h
-  · -- W5
+  ·
     intro k xs as hk κ
     simp only [witnessCertifier, witnessObs]
     split_ifs with hc
     · exact absurd hc.1 hk
     · rfl
-  · -- W6
+  ·
     intro i k xs as hi hlen hik hkw hf
     simp only [witnessCertifier] at hf
     have hwin : winEnd2 i = 2 * (i / 2) + 1 := rfl
@@ -95,7 +82,7 @@ theorem witnessCertifier_assumptions :
         · rw [← h, hgetD, hf]; simp
       simp only [hfk, and_self, ↓reduceIte]
       exact fun h => by cases h
-  · -- J
+  ·
     intro k xs as
     simp only [witnessCertifier, witnessObs]
     exact (as.getD k default).jit.2
@@ -104,11 +91,6 @@ theorem witnessCertifier_assumptions :
 theorem witnessCertifier_jitter_varies :
     (witnessCertifier.obs 0 [()] [⟨0, 0, false⟩]).jitter ≠ (witnessCertifier.obs 0 [()] [⟨0, 1, false⟩]).jitter := by
   simp [witnessCertifier, witnessObs]
-
-/-! ## A reacting operator
-
-An operator that reacts to what it observes. With no timing advice, exactly one secret is accepted despite the
-feedback. -/
 
 /-- A reacting operator: its ingress is the previous step's occupancy count. -/
 def rOp (_ : ℕ) (o : List (Obs 1 1 2)) : Fin 3 :=
@@ -154,14 +136,6 @@ def rDec (ws : List (Obs 1 1 2)) : Fin 3 → Fin 3 := fun k =>
   | some x => rowCount (x.rows 0)
   | none => 0
 
-/-! ## A joint witness for the ingress bound
-
-Read inward (`NetTiming.Protocol.Ingress`): the outside's message is `z`, and its sender delivers `z k` frames `[true]`
-at step `k`; X's device is `rOp`, reacting to the last count it saw. The certifier is the witness certifier without jitter,
-so J holds with `D = 1`, and W4's allocation is the full two slots. Every hypothesis of
-`Guarantees.EncardIngressDecodableLe` holds at once, and all `27 = (2 + 1)^3` messages are decoded: the bound is met
-exactly. -/
-
 /-- The witness certifier read inward, with no jitter. -/
 def iCertifier : Certifier 1 1 2 (Fin 3) WAct (Obs 1 1 2) where
   obs k _ as := { witnessObs k [] as with jitter := 0 }
@@ -193,13 +167,6 @@ theorem ingress_witness :
 theorem ingress_witness_tight :
     (Set.univ : Set (Fin 3 → Fin 3)).encard = (((∏ _ℓ : Fin 1, (2 + 1)) ^ 3 * 1 ^ 3 : ℕ) : ℕ∞) := by
   rw [Set.encard_univ, ENat.card_eq_coe_fintype_card, Fintype.card_fun, Fintype.card_fin]; rfl
-
-/-! ## An allocation below the slot count
-
-The link has two slots and an allocation of one frame: the certifier releases at most one frame per bucket, whatever the
-sender asks, and the outside asks for both slots to send a 1. Every hypothesis of `Guarantees.EncardIngressDecodableLe`
-holds with `r = 1 < S = 2`, and all `8 = (1 + 1)^3` messages are decoded: the bound is met exactly, and it is below the
-`(2 + 1)^3 = 27` that `r = S` gives. -/
 
 /-- The allocated certifier's network certificate: `min(count, 1)` frames `[true]`, left-packed, no jitter, complete statuses. -/
 def aObs (k : ℕ) (as : List WAct) : Obs 1 1 2 where
@@ -260,7 +227,7 @@ theorem allocated_witness_tight :
   refine ⟨?_, by decide⟩
   rw [Set.encard_univ, ENat.card_eq_coe_fintype_card, Fintype.card_fun, Fintype.card_fin]; rfl
 
-/-! ## The draft's toy -/
+/-! ## A toy of 729 left-packed occupancies -/
 
 theorem toy_leftPacked : Fintype.card {P : Fin 6 → Fin 2 → Bool // LeftPacked P} = 729 := by
   rw [card_leftPacked]; rfl

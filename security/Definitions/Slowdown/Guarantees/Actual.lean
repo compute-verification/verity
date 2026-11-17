@@ -5,23 +5,7 @@ public import Definitions.Core.Partition
 public import Definitions.InferenceOnly.Reads
 public import Definitions.InferenceOnly.Assumptions
 
-/-!
-# The actual circuit's runtime statements (trusted)
-
-In the actual-circuit model, the developer runs at `n` locations `X 0, …, X (n − 1)`, pairwise disjoint, and its region
-over `[0, t)`, as a circuit whose inputs are what it reads with the baseline `θ_A` (`Placed.declaration`), is the
-declaration the inference-only policy's statements are about.
-
-* `ServerBlocksAt` (the capacity form at any cuts): for any cuts `τ` of `[0, t)` and any set `G` of gates, the windows
-  `A[X i, [τ j, τ (j + 1))]` divide that declaration's computed gates into `n J` inference blocks, each of at most
-  `Φ_X (τ (j + 1) − τ j)` gates and reading at most `stateIn_X(τ j, G) + β_X (τ (j + 1) − τ j)` bits in `G`, baseline
-  included (`InferenceOnly.readsIn`). It takes no memory constraint: the state at each cut is in the bound.
-* `ServerBlocks` (the capacity form): the windows `A[X i, [kω, (k + 1)ω)]`, cut at `t`, divide that declaration's computed
-  gates into `n ⌈t/ω⌉` inference blocks, each of at most `Φ_X ω` gates (work priced at one per gate) and reading at most
-  `M_X + β_X ω` fresh input bits. It takes the four physical constraints it uses (`Causal`, `ComputeRate`, `Memory`, `Links`).
-
-The proofs are in `security/Proofs/ResourceAccounting/Actual/`.
--/
+/-! The actual circuit's runtime statements, which take no memory constraint: the developer's windows divide its declaration into small inference blocks. -/
 
 @[expose] public section
 

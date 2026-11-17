@@ -2,63 +2,7 @@ module
 
 public import Definitions.Slowdown.Guarantees.Remote
 
-/-!
-# The slowdown, remote protocol, over a monitoring period: the statement
-
-`SlowdownRemote` over a monitoring period of `T` windows (results are per monitoring period), with its
-premises on the protocols, `PouwSound`, `SampledDetection` and one declaration's count verdict, replaced by what each
-protocol's own guarantee gives on live coins and by each day's verdict. A window is one round of the verifier's live coins: window `t`'s
-coins `Ω t` are uniform and independent of the other windows', and a run of the period is `ξ : (t : Fin T) → Ω t`. Each
-leg is stated as `Proofs.Flock.Soundness.Audit.Periods` states a period's bound: at any value of the other windows'
-coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
-
-* **PoUW** (in place of `PouwSound`): window `t`'s certificate is incorrect (`incorrect t`: accepted with the window's time
-  below `(1 − ε)·T_cred`) with probability at most `p` over its coins. That is
-  `ResourceAccounting.SecurityProofs.Compose.CircuitCredit`'s conclusion, `p = δ_s + δ_bind + δ_ks`, at window `t`'s play, for
-  a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s premises; that
-  bridge is not stated, and `δ_bind` and `δ_ks` have no value yet (`PouwSound`), so `p` is a parameter with none.
-  `ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` credits live words over a period's accepted prefix, not time, so it
-  does not give `incorrect`'s form.
-* **SPOT** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
-  proof blocks at registration, `incorrectRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,
-  each of which a window of `Flock.Guarantees.IntegrityMonitoringPeriod` has at the strategy that plays it: the sample misses all
-  `m` of the window's faulty blocks with probability at most `(1 − q)^m` (`Flock.Guarantees.SamplingBlock.sampleMiss_le`,
-  under A3: a uniform `kd`-subset of `n` units misses `m` fixed units with probability
-  `C(n − m, kd)/C(n, kd) ≤ (1 − kd/n)^m`), and the window is accepted with a sampled faulty block with probability at most
-  `ε_ks,t + ε_bind,t` (`SamplingBlock.accepted_drawnIncorrect_le`, from `Flock.SecurityProofs.EndToEndHiddenSampled`). That
-  the deployment's window `t`, at each value of the other windows' coins, is such a window with its faulty blocks as
-  its incorrect proof blocks is a bridge not stated either: `IntegrityMonitoringPeriod` plays the windows as one sequential game, not over a
-  product of window coins. No guarantee implies `SampledDetection`'s per-block form: it conditions each block on its
-  own window's other blocks, and it folds the knowledge term into `q`, where the protocol's is additive per window. The
-  statement does not need it: a block's time is its window's, and each identity's escaped blocks are bounded at the
-  predictable time its faulty blocks reach `K + 1`, the stopped, per-identity form of `IntegrityPooled`'s own
-  argument, which `FlockSoundness.Audit.Periods.prCoin_forall_sum_le_pow` bounds by `(1 − q)^(K+1)`. That is a tail
-  bound, so the escape term needs no Markov's inequality: `J (1 − q)^(K+1)` at an escape share `J K B/C`, against
-  `SlowdownRemote`'s `J ((1 − q)/q) B/(θC)`.
-* **The halt**: `TerminalDetection` stays a named premise. The halt is code (`Fleet`'s R5-all in
-  `verity/protocols/proofs/spot/verifier/service.py`, its verifier `Spot.Fleet`), and
-  `Properties.Spot` proves what it does (`FleetHaltIsFinal`, `NoAcceptAfterHalt`), but not this form: it halts
-  an operator at its `budget`-th failure, not its first (`budget ≥ 1`); it ends the operator's registrations, not its
-  hardware's use; and nothing states the verdict's time `Δ` after the detected block.
-* **The inference-only policy**: each day `i` of the period declares `d_i`, and the statement takes the day's verdict
-  exactly, `CompliesAtMost c k n_i`, at most `n_i` proof blocks of a `(c, k)`-partition at the day's public block count
-  `n_i`: what a published `complies` of the count of `(c, k)`-inference blocks (`InferenceOnlyCheck.Count.check`) gives the Boolean
-  declaration its Program lowers to (`InferenceOnlyCheck.Properties.DescCountsCK`, stated in `security/Properties` and not yet
-  proved). Reading the check itself needs the code (package `security_properties`), so the statement takes its verdict.
-  The day's charged work meets (H) and (E) (`Slowdown.Cut.Assumptions.Hardness`, `Exports`), and `Slowdown.Cut.Guarantees.CountHE`
-  bounds its MACs by `n_i (k + α) + (k/2) √(n_i O_i / (β_w β_x))` (`Slowdown.Cut.workHE`). No rate form, padding or other
-  premise on the circuit enters. What is open on this leg is `DescCountsCK`'s proof and the bridge from the deployment's
-  days to the declarations the count reads: it is not stated.
-
-Every other premise is `SlowdownRemote`'s: the model's accounting of the four sources of counted multiplications, the
-capacities `C` and `U` (`s = U/(C + U)`), and the hardware's rate `Φ` per identity. The developer's identities `I`
-are fixed over the period: nothing here models or rests on re-registration.
-
-`Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod` proves it. `SlowdownRemoteMonitoringPeriod_honest` and `SlowdownRemoteMonitoringPeriod_nontrivial`
-are its witnesses: its premises hold at a constructed honest developer with one declared day, and at `AcceptAll`, a
-PoUW verifier that accepts every certificate, every other premise holds while PoUW's per-window bound and the conclusion
-fail.
--/
+/-! `SlowdownRemote` over a monitoring period of `T` windows, each protocol's premise replaced by its own guarantee's per-window bound on live coins and by each day's verdict; the bridges from `CircuitCredit` and `IntegrityMonitoringPeriod` to those bounds are not stated. -/
 
 @[expose] public section
 
@@ -114,21 +58,16 @@ def SlowdownRemoteMonitoringPeriod : Prop :=
     (Φ Δ H q B εW κ C U χ mfu : ℝ) (W : ((t : Fin T) → Ω t) → ℝ) (M Mu Mr Mx : ((t : Fin T) → Ω t) → ℕ)
     (R : Type) [Fintype R] (d : R → RegisteredCircuit) (n : R → ℕ) (c k : ℕ) (γ V : Type) [Fintype γ] [DecidableEq γ]
     [DecidableEq V] (Wk : (i : R) → Cut.Work (d i).D γ) (val : (i : R) → Finset (Fin (d i).D.N) → V) (βw βx b : ℝ),
-    -- PoUW, per window
     0 ≤ p → 0 < ε → (∀ t, 0 ≤ cap t) → Assumptions.WithinCompute cap C → Assumptions.PouwPerExecutionPhase incorrect p →
-    -- SPOT, per window: faulty blocks fixed before the window's coins, its sample and verdict read them
     Assumptions.SampledPerExecutionPhase bad drawn detected win q ks → 0 ≤ q → q ≤ 1 →
-    -- the identities and the halt
     Assumptions.IdentitySchedule bad win I idW τw w Φ Δ H C B → 0 < H → 0 ≤ Δ →
     (∀ ξ, Assumptions.TerminalDetection (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)) Δ) →
     (∀ b, 0 ≤ w b) → 0 ≤ B →
-    -- the inference-only policy: each day's verdict, and (H) and (E) on its charged work
     0 < κ → 0 < C → 0 ≤ U → 0 < mfu → mfu ≤ 1 → 0 < βw → 0 < βx → 0 < b →
     (∀ i, CompliesAtMost c k (n i) (d i)) → (∀ i, Cut.ValuesInjective (Wk i) (val i)) →
     (∀ i, Cut.NoSharedPair (Wk i) (val i)) →
     (∀ i, Cut.Assumptions.Hardness (d i) ![(Wk i).allW, (Wk i).allX] (val i) ![βw, βx] k) →
     (∀ i, Cut.Assumptions.Exports (Wk i) b) →
-    -- the counted multiplications
     (∀ ξ, 0 < M ξ) → (∀ ξ, Assumptions.SourcesCover (M ξ) (Mu ξ) (Mr ξ) (∑ i, (Wk i).N) (Mx ξ)) →
     (∀ ξ, Assumptions.UnmonitoredAtMost (Mu ξ) mfu κ U) →
     (∀ ξ, Assumptions.ResidualAtMost (Mr ξ) κ C εW (W ξ) (incorrectCapacity cap (fun t => incorrect t ξ)) (∑ b ∈ bad ξ, w b)) →
@@ -165,21 +104,16 @@ def SlowdownRemoteMonitoringPeriod_honest : Prop :=
     (R : Type) (_ : Fintype R) (d : R → RegisteredCircuit) (n : R → ℕ) (c k : ℕ) (γ V : Type) (_ : Fintype γ)
     (_ : DecidableEq γ) (_ : DecidableEq V) (Wk : (i : R) → Cut.Work (d i).D γ)
     (val : (i : R) → Finset (Fin (d i).D.N) → V) (βw βx b : ℝ),
-    -- PoUW, per window
     0 ≤ p ∧ 0 < ε ∧ (∀ t, 0 ≤ cap t) ∧ Assumptions.WithinCompute cap C ∧ Assumptions.PouwPerExecutionPhase incorrect p ∧
-    -- SPOT, per window: faulty blocks fixed before the window's coins, its sample and verdict read them
     Assumptions.SampledPerExecutionPhase bad drawn detected win q ks ∧ 0 ≤ q ∧ q ≤ 1 ∧
-    -- the identities and the halt
     Assumptions.IdentitySchedule bad win I idW τw w Φ Δ H C B ∧ 0 < H ∧ 0 ≤ Δ ∧
     (∀ ξ, Assumptions.TerminalDetection (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)) Δ) ∧
     (∀ b, 0 ≤ w b) ∧ 0 ≤ B ∧
-    -- the inference-only policy: each day's verdict, and (H) and (E) on its charged work
     0 < κ ∧ 0 < C ∧ 0 ≤ U ∧ 0 < mfu ∧ mfu ≤ 1 ∧ 0 < βw ∧ 0 < βx ∧ 0 < b ∧
     (∀ i, CompliesAtMost c k (n i) (d i)) ∧ (∀ i, Cut.ValuesInjective (Wk i) (val i)) ∧
     (∀ i, Cut.NoSharedPair (Wk i) (val i)) ∧
     (∀ i, Cut.Assumptions.Hardness (d i) ![(Wk i).allW, (Wk i).allX] (val i) ![βw, βx] k) ∧
     (∀ i, Cut.Assumptions.Exports (Wk i) b) ∧
-    -- the counted multiplications
     (∀ ξ, 0 < M ξ) ∧ (∀ ξ, Assumptions.SourcesCover (M ξ) (Mu ξ) (Mr ξ) (∑ i, (Wk i).N) (Mx ξ)) ∧
     (∀ ξ, Assumptions.UnmonitoredAtMost (Mu ξ) mfu κ U) ∧
     (∀ ξ, Assumptions.ResidualAtMost (Mr ξ) κ C εW (W ξ) (incorrectCapacity cap (fun t => incorrect t ξ)) (∑ b ∈ bad ξ, w b)) ∧
@@ -197,10 +131,7 @@ def SlowdownRemoteMonitoringPeriod_honest : Prop :=
 
 noncomputable section
 
-/-! **`AcceptAll`, a PoUW verifier that accepts every certificate**: one window, its coins a bit, run by the one
-identity at time 0, whose certificate, for all of the monitored compute, is incorrect and accepted on every run. It has no
-incorrect proof block and no declared day, all of the monitored compute is certified work, and the run's one counted
-multiplication is in the residual. `SlowdownRemoteMonitoringPeriod_nontrivial` is stated at it, its numbers written in place. -/
+/-! `AcceptAll`, a PoUW verifier that accepts every certificate: the instance `SlowdownRemoteMonitoringPeriod_nontrivial` is stated at. -/
 namespace AcceptAll
 
 /-- The window certifies all of the monitored compute, `C = 1`. -/
@@ -245,29 +176,23 @@ holds, PoUW's per-window bound fails (the certificate is incorrect with probabil
 at `δ = 0`, the run's compute efficiency is 1, above the bound `1/2`, and its hardware multiple is 1, below the overhead
 bound `2`, on every run. -/
 def SlowdownRemoteMonitoringPeriod_nontrivial : Prop :=
-  -- every other premise: the window's coins
   (∀ _ : Fin 1, Nonempty Bool) ∧
-  -- PoUW's capacities
   (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ t, 0 ≤ AcceptAll.cap t) ∧ Assumptions.WithinCompute AcceptAll.cap 1 ∧
-  -- SPOT, per window
   Assumptions.SampledPerExecutionPhase (Ω := fun _ => Bool) AcceptAll.bad AcceptAll.drawn AcceptAll.detected AcceptAll.win 1
     AcceptAll.ks ∧
   (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧
-  -- the identities and the halt
   Assumptions.IdentitySchedule AcceptAll.bad AcceptAll.win (∅ : Finset Unit) AcceptAll.idW AcceptAll.τw AcceptAll.w 0 0 1
     1 0 ∧
   (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧
   (∀ ξ, Assumptions.TerminalDetection (AcceptAll.bad ξ) (AcceptAll.detected ξ)
     (fun b => AcceptAll.idW (AcceptAll.win b)) (fun b => AcceptAll.τw (AcceptAll.win b)) 0) ∧
   (∀ b, 0 ≤ AcceptAll.w b) ∧ (0 : ℝ) ≤ 0 ∧
-  -- the inference-only policy
   (0 : ℝ) < 2 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (1 : ℝ) ≤ 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧
   (∀ i, CompliesAtMost 1 1 (AcceptAll.n i) (AcceptAll.d i)) ∧
   (∀ i, Cut.ValuesInjective (AcceptAll.Wk i) (AcceptAll.val i)) ∧ (∀ i, Cut.NoSharedPair (AcceptAll.Wk i) (AcceptAll.val i)) ∧
   (∀ i, Cut.Assumptions.Hardness (AcceptAll.d i) ![(AcceptAll.Wk i).allW, (AcceptAll.Wk i).allX] (AcceptAll.val i)
     ![1, 1] 1) ∧
   (∀ i, Cut.Assumptions.Exports (AcceptAll.Wk i) 1) ∧
-  -- the counted multiplications
   (∀ ξ, 0 < AcceptAll.M ξ) ∧
   (∀ ξ, Assumptions.SourcesCover (AcceptAll.M ξ) (AcceptAll.Mu ξ) (AcceptAll.Mr ξ) (∑ i, (AcceptAll.Wk i).N)
     (AcceptAll.Mx ξ)) ∧
@@ -275,9 +200,7 @@ def SlowdownRemoteMonitoringPeriod_nontrivial : Prop :=
   (∀ ξ, Assumptions.ResidualAtMost (AcceptAll.Mr ξ) 2 1 0 (AcceptAll.W ξ)
     (incorrectCapacity AcceptAll.cap (fun t => AcceptAll.incorrect t ξ)) (∑ b ∈ AcceptAll.bad ξ, AcceptAll.w b)) ∧
   (∀ ξ, Assumptions.CheatingAtMost (AcceptAll.Mx ξ) 2 0 1 0) ∧
-  -- PoUW's per-window bound fails
   ¬ Assumptions.PouwPerExecutionPhase (Ω := fun _ => Bool) AcceptAll.incorrect 0 ∧
-  -- and so does the conclusion
   ¬ (1 - (0 / (1 / 2) + (∅ : Finset Unit).card * (1 - 1) ^ ((0 : ℕ) + 1) + ∑ t, AcceptAll.ks t) ≤
       prob (PMF.uniformOfFintype (Fin 1 → Bool)) (fun ξ =>
         efficiency 2 (AcceptAll.M ξ) 1 0 ≤

@@ -9,16 +9,7 @@ import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# What the tap's certifier saw is what its relay sent
-
-`Definitions.Certifier.Tap`. Under `trusted-device` the tap's run is its code, so the cells the client receives
-are the relay's code's (`certifier_cells`) and, on a schedule the record format holds (`RecordFormat.fits`), read back from the
-record the same run writes (`certifier_cells_read`): what the certifier saw is what the relay sent, by the one code run. Of the data reaching the tap on a connection, each cell its
-lane sends before its fail cell is in the record, as that cell's data in its bucket (`certifier_data_read`). The rest of the
-server's bytes, after the fail cell or past the lane's end, reach neither the client nor the record, so the record
-does not fix the whole stream the server sent.
--/
+/-! What the tap's certifier saw is what its relay sent; the record does not fix the server's bytes after the fail cell or past the lane's end. -/
 
 @[expose] public section
 

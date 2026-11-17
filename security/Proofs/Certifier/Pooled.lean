@@ -43,25 +43,13 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Certifier.MonitoringPeriodSum
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The incorrect proof blocks over a monitoring period: the escapes multiply
-
-A uniform `k`-subset of `n` blocks misses a set of `f` blocks with probability `C(n - f, k) / C(n, k)`, at most
-`(1 - k/n)^f` (`choose_sub_le`, `pr_disjoint_le`). Over windows on independent coins, each with its incorrect
-set fixed before its own sample, every sample missing its window's set while the sets hold `F` blocks in total has
-probability at most `r^F` when each window's miss has probability at most `r` to the power of its set's size
-(`pr_adaptive_le`, the monitoring-period step `prCoin_forall_sum_le_pow` read in `Pr`). With
-each window's soundness error added by a union bound, that is `pooledIncorrectBlocks`. `pooledIncorrectBlocks_rate` is
-that bound at the share a rule that names a rate samples of whatever each window registers.
--/
+/-! The incorrect proof blocks over a monitoring period: the escapes multiply over windows on independent coins. -/
 
 @[expose] public section
 
 namespace NetTiming
 
 open Claims Finset
-
-/-! ### The union bound in `Pr` -/
 
 theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) : Pr (fun a => p a ∨ q a) ≤ Pr p + Pr q := by
   classical
@@ -71,8 +59,6 @@ theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) : Pr (fun a => p a
   exact_mod_cast (Finset.card_le_card fun a ha => by
     simp only [Finset.mem_filter, Finset.mem_union, Finset.mem_univ, true_and] at ha ⊢; exact ha).trans
     (Finset.card_union_le _ _)
-
-/-! ### A uniform sample's miss -/
 
 theorem choose_pred_le (m k n : ℕ) (hm : m ≤ n) (hk : k ≤ n) :
     ((m - 1).choose k : ℝ) ≤ m.choose k * (1 - k / n) := by
@@ -175,8 +161,6 @@ theorem sampleUniform_val (n k : ℕ) :
     exact ⟨⟨S, hS⟩, by ext x; simp [Subtype.ext_iff]⟩
   rw [h1, one_mul, Fintype.card_finset_len, Fintype.card_fin]
 
-/-! ### The escapes multiply over windows on independent coins -/
-
 open FlockSoundness.Game in
 /-- **The escapes multiply**: execution phases whose audits, given the earlier phases' coins, accept with probability
 at most `r^(f i)`, `f i` fixed before phase `i`'s coins, all accept with `Σ_i f i ≥ F` with probability at most `r^F`:
@@ -207,9 +191,6 @@ theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0
   refine (ENNReal.toReal_mono (ENNReal.pow_ne_top ENNReal.ofReal_ne_top) key).trans_eq ?_
   rw [ENNReal.toReal_pow, ENNReal.toReal_ofReal hr0]
 
-/-! ### The monitoring period -/
-
-/-- **The incorrect proof blocks over a monitoring period**: `Guarantees.PooledIncorrectBlocksLe`. -/
 theorem pooledIncorrectBlocks : Guarantees.PooledIncorrectBlocksLe := by
   intro m Ω _ _ n k sample hcard hunif W hW acc ε hsound q hq0 hq1 hq F
   refine ⟨?_, fun δ hδ hlog => ?_⟩
@@ -237,13 +218,8 @@ theorem pooledIncorrectBlocks : Guarantees.PooledIncorrectBlocksLe := by
       _ ≤ Real.exp (-Real.log (1 / δ)) := Real.exp_le_exp.2 (by nlinarith)
       _ = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
 
-/-- **The incorrect proof blocks over a monitoring period, at a rate**: `pooledIncorrectBlocks` at `q = num/den`, with
-every window's count at least `num/den` of the units it registers, `num · n i ≤ den · k i`, in the place of
-`q · n i ≤ k i`. A window's `n i` is the registration's, which the prover sizes. The count the rule `rate:NUM/DEN[:T]`
-names, `Spot.Rate.count NUM DEN T (n i)`, meets the hypothesis at every `n i` (`Spot.Rate.count_ge`;
-`Properties.Spot.RuleAtRate`), so under that rule the bound holds at `NUM/DEN` whatever each window registers; a
-fixed count `k i` meets it only while `n i ≤ den · k i / num`. The windows' populations are fixed before the period, as
-in `pooledIncorrectBlocks`. -/
+/-- A window's `n i` is the registration's, which the prover sizes: the rule `rate:NUM/DEN[:T]` meets the hypothesis at
+every `n i`, and a fixed count `k i` only while `n i ≤ den · k i / num`. -/
 theorem pooledIncorrectBlocks_rate {m : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] (n k : Fin m → ℕ)
     (draw : (i : Fin m) → Ω → Finset (Fin (n i))) (hcard : ∀ i x, (draw i x).card = k i)
     (hunif : ∀ i (S : Finset (Fin (n i))), S.card = k i →

@@ -3,15 +3,7 @@ module
 public import Definitions.Slowdown.Threads
 public import Definitions.Slowdown.Fit
 
-/-!
-# The inference-only policy over threads: the named assumption
-
-The thread draft's one assumption besides `(d, e)`-threading, which is a property of the reference training algorithm's wiring
-(`Threading.Threaded`), is that weights are incompressible. It is a statement about the reference training circuit `r`,
-whose weights are computed after the commitment, not about the declared circuit: a declared circuit reaches it only
-through containment. `WeightsIncompressibleSlots` is the same assumption with weights charged per parameter slot
-(`Threading.Slots`), once per parameter however many of its optimizer steps a subcircuit spans.
--/
+/-! The thread draft's named assumption that weights are incompressible, a statement about the reference training circuit and not about the declared circuit. -/
 
 @[expose] public section
 

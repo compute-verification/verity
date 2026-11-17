@@ -4,21 +4,7 @@ public import Definitions.ResourceAccounting.Actual
 public import Definitions.Registration.Physical
 public import Definitions.Slowdown.Assumptions.Fit
 
-/-!
-# The inference-only policy over windows: the fit bound on a physical run
-
-`FitBound` on the windows a run's cuts make. The servers `X i` of an actual circuit `A` (`ResourceAccounting.Placed`), cut at
-`0 = τ 0 ≤ … ≤ τ J = t` (`ResourceAccounting.Cuts`), divide the developer's region over `[0, t)` into `n J` windows
-`A[X i, [τ j, τ (j + 1))]`; through a containment of the reference training algorithm `c` in the developer's declaration, those
-windows divide `c`. Each window reads at most its server's state at the cut that opens it plus what its links carry, so
-when that state, in the image of `c`'s novel gates, is at most `R` bits wide, the capacity of the links into each server
-at most `r` and each window at most `ω` ticks long, every window reads at most `S = R + r ω`, and `FitBound` applies
-with `k = n J`. Divided by the run's `n t` server-ticks, it bounds the counted multiplications a server does a tick.
-
-Reads are counted by width (`Placed.stateIn`, `freshInput`), as in `ResourceAccounting.Guarantees.Actual.ThreadedRuntime`: a wipe
-bounds information, so plugging a wipe's residual in as `R` needs the read bound in its determination form. `r` bounds
-the links' capacity (`linkCapacity`), not the intake a run measures.
--/
+/-! The fit bound on the windows a physical run's cuts make, its reads counted by width. -/
 
 @[expose] public section
 

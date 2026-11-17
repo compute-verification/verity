@@ -36,31 +36,13 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The leak bound under a sampled audit: `SampledAuditAccepted` composed with the count
-
-On `RAcc δ` the incorrect set is one of `incorrectSets d P δ` (`faulty_mem_incorrectSets`), and every observation sequence the
-trace's transfer gates carry with every status complete is `Accepted` with advice held only at that set's committed
-gates and the trace's committed values as the inputs besides the ingress. With those inputs moved into `As`
-(`AdviceIn`), it is then among the sequences `AccSeqsSampled` counts, so
-`RAcc δ` implies the leak relation `RLeak` (`rLeak_of_rAcc`), and `KSLinOn`'s bound moves from one to the other
-(`ksLinOn_rLeak`). At any deployment where `KS` and `SampledAuditAccepted` hold, the run's observations are then among
-at most `2^c · #incorrectSets · 2^β · D^n` public sequences, `c + log2 #incorrectSets + β + n·log2 D` bits, except with
-`KSAccepted`'s probability (`sampledLeak`).
-
-`AdviceIn` is a hypothesis on the circuit and `As`. It holds, for every circuit, at the inputs pinned to the trace at a
-set `R` and `false` off the free inputs (`adviceIn_asReg`), whose count is `2^#(freeInputs \ R)` at any values at `R`
-(`encard_asReg_le`): `sampledLeak_reg` is the bound with `c = #(freeInputs \ R)` and no hypothesis on the inputs. With
-`R` the registered inputs, the registration's values are left out of `c`.
--/
+/-! The leak bound under a sampled audit: `SampledAuditAccepted` composed with the count. -/
 
 @[expose] public section
 
 namespace NetTiming
 
 open Claims Claims.Sampling
-
-/-! ### `RAcc δ` implies the leak relation -/
 
 theorem faulty_mem_incorrectSets {H : Msg → Msg} {Cm : CommitmentScheme Bool} {δ : ℝ} {s : AuditStatement} {P : Partition} {w : Wit}
     (hRel : RelS H Cm δ s P w) (hdisj : Disjoint (faulty H Cm s P w) (allSlots s.design P)) :
@@ -97,8 +79,6 @@ theorem ksLinOn_rLeak {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Co
   refine le_trans ?_ (h x hx Ω P)
   unfold PrBad
   exact Pr_mono fun r hr => ⟨hr.1, fun hR => hr.2 (ext_mono (rLeak_of_rAcc hin x) _ hR)⟩
-
-/-! ### The inputs pinned at `R`, `false` off the free inputs -/
 
 theorem valOver_congr_input (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → Option Bool)
     (h : ∀ i, C.gates[i]? = some .input → inp i = inp' i) (g : ℕ) :
@@ -171,25 +151,13 @@ theorem encard_asReg_le {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : �
         rw [Set.encard_coe_eq_coe_finsetCard]
         simp
 
-/-! ### The leak bound, at any compiled sampled verifier -/
-
 section Compiled
 
 open Claims.SamplingGeneric (Arg Compiled)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The leak bound under a sampled audit**, at any compiled sampled verifier `D` where `Compiled.KS` holds, given
-`SampledAuditAccepted`. Take a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`, and for each statement
-and values `ρ` inputs besides the ingress `As s ρ`, at most `2^c` of them, that suffice for the inputs `ρ`
-(`AdviceIn`), and `β` bounding each possible incorrect set's committed bits (`faultyBits`). On the statements in
-scope:
-
-* `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind`, `KSAccepted`'s bound: except with that probability, every observation
-  sequence of length `k` with jitter below `Dj` that the trace's transfer gates carry with every status complete is among
-  the sequences `AccSeqsSampled` counts at `As s ρ`, `ρ` the trace's committed values;
-* at every `ρ`, those sequences number at most `2^c · #incorrectSets(δ) · 2^β · Dj^k`, which the statement, `δ`, `As`, `ρ`,
-  the operator and `Dj` fix: the leak is at most `c + log2 #incorrectSets(δ) + β + k·log2 Dj` bits. -/
+/-- `AdviceIn` is a hypothesis on the circuit and `As`; `sampledLeak_reg` discharges it for every circuit. -/
 theorem sampledLeak (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Compiled Coin A) (hks : D.KS H)
     (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (c β : AuditStatement → ℕ) (Dj : ℕ)

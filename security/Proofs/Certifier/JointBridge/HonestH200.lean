@@ -71,34 +71,7 @@ import Proofs.Properties.Pouw.Grid
 import Proofs.Properties.Poub.Remote.Sort
 import Spot.Record
 
-/-!
-# `WorkOfH1CheckedCreditMonitoringPeriodH200`'s witnesses: an honest period on the H200, and the verifier that accepts everything
-
-The positive twin of `ResourceAccounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriodH200`, and of `WorkOfCreditedWords`
-at its instance: `Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1`'s live-salt period of `n ≥ 1` executionPhases, 128 words
-live and fixed a window, run by a device that spends `512` INT8 tensor-core multiply-adds on each word and outsources
-no unit, meets every hypothesis at the H200's INT8 price, at `PouwH1Tile_v1`'s `2048` multiply-adds a unit and
-`b_unit = 1024`, with the work certificate the whole priced credit, `W = 512·credit` (`meets`, `h200_sound`,
-`credited_sound`, and `WorkOfH1CheckedCreditMonitoringPeriodH200_honest` at one window, `δ_s = 10⁻⁶`, the run's δ).
-
-* The period (`honestRun`): one coin coordinate, PoUW's, which is H1's paths; one account; the empty circuit; a window
-  of one tick, in which the compute account runs `512·128·n` tensor-core multiply-adds and nothing else, the device's
-  whole rate (`device`). PoUW's verdict is the deployed check's (`checkedAccepts`): the compiled PoUW check,
-  `PouwCheck.protocol.check` (`verity/protocols/accounting/pouw/verifier/lean/check`, held to the Python verifier by its difftest),
-  accepts every window of the period, as `Properties.Pouw.MonitoringPeriod.Accepts` reads it. The period's play
-  (`checkedPlay`) is H1's honest play with that acceptance, so PoUW's verdict on the run is the play's at the run's
-  coin by definition. No other subprotocol runs in the period, so none accepts. The network attester's claim at
-  `K` is that the bits it saw the node move, none in this period, are within `K`.
-* The certificates (`cert`): `W = 512·creditPrefix(n, 128·n)`, the check's credit at the honest period's accepted
-  prefix and live words (`HonestH1.prefixLen_all`, `HonestH1.checkedLive_all`) at `m = 512` and `p(tc) = 1`
-  (`h200S8Price_tc`), and `K = 0`, so `help = 0` units meets `HelpWithinCertifier`.
-* `m = 512`: the honest circuit's 128 words are all credited (`HonestH1.wordsOf_eq`), so the minimum is over them
-  (`minWordMacs_const`), and `WordCostsMacs` is `512·1·(n·128) ≤ 512·128·n`, the period's work (`work_honestRun`).
-
-The verifier that accepts everything (`acceptAll`) is the same period with every subprotocol accepting at every coin.
-At no executionPhases its device runs nothing, so a work certificate `W = 1` fails on every coin and PoUW's guarantee fails
-there at any error below one (`WorkOfH1CheckedCreditMonitoringPeriodH200_nontrivial`).
--/
+/-! `WorkOfH1CheckedCreditMonitoringPeriodH200`'s witnesses: an honest period on the H200, and the verifier that accepts everything. -/
 
 @[expose] public section
 
@@ -107,8 +80,6 @@ namespace ResourceAccounting.SecurityProofs.Bridge.HonestH200
 open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
-
-/-! ## The word count and the price -/
 
 theorem foldl_min_const (k : ℕ) : ∀ l : List ℕ, (l.map fun _ => k).foldl min k = k
   | [] => rfl
@@ -143,8 +114,6 @@ theorem minWordMacs_honest :
 /-- An INT8 tensor-core multiply-add costs one dense E4M3 multiply-add on the H200. -/
 theorem h200S8Price_tc (sha fetch : ℚ) : ResourceAccounting.h200S8Price sha fetch .tc = 1 := Nat.ceil_one
 
-/-! ## The period -/
-
 /-- A device of `512·128·n` tensor-core multiply-adds a tick and nothing else. -/
 def device (n : ℕ) : ResourceAccounting.Device Unit := ⟨0, 0, fun o => if o = .tc then 65536 * n else 0, 0, fun _ => 0⟩
 
@@ -177,9 +146,6 @@ def checkedAccepts (n : ℕ) (x : Paths HonestH1.Ω1 n) : Prop :=
 noncomputable def checkedPlay (n : ℕ) : Play HonestH1.Ω1 n Unit Unit Unit Unit :=
   { HonestH1.play n with accepts := checkedAccepts n }
 
-/-- **The honest period on PoUW's coins**, H1's paths: one tick of the device's whole rate, PoUW's verdict the
-deployed check's on the period's executionPhases at the run's coin, no other subprotocol accepting, and the network
-attester's claim at `K` that the bits it saw the node move, none, are within `K`. -/
 noncomputable def honestRun (n : ℕ) :
     ResourceAccounting.PeriodRun (device n) Unit emptyCircuit (fun _ : Unit => Paths HonestH1.Ω1 n) where
   units := 0
@@ -195,8 +161,6 @@ noncomputable def honestRun (n : ℕ) :
     | .pouw => (checkedPlay n).accepts (ξ ())
     | _ => False
 
-/-- **The verifier that accepts everything**, on the same period: every subprotocol accepts at every coin, and the
-network attester's claim always holds. -/
 def acceptAll (n : ℕ) :
     ResourceAccounting.PeriodRun (device n) Unit emptyCircuit (fun _ : Unit => Paths HonestH1.Ω1 n) where
   units := 0
@@ -231,8 +195,7 @@ theorem work_acceptAll (n : ℕ) (p : ResourceAccounting.Price) (ξ : (i : Unit)
 noncomputable def cert (n : ℕ) (δs : ℝ) : ResourceAccounting.Certificates :=
   ⟨0, 512 * creditPrefix Honest.scheme HonestH1.circuit 144 n (128 * n) 1 1 (67 / 8) δs, 0, 0, 0⟩
 
-/-- PoUW's audit of the honest period credits H1's checked words at the H200's INT8 price, `512` multiply-adds a word,
-`2048` a unit and `1024` bits a unit. Its verdict is the play's at the run's coin by definition. -/
+/-- Its verdict is the play's at the run's coin by definition. -/
 noncomputable def realizes (n : ℕ) (δs : ℝ) (sha fetch : ℚ) :
     ResourceAccounting.RealizesCreditedWords (honestRun n) (cert n δs) (ResourceAccounting.h200S8Price sha fetch)
       (minWordMacs Honest.scheme HonestH1.circuit (fun _ => ResourceAccounting.receiptWordMacs 4 8))
@@ -264,12 +227,6 @@ theorem helpWithin (n : ℕ) (δs : ℝ) (sha fetch : ℚ) :
   intro _ _ _
   simp [cert, ResourceAccounting.Certificates.helpUnits]
 
-/-! ## Every hypothesis -/
-
-/-- **The honest period on the H200 meets every hypothesis of `WorkOfH1CheckedCreditMonitoringPeriodH200`**, in its order, at
-any SHA-512 and fetch price, `n ≥ 1` executionPhases and `δ_s > 0`, with `δ_bind = δ_ks = 0`, and the deployed check accepts
-the period on every path: the realization at the deployed check's verdict, the two bridge premises, and
-`HonestH1.h1_meets`'s premises of `H1CheckedCreditMonitoringPeriod` at the checked play. -/
 theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : ℚ) :
     Nonempty (ResourceAccounting.RealizesCreditedWords (honestRun n) (cert n δs) (ResourceAccounting.h200S8Price sha fetch)
       (minWordMacs Honest.scheme HonestH1.circuit (fun _ => ResourceAccounting.receiptWordMacs 4 8))
@@ -315,9 +272,6 @@ theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : �
     hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hStaged, hMu, hRB, hGs, fun hw x _ => hUF hw x trivial,
     fun x => hAcc x⟩
 
-/-- **The honest period on the H200 meets `WorkOfH1CheckedCreditMonitoringPeriodH200`'s hypotheses, so PoUW's per-period
-guarantee holds on it**, at any SHA-512 and fetch price, `n ≥ 1` executionPhases and `δ_s > 0`, with `δ_bind = δ_ks = 0`, at
-the certificate `W = 512·credit`, the whole priced credit. -/
 theorem h200_sound (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : ℚ) :
     (honestRun n).Sound (cert n δs) (ResourceAccounting.h200S8Price sha fetch) .pouw (δs + n * (0 + 0)) := by
   obtain ⟨hN, hM, -⟩ := HonestH1.h1_meets n hn hδs
@@ -331,8 +285,6 @@ theorem h200_sound (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetc
     hS hρN hwmax hlk (fun _ => hG) (fun _ => hDD) (fun _ => hPre) (fun _ => hMoved) (fun _ => hReg) (fun _ => hDraw)
     (fun _ => hServ) (fun _ => hSalt) hStaged (fun _ => hMu) (fun _ => hRB) (fun _ => hGs) (fun _ => hUF)
 
-/-- **The honest period on the H200 meets every hypothesis of `WorkOfCreditedWords`**, with the source's bound
-`HonestH1.h1_credit`: the same conclusion as `h200_sound`, through the generic bridge. -/
 theorem credited_sound (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : ℚ) :
     (honestRun n).Sound (cert n δs) (ResourceAccounting.h200S8Price sha fetch) .pouw (δs + n * (0 + 0)) := by
   refine WorkOfCreditedWords Unit Unit Unit (fun _ => Paths HonestH1.Ω1 n) (device n) emptyCircuit (honestRun n)
@@ -352,10 +304,8 @@ open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumpt
 open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 open HonestH200
 
-/-- **`WorkOfH1CheckedCreditMonitoringPeriodH200`'s honest witness**: its hypotheses hold at the honest period on the H200
-(`HonestH200.honestRun`), one window of H1's honest period at the run's `δ = 10⁻⁶`, whose PoUW verdict is the compiled
-check's (`PouwCheck.protocol.check` accepting every window, `HonestH200.checkedAccepts`), at the H200's INT8 price with
-the SHA-512 and fetch prices, which no tensor-core price reads (`HonestH200.h200S8Price_tc`), at `0`. -/
+/-- Its PoUW verdict is the compiled check's (`PouwCheck.protocol.check` accepting every window), at the H200's INT8 price,
+which no SHA-512 or fetch price reads. -/
 theorem WorkOfH1CheckedCreditMonitoringPeriodH200_honest :
     Nonempty (ResourceAccounting.RealizesCreditedWords (honestRun 1) (cert 1 (1 / 1000000)) (ResourceAccounting.h200S8Price 0 0)
       (minWordMacs Honest.scheme HonestH1.circuit (fun _ => ResourceAccounting.receiptWordMacs 4 8))
@@ -397,9 +347,6 @@ theorem WorkOfH1CheckedCreditMonitoringPeriodH200_honest :
     ∀ x, checkedAccepts 1 x :=
   meets 1 Nat.one_pos (by norm_num) 0 0
 
-/-- **`WorkOfH1CheckedCreditMonitoringPeriodH200`'s conclusion fails at the verifier that accepts everything**
-(`HonestH200.acceptAll`): at no executionPhases the device runs nothing, so at the work certificate `W = 1` the compute
-account's work, `0`, is below `W` on every coin while PoUW accepts, and PoUW's guarantee fails at error `½`. -/
 theorem WorkOfH1CheckedCreditMonitoringPeriodH200_nontrivial :
     ¬ (acceptAll 0).Sound ⟨0, 1, 0, 0, 0⟩ (ResourceAccounting.h200S8Price 0 0) .pouw (1 / 2) := by
   intro h

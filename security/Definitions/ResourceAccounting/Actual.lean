@@ -4,40 +4,7 @@ public import Definitions.Core.Circuit
 public import Definitions.Core.RegisteredCircuit
 public import Mathlib.Order.Interval.Set.Defs
 
-/-!
-# The actual circuit (trusted)
-
-The actual-circuit model. The *actual circuit* of a run is the circuit of everything the hardware did
-(`Verity.Circuit`): a gate for each operation, a wire for each dependence, and each gate placed at a leaf `x g` of the
-tree of locations, a cell `cell g` of that leaf and a tick `t g` (`Placed`; a leaf's memory is its cells, a program
-reads cells, and a cell takes at most one gate a tick). A location is a set of leaves (`Finset L`); the tree is laminar
-and never needed explicitly. Its input gates are the values that existed before the run, such as stored weights and the
-prover's secrets (the model places them at tick 0; nothing here needs it).
-
-For a location `X` and a set `I` of ticks (an interval `[a, b)`, `Set.Ico a b`, or `[t, ∞)`, `Set.Ici t`):
-* `region X I`: `A[X, I]`, the computed gates placed in `X` during `I`. Input gates are in no region, as they are in no
-  unit of a `Verity.Partition`: a region reads the values it starts from, so `state` counts what `X` stores;
-* `work π R`: `π(R)`, the work of a set of gates at a pricing `π`;
-* `ingress X I`: `in_X(I)`, the bits read into `X` during `I`: the width of the gates placed outside `X` that `A[X, I]`
-  reads;
-* `egress X I`: `out_X(I)`, the width of the gates placed in `X` that a gate placed outside `X` during `I` reads;
-* `state X t`: `mem_X(t)`, the bits `X` carries across `t`: the width of the gates placed in `X` that `A[X, [t, ∞))`
-  reads from outside itself, the gates `X` computed before `t` and the input gates it stores;
-* `stateIn X t G`: the part of `mem_X(t)` in a set `G` of gates. `state X t` is `stateIn X t G + stateIn X t Gᶜ`
-  (`ResourceAccounting.SecurityProofs.Actual.state_eq_stateIn_add_compl`).
-
-A run's windows are cut at ticks `0 = τ 0 ≤ τ 1 ≤ … ≤ τ J = t` (`Cuts t`), window `j` being `[τ j, τ (j + 1))`; the
-cuts may differ from run to run.
-
-What a region reads from outside itself is what its location carried in plus what crossed its boundary (the split,
-`ResourceAccounting.SecurityProofs.Actual.width_into_region_le`), when wires run forward in time inside the location (`Forward`):
-causality at latency 0, inside `X`, for computed sources, which is all the split needs.
-
-`cut S` is a set `S` of gates as a circuit whose inputs are what it reads: `A` with every gate outside `S` an input gate,
-and the gates of `S` its outputs. `declaration X t θ` is `A[X, [0, t))` so cut, with the baseline `θ_A`, the input gates
-committed before the run, as the inference-only policy's `RegisteredCircuit`. The runtime `t_A(P)` reads the strategy, not one run
-(`ResourceAccounting.Actual.runtime`).
--/
+/-! The actual-circuit model: the circuit of everything the hardware did in a run, each gate placed at a leaf, a cell and a tick, and what a location computes, reads, sends and stores in it. -/
 
 @[expose] public section
 
@@ -91,8 +58,6 @@ the part of `mem_X(t)` in `G`. -/
 noncomputable def stateIn (X : Finset L) (t : ℕ) (G : Finset (Fin A.N)) : ℕ :=
   A.width (((A.into (A.region X (Set.Ici t))).filter fun a => A.x a ∈ X) ∩ G)
 
-/-- **Wires run forward in time inside `X`**: a computed gate placed in `X` is read by gates placed in `X` only at its
-tick or later. -/
 def Forward (X : Finset L) : Prop :=
   ∀ g, ∀ a ∈ A.reads g, A.isInput a = false → A.x a ∈ X → A.x g ∈ X → A.t a ≤ A.t g
 

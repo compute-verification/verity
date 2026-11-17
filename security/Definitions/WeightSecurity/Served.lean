@@ -3,36 +3,7 @@ module
 public import Definitions.Core.Game
 public import Definitions.WeightSecurity
 
-/-!
-# Weight security at an audited deployment: the windows it serves, the halt, and the channel they leave through
-
-A deployment serves the outsider one query per window. In window `n` it serves the outsider's `n`-th query with an
-advice `a ∈ Adv` (the run-time choices a registered compiler reads, which the deployment picks), releases the outputs'
-values on the window's egress slots `O` at a timing bucket `Tick`, and then the window's audit runs on live coins: it
-accepts or rejects, and its sample holds one of the window's incorrect proof blocks or misses them all. A release leaves
-before its window's verdict (detection, not prevention), and the deployment halts once a window is rejected, after a lag
-of `L` further windows. The network attester is the layer that makes the release the whole of what leaves: the
-outputs the trace commits, at its bucket, and nothing else.
-
-* `Served`: what a run records of a window;
-* `Served.count L l`: how many of the run `l`'s windows release before the halt;
-* `Served.reply L l n` and `Served.view`: what the outsider receives in its `n`-th round, and its view of the run;
-* `Served.lead l`: the incorrect proof blocks of the windows before the first whose sample holds one of its own;
-* `Served.Undetected M l`: the audit leaves `M` incorrect proof blocks undetected: an accepted window's sample held one
-  of its incorrect proof blocks, or the windows before the first sampled one hold at least `M`;
-* `Served.UndetectedLe M δ run`: on every run, the audit leaves `M` incorrect proof blocks undetected with probability
-  at most `δ`;
-* `Served.Local C E Ou L θ r l`: each window that releases changes at most `E` of its slots per incorrect proof block,
-  against the served function's honest answer to the outsider's query at the window's advice. It is what the layers
-  below the composition give: the network attester ties the release to the trace's outputs, and the trace differs
-  from the honest run only in its incorrect proof blocks' reach (`Population.Dataflow.card_changed_le`);
-* `Served.Isolated C F Ou L θ r l`: through each window accepted before the first rejection, the releases change at
-  most `F` outputs per incorrect proof block of the windows so far, so a block's changes may fall in later windows,
-  through state they read;
-* `servedChannel T K`: the covert channel of such a deployment over `T` windows: each window's advice and timing bucket,
-  at most `K` of the `T · |O|` released values overwritten, and how many windows release before the halt;
-* `servedBits T K`: that channel's covert capacity in bits.
--/
+/-! Weight security at an audited deployment: the windows it serves, the halt, and the channel they leave through. -/
 
 @[expose] public section
 

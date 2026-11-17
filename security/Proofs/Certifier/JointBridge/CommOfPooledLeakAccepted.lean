@@ -36,26 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.Prob
 
-/-!
-# The network attester's per-period guarantee, pooled over a monitoring period of sampled audits (proof)
-
-`ResourceAccounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted`: `comm_of_pooledLeak` at `PooledLeakAccepted`'s proof
-(`NetTiming.pooledLeak`, which `NetTiming.SecurityProofs.PooledLeakAccepted` is). On a run that realizes the network
-attester's monitoring period of `m` sampled audits (`ResourceAccounting.JointBridge.RealizesCommOfPooledLeakAccepted`), under
-the two inputs `hesc` and `hleak`, the network audit's `Sound` holds at `e^(−q·Fmax) + Σ e + Σ e'`.
-
-At a value `ξ` of the other audits' coins, the network audit's own coins are the execution phases' coins (`coins`), so
-the probability over them is the probability over the phases' coins (`Pouw.pr_equiv`). There the network audit
-accepting with its claim failing means every verification phase's audit accepts (`accepts_imp`) while the period's
-good event fails (`comm_iff`), which is the event `PooledLeakAccepted`'s first conjunct bounds, read at one secret:
-the bound is on the period's coins and no secret enters it. Its `δ` is taken at `e^(−q·Fmax)`, the least it allows.
-
-`PooledLeakAccepted` is taken as it is stated, so the proof also supplies what only its count reads, none of which the
-realization holds: each execution phase's number of proof blocks (one past the largest index in its incorrect sets),
-the bits a proof block commits (the most over those), the schedules (the run's, at the phases' coins) and the most
-cells each gives a connection. The network attester's trust (`trusted-device`) and its record format holding the run's
-schedules are the realization's `trusted` and `fits`.
--/
+/-! The network attester's per-period guarantee, pooled over a monitoring period of sampled audits. -/
 
 @[expose] public section
 
@@ -63,7 +44,6 @@ namespace ResourceAccounting.SecurityProofs.Bridge
 
 open Claims Claims.Sampling NetTiming ResourceAccounting.JointBridge
 
-/-- `Guarantees.Bridge.CommOfPooledLeakAccepted` from `PooledLeakAccepted`. -/
 theorem comm_of_pooledLeak (hsrc : NetTiming.Guarantees.PooledLeakAccepted) {ι : Type} {d : Device ι} {α : Type}
     [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)]
     {r : PeriodRun d α C Ω} (c : Certificates) (p : Price) {L Kₒ S : ℕ} {lay : AuditStatement → BoundaryGates L S}
@@ -91,7 +71,6 @@ theorem comm_of_pooledLeak (hsrc : NetTiming.Guarantees.PooledLeakAccepted) {ι 
         (R.sched (Function.update ξ (r.own .network) (R.coins.symm ω))).cells κ) (Finset.mem_univ ω)⟩
   have hF : Real.log (1 / Real.exp (-(q * Fmax))) ≤ q * Fmax :=
     le_of_eq (by rw [one_div, Real.exp_neg, inv_inv, Real.log_exp])
-  -- `PooledLeakAccepted`'s first conjunct at one secret, on the execution phases' coins.
   have key : Pouw.pr (fun ω : Fin m → R.Coin => (∀ i, R.acc ξ i ω (ω i)) ∧
       ¬PooledGood lay k reg Dj R.sw R.Pw R.ρ R.op Fmax (R.W ξ ω)
         (R.run R.device (R.sched (Function.update ξ (r.own .network) (R.coins.symm ω)),
@@ -107,7 +86,6 @@ theorem comm_of_pooledLeak (hsrc : NetTiming.Guarantees.PooledLeakAccepted) {ι 
       (fun _ => R.acc ξ) (fun _ => R.acc_prefix ξ) (fun _ => R.W ξ) (fun _ => R.W_prefix ξ) (fun _ => hn)
       e e' he q hq0 hq1 (fun _ _ => hesc ξ (Set.mem_univ ξ)) (fun _ _ => hleak ξ (Set.mem_univ ξ))
       (Real.exp (-(q * Fmax))) (Real.exp_pos _) Fmax hF).1 () (Set.mem_univ ())
-  -- The network audit's own coins are the execution phases' coins.
   refine le_trans (Pouw.pr_mono ?_) ((Pouw.pr_equiv R.coins _).trans_le key)
   intro x hx
   obtain ⟨ha, hn'⟩ := hx

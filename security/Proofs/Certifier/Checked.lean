@@ -40,26 +40,7 @@ import Proofs.Certifier.PooledLeak
 import Proofs.Certifier.SampledAuditAccepted
 import Proofs.Certifier.SampledLeak
 
-/-!
-# The leak bound with checked inputs
-
-**The count.** A sequence accepted with a valid run at an incorrect set `F` of proof blocks of no class sampled `all` maps
-injectively to its inputs off the checked and registered ones, the bit at which `holdAll` holds each committed gate of
-`F`'s units, and its jitter code (`encard_acceptedChecked_le`): two sequences with one code agree step by step, since at
-step `t` each egress row is the run's over the whole horizon (`rows_full`, by causality), and the check pins it from the
-ingress through `t`, the inputs off `chk` and the held values (`CheckedUnique`). The count is
-`2^#(freeInputs \ (reg ∪ chk)) · 2^(faultyBits F) · D^n`, and over the possible incorrect sets
-`2^#(freeInputs \ (reg ∪ chk)) · #incorrectSets · 2^β · D^n`, `β` the most bits one commits (`encard_accSeqsChecked_le`).
-
-**The relation.** On `RAcc δ`, the trace run with the incorrect proof blocks' committed gates held at the trace's values
-(`heldAdv`) is the run the count reads at the inputs pinned to the trace (`inputOf_full`), so where it is `valid`,
-`RLeakChecked δ` holds (`rLeakChecked_of`). Otherwise the check missed on the trace's run, which `CheckedWitness` at
-`traceRun` bounds by `εchk` (`checkedWitness_traceRun` writes that instance out), so `KSLinOn` moves from `RAcc δ` to
-`RLeakChecked δ` at `κ + εchk` (`ksLinOn_rLeakChecked`).
-
-A monitoring period's bound with checked inputs is `Carried`'s, which gives it at the empty pool for windows that each
-hold a pool of their own (`pooledLeakChecked_of_carried`).
--/
+/-! The leak bound with checked inputs: the count, the relation, and the guarantee. -/
 
 @[expose] public section
 
@@ -67,10 +48,6 @@ namespace NetTiming
 
 open Claims Claims.Sampling Finset
 
-/-! ### The run over the whole horizon -/
-
-/-- **The full ingress reads the trace**: on the operator's moves over the whole horizon the trace carries, every input
-reads the trace's value (an ingress gate the ingress the trace holds, every other input the trace's value). -/
 theorem inputOf_full {L K S : ℕ} {lay : BoundaryGates L S} {C : Prog} {ref : ℕ → Option Bool}
     {op : ℕ → List (Obs L K S) → List Bool} {k : ℕ} {o : List (Obs L K S)} (hcar : Carries lay C ref op k o) (g : ℕ) :
     lay.inputOf k ((List.range k).map fun i => op i (o.take i)) (traceVal C ref) g = traceVal C ref g := by
@@ -112,9 +89,6 @@ theorem disjoint_of_mem_incorrectSets {d : Design} {P : Partition} {δ : ℝ} {F
   simp only [incorrectSets, Finset.mem_filter] at h
   exact h.2.2
 
-/-- **With no checked input, every check pins the rows**: where the layout fits, two runs whose ingress agrees through
-step `t`, on one set of other inputs and held values, give step `t` one egress row, by causality
-(`inputOf_eq_of_causal`): `CheckedUnique` at `chk = ∅`, at any check. -/
 theorem checkedUnique_empty {L S : ℕ} {C : Prog} (P : Partition) (d : Design) {lay : BoundaryGates L S} {n : ℕ}
     (hfits : lay.Fits C n) (valid : (ℕ → Bool) → Prop) : CheckedUnique C P d lay n ∅ valid := by
   intro t ht ins ins' a a' free hl hl' hpre ha _ _ _ ℓ
@@ -127,11 +101,6 @@ theorem checkedUnique_empty {L S : ℕ} {C : Prog} (P : Partition) (d : Design) 
       (fun j hjt => (ingressUpTo_getD _ _ [] hjt).trans (hj j hjt)) a hi
   exact (hmid ins hl fun _ _ => rfl).symm.trans (hmid ins' hl' hpre)
 
-/-! ### The count -/
-
-/-- **One incorrect set's count with a valid run.** At a check that pins `chk` and an incorrect set `F` of proof blocks of
-no class sampled `all`, the sequences accepted with a valid run at the inputs pinned at `R` number at most
-`2^#(freeInputs \ (R ∪ chk)) · 2^(faultyBits F) · D^n`. -/
 theorem encard_acceptedChecked_le {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
     (hfits : lay.Fits C n) (chk : Finset ℕ) (valid : (ℕ → Bool) → Prop) (hchk : CheckedUnique C P d lay n chk valid)
     (R : Finset ℕ) (ρ : ℕ → Bool) (F : Finset ℕ) (hF : Disjoint F (allSlots d P))
@@ -280,12 +249,6 @@ theorem encard_accSeqsChecked_le {L K S : ℕ} (C : Prog) (P : Partition) (d : D
         norm_cast
         ring
 
-/-! ### The relation -/
-
-/-- **A valid trace run gives the leak relation with a valid run**: on the audit's scope, at a witness in `RelS δ` whose
-incorrect set holds no proof block of a class sampled `all` and whose trace run is `valid`, every sequence the trace
-carries is accepted with a valid run, at the inputs pinned to the trace at the registered ones and the trace's values
-held at the incorrect set's committed gates. -/
 theorem rLeakChecked_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg)
     (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
@@ -329,7 +292,6 @@ theorem rLeakChecked_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (H :
     rw [hr]
     simp only [circuitProgram, hv']
 
-/-- **The leak relation with a valid run gives the leak relation**: a sequence accepted with a valid run is accepted. -/
 theorem rLeak_of_rLeakChecked {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse : Msg → Option AuditStatement}
     {partition : AuditStatement → Option Partition} {L K S : ℕ} {lay : AuditStatement → BoundaryGates L S}
     {k : AuditStatement → ℕ} {δ : ℝ} {As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)}
@@ -341,10 +303,7 @@ theorem rLeak_of_rLeakChecked {H : Msg → Msg} {Cm : CommitmentScheme Bool} {pa
   obtain ⟨hl', hD', F, hF, a, ha, free, hfree, -, hacc⟩ := h op o hC hCov hl hD
   exact ⟨hl', hD', F, hF, a, ha, free, hfree, hacc⟩
 
-/-- **The check on the trace's run, written out**: `CheckedWitness` at `traceRun` is the bound `εchk x`, at every
-prover, on the probability that a run accepts and its extracted witness, with no proof block sampled `all` incorrect,
-has a trace run that is not `valid`. The runs are the definition's one parameter, and this is its instance at the
-trace's run. -/
+/-- The runs are `CheckedWitness`'s one parameter, and this is its instance at the trace's run. -/
 theorem checkedWitness_traceRun {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A)
     (valid : AuditStatement → (ℕ → Bool) → Prop) (εchk : Msg → ℝ) (x : Msg) :
@@ -369,8 +328,6 @@ theorem checkedWitness_true {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
   refine le_of_eq ((Pr_congr fun r => iff_false_intro ?_).trans Pr_false)
   simp
 
-/-- **`KSLinOn` moves from `RAcc δ` to the leak relation with a valid run**, on the statements where the check holds on
-the trace's run except with probability `εchk` (`CheckedWitness` at `traceRun`), at `κ + εchk`. -/
 theorem ksLinOn_rLeakChecked {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
@@ -401,11 +358,6 @@ theorem ksLinOn_rLeakChecked {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhab
   · beta_reduce
     ring
 
-/-! ### The guarantees -/
-
-/-- **The leak bound with checked inputs**: `Guarantees.SampledLeakChecked`, from `ksLinOn_rLeakChecked` at
-`KSAccepted`'s bound (`SecurityProofs.SampledAuditAccepted`) and `encard_accSeqsChecked_le` on the statements whose
-layout fits. -/
 theorem sampledLeakChecked : Guarantees.SampledLeakChecked := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid εchk Dj
   refine ⟨ksLinOn_rLeakChecked H D lay k reg valid εchk Dj

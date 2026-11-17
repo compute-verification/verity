@@ -37,28 +37,7 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Certifier.Carried
 import Proofs.Certifier.WitnessesChecked
 
-/-!
-# The witnesses of the leak bounds over a carried pool
-
-`SampledLeakCarried`'s honest lemma (`SampledLeakCarried_honest`) is its premises at the toy code: `Compiled.KS`, as
-`SampledLeakChecked`'s (`SampledAuditAccepted_honest`), and opening gates that are inputs of each circuit, at a run that
-opens its row at every one of its input gates. `CheckedUnique` and `CheckedWitness` are open premises, as they are
-`SampledLeakChecked`'s.
-
-Their nontrivial lemmas:
-
-* `SampledLeakCarried`. Its acceptance conclusion fails at the accepting compiled verifier `leakL`, as
-  `SampledLeakChecked`'s does, at the check every run passes and no opening or closing gate: a witness in `RLeakCarried`
-  is in `RLeak` (`rLeak_of_rLeakCarried`), and none is (`leakL_noRLeak`).
-* `PooledLeakCarried`, at its one pattern of no restarts. At one run whose audit always accepts, `q = 1`, `Fmax = 1`, no
-  error, every row the empty pool's, and its observations empty where the horizon is one step: no run meets its leak
-  relation, no opening collides (the two digests of the empty row hash one message, `poolColl_empty`), and the escape
-  bound reads `1 ≤ 0`.
-
-`PooledLeakCarried`'s honest lemma is open: it needs a deployed check that pins its closing row (`CheckedClosing`) and the
-roots it opens and leaves (`CarriedRoots`), and its period's inputs (`MonitoringPeriodChannel`, `MonitoringPeriodAdaptive`, `MonitoringPeriodMissProb`,
-`MonitoringPeriodLeaksCarried`).
--/
+/-! The witnesses of the leak bounds over a carried pool, at which `CheckedUnique` and `CheckedWitness` stay open premises and `PooledLeakCarried`'s honest lemma is open. -/
 
 @[expose] public section
 

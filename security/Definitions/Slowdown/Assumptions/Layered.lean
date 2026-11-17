@@ -2,15 +2,7 @@ module
 
 public import Definitions.Slowdown.Layered
 
-/-!
-# The inference-only policy over threads: the reference training algorithm is keyed
-
-`Slowdown.Guarantees.ThreadedOfLayered` derives the thread draft's threading premise from a keyed form of the reference
-training algorithm (`Layered`). That the reference training circuit is keyed, and at which parameters, is checked on paper against
-a transformer block at Kimi K2's shapes, not in Lean: no Lean reference training algorithm of a transformer exists to build a
-`Layered` on. Until one does, it is a named conjecture, stated over a reference training algorithm `c` and its threading `T` as
-`WeightsIncompressible` is.
--/
+/-! The keyed form of the reference training algorithm, a named conjecture: that it is keyed is checked on paper, not in Lean, because no Lean reference training algorithm of a transformer exists. -/
 
 @[expose] public section
 

@@ -3,36 +3,7 @@ module
 public import Definitions.Core.Formalism
 public import Mathlib.Basic.Real.Basic
 
-/-!
-# Serving blocks and the training class's counts (trusted)
-
-A training class's counted operations sit in a circuit with its registered input gates, a registered circuit `d`
-(`Verity.RegisteredCircuit`): at the serving-block bound, the actual circuit the fleet evaluates. Its per-block cap `q(c, k)`
-bounds the weight of the operations computed wholly inside any block of at most `c` operation gates that reads at most
-`k` unregistered input bits. A **serving block** is a server-time block's gates (`Verity.Block`): a server's gates
-between two consecutive wipes. Each counted operation is assigned to the serving block holding its representative gate.
-The serving blocks are the units `S` of a partition (`Verity.Partition`), its other units the dark remainder, and the
-inference blocks are a `(c, k)`-partition (`Verity.Partition.IsCK`) refining it (`Verity.Partition.Refines`). The
-serving-block bound (`ResourceAccounting.Guarantees.ServingBlocks`) is Theorem 3 (counting) applied to each serving block and
-summed.
-
-For a circuit `C` and counted operations `J` (`Counted`):
-* `J.total`: `Σ_{v ∈ 𝒥} ω_v`;
-* `J.assigned R`: the local count `Ω_R`, the weight of the operations whose representative gate is in `R`;
-* `J.inside I`: the weight of the operations computed wholly inside `I` (`body v ⊆ I`);
-* `J.outside R B`: the weight of `R`'s operations computed wholly inside none of the blocks `B i`;
-* `J.split R B`: the part of `J.outside R B` whose representative is in one of the blocks, the operations split between a
-  block and gates outside it.
-
-A block's unregistered input bits are `|in(I) \ θ|` (`Verity.RegisteredCircuit.unregistered`), one bit per gate on a Boolean
-circuit. Blocks here have at most `c` gates, as a `(c, k)`-partition's inference blocks do (`Verity.Partition.IsCK`).
-
-The named premises are `ServingSizes` (each serving block's gates and unregistered input bits), `WeightsAtMost`,
-`PerBlockCap`, `UncertifiedCap`, `OperationBodies` (an operation's gates are unregistered and lead to its representative)
-and `Overlap` (a gate is in at most `μ` operations' bodies). The last two bound the operations
-assigned to a serving block but not computed wholly inside it: each has a gate outside the block that a gate of the
-block reads, an unregistered input of the block, so at most `ω_max μ k_S` of `Ω_S` escapes the per-block cap.
--/
+/-! Serving blocks, each a server's gates between two consecutive wipes, and the counted operations the serving-block bound reads. -/
 
 @[expose] public section
 

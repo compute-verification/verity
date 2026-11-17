@@ -3,12 +3,7 @@ module
 public import Proofs.Compose.Compose.SplitRateClosed
 public import Proofs.ResourceAccounting.Lemmas.Compose
 
-/-!
-# The merged rate: proof
-
-`ResourceAccounting.Guarantees.Compose.SplitRateMerged`, from `SplitRateClosed` at `p = p0 = q`: there the whole branch is the
-larger (`a ≤ b`), and lower lucks only raise `SplitRateAt`'s right side (`splitRateAt_anti`).
--/
+/-! The merged rate: proof, from `SplitRateClosed` at `p = p0 = q`. -/
 
 @[expose] public section
 

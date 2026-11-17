@@ -4,30 +4,7 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Order.Interval.Finset.Nat
 
-/-!
-# The device model (trusted)
-
-The one device that the compute, bandwidth and capacity audits are all about: what it holds, what flows into it, what
-it computes, and when.
-
-* **State.** On-chip state of at most `chip` bits (S_chip: registers, shared memory, caches) and device memory of at
-  most `mem` bits (M).
-* **Ingress.** Bits reach the chip from device memory at most `bw` per tick (BW), and over each side channel `i : ι` at
-  most `cap i` per tick: PCIe from NVMe and the network (there is no host RAM).
-* **Ops.** Each op class (`OpClass`) runs at most `rate o` times per tick: tensor-core multiply-adds (`rate .tc` is F),
-  CUDA-core ops and oracle queries.
-* **Time.** A tick is the device's unit of time, and a window is `len` consecutive ticks from `start`, so its duration
-  T is `len`.
-
-A schedule is the device's step at each tick. A step charges every resource it uses to an account (`α`): the ops of
-each class, the bits read from device memory and over each side channel, and the on-chip state and device memory held
-at the end of the tick. A step fits the device (`Step.Fits`) when, for every resource, the charges of all accounts
-together are within the device's limit. So each unit of a resource (one tensor-core cycle, one bit read, one bit held
-for a tick) is charged once, to one account, and no two accounts can both claim it. A window's totals (`Schedule.ops`,
-`Schedule.read`, `Schedule.held`, ...) sum an account's charges over the window's ticks. Memory held is counted in
-bit-ticks: one bit held for one tick is one bit-tick, so `Schedule.held` over a window of `len` ticks is `len` times the
-account's average in bits.
--/
+/-! The device model the compute, bandwidth and capacity audits share: its limits, and schedules that charge each unit of a resource to one account. -/
 
 @[expose] public section
 
@@ -63,7 +40,6 @@ structure Device (ι : Type) where
 /-- One tick of a schedule, its charges split by account `α`. Each op is charged once, to the account that runs it,
 not once per use of its result: PoUW's outputs are useful by design, so the residual counts ops, not information. -/
 structure Step (ι α : Type) where
-  /-- the ops of class `o` that account `a` ran -/
   ops : α → OpClass → ℕ
   /-- the bits account `a` read from device memory -/
   read : α → ℕ
@@ -116,7 +92,6 @@ def work (p : Price) : ℕ := ∑ o, p o * sc.ops w a o
 /-- The bits account `a` read from device memory over window `w`. -/
 def read : ℕ := ∑ t ∈ w.ticks, (sc t).read a
 
-/-- The bits account `a` took in over side channel `i` over window `w`. -/
 def side (i : ι) : ℕ := ∑ t ∈ w.ticks, (sc t).side a i
 
 /-- The device memory account `a` held over window `w`, in bit-ticks: the bits it holds at the end of each of the

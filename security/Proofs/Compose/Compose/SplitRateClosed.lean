@@ -3,14 +3,7 @@ module
 public import Proofs.Compose.Compose.SplitRateExp
 public import Proofs.ResourceAccounting.Lemmas.Compose
 
-/-!
-# The closed rate: proof
-
-`ResourceAccounting.Guarantees.Compose.SplitRateClosed`, from `SplitRateExp`. A larger rate keeps `SplitRateAt` at the same
-`ν, ν₀` (`splitRateAt_mono`), and each closed branch is at least the sharp one (`sharp_le_closed`): with
-`c = Kρw_max` and `q = p + (1 − p)e^{−c}`, `−ln q ≥ 1 − q = (1 − p)(1 − e^{−c})` and `(1 + c)e^{−c} ≤ 1`, so
-`(1 + c)·(−ln q) ≥ (1 − p)·c`. At `w_max = 0` every work is `0` and `ν = ν₀ = 0` do.
--/
+/-! The closed rate, from `SplitRateExp`. -/
 
 @[expose] public section
 

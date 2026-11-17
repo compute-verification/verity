@@ -2,68 +2,7 @@ module
 
 public import Definitions.ResourceAccounting.Gates.Model
 
-/-!
-# The registry's primitives, each in one class (trusted)
-
-Every primitive of the registry in exactly one class of the model (`Model.lean`), as the ruling closes the free
-set, 262 ids: the 194 of `verity/circuits/ops/prims.py` at
-`615eabc13a`; S8-PORT's (`ops/s8.py` and `ops/boolean/s8.py` at `45351115eb`): the s8 family's two steps
-`BlackwellS8ImmaDot32` and `BlackwellU8S8ImmaDot32` and LimbSplit's four limb steps (`S32LowByte`, `S32ByteCarry`,
-`S32ClampS8`, `S32ClampRest`), each as its word Definition (`_v1`) and on bits (`_v2`); PIN's spot check
-(`segment_e2e.py`, in history at `61f13c2275`): `PouwSegDot_v1`, `PouwDuoAbsorb_v1`, `PouwSel32_v1`,
-`PouwWinOk_v1`;
-and the H1 + fx1 tile's (`verity/protocols/accounting/pouw/prover/circuit/`'s `segment.py`, `h1tile.py`, `seeds.py`, `words.py` and
-`boolean.py` at `b5516bef2f`), each as its word Definition (`_v1`) and on bits (`_v2`): its segment dots (`PouwSegDot`'s
-`_v2` and `PouwSegDot0`), its noise (`PouwU129`, `PouwI8AddBit`, `PouwI8Add`, `PouwI8Neg`, and the seeds' composites
-`PouwUnitSeeds` and `PouwNoiseBlock`), its digits (`PouwDigitLo`, `PouwDigitHi`, `PouwDigitZ`, `PouwLow8`, `PouwSx8`,
-`PouwResAdd`), its fold (`PouwFx1Absorb`, `PouwXinFinal`, and `PouwXor32`'s `_v2` across lanes) and its one stream
-(`PouwOneStream2`, `PouwOneStream3`, `PouwWrapBits`, `PouwWrapSeg`, `PouwXWrap`, `PouwPeelSeg`), with v4's dead-tile
-mask (`PouwOrBit`, `PouwMask32`, `PouwH1Tile_v4`) and J10-R's call-scope noise (`PouwCallSeeds`, seed_c and
-σ_R a call, and `PouwAdd64`, a block's counter, `PouwH1Tile_v5` and `_v6`). Its exact accumulator
-`GemmAccumulatorS8_v2{K}` is a body of `BlackwellS8ImmaDot32_v2` steps, not a primitive, and isn't listed.
-
-* **free:** the s8-family steps (`family`, with their operand formats, `k` and clamp or wrap), each the exact dot mod
-  `2^32` (or clamped), so in its window the exact sum, and free only in a circuit whose windows interval analysis
-  proves (`Proven`, which `Guarantees.Gates.ProvenWindow` turns into every step's window): the two IMMA steps (s8·s8
-  clamped, u8·s8 wrapped, `k = 32`), the segment dots `PouwSegDot` (PIN's and H1's, s8·s8 wrapped, `k = 32`) and
-  `PouwSegDot0` (H1's first prefix words: `PouwSegDot` from 0, a gate of it reading the constant 0 as its accumulator),
-  and route U's `PouwDot16U8S8_v1` (u8·s8 wrapped, `k = 16`). A step on bits (`_v2`) is a Boolean body that no theorem
-  here equates with its word step; `I32Add_v1` and `I32Sub_v1` (`affine`), proven not to wrap;
-  `Bf16ToF32_v1` (`affine`, `bf16ToF32Op`: `×2^16` from the bf16 word's s16 reading to the f32 word's s32 reading,
-  which never wraps, `Guarantees.Gates.Bf16ToF32Affine`); the constants (`const`). An exact integer multiply by a
-  constant is an affine gate only where it is proven in window (`I32Mul_v1` by a constant, translated so); an FP
-  multiply by a constant rounds, and is a rounding.
-* **gathers** (`gather`, an `IntOp.gather` and never any other function), counted in fresh index bits (`units`): the
-  kernel-level gathers by family (`Gather{Bf16,F32,I32,E4m3,E2m1,E8m0}x{V}_v1`), at their index, `⌈log₂ (V + 1)⌉` bits,
-  each with its family's out-of-range constant, its evaluator's, read signed at its width (`0x7FFF`, `0x7FC00000`,
-  `−1`, `0x7F`, `0`, `0xFF` read as `−1`), for a token outside `[0, V)`; and the table reads (`TableRead{n}x{w}_v1`,
-  `tableReadBits`), at their index's low `n` bits, `n` bits, which never leave their `2^n` entries: property/v1's
-  `range` and `low` kinds. Its `lifted` kind (`LGatherRow`) is not listed, so refused.
-* **budgeted**, in units: `compareSelect` (comparisons, selections, min, max and clamps, `F32Sat_v1` and `S32ClampS8`
-  among them, the 1-bit logic ops `And2`, `Xor2`, `BitAnd`, `BitOr`, `BitXor`, `BitNot`, `Not`, the salt-dead tests,
-  PIN's `PouwSel32_v1` and `PouwWinOk_v1`, H1's wrap and digit tests `PouwWrapBits`, `PouwXWrap` and `PouwDigitZ`, and
-  v4's live bit and receipt mask `PouwOrBit` and `PouwMask32`);
-  `fold` (the receipt folds' steps, `PouwDuoAbsorb_v1` and fx1's `PouwFx1Absorb`); and `rounding`, every other
-  primitive: FP arithmetic and casts (`E4m3ToF32_v1` and `F32Neg_v1` among them), the exact widenings and packings but
-  `Bf16ToF32_v1`, the FP and FP8 dots, integer division, remainder and narrowing, integer products and sums reduced mod
-  `2^w` (`I32Mul_v1`, `NcpDot16I7_v1`, `PouwSqAcc_v1`, H1's `PouwWrapSeg`, `PouwPeelSeg` and one streams: a wrap
-  drops a carry), bit operations on words, field extractions (`PouwWindowWord_v1` and the family `BitAtx`: a field of
-  one runtime word, not a column, so never a gather, whose constant index would cost nothing), LimbSplit's limb steps
-  (the carries `IntGate.role` gives), and PoUW's integer helpers (H1's noise, digits and `PouwXinFinal` among them).
-* **inputs**, by family: `Input{n}_v1` ids are run inputs and `RegisteredInput{n}_v1` ids registered. A coin input is
-  an `Input` id whose port is kind coin (`verity/circuits/ports.py`), so its binding is its port's, not its id's
-  (`Class.listed`).
-* **families** are full patterns, as property/v1's: a family's id is its prefix, a positive numeral with no leading `0`
-  and `_v1` (`numbered`), and a table read's `TableRead`, its `n`, `x`, its `w` and `_v1`.
-* **refused:** any id neither list names (`classOf id = none`: another version of a family, or a numeral it lacks,
-  among them), and any gate whose operation isn't in its primitive's class (`Classed`).
-
-`classOf` is what property/v1's closed table is to agree with, id for id. It agrees with
-`benchmarks/property_redteam/cases.py`'s closed table on every id but `PouwDot16U8S8_v1`, free here under `Proven` as
-the u8·s8 IMMA step is, `Bf16ToF32_v1`, free-affine here as property/v1 counts it (`×65536` on the s16 reading, no wrap,
-as ruled), and the table's nine other `other` ids, roundings here: the ruling caps three classes and no fourth, and both
-are budgeted the same.
--/
+/-! Every primitive of the registry in exactly one class of the model; `classOf` is what property/v1's closed table is to agree with, id for id. -/
 
 @[expose] public section
 
@@ -391,7 +330,6 @@ def classOf (id : String) : Option Class :=
 /-- `Bf16ToF32_v1`'s operation: `×2^16`, from the bf16 word's s16 reading to the f32 word's s32 reading. -/
 def bf16ToF32Op {ι : Type} : IntOp ι := .affine 0 [2 ^ 16]
 
-/-- The class of a gate's operation. -/
 def IntOp.cls {ι : Type} : IntOp ι → Class
   | .input b _ => .input b
   | .const _ => .const

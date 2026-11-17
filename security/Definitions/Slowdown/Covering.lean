@@ -2,29 +2,7 @@ module
 
 public import Definitions.Core.RegisteredCircuit
 
-/-!
-# Coverings by inference blocks, and multiplication blocks
-
-The vocabulary of the covering bound, with one width `b` and one compression rate `r` for weights
-and activations alike. `C` is a declaration's circuit, read as a finite DAG: its
-sources `in(C)` are the gates with no predecessors (`sources`), and `θ ⊆ in(C)` are its registered parameters (the
-baseline). The statement counts gates; in the Boolean profile (`w = 1`) a gate is a bit.
-
-* A **subcircuit** `S` (`Subcircuit`) is a set of gates with inputs `in(S) ⊆ S`, every gate of `S \ in(S)` having all its
-  predecessors in `S`: `S` computes `S \ in(S)` (`inner`) from `in(S)`. A gate of `in(C)` in `S` is one of its inputs,
-  since a gate with no predecessors is given, not computed: otherwise a block could hold a prompt's bits, or an
-  unregistered weight, as gates it computes and read them for nothing. An inference block `R` of a division is the subcircuit
-  `R ∪ into R` with inputs `into R` and the input gates of `C` in `R`.
-* An **`(s, k)`-inference block** (`InferenceBlock`) is a subcircuit with `|S| ≤ s` and `|in(S) \ θ| ≤ k`. An
-  **`(s, k)`-covering** (`Covers`) is a family of them that together compute `C \ in(C)`: every gate with a predecessor
-  is computed by some block. Blocks may overlap and recompute, so a covering need not be a `Partition`. Its slowdown is
-  `ρ = s · #blocks / |C|`.
-* **Multiplication blocks** (`MulBlocks`): for `(i, j) ∈ P ⊆ θ' × J` (weights `i` of the updated parameters `θ'`, tokens
-  `j`), pairwise disjoint `m_{i,j} ⊆ C \ in(C)`, each with an output gate `o_{i,j} ∈ m_{i,j}` that every gate of
-  `m_{i,j}` reaches inside `m_{i,j}` (so `m_{i,j}` is nonempty), and pairwise disjoint token computations `T_j ⊆ C \ θ`.
-  `S` **completes** `m` when `m ⊆ S \ in(S)`, and `θ'_S` (`weightsCompleted`) is the set of weights `i` for which `S`
-  completes some `m_{i,j}`.
--/
+/-! The covering bound's vocabulary: subcircuits, inference blocks and coverings of a declaration's circuit, and its multiplication blocks; a block can't hold a prompt's bits as gates it computes, and blocks may overlap and recompute. -/
 
 @[expose] public section
 
@@ -73,12 +51,10 @@ structure MulBlocks (d : RegisteredCircuit) where
   o : Fin nw × Fin nt → Fin d.D.N
   T : Fin nt → Finset (Fin d.D.N)
   m_disjoint : ∀ p ∈ P, ∀ q ∈ P, p ≠ q → Disjoint (m p) (m q)
-  /-- `m_{i,j} ⊆ C \ in(C)`. -/
   m_computed : ∀ p ∈ P, Disjoint (m p) (sources d.D)
   o_mem : ∀ p ∈ P, o p ∈ m p
   reach : ∀ p ∈ P, ∀ g ∈ m p, FeedsWithin d.D (m p) g (o p)
   T_disjoint : ∀ j j', j ≠ j' → Disjoint (T j) (T j')
-  /-- `T_j ⊆ C \ θ`. -/
   T_θ : ∀ j, Disjoint (T j) d.θ
 
 namespace MulBlocks

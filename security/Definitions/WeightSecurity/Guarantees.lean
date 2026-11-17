@@ -8,52 +8,7 @@ public import Definitions.WeightSecurity.ToyFaulted
 public import Definitions.WeightSecurity.ToyServed
 public import Definitions.WeightSecurity.ToyTied
 
-/-!
-# Model weight security
-
-`Theft`: if honest use of the served function doesn't hand out the weights (`HonestUseHard`, at `p` for `q` queries),
-and what leaves the datacenter goes through a covert channel of `|S|` strings except with probability `ε`
-(`LeaksThrough`), then the outsider steals the weights with probability at most `|S| · p + ε`. With `|S| = 2^𝒞`:
-`Pr[steal] ≤ 2^𝒞 · p_hon(q) + ε`, so the covert capacity `𝒞` must approach `log₂ (1/p_hon(q))` before theft is likely.
-The datacenter knows the weights and may do anything; the outsider is adaptive, and the covert string may arrive in
-pieces between its queries and steer them.
-
-The proof is the leakage lemma: for each covert string `s`, the outsider with `s` written in (`Outsider.withString`)
-is an honest-use party that sees, when `s` is the datacenter's, exactly what the outsider sees, so the outsider's
-success is at most the sum over `s` of theirs.
-
-`TheftHonest` and `TheftNontrivial` are its witnesses, at the toy instance (`Definitions.WeightSecurity.Toy`), where a
-lemma, `TheftTight` (`security/Proofs/WeightSecurity/Lemmas.lean`), shows the factor `|S|` is attained.
-
-`TheftServed` is `Theft` at an audited deployment (`Definitions.WeightSecurity.Served`). The channel is the served one:
-advice, timing buckets, the overwrites the audit lets through and the halt. The leakage term is the probability `δ` that
-the audit leaves `M` incorrect proof blocks undetected, plus the probability that a release isn't local, which the
-network attester and the dataflow discharge. Its witnesses
-`TheftServedHonest` and `TheftServedNontrivial` are at the toy deployment (`Definitions.WeightSecurity.ToyServed`).
-
-`TheftFaulted` is the same deployment under SPOT's fault model (`Definitions.WeightSecurity.Faulted`): a fault is an
-input to the faulted circuit, not an overwrite of a release, so SPOT's part of the channel is the fault patterns, of
-sizes summing to at most `M`, and the reach of a fault drops out. What faults at the patterns no cut covers do to the
-weights' exposure is the named assumption `FaultedUseHard` (λ), on a typical set of weights; a pattern an honest cut
-`κ` cuts (`Definitions.WeightSecurity.Cut`) counts in the channel by the cut's hint instead, and needs no assumption.
-`TheftServed` stays as the bound that takes no claim about the model. Its witnesses `TheftFaultedHonest` and
-`TheftFaultedNontrivial` are at the toy deployment with faults (`Definitions.WeightSecurity.ToyFaulted`), at the cut
-that cuts nothing.
-
-`TheftServedReq` is `TheftServed` per charge unit, in bits: the released outputs grouped into units (a request, or a
-request with the requests that read its state), each changed unit charged its whole output and its name, and the leakage
-term the probability that an incorrect proof block changes more than `F` units, in its window or later ones, before the
-first rejection (`Served.Isolated`). `TheftServedMinEntropy` is `TheftServedReq` against every party, where honest use
-leaves the weights `H` bits of min-entropy: `2^(B - H)`. `TheftServedHonest` is the first's honest witness,
-`TheftServedMinEntropyHonest` the second's, and each has a nontrivial witness at the leaking toy deployment.
-
-`TheftServedTied` is `TheftServedReq` at a served circuit that is a checked population, its egress named by charge unit
-and each unit's reach holding at most `F` charge units, its run recording each window's extracted trace
-(`Definitions.WeightSecurity.Tied`). The probability that the releases aren't isolated gives way to the failure
-probabilities of the two premises that make them so: the releases are their traces' outputs (`EgressTied`) and the
-traces hold the windows' inputs (`AdviceCovered`). Its witnesses `TheftServedTiedHonest` and
-`TheftServedTiedNontrivial` are at the toy deployment as a population (`Definitions.WeightSecurity.ToyTied`).
--/
+/-! Model weight security: the outsider steals the weights with probability at most the covert strings' count times the honest-use rate plus the leakage terms, at every deployment form, against an adaptive outsider and a datacenter that knows the weights. -/
 
 @[expose] public section
 

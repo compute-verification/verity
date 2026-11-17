@@ -2,25 +2,7 @@ module
 
 public import Definitions.InferenceOnly
 
-/-!
-# The inference-only policy over threads: the vocabulary
-
-The thread draft ("Distinguishing inference from frontier training via novel communication intensity") bounds
-the fresh-input rate of every small subcircuit of a reference training circuit `C` from two facts about `C`'s structure:
-each weight is used a bounded number of times per thread, and a subcircuit pays an entry fee before it can do much of a
-thread's work. It states them over `C` itself, not over the declared circuit, which reaches them through containment.
-
-* `Threading C`: `C`'s counted multiplications (gates that multiply a weight by an activation, where an activation is
-  any non-weight value, gradients included) and a thread partition, putting each non-weight value in at most one thread,
-  with each weight used at most `reuse` times per thread. A counted multiplication belongs to the thread of its
-  activation. In a standard transformer a thread is one token position at one training step, and `reuse = 2`.
-* `Small C c k R`: the draft's small subcircuit, at most `c` computed gates reading at most `k` fresh input
-  bits (its `F*` and `S*`). Under the policy at `(c, k)`, or at `c` gates and the rate `α` with `k = α c`, every
-  inference block is small.
-* `Threading.Threaded c k d e`: the draft's `(d, e)`-threaded: every small subcircuit that reads fewer than `d` fresh
-  input values of a thread computes at most `e` of that thread's counted multiplications per value it reads from the
-  thread.
--/
+/-! The vocabulary of the inference-only policy over threads, stated over the reference training circuit itself, which the declared circuit reaches through containment. -/
 
 @[expose] public section
 
