@@ -50,7 +50,7 @@ open Lean (Json)
 def samplingDesignObj (named : Json) (derived : Option Flock.Draw.SamplingDesign) : Json := (derived.map (·.toJson)).getD named
 
 /-- **`Select.select`'s steps**: an accepted sample read the population `n`, the rule's sampling design over it and its expansion, and
-proves every unit it drew: all of `[0, n)` under `All`, else the units `sampleUnits` samples from the coins under the sampling design
+proves every unit it sampled: all of `[0, n)` under `All`, else the units `sampleUnits` samples from the coins under the sampling design
 `flockSamplingDesign` accepts. -/
 theorem select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (draw : Json) (proved : Array ℕ) (read : ℕ)

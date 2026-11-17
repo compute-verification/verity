@@ -28,10 +28,10 @@ the `Hello`'s proved:
 * `SessOn`: the session's entry set up on the setup. `sessOn_sessKept`: the updates that keep the session's stop keep
   it.
 * `LoopRead`: what the relay reads at a slot as the loop answers it, and the loop at the session's next request: the
-  `Hello`'s nonce the relay drew, the model's `Hello` round passing and the session's entry on the setup (`SessOn`);
+  `Hello`'s nonce the relay sampled, the model's `Hello` round passing and the session's entry on the setup (`SessOn`);
   the `Commit`'s roots `commitRead` reads off
   the slots, the level 0s it binds kept, the coin tree's streams the session's, the ZK server's own link at the
-  level 0s the loop drew for the session, each `Level0.ofSamples` on the host's and the operating system's bytes, and
+  level 0s the loop sampled for the session, each `Level0.ofSamples` on the host's and the operating system's bytes, and
   the session's entry linked to the words of the coins the prover receives (`Frame.words`); a
   frame round as the loop ran it (`RoundRun`) on the worker's value at the model's history, the rep's frame
   at the model's configuration there, its rounds of the inner proof `InnerSrc`, its start `StartOk` and the loop's
@@ -219,12 +219,12 @@ theorem sessOn_sessKept {spec : SessionSpec} {sts : Array Stmt} {sid : Nat} {R R
 
 /-- **What the relay reads at a slot of kind `k` of session `sid`**, from the session `st` and placement `pl`, as the
 loop at `σ` answers it serving the model's run `M`, the loop being at `σ'` at the session's next request: at the
-`Hello` the nonce `nonce` the relay drew, the model's `Hello` round passing (every round before the history the
+`Hello` the nonce `nonce` the relay sampled, the model's `Hello` round passing (every round before the history the
 slot leaves passed, `liveBefore`), and where the relay's setup is `spec` and `sts` the session's entry set up on them
 (`SessOn`: the loop began the session on its setup, at a session id no other session has); at the `Commit` the roots
 `commitRead` reads off the loop's level-0 slots at the session's tables (the setup's, each with its statement's `m`),
 the session's tables' level 0 at its next request those `commitRead` left, the coin tree's streams the session's
-(`streamsOk`), and the ZK server's own message the link at the roots of the level 0s `ls` the loop drew for the session
+(`streamsOk`), and the ZK server's own message the link at the roots of the level 0s `ls` the loop sampled for the session
 (`AfterSample`), table `j`'s being `Level0.ofSamples` at its statement's `m` on what the host and the operating system
 handed the loop for rep stream `2j` (`LoopModel.src`, as `Session.level0` samples it), and where the auditor answered
 coins the session goes on past, the session's entry at its next request linked to the words of what the prover
@@ -616,7 +616,7 @@ theorem slotCase_carried {W Rr : Type} {M : LoopModel W Rr} {J : List String →
       rw [hcc, hop]
       exact hF.count h
 
-/-- **The `Hello`'s slot case**: where the model's first message is the `Hello` at the nonce the relay drew and `J` is
+/-- **The `Hello`'s slot case**: where the model's first message is the `Hello` at the nonce the relay sampled and `J` is
 kept at the `Hello`, what the relay read at the `Hello` is the model's message, and `LoopP` holds at the next request
 with that message taken, the session's coins started with nothing opened. -/
 theorem slotCase_hello {W Rr : Type} {M : LoopModel W Rr} {J : List String → State → LoopAt → Prop} {sid : Nat}

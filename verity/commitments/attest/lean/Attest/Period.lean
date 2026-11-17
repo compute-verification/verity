@@ -9,7 +9,7 @@ public import Commitments.FV3
 `verity.commitments.attest`, whose module docstring is the spec. An auditor party on a device commits each sampling block's
 records (each a byte string) as the leaves of one frame-v3-sha512 tree per certification period (`root`, over the domain
 `periodDomain count` at the binding `PERIOD_BINDING`, owner −1, leaf schema `PERIOD_SCHEMA`), and its lower HSS key signs the
-root once per period (`Lms.periodRootMessage`, binding the deployment, the party, the attachment the challenger drew, the
+root once per period (`Lms.periodRootMessage`, binding the deployment, the party, the attachment the challenger sampled, the
 link, the period's index and the record count). The records, the root and its signature go to the prover only, as
 witness. The party's lower key and its certificate under the device's identity (`PartyKey`) are public: every liveness
 record shows them in the clear. `checkKey` is the verifier's check of them, in the clear (`Lms.verifyCertificate`).

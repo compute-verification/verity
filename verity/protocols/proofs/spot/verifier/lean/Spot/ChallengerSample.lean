@@ -14,7 +14,7 @@ files. The session is the one the ledger opens on `window` under `key` (`trusted
 family `label`, and its openings exactly the coins that session's signed log shows released after `after`
 (`challengerStream`). The result is their concatenation, the bytes a sample reads. A component whose check reads its
 coins through this (`Core.Live`) takes its sample from the challenger's record, and
-`Properties.Challenger.SampledByDevice` says what that record shows: the coins the device drew, or a break.
+`Properties.Challenger.SampledByDevice` says what that record shows: the coins the device sampled, or a break.
 
 `coinsReason key main coins window label after read` is `coins_reason`: why the bytes `read` are not the start of what
 `sampleCoins` reads from the same evidence, every coin of it read (`startReason`), under the verifier's challenger key and
