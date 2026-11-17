@@ -5,8 +5,8 @@ public import CoreProtocol.Protocol
 public import Flock.Draw
 public import Flock.WindowRecord
 public import Identity.Domains.Pouw
-public import PouwCheck.Json
-public import PouwCheck.Tile
+public import PouwVerifier.Json
+public import PouwVerifier.Tile
 public import PouwWindow.Length
 
 /-!
@@ -28,7 +28,7 @@ Each decoder refuses with `core_check.py`'s message, and `Core.Protocol.answer` 
 
 @[expose] public section
 
-namespace PouwCheck
+namespace PouwVerifier
 
 open Lean (Json)
 open Flock (V)
@@ -319,4 +319,4 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
 example : formats = [Domains.REGISTRATION_V1, Domains.REGISTRATION] := rfl
 
-end PouwCheck
+end PouwVerifier

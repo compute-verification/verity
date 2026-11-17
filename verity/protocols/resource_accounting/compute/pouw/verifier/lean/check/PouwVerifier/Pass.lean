@@ -2,7 +2,7 @@ module
 
 public import PouwCommit.Bindings
 public import PouwWindow.Rounds
-public import PouwCheck.Inputs
+public import PouwVerifier.Inputs
 public import Spot.ChallengerSession
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
@@ -44,7 +44,7 @@ then: bound by `taggedSha256`, after the current binding, and sampled by `derive
 
 @[expose] public section
 
-namespace PouwCheck
+namespace PouwVerifier
 
 open Lean (Json)
 open PouwCommit (CoinOpening pyFromHex pyRepr tagged leafValue Domain)
@@ -589,4 +589,4 @@ example : EPOCH_OPEN_TAG = Domains.POUW_EPOCH_OPEN.toUTF8 := rfl
 example : DRAW_DOMAIN = Domains.POUW_SERVED_ZK_SAMPLING := rfl
 example : ("verity/pouw/weights/v1" : String) = Domains.POUW_WEIGHTS_ROOT := rfl
 
-end PouwCheck
+end PouwVerifier

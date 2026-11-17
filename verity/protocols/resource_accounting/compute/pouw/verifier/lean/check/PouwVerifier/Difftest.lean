@@ -1,10 +1,10 @@
 module
 
 public import Difftest
-public import PouwCheck.Check
-public import PouwCheck.Chunks
-public import PouwCheck.Opening
-public import PouwCheck.Rounds
+public import PouwVerifier.Check
+public import PouwVerifier.Chunks
+public import PouwVerifier.Opening
+public import PouwVerifier.Rounds
 
 /-!
 # The difftest's functions: the check's Lean behind `Difftest.serve`
@@ -42,7 +42,7 @@ harness (`verity/core/difftest`):
 
 @[expose] public section
 
-namespace PouwCheck.Difftest
+namespace PouwVerifier.Difftest
 
 open Lean (Json ToJson toJson)
 
@@ -141,4 +141,4 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("opening", openingOf), ("registered", registeredOf), ("pass", passOf), ("draw", drawOf), ("salt", saltOf),
   ("live-salt", liveSaltOf), ("rounds", roundsOf), ("chunks", chunksOf), ("ratio", ratioOf)]
 
-end PouwCheck.Difftest
+end PouwVerifier.Difftest

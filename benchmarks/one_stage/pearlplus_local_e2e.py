@@ -400,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("run")
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--lean", help="the Lean verdict by served_passes.py lean with this pouw-pearlplus ('build': built in "
-                   "PouwCheck.PearlPlus's package) in place of the stand-in")
+                   "PouwVerifier.PearlPlus's package) in place of the stand-in")
     gt = sub.add_parser("gate")
     gt.add_argument("--root", type=Path, required=True)
     gt.add_argument("words")

@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Verified
+public import PouwVerifier.Verified
 
 /-!
 # A served window's live statements verified (`credit._live_verified`)
@@ -34,11 +34,11 @@ form (`LIVE_STATEMENTS_FORM`), and one statement a round of the window's (a retr
 
 @[expose] public section
 
-namespace PouwCheck.LiveVerified
+namespace PouwVerifier.LiveVerified
 
 open Lean (Json toJson)
-open PouwCheck.Credit
-open PouwCheck.Verified (CIRCUIT_FILES finding)
+open PouwVerifier.Credit
+open PouwVerifier.Verified (CIRCUIT_FILES finding)
 
 def LIVE_STATEMENT_KEYS : List String := ["circuit", "public", "round", "sessions"]
 
@@ -104,12 +104,12 @@ def readsFile (program pre window session : String) (t steps s m : Nat) (roots :
   let slots := (List.range t).map fun i => (s!"slot_{i}", port sv SLOT_WORDS sd Flock.HmRow.ROW_SCHEMA_V2 i)
   let reqs := (List.range t).map fun i => (s!"req_{i}", port rv HEADER_WORDS rd Flock.HmRow.ROW_SCHEMA_SEG i)
   let mp ← knownPort program window s!"{pre}{M_ROWS}@{s}"
-    #[(#[m % 65536, m / 65536], PouwCheck.publicRowSalt window s)] SLOT_WORDS s 0
+    #[(#[m % 65536, m / 65536], PouwVerifier.publicRowSalt window s)] SLOT_WORDS s 0
   let sp ← knownPort program window s!"{pre}{ROUND_ROWS}@{s}"
-    #[(#[s % 65536, s / 65536], PouwCheck.publicRowSalt window s)] SLOT_WORDS s 0
+    #[(#[s % 65536, s / 65536], PouwVerifier.publicRowSalt window s)] SLOT_WORDS s 0
   let capRows := (Array.range t).map fun q =>
     let c := maxTokens.getD q 0
-    (#[c % 65536, c / 65536], PouwCheck.publicRowSalt window q)
+    (#[c % 65536, c / 65536], PouwVerifier.publicRowSalt window q)
   let caps := (List.range t).zip (← knownPorts program window s!"{pre}{CAPS}" capRows SLOT_WORDS s (List.range t))
     |>.map fun (i, p) => (s!"cap_{i}", p)
   let op ← knownPort program window s!"{pre}{LIVE_OK_VALUE}"
@@ -217,4 +217,4 @@ def liveVerified (j : Json) : R Json := do
     return Json.mkObj [("outcomes", Json.arr out)]
   | _ => throw ("error", "credit-live-verified: the verifier's answers are neither null nor a list")
 
-end PouwCheck.LiveVerified
+end PouwVerifier.LiveVerified

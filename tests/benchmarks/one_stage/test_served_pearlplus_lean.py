@@ -37,7 +37,7 @@ H100 = "pearl-c-h100-v1-h3"
 SOURCE = b"verifier" * 4
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"),
               pytest.mark.skipif(not (PACKAGE / "lakefile.toml").exists(),
-                                 reason="no PouwCheck.PearlPlus package in this tree (PR #7221)")]
+                                 reason="no PouwVerifier.PearlPlus package in this tree (PR #7221)")]
 
 
 def _module(name: str, path: Path):
@@ -104,7 +104,7 @@ def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_com
         return S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
 
     before = row()
-    assert before["verdict"] == "missing" and f"no Lean PouwCheck.PearlPlus verdict ({S.PEARLPLUS_LEAN}" in before["why"]
+    assert before["verdict"] == "missing" and f"no Lean PouwVerifier.PearlPlus verdict ({S.PEARLPLUS_LEAN}" in before["why"]
     shutil.copyfile(node / S.PEARLPLUS_LEAN, piece / S.PEARLPLUS_LEAN)
     got = row()
     assert lean["work"]["credited"] == 0 and lean["work"]["credited_tiles"] > 0

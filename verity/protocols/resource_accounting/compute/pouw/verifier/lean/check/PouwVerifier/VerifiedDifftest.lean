@@ -1,8 +1,8 @@
 module
 
-public import PouwCheck.CreditDifftest
-public import PouwCheck.LiveVerified
-public import PouwCheck.CommittedFiles
+public import PouwVerifier.CreditDifftest
+public import PouwVerifier.LiveVerified
+public import PouwVerifier.CommittedFiles
 
 /-!
 # The difftest's functions for a served execution phase's statements (`PouwCheck.Verified`, `PouwCheck.LiveVerified`,
@@ -22,21 +22,21 @@ Beside `PouwCheck.CreditDifftest`'s, behind the same `pouw-check-difftest` (`Pou
 
 @[expose] public section
 
-namespace PouwCheck.VerifiedDifftest
+namespace PouwVerifier.VerifiedDifftest
 
 open Lean (Json)
 
-def verifiedOf (j : Json) : Except String Json := PouwCheck.Difftest.refusal id (Verified.verified j)
+def verifiedOf (j : Json) : Except String Json := PouwVerifier.Difftest.refusal id (Verified.verified j)
 
-def liveVerifiedOf (j : Json) : Except String Json := PouwCheck.Difftest.refusal id (LiveVerified.liveVerified j)
+def liveVerifiedOf (j : Json) : Except String Json := PouwVerifier.Difftest.refusal id (LiveVerified.liveVerified j)
 
-def committedFilesOf (j : Json) : Except String Json := PouwCheck.Difftest.refusal id (CommittedFiles.filesOf j)
+def committedFilesOf (j : Json) : Except String Json := PouwVerifier.Difftest.refusal id (CommittedFiles.filesOf j)
 
 def table : String → Option _root_.Difftest.Fn :=
   _root_.Difftest.table [("credit-verified", verifiedOf), ("credit-live-verified", liveVerifiedOf),
     ("credit-committed-files", committedFilesOf)]
 
 /-- `pouw-check-difftest`'s functions: `PouwCheck.CreditDifftest.all`'s, then these. -/
-def all (name : String) : Option _root_.Difftest.Fn := PouwCheck.CreditDifftest.all name <|> table name
+def all (name : String) : Option _root_.Difftest.Fn := PouwVerifier.CreditDifftest.all name <|> table name
 
-end PouwCheck.VerifiedDifftest
+end PouwVerifier.VerifiedDifftest

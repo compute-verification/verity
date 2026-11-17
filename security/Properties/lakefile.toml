@@ -23,7 +23,7 @@ name = "pouw_window"
 path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/window"
 
 [[require]]
-name = "pouw_check"
+name = "pouw_verifier"
 path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
 
 [[require]]

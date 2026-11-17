@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Credit
+public import PouwVerifier.Credit
 public import PouwWindow.RegFile
 
 /-!
@@ -30,7 +30,7 @@ the descriptor's bytes and the execution phase's calls.
 
 @[expose] public section
 
-namespace PouwCheck.LeafOwn
+namespace PouwVerifier.LeafOwn
 
 open Lean (Json)
 
@@ -119,4 +119,4 @@ def leafOwnCmd (args : List String) : IO UInt32 := do
     leafOwn? d rounds reg prod file u lane
     records.forM PouwWindow.Lanes.checkFull
 
-end PouwCheck.LeafOwn
+end PouwVerifier.LeafOwn

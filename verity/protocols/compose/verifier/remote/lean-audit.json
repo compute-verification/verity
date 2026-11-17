@@ -12,7 +12,7 @@
     "CoreComposition.Cases",
     "CoreComposition.Tie",
     "InferenceOnlyCheck.Protocol",
-    "PouwCheck.Period",
+    "PouwVerifier.Period",
     "Spot.OneStage",
     "Spot.OneStageZk",
     "PouwPearlPlus.Protocol",
