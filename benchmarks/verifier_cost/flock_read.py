@@ -1,28 +1,18 @@
-"""flock_read.py K WORK [--circuit-only]: the H1 tile unit's flat statement circuit at contraction K (`prover/lowering/h1unit.Shape(K)`,
-the 4×8 tile, staged flat as `h1_prove/job.sh` stages it), and one instance on it (not with
-`--circuit-only`, which `flock_tmpl.sh` passes).
-
-Writes WORK/circuit.txt, WORK/stmt/{inst.bin,pub.bin} and WORK/build.json (the unit's ANDs, nnz, k_log, the circuit's bytes
-and the build's seconds). The instance's codes, salt and roots are random: the read's cost depends on the circuit only.
-The stager's check of the outputs against the IR reference is skipped (hours at K = 4096); the lowering's own evaluation
-still has to satisfy the unit.
+"""flock_read.py K WORK: the H1 tile unit's flat statement circuit at contraction K (`prover/lowering/h1unit.Shape(K)`, the
+4×8 tile, staged flat as `h1_prove/job.sh` stages it), for `flock_tmpl.sh` and `flock_unroll.sh`. Writes WORK/circuit.txt and
+WORK/build.json (the unit's ANDs, the circuit's bytes, the build's seconds and its Program descriptor's size).
 """
 from __future__ import annotations
 
 import json
-import os
 import resource
 import sys
 import time
 from pathlib import Path
 
-import numpy as np
-
 H1 = Path(__file__).resolve().parents[1] / "pouw" / "h1_prove"
 sys.path.insert(0, str(H1))
 sys.path.insert(0, str(H1.parent / "hidden_zk"))
-
-from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
 
 import h1form as F  # noqa: E402
 
@@ -49,27 +39,8 @@ def main() -> None:
     shape = F.shape(k)
     stager = shape.stager("unit/pouw-h1-tile", circuit=work / "circuit.txt")
     t1 = time.time()
-    if "--circuit-only" in sys.argv[3:]:
-        head = {"k": k, "ands": stager.low.layout.counts["ands"], "circuit_bytes": (work / "circuit.txt").stat().st_size,
-                "build_seconds": round(t1 - t0, 1),
-                "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
-        head |= description(shape.definition())
-        (work / "build.json").write_text(json.dumps(head, indent=1))
-        print("BUILT " + json.dumps(head), flush=True)
-        return
-    rng = np.random.default_rng(k)
-    a = rng.integers(-128, 128, size=(shape.r, k), dtype=np.int16)
-    b = rng.integers(-128, 128, size=(shape.c, k), dtype=np.int16)
-    rows = {f"a{i}": U.row_words(a[i:i + 1]) for i in range(shape.r)}
-    rows |= {f"b{j}": U.row_words(b[j:j + 1]) for j in range(shape.c)}
-    rows["pub"] = U.pub_words(os.urandom(64), 0, (os.urandom(64), os.urandom(64))).reshape(1, -1)
-    stager.reference_check = lambda _rows, _outs: None
-    got = stager.stage({p: rows[p] for p in stager.row_ports}, work / "stmt", os.urandom(32))
-    counts = stager.low.layout.counts
-    head = {"k": k, "r": shape.r, "c": shape.c, "definition": shape.definition().id, "ands": counts["ands"],
-            "unit_nnz": got["unit_nnz"], "k_log": stager.meta["k_log"], "vus_per_block": stager.meta["vus_per_block"],
-            "pin": stager.pin, "circuit_bytes": (work / "circuit.txt").stat().st_size,
-            "build_seconds": round(t1 - t0, 1), "stage_seconds": round(time.time() - t1, 1),
+    head = {"k": k, "ands": stager.low.layout.counts["ands"], "circuit_bytes": (work / "circuit.txt").stat().st_size,
+            "build_seconds": round(t1 - t0, 1),
             "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
     head |= description(shape.definition())
     (work / "build.json").write_text(json.dumps(head, indent=1))

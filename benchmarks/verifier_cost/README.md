@@ -181,7 +181,7 @@ research run --as proofs --project verity --on auto --source . --cwd clone --mem
   bash benchmarks/verifier_cost/members_files.sh 1 16 150
 ~~~
 
-`flock_tmpl.sh K...` is the H1 tile proof block in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
+`flock_tmpl.sh K...` is the H1 tile proof block in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py`
 builds the 4×8 tile's statement circuit at each contraction K (`h1unit.Shape`), `python -m verity_flock.tmpl` writes its proof block's templated form (Definitions read off the flat proof block's
 repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
 against the circuit's flat proof block byte for byte. Per K, `$OUT` gets emit-K.json (the levels, Definitions, rows and bytes),
