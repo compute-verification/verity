@@ -534,6 +534,7 @@ bookkeeping (`tests/conftest.py`), and the check's ratchet gate is off the merge
 | "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, the registered circuit's work; execution block, execution phase |
 | a served span: "window", "commit period" for PoUW's span and `window`, "sampling block", until renamed | execution phase |
 | "window" for SPOT's served span with its audit; SPOT's records' `window` (`window_root`) until a format version | run (`Spot.Run`); its served part is the run's serving, and its length the run length |
+| "served window", "served run", "what was served"; the stored keys and format ids that spell them, until a format version | workload (execution phase where the sense is time) |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
 | "proof service" | proof system |
