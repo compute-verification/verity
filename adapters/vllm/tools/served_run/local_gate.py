@@ -1,7 +1,7 @@
 """Infra's challenger gate (`verity/protocols/compose/verifier/live_challenger/auditor.py`) run on one node
-under a test key, for a rehearsal of a served window (`pouw_h1_rehearsal.py`); run by hand or by that job, never collected.
+under a test key, for a rehearsal of a served window (`tests/adapters/vllm/tests/protocols/pouw_h1_rehearsal.py`).
 
-    python -I local_gate.py DIR init --tree TGZ --commit SHA [--params W,H] [--peer NAME] [--ports LO-HI] [--coins lean|stub]
+    python -I local_gate.py DIR init --tree TGZ --commit SHA [--params W,H] [--peer NAME] [--ports LO-HI]
     python -I local_gate.py DIR VERB ...   # the gate's verbs as the lane's key: reserve, open, status, ledger, pins,
                                            # pubkey, fetch, period-open, period-close, model-key, models
                                            # (`auditor.gate(["--ssh", WORDS, "--key", LANE])`)
@@ -11,9 +11,8 @@ under a test key, for a rehearsal of a served window (`pouw_h1_rehearsal.py`); r
 ``init`` unpacks infra's tree (``git archive SHA`` of `ARCHIVE`'s paths, refused without one) as ``DIR/tree/SHA``, so
 `auditor.pinned_commit` names SHA, makes the host's state in ``DIR/host`` (`auditor.Host`, its pins log recording SHA as
 its own main, since nothing here fetches main) and its LMS key at ``--params``
-(default 4,5: 32 leaves), and builds the Lean verifier whose `one_stage.verifier.coins` serve.py flips its coins from
-(``--coins lean``; ``stub`` serves `stub_serve.py`'s seeded bytes instead, and ``init`` falls back to it, saying why, when
-the build fails). Every verb then runs infra's own code from that tree, which goes first on ``sys.path`` before any
+(default 4,5: 32 leaves), and builds the Lean verifier whose `one_stage.verifier.coins` serve.py flips its coins from;
+``init`` refuses when that build fails. Every verb then runs infra's own code from that tree, which goes first on ``sys.path`` before any
 ``verity`` import: `auditor.gate` with its hooks as root and `auditor` would run them on the auditor device (`reserve`,
 `admit`, `period`, `await_commitment`, `model_register`), each in this process, and a session's unit (`auditor.run`,
 serve.py with ``--root`` and the session's secret) a detached ``DIR run SESSION`` that holds ``DIR/units/SESSION.lock``
@@ -23,7 +22,7 @@ checkpoint manifests (vLLM's and the torch loop's) beside ``verity``. What diffe
 runs everything (no ``auditor`` user, ``runuser``, sudoers or systemd unit, so ``own`` does nothing and the registry isn't
 made append-only); the key is a test key of ``--params``, not ``lms.DEPLOYED``; serve.py
 listens on the node itself (no ``--peer``, so no ``ssh -R`` tunnel), on ``--ports`` (default 27811-27899, off the live
-tunnels' 7811-7899); and with ``--coins stub`` its coins are seeded bytes, not the Lean verifier's.
+tunnels' 7811-7899).
 """
 from __future__ import annotations
 
@@ -113,7 +112,6 @@ def init(d: Path, argv: list[str]) -> int:
     p.add_argument("--params", default="4,5")
     p.add_argument("--peer", default="local")
     p.add_argument("--ports", default="27811-27899")
-    p.add_argument("--coins", choices=("lean", "stub"), default="lean")
     p.add_argument("--name", default="local-gate")
     a = p.parse_args(argv)
     tree = d / "tree" / a.commit
@@ -124,19 +122,19 @@ def init(d: Path, argv: list[str]) -> int:
         print(f"local_gate: the tree {a.tree} has no {', '.join(missing)}: make it with "
               f"`git archive --format=tar.gz -o TGZ {a.commit} {' '.join(ARCHIVE)}`", file=sys.stderr)
         return 2
+    pkg = tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean"
+    b = subprocess.run(["lake", "build", "spot-verifier"], cwd=pkg, capture_output=True, text=True)
+    if b.returncode:
+        print(f"local_gate: lake build spot-verifier exited {b.returncode}, and the gate's coins are the Lean "
+              f"verifier's:\n{(b.stdout + b.stderr)[-3000:]}", file=sys.stderr)
+        return 2
     (d / "host").mkdir(mode=0o700)
     (d / "host" / "sessions").mkdir()
     (d / "units").mkdir()
     (d / "host" / "peers").write_text(f"{a.peer} localhost\n")
     (d / "host" / "coin-ports").write_text(f"{a.peer} {a.ports}\n")
     cfg = {"tree": str(tree), "commit": a.commit, "params": [int(x) for x in a.params.split(",")], "peer": a.peer,
-           "ports": [int(x) for x in a.ports.split("-")], "coins": a.coins, "name": a.name}
-    if a.coins == "lean":
-        pkg = tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean"
-        b = subprocess.run(["lake", "build", "spot-verifier"], cwd=pkg, capture_output=True, text=True)
-        cfg["lean_build"] = {"rc": b.returncode, "tail": (b.stdout + b.stderr)[-3000:]}
-        if b.returncode:
-            cfg["coins"], cfg["coins_why"] = "stub", f"lake build spot-verifier exited {b.returncode}"
+           "ports": [int(x) for x in a.ports.split("-")], "name": a.name}
     (d / CONFIG).write_text(json.dumps(cfg, indent=1) + "\n")
     A = _auditor(d, cfg)
     from verity.commitments.crypto import lms
@@ -147,13 +145,13 @@ def init(d: Path, argv: list[str]) -> int:
     public = lms.public_key(key)
     doc = {"W": key.params.W, "H": key.params.H, "public": public.hex(), "public_sha512": __import__("hashlib").sha512(public).hexdigest()}
     (host.root / "pubkey.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-    print(json.dumps({**{k: v for k, v in cfg.items() if k != "lean_build"}, "pubkey": doc}))
+    print(json.dumps({**cfg, "pubkey": doc}))
     return 0
 
 
 def unit(d: Path, session: str) -> int:
     """The session's unit (`vy-challenger@SESSION.service`): `auditor.run` with serve.py's argv as the unit's, except no
-    ``--peer`` (serve.py listens on this node) and the test key's ``--params``; ``stub`` coins through stub_serve.py."""
+    ``--peer`` (serve.py listens on this node) and the test key's ``--params``."""
     cfg = _config(d)
     A = _auditor(d, cfg)
     host = _host(A, d, cfg)
@@ -168,9 +166,6 @@ def unit(d: Path, session: str) -> int:
         i = argv.index("--peer")
         del argv[i:i + 4]
     argv += ["--params", ",".join(map(str, cfg["params"])), "--keygen-workers", "4"]
-    if cfg["coins"] == "stub":
-        os.environ["COINS_LOG"] = str(d / "units" / f"{session}.coins")
-        argv[2:2] = [str(Path(cfg["tree"]) / "tests" / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "stub_serve.py")]
     signer = A.key_signer(host, _params(cfg), 4)
     try:
         e = A.run(host, session, signer=signer, pinned=A.pinned_commit(), now=_now, argv=argv)

@@ -93,6 +93,8 @@ doesn't control.
   `run.sh` hands a run's script its node's paths as its environment, so no script names a node. It holds no machine's
   address: the gate's value names the variable that holds the challenger host's (`VY_CHALLENGER_1_HOST`), which
   `run.sh` fills from the environment the run is launched in, and without it the window run starts nothing and says so.
+- `local_gate.py`: the challenger's gate (`live_challenger/auditor.py`) on one node under a test key, its coins the
+  Lean verifier's; `init` refuses when that verifier doesn't build.
 - `workloads/` keeps a bf16 RTX PRO 6000 workload, which the served run doesn't serve.
 
 ## Commands
