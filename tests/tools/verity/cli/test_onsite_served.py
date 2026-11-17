@@ -113,6 +113,21 @@ def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(dem
     assert {p["protocol"] for p in cfg["pin"]} == {"pous", "wipe"} & set(T.DEMOS[demo])
 
 
+def test_remote_has_the_values_pearl_pluss_tie_takes_and_no_onsite_demo_takes_them():
+    remote = R.load(ROOT / "demos" / "remote.toml", REG)
+    assert remote["workload"]["params"] == {"model": "unsloth/Llama-3.2-1B", "precision": "bfloat16", "slots": 4,
+                                            "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+                                            "window-steps": 2, "load": "fixed"}
+    assert remote["params"]["verity/pouw/pearl-plus/v1"] == {"class": "4,27,2", "tie-uniform": True}
+    hooks = T.variables(remote, {})
+    assert {k: hooks[k] for k in ("REPO", "PRECISION", "SLOTS", "WINDOW_STEPS", "LOAD", "V3C_CLASS", "CLASSES",
+                                  "PEARLPLUS_TIE_UNIFORM")} == {
+        "REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": "4", "WINDOW_STEPS": "2", "LOAD": "fixed",
+        "V3C_CLASS": "4,27,2", "CLASSES": "4,27,2", "PEARLPLUS_TIE_UNIFORM": "1"}
+    for demo in set(T.DEMOS) - {"remote"}:
+        assert R.load(ROOT / "demos" / f"{demo}.toml", REG)["workload"]["params"] == T.SERVED.default_params
+
+
 def test_the_configuration_states_no_host_or_address():
     cfg = K.parse(CONFIG.read_text())
     assert not [(p["name"], f) for p in cfg["party"] for f in p if f in K.TRANSPORT]

@@ -232,17 +232,26 @@ HEADERS = {
 HEADER = HEADERS["onsite_full"]
 
 
+#: a demo's own workload values and component parameters over the shared defaults: remote's are those Pearl+'s tie takes
+DEMO_VALUES = {"remote": ({"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+                           "precision": "bfloat16", "slots": 4, "window-steps": 2, "load": "fixed"},
+                          {SP.IDS["pearl-plus"]: {"class": "4,27,2", "tie-uniform": True}})}
+
+
 def configuration(commit: str, demo: str = "onsite_full",
                   pins: Sequence[Mapping[str, str]] | None = None) -> dict[str, Any]:
     """The configuration `demos/<demo>.toml` holds, at program ``commit``: `config new`'s over the demo's subprotocols
     (`DEMOS`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
-    parameters stated, and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
+    parameters stated (with the demo's own, `DEMO_VALUES`), and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
     entries for the subprotocols the demo lists: no code states a key)."""
     protocols = DEMOS[demo]
     cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
-    cfg["workload"]["params"] = dict(SERVED.default_params)
+    workload, params = DEMO_VALUES.get(demo, ({}, {}))
+    cfg["workload"]["params"] = {**SERVED.default_params, **workload}
     if "pous" in protocols:
         cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
+    if params:
+        cfg["params"] = {**cfg.get("params", {}), **params}
     for p in cfg["party"]:
         remote = demo == "remote" and p["principal"] == "auditor"
         p["machine"] = AUDITOR_REMOTE if remote else PLACEMENT[p["name"]]
