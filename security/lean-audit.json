@@ -5672,7 +5672,6 @@
   },
   "Verity.Sampled.onsite_soundness_deployedReady": {
    "type_hash": "3676962ccecf34413033e5dd975311d7b06a736d598716cdfda7bf7fdee92b2c",
-   "unfolded_hash": "014fc46645a11651409f9682cee16df932b38d276d9400f88a05ded15b354cc9",
    "missing": "below_one",
    "targets": [
     "Verity.Subprotocol.pouw",
@@ -5683,15 +5682,16 @@
     "Verity.Subprotocol.wipe"
    ],
    "owner": "@soundness",
-   "why": "Its honest witnesses are at `(Instance.Honest.inst ⊤ Instance.Honest.bound).base`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+   "why": "Its honest witnesses are at `(Instance.Honest.inst ⊤ Instance.Honest.bound).base`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover.",
+   "unfolded_hash": "014fc46645a11651409f9682cee16df932b38d276d9400f88a05ded15b354cc9"
   },
   "Verity.Sampled.remote_soundness_deployedReady": {
    "type_hash": "3519735b22bf44943e1704c45b0bc77d6b8a6a7939a35a85c4158de460fb9488",
-   "unfolded_hash": "a295448a8afe7a3938ee9fdddc4de2b6bf6f80ad99b5f5e2f64952252aa23295",
    "missing": "below_one",
    "targets": ["Verity.Subprotocol.pouw"],
    "owner": "@soundness",
-   "why": "Its honest witnesses are at `(Instance.Honest.inst ⊤ Instance.Honest.bound).base`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover."
+   "why": "Its honest witnesses are at `(Instance.Honest.inst ⊤ Instance.Honest.bound).base`, whose published error at each listed target is ⊤, so the bound they conclude there holds of every prover.",
+   "unfolded_hash": "a295448a8afe7a3938ee9fdddc4de2b6bf6f80ad99b5f5e2f64952252aa23295"
   },
   "Verity.SecurityProofs.BlockDescription": {
    "type_hash": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb",
