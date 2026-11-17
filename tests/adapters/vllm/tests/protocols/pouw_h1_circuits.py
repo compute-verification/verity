@@ -190,9 +190,13 @@ def leaf_bound(win: Any, k: int, kind: str) -> tuple[Any, bytes, dict, dict]:
     """K's leaf statement ``kind`` of the window Program `win`: its Definition (`h1window.leaf_unit`), its leaf Program's
     descriptor (`served.descriptor`), its partition object and what its file is bound to, ``{"partition",
     "program"}``."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import (
+        h1window as HW,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        served as SV,
+    )
     program, query = HW.leaf_program(win, k, kind)
     part = P.partition(program, query)
     desc = SV.descriptor(program)
@@ -214,7 +218,9 @@ def lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
 def _lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
     """K's leaf statement ``kind`` (`leaf_bound`) as the flat statement on `drawn_rows.leaf_rows`, its output
     `drawn_rows.LEAF_OUT_ROWS`, staged by Flock's library and written to `path`."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import sampled_rows as D
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        sampled_rows as D,
+    )
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity_flock import class_statement as CS
     descriptor = gzip.decompress(program.read_bytes())
@@ -230,9 +236,13 @@ def leaf_files(program_dir: Path, out: Path, descriptor: bytes, ks: Sequence[int
     descriptor written beside it (`drawn_rows.LEAF_PROGRAM`): ``files`` (each file's SHA-512 and ``leaf_programs``), each
     statement's bind (``leaf_binds``) and Definition id (``templates``). ValueError when credit derives another leaf
     Program or partition at K, or refuses the K (`credit.lanes_shape`)."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import sampled_rows as D
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        sampled_rows as D,
+    )
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-    from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
+    from verity.protocols.resource_accounting.compute.pouw.verifier import (
+        leaf_lanes as LL,
+    )
 
     from tests.protocols.pouw_h1_rehearsal import PROGRAM
     layout, _why = CR.layout_of(descriptor)

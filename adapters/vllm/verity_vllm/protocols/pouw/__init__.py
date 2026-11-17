@@ -50,62 +50,67 @@ from functools import cache
 from typing import Any, cast
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-    Challenger,
-    closed_on_error,
-    CoinCommitment,
-    CoinWindow,
-    commit_rows,
-    DomainError,
-    Epoch,
-    finish_window,
     H1_CHALLENGER,
     H1_SCHEME,
-    H1Run,
     HM96,
     HM96_WEIGHTS,
-    host_array,
-    in_process_draw,
     LEAD_BACKEND,
-    lead_refusals,
     LEAD_SCHEME,
-    lead_in_process_certifier,
+    NCP_CIRCUIT_SCHEMES,
+    NCP_SCHEMES,
+    PEARL_C_CALL_CAPACITY,
+    PEARL_C_SCHEMES,
+    ROUND0,
+    SCHEDULES,
+    Challenger,
+    CoinCommitment,
+    CoinWindow,
+    DomainError,
+    Epoch,
+    H1Run,
     LeadRun,
     Matmul,
     MatmulRun,
-    NCP_CIRCUIT_SCHEMES,
-    ncp_scheme,
-    NCP_SCHEMES,
     NcpCircuitRun,
     NcpRun,
-    PEARL_C_CALL_CAPACITY,
+    PearlCKernel,
+    QuantizedRows,
+    Shape,
+    Workload,
+    closed_on_error,
+    commit_rows,
+    finish_window,
+    host_array,
+    in_process_draw,
+    lead_in_process_certifier,
+    lead_refusals,
+    ncp_scheme,
     pearl_c_refusals,
     pearl_c_salt_key,
     pearl_c_schedule,
     pearl_c_scheme,
-    PEARL_C_SCHEMES,
-    PearlCKernel,
     program_salt,
     quantize,
-    QuantizedRows,
-    ROUND0,
     run_matmul,
     salt_session,
-    SCHEDULES,
-    Shape,
-    traced_as as _traced_as,
     use_int8_arm,
     verifier_coins,
     weight_binding,
     weights_root,
-    Workload,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    traced_as as _traced_as,
+)
+from verity_torch.pouw import (  # importing it hands PoUW its tensors and H1's device
+    PearlCDeviceRun,
+    hook_steps,
+    pearl_c_weight_roots,
 )
 
-from verity_torch.pouw import PearlCDeviceRun, hook_steps, pearl_c_weight_roots  # importing it hands PoUW its tensors and H1's device
 from verity_vllm.protocols.interface import Context, Option, Target
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
-
 
 __all__ = ["PearlCDeviceRun", "Settings", "challenged", "h1_run", "linear_types", "pearl_c_salt_key", "refusals"]
 

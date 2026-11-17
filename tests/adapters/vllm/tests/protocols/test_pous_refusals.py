@@ -14,7 +14,9 @@ from typing import Any
 
 import pytest
 import torch
-from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.resource_accounting.memory.pous.prover import (
+    challenger_prover as CR,
+)
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 from verity.protocols.resource_accounting.memory.pous.verifier import period, setup

@@ -15,9 +15,15 @@ import sys
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import manifest as PM
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    pearl_c as PPD,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
+    kernel as PK,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
+    manifest as PM,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
 from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SCHEDULES

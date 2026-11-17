@@ -12,9 +12,10 @@ import time
 
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import REGISTRY
+from verity.circuits.ops.boolean.versions import word_descriptor
+
 from verity_vllm.check.match.derived_index import derived_shape
 from verity_vllm.program import workload as W
-from verity.circuits.ops.boolean.versions import word_descriptor
 
 
 def load_desc(d: str) -> dict:

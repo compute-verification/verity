@@ -24,8 +24,14 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     PoubReceipt,
     chain,
 )
-from verity.protocols.resource_accounting.memory.poub.prover.node_store.verify import verify_opening
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, memory_map
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.verify import (
+    verify_opening,
+)
+from verity.protocols.resource_accounting.memory.poub.verifier import (
+    audit,
+    codec,
+    memory_map,
+)
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
 
 from tests import fake_vllm

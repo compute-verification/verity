@@ -2,6 +2,7 @@
 clock its hooks read. The unit itself, and every verb, run infra's code from a pinned tree and are the rehearsal's."""
 from __future__ import annotations
 
+import importlib.util
 import io
 import subprocess
 import sys
@@ -9,8 +10,6 @@ from datetime import UTC
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-
-import importlib.util
 
 import pytest
 

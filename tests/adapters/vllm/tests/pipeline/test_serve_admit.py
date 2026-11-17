@@ -19,7 +19,15 @@ from typing import Any
 
 import pytest
 
-from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, Tokenizer, records
+from tests.pipeline.test_serve_openai import (
+    CERTIFIER_BODY,
+    Committer,
+    Engine,
+    Runner,
+    Serving,
+    Tokenizer,
+    records,
+)
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_admit as sa

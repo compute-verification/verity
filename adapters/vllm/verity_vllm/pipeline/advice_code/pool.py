@@ -12,7 +12,13 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Iterable, Sequence
 
-from verity_vllm.pipeline.advice_code.schedule import PREEMPTED, WAITING, Engine, RequestState, cdiv
+from verity_vllm.pipeline.advice_code.schedule import (
+    PREEMPTED,
+    WAITING,
+    Engine,
+    RequestState,
+    cdiv,
+)
 
 __all__ = ["BlockPool"]
 

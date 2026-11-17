@@ -9,7 +9,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from verity.commitments.periods import interface as IF
-from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
+
+from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.pipeline import weight_rows as WT
 
 SERVED = [Path(__file__).resolve().parents[5] / "benchmarks/one_stage" / f"glm53_{p}.json"
           for p in ("all_families_tp8_step16", "sparse_mla_tp8_step16", "prefill_tp8_step0")]

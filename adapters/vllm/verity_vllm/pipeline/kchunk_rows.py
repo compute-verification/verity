@@ -17,8 +17,8 @@ from dataclasses import replace
 from typing import Any
 
 import numpy as np
-
 from verity.commitments.periods import rows as CS
+
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import Template, template
 

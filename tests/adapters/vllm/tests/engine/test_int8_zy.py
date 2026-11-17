@@ -9,7 +9,9 @@ import numpy as np
 import pytest
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import credit_gate as CG
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    credit_gate as CG,
+)
 from verity_torch.pouw import credit_gate_device as CGD
 
 from verity_vllm.engine import int8_exact as E

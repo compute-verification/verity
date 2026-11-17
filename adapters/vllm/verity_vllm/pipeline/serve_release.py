@@ -320,7 +320,10 @@ def retention_refusal(opts: Any) -> str | None:
     spec = r.retain_exclude
     if not spec:
         return None
-    from verity_vllm.commit.committer.host_retention import HIDDEN_M1_FAMILIES, retain_exclude_families
+    from verity_vllm.commit.committer.host_retention import (
+        HIDDEN_M1_FAMILIES,
+        retain_exclude_families,
+    )
 
     if other := sorted(retain_exclude_families(spec) - HIDDEN_M1_FAMILIES):
         return (f"--retain-exclude {spec}: {other} aren't attention interiors; serve-openai commits without retaining only "

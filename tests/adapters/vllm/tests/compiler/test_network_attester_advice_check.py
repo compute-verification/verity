@@ -12,13 +12,13 @@ import random
 
 import pytest
 from verity.protocols.resource_accounting.network.verifier import advice as V
+
 from tests.verity.protocols.resource_accounting.network.verifier.test_network_attester_advice import (
     FIXTURE,
     RANDOM,
     packed,
     rebuild,
 )
-
 from verity_vllm.compiler.advice_check import (
     DEFERRED,
     _sort_net,

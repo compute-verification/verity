@@ -8,7 +8,6 @@ import importlib
 import math
 
 import pytest
-from verity_vllm.definitions.registry import dense as SC
 
 from tests.engine.test_gen_dense2 import FA2, SCOPE, _fa2_edit
 from tests.observe.test_patterns_synthetic import (
@@ -20,6 +19,7 @@ from tests.observe.test_patterns_synthetic import (
     context,
     decode_step,
 )
+from verity_vllm.definitions.registry import dense as SC
 from verity_vllm.observe.fold.patterns import AttentionScope
 from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as B1PROF
