@@ -55,3 +55,14 @@ the move once `move_check.py` certifies that run.
 Once it lands, each open branch crosses it:
 
     python3 tools/move/restack.py BRANCH --push-to NEWBRANCH --kept
+
+A commit written by a script with no map has no move line, so `restack.py` merges it as a plain commit and leaves the
+branch's own lines in its old names. The Lean names pass's docket part, `5916146988e4`
+(`tools/move/lean_names_pass.py --apply docket`: eight names of SPOT's run record become `docket`, in code only), is
+one. A branch made before it that touches those names crosses in three runs, each `--dry-run` printing the result
+the next one reads, the middle one naming the part and its script:
+
+    python3 tools/move/restack.py BRANCH --main a98c0b3a1d48 --dry-run
+    python3 tools/move/restack.py RESULT1 --move-commit 5916146988e4 --script tools/move/lean_names_pass.py \
+      --script-arg=--apply --script-arg docket --dry-run
+    python3 tools/move/restack.py RESULT2 --push-to NEWBRANCH --kept
