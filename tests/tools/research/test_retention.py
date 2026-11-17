@@ -210,16 +210,17 @@ def test_keep_refuses_the_root_a_sidecar_a_missing_path_and_a_path_outside_the_r
 
 # ---- implicit records ---------------------------------------------------------------------------------------------------------------
 
-def test_a_preserved_custody_marker_is_an_implicit_record_owned_by_the_lane_then_the_campaign_then_runner(tmp_path):
+def test_a_preserved_custody_marker_is_an_implicit_record_owned_by_the_lane_else_runner_never_the_campaign(tmp_path):
     a = run_dir(tmp_path, "research/runs/r1", lane="compute-accounting", campaign="pouw")
     found = R.record_at(a, "research/runs/r1")
     assert found.source == "custody" and not (a / R.SIDECAR).exists(), "nothing is written for an implicit record"
     assert found.record == {**found.record, "schema": R.SCHEMA, "path": "research/runs/r1", "node": NODE, "owner": "compute-accounting",
                             "created": "2026-09-20T10:00:00Z", "expires": "2026-09-23T00:00:00Z", "priority": "normal",
                             "preserved": ART, "regenerate": None}
-    assert R.record_at(run_dir(tmp_path, "research/runs/r2", campaign="pouw"), "research/runs/r2").record["owner"] == "pouw"
+    r2 = R.record_at(run_dir(tmp_path, "research/runs/r2", campaign="recursion-e2e"), "research/runs/r2").record
+    assert r2["owner"] == "runner", "a campaign is no lane: nobody could approve its removal"
     r3 = R.record_at(run_dir(tmp_path, "research/runs/r3", created=None), "research/runs/r3").record
-    assert (r3["owner"], r3["created"]) == ("runner", "2026-09-21T00:00:00Z"), "no lane or campaign: runner; no created_utc: verified_utc"
+    assert (r3["owner"], r3["created"]) == ("runner", "2026-09-21T00:00:00Z"), "no lane: runner; no created_utc: verified_utc"
 
 
 def test_an_unpreserved_marker_gives_no_record_and_a_sidecar_wins_over_custody(tmp_path):
@@ -895,6 +896,51 @@ def test_rm_deletes_with_the_owners_yes_leaves_the_covering_record_and_logs_who(
     assert plan["freed_bytes"] == UNIT and plan["actions"][0]["reason"].endswith("and its owner said yes")
     (line,) = log_lines(root)
     assert (line["action"], line["by"], line["bytes"], line["files"]) == ("delete", BY, UNIT, 1)
+
+
+HANDLES = ["infra", "proofs", "compute-accounting"]
+
+
+def test_rm_takes_infras_yes_for_an_owner_no_handle_holds_and_says_which_rule(tmp_path):
+    root = tmp_path / "ws"
+    unheld = run_dir(root, "research/runs/r1")
+    campaign = kept(root, "research/old", owner="@recursion-e2e", expires=FUTURE)
+    plan = R.rm([unheld, campaign], approved_by="@infra", ref=REF, root=root, apply=True, by=BY, in_use=never_in_use, now=clock,
+                node=NODE, handles=HANDLES)
+    assert [a["action"] for a in plan["actions"]] == ["delete", "delete"] and not unheld.exists() and not campaign.exists()
+    assert plan["actions"][0]["reason"].startswith("research/runs/r1 is kept by @runner until 2026-09-23T00:00:00Z")
+    assert plan["actions"][0]["reason"].endswith("and @infra said yes for @runner, which no handle of the registry holds (the rule "
+                                                 "for an unheld owner)")
+    assert "said yes for @recursion-e2e" in plan["actions"][1]["reason"]
+    assert [x["action"] for x in log_lines(root)] == ["delete", "delete"]
+
+
+def test_rm_takes_no_infra_yes_for_a_held_owner_another_lanes_for_an_unheld_one_or_any_without_the_registry(tmp_path):
+    root = tmp_path / "ws"
+    held = kept(root, "pouw/a", owner="@compute-accounting", expires=FUTURE)
+    unheld = kept(root, "research/old", owner="@recursion-e2e", expires=FUTURE)
+    plan = R.rm([held], approved_by="@infra", ref=REF, root=root, in_use=never_in_use, now=clock, node=NODE, handles=HANDLES)
+    assert plan["actions"][0]["action"] == "refuse" and plan["actions"][0]["reason"].endswith("only @compute-accounting can say yes")
+    plan = R.rm([unheld], approved_by="@proofs", ref=REF, root=root, in_use=never_in_use, now=clock, node=NODE, handles=HANDLES)
+    assert plan["actions"][0]["action"] == "refuse" and plan["actions"][0]["reason"].endswith(
+        "only @recursion-e2e can say yes; @recursion-e2e is no handle of the registry, so @infra can say yes too")
+    plan = R.rm([unheld], approved_by="@infra", ref=REF, root=root, in_use=never_in_use, now=clock, node=NODE)
+    assert plan["actions"][0]["action"] == "refuse" and plan["actions"][0]["reason"].endswith("only @recursion-e2e can say yes")
+    assert held.exists() and unheld.exists()
+
+
+def test_rm_cli_reads_the_registry_for_the_unheld_rule_and_says_when_it_cannot(tmp_path, monkeypatch, capsys):
+    root = tmp_path / "ws"
+    unheld = kept(root, "research/old", owner="@recursion-e2e", expires=FUTURE)
+    reg = tmp_path / "registry.json"
+    reg.write_text(json.dumps({"schema": "verity/slack-registry/v1", "handles": [{"handle": h, "remit": "r"} for h in HANDLES]}))
+    monkeypatch.setattr(R, "DEFAULT_JOBS_DIRS", ())
+    argv = ["retention", "rm", str(unheld), "--approved-by", "@infra", "--ref", REF, "--root", str(root)]
+    assert research_main([*argv, "--registry", str(reg)]) == 0
+    assert "would delete" in capsys.readouterr().out and unheld.exists(), "a dry run"
+    assert research_main([*argv, "--registry", str(tmp_path / "absent.json")]) == 1
+    cap = capsys.readouterr()
+    assert "the registry can't be read" in cap.err and "--registry FILE" in cap.err and "REFUSED" in cap.out
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a read-only directory")
