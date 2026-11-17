@@ -17,7 +17,7 @@ from synthetic import JOBS, KIND_DIALS, KINDS, LORA, OTHER_DIALS, kind_of, job_c
 from torch import nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
-from training_slowdown import VERSION, config, flops, formalism, gates, grade, library, policy, run, starts, work
+from training_slowdown import VERSION, config, flops, gates, grade, library, policy, run, starts, work
 from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, SparseTernary, derive_seed
 from training_slowdown.counterexample import check
@@ -456,8 +456,8 @@ RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "attention", "aff
 def test_the_job_traces_its_routes_step(ran):
     """The record's `trace` is the capture's measurement of the middle one of the route's last three steps at the
     job's batch and the start's context, the tokens the counter counted a step, with the version of the code that
-    took it, the rows unpriced and nothing the formalism derives; the rows price where they are read."""
-    rec, cfg = ran[0], ran[1]
+    took it, the rows unpriced; the rows price where they are read."""
+    rec = ran[0]
     tr = rec["trace"]
     assert set(tr) == {"capture", "capture_code", "torch", "step", "axes", "tokens", "order", "updated", "rows", "k",
                        "p_match", "at", "elementwise_products", "data_dependent", "carried_scalars", "circuit"}
@@ -481,19 +481,10 @@ def test_the_job_traces_its_routes_step(ran):
     assert len({r["gates_per_mac"] for r in priced if r["phase"] != "optimizer"}) == 1
     assert sum(r["count"] * r["macs"] for r in priced if r["phase"] == "forward" and all(r["affected"])) > 0
     assert all(r["gates_per_mac"] > 0 and "dtypes" not in r for r in priced)
-    # the step's circuit, raw: the gradient's cut and a token group's partial are the trained matrices' dW at the
-    # accumulator's 32 bits, the update the forward reads those matrices at the 16 bits autocast casts them to, the
-    # carried state no token op reads AdamW's two moments, and a window's tokens are read at its inputs and its last
-    # target
-    weights = sum(p.numel() for p in config.route(cfg.route).build(cfg.start.shape, cfg.dials)[0].parameters()
-                  if p.requires_grad)
+    # the step's circuit: a window's tokens are read at its inputs and its last target
     c = tr["circuit"]
-    assert {*formalism.TRACED_STRUCTURE, "tau_ids", "tau_other_bits", "a_bits", "u_in", "u1_bits", "tail_share"} < set(c)
-    assert not {"parts", "labels", "u", "trace", *formalism.READ_BACKS} & set(c)
-    assert c["grad_cut_bits"] == c["partial_cut_bits"] == 32 * weights > 0 and c["u1_bits"] == 16 * weights
-    assert c["state_bits"] == 2 * 32 * weights and c["delta_grad_bits"] == 3 * 32 * weights
-    assert (c["region"], c["tokens"], c["token_factor"], c["tau_ids"]) == (1, tr["tokens"], 1, 1025 / 1024)
-    assert 0 < c["affected_share"] < c["sigma"] < 1
+    assert set(c) == {"gates", "affected_share", "tau_ids", "tau_other_bits"} and c["gates"] > 0
+    assert c["tau_ids"] == 1025 / 1024 and 0 < c["affected_share"] < 1
 
 
 def test_the_counters_split_of_a_step_on_a_model_with_position_tables_is_the_traces(ran):
@@ -542,7 +533,7 @@ def test_the_traced_step_has_a_step_before_it_where_the_run_has_one(tmp_path, st
     route = config.route(cfg.route)
     tr = trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
     assert tr["step"] == traced
-    assert (tr["circuit"]["affected_share"] > 0) == (tr["circuit"]["u1_bits"] > 0) == (steps > 1)
+    assert (tr["circuit"]["affected_share"] > 0) == (steps > 1)
 
 
 def test_what_a_routes_output_computes_is_traced_and_charged_with_its_step(tmp_path):
@@ -668,7 +659,7 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     what the job's counter recorded of that same step as it ran: the step's tokens, its GEMMs' MACs, its elementwise
     MACs and all its MACs are equal; the trace's rows, which the slowdown's products are read from, hold exactly the
     GEMMs' MACs; the forward's GEMMs are equal apart; and every shape the rows run is one the counter's op log ran
-    (`formalism.other_program`). At a step that reads the step before's update, and for the whole model at a run's
+    (`grade.other_program`). At a step that reads the step before's update, and for the whole model at a run's
     only step, which reads none: there a trained embedding is θ's and its lookup counts nothing, and from the next
     step on the counter holds it at the gather Definition's multiplexers, which |C| counts and no product is, so the
     counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work. A grown model
@@ -724,7 +715,7 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     assert [r[5] for r in log if r[2] == "embedding"] == ([lookup] if model.embed.requires_grad and tr["step"] else [])
     assert sum(v for k, v in step["by"].items() if k.startswith("fwd/")) == forward + sum(
         r[5] for r in log if not gemm_like(r[2]))
-    assert formalism.other_program(rows, grade.macs_log(rec, None)) is None
+    assert grade.other_program(rows, grade.macs_log(rec, None)) is None
 
 
 def test_every_config_of_the_library_takes_a_kind_of_step_a_job_takes():
@@ -834,7 +825,7 @@ def test_a_routes_output_is_the_traces_step_and_the_counters_next_step_or_tail(t
 
 
 def test_a_trace_at_another_rank_is_not_of_the_jobs_program(tmp_path):
-    """`formalism.other_program` on a job's op log and a trace the job didn't take: LoRA at rank 3 runs shapes the
+    """`grade.other_program` on a job's op log and a trace the job didn't take: LoRA at rank 3 runs shapes the
     rank-2 job never ran (each adapter's factors and their gradients), so the grade doesn't price its rows as that
     job's, where the job's own trace it does (the test above)."""
     rec, *_ = counted_and_traced(tmp_path, 3, **JOBS["lora"])
@@ -842,7 +833,7 @@ def test_a_trace_at_another_rank_is_not_of_the_jobs_program(tmp_path):
                                    dials=LORA | {"rank": 3}), starts.registry(tmp_path / "reg" / "starts.toml"))
     route = config.route(cfg.route)
     tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
-    o = formalism.other_program(work.priced(tr)["rows"], grade.macs_log(rec, None))
+    o = grade.other_program(work.priced(tr)["rows"], grade.macs_log(rec, None))
     assert o is not None and o["unmatched"] > 0 and all(3 in s for s in o["largest"]), o
 
 

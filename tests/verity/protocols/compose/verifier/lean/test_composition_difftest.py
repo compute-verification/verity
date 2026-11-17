@@ -486,7 +486,7 @@ product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
 
 @pytest.fixture(scope="module")
 def recorded(tmp_path_factory):
-    """Space's and bandwidth's cases, made once (their memory challenger's session logs under the suite's basetemp), and
+    """Space's and bandwidth's cases, made once (their memory attester's session logs under the suite's basetemp), and
     the wipe's test signer's files under it too while the module's tests sample wipes."""
     if not R.POUS.cases:
         periods.build(tmp_path_factory.mktemp("periods"))

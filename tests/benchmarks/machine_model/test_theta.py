@@ -215,4 +215,4 @@ def test_the_command_and_the_render(capsys):
     out = capsys.readouterr().out
     assert "| `tensor.s8.k16` |" in out and "### FP8 atoms" in out and "### SHA-512's ceiling" in out
     with pytest.raises(SystemExit, match="no theta.toml"):
-        main(["--device", "sm_80", "theta"])
+        main(["--device", "sm_100", "theta"])

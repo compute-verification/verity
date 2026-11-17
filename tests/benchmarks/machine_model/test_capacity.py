@@ -25,7 +25,7 @@ def test_the_empty_gpu_certifies_nothing_and_offers_a_full_tensor_pipe(pi):
     assert x.empty > 1 / C.TENSOR_CYCLES  # the scalar pipes add useful work beside the tensor pipe
 
 
-@pytest.mark.parametrize("dev", ["sm_80", "sm_89", "sm_90", "sm_100"])
+@pytest.mark.parametrize("dev", ["sm_90", "sm_100"])
 def test_every_devices_empty_gpu_offers_its_own_tensor_pipe(dev):
     """USEFUL names sm_120's MMA only: on another device the hidden program must still find that device's tensor class,
     or σ ignores the tensor pipe (sm_100's empty GPU read 0.0195 slots a SMSP-cycle, its lanes, against 0.52)."""

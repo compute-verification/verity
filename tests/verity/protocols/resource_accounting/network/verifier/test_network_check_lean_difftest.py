@@ -22,7 +22,7 @@ SCRIPT = LEAN / "scripts" / "difftest_vectors.py"
 _spec = importlib.util.spec_from_file_location("network_check_difftest_vectors", SCRIPT)
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NetworkCheck.DifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NetworkVerifier.DifftestMain"]
 
 
 def test_the_data_is_what_the_audit_pins(tmp_path):

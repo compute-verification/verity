@@ -6,7 +6,8 @@ Definitions a served Program calls are the word Call families circuit-check hold
 here, not beside that module, so that the registries import no frontend module for it."""
 from __future__ import annotations
 
-from typing import Any, Callable, Iterator
+from collections.abc import Callable, Iterator
+from typing import Any
 
 
 def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
@@ -36,9 +37,13 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
     binding its Definition module's sidecar already checks, so they add no task."""
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.ops.boolean import gemm as BG
-    from verity_vllm.definitions.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
-    from verity_vllm.definitions.registry import flashmla as FM, flashmla_prefill as FP
-    from verity_vllm.definitions.registry import flashmla_dsv32 as FD, fp8_ds_mla_upconvert as FU
+
+    from verity_vllm.definitions.registry import dsv4_compressor as DC
+    from verity_vllm.definitions.registry import dsv4_qnorm_insert as DQ
+    from verity_vllm.definitions.registry import flashmla as FM
+    from verity_vllm.definitions.registry import flashmla_dsv32 as FD
+    from verity_vllm.definitions.registry import flashmla_prefill as FP
+    from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as FU
     from verity_vllm.definitions.registry import marlin_moe as MM
     from verity_vllm.definitions.registry import sparse_mla as SM
     from verity_vllm.definitions.registry import tp_allreduce as TA
@@ -50,7 +55,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
     router = {"E": 8, "SCALE": 2.5}
     marlin = {"E": 3, "K": 256, "N": 16, "TK": 128, "TN": 8, "GRID": 5, "DOT": MM.DOT}
     int8_row = {"D": 32, "S": 33, "SCALE": 32 ** -0.5}   # Q' K'^T steps 32 channels, so D >= 32; int8_exact's sidecar's row
-    dsv4 = {"triton_block_rmsnorm": {"N": 512, "BLOCK": 2048, "WARPS": 8, "EPS": 1e-6},
+    dsv4: dict[str, dict[str, Any]] = {"triton_block_rmsnorm": {"N": 512, "BLOCK": 2048, "WARPS": 8, "EPS": 1e-6},
             "mhc_pre_broadcast": {**mhc, "H": 7168, "NS": 28}, "mhc_residual_broadcast": {"HC": 2, "H": 8},
             "mhc_fused_post_pre": {**mhc, "H": 1024, "NS": 4, "TH": 256}, "mhc_post_pre_tf32": {**mhc, "H": 1024, "NS": 4},
             "mhc_post": {"HC": 4, "N": 7168}, "hc_head": {**mhc, "H": 7168, "TH": 128},
@@ -86,9 +91,10 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics, or at
     `_served_kind_statics`' when no small table binds it: (label, the bound Definition, or the error)."""
     from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32
+
     from verity_vllm import TargetProfile
-    from verity_vllm.program.frontend.rules import vocab as V
     from verity_vllm.definitions.registry import prims as P
+    from verity_vllm.program.frontend.rules import vocab as V
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,

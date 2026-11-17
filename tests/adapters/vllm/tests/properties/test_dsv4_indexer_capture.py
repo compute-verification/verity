@@ -6,8 +6,6 @@ the top-k checks at 1024, the PTX scan, the bindings, the statics, the verdict a
 `tests/properties/dsv4_indexer_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import contextlib
 import copy
 import hashlib

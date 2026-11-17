@@ -1,4 +1,4 @@
-"""The ingress side of the step-indexed scan: one proof block a certifier bucket t, `IngressScanBucket`, which reads
+"""The ingress side of the step-indexed scan: one proof block a network attester bucket t, `IngressScanBucket`, which reads
 bucket t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's
 egress view, its outputs beside an ok bit (the generator form); the scan's start, `IngressScanStart`, gives the first
 bucket its S_{−1}. Every switch is computed from the state and the rows; none is witness. Nothing here is in a
@@ -265,7 +265,7 @@ class Class:
                 "egress": (params.egress == "id", "= id, the egress record's form")}
         bad = [f"{k} {want} (it is {getattr(params, k)})" for k, (ok, want) in need.items() if not ok]
         if bad:
-            raise ValueError(f"{self} doesn't serve the network certifier at these parameters: set " + "; ".join(bad))
+            raise ValueError(f"{self} doesn't serve the network attester at these parameters: set " + "; ".join(bad))
 
 
 def slot_layout(cls: Class) -> tuple[tuple[str, int], ...]:
@@ -901,7 +901,7 @@ _STEP = ("each block continues the live slot on its ordinal or takes the lowest 
          "switch is computed from the state, the entries and the row")
 IngressScanBucket = _part(
     "IngressScanBucket", STATICS, _sig, _build,
-    "the scan's state S_t = `ingress_scan.step` of sin, bucket t's ingress row (lanes·r network certifier cells of B bytes, a "
+    "the scan's state S_t = `ingress_scan.step` of sin, bucket t's ingress row (lanes·r network attester cells of B bytes, a "
     "block of r a live connection in ordinal order) and the Programs' entries prog0 … prog<lanes − 1> (each "
     "`SlotEntry_v1`'s row of its slot), and its egress view at t (`egress.EgressBucket`'s state), with 1 in bit 0 of "
     "the first output iff every check of the step holds: " + _STEP, version=3)

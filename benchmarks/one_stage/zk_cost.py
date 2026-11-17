@@ -72,6 +72,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
+CARD_FILES = REPO / "hardware/cards"
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
@@ -691,7 +692,7 @@ def overhead(a) -> int:
     from verity.device import load_card, rate
     out = Path(a.out)
     # --card none: a CPU node's sessions, which no GPU's peak divides
-    card = None if a.card == "none" else load_card(a.card)
+    card = None if a.card == "none" else load_card(a.card, directory=CARD_FILES)
     stages = [r for r in read_jsonl(out / "records" / "stage.jsonl") if r.get("unit")]
     proves = [r for r in read_jsonl(out / "records" / "prove.jsonl") if r.get("unit") and r["accepted"]]
     verifies = [r for r in read_jsonl(out / "records" / "verify.jsonl") if r.get("unit")]

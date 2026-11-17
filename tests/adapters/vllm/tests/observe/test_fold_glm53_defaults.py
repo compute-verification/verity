@@ -10,8 +10,6 @@
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import dataclasses
 
 import pytest
@@ -271,7 +269,6 @@ def _build_kind(settings, M, N=H, rows=None):
     from types import SimpleNamespace
 
     from verity_vllm.definitions.registry import tp_allreduce as T
-
     from verity_vllm.program.frontend.rules.vllm_bindings import collectives as BC
     from verity_vllm.program.frontend.rules.vocab import vocabulary_for
 

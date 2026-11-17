@@ -523,7 +523,7 @@ def test_a_compare_with_no_producer_facts_is_handed_the_manifests_own_and_the_na
 
 
 class Session:
-    """The Commit's remote session as `main` and `pipeline.remote_session` read it: asked before the engine's build and once
+    """The Commit's remote session as `main` and `pipeline.poub_session` read it: asked before the engine's build and once
     it is built, begun at the first instrumented run, each of whose engine steps is then a pass of its lock, and ended after
     that run.  ``accepts`` is its answer; ``calls`` keeps what it was asked, in order."""
 
@@ -561,14 +561,14 @@ class Session:
 
 
 @pytest.mark.parametrize(("accepts", "error", "ended_as"), [(True, None, None), (False, "pass 2 late", 3)], ids=["accepted", "rejected"])
-def test_a_remote_session_audits_the_first_instrumented_run_alone_a_pass_an_engine_step(tmp_path, stand_ins, capsys, monkeypatch, accepts, error, ended_as):
+def test_a_poub_session_audits_the_first_instrumented_run_alone_a_pass_an_engine_step(tmp_path, stand_ins, capsys, monkeypatch, accepts, error, ended_as):
     """The session is begun at the first instrumented run, runs each of its engine steps and is ended after it, before the
     run's root is finalized; that run's row carries its entry, no other run is audited, the verdict carries the session's
     record, and a session that rejected ends the Commit with exit 3 after the verdict is written."""
-    from verity_vllm.pipeline import remote_session
+    from verity_vllm.pipeline import poub_session
 
     session = Session(tmp_path / "out", accepts, error)
-    monkeypatch.setattr(remote_session, "session_of", lambda args: session)
+    monkeypatch.setattr(poub_session, "session_of", lambda args: session)
     stand_ins.verdicts = [(True, None)]
     ended = run(tmp_path, capsys)
     [com] = made()
