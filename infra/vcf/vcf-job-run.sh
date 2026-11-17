@@ -4,8 +4,8 @@
 # (default /data/vcf-jobs/NAME-STAMP/) on the pod, and removes the job's directory under the account's home. Only the pod holds
 # the key; nothing of ours but JOBSCRIPT and SEND's payload is sent there. MINUTES is at most 30 (an unreserved job); a job
 # still pending after PEND_MIN minutes (default 20) is cancelled. sacct.txt records its node, submit, start and end.
-# With SEND (a payload.sh archive), each run directory the job leaves under result/runs/ is published to the evidence store
-# with run custody (`research data custody RUN_DIR --publish`), by the payload's own tools/research and r2.env's key.
+# With SEND (a payload.sh archive), vcf-publish.sh beside it then publishes each run directory the job left under
+# result/runs/ to the evidence store with run custody.
 #   SEND=/data/vcf/payloads/x.tar.gz vcf-job-run.sh native-peak main 30 /data/vcf/vcf-bench.sh --gres=gpu:1 --cpus-per-task=16 --mem=64G
 set -u
 NAME=${1:?name}; PART=${2:?partition}; MIN=${3:?minutes}; JOB=${4:?job script}; shift 4
@@ -52,19 +52,5 @@ say "ended: $(cut -c1-200 < "$OUT/sacct.txt")"
 "${S[@]}" "rm -rf '$D'; rmdir verity-jobs 2>/dev/null; true" 2>/dev/null
 say "output in $OUT: $(ls "$OUT" | tr '\n' ' ')"
 [ -n "${SEND:-}" ] || exit 0
-RUNS=$(ls -d "$OUT"/result/runs/*/ 2>/dev/null)
-[ -n "$RUNS" ] || { say "no run directory came back: nothing to publish"; exit 6; }
-# the local store stays on /data, never the pod's /root
-R=$(mktemp -d -p /data/vcf) && tar -C "$R" -xzf "$SEND" tree/tools/research/src || { say "no tools/research in $SEND"; rm -rf "$R"; exit 6; }
-rc=0
-for d in $RUNS; do
-  if ( set -a; . /root/.config/verity/r2.env; set +a
-       cd "$R/tree/tools/research" && PYTHONPATH=src LC_ALL=C.UTF-8 python3.12 -m research data custody "${d%/}" --publish --store "${VCF_STORE:-/data/vcf/store}"
-     ) >> "$OUT/publish.log" 2>&1; then
-    say "published $(basename "$d"): $(tail -n 1 "$OUT/publish.log" | cut -c1-200)"
-  else
-    rc=7; say "publish of $(basename "$d") failed: $(tail -n 1 "$OUT/publish.log" | cut -c1-200)"
-  fi
-done
-rm -rf "$R"
-exit $rc
+bash "$(dirname "$0")/vcf-publish.sh" "$OUT" "$SEND" 2>&1 | while read -r l; do say "$l"; done
+exit "${PIPESTATUS[0]}"

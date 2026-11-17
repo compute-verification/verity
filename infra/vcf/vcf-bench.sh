@@ -1,12 +1,15 @@
 #!/bin/bash
 # The job vcf-job-run.sh submits to VCF's Slurm cluster with SEND=a payload from payload.sh: it records what the node has
-# (result/site.txt), builds the tree's environment with uv inside the job's directory, and runs the payload's command under
+# (result/site.txt), builds the tree's environment with uv on the node's disk, and runs the payload's command under
 # `research run --local-only`, leaving the run directory under result/runs/ for vcf-job-run.sh to copy back and publish. It holds
-# no credential and writes nothing outside the job's directory, which vcf-job-run.sh removes.
+# no credential; it writes only the job's directory, which vcf-job-run.sh removes, and its scratch on the node's disk.
 set -u -o pipefail
-J=${SLURM_SUBMIT_DIR:?submit me with sbatch}; W=$J/work
+J=${SLURM_SUBMIT_DIR:?submit me with sbatch}
+# the tree, uv, its Pythons, caches and the venv (GBs with CUDA torch) on the node's own disk: the home is a network
+# filesystem, where removing them takes minutes
+W=$(mktemp -d "${TMPDIR:-/tmp}/verity-XXXXXX") || exit 3
+trap 'rm -rf "$W"' EXIT TERM
 mkdir -p "$W/home" "$J/result/runs"
-# uv, its Pythons and caches, and research's store stay in the job's directory: the defaults write the account's home
 export HOME=$W/home XDG_CACHE_HOME=$W/cache XDG_DATA_HOME=$W/data XDG_CONFIG_HOME=$W/config UV_CACHE_DIR=$W/uv-cache \
   UV_PYTHON_INSTALL_DIR=$W/python UV_TOOL_DIR=$W/tools RESEARCH_STORE=$W/store GIT_CEILING_DIRECTORIES=$J
 NODE=${SLURMD_NODENAME:-$(hostname -s)}
@@ -21,7 +24,7 @@ NODE=${SLURMD_NODENAME:-$(hostname -s)}
   echo "cuda dirs: $(ls -d /usr/local/cuda* 2>/dev/null | tr '\n' ' ')"
   echo "sudo -n: $(sudo -n true 2>&1 && echo yes || echo no)"
   printf 'pypi: '; curl -s -o /dev/null -m 20 -w '%{http_code}\n' https://pypi.org/simple/ || echo unreachable
-  df -h --output=avail,target "$J" | tail -n 1
+  df -h --output=avail,target "$J" "$W" | tail -n 2
 } > "$J/result/site.txt" 2>&1
 tar -C "$W" -xzf "$J/payload.tar.gz" || { echo "no payload: send one with SEND=" >&2; exit 3; }
 # shellcheck source=/dev/null
@@ -32,11 +35,13 @@ t0=$(date +%s)
 # shellcheck disable=SC2086
 uv sync -q $VCF_SYNC || { echo "uv sync $VCF_SYNC failed" >&2; exit 4; }
 echo "uv $(uv --version | awk '{print $2}'); uv sync $VCF_SYNC in $(( $(date +%s) - t0 )) s" >> "$J/result/site.txt"
-# what the record names as the machine: a node of VCF's cluster, with none of our machines' lease, slot or memory limit
+export PATH="$W/tree/.venv/bin:$PATH"
+# what the record names as the machine: a node of VCF's cluster, shared with its other users, with no lease or slot of
+# ours; Slurm's --mem is its memory limit
 REMOTE=$(.venv/bin/python -c 'import json, os, sys; e = os.environ.get
 print(json.dumps({"machine": "vcf-" + sys.argv[1], "site": "vcf-slurm", "host": "vcf.lucidcomputing.ai", "slurm_job": e("SLURM_JOB_ID"),
                   "partition": e("SLURM_JOB_PARTITION"), "cpus": e("SLURM_CPUS_PER_TASK"), "gpus": e("SLURM_JOB_GPUS"),
-                  "mem_mb": e("SLURM_MEM_PER_NODE"), "lease": None, "slot": None, "mem_limit_gb": None, "node_shared": True}))' "$NODE")
+                  "mem_mb": e("SLURM_MEM_PER_NODE"), "lease": None, "slot": None, "node_shared": True}))' "$NODE")
 .venv/bin/research run --runs-dir "$J/result/runs" --local-only "VCF's cluster holds no store key: vcf-job-run.sh publishes the run dir with its custody" \
   --source-identity "{\"commit\": \"$VCF_COMMIT\", \"tree\": \"$VCF_TREE\", \"dirty\": false, \"dirty_digest\": null}" \
   --remote-json "$REMOTE" --cost-json '{"provider": "vcf", "rate_usd_per_hour": null, "shared": true, "reason": "VCF cluster, no rate"}' \

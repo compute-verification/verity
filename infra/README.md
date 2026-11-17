@@ -57,6 +57,7 @@ node 1 runs the console's `node1` group (`tools/research/console/`). The manifes
 | GitHub App tokens for drive and the notes, and the read-only one every watcher reads GitHub with | `infra/control/gh_app_token.sh`, `gh_notes_token.sh`, `gh_read_token.sh` |
 | `research msg` as root, for credentials that live only on the pod | `infra/control/msg.sh` |
 | The dead-man's switch, which alerts when the pod stops | `infra/control/deadman/` |
+| A benchmark run on VCF's Slurm cluster, sent from the pod and published from it (`benchmarks/README.md`, "On VCF's Slurm cluster") | `infra/vcf/`, deployed as `/data/vcf/` |
 
 ## Agents and messaging
 
