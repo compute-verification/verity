@@ -5,7 +5,7 @@ public import Proofs.Flock.Claims.KS.PlainSampleDecK
 public import Proofs.Flock.Claims.KS.PlainSimW
 public import Proofs.Flock.Claims.KS.PlainFirst
 public import Proofs.Flock.Claims.KS.PlainWrP
-public import Proofs.Flock.Claims.Recursion.PlainK
+public import Proofs.Flock.Claims.Steps.PlainK
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

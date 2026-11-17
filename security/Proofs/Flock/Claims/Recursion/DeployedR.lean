@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
 public import Proofs.Flock.Claims.Recursion.LayoutBAcc
 public import Proofs.Flock.Claims.KS.PlainR
+public import Proofs.Flock.Claims.Recursion.NextR
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

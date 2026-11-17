@@ -4,8 +4,7 @@ public import Proofs.Flock.Claims.KS.PlainWire
 public import Proofs.Flock.Claims.KS.PlainSample
 public import Proofs.Flock.Claims.KS.ForkCoupling
 public import Proofs.Flock.Claims.KS.RoundsN
-public import Proofs.Flock.Claims.Recursion.PlainK
-
+public import Proofs.Flock.Claims.Steps.PlainK
 /-!
 # The plain simulator
 

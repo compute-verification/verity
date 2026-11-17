@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Steps.NextS
 public import Proofs.Flock.Claims.Recursion.NextShaDec
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -59,14 +60,8 @@ Run against `H`, that decision is the verdict on the decoded proofs (`verifyJPWi
 namespace FlockDeploy
 
 open Flock
-open Lean (Json)
 
-/-- What `nextS` does at the prover's messages. -/
-inductive ActS where
-  | rej
-  | coin (c : Coin)
-  | decide (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-      (mids : List (Claims.Msg × Coin)) (f : FinalP)
+open Lean (Json)
 
 /-- **`nextS`'s step**: a coin where the deployed plain verifier answers one; else, at a statement that sets up, decide
 where `rd` reads the last message and the link message reads; anything else, refuse. -/
@@ -104,23 +99,6 @@ theorem nextS_decide {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : 
     {mids : List (Claims.Msg × Coin)} {f : FinalP} (h : actS rd x as cs = .decide s spec sts link c₁ mids f) :
     nextS rd x as cs = outOf (decisionSF s x link c₁ mids f) := by
   simp only [nextS, h]
-
-theorem outOf_acc_iff (H : Claims.Msg → Claims.Msg) (d : Claims.OCV Unit) :
-    ((outOf d).eval H).1 = .acc ↔ (d.run.eval H).1 = .ok () := by
-  simp only [outOf, Claims.OC.eval_bind, Claims.OC.eval]
-  cases hr : (d.run.eval H).1 with
-  | ok u =>
-    cases u
-    exact ⟨fun _ => rfl, fun _ => rfl⟩
-  | error e => exact ⟨fun h => by first | cases h | simp at h, fun h => by cases h⟩
-
-/-- `decisionSF` run against `H`: the setup at `hOf H`, then `decisionAtS` at its session. -/
-theorem decisionSF_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : FinalP) :
-    ((decisionSF s x link c₁ mids f).run.eval H).1 =
-      (setupWith (Claims.hOf H) s.read >>= fun v => ((decisionAtS s v.1 v.2 x link c₁ mids f).run.eval H).1) := by
-  unfold decisionSF
-  rw [evRun_bind, (setupM_eval H s.read).1]
 
 /-- **A decision of `nextS` accepts exactly where the setup at `hOf H` returns a session at which `decisionAtS`
 returns.** -/
@@ -173,8 +151,11 @@ end FlockDeploy
 namespace RecDeploy
 
 open Flock
+
 open Claims (Msg Out)
+
 open FlockDeploy (Coin FinalP nextS nextS_coin ReadOkS)
+
 open Claims.Recursion.VStarB
 
 /-- **A split of `nextS`'s last step that may assume the reading**: checks the inner statement fixes, and the proof that

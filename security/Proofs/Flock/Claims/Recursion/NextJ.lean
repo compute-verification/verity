@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Steps.NextJ
 public import Proofs.Flock.Claims.Recursion.NextCs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -67,43 +68,14 @@ decoding stays among the verdict's checks here (`LastSplitJ`'s `checks`), and no
 namespace FlockDeploy
 
 open Flock
+
 open Lean (Json)
-
-/-- **The prover's last message at the parsed value**: the statement, the record's parsed value and the proof files. -/
-structure FinalJ where
-  stmt : Claims.Msg
-  j : Json
-  proofs : Array ByteArray
-
-/-- The record's sample at its parsed value, rebuilt (`recordDraw` after the parse). -/
-def sampleOfJ (j : Json) : Option Json :=
-  match j.getObjVal? "unit_draw" with
-  | .ok Json.null => none
-  | .ok d => some (Flock.norm d)
-  | .error _ => none
 
 theorem recordSample_of_parse {record : String} {j : Json} (h : Flock.JsonParse.parse record = .ok j) :
     FlockSoundness.Discharge.Exec.recordDraw record = sampleOfJ j := by
   unfold FlockSoundness.Discharge.Exec.recordDraw
   rw [h]
   rfl
-
-/-- The checks after the verdict at the parsed value: the statement, the sample at `f.j`, custody at `j'`. -/
-def checksAtJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : FinalJ) (j' : Json) : Flock.V Unit := do
-  Record.check (f.stmt == x) "live: the last message's statement is not the statement"
-  Record.check (sampleEq (sampleOfJ f.j) s.read.draw) "live: the record's draw is not the statement's"
-  custody spec (← liveOfJ spec j') link c₁ mids
-  s.read.check
-  if s.read.draw.isNone then ProvedScope.sampleDesign false s.read.tags false none
-
-/-- **The decision at a session at the parsed value**: the plain verdict and custody's reading at the coin-substituted
-value. -/
-def decisionAtJ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : FinalJ) :
-    Claims.OCV Unit := do
-  verifyJWithM Claims.Hashes.oc spec (tabsOf sts) (coinSubJ spec c₁ mids f.j) f.proofs
-  monadLift (checksAtJ s spec x link c₁ mids f (coinSubJ spec c₁ mids f.j))
 
 /-- The decision at the parsed value: the statement's setup over `OC`, then `decisionAtJ`. -/
 def decisionJF (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
@@ -190,8 +162,11 @@ end FlockDeploy
 namespace RecDeploy
 
 open Flock
+
 open Claims (Msg Out)
+
 open FlockDeploy (Coin FinalJ nextJ nextJ_coin ReadOk)
+
 open Claims.Recursion.VStarB
 
 /-- **A split of `nextJ`'s last step that may assume the reading**: checks the inner statement fixes, and the proof that

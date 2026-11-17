@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Steps.FlockKSAcc
 public import Proofs.Flock.Claims.Recursion.FlockKSAbort
 public import Proofs.Flock.Claims.Recursion.Hybrid
 public import Proofs.Flock.Claims.Bridge.Coins
@@ -44,12 +45,6 @@ that round's coin, which `decC` reads off it. -/
 def CoinsShown (H : Msg → Msg) (V : Verifier Coin) (decC : Msg → Msg → Coin) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (c : Coin) (m : Msg), as.length = cs.length + 1 →
     ((V.next x as (cs ++ [c])).eval H).1 = .msg m → decC x m = c
-
-/-- **The verifier accepts only at its last round** (a code fact): wherever it accepts, with one coin per message, the
-prover sent `k(x)` messages. -/
-def AccLast (H : Msg → Msg) (V : Verifier Coin) : Prop :=
-  ∀ (x : Msg) (as : List Msg) (cs : List Coin), cs.length = as.length → ((V.next x as cs).eval H).1 = .acc →
-    as.length = V.k x
 
 /-- **The verifier decides without the round's coin** (a code fact): where it accepts at a round, it does the same,
 calls and all, at any other coin of that round. -/

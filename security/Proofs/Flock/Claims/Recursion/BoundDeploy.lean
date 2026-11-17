@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Steps.BoundDeploy
 public import Proofs.Flock.Claims.Recursion.VStarBound
 public import Proofs.Flock.Claims.Recursion.DeployPremises
 import Mathlib.Algebra.Order.Floor.Extended
@@ -76,6 +77,7 @@ Statements only, with those three lemmas and (P1) at the deployed plain verifier
 namespace RecDeploy
 
 open Claims (Msg Out)
+
 open FlockDeploy (Coin)
 
 /-- **V\*'s bound layout as the compiled verifier's readers**: the inner messages and each part's calls, off the parts'
@@ -84,16 +86,6 @@ def _root_.Claims.Recursion.VStarB.LayoutB.readers (L : Claims.Recursion.VStarB.
   ⟨L.msgs, L.calls⟩
 
 /-! ## The schedule's commit strings -/
-
-/-- A rep's schedule at a table of the session (`rec_live.rep_rounds`, `Flock.RecVStar.repRounds`): at the table's `m`
-and `k_log` and the session's claims, `2 + points · regions` as `FlockDeploy.repRounds` counts them; empty off
-`fast100`. -/
-def repSchedAt (spec : _root_.Flock.SessionSpec) (st : _root_.Flock.Stmt) : List _root_.Flock.RecVStar.SchedRound :=
-  ((_root_.Flock.RecVStar.repRounds st.m st.c.kLog (2 + spec.points * st.regions.size)).map Array.toList).getD []
-
-/-- A table's level-0 top's nodes, `2^{cap₀}` at `fast100`'s first level (`2^7 = 128` at its 218 queries). -/
-def level0Nodes (st : _root_.Flock.Stmt) : ℕ :=
-  2 ^ ((_root_.Flock.fast100 st.m).map fun s => (s.levels.getD 0 default).cap).getD 0
 
 /-- **The schedule's commit strings at each inner round before the last** (`Bound.nAt` at the deployment), at an inner
 statement the deployed plain verifier sets up. Round 0, the link, carries each table's level-0 top, one string a cap
