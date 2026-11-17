@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.Period
+public import NetworkVerifier.Period
 public import Spot.OneStage
 public import Lms.Sign
 public import Mathlib.Algebra.BigOperators.Fin
@@ -78,7 +78,7 @@ check, false at `acceptAllRows` too, and `pairParams 1` with `unnamedCommitment`
 
 namespace Properties.NetworkPeriod
 
-open NetworkCheck.Period
+open NetworkVerifier.Period
 
 /-- **The rows form's `K` bounds `MonitoringPeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
 connections, the facts `w` of `n` execution phases' scans, their tied audits' free inputs `tied` (`tiedAudits`) and the
@@ -427,11 +427,11 @@ count, `ScanOk.members`): its port is `<name>/o0`, its leaves are the member's p
 root are, in hex, the member's `o0` frame domain `dom` (`ScanOk.domain`, the template's and the count's) and the root
 of that many ok rows under the public salts at `dom` (`ScanOk.root`). -/
 def OkEntry (m : String × String × ℕ) (e : Lean.Json) : Prop :=
-  ∃ dom : ByteArray, NetworkCheck.ScanOk.domain m.2.1 m.2.2 = .ok dom ∧
-    e.getObjValD "port" = .str (m.1 ++ ("/" ++ NetworkCheck.ScanOk.PORT)) ∧
+  ∃ dom : ByteArray, NetworkVerifier.ScanOk.domain m.2.1 m.2.2 = .ok dom ∧
+    e.getObjValD "port" = .str (m.1 ++ ("/" ++ NetworkVerifier.ScanOk.PORT)) ∧
     (e.getObjValD "leaves").getNat? = .ok m.2.2 ∧
     e.getObjValD "domain" = .str (Flock.hexOf dom) ∧
-    e.getObjValD "root" = .str (Flock.hexOf (NetworkCheck.ScanOk.root dom m.2.2))
+    e.getObjValD "root" = .str (Flock.hexOf (NetworkVerifier.ScanOk.root dom m.2.2))
 
 /-- What `RowsOkHeld` says of a period its check accepted: in the rows form under a schedule of `T` ticks, of each
 execution phase's scan's registration `reg`: `T` is at least 2; each member of the scan at `T` (`ScanOk.members`) has
@@ -445,10 +445,10 @@ def RowsOkHeldAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg →
       2 ≤ s.window ∧
-      (∀ m ∈ NetworkCheck.ScanOk.members s.window, ∃ e ∈ NetworkCheck.ScanOk.rootsOf reg, OkEntry m e) ∧
-      ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, ∀ q : String, e.getObjValD "port" = .str q →
-        NetworkCheck.ScanOk.okPort q = true → q ≠ NetworkCheck.ScanOk.START →
-          ∃ m ∈ NetworkCheck.ScanOk.members s.window, OkEntry m e
+      (∀ m ∈ NetworkVerifier.ScanOk.members s.window, ∃ e ∈ NetworkVerifier.ScanOk.rootsOf reg, OkEntry m e) ∧
+      ∀ e ∈ NetworkVerifier.ScanOk.rootsOf reg, ∀ q : String, e.getObjValD "port" = .str q →
+        NetworkVerifier.ScanOk.okPort q = true → q ≠ NetworkVerifier.ScanOk.START →
+          ∃ m ∈ NetworkVerifier.ScanOk.members s.window, OkEntry m e
 
 /-- `RowsOkHeld` of the period check `chk`: `RowsOkHeldAt` of every period `chk` accepts. -/
 def RowsOkHeldOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
@@ -503,11 +503,11 @@ guarantee reads one. -/
 key, at any link, direction, window and digest whose certificate message forms: the step from Lean's signer
 (`Lms.signAt`) to the check's verification of each certificate. -/
 def SignsCertificateAt : Prop :=
-  ∀ (I seed : ByteArray) (k : Lms.PrivateKey) (session : ByteArray) (link : String) (d : NetworkCheck.Direction)
+  ∀ (I seed : ByteArray) (k : Lms.PrivateKey) (session : ByteArray) (link : String) (d : NetworkVerifier.Direction)
     (w : ℕ) (digest : ByteArray),
     Lms.key Lms.deployed I seed = .ok k →
-    (∃ m, NetworkCheck.certificateMessage k.I session link d w digest = .ok m) →
-    ∃ x : NetworkCheck.Check.Certificate, x.keyId = k.I ∧ x.link = link ∧ x.direction = d ∧ x.window = w ∧
+    (∃ m, NetworkVerifier.certificateMessage k.I session link d w digest = .ok m) →
+    ∃ x : NetworkVerifier.Check.Certificate, x.keyId = k.I ∧ x.link = link ∧ x.direction = d ∧ x.window = w ∧
       x.digest = digest ∧ x.signs Lms.deployed k.publicKey session = true
 
 /-- A ratio in lowest terms with a positive denominator reads back from the text `Core.Ratio.toString` writes: the

@@ -22,7 +22,7 @@ on the verdicts it answers with, and a rejected run publishes none (`WorkIsTheCr
 
 namespace Properties.Pouw.PearlPlus
 
-open PouwCommit PouwCheck.PearlPlus PouwCheck.PearlPlus.Words
+open PouwCommit PouwVerifier.PearlPlus PouwVerifier.PearlPlus.Words
 
 /-! ## `Except` and `BEq` -/
 
@@ -280,8 +280,8 @@ theorem afterTie_ok {i : Input} {passes : List Pass} {tie : Option Tied} {pl : P
     (∀ c, i.held = some c → c.commitment = pl.root ∧ pl.source = c.source ∧
       (i.source = none ∨ i.source = some c.source)) ∧
     (i.held = none → i.source = some pl.source) ∧
-    ∃ key drawn, PouwCheck.PearlPlus.drawKey pl.source pl.root = .ok key ∧
-      PouwCheck.PearlPlus.draw pl.passes key i.draws = .ok drawn ∧
+    ∃ key drawn, PouwVerifier.PearlPlus.drawKey pl.source pl.root = .ok key ∧
+      PouwVerifier.PearlPlus.draw pl.passes key i.draws = .ok drawn ∧
       pl.todo = todo pl.passes drawn ∧ pl.drawn = drawn.length ∧ pl.picks = drawn := by
   unfold afterTie at h
   extract_lets -underBinder root jsrc at h
@@ -330,7 +330,7 @@ theorem afterTie_ok {i : Input} {passes : List Pass} {tie : Option Tied} {pl : P
     · exact ⟨(), h⟩
   dsimp (config := { zeta := false }) only [jo] at h
   extract_lets -underBinder jk at h
-  obtain ⟨key, hk, h⟩ : ∃ key, PouwCheck.PearlPlus.drawKey source root = .ok key ∧ jk key = .ok pl := by
+  obtain ⟨key, hk, h⟩ : ∃ key, PouwVerifier.PearlPlus.drawKey source root = .ok key ∧ jk key = .ok pl := by
     split at h
     · rename_i k hk
       obtain ⟨k', hk', h⟩ := bind_ok h
@@ -339,7 +339,7 @@ theorem afterTie_ok {i : Input} {passes : List Pass} {tie : Option Tied} {pl : P
     · cases h
   dsimp (config := { zeta := false }) only [jk] at h
   extract_lets -underBinder jdr at h
-  obtain ⟨drawn, hdr, h⟩ : ∃ drawn, PouwCheck.PearlPlus.draw passes key i.draws = .ok drawn ∧ jdr drawn = .ok pl := by
+  obtain ⟨drawn, hdr, h⟩ : ∃ drawn, PouwVerifier.PearlPlus.draw passes key i.draws = .ok drawn ∧ jdr drawn = .ok pl := by
     split at h
     · rename_i d hd
       obtain ⟨d', hd', h⟩ := bind_ok h
