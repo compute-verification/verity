@@ -639,8 +639,12 @@ def test_a_heads_own_change_is_the_queues_so_a_merge_of_main_keeps_it(tmp_path):
     git("merge", "-q", "--no-edit", "main")
     m1 = git("rev-parse", "HEAD")
     e1 = commit("b.py", "b \n")
-    own, unread = qt.own_changes({"1": (main_, [h1, m1, e1])}, repo=tmp_path)
+    kept = tmp_path / "own.json"
+    own, unread = qt.own_changes({"1": (main_, [h1, m1, e1])}, repo=tmp_path, kept=kept)
     assert unread == [] and own[f"1@{h1}"] == own[f"1@{m1}"] and own[f"1@{e1}"] != own[f"1@{h1}"] and None not in own.values()
+    assert sorted(json.loads(kept.read_text()).values()) == sorted(own.values())
+    kept.write_text(json.dumps({f"{git('merge-base', main_, h1)} {h1}": "kept"}))
+    assert qt.own_changes({"1": (main_, [h1])}, repo=tmp_path, kept=kept)[0] == {f"1@{h1}": "kept"}
 
 
 def left() -> list[dict]:

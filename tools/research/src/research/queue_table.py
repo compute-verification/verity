@@ -77,6 +77,8 @@ SHARD_LAYOUT_H = 3
 WINDOW_H = 24
 #: where the last reading of each node's CPU counters is kept, so the next run gives the average over the time between
 STATE = Path.home() / ".research" / "queue-table.json"
+#: the own changes `own_changes` worked out, by merge base and head, as `queue.Queue.own_change` keeps them
+OWN = Path.home() / ".research" / "queue-table-own.json"
 #: this checkout, whose policy.toml and drive.toml say what is off the gate and what the low-risk rule admits
 CHECKOUT = Path(__file__).resolve().parents[4]
 #: the subject of a restack's last commit (`tools/move/restack.py`), naming the head it restacked, in full or abbreviated
@@ -453,14 +455,14 @@ def check_nodes(args: str) -> list[str]:
     return found[-1].split(",") if found else []
 
 
-def _labels(store_root, targets: list[str]) -> dict[str, list[dict]]:
-    """Each target's `ready` and `reviewed` labels, pulled from the store's remote first."""
+def _labels(store_root, targets: list[str], pulled: tuple[str, ...] = ()) -> dict[str, list[dict]]:
+    """Each target's `ready` and `reviewed` labels, pulled from the store's remote first unless it starts with one of ``pulled``."""
     from .store import labels_sync
     from .store.local import LocalStore
 
     store = LocalStore(store_root)
     try:
-        labels_sync.pull_targets(store, targets, jobs=16)
+        labels_sync.pull_targets(store, [t for t in targets if not t.startswith(pulled)], jobs=16)
     except Exception as e:  # noqa: BLE001  a VM without the store's secrets still reads what it pulled before
         print(f"research queue stats: labels not pulled ({e}); reading the local copies", file=sys.stderr)
     return {t: [{"key": lab.key, "value": lab.value, "by": lab.by, "ts": lab.ts} for lab in store.labels(t)
@@ -487,10 +489,17 @@ def pr_heads(store_root, prs: list[str]) -> dict[str, list[str]]:
     return out
 
 
-def own_changes(bases: dict[str, tuple[str, list[str]]], repo: Path = CHECKOUT) -> tuple[dict[str, str | None], list[str]]:
+def own_changes(bases: dict[str, tuple[str, list[str]]], repo: Path = CHECKOUT, kept: Path | None = None) -> tuple[dict[str, str | None], list[str]]:
     """({PR@head: its own change from its merge base with the PR's base (`queue.own_change`)}, what was not read), for each PR's
-    (base, heads), each commit not in ``repo`` fetched from origin by its sha first."""
-    from .queue import own_change
+    (base, heads), each commit not in ``repo`` fetched from origin by its sha first, and each kept in ``kept`` (`OWN`) by merge
+    base and head, the newest `queue.OWN_KEEP`."""
+    from .queue import OWN_KEEP, own_change
+
+    kept = kept or OWN
+    try:
+        known = json.loads(kept.read_text())
+    except (OSError, ValueError):
+        known = {}
 
     shas = sorted({s for base, heads in bases.values() for s in (base, *heads)})
     have = subprocess.run(["git", "cat-file", "--batch-check=%(objectname) %(objecttype)"], cwd=repo, capture_output=True, text=True,
@@ -507,13 +516,23 @@ def own_changes(bases: dict[str, tuple[str, list[str]]], repo: Path = CHECKOUT) 
         if lost:
             unread.append(f"git: {len(lost)} commits origin gave none for, whose heads' marks follow restacks alone (first {lost[0][:12]})")
 
-    def one(item: tuple[str, str, str]) -> tuple[str, str | None]:
+    def one(item: tuple[str, str, str]) -> tuple[str, str, str | None]:
         pr, base, head = item
         mb = subprocess.run(["git", "merge-base", base, head], cwd=repo, capture_output=True, text=True).stdout.strip()
-        return f"{pr}@{head}", own_change(repo, mb, head) if mb else None
+        at = f"{mb} {head}"
+        return f"{pr}@{head}", at, (known[at] if at in known else own_change(repo, mb, head)) if mb else None
 
     with ThreadPoolExecutor(8) as ex:
-        return dict(ex.map(one, [(pr, base, h) for pr, (base, heads) in bases.items() for h in heads])), unread
+        got = list(ex.map(one, [(pr, base, h) for pr, (base, heads) in bases.items() for h in heads]))
+    known.update({at: own for _, at, own in got if not at.startswith(" ")})
+    try:
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        tmp = kept.with_name(f"{kept.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(dict(list(known.items())[-OWN_KEEP:])))
+        tmp.replace(kept)
+    except OSError as e:
+        print(f"research queue stats: the own changes not kept in {kept} ({e})", file=sys.stderr)
+    return {key: own for key, _, own in got}, unread
 
 
 def lean_files(base: str, sha: str) -> list[int] | None:
@@ -677,7 +696,7 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
                    | {(pr, h) for pr, hs in others.items() for h in hs})
     with ThreadPoolExecutor(1) as ex:
         own = ex.submit(own_changes, {pr: (bases[pr], sorted(hs)) for pr, hs in heads.items() if pr in bases})
-        labels = _labels(store_root, [label_target(int(pr), head) for pr, head in pairs])
+        labels = _labels(store_root, [label_target(int(pr), head) for pr, head in pairs], tuple(label_target(int(pr), "") for pr in others))
         doc["own"], unread = own.result()
     doc["errors"] += unread
     doc["labels"] = {f"{pr}@{head}": labels[label_target(int(pr), head)] for pr, head in pairs}
