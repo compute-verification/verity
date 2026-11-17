@@ -68,7 +68,7 @@ class SignedRecord:
 
 @dataclass(frozen=True)
 class Out:
-    """An egress execution phase's output value (`out_commit.CertifiedOut`): its witness, the rows' salts, and its
+    """An egress execution phase's output value (`out_commit.AttestedOut`): its witness, the rows' salts, and its
     public record as canonical JSON."""
 
     witness: bytes

@@ -48,7 +48,7 @@ SHAPE = _shape()
 
 
 @pytest.fixture(scope="module")
-def signed(tmp_path_factory) -> tuple[O.CertifiedOut, LmsKey]:
+def signed(tmp_path_factory) -> tuple[O.AttestedOut, LmsKey]:
     s = S.signer(tmp_path_factory.mktemp("out-signer"))
     return O.commit_out(VALUES, shape=SHAPE, key=s, session=S.SESSION, window=WINDOW), s.public_key()
 
@@ -66,7 +66,7 @@ def fresh(tmp_path):
     return make
 
 
-def _record(out: O.CertifiedOut) -> dict:
+def _record(out: O.AttestedOut) -> dict:
     return json.loads(json.dumps(out.public))
 
 

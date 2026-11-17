@@ -381,7 +381,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
                            for _ in range(draw(st.integers(0, ingress_grid.allocation)))]
                           for _ in range(W * ingress_grid.buckets)] for l in ingress}
     egress_parameters, ingress_parameters = parameters_digest(grid, ss), parameters_digest(ingress_grid)
-    certified_grid = ingress_grid
+    attested_grid = ingress_grid
     refuse, unsettled = set(), set()
     forge_status = False
     targets = [("egress", l, w) for l in egress for w in range(W)] + [("ingress", l, w) for l in ingress for w in range(W)]
@@ -427,9 +427,9 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         else:
             ingress_parameters = parameters_digest(ingress_grid, ss)
     elif m == "ingress-grid":
-        certified_grid = draw(st.sampled_from([dataclasses.replace(ingress_grid, bucket_ms=ingress_grid.bucket_ms + 1),
+        attested_grid = draw(st.sampled_from([dataclasses.replace(ingress_grid, bucket_ms=ingress_grid.bucket_ms + 1),
                                                dataclasses.replace(ingress_grid, queue_capacity=ingress_grid.queue_capacity + 1)]))
-        ingress_parameters = parameters_digest(certified_grid)
+        ingress_parameters = parameters_digest(attested_grid)
 
     signer = _Signer(key)
     sampled_salts = itertools.count()
@@ -453,13 +453,13 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         for record in run_shaper(shipped[l], ready[l], syncs[l], cert):
             certify(record, EGRESS, grid, egress_parameters)
     for l in ingress:
-        cert = _Faulty(l, certified_grid, faults.get(("ingress", l), {}))
+        cert = _Faulty(l, attested_grid, faults.get(("ingress", l), {}))
         for t, fs in enumerate(ingress_frames[l]):
             for f in fs:
                 cert.enqueue(f)
             cert.tick()
-            if (t + 1) % certified_grid.buckets == 0:
-                certify(cert.close_window(), INGRESS, certified_grid, ingress_parameters)
+            if (t + 1) % attested_grid.buckets == 0:
+                certify(cert.close_window(), INGRESS, attested_grid, ingress_parameters)
 
     signer.refuse = False
 

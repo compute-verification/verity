@@ -118,7 +118,7 @@ def test_check_registration_refuses_a_field_not_the_verifiers(tmp_path, field, v
 
 
 @pytest.mark.parametrize("other", ["link", "window", "direction"])
-def test_check_registration_refuses_a_certificate_for_another_phase_or_direction(tmp_path, other):
+def test_check_registration_refuses_a_attestation_for_another_phase_or_direction(tmp_path, other):
     t, _cert, issuer = attested(tmp_path)
     at = {"link": LINK, "direction": Direction.INGRESS, "window": 0}
     at[other] = {"link": "s1/uplink", "window": 2, "direction": Direction.EGRESS}[other]
