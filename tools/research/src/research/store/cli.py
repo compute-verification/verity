@@ -1342,7 +1342,7 @@ def cmd_gc(argv: list[str]) -> int:
     if st.remote is None:
         print("research data gc: no remote configured", file=sys.stderr)
         return 2
-    say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    say = lambda s: print(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {s}", file=sys.stderr, flush=True)  # noqa: E731
     try:
         linear = None
         if ns.cite_linear:

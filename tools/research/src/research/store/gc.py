@@ -11,8 +11,9 @@ What stays (the keep set):
 
 What a kept manifest's `refs` name joins the keep set, to a fixed point; what a cited one's `meta` names (art ids and runs) does
 too, but not what a young or untimed one's `meta` mentions: a result naming its own run is no citation of that run.  A blob is a
-candidate when an expired artifact (one outside the keep set) holds it and no kept artifact does.  Manifests, attempts and labels
-are never deleted: an expired id still resolves, and `fetch` reports its blob absent.
+candidate when an expired artifact (one outside the keep set) holds it, no kept artifact does, and the remote still holds it (a
+listing of `objects/sha256/` each pass).  Manifests, attempts and labels are never deleted: an expired id still resolves, and
+`fetch` reports its blob absent; without the listing, every blob a pass deleted would be a candidate again in every later pass.
 
 Deletion is two-phase, for uploads in flight.  An upload skips a blob the remote already holds (`S3Remote.put` HEADs first), so a
 new artifact can come to hold an old blob before its manifest is listed.  `apply` therefore deletes only a blob that has been a
@@ -21,8 +22,9 @@ time, each batch after a fresh listing of `manifests/`, so a blob a new manifest
 its own batch is being deleted; the listing after the last batch reports any such blob that is now absent as `lost` (the pass
 exits 1).  `GRACE_S` covers a custody upload (its key lives at most 24 h, README §10.1).
 
-Fails closed: a manifest, label or attempt it can't read, or a citing tree it can't scan, stops the pass before anything is
-deleted.  Remote objects are immutable, so `cache` keeps every manifest, label and attempt it read, by key.  Memory stays small on
+Fails closed: a manifest, label or attempt it can't read, a citing tree it can't scan, or a listing of `objects/sha256/` that
+fails, stops the pass before anything is deleted.  A SIGINT (`timeout -s INT`) unwinds through `apply`, which saves the marks
+first, so a pass cut short keeps its progress.  Remote objects are immutable, so `cache` keeps every manifest, label and attempt it read, by key.  Memory stays small on
 a bucket of millions of blobs: each manifest is parsed as it is read, and its blobs go to a SQLite file in `work` that one query
 groups by digest.
 """
@@ -330,6 +332,9 @@ def plan(remote: Any, cache: Path, cite: list[Path], *, now: float, ttl: dict[st
         q = "SELECT b.digest, MAX(b.size) FROM b LEFT JOIN k ON k.art = b.art GROUP BY b.digest HAVING COUNT(k.art) = 0"
         p.candidates = {d.hex(): int(s) for d, s in db.execute(q)}
         db.close()
+    say(f"plan: {len(p.candidates)} blobs only expired artifacts hold; listing objects/sha256/ for the ones still there")
+    held = held_blobs(remote, p.candidates)
+    p.candidates = {b: n for b, n in p.candidates.items() if b in held}
     say(f"{len(p.expired)} artifacts expired; {len(p.candidates)} candidate blobs, {sum(p.candidates.values()) / 2**30:.1f} GiB")
     return p
 
@@ -392,6 +397,18 @@ def save_marks(path: Path, marks: dict[str, float], now: float) -> None:
     tmp = path.with_name(path.name + f".tmp-{os.getpid()}")
     tmp.write_text(json.dumps({"schema": "research/store-gc-marks/v0.1", "written": now, "marks": marks}) + "\n")
     os.replace(tmp, path)
+
+
+def held_blobs(remote: Any, blobs: dict[str, int]) -> set[str]:
+    """Which of `blobs` the remote holds, from one listing of `objects/sha256/` (256 prefixes, 16 at once).  A listing that fails
+    is a GcError: the pass can't tell which candidates exist, so it deletes nothing."""
+    def one(prefix: str) -> set[str]:
+        return {b for k in remote.list(prefix) if (b := k[len("objects/sha256/"):]) in blobs}
+    try:
+        with ThreadPoolExecutor(max_workers=16) as ex:
+            return set().union(*ex.map(one, [f"objects/sha256/{x:02x}" for x in range(256)]))
+    except Exception as e:  # noqa: BLE001
+        raise GcError(f"objects/sha256/ can't be listed ({type(e).__name__}: {e})") from None
 
 
 def list_manifests(remote: Any) -> list[str]:
