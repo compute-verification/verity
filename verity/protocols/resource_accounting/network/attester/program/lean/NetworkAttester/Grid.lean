@@ -1,7 +1,7 @@
 module
 
 /-!
-# The certifier program: rows, grids, fill and the FIFO certifier
+# The network attester program: rows, grids, fill and the FIFO certifier
 
 The executable forms of `security/Definitions/Certifier/Grid.lean` that the difftest runs, under the same names in
 `NetworkAttester`. Lean core only: `offset` sums over `List.finRange` where the reference sums over a `Finset`.
@@ -33,7 +33,7 @@ def queue (S : Nat) (enq : Nat → Nat) : Nat → Nat
   | 0 => 0
   | t + 1 => queue S enq t + enq t - min (queue S enq t + enq t) S
 
-/-- The FIFO certifier's release count in bucket `t`. -/
+/-- The FIFO network attester's release count in bucket `t`. -/
 def released (S : Nat) (enq : Nat → Nat) (t : Nat) : Fin (S + 1) :=
   ⟨min (queue S enq t + enq t) S, Nat.lt_succ_of_le (Nat.min_le_right _ _)⟩
 

@@ -919,10 +919,10 @@ private def auditor : Site.Registration.Auditor := keysOf (base ++ [vm "vm0" non
 private def hostedBy (drift : Option Figure) : List Site.Loc :=
   (base.map fun x => if x.id == "cert0" then { x with parent := some "vm0" } else x) ++ [vm "vm0" drift]
 
-/-- The example's locations with a drift of `n / d` stated for its certifier's host. -/
+/-- The example's locations with a drift of `n / d` stated for its network attester's host. -/
 private def drifting (n d : Nat) : List Site.Loc := hostedBy (some (fig n d))
 
-/-- The example's locations, its certifier's host's clock taken at real time's rate. -/
+/-- The example's locations, its network attester's host's clock taken at real time's rate. -/
 private def locs : List Site.Loc := drifting 0 1
 
 private def site : Site := ⟨[sheet], locs, links⟩
@@ -1330,7 +1330,7 @@ private def unrated : Site :=
   (egress site).2.map (fun r => (r.place, r.status, r.free))
 #guard (egress standin).2.map (fun r => (r.place, r.status, r.free)) ==
   (egress site).2.map (fun r => (r.place, r.status, r.free))
--- a drift taken on a premise. The example's certifier's host states no drift, so its row on no premise covers nothing:
+-- a drift taken on a premise. The example's network attester's host states no drift, so its row on no premise covers nothing:
 -- the link is charged at capacity over the week. With 1/2000 premised for the host, the same row follows, covered,
 -- and names the premise: of a week of steps of a thousandth of a second, 302,400 might end past the week, and what is
 -- left covers its length less a 2000th; the 604.6488 seconds not covered are charged at capacity
@@ -1368,7 +1368,7 @@ private def twoHosts : Site := ⟨[sheet], hostedBy none ++ [vm "vm1" none], lin
 private def other : List Premised := [{ host := "vm1", drift := fig 1 2000, premise := "ClockRateWithin(vm1, 5e-4)" }]
 #guard weekRows twoHosts other == weekRows bare [] ∧ weekRows twoHosts (other ++ onPremise) == weekRows bare onPremise
 -- a premise for a host that is no auditor's device of the Site is refused by name, and no row is printed: one the Site
--- does not hold, the auditor's device, the prover's host; a certifier at the site is in no host, so no premise times
+-- does not hold, the auditor's device, the prover's host; a network attester at the site is in no host, so no premise times
 -- it and its row covers nothing
 private def refused (S : Site) (host : String) : Option String :=
   match rows S digest auditor (period week) [paced] [check 1000000000000000 604800000 "1/1000"]
@@ -1399,7 +1399,7 @@ private def device (id : String) (kind : Site.Kind) (key : String) : Site.Loc :=
 private def link (id a b : String) : Site.Link := { id, ends := (a, b), β := some 10000000000, latency := 1 }
 
 /-- Beside the example: a second host, joined to the challenger and to the first host; a DRAM leaf under each host; a
-second challenger, joined to the first host; and a certifier with no link. -/
+second challenger, joined to the first host; and a network attester with no link. -/
 private def wideLocs : List Site.Loc :=
   locs ++ [host1, dram "dram0" "node0", dram "dram1" "node1", device "chal1" .challenger "e2",
     device "cert1" .certifier "c1"]
@@ -1412,7 +1412,7 @@ private def wideRows (accounts : List Account) (answers : List Answer) (ticks : 
 private def twice : List Site.Loc := locs ++ [device "cert1" .certifier certKey]
 private def upper (x : Site.Loc) : Site.Loc := if x.id == "cert0" then { x with key := "C0" } else x
 
--- a key names its device: the certifier's its certifier, the challenger's its challenger
+-- a key names its device: the network attester's its certifier, the challenger's its challenger
 #guard (site.holder auditor certKey).map (·.id) == some "cert0"
 #guard (site.holder auditor chalKey).map (·.id) == some "chal0"
 -- and names none: an auditor's device's key, a key no location of the auditor's holds, a key the auditor registers for
@@ -1423,12 +1423,12 @@ private def upper (x : Site.Loc) : Site.Loc := if x.id == "cert0" then { x with 
 #guard (Site.holder ⟨[sheet], twice, links⟩ (keysOf twice) certKey).isNone
 #guard (Site.holder ⟨[sheet], Core.Site.Example.locs, links⟩ Core.Site.Example.auditor "k0").isNone
 #guard (Site.holder ⟨[sheet], locs.map upper, links⟩ (keysOf (locs.map upper)) "C0").isNone
--- the certifier reaches its uplink's half on its host's side, never the half to the outside, and no host; the
+-- the network attester reaches its uplink's half on its host's side, never the half to the outside, and no host; the
 -- challenger reaches the hosts its links join it to, each once, and no link
 #guard (site.hostLinks "cert0").map (·.id) == ["up0"] ∧ site.hostsOf "cert0" == []
 #guard site.hostLinks "chal0" == [] ∧ site.hostsOf "chal0" == ["node0"]
 #guard wide.hostsOf "chal0" == ["node0", "node1"] ∧ wide.hostsOf "chal1" == ["node0"]
--- a certifier the Site gives no link reaches nothing, though its key names it; a link between hosts, no device's
+-- a network attester the Site gives no link reaches nothing, though its key names it; a link between hosts, no device's
 #guard (wide.holder (keysOf wideLocs) "c1").map (·.id) == some "cert1" ∧ wide.hostLinks "cert1" == []
 #guard !(["cert0", "cert1", "chal0", "chal1"].any fun i => (wide.hostLinks i).any (·.id == "hh0"))
 

@@ -26,7 +26,7 @@ open scoped ENNReal
 /-- **`witness-path-private`**, the per-channel premise, beside the per-party `Faithful p`, `Secret p` and `Confined p`
 and the site's `Covered`: every node that can read a private frame of `c` in transit, over the
 channel's life, is its auditor end, one of the prover's own machines, or an auditor party under `Confined p`. The
-certifier on the server's own uplink meets it, and so does the memory challenger reached in-region; a channel across a
+network attester on the server's own uplink meets it, and so does the memory challenger reached in-region; a channel across a
 network the prover doesn't own meets it only with keys (`ChannelHides`). -/
 def WitnessPathPrivate {Node : Type} (s : Roles Node) (c : Channel Node) : Prop :=
   PathPrivate s c.party c.readsPrivate

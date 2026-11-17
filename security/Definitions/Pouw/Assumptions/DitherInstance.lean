@@ -47,7 +47,7 @@ import Mathlib.Topology.Sheaves.Init
   they say among the signed times alone the verdict does check (`Dither.Timed`: each operand root in before its
   block's coins, each root before the next block's coins, each check coin after the block's roots, every deadline
   inside the period). What is left is that the node is within the model: its runs take at least the model's
-  wall time, from the coins they read to what the certifier sees arrive.
+  wall time, from the coins they read to what the network attester sees arrive.
 
   `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads all three, beside the network attester's count
   (`Definitions.Pouw.Assumptions.Dither.CertifierSeesImports`).
@@ -67,7 +67,7 @@ open Pouw.Dither
 sooner than the work that computed it**: sampling block `b`'s work reads the dither coins the challenger issues at
 `t ob b` (its signed issue time, as the verdict reads it from the readings `ob = dev A o x`), so the network
 attester, watching the replica's boundary, can't see the block's root arrive (`arrive ob b`, its signed time)
-before `t ob b` plus the work's wall time in the model. The challenger's and the certifier's clocks are the
+before `t ob b` plus the work's wall time in the model. The challenger's and the network attester's clocks are the
 auditor's devices. That the node takes at least the model's wall time is the node's being within the model, not a
 property of the clocks. -/
 def RootAfterCoin (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (dev : Readings G P nsb Obs)

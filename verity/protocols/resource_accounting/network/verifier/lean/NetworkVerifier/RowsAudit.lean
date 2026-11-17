@@ -9,7 +9,7 @@ public import NetworkAttester.Rows
 
 The audit of a run of the active network attester (`network_certifier_serve`, the serving module below) over the records it
 signed: each of the run's `W` windows' requests (the link's ingress), responses (its egress) and fails (`<link>-fails`,
-egress) records, each held to its certified record, then the certifier program's `NetworkAttester.Rows.audit` over
+egress) records, each held to its certified record, then network attestation's program's `NetworkAttester.Rows.audit` over
 their grids, the executable form of `security/Definitions/Certifier/RecordRows.lean`. That audit accepts only
 when the egress record is the schedule it shows rendered over the lanes, so a run whose cells the network attester
 cut, clocked or ordered otherwise than the schedule is refused here, not taken on trust.
@@ -30,7 +30,7 @@ each egress cell with `io_tie.parse_cell`.
 
 `NetworkCheck.Period`'s rows-form terms, read by its decoders: the network attester's LMS public key (16 + N bytes) and
 parameters, the link (the serving module's `LINK`, at most 65,535 UTF-8 bytes), the schedule (`NetworkAttesterParams`,
-`Period.scheduleOf`), whose digest every record head binds (`Period.Schedule.digest`), the certifier session (32 bytes)
+`Period.scheduleOf`), whose digest every record head binds (`Period.Schedule.digest`), the network attester session (32 bytes)
 every certificate binds, and the run's `W ≥ 1` windows, `0 … W − 1`. A schedule with a response limit
 (`max_tokens_cap`, which `Period.scheduleOf` reads) is refused: `NetworkAttester.Rows.audit` holds no response to its
 request's `max_tokens`, so it doesn't cover a run under one.
@@ -49,7 +49,7 @@ of `cell_bytes`, the fails record's of `lanes`) and digest, settled by the deadl
 digest under the record's salt (`certificateDigest`) and is the key's and verifies in the session
 (`Check.Certificate.signs`); then `NetworkAttester.Rows.audit` over the grids (`auditOf`), with its refusal's reason.
 
-What it reads is witness, the traffic's records and the heads and salts the certifier signed, so it publishes nothing:
+What it reads is witness, the traffic's records and the heads and salts the network attester signed, so it publishes nothing:
 **Public** `{}`, and the **profile** the link and `W`. Its work is linear in the records: each grid is hashed once into
 its head and read once by the audit.
 -/
