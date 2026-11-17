@@ -61,7 +61,7 @@ reason = "Flock's distribution (`verity_flock`) and its verifier's scripts"
 [[distribution]]
 directory = "verity/protocols/resource_accounting/memory/pous/verifier/check"
 owner = "memory-accounting"
-reason = "the PoUS Lean check (`pous-check`), whose Python is run by path beside `benchmarks/pous`: its difftest generator, which its `lean-audit.json` runs, and `interop.py`, which holds it to the wire's Python reference through `verity_difftest`"
+reason = "the PoUS Lean check (`pous-verifier`), whose Python is run by path beside `benchmarks/pous`: its difftest generator, which its `lean-audit.json` runs, and `interop.py`, which holds it to the wire's Python reference through `verity_difftest`"
 
 [[distribution]]
 directory = "verity/protocols/resource_accounting/memory/poub/prover"

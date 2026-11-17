@@ -1111,7 +1111,7 @@ def topEntryFields (program : String) (bcs : Array ByteArray) (e : Json) : V Boo
 binds (`bound`, META's `registration`), and its entry named `stacked` (R's registered top, `rec_live.register_top`) with the
 record's `program`; none when neither the record nor META names one. A record META does not bind, or a META binding a record
 the verifier does not hold, is refused; so is a v1 record, or one naming `stacked` twice. -/
-def registration (reg : Option Json) (bound : Option String) : V (Option (String × Option Json)) := do
+def docket (reg : Option Json) (bound : Option String) : V (Option (String × Option Json)) := do
   match reg, bound with
   | none, none => return none
   | none, some d =>
@@ -1354,7 +1354,7 @@ def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (boun
     (shape : Option StackedShape := none) : V InnerCommits := do
   if (tr.getObjValAs? String "kind").toOption != some TRANSCRIPT_FORMAT then throw s!"rec inner transcript: not a {TRANSCRIPT_FORMAT} record"
   checkFinished tr
-  let held ← registration reg bound
+  let held ← docket reg bound
   let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw "rec inner transcript: rounds is not a list"
   let rec_ ← match JsonParse.parse record with
     | .ok j => pure j
