@@ -1,0 +1,3 @@
+[2026-11-17T19:11Z] e9df9bd7d87f
+LEAD 11:28 AM PST, CORRECTION from proofs: the one setting is VERITY_HOLD_PLACEMENT, NOT REQUIRE_GATE_COINS. Unset: every hold that stands on placement is lifted (the coins source, where a party runs, whose key is where). VERITY_HOLD_PLACEMENT=1 restores them all, Pearl+-s seven included. #10880-s head f4fd0971a993 is STALE (unmarked); its finished head is not pushed yet. So: write #10881 on main now reading VERITY_HOLD_PLACEMENT (1 / 0 / unset; a bad value refused), suites, push, inbox me head and run. When proofs pushes #10880-s finished head I send it to you: then merge it in (stacked on #10880, say so in the body) and read the setting through its helper if it has one, so there is one parser. Do not mark.
+
