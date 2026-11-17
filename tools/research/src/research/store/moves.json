@@ -5026,7 +5026,6 @@
         "benchmarks/int8_class_rate/pyproject.toml": "tests/benchmarks/int8_class_rate/pyproject.toml",
         "benchmarks/kernels/exactlin/pyproject.toml": "tests/benchmarks/kernels/exactlin/pyproject.toml",
         "benchmarks/kernels/numabind/pyproject.toml": "tests/benchmarks/kernels/numabind/pyproject.toml",
-        "benchmarks/kernels/s8_linear/pyproject.toml": "tests/benchmarks/kernels/s8_linear/pyproject.toml",
         "benchmarks/kv_filler/pyproject.toml": "tests/benchmarks/kv_filler/pyproject.toml",
         "benchmarks/landing/pyproject.toml": "tests/benchmarks/landing/pyproject.toml",
         "benchmarks/lean_records/pyproject.toml": "tests/benchmarks/lean_records/pyproject.toml",
