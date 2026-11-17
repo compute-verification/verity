@@ -424,8 +424,8 @@ def test_the_glossary_records_the_retired_terms():
 LEAN_WORDS = {"draw": (("draw", "draws", "drawn"), "sample"), "law": (("law", "laws"), "sampling design"),
               "escape": (("escape",), "miss probability"), "wrong": (("wrong",), "incorrect"),
               "dampener": (("dampener",), "slowdown"), "firewall": (("firewall",), "ZK server"),
-              "horizon": (("horizon",), "monitoring period"), "warden": (("warden",), "network certifier"),
-              "tap": (("tap", "taps"), "network certifier"), "leg": (("leg", "legs"), "subprotocol")}
+              "horizon": (("horizon",), "monitoring period"), "warden": (("warden",), "network attester"),
+              "tap": (("tap", "taps"), "network attester"), "leg": (("leg", "legs"), "subprotocol")}
 
 
 def words(name: str) -> list[str]:

@@ -169,8 +169,8 @@ LINES = [
      'WINDOW {"slots": 4}'),
     ('PERIOD closed p: {"body": {"complete": true, "windows": [{"complete": true, "root": "ab", "session": "s1"}]}, "seq": 9}',
      'PERIOD closed p: {"body": {"complete": true}, "seq": 9}'),
-    ('THE NETWORK CERTIFIER {"rc": 1, "reason": "window 7: the scan\'s prog is no audit\'s", "verdict": "reject"}',
-     'THE NETWORK CERTIFIER {"rc": 1, "reason": "window K: the scan\'s prog is no audit\'s", "verdict": "reject"}'),
+    ('THE NETWORK ATTESTER {"rc": 1, "reason": "window 7: the scan\'s prog is no audit\'s", "verdict": "reject"}',
+     'THE NETWORK ATTESTER {"rc": 1, "reason": "window K: the scan\'s prog is no audit\'s", "verdict": "reject"}'),
     ("SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [13, 19] (law rate:2/4), "
      'drawn members [5, 42]: RECORDS {"accepted": true}',
      "SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps (law rate:2/N), "
@@ -184,7 +184,7 @@ LINES = [
     ("REQUESTS (exit 0): [serve-load] varied: 3/3 ok", "REQUESTS (exit 0): [serve-load] varied: ok"),
     ('V3C-AUDIT refused: {"codes": ["stream"], "rule": {"law": "stratified-rate:1/2244", "rule": "law"}} (rate:3/561:4)',
      'V3C-AUDIT refused: {"codes": ["stream"], "rule": {"law": "stratified-rate:1/N", "rule": "law"}} (rate:3/N:4)'),
-    ("CLASSES: the window circuit's 4,32,4; the certifier's scan W63 (w63k4), the one class the gate serves",) * 2,
+    ("CLASSES: the window circuit's 4,32,4; network attestation's scan W63 (w63k4), the one class the gate serves",) * 2,
     ('POUS {"rc": 1, "reason": "the session ended late after 9 of 320 rounds", "verdict": "reject"}',) * 2,
 ]
 
@@ -3546,7 +3546,7 @@ def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
     (("v3c",), {"CERTIFIER_CMD": "true", "CERTIFIER_PERIOD_CMD": None},
      "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"),
     ((), {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None},
-     "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"),
+     "PREFLIGHT: the split attestation period check reads V3c's period.json, and V3C_CLASS is empty"),
 ])
 def test_the_split_certifier_needs_v3c_and_no_whole_piece_beside_it(tmp_path, args, extra, line):
     """The split's period check writes network attestation's answer from V3c's period.json, so the preflight refuses it beside
@@ -4485,7 +4485,7 @@ def test_under_pearlplus_tie_v3c_audits_no_commit_not_chained_right_after_w(tmp_
 @pytest.mark.parametrize("extra, line", [
     ({"POUW": "h1"}, "PREFLIGHT: PEARLPLUS_TIE ties the window to Pearl+'s W, which POUW=pearlplus's piece writes: POUW is h1"),
     ({"H1_TIE": "1", "H1_GATE": ""}, "PREFLIGHT: PEARLPLUS_TIE or H1_TIE, not both: the window is tied to one W"),
-    ({}, "PREFLIGHT: under PEARLPLUS_TIE V3c runs once Pearl+'s piece wrote W, after step 4, and the split certifier's "
+    ({}, "PREFLIGHT: under PEARLPLUS_TIE V3c runs once Pearl+'s piece wrote W, after step 4, and the split attestation "
          "period check needs it before: set CERTIFIER_CMD instead"),
     ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "LOAD": "varied"},
      "PREFLIGHT: under PEARLPLUS_TIE round s of Pearl+'s W is the window's s-th step, the class's s-th output, so the window "
@@ -6315,7 +6315,7 @@ FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3"
 
 IDS = "--protocol ids --id-payload 503"
 #: the runner's refusal of a front in front of an endpoint that is off the id form
-OFF_IDS = ("PREFLIGHT: the certifier front sends id-form requests, which serve-openai answers only under "
+OFF_IDS = ("PREFLIGHT: the network attester front sends id-form requests, which serve-openai answers only under "
            f"SERVE_ARGS='{IDS}'")
 SESSION_CLOSE = '"$PY" benchmarks/network_traces/certifier_piece.py close "$1" "$2"'
 
