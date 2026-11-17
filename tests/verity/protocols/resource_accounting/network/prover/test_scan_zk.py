@@ -706,7 +706,7 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
 def test_a_network_attester_runs_rows_are_read_under_its_deployments_key(tmp_path):
     h = sz.host(tmp_path / "host", published(tmp_path / "run"), sample=16)
     assert list(h.rounds) == ["block-0", "honest-0", "chain-0", "tampered-0", "unread-0", "stale-1"]
-    assert h.whole.run_id == "00" * 32 and "network certifier run" in h.whole.source
+    assert h.whole.run_id == "00" * 32 and "network attester run" in h.whole.source
     assert h.whole.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
     assert h.whole.outputs == {q: r for q, r in enumerate(sz.W63.responses, 1)}
     assert h.whole.tampered.key_of == "the driver's own"
