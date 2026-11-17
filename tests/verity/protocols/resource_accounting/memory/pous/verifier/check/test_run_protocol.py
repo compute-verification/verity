@@ -1,4 +1,4 @@
-"""`pous-run-protocol serve` (`PousVerifier.RunProtocol`, onsite Verity's PoUS component) against the Python verifier of the
+"""`pous-run-protocol serve` (`PousCheck.RunProtocol`, onsite Verity's PoUS component) against the Python verifier of the
 same case (`answer_of`: the case decoded as the Lean decodes it, then `pous.period`'s `tie` and `run.check_at`, and its
 `certify` and `profile`): every field of the answer but its reason, the certified `s_bits`, `eps` and the profile's gaps
 among them.
@@ -14,7 +14,7 @@ other round with zeros; each protocol refuses the other's signer; and the same t
 encode). The period's setup case is the setup protocol's (`pous-setup`), which accepts it; the period's case with another
 store's setup (a run committed to a different setup) is refused, for the tie's reason.
 
-`pous-run serve`'s `certify` (`PousVerifier.RunProtocol.certifyFn`) against `period.certify` and `period.profile` at points
+`pous-run serve`'s `certify` (`PousCheck.RunProtocol.certifyFn`) against `period.certify` and `period.profile` at points
 no setup could reach: sampled about each certificate's edges (labels per segment, segments, `k`, `Δ + RTT`, the width), and
 Demo B's `C*`, 1038 segments of `2^16` labels, where both publish `PeriodHeldDemo`'s 1,060,008,348,186 bits."""
 
@@ -93,7 +93,7 @@ def _evidence(b: bytes) -> tuple:
 
 
 def answer_of(protocol: str, schemes: dict):
-    """`PousVerifier.RunProtocol.mkProtocol protocol schemes`'s answer in Python."""
+    """`PousCheck.RunProtocol.mkProtocol protocol schemes`'s answer in Python."""
     def check(p, setup, e) -> tuple:
         (point, sid, trusted), (digests, session, inputs) = p, e
         a = period.answer(point, schemes, trusted, setup, digests, session, sid, protocol, setup_inputs=inputs)
@@ -187,7 +187,7 @@ setup_server = D.server_fixture(setup_port())
 
 
 def certify_reference(j) -> dict:
-    """`PousVerifier.RunProtocol.certifyFn` in Python: the point decoded as the Lean decodes it, then `period.profile` and
+    """`PousCheck.RunProtocol.certifyFn` in Python: the point decoded as the Lean decodes it, then `period.profile` and
     `period.certify` there."""
     pt = _point_of(M._get(j, "point"))
     return {"profile": period.profile(pt), "public": period.certify(pt)}

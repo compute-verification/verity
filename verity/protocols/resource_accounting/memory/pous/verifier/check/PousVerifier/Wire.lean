@@ -26,7 +26,7 @@ Every check is the Python's, in the Python's order, because the first failing ch
   itself (`Verifier.privateRoot`), which it never trusts; a public setup's blocks must hash to the declared root and
   decode back to the committed `W`. A setup failure is reported under the first AUDIT_OPEN in the session.
 * the audit: AUDIT_OPEN names this epoch, a fresh `(epoch, audit id)` pair (`Verifier.seen`, required) and the audit id
-  derived from the verifier's secret; round `j`'s CHALLENGE carries the derived index and nonce (`PousVerifier.Challenge`);
+  derived from the verifier's secret; round `j`'s CHALLENGE carries the derived index and nonce (`PousCheck.Challenge`);
   its RESPONSE echoes them and carries a canonical block whose path to the root verifies; the measured latency is at most
   `Δ + RTT`; with flag bit 0 the block decodes to a payload below `2^payload_bits` (`Wire.Codec`), and with flag bit 1 to
   the verifier's held `W`'s payload (`Verifier.wBytes`); and nothing follows the last round.

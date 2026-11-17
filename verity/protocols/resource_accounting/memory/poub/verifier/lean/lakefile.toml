@@ -30,7 +30,7 @@ name = "verity_difftest"
 path = "../../../../../../circuits/difftest"
 
 # A P2 store's openings are checked on PoUS's vk (`Poub.P2`), by PoUS's own leaf and path check
-# (`PousVerifier.Merkle`).
+# (`PousCheck.Merkle`).
 [[require]]
 name = "pous_verifier"
 path = "../../../pous/verifier/check"

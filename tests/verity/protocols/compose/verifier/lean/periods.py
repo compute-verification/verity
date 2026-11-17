@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[6]
 BANDWIDTH = ROOT / "verity/protocols/resource_accounting/memory/poub/verifier"
 POUS_K = 8
 """Rounds of PoUS's audit: the composition reads only the component's answer, so its case is kept small (the hook's
-own point is `pous_verifier`'s difftest's)."""
+own point is `pous_check`'s difftest's)."""
 OTHER_POUS_STORE = hashlib.shake_256(b"another tiny MLP's weights").digest(500)
 """Four blocks of P2's 126 payload bytes at the small point's width: a store PoUS sets up, never the committed `C*`."""
 COINS = hashlib.sha512(b"the period's live coins").digest()

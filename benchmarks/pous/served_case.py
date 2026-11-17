@@ -106,7 +106,7 @@ def digest(case: Mapping[str, Any]) -> str:
 
 def pous_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
                 protocol: str = period.PROTOCOL) -> dict[str, Any]:
-    """`PousVerifier.RunProtocol`'s answer on ``case`` by its Python (`period.answer`), from the case's bytes alone."""
+    """`PousCheck.RunProtocol`'s answer on ``case`` by its Python (`period.answer`), from the case's bytes alone."""
     commitment, ev = _shape(case)
     p = case["params"]
     try:
