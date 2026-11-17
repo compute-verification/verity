@@ -3180,6 +3180,12 @@
    "issue": "PRF-579",
    "due": "2026-11-17"
   },
+  "Verity.Sampled.TwoStageBound": {
+   "owner": "@proofs",
+   "digest": "0000000000000000000000000000000000000000000000000000000000000000",
+   "issue": "PRF-460",
+   "due": "2026-11-30"
+  },
   "Verity.Vocab.BandwidthAuditSound": {
    "owner": "@memory-accounting",
    "digest": "0ba14a8edc194d4a0149201841d2bb1f8546486d4829928a3f14a2193301d417",
