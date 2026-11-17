@@ -22,8 +22,8 @@ Its `window` and `period` against `credit.window` and `credit.period_credit`, th
 `credit.drawn`, `credit._window_drawn` (at the strata of the descriptor's layout, `Credit.descriptorDrawn`, the sample the
 J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s):
 one `Port` each, over the cases
-`pouw_credit_cases` generates (a served window whose sampling coin opened after its sample root over the manifest's credit bits,
-the units a sampling coin selects from a window's layout and each of them proved, a served window whole with its layout read
+`pouw_credit_cases` generates (a workload whose sampling coin opened after its sample root over the manifest's credit bits,
+the units a sampling coin selects from a window's layout and each of them proved, a workload whole with its layout read
 from its circuit's descriptor (`credit.layout_of`) and its round log held to the challenger's (`core_check.rounds_twin`) and
 to its A trees, a period of the
 auditor's ledger and its windows, a window's A trees under its round roots, a window's registered weights under its
@@ -357,7 +357,7 @@ REGISTERED_FILE = _port("registered-file", registered_file, credit_cases.registe
 
 
 def test_credit(pass_server):
-    """Generated served windows' credited sets, sampled proof blocks and their outcomes, whole windows and periods, and A rows,
+    """Generated workloads' credited sets, sampled proof blocks and their outcomes, whole windows and periods, and A rows,
     then each mutation over a few seeds (`replay`): a window's tile at a K its proof doesn't cover (2^17 or past, or no
     multiple of 32), a credit bit flipped after the sampling coin, units the prover chose, a sampled proof block failed or missing,
     a period unclosed or a window of it missing or out of order, an A tree the round roots

@@ -1,4 +1,4 @@
-"""PoUS's and the wipe's pieces for the composite (`benchmarks/one_stage/composite.py`), built from a served window's
+"""PoUS's and the wipe's pieces for the composite (`benchmarks/one_stage/composite.py`), built from a workload's
 kept outputs: each piece's case, ``case.json``, the ``{"commitment", "evidence", "params"}`` its Lean component's
 ``serve`` reads (the commitment and evidence hex, no blobs), and that component's own answer on it, ``answer.json``,
 whose commitment is the component's digest of the case's commitment: its Lean's with ``--exe``; else PoUS's Python's,
@@ -7,7 +7,7 @@ directory composite.py takes as ``--piece``.
 
     served_case.py --window DIR [--private P] [--exe LEAN] [--hf-home H] [--p2-lib LIB] [--device cuda]
 
-``DIR`` is a piece's public directory as the served run keeps it, and its ``answer.json`` names the protocol:
+``DIR`` is a piece's public directory as the workload keeps it, and its ``answer.json`` names the protocol:
 
 * **PoUS** (`verity/pous/p2/v4/run`, `served_piece.py`): ``DIR/answer.json``, under its hiding commitment, and
   ``DIR/pous.json``, with the commitment's binding; and the private directory (``--private``, by default the one
@@ -30,7 +30,7 @@ these is refused (`Refused`) and nothing is written.
 The case and its answer stay on the prover's side, in that 0700 directory, and so does composite.py's ``--out``, where it
 writes every piece's evidence again (``evidence.json``). The auditor's side reads what it read before: each piece's
 public ``answer.json`` (PoUS's under its hiding commitment) and the composite's answer. This prints one ``CASE`` line,
-naming the protocol, the verdict and where the piece is. A served run never runs it on PoUS's piece: `served_piece.py`
+naming the protocol, the verdict and where the piece is. A workload never runs it on PoUS's piece: `served_piece.py`
 writes that case and its answer itself while it holds ``C*`` (`pous_answer`, `judged`, `write`), `served_wipe.sh` runs
 it on the wipe's, and the composite takes both as written (`onsite_pieces.sh`'s `onsite_cases`).
 

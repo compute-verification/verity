@@ -97,7 +97,7 @@ def test_the_alias_table_is_the_same_through_the_record_and_the_parsed_json():
     table = OP.alias_table(doc)
     assert table == {"model.layers.1.self_attn.rotary_emb": ("model.layers.0.self_attn.rotary_emb", 1)}
     assert OP.alias_table(RequiredManifest.of(doc, "the test's manifest")) == table
-    assert OP.alias_table({"op_path_aliases": aliases}) == table                     # a served window hands the store its aliases alone
+    assert OP.alias_table({"op_path_aliases": aliases}) == table                     # a workload hands the store its aliases alone
 
 
 @pytest.mark.parametrize("rows", ("rows", "none"))

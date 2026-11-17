@@ -1,4 +1,4 @@
-"""A served run's registration log registers its compiler (`serve_day.register_compiler`, which `advice.write` calls before it
+"""A workload's registration log registers its compiler (`serve_day.register_compiler`, which `advice.write` calls before it
 binds any advice): the log a run declared its day in holds one item of kind ``builder``, core's check accepts the log with it,
 and that item is what the run's advice windows are bound under: its digest the one each window's binding names the compiler by,
 its ℓ at least each window's advice bits, its format the one that decodes each window's advice. Under the tie the item stands

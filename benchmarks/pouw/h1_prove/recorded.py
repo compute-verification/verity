@@ -799,7 +799,7 @@ def _time(p: Path) -> dict | None:
 
 
 def _verdict(p: Path) -> dict | None:
-    """The check's verdict over every session it verified: accepted iff each was, with the first refusal's reason."""
+    """The verifier's verdict over every session it verified: accepted iff each was, with the first refusal's reason."""
     if not p.exists():
         return None
     v = [json.loads(x[8:]) for x in p.read_text().splitlines() if x.startswith("VERDICT ")]

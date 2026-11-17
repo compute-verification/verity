@@ -965,7 +965,7 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
                                                     "the caller's `device_key` loads, and session log, which sign the "
                                                     "session's close (`Closer`)")
     ap.add_argument("--session", help="with --challenger: the session id (64 hex) the auditor gave the memory "
-                                      "challenger for this session; without them, no session has a case")
+                                      "attester for this session; without them, no session has a case")
     ap.add_argument("--trusted-sha512", help="with --challenger: the SHA-512 (128 hex) of the key the configuration "
                                              f"pins for the close ({CLOSER_PARTY}'s for {COMPONENT}); the "
                                              "challenger's key is refused before any session unless it is that key")

@@ -26,7 +26,7 @@ MAX_PROCS = 16
 DUMP_TIMEOUT_S = 30.0
 MISSING = "py-spy is not on PATH"
 #: py-spy's `Process <pid>: <argv>` header: the workload's whole command line, whose flags can name what a run must keep private
-#: (a served window's number), and custody uploads logs/stall-*.txt; the dump keeps only the pid and comm
+#: (a workload's number), and custody uploads logs/stall-*.txt; the dump keeps only the pid and comm
 ARGV_LINE = re.compile(r"^Process (\d+): .*$", re.M)
 
 

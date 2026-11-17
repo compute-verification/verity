@@ -43,7 +43,7 @@ committed afresh); a5 adds the member's other ports at the docket's roots (`rows
 of a pinned parameter leave the free inputs where the window's root for it is the pinned root: `declared_count` counts
 them registered, its pins the ``--registered`` file's roots and the window's roots those its docket records
 (`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries). A record that
-lists its members (a served window's) declares its reads beside them, as a served window reads its model's weights
+lists its members (a workload's) declares its reads beside them, as a workload reads its model's weights
 (each ``weights/<label>@<words>``, pinned at the root of the committer's weights registration): each read port its
 members' own rows or a shared-row table of them (`interface.listed_reads`), audited and counted as a stated record's
 reads are, and the count names every parameter it reads whose window root is no pin (``unpinned``), whose reads count
@@ -62,7 +62,7 @@ reads tie each reader's row to its writer's. One it reads only through input por
 too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). PoUW's H1 tiles
 have theirs pinned through ``--registered``, from the window's entries.
 
-A circuit whose program takes values ahead of its templates' parameters (`interface.Registered.values`: a served window's
+A circuit whose program takes values ahead of its templates' parameters (`interface.Registered.values`: a workload's
 H1 tables, or each Pearl+ call's A rows and y, which its proof blocks make where the model makes them) has them registered
 first by an earlier record W (``--tie W``: PoUW H1's docket of the window, fixed before H1's sample coin, or Pearl+'s
 window record of its retained timed rounds, written after the retention and before the verifier's coin), and the window's
@@ -366,7 +366,7 @@ def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> di
     (``wired``, which a5's wiring check holds). A record that declares no input lists no steps and registers no input (a
     row table's registered reads are refused, `verifier_window`), so none is ingress or registered: the ``external``
     ports are reported, not subtracted. A record that declares its registered reads or its window's ingress (vLLM's
-    served windows) is counted by `declared_count`. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
+    workloads) is counted by `declared_count`. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
     inputs = wired = ext_bits = 0
     ext = set(external)
     for m in members:

@@ -11,7 +11,7 @@ script:
   arm of the script audits a window as forging a read;
 * each partition file (`partitions`: this benchmark's, the one-stage audit's and each one the script names) states a
   rate a stream takes or is listed as still stating a fixed design (`FIXED`), which an audit on a challenger's coins
-  (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check and a served window's audit from its records
+  (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check and a workload's audit from its records
   (`records_audit.py audit`) refuses by name. The list only shrinks."""
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ STANDIN, UNITS = "SiluMul_v2{I=256}", 8
 RATE = "a rate (rate:NUM/DEN, stratified-rate:NUM/DEN or work-rate:NUM/DEN)"
 #: the partition files that still state a fixed design (``subset:K``, ``stratified:K`` or ``work:K``), by path from the
 #: root. A stream refuses such a text as its rule, so an audit on a challenger's coins refuses the file, and so does a
-#: served window's audit from its records. Each one's rate is its K over the proof blocks its scope registers, a count
+#: workload's audit from its records. Each one's rate is its K over the proof blocks its scope registers, a count
 #: only its window gives. The list only shrinks: a file leaves it in the change that makes its text a rate, and none
 #: joins it.
 FIXED = frozenset({
@@ -167,8 +167,7 @@ def test_the_weights_ties_arm_tells_the_audit_what_each_refused_tie_forges():
 
 
 def test_each_partition_file_states_a_rate_or_is_listed_as_still_stating_a_fixed_design():
-    """A partition file's text is the rule an audit states to its stream, on a challenger's coins or from a served
-    window's records, so each one states a rate a stream takes, or is in `FIXED` and that audit is refused at the rule
+    """A partition file's text is the rule an audit states to its stream, on a challenger's coins or from a workload's records, so each one states a rate a stream takes, or is in `FIXED` and that audit is refused at the rule
     check. A file outside the list that states a fixed design fails, and so does a stale entry: a listed file that states
     a rate, or that is gone."""
     files = partitions()

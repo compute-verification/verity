@@ -161,7 +161,7 @@ def test_a_ranks_served_window_under_a_sha512_tp_run_root_passes(served_tp):
 
 
 def test_a_ranks_served_window_under_an_old_records_sha256_tp_run_root_is_refused_by_name(served_tp):
-    """A served window names a SHA-512 commitment, as `deferred_rows.source` holds a deferred Commit's (one hash): a window held to
+    """A workload names a SHA-512 commitment, as `deferred_rows.source` holds a deferred Commit's (one hash): a window held to
     a record whose TP run root is 32 bytes (an old record's SHA-256 v1 root), and to the verifier's on everything else, is refused
     by ``sha512``."""
     for r in range(2):

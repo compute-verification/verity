@@ -108,7 +108,7 @@ def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int]) -> Co
     collector, `pipeline.serve_seal.committer`), in place of a Commit of its own (`attach`): the step's input ids are its
     step-input port's (`served_record.StepInputPort`) and each of H1's ``layers``' x_q and s_a are its int8 source's
     (`Int8Source`, the bench row's manifest's sites, under their op paths), so H1's A tables are tied to the values the
-    served window commits. ValueError when the Commit has no port or no int8 source, when ``layers`` hold a routed
+    workload commits. ValueError when the Commit has no port or no int8 source, when ``layers`` hold a routed
     expert (only H1's own source acquires those), or when the source doesn't acquire some linear at each engine step of
     ``steps``, the window's. ``tap.untap()`` removes it."""
     sources = list(getattr(com, "sources", ()))

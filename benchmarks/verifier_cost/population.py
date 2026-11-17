@@ -1,5 +1,5 @@
 """`population.sh`'s inputs: per N, DIR/pop-N.json, `{"descriptor", "query", "population"}` for a template-instance
-population of about N units over a layered call hierarchy (a served window's shape): `--roots` root batches cycling over
+population of about N units over a layered call hierarchy (a workload's shape): `--roots` root batches cycling over
 `--templates` distinct templates, each template the top of `--levels` levels of composites, every composite calling
 three of the level below (at most `--width` per level) and XOR-ing their results, under `Q_template_instances` over the
 templates. `--input-members M` widens each of the root's input nodes to M members (its first ones the population's

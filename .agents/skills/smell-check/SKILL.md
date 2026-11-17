@@ -48,7 +48,7 @@ fix:    <the fix and its owner; started or not>
 
 Each question heads a catalogue section, whose entries are its examples.
 
-1. **Is what's credited tied to what was served?** PoUW credits noised work on a served product's operands, committed
+1. **Is what's credited tied to what the workload served?** PoUW credits noised work on a served product's operands, committed
    and checked by value; not work beside it, stand-ins, a reference pass, uncommitted bytes, or a claim narrowed to fit.
 2. **Does "served", "end to end" or "measured" mean the real path?** The pinned compiled build at the record's settings,
    the real workload and values, interference included, the verifier, the critical path; not a harness, model,

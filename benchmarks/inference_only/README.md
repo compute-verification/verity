@@ -4,7 +4,7 @@ How much training could a developer hide inside the inference blocks that Llama 
 serve? This benchmark answers with one number: the least slowdown that training would suffer, under the min-cut bound.
 A number of 1 says the bound shows no slowdown. The served policy's number is 1.
 
-Given a served run's record, it follows the core benchmarks' interface: a measurement, not an audit, with a number only
+Given a workload's record, it follows the core benchmarks' interface: a measurement, not an audit, with a number only
 where the record holds a PoUW accept of record and the policy's check ran and both its rules comply. Given none, it
 prices the policy that a file in this tree states, and says under its first line that it reads no run.
 
@@ -19,7 +19,7 @@ This needs nothing but a CPU. It prints `A STATED POLICY PRICED, NOT A MEASUREME
 (`AS SERVED: 1`), its `c`, `k` and `n` with what `k` is made of, the same policy over monitoring periods, and one JSON
 object last. It exits 0.
 
-On a served run's record, where `DIR` is the record's directory, its `out/`, or a run id:
+On a workload's record, where `DIR` is the record's directory, its `out/`, or a run id:
 
 ~~~sh
 uv run verity bench inference_only --stated-only --from DIR
@@ -31,7 +31,7 @@ Its first lines are the interface's:
 Inference-only: the least slowdown of training run inside the policy's inference blocks
 ran with: coins local challenger; parameters development (scheme SCHEME)
 a measurement, not an audit
-The served run's record read: DIR/out
+The workload's record read: DIR/out
 ~~~
 
 The `ran with` line says which coins and parameters the record states PoUW's piece was made with, or `ran with: not
@@ -80,7 +80,7 @@ The last builds the Lean count and runs it on the class this tree builds, which 
 
 ## What you may change
 
-The record: any served run's files, its class and policy, its limits and counts, its PoUW verdict. And the options:
+The record: any workload's files, its class and policy, its limits and counts, its PoUW verdict. And the options:
 `--policy FILE`, a stated policy to price; `--model`, `--class` and `--division`, the built class; `--uncredited-share
 S`, a typed share, whose figures print under a label saying they rest on no PoUW verdict.
 

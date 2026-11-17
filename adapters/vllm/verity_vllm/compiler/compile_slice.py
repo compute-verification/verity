@@ -18,7 +18,7 @@ window's blocks (`served_rows.register`'s G); at G = P the unit is the first, so
 - ``cert``, the window's certified arrivals (`replay_chain.arrival_fields`: K slots of valid, id, P, O) and ``tok``,
   each slot's first CU·B certified token ids (its prompt, then its outputs; zero past them), a row the verifier holds to
   the certified record's commitment (its b‖c);
-- ``srv``, the served rows: the step rows the served window ran (P steps of `rows_bits`, idle ones zero; `srv_row`;
+- ``srv``, the served rows: the step rows the workload ran (P steps of `rows_bits`, idle ones zero; `srv_row`;
   each step's rows at the runner's batch positions), a row the verifier holds by its b‖c to the window's row of the
   served rows' registration (`served_rows`), committed on the Commit side before the sample. At G < P they are P / G
   rows ``srv0`` … (`srv_rows`), row j steps [j·G, (j + 1)·G) and held to window w's leaf w·(P / G) + j
@@ -73,7 +73,7 @@ request 1 a free 16-token hit at step 6 is refused by ``cache`` alone (0x1F) eve
 own rows in ``srv``. Advice that drops a decision the scan asks (a cleared enable) is refused by ``load`` when the
 window row keeps it and by ``steps`` when the scan reads past the count; a carry-out other than the charge's carry' by
 ``code``. Free returns aren't expressible on the slice: it has no stopping request. Advice that registers six passes
-where the served window admitted user-1 at the sixth ask is refused by ``rows`` (0x2F) with the served rows in
+where the workload admitted user-1 at the sixth ask is refused by ``rows`` (0x2F) with the served rows in
 ``srv``; with its own rows there, the circuit accepts and the native
 b‖c check refuses ``srv``. A restarted carry-in (the priors, or counts fitted to the window) is accepted by the unit,
 which takes any carry-in, and refused by `charge_chain.check_chain` (``CH-carry``) on its b‖c.

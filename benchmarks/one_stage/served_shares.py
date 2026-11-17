@@ -1,4 +1,4 @@
-"""A served run's two shares of the card's capacity, from its serve dir: the declared utilization, the work the served
+"""A workload's two shares of the card's capacity, from its serve dir: the declared utilization, the work the served
 model's steps declare at θ over the wall the engine took to serve them, term by term, and the credited share, the MACs
 Pearl+'s PoUW verdict credited at θ over that same wall.
 
@@ -31,7 +31,7 @@ replays every tile of its passes, as much work as checking every tile, to give u
 (core-seconds a second of the wall), never as a share of θ. Pearl+'s served piece takes S and N from its
 ``served_passes.py volunteer`` document (`served_verdicts.pearlplus`), against its timed call's wall.
 
-Pearl+'s own served run (`pearlplus_shares`, from `served_passes.py`'s serve and verify documents, the POUW=pearlplus
+Pearl+'s own workload (`pearlplus_shares`, from `served_passes.py`'s serve and verify documents, the POUW=pearlplus
 piece's) has no step trace: its wall is its timed ``generate`` call's, its declared work that call's passes' linear MACs
 alone, and its credited work the verdict's credit over those passes (the verify document's ``timed``), both at θ. Every
 pass of that run is written whole for the verdict inside its step; the same load served with no pass retained
@@ -161,12 +161,12 @@ def shares(serve_dir: Path, credit: dict[str, Any] | None = None, model: str | N
 
 
 def pearlplus_shares(served: dict[str, Any], verified: dict[str, Any]) -> dict[str, Any]:
-    """Pearl+'s served run's shares at each reading of the clock (module docstring): ``served`` is `served_passes.py
+    """Pearl+'s workload's shares at each reading of the clock (module docstring): ``served`` is `served_passes.py
     serve`'s document, ``verified`` its ``verify``'s, whose ``timed`` credit an accepted verdict carries; a rejected one
     credits 0."""
     wall = served["generate_s"]
     if not (isinstance(wall, (int, float)) and wall > 0):
-        raise ValueError(f"the served run's timed call has no wall: {wall!r}")
+        raise ValueError(f"the workload's timed call has no wall: {wall!r}")
     timed = [p for p in served["passes"] if p.get("timed")]
     declared = sum(p["macs"] or 0 for p in timed)
     answer = verified.get("answer") or {}

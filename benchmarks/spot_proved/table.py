@@ -4,7 +4,7 @@ keys, its n index scores and the top-k its attention read.
     table.py steps --tree TREE --arm-dir ARM --load NAME [--rep 1] [--outputs 2] --out STEPS.json
     table.py check CAPTURE [--steps STEPS.json] --out FILE
 
-``steps`` names, from the served window (TREE's ``benchmarks/serve_tax/replay.py`` `window`), the steps at which the
+``steps`` names, from the workload (TREE's ``benchmarks/serve_tax/replay.py`` `window`), the steps at which the
 longest prompt's outputs 0, 1, ... were sampled: output i from the row attending to ``len(prompt) + i`` keys, at the step
 whose row of the request ends there (``first position + tokens``). The window's step indices count from its first step, as
 ``capture.py --steps-from STEPS.json`` counts a replay's steps from an empty engine.
@@ -165,7 +165,7 @@ def summary(cmd: str, res: dict) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("steps", help="the steps sampling the longest prompt's first outputs, from the served window")
+    s = sub.add_parser("steps", help="the steps sampling the longest prompt's first outputs, from the workload")
     s.add_argument("--tree", type=Path, required=True)
     s.add_argument("--arm-dir", type=Path, required=True)
     s.add_argument("--load", required=True)

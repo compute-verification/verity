@@ -1,6 +1,6 @@
 """A two-stage sampled audit's interior registration, from replay.
 
-The boundary registration's replay blocks are request spans: one request's lifetime in a served window, padded to its size
+The boundary registration's replay blocks are request spans: one request's lifetime in a workload, padded to its size
 class's n_rho proof blocks. After the first stage samples Q of them, the prover replays each sampled span and registers its
 proof blocks' values, phase ``interior``, as the record `Stream.register_interiors` receives: population Q·n_rho, the
 sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after the boundary registration.
@@ -623,7 +623,7 @@ def _as_served(data: Sequence[Mapping[str, Any]], cells: Sequence[int], held: Se
             u = int(off[0])
             raise ValueError(f"{x.template}: unit {u} (sampled span {u // cells[k]}) {does} at its {x.port!r} a row that "
                              f"is not row {at[u]} of {x.value}, {what} round 1 committed: the replay didn't reproduce "
-                             "what was served")
+                             "what the workload served")
 
 
 def _served(ms: Sequence[CS.Member], readers: Sequence[tuple[int, tuple[int, int]]], links: Sequence[Link],

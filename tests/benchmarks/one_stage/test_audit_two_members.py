@@ -1,4 +1,4 @@
-"""Two sampled members of a tiny committed window through the records audit as a served window's audit runs it
+"""Two sampled members of a tiny committed window through the records audit as a workload's audit runs it
 (`served_verdicts.sh`'s ``v3c_audit``): ``records_audit.py audit`` in a process of its own, which samples on its stream
 and hands `a5.audit` the members, each proved by Flock's prover (`flock-circuit`, the CPU build) behind the ZK server
 and verified by the Lean verifier. Nothing on that path is replaced. The members' prover is the audit's one kept process
@@ -16,7 +16,7 @@ stops included (`_kept_prover`).
   here its `serve.py` runs SPOT's Lean verifier itself. Its key is the session's own, so its coins show the path and
   are no auditor's.
 * **The sessions' coin trees.** By default the two sessions run on that same challenger session
-  (`a5.window_trees`), as a served window's audit runs them: each of the kept prover's verifiers takes its tree
+  (`a5.window_trees`), as a workload's audit runs them: each of the kept prover's verifiers takes its tree
   through the audit's relay, and each session's tree is closed there after its evidence before the next session
   starts (FLOCK_CHALLENGER=0, a development run's, keeps each on a tree of its own). The audit then writes its case in
   v2's per-member form with the challenger's key, the window's root and the coins, and v2's check accepts it
@@ -40,7 +40,7 @@ real files, where every other test of those gives one of them a stand-in. A pass
 inputs are unchanged, so it reruns only on a change to what `benchmarks/one_stage` reads. Every other test of the audit
 gives `a5.audit`, the prover or the verifier a stand-in, so none sees what only the real ones refuse: a rule the
 stream's service doesn't take, a statement the prover can't stage or the Lean verifier won't set up, a session the ZK
-server stops, or a record a later step can't read. A served window's audit finds those hours in."""
+server stops, or a record a later step can't read. A workload's audit finds those hours in."""
 from __future__ import annotations
 
 import hashlib
@@ -80,7 +80,7 @@ TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in 
 DESIGN = "stratified:1"
 RULE = "stratified-rate:1/2"
 RUN = "ab" * 64
-#: what the steps after a served window's audit read of its record (`served_verdicts.sh`'s hand-off, `records_audit.period`)
+#: what the steps after a workload's audit read of its record (`served_verdicts.sh`'s hand-off, `records_audit.period`)
 RECORD = ("summary.json", "window/audit.json", "window/registration.json", "window/program.json", "window/case.json")
 #: a member's verdicts in the audit record: the prover's own verifier's, Lean's of the session, and Lean's of its sample
 VERDICTS = ("m0-verifier", "lean-verify", "lean-draw")
@@ -325,7 +325,7 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
 
 
 def _answer(out: Path) -> dict:
-    """SPOT's answer on the audit under ``out`` (`served_integrity.answer`, as the served run's record and the
+    """SPOT's answer on the audit under ``out`` (`served_integrity.answer`, as the workload's record and the
     attestation period read it), its docket the one the audit registered."""
     from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # beside a5, on the path `records_audit` put there
 

@@ -18,7 +18,7 @@ verdict's own stream to that class:
 
 * ``registration``: the digest of the class's boundary record (`registration.digest`), which the record of every later
   stream of the class names as its ``previous``. It is the same on every verdict of a class.
-* ``serve``: the id, in the evidence store, of the served run the class's files came from. It is the caller's word
+* ``serve``: the id, in the evidence store, of the workload the class's files came from. It is the caller's word
   (``--serve``): no file of a class names a run of the store. What a class's docket itself binds of its serve
   is its window's ``run`` (`boundary_rows.run_root`: the serve's nonce and the window's index).
 * ``class``: the class's place in its serve, ``w<window>/p<P>-o<O>``, ending ``-nostop`` for a class filed without a
@@ -186,7 +186,7 @@ PIECES = {
 def record(piece: str, first: Mapping[str, Any], summary: Mapping[str, Any], *, run: str, serve: str, commit: str,
            control: str | None = None, stream: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The verdict record of ``piece`` on the class of ``first`` (its first-stage file) from the verifier's command's
-    ``summary`` (the module docstring). ``run``: the run that produced the verdict. ``serve``: the served run the
+    ``summary`` (the module docstring). ``run``: the run that produced the verdict. ``serve``: the workload the
     class came from. ``commit``: the commit the verifier ran at. ``control``: the negative control the run is, or
     None on the honest run. ``stream``: the docket of the verdict's own stream, where ``first`` does not
     hold it (the module docstring's ``--stream``). ValueError for what the module docstring's "Refused" lists and an
@@ -233,7 +233,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--summary", required=True, help="the verifier's command's summary.json on that class")
     ap.add_argument("--stream", help="the registration record of the verdict's own stream where the first-stage file "
                                      "does not hold it: the second stage's interior/registration.json")
-    ap.add_argument("--serve", required=True, help="the id of the served run the class came from")
+    ap.add_argument("--serve", required=True, help="the id of the workload the class came from")
     ap.add_argument("--run", required=True, help="the id of the run that produced the verdict")
     ap.add_argument("--commit", help="the commit the verifier ran at (this tree's HEAD)")
     ap.add_argument("--control", choices=CONTROLS, help="the negative control this run is; none on the honest run")

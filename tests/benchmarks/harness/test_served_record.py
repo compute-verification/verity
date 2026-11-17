@@ -157,7 +157,7 @@ WITHHELD = {"accepted": False, "interior": ["statements"], "replay_sample": [], 
 
 def served(tmp_path, *, outcome=WITHHELD, held=True, verdicts=None, units=(2,), layout=LAYOUT, sessions_record=False,
            registered=("logits",)):
-    """A served run's four runs' directories, each holding what that run publishes. ``sessions_record`` is the
+    """A workload's four runs' directories, each holding what that run publishes. ``sessions_record`` is the
     summary's top-level ``accepted``, the one-stage record of the sessions alone; ``registered`` the values the
     interior registers."""
 

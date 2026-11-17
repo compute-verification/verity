@@ -5,7 +5,7 @@ pearl_c_sm120.cu's kernels write, in its row-major layout (A' and B~'s codes and
 `verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c` on the device record; the products over every cell are batched in
 numpy (the chains window by window, the peel with `verity.circuits.kernels.tc.group_sum_total_batch`
 on the record's peel step), and one whole 64 x 64 tile per variant is recomputed by the scheme (`encode`, `checked`,
-`digest`) and must agree.  Pearl's tickets are not part of `pearl-c-sm120` (no PoUW check reads them), so nothing here
+`digest`) and must agree.  Pearl's tickets are not part of `pearl-c-sm120` (no PoUW verifier reads them), so nothing here
 computes them.  run.py compares the device's buffers with these bytes before it times anything.
 
   uv run python benchmarks/pouw/pearl_c_sm120/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
@@ -60,7 +60,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_de
 VARIANTS = (SM120, SM120_UNPROMOTED)
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
 COINS = b"verity-pouw/pearl-c-sm120-gpu-check/coins"
-#: the check's prover hm96 salt key (a served run samples its own)
+#: the check's prover hm96 salt key (a workload samples its own)
 SALT_KEY = hashlib.sha256(b"verity-pouw/pearl-c-sm120-gpu-check/salt-key").digest()
 
 

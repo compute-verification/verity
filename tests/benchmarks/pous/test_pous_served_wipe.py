@@ -1,4 +1,4 @@
-"""`streamed_wipe/served_wipe.sh`, the wipe's piece of a served window (served_verdicts.sh's WIPE_CMD), on a
+"""`streamed_wipe/served_wipe.sh`, the wipe's piece of a workload (served_verdicts.sh's WIPE_CMD), on a
 CPU: its demo.sh is `served_wipe_demo.py` (one 32 MiB segment in host memory, `wipe_store.HostMemory`, against
 `wipe_side.py`, the challenger's stand-in on a host of its own), and `nvidia-smi` and `gpu-lease` are stand-ins on PATH.
 DIR/answer.json is the subprotocol's core answer (verity/wipe/v0) in the form `Answer.toJson` writes (what served_verdicts.py's
@@ -186,7 +186,8 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
                      "address": ["10.96.0.36", 47611]}
     assert json.loads((d / "served.json").read_text()) == {
         "serve_dir": str(tmp_path / "pieces" / "serve-run"), "window": "3", "server": "vy-dc-h200", "card": CARD,
-        "run": node.get("RESEARCH_RUN_ID"), "lease": "the serve's: its engine loads on this card after the wipe"}
+        "run": node.get("RESEARCH_RUN_ID"), "lease": "the serve's: its engine loads on this card after the wipe",
+        "key_pin": "run"}
     summary = json.loads((d / "summary.json").read_text())
     assert summary["verdict"] == "accept" and summary["decided_by"] == DECIDED and summary["k"] == W.READS
     key, = case["params"]["trusted"]
@@ -202,7 +203,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     headline = json.loads(last.removeprefix("WIPE "))
     assert headline | {"fill_GBps": None, "t0": None, "t1": None} == {
         "verdict": "accept", "reason": None, "protocol": W.PROTOCOL, "decided_by": DECIDED, "k": W.READS, "segments": 1,
-        "fill_GBps": None, "t0": None, "t1": None, "server": "vy-dc-h200", "card": CARD, "exit": 0}
+        "fill_GBps": None, "t0": None, "t1": None, "server": "vy-dc-h200", "card": CARD, "exit": 0, "key_pin": "run"}
     assert all(f"-i {CARD}" in line for line in (tmp_path / "smi.log").read_text().splitlines())
     assert not (tmp_path / "lease.log").exists() and not (d / "refused.txt").exists()
     assert _stamps(d) == ["start", "the wipe exit 0", "exit 0"]

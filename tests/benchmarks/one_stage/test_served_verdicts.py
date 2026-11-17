@@ -10,7 +10,7 @@ link of the node uncounted and uncertified; one whose attester ran on the node n
 when its answer accepts on the record's server. Remote's product runs no onsite piece and composes SPOT and
 PoUW alone, the others dropped. PoUW's development piece checks the window's gate session and credits
 nothing, and the gate is refused while the lane has a period
-open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
+open. The period the workloads join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and count the class of record only where
 CLASSES names it; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's attester
@@ -163,7 +163,7 @@ def _window_data(out: Path, k: int) -> list[str]:
     return hits
 
 
-#: a served run's verdict lines on window 7 of three closed, two sealed, steps [13, 19), windows 5 and 6 refused, and
+#: a workload's verdict lines on window 7 of three closed, two sealed, steps [13, 19), windows 5 and 6 refused, and
 #: their published form
 LINES = [
     ("SERVE stopped (exit 0): 3 window(s) closed, 2 sealed", "SERVE stopped (exit 0): window(s) closed, sealed"),
@@ -541,7 +541,7 @@ def _sampled_coins(tmp_path: Path, summary: dict | str | None, *args: str, audit
 ], ids=["gate, own trees", "gate, a summary that isn't JSON", "gate, the sample's session's trees",
         "gate, no summary", "local", "PP_CHALLENGER unset", "gate with V3c on: step 3 local"])
 def test_step_3_on_the_gates_coins_stops_where_its_sessions_took_their_own_coin_trees(tmp_path, summary, extra, rc):
-    """The served run of the gate's coins whose proving sessions each sampled a coin tree of their own was accepted by
+    """The workload of the gate's coins whose proving sessions each sampled a coin tree of their own was accepted by
     every check on the served node and refused by the auditor's Lean verifier off it; step 3 now stops there, exit 20,
     with one line naming the fix. A development session's coins, and step 3 while V3c's audit takes the gate's (step
     3's then local), pass as before."""
@@ -1730,7 +1730,7 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
 
 
 def _pearlplus_run(accepted: bool = True, source: str = S.LIVE_SOURCE) -> tuple[dict, dict]:
-    """Pearl+'s served run, `served_passes.py`'s two documents: a warm-up pass, then three timed passes, its coins a live
+    """Pearl+'s workload, `served_passes.py`'s two documents: a warm-up pass, then three timed passes, its coins a live
     session's (``source`` ``challenger``, as `served_step.coins_of` records them) or an in-process challenger's, and
     Pearl+'s verdict over all four, accepting (its credit over the timed passes beside it) or not."""
     live = source == S.LIVE_SOURCE
@@ -1763,7 +1763,7 @@ def live(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize("host", ["local-challenger", "vy-challenger-1"])
 def test_a_pearlplus_piece_names_the_challenger_its_session_was_opened_on(tmp_path, live, host):
-    """The piece's coins and why it credits nothing name the challenger whose gate opened the served run's salt session,
+    """The piece's coins and why it credits nothing name the challenger whose gate opened the workload's salt session,
     as that open answer's ``host`` (``<host>.<session>``) names it: a local gate's scratch host where serve.sh's local
     challenger made the coins, the deployed auditor's where it did, never one for the other."""
     served, verified = _pearlplus_run()
@@ -1776,7 +1776,7 @@ def test_a_pearlplus_piece_names_the_challenger_its_session_was_opened_on(tmp_pa
 
 
 def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_path, capsys, live):
-    """``pearlplus``: Pearl+'s own served run, accepted by Pearl+'s verdict over its passes and its epoch's salt its live
+    """``pearlplus``: Pearl+'s own workload, accepted by Pearl+'s verdict over its passes and its epoch's salt its live
     session's, is accepted with that verdict's line and credit and its shares (the timed passes' MACs and their credit at
     θ over the timed call's wall), and its row in the record stays missing, naming the first condition of record it fails
     (a compose with no key pin), so the record composes pending; the pieces' line says it's a development run's, and
@@ -2255,7 +2255,7 @@ PINS_LINE = '{"commit": "aa", "main": "bb", "pinned_utc": "2026-10-26T21:35:00Z"
     ("other key", "CoinError: the challenger key at "),
     ("no gate", "ValueError: no gate, key pin or main's first-parent line to check the session by (--gate, "
                 "--key-sha512, --main)"),
-    ("no session", "ValueError: the served run names no live session"),
+    ("no session", "ValueError: the workload names no live session"),
     ("no calls", "the served run has no pass with calls to check"),
     ("gate refuses", "RuntimeError: the gate refused fetch (exit 1): no such session"),
 ])
@@ -3359,8 +3359,8 @@ def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_an
         assert json.loads((tmp_path / name / "out" / "inference-only-limits.json").read_text()) == held
     rc, lines, _ = _inference_only(tmp_path / "none", "inference-policy", IO_WRITE=json.dumps({"k": 6}))
     assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case "
-                                           "is at the run's ALPHA and GAMMA, or at what it reads off the served "
-                                           "window's division:")
+                                           "is at the run's ALPHA and GAMMA, or at what it reads off the "
+                                           "workload's division:")
     assert not (tmp_path / "none" / "out" / "inference-only-limits.json").exists()
 
 
@@ -5337,7 +5337,7 @@ def test_a_deferral_under_day_carries_the_days_log_and_its_follow_on_audits_r2_a
 def test_a_deferral_carries_the_limits_the_run_fixed_before_its_serve_as_alpha_and_gamma(tmp_path):
     """The follow-on's settings name α and Γ as the run's limits file states them (IO_LIMITS, written with the policy
     before the serve), whatever the environment says at the deferral, so the follow-on's composite reads none off the
-    served window's division."""
+    workload's division."""
     (limits := tmp_path / "limits.json").write_text(json.dumps({"alpha": [3, 7], "gamma": 14}))
     run = _deferred(tmp_path, IO_LIMITS=str(limits), ALPHA="9", GAMMA="9")
     assert run.returncode == 0, run.stderr
@@ -5669,9 +5669,9 @@ def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its
 
 
 @pytest.mark.parametrize("blob, said", [
-    ("sampled-proofs-served/window/m0/inst-0.bin", "it would carry the served run's witness (WITNESS "
+    ("sampled-proofs-served/window/m0/inst-0.bin", "it would carry the workload's witness (WITNESS "
      "sampled-proofs-served/window/m0/inst-0.bin: a prover's instance file (its rows))"),
-    ("sampled-proofs-served/window/m0/prover/rows.bin", "it would carry the served run's witness (WITNESS "
+    ("sampled-proofs-served/window/m0/prover/rows.bin", "it would carry the workload's witness (WITNESS "
      "sampled-proofs-served/window/m0/prover/rows.bin: a prover's input file (its rows and salts))"),
     ("/elsewhere/pub-0.bin", "{case} names a blob outside the serve dir: /elsewhere/pub-0.bin"),
 ])
@@ -5801,11 +5801,11 @@ COMPOSE_CLASH = ("PREFLIGHT: the compose follow-on runs at the hand-off's settin
         audit="no V3c audit", sampled=STEP3, verdict="FAIL (the serve dir's private/compose/check.log)")),
     ((), None, {"HOST": "vy-dc-h200"}, "PREFLIGHT: this is the served node vy-dc-h200, which the prover controls, so "
      "nothing composed here claims a record: compose on COMPOSE_NODE (vy-auditor-2)"),
-    (("advice/w7/private/advice.bin",), None, {}, "PREFLIGHT: the compose follow-on holds no witness of the served run, "
+    (("advice/w7/private/advice.bin",), None, {}, "PREFLIGHT: the compose follow-on holds no witness of the workload, "
      "and this node's serve dir does (WITNESS advice/wK/private/advice.bin: the advice and its opening): compose on a "
      "node that holds the hand-off alone"),
-    ((f"v3c-w7-{VTAG}/window/values/a.bin",), None, {}, "PREFLIGHT: the compose follow-on holds no witness of the served "
-     f"run, and this node's serve dir does (WITNESS v3c-wK-{VTAG}/window/values/a.bin: a committed value file): compose "
+    ((f"v3c-w7-{VTAG}/window/values/a.bin",), None, {}, "PREFLIGHT: the compose follow-on holds no witness of the "
+     f"workload, and this node's serve dir does (WITNESS v3c-wK-{VTAG}/window/values/a.bin: a committed value file): compose "
      "on a node that holds the hand-off alone"),
     ((), None, {"PRODUCT": "onsite"}, f"{COMPOSE_CLASH} PRODUCT: unset it"),
     ((), None, {"RESEARCH_SOURCE_SHA": "cd" * 20}, "PREFLIGHT: the compose follow-on composes with the served node's "
@@ -5816,7 +5816,7 @@ COMPOSE_CLASH = ("PREFLIGHT: the compose follow-on runs at the hand-off's settin
 ])
 def test_a_compose_follow_on_refuses_the_served_node_a_witness_a_changed_copy_another_setting_or_tree(
         tmp_path, keep, change, extra, line):
-    """No record is composed on the served node, which the prover controls, nor where a witness of the served run is
+    """No record is composed on the served node, which the prover controls, nor where a witness of the workload is
     held (the follow-on's serve dir holds the hand-off alone), and no retries: a copied file changed fails the copy's check
     before anything runs, and a setting other than the hand-off's, another tree or no hand-off is refused."""
     assert _handed(tmp_path).returncode == 0
@@ -6319,9 +6319,9 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
      "hashed: its SHA-256 isn't its sum (1 such)"),
     ({"TAMPER": "sampled-proofs-served/window/case-v2.json"}, "sampled-proofs-served/window/case-v2.json isn't the file the "
      "served node hashed"),
-    ({"CARRY": "private/h1/key"}, "the hand-off carries the served run's witness: private/h1/key (H1's prover state (its "
+    ({"CARRY": "private/h1/key"}, "the hand-off carries the workload's witness: private/h1/key (H1's prover state (its "
      "key))"),
-    ({"CARRY": "sampled-proofs-served/window/m0/inst-0.bin"}, "the hand-off carries the served run's witness: "
+    ({"CARRY": "sampled-proofs-served/window/m0/inst-0.bin"}, "the hand-off carries the workload's witness: "
      "sampled-proofs-served/window/m0/inst-0.bin"),
     ({"CARRY": "notes.txt"}, "the hand-off carries notes.txt, which its sums don't list"),
 ])
@@ -6456,7 +6456,7 @@ def test_copy_to_a_write_only_rsync_sends_the_list_under_the_serve_dirs_name_mak
      "window's witness, and vy-auditor-2 is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"),
     ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6"}, 3, "COPY refused: vy-dc-h200.example is the served "
      "node, which the prover controls: copy the hand-off to COMPOSE_NODE (vy-auditor-2)"),
-    ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names the served run's "
+    ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names the workload's "
      "witness (WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds)"),
     ("deferred", "compose", "vy-auditor-2", {}, 3, "COPY refused: the serve dir {d} holds no compose list "
      "(private/compose/inputs.txt and compose.env)"),
@@ -7794,3 +7794,27 @@ def test_the_serve_steps_python_path_names_the_import_root_of_every_workspace_pa
     reached = _workspace_reach("verity_vllm.pipeline.cli", "verity_vllm.pipeline.serve_openai")
     assert {"verity", "verity_vllm", "verity_config"} <= set(reached), reached
     assert sorted(f"{top} ({where})" for top, where in reached.items() if where not in named) == []
+
+
+@pytest.mark.parametrize("sealed", [True, False])
+def test_the_window_verb_publishes_the_execution_phase_in_a_fresh_out_or_stops(tmp_path, sealed):
+    """`served_verdicts.sh window` in an $OUT with no serve/ writes serve/phase.json, the picked window's seal's SHA-512;
+    with no seal of that window it writes none and stops at 21."""
+    tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
+    (tree / "benchmarks").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage", target_is_directory=True)
+    _script(venv / "python", '[ "$1" = benchmarks/one_stage/served_verdicts.py ] && [ "$2" = window ] && '
+                             f'{{ echo \'{{"window": 7}}\'; exit 0; }}\nexec {sys.executable} "$@"')
+    (d / "private").mkdir(parents=True)
+    seal = json.dumps({"window": 7, "run_root": "ab" * 64})
+    (d / "seals.jsonl").write_text(json.dumps({"window": 3}) + "\n" + (seal + "\n" if sealed else ""))
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out")}
+    run = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "window"], cwd=tree, env=env, check=False,
+                         capture_output=True, text=True)
+    phase = tmp_path / "out" / "serve" / "phase.json"
+    if sealed:
+        assert run.returncode == 0, (run.stdout, run.stderr)
+        assert json.loads(phase.read_text()) == {"seal_sha512": hashlib.sha512(seal.encode()).hexdigest()}
+    else:
+        assert run.returncode == 21 and not phase.exists(), (run.stdout, run.stderr)
+        assert "STOP at window (exit 21)" in run.stdout.splitlines()

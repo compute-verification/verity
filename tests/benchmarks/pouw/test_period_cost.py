@@ -1,4 +1,4 @@
-"""period_cost: the windows and node-days come back, the served window's units are 32×32, n_min is the least
+"""period_cost: the windows and node-days come back, the workload's units are 32×32, n_min is the least
 n under 1%, the period only shortens with load, the sample and nodes, and every lever names what it changes."""
 
 from __future__ import annotations

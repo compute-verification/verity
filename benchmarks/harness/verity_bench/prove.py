@@ -342,7 +342,7 @@ class SamplingPlan:
 class Spot:
     """SPOT over a proof system: `prover`'s cost of each block type, at the blocks `plan` samples a served token. A
     plan's cell is a row's by the block type's name, else by a staged type any steady-state row of the type was staged
-    as, the one that priced it first (a plan names a block type no served run has taken by its staged type alone, and
+    as, the one that priced it first (a plan names a block type no workload has taken by its staged type alone, and
     a newer row may stage it under another name); a plan and a census that don't cover each
     other are refused, since the total would price another workload. Each row keeps its cell's price in the plan
     (`Row.planned`), where the plan states one."""

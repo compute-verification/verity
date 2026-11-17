@@ -1,5 +1,5 @@
-"""v2_case.py: SPOT v2's case of a served window from its kept files, in a5's form: one member's statement,
-and no case for a window of several. The rebuild reads what a served run's ``m0/compose.log``
+"""v2_case.py: SPOT v2's case of a workload from its kept files, in a5's form: one member's statement,
+and no case for a window of several. The rebuild reads what a workload's ``m0/compose.log``
 (``fixtures/served-window-m0``, a served H200 run's) records, and the case is written private as `composite.py` reads
 it, or, with no case or a blob with no file, only ``missing.json``, which `composite.py` leaves out. `case` runs on a
 small kept window, so it is held to a5's `case_v2` as that is: its public digest is the one the audit staged where the
@@ -148,7 +148,7 @@ PUBLIC = hashlib.sha512(b"public").hexdigest()
 
 
 def _window(tmp_path: Path) -> Path:
-    """A kept window as `case` reads it: the served run's ``compose.log`` beside a circuit file and a public file, the
+    """A kept window as `case` reads it: the workload's ``compose.log`` beside a circuit file and a public file, the
     verifier's partition, one session, and the v1 case whose evidence names it."""
     w = tmp_path / "window"
     s = w / "session-m0" / "sessions" / "a"

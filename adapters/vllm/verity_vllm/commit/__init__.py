@@ -1,4 +1,4 @@
-"""verity_vllm.commit: the Commit, which commits a served run's values while it serves.
+"""verity_vllm.commit: the Commit, which commits a workload's values while it serves.
 
 `committer` is the GPU committer (`native_collect.NativeCollectCommitter`, whose serving-thread work per acquired tensor is one C++
 call, the host committer, leaf hashing and their CUDA/C++ sources). `step_rows` is the ``rows-sha512`` scheme, the one every Commit

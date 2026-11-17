@@ -49,7 +49,7 @@ verity_vllm.program.predict.inference_blocks      # B's partition of a window ci
 verity_vllm.program.predict.step_needs      # one served engine step's needs: a library entry point (`StepNeeds`, `workload_phi`), for benchmarks/route_capture's gap
 verity_vllm.program.moe_difftest      # the MoE source's evidence names it as the check of the bf16 Triton experts (acquire/sources/moe_source.py)
 verity_vllm.acquire.h1_commit      # pouw_h1_ranks.COMMIT_EXTENSION: vLLM's workers import it by name (worker_extension_cls)
-verity_vllm.pipeline.boundary_rows      # a served window's boundary commitment: a library entry point, read by benchmarks/one_stage/two_stage.py
+verity_vllm.pipeline.boundary_rows      # a workload's boundary commitment: a library entry point, read by benchmarks/one_stage/two_stage.py
 verity_vllm.pipeline.boundary_stop      # a serve's stop rule and a stop class's stop record: a library entry point, read by benchmarks/one_stage/two_stage.py
 verity_vllm.pipeline.boundary_windows      # the boundary commitment's hook on the scheduler: a library entry point, installed by benchmarks/serve_tax's plugin
 verity_vllm.pipeline.tick_plugin      # --admit tick under vLLM's own server: vLLM imports its general plugin (register) and its middleware (TickFeed) by name
@@ -60,7 +60,7 @@ verity_vllm.pipeline.window_replay      # a window's circuit as one replay Defin
 verity_vllm.pipeline.node_window_rows   # a rank's node window on the served path: a library entry point (`commit_rank_window`), no serve calls it yet
 verity_vllm.program.predict.class_window   # a request's Program at its size class and its node window: a library entry point (`class_request`, `class_window`), not built
 verity_vllm.commit.row_tables_device      # a step's row tables hashed on the GPU: a library entry point (`step_roots`, `host_step`), read by benchmarks/commitments/step_root_gpu.py
-verity_vllm.pipeline.serve_h1      # a served window's PoUW H1 release: a library entry point (`config_of`), read by benchmarks/one_stage/served_verdicts.py
+verity_vllm.pipeline.serve_h1      # a workload's PoUW H1 release: a library entry point (`config_of`), read by benchmarks/one_stage/served_verdicts.py
 verity_vllm.definitions.numerics.twins      # the twins register their kernels with core on import: a library entry point, imported by circuit-check's targets and check's prebuild
 # the engine core's seam and the stock engine: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins
 # and code outside the package call

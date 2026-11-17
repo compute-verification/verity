@@ -1,4 +1,4 @@
-"""A day's (c, k)-inference blocks, counted from its served windows' circuit records and judged against the day's declared
+"""A day's (c, k)-inference blocks, counted from its workloads' circuit records and judged against the day's declared
 c, k and n (`InferenceOnlyCheck.Count`'s rule): ``verity-vllm block-counts``. The public output is the judgment alone
 (`records.block_counts`); the exact counts go only to a private file.
 
@@ -155,7 +155,7 @@ def judge(classes: tuple[RBC.BlockClass, ...] | list[RBC.BlockClass], total: int
 
 @dataclass
 class Day:
-    """A day's served windows, counted one at a time (`add`), as `judgment` judges them."""
+    """A day's workloads, counted one at a time (`add`), as `judgment` judges them."""
     day: str
     pins: Mapping[str, str] | None = None
     _sessions: dict[str, tuple[Any, int, int]] = field(default_factory=dict)
@@ -164,7 +164,7 @@ class Day:
     _windows: int = 0
 
     def add(self, doc: Mapping[str, Any], roots: Mapping[str, str] | None = None) -> str:
-        """One served window: its circuit record and the roots its registration records. -> its class's definition."""
+        """One workload: its circuit record and the roots its registration records. -> its class's definition."""
         rec = hashlib.sha512(IF.circuit_bytes(IF.circuit_of(doc))).hexdigest()
         if rec not in self._sessions:
             self._sessions[rec] = session(doc)
@@ -217,7 +217,7 @@ def write_private(path: Path, doc: Mapping[str, Any]) -> None:
 
 @dataclass
 class Options:
-    """A day's (c, k)-inference blocks from its served windows' circuit records, judged against its declared c, k and n:
+    """A day's (c, k)-inference blocks from its workloads' circuit records, judged against its declared c, k and n:
     the public judgment alone (no count), and the exact counts in a private file."""
     day: str = option("--day", help="the UTC day served, YYYY-MM-DD")
     declaration: Path = option("--declaration", type=Path,
@@ -225,7 +225,7 @@ class Options:
     private: Path = option("--private", type=Path,
                            help="write the private judgment, with the exact counts, here (0600), beside the run's private files")
     window: list = option("--window", nargs=2, action="append", metavar=("CIRCUIT", "REGISTRATION"), default=[],
-                          help="one served window: its circuit record (circuit.json) and its registration (the "
+                          help="one workload: its circuit record (circuit.json) and its registration (the "
                                "registered roots it records), or - for none; repeat for each of the day's windows")
     pins: Path | None = option("--pins", default=None, type=Path,
                                help="the committer's weights registration, the verifier's pins (none: every read is free)")

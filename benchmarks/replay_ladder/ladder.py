@@ -1,4 +1,4 @@
-"""The replay ladder: on each model of a ladder of pinned checkpoints, does replaying a saturated served window under its
+"""The replay ladder: on each model of a ladder of pinned checkpoints, does replaying a saturated workload under its
 recorded schedule give the served tokens, compiled, run after run, and how far do the tokens depend on the batch?
 
     ladder.py serve   --model ID --c4 C4.json.gz --out DIR [--span-s 60] [--over 1.45] [--burst 800] [--docs N]

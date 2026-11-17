@@ -1,4 +1,4 @@
-"""A served window's boundary commitment as the engine core serves (`BoundaryWindows`): the hook on vLLM's scheduler
+"""A workload's boundary commitment as the engine core serves (`BoundaryWindows`): the hook on vLLM's scheduler
 that takes each request in, keeps the ids each step serves it, closes windows, and commits each window's finished spans
 class by class (`boundary_rows.commit`, `write`), under the serve's stop rule where it registers one
 (`boundary_stop.filed`)."""

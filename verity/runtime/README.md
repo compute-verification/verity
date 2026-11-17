@@ -42,7 +42,7 @@ Internal, which no code outside this directory imports and `runner.run` reaches 
   (`decode`, `split`, `parse`, `FrameReader`, `frames`), each rule broken refused by name; and `handshake`
   (`handshake.py`), the signed exchange that opens every channel between parties.
 
-The served table of `verity run` runs `served_verdicts.sh` for the served window, and its runtime pieces (the wipe's,
+The served table of `verity run` runs `served_verdicts.sh` for the workload, and its runtime pieces (the wipe's,
 PoUS's rounds' and PoUB's parties) through `runner.run`.
 
 ## Where to look

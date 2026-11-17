@@ -315,7 +315,7 @@ def read(root: Path) -> dict[str, Any]:
     staged = json.loads(text(root / "stage.json") or "null")
     inputs = STATEMENTS if staged is None else {**STATEMENTS, "inner": (
         f"{staged['n']} x {staged['unit']} ({staged['subcircuit']}, m = {staged['m']}) under Q_template_instance, staged by "
-        + (f"stage.sh from served window {staged['window']['run'][:16]}'s member {staged['window']['member']}"
+        + (f"stage.sh from workload {staged['window']['run'][:16]}'s member {staged['window']['member']}"
            if staged.get("window") else "stage.sh from seeded inputs (generated values)")
         + ", verity/flock-circuit+plain-leaves, M0 (no --zk), on the challenger's coin tree (FC_COINS=tree), through "
           "rec_live's proxy")}

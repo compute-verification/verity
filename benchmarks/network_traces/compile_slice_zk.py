@@ -12,7 +12,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
   steps (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit, each
   arrival's max_tokens its request's), which `prove` first checks is the corpus's (`replay_vectors.vectors` on
   corpus-smallkv: the arrivals, the decisions and the replay's rows; `cache_vectors`' tokens of each arrival); or
-  ``w212``, window 212 of vLLM's served run (the encodings' ``vllm-8eb1`` fixture) padded into the run's public engine
+  ``w212``, window 212 of vLLM's workload (the encodings' ``vllm-8eb1`` fixture) padded into the run's public engine
   class, (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, no prefix caching, under the run's AsyncScheduler (AS = 1;
   `fixtures/compile_slice_w212_class_async.json`), with the seal's rows as the served ones (`served_rows.step_rows`)
   and each arrival's max_tokens its request's in the trace, which `prove` first checks is the run's (the window's
@@ -45,7 +45,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
   demo ``short``, request 1's admission hit claimed one block of its two, and ``unasked``, the waiting candidate's hit
   claimed 0; the adversarial choices the slice can take (`compile_slice.phase9`: a prefix hit, and on the corpus a
   decision read again and an arrival left in the queue). On the corpus and w212, the passes (advice
-  of a pass at every ask where the served window admitted: six on the corpus, twenty-one on w212, one an async unit), with the served rows in
+  of a pass at every ask where the workload admitted: six on the corpus, twenty-one on w212, one an async unit), with the served rows in
   ``srv`` (``sixpass``) and with its own (``sixpass-own``). The rest are honest, enough of them that the statement fits
   `--zk`'s shape (`stage`).
 * **The served rows** (`served_rows`): the Commit side registers each unit's window under the run root (a stand-in: the

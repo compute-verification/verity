@@ -12,7 +12,7 @@ the row format, records that are their entries' and each way they are not, small
 (the side trees' code is the same at 2^13 and 2^17, which the pinned execution phase exercises), and execution phases built honestly
 (`_window`: one to four calls, the filler, empty entries, records and side indices) and then broken in one of the ways
 `window_problem` names. Each problem-returning function must reach every one of its reasons (`REACHES`). The pinned
-execution phase of `tests/vectors/window.json` (`window_vectors.py`) and the execution phases of served runs (`SERVED`, from the evidence
+execution phase of `tests/vectors/window.json` (`window_vectors.py`) and the execution phases of workloads (`SERVED`, from the evidence
 store) are fixed vectors on top of the sampled ones.
 """
 from __future__ import annotations

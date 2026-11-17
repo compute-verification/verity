@@ -9,7 +9,7 @@ combine statements, costs, and the file it writes.
 The tile's lowering is `h1unit.Shape.stager` (`lanes.py tile`), the auditor's lowering whose file a PoUW period-open commits
 as ``k<K>`` (`pouw_h1_circuits --lower` lowers it so in the adapter, a tree from before it left benchmarks/ there), bound to
 `BIND`. A lane's or the combine's is h1_lanes' staging of that statement of the R x C leaf (`lanes.py`), bound to the Program
-a served window's verifier derives for it. Each runs in a child process with ``HZ_STAGE`` (``fast`` by default) and
+a workload's verifier derives for it. Each runs in a child process with ``HZ_STAGE`` (``fast`` by default) and
 ``H1_TMPL`` unset for the flat form or ``structural``. Its peak RSS is the child's
 ``ru_maxrss`` (`os.wait4`, KiB on Linux) and its wall time the child's. The file is then read once for its SHA-512, bytes,
 META's ``k_log`` and AND rows (`scan`), and deleted.

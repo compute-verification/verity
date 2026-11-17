@@ -3,9 +3,9 @@
 requests it admits, so the mix it was measured at is on the record. A Commit period is WINDOW_STEPS engine steps, one in
 the run of record, so an execution phase of T buckets of τ holds several, and their sum over each execution phase
 (``by_phase``) is the advice an execution phase carries, which the onsite record sets beside the network attester's
-bound (`onsite_record.py`). A served run's advice length is
+bound (`onsite_record.py`). A workload's advice length is
 private (a value), so only a test run with public inputs is measured, and its record says so (``label``): a figure of
-that test run, never of a served run.
+that test run, never of a workload.
 
     python benchmarks/one_stage/advice_charge.py ADVICE --run RUN [--tau S] [--T BUCKETS] --to FILE
 
