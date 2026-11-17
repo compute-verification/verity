@@ -9,7 +9,7 @@ public import Proofs.Flock.Soundness.ExecSample
 import all Lean.Data.Json.Basic
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-! The units a first-stage sample proves are the ones its select drew (`proved_select`). -/
+/-! The units a first-stage sample proves are the ones its select sampled (`proved_select`). -/
 
 @[expose] public section
 

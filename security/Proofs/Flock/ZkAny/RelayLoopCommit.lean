@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayLoop
 public import Proofs.Flock.ZkAny.RelayEnv
 
-/-! The `Commit`'s slot case at the deployed loop: the relay reads the model's link, whose roots are the level 0 the loop drew for the session (`slotCase_commit`). -/
+/-! The `Commit`'s slot case at the deployed loop: the relay reads the model's link, whose roots are the level 0 the loop sampled for the session (`slotCase_commit`). -/
 
 @[expose] public section
 

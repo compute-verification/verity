@@ -374,7 +374,7 @@ end Group
 section Model
 variable {β : Type}
 
-/-- **The record's round of a message round** `(m, o)`, whose coin drew `n` values (`cv o n`): `m`'s first commit
+/-- **The record's round of a message round** `(m, o)`, whose coin sampled `n` values (`cv o n`): `m`'s first commit
 strings as tops of the levels' node counts `a`'s tops have, the rest, where there is any, as its one `c_k`, and
 everything else `a`'s. -/
 def roundD (cv : β → Nat → List F128) (a : Round) (n : Nat) (mo : List UInt8 × β) : Round :=
@@ -404,7 +404,7 @@ theorem coins_roundD (cv : β → Nat → List F128) (a : Round) (n : Nat) (mo :
     (roundD cv a n mo).coins = cv mo.2 n := rfl
 
 /-- **The model of the challenger's live-coin part's record of the message rounds `ms`** (`rec_live`'s `commit`, `round` and
-`record`), each answered by `o` whose coin drew `cv o n` at its count `nOf i`: round 0's message as the link's one
+`record`), each answered by `o` whose coin sampled `cv o n` at its count `nOf i`: round 0's message as the link's one
 table's level-0 top (that table Hello's first) and its coin as the link points; each later round before the last as
 a recorded round (`roundD`), whose other fields are `aux`'s; nothing of the last round; and the record's kind, tops'
 format and Hello `hd`'s. -/
@@ -478,7 +478,7 @@ noncomputable def outCoin : Out → Coin
   | .msg bs => coinOf bs
   | _ => default
 
-/-- **The values a round's answer drew**: its coin's first `n`. -/
+/-- **The values a round's answer sampled**: its coin's first `n`. -/
 noncomputable def coinVals (o : Out) (n : ℕ) : List Flock.F128 := ((outCoin o).vals n).toList
 
 /-- **The challenger's live-coin part's transcript as its record**: at a compiled statement `x`, `rec_live`'s record of the inner

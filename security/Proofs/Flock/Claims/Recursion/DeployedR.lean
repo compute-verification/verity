@@ -232,7 +232,7 @@ verifier's values, and `out`, its zero rows. -/
 def resPorts : List String := ["v", "out"]
 
 /-- The ports check 5 holds to the verifier's own rows at a `rec-open` part (`RecCoins.checkOpen`): `coef`, the
-coefficients at the verifier's coins, and `dirs`, the directions of the positions the verifier drew. -/
+coefficients at the verifier's coins, and `dirs`, the directions of the positions the verifier sampled. -/
 def openPorts : List String := ["coef", "dirs"]
 
 /-- **The rows check 5 holds at part `s`**, with the port's index: at an algebra part (`.inner`), ports `v` and `out`

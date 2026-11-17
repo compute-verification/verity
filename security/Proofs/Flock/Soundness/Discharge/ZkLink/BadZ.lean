@@ -245,7 +245,7 @@ theorem opRZ_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) 
   Exec.opOfL_conflict_collision h.1 h.2.1 h.2.2
 
 open Classical in
-/-- **Rep `r`'s pads openings, by position**: at `p`, the pair of the first query that drew `p` (rep `r`'s
+/-- **Rep `r`'s pads openings, by position**: at `p`, the pair of the first query that sampled `p` (rep `r`'s
 `PendZ.qpos`) and whose opening verifies at `p` from its leaf under its salt to the root `c 0`. -/
 noncomputable def opPadsAtZ (Hs : Hashes F D Sl) (N q r : ℕ) (c : Cap D) (out : OutZC F D Sl) (p : Fin N) :
     Option (F × F) :=
@@ -282,12 +282,12 @@ def padsPairZ (Hs : Hashes F D Sl) (r pos : ℕ) (out out' : OutZC F D Sl) (jj j
     ((out.opens.inner r).pads jj).2.1 ((out'.opens.inner r).pads jj').2.1 ((out.opens.inner r).pads jj).2.2
     ((out'.opens.inner r).pads jj').2.2
 
-/-- The root rep `r`'s pads opening of query `jj` reaches from its leaf, at the position the query drew. -/
+/-- The root rep `r`'s pads opening of query `jj` reaches from its leaf, at the position the query sampled. -/
 def padsRootZ (Hs : Hashes F D Sl) (out : OutZC F D Sl) (r jj : ℕ) : D :=
   Merkle.reachL Hs.H Hs.Ep Hs.Lp ((if r = 0 then out.pend.1 else out.pend.2).qpos jj)
     ((out.opens.inner r).pads jj).1 ((out.opens.inner r).pads jj).2.1 ((out.opens.inner r).pads jj).2.2
 
-/-- `PadsClashAtZ`'s test at a rep and two of its queries: at the position the first drew, both openings verify to the
+/-- `PadsClashAtZ`'s test at a rep and two of its queries: at the position the first sampled, both openings verify to the
 root the first one reaches (`padsRootZ`), with different pairs. The root is computed from the opening, not searched
 for. -/
 def PadsClashAt (Hs : Hashes F D Sl) (N : ℕ) (out : OutZC F D Sl) (r jj jj' : ℕ) : Prop :=
@@ -361,7 +361,7 @@ theorem opPadsAtZ_isSome {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D} {out : O
   exact List.ne_nil_of_mem (List.mem_filter.2 ⟨List.mem_range.2 hjj, decide_eq_true ⟨hq, hv⟩⟩)
 
 open Classical in
-/-- The first of rep `r`'s queries that drew `p` and whose pads opening verifies there: the query whose pair
+/-- The first of rep `r`'s queries that sampled `p` and whose pads opening verifies there: the query whose pair
 `opPadsAtZ` returns. -/
 noncomputable def firstPadsZ (Hs : Hashes F D Sl) (N q r : ℕ) (c : Cap D) (out : OutZC F D Sl) (p : Fin N) :
     Option ℕ :=

@@ -22,7 +22,7 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 /-- **The session loop's own tables** at the level-0 source `src`: rep stream `k`'s table is table `k / 2`'s
 `tabOfLevel0` at the level 0 `Level0.ofSamples` samples at its `m` from `src`'s packed witness and sampled bytes, with `src`'s
-salts for levels ≥ 1 (`Frames.placeOf` on the loop's `Level0`, which `Level0.draw` drew on the host's packed witness and
+salts for levels ≥ 1 (`Frames.placeOf` on the loop's `Level0`, which `Level0.draw` sampled on the host's packed witness and
 the operating system's bytes, and `Level0.commit` binds at the table's `m`; `Finish.serveLoop`'s salts). -/
 def Loop.realOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) (k : ℕ) : V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray) :=
@@ -54,7 +54,7 @@ def Loop.linkOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F
   | none => []
 
 /-- `L₀` with the loop's own link at the source `src` (`Loop.linkOf`): the link the loop's `Commit` carries, which it
-builds itself from the level 0 it drew. -/
+builds itself from the level 0 it sampled. -/
 def LeanRelease.withLink {R : Type} (L₀ : LeanRelease Flock.Wit R)
     (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)) : LeanRelease Flock.Wit R :=
   { L₀ with link := fun x w ρ _ => Loop.linkOf src x w ρ }
@@ -159,7 +159,7 @@ noncomputable def streamOf (x : Msg) (h : List (Msg × Msg)) (spec : SessionSpec
 
 /-- **The record the auditor assembles** on the history `h` at `x`, the witness `w` and the tape `ρ`, at the level-0 source
 `src` and the proof files `proofs`: `recordJson` at SHA-512 of each rep stream's rounds as they left the loop
-(`seenRounds`, each round's bytes retained), the roots of the level 0 the loop drew (`level0Of`, as its `Commit` carries
+(`seenRounds`, each round's bytes retained), the roots of the level 0 the loop sampled (`level0Of`, as its `Commit` carries
 them) and the link points (the `Commit`'s coins). -/
 noncomputable def recordOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) (h : List (Msg × Msg)) (spec : SessionSpec) (sts : Array Stmt)

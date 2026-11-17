@@ -294,7 +294,7 @@ def findBreak (dev : History) (key : ChallengerKey) (label : String) (coins : Js
 def Break (dev : History) (key : ChallengerKey) (label : String) (coins : Json) : Prop :=
   ∃ w, findBreak dev key label coins = some w ∧ w.Valid dev key
 
-/-- A byte string's bits in order, bit `t` being bit `t mod 8` of byte `⌊t/8⌋`: a coin's raw bits, as the device drew them
+/-- A byte string's bits in order, bit `t` being bit `t mod 8` of byte `⌊t/8⌋`: a coin's raw bits, as the device sampled them
 and a sample reads them. -/
 def bitsOf (b : ByteArray) : List Bool :=
   b.toList.flatMap fun x => (List.range 8).map fun i => x.toNat.testBit i

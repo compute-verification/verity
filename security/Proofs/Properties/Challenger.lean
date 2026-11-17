@@ -5,7 +5,7 @@ import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
 
-/-! `answer` and the live checks accept only at coins a challenger device drew, and `SampledByDevice` and
+/-! `answer` and the live checks accept only at coins a challenger device sampled, and `SampledByDevice` and
 `FamilyOneCommitment` are not vacuous. -/
 
 @[expose] public section

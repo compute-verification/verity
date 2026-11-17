@@ -4,7 +4,7 @@ public import Proofs.Properties.Challenger
 public import Proofs.Properties.Challenger.Coins
 public import Proofs.Properties.Challenger.Window
 
-/-! The coins a sample reads are the ones its challenger drew, or a break (`SampledByDevice`). -/
+/-! The coins a sample reads are the ones its challenger sampled, or a break (`SampledByDevice`). -/
 
 @[expose] public section
 
