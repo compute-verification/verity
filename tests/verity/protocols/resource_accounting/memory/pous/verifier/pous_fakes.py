@@ -1,4 +1,4 @@
-"""The suite's one injected clock (AGENTS.md "Tests"): what a memory challenger, a wipe's parties and a timed audit read in
+"""The suite's one injected clock (AGENTS.md "Tests"): what a memory attester, a wipe's parties and a timed audit read in
 place of their default clocks (`time.perf_counter_ns`, and the wipe's `streamed_wipe.raw_clock_ns`), which `conftest.py`
 fails a test for leaving them on."""
 

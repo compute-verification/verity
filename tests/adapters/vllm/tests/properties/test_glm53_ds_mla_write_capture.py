@@ -4,8 +4,6 @@ byte, a flipped kv_c_out word and a flipped scale; the PTX check takes the two F
 `tests/properties/glm53_ds_mla_write_capture_gpu.py --phase gpu` then `--phase compare` on an H200)."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 from pathlib import Path
 from typing import Any

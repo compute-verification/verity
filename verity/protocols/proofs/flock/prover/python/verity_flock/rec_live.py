@@ -554,7 +554,7 @@ def full_draw(program, query: dict) -> dict:
     n = sum(hi - lo for _, rs in P.strata(program, query) for lo, hi in rs)
     sampling_design = D.derive(program, query, {"law": "stratified", "k": n})
     if any(s["k"] != sum(hi - lo for lo, hi in s["units"]) for s in sampling_design["strata"]):
-        raise ValueError("the stratified law at K = the population leaves a unit undrawn")
+        raise ValueError("the stratified sampling design at K = the population leaves a unit undrawn")
     return {**sampling_design, "population": n, "units": list(range(n))}
 
 

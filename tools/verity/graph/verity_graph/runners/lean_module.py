@@ -27,7 +27,7 @@ The `lean` env on a worker: the toolchain of the package's `lean-toolchain` (ela
 packages (Mathlib, ArkLib and the rest) its `.lake/packages` at its manifest and toolchain (`lean_audit.deps_key`), made once
 per worker under `lean-env/` in the check's cache (`fetched_dir`): a copy of the check's warm dependencies
 (`lean_audit.WarmDeps`) when the worker has them, else what `setup.sh` makes in the package (the pinned bundle and Mathlib's
-cache), and topped up from each warm copy the check gives back after (`_top_up`). Only the compile runs the module's code,
+cache), run as `check.py`'s `setup` runs it (its refusals, the first half, then the fetch in a sandbox of its own), and topped up from each warm copy the check gives back after (`_top_up`). Only the compile runs the module's code,
 inside `sandbox.sh` where the worker has it. An env that can't be made, a part of it a compile misses, a part of an import
 the task didn't read and a crashed tool are errors; a module that doesn't compile, a declaration the kernel rejects or
 whose axioms are outside `STANDARD`, and a timeout are fails."""
@@ -53,12 +53,12 @@ from . import Timeout, call
 
 LEAN = ROOT / "tools" / "verity" / "lean"
 #: the files of the Lean tool a task runs: inputs of every lean-module task
-TOOLS = tuple(f"tools/verity/lean/{f}" for f in ("Replay.lean", "sandbox.sh"))
+TOOLS = tuple(f"tools/verity/lean/{f}" for f in ("Replay.lean", "sandbox.sh", "sockets.py"))
 #: the axioms a declaration may use: the Lean check's (check.py's `STANDARD`, which no lock overrides)
 STANDARD = ("Classical.choice", "Quot.sound", "propext")
 #: sandbox.sh's invocation (its header), probed as check.py's `sandboxed()` probes it: check.py isn't among a task's inputs,
 #: so the runner doesn't load it
-UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--ipc", "--pid", "--fork", "--kill-child"]
 #: beside a worker's fetched packages once they're made: {"key": their `deps_key`, "warm": the `_stamp` of the warm copy they
 #: last took what they lacked from, null when the worker kept none}
 READY = ".ready"
@@ -195,9 +195,9 @@ def _prepare(pkg: Path, k: str, home: Path, work: Path, warm: la.WarmDeps) -> No
     if not tmp.is_dir():
         if (pkg / ".lake" / "packages").exists():
             raise EnvError(f"{pkg} has a .lake/packages of its own, which setup.sh would keep: move it away")
-        rc = call(["bash", str(LEAN / "setup.sh"), str(pkg)], work, ROOT, {**os.environ, "LEAN_CACHE": "off"})
+        rc, text = la.lean_check().setup(pkg, (pkg / "lean-toolchain").read_text().strip(), work / "setup.log")
         if rc or not (pkg / ".lake" / "packages").is_dir():
-            raise EnvError(f"setup.sh {pkg.relative_to(ROOT)} failed (exit {rc})")
+            raise EnvError(f"setup.sh {pkg.relative_to(ROOT)} failed (exit {rc}): {text.strip()[-1000:]}")
         shutil.move(pkg / ".lake" / "packages", tmp)
     if missing := [n for n in fetched(pkg) if not (tmp / n).is_dir()]:
         raise EnvError(f"the dependencies made for {pkg.relative_to(ROOT)} lack {', '.join(missing)}")

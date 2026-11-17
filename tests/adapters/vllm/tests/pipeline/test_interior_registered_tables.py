@@ -36,13 +36,13 @@ from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods.interface import digest_words
-from verity_vllm.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
-from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
+from verity_vllm.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
+from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import interior_links as IL
 from verity_vllm.pipeline import interior_rows as IR
@@ -160,6 +160,8 @@ def _span(seed: int, registration: int = 0) -> IR.Span:
     cols: dict[str, list] = {p: [] for p, _w in (*m.rows, *m.outs)}
     for j in range(CELLS):
         t, e = tables[PARAMS[AT[j]]], int(rng.integers(0, E))
+        sx: np.ndarray
+        ws: np.ndarray
         xq, sx, ws = rng.integers(0, 0x70, K, dtype=np.uint8), np.asarray([0.5], "<f4"), np.asarray([0.25], "<f4")
         y, _nonfinite = moe_expert_fp8_block_row(xq, sx.view("<u4"), np.asarray(t.rows[e], "<u2").view(np.uint8),
                                                  ws.view("<u4"), G=K, KB=K, dot="mmav2")

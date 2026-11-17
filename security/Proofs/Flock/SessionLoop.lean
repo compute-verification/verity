@@ -9,7 +9,6 @@ public import Proofs.Flock.SessionLoop.TakenVals
 public import Proofs.Flock.SessionLoop.LiveInner
 public import Proofs.Flock.Claims.ZK.FrameUnrefused
 public import Proofs.Flock.SessionLoop.Link
-public import Proofs.Flock.SessionLoop.LiveRefine
 public import Proofs.Flock.Claims.ZK.FinishSwFrame
 public import Proofs.Flock.Claims.ZK.FinishSwRep
 public import Proofs.Flock.SessionLoop.FinishParts
@@ -74,7 +73,6 @@ public import Proofs.Flock.SessionLoop.RoundOff
 public import Proofs.Flock.SessionLoop.SchedSlot
 public import Proofs.Flock.SessionLoop.LiveSchedOwn
 public import Proofs.Flock.SessionLoop.LiveInnerOwn
-public import Proofs.Flock.SessionLoop.LiveOwn
 public import Proofs.Flock.SessionLoop.Phase
 public import Proofs.Flock.SessionLoop.ZkAny
 public import Proofs.Flock.SessionLoop.SampledAudit
@@ -84,7 +82,6 @@ public import Proofs.Flock.SessionLoop.LeafCap
 public import Proofs.Flock.SessionLoop.VsOfTakes
 public import Proofs.Flock.SessionLoop.VsOfBody
 public import Proofs.Flock.SessionLoop.SwCausalExe
-public import Proofs.Flock.SessionLoop.RowsHonest
 public import Proofs.Flock.SessionLoop.RoundsPassFrame
 public import Proofs.Flock.SessionLoop.ScheduleTotal
 public import Proofs.Flock.SessionLoop.SchedTotalWalk

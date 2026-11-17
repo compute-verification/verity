@@ -8,9 +8,8 @@ program.
   that persists across steps (the slow weights, optimizer state, any buffer carried from one step to the next that
   isn't θ or token data). A gather of a dependent table makes its rows dependent with no MAC; a cache computed only
   from θ and token data is not dependent. So the merged (W + BA)x and unmerged Wx + BAx forms of one update have the
-  same U up to the adapter products. Backward products are left out of U; the training formalism's affected gates A,
-  which count them and the optimizer's, are measured on the step's circuit (training_slowdown.capture.circuit, which
-  `grade.with_circuit` puts on a record's steps).
+  same U up to the adapter products. Backward products are left out of U; the affected share, which counts them and
+  the optimizer's, is measured on the step's circuit (training_slowdown.capture.circuit).
 
 Per step t it gives the updated MACs, the updated MACs per token block (the smaller of the per-row sum over updated nodes
 and the step's updated MACs over its tokens, so neither hiding tokens from the count nor routing tokens to some weights

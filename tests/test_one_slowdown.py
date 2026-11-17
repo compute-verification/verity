@@ -40,8 +40,6 @@ ALLOWED = {
                                                          "`bound`'s and the period bound's"),
     "tests/benchmarks/training_slowdown/conftest.py":
         (("bound",), "reference: the count the fixtures' bound of record is held to"),
-    "tests/benchmarks/training_slowdown/test_formalism.py":
-        (("slowdown_at_least",), "reference: the record's figure is the statement's arithmetic"),
     "tests/benchmarks/training_slowdown/test_grade.py":
         (("blocks_at_least",), "reference: ρ's products term is the theorem's count solved for the fewest blocks"),
     "tests/benchmarks/training_slowdown/test_one_calculator.py":

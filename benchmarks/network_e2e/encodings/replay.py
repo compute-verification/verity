@@ -56,7 +56,7 @@ STEP_TRACE = "verity-vllm/step-trace/v1"
 @dataclass(frozen=True)
 class Releases:
     """A tick-admitted run's certified releases, as the network attester (or the trace corpus's stand-in for it) gave
-    them: the registered tick, the certifier run's origin (unix seconds; bucket a is [origin + a·τ_b, origin + (a + 1)·τ_b)),
+    them: the registered tick, the attester run's origin (unix seconds; bucket a is [origin + a·τ_b, origin + (a + 1)·τ_b)),
     and each request's release number N and bucket a, in the trace's engine order."""
 
     tick: Tick
@@ -68,7 +68,7 @@ class Releases:
 @dataclass
 class Trace:
     """A served run's step trace (`verity-vllm/step-trace/v1`), its requests in the order they reached the engine, with
-    the certifier's view of its timing when the trace has a clock: each request's ingress time and each step's release
+    the attester's view of its timing when the trace has a clock: each request's ingress time and each step's release
     time (its output's tokens leaving through the egress certifier), or each kept output's own (`output_t`) where the
     recorder saw them leave one by one; and `releases`, a run served under the certified tick's releases."""
 
@@ -184,7 +184,7 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
     `finished` (in a served run the committed sampled tokens and the certified egress say the same); with a draft (the
     header's `speculative`), so do the drafts each row kept, its `emitted` less its own token. An `arrive` or
     `step` record's `t` is the engine's clock; a record's `ingress_t` / `release_t`, where the recorder has the
-    certifier's, wins, and otherwise the engine's clock less `ingress_lag_s` (plus `release_lag_s`) stands in for it."""
+    attester's, wins, and otherwise the engine's clock less `ingress_lag_s` (plus `release_lag_s`) stands in for it."""
     recs = list(records)
     if not recs or recs[0].get("kind") != "header" or recs[0].get("schema") != STEP_TRACE:
         raise ValueError(f"not a {STEP_TRACE} trace")
@@ -366,7 +366,7 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     release order (a, ordinal) leaves order exceptions to charge (the corpus's `<trace>.released` traces carry it as
     their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give.
 
-    A trace served under ``--admit tick`` (meta.json's ``tick``: τ and the certifier run's origin) has each request's
+    A trace served under ``--admit tick`` (meta.json's ``tick``: τ and the attester run's origin) has each request's
     release number and bucket from its network attester, a network attester trace's network attester or the corpus's stand-in for it
     (`requests.jsonl`'s ``release`` and ``bucket``), as `Trace.releases`."""
     d = Path(d)
@@ -989,17 +989,19 @@ def kept_bits(trace: Trace, arrivals: Iterable[Code] = ()) -> dict[str, Any]:
     Beside them, and not sent: `counts[k]`, the rows that verified drafts, emitted and kept k; `entropy`, theirs in bits
     a row (at most `max`, log2(K + 1)); and `alone`, that entropy over those rows, what the counts would come to taken
     each alone. `alone` bounds `charged` from neither side: the code reads each request's count before. The rows and
-    the drafts each carried are the replay's, so it refuses a trace the replay doesn't reproduce."""
+    the drafts each carried are the replay's, so it refuses a trace the replay doesn't reproduce. With no draft no row
+    keeps one, and every term is 0."""
     K = trace.engine.num_speculative_tokens
-    if not K:
-        raise ValueError("the trace's engine serves with no draft, so no row keeps one")
-    if trace.emitted is None:
+    if K and trace.emitted is None:
         raise ValueError("the drafts a row kept are the trace's `emitted` less one, which this trace does not record")
     with KP.emitting() as emitted:
         rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
     m = compare(rp.steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
+    if not K:
+        return {"K": 0, "rows": 0, "counts": [0], "entropy": 0.0, "max": 0.0, "alone": 0.0, "charged": 0, "ideal": 0,
+                "derived": 0}
     counts = [0] * (K + 1)
     for st, em in zip(rp.steps, trace.emitted):
         for i, d in st.drafts.items():
@@ -1017,7 +1019,7 @@ def kept_bits(trace: Trace, arrivals: Iterable[Code] = ()) -> dict[str, Any]:
 
 def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s: float = 0.1,
                 window_buckets: int = 600) -> dict[str, Any]:
-    """A trace served with a draft, as the two classes of advice its replay takes, in bits over the trace: `arrivals`,
+    """A trace, with a draft or none, as the two classes of advice its replay takes, in bits over the trace: `arrivals`,
     the residual advice under each of `contexts` (`encode`, the replay asked each row's kept count as the row emits),
     which a serve under the certified tick does not send; and `kept_count` (`kept_bits`). Each context's arrivals and
     the kept count's string, with the certified record and nothing else, decode back to the trace's steps and counts.
@@ -1078,8 +1080,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                     help="a trace-corpus output's release time: its step's (engine) or its streamed chunk's (client)")
     ap.add_argument("--ingress", choices=("client", "warden"), default="client",
                     help="a trace-corpus request's certified ingress: the client's send time (client) or the engine's "
-                         "arrival stamp (network_attester: the floor a server admitting in the network certifier's release order would "
-                         "give; the network certifier certifies the release order, which a trace's .released view carries)")
+                         "arrival stamp (network_attester: the floor a server admitting in the network attester's release order would "
+                         "give; the network attester certifies the release order, which a trace's .released view carries)")
     ap.add_argument("--span", help="of each step trace, only the requests whose id holds this, as a trace of their own: "
                                    "one load of a serve that ran others, begun with the engine drained and its prefix "
                                    "cache reset")

@@ -5,7 +5,7 @@ prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a se
 one of the prover machine's certifier coin link (`verity/protocols/compose/verifier/live_challenger/auditor.py`,
 the coins' path; the premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`) and `OneClock` are named in
 this package's README); in development
-(`verity/protocols/compose/verifier/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/remote_session` places
+(`verity/protocols/compose/verifier/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/poub_session` places
 its verifier.  On its host, before the stream opens, `open_session` signs the challenger's record and writes it, the key
 and the head of the release log to the challenger's directory (`record.json`, `key.json`, `releases.jsonl`), for the
 session id the auditor launched it under; `serve` refuses a session whose record isn't written there, so no coin opens

@@ -85,7 +85,7 @@ def drifted(*drift: tuple[str, Fraction]) -> G.Auditor:
 
 def in_vm(host: S.Loc = VM0, drift: Fraction | None = None) -> list:
     """The example's site with its certifier in the auditor's device `host`, registered after it (the Lean's `inVm`),
-    the certifier stating the drift `drift`."""
+    the network attester stating the drift `drift`."""
     locs = tuple(dataclasses.replace(x, parent="vm0", drift=drift) if x.id == "cert0" else x for x in LOCS)
     return [G.site((SHEET,), (*locs, host), LINKS)]
 
@@ -195,7 +195,7 @@ FIELDS = {"kind": S.KINDS, "parent": [None, *IDS], "owner": S.OWNERS, "sheet": [
 
 #: Site entries that, after the example's, each fail one check of their own: an uplink no certifier splits
 #: (`uncertified`, onsite), a host's memory no challenger reaches (`challenger-reach`, onsite), a device's memory over its
-#: sheet's (`capacity`), a sheet the auditor has no data sheet for (`sheet-digest`), a certifier that splits no uplink
+#: sheet's (`capacity`), a sheet the auditor has no data sheet for (`sheet-digest`), a network attester that splits no uplink
 #: (`kind`), an auditor's device whose key the auditor does not hold (`owner`; `WITH_VM` holds it). The second is checked
 #: under `WIDE`, which has figures for its host and DRAM.
 TWISTS = (G.site(links=(S.Link("l3", ("node0", S.OUTSIDE), 1, 0),)),

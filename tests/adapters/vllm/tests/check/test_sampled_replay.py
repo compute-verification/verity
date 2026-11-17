@@ -13,12 +13,6 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
-from verity_vllm.definitions.numerics import derived_rows as D
-from verity_vllm.definitions.numerics import rows as RK
-from verity_vllm.definitions.registry import b1
-from verity_vllm.definitions.registry import moe as R
-from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.hopper import HopperBF16WgmmaDot16
 
 from verity_vllm.check.replay import compare as CMP
 from verity_vllm.check.replay import coverage as COV
@@ -30,6 +24,12 @@ from verity_vllm.check.replay import opening as OP
 from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay import sample as SM
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.definitions.numerics import derived_rows as D
+from verity_vllm.definitions.numerics import rows as RK
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import moe as R
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.hopper import HopperBF16WgmmaDot16
 from verity_vllm.query import program_view as PV
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.program_view import from_instances

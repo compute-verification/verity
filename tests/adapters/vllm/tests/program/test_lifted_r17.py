@@ -35,7 +35,7 @@ from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import weights_type
 
 from tests.program.test_serve3 import D_MAX, LP, TINY, _inputs
-from verity_vllm.program.lifting import lifted_compose, lifted_records
+from verity_vllm.program.lifting import lifted_records
 from verity_vllm.program.workload import eos_lag_rows_declared
 
 I32, BF16 = Value(32), Value(16)
@@ -385,12 +385,6 @@ def test_a2_declared_lag_of_row_reads_the_builds_declaration_through_the_same_ru
         with open(p) as f:
             wp = json.load(f)
         assert wp["workload_fn"].startswith("Workload_v1{") and lifted_records.declared_lag_of_row(wp) == (None, None), p
-    # the compose passes the lag as the Workload_v1 static exactly when the tree's WorkloadProgram takes one; inspected, not guessed
-    import inspect
-
-    from verity_vllm.program import workload as W
-    takes_lag = "lag" in inspect.signature(W.WorkloadProgram.__init__).parameters
-    assert callable(lifted_compose.workload_program) and isinstance(takes_lag, bool)
 
 
 def test_a2_the_lifted_program_is_a_function_of_the_declared_lag():

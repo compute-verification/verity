@@ -383,9 +383,9 @@ kit's writer, each a figure a sampled proof block:
 Under each id it writes three measurements, in this order:
 
 1. the Flock layer, member `flock`;
-2. the zero-knowledge layer, member `zero knowledge`;
-3. the sampling layer last, with no member. That is the metric's own reading, Flock with zero knowledge at the
-   sampling plan, the system as served, and the one the metric's title, unit and axis are for.
+2. the zero-knowledge layer, member `flock-zero-knowledge`;
+3. the sampling layer last, member `sampling`: Flock with zero knowledge at the sampling plan, the system as served,
+   and the one the metric's title, unit and axis are for.
 
 prove_path and a5 both give these figures by dividing a member's session timing by its proof blocks sampled
 (`draw_counts`), as prove_path's own `per_unit` does. A member whose timing has no count of sampled proof blocks (one
@@ -403,14 +403,13 @@ tree's Lean toolchain, through `elan`) from the tree themselves. Each writes its
 `$RESEARCH_RUN_DIR/out` (a5's `./out` outside a run, recursion's `/tmp/rec-bench-PID/out`); give that directory to the
 printer's flag. Each from the tree's root:
 
-1. **The Flock, zero-knowledge and sampling layers**, on one H200 with about 450 GB of memory: the commands of
-   `benchmarks/one_stage/README.md`'s section "The three benchmarks of the proof-layers table", as written there. They
-   are the vLLM adapter's one bootstrap (`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`, which makes the vLLM
-   environment, the int8 checkpoint and the sm_90 taps under `WORK`), three partition files, and three runs of
-   `benchmarks/one_stage/a5_llama1b_h200.sh`. Give their three `OUT` directories to `--flock`, `--zk` and `--sampling`.
+1. **The Flock, zero-knowledge and sampling layers**, on one H200 with at least 96 GB of host memory available and 96 GB
+   of disk free under `WORK` (`benchmarks/one_stage/README.md`'s "The three benchmarks of the proof-layers table"):
+   `A5_CARD=0 A5_CORES=40-59 WORK=/workspace/a5-layers GPU_LEASE_WHO=$USER bash benchmarks/one_stage/proof_layers.sh`.
+   It prints the three; give `./out`'s `out-flock`, `out-zk` and `out-sampling` to `--flock`, `--zk` and `--sampling`.
 2. **The recursion layer**, on 32 CPU cores with 128 GB (`run.py`'s memory behind the ZK server), about an hour at
-   K = 4096:
-   `taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=DIR`. Give its `$OUT` to
+   K = 2048 with N = 2:
+   `taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=2048 N=2 GPU=0 FLOCK_WORK=DIR`. Give its `$OUT` to
    `--recursion`.
 
 Then `verity bench prove layers --flock A --zk B --sampling C --recursion E`, which reads only those directories.
