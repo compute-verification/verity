@@ -2467,7 +2467,7 @@ def _templates_of(doc: Mapping[str, Any], resolve: Callable[[str], Any]) -> list
 def _program_of(doc: Mapping[str, Any], defs: list[tuple[Any, int]]) -> tuple[Any, dict[str, Any]]:
     several = len(defs) > 1 or doc["query"] != PO.template_instance_query(defs[0][0])
     program, query = CS.population_program(defs, several=several, values=program_values(declarations(doc)[2]))
-    if "cap" in doc and PO.build(program, query)["program"] != doc.get("program"):
+    if "wires" in doc and PO.build(program, query)["program"] != doc.get("program"):
         try:
             wired = wired_population_program(defs, doc)
         except ValueError:
