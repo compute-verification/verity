@@ -9,12 +9,10 @@ stochastic. It renders no tables.
   harness's `commit` arms measure the Commit. Its docstring has what a run does, and which runs its gate accepts without a
   root (declared warm-ups, named in the verdict).
 - `served_arm.py` and `served_arm.sh`: the served arm, the Commit at 4 KiB rows against compiled and eager stock in one run
-  (the specs `*-served-arm`). With `PIN_BUILD` (a Build of record's `build.json`) every arm compiles the Build's
+  (the specs `*-rtx-served-arm`). With `PIN_BUILD` (a Build of record's `build.json`) every arm compiles the Build's
   kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs. `tests/test_served_arm.py` tests both over
   stand-ins for the arms they build on.
-- `run.sh`: `verity bench served_commit`, one spec's sweep in one process; `SPEC` names the spec. `record.py` then writes
-  the compiled Commit arm's throughput, time to first token and time per output token over its stock control
-  (`metrics.toml`) into the run's result, at each timed point.
+- `run.sh`: `verity bench served_commit`, one spec's sweep in one process; `SPEC` names the spec.
 - `tp_decode.py` and `tp_decode.sh`: one Commit arm against stock in one TP engine, eager (GLM-5.3 TP8).
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
   serving on a high-priority stream over the worker's hashing, NVTX ranges; `-base` and `-batch`
@@ -30,7 +28,7 @@ stochastic. It renders no tables.
 - `hash_prof.py` and `hash_prof.sh`: one step's rows-sha512 hashing as the windowed worker calls it, at T tokens a step, in
   the worker's form (held leaves folded many windows at once, levels copied on a copy stream) and the per-window form before
   it, with the kernels' knobs, under nsys and ncu.
-- The specs: the served arm's, `benchmarks/harness/specs/*-served-arm*.toml` (one RTX PRO 6000 or one H200 each, on the width sweep).
+- The specs: the served arm's, `benchmarks/harness/specs/*-rtx-served-arm*.toml` (one RTX PRO 6000 each, on the width sweep).
   `run.sh` and `prof.sh` take any served spec as `SPEC`, with its arms, sweep and reps unless their arguments name others.
 
 The engines are vLLM's serving defaults (`serving_defaults`: torch.compile, full and piecewise CUDA graphs, no batch
