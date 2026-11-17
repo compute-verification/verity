@@ -13,21 +13,21 @@ ROOT = Path(__file__).resolve().parents[3]
 BASH = shutil.which("bash")
 
 
-def _sourced(tmp_path: Path, cap: str, **env: str) -> subprocess.CompletedProcess:
+def _sourced(tmp_path: Path, capability: str, **env: str) -> subprocess.CompletedProcess:
     tools = tmp_path / "tools"
     tools.mkdir(exist_ok=True)
     for name in ("head", "tr"):
         if not (tools / name).exists():
             (tools / name).symlink_to(shutil.which(name))
-    (tools / "nvidia-smi").write_text(f'#!{BASH}\necho "$*" > {tmp_path}/asked\necho " {cap}"\n')
+    (tools / "nvidia-smi").write_text(f'#!{BASH}\necho "$*" > {tmp_path}/asked\necho " {capability}"\n')
     (tools / "nvidia-smi").chmod(0o755)
     return subprocess.run([BASH, "-c", '. benchmarks/harness/flashinfer_arch.sh && echo "$FLASHINFER_CUDA_ARCH_LIST"'],
                           cwd=ROOT, env={"PATH": str(tools), **env}, capture_output=True, text=True)
 
 
-@pytest.mark.parametrize(("cap", "arch"), [("12.0", "12.0f"), ("10.0", "10.0a"), ("9.0", "9.0a")])
-def test_each_capability_has_its_build(tmp_path: Path, cap: str, arch: str) -> None:
-    ran = _sourced(tmp_path, cap, CUDA_VISIBLE_DEVICES="GPU-a,GPU-b")
+@pytest.mark.parametrize(("capability", "arch"), [("12.0", "12.0f"), ("10.0", "10.0a"), ("9.0", "9.0a")])
+def test_each_capability_has_its_build(tmp_path: Path, capability: str, arch: str) -> None:
+    ran = _sourced(tmp_path, capability, CUDA_VISIBLE_DEVICES="GPU-a,GPU-b")
     assert (ran.returncode, ran.stdout) == (0, f"{arch}\n"), ran.stderr
     assert (tmp_path / "asked").read_text().split()[:2] == ["-i", "GPU-a"]
 
