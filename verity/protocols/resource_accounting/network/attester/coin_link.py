@@ -1,5 +1,5 @@
 """The network attester's coin link (D7 of `security/Definitions/Certifier/Guarantees.lean`, "The coins"): the one
-path a window's live coins take from the challenger to the server it audits, counted and re-clocked on the certifier's
+path a window's live coins take from the challenger to the server it audits, counted and re-clocked on the attester's
 own grids.
 
 The challenger (`spot.remote`, served by `verity/protocols/compose/verifier/live_challenger/serve.py`) and this link run on one auditor
@@ -29,7 +29,7 @@ both ways, one connection at a time, in the challenger's order:
 - **Fail closed.** A frame `remote` would refuse whole (a body, a head past `remote.MAX_HEAD`, a stream that ends inside
   one), a queue past `queue_cells`, a prover that leaves more than `backlog` bytes untaken, cells still queued when their
   connection ends, and a tick later than `slack` each fault a grid (`grid.Reason`), which cuts the connection at that
-  tick: nothing leaves the link uncertified, and the fault is the execution phase's status.
+  tick: nothing leaves the link unattested, and the fault is the execution phase's status.
 
 `CoinLink.summary` is what the link publishes for its window: its parameters, each execution phase's status, the coins'
 frames and bytes, every counted frame's name and bytes, and the charge. Each bucket's occupancy and every frame's content

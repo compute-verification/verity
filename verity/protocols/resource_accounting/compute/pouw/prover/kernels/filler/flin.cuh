@@ -1,6 +1,5 @@
 // ---------------------------------------------------------------- flin: the decode linears as a warp-specialized GEMM with filler warps
-// (FILL, round 2; included by dcap.cu after the dfill section, whose dseed/dword/dcval/drec/dstep/dchain_ref it reuses,
-// and pfill.cuh's pf_* on a pfill build)
+// (FILL, round 2; included by dcap.cu after the dfill section, whose dseed and pfill.cuh's pf_* it reuses)
 //
 // D (M x N, row-major s32) = X (M x K s8) W^T (W N x K s8), computed as D^T = W X^T: the weights are the MMA's A operand
 // (16 output features a fragment), the tokens its B operand (8 a fragment). Weights and activations are repacked once into
@@ -80,8 +79,7 @@ __global__ void fadv_k(FState* s, unsigned long long per) {
   s->step++;
 }
 
-#ifndef DFILL_V1
-// ---------------------------------------------------------------- the filler warps' tile on a pfill build (round 4)
+// ---------------------------------------------------------------- the filler warps' tile (round 4)
 // pfill-k's arithmetic (pfill.cuh, -DPFILL_BITS: {0,1} SHA-512 noise, s8 IMMA m16n8k32 with C = 0, every s32 word into
 // the ram receipt) in one warp's registers, as a step a serving kernel's filler warp calls: dfill_k_warp(c0, c1, tile,
 // step) reads nothing but its arguments (the round's coins, the slot's public tile id, the step's index) and returns the
@@ -240,82 +238,6 @@ __device__ __forceinline__ void filler_warp(const FSlots& fs, size_t slot, const
   for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(0xffffffffu, h, o);
   if (lane == 0) dfill_k_put(fs.rec + at, fs.cnt + at, h, steps);
 }
-#else
-static uint64_t fwarp_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
-  return dchain_ref(c0, c1, tile, nc, steps);
-}
-static double fwarp_macs(int nc, long long steps) { return (double)steps * nc * 4096.0; }
-constexpr int FW_CTL = 8;  // the receipts gate's control: the same slot 8 steps short
-struct FStop {
-  const int* prog;
-  int at;
-};
-// One filler warp: dfill_k's tile for its slot (NC chains), stepping 8 at a time while *done < ndone (and, with thr, only
-// while *wait == ndone), then its receipt and its step count to the ring. Every lane reads the flags through lane 0.
-// LAZY > 0 steps 8·LAZY at a time and tests a read of done issued a round earlier: the served warps' memory traffic can
-// hold a shared load in the MIO queue for hundreds of cycles, and a warp waiting on it stalls its chains (pv's filler
-// warps lost a third of their loop there). Such a warp runs up to two rounds past the last served warp. stop is the
-// pfill build's (FLIN_STOP) and unused here.
-template <int NC, int LAZY = 0>
-__device__ __forceinline__ void filler_warp(const FSlots& fs, size_t slot, const int* done, const int* wait, int ndone,
-                                            int thr, FStop = {nullptr, 0}) {
-  const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
-  const FState rs = *fs.st;
-  const size_t at = (size_t)(rs.step % fs.ring) * fs.per + fs.off + slot;
-  const uint64_t seed = dseed(rs.c0, rs.c1, rs.base + fs.off + slot);
-  uint32_t b[2][2], c[4], st[NC][4];
-#pragma unroll
-  for (int j = 0; j < 2; j++) {
-    b[j][0] = dword(seed, 1 + j, g, t);
-    b[j][1] = dword(seed, 1 + j, g, 4 + t);
-  }
-  c[0] = (uint32_t)dcval(seed, g, 2 * t);
-  c[1] = (uint32_t)dcval(seed, g, 2 * t + 1);
-  c[2] = (uint32_t)dcval(seed, g + 8, 2 * t);
-  c[3] = (uint32_t)dcval(seed, g + 8, 2 * t + 1);
-#pragma unroll
-  for (int ch = 0; ch < NC; ch++) {
-    st[ch][0] = dword(seed, 16 + ch, g, t);
-    st[ch][1] = dword(seed, 16 + ch, g + 8, t);
-    st[ch][2] = dword(seed, 16 + ch, g, 4 + t);
-    st[ch][3] = dword(seed, 16 + ch, g + 8, 4 + t);
-  }
-  const volatile int* vd = done;
-  const volatile int* vw = wait;
-  int steps = 0, raw = LAZY && lane == 0 ? *vd : 0, d = 0;
-  for (;;) {
-    if constexpr (LAZY == 0) d = __shfl_sync(0xffffffffu, lane == 0 ? *vd : 0, 0);
-    if (d >= ndone) break;
-    if constexpr (LAZY > 0) {
-      d = __shfl_sync(0xffffffffu, raw, 0);
-      raw = lane == 0 ? *vd : 0;
-    }
-    if (thr) {
-      const int w = __shfl_sync(0xffffffffu, lane == 0 ? *vw : 0, 0);
-      if (w < ndone) {
-        __nanosleep(64);
-        continue;
-      }
-    }
-#pragma unroll
-    for (int u = 0; u < 8 * (LAZY ? LAZY : 1); u++)
-#pragma unroll
-      for (int ch = 0; ch < NC; ch++) dstep(st[ch], b[u & 1], c);
-    steps += 8 * (LAZY ? LAZY : 1);
-  }
-  uint64_t h = 0;
-#pragma unroll
-  for (int ch = 0; ch < NC; ch++)
-    h ^= drec(seed, ch, g, t, st[ch][0]) ^ drec(seed, ch, g + 8, t, st[ch][1]) ^ drec(seed, ch, g, 4 + t, st[ch][2]) ^
-         drec(seed, ch, g + 8, 4 + t, st[ch][3]);
-#pragma unroll
-  for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(0xffffffffu, h, o);
-  if (lane == 0) {
-    fs.rec[at] = h;
-    fs.cnt[at] = steps;
-  }
-}
-#endif
 
 struct FlinArgs {
   const int8_t* W;  // tiled, [N/BN][K/BK][BN·BK]
@@ -616,7 +538,7 @@ static int flin_smem(int M) {
   return c.ST * (c.BN + M) * c.BK + 2 * c.ST * 8 + 16;
 }
 static bool g_pdl = true;  // FLIN_PDL=0 launches each linear only after the previous grid has finished
-static int g_flin_stop = 0;  // FLIN_STOP: Flin.stop (a pfill build's filler warps start no step with that few units left)
+static int g_flin_stop = 0;  // FLIN_STOP: Flin.stop (the filler warps start no step with that few units left)
 static int g_flin_lm = 0;    // FLIN_LM=1: fstep's lm_head through flin (Flin.lm) when any linear is
 template <int M, int BK, int ST, int CWN, int CWM, int BN, int FW, int NC>
 static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
@@ -1139,7 +1061,7 @@ static int flin_gate(Dev& d) {
   return fails;
 }
 
-#if !defined(DFILL_V1) && !defined(main)
+#ifndef main
 // walone S [reps] (dcap's own build only, so no scored binary holds it): dfill_k_warp with no serving beside it, blocks
 // of 8 warps under flin's register cap (128 a thread), as many as fit an SM, each warp S steps of its own slot (tile id
 // tile0 + its index) and then its receipt through dfill_k_put: the in-kernel filler's rate and, under ncu, its issue

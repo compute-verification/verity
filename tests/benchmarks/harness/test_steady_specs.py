@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from verity_bench.vllm.presets import SPEC_ROOT
 ROOT = Path(__file__).resolve().parents[3]
 STEADY = sorted(path.stem for path in SPEC_ROOT.glob("*.toml") if SP.is_steady(path))
 HEAD = "glm53-flock-steady-head-block-h200"
+HEAD_C24 = "glm53-flock-steady-head-block-h200-c24"
 SETUP = "benchmarks/harness/setup/flock_prover.sh"
 LAUNCHER = "benchmarks/harness/steady_point.sh"
 
@@ -69,6 +71,23 @@ def test_the_head_blocks_statements_are_two_directories_of_one_artifact_in_the_s
     assert not any(row.staged.startswith("/") for row in (false, true)), "no point reads a directory another lane staged"
 
 
+def test_the_head_blocks_24_core_points_are_its_four_prover_points_with_identities_of_their_own():
+    """`HEAD_C24` is the head block's spec at four provers on 24 cores and in nothing else: its points are the ten-core
+    spec's four-prover points, and each identity is the one that point would have at 24 cores, never the ten-core one,
+    so neither's result is read as the other's."""
+
+    ten, wide = SP.load_spec(HEAD), SP.load_spec(HEAD_C24)
+    assert (ten.cores, wide.cores) == (10, 24)
+    assert replace(ten, id=wide.id, cores=wide.cores, row=wide.row) == wide
+    assert wide.row == tuple(replace(row, provers=(4,)) for row in ten.row)
+    fours = [point for point in ten.points if point.provers == 4]
+    assert [(point.id, point.sessions) for point in wide.points] == [(point.id, point.sessions) for point in fours]
+    files = "f" * 64
+    for four, point in zip(fours, wide.points, strict=True):
+        assert SP.point_identity(wide, point, files) == SP.point_identity(replace(ten, cores=24), four, files)
+        assert SP.point_identity(wide, point, files) != SP.point_identity(ten, four, files)
+
+
 def real(tmp_path: Path, **changes: str) -> tuple[Path, str]:
     """The head block's spec and its setup, as the tree has them, in a made-up tree (`test_steady_point.tree`);
     `changes`: text of the spec replaced."""
@@ -82,7 +101,7 @@ def real(tmp_path: Path, **changes: str) -> tuple[Path, str]:
     return root, path
 
 
-def launches(root: Path, path: str, node: str = "vy-dc-h200") -> tuple[list, list[list[str]]]:
+def launches(root: Path, path: str, node: str = "vy-spot-glm53") -> tuple[list, list[list[str]]]:
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
     commands: list[list[str]] = []
     assert P.dispatch(plan, root / path, root=root, direct=node,
@@ -102,7 +121,7 @@ def test_each_point_of_the_head_blocks_spec_is_launched_with_the_stores_key_with
         assert job[-8:] == ["bash", LAUNCHER, "--spec", path, "--point", item.point.id, "--identity", item.identity]
 
 
-@pytest.mark.parametrize("node", ["vy-spot-glm53", "vy-dc-h200-3"])
+@pytest.mark.parametrize("node", ["vy-spot-glm53", "vy-h200x8-1", "vy-dc-h200-3"])
 def test_the_head_blocks_spec_runs_direct_on_the_h200_nodes_whose_slots_give_ten_cores_of_one_numa_node(tmp_path, node):
     from research.pods.nebius.slot_only import through_slot
 

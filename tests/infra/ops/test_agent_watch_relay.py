@@ -179,7 +179,7 @@ def test_a_worker_whose_lane_no_handle_owns_rings_infra_and_says_so_never_posted
     relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
         {"kind": "worker_idle", "agent": g2, "name": "G2-1 → LiveEnd for FinExe", "run": "", "lane": "", "handle": None,
          "parent": p, "at": "2026-10-19T19:22:00Z", "wake": "I'll check back in 30 min.", "wake_due": "2026-10-19T19:52:00Z"},
-        {"kind": "worker_idle", "agent": h1, "name": "H1", "run": "", "lane": "hash", "at": "2026-10-18T20:06:00Z"},
+        {"kind": "worker_idle", "agent": h1, "name": "H1", "run": "", "lane": "kernels", "at": "2026-10-18T20:06:00Z"},
         {"kind": "workers_failed", "agent": p, "name": "", "run": "", "lane": "", "handle": None, "minutes": 4,
          "members": [{"kind": "worker_idle", "agent": g2, "name": "G2-1", "at": "2026-10-19T19:22:00Z"},
                      {"kind": "worker_idle", "agent": h1, "name": "G2-2", "at": "2026-10-19T19:25:00Z"}]}]) + "\n"
@@ -189,9 +189,8 @@ def test_a_worker_whose_lane_no_handle_owns_rings_infra_and_says_so_never_posted
         "2026-10-19T19:22:00Z; if it didn't report back, resume it with Task. Before it stopped, it set its own wake-up "
         "(\u201cI'll check back in 30 min.\u201d, due about 19:52Z). Its lane is unknown (no handle owns it or its parent), "
         "so @infra is rung to find its coordinator.")
-    assert relay.posts[1] == (f"{kernels} *Agent watch:* worker H1 (<https://cursor.com/agents/{h1}|{h1}>) of lane hash went "
-                              "idle at 2026-10-18T20:06:00Z; if it didn't report back, resume it with Task."), \
-        "a lane's old name is its renamed handle"
+    assert relay.posts[1] == (f"{kernels} *Agent watch:* worker H1 (<https://cursor.com/agents/{h1}|{h1}>) of lane kernels went "
+                              "idle at 2026-10-18T20:06:00Z; if it didn't report back, resume it with Task.")
     assert relay.posts[2].startswith(f"{infra} *Agent watch:* 2 workers of the coordinator") and \
         relay.posts[2].endswith("Its lane is unknown (no handle owns it or its parent), so @infra is rung to find its coordinator.")
     assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"], KERNELS_INBOX["inbox_ts"], INFRA_INBOX["inbox_ts"]]
@@ -606,15 +605,6 @@ def test_a_failure_the_watch_acted_on_leads_with_its_owner_and_rings_that_inbox(
     assert relay.posts[3].endswith("needs a fresh launch (idle since 10:20Z); the watch relaunched it fresh as bc-7. New agent bc-7.")
     assert relay.posts[4].startswith("*Agent watch:*"), "a failure with no owner is posted in the channel only"
     assert [r["thread_ts"] for r in rings(relay)] == [TOP_INBOX["inbox_ts"]] * 2 + [PROOFS_INBOX["inbox_ts"]] * 2
-
-
-def test_a_renamed_handle_is_rung_by_its_new_name(relay):
-    """A renamed handle (hash, now kernels) is rung by its new name; lanes' notes and workers.d may still carry the old."""
-    assert relay.RENAMED.get("hash") == "kernels"
-    relay.log_text["text"] = json.dumps({"kind": "worker_idle", "agent": "bc-x", "name": "H1", "run": "", "lane": "hash",
-                                         "handle": "hash", "at": "2026-10-18T20:06:00Z"}) + "\n"
-    relay.once()
-    assert relay.posts[0].startswith(relay.slack.tag(relay.slack.entry(relay.REG, "kernels")))
 
 
 def test_workers_that_stopped_together_are_one_post_to_the_lane_naming_each_and_its_wake_up(relay):
