@@ -17,12 +17,12 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
-
-from verity_vllm.compiler import compile_slice as CS
-from verity_vllm.compiler import cache_step_v3 as V3S, compile_slice_v4 as V4
-from verity_vllm.compiler import replay_chain as RC
 from verity.circuits import boolean as BL
 
+from verity_vllm.compiler import cache_step_v3 as V3S
+from verity_vllm.compiler import compile_slice as CS
+from verity_vllm.compiler import compile_slice_v4 as V4
+from verity_vllm.compiler import replay_chain as RC
 
 #: SHA-512 of the reference's served rows and last state and window rows on each test's slices, by demonstration and
 #: test (`_as_reference`): the window's schedule, pinned, so a change to the reference that moves a row shows here
@@ -196,10 +196,10 @@ def _window(rng: random.Random, AS: int) -> CS.Slice:
     base = [rng.randrange(1, 15) for _ in range(4)]
     arrivals, tokens = [], []
     for i in range(3):
-        P, O = rng.randrange(4, 13), rng.randrange(1, 5)
+        P, n_out = rng.randrange(4, 13), rng.randrange(1, 5)
         pre = base if rng.random() < 0.6 else [rng.randrange(1, 15) for _ in range(4)]
-        tokens.append(tuple((pre + [rng.randrange(1, 15) for _ in range(P + O)])[:P + O]))
-        arrivals.append((i, P, O, rng.randrange(2)) if AS else (i, P, O))
+        tokens.append(tuple((pre + [rng.randrange(1, 15) for _ in range(P + n_out)])[:P + n_out]))
+        arrivals.append((i, P, n_out, rng.randrange(2)) if AS else (i, P, n_out))
     return CS.Slice(tuple(arrivals), tuple(rng.randrange(2) for _ in range(5)), 5, tuple(tokens))
 
 

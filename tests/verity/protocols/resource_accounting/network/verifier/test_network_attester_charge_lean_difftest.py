@@ -1,4 +1,4 @@
-"""The difftest of `arith_encode.reference_charge` against the certifier's Lean program: the Python half.
+"""The difftest of `arith_encode.reference_charge` against the attester's Lean program: the Python half.
 
 `device/program/lean/scripts/charge_vectors.py` writes 4,000 random instances, a book, a carry and windows of slots that ask or not
 with their decisions, and `reference_charge`'s results on each: window by window from the carry, and chained from the

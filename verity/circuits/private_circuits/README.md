@@ -23,5 +23,4 @@ evaluate(unit, *arguments(half_adder, [1, 1]))                 # (0, 1), the sam
 A gate is `(op, a, b)`, with op 0 to 3 for XOR, AND, XNOR and NAND of two earlier wires. The module's docstring gives
 the description's form, the design and its cost, about 2 N_IN + G ANDs per gate of the private circuit.
 
-The tests are in `tests/verity/circuits/private_circuits/`, and the benchmark
-[`private_circuit`](../../../benchmarks/private_circuit/README.md) measures the unit.
+The tests are in `tests/verity/circuits/private_circuits/`.
