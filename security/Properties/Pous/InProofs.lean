@@ -1,6 +1,6 @@
 module
 
-public import MemoryChallenger.Verdict
+public import MemoryAttester.Verdict
 public import Properties.Pous
 public import PousCheck.SetupInProofs
 public import Definitions.Core.Interaction
@@ -40,9 +40,9 @@ Both are stated and not proved. What closes them is proofs' two forms, through t
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SessionDeployed
+namespace MemoryAttester.Properties.SessionDeployed
 
-open MemoryChallenger
+open MemoryAttester
 
 /-- **PoUS's session checked inside proofs, as deployed: stated and unproved**; proofs' `IntegrityAllProvedCarried`
 closes it through `sessionGives`. For a session check `sessionInProofs` over one outcome a proof block (SESSUNITS', not on
@@ -67,7 +67,7 @@ def RunInProofsDeployed (H : Claims.Msg → Claims.Msg) (UnitOutcome : Type)
           (verdict schemes trusted expected s c openings).accepted = true) E
         (fun _ => (c.k + 2) * (εKs + εBind)) fun _ => γ
 
-end MemoryChallenger.Properties.SessionDeployed
+end MemoryAttester.Properties.SessionDeployed
 
 namespace PousCheck.Properties.SetupDeployed
 

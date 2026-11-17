@@ -31,7 +31,7 @@ depend on an earlier answer, an adaptive query, which `Sha512Prf` (non-adaptive)
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties MemoryChallenger
+open Pous.EndToEnd PousCheck PousCheck.Properties MemoryAttester
 
 open scoped ENNReal
 

@@ -1,9 +1,9 @@
 module
 
 public import PousCheck.RunProtocol
-public import MemoryChallenger.SetupRecord
+public import MemoryAttester.SetupRecord
 meta import PousCheck.RunProtocol
-meta import MemoryChallenger.SetupRecord
+meta import MemoryAttester.SetupRecord
 
 /-!
 # A PoUS run on the memory challenger's signed setup, as a core protocol
@@ -46,7 +46,7 @@ set_option backward.privateInPublic.warn false
 namespace PousCheck.SignedRun
 
 open Lean (Json)
-open Flock MemoryChallenger
+open Flock MemoryAttester
 
 def ID : String := "verity/pous/p2/v4/signed-run"
 
@@ -89,7 +89,7 @@ def decodeEvidence (b : ByteArray) : V Evidence := do
       ← SignedSetupRecord.ofJson (← J.get j "setup" "evidence")⟩) Evidence.toJson (← Core.canonicalJson b)
 
 /-- The first round whose opening does not open its index's row under `pub`'s root and salt, if any. -/
-def badOpening (q : P2.Params) (pub : SetupProtocol.Public) (rounds : Array MemoryChallenger.Round)
+def badOpening (q : P2.Params) (pub : SetupProtocol.Public) (rounds : Array MemoryAttester.Round)
     (paths : Array Opening) : Option Nat :=
   (Array.range rounds.size).find? fun j =>
     match rounds[j]?, paths[j]? with
@@ -100,7 +100,7 @@ def badOpening (q : P2.Params) (pub : SetupProtocol.Public) (rounds : Array Memo
 
 /-- The rows the openings opened: block `i`'s is the row of the first round at index `i`, none for a block no round
 asks. -/
-def expectedOf (rounds : Array MemoryChallenger.Round) (paths : Array Opening) (i : Nat) : Option ByteArray :=
+def expectedOf (rounds : Array MemoryAttester.Round) (paths : Array Opening) (i : Nat) : Option ByteArray :=
   ((rounds.zip paths).find? (·.1.index == i)).map (·.2.row)
 
 /-- The signed run's check at `pt` under `schemes` (module docstring). `trusted` is the verifier's list of

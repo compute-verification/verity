@@ -2,7 +2,7 @@ module
 
 public import Properties.Pous.Component
 public import Proofs.Properties.Pous.RunAt
-public import Proofs.Properties.Pous.MemoryChallenger
+public import Proofs.Properties.Pous.MemoryAttester
 public import Proofs.Properties.Hash.Lms
 public import Mathlib.Tactic.SplitIfs
 public import Proofs.Core.CanonUtf8
@@ -53,10 +53,10 @@ for `wipeAccepts`, and `wipeAccepts_complete_nontrivial` (the check that trusts 
 
 namespace Pous.Component.SecurityProofs
 
-open Flock MemoryChallenger MemoryChallenger.Properties PousCheck PousCheck.Properties Pous.EndToEnd
+open Flock MemoryAttester MemoryAttester.Properties PousCheck PousCheck.Properties Pous.EndToEnd
 open Pous.EndToEnd.SecurityProofs
 open PousCheck.Properties.SecurityProofs (append_cancel mth_binds leaves_entry root_mth)
-open MemoryChallenger.Properties.SecurityProofs (forIn'_measure_eq)
+open MemoryAttester.Properties.SecurityProofs (forIn'_measure_eq)
 open Lean (Json)
 open Verity.CanonUtf8 (canonUtf8_flat eq_ok_of)
 
@@ -125,8 +125,8 @@ private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canon
 
 /-- What `exactly` accepts is in the form its encoder writes: the two have one canonical text. -/
 private theorem exactly_ok {α : Type} {f : Lean.Json → Flock.V α} {enc : α → Lean.Json} {j : Lean.Json} {a : α}
-    (h : MemoryChallenger.exactly f enc j = .ok a) : ∃ s, Flock.canon (enc a) = .ok s ∧ Flock.canon j = .ok s := by
-  unfold MemoryChallenger.exactly at h
+    (h : MemoryAttester.exactly f enc j = .ok a) : ∃ s, Flock.canon (enc a) = .ok s ∧ Flock.canon j = .ok s := by
+  unfold MemoryAttester.exactly at h
   cases hf : f j with
   | error e => simp [hf, bind, Except.bind] at h
   | ok a0 =>
@@ -360,7 +360,7 @@ private def wtail (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : 
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ (p.limitNs : Int)) then
       reasons := reasons.push s!"batch {b} is past its deadline of {p.limitNs} ns"
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
-  return (MemoryChallenger.StreamedWipe.Findings.mk reasons, MemoryChallenger.acceptIf reasons.isEmpty)
+  return (MemoryAttester.StreamedWipe.Findings.mk reasons, MemoryAttester.acceptIf reasons.isEmpty)
 
 /-! Each case of the scheme and the signature is a declaration of its own: `rfl` unfolds the whole verdict in each of
 its sixteen branches, and the fifty-six together exceed one declaration's heartbeats. -/
@@ -444,8 +444,8 @@ private def WGood (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (b : N
         false ∧
       (b == 0 && decide (s.batches[b].sendNs < s.fillEndNs)) = false
 
-private theorem waccepted_acceptIf (f : MemoryChallenger.StreamedWipe.Findings) (b : Bool) :
-    MemoryChallenger.StreamedWipe.Verdict.accepted (f, MemoryChallenger.acceptIf b) = b := by
+private theorem waccepted_acceptIf (f : MemoryAttester.StreamedWipe.Findings) (b : Bool) :
+    MemoryAttester.StreamedWipe.Verdict.accepted (f, MemoryAttester.acceptIf b) = b := by
   cases b <;> rfl
 
 private theorem wtail_accepted (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
@@ -623,7 +623,7 @@ private theorem forIn'_keep {α σ : Type} (l : List α) (f : (a : α) → a ∈
 /-- `wtail` keeps its reasons when every batch passes. -/
 private theorem wtail_keep (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
     (hg : ∀ b < s.batches.size, WGood s c b) :
-    wtail s c r0 = (MemoryChallenger.StreamedWipe.Findings.mk r0, MemoryChallenger.acceptIf r0.isEmpty) := by
+    wtail s c r0 = (MemoryAttester.StreamedWipe.Findings.mk r0, MemoryAttester.acceptIf r0.isEmpty) := by
   unfold wtail
   simp only [Id.run]
   rw [Std.Legacy.Range.forIn'_eq_forIn'_range', forIn'_keep]
@@ -678,7 +678,7 @@ theorem wipeAccepts_complete : ∀ (p : WipeProtocol.Params) (c : StreamedWipe.C
   · exact .inr he
   refine .inl ?_
   have hv : StreamedWipe.verdict SCHEMES p.trusted.toList s c =
-      (MemoryChallenger.StreamedWipe.Findings.mk #[], Core.Verdict.accept) := by
+      (MemoryAttester.StreamedWipe.Findings.mk #[], Core.Verdict.accept) := by
     rw [wverdict_eq, wpre_nil _ _ s c hk hcm hcov hend hsize,
       wtail_keep s c _ fun b _ => wgood_of s c b (hb b)] <;> rfl
   have hs : ¬ ((c.server != p.server || c.session != p.session) = true) := by simp [hsv, hss]
@@ -738,8 +738,8 @@ private theorem honest_checked {I seed : ByteArray} {k : Lms.PrivateKey} (hk : L
     simp only [Lms.PrivateKey.publicKey, ByteArray.size_append, hIs, hroot]
   have hI : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
   obtain ⟨m, hm⟩ := honest_message
-  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I honestCommitment.session m = .ok M := by
-    unfold memoryChallengerMessage
+  obtain ⟨M, hM⟩ : ∃ M, memoryAttesterMessage k.I honestCommitment.session m = .ok M := by
+    unfold memoryAttesterMessage
     simp [hIs]
     exact ⟨_, rfl⟩
   obtain ⟨sig, hsig⟩ :=
@@ -849,7 +849,7 @@ private def toyCoins : CoinTree :=
   | .error _ => ⟨toySid, 2, #[0], toyCoinKey, #[toyCoinSalt], #[], .empty⟩
 private def toyPhaseCommitment : ChallengePhaseCommitment :=
   ⟨toySid, toyCoins.root, toyCoinKey, 2, 1, 1000, 8, toyPublic.root⟩
-private def toyRound : MemoryChallenger.Round := ⟨0, 0, 0, 0, blockDigest toyBlocks[0]!⟩
+private def toyRound : MemoryAttester.Round := ⟨0, 0, 0, 0, blockDigest toyBlocks[0]!⟩
 private def toyOpenings : Array CoinOpening := #[toyCoins.opening 0]
 private def toySigned (pk sig : ByteArray) : SignedChallengePhase :=
   ⟨toyPhaseCommitment, COMPLETE, #[toyRound], LMS, pk, sig⟩
@@ -876,7 +876,7 @@ private def rpre (schemes : Schemes) (trusted : List ByteArray) (s : SignedChall
   return reasons
 
 /-- `verdict` from the rounds `rounds` on, after the reasons `r0`. -/
-private def rtail (expected : Nat → Option ByteArray) (rounds : Array MemoryChallenger.Round) (c : ChallengePhaseCommitment)
+private def rtail (expected : Nat → Option ByteArray) (rounds : Array MemoryAttester.Round) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (r0 : Array String) : Verdict := Id.run do
   let mut reasons := r0
   let byJ := fun (j : Nat) => openings.findRev? (·.j == j)
@@ -892,13 +892,13 @@ private def rtail (expected : Nat → Option ByteArray) (rounds : Array MemoryCh
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ c.limitNs) then late := late + 1
   if wrong > 0 then reasons := reasons.push s!"{wrong} answers are not their blocks of C"
   if late > 0 then reasons := reasons.push s!"{late} answers are past Δ + RTT = {c.limitNs} ns"
-  return (MemoryChallenger.Findings.mk reasons late wrong, MemoryChallenger.acceptIf reasons.isEmpty)
+  return (MemoryAttester.Findings.mk reasons late wrong, MemoryAttester.acceptIf reasons.isEmpty)
 
 private theorem rverdict_eq (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray)
     (s : SignedChallengePhase) (c : ChallengePhaseCommitment) (openings : Array CoinOpening) :
-    MemoryChallenger.verdict schemes trusted expected s c openings =
+    MemoryAttester.verdict schemes trusted expected s c openings =
       rtail expected s.rounds c openings (rpre schemes trusted s c) := by
-  unfold MemoryChallenger.verdict rtail rpre
+  unfold MemoryAttester.verdict rtail rpre
   cases schemes.lookup s.scheme with
   | none =>
     by_cases h1 : (!s.commitment == c) = true <;> by_cases h2 : (s.ended != COMPLETE || s.rounds.size != c.k) = true <;>
@@ -934,9 +934,9 @@ private theorem rtail_toy :
   decide +kernel
 
 private theorem verdict_toy (pk sig m : ByteArray)
-    (hm : MemoryChallenger.message toyPhaseCommitment COMPLETE #[toyRound] = .ok m)
+    (hm : MemoryAttester.message toyPhaseCommitment COMPLETE #[toyRound] = .ok m)
     (hlms : lmsVerify Lms.deployed pk toyPhaseCommitment.session m sig = .ok true) :
-    (MemoryChallenger.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig) toyPhaseCommitment
+    (MemoryAttester.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig) toyPhaseCommitment
       toyOpenings).accepted = true := by
   rw [rverdict_eq, rpre_nil SCHEMES [pk] (toySigned pk sig) toyPhaseCommitment
     ⟨Lms.deployed, rfl, List.mem_singleton.2 rfl, m, hm, hlms⟩ (beq_self_eq_true _) rfl rfl]
@@ -951,7 +951,7 @@ private theorem checkAt_of (schemes : Schemes) (pt : Run.Point) (trusted : List 
     (h7 : decide (r.commitment.limitNs ≤ pt.limitNs) = true)
     (h8 : (r.commitment.blockBytes == pt.params.blockBytes) = true) (h9 : (r.commitment.binding == pub.root) = true)
     (h10 : (r.commitment.session == sid) = true)
-    (hv : (MemoryChallenger.verdict schemes trusted (Run.expected pt.params digests) r.signed r.commitment
+    (hv : (MemoryAttester.verdict schemes trusted (Run.expected pt.params digests) r.signed r.commitment
       r.openings).accepted = true) :
     Run.checkAt schemes pt trusted pub digests r sid = .ok () := by
   unfold Run.checkAt
@@ -967,19 +967,19 @@ private theorem table_toy :
 -- elaborating `checkAt_of`'s `rfl` arguments at the toy unfolds past the default depth
 set_option maxRecDepth 100000 in
 private theorem checkAt_toy (pk sig : ByteArray)
-    (hv : (MemoryChallenger.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig)
+    (hv : (MemoryAttester.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig)
       toyPhaseCommitment toyOpenings).accepted = true) :
     Run.checkAt SCHEMES toyPoint [pk] toyPublic toyDigests (toyRecord pk sig) toySid = .ok () :=
   checkAt_of SCHEMES toyPoint [pk] toyPublic toyDigests (toyRecord pk sig) toySid rfl salt_toy digests_toy
     table_toy rfl rfl rfl rfl (beq_self_eq_true _) (beq_self_eq_true _) hv
 
-private theorem message_toy : ∃ m, MemoryChallenger.message toyPhaseCommitment COMPLETE #[toyRound] = .ok m := by
+private theorem message_toy : ∃ m, MemoryAttester.message toyPhaseCommitment COMPLETE #[toyRound] = .ok m := by
   obtain ⟨v, hv⟩ : ∃ v, toyRound.value = .ok v := by
     have hd : toyRound.digest.size = 64 := Properties.Certifier.Bytes.hash_size _
-    unfold MemoryChallenger.Round.value
+    unfold MemoryAttester.Round.value
     rw [ite_cond_eq_false _ _ (by simp [hd])]
     exact ⟨_, rfl⟩
-  unfold MemoryChallenger.message MemoryChallenger.recordsDigest MemoryChallenger.recordsStream
+  unfold MemoryAttester.message MemoryAttester.recordsDigest MemoryAttester.recordsStream
   rw [Array.mapM_eq_mapM_toList]
   simp only [List.toList_toArray, List.mapM_cons, List.mapM_nil, hv, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
@@ -1000,8 +1000,8 @@ theorem runAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.ke
     simp only [Lms.PrivateKey.publicKey, ByteArray.size_append, hIs, hroot]
   have hI : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
   obtain ⟨m, hm⟩ := message_toy
-  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I toyPhaseCommitment.session m = .ok M := by
-    unfold memoryChallengerMessage
+  obtain ⟨M, hM⟩ : ∃ M, memoryAttesterMessage k.I toyPhaseCommitment.session m = .ok M := by
+    unfold memoryAttesterMessage
     simp [hIs]
     exact ⟨_, rfl⟩
   obtain ⟨sig, hsig⟩ :=

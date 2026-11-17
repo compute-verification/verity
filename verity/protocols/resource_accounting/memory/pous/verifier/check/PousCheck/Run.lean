@@ -1,6 +1,6 @@
 module
 
-public import MemoryChallenger.Judge
+public import MemoryAttester.Judge
 public import PousCheck.SetupProtocol
 public import PousCheck.Merkle
 
@@ -40,7 +40,7 @@ set_option backward.privateInPublic.warn false
 namespace PousCheck.Run
 
 open Lean (Json)
-open Flock MemoryChallenger
+open Flock MemoryAttester
 
 /-- What a run is checked at: the codec's parameters, the rounds `k` and the largest limit `Δ + RTT`, in ns. -/
 structure Point where
