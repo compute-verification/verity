@@ -1,4 +1,4 @@
-"""The streamed-label wipe's verdict decided by its Lean port, `streamed-wipe-verdict` (`MemoryAttester.StreamedWipe`,
+"""The streamed-label wipe's verdict decided by its Lean port, `streamed-wipe-verdict` (`MemoryChallenger.StreamedWipe`,
 built here with `lake` on first use), with `streamed_wipe.verdict` beside it as the reference.
 
 `judge(signed, commitment, trusted=..., schemes=..., decide=VERDICT)` returns the verdict a caller records and each side's
@@ -17,7 +17,7 @@ sampled sessions, adversarial edits of them and named negative controls; `benchm
 step judges its session here.
 
 The record goes as `to_json` writes its parts, `trusted` as sorted hex and `schemes` by id, each one the port verifies
-(`MemoryAttester.KNOWN_SCHEMES`: `memory_attester.LMS` and the test signers' ids).  Where the Lean refuses the record
+(`MemoryChallenger.KNOWN_SCHEMES`: `memory_attester.LMS` and the test signers' ids).  Where the Lean refuses the record
 (a scheme id it doesn't verify, a field `to_json` can't have written), `verdict` raises `ValueError` and `judge` rejects
 the session: it fails closed, never to the Python."""
 

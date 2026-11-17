@@ -1,11 +1,11 @@
-"""The wipe's half of the check that holds its count to the network attester's (`MemoryAttester.WipeCount`):
+"""The wipe's half of the check that holds its count to the network attester's (`MemoryChallenger.WipeCount`):
 `wipe-count-test serve` against `wipe_protocol_case.counted_test_answer` (`wipe_period.outcome_counted` behind the
 Lean's decoders) on sampled sessions, with a start mark and with none, as they ran, under one adversarial edit, unsigned
 or under params of another server, each with a sampled egress in its evidence; one wipe with a start mark and a count,
 accepted and certified at that count where `wipe-protocol-test` certifies nothing on the same case, and the same wipe
 with no count, with no start mark, with a saturated count, unsigned, tampered, with a count out of range and under
 another server, each with its reason; and `named`, what a composition's tie reads off the case (`wipe_named` of
-`memory-attester-difftest`), against `wipe_period.named`."""
+`memory-challenger-difftest`), against `wipe_period.named`."""
 
 from __future__ import annotations
 
