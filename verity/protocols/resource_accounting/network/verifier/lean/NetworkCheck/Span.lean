@@ -100,12 +100,12 @@ open NetworkCheck.Check (Certificate)
 open NetworkCheck.Period (Schedule Rows scheduleOf rowsOf certificateOf rowsDomain headDigest rowsFormat rowSchema
   outBits)
 
-def protocolId : String := Domains.CERTIFIER_SPAN_PROTOCOL
+def protocolId : String := Domains.ATTESTER_SPAN_PROTOCOL
 
-def commitmentTag : String := Domains.CERTIFIER_SPAN
+def commitmentTag : String := Domains.ATTESTER_SPAN
 
 /-- `certificate.MARK_TAG`. -/
-def markTag : ByteArray := Domains.CERTIFIER_MARK.toUTF8
+def markTag : ByteArray := Domains.ATTESTER_MARK.toUTF8
 
 /-- A mark is 64 bytes (`certificate.DIGEST_BYTES`). -/
 def markBytes : Nat := 64

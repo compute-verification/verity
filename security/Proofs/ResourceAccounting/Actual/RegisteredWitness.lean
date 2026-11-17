@@ -82,10 +82,10 @@ theorem outside_exceeds (S : Site) (hno : ∀ x ∈ S.locs, x.id ≠ Site.outsid
     (hk : S.kind? Site.outside ≠ some .certifier) {i : String} (hi : i ≠ Site.outside) (β : Fin S.links.length → ℕ) :
     ¬ ((Set.range fun r : Fin (2 ^ ((∑ e, β e) + 1)) =>
         (run (fun _ : Fin 1 => S.place Site.outside) (BitVec.ofFin r)).acts
-          (S.placesIn (S.proverUnder i ∪ (S.challengersOf ∅ i \ ∅)) ∪ S.placesIn (S.certifiersOf i ∪ ∅))ᶜ
+          (S.placesIn (S.proverUnder i ∪ (S.challengersOf ∅ i \ ∅)) ∪ S.placesIn (S.attestersOf i ∪ ∅))ᶜ
           (Set.Ico 0 1)).encard ≤
-      ((2 ^ ((∑ _y ∈ S.placesIn (S.certifiersOf i ∪ ∅), 0) +
-        0 * ((Finset.Ico (0 : ℕ) 1).image id).card * (S.placesIn (S.certifiersOf i ∪ ∅)).card +
+      ((2 ^ ((∑ _y ∈ S.placesIn (S.attestersOf i ∪ ∅), 0) +
+        0 * ((Finset.Ico (0 : ℕ) 1).image id).card * (S.placesIn (S.attestersOf i ∪ ∅)).card +
         uncertifiedLinkCapacity S.placeEnds β (S.placesIn (S.auditorsOf ∅ i)) (S.placesIn (S.proverUnder i)) *
           (1 - 0)) : ℕ) : ℕ∞)) := by
   intro h
@@ -116,9 +116,9 @@ theorem LeakPartsRegistered_honest :
         (Toy.strategy fun g : Fin 2 =>
           (Site.ofLog [Registration.Example.onsite]).place (if g = 0 then "cert0" else "node0"))
         ((Site.ofLog [Registration.Example.onsite]).placesIn
-          ((Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" ∪ ∅)) Toy.cells 0 1 (fun _ => 1) ∧
+          ((Site.ofLog [Registration.Example.onsite]).attestersOf "node0" ∪ ∅)) Toy.cells 0 1 (fun _ => 1) ∧
       ((Site.ofLog [Registration.Example.onsite]).placesIn
-        ((Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" ∪ ∅)).Nonempty := by
+        ((Site.ofLog [Registration.Example.onsite]).attestersOf "node0" ∪ ∅)).Nonempty := by
   have hend : ∀ g : Fin 2, (Site.ofLog [Registration.Example.onsite]).linkPlace
       ((Site.ofLog [Registration.Example.onsite]).place (if g = 0 then "cert0" else "node0")) =
         (Site.ofLog [Registration.Example.onsite]).place (if g = 0 then "cert0" else "node0") := by
@@ -137,9 +137,9 @@ theorem LeakPartsRegistered_honest :
     rw [hhost, Option.mem_def, Option.some.injEq] at hk
     subst hk
     rfl
-  have hcert : "cert0" ∈ (Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" := by
+  have hcert : "cert0" ∈ (Site.ofLog [Registration.Example.onsite]).attestersOf "node0" := by
     classical
-    unfold Site.certifiersOf
+    unfold Site.attestersOf
     exact Finset.mem_filter.2 ⟨hplace, hkind, "node0", hnode, hfar⟩
   exact ⟨⟨"cert0", hplace⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, Finset.mem_union_left _ hcert⟩⟩
 
@@ -157,12 +157,12 @@ theorem LeakPartsRegistered_nontrivial (β : Fin (Site.ofLog [Registration.Examp
               ((Site.ofLog [Registration.Example.onsite]).proverUnder "node0" ∪
                 ((Site.ofLog [Registration.Example.onsite]).challengersOf ∅ "node0" \ ∅)) ∪
             (Site.ofLog [Registration.Example.onsite]).placesIn
-              ((Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" ∪ ∅))ᶜ
+              ((Site.ofLog [Registration.Example.onsite]).attestersOf "node0" ∪ ∅))ᶜ
           (Set.Ico 0 1)).encard ≤
       ((2 ^ ((∑ _y ∈ (Site.ofLog [Registration.Example.onsite]).placesIn
-            ((Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" ∪ ∅), 0) +
+            ((Site.ofLog [Registration.Example.onsite]).attestersOf "node0" ∪ ∅), 0) +
         0 * ((Finset.Ico (0 : ℕ) 1).image id).card * ((Site.ofLog [Registration.Example.onsite]).placesIn
-          ((Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" ∪ ∅)).card +
+          ((Site.ofLog [Registration.Example.onsite]).attestersOf "node0" ∪ ∅)).card +
         uncertifiedLinkCapacity (Site.ofLog [Registration.Example.onsite]).placeEnds β
           ((Site.ofLog [Registration.Example.onsite]).placesIn
             ((Site.ofLog [Registration.Example.onsite]).auditorsOf ∅ "node0"))

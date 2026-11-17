@@ -46,7 +46,7 @@ def x():
 
 
 def test_the_domain_is_the_tables_and_its_bytes_dont_move():
-    assert SR.SCHEMA is domains.CERTIFIER_SERVED_ROWS and SR.DOMAIN == SR.SCHEMA.encode() == b"verity/certifier/served-rows/v1"
+    assert SR.SCHEMA is domains.ATTESTER_SERVED_ROWS and SR.DOMAIN == SR.SCHEMA.encode() == b"verity/certifier/served-rows/v1"
 
 
 def test_the_runner_rows_are_the_slices(x):

@@ -65,11 +65,11 @@ def siteOf (j : Json) : V Core.Site := do
   pure ⟨[], locs, links⟩
 
 /-- The network attesters' links of `S`, by id, in the Site's order: those that join a network attester and a host. -/
-def certifierLinks (S : Core.Site) : List String := (S.links.filter fun k => S.Joins k .certifier .host).map (·.id)
+def attesterLinks (S : Core.Site) : List String := (S.links.filter fun k => S.Joins k .certifier .host).map (·.id)
 
 /-- What a refusal of a link says a right one is: the network attesters' links of `S`. -/
 def rightLinks (S : Core.Site) : String :=
-  s!"the network certifiers' links there are [{", ".intercalate (certifierLinks S)}]"
+  s!"the network certifiers' links there are [{", ".intercalate (attesterLinks S)}]"
 
 /-- A link's end as a refusal names it: its kind and id, the outside, or an id nothing registers. -/
 def endName (S : Core.Site) (i : String) : String :=

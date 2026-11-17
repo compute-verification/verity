@@ -308,7 +308,7 @@ identifier (a key's first 16 bytes) and one session twice; two keys with one key
 `"session"` or `"sessions"`; an entry whose start is not the one its session signed, an entry whose session is not
 the one after its key's entry listed before it, a shown start its session did not certify, and evidence that does not
 show one start for each listed entry; and, at an execution phase, a signer that is a listed key outside its stretch or is not
-listed. `certifierEntries` and `certifierLink` read the entries and the link off the parameters through the period's
+listed. `attesterEntries` and `attesterLink` read the entries and the link off the parameters through the period's
 own decoder, for a composition that pins them. The period check reads the inference-only policy's layout check.
 
 ## The egress record

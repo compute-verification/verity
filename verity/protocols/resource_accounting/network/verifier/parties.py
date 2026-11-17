@@ -57,7 +57,7 @@ reads, the core command line ``network-period check PARAMS COMMITMENT EVIDENCE``
 
 from __future__ import annotations
 
-from verity.commitments.domains import CERTIFIER_PROTOCOL
+from verity.commitments.domains import ATTESTER_PROTOCOL
 from verity.protocol import Channel, Manifest, Role
 from verity.channel import Body, Int, Schema, Str
 from verity.protocols.proofs.spot.verifier import parties as SP
@@ -65,7 +65,7 @@ from verity.protocols.proofs.spot.verifier import parties as SP
 from . import out_commit as O
 from . import network_attester_rows as WR
 
-ID = CERTIFIER_PROTOCOL
+ID = ATTESTER_PROTOCOL
 VERSION = 1
 NETWORK_ATTESTER, WORKERS, VERIFIER = "network-certifier", SP.WORKERS, SP.VERIFIER
 OUT_OPENING, OUT_RECORD = "out-opening", "out-record"

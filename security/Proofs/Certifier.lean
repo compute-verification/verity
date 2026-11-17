@@ -103,7 +103,7 @@ proves there. `Code` proves the network attester's program
 any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. `SampledAuditInstance` takes that
 `Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.
 `TapRows` fills an extracted trace in with the network attester's values and reduces a disagreement between the two
-to a collision (`TapProof.certifierColl_of_disagree`): an accepted audit's extracted trace carries the network
+to a collision (`TapProof.attesterColl_of_disagree`): an accepted audit's extracted trace carries the network
 attester's registered rows outside the incorrect proof blocks, unless its openings collide with the network
 attester's. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`): inputs a check pins cost no
 advice bits, and `WitnessesChecked` gives its nontrivial lemma.

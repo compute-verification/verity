@@ -1845,7 +1845,7 @@ SERVER, CLIENT = "server", "client"
 #: the loopback port the id front listens on, on the node, and where the client's side reaches it (a forward's end)
 FRONT_PORT = 18746
 #: the network attester's schedule such an arm is served under, by the fields of its parameters; its lanes and its
-#: queue are by default the highest rung (`certifier_cells`). One cell, so one id, leaves a connection each slot of a
+#: queue are by default the highest rung (`attester_cells`). One cell, so one id, leaves a connection each slot of a
 #: bucket, the first ``delay`` buckets after the connection's admission; a request is at most ``ingress_cells`` cells,
 #: read within ``ingress_buckets`` buckets, and an answer at most the ids its last field, the response limit, allows
 CELLS = {"cell_bytes": 4096, "slots": 1, "bucket_ms": 250, "delay": 60, "window": 600, "ingress_cells": 4,
@@ -1883,7 +1883,7 @@ def certifiable(load: Load) -> bool:
     return load.file is not None and not load.sessions and not load.plan
 
 
-def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int]:
+def attester_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int]:
     """The network attester's schedule for ``loads``: `CELLS` with ``--cells NAME=N,...`` over it, its lanes and its
     queue by default the loads' highest rung. Refused where it is no schedule of the network attester's in the id form
     (`attester_schedule`), or where its queue is under a rung: vLLM's client opens a rung's connections at once,
@@ -2039,7 +2039,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
     arm, model = ARMS[a.arm], MODELS[a.model_id]
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
     loads = certified_loads(a.arm, a.loads)
-    cells = certifier_cells(a.cells, loads)
+    cells = attester_cells(a.cells, loads)
     stop_at = parse_stop_at(a.stop_at)
     tick = tick_args(a.tick_from, a.tick_ms, bucket_ms=cells["bucket_ms"])
     signal.signal(signal.SIGTERM, on_term)
@@ -2142,7 +2142,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
     if not a.attester_windows or a.attester_windows < 1:
         raise SystemExit("--attester-windows N: the windows the network certifier runs, fixed when it starts: enough "
                          "for the warm-up and every pass, each as long as its longest answer's cells take")
-    cells = certifier_cells(a.cells, loads)
+    cells = attester_cells(a.cells, loads)
     datasets = parse_datasets(a.dataset, loads)
     sizes = parse_pass_prompts(a.pass_prompts, loads)
     passes = {pass_name(n, c): (n, c) for n, rungs in loads.items() for c in rungs}
@@ -3941,7 +3941,7 @@ def main(argv: list[str] | None = None) -> int:
                         "client's side reaches it")
     r.add_argument("--cells", metavar="NAME=N,...",
                    help="such an arm: the network certifier's schedule over CELLS, the same on both sides "
-                        "(certifier_cells)")
+                        "(attester_cells)")
     r.add_argument("--attester-windows", type=int, metavar="N",
                    help="such an arm's client side: the windows the network certifier runs, fixed when it starts")
     r.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override)")
