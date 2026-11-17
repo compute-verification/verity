@@ -109,21 +109,22 @@ def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]
     return Program(bind(defn, **named, counts=tuple(n for _, n in members)))
 
 
-#: the circuit record's fields `wired_population_program` reads beside its templates
+#: the circuit record's fields `wired_population_program`'s ``record`` binding holds
 WIRED_FIELDS = ("wires", "cuts", "registered", "order", "ingress", "boundary_reads", "free", "external")
 
 
 def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, int]], record: Mapping[str, Any]
                              ) -> tuple[Program, dict[str, Any]]:
     """`WiredPopulations_v1{templates, record, counts}` and its template query, as `Circuit.program` gives the population's:
-    circuit record ``record`` as one Program over ``templates``, each ``(template, units)`` as the record names them. Each range of the record's order (each template one range where it
-    states none) is a batch, and the result is `mixed_population_program`'s. An input row is its wire's writer's output row;
-    a registered or boundary read's, the root parameter named for the value it reads; a table read's, ``<param>/<root or
-    domain>``; an opening's port, ``<table>/<port>`` over the opening's units; an ingress, named free or external port's row,
-    the population's own ``<j>.<port>``. The registered values are the first parameters, in order, the rest sorted by name.
-    ``record`` is the binding's by the SHA-512 of the canonical JSON of its `WIRED_FIELDS`. Refused (ValueError), by name:
-    a row nothing fills or two fill, a wire or read between leaves of two widths, a wire whose writer the order puts at or
-    after its reader."""
+    circuit record ``record`` as one Program over ``templates``, each ``(template, units)`` as the record names them. Each
+    range of the record's order (each template one range where it states none) is a batch, and the result is
+    `mixed_population_program`'s. An input row is its wire's writer's output row; a registered or boundary read's, the root
+    parameter named for the value it reads; a table read's, ``<param>/<root or domain>``; an opening's port,
+    ``<table>/<port>`` over the opening's units; any other row, the population's own ``<j>.<port>``. The registered values
+    are the first parameters, in order, the rest sorted by name. The Program's ``annotations["free"]`` are the rows no
+    wire, read, table read, opening or ingress fills, as the record's ``free`` entries state rows. ``record`` is the
+    binding's by the SHA-512 of the canonical JSON of its `WIRED_FIELDS`. Refused (ValueError), by name: a row two fill, a
+    wire or read between leaves of two widths, a wire whose writer the order puts at or after its reader."""
     ids = [descriptor_id(t) for t, _ in templates]
     if [list(x) for x in record.get("templates", ())] != [[tid, n] for tid, (_, n) in zip(ids, templates)]:
         raise ValueError(f"record templates {record.get('templates')}: the templates' ids and units, {ids}")
@@ -215,22 +216,24 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
             for u in range(o["at"], o["at"] + o["units"]):
                 for c in range(cut(j, p)):
                     fill(o, j, p, u, c, ("whole", name, u - o["at"]))
-    own = {(index[g["reader"]], g["port"], u, c) for g in record.get("ingress", ())
-           for u in range(g["at"], g["at"] + g["units"]) for c in range(cut(index[g["reader"]], g["port"]))}
-    own |= {(index[f["reader"]], f["port"], u, c) for f in record.get("free", ())
-            for u in range(f["at"], f["at"] + f["units"])
-            for c in range(*((f["cut"][0], sum(f["cut"])) if "cut" in f else (0, cut(index[f["reader"]], f["port"]))))}
-    external = set(record.get("external", ()))
+    ingress = {(index[g["reader"]], g["port"], u) for g in record.get("ingress", ()) for u in range(g["at"], g["at"] + g["units"])}
+    free = []
     for j, ((ps, _), n) in enumerate(zip(sigs, units)):
         for p, _t in ps:
             for u in range(n):
-                for c in range(cut(j, p)):
-                    if (u, c) in fills.get((j, p), {}):
-                        continue
-                    if (j, p, u, c) not in own and f"{ids[j]}/{p}" not in external:
-                        raise ValueError(f"{ids[j]} {p} unit {u} row {c}: no wire, registered read, boundary read, table "
-                                         "read, opening, ingress, named free row or external port fills it")
-                    fill("own", j, p, u, c, ("own", f"{j}.{p}", None))
+                k, rows = cut(j, p), []
+                for c in range(k):
+                    if (u, c) not in fills.get((j, p), {}):
+                        fill("own", j, p, u, c, ("own", f"{j}.{p}", None))
+                        if (j, p, u) not in ingress:
+                            rows.append(c)
+                for c0 in (c for c in rows if c - 1 not in rows):
+                    c1 = next(c for c in range(c0, k + 1) if c not in rows)
+                    last = free[-1] if free else None
+                    if last and last[:2] == (ids[j], p) and last[2] + last[3] == u and last[4] == (c0, c1 - c0):
+                        free[-1] = (*last[:3], last[3] + 1, last[4])
+                    else:
+                        free.append((ids[j], p, u, 1, (c0, c1 - c0)))
     values = list(reg.get("values", ()))
     mine = [(f"{j}.{p}", Array(n, t)) for j, ((ps, _), n) in enumerate(zip(sigs, units)) for p, t in ps
             if any(s[0] == "own" for s in fills[(j, p)].values())]
@@ -270,7 +273,9 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
         {k: record[k] for k in WIRED_FIELDS if k in record})).hexdigest(), "counts": tuple(units)}
     defn = CompositeDefinition("WiredPopulations", 1, tuple(named), lambda S: (params, rets), body,
                                doc="wired units of " + ", ".join(f"{n} x {t.id}" for t, n in templates), register=False)
-    return Program(bind(defn, **named)), template_instances_query([t for t, _ in templates])
+    free_rows = [{"reader": t, "port": p, "at": at, "units": n, **({} if rows == (0, cut(index[t], p)) else {"cut": list(rows)})}
+                 for t, p, at, n, rows in free]
+    return Program(bind(defn, **named), annotations={"free": free_rows}), template_instances_query([t for t, _ in templates])
 
 
 def _cover(p: Mapping[str, Any]) -> Iterator[tuple[int, int, int]]:

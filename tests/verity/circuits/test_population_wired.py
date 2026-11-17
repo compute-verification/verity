@@ -53,8 +53,21 @@ def test_with_no_wires_and_no_reads_its_inputs_are_the_populations():
     assert wired.fn.signature() == mixed.fn.signature()
 
 
-def test_an_input_nothing_fills_is_refused_by_name():
-    with pytest.raises(ValueError, match=r"TWiredA_v1 k unit 0 row 0: no wire"):
-        wired_population_program([(A, 2), (B, 2)], _record(external=(f"{IA}/x",)))
-    with pytest.raises(ValueError, match=r"TWiredB_v1 w unit 0 row 0: no wire"):
-        wired_population_program([(A, 2), (B, 2)], _record(reads=False))
+def test_a_row_nothing_fills_is_free():
+    rec = _record()
+    reg = rec["registered"]
+    reg["params"].update(x=4, k=4)
+    reg["reads"] = [{**reg["reads"][0], "radix": [1]}] + [
+        {"reader": IA, "port": p, "param": p, "at": 0, "radix": [2], "base": 0, "step": [2]} for p in "xk"]
+    prog = wired_population_program([(A, 2), (B, 2)], rec)[0]
+    assert prog.annotations["free"] == [{"reader": IB, "port": "w", "at": 1, "units": 1}]
+    assert [n for n, _ in prog.fn.signature()[0]] == ["k", "w", "x", "1.w"]
+    assert wired_population_program([(A, 2), (B, 2)], _record())[0].annotations["free"] == [
+        {"reader": IA, "port": "x", "at": 0, "units": 2}, {"reader": IA, "port": "k", "at": 0, "units": 2}]
+
+
+def test_a_row_two_fill_is_refused():
+    rec = _record()
+    rec["registered"]["reads"].append({"reader": IB, "port": "y", "param": "w", "at": 1, "radix": [1], "base": 0, "step": [0]})
+    with pytest.raises(ValueError, match=r"TWiredB_v1 y unit 1 row 0 is filled twice"):
+        wired_population_program([(A, 2), (B, 2)], rec)
