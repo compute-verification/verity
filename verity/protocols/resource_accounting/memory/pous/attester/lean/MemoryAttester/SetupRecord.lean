@@ -7,7 +7,7 @@ public import MemoryAttester.StreamedWipe
 # The memory challenger's setup record
 
 What the memory challenger's device signs at setup, with the key and under the session id it signs that session's
-record with (`memoryAttesterMessage`): the setup's published outputs it was given, the number of blocks, the
+record with (`memoryChallengerMessage`): the setup's published outputs it was given, the number of blocks, the
 commitment to `W`, the salt and the root of the store's rows, against which the session's answers are checked. It says
 the device was given these, never that setup's check passed: the device sees no store and runs no check at setup.
 `memory_challenger.SetupRecord` and its functions mirror this file byte for byte.
@@ -95,7 +95,7 @@ def setupRecordOk (schemes : Schemes) (scheme : String) (publicKey session : Byt
       | .ok b => b
       | .error _ => false
 
-/-- The bytes `memoryAttesterMessage` hashes (`memoryAttesterMessage_eq`). -/
+/-- The bytes `memoryChallengerMessage` hashes (`memoryChallengerMessage_eq`). -/
 def rolePreimage (I session record : ByteArray) : ByteArray :=
   field MEMORY_CHALLENGER_TAG.toUTF8 ++ I ++ field (field session) ++ field record
 
