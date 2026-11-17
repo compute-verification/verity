@@ -19,3 +19,15 @@ def test_requests_stay_in_place_of_a_window() -> None:
     assert (a.window, a.requests) == (None, "0:300:3")
     with pytest.raises(SystemExit):
         run.parse(["--window", "one-300", "--requests", "0:300:3"])
+
+
+def test_the_bare_command_stays_glm_5_3() -> None:
+    assert run.parse([]).model == "glm-5.3"
+
+
+def test_llama_3_2_1b_compiles_its_class_circuit_in_place_of_a_window() -> None:
+    a = run.parse(["--model", "llama-3.2-1b"])
+    assert (a.model, a.window, a.requests) == ("llama-3.2-1b", None, None)
+    for extra in (["--window", "long-w0"], ["--requests", "0:300:3"], ["--layers", "2"], ["--guard"]):
+        with pytest.raises(SystemExit):
+            run.parse(["--model", "llama-3.2-1b", *extra])
