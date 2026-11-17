@@ -198,7 +198,7 @@ OPTIONAL_SCHEDULE_KEYS = sorted(OPTIONAL_FIELDS)
 #: what the check says of a schedule with connection rows (`connectionRowsRefusal`)
 CONNECTION_ROWS = ("schedule: connection rows: the check reads no connection rows' registration, so it refuses a "
                    "schedule with lengths rows, content rows or request words (connectionRowsCheck)")
-CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
+ATTESTATION_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 ROWS_WINDOW_KEYS = ["answer", "certificates", "registrations"]
 #: `paramsOf`'s refusal of parameters naming a `sync_set`, the clock form's, which the check doesn't read
 CLOCK_FORM = "sync_set: the clock form is not one this check reads"
@@ -876,7 +876,7 @@ def _answer(j, ctx: str) -> dict:
 
 
 def _certificate(j, ctx: str) -> Certificate:
-    _exactly(j, CERTIFICATE_KEYS, ctx)
+    _exactly(j, ATTESTATION_KEYS, ctx)
     try:
         direction = Direction(_of(j["direction"], str, ctx))
     except ValueError:
