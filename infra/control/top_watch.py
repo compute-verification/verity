@@ -27,7 +27,8 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
 2. An ACTIVE Verity cloud agent (`GET /v1/agents`) that holds no handle: no registry `holder` and no inbox in the routes names it.
    top.
 3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): top.
-4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci. It reads
+4. main's head unchanged for STALL_S (since the sweep first saw it) while the verified queue has a candidate (a `queue/*`
+   branch on origin): ci. It reads
    GitHub with the token GH_TOKEN_CMD prints, taken at each pass and never from the loop's environment; a read GitHub
    refuses, or no token to read with, rings infra once until a read works again, with what to do.
 5. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
@@ -349,7 +350,8 @@ def rules_thread(state, ring, api, reg, now) -> None:
 
 
 MAIN_QUERY = """query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {
-  ref(qualifiedName: "refs/heads/main") { target { oid ... on Commit { committedDate } } compare(headRef: "next") { aheadBy } } } }"""
+  ref(qualifiedName: "refs/heads/main") { target { oid ... on Commit { committedDate } } }
+  refs(refPrefix: "refs/heads/queue/") { totalCount } } }"""
 
 
 class GitHubRefused(Exception):
@@ -370,9 +372,8 @@ def gh_token() -> str:
 
 
 def gh_main(token: Callable[[], str] | None = None) -> dict:
-    """main's head, its commit time and how far `next` is ahead, in one small GraphQL read (REST's compare of main...next
-    carries every commit and patch: megabytes while a few hundred commits are queued), with the token `token` gives now
-    (`gh_token`)."""
+    """main's head, its commit time and how many candidates the verified queue has, in one small GraphQL read, with the
+    token `token` gives now (`gh_token`)."""
     owner, name = REPO.split("/")
     req = urllib.request.Request("https://api.github.com/graphql", method="POST",
                                  data=json.dumps({"query": MAIN_QUERY, "variables": {"owner": owner, "name": name}}).encode(),
@@ -386,12 +387,13 @@ def gh_main(token: Callable[[], str] | None = None) -> dict:
         raise
     if out.get("errors"):
         raise ValueError(f"GitHub GraphQL: {out['errors'][0].get('message')}")
-    ref = out["data"]["repository"]["ref"]
-    return {"sha": ref["target"]["oid"], "committed": ref["target"]["committedDate"], "ahead": ref["compare"]["aheadBy"]}
+    repo = out["data"]["repository"]
+    return {"sha": repo["ref"]["target"]["oid"], "committed": repo["ref"]["target"]["committedDate"],
+            "candidates": repo["refs"]["totalCount"]}
 
 
 def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
-    """main's head unchanged for STALL_S. A landed candidate's commit carries the time drive built it on `next`, not when main moved
+    """main's head unchanged for STALL_S. A landed candidate's commit carries the time the queue built it, not when main moved
     to it, so the clock starts at the later of that and the first pass that saw the head. A refused read rings infra once,
     and again only after a read that worked: until it reads, a stalled main rings nobody."""
     try:
@@ -409,10 +411,10 @@ def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
     if seen.get("sha") != head["sha"]:
         seen = state["main_head"] = {"sha": head["sha"], "seen": now}
     at = max(committed, seen["seen"])
-    if now - at >= STALL_S and head["ahead"] > 0:
+    if now - at >= STALL_S and head["candidates"] > 0:
         once_each(state, f"main:{head['sha']}", ring, "ci",
                   f"ci: main hasn't moved for {(now - at) // 60:.0f} min (at {head['sha'][:10]} since {iso(at)}) while "
-                  f"next is {head['ahead']} commits ahead of it: check drive (`research queue status`).", None, now)
+                  f"the verified queue has {head['candidates']} candidate(s): check it (`research queue status`).", None, now)
 
 
 def h200s(state, ring, now, samples: Callable[[float, float], list[dict]]) -> None:
