@@ -233,10 +233,6 @@ theorem band_meets_family : BandMeetsFamily := fun hepf N _ hN d hd =>
     fun salt => band_meets_fam_dom hepf N hN d hd _
       (dom_inj salt (le_trans (Nat.mul_le_mul_right _ hN) (by norm_num)))⟩
 
-/-- At `N = 448` the family is `BandMeets14`'s statement. -/
-theorem band_meets_family_14 (hepf : ChainExPostFactoG) (d : ℕ) (hd : 5 ≤ d) :
-    ChainBandMeets14 d ∧ ChainBandMeets14Global d :=
-  band_meets_family hepf 448 (by norm_num) d hd
 
 /-! ## Injective domains are necessary at every `N ≥ 2`; `N = 1` is the one-segment band
 
@@ -324,11 +320,6 @@ theorem chainBandSeg_one (d ℓ c : ℕ) (dom : ℕ → Bits c) :
   show chainScheme (B := 2 ^ 9) (bandSegDAG 1 (2 ^ 9) d) ℓ c dom = chainScheme (bandDAG (2 ^ 9) d) ℓ c dom
   rw [bandSegDAG_one]
 
-/-- At `N = 1` the family's global layout is the one-segment band statement `ChainBandMeets64`. -/
-theorem band_meets_family_one (hepf : ChainExPostFactoG) (d : ℕ) (hd : 5 ≤ d) : ChainBandMeets64 d := by
-  intro salt
-  have h := (band_meets_family hepf 1 (by norm_num) d hd).2 salt
-  rwa [chainBandSeg_one] at h
 
 end Pous.BandMulti
 

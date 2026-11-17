@@ -118,7 +118,7 @@ def _down(rid: str, sha: str, why: str, launch: bool = False) -> Verdict:
 
 
 class Plans:
-    """Drive's auto plans (`Driver.plan_shards`, `Driver.planned`) on ``d``: each one asked for gets a job's directory and a
+    """Drive's auto plans (`plan_shards`, `planned`) on ``d``: each one asked for gets a job's directory and a
     plan's (``tmp``'s job-K and plan-K, the plan's file in it), and is being made until ``answers`` holds what its plan's
     directory answers.  An answer is read once, as `drive._job_end` reads a job's end: its job's directory goes, and a job
     with none is gone with no exit."""

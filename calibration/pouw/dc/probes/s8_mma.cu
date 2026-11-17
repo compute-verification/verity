@@ -32,7 +32,7 @@
 #include "../dc.cuh"
 #include "../wgmma.cuh"
 
-// ---- mma.sync m16n8k32 (benchmarks/tc_probe/mma_tiles.cu's 8-bit fragment layout) ---------------------------------------
+// ---- mma.sync m16n8k32 (calibration/tc_probe/mma_tiles.cu's 8-bit fragment layout) ---------------------------------------
 #define MMA_FORM(NAME, PTX)                                                                                               \
   extern "C" __global__ void NAME(const uint8_t* __restrict__ A, const uint8_t* __restrict__ Bt,                          \
                                   const uint32_t* __restrict__ C, uint32_t* __restrict__ D, int ntiles) {                 \

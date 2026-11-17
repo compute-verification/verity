@@ -263,8 +263,8 @@ class _Program:
 
     def _RMSNormFusedCuda(self, j: int, node: Any) -> None:
         """`RMSNormFusedCuda_v2{N, EPS}`, one unit, or cut at its residual add where an earlier node reads its template's ``x``
-        at another row count or one unit would pass ``grain.rows`` rows: N / C `RMSNormFusedCudaAdd_v1{N, C, AT}` units, C =
-        ``grain.norm``, and the tail `RMSNormFusedCudaTail_v1{N, EPS}`, its ``r`` cut j part AT = j's sum."""
+        at another row count or one unit would pass ``grain.rows`` rows: N / C `RMSNormFusedCudaAdd_v2{N, C, AT, R}` units, C =
+        ``grain.norm`` and R the rows their writers hold its x part in, and the tail `RMSNormFusedCudaTail_v1{N, EPS}`, its ``r`` cut j part AT = j's sum."""
         x, res, w = node.args
         (N, eps), xs, rs = (node.fn.bindings[k] for k in ("N", "EPS")), self.rows(x.refs), self.rows(res.refs)
         if self.b.read_rows.get((descriptor_id(node.fn), "x"), len(xs)) == len(xs) and \
@@ -276,8 +276,9 @@ class _Program:
             raise Unexpressible(f"{node.fn.id}: its {N} elements aren't parts of the grain's {C}")
         parts = []
         for at in range(N // C):
-            tid, u = self.b.unit(bind(NS.RMSNormFusedCudaAdd, N=N, C=C, AT=at))
-            self.b.feed(tid, "x", u, 1, self.rows(x.refs.slice(at * C, (at + 1) * C)))
+            part = self.rows(x.refs.slice(at * C, (at + 1) * C))
+            tid, u = self.b.unit(bind(NS.RMSNormFusedCudaAdd, N=N, C=C, AT=at, R=len(part)))
+            self.b.feed(tid, "x", u, 1, part)
             self.b.feed(tid, "res", u, 1, rs)
             parts.append(Row(tid, u, "o0", C))
         tid, u = self.b.unit(bind(NS.RMSNormFusedCudaTail, N=N, EPS=eps))
