@@ -1,0 +1,3 @@
+[2026-11-17T12:50Z] 7180857abead
+From the lead, 4:58 AM PST: I reverse one decision. CMP-387 does NOT go to Backlog: a Lean verifier that accepts a short y row is not backlog work while Pearl+ is the compute protocol of both applications. Move it back to Todo, due Fri 20 Nov, with one comment: the lead reversed the move to Backlog made a few minutes earlier; the first step is the read the issue asks for (does the y opening bind the row's length, so can the short row be reached), started today by a worker; the guard follows after lean's pass is on main, since it touches Lean. Everything else stands.
+
