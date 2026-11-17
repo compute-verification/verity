@@ -550,10 +550,10 @@ def test_create_leases_the_pod_from_its_boot_and_arms_it_once_sshd_answers(accou
         seen.update(ssh=ssh, seconds=seconds, **kw)
         return {"expires_epoch": NOW + 7200, "expires_utc": "t", "lease_pid": 1, "lease_alive": True, "guard_pid": 2, "guard_alive": True}
 
-    pod, rc = part.create_leased(_ns(), gate=lambda name, h: (None, "vy-"), wait_ssh=lambda pid: ("1.2.3.4", 22), arm=arm,
+    pod, rc = part.create_leased(_ns(), gate=lambda name, h: (None, "vy-"), wait_ssh=lambda pid: ("192.0.2.4", 22), arm=arm,
                                  terminate=lambda pid: pytest.fail("an armed pod is not terminated"), clock=lambda: NOW)
     assert rc == 0 and pod["lease"]["lease_alive"] and account[0].lease_expires == NOW + 7200
-    assert seen["seconds"] == 7200 and seen["first_idle_min"] == 20.0 and seen["ssh"][-1] == "root@1.2.3.4"
+    assert seen["seconds"] == 7200 and seen["first_idle_min"] == 20.0 and seen["ssh"][-1] == "root@192.0.2.4"
 
 
 @pytest.mark.parametrize("stage", ["ssh", "arm"])
