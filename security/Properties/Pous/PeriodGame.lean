@@ -18,7 +18,7 @@ with no premise. The certificate's fit (`Fits`) and the 105-round bound (`Pous.G
   event's probability over them is at most `δ + ε_max`, the ring model's bound, with no premise on SHA-512.
 * `PeriodHeldSha512`, `PeriodHeldSha512At`: the coins are the challenger's hm96 coins and its 64-byte secret source, and
   its streams are the deployed derivation's (`challengerStreams`: `derive(source, COIN_DOMAIN, {session, blocks, k})`,
-  then `stream(key, ("u", j), DRAW_BYTES)` for each round `j`, `MemoryChallenger.sampleIndices`'s). Under
+  then `stream(key, ("u", j), DRAW_BYTES)` for each round `j`, `MemoryAttester.sampleIndices`'s). Under
   `Hash.Assumptions.Sha512Prf` (`prf/sha-512`) at the two tests the event gives, the key derivation (one input) and the
   streams' 105 · 64 blocks, the bound is `δ + ε_max + ε_prf(t, 1) + ε_prf(t, 6720)`.
 
@@ -31,7 +31,7 @@ depend on an earlier answer, an adaptive query, which `Sha512Prf` (non-adaptive)
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties MemoryChallenger
+open Pous.EndToEnd PousCheck PousCheck.Properties MemoryAttester
 
 open scoped ENNReal
 

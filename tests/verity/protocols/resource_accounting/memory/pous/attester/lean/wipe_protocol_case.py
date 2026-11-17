@@ -1,13 +1,13 @@
-"""The wipe protocol (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`) in Python, for every difftest that runs it: its
+"""The wipe protocol (`MemoryAttester.WipeProtocol`, `verity/wipe/v0`) in Python, for every difftest that runs it: its
 mirror, `answer` (and `reference(id, schemes)`), and its cases, `build`, `case` and `cases`.
 
 `reference(id, schemes)(case)` is the outcome of one `serve` line in the core interface's answer format
-(`verity_difftest.protocol.answer`): it decodes the protocol's formats as `MemoryChallenger/WipeProtocol.lean` does, each
+(`verity_difftest.protocol.answer`): it decodes the protocol's formats as `MemoryAttester/WipeProtocol.lean` does, each
 input exactly the canonical JSON of what it decodes to (the commitment and the signed session as `wipe_cases` decodes
 them, the evidence's egress null or an integer of either sign), and checks with the period hook's own Python, `wipe_period.outcome` over `streamed_wipe.verdict`. Its verdict,
 public, profile and digest are the Lean's exactly, and past decoding its reasons are the Lean's word for word. `answer`
 is `verity/wipe/v0`'s, under S1's LMS; `test_answer` the test signers' protocol's. `counted_test_answer` is the
-wipe's component with its count held (`MemoryChallenger.WipeProtocol.countedTest`), under the test signers' schemes:
+wipe's component with its count held (`MemoryAttester.WipeProtocol.countedTest`), under the test signers' schemes:
 the same formats, its check `wipe_period.outcome_counted`.
 
 `build(m, seed)` makes one wipe with the change `m` (`EXPECT`), signed by the memory challenger's tests' key at S1's
@@ -108,7 +108,7 @@ def digest(c: sw.WipeCommitment) -> bytes:
 
 
 def reference(protocol_id: str, schemes) -> Callable[[Any], dict]:
-    """`MemoryChallenger.WipeProtocol.mkProtocol protocol_id schemes` in Python."""
+    """`MemoryAttester.WipeProtocol.mkProtocol protocol_id schemes` in Python."""
 
     def check(p: Params, c: sw.WipeCommitment, e: Evidence) -> tuple:
         return WP.outcome(p.server, p.session, p.trusted, c, e.signed, schemes, egress_mib=e.egress_mib)
@@ -122,7 +122,7 @@ test_answer = reference(TEST_ID, M.ts.SCHEMES)
 
 
 def counted_reference(protocol_id: str, schemes) -> Callable[[Any], dict]:
-    """`MemoryChallenger.WipeProtocol.mkCounted protocol_id schemes` in Python: the wipe's formats and digest, its
+    """`MemoryAttester.WipeProtocol.mkCounted protocol_id schemes` in Python: the wipe's formats and digest, its
     check `wipe_period.outcome_counted`."""
 
     def check(p: Params, c: sw.WipeCommitment, e: Evidence) -> tuple:
