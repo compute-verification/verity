@@ -127,6 +127,77 @@ theorem checkedUnique_empty {L S : ℕ} {C : Prog} (P : Partition) (d : Design) 
       (fun j hjt => (ingressUpTo_getD _ _ [] hjt).trans (hj j hjt)) a hi
   exact (hmid ins hl fun _ _ => rfl).symm.trans (hmid ins' hl' hpre)
 
+/-- A free input over the horizon `n` reads the advice, at any ingress of `n` steps. -/
+theorem inputOf_of_mem_freeInputs {L S : ℕ} {C : Prog} {lay : BoundaryGates L S} {n : ℕ} {ins : List (List Bool)}
+    (hl : ins.length = n) (a : ℕ → Bool) {g : ℕ} (hg : g ∈ freeInputs C lay n) : lay.inputOf n ins a g = a g := by
+  have hany : (List.range n).any (fun i => (lay.ingress i).contains g) = false := (Finset.mem_filter.1 hg).2.2
+  have hnone : (List.range ins.length).findSome? (fun i => ((lay.ingress i).findIdx? (· == g)).map (i, ·)) = none := by
+    rw [List.findSome?_eq_none_iff]
+    intro i hi
+    rw [Option.map_eq_none_iff, List.findIdx?_eq_none_iff]
+    intro x hx
+    have hnot : ¬(lay.ingress i).contains g = true := List.any_eq_false.1 hany i (by simpa [hl] using hi)
+    rw [List.contains_iff_mem] at hnot
+    rw [beq_eq_false_iff_ne]
+    rintro rfl
+    exact hnot hx
+  unfold BoundaryGates.inputOf
+  rw [hnone, hany]
+  simp
+
+/-- An input reads the advice at itself alone. -/
+theorem inputOf_congr_adv {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins : List (List Bool)) {a a' : ℕ → Bool}
+    {g : ℕ} (h : a g = a' g) : lay.inputOf k ins a g = lay.inputOf k ins a' g := by
+  unfold BoundaryGates.inputOf
+  split
+  · rfl
+  · rw [h]
+
+/-- Two inputs that agree at every input `free` doesn't hold give `C` one run. -/
+theorem valOver_congr_unheld (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → Option Bool)
+    (h : ∀ i, free i = none → C.gates[i]? = some .input → inp i = inp' i) (g : ℕ) :
+    valOver C inp free g = valOver C inp' free g := by
+  induction g using Nat.strong_induction_on with
+  | _ g ih =>
+    rcases hf : free g with _ | b
+    · rcases hx : C.gates[g]? with _ | x
+      · rw [valOver_of_none_none C inp hf hx, valOver_of_none_none C inp' hf hx]
+      · rw [valOver_of_none_some C inp hf hx, valOver_of_none_some C inp' hf hx]
+        have hrd : ∀ i ∈ x.reads, (if _h : i < g then some (valOver C inp free i) else some false) =
+            if _h : i < g then some (valOver C inp' free i) else some false := by
+          intro i _
+          split_ifs with hig
+          · rw [ih i hig]
+          · rfl
+        rw [bgate_val_congr x _ hrd]
+        cases x <;> first | rfl | rw [h g hf hx]
+    · rw [valOver_of_some C inp hf, valOver_of_some C inp' hf]
+
+/-- **A check that pins each checked input's run value pins the rows**: where the layout fits and the checked inputs are
+free inputs, the check that the run holds each gate `g ∈ chk` at `c g` meets `CheckedUnique`, at any program, partition,
+design, horizon and values `c`. It covers the checks that pin each checked input to a constant and no other: a deployed
+check that lets a checked input vary with the run is not covered, and `CheckedUnique` for it is still open. A checked
+input the held values don't hold reads its advice, so two valid runs read one advice there; off `chk` their advice
+agrees already, and a held gate reads none: the two runs are one run on one advice, which `checkedUnique_empty` pins. -/
+theorem checkedUnique_pin {L S : ℕ} {C : Prog} (P : Partition) (d : Design) {lay : BoundaryGates L S} {n : ℕ}
+    (hfits : lay.Fits C n) {chk : Finset ℕ} (hchk : chk ⊆ freeInputs C lay n) (c : ℕ → Bool) :
+    CheckedUnique C P d lay n chk fun ρ => ∀ g ∈ chk, ρ g = c g := by
+  intro t ht ins ins' a a' free hl hl' hpre ha hfree hv hv' ℓ
+  have hval : ∀ (js : List (List Bool)) (b : ℕ → Bool), js.length = n → ∀ g ∈ chk, free g = none →
+      valOver C (lay.inputOf n js b) free g = b g := by
+    intro js b hjs g hg hf
+    rw [valOver_of_none_some C _ hf (Finset.mem_filter.1 (hchk hg)).2.1, inputOf_of_mem_freeInputs hjs b (hchk hg)]
+    rfl
+  have heq : valOver C (lay.inputOf n ins' a') free = valOver C (lay.inputOf n ins' a) free := by
+    refine funext (valOver_congr_unheld C free fun i hf _ => ?_)
+    refine inputOf_congr_adv lay n ins' ?_
+    by_cases hi : i ∈ chk
+    · rw [← hval ins' a' hl' i hi hf, hv' i hi, ← hv i hi, hval ins a hl i hi hf]
+    · exact (ha i hi).symm
+  rw [heq]
+  exact checkedUnique_empty P d hfits (fun _ => True) t ht ins ins' a a free hl hl' hpre (fun _ _ => rfl) hfree trivial
+    trivial ℓ
+
 /-! ### The count -/
 
 /-- **One incorrect set's count with a valid run.** At a check that pins `chk` and an incorrect set `F` of proof blocks of
