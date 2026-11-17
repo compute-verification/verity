@@ -7,14 +7,14 @@ and no console script. The policy's only Python is beside it: its manifest on th
 (`verity.protocols.workload_classification.training_detection.inference_only.verifier.parties`: one party, the verifier, no channel and no message), which a
 deployment configuration's table declares the policy's party from, with its test in `tests/verity/protocols/workload_classification/training_detection/inference_only/verifier`.
 
-- **Lean**: `lean/` is the Lake package `inference_only_check`, whose library `InferenceOnlyCheck` the packages at `../../../../resource_accounting/network/verifier/lean`,
+- **Lean**: `lean/` is the Lake package `inference_only_verifier`, whose library `InferenceOnlyVerifier` the packages at `../../../../resource_accounting/network/verifier/lean`,
   `verity/protocols/compose/verifier/onsite`, `verity/protocols/compose/verifier/remote` and `security/Properties` require by path.
 - **Commands** (`lake exe`, in `lean/`):
   - `inference-only id | check PARAMS COMMITMENT EVIDENCE | serve`: the core protocol `verity/inference-only/v0`,
     which both composites compose;
   - `inference-only-rows id | check PARAMS COMMITMENT EVIDENCE [CIRCUIT FILE ...] | serve`: the core protocol
     `verity/inference-only/rows/v1`, which no system lists;
-  - `inference-only-check [--unrolled] INSTANCE TRUSTED`, or with `--policy [--unrolled] INSTANCE` or
+  - `inference-only-verifier [--unrolled] INSTANCE TRUSTED`, or with `--policy [--unrolled] INSTANCE` or
     `--count [--detail] INSTANCE`: the verdict on one instance, as JSON on stdout. `benchmarks/verifier_cost` builds
     and runs it;
   - `inference-only-record-check CASE`: the record form on one case of its difftest's, such as
@@ -57,7 +57,7 @@ at most k bits outside θ (`verity/protocols/compose/verifier/remote/README.md`,
 check decides the policy at a rate, `InferenceOnly.CompliesRate` (below).
 
 The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/protocols/compose/verifier/lean`):
-`InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
+`InferenceOnlyVerifier.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
 interface. Its params are the registered circuit, the budgets and the registration log before the run; its commitment is
 the run's own registration record, which must name the registered circuit and which each composite requires to be the
 record SPOT commits to (`Core.Composition.same`); its evidence is the division with θ and θ's
@@ -103,30 +103,30 @@ scenarios register a policy as if it were a subprotocol.
 
 ## The check
 
-`lean/` is the Lake package `inference_only_check`, code that reads Programs with the circuit format's decoder (`Circuits.Program`,
+`lean/` is the Lake package `inference_only_verifier`, code that reads Programs with the circuit format's decoder (`Circuits.Program`,
 in the package `core_circuits`) and imports nothing else but Lean core, the core interface (`core_protocol`) and SPOT's
 verifier (`core_spot`, with Flock's under it), whose readers of a circuit record and a circuit file the record form and
 the rows protocol read them with.
 
-- `inference-only-check` runs `InferenceOnlyCheck.Theta.check`: `InferenceOnlyCheck.Desc.check`, which decides `InferenceOnly.CompliesRate c α` for a declared
+- `inference-only-verifier` runs `InferenceOnlyVerifier.Theta.check`: `InferenceOnlyVerifier.Desc.check`, which decides `InferenceOnly.CompliesRate c α` for a declared
   division aligned to the root's Calls at the cost of the descriptor (one summary per Definition), then each θ entry's
   provenance against the deployment's registration log.
-- `inference-only-check --count` runs `InferenceOnlyCheck.Count.check`, the count of (c, k)-inference blocks: the declaration names its block
+- `inference-only-verifier --count` runs `InferenceOnlyVerifier.Count.check`, the count of (c, k)-inference blocks: the declaration names its block
   Definitions by descriptor key, and the check gives each one's Boolean gates (from a per-primitive gate table), its
   fresh input bits outside θ and its blocks, multiplied through batches and scans, and the root's total against n.
   - Public: the judgment against n, `{"complies": true|false}`, or the refusal (`{"error": code}`, with a `message`
     for some codes).
   - Not public: the rows (each block Definition's gates, fresh bits and blocks), the total and which block failed.
-    `--count --detail` prints that whole verdict (`InferenceOnlyCheck.Count.checkDetail`) for the private record only.
+    `--count --detail` prints that whole verdict (`InferenceOnlyVerifier.Count.checkDetail`) for the private record only.
 
-  `InferenceOnlyCheck.Properties.DescCountsCK` (`security/Properties/InferenceOnly/Count.lean`) states that a published `complies` means
+  `InferenceOnlyVerifier.Properties.DescCountsCK` (`security/Properties/InferenceOnly/Count.lean`) states that a published `complies` means
   `InferenceOnly.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. The count's difftest holds
   both forms to the Python reference's `check_count` and `check_count_detail` (`lean/scripts/inference_only_reference.py`), run by
   `../../../../../../tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_count_difftest.py`.
-- `inference-only-check --unrolled` runs the same with `InferenceOnlyCheck.check`, the check gate by gate, kept as the reference; its input
-  format is in `InferenceOnlyCheck.Check`'s docstring. `--policy` runs the policy's check alone, without θ's provenance, which
+- `inference-only-verifier --unrolled` runs the same with `InferenceOnlyVerifier.check`, the check gate by gate, kept as the reference; its input
+  format is in `InferenceOnlyVerifier.Check`'s docstring. `--policy` runs the policy's check alone, without θ's provenance, which
   is what `benchmarks/verifier_cost` measures.
-- `inference-only id | check | serve` runs `InferenceOnlyCheck.Theta.check` as the core protocol `verity/inference-only/v0`,
+- `inference-only id | check | serve` runs `InferenceOnlyVerifier.Theta.check` as the core protocol `verity/inference-only/v0`,
   the subprotocol of onsite and remote.
 - `inference-only-rows id | check | serve` runs `InferenceOnly.RowsProtocol.protocol`, the core protocol
   `verity/inference-only/rows/v1`: the check of an execution phase's circuit record, each block counted in the rows of

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# inference_only_cost.py on a CPU node: build inference_only_check and inference-only-phases (inference_only_phases/Main.lean, in a scratch Lake package against the
-# checkout's inference_only_check), then run each CASE (suite, serve, glm; all three by default) into $OUT. Run from a clone (the
+# inference_only_cost.py on a CPU node: build inference_only_verifier and inference-only-phases (inference_only_phases/Main.lean, in a scratch Lake package against the
+# checkout's inference_only_verifier), then run each CASE (suite, serve, glm; all three by default) into $OUT. Run from a clone (the
 # build writes .lake), with GLM-5.3's rank 0 workload descriptor sent beside it for `glm` (README.md's fetch):
 #   research run --project verity --on vy-nebius-cpu-2 --pool network --source . --cwd clone --mem-gb 320 --timeout 12h \
 #     --send glm53-b1-rank0.descriptor.json.gz -- bash benchmarks/verifier_cost/inference_only_cost.sh [CASE...]
@@ -23,7 +23,7 @@ name = "inference_only_phases"
 defaultTargets = ["inference-only-phases"]
 
 [[require]]
-name = "inference_only_check"
+name = "inference_only_verifier"
 path = "$L"
 
 [[lean_exe]]

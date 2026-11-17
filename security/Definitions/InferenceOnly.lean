@@ -14,7 +14,7 @@ and so is anything `R` computes itself.
 
 `Complies c k` is the inference-only policy: `D` has a `(c, k)`-partition (`Verity.Partition.IsCK`), every inference
 block exactly `c` gates, padding included, reading at most `k` fresh input bits. Its rate is `α = k / c`, the most fresh
-input an inference block reads per gate. `CompliesRate c α` is the policy as the verifier's check (`InferenceOnlyCheck`) reads it,
+input an inference block reads per gate. `CompliesRate c α` is the policy as the verifier's check (`InferenceOnlyVerifier`) reads it,
 on a circuit of any widths: inference blocks of at most `c` gates, each reading at most `α` fresh input bits per gate. A
 `(c, k)`-partition complies at rate `k / c`, and an inference block of at most `c` gates at rate `α` reads at most
 `k = α c` fresh input bits. `CompliesAtMost c k n` is its count form on a Boolean declaration: `D` divides into at most

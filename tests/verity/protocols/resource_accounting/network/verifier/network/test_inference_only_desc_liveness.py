@@ -1,9 +1,9 @@
-"""The liveness cases of the description-sized inference-only check (`InferenceOnlyCheck.Desc`): the Python half.
+"""The liveness cases of the description-sized inference-only check (`InferenceOnlyVerifier.Desc`): the Python half.
 
 `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/desc_liveness_vectors.py` writes 13 Program shapes, each at a small `n`
-and at one of `2^22` to `2^52 + 1` scan iterations or batch members, past anything `InferenceOnlyCheck.Desc` walks one by one.
-`check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/DescLivenessMain.lean`
-fails unless `InferenceOnlyCheck.Desc.check` gives on every small instance what `InferenceOnlyCheck.check` gives on it expanded, and on the
+and at one of `2^22` to `2^52 + 1` scan iterations or batch members, past anything `InferenceOnlyVerifier.Desc` walks one by one.
+`check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyVerifier/DescLivenessMain.lean`
+fails unless `InferenceOnlyVerifier.Desc.check` gives on every small instance what `InferenceOnlyVerifier.check` gives on it expanded, and on the
 big one that verdict (or its fresh input bits). The audit checks the data against the record's SHA-256 and caches its pass on
 the Lean package's files alone, so the first test is what says the data is still what the generator writes; the second
 that `scripts/inference_only_reference.py` gives each small instance a verdict, the unrolled check's.
@@ -27,7 +27,7 @@ def _load(name: str):
 
 
 vectors = _load("desc_liveness_vectors")
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.DescLivenessMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyVerifier.DescLivenessMain"]
 
 
 def test_the_data_is_what_the_audit_pins(tmp_path):
