@@ -2155,7 +2155,7 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
     others = place.get("uncounted") or "every other link of the node"
     out = ([f"K counts the relayed link alone, {'; '.join(counted)}; {others} is uncounted and uncertified"]
            if counted else [])
-    premise = place.get("trusted-device") or place.get("trusted-host")   # a record made before the premise's rename
+    premise = place.get("trusted-device")
     out += [f"trusted-device {premise}"] if premise else []
     if isinstance(w, Mapping) and w.get("held"):
         out.append(f"its weights {w['held']}, not concurrently with the block")
