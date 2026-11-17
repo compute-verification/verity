@@ -1200,7 +1200,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         inside, late = sum(v <= TARGET_MIN for v in got), sum(w > TARGET_MIN * 60 for w in waits)
         landed = f"{inside} of {len(got)} landed ({inside / len(got):.0%})" if got else "none landed"
         if not waits:
-            return landed + "; none marked in the window waiting"
+            return landed
         n, hits = len(got) + len(waits), inside + len(waits) - late
         return landed + f"; with the {len(waits)} marked in the window and waiting, {late} past 2 h: {hits} of {n} ({hits / n:.0%})"
 

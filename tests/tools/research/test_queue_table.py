@@ -615,7 +615,7 @@ def test_the_share_within_2_h_also_counts_the_marked_still_waiting_a_wait_past_2
     d = dict(doc(), now=qt.ts(at("03:30")))
     row = {r["name"]: r for r in qt.table(d)}["Share on `main` within 2 h of the mark"]
     assert row["day"] == "2 of 2 landed (100%); with the 3 marked in the window and waiting, 2 past 2 h: 3 of 5 (60%)"   # #3 and #4
-    assert row["hour"] == "none landed; none marked in the window waiting"
+    assert row["hour"] == "none landed"                                                  # nothing waits from the last hour either
 
 
 def test_a_heads_own_change_is_the_queues_so_a_merge_of_main_keeps_it(tmp_path):
