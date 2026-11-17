@@ -37,14 +37,17 @@ CONFIG = ROOT / "demos" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
 KEY = "0" * 128
-WIPE_PIN = next(p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"] if p["protocol"] == "wipe")
+PIN = {p["protocol"]: p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"]}
+WIPE_PIN = PIN["wipe"]
 #: every binding the pieces read, on documentation addresses (RFC 5737)
 BINDINGS = {
     "challenger": {"pouw": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}},
     "memory-challenger": {"pous": {"address": "192.0.2.1:7000"}, "wipe": {"address": "192.0.2.1:7001"}},
-    "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}},
+    "bandwidth-verifier": {"bandwidth": {"host": "192.0.2.2"}},
     "network-certifier": {"certifier": {"gate": "user@gate-1"}},
 }
+#: `BINDINGS` with the address PoUB's runtime parties read (`runtime`)
+RUNTIME_BINDINGS = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}}}
 UNBOUND = sorted(f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c, ks in cs.items() for k in ks)
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
@@ -58,9 +61,13 @@ VARIABLES = {
     "REV": "15b0976d400d796ee589e7737d03a919526bf800", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
     "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16", "WIPE_ADDRESS": "192.0.2.1:7001",
     "WIPE_CMD": f'WIPE_KEY_SHA512={WIPE_PIN} bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"',
+    "POUS_CMD": 'bash benchmarks/pous/served_piece.sh "$@"', "ONSITE_PIECES": "benchmarks/pous/onsite_pieces.sh",
+    "POUS_ARGS": f"--trusted-sha512 {PIN['pous']} --rounds 320 --challenger-address 192.0.2.1:7000 "
+                 f"--bw-trusted-sha512 {PIN['bandwidth']} --bw-host 192.0.2.2",
+    "BANDWIDTH_CMD": '"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"',
 }
 KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "memory-challenger.pous.address",
-        "bandwidth-verifier.bandwidth.address", "network-certifier.certifier.gate", "memory-challenger.wipe.address"]
+        "bandwidth-verifier.bandwidth.host", "network-certifier.certifier.gate", "memory-challenger.wipe.address"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
 RUNTIME = {
     ("memory-challenger", "pous"): ("verity/pous/memory-challenger", "memory-challenger", "auditor-host",
@@ -70,6 +77,19 @@ RUNTIME = {
                                           "CLOCK_MONOTONIC ns"),
     ("prover", "bandwidth"): ("verity/remote-bandwidth/p2/v0", "prover", "prover-node", None),
 }
+#: PoUS's and PoUB's parties as runtime pieces of their sessions (`T.POUS`, `T.POUB`), for the runtime path of `live`
+RUNTIME_PARTIES = {
+    (c, party): T.Piece(c, party, T.RUNTIME, f"{party}'s {c} run", reaches=reaches, binds=("address",), session=s)
+    for c, s, listener in (("pous", T.POUS, T.MEMORY_CHALLENGER), ("bandwidth", T.POUB, T.BANDWIDTH_VERIFIER))
+    for party, reaches in ((T.PROVER, listener), (listener, ""))}
+
+
+@pytest.fixture
+def runtime(monkeypatch):
+    """The table with PoUS's and PoUB's parties as runtime pieces, the path `live` keeps for a protocol the runtime
+    starts, which no listed piece takes now."""
+    for (c, party), piece in RUNTIME_PARTIES.items():
+        monkeypatch.setitem(T.PARTIES, c, {**T.PARTIES[c], party: piece})
 
 
 def toml(tables: dict) -> str:
@@ -221,7 +241,9 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     pieces = {(x["party"], e["component"]) for x in got["plan"] for e in x["entries"]}
     assert {c for _, c in pieces} == {*T.PROTOCOLS, T.SERVED_WINDOW}
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
-    assert not {"POUS_CMD", "POUS_ARGS", "BANDWIDTH_CMD"} & set(hooks) and hooks["WIPE_CMD"] == VARIABLES["WIPE_CMD"]
+    assert all(hooks[k] == VARIABLES[k] for k in ("WIPE_CMD", "POUS_CMD", "BANDWIDTH_CMD"))
+    assert " ".join(e["hooks"]["POUS_ARGS"] for x in got["plan"] for e in x["entries"]
+                    if "POUS_ARGS" in e["hooks"]) == VARIABLES["POUS_ARGS"]
     assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
             if "SERVE_ARGS" in e["hooks"]} == {"certifier": T.ID_FORM}
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
@@ -229,18 +251,19 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert hooks["DEVELOPMENT"] == "1"
 
 
-def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_clock_and_channels(tmp_path, capsys):
+def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_clock_and_channels(tmp_path, capsys,
+                                                                                              runtime):
     """PoUS's rounds' and PoUB's parties are their protocols' (`Session`), each on the machine the
     configuration places it on, the clock its header names on the one that reads a clock, the auditor's side listening
     at the address the prover's side dials; PoUB's is ``absent`` while its halves aren't in the tree."""
-    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path))
+    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, RUNTIME_BINDINGS))
     assert rc == 0, err
     runtime = {(x["party"], e["component"]): e for x in got["plan"] for e in x["entries"] if e["runs"] == T.RUNTIME}
     assert set(runtime) == set(RUNTIME)
     for (party, component), (protocol, role, machine, clock) in RUNTIME.items():
         e, s = runtime[party, component], T.PARTIES[component][party].session
         assert (e["role"], e["machine"], e["clock"], e["raises"]) == (role, machine, clock, T.NOT_YET)
-        address = BINDINGS[s.listener][component]["address"]
+        address = RUNTIME_BINDINGS[s.listener][component]["address"]
         assert e["listens" if party == s.listener else "dials"] == address
         if e["protocol"] is None:
             assert e["absent"] and set(e["absent"]) <= {h.split(":")[0] for h in s.halves}
@@ -266,8 +289,9 @@ def test_the_runtime_sessions_are_one_manifest_with_every_configured_role_and_a_
 def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
     rc, got, _ = dry(capsys)
     assert rc == 0 and got["dry"][0]["unbound"] == UNBOUND
-    assert next(e["dials"] for x in got["plan"] if x["party"] == "prover" for e in x["entries"]
-                if e["component"] == "pous") == "<memory-challenger.pous.address>"
+    assert "--challenger-address '<memory-challenger.pous.address>'" in next(
+        e["hooks"]["POUS_ARGS"] for x in got["plan"] if x["party"] == "prover" for e in x["entries"]
+        if e["component"] == "pous")
 
 
 def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
@@ -297,7 +321,7 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
     gates = [e for ps in REG.parties.values() for e in ps.values() if e.runs == T.GATE]
-    assert len(gates) == 4
+    assert len(gates) == 6
     assert all((e.scripts, e.binds, e.optional, e.variables(cfg, BINDINGS)) == ((), (), (), {}) for e in gates)
     principal = {p["name"]: p["principal"] for p in cfg["party"]}
     assert all(principal[p] == "auditor" for ps in REG.parties.values() for p, e in ps.items() if e.runs == T.GATE)
@@ -322,23 +346,24 @@ def test_the_live_challenger_is_bound_only_when_given(tmp_path, capsys):
 
 
 def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_it_nothing(tmp_path, capsys,
-                                                                                         monkeypatch):
+                                                                                         monkeypatch, runtime):
     """The prover node's runtime parties need what their protocol's start reads (the served store, the card, setup's
     request), which doesn't reach the table yet: the run raises by the row's name before the served window starts."""
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
     state = tmp_path / T.PROVER_NODE
     with pytest.raises(NotImplementedError) as e:
-        R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path), "--state", str(state)], REG)
+        R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path, RUNTIME_BINDINGS), "--state",
+                    str(state)], REG)
     assert e.value.args == (T.NOT_YET,) and not (state / "out.started").exists()
 
 
 def test_the_memory_challengers_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
-                                                                                                     capsys):
+                                                                                                     capsys, runtime):
     """On the auditor's device each memory challenger's start checks its key against `demos/onsite_full.toml`'s pin
     first: a state with no key is refused ``key``, and one whose key the configuration doesn't pin ``pin``, before any
     request is read or any party or the served window starts."""
     state = tmp_path / T.AUDITOR_HOST
-    run = [str(CONFIG), "--on", T.AUDITOR_HOST, "--bindings", bindings(tmp_path), "--state", str(state)]
+    run = [str(CONFIG), "--on", T.AUDITOR_HOST, "--bindings", bindings(tmp_path, RUNTIME_BINDINGS), "--state", str(state)]
     assert R.run_main(run, REG) == 2 and "refused key" in capsys.readouterr().err
     other = b"a key the auditor never pinned"
     mine = state / "runs" / "pous" / T.MEMORY_CHALLENGER
@@ -356,7 +381,7 @@ def test_the_rounds_and_poubs_parties_each_have_their_protocols_start():
         assert sorted(s.protocol().starts) == sorted(s.roles.values())
 
 
-def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, monkeypatch):
+def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, monkeypatch, runtime):
     """With its start and its party key given, a runtime party still raises before it runs: the two sides' requests
     are compared nowhere yet (`request_bound`)."""
     monkeypatch.setitem(CP.PROTOCOL.starts, T.CS.CHALLENGER, lambda configuration, bound, state: Start({"k": 1}))
@@ -369,7 +394,7 @@ def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, mo
     assert callable(T.prepare(cfg, tmp_path, BINDINGS, piece))
 
 
-def test_the_onsite_lines_trusted_device_is_each_memory_challengers_placement(tmp_path, monkeypatch):
+def test_the_onsite_lines_trusted_device_is_each_memory_challengers_placement(tmp_path, monkeypatch, runtime):
     """The verifier's line carries each memory challenger's `trusted-device` premise as `placement` reads it from the
     challenger's outcome here: under a committed configuration, ``holds`` for a session signed under the pinned key, and
     rehearsal for one that reports no key."""
@@ -388,7 +413,7 @@ def test_the_onsite_lines_trusted_device_is_each_memory_challengers_placement(tm
     assert line[mc.PREMISE]["pous"].startswith("holds")
 
 
-def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_it(tmp_path, monkeypatch):
+def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_it(tmp_path, monkeypatch, runtime):
     """PoUB's verifier pins the memory challenger's PoUS key, which is in that party's run on the same host: its start
     gets that run's state directory (``challenger``) beside its bindings, and its own state directory."""
     got = {}
@@ -399,8 +424,8 @@ def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_i
 
     monkeypatch.setitem(T.POUB.starts, T.P2.VERIFIER, start)
     with pytest.raises(NotImplementedError):
-        T.prepare(R.load(CONFIG, REG), tmp_path, BINDINGS, T.PARTIES["bandwidth"][T.BANDWIDTH_VERIFIER])
-    assert got["bound"] == {**BINDINGS["bandwidth-verifier"]["bandwidth"],
+        T.prepare(R.load(CONFIG, REG), tmp_path, RUNTIME_BINDINGS, T.PARTIES["bandwidth"][T.BANDWIDTH_VERIFIER])
+    assert got["bound"] == {**RUNTIME_BINDINGS["bandwidth-verifier"]["bandwidth"],
                             "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_CHALLENGER)}
     assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
 
@@ -425,7 +450,7 @@ def test_the_runtime_components_channels_are_their_protocols_manifests():
 def test_a_binding_the_file_lacks_is_refused(tmp_path, capsys):
     tables = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {}}}
     rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, tables))
-    assert rc == 2 and "refused unbound" in err and "bandwidth-verifier.bandwidth.address" in err
+    assert rc == 2 and "refused unbound" in err and "bandwidth-verifier.bandwidth.host" in err
 
 
 @pytest.mark.parametrize("tables, why", [
@@ -496,7 +521,7 @@ def stand_in(tmp: Path, name: str, body: str) -> str:
 
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
 RUNNER = """mkdir -p "$OUT"
-/usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+)=' \
+/usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|ONSITE_PIECES|BANDWIDTH_CMD|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+)=' \
   | sort > "$OUT/hooks.txt"
 """
 
@@ -510,7 +535,7 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert rc == 0
     assert said(out, "PARTY") == [{"party": p, "refused": None} for p in ("firewall", "workers")]
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks["SLOTS"] == "4" and not {"POUS_CMD", "POUS_ARGS"} & set(hooks)
+    assert hooks["SLOTS"] == "4" and hooks["POUS_ARGS"] == VARIABLES["POUS_ARGS"]
     # the served window's rule is the configuration's, a rate: its audit states it to its stream, which takes no fixed count
     assert SamplingDesign(hooks["V3C_LAW"]).text == K.parse(CONFIG.read_text())["service"]["law"]
     kept = set(VARIABLES) - {"PRECISION", "WINDOW_STEPS", "DEVELOPMENT"}
@@ -522,7 +547,7 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert hooks["SERVE_ARGS"] == "--protocol ids --id-payload 503"
 
 
-#: the prover node's parties whose pieces are the served window's alone: its prover's are runtime parties (`live`)
+#: two of the prover node's parties, whose pieces are the served window's
 SERVED_PARTIES = ("--party", "workers", "--party", "firewall")
 
 
@@ -643,6 +668,63 @@ def test_served_wipe_gets_the_configurations_pin_and_no_other(tmp_path, pinned):
     assert p.returncode == 3
     assert ("nvidia-smi can't read the card no-such-card" in refused) == pinned
     assert ("no challenger key is pinned" in refused) != pinned
+
+
+#: the bindings both ways of starting PoUB read, so the same file starts its runtime parties and its pieces
+BOTH = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {**BINDINGS["bandwidth-verifier"]["bandwidth"],
+                                                         **RUNTIME_BINDINGS["bandwidth-verifier"]["bandwidth"]}}}
+
+
+def test_pouss_and_poubs_parties_start_from_the_table_and_none_raises(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", RUNNER))
+    for machine, party in ((T.PROVER_NODE, T.PROVER), (T.AUDITOR_HOST, T.MEMORY_CHALLENGER),
+                           (T.AUDITOR_HOST, T.BANDWIDTH_VERIFIER)):
+        state = tmp_path / party
+        assert R.run_main([str(CONFIG), "--on", machine, "--party", party, *(
+            ("--party", T.WORKERS) if party == T.PROVER else ()), "--bindings", bindings(tmp_path, BOTH), "--state",
+            str(state)], REG) == 0, capsys.readouterr().err
+        assert {"party": party, "refused": None} in said(capsys.readouterr().out, "PARTY")
+    hooks = dict(x.split("=", 1) for x in (tmp_path / T.PROVER / "out" / "hooks.txt").read_text().splitlines())
+    assert {k: hooks[k] for k in ("POUS_CMD", "POUS_ARGS", "BANDWIDTH_CMD", "ONSITE_PIECES")} == {
+        k: VARIABLES[k] for k in ("POUS_CMD", "POUS_ARGS", "BANDWIDTH_CMD", "ONSITE_PIECES")}
+
+
+#: python's stand-in for served_piece.sh: each call's arguments, one per line, then a blank line
+ARGV = """#!/usr/bin/env bash
+printf '%s\n' "$@" >> "$(dirname "$0")/argv.txt"; echo >> "$(dirname "$0")/argv.txt"
+"""
+
+
+@pytest.mark.parametrize("pins", ["configuration's", "others", "none"])
+def test_pouss_and_poubs_command_line_carries_the_configurations_pins_and_no_other_key(tmp_path, pins):
+    """served_piece.sh run as the workload runs it, under the pieces' variables, with a stand-in python: the PoUS
+    session's key and the bandwidth close's are the configuration's pins, whatever the environment or a binding says,
+    and a bound command keeps its spaces."""
+    cfg = R.load(CONFIG, REG)
+    other = {"pous": "a" * 128, "bandwidth": "b" * 128, "wipe": "c" * 128}
+    cfg = {**cfg, "pin": {"configuration's": cfg["pin"], "none": [],
+                          "others": [{**p, "key-sha512": other[p["protocol"]]} for p in cfg["pin"]]}[pins]}
+    tables = {**BINDINGS, "memory-challenger": {**BINDINGS["memory-challenger"], "pous": {
+        "address": "192.0.2.1:7000", "command": "ssh -i key auditor-1 challenger_party", "key-sha512": "d" * 128}}}
+    hooks = {k: v for x in ("pous", "bandwidth") for k, v in T.PARTIES[x][T.PROVER].variables(cfg, tables).items()
+             if k != "POUS_ARGS"}
+    hooks["POUS_ARGS"] = T.variables(cfg, tables)["POUS_ARGS"]
+    py = Path(stand_in(tmp_path, "python", ARGV))
+    py.chmod(0o755)
+    env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path), "PY": str(py),
+           "P2_LIB": str(tmp_path), "POUS_EXE": "true", "BW_CASE_EXE": "true", "GPU_LEASE_UUID": "no-such-card",
+           "VERITY_PINS": json.dumps(cfg["pin"]), "POUS_ARGS": hooks["POUS_ARGS"]}
+    p = subprocess.run(["bash", "-c", hooks["POUS_CMD"], "_", str(tmp_path / "serve"), "3", str(tmp_path / "pous")],
+                       cwd=ROOT, env=env, capture_output=True, text=True, check=False)
+    calls = [c.split("\n") for c in (tmp_path / "argv.txt").read_text().split("\n\n") if "--sessions" in c]
+    assert p.returncode == 0, p.stderr
+    argv, = calls
+    flag = {f: argv[argv.index(f) + 1] if f in argv else None
+            for f in ("--trusted-sha512", "--bw-trusted-sha512", "--challenger-command", "--bw-host")}
+    pinned = {p["protocol"]: p["key-sha512"] for p in cfg["pin"]}
+    assert (flag["--trusted-sha512"], flag["--bw-trusted-sha512"]) == (pinned.get("pous"), pinned.get("bandwidth"))
+    assert flag["--challenger-command"] == "ssh -i key auditor-1 challenger_party" and flag["--bw-host"] == "192.0.2.2"
+    assert "d" * 128 not in argv
 
 
 @pytest.mark.parametrize("rows, verdict, reason", [

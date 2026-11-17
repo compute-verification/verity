@@ -12,8 +12,8 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
 - ``gate``: the auditor's side of a session, which the auditor's gate starts on its host when the prover's piece opens it;
   `verity run` starts nothing for it;
 - ``runtime``: a party of its protocol's `ProtocolDef` (`Session`), which `verity run` starts on the machine the
-  configuration places it on through the runtime (`verity.runtime.runner.run`), one run of the protocol a piece: PoUS's
-  rounds' and PoUB's parties. The auditor's side listens at its ``address`` binding and the prover's side
+  configuration places it on through the runtime (`verity.runtime.runner.run`), one run of the protocol a piece (no
+  listed piece runs so now: `POUS` and `POUB` are the sessions it would start). The auditor's side listens at its ``address`` binding and the prover's side
   dials it; a party whose manifest needs a clock gets the clock its header names (`RealClock(read, name)`). Its
   protocol starts it (`ProtocolDef.starts`: from the configuration, the piece's bindings and the party's state
   directory, its request and its capabilities, the auditor's signer refused first unless the configuration pins it), and
@@ -397,6 +397,36 @@ def _wipe(cfg, params, bound):
             **{v: bound[k] for k, v in _WIPE.items() if k in bound}}
 
 
+POUS_SCRIPT, ONSITE_PIECES = "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh"
+BANDWIDTH_SCRIPT = "benchmarks/one_stage/served_bandwidth.py"
+#: served_piece.py's flag for each binding of PoUS's memory challenger, and of PoUB's bandwidth verifier
+_POUS = {"address": "--challenger-address", "host": "--challenger-host", "command": "--challenger-command"}
+_BANDWIDTH = {"host": "--bw-host", "command": "--bw-party"}
+
+
+def _pinned(cfg: Mapping[str, Any], party: str, protocol: str) -> list[str]:
+    return [p["key-sha512"] for p in cfg.get("pin", []) if (p["party"], p["protocol"]) == (party, protocol)][:1]
+
+
+def _pous_piece(cfg, params, bound):
+    """The memory challenger's key is the configuration's pin alone, on the command line; with no pin the piece
+    trusts no session."""
+    pin = _pinned(cfg, MEMORY_CHALLENGER, "pous")
+    words = [*(["--trusted-sha512", *pin] if pin else []), "--rounds", str(params["challenges"]),
+             *(w for k, flag in _POUS.items() if k in bound for w in (flag, bound[k]))]
+    return {"POUS_CMD": f'bash {POUS_SCRIPT} "$@"', "POUS_ARGS": shlex.join(words), "ONSITE_PIECES": ONSITE_PIECES}
+
+
+def _bandwidth_piece(cfg, params, bound):
+    """The close's key is the configuration's pin for the bandwidth verifier alone; with no pin the session has no
+    case."""
+    pin = _pinned(cfg, BANDWIDTH_VERIFIER, P2.COMPONENT)
+    words = [*(["--bw-trusted-sha512", *pin] if pin else []),
+             *(w for k, flag in _BANDWIDTH.items() if k in bound for w in (flag, bound[k]))]
+    return {"POUS_ARGS": shlex.join(words),
+            "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect --serve-dir "$1" --window "$2" --out "$3"'}
+
+
 #: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the challenger's header names the
 #: monotonic clock
 POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.challenger_party:PROTOCOL",
@@ -462,18 +492,23 @@ PARTIES: dict[str, dict[str, Piece]] = {
                         "the declared division yet, so the record has none and the onsite check stays undecided"),
     },
     "pous": {
-        PROVER: Piece("pous", PROVER, RUNTIME, "PoUS's rounds' prover: the memory challenger's timed reads answered "
-                      "from the served weights held as P2's C* on the card", reaches=MEMORY_CHALLENGER,
-                      binds=("address",), session=POUS),
-        MEMORY_CHALLENGER: Piece("pous", MEMORY_CHALLENGER, RUNTIME, "the memory challenger's side, on its own coins "
-                                 "and clock, signing the session", binds=("address",), session=POUS),
+        PROVER: Piece("pous", PROVER, SERVED_WINDOW, "PoUS's prover after the workload (POUS_CMD, served_piece.sh): "
+                      "the memory challenger's timed reads answered from the served weights held as P2's C* on the "
+                      "card, its session trusted only under the key the configuration pins for the memory challenger's "
+                      "PoUS sessions", scripts=(POUS_SCRIPT, ONSITE_PIECES), reaches=MEMORY_CHALLENGER,
+                      binds=("address",), optional=("host", "command"), hooks=_pous_piece),
+        MEMORY_CHALLENGER: Piece("pous", MEMORY_CHALLENGER, GATE, "the gate: PoUS's memory challenger, on its own "
+                                 "coins and clock, signing the session"),
         VERIFIER: Piece("pous", VERIFIER, CHECK, "PoUS's row"),
     },
     "bandwidth": {
-        PROVER: Piece("bandwidth", PROVER, RUNTIME, "PoUB's prover: the served store proved to the bandwidth verifier a "
-                      "pass at a time", reaches=BANDWIDTH_VERIFIER, binds=("address",), session=POUB),
-        BANDWIDTH_VERIFIER: Piece("bandwidth", BANDWIDTH_VERIFIER, RUNTIME, "the bandwidth verifier and its "
-                                  "challenger, on its own coins and clock", binds=("address",), session=POUB),
+        PROVER: Piece("bandwidth", PROVER, SERVED_WINDOW, "PoUB's prover inside PoUS's piece (served_piece.py's "
+                      "--bw-*): the held store proved to the bandwidth verifier a pass at a time, the session's close "
+                      "trusted only under the key the configuration pins for the bandwidth verifier, its answer "
+                      "collected by BANDWIDTH_CMD", scripts=(BANDWIDTH_SCRIPT,), reaches=BANDWIDTH_VERIFIER,
+                      binds=("host",), optional=("command",), hooks=_bandwidth_piece),
+        BANDWIDTH_VERIFIER: Piece("bandwidth", BANDWIDTH_VERIFIER, GATE, "the gate: the bandwidth verifier and its "
+                                  "challenger, on its own coins and clock"),
         VERIFIER: Piece("bandwidth", VERIFIER, CHECK, "PoUB's row"),
     },
     "certifier": {
@@ -521,8 +556,8 @@ def pieces(cfg: Mapping[str, Any], party: str) -> list[Piece]:
     return out + [PARTIES[c][party] for c in cfg["protocols"] if party in PARTIES.get(c, {})]
 
 
-#: the runner's variables that are serve-openai's flags, which each piece adds its own to
-JOINED = ("SERVE_ARGS",)
+#: the runner's variables that are flags, serve-openai's and served_piece.py's, which each piece adds its own to
+JOINED = ("SERVE_ARGS", "POUS_ARGS")
 
 
 def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:

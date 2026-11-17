@@ -30,7 +30,7 @@
 # didn't answer or agree (the window is then undecided), keeps what the sessions left and can be answered again by
 # hand (served_piece.py's arguments with --answers), with no new session; once each Lean has answered, C* is removed.
 #
-# POUS_ARGS adds served_piece.py's options (--node, --private, --rounds, --challenger-*, --trusted-sha512, --device,
+# POUS_ARGS adds served_piece.py's options, as shell words (--node, --private, --rounds, --challenger-*, --trusted-sha512, --device,
 # --bw-*, --no-bandwidth). Logs: DIR/build.log, DIR/lake-build.log, DIR/pous.log (both parts' stderr) and
 # DIR/stamps.txt, the piece's timeline, a line `UTC EVENT` each: its start, each build's end, the library's load, the
 # card asked for and leased, each part's exit, and between them served_piece.py's own (the weights loaded, setup, each
@@ -75,10 +75,10 @@ if [ -z "$POUS_EXE" ] || [ -z "$BW_CASE_EXE" ]; then
   [ -n "$POUS_EXE" ] || { built "$CHECK" pous-run-protocol; POUS_EXE=$EXE; }
   [ -n "$BW_CASE_EXE" ] || { built verity/protocols/resource_accounting/memory/poub/verifier/lean poub-p2-protocol; BW_CASE_EXE=$EXE; }
 fi
-# shellcheck disable=SC2206
 ARGS=("$ROOT/benchmarks/pous/served_piece.py" "$SERVE_DIR" "$WINDOW" "$DIR" --hf-home "${HF_HOME:-/workspace/hf}"
       --p2-lib "$LIB" --node "${POUS_NODE:-$(hostname)}" --bw-minutes "${BW_PARTY_MIN:-10}"
-      --case-exe "$POUS_EXE" --bw-case-exe "$BW_CASE_EXE" ${POUS_ARGS:-})
+      --case-exe "$POUS_EXE" --bw-case-exe "$BW_CASE_EXE")
+eval "ARGS+=(${POUS_ARGS:-})"
 LEASE=(gpu-lease)
 command -v gpu-lease > /dev/null 2>&1 || LEASE=(bash "$ROOT/tools/research/src/research/pods/sh/gpu_lease.sh")
 stamp "asked for the card"
