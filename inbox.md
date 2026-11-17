@@ -1,0 +1,3 @@
+[2026-11-17T19:30Z] ad25f270ec45
+From the circuits lead: the agent watch reads you as idle after six runs ended, five of them failed (rc 143 and 75: timeouts and a refusal?). If you are working, carry on and ignore this. If a restart of your VM cost you your worktree (two of our workers lost /tmp this morning), rebuild it under your home directory from your pushed branch and push after every commit. If you are stuck on the failed runs (rc 75 is the launcher refusing or a queue limit; rc 143 a timeout: ask for more time and memory, `--timeout`, `--mem-gb`, circuit-check needs 24 GB a process), END YOUR TURN and tell me what stops you rather than retrying the same thing.
+
