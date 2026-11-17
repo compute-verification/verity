@@ -14,7 +14,7 @@ there is the deferred release's link. Here is `envPre_loop`'s step at the `Commi
 * `nextD_link`: at the link (round `1`), below the last round, the deferred release is the ZK server's own message,
   whatever the worker sends.
 * **`slotCase_commit`**: where the run's messages are the deferred release's and `J` is kept at the `Commit`, what the
-  relay read at the `Commit` is the model's link, whose roots are the level 0 the loop drew for the session, and
+  relay read at the `Commit` is the model's link, whose roots are the level 0 the loop sampled for the session, and
   `LoopP` holds at the next request with that message taken and one more opening.
 -/
 
@@ -53,7 +53,7 @@ theorem nextD_link {W Rr : Type} (L : LeanRelease W Rr) (n : Claims.Msg → Nat)
 
 /-- **The `Commit`'s slot case**: where each of the run's messages is the deferred release's, the run has more than
 two, and `J` is kept at the `Commit`, what the relay read at the `Commit` is the model's link, the ZK server's own
-message there, whose roots are the level 0 the loop drew for the session; and `LoopP` holds at the next request with
+message there, whose roots are the level 0 the loop sampled for the session; and `LoopP` holds at the next request with
 that message taken, the session having opened one more. -/
 theorem slotCase_commit {W Rr : Type} {M : LoopModel W Rr} {J : List String → State → LoopAt → Prop} {sid : Nat}
     {spec : SessionSpec} {sts : Array Stmt} {nonce : ByteArray} (hOwn : M.Own) (hn : 2 < M.nN M.x)

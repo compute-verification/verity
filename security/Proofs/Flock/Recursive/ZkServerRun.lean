@@ -12,7 +12,7 @@ row digests under each list's salts, in salt order. `run_of_one` is its use: a s
 a template `σ` filled with the commit strings of digests `D`, finished, sends `σ` filled with `D`'s commit strings under
 every salt list of that length.
 
-What a message says but its commit strings is `blank`; its commit strings, in the order the ZK server drew their salts,
+What a message says but its commit strings is `blank`; its commit strings, in the order the ZK server sampled their salts,
 `holes`; `fillAll` puts commit strings back into blanked messages. The proof follows `run`'s loop, `step`'s cases and the
 salting `mapM`s at once at the two salt lists (`Rel`, a relational reading of the ZK server's state monad).
 -/
@@ -40,7 +40,7 @@ def blank : Sent → Sent
   | .round stream tops level0 rows n => .round stream (tops.map blankTop) level0 (blankTop rows) n
   | .finish ok => .finish ok
 
-/-- A message's commit strings, in the order the ZK server drew their salts. -/
+/-- A message's commit strings, in the order the ZK server sampled their salts. -/
 def holes : Sent → List ByteArray
   | .hello _ => []
   | .commit roots => roots.flatMap (·.2)
@@ -176,8 +176,8 @@ section Rel
 
 variable (ys ys' : List ByteArray)
 
-/-- What two states of one session at the salt lists `ys`, `ys'` drew and sent: `z`, `z'` are their salts left, `x`, `x'`
-what they sent, and `p`, `p'` the commit strings sampled and not yet sent. Both drew as many salts, the first ones of their
+/-- What two states of one session at the salt lists `ys`, `ys'` sampled and sent: `z`, `z'` are their salts left, `x`, `x'`
+what they sent, and `p`, `p'` the commit strings sampled and not yet sent. Both sampled as many salts, the first ones of their
 lists; they sent the same messages but for their commit strings; and their commit strings, the sent ones then the
 pending ones, are those of the same 64-byte digests `ds` under each list's salts, in order. -/
 def Drawn (p p' : List ByteArray) (z : List ByteArray) (x : Array Sent) (z' : List ByteArray) (x' : Array Sent) :

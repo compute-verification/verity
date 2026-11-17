@@ -11,7 +11,7 @@ ZK server runs, the analysis's masked prover (`Flock.ZkServer.Finish`'s copies, 
   (`FlockComplete.commitP`'s, which evaluates each entry on its own), its leaves `hm96-sha512/v1`'s in tasks.
 * `commit0`: level 0's commitment of the table the transport hands it (`Link.In`, the table `Link.parse` reads;
   `FlockComplete.commitPZk`'s). `commitOf`: the same commitment read off the table's `Level0`, which the session
-  loop drew and committed (`Level0.ofSamples_ok`: its rows, layers and root are `Link`'s of its own inputs).
+  loop sampled and committed (`Level0.ofSamples_ok`: its rows, layers and root are `Link`'s of its own inputs).
 * `zerocheckFw`, `lincheckFw`: the masked zerocheck and lincheck sending the passed values `v_i` as `v_i + h_i`
   (`FlockComplete.zerocheckCut`, `lincheckCut` at `masked i = v_i + h_i`), `final_c`'s too: the inner proof holds the
   passed `final_c` to `P_c(ζ)` of the passed `round1_c` (`Zk.replay`'s constraint).
@@ -886,7 +886,7 @@ def coinsWhy (own : Nat → Nat → ByteArray → IO (Option (Except String Own)
     if o.coins[k]? == some cs then none else some s!"its round {k}'s coins are not the ones the stream answered"
 
 /-- **Table `i`'s rep `r`'s samples** on the table `t`: the ones its frame took at the rep's start where the session loop
-holds the rep (`own`), else `mine`, the ones this finish drew with the rep's salts for levels ≥ 1. No request carries
+holds the rep (`own`), else `mine`, the ones this finish sampled with the rep's salts for levels ≥ 1. No request carries
 them, so the prover never holds the pads it is masked with. -/
 def drawsOf (own : Nat → Nat → ByteArray → IO (Option (Except String Own))) (i r : Nat) (t : Tab)
     (mine : Option Frame.Draws) : IO (Except String Frame.Draws) := do

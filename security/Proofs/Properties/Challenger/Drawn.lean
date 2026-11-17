@@ -5,7 +5,7 @@ public import Proofs.Properties.Challenger.Coins
 public import Proofs.Properties.Challenger.Window
 
 /-!
-# The coins a sample reads are the ones its challenger drew
+# The coins a sample reads are the ones its challenger sampled
 
 `sampleCoins` reads its coins under the session the ledger opens on the window (`ChallengePhase.drawCoins_ok`), and they are the
 coins any run of the device released whose commitment and roots are that session's (`Coins.sampled_released`), or a break.

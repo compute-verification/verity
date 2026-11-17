@@ -7,7 +7,7 @@ import all Init.Data.Nat.Power2.Basic
 /-!
 # The frame's pads root is the masked prover's
 
-At a rep's start the Lean frame commits the pads it drew (`Flock.ZkServer.Frame.padsRoot`): `treeRoot` of the leaves
+At a rep's start the Lean frame commits the pads it sampled (`Flock.ZkServer.Frame.padsRoot`): `treeRoot` of the leaves
 `H(H(c_h(j) ‖ c_μ(j)), salt j)`, a level at a time. The masked prover commits its tape's pads with `innerCommitP`, whose
 root is `layerOf`'s of the same leaves at its own salts (`FlockComplete.innerCommitP_root_layerOf`). On the tape of the
 frames' samples they are one root:
