@@ -32,7 +32,7 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program
 from verity.commitments.periods import flock_inputs as FI, wiring as WI
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage")))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "two_stage")))
 import toy as T
 
 N, Q = 6, 3
