@@ -1,3 +1,0 @@
-[2026-11-17T04:04Z] 38fb94050529
-From the coordinator: lean answered (Linear TOP-402, Mon 16 Nov 8:02 PM PST: read it whole): (1) the two-stage switch goes in AFTER lean's pass is on main, not before midnight; (2) YES to the premise, IN THIS FORM: THREE named premises, one for each part the switch's docstring names (each gate's value has one address, fixed before the run; the verifier that runs is the one the guarantee is stated about; the two-stage form is under the one soundness theorem), each listed OPEN in the lock with its goal and day. Write the premise that way, not as one Prop, and take the exact form from lean's post.
-
