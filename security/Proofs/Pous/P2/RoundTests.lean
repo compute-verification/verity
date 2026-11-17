@@ -124,32 +124,5 @@ theorem round_trunc (hP : PrimeP16448) (p ε₀ : ℝ≥0∞) (D Q L t : ℕ) (h
     _ ≤ (1 - p) * 1 + ε₀ := add_le_add (mul_le_mul' le_rfl (pr_le_one' _)) le_rfl
     _ = _ := by rw [mul_one]
 
-/-- **At `2^19` blocks, truncation refutes `p = 0.043` from `L = 2^167`**: keeping `501,757` blocks without their low
-`166` bits (`16,282` bits a block, within `S₀ = 8,169,621,180`) passes a round with probability
-`501757/2^19 ≈ 0.95703 > 0.957 + 2^-130`. So `P2RingRoundSecure (43/1000) ε₀ D Q L` is false at `D ≥ 2`, `Q ≥ 2`,
-`L ≥ 2^167` whenever `ε₀ ≤ 2^-130`, if `p` is prime.
-
-`t = 166` and `167` (rates `0.957026` and `0.957085`) sit in the window `(1 − p, 0.01^(1/105)] = (0.957, 0.957089]`
-in which only the per-round form fails: the same truncation could refute the 105-challenge whole-audit form
-`P2RingAuditSecure` only from `t = 168`, where its rate's 105th power first exceeds `1%`. `L ≥ 2^167` is `round_trunc`'s decoder, which tries `2^(t+1)` candidates. A
-meet-in-the-middle decoder takes one root of the stored value (depth `16,446`, both signs compared locally) and then
-one squaring per candidate, about `2^166 + 2^16` multiplications, so the true threshold is about `L ≥ 2^166` at
-`D ≥ 16,446`. That decoder is not proved here. -/
-theorem round_trunc_b19 (hP : PrimeP16448) (ε₀ : ℝ≥0∞) (D Q L : ℕ) (hD : 2 ≤ D) (hQ : 2 ≤ Q)
-    (hL : 2 ^ 167 ≤ L) (hε : ε₀ ≤ (2⁻¹ : ℝ≥0∞) ^ 130) : ¬ P2RingRoundSecure (43 / 1000) ε₀ D Q L := by
-  intro h
-  have hS : 501757 * (16448 - 166) ≤ (p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ := by
-    rw [stateBound_p2ring_b19]
-    norm_num
-  have hb := (round_trunc hP _ ε₀ D Q L 166 hD hQ (by norm_num) hL h (2 ^ 19) le_rfl (by norm_num) 501757
-    (by norm_num) hS).trans (add_le_add le_rfl hε)
-  have hm : ((501757 : ℕ) : ℝ≥0∞) / ((2 ^ 19 : ℕ) : ℝ≥0∞) = ENNReal.ofReal (501757 / 2 ^ 19) := by
-    rw [← ENNReal.ofReal_natCast, ← ENNReal.ofReal_natCast (2 ^ 19), ← ENNReal.ofReal_div_of_pos (by norm_num)]
-    norm_num
-  have hr : (1 - 43 / 1000 : ℝ≥0∞) + (2⁻¹ : ℝ≥0∞) ^ 130 = ENNReal.ofReal (957 / 1000 + (2⁻¹ : ℝ) ^ 130) := by
-    rw [one_sub_043, ENNReal.ofReal_add (by norm_num) (by positivity), ENNReal.ofReal_pow (by norm_num),
-      ENNReal.ofReal_inv_of_pos (by norm_num), ENNReal.ofReal_ofNat]
-  rw [hm, hr, ENNReal.ofReal_le_ofReal_iff (by positivity)] at hb
-  norm_num at hb
 
 end PousP2Rounds
