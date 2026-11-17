@@ -9,6 +9,7 @@ import pytest
 from steady_standins import CUDA, POINT, RECORD, STAGE, Store, tree
 from test_steady import DROP, made
 
+from verity_bench import kit
 from verity_bench import prove_records as R
 from verity_bench import steady as S
 from verity_bench import steady_node as N
@@ -369,6 +370,17 @@ def test_a_labelled_run_whose_rows_cannot_be_read_is_named_in_each_point_it_coul
     store.label(bare, "superseded_by", "r20231116-100000-0009")
     found, why = store.lookup()(spec, item, identity)
     assert found is None and bare not in why and unread in why, why
+
+
+def test_a_labelled_trial_whose_row_passes_is_never_the_points_run_and_is_named_as_a_trial(planned):
+    spec, item, identity, store = planned
+    trial = store.ran("r20231114-100000-0001", store.files({SP.VERSIONS: DROP}), env={kit.TRIAL: "1"})
+    store.label(trial, "run_of_record", RECORD)
+    why = kit.trial_why(trial, {"params": {"env": {kit.TRIAL: "1"}}})
+    assert store.lookup()(spec, item, identity) == (None, f"{trial} (labelled `{RECORD}`): {why}")
+    passing = store.ran("r20231115-100000-0002", store.files({SP.VERSIONS: DROP}))
+    store.label(passing, "run_of_record", RECORD)
+    assert store.lookup()(spec, item, identity) == (passing, None)
 
 
 def test_a_run_is_cannot_tell_where_neither_its_own_row_nor_its_completed_one_holds_the_field(planned):
