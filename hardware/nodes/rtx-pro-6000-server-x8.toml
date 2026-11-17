@@ -49,7 +49,7 @@ rate = { value = 698092307693, unit = "B/s", mark = "ceiling", source = "the hos
 rate = { value = 400000000000, unit = "bit/s", mark = "measurement", source = "/sys/class/net/eth0/speed on the node's VM reads 400000 Mb/s, and ethtool the same at full duplex with the link detected (art:8e47f2512256). eth0, a device of the mlx5_core driver, is the one interface a route of the node's main tables names, the default route among them; the others are the loopback and a bridge with no device behind it, which is down. No latency of it is on record and nothing reads one, so its link registers at latency 0" }
 
 # The storage path: the node's way out that is no interface. Every disk of the node is the provider's network disk,
-# so what is written to one has left the server past every interface of the VM's, where no network certifier can
+# so what is written to one has left the server past every interface of the VM's, where no network attester can
 # split it. It is stated once, naming the disk leaves that ride it, and it states no rate: its rate is the one that
 # bounds the node's disks together, the host card's disk.read_max, which the Site's leaves gives and its ways_out
 # reads. A server whose drives are all its own has no such table.

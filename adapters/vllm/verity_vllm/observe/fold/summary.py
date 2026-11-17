@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from verity_vllm.observe.fold.resolver import spec_label
 
 #: the fail-closed reference-integrity rule id (definition and evaluation over persisted summaries:
@@ -9,8 +11,8 @@ from verity_vllm.observe.fold.resolver import spec_label
 REFERENCE_INTEGRITY_RULE = "R1/2026-09-18"
 
 
-def summarize(result) -> dict:
-    """A JSON-able summary of a fold (`fold.FoldResult`) for reports."""
+def summarize(result: Any) -> dict:
+    """A JSON-able summary of a fold (`fold.FoldResult`, not imported: `fold` imports this module) for reports."""
     return {"digest": result.digest, "params": [[n, repr(t)] for n, t in result.params], "ret_type": repr(result.body.ret_type) if result.body else None,
             "nodes": len(result.body.nodes) if result.body else 0, "instances": len(result.instances),
             "report": result.report.to_dict(), "memory": result.memory, "steps": result.steps, "errors": len(result.errors),
