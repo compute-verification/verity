@@ -50,7 +50,7 @@ def verified(case: dict) -> dict:
     return {"refused": list(refused)} if refused is not None else {"outcomes": got}
 
 
-VERIFIED_PORT = D.Port("pouw-check-difftest", "credit-verified", verified, package=LEAN, need_rejects=False,
+VERIFIED_PORT = D.Port("pouw-verifier-difftest", "credit-verified", verified, package=LEAN, need_rejects=False,
                        of_record=V.RECORD_VERDICT,
                        inputs=st.builds(cases.verified_instance, st.randoms(use_true_random=False),
                                         st.sampled_from(["honest"] * (len(cases.NAMES) // 3) + cases.NAMES)))
@@ -65,7 +65,7 @@ def test_verified(server):
     stats = D.run(VERIFIED_PORT, examples=300, server=server)
     swept = Counter(D.replay(VERIFIED_PORT, cases.verified_instance(random.Random(f"{name}/{seed}"), name), server)[0]
                     for name in ["honest", *cases.NAMES] for seed in range(10 if name in cases.LANES_NAMES else 4))
-    print(f"pouw-check-difftest credit-verified: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+    print(f"pouw-verifier-difftest credit-verified: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(VERIFIED.items()))}")
     assert {"run", "accept", "lanes: accept"} <= set(VERIFIED)
     for part in ("circuit: the committed circuit files are not", "proof: the window's statements are not a list",
