@@ -90,6 +90,7 @@ def piece_rows(logits: Any, ids: Any, c: int | None = None, *, pad: int | None =
     Refused unless the combine selects every id. ``pad``: the size class's tokens, the last row and id repeated to it
     first, as `Span.padded` pads `pieces`' cells by whole tokens."""
     import torch
+
     from verity_vllm.definitions.registry.b1 import NEG_INF_BF16
     from verity_vllm.definitions.registry.dead_free import CHUNK
     x = logits.view(torch.int16) if logits.dtype == torch.bfloat16 else logits
@@ -133,8 +134,8 @@ def _greedy_rows(x: Any, ids: Any, template: str) -> dict[str, dict[str, Any]]:
     chunk's rows are its lanes and its output its best's word and its token index's low and high words; the combine's
     rows are the last chunk's lanes and each other chunk's output, and its output the token's two words."""
     import torch
-
     from verity.circuits.codec import descriptor_id
+
     from verity_vllm.definitions.registry import greedy_stages as GS
     from verity_vllm.definitions.registry.b1 import NEG_INF_BF16
     n, V = x.shape
