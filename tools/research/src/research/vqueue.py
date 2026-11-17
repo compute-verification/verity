@@ -63,7 +63,8 @@ passed candidates at the chain's bottom in order, one `Advance` and drop each, u
 counts at once, as the lowest's would, once its base's word on each of its own failures is known (`Failed.base_tests`), or,
 for a failure whose inputs meet its own members and none below it, `main`'s (`Failed.main_tests`, `_said`).  Until then it
 is built again at once on its base without its suspects, who wait for its base's check: when that passes they are
-bisected as a fail's suspects, and when it fails, its failure being its base's, they go back in (`_unsaid`).  The lowest fail
+bisected as a fail's suspects, and when its base leaves main's chain otherwise or lands on inherited failures, the failure
+maybe its base's, they go back in (`_unsaid`).  The lowest fail
 on the chain is the one read, and nothing is built on a candidate that failed.  A fail is read as soon as a gating task has
 failed, while others still run (not `Verdict.ended`), unless each of its failures is inherited.  Bisecting keeps no state of
 its own: a suspect's limit (half the suspects of the newest failed or infra-split outcome it was in) bounds the batches it
@@ -920,12 +921,12 @@ def _passed(c: Candidate) -> Outcome:
 
 
 def _outcomes(s: Snapshot, acts: list[Action]) -> list[Outcome]:
-    """The snapshot's history and the outcomes ``acts`` records, oldest first, each `UNSAID` one as its base's word has it
-    once its base left main's chain: a fail when it passed, so its suspects are bisected as a fail's, and none when it left
-    otherwise, so they go back in as before."""
+    """The snapshot's history and the outcomes ``acts`` records, oldest first, each `UNSAID` one as its base's word has it:
+    a fail once its base's check passed or it landed failing nothing, so its suspects are bisected as a fail's, and none
+    once it left main's chain otherwise, inherited failures and all, so they go back in as before."""
     out = [*s.history, *(replace(a.outcome, sha=a.sha) for a in acts if isinstance(a, Drop) and a.outcome is not None)]
     live = {c.sha for c in s.candidates} - {a.sha for a in acts if isinstance(a, Drop)}
-    passed = {o.sha for o in out if o.state == PASS}
+    passed = {o.sha for o in out if o.state == PASS and not o.inherited} | {c.sha for c in s.candidates if c.verdict.state == PASS}
     return [replace(o, state=FAIL) if o.state == UNSAID and o.base in passed else o for o in out
             if o.state != UNSAID or o.base in live | passed]
 
@@ -1053,7 +1054,7 @@ def _unsaid(c: Candidate, built: dict[int, Ready]) -> Drop:
     unsaid = [f for f in c.verdict.failed if not _inherited(f) and f.base_tests is None]
     suspects = tuple(m for m in c.members if any(meets(_files(built, m), f.inputs) for f in unsaid)) or c.members
     return Drop(c.sha, f"failed {', '.join(f.task for f in unsaid)} before {c.base[:12]}'s check said whose failure it is: "
-                       f"built again without {', '.join(f'#{m}' for m in suspects)}, who wait for that check",
+                       f"built again without {', '.join(f'#{m}' for m in suspects)}, who wait{'s' * (len(suspects) == 1)} for that check",
                 Outcome(c.members, c.heads, UNSAID, suspects, c.base))
 
 
