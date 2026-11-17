@@ -1,5 +1,7 @@
 """Remote's configuration (`demos/remote.toml`) under the table (`served_table.py`): `verity run --dry-run` resolves
-every party, Pearl+'s included, and without bindings names the three Pearl+ lacks; the runner's variables under remote
+every party, Pearl+'s included, and without bindings Pearl+'s coins are an in-process challenger's on the workload's
+machine, which the verifier's line says, with no key blocking and no placeholder reaching the runner; a part of Pearl+'s
+live challenger is refused by name; the runner's variables under remote
 are Pearl+'s, onsite's carry none of them; Pearl+'s class is refused by name when it disagrees with the workload's slots
 or window-steps, and its uniform tie is asked for only by its parameter. Under remote alone, the runner's exit 2 with
 the compose hand-off written is pending, and the verifier reads only the compose answer's record (Pearl+'s row under
@@ -23,7 +25,8 @@ T = sys.modules["served_table"]
 PP = SP.IDS["pearl-plus"]
 KEY = "0" * 128
 BINDINGS = {"challenger": {"pearl-plus": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}}}
-KEYS = ["challenger.pearl-plus.gate", "challenger.pearl-plus.peer", "challenger.pearl-plus.key-sha512"]
+LOCAL = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "",
+         "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
 PEARLPLUS = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "gate-command",
              "PEARLC_CHALLENGER_PEER": "peer-1", "H1_KEY_SHA512": KEY}
 OPTIONAL = {"PEARLC_CHALLENGER_LANE", "MAIN_FILE", "V3C_CLASS", "CLASSES", "PEARLPLUS_TIE_UNIFORM"}
@@ -76,11 +79,24 @@ def test_a_dry_run_resolves_every_party_of_remote(tmp_path, capsys):
     assert {"from": "challenger", "to": "workers", "messages": ["PearlSalt"], "after": []} in cfg["channel"]
 
 
-def test_a_dry_run_without_bindings_names_the_three_pearl_plus_lacks(capsys):
-    rc, got, _ = dry(capsys)
-    assert rc == 0 and got["dry"][0]["unbound"] == sorted(KEYS)
-    assert T.unbound(R.load(CONFIG, REG), {}) == KEYS
-    assert hooks_of(got)["PEARLC_CHALLENGER_GATE"] == "<challenger.pearl-plus.gate>"
+def test_without_bindings_no_key_blocks_and_pearl_pluss_coins_are_the_workloads_machines(capsys):
+    cfg = R.load(CONFIG, REG)
+    for on in ((), ("--on", T.PROVER_NODE)):
+        rc, got, err = dry(capsys, *on)
+        assert rc == 0 and [x["unbound"] for x in got["dry"]] == [[]], err
+        assert hooks_of(got) == LOCAL
+    assert T.unbound(cfg, {}) == []
+    variables = T.variables(cfg, {})
+    assert [k for k, v in variables.items() if "<" in v] == []
+    assert {k: variables.get(k) for k in LOCAL} == LOCAL and "H1_KEY_SHA512" not in variables
+
+
+def test_a_part_of_pearl_pluss_live_challenger_is_refused_by_name(tmp_path, capsys):
+    for part, lacking in (({"gate": "gate-command"}, "challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512"),
+                          ({"peer": "peer-1", "key-sha512": KEY}, "challenger.pearl-plus.gate")):
+        rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": part}}))
+        assert rc == 2 and "refused unbound: Pearl+'s live challenger takes gate, peer, key-sha512 together" in err, err
+        assert f"without {lacking}: bind them" in err, err
 
 
 def test_the_runners_variables_under_remote_are_pearl_pluss_and_onsites_carry_none():
@@ -145,6 +161,19 @@ def test_the_workload_runs_once_with_pearl_pluss_hooks(tmp_path, capsys, monkeyp
     assert said(capsys.readouterr().out, "PARTY") == [{"party": p, "refused": None} for p in here] and "workers" in here
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
     assert hooks == PEARLPLUS | {"SLOTS": "4", "WINDOW_STEPS": "16"}
+
+
+def test_without_bindings_the_workload_runs_with_no_gate_and_no_placeholder(tmp_path, capsys, monkeypatch):
+    for k in OPTIONAL | set(PEARLPLUS):
+        monkeypatch.delenv(k, raising=False)
+    runner = tmp_path / "runner.sh"
+    runner.write_text(RUNNER)
+    monkeypatch.setattr(T, "RUNNER", str(runner))
+    state = tmp_path / "state"
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--state", str(state)], REG)
+    assert rc == 0 and set(parties(capsys).values()) == {None}
+    hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
+    assert hooks == {k: v for k, v in LOCAL.items() if k != "DEVELOPMENT"} | {"SLOTS": "4", "WINDOW_STEPS": "16"}
 
 
 HANDED = "HANDOFF the final record, composed off this node: on COMPOSE_NODE (auditor-2)"
@@ -292,3 +321,20 @@ def test_remotes_verifier_gives_its_verdict_line_on_its_own_machine(tmp_path, ca
     lines = said(out.out, "VERDICT")
     assert len(lines) == 1, out
     assert (rc, lines[0]["product"], lines[0]["verdict"], lines[0]["block"]) == (0, T.REMOTE, "accept", 3)
+    assert lines[0]["coins"] == "simulated"
+    assert lines[0]["coins_on"] == {T.RECORD_NAMES["integrity"]: T.PROVER_NODE, "pearl-plus": T.PROVER_NODE}
+
+
+def test_the_verifiers_line_names_the_challengers_machine_for_a_bound_gate(tmp_path):
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
+    spot = T.RECORD_NAMES["integrity"]
+    at = {p["name"]: p["machine"] for p in cfg["party"]}
+    for tables, want in ((BINDINGS, {spot: at[T.WORKERS], "pearl-plus": at[T.CHALLENGER]}),
+                         ({"challenger": {**BINDINGS["challenger"], spot: {"gate": "user@gate-1"}}},
+                          {spot: at[T.CHALLENGER], "pearl-plus": at[T.CHALLENGER]})):
+        (tmp_path / T.BINDINGS).write_text(json.dumps(tables))
+        got = T.remote_check(cfg, tmp_path)
+        assert got["coins_on"] == want
+        assert got["coins"] == ("simulated" if at[T.WORKERS] in want.values() else T.coins_of(cfg))
+    assert T.coins_of(cfg) == "development" and at[T.WORKERS] != at[T.CHALLENGER]

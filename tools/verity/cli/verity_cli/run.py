@@ -43,6 +43,8 @@ onsite, its id the line's ``product``), printed as a line and written to ``STATE
 
 onsite's line also has ``trusted-device``: each memory challenger's premise that its device ran on a machine the
 developer doesn't control (`memory_challenger.trusted_device`), by component, from the outcome of its run here.
+remote's has ``coins_on``: the machine each component whose challenger gate is optional had its coins flipped on, the
+challenger's where its gate is bound, else the workload's, which makes ``coins`` ``simulated``.
 
 ``coins`` is ``simulated`` when the challenger's host is a machine a prover's party is on, else ``development`` (the
 keys are made for the run). ``simulated`` names each premise the placement leaves unmet (a party that sends coins on a
