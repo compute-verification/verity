@@ -337,7 +337,7 @@ def pearlplus_why(challenger: str) -> str:
     """Why the Pearl+ piece's verdict (`pearlplus`) credits nothing, its epoch's salt coin a live session's on
     `challenger` (`challenger_of`)."""
     return (f"{_PEARLPLUS_UNTIED}; its epoch's salt coin is a live session's on {challenger}; and an ACCEPT is the "
-            "reference replay's (verify_run.py), not PouwCheck's ZK proof")
+            "reference replay's (verify_run.py), not PouwVerifier's ZK proof")
 
 
 def pearlplus_coins_from(challenger: str) -> dict[str, str]:
@@ -405,7 +405,7 @@ MEMBERS_COVER = ("each sampled proof block proved in its own kind's statement ag
                  "misses members; the wires between members are not held; the circuit files' digests are fixed before "
                  "the coins in the parameters but not signed in the docket")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
-PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwCheck.PearlPlus), "
+PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwVerifier.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
                   "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
 #: what the composed verdict's reason (`said`) says of that row's accept
@@ -418,7 +418,7 @@ WEAKER_TIE = ("a weaker tie, not the tied guarantee: the window's records audit 
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
-                "served_rows": "a window's committed rows and salts", "certifier-front": "the certifier front's group (its prompts)"}
+                "served_rows": "a window's committed rows and salts", "certifier-front": "the network attester front's group (its prompts)"}
 #: ... by the serve dir's top directory
 WITNESS_TOPS = {"windows": "a sealed row dir (the window's rows)", "advice": "the advice and its opening"}
 #: ... by a file's name (`fnmatch`)
@@ -2107,10 +2107,10 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     try:
         lean = json.loads((piece_dir / PEARLPLUS_LEAN).read_text())
     except (OSError, ValueError) as e:
-        return None, f"no Lean PouwCheck.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
+        return None, f"no Lean PouwVerifier.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
     if not isinstance(lean, dict) or lean.get("verdict") != "accept":
         v = lean.get("verdict") if isinstance(lean, dict) else None
-        return None, f"the Lean PouwCheck.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
+        return None, f"the Lean PouwVerifier.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
     source = (answer["profile"] or {}).get("source")
     if (lean.get("commitment"), lean.get("source")) != (answer["commitment"], source):
         return None, (f"the Lean verdict is on run {str(lean.get('commitment'))[:16]}... at source "

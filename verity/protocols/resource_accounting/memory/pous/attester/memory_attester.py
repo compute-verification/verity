@@ -123,7 +123,7 @@ COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
 RECORD_BYTES = 92
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
-"""The coarsest clock the memory attester runs on: a microsecond (the certifier's 100 ms buckets are far too coarse)."""
+"""The coarsest clock the memory attester runs on: a microsecond (the network attester's 100 ms buckets are far too coarse)."""
 COMPLETE, LATE = "complete", "late"
 HM96 = hm96.SHA512
 LIMITS = VerificationLimits()

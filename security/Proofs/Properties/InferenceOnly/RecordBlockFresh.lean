@@ -37,13 +37,13 @@ the summary's fresh (`FreshRows`):
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Row outerOf)
-open InferenceOnlyCheck.Record (Case read Kind)
-open InferenceOnlyCheck.Record.SecurityProofs (form read_front front_text finish_text mem_of_lookup rowBits rowBits_eq FreshRows
+open InferenceOnlyVerifier.Record (Case read Kind)
+open InferenceOnlyVerifier.Record.SecurityProofs (form read_front front_text finish_text mem_of_lookup rowBits rowBits_eq FreshRows
   tmplOf_spec bitsOf_eq program_of_read)
 open Spot.Bits (bitsOf)
 open Lean (Json)
@@ -209,4 +209,4 @@ theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = 
   rw [← hrb]
   exact (hrow b hbA).2.2.2
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
