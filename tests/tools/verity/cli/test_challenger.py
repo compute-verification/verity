@@ -4,6 +4,7 @@ stopped when the run ends. Its hosts and Pearl+'s gate are stand-ins written by 
 from __future__ import annotations
 
 import ast
+import inspect
 import json
 import subprocess
 import sys
@@ -79,6 +80,12 @@ def test_the_challenger_writes_spots_and_pearl_plus_bindings():
     assert {c: list(k) for c, k in T.STARTS[T.CHALLENGER].writes.items()} == {
         "sampled-proofs": ["loopback", "main-file"], "pearl-plus": ["gate", "peer", "lane", "key-sha512", "main-file"]}
     assert (ROOT / T.PEARLPLUS_GATE).is_file()
+
+
+def test_its_serve_takes_the_machines_this_host_stands_for_or_none():
+    serve = inspect.signature(T.STARTS[T.CHALLENGER].serve)
+    serve.bind({}, Path("state"))
+    serve.bind({}, Path("state"), ["prover-node"])
 
 
 def test_its_hosts_run_under_keys_made_for_the_run_pinned_on_the_runs_commit_and_its_bindings_are_whole(stand_ins):

@@ -548,7 +548,7 @@ def _deployed_local(root: Path, main: list[str]) -> LC.Local:
     return LC.Local(root, main, params=(lms.DEPLOYED.W, lms.DEPLOYED.H), workers=len(os.sched_getaffinity(0)))
 
 
-def _serve_challenger(cfg: Mapping[str, Any], state: Path) -> None:
+def _serve_challenger(cfg: Mapping[str, Any], state: Path, machines: Sequence[str] = ()) -> None:
     """The challenger where `verity run` starts it, on this machine: SPOT's loopback host (`challenger_party.Host`)
     and Pearl+'s gate (`PEARLPLUS_GATE`), each under a key made for the run in ``STATE/parties/challenger/``, flipping
     its own coins, pinned on the run's commit, whose first-parent line is ``main.txt``; its bindings written whole, by
