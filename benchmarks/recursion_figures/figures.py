@@ -11,7 +11,7 @@ run's result (`record`).
 The bench is public and states what it measured; this side reads the census's fleets and the monitoring periods, which
 stay private, and scales the measurement over them: its cost, its knowledge-soundness error
 and its stop-leak bound, for one window and pooled over the monitoring periods (`verity.protocol`'s `MONITORING_PERIODS`: a week, a month,
-a year), over one datacenter (``benchmarks/census/deployments.json``'s reference) and over the world's compute (the
+a year), over one datacenter (``calibration/census/deployments.json``'s reference) and over the world's compute (the
 adversary resource model, ``adversary.json``'s reference). Every figure says its basis: ``measured`` (this run),
 ``proved`` (a Lean theorem, by name, with what it assumes) or ``scaled`` (and what is scaled).
 

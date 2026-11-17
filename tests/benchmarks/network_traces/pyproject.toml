@@ -55,7 +55,7 @@ untraced = [
 # default the sampling plan's: the break-even planner's case, which it builds from Figure 1's lines (figure1.py,
 # total_cost.py, the second stage's bound it imports and the cards they read); where asked, the census's request and
 # GPU peak at the workload card's MACs a token.
-inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "benchmarks/census/hardware.json",
+inputs = ["calibration/census/deployments.json", "calibration/census/adversary.json", "calibration/census/hardware.json",
           "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml",
           "benchmarks/spot_figures/cards", "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/figure1.py",
           "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/second_stage.py",
@@ -76,7 +76,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "verity/protocols/proofs/flock/prover/agreement/redigest.py", "verity/protocols/proofs/flock/prover/agreement/transcript_check.py",
           "verity/protocols/proofs/flock/prover/agreement/record_text.py",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json",
-          "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py", "benchmarks/census/deployments.json",
+          "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py", "calibration/census/deployments.json",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
           "tests/verity/protocols/resource_accounting/network/verifier/network/period_case.py", "tools/difftest/python/verity_difftest",
           "verity/__init__.py", "verity/protocols/compose/__init__.py", "verity/protocols/compose/verifier/__init__.py",
