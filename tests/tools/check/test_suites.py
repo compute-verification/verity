@@ -2329,19 +2329,43 @@ def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_pat
     assert re.search(r"passed  wide .* on 2 workers", p.stdout) and "passed  one" in p.stdout, p.stdout
 
 
-def test_the_longest_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_proportion_to_its_seconds(tmp_path, monkeypatch):
+def test_a_parts_last_run_is_recorded_as_its_own_and_starts_it_before_shorter_suites(tmp_path):
+    import json
+
+    root = tmp_path / "tree"
+    _env_workspace(root, {"one": "def test_one():\n    pass\n", "two": "def test_a():\n    pass\n\ndef test_b():\n    pass\n"})
+    two = root / "two" / "pyproject.toml"
+    two.write_text(two.read_text() + "\n[tool.verity.tests]\nparts = 2\n")
+    _git(root, "commit", "-qam", "two in parts")
+    durations = tmp_path / "cache" / "durations.json"
+    durations.parent.mkdir()
+    durations.write_text(json.dumps({"one": 10.0, "two": 4.0, "two:1/2": 50.0}))
+    p = _run_suite(root, tmp_path, "--fresh", "one", "two:1/2")
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert re.findall(r"^passed  (\S+)", p.stdout, re.M) == ["two:1/2", "one"], \
+        "the part's own last run (50 s), not its share of the suite's (2 s), puts it before one's 10 s"
+    after = json.loads(durations.read_text())
+    assert after["two"] == 4.0 and 0 < after["two:1/2"] < 50.0, after
+
+
+def test_each_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_proportion_to_its_seconds(tmp_path, monkeypatch):
     S = _suites(monkeypatch, tmp_path)
     big, a, b = (S.Suite(n, n, (), (), parallel=True) for n in ("big", "a", "b"))
     heavy = S.Suite("heavy", "h", (), (), parallel=True, worker_gb=16)
-    [alone, rest] = S.wide_lanes([a, big, b], [300.0, 600.0, 100.0], 20, 100.0)
+    [alone, lane_a, lane_b] = S.wide_lanes([a, big, b], [300.0, 600.0, 100.0], 20, 100.0)
     assert (alone.suites, alone.procs, alone.gb) == ([big], 12, 60.0), "the longest recorded, in proportion to 600 of 1,000 s"
-    assert (rest.suites, rest.procs, rest.gb) == ([a, b], 8, 40.0), "the rest in their order, on what it leaves"
+    assert [(x.suites, x.procs, x.gb) for x in (lane_a, lane_b)] == [([a], 6, 30.0), ([b], 2, 10.0)], \
+        "the rest split the same way, on what it leaves"
+    lanes = S.wide_lanes([big, heavy], [600.0, 300.0], 20, 100.0)
+    assert [(x.suites, x.procs, round(x.gb, 1)) for x in lanes] == [([big], 13, 36.0), ([heavy], 7, 64.0)], \
+        "the GB in proportion to the seconds at each one's worker_gb"
+    assert [S.wide_workers(x.suites[0], x.procs, x.gb) for x in lanes] == [8, 4], "600 s on 8 workers and 300 s on 4 end together"
     assert S.wide_lanes([a, big, b], [None, 600.0, 100.0], 7, None) == [S.Lane([a, big, b], 7, None)], \
         "a suite whose seconds aren't known isn't counted at nothing beside the others: one lane, each on all of it in turn"
     assert S.wide_lanes([big], [600.0], 20, 100.0) == [S.Lane([big], 20, 100.0)], "one suite"
     assert S.wide_lanes([big, a], [None, None], 20, 100.0) == [S.Lane([big, a], 20, 100.0)], "none recorded"
     assert S.wide_lanes([big, a], [600.0, 300.0], 1, 100.0) == [S.Lane([big, a], 1, 100.0)], "one process"
-    assert S.wide_lanes([big, heavy], [600.0, 300.0], 20, 30.0) == [S.Lane([big, heavy], 20, 30.0)], \
+    assert S.wide_lanes([big, heavy], [600.0, 300.0], 20, 20.0) == [S.Lane([big, heavy], 20, 20.0)], \
         "a share that holds no worker of a suite's worker_gb keeps one lane"
 
 
@@ -2386,9 +2410,9 @@ def test_a_parallel_suite_that_reuses_nothing_gets_workers_beside_a_longer_last_
     def workers(lanes):
         return {s.name: S.wide_workers(s, x.procs, x.gb) for x in lanes for s in x.suites}
 
-    assert workers(S.wide_lanes([vstar, flock], [360.0, 112.0 * 4 / 6], procs, gb)) == {"vstar_cli": 11, "verity-flock": 1}, \
+    assert workers(S.wide_lanes([vstar, flock], [360.0, 112.0 * 4 / 6], procs, gb)) == {"vstar_cli": 10, "verity-flock": 2}, \
         "what tonight's last durations planned"
-    assert workers(S.wide_lanes([flock, vstar], [7143.0, 2490.0], procs, gb)) == {"verity-flock": 5, "vstar_cli": 3}
+    assert workers(S.wide_lanes([flock, vstar], [7143.0, 2490.0], procs, gb)) == {"verity-flock": 6, "vstar_cli": 2}
     vllm = S.Suite("verity-vllm", "a", (), (), parallel=True, worker_gb=8)
     evaluate = S.Suite("verity-core-evaluate", "e", (), (), parallel=True)
     assert workers(S.wide_lanes([vllm, flock, evaluate], [None, 2979.0 * 2 / 6, 220.0], 94, 136.0))["verity-vllm"] == 17
@@ -2404,7 +2428,7 @@ def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_
     defs, a, b = (S.Suite(n, n, (), (), parallel=True) for n in ("defs", "a", "b"))
     seconds = [300.0, 900.0, 200.0, 100.0]
     [shared] = [x for x in S.shared_lanes([cc, defs, a, b], seconds, 88, 260.0) if cc in x.suites]
-    assert shared.suites == [cc, a, b] and S.wide_workers(cc, shared.procs, shared.gb) == 13
+    assert shared.suites == [cc] and S.wide_workers(cc, shared.procs, shared.gb) == 10
     lanes = S.wide_lanes([cc, defs, a, b], seconds, 88, 260.0)
     assert lanes == [S.Lane([cc], 14, 112.0), *S.shared_lanes([defs, a, b], seconds[1:], 74, 148.0)]
     longest = [3000.0, *seconds[1:]]
@@ -2432,11 +2456,10 @@ def _line_end(S, lanes, cost) -> float:
     return max(sum(cost(s, S.wide_workers(s, lane.procs, lane.gb)) for s in lane.suites) for lane in lanes)
 
 
-def test_the_line_ends_near_the_longer_of_the_longest_suite_and_the_rest(tmp_path, monkeypatch):
+def test_the_line_ends_near_its_tests_seconds_spread_over_every_process(tmp_path, monkeypatch):
     """A suite's seconds on n workers are max(its longest test, its tests' seconds / n), as for adapters/vllm/verity_vllm/definitions, whose one
-    long test bounds it, beside circuit_check, which its workers' count bounds. One after another on 16 processes the line
-    lasts the sum of the suites; in two lanes on twice the processes, each about as many as it had alone, it ends near the
-    longer of the longest suite's seconds and the rest's, and before the line of one lane on all 32."""
+    long test bounds it, beside circuit_check, which its workers' count bounds. Split by its tests' seconds (`todo_seconds`),
+    each in a lane of its own, the line ends near their sum spread over every process, and before the line of one lane."""
     S = _suites(monkeypatch, tmp_path)
     work = {"cc": (16_000, 100), "defs": (3_200, 600), "pouw": (3_200, 50), "ops": (1_600, 20)}
     suites = [S.Suite(n, n, (), (), parallel=True) for n in work]
@@ -2445,21 +2468,21 @@ def test_the_line_ends_near_the_longer_of_the_longest_suite_and_the_rest(tmp_pat
         total, longest = work[s.name]
         return max(longest, total / n)
 
-    seconds = [cost(s, 16) for s in suites]
-    big, rest = seconds[0], sum(seconds[1:])
+    seconds = [work[s.name][0] for s in suites]
+    spread = sum(seconds) / 32
     lanes = S.wide_lanes(suites, seconds, 32, None)
-    assert [x.suites for x in lanes] == [suites[:1], suites[1:]]
+    assert [x.suites for x in lanes] == [[s] for s in suites]
     end = _line_end(S, lanes, cost)
-    assert end <= 1.05 * max(big, rest) and end < _line_end(S, [S.Lane(suites, 32, None)], cost) < sum(seconds)
+    assert end <= 1.1 * spread and end < _line_end(S, [S.Lane(suites, 32, None)], cost)
     gb = 32 * S.TEST_PROCESS_GB
     held = S.wide_lanes(suites, seconds, 64, gb)
     assert sum(x.gb for x in held) == gb and all(S.wide_workers(s, x.procs, x.gb) * S.worker_gb(s) <= x.gb
                                                  for x in held for s in x.suites), "each lane's workers fit its share of the GB"
-    assert _line_end(S, held, cost) <= 1.05 * max(big, rest), "the memory bounds the workers as the processes did"
+    assert _line_end(S, held, cost) <= 1.1 * spread, "the memory bounds the workers as the processes did"
 
 
-def test_a_line_in_two_lanes_runs_every_suite_with_its_verdict_and_its_key(tmp_path):
-    """End to end: three parallel suites whose kept passes put the longest beside the other two, on 4 of 6 processes and 2,
+def test_a_line_in_lanes_runs_every_suite_with_its_verdict_and_its_key(tmp_path):
+    """End to end: three parallel suites whose kept passes put each in a lane of its own, on 4, 1 and 1 of 6 processes,
     pass as the same suites under the same keys as in one lane (no kept pass). The split reads the kept passes' seconds, not
     the last durations, which here say the opposite."""
     import json
@@ -2489,8 +2512,8 @@ def test_a_line_in_two_lanes_runs_every_suite_with_its_verdict_and_its_key(tmp_p
     out, one = line(None)
     assert "beside" not in out and all(re.search(rf"passed  {n} .* on 6 workers", out) for n in ("big", "mid", "small")), out
     out, two = line({"big": 100.0, "mid": 30.0, "small": 20.0})
-    assert "suites: big on 4 processes beside 2 parallel suites one at a time on 2" in out, out
-    assert re.search(r"passed  big .* on 4 workers", out) and all(re.search(rf"passed  {n} .* on 2 workers", out)
+    assert "suites: big on 4 processes, mid on 1 processes, small on 1 processes" in out, out
+    assert re.search(r"passed  big .* on 4 workers", out) and all(re.search(rf"passed  {n} .* in [0-9]+ s;", out)
                                                                    for n in ("mid", "small")), out
     assert two == one and [r[1] for r in one] == ["passed"] * 3
 

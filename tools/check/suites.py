@@ -152,12 +152,12 @@ pass kept here, naming a changed directory's files from git's trees, and says pe
 `--jobs` is how many test processes run at once, by default the CPUs this process may use but at most one per
 `TEST_PROCESS_GB` of available memory. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
 over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
-kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run in two
-lanes, the longest of them alone beside the rest one at a time, which split the processes and memory the parallel suites have in
-proportion to what each run has to do (`shared_lanes`): the seconds the kept passes of the tests it will run took, its
+kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run each
+in a lane of its own, which split the processes the parallel suites have in proportion to what each run has to do, and their
+memory to that at each one's `worker_gb` (`shared_lanes`): the seconds the kept passes of the tests it will run took, its
 reused ones left out (`todo_seconds`), not its last duration, which a run that reused most of its passes makes small; with
 any suite that has no such pass here, they run in one lane, each on all its processes in turn. But a suite that declares
-`[tool.verity.tests] workers` and would get fewer there runs in a third lane of its own on that many, up to half of what the
+`[tool.verity.tests] workers` and would get fewer there runs in a lane of its own on that many, up to half of what the
 parallel suites have (`wide_lanes`,
 `held_workers`); beside them the others run side by side on as few of the processes as let
 them finish about when the longest of them does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
@@ -2564,8 +2564,9 @@ def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: f
 
 def shared_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None) -> list[Lane]:
     """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: what each one's run has to do, `todo_seconds`,
-    None when that isn't known): the longest in a lane of its own beside the rest, the two splitting both in proportion to
-    their seconds, so that they end about together. One lane for fewer than two suites, a single process, a share too small
+    None when that isn't known): the longest in a lane of its own beside the rest's lanes, split the same way, the two splitting
+    the processes in proportion to their seconds and ``gb`` to their seconds at their `worker_gb`, so that they end about
+    together whichever of the two bounds their workers. One lane for fewer than two suites, a single process, a share too small
     for one worker of a suite at its `worker_gb`, or any suite whose seconds aren't known: counted at nothing, it would run
     on what the others leave, one worker for a suite that may need an hour of them, while each suite of one lane gets all of
     its processes in turn."""
@@ -2575,10 +2576,10 @@ def shared_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb:
     big, rest = wide[i], wide[:i] + wide[i + 1:]
     f = seconds[i] / sum(seconds)
     p = min(procs - 1, max(1, round(f * procs)))
-    g = None if gb is None else f * gb
+    g = None if gb is None else gb * seconds[i] * worker_gb(big) / sum(t * worker_gb(s) for s, t in zip(wide, seconds))
     if g is not None and (g < worker_gb(big) or gb - g < max(map(worker_gb, rest))):
         return [Lane(wide, procs, gb)]
-    return [Lane([big], p, g), Lane(rest, procs - p, None if gb is None else gb - g)]
+    return [Lane([big], p, g), *shared_lanes(rest, seconds[:i] + seconds[i + 1:], procs - p, None if gb is None else gb - g)]
 
 
 def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: float | None = None) -> int:
@@ -2902,7 +2903,9 @@ def main(argv: list[str] | None = None) -> int:
         return f"{s.name}:{parts[s].spec}" if s in parts else s.name
 
     def last(s: Suite) -> float | None:
-        """Its last run's seconds, a part's as its share of its suite's."""
+        """Its last run's seconds, a part's as its own last run's, else as its share of its suite's."""
+        if (k := known.get(label(s))) is not None:
+            return k
         return None if (k := known.get(s.name)) is None else k * (parts[s].share if s in parts else 1.0)
 
     todo.sort(key=lambda t: -(last(t[0]) if last(t[0]) is not None else float("inf")))
@@ -2932,8 +2935,8 @@ def main(argv: list[str] | None = None) -> int:
     turns = {s: lane.suites.index(s) for lane in lanes for s in lane.suites}
     beside = f", beside {len(one)} others on {r}" if one else ""
     if len(lanes) > 2:
-        alone = ", ".join(f"{x.suites[0].name} on {x.procs} processes" for x in lanes[1:-1])
-        print(f"suites: {alone} beside {len(lanes[-1].suites)} parallel suites one at a time on {lanes[-1].procs}{beside}")
+        print("suites: " + ", ".join(f"{x.suites[0].name} on {x.procs} processes" if len(x.suites) == 1 else
+                                     f"{len(x.suites)} parallel suites one at a time on {x.procs}" for x in lanes[1:]) + beside)
     elif wide and one:
         print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes{beside}")
     min_s = a.per_test_min_s if a.per_test_min_s is not None else float(SETTINGS.get(MIN_S_ENV) or 0)
@@ -2958,8 +2961,7 @@ def main(argv: list[str] | None = None) -> int:
         results.append(r)
         if a.json and r.status == "failed":
             failing(a.json, results)
-        if s not in parts:                 # a part's seconds are its share's, not the suite's
-            known[s.name] = r.seconds
+        known[label(s)] = r.seconds
         u = used(r, paths, deps, tree, lock)
         if s in parts and reach[s] is not None:
             # a test module of another part its tests opened (as data, by path) is as much its input as one they import
