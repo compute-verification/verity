@@ -528,7 +528,7 @@ def test_a_windows_charge_of_2_to_the_20_with_its_kept_segment_is_refused_by_nam
     assert CV.encode([CV.Window()], book, [tail(18)]).lens == ((1 << CW) - 25,) and under.lens == ((1 << CW) - 1,)
     assert read(under, 18) == (cs, [(1 << CW) - 1])
     assert CV.encode([CV.Window()], book, [tail(19)]).lens == ((1 << CW) - 24,)
-    said = (f"^window 0: its charge is {1 << CW} bits, and network certification counts a window's charge in 20 bits, so it is under "
+    said = (f"^window 0: its charge is {1 << CW} bits, and network attestation counts a window's charge in 20 bits, so it is under "
             f"{1 << CW}; register a shorter window, so that less is charged to one$")
     with pytest.raises(ValueError, match=said):
         CV.encode([CV.Window()], book, [tail(19)], KP.coder(K, terms))

@@ -147,7 +147,7 @@ def caption(out: dict) -> str:
                     + (f" (pending, hatched: {arm['pending']})" if arm.get("pending") else ""))
     c = (f"(c) The advice's term in the bound is a window's bits times the scope's machine windows "
          f"({out['windows'][p]:.3g} over a {p}, {out['windows'][s]:.3g} over a {s}), against {t['label']}: "
-         + "; ".join(rows) + ". The tick's arms take the certifier's release buckets as the arrivals: without them the "
+         + "; ".join(rows) + ". The tick's arms take the network attester's release buckets as the arrivals: without them the "
          "server could hold a request back by whole ticks, which is advice again. The run with the real network "
          "certifier is pending: in the measured runs a client stood in for it. Until a circuit checks the stop rule, "
          "each response's length is advice with the tick too, charged today at log2(max_tokens) + 1 bits a request. "
@@ -161,7 +161,7 @@ def _timeline(ax, sc: dict) -> None:
 
     span = sc["span_ms"]
     rows = {"clients": 4.2, "certifier": 3.15, "continuous": 1.95, "tick": .75}
-    names = {"clients": "Clients", "certifier": "Network certifier\n(the auditor's device)",
+    names = {"clients": "Clients", "certifier": "Network attester\n(the auditor's device)",
              "continuous": "Continuous admission", "tick": "Tick admission"}
     for key, y in rows.items():
         ax.text(-12, y, names[key], ha="right", va="center", fontsize=14,
