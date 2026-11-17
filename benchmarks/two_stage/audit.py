@@ -58,7 +58,6 @@ import argparse
 import hashlib
 import json
 import sys
-import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -191,9 +190,6 @@ def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.C
             and o is not None and o.get("accepted") is False)
 
 
-METRIC = "proofs/two-stage-audit-seconds"
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="audit.py", description=__doc__.splitlines()[0])
     ap.add_argument("--n", type=int, default=4, help="N: the spans serving commits")
@@ -213,28 +209,14 @@ def main(argv=None) -> int:
                     "--first-parent origin/main`), which the challenger session's pin is held to")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
-    started = time.perf_counter()
     manager, samples, finisher = AC.start("local", ROOT, [0, 1], a.out / "challenger", a.main, local=LC.Local)
     try:
-        rc = run(a, a.out, StageCoins(samples), samples)
+        return run(a, a.out, StageCoins(samples), samples)
     finally:
         for rank in (0, 1):
             samples.skip(rank)
         finisher.join()
         manager.shutdown()
-    if not a.altered:
-        record(a, rc == 0, time.perf_counter() - started)
-    return rc
-
-
-def record(a: argparse.Namespace, ok: bool, seconds: float) -> None:
-    from verity_bench import kit
-
-    res = kit.writer(a.out)
-    res.validation("passed" if ok else "failed", "the honest audit is as audit.py expects: both stages and the stream's "
-                   "outcome accept", "ok" if ok else "summary.json's as_expected is false")
-    res.measurement(METRIC, seconds if ok else None, "s", mark="measured", member=f"toy-n{a.n}-q{a.q}-k{a.k}-cpu",
-                    why=None if ok else "the honest audit was not as expected", extra={"n": a.n, "q": a.q, "k": a.k})
 
 
 def run(a: argparse.Namespace, out: Path, coins: StageCoins, samples) -> int:
