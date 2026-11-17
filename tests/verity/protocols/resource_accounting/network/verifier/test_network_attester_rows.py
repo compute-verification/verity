@@ -189,7 +189,7 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(traffic, t
         W.check_registration(forged, key, signers.SESSION, *args)
 
 
-def test_a_refused_signer_gives_no_certificate(traffic, tmp_path):
+def test_a_refused_signer_gives_no_attestation(traffic, tmp_path):
     network_attester, _ = traffic
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
     issuer.signer.start(signers.OTHER_SESSION)

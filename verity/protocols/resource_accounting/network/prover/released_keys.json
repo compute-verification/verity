@@ -68,7 +68,7 @@
     "parameters": "commitment",
     "records_file": "structure",
     "public_file": "structure",
-    "clock_certificates": "structure",
+    "clock_attestations": "structure",
     "sync_bits": "structure",
     "warden_check/accepted": "output",
     "warden_check/failed/*": "output",

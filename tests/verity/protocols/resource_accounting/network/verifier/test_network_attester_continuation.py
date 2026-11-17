@@ -141,7 +141,7 @@ def test_each_closes_stamps_are_the_open_responses_released_counts_in_release_or
             assert r.ended == (conns[r.q]["ended"] if conns[r.q]["ended"] < b else None)
 
 
-def test_a_continuation_is_its_certified_request_with_the_released_ids_after_its_prompt(run):
+def test_a_continuation_is_its_attested_request_with_the_released_ids_after_its_prompt(run):
     two, four = _edge(run, 8).continuations
     assert (two.q, two.n, two.e) == (2, 1, 8) and len(two.request.prompt) == 100 + 8
     assert two.request == REQUESTS[1]._replace(prompt=REQUESTS[1].prompt + _ids(2, 8), max_tokens=20 - 8)

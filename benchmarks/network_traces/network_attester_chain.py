@@ -242,7 +242,7 @@ def checked(run: Path, deployed: bool = False) -> tuple[dict, dict]:
                    "public": RF.read_public(key).public.hex(),
                    "deployed": tuple(key["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W, lms.DEPLOYED.H)},
            "parameters": dep["digest"], "records_file": "certified.jsonl",
-           "public_file": None if public is None else public.name, "clock_certificates": 0, "sync_bits": 0.0,
+           "public_file": None if public is None else public.name, "clock_attestations": 0, "sync_bits": 0.0,
            "warden_check": verdict(check),
            "public_is_the_records": None if public is None else theirs == mine}
     why = ("the key isn't LMS at lms.DEPLOYED" if deployed and not out["key"]["deployed"]
