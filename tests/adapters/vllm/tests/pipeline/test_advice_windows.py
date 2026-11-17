@@ -357,7 +357,7 @@ def _sample(rec: dict, sampling_design: dict) -> dict:
     from verity.protocols.proofs.spot.verifier.challenger import coins as T
 
     n = rec["population"]
-    return {**sampling_design, "population": n, "units": sorted(T.sample_first(T.OwnRandomness(_Coins()), sampling_design, n)["units"])}
+    return {**sampling_design, "population": n, "units": sorted(T.draw_first(T.OwnRandomness(_Coins()), sampling_design, n)["units"])}
 
 
 def test_the_compilers_transfer_gate_units_are_sampled_whole_beside_the_sampled_rest(gated_tp):

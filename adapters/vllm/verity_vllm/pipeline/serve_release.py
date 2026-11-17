@@ -18,7 +18,7 @@ the leaves the sampled blocks open.
   and the tree nodes an opening inside it reads (`store_dump.sampled`), so each kept leaf's opening path stays whole until the
   last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
 * **Where samples come in.** `Samples.put` in process (PoUW H1's under ``pouw``, from its arm once the window's sampling coin is
-  open: `serve_h1.H1Windows.sampled`), or `SampleDir`: ``--draws-dir`` (default ``OUT/samples``) holds one file a sample,
+  open: `serve_h1.H1Windows.sampled`), or `SampleDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a sample,
   ``w<k>.<protocol>.json`` = ``{"window": k, "protocol": P, "reads": [[step, name, lo, hi], ...]}``, written whole (to a temporary
   name, then renamed) once the window's ``windows.jsonl`` line, its commitment, is out. A file that doesn't parse, or names
   another window or protocol, fails that window's release by name; the server serves on.
@@ -217,12 +217,12 @@ class Samples:
 
 class SampleDir:
     """``--draws-dir``: each ``w<k>.<protocol>.json`` put into `Samples` once; `scan` reads what's new, `start` scans every
-    ``period_s`` (default `VERITY_SAMPLES_POLL_S`) on a thread of its own until `stop`."""
+    ``period_s`` (default `VERITY_DRAWS_POLL_S`) on a thread of its own until `stop`."""
 
     def __init__(self, path: str | Path, samples: Samples, *, period_s: float | None = None,
                  sleep: Callable[[float], None] = time.sleep) -> None:
         self.path, self.samples, self.sleep = Path(path), samples, sleep
-        self.period_s = settings.VERITY_SAMPLES_POLL_S if period_s is None else float(period_s)
+        self.period_s = settings.VERITY_DRAWS_POLL_S if period_s is None else float(period_s)
         self.path.mkdir(parents=True, exist_ok=True)
         self.seen: set[str] = set()
         self._stop = threading.Event()
@@ -286,7 +286,7 @@ class RetentionOptions:
                                      "(serve_release); pouw is PoUW H1's, put by its arm (--protocols), the rest come in "
                                      "through --draws-dir")
     samples_dir: str = option("--draws-dir", default="", metavar="DIR",
-                            help="--release-after: where each sample comes in, w<k>.<protocol>.json (default OUT/samples)")
+                            help="--release-after: where each sample comes in, w<k>.<protocol>.json (default OUT/draws)")
 
 
 def retention_record(opts: Any, com: Any) -> dict[str, Any]:

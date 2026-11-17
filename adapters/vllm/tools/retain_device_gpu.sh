@@ -97,7 +97,7 @@ say "HOST windows and largest window's committed bytes: $(cat "$OUT/reads.json")
 
 DD=$BASE/device
 mkdir -p "$DD"
-( "$PY" "$HELP" sample "$DD" "$OUT/reads" --protocol pouw --delay-s "$DELAY_S" --draws-dir "$DD/samples" --stop "$DD/.stop" ) > "$OUT/drawer.log" 2>&1 &
+( "$PY" "$HELP" draw "$DD" "$OUT/reads" --protocol pouw --delay-s "$DELAY_S" --draws-dir "$DD/samples" --stop "$DD/.stop" ) > "$OUT/drawer.log" 2>&1 &
 DRAWER=$!
 serve device --retain device --retain-device-gb "$GB" --window-gb "$WGB" --release-after pouw --draws-dir "$DD/samples"; sr=$?
 kill "$DRAWER" 2>/dev/null; wait "$DRAWER" 2>/dev/null

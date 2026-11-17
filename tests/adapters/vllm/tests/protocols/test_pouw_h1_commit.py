@@ -1183,7 +1183,7 @@ def test_a_refused_reserve_or_a_reused_session_serves_no_window():
     assert sessions("commit")["session"] == CH.session_id(1) and sessions.samples["commit"]["session"] == CH.session_id(0xd)
     with pytest.raises(ValueError, match="no fresh session"):
         sessions("fill")
-    with pytest.raises(ValueError, match="no fresh sample session"):
+    with pytest.raises(ValueError, match="no fresh draw session"):
         GPU.window_sessions(Same(1), "vy-nebius-1", STEPS)("commit")
 
 

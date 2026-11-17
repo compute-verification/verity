@@ -97,7 +97,7 @@ def answer(out: dict) -> dict:
     return {"verdict": out["answer"]["verdict"], "reason": out["answer"]["reason"], "refused": out.get("refused"),
             "commitment": out.get("commitment"), "source": out.get("source"),
             "over_cap": out.get("over_cap", VR.REJECT), "verdicts": out.get("verdicts", []),
-            "work": None if work is None else {"over_cap_samples": 0, **work},
+            "work": None if work is None else {"over_cap_draws": 0, **work},
             "exact_work": (out["answer"]["profile"] or {}).get("exact_work"), "tie": out.get("tie")}
 
 

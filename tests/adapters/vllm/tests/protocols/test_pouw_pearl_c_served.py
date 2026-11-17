@@ -374,7 +374,7 @@ def _kinds(gate):
 
 
 H1_OPEN: dict[str, Any] = {"cap": 4, "circuit": "c1" * 64, "draw_k": 27, "rows": 64}
-H1_REFUSED = ("the lane's open period p-h1 is H1's (its open commits sample_k, rows): a salt-only session is a window "
+H1_REFUSED = ("the lane's open period p-h1 is H1's (its open commits draw_k, rows): a salt-only session is a window "
               "H1's checks refuse (window.live_epoch_reason)")
 
 

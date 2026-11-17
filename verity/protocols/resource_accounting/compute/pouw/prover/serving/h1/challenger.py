@@ -649,7 +649,7 @@ def sampled_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, des
         sample: Mapping[str, Any] = given if isinstance(given, Mapping) else {}
         coin = LiveOpening.from_json(sample.get("coin")).coin.hex()
     except CoinError as e:
-        return None, ("draw", f"the window's sampling coin is malformed ({e})")
+        return None, ("draw", f"the window's draw coin is malformed ({e})")
     return CR.sampled(coin, window.get("root"), sample.get("root"), {"receipts": sample.get("receipts")}, layout, k)
 
 

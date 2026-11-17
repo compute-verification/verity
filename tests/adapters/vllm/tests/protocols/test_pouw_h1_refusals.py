@@ -657,7 +657,7 @@ def test_a_windows_sample_is_held_to_its_root_its_parts_and_its_coin(served):
         assert _trusted(host, {**honest, **edit}) == f"the window's sample root is malformed ({what})"
     for coin in ({"bad": 1}, None):
         assert _trusted(host, {**honest, "draw": {**sample, "coin": coin}}) == (
-            f"the window's sampling coin is malformed ({NO_OPENING})")
+            f"the window's draw coin is malformed ({NO_OPENING})")
     signed, root = host.sample.challenger.commitment, bytes.fromhex(sample["root"])
     assert PHD.sample_reason(honest, signed, (root,)) is None
     for received in ((bytes(64),), (root, root), (bytes(64), root)):
@@ -2584,7 +2584,7 @@ def test_a_windows_calls_are_staged_only_on_cores_sample_and_its_programs_circui
     assert DN.run("stage", a) == 1
     said = capsys.readouterr().err
     assert said.startswith("REFUSED: core ") and said.endswith(
-        f" nothing from the window: sample: the window's sampling coin is malformed ({NO_OPENING})\n"), said
+        f" nothing from the window: draw: the window's draw coin is malformed ({NO_OPENING})\n"), said
     win["record"] = {"commitment": {"draw": {"coin": opening, "root": registered, "receipts": receipts}}}
     assert DN.run("stage", a) == 1
     assert capsys.readouterr().err == (f"REFUSED: --circuits' manifest is for Program {'00' * 8}..., not the window's "

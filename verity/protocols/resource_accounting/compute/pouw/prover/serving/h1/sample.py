@@ -56,7 +56,7 @@ def sample_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines:
         return f"the window's sample session: {Ch.WITHHELD}"
     why = Wd.sample_epoch_reason(trusted)
     if why is not None:
-        return f"the window's sample session's signed coins: {why}"
+        return f"the window's draw session's signed coins: {why}"
     return sample_reason(commits, trusted, received.get(Wd.SAMPLE, ()))
 
 
@@ -80,7 +80,7 @@ def sample_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received:
     try:
         opening = LiveOpening.from_json(sample.get("coin"))
     except CoinError as e:
-        return f"the window's sampling coin is malformed ({e})"
+        return f"the window's draw coin is malformed ({e})"
     why = live_reason(trusted, opening, Wd.SAMPLE, 0, root)
     return None if why is None else f"the window's sampling coin: {why}"
 

@@ -220,7 +220,7 @@ def _window(gate, tmp_path, monkeypatch, name: str, seed: int):
             gate.reserve(sample, Wd.SAMPLE_FAMILIES, withheld=True)
             reply = gate.open(sample, root)
             assert (reply["withheld"], reply["signed"], reply["commitment"]) == (True, True, None)
-            d = made["session"].draw = _Session(tmp_path, monkeypatch, sample, gate.take(), seed + 100,
+            d = made["session"].sample = _Session(tmp_path, monkeypatch, sample, gate.take(), seed + 100,
                                                 challenger=Wd.sample_challenger(0, CH.entropy(seed + 100)),
                                                 close=gate.take, reserved=True, withhold=True)
             d.window = {"root": root}
