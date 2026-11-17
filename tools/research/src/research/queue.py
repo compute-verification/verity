@@ -3955,7 +3955,7 @@ def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | 
     """The `research run` of the quick tier at ``at`` (``wt``, a checkout of it, its `--source`) since ``base`` as run ``rid`` on
     machine ``on`` (`RemoteQuickTier`): in a check slot of the machine (of its ``pool``'s), a `--priority` one with
     ``priority``, waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
-    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`). The run's environment names `QUICK_ASK`."""
+    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`)."""
     slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
     job = Path(quick_tier.__file__)
     args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
