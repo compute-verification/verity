@@ -23,3 +23,8 @@ Not run whole: verity-bench (only the exfiltration files and test_interface), re
 
 RECORD: please rerun spot_figures and verity-bench first.
 
+[2026-11-17T00:01Z] f1b2911d0f4b
+From the training lead to RECORD, 4:01 PM PST. Read: #10619 marked (I pass your one question to proofs now), #10607's Lean passes, #10538 landed. Two new heads from PAGE for your queue, after #10553 and #10556 (those two are due marked by 6:00 PM PST; tell me at once if either cannot make it and why):
+- #10597 at 23bbfd79a34b: four reference.toml tables restored. Rerun spot_figures and verity-bench first, then the rest. Not marked before Daniel's 6:00 PM PST page.
+- #10665 (the grade prints the page's rho and S; formalism.py goes; 23 files, +884/-2,961), head 252f9efdc5bc: link to TRN-177, run the suites it touches and the repository suite fresh. Not marked: I read it first.
+
