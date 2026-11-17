@@ -1,11 +1,11 @@
-"""The difftest's data: random instances, and `certificate.py`'s results on each, for `NetworkVerifier/Difftest.lean`.
+"""The difftest's data: random instances, and `certificate.py`'s results on each, for `NetworkCheck/Difftest.lean`.
 
     python scripts/difftest_vectors.py <verity checkout> --out DIR [--count N]
 
-Writes `DIR/difftest/instances.jsonl`, one instance per line as `NetworkVerifier.Difftest.evaluate` reads it, and
+Writes `DIR/difftest/instances.jsonl`, one instance per line as `NetworkCheck.Difftest.evaluate` reads it, and
 `DIR/difftest/python.jsonl`, the same line's results from the checkout's `verity.protocols.resource_accounting.network.verifier.certificate`
 (and `verity.commitments.identity`, `verity.commitments.crypto.lms` through it), with `null` where Python raises `ValueError`.
-The Lean audit runs `NetworkVerifier/DifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256),
+The Lean audit runs `NetworkCheck/DifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256),
 and `tests/verity/protocols/resource_accounting/network/verifier/test_network_check_lean_difftest.py` checks that this script still writes
 them.
 
@@ -239,7 +239,7 @@ def _messages(rng: random.Random, key_id: bytes, session: bytes, link: str, dire
 
 
 def instance(seed: int) -> tuple[dict, dict]:
-    """Instance `seed` as `NetworkVerifier.Difftest.evaluate` reads it, and the Python's results on it."""
+    """Instance `seed` as `NetworkCheck.Difftest.evaluate` reads it, and the Python's results on it."""
     rng = random.Random(seed)
     p, ss = _params(rng), _sync_set(rng)
     grid = _grid(rng, p)

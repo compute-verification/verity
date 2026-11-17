@@ -36,7 +36,7 @@ COMPARES = {"held", "entryHeld", "rootsOf", "named", "counted", "okPort", "PORT"
 
 
 def code(module: str, *defines: str) -> str:
-    """The code that runs of the check's module `NetworkVerifier.<module>`: comments and strings blanked, its guards cut.
+    """The code that runs of the check's module `NetworkCheck.<module>`: comments and strings blanked, its guards cut.
     The module is named, not found by a definition's name, because two modules may each define one (`ScanOk.held`
     holds a registration to the constants; the period check's own `held` holds the class circuit). It opens the one
     namespace of its name, so `<module>.<name>` in another module is its definition `name`, and it defines each of

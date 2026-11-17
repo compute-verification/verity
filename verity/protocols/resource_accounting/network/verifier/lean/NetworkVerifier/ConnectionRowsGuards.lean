@@ -7,7 +7,7 @@ meta import NetworkVerifier.Period
 # The period's check on schedules with connection rows, at a schedule
 
 `plainSchedule`, a schedule whose cells hold an id request's head and first prompt id, and the guards that hold the
-period's check (`NetworkVerifier.Period`) to its Python mirror there: the schedule's digest with lengths rows, content
+period's check (`NetworkCheck.Period`) to its Python mirror there: the schedule's digest with lengths rows, content
 rows, a response cap and request words, what the parse reads and refuses of them, and the check's refusal of a
 schedule with connection rows.
 -/

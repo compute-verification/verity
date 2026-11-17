@@ -12,7 +12,7 @@ scan is staged in, so `constants` refuses a T below 2 (`FewTicks`).
 The scan's start unit, the member ``start``, is none of them: it has no ok bit, and its ``o0`` (`START`) is the state
 it copies, a row of the scan's state.
 
-The period check (its rows form's `okChecks`; Lean `NetworkVerifier.ScanOk`, which this mirrors) computes them
+The period check (its rows form's `okChecks`; Lean `NetworkCheck.ScanOk`, which this mirrors) computes them
 once a period, from T, and holds every execution phase's scan's registration to them by comparison alone (`held`): its
 ``roots`` name each member's ``<member>/o0`` at the constant's root, leaves and domain, and no other port ending
 ``/o0`` but the start unit's. A member's statement reads its ``o0`` rows at the root its registration names, so a

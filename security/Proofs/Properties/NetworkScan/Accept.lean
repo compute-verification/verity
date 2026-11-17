@@ -42,7 +42,7 @@ import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# What `NetworkVerifier.Period.scanOf`'s acceptance gives of the scan's Program
+# What `NetworkCheck.Period.scanOf`'s acceptance gives of the scan's Program
 
 `scanOf_accepted` reads `scanOf`'s steps one by one (each check a `need`, so each step a bind) and keeps what
 `NetTiming.BoundaryGates.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the

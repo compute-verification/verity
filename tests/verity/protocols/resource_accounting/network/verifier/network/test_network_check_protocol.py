@@ -1,7 +1,7 @@
-"""The network certificate check (`NetworkVerifier.Check`, `network-verifier serve`) against `audit.py`, through the difftest
+"""The network certificate check (`NetworkCheck.Check`, `network-check serve`) against `audit.py`, through the difftest
 harness's `ProtocolPort`.
 
-The reference decodes the protocol's formats (`NetworkVerifier/Check.lean`'s module docstring) and runs the real `Audit`:
+The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module docstring) and runs the real `Audit`:
 `check_link` on each egress link, then `check_ingress_link` on each ingress link, under the attester's `LmsKey` in its
 session. The cases are generated spatial units: an honest network attester (`grid.Certifier` driven by
 `schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with

@@ -12,7 +12,7 @@ its scans' δ. It is the one calculator of K, and it scales K in two ways:
 A link is one network attester on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
 second of one scan class (`ingress_scan.Class`, or a window class's `scan`). Its sampling blocks are each 2T transfer
 blocks, T buckets of τ seconds each way, and the start unit the state they read is copied in, 2T + 1 proof blocks,
-every proof block sampled, each sampling block's scan at δ_scan. K's terms are those of `NetworkVerifier.Period`'s rows form (`rowsTerms`) in the generator reading
+every proof block sampled, each sampling block's scan at δ_scan. K's terms are those of `NetworkCheck.Period`'s rows form (`rowsTerms`) in the generator reading
 of the scan's statement:
 
 * the schedules and the fail cells, ⌈log2(cap + 1)⌉ each a request (`capsTerm`, charged twice as `#Ss ≤ ∏_c (cap_c +
@@ -387,7 +387,7 @@ def seconds(period: str | float | Fraction) -> float | Fraction:
 
 
 def jitter_bits(steps: int) -> int:
-    """K's jitter term over `steps` steps at `JITTER_BOUND`, ⌈log2 D_j^steps⌉ (`NetworkVerifier.Period`'s)."""
+    """K's jitter term over `steps` steps at `JITTER_BOUND`, ⌈log2 D_j^steps⌉ (`NetworkCheck.Period`'s)."""
     return (JITTER_BOUND ** steps - 1).bit_length()
 
 

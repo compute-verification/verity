@@ -12,7 +12,7 @@ monitoring period when both its checks do:
   commitments and answers), which reads no device: the served check, whose remote form is
   `Definitions.Pouw.Assumptions.OnsiteFreed.RemoteWorkFloor`;
 * **the network attester's check** `vn`: its verdict on the transcript and the certifier's signed readings of the
-  registered devices' links (`NetworkVerifier.Period`), whose signed counts of the bits the period's programs exchange
+  registered devices' links (`NetworkCheck.Period`), whose signed counts of the bits the period's programs exchange
   with machines outside those devices it refuses past `K` (`CountedWithin`, with
   `Definitions.Pouw.Assumptions.Dither.CertifierSeesImports`).
 
