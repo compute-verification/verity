@@ -112,12 +112,19 @@ def replay_record(tmp: Path, status: str = "passed", **fingerprint) -> Path:
                   fingerprint={"arm_dir": "/data/prod-record.1", "load": "agentic@4", "rep": 2} | fingerprint)
 
 
-def circuit_check_record(tmp: Path, ok: bool = True, rows: tuple[str, ...] = tuple(BINDINGS)) -> Path:
+def circuit_check_record(tmp: Path, ok: object = True, rows: tuple[str, ...] = tuple(BINDINGS),
+                         warned: tuple[str, ...] = ()) -> Path:
     d = record(tmp, CC, None)
+    warning = {"name": "partition/unchecked:Dsa_v1", "check": "partition", "code": "unchecked",
+               "definition": "Dsa_v1", "count": 1}
     (d / S.CIRCUIT_CHECK).write_text(json.dumps({
         "schema": S.CIRCUIT_CHECK_SCHEMA, "options": {},
-        "summary": {"ok": ok, "failures": 0 if ok else 1, "failure_names": [] if ok else ["exhaustive"]},
-        "targets": [{"row": r} for r in rows]}))
+        "summary": {"ok": ok, "failures": 0 if ok else 1, "failure_names": [] if ok else ["exhaustive"],
+                    "unchecked": {"items": len(warned), "definitions": 1 if warned else 0},
+                    "warnings": {"partition/unchecked": {"total": 1, "definitions": 1, "by_definition": {"Dsa_v1": 1}}}
+                    if warned else {}},
+        "targets": [{"kind": "definition", "target": r, "failures": [], "warnings": [warning] if r in warned else [],
+                     "seconds": 0.1, "peak_gb": 0.1, "block": {}} for r in rows]}))
     return d
 
 
@@ -189,8 +196,22 @@ def test_exact_passes_on_a_passed_replay_and_circuit_check_saying_what_it_could_
                                                  "replay_kind": "python", "held_to_minify": False}.items()
     assert r["workload_fingerprint"]["bindings"] == BINDINGS
     assert "`arm_dir` '/data/prod-record.1'" in r["validation"]["detail"]
+    assert "0 of the 1 named bindings unchecked" in r["validation"]["detail"]
     assert "could not be held to minify run" in capsys.readouterr().out
-    assert json.loads((out / "exact.json").read_text())["replay"]["kind"] == "python"
+    doc = json.loads((out / "exact.json").read_text())
+    assert doc["replay"]["kind"] == "python"
+    assert doc["circuit_check"]["unchecked"] == {"count": 0, "of": 1, "bindings": [],
+                                                 "report": {"items": 0, "definitions": 0}}
+
+
+def test_exact_reports_an_unchecked_binding_without_refusing(store, tmp_path):
+    store[MINIFY], store[REPLAY] = minify_record(tmp_path), replay_record(tmp_path)
+    store[CC] = circuit_check_record(tmp_path, warned=tuple(BINDINGS))
+    out = tmp_path / "exact"
+    assert exact(out, "--circuit-check", CC, "--bindings", *BINDINGS) == 0
+    assert (f"1 of the 1 named bindings unchecked (a warning, which never fails: {BINDINGS[0]}; the report's "
+            "`summary.unchecked`: 1 items on 1 definitions)") in result(out)["validation"]["detail"]
+    assert json.loads((out / "exact.json").read_text())["circuit_check"]["unchecked"]["count"] == 1
 
 
 def test_exact_holds_a_replay_that_names_its_minify_run(store, tmp_path):
@@ -207,6 +228,7 @@ def test_exact_holds_a_replay_that_names_its_minify_run(store, tmp_path):
 @pytest.mark.parametrize("ok, rows, why", [
     (False, tuple(BINDINGS), "failed over 1 targets, failing exhaustive"),
     (True, ("Other_v1/glm53",), f"failed over 1 targets, holding none of {BINDINGS[0]}"),
+    ("true", tuple(BINDINGS), "failed over 1 targets"),
 ])
 def test_exact_fails_where_circuit_check_fails_or_misses_a_binding(store, tmp_path, ok, rows, why):
     store[MINIFY], store[REPLAY] = minify_record(tmp_path), replay_record(tmp_path)
@@ -218,7 +240,8 @@ def test_exact_fails_where_circuit_check_fails_or_misses_a_binding(store, tmp_pa
 
 def test_exact_refuses_without_a_circuit_check_report_naming_circuits(store, tmp_path):
     store[MINIFY], store[REPLAY] = minify_record(tmp_path), replay_record(tmp_path)
-    with pytest.raises(SystemExit, match="no circuit-check verdict on the real model's bindings.*both are circuits'"):
+    with pytest.raises(SystemExit, match="no circuit-check verdict on the real model's bindings.*--out .*circuits' "
+                                         "command for that set is coming$"):
         exact(tmp_path / "exact")
     with pytest.raises(SystemExit, match="no circuit-check verdict"):
         exact(tmp_path / "exact", "--circuit-check", CC)
