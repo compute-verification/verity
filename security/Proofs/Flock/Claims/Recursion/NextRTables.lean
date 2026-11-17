@@ -41,24 +41,7 @@ import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Claims.Scope.Sizes
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# Every table `verify --plain-tables` admits is `TableOk`
-
-`sessionRun_decides_coins` takes, at every table, `TableOk` and at most 2,048 extra claims at the link's points. A plain
-completeness case gives them at its one table (`Case.tableOk`). Here they hold at every table of a statement that sets
-up (`setupOf false`) and that `verify --plain-tables`'s statement refusals pass (`PlainTablesOk`: `ProvedScope.checkP`
-as `verifyCmd` calls it under the flag, then `sizesOk` on the tables' `m`).
-
-* `tablesOk_of_read`: at an untyped statement that sets up without the verifier's own public input words, every table
-  of `22 ≤ m` is `TableOk` with at most 2,048 extra claims. Each table's circuit is the one the scope parses
-  (`Readable.tableAt`), so it is well formed (`m = k_log + nbl`, `6 ≤ k_log`). It has table 0's `m`
-  (`Readable.tables_fit`), which is at most 35 (`Readable.table0`). Its own setup gives a registered scheme and at most
-  1,024 regions (`setupOne_scheme`), at the session's two link points (`setupTables_points`).
-* `tablesOk_of_plainTables`: the same from `PlainTablesOk`, whose `checkP` refuses a typed statement and the verifier's
-  own public input words, and whose `sizesOk` refuses `m < 22`.
-* `sessionRun_decides_tables`: `sessionRun_decides_coins` with `PlainTablesOk` in place of the per-table premise, and
-  coins numbering the deployed verifier's `(V false).k x` (`hlen_of_k`) in place of the count premise.
--/
+/-! Every table `verify --plain-tables` admits is `TableOk`, so the honest run decides at every statement it admits. -/
 
 @[expose] public section
 
@@ -66,16 +49,13 @@ namespace FlockDeploy
 
 open Flock FlockComplete
 
-/-- **`verify --plain-tables`'s statement refusals** at the verifier's read of a statement and the tables it set up, as
-`verifyCmd` runs them under the flag: `ProvedScope.checkP` (the verifier's own public input words as it holds them, its
-registered reads passed as `false`), then `sizesOk` on the tables' `m`. -/
+/-- `verify --plain-tables`'s statement refusals as `verifyCmd` runs them under the flag: `ProvedScope.checkP`,
+then `sizesOk` on the tables' `m`. -/
 def PlainTablesOk (r : Readable.Read) (sts : Array Stmt) : Prop :=
   ProvedScope.checkP r.tags r.I.circuitFile r.I.publicFile r.I.tables r.I.count r.I.program r.publicInputs.isSome
       false = .ok () ∧
     ProvedScope.sizesOk false ((tabsOf sts).map Setup.m) = .ok ()
 
-/-- **Every table of `22 ≤ m` is `TableOk`**, with at most 2,048 extra claims at any link points, at an untyped
-statement that sets up without the verifier's own public input words. -/
 theorem tablesOk_of_read {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hx : setupOf false x = some (s, spec, sts)) (hty : s.read.tags.typed = false)
     (hpi : s.read.publicInputs = none) (h22 : ∀ st ∈ sts, 22 ≤ st.m) :
@@ -107,8 +87,6 @@ theorem tablesOk_of_read {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : 
   simp only [pointsOf, Array.size_map, Array.size_range, hpts]
   omega
 
-/-- **Every table `verify --plain-tables` admits is `TableOk`**, with at most 2,048 extra claims at any link points:
-`checkP` refuses a typed statement and the verifier's own public input words, and `sizesOk` refuses `m < 22`. -/
 theorem tablesOk_of_plainTables {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hx : setupOf false x = some (s, spec, sts)) (hP : PlainTablesOk s.read sts) :
     ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
@@ -123,8 +101,6 @@ theorem tablesOk_of_plainTables {x : Claims.Msg} {s : Ins} {spec : SessionSpec} 
     exact ⟨st, hst, rfl⟩)
   exact (Readable.mMin_ge false).trans this
 
-/-- **The honest run decides at every statement `verify --plain-tables` admits**: `sessionRun_decides_coins` with
-`PlainTablesOk` in place of the per-table premise, at coins numbering the deployed verifier's `(V false).k x`. -/
 theorem sessionRun_decides_tables {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H)
     {rd : Claims.Msg → Option FinalP} {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128}

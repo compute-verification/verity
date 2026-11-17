@@ -40,20 +40,7 @@ import Proofs.Flock.Claims.KS.PlainQueryRound
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# Two reps accepted on one stream are one proof, or their openings collide
-
-`rep_bind_lig` gives two proofs `verifyRep` accepts as one rep on one retained stream every field but `params`,
-`zerocheck.finalC`, `ligerito.initialCap` and the openings. The rest:
-
-* `params` is the pinned fast100 parameters (`verifyRep`'s R7/F2 check), and `initialCap` the proof's cap (Ligerito's
-  first check);
-* `finalC` is zerocheck's evaluation of `round1c` at its coin `z`, round 2's first coin (`bindAndZerocheck_finalC`);
-* every level's openings pass their Merkle checks against one cap at the positions of one round's coins
-  (`plainQueryRound_verifyRepWith`, `plainLevels_verifyRepWith`), so they are one, or two of them collide
-  (`merkleCheck_coll`);
-* a decoded proof has `R − 1` recursive proofs (`decodeProof_rproofs`), so one opening per level is the whole of them.
--/
+/-! Two reps accepted on one stream are one proof, or their openings collide (`rep_bind_proof`). -/
 
 @[expose] public section
 
@@ -62,7 +49,6 @@ namespace FlockSoundness.Discharge.DecodeZL
 open Flock Reader
 open FlockSoundness.Refine (ebind_ok)
 
-/-- A loop whose every step pushes one element returns its start with one element per index. -/
 theorem yields_forIn_size {α : Type} (body : ℕ → Array α → Reader.M (ForInStep (Array α)))
     (hb : ∀ i s, Post (body i s) fun st => ∃ x, st = .yield (s.push x)) :
     ∀ (l : List ℕ) (acc out : Array α), Yields (forIn l acc body) out → out.size = acc.size + l.length
@@ -78,7 +64,6 @@ theorem yields_forIn_size {α : Type} (body : ℕ → Array α → Reader.M (For
     rw [this, Array.size_push, List.length_cons]
     omega
 
-/-- **A decoded proof has `R − 1` recursive proofs**, `R + 1` its schedule's levels. -/
 theorem decodeProof_rproofs {sh : Shape} {bytes : ByteArray} {p : Proof} (h : decodeProof sh bytes = .ok p) :
     p.ligerito.recursiveProofs.size = sh.sched.levels.size - 1 - 1 := by
   replace h := (Flock.decodeProof_read h).1
@@ -123,8 +108,6 @@ local instance lawfulBEqByteArrayRB : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-/-! ## What `verifyRep` pins outside the frames -/
-
 theorem pcs_eq_of_beq {x y : PcsParams} (h : (x == y) = true) : x = y := by
   obtain ⟨a, b, c, d, e, f⟩ := x
   obtain ⟨a', b', c', d', e', f'⟩ := y
@@ -133,7 +116,6 @@ theorem pcs_eq_of_beq {x y : PcsParams} (h : (x == y) = true) : x = y := by
   obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ := h'
   rfl
 
-/-- **Zerocheck pins `finalC`**: its evaluation of `round1c` at `z`, the first coin of the round two on. -/
 theorem bindAndZerocheck_finalC {m : ℕ} (hm : 14 ≤ m) {digest cap : ByteArray} {p : ZerocheckProof}
     {t t' : Transcript} {zc : ZcOut} (h : bindAndZerocheck m digest cap p t = .ok (zc, t')) :
     p.finalC = dot (lagrange nodesL den6Inv ((t.rounds[t.k + 2]!).coins.getD 0 0)) p.round1c := by
@@ -153,7 +135,6 @@ theorem bindAndZerocheck_finalC {m : ℕ} (hm : 14 ≤ m) {digest cap : ByteArra
   rw [hr, hk] at hpc
   exact (beq_iff_eq.1 hpc).symm
 
-/-- **Ligerito pins `initialCap`** to the commitment's cap. -/
 theorem ligerito_initialCap {ms : MerkleScheme} {sch : Flock.Schedule} {T : F128} {cap : Array ByteArray}
     {p : LigeritoProof} {basisAt : Array F256 → ℕ → Array F256} {t t' : Transcript}
     (h : Flock.ligerito ms sch T cap p basisAt t = .ok ((), t')) : p.initialCap = cap := by
@@ -161,8 +142,6 @@ theorem ligerito_initialCap {ms : MerkleScheme} {sch : Flock.Schedule} {T : F128
   obtain ⟨hcap, -⟩ := check_bind h
   exact beq_iff_eq.1 hcap
 
-/-- **What an accepted rep pins outside its frames**: the pinned parameters, the initial cap, and `finalC` at round
-2's coin. -/
 theorem verifyRep_pins {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess : RunRecord} {i r : ℕ}
     {bytes cap : ByteArray} (hm : 14 ≤ st.m) (h : verifyRep spec st sch sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
@@ -197,14 +176,9 @@ theorem verifyRep_pins {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} 
     simp only [Transcript.init, Nat.zero_add] at hz
     exact hz
 
-/-! ## Every level's Merkle check -/
-
-/-- The round of level `ℓ`'s query coins in a plain rep's stream, `nExtra` the statement's extra claims. -/
 abbrev repRound (st : Setup) (sch : Flock.Schedule) (nExtra ℓ : ℕ) : ℕ :=
   plainLevelRound st.m st.kLog sch.k0 (2 + nExtra) (sch.levels.size - 1) ℓ
 
-/-- **Query `j`'s opening at level `ℓ`**, as its SHA-512 inputs: the proof's level-`ℓ` row, salt and siblings at the
-position of the level's query coins in `rounds` (round `rd ℓ`). -/
 def levelIns (ms : MerkleScheme) (sch : Flock.Schedule) (rounds : Array Round) (rd : ℕ → ℕ) (p : Proof) (ℓ j : ℕ) :
     List ByteArray :=
   opensInsOf ms (openAt p.ligerito (sch.levels.size - 1) ℓ).1[j]!
@@ -226,8 +200,6 @@ theorem named_of {ms : MerkleScheme}
     rw [e] at hs
     exact (Option.some.inj hs).symm
 
-/-- **An accepted plain rep passed every level's Merkle check** against that level's cap (`capAt`), on its opened
-rows, siblings and salts (`openAt`), at the positions of round `repRound`'s coins. -/
 theorem rep_levels_check {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess : RunRecord} {i r : ℕ}
     {bytes cap : ByteArray} (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
@@ -268,8 +240,6 @@ theorem rep_levels_check {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule
       ite_eq_right_iff.2 fun h0 => absurd h0 (by omega)
     rw [e]
     exact hmc
-
-/-! ## Two reps on one stream -/
 
 theorem levelProof_eq {a b : LevelProof} (h : (a.rows, a.siblings, a.salts) = (b.rows, b.siblings, b.salts)) :
     a = b := by
@@ -317,9 +287,6 @@ theorem proof_eq {a b : Proof} (h1 : a.cap = b.cap) (h2 : a.params = b.params) (
   subst h1 h2 h3 h4 h5 h6
   rfl
 
-/-- **Two proofs accepted as one rep on one retained stream are one proof, or two of their openings collide**: at
-some level, one query's two openings, at the position of that level's query coins, collide among their SHA-512
-inputs. -/
 theorem rep_bind_proof (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes bytes' cap cap' : ByteArray) (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)

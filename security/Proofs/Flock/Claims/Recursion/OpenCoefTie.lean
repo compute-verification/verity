@@ -52,27 +52,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Pinned
 
-/-!
-# Check 5's `coef` tie at the deployed run
-
-A `rec-open` piece's copy reads its opening's coefficients at its `coef` columns (`openCoefs`). Check 5
-(`RecCoins.checkOpen`) holds each instance's public commit string of port `coef` to `commitRow` of the verifier's own
-row `openCoef` under `verifierSalt`: the words of `RecCoins.coefAt` at its rep's `κ` and `eq(α)` at the query. So, as
-for `dirs` (`OpenDirs.dirsTie_staged`), `port_tie` gives the copy's `coef` bits as the verifier's row, and the coin side
-reads that row off the coins as `Rows.coefRead` (`coefTieR_of`). The record facts are the deployed record's, as for
-`dirs`: `DeployedR.layR` records the part's hm96 calls at `coef` (`openPorts`, `portCalls_sub_layR_open`), and check 5's
-evaluations of the `coef` rows are `openSetupSt`'s, which the deployed setup lists (`hset`, `resSetup_deployedB`).
-
-* `openCoefs_of_words`: a copy whose `coef` columns hold the bits of `RecCoins.words xs` reads `xs`.
-* `coefCols_staged`, `slotCoef_staged`: port `coef` is row 3 of the unit, from column `coefCol LANES HH 0` of each copy,
-  and its slot commits.
-* `coefTie_staged`: the copy's `coef` columns are check 5's `coef` row, at each instance.
-* `CoefTieR`, `coefTieR_of`: check 5's `coef` row at a piece's instance is the words of `coefRead` at the coins, from
-  `InnerCoinsR`.
-* `CopyCoefTieR`, `copyCoefTieR_of`, `copyCoefTieR_dense`: the tie at every piece a level part owns, at any accepted
-  run (`AtPieces`); `CopyCoefTieRP`, `copyCoefTieRP_dense` at each part's own witness (`AtPiecesP`, `JointP`), and
-  `copyCoefTieRP_deployed` at the deployed brings, the deployed bound and row D's pieces, with no premise.
--/
+/-! Check 5's `coef` tie at the deployed run, which holds at the deployed brings with no premise (`copyCoefTieRP_deployed`). -/
 
 @[expose] public section
 
@@ -90,9 +70,6 @@ open FlockSoundness.Refine (shapeOf)
 
 noncomputable section
 
-/-! ## Reading a copy's `coef` columns -/
-
-/-- Column `h` of a `rec-open` copy's `coef` row: `openCoefs`' base. -/
 def coefCol (LANES HH h : ℕ) : ℕ := 128 * LANES + 1024 * max 1 ((HH + 1) / 2) + 1024 + h
 
 theorem coefCol_add (L H h : ℕ) : coefCol L H h = coefCol L H 0 + h := by
@@ -112,8 +89,6 @@ theorem words_size (xs : Array F128) : (RecCoins.words xs).size = 8 * xs.size :=
 theorem coefAt_size (kap : Array (Array F128)) (L : ℕ) (e : F128) : (RecCoins.coefAt kap L e).size = 2 * L := by
   simp [RecCoins.coefAt] <;> omega
 
-/-- **A copy whose `coef` columns hold the words of `xs` reads `xs`**: element `i` of `openCoefs` is its 128 bits at
-`coefCol (128 i)`, which are bits `128 i …` of `RecCoins.words xs` (`words_bit`). -/
 theorem openCoefs_of_words {v : ℕ → Bool} {LANES HH : ℕ} {xs : Array F128} (hxs : xs.size = 2 * LANES)
     (hv : ∀ h < 256 * LANES, v (coefCol LANES HH h) = ((RecCoins.words xs)[h / 16]!).testBit (h % 16)) :
     Flock.Readable.openCoefs v LANES HH = xs := by
@@ -132,10 +107,6 @@ theorem openCoefs_of_words {v : ℕ → Bool} {LANES HH : ℕ} {xs : Array F128}
     rw [e, FlockC3.RegLevels.words_bit xs (by rw [hxs]; omega), show (128 * i + t) / 128 = i by omega,
       show (128 * i + t) % 128 = t by omega, getElem!_pos xs i h2]
 
-/-! ## The `rec-open` unit's `coef` port -/
-
-/-- **Port `coef` is the circuit's row 3**: the unit's first five rows are `row`, `aux`, `acc`, `coef`, `dirs`
-(`rowsOk`). -/
 theorem findIdx_coef {c : Circuit} {L H : ℕ} (h : RecOpen.rowsOk c L H = true) :
     c.ports.findIdx? (·.name == "coef") = some 3 := by
   have hnm : ∀ j < 5,
@@ -155,7 +126,6 @@ theorem preBits_coef (L H : ℕ) :
       (Flock.RecOpen.ports L H).acc := by
   simp [FlockC3.RegLevels.preBits, Flock.RecOpen.Ports.bits] <;> omega
 
-/-- **Port `coef` starts at `coefCol`**: the words of the three rows before it are its offset. -/
 theorem words_pre3 {c : Circuit} {L H : ℕ} (h : RecOpen.rowsOk c L H = true) :
     16 * (c.ports.extract 0 3).foldl (· + ·.words) 0 = coefCol L H 0 := by
   have hpre : ∀ i ≤ 5, 16 * ((c.ports.toList.take i).map (·.words)).sum = FlockC3.RegLevels.preBits L H i := by
@@ -178,10 +148,6 @@ theorem words_pre3 {c : Circuit} {L H : ℕ} (h : RecOpen.rowsOk c L H = true) :
   rw [hst, hpre 3 (by omega), preBits_coef]
   simp [coefCol, Flock.RecOpen.ports]
 
-/-- **Where a copy's `coef` columns sit**: at a staged `rec-open` part, port `coef` is row 3 (`findIdx_coef`) of
-`16 LANES` words, at a `LANES` that is a multiple of 8 (`RecOpen.valid`), and instance `i`'s `coef` row
-(`rowHidden_eq`) is copy `(i / g, i % g, 0)`'s columns from `coefCol LANES HH 0` (`words_pre3`, the unit's one input
-group at column 0), below the unit's constant (`leaves_le_constPos`). -/
 theorem coefCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
     {lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n)) {c : Circuit}
@@ -245,9 +211,6 @@ theorem coefCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
   rw [hel, formBit_var, hcol0, Nat.zero_mul, Nat.zero_add, ← hix, Claims.Recursion.VStar.copyOf_eq hj]
   simp [Claims.Recursion.VStar.copyIdx, hsz, hupv]
 
-/-- **A level part's `coef` slot commits**: `coef` is an input of the `rec-open` unit (its outputs are `out` and
-`acc_out`), so its row lies in the table's leaves (`in_block`); each instance `i < n` is one of the table's
-(`staged_scope`, `oneFull_staged`), so in one of its blocks (`div_lt_blocks`), and `slotCommits_table` applies. -/
 theorem slotCoef_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} (hr : readX x = some r)
     {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ}
@@ -303,10 +266,6 @@ theorem slotCoef_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
     decide
   exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hqc (in_block hrows hout hqc) hb
 
-/-! ## Check 5's `coef` rows -/
-
-/-- **Check 5's `rec-open` rows, opened**: where `openRows` gives rows, the inner session's algebra, the one level of
-`LANES` lanes and `H` siblings, both reps, and the `coef` and `dirs` rows built of them. -/
 theorem openRows_coef {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Array ℕ)}
     (h : openRows inn LANES H = some (cr, dr)) :
     ∃ sh extras l r0 r1, inn.algebra = .ok (sh, extras) ∧ innerLevels sh LANES H = [l] ∧
@@ -338,7 +297,6 @@ theorem cr_size_eq {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Array 
   obtain ⟨sh, extras, l, r0, r1, -, -, -, -, rfl, rfl⟩ := openRows_coef h
   simp [openCoef, openDirs]
 
-/-- **Each of check 5's `coef` rows is `16 LANES` words**: the words of `coefAt`'s `2 LANES` elements. -/
 theorem crRow_size {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Array ℕ)}
     (h : openRows inn LANES H = some (cr, dr)) {i : ℕ} (hi : i < cr.size) : cr[i]!.size = 16 * LANES := by
   obtain ⟨sh, extras, l, r0, r1, -, -, -, -, rfl, -⟩ := openRows_coef h
@@ -347,8 +305,6 @@ theorem crRow_size {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Array 
   rw [FlockC3.RegLevels.getElem!_map_range _ hi]
   simp only [words_size, coefAt_size] <;> omega
 
-/-- **`coef` row `r q + j` is rep `r`'s query `j`**: at level `l` of `q` queries, instance `r q + j` (`r < 2`,
-`j < q`) holds the words of rep `r`'s coefficients at `eq(α_l)[j]`. -/
 theorem openCoef_get (sh : Shape) (l LANES : ℕ) (r0 r1 : RecCoins.Rep) {r j : ℕ} (hr : r < 2)
     (hj : j < (sh.sched.levels[l]!).q) :
     (openCoef sh l LANES r0 r1)[r * (sh.sched.levels[l]!).q + j]! =
@@ -369,14 +325,6 @@ theorem openCoef_get (sh : Shape) (l LANES : ℕ) (r0 r1 : RecCoins.Rep) {r j : 
       rw [Nat.add_mod_left, Nat.mod_eq_of_lt hj]
     simp [h1, h2]
 
-/-! ## The tie at a copy -/
-
-/-- **Check 5's `coef` tie at a level part's instance, at `layR`**: at a staged `rec-open` part whose calls at `layR`
-are true and collision-free with the verifier's evaluations, and whose check 5 runs `checkOpen`, the inner session check 5 loads gives `coef` rows `cr`, and at each instance `i < n` of them
-the copy `(i / g, i % g, 0)` holds `cr[i]`'s bits at its `coef` columns: `port_tie` at the `coef` slot
-(`slotCoef_staged`, whose calls `layR` records, `portCalls_sub_layR_open`) and check 5's public row
-(`check5_bytes_lt`), with the verifier's evaluations of it in `openSetupSt` (`hset`), and the slot's forms the copy's
-`coef` columns (`coefCols_staged`). -/
 theorem coefTie_staged {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit}
@@ -471,10 +419,6 @@ theorem coefTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   rw [hcol, ← bitL_readForms hl, hrb, wordBytes, bitL_wordBytes _ h hb16, List.getD_eq_getElem?_getD,
     Array.getElem?_toList, ← Array.getD_eq_getD_getElem?, getD_padTo, getD_of_lt hj]
 
-/-! ## The coin side -/
-
-/-- **`alphaOf` is the level's context's `α`**: where the contexts are the levels in order (`rows_conss`), the context
-starting at level `l` is the `l`-th. -/
 theorem alphaOf_eq {info : RecAlgebra.Info RecAlgebra.Lin} {n : ℕ} {qs : ℕ → ℕ}
     (E : info.lg.conss.toList.map (fun c => (c.start, c.pos.size)) = (List.range n).map fun k => (k, qs k))
     {l : ℕ} (hl : l < n) : Rows.alphaOf info l = (info.lg.conss[l]!).alpha := by
@@ -495,10 +439,9 @@ theorem alphaOf_eq {info : RecAlgebra.Info RecAlgebra.Lin} {n : ℕ} {qs : ℕ �
   unfold Rows.alphaOf
   rw [hf, getElem!_pos _ l (by omega)]
 
-/-- **The `coef` tie** (`CoefTieR`, the coin side of `CopyCoefTieR`): at a V\* statement `xO` part `s` stages at `x`
-and shows the coins `c` at, where check 5 loads the staged table's (table 0's) inner session from its source and
-builds `rec-open`'s rows at the level part's `LANES`, `HH` (`openRows`), the `coef` row of a piece `ownQR` gives part
-`s`, at instance `rep · q + query`, is the words of the `coef` `coefRead` reads off the coins. -/
+/-- The coin side of `CopyCoefTieR`: where check 5 loads the staged table's inner session and builds `rec-open`'s
+rows, the `coef` row of a piece `ownQR` gives part `s`, at instance `rep · q + query`, is the words of the `coef`
+`coefRead` reads off the coins. -/
 def CoefTieR (untr : TrReader) (b : Brings) (pieces : Msg → List OpenPiece) (Bk : Msg → ℕ) (s : ℕ) (x : Msg)
     (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
@@ -511,11 +454,6 @@ def CoefTieR (untr : TrReader) (b : Brings) (pieces : Msg → List OpenPiece) (B
         cr[q.rep * OpenLower.qAt (xIOf x) q.level + q.query]! =
           RecCoins.words (Rows.coefRead (xIOf x) ((List.range (Bk (xIOf x))).map c) q)
 
-/-- **`CoefTieR` from `InnerCoinsR`**, at a statement the reader reads at the dense form and pieces in range: as
-`posTieR_of`, `openRows`' `coef` row `r q + j` is rep `r`'s query `j`'s coefficients (`openCoef_get`) at the piece's
-level, and `verifierRows` gives the same `κ` and contexts at check 5's shape and coins as at the reader's
-(`verifierRows_filter`, `verifierRows_comb`, `verifierRows_congr`); `coefRead`'s lanes are the level's (`levelMatch`)
-and its `alphaOf` the level's context's (`alphaOf_eq`). -/
 theorem coefTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ}
     {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) (hR : OpenLower.PiecesInRangeR pieces)
@@ -525,7 +463,6 @@ theorem coefTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPi
   obtain ⟨sh, extras, l, r0, r1, halg, hl, h0, h1, rfl, -⟩ := openRows_coef hop
   obtain ⟨hext, hsh'⟩ := OpenLower.algebra_ok halg
   obtain ⟨sch, hsch, hshm, hshk, hshc, hshs, hshh⟩ := OpenLower.shape?_ok hsh'
-  -- the piece's level is the statement's
   obtain ⟨hq0, r', ss', hr', hss', L', H', n', hsv'⟩ := OpenLower.ownQR_some ho
   rw [hr] at hr'
   cases hr'
@@ -550,19 +487,16 @@ theorem coefTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPi
   have hql : q.level = l := OpenLower.innerLevels_unique hl (by rw [hshs]; exact hlev)
     (by rw [hshs]; exact hLANES.symm) (by rw [hshs]; exact hHH.symm)
   have hl' : l < sh.sched.levels.size := by rw [hshs, ← hql]; exact hlev
-  -- check 5's row
   have hqa : OpenLower.qAt (xIOf x) q.level = (sh.sched.levels[l]!).q := by
     unfold OpenLower.qAt
     rw [hS, hshs, hql]
   rw [hqa, openCoef_get sh l LANES r0 r1 hrep (by rw [hshs, ← hql]; exact hquery)]
   refine congrArg RecCoins.words ?_
-  -- rep `q.rep`'s rounds and rows
   have hrq : inn.rep sh extras q.rep = .ok (if q.rep = 0 then r0 else r1) := by
     obtain h | h : q.rep = 0 ∨ q.rep = 1 := by omega
     · rw [h]; simpa using h0
     · rw [h]; simpa using h1
   obtain ⟨hrounds, hvr⟩ := RecDeploy.rep_ok hrq
-  -- its contexts are the levels in order
   have hseam := FlockSoundness.Refine.fast100_level _ _ hsch
   have h0s : 0 < sh.sched.levels.size := by rw [hshs]; exact (FlockVBridge.Family.fast100_q0 hsch).1
   have hqs : ∀ k < sh.sched.levels.size, ∀ cs,
@@ -573,7 +507,6 @@ theorem coefTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPi
   have E := FlockVBridge.Family.rows_conss hvr h0s hqs
   rw [OpenLower.verifierRows_filter (hrd q.rep hrep _ hrounds (OpenLower.verifierRows_pos hvr)),
     Rows.verifierRows_comb] at hvr
-  -- the reader's coefficients
   have hexs : ((tabsOf v.2.2)[0]!.extra (pointsOf v.2.1 (((List.range (Bk (xIOf x))).map c).headD default))) =
       .ok extras := by rw [← hex, hext]
   have hLL : FlockVBridge.AccChain.levelLanes
@@ -603,15 +536,11 @@ theorem coefTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPi
     dsimp only
     rw [hi, hk', hql, FlockC3.Opening.coefAt_eq, hLL, alphaOf_eq E hl']
 
-/-- **`CoefTieR` at a dense compiled statement**, from the verifier's checks and the pieces' ranges
-(`innerCoinsR_staged`). -/
 theorem coefTieR_dense {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ} {x : Msg}
     {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hd : Claims.Recursion.Form.Dense st0.form) (hR : OpenLower.PiecesInRangeR pieces)
     (hB : RestRead.kI x ≤ Bk (xIOf x)) : CoefTieR recRead b pieces Bk s x c :=
   coefTieR_of hst hd hR (OpenLower.innerCoinsR_staged hst hd hB)
-
-/-! ## The tie at every piece -/
 
 section Deployed
 
@@ -619,14 +548,11 @@ variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Re
   (untr : TrReader) (b : Brings) (cmt : Msg → ℕ → Msg → Msg) (L : LayoutB)
   (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
 
-/-- **Check 5's `coef` tie at the copies**: at every piece a level part owns, at any accepted run (`AtPieces`), the
-coefficients the piece's copy reads (`openCoefs`) are the ones `coefRead` reads off the coins. -/
 def CopyCoefTieR (pieces : Msg → List OpenPiece) : Prop :=
   OpenLower.AtPieces H D shape untr b cmt L pieces fun x c _ LANES HH _ _ w p ht q =>
     Flock.Readable.openCoefs (OpenLower.copyR (Claims.Recursion.xI D x) w p ht q) LANES HH =
       Rows.coefRead (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q
 
-/-- **`CopyCoefTieR` at the parts' own witnesses** (`AtPiecesP`: `JointP`, at `w = ws[s]`). -/
 def CopyCoefTieRP (pieces : Msg → List OpenPiece) : Prop :=
   OpenLower.AtPiecesP H D shape untr b cmt L pieces fun x c _ LANES HH _ _ w p ht q =>
     Flock.Readable.openCoefs (OpenLower.copyR (Claims.Recursion.xI D x) w p ht q) LANES HH =
@@ -634,13 +560,6 @@ def CopyCoefTieRP (pieces : Msg → List OpenPiece) : Prop :=
 
 end Deployed
 
-/-- **`CopyCoefTieR` at the layout of record `layR`**, at the deployed reader's statements at the dense form and pieces
-in range, from the deployed setup listing check 5's evaluations (`hset`) and the coin side (`InnerCoinsR`): the part's circuit is the staged table's, with `coef` among its
-inputs (`four_lt_nIn`); check 5's site holds the registered reads, the inner session and its unit no other recursive unit
-(`copySite_staged`); the piece's instance is below the statement's `n`, which is check 5's `coef` rows (`drSize_staged`,
-`cr_size_eq`) and at most the table's public file's, so the labels are `0, …, n − 1` (`CopySite.idx_staged`); then
-`coefTie_staged` at the piece's instance gives its `coef` columns as check 5's row there, which is the words of
-`coefRead` (`coefTieR_of`), and `openCoefs_of_words` reads them. -/
 theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {IV : Claims.Verifier Coin} {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
     {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
@@ -671,7 +590,6 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
   cases hss'
   rw [hsv] at hsv'
   cases hsv'
-  -- the part's circuit, with `coef` among its inputs
   obtain ⟨vs, hvs, -, hall⟩ := readX_partVStar hr
   rw [hss] at hvs
   cases hvs
@@ -687,7 +605,6 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
   have hou := Flock.RecOpen.outsOk_of_check P.recNet hpar
   rw [hc0] at hrk hou
   have hdin : 3 < HmOut.nIn cc := by have := four_lt_nIn hrk hou; omega
-  -- check 5's site and rows
   rw [e0] at hpar
   obtain ⟨own, f, hown, hf', hso, hop, hsp, -⟩ := CopySite.copySite_staged hsu h0 (.inl (by simp [hpar]))
   obtain ⟨hins, hset0⟩ := setupO_some hsu
@@ -695,7 +612,6 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
   rw [hown, hf'] at hcoin
   obtain ⟨inn, hinn, hco⟩ := FlockSoundness.Discharge.Recursion.openCheck_of_check hcoin hso hop hsp hpar
   obtain ⟨cr, dr, hrows, ⟨what, hcv⟩, -⟩ := FlockSoundness.Discharge.Recursion.open_of_check hco
-  -- the piece's level is the statement's
   obtain ⟨h0q, r2, ss2, hr2, hss2, L2, H2, n2, hsv2⟩ := OpenLower.ownQR_some ho
   rw [hr] at hr2
   cases hr2
@@ -718,7 +634,6 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
     generalize ((OpenLower.schAt (xIOf x) 0).levels[s]!).q = Q at hqry ⊢
     have h1 : q.rep * Q ≤ 1 * Q := Nat.mul_le_mul_right _ (by omega)
     omega
-  -- the statement's instances are the table's, at most its public file's
   obtain ⟨-, r3, ss3, sv3, hr3, hss3, hsv3, hpop⟩ := staged_scope hS hxp h0p
   rw [hr] at hr3
   cases hr3
@@ -737,13 +652,11 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
   have hnn := setupOne_n hd1
   rw [e0] at hpop' hnn
   have hnp : n ≤ sts[0].pub.n := by omega
-  -- check 5's `coef` rows are the statement's instances
   have hIc := hI s x cs st hx' hd xO (And.intro hshow hS) i0 spec sts hsu h0 f inn hf' hinn
   obtain ⟨v, hv, hm, -⟩ := hIc
   have hdrs : dr.size = n := OpenDirs.drSize_staged hx' hd hr hss hsv hlev ⟨v, hv, hm⟩ hrows
   have hcrs : cr.size = n := (cr_size_eq hrows).trans hdrs
   have hidx := CopySite.idx_staged hsu h0 hown hcv (by omega) (CopySite.labels_staged hS hsu h0)
-  -- the copy's `coef` columns are check 5's row
   obtain ⟨inn', cr', dr', hinn', hor', htie⟩ := coefTie_staged hT hnc hS hck hr hss hsv hpc hxp ht hsu h0 hidx hown
     hso hop hsp hf' (hset xO)
     hdin hinst (by omega)
@@ -751,7 +664,6 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
   cases hinn'
   rw [hrows] at hor'
   cases hor'
-  -- which is the words of `coefRead`
   have hct := coefTieR_of hx' hd hR (hI s x cs st hx' hd) xO (And.intro hshow hS) i0 spec sts hsu h0 f inn hf' hinn
     r ss lv LANES HH n hr hss hsv cr dr hrows q (by rw [← hxI]; exact hq) ho
   have hct' : cr[OpenDirs.instR (Claims.Recursion.xI (DR b elem IV) x) q]! =
@@ -773,8 +685,6 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
   refine openCoefs_of_words (by omega) fun h hh => ?_
   rw [htie hcr h hh, hct']
 
-/-- **`CopyCoefTieR` at the deployed reader**, at the dense form: the coin side from the verifier's checks
-(`innerCoinsR_staged`). -/
 theorem copyCoefTieR_dense {b : Brings}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {IV : Claims.Verifier Coin} {cmt : Msg → ℕ → Msg → Msg}
@@ -787,8 +697,6 @@ theorem copyCoefTieR_dense {b : Brings}
   copyCoefTieR_of pieces hP (fun _ h => h) hR hset
     fun _ x _ _ hst hd => OpenLower.innerCoinsR_staged hst hd (hB x)
 
-/-- **`CopyCoefTieRP` at the deployed reader**, at the dense form: `copyCoefTieR_dense` at each part's own witness
-(`atPiecesP_of`). -/
 theorem copyCoefTieRP_dense {b : Brings}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {IV : Claims.Verifier Coin} {cmt : Msg → ℕ → Msg → Msg}
@@ -800,9 +708,6 @@ theorem copyCoefTieRP_dense {b : Brings}
       pieces :=
   OpenLower.atPiecesP_of _ _ _ _ _ _ _ (copyCoefTieR_dense pieces hP hR hset hB)
 
-/-- **`CopyCoefTieRP` at the deployed brings, with no premise**: `copyCoefTieRP_dense` at `bB (deployedB b) …`, whose
-setup lists check 5's evaluations (`resSetup_deployedB`), the deployed bound `bdR` (whose `k` is `kI`) and row D's
-pieces (`piecesInRangeR_rowDPieces`). Its record is `DR … (bdR …).IVStar`, which is `DRL`. -/
 theorem copyCoefTieRP_deployed (rd : Msg → Option FlockDeploy.FinalP) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)

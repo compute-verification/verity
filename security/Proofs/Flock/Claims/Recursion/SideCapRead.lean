@@ -38,25 +38,7 @@ import Proofs.Flock.Claims.Recursion.CapPorts
 import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.RestLens
 
-/-!
-# The reader's cap at level 0 (`SideCapR`), at the deployed `finalR` and `DeployedR.layR`
-
-`SideCapR` asks that the side `sideAtR rd` read at the opened messages have, at a piece's opening, the node a RecCap
-row carries (`CapEntryR`). At level 0 the side's cap is `capR`: the nodes of the first opened message's rows
-(`rowsOf`, `nodeOf`), the table's level-0 top (`repCtx`'s `cap0`). That message is round 0's rows joined
-(`Bound.opened`, `joinR`), and at the deployed last message round 0 is RecCap's `top` rows:
-
-* the last message off the witnesses starts with round 0's openings, at RecCap's part over its `N = level0Nodes`
-  instances, each its row then its salt (`lastAt_parts`, `openPieces`, `capOpen`);
-* `finalR` reads the trailer off the end and cuts the rest at `openLens` (`finalR_trailer`), so its first round is
-  those rows, as RecCap's part's witness reads them (`cutRound_openSegs`, `cutRounds_head`);
-* so the side's level-0 cap entry `i` is the node of RecCap's `top` row at instance `i` (`capRow`), for `i < N`
-  (`capEntry_level0`). RecCap's part has a circuit, the one `readX` checked for its port `top` (`capPorts`).
-
-`sideCapR_of` gives `SideCapR` at `layR elem` and the deployed bound record at `finalR` from two premises: the opened
-position at level 0 is below the cap's `N` nodes, at one of the table's two reps (`PosCap0`), and the levels above
-0 (`SideCapUp`), whose caps are the stream rounds' tops (`topGroups` of the `capOpenAt` openings).
--/
+/-! The reader's cap at level 0 (`SideCapR`) at the deployed `finalR` and `DeployedR.layR`, from `PosCap0` and `SideCapUp` (`sideCapR_of`). -/
 
 @[expose] public section
 
@@ -69,10 +51,6 @@ open Claims.Recursion.VStarB
 open RecDeploy.OpenLower (AtPieces AtOpened sideAtR capR ligR ownQR)
 open RecDeploy.RestRead (DenseX)
 
-/-! ## Round 0's cut -/
-
-/-- **`cutRound` reads a cap's openings back**: at the openings' row lengths, the bytes read off the witness `w`
-are the rows, each then its salt, and what follows is left. -/
 theorem cutRound_openSegs (w : Claims.Flock.Wit) (c : Circuit) (nm : String) (q : ℕ) :
     ∀ (ns : List ℕ) (more : Msg), ∃ ps : List (Msg × Salt),
       DeployedR.cutRound (DeployedR.rowLens (ns.flatMap (openSegs c nm q)))
@@ -113,7 +91,6 @@ theorem cutRound_openSegs (w : Claims.Flock.Wit) (c : Circuit) (nm : String) (q 
         List.take_left' hS, Option.map_some]
     · rw [List.map_cons, hp, List.map_cons]
 
-/-- **The first round `cutRounds` reads is its first cut.** -/
 theorem cutRounds_head {l : List ℕ} {ls : List (List ℕ)} {m : Msg} {ps : List (Msg × Salt)} {rest : Msg}
     {os : List (List (Msg × Salt))} {last : Msg} (h1 : DeployedR.cutRound l m = some (ps, rest))
     (h : DeployedR.cutRounds (l :: ls) m = some (os, last)) : ∃ os', os = ps :: os' := by
@@ -121,21 +98,13 @@ theorem cutRounds_head {l : List ℕ} {ls : List (List ℕ)} {m : Msg} {ps : Lis
   obtain ⟨⟨os', l'⟩, -, he⟩ := Option.map_eq_some_iff.1 h
   exact ⟨os', (Prod.mk.inj he).1.symm⟩
 
-/-! ## The level-0 cap -/
-
-/-- A layout's messages don't read its calls. -/
 theorem msgs_shaAt (L : LayoutB) (f : Msg → ℕ → List (Msg × List HmNets.Lin × List HmNets.Lin)) :
     ({ L with shaAt := f } : LayoutB).msgs = L.msgs := rfl
 
-/-- The layout of record's messages are `layoutBTops`' at the last round's pieces: `layR` adds only calls. -/
 theorem msgs_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
     (DeployedR.layR elem).msgs = (RestRead.layAt (DeployedR.restR elem)).msgs :=
   msgs_shaAt (RestRead.layAt (DeployedR.restR elem)) _
 
-/-- **The side's level-0 cap entry is RecCap's `top` row's node**, at every reading of the deployed last message: at
-a dense compiled statement and witnesses one a part, `finalR`'s first round is RecCap's part's `top` rows over its
-`N = level0Nodes` instances (`cutRound_openSegs`), so the side's cap (`capR`, table 0's chunk of their nodes) has
-at each opened node `i < N` the node of RecCap's row `i`, at the list's last statement `.cap 0 N`. -/
 theorem capEntry_level0 (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (rd : Msg → Option FinalP) (posAt : Msg → List Coin → OpenPiece → ℕ) {x : Msg} (hx : DenseX x)
     {ws : List Claims.Flock.Wit} (hl : ws.length = nS x) {cs : List Coin} {HH : ℕ} {q : OpenPiece}
@@ -208,31 +177,22 @@ theorem capEntry_level0 (elem : (r : XR) → List (Fin r.w.parts.length × List 
       List.getElem?_map, List.getElem?_map, List.getElem?_range hi, Option.map_some, Option.map_some,
       Option.getD_some]
 
-/-! ## `SideCapR` from level 0 and the levels above -/
-
 section Deployed
 
 variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Recursion.Form → Prop)
   (untr : TrReader) (b : Brings) (cmt : Msg → ℕ → Msg → Msg) (L : LayoutB)
   (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace) (rd : Msg → Option FinalP)
 
-/-- **The opened position at level 0 is one of the cap's nodes**: at a level-0 piece, one of its table's two reps,
-the opening's node (`posAt`, below `HH` siblings) is below RecCap's node count `N`. -/
 def PosCap0 (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c _ _ HH _ _ _ _ _ q => q.level = 0 →
     q.rep < 2 ∧ ∀ (r : XR) (i N : ℕ), readX x = some r → capAt r = some (i, N) →
       posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q >>> HH < N
 
-/-- **The reader above level 0**: `SideCapR` at the pieces of the levels whose caps are the stream rounds' tops. -/
 def SideCapUp (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c ws _ HH _ _ _ _ _ q => q.level ≠ 0 →
     AtOpened D Bd x (L.msgs x ws) (CapEntryR rd posAt x (Claims.Recursion.xI D x)
       ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) ws HH q)
 
-/-- **The reader at the deployed layout and last message**, from level 0's position range and the levels above:
-at `layR elem` and the bound record at `finalR` with rows joined by `joinR`, a level-0 piece's cap entry is RecCap's
-`top` row's node (`capEntry_level0`); a piece is table 0's (`ownQR`), and the record reads the statement as the
-deployed reader does, with one witness a part. -/
 theorem sideCapR_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out) (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128))

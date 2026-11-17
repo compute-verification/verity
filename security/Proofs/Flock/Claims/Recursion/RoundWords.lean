@@ -41,23 +41,7 @@ import Proofs.Flock.Claims.Recursion.RowsCover
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The holders of one round's row agree on its words
-
-The deployed layout sizes each absorbed round's row by the first part that holds it (`rowSlot`), and every part that
-holds it reads that row, so the proof of the honest prover's acceptance needs the holders of one round to read it at one
-word count. The verifier checks it on V\*'s list (`RecVStar.checkRoundWords`, in `checkRoundsListed`, in
-`RecVStar.statements`): every port under one `rec-c<k>` has one word count off its statement's description
-(`RecVStar.ownWords`).
-
-* `roundWords_of_check`, `words_of_roundWords`: the check gives one word count per `rec-c<k>`;
-* `msgRound_inj`: two held rows of one inner round are under one `rec-c<k>` (`msgRound` is `r · |rs| + c_k`, with `c_k`
-  a round of `rs` and the message rounds distinct);
-* `ports_words`, `ownWords_rows`: a part's port's words, where V\*'s parse check passed (`checkParsed_ok`), are its
-  statement's `ownWords`;
-* `heldRows_words`: wherever `readX` reads `x`, two held rows of one round sit at ports of one word count, the hypothesis
-  `hW` of `VStarBuild.fit_stream`.
--/
+/-! The holders of one round's row agree on its words, which the verifier checks on V\*'s list (`RecVStar.checkRoundWords`). -/
 
 @[expose] public section
 
@@ -66,7 +50,6 @@ namespace RecDeploy
 open Flock
 open Claims (Msg)
 
-/-- **`checkRoundsListed` runs the width check**: where it passes, `checkRoundWords` does. -/
 theorem roundWords_of_check {i : RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : RecVStar.checkRoundsListed i ss = .ok ()) : RecVStar.checkRoundWords ss = .ok () := by
   unfold RecVStar.checkRoundsListed at h
@@ -76,8 +59,6 @@ theorem roundWords_of_check {i : RecVStar.Inner} {ss : Array VStar.Stmt}
     · exact h
   · cases h
 
-/-- **One word count a round**: where `checkRoundWords` passes, two of the list's ports under one `rec-c<k>` have one
-word count. -/
 theorem words_of_roundWords {ss : Array VStar.Stmt} (h : RecVStar.checkRoundWords ss = .ok ())
     {p p' : ℕ × Option ℕ × String × String} (hp : p ∈ RecVStar.roundPorts ss) (hp' : p' ∈ RecVStar.roundPorts ss)
     (hk : p.1 = p'.1) : p.2.1 = p'.2.1 := by
@@ -99,7 +80,6 @@ theorem words_of_roundWords {ss : Array VStar.Stmt} (h : RecVStar.checkRoundWord
     cases hf2
     rw [← e1, e2]
 
-/-- **`msgRound` names one message round**: two of the reps' rounds at one place of the rep streams are one `k`. -/
 theorem msgRound_inj {rs : Array RecVStar.SchedRound} {r₁ k₁ r₂ k₂ j : ℕ} (h₁ : msgRound rs r₁ k₁ = some j)
     (h₂ : msgRound rs r₂ k₂ = some j) : k₁ = k₂ := by
   unfold msgRound at h₁ h₂
@@ -124,8 +104,6 @@ theorem msgRound_inj {rs : Array RecVStar.SchedRound} {r₁ k₁ r₂ k₂ j : �
   obtain ⟨hk₂, g₂⟩ := List.getElem?_eq_some_iff.1 ha₂
   exact (hnd.getElem_inj_iff).1 (g₁.trans g₂.symm)
 
-/-- **A port's words are its row's**: where the circuit's ports are `rows` by name, words and bits, the port `findIdx?`
-finds by name has the words of the row `find?` finds by name. -/
 theorem ports_words {c : Circuit} {rows : List (String × ℕ × ℕ)}
     (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = rows) {nm : String} {qi : ℕ}
     (hq : c.ports.findIdx? (·.name == nm) = some qi) :
@@ -139,13 +117,11 @@ theorem ports_words {c : Circuit} {rows : List (String × ℕ × ℕ)}
     simpa using this
   simp [hf, Array.getElem?_eq_getElem hlt]
 
-/-- `zip` of two maps of one list. -/
 theorem zip_map_map {α β γ : Type} (f : α → β) (g : α → γ) :
     ∀ l : List α, (l.map f).zip (l.map g) = l.map fun a => (f a, g a)
   | [] => rfl
   | a :: l => by simp [zip_map_map f g l]
 
-/-- An input row's words, found by its name among the rows `A` lays first. -/
 theorem find_rows {A : List (String × ℕ)} {rest : List (String × ℕ × ℕ)} {nm : String} {w : ℕ} (hm : (nm, w) ∈ A) :
     (((A.map fun p : String × ℕ => (p.1, p.2, 16 * p.2)) ++ rest).find? fun x => x.1 == nm).map
         (fun x => x.2.1) = (A.find? fun x => x.1 == nm).map (fun x => x.2) := by
@@ -153,9 +129,6 @@ theorem find_rows {A : List (String × ℕ)} {rest : List (String × ℕ × ℕ)
     ((List.find?_isSome (p := fun x : String × ℕ => x.1 == nm)).2 ⟨_, hm, by simp⟩)
   simp [List.find?_append, List.find?_map, Function.comp_def, ha]
 
-/-- **A message-round port's words off the description**: at a statement whose unit builds, a port of its own
-(`ownPorts`) under a `rec-c<k>` has, among V\*'s rows of its unit (`vstarRows`), the words `ownWords` reads off the
-statement. -/
 theorem ownWords_rows {s : VStar.Stmt} {u : VStar.UnitC} (hu : s.unit = .ok u)
     {q : String × String × Array (Option ℕ)} (hq : q ∈ RecVStar.ownPorts s) {k : ℕ}
     (hk : RecVStar.cIndex q.2.1 = some k) :
@@ -238,10 +211,6 @@ theorem ownWords_rows {s : VStar.Stmt} {u : VStar.UnitC} (hu : s.unit = .ok u)
   | cap _ _ => simp [RecVStar.ownPorts] at hq
   | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
-/-- **The holders of one round's row agree on its words**: wherever `readX` reads `x`, two rows the parts hold
-(`heldRows`) at one round of the rep streams sit at ports of one word count. The rows are under one `rec-c<k>`
-(`msgRound_inj`); each port's words are its statement's `ownWords` (V\*'s parse check, `ownWords_rows`), and V\*'s list
-holds every port under one `rec-c<k>` at one word count (`checkRoundWords`, in `RecVStar.statements`). -/
 theorem heldRows_words {x : Msg} {r : XR} (hx : readX x = some r) :
     ∀ s₁ c₁ h₁ s₂ c₂ h₂, r.w.parts[s₁]?.bind partCircuit = some c₁ → h₁ ∈ heldRows r s₁ →
       r.w.parts[s₂]?.bind partCircuit = some c₂ → h₂ ∈ heldRows r s₂ → h₁.1 = h₂.1 →

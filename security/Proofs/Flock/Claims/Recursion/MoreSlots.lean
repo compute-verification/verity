@@ -41,17 +41,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
 import Proofs.Flock.Soundness.Discharge.Hm.Mask
 
-/-!
-# The extra calls' slots at any staged part (`MoreSlotsTrue`'s parts)
-
-`DeployedR.layR` records, beside `layoutBTops`' calls, each output row's (`outsCalls`), check 5's (`valCalls`) and the
-`rec-acc` chain's (`accCalls`) hm96 calls. Each pair is a slot's salt call and its row call, at some row forms
-(`formCalls`), and both are true wherever the slot outputs the commit string of its row prefix and that row
-(`formCalls_true`, `hmCalls_true` at any forms). An input row's slot does at a staged part (`slotCommits_table`);
-an output row's does wherever its unit's output group lies in the unit's slot (`slotOut_table`'s `hin`), which holds of
-every unit the parser built (`hin_of_check`: D11 in `Net.ofRows`, its group's bits within its words, and
-`HmRow.check`'s 16-bit returned outputs), so at every staged part (`slotOut_stagedG`).
--/
+/-! The extra calls' slots at any staged part, whose calls are true wherever the slot outputs the commit string of its row prefix and that row. -/
 
 @[expose] public section
 
@@ -64,8 +54,6 @@ open Claims.Recursion.VStarB (readForms formBit)
 open FlockSoundness.Discharge.Hm (bitL)
 open RecDeploy.ResLower (slotOut_table staged_hidden)
 open RecDeploy.DeployedR (outRowForms)
-
-/-! ## A slot's calls at any row forms -/
 
 /-- **Port `q`'s hm96 calls at instance `n`, with the row at forms `F`**: the salt's, `SHA-512(p_salt ‖ y) = c`, then
 the row's, `SHA-512(row_prefix ‖ row) = d`. -/
@@ -84,9 +72,6 @@ theorem portCalls_eq (c : Circuit) (nm : String) (q n : ℕ) :
 
 theorem accOutCalls_eq (c : Circuit) (q n : ℕ) : accOutCalls c q n = formCalls c q n (accOutForms c q n) := rfl
 
-/-- **A slot's calls are true evaluations where it outputs its commit string**, at any row forms `F` (`hmCalls_true`'s
-argument): the salt's is the commit string's second half; the row's digest form `b ⊕ Φy` is
-`SHA-512(row) ⊕ M·y ⊕ Φy`, and `Φy` is `M·y` (`maskV_filter`). -/
 theorem formCalls_true {c : Circuit} {q n : ℕ} {F : List HmNets.Lin} {w : Claims.Flock.Wit}
     (h : readForms w (hmCommit c q n) =
       FlockSoundness.Binding.commitString (rowPfx c q ++ readForms w F) (readForms w (hmSalt c q n))) :
@@ -137,10 +122,6 @@ theorem formCalls_true {c : Circuit} {q n : ℕ} {F : List HmNets.Lin} {w : Clai
     rw [hci, Bool.xor_assoc, Bool.xor_self, Bool.xor_false]
     rfl
 
-/-! ## A unit's output group lies in its slot -/
-
-/-- **`HmRow.check`'s unit groups**: an untyped circuit's unit has an output group, and where the unit returns the
-outputs, that group's ports are 16-bit words. -/
 theorem outGroup_of_check {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
     (h : HmRow.check c tags ls = .ok ()) (ho : c.outNet = c.unitNet) :
     c.unit.outGroups.size ≠ 0 ∧ ∀ b ∈ (c.unit.outGroups.getD 0 default).bits.toList, b = 16 := by
@@ -160,7 +141,6 @@ theorem outGroup_of_check {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.t
     Array.any_eq_true'.2 ⟨b, Array.mem_def.2 hb, by simpa using hne⟩
   simp only [hany, ho, bne_self_eq_false, Bool.not_false, Bool.true_and, Bool.and_true, Bool.or_true]
 
-/-- **`Net.ofRows`' output groups' ports fit their words.** -/
 theorem ofRows_outBits {name : String} {useful constPos : ℕ} {ig og : Array Group} {ra rb : Array (Array ℕ)}
     {n : Net} (h : Net.ofRows name useful constPos ig og ra rb = .ok n) :
     ∀ g ∈ og.toList, g.bits.foldl (· + ·) 0 ≤ g.words * WORD := by
@@ -175,9 +155,6 @@ theorem ofRows_outBits {name : String} {useful constPos : ℕ} {ig og : Array Gr
   have := h5.2 i hi
   omega
 
-/-- **A built unit's output group lies in its slot** (`slotOut_table`'s `hin`): the group lies in the unit's
-`2^unitLog / WORD` words (D11, `Net.ofRows_ok`), and its ports, 16-bit words each (`outGroup_of_check`), fit its words
-(`ofRows_outBits`). -/
 theorem hin_of_check {c : Circuit} (hB : FlockSoundness.Built c.unit) {tags : Tags} {ls : Lean.Json}
     (ht : c.typed = none) (h : HmRow.check c tags ls = .ok ()) (ho : c.outNet = c.unitNet) :
     ∀ j < (c.unit.outGroups.getD 0 default).bits.size, ∀ t < 16,
@@ -208,12 +185,6 @@ theorem hin_of_check {c : Circuit} (hB : FlockSoundness.Built c.unit) {tags : Ta
   generalize P / 128 = K at hD hdiv
   omega
 
-/-! ## An output slot commits at any staged part -/
-
-/-- **A staged part's output slot commits its output bits**, at any of its statement's instances (`slotOut_staged` at
-any unit): the part's table has hidden outputs (`staged_hidden`) and returns them from its unit (`scopeOk`), whose
-output group lies in its slot (`hin_of_check`), and holds every instance of its statement (`staged_scope`,
-`oneFull_staged`), at a block of the table (`div_lt_blocks`), so `slotOut_table`. -/
 theorem slotOut_stagedG {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} (hr : readX x = some r)
     {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss) {sv : VStar.Stmt}
@@ -277,8 +248,6 @@ theorem slotOut_stagedG {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
   obtain ⟨ls, hls⟩ := P.check
   exact slotOut_table ht' hh hd P.tmpl hv1 ho (hin_of_check (L.built_flat P.tmpl) P.typed hls ho) L regs hz1 hqs hq hb
 
-/-- **A staged part's input slot commits its row**, at any port its statement doesn't output (`in_block`) and any of
-its statement's instances, or either rep (`hmSlotsCommit_of_full` at any port). -/
 theorem slotIn_stagedG {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} (hr : readX x = some r)
     {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss) {sv : VStar.Stmt}
@@ -331,26 +300,17 @@ theorem slotIn_stagedG {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit
   subst hc0
   exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hq (in_block hrows hnm hq) hb
 
-/-! ## The open leaves -/
-
-/-- **A port V\* outputs is an output row of the parsed circuit**: at a staged part, a port its statement lists among
-its outputs is at or past the circuit's input rows (`HmOut.nIn`). `RecVStar.checkParsed` holds the ports' names to
-V\*'s inputs then outputs (`vstarRows`) and `HmOut.checkRows` the rows to META's `input_ports` then one per run of
-output ports, but neither ties the two splits (ResLower's `hvin`, `hoout`). -/
+/-- `RecVStar.checkParsed` holds the ports' names to V\*'s inputs then outputs and `HmOut.checkRows` the rows
+to META's `input_ports` then the outputs, but neither ties the two splits. -/
 def PastIn (st : Stage) : Prop :=
   ∀ (s : ℕ) (x xO : Msg) (r : XR) (ss : Array VStar.Stmt) (sv : VStar.Stmt) (c : Circuit) (nm : String) (q : ℕ),
     StagedPart st s x xO → readX x = some r → RecVStar.statements r.shape = .ok ss → ss[s]? = some sv →
       r.w.parts[s]?.bind partCircuit = some c → nm ∈ sv.sub.outputs → c.ports.findIdx? (·.name == nm) = some q →
         HmOut.nIn c ≤ q
 
-/-- **The chain's `acc` holdings are instances of their statement**: where statement `sv` reads the `rec-acc` chain
-at `acc` instance `u` (`accRead`, off `RecVStar.accReads`), `u` is below `sv`'s instances (a level's `2q`, R's
-level's `q`). -/
 def AccFits : Prop :=
   ∀ (r : XR) (ss : Array VStar.Stmt) (s : ℕ) (sv : VStar.Stmt), RecVStar.statements r.shape = .ok ss →
     ss[s]? = some sv → ∀ u, (accRead r sv "acc" u).isSome = true → u < sv.instances
-
-/-! ## Each kind of call is true -/
 
 section Calls
 
@@ -404,8 +364,6 @@ theorem portCallsG_true (hP : PastIn st) (hS : StagedPart st s x xO)
 
 end Calls
 
-/-! ## Which ports the extra calls read -/
-
 theorem outputs_named (sv : VStar.Stmt) :
     ∀ nm ∈ sv.sub.outputs, nm = "out" ∨ nm = "acc_out" ∨ nm = "rin" ∨ nm = "rout" := by
   cases sv <;> simp [VStar.Stmt.sub, VStar.recOpenSub, VStar.innerSub, VStar.sparseSub, VStar.capSub, VStar.linkSub]
@@ -414,7 +372,6 @@ theorem not_output {sv : VStar.Stmt} {nm : String} (h1 : nm ≠ "out") (h2 : nm 
     (h4 : nm ≠ "rout") : nm ∉ sv.sub.outputs :=
   fun hm => (outputs_named sv nm hm).elim h1 fun h => h.elim h2 fun h => h.elim h3 h4
 
-/-- A read of the chain at a port other than `acc` is an algebra part's `acc0` or `acc1`, at rep `u < 2`. -/
 theorem accRead_other {r : XR} {sv : VStar.Stmt} {nm : String} {u : ℕ} (ha : nm ≠ "acc")
     (h : (accRead r sv nm u).isSome = true) : u < 2 ∧ nm ∉ sv.sub.outputs := by
   cases sv with
@@ -430,7 +387,6 @@ theorem accRead_other {r : XR} {sv : VStar.Stmt} {nm : String} {u : ℕ} (ha : n
     · simp only [if_neg h1, Option.isSome_none, Bool.false_eq_true] at h
   | _ => unfold accRead at h; simp [ha] at h
 
-/-- A read of the chain at `acc` is a level's, whose statement outputs `acc_out`. -/
 theorem accRead_acc {r : XR} {sv : VStar.Stmt} {u : ℕ} (h : (accRead r sv "acc" u).isSome = true) :
     "acc_out" ∈ sv.sub.outputs := by
   cases sv with
@@ -445,13 +401,6 @@ theorem accRead_acc {r : XR} {sv : VStar.Stmt} {u : ℕ} (h : (accRead r sv "acc
     unfold accRead RecVStar.accReads at h
     simp [Except.toOption, pure, Except.pure] at h
 
-/-! ## `MoreSlotsTrue` -/
-
-/-- **The extra calls are true at a witness in the outer relation** (KSLin2LayR's `MoreSlotsTrue` at
-`deployZkRec`), off `PastIn` and `AccFits`: an output row's calls (`outsCalls`: port `out`, an output of a level's and
-a RecCap's statement) at its output bits (`slotOut_stagedG`); check 5's (`valCalls`) at an input row's columns or an
-output row's bits, by the row's kind (`slotIn_stagedG`, `slotOut_stagedG`); the chain's (`accCalls`) at `acc0`,
-`acc1` and `acc`, inputs, and `acc_out`, an output (`accRead_other`, `accRead_acc`). -/
 theorem moreSlotsTrue {st : Stage} (hP : PastIn st) (hA : AccFits) :
     ∀ (x : Msg) (ms : List (Msg × Out)) (s : ℕ) (w : Claims.Flock.Wit) (r : XR),
       StagedPart st s x (staged st x ms s) →

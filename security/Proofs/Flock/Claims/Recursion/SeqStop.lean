@@ -3,21 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.Stop
 public import Proofs.Flock.Claims.Recursion.SeqPrefix
 
-/-!
-# The recursion's zero knowledge with the prover's public stop, by sequential composition
-
-`zkAt` (`Recursion.Seq`) with a public stop `s` read at the first part's rounds (`Claims.ZKMal.zkmalAt_layout_stop`):
-the masked reference prover with the stop (`stopP (refPM …) s (kPre IV)`) is `ZKmalAt` at `simMStop`, the first part's
-simulator cut where the stop fires (`censorSim`), then each V\* session's outer simulator where the stop hasn't fired
-and the silent one where it has (`stopProgB`). A session needs zero knowledge, and its witness the sessions' relation,
-only at a history where the stop hasn't fired, and there only at a live first part (`zkAtStop`).
-
-* `iterSimG_stopped_eval`: `simMStop`'s nested simulator's transcript as a fold of one step per session (`stepS`).
-* `simPre_pm`: the claim's first-part simulator `simPre` at `deployRec` is a run of a message function (`pmZ`: each
-  inner round's and the staging round's commit strings to the zero digest), so cut where the stop fires it is that
-  function with the stop (`Claims.ZKMal.interact_censor`).
-* `Claims.ZKMal.foldl_silent`: silent sessions in turn are as many silent rounds.
--/
+/-! The recursion's zero knowledge with the prover's public stop, by sequential composition (`zkAtStop`). -/
 
 @[expose] public section
 
@@ -34,19 +20,16 @@ theorem recGoesOn_append (τ r : List (Msg × Out)) (hr : r ≠ []) :
   | none => exact absurd (List.getLast?_eq_none_iff.1 hl) hr
   | some a => simp only [Recursion.goesOn, List.getLast?_append, hl, Option.some_or]
 
-/-- Past its first `k` rounds, a history's stop is its first `k` rounds'. -/
 theorem fired_append (s : List (Msg × Msg) → Bool) (k : ℕ) (h₀ h : List (Msg × Msg)) (hl : h₀.length = k) :
     fired s k (h₀ ++ h) = fired s k h₀ := by
   rw [← fired_take (s := s) (h₀ ++ h) (le_refl k), List.take_left' hl]
 
-/-- **The silent session under a transcript** is the empty message every round after it. -/
 theorem silent_eval (H : Msg → Msg) (ask : List Msg → Out) (τ : List (Msg × Out)) (n : ℕ) :
     (SP.eval H ask (spUnder (τ.map Prod.fst) (silentSP n))).1 = interact ask (fun _ => []) n (histOf τ) := by
   have e := interact_shift ask (fun _ => []) (histOf τ) n []
   rw [List.append_nil, histOf_map_fst] at e
   rw [e, spUnder_eval, silentSP, spRun_eval] <;> rfl
 
-/-- **Silent sessions in turn**, after a transcript of messages, are as many rounds of the empty message. -/
 theorem foldl_silent {ι : Type} (ask : List Msg → Out) (ns : ι → ℕ) :
     ∀ (l : List ι) (τ : List (Msg × Out)), (∀ p ∈ τ, isMsg p.2 = true) →
       l.foldl (fun τ i => if Recursion.goesOn τ then τ ++ interact ask (fun _ => []) (ns i) (histOf τ) else τ) τ =
@@ -82,7 +65,6 @@ theorem sum_finRange_map (g : ℕ → ℕ) :
       rw [List.finRange_succ_last, List.map_append, List.map_map, List.sum_append, List.range_succ, List.map_append,
         List.sum_append, ← sum_finRange_map g n] <;> first | rfl | simp
 
-/-- `censorSim`'s transcript against `ask`: `S`'s, cut where the stop fires. -/
 theorem censorSim_eval (H : Msg → Msg) (ask : List Msg → Out) (S : Simulator) (s : Msg → List (Msg × Msg) → Bool)
     (k : Msg → ℕ) (x : Msg) (c : S.C x) :
     (SP.eval H ask ((censorSim S s k).prog x c)).1 =
@@ -100,10 +82,6 @@ open Claims.ZKMal (Layout ZKmalAt SeqTape iterSimG)
 
 variable (IV : Claims.Verifier Coin) (b : Brings)
 
-/-! ## The first part as a message function -/
-
-/-- Two `simRounds` from the empty transcript, `n` rounds then one, are a run of `pm`: where `f` and `g` read as
-`pm` before and at round `n`. -/
 theorem simRounds_pre_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
     (f g : List (Claims.Msg × Claims.Out) → Claims.SP Claims.Msg) (n k : ℕ)
     (pm : List (Claims.Msg × Claims.Msg) → Claims.Msg) (hk : k = 1)
@@ -159,16 +137,12 @@ theorem simRounds_tail_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.M
   simp only [Claims.ZKMal.recSpBind_eq, Claims.ZKMal.spBind_eval]
   rw [simRounds_pre_eval H ask f g n k pm hk hf hg]
 
-/-- **The first part's simulated messages**: the first `n` rounds each the commit string to the zero digest under its
-inner salt (`yI`), then the staging message at the commit strings to the zero digest under the staging salts (`yS`). -/
 noncomputable def pmZ (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (n : ℕ) (yI : Fin n → Salt)
     (yS : Fin (b.nC x) → Salt) (h : List (Claims.Msg × Claims.Msg)) : Claims.Msg :=
   if hh : (asRounds h).length < n then List.ofFn (maskOf (yI ⟨(asRounds h).length, hh⟩)) ++
       saltH H (yI ⟨(asRounds h).length, hh⟩)
   else stageMsg b.hs x (asRounds h) ((List.finRange (b.nC x)).map fun j => List.ofFn (maskOf (yS j)) ++ saltH H (yS j))
 
-/-- **The claim's first-part simulator is a run of `pmZ`**, where the inner protocol's rounds at the inner statement
-are the inner verifier's. -/
 theorem simPre_pm {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursion.Inner Coin W)
     (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (x : Claims.Msg)
     (hI : I.V.k (xIOf x) = IV.k (xIOf x)) (c : (simPre (deployRec IV ivScope b) I).C x) :
@@ -211,12 +185,6 @@ theorem simPre_pm {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursi
       | (simp only [List.map_map]; try rfl)
       | rfl
 
-/-! ## The composed simulator with the stop -/
-
-/-- **The composed simulator with the stop `s`** of the masked run: the first part's simulator `S₀` cut where the stop
-fires within the first part (`censorSim`), then, while the claim's test (`Recursion.goesOn`) holds, session `j`'s outer
-simulator `SO x j` at the V\* statement its simulated history stages where the stop hasn't fired, and the silent one
-where it has (`stopProgB`), on coins of its own. -/
 noncomputable def simMStop (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (S₀ : Claims.Simulator) (SO : Claims.Msg → ℕ → Claims.Recursion.OSim)
     (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool) : Claims.Simulator where
@@ -229,11 +197,6 @@ noncomputable def simMStop (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonemp
     (Claims.ZKMal.stopProgB s (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
       fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (fun _ _ => Claims.Recursion.goesOn) (nS x)).prog x
 
-/-- **The recursion's zero knowledge at one statement with a public stop, by sequential composition**: `zkAt` with the
-stop `s` read at the first part's rounds, where each session is `ZKmalAt` at its outer simulator at every history that
-starts it and where the stop hasn't fired (`hS`), and the witness `wit` gives is in the sessions' relation there at
-every live first part (`hW`: its messages the first part's prover's on the tape `t₀`). The masked reference prover
-with the stop is `ZKmalAt` at `simMStop` with `ε₀ + Σ_{j < nS x} eB j` and `nS x · g`, at the masked run's rounds. -/
 theorem zkAtStop (H : Claims.Msg → Claims.Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
     (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
@@ -269,8 +232,6 @@ theorem zkAtStop (H : Claims.Msg → Claims.Msg) {NB ΩB : Type} [Fintype NB] [N
     parts_start] at h
   exact h.of_equiv _ (Equiv.refl _) (Equiv.refl _) fun _ _ _ => rfl
 
-/-- One session's step of a nested simulator: while the run goes on, under the transcript so far, the session's
-program `pB` at the history so far. -/
 noncomputable def stepS (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
     (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg)
     (pB : (j : ℕ) → (x : Claims.Msg) → List (Claims.Msg × Claims.Msg) → (SO x j).C →
@@ -280,8 +241,6 @@ noncomputable def stepS (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg �
     τ ++ (Claims.SP.eval H ask (Claims.ZKMal.spUnder (τ.map Prod.fst) (pB j x (Claims.histOf τ) c))).1
   else τ
 
-/-- **The stopped parts' nested simulator's transcript**: the first part's, then one `stepS` per session, on the
-coins `iterCoins` reads off the nested ones, for any sessions' programs `pB` (`simMStop`'s are `stopProgB`'s). -/
 theorem iterSimG_stopped_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (T₀ : SeqTape)
     (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (S₀ : Claims.Simulator)
     (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool)

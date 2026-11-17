@@ -33,20 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Row B at the decision: what the record's decode gives
-
-Row B (`RecDeploy.Rows.RowB`) asks four things of rep `r` of table `i` at a decision of the last step. Three of them
-are what the verdict's decoder checks of every record it returns (`DecAt.decode`), whatever the record's value:
-
-* **S11 finds the rep's stream** (`DecAt.finds`): the decoder refuses a record without a stream at each rep stream's
-  name (`decodeJWith_finds`), and table `i`'s rep `r` is the rep stream `<t>/rep<r>` (`repStreams_getElem`).
-* **S12 makes its rounds well formed and none of its coin rounds empty** (`DecAt.roundsWF`, `DecAt.noEmpty`): every
-  decoded round has `1 ≤ n` and exactly `n` coins (`decodeJWith_rounds`).
-
-The fourth, `framed` (the rounds hold the rep's frames), is about the record's values, not its form: it holds where
-each round retained its chunk's bytes and counts its chunk's closing squeeze (`framedAt_of_rounds`).
--/
+/-! What the record's decode gives of row B at a decision; its `framed` is about the record's values, not its form. -/
 
 @[expose] public section
 
@@ -59,8 +46,6 @@ open Flock.RecAlgebra (NoEmpty)
 open FlockSoundness.Discharge.Recursion (HClass)
 open Lean (Json)
 
-/-! ## What the decoder checks -/
-
 theorem check_round {n : ℕ} {coins : Array F128} {b c : Bool} {why : String} {u : Unit}
     (h : Record.check (decide (1 ≤ n) && b && coins.size == n && c) why = .ok u) : 1 ≤ n ∧ coins.size = n := by
   have := check_ok_iff.1 h
@@ -68,7 +53,6 @@ theorem check_round {n : ℕ} {coins : Array F128} {b c : Bool} {why : String} {
   exact ⟨this.1.1.1, this.1.2⟩
 
 set_option maxHeartbeats 1000000 in
-/-- **S12: every decoded round has at least one coin, and as many as its count.** -/
 theorem decodeJWith_rounds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : RunRecord}
     (h : Record.decodeJWith hs spec j = .ok sess) :
     ∀ s ∈ sess.streams.toList, ∀ rd ∈ s.rounds.toList, 1 ≤ rd.n ∧ rd.coins.size = rd.n := by
@@ -106,7 +90,6 @@ theorem find_of_any {ss : Array StreamRec} {w : String} (h : ss.any (·.name == 
     exact absurd hw (hf s hs)
 
 set_option maxHeartbeats 1000000 in
-/-- **S11: the decoder finds a stream at each rep stream's name.** -/
 theorem decodeJWith_finds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : RunRecord}
     (h : Record.decodeJWith hs spec j = .ok sess) :
     ∀ x ∈ spec.repStreams.toList, ∃ s, sess.streams.find? (·.name == x.2.2) = some s := by
@@ -123,12 +106,9 @@ theorem decodeJWith_finds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} 
     obtain ⟨i, r, w⟩ := x
     exact find_of_any (h11.2 _ (Array.mem_toList_iff.1 hx))
 
-/-! ## Frames from the rounds' values -/
-
 open FlockSoundness.Refine (Frame encs Retains) in
 open FlockSoundness.Discharge.Exec (chunks) in
 open FlockVBridge.Family (FramedAt sqCount) in
-/-- **The rounds hold the frames** where round `k` retained chunk `k`'s bytes and counts its closing squeeze's coins. -/
 theorem framedAt_of_rounds {rs : Array Round} {fs : List Frame}
     (hb : ∀ k < (chunks fs).1.length, (rs[k]!).bytes = some ⟨(encs ((chunks fs).1.getD k [])).toArray⟩)
     (hn : ∀ k < (chunks fs).1.length, (rs[k]!).n = sqCount ((chunks fs).1.getD k [])) :
@@ -140,14 +120,11 @@ theorem framedAt_of_rounds {rs : Array Round} {fs : List Frame}
   rw [hb k hk]
   simp
 
-/-! ## Row B's form at a decision -/
-
 namespace DecAt
 
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) {i : ℕ}
 
-/-- **S11 finds rep `r`'s stream** of a table of the statement. -/
 theorem finds (hi : i < D.spec.tables.size) (r : Fin 2) : (D.files cls i).Finds r := by
   obtain ⟨hq, e⟩ := Claims.Bridge.Custody.repStreams_getElem D.spec hi r.isLt
   obtain ⟨s, hs⟩ := decodeJWith_finds _ D.decode _ (Array.getElem_mem_toList hq)
@@ -163,11 +140,9 @@ theorem stream_mem (hi : i < D.spec.tables.size) (r : Fin 2) :
     (D.files cls i).stream r ∈ D.sess.streams.toList :=
   Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some (D.finds cls hi r))
 
-/-- **S12: rep `r`'s rounds are well formed.** -/
 theorem roundsWF (hi : i < D.spec.tables.size) (r : Fin 2) : RoundsWF ((D.files cls i).stream r).rounds :=
   roundsWF_of fun rd h => (decodeJWith_rounds _ D.decode _ (D.stream_mem cls hi r) rd h).2
 
-/-- **S12: none of rep `r`'s coin rounds is empty.** -/
 theorem noEmpty (acc : ℕ → Array F128) (hi : i < D.spec.tables.size) (r : Fin 2) :
     NoEmpty (D.rep cls acc i r).rounds := by
   intro c hc

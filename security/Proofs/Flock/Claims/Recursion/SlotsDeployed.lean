@@ -37,19 +37,7 @@ import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Recursive.VStarCheck
 
-/-!
-# `CircOkAt` at the staged parts (`circOkAt_staged`)
-
-`HpEarly.CircOkAt x` is what `slotsOk_assign` reads of each part's circuit besides `TraceOk`. It holds at every staged
-part (`StagedPart`), from the verifier's own checks of the staged table, which is part `s`'s circuit
-(`partCircuit_staged`):
-
-* `HmNets.check c = .ok ()`, and every v1 port unsegmented with `2 · words = 128 · chunks`: `HmRow.parse` runs the
-  first and refuses the others (`ParseFacts`: `rowNets`, `v1Segs`, `portWords`; `parseFacts_of_parse`);
-* `c.kLog ≤ 32`: the setup refuses `k_log > 27` (`table0`);
-* every port v1: V\*'s parse check refuses a `sha512/row/v2` port (`checkParsed_v1`). V\*'s META writes `row_schema` and
-  never `row_schemas` (`VStar/Compose.lean`, `metaHead`), so every deployed V\* port is v1 and the honest table passes.
--/
+/-! `CircOkAt` at the staged parts (`circOkAt_staged`), from the verifier's own checks of the staged table. -/
 
 @[expose] public section
 
@@ -59,8 +47,6 @@ open _root_.Flock
 open Claims (Msg)
 open RecDeploy.VStarBuild
 
-/-- **`slotsOk_assign`'s three premises at a staged part**: the verifier's hm96 nets, `kLog ≤ 27`, and every port a
-`sha512/row/v1` row of whole 128-byte chunks. -/
 theorem slotFacts_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {sv : _root_.VStar.Stmt}
     {c : Circuit} (hp : partAt x s = some (sv, c)) :
     _root_.Flock.HmNets.check c = .ok () ∧ c.kLog ≤ 32 ∧ ∀ q (hq : q < c.ports.size), c.ports[q].v2 = false ∧
@@ -88,8 +74,6 @@ theorem slotFacts_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
   have hv2 := hv _ hm
   exact ⟨hv2, P.v1Segs _ hm hv2, P.portWords _ hm hv2⟩
 
-/-- **`CircOkAt` at the deployed V\***: when every part of `x` is staged, each part's circuit meets
-`slotFacts_staged`. -/
 theorem circOkAt_staged {st : Stage} {x : Msg}
     (hS : ∀ s sv c, partAt x s = some (sv, c) → ∃ xO, StagedPart st s x xO) : HpEarly.CircOkAt x := by
   intro s sv c hp

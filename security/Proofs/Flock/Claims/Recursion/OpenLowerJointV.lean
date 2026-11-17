@@ -33,16 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The composition at the parts' own messages, landing on `DecompBV` (`decompBV_lastSplitP_sharesJV`)
-
-`decompB_lastSplitP_sharesJ` asks the pieces' share under `Joint`, whose no-collision conjunct searches the parts'
-recorded calls only, and lands on `DecompB`. A share that ties two parts' commit strings through the compiled
-verifier's own climbs (row E's chain slots, `Top.RowEJoint`, through `accCommit_eq`) needs the escape to search those
-evaluations too. `decompBV_lastSplitP_sharesJV` asks `hlowP` under `JointV` at `PartAcceptsV` and lands on
-`DecompBV` at `PartAcceptsV` (`decompBV_of_jointV`), the form `RecDeploy.ksLin2_deployedR_layRV` takes. `JointV` gives
-`Joint` at `PartAccepts` (`joint_of_jointP`, `jointP_of_jointV`), so a share proved under `Joint` is one under `JointV`.
--/
+/-! The composition at the parts' own messages under `JointV`, whose escape also searches the compiled verifier's own evaluations, landing on `DecompBV`. -/
 
 @[expose] public section
 
@@ -64,9 +55,6 @@ variable (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : Type} (pieces : Msg
   (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ)
   (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
 
-/-- **The composition with the pieces' share under `JointV`**: `decompB_lastSplitP_sharesJ` with `hlowP` asked only
-where every part accepts at its V\* statement and witness and no recorded call collides with another or with the
-compiled verifier's own evaluations there (`JointV`), landing on `DecompBV` at `PartAcceptsV`. -/
 theorem decompBV_lastSplitP_sharesJV (ownB : Msg → VerdictR → Option ℕ) (ownQ : Msg → Q → Option ℕ)
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}

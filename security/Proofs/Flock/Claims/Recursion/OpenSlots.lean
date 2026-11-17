@@ -40,21 +40,7 @@ import Proofs.Flock.Claims.Recursion.HmOpen
 import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.RestLens
 
-/-!
-# The openings and commit strings of the rounds before the last are hm96 slots' (`OpensSlots` at `layR`)
-
-At `DeployedR.layR elem` every commit string of a round before the last is some part's hm96 slot output, and the last
-message opens each at that same slot: RecCap's `N` instances at round 0 (`capHold`, `capOpen`); at a stream round, each
-top's instances at its cap's part (`topPiece`, `capOpenAt`), then the row the round absorbs at its first holder
-(`rowPiece`, `rowOpen`). This file lays both sides out as one list of slots a round (`slotRounds`):
-
-* `openLens_eq`, `openBytes`: the trailer's lengths and the openings' bytes are the slots' rows and salts, round by
-  round, so `finalR` cuts each round's openings back (`CutOpens.cutRounds_groups`).
-* `msgs_slots`: round `j`'s message is its slots' commit strings end to end.
-* `opensSlots_layR`: `OpensSlots (layR elem)` from `SlotsRecorded elem`, the one fact left at the slots' forms: each
-  slot's two hm96 calls are among its part's recorded calls, and its port's row prefix is the one `rowInDeployed` lays
-  at the row's length.
--/
+/-! The openings and commit strings of the rounds before the last are hm96 slots' (`OpensSlots` at `layR`), from `SlotsRecorded`. -/
 
 @[expose] public section
 
@@ -65,8 +51,6 @@ open Claims (Msg)
 open Claims.Recursion.VStarB
 open RecDeploy.DeployedR
 open RecDeploy.RestRead
-
-/-! ## Lists -/
 
 theorem findSome?_map_out {α β γ : Type} (f : α → Option β) (g : β → γ) :
     ∀ l : List α, (l.findSome? f).map g = l.findSome? fun a => (f a).map g
@@ -103,8 +87,6 @@ theorem flatMap_congr_mem {α β : Type} {f g : α → List β} :
     rw [List.flatMap_cons, List.flatMap_cons, h a List.mem_cons_self,
       flatMap_congr_mem l fun b hb => h b (List.mem_cons_of_mem _ hb)]
 
-/-! ## Slots -/
-
 /-- **An hm96 slot**: at part `s`, of circuit `c`, port `q`'s slot at instance `n`, its row read at port `nm`. -/
 structure Slot where
   s : ℕ
@@ -113,61 +95,44 @@ structure Slot where
   q : ℕ
   n : ℕ
 
-/-- The slot's row, at port `nm`'s unit input columns. -/
 def Slot.row (σ : Slot) : List HmNets.Lin := ((rowHidden σ.c σ.nm σ.n).getD []).map HmNets.Lin.var
 
-/-- The slot's opening segments: its row, then its salt. -/
 def Slot.segs (σ : Slot) : List (Msg × List HmNets.Lin) := openSegs σ.c σ.nm σ.q σ.n
 
-/-- The slot's commit string segment. -/
 def Slot.cmt (σ : Slot) : Msg × List HmNets.Lin := (([] : Msg), hmCommit σ.c σ.q σ.n)
 
-/-- The slot's opening off the witness `w`: its row's bytes, then its salt's. -/
 def Slot.opening (w : Claims.Flock.Wit) (σ : Slot) : Msg × Msg :=
   (readForms w σ.row, readForms w (hmSalt σ.c σ.q σ.n))
 
-/-- The slot's commit string off the witness `w`. -/
 def Slot.commit (w : Claims.Flock.Wit) (σ : Slot) : Msg := readForms w (hmCommit σ.c σ.q σ.n)
 
-/-- Part `s`'s circuit, the default where it has none (as `capOpen` and `topPiece` read it). -/
 def cOf (r : XR) (s : ℕ) : Circuit := (r.w.parts[s]?.bind partCircuit).getD default
 
-/-- A cap's slots at part `s`: port `top`'s at instances `ns`. -/
 def capSlots (r : XR) (s : ℕ) (ns : List ℕ) : List Slot :=
   ns.map fun n => ⟨s, cOf r s, "top", (capPort (cOf r s)).getD 0, n⟩
 
-/-- The slot of the row stream round `j` absorbs, where part `s` holds one. -/
 def rowSlotAt (r : XR) (j s : ℕ) : Option Slot :=
   ((heldRows r s).find? (·.1 == j)).bind fun h =>
     (r.w.parts[s]?.bind partCircuit).map fun c => ⟨s, c, h.2.1, h.2.2.1, h.2.2.2⟩
 
-/-- The slot of the row stream round `j` absorbs, at its first holder (`rowPiece`'s and `rowOpen`'s part). -/
 def rowSlot (r : XR) (j : ℕ) : Option Slot := (List.range r.w.parts.length).findSome? (rowSlotAt r j)
 
-/-- The `e`-th top of stream round `j`'s slots, at its cap's part (`capPieceAt`'s, `capOpenAt`'s). -/
 def capSlotsAt (r : XR) (rs : Array RecVStar.SchedRound) (j e : ℕ) : List Slot :=
   capSlots r (capsFrom r rs + topsBefore rs (j % rs.size) + e)
     ((List.range (((rs.getD (j % rs.size) default).2.1).getD e 0)).map fun t =>
       j / rs.size * ((rs.getD (j % rs.size) default).2.1).getD e 0 + t)
 
-/-- **Stream round `j`'s slots**, in commit order: each top's, then the row's. -/
 def roundSlots (r : XR) (rs : Array RecVStar.SchedRound) (j : ℕ) : List Slot :=
   (List.range ((rs.getD (j % rs.size) default).2.1).size).flatMap (capSlotsAt r rs j) ++ (rowSlot r j).toList
 
-/-- **Every round before the last's slots**, round by round: RecCap's at round 0, then each stream round's. -/
 def slotRounds (r : XR) : List (List Slot) :=
   (capAt r).toList.map (fun p => capSlots r p.1 (List.range p.2)) ++
     ((repSched r.shape).map fun rs => (List.range (2 * rs.size)).map (roundSlots r rs)).getD []
 
-/-- **Each slot's calls are recorded at its part, and its row prefix fits**: at a dense compiled statement, each slot's
-two hm96 calls (`hmCalls`) are among its part's recorded calls at `layR elem`, and its port's row prefix (`rowPfx`) is
-the one `rowInDeployed` lays at its row's byte length. -/
 def SlotsRecorded (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) : Prop :=
   ∀ x, DenseX x → ∀ r, readX x = some r → ∀ l ∈ slotRounds r, ∀ σ ∈ l,
     (∀ p ∈ hmCalls σ.c σ.nm σ.q σ.n, p ∈ (DeployedR.layR elem).shaAt x σ.s) ∧
       rowPfx σ.c σ.q = (HmRow.rowPrefix (((σ.row.length + 7) / 8) / 2)).data.toList
-
-/-! ## The pieces as slots -/
 
 theorem capSlots_s {r : XR} {s : ℕ} {ns : List ℕ} {σ : Slot} (h : σ ∈ capSlots r s ns) : σ.s = s := by
   obtain ⟨n, -, rfl⟩ := List.mem_map.1 h
@@ -206,8 +171,6 @@ theorem rowPiece_eq (r : XR) (j : ℕ) : rowPiece r j = (rowSlot r j).toList.map
   unfold rowSlotAt
   cases ((heldRows r s).find? (·.1 == j)) <;> cases (r.w.parts[s]?.bind partCircuit) <;> rfl
 
-/-! ## The trailer's lengths -/
-
 theorem rowLens_slots : ∀ σs : List Slot,
     rowLens (σs.flatMap Slot.segs) = σs.map fun σ => pieceLen [(([] : Msg), σ.row)]
   | [] => rfl
@@ -228,7 +191,6 @@ theorem roundLens_slots (r : XR) (rs : Array RecVStar.SchedRound) (j : ℕ) :
     try rfl
   · cases rowSlot r j <;> rfl
 
-/-- **The trailer's lengths are the slots' rows' byte lengths**, round by round. -/
 theorem openLens_eq (r : XR) :
     openLens r = (slotRounds r).map fun l => l.map fun σ => pieceLen [(([] : Msg), σ.row)] := by
   unfold openLens slotRounds
@@ -246,8 +208,6 @@ theorem openLens_eq (r : XR) :
       intro j _
       simp only [Function.comp_apply]
       exact roundLens_slots r rs j
-
-/-! ## The openings' bytes -/
 
 theorem readSegs_flatMap {α : Type} (w : Claims.Flock.Wit) (l : List α) (f : α → List (Msg × List HmNets.Lin)) :
     readSegs w (l.flatMap f) = l.flatMap fun a => readSegs w (f a) := by
@@ -296,7 +256,6 @@ theorem roundBytes (r : XR) (rs : Array RecVStar.SchedRound) (j : ℕ) (ws : Lis
     exact piece_slots ws d _ _ fun σ hσ => capSlots_s hσ
   · cases rowSlot r j <;> rfl
 
-/-- **The openings' bytes are the slots' rows and salts**, round by round, where every piece is a witness's part. -/
 theorem openBytes (r : XR) (ws : List Claims.Flock.Wit) (d : Claims.Flock.Wit)
     (h : ∀ p ∈ openPieces r, p.1 < ws.length) :
     readPieces (openPieces r) ws =
@@ -320,8 +279,6 @@ theorem openBytes (r : XR) (ws : List Claims.Flock.Wit) (d : Claims.Flock.Wit)
       congr 1
       funext j
       exact roundBytes r rs j ws d
-
-/-! ## Every slot and piece is a part's -/
 
 theorem rowSlot_lt {r : XR} {j : ℕ} {σ : Slot} (h : rowSlot r j = some σ) : σ.s < r.w.parts.length := by
   obtain ⟨a, ha, hfa⟩ := List.exists_of_findSome?_eq_some h
@@ -383,13 +340,10 @@ theorem openPieces_lt {x : Msg} {r : XR} (hr : readX x = some r) :
         omega
       exact roundOpen_lt hpos' (topsLen_readX hr hrs) hp
 
-/-! ## The messages as slots -/
-
 theorem held_of_unfixed {L : LayoutB} {x : Msg} {s : ℕ} {w : Claims.Flock.Wit} {i : ℕ} (hf : L.fixedAt x i = none) :
     L.held x s w i = (L.msgAt x s i).map (readSegs w) := by
   simp [LayoutB.held, hf]
 
-/-- **Round `j`'s message is its slots' commit strings end to end**, at every round before the last. -/
 theorem msgs_slots (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     (hx : DenseX x) {ws : List Claims.Flock.Wit} (hl : ws.length = nS x) (d : Claims.Flock.Wit) {r : XR}
     (hr : readX x = some r) {j : ℕ} {l : List Slot} (hj : (slotRounds r)[j]? = some l) :
@@ -565,11 +519,6 @@ theorem msgs_slots (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
           show readSegs (ws.getD σ.s d) [σ.cmt] ++ [] = σ.commit (ws.getD σ.s d) ++ []
           rw [readSegs_cmt]
 
-/-! ## `OpensSlots` at the layout of record -/
-
-/-- **`OpensSlots` at `layR elem`**, from `SlotsRecorded elem`: `finalR` cuts each round's openings at its slots
-(`openLens_eq`, `openBytes`, `cutRounds_groups`), and each round's message is its slots' commit strings
-(`msgs_slots`, `commitAt_flatten`). -/
 theorem opensSlots_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (hS : SlotsRecorded elem) : RestLow.OpensSlots (DeployedR.layR elem) := by
   intro x hx ws hl os last hf j i o ho
@@ -605,7 +554,6 @@ theorem opensSlots_layR (elem : (r : XR) → List (Fin r.w.parts.length × List 
   have hf' : finalR (lastAt (restR elem) x ws) = some (os, last) := hf
   rw [hlast, finalR_trailer, hlens, hbytes, CutOpens.cutRounds_groups _ L hsalt] at hf'
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj hf')
-  -- the opening `o` is slot `σ`'s
   rw [hL] at ho
   simp only [List.getD_eq_getElem?_getD, List.getElem?_map] at ho
   cases hj : (slotRounds r)[j]? with

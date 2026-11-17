@@ -37,13 +37,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `StepsW` at the deployed readers and brings
-
-`stepsWV_deployedR` at KS's brings (`DecompBR.bB (deployedB b) …`, `recRead`), with the copy's coefficients
-(`OpenCoef.copyCoefTieRP_deployed`) and the registered setup (`regSetup_deployedB`) closed. What is left is the next
-rows' owners (`NextHeldW`).
--/
+/-! `StepsW` at the deployed readers and brings, from the next rows' owners (`NextHeldW`) alone. -/
 
 @[expose] public section
 
@@ -54,7 +48,6 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP)
 open Claims.Recursion.VStarB
 
-/-- **`StepsWG` at `XsW … AccV` at the deployed readers and brings**, from the next rows' owners (`hN`). -/
 theorem stepsWV_deployed (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE w : Msg → ℝ) (b : Brings)
     (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record)
     (rest : Msg → List (Msg × Claims.Out) → List UInt8) (cmt : Msg → ℕ → Msg → Msg)

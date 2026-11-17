@@ -37,30 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.DeployMargin
 
-/-!
-# (P1) `Bound.PlainKSAbort` fails at an element-level verifier `KSBoundRouteCols` quantifies over
-
-`RecDeploy.KSBoundRouteCols` takes (P1), `Bound.PlainKSAbort`, at the deployed bound record
-`bdDeployed rel nextE colsE wE …`, at every choice of the element-level verifier's steps `nextE`. At the steps that
-accept whatever they read (`acceptAllE`), (P1) fails at every false statement in the deployed plain verifier's scope
-(`not_plainKSAbort_acceptAll_in`):
-
-* **Generic** (`Claims.Recursion.not_KSAbort_of_acc`): an inner protocol whose verifier accepts at its first round fails
-  `Inner.KSAbort` at any statement with no witness and `κ < 1`. The prover that never aborts is accepted at every coin,
-  `E^rep` finds no witness there, and the verifier calls `H` nowhere, so `B` finds no collision: `1 ≤ κ`.
-* **At `DE`** (`not_plainKSAbort_acceptAll`): `deE rel acceptAllE colsE wE` keeps `deployPlainTrim rel`'s parser, code
-  and numbers, so its relation and `κ` are `deployPlain rel`'s, its decoders `deployPlainTrim rel`'s, and its verifier
-  takes `FlockDeploy.V false`'s rounds, at least one at every statement. The deployed plain radius decoder meets the spec
-  at the trimmed code (`FlockDeploy.listWithin_plainTrim`).
-* **In scope** (`not_plainKSAbort_acceptAll_in`): at a plain session in scope (`FlockDeploy.PlainIn`, at most `200`
-  tables), `κ ≤ 200 · 2^{−202.98} < 1` (`FlockDeploy.κ_plain_le`).
-
-So (P1) at every `nextE`, as `KSBoundRouteCols` quantifies it, is false wherever the deployed plain verifier has a false
-statement in scope: `deE` leaves the element-level verifier's steps free, while its `κ` is `deployPlain rel`'s, fixed by
-the deployed numbers. That is why (P1) stays a hypothesis of `KSBoundRouteCols`; at the deployed plain verifier's own steps
-it is `RecDeploy.plainKSAbort_bd`'s statement, and at the deployed relation it holds with no premise
-(`RecDeploy.plainKSAbort_deployed`).
--/
+/-! (P1) `Bound.PlainKSAbort` fails at an element-level verifier that accepts everything, so it stays a hypothesis of `KSBoundRouteCols`. -/
 
 @[expose] public section
 
@@ -68,9 +45,6 @@ namespace Claims.Recursion
 
 open Claims
 
-/-! ## An inner verifier that accepts at its first round -/
-
-/-- A verifier whose steps accept whatever they read accepts at the first round and calls `H` nowhere. -/
 theorem stepWith_acc {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
     (hv : ∀ as, vnext as = .ret .acc) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), 0 < n →
@@ -97,8 +71,6 @@ section Acc
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- At a statement with no witness, a prover that never aborts against a verifier that accepts at its first round
-fails `E^rep` at every sample. -/
 theorem prBadAbort_acc (H : Msg → Msg) (I : Inner Coin W) (x : Msg) (hv : ∀ as cs, I.V.next x as cs = .ret .acc)
     (hk : 0 < I.V.k x) (hx : ∀ w, ¬ I.R x w) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A]
     (P : Prover Ω) :
@@ -112,7 +84,6 @@ theorem prBadAbort_acc (H : Msg → Msg) (I : Inner Coin W) (x : Msg) (hv : ∀ 
     | none => exact id
     | some w => exact hx w
 
-/-- Neither run of `B`'s fork calls `H` on the verifier's side, so `B` finds nothing. -/
 theorem prBAbort_acc (H : Msg → Msg) (I : Inner Coin W) (x : Msg) (hv : ∀ as cs, I.V.next x as cs = .ret .acc)
     (hk : 0 < I.V.k x) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (P : Prover Ω) :
     PrBAbort H I.V P x (fun _ _ _ => true : Ω → (Fin (I.V.k x) → Coin) → A → Bool) = 0 := by
@@ -122,9 +93,6 @@ theorem prBAbort_acc (H : Msg → Msg) (I : Inner Coin W) (x : Msg) (hv : ∀ as
   simp only [BAbort, abortRun_keep, run_vLog_acc H P I.V x hv hk, List.append_nil, findColl] at h
   cases h
 
-/-- **`Inner.KSAbort` fails at an inner protocol whose verifier accepts at its first round**, wherever a statement has
-no witness and `κ < 1`: the prover that never aborts is accepted at every coin, `E^rep` finds no witness, and `B` finds
-no collision, so `1 ≤ κ`. -/
 theorem not_KSAbort_of_acc (H : Msg → Msg) (I : Inner Coin W) (x : Msg) (hv : ∀ as cs, I.V.next x as cs = .ret .acc)
     (hk : 0 < I.V.k x) (hx : ∀ w, ¬ I.R x w) (hκ : I.κ x < 1) : ¬ I.KSAbort H := by
   intro h
@@ -141,11 +109,8 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- The element-level verifier's steps that accept whatever they read. -/
 def acceptAllE : Msg → List Msg → List Coin → Claims.OC Out := fun _ _ _ => .ret .acc
 
-/-- **(P1) fails at `acceptAllE`** at every statement with no witness in the deployed plain relation where the deployed
-plain `κ` is below `1`, whatever the code side's other choices. -/
 theorem not_plainKSAbort_acceptAll (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (x : Msg)
@@ -156,8 +121,6 @@ theorem not_plainKSAbort_acceptAll (rel : _root_.Flock.Readable.Parsed → _root
     (Claims.Recursion.Inner.ofFlock (deE rel acceptAllE colsE wE) Claims.GS.plainDecodeRD) x (fun _ _ => rfl)
     (V_k_pos_flock false x) hx hκ (h Claims.GS.plainDecodeRD (FlockDeploy.listWithin_plainTrim rel))
 
-/-- **(P1) fails at `acceptAllE` at every false statement in the deployed plain verifier's scope**: a plain session
-that sets up with at most `200` tables at the deployed parameters (`FlockDeploy.PlainIn`) and has no witness. -/
 theorem not_plainKSAbort_acceptAll_in (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) {x : Msg} {s spec sts}

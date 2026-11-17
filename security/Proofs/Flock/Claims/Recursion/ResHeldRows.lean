@@ -40,18 +40,7 @@ import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.SlotsCalls
 import Proofs.Flock.Claims.Recursion.TopsOpens
 
-/-!
-# Every holder of a stream round's row holds the row its first holder opens
-
-At `layR` a stream round `j` that absorbs a message holds one hm96 commit string past its tops, and every part with a
-held row of round `j` (`heldRows`) commits to it there: its part's check reads that round's bytes as its link's
-commit (`round_view`, `heldRow_bytes`, `CmtAgrees`). The round's row is opened at its first holder (`rowSlot`), so up
-to a collision among the recorded calls every holder's row is the opened one.
-
-* `held_commit_ms`: a holder's commit string is the readers' round `j + 1` past its tops' bytes.
-* `held_rows_tie`: two holders with one commit string hold one row (`rows_eq_of_calls'`, prefixes of one length).
-* `held_rowSlot`: at the joint witnesses, every holder's row is its round's `rowSlot`'s.
--/
+/-! Every holder of a stream round's row holds the row its first holder opens, up to a collision among the recorded calls. -/
 
 @[expose] public section
 
@@ -61,9 +50,6 @@ open Flock
 open Claims (Msg)
 open Claims.Recursion.VStarB
 
-/-- **A holder's commit string is its round's past the tops**: at a staged part whose check passes and whose readers'
-messages agree with its commit strings (`CmtAgrees`), each of its held rows `h` is of a stream round `h.1 < 2R`, and
-round `h.1 + 1` of the messages holds, past its tops' `128 · n` bytes, the holder's slot's commit string. -/
 theorem held_commit_ms (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st : Stage} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {ms : List Msg}
@@ -179,7 +165,6 @@ theorem held_commit_ms (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin)
   rw [List.drop_take, Nat.add_sub_cancel_left, List.drop_left' hTL] at h3
   rw [h3, hb]
 
-/-- **A held row's slot calls are among `layR`'s**, at its part's witness. -/
 theorem held_calls_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     {r : XR} (hr : readX x = some r) {s : ℕ} {c : Circuit} (hc : r.w.parts[s]?.bind partCircuit = some c)
     {ws : List Claims.Flock.Wit} {w : Claims.Flock.Wit} (hw : ws[s]? = some w) {h : ℕ × String × ℕ × ℕ}
@@ -211,7 +196,6 @@ theorem rowPfx_length {c : Circuit} {q : ℕ} (hq : q < c.ports.size) : (rowPfx 
   simp only [rowPfx, Array.getElem?_eq_getElem hq, Option.map_some, Option.getD_some]
   exact FlockSoundness.Discharge.Hm.length_rowPrefix _
 
-/-- `CapLower.rows_eq_of_calls` at row prefixes of one length rather than one prefix. -/
 theorem rows_eq_of_calls' {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2)
     (hnc : (Claims.findColl l).isSome = false) {c c' : Circuit} {q q' n n' : ℕ} {w w' : Claims.Flock.Wit}
     {row row' : List HmNets.Lin}
@@ -254,9 +238,6 @@ theorem rows_eq_of_calls' {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy
     (e.symm.trans (hcm.trans e'))
   exact (List.append_inj hb hpfx).2
 
-/-- **Two holders with one commit string hold one row**, at `layR` and the joint witnesses: where every part's
-recorded calls are true and free of collisions, held rows `h` of part `s` and `h'` of part `s'` whose slots carry one
-commit string have one row at their ports' unit input columns. -/
 theorem held_rows_tie (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     {ws : List Claims.Flock.Wit}
     (hT : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2)
@@ -272,9 +253,6 @@ theorem held_rows_tie (elem : (r : XR) → List (Fin r.w.parts.length × List (M
   exact rows_eq_of_calls' hT hnc h1 h2 h3 h4
     ((rowPfx_length (heldRows_port hc hh)).trans (rowPfx_length (heldRows_port hc' hh')).symm) hcm
 
-/-- **Every holder's row is its round's opened row**, at `layR` and the joint witnesses: where every part's recorded
-calls are true and free of collisions and every part is staged, checked and agrees with the readers' messages, each
-held row `h` of part `s` is the row of round `h.1`'s first holder's slot (`rowSlot`), at that part's witness. -/
 theorem held_rowSlot (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     {ws : List Claims.Flock.Wit}
     (hT : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2)

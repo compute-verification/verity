@@ -36,18 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 
-/-!
-# The route modulo what `E*` reads: what it needs of the last round
-
-The route's last-round comparison modulo `E*`'s reading makes the plurality prover `P_I` send, at the last inner round,
-some message with the plurality reading, not the extraction's own message. `P_I`'s run there makes `IVStar`'s calls on
-its own message, and `PrBAbort_le_PrBI` needs every call of a kept run among the calls `E_O`'s witnesses record at that
-sample (`innerF_vLog_sub`). So the route reads (P4) as `Bound.LastBindsEC`, where the columns or the sets of calls differ, and
-`Bound.LastCoinFree`, that `IVStar`'s last step reads no last coin (both in `Definitions/Claims/Recursion.lean`). Here
-`LastCoinFree` follows from `DE`'s last step reading none (`Bound.lastCoinFree_of_step`), which the deployed plain
-verifier meets: its decision passes the coins with the last dropped (`RecDeploy.lastStepFree_of_V`,
-`RecDeploy.lastCoinFree_deployed`).
--/
+/-! What the route needs of the last round: (P4) as `Bound.LastBindsEC`, and `Bound.LastCoinFree` from `DE`'s last step reading no last coin. -/
 
 @[expose] public section
 
@@ -81,15 +70,12 @@ theorem take_eq_of_dropLast {α : Type} {l l' : List α} (hl : l.length = l'.len
     omega
   rw [h1 l hn, h1 l' (by omega), hd]
 
-/-- **`DE`'s last step, as `agrees` checks it, reads no last coin.** -/
 def Bound.LastStepFree (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs cs' : List Coin), ms.length = Bd.DE.V.k x → cs.length = ms.length →
     cs'.length = ms.length → cs.dropLast = cs'.dropLast →
     (bindOC (Bd.DE.V.next x ms cs) fun b => OC.ret (decide (b = .acc))).eval H =
       (bindOC (Bd.DE.V.next x ms cs') fun b => OC.ret (decide (b = .acc))).eval H
 
-/-- `agrees` at the last round reads no last coin where `DE`'s last step reads none: each earlier step reads the coins
-before the last only. -/
 theorem Bound.agrees_congr_last {H : Msg → Msg} {Bd : Bound Coin Col T} (h : Bd.LastStepFree H) {x : Msg}
     {ms : List Msg} {cs cs' : List Coin} (hk : ms.length = Bd.DE.V.k x) (hc : cs.length = ms.length)
     (hc' : cs'.length = ms.length) (hd : cs.dropLast = cs'.dropLast) :
@@ -109,8 +95,6 @@ theorem Bound.agrees_congr_last {H : Msg → Msg} {Bd : Bound Coin Col T} (h : B
       List.take_of_length_le (show cs'.length ≤ j + 1 by omega)]
     exact h x ms cs cs' hk hc hc' hd
 
-/-- **`IVStar` reads no last coin where `DE`'s last step reads none**: its last step reads the coins only in
-`agrees`. -/
 theorem Bound.lastCoinFree_of_step {H : Msg → Msg} {Bd : Bound Coin Col T} (h : Bd.LastStepFree H) :
     Bd.LastCoinFree H := by
   intro x as cs cs' hk hc hc' hd
@@ -139,9 +123,6 @@ open Claims (Msg Out OC)
 open Claims.Recursion (Bound bindOC)
 open FlockDeploy (Coin)
 
-/-- **The deployed plain verifier's last step, as `agrees` checks it, reads no last coin**: a coin request answers its
-own coin and accepts nothing; past a first coin a decision passes the coins with the last dropped
-(`FlockDeploy.act_cons_snoc`); and with a single coin the statement sets up no session, so the step refuses. -/
 theorem next_lastStep (H : Msg → Msg) (x : Msg) (ms : List Msg) (L : List Coin) (c c' : Coin)
     (hk : ms.length = (FlockDeploy.V false).k x) (hc : L.length + 1 = ms.length) :
     (bindOC (FlockDeploy.next false x ms (L ++ [c])) fun b => OC.ret (decide (b = Out.acc))).eval H =
@@ -178,7 +159,6 @@ theorem next_lastStep (H : Msg → Msg) (x : Msg) (ms : List Msg) (L : List Coin
         simp only [FlockDeploy.next, FlockDeploy.act_cons_snoc false x ms c₀ l c c' ha]
       rw [heq]
 
-/-- **`LastStepFree` at every bound record whose `DE` steps as the deployed plain verifier.** -/
 theorem lastStepFree_of_V {Col T : Type} (H : Msg → Msg) (Bd : Bound Coin Col T) (hV : Bd.DE.V = FlockDeploy.V false) :
     Bd.LastStepFree H := by
   intro x ms cs cs' hk hc hc' hd
@@ -197,8 +177,6 @@ theorem lastStepFree_of_V {Col T : Type} (H : Msg → Msg) (Bd : Bound Coin Col 
   rw [hV]
   exact next_lastStep H x ms L c c' hk (by simp only [List.length_append, List.length_singleton] at hc; exact hc)
 
-/-- **`LastCoinFree` at the deployed bound record**, at the deployed plain verifier's own steps, whatever the code
-side's other choices. -/
 theorem lastCoinFree_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (H : Msg → Msg) :

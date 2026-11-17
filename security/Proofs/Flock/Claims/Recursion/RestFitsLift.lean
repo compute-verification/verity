@@ -39,19 +39,7 @@ import Proofs.Flock.Claims.Recursion.RepFramesBind
 import Proofs.Flock.Claims.Recursion.RepFramesFields
 import Proofs.Flock.Claims.Recursion.RepFramesLig
 
-/-!
-# A fit lifts to rows of its rows' sizes (`fitsLift`)
-
-A rep's fit (`FitsRep`) reads its rows' contents in two places only: the recursive caps are the rounds' tops, and each
-round's value row holds the values its chunk absorbs. Everything else it asks of the proof is a size. So rows of the
-same byte sizes as fitting ones have a fit (`RestRead.FitsLift`): take the tops of the new rows as the recursive caps,
-and the leading bytes of each new value row as that round's values.
-
-The values are realizable because a rep's frames read every absorbed value slot of a proof of its shape exactly once.
-`repFrames_fields` and `ligFrames_fields` show the frames fix those slots, so the map from the slots to the frames'
-values is injective; both sides have `|F128|` to the same power (`vals_repFrames_length`), so it is onto
-(`realize`). Any 16 bytes are an `F128`'s by the same count (`toBytes_surj`).
--/
+/-! A fit lifts to rows of its rows' sizes (`fitsLift`). -/
 
 @[expose] public section
 
@@ -62,8 +50,6 @@ open FlockSoundness.Refine (Frame colBytes shapeOf)
 open FlockSoundness.Discharge.DecodeZL (ProofSizes)
 open FlockSoundness.Discharge.Exec (chunks closes chunks_flatten repFrames repFrames_chunks_snd repFrames_fields
   zcFrames lcFrames rsFrames ligFrames ligFrames_fields levelFr introFr queryFr chFr kFr capFr rs_size)
-
-/-! ## Bytes -/
 
 theorem card_UInt8 : Fintype.card UInt8 = 2 ^ 8 :=
   (FinEnum.card_eq_fintypeCard (α := UInt8)).symm.trans rfl
@@ -78,7 +64,6 @@ theorem byteArray_ext {x y : ByteArray} (h : x.data = y.data) : x = y := by
   cases h
   rfl
 
-/-- An element's 16 bytes. -/
 def toVec (a : F128) : List.Vector UInt8 16 := ⟨a.toBytes.data.toList, FlockSoundness.Refine.toBytes_length a⟩
 
 theorem toVec_inj : Function.Injective toVec := fun a b h => by
@@ -89,13 +74,11 @@ theorem card_F128_vec : Fintype.card F128 = Fintype.card (List.Vector UInt8 16) 
   rw [card_vector, card_F128, card_UInt8]
   all_goals norm_num
 
-/-- **Any 16 bytes are an element's.** -/
 theorem toBytes_surj (l : List UInt8) (hl : l.length = 16) : ∃ a : F128, a.toBytes.data.toList = l := by
   obtain ⟨a, ha⟩ := ((Fintype.bijective_iff_injective_and_card toVec).2 ⟨toVec_inj, card_F128_vec⟩).2 ⟨l, hl⟩
   simp only [toVec] at ha
   exact ⟨a, Subtype.mk.inj ha⟩
 
-/-- **Any whole 16-byte blocks are some elements' bytes.** -/
 theorem colBytes_surj : ∀ (n : ℕ) (l : List UInt8), l.length = 16 * n →
     ∃ vs : List F128, vs.length = n ∧ colBytes vs = l
   | 0, l, h => ⟨[], rfl, (List.eq_nil_of_length_eq_zero (by omega)).symm⟩
@@ -105,8 +88,6 @@ theorem colBytes_surj : ∀ (n : ℕ) (l : List UInt8), l.length = 16 * n →
     refine ⟨a :: vs, by rw [List.length_cons, hl], ?_⟩
     show a.toBytes.data.toList ++ colBytes vs = l
     rw [ha, hv, List.take_append_drop]
-
-/-! ## Lists -/
 
 theorem getD_map_nil {α β : Type} (f : List α → List β) (hf : f [] = []) :
     ∀ (L : List (List α)) (j : ℕ), (L.map f).getD j [] = f (L.getD j [])
@@ -140,8 +121,6 @@ theorem cutLens_map {α β : Type} (f : α → β) : ∀ (ns : List ℕ) (l : Li
     have ih := cutLens_map f ns (l.drop n)
     rw [List.map_drop] at ih
     simp only [cutLens, List.map_cons, List.map_take, ih]
-
-/-! ## The values a rep's frames absorb, by count -/
 
 theorem vals_dom (b : ByteArray) (fs : List Frame) : vals (.dom b :: fs) = vals fs := rfl
 theorem vals_label (b : ByteArray) (fs : List Frame) : vals (.label b :: fs) = vals fs := rfl
@@ -239,7 +218,6 @@ theorem vals_rsFrames_length {sh : Shape} {p : Proof} (hp : ProofSizes sh p) :
   simp only [vals_label, vals_vec, vals_sq, vals_nilR, List.append_nil, Array.length_toList, rs_size hp,
     if_pos (show k < sh.claims by omega)]
 
-/-- **How many values a rep's frames absorb**, at a proof of the rep's shape. -/
 theorem vals_repFrames_length {st : Setup} {sch : Flock.Schedule} {e : ℕ} {p : Proof}
     (hp : ProofSizes (shapeOf st sch e) p) (hk : st.fold.kLog = st.kLog) (hL : 2 ≤ sch.levels.size)
     (d : ByteArray) (T : F128) :
@@ -255,11 +233,6 @@ theorem vals_repFrames_length {st : Setup} {sch : Flock.Schedule} {e : ℕ} {p :
     vals_ligFrames_length sch T _ _ hL, h5, h1, h2, h3, h4, hk]
   all_goals omega
 
-/-! ## Every absorbed value is some proof's -/
-
-/-- The absorbed value slots of a proof the size of `q`: `T`, the zerocheck's (`round1ab`, `round1c`, its rounds,
-`finalA`, `finalB`), the lincheck's (its rounds and `zPartial`), the ring switches', and Ligerito's (its messages, its
-out-of-domain values and `yr`). -/
 abbrev Slots (q : Proof) : Type :=
   F128 × (Fin q.zerocheck.round1ab.size → F128) × (Fin q.zerocheck.round1c.size → F128) ×
     (Fin q.zerocheck.rounds.size → F128 × F128) × F128 × F128 ×
@@ -268,7 +241,6 @@ abbrev Slots (q : Proof) : Type :=
     (Fin q.ligerito.messages.size → (F128 × F128) × (F128 × F128)) ×
     (Fin q.ligerito.oodValues.size → F128) × (Fin q.ligerito.finalProof.yr.size → F128)
 
-/-- `q` with its absorbed values at the slots `d`, and the slots' `T`. -/
 def fill (q : Proof) (d : Slots q) : Proof × F128 :=
   ({ q with
       zerocheck := { q.zerocheck with
@@ -308,7 +280,6 @@ theorem fill_sizes {sh : Shape} {q : Proof} (hq : ProofSizes sh q) (d : Slots q)
 theorem ofFn_inj {α : Type} {n : ℕ} {f g : Fin n → α} (h : Array.ofFn f = Array.ofFn g) : f = g :=
   List.ofFn_injective (by simpa only [Array.toList_ofFn] using congrArg Array.toList h)
 
-/-- **The slots are fixed by the values the frames absorb**, at a setup that folds at its own `k_log`. -/
 theorem fill_inj {st : Setup} {sch : Flock.Schedule} {d₀ : ByteArray} {e : ℕ} {q : Proof}
     (hq : ProofSizes (shapeOf st sch e) q) (hk : st.fold.kLog = st.kLog) (hL : 2 ≤ sch.levels.size)
     {a b : Slots q}
@@ -341,7 +312,6 @@ theorem pow_count (N m k e k0 L x : ℕ) :
     N ^ (64 + 64 + 2 * (m - 6) + 2 + 2 * (k - 6) + 64 + 128 * (2 + e) + (4 * k0 + 36 + 30 * L + 2 ^ (x + 1))) := by
   ring
 
-/-- **As many slots as absorbed values**, counted as `F128`s. -/
 theorem card_slots {st : Setup} {sch : Flock.Schedule} {e : ℕ} {q : Proof} (hq : ProofSizes (shapeOf st sch e) q)
     (hL : 2 ≤ sch.levels.size) :
     Fintype.card (Slots q) = Fintype.card F128 ^ (64 + 64 + 2 * (st.m - 6) + 2 + 2 * (st.kLog - 6) + 64 +
@@ -354,7 +324,6 @@ theorem card_slots {st : Setup} {sch : Flock.Schedule} {e : ℕ} {q : Proof} (hq
   generalize Fintype.card F128 = N
   exact pow_count N st.m st.kLog e sch.k0 (sch.levels.size - 2) sch.ext
 
-/-- The absorbed values at the slots `d`, as a vector of their count. -/
 def slotVals (st : Setup) (sch : Flock.Schedule) (d₀ : ByteArray) (e : ℕ) (q : Proof) (n : ℕ)
     (hn : ∀ d : Slots q, (vals (repFrames st sch d₀ (2 + e) (fill q d).1 (fill q d).2)).length = n) (d : Slots q) :
     List.Vector F128 n :=
@@ -364,8 +333,6 @@ theorem slotVals_val {st : Setup} {sch : Flock.Schedule} {d₀ : ByteArray} {e :
     (hn : ∀ d : Slots q, (vals (repFrames st sch d₀ (2 + e) (fill q d).1 (fill q d).2)).length = n) (d : Slots q) :
     (slotVals st sch d₀ e q n hn d).val = vals (repFrames st sch d₀ (2 + e) (fill q d).1 (fill q d).2) := rfl
 
-/-- **Every value list of the frames' count is some proof's**: a proof of `q`'s shape with `q`'s cap, recursive caps
-and nonces, and a `T`, whose rep frames absorb exactly `W`. -/
 theorem realize {st : Setup} {sch : Flock.Schedule} {d₀ : ByteArray} {e : ℕ} {q : Proof}
     (hq : ProofSizes (shapeOf st sch e) q) (hk : st.fold.kLog = st.kLog) (hL : 2 ≤ sch.levels.size) (T₀ : F128)
     (W : List F128) (hW : W.length = (vals (repFrames st sch d₀ (2 + e) q T₀)).length) :
@@ -395,9 +362,6 @@ theorem realize {st : Setup} {sch : Flock.Schedule} {d₀ : ByteArray} {e : ℕ}
   have h5 : (fill q d).1.ligerito.consistencyNonces = q.ligerito.consistencyNonces := rfl
   exact ⟨(fill q d).1, (fill q d).2, hs, h1, h2, h3, h4, h5, hv⟩
 
-/-! ## The recursive caps change bytes frames only -/
-
-/-- A frame with its bytes blanked. -/
 def blank : Frame → Frame
   | .dom b => .dom b
   | .label b => .label b
@@ -447,7 +411,6 @@ theorem ligFrames_blank (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray
   simp only [List.map_append, List.map_cons, hlv]
   simp [blank, capFr, introFr, queryFr]
 
-/-- `p` with the recursive caps `R`. -/
 def withCaps (p : Proof) (R : Array (Array ByteArray)) : Proof :=
   { p with ligerito := { p.ligerito with recursiveCaps := R } }
 
@@ -491,8 +454,6 @@ theorem withCaps_sizes {sh : Shape} {p : Proof} (hp : ProofSizes sh p) {R : Arra
     yr := hp.yr, messages := hp.messages, queryNonces := hp.queryNonces, oodValues := hp.oodValues,
     claimNonces := hp.claimNonces, consistencyNonces := hp.consistencyNonces }
 
-/-! ## The rows' tops and value rows, by size -/
-
 theorem size_nodeOf (r : ByteArray) : (nodeOf r).size = r.size - 64 := by
   show (r.data.toList.take (r.data.size - 64)).toArray.size = r.data.size - 64
   rw [List.size_toArray, List.length_take, Array.length_toList]
@@ -520,8 +481,6 @@ theorem topGroups_sizes : ∀ (sched : List RecVStar.SchedRound) (rows rows' : L
       exact List.map_congr_left fun z _ => size_nodeOf z
     rw [e, e, h.1]
 
-/-- **A round's values lift to rows of its rows' sizes**: some values of the same count, read off the leading bytes of
-the new value row. -/
 theorem rowsAt_lift {s : RecVStar.SchedRound} {rs rs' : List ByteArray} {vs' : List F128} (h : RowsAt s rs' vs')
     (hs : rs.map ByteArray.size = rs'.map ByteArray.size) : ∃ vs, vs.length = vs'.length ∧ RowsAt s rs vs := by
   obtain ⟨h1, ⟨pad', hpad', h2⟩, h3⟩ := h
@@ -565,8 +524,6 @@ open Flock
 open FlockDeploy (RepCtx FitsRep vals skel topGroups RowsAt chunksOf withCaps blank)
 open FlockSoundness.Discharge.Exec (chunks chunks_flatten repFrames repFrames_chunks_snd)
 
-/-- **A fit lifts to every rows of its rows' byte sizes** (`FitsLift`): the new rows' tops as the recursive caps, and
-the values each new value row leads with (`rowsAt_lift`), which some proof of the fit's shape absorbs (`realize`). -/
 theorem fitsLift : FitsLift := by
   intro c hk rows rows' p' T' h hsz
   have hlen : rows.length = rows'.length := by simpa using congrArg List.length hsz

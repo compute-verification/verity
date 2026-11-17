@@ -35,16 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# S17 at the substituted value (`decodeJWith_shaSubJ`, `s17_shaSubJ`)
-
-At the record's value with its proof digests written from digests `ds` (`shaSubJ`), the decoder's proof digests are
-`shaArr`'s entries, whatever the rest of the value (`decodeJWith_shaSubJ`): it reads `proof_{dk}` last, and `shaSubJ`
-replaces that key's value in place (`arr_mapKey_const`), each entry an object of the two distinct keys `stream` and `dk`
-(`proofShaRd_entry`). At the files' digests through `h`, with as many files as rep streams and the rep streams' names
-distinct (`NamesDistinct`), S17's two checks pass (`s17_canonical`): the digests list exactly the rep streams, and each
-file's digest is the one its stream's entry names. `s17_shaSubJ` is the two together, at a decoded session.
--/
+/-! S17 passes at the record's value with its proof digests written from the files' digests. -/
 
 @[expose] public section
 
@@ -54,7 +45,6 @@ open Flock
 open Lean (Json)
 open FlockComplete.JsonRT (Distinct getObjVal?_mkObj dk_cases)
 
-/-- Rep stream `q`'s entry of `proof_{dk}` at the digest `q.2`. -/
 def shaList (spec : SessionSpec) (q : (ℕ × ℕ × String) × ByteArray) : List (String × Json) :=
   [("stream", Json.str q.1.2.2), (spec.dk, FlockComplete.hexJ q.2)]
 
@@ -64,7 +54,6 @@ theorem shaArr_eq (spec : SessionSpec) (ds : Array ByteArray) :
 theorem shaList_distinct (spec : SessionSpec) (q : (ℕ × ℕ × String) × ByteArray) : Distinct (shaList spec q) := by
   rcases dk_cases spec with e | e <;> simp [shaList, e]
 
-/-- The decoder's read of one entry of `proof_{dk}` (`Record.decodeJWith`'s last step). -/
 def proofShaRd (spec : SessionSpec) (p : Json) : Flock.V (String × String) := do
   pure ((← Record.str p "stream"), (← Record.str p spec.dk))
 
@@ -94,7 +83,6 @@ theorem mapM_map_ok {α β γ : Type} (xs : Array α) (h : α → β) (f : β �
   | (rw [← Array.toList_map, Array.toArray_toList])
   | (congr 1; simp)
 
-/-- **The substituted value's digests are `shaArr`'s**: the decoder's last two reads at `shaSubJ spec ds j`. -/
 theorem proofSha_read {spec : SessionSpec} {ds : Array ByteArray} {j : Json} {a : Array Json}
     {ps : Array (String × String)} (ha : Record.arr (shaSubJ spec ds j) s!"proof_{spec.dk}" = .ok a)
     (hm : a.mapM (proofShaRd spec) = .ok ps) :
@@ -106,7 +94,6 @@ theorem proofSha_read {spec : SessionSpec} {ds : Array ByteArray} {j : Json} {a 
   cases hm
   rfl
 
-/-- **The decoder reads `shaArr`'s digests at the substituted value**, whatever the rest of the value. -/
 theorem decodeJWith_shaSubJ (hs : Flock.Hashes Flock.V) {spec : SessionSpec} {ds : Array ByteArray} {j : Json}
     {sess : RunRecord} (h : Record.decodeJWith hs spec (shaSubJ spec ds j) = .ok sess) :
     sess.proofSha = (spec.repStreams.zip ds).map fun q => (q.1.2.2, hexOf q.2) := by
@@ -118,14 +105,10 @@ theorem decodeJWith_shaSubJ (hs : Flock.Hashes Flock.V) {spec : SessionSpec} {ds
     | (cases h; done)
     | (cases h; exact proofSha_read (by assumption) (by assumption))
 
-/-- The rep streams' names are distinct. -/
 def NamesDistinct (spec : SessionSpec) : Prop :=
   ∀ (i k : ℕ) (hi : i < spec.repStreams.size) (hk : k < spec.repStreams.size),
     spec.repStreams[i].2.2 = spec.repStreams[k].2.2 → i = k
 
-/-- **S17 passes at the files' digests**: where the decoded proof digests are `shaArr`'s at the files' digests through
-`h`, of as many files as rep streams with distinct names, S17's list check and every file's digest check pass (as
-`FlockComplete.verifyWith_ok` takes them). -/
 theorem s17_canonical (spec : SessionSpec) (h : ByteArray → ByteArray) {bs : Array ByteArray}
     {ps : Array (String × String)}
     (hps : ps = (spec.repStreams.zip (bs.map (FlockComplete.dgOf spec h))).map fun q => (q.1.2.2, hexOf q.2))
@@ -169,8 +152,6 @@ theorem s17_canonical (spec : SessionSpec) (h : ByteArray → ByteArray) {bs : A
     rw [hf, he i hi']
     simp
 
-/-- **S17 passes at the substituted value**: a session decoded at the record's value with its proof digests the
-files' through `h` passes S17's two checks, at as many files as rep streams with distinct names. -/
 theorem s17_shaSubJ (h : ByteArray → ByteArray) {spec : SessionSpec} {bs : Array ByteArray} {j : Json}
     {sess : RunRecord}
     (hd : Record.decodeJWith (Flock.Hashes.ofSha512 h : Flock.Hashes Flock.V) spec

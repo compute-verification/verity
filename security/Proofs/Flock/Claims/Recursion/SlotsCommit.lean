@@ -39,30 +39,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Commit
 import Proofs.Flock.Soundness.Discharge.Hm.Mask
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# `ReadersTrue` at `layoutBTops`, from the hm96 slots' commit strings
-
-`layoutBTops` records two SHA-512 calls at each hm96 slot it reads (`hmCalls`): at each held port (`heldRows`) and, at a
-RecCap, at port `top` of each instance (`capsCalls`). Off a witness, at the slot's forms:
-
-* the salt's, `SHA-512(salt_prefix ‖ y) = c`, with `y` the slot's salt inputs and `c` the last 64 bytes of its output
-  `b ‖ c`;
-* the row's, `SHA-512(row_prefix ‖ row) = d`, with the row at the port's unit input columns and `d` the XOR form
-  `b ⊕ Φy` (`hmDigest`).
-
-Both are true evaluations wherever the slot's output is the commit string of its row and salt (`SlotCommits`,
-`Binding.commitString`, `b = SHA-512(row) ⊕ M·y`, `c = SHA-512(salt_prefix ‖ y)`): `hmCalls_true`, bit for bit, where
-`d`'s mask `Φy` cancels `b`'s `M·y` (`maskV_filter`). So `ReadersTrue` at `layoutBTops` is `HmSlotsCommit`, every
-slot's commit string at the outer relation (`readersTrue_layoutBTops`), and `ksLin2_deployed_slots` and
-`bitsLin2_deployed_slots` take that in its place.
-
-`HmSlotsCommit` is a fact about the slots' circuits at `Flock.check`, the form `Hm.row_bc_flat` and
-`Hidden.port_commit_rowsP` prove at a satisfied table's columns. `SlotsCheck.lean` proves it (`hmSlotsCommit_of_full`):
-a staged part sets up one table holding its whole population, which the verifier's setup refuses otherwise
-(`RecSetup.oneFull`). An honest slot
-commits (`slotCommits_of_hm96`): `SlotCommits` holds wherever the slot's columns carry a satisfying hm96 assignment on
-the row and salt it reads (`Hm.hm96_commit`).
--/
+/-! `ReadersTrue` at `layoutBTops`, from the hm96 slots' commit strings (`readersTrue_layoutBTops`). -/
 
 @[expose] public section
 
@@ -73,8 +50,6 @@ open Claims (Msg Out)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB (readForms formBit)
 open FlockSoundness.Discharge.Hm (bitL)
-
-/-! ## Bits off forms -/
 
 theorem testBit_bitsNat : ∀ (bs : List Bool) (i : ℕ), (Claims.Recursion.VStar.bitsNat bs).testBit i = bs.getD i false
   | [], i => by simp [Claims.Recursion.VStar.bitsNat]
@@ -87,7 +62,6 @@ theorem testBit_bitsNat : ∀ (bs : List Bool) (i : ℕ), (Claims.Recursion.VSta
         Claims.Recursion.VStar.bitsNat bs by rw [Nat.add_mul_div_left _ _ (by omega)]; cases b <;> simp,
         testBit_bitsNat bs i]
 
-/-- **A bit of bits read as bytes** is that bit. -/
 theorem bitL_bytesOf {bs : List Bool} {q : ℕ} (hq : q < bs.length) :
     bitL (Claims.Recursion.VStar.bytesOf bs) q = bs[q] := by
   unfold bitL Claims.Recursion.VStar.bytesOf
@@ -102,7 +76,6 @@ theorem bitL_readForms {w : Claims.Flock.Wit} {fs : List HmNets.Lin} {q : ℕ} (
   unfold readForms
   rw [bitL_bytesOf (by simpa using hq), List.getElem_map]
 
-/-- **Forms whose bits are a byte string's read as it.** -/
 theorem readForms_eq_of_bits {w : Claims.Flock.Wit} {fs : List HmNets.Lin} {l : List UInt8}
     (hlen : fs.length = 8 * l.length) (h : ∀ q (hq : q < fs.length), formBit w fs[q] = bitL l q) :
     readForms w fs = l := by
@@ -116,8 +89,6 @@ theorem readForms_eq_of_bits {w : Claims.Flock.Wit} {fs : List HmNets.Lin} {l : 
 theorem formBit_var (w : Claims.Flock.Wit) (v : ℕ) : formBit w (HmNets.Lin.var v) = w.hid.getD v false := by
   simp [formBit, HmNets.Lin.var]
 
-/-- **The mask's bit as an XOR over the key's set bits**: `maskV`'s sum of `key_{i+j} · y_j`, the XOR of `y_j` over
-the `j` at which key bit `i + j` is set, as `hmDigest` lists them. -/
 theorem foldl_xor_filter (p u : ℕ → Bool) : ∀ (l : List ℕ) (c : Bool),
     l.foldl (fun acc j => acc ^^ (p j && u j)) c = (c ^^ ((l.filter p).map u).foldr (fun b acc => b ^^ acc) false)
   | [], c => by simp
@@ -130,9 +101,6 @@ theorem maskV_filter (key : ByteArray) (y : ℕ → Bool) (i : ℕ) :
       (((List.range 1536).filter fun j => Hm96.bit key (i + j)).map y).foldr (fun b acc => b ^^ acc) false := by
   rw [FlockSoundness.Discharge.Hm.maskV, foldl_xor_filter, Bool.false_xor]
 
-/-! ## A slot's calls -/
-
-/-- The prefix port `q`'s row is hashed under, `sha512/row/v1`'s: none past the ports. -/
 def rowPfx (c : Circuit) (q : ℕ) : Msg := (c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD []
 
 /-- **Port `q`'s hm96 slot at instance `n` outputs its commit string**, off the witness `w`: its `b ‖ c` (`hmCommit`)
@@ -142,7 +110,6 @@ def SlotCommits (c : Circuit) (nm : String) (q n : ℕ) (w : Claims.Flock.Wit) :
   readForms w (hmCommit c q n) = FlockSoundness.Binding.commitString
     (rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var)) (readForms w (hmSalt c q n))
 
-/-- **The slot commits where its out columns carry the commit string's bits.** -/
 theorem slotCommits_of_bits {c : Circuit} {nm : String} {q n : ℕ} {w : Claims.Flock.Wit}
     (h : ∀ t < 1024, w.hid.getD (slotHid c n (hmBase c q n) (hmOutCol c + t)) false =
       bitL (FlockSoundness.Binding.commitString
@@ -153,9 +120,6 @@ theorem slotCommits_of_bits {c : Circuit} {nm : String} {q n : ℕ} {w : Claims.
     simp only [hmCommit, List.getElem_map, List.getElem_range, formBit_var]
     exact h t (by simpa [hmCommit] using ht)
 
-/-- **An honest slot commits** (the witness that `SlotCommits` holds of honest slots): where the witness's slot columns
-carry a satisfying assignment `z` of the hm96 circuit, its `cv` and `pad` inputs the row's last chaining value and block
-and its salt inputs the salt the slot reads, the slot outputs its commit string (`Hm.hm96_commit`). -/
 theorem slotCommits_of_hm96 {c : Circuit} {nm : String} {q n : ℕ} {w : Claims.Flock.Wit} (z : HmNets.Var → Bool)
     (hz : FlockSoundness.Discharge.Hm.stHolds z ((HmNets.hm96Row Hm96.Default512.key).run HmNets.St.empty).2)
     (hcv : ∀ i < 512, z i = FlockSoundness.Discharge.Hm.wbit (FlockSoundness.Discharge.Hm.lastCv
@@ -182,8 +146,6 @@ theorem sha512_eq (m : Msg) :
   rw [FlockSoundness.Binding.digBytes, FlockSoundness.Refine.dig_eq, FlockSoundness.Refine.H512_val]
   rfl
 
-/-- **A slot's calls are true evaluations where it outputs its commit string**: the salt's is the commit string's
-second half; the row's digest form `b ⊕ Φy` is `SHA-512(row) ⊕ M·y ⊕ Φy`, and `Φy` is `M·y` (`maskV_filter`). -/
 theorem hmCalls_true {c : Circuit} {nm : String} {q n : ℕ} {w : Claims.Flock.Wit} (h : SlotCommits c nm q n w) :
     ∀ p ∈ hmCalls c nm q n, FlockDeploy.sha512 (p.1 ++ readForms w p.2.1) = readForms w p.2.2 := by
   have hb : ∀ t (ht : t < 1024), w.hid.getD (slotHid c n (hmBase c q n) (hmOutCol c + t)) false =
@@ -233,20 +195,11 @@ theorem hmCalls_true {c : Circuit} {nm : String} {q n : ℕ} {w : Claims.Flock.W
     rw [hci, Bool.xor_assoc, Bool.xor_self, Bool.xor_false]
     rfl
 
-/-! ## The layout's slots -/
-
-/-- **Every hm96 slot `layoutBTops` reads at part `s` outputs its commit string** off the part's witness `w`, part `s`
-of `r` having the circuit `c`: at each held port (`heldRows`) and, where part `s`'s statement is a RecCap, at port `top`
-of each of its instances. -/
 def SlotsCommit (r : XR) (s : ℕ) (c : Circuit) (w : Claims.Flock.Wit) : Prop :=
   (∀ h ∈ heldRows r s, SlotCommits c h.2.1 h.2.2.1 h.2.2.2 w) ∧
     ∀ l N, (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N) → ∀ q, capPort c = some q →
       ∀ n < N, SlotCommits c "top" q n w
 
-/-- **V\*'s hm96 slots output their commit strings at the outer relation** (a code fact about V*'s circuits at
-`Flock.check`): wherever part `s`'s V\* statement, staged at any rounds as V\* stages it (`StagedPart`, its scope
-check passed), is in the outer relation at `w`, every hm96 slot `layoutBTops` reads at part `s` outputs its commit
-string (`SlotsCommit`). -/
 def HmSlotsCommit {Col T : Type} (DO : Claims.Flock.Deploy Coin Col T) (st : Stage) : Prop :=
   ∀ (x : Msg) (ms : List (Msg × Out)) (s : ℕ) (w : Claims.Flock.Wit) (r : XR) (c : Circuit),
     StagedPart st s x (staged st x ms s) → Claims.Flock.check DO.parse (staged st x ms s) w = true → readX x = some r →
@@ -275,10 +228,6 @@ theorem mem_capsCalls {r : XR} {s : ℕ} {p : Msg × List HmNets.Lin × List HmN
           exact ⟨l, N, c, q, n, rfl, rfl, hq, hn, hp⟩
     · simp at hp
 
-/-- **`ReadersTrue` at `layoutBTops` from the slots' commit strings**: every call the readers record is a part's, at one
-of the slots `layoutBTops` reads (`layoutBDeployed`'s held ports, or a RecCap's port `top`), off a witness in the outer
-relation at the part's staged statement; there the slot outputs its commit string, so the call is true
-(`hmCalls_true`). -/
 theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin)))
     (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T) (h : HmSlotsCommit DO b.st) :
     ReadersTrue FlockDeploy.sha512 IV { b with rd := (layoutBTops fin).readers } DO := by
@@ -315,11 +264,8 @@ theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List 
     · obtain ⟨l, N, c, q, n, hst, hc, hq, hn, hp⟩ := mem_capsCalls hp
       exact hmCalls_true ((h x _ s ws[s] r c hsg hck hr hc).2 l N hst q hq n hn) p hp
 
-/-! ## `KSLin2` and `BitsLin2` with the slots' commit strings -/
-
-/-- **`KSLin2` at the model of the challenger's live-coin part's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
-`ksLin2_deployed_rec`, with `ReadersTrue` from `HmSlotsCommit` (`readersTrue_layoutBTops`). What stays open at the dense
-form is `PartChecksBV`, `PartOpensB`, `DecompB` and `HmSlotsCommit` (`ksLin2_deployed_full` proves it). -/
+/-- What stays open at the dense form is `PartChecksBV`, `PartOpensB` and `DecompB`; `ksLin2_deployed_full` proves
+`HmSlotsCommit`. -/
 theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -344,10 +290,8 @@ theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecor
   exact ksLin2_deployed_rec b aux nOf hd rest fin wE join final w hP
     (readersTrue_layoutBTops (finOpen fin) Bd.IVStar bR (deployZkRec _root_.Flock.Readable.relation) hS)
 
-/-- **`BitsLin2` at the model of the challenger's live-coin part's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
-`bitsLin2_deployed_rec`, with `ReadersTrue` from `HmSlotsCommit`. It reads `StrictBirthday` and `ExpectedCR`, the named
-SHA-512 collision assumptions, and `ksLin2_deployed_slots`' open premises: a bound on a number under named premises, not
-a proved security level. -/
+/-- It reads `StrictBirthday`, `ExpectedCR` and `ksLin2_deployed_slots`' open premises: a bound on a number under
+named premises, not a proved security level. -/
 theorem bitsLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
