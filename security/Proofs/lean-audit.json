@@ -403,6 +403,7 @@
   "Proofs.Pouw.Credit.Withheld",
   "Proofs.Properties.Verity.Subprotocols",
   "Proofs.Properties.Verity.InferenceOnly",
+  "Proofs.Properties.Verity.InferenceOnlyRows",
   "Proofs.Properties.Verity.OnsiteCaller",
   "Proofs.Properties.Verity.Coupling",
   "Proofs.Properties.Flock.Nets",

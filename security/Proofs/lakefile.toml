@@ -167,7 +167,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.Sampled.SessionAt", "Proofs.Properties.Verity.Sampled.OpensRecorded",
   "Proofs.Properties.Verity.Sampled.OpensAt", "Proofs.Properties.Verity.Sampled.ParamsProgram",
   "Proofs.Properties.Verity.Sampled.LiveOf", "Proofs.Properties.Verity.Sampled.LiveDevice",
-  "Proofs.Properties.Verity.InferenceOnly", "Proofs.Properties.Verity.OnsiteCaller",
+  "Proofs.Properties.Verity.InferenceOnly", "Proofs.Properties.Verity.InferenceOnlyRows", "Proofs.Properties.Verity.OnsiteCaller",
   "Proofs.Properties.Challenger.Steps", "Proofs.Properties.Challenger.Plain", "Proofs.Properties.Challenger.Entry",
   "Proofs.Properties.Challenger.Signer", "Proofs.Properties.Challenger.Built", "Proofs.Properties.Challenger.Files",
   "Proofs.Properties.Challenger.Bodies", "Proofs.Properties.Challenger.Logs", "Proofs.Properties.Challenger.Messages",

@@ -76,6 +76,7 @@
   "Properties.Verity.Soundness",
   "Properties.Verity.LedgerPinned",
   "Properties.Verity.Game",
+  "Properties.Verity.RowsCase",
   "Properties.Verity.Sha512",
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",

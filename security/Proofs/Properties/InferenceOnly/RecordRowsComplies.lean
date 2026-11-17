@@ -214,6 +214,7 @@ theorem rowsAt_summary {j tr : Json} {r : InferenceOnlyVerifier.Record.Case}
 /-- **Accepting a record in rows gives the rate rule in rows on its circuit.** -/
 theorem RowsComplies : Properties.Record.RowsComplies := by
   intro p c e bs pub prof h
+  unfold Properties.Remote.RowsHeld
   obtain ⟨r, table, rows, hread, htable, hrows, hrate⟩ := checkBlobs_accept h
   have hR := form_rates p.gamma p.num p.den ⟨rows, (InferenceOnlyVerifier.Record.summarize r).fresh⟩ hrate
   refine ⟨r, table, hread, htable, form_laidOut _ _ r hread, fun d hd u hu => ?_⟩
