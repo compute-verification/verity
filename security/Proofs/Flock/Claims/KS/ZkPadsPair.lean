@@ -43,28 +43,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
 
-/-!
-# The masked pads fork's two-run clash
-
-`ZkSimForkLeOn x IsPadsEvZ` is the masked simulator's fork bound at each rep's pads. It splits as the caps' does
-(`ZkFork`): an alignment of the simulated fork at rep `r`'s pads node with the fork at the pads round, and the clash of
-the live fork event, two accepting runs whose decoded outputs open a position of one cap `d`'s pads tree to different
-pairs (`PadsForkEvZ`). This file proves the clash with no hypothesis and leaves the alignment as a premise
-(`ZkPadsAlign`).
-
-The clash reads the model's openings, not a shared root: an opening that `opPadsAtZ` accepts verifies at the query's
-position to `d 0` (`opPadsAtZ_some`), and at SHA-512 that is the executable's `hm96-sha512/v1` climb from the pair's
-leaf reaching `d 0`'s bytes (`climb_of_verifiesL`). At an accepting run's view each rep's pads openings are its
-proof file's inner-proof openings at the positions its stream's last round's coins give (`PadsRep`), and the run's
-verifier hashed every input of each of them (`verifyInner_logs`; `PadsLogged`). Two openings at one position climbing
-to one top with different pairs collide in the two runs' joined logs (`tiedColl_of_climbs`; `tiedColl_of_padsLogged`).
-
-* `zkViewPadsLogged`, `zkAccPads`: an accepting run's view, and a decoded live outcome of the masked simulator, log
-  their reps' pads openings.
-* `zkPairPads`: the live pads fork event gives the deployed runs' pair event.
-* `opPadsAtZ_nul`: the dead branches' empty openings open no pads position (`2 ≤ N`, `two_le_zkTabsN`).
-* `zkSimForkLePads_of`, `zk_KS_of_padsAlign`: the pads fork bound, and masked KS, from the pads alignment.
--/
+/-! The masked pads fork's two-run clash, with no hypothesis; the alignment stays a premise (`ZkPadsAlign`). -/
 
 @[expose] public section
 
@@ -79,17 +58,12 @@ open FlockSoundness.Discharge.ZkExec (innerN layZ shapeZK shapeZKn innerOpensOf 
   encPair leaf_pair walk_pair)
 open Claims.Bridge.Custody
 
-/-- **A rep's pads openings, logged**: at each of the `Q` queries the opening is a pair, its salt and a path of
-digest-width siblings, every SHA-512 input of whose `hm96-sha512/v1` opening at the query's position is in `L`. -/
 def PadsLogged (L : List (Claims.Msg × Claims.Msg)) (io : ZkLink.InnerOpens 𝔽 Dig (List UInt8)) (qpos : ℕ → ℕ) :
     Prop :=
   ∀ k < Zk.Q, ∃ (o : F128 × F128) (salt : ByteArray) (path : Array ByteArray),
     io.pads k = (pairOf o, salt.data.toList, path.toList.map toDig) ∧ (∀ b ∈ path.toList, b.size = 64) ∧
       ∀ m ∈ opensIns #[o.1, o.2] salt (qpos k) path.toList, Claims.toMsg m ∈ L.map Prod.fst
 
-/-- **A pads opening the model verifies is an executable climb**: at SHA-512, an opening of the pair `o` under `salt`
-along digest-width siblings that verifies at depth `n` to the cap `fun _ => R` has `n` siblings, and its
-`hm96-sha512/v1` climb from the pair's leaf reaches `R`'s bytes. -/
 theorem climb_of_verifiesL {R : Dig} {n pos : ℕ} {o : F128 × F128} {salt : ByteArray} {path : Array ByteArray}
     (hw : ∀ b ∈ path.toList, b.size = 64)
     (h : Merkle.VerifiesL hs512.H hs512.Ep hs512.Lp (fun _ => R) n pos (pairOf o) salt.data.toList
@@ -110,9 +84,6 @@ theorem climb_of_verifiesL {R : Dig} {n pos : ℕ} {o : F128 × F128} {salt : By
   rw [walk_pair, walk_val "", hmap, leaf_pair, ← climb_hm96 "", hlf] at e
   exact e
 
-/-- **Two logged pads openings at one position that verify to one cap with different pairs collide in the joined
-logs**: both climb to the cap's bytes along paths of the depth's length (`climb_of_verifiesL`), and every input of
-each is in its own log (`tiedColl_of_climbs`). -/
 theorem tiedColl_of_padsLogged {L₁ L₂ : List (Claims.Msg × Claims.Msg)}
     {io₁ io₂ : ZkLink.InnerOpens 𝔽 Dig (List UInt8)} {qpos₁ qpos₂ : ℕ → ℕ} (h₁ : PadsLogged L₁ io₁ qpos₁)
     (h₂ : PadsLogged L₂ io₂ qpos₂) {k₁ k₂ : ℕ} (hk₁ : k₁ < Zk.Q) (hk₂ : k₂ < Zk.Q) {R : Dig} {n p : ℕ}
@@ -137,10 +108,6 @@ theorem tiedColl_of_padsLogged {L₁ L₂ : List (Claims.Msg × Claims.Msg)}
     (by simpa using congrArg (fun r : Array F128 => r[1]!) e)
   rw [e']
 
-/-- **An accepted masked rep logs its pads openings**: where a stream `y` has the coins of the live session's rep
-stream `2j + r` and rep `r`'s proof file decodes to pads openings sampled at the positions `y`'s last round's coins give
-(`PadsRep`), the run's verifier opened each of those queries at that position (`zkVerifyRepWith_inner`,
-`verifyInner_logs`), so every input of each opening is in its log. -/
 theorem zk_padsLogged {L : List (Claims.Msg × Claims.Msg)} {spec : SessionSpec} {sts : Array Stmt}
     {record : String} {proofs : Array ByteArray} {lv : Live} {j rr : ℕ} {sch : Schedule} {tPad : ℕ}
     (hv : Zk.verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) record proofs = .ok ())
@@ -205,10 +172,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **An accepting run's view logs its reps' pads openings**: at the view the deployed decoders are right at
-`OpensRows` (`decodesTableR_deploy`), so table `j` reads `Q` queries and each rep's pads openings are its proof file's
-inner-proof openings at the positions its rep stream's last round's coins give; that stream has the run's rep stream's
-coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so the run's log holds their inputs (`zk_padsLogged`). -/
 theorem zkViewPadsLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -294,10 +257,6 @@ theorem zkViewPadsLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse tr
 
 end Gen
 
-/-- **An accepting run's view logs its reps' pads openings**: at the view the deployed decoders are right at
-`OpensRows` (`decodesTableR_deploy`), so table `j` reads `Q` queries and each rep's pads openings are its proof file's
-inner-proof openings at the positions its rep stream's last round's coins give; that stream has the run's rep stream's
-coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so the run's log holds their inputs (`zk_padsLogged`). -/
 theorem zkViewPadsLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -337,13 +296,10 @@ open Claims.Bridge.Live
 
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
 
-/-- **The pads fork event at rep `r` of table `j`**: table `j`'s outputs in both runs open a position of one cap
-`d`'s pads tree to different pairs. -/
 def PadsForkEvZ (Hs : Hashes 𝔽 D Sl) (N q j r : ℕ) (a a' : List (OutZC 𝔽 D Sl)) : Prop :=
   ∃ (d : Model.Cap D) (p : Fin N), Rewinding.ConflictAt (fun outs : List (OutZC 𝔽 D Sl) =>
     opPadsAtZ Hs N q r d (outs.getD j dfltOutZC)) (a, a') p
 
-/-- Table `j`'s output opens a position of some cap's pads tree at rep `r`. -/
 def OpensPadsZ (Hs : Hashes 𝔽 D Sl) (N q j r : ℕ) (a : List (OutZC 𝔽 D Sl)) : Prop :=
   ∃ (d : Model.Cap D) (p : Fin N), (opPadsAtZ Hs N q r d (a.getD j dfltOutZC) p).isSome
 
@@ -353,8 +309,6 @@ theorem padsForkEvZ_opens {Hs : Hashes 𝔽 D Sl} {N q j r : ℕ} {a a' : List (
   ⟨⟨d, p, h₁⟩, ⟨d, p, h₂⟩⟩
 
 omit [Inhabited D] in
-/-- **The dead branches' empty openings open no pads position**: their paths are empty, and a tree of `N ≥ 2` leaves
-has depth at least one. -/
 theorem opPadsAtZ_nul (Hs : Hashes 𝔽 D Sl) {N : ℕ} (hN : 2 ≤ N) (q r : ℕ) (c : Model.Cap D)
     {out : OutZC 𝔽 D Sl} (h : out.opens = nulOpZ) (p : Fin N) : opPadsAtZ Hs N q r c out p = none := by
   unfold opPadsAtZ
@@ -380,7 +334,6 @@ theorem not_opensPadsZ_nul {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (ts : List (TabZ
   rw [hp', opPadsAtZ_nul Hs hN q r d rfl] at hs
   exact Bool.false_ne_true hs
 
-/-- The deployed masked tables' pads trees have at least `K_PAD` leaves. -/
 theorem two_le_zkTabsN {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
@@ -408,9 +361,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A decoded live outcome of the masked simulator logs an accepting run's pads openings**: where the live verdict
-holds, `P`'s run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of the record it decides
-(`zkSimRunAt`), and table `j`'s decoded output's pads openings are logged in the run (`zkViewPadsLogged`). -/
 theorem zkAccPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -443,9 +393,6 @@ theorem zkAccPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Read
 
 end Gen
 
-/-- **A decoded live outcome of the masked simulator logs an accepting run's pads openings**: where the live verdict
-holds, `P`'s run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of the record it decides
-(`zkSimRunAt`), and table `j`'s decoded output's pads openings are logged in the run (`zkViewPadsLogged`). -/
 theorem zkAccPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -476,10 +423,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The live pads fork event's pair**: two live outcomes of the masked simulator at one tape decoding to outputs
-that open a position of one cap's pads tree at rep `r` of table `j` to different pairs are two accepting runs of `P`
-at `zkΦ`'s coins (`zkAccPads`) whose openings there both climb to the cap's bytes, so they collide in the two runs'
-logs (`tiedColl_of_padsLogged`). -/
 theorem zkPairPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -515,10 +458,6 @@ theorem zkPairPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Rea
 
 end Gen
 
-/-- **The live pads fork event's pair**: two live outcomes of the masked simulator at one tape decoding to outputs
-that open a position of one cap's pads tree at rep `r` of table `j` to different pairs are two accepting runs of `P`
-at `zkΦ`'s coins (`zkAccPads`) whose openings there both climb to the cap's bytes, so they collide in the two runs'
-logs (`tiedColl_of_padsLogged`). -/
 theorem zkPairPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -546,9 +485,6 @@ theorem zkPairPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Rea
     (ω := ω) (j := j) (hj := hj) (C := C) (hC := hC) (u := u) (r₁ := r₁) (r₂ := r₂) (r := r) (h := h)
 
 open Classical in
-/-- **The simulated fork's alignment at rep `r`'s pads at tape `u`**: against the simulated strategy after `Commit`
-at table `j`, the fork at rep `r`'s pads node (`advPadsSZ`, `zkAdvSim`'s pads term) is at most the fork after `t`
-coins of `PadsForkEvZ`. -/
 def ZkPadsAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -589,9 +525,6 @@ namespace Gen
 variable [S : ZkSetup]
 
 open Classical in
-/-- **The simulated fork's alignment at rep `r`'s pads at tape `u`**: against the simulated strategy after `Commit`
-at table `j`, the fork at rep `r`'s pads node (`advPadsSZ`, `zkAdvSim`'s pads term) is at most the fork after `t`
-coins of `PadsForkEvZ`. -/
 def ZkPadsAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -629,10 +562,6 @@ def ZkPadsAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Reada
 
 end Gen
 
-/-- **The simulated fork is aligned with the masked fork rounds at the pads**: at every masked statement in scope
-that sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep
-`r`'s pads node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
-`PadsForkEvZ` (`ZkPadsAlignQ`). -/
 def ZkPadsAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
@@ -649,10 +578,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The simulated fork is aligned with the masked fork rounds at the pads**: at every masked statement in scope
-that sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep
-`r`'s pads node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
-`PadsForkEvZ` (`ZkPadsAlignQ`). -/
 def ZkPadsAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
@@ -666,11 +591,6 @@ def ZkPadsAlign (x : Claims.Msg) : Prop :=
       (zkRd hset h0 L hz hk hlay j (.inl (.inr (.inl r)))).val u
 
 open Classical in
-/-- **The fork advantage at rep `r`'s pads from the alignment**: `zkAdvSim` at the pads is at most the simulated fork
-at round `t`, where at each tape the fork at the pads node is at most the fork after `t` coins of `PadsForkEvZ`: that
-fork is at most the live fork of the decoded event (`forkC_simAtJZ_le`, the dead branches opening no pads position,
-`not_opensPadsZ_nul`), the deployed runs' fork at round `t` (`forkC_liveStratZ`), whose event is the runs' pair event
-(`zkPairPads`). -/
 theorem zkAdvPads_le_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -709,11 +629,6 @@ theorem zkAdvPads_le_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse tru
 end Gen
 
 open Classical in
-/-- **The fork advantage at rep `r`'s pads from the alignment**: `zkAdvSim` at the pads is at most the simulated fork
-at round `t`, where at each tape the fork at the pads node is at most the fork after `t` coins of `PadsForkEvZ`: that
-fork is at most the live fork of the decoded event (`forkC_simAtJZ_le`, the dead branches opening no pads position,
-`not_opensPadsZ_nul`), the deployed runs' fork at round `t` (`forkC_liveStratZ`), whose event is the runs' pair event
-(`zkPairPads`). -/
 theorem zkAdvPads_le_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -735,8 +650,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The fork bound at the pads from the alignment**: `ZkSimForkLeOn` at `IsPadsEvZ` from `ZkPadsAlign`, the clash
-holding outright (`zkAdvPads_le_of`). -/
 theorem zkSimForkLePads_of {x : Claims.Msg} (ha : ZkPadsAlign x) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i hi
   rcases i with ((_ | (r | _)) | ⟨⟩)
@@ -748,8 +661,6 @@ theorem zkSimForkLePads_of {x : Claims.Msg} (ha : ZkPadsAlign x) : ZkSimForkLeOn
 
 end Gen
 
-/-- **The fork bound at the pads from the alignment**: `ZkSimForkLeOn` at `IsPadsEvZ` from `ZkPadsAlign`, the clash
-holding outright (`zkAdvPads_le_of`). -/
 theorem zkSimForkLePads_of {x : Claims.Msg} (ha : ZkPadsAlign x) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i :=
   Gen.zkSimForkLePads_of (S := S₀) (x := x) (ha := ha)
 
@@ -757,8 +668,6 @@ end Live
 
 open Flock
 
-/-- **The deployed masked verifier: KS, from the cap/`τ` fork bound and the pads alignment**, at SHA-512 at the
-trimmed record at the deployed relation: `zk_KS_of_forks` at `zkSimForkLePads_of`. -/
 theorem zk_KS_of_padsAlign
     (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
     (hpa : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkPadsAlign x) :

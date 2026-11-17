@@ -4,15 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Off the masked table without a self-clash
-
-`session_sound_of_table_accZ` with its level-0 term read only on runs that do not self-clash, as `SessionSC` has it at
-the plain record: for an event `Acc` of the session's outputs that implies the table and every table before it accept,
-and any level-0 oracle `C`, `Pr[Acc ∧ C uncommitted] ≤ ε_c⁻ + Pr[Acc ∧ no self-clash ∧ a run opens a level-0 position
-off C]` (`session_sound_of_table_accZ_sc`). `ε_c⁻` already counts the self-clash, so a bad run that self-clashes is charged
-there (`bad_pointwise_ofZ_sc`).
--/
+/-! Off the masked table without a self-clash, which `ε_c⁻` already charges. -/
 
 @[expose] public section
 
@@ -25,7 +17,6 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 variable {D Sl : Type}
 
 open Classical in
-/-- `bad_pointwise_ofZ` with the level-0 term only where the run does not self-clash. -/
 theorem bad_pointwise_ofZ_sc [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F)
     (cap₀ : Cap D) (i : IZ F D × IZ F D) (a : Bool × Oracle F) (n : ℕ) (Acc : List (OutZC F D Sl) → Prop)
     (hAcc : ∀ outs, Acc outs → AccUpTo n outs) (b : List (OutZC F D Sl))
@@ -78,10 +69,6 @@ theorem bad_pointwise_ofZ_sc [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (
     exact h
 
 open Classical in
-/-- **Compiled soundness of a `--zk` table in a batched session, off the table without a self-clash.** For every
-event `Acc` of the session's outputs that implies the table and every table before it accept, every session strategy
-after `Commit` and every level-0 oracle `C`: `Acc` holds with `C` uncommitted with probability at most `ε_c⁻` plus the
-probability that `Acc` holds in a run that does not self-clash and opens a level-0 position off `C`. -/
 theorem session_sound_of_table_accZ_sc [Inhabited D] [Inhabited Sl] (A : Arith F K) (hA : A.Correct)
     (Hs : Hashes F D Sl) (T : TabZK F mPts) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl)))
     (cap₀ : Cap D) (Acc : List (OutZC F D Sl) → Prop)

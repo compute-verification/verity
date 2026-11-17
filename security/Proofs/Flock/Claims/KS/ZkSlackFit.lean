@@ -3,23 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.ZkSlackW
 public import Proofs.Flock.Claims.KS.PlainSlackFit
 
-/-!
-# The slack fits the masked weight's room at the coupling's chances
-
-`ZkSimWJ` asks that the slack's escapes fit the room `zk_fork_room` leaves in the masked weight
-(`Claims.Flock.SlackFitW`). At chances at most `ε ≤ 1/2` before the last round and at most `1` there, a fork's slack
-weights before the last round total at most `8ε` (`Claims.Flock.sum_slackW_le`), so:
-
-* `sum_slackCW_le`, `sum_slackTW_le`: by Cauchy–Schwarz each table's slack weights total at most its weight times
-  `|IZW|·8ε`, and every table's at most the joined weights times `c·8ε`, `c` a bound on `|IZW|`;
-* `slackFitW_of_le`: the slack fits where its weights are at most `ε'` times the joined ones, the joined at most `A`
-  times the room, and `4·√ε'·A + 2·ε'·A ≤ 1`;
-* `m1_slackNums`, `zk_slackFitW`: at Flock ZK's schedules a table has at most `7` levels, level 1 a query and level
-  0's weight with its `2` under `2^40`, so the joined weights are at most `2^41` times the room and the slack fits at
-  chances at most `2^{-128}`, whatever the rounds;
-* `zk_slackFitW_δN`: at the chances `FnFork.δN GF128 65536 n` of the coupling at `fnAt`, where every revealed length
-  before the last round is positive.
--/
+/-! The slack fits the masked weight's room at the coupling's chances. -/
 
 @[expose] public section
 
@@ -34,8 +18,6 @@ theorem card_IZW (L : ℕ) : Fintype.card (IZW L) = 2 * L + 5 := by
   show Fintype.card (((Fin 2 × Fin L) ⊕ (Fin 2 ⊕ Fin 2)) ⊕ Unit) = _
   simp only [Fintype.card_sum, Fintype.card_prod, Fintype.card_fin, Fintype.card_unit]
 
-/-- **Table `j`'s slack weights total at most its weight times `|IZW|·8ε`**, its forks before the last round, at
-chances at most `ε ≤ 1/2` before the last round and at most `1` there (Cauchy–Schwarz, `sum_slackW_le`). -/
 theorem sum_slackCW_le {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 ≤ δ t) (hδ : ∀ t, t + 1 < K → δ t ≤ ε)
     (hδ1 : ∀ t, δ t ≤ 1) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 2) (j : ℕ) (hj : ∀ i, (rd j i).val + 1 < K) :
     ∑ t, slackCW sch Np rd δ j t ≤
@@ -60,8 +42,6 @@ theorem sum_slackCW_le {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 ≤ δ t) 
     _ = (∑ i, cZW (sch j) (Np j) i) * (Fintype.card (IZW (sch j).levels.length) * (8 * ε)) := by
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
 
-/-- **Every table's slack weights total at most the joined weights times `c·8ε`**, `c` a bound on each table's
-`|IZW|`. -/
 theorem sum_slackTW_le {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 ≤ δ t) (hδ : ∀ t, t + 1 < K → δ t ≤ ε)
     (hδ1 : ∀ t, δ t ≤ 1) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 2) (hj : ∀ j < n, ∀ i, (rd j i).val + 1 < K) {c : ℝ}
     (hc : ∀ j < n, (Fintype.card (IZW (sch j).levels.length) : ℝ) ≤ c) :
@@ -75,8 +55,6 @@ theorem sum_slackTW_le {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 ≤ δ t) 
   rw [mul_comm (c * (8 * ε))]
   exact mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_right (hc j hjn) (by linarith)) hc0
 
-/-- **The slack fits the room** where its weights are at most `ε'` times the joined ones, the joined weights at most
-`A` times the room, and `4·√ε'·A + 2·ε'·A ≤ 1`. -/
 theorem slackFitW_of_le (δ : ℕ → ℝ) {ε' A : ℝ} (hε' : 0 ≤ ε')
     (hS : ∑ t, slackTW n sch Np rd δ t ≤ ε' * ∑ t, joinCW n sch Np rd t)
     (hJ : ∑ t, joinCW n sch Np rd t ≤ A * roomW n sch Np) (h : 4 * Real.sqrt ε' * A + 2 * ε' * A ≤ 1) :
@@ -98,8 +76,6 @@ theorem slackFitW_of_le (δ : ℕ → ℝ) {ε' A : ℝ} (hε' : 0 ≤ ε')
     _ ≤ 1 * R := mul_le_mul_of_nonneg_right h hR0
     _ = R := one_mul R
 
-/-- **The joined weights are at most `A` times the room** where each table's level 0 with its `2` weighs at most
-`A - 1` times a level 1's, and has a level. -/
 theorem joinCW_le_room {A : ℝ}
     (h : ∀ j < n, 1 ≤ (sch j).levels.length ∧
       2 + 2 ^ (FlockSoundness.lvOf (sch j) 0).logLen * (2 * (FlockSoundness.lvOf (sch j) 0).queries) ≤
@@ -132,8 +108,6 @@ open Flock FlockSoundness
 
 variable {wideLeaf : Bool}
 
-/-- **The numbers Flock ZK's schedules give the slack's fit**: at `m ∈ [25, 35]` at most `7` levels and at least
-one, level 1 a query, and level 0's weight `2^{d₀}·2Q₀` with `2` under `2^40`. -/
 theorem m1_slackNums : ∀ m : Fin 11, (Accounting.m1Schedule wideLeaf (m.val + 25)).levels.length ≤ 7 ∧
     1 ≤ (Accounting.m1Schedule wideLeaf (m.val + 25)).levels.length ∧
     1 ≤ 2 ^ (lvOf (Accounting.m1Schedule wideLeaf (m.val + 25)) 1).logLen *
@@ -142,9 +116,6 @@ theorem m1_slackNums : ∀ m : Fin 11, (Accounting.m1Schedule wideLeaf (m.val + 
       (2 * (lvOf (Accounting.m1Schedule wideLeaf (m.val + 25)) 0).queries) ≤ 2 ^ 40 := by
   cases wideLeaf <;> decide +kernel
 
-/-- **The slack fits the masked room at Flock ZK's schedules at chances at most `2^{-128}`**, every fork before the
-last round, whatever the rounds `K`: `|IZW| ≤ 19`, the joined weights at most `2^41` times the room, and
-`4·√(19·8·2^{-128})·2^41 + 2·19·8·2^{-128}·2^41 ≤ 1`. -/
 theorem zk_slackFitW {K n : ℕ} (st : ℕ → Stmt) (hm : ∀ j < n, 25 ≤ (st j).m ∧ (st j).m ≤ 35)
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < n, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin K) (hj : ∀ j < n, ∀ i, (rd j i).val + 1 < K)
@@ -182,15 +153,11 @@ theorem zk_slackFitW {K n : ℕ} (st : ℕ → Stmt) (hm : ∀ j < n, 25 ≤ (st
   have h4 : 4 * ((2 : ℝ) ^ 60)⁻¹ * 2 ^ 41 ≤ 1 / 2 := by norm_num
   nlinarith [Real.sqrt_nonneg (19 * (8 * ((2 : ℝ) ^ 128)⁻¹))]
 
-/-- **The coupling's chance at GF128's coins at a round whose revealed length is positive** is at most
-`2^{-128}`. -/
 theorem δN_GF128_le {K : ℕ} {n : Fin K → ℕ} {t : ℕ} (hn : ∀ ht : t < K, 1 ≤ n ⟨t, ht⟩) :
     Claims.Flock.FnFork.δN FlockLevel3.GF128 65536 n t ≤ ((2 : ℝ) ^ 128)⁻¹ := by
   have := Claims.Flock.δN_le_inv (A := FlockLevel3.GF128) (M := 65536) (by norm_num) hn
   rwa [FlockLevel3.card_F, Nat.cast_pow, Nat.cast_ofNat] at this
 
-/-- **The slack fits the masked room at the coupling's chances** `FnFork.δN GF128 65536 n`, at Flock ZK's schedules,
-every fork before the last round, where every revealed length before the last round is positive. -/
 theorem zk_slackFitW_δN {K n : ℕ} (st : ℕ → Stmt) (hm : ∀ j < n, 25 ≤ (st j).m ∧ (st j).m ≤ 35)
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < n, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin K) (hj : ∀ j < n, ∀ i, (rd j i).val + 1 < K)

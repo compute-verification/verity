@@ -44,19 +44,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Flock at one table of a session: the table's numbers at the masked verifier
-
-`Flock.κTable` is the session's `κ` read at the table's error and word length (`κTable_eq_κ`), so the session's number
-lemmas give the table's.
-
-* **The size at a table**: `κ_j ≤ 2^{−202.98}` and `λ_j ≥ 201.98` from the table's numbers (`κTable_le_of`,
-  `lamTable_ge_of`); at a masked table in scope (`κTable_zk_le`); and at every table of a masked session in scope
-  (`zkIn_table`), where the session's own are `n·2^{−202.98}` and `201.98 − log₂ n` at `n` tables.
-* **Past the statement's tables** the word is empty and the error at the table is at least `1` (`one_le_κTable_past`),
-  so the table statement says nothing there, while the deployed `table` still gives a statement at the index
-  (`table_ne_none`): `Flock.RTable` there is the relation of that statement, not the empty relation.
--/
+/-! Flock at one table of a session: the table's numbers at the masked verifier. -/
 
 @[expose] public section
 
@@ -64,24 +52,17 @@ namespace FlockDeploy.KS
 
 open Flock
 
-/-! ## The size at a table -/
-
-/-- `κTable` is `κ` at the record whose `εtable` and `N₀` are table `j`'s error and word length. -/
 theorem κTable_eq_κ {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (N : Claims.Msg → ℕ → ℕ)
     (ε : Claims.Msg → ℕ → ℝ) (j : ℕ) (x : Claims.Msg) :
     Claims.Flock.κTable D N ε j x =
       Claims.Flock.κ { D with εtable := fun y => ε y j, N₀ := fun y => (N y j : ℝ) } x := rfl
 
-/-- `κ_j ≤ 2^{−202.98}` from the table's numbers: its error at most `2^{−205}`, `210` waits, the truncation `2^256`
-and a word of `2^10` to `2^23` symbols (`Numbers.κ_le` at the table's record). -/
 theorem κTable_le_of {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (N : Claims.Msg → ℕ → ℕ)
     (ε : Claims.Msg → ℕ → ℝ) (j : ℕ) (x : Claims.Msg) (hε : ε x j ≤ 2 ^ (-(205 : ℝ))) (hw : 210 ≤ D.waits x)
     (hK : D.cap x = Claims.Flock.Numbers.cap) (hN : (2 : ℝ) ^ 10 ≤ (N x j : ℝ)) (hN' : (N x j : ℝ) ≤ 2 ^ 23) :
     Claims.Flock.κTable D N ε j x ≤ 2 ^ (-(202.98 : ℝ)) :=
   Claims.Flock.Numbers.κ_le { D with εtable := fun y => ε y j, N₀ := fun y => (N y j : ℝ) } x hε hw hK hN hN'
 
-/-- `λ_j ≥ 201.98` from the table's numbers and the session's `γ ≤ 2^105` (`Numbers.lam_ge` at the table's
-record). -/
 theorem lamTable_ge_of {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (N : Claims.Msg → ℕ → ℕ)
     (ε : Claims.Msg → ℕ → ℝ) (j : ℕ) (x : Claims.Msg) (hε0 : 0 ≤ ε x j) (hε : ε x j ≤ 2 ^ (-(205 : ℝ)))
     (hw : 210 ≤ D.waits x) (hK : D.cap x = Claims.Flock.Numbers.cap) (hN : (2 : ℝ) ^ 10 ≤ (N x j : ℝ))
@@ -90,14 +71,12 @@ theorem lamTable_ge_of {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) 
   Claims.Flock.Numbers.lam_ge { D with εtable := fun y => ε y j, N₀ := fun y => (N y j : ℝ) } x hε0 hε hw hK hN
     hN' hγ
 
-/-- A table's own error at a table of the statement. -/
 theorem tableErrJ_eq {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : Stmt}
     (h : (tables true x)[j]? = some (spec, st)) : tableErrJ true x j = tableErr true spec st := by
   unfold tableErrJ
   rw [h]
   rfl
 
-/-- A masked table's word's length is its level-0 codeword length. -/
 theorem wordLenJ_cast {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : Stmt}
     (h : (tables true x)[j]? = some (spec, st)) : (wordLenJ true x j : ℝ) = tableLen true st := by
   have e : wordLenJ true x j = 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d := by
@@ -105,8 +84,6 @@ theorem wordLenJ_cast {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : Stmt
   rw [e, Nat.cast_pow, Nat.cast_ofNat]
   simp only [tableLen, ite_true]
 
-/-- **`κ_j ≤ 2^{−202.98}` at a masked table in scope**: a table of the statement at an `m` the masked verifier
-serves and a shape in `InRange`. -/
 theorem κTable_zk_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {j : ℕ} {spec : SessionSpec}
     {st : Stmt} (h : (tables true x)[j]? = some (spec, st)) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35)
     (hst : (acct spec st).InRange) :
@@ -119,8 +96,6 @@ theorem κTable_zk_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.
   exact κTable_le_of (deployZk rel) (wordLenJ true) (tableErrJ true) j x hε (waits_deploy rel x).2.ge
     (cap_deploy rel x).2 (le_of_le_of_eq hlo hw.symm) (le_of_eq_of_le hw hhi)
 
-/-- **At a masked session in scope, at every table of the statement, `κ_j ≤ 2^{−202.98}` and `λ_j ≥ 201.98`**,
-where the session's own are `n·2^{−202.98}` and `201.98 − log₂ n` (`κ_zk_le`, `lam_zk_ge`). -/
 theorem zkIn_table (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : ZkIn x s spec sts) {j : ℕ} (hj : j < sts.size) :
     Claims.Flock.κTable (deployZk rel) (wordLenJ true) (tableErrJ true) j x ≤ 2 ^ (-(202.98 : ℝ)) ∧
@@ -144,9 +119,8 @@ theorem zkIn_table (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg
       (cap_deploy rel x).2 (le_of_le_of_eq hlo hw.symm) (le_of_eq_of_le hw hhi)
       (γ_le_105_of (deployZk rel) x h.size_le (Vk_zk_le rel h) (weight_nonneg true x) (weight_zk_le rel h))⟩
 
-/-! ## Past the statement's tables -/
-
-/-- Past the statement's tables the word is empty, `k_j = 0`, and the error at the table is at least `1`. -/
+/-- So the table statement says nothing past the statement's tables, where `Flock.RTable` is still the relation of
+the statement `table` gives there (`table_ne_none`), not the empty relation. -/
 theorem one_le_κTable_past (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
     (hj : (tables true x).length ≤ j) :
     1 ≤ Claims.Flock.κTable (deployZk rel) (wordLenJ true) (tableErrJ true) j x := by
@@ -163,7 +137,6 @@ theorem one_le_κTable_past (rel : Readable.Parsed → Readable.Relation) (x : C
     | some p => exact tableErr_nonneg true p.1 p.2
   exact Claims.Flock.one_le_κTable (deployZk rel) (wordLenJ true) (tableErrJ true) j x hε hk
 
-/-- At a statement that parses, the deployed `table` gives a statement at every index, past its tables too. -/
 theorem table_ne_none {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true rel x = some s) (j : ℕ) : (deployZk rel).table x j ≠ none := by
   obtain ⟨p, -, -, -, -, htab⟩ := parsed_of_parse hs

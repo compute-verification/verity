@@ -34,17 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Masked knowledge soundness at the outer verifier (`zk_KS_outer`)
-
-The recursion's outer verifier (`RecDeploy.deployZkRec`) is `deployZk` at another setup, `SO`: masked, the recursive
-setup (`RecDeploy.setupO`) at its Flock inputs, whose `Ok` is the recursive setup's success (`RecIns.setup`, which runs
-the verifier's inner-shape refusals, `RecSetup.checkInner`, among its own), with the verdict's last refusals
-(`RecDeploy.fullSampleO`) after the checks (`wrapO`); plain, `S₀`'s. At `SO` the masked chain's copy of the masked
-instance (`KS.Gen.deployZk`) is `deployZkRec` (`deployZk_SO`): the same step (`act_SO`), the decision's refusal after the
-verdict (`outOf_decision_SO`), the same reading of the statement, columns and numbers. So the chain's knowledge
-soundness at `SO` (`KS.Gen.zk_KS_untrim`) is the outer verifier's (`zk_KS_outer`).
--/
+/-! Masked knowledge soundness at the outer verifier (`zk_KS_outer`). -/
 
 @[expose] public section
 
@@ -54,11 +44,9 @@ open Flock
 open RecDeploy (RecIns insO setupO readOfO fullSampleO actO nextO VO runOfO colsO tablesO εtableO N₀O weightO
   deployZkRec)
 
-/-- **The outer verifier's refusal after the checks**: the verdict's last refusals (`fullSampleO`). -/
 def wrapO (x : Claims.Msg) (f : Final) (v : Flock.V Unit) : Flock.V Unit :=
   if fullSampleO x f then v else .error "rec: refused by the verdict's last refusals (fullSample, innerSampled, denseOnly)"
 
-/-- Under `--zk` the recursive setup passes every table's `Zk.shapeOk`. -/
 theorem recIns_shapeOk {r : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : r.setup = .ok (spec, sts))
     (hz : r.base.read.zk = true) : sts.forM Zk.shapeOk = .ok () := by
   unfold RecDeploy.RecIns.setup at h
@@ -70,8 +58,6 @@ theorem recIns_shapeOk {r : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h :
     subst h2
     assumption
 
-/-- **The outer verifier's setup**: masked, the recursive setup at its Flock inputs (`RecIns.base`), `Ok` where the
-recursive setup succeeds, and the verdict's last refusals after the checks (`wrapO`); plain, `S₀`'s. -/
 @[reducible] def SO : ZkSetup where
   ins zk x := match zk with
     | true => (insO x).map RecIns.base
@@ -122,13 +108,11 @@ theorem checks_SO (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List B
     (mids : List (Claims.Msg × Coin)) (f : Final) :
     @Gen.checks SO true s spec x link c₁ mids f = wrapO x f (checks true s spec x link c₁ mids f) := rfl
 
-/-- **The step at `SO` is the outer verifier's** (`actO`). -/
 theorem act_SO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : @Gen.act SO true x as cs = actO x as cs := by
   unfold Gen.act actO
   rw [setupOf_SO]
   rcases setupO x with _ | ⟨i, spec, sts⟩ <;> rfl
 
-/-- A decision's outcome, read after a first step: a refusal of the step is a refusal. -/
 theorem outOf_bind {β : Type} (m : Claims.OCV β) (G : β → Claims.OCV Unit) :
     outOf (m >>= G) = m.run.bind fun r => match r with
       | .ok b => outOf (G b)
@@ -139,8 +123,6 @@ theorem outOf_bind {β : Type} (m : Claims.OCV β) (G : β → Claims.OCV Unit) 
   funext r
   cases r <;> rfl
 
-/-- **The decision at `SO`** is the decision, refused where the verdict's last refusals fail (`nextO`'s decide
-step). -/
 theorem outOf_decision_SO (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
     (mids : List (Claims.Msg × Coin)) (f : Final) :
     outOf (@Gen.decision SO true s x link c₁ mids f) =
@@ -165,7 +147,6 @@ theorem outOf_decision_SO (s : Ins) (x : Claims.Msg) (link : List ByteArray × L
       unfold wrapO
       cases fullSampleO x f <;> rfl
 
-/-- **The verifier's next message at `SO` is the outer verifier's** (`nextO`). -/
 theorem next_SO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) :
     @Gen.next SO true x as cs = nextO x as cs := by
   unfold Gen.next nextO
@@ -175,7 +156,6 @@ theorem next_SO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) :
   | coin c => rfl
   | decide s spec sts link c₁ mids f => exact outOf_decision_SO s x link c₁ mids f
 
-/-- **The verifier at `SO` is the outer verifier** (`VO`). -/
 theorem V_SO : @Gen.V SO true = VO := by
   unfold Gen.V VO
   congr 1
@@ -211,7 +191,6 @@ theorem tables_SO (x : Claims.Msg) : @Gen.tables SO true x = tablesO x := by
   rw [setupOf_SO]
   rcases setupO x with _ | ⟨i, spec, sts⟩ <;> rfl
 
-/-- **The masked chain's instance at `SO` is the outer verifier's record** (`deployZkRec`). -/
 theorem deployZk_SO (rel : Readable.Parsed → Readable.Relation) : @Gen.deployZk SO rel = deployZkRec rel := by
   have hε : @Gen.εtable SO true = εtableO := funext fun x => by unfold Gen.εtable εtableO; rw [tables_SO]
   have hN : @Gen.N₀ SO true = N₀O := funext fun x => by unfold Gen.N₀ N₀O; rw [tables_SO]
@@ -219,9 +198,6 @@ theorem deployZk_SO (rel : Readable.Parsed → Readable.Relation) : @Gen.deployZ
   unfold Gen.deployZk deployZkRec Gen.parse Gen.scopeCheck Gen.table
   rw [V_SO, readOf_SO, cols_SO, hε, hN, hw]
 
-/-- **Masked knowledge soundness at the outer verifier**, at SHA-512 at the deployed relation, with no premise: the
-masked chain's (`KS.Gen.zk_KS_untrim`) at the outer verifier's setup (`SO`), whose instance is `deployZkRec`
-(`deployZk_SO`). -/
 theorem zk_KS_outer : Claims.Flock.KS sha512 (RecDeploy.deployZkRec Readable.relation) := by
   rw [← deployZk_SO]
   exact @Gen.zk_KS_untrim SO

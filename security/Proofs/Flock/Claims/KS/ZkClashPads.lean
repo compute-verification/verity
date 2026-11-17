@@ -39,23 +39,7 @@ import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
 
-/-!
-# The masked view's pads clash
-
-`PadsZ`, `SelfClashZ`'s pads case, at an accepting run's view: two of a rep's pads openings, both sampled at one
-position, that verify there to one root with different pairs. At the view the deployed decoders are right at
-`OpensRows`, whose pads openings are rep `r`'s proof file's inner-proof openings at `wrS`'s transcript, sampled at the
-positions the rep stream's last round's coins give (`PadsRep`). That stream has the run's rep stream's coins, and the
-run's verifier opened each of those queries against the inner proof's root at that position, so two at one position
-with different pairs collide in the run's log (`tiedColl_of_verifyInner`). The root the clash reads plays no part.
-
-* `coins_last`: two round arrays with the same coins at every round have the same last round's coins.
-* `zk_padsClash_tied`: a pads clash among one accepted rep's inner-proof openings at the positions its last round's
-  coins give is a collision in the run's log.
-* `zkViewClashQP`: `ZkViewClashQ x PadsZ` at every statement.
-* `zk_KS_of_forks`, `zk_tableBoundJOnAccR_of_forks`, `zk_KSFlock_of_forks`: masked KS and the recursion's chain rest on
-  the cap/`τ` and pads fork bounds alone.
--/
+/-! The masked view's pads clash, at which the root the clash reads plays no part. -/
 
 @[expose] public section
 
@@ -69,7 +53,6 @@ open Flock FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge FlockSo
 open FlockSoundness.Discharge.ZkExec (innerN layZ shapeZK shapeZKn innerOpensOf PadsRep zk_decode_paths)
 open Claims.Bridge.Custody
 
-/-- Two round arrays with the same coins at every round have the same last round's coins. -/
 theorem coins_last {a b : Array Flock.Round}
     (h : ∀ i : ℕ, a[i]?.map (fun rd : Flock.Round => rd.coins) = b[i]?.map (fun rd : Flock.Round => rd.coins)) :
     (a[a.size - 1]!).coins = (b[b.size - 1]!).coins := by
@@ -86,11 +69,6 @@ theorem coins_last {a b : Array Flock.Round}
     simpa using e
   · rw [getElem!_neg a i (by omega), getElem!_neg b i hi]
 
-/-- **Two of an accepted masked rep's pads openings at one position with different pairs collide in the run's log**:
-where a stream `y` has the coins of the live session's rep stream `2j + r` and rep `r`'s proof file decodes to pads
-openings sampled at the positions `y`'s last round's coins give (`PadsRep`), the run's verifier opened those queries
-against the inner proof's root at those positions (`zkVerifyRepWith_inner`), so two of them at one position with
-different pairs collide among its calls (`tiedColl_of_verifyInner`). -/
 theorem zk_padsClash_tied {L : List (Claims.Msg × Claims.Msg)} {spec : SessionSpec} {sts : Array Stmt}
     {record : String} {proofs : Array ByteArray} {lv : Live} {j rr : ℕ} {sch : Schedule} {tPad : ℕ}
     (hv : Zk.verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) record proofs = .ok ())
@@ -156,11 +134,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A pads clash at an accepting run's view is a collision in its log**: at the view the deployed decoders are right
-at `OpensRows` (`decodesTableR_deploy`), so table `j`'s rep `r` reads `Q` queries and its pads openings are its proof
-file's inner-proof openings at `wrS`'s transcript, sampled at the positions its rep stream's last round's coins give; that
-stream has the run's rep stream's coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so two of them at one
-position with different pairs collide in the run's log (`zk_padsClash_tied`). -/
 theorem zkViewClashQP (x : Claims.Msg) : ZkViewClashQ x PadsZ := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C _ r hacc s' spec' sts' link c₁ mids f hact hret
   obtain ⟨a, ⟨hV, pend, hpl, ha⟩, hcl⟩ := hret
@@ -228,11 +201,6 @@ theorem zkViewClashQP (x : Claims.Msg) : ZkViewClashQ x PadsZ := by
 
 end Gen
 
-/-- **A pads clash at an accepting run's view is a collision in its log**: at the view the deployed decoders are right
-at `OpensRows` (`decodesTableR_deploy`), so table `j`'s rep `r` reads `Q` queries and its pads openings are its proof
-file's inner-proof openings at `wrS`'s transcript, sampled at the positions its rep stream's last round's coins give; that
-stream has the run's rep stream's coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so two of them at one
-position with different pairs collide in the run's log (`zk_padsClash_tied`). -/
 theorem zkViewClashQP (x : Claims.Msg) : ZkViewClashQ x PadsZ :=
   Gen.zkViewClashQP (S := S₀) (x := x)
 
@@ -240,8 +208,6 @@ end Clash
 
 open Flock
 
-/-- **The deployed masked verifier: KS, from the cap/`τ` and pads fork bounds**, at SHA-512 at the trimmed record at
-the deployed relation: the view's pads clash holds at every statement (`zkViewClashQP`; `zk_KS_of_kinds`). -/
 theorem zk_KS_of_forks (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
     (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i) :
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
@@ -254,16 +220,12 @@ namespace FlockDeploy.KS
 open Flock
 open Claims.Recursion
 
-/-- **Every masked table's bound with escapes on accepted runs counted per round**, at full-width columns, from the
-cap/`τ` and pads fork bounds (`zk_tableBoundJOnAccR_of_kinds` at `zkViewClashQP`): `zk_KSFlockJR`'s premise. -/
 theorem zk_tableBoundJOnAccR_of_forks
     (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
     (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i) :
     TableBoundJOnAccR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) :=
   zk_tableBoundJOnAccR_of_kinds hct hp fun x _ => zkViewClashQP x
 
-/-- **KS of the recursion over the masked record the claims read** at the deployed relation, at every number of
-tables, from the cap/`τ` and pads fork bounds (`zk_KSFlock_of_kinds` at `zkViewClashQP`). -/
 theorem zk_KSFlock_of_forks (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)
