@@ -3,24 +3,7 @@ module
 public import Properties.Challenger
 public import Definitions.Core.Site
 
-/-!
-# A ledger line signed under a key the registration pins
-
-The challenger's ledger lines are what the auditor's device signs (`Properties.Challenger.History.ledger`); the reader
-checks each one's signature under the key the parameters name (`Properties.Challenger.signatures`). That key is the
-auditor's only where the registration pins it. These say so of a line and of a list of lines, against the registration
-log's Site (`Verity.Site.ofLog`) and the auditor's own keys (`Verity.Registration.Auditor.key`):
-
-* `KeyPinned`: a location of the auditor's (`Verity.Site.Kind.auditor`) in the log's Site is registered under the key,
-  in lower-case hex (`Flock.hexOf`, the one form a key is compared in), and the auditor's own key for that location is
-  the same string, as the registration's `Owners` check holds a registered key to;
-* `LinePinned`: the line is a ledger entry (`Spot.Challenger.ledgerEntry?`), whose signature LMS verifies over the
-  entry's message (`Spot.Challenger.ledgerMessage`) under a key the registration pins;
-* `LinesPinned`: every line of a list is.
-
-`linesPinned_unpinned` is the shape that keeps `LinesPinned` from being vacuous: under a key the registration doesn't
-pin, no list holding a line is pinned.
--/
+/-! A ledger line signed under a key the registration pins (`KeyPinned`, `LinePinned`, `LinesPinned`). -/
 
 @[expose] public section
 
@@ -42,7 +25,6 @@ def LinePinned (log : _root_.Verity.Registration) (A : _root_.Verity.Registratio
   ∃ e m, ledgerEntry? line = some e ∧ ledgerMessage (Properties.Challenger.ident key.pub) e.entry = .ok m ∧
     Properties.Challenger.LmsVerifies key m e.sig ∧ KeyPinned log A key.pub
 
-/-- **Every ledger line of `lines` is signed under a pinned key** (`LinePinned`, at `key`). -/
 def LinesPinned (log : _root_.Verity.Registration) (A : _root_.Verity.Registration.Auditor) (key : ChallengerKey)
     (lines : List Json) : Prop :=
   ∀ line ∈ lines, LinePinned log A key line

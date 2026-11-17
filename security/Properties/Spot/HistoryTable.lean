@@ -4,22 +4,8 @@ public import Spot.HistoryTable
 public import Definitions.Hash.HistoryTable
 public import Properties.Verity.Sha512
 
-/-!
-# A history table's registered root, checked: the model's root (`Spot.HistoryTable.checkAt`)
-
-`Spot.HistoryTable.checkAt` accepts a registered root only when it is `rootAt`, the frame-v3-sha512 root the verifier
-computes over a history table's writers' `b ‖ c` at a power-of-two capacity, the placeholder's past the table's length.
-`HistoryRootIsModel` says that root is the hash area's `Hash.HistoryTable.root` at SHA-512 (`Verity.sha512`), so
-`Hash.Guarantees.HistoryReadBinding` speaks of the root the verifier holds:
-
-* the domain is `domainAt`'s id, counting `cap` ranks, each its own position (`historyDomain`);
-* the key is hm96-sha512's default key, the one `Flock.Hm96.Default512.treeLeaf` reads;
-* the strings are the written rows' `b ‖ c` below the table's length and the placeholder of `words` words past it
-  (`Hash.HistoryTable.string`).
-
-It takes no premise: `checkAt` itself refuses a capacity that is not a power of two of at least 2, where the code's tree
-would pad and the model's would not.
--/
+/-! A history table's registered root, which `Spot.HistoryTable.checkAt` accepts, is the hash area's model root
+(`HistoryRootIsModel`). -/
 
 @[expose] public section
 

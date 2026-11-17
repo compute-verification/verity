@@ -5,42 +5,8 @@ public import Definitions.Pous.Accounting.Wipe
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# An accepted wipe meets the survivor bound it publishes
-
-For a session it accepts and certifies, `MemoryChallenger.WipeProtocol.check` (`verity/wipe/v0`, whose verdict is
-`StreamedWipe.verdict`) publishes `foreign_bits = 512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128`
-(`certify`): `n` labels, `k` timed reads, `r = ratio k`, `R` the declared memory past the fill, `E` the egress count
-the evidence gives the check (`WipeProtocol.Evidence.egress`; no session signs one), `egress_mib` whole MiB. No network
-attester signs `E` yet, so `check` publishes `uncounted` (`certify` at `EGRESS_MAX_UNITS`) for every session it
-accepts and certifies none: until the check that composes the wipe with the network attester, no session meets this
-hypothesis.
-`WipeSurvivorBound` says that every prover strategy `τ` of the
-device model (`ResourceAccounting.Wipe.Strategy`), with the labels `prf K` of the challenger's key `K`, meets the survivor bound
-(`Verity.Wipe.SurvivorBound`) at `foreign_bits` and
-
-  `eps + prfAdvantage prf (τ.distinguisher …) + τ.deltaNet …`,
-
-on the event the auditor's devices observe (`ResourceAccounting.Wipe.Strategy.Observed`): every spot read answered with its
-label, as the memory challenger signs it, and the certifiers' count of the egress at most `E`. No term is zero:
-
-* the labels' PRF advantage (`Pous.StreamedWipe.prfAdvantage`) against the distinguisher the adversary's moves make
-  (`ResourceAccounting.Wipe.Strategy.distinguisher`), SHA-512's under `prf/sha-512`;
-* `δ_net` (`ResourceAccounting.Wipe.Strategy.deltaNet`), the probability that the observed event holds while the egress is
-  outside a set `A` of at most `2^E` strings, which the network attester's guarantee bounds
-  (`NetTiming.Guarantees.SampledLeakAccepted`).
-
-The strategy is arbitrary, its fill any bits of the store up to `memory_bits`. The state the fill leaves out
-(`Verity.Wipe.unfilled`) is counted beside `foreign_bits`, as `SurvivorBound` counts it. The commitment is the one its
-bytes decode to (`WipeProtocol.decodeCommitment`, the protocol's decoder), whose `Params.check` refuses fewer reads than
-a batch (`1 ≤ batch ≤ k`): `check` alone accepts a commitment of no reads, where `ratio 0 = 1` doesn't meet the sampling
-condition and the bound fails. Proved from `Pous.Guarantees.StreamedWipeMeetsReads` at `r = ratio k`
-(`Proofs.Properties.Pous.Wipe`).
-
-The honest strategy (`honest`), a cheating one (`cheat`) and one segment (`segmentParams` on `segmentDevice`) are what
-its honest and nontrivial lemmas, `WipeSurvivorBoundHonest` and `WipeSurvivorBoundNontrivial`
-(`security/Proofs/Properties/Pous/Lemmas/Wipe.lean`), are stated at.
--/
+/-! An accepted wipe meets the survivor bound it publishes (`WipeSurvivorBound`); no network attester signs the
+egress count, so the check certifies no session and no session meets its hypothesis. -/
 
 @[expose] public section
 
@@ -71,8 +37,6 @@ def WipeSurvivorBound : Prop :=
           Pous.StreamedWipe.prfAdvantage prf
             (τ.distinguisher (τ.Observed count (egressMib.toNat * WipeProtocol.UNIT_BITS)) A hold keep) +
           τ.deltaNet (τ.Observed count (egressMib.toNat * WipeProtocol.UNIT_BITS)) prf A hold
-
-/-! ## The honest strategy and a cheating one -/
 
 section Strategies
 

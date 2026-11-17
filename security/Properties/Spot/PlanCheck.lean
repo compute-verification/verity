@@ -3,27 +3,8 @@ module
 public import Spot.PlanCheck
 public import Definitions.Flock.Audit.Partitioning
 
-/-!
-# The planner's checker: what its acceptance means (`Spot.PlanCheck`)
-
-The planner (`optimize.py`) picks a one-stage design in floating point; `Spot.PlanCheck` checks it in exact
-arithmetic. These properties say what a check that passes establishes, against the partitioning targets
-(`Definitions.Flock.Audit.Partitioning`) that `audit_exfiltration` and the free-compute guarantees read:
-
-* `LeakCheckSound`: when `leakBound d` returns `v`, sampling the design's `units` units independently with probability
-  `num / den` (`SamplingDesign.bernoulli`) certifies at most `v` bits at `delta`, every unit exporting at most `width` bits
-  (`CertifiesLeak`).
-* `LeakCountSound`: there, more than `count` incorrect proof blocks escape that sampling with probability below `delta`.
-* `WorkCheckSound`: when `checkWork d` accepts, every assignment of units to the design's strata, each unit sampled
-  independently with its stratum's probability (`SamplingDesign.bernoulliOf`), meets the target: every set of incorrect proof blocks doing
-  work at least `target` escapes with probability at most `delta` (`MeetsTarget`).
-
-Neither says the design is the cheapest: that is the planner's claim, which nothing here checks.
-
-Each is about a Bernoulli design, whose rate is each unit's own probability whatever population is registered. The
-audit and the stream's run refuse a registration under one (`Spot.Draw.bernoulli`), so none of these reads a served
-window's rule; the count a served window's rule names over its population is `RuleAtRate`'s (`Properties.Spot.Rate`).
--/
+/-! What a passing check of the planner's design (`Spot.PlanCheck`) establishes; none says the design is the
+cheapest. -/
 
 @[expose] public section
 

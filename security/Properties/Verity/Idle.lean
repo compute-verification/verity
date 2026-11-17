@@ -2,29 +2,8 @@ module
 
 public import Properties.Verity.Coupling
 
-/-!
-# An idle deployment: two instances of the names the subprotocols define, built by hand
-
-The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.SoundnessOf` read these: a small hand-built
-descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
-circuit file is read as empty files under the `verity/flock-netlist/v1` tags (`fileRead`); the coin commitment has no families, the device
-samples nothing at the close and signs nothing (`signer`), the honest prover sends an empty request and closes the device
-at once, no check reads its log, and there are no commitment openings and no gates computed;
-the world charges nothing over an empty window (`world`); the schedule is one
-empty block (`blocks`), and its wipe fills nothing and accepts nothing (`wipe`). Every finder and forger outputs nothing
-on its one coin, and no bound reads a further finder. The circuit file's and the public file's digests in the parameters
-are both the parameters' own SHA-512, so the committed files pass the commit phase's check exactly when one of them is
-the parameters.
-
-`vocab δ W` publishes the error `δ` for every subprotocol, the work certificate `W`, and no collision, forgery or loss
-term; no play computes a gate or a MAC. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target
-holds. At `exact` (`δ = 0`, `W = 1`) every error is `0` while PoUW's claim fails on every play after the empty
-commitment: at onsite a gate computed, at remote a credit Pearl+'s check published, which needs a commitment that binds
-the components' digests, and the empty one doesn't.
-
-`coupling δ` is the period coupling at PoUW that `Verity.TargetOfPeriods`' witnesses read: the run of the coins model
-that charges nothing and accepts everything (`periodRun`), whose claim, a gate of work, fails at every coin.
--/
+/-! An idle deployment: two hand-built instances of the names the subprotocols define, which the soundness
+statements' witnesses read. -/
 
 @[expose] public section
 
@@ -168,10 +147,8 @@ theorem periodRun_pouw_fails (c : Certificates) (hW : c.W = 1) (p : Price) (ξ :
     ¬ periodRun.Holds c p .pouw ξ := by
   simp [PeriodRun.Holds, PeriodRun.work, Schedule.work, Schedule.ops, periodRun, world, step, hW]
 
-/-- **The idle deployment's period coupling at PoUW**, at `vocab δ 1`, for every verdict, composite, parameters,
-committed files, commitment, strategy and resolution of the coin trees' coins: the run that charges nothing and accepts
-everything (`periodRun`), over one coin in bijection with the coins flipped up front (the coin commitment has no families
-and the device samples nothing at the close), with no break. Its claim, one gate of work, fails at every coin, so its `world` holds. -/
+/-- **The idle deployment's period coupling at PoUW**, at `vocab δ 1`: the run that charges nothing and accepts
+everything (`periodRun`), over one coin, with no break; its claim, one gate of work, fails at every coin. -/
 def coupling (δ : ℝ≥0∞) (acc : Exchange → Prop) (k : Verity.Registration.Composite) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy ((vocab δ 1).game θ F c)) (ρ : TreeCoins) :
     (vocab δ 1).PeriodCoupling acc k .pouw θ F c σ ρ where

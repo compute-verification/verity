@@ -3,21 +3,7 @@ module
 public import Properties.Pous.PeriodAt
 public import Properties.Pous.Pooled
 
-/-!
-# The instances PoUS's per-period guarantees' honest lemmas are stated at
-
-Beside `honestRun`, `honestStrategy` and `sidAudit` (`Properties.Pous.PeriodDeployed`, `Properties.Pous.Pooled`):
-
-* `verdictRun`: the honest period whose capacity verdict is the verifier's whole decision on `sidAudit` outside a break,
-  as `PeriodCapacity` takes the joint run's wiring.
-* `obligationRun` and `obligationAudit`: the honest period and `sidAudit` with the other tags' keys among the other
-  audits' coins, at the snapshot `tag = id` (`IdKeys`), as `ObligationHeld` takes them.
-* `sidAuditAt N`: `sidAudit` at `N` blocks, as `PeriodHeldAt` and `PeriodHeldDemo` take an audit.
-* `demoDevice`, `demoRun` and `demoPoint`: `honestDevice` with Demo B's store, `1038·2^16` blocks, as its device
-  memory, a period whose capacity account holds the whole store at every tick, and Demo B's point.
-
-Each run's capacity verdict is its audit's decision outside a break.
--/
+/-! The instances PoUS's per-period guarantees' honest lemmas are stated at. -/
 
 @[expose] public section
 
@@ -61,7 +47,6 @@ def obligationRun : ResourceAccounting.Run honestDevice Unit Unit (Unit × IdKey
     simp [ResourceAccounting.Step.Fits, honestDevice]
   accepts _ ω := obligationAudit.Accepts ω ∧ ¬ obligationAudit.Break ω
 
-/-- `sidAudit` at `N` blocks. -/
 def sidAuditAt (N : ℕ) [NeZero N] : AuditsAt N Unit Unit where
   trusted := []
   sid := ⟨Array.replicate 32 0⟩

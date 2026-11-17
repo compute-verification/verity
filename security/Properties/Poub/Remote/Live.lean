@@ -2,36 +2,8 @@ module
 
 public import Poub.Verifier
 
-/-!
-# The verifier's process accepts what `Shared.run g` accepts (`LiveIsRun`)
-
-The verifier's process (`Poub.Verifier`, `poub-verifier`) doesn't run `Shared.run`: it takes a
-session's events one request at a time, each with the coin the challenger released for it (`Verifier.eventOn`: the coin
-set first, `withCoin`, and an event that read a coin never sent refused, `unset`), checks a window's openings on
-threads of their own when the driver asks (`verify`, `Verifier.windowCheck`: the frames read by `Wire.openingsOf`, the
-verdict `checkWindowChunked`'s), and applies that verdict to the session as it stands when the driver settles it
-(`settle`, `Session.verifyBy`), other events between. The driver's transcript records each event as it came and each
-settled window as a `verify` of its frames, read by the same `Wire.openingsOf`.
-
-`Live` is that request loop on one session sampled `g` windows a coin, as a pure function: `step` is the process's
-`event`, `verify` and `settle` on a running session, each giving its reply and the event the transcript records for it
-(none for a `verify`), and `run` takes a list of requests through it.
-
-* `LiveIsRun`: a session the process ran on its live coins, with every window it checked settled or not, is
-  `Shared.run g` on the events its transcript records, from `State.init` on any coins that agree with the ones the
-  challenger sent (every coin the session holds, of a coin's size, and every append coin): every result the same,
-  and the same session but for its coins. So its outcome and record (`State.outcome`, `State.summary`, which read no
-  coin) are `Shared.run g`'s, and a transcript that pads the coins never sent (`benchmarks/remote_session/
-  lean_verifier.py`) replays to the process's verdict. At `g = 1` that is `Session.run` (`Poub.Shared.run_one`).
-
-It needs `1 ≤ g` and `1 ≤ min_passes` (`Properties.Poub.Coins`: with none, an empty window sampled at its deadline
-could take a root before its verdict is settled), which the process's `session` request checks (`Difftest.sessionOf`'s
-`positive`). The model is the process at two windows in flight, where `Verifier.eventOn`'s `Flight.step` is
-`Shared.step g` (`Flight.step_two`); a session at one in flight isn't in it, as no property covers one yet (`Flight`).
-The registry's other sessions, and `abort`, which ends a session with the driver's outcome, are not in the model: the
-process keeps each session's state apart (`Registry.running`, `Registry.update`) and an aborted session is not
-accepted. The process's IO (reading requests and frames, threads, writing answers) is `handle`'s and `serve`'s.
--/
+/-! The verifier's process accepts what `Shared.run g` accepts on the events its transcript records (`LiveIsRun`),
+modelled at two windows in flight; no property covers a session at one. -/
 
 @[expose] public section
 

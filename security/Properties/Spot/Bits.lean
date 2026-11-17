@@ -3,19 +3,8 @@ module
 public import Definitions.Claims.Sampling
 public import Spot.Bits
 
-/-!
-# A sampled statement's bits as the claims' program (`Spot.Bits`)
-
-`Spot.Bits` lays a registered circuit file out as a Boolean-profile program of `Bits.LGate`s; the claims read
-a program as `Claims.Sampling.Prog`, of `Claims.Sampling.BGate`s, constructor for constructor the same gates. This is
-the map between them, so a statement's program is Bits' layout read as the claims read it.
-
-* `bitsGate g`: the claims' gate an `LGate` is, and `ofBGate` back.
-* `bitsProg kp κ`: the claims' program `Bits.prog kp κ` is, its gates under `bitsGate` and its outputs' positions.
-
-`Proofs.Properties.Spot.Bits` proves that the two maps are inverse and keep the gates read, that `bitsProg`'s
-gates are `Bits.off kp kp.size`, and that gate `g` of `kp` sits at `Bits.posOf kp g`, the last of its lowered gates.
--/
+/-! The map between `Spot.Bits`' layout of a registered circuit file and the claims' program (`bitsGate`,
+`bitsProg`). -/
 
 @[expose] public section
 
@@ -31,7 +20,6 @@ def bitsGate : Bits.LGate → Claims.Sampling.BGate
   | .and ws => .and ws
   | .xor ws => .xor ws
 
-/-- The `LGate` a claims' gate is. -/
 def ofBGate : Claims.Sampling.BGate → Bits.LGate
   | .input => .input
   | .const b => .const b

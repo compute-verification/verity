@@ -3,86 +3,8 @@ module
 public import PouwCheck
 public import PouwCheck.Pass
 
-/-!
-# PoUW's Pearl-C live salt: what the check of a pass salted by a live challenger session must establish
-
-A Pearl-C device run (`PearlCDeviceRun`, manifest `MANIFEST_SCHEMA`) can take its salt coin from a live session of the
-auditor's challenger instead of from seeded epoch coins (`pouw_pearl_c_host.epoch_of`). The salt's unit is the *salt
-epoch*: one install, or one measured interval of an install, over the weights' root `W` (`weightsRootAt 64
-"verity/pouw/weights/v1"` of the manifest's weights). The epochs over one `W` are numbered `k` = 0, 1, 2, … in the order
-their sessions open, a new number for each reinstall or interval. Epoch `k` over `W` is salted by a session reserved
-with Pearl-C's layout, its salt coin alone (`SALT_FAMILIES`), and opened on the epoch's root `epochOpenRoot W k` =
-SHA-512(`EPOCH_OPEN_TAG` ‖ `W` ‖ u64be(`k`)). H1's sessions are opened on a window-open root instead. The session releases
-its one coin after the epoch's root, and the epoch's salt is `audit.salt_of` of that coin over `W`, as H1 keys a window's
-salt by its weights' root. A salt epoch is neither `LiveCommitment.epoch`, the challenger's own number, nor `audit.Epoch`.
-
-Many passes run in one epoch under its one salt. A pass is one engine step's forward, cut so that the tile
-caps fit, and the salt fixes seed_B, so B~ is formed once per epoch. Each pass's manifest names the epoch's session, and
-its `pass_index` is the epoch's `k`.
-
-`Check` is the signature of the check `core_check` gains for such a pass: it applies `saltCheck`'s rule with the epoch's
-root in place of the window-open root and returns the pass's salt. Its port will be `PouwCheck.liveSaltCheck`
-(`core_check.live_salt`, the live branch of `_epoch_salt`, taken when the manifest's coins are of `LIVE_SCHEME`). This file
-states its properties before the check exists, so its proof shows `AcceptMeans`, `OnePair` and `OneRoot` of
-`PouwCheck.liveSaltCheck`, with `LiveCoinBinding` and `EpochRootBinding`. It also states what the Pearl-C period's credit
-must show of the passes it credits (`CreditDistinct`), with `RowSeedBinding`.
-
-What the check accepts (`Accepted`) is a pass of `MANIFEST_SCHEMA` that names its session and meets these conditions:
-
-* The check reads the pass's coins only through the challenger's own records, never the manifest's word. It computes the
-  epoch's root `R` from the manifest's weights and `pass_index` (`EpochRoot`). The session is the one that the auditor's
-  signed v2 ledger opens on `{root: R}` under the window's pinned challenger key and ends closed, run from a commit the
-  host's pins log records on main's first-parent line (`pinnedChallengePhase`).
-* The session's files are that session's (`challengePhaseNamed`), under the commitment the session signed.
-* The session counts (`Counts`): the commitment is Pearl-C's salt-only layout, and the session's log shows `R`, alone, as
-  the one root it received, each received root followed by its coin's release.
-* The ledger shows the session in its signed order (`LedgerShows`):
-  - a reserve of the salt-only layout;
-  - the open on `R` that binds that reserve;
-  - the end, closed and complete, having released one salt coin and nothing else, its record's leaf strictly between
-    the open's and the end's;
-  - no other open on `R` or of the session.
-* The manifest's `session`, the gate's open answer, names that session, the open's `seq`, `R` and the commitment, and
-  carries no `secret` (`ManifestNames`).
-* The manifest's coins are the session's commitment, and its salt opening is the commitment's `pouw/salt` coin 0, opened
-  after `R` (`liveReason`).
-* The manifest's salt is `audit.salt_of` of that coin over `W` (`liveSalt`).
-
-The facts PoUW's argument reads from an acceptance:
-
-* **The salt is fixed only after the epoch's root.** The open naming `R` is signed before the session's record, which
-  holds the challenger's commitment to the coins (`leafOf o.sig < recordLeaf`). The coin is opened after `R`
-  (`liveReason`), and `R` is the root the log shows the coin's release followed. That the gate and the challenger run as
-  written, in that order, is S5 (live coins on `trusted-device`); that the coin stays hidden from the hello to its
-  release is N1 (X-RO commitments, hm96's hiding leaves). Both are named assumptions of PoUW's model, not this check's
-  properties.
-* **One epoch, one session, one salt.** The ledger opens `R` once and the session once (`LedgerShows`' last clause), so
-  two passes of one epoch have one session and one salt, up to a SHA-512 collision (`OnePair`, from `LiveCoinBinding`).
-  One session salts one root (`OneRoot`), and a root names one weights' root and one epoch, up to a SHA-512 collision
-  (`EpochRootBinding`).
-* **No credit for work before the salt.** The session released one salt coin, once, and ended closed and complete, and
-  PoUW's existing pass check binds every unit and record of the pass to the salt.
-
-**Every pass of an epoch does distinct work.** -h3's seed of row `i` of call `u` is
-H_"seed-A"(salt ‖ row digest ‖ root_B ‖ u64le(`u`·2^32 + `i`)) (`rowSeed`, `pearl_c.row_seed`), and nothing in it names the
-pass. The passes of one epoch share its salt and root_B, so a call index repeated in two of them, over equal rows, gives
-equal row seeds, noise and tickets, credited twice. On main the device's call index restarts at 0 every pass
-(`pouw_pearl_c_device`: `index = len(cur.matmuls)`), and the verifier checks only that indices are unique within a pass
-(`_check_workload`), so nothing refuses that. The rule: the call index runs across the epoch, every index is below 2^32,
-and the Pearl-C period refuses to credit two passes of one epoch that share a call index (`PassesDistinct`,
-`CreditDistinct`). The row seeds of two different (call index, row) pairs hash messages that differ in their last 8
-bytes, so they are different unless the first 32 bytes of SHA-512 collide (`RowSeedBinding`). An epoch's passes are
-credited in one period, the one whose close lists the epoch's root.
-
-Under the salt-only layout an abandoned session ends complete too, so a prover can open `n` sessions on `n` epoch roots
-and present the epoch whose salt it likes best. The salt decides seed_B, the row seeds and `rotation_key`, not which units
-are proven (the sampling coin, released after registration). Each epoch's deadline counts from its own session's release, and
-every pass of the epoch registers by it, so abandoning buys no time, and an install that outlasts the deadline is cut into
-intervals, each its own epoch. Best-of-`n` gains at most `n·ε`, where `ε` is the chance that one salt lets a dishonest
-pass through, while nothing keyed by the salt is rewarded. A Pearl-C period refuses a complete salt-only session that no
-accepted pass presents, which makes the gain zero within credited periods. That rule is the period checker's, not this
-check's.
--/
+/-! What the check of a Pearl-C pass salted by a live challenger session must establish, stated before that check
+exists, and what the period's credit must show of the passes it credits. -/
 
 @[expose] public section
 
@@ -92,8 +14,6 @@ open Lean (Json)
 open PouwCheck (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
 open Spot.Challenger (Audited ChallengerKey Families LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
   leafOf liveReason pinnedChallengePhase challengePhaseNamed)
-
-/-! ## The layout, the epoch's root and the salt -/
 
 /-- Pearl-C's live layout: the salt coin and nothing else. A session reserved with it is complete exactly when it
 released its salt coin. -/
@@ -133,8 +53,6 @@ def liveSalt (c : LiveCommitment) (coin w : ByteArray) : Except String ByteArray
   let k ← PouwCommit.key? coin PouwCommit.EPOCH_SALT_DOMAIN
     [("epoch", .int c.epoch), ("coins", .bytes c.root), ("weights", .bytes w)]
   pure (FlockSoundness.Randomness.stream k [.str "salt"] 32)
-
-/-! ## What the session and the ledger show -/
 
 /-- When a Pearl-C salt session counts: its commitment is the salt-only layout's, and its log shows the challenger
 received `r`, the epoch's root, alone, as the salt coin's root, each received root followed by its coin's release
@@ -183,8 +101,6 @@ def ManifestNames (m : Json) (a : Audited) (r : ByteArray) (openSeq : Nat) : Pro
     Spot.getD (at? m "session") "commitment" = .str a.commitment ∧
     Spot.field? (at? m "session") "secret" = none
 
-/-! ## The check -/
-
 /-- The check's signature. Its inputs are `saltCheck`'s first five: the verifier's challenger key, the auditor's ledger (its
 lines), the host's pins log, the verifier's copy of main's first-parent history and the session's files
 `{close, hellos, log, record}`. In place of the window, its two roots and the opening, it takes the pass's manifest `m`
@@ -214,8 +130,6 @@ returns is that session's salt coin's over the weights' root (`Accepted`). -/
 def AcceptMeans (check : Check) : Prop :=
   ∀ key ledger pins main session m salt, check key ledger pins main session m = .ok salt →
     ∃ w k a c o, Accepted key ledger pins main session m w k a c o salt
-
-/-! ## Collisions and the messages hashed -/
 
 /-- Two different messages, one from each list, with one SHA-512 digest. -/
 def Collides (xs ys : List ByteArray) : Prop :=
@@ -280,8 +194,6 @@ def hashedBy (c : LiveCommitment) (o : LiveOpening) (label : String) (index : In
   | .ok dom, some pos => domainHashed c ++ liveHashed c dom pos o
   | _, _ => domainHashed c
 
-/-! ## The row seeds and the passes' call indices -/
-
 /-- -h3's label block for seed_A (`pearl_c.S512_LABELS["seed-A"]`): `pearl-c/h3s/seed-A` and a zero byte, zero-padded to
 128 bytes. -/
 def SEED_A_LABEL : ByteArray :=
@@ -314,8 +226,6 @@ def epochOf (m : Json) : Json := Spot.getD (at? m "session") "root"
 log, the verifier's copy of main's first-parent history and the period (its name, its close and the passes it presents,
 each a manifest with its session's files). On acceptance it returns the manifests of the passes it credits. -/
 abbrev PeriodCredit := (key ledger pins main period : Json) → R (List Json)
-
-/-! ## The properties -/
 
 /-- A live root binds its commitment and its coins. Take two commitments with one root `r`, `⟨s, e, fs, r⟩` and
 `⟨s', e', fs', r⟩`, and an opening of each that `liveReason` accepts for one coin (`label`, `index`). Either the
@@ -379,8 +289,6 @@ def PassesDistinct (credited : List Json) : Prop :=
   (∀ m ∈ credited, ∀ u ∈ callIndices m, 0 ≤ u ∧ u < 2 ^ 32) ∧
     credited.Pairwise fun m m' => epochOf m = epochOf m' → ∀ u ∈ callIndices m, u ∉ callIndices m'
 
-/-- The Pearl-C period credits only passes that do distinct work within each epoch: whatever it credits meets
-`PassesDistinct`. -/
 def CreditDistinct (credit : PeriodCredit) : Prop :=
   ∀ key ledger pins main period credited,
     credit key ledger pins main period = .ok credited → PassesDistinct credited
