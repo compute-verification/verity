@@ -2590,7 +2590,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     Pearl+'s answer with the Lean's work, and remote's record composes it with W_cert that work, nothing missing, pending
     the remote check's answer."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setenv(S.NODE_NAME, "vy-dc-h200")
+    monkeypatch.setenv("PP_PEER", "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
@@ -2627,7 +2627,7 @@ def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sam
     the row's profile and the record's reason say the weaker tie with the rule, so nothing reads it as the tied
     guarantee."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setenv("PP_PEER", "vy-dc-h200")
+    monkeypatch.setenv(S.NODE_NAME, "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, rule=design)
     row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
