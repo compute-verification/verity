@@ -1,0 +1,19 @@
+[[metric]]
+id = "kernels/wide-leaf-gpu-seconds-over-today"
+title = "Wide leaf proving time ratio"
+owner = "kernels"
+unit = "times today's leaf"
+axis = "GPU-seconds a statement with the wide level-0 commitment leaf over the same with today's leaf, one prover on one card's slot proving the same statement interleaved, each point naming its model and card."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source -- bash benchmarks/kernels/wide_leaf/run.sh"
+every = "7d"
+
+[[metric]]
+id = "kernels/wide-leaf-proof-bytes-over-today"
+title = "Wide leaf proof size ratio"
+owner = "kernels"
+unit = "times today's proof"
+axis = "Bytes of one statement's proofs with the wide level-0 commitment leaf over the same with today's leaf, from the run that times them, each point naming its model and card."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source -- bash benchmarks/kernels/wide_leaf/run.sh"
+every = "7d"
