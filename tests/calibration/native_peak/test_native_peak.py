@@ -156,10 +156,10 @@ def test_the_cards_reading_by_path_is_verity_devices_rate_at_the_tensor_pipes_cl
 
 
 def test_spec_peaks_agree_with_every_census_line() -> None:
-    """The pod-side table reads nothing on a pod but the shipped tree's cards; it must quote benchmarks/census/hardware.json's peak
+    """The pod-side table reads nothing on a pod but the shipped tree's cards; it must quote calibration/census/hardware.json's peak
     for every line."""
     m = _measure()
-    hardware = json.loads((REPO / "benchmarks" / "census" / "hardware.json").read_text(encoding="utf-8"))
+    hardware = json.loads((REPO / "calibration" / "census" / "hardware.json").read_text(encoding="utf-8"))
     smi = {"NVIDIA A100 SXM4 80GB": "NVIDIA A100-SXM4-80GB", "NVIDIA H100 SXM5 80GB": "NVIDIA H100 80GB HBM3", "NVIDIA L40S 48GB": "NVIDIA L40S"}
     dtype = {"bf16": "bf16", "e4m3": "e4m3", "e2m1": "nvfp4"}
     for h in hardware:

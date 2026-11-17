@@ -64,7 +64,7 @@ class Gpu:
     harness's build target, host CPU core-seconds' weight in SM-seconds (the
     node's CPU capacity over its GPUs'), and the scalings and libraries its
     fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch (`bench.py --bridge`),
-    since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `benchmarks/census/hardware.json`
+    since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `calibration/census/hardware.json`
     (the H200's is the H100's: the same compute with more HBM)."""
 
     gpu: str
