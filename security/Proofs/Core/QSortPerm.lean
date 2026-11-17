@@ -3,13 +3,7 @@ module
 public import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
 
-/-!
-# `Array.qsort` permutes its array
-
-`qsort_perm`: `Array.qsort` returns a permutation of the array it was given, under any comparison. Every step of it
-swaps two elements: the three swaps that pick `qpartition`'s pivot, its loop's (`qpartition_loop_perm`,
-`qpartition_perm`), and `sort`'s two halves (`sort_perm`).
--/
+/-! `Array.qsort` permutes its array. -/
 
 @[expose] public section
 
@@ -27,7 +21,6 @@ theorem perm_ite_swap (as : Vector α n) (b : Bool) {i j : Nat} (hi : i < n) (hj
   · exact Vector.swap_perm hi hj
   · exact Vector.Perm.refl as
 
-/-- `qpartition`'s loop permutes the array. -/
 private theorem qpartition_loop_perm (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α) :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2.Perm as := by
@@ -44,7 +37,6 @@ private theorem qpartition_loop_perm (lt : α → α → Bool) {lo hi : Nat} (hh
       · exact ih (hi - (k + 1)) (by omega) as i (k + 1) ilo (by omega) (by omega) rfl
     · exact Vector.swap_perm (by omega) hhi
 
-/-- `qpartition` permutes the array. -/
 theorem qpartition_perm (lt : α → α → Bool) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n)
     (hhi : hi < n) : (Array.qpartition as lt lo hi w hlo hhi).2.Perm as := by
   unfold Array.qpartition
@@ -52,7 +44,6 @@ theorem qpartition_perm (lt : α → α → Bool) (as : Vector α n) (lo hi : Na
   exact (qpartition_loop_perm lt hhi _ (hi - lo) _ lo lo (Nat.le_refl _) (Nat.le_refl _) w rfl).trans
     (((perm_ite_swap _ _ _ _).trans (perm_ite_swap _ _ _ _)).trans (perm_ite_swap _ _ _ _))
 
-/-- `qsort`'s `sort` permutes the array. -/
 private theorem sort_perm (lt : α → α → Bool) :
     ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       (Array.qsort.sort lt as lo hi w hlo hhi).Perm as := by
@@ -75,7 +66,6 @@ private theorem sort_perm (lt : α → α → Bool) :
             (ih (mid - lo) (by omega) as' lo mid hmid.1 hlo (by omega) rfl)).trans hp
     · exact Vector.Perm.refl as
 
-/-- **`Array.qsort` returns a permutation of its array.** -/
 theorem qsort_perm (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as := by
   unfold Array.qsort
   split

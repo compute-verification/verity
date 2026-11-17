@@ -5,21 +5,7 @@ public import Mathlib.Algebra.Order.Monoid.Canonical.Basic
 public import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# The machine 𝓜: an honest semantics, the rate bound, and the card premise's refutations
-
-* `s8Open`: a semantics with one MMA opcode, `s8` by `s8` into 32-bit accumulators, computing `C + Σ a·b` exactly
-  (`intDot`), the deployed kernels' `wgmma`. It meets (P1) on every card (`s8Open_exact`) and (P2)
-  (`s8Open_productForm`), so the headline's hypotheses on the semantics are met.
-* `units_le_of_fits`: a run meeting the model uses each resource at most at its rate over its seconds, and so at most
-  the device model's limits summed over a window of ticks (`fits_toDevice`, at `Card.toDevice`).
-* `cardWithinAccel_fails`: the card premise is false for a card that changes its memory in no time. Every instruction
-  uses part of an issue slot (`use_issue_pos`), so a run of zero seconds runs none and leaves the memory as it was
-  (`run_mem_of_issue_zero`).
-* `cardWithinAccel_fails_rate`: it is false for a card that, in `T` seconds, changes more words of shared memory, L2 or
-  device memory than the store's resource carries in `T` seconds. Each word an instruction writes there is a unit of
-  that resource (`outTo_le_use`), so a run changes at most its units (`changed_run`).
--/
+/-! An honest semantics for the machine 𝓜, its rate bound, and the card premise's refutations. -/
 
 @[expose] public section
 
@@ -32,7 +18,6 @@ def intDot (fa fb : Fmt) : Dot := fun acc a b =>
   (BitVec.ofInt 32 ((BitVec.ofNat 32 acc).toInt +
     (List.zipWith (fun p q => fa.intVal p * fb.intVal q) a b).sum)).toNat
 
-/-- A multiplier output's signed product. -/
 def signed (t : Verity.TC.Spec.Cls × Verity.TC.Spec.Cls × Bool × ℕ × ℕ) : ℤ :=
   if t.2.2.1 then -(t.2.2.2.1 : ℤ) else (t.2.2.2.1 : ℤ)
 
@@ -51,7 +36,6 @@ theorem signed_mulOut_s8 (p q : ℕ) :
     show ((z.natAbs : ℕ) : ℤ) = z
     exact Int.natAbs_of_nonneg (not_lt.mp h)
 
-/-- **The exact `s8` dot is in product form** at every `k`. -/
 theorem s8_productForm (k : ℕ) : ProductForm .s8 .s8 k (intDot .s8 .s8) := by
   refine ⟨fun c ps _ _ => (BitVec.ofInt 32 ((BitVec.ofNat 32 c).toInt + (ps.map signed).sum)).toNat, ?_⟩
   intro c a b ha hb
@@ -76,12 +60,10 @@ def s8Open : Open where
   dot _ _ := intDot .s8 .s8
   dotSp _ _ := intDot .s8 .s8
 
-/-- `s8Open` meets (P1) on every card: its integer dot is exact at any range. -/
 theorem s8Open_exact (c : Card) : c.Exact s8Open := by
   intro o k acc a b _ _ _ _ _ _
   rfl
 
-/-- `s8Open` meets (P2). -/
 theorem s8Open_productForm : Verity.Assumptions.AccelProductForm s8Open :=
   fun _ k => ⟨s8_productForm k, s8_productForm (k / 2)⟩
 
@@ -89,14 +71,11 @@ namespace Machine
 
 variable {m : Machine}
 
-/-- **The rate bound**: a run meeting the model uses each resource at most `ρ_r T`. -/
 theorem units_le_of_fits {Θ : Type} [DecidableEq Θ] (P : m.Prog Θ) (σ : m.State Θ) (sched : List Θ) (T : ℚ≥0)
     (h : Fits P σ sched T) (r : Res) : units (run P σ sched).2 r ≤ m.card.ρ r * T :=
   le_self_add.trans (h.2 r)
 
-/-- **The window bound**: a run meeting the model in `len` ticks of `τ` seconds uses at most the device's tensor MACs,
-CUDA-core ops (32 an issue slot, and every pipe's lanes) and device-memory bits summed over the window
-(`Card.toDevice`). It builds no per-tick `ResourceAccounting.Schedule`. -/
+/-- It builds no per-tick `ResourceAccounting.Schedule`. -/
 theorem fits_toDevice {Θ : Type} [DecidableEq Θ] (P : m.Prog Θ) (σ : m.State Θ) (sched : List Θ) (τ : ℚ≥0)
     (len : ℕ) {ι : Type} (cap : ι → ℕ) (h : Fits P σ sched (len * τ)) :
     units (run P σ sched).2 .tensor ≤ len * ((m.card.toDevice τ cap).rate .tc : ℚ≥0) ∧
@@ -124,7 +103,6 @@ theorem port_issue (s : Store) : port s .issue = 0 := by cases s <;> rfl
 
 theorem regWr_issue (s : Store) : regWr s .issue = 0 := by simp [regWr]
 
-/-- Every instruction uses part of an issue slot. -/
 theorem use_issue_pos (i : m.Instr) : 0 < i.use .issue := by
   rcases i with ⟨o, _, _, _⟩ | ⟨_, _, _⟩
   · cases o <;>
@@ -137,14 +115,12 @@ theorem use_issue_pos (i : m.Instr) : 0 < i.use .issue := by
 theorem units_append (a b : List m.Instr) (r : Res) : units (a ++ b) r = units a r + units b r := by
   simp [units]
 
-/-- A step that runs no instruction leaves the state as it was. -/
 theorem step_none {Θ : Type} [DecidableEq Θ] (P : m.Prog Θ) (σ : m.State Θ) (θ : Θ)
     (h : (step P σ θ).2 = none) : (step P σ θ).1 = σ := by
   unfold step at h ⊢
   rcases hP : (P θ)[σ.pc θ]? with _ | (_ | _) <;> simp only [hP] at h ⊢ <;>
     first | rfl | (split at h <;> simp at h) | simp_all
 
-/-- **A run that uses no issue slot runs no instruction**, so it leaves the memory as it was. -/
 theorem run_mem_of_issue_zero {Θ : Type} [DecidableEq Θ] (P : m.Prog Θ) :
     ∀ (σ : m.State Θ) (sched : List Θ), units (run P σ sched).2 .issue = 0 → (run P σ sched).1.mem = σ.mem
   | _, [], _ => rfl
@@ -233,7 +209,6 @@ theorem port_ne_reg {t : Store} {r : Res} (h : port t r = 1) : t ≠ .reg := by
   rintro rfl
   cases r <;> simp [port] at h
 
-/-- An opcode writes at most its units of resource `r` in the store `r` prices. -/
 theorem outTo_le_use (t : Store) (r : Res) (h : port t r = 1) (o : Opcode m.sem) :
     ((((List.finRange o.nOut).filter fun i => o.outStore i = t).length : ℕ) : ℚ≥0) ≤ m.card.use o r := by
   have ht := port_ne_reg h
@@ -292,8 +267,6 @@ theorem changed_step {Θ : Type} [DecidableEq Θ] (t : Store) (r : Res) (h : por
         simp
     · simp [changed_self]
 
-/-- **A run changes at most its units of resource `r` in the store `t` it prices** (`port t r = 1`: shared memory,
-L2 or device memory), each word it writes there a unit. -/
 theorem changed_run {Θ : Type} [DecidableEq Θ] (t : Store) (r : Res) (h : port t r = 1) (P : m.Prog Θ) :
     ∀ (σ : m.State Θ) (sched : List Θ),
       ((changed t σ.mem (run P σ sched).1.mem).card : ℚ≥0) ≤ units (run P σ sched).2 r
@@ -323,11 +296,8 @@ theorem cardWithinAccel_fails (c : Card) (can : (c.Mem → c.Mem) → ℚ≥0 �
     le_antisymm ((Machine.units_le_of_fits P _ sched 0 hfits .issue).trans (by simp)) zero_le
   exact hf (hmem.symm.trans (Machine.run_mem_of_issue_zero P _ sched h0))
 
-/-- **The card premise is false for a card that writes faster than its table.** If
-`can` says the card takes some memory `M` in `D` to an `f M` differing from `M` in more words of shared memory, L2 or
-device memory than the store's resource carries in `T` seconds (`ρ_r T`, `port t r = 1`), `CardWithinAccel c can` is
-false: a run changes at most its units of `r` in `t` (`Machine.changed_run`), and a run of `T` seconds uses at most
-`ρ_r T` (G2). -/
+/-- **The card premise is false for a card that writes faster than its table**: one taking some memory `M` in
+`D` to an `f M` differing from `M` in more words of a store than the store's resource carries in `T` seconds. -/
 theorem cardWithinAccel_fails_rate (c : Card) (can : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop) (t : Store)
     (r : Res) (h : port t r = 1) (f : c.Mem → c.Mem) (T : ℚ≥0) (D : c.Mem → Prop) (M : c.Mem) (hcan : can f T D)
     (hD : D M) (hf : c.ρ r * T < ((Finset.univ.filter fun q : Fin (c.size t) => f M ⟨t, q⟩ ≠ M ⟨t, q⟩).card : ℚ≥0)) :

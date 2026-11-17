@@ -5,13 +5,7 @@ public import Proofs.Core.Prob
 import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Basic.ENNReal.BigOperators
 
-/-!
-# Independent coins: their weights
-
-`piDistribution ν` weighs `x` by `∏ i, ν i (x i)` (`piDistribution_apply`, `piDistribution_toReal`), so `iid μ n` weighs a path of coins by the
-product of theirs (`iid_toReal`), and the first coin splits off (`iid_cons_toReal`). `prodDistribution ρ ν` weighs `(w, x)` by
-`ρ w · ν x` (`prodDistribution_toReal`).
--/
+/-! The weights of independent coins. -/
 
 @[expose] public section
 

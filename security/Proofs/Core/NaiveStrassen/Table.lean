@@ -3,19 +3,7 @@ module
 public import Definitions.Core.NaiveStrassen
 public import Proofs.Core.NaiveStrassen.Grid
 
-/-!
-# The tables (NaiveStrassen's kernel tables)
-
-Level `l`'s tables bound, at each pair of grid cells `(i, j)`, the least cost at depth budget `l` of a schedule whose
-operands range over at least `g i` and `g j` values: `lo` over every schedule and `has` over those with a fast
-scheme. Each is a packed `sz l × sz l` table (`Pack.lean`); row and column 0 are zero, and entries beyond the table read
-as zero.
-
-This file only computes them, by the options of the model: an atom of the RTX PRO 6000's data sheet, a scheme over the
-previous level, and digit splits, relaxed by a fixed number of passes (`passes`) of splits of `A` followed by a
-symmetrisation (splits of `B`). Nothing here is trusted: `Check.lean` checks the result, and only the check is proved
-sound.
--/
+/-! NaiveStrassen's tables, computed by the model's options; only `Check.lean`'s check of them is proved sound. -/
 
 @[expose] public section
 
@@ -36,7 +24,6 @@ def setRow (T n i R : Nat) : Nat := T - (row T n i <<< (64 * n * i)) + (R <<< (6
 def foldRange {α : Type} (a b : Nat) (f : Nat → α → α) (init : α) : α :=
   Nat.rec (motive := fun _ => α) init (fun k acc => f (a + k) acc) (b - a)
 
-/-- `f` applied `k` times. -/
 def iter {α : Type} (k : Nat) (f : α → α) (x : α) : α := Nat.rec (motive := fun _ => α) x (fun _ acc => f acc) k
 
 /-- An entry no table reaches (`2^56 - 1`). -/
@@ -58,7 +45,6 @@ def gatherT (prev m n μ : Nat) : Nat := packRows (fun k => packF (fun j => fld 
 def schemeRow (prev m n i : Nat) (prof : List (Nat × Nat)) : Nat :=
   prof.foldl (fun acc p => acc + row (gatherT prev m n p.2) n (kc i p.1)) 0
 
-/-- `CAP` in each of `n` fields. -/
 def capRow (n : Nat) : Nat := CAP * packF (fun _ => 1) n
 
 /-- A row with field 0 cleared. -/
@@ -94,7 +80,6 @@ def splitPass (n : Nat) (t : Nat × Nat) : Nat × Nat :=
     let h := minRow n r.2 (r.1 + row s.2 n 1)
     (setRow s.1 n i r.1, setRow s.2 n i h)) t
 
-/-- The transpose of an `n × n` table. -/
 def transpose (T n : Nat) : Nat := packRows (fun i => packF (fun j => fld (row T n j) i) n) n n
 
 /-- The fieldwise minimum of a table and its transpose (splits of `B`). -/
@@ -102,12 +87,10 @@ def symm (T n : Nat) : Nat :=
   let U := transpose T n
   packRows (fun i => minRow n (row T n i) (row U n i)) n n
 
-/-- One relaxation pass. -/
 def pass (n : Nat) (t : Nat × Nat) : Nat × Nat :=
   let s := splitPass n t
   (symm s.1 n, symm s.2 n)
 
-/-- Level `l`'s tables from the previous level's. -/
 @[irreducible] def level (l : Nat) (prev : Nat × Nat) : Nat × Nat :=
   iter (passes.getD l 0) (pass (sz l)) (initLevel l (sz (l - 1)) (sz l) prev)
 

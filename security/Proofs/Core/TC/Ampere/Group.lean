@@ -4,13 +4,7 @@ public import Proofs.Core.TC.Ampere.Arith
 import Proofs.Core.TC.Proofs.Group
 import Proofs.Core.TC.Proofs.Norm
 
-/-!
-# One Ampere group, the relation's side
-
-`Verity.SecurityProofs.TC.Proofs.Group` for the Ampere/Ada parameters (`AP`): a term's alignment, and every column of
-the finite path. The maximum exponent (`estar_eq`) and the output state (`out_poly`) do not depend on the parameters and
-are reused.
--/
+/-! One Ampere group, the relation's side. -/
 
 @[expose] public section
 
@@ -82,7 +76,6 @@ def magWOf (T : Int) : Nat := T.natAbs * 2 ^ (30 - bitLength T.natAbs) / 2 ^ 5
 def mag24Of (T E : Int) : Nat := magWOf T / 2 ^ (min (eFin T E - eOut T E + 1) 35).toNat
 
 
-/-- The bit length through `T_norm` and the top-bit range check. -/
 theorem norm_L (m L normpow z_t normB : Int) (hm0 : 0 ≤ m) (hnorm : LOOKUP (tNorm AP) L (normpow, z_t))
     (hnB : MUL m normpow normB) (hr : RANGE (normB - (1 - z_t) * 2 ^ (AP.B - 1)) (AP.B - 1)) :
     L = bitLength m.toNat ∧ z_t = (if m = 0 then 1 else 0) ∧ normB = ((m.toNat * 2 ^ (30 - bitLength m.toNat) : Nat) : Int) := by

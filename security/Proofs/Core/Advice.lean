@@ -5,15 +5,7 @@ public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.List.OfFn
 public import Definitions.Core.Advice
 
-/-!
-# The advice tree binds its rows, up to a collision among the strings it hashes
-
-Two advice trees with one root have the same rows, or `H` maps two distinct strings, one hashed in each tree, to one
-digest (`root_bind`). Down from the root, equal digests of different strings are such a collision; equal strings give
-equal parts, since the framing is separated and digests have one length. At the leaves, equal hm96 leaves give equal salt
-digests, so equal salts (or a collision), so equal masks, so equal row digests, so equal rows (or a collision). Two trees
-of different depths collide at the root, whose messages differ in level or kind.
--/
+/-! The advice tree binds its rows, up to a collision among the strings it hashes. -/
 
 @[expose] public section
 
@@ -29,7 +21,6 @@ theorem CollidesIn.mono {S S' T T' : Finset (List UInt8)} (hS : S ⊆ S') (hT : 
     CollidesIn H S T → CollidesIn H S' T'
   | ⟨x, hx, y, hy, hne, he⟩ => ⟨x, hS hx, y, hT hy, hne, he⟩
 
-/-- One hash: equal digests of `x ∈ S` and `y ∈ T` are equal strings or a collision. -/
 theorem eq_or_collides {S T : Finset (List UInt8)} {x y : List UInt8} (hx : x ∈ S) (hy : y ∈ T) (h : H x = H y) :
     x = y ∨ CollidesIn H S T := by
   by_cases hxy : x = y
@@ -51,7 +42,6 @@ def Agree (rows₀ rows₁ : List (List UInt8)) (i : ℕ) : Prop :=
 
 variable {rows₀ rows₁ : List (List UInt8)} {salt₀ salt₁ : ℕ → List UInt8}
 
-/-- **hm96's leaf binds its row**, up to a collision among the leaf's four inputs. -/
 theorem row_bind {S T : Finset (List UInt8)} {i : ℕ} {row₀ row₁ y₀ y₁ : List UInt8} (hF : F.Separated)
     (hS : rowInput F row₀ ∈ S ∧ saltInput F y₀ ∈ S ∧ hmInput H F row₀ y₀ ∈ S ∧ leafInput H F i row₀ y₀ ∈ S)
     (hT : rowInput F row₁ ∈ T ∧ saltInput F y₁ ∈ T ∧ hmInput H F row₁ y₁ ∈ T ∧ leafInput H F i row₁ y₁ ∈ T)
@@ -74,8 +64,6 @@ theorem row_bind {S T : Finset (List UInt8)} {i : ℕ} {row₀ row₁ y₀ y₁ 
 theorem leaf_mem {a b c d : List UInt8} : d ∈ ({a, b, c, d} : Finset (List UInt8)) :=
   Finset.mem_insert_of_mem (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem (Finset.mem_singleton_self _)))
 
-/-- **A leaf binds what it holds**, up to a collision among its inputs: a row in both trees or in neither, and then the
-same row. -/
 theorem leaf_bind (hF : F.Separated) {i : ℕ} (h : leafAt H F rows₀ salt₀ i = leafAt H F rows₁ salt₁ i) :
     Agree rows₀ rows₁ i ∨ CollidesIn H (inputsAt H F rows₀ salt₀ 0 i) (inputsAt H F rows₁ salt₁ 0 i) := by
   unfold leafAt at h
@@ -105,8 +93,6 @@ theorem div_two_pow_succ {i k j : ℕ} (h : i / 2 ^ (k + 1) = j) : i / 2 ^ k = 2
   rw [Nat.pow_succ, ← Nat.div_div_eq_div_mul] at h
   omega
 
-/-- **A subtree binds its leaves**: two nodes of one height and index with one digest agree at every position below them,
-up to a collision among the strings hashed below them. -/
 theorem nodeAt_bind (hF : F.Separated) : ∀ k j, nodeAt H F rows₀ salt₀ k j = nodeAt H F rows₁ salt₁ k j →
     (∀ i, i / 2 ^ k = j → Agree rows₀ rows₁ i) ∨
       CollidesIn H (inputsAt H F rows₀ salt₀ k j) (inputsAt H F rows₁ salt₁ k j)
@@ -145,8 +131,6 @@ theorem topAt_mem (rows : List (List UInt8)) (salt : ℕ → List UInt8) :
     split_ifs <;> simp only [Finset.mem_insert, Finset.mem_singleton, or_true]
   | k + 1, j => node_mem rows salt k j
 
-/-- Nodes of different heights are hashed from different strings: a node's message names its level, and a leaf's or a
-pad's is no node's. -/
 theorem topAt_ne (hF : F.Separated) {k k' : ℕ} (hk : k ≠ k') (j j' : ℕ) :
     topAt H F rows₀ salt₀ k j ≠ topAt H F rows₁ salt₁ k' j' := by
   match k, k' with
@@ -168,8 +152,6 @@ theorem length_le_depth (count : ℕ) : count ≤ 2 ^ depth count := by
   unfold depth
   omega
 
-/-- **The advice tree binds its rows**: two trees with one root have the same rows, or `H` collides between a string one
-hashes and a different one the other does. -/
 theorem root_bind (hF : F.Separated) (h : root H F rows₀ salt₀ = root H F rows₁ salt₁) :
     rows₀ = rows₁ ∨ CollidesIn H (hashInputs H F rows₀ salt₀) (hashInputs H F rows₁ salt₁) := by
   unfold root at h
@@ -189,8 +171,6 @@ theorem root_bind (hF : F.Separated) (h : root H F rows₀ salt₀ = root H F ro
     · exact Or.inr hc
   · rw [nodeAt_eq, nodeAt_eq] at h
     exact Or.inr ⟨_, topAt_mem _ _ _ _, _, topAt_mem _ _ _ _, topAt_ne hF hd 0 0, h⟩
-
-/-! ## The premises can hold: a separated framing, and rows that decode -/
 
 /-- A framing that is separated: a kind byte, then the digests, then a level or rank in unary. -/
 def Framing.unary : Framing where

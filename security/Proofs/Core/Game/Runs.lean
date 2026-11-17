@@ -4,14 +4,7 @@ public import Proofs.Core.Game.Expect
 import Mathlib.Algebra.CharP.Defs
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Independent runs of a strategy
-
-`expectN g s n F` is the expectation of `F` over `n` independent runs of the strategy `s`, `F`
-reading the list of their outputs, first run first. A per-run quantity summed over the runs has `n`
-times its expectation (`expectN_sum_map`), and a product over independent runs is the expectation
-to the `n` (`expectN_prod_map`).
--/
+/-! Independent runs of a strategy. -/
 
 @[expose] public section
 
@@ -21,7 +14,7 @@ namespace Game
 
 variable {α : Type}
 
-/-- The expectation of `F` over `n` independent runs of `s`. -/
+/-- The expectation of `F` over `n` independent runs of `s`, `F` reading their outputs first run first. -/
 noncomputable def expectN (g : Game α) (s : Strategy g) : ℕ → (List α → ℝ) → ℝ
   | 0, F => F []
   | n + 1, F => expect (fun a => expectN g s n fun as => F (a :: as)) g s
@@ -72,7 +65,6 @@ theorem expectN_sum {ι : Type} (t : Finset ι) (F : ι → List α → ℝ) (n 
       simp only [Finset.sum_insert hx]
       rw [expectN_add g s (F x) (fun as => ∑ i ∈ t, F i as), ih]
 
-/-- **A per-run quantity summed over `n` runs** has `n` times its expectation. -/
 theorem expectN_sum_map (f : α → ℝ) :
     ∀ n, expectN g s n (fun as => (as.map f).sum) = n * expect f g s
   | 0 => by simp [expectN]
@@ -85,7 +77,6 @@ theorem expectN_sum_map (f : α → ℝ) :
       push_cast
       ring
 
-/-- **A product over `n` independent runs** is the expectation to the `n`. -/
 theorem expectN_prod_map (f : α → ℝ) :
     ∀ n, expectN g s n (fun as => (as.map f).prod) = expect f g s ^ n
   | 0 => by simp [expectN]

@@ -2,36 +2,19 @@ module
 
 public import Proofs.Core.NaiveStrassen.Pack
 
-/-!
-# The grid (NaiveStrassen's kernel tables)
-
-The tables of `Table.lean` are indexed by grid cells: cell `i` stands for operands ranging over `g i` values. This file
-is data: the grid, each level's table size, the number of relaxation passes a level needs, and two lookup tables, `kc`
-(a scheme's kid cell) and `rest` (the high digit's cell after a split). Nothing here is trusted: `Check.lean` checks
-every property of it that the proof uses.
-
-The program that wrote `gridL`, `sizes`, `passes`, `kcP` and `restP` is not in the tree. Writing them again, say for
-another `topL`, takes a program that computes them by the rules they meet:
-
-* `gridL`: in increasing order, the values up to `255·4^topL + 1` among `1, 2, 3, 4, 256, 257, 513, 1025, 2049, 4097`,
-  `⌈2^(x/2)⌉` for every `x`, and `255·2^j + 1` for every `j`;
-* `kc i ν`: the last cell of at most `(g i - 1)·ν + 1` values, for `ν` from 1 to 4;
-* `rest i e`: the last cell of at most `⌈g i / (g (e + 1) - 1)⌉` values for `1 ≤ e < i`, and 0 otherwise;
-* `sizes`: `root + 1` at level `topL`, and at each level below it the larger of the size `n` one level up and
-  `kc (n - 1) 4 + 1`;
-* `passes`: at each level, how many of `Table.lean`'s `pass`es change a table before one changes neither, which takes
-  computing the tables as `level` does.
--/
+/-! The grid of NaiveStrassen's kernel tables: data no program in the tree writes, which `Check.lean` checks for every property the proof uses. -/
 
 @[expose] public section
 
 namespace Verity.Accel.NaiveStrassen.Packed
 
-/-- The grid: each cell's number of values, increasing. -/
+/-- The grid: each cell's number of values, increasing: the values up to `255·4^topL + 1` among `1, 2, 3, 4, 256, 257,
+513, 1025, 2049, 4097`, `⌈2^(x/2)⌉` for every `x`, and `255·2^j + 1` for every `j`. -/
 def gridL : List Nat := [1, 2, 3, 4, 6, 8, 12, 16, 23, 32, 46, 64, 91, 128, 182, 256, 257, 363, 511, 512, 513, 725, 1021, 1024, 1025, 1449, 2041, 2048, 2049, 2897, 4081, 4096, 4097, 5793, 8161, 8192, 11586, 16321, 16384, 23171, 32641, 32768, 46341, 65281, 65536, 92682, 130561, 131072, 185364, 261121, 262144, 370728, 522241, 524288, 741456, 1044481, 1048576, 1482911, 2088961, 2097152, 2965821, 4177921, 4194304, 5931642, 8355841, 8388608, 11863284, 16711681, 16777216, 23726567, 33423361, 33554432, 47453133, 66846721, 67108864, 94906266, 133693441, 134217728, 189812532, 267386881, 268435456, 379625063, 534773761, 536870912, 759250125, 1069547521, 1073741824, 1518500250, 2139095041, 2147483648, 3037000500, 4278190081, 4294967296, 6074001000, 8556380161, 8589934592, 12148002000, 17112760321]
-/-- Each level's table size. -/
+/-- Each level's table size: `root + 1` at level `topL`, and at each level below it the larger of the size `n` one
+level up and `kc (n - 1) 4 + 1`. -/
 def sizes : List Nat := [98, 92, 86, 80, 74, 68, 62, 56, 50, 44, 38, 31, 23, 16]
-/-- Relaxation passes a level needs. -/
+/-- Relaxation passes a level needs: how many of `Table.lean`'s `pass`es change a table before one changes neither. -/
 def passes : List Nat := [6, 3, 2, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
 /-- `kc`'s table, 8-bit fields at `(ν - 1)·gsz + i`. -/
 def kcP : Nat := 40765986477140355682755822570657816810680727028967926618531721484328651557541970285457476366912808845521580233465166838898680977994500163098805658558619754928388723123615618076013916816902885804779143761896636236796726579367308470570466559356511716845463550006121069432229063970174851898583286738759642598020692728748542167749588380656999680731465094846582540563367256657112650491701525084456822313206634308629777089529383899377302490358509603704128080317696074032614531048175644455338366513513809690168404207662862759125044598193864349076459581730749543240047290234240818591800111375063973354696133016757954134751050680206842630324246045839348504501924058273349583486952588194529992710377375614322755559652458938048985501025044236572298870533381381516649589756563497641262500074507410019150225553626929969387242026656521813824635270065154929191614543513347542022479932180978141684126691225578254793110787408784072332989264303375720498260476160
@@ -51,9 +34,11 @@ def gsz : Nat := gridL.length
 def gridP : Nat := packF (fun i => gridL.getD i 0) gsz
 /-- Cell `i`'s number of values. -/
 def g (i : Nat) : Nat := fld gridP i
-/-- The cell of a kid of cell `i` whose combination has `ℓ₁` norm `ν` (`1 ≤ ν ≤ 4`). -/
+/-- The cell of a kid of cell `i` whose combination has `ℓ₁` norm `ν` (`1 ≤ ν ≤ 4`): the last cell of at most
+`(g i - 1)·ν + 1` values. -/
 def kc (i ν : Nat) : Nat := (kcP >>> (8 * ((ν - 1) * gsz + i))) &&& 255
-/-- The cell of the high digit when cell `i` is split below cell `e + 1`. -/
+/-- The cell of the high digit when cell `i` is split below cell `e + 1`: the last cell of at most
+`⌈g i / (g (e + 1) - 1)⌉` values for `1 ≤ e < i`, and 0 otherwise. -/
 def rest (i e : Nat) : Nat := (restP >>> (8 * (i * gsz + e))) &&& 255
 /-- Level `l`'s table size. -/
 def sz (l : Nat) : Nat := sizes.getD l gsz

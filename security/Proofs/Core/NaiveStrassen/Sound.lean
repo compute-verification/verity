@@ -2,21 +2,13 @@ module
 
 public import Proofs.Core.NaiveStrassen.Check
 
-/-!
-# Soundness of the tables (NaiveStrassen)
-
-`Facts` lists, pointwise, what the check establishes about a family of tables `lo l i j` and `has l i j`. `Facts.core`
-proves from it, by induction on the schedule, that `lo` bounds every schedule's cost and `has` every fast schedule's,
-at any grid cells below the operand ranges.
--/
+/-! Soundness of NaiveStrassen's tables: a passing check bounds every schedule's cost. -/
 
 @[expose] public section
 
 namespace Verity.Accel.NaiveStrassen.Packed
 
 open Verity.Accel.NaiveStrassen
-
-/-! ## Sums -/
 
 theorem foldl_add (xs : List Nat) (acc : Nat) : xs.foldl (· + ·) acc = acc + xs.sum := by
   induction xs generalizing acc with
@@ -52,8 +44,6 @@ theorem pred_mul_add_le_sum {c y : Nat} : ∀ {xs : List Nat}, (∀ x ∈ xs, c 
         rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right c (by omega)
       omega
 
-/-! ## Ceiling division -/
-
 theorem ceil_mono {x y d D : Nat} (hd : 0 < d) (hdD : d ≤ D) (hxy : x ≤ y) :
     (x + D - 1) / D ≤ (y + d - 1) / d := by
   have hD : 0 < D := Nat.lt_of_lt_of_le hd hdD
@@ -65,8 +55,6 @@ theorem ceil_mono {x y d D : Nat} (hd : 0 < d) (hdD : d ≤ D) (hxy : x ≤ y) :
     have : ((y + d - 1) / d + 1) * D = D * ((y + d - 1) / d) + D := by rw [Nat.succ_mul, Nat.mul_comm]
     omega
   omega
-
-/-! ## Atoms and schemes -/
 
 theorem atom_eq {f f' : Atom} (h : (f == f') = true) : f = f' := by
   cases f; cases f'
@@ -115,8 +103,6 @@ theorem norms_trivial :
 
 theorem range_zero (a ν : Nat) : range 0 a ν = (a - 1) * ν + 1 := by simp [range]
 
-/-! ## The facts and the induction -/
-
 /-- What the check establishes about tables `lo` and `has` up to level `Lmax` on a grid `g` of `G` cells. -/
 structure Facts (G Lmax : Nat) (g : Nat → Nat) (kc rest : Nat → Nat → Nat) (lo has : Nat → Nat → Nat → Nat) :
     Prop where
@@ -161,7 +147,6 @@ theorem Facts.zero_right (F : Facts G Lmax g kc rest lo has) {l : Nat} (hl : l �
     (hj : G ≤ j) : lo l i j = 0 ∧ has l i j = 0 := by
   rw [(F.symm l hl i j).1, (F.symm l hl i j).2]; exact F.out l hl j i hj
 
-/-- A digit split of the row operand at `d`, given bounds on its two subtrees at every cell they cover. -/
 theorem Facts.split_bound (F : Facts G Lmax g kc rest lo has) {l : Nat} (hl : l ≤ Lmax) {d A c1 c2 : Nat}
     {fx fy : Bool} (hd : 2 ≤ d) (hdA : d < A) {i : Nat} (hi : g i ≤ A) (j : Nat)
     (hx : ∀ e, g e ≤ d → lo l e j ≤ c1 ∧ (fx = true → has l e j ≤ c1))
@@ -199,7 +184,6 @@ theorem Facts.split_bound (F : Facts G Lmax g kc rest lo has) {l : Nat} (hl : l 
     · have := hx2 hf; omega
     · have := hy2 hf; omega
 
-/-- **The induction**: `lo` bounds every schedule at cells below its operand ranges, and `has` every fast one. -/
 theorem Facts.core (F : Facts G Lmax g kc rest lo has) {fs : List Atom} (hD : Dom fs) :
     ∀ (S : Sched) (l a b : Nat), l ≤ Lmax → S.valid fs schemes 0 l a b = true → ∀ i j, g i ≤ a → g j ≤ b →
       lo l i j ≤ S.cost l ∧ (S.fast = true → has l i j ≤ S.cost l) := by
@@ -297,8 +281,6 @@ theorem Facts.core (F : Facts G Lmax g kc rest lo has) {fs : List Atom} (hD : Do
 
 end
 
-/-! ## From the check to the facts -/
-
 theorem allBelow_iff {n : Nat} {f : Nat → Bool} : allBelow n f = true ↔ ∀ k < n, f k = true := by
   induction n with
   | zero => exact ⟨fun _ _ h => absurd h (Nat.not_lt_zero _), fun _ => rfl⟩
@@ -342,8 +324,6 @@ def LO (l i j : Nat) : Nat := fld (row (tab l).1 (sz l) i) j
 /-- Level `l`'s `has` at cells `i` and `j`. -/
 def HA (l i j : Nat) : Nat := fld (row (tab l).2 (sz l) i) j
 
-/-! ### Packed rows -/
-
 theorem fld_zero (j : Nat) : fld 0 j = 0 := by rw [fld_eq, getW, Nat.zero_div, Nat.zero_mod]
 
 theorem row_ge {T n i : Nat} (hT : T < 2 ^ (64 * n * n)) (hi : n ≤ i) : row T n i = 0 := by
@@ -352,7 +332,6 @@ theorem row_ge {T n i : Nat} (hT : T < 2 ^ (64 * n * n)) (hi : n ≤ i) : row T 
 theorem packF_lt {f : Nat → Nat} {n : Nat} (hf : ∀ j < n, f j < 2 ^ 64) : packF f n < 2 ^ (64 * n) := by
   rw [packF_eq]; exact packW_lt hf
 
-/-- Every entry of a table whose rows pass `small` is below `2^56`. -/
 theorem fld_row_lt {T n : Nat} (hT : T < 2 ^ (64 * n * n)) (hs : ∀ i < n, small n (row T n i) = true)
     (i j : Nat) : fld (row T n i) j < 2 ^ 56 := by
   by_cases hi : i < n
@@ -425,7 +404,6 @@ theorem fld_atomT {i j : Nat} (hi : i < gsz) (hj : j < gsz) :
   rw [row_packRows (fun k _ => packF_lt fun j _ => hB k j), ite_eq_left hi, fld_packF (fun j _ => hB i j),
     ite_eq_left hj]
 
-/-- The sum of a scheme's gathered rows, fieldwise. -/
 theorem fld_foldl {j : Nat} {α : Type} (R : α → Nat) (hR : ∀ p k, fld (R p) k < 2 ^ 56)
     (ps : List α) : ∀ acc : Nat, (∀ k, fld acc k + ps.length * 2 ^ 56 < 2 ^ 64) →
       fld (ps.foldl (fun acc p => acc + R p) acc) j = fld acc j + (ps.map fun p => fld (R p) j).sum := by
@@ -440,8 +418,6 @@ theorem fld_foldl {j : Nat} {α : Type} (R : α → Nat) (hR : ∀ p k, fld (R p
     rw [ih (acc + R p) (fun k => by
       rw [hadd k]; have h1 := h k; have h2 := hR p k; simp only [List.length_cons] at h1; omega), hadd j,
       Nat.add_assoc]
-
-/-! ### One level -/
 
 section level
 variable {l : Nat} {prev : Nat × Nat}
@@ -587,7 +563,6 @@ theorem lvl_sch_rows (hc : checkLevel (l + 1) (tab (l + 1)) prev = true) {i : Na
   obtain ⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩ := ((hc.1.2 i hi).2).resolve_left (Nat.succ_ne_zero l)
   exact ⟨h1, h2, h3, h4, h5, h6⟩
 
-/-- A scheme's row, fieldwise: the sum of the previous level's `lo` at the kid cells. -/
 theorem lvl_sch_fld (hc0 : checkLevel l (tab l) prev = true) (prof : List (Nat × Nat)) (hlen : prof.length ≤ 7)
     {n i k : Nat} (hk : k < n) :
     fld (schemeRow (tab l).1 (sz l) n i prof) k = (prof.map fun p => LO l (kc i p.1) (kc k p.2)).sum := by
@@ -681,8 +656,6 @@ theorem lvl_root (hc : checkLevel l (tab l) prev = true) :
 
 end level'
 
-/-! ## The check bounds every schedule -/
-
 theorem facts (h : checkAll = true) : Facts gsz topL g kc rest LO HA := by
   simp only [checkAll, Bool.and_eq_true, decide_eq_true_eq] at h
   obtain ⟨⟨hg, h15⟩, hr⟩ := h
@@ -713,8 +686,6 @@ theorem g_root (h : checkAll = true) : g root = 256 := by
   obtain ⟨⟨⟨⟨⟨⟨⟨⟨-, -⟩, -⟩, h256⟩, -⟩, -⟩, -⟩, -⟩, -⟩ := h
   exact h256
 
-/-- **The tables bound every schedule** over atoms `fs` that the RTX PRO 6000 sheet's dominate, on int8 operands:
-fast ones by naive tiled's `8^(l+1)` plus 32 up to `thmL`, and all of them by `8^l` above it, to `topL`. -/
 theorem bound (h : checkAll = true) {fs : List Atom} (hD : Dom fs) {l : Nat} (hl : l ≤ topL) {S : Sched}
     (hv : S.valid fs schemes 0 l 256 256 = true) :
     (l ≤ thmL → S.fast = true → 8 ^ (l + 1) + 32 ≤ S.cost l) ∧ (thmL < l → 8 ^ l < S.cost l) := by

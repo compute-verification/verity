@@ -3,14 +3,7 @@ module
 public import Flock.Canon
 public import Proofs.Core.QSort
 
-/-!
-# `Flock.canonUtf8` of a flat object, in a form the kernel evaluates
-
-`Flock.canonUtf8` is well founded and sorts with core's `Array.qsort`, neither of which the kernel unfolds. On a flat
-object, every value `null`, a Boolean, a number or a string (`jsonFlat`), it is `canonFlat`, which sorts only items
-whose keys are out of order (`canonUtf8_flat`); `Json.mkObj` already keeps them in order, so `decide +kernel` evaluates
-`canonFlat` on its objects, given the `import all`s of core's string order, arrays and `Repr` that its caller needs.
--/
+/-! `Flock.canonUtf8` of a flat object, in a form the kernel evaluates. -/
 
 @[expose] public section
 
@@ -82,7 +75,6 @@ theorem canonUtf8_flat (j : Json) (h : jsonFlat j = true) : Flock.canonUtf8 j = 
   case obj kvs => exact (canonUtf8_obj kvs h).trans (canonObj_inOrder kvs)
   all_goals simp [jsonFlat] at h
 
-/-- An `Except` the kernel decides is `.ok a` is `.ok a`. -/
 theorem eq_ok_of {α : Type} [DecidableEq α] {x : Except String α} {a : α}
     (h : (match x with | .ok b => decide (b = a) | .error _ => false) = true) : x = .ok a := by
   cases x with

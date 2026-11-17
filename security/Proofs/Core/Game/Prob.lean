@@ -7,21 +7,7 @@ import Mathlib.Basic.ENNReal.BigOperators
 import Proofs.Core.Game.Basic
 public import Definitions.Core.Game.Prob
 
-/-!
-# Probabilities for a fixed prover strategy
-
-`value` bounds the optimal prover. The table theorems (`table_sound_exec`) bound `prob` for every
-strategy instead, and the two differ when some branch has no strategy at all (a `send` of an empty
-type), so the audit theorems are stated for every strategy too. These are the strategy-level tools
-they use:
-
-* `prob_mono`, `prob_le_one`, `prob_or_le`: monotonicity and the union bound;
-* `prob_and_const`: an event conjoined with a fact fixed by the strategy;
-* `prob_map`, `Strategy.toMap_ofMap`, `Strategy.ofMap_toMap`: relabelling the output (`map`) keeps the game's
-  strategies (`Strategy.ofMap` and `Strategy.toMap`, in `Protocol`).
-
-The definitions are in `Definitions.Core.Game.Prob`.
--/
+/-! Probabilities for a fixed prover strategy, which the audit theorems use because `value` and `prob` differ where some branch has no strategy. -/
 
 @[expose] public section
 
@@ -57,7 +43,6 @@ theorem prob_coin (p : α → Prop) (C : Type) [Fintype C] [Nonempty C] (k : C �
 theorem prob_send (p : α → Prop) (M : Type) (k : M → Game α) (s : Strategy (Game.send M k)) :
     prob p (.send M k) s = prob p (k s.1) s.2 := rfl
 
-/-- The union bound, for a fixed strategy. -/
 theorem prob_or_le (p q : α → Prop) :
     ∀ (g : Game α) (s : Strategy g), prob (fun a => p a ∨ q a) g s ≤ prob p g s + prob q g s
   | .ret a, _ => by
@@ -70,7 +55,6 @@ theorem prob_or_le (p q : α → Prop) :
       rw [← avg_add]
       exact avg_mono fun c => prob_or_le p q (k c) (s c)
 
-/-- An event conjoined with a fact that does not depend on the run. -/
 theorem prob_and_const (p : α → Prop) (Q : Prop) [Decidable Q] (g : Game α) (s : Strategy g) :
     prob (fun a => p a ∧ Q) g s = if Q then prob p g s else 0 := by
   by_cases hQ : Q
@@ -85,8 +69,6 @@ theorem avg_ite_eq_prCoin {C : Type} [Fintype C] (p : C → Prop) [DecidablePred
   unfold prCoin
   exact congrArg avg (funext fun c => by by_cases h : p c <;> simp [h])
 
-/-- **Independent coordinates.** Averaging a product of per-coordinate functions over a product of
-uniform coins gives the product of the averages. -/
 theorem avg_pi_prod {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → Type} [∀ i, Fintype (Ω i)]
     [∀ i, Nonempty (Ω i)] (f : ∀ i, Ω i → ℝ≥0∞) :
     avg (fun ω : ∀ i, Ω i => ∏ i, f i (ω i)) = ∏ i, avg (f i) := by
@@ -97,7 +79,6 @@ theorem avg_pi_prod {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → Type}
   simp only [hinv, ← Finset.prod_mul_distrib]
   exact (Fintype.prod_sum fun i j => ((Fintype.card (Ω i) : ℝ≥0∞))⁻¹ * f i j).symm
 
-/-- The probability that independent coordinates all satisfy their events is the product. -/
 theorem prCoin_pi_forall {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → Type} [∀ i, Fintype (Ω i)]
     [∀ i, Nonempty (Ω i)] (D : Finset ι) (P : ∀ i, Ω i → Prop) :
     prCoin (fun ω : ∀ i, Ω i => ∀ i ∈ D, P i (ω i)) = ∏ i ∈ D, prCoin (P i) := by
@@ -131,7 +112,6 @@ theorem prCoin_pi_forall {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → 
         simp only [hi, ite_true]
         exact avg_ite_eq_prCoin _
 
-/-- Relabelling the output relabels the event. -/
 theorem prob_map (p : β → Prop) (f : α → β) :
     ∀ (g : Game α) (s : Strategy (g.map f)),
       prob p (g.map f) s = prob (fun a => p (f a)) g (Strategy.ofMap f g s)
@@ -164,9 +144,6 @@ theorem prob_true : ∀ (g : Game α) (s : Strategy g), prob (fun _ => True) g s
       rw [prob_coin]
       exact (congrArg avg (funext fun c => prob_true (k c) (s c))).trans (avg_const 1)
 
-/-- **Additive composition, for a fixed strategy.** If from every doomed output of `g` the
-continuation succeeds with probability at most `ε₂` whatever the prover does, the composition
-succeeds with at most the probability of leaving the doomed set, plus `ε₂`. -/
 theorem prob_bind_le (f : α → Game β) (p : β → Prop) (D : α → Prop) (ε₂ : ℝ≥0∞)
     (hf : ∀ a, D a → ∀ t, prob p (f a) t ≤ ε₂) :
     ∀ (g : Game α) (s : Strategy (g.bind f)),
@@ -187,7 +164,6 @@ theorem prob_bind_le (f : α → Game β) (p : β → Prop) (D : α → Prop) (�
       rw [← avg_const (C := C) ε₂, ← avg_add]
       exact avg_mono fun c => prob_bind_le f p D ε₂ hf (k c) (s c)
 
-/-- An event that the continuation settles by the first output alone. -/
 theorem prob_bind_of_const (f : α → Game β) (p : β → Prop) (P : α → Prop)
     (hf : ∀ a t, prob p (f a) t = prob P (.ret a) PUnit.unit) :
     ∀ (g : Game α) (s : Strategy (g.bind f)), prob p (g.bind f) s = prob P g (Strategy.ofBind f g s)

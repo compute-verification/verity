@@ -6,18 +6,7 @@ import Mathlib.Algebra.Order.Field.Rat
 import Mathlib.Algebra.Order.Ring.NNRat
 import Mathlib.Data.Finset.Attr
 
-/-!
-# The figures a bound reads
-
-Each operand class's range is a range of int8 values (`OperandClass.lo_le_hi`, `OperandClass.range_s8`).
-`DeviceFigures.bounding` has at least the capacity of the stated figures and of the estimate's
-(`DeviceFigures.capacityLE_bounding`, `DeviceFigures.estimate_capacityLE_bounding`). An accepted device's figures are
-within tolerance of `bounding`'s (`DeviceFigures.Accepted.within_bounding`), and `bounding`'s are themselves accepted
-against the estimate (`DeviceFigures.Accepted.bounding`), so the bound reads at most the tolerance more capacity than the
-estimate. Registration accepts an estimate's own figures when its rates are positive (`DeviceFigures.accepted_self`), so
-`Accepted` is not vacuous; it refuses a toy device stated ten percent slow or ten percent fast, and one stating a zero
-rate even where the tolerance would allow it.
--/
+/-! The figures a bound reads, and registration's acceptance of a device's figures against its estimate. -/
 
 @[expose] public section
 
@@ -51,25 +40,20 @@ theorem CapacityLE.refl (a : DeviceFigures) : a.CapacityLE a :=
 theorem CapacityLE.trans {a b c : DeviceFigures} (hab : a.CapacityLE b) (hbc : b.CapacityLE c) : a.CapacityLE c :=
   ⟨hab.1.trans hbc.1, fun o => (hab.2 o).trans (hbc.2 o)⟩
 
-/-- The figures the bound reads have at least the stated figures' capacity. -/
 theorem capacityLE_bounding (est : DeviceEstimate) (d : DeviceFigures) : d.CapacityLE (d.bounding est) :=
   ⟨le_max_left _ _, fun _ => le_max_left _ _⟩
 
-/-- The figures the bound reads have at least the estimate's capacity. -/
 theorem estimate_capacityLE_bounding (est : DeviceEstimate) (d : DeviceFigures) :
     est.figures.CapacityLE (d.bounding est) :=
   ⟨le_max_right _ _, fun _ => le_max_right _ _⟩
 
-/-- Registration accepts an estimate's own figures when its peak rates are positive. -/
 theorem accepted_self (est : DeviceEstimate) (h : ∀ c, 0 < est.figures.peakRate c) : est.figures.Accepted est :=
   ⟨rfl, withinTolerance_self _ _, fun _ => withinTolerance_self _ _, h⟩
 
-/-- The figures the bound reads for an accepted device are themselves within tolerance of the estimate's. -/
 theorem Accepted.bounding {est : DeviceEstimate} {d : DeviceFigures} (h : d.Accepted est) :
     (d.bounding est).Accepted est :=
   ⟨h.1, h.2.1.max_right, fun c => (h.2.2.1 c).max_right, fun c => (h.2.2.2 c).trans_le (le_max_left _ _)⟩
 
-/-- An accepted device's figures are within tolerance of the figures the bound reads. -/
 theorem Accepted.within_bounding {est : DeviceEstimate} {d : DeviceFigures} (h : d.Accepted est) :
     d.Accepted ⟨d.bounding est, est.tolerance⟩ :=
   ⟨rfl, h.2.1.of_max, fun c => (h.2.2.1 c).of_max, h.2.2.2⟩

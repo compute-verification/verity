@@ -6,20 +6,7 @@ import Proofs.Core.Game.Basic
 import Proofs.Core.Game.Interleave
 public import Definitions.Core.Game.Batch
 
-/-!
-# One lockstep among identical games
-
-A batched session runs many tables concurrently, the prover choosing the schedule (`batch`). To
-compile one table while every other game stays as it is, that table's lockstep runs beside the
-same game on both sides: `leftSame` and `rightSame` for `interleave`, and `batchLock` for a batch
-with the table at position `pre.length`. The index stays the table's, so its slots and choosers
-carry over, and alignment is preserved (`Aligned.batchLock`).
-
-`value_batch_getD_le`: an event of one position's output is at most as likely, for an optimal
-prover, as the same event in that position's game alone.
-
-The definitions are in `Definitions.Core.Game.Batch`.
--/
+/-! One lockstep among identical games, and one position of a batch against its game alone. -/
 
 @[expose] public section
 
@@ -29,8 +16,6 @@ namespace Game
 
 variable {α β γ : Type}
 
-/-- **One position of a batch.** An event of one position's output is at most as likely, for an
-optimal prover, as the same event in that position's game alone. -/
 theorem value_batch_getD_le (Q : α → Prop) (d : α) (g : Game α) (post : List (Game α)) :
     ∀ pre : List (Game α),
       value (fun outs => Q (outs.getD pre.length d)) (batch (pre ++ g :: post)) ≤ value Q g
@@ -72,8 +57,6 @@ theorem value_withDummy (O : Type) [Nonempty O] (p : α → Prop) :
       exact Finset.sum_congr rfl fun c _ => by rw [← value_withDummy O p (k c)]; rfl
 
 variable {T D I : Type} {get : I → ℕ → Option (T × D)}
-
-/-! ## Alignment -/
 
 section Aligned
 
@@ -227,7 +210,6 @@ theorem Aligned.rightSame {R₁ R₂ : I → α → β → Prop} :
           Aligned.rightSame (k c) hL')
         (fun _ _ => Aligned.map (Aligned.same _)) hL
 
-/-- **Batching preserves alignment.** -/
 theorem Aligned.batchLock {ζ : Type} {R₁ R₂ : I → ζ → ζ → Prop} (d : ζ) {i₁ i₂ : I}
     {g₁ g₂ g' : Game ζ} {L₁ : Lock T D get R₁ i₁ g₁ g'} {L₂ : Lock T D get R₂ i₂ g₂ g'}
     (hL : Aligned L₁ L₂) (post : List (Game ζ)) :

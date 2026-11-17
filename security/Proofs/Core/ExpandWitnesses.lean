@@ -3,18 +3,7 @@ module
 public import Definitions.Core.Guarantees.Expand.Witnesses
 public import Proofs.Core.AndSize
 
-/-!
-# The bit-level expansion's size bounds: honest and nontrivial lemmas
-
-The proofs of `security/Definitions/Core/Guarantees/Expand/Witnesses.lean`, at `Verity.Expand.AndPair`
-(`security/Definitions/Core/Expand/Instances.lean`). The honest lemmas are `ExpandSize` and `ExpandAndSize` there. The
-nontrivial ones show that both bounds hold with equality there:
-
-* `RegisteredCircuit.width_unregistered_le_expand`: when every gate of a unit has a bit, the bits of the unit's unregistered
-  reads are unregistered reads of its expansion, so `ExpandSize`'s bound on them is an equality;
-* `Expand.AndPair.isAnd`: each bit of `AndPair`'s gate 2 is the AND of a bit of gate 0 and one of gate 1, so it is not
-  affine (`Circuit.not_affine_of_and`), and the expansion's AND count is its number of computed bits.
--/
+/-! The bit-level expansion's size bounds: their honest and nontrivial lemmas, at `Verity.Expand.AndPair`. -/
 
 @[expose] public section
 
@@ -36,8 +25,6 @@ theorem Circuit.bitZ_ofBool (b : Bool) : bitZ (BitVec.ofBool b) = if b then 1 el
 theorem getLsbD_ofBool_zero (b : Bool) : (BitVec.ofBool b).getLsbD 0 = b := by
   cases b <;> rfl
 
-/-- The bits of a unit's unregistered reads are unregistered reads of its expansion, when each gate of the unit has a
-bit to read them. -/
 theorem RegisteredCircuit.bits_unregistered_subset (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (u : Fin B)
     (hw : ∀ g ∈ P.gates u, 0 < d.D.w g) :
     univ.filter (fun b => (d.D.unbit b).1 ∈ d.unregistered (P.gates u)) ⊆ d.expand.unregistered (P.expand.gates u) := by
@@ -56,8 +43,6 @@ theorem RegisteredCircuit.bits_unregistered_subset (d : RegisteredCircuit) {B : 
     exact ⟨mem_univ _, hg⟩
   · exact (d.D.mem_expand_reads hi).2 (by rw [Circuit.unbit_bit]; exact hr)
 
-/-- When each gate of a unit has a bit, its expansion's unregistered reads are at least as many as the width of its own:
-`ExpandSize`'s bound on them is an equality. -/
 theorem RegisteredCircuit.width_unregistered_le_expand (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (u : Fin B)
     (hw : ∀ g ∈ P.gates u, 0 < d.D.w g) :
     d.D.width (d.unregistered (P.gates u)) ≤ (d.expand.unregistered (P.expand.gates u)).card := by
@@ -71,8 +56,6 @@ namespace Expand.AndPair
 
 theorem op_two (V : (a : Fin d.D.N) → BitVec (d.D.w a)) : d.D.op 2 V = V 0 &&& V 1 := rfl
 
-/-- Each bit of the expansion's computed gates is an AND gate: bit `i` of gate 2 is bit `i` of gate 0 and bit `i` of
-gate 1. -/
 theorem isAnd : ∀ b ∈ d.D.expand.computed, d.D.expand.IsAnd b := by
   intro b hb
   obtain ⟨g, i, rfl⟩ : ∃ g i, d.D.bit g i = b := ⟨_, _, d.D.bit_unbit b⟩

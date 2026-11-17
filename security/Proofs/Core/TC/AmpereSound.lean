@@ -10,13 +10,7 @@ import Proofs.Core.TC.Ampere.Words
 import Proofs.Core.TC.Proofs.Words
 import Proofs.Core.TC.Sound
 
-/-!
-# The step relation is the step semantics, on the Ampere/Ada pipeline
-
-The theorems of `Verity.SecurityProofs.TC.Sound` for `AMPERE_BF16_M16N8K16` (two groups of eight products, a 25-bit
-adder, exponent floor `-132`), whose parameters `ADA_BF16_M16N8K16` shares (`ada_eq_ampere`). Each step's two groups
-chain inside the relation through the first group's output state, as they chain inside `tc_dot_total` through its value.
--/
+/-! The step relation is the step semantics, on the Ampere/Ada pipeline. -/
 
 @[expose] public section
 
@@ -38,7 +32,6 @@ theorem zip_drop {α β : Type} : ∀ (n : Nat) (a : List α) (b : List β), (a.
   | _ + 1, _ :: _, [] => by simp
   | n + 1, x :: a, y :: b => by simp [zip_drop n a b]
 
-/-- The product rows of an accepted witness are the ones `step_witness` builds. -/
 theorem prods_eq_ampere (a b : List Nat) (ha : a.length = 16) (hb : b.length = 16) (ha16 : ∀ x ∈ a, x < 2 ^ 16)
     (hb16 : ∀ x ∈ b, x < 2 ^ 16) (prod : List ProdCols) (hl : prod.length = 16)
     (h : ∀ j (hj : j < prod.length), prodHolds AP (a[j]!) (b[j]!) prod[j]) :
@@ -69,7 +62,6 @@ theorem ampere_sem (acc : Nat) (a b : List Nat) (ha : a.length = 16) (hb : b.len
   rw [← zipWith_eq_map_zip, ← zipWith_eq_map_zip, List.take_of_length_le (l := a.drop 8) (by simp [ha]),
     List.take_of_length_le (l := b.drop 8) (by simp [hb])]
 
-/-- The step's value on the Ampere pipeline. -/
 theorem ampere_step_core (align : Align) (acc : Nat) (a b : List Nat)
     (hin : StepInputs AMPERE_BF16_M16N8K16 acc a b) (w : Witness)
     (h : StepHolds AMPERE_BF16_M16N8K16 align (decodeState acc AMPERE_BF16_M16N8K16) a b w) :
@@ -197,8 +189,6 @@ theorem ampere_step_lt (acc : Nat) (a b : List Nat) (hin : StepInputs AMPERE_BF1
   obtain ⟨V, hV, hsem, -⟩ := ampere_step_core .div acc a b hin w hw
   rw [hsem]; exact pack_lt V hV
 
-/-- A proof block on the Ampere pipeline: every witness chain the relation accepts from `decode_state(acc)` outputs
-the decode of the semantics' accumulator after the unit's steps. -/
 theorem ampere_unit_sound (align : Align) (acc : Nat) (hacc : acc < 2 ^ 32)
     (steps : List (List Nat × List Nat × Witness))
     (hin : ∀ s ∈ steps, s.1.length = 16 ∧ s.2.1.length = 16 ∧ (∀ x ∈ s.1, x < 2 ^ 16) ∧ (∀ x ∈ s.2.1, x < 2 ^ 16))
@@ -215,7 +205,6 @@ theorem ampere_unit_sound (align : Align) (acc : Nat) (hacc : acc < 2 ^ 32)
     rw [ampere_step_sound align acc a b hin' w hs] at hrest
     exact ih _ (ampere_step_lt acc a b hin') (fun s hs => hin s (List.mem_cons_of_mem _ hs)) hrest
 
-/-- The same from the unit's constant initial state `zero_state`, which is `decode_state(+0)`. -/
 theorem ampere_unit_sound_zero (align : Align) (steps : List (List Nat × List Nat × Witness))
     (hin : ∀ s ∈ steps, s.1.length = 16 ∧ s.2.1.length = 16 ∧ (∀ x ∈ s.1, x < 2 ^ 16) ∧ (∀ x ∈ s.2.1, x < 2 ^ 16))
     (out : State) (h : ChainHolds AMPERE_BF16_M16N8K16 align (zeroState AMPERE_BF16_M16N8K16) steps out) :

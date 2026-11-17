@@ -7,23 +7,7 @@ import Mathlib.Basic.ENNReal.BigOperators
 import Proofs.Core.Game.Basic
 public import Definitions.Core.Game.Expect
 
-/-!
-# Expectations against a strategy, and the rewinding lemma for any run distribution
-
-`expect f g s` is the expectation of `f` over the verifier's coins when the prover plays `s`: the
-real-valued version of `prob` (`prob_toReal`). Two independent runs of the same strategy give
-`expect₂`.
-
-`expect_bad_le` is the rewinding lemma of `Rewinding.prBad_le` for any strategy's run
-distribution: if each run opens at most `Q` of `N` positions, the probability that a run opens a
-position off the plurality table is at most `√(N · Q · Pr₂[two runs open a position differently])`.
-The proof is `Rewinding`'s counting argument with weights: at each position, a run opening it to
-`v` conflicts with every run opening it to anything else, which by plurality is at least the
-off-plurality mass `b_p`, so the conflict mass at `p` is at least `b_p²`; and Cauchy–Schwarz over
-positions.
-
-The definitions are in `Definitions.Core.Game.Expect`.
--/
+/-! Expectations against a strategy, and the rewinding lemma for any run distribution. -/
 
 @[expose] public section
 
@@ -106,7 +90,6 @@ theorem expect_ind_le_one (p : α → Prop) (g : Game α) (s : Strategy g) :
   rwa [expect_const] at this
 
 open Classical in
-/-- `prob` is the expectation of the indicator. -/
 theorem prob_toReal (p : α → Prop) : ∀ (g : Game α) (s : Strategy g),
     (prob p g s).toReal = expect (ind p) g s
   | .ret a, _ => by simp only [prob, expect, ind]; split_ifs <;> simp
@@ -123,8 +106,6 @@ theorem prob_toReal (p : α → Prop) : ∀ (g : Game α) (s : Strategy g),
 
 end Game
 
-/-! ## The rewinding lemma for any run distribution -/
-
 namespace Rewinding
 
 open Game Finset
@@ -133,7 +114,6 @@ variable {α : Type} {P V : Type} [Fintype P] [Fintype V] [DecidableEq V]
 
 variable (op : α → P → Option V)
 
-/-- Every run distribution has a plurality table. -/
 theorem exists_pluralityE [Nonempty V] (g : Game α) (s : Strategy g) :
     ∃ vstar : P → V, IsPluralityE op g s vstar := by
   have h : ∀ p, ∃ v : V, ∀ w, expect (ind fun a => op a p = some w) g s ≤
@@ -156,7 +136,6 @@ theorem ind_isSome_eq_sum [Fintype V] (p : P) (a : α) :
     simp
 
 open Classical in
-/-- **The rewinding lemma for any run distribution.** -/
 theorem expect_bad_le (g : Game α) (s : Strategy g) (vstar : P → V)
     (hv : IsPluralityE op g s vstar) (Q : ℕ) (hQ : ∀ a, #(univ.filter fun p => (op a p).isSome) ≤ Q) :
     expect (ind fun a => ∃ p, Off op vstar a p) g s ≤
@@ -171,14 +150,12 @@ theorem expect_bad_le (g : Game α) (s : Strategy g) (vstar : P → V)
     simp only [o, π]
     rw [← expect_sum]
     exact congrArg (fun f => expect f g s) (funext fun a => ind_isSome_eq_sum op p a)
-  -- the off-plurality mass
   have hb : ∀ p, b p = o p - π p (vstar p) := fun p => by
     simp only [b, o, π]
     rw [← expect_sub]
     refine congrArg (fun f => expect f g s) (funext fun a => ?_)
     unfold ind Off
     by_cases h1 : (op a p).isSome <;> by_cases h2 : op a p = some (vstar p) <;> simp_all
-  -- the conflict mass at `p`
   have hc : ∀ p, c p = ∑ v, π p v * (o p - π p v) := fun p => by
     simp only [c, expect₂]
     have hin : ∀ a, expect (fun a' => ind (fun x : α × α => ConflictAt op x p) (a, a')) g s =
@@ -217,7 +194,6 @@ theorem expect_bad_le (g : Game α) (s : Strategy g) (vstar : P → V)
       expect_const_mul, mul_comm]
   have hπ0 : ∀ p v, 0 ≤ π p v := fun p v => expect_nonneg (ind_nonneg _) g s
   have hb0 : ∀ p, 0 ≤ b p := fun p => expect_nonneg (ind_nonneg _) g s
-  -- plurality: every value's complement mass is at least `b_p`, so `c_p ≥ o_p·b_p ≥ b_p²`
   have hcb : ∀ p, b p ^ 2 ≤ c p := fun p => by
     have h1 : ∀ v, π p v * b p ≤ π p v * (o p - π p v) := fun v =>
       mul_le_mul_of_nonneg_left (by rw [hb]; linarith [hv p v]) (hπ0 p v)
@@ -227,7 +203,6 @@ theorem expect_bad_le (g : Game α) (s : Strategy g) (vstar : P → V)
       _ = ∑ v, π p v * b p := by rw [ho, Finset.sum_mul]
       _ ≤ ∑ v, π p v * (o p - π p v) := Finset.sum_le_sum fun v _ => h1 v
       _ = c p := (hc p).symm
-  -- the union bound over positions
   have hunion : expect (ind fun a => ∃ p, Off op vstar a p) g s ≤ ∑ p, b p := by
     rw [← expect_sum]
     refine expect_mono (fun a => ?_) g s
@@ -241,7 +216,6 @@ theorem expect_bad_le (g : Game α) (s : Strategy g) (vstar : P → V)
               (fun p _ => ind_nonneg _ _) (mem_univ p)
     · rw [show ind (fun a => ∃ p, Off op vstar a p) a = 0 by simp [ind, h]]
       exact Finset.sum_nonneg fun p _ => ind_nonneg _ _
-  -- each conflicting pair counted at no more than `Q` positions
   have hQc : ∑ p, c p ≤ Q * expect₂ (fun a a' =>
       ind (fun x : α × α => ∃ p, ConflictAt op x p) (a, a')) g s := by
     simp only [c, expect₂]
@@ -261,7 +235,6 @@ theorem expect_bad_le (g : Game α) (s : Strategy g) (vstar : P → V)
     · push Not at h
       rw [Finset.sum_eq_zero fun p _ => by simp [ind, h p]]
       exact mul_nonneg (Nat.cast_nonneg _) (ind_nonneg _ _)
-  -- Cauchy–Schwarz over positions
   have hcs : (∑ p, b p) ^ 2 ≤ Fintype.card P * ∑ p, b p ^ 2 := by
     have := sq_sum_le_card_mul_sum_sq (s := (univ : Finset P)) (f := b)
     simpa using this

@@ -5,28 +5,7 @@ import Mathlib.Algebra.Order.Chebyshev
 import Proofs.Core.Game.Basic
 public import Definitions.Core.Game.Lock
 
-/-!
-# Lockstep coupling of an oracle game with its compiled game
-
-The compiled protocol replaces each committed table by a cap and opens the queried columns with
-paths at the end. `Lock get R i g g'` exhibits the compiled game `g'` running in lockstep with the
-oracle game `g`: the same coins and the same messages, except
-at a **table** node, where `g` receives a table `t : T` and `g'` a cap `d : D`. The node carries a
-slot, and the index `i : I` records the tables fixed so far (`get i slot`). At the leaves the two
-outputs satisfy `R i a b`. The compiled game's last message, the openings, has no counterpart in
-the oracle game; the oracle game gets a dummy send for it (`withDummy`), which changes no
-probability (`expect_withDummy`).
-
-For a compiled strategy `σ'` and a choice of table at every table node (`plur`, the plurality of
-the slot's openings over the continuation), `oracleStrat` is the oracle strategy `P̃` that sends
-the chosen tables and otherwise plays `σ'`. `expect_le_coupled`: the compiled event has
-probability at most the oracle event's under `P̃`, plus the probability of `Bad`, the runs whose
-leaf fails the coupling. `leafE_off_le`: per slot, the probability that a run opens a position
-off the table chosen at that slot is at most `√(N · Q · Pr[fork conflict])`: the rewinding lemma
-(`Rewinding.expect_bad_le`) at the slot's node, averaged over prefixes by Jensen.
-
-The definitions are in `Definitions.Core.Game.Lock`.
--/
+/-! Lockstep coupling of an oracle game with its compiled game. -/
 
 @[expose] public section
 
@@ -42,7 +21,6 @@ namespace Lock
 
 variable {T D I : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
 
-/-- A leaf function that ignores the index has the plain expectation. -/
 theorem leafE_const (plur : Chooser T D β) (f : β → ℝ) : ∀ {i : I} {g : Game α} {g' : Game β}
     (L : Lock T D get R i g g') (σ' : Strategy g'),
     leafE plur (fun _ b => f b) L σ' = expect f g' σ'
@@ -65,7 +43,6 @@ theorem leafE_mono (plur : Chooser T D β) {F F' : I → β → ℝ} (h : ∀ i 
   | _, _, _, .send _ L, σ' => leafE_mono plur h (L σ'.1) σ'.2
   | _, _, _, .table _ _ _ _ _ L, σ' => leafE_mono plur h _ σ'.2
 
-/-- Monotonicity where the leaf relation holds. -/
 theorem leafE_mono_rel (plur : Chooser T D β) {F F' : I → β → ℝ}
     (h : ∀ i a b, R i a b → F i b ≤ F' i b) :
     ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
@@ -99,9 +76,6 @@ theorem leafE_sum (plur : Chooser T D β) {ι : Type} (s : Finset ι) (F : ι �
       simp only [Finset.sum_insert hx]
       rw [leafE_add plur (F x) (fun i b => ∑ x ∈ s, F x i b), ih]
 
-/-- **The coupling.** If every leaf where the compiled event holds and the run is not `Bad`
-satisfies the oracle event, the compiled event's probability is at most the oracle event's under
-`P̃` plus the probability of `Bad`. -/
 theorem expect_le_coupled (plur : Chooser T D β) (Ec : β → Prop) (Eo : α → Prop)
     (Bad : I → β → Prop) (hR : ∀ i a b, R i a b → Ec b → ¬ Bad i b → Eo a) :
     ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
@@ -124,9 +98,6 @@ theorem expect_le_coupled (plur : Chooser T D β) (Ec : β → Prop) (Eo : α �
   | _, _, _, .send _ L, σ' => expect_le_coupled plur Ec Eo Bad hR (L σ'.1) σ'.2
   | _, _, _, .table _ _ _ _ _ L, σ' => expect_le_coupled plur Ec Eo Bad hR _ σ'.2
 
-/-! ## Building locksteps -/
-
-/-- A dummy last message changes no expectation. -/
 theorem expect_withDummy (O : Type) (f : α → ℝ) : ∀ (g : Game α) (σ : Strategy (withDummy O g)),
     expect f (withDummy O g) σ = expect f g (dropDummy O g σ)
   | .ret _, _ => rfl
@@ -134,8 +105,6 @@ theorem expect_withDummy (O : Type) (f : α → ℝ) : ∀ (g : Game α) (σ : S
       simp only [withDummy, bind_coin, expect]
       exact congrArg (· / _) (Finset.sum_congr rfl fun c _ => expect_withDummy O f (k c) (σ c))
   | .send _ k, σ => expect_withDummy O f (k σ.1) σ.2
-
-/-! ## Rewinding at every table node -/
 
 theorem forkE_nonneg (plur : Chooser T D β) (slot : ℕ) {Φ : D → β → β → ℝ}
     (hΦ : ∀ d b b', 0 ≤ Φ d b b') :
@@ -153,8 +122,6 @@ theorem forkE_nonneg (plur : Chooser T D β) (slot : ℕ) {Φ : D → β → β 
       · exact expect_nonneg (fun b => expect_nonneg (hΦ _ b) _ _) _ _
       · exact forkE_nonneg plur slot hΦ _ σ'.2
 
-/-- Below a slot's node, a leaf function reading only that slot's table is the plain expectation
-with the table fixed. -/
 theorem leafE_fixed (plur : Chooser T D β) (slot : ℕ) (td : T × D) (f : β → ℝ) (F : I → β → ℝ)
     (hF : ∀ i b, get i slot = some td → F i b = f b) :
     ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
@@ -170,7 +137,6 @@ theorem leafE_fixed (plur : Chooser T D β) (slot : ℕ) (td : T × D) (f : β �
       have hs : s ≠ slot := fun h => by subst h; rw [hfresh] at hi; cases hi
       exact leafE_fixed plur slot td f F hF _ σ'.2 (by rw [hkeep _ _ slot hs.symm, hi])
 
-/-- Jensen for `√` over a uniform average. -/
 theorem avg_sqrt_le' {C : Type} [Fintype C] [Nonempty C] (x : C → ℝ) (hx : ∀ c, 0 ≤ x c) :
     (∑ c, Real.sqrt (x c)) / Fintype.card C ≤ Real.sqrt ((∑ c, x c) / Fintype.card C) := by
   have hn : (0 : ℝ) < Fintype.card C := by exact_mod_cast Fintype.card_pos
@@ -182,10 +148,6 @@ theorem avg_sqrt_le' {C : Type} [Fintype C] [Nonempty C] (x : C → ℝ) (hx : �
   nlinarith [hcs]
 
 open Classical in
-/-- **Rewinding at a slot.** If the table chosen at `slot` (with cap `d`) always reads, through
-`row`, as a plurality of the slot's openings `op d` over the continuation, then the probability
-that a run opens a position off the table fixed at `slot` is at most `√(N · Q · Pr[fork conflict])`,
-where the fork is at the slot's node. -/
 theorem leafE_off_le {P V : Type} [Fintype P] [Fintype V] [DecidableEq V]
     (op : D → β → P → Option V) (row : T → P → V) (slot : ℕ) (Q : ℕ)
     (hQ : ∀ d b, (Finset.univ.filter fun p => (op d b p).isSome).card ≤ Q) (plur : Chooser T D β)
@@ -233,9 +195,6 @@ theorem leafE_off_le {P V : Type} [Fintype P] [Fintype V] [DecidableEq V]
         exact leafE_off_le op row slot Q hQ plur hplur _ σ'.2
           (by rw [hkeep _ _ slot (Ne.symm hs), hi])
 
-/-! ## Two locksteps of one compiled game with the same slots -/
-
-/-- A lockstep is aligned with itself. -/
 theorem Aligned.refl : ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g'),
     Aligned L L
   | _, _, _, .ret h => .ret h h
@@ -243,7 +202,6 @@ theorem Aligned.refl : ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D ge
   | _, _, _, .send M L => .send M fun m => Aligned.refl (L m)
   | _, _, _, .table slot _ _ _ _ L => .table slot fun t d => Aligned.refl (L t d)
 
-/-- **Aligned locksteps have the same fork probability.** -/
 theorem forkE_congr (plur : Chooser T D β) (slot : ℕ) (Φ : D → β → β → ℝ)
     {R₁ R₂ : I → α → β → Prop} {i₁ i₂ : I} {g₁ g₂ : Game α} {g' : Game β}
     {L₁ : Lock T D get R₁ i₁ g₁ g'} {L₂ : Lock T D get R₂ i₂ g₂ g'} (h : Aligned L₁ L₂) :
@@ -262,7 +220,6 @@ theorem forkE_congr (plur : Chooser T D β) (slot : ℕ) (Φ : D → β → β �
       · rfl
       · exact ih _ σ'.1 σ'.2
 
-/-- **Sequencing preserves alignment.** -/
 theorem Aligned.bind {α₂ β₂ : Type} {R₁ R₂ : I → α → β → Prop} {R₁' R₂' : I → α₂ → β₂ → Prop}
     {f₁ f₂ : α → Game α₂} {f' : β → Game β₂}
     {h₁ : ∀ i a b, R₁ i a b → Lock T D get R₁' i (f₁ a) (f' b)}

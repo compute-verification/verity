@@ -3,41 +3,7 @@ module
 public import Definitions.Core.Game.InterleaveBridge
 public import Proofs.Core.Game.TwoRun
 
-/-!
-# A play advanced between stops, on coins supplied from outside
-
-A strategy `σ` of a causal game `g` (`Verity.Game`) is turned into a strategy of another game whose moves interleave with
-coins, a Flock game (`FlockSoundness.Game`) among them, by simulating `σ`: the simulation holds a tape of `g` and a
-position on it, and walks `σ`'s play to the next node where one of a family of cuts (`DigestCut`) fixes a message (a
-stop). There the other game's move is read off the most likely message at each cut fixed there (`revealMode`), and its
-coin is written into the tape at the stop before the walk goes on. This module is that simulation on `g`'s side, at
-any family of cuts and any rewriting of the tape:
-
-* **Positions** (`Pos`): a node of `g` with `σ`'s strategy there, the cuts there, the tape from there and the tapes of
-  the whole play through the node (`Pos.back`, a tape from there put back in place).
-* **The walk** (`Pos.toStop`): along the tape, through the prover's messages and the tape's coins, to the first node at
-  which a cut is fixed, or to the play's end (`Pos.toStop_stops`). `Pos.consume` marks the cuts fixed at a stop as
-  past, `Pos.rewrite` rewrites the tape from the position and `Pos.withTape` replaces it.
-* **The walk resamples** (`Pos.avg_toStop`): over a uniform tape from a position, the tape from the next stop is
-  uniform and independent of the walk to it, so any reading of the stop has the mean of its average over the tapes
-  from there (`Pos.resample`). It rests on the coin a play reads picking out a uniform, independent value of the tape's
-  dependent function (`avg_pick`, from `avg_update_pi`), beside means over products (`avg_prod`, `avg_comm`,
-  `avg_equiv`). The walk keeps the whole tape at any cuts (`Pos.toStop_tape`).
-* **What the walk keeps** (`Pos.Inv`, `Pos.Le`): the play of a tape through the position is the play from the position
-  (`Pos.Inv.run`); each cut not yet past reads, on such a tape, what its descent at the position reads, at every
-  reading that descends through the prover's messages and the tape's coins (`CutReading`: the miss, the revealed and
-  the most likely message); and the walk, consuming and rewriting only extend the position's tapes (`Pos.Le`), so
-  every later tape is one through it, and the walk keeps the whole tape (`Pos.toStop_spec`).
-* **What a stop fixes** (`Pos.modes`, `Pos.read_here`): at a stop, each cut fixed there reads, on every tape through
-  any later position, what it reads at the stop.
-* **The coupling through a joint distribution** (`pr_le_of_joint`): a joint distribution of another game's outcome and a tape of `g`, whose
-  tape marginal is within `h` of the uniform tape's, and on whose support an event of the tape implies one of the
-  outcome, bounds the event's probability over the uniform tape by the outcome's plus `h`.
-
-`Pos`, the walk (`Pos.walk`, `Pos.toStop`), `Pos.root`, `Pos.tape`, `Pos.consume`, `Pos.rewrite`, `Pos.modes` and the
-cuts' `atSend`, `atCoin`, `isHere` and `modeHere` are `Definitions.Core.Game.InterleaveBridge`'s; `Pos.withTape`,
-`Pos.resample`, `Pos.Inv`, `Pos.Le` and `CutReading` are here.
--/
+/-! A play of a causal game advanced between stops, on coins supplied from outside. -/
 
 @[expose] public section
 
@@ -99,8 +65,6 @@ theorem atCoin_eq {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game 
 
 end CutReading
 
-/-! ## Averages over products and dependent functions -/
-
 theorem avg_equiv {C D : Type} [Fintype C] [Fintype D] (e : C ≃ D) (f : D → ℝ≥0∞) :
     avg (fun c => f (e c)) = avg f := by
   unfold avg
@@ -123,7 +87,6 @@ theorem avg_comm {C D : Type} [Fintype C] [Fintype D] (f : C → D → ℝ≥0�
     ← avg_equiv (Equiv.prodComm C D) (fun p : D × C => f p.2 p.1)]
   rfl
 
-/-- **Resampling one value of a uniform dependent function** leaves its average unchanged. -/
 theorem avg_update_pi {C : Type} [DecidableEq C] [Fintype C] {T : C → Type} [∀ c, Fintype (T c)]
     [∀ c, Nonempty (T c)] (c : C) (F : ((c : C) → T c) → ℝ≥0∞) :
     avg (fun f => avg fun a : T c => F (Function.update f c a)) = avg F := by
@@ -138,9 +101,6 @@ theorem avg_update_pi {C : Type} [DecidableEq C] [Fintype C] {T : C → Type} [�
     _ = avg (fun p : ((c : C) → T c) × T c => F p.1) := avg_equiv e fun p => F p.1
     _ = avg F := by rw [avg_prod]; simp only [avg_const]
 
-/-- **The value a uniform coin picks out of a uniform dependent function is uniform and independent of the others**:
-averaged over the coin `c` and the function `f`, a reading of `c`, `f c` and `f` with `f c` replaced is its average over
-`f c`'s replacements. -/
 theorem avg_pick {C : Type} [DecidableEq C] [Fintype C] {T : C → Type} [∀ c, Fintype (T c)]
     [∀ c, Nonempty (T c)] (F : (c : C) → T c → (T c → (c : C) → T c) → ℝ≥0∞) :
     avg (fun z : C × ((c : C) → T c) => F z.1 (z.2 z.1) fun y => Function.update z.2 z.1 y) =
@@ -205,7 +165,6 @@ theorem tape_consume (p : Pos g σ V ι) : p.consume.tape = p.tape := rfl
 theorem tape_rewrite (p : Pos g σ V ι) (f : CoinTape p.g' p.s' → CoinTape p.g' p.s') :
     (p.rewrite f).tape = p.back (f p.x) := rfl
 
-/-- **The walk extends the position, keeps the tape and keeps the invariant.** -/
 theorem walk_spec (Ks₀ : ι → DigestCut V g) :
     ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (x : CoinTape g' s')
       (back : CoinTape g' s' → CoinTape g σ),
@@ -258,7 +217,6 @@ theorem walk_spec (Ks₀ : ι → DigestCut V g) :
       rw [Function.update_eq_self]
       rfl
 
-/-- **The walk keeps the tape**, at any cuts. -/
 theorem walk_tape : ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (x : CoinTape g' s')
     (back : CoinTape g' s' → CoinTape g σ), (walk g' s' Ks x back).tape = back x
   | .ret _, _, _, _, _ => rfl
@@ -299,8 +257,6 @@ theorem avg_walk_coin (H : Pos g σ V ι → ℝ≥0∞) {C : Type} [iF : Fintyp
   avg_pick (T := fun c => CoinTape (k c) (s' c)) fun c a u =>
     H (walk (k c) (s' c) (fun i => (Ks i).atCoin c) a fun y => back (c, u y))
 
-/-- **The tape from the next stop is uniform and independent of the walk to it**: averaged over the tape from a
-node, any reading of the walk's stop is its average over the tapes from the stop. -/
 theorem avg_walk (G : Pos g σ V ι → ℝ≥0∞) : ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g')
     (back : CoinTape g' s' → CoinTape g σ),
     avg (fun z : CoinTape g' s' => G (walk g' s' Ks z back)) =
@@ -330,18 +286,15 @@ theorem avg_walk (G : Pos g σ V ι → ℝ≥0∞) : ∀ (g' : Game α) (s' : S
       rw [avg_walk_coin G, avg_walk_coin (resample G)]
       exact congrArg avg (funext fun z => avg_walk G (k z.1) (s' z.1) _ _)
 
-/-- **The tape from the next stop is uniform and independent of the walk to it**, from a position. -/
 theorem avg_toStop (G : Pos g σ V ι → ℝ≥0∞) (p : Pos g σ V ι) :
     avg (fun z : CoinTape p.g' p.s' => G (p.withTape z).toStop) =
       avg fun z : CoinTape p.g' p.s' => resample G (p.withTape z).toStop :=
   avg_walk G p.g' p.s' p.Ks p.back
 
-/-- **The next stop extends the position, keeps the tape and keeps the invariant.** -/
 theorem toStop_spec {Ks₀ : ι → DigestCut V g} {p : Pos g σ V ι} (h : p.Inv Ks₀) :
     p.Le p.toStop ∧ p.toStop.tape = p.tape ∧ p.toStop.Inv Ks₀ :=
   walk_spec Ks₀ p.g' p.s' p.Ks p.x p.back h
 
-/-- **The walk ends at a stop or at the play's end.** -/
 theorem walk_stops : ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (x : CoinTape g' s')
     (back : CoinTape g' s' → CoinTape g σ),
     (∃ i, ((walk g' s' Ks x back).Ks i).isHere) ∨ ∃ a, (walk g' s' Ks x back).g' = .ret a
@@ -362,8 +315,6 @@ theorem walk_stops : ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCu
 theorem toStop_stops (p : Pos g σ V ι) : (∃ i, (p.toStop.Ks i).isHere) ∨ ∃ a, p.toStop.g' = .ret a :=
   walk_stops p.g' p.s' p.Ks p.x p.back
 
-/-- **What a stop fixes, on every later tape**: at a position that keeps the invariant, a cut fixed there reads, on
-every tape through any later position and at every reading, what it reads at the position on some tape from there. -/
 theorem read_here {Ks₀ : ι → DigestCut V g} {p q : Pos g σ V ι} (h : p.Inv Ks₀) (hpq : p.Le q) {i : ι}
     {rv : α → Option V} (hi : p.Ks i = .here rv) {β : Type} (ρ : CutReading α V β) (y : CoinTape q.g' q.s') :
     ∃ z, ρ.r (Ks₀ i) σ (q.back y) = ρ.r (DigestCut.here rv : DigestCut V p.g') p.s' z := by
@@ -375,14 +326,11 @@ theorem read_here {Ks₀ : ι → DigestCut V g} {p q : Pos g σ V ι} (h : p.In
   · rw [hi] at hc
     cases hc
 
-/-- **The play of the position's tape is the play of the whole tape.** -/
 theorem run_tape {Ks₀ : ι → DigestCut V g} {p : Pos g σ V ι} (h : p.Inv Ks₀) :
     CoinTape.run g σ p.tape = CoinTape.run p.g' p.s' p.x :=
   h.run p.x
 
 end Pos
-
-/-! ## The coupling through a joint distribution -/
 
 theorem prob_mono_reaches {p q : α → Prop} :
     ∀ (g : Game α) (s : Strategy g), (∀ a, PlayReaches g s a → p a → q a) → prob p g s ≤ prob q g s
@@ -396,9 +344,6 @@ theorem prob_mono_reaches {p q : α → Prop} :
   | @Game.coin _ C _ _ k, s, h => Finset.sum_le_sum fun c _ =>
       mul_le_mul_right (prob_mono_reaches (k c) (s c) fun a ha => h a ⟨c, ha⟩) _
 
-/-- **The coupling through a joint distribution**: a joint distribution `W` of an outcome and a tape of `g` at `σ` whose tape is, at the
-event `Q`, within `h` of the uniform tape (`hW`), and on whose support `Q` of the tape implies `E` of the outcome (`hE`),
-bounds `Q`'s probability over the uniform tape by `E`'s under `W`, plus `h`. -/
 theorem pr_le_of_joint {g : Game α} {σ : Strategy g} {β : Type} (W : Game (β × CoinTape g σ)) (w : Strategy W)
     (Q : CoinTape g σ → Prop) (E : β → Prop) (h : ℝ≥0∞)
     (hW : ENNReal.ofReal (Claims.Pr Q) ≤ prob (fun o => Q o.2) W w + h)

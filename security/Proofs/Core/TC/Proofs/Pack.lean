@@ -4,13 +4,7 @@ public import Definitions.Core.TC.Bridge
 import Proofs.Core.TC.Proofs.Group
 import Proofs.Core.TC.Proofs.Words
 
-/-!
-# The unit boundary: `pack_relation` is `pack_value` then `cvt.rn.bf16.f32`
-
-For a canonical final state, `pack_relation`'s predicates force the FP32 word to be `pack_value` of the state's value
-(`pack_word`) and the BF16 word to be `cvt_rn_bf16_f32` of it (`pack_sound`), and some columns satisfy them
-(`pack_complete`). None of this depends on the pipeline: the floor enters only through states whose magnitude is zero.
--/
+/-! The unit boundary, on every pipeline: `pack_relation` is `pack_value` then `cvt.rn.bf16.f32`. -/
 
 @[expose] public section
 
@@ -18,14 +12,12 @@ namespace Verity.TC.Proofs
 
 open Verity.TC Verity.TC.Spec Verity.TC.Relation
 
-/-- `cvt.rn.bf16.f32`'s arithmetic on a word below `2^32`, as division and remainder. -/
 theorem cvt_arith (W b : Nat) (hb : b = W / 65536 % 2) :
     (W >>> 16) &&& 1 = b ∧ ((W + 0x7FFF + b) >>> 16) &&& 0xFFFF = (W + 0x7FFF + b) / 65536 % 65536 := by
   refine ⟨?_, ?_⟩
   · rw [Nat.shiftRight_eq_div_pow, show (1 : Nat) = 2 ^ 1 - 1 by decide, and_mask]; simp [hb]
   · rw [Nat.shiftRight_eq_div_pow, show (0xFFFF : Nat) = 2 ^ 16 - 1 by decide, and_mask]
 
-/-- The rounding half of `pack_relation`: its BF16 word is the RNE rounding of its FP32 word, or `0x7FFF` for a NaN. -/
 theorem cvt_part (nan : Int) (hnan : nan = 0 ∨ nan = 1) (c : PackCols) (hW0 : 0 ≤ c.word) (hW1 : c.word < 2 ^ 32)
     (h10 : RANGE c.lo 16) (h11 : RANGE c.hi 16) (h12 : LIN (c.hi * 65536 + c.lo - c.word)) (h13 : BOOL c.b16)
     (h14 : RANGE c.hi2 15) (h15 : LIN (c.hi2 * 2 + c.b16 - c.hi)) (h16 : BOOL c.carry) (h17 : RANGE c.rem 16)
@@ -51,7 +43,6 @@ theorem cvt_part (nan : Int) (hnan : nan = 0 ∨ nan = 1) (c : PackCols) (hW0 : 
   · simp only [ite_true]
     omega
 
-/-- A group's output packs to a word whose class is NaN exactly when the value is NaN. -/
 theorem pack_class (V : Value) (hV : Admissible V) : fp32Class (packValue V) = .nan ↔ V = .nan := by
   cases V with
   | nan => simp only [iff_true]; decide
@@ -85,7 +76,6 @@ theorem pack_class (V : Value) (hV : Admissible V) : fp32Class (packValue V) = .
       simp only [this, ite_false]
       split <;> simp
 
-/-- The packing half of `pack_relation`: its FP32 word is `pack_value` of the state's value. -/
 theorem pack_word (Z : Int) (V : Value) (hV : Admissible V) (c : PackCols) (h : packWordHolds (stateOf Z V) c) :
     c.word = (packValue V : Int) := by
   obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := h
@@ -153,7 +143,6 @@ theorem pack_word (Z : Int) (V : Value) (hV : Admissible V) (c : PackCols) (h : 
         simp only [hb, ite_false]
         omega
 
-/-- `pack_relation` is `pack_value` then `cvt_rn_bf16_f32`, for every admissible value. -/
 theorem pack_sound (Z : Int) (V : Value) (hV : Admissible V) (c : PackCols) (h : packHolds (stateOf Z V) c) :
     c.word = (packValue V : Int) ∧ c.bf16 = (cvtRnBf16F32 (packValue V) : Int) := by
   have hw := pack_word Z V hV c h.1
@@ -219,7 +208,6 @@ theorem cvt_complete (st : State) (h0 : 0 ≤ (honestPack st).word) (h1 : (hones
   all_goals (try simp only [RANGE, LIN, MUL])
   all_goals omega
 
-/-- Some columns satisfy `pack_relation` for every admissible value. -/
 theorem pack_complete (Z : Int) (V : Value) (hV : Admissible V) : packHolds (stateOf Z V) (honestPack (stateOf Z V)) := by
   have hword : packWordHolds (stateOf Z V) (honestPack (stateOf Z V)) := by
     have hM : 0 ≤ (stateOf Z V).M ∧ (stateOf Z V).M < 2 ^ 24 ∧
