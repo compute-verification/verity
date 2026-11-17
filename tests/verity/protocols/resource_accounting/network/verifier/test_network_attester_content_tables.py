@@ -113,7 +113,7 @@ def registered(device, params: NetworkAttesterParams, directory) -> str:
     return h.hexdigest()
 
 
-def test_a_schedule_without_content_rows_has_the_digest_records_heads_and_certificates_it_had(tmp_path):
+def test_a_schedule_without_content_rows_has_the_digest_records_heads_and_attestations_it_had(tmp_path):
     """The classes are hashed only by a schedule that lists them, so a schedule without them, with lengths rows or
     without, has the parameters digest it had, and its run leaves the records, the heads and the attestations it left,
     byte for byte. Its device keeps and hands nothing more: a release has no request and no ids."""

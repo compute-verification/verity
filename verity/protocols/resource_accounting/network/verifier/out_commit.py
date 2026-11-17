@@ -13,7 +13,7 @@ default `hm96-sha512/row/v2`, a proof block's bit-row port), committed as `Regis
 the domain `registered_entries` derives for a value the verifier pins: `registration.check` holds its pinned values
 across windows, so D leaves the window's open root out. `program` is the reading program's digest
 (`partition.program_digest`), public. salt_r is 192 bytes the attester samples from the operating system for row r and
-no other row. The salts are witness, which the attester hands to the prover alone (`CertifiedOut.salts`, `witness`);
+no other row. The salts are witness, which the attester hands to the prover alone (`AttestedOut.salts`, `witness`);
 the rows are what the server sent, which the prover holds.
 
 **The signed head** (`OutHead`) is public, as a hiding root is:
@@ -27,7 +27,7 @@ Its attestation is `Issuer.sign`'s of the out digest for the egress execution ph
 out of another's: `check_out` takes the window it expects. A record's, a clock's and the network attester cells'
 digests are under other tags, so none verifies as another.
 
-**The record** (`CertifiedOut.public`) is the head and its attestation as one public JSON object, what the auditor
+**The record** (`AttestedOut.public`) is the head and its attestation as one public JSON object, what the auditor
 receives:
 
     {"format": RECORD, "link", "direction", "window", "session", "value", "program", "words", "rows", "word_bits",
@@ -167,7 +167,7 @@ class OutHead:
 
 
 @dataclass(frozen=True)
-class CertifiedOut:
+class AttestedOut:
     """The attester's output value: the public part (`head`, `certificate` and `session`, read together as `public`,
     with `root` and `domain` its hex), and the witness (`committed`: the rows and their salts, `salts`), which goes to
     the prover alone."""
@@ -211,14 +211,14 @@ class CertifiedOut:
 
 
 def read_witness(blob: bytes) -> list[bytes]:
-    """`CertifiedOut.witness` read back: the rows' salts."""
+    """`AttestedOut.witness` read back: the rows' salts."""
     if not blob or len(blob) % SALT_BYTES:
         raise ValueError(f"an out value's witness is {SALT_BYTES} bytes a row")
     return [blob[i:i + SALT_BYTES] for i in range(0, len(blob), SALT_BYTES)]
 
 
 def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | Issuer, session: bytes, window: int,
-               link: str = LINK, salts: Sequence[bytes] | None = None) -> CertifiedOut:
+               link: str = LINK, salts: Sequence[bytes] | None = None) -> AttestedOut:
     """The output value the attester relayed, committed at the registration's `shape` under the domain the verifier
     derives for the reading program's pinned value, and its head signed for the egress execution phase `(link, window)`
     in attester session `session`.
@@ -240,7 +240,7 @@ def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | 
     certificate = issuer.sign(link, DIRECTION, window, head.digest())
     if certificate is None:
         raise SignerRefused(f"the attester's signer refused the out certificate of {link} window {window}")
-    return CertifiedOut(head, certificate, session, committed)
+    return AttestedOut(head, certificate, session, committed)
 
 
 _RECORD_TYPES = {"format": str, "link": str, "direction": str, "window": int, "session": str, "value": str,
@@ -251,7 +251,7 @@ _CERT_KEYS = ("key", "digest", "signature")
 
 def _read(doc: Any) -> tuple[OutHead, Certificate, bytes]:
     if not isinstance(doc, Mapping):
-        raise OutRefused("out-record", f"an out record is a JSON object (`CertifiedOut.public`), not a "
+        raise OutRefused("out-record", f"an out record is a JSON object (`AttestedOut.public`), not a "
                                        f"{type(doc).__name__}")
     if set(doc) != set(_RECORD_TYPES):
         raise OutRefused("out-record", f"an out record holds the keys {sorted(_RECORD_TYPES)} and no other")
@@ -281,7 +281,7 @@ def _read(doc: Any) -> tuple[OutHead, Certificate, bytes]:
 
 def check_out(certificate: Any, key: PublicKey, session: bytes, shape: OutShape, *, window: int,
               link: str = LINK) -> str:
-    """The verifier's read of the out record `certificate` (`CertifiedOut.public`) for the egress execution phase
+    """The verifier's read of the out record `certificate` (`AttestedOut.public`) for the egress execution phase
     `(link, window)` it expects, under the network attester's `key` in attester session `session`: the root to pin
     (lowercase hex, `registration.check`'s `pinned` form), or `OutRefused` naming the first check that fails. `shape`
     is the verifier's own, from its registration of the reading program (module docstring, "The shape"), whose
@@ -327,5 +327,5 @@ def check_out(certificate: Any, key: PublicKey, session: bytes, shape: OutShape,
     return head.root.hex()
 
 
-__all__ = ["DIRECTION", "LINK", "OUT_TAG", "RECORD", "REFUSALS", "SALT_BYTES", "VALUE", "CertifiedOut", "OutHead",
+__all__ = ["DIRECTION", "LINK", "OUT_TAG", "RECORD", "REFUSALS", "SALT_BYTES", "VALUE", "AttestedOut", "OutHead",
            "OutRefused", "OutShape", "check_out", "commit_out", "read_witness"]

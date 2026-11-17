@@ -126,7 +126,7 @@ def test_a_window_past_the_sessions_end_or_before_its_origin_isnt_covered(tmp_pa
     assert not early["covered"] and early["why"] == ["the window starts at execution phase -1, before the session's origin"]
 
 
-def test_a_certificate_that_fails_to_verify_or_is_missing_uncovers_its_window(tmp_path: Path) -> None:
+def test_a_attestation_that_fails_to_verify_or_is_missing_uncovers_its_window(tmp_path: Path) -> None:
     run = gate_run(tmp_path / "forged", forged=frozenset({(LINK, 2)}), missing=frozenset({(FAILS, 4)}))
     assert egress(run, at(1_000), at(4_000))["covered"], "windows 0 and 1"
     forged = egress(run, at(7_000), at(8_000))
