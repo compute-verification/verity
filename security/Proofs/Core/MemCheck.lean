@@ -18,38 +18,7 @@ import Proofs.Core.Game.Prob
 import Proofs.Core.Game.Tape
 import Proofs.Core.ValueSalts
 
-/-!
-# What a memory check establishes, and what a fingerprint collision costs it: proofs
-
-`MemoryChecked`. Times increase along the log and only the initial contents are at time `0`, so the writes with the
-initial contents are distinct records; the check makes them the reads with the final contents, so no two accesses read
-one record and no access reads a final content. By strong induction on the access, each read finds its address's last
-write before it, or its initial value: the record it reads is a write's or an initial content, earlier than it by the
-time test, and a first access to the address in between would, by induction, have read that same record. The final
-contents follow the same way, and an address the log accesses is touched since its first access reads an initial
-content. `MemoryChecked_honest`, a log of three accesses to two addresses passes the check;
-`MemoryChecked_nontrivial`, an access that reads its own write did not read its memory correctly, though its records
-pass the multiset test.
-
-`FingerprintCollision`. A multiset's fingerprint is the value at `(α, γ)` of the polynomial
-`∏ c, (X 0 + Σ_i C(c_i) X 1^i)` (`fingerprint2`), of total degree at most `|A| · max 1 (m - 1)`. Two different multisets
-give different polynomials (`fingerprint2_injective`): sent to `F[γ][α]`, each is `∏ c, (α - g c)` with
-`g c = -Σ_i C(c_i) γ^i`, injective in `c`, and the roots of that product are the multiset of the `g c`. So the difference
-is a nonzero polynomial of total degree at most `max |A| |B| · max 1 (m - 1)`, and Schwartz–Zippel
-(`Game.prCoin_mvEval_eq_zero_le`) bounds the coins at which it vanishes.
-
-`PrintCollision`. Two different keys' prints differ by a nonzero polynomial of degree at most `m - 1` in `δ`
-(`chunkPoly`), which vanishes at a uniform `δ` with probability at most `(m - 1) / |F|`; a union bound over the
-`C(|S|, 2)` pairs, by induction on `S`, gives the rest.
-
-Witnesses, at GF(2^128) (Mathlib's `GaloisField 2 128`): `FingerprintCollision_honest`, an honest log's two sides (one
-multiset of two-chunk records listed in two orders) have equal fingerprints at every coin, and against a different
-multiset the bound at two records of two chunks holds, `2 / 2^128`; `FingerprintCollision_nontrivial`, a check that
-accepts every pair of multisets accepts two different ones with probability 1, above the bound `1 / 2^128`.
-`PrintCollision_honest`, two keys of four chunks share a print with probability at most `3 / 2^128`;
-`PrintCollision_nontrivial`, a check that takes every two keys to share a print does so with probability 1, above
-`1 / 2^128`.
--/
+/-! What a memory check establishes, and what a fingerprint collision costs it: proofs. -/
 
 @[expose] public section
 
@@ -123,8 +92,6 @@ theorem totalDegree_fingerprint2_le {m : ℕ} (A : Multiset (Fin m → F)) :
     exact totalDegree_factor2_le _)
   simpa using h
 
-/-- Two different multisets have different fingerprint polynomials: sent to `F[γ][α]`, each is the product of
-`α - (-Σ_i C(c_i) γ^i)` over its records, whose roots are the multiset of the `-Σ_i C(c_i) γ^i`. -/
 theorem fingerprint2_injective {m : ℕ} : Function.Injective (fingerprint2 (F := F) (m := m)) := by
   intro A B h
   let φ : MvPolynomial (Fin 2) F →+* Polynomial (Polynomial F) :=
@@ -146,7 +113,6 @@ theorem fingerprint2_injective {m : ℕ} : Function.Injective (fingerprint2 (F :
 
 end
 
-/-- Relabelling a uniform coin by an equivalence keeps an event's probability. -/
 theorem prCoin_equiv {C D : Type} [Fintype C] [Fintype D] (e : C ≃ D) (p : D → Prop) :
     Game.prCoin (fun c => p (e c)) = Game.prCoin p := by
   classical
@@ -155,7 +121,6 @@ theorem prCoin_equiv {C D : Type} [Fintype C] [Fintype D] (e : C ≃ D) (p : D �
 
 variable {F : Type} [Field F] [Fintype F]
 
-/-- Two different packed keys share a print at a uniform `δ` with probability at most `(m - 1) / |F|`. -/
 theorem prCoin_element_eq_le {m : ℕ} (c c' : Fin m → F) (h : c ≠ c') :
     Game.prCoin (fun δ : F => element δ c = element δ c') ≤ ((m - 1 : ℕ) : ℝ≥0∞) / Fintype.card F := by
   classical
@@ -178,13 +143,11 @@ section
 
 variable {A V : Type} [DecidableEq A]
 
-/-- The memory after access `i` is the memory before it with `i`'s write at its address. -/
 theorem ram_take_succ (v0 : A → V) (log : List (Access A V)) (i : ℕ) (h : i < log.length) :
     ram v0 (log.take (i + 1)) = Function.update (ram v0 (log.take i)) log[i].a (log[i].w, log[i].now) := by
   simp only [ram, List.take_add_one, List.getElem?_eq_getElem h, Option.toList_some, List.foldl_append,
     List.foldl_cons, List.foldl_nil]
 
-/-- Before any access to `a`, the memory holds `a`'s initial value at time `0`. -/
 theorem ram_take_of_none (v0 : A → V) (log : List (Access A V)) (a : A) :
     ∀ i, i ≤ log.length → (∀ k (hk : k < log.length), k < i → log[k].a ≠ a) →
       ram v0 (log.take i) a = (v0 a, 0)
@@ -193,7 +156,6 @@ theorem ram_take_of_none (v0 : A → V) (log : List (Access A V)) (a : A) :
     rw [ram_take_succ v0 log i (by omega), Function.update_of_ne (hn i (by omega) (by omega)).symm]
     exact ram_take_of_none v0 log a i (by omega) fun k hk hki => hn k hk (by omega)
 
-/-- After an access `j` to `a`, and no other access to `a` before `i`, the memory holds `j`'s write at `a`. -/
 theorem ram_take_of_last (v0 : A → V) (log : List (Access A V)) (a : A) (j : ℕ) (hj : j < log.length)
     (hja : log[j].a = a) :
     ∀ i, j < i → i ≤ log.length → (∀ k (hk : k < log.length), j < k → k < i → log[k].a ≠ a) →
@@ -228,8 +190,6 @@ theorem MemoryChecked : Guarantees.MemoryChecked := by
     · exact absurd (List.pairwise_iff_getElem.1 hinc i j hi hj h') (by omega)
     · obtain rfl : j = i := by omega
       exact lt_irrefl _ h
-  -- the writes with the initial contents are distinct (times increase, and only the initial ones are at `0`), so the
-  -- reads with the final contents are too
   have hW : (writes log + touched.val.map fun a => (a, v0 a, 0)).Nodup := by
     refine Multiset.nodup_add.2 ⟨?_, touched.nodup.map fun a b h => by simpa using congrArg Prod.fst h, ?_⟩
     · refine Multiset.coe_nodup.2 (List.Pairwise.imp ?_
@@ -253,7 +213,6 @@ theorem MemoryChecked : Guarantees.MemoryChecked := by
     intro k hk a ha h
     refine Multiset.disjoint_left.1 hRF (Multiset.mem_coe.2 (List.mem_map.2 ⟨log[k], List.getElem_mem hk, h⟩)) ?_
     exact Multiset.mem_map.2 ⟨a, ha, rfl⟩
-  -- each record of the reads and final contents is a write's or an initial content
   have hsrc : ∀ p ∈ (reads log + touched.val.map fun a => (a, fin a)),
       (∃ j, ∃ hj : j < log.length, wr log[j] = p) ∨ ∃ a ∈ touched, (a, v0 a, 0) = p := by
     intro p hp
@@ -268,8 +227,6 @@ theorem MemoryChecked : Guarantees.MemoryChecked := by
     fun i hi => Multiset.mem_add.2 (Or.inl (Multiset.mem_coe.2 (List.mem_map.2 ⟨log[i], List.getElem_mem hi, rfl⟩)))
   have hfin_mem : ∀ a ∈ touched, (a, fin a) ∈ (reads log + touched.val.map fun a => (a, fin a)) :=
     fun a ha => Multiset.mem_add.2 (Or.inr (Multiset.mem_map.2 ⟨a, ha, rfl⟩))
-  -- the reads, by strong induction on the access: an access reading another's write, or an initial content, while a
-  -- first access to its address in between read the same record, would be two accesses reading one record
   have hreads : ∀ i (h : i < log.length), (log[i].v, log[i].t) = ram v0 (log.take i) log[i].a := by
     intro i
     induction i using Nat.strong_induction_on with
@@ -308,7 +265,7 @@ theorem MemoryChecked : Guarantees.MemoryChecked := by
         exact absurd (hrdinj _ i hk hi this) (by omega)
       rw [ram_take_of_none v0 log _ i (by omega) hnone, ← ha, hv, ht]
   refine ⟨hreads, ?_, ?_⟩
-  · -- the final contents: an access to the address after the record's source would read that record too
+  ·
     intro a ha
     rcases hsrc _ (hfin_mem a ha) with ⟨j, hj, hja⟩ | ⟨a', -, ha'⟩
     · simp only [wr, Prod.mk.injEq] at hja
@@ -343,7 +300,7 @@ theorem MemoryChecked : Guarantees.MemoryChecked := by
       have := ram_take_of_none v0 log a' log.length le_rfl hnone
       rw [List.take_length] at this
       rw [this, hfin]
-  · -- every accessed address is touched: the first access to it reads a record no write before it made
+  ·
     intro x hx
     obtain ⟨j0, hj0, rfl⟩ := List.getElem_of_mem hx
     have hex : ∃ k, ∃ hk : k < log.length, log[k].a = log[j0].a := ⟨j0, hj0, rfl⟩

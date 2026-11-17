@@ -5,33 +5,7 @@ import Mathlib.Algebra.Order.Chebyshev
 import Mathlib.Combinatorics.Enumerative.DoubleCounting
 public import Definitions.Core.Rewinding
 
-/-!
-# The rewinding lemma: openings off the plurality table cost collisions
-
-Flock's compiled theorem (its soundness package's `README.md` §1.2) covers every prover,
-including one that never "knows" a table. Its committed table is the **plurality** table: at
-each position, the column the prover opens in the most runs (`IsPlurality`). A run is `bad` when
-it opens some position to a column off the plurality; a pair of runs `conflict`s when both open
-one position, to different columns. By `Merkle.openCollPair_spec`, each conflicting pair (both
-paths valid against one cap) gives a collision of the hash, found by running the prover twice with
-independent coins.
-
-`bad_sq_le`: if each run opens at most `Q` of the `N` positions, then
-
-  `#bad ² ≤ N · Q · #conflict`   (counts over runs `Ω` and pairs `Ω × Ω`),
-
-so `Pr[bad] ≤ √(N · Q · Pr[conflict])` (`prBad_le`). With `Pr[conflict] ≤ Adv_CR(B)` for the
-two-run collision finder `B`, this is the per-level term `√(N_ℓ Q_ℓ · Adv_CR)` of that package's
-`DESIGN.md` §1.2.
-
-Proof: `bad` is covered by the per-position sets of off-plurality runs, of sizes `b_p`. A run
-that opens `p` to `v` conflicts at `p` with every run opening `p` to anything but `v`, and there
-are at least `b_p` of those because no value beats the plurality, so `#conflictAt p ≥ q_p b_p ≥
-b_p²`. Each conflicting pair is counted at no more than `Q` positions, and Cauchy–Schwarz gives
-`(Σ b_p)² ≤ N Σ b_p²`.
-
-The definitions are in `Definitions.Core.Rewinding`.
--/
+/-! The rewinding lemma: openings off the plurality table cost collisions. -/
 
 @[expose] public section
 
@@ -46,7 +20,6 @@ variable {Ω P V : Type} [Fintype Ω] [DecidableEq Ω] [DecidableEq V]
 variable (op : Ω → P → Option V)
 
 omit [DecidableEq Ω] in
-/-- Every assignment of runs to openings has a plurality table. -/
 theorem exists_plurality [Nonempty V] : ∃ vstar : P → V, IsPlurality op vstar := by
   have h : ∀ p, ∃ v : V, ∀ w, #(openedTo op p w) ≤ #(openedTo op p v) := by
     intro p
@@ -71,14 +44,11 @@ theorem openedTo_subset (p : P) (v : V) : openedTo op p v ⊆ opened op p := by
   intro h
   simp [h]
 
-/-- The runs off the plurality at `p` are the runs that open `p`, minus those that open it to the
-plurality value. -/
 theorem off_eq (vstar : P → V) (p : P) :
     univ.filter (fun ω => Off op vstar ω p) = opened op p \ openedTo op p (vstar p) := by
   ext ω
   simp [Off, opened, openedTo]
 
-/-- A run opening `p` to `v` conflicts at `p` with at least `#off_p` runs (plurality). -/
 theorem off_le_row (vstar : P → V) (hv : IsPlurality op vstar) (p : P) (ω₁ : Ω) (v : V)
     (h₁ : op ω₁ p = some v) :
     #(univ.filter fun ω => Off op vstar ω p) ≤ #(univ.filter fun ω₂ => ConflictAt op (ω₁, ω₂) p) := by
@@ -92,11 +62,9 @@ theorem off_le_row (vstar : P → V) (hv : IsPlurality op vstar) (p : P) (ω₁ 
   have := hv p v
   omega
 
-/-- `b_p² ≤ #conflictAt p`. -/
 theorem off_sq_le (vstar : P → V) (hv : IsPlurality op vstar) (p : P) :
     #(univ.filter fun ω => Off op vstar ω p) ^ 2 ≤ #(univ.filter fun x => ConflictAt op x p) := by
   set b := #(univ.filter fun ω => Off op vstar ω p)
-  -- count conflicting pairs by their first run
   have hsplit : #(univ.filter fun x : Ω × Ω => ConflictAt op x p) =
       ∑ ω₁, #(univ.filter fun ω₂ => ConflictAt op (ω₁, ω₂) p) := by
     rw [card_filter, ← univ_product_univ, sum_product]
@@ -126,7 +94,6 @@ section rewinding
 
 variable {op}
 
-/-- Each conflicting pair is counted at no more than `Q` positions. -/
 theorem sum_conflictAt_le (Q : ℕ) (hQ : ∀ ω, #(univ.filter fun p => (op ω p).isSome) ≤ Q) :
     ∑ p, #(univ.filter fun x => ConflictAt op x p) ≤ Q * #(conflict op) := by
   classical
@@ -149,7 +116,6 @@ theorem sum_conflictAt_le (Q : ℕ) (hQ : ∀ ω, #(univ.filter fun p => (op ω 
     _ = Q * #(conflict op) := by
         rw [← sum_filter, sum_const, smul_eq_mul, mul_comm, filter_mem_eq_inter, univ_inter]
 
-/-- **Rewinding lemma (counts).** `#bad ² ≤ N · Q · #conflict`. -/
 theorem bad_sq_le (vstar : P → V) (hv : IsPlurality op vstar) (Q : ℕ)
     (hQ : ∀ ω, #(univ.filter fun p => (op ω p).isSome) ≤ Q) :
     #(bad op vstar) ^ 2 ≤ Fintype.card P * Q * #(conflict op) := by
@@ -170,8 +136,6 @@ theorem bad_sq_le (vstar : P → V) (hv : IsPlurality op vstar) (Q : ℕ)
         Nat.mul_le_mul_left _ (sum_conflictAt_le Q hQ)
     _ = Fintype.card P * Q * #(conflict op) := by ring
 
-/-- **Rewinding lemma (probabilities).** Over uniform coins, `Pr[bad] ≤ √(N · Q · Pr[conflict])`,
-where `Pr[conflict]` is over two independent runs. -/
 theorem prBad_le [Nonempty Ω] (vstar : P → V) (hv : IsPlurality op vstar) (Q : ℕ)
     (hQ : ∀ ω, #(univ.filter fun p => (op ω p).isSome) ≤ Q) :
     (#(bad op vstar) : ℝ) / Fintype.card Ω ≤

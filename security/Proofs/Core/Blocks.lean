@@ -7,20 +7,7 @@ import Mathlib.Data.Fintype.BigOperators
 import Proofs.Core.Game.Basic
 import Proofs.Core.Game.Interleave
 
-/-!
-# A wipe that meets the boundary's definitions, and its survivor bound on a run
-
-`Wipe.blank` clears the device's whole state, sends nothing out and always accepts. It separates
-(`Wipe.blank_separates`), and meets the survivor bound at the constant `2^-128` for every `foreignBits ≥ 128`
-(`Wipe.blank_survivorBound`), so `Wipe.Separates` and `Wipe.SurvivorBound` hold together on some wipe of every device.
-
-On a run whose view at the boundary is distributed as the wipe's game samples it (`Wipe.OfRun.Preserves`), the run's event
-that the wipe accepts while foreign content past the survivor threshold survives (`Wipe.OfRun.Kept`) is the preimage of
-the wipe's game's, so the survivor bound bounds it at the run's moves (`Wipe.OfRun.prob_kept_le`). A run that, after
-any game, samples the foreign content, the seed and the spot reads at the boundary meets `Preserves` at every strategy,
-for every wipe (`Wipe.OfRun.drawn_preserves`); on it the blank wipe's event has probability at most `2^-128`
-(`Wipe.OfRun.blank_drawn`).
--/
+/-! A wipe that meets the boundary's definitions, and its survivor bound on a run. -/
 
 @[expose] public section
 
@@ -77,9 +64,6 @@ theorem Wipe.blank_survivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonemp
     _ = 2⁻¹ ^ S := ENNReal.inv_pow
     _ ≤ 2⁻¹ ^ 128 := pow_le_pow_right_of_le_one' (by norm_num) hS'
 
-/-- **The survivor bound on a run.** If the wipe `w` meets its survivor bound at `foreignBits` and `ε`, and the run's
-view at the boundary is distributed as the wipe's game samples it at the strategy `t`, then on the run the probability
-that the wipe accepts while foreign content past the survivor threshold survives is at most `ε` at the run's moves. -/
 theorem Wipe.OfRun.prob_kept_le [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] {w : Wipe d s b Ω Ch}
     {foreignBits : ℕ}
     {ε : (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
@@ -100,8 +84,6 @@ theorem Wipe.OfRun.prob_kept_le [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempt
       _ = 0 := Game.value_false _
       _ ≤ _ := zero_le
 
-/-- A continuation whose event has the same probability `V` from every output, whatever the prover does, gives the
-composition probability `V`. -/
 theorem Wipe.OfRun.prob_bind_eq {α β : Type} (f : α → Game β) (p : β → Prop) (V : ℝ≥0∞)
     (hf : ∀ a t, Game.prob p (f a) t = V) :
     ∀ (g : Game α) (t : Game.Strategy (g.bind f)), Game.prob p (g.bind f) t = V
@@ -122,8 +104,6 @@ def Wipe.OfRun.drawn [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (w : 
   keep := keep
   view := Prod.snd
 
-/-- **The map exists at every wipe** on a run that samples its foreign content with the wipe's coins: its view is
-distributed as the wipe's game samples it at every strategy. -/
 theorem Wipe.OfRun.drawn_preserves [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (w : Wipe d s b Ω Ch)
     {O₀ : Type} (g : Game O₀) (S_φ : ℕ) (hold : (Fin S_φ → Bool) → Device.State d)
     (keep : Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool)
@@ -131,9 +111,6 @@ theorem Wipe.OfRun.drawn_preserves [Fintype Ω] [Nonempty Ω] [Fintype Ch] [None
     (Wipe.OfRun.drawn w g S_φ hold keep).Preserves t := fun P =>
   Wipe.OfRun.prob_bind_eq _ (fun o => P o.2) (Game.value P (Game.draw _)) (fun _ _ => rfl) g t
 
-/-- **The blank wipe on the run that samples its foreign content**: for every `foreignBits ≥ 128`, the run's event that
-the wipe accepts while foreign content past the survivor threshold survives has probability at most `2^-128`, so the
-premises of a statement over runs (`Wipe.SurvivorBound` and `Wipe.OfRun.Preserves`) hold together. -/
 theorem Wipe.OfRun.blank_drawn [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] {foreignBits : ℕ}
     (h : 128 ≤ foreignBits) {O₀ : Type} (g : Game O₀) (S_φ : ℕ) (hold : (Fin S_φ → Bool) → Device.State d)
     (keep : Device.State d → (Fin (Wipe.blank d s b Ω Ch).egress → Bool) → Ch → Fin S_φ → Bool)

@@ -5,28 +5,7 @@ public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Json.Parse
 public import Proofs.Flock.Claims.Complete.Json.RoundTrip
 
-/-!
-# What `Core.canonicalJson` accepts
-
-`Core.canonicalJson` reads a protocol's parameters, and a commitment or evidence that is JSON, with the total parser
-(`Flock.JsonParse.parse`) and accepts where `Flock.canon` writes the bytes back. So what it accepts is a set a
-theorem states, with no hypothesis on the bytes:
-
-* `canonicalJson_accepts`: the bytes it accepts are exactly the canonical texts of printable values
-  (`Claims.Json.Good`: every object a well-formed tree, every number an integer);
-* `canonicalJson_good`: the value it returns is printable;
-* `canonicalJson_same`: the value it returns on a printable value's canonical text is alike that value
-  (`Claims.Json.Same`), so two printable values with one canonical text are read as one value;
-* `canonicalJson_iff`: it returns `j` exactly where the bytes are a text the parser reads as `j` and `canon` writes
-  back from `j`; on a text's own bytes (`canonicalJson_toUTF8_iff`), exactly where the parser reads the text as `j`
-  and `canon` writes it back, so what it returns there is the parser's reading of the text.
-
-The steps: bytes decode to a string exactly where they are its UTF-8 (`fromUTF8?_eq_some_iff`); a text of ASCII
-without DEL has every byte below `0x7f` (`toUTF8_ascii`), and `canon` writes only such texts; the parser builds only
-well-formed trees (`FlockComplete.JsonRT.parse_wf`), and one of those that `canon` prints has only integers
-(`good_of_canon`); the parser reads `canon`'s text of a printable value back as a value alike it
-(`FlockComplete.JsonRT.parse_canon`), which `canon` prints the same (`canon_same`).
--/
+/-! What `Core.canonicalJson` accepts: exactly the canonical texts of printable values. -/
 
 @[expose] public section
 
@@ -35,8 +14,6 @@ namespace Verity.CanonicalJson
 open Lean (Json)
 open Claims.Json (Ascii Same Good Wf)
 open FlockComplete.JsonRT (parse_wf parse_canon canon_ascii canon_same)
-
-/-! ## Bytes and texts -/
 
 private theorem utf8Encode_ascii : ∀ (l : List Char), (∀ c ∈ l, c.toNat < 0x7f) →
     l.utf8Encode.data.all (· < 0x7f) = true
@@ -54,12 +31,10 @@ private theorem utf8Encode_ascii : ∀ (l : List Char), (∀ c ∈ l, c.toNat < 
       omega
     simpa [List.data_toByteArray] using hb
 
-/-- **A text of ASCII without DEL has every byte below `0x7f`**: `Core.canonicalJson`'s first check passes on it. -/
 theorem toUTF8_ascii (s : String) (h : Ascii s) : s.toUTF8.data.all (· < 0x7f) = true := by
   rw [String.toUTF8_eq_toByteArray, ← String.utf8Encode_toList]
   exact utf8Encode_ascii _ h
 
-/-- **Bytes decode to a string exactly where they are its UTF-8.** -/
 theorem fromUTF8?_eq_some_iff {b : ByteArray} {s : String} : String.fromUTF8? b = some s ↔ b = s.toUTF8 := by
   constructor
   · intro h
@@ -77,9 +52,6 @@ theorem fromUTF8?_eq_some_iff {b : ByteArray} {s : String} : String.fromUTF8? b 
     apply String.toByteArray_inj.1
     simp [String.fromUTF8]
 
-/-! ## The value it returns, and the text it returns it on -/
-
-/-- **What `canonicalJson` returns it read with the total parser from the bytes' text, which `canon` writes back.** -/
 theorem canonicalJson_ok {b : ByteArray} {j : Json} (h : Core.canonicalJson b = .ok j) :
     ∃ s, b = s.toUTF8 ∧ Flock.JsonParse.parse s = .ok j ∧ Flock.canon j = .ok s := by
   unfold Core.canonicalJson at h
@@ -112,7 +84,6 @@ theorem canonicalJson_ok {b : ByteArray} {j : Json} (h : Core.canonicalJson b = 
             subst hj he
             exact ⟨s', fromUTF8?_eq_some_iff.1 hs, hp, hc⟩
 
-/-- **A text the total parser reads as a value `canon` writes it back from is accepted, as that value.** -/
 theorem canonicalJson_of {s : String} {j : Json} (hp : Flock.JsonParse.parse s = .ok j)
     (hc : Flock.canon j = .ok s) : Core.canonicalJson s.toUTF8 = .ok j := by
   unfold Core.canonicalJson
@@ -123,15 +94,11 @@ theorem canonicalJson_of {s : String} {j : Json} (hp : Flock.JsonParse.parse s =
   simp only [bind, Except.bind, pure, Except.pure, hc]
   rw [ite_eq_right (by simp)]
 
-/-- **`canonicalJson` returns `j` exactly where the bytes are a text the total parser reads as `j` and `canon` writes
-back from `j`.** -/
 theorem canonicalJson_iff (b : ByteArray) (j : Json) :
     Core.canonicalJson b = .ok j ↔
       ∃ s, b = s.toUTF8 ∧ Flock.JsonParse.parse s = .ok j ∧ Flock.canon j = .ok s :=
   ⟨canonicalJson_ok, fun ⟨_, hb, hp, hc⟩ => hb ▸ canonicalJson_of hp hc⟩
 
-/-- **On a text's bytes `canonicalJson` returns the total parser's reading of the text**, where `canon` writes the
-text back from it, and refuses elsewhere. -/
 theorem canonicalJson_toUTF8_iff (s : String) (j : Json) :
     Core.canonicalJson s.toUTF8 = .ok j ↔ Flock.JsonParse.parse s = .ok j ∧ Flock.canon j = .ok s := by
   constructor
@@ -141,8 +108,6 @@ theorem canonicalJson_toUTF8_iff (s : String) (j : Json) :
     obtain rfl : s = s' := String.toByteArray_inj.1 hb'
     exact ⟨hp, hc⟩
   · exact fun ⟨hp, hc⟩ => canonicalJson_of hp hc
-
-/-! ## A well-formed value that `canon` prints is printable -/
 
 private theorem list_ok_of_mapM {α β ε : Type} {f : α → Except ε β} :
     ∀ {l : List α} {r : List β}, l.mapM f = .ok r → ∀ x ∈ l, ∃ y, f x = .ok y
@@ -166,8 +131,6 @@ private theorem array_ok_of_mapM {α β ε : Type} {f : α → Except ε β} {a 
   | error e => rw [hl] at h; cases h
   | ok l => exact fun x hx => list_ok_of_mapM hl x (Array.mem_toList_iff.2 hx)
 
-/-- **A well-formed value that `canon` prints is printable**: `Flock.canon` returns only where every number, at
-every depth, is an integer, so a value it prints whose objects are well-formed trees is `Claims.Json.Good`. -/
 theorem good_of_canon : ∀ (j : Json), Wf j → ∀ s, Flock.canon j = .ok s → Good j
   | _, .null, _, _ => .null
   | _, .bool b, _, _ => .bool b
@@ -202,20 +165,15 @@ theorem good_of_canon : ∀ (j : Json), Wf j → ∀ s, Flock.canon j = .ok s �
       | error _ => rw [hc] at hy; cases hy
       | ok t => exact good_of_canon v (hw k v hkv) t hc
 
-/-! ## What it accepts -/
-
-/-- **What `canonicalJson` returns is printable**: every object a well-formed tree, every number an integer. -/
 theorem canonicalJson_good {b : ByteArray} {j : Json} (h : Core.canonicalJson b = .ok j) : Good j := by
   obtain ⟨s, -, hp, hc⟩ := canonicalJson_ok h
   exact good_of_canon j (parse_wf s j hp) s hc
 
-/-- **A printable value's canonical text is accepted, as a value alike it.** -/
 theorem canonicalJson_of_canon {j : Json} {s : String} (hg : Good j) (hc : Flock.canon j = .ok s) :
     ∃ j', Core.canonicalJson s.toUTF8 = .ok j' ∧ Same j j' := by
   obtain ⟨j', hp, hs⟩ := parse_canon j s hg hc
   exact ⟨j', canonicalJson_of hp ((canon_same j j' hs).symm.trans hc), hs⟩
 
-/-- **What `canonicalJson` accepts**: exactly the canonical texts of printable values. -/
 theorem canonicalJson_accepts (b : ByteArray) :
     (∃ j, Core.canonicalJson b = .ok j) ↔ ∃ j s, Good j ∧ Flock.canon j = .ok s ∧ b = s.toUTF8 := by
   constructor
@@ -226,7 +184,6 @@ theorem canonicalJson_accepts (b : ByteArray) :
     obtain ⟨j', h, -⟩ := canonicalJson_of_canon hg hc
     exact ⟨j', h⟩
 
-/-- **What `canonicalJson` returns on a printable value's canonical text is alike that value.** -/
 theorem canonicalJson_same {j₀ : Json} {s : String} (hg : Good j₀) (hc : Flock.canon j₀ = .ok s) {j : Json}
     (h : Core.canonicalJson s.toUTF8 = .ok j) : Same j₀ j := by
   obtain ⟨j', h', hs⟩ := canonicalJson_of_canon hg hc

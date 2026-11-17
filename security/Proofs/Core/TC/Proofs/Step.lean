@@ -2,12 +2,7 @@ module
 
 public import Proofs.Core.TC.Proofs.SemGroup
 
-/-!
-# One group, both sides: `group_sound`
-
-The relation's special-value flags are the semantics' (`ind_sum`, `contains_infSign`), its finite path is `group_sum`
-(`groupSum_eq`), and its output state is the canonical state of `group_step_total`'s value.
--/
+/-! One group, both sides: `group_sound`. -/
 
 @[expose] public section
 
@@ -62,8 +57,6 @@ theorem filterMap_term_fin : ∀ l : List Value, l.any Value.isNaN = false → l
       | fin t => exact ⟨t, rfl⟩
     · exact ih y hy
 
-/-! ## The accumulator's row -/
-
 theorem stateOf_facts (v : Value) (hv : Admissible v) :
     let st := stateOf (-133) v
     st.nan = ind Value.isNaN v ∧ st.inf * (1 - st.neg) = ind (Value.isInf false) v ∧
@@ -91,8 +84,6 @@ theorem stateOf_facts (v : Value) (hv : Admissible v) :
       cases ht'
       refine ⟨by simp [HP], by omega, fun _ => rfl, fun _ => ?_, fun h => absurd h h0, hn⟩
       split <;> simp_all
-
-/-! ## The product rows -/
 
 /-- A product row as `_terms` lists it. -/
 def prodIn (q : ProdCols) : TermIn := ⟨q.sp, q.em, q.P * 2 ^ (9 + HP.rho)⟩
@@ -210,8 +201,6 @@ theorem fin_case (T E O zt zo nt ef m : Int) (hT : T.natAbs < 2 ^ 32)
         simp only [outPoly, stateOf, hm0, ite_false, State.mk.injEq]
         by_cases hneg : T < 0 <;> simp [hneg] <;> omega
 
-/-- One group of the Hopper step: the relation's output state is the canonical state of `group_step_total`'s value,
-and that value is again an admissible accumulator. -/
 theorem group_sound (align : Align) (v : Value) (hv : Admissible v) (ab : List (Nat × Nat)) (hlen : ab.length = 16)
     (hw : ∀ x ∈ ab, x.1 < 2 ^ 16 ∧ x.2 < 2 ^ 16) (g : GroupCols) (hg : g.terms.length = 17)
     (h : groupHolds HP align 16 (stateOf (-133) v) (ab.map (fun x => prodCols (-133) x.1 x.2)) g) :
@@ -236,7 +225,6 @@ theorem group_sound (align : Align) (v : Value) (hv : Admissible v) (ab : List (
     intro j hj
     simp only [List.getElem_map]
     exact (hok _ (List.getElem_mem _)).P_nonneg
-  -- each term: its alignment
   have hterm : ∀ i (hi : i < ins.length) (ht : i < g.terms.length),
       0 ≤ g.Estar - ins[i].e ∧ g.Estar - ins[i].e < 512 ∧
         g.terms[i].aligned - 2 * g.terms[i].signed = contrib g.Estar ins[i] := by
@@ -276,7 +264,6 @@ theorem group_sound (align : Align) (v : Value) (hv : Admissible v) (ab : List (
     rw [← this]; omega
   have hfp := finite_path g h5 h6 h7 h8 h9 h10 h11 h12 h13 h14 h15 h16 h17 h18 h19
   have hout := out_poly HP.Z g h28 h30 h31 h33 h35 h36 h37 h38 h40 h41 h42 h43 h44
-  -- the special-value flags are the semantics'
   obtain ⟨eN, eP, eNg⟩ := prods_sum ab hok
   unfold LIN at h22 h23 h24
   unfold MUL at h20 h21
@@ -295,7 +282,6 @@ theorem group_sound (align : Align) (v : Value) (hv : Admissible v) (ab : List (
   have hap := hflag (Value.isInf false) _ _ _ (by rw [← eP]; exact h23) (by rw [← h20]; exact fpinf) h26
   have hang := hflag (Value.isInf true) _ _ _ (by rw [← eNg]; exact h24) (by rw [← h21]; exact fninf) h27
   rw [hout, han, hap, hang]
-  -- the semantics, by cases
   unfold groupStepTotal
   simp only []
   rw [contains_infSign, contains_infSign]
@@ -312,7 +298,6 @@ theorem group_sound (align : Align) (v : Value) (hv : Admissible v) (ab : List (
       · have bNg : ¬ L.any (Value.isInf true) = true := by rw [← contains_infSign, hsg]; simp
         have bP : ¬ L.any (Value.isInf false) = true := by rw [← contains_infSign, hsg]; simp
         simp only [bNg, bP, ite_false, Bool.false_eq_true]
-        -- every term is finite: the finite path is `group_sum`
         have hall := filterMap_term_fin L (by simpa using bN) (by simpa using bNg) (by simpa using bP)
         subst hL
         obtain ⟨t0, rfl⟩ := hall v (List.mem_cons_self ..)

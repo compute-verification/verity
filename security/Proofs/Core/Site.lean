@@ -5,32 +5,7 @@ public import Definitions.Core.Site
 import all Init.Data.Repr
 import all Init.Data.ToString.Basic
 
-/-!
-# The registration: its check, and the Site along it
-
-* `Registration.Entry.refusal_eq_none_iff`: an entry is refused exactly when it is invalid, so a refusal names a check
-  the entry fails, the first in `Entry.Valid`'s order (a site entry's: `Site.Entry.refusal_eq_none_iff`).
-* `Registration.valid_append_singleton`: a log with one more entry is valid exactly when the log is and the entry is
-  valid against it and registers no item and declares no day it registers or declares, so a log is checked one entry
-  at a time (`Registration.valid_append_singleton_iff_refusal`, by the log's refusal); and every prefix of a valid log
-  is valid (`Registration.Valid.of_prefix`).
-* `Registration.Valid.days_nodup`: a valid log declares each day at most once; and a day's declaration stays the day's as
-  the log grows (`Registration.declared_prefix`).
-* `Site.ofLog_prefix`: the Site grows along the log, a prefix's sheets, locations and links being a prefix of every
-  extension's; and what an id names in a prefix's Site it names in every extension's (`Site.loc?_ofLog_prefix`,
-  `Site.kind?_ofLog_prefix`), so a later entry changes nothing already registered.
-* `Registration.Valid.ids_nodup` and `Registration.Valid.parents`: a valid log registers each id once, and its Site is a
-  tree, each location under a registered parent of a kind its own allows.
-* `Registration.Valid.linkKinds`, `Registration.Valid.ends_known` and `Registration.Valid.ends_ne`: a valid log's
-  links join kinds a link may join (`Site.LinkKinds`), end at something registered and each join two different ends;
-  so the other end of a memory challenger's link is a host (`Site.host_of_challenger`).
-* A small onsite site and a later entry for each check, each refused by that check's name
-  (`Registration.Example.onsite_refusals`), and the same entries on a remote site, which accepts the two that only an
-  onsite site refuses (`Registration.Example.remote_refusals`); both sites complete against the auditor's figures, and
-  one short of a leaf not (`Registration.Example.complete`); a device's model read off the Site
-  (`Registration.Example.gpu0_device`); and the onsite site with day 0 declared, a second declaration of the day refused
-  (`Registration.Example.declaration_refusals`).
--/
+/-! The registration's check, and the Site along it. -/
 
 @[expose] public section
 
@@ -53,7 +28,6 @@ theorem ofLog_concat (l : Registration) (e : Registration.Entry) : ofLog (l ++ [
 @[simp] theorem add_empty (S : Site) : S.add {} = S := by
   cases S; simp [add]
 
-/-- **The Site grows along the log**: a prefix's sheets, locations and links are a prefix of every extension's. -/
 theorem ofLog_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) :
     (ofLog l₁).sheets <+: (ofLog l₂).sheets ∧ (ofLog l₁).locs <+: (ofLog l₂).locs ∧
       (ofLog l₁).links <+: (ofLog l₂).links := by
@@ -89,7 +63,6 @@ theorem kind?_isSome_of_known {S : Site} {i : String} (hi : S.Known i) : (S.kind
     · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hi
       simpa [loc?, List.find?_isSome] using ⟨x, hx, rfl⟩
 
-/-- What an id names in a prefix's Site, it names in every extension's. -/
 theorem loc?_ofLog_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) {i : String} {x : Loc}
     (hx : (ofLog l₁).loc? i = some x) : (ofLog l₂).loc? i = some x :=
   loc?_of_prefix (ofLog_prefix h).2.1 hx
@@ -104,8 +77,6 @@ def LinkKinds (S : Site) : Prop := ∀ k ∈ S.links, ∃ p ∈ Kind.links, S.Jo
 
 instance instDecidableLinkKinds (S : Site) : Decidable S.LinkKinds := by unfold LinkKinds; infer_instance
 
-/-- **A memory challenger's links end at hosts**: at a Site whose links join kinds a link may join, the other end of
-a link with a memory challenger at one end is a host. -/
 theorem host_of_challenger {S : Site} (hk : S.LinkKinds) {k : Link} (hmem : k ∈ S.links) :
     (S.kind? k.ends.1 = some .challenger → S.kind? k.ends.2 = some .host) ∧
       (S.kind? k.ends.2 = some .challenger → S.kind? k.ends.1 = some .host) := by
@@ -128,7 +99,6 @@ open Registration (Digests Auditor Composite)
 
 variable {D : Digests} {A : Auditor} {c : Composite}
 
-/-- **A site entry's refusal decides its validity**: it is refused exactly when it is invalid. -/
 theorem refusal_eq_none_iff {S : Site} {e : Entry} : e.refusal D A c S = none ↔ e.Valid D A c S := by
   unfold refusal Valid
   split_ifs <;> simp_all
@@ -139,7 +109,6 @@ namespace Registration
 
 variable {D : Digests} {A : Auditor} {c : Composite}
 
-/-- **The refusal decides validity**: an entry is refused exactly when it is invalid. -/
 theorem Entry.refusal_eq_none_iff {S : Site} {head : String} {e : Entry} :
     e.refusal D A c S head = none ↔ e.Valid D A c S head := by
   cases e with
@@ -153,8 +122,6 @@ theorem Entry.refusal_eq_none_iff {S : Site} {head : String} {e : Entry} :
     unfold Entry.refusal Entry.Valid Entry.kindRefusal Entry.Checks
     split_ifs <;> simp_all
 
-/-- **The log's refusal decides validity**: the log refuses its next entry exactly when the entry is invalid against it,
-registers an item twice or declares a day it declares. -/
 theorem refusal_eq_none_iff {l : Registration} {e : Entry} :
     refusal D A c l e = none ↔ e.Valid D A c (Site.ofLog l) (head D c l) ∧ e.Once l := by
   unfold refusal Entry.Once
@@ -175,8 +142,6 @@ theorem days_concat (l : Registration) (e : Entry) :
 @[simp] theorem valid_nil : Valid D A c [] := by
   simp [Valid]
 
-/-- **A log is checked one entry at a time**: with one more entry it is valid exactly when it was, and the entry is
-valid against it and registers no item it registers. -/
 theorem valid_append_singleton {l : Registration} {e : Entry} :
     Valid D A c (l ++ [e]) ↔ Valid D A c l ∧ e.Valid D A c (Site.ofLog l) (head D c l) ∧ e.Once l := by
   unfold Valid
@@ -192,8 +157,6 @@ theorem valid_append_singleton {l : Registration} {e : Entry} :
     · obtain rfl : i = l.length := by simp at hi; omega
       simpa using he
 
-/-- **Every prefix of a valid log is valid**: an entry valid against its prefix stays valid in every extension of the
-log. -/
 theorem Valid.of_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) (hv : Valid D A c l₂) : Valid D A c l₁ := by
   obtain ⟨t, rfl⟩ := h
   unfold Valid at hv ⊢
@@ -201,13 +164,10 @@ theorem Valid.of_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) (hv : Val
   have := hv i (by simp; omega)
   simpa [List.getElem_append_left hi, List.take_append_of_le_length (Nat.le_of_lt hi)] using this
 
-/-- **A valid log with one more entry is valid exactly when the log refuses no entry**: the check of a log is its
-refusal of each entry in turn. -/
 theorem valid_append_singleton_iff_refusal {l : Registration} {e : Entry} :
     Valid D A c (l ++ [e]) ↔ Valid D A c l ∧ refusal D A c l e = none := by
   rw [valid_append_singleton, refusal_eq_none_iff]
 
-/-- **A valid log declares each day at most once.** -/
 theorem Valid.days_nodup {l : Registration} (h : Valid D A c l) : (days l).Nodup := by
   induction l using List.reverseRecOn with
   | nil => simp
@@ -226,8 +186,6 @@ theorem Valid.days_nodup {l : Registration} (h : Valid D A c l) : (days l).Nodup
         rintro rfl
         exact hn (hb ▸ ha)
 
-/-- **A day's declaration stays the day's**: once the log declares a circuit for day `j`, every extension of it declares
-the same circuit for day `j`, and in a valid log it is the only declaration of the day (`Valid.days_nodup`). -/
 theorem declared_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) {j : ℕ} {d : Declared}
     (hd : declared l₁ j = some d) : declared l₂ j = some d := by
   obtain ⟨t, rfl⟩ := h
@@ -235,7 +193,6 @@ theorem declared_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) {j : ℕ}
   rw [List.findSome?_append, hd]
   rfl
 
-/-- **A valid log registers each id once**, the outside's among them. -/
 theorem Valid.ids_nodup {l : Registration} (h : Valid D A c l) : (Site.ofLog l).ids.Nodup := by
   induction l using List.reverseRecOn with
   | nil => simp [Site.ids]
@@ -247,7 +204,6 @@ theorem Valid.ids_nodup {l : Registration} (h : Valid D A c l) : (Site.ofLog l).
     | information _ _ => simpa [Entry.added] using ih hl
     | declaration _ _ => simpa [Entry.added] using ih hl
 
-/-- **A valid log's Site is a tree**: each location's parent is registered, and of a kind the location's own allows. -/
 theorem Valid.parents {l : Registration} (h : Valid D A c l) :
     ∀ x ∈ (Site.ofLog l).locs, (∀ p ∈ x.parent, (Site.ofLog l).Known p) ∧
       x.parent.bind (Site.ofLog l).kind? ∈ x.kind.parents := by
@@ -272,8 +228,6 @@ theorem Valid.parents {l : Registration} (h : Valid D A c l) :
         simpa [hpar, hk', Site.kind?_of_prefix hpre hk'] using hp
     · exact ⟨he.2.1.1 x hx, (he.2.2.1.1 x hx).1⟩
 
-/-- **A valid log's links join kinds a link may join**: the entry check `kind` holds each new link to it at the Site
-as the entry extends it, and a later entry changes no registered id's kind. -/
 theorem Valid.linkKinds {l : Registration} (h : Valid D A c l) : (Site.ofLog l).LinkKinds := by
   unfold Site.LinkKinds
   induction l using List.reverseRecOn with
@@ -296,8 +250,6 @@ theorem Valid.linkKinds {l : Registration} (h : Valid D A c l) : (Site.ofLog l).
       · exact Or.inr ⟨Site.kind?_of_prefix hpre h1, Site.kind?_of_prefix hpre h2⟩
     · exact (he.2.2.1.2.1 k hk).2.1
 
-/-- **A valid log's links end at something registered**: the entry check `unknownRef` holds each new link's ends to
-registered ids, and a registered id stays registered. -/
 theorem Valid.ends_known {l : Registration} (h : Valid D A c l) :
     ∀ k ∈ (Site.ofLog l).links, (Site.ofLog l).Known k.ends.1 ∧ (Site.ofLog l).Known k.ends.2 := by
   induction l using List.reverseRecOn with
@@ -315,7 +267,6 @@ theorem Valid.ends_known {l : Registration} (h : Valid D A c l) :
     · exact ⟨Site.known_of_prefix hpre (ih hl k hk).1, Site.known_of_prefix hpre (ih hl k hk).2⟩
     · exact he.2.1.2 k hk
 
-/-- **A valid log's links each join two different ends**: the entry check `kind` holds each new link to it. -/
 theorem Valid.ends_ne {l : Registration} (h : Valid D A c l) :
     ∀ k ∈ (Site.ofLog l).links, k.ends.1 ≠ k.ends.2 := by
   induction l using List.reverseRecOn with
@@ -339,7 +290,6 @@ open Site (Sheet Loc Link Tier outside)
 /-- Figures for an SKU: a tensor clock of `clock` Hz, and `rate` MACs a second at every operand class. -/
 def stated (sku : String) (clock rate : ℚ≥0) : DeviceFigures := ⟨sku, clock, fun _ => rate⟩
 
-/-- Two sheets, an SKU each. -/
 def sheetA : Sheet := ⟨stated "sim-int8-a" 1000 64000, 3200, 2 ^ 25, 64 * 2 ^ 30⟩
 def sheetB : Sheet := ⟨stated "sim-int8-b" 2000 256000, 6400, 2 ^ 26, 128 * 2 ^ 30⟩
 
@@ -361,9 +311,8 @@ def node0Figures : Site.HostFigures :=
     ways := [("uplink0", some 100000)] }
 
 /-- The auditor's data sheets for the two SKUs and a tenth's tolerance around their figures; the keys of its certifier,
-its challenger and its host `vm0`, each of the scheme `lms`; its figures for the host `node0` and for its DRAM and disk
-leaves; its figures for a host `node1` and its DRAM, which a later entry registers; and `vm0`'s time base and its
-clock's drift, one part in two thousand. -/
+challenger and host `vm0`, of the scheme `lms`; its figures for the hosts `node0` and `node1` and their leaves, `node1`
+registered by a later entry; and `vm0`'s time base and its clock's drift, one part in two thousand. -/
 def auditor : Auditor :=
   { sheet := fun s => [sheetA, sheetB].find? (·.sku == s)
     tolerance := ⟨1 / 10⟩
@@ -486,7 +435,6 @@ theorem gpu0_device :
       some (64, 4, 2 ^ 25, 8 * (64 * 2 ^ 30)) := by
   decide +kernel
 
-/-- Each check refuses its case on the onsite site, by its name. -/
 theorem onsite_refusals :
     later.map (fun x => x.1.refusal digests auditor .onsite (Site.ofLog [onsite]) (head digests .onsite [onsite])) =
       later.map (·.2) := by
@@ -505,7 +453,6 @@ def day0 : Declared := ⟨0, "program0"⟩
 /-- The onsite site, then its declaration of day 0. -/
 def declaredLog : Registration := [onsite, .declaration "genesis+" day0]
 
-/-- The onsite site with day 0 declared is valid, and day 0's registered circuit is `day0`. -/
 theorem declaredLog_valid : Valid digests auditor .onsite declaredLog ∧ declared declaredLog 0 = some day0 :=
   ⟨by decide +kernel, rfl⟩
 
@@ -517,7 +464,6 @@ theorem declaration_refusals :
       [some .duplicateDeclaration, none, some .previous] := by
   decide +kernel
 
-/-- A window within day 0 of a monitoring period cut into days runs day 0's declared program, and runs no other. -/
 theorem runsDeclared_day0 (m : MonitoringPeriod) (cut : m.span.Cut 1) :
     RunsDeclared declaredLog m cut (cut.part 0) "program0" ∧ ¬RunsDeclared declaredLog m cut (cut.part 0) "program1" := by
   refine ⟨⟨0, ⟨le_refl _, le_refl _⟩, day0, rfl, rfl⟩, ?_⟩
