@@ -1605,7 +1605,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--reached", metavar="BASE",
                     help="the targets the checkout's change since its merge base with BASE reaches, from --cache DIR (default: "
                          "check's own, `default_cache`): none when no path it changes is one a check reads (`shard.reaching`), "
-                         "else the --all --catalog-units targets that cache gives no result for; printed, and none checked")
+                         "else the --all --catalog-units targets that cache gives no result for; printed, and none checked. "
+                         "Each key holds the checker's version and the VERITY_* variables (`cache.key`): from a cache another "
+                         "checker or environment filled, every target is reached")
     ap.add_argument("--check", action="store_true", help="with --reached: check the targets it names, as --all --catalog-units")
     ap.add_argument("--combine", type=Path, nargs="+", metavar="DIR",
                     help="the report, summary and exit status the unsharded run gives, from the --shard-dir of every shard 1..N "
