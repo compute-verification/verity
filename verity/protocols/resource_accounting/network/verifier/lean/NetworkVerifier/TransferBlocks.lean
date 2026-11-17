@@ -38,7 +38,7 @@ certificates as a reveal endpoint served them (`refusals`), which `lean_audit.ce
 `audit.certificate_refusals` as its reference. Both read a certificate as v4's check does (`Check.Certificate`) and
 verify it with its one LMS check (`Check.Certificate.signs`). Code: it imports only Lean, Flock's verifier
 (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`, `Flock.Hm96`, `Flock.FV3`), the identity hash, the LMS port and v4's
-certificate and its encodings (`NetworkVerifier.Check`).
+certificate and its encodings (`NetworkCheck.Check`).
 -/
 
 @[expose] public section

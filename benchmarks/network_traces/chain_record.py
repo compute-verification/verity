@@ -151,7 +151,7 @@ NO_PERIOD_ANSWER = "no --period-answer: no certifier/v0 answer on the period"
 #: why a report writes no block entry for any answer the period check gives
 ROWS_FORM = ("the rows form's execution phases are the scan's registrations, which this chain does not hold, so no K is "
              "written")
-#: certifier/v0's commitment digest: tagged_sha512(PERIOD_TAG, the commitment's bytes) (`NetworkVerifier.Period`'s)
+#: certifier/v0's commitment digest: tagged_sha512(PERIOD_TAG, the commitment's bytes) (`NetworkCheck.Period`'s)
 PERIOD_TAG = "verity-network-certifier/period/v0"
 
 
@@ -469,14 +469,14 @@ def scan_exit(s: dict | None, job: dict) -> str | None:
 
 
 #: the value a window circuit registers the scan's state rows as, which no pin holds: the verifier fixes it before no run,
-#: so its reads stay free (`NetworkVerifier.Period.stateValue`)
+#: so its reads stay free (`NetworkCheck.Period.stateValue`)
 SCAN_STATE = "verity/certifier/scan-state/v1"
 
 
 def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = None) -> dict:
     """A compute audit window's input bits by what fills them, from its ``circuit.json`` alone (its templates, its
     statements' ``in_rows`` and its declarations; work per template, wire and declaration, never per unit, and no
-    Definition looked up), as `NetworkVerifier.Circuit.countsOf` counts them (`interface.input_count`):
+    Definition looked up), as `NetworkCheck.Circuit.countsOf` counts them (`interface.input_count`):
 
     * ``inputs``: every unit's input rows;
     * ``wired``: each wire's reader rows times one row of its port, a cut port's row its words over its cuts
@@ -557,18 +557,18 @@ def free_inputs(circuit: dict, pins: dict | None = None, roots: dict | None = No
 
 def registered_bits(circuit: dict, pins: dict | None = None, roots: dict | None = None) -> int:
     """The bits of a window circuit's input rows its registration registers at the verifier's ``pins``, as
-    `NetworkVerifier.Circuit.countsOf` counts them (`input_terms`' ``registered``)."""
+    `NetworkCheck.Circuit.countsOf` counts them (`input_terms`' ``registered``)."""
     return input_terms(circuit, pins, roots)["registered"]
 
 
 def audit_of(d: Path, pins: dict | None = None) -> dict:
     """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its proof
     blocks, the proof blocks its sampling design samples (a subset design's ``k``, a stratified design's ``Σ k``, as
-    `NetworkVerifier.Period` counts them), the
+    `NetworkCheck.Period` counts them), the
     least rate it samples a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs with the terms
     taken out of them (`input_terms`, the registered rows at the verifier's ``pins`` the registration's window records as
     its ``registered_roots``). Its jitter term is the link's steps over the period, which `d1_terms` charges. A window
-    holding a pin must bind ``circuit.json`` by its SHA-512 (``window.circuit``), as `NetworkVerifier.Period.auditCheck`
+    holding a pin must bind ``circuit.json`` by its SHA-512 (``window.circuit``), as `NetworkCheck.Period.auditCheck`
     refuses a count on a circuit its registration doesn't bind."""
     from verity.commitments.periods import interface as IF
     reg = json.loads((d / "registration.json").read_text())

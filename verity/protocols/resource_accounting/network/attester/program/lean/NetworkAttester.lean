@@ -19,7 +19,7 @@ The executable forms of the reference definitions in `security/Definitions/Certi
 `NetworkAttester.WindowCharge`), and the difftests themselves (`NetworkAttester.Difftest`,
 `NetworkAttester.AdviceV1.ChargeDifftest`, `NetworkAttester.WindowCharge.WindowDifftest`). Besides, the audit of the
 active network attester's records as rows (`NetworkAttester.Rows`, the executable form of
-`Definitions/Certifier/RecordRows.lean`), which `network_verifier`'s `network-rows` runs over a run's certified
+`Definitions/Certifier/RecordRows.lean`), which `network_check`'s `network-rows` runs over a run's certified
 records. Code: it imports only Lean, and never `security/`; `security_proofs` requires it and proves the agreement
 (`Proofs.Certifier.Code`).
 -/

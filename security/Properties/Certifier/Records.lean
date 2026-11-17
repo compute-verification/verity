@@ -4,7 +4,7 @@ public import NetworkVerifier.RecordsGrid
 public import Properties.Certifier.Check
 
 /-!
-# The records check: what acceptance by its Lean code (`NetworkVerifier.Records.protocol`) means
+# The records check: what acceptance by its Lean code (`NetworkCheck.Records.protocol`) means
 
 `verity/network-records/v3` is the network audit's verifier: `audit.py`'s `Audit` over raw, committed and
 certified records. `AcceptMeans` is what its acceptance establishes about the unit's records, stated over the check's
@@ -163,7 +163,7 @@ def ProgramRecords (p : Params) (c : Records.Commitment) (e : Evidence) : Prop :
 
 /-! ## Acceptance -/
 
-/-- **What the records check's acceptance means.** If `NetworkVerifier.Records.protocol` accepts the parameters, the
+/-- **What the records check's acceptance means.** If `NetworkCheck.Records.protocol` accepts the parameters, the
 published records and the evidence `e`, the unit's records are the Program's under `e`, its payloads read as bits. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence) (pub : Unit) (prof : Profile),

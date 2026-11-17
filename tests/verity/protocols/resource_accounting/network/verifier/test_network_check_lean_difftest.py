@@ -1,9 +1,9 @@
-"""The difftest of `certificate.py`'s encodings against the Lean package `network_verifier`: the Python half.
+"""The difftest of `certificate.py`'s encodings against the Lean package `network_check`: the Python half.
 
 `verity/protocols/resource_accounting/network/verifier/lean/scripts/difftest_vectors.py` writes 2,000 random instances and this
 package's results on each (the frame tree, `parameters_digest` and its canonical JSON, `record_head`, `RecordHead`'s
 encoding and digest, `certificate_message`). `check` runs the Lean half in its Lean audit (`runs` in that package's
-`lean-audit.json`): `NetworkVerifier/DifftestMain.lean` computes every result with `NetworkVerifier.Certificate` and fails on any
+`lean-audit.json`): `NetworkCheck/DifftestMain.lean` computes every result with `NetworkCheck.Certificate` and fails on any
 byte that differs. The audit checks the data against the record's SHA-256, and its pass is cached on the Lean package's
 files alone, so the test here is what says the data is still what this package computes: a change to an encoding changes
 the data, fails this test, and `check.py --update` records the new data, which makes `check` run the Lean half on it. The
