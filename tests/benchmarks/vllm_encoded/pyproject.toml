@@ -16,4 +16,6 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/word_codec/pa
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py",
           "hardware/cards", "verity/device.py", "verity/channel.py",
-          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "benchmarks/vllm_encoded"]  # kv_bench.py reads the RTX PRO 6000's card
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "benchmarks/vllm_encoded",  # kv_bench.py reads the RTX PRO 6000's card
+          # test_stack_write_gate.py: the stack write gate's profile reader and the PoUW harness's ptxas reader
+          "benchmarks/codec_tensor/write_gate.py", "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"]
