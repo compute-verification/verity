@@ -94,8 +94,7 @@ def test_without_bindings_no_key_blocks_and_pearl_pluss_coins_are_the_workloads_
 
 #: onsite's subprotocols with Pearl+ in H1's place
 ONSITE_PEARLPLUS = tuple("pearl-plus" if c == "pouw" else c for c in T.ONSITE_COMPONENTS)
-ONSITE_UNBOUND = [f"{T.MEMORY_CHALLENGER}.pous.address", f"{T.BANDWIDTH_VERIFIER}.bandwidth.address",
-                  f"{T.NETWORK_CERTIFIER}.certifier.gate", f"{T.MEMORY_CHALLENGER}.wipe.address"]
+ONSITE_UNBOUND = [k for k in T.unbound(R.load(ONSITE, REG), {}) if k.split(".")[1] != "pouw"]
 
 
 def onsite_pearlplus(tmp: Path, monkeypatch) -> Path:
