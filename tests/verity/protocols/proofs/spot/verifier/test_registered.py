@@ -1887,7 +1887,7 @@ def test_an_arrival_open_at_a_windows_edge_continues_in_the_next_from_the_pool_i
     (`ing`); its rows (`req`: each arrival's outputs in the window and its cut bit) are its own values, under its open
     root; and its pool chains, `pin` the previous window's `pout`. So window 0 cuts two arrivals, windows 1 and 2 each
     open the pool the one before left and serve the continuations, and a continuation counted from the outputs serving
-    computed (P + n) instead of those released, or the previous window's arrivals again, is not the certifier's root
+    computed (P + n) instead of those released, or the previous window's arrivals again, is not the network attester's root
     (`R7-held`). A window opening the empty pool where it carries the pool is refused by name (`R7-pool-chain`)."""
     prog = _continued()
     w = _registered(prog)

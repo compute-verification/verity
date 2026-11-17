@@ -154,7 +154,7 @@ def markdown(rec: Mapping[str, Any]) -> str:
     L = [f"# The onsite record of `{rec['run']}` per monitoring period", "",
          f"The run is {'of record' if o['holds'] else 'not of record'} (every verdict accepts: {o['holds']}; missing "
          f"{o['missing']}, not accepting {o['not_accepting']}, not established {o.get('not_established', [])}). The "
-         f"network certifier: {said}. m = {b['phases']} execution phases of {p['phase_s']} s, the run's period "
+         f"network attester: {said}. m = {b['phases']} execution phases of {p['phase_s']} s, the run's period "
          f"{b['period_s']} s. K of record {fig['K']:,} bits; the tight K {b['K']:,} (`{b['statement']}`) is no "
          f"figure while anything is open; open: {fig['open'] or 'nothing'}.", "",
          f"The advice: ℓ_a = {[bits(x) for x in a['cap']['ell_a']]} bits, the registered cap, is the charge's upper "

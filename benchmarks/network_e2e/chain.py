@@ -6,11 +6,11 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
 * **The advice** (`advice`, a file): I1's JSON (`to_json`), its `encode` bytes, or a prove-path run's stand-in
   advice from before v0 fixed ``release`` and ``sources`` (its ``advice/advice.json``), upgraded as
   `advice_windows.advice_of_workload` now writes it: no sources, each kept output released in its step's bucket. It is
-  bound to the runs only on the advice profile, by the honest run's certified I/O (``io.json``): every advice request is
-  a certified request (its ``user``), once.
+  bound to the runs only on the advice profile, by the honest run's attested I/O (``io.json``): every advice request is
+  an attested request (its ``user``), once.
 * **Bits per execution phase** (`bits`), T the honest run's egress window in buckets: v0's (I1's
   `bits_by_window`) and, given the registered serving config (`derived.Config`'s fields, or a step
-  trace's ``config``) and the certified I/O the advice is bound to, whose tokens the residual reads (canonical sources,
+  trace's ``config``) and the attested I/O the advice is bound to, whose tokens the residual reads (canonical sources,
   derived hits), the residual's (`derived.residual`), unshaped (release sent) and shaped (release derived), charged by
   I1's rule (`derived.charge`), with the forced fields' share. `derived.reconstruct` must give back every step of the
   advice and every output length from the residual, the config and the tokens, and `derived.rebuild` the whole advice
@@ -18,9 +18,9 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
 * **The endpoint's own advice** (`served_advice`, a served run's records): `verity-vllm advice` over a `verity-vllm
   serve-openai` endpoint's records (`ENDPOINT`), one window advice (`verity_vllm.pipeline.window_advice`) a closed
   Commit window, each registered (its hiding root, under the window's Commit) with its opening beside it. The honest
-  run's windows are bound to it (each window opened to its registered root, every certified request admitted in
+  run's windows are bound to it (each window opened to its registered root, every attested request admitted in
   exactly one window, a window that carries requests in joined to the window before it, `window_chain.join`) and each
-  chain of windows rebuilt from its certified I/O under the config read off the endpoint's records
+  chain of windows rebuilt from its attested I/O under the config read off the endpoint's records
   (`endpoint_config`), its bits placed in the run's execution phases.
 * **The prove path** (`prove_path`, a directory or a gzipped tar): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
@@ -100,8 +100,8 @@ def advice(path: Path):
 
 
 def holdings(adv, io: list[dict]):
-    """The certified I/O (``io.json``'s requests, in ingress order) as `derived.Holdings`, and each advice request's
-    certified index; or None and why, when the advice's requests aren't the certified ones, each once."""
+    """The attested I/O (``io.json``'s requests, in ingress order) as `derived.Holdings`, and each advice request's
+    attested index; or None and why, when the advice's requests aren't the attested ones, each once."""
     users = [r["user"] for r in io]
     ids = [q.id for q in adv.requests]
     if sorted(users) != sorted(ids) or len(set(ids)) != len(ids):
@@ -113,7 +113,7 @@ def holdings(adv, io: list[dict]):
 
 def bits(adv, T: int, windows: int, config: dict | None, io: list[dict] | None) -> dict:
     """The advice's bits per egress window of T buckets: v0's, and with ``config`` and an ``io`` it is bound to the
-    residual's (the module's docstring); ``io``, the certified I/O, binds the advice to the run, and its tokens are what
+    residual's (the module's docstring); ``io``, the attested I/O, binds the advice to the run, and its tokens are what
     the residual reads and rebuilds the advice from."""
     v0 = I1.bits_by_window(adv, T)
     out = {"T": T, "v0_total": I1.total_bits(adv), "config": config, "bound": None, "public_fields": None,
@@ -221,10 +221,10 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
     `SLACK_S`). A window that carries requests in joins the window before it into a chain (``chain``), joined into one
     I1 v0 advice (`window_chain.join`): its carried requests and their state are the earlier window's, as that window's
     registered advice closed them, never its own string's, so each request and step is charged once. The advice is
-    bound to the run when each window's requests are certified ones, every certified request is admitted in exactly one
+    bound to the run when each window's requests are attested ones, every attested request is admitted in exactly one
     window, each window's opening opens its registered root and its registration names the window's Commit
     (``windows.jsonl``), and each chain joins: a window that carries a request in follows the window before it, which
-    the run holds, and no window is left owing a carry. Each chain's advice is rebuilt from its certified I/O under the
+    the run holds, and no window is left owing a carry. Each chain's advice is rebuilt from its attested I/O under the
     config read off the endpoint (`endpoint_config`) by `bits`, charged per bucket (T 1) and placed at its first
     window's first step's bucket, each later window's release counted from its own first step's, so its bits land in
     the execution phases of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first

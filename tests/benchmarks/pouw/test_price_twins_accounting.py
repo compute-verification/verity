@@ -29,7 +29,7 @@ import clear_work as CW
 
 import price_twins as P
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 GAMMA0 = Fraction(1, 400)            # TT_OUT's target gap g₀, at every cap (`gapFromTTOut`)
 ONE = 0x3F800000                     # α = β = 1 and x = 0: a forming with no salt-dead element

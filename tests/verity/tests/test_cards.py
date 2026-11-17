@@ -18,8 +18,8 @@ from verity.errors import InvalidArtifact
 from verity import device as S
 from verity.device import CARD_KINDS, MARKS, load_card, number, skus
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
-NODE_FILES = Path(__file__).resolve().parents[3] / "hardware/nodes"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/nodes"
 
 
 def entries(table: dict, at: str = "") -> dict[str, dict]:
@@ -38,11 +38,35 @@ def value(card: dict, key: str) -> Fraction:
 
 
 def test_the_cards_we_run() -> None:
-    assert skus("gpu", directory=CARD_FILES) == ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server"]
+    assert skus("gpu", directory=CARD_FILES) == ["b200-sxm-180gb", "h100-sxm-80gb", "h200-sxm-141gb", "rtx-pro-6000-server"]
     assert skus("host", directory=CARD_FILES) == ["xeon-6776p-2s", "xeon-platinum-8468-2s"]
     assert skus("server", directory=CARD_FILES) == ["dgx-h200"]
     assert skus("timebase", directory=CARD_FILES) == ["nebius-vm-monotonic-raw"]
     assert skus(directory=CARD_FILES) == sorted(sku for kind in CARD_KINDS for sku in skus(kind, directory=CARD_FILES))
+
+
+def test_each_gpu_has_one_short_name() -> None:
+    """`short`, the name a point's member, a spec's id and a table's row carry for the card: lower case letters, digits
+    and hyphens, and no two GPU cards the same."""
+    short = {sku: load_card(sku, directory=CARD_FILES).get("short") for sku in skus("gpu", directory=CARD_FILES)}
+    bad = sorted(sku for sku, s in short.items() if not isinstance(s, str) or not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", s))
+    assert not bad, f"{bad}: set `short` to lower case letters, digits and hyphens"
+    assert len(set(short.values())) == len(short), f"two GPU cards share a `short`: {short}"
+    assert short == {"b200-sxm-180gb": "b200", "h100-sxm-80gb": "h100", "h200-sxm-141gb": "h200",
+                     "rtx-pro-6000-server": "rtx-pro-6000"}
+
+
+@pytest.mark.parametrize("sku", skus("gpu", directory=CARD_FILES))
+def test_the_driver_names_are_each_sourced(sku: str) -> None:
+    """`driver`, the product strings the driver reports for the card (`nvidia-smi --query-gpu=name`): a list, empty
+    where no machine has been read, each entry the string read and a source citing the run's record that read it."""
+    driver = load_card(sku, directory=CARD_FILES).get("driver")
+    assert isinstance(driver, list), "set `driver` to a list of { value, source }, [] where no machine has been read"
+    for entry in driver:
+        assert isinstance(entry, dict) and set(entry) == {"value", "source"}, entry
+        assert all(isinstance(entry[k], str) and entry[k].strip() for k in ("value", "source")), entry
+        assert re.search(r"\bart:[0-9a-f]{12}\b", entry["source"]), f"{entry}: cite the record that read it as art:<12 hex>"
+    assert len({e["value"] for e in driver}) == len(driver), driver
 
 
 #: The fewest entries a card of each kind holds, so a card whose sections didn't parse as entries fails.
@@ -115,7 +139,7 @@ def test_derived_gpu_numbers(sku: str) -> None:
 
 #: The uniform registers a warp that each card's `store.reg_extra` counts: the 80 a run found hold values on the RTX PRO
 #: 6000, and 63 on the cards whose uniform registers no run has swept.
-UNIFORM_REGISTERS = {"b200-sxm-180gb": 63, "h200-sxm-141gb": 63, "rtx-pro-6000-server": 80}
+UNIFORM_REGISTERS = {"b200-sxm-180gb": 63, "h100-sxm-80gb": 63, "h200-sxm-141gb": 63, "rtx-pro-6000-server": 80}
 
 
 @pytest.mark.parametrize("sku", skus("gpu", directory=CARD_FILES))
@@ -165,7 +189,7 @@ def test_the_caches_a_run_found_are_one_cards() -> None:
     two counted once a warp scheduler are whole multiples of `rate.issue`'s schedulers."""
     found = MEASURED_ONLY["gpu"]
     have = {sku: {key for key in entries(load_card(sku, directory=CARD_FILES)) if key in found} for sku in skus("gpu", directory=CARD_FILES)}
-    assert have == {"b200-sxm-180gb": set(), "h200-sxm-141gb": set(), "rtx-pro-6000-server": found}
+    assert have == {"b200-sxm-180gb": set(), "h100-sxm-80gb": set(), "h200-sxm-141gb": set(), "rtx-pro-6000-server": found}
     card = load_card("rtx-pro-6000-server", directory=CARD_FILES)
     assert {entries(card)[key]["unit"] for key in found} == {"B/SM"}
     assert [value(card, f"store.{k}") / value(card, "rate.issue") for k in ("l0i", "const_l0")] == [6144, 3072]
@@ -201,6 +225,17 @@ def test_the_h200s_two_readings() -> None:
     """The H200's FP32 add at both clock readings (CMP-438), pinned so that a change to either is deliberate: 32 with
     both pipes at 1980 MHz, the default, and 29.58 with the tensor pipe at 1830 MHz, each naming its W1 price."""
     card = load_card("h200-sxm-141gb", directory=CARD_FILES)
+    fp32 = card["price"]["fp32"]
+    assert card["clock"]["default"] == "sm"
+    assert {r: value(fp32, r) for r in S.READINGS} == {"tensor": Fraction("29.58"), "sm": 32}
+    assert "Pouw.PearlC.W1.W1Prices.h100." in fp32["sm"]["source"]
+    assert "Pouw.PearlC.W1.W1Prices.h100Tensor." in fp32["tensor"]["source"]
+
+
+def test_the_h100s_two_readings() -> None:
+    """The H100's FP32 add at both clock readings, pinned so that a change to either is deliberate: 32 with
+    both pipes at 1980 MHz, the default, and 29.58 with the tensor pipe at 1830 MHz, each naming its W1 price."""
+    card = load_card("h100-sxm-80gb", directory=CARD_FILES)
     fp32 = card["price"]["fp32"]
     assert card["clock"]["default"] == "sm"
     assert {r: value(fp32, r) for r in S.READINGS} == {"tensor": Fraction("29.58"), "sm": 32}
@@ -337,7 +372,7 @@ def test_the_second_readings() -> None:
     memory its processor takes beside the figures PoUB's timing mirrors, which stay where they were; and the caches a
     run found on the RTX PRO 6000."""
     gib = 2 ** 30
-    boards = {"rtx-pro-6000-server": (96, 96), "h200-sxm-141gb": (141, 144), "b200-sxm-180gb": (180, 192)}
+    boards = {"rtx-pro-6000-server": (96, 96), "h100-sxm-80gb": (80, 80), "h200-sxm-141gb": (141, 144), "b200-sxm-180gb": (180, 192)}
     for sku, (dram, installed) in boards.items():
         card = load_card(sku, directory=CARD_FILES)
         assert [value(card, "store.dram"), value(card, "store.dram_installed")] == [dram * gib, installed * gib], sku
@@ -444,7 +479,7 @@ def test_the_b200_sheet_agrees_with_its_card_file() -> None:
 
 
 def test_an_unknown_sku_names_the_cards() -> None:
-    every = ["b200-sxm-180gb", "dgx-h200", "h200-sxm-141gb", "nebius-vm-monotonic-raw", "rtx-pro-6000-server",
+    every = ["b200-sxm-180gb", "dgx-h200", "h100-sxm-80gb", "h200-sxm-141gb", "nebius-vm-monotonic-raw", "rtx-pro-6000-server",
              "xeon-6776p-2s", "xeon-platinum-8468-2s"]
     with pytest.raises(KeyError, match=re.escape(f"the cards are {every}")):
         load_card("rtx-pro-6000-workstation", directory=CARD_FILES)

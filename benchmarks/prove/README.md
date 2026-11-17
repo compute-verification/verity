@@ -199,7 +199,7 @@ a steady-state measurement when the report wasn't stopped or timed out, every pr
 accepted and its cache was flat. A run that holds `rate.json` is read from it alone.
 
 The serving rate is not a record. It is a stated, modeled input: the census's MACs a served token at the fleet's assumed
-serving MFU (`benchmarks/slowdown/data/reference.toml`) of the card's data-sheet peak (`benchmarks/census/hardware.json`).
+serving MFU (`benchmarks/slowdown/data/reference.toml`) of the card's data-sheet peak (`calibration/census/hardware.json`).
 
 
 ## The Lean verifier's seconds and the proof's bytes
@@ -371,8 +371,8 @@ The table is followed by its JSON line, and under a research run, or with `$OUT`
 Its schema is `verity-bench/proof-layers/v2`: `{schema, audit, results}`, one object for each layer's benchmark result.
 v1 named that list `rows`; nothing reads either by key.
 
-Run as `benchmarks/prove/run.py layers` (`LAYER_METRICS`), it also writes three of `metrics.toml`'s metrics through the
-kit's writer, each a figure a sampled proof block:
+Run as `benchmarks/prove/run.py layers` (`LAYER_METRICS`), as `benchmarks/one_stage/proof_layers.sh`'s last step, their
+`command`, it also writes three of `metrics.toml`'s metrics through the kit's writer, each a figure a sampled proof block:
 
 | id | figure |
 |---|---|
