@@ -800,11 +800,11 @@ def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challen
     assert S.challenger_coins("command:python3 -I local_gate.py /gate").startswith("simulated: ")
     live_report, live_rec, _ = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
                                         run="r1", coins=("live", "vy-challenger-1"))
-    held = live_rec["legs"]["integrity"]
+    held = live_rec[BR.BY_SUBPROTOCOL]["integrity"]
     for coins in ((S.sampled_coins(audit, "0" * 128), "vy-dc-h200"), ("simulated", "unnamed")):
         report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
                                      run="r1", coins=coins)
-        row, sub = report["protocols"]["integrity"], rec["legs"]["integrity"]
+        row, sub = report["protocols"]["integrity"], rec[BR.BY_SUBPROTOCOL]["integrity"]
         assert (row["coins"], line["coins"], sub["quantity"]["coins"]) == ("simulated",) * 3
         assert row["coins_on"] == line["coins_on"] == sub["quantity"]["coins_on"] == {S.SAMPLED_NAME: coins[1]}
         assert "its coins were simulated" in line["reason"], line["reason"]
@@ -816,7 +816,7 @@ def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challen
         assert rec["composed"]["joint_horizon"]["at"]["1/100"]["not_established"] == ["integrity"]
         jsonschema.Draft202012Validator(SCHEMA).validate(rec)
         assert BR.check(rec) == {}
-        assert "value" in BR.check({**rec, "legs": {**rec["legs"], "integrity": {
+        assert "value" in BR.check({**rec, BR.BY_SUBPROTOCOL: {**rec[BR.BY_SUBPROTOCOL], "integrity": {
             **sub, "quantity": {**sub["quantity"], "value": held["quantity"]["value"]}}}})["subprotocol:integrity"]
     row = live_report["protocols"]["integrity"]
     assert (row["coins"], row["epsilon"], row["delta"]) == ("live", "1/2", "1/100") and BR.UNDER_AUDITOR not in row
@@ -1119,7 +1119,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("pending", [], {}, {})
         assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.SUBPROTOCOLS}
-        late = {"sampled proofs": ON_NODE, "the network certifier": " (its quantity is not established at δ = 1/1000000: "
+        late = {S.NAMES["integrity"]: ON_NODE, "the network certifier": " (its quantity is not established at δ = 1/1000000: "
                                                                     "the run established it except with 1/100)",
                 "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})"}
         assert line["reason"] == "; ".join(
