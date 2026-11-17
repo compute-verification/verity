@@ -9,6 +9,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+__all__ = ["COPIED", "EXPERTS", "GLM53", "LAYERS", "cut", "stand_in"]
+
 GLM53 = Path(__file__).resolve().parent / "hf_configs" / "GLM53.config.json"
 #: decoder layers (GLM-5.3's three dense layers, then MoE layers with a shared and an own index) and routed experts
 LAYERS, EXPERTS = 7, 16

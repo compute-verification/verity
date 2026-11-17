@@ -169,7 +169,8 @@ case $MODEL_ID in
     CK=${CHECKPOINT:-$CK}; GPUS=8 ;;
   glm53-standin)
     REV=aca966e4e02791568aa6a4ced368624b3d897f42
-    if [ -e "/workspace/cp/glm53-ckpt/$REV/.verified" ]; then real=/workspace/cp/glm53-ckpt/$REV; else real=/workspace/fs/glm53/$REV; fi
+    if [ -n "${TOKENIZER_FROM:-}" ]; then real=$TOKENIZER_FROM
+    elif [ -e "/workspace/cp/glm53-ckpt/$REV/.verified" ]; then real=/workspace/cp/glm53-ckpt/$REV; else real=/workspace/fs/glm53/$REV; fi
     CK=${CHECKPOINT:-/tmp/serve-tax-standin.${D##*/}}
     [ -n "${CHECKPOINT:-}" ] || "$PY" "$here/serve_tax.py" standin --model-id "$MODEL_ID" --tokenizer-from "$real" --out "$CK" \
       || exit 2

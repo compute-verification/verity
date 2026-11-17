@@ -104,12 +104,12 @@ benchmark's own measurement (a sessions load, a value, the same work on both sid
 two arms are at the same settings. Of `prod-record` it holds two more: `vllm/prod-replay-match-glm53`, the percent of
 the replayed window's served tokens the replay gave back before a request's first difference, where the replay's
 record agrees with what it kept; and `vllm/prod-advice-bits-glm53`, the advice line's bits charged a request, where
-that line is measured. For Llama 3.2 1B (`record-ids` over `compiled`) the cost and the replay match are points of the
-same two ids, older than their other models; the 1B has no speculative decoding, so no advice line. The cost of
-`prod-all-on` over `prod` (`--ours prod-all-on`: the serving cost benchmark's README, "Everything on at the recipe's
-line") is a point of the cost's id too, and its `parts` say in words what it has on and what it leaves off. Each point
-names its `model` (the checkpoint, `repo@revision`), its `hardware` (the cards it was served on) and its `member`, the
-model, the card and the arm (the cost's over its stock), which tells its line from the id's other models' and arms'.
+that line is measured. For Llama 3.2 1B (`record-ids` over `compiled`) the cost, the replay match and the advice are
+points of the same three ids, older than their other models. The cost of `prod-all-on` over `prod` (`--ours prod-all-on`: the serving cost
+benchmark's README, "Everything on at the recipe's line") is a point of the cost's id too, and its `parts` say in words
+what it has on and what it leaves off. Each point names
+its `model` (the checkpoint, `repo@revision`), its `hardware` (the cards it was served on) and its `member`, the model,
+the card and the arm (the cost's over its stock), which tells its line from the id's other models' and arms'.
 Otherwise the result holds no entry under an id.
 
 The job fails where an arm or the replay fails, where a replay was asked for and its tokens were not compared, and
@@ -221,19 +221,39 @@ replay that differs, the first token that does and the first step.
   Program calling the accept test's Definition (`SampledAccept_v1`), which none does yet; how the pass's sampled
   requests were seeded, from each one's own arrival (what a sampled request with no seed there was sampled with is in
   no record: its tokens cannot be replayed); and the pass. The loader's own
-  replay of the scheduler must reproduce every step of the pass: where it does not, or the serve has no draft, the
-  line is not measured and says the loader's reason.
+  replay of the scheduler must reproduce every step of the pass: where it does not, the line is not measured and
+  says the loader's reason. A serve with no draft keeps no draft, so its kept count is 0 bits and its advice is the
+  arrivals'.
 
 A line says `not measured` with its reason where the job's files don't hold it or can't be read; the last line counts
 the measured ones and names the arms that were not served whole.
+
+## The cost priced from counts
+
+`priced.py OUT --units TOPK_CUT.jsonl` reads a finished job's `out/` with no GPU. It prices the canonical top-k's layer
+(each arm of ours over `prod-trace`, `--reference`) from what the job kept, against the top-k's device time a call on
+one card (`TOPK_CUT.jsonl`, the timing of `benchmarks/dsa_topk`'s passes at the served decode shapes):
+
+- **The rows each call reads** come from the schedule: each counted pass's decode steps in the arm's step trace, with
+  the rows past the indexer's k keys and the longest of them. A decode step makes 22 calls on each card.
+- **The rows whose fast selection failed** come from the model's outputs: the top-k's counters (`topk_counters.json`).
+  Those are lifetime totals over the processes, so the reader takes a card's share and the counted passes' share of
+  the lifetime's decode rows. It places them in calls three ways: packed, a request's rows to a call, and one row a
+  call. The bounds and the point are those placements, with each pass's time ranged over the distributions it was timed on.
+- **What it gives:** the layer's cost in percent of the reference's counted serving time, beside the job's own measured
+  layer (`prod_repro.json`'s `layers`) and the difference in points. The point under
+  `vllm/prod-serving-cost-glm53` (member `…-priced`, `mark` `modeled`, `--result` under a run) is that layer plus the
+  job's measured `prod-trace` over `prod`. It names the job's run as the run that tests it.
+- **When it writes no point:** where the counters hold no failed rows, or where the job measured no layer below.
+- **What it doesn't price:** prefill steps, which have no device times at prefill shapes; the host's time; and the
+  cards differing (each card is taken to fail the same rows).
 
 ## What is not yet true
 
 - **The advice line's serve is not under the network attester.** No arm of this command is served under the
   network attester's record or the certified tick, so the arrivals are charged at what they would cost without the tick. The
   kept count is charged at its code's bits: the accept test has a Definition, and no block of a served Program calls
-  it, so nothing derives the count yet. A serve with
-  no draft (every model but GLM-5.3 here) has no line: the loader's table of a draft's advice is the one read.
+  it, so nothing derives the count yet.
 - **The recipe's settings are GLM-5.3's alone.** For every other model the arms are the benchmark's own: speculative
   decoding off and a context limit of 4,096 tokens unless `--max-model-len` is given.
 - **The context limit is not the model's own.** At the recipe's settings it is the recipe's number for the cards,

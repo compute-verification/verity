@@ -459,7 +459,7 @@ class Model:
     published_tokenizer: dict = field(default_factory=dict)
     #: where it is a stand-in, served from vLLM's random weights, the adapter's cut of the model's config
     #: (`verity_vllm.engine.profiles.stand_in`: ``layers``, ``experts``, ``heads``); its checkpoint is a directory
-    #: `standin` writes, and its points are marked partial and name it in their member (`member`, `mark`)
+    #: `standin` writes, and its runs write no measurement (`write_result`)
     stand_in: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -478,11 +478,6 @@ class Model:
         """What a record names the model by: its repository at its revision, and a stand-in's cut beside it."""
         cut = ", ".join(f"{v} {k}" for k, v in self.stand_in.items())
         return f"{self.repo}@{self.revision}" + (f" stand-in ({cut}, random weights)" if cut else "")
-
-    @property
-    def mark(self) -> str:
-        """The kit's mark of a point measured on it: a stand-in's covers part of what its metric names."""
-        return "partial" if self.stand_in else "measured"
 
     def checkpoint(self) -> Path:
         hub = Path(SHARED.HF_HOME or "/workspace/hf") / "hub"
@@ -555,7 +550,7 @@ MODELS = {
     # points transfers to glm53
     "glm53-standin": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3-stand-in",
                            ("--tensor-parallel-size", "1", "--load-format", "dummy"), (2.0, 0.08),
-                           metric="vllm/serving-cost-glm53", check="GreedySelect_v1{V=154880,N=7744}",
+                           check="GreedySelect_v1{V=154880,N=7744}",
                            published=("--kv-cache-dtype", "fp8", "--speculative-config.method", "mtp",
                                       "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47",
                                       "--reasoning-parser", "glm47", "--enable-auto-tool-choice"),
@@ -3905,11 +3900,10 @@ def hardware(model: Model) -> str:
 
 def member(model: Model, arm: str, reference: str | None = None) -> str:
     """A point's ``member``, what tells its line from the lines of the metric's other configurations: the model's
-    served name, for a stand-in its random weights and its cards, this host's card and the arm, over its reference where
-    it has one, lower-case words joined by hyphens (``llama-3.2-1b-h200-record-over-compiled``)."""
+    served name, this host's card and the arm, over its reference where it has one, lower-case words joined by hyphens
+    (``llama-3.2-1b-h200-record-over-compiled``)."""
     kind = card().removeprefix("NVIDIA ").lower().replace(" ", "-")
-    stand_in = ("random-weights", f"{tp_size(model)}-card") if model.stand_in else ()
-    return "-".join((model.served, *stand_in, kind, arm, *(("over", reference) if reference else ())))
+    return "-".join((model.served, kind, arm, *(("over", reference) if reference else ())))
 
 
 def write_result(r: dict, out: Path) -> None:
@@ -3921,7 +3915,7 @@ def write_result(r: dict, out: Path) -> None:
     ok, detail, what, measurements = result_of(r | {"hardware": hardware(model),
                                                     "member": member(model, r["arm"], r["reference"])})
     if model.stand_in:
-        measurements = [m | {"mark": model.mark, "inputs": [model.mark, *m.get("inputs", ())]} for m in measurements]
+        measurements = []
     kit()[1].write_result(Path(run_dir), run_id, out, "serving_cost.json", ok, detail, what, measurements)
 
 

@@ -208,7 +208,7 @@ SAMPLED_ONLY = ("sampled", "proved_in.unpassed", "proved_in.sampled", "requires.
 SIBLINGS = _module(ROOT / "tools" / "verity" / "lean" / "siblings.py", "lean_siblings_for_lean_changed")
 PROBE = _module(ROOT / "tools" / "verity" / "lean" / "axiom_probe.py", "axiom_probe_for_lean_changed")
 #: the audit's build sandbox, as `tools/verity/lean/check.py` runs it: writable only in the `.lake` directories it is given
-UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--ipc", "--pid", "--fork", "--kill-child"]
 SANDBOX = ROOT / "tools" / "verity" / "lean" / "sandbox.sh"
 #: Lake's two lines for a write the sandbox's read-only mount refused, the second naming the path
 REFUSED_WRITE = re.compile(r"^error: read-only file system \(error code: \d+\)\n[ \t]+file: (\S.*?)[ \t]*$", re.M)
@@ -235,9 +235,11 @@ def in_tree(pkg: str, entry: str, file: str) -> str:
     """``entry`` of ``pkg``'s ``file`` (a path dependency's `dir`, a `proved_in` package) as a repository path: a package
     whose build the audit of ``pkg`` writes, so one outside the tree is refused (`check.OutsideTree`)."""
     p = posixpath.normpath(posixpath.join(pkg, entry))
-    if p == ".." or p.startswith(("../", "/")):
-        raise AUDIT.OutsideTree(f"{pkg}/{file}: {entry!r} names {p}, outside the tree, whose .lake a build of {pkg} would "
-                                f"write: a package it requires by path or names under proved_in must lie in the tree")
+    real = (ROOT / p).resolve()
+    if p == ".." or p.startswith(("../", "/")) or not real.is_relative_to(ROOT.resolve()):
+        raise AUDIT.OutsideTree(f"{pkg}/{file}: {entry!r} names {p!r}, which resolves to {str(real)!r}, outside the tree, "
+                                f"whose .lake a build of {pkg} would write: a package it requires by path or names under "
+                                f"proved_in must lie in the tree")
     return p
 
 
@@ -322,24 +324,30 @@ def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
     """Make ``tree``'s copy of ``pkgs`` this checkout's tracked files, leaving each `.lake`; the number of files written.
     The product of a source it unlinks, or rewrites, stays: a tree serves several branches, and Lake replays the product
     when one of them brings that source back as it was built from. Until then neither Lake nor a sibling check's stub
-    loads it: each reads in the module's trace which source it was built from (`siblings.py`)."""
+    loads it: each reads in the module's trace which source it was built from (`siblings.py`). The tree holds no links: a
+    tracked one is refused (`check.OutsideTree`), and one ``tree`` keeps in a package or above it is removed, since a
+    file written through it, or its `.lake` emptied (`link`, `lake_dirs`), would land outside the tree."""
     tracked, n = set(files), 0
     for p in pkgs:
+        for up in [*reversed(Path(p).parents[:-1]), Path(p)]:
+            if (tree / up).is_symlink():
+                os.unlink(tree / up)
         for d, dirs, names in os.walk(tree / p):
+            for x in [x for x in dirs if os.path.islink(os.path.join(d, x))]:
+                os.unlink(os.path.join(d, x))
+                dirs.remove(x)
             dirs[:] = [x for x in dirs if x != ".lake"]
             for f in names:
                 rel = os.path.relpath(os.path.join(d, f), tree)
-                if rel not in tracked:
+                if rel not in tracked or os.path.islink(tree / rel):
                     os.unlink(tree / rel)
         for f in LA.own_files(p, files):
             src, dst = ROOT / f, tree / f
             if src.is_symlink():
-                if dst.is_symlink() and os.readlink(dst) == os.readlink(src):
-                    continue
-                dst.unlink(missing_ok=True)
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                dst.symlink_to(os.readlink(src))
-            elif src.is_file():
+                raise AUDIT.OutsideTree(f"{f!r} is a symbolic link (to {os.readlink(src)!r}), which the slot tree would "
+                                        f"keep and the run then write through (`link`, `lake_dirs`): the tree holds no "
+                                        f"links, so replace it with the file or directory it points to")
+            if src.is_file():
                 data = src.read_bytes()
                 if dst.is_file() and not dst.is_symlink() and dst.read_bytes() == data:
                     continue
