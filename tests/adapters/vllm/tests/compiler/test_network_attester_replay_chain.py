@@ -9,11 +9,11 @@ from __future__ import annotations
 import random
 
 import pytest
-
-from verity_vllm.compiler import replay_chain as RC
+from verity.circuits.boolean.forms import Circuit
 from verity.protocols.resource_accounting.network.verifier.head_check import ands
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.circuits.boolean.forms import Circuit
+
+from verity_vllm.compiler import replay_chain as RC
 
 SMALL = RC.Shape(R=3, W=2, A=3, L=40, NB=20, IW=4, Q=5, D=6, P=3, K=3)
 #: A a power of two (AC = 3 > DW = 1), one decision and one step a window
@@ -515,7 +515,7 @@ def _session(S, rng):
         assert loaded is not None
         cur, win = loaded
         rows.append(cur)
-        units = [("load", rows[0], last, arrivals, decisions, n)]
+        units: list[tuple] = [("load", rows[0], last, arrivals, decisions, n)]
         for u in range(S.P):
             stepped = _rand_row(rng, S, heads=False)
             taken, used = (1, 1) if u < n - 1 else (0, len(decisions) - cur.dh) if u == n - 1 else (0, 0)
