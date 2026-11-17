@@ -242,10 +242,14 @@ the directory of the file declaring it never names, and a shared `metrics.toml` 
 
 ## The serving cost in five stages
 
-The serving cost of a model too large to optimize on (`serve_tax/README.md`'s "The serving cost") is had in five
-stages. Each stage is a run of its own, stores what the next one reads, and refuses to run without the stored benchmark
-result of the stage before it. Its numbers are measurements under "Metrics"' rules. A stage whose record is a verdict
-records what the check or the verifier returned ("What a benchmark may import and write").
+The serving cost of a model too large to optimize on (`serve_tax/README.md`'s "The serving cost") is to be had in
+five stages. No stage has its command in the tree yet: the table states what each stage's command stores when it
+lands. Parts of two run today under other names, without a stage's refusal: stage 2's check of bindings is
+`circuit-check` on a Definition module's sidecar, its replay is `serve_tax/replay.py`'s, and stage 5's measured figure
+is `serve_tax`'s serving cost. Each stage is to be a run of its own that stores what the next one reads and refuses to
+run without the stored benchmark result of the stage before it. Its numbers are to be measurements under "Metrics"'
+rules, and a stage whose record is a verdict is to record what the check or the verifier returned ("What a benchmark
+may import and write").
 
 | Stage | What it runs | What it stores |
 | --- | --- | --- |
@@ -255,10 +259,10 @@ records what the check or the verifier returned ("What a benchmark may import an
 | 4. Price | stage 1's unit costs times stage 3's counts, over stage 3's baseline step time | the priced serving cost under the real model's metric and `member`, `modeled`, with the stage 1 and stage 3 runs it read among its `inputs`, and every (part, code path) it could not price |
 | 5. Confirm | one run of the real model at scale | the measured serving cost, `measured`, and the measured minus the priced as a measurement of its own |
 
-Stage 1 writes no serving-cost percentage and no point under the real model's metric: a `member` tells apart
+Stage 1 is to write no serving-cost percentage and no point under the real model's metric: a `member` tells apart
 configurations that read the same quantity, and a copy from random weights does not read the real model's serving
-cost. Stage 4 names the runs it read in its `inputs` and not as `from_run`, since its number is its own and `from_run`
-writes no measurement.
+cost. Stage 4 is to name the runs it read in its `inputs` and not as `from_run`, since its number is its own and
+`from_run` writes no measurement.
 
 Two cases decide where a price comes from:
 
