@@ -24,10 +24,13 @@ BY_SPEC = {
 }
 LIVE_ARM, LIVE_CONTROL = "dither-a@x", "exact-fused"
 # Time per output token by arm; every arm slows by the same factor each rep, so the paired ratios are exact.
-SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@compiled": 1.2, "bandwidth-audit": 1.0}
+SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@compiled": 1.2, "bandwidth-audit": 1.0,
+         "pouw:pearl-c-h100-v1-h3": 12.4}
 R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-r6", "llama31-8b-fp8-1gpu-bandwidth-served-h200",
                   "llama32-1b-fp8-1gpu-bandwidth-served-h200")
 WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width-h200"
+POUW, POUW_H100, POUW_ARM = ("benchmarks/served-overhead-pouw", "llama32-1b-1gpu-pouw-protocol-served-h100",
+                             "pouw:pearl-c-h100-v1-h3")
 
 
 class ScaledEngine:
@@ -66,7 +69,7 @@ class ScaledFactory:
         return ScaledEngine(arm, self.commit_scale if arm.id.startswith(("commit", "bandwidth")) else 1.0, self.gpu)
 
 
-RTX, H200 = "NVIDIA RTX PRO 6000 Blackwell Server Edition", "NVIDIA H200"
+RTX, H200, H100 = "NVIDIA RTX PRO 6000 Blackwell Server Edition", "NVIDIA H200", "NVIDIA H100 80GB HBM3"
 
 
 def _result(point_id: str, commit_scale: float, reps: int = 2, gpu: str = RTX) -> dict:
@@ -82,6 +85,13 @@ def _audit(point_id: str, scale: float, gpu: str) -> dict:
     arms = (Arm("stock-fp8@compiled"), Arm("bandwidth-audit", control="stock-fp8@compiled"))
     return run_benchmark(load_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
                          factory=ScaledFactory(scale, gpu), git_commit="c" * 40)
+
+
+def _pouw(point_id: str, gpu: str) -> dict:
+    [point] = [p for p in expand_sweep("quick") if p.id == point_id]
+    arms = (Arm("stock-fp8"), Arm(POUW_ARM), Arm("stock-fp8@compiled"))
+    return run_benchmark(load_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
+                         factory=ScaledFactory(1.0, gpu), git_commit="c" * 40)
 
 
 class Producer:
@@ -524,7 +534,7 @@ def test_the_bandwidth_audits_members_are_written_from_their_records_runs_and_sa
     members = {"llama-3.1-8b-h200": BIG, "llama-3.2-1b-h200": SMALL}
     out, got = table("before")
     assert set(got["by"]) == {("benchmarks/served-overhead-commit", None), (audit, None),
-                              *((audit, member) for member in members)}
+                              *((audit, member) for member in members), (POUW, "llama-3.2-1b-h100")}
     assert got["by"][audit, None]["value"] == pytest.approx(500.0) and got["by"][audit, None]["device"] == RTX
     for member, spec in members.items():
         assert f"| PoUS bandwidth audit | — | `{spec}` | — | — | — | — | — | {none} | — |" in out
@@ -563,6 +573,67 @@ def test_the_bandwidth_audits_member_specs_are_its_record_spec_on_one_h200_and_t
     pinned = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200").preset
     assert (small.model, small.revision, small.case, small.model_digest) == (
         pinned.model, pinned.revision, pinned.case, None)
-    [protocol] = [p for p in served_table.PROTOCOLS if p.members]
-    assert (protocol.record, protocol.members) == (
-        "pous-bandwidth-audit", (("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL)))
+    [protocol] = [p for p in served_table.PROTOCOLS if p.record == "pous-bandwidth-audit"]
+    assert protocol.members == (("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL))
+
+
+def _row(protocol: str, spec: str, mean: float, member: str | None = None) -> dict:
+    return {"protocol": protocol, "arm": "a", "spec": spec, "point": "b32-p512-mixed", "device": H200,
+            "run": "r20261117-000000-0001", "art": "art:" + "a" * 64, "caveats": [], "member": member,
+            "over_served": {served_table.PER_OUTPUT: {"mean": mean, "ci95": [mean - 0.01, mean + 0.01], "n": 6}}}
+
+
+def test_a_metric_of_members_only_leaves_every_other_metrics_readings_byte_for_byte_as_they_were():
+    import hashlib
+
+    table = {"rows": [_row("Commit", WIDTH_H200, 2.378), _row("PoUS bandwidth audit", R6, 6.02),
+                      _row("PoUS bandwidth audit", BIG, 2.5, "llama-3.1-8b-h200"),
+                      _row("PoUS bandwidth audit", SMALL, 4.0, "llama-3.2-1b-h200")], "skipped": []}
+    metrics = _served_overhead_metrics()
+    before = served_render.measurements(table, {k: v for k, v in metrics.items() if k != POUW})
+    assert hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest() == (
+        "c1149f548cd05469475102ceba333171c5ec4fea48dac2c7c27acc8dace55bbc")
+    table["rows"].append(_row("PoUW served on sm_90a", POUW_H100, 12.4, "llama-3.2-1b-h100"))
+    after = served_render.measurements(table, metrics)
+    assert [m for m in after if m["name"] != POUW] == before
+    [pouw] = [m for m in after if m["name"] == POUW]
+    assert (pouw["member"], pouw["value"], pouw["mark"]) == ("llama-3.2-1b-h100", pytest.approx(1140.0), "measured")
+
+
+def test_the_pouw_metric_is_its_members_readings_from_their_records_runs_and_never_fails_validation_for_its_own(
+        tmp_path, monkeypatch, capsys):
+    from verity_bench import kit
+
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
+                                                    "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi"})
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261117-000000-0000")
+    producer = Producer(tmp_path)
+    producer.ran("r20261024-030000-0003", WIDTH_H200, "b32-p512-mixed", _result("b32-p512-mixed", 1.25, gpu=H200))
+    producer.label("r20261024-030000-0003", "run_of_record", "commit", "2026-10-27T16:48:09Z")
+    producer.ran("r20261024-020000-0002", R6, "b32-p512-mixed", _audit("b32-p512-mixed", 6.0, RTX))
+    producer.label(producer.table(["r20261024-020000-0002"], "r6"), "run_of_record", "pous-bandwidth-audit",
+                   "2026-10-27T16:48:07Z")
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "fresh"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(producer.config))
+    monkeypatch.setattr(served_table, "spec_added", lambda root, spec: ADDED)
+
+    def table(name: str) -> dict:
+        run_dir = tmp_path / name
+        run_dir.mkdir()
+        monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+        assert main(["served-table"], metrics=_served_overhead_metrics()) == 0
+        capsys.readouterr()
+        got = json.loads((run_dir / kit.RESULT).read_text())
+        return got | {"by": {(m["name"], m.get("member")): m for m in got["measurements"]}}
+
+    got = table("before")
+    assert (POUW, None) not in got["by"]
+    assert got["by"][POUW, "llama-3.2-1b-h100"]["value"] is None
+    assert got["validation"]["status"] == "passed" and got["validation"]["detail"].startswith("2 of 2 metrics")
+
+    producer.ran("r20261117-221551-8a0b", POUW_H100, "b32-p512-mixed", _pouw("b32-p512-mixed", H100))
+    producer.label("r20261117-221551-8a0b", "run_of_record", "pouw-served-sm90", "2026-11-17T23:00:00Z")
+    member = table("after")["by"][POUW, "llama-3.2-1b-h100"]
+    assert (member["value"], member["unit"], member["mark"], member["device"]) == (
+        pytest.approx(1140.0), served_render.OVERHEAD_UNIT, "measured", H100)
+    assert member["inputs"][1] == "r20261117-221551-8a0b"
