@@ -1,0 +1,98 @@
+# The two-stage benchmark into the one-stage benchmark: what `tools/move/layout.py --map tools/move/two_stage_fold_map.toml`
+# moves and rewrites.
+#
+# `benchmarks/two_stage/` (the toy replay block, its audit and the guard export its Lean model's test reads) joins
+# `benchmarks/one_stage/`, which holds the two-stage driver it imports, and its tests join the one-stage suite. No file
+# name clashes, so every file keeps its name: a renamed bare module (`import guard as G`) is no import `layout.py` rewrites.
+# `settings.py` keeps its name too: `verity_config.settings.of` reads a distribution's registry from that file. It goes
+# beside the one-stage suite's `pyproject.toml`, where `of` finds it for the tests, its only readers: in
+# `benchmarks/one_stage/`, which other suites put on `sys.path`, it would be the `settings` their bare `import settings`
+# finds first. The two-stage suite's `pyproject.toml` is dropped: the one-stage suite's inputs already cover what it lists.
+[roots]
+old = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", research = "tools/research/src/research", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_landq = "tools/verity/landq/verity_landq", verity_machine_model = "benchmarks/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_torch = "adapters/torch/verity_torch", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", research = "tools/research/src/research", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_landq = "tools/verity/landq/verity_landq", verity_machine_model = "benchmarks/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_torch = "adapters/torch/verity_torch", verity_vllm = "adapters/vllm/verity_vllm" }
+
+[paths]
+"benchmarks/two_stage/" = "benchmarks/one_stage/"
+"benchmarks/two_stage/settings.py" = "tests/benchmarks/one_stage/settings.py"
+"tests/benchmarks/two_stage/TwoGuard.lean" = "tests/benchmarks/one_stage/TwoGuard.lean"
+"tests/benchmarks/two_stage/guard_node.py" = "tests/benchmarks/one_stage/guard_node.py"
+"tests/benchmarks/two_stage/test_guard.py" = "tests/benchmarks/one_stage/test_guard.py"
+"tests/benchmarks/two_stage/test_toy.py" = "tests/benchmarks/one_stage/test_toy.py"
+
+[tokens]
+# what the tests' directory held untracked (the fetched guard fixture, `fixtures/guard.tar.xz`) follows its files
+"tests/benchmarks/two_stage/" = "tests/benchmarks/one_stage/"
+
+[retired]
+paths = ["benchmarks/two_stage", "tests/benchmarks/two_stage"]
+
+[drop]
+paths = ["tests/benchmarks/two_stage/pyproject.toml"]
+
+[split]
+".gitignore: tests/benchmarks/two_stage" = { to = "tests/benchmarks/one_stage", why = "the fetched guard fixture, which test_guard.py reads beside itself" }
+"artifacts.json: tests/benchmarks/two_stage" = { to = "tests/benchmarks/one_stage", why = "the fetched guard fixture, which test_guard.py reads beside itself" }
+"tests/benchmarks/two_stage/test_guard.py: benchmarks/two_stage" = { to = "benchmarks/one_stage", why = "the directory it imports `guard` from" }
+"tools/check/suites.py: benchmarks/two_stage" = { to = "benchmarks/one_stage", why = "the suite the two-stage tests join" }
+
+[rewrite]
+# as tests_root_map.toml's
+exclude = [
+    "fixtures/**",
+    "**/fixtures/**",
+    "**/*vectors*.json",
+    "**/*vectors*.txt.gz",
+    "**/CHANGELOG.md",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "**/lake-manifest.json.lock",
+    "tools/move/**",
+    "archive/**",
+    "**/numerical/tests/bench/data/**",
+    "**/price_twins.json",
+    "verity/circuits/silicon/captures/**",
+    "verity/circuits/silicon/hawkeye/**",
+    "tools/research/src/research/store/moves.json",
+    "**/network_e2e/tests/data/**",
+    "adapters/vllm/manifests/**",
+    "adapters/vllm/workloads/**",
+    "adapters/vllm/data/**",
+    "adapters/vllm/verity_vllm/pins/**",
+    "adapters/vllm/tools/migrate/superseded_quarantine.py",
+    "**/migrate/test_superseded_quarantine.py",
+    "**/lakefile.toml",
+    "tests/tree.toml",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.c",
+    "benchmarks/pouw/pearl_c_sm90/**",
+    "benchmarks/numerical/bench-instances/v1/manifest.json",
+    "benchmarks/numerical/bench-instances/v1/tu-k16.index.json",
+    "benchmarks/numerical/bench-instances/v1/vu-k1536-neg.index.json",
+    "benchmarks/numerical/bench-instances/v1/vu-k1536.index.json",
+    "tests/adapters/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
+    "tests/adapters/vllm/verity_vllm/definitions/fixtures/fa2_train_bwd_sm120.npz",
+    "tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json",
+    "tests/verity/circuits/ops/fixtures/gpu-nan-2026-09-28/fp32_ops.json",
+    "tests/verity/circuits/ops/fixtures/tc-sm120-k32-e2m1-2026-09-30/records.json",
+    "verity/circuits/silicon/discrepancy_log.json",
+    "verity/circuits/silicon/hawkeye/PIN.json",
+]
+include = [
+    "**/fixtures/README.md",
+    "**/fixtures/**/README.md",
+    "tools/move/pyproject.toml",
+]
+
+
+
+[modules]
+# the rename [paths] implies (`layout.py --modules`)
+"benchmarks.two_stage" = "benchmarks.one_stage"
+"benchmarks.two_stage.settings" = "tests.benchmarks.one_stage.settings"
+"tests.benchmarks.two_stage.guard_node" = "tests.benchmarks.one_stage.guard_node"
+"tests.benchmarks.two_stage.test_guard" = "tests.benchmarks.one_stage.test_guard"
+"tests.benchmarks.two_stage.test_toy" = "tests.benchmarks.one_stage.test_toy"
