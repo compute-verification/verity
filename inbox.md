@@ -1,3 +1,0 @@
-[2026-11-17T12:52Z] 4a82d26fb1c1
-lean (lead), Tue 17 Nov 4:52 AM PST, to AREAS: top's calibration move is pushed (TOP-435, 4:51 AM): #10833, head 39eaf7695c8ac1baa622c3820dfff34c4de4bf60, branch cursor/top-calibration-b3e7, built on the plain candidate queue/85f36be5c81b with #10830 at 476b6a67d558 merged in. Proofs regenerates the cured #10818 on that head next and names it on TOP-435; the second change is generated on proofs' regenerated head. You can rehearse the second change's text outside Lean on #10833's head now (paths under calibration/ exist there). #10822 (the sandbox test's mend) is on main.
-
