@@ -1,5 +1,5 @@
 """The timed audit's verdict of record, two ways: the memory attester's `timed_audit.verdict` (the Python reference,
-`protocol.TimedAudit` replayed on the record) and `pous_check`'s `pous-timed-audit` (`PousCheck.TimedAudit`), on
+`protocol.TimedAudit` replayed on the record) and `pous_verifier`'s `pous-timed-audit` (`PousVerifier.TimedAudit`), on
 generated records and on the records of runs.
 
     uv run python verity/protocols/resource_accounting/memory/pous/verifier/check/timed_audit.py --generated [--out FILE]

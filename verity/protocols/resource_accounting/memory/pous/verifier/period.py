@@ -1,12 +1,12 @@
 """The verifier's side of one PoUS period on one node: the run's check, with the answer of PoUS's component of onsite
-Verity (`verity/pous/p2/v4/run`, `PousCheck.RunProtocol` in `check/`). The prover's side, the setup, the session and the
+Verity (`verity/pous/p2/v4/run`, `PousVerifier.RunProtocol` in `check/`). The prover's side, the setup, the session and the
 period's subprotocol, is `verity/protocols/resource_accounting/memory/pous/prover/period_prover.py`, which ends each period here.
 
 The verifier judges the run, setup's acceptance of `C*` publishing exactly the run's commitment (`tie`) and then
 `run.check_at`, and answers in the core interface's canonical form (`answer`); the case (`case`) carries setup's own
 inputs (`setup_case`, read back by `setup_inputs`).
 
-What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify` computes it: `s_bits = ⌊ρ·blocks·w⌋`
+What an accepted run certifies is `certify`'s, as `PousVerifier.RunProtocol.certify` computes it: `s_bits = ⌊ρ·blocks·w⌋`
 at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point (`certificate`: P2's registered one at
 `run.DEPLOYED`, a 1 GiB `C*`, else P2's proved family `p2.family_certificate`, any `2^8` to `2^23` blocks at the
 registered width and prime, else the per-period guarantee `p2.wide_certificate`, `periodHeldAt`, to `2^27` blocks, which
@@ -18,7 +18,7 @@ run's certificate.
 (`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 
 `answer_signed` is the run on the memory attester's signed setup (`verity/pous/p2/v4/signed-run`,
-`PousCheck.SignedRun`): `run.check_signed_at` in place of `tie` and `run.check_at`, its case (`case_signed`) the
+`PousVerifier.SignedRun`): `run.check_signed_at` in place of `tie` and `run.check_at`, its case (`case_signed`) the
 session, the setup record the session's key signed (`memory_attester.sign_setup_record`: the published outputs the
 memory attester's device was given) and the prover's openings (`openings_of`, from its table), a few megabytes at a
 served store where `case` carries the table and `C*`. It certifies nothing, and its profile says why (`SIGNED_GAPS`);
@@ -54,16 +54,16 @@ from .schemes import p2 as P2
 from .verifier import DIGEST_BYTES, MerkleTree, row_leaf
 
 PROTOCOL = "verity/pous/p2/v4/run"
-"""`PousCheck.RunProtocol.ID`; a test signer's runs answer under `memory_attester.TEST_PREFIX` + it."""
+"""`PousVerifier.RunProtocol.ID`; a test signer's runs answer under `memory_attester.TEST_PREFIX` + it."""
 SIGNED_PROTOCOL = "verity/pous/p2/v4/signed-run"
-"""`PousCheck.SignedRun.ID`: the run on the memory attester's signed setup (`answer_signed`)."""
+"""`PousVerifier.SignedRun.ID`: the run on the memory attester's signed setup (`answer_signed`)."""
 SIGNED_GAPS = ("the signed run's guarantee is not proved: this check takes the memory challenger's signed setup where "
                "the run's check reads the store",
                "setup's check is not yet a proof, and it ran on the developer's node")
-"""`PousCheck.SignedRun.GAPS`: why the signed run certifies nothing, after the point's own gaps."""
+"""`PousVerifier.SignedRun.GAPS`: why the signed run certifies nothing, after the point's own gaps."""
 SETUP_ACCEPTED = ("the store at the published root is the encoding of the registered weights under the published "
                   "commitment and salt (SetupAccepted)")
-"""`PousCheck.SignedRun.SETUP_ACCEPTED`: setup's acceptance, an open premise of the signed run, among its certificate's
+"""`PousVerifier.SignedRun.SETUP_ACCEPTED`: setup's acceptance, an open premise of the signed run, among its certificate's
 hypotheses."""
 SESSION_DOMAIN = "verity/pous-period/session/v1"
 W, C0 = 1024, 105
@@ -84,7 +84,7 @@ def point_for(size: int, w: int = P2.POINT[0], c0: int = P2.POINT[1], k: int = K
 
 
 def certificate(q: P2.P2Params) -> Any:
-    """`PousCheck.RunProtocol.certificate`: P2's registered certificate when `q` is its point, segment count and all,
+    """`PousVerifier.RunProtocol.certificate`: P2's registered certificate when `q` is its point, segment count and all,
     else P2's proved family's (`p2.family_certificate`, `2^8` to `2^23` blocks), else the per-period guarantee's
     (`p2.wide_certificate`, to `2^27` blocks), else none."""
     registered = P2.P2(P2.P2Params(q.w, q.c0, q.blocks_per_segment, q.segments)).certificate
@@ -94,7 +94,7 @@ def certificate(q: P2.P2Params) -> Any:
 
 
 def gaps(point: R.Point) -> tuple[Any, list[str]]:
-    """`PousCheck.RunProtocol.gaps`: the certificate at the point, and why it doesn't cover the run (none when it does)."""
+    """`PousVerifier.RunProtocol.gaps`: the certificate at the point, and why it doesn't cover the run (none when it does)."""
     q = point.params
     cert = certificate(q)
     if cert is None:
@@ -103,7 +103,7 @@ def gaps(point: R.Point) -> tuple[Any, list[str]]:
 
 
 def certify(point: R.Point) -> dict[str, Any]:
-    """`PousCheck.RunProtocol.certify`'s public outputs: `{"certified", "eps", "s_bits"}`, eps an exact ratio."""
+    """`PousVerifier.RunProtocol.certify`'s public outputs: `{"certified", "eps", "s_bits"}`, eps an exact ratio."""
     cert, why = gaps(point)
     if cert is None or why:
         return {"certified": False, "eps": "0", "s_bits": 0}
@@ -113,7 +113,7 @@ def certify(point: R.Point) -> dict[str, Any]:
 
 
 def profile(point: R.Point) -> dict[str, Any]:
-    """`PousCheck.RunProtocol.profileJson`: the store and the audit the run was checked at, the certificate, every gap."""
+    """`PousVerifier.RunProtocol.profileJson`: the store and the audit the run was checked at, the certificate, every gap."""
     cert, why = gaps(point)
     q = point.params
     return {"block_bits": q.w, "blocks": q.blocks, "certificate": None if cert is None else cert.to_json(),
@@ -133,7 +133,7 @@ def point_of(doc: Mapping[str, Any]) -> R.Point:
 
 def case(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup, digests: bytes,
          session: R.ChallengePhaseRecord, setup_of: Mapping[str, Any]) -> dict[str, Any]:
-    """The run protocol's case, `{"commitment": hex, "evidence": hex, "params": JSON}` (`PousCheck.RunProtocol`): its
+    """The run protocol's case, `{"commitment": hex, "evidence": hex, "params": JSON}` (`PousVerifier.RunProtocol`): its
     evidence carries the setup's own commitment and evidence, from `setup_of`, the setup protocol's case."""
     params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
     evidence = {"digests": digests.hex(), "session": session.to_json(),
@@ -143,12 +143,12 @@ def case(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published:
 
 
 SetupInputs = tuple[bytes, bytes, Sequence[Sequence[bytes]]]
-"""The setup's own inputs (`PousCheck.RunProtocol.SetupEvidence`): the server's commitment to `W`, the verifier's salt,
+"""The setup's own inputs (`PousVerifier.RunProtocol.SetupEvidence`): the server's commitment to `W`, the verifier's salt,
 and `C*` segment by segment."""
 
 
 def tie(point: R.Point, published: R.Setup, inputs: SetupInputs) -> None:
-    """`PousCheck.RunProtocol.tie`: setup accepts `C*` against the commitment and salt at the point's parameters (the
+    """`PousVerifier.RunProtocol.tie`: setup accepts `C*` against the commitment and salt at the point's parameters (the
     public-encoder path, `protocol.verifier_key`) and publishes exactly `published`, the run's commitment; else raises
     `run.Refused`."""
     commitment, salt, store = inputs
@@ -164,7 +164,7 @@ def tie(point: R.Point, published: R.Setup, inputs: SetupInputs) -> None:
 def case_signed(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup,
                 session: R.ChallengePhaseRecord, signed_setup: mc.SignedSetupRecord,
                 openings: Sequence[R.Opening]) -> dict[str, Any]:
-    """The signed run protocol's case (`PousCheck.SignedRun`): `case`'s params and commitment, and its evidence the
+    """The signed run protocol's case (`PousVerifier.SignedRun`): `case`'s params and commitment, and its evidence the
     session, the memory attester's signed setup record and one opening per round, in place of the table and the
     setup's own inputs."""
     params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
@@ -183,7 +183,7 @@ def openings_of(point: R.Point, salt: bytes, digests: bytes, rounds: Sequence[mc
 
 
 def profile_signed(point: R.Point) -> dict[str, Any]:
-    """`PousCheck.SignedRun.profileJson`: `profile`, its gaps the point's and then `SIGNED_GAPS`, and its certificate's
+    """`PousVerifier.SignedRun.profileJson`: `profile`, its gaps the point's and then `SIGNED_GAPS`, and its certificate's
     hypotheses, when it has a certificate, followed by `SETUP_ACCEPTED`."""
     cert, why = gaps(point)
     cert = None if cert is None else replace(cert, hypotheses=(*cert.hypotheses, SETUP_ACCEPTED))
@@ -222,7 +222,7 @@ def answer(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection
 
 
 def setup_case(q: P2.P2Params, commitment: bytes, salt: bytes, encoded: Sequence[Sequence[bytes]]) -> dict[str, Any]:
-    """The setup protocol's case (`PousCheck.SetupProtocol`): the manifest, `commitment ‖ salt`, and `C*` framed."""
+    """The setup protocol's case (`PousVerifier.SetupProtocol`): the manifest, `commitment ‖ salt`, and `C*` framed."""
     u32 = lambda n: n.to_bytes(4, "big")  # noqa: E731
     evidence = u32(len(encoded)) + b"".join(u32(len(seg)) + b"".join(u32(len(b)) + b for b in seg) for seg in encoded)
     return {"commitment": (commitment + salt).hex(), "evidence": evidence.hex(), "params": q.manifest()}
