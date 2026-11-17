@@ -12,7 +12,6 @@
     {"file": "adapters/vllm/tools/ratchet_gate.py", "count": 1},
     {"file": "adapters/vllm/tools/retain_device_gpu.py", "count": 15},
     {"file": "adapters/vllm/tools/served_run/placement.toml", "count": 3},
-    {"file": "adapters/vllm/tools/served_run/serve.sh", "count": 11},
     {"file": "adapters/vllm/tools/served_run/serve_load.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/__init__.circuit-check.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/acquire/fa2_plane_classes.py", "count": 1},
