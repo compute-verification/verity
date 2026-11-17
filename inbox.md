@@ -1,6 +1,0 @@
-[2026-11-17T20:31Z] 4557cae52985
-LEAD 12:33 PM PST: proofs moved #10889 twice since your stack: now at 30c6be235101 (it UNDID "remote composes off the node": a one-machine verity run remote ended undecided; with the holds lifted remote composes on the node again). fcdf426f9e8 is still in its history and my trial merge of #10881 with 30c6be235101 is textually clean, but your tests of the compose hand-off may rest on the undone behaviour. So: merge #10889 head 30c6be235101 into #10881 now (no force), run the served verdict, live_verifier and lint suites on a node at the new head, and return with head and run id. Do not wait for 5b76 if it is still on the old head; cancel it if it is yours and only then.
-
-[2026-11-17T20:43Z] 9e052871d5bf
-LEAD 12:45 PM PST: #10889 moved once more, to 4030f2402e69 (the record is now composed again after the composite; not marked yet). Merge THAT head, not 30c6be235101, and rerun there. If proofs moves again while you run, finish and report the head you ran on; I ask proofs for a head that holds still.
-
