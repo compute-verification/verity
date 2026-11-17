@@ -1,8 +1,8 @@
-"""Network certificates (record v2 on SHA-512): the layout restated from PROTOCOL.md, the frame tree, what the digest
-and the signed message bind, the signer's refusal failing closed, and the certified audit's verdicts against the raw
-audit's on every scenario of the audit and commitment tests. The mark certificate: what it signs, each refusal of
+"""Network attestations (record v2 on SHA-512): the layout restated from PROTOCOL.md, the frame tree, what the digest
+and the signed message bind, the signer's refusal failing closed, and the attested audit's verdicts against the raw
+audit's on every scenario of the audit and commitment tests. The mark attestation: what it signs, each refusal of
 its opening by name, the issuer signing none when its signer refuses or its coins repeat, and no second one of a mark
-it has certified. A certificate's bytes: the layout, its inverse, the same bytes inside both record encoders, and each
+it has attested. An attestation's bytes: the layout, its inverse, the same bytes inside both record encoders, and each
 refusal by name."""
 
 import hashlib
@@ -151,7 +151,7 @@ def ingress_verdicts(records, windows, key=None, session=SESSION):
 
 
 def certified(raw):
-    """The raw audit's verdicts as the certified audit gives them: the issuer certifies no incomplete record, so a
+    """The raw audit's verdicts as the attested audit gives them: the issuer certifies no incomplete record, so a
     window the raw audit rejects on its status has no certificate and is a `no-verdict`."""
     return ["no-verdict" if v is not None and v.startswith("status:") else v for v in raw]
 
@@ -198,7 +198,7 @@ def test_certified_audit_matches_raw_audit_on_every_egress_scenario(tmp_path):
 
 
 def test_certified_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path):
-    """One clock per spatial unit: a second link with another in-set sync in window 1 is advice there, certified too."""
+    """One clock per spatial unit: a second link with another in-set sync in window 1 is advice there, attested too."""
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     other = [SYNCS[0], ClockSync(2, 1), SYNCS[2]]
@@ -214,7 +214,7 @@ def test_certified_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path
 
 def test_certified_audit_matches_raw_audit_on_ingress(tmp_path):
     """Ingress: different timings are both accepted, and a duplicate and a missing window are the raw audit's
-    violations, certified; an incomplete status, certified nothing, is a `no-verdict`."""
+    violations, attested; an incomplete status, attested nothing, is a `no-verdict`."""
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     early = ingress_run([[2, 0, 0, 0], [1, 1, 0, 0], [0, 0, 0, 0]])
@@ -241,7 +241,7 @@ def test_an_honest_window_is_complete_so_the_issuer_refuses_nothing_honest(tmp_p
 
 
 def test_a_certificate_cannot_move_to_another_phase_or_key(tmp_path):
-    """Moving a certificate to another window, link or direction, editing its head, signing with another key or
+    """Moving an attestation to another window, link or direction, editing its head, signing with another key or
     forging the signature is a `signature` violation, and only in that window."""
     signer = signers.signer(tmp_path)
     key = signer.public_key()
@@ -257,7 +257,7 @@ def test_a_certificate_cannot_move_to_another_phase_or_key(tmp_path):
 
     assert egress_verdicts([with_window_0(c1), *certified[1:]], key) == ["signature", None, None]
     assert egress_verdicts([with_window_0(c1, cert=False), *certified[1:]], key) == ["signature", None, None]
-    # the head still says window 1, so the moved certificate is a second record there
+    # the head still says window 1, so the moved attestation is a second record there
     assert egress_verdicts([with_window_0(c1, head=False), *certified[1:]], key) == ["no-verdict", "duplicate", None]
     relabelled = [CertifiedRecord(
         RecordHead(**{f: getattr(c.head, f) for f in RecordHead.__slots__} | {"link": "tokens"}), c.salt,
@@ -277,7 +277,7 @@ def test_a_certificate_cannot_move_to_another_phase_or_key(tmp_path):
 def test_an_incomplete_record_gets_no_certificate_and_a_relayed_status_is_bound(tmp_path):
     """The issuer certifies only a complete record: a faulted one is listed in `refused`, with no session started and
     no leaf spent, and its window is a `no-verdict`. The status is the signed head's: a faulted head signed anyway (by
-    `sign`, as a forger would have to) that a relay edits to complete breaks the certificate."""
+    `sign`, as a forger would have to) that a relay edits to complete breaks the attestation."""
     signer = signers.signer(tmp_path)
     w = Certifier("requests", P)
     w.fault(Reason.DROPPED)
@@ -390,7 +390,7 @@ def test_a_session_already_started_is_refused_and_its_windows_fail_closed(tmp_pa
 
 
 def test_a_certificate_from_another_session_is_a_signature_violation(tmp_path):
-    """The cross-session replay: certificates the key signed in another session of the attester, honest ones of the
+    """The cross-session replay: attestations the key signed in another session of the attester, honest ones of the
     same execution phases, are a `signature` violation in this session, every window; in their own they are accepted."""
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     signer = signers.signer(tmp_path)
@@ -406,8 +406,8 @@ def test_a_certificate_from_another_session_is_a_signature_violation(tmp_path):
 
 def test_the_certificate_signs_the_record_digest_salted_by_the_attester(tmp_path):
     """The signed digest is SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) under 64 bytes of the attester's own coins,
-    fresh per record: one record certified twice is signed under two digests, neither of them R. The host's check
-    reads the certificate alone; a record handed with another salt, or a salt of another length, is refused."""
+    fresh per record: one record attested twice is signed under two digests, neither of them R. The host's check
+    reads the attestation alone; a record handed with another salt, or a salt of another length, is refused."""
     signer = signers.signer(tmp_path)
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     fixed = certify_all(Issuer(signer, SESSION, coins=lambda n: b"\x07" * n), honest[:1])[0]
@@ -459,10 +459,10 @@ def fresh_coins():
 
 
 def test_a_mark_is_signed_salted_under_its_own_tag_on_the_marks_link_name(tmp_path):
-    """A mark certificate signs SHA-512("verity-network-certifier/mark/v1" ‖ salt_c ‖ mark) under 64 bytes of the
-    attester's own coins, as an egress certificate on `<link>-marks` at the execution phase its caller gave, over the
-    message every certificate signs, with one leaf. Its opening holds, and its execution phase is the certificate's.
-    The issuer keeps the mark, and asked for it again it raises `MarkRefused` and signs no second certificate."""
+    """A mark attestation signs SHA-512("verity-network-certifier/mark/v1" ‖ salt_c ‖ mark) under 64 bytes of the
+    attester's own coins, as an egress attestation on `<link>-marks` at the execution phase its caller gave, over the
+    message every attestation signs, with one leaf. Its opening holds, and its execution phase is the attestation's.
+    The issuer keeps the mark, and asked for it again it raises `MarkRefused` and signs no second attestation."""
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     issuer = Issuer(signer, SESSION, coins=fresh_coins())
@@ -485,11 +485,11 @@ def test_a_mark_is_signed_salted_under_its_own_tag_on_the_marks_link_name(tmp_pa
 
 
 def test_the_issuer_signs_no_second_mark_of_a_message(tmp_path):
-    """The issuer marks a message at most once: a mark it has certified is refused when asked for again, at the same
+    """The issuer marks a message at most once: a mark it has attested is refused when asked for again, at the same
     execution phase, at a later one and for another link, by `MarkRefused`, and nothing is handed back. A refused call
-    takes no coins, uses no leaf and lists nothing in `refused`, so the next mark, another message, is certified under
+    takes no coins, uses no leaf and lists nothing in `refused`, so the next mark, another message, is attested under
     the next salt at the next leaf, and is then refused too. A restarted signer on the key's state signs no mark in
-    the session the state has started, the certified one or another: the session's marks are the first signer's."""
+    the session the state has started, the attested one or another: the session's marks are the first signer's."""
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     taken = []
@@ -523,7 +523,7 @@ def test_the_issuer_signs_no_second_mark_of_a_message(tmp_path):
 
 def test_a_mark_that_is_not_bytes_is_signed_nowhere(tmp_path):
     """A mark of 64 bytes that are not `bytes` (a `bytearray`, a `memoryview`) is refused with `ValueError` before the
-    issuer takes a coin or asks its signer anything, before and after the same bytes are certified: no coin is taken,
+    issuer takes a coin or asks its signer anything, before and after the same bytes are attested: no coin is taken,
     no leaf is used, nothing is listed in `refused`, and neither a salt nor the mark is kept."""
     signer = signers.signer(tmp_path)
     taken = []
@@ -545,9 +545,9 @@ def test_a_mark_that_is_not_bytes_is_signed_nowhere(tmp_path):
 
 
 def test_a_mark_certificate_is_refused_by_name(tmp_path):
-    """A mark certificate's opening is refused with why: another mark, another salt or an altered digest (`opening`);
-    read as another link's mark, or a certificate on the link's own name (`link`); an ingress certificate (`egress`);
-    another key's (`key`); and a certificate relabelled to another link name or another execution phase, another
+    """A mark attestation's opening is refused with why: another mark, another salt or an altered digest (`opening`);
+    read as another link's mark, or an attestation on the link's own name (`link`); an ingress attestation (`egress`);
+    another key's (`key`); and an attestation relabelled to another link name or another execution phase, another
     session's and a forged signature (`signature`). A record's salted digest signed on the marks' link name opens as
     no mark."""
     signer = signers.signer(tmp_path)
@@ -616,7 +616,7 @@ def test_the_issuer_signs_no_mark_when_its_signer_refuses_or_its_coins_repeat(tm
 
 
 def layout(c: Certificate) -> bytes:
-    """A certificate's bytes restated field by field: u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖
+    """An attestation's bytes restated field by field: u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖
     u64be execution phase ‖ digest (64) ‖ u32be len(signature) ‖ signature."""
     link = c.link.encode()
     return (struct.pack(">H", len(c.key_id)) + c.key_id + struct.pack(">H", len(link)) + link
@@ -625,7 +625,7 @@ def layout(c: Certificate) -> bytes:
 
 
 def one_of_each(tmp_path):
-    """The signer's key, a certified record, and a certificate of each kind the issuer signs: a record's at each end
+    """The signer's key, an attested record, and an attestation of each kind the issuer signs: a record's at each end
     and a mark's."""
     signer = signers.signer(tmp_path)
     issuer = Issuer(signer, SESSION, coins=fresh_coins())
@@ -637,9 +637,9 @@ def one_of_each(tmp_path):
 
 
 def test_a_certificates_bytes_are_the_layout_and_decode_is_its_inverse(tmp_path):
-    """`Certificate.encode` is the layout field by field for a record's certificate at each end and a mark's, and
-    `Certificate.decode` gives the certificate back, which still verifies and encodes to the same bytes. Two
-    certificates that differ in one field have different bytes."""
+    """`Certificate.encode` is the layout field by field for a record's attestation at each end and a mark's, and
+    `Certificate.decode` gives the attestation back, which still verifies and encodes to the same bytes. Two
+    attestations that differ in one field have different bytes."""
     key, _, kinds = one_of_each(tmp_path)
     assert {c.direction for c in kinds.values()} == {EGRESS, INGRESS}
     assert kinds["mark"].link == "responses-marks" and len({c.encode() for c in kinds.values()}) == 3
@@ -659,10 +659,10 @@ def test_a_certificates_bytes_are_the_layout_and_decode_is_its_inverse(tmp_path)
 
 
 def test_a_certificates_bytes_are_those_inside_both_record_encoders(tmp_path):
-    """The commitment's leaf of a certified record (`service.encode`) is its head, its 64-byte salt and then the
-    certificate, which is where the Lean reads it; the Lean audit's encoding of the record (`lean_audit.encode`) is
-    a kind byte, the leaf's length and that leaf. The certificate's part of both is `Certificate.encode`, for a
-    record's certificate at each end and a mark's, and `Certificate.decode` reads it back from there."""
+    """The commitment's leaf of an attested record (`service.encode`) is its head, its 64-byte salt and then the
+    attestation, which is where the Lean reads it; the Lean audit's encoding of the record (`lean_audit.encode`) is
+    a kind byte, the leaf's length and that leaf. The attestation's part of both is `Certificate.encode`, for a
+    record's attestation at each end and a mark's, and `Certificate.decode` reads it back from there."""
     _, record, kinds = one_of_each(tmp_path)
     head = record.head.encode()
     for c in kinds.values():
@@ -678,9 +678,9 @@ def test_a_certificates_bytes_are_those_inside_both_record_encoders(tmp_path):
 
 def test_a_certificates_bytes_are_refused_by_name():
     """`Certificate.decode` refuses bytes left after the signature, bytes that end inside a fixed-width part, and a
-    length that names more bytes than are left, each saying which; every proper prefix of a certificate's bytes is
+    length that names more bytes than are left, each saying which; every proper prefix of an attestation's bytes is
     one of the last two. It refuses a direction code other than 0 and 1, a link that is not UTF-8 and anything that
-    is not bytes: a number is not that many zero bytes. `encode` refuses a certificate the layout cannot hold."""
+    is not bytes: a number is not that many zero bytes. `encode` refuses an attestation the layout cannot hold."""
     c = Certificate(b"I" * 16, "responses-marks", EGRESS, 5, bytes(range(64)), b"signature")
     data = c.encode()
     assert Certificate.decode(data) == c and Certificate.decode(memoryview(data)) == c

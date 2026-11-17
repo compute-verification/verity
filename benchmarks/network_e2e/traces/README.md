@@ -39,14 +39,14 @@ end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eo
   (`verity/protocols/resource_accounting/network/attester/network_attester_serve.py serve`, a process beside the server, not on the auditor device). The client
   speaks cells through the relay's shim. `summarize` checks what the relay published, and writes each relay trace
   twice more for the scheduler replay (`benchmarks/network_e2e/encodings/replay.py`'s `read_corpus_trace`): with the
-  relay's admission order and with its release order as the certified ingress (`summary.network_attester_views`). The relay,
+  relay's admission order and with its release order as the attested ingress (`summary.network_attester_views`). The relay,
   the client and the server run on cores of their own (`corpus.cpu_plan`), and three probes say where a late tick or a
   late cell read came from: `network_attester_probe.py` (the relay's every tick, publish and collection), `host_sample.py` (the
   host's load every 100 ms) and the client's own event loop record (`corpus.drive_network_attester`); the summary lays each late
   tick against them (`summary.late_ticks`).
 - `corpus.py run --admit tick` serves under the certified tick (`verity_vllm.pipeline.serve_admit`, which vLLM's server
   loads through `verity_vllm.pipeline.tick_plugin`): the engine adds the requests whose release bucket closed by its
-  logical clock, in release order, so that batch composition is a function of the certified releases and the advice v1
+  logical clock, in release order, so that batch composition is a function of the attested releases and the advice v1
   sends no timing. In a network attester trace the network attester in front of the server sends the release headers
   and streams the watermark (`network_attester_serve.py serve --watermark`, in
   `verity/protocols/resource_accounting/network/attester/`), and the summary takes each request's release from what the server

@@ -1,14 +1,14 @@
 """The network chain on an active network attester's run (`network_attester_chain`, `chain_record`'s network attester path),
 here the synthetic run published as `network_attester_serve.Publisher` publishes a served one, in the gate's layout (its witness
 under ``witness/``, and under ``out/`` what the gate's own outcome publishes of it): the
-certificates step reruns the network attester's own check and holds the public certificates to the certified lines,
+attestations step reruns the network attester's own check and holds the public attestations to the attested lines,
 refusing a changed one and a changed cell; the run's deployment is the auditor's record's (`network_attester_chain.deployment_of`),
-and a copy of it re-signed, rewritten or in other bytes is refused; the certified I/O read off the cells is the requests
+and a copy of it re-signed, rewritten or in other bytes is refused; the attested I/O read off the cells is the requests
 and responses served;
 N2's link is the network attester's (both heads at its digest, no sync, charge 0) and its references expect honest
 accepted and tampered refused on its signed digest alone. A network attester rehearsal's run (its records through the older network attester's proxy)
 is refused by name (`network_attester_chain.PROXY`) by every reader: its files, or a network attester's deployment.json in an active
-network attester's run. The report on the network attester path requires the certificates, the endpoint, the tie, N2
+network attester's run. The report on the network attester path requires the attestations, the endpoint, the tie, N2
 and the scan, names its stubs, and refuses a step whose input is a network attester rehearsal's or another network attester
 run's."""
 
@@ -79,14 +79,14 @@ def gate_run(d: Path, seed: bytes = b"warden-run") -> Path:
 
 
 def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_the_wiring(tmp_path):
-    """Of each registration of an execution phase's cells, the gate's ``out/`` holds the certificate, with the link,
+    """Of each registration of an execution phase's cells, the gate's ``out/`` holds the attestation, with the link,
     direction and window the registration names, and the line as `network_attester_serve.Publisher` writes it less the wiring
     and the cost: the witness's own bytes but for those two, the root and the domain among them, and no wiring. The
-    line whole is in ``witness/``, where the chain reads it. A record's certificate is written in one key order, so
+    line whole is in ``witness/``, where the chain reads it. A record's attestation is written in one key order, so
     its text in the witness's line is its text in the public one. So the record's leak guard, which reads a job's files
     against the gate run's witness, holds nothing of a record whose files name a registration's public keys as a
     verifier's files do (the published line, the registration less its wiring indented, a port with its root and
-    domain, the certificates). The control: the published line with the wiring written into it is held, and so are
+    domain, the attestations). The control: the published line with the wiring written into it is held, and so are
     a registration whole and the wiring alone, each moved out of the record."""
     run = gate_run(tmp_path / "g")
     witness = (run / "witness" / "cells.jsonl").read_text().splitlines()
@@ -189,7 +189,7 @@ def test_a_network_attester_runs_certificates_io_and_link_are_its_own(tmp_path):
 
 
 def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(tmp_path):
-    """Of the network attester's own check, the certificates step writes the gate's end's verdict, key for key:
+    """Of the network attester's own check, the attestations step writes the gate's end's verdict, key for key:
     whether it accepted and the gate's own list of counts (`auditor.NETWORK_ATTESTER_COUNTS`, its `cell_rows` cut to
     `auditor.CELL_ROWS`). The step's list is the gate's, so a key the gate does not publish is not written by the
     chain: the check's problems and their number, the summary's counts of the traffic and its other keys (a
@@ -233,7 +233,7 @@ def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics
     """``chain_record.py certs`` writes ``certs.json`` with only the keys the list of released_keys.json names, on an
     accepted run and on one the network attester's own check refuses, and every count of `verdict` the list names;
     what the step found of the traffic (`network_attester_chain.WITNESS_KEYS`: which execution phases the signer refused, how
-    many it certified, each one's certified, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
+    many it attested, each one's attested, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
     held any of it would fail the record."""
     from verity.protocols.resource_accounting.network.prover import released_keys as RK
 
@@ -319,9 +319,9 @@ def test_a_attester_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path, 
 def test_the_gate_publishes_the_word_that_an_execution_phase_has_no_head_and_a_reader_checks_it(tmp_path):
     """A run at the lengths rows' form 2 whose first two execution phases end in the network attester's word that
     they have no head, and its last two in their heads. Of each line of its `rows.jsonl` the gate publishes one
-    certificate in the same six fields and nothing of the line's cost. The word's fields, with the schedule's digest,
+    attestation in the same six fields and nothing of the line's cost. The word's fields, with the schedule's digest,
     are the word's public record whole, which `connection_rows.check_no_head` accepts under the deployment's key and
-    session for its own execution phase alone; a head's certificate read as the word is refused. So a reader tells
+    session for its own execution phase alone; a head's attestation read as the word is refused. So a reader tells
     the two apart from what the gate publishes, and nothing but the word's record leaves by the word's line."""
     out = tmp_path / "run"
     params = dataclasses.replace(ENDS, queue=5)
@@ -378,7 +378,7 @@ def test_n2_on_a_sampled_network_attester_period_tampers_every_window_and_proves
 
 
 def _steps(tmp_path, run: Path) -> SimpleNamespace:
-    """The network attester path's step outputs on `run`: its real certificates, and the endpoint, the tie, N2 and the
+    """The network attester path's step outputs on `run`: its real attestations, and the endpoint, the tie, N2 and the
     scan as their drivers write them."""
     def put(name, doc):
         (tmp_path / name).write_text(json.dumps(doc))

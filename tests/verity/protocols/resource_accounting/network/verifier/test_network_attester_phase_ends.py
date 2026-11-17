@@ -87,7 +87,7 @@ def order_of(device: NetworkAttester) -> dict[int, int]:
 def test_form_2_is_a_value_of_its_own_digest_and_a_schedule_at_form_1_leaves_what_it_left(tmp_path):
     """The form is 1 or 2. Form 2 has the lengths and fails tables and the bounds of form 1 and another digest, and
     its content tables have form 1's names and row sizes; a schedule at form 1, with content rows or without, has
-    the digest it had, and its run leaves the records, the certificates, the cells' heads, the hands, the
+    the digest it had, and its run leaves the records, the attestations, the cells' heads, the hands, the
     connection rows' heads and their registrations it left, byte for byte: with content rows, and with a late tick,
     whose execution phase and the one before it it doesn't hand."""
     assert LENGTHS_FORMS == (1, 2)
@@ -590,9 +590,9 @@ def test_a_run_that_ends_early_ends_the_execution_phases_it_has_not():
 
 
 def test_the_word_that_no_head_comes_is_signed_for_its_execution_phase_link_session_and_schedule(tmp_path):
-    """The word is one certificate of the link's egress in the execution phase, over a digest of the link, the
+    """The word is one attestation of the link's egress in the execution phase, over a digest of the link, the
     execution phase and the schedule's parameters under a tag of its own; its record reads back and is refused for
-    another execution phase, link, session, schedule or key, with a field changed or added. A head's certificate is
+    another execution phase, link, session, schedule or key, with a field changed or added. A head's attestation is
     no word and the word's is no head's, and a schedule at form 1 has no such word."""
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
     key = issuer.signer.public_key()

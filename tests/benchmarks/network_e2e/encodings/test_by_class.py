@@ -1,6 +1,6 @@
 """Advice v1's charge by class (`verity_vllm.pipeline.advice_code.by_class`, and `by_class.py`'s report over a trace).
 Each window's parts sum to its charge, and its segment's parts are the arithmetic decoder's own shifts, under the
-tick and without it, under the uniform book and a fit one. Under the certified tick, with the prefix cache on and
+tick and without it, under the uniform book and a fit one. Under the attested tick, with the prefix cache on and
 prompts that share prefixes, every field but the lengths is 0 by construction, each by rules whose lines are in the
 code; without the tick the admission is charged and the hits still aren't. The observer reads off the replay the
 evictions, the lookups they cut short, the waits with what held them, and the preemptions. The report counts each

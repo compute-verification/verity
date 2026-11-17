@@ -1,7 +1,7 @@
 """The network attester's connection rows: what it signs of the connections it released in an execution phase of a
 link, as tables of rows committed as its cells' rows are (`network_attester_rows`) and listed in one head for that execution
 phase, which it signs once. A schedule has them only where its parameters say so (`NetworkAttesterParams.lengths`): a schedule
-without them has no such head, and its records, cells' heads and certificates are the ones it had. The head lists
+without them has no such head, and its records, cells' heads and attestations are the ones it had. The head lists
 the lengths rows and the fails rows and, where the schedule has content rows (`NetworkAttesterParams.content`), three tables
 a class after them, or four where it has request words (`NetworkAttesterParams.request_words`). Every table of the same
 connections is under the one signature, and no proof block opens a row of them under any other head.
@@ -80,8 +80,8 @@ leaf: its domain is the one above at rows = 0 and its root is 64 zero bytes (`NO
 
 with the tables in the order the schedule's parameters list them (`tables_of`: `lengths`, then `fails`, then each
 class's `request.i`, `response.i` and `end.i`, and its `words.i` in a schedule with request words). Its
-certificate is `Issuer.sign`'s of the digest for the link's egress in execution phase w, the one whose releases it
-holds, though it is signed an execution phase later. A record's, a clock's and a cells' head's certificates of the
+attestation is `Issuer.sign`'s of the digest for the link's egress in execution phase w, the one whose releases it
+holds, though it is signed an execution phase later. A record's, a clock's and a cells' head's attestations of the
 same execution phase sign other digests, so none verifies as it (each would need a SHA-512 preimage). `parameters` is
 the schedule's digest, which holds the connection rows' form.
 
@@ -94,30 +94,30 @@ say.
 
 **The word that no head comes** (`no_head_digest`, `no_head`, `check_no_head`; the lengths rows' form 2 only,
 `NetworkAttesterParams.closes`). Under form 2 the network attester ends every execution phase of a run in exactly one of two
-certificates of the link's egress in that execution phase: its head's, or this word's, which it signs where it
+attestations of the link's egress in that execution phase: its head's, or this word's, which it signs where it
 doesn't hand the execution phase (`network_attester`'s "The lengths rows": it, the one before it or the one after it wasn't
 published complete, or the run ended early):
 
     digest = tagged_sha512(NO_HEAD_TAG, u16be len(link) ‖ link ‖ u64be window ‖ parameters (64 bytes))
 
 a head's first three fields under a tag of its own. So the word is of one link's execution phase under one schedule,
-whose digest holds the form, and, as every certificate is, of one session and one key
+whose digest holds the form, and, as every attestation is, of one session and one key
 (`certificate.certificate_message`). Its public record is
 
     {"format": NO_HEAD, "link", "window", "parameters", "certificate": {"key", "digest", "signature"}}
 
 A reader tells a head, the word and silence apart with public values alone. The word's digest is a function of the
-link, the execution phase and the schedule's digest, so a certificate that signs it is the word, and no head's
-certificate is (`check_registration` refuses the word's and `check_no_head` a head's: each would need a SHA-512
+link, the execution phase and the schedule's digest, so an attestation that signs it is the word, and no head's
+attestation is (`check_registration` refuses the word's and `check_no_head` a head's: each would need a SHA-512
 collision across the two tags). An execution phase with neither has not ended yet, or its signer refused the leaf:
 it has no certificate, and fails closed as a record without one does. Which of the two an execution phase ends in
-is a function of which execution phases' records were published complete, which their certificates already say, so
+is a function of which execution phases' records were published complete, which their attestations already say, so
 the word makes nothing else public. That an execution phase gets one of the two and never both rests on the network
 attester's own code (`trusted-device`): its signer signs the digest it is asked to. Under form 1 an execution phase
 that isn't handed has no certificate of either kind.
 
-**The registration** (`registration`) is the head and its certificate as one JSON object, kept on a run's private
-side (the auditor's gate publishes its certificate alone):
+**The registration** (`registration`) is the head and its attestation as one JSON object, kept on a run's private
+side (the auditor's gate publishes its attestation alone):
 
     {"format": REGISTRATION, "link", "window", "parameters", "word_bits", "row_schema",
      "tables": [{"name", "value", "rows", "words", "domain", "root", "layout"}, ...],
@@ -131,7 +131,7 @@ first_bucket + (j + 1)·every − 1 in `slots` slots of `slot_bytes`; for a cont
 first_bucket + buckets − 1 filed in the schedule's class `class`, a words table's as its class's others.
 `check_registration` is the verifier's read of it: the head is the execution phase's, it lists the schedule's tables
 and no other, each one's domain, rows and layout are the ones the schedule's parameters give, and its one
-certificate verifies under the network attester's key in the session over the head's digest. Under form 2 a
+attestation verifies under the network attester's key in the session over the head's digest. Under form 2 a
 class's rows are the registration's own, and the verifier holds them to what a count is: at most R, one for the
 class's tables, and with the zero root where it is 0. It derives each domain at the count it read. A registration
 made under another schedule, of either form, with request words or without, has that schedule's digest for its
@@ -546,7 +546,7 @@ def _layout(params: NetworkAttesterParams, window: int, table: str) -> dict[str,
 
 def registration(head: Head, certificate: Certificate, params: NetworkAttesterParams) -> dict[str, Any]:
     """The record of an execution phase's connection rows: the head, each table's format and order, and the one
-    certificate. A run keeps it on its private side; the auditor's gate publishes the certificate alone."""
+    attestation. A run keeps it on its private side; the auditor's gate publishes the attestation alone."""
     return {"format": REGISTRATION, "link": head.link, "window": head.window, "parameters": head.parameters.hex(),
             "word_bits": WORD_BITS, "row_schema": SCHEMA,
             "tables": [{"name": e.name, "value": value_name(head.link, e.name, head.window), "rows": e.rows,
@@ -636,7 +636,7 @@ def attest_no_head(issuer: Issuer, link: str, window: int, params: NetworkAttest
 
 
 def no_head(certificate: Certificate, params: NetworkAttesterParams) -> dict[str, Any]:
-    """The public record of the word that an execution phase has no head: what it is of, and its certificate."""
+    """The public record of the word that an execution phase has no head: what it is of, and its attestation."""
     return {"format": NO_HEAD, "link": certificate.link, "window": certificate.window,
             "parameters": params.digest.hex(),
             "certificate": {"key": certificate.key_id.hex(), "digest": certificate.digest.hex(),

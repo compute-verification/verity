@@ -204,7 +204,7 @@ def classes(reg: Registered) -> dict[str, dict[str, Any]]:
 def aborts(d: Path, T: int = 600) -> dict[str, Any]:
     """What a trace's directory records of aborts, read without the reader that refuses them: the requests the engine
     freed by finish reason and those it ended on neither a stop id nor its length; where every request has its
-    certified release bucket (a trace served under the certified tick), the windows of `T` buckets that hold a
+    attested release bucket (a trace served under the certified tick), the windows of `T` buckets that hold a
     release and the aborted requests in each that has one, a request's window counted from the first release as the
     reader counts it; where the directory has the client's rows (one a released request), the released requests the
     engine never freed (dropped before it, or unfinished); and where it has the network attester's log, the

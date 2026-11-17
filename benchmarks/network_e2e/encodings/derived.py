@@ -39,7 +39,7 @@ from verity_vllm.pipeline.advice_code.derived import (
 
 def load_trace(path: str | Path) -> dict:
     """A step trace (`sched_trace`'s format, `enc-derived/sched-trace/v2`, optionally gzipped): `config` (`Config`'s
-    fields), `requests` in certified-ingress order (`id`, `prompt_ids`, `max_tokens`, `output_ids`, `finish`), and `steps`
+    fields), `requests` in attested-ingress order (`id`, `prompt_ids`, `max_tokens`, `output_ids`, `finish`), and `steps`
     (`t_end_s`, `rows` in scheduling order: `request` (its ingress index), `start`, `n`, `samples`, `new`, `resumed`, and
     on a row that admits its request with a hit, `sources`: [ingress index, tokens] runs)."""
     p = Path(path)
@@ -88,7 +88,7 @@ def load_corpus_trace(d: str | Path, *, block_size: int = 16, eos_token_id: int 
 
     A step's rows are in the model runner's batch order (`row_order` "batch", I1's) or in vLLM's scheduling order
     ("scheduling": running, then resumed, then new; the hook gives each list in its loop's order). The requests are in
-    the engine's arrival order, which stands for the certified ingress order. The corpus doesn't record whose KV a hit
+    the engine's arrival order, which stands for the attested ingress order. The corpus doesn't record whose KV a hit
     reads; `advice_of` names the canonical sources."""
     d = Path(d)
     argv = json.loads((d / "meta.json").read_text()).get("server_argv") or []
@@ -200,7 +200,7 @@ def _sampling_rows(advice: Advice, i: int) -> int:
 
 
 def tokens_of(held: Holdings, order: Sequence[int], prompt_len: Sequence[int]) -> list[tuple[int, ...]]:
-    """Each I1 request's tokens, from certified request `order[i]`: its prompt ids, then its committed sampled ids."""
+    """Each I1 request's tokens, from attested request `order[i]`: its prompt ids, then its committed sampled ids."""
     R = len(prompt_len)
     if len(held.requests) != R or sorted(order) != list(range(R)):
         raise ValueError(f"the advice's {R} requests aren't the {len(held.requests)} certified ones, each once")
@@ -224,7 +224,7 @@ def canonical_sources(advice: Advice, tokens: Sequence[Sequence[int]], unit: int
 
 def residual(advice: Advice, cfg: Config, held: Holdings, *, order: Sequence[int] | None = None,
              shaped: bool = False) -> Residual:
-    """The advice that remains of `advice`, whose requests are certified requests `order` (None: in ingress order): what
+    """The advice that remains of `advice`, whose requests are attested requests `order` (None: in ingress order): what
     `reconstruct` needs beside the config and the tokens to give every field back. Refused unless the walk gives
     `advice` back: a hit other than the longest cached one while nothing can have been evicted, a source other than the
     earliest-admitted request, or a start, n or kind off vLLM's rules."""
