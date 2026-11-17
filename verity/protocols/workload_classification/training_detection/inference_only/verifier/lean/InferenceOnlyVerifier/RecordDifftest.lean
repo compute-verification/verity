@@ -129,7 +129,7 @@ def differences (i : Nat) (case py : String) : List String :=
       rowsDiffer "closed" i (closedOf inst tr) (p.getObjValD "closed") ++
       circuitDiffers i inst tr (c.getObjValD "spot") (detail.getObjValD "error")
 
-/-- `lake env lean --run InferenceOnlyVerifier/RecordDifftestMain.lean CASES PYTHON N`: fails unless the two files have `N` lines
+/-- `lake env lean --run InferenceOnlyCheck/RecordDifftestMain.lean CASES PYTHON N`: fails unless the two files have `N` lines
 and no line differs. -/
 def main (args : List String) : IO UInt32 := do
   let [cases, python, n] := args

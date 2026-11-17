@@ -36,14 +36,14 @@ verity bench verifier_cost plot ART --to PNG             # from the store
 
 `inference_only_glm.sh` runs `inference-only-verifier --policy` on GLM-5.3's registered Programs: the eight per-rank workload Programs of the B1
 Build (vLLM, TP8 on 8×H200, a 256-token prompt and 32 sampled tokens), each checked against the Build's pinned
-digest. A registered Program's root is its inputs and one Call, the request, so the only division `InferenceOnlyVerifier.Desc` can
+digest. A registered Program's root is its inputs and one Call, the request, so the only division `InferenceOnlyCheck.Desc` can
 check on it is that one inference block; and its weights are bound per run (`Input<w>_v1`), so θ can't hold them
 (`theta-not-registered`). `inference_only_glm.py` (its docstring has the cases) derives Programs with the same computed gates and
 wires: rank 0's with its weights bound at registration (θ), one inference block per rank; and the eight ranks' requests joined into
 one Definition the node's root calls once, each collective reading the other ranks' partials where it read its
 `peers_*` inputs, one inference block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
 α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
-per layer, per Call) aren't checked here: their root would be the request's body, whose reads `InferenceOnlyVerifier.Desc` holds as
+per layer, per Call) aren't checked here: their root would be the request's body, whose reads `InferenceOnlyCheck.Desc` holds as
 segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`); `inference_only_cost.py glm` counts and times
 them. Three of rank 0's Definitions (the router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in
 all through `--policy`, `--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json`
@@ -71,16 +71,16 @@ research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-
 - **The inference block.** One inference block holds every root node that isn't an input, which is the whole node's session (the demo's
   division).
 - **The checks**, in the order they start (`NODE_POINTS`):
-  - given the registration, the check of record (`inference-only-verifier INSTANCE TRUSTED`, `InferenceOnlyVerifier.Theta`), at A: the
+  - given the registration, the check of record (`inference-only-check INSTANCE TRUSTED`, `InferenceOnlyCheck.Theta`), at A: the
     policy check, then θ's provenance against the registration log;
   - `--policy` at A (Γ = 2^44, α = 2^-25);
   - at C (α = 2^-28) with Γ = 2^44 and with Γ = 2^52;
   - at A's four neighbours.
-- **Each `inference-only-verifier`** decodes the whole descriptor (about 50 GB resident for a whole-node session).
+- **Each `inference-only-check`** decodes the whole descriptor (about 50 GB resident for a whole-node session).
   `--check-mem-gb` caps each one's address space, which runs about 15 GB above its resident peak, so a check that
   outgrows its share of the run's `--mem-gb` fails rather than the node. A dry run on a root `Desc` can't read ends
   there.
-- **The root must be inputs and one Call.** `InferenceOnlyVerifier.Desc` can't hold a session laid out as the root's own nodes
+- **The root must be inputs and one Call.** `InferenceOnlyCheck.Desc` can't hold a session laid out as the root's own nodes
   (`root_calls` in `results.json` counts them), for the reason above.
 
 ~~~sh

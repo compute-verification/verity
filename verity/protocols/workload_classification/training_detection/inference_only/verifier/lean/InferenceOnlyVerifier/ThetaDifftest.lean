@@ -6,11 +6,11 @@ public import InferenceOnlyVerifier.DescDifftest
 /-!
 # The difftest of θ's provenance: against the Python reference, and against the unrolled check
 
-`scripts/theta_difftest_vectors.py` writes cases, each `{"instance", "trusted"}` (an instance of `InferenceOnlyVerifier.Desc` with
+`scripts/theta_difftest_vectors.py` writes cases, each `{"instance", "trusted"}` (an instance of `InferenceOnlyCheck.Desc` with
 θ's `provenance`, and the trusted input beside it), each expanded gate by gate where the policy check gives it a verdict
 and its provenance is one entry per θ entry, and `scripts/inference_only_reference.py`'s `check_theta` on each.
-`InferenceOnlyVerifier/ThetaDifftestMain.lean` fails unless `InferenceOnlyVerifier.Theta.check` gives Python's result on every case and
-`InferenceOnlyVerifier.Theta.checkUnrolled`'s on every expansion: per inference block its size and fresh input bits, the verdict and the first failing
+`InferenceOnlyCheck/ThetaDifftestMain.lean` fails unless `InferenceOnlyCheck.Theta.check` gives Python's result on every case and
+`InferenceOnlyCheck.Theta.checkUnrolled`'s on every expansion: per inference block its size and fresh input bits, the verdict and the first failing
 inference block, or the first refusal's code. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not
 a proof.
 -/
@@ -21,8 +21,8 @@ namespace InferenceOnlyVerifier.ThetaDifftest
 
 open Lean (Json)
 
-/-- How case line `i` differs: `InferenceOnlyVerifier.Theta.check` against Python's result and, on an expansion, against
-`InferenceOnlyVerifier.Theta.checkUnrolled` on it. -/
+/-- How case line `i` differs: `InferenceOnlyCheck.Theta.check` against Python's result and, on an expansion, against
+`InferenceOnlyCheck.Theta.checkUnrolled` on it. -/
 def differences (i : Nat) (case exp python : String) : List String :=
   match Json.parse case, Json.parse exp, Json.parse python with
   | .error e, _, _ => [s!"case {i}: not JSON: {e}"]
@@ -35,7 +35,7 @@ def differences (i : Nat) (case exp python : String) : List String :=
        else DescDifftest.compare i "Theta.checkUnrolled" out
         (Theta.checkUnrolled (x.getObjValD "instance") (x.getObjValD "trusted")))
 
-/-- `lake env lean --run InferenceOnlyVerifier/ThetaDifftestMain.lean CASES EXPANDED PYTHON N`: fails unless the three files have
+/-- `lake env lean --run InferenceOnlyCheck/ThetaDifftestMain.lean CASES EXPANDED PYTHON N`: fails unless the three files have
 `N` lines each and no line differs. -/
 def main (args : List String) : IO UInt32 := do
   let [cases, exp, py, n] := args

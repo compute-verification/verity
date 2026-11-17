@@ -6,12 +6,12 @@ public import InferenceOnlyVerifier.DescDifftest
 /-!
 # The liveness cases of the description-sized check
 
-`scripts/desc_liveness_vectors.py` writes Program shapes on which `InferenceOnlyVerifier.Desc` once walked a scan's iterations or a
+`scripts/desc_liveness_vectors.py` writes Program shapes on which `InferenceOnlyCheck.Desc` once walked a scan's iterations or a
 batch's members one by one (a stack overflow, a time and a memory linear in them), each at a small `n` and at an
-`n` of `2^22` to `2^52`. `InferenceOnlyVerifier/DescLivenessMain.lean` fails unless, on every case, `InferenceOnlyVerifier.Desc.check` gives on the
-small instance what `InferenceOnlyVerifier.check` gives on it expanded gate by gate (`expand`), and on the big one a verdict that is
+`n` of `2^22` to `2^52`. `InferenceOnlyCheck/DescLivenessMain.lean` fails unless, on every case, `InferenceOnlyCheck.Desc.check` gives on the
+small instance what `InferenceOnlyCheck.check` gives on it expanded gate by gate (`expand`), and on the big one a verdict that is
 the small one's (`same`) or has its fresh input bits per inference block (`novel`, where the gates grow with `n`). That it finishes is the
-point: the big instances are past anything `InferenceOnlyVerifier.Desc` walks one by one (`InferenceOnlyVerifier.Desc.WALK`). The Lean audit runs it
+point: the big instances are past anything `InferenceOnlyCheck.Desc` walks one by one (`InferenceOnlyCheck.Desc.WALK`). The Lean audit runs it
 (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
 
@@ -21,7 +21,7 @@ namespace InferenceOnlyVerifier.DescLiveness
 
 open Lean (Json toJson)
 
-/-- `j`, an instance of `InferenceOnlyVerifier.Desc` (θ and the owners per root node), expanded gate by gate as `InferenceOnlyVerifier.check`
+/-- `j`, an instance of `InferenceOnlyCheck.Desc` (θ and the owners per root node), expanded gate by gate as `InferenceOnlyCheck.check`
 reads it: θ its nodes' gates, and each gate's owner its root node's. -/
 def expand (j : Json) : Except String Json := do
   let i ← parse j
@@ -59,7 +59,7 @@ def differences (c : Json) : List String :=
     | m => [s!"mode {m.compress}"]
   (unrolled ++ verdict ++ same).map (s!"case {id}: " ++ ·)
 
-/-- `lake env lean --run InferenceOnlyVerifier/DescLivenessMain.lean CASES N`: fails unless the file has `N` cases and none differs. -/
+/-- `lake env lean --run InferenceOnlyCheck/DescLivenessMain.lean CASES N`: fails unless the file has `N` cases and none differs. -/
 def main (args : List String) : IO UInt32 := do
   let [path, n] := args | IO.eprintln "usage: InferenceOnlyVerifier/DescLivenessMain.lean CASES N"; return 2
   let lines := ((← IO.FS.readFile path).splitOn "\n").filter (! ·.isEmpty) |>.toArray

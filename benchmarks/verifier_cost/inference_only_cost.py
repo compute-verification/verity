@@ -1,6 +1,6 @@
-"""``inference_only_cost.py CASE``: what `inference-only-verifier --policy` (`InferenceOnlyVerifier.Desc`) costs under Boolean-first, each check also run through
+"""``inference_only_cost.py CASE``: what `inference-only-check --policy` (`InferenceOnlyCheck.Desc`) costs under Boolean-first, each check also run through
 `inference-only-phases` (`inference_only_phases/Main.lean`: the check's steps timed, the slowest Definitions' summaries named), whose verdict
-must be `inference-only-verifier --policy`'s.
+must be `inference-only-check --policy`'s.
 
   suite --out DIR --phases EXE --scratch DIR
       the inference-only check's own vectors: each `runs` entry of its lean-audit.json generated and its exe timed, the largest
@@ -14,7 +14,7 @@ must be `inference-only-verifier --policy`'s.
       (`lift.on_bits`) and called once by a root of its inputs. θ empty (its weights are bound per run), one inference block, the
       request, at `inference_only_glm.GAMMA`, `inference_only_glm.ALPHA`
 
-DIR/CASE.jsonl has a row per check: the description's sizes, `inference-only-verifier --policy`'s seconds, peak RSS and verdict, and
+DIR/CASE.jsonl has a row per check: the description's sizes, `inference-only-check --policy`'s seconds, peak RSS and verdict, and
 `inference-only-phases`'s PHASE lines (DIR/phases/<name>.log keeps them as they come). `--big N` is the body size from which
 `inference-only-phases` times a summary step by step; `--no-policy` runs `inference-only-phases` alone.
 """
@@ -79,7 +79,7 @@ def small(v):
 
 
 def check(args, name: str, path: Path, row: dict) -> dict:
-    """`inference-only-phases` then `inference-only-verifier --policy` on the instance `path`, one row."""
+    """`inference-only-phases` then `inference-only-check --policy` on the instance `path`, one row."""
     logs = Path(args.out) / "phases"
     logs.mkdir(parents=True, exist_ok=True)
     ph = launch([str(args.phases), str(path), "20", str(args.big)], logs / f"{name}.log")

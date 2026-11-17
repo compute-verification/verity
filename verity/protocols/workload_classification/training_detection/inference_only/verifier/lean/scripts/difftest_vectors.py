@@ -1,12 +1,12 @@
 """The difftest's data: random declarations and divisions, and the Python reference's results on each, for
-`InferenceOnlyVerifier/DifftestMain.lean`.
+`InferenceOnlyCheck/DifftestMain.lean`.
 
     python scripts/difftest_vectors.py <verity checkout> --out DIR [--count N]
 
-Writes `DIR/difftest/instances.jsonl` (N random instances, then `pinned()`'s), one instance per line as `InferenceOnlyVerifier.check`
-reads it (`InferenceOnlyVerifier.Check`'s docstring: `program`, `theta`, `owner`, `gamma`, `alpha`), and `DIR/difftest/python.jsonl`,
+Writes `DIR/difftest/instances.jsonl` (N random instances, then `pinned()`'s), one instance per line as `InferenceOnlyCheck.check`
+reads it (`InferenceOnlyCheck.Check`'s docstring: `program`, `theta`, `owner`, `gamma`, `alpha`), and `DIR/difftest/python.jsonl`,
 the same line's results from
-`scripts/inference_only_reference.py`. The Lean audit runs `InferenceOnlyVerifier/DifftestMain.lean` on both files (`runs` in `lean-audit.json`,
+`scripts/inference_only_reference.py`. The Lean audit runs `InferenceOnlyCheck/DifftestMain.lean` on both files (`runs` in `lean-audit.json`,
 which pins their SHA-256), and `tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_lean_difftest.py` checks that this script
 still writes them.
 
@@ -18,7 +18,7 @@ or an array. θ is empty, every input (refused, `theta-not-registered`, where on
 inputs, or a random set of them. A division is one inference block, one inference block per gate, runs of consecutive gates or a random
 assignment, numbered in a random order; `Γ` is at, below or above the division's largest inference block, and `α` at, just below or
 just above its largest fresh input per gate, written reduced or not. About a third of the instances are malformed, each in one way the
-check refuses (every code of `InferenceOnlyVerifier.Check`). Then come `mistyped_vectors.cases()`'s (`mistyped()`): references
+check refuses (every code of `InferenceOnlyCheck.Check`). Then come `mistyped_vectors.cases()`'s (`mistyped()`): references
 that name leaves of other widths than their types give them, which the codec and the check refuse as `program`, and
 their well-typed neighbours. The data ends with `pinned()`'s three instances: two on the declaration worked by hand
 (`hand()`), θ every input, which the check must refuse, and θ the registered input, which it must accept, and one on a
@@ -421,7 +421,7 @@ def pinned() -> list[dict]:
     {c}, {d, e}: θ every input (`theta_kind` "all"), which holds b, bound per run, so it is refused; and θ the
     registered input alone, which saves IU 1 a's 8 bits and gets a verdict. Then `hand_const()` divided as {k, c}, {d}
     with θ its registered input: the constant is a gate of inference block 0 that reads nothing, so IU 0 reads no fresh bit, and
-    IU 1 reads c's 8 and b's 8. Gate ids are root node ids here, so each is an instance of `InferenceOnlyVerifier.Desc` too."""
+    IU 1 reads c's 8 and b's 8. Gate ids are root node ids here, so each is an instance of `InferenceOnlyCheck.Desc` too."""
     base = {"program": hand(), "owner": ["input", "input", 0, 1, 1], "gamma": 2, "alpha": [16, 1]}
     return [
         {"instance": base | {"theta": [0, 1]}, "theta_kind": "all", "expect": {"error": "theta-not-registered"}},

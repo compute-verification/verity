@@ -27,7 +27,7 @@ import Std.Data.HashSet.Lemmas
 
 Toward `FreshExact`. A segment names gates with their widths (`Width.segGates`). `Desc.intoOf`
 collects, per inference block, the segments its root nodes read whose first piece is in a root node of another inference block and outside θ's
-nodes (`intoOf_spec`), and `InferenceOnlyVerifier.ius` sums the widths of the gates outside an inference block that its gates read, θ's taken out
+nodes (`intoOf_spec`), and `InferenceOnlyCheck.ius` sums the widths of the gates outside an inference block that its gates read, θ's taken out
 (`ius_snd`, `hashSet_fold_sum'`), and `Desc.freshWidth` sums the widths of the distinct gates of those segments
 (`Width.freshWidthExact`). So `FreshExact` holds wherever one smaller statement does, a named `Prop` here
 (`freshExact_of`): `ReadsExact`, that on a Program `Desc.evaluate` reads, the segments `Desc.analyze` gives a root node
@@ -47,7 +47,7 @@ open Flock.Program (Prog GateTable)
 open Width (pieceGates piecesGates segGates segsGates dedup_sum)
 
 /-- **`analyze`'s reads are the unrolled operands outside each root node.** On a Program `Desc.evaluate` reads,
-with `InferenceOnlyVerifier.circuitOf`'s circuit `c`: every gate a segment of root node `k`'s reads names (one of positive count) is a
+with `InferenceOnlyCheck.circuitOf`'s circuit `c`: every gate a segment of root node `k`'s reads names (one of positive count) is a
 gate `a` of width `c.w[a]` in the root node `Desc.nodeOf` finds for the segment's first piece; and those gates are
 exactly the gates outside node `k` that its gates read. -/
 def ReadsExact : Prop :=
@@ -251,7 +251,7 @@ theorem segGates_ps {s : Desc.Seg} {x : ℤ × ℕ} (h : x ∈ segGates s) : ∃
 
 /-- **`FreshExact`, from `analyze`'s reads and `freshWidth`'s union**: the segments `intoOf` collects for an inference block name, with
 their widths, the gates outside it that its gates read, θ's taken out, each once; `freshWidth` sums their widths, and so
-does `InferenceOnlyVerifier.ius`. -/
+does `InferenceOnlyCheck.ius`. -/
 theorem freshExact_of (hR : ReadsExact) : FreshExact := by
   intro bytes P reads mask own c dv hdec hov hlo hin hwk han hc hms hos hdsz hmask hown hdiv hn u hu
   obtain ⟨-, h0, hK, hmono⟩ := rootLaidOut_spec P hlo

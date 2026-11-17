@@ -1,5 +1,5 @@
-"""`registration_log.write` is a log inference-only-verifier's full check accepts: on a Program whose θ is registered, its record, provenance
-and trusted input pass `inference_only_reference.check_theta` (`InferenceOnlyVerifier.Theta`'s reference), each entry is the one one-stage's
+"""`registration_log.write` is a log inference-only-check's full check accepts: on a Program whose θ is registered, its record, provenance
+and trusted input pass `inference_only_reference.check_theta` (`InferenceOnlyCheck.Theta`'s reference), each entry is the one one-stage's
 `Registered.commit` makes of the parameter's rows, and each break is refused with the code the check names."""
 import copy
 import importlib.util

@@ -9,10 +9,10 @@ public import Proofs.Slowdown.Cover.Training
 # A verdict of compliance carries the cover theorem's factor
 
 `CoverTrained` and `CheckedCoverTraining` are stated in `Properties.InferenceOnly.Desc.Cover`. `coverTrained` proves `CoverTrained`
-of every verdict of the gate-level check `InferenceOnlyVerifier.evaluate`, from the verdict's compliance at its rate (`Witnesses`)
+of every verdict of the gate-level check `InferenceOnlyCheck.evaluate`, from the verdict's compliance at its rate (`Witnesses`)
 and `CoverTraining_rate`, multiplied out by `c`.
 
-The check of record is `InferenceOnlyVerifier.Theta.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's provenance.
+The check of record is `InferenceOnlyCheck.Theta.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's provenance.
 Its verdict is `Desc.evaluate`'s (`theta_desc`), and `Properties.DescAgrees` makes that the gate-level check's on every
 expansion of the instance, gate by gate, so `checkedCoverTraining_of_descAgrees` proves `CheckedCoverTraining` from it,
 and `SecurityProofs.CheckedCoverTraining` from `SecurityProofs.DescAgrees`.
