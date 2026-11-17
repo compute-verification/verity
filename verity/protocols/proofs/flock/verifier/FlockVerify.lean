@@ -1201,7 +1201,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
       (if part.isNull then [] else [("partition", part)]) ++
       ProvedScope.programFields parsed handed ++
       -- the public file's header and the registered reads it checked the session against, by their digests, the
-      -- sample it sampled the session's statement at and the tables it split it into, which a caller holds a statement of
+      -- sample it drew the session's statement at and the tables it split it into, which a caller holds a statement of
       -- the session to
       (match header with | some h => [("public_header_sha512", Lean.Json.str h)] | none => []) ++
       (match registeredSha with | some h => [("registered_sha512", Lean.Json.str h)] | none => []) ++

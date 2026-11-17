@@ -14,7 +14,7 @@ something else. Each committed kind has its openings by position:
 
 * the level-0 oracle at the witness cap, its rows `width₀` lanes wide (`op₀Z`, `opOfW`), and each level's table at its
   cap (`opRZ`, `Exec.opOfL` on `slotOpensZ`);
-* rep `r`'s pads oracle at its root (`opPadsAtZ`): at each pads position, the pair of the first query that sampled that
+* rep `r`'s pads oracle at its root (`opPadsAtZ`): at each pads position, the pair of the first query that drew that
   position and whose opening verifies there;
 * rep `r`'s `τ` oracle at its commitment (`opTauZ`): on an accepted output, `τ`, if it opens the commitment.
 
@@ -279,7 +279,7 @@ theorem opRZ_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) 
 /-! ## The pads roots -/
 
 open Classical in
-/-- **Rep `r`'s pads openings, by position**: at `p`, the pair of the first query that sampled `p` (rep `r`'s
+/-- **Rep `r`'s pads openings, by position**: at `p`, the pair of the first query that drew `p` (rep `r`'s
 `PendZ.qpos`) and whose opening verifies at `p` from its leaf under its salt to the root `c 0`. -/
 noncomputable def opPadsAtZ (Hs : Hashes F D Sl) (N q r : ℕ) (c : Cap D) (out : OutZC F D Sl) (p : Fin N) :
     Option (F × F) :=
@@ -319,12 +319,12 @@ def padsPairZ (Hs : Hashes F D Sl) (r pos : ℕ) (out out' : OutZC F D Sl) (jj j
     ((out.opens.inner r).pads jj).2.1 ((out'.opens.inner r).pads jj').2.1 ((out.opens.inner r).pads jj).2.2
     ((out'.opens.inner r).pads jj').2.2
 
-/-- The root rep `r`'s pads opening of query `jj` reaches from its leaf, at the position the query sampled. -/
+/-- The root rep `r`'s pads opening of query `jj` reaches from its leaf, at the position the query drew. -/
 def padsRootZ (Hs : Hashes F D Sl) (out : OutZC F D Sl) (r jj : ℕ) : D :=
   Merkle.reachL Hs.H Hs.Ep Hs.Lp ((if r = 0 then out.pend.1 else out.pend.2).qpos jj)
     ((out.opens.inner r).pads jj).1 ((out.opens.inner r).pads jj).2.1 ((out.opens.inner r).pads jj).2.2
 
-/-- `PadsClashAtZ`'s test at a rep and two of its queries: at the position the first sampled, both openings verify to the
+/-- `PadsClashAtZ`'s test at a rep and two of its queries: at the position the first drew, both openings verify to the
 root the first one reaches (`padsRootZ`), with different pairs. The root is computed from the opening, not searched
 for. -/
 def PadsClashAt (Hs : Hashes F D Sl) (N : ℕ) (out : OutZC F D Sl) (r jj jj' : ℕ) : Prop :=
@@ -400,7 +400,7 @@ theorem opPadsAtZ_isSome {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D} {out : O
   exact List.ne_nil_of_mem (List.mem_filter.2 ⟨List.mem_range.2 hjj, decide_eq_true ⟨hq, hv⟩⟩)
 
 open Classical in
-/-- The first of rep `r`'s queries that sampled `p` and whose pads opening verifies there: the query whose pair
+/-- The first of rep `r`'s queries that drew `p` and whose pads opening verifies there: the query whose pair
 `opPadsAtZ` returns. -/
 noncomputable def firstPadsZ (Hs : Hashes F D Sl) (N q r : ℕ) (c : Cap D) (out : OutZC F D Sl) (p : Fin N) :
     Option ℕ :=
@@ -454,7 +454,7 @@ theorem opPadsAtZ_conflict_collision {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap
   rw [e1, e2, e']
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A rep's disagreeing pads opening**, at a position its query sampled: a pads clash within the run, or the run opens
+/-- **A rep's disagreeing pads opening**, at a position its query drew: a pads clash within the run, or the run opens
 a pads position of the fixed pads oracle to another pair. -/
 theorem pads_badAtZ (Hs : Hashes F D Sl) (N q r : ℕ) (hr : r < 2) (j : IZ F D) (out : OutZC F D Sl)
     (hnot : ¬ PadsAgreeAt Hs N q (if r = 0 then out.pend.1 else out.pend.2).qpos j (out.opens.inner r)) :
@@ -708,7 +708,7 @@ theorem getPairZ_tau (r : ℕ) (hr : r < 2) (i : IZ F D × IZ F D) :
     rfl
 
 /-- **The openings agree with every fixed table**: both reps' rows (`AgreeZ`), pads pairs at the positions their queries
-sampled (`PadsAgreeAt`) and `τ` (`TauAgree`). -/
+drew (`PadsAgreeAt`) and `τ` (`TauAgree`). -/
 def AgreeAllZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F) (i : IZ F D × IZ F D) (out : OutZC F D Sl) :
     Prop :=
   AgreeZ 0 C₀ (width₀ T) i.1.lev out.pend.1.lig.reqs out.opens.rows ∧

@@ -5,7 +5,7 @@ The session loop (`Session`) holds each zk_served rep's frame itself (`Frame.ste
 issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prover sends names a frame's request:
 
 * `startRep`: a rep's frame starts at the loop's frames port (`rep NAME TABLE REP`), for a live session whose level 0 the
-  loop sampled and one of its tables' reps, at the statement's start (`Drive.start`: its pads layout and mask slot), its
+  loop drew and one of its tables' reps, at the statement's start (`Drive.start`: its pads layout and mask slot), its
   samples from the operating system, which never leave the loop: the prover gets the pads' root alone.
 * `round`: a session's `Round` of a rep stream carries the device's round. Its place is the statement's: the algebraic
   phase's scheduled round (`Skeleton.rounds`, on the table's level 0, the loop's own), then the opening's
