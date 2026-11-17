@@ -16,12 +16,12 @@ else:
 
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 
 from tests.protocols import pouw_h1_credit as PC
 from verity_vllm.engine import int8_ops as OPS
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 SALT = hashlib.sha512(b"salt").digest()
 

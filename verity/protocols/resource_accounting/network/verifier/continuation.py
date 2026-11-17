@@ -11,13 +11,13 @@ requests in the order of those cells (by bucket, then as the ingress record hold
 before b, its response
 
 - has e id cells in egress buckets before b. A cell counts by the slot the schedule releases it in, which is the
-  bucket the egress record holds it in: never by when its bytes reached the certifier, by when or whether the client
+  bucket the egress record holds it in: never by when its bytes reached the attester, by when or whether the client
   read them, nor by what the server had computed by then (an id the server has sent whose slot is at or after b
   doesn't count);
 - is *open* at b when no end cell of its (the network attester's `END` or `FAIL`) is in an egress bucket before b.
 
-At b the certifier stamps each open response (q, N, e), q its ordinal, in N order: `stamps`. A stamp is structural:
-the certifier reads its cells' kinds, ordinals and buckets, and no request field and no id. Every part is read from
+At b the attester stamps each open response (q, N, e), q its ordinal, in N order: `stamps`. A stamp is structural:
+the attester reads its cells' kinds, ordinals and buckets, and no request field and no id. Every part is read from
 the records before b, so the stamps are a function of them and of b alone: no party chooses a stamp, no cell at or
 after b moves one, and a request whose cells straddle b has no N yet, so no stamp, and arrives after b as any request
 does. A session's first close, b = 0, has no stamp.
@@ -45,7 +45,7 @@ form. `read` reads the network attester's own records (`network_attester.py`'s s
 `NetworkAttesterParams.window` buckets) up to b, through `network_attester.read_cell`, `io_tie.parse_cell` and `id_form.id_request`: a
 request is its connection's `DATA` cells and its `END`, released at the `END`'s bucket, and its response's id cells
 are its `DATA` cells, one id event each. It reads no bucket at or after b, and refuses a close that isn't a whole
-number of complete execution phases the records cover, a cell that isn't the certifier's, a request that isn't a
+number of complete execution phases the records cover, a cell that isn't the attester's, a request that isn't a
 canonical id request, an egress cell out of the id form, an id cell before its request's release or after its end
 cell, and a request cell after its `END`. That each cell is in its schedule's slot is `network_attester.audit`'s check, which
 this one doesn't repeat. `edge` is the rule on those records: the stamps and the continuations at b.

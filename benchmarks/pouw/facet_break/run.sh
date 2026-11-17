@@ -62,9 +62,16 @@ done
 exit \$rc
 EOF
 # a chunk times in about a minute: the lease is 2 minutes a chunk and 5 more, so a big batch isn't cut off mid-chunk
-gpu-lease 1 --wait --max-min $(( ${#bins[@]} * 2 + 5 )) -- bash "$WORK/time.sh"
+lease=(gpu-lease 1 --wait --max-min $(( ${#bins[@]} * 2 + 5 )) --)
+[ -n "${GPU_LEASE_UUID:-}" ] && lease=()
+"${lease[@]}" bash "$WORK/time.sh"
 rc=$?
 cat "$OUT"/chunks/*/rows.jsonl >"$OUT/rows.jsonl" 2>/dev/null
 python3 "$HERE/loads.py" table "$OUT/rows.jsonl" >"$OUT/loads.jsonl"
-python3 "$HERE/loads.py" summary "$OUT/rows.jsonl" | tee "$OUT/summary.txt"
+record=(--record "$OUT")
+[ $rc = 0 ] || record+=(--failed "the lease or a chunk's gate exited $rc")
+ROOT=$HERE/../../..
+PYTHONPATH="$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 "$HERE/loads.py" summary "$OUT/rows.jsonl" "${record[@]}" | tee "$OUT/summary.txt"
+[ "${PIPESTATUS[0]}" = 2 ] && [ $rc = 0 ] && rc=2
 exit $rc

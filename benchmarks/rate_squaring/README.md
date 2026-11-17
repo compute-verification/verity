@@ -1,21 +1,25 @@
-# benchmarks/rate_squaring
+# How fast a node squares
 
-How fast a node can square modulo the store codec's Sloth primes, which bounds how fast it can rebuild an encoded store:
-the evidence for the bandwidth audit's (PoUB, `verity/protocols/resource_accounting/memory/poub/verifier`) stated squaring ceiling.
-`sq.cu` (run by `sq.sh`) squares mod 2^512 − 569 (or another width, `BITS` and `C`) on the GPU's CUDA cores in every
-(FOLD, ILP) form, each gated against Python's `pow` by `sq_gate.py` before it is timed, with its SASS opcode mix
-(`sass_mix.py`) and Nsight Compute's counts. `ifma.c` (run by `ifma.sh`) is the host's AVX-512 IFMA rate, and `gamma.py`
-turns the rates into x₁ and γ tables.
+How fast a node can square modulo the store codec's Sloth primes bounds how fast it can rebuild an encoded store. These
+measurements are the evidence for the bandwidth audit's (PoUB, `verity/protocols/resource_accounting/memory/poub/verifier`)
+stated squaring ceiling: the GPU's CUDA cores in every form, each gated against Python's `pow` before it is timed, and
+the host's AVX-512 IFMA rate.
 
-**Status: active.** `verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu` and `benchmarks/codec_tensor/wt.cu` take their FOLD
-6 form from `sq.cu`, and the audit's `timing.py` cites `gamma.py`. Decided by `rg rate_squaring` over `verity/`,
-`benchmarks/`, `demos/`, `tests/` and `adapters/`. `gamma.py` is a finished study.
-
-**Run:** `uv run tools/check/suites.py benchmarks/rate_squaring` runs the GPU forms' CPU twins, the IFMA build's
-gate (with `gcc`), and `gamma.py`. `sq.sh` needs one GPU and `ifma.sh` an AVX-512 IFMA host.
-
-**Reads and writes:** `sq.sh` and `ifma.sh` write `time.jsonl`, the gate outputs, `sass-mix.json`, Nsight Compute's
-CSVs and the build logs into their output directory. **Backs:** these rates are
+**Backs:** these rates are
 the evidence for `timing.GPU_SQUARINGS_PER_S` and so for the stated ceiling C_sq (`timing.SQUARINGS_PER_S`), the `s` of
 the named assumption `ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling`, which `ResourceAccounting.Guarantees.Remote.Held`
 and `HeldOverTime` take.
+
+## Try it
+
+~~~sh
+uv run python benchmarks/rate_squaring/gamma.py
+~~~
+
+It turns the measured rates into x₁ and γ, one row per squaring form and host: no GPU needed.
+
+| Command | Needs | Writes into its output directory |
+| --- | --- | --- |
+| `uv run tools/check/suites.py benchmarks/rate_squaring` | the CPU, with `gcc` | nothing: the GPU forms' CPU twins, the IFMA build's gate, and `gamma.py` |
+| `sq.sh` | one GPU | `time.jsonl`, the gate outputs, `sass-mix.json`, Nsight Compute's CSVs and the build logs |
+| `ifma.sh` | an AVX-512 IFMA host | the same |

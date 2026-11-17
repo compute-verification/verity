@@ -13,7 +13,7 @@ import random
 import pytest
 
 from verity.commitments.crypto import lms as R
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import session as P
 from verity.protocols.resource_accounting.memory.pous.verifier import session_proofs as V
 
@@ -43,7 +43,7 @@ def _staged(k: int = K):
     rounds = [mc.Round(j, tree.indices[j], 10 * j, 10 * j + 5, mc.block_digest(blocks[tree.indices[j]])) for j in range(k)]
     key = _rand(16 + 64)
     head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": k}, sort_keys=True, separators=(",", ":")).encode()
-    m = R.memory_challenger_message(key[:16], session, mc.message(c, mc.COMPLETE, rounds))
+    m = R.memory_attester_message(key[:16], session, mc.message(c, mc.COMPLETE, rounds))
     st = P.session_statements(head, session,
                               [r.value() for r in rounds], m, key, _rand(R.DEPLOYED.signature_bytes()), tree.indices,
                               [blocks[i] for i in tree.indices], limit_ns=c.limit_ns)

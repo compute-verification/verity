@@ -2,7 +2,7 @@
 and watermark as `verity.protocols.resource_accounting.network.verifier.release` makes them, against the server's real `tick_plugin.TickFeed`;
 which traces take the tick, τ's calibration on a trace's busy cycle, the checkpoint's stop ids, the hook's record of the
 KV pool, and what the summary keeps of a tick trace, a network attester trace's releases taken from the server's feed and checked
-against the certifier's log."""
+against the attester's log."""
 from __future__ import annotations
 
 import asyncio

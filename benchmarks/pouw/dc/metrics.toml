@@ -1,0 +1,9 @@
+[[metric]]
+id = "compute-research/fastest-tensor-form-over-honest"
+title = "Fastest tensor form over honest"
+owner = "compute-research"
+unit = "times honest"
+axis = "The most 32-bit output slots a SM a clock that any tensor form with data writes in a dc run, over the honest 8-bit form's (wgmma s8 m64n256k32 on sm_90, tcgen05.mma i8 128x256x32 on sm_100), each point naming its card and family."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source --custody-ttl 12h -- env GPU_LEASE_WHO=compute-research gpu-lease 1 --wait --on CARD --cores CORES --max-min 40 -- bash benchmarks/pouw/dc/run.sh sm90"
+every = "7d"
