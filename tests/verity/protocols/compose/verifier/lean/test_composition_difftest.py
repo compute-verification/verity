@@ -1160,9 +1160,8 @@ def test_product_names_only_the_composites():
     assert named([R.POUW_PERIOD.id, R.POUW_PERIOD.id, R.SPOT.id])[0] == 64
     assert named([R.INFERENCE_ONLY.id, "verity/pouw/v1", R.SPOT.id])[0] == 64
     plain = ["verity/inference-only/rows/v1", R.PEARL_PLUS.id, R.SPOT.id]
-    for ids in (plain, plain[::-1]):
-        p = subprocess.run([exe, ",".join(ids), "id"], capture_output=True, text=True)
-        assert (p.returncode, p.stdout) == (64, "") and "is remote's plain sibling, refused until" in p.stderr, p.stderr
+    assert named(plain) == named(plain[::-1]) == (0, "verity/remote/plain/v1")
+    assert named(plain[:2])[0] == 64
 
 
 @pytest.mark.slow

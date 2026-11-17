@@ -6,6 +6,10 @@ their work subprotocol:
   verdict (`PouwCheck.PearlPlus.Protocol.protocol`, `verity/pouw/pearl-plus/v1`: a served run's retained passes, the
   work-weighted sample over their tiles at δ = 1/100, and the run's credit at Pearl's assumption) and SPOT.
   `Verity.Registration.Composite.remote` reads it.
+* `Core.Remote.Plain.protocol` (`verity/remote/plain/v1`), **remote's plain sibling**: v1 with the inference-only
+  policy's rows check (`InferenceOnly.RowsProtocol.protocol`, `verity/inference-only/rows/v1`) in v0's place, under
+  v1's two ties on the rows check's record and a third (`Plain.circuits`): the circuit files the rows check reads are
+  the files SPOT verifies. `Verity.Registration.Composite.plain` reads it.
 * `Core.Remote.protocol` (`verity/remote/v0`), **development**: H1's period credit in Pearl+'s place, with the
   period's execution phases tied to the run's record (`executionPhases`). It is no verifier: `Core.Composites` doesn't list it, so no
   configuration names it, and no soundness theorem covers it; it runs only as its development executable (`remote`).
@@ -55,6 +59,7 @@ public import CoreComposition.Blobs
 public import CoreComposition.Cases
 public import CoreComposition.Tie
 public import InferenceOnlyVerifier.Protocol
+public import InferenceOnlyVerifier.RowsProtocol
 public import PouwVerifier.Period
 public import PouwPearlPlus.Protocol
 public import Spot.OneStage
@@ -64,6 +69,7 @@ meta import CoreComposition.Blobs
 meta import CoreComposition.Cases
 meta import CoreComposition.Tie
 meta import InferenceOnlyVerifier.Protocol
+meta import InferenceOnlyVerifier.RowsProtocol
 meta import PouwVerifier.Period
 meta import PouwPearlPlus.Protocol
 meta import Spot.OneStage
@@ -562,5 +568,59 @@ private def executionPhaseStray (policy : String) (w : String) : Option String :
   pearlIn (chainedAfter 0 (record 9)) (record 9)])) == none
 
 end V1
+
+/-! ## `verity/remote/plain/v1`, remote's plain sibling -/
+
+namespace Plain
+
+/-- The plain sibling's subprotocols, in the order of their ids: the rows check in v0's place. -/
+def components : List BlobProtocol :=
+  [InferenceOnly.RowsProtocol.protocol, PouwVerifier.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol]
+
+/-- The subprotocols that must commit to one record: the rows check and SPOT. -/
+def tied : List String := [InferenceOnly.RowsProtocol.protocolId, VStar.Recursive.Sampled.protocol.id]
+
+/-- Pearl+'s run on the rows check's record, which decodes as v0's does. -/
+def run : Tie :=
+  ⟨"record", [(InferenceOnly.RowsProtocol.protocolId, policyRecord), (PouwVerifier.PearlPlus.Protocol.protocolId, V1.runRecord)]⟩
+
+/-- Pearl+'s passes on the execution phase record the rows check's record is chained right after. -/
+def executionPhase : Tie :=
+  ⟨"window", [(InferenceOnly.RowsProtocol.protocolId, V1.policyPrevious),
+    (PouwVerifier.PearlPlus.Protocol.protocolId, V1.runExecutionPhase)]⟩
+
+/-- A set of circuit files' SHA-512s as one value: the distinct digests, sorted, comma-separated. -/
+def filesKey (ds : Array String) : ByteArray :=
+  ",".intercalate (Spot.sortStrings ds).toList.eraseDups |>.toUTF8
+
+/-- The circuit files the rows check reads: its parameters' `circuits`, as it decodes them. -/
+def rowsFiles (k : Case) : Option (List ByteArray) :=
+  ((Core.canonicalJson k.params.toUTF8 >>= InferenceOnly.RowsProtocol.paramsOf).toOption).map fun p =>
+    [filesKey (p.circuits.map (·.2))]
+
+/-- The circuit files SPOT verifies: the one statement's, or each member's in the per-member form; `none` for a form
+SPOT refuses. -/
+def spotFiles (k : Case) : Option (List ByteArray) :=
+  match (Core.canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson).toOption with
+  | some (.inl p) => some [filesKey (match p.members with | some ms => ms.map (·.own.circuit) | none => #[p.own.circuit])]
+  | _ => none
+
+/-- The circuit files the rows check reads are the files SPOT verifies. -/
+def circuits : Tie :=
+  ⟨"circuits", [(InferenceOnly.RowsProtocol.protocolId, rowsFiles), (VStar.Recursive.Sampled.protocol.id, spotFiles)]⟩
+
+def ties : List Tie := [run, executionPhase, circuits]
+
+def protocol : BlobProtocol := tiedSameB "verity/remote/plain/v1" tied ties components
+
+#guard orderedB components
+#guard components.map (·.id) ==
+  ["verity/inference-only/rows/v1", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
+#guard tied.all fun s => (components.map (·.id)).contains s
+#guard ties.all fun t => t.names.all fun n => (components.map (·.id)).contains n.1
+#guard filesKey #["b", "a", "b"] == "a,b".toUTF8
+#guard filesKey #["a", "b"] == filesKey #["b", "a"] && filesKey #["a"] != filesKey #["a", "b"]
+
+end Plain
 
 end Core.Remote

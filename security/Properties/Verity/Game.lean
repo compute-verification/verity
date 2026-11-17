@@ -25,10 +25,11 @@ public import Properties.InferenceOnly.RecordRows
 
 A composite is the list of its subprotocols' ids (`Verity.Registration.Composite`), and its verifier is one compiled
 Lean function of that list (`verifier`): the composition of the listed subprotocols over the blobs the prover sent,
-under the code's one rule (`Core.Composition.tiedSameB`), with the ties between those it lists (`ties`). Onsite and
-remote are two lists (`Composite.onsite`, `Composite.remote`), whose verifiers are the two the code builds
-(`Core.Composites.composites`): `Core.Onsite.protocol` (`verity/onsite/v0`) and remote's composite of record
-`Core.Remote.V1.protocol` (`verity/remote/v1`). Remote's development composite, `Core.Remote.protocol`
+under the code's one rule (`Core.Composition.tiedSameB`), with the ties between those it lists (`ties`). Onsite, remote
+and remote's plain sibling are three lists (`Composite.onsite`, `Composite.remote`, `Composite.plain`), whose verifiers
+are the three the code builds (`Core.Composites.composites`): `Core.Onsite.protocol` (`verity/onsite/v0`), remote's
+composite of record `Core.Remote.V1.protocol` (`verity/remote/v1`) and `Core.Remote.Plain.protocol`
+(`verity/remote/plain/v1`). Remote's development composite, `Core.Remote.protocol`
 (`verity/remote/v0`, H1's period as its work), is no composite's verifier, and `Core.Composites.ofIds` refuses its
 subprotocols. A subprotocol is listed by its compiled check's id (`Subprotocol.idAt`): every subprotocol but PoUW and
 the inference-only policy has one compiled check, the same in every composite that lists it; PoUW's is Pearl+'s run
@@ -216,18 +217,22 @@ subprotocol whose id `k` lists. -/
 def componentsOf (k : Verity.Registration.Composite) : List BlobProtocol :=
   (Subprotocol.all.filter (·.idAt k ∈ k)).map (·.protocolAt k)
 
-/-- The subprotocols of composite `k` that must commit to one record: the inference-only policy and SPOT,
-each where `k` lists it. -/
+/-- The subprotocols of composite `k` that must commit to one record: the inference-only policy's check (v0 or the
+rows check) and SPOT, each where `k` lists it. -/
 def tied (k : Verity.Registration.Composite) : List String :=
-  [InferenceOnlyVerifier.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id].filter (· ∈ k)
+  [InferenceOnlyVerifier.Protocol.protocolId, rowsId, VStar.Recursive.Sampled.protocol.id].filter (· ∈ k)
 
 /-- **The ties between subprotocols**: every window of PoUW's period on the policy's record (`Core.Remote.executionPhases`),
 PoUS and PoUB-P2 on one store (`Core.Onsite.store`), Pearl+'s run on the policy's record (`Core.Remote.V1.run`), and
-Pearl+'s window record the one the policy's record is chained after (`Core.Remote.V1.executionPhase`). -/
-def allTies : List Composition.Tie := [Remote.executionPhases, Onsite.store, Remote.V1.run, Remote.V1.executionPhase]
+Pearl+'s window record the one the policy's record is chained after (`Core.Remote.V1.executionPhase`); the same two on
+the rows check's record (`Core.Remote.Plain.run`, `Core.Remote.Plain.executionPhase`), and the circuit files the rows
+check reads the files SPOT verifies (`Core.Remote.Plain.circuits`). -/
+def allTies : List Composition.Tie :=
+  [Remote.executionPhases, Onsite.store, Remote.V1.run, Remote.V1.executionPhase, Remote.Plain.run,
+    Remote.Plain.executionPhase, Remote.Plain.circuits]
 
 /-- The ties of composite `k`: each tie between subprotocols `k` lists, so a composite is its list and no tie is
-chosen beside it. Onsite has the first two, remote the last two. -/
+chosen beside it. Onsite has the first two, remote the next two, and remote's plain sibling the last three. -/
 def ties (k : Verity.Registration.Composite) : List Composition.Tie :=
   allTies.filter fun t => t.names.all fun n => n.1 ∈ k
 
@@ -240,18 +245,20 @@ def component (k : Verity.Registration.Composite) (a : Subprotocol) : Option Blo
 def subprotocols (k : Verity.Registration.Composite) : Finset Subprotocol :=
   Finset.univ.filter fun a => (component k a).isSome
 
-/-- The id composite `k`'s verifier answers under: onsite's and remote's are the code's (`Core.Onsite.protocol`'s,
-`verity/onsite/v0`, and `Core.Remote.V1.protocol`'s, `verity/remote/v1`), and any other list's is its ids,
+/-- The id composite `k`'s verifier answers under: onsite's, remote's and its plain sibling's are the code's
+(`Core.Onsite.protocol`'s, `verity/onsite/v0`, `Core.Remote.V1.protocol`'s, `verity/remote/v1`, and
+`Core.Remote.Plain.protocol`'s, `verity/remote/plain/v1`), and any other list's is its ids,
 comma-separated, after a prefix no protocol's id has. No code builds a verifier under such an id
 (`Core.Composites.ofIds` refuses the list), so it names the composition only in this game. -/
 def compositeId (k : Verity.Registration.Composite) : String :=
   if k = .onsite then Onsite.protocol.id else if k = .remote then Remote.V1.protocol.id
+  else if k = .plain then Remote.Plain.protocol.id
   else "verity/composite/v0:" ++ ",".intercalate k
 
 /-- **The compiled verifier of composite `k`**: the composition of `k`'s subprotocols under the one rule the code
 composes by (`Core.Composition.tiedSameB`), with the subprotocols that commit to one record (`tied`) and the ties
-between those it lists (`ties`). At onsite it is `Core.Onsite.protocol` and at remote `Core.Remote.V1.protocol`, the
-two composites the code builds (`Core.Composites.ofIds`). -/
+between those it lists (`ties`). At onsite it is `Core.Onsite.protocol`, at remote `Core.Remote.V1.protocol` and at its
+plain sibling `Core.Remote.Plain.protocol`, the three composites the code builds (`Core.Composites.ofIds`). -/
 def verifier (k : Verity.Registration.Composite) : BlobProtocol :=
   Composition.tiedSameB (compositeId k) (tied k) (ties k) (componentsOf k)
 

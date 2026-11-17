@@ -20,7 +20,7 @@ properties, never a proof. Their proofs (`security/Proofs/Properties/Verity/`) i
 | `Verity.soundness_at_of_targets : Verity.SoundnessOf` | at every composite `k`, a list of subprotocols' ids, `k`'s subprotocols' targets give `Vocab.SoundnessAt k` | `security/Proofs/Properties/Verity/Soundness.lean` |
 | `Verity.soundness_of_subprotocols : Verity.Soundness` | `SoundnessOf` at onsite's list, from its seven targets | the same file |
 | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` | `SoundnessOf` at remote's list, from two targets and the two statements on the committed files | `security/Proofs/Properties/Verity/InferenceOnly.lean` |
-| `Verity.plain_soundness_of_subprotocols : Verity.PlainSoundness` | `SoundnessOf` at remote's plain sibling's list, the rows check in v0's place, from its three targets | the same file |
+| `Verity.plain_soundness_of_subprotocols : Verity.PlainSoundness` | `SoundnessOf` at remote's plain sibling's list, the rows check in v0's place, from SPOT's and PoUW's targets | the same file |
 
 The statements are in `Soundness.lean` (this directory). **Remote's**: for any device and any names `V` the subprotocols
 define (`Vocab`), if SPOT and PoUW each meet their target at remote and the two statements on the committed files hold
@@ -54,15 +54,13 @@ at `Idle.exact` for a verifier that accepts everything. `GateARow` reads no depl
 (`Subprotocol.idAt`) `k` lists. A subprotocol's compiled check is the same in every composite but PoUW's, which is
 Pearl+'s run verdict in a composite that lists Pearl+'s id and H1's period credit elsewhere (`Subprotocol.protocolAt`,
 `Verity.component`), and the composite's verifier (`Verity.verifier k`) composes the listed ones under the code's one
-rule, with each tie between two it lists (`Verity.ties`). At onsite's and remote's lists it is the verifier the code
-builds from that list (`Verity.ofIds_onsite`, `Verity.ofIds_remote`,
-`security/Proofs/Properties/Verity/Soundness/Composite.lean`); the code builds no other (`Core.Composites.ofIds`), and
-refuses the plain sibling's list by name until its soundness is proved (`Verity.ofIds_plain`). No compiled check carries
-the rows check's id yet: the game reads it as `Verity.rowsCheck`, whose behavior nothing states (`rowsUnbuilt`, an
-`escapes` entry of the lock), so its target there is proved only from the compiled check that replaces it. Its claim
-there is `Verity.rowsHeld`, which nothing states either: v0's clause, which `Vocab.inferenceOnlySound` proves at a
-composite that lists v0 and not the rows check, would read no case at the plain sibling (`Verity.v0_not_mem_plain`,
-`Vocab.holds_plain`, `Verity.not_inferenceOnlySound_hyp_plain`).
+rule, with each tie between two it lists (`Verity.ties`). At onsite's, remote's and its plain sibling's lists it is
+the verifier the code builds from that list (`Verity.ofIds_onsite`, `Verity.ofIds_remote`, `Verity.ofIds_plain`,
+`security/Proofs/Properties/Verity/Soundness/Composite.lean`); the code builds no other (`Core.Composites.ofIds`). The
+rows check's compiled check is `Verity.rowsCheck` (`InferenceOnly.RowsProtocol.protocol`), and its claim at the plain
+sibling is `Verity.rowsHeld`, the clause in rows its guarantee (`RowsComplies`) states, which
+`Vocab.inferenceOnlySound_rows` proves at every composite where v0 doesn't decide the policy; v0's clause would read no
+case there (`Verity.v0_not_mem_plain`, `Vocab.holds_plain`, `Verity.not_inferenceOnlySound_hyp_plain`).
 
 | Subprotocol | Target | Compiled check | Remote | Plain | Onsite |
 |---|---|---|---|---|---|
@@ -70,7 +68,7 @@ composite that lists v0 and not the rows check, would read no case at the plain 
 | PoUW | `PouwSound` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`) | | | yes |
 | | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`): Pearl+'s run verdict, its claim in MACs | yes | yes | |
 | the inference-only policy | `InferenceOnlySound` | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | | yes |
-| | | `Verity.rowsCheck` (`verity/inference-only/rows/v1`): the rows check, not yet compiled | | yes | |
+| | | `Verity.rowsCheck` (`InferenceOnly.RowsProtocol.protocol`, `verity/inference-only/rows/v1`): the rows check | | yes | |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | | | yes |
 | PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | | yes |
 | the network attester | `NetworkAttesterSound` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | | | yes |

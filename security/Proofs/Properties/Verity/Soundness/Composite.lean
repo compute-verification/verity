@@ -21,8 +21,8 @@ and its verifier. These are the facts about those functions, at every list and a
   ties (`ties_onsite`, `ties_remote`). The spec's two lists are the code's components' ids (`ids_onsite`,
   `ids_remote`).
 * **At remote's plain sibling.** Its subprotocols are remote's with the rows check in v0's place
-  (`componentsOf_plain`), and the code builds no verifier from its list: `Core.Composites.ofIds` refuses it by name
-  (`ofIds_plain`).
+  (`componentsOf_plain`), and its verifier is the code's: `Core.Remote.Plain.protocol` (`verifier_plain`), the
+  composite the code builds from its list (`ofIds_plain`), with the code's ties (`ties_plain`).
 -/
 
 @[expose] public section
@@ -129,11 +129,13 @@ theorem ofIds_onsite : Composites.ofIds Verity.Registration.Composite.onsite = .
 /-- **The code builds remote's verifier from remote's list.** -/
 theorem ofIds_remote : Composites.ofIds Verity.Registration.Composite.remote = .ok (verifier .remote) := rfl
 
-/-- **Onsite's and remote's verifiers are the ones the composites' table lists**, each beside its list. -/
-theorem verifier_mem (hk : k = .onsite ∨ k = .remote) : (verifier k, k) ∈ Composites.composites := by
-  rcases hk with rfl | rfl
+/-- **Onsite's, remote's and its plain sibling's verifiers are the ones the composites' table lists**, each beside its
+list. -/
+theorem verifier_mem (hk : k = .onsite ∨ k = .remote ∨ k = .plain) : (verifier k, k) ∈ Composites.composites := by
+  rcases hk with rfl | rfl | rfl
   · exact List.mem_cons.2 (Or.inl rfl)
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
+  · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))))
 
 /-! ## Remote's plain sibling -/
 
@@ -142,7 +144,18 @@ place. -/
 theorem componentsOf_plain :
     componentsOf .plain = [rowsCheck, PouwVerifier.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol] := rfl
 
-/-- **The code refuses the plain sibling's list**, by name: no verifier the code builds is the plain sibling's. -/
-theorem ofIds_plain : Composites.ofIds Verity.Registration.Composite.plain = .error Composites.plainRefusal := rfl
+theorem componentsOf_plain_code : componentsOf .plain = Remote.Plain.components := rfl
+
+theorem tied_plain : tied .plain = Remote.Plain.tied := rfl
+
+/-- The plain sibling's ties are the code's: v1's two on the rows check's record, and the circuit files the rows check
+reads the files SPOT verifies. -/
+theorem ties_plain : ties .plain = Remote.Plain.ties := rfl
+
+/-- **The plain sibling's verifier is the code's**, `Core.Remote.Plain.protocol`. -/
+theorem verifier_plain : verifier .plain = Remote.Plain.protocol := rfl
+
+/-- **The code builds the plain sibling's verifier from its list.** -/
+theorem ofIds_plain : Composites.ofIds Verity.Registration.Composite.plain = .ok (verifier .plain) := rfl
 
 end Verity
