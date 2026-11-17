@@ -34,22 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The generic sampled compiler's statements say something
-
-Each closed statement of the generic sampled compiler (`CompilerKS`, `CompilerKSReg`, `CompilerKSRegX`,
-`CompilerKSCount`, `CompilerBits`, `CompilerEfficient`, `CompilerZK`) is a guarantee that the lock's `claims.generic` names, held to two
-witnesses (the lock's `witnesses`): honest ones, whose conclusions are its premises holding together at one instance,
-and a nontrivial one, at which its conclusion fails. Each builds its instance: coins `Bool` and the hash SHA-512
-(`FlockDeploy.sha512`), at the toys of `Witnesses.SamplingGeneric`, `SamplingGenericCost` and `SamplingGenericZK`.
-
-* Honest: `twoL`, two sessions over `twoA` that each accept, under a binding commitment (`compilerKS_honest`), whose
-  opening checks make no call (`compilerBits_honest`); `echoL`, one masked session over the zero-knowledge `echoArg`,
-  with the toy witness in its sampling relation (`compilerZK_honest`).
-* Nontrivial: `sksL` (accepts with an empty relation) fails `KS`, `KSReg`, `KSRegX`, `KSCount` and `Bits`; `effL` (its opening
-  check calls more than it counts) fails `Efficient`; and `talkL` (a talking prover, a silent simulator) fails
-  `ZkCompiled.ZK`.
--/
+/-! The generic sampled compiler's closed statements say something: honest and nontrivial witnesses each, at coins `Bool` and SHA-512. -/
 
 @[expose] public section
 

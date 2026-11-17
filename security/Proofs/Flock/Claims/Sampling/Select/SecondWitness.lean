@@ -14,17 +14,7 @@ import all Init.Data.Repr
 import all Init.Data.Int.Repr
 import all Lean.Data.Json.Basic
 
-/-!
-# `SecondMisses` says something: the second stage accepts, and a stage that accepts everything breaks its bound
-
-* `secondMisses_honest`: the deployed `Select.selectSecond` accepts one sampled replay block whose one cell holds two
-  proof blocks, one sampled, on 82 zero bytes. The kernel evaluates it (`decide +kernel`) once the definitions it can't
-  unfold are their
-  twins: `Array.qsort` and `Flock.canon` with fuel (`qsort_fuel`, `canon_fuel`), `Flock.Draw.onWith`'s `repeat` with
-  fuel (`onWith_fuel`) and `Flock.Draw.subset` with its map a function (`subset_fn`).
-* `secondMisses_nontrivial`: at `acceptAllSecond`, which accepts everything and proves nothing, both proof blocks of
-  the sampled replay block's one cell escape with probability 1, above `escCell 2 1 2 = 0`.
--/
+/-! `SecondMisses` says something: the deployed second stage accepts, and a stage that accepts everything breaks its bound. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -40,10 +30,7 @@ namespace Properties.Spot.SecurityProofs
 open Lean (Json)
 open Claims.Sampling
 
-/-! ## `Array.qsort` with fuel
-
-`qsort`'s recursion is well founded, which the kernel does not unfold; `qsortFuel` is it with each recursion's measure
-as fuel, and `qsort_fuel` says they agree. -/
+/-! `qsort`'s well-founded recursion does not unfold in the kernel; `qsortFuel` is it with each recursion's measure as fuel (`qsort_fuel`). -/
 
 section Fuel
 
@@ -140,10 +127,7 @@ theorem qsort_fuel (as : Array α) (lt : α → α → Bool) (lo hi : Nat) : as.
 
 end Fuel
 
-/-! ## `Flock.canon` with fuel
-
-`canon` is well founded too; `canonFuel f` is it unfolded `f` times, `canon` itself past that, so the two agree at every
-fuel (`canon_fuel`). -/
+/-! `canon` is well founded too; `canonFuel f` is it unfolded `f` times, `canon` itself past that (`canon_fuel`). -/
 
 def canonFuel : Nat → Json → Flock.V String
   | 0, j => Flock.canon j
@@ -171,12 +155,8 @@ theorem canon_fuel : ∀ (f : Nat) (j : Json), Flock.canon j = canonFuel f j
     | arr a => rw [Flock.canon]; simp only [canonFuel, canon_fuel f]
     | obj kvs => rw [Flock.canon]; simp only [canonFuel, canon_fuel f, qsort_fuel]
 
-/-! ## `Flock.Draw.onWith` with fuel
+/-! `onWith`'s `repeat` unfolds only through `Lean.Loop.forIn_eq_of_monadTail`; `onWithFuel f` is its first `f` rounds (`onWith_fuel`). -/
 
-`onWith`'s `repeat` is `Lean.Loop.forIn`, which only unfolds through `Lean.Loop.forIn_eq_of_monadTail`; `onWithFuel f`
-is its first `f` rounds, the loop itself past them (`onWith_fuel`). -/
-
-/-- `onWith` from the stream `src₀` already read. -/
 def onWithFrom {m : Type → Type} [Monad m] (get : Nat → m ByteArray) (need : Nat)
     (run : ByteArray → Option (Array Nat)) (src₀ : ByteArray) : m (Option (Array Nat)) := do
   let mut src := src₀
@@ -221,13 +201,9 @@ theorem onWith_fuel {m : Type → Type} [Monad m] [LawfulMonad m] [Lean.Order.Mo
   funext src
   exact onWithFrom_fuel get need run f src
 
-/-! ## `Flock.Draw.subset` without its map
+/-! `subset`'s swaps live in a `Std.HashMap`, whose bucket index reads the platform's word size, which the kernel does not
+evaluate; `subsetFn` keeps the same swaps as a function (`subset_fn`). -/
 
-`subset`'s Fisher–Yates swaps live in a `Std.HashMap`, whose bucket index reads the platform's word size, which the
-kernel does not evaluate; `subsetFn` keeps the same swaps as a function, and `subset_fn` says they agree, by a
-simulation of one loop by the other (`forIn_sim`). -/
-
-/-- Two steps of two loops, both done or both continuing, in states related by `R`. -/
 def stepSim {σ τ : Type} (R : σ → τ → Prop) : ForInStep σ → ForInStep τ → Prop
   | .done s, .done t => R s t
   | .yield s, .yield t => R s t
@@ -254,7 +230,6 @@ theorem forIn_bind_sim {α σ τ β : Type} (R : σ → τ → Prop) (l : List �
   rw [Id.run_bind, Id.run_bind]
   exact hc _ _ (forIn_sim R f g hstep l s₀ t₀ h₀)
 
-/-- `Flock.Draw.subset` with its swaps as a function. -/
 def subsetFn (k n : Nat) (src : ByteArray) : Option (Array Nat) := Id.run do
   let mut sw : Nat → Nat := fun a => a
   let mut pos := 0
@@ -287,8 +262,6 @@ theorem subset_fn : Flock.Draw.subset = subsetFn := by
     cases r₁ with
     | some r => rfl
     | none => simp only [h3]
-
-/-! ## The witnesses -/
 
 /-- **`SecondMisses`'s honest lemma**: the deployed second stage accepts one sampled replay block whose one cell holds
 two proof blocks, one sampled, on 82 zero bytes (its stratum's `need`). The kernel evaluates `selectSecond`

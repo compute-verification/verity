@@ -6,28 +6,7 @@ public import Proofs.Flock.Claims.Sampling.Select.Steps
 public import Proofs.Flock.Claims.Sampling.Select.Take
 public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 
-/-!
-# `EndToEndSample`'s facts as equalities, and the deployed design's shape
-
-At a `SubsetDesign` over one class of `n` proof blocks (`EndToEndSample`'s hypotheses):
-
-* `Pa_subset_of_range`, `miss_subset`, `missAt_subset`: `P_a(B)`, `miss(t)` and `missAt D t x` are the hypergeometric
-  `C(n − |B|, kd)/C(n, kd)` and `C(n − t, kd)/C(n, kd)`, for `B ⊆ [0, n)` and `t ≤ n`.
-* `notMem_M_iff`: at every `δ`, `M_δ`'s complement in `[0, n)` is a count threshold `K₀ ≤ |B|`, `K₀ ≤ n + 1`.
-* `notMem_M_iff_count`: at `δ = C(n − K₀, kd)/C(n, kd)` (`1 ≤ kd ≤ n`), that threshold is `min K₀ (n − kd + 1)`
-  (`ratio_le_iff`).
-
-The deployed sampled verifier's statements are not of that shape. At `deployOf F (SamplingDeploy.code c reg …)` under
-`RegMatches` (`deployOf_shape`), the design is `slotDesign`'s two rules, the population's first stage and the input
-class sampled `all`, and the partition is `Slots.layout`'s two classes, the population and the input class (empty, or one
-stratum). So `SubsetDesign` and a one-class partition fail there (`deployOf_not_subsetDesign`,
-`deployOf_not_oneClass`). At a population sampled `subset kd` (`SubsetInputsDesign`), with `N` population slots:
-
-* `Pa_subsetInputs`: `P_a(B)` is `C(N − |B ∩ [0, N)|, kd)/C(N, kd)` when `B` misses the input class, else `0`.
-* `miss_subsetInputs`, `missAt_subsetInputs`: `miss(t) = missAt D t x = C(N − t, kd)/C(N, kd)` for `t ≤ N`.
-* `notMem_M_iff_subsetInputs`: outside `M_δ` at `δ = C(N − K₀, kd)/C(N, kd)` is: `B` meets the input class, or at
-  least `min K₀ (N − kd + 1)` of its slots.
--/
+/-! `EndToEndSample`'s facts as equalities, and the deployed design's shape, which is not a `SubsetDesign`. -/
 
 @[expose] public section
 
@@ -35,13 +14,10 @@ namespace Claims.Sampling.EndToEndSample
 
 open scoped ENNReal
 
-/-! ## The count -/
-
 theorem choose_div_anti {n kd a b : ℕ} (h : a ≤ b) :
     ((n - b).choose kd : ℝ) / (n.choose kd : ℝ) ≤ ((n - a).choose kd : ℝ) / (n.choose kd : ℝ) :=
   div_le_div_of_nonneg_right (by exact_mod_cast Nat.choose_le_choose kd (by omega)) (Nat.cast_nonneg _)
 
-/-- `C(a, k) < C(b, k)` for `a < b` and `1 ≤ k ≤ b`. -/
 theorem choose_lt_choose {a b k : ℕ} (hab : a < b) (hk : 1 ≤ k) (hkb : k ≤ b) : a.choose k < b.choose k := by
   obtain ⟨b, rfl⟩ : ∃ b', b = b' + 1 := ⟨b - 1, by omega⟩
   obtain ⟨k, rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
@@ -50,7 +26,6 @@ theorem choose_lt_choose {a b k : ℕ} (hab : a < b) (hk : 1 ≤ k) (hkb : k ≤
   have h2 := Nat.choose_le_choose (k + 1) (show a ≤ b by omega)
   omega
 
-/-- `C(n − a, kd) ≤ C(n − K₀, kd)` exactly when `a` reaches `min K₀ (n − kd + 1)`. -/
 theorem choose_le_iff {n kd K₀ a : ℕ} (hkd : 1 ≤ kd) (hkn : kd ≤ n) :
     (n - a).choose kd ≤ (n - K₀).choose kd ↔ min K₀ (n - kd + 1) ≤ a := by
   constructor
@@ -70,8 +45,6 @@ theorem ratio_le_iff {n kd K₀ a : ℕ} (hkd : 1 ≤ kd) (hkn : kd ≤ n) :
   rw [div_le_div_iff_of_pos_right (by exact_mod_cast Nat.choose_pos hkn), Nat.cast_le]
   exact choose_le_iff hkd hkn
 
-/-! ## One class sampled `subset kd` -/
-
 section OneClass
 
 variable {d : Design} {kd : ℕ} {P : Partition} {c : List (List (List ℕ))} {n : ℕ}
@@ -81,7 +54,6 @@ theorem Pa_subset_of_range (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn :
     d.Pa P B = ((n - B.card).choose kd : ℝ) / (n.choose kd : ℝ) := by
   rw [Pa_subset hd hP, hn, Claims.Sampling.EndToEndSample.window_zero fun v hv => Finset.mem_range.1 (hB hv)]
 
-/-- **The miss is the hypergeometric tail**: `miss(t) = C(n − t, kd)/C(n, kd)` for `t ≤ n`. -/
 theorem miss_subset (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.blocks.length = n) {t : ℕ}
     (ht : t ≤ n) : d.miss P t = ((n - t).choose kd : ℝ) / (n.choose kd : ℝ) := by
   have hle : ∀ B : {B : Finset ℕ // B ⊆ Finset.range P.blocks.length ∧ t ≤ B.card},
@@ -97,7 +69,6 @@ theorem miss_subset (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.bloc
   refine le_antisymm (ciSup_le hle) (le_ciSup_of_le ⟨_, Set.forall_mem_range.2 hle⟩ ⟨_, hB₀, by simp⟩ ?_)
   rw [Pa_subset_of_range hd hP hn (hn ▸ hB₀), Finset.card_range]
 
-/-- **`missAt` is the hypergeometric tail** at a statement of one class sampled `subset kd`. -/
 theorem missAt_subset {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) (s : AuditStatement) (hs : D.parse x = some s)
     (hd : SubsetDesign s.design kd) (hP : (D.part s).classes = [c]) (hn : (D.part s).blocks.length = n) {t : ℕ}
     (ht : t ≤ n) : missAt D t x = ((n - t).choose kd : ℝ) / (n.choose kd : ℝ) := by
@@ -107,8 +78,6 @@ theorem missAt_subset {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) (s :
   rw [miss_subset hd hP hn ht]
   exact max_eq_right (by positivity)
 
-/-- **`M_δ` is a count threshold**: at every `δ`, some `K₀ ≤ n + 1` has `C(n − K₀, kd)/C(n, kd) ≤ δ` (when `K₀ ≤ n`)
-and puts a set of slots outside `M_δ` exactly when it has `K₀` or more. -/
 theorem notMem_M_iff (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.blocks.length = n) (δ : ℝ) :
     ∃ K₀ ≤ n + 1, (K₀ ≤ n → ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) ≤ δ) ∧
       ∀ B ⊆ Finset.range n, (B ∉ d.M P δ ↔ K₀ ≤ B.card) := by
@@ -129,8 +98,6 @@ theorem notMem_M_iff (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.blo
       · omega
       · exact (choose_div_anti hK).trans h1
 
-/-- **At the claims' `δ`**, `C(n − K₀, kd)/C(n, kd)` with `1 ≤ kd ≤ n`: a set of slots is outside `M_δ` exactly when
-it has at least `min K₀ (n − kd + 1)`. -/
 theorem notMem_M_iff_count (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.blocks.length = n)
     (hkd : 1 ≤ kd) (hkn : kd ≤ n) (K₀ : ℕ) {B : Finset ℕ} (hB : B ⊆ Finset.range n) :
     B ∉ d.M P (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) ↔ min K₀ (n - kd + 1) ≤ B.card := by
@@ -140,10 +107,6 @@ theorem notMem_M_iff_count (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn :
 
 end OneClass
 
-/-! ## The deployed shape -/
-
-/-- `slotDesign`'s design: the population's first stage (`all` under the `All` rule, else the sampling design of record's), then
-the input class sampled `all`. -/
 theorem slotDesign_rules {rule : _root_.Spot.Select.Rule} {p : _root_.Spot.Program}
     {q : Lean.Json} {t : Option Lean.Json} {d : Design}
     (h : _root_.Properties.Spot.slotDesign rule p q t = .ok d) :
@@ -162,7 +125,6 @@ theorem slotDesign_rules {rule : _root_.Spot.Select.Rule} {p : _root_.Spot.Progr
     obtain rfl := (Except.ok.inj h).symm
     exact ⟨_, rfl, (fun h => by cases h), fun _ => ⟨_, rfl⟩⟩
 
-/-- `Slots.layout`'s classes: the population, then the input class, empty or one stratum. -/
 theorem layout_classes {p : _root_.Spot.Program} {q : Lean.Json} {l : _root_.Spot.Slots.SlotOrder}
     (h : _root_.Spot.Slots.layout p q = .ok l) :
     ∃ pop ins, l.classes = #[pop, ins] ∧ (ins = #[] ∨ ∃ st, ins = #[st]) := by
@@ -194,9 +156,6 @@ variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.
   (bytes : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L x) → Fin 256)
   (sr : (x : Msg) → Finset (Fin (c.V.k x))) (sess : Msg → Claims.Seen → Option (Msg × Claims.Seen))
 
-/-- **The deployed statement's shape**: at the deployed code under `RegMatches`, a statement that parses and
-partitions has two rules, the population's first stage and the input class sampled `all`, over two classes, the
-population and the input class (empty, or one stratum). -/
 theorem deployOf_shape (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : AuditStatement} {Pt : Partition}
     (hx : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).parse x = some s)
     (hp : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).partition s = some Pt) :
@@ -227,9 +186,6 @@ theorem deployOf_not_oneClass (hreg : SamplingDeploy.RegMatches c reg) {x : Msg}
 
 end Deployed
 
-/-! ## The population sampled `subset kd`, then the input class -/
-
-/-- The deployed design at a population sampled `subset kd`: that, then the input class sampled `all`. -/
 def SubsetInputsDesign (d : Design) (kd : ℕ) : Prop := d.rules = [.subset kd, .all]
 
 theorem all_Pa_of_empty {ns : List ℕ} {W : Finset ℕ} (h : W = ∅) : OneStage.Pa ns .all W = 1 := by
@@ -242,7 +198,6 @@ theorem blocks_length_two {P : Partition} {c ic : List (List (List ℕ))} (hP : 
     P.blocks.length = c.flatten.length + ic.flatten.length := by
   simp [Partition.blocks, hP]
 
-/-- A set of slots below `N + M` that misses `[N, N + M)` is below `N`. -/
 theorem subset_range_of_window {N M : ℕ} {B : Finset ℕ} (hB : B ⊆ Finset.range (N + M)) (h : window N M B = ∅) :
     B ⊆ Finset.range N := by
   intro v hv
@@ -279,7 +234,6 @@ section SubsetInputs
 
 variable {d : Design} {kd : ℕ} {P : Partition} {c ic : List (List (List ℕ))}
 
-/-- On a set that misses the input class, `P_a` is the population's hypergeometric miss. -/
 theorem Pa_subsetInputs_of_window (hd : SubsetInputsDesign d kd) (hP : P.classes = [c, ic]) {B : Finset ℕ}
     (hB : B ⊆ Finset.range (c.flatten.length + ic.flatten.length))
     (hw : window c.flatten.length ic.flatten.length B = ∅) :
@@ -288,8 +242,6 @@ theorem Pa_subsetInputs_of_window (hd : SubsetInputsDesign d kd) (hP : P.classes
   rw [Pa_subsetInputs hd hP, all_Pa_of_empty hw, mul_one,
     Claims.Sampling.EndToEndSample.window_zero fun v hv => Finset.mem_range.1 (hB' hv)]
 
-/-- **The deployed miss is the population's hypergeometric tail**: `miss(t) = C(N − t, kd)/C(N, kd)` for `t ≤ N`, the
-population's `N` slots. -/
 theorem miss_subsetInputs (hd : SubsetInputsDesign d kd) (hP : P.classes = [c, ic]) {t : ℕ}
     (ht : t ≤ c.flatten.length) :
     d.miss P t = ((c.flatten.length - t).choose kd : ℝ) / (c.flatten.length.choose kd : ℝ) := by
@@ -320,8 +272,6 @@ theorem missAt_subsetInputs {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg
   rw [miss_subsetInputs hd hP ht]
   exact max_eq_right (by positivity)
 
-/-- **The deployed threshold**: at `δ = C(N − K₀, kd)/C(N, kd)` (`1 ≤ kd ≤ N`), a set of slots is outside `M_δ` exactly
-when it meets the input class or has at least `min K₀ (N − kd + 1)` slots. -/
 theorem notMem_M_iff_subsetInputs (hd : SubsetInputsDesign d kd) (hP : P.classes = [c, ic]) (hkd : 1 ≤ kd)
     (hkn : kd ≤ c.flatten.length) (K₀ : ℕ) {B : Finset ℕ} (hB : B ⊆ Finset.range P.blocks.length) :
     B ∉ d.M P (((c.flatten.length - K₀).choose kd : ℝ) / (c.flatten.length.choose kd : ℝ)) ↔

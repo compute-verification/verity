@@ -5,22 +5,7 @@ public import Proofs.Flock.Claims.Witnesses.SamplingTwo
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.ZK.NonVacuous
 
-/-!
-# The two-stage committed form's statements say something
-
-`CompiledTwo.KSRegTwo` and `CompiledTwo.HeadlineTwo` fail at `sksLTwo` (`Witnesses.SamplingTwo`: `sksL`, which accepts
-after one round, samples nothing and opens nothing, with the two-stage design `toyTwo`), its silent prover and any hash:
-`CompiledTwo.KSRegTwo_fails` and `CompiledTwo.HeadlineTwo_fails` over the spec, and at coins `Bool` and SHA-512
-(`FlockDeploy.sha512`) the nontrivial lemmas of `CompilerKSRegTwo` and `CompilerHeadlineTwo`.
-
-* `sksLTwo`'s committed boundary trace opens nothing (`sksL_regVal`), so its one proof block is incorrect there at any
-  interior (`toy_incorrectInAt`), the footprint is at least `1` in the one cell, and the design's `P̄_a` is `0` at every
-  interior: the footprint is outside `M̄_0` (`sksLTwo_notM`).
-* Its sessions make no call, so `B_conf,2` finds nothing (`sksLTwo_bconfTwo`), and with `ε_reg = 0` (`sksL_εreg`) the
-  committed form's error at two stages is `0` (`sksLTwo_εregTwo`).
-* It accepts always. At `δ = 0` the threshold form then bounds `1` by `0` (`compiledTwoKSReg_fails`), and so does the
-  headline at the bound `0` on `P̄_a` (`compiledTwoHeadline_fails`).
--/
+/-! The two-stage committed form's statements say something: they fail at `sksLTwo`. -/
 
 @[expose] public section
 
@@ -30,7 +15,6 @@ open Claims.SamplingGeneric
 open Claims.Sampling (incorrectInAt footprintAt)
 open Claims.Witness.Sampling (ownLog_noHash toyStmt toyPart toyPart_blocks)
 
-/-- At boundary values that commit nothing at the input, the toy's proof block is incorrect at any interior values. -/
 theorem toy_incorrectInAt {val : ℕ → Option Bool} (hv : val 0 = none) (ι : ℕ → Bool) :
     0 ∈ incorrectInAt toyStmt toyPart toyPart val 0 0 ι := by
   classical
@@ -48,7 +32,6 @@ theorem toy_footprintAt {val : ℕ → Option Bool} (hv : val 0 = none) (ι : �
     1 ≤ footprintAt toyStmt toyPart toyPart val ι 0 0 :=
   Finset.card_pos.2 ⟨0, toy_incorrectInAt hv (ι 0)⟩
 
-/-- `sksLTwo`'s committed boundary trace's footprint is outside `M̄_0` at every interior. -/
 theorem sksLTwo_notM {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) {Ω : Type}
     (P : Prover Ω) (x : Msg) (ω : Ω) (ι : ℕ → ℕ → Bool) :
     footprintAt toyStmt toyPart toyPart ((sksLTwo Coin).regVal H P x ω) ι ∉ toyTwo.M toyPart 0 := by
@@ -58,7 +41,6 @@ theorem sksLTwo_notM {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coi
   rw [toyTwo_Pa (toy_footprintAt (val := (sksLTwo Coin).regVal H P x ω) (sksL_regVal H P x ω 0) ι)] at hlt
   exact lt_irrefl _ hlt
 
-/-- `sksLTwo`'s sessions make no call, so `B_conf,2` finds nothing. -/
 theorem sksLTwo_bconfTwo {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (Ω : Type)
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) : (CompiledTwo.BconfTwo H (sksLTwo Coin) Ω P x).Pr H = 0 := by
   simp only [CompiledTwo.BconfTwo]
@@ -67,7 +49,6 @@ theorem sksLTwo_bconfTwo {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
   · exact finder_pr_none H _ fun q => by
       simp [ownLog_noHash _ _ _ (noHash_runExt (sksLTwo Coin).toCompiled (fun _ _ _ => rfl) _ _ _ _ _), findColl]
 
-/-- `sksLTwo`'s committed form's error at two stages is `0`. -/
 theorem sksLTwo_εregTwo {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (x : Msg) :
     (sksLTwo Coin).εregTwo H x silentP = 0 := by
   unfold CompiledTwo.εregTwo
@@ -107,8 +88,6 @@ theorem compiledTwoHeadline_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [
   norm_num at h2
 
 end Claims.Witness.SamplingGeneric
-
-/-! ## Stated over the spec -/
 
 namespace Claims.SamplingGeneric
 

@@ -6,29 +6,7 @@ public import Proofs.Flock.Claims.Witnesses.SamplingTwoRegMiss
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.ZK.NonVacuous
 
-/-!
-# The two-stage committed form at the boundary trace read at the statement says something
-
-`CompiledTwo.KSRegTwoX`, `CompiledTwo.HeadlineTwoX` and `CompiledTwo.MissTwoX` fail at `sksLTwo`
-(`Witnesses.SamplingTwo`: `sksL`, which accepts after one round, samples nothing and opens nothing, with the two-stage
-design `toyTwo`), its silent prover and any hash: `CompiledTwo.KSRegTwoX_fails`, `CompiledTwo.HeadlineTwoX_fails` and
-`CompiledTwo.MissTwoX_fails` over the spec, and at coins `Bool` and SHA-512 (`FlockDeploy.sha512`) the nontrivial
-lemmas of `CompilerKSRegTwoX`, `CompilerHeadlineTwoX` and `CompilerMissTwoX`. The bound on what the committed trace
-serves, `CompiledTwo.ExfilRegTwoX`, has the committed form as its first part, so it fails there too
-(`CompiledTwo.ExfilRegTwoX_fails`).
-
-* `sksLTwo`'s boundary trace read at the statement opens nothing (`sksL_regValX`), so its one proof block is incorrect
-  there at any interior (`toy_incorrectInAt`): the footprint is outside `M̄_0` at every interior (`sksLTwo_notMX`), the
-  design's `P̄_a` is `0` there, and its one replay block is wrong at the boundary (`toy_incorrectAtBoundaryAt`).
-* Its sessions make no call, so with `ε_reg,X = 0` (`sksL_εregX`) and `B_conf,2` finding nothing (`sksLTwo_bconfTwo`)
-  the error at two stages is `0` (`sksLTwo_εregTwoX`).
-* It accepts always and samples nothing. At `δ = 0` the threshold form then bounds `1` by `0`
-  (`compiledTwoKSRegX_fails`), so does the headline at the bound `0` on `P̄_a` (`compiledTwoHeadlineX_fails`), and so
-  does the miss at both rates `1` (`compiledTwoMissX_fails`).
-
-The three compilers' premises are those of the forms at the committed boundary trace, so their honest lemmas are those
-forms' (`compilerKSTwo_honest`, `compilerMissTwo_honest`).
--/
+/-! The two-stage committed form at the boundary trace read at the statement says something: it fails at `sksLTwo`. -/
 
 @[expose] public section
 
@@ -38,7 +16,6 @@ open Claims.SamplingGeneric
 open Claims.Sampling (footprintAt incorrectAtBoundaryAt)
 open Claims.Witness.Sampling (toyStmt toyPart)
 
-/-- `sksLTwo`'s boundary trace read at the statement has its footprint outside `M̄_0` at every interior. -/
 theorem sksLTwo_notMX {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) {Ω : Type}
     [Fintype Ω] (P : Prover Ω) (x : Msg) (ι : ℕ → ℕ → Bool) :
     footprintAt toyStmt toyPart toyPart ((sksLTwo Coin).regValX H P x) ι ∉ toyTwo.M toyPart 0 := by
@@ -48,7 +25,6 @@ theorem sksLTwo_notMX {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Co
   rw [toyTwo_Pa (toy_footprintAt (val := (sksLTwo Coin).regValX H P x) (sksL_regValX H P x 0) ι)] at hlt
   exact lt_irrefl _ hlt
 
-/-- `sksLTwo`'s error at two stages, at the boundary trace read at the statement, is `0`. -/
 theorem sksLTwo_εregTwoX {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (x : Msg) :
     (sksLTwo Coin).εregTwoX H x silentP = 0 := by
   unfold CompiledTwo.εregTwoX
@@ -108,8 +84,6 @@ theorem compiledTwoMissX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inh
   norm_num at h2
 
 end Claims.Witness.SamplingGeneric
-
-/-! ## Stated over the spec -/
 
 namespace Claims.SamplingGeneric
 

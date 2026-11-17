@@ -4,23 +4,7 @@ public import Proofs.Flock.Claims.Scope.System
 public import Proofs.Flock.Soundness.ExecPlacement
 public import Proofs.Flock.Soundness.Refine.Regions
 
-/-!
-# The verifier's tables as the readable relation
-
-Each table of the verifier's statement is a block R1CS over GF(2), the model's `Statement` (`Layout.model`: `m`, `k_log`,
-the pin, the level-0 matrices `placedA`, `placedB`, the regions `regionsOf`). `Tab` is that data without its proofs
-(`Tab.ofStmt`), `sysOf m kLog ts` the tables as one `Sys` in blocks of `2^kLog` bits, `2^(m − kLog)` of them, and
-`relation` the deployed relation's fields: `sysOf` at the first table's `m` and `k_log`, over every table.
-
-* `tab_iff`: a table's rows, pin and fixed bits hold in every block exactly when the model's statement is satisfied.
-* `sysOf_iff`: the system holds in every block exactly when every table fits the blocks (`Tab.Fits`: its own `m` and
-  `k_log`, `6 ≤ k_log ≤ m`, its pin in the block) and its model statement is satisfied by its share of the hidden
-  values (`zOf`: of `J` tables, table `c`'s bit `a` is hidden value `a·J + c`). A table that does not fit is
-  unsatisfiable.
-* `relS_relation`: `Claims.Flock.RelS` of `toReadable relation p` is that, for every table of `p`.
-* `toModel_ofStmt`: at a table whose statement has the verifier's layout, the model statement is `Layout.model` at
-  `regionsOf`, the one the soundness proof reads.
--/
+/-! The verifier's tables as the readable relation. -/
 
 @[expose] public section
 
@@ -98,7 +82,6 @@ def fixed (t : Tab) : List (ℕ × (ℕ → Bool)) :=
   t.regions.flatMap fun R => ((List.range (2 ^ R.free.length)).filter fun i => decide (R.inBlock i < 2 ^ t.kLog)).map
     fun i => (R.inBlock i, fun o => if ho : o < 2 ^ (t.m - t.kLog) then ofZ (R.bits ⟨o, ho⟩ i) else false)
 
-/-- **The table holds in `x`** (`x o i`: bit `i` of block `o`): every block's rows, pin and fixed bits. -/
 def Holds (t : Tab) (x : ℕ → ℕ → Bool) : Prop :=
   ∀ o < 2 ^ (t.m - t.kLog),
     (∀ i < 2 ^ t.kLog, (xsum (t.a i) (x o) (2 ^ t.kLog) && xsum (t.b i) (x o) (2 ^ t.kLog)) = x o i) ∧
@@ -111,7 +94,6 @@ theorem toZ_row (t : Tab) (M : Matrix (Fin (2 ^ t.kLog)) (Fin (2 ^ t.kLog)) (ZMo
   rw [toZ_xsum, Finset.sum_range (fun r => toZ (s i r) * toZ (x r))]
   simp only [Matrix.mulVec, dotProduct, hs, toZ_ofZ, hx]
 
-/-- **A table holds exactly when its model statement is satisfied**, at a witness whose blocks are `x`'s. -/
 theorem tab_iff (t : Tab) (h : t.Ok) (z : Model.Witness t.m) (x : ℕ → ℕ → Bool)
     (hx : ∀ (o : Fin (2 ^ (t.m - t.kLog))) (i : Fin (2 ^ t.kLog)), toZ (x o i) = (t.toModel h).block z o i) :
     t.Holds x ↔ (t.toModel h).Satisfies z := by
@@ -151,8 +133,6 @@ theorem tab_iff (t : Tab) (h : t.Ok) (z : Model.Witness t.m) (x : ℕ → ℕ �
     rw [show (t.toModel h).pin = ⟨t.pin, h.2.2⟩ from rfl, ← hx ⟨o, ho⟩ ⟨t.pin, h.2.2⟩] at this
     exact (toZ_eq_iff _ _).1 this
 
-/-- **The model statement of a verifier's table** is `Layout.model` at its regions, wherever the statement has the
-verifier's layout. -/
 theorem toModel_ofStmt {st : Stmt} (L : FlockSoundness.Layout st) (h : (ofStmt st).Ok) :
     (ofStmt st).toModel h = L.model (Refine.regionsOf st) := rfl
 
@@ -197,8 +177,6 @@ theorem sysOf_wf (m kLog : ℕ) (ts : List Tab) : (sysOf m kLog ts).WF where
       subst hf
       exact Nat.two_pow_pos _
 
-/-- **The system holds in every block** exactly when every table fits the blocks and its share of the hidden values
-satisfies its model statement. -/
 theorem sysOf_iff (m kLog : ℕ) (ts : List Tab) (w : Claims.Flock.Wit) :
     (∀ b < (sysOf m kLog ts).nB, (sysOf m kLog ts).Holds w b) ↔
       ∀ c < ts.length, ∃ h : (ts.getD c default).Fits m kLog,
@@ -255,9 +233,6 @@ and `k_log` (`toReadable`'s). -/
 def relation (p : Parsed) : Relation :=
   (sysOf ((p.sts[0]?.map (·.m)).getD 0) ((p.sts[0]?.map (·.c.kLog)).getD 0) (p.sts.toList.map Tab.ofStmt)).rel
 
-/-- **`RelS` at the deployed relation**: a witness satisfies the readable statement exactly when every table of the
-verifier's statement fits the first table's blocks and its share of the hidden values satisfies its model
-statement. -/
 theorem relS_relation (p : Parsed) (w : Claims.Flock.Wit) :
     Claims.Flock.RelS (toReadable relation p) w ↔
       ∀ c < p.sts.size, ∃ h : (Tab.ofStmt p.sts[c]!).Fits (toReadable relation p).m (toReadable relation p).kLog,

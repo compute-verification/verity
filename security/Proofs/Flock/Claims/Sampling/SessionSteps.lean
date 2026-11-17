@@ -2,20 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Session
 
-/-!
-# `SessionRuns` from the sampled verifier's step structure
-
-`SessionSteps D`: the sampled verifier `D.V` answers its first `pre x` rounds itself, with no `H` call and never
-accepting, and every later round is Flock's verifier `D.flock.V` at the session's statement, which the prefix's prover
-messages name (`stmt`), on the later messages and coins. Where the prefix's last answer is a message, that statement has
-the session's `kS x` rounds. Every unit's session is on the rounds after the prefix, and the session read off a run's
-transcript is the statement and the transcript after the prefix where the prefix answered every round with a message,
-and else a refused run: the run of `xR x`, a statement with `kS x` rounds at which Flock refuses the first message `[]`.
-
-`sessionRuns_of_steps`: such a verifier runs its sessions as Flock runs (`SessionRuns`). At any coins, Flock's rounds are
-the rounds after the prefix, in order; Flock's prover plays the sampled prover's messages after the prefix's transcript;
-and the run decides what that Flock run decides, shows its transcript as the session, and makes its `H` calls.
--/
+/-! `SessionRuns` from the sampled verifier's step structure: a prefix of its own rounds, then Flock's verifier. -/
 
 @[expose] public section
 
@@ -23,12 +10,6 @@ namespace Claims.Sampling
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **The sampled verifier's step structure**: a prefix of `pre x` rounds the verifier answers with no `H` call and no
-acceptance, then Flock's verifier at the statement the prefix's prover messages name (`stmt`), on the later messages and
-coins; the prefix's last answer is a message only where that statement has `kS x` rounds; every unit's session rounds are
-the rounds after the prefix; and the session read off a transcript is the statement and the transcript after the prefix
-where the transcript shows the prefix answered with messages and the verifier answers its last round with a message at
-some coins, and the refused run of `xR x` (`kS x` rounds, refusing the message `[]` at once) where the prefix refused. -/
 structure SessionSteps (D : Deploy Coin Col T) where
   pre : Msg → ℕ
   kS : Msg → ℕ
@@ -52,13 +33,10 @@ structure SessionSteps (D : Deploy Coin Col T) where
   session_refused : ∀ x u (ms : List (Msg × Out)) a, ms.length < pre x → (∀ e ∈ ms, ∃ m, e.2 = .msg m) →
     D.session x u ⟨ms ++ [(a, .rej)], .rej⟩ = some (xR x, ⟨[([], .rej)], .rej⟩)
 
-/-! ## A run's rounds -/
-
 section Rounds
 
 variable {Ω Ω' : Type} (H : Msg → Msg)
 
-/-- **A round answered with a message and no `H` call** appends the prover's message and the answer, and continues. -/
 theorem stepWith_msg (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (n : ℕ) (hist : List (Msg × Msg))
     (as : List Msg) (t : Transcript) (m : Msg) (hv : v (as ++ [((P.next x hist ω).eval H).1]) = .ret (.msg m)) :
     stepWith H P x ω v (n + 1) hist as t =
@@ -67,16 +45,12 @@ theorem stepWith_msg (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Ou
           t.out⟩ := by
   simp only [stepWith, hv, OC.eval, List.append_nil]
 
-/-- **A round refused with no `H` call** appends the prover's message and the refusal, and ends the run. -/
 theorem stepWith_rej (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (n : ℕ) (hist : List (Msg × Msg))
     (as : List Msg) (t : Transcript) (hv : v (as ++ [((P.next x hist ω).eval H).1]) = .ret .rej) :
     stepWith H P x ω v (n + 1) hist as t =
       ⟨t.msgs ++ [(((P.next x hist ω).eval H).1, .rej)], t.pLog ++ ((P.next x hist ω).eval H).2, t.vLog, .rej⟩ := by
   simp only [stepWith, hv, OC.eval, List.append_nil]
 
-/-- **The rounds after a prefix**: rounds against `v`, which at the prefix's messages `as₀` followed by `bs` is `v'` at
-`bs`, of a prover that after the prefix's history `hist₀` plays `P'`, are `P'`'s rounds against `v'` after the prefix's
-transcript `m₀` and calls `p₀`, `l₀`. -/
 theorem stepWith_shift (P : Prover Ω) (P' : Prover Ω') (x x' : Msg) (ω : Ω) (ω' : Ω') (v v' : List Msg → OC Out)
     (hist₀ : List (Msg × Msg)) (as₀ : List Msg) (m₀ : List (Msg × Out)) (p₀ l₀ : List (Msg × Msg))
     (hP : ∀ hist, P.next x (hist₀ ++ hist) ω = P'.next x' hist ω')
@@ -104,8 +78,6 @@ theorem stepWith_shift (P : Prover Ω) (P' : Prover Ω') (x x' : Msg) (ω : Ω) 
     | acc => simp only [List.append_assoc]
     | rej => simp only [List.append_assoc]
 
-/-- **A one-round refusal**: a prover whose first message is `[]`, against a verifier that refuses it with no `H` call,
-shows the refused run `[([], rej)]` in any positive number of rounds. -/
 theorem stepWith_refused (x : Msg) (v : List Msg → OC Out) (hv : v [[]] = .ret .rej) (n : ℕ) (hn : 0 < n) :
     stepWith H (⟨fun _ _ _ => .ret []⟩ : Prover Unit) x () v n [] [] ⟨[], [], [], .rej⟩ =
       ⟨[([], .rej)], [], [], .rej⟩ := by
@@ -115,7 +87,6 @@ theorem stepWith_refused (x : Msg) (v : List Msg → OC Out) (hv : v [[]] = .ret
 end Rounds
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **Coins that agree below `n`** are the same coins at up to `n` messages. -/
 theorem coins_eq {k n m : ℕ} {r r' : Fin k → Coin} (h : ∀ t : Fin k, t.val < n → r' t = r t) (hm : m ≤ n) :
     (List.range m).map (coinSeq r') = (List.range m).map (coinSeq r) := by
   apply List.map_congr_left
@@ -130,7 +101,6 @@ namespace SessionSteps
 
 variable {D : Deploy Coin Col T} (S : SessionSteps D)
 
-/-- **The rounds after the prefix**, as the rounds of a Flock run with `kS x` of them. -/
 def emb (x : Msg) {k : ℕ} (hk : k = S.kS x) (i : Fin k) : Fin (D.V.k x) :=
   ⟨S.pre x + i.val, by have := i.isLt; have := S.k_eq x; omega⟩
 
@@ -139,7 +109,6 @@ theorem emb_strictMono (x : Msg) {k : ℕ} (hk : k = S.kS x) : StrictMono (S.emb
   fun _ _ hij => Nat.add_lt_add_left hij _
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-/-- **A unit's session rounds are the rounds after the prefix**, each Flock round's once. -/
 theorem mem_rounds_iff (x : Msg) (u : ℕ) {k : ℕ} (hk : k = S.kS x) (t : Fin (D.V.k x)) :
     t ∈ D.rounds x u ↔ ∃ i, S.emb x hk i = t := by
   rw [S.rounds_iff]
@@ -152,10 +121,6 @@ theorem mem_rounds_iff (x : Msg) (u : ℕ) {k : ℕ} (hk : k = S.kS x) (t : Fin 
     exact Nat.le_add_right _ _
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
-/-- **The prefix's rounds**: from a transcript `ms` of answered rounds of the prefix, `j` more rounds either answer every
-prefix round, reaching a transcript `ms'` of all of it whose last round the verifier answers with a message at `r`, or
-refuse one, ending the run; and both, with the transcript and the prover's calls, are the same at every coins `r'` that
-agree with `r` below the prefix. -/
 theorem run_prefix (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (j : ℕ) :
     ∀ (ms : List (Msg × Out)) (ps : List (Msg × Msg)), ms.length + j = S.pre x → (∀ e ∈ ms, ∃ m, e.2 = .msg m) →
       (ms ≠ [] → ∃ m, D.V.next x (ms.map Prod.fst) ((List.range ms.length).map (coinSeq r)) = .ret (.msg m)) →
@@ -233,10 +198,6 @@ theorem run_prefix (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (ω :
 end SessionSteps
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
-/-- **`SessionRuns` from the step structure**: at coins that check a unit, its session is Flock's run on the rounds after
-the prefix, of the prover that plays the sampled prover's messages after the prefix's transcript (or, where the prefix
-refused, of a prover whose first message Flock refuses at `xR x`), and it decides the run, is the session the run shows,
-and makes only `H` calls the run makes. -/
 theorem sessionRuns_of_steps {D : Deploy Coin Col T} (S : SessionSteps D) (H : Msg → Msg) : SessionRuns H D := by
   intro x Ω P ω r u _
   have hrun : ∀ r' : Fin (D.V.k x) → Coin, run H P D.V x ω r' =

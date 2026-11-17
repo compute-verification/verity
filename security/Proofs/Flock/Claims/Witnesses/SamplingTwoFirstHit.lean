@@ -5,24 +5,7 @@ public import Proofs.Flock.SamplingGeneric.TwoFirstHitKS
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.ZK.NonVacuous
 
-/-!
-# The two-stage committed form at the first-hit error says something
-
-`CompiledTwo.KSFirstHitTwoX` fails at `sksLTwo` (`Witnesses.SamplingTwo`: `sksL`, which accepts after one round,
-samples nothing and opens nothing, with the two-stage design `toyTwo`), its silent prover and any hash, at the costs
-`c_R = c_F = 0` (`compiledTwoKSFirstHitX_fails`): the three bounds it takes hold there, and what it concludes,
-`CompiledTwo.FirstHitTwoXAt`, fails there (`compiledTwoFirstHitXAt_fails`). At coins `Bool` and SHA-512
-(`FlockDeploy.sha512`) the second is the nontrivial lemma of `Flock.SecurityProofs.SpotFirstHitTwo`
-(`compilerFirstHitTwoXAt_nontrivial`).
-
-* The form's three bounds hold at the costs `0`: `sksLTwo` has no sessions, so `B_conf,X` finds nothing (`bconfX_pr`);
-  its extractions open nothing under the statement's roots (`sksL_opensAt`) or under a replay block's interior roots
-  (`sksLTwo_iopensAt`), so no run is off the boundary trace or off a committed interior (`sksLTwo_offRegX`,
-  `sksLTwo_offIreg`).
-* Its error at the costs `0` is `0` (`sksLTwo_εfirstTwoX`): `κ_s = 0` and `Pr[B] = 0`.
-* It accepts always, while `P̄_a` at the footprint of its boundary trace read at the statement is `0` at every
-  interior, so the headline at the bound `0` would bound `1` by `0`.
--/
+/-! The two-stage committed form at the first-hit error says something: it fails at `sksLTwo`. -/
 
 @[expose] public section
 
@@ -32,7 +15,6 @@ open Claims.SamplingGeneric
 open Claims.Sampling (footprintAt)
 open Claims.Witness.Sampling (toyStmt toyPart rejCm)
 
-/-- `sksLTwo`'s extractions open nothing under a replay block's interior roots: its commitment opens nothing. -/
 theorem sksLTwo_iopensAt {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) {Ω : Type}
     (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin ((sksLTwo Coin).V.k x) → Coin) (c : (sksLTwo Coin).SlotEC x)
     (ρ g : ℕ) : (sksLTwo Coin).iopensAt H P x ω r c ρ g = none := by
@@ -41,7 +23,6 @@ theorem sksLTwo_iopensAt {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
   simp only [CompiledTwo.iopensAt, hp]
   simp [Claims.Sampling.CommitmentScheme.Opens, hc, rejCm, OC.eval]
 
-/-- No run of `sksLTwo` is off the boundary trace read at the statement: its extractions open nothing. -/
 theorem sksLTwo_offRegX {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) {Ω : Type}
     [Fintype Ω] (P : Prover Ω) (x : Msg) :
     Pr (fun q : Ω × ((Fin ((sksLTwo Coin).V.k x) → Coin) × (sksLTwo Coin).SlotEC x) =>
@@ -51,8 +32,6 @@ theorem sksLTwo_offRegX {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited 
       obtain ⟨_, g, _, b, hb, _⟩ := hq
       exact Option.some_ne_none b (hb.symm.trans (sksL_opensAt (Coin := Coin) H P x q.1 q.2.1 q.2.2 g))) Pr_false
 
-/-- No run of `sksLTwo` is off a committed interior: its extractions open nothing under a replay block's interior
-roots. -/
 theorem sksLTwo_offIreg {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) {Ω : Type}
     [Fintype Ω] (P : Prover Ω) (x : Msg) (Pρ : Claims.Sampling.Partition) :
     Pr (fun q : Ω × ((Fin ((sksLTwo Coin).V.k x) → Coin) × (sksLTwo Coin).SlotEC x) =>
@@ -62,7 +41,6 @@ theorem sksLTwo_offIreg {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited 
       obtain ⟨_, g, _, ρ, _, b, hb, _⟩ := hq
       exact Option.some_ne_none b (hb.symm.trans (sksLTwo_iopensAt H P x q.1 q.2.1 q.2.2 ρ g))) Pr_false
 
-/-- `sksLTwo`'s first-hit error at the costs `0` is `0`. -/
 theorem sksLTwo_εfirstTwoX {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (x : Msg) :
     (sksLTwo Coin).εfirstTwoX H x silentP 0 0 = 0 := by
   have hκ : (sksLTwo Coin).κs x = 0 := sksL_κs (Coin := Coin) x
@@ -103,8 +81,6 @@ theorem compiledTwoKSFirstHitX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin
     (h [] toyStmt toyPart toyTwo (sksLTwo_scope []) rfl rfl rfl Unit silentP 0 0 hR hB hN)
 
 end Claims.Witness.SamplingGeneric
-
-/-! ## Stated over the spec -/
 
 namespace Claims.SamplingGeneric
 

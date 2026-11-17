@@ -3,21 +3,7 @@ module
 public import Proofs.Flock.Claims.Witnesses.Encodings
 public import Proofs.Flock.Claims.Deploy
 
-/-!
-# The registered encodings' statements say something
-
-Each closed binding statement of the registered encodings (`ByPosBinds`, `CodeBinds`, `LinkBinds`, `RelinkR`) is a
-guarantee that the lock's `claims.generic` names, held to two witnesses (the lock's `witnesses`): an honest one, whose
-conclusion is its premises holding together at one instance, and a nontrivial one, at which its conclusion fails. Each
-is at the hash SHA-512 (`FlockDeploy.sha512`) and the toys of `Witnesses.Encodings`.
-
-* Honest: the repetition code `repCode` meets the code's premises (`codeBinds_honest`); its scheme and the record
-  `trueCm` bind (`byPosBinds_honest`), one pair links them at position `0` (`linkBinds_honest`), and the toy trace is
-  in the sampling relation under their sum (`relinkR_honest`).
-* Nontrivial: the sum of two commitments whose openings all pass (`byPosBinds_nontrivial`), a code with no columns
-  (`codeBinds_nontrivial`), openings that make no call (`linkBinds_nontrivial`), and a record that rejects every
-  opening (`relinkR_nontrivial`).
--/
+/-! The registered encodings' binding statements say something: an honest and a nontrivial witness each, at SHA-512 and the toys of `Witnesses.Encodings`. -/
 
 @[expose] public section
 

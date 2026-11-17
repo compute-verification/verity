@@ -35,36 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Sampling's zero knowledge by sequential composition
-
-The masked sampled run is a first part whose messages the framing fixes (the registration and the sample), then `M`
-sessions back to back, each a complete run of one session protocol (Flock's masked record: its own `Hello`, coin tree
-and coins) at the statement the router puts it under, on a tape of its own. Its zero knowledge is the sessions' by
-sequential composition (`zkmalAt_layout` at `c = 0`): the first part costs nothing, since the router fixes its
-messages from `(x, hist)` (`zkmalAt_public`), and `M` sessions cost `Σ_{j < M} eB j` and `M·g`.
-
-* `StepZ`, `Framing`: the router, by slot (`StepZ.session j xS hS`), and the code's reads and witness encoding, with the
-  parts' rounds (`k₀`, `n`). `Framing.prover` is the masked sampled reference prover: `Reference.refP` with each
-  session the given session prover on slot `j`'s tape, so two sessions under one statement have independent tapes.
-* `Framing.Routed`: the router puts each round in its part, and each session under the statement of its first
-  history. `Framing.prover_flat`: then the prover sends the composed prover's messages and makes at least its calls
-  (`Framing.honestSeq`, `HonestSeq`).
-* `Framing.SessionWit`: with no incorrect proof block, the openings a session reveals make a witness in the session's relation,
-  at every history that starts it. `Seq.RelOnAt` is then a theorem (`Framing.relOnAt`), from `Rhon` and the reveal's
-  facts (`Reference.found_opens`, `found_val`, `found_covers`).
-* `Framing.Shaped`: at every history that starts session `j`, the session protocol's rounds are the slot's, its
-  simulator's coins are `CB j x` up to a bijection, and its errors are at most `eB j` and `g`.
-* **`Framing.zkAt`**: `ZKmalAt` at one statement, on the nested tape read flat; `Framing.zkmalR` at a constant number
-  of sessions `M` (the deployed code's `sessions = 1` is `M = 1`), and `Framing.zkmalRx` at `M x` sessions on
-  statement-indexed tapes.
-* **`SamplingDeploy.zk_seq`**: `Claims.Sampling.ZK` at the masked record `deployZ` (the deployed record with its
-  reference prover `Framing.prover` at the session prover `DF.prover` of a masked Flock record `DF`), from
-  `Claims.Flock.ZK H DF εF γF`, at `ε = Σ_{j < M} eB j` and `γ = M·g`.
-
-The simulator is given the published leaf layer and doesn't read it: what the prover sends outside the sessions is a
-function of `(x, hist)`.
--/
+/-! Sampling's zero knowledge at the masked record, by sequential composition of its sessions. -/
 
 @[expose] public section
 
@@ -72,25 +43,18 @@ namespace Claims.Sampling
 
 open Claims Claims.ZKMal
 
-/-- **Where a masked run is, for the reference prover**, at a history: slot `j`'s session under the statement `xS` at
-its own history `hS`, or a message the run's framing fixes outside the sessions. -/
 inductive StepZ where
   | session (j : ℕ) (xS : Msg) (hS : List (Msg × Msg))
   | say (m : Msg)
 
-/-- The session's statement; `[]` outside the sessions. -/
 def StepZ.stmt : StepZ → Msg
   | .session _ xS _ => xS
   | .say _ => []
 
-/-- What the framing says; `[]` in a session. -/
 def StepZ.said : StepZ → Msg
   | .session .. => []
   | .say m => m
 
-/-- **The masked sampled prover's framing**: the code's parser, partition evaluation, trace commitment, reads and
-witness encoding (`Reference.refP`'s); the router by slot (`step`); and the parts' rounds: `k₀ x` before the sessions,
-`n x j` in session `j`. -/
 structure Framing where
   parse : Msg → Option AuditStatement
   partition : AuditStatement → Option Partition
@@ -108,9 +72,6 @@ namespace Framing
 
 variable (F : Framing)
 
-/-- **The masked sampled reference prover** at the witness `w`, with the session prover `PS`: what the framing fixes
-outside the sessions; in slot `j`'s session under `xS`, `PS` at the session's history, on the Flock witness of what
-it reveals and slot `j`'s tape. -/
 def prover {TS : Type} (PS : Claims.Flock.Wit → Prover TS) (w : Wit) : Prover (ℕ → TS) :=
   ⟨fun x hist ω =>
     match F.step x hist with
@@ -121,54 +82,38 @@ def prover {TS : Type} (PS : Claims.Flock.Wit → Prover TS) (w : Wit) : Prover 
           (PS (F.wit s xS os)).next xS hS (ω j)
       | none => .ret []⟩
 
-/-- **The framing's parts**: the first part, then session `j` at the statement the router puts its first history
-under; no witness. -/
 def parts : Layout Wit Claims.Flock.Wit (Unit × Unit) where
   k₀ := F.k₀
   n := F.n
   xs x _ h := (F.step x h).stmt
   ws _ _ _ _ _ := ⟨[]⟩
 
-/-- **A session's witness**: the Flock witness of what it reveals of `w` at its statement's reads, against `H`. -/
 def wsOf (H : Msg → Msg) (w : Wit) (x : Msg) (h : List (Msg × Msg)) : Claims.Flock.Wit :=
   match F.parse x with
   | some s => F.wit s (F.step x h).stmt (Reference.found H F.commit s.roots w (F.reads s (F.step x h).stmt))
   | none => ⟨[]⟩
 
-/-- The parts with each session's witness. -/
 def lay (H : Msg → Msg) : Layout Wit Claims.Flock.Wit (Unit × Unit) :=
   { F.parts with ws := fun _ w _ x h => F.wsOf H w x h }
 
 theorem lay_start (H : Msg → Msg) : (F.lay H).start = F.parts.start := Layout.start_congr rfl rfl
 
-/-- The first part's prover: what the framing says. -/
 def sayP : Wit → Prover (Unit × Unit) := fun _ => ⟨fun x hist _ => .ret (F.step x hist).said⟩
 
-/-- The first part's simulator: it runs the framing. -/
 def sim₀ : Simulator where
   C _ := Unit
   prog x _ := spRun (fun h => .ret (F.step x h).said) (F.k₀ x) []
 
-/-- **The composed simulator** of `M` sessions after the first part: the framing, then each session's simulator
-`SF` at the statement its simulated history routes to, on coins `CB j x`. -/
 noncomputable def sim (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (SF : Simulator)
     (CB : ℕ → Msg → Type) [∀ j x, Fintype (CB j x)] [∀ j x, Nonempty (CB j x)] (M : ℕ) : Simulator :=
   iterSimG unitTape 0 NB ΩB (Layout.seq unitTape 0 NB ΩB F.parts) F.sim₀ CB
     (fun j x u => progOf SF (CB j x) (F.step x u).stmt) (fun j x => goesOn (F.parts.start x j)) M
 
-/-- **The router puts each round in its part** at `x`, for `M` sessions: within the first part it says what the
-framing fixes, and within session `j < M` it is in slot `j`'s session under the statement of the session's first
-history, at the session's own history. -/
 def Routed (M : ℕ) (x : Msg) : Prop :=
   (∀ hist : List (Msg × Msg), hist.length < F.k₀ x → ∃ m, F.step x hist = .say m) ∧
     ∀ j < M, ∀ hist : List (Msg × Msg), F.parts.start x j ≤ hist.length → hist.length < F.parts.start x (j + 1) →
       F.step x hist = .session j (F.step x (hist.take (F.parts.start x j))).stmt (hist.drop (F.parts.start x j))
 
-/-- **An honest unit's openings make a witness in its session's relation** `RF` at `x`: with no incorrect proof block, at every
-history that starts session `j < M`, openings that pass the commitment's check under the roots, are the committed
-values `Wit.val` reads, and cover every position the session reads under its statement that has a committed value,
-encode (`wit`) a witness in the statement's relation. `SessionWit`'s form at the masked router, at every history
-rather than the runs of the public-coin verifier, and on the claim's relation `Rhon`, which reads no scope. -/
 def SessionWit (H : Msg → Msg) (RF : Rel Claims.Flock.Wit) (M : ℕ) (x : Msg) : Prop :=
   ∀ s Pt w, F.parse x = some s → F.partition s = some Pt → faulty H F.commit s Pt w = ∅ →
     ∀ j < M, ∀ u : List (Msg × Msg), u.length = F.parts.start x j →
@@ -177,17 +122,12 @@ def SessionWit (H : Msg → Msg) (RF : Rel Claims.Flock.Wit) (M : ℕ) (x : Msg)
         (∀ g ∈ F.reads s (F.step x u).stmt, ∀ b, w.val H F.commit s g = some b → ∃ o ∈ os, o.pos = g) →
           RF (F.step x u).stmt (F.wit s (F.step x u).stmt os)
 
-/-- **The sessions at `x` are of one shape**: at every history that starts session `j < M`, the session protocol's
-rounds (`kF`) are the slot's, its simulator's coins are `CB j x` up to a bijection, and its errors are at most `eB j`
-and `g`. -/
 def Shaped (kF : Msg → ℕ) (SF : Simulator) (εF γF : Msg → ℝ) (CB : ℕ → Msg → Type) (eB : ℕ → ℝ) (g : ℝ) (M : ℕ)
     (x : Msg) : Prop :=
   ∀ j < M, ∀ u : List (Msg × Msg), u.length = F.parts.start x j →
     kF (F.step x u).stmt = F.n x j ∧ Nonempty (CB j x ≃ SF.C (F.step x u).stmt) ∧ εF (F.step x u).stmt ≤ eB j ∧
       γF (F.step x u).stmt ≤ g
 
-/-- **The prover sends the composed prover's messages**, and makes at least its calls, at every history within `M`
-sessions, on the flat tape: the first part's prover, then session `j` at the history before it. -/
 theorem prover_flat (H : Msg → Msg) {TS : Type} (PS : Claims.Flock.Wit → Prover TS) (M : ℕ) {x : Msg} {s : AuditStatement}
     (hs : F.parse x = some s) (hr : F.Routed M x) (w : Wit) (hist : List (Msg × Msg))
     (ω : (Unit × Unit) × (ℕ → TS)) (hh : hist.length < F.parts.start x M) :
@@ -206,8 +146,6 @@ theorem prover_flat (H : Msg → Msg) {TS : Type} (PS : Claims.Flock.Wit → Pro
     simp only [prover, hst, hs, Claims.Sampling.ocBind_eval, Reference.revealOC_eval, lay, wsOf, parts, true_and]
     exact List.subset_append_right _ _
 
-/-- **`HonestSeq`**: the prover on the flat tape `flatten` reads sends the nested composed prover's messages
-(`iterProver` at the parts, the composition `zkmalAt_iterG` reads), and makes at least its calls. -/
 theorem honestSeq (H : Msg → Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (PS : Claims.Flock.Wit → Prover (NB × ΩB)) (M : ℕ) {x : Msg} {s : AuditStatement} (hs : F.parse x = some s)
     (hr : F.Routed M x) (w : Wit) (hist : List (Msg × Msg)) (t : unitTape.at 0 NB ΩB M)
@@ -220,8 +158,6 @@ theorem honestSeq (H : Msg → Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [
   rw [Layout.iterProver_flat unitTape 0 NB ΩB (F.lay H) F.sayP PS M w x hist t]
   exact F.prover_flat H PS M hs hr w hist _ hh
 
-/-- **`Seq.RelOnAt` from `Rhon`**: where no unit is faulty, each session's witness is in its relation at every history
-that starts it, so at every unit an honest run selects. -/
 theorem relOnAt (H : Msg → Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (RF : Rel Claims.Flock.Wit) (M : ℕ) (x : Msg) (RA : Rel Wit)
     (hRA : ∀ w, RA x w → Rhon H F.commit F.parse F.partition x w) (hw : F.SessionWit H RF M x) {j : ℕ} (hj : j < M)
@@ -235,11 +171,6 @@ theorem relOnAt (H : Msg → Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fi
   exact hw s Pt w hs hPt hf j hj u hu _ (fun o ho => ⟨Reference.found_opens ho, Reference.found_val ho⟩)
     fun g hg b hb => Reference.found_covers hg hb
 
-/-- **Sampling's zero knowledge at one statement, by sequential composition**: at `x`, where the router puts each
-round in its part (`Routed`), honest openings make session witnesses in `RF` (`SessionWit`), the session protocol
-`PS` is `ZKmalR` at `SF` with `εF` and `γF` on `RF`, and the sessions are of one shape (`Shaped`), the masked prover
-on the flat tape is `ZKmalAt` at the composed simulator, with `Σ_{j < M} eB j` and `M·g`, on any relation within
-`Rhon`, at `k`, the parts' rounds. -/
 theorem zkAt (H : Msg → Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (PS : Claims.Flock.Wit → Prover (NB × ΩB)) (RF : Rel Claims.Flock.Wit) (SF : Simulator) (kF : Msg → ℕ)
     (εF γF : Msg → ℝ) (hF : ZKmalR H kF PS RF SF εF γF) (M : ℕ) (x : Msg) (k : ℕ)
@@ -275,7 +206,6 @@ theorem zkAt (H : Msg → Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Finty
   · obtain ⟨s, -, hs, -⟩ := hRA w hwA
     exact (F.prover_flat H PS M hs (hr ⟨w, hwA⟩) w hist _ hh).2
 
-/-- **`Framing.zkAt` at every statement**, for a constant number of sessions `M`: `ZKmalR` on one tape type. -/
 theorem zkmalR (H : Msg → Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (PS : Claims.Flock.Wit → Prover (NB × ΩB)) (RF : Rel Claims.Flock.Wit) (SF : Simulator) (kF : Msg → ℕ)
     (εF γF : Msg → ℝ) (hF : ZKmalR H kF PS RF SF εF γF) (M : ℕ) (RA : Rel Wit)
@@ -290,14 +220,11 @@ theorem zkmalR (H : Msg → Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fin
     F.zkAt H PS RF SF kF εF γF hF M x _ rfl RA (hRA x) (hr x) (hw x) CB (fun j => eB j x) (g x) (hsh x)
       (fun j _ => he0 j x) (hg x)
 
-/-- The composed simulator of `M x` sessions at each `x`. -/
 noncomputable def simX (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (SF : Simulator)
     (CB : ℕ → Msg → Type) [∀ j x, Fintype (CB j x)] [∀ j x, Nonempty (CB j x)] (M : Msg → ℕ) : Simulator where
   C x := (F.sim NB ΩB SF CB (M x)).C x
   prog x := (F.sim NB ΩB SF CB (M x)).prog x
 
-/-- **`Framing.zkAt` on statement-indexed tapes**: `M x` sessions at each `x`, each statement's prover on the tape of
-its own sessions (`ZKmalRx`). -/
 theorem zkmalRx (H : Msg → Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (PS : Claims.Flock.Wit → Prover (NB × ΩB)) (RF : Rel Claims.Flock.Wit) (SF : Simulator) (kF : Msg → ℕ)
     (εF γF : Msg → ℝ) (hF : ZKmalR H kF PS RF SF εF γF) (M : Msg → ℕ) (RA : Rel Wit)
@@ -321,15 +248,11 @@ namespace SamplingDeploy
 
 open Claims Claims.Sampling Claims.ZKMal
 
-/-- **The code's masked framing** at a router by slot `step` and the parts' rounds `k₀`, `n`: the code's parser,
-partition evaluation, trace commitment, reads and witness encoding. -/
 def framing (c : Code) (step : Msg → List (Msg × Msg) → StepZ) (k₀ : Msg → ℕ) (n : Msg → ℕ → ℕ) : Framing :=
   ⟨c.parse, c.partition, commit c, c.reads, c.wit, step, k₀, n⟩
 
-/-- **The masked deployed record**: the deployed record with its reference prover the masked one (`Framing.prover`),
-each session the masked Flock record `DF`'s reference prover (`DF.prover`, its `Hello` first) on slot `j`'s tape. The
-verifier is the code's, so its rounds must count each session's `Hello` (`zk_seq`'s `hV`). The other fields are
-`deploy rel c`'s; completeness at this record is not claimed here. -/
+/-- The verifier is the code's, so its rounds must count each session's `Hello` (`zk_seq`'s `hV`); completeness at this
+record is not claimed here. -/
 noncomputable def deployZ (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : Code)
     (step : Msg → List (Msg × Msg) → StepZ) (k₀ : Msg → ℕ) (n : Msg → ℕ → ℕ) {CoinF ColF TF : Type}
     (DF : Claims.Flock.ZkDeploy CoinF ColF TF) :
@@ -339,21 +262,16 @@ noncomputable def deployZ (rel : _root_.Flock.Readable.Parsed → _root_.Flock.R
     tapeNonempty := inferInstance
     P := (framing c step k₀ n).prover DF.prover }
 
-/-- **The masked record's tape** at `M` sessions: the nested tape of `zkmalAt_iterG`, read as one tape per slot. -/
 noncomputable def tapeZ (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (M : ℕ) :
     unitTape.at 0 NB ΩB M → ℕ → NB × ΩB :=
   fun t => (Layout.flatten unitTape 0 NB ΩB M t).2
 
-/-- **The masked record's simulator** at `M` sessions, given the leaf layer, which it doesn't read. -/
 noncomputable def simLeakZ (F : Framing) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (SF : Simulator) (CB : ℕ → Msg → Type) [∀ j x, Fintype (CB j x)] [∀ j x, Nonempty (CB j x)] (M : ℕ) :
     SimLeak where
   C x := (F.sim NB ΩB SF CB M).C x
   prog x _ c := (F.sim NB ΩB SF CB M).prog x c
 
-/-- **`HonestSeq` at the masked deployed record**: at a statement that parses where the router puts each round in its
-part, the record's reference prover on the masked tape sends the composed prover's messages and makes at least its
-calls, at every history within its rounds. -/
 theorem deployZ_honestSeq (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (c : Code) (step : Msg → List (Msg × Msg) → StepZ) (k₀ : Msg → ℕ) (n : Msg → ℕ → ℕ) (M : ℕ)
     {CoinF ColF TF : Type} (DF : Claims.Flock.ZkDeploy CoinF ColF TF) {x : Msg} {s : AuditStatement}
@@ -368,11 +286,6 @@ theorem deployZ_honestSeq (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed 
         ((((deployZ rel c step k₀ n DF).P w).next x hist (tapeZ DF.Nonce DF.Rest M t)).eval H).2 :=
   (framing c step k₀ n).honestSeq H DF.prover M hs hr w hist t (hV ▸ hh)
 
-/-- **Sampling's zero knowledge by sequential composition**, at the masked deployed record: `Claims.Sampling.ZK` of
-`deployZ`'s reference prover on `tapeZ`'s tape at the composed simulator, with `ε = Σ_{j < M} eB j` and `γ = M·g`,
-from Flock's zero knowledge at the masked record `DF` its sessions run (`hF`). What remains, at each statement that
-parses: the verifier's rounds are the parts' (`hV`), the router puts each round in its part (`hr`), honest openings
-make witnesses in Flock's relation (`hw`), and the sessions are of one shape (`hsh`). -/
 theorem zk_seq (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : Code)
     (step : Msg → List (Msg × Msg) → StepZ) (k₀ : Msg → ℕ) (n : Msg → ℕ → ℕ) (M : ℕ) {CoinF ColF TF : Type}
     (DF : Claims.Flock.ZkDeploy CoinF ColF TF) (εF γF : Msg → ℝ) (hF : Claims.Flock.ZK H DF εF γF)

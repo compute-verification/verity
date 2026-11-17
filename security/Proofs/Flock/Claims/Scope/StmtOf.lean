@@ -41,13 +41,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# Each table the verifier parses is `stmtOf`'s
-
-`tableAt_model`: each table the verifier parses (untyped, without public input ports) is well formed (`StmtWF`,
-`RegionsWF`), and its table's matrices (`placedA`, `placedB`, what `Tab.toModel` reads) are `stmtOf`'s (`matA`, `matB`;
-`placedA_eq`, on the public-output path and the hidden one).
--/
+/-! Each table the verifier parses is `stmtOf`'s. -/
 
 @[expose] public section
 
@@ -55,7 +49,6 @@ namespace Flock.Readable
 
 open FlockSoundness FlockSoundness.Discharge Exec
 
-/-- **Each table the verifier parses is `stmtOf`'s**: well formed, and its matrices are `stmtOf`'s. -/
 theorem tableAt_model {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : r.tags.typed = false)
     (hpi : r.publicInputs = none) {j : ℕ} (hj : j < sts.size) :
     Refine.StmtWF sts[j] ∧ Refine.RegionsWF sts[j] ∧

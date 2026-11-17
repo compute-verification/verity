@@ -5,20 +5,7 @@ public import Proofs.Flock.SamplingGeneric.TwoOneWaitKS
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.ZK.NonVacuous
 
-/-!
-# The two-stage committed form at the one-wait extraction's boundary trace says something
-
-What `CompiledTwo.OneWaitTwoXAt` concludes fails at `sksLTwo` (`Witnesses.SamplingTwo`: `sksL`, which accepts after
-one round, samples nothing and opens nothing, with the two-stage design `toyTwo`), its silent prover and any hash, at
-the error `0` (`compiledTwoOneWaitXAt_fails`). At coins `Bool` and SHA-512 (`FlockDeploy.sha512`) that is the
-nontrivial lemma of `Flock.SecurityProofs.SpotOneWaitTwo` (`compilerOneWaitTwoXAt_nontrivial`).
-
-* The one-wait compiled verifier's extractions open nothing under the statement's roots, as `sksL`'s open nothing:
-  its commitment opens nothing, whatever the extractor (`sksL_oneWait_opensAt`). So its boundary trace read at the
-  statement opens nothing (`sksL_oneWait_regValX`).
-* It accepts always, while `P̄_a` at the footprint of that trace is `0` at every interior, so the headline at the
-  bound `0` and the error `0` would bound `1` by `0`.
--/
+/-! The two-stage committed form at the one-wait extraction's boundary trace says something: it fails at `sksLTwo`. -/
 
 @[expose] public section
 
@@ -28,8 +15,6 @@ open Claims.SamplingGeneric
 open Claims.Sampling (footprintAt)
 open Claims.Witness.Sampling (toyStmt toyPart rejCm)
 
-/-- The one-wait compiled verifier over `sksL` opens nothing under the statement's roots: its commitment opens
-nothing. -/
 theorem sksL_oneWait_opensAt {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
     {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin ((sksL Coin).oneWait.V.k x) → Coin)
     (c : (sksL Coin).oneWait.SlotEC x) (g : ℕ) : (sksL Coin).oneWait.opensAt H P x ω r c g = none := by
@@ -38,7 +23,6 @@ theorem sksL_oneWait_opensAt {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhab
   simp only [Compiled.opensAt, hp]
   simp [Claims.Sampling.Wit.val, Claims.Sampling.CommitmentScheme.Opens, hc, rejCm, OC.eval]
 
-/-- The one-wait compiled verifier over `sksL` has a boundary trace read at the statement that opens nothing. -/
 theorem sksL_oneWait_regValX {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
     {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) (g : ℕ) : (sksL Coin).oneWait.regValX H P x g = none := by
   simp [Compiled.regValX, sksL_oneWait_opensAt, Pr_false]
@@ -60,8 +44,6 @@ theorem compiledTwoOneWaitXAt_fails {Coin : Type} [Fintype Coin] [Nonempty Coin]
   norm_num at h2
 
 end Claims.Witness.SamplingGeneric
-
-/-! ## Stated over the spec -/
 
 namespace Claims.SamplingGeneric
 

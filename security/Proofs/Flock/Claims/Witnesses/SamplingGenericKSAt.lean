@@ -5,17 +5,7 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Witnesses.Sampling
 import Proofs.Flock.Claims.Witnesses.Shared
 
-/-!
-# Refutation witnesses: KS read at a time budget
-
-`Sampling.KSAt` and `Compiled.KSAt` fail at `sksL` (`Witnesses.SamplingGeneric`), which accepts every run while no
-witness is in its relation at `δ = 0`: its `γ` is `0`, so the birthday term vanishes, and at the budget `0` its `B_ext`
-finds nothing at no cost, so the binding term is `0` (`sksL_ecrBound`). The bound is then `κ_0 < 1/3`, below the silent
-prover's `Pr[bad] = 1` (`sksL_ksAt_fails`), at any scope holding `[]` and any relation with no witness there
-(`sksL_ksAt_fails_at`, which `SamplingTwoKSAt` reads). So `CompilerKSAt`'s conclusion fails there
-(`compilerKSAt_nontrivial`); its premises are `CompilerBits`', which hold together at `twoL` (`compilerKS_honest`,
-`compilerBits_honest`).
--/
+/-! Refutation witnesses: KS read at a time budget fails at `sksL`. -/
 
 @[expose] public section
 
@@ -29,8 +19,6 @@ section KSAt
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- At `sksL`'s silent prover, `B_ext` at the budget `0` finds nothing at no cost, so its binding term at the budget `0`
-is `0`. -/
 theorem sksL_ecrBound (H : Msg → Msg) (x : Msg) :
     ecrBound H (Claims.Sampling.BextAt H (sksL Coin).V (sksL Coin).E 0 Unit silentP x) 0 = 0 := by
   have hn : ∀ (ω : Unit) (r₀ : Fin ((sksL Coin).V.k x) → Coin) (c : (sksL Coin).E.C x),
@@ -81,8 +69,6 @@ theorem compiledKSAt_fails (H : Msg → Msg) : ¬ (sksL Coin).KSAt H := fun h =>
 end KSAt
 
 end Claims.Witness.SamplingGeneric
-
-/-! ## Stated over the spec -/
 
 namespace Claims.Sampling
 

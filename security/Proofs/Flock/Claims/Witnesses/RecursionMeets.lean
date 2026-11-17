@@ -38,61 +38,13 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployEfficient
 
-/-!
-# Antecedent witnesses: the ZK-recursion compiler's claims at the deployed record
-
-Each of the recursion's claims (`Definitions.Claims.Recursion`) has its checkable antecedents met at the deployed record,
-beside the toy record it fails at (`Witnesses.Recursion`). The tree has no deployed record of the compiled verifier
-itself: its claims are parametric in it, and what they read of the deployment is the inner Flock (the deployed plain
-verifier, `FlockDeploy.deployPlain`, as the inner session's tags are plain), the outer `--zk` Flock
-(`FlockDeploy.deployZk`), each at its radius decoder, and the readable scope. At every relation the deployed records
-read:
-
-* `KS_meets`, `KSPriv_meets`, `Bits_meets`, `Efficient_meets`: the outer radius decoder meets the list-decoding spec at
-  the deployed `--zk` record (`decOK`, `FlockDeploy.listWithin_zk`), the spec those claims quantify the outer decoder
-  over (`Efficient` is stated at one decoder, this one);
-* `KSFlock_meets`, `BitsFlock_meets`: so do the inner radius decoder at the deployed plain record and the outer one;
-* `KSBound_meets`, `KSPrivBound_meets`: at the deployed bound record (`RecDeploy.bdCover`, `RecDeploy.bdDeployed` at
-  `γ`'s weight `RecDeploy.wCover` at `IVStar`, `coverW` of the trimmed plain record's weight; its element-level
-  Flock is the trimmed plain record `FlockDeploy.deployPlainTrim` with only its verifier's steps, columns and weight
-  replaced), the inner radius decoder meets the spec, and so does the outer one at the deployed `--zk` record;
-* `Inner.KS_meets`, `Inner.KSAbort_meets`: the inner radius decoder meets the spec at the deployed plain record, the
-  inner protocol `Inner.ofFlock` reads there;
-* `KSFlock_meets_trim`, `Inner.KS_meets_trim`, `Inner.KSAbort_meets_trim`: the same at the trimmed records
-  (`FlockDeploy.deployPlainTrim`, `FlockDeploy.deployZkTrim`, `FlockDeploy.listWithin_plainTrim`,
-  `FlockDeploy.listWithin_zkTrim`), where the recursion's KS theorems sit;
-* `ZK_meets`, `ZKPriv_meets`: the deployed outer record is masked;
-* `ZKStop_meets`: the deployed outer record is masked, and the compiled verifier's record with its stop
-  (`RecDeploy.deployRecStop`) is one whose prover `ZKStop` reads is `refPStop` on the tape each statement samples
-  (`RecDeploy.prover_deployRecStop`), which sends the empty message wherever its stop has fired
-  (`RecDeploy.refPStop_halted`), and whose stop fires at the first round on every statement out of scope or whose
-  inner statement the inner verifier can't accept (`RecDeploy.halted_of_statement`), and nowhere before the staging
-  round at an inner-ready statement in scope where every answer is a coin's bytes and none a bad inner coin
-  (`RecDeploy.halted_live`);
-* `ZKStop_meets_ready`: where that leaves the stop live. The inner statement `RecDeploy.PlainLeavesAdmitted` names
-  is in Flock's scope and true, and at every statement in scope carrying it the reference prover runs every
-  round before the staging round where every answer is a coin's bytes and none a bad inner coin
-  (`RecDeploy.ready_of_admitted`); so it does wherever the inner statement's size, its regions and its honest record
-  fit, which in scope are the inner readiness the stop reads (`RecDeploy.ready_inScope_iff`);
-* `ScopeMatches_meets`: the deployed inner Flock's readable scope is its scope check (`FlockDeploy.scopeMatches_plain`),
-  which `Flock.RecScope.scopeMatches_deployed` reads;
-* `Complete_meets`, `Nontrivial_meets`: the readable scope holds a statement of the one kind the compiled verifier
-  accepts, the dense form (candidate 3's inner table: `m = 25`, `k_log = 22`, three regions), with a V* session that
-  samples every unit, and none of the holo or sparse ones it refuses (RecSparse `(18, 13, 6, 0)` and R at `(23, 2)`)
-  (`inScope_kinds`);
-* `Complete_meets_deployed`: the compiled verifier's record (`RecDeploy.deployRec`) states an error below `1` on every
-  statement it can accept (`RecDeploy.readyRec`) whose inner session is one the numbers are stated at
-  (`FlockDeploy.PlainIn`), whose V* statements are of tables at `m ≤ 35`, at most `2^64` of them
-  (`RecDeploy.δcRec_lt_one`).
--/
+/-! Antecedent witnesses: the ZK-recursion compiler's claims at the deployed record; the tree has no deployed record of the compiled verifier itself, so what they read of the deployment is the inner and outer Flock and the readable scope. -/
 
 @[expose] public section
 
 namespace Claims.Witness.Recursion
 
 open Claims Claims.Recursion
-
-/-! ## The readable scope's kinds -/
 
 /-- A V* session's full sample over four units. -/
 def fullSample4 : Recursion.DrawRecord := ⟨some 4, 4, [0, 1, 2, 3], []⟩
@@ -127,14 +79,11 @@ theorem sparseStmt_out (holo : Bool) : ¬ InScope (sparseStmt holo) := by
   simp [sparseStmt] at hs
 
 /-- **The readable scope holds the dense form, and only it**: a dense statement with a V* session that samples every unit
-is in scope, and the holo form and candidate 3's sparse phase, which the compiled verifier refuses
-(`RecSetup.denseOnly`), are not. -/
+is in scope, and the holo and sparse forms, which the compiled verifier refuses (`RecSetup.denseOnly`), are not. -/
 theorem inScope_kinds :
     InScope (denseStmt false) ∧ ¬ InScope (denseStmt true) ∧ ¬ InScope (sparseStmt false) ∧
       ¬ InScope (sparseStmt true) :=
   ⟨denseStmt_inScope, denseStmt_holo_out, sparseStmt_out false, sparseStmt_out true⟩
-
-/-! ## The witnesses -/
 
 /-- `KS`'s antecedent at the deployment: the outer radius decoder meets the list-decoding spec at the deployed `--zk`
 record. -/

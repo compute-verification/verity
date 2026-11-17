@@ -11,19 +11,7 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 import Proofs.Flock.Soundness.ExecSample
 import Proofs.Flock.SamplingGeneric.TwoCode
 
-/-!
-# The second stage's proof blocks by template (`sum_proved_selectSecond_le`)
-
-`size_proved_selectSecond` counts an accepted second stage's proof blocks, `|sample| · Σ_t k_t`, every one alike. A
-weight that differs by template sums over them to at most `|sample| · Σ_t k_t · M_t`, where `M_t` bounds it on template
-`t`'s cells: each cell's stratum samples `k_t` of its units (`subset_size`), each below the stratum's size
-(`subset_spec`), so each in the cell (`stratum_unit`), and the stratified sample returns the strata's samples together
-(`stratifiedWith_sum_le`). At a registration, a unit's proof block is `RegTwo.blockAt`, which on template `t`'s cells
-is a block of template `t` (`RegTwo.blockAt_cell`), so a weight on blocks at most `M_t` on template `t`'s blocks sums
-over the proved units' blocks to at most `|sample| · Σ_t k_t · M_t` (`RegTwo.sum_proved_blockAt_le`), and over the
-checked blocks of an accepted second stage, with a replay sample of at most `K0` blocks, to at most the always-checked
-blocks' weight plus `K0 · Σ_t k_t · M_t` (`RegTwo.sum_checked_le_strata`).
--/
+/-! The second stage's proof blocks by template (`sum_proved_selectSecond_le`). -/
 
 @[expose] public section
 
@@ -34,15 +22,12 @@ namespace Properties.Spot.SecurityProofs
 open Lean (Json)
 open FlockSoundness FlockSoundness.Audit
 
-/-- A stratum's unit weighs at most the largest weight on its units. -/
 theorem le_sup_unit (W : ℕ → ℕ) (s : Flock.Draw.Stratum) {j : ℕ} (hj : j < s.size) :
     W (s.unit j) ≤ (expand s.units.toList).toFinset.sup W := by
   rw [stratum_size'] at hj
   rw [stratum_unit, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj, Option.getD_some]
   exact Finset.le_sup (List.mem_toFinset.2 (List.getElem_mem hj))
 
-/-- **A stratified sample's weights**: the units a run of `stratifiedWith` on `take` returns weigh at most each
-stratum's `k` times the largest weight on its units, summed over the strata. -/
 theorem stratifiedWith_sum_le (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
     (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run p = .ok (some D, p'))
     (W : ℕ → ℕ) :
@@ -117,8 +102,6 @@ theorem stratifiedWith_sum_le (src : ByteArray) (strata : Array Flock.Draw.Strat
     rw [Array.toList_empty, List.map_nil, List.sum_nil, Nat.zero_add]
     exact sum_range'_getElem! strata fun s => s.k * (expand s.units.toList).toFinset.sup W
 
-/-- **A work sampling design's sample by stratum**: `units` weighs at most each stratum's `k` times the largest weight
-on its units, summed over the strata. -/
 theorem workUnits_sum_le {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray}
     {units : Array ℕ} (h : Draw.sampleUnits (.work K ws) n src = .ok (units, read)) (W : ℕ → ℕ) :
     (units.toList.map W).sum ≤ (ws.toList.map fun s => s.k * (expand s.units.toList).toFinset.sup W).sum := by
@@ -158,7 +141,6 @@ theorem filterMap_map_some {α β γ : Type} (xs : Array α) (g : α → β) (f 
   have : (f ∘ g) = fun a => some (k a) := funext hf
   rw [this, Array.filterMap_eq_map' rfl]
 
-/-- A sample object whose `units` are `units`, with no closure, proves those units: a weight sums alike over both. -/
 theorem sum_proved_of_units {draw : Json} {units : Array ℕ} (hu : getD draw "units" = natsJson units)
     (hc : getD draw "closure" = Json.null) (W : ℕ → ℕ) :
     ((Draw.proved draw).toList.map fun j => W j.toNat).sum = (units.toList.map W).sum := by
@@ -169,8 +151,6 @@ theorem sum_proved_of_units {draw : Json} {units : Array ℕ} (hu : getD draw "u
   rw [filterMap_map_some units _ int? (fun a : ℕ => (a : Int)) int_toJson]
   simp [Function.comp_def]
 
-/-- The cells over templates `L`, a weight on each cell's template: each template's, once for each of the `q` sampled
-replay blocks. -/
 theorem sum_cells_fst (q : ℕ) (f : ℕ → ℕ) (L : List ℕ) :
     ((L.flatMap fun t => (List.range q).map fun i => (t, i)).map fun z => f z.1).sum = q * (L.map f).sum := by
   induction L with
@@ -187,8 +167,6 @@ theorem mem_expand_cell {lo hi x : ℕ} (hx : x ∈ expand (#[(lo, hi)] : Array 
   rw [he, List.append_nil, List.mem_range'_1] at hx
   omega
 
-/-- **The second stage's proof blocks by template**: where a weight `W` on units is at most `M t` on template `t`'s
-cells, it sums over an accepted second stage's proved units to at most `|sample| · Σ_t k_t · M t`. -/
 theorem sum_proved_selectSecond_le {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) (W M : ℕ → ℕ)
     (hW : ∀ t i j, t < ns.size → i < sample.size → j < ns.getD t 0 →
@@ -226,9 +204,6 @@ namespace SamplingDeploy
 open Properties.Spot Properties.Spot.SecurityProofs
 open Lean (Json)
 
-/-- **The proved units' blocks by template, at a registration**: a weight `w` on blocks, at most `M t` on template
-`t`'s, sums over the blocks of an accepted second stage's proved units to at most `|sample| · Σ_t k_t · M t`. At the
-replay sample `g.sample src₁` (at most `K` blocks), this is the by-template count `K · Σ_t k_t · M_t`. -/
 theorem RegTwo.sum_proved_blockAt_le (g : RegTwo) (sample : Array ℕ) (src : ByteArray) {draw : Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond sample g.ns g.ks src = .ok (draw, n)) (w M : ℕ → ℕ)
     (hM : ∀ ρ t i, t < g.ns.size → i < g.ns.getD t 0 → w (g.blockOf ρ t i) ≤ M t) :
@@ -248,7 +223,6 @@ theorem sum_toFinset_le (l : List ℕ) (w : ℕ → ℕ) : ∑ v ∈ l.toFinset,
     · rw [Finset.insert_eq_of_mem ha]; omega
     · rw [Finset.sum_insert ha]; omega
 
-/-- The units below `N` that some `j ∈ P` maps to weigh at most the weight summed over `P`'s images. -/
 theorem sum_filter_hit_le (N : ℕ) (P : Array ℤ) (f : ℤ → ℕ) (w : ℕ → ℕ) :
     (((List.range N).filter fun v => P.any fun j => f j == v).map w).sum ≤ (P.toList.map fun j => w (f j)).sum := by
   have hsub : ((List.range N).filter fun v => P.any fun j => f j == v).toFinset ⊆ (P.toList.map f).toFinset := by
@@ -263,9 +237,6 @@ theorem sum_filter_hit_le (N : ℕ) (P : Array ℤ) (f : ℤ → ℕ) (w : ℕ �
   rw [List.map_map] at this
   exact this
 
-/-- **The checked proof blocks by template, at a registration**: on an accepted second stage over a replay sample of
-at most `K0` blocks, a weight `w` on blocks, at most `M t` on template `t`'s, sums over the checked blocks below `N` to
-at most the always-checked blocks' weight plus `K0 · Σ_t k_t · M t`. -/
 theorem RegTwo.sum_checked_le_strata (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (w M : ℕ → ℕ)
     (hM : ∀ ρ t i, t < g.ns.size → i < g.ns.getD t 0 → w (g.blockOf ρ t i) ≤ M t) {K0 : ℕ}

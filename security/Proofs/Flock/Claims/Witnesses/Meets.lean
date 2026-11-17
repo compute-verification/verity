@@ -37,32 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployEfficient
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What the claims ask of a record holds at the deployed ones
-
-The lock's `claims` section names, for each claim, theorems `meets`, one per deployed record, that state the claim's
-checkable antecedents there, so that the claim is not true at the deployment only because nothing meets them. The
-deployed records are Flock's, `deployPlain` and `deployZk` (`DeployCode`). The sampling compiler's claims read a Flock
-record, the sampling record's `flock`, and their antecedents are of that record (the recursion's are `RecursionMeets`):
-
-* `Flock.decoder_meets_plain`, `_zk`: the record's own decoder meets the list-decoding spec at the record's code,
-  length and radius (`decode_plain`, `listWithin_plain`). That is the antecedent of Flock's `KS` and `Bits` (every
-  decoder that meets the spec) and a conjunct of its `Efficient`.
-* `Sampling.decoder_meets_plain`, `_zk`: the same at a sampling record whose `flock` is the deployed record, the
-  list bound the compiled sampled verifier's KS reads there (`SamplingDeploy.ks_compiled`).
-* `Flock.masked_meets_zk`: `deployZk` is the masked verifier, the first conjunct of Flock's `ZK`;
-  `Sampling.masked_meets_zk`: so is the `flock` of a sampling record over it, the first conjunct of the sampling `ZK`.
-* `Flock.scope_meets_plain`, `_zk`: the record's readable scope (`Flock.InScope` at the record's `zk`) holds a statement
-  with a witness in its relation (`RelS`), the readable part of `Complete`'s antecedent (`Scope x`, `R x w`), what
-  `ScopeMatches` equates with the scope check, and what each of `Nontrivial`'s recorded runs is of. That some bytes
-  parse to it is beyond Lean: the verifier's parser reads the circuit file's rows with `HmRow.parse`, which
-  regenerates the `hm96` nets, beyond what the kernel evaluates.
-* `Sampling.scope_meets`: the sampling scope's readable form (`Sampling.InScope`) holds a program, partition and
-  design; it reads no field of the record, of which the tree has no concrete one. It is the readable part of the
-  sampling `Complete`'s antecedent, of what its `ScopeMatches` equates, and of `Nontrivial`'s runs.
-* `Sampling.universal_meets`: some private circuit fits its size class, on inputs of the class's width, the antecedent
-  of `Universal`, which reads no field of the record either.
--/
+/-! What the claims ask of a record holds at the deployed ones; that some bytes parse to the readable scope's statement is beyond Lean, since `HmRow.parse` regenerates the `hm96` nets beyond what the kernel evaluates. -/
 
 @[expose] public section
 
@@ -89,8 +64,6 @@ theorem Flock.decoder_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.R
 theorem Flock.masked_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) : (deployZk rel).zk = true :=
   rfl
 
-/-- **A statement of a record's readable scope**: `2^m` trace bits in blocks of `2^6`, the empty circuit, one table,
-hm96 rows (`rows-v1`) under SHA-512 leaves. -/
 def Flock.scopeStmt (m : ℕ) : Claims.Flock.Stmt :=
   ⟨m, 6, ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩, fun _ _ => .pub 0, fun _ _ => .pub 0, [],
     ⟨true, false, true, "hm96-sha512/v1", 1, false, false, false, false, 1, false, 0, true, true, false, false, false⟩⟩
@@ -113,11 +86,8 @@ theorem Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Rel
     unfold Claims.Flock.InScope
     decide, fun _ _ o => o.elim0⟩
 
-/-- **A statement of the sampling scope**: the one-gate program that returns its input, under `Q_word` v1, with the
-design that checks every unit of its one class. -/
 def Sampling.scopeStmt : Claims.Sampling.AuditStatement := ⟨[], ⟨[.input], [0]⟩, ⟨"Q_word", 1, []⟩, ⟨[.all]⟩, []⟩
 
-/-- Its partition: one class of one stratum of one proof block, `{0}`. -/
 def Sampling.scopePartition : Claims.Sampling.Partition := ⟨[[[[0]]]]⟩
 
 /-- **The sampling scope holds a statement**: its readable form reads no field of the record. -/
