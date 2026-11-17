@@ -58,7 +58,7 @@ from verity_vllm.program.predict.window_class import PearlTables, WindowClass
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import ROW_ALIGN
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 
-#: the scheme the remote demo's Pearl+ serves under, on the H200
+#: the scheme the remote application's Pearl+ serves under, on the H200
 SCHEME = "pearl-c-h100-v1-h3"
 PEARL = PearlTables(SCHEME, words=16)
 #: each position's cut linears' K and N, calls 0 to 7 in node order: each layer's q/k/v, o, gate/up and down
