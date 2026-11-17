@@ -26,7 +26,7 @@ if on pin && [[ $REPO == verity-int8/* ]] && { [ -n "${STEPS:-}" ] || [ ! -f "$H
     || { log "pin: NOT made: $(tail -n 1 "$OUT/pin.log" | cut -c1-300)"; exit 3; }
   touch "$HF_HOME/.made"; log "pin: made, every file's sha256 the manifest's"
 fi
-. adapters/vllm/tools/served_run/pin_link.sh || exit 2
+. adapters/vllm/tools/served_run/workload_env.sh || exit 2
 if on taps && { [ -n "${STEPS:-}" ] || [ ! -s "$HIDDEN_SO" ] || [ ! -s "$NORM_TAP_SO" ]; }; then
   S=$R/taps-staged
   rm -rf "$S/exactness" && mkdir -p "$S"
