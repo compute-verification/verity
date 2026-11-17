@@ -4641,8 +4641,9 @@ def main(argv: list[str]) -> int:
                          "(`git revert -m 1`, pushed as the loop lands) and holds the ready PRs that meet it too, and with no "
                          "such PR reverts none and sends plain candidates through the whole check until `main`'s passes, "
                          "ringing ci either way. While it is on, `main` holds a plain candidate's commits before their whole "
-                         "check has run; every other candidate (Lean, a lock, a move, the check or the landing code itself) "
-                         "takes the whole check before it lands")
+                         "check has run, the check's and the landing's own code among them where `verdict_plain` lists it; "
+                         "every other candidate (Lean, a lock, a move, a verifier or another path those lists keep it off "
+                         "for) takes the whole check before it lands")
     ap.add_argument("--shards", type=_shards, default=SHARDS,
                     help=f"with --gate {CHECK_GATE} or {VERDICT_GATE}, the shards each check runs as, one launch each: an N "
                          "ci.toml has a shard "
