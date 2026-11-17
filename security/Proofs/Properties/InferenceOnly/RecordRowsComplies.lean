@@ -31,7 +31,8 @@ open Lean (Json)
 open Flock.Program (Prog)
 open Spot.RecordText (Tmpl templatesOf gridsOf slotIn)
 open InferenceOnlyVerifier.Record.SecurityProofs (form form_owns form_laidOut form_rates read_front finish_text
-  front_text front_inst ranges_spec mapM_ok tmplOf_spec)
+  front_text front_inst ranges_spec tmplOf_spec)
+open InferenceOnlyVerifier.Record.SecurityProofs.Json (mapM_ok)
 
 /-! ## A block's rows, template by template -/
 
@@ -232,22 +233,32 @@ theorem RowsComplies : Properties.Record.RowsComplies := by
     exact (front_inst hf).2
   · exact Nat.le_trans (Nat.mul_le_mul_right _ hfresh) hR.2
 
-theorem rows_unread_refused :
-    (InferenceOnlyVerifier.Record.read
-      (InferenceOnly.RowsProtocol.instanceOf ⟨0, 0, 1, #[], #[], #[], ""⟩ ⟨"", none⟩)
-      (InferenceOnly.RowsProtocol.trustedOf ⟨0, 0, 1, #[], #[], #[], ""⟩ ⟨.null, "", .empty⟩)).toBool = false := by
-  decide +kernel
+/-- A case whose `α` has denominator 0. -/
+def zeroDen : InferenceOnly.RowsProtocol.Params := ⟨0, 0, 0, #[], #[], #[], ""⟩
 
-/-- **`RowsComplies` fails without `InferenceOnly.RowsProtocol.checkBlobs`.** At a case whose Program is no text,
+theorem zeroDen_parse :
+    InferenceOnlyVerifier.Record.parse (InferenceOnly.RowsProtocol.instanceOf zeroDen ⟨"", none⟩) = .error "params" := by
+  have hg : (InferenceOnly.RowsProtocol.instanceOf zeroDen ⟨"", none⟩).getObjVal? "gamma" = .ok (Lean.toJson (0 : ℕ)) :=
+    getObjVal?_mkObj (by simp) (by simp [InferenceOnly.RowsProtocol.instanceOf, zeroDen])
+  have ha : (InferenceOnly.RowsProtocol.instanceOf zeroDen ⟨"", none⟩).getObjVal? "alpha" =
+      .ok (Json.arr #[Lean.toJson (0 : ℕ), Lean.toJson (0 : ℕ)]) :=
+    getObjVal?_mkObj (by simp) (by simp [InferenceOnly.RowsProtocol.instanceOf, zeroDen])
+  have hp : (InferenceOnly.RowsProtocol.instanceOf zeroDen ⟨"", none⟩).getObjVal? "pins" = .ok (Json.arr #[]) :=
+    getObjVal?_mkObj (by simp) (by simp [InferenceOnly.RowsProtocol.instanceOf, zeroDen])
+  unfold InferenceOnlyVerifier.Record.parse InferenceOnlyVerifier.field
+  rw [rows_instance_program, rows_instance_record, hg, ha, hp]
+  rfl
+
+/-- **`RowsComplies` fails without `InferenceOnly.RowsProtocol.checkBlobs`.** At a case whose `α` has denominator 0,
 which a verifier that accepted every case would accept, the record check reads no record: its conclusion's first part
 fails. -/
 theorem RowsComplies_nontrivial :
     ∀ r, ¬ InferenceOnlyVerifier.Record.read
-      (InferenceOnly.RowsProtocol.instanceOf ⟨0, 0, 1, #[], #[], #[], ""⟩ ⟨"", none⟩)
-      (InferenceOnly.RowsProtocol.trustedOf ⟨0, 0, 1, #[], #[], #[], ""⟩ ⟨.null, "", .empty⟩) = .ok r := by
+      (InferenceOnly.RowsProtocol.instanceOf zeroDen ⟨"", none⟩)
+      (InferenceOnly.RowsProtocol.trustedOf zeroDen ⟨.null, "", .empty⟩) = .ok r := by
   intro r h
-  have := rows_unread_refused
-  rw [h] at this
-  simp [Except.toBool] at this
+  unfold InferenceOnlyVerifier.Record.read InferenceOnlyVerifier.Record.front at h
+  rw [zeroDen_parse] at h
+  cases h
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs
