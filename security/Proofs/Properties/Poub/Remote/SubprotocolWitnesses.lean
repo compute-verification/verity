@@ -849,8 +849,8 @@ theorem publishedEps_acceptAll :
       ¬ (((⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).eps = ⟨0, 1⟩ ∧ (⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).qBytes = 0) ∨
         ((⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).eps = Poub.Protocol.ratio Poub.Protocol.EPS ∧
           constantTerms params g
-            ({ node := .empty, blocks := 1, payloadRoot := .empty, codecSeed := .empty, codec := ⟨Poub.Codec.P512, 2, false⟩,
-             receipt := .sketch, rows := 0, key := ⟨⟨Poub.Codec.P512, 2, false⟩, #[], 0, none, .empty⟩ } : Poub.Registration)
+            (⟨.empty, 1, .empty, .empty, ⟨Poub.Codec.P512, 2, false⟩, .sketch, 0, ⟨⟨Poub.Codec.P512, 2, false⟩, #[], 0, none, .empty⟩⟩ :
+              Poub.Registration)
             appendCoins.size (Poub.Protocol.DELTA : ℝ) ≤ (Poub.Protocol.EPS : ℝ))) := by
   intro _ _ _ _ _ _ hd
   rcases hd with ⟨-, hq⟩ | ⟨he, -⟩
@@ -879,8 +879,8 @@ theorem acceptIsVerified_acceptAll :
       (events : Array Poub.Session.Event) (rs : Array Poub.Session.Result) (s : Poub.Session.State)
       (sm : Poub.Session.Summary),
       ¬ ((⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public) = (Poub.Protocol.certify params g
-          ({ node := .empty, blocks := 1, payloadRoot := .empty, codecSeed := .empty, codec := ⟨Poub.Codec.P512, 2, false⟩,
-            receipt := .sketch, rows := 0, key := ⟨⟨Poub.Codec.P512, 2, false⟩, #[], 0, none, .empty⟩ } : Poub.Registration)
+          (⟨.empty, 1, .empty, .empty, ⟨Poub.Codec.P512, 2, false⟩, .sketch, 0, ⟨⟨Poub.Codec.P512, 2, false⟩, #[], 0, none, .empty⟩⟩ :
+              Poub.Registration)
           appendCoins.size sm).1) :=
   fun params g _ appendCoins _ _ _ _ sm => certify_ne_acceptAll params g _ appendCoins.size sm
 
