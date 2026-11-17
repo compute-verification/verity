@@ -31,6 +31,7 @@ from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
+from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import cast as BC, gemm as BG
 from verity.circuits.types import Array, Tuple, Value
@@ -933,6 +934,43 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
             sliced(wires=(replace(c.wires[0], **edit),))
     with pytest.raises(ValueError, match="both fill rows"):
         sliced(wires=(*c.wires, I.Wire(GID, "x", G8ID, "o0", at=2, radix=(1,), base=0, step=(0,), cut=(1, 1))))
+
+
+OPEN = (f"{G8ID}/x", f"{G8ID}/w", f"{GID}/w")
+
+
+def test_the_wired_program_has_the_population_programs_units():
+    c = sliced(external=OPEN)
+    units = [[(t, lo, n) for _k, t, lo, n in CS.template_partition(*p).ranges] for p in (c.program(), c.wired_program())]
+    assert units[0] == units[1] == [(G8ID, 0, 6), (GID, 6, 3)]
+
+
+def test_the_wired_program_is_its_units_with_the_wired_rows_fed_by_hand():
+    rng = np.random.default_rng(7)
+    x, w8, w16 = (rng.integers(0, 1 << 14, s) for s in ((6, 16), (6, 8, 16), (3, 16, 16)))
+    o8 = [evaluate(G8, x[u].ravel().tolist(), w8[u].ravel().tolist()) for u in range(6)]
+    o16 = [evaluate(GEMM, [*o8[2 * u], *o8[2 * u + 1]], w16[u].ravel().tolist()) for u in range(3)]
+    got = evaluate(sliced(external=OPEN).wired_program()[0].fn, *(a.ravel().tolist() for a in (x, w8, w16)))
+    assert got == tuple(v for out in o8 + o16 for v in out)
+
+
+def test_a_wired_row_is_no_input_of_the_wired_program():
+    c = sliced(external=OPEN)
+    bits = [sum(sum(t.leaf_widths()) for _n, t in p.fn.signature()[0]) for p, _q in (c.program(), c.wired_program())]
+    assert bits[0] - bits[1] == I.input_count(c.description())["wired"] == 16 * 6 * 8
+
+
+def test_a_record_naming_the_wired_program_is_read_as_it():
+    c = sliced(external=OPEN)
+    rec = {**I.descriptor_record(c, 2), "run": RUN, "context": ""}
+    part = PO.build(*c.wired_program())
+    wired = {**rec, "program": part["program"], "partition": PO.digest(part)}
+    assert PO.build(*I.program_of_record(wired, I.resolve)) == part
+    assert PO.build(*I.program_of_record(rec, I.resolve)) == PO.build(*c.program()) != part
+    mine = I.window_of_record(wired, SAMPLING_DESIGN, I.resolve)
+    assert mine.partition_digest == PO.digest(part) and mine.members == I.window_of_record(rec, SAMPLING_DESIGN, I.resolve).members
+    with pytest.raises(ValueError, match=r"\['partition', 'program'\] are not the ones its templates make"):
+        I.window_of_record({**wired, "wires": [{**rec["wires"][0], "step": [2, 0]}]}, SAMPLING_DESIGN, I.resolve)
 
 
 def test_cap_is_a_run_field_the_registration_binds_and_the_circuits_digest_does_not():
