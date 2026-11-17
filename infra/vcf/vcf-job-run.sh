@@ -30,11 +30,11 @@ say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/vcf-job.log"; }
 say "submit $NAME on $PART for $MIN min, extra: $*"
 if [ -n "${SEND:-}" ]; then
   [ -f "$SEND" ] || { say "no file at SEND=$SEND"; exit 2; }
-  "${S[@]}" "mkdir -p '$D' && cat > '$D/payload.tar.gz'" < "$SEND" || { say "the payload's copy failed"; exit 5; }
+  "${S[@]}" "mkdir -p '$D' && cat > '$D/payload.tar.gz'" < "$SEND" || { say "the payload's copy failed"; "${S[@]}" "rm -rf '$D'"; exit 5; }
   say "payload sent: $(stat -c %s "$SEND") bytes"
 fi
 ID=$("${S[@]}" "mkdir -p '$D' && cat > '$D/job.sh' && cd '$D' && sbatch --parsable --job-name='$NAME' --partition='$PART' --time='$MIN' --output=out.txt --error=err.txt $* job.sh" < "$JOB" 2> "$OUT/submit.err" | tr -dc '0-9;' | cut -d';' -f1)
-[ -n "$ID" ] || { say "not submitted: $(tr '\n' ' ' < "$OUT/submit.err" | cut -c1-300)"; exit 5; }
+[ -n "$ID" ] || { say "not submitted: $(tr '\n' ' ' < "$OUT/submit.err" | cut -c1-300)"; "${S[@]}" "rm -rf '$D'; rmdir verity-jobs 2>/dev/null; true"; exit 5; }
 say "job $ID"
 n=0
 while [ $n -lt $(((PEND + MIN) * 4 + 40)) ]; do
