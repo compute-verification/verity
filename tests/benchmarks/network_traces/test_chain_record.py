@@ -185,7 +185,7 @@ def _chain_of(tmp_path) -> SimpleNamespace:
 
 
 def test_no_block_entry_is_written_for_an_answer_the_period_check_accepts(tmp_path, period):
-    """A certifier/v0 case from its Python mirror (`period_case`, held to `NetworkCheck.Period` by its difftest),
+    """A certifier/v0 case from its Python mirror (`period_case`, held to `NetworkVerifier.Period` by its difftest),
     accepted, on an accepted chain."""
     case = period.case("accept", 1)
     answer = period.reference(case)
@@ -532,7 +532,7 @@ def test_the_faulty_sets_bits_are_the_powers_without_computing_it():
 
 
 def test_free_inputs_leave_out_the_registered_reads_of_a_parameter_held_at_the_verifiers_pin():
-    """`free_inputs` subtracts what `NetworkCheck.Circuit.countsOf` holds (`interface.input_count`'s ``registered``): the
+    """`free_inputs` subtracts what `NetworkVerifier.Circuit.countsOf` holds (`interface.input_count`'s ``registered``): the
     weights' registered reads leave the count where the verifier's pin of ``weights`` is the root the window's
     registration records, and stay free under no pins, another root, no root recorded, or a pin of another root; a wire
     takes out its rows, and an external port stays free, as ``countsOf`` leaves it. A pin of the scan's state is

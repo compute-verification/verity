@@ -6,7 +6,7 @@
   "security/Definitions/Claims/SamplingTwo.lean": "ab065721add873b51d1b2eaee1113f383958055fc9c9628cb119056a6447fec1",
   "security/Proofs/Flock/SamplingGeneric/TwoCount.lean": "c820464f240ec38b32d996dec9347cbdf268ed732e3a8da1e2cea34b06eac8e7",
   "security/Proofs/Flock/SamplingGeneric/TwoTable.lean": "69a83bac804c09746b5c5705f00c404bf37e52068dc9e7aa7953712df93d3395",
-  "security/Proofs/lake-manifest.json": "558cf51eecf9bfa8cb8b007526e33ca47e96e327294b2354ff00f2a3e6814a59",
+  "security/Proofs/lake-manifest.json": "7939ceec807115f1f7796d6356520f3ba4b06eafdbec6b05d59bed0d79565794",
   "security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632"
  },
  "vectors": [

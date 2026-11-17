@@ -729,7 +729,7 @@ def _cells(run: Path) -> dict[tuple[str, int], dict]:
 
 
 def test_each_registration_names_its_execution_phases_network_attester_rows_its_ports_read(tmp_path):
-    """The rows form's hold (`NetworkCheck.Period`: the scan's registration names each of W's row registrations' root
+    """The rows form's hold (`NetworkVerifier.Period`: the scan's registration names each of W's row registrations' root
     and domain): of a G = 2 run, each execution phase's honest round names, as ``rows/<direction>/<w>``, its own two
     row registrations of the run's ``cells.jsonl``, T leaves each (ingress's row ports and egress's o1 read them), and
     no other execution phase's; the tampered round, egress only, names the egress rows alone, the re-signed ones in
@@ -904,7 +904,7 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
-    """`scan_period.rows_case` of one execution phase in the rows form's formats (`NetworkCheck.Period`; its Lean checks
+    """`scan_period.rows_case` of one execution phase in the rows form's formats (`NetworkVerifier.Period`; its Lean checks
     the case on a node: scan_period.sh): the deployment's key and session, the one entry listed, from execution phase
     0, and its schedule (its integer fields, the id egress form's), the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
