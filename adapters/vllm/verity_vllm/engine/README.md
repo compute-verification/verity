@@ -32,7 +32,7 @@ what it holds.
   private `profiles.dense_generic._sha256`.
 - **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `check`
   and `commit` packages, its `llm`; two of the adapter's `tools`; and the benchmarks that build,
-  serve or time the engine (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`, `benchmarks/torch_gpu`,
+  serve or time the engine (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`,
   `benchmarks/vllm_encoded` and a dozen more directories).
 - **Loads:** vLLM, torch, triton, numpy and, in `meta_inventory`, `huggingface_hub`; the integration's `config`,
   `settings`, `errors`, `log`, `target_family`, `records.schema_ids`, `records.logits_capture`, `program.frontend`

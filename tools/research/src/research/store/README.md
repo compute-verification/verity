@@ -49,7 +49,7 @@ attempt id = run id (r20260922-105905-2021)
 pr:<number>@<40-hex commit>                             a pull request at one head; only labels target it
 ckpt:<HF repo id>@<40-hex revision>                     a checkpoint at one revision; only labels target it
 task:<sha512 hex of a task's key>                       a check's task: the executor's verdicts (pass, fail or error; a fail stands until an error after it, else the newest is the key's) and results on it; only labels target it
-commit:<40-hex commit>                                  a commit: the executor's task graphs of it and drive's shadow record of its check; only labels target it
+commit:<40-hex commit>                                  a commit: the executor's task graphs of it and its verdicts; only labels target it
 ~~~
 
 Two agents freezing the same member set produce the same snapshot id (members are sorted and de-duplicated; `name`, `note`
@@ -434,7 +434,7 @@ one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote/ma
 `preserved` is a three-part gate (attempt manifest, artifacts, labels) naming the part that fails. `labels TARGET --remote`
 marks each both / LOCAL ONLY / REMOTE ONLY.
 Conflicting ones coexist on both sides. A landing is a `landed` label by `research-merge` on each run its `Check:`
-trailer names, valued main's commit (`research merge`; `--label-landed REV` backfills).
+trailer names, valued main's commit (`merge.label_landed`, from the verified queue's after-landing job).
 
 The labels pack (§3) is every assertion of the remote's `labels/` as one tarball beside its sha256, which `labels-pack`
 rebuilds and replaces, hourly on the control pod; a sync that lacks more than 5,000 assertions takes it first and pulls only
@@ -477,7 +477,7 @@ prints the table; the groups are:
   carries no verdict — ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
   executor's worker; on `commit:<sha>`, `tasks_graph` and `verity_graph` (`art:` id of the `tasks-graph/v1` or
   `verity-graph/v2` graph it listed on a worker) and `ready_verdict` (its `ready:` verdict), by the executor;
-  `executor_shadow`, by drive (`research.executor`); `nightly_check`, by the control pod's nightly check;
+  `executor_shadow`, by the old path's drive, which nothing writes now; `nightly_check`, by the control pod's nightly check;
   `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, by that label's author, and `label_delegation` on an
   agent's delegation target (`task:<sha512>`), by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
