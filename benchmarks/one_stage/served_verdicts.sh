@@ -58,7 +58,10 @@
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
 #     them.
-#  3. SPOT, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
+#  3. SPOT, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; under
+#     PEARLPLUS_TIE the fixed load's, the one window holding its requests and no other, with CERTIFIER_FRONT's group in a
+#     window of its own, the one whose requests are all the network attester's, which the network attester's piece takes
+#     and the record's `not_covered` names, its case left out of the composite; the
 #     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
 #     the window circuit's classes beside network attestation's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
@@ -1117,7 +1120,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   weights
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period served "$D" 2>&1 | tail -1)"
   if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier in front of the endpoint, before the requests
-    # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests.
+    # below: its group closes into a window of its own, the run's earliest, which the window of record is under
+    # PEARLPLUS_TIE never (the fixed load's) and otherwise only where it has the most requests.
     # Its session, bundle and log hold the group's prompts, request and cells, so they stay in the serve dir's private/
     (umask 077; mkdir -p "$D/private")
     (cd "$TREE" && timeout -k 1m "${CERTIFIER_FRONT_TIMEOUT:-20m}" bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$D/private/certifier-front") \
@@ -1905,8 +1909,8 @@ if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under
       say "PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS $V3C, whose window circuit CLASSES ($CLASSES) doesn't count: add it"; exit 3 ;; esac
     [[ " ${SERVE_ARGS:-} " != *" --prefix-caching "* ]] \
       || { say "PREFLIGHT: under PEARLPLUS_TIE each request's prefill computes every row of its prompt, at which the cut circuit reads Pearl+'s tables, and SERVE_ARGS turns vLLM's prefix cache on (--prefix-caching): drop it"; exit 3; }
-    [ -z "${CERTIFIER_FRONT:-}" ] \
-      || { say "PREFLIGHT: under PEARLPLUS_TIE the window is V3C_CLASS's fixed load, and CERTIFIER_FRONT's group closes into a window of its own, which the run's pick takes on a tie in requests: unset CERTIFIER_FRONT"; exit 3; }
+    [ -z "${WINDOW:-}" ] \
+      || { say "PREFLIGHT: under PEARLPLUS_TIE the window of record is the fixed load's, named by its requests, and WINDOW names one by number: unset it"; exit 3; }
     grep -q -- '"--pearl-passes"' "$TREE/benchmarks/prove_path/prove_path.py" \
       || { say "PREFLIGHT: PEARLPLUS_TIE needs window-commit's --pearl-passes, its circuit cut at Pearl+'s linears, which this tree's prove_path.py doesn't take"; exit 3; }
     [ -z "$PEARLC_CHALLENGER_GATE" ] || [ -n "${MAIN_FILE:-}" ] \
@@ -2201,18 +2205,32 @@ fi
 
 # 3. SPOT: the window, its advice and Programs, V3b's window circuit, then Flock --zk and the Lean verifier
 # the pick (its number, steps, requests and users, and each window refused and why) stays in the serve dir's private/
-PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$D/private/window.err")
+TIED_BY=()
+[ -z "$PEARLPLUS_TIE" ] || TIED_BY=(--of-load "$D/load.jsonl")
+PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} \
+  ${TIED_BY[@]+"${TIED_BY[@]}"} 2> "$D/private/window.err")
 [ -n "$PICK" ] || { say "WINDOW refused: no sealed window qualifies (why, by window, in the serve dir's private/window.err)"; stop window 12; }
 (umask 077; echo "$PICK" > "$D/private/window.json")
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
-say "WINDOW: $([ -n "${WINDOW:-}" ] && echo "the one WINDOW names" || echo "the sealed one with the most requests"), none carried across windows, at the class's $SLOTS slots (the pick in the serve dir's private/window.json)"
+say "WINDOW: $(if [ -n "$PEARLPLUS_TIE" ]; then echo "the fixed load's, the one sealed window holding its requests (load.jsonl's) and no other"
+  elif [ -n "${WINDOW:-}" ]; then echo "the one WINDOW names"; else echo "the sealed one with the most requests"; fi), none carried across windows, at the class's $SLOTS slots (the pick in the serve dir's private/window.json)"
+KN=$K
+rm -f "$D/private/front-window"
+if [ -n "$PEARLPLUS_TIE" ] && [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network attester's row from its front's own window
+  KN=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" --attested 2>> "$D/private/window.err" \
+    | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])' 2> /dev/null)
+  [ -n "$KN" ] && [ "$KN" != "$K" ] \
+    || { say "WINDOW refused: the network attester's front's group is in no one sealed window of its own apart from the fixed load's (why in the serve dir's private/window.err)"; stop window 12; }
+  (umask 077; echo "$KN" > "$D/private/front-window")
+  say "NETWORK-WINDOW: the network attester's row is over its front's group, the one sealed window of its requests alone, not the tied load's: it stands as its own verdict, its case left out of the composite"
+fi
 say "CLASSES: the window circuit's ${CLASSES}; the certifier's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
 CERT=
 if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest piece, so it starts once the window is picked
   # kept off CPUs 0 and 1 (CERT_CPUS), which PoUS's answers need idle: the chain's load stretches a round past Δ + RTT
   CERT_TASKSET=(); NCPU=$(nproc)
   command -v taskset > /dev/null && [ "$NCPU" -gt 2 ] && CERT_TASKSET=(taskset -c "${CERT_CPUS:-2-$((NCPU - 1))}")
-  ${CERT_TASKSET[@]+"${CERT_TASKSET[@]}"} "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" \
+  ${CERT_TASKSET[@]+"${CERT_TASKSET[@]}"} "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$KN" --out "$OUT/pieces" \
     --product "$PRODUCT" --only certifier > "$OUT/pieces-certifier.txt" 2>&1 &
   CERT=$!
 fi

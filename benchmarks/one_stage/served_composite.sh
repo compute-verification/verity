@@ -27,8 +27,9 @@
 # each with `--exe` its product's Lean (`remote`, `onsite`, built here), over the directories under SERVE_DIR/private
 # that hold a case.json and an answer.json whose protocol is one of that product's subprotocols (composite.py's
 # COMPONENTS), but for ONSITE_SKIP's, which `onsite_cases` sets to those of a PoUS or wipe case that is not its piece's
-# with its Lean's answer, and for SERVE_DIR/private/pouw, whose period case only served_cases.py hands on, tied to R;
-# each within
+# with its Lean's answer, for SERVE_DIR/private/pouw, whose period case only served_cases.py hands on, tied to R, and
+# for the network attester's case where SERVE_DIR/private/front-window says it is over its front's group and not the
+# window of record's requests (onsite's Lean holds it to no tie, so it would accept it); each within
 # COMPOSITE_TIMEOUT (default 60m) and COMPOSITE_MEM_GB GiB (default 170): a systemd user scope's MemoryMax, else
 # prlimit's address-space limit, and on a host with neither it is not run. A case's evidence and params, and an
 # answer's query, digests and profile, are witness, so composite.py's private output and every log of this step are under SERVE_DIR/private/composite/PRODUCT, on
@@ -166,7 +167,7 @@ for f in sorted(root.rglob("case.json")):
         protocol = json.loads((d / "answer.json").read_text())["protocol"]
     except (ValueError, KeyError, TypeError):
         continue
-    if protocol in ids:
+    if protocol in ids and not (protocol == "verity/certifier/v0" and (root / "front-window").is_file()):
         print(d)
 EOF
 )

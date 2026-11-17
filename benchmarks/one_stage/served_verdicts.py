@@ -52,7 +52,9 @@ V3C-AUDIT line's account of whose coins its audit's were and its coin trees (`co
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
 circuit refuses a request carried across windows), at most ``--slots`` of them (its class's); the most requests, then the
-earliest. ``--window K`` holds K to the same rules. Prints the pick (`pick`): ``{window, requests, users, steps,
+earliest. ``--window K`` holds K to the same rules. ``--of-load FILE`` (a fixed load's lines, `serve_load.py`'s
+``--out``) takes the one window whose requests are that load's and no other, and ``--attested`` the one whose requests
+are all the network attester's: neither a count nor a setting chooses it, and either refuses unless one window fits. Prints the pick (`pick`): ``{window, requests, users, steps,
 refused}``, which the run keeps in the serve dir's ``private/window.json``.
 
 ``pieces``: each subprotocol after SPOT (`PIECES`: PoUW, PoUS, the bandwidth audit, the network attester) runs
@@ -268,6 +270,14 @@ INFERENCE_ONLY_ROW = "inference-only"
 UNDECIDED = "undecided: "
 INFERENCE_ONLY_UNREAD = ("not read by the combined verdict: the composite combines verity/inference-only/v0's own "
                          "case, not this (c, k, n) verdict")
+#: the network attester's request users, as the endpoint records them (`serve_commit.REQUEST_USERS`)
+ATTESTER_USER = re.compile(r"user-[0-9]+")
+#: under the serve dir's private/: the window the network attester's row is taken from, where it is its front's group's
+#: and not the window of record (a tied run's fixed load, which the network attester does not carry)
+FRONT_WINDOW = "front-window"
+FRONT_GROUP = ("the network attester's verdict is over its front's group, a window of its own, and not over the tied "
+               "load's requests: it stands as its own protocol's verdict, its case left out of the composite, and no "
+               "certificate of it reaches the block record")
 #: a piece's limit unless ``<COMPONENT>_TIMEOUT`` or ``PIECE_TIMEOUT`` sets one, as `timeout` reads it
 PIECE_TIMEOUT = "60m"
 #: what `pieces` leaves beside a piece it ran: the node it ran on, its exit and its limit
@@ -467,8 +477,11 @@ def _refusal(k: int, seal: Mapping[str, Any], line: Mapping[str, Any] | None, mi
     return None
 
 
-def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]:
-    """The window to audit (module docstring); ValueError when none qualifies, or ``want`` doesn't."""
+def pick(serve_dir: Path, slots: int, want: int | None = None, users: Sequence[str] | None = None,
+         attested: bool = False) -> dict[str, Any]:
+    """The window to audit (module docstring); ValueError when none qualifies, or ``want`` doesn't. ``users``: the one
+    window whose requests are exactly those users', and ``attested`` the one whose requests are all the network
+    attester's (`ATTESTER_USER`); either refuses unless exactly one window qualifies."""
     seals = {int(s["window"]): s for s in _lines(serve_dir / "seals.jsonl")}
     lines = {int(w["window"]): w for w in _lines(serve_dir / "windows.jsonl")}
     reqs = _lines(serve_dir / "requests.jsonl")
@@ -487,6 +500,15 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
         if want in refused:
             raise ValueError(f"window {want}: {refused[want]}")
         ok = [x for x in ok if x[0] == want]
+    if users is not None or attested:
+        what = "the fixed load's requests and no other" if users is not None else "the network attester's requests alone"
+        fit = [(k, mine) for k, mine in ok
+               if (sorted(r.get("user") or "" for r in mine) == sorted(users) if users is not None
+                   else mine and all(ATTESTER_USER.fullmatch(r.get("user") or "") for r in mine))]
+        if len(fit) != 1:
+            raise ValueError(f"{len(fit)} sealed windows hold {what} ({[k for k, _ in fit]}), and the run names one: "
+                             f"{json.dumps(refused, sort_keys=True)}")
+        ok = fit
     if not ok:
         raise ValueError(f"no sealed window to audit: {json.dumps(refused, sort_keys=True)}")
     k, mine = max(ok, key=lambda x: (len(x[1]), -x[0]))
@@ -2400,7 +2422,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
            lean: str = "no composite was read", inference_only: Mapping[str, Any] | None = None,
-           ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           front_group: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; SPOT's
@@ -2413,7 +2435,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     none, which the report and the line carry; a rejection by it rejects whatever the rows say. ``inference_only``: the
     inference-only verifier's verdict, which the report carries as its ``inference-only`` row and the line under
     ``not_combined``, and which neither the combined verdict nor the block record reads: ``reject`` only where the Lean
-    verifier gave a verdict, ``error`` where it gave none (`UNDECIDED`)."""
+    verifier gave a verdict, ``error`` where it gave none (`UNDECIDED`). ``front_group``: the network attester's row is
+    over its front's group (`FRONT_GROUP`), which its row and the line's ``not_covered`` say, and the block record
+    doesn't read."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
@@ -2425,6 +2449,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
     rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+    apart = {"communication"} & set(rows) - set(drops) if front_group else set()
+    for k in apart:
+        rows[k]["requests"] = FRONT_GROUP
     for k, r in rows.items():
         if k not in drops and "answer_from" not in r and (r.get("verdict") != "missing" or "development" in r):
             r["answer_from"] = f"{AS_WRITTEN} ({WRITTEN.get(k) or f'its piece files in {PIECES.get(k, WIPE)[1]}/'})"
@@ -2453,7 +2480,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, "composed_on": where,
              "answers": answers, "lean": lean, **left,
              **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
-             **({"unserved": unserved} if unserved else {}), **dev}
+             **({"unserved": unserved} if unserved else {}), **dev,
+             **({"not_covered": {NAMES[k]: FRONT_GROUP for k in apart}} if apart else {})}
     io = {} if inference_only is None else {INFERENCE_ONLY_ROW: inference_only_row(inference_only)}
     if io:
         named["not_combined"] = {"the inference-only verifier": io[INFERENCE_ONLY_ROW]["verdict"]}
@@ -2469,7 +2497,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
         report["protocols"] = {**rows, **io}
         return report, None, line
     extra = {subprotocols[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
-             for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
+             for k, r in rows.items()
+             if k != "integrity" and k not in apart and r.get("verdict") == "accept" and at[k][0] is not None}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
     rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, answer=answer, extra=extra, product=product)
     verdict = WINDOW_VERDICT.get(rec["composed"]["verdict"], rec["composed"]["verdict"])
@@ -2490,6 +2519,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     w.add_argument("serve_dir", type=Path)
     w.add_argument("--slots", type=int, default=8)
     w.add_argument("--window", type=int)
+    w.add_argument("--of-load", type=Path, help="the fixed load's lines (serve_load.py --out): the window of its requests")
+    w.add_argument("--attested", action="store_true", help="the window of the network attester's requests alone")
     g = sub.add_parser("gate")
     g.add_argument("--gate", default=os.environ.get("H1_GATE"))
     g.add_argument("--lane", default="vllm")
@@ -2685,8 +2716,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "window":
         try:
-            print(json.dumps(pick(a.serve_dir, a.slots, a.window), sort_keys=True))
-        except ValueError as e:
+            users = None if a.of_load is None else [r["user"] for r in _lines(a.of_load)]
+            if users == []:
+                raise ValueError(f"{a.of_load} names no request of the fixed load")
+            print(json.dumps(pick(a.serve_dir, a.slots, a.window, users=users, attested=a.attested), sort_keys=True))
+        except (ValueError, KeyError) as e:
             print(f"served_verdicts.py window: {e}", file=sys.stderr)
             return 1
         return 0
@@ -2834,7 +2868,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
-                               answer=answer, lean=lean, inference_only=io)
+                               answer=answer, lean=lean, inference_only=io,
+                               front_group=(a.serve_run / "private" / FRONT_WINDOW).is_file())
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:
