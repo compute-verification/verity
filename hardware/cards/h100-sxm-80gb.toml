@@ -24,12 +24,12 @@ count = { value = 132, unit = "SM", mark = "ceiling", source = "NVIDIA H100 Tens
 warps = { value = 64, unit = "warp/SM", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.2 Table 28, 'Maximum number of resident warps per SM', CC 9.0: 64 (and 2048 resident threads, 32 a warp); H100 whitepaper V1.04 Table 4, H100: 'Max Warps / SM 64'; store.reg_extra counts its uniform registers and predicates at this many" }
 
 # The clocks, in MHz. default names the reading of the tensor's clock (verity.device.READINGS: sm or tensor) that
-# every figure of the card is stated at unless it names the other: the higher tensor ceiling (CMP-438), where
-# readings(card) is largest.
+# every figure of the card is stated at unless it names the other: the higher tensor ceiling, where readings(card) is
+# largest, so a figure credits no more than either reading would.
 [clock]
 default = "sm"
 sm = { value = 1980, unit = "MHz", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non-Tensor Core Ops 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous for NVIDIA Data Center GPUs'; art:6a05f4880c43 (nvidia-smi clocks.max.sm 1980 MHz on one card)" }
-tensor = { value = 1830, unit = "MHz", mark = "ceiling", source = "the tensor's clock ceiling, not a clock a loaded card holds, on two readings, each figure it moves quoted at both; a credit is claimed at the 1980 MHz one, the higher ceiling (clock.default, price.fp32.sm, CMP-438), unless it says it rests on 1830 MHz (price.fp32.tensor). 1830 MHz: H100 whitepaper V1.04 Table 3, H100 SXM5, 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops 1830 MHz', at which its 'Peak INT8 Tensor TOPS 1978.9' is 4096 a SM-clock on 132 SMs, so 9.894e14 s8 MACs a second. 1980 MHz, clock.sm: the card's boost clock for its other pipes (the same table), so 1.0705e15 s8 MACs a second. Falsified by any run of benchmarks/tensor_duty above 132 x 4096 x 1830 MHz = 9.894e14 s8 MACs a second over the host's wall clock; no such run has been made on an H100" }
+tensor = { value = 1830, unit = "MHz", mark = "ceiling", source = "the tensor's clock ceiling, not a clock a loaded card holds, on two readings, each figure it moves quoted at both; a credit is claimed at the 1980 MHz one, the higher ceiling (clock.default, price.fp32.sm: a figure is stated at the reading with the higher ceiling unless it names the other), unless it says it rests on 1830 MHz (price.fp32.tensor). 1830 MHz: H100 whitepaper V1.04 Table 3, H100 SXM5, 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops 1830 MHz', at which its 'Peak INT8 Tensor TOPS 1978.9' is 4096 a SM-clock on 132 SMs, so 9.894e14 s8 MACs a second. 1980 MHz, clock.sm: the card's boost clock for its other pipes (the same table), so 1.0705e15 s8 MACs a second. Falsified by any run of benchmarks/tensor_duty above 132 x 4096 x 1830 MHz = 9.894e14 s8 MACs a second over the host's wall clock; no such run has been made on an H100" }
 memory = { value = 2619, unit = "MHz", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3, H100 SXM5: 'Memory Data Rate 2619 MHz DDR', the row footnoted 'Not Finalized for H100' though the cover says 'Includes final GPU / memory clocks'; art:6a05f4880c43 (nvidia-smi clocks.max.memory 2619 MHz on one card)" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes. smem is the pool of L1 and shared memory, and
@@ -77,7 +77,7 @@ nvf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m
 mxf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
 f64 = { value = 29.5, unit = "tensor unit/MAC", mark = "ceiling", source = "H100 data sheet: 'FP64 Tensor Core 67 teraFLOPS', which over 132 SMs at the 1980 MHz boost clock the H100 whitepaper V1.04 Table 3 gives FP64 tensor operations is 128.2 DMMA MACs a SM-clock there (the whitepaper's own 'Peak FP64 Tensor TFLOPS' 66.9 is 128.0); 128 a SM-clock there is, at clock.tensor, 4096 / 128 x 1830 / 1980 = 29.58 units a MAC, rounded down so the table's FP64 rate, 67.08 TFLOPS, stays at or above both figures; 32 at clock.sm's 1980 MHz" }
 
-# What an operation costs in tensor units (rate.tensor's unit). The unit (CMP-438): each operation is charged in seconds
+# What an operation costs in tensor units (rate.tensor's unit). The unit: each operation is charged in seconds
 # at its own pipe's data-sheet ceiling, so a program's time is at least the sum of its operations over their pipes'
 # ceilings. An FP32 add's price at the ceilings is stated at both clock readings, each keyed by its reading's name:
 # fp32.sm, both pipes at clock.sm, the higher tensor ceiling and the default (clock.default), which a credit is claimed

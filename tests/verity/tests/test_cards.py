@@ -233,7 +233,7 @@ def test_the_h200s_two_readings() -> None:
 
 
 def test_the_h100s_two_readings() -> None:
-    """The H100's FP32 add at both clock readings (CMP-438), pinned so that a change to either is deliberate: 32 with
+    """The H100's FP32 add at both clock readings, pinned so that a change to either is deliberate: 32 with
     both pipes at 1980 MHz, the default, and 29.58 with the tensor pipe at 1830 MHz, each naming its W1 price."""
     card = load_card("h100-sxm-80gb", directory=CARD_FILES)
     fp32 = card["price"]["fp32"]
