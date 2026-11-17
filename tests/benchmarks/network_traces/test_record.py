@@ -440,7 +440,6 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
     monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(SamplingParams=lambda **kw: kw))
     monkeypatch.setitem(sys.modules, "verity_vllm.engine.engine_driver",
                         types.SimpleNamespace(external_id=lambda s: s.rsplit("-", 1)[0]))
-    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     rc = rec.main(["run", "--out", str(tmp_path), "--model", "unsloth/Llama-3.2-1B", "--mode", "bi-eager",
                    "--mix", "b4=5", "--minutes", "3.5", "--warmup-s", "10"])
     meta = json.loads((tmp_path / "meta.json").read_text())
