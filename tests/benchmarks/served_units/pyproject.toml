@@ -18,4 +18,4 @@ untraced = ["test_job.py", "test_names.py", "test_stage_prove.py", "test_tmpl_un
 inputs = ["verity", "calibration/hardware/cards", "adapters/vllm/verity_vllm", "tools/verity/circuit_check/src/circuit_check",
           "adapters/torch/verity_torch",
           "benchmarks/spot_figures/breakeven/reprice.py", "benchmarks/served_units",
-          "benchmarks/harness/verity_bench"]
+          "benchmarks/harness/verity_bench", "tools/config/verity_config"]
