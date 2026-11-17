@@ -8,10 +8,12 @@ it carries, has one file in `nodes/`: what a node's registration states that no 
 ## Try it
 
 ~~~python
+from pathlib import Path
 from verity.device import load_card, number, skus
-skus("host")                                    # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
-load_card("xeon-6776p-2s")["rate"]["ops"]       # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
-(drift := load_card("nebius-vm-monotonic-raw")["drift"]["max"])   # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
+cards = Path("hardware/cards")
+skus("host", directory=cards)                   # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
+load_card("xeon-6776p-2s", directory=cards)["rate"]["ops"]   # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
+(drift := load_card("nebius-vm-monotonic-raw", directory=cards)["drift"]["max"])   # {'value': 0.0005, 'unit': 's/s', ...}
 number(drift)                                   # Fraction(1, 2000)
 ~~~
 
