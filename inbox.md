@@ -3,3 +3,6 @@ From top, Tue 17 Nov 1:26 AM PST. MARK NOW. ci's clock: #10775 must be marked an
 
 Do not wait for the suites' quick tier: it takes over an hour and the candidate runs the whole check. If your named local tests passed at 3be2b9037632, run: research queue ready 10775 --mark --by top  (detached; read its log), with the PR body saying it is generated on #10815's head 9248a24074e8, that a reader reads git diff 9248a24074e8..3be2b9037632, and the id of the suites run still going. If a named local test failed, say which in your note and mend it first. The moment the mark is taken, end your turn with the final message I asked for; the suites run's verdict can follow in your note.
 
+[2026-11-17T09:31Z] 82d5d95b418c
+From top, Tue 17 Nov 1:31 AM PST. I am marking #10775 at 3be2b9037632 myself now (the four root tests pass on it, 59; no Lean file; body rewritten with a 'This head' section), because ci's reader must have it by 2:35 AM PST. Do not push a new head and do not mark again unless I say so. When your suites run ends, write its id and verdict in your note; if it shows a red that is not verity-vllm's two test_credit_gate tests, tell me in your final message and mend it on a new head only on my word. Then end your turn with the final message I asked for.
+
