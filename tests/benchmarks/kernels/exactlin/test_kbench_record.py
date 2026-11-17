@@ -1,5 +1,5 @@
 """kbench.py's result: the gate's verdict as its validation, and the metric only where the gate passed and the model was
-timed in both arms. CPU only: torch, int8_fused and kgate are stand-ins."""
+timed in both arms, its member the model and the card. CPU only: torch, int8_fused and kgate are stand-ins."""
 from __future__ import annotations
 
 import importlib.util
@@ -29,6 +29,8 @@ def kbench(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
                       ("kgate", types.ModuleType("kgate"))):
         monkeypatch.setitem(sys.modules, name, mod)
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    from verity_bench import kit
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "NVIDIA H200", "gpus": [], "node": "n", "commit": None})
     spec = importlib.util.spec_from_file_location("kbench_under_test", DIR / "kbench.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -43,14 +45,13 @@ def _result(out: Path) -> dict:
     return json.loads((out / "result.json").read_text())
 
 
-def test_a_passed_gate_records_the_ratio_the_model_and_both_arms(kbench: types.ModuleType, tmp_path: Path) -> None:
+def test_a_passed_gate_records_the_ratio_its_member_and_both_arms(kbench: types.ModuleType, tmp_path: Path) -> None:
     kbench.record(tmp_path, _gate(True), STEP, MODEL)
     doc = _result(tmp_path)
     assert doc["validation"]["status"] == "passed" and doc["validation"]["evidence"] == ["gate.json"]
     [m] = doc["measurements"]
     assert (m["name"], m["value"], m["unit"], m["mark"]) == (kbench.METRIC, pytest.approx(1.2), "times stock", "measured")
-    assert (m["model"], m["exact_ms_per_step"], m["stock_ms_per_step"]) == (MODEL, 1.2, 1.0)
-    assert "card" in m["host"]
+    assert (m["member"], m["exact_ms_per_step"], m["stock_ms_per_step"]) == ("llama-3.2-1b-h200", 1.2, 1.0)
 
 
 def test_a_failed_gate_records_no_measurement(kbench: types.ModuleType, tmp_path: Path) -> None:
