@@ -1,5 +1,5 @@
 # The repository's layout of record, which tests/test_tree.py holds the tracked tree to at six levels: the root,
-# demos/, verity/, verity/protocols/, each group's directory there and each protocol's directory.
+# applications/, verity/, verity/protocols/, each group's directory there and each protocol's directory.
 #
 # [[tree]] is the tree: each entry's path and what it means.  An entry the tree has and main doesn't hold yet carries
 # the owner who brings it and the day, which top drops once it lands.  `protocol = true` marks the protocols,
@@ -30,27 +30,27 @@ path = "adapters/"
 means = "one directory per serving system, holding only what attaches Verity to it: torch/, and vllm/ on it with the served kernels' circuits"
 
 [[tree]]
-path = "demos/"
-means = "one file per demo, the configuration `verity run` reads, and nothing else: README.md (one table of them), remote.toml, onsite_network.toml, onsite_compute.toml (the default) and onsite_full.toml. A demo holds no code"
+path = "applications/"
+means = "one file per application, the configuration `verity run` reads, and nothing else: README.md (one table of them), remote.toml, onsite_network.toml, onsite_compute.toml (the default) and onsite_full.toml. An application holds no code"
 
 [[tree]]
-path = "demos/README.md"
+path = "applications/README.md"
 means = "one table: the file, what it shows, its command, how far it runs and is proved"
 
 [[tree]]
-path = "demos/remote.toml"
-means = "the remote demo: SPOT, PoUW and the inference-only policy, with no auditor's device at the site"
+path = "applications/remote.toml"
+means = "the remote application: SPOT, PoUW and the inference-only policy, with no auditor's device at the site"
 
 [[tree]]
-path = "demos/onsite_network.toml"
+path = "applications/onsite_network.toml"
 means = "onsite, network only: the network attester, SPOT and the memory wipe"
 
 [[tree]]
-path = "demos/onsite_compute.toml"
+path = "applications/onsite_compute.toml"
 means = "onsite, the default: those three, PoUW and the inference-only policy"
 
 [[tree]]
-path = "demos/onsite_full.toml"
+path = "applications/onsite_full.toml"
 means = "onsite, whole: those five, PoUS and PoUB"
 
 [[tree]]
@@ -137,7 +137,7 @@ means = "what a protocol declares"
 
 [[tree]]
 path = "verity/config.py"
-means = "reads a configuration, the file `verity run CONFIG` takes (a .toml in demos/)"
+means = "reads a configuration, the file `verity run CONFIG` takes (a .toml in applications/)"
 
 [[tree]]
 path = "verity/errors.py"
