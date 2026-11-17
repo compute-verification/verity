@@ -2,7 +2,7 @@ module
 
 public import PouwCommit.Bindings
 public import PouwWindow.Rounds
-public import PouwCheck.Inputs
+public import PouwVerifier.Inputs
 public import Spot.ChallengerSession
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
@@ -31,10 +31,10 @@ before its salt (`pouwRecord`, `salt.pouw_record`), and passes only a pass salte
 receipt.
 
 `liveSaltCheck` is `core_check.live_salt` (LIVESALT2, stated in `Properties.Pouw.LiveSalt`), the Pearl-C form of
-`saltCheck` (`PouwCheck.Rounds`): the session's root is the pass's salt execution phase's root (`epochOpenRoot` of its weights'
+`saltCheck` (`PouwVerifier.Rounds`): the session's root is the pass's salt execution phase's root (`epochOpenRoot` of its weights'
 root W and its `pass_index`), not an execution phase's open root, and the session counts only when it is reserved for the salt coin alone (`PouwWindow.SALT_FAMILIES`) and the ledger ends it
 complete, having released that coin. It sits here, not beside `saltCheck`, because `passEpoch` reads it and
-`PouwCheck.Rounds` imports this module. `saltChallengePhase` is the session both read.
+`PouwVerifier.Rounds` imports this module. `saltChallengePhase` is the session both read.
 
 Both read the coin versions of `coinVersion`: the current one, whose binding and weights' root are `tagged`'s whole
 SHA-512, and, only in a replay of a recorded pass, the e2e-service passes', which keep its first 32 bytes. A replay of a
@@ -44,7 +44,7 @@ then: bound by `taggedSha256`, after the current binding, and sampled by `derive
 
 @[expose] public section
 
-namespace PouwCheck
+namespace PouwVerifier
 
 open Lean (Json)
 open PouwCommit (CoinOpening pyFromHex pyRepr tagged leafValue Domain)
@@ -589,4 +589,4 @@ example : EPOCH_OPEN_TAG = Domains.POUW_EPOCH_OPEN.toUTF8 := rfl
 example : DRAW_DOMAIN = Domains.POUW_SERVED_ZK_SAMPLING := rfl
 example : ("verity/pouw/weights/v1" : String) = Domains.POUW_WEIGHTS_ROOT := rfl
 
-end PouwCheck
+end PouwVerifier

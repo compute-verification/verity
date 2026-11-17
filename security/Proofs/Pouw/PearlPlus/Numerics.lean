@@ -9,7 +9,7 @@ public import Proofs.Properties.Core.Evaluate
 /-!
 # Pearl+'s bridge, the numerics: the check's FP32 add, square root and BF16 step are the semantics'
 
-`PouwCheck.PearlPlus.Words` runs core's evaluator: `Evaluate.Fp32.f32AddV2` in the chain's promotion, the row statistics'
+`PouwVerifier.PearlPlus.Words` runs core's evaluator: `Evaluate.Fp32.f32AddV2` in the chain's promotion, the row statistics'
 butterfly and sum and the peel's `B` factor, `Evaluate.Fp32.sqrtRn` for the row's `ρ`, and `Evaluate.TC.hopperBf16Dot16`
 for the peel's four K16 steps. The semantics reads `TileCircuit.f32Add` (with `PeelExact.addWord?`, its rounding on finite
 words), `RowCircuit.sqrtWord` and `PeelExact.k16Step`. Each statement says the two agree wherever the check reads the

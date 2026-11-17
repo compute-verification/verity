@@ -18,7 +18,7 @@ public import Proofs.Pouw.PearlPlus.Cap
 /-!
 # Pearl+'s bridge: the Lean check's verdict on a tile, read in the Models game
 
-From `PouwCheck.PearlPlus.checkTile`'s code to `TileWordsGood` and `TileGood` of `pearlCProtocolDevRev1 devH100` at the
+From `PouwVerifier.PearlPlus.checkTile`'s code to `TileWordsGood` and `TileGood` of `pearlCProtocolDevRev1 devH100` at the
 deployed semantics (`semH3`: `pc8`'s row arithmetic, the H100 atom and -h3's noise from SHA-512), the tile the named
 premise `TTOutTilePearlCH100Rev1` reads. Four parts:
 
