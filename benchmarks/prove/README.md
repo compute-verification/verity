@@ -391,8 +391,9 @@ proof block and the last a build:
 
 Each measurement's fields name its `prover_batch`, and the build's its `build_cache`. Under each id it writes three
 measurements, in this order, each member the model and card (`benchmarks/README.md`'s `member`) an a5 output's
-machine.txt states, the model of its row dir's row and the `nvidia-smi -L` name of the card it took, then the layer's
-words:
+machine.txt states, the model of its row dir's row and the `short` of the card record (`kit.card_short`) whose
+`driver` holds the `nvidia-smi -L` name of the card it took, then the layer's words. A name no card record holds
+writes no measurement, and the layer's note says why:
 
 1. the Flock layer, member `llama-3.2-1b-h200-flock`;
 2. the zero-knowledge layer, member `llama-3.2-1b-h200-flock-zero-knowledge`;

@@ -145,6 +145,21 @@ def test_under_gate_verdict_a_candidate_that_is_not_plain_still_takes_the_whole_
     assert [kw["shard"] for kw in _shards_of(runs, sha)] == ["1/3", "2/3", "3/3"]
 
 
+def test_under_gate_verdict_one_tick_builds_the_plain_prs_apart_from_one_taking_the_whole_check(env, monkeypatch):
+    """Two plain PRs and, ranked between them, one changing a path `lowrisk_excludes` names: the plain two go in a candidate of
+    their own on the quick tier, and the third in one above it that takes the whole check, both built in one tick."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    env.put(3, {"c.txt": "3\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, depth=2, fill=2)
+    logged = loop.tick()
+    built = [r for r in logged if r["action"] == "build"]
+    started = {r["sha"]: r["record"]["gate"] for r in logged if r["action"] == "slim"}
+    assert [(b["members"], b["base"]) for b in built] == [([1, 3], main), ([2], built[0]["sha"])]
+    assert [started[b["sha"]] for b in built] == [vqueue_slim.QUICK, "check"] and len(quick.launches) == 1
+
+
 def _tree_drive(**lists: list[str] | None) -> str:
     """drive.toml on `main` with the low-risk lane on and this tree's own `lowrisk_excludes`, `verdict_excludes` and
     `verdict_plain`, but each ``lists`` names: that list in its place, or, as None, left out."""
@@ -163,16 +178,17 @@ def _tree_drive(**lists: list[str] | None) -> str:
     ("a Lean source", {"Lib/A.lean": "def a := 1\n"}, "check"),
     ("a lock", {"pkg/lean-audit.json": "{}\n"}, "check"),
     ("a move", {"c.txt": None, "moved/c.txt": "c\n", "a.txt": "moved/c\n"}, "check"),
-    ("the loop", {"tools/research/src/research/vqueue_loop.py": "x = 1\n"}, "check"),
+    ("the loop", {"tools/research/src/research/vqueue_loop.py": "x = 1\n"}, vqueue_slim.QUICK),
+    ("the verifier machine", {"tools/research/src/research/pods/nebius/verifier/setup.sh": "x\n"}, "check"),
 ], ids=["a doc", "a benchmark", "the circuit language", "the root's tests", "a verifier", "a device", "a Lean source",
-        "a lock", "a move", "the loop"])
+        "a lock", "a move", "the loop", "the verifier machine"])
 def test_under_gate_verdict_what_is_plain_is_what_the_tree_s_lowrisk_excludes_and_verdict_excludes_both_leave(
         env, monkeypatch, what, files, gate):
     """`main`'s drive.toml holds this tree's own `lowrisk_excludes`, `verdict_plain` and `verdict_excludes`.  A PR with a land
-    verdict of its own that changes a doc, a benchmark or the root's tests (an entry of `verdict_plain`) is plain, and its
-    candidate takes the quick tier.  One changing the circuit language, a verifier, a device, a Lean source, a lock or the
-    loop's own code takes the whole check, the gate reading what the low-risk lane keeps off but `verdict_plain` and adding
-    `verdict_excludes`, as does a move, whatever it touches."""
+    verdict of its own that changes a doc, a benchmark, the root's tests or the loop's own code (an entry of `verdict_plain`)
+    is plain, and its candidate takes the quick tier.  One changing the circuit language, a verifier, a device, a Lean source,
+    a lock or the verifier machine's deployment the research tool holds takes the whole check, the gate reading what the
+    low-risk lane keeps off but `verdict_plain` and adding `verdict_excludes`, as does a move, whatever it touches."""
     _main_to(env, {DRIVE_FLAGS: _tree_drive()})
     if what == "a move":
         _move(env, 1, files)
@@ -192,8 +208,8 @@ def test_under_gate_verdict_no_file_of_the_tree_the_low_risk_lane_keeps_off_is_p
     own: none whose file `lowrisk_excludes` keeps off the low-risk lane is plain, except a file only entries of
     `verdict_plain` keep off, nor any changing non-test Python under a `verifier/` or `device/` directory, so a Python
     verifier that drifts from its Lean takes the whole check before it lands.  A verifier, a device, the code an auditor's
-    device runs, the research tool's CLI, the move tool, the Lean check and the check are not plain; a doc, a benchmark,
-    infra/ and the agent guard are."""
+    device runs, the verifier machine's deployment and the Lean check are not plain; a doc, a benchmark, infra/, the agent
+    guard, the research tool's CLI, the move tool and the check are."""
     files = _git(ROOT, "ls-files").splitlines()
     _main_to(env, {DRIVE_FLAGS: _tree_drive()})
     loop, _, _ = _verdict(env, monkeypatch)
@@ -211,10 +227,11 @@ def test_under_gate_verdict_no_file_of_the_tree_the_low_risk_lane_keeps_off_is_p
                and "tests" not in f.split("/") and not PurePosixPath(f).name.startswith("test_")}
     assert audited and not audited & plain, f"plain verifier or device Python: {sorted(audited & plain)[:10]}"
     whole = {"verity/protocols/resource_accounting/compute/pouw/verifier/audit.py", "verity/protocols/compose/verifier/live_challenger/auditor.py",
-             "tools/research/src/research/cli.py", "tools/verity/lean/check.py", "tools/check/check.py",
+             "tools/verity/lean/check.py", "tools/research/src/research/pods/nebius/verifier/setup.sh",
              "benchmarks/one_stage/a5.py", "verity/protocols/resource_accounting/network/attester/network_attester_serve.py",
-             "benchmarks/poub_session/auditor_line.py", "tools/move/restack.py"}
-    quick = {"GLOSSARY.md", "calibration/census/README.md", "infra/README.md", "tools/agent-guard/boot.sh"}
+             "benchmarks/poub_session/auditor_line.py"}
+    quick = {"GLOSSARY.md", "calibration/census/README.md", "infra/README.md", "tools/agent-guard/boot.sh",
+             "tools/research/src/research/cli.py", "tools/check/check.py", "tools/move/restack.py"}
     assert whole | quick <= set(files) and not whole & plain and quick <= plain
 
 
