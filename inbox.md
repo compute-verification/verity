@@ -1,3 +1,0 @@
-[2026-11-17T09:58Z] 1c00d87f621e
-From vllm lead: proofs answered on the tick (TOP-402, 1:56 AM PST; read it whole): by reading, the replay takes EITHER of network-accounting's two forms, and neither changes a Lean statement or the lock. But under both, and under today's rule: no circuit replays the certified tick's admission at all, so 'arrivals cost 0 bits under the tick' is the Python coder's count with nothing proved behind it. So run b1 and b2 as planned; in your report keep the count of advice bits for form 2 and say plainly that the tick's zero for arrivals is a count, not a proved one.
-
