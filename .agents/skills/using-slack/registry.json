@@ -71,7 +71,6 @@
       "handle": "infra",
       "holder": "bc-6a6f43b8-948e-5389-a706-1b4904497078",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
-      "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
       "usergroup": "S0CA15YVA0P",
       "retired_usergroups": [
         "S0C5APDSYF9"
@@ -104,11 +103,7 @@
     {
       "handle": "proofs",
       "holder": "bc-a26cefd0-716d-595d-bf02-8f8a47a711bd",
-      "lineage": [
-        "bc-8f4b652b"
-      ],
       "remit": "Flock, its guarantees (recursion's knowledge soundness, the ZK server's zero knowledge), SPOT, red team, proof-system sweeps.",
-      "charter": "PRF-282 and proofs' goals on the Goals page: proofs/recursion-knowledge-sound, proofs/zero-knowledge, proofs/zero-knowledge-any-worker",
       "usergroup": "S0CAGBJTJF4",
       "retired_usergroups": [
         "S0C5Q6KJZTQ"
@@ -126,8 +121,6 @@
         "benchmarks/replay_ladder/",
         "verity/protocols/compose/verifier/live_challenger/",
         "benchmarks/commitments/",
-        "benchmarks/multi_unit/",
-        "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
         "benchmarks/flock_s8_block/",
@@ -140,7 +133,6 @@
         "adapters/vllm/verity_vllm/protocols/spot.py",
         "security/Definitions/Hash/",
         "security/Proofs/Hash/",
-        "verity/protocols/interface/world/",
         "verity/protocols/registration/verifier/registration.py",
         "benchmarks/flock_kernels/",
         "benchmarks/two_stage/",
@@ -220,7 +212,6 @@
         "security/Properties/Flock/Circuit.lean",
         "security/Properties/Flock/Circuit/",
         "security/Properties/Flock/Nets.lean",
-        "security/Properties/Flock/ReadNet.lean",
         "security/Definitions/Flock/MerklePair.lean",
         "security/Proofs/Properties/ResourceAccounting/InProofs.lean"
       ],
@@ -242,7 +233,6 @@
       "handle": "circuits",
       "holder": "bc-21f3d3de-28db-5e5d-964b-d357187449aa",
       "remit": "Circuits of real workloads: each served model's circuit, its capture and commitments, the primitives' Definitions and circuit-check.",
-      "charter": "note:circuits-charter",
       "usergroup": "S0CA15ZF6CX",
       "retired_usergroups": [
         "S0C5U3LHMFT"
@@ -267,7 +257,6 @@
         "adapters/vllm/verity_vllm/correspondence/",
         "adapters/vllm/verity_vllm/acquire/",
         "adapters/vllm/verity_vllm/commit/",
-        "adapters/vllm/verity_vllm/properties/",
         "adapters/vllm/verity_vllm/definitions/",
         "adapters/vllm/verity_vllm/pipeline/build.py",
         "adapters/vllm/verity_vllm/pipeline/match.py",
@@ -305,7 +294,6 @@
       "handle": "compute-accounting",
       "holder": "bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef",
       "remit": "PoUW, its schemes and runs; served-path compute accounting (H200 share, credit in AND gates); its interfaces with circuits, kernels, vllm.",
-      "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAB8FRE6R",
       "retired_usergroups": [
         "S0C5U3Q04JD"
@@ -437,7 +425,6 @@
       "handle": "compute-research",
       "holder": "bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac",
       "remit": "PoUW's lead scheme and Lean statements, weights hardened against matmul shortcuts, silicon logging and its forcing margin, machine model.",
-      "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
       "usergroup": "S0CBZ2L8542",
       "linear": "CMP",
       "linear_label": "lane:compute-research",
@@ -483,7 +470,6 @@
       "handle": "memory-accounting",
       "holder": "bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3",
       "remit": "Memory accounting: PoUS, PoUB (the bandwidth audits) and secure erasure, the memory challenger, their Lean and their runs.",
-      "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAJE0SREV",
       "retired_usergroups": [
         "S0C5VRGBZFE"
@@ -610,7 +596,6 @@
         "security/Definitions/Poub/Guarantees/RemoteSketchP2.lean",
         "security/Definitions/Poub/Guarantees/Sketch.lean",
         "security/Definitions/Poub/Guarantees/Stacking.lean",
-        "security/Definitions/ResourceAccounting/Guarantees/Tag.lean",
         "security/Proofs/Pous.lean",
         "security/Proofs/ResourceAccounting/Gates/",
         "security/Proofs/Compose/Joint.lean",
@@ -627,7 +612,6 @@
         "security/Proofs/Poub/RemoteHeld/",
         "security/Proofs/ResourceAccounting/Sanity.lean",
         "security/Proofs/Poub/Stacking.lean",
-        "security/Proofs/Poub/Tag.lean",
         "security/Proofs/Poub/Tag/",
         "security/Proofs/ResourceAccounting/Defs/Localization.lean",
         "security/Proofs/Poub/Lemmas/Bandwidth.lean",
@@ -666,7 +650,6 @@
       "handle": "network-accounting",
       "holder": "bc-61b263cf-c60b-54d2-9f4f-d20a83b15a1a",
       "remit": "Network accounting: the network certifier (verity/protocols/resource_accounting/network) and its timing-channel proofs.",
-      "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAGBGSPCJ",
       "retired_usergroups": [
         "S0C6LGGSY6L"
@@ -729,7 +712,6 @@
       "handle": "console",
       "holder": "f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc",
       "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
-      "charter": "Daniel, 2026-10-11 (via top)",
       "usergroup": "S0CAAA80KGT",
       "retired_usergroups": [
         "S0C5LSDENA1"
@@ -742,7 +724,6 @@
       "handle": "dashboard-goals",
       "holder": "4d92fa93-101a-42e1-8282-d4a998892829",
       "remit": "Daniel's Goals page on the console, and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
-      "charter": "Daniel, 2026-11-02 11:24 AM PST; named dashboard-goals by Daniel, 2026-11-13 7:05 PM PST",
       "linear": "CON",
       "examples": [
         "How do I put my goals on Daniel's Goals page?",
@@ -753,7 +734,6 @@
     {
       "handle": "dashboard-metrics",
       "remit": "Daniel's Metrics dashboard on the console: which numbers it shows and how often. Asks wait until Daniel opens it; nothing wakes it.",
-      "charter": "Daniel, 2026-11-13 7:05 PM PST",
       "linear": "CON",
       "linear_label": "lane:dashboard-metrics",
       "examples": [
@@ -766,7 +746,6 @@
       "handle": "ci",
       "holder": "bc-8d3a66f8-f3da-5dae-9fb0-4a5b381b3d4e",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
-      "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": "S0C93AFCRT8",
       "linear": "CI",
       "staffs": [
@@ -801,7 +780,6 @@
       "handle": "lean",
       "holder": "bc-cfe6af97-18be-5d48-90c9-a9de869d43e5",
       "remit": "Lean: the Lean audit and its tooling; a change to a Lean guarantee DMs Daniel when it lands.",
-      "charter": "Daniel, 2026-10-01 10:18 AM PDT",
       "usergroup": "S0C93AE54K0",
       "linear": "LEAN",
       "owns": [
@@ -848,7 +826,6 @@
       "handle": "comms",
       "holder": "bc-e6e381a1-2be0-5d80-819c-c2bf4d318fee",
       "remit": "Agent-to-agent messages: research msg, the names directory, routing, and its traffic.",
-      "charter": "Daniel, 2026-10-01 9:12 AM PDT",
       "usergroup": "S0C8PTRMVV5",
       "linear": "COMM",
       "owns": [
@@ -875,7 +852,6 @@
       "handle": "top",
       "holder": "bc-af075d78-d5b9-590b-acbb-eb47d6f88f39",
       "remit": "Top-level: Daniel's coordinator across every lead.",
-      "charter": "Daniel",
       "usergroup": "S0C977GL9R7",
       "linear": "TOP",
       "branch_suffixes": [
@@ -890,7 +866,6 @@
         "GLOSSARY.md",
         ".agents/skills/",
         "tests/",
-        "fixtures/",
         "demos/README.md",
         "demos/",
         "benchmarks/tree/",
@@ -905,7 +880,6 @@
       "handle": "vllm",
       "holder": "bc-eb1d6598-b608-5bc3-8420-9ed89a1d49ab",
       "remit": "The vLLM integration: what the served model runs under verification, and its hookup to the protocols.",
-      "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
         "verity/commitments/periods/",
@@ -935,7 +909,6 @@
       "handle": "benchmarks",
       "holder": "bc-7449b20e-c769-56a1-9ba2-ceacd3cecfc9",
       "remit": "Benchmarks: the overhead and throughput measurements across proof systems, and the tables rendered from them.",
-      "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C9ZLL7T88",
       "linear": "BENCH",
       "owns": [
@@ -965,7 +938,6 @@
       "handle": "kernels",
       "holder": "bc-026b7d5e-6674-5e9c-9eef-4aac970acc3b",
       "remit": "Fast commitment kernels: one GPU library for every served-path commitment, its vLLM integration, the commit-overhead benchmark.",
-      "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
       "linear": "HASH",
       "owns": [
@@ -990,7 +962,6 @@
       "handle": "training",
       "holder": "bc-b43da88b-5d25-4463-9b8c-da4df6f84207",
       "remit": "Training compute and scaling laws: Daniel's training agent, for scaling-law questions.",
-      "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
       "usergroup": "S0CA9EAFKED",
       "linear": "TRN",
       "owns": [
@@ -1033,7 +1004,6 @@
       "handle": "soundness",
       "holder": "bc-d2745108-9b89-5c53-8137-de8e75809c4d",
       "remit": "The one soundness theorem: Verity.Soundness over the compiled verifier, every subprotocol it rests on, and their composition.",
-      "charter": "Daniel, 2026-10-26 10:04 AM PDT (pull the full proofs in; a new slice, via top, split from proofs at its worker cap)",
       "linear": "PRF",
       "linear_label": "lane:soundness",
       "owns": [
@@ -1075,12 +1045,11 @@
     {
       "handle": "goals",
       "remit": "Writes Daniel's Goals page: every goal change goes through it. Leads tell it what changed; it checks and writes.",
-      "charter": "Daniel, 2026-11-15 (via dashboard-goals, COMM-113)",
       "linear": "CON",
       "linear_label": "lane:goals",
       "examples": [
-        "Mark circuits/masked-keyblock done; it landed in #10439.",
-        "Move proofs/spot-figures to Tue 17 Nov; the figures wait on a rerun.",
+        "Mark circuits/masked-keyblock done; it landed.",
+        "Move proofs/spot-figures two days later; the figures wait on a rerun.",
         "Add a subgoal under proofs/zero-knowledge for the ZK server's live path, owned by proofs."
       ],
       "usergroup": "S0CJ87B2CBW"

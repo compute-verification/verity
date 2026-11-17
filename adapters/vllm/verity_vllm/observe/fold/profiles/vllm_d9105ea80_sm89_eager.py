@@ -23,7 +23,6 @@ from collections.abc import Callable
 from typing import Any
 
 from verity_vllm.definitions.registry import b1
-
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import (
     AttentionScope,

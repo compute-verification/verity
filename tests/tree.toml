@@ -239,7 +239,7 @@ protocol = true
 
 [[tree]]
 path = "verity/protocols/resource_accounting/network/"
-means = "network certification: the network attester and its guarantee"
+means = "network attestation: the network attester and its guarantee"
 protocol = true
 
 [[tree]]

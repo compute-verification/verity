@@ -1,8 +1,8 @@
-Part of network certification's [PROTOCOL.md](../PROTOCOL.md).
+Part of network attestation's [PROTOCOL.md](../PROTOCOL.md).
 
 ## Advice v0 (`advice`)
 
-Network certification for arbitrary vLLM usage runs a precommitted AOT compiler. It takes an **advice** string, which
+Network attestation for arbitrary vLLM usage runs a precommitted AOT compiler. It takes an **advice** string, which
 encodes everything serving made unpredictable, and compiles each engine step's circuit from it. The network
 attester certifies the I/O, and SPOT holds the committed values to the compiled circuits and to the certified I/O. v0 is
 the interface the compiler, the encoders and the tie to the certified I/O code against; its schema id is

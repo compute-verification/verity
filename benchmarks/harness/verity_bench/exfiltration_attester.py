@@ -19,8 +19,8 @@ from verity_bench.exfiltration_common import (
 from verity_bench.exfiltration_text import _n, _p
 
 
-def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
-              stop: Any = None) -> dict:
+def attester(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
+             stop: Any = None) -> dict:
     """The network attester's term at the datacenter's and the world's load (`leak_bounds.document`) for a class of
     at most ``response_ids`` ids a response, over the requests its calculator counts by default, the sampling plan's,
     with each execution phase's scan at ``scan_delta``. With None the δ is the one at which the row of the document

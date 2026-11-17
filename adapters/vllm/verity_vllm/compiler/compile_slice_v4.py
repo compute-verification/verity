@@ -88,23 +88,39 @@ from __future__ import annotations
 
 import copy
 import hashlib
+from collections.abc import Sequence
 from types import SimpleNamespace
-from typing import Sequence
+from typing import Any
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.forms import (
+    ONE,
+    ZERO,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.gf128 import mul_forms
+from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import block_key as BK
-from verity_vllm.compiler import cache_step as CST, compile_slice as CS
-from verity_vllm.compiler import cache_step_v3 as V3S
-from verity_vllm.compiler import replay_chain as RC, replay_step as RS
-from verity.circuits.boolean import BIT
-from verity.circuits.boolean.trace import part as _part
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.resource_accounting.network.verifier.head_check import _coll, _Consts, ands
+from verity.protocols.resource_accounting.network.verifier.head_check import (
+    _coll,
+    _Consts,
+    ands,
+)
+
+from verity_vllm.compiler import cache_step as CST
+from verity_vllm.compiler import cache_step_v3 as V3S
+from verity_vllm.compiler import compile_slice as CS
+from verity_vllm.compiler import replay_chain as RC
+from verity_vllm.compiler import replay_step as RS
 
 STATICS = RS.STATICS + ("Q", "D", "P", "K", "CTW", "CU", "DA", "NS", "NM")
 FLAGS = ("load", "steps", "cache", "served", "carry", "pool")
@@ -387,7 +403,7 @@ class _Bus:
         self.nc[p] = RS._sel(C, x["leave"].inv(), self.nc[p])
         return list(ret)
 
-    def finish(self, tap) -> tuple[object, object, list]:
+    def finish(self, tap) -> tuple[Any, Any, list]:
         """(1 iff an active step's bounds hold, 1 iff every result no record carries is zero, the next slot row)."""
         C, S = self.C, self.S
         upd = tap["update"]
@@ -683,8 +699,8 @@ def tap(S, st: RS.State, inp: RS.Inputs) -> SimpleNamespace:
                 "max_tokens": getattr(r, O_IS_MAX_TOKENS) if AS else 0, "fin": r.fin if AS and running else 0}
 
     run = [rec(r, r.comp, True) for r in st.running] + [None] * (R - len(st.running))
-    wait = [rec(r, 0, False) for r in st.waiting]
-    arr = [{**rec(a, 0, False), "out": 0} for a in inp.arrivals]
+    wait: list[dict | None] = [rec(r, 0, False) for r in st.waiting]
+    arr: list[dict | None] = [{**rec(a, 0, False), "out": 0} for a in inp.arrivals]
     if not st.running and not st.waiting and arr:
         wait, arr = arr[:1], arr[1:]
     wait, arr = (wait + [None] * W)[:W], (arr + [None] * A)[:A]
@@ -711,7 +727,7 @@ def tap(S, st: RS.State, inp: RS.Inputs) -> SimpleNamespace:
     for c in range(W + A):
         r = wait[c] if c < W else arr[c - W]
         reach = going and r is not None and budget > 0 and (cnt < S.M if S.M <= R else True)
-        x = {"c": c, "id": r["id"] if r else 0, "ntok": r["P"] + r["out"] if r else 0, "reach": reach, "admit": False,
+        x: dict[str, Any] = {"c": c, "id": r["id"] if r else 0, "ntok": r["P"] + r["out"] if r else 0, "reach": reach, "admit": False,
              "new": 0, "rec": r}
         go = False
         if reach:
@@ -730,10 +746,11 @@ def tap(S, st: RS.State, inp: RS.Inputs) -> SimpleNamespace:
                 cnt, free, budget = cnt + 1, free - new - ev, budget - n
         going = x["admit"] if c >= W else going and (r is None or go)
         cands.append(x)
-    post: list[dict | None] = [{**run[p], "n": run_n[p], "cand": None} if kept[p] else None for p in range(R)]
+    post: list[dict | None] = [{**r, "n": n, "cand": None} if r is not None and k else None
+                               for r, n, k in zip(run, run_n, kept)]
     for k, x in enumerate(c for c in cands if c["admit"]):
         post[cnt0 + k] = {**x["rec"], "comp": x["hb"], "n": x["n"], "fin": 0, "cand": x}
-    update = []
+    update: list[dict | None] = []
     for s in post:
         if s is None:
             update.append(None)
@@ -944,6 +961,7 @@ def scan(S, sl: CS.Slice, delta: int = COINS[2], stream: V3S.Stream | None = Non
         rets = tuple(r[p] if (t.update[p] or {}).get("leave") else 0 for p in range(R))
         wit.append((backs, tuple(h), tuple(e), rets))
         pools.append((nc, fl))
+        assert out.state is not None
         stepped = CS._row(Sc, out.state)
         nxt = RC.Row(stepped.running, stepped.waiting, stepped.free, cur.qh + out.taken, cur.dh + out.used, cur.steps - 1)
         steps.append(out.rows)
@@ -995,7 +1013,7 @@ def _chk(S, sh, sc) -> list[int]:
     for i in range(4):
         out += [b for w in wit for v in w[i] for b in bits(v, CW)]
     stm = sc.stream
-    slots = list(stm.slots) + [V3S.Slot(*[0] * 11, use=0)] * (S.NS - len(stm.slots))
+    slots = list(stm.slots) + [V3S.Slot(*(0,) * 11, use=0)] * (S.NS - len(stm.slots))
     out += [x.start for x in slots]
     out += [b for x in slots for b in bits(x.kind, 3)] + [b for x in slots for b in bits(x.r, S3.RW)]
     out += [b for x in slots for b in bits(x.a, CW)] + [b for x in slots for b in bits(x.b, CW)]

@@ -110,7 +110,7 @@ def uplink(path: Path, links: int) -> Uplink:
     split = [k for k in boundary if site.certified(k)]
     if len(hosts) != 1 or len(split) != links or len(boundary) != len(split) or any(k.beta is None for k in split):
         raise SystemExit(f"certifier_term: {path} doesn't register the model's machine, one host whose {links} boundary "
-                         f"link(s) a network certifier splits: it registers the hosts {hosts}, whose boundary links are "
+                         f"link(s) a network attester splits: it registers the hosts {hosts}, whose boundary links are "
                          f"{[k.id for k in boundary]}, {[k.id for k in split]} of them certified, each at a capacity")
     return Uplink(sum(k.beta for k in split),
                   f"registration {registration.head(composite, log)}, read as given: host {hosts[0]}'s certified "
