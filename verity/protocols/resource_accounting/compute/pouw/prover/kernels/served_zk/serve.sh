@@ -22,8 +22,8 @@ tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}"
 
 # the challenger's coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-stamp "pouw-check-difftest build"
-(cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+stamp "pouw-verifier-difftest build"
+(cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/check && lake build pouw-verifier-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
   || { stamp "LEAN_BUILD_FAIL rc=$?"; tail -20 "$OUT/lean-coins-build.log"; exit 12; }
 
 export SCHEME=pearl-c-sm120-v1-h3 MODE=smoke RETAIN=1
