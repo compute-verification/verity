@@ -34,28 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The leaf and the receipt its 33 sessions' committed rows decode to
-
-`ResourceAccounting.Guarantees.TS.LeafLanesSound` opens the leaf the lanes' committed rows decode to, and checks the receipt the
-combine's committed row decodes to: no premise says which leaf and receipt the rows hold. Each value is read where a
-statement reads it (`decL`, `decC` at the registrants' commit-time openings `openedReg`):
-
-* `aLane`, `aSlot`, `bLane`, `bSlot`, `cellLane`: A row `r` is lane `4 (r mod 8)`'s at row slot `⌊r/8⌋`, B row `j` lane
-  `⌊(j mod 8)/2⌋`'s at column slot `2⌊j/8⌋ + (j mod 2)`, and cell `(i, j)` of the record lane
-  `4 (i mod 8) + ⌊(j mod 8)/2⌋`'s, the one lane whose cells it is among (`ResourceAccounting.TS.Lanes.cover`);
-* `leafOf`, `receiptOf`: the leaf those lanes' decodes read, and the combine's decoded receipt;
-* `aLane_rowOf` …, `cellLane_rowOf_colOf`: lane `l`'s A row at slot `s` is lane `4⌊l/4⌋`'s at the same slot, its B row
-  at slot `t` lane `l mod 4`'s at the same slot, and its cells its own;
-* `LaneAgrees`, `LaneAgrees.laneOk`: a lane's view agrees with a leaf on what `LaneOk` reads (its A and B rows, its own
-  32 cells, its partials row, its public inputs, its index and `ok`), so `LaneOk` of the view is `LaneOk` of the leaf's;
-* `LaneKnownHolds.pub_eq`, `lane_eq`, `ok_eq`: where verity-verify-proof's checks give a lane's known fields, its decode's
-  public inputs, index and `ok` are those; `CombineView.eta_ok`.
-
-Four lanes read each A row, and four each B row; that they decode it alike is `ResourceAccounting.TS.Lanes.read_bits` (one
-registered tree, each read in full, the registrants' rows agreeing). Each cell of the record is read by its one lane,
-so no lane's reads of another's cells are asked.
--/
+/-! The leaf and the receipt the 33 sessions' committed rows decode to, each read where a statement reads it, so no
+premise says which leaf and receipt the rows hold. -/
 
 @[expose] public section
 
@@ -131,8 +111,6 @@ theorem cellLane_rowOf_colOf (l : Fin 32) (s : Fin 4) (t : Fin 8) : cellLane (ro
   simp only [cellLane, rowOf, colOf]
   omega
 
-/-- **Lane `l`'s view agrees with the leaf `L` on what `LaneOk` reads**: its A and B rows are `L`'s at its slots, its
-record at its own 32 cells is `L`'s, its partials row is `p`, its public inputs `pub`, its index `l`, and `ok = 1`. -/
 structure LaneAgrees {K nw : ℕ} {Pub : Type} (v : LaneView K nw Pub) (L : Leaf K) (pub : Pub) (p : Fin nw → BitVec 32)
     (l : Fin 32) : Prop where
   a : v.a = laneA L l
@@ -144,8 +122,6 @@ structure LaneAgrees {K nw : ℕ} {Pub : Type} (v : LaneView K nw Pub) (L : Leaf
   lane : v.lane = l
   ok : v.ok = true
 
-/-- **`LaneOk` reads only what `LaneAgrees` fixes**: a view that agrees with `L` and meets `LaneOk` makes lane `l`'s
-view of `L` meet it. -/
 theorem LaneAgrees.laneOk {K nw : ℕ} {Pub : Type} {dq : List ℤ → ℤ}
     {part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32} {v : LaneView K nw Pub}
     {L : Leaf K} {pub : Pub} {p : Fin nw → BitVec 32} {l : Fin 32} (h : LaneAgrees v L pub p l)
@@ -162,7 +138,6 @@ theorem LaneAgrees.laneOk {K nw : ℕ} {Pub : Type} {dq : List ℤ → ℤ}
   rw [← hz s t, ← hy s t]
   exact ⟨h1, h2⟩
 
-/-- Where a lane's known fields hold, its decode's public inputs are `P`. -/
 theorem LaneKnownHolds.pub_eq {K nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} {P : LanePub} {l : Fin 32}
     (h : LaneKnownHolds T rd P l) : (decLane K nw T rd).pub = P := by
   obtain ⟨admit, salt, position, roots, hs, hp, hr⟩ := P
@@ -177,7 +152,6 @@ theorem LaneKnownHolds.pub_eq {K nw : ℕ} {T : Tile} {rd : String → ℕ → O
   · exact bitsN_eq h.position hp
   · exact bitsN_eq h.roots hr
 
-/-- Where lane `l`'s known fields hold, its decode's index is `l`. -/
 theorem LaneKnownHolds.lane_eq {K nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} {P : LanePub} {l : Fin 32}
     (h : LaneKnownHolds T rd P l) : (decLane K nw T rd).lane = l := by
   have hl : l.val < 2 ^ laneBits := by
@@ -189,40 +163,34 @@ theorem LaneKnownHolds.lane_eq {K nw : ℕ} {T : Tile} {rd : String → ℕ → 
   rw [bitsN_eq h.lane hl]
   exact Nat.mod_eq_of_lt l.isLt
 
-/-- Where a lane's known fields hold, its decode's `ok` is `1`. -/
 theorem LaneKnownHolds.ok_eq {K nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} {P : LanePub} {l : Fin 32}
     (h : LaneKnownHolds T rd P l) : (decLane K nw T rd).ok = true := by
   show (rd "o0" 0 == some true) = true
   rw [h.ok]
   rfl
 
-/-- A decode's A row at slot `s` reads only its port `a<s>`. -/
 theorem decLane_a {K nw nw' : ℕ} {T : Tile} {rd rd' : String → ℕ → Option Bool} {s : Fin 4}
     (h : rd s!"a{s.val}" = rd' s!"a{s.val}") : (decLane K nw T rd).a s = (decLane K nw' T rd').a s := by
   first
   | (simp only [decLane, h]; done)
   | (unfold decLane; dsimp only; rw [h])
 
-/-- A decode's B row at slot `t` reads only its port `b<t>`. -/
 theorem decLane_b {K nw nw' : ℕ} {T : Tile} {rd rd' : String → ℕ → Option Bool} {t : Fin 8}
     (h : rd s!"b{t.val}" = rd' s!"b{t.val}") : (decLane K nw T rd).b t = (decLane K nw' T rd').b t := by
   first
   | (simp only [decLane, h]; done)
   | (unfold decLane; dsimp only; rw [h])
 
-/-- A combine view whose `ok` is `1` is its partials, its receipt and `1`. -/
 theorem CombineView.eta_ok {nw : ℕ} (v : CombineView nw) (h : v.ok = true) : v = ⟨v.parts, v.receipt, true⟩ := by
   obtain ⟨parts, receipt, ok⟩ := v
   dsimp only at h
   subst h
   rfl
 
-/-- Lane `l` reads row `rowOf l s` of `a` at its port `a<s>`. -/
 theorem a_read (K : ℕ) (l : Fin 32) (s : Fin 4) :
     (s!"a{s.val}", "a", (rowOf l s).val) ∈ regReads (servedTile K) (some l.val) :=
   List.mem_filterMap.2 ⟨_, lanePorts_a K l s, rfl⟩
 
-/-- Lane `l` reads row `colOf l t` of `b` at its port `b<t>`. -/
 theorem b_read (K : ℕ) (l : Fin 32) (t : Fin 8) :
     (s!"b{t.val}", "b", (colOf l t).val) ∈ regReads (servedTile K) (some l.val) :=
   List.mem_filterMap.2 ⟨_, lanePorts_b K l t, rfl⟩
@@ -233,7 +201,6 @@ theorem fullValue_a : fullValue "a" = true := by
 theorem fullValue_b : fullValue "b" = true := by
   first | rfl | decide | simp [fullValue]
 
-/-- A decode's record cell does not depend on its partials' width. -/
 theorem decLane_z {K nw nw' : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} (i j : Fin 32) :
     (decLane K nw T rd).z i j = (decLane K nw' T rd).z i j :=
   rfl
@@ -242,14 +209,10 @@ theorem decLane_y {K nw nw' : ℕ} {T : Tile} {rd : String → ℕ → Option Bo
     (decLane K nw T rd).y i j = (decLane K nw' T rd).y i j :=
   rfl
 
-/-- The combine's decoded `ok` is its `o0` bit. -/
 theorem decComb_ok {nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} :
     (decComb nw T rd).ok = (rd "o0" 0 == some true) :=
   rfl
 
-/-- **Lane `l`'s decode agrees with the leaf the committed rows decode to** (`leafOf`), where its `a<s>` ports read what
-lane `aHome l`'s do and its `b<t>` ports what lane `bHome l`'s do, its partials row is `p` and its known fields hold at
-`P`: its cells are its own (`cellLane_rowOf_colOf`), and its A and B rows are those lanes' at the same slots. -/
 theorem laneAgrees_of {K nw : ℕ} {T : Tile} (sess : Option (Fin 32) → RowsSession) {P : LanePub}
     {p : Fin nw → BitVec 32} (l : Fin 32)
     (ha : ∀ s : Fin 4, portBit (sess (some l)) (openedReg (sess (some l))) s!"a{s.val}" =

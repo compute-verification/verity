@@ -39,29 +39,8 @@ import Proofs.Pouw.TS.Session.Lanes.KnownRead
 import Proofs.Flock.VBridge.Family.Registrants
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Lane `l`'s partials row is the combine's `p<l>`
-
-Lane `l`'s statement reads its partials row at its port `partials`, and the combine reads it at `p<l>`: two ports of two
-circuits, of one registered value. Where each session's `--registered` file holds `PouwWindow.Lanes.ownOf` (one table
-per value at the unit's placement, `place v`, registered at `roots (place v).1`, each port read at its layout row from
-the table's base row) and verity-verify-proof's known-read check holds each port the file
-marks `read_in_full` (`PouwWindow.Lanes.readFull`) to one row of its registered words whose every bit the unit reads
-(`Flock.KnownRead.fullRows`), the two statements decode one row:
-
-* `regPort`, `mem_ownOf`, `partials_lane`, `partials_comb`, `full_of`, `mem_fullRows`: the two ports are `ownOf`'s, both
-  of the partials' table at the base row plus `l`, and both read in full (`full_of`: a read of an A, B or partials
-  row), so the check holds each to one row of that table's `regWords` words;
-* `ReadsOwnRow`: every unit's registrant reads a port that `own` reads at one row (`reads = #[some r]`) at that row,
-  which acceptance gives (`RowsSession.readsOwnRow_of`);
-* `portBit_none`: no bit at or past a port's row width is read;
-* `read_bits`, `partials_bits`: where two sessions' registrants' rows agree at one tree and position (`RowsAgree`), two
-  ports that read one row of one value in full have one function for bits (lane `l`'s `partials` and the combine's
-  `p<l>`; two lanes' reads of one A or B row, `Lanes.Committed`): below their common width the opened row's bits
-  (`portBit_opened`), one row's bytes so one row's bits (`FlockVBridge.Family.bits_of_encPortH`); at and past it none;
-* `fieldBit_partials`, `fieldBit_combine`, `part_eq`: both decodes read the partials words from bit 0, so lane `l`'s
-  decoded partials row is the combine's row `l`.
--/
+/-! Lane `l`'s partials row and the combine's `p<l>`, two ports of one registered value each read in full, decode one
+row. -/
 
 @[expose] public section
 
@@ -70,8 +49,6 @@ namespace ResourceAccounting.TS.Lanes
 open PouwWindow.Lanes Flock.SoundAtBridge ResourceAccounting.TS.Checked FlockSoundness.Discharge
 open FlockSoundness.Discharge.Layout (portRowW)
 
-/-- `ownOf`'s port `nm`: the leaf's row `row` of the value `v`, row `(place v).2 + row` of the table `(place v).1`,
-registered at `roots (place v).1`. -/
 def regPort (roots : String → _root_.Flock.Registered.Port) (place : String → String × ℕ) (nm v : String) (row : ℕ) :
     _root_.Flock.Registered.Port :=
   { roots (place v).1 with name := nm, value := (place v).1, readsRel := #[some ((place v).2 + row)], readsFrom := 0 }
@@ -85,24 +62,20 @@ theorem mem_ownOf (roots : String → _root_.Flock.Registered.Port) (place : Str
     regPort roots place nm v row ∈ ownOf roots place T k :=
   List.mem_map.2 ⟨_, h, rfl⟩
 
-/-- Lane `l` reads row `l` of `partials` at its port `partials`. -/
 theorem partials_lane (T : Tile) (l : ℕ) : ("partials", "partials", l) ∈ regReads T (some l) := by
   refine List.mem_filterMap.2 ⟨⟨"partials", .read "partials" l, fieldsFrom 0 [("partials", 32 * T.nw)], false⟩, ?_, rfl⟩
   show _ ∈ lanePorts T l
   unfold lanePorts
   exact List.mem_append_right _ (by simp)
 
-/-- The combine reads row `x` of `partials` at its port `p<x>`. -/
 theorem partials_comb (T : Tile) {x : ℕ} (hx : x < T.lanes) : (s!"p{x}", "partials", x) ∈ regReads T none :=
   List.mem_filterMap.2 ⟨⟨s!"p{x}", .read "partials" x, fieldsFrom 0 [(s!"partials[{x}]", 32 * T.nw)], false⟩,
     List.mem_append_left _ (List.mem_map.2 ⟨x, List.mem_range.2 hx, rfl⟩), rfl⟩
 
-/-- A read of a `fullValue` (an A, B or partials row) is a port read in full. -/
 theorem full_of {T : Tile} {k : Option ℕ} {nm v : String} {row : ℕ} (h : (nm, v, row) ∈ regReads T k)
     (hv : fullValue v = true) : nm ∈ readFull T k :=
   List.mem_toArray.2 (List.mem_filterMap.2 ⟨_, h, by simp only [hv, if_true]⟩)
 
-/-- A port read in full is checked as one row of its registered port's words. -/
 theorem mem_fullRows {own : Array _root_.Flock.Registered.Port} {names : Array String} {nm : String}
     {P : _root_.Flock.Registered.Port} (hn : nm ∈ names) (hf : own.toList.find? (·.name == nm) = some P) :
     (nm, #[(Array.replicate (_root_.Flock.KnownRead.regWords P) 0, ByteArray.empty)]) ∈
@@ -112,7 +85,6 @@ theorem mem_fullRows {own : Array _root_.Flock.Registered.Port} {names : Array S
 
 theorem fieldBit_partials (T : Tile) : fieldBit (lanePorts T 0) "partials" = 0 := rfl
 
-/-- Every field of the combine's ports is at bit 0 of its port's row. -/
 theorem fieldBit_combine (T : Tile) (path : String) : fieldBit (combinePorts T) path = 0 := by
   unfold fieldBit
   cases h : fieldOf? (combinePorts T) path with
@@ -127,7 +99,6 @@ theorem fieldBit_combine (T : Tile) (path : String) : fieldBit (combinePorts T) 
     rcases hp with ⟨x, -, rfl⟩ | rfl | rfl <;>
       simp only [fieldsFrom, List.mem_cons, List.not_mem_nil, or_false] at hfm <;> subst hfm <;> rfl
 
-/-- **No bit at or past a port's row width is read**: `portBit` is `none` at a bit no port of the name holds. -/
 theorem portBit_none {s : RowsSession} (v : ℕ → ℕ → Option Bool) {name : String} {b : ℕ}
     (h : ∀ q : Fin s.c.ports.size, s.c.ports[q].name = name → portRowW s.c q ≤ b) : portBit s v name b = none := by
   unfold portBit
@@ -143,12 +114,6 @@ def ReadsOwnRow (s : RowsSession) : Prop :=
   ∀ (u : Fin s.n) (q : Fin s.c.ports.size), (∃ pt ∈ s.own, pt.name = s.c.ports[q].name) → ∀ r : ℕ,
     (s.ownPort q).reads = #[some r] → (s.rdU u).readAt (.inl (u, q)) = r
 
-/-- **Two statements' reads of one registered row in full read its bits alike**: at sessions `sL` and `sC` (statements
-`kL` and `kC`, the same or not) whose registered files hold `ownOf roots place T` (one placement for both) and pass
-the complete check, and the known-read check at each port `readFull` names, whose registrants' rows agree at one tree
-and position, and whose units read their one-row ports at their rows, `portBit` at two ports that read the leaf's row
-`row` of one value `v` (row `(place v).2 + row` of its table), each read in full, is one function: below their common width the opened row's bits (`portBit_opened`), one row's bytes so one
-row's bits (`FlockVBridge.Family.bits_of_encPortH`); at and past it none. -/
 theorem read_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {place : String → String × ℕ}
     {sL sC : RowsSession} {kL kC : Option ℕ}
     {nmL nmC v : String} {row : ℕ} (hmL : (nmL, v, row) ∈ regReads T kL) (hmC : (nmC, v, row) ∈ regReads T kC)
@@ -243,8 +208,6 @@ theorem read_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {
       exact hge
     rw [nL, nC]
 
-/-- **Lane `l`'s `partials` and the combine's `p<l>` read one row's bits**: `read_bits` at their reads of row `l` of
-`partials`. -/
 theorem partials_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {place : String → String × ℕ}
     {sL sC : RowsSession} {l : ℕ} (hl : l < T.lanes)
     (hOL : ∀ p ∈ ownOf roots place T (some l), sL.own.toList.find? (·.name == p.name) = some p)
@@ -265,8 +228,6 @@ theorem partials_bits {T : Tile} {roots : String → _root_.Flock.Registered.Por
   read_bits (partials_lane T l) (partials_comb T hl) (full_of (partials_lane T l) rfl) (full_of (partials_comb T hl) rfl)
     hOL hOC hcL hcC hkL hkC huL hSL huC hSC hRL hRC hA b
 
-/-- **Lane `l`'s decoded partials row is the combine's row `l`**, where the two ports' bits are one function: both
-decodes read the words from bit 0 (`fieldBit_partials`, `fieldBit_combine`). -/
 theorem part_eq {K nw : ℕ} {T : Tile} {sL sC : RowsSession} {vL vC : ℕ → ℕ → Option Bool} {l : Fin 32}
     (h : ∀ b, portBit sL vL "partials" b = portBit sC vC s!"p{l.val}" b) :
     (decL K nw T sL vL).part = (decC nw T sC vC).parts l := by

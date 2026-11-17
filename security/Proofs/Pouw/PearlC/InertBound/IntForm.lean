@@ -4,23 +4,8 @@ public import Definitions.Pouw.PearlC.DeviceRev1
 public import Proofs.Pouw.PearlC.Records
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# The cap circuit's integer tests are rev1's per-tile cap
-
-`cap.py`'s `Pc8TileCap` decides rev1's `inertBoundOK` (`pearlCTilesDevRev1`) on three integer tests over 32-bit words: the
-debit `L` against its largest passing value, `(N/g)·L + (G·fs·|C|/g)·elems` against a table over the passing rows'
-count, and the count's equality with each row of the table. This file restates the scheme's integers, the constants
-and the tests as `cap.py` writes them, and proves the tests decide the cap.
-
-* `IntPrices`, `creditInt`: `pearl_c_device.Prices` and `PearlC(forming="v1").credit_of(Shape(m, k, n))`, so
-  `creditDevRev1 = creditInt` (`creditDevRev1_eq`).
-* `inertBoundConstants`, `InertBoundDomain`, `InertBoundFits`: `_inert_bound_constants` (with `_promoted`'s domain), and its refusals.
-* `inertBoundTests`: the tests on integers; `inertBoundTests_iff`: they hold iff `RHO·(N·L + elem·elems) ≤ |R|·|C|·P`, and
-  `inert_bound_iff_int`: iff the debit is at most `ρ·creditDevRev1·tileShare` (ρ = 1/RHO).
-* `addW`, `mulW`, `leW`, `boundW`, `inertBoundTestsW`: the same tests on 32-bit words (`I32Add`, `_mul`, `I32Le`, the
-  `I32Eq` selection of the bound); `inertBoundTestsW_eq`: under `_inert_bound_constants`' bounds they are `inertBoundTests`, since no sum
-  they compute leaves 31 bits (`capSums_fit`).
--/
+/-! The cap circuit's integer tests on 32-bit words (`cap.py`'s `Pc8TileCap`) decide rev1's per-tile cap
+(`inertBoundOK`). -/
 
 @[expose] public section
 
@@ -36,7 +21,6 @@ structure IntPrices where
   fs : ℕ
   qa : ℕ
 
-/-- The Lean record's prices. -/
 def IntPrices.toPrices (p : IntPrices) : Prices := ⟨p.fadd, p.bf16, ⟨p.fs, p.qa⟩⟩
 
 /-- `SM120_PRICES`. -/
@@ -80,8 +64,7 @@ def inertBoundConstants (p : IntPrices) (g k tm tn n rho : ℕ) : InertBoundCons
   let lMax := table tm / (n / gg)
   ⟨atom, zeroPromo, n / gg, elem / gg, lMax, table⟩
 
-/-- `_promoted`'s and `_inert_bound_constants`' domain: a promoted device (`g ≥ 1`), whole promotion windows of `32·g`, at least
-two of them, `0 < tn ≤ n` with `tn ∣ n`, `tm > 0` and `rho > 0`. -/
+/-- `_promoted`'s and `_inert_bound_constants`' domain. -/
 structure InertBoundDomain (g k tm tn n rho : ℕ) : Prop where
   g_pos : 0 < g
   window : 32 * g ∣ k
@@ -107,14 +90,10 @@ def InertBoundFits (p : IntPrices) (g k tm tn n rho : ℕ) : Prop :=
 instance instDecidableInertBoundFits (p : IntPrices) (g k tm tn n rho : ℕ) : Decidable (InertBoundFits p g k tm tn n rho) := by
   unfold InertBoundFits; infer_instance
 
-/-- **The cap's tests on integers**: `debit = atom·atoms + zero·zeros` at most `l_max`, and
-`lhs = (n/g)·debit + (elem/g)·elems` at most the table at the passing rows' count. -/
 def inertBoundTests (c : InertBoundConstants) (atoms zeros elems rows : ℕ) : Bool :=
   let debit := c.atom * atoms + c.zero * zeros
   let lhs := c.nG * debit + c.elemG * elems
   decide (debit ≤ c.lMax) && decide (lhs ≤ c.table rows)
-
-/-! ## 32-bit words -/
 
 /-- `I32Add`: the sum mod `2^32`. -/
 def addW (a b : ℕ) : ℕ := (a + b) % 2 ^ 32
@@ -128,7 +107,6 @@ def mulW (c x : ℕ) : ℕ :=
     if c % 2 = 1 then addW d x else d
 decreasing_by omega
 
-/-- A word as a signed 32-bit integer. -/
 def toInt32 (w : ℕ) : ℤ := if w < 2 ^ 31 then (w : ℤ) else (w : ℤ) - 2 ^ 32
 
 /-- `I32Le`: signed comparison of two words. -/
@@ -138,8 +116,8 @@ def leW (a b : ℕ) : Bool := decide (toInt32 a ≤ toInt32 b)
 def boundW (c : InertBoundConstants) (tm rows : ℕ) : ℕ :=
   (List.range' 1 tm).foldl (fun b r => if rows = r then c.table r else b) (c.table 0)
 
-/-- **The cap's tests on words** (`_tile_inert_bound_body`): `debit = atom·atoms + zero·zeros` and
-`lhs = (n/g)·debit + (elem/g)·elems` by `_mul` and `I32Add`, then `I32Le(debit, l_max) ∧ I32Le(lhs, bound)`. -/
+/-- `_tile_inert_bound_body`'s tests: `I32Le(debit, l_max) ∧ I32Le(lhs, bound)`, with the sums by `_mul` and
+`I32Add`. -/
 def inertBoundTestsW (c : InertBoundConstants) (tm atoms zeros elems rows : ℕ) : Bool :=
   let debit := addW (mulW c.atom atoms) (mulW c.zero zeros)
   let lhs := addW (mulW c.nG debit) (mulW c.elemG elems)
@@ -184,11 +162,7 @@ theorem boundW_eq (c : InertBoundConstants) {tm rows : ℕ} (h : rows ≤ tm) : 
   · have : rows = 0 := by omega
     rw [this]
 
-/-! ## The tests decide the cap -/
-
-/-- **The integer tests are the scaled cap**: on the domain and with `rows ≤ tm`, `inertBoundTests` holds iff
-`RHO·(N·L + G·fs·tn·elems) ≤ rows·tn·P`, with `L = (32·G + add)·atoms + G·add·zeros` and `P = G·credit_of(1, k, N)`.
-The first test follows from the second (the table grows with `rows`); it is there to bound `L` on words. -/
+/-- The first test follows from the second because the table grows with `rows`; it is there to bound `L` on words. -/
 theorem inertBoundTests_iff (p : IntPrices) {g k tm tn n rho : ℕ} (hD : InertBoundDomain g k tm tn n rho)
     {atoms zeros elems rows : ℕ} (hr : rows ≤ tm) :
     inertBoundTests (inertBoundConstants p g k tm tn n rho) atoms zeros elems rows = true ↔
@@ -219,8 +193,6 @@ theorem inertBoundTests_iff (p : IntPrices) {g k tm tn n rho : ℕ} (hD : InertB
       _ ≤ rows * tn * P := h
       _ ≤ tm * tn * P := by gcongr
 
-/-- `credit_of` is `creditDevRev1`: on whole promotion windows of a promoted record at prices `p`, rev1's credit of a
-unit is `m` times `credit_of(Shape(1, k, n))`. -/
 theorem creditDevRev1_eq (p : IntPrices) {d : PearlCDevice} {g : ℕ} (hG : d.G = g) (hg : 0 < g)
     (hp : d.prices = p.toPrices) (sh : Shape) (hk : 32 * g ∣ sh.k) (hk1 : 32 * g ≤ sh.k) :
     creditDevRev1 d sh = (sh.m : ℚ) * (creditInt p g 1 sh.k sh.n : ℚ) := by
@@ -248,9 +220,6 @@ theorem creditDevRev1_eq (p : IntPrices) {d : PearlCDevice} {g : ℕ} (hG : d.G 
   field_simp
   ring
 
-/-- **rev1's per-tile cap is the scaled integer inequality**: at `ρ = 1/RHO`, the debit
-`inertWorkDev ⟨atoms, 0⟩ + fs·(|C|/N)·elems + add·zeros` is at most `ρ·creditDevRev1·tileShare` iff
-`RHO·(N·L + G·fs·|C|·elems) ≤ |R|·|C|·P` (`m` cancels). -/
 theorem inert_bound_iff_int (p : IntPrices) {d : PearlCDevice} {g rho : ℕ} (hG : d.G = g) (hg : 0 < g)
     (hp : d.prices = p.toPrices) (sh : Shape) (hk : 32 * g ∣ sh.k) (hk1 : 32 * g ≤ sh.k) (hm : 0 < sh.m)
     (hn : 0 < sh.n) (hrho : 0 < rho) (rows cols : Finset ℕ) (atoms zeros elems : ℕ) :
@@ -273,10 +242,6 @@ theorem inert_bound_iff_int (p : IntPrices) {d : PearlCDevice} {g rho : ℕ} (hG
     ring
   · field_simp
 
-/-! ## On 32-bit words -/
-
-/-- The word tests are the integer tests when the debit, `l_max`, the bound and (where the first test passes) the left
-side stay below `2^31`. -/
 theorem inertBoundTestsW_eq_of (c : InertBoundConstants) {tm atoms zeros elems rows : ℕ} (hr : rows ≤ tm)
     (h1 : c.atom * atoms + c.zero * zeros < 2 ^ 31) (h2 : c.lMax < 2 ^ 31) (h3 : c.table rows < 2 ^ 31)
     (h4 : c.atom * atoms + c.zero * zeros ≤ c.lMax →
@@ -295,9 +260,6 @@ theorem inertBoundTestsW_eq_of (c : InertBoundConstants) {tm atoms zeros elems r
       leW_of_lt h5 h3]
   · simp [h]
 
-/-- **No sum the cap computes leaves 31 bits** under `_inert_bound_constants`' bounds, with the counts a tile of `tm` rows and
-`tn` columns can reach (`k/32` flags and `k/(32·G)` promotions per word, `k` elements per row): the debit, `l_max`, the
-bound at any `rows ≤ tm`, and the left side wherever the first test passes. -/
 theorem capSums_fit (p : IntPrices) {g k tm tn n rho : ℕ} (hF : InertBoundFits p g k tm tn n rho)
     {atoms zeros elems rows : ℕ} (ha : atoms ≤ tm * tn * (k / 32)) (hz : zeros ≤ tm * tn * (k / (32 * g)))
     (he : elems ≤ tm * k) (hr : rows ≤ tm) :
@@ -321,8 +283,6 @@ theorem capSums_fit (p : IntPrices) {g k tm tn n rho : ℕ} (hF : InertBoundFits
     exact Nat.add_le_add (Nat.mul_le_mul_left _ h) (Nat.mul_le_mul_left _ he)
   omega
 
-/-- **The circuit's tests decide the cap**: on `_inert_bound_constants`' domain and within its bounds, with the counts a tile can
-reach, the word tests (`inertBoundTestsW`) hold iff `RHO·(N·L + G·fs·tn·elems) ≤ rows·tn·P`. -/
 theorem inertBoundTestsW_iff (p : IntPrices) {g k tm tn n rho : ℕ} (hD : InertBoundDomain g k tm tn n rho)
     (hF : InertBoundFits p g k tm tn n rho) {atoms zeros elems rows : ℕ} (ha : atoms ≤ tm * tn * (k / 32))
     (hz : zeros ≤ tm * tn * (k / (32 * g))) (he : elems ≤ tm * k) (hr : rows ≤ tm) :

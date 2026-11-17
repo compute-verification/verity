@@ -37,61 +37,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A leaf's 33 linked sessions realize one unit (the statement)
-
-`ResourceAccounting.Guarantees.TS.LeafLanesSound`: under option A a sampled 32 × 32 H1 leaf is proved as its 32 lanes
-(`h1zy.PouwH1LaneZy_v1{TILE}`) and their combine (`PouwH1Combine_v1{TILE}`), 33 Flock sessions over the leaf's
-committed rows and one post-draw partials record. Accepted together, they realize the one-unit proof layer
-`ResourceAccounting.TS.Lanes.leafLayer`, whose relation is the unit's served checks on the leaf's 32 × 32 cells (`UnitServed`:
-`z = A·Bᵀ` and `y = dq(z)` at every cell, the receipt the XOR of its lanes' honest partials) unless two of the
-sessions' registrants' records exhibit a SHA-512 collision (`LeafColl`) or a session's known-content tie does
-(`LeafKnownColl`). Its acceptance includes verity-verify-proof's known-content, complete and known-read checks at each of
-the 33 sessions, and the leaf verifier's checks of each session's registered file (`PouwWindow.Lanes.checkOwn`) and
-of its sample (`PouwWindow.Lanes.checkFull`: every unit of a non-empty population) and of the file's reads
-(`PouwWindow.Lanes.checkOneRead`: one read at each port), all run by `pouw-leaf-own`. Each session is
-`RowsSession.canon` of a session and its registrants' openings (`RowsSession.Openings`): its registered reads are built
-from the verifier's own `own`, every circuit port's row that `own` names read through `own`'s port at its one position,
-and only the rows, salts and paths the registrants committed come from them. It takes `CheckedSessionSound`'s
-hypotheses at each session as named premises, Flock's collision bounds and the window's sampling design
-(`ResourceAccounting.Premises.TS.SessionsCR`, `ExecutionPhaseDesigns`), but port uniqueness and the `ok` port, which that acceptance gives
-(the known-read check's names, at known content naming `o0`), full checking (`kd = n`) and a unit (`0 < n`), which the
-sample check gives, and registered served roots (`RowsSession.ServedRegistered`), which the reads built from `own` and the
-one-read check give, and two named premises: the
-lanes' and the combine's circuits compute their pieces' compositions on bits, at their port rows, read through the
-layout's decodes (`ResourceAccounting.TS.Lanes.LaneLowers` and `CombineLowers` at `Lanes.decL`, `Lanes.decC`; the lane's dequant
-is its Definition's word view, `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`), and its chain words are `h1tile._chain`'s,
-`ResourceAccounting.TS.Lanes.laneChain K nw` (`Pouw.H1Zy.h1Chain K` at the `pub` row's seeds); the complete check makes those
-rows the registered reads). That the pieces'
-lowerings compose to the Definitions is proved (`ResourceAccounting.TS.Lanes.laneComputes_of_lowers`,
-`combineComputes_of_lowers`, `Pouw.H1Zy.laneBits_bv`, `combineBits_bitsOf`), and that
-each Definition's `ok = 1` means the lane's or the combine's check
-(`ResourceAccounting.TS.Lanes.leafChecks_of_computes`, which gives `ResourceAccounting.Assumptions.TS.LeafChecks`), at a `K`
-the lanes bind at (`32 ∣ K`, `K < 2^17`), which the leaf verifier's tile check, part of the acceptance, gives
-(`PouwWindow.Lanes.Tile.check`, `ResourceAccounting.TS.Lanes.k_of_check`). The leaf the layer opens is the one the lanes' committed rows decode to, and the receipt it checks
-the one the combine's committed row decodes to (`ResourceAccounting.TS.Lanes.leafOf`, `receiptOf`): each A row as the lane
-`4 (r mod 8)` reads it, each B row as the lane `⌊(j mod 8)/2⌋` reads it, each cell of the record as the one lane whose
-cell it is, so no premise says which leaf the rows hold. The four lanes that read one A row, or one B row, read it in
-full (`PouwWindow.Lanes.readFull`) at one registered tree, so they decode it alike up to a clash of their registrants'
-records (`LeafColl`). The known content each session is handed is
-the path's public inputs' rows (`ResourceAccounting.TS.Lanes.knownOf`, `PouwWindow.Lanes.knownRows`), so that check and the
-known-read check bind them, unasked: lane `l`'s `pub` row its salt, position, roots and index `l`, its `admit` row the
-admit bits, and every `o0` row `ok = 1`. That each session's registered file holds the layout's data ports
-(`PouwWindow.Lanes.ownOf` at one table per value, `roots`, each value placed in its table from a base row, `place`) is
-not asked either: acceptance checks it, at any roots and any placement, and `pouw-leaf-own` takes the roots from the
-accepted registration and produced record alone (`PouwWindow.Lanes.roots?`) and, for a unit of a window Program, the
-placement from the window's committed descriptor and round log (`PouwCheck.LeafOwn.placeOf`), so no premise is left
-on how the file was built. Each file marks its reads of the A, B and partials rows `read_in_full`
-(`PouwWindow.Lanes.readFull`), which the known-read check holds to one row of the registered words: so lane `l`'s
-partials row and the combine's `p<l>` are one row, the partials record is the rows the 33 statements read, and nothing
-of it is asked. The leaf is one unit of the registered circuit, and the partials are proof-layer values.
-Each proof is then accepted with a leaf that fails the unit's checks, and no collision in hand, with
-probability at most `33 δ`: `δ` a session from `CheckedSessionSound`, joined by a union bound. It is
-`ResourceAccounting.Guarantees.TS.LeafGroupSound`'s argument (`ResourceAccounting.TS.Group.group_soundAt`) at the 32 × 32 leaf, one
-chunk a lane, where the group's premise `GroupRealizes` is proved from the two above
-(`ResourceAccounting.TS.Lanes.groupRealizes_lanes32`).
-It sits in the proofs package because the sessions do (`reads_exempt`).
--/
+/-! The statement that a sampled 32 × 32 H1 leaf proved as its 32 lanes and their combine, 33 linked Flock sessions, is
+accepted with a leaf that fails the unit's checks and no collision in hand with probability at most `33 δ`. -/
 
 @[expose] public section
 

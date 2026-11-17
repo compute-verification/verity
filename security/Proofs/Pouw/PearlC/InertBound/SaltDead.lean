@@ -6,32 +6,14 @@ import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.FormingP
 
-/-!
-# The salt-dead two-ends lemma
-
-On a one-group step (`p.groups = [32]`: sm_120's `sm120E4m3K32 z` and Hopper's `hopperE4m3K32`), an element is
-salt-dead (`saltDeadP`) iff the support's two ends agree (`EndsAgree`): every product `+|E′|·11/4` against every
-product `−|E′|·11/4`. So RowA decides `saltDeadP` per element from two evaluations of the forming step instead of 33.
-
-* **The structure** (`flat_structure`): on the support (`SaltDead.support`, the flat pairs) the code's value is
-  `Φ(a·n)`, where `n = flatCount s s'` is the signed count (products `+` less products `−`), `Φ` is monotone and `a` has
-  the sign of `β`. Every `E′` code is `±c_β` and every `F` code `±0x43`, so all 32 products have one magnitude and one
-  exponent: the alignment exponent (`maxExp`) is the same at every pair, the aligned sum is `aligned(C) + n·a₀`, and the
-  read (`codeW_mono`) is monotone. A non-finite accumulator makes the code constant (`pipeStep_nonfin`).
-* **Monotone in the count for `β ≥ 0`, antitone for `β ≤ 0`** (`atomMixP_flat_mono`, `atomMixP_flat_anti`). Without a
-  hypothesis on `β` the count is not monotone (`FlatMono`): `not_flatMono_sm120` and `not_flatMono_hopper` refute it at
-  `α·x = 0`, `β = −1`, where count `−32` gives code `448` and count `32` gives `−448`.
-* **(E)** `saltDeadP_iff_ends`, with no hypothesis on `α`, `x` or `β`; **(C)** `saltDeadP_card_ends`, the per-block
-  count RowA's `sd` port carries; **(Z)** `codeVal_eq_iff`, the circuit's comparison of two codes' values.
--/
+/-! On a one-group step an element is salt-dead iff the support's two ends agree, so RowA decides `saltDeadP` from two
+evaluations of the forming step instead of 33. -/
 
 @[expose] public section
 
 namespace Pouw.PearlC.InertBound
 
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.FormingP Pouw.PearlC.SaltDead
-
-/-! ## The ends and the signed count -/
 
 /-- The support's ends: every product `+|E′|·11/4`. -/
 def plusEnd : (Fin 32 → Code) × (Fin 32 → Code) := (flatLine fun _ => false, flatLineF fun _ => false)
@@ -46,8 +28,7 @@ def EndsAgree (p : Pipeline) (α y β : ℚ) : Prop :=
 /-- A support pair's signed count: products `+` less products `−` (`plusEnd` 32, `minusEnd` −32). -/
 def flatCount (s s' : Fin 32 → Bool) : ℤ := ∑ t, if s t = s' t then 1 else -1
 
-/-- cap-unit's (M) as first stated: on every flat pair, the code's value is monotone in the signed count, for every
-`α`, `x` and `β`. False on sm_120 and Hopper (`not_flatMono_sm120`, `not_flatMono_hopper`); true for `0 ≤ β`
+/-- False on sm_120 and Hopper (`not_flatMono_sm120`, `not_flatMono_hopper`); it holds for `0 ≤ β`
 (`atomMixP_flat_mono`). -/
 def FlatMono (p : Pipeline) : Prop :=
   ∀ (α y β : ℚ) (s₁ s₁' s₂ s₂' : Fin 32 → Bool), flatCount s₁ s₁' ≤ flatCount s₂ s₂' →
@@ -68,8 +49,6 @@ theorem neg_le_flatCount (s s' : Fin 32 → Bool) : -32 ≤ flatCount s s' := by
   unfold flatCount
   calc (-32 : ℤ) = ∑ _t : Fin 32, (-1 : ℤ) := by simp
     _ ≤ ∑ t, (if s t = s' t then 1 else -1 : ℤ) := Finset.sum_le_sum fun t _ => by split_ifs <;> norm_num
-
-/-! ## (M) as first stated is false -/
 
 theorem not_flatMono_sm120 : ¬ FlatMono sm120E4m3 := by
   intro h
@@ -93,9 +72,6 @@ theorem not_flatMono_hopper : ¬ FlatMono hopperE4m3K32 := by
   rw [e1, e2] at h1
   norm_num at h1
 
-/-! ## The products on the support -/
-
-/-- A term with its sign set to `σ` (a zero term unchanged). -/
 def sgnT (σ : Bool) (T : Term) : Term := if T.mag = 0 then T else ⟨σ, T.exp, T.mag⟩
 
 theorem sgnT_mag (σ : Bool) (T : Term) : (sgnT σ T).mag = T.mag := by unfold sgnT; split_ifs <;> rfl
@@ -121,12 +97,9 @@ theorem product_pair {c₀ c₁ f₀ f₁ : Code} (hc : CodePair c₀ c₁) (hf 
   rw [product_sgnT (c₀ := c₀) (f₀ := f₀) (by cases σ₁ <;> simp [hcs]) (by cases σ₁ <;> simp [hce])
     (by cases σ₂ <;> simp [hfs]) (by cases σ₂ <;> simp [hfe]), e1, e2]
 
-/-- An `E′` entry's sign bit on a flat line: the line's sign, flipped when `β < 0`. At `β = 0` the zero product keeps
-the line's sign (`mulCode`: `+0·(−44)` is `−0`). -/
+/-- At `β = 0` the zero product keeps the line's sign (`mulCode`: `+0·(−44)` is `−0`). -/
 def sgnB (β : ℚ) (b : Bool) : Bool := if β < 0 then !b else b
 
-/-- Every `E′` code on a flat line is `c₀` or `c₁ = c₀` with the sign bit set, by `sgnB`; `c₀` has significand `0`
-at `β = 0`. -/
 theorem lineCodes_flat (β : ℚ) : ∃ c₀ c₁ : Code, CodePair c₀ c₁ ∧ (β = 0 → c₀.sig = 0) ∧
     ∀ (s : Fin 32 → Bool) (t : Fin 32), lineCodes β (flatLine s) t = if sgnB β (s t) then c₁ else c₀ := by
   obtain ⟨K, hK, hpos, hneg⟩ := e4m3Word_signs (β * 44)
@@ -183,8 +156,6 @@ theorem codePair_F : CodePair ⟨67, by decide⟩ ⟨195, by decide⟩ := code_p
 theorem flatLineF_eq (s' : Fin 32 → Bool) (t : Fin 32) :
     flatLineF s' t = if s' t then (⟨195, by decide⟩ : Code) else ⟨67, by decide⟩ := by
   unfold flatLineF; cases s' t <;> decide +kernel
-
-/-! ## The alignment on the support -/
 
 theorem foldl_maxExp_congr (ts us : List Term)
     (h : ts.map (fun t => (t.mag, t.exp)) = us.map (fun t => (t.mag, t.exp))) (m : ℤ) :
@@ -248,10 +219,6 @@ theorem sum_sgnB_neg {β : ℚ} (hβ : β < 0) (s s' : Fin 32 → Bool) :
   simp only [sgnB, hβ, ite_true]
   cases s t <;> cases s' t <;> rfl
 
-/-! ## The step on the support -/
-
-/-- The step of `⟨[n], w, z⟩` on a non-finite accumulator (NaN or an infinity) and finite codes writes the
-accumulator's own value, whatever the products. -/
 theorem pipeStep_nonfin {n w : ℕ} {z : ℤ} {acc : ℕ} (hacc : ∀ t, fp32Value acc ≠ .fin t) (a b : Fin n → Code)
     (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) :
     (⟨[n], w, z⟩ : Pipeline).step acc (List.ofFn a) (List.ofFn b) = packValue (fp32Value acc) := by
@@ -275,9 +242,6 @@ theorem pipeStep_nonfin {n w : ℕ} {z : ℤ} {acc : ℕ} (hacc : ∀ t, fp32Val
   · cases s <;> simp [List.any_cons, h1, h2, Value.isNaN, Value.isInf]
   · exact absurd h (hacc t)
 
-/-- **The step on the support, finite accumulator.** At every flat pair the code's value is the read `codeW` at one
-exponent `E` of `aligned(C) + A·S`, where `S` counts the products' signs and `A ≥ 0` is one product's aligned
-magnitude, `0` at `β = 0`. -/
 theorem flat_fin_eq {w : ℕ} (z : ℤ) (α y β : ℚ) {tc : Term} (hacc : fp32Value (f32Word (α * y)) = .fin tc)
     {c₀ c₁ : Code} (hc : CodePair c₀ c₁)
     (hline : ∀ (s : Fin 32 → Bool) (t : Fin 32), lineCodes β (flatLine s) t = if sgnB β (s t) then c₁ else c₀)
@@ -316,8 +280,6 @@ theorem flat_fin {w : ℕ} (z : ℤ) (α y β : ℚ) {tc : Term} (hacc : fp32Val
     unfold product; simp [hc0 hβ, Term.zero]
   · rw [flat_fin_eq z α y β hacc hc hline s s', alignedSum_sgnT]
 
-/-- **The structure on the support.** On a one-group step the code's value at every flat pair is `Φ(a·n)`, with
-`n = flatCount s s'`, `Φ` monotone and `a` of the sign of `β` (`a = 0` at `β = 0`), for every `α`, `x` and `β`. -/
 theorem flat_structure (p : Pipeline) (hp : p.groups = [32]) (hw : 1 ≤ p.width) (α y β : ℚ) :
     ∃ Φ : ℤ → ℚ, Monotone Φ ∧ ∃ a : ℤ, (0 ≤ β → 0 ≤ a) ∧ (β ≤ 0 → a ≤ 0) ∧
       ∀ s s' : Fin 32 → Bool,
@@ -352,10 +314,6 @@ theorem flat_structure (p : Pipeline) (hp : p.groups = [32]) (hw : 1 ≤ p.width
       (List.ofFn (lineCodes β (flatLine s))) (List.ofFn (flatLineF s'))))) = _
     rw [pipeStep_nonfin hfin _ _ hna hnb]
 
-/-! ## The lemma -/
-
-/-- **(M⁺)** On a one-group step with `0 ≤ β`, an element's code value over the support is monotone in the signed
-count. -/
 theorem atomMixP_flat_mono (p : Pipeline) (hp : p.groups = [32]) (hw : 1 ≤ p.width) (α y : ℚ) {β : ℚ} (hβ : 0 ≤ β)
     {s₁ s₁' s₂ s₂' : Fin 32 → Bool} (h : flatCount s₁ s₁' ≤ flatCount s₂ s₂') :
     codeVal ((atomMixP p).elem α y β (flatLine s₁) (flatLineF s₁')) ≤
@@ -364,8 +322,6 @@ theorem atomMixP_flat_mono (p : Pipeline) (hp : p.groups = [32]) (hw : 1 ≤ p.w
   rw [hf, hf]
   exact hΦ (mul_le_mul_of_nonneg_left h (ha hβ))
 
-/-- **(M⁻)** On a one-group step with `β ≤ 0`, an element's code value over the support is antitone in the signed
-count. -/
 theorem atomMixP_flat_anti (p : Pipeline) (hp : p.groups = [32]) (hw : 1 ≤ p.width) (α y : ℚ) {β : ℚ} (hβ : β ≤ 0)
     {s₁ s₁' s₂ s₂' : Fin 32 → Bool} (h : flatCount s₁ s₁' ≤ flatCount s₂ s₂') :
     codeVal ((atomMixP p).elem α y β (flatLine s₂) (flatLineF s₂')) ≤
@@ -374,7 +330,6 @@ theorem atomMixP_flat_anti (p : Pipeline) (hp : p.groups = [32]) (hw : 1 ≤ p.w
   rw [hf, hf]
   exact hΦ (mul_le_mul_of_nonpos_left h (ha hβ))
 
-/-- **(E) The salt-dead lemma**: on a one-group step an element is salt-dead iff the support's two ends agree. -/
 theorem saltDeadP_iff_ends (p : Pipeline) (hp : p.groups = [32]) (hw : 1 ≤ p.width)
     (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) (k : ℕ) (x : Fin k → ℚ) (l : Fin k) :
     saltDeadP p alpha beta k x l ↔ EndsAgree p (alpha k x) (x l) (beta k x) := by
@@ -416,17 +371,15 @@ theorem codeVal_eq_iff_all : ∀ c d : Code, c.isNaN = false → d.isNaN = false
     (codeVal c = codeVal d ↔ c = d ∨ (c.val % 128 = 0 ∧ d.val % 128 = 0)) := by
   decide +kernel
 
-/-- **(Z)** The circuit's comparison: two non-NaN codes have one value iff they are equal or both zeros. -/
+/-- The circuit's comparison of two codes' values. -/
 theorem codeVal_eq_iff (c d : Code) (hc : c.isNaN = false) (hd : d.isNaN = false) :
     codeVal c = codeVal d ↔ c = d ∨ (c.val % 128 = 0 ∧ d.val % 128 = 0) :=
   codeVal_eq_iff_all c d hc hd
 
-/-- The lemma at sm_120's step. -/
 theorem saltDeadP_iff_ends_sm120 (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) (k : ℕ) (x : Fin k → ℚ) (l : Fin k) :
     saltDeadP sm120E4m3 alpha beta k x l ↔ EndsAgree sm120E4m3 (alpha k x) (x l) (beta k x) :=
   saltDeadP_iff_ends sm120E4m3 rfl (by decide) alpha beta k x l
 
-/-- The lemma at Hopper's step (Π's `SaltDead.saltDead`, `saltDeadP_hopper`). -/
 theorem saltDeadP_iff_ends_hopper (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) (k : ℕ) (x : Fin k → ℚ) (l : Fin k) :
     saltDeadP hopperE4m3K32 alpha beta k x l ↔ EndsAgree hopperE4m3K32 (alpha k x) (x l) (beta k x) :=
   saltDeadP_iff_ends hopperE4m3K32 rfl (by decide) alpha beta k x l
