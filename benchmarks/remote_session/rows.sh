@@ -113,9 +113,11 @@ FLAGS=(-O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xcompiler -fP
 LEAF64=() NO_LEAF64=(--no-leaf64)
 if [[ " $ROWS " == *" 64 "* && "${ROWS_ARGS:-}" == *--leaf-ctas* ]]; then LEAF64=(-DLEAF_PASS64) NO_LEAF64=(); fi
 BASE_REV=${BASE_REV:-$(git -C "$TREE" merge-base HEAD origin/main 2> /dev/null)}
-# The base's session.cu where the tree's is, beside the tree's own includes (the circuits' kernels and the reader).
+# The base's session.cu where the tree's is, beside the tree's own includes (the circuits' kernels, the commitments'
+# row commit and the reader).
 mkdir -p "$B/base/$PR/remote_session"
 ln -s "$TREE/verity/circuits" "$B/base/verity/circuits"
+ln -s "$TREE/verity/commitments" "$B/base/verity/commitments"
 ln -s "$TREE/$PR/codec_tensor" "$B/base/$PR/codec_tensor"
 BASE=$B/base/$PR/remote_session/session.cu
 { [ -n "$BASE_REV" ] && git -C "$TREE" show "$BASE_REV:$PR/remote_session/session.cu" > "$BASE" 2> /dev/null; } \
