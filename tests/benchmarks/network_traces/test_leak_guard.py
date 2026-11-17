@@ -35,7 +35,7 @@ def _guard(tmp: Path, run: Path, *extra: str) -> tuple[int, dict, dict]:
 
 
 def test_every_file_holding_the_witness_is_moved_out_and_named_by_its_path_alone(tmp_path):
-    """A piece of the certified lines at an odd offset, one salt as upper-case hex or raw, a declared witness name, a
+    """A piece of the attested lines at an odd offset, one salt as upper-case hex or raw, a declared witness name, a
     witness/ directory, a sent gate tarball, an archive member, a compressed stream, a damaged or unreadable archive and
     an archive inside one are each moved to the quarantine (0700), with nothing else; the report holds their paths and
     counts, never a piece's bytes or digest, which the quarantine's report holds."""
@@ -86,9 +86,9 @@ def test_every_file_holding_the_witness_is_moved_out_and_named_by_its_path_alone
 
 
 def test_the_gates_public_files_their_reprints_and_a_public_twin_are_no_finds(monkeypatch, tmp_path):
-    """A record holding the gate's public files as they are, a certificate written again indented (a witness file holds
+    """A record holding the gate's public files as they are, an attestation written again indented (a witness file holds
     it so, public only through `reprinted`) and the witness's copy of a public file is clean; without the reprints the
-    indented certificate is a find. A public line that isn't JSON is counted, not written again. A run dir with no gate
+    indented attestation is a find. A public line that isn't JSON is counted, not written again. A run dir with no gate
     run is read for witness paths alone."""
     g = _gate(tmp_path / "G" / "g1")
     (g / "out" / "torn.jsonl").write_bytes(b'{"window": 0}\n\n{"window": \n')
@@ -422,7 +422,7 @@ def test_a_released_file_with_one_undeclared_key_fails_the_record(tmp_path):
 def test_a_gate_runs_file_that_says_an_execution_phase_was_refused_fails_the_record(tmp_path):
     """Which execution phases the signer refused depends on what the node sent and when, and no list declares the
     key that says it. So a record of a gate run with one refused line fails (exit 3) on that file alone, by the key
-    and its count, and a record is released only of a run whose every execution phase was certified."""
+    and its count, and a record is released only of a run whose every execution phase was attested."""
     run = tmp_path / "run"
     files = [f"out/gates/c0/r0/out/{name}" for name in ("certificates.jsonl", "cells-certificates.jsonl",
                                                          "rows-certificates.jsonl", "cells-registrations.jsonl")]
