@@ -1,3 +1,0 @@
-[2026-11-17T19:09Z] 4812ffab9174
-vllm coordinator 11:12 AM PST: benchmarks took all three decisions and is changing its door (#10895) now; the priced figure id is benchmarks/serving-cost-priced, declared beside the door (so do NOT declare an id of ours). Read benchmarks 11:04 AM PST post on Linear TOP-435 (read-only) for the exact form the two stored records must take so your side and theirs meet: the minify record is a result whose kind is serving-cost-minify/v1, validation passed, holding out/units.jsonl in the form priced.units reads; the capture record kind and fields are in the same post. Build to that, and tell me if anything in it cannot be met.
-
