@@ -82,6 +82,9 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
 #: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
 AS_WRITTEN = "as the served node wrote it"
+#: the setting that restores this week's lifted placement holds (``1``); unset, `onsite_check` prints a record the
+#: workload's node composed as it has it
+HOLD_PLACEMENT = "VERITY_HOLD_PLACEMENT"
 
 
 # --- what each component and the workload declare -------------------------------------------------------------------
@@ -719,10 +722,11 @@ PHASE = "phase.json"
 def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     """The verifier's onsite line over what the application's serving step published in ``state``'s ``out/`` and
     nothing else: the record (``record/verdicts.json``) of the execution phase ``serve/phase.json`` names, the line's
-    ``block`` its seal's SHA-512, in `verity_cli.run`'s verdict form. The serving node composed that record, so each of
-    its accepts, each row's and the combined verdict, reads undecided, `AS_WRITTEN` in the reason, whatever a row's
-    ``answer_from`` (printed, deciding nothing) says; a reject or an error stands. Refused (``window``, ``record``)
-    when either file isn't there."""
+    ``block`` its seal's SHA-512, in `verity_cli.run`'s verdict form: its verdicts as the record has them, each row's
+    ``answer_from`` (printed, deciding nothing) saying who wrote it. Under ``VERITY_HOLD_PLACEMENT=1``
+    (`HOLD_PLACEMENT`), since the workload's node composed that record, each of its accepts, each row's and the
+    combined verdict, reads undecided, `AS_WRITTEN` in the reason; a reject or an error stands either way. Refused
+    (``window``, ``record``) when either file isn't there."""
     out = state / "out"
     phase, report = out / "serve" / PHASE, out / "record" / "verdicts.json"
     if not phase.is_file():
@@ -743,14 +747,15 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     reason = (wrong or composed.get("reason")) if verdict == "reject" else \
         (f"missing {missing}" if missing else None) or (f"no row for {absent}" if absent else None) \
         or (composed.get("lean") if verdict != "accept" else None)
-    # The serving node composed this record, so none of its accepts stands; one recomputed by the verifier would.
-    held = (["the composed verdict"] if verdict == "accept" else []) + \
-        sorted(c for c, v in components.items() if v == "accept")
-    components = {c: "undecided" if v == "accept" else v for c, v in components.items()}
-    if verdict == "accept":
-        verdict = "undecided"
-    if held and verdict == "undecided":
-        reason = "; ".join(x for x in (reason, "not accepted: " + ", ".join(f"{h} {AS_WRITTEN}" for h in held)) if x)
+    if os.environ.get(HOLD_PLACEMENT) == "1":
+        # The workload's node composed this record, so none of its accepts stands; one recomputed by the verifier would.
+        held = (["the composed verdict"] if verdict == "accept" else []) + \
+            sorted(c for c, v in components.items() if v == "accept")
+        components = {c: "undecided" if v == "accept" else v for c, v in components.items()}
+        if verdict == "accept":
+            verdict = "undecided"
+        if held and verdict == "undecided":
+            reason = "; ".join(x for x in (reason, "not accepted: " + ", ".join(f"{h} {AS_WRITTEN}" for h in held)) if x)
     on, developer = coins_on(cfg, bindings_of(state)), {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
     return {"block": seal, "components": components, "answer_from": answer_from, "product": product, "reason": reason,
             "registration": None, "coins": "simulated" if developer & set(on.values()) else coins_of(cfg),
