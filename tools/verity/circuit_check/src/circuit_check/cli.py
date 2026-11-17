@@ -66,6 +66,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import ambient as AM
+from . import block_held as BH
 from . import by_calls as BC
 from . import cache as CC
 from . import checks as CK
@@ -1067,6 +1068,15 @@ def _missed(tasks: list[tuple], keys: list[dict | None] | None, hits: dict[int, 
     return [(tasks[i][0], tasks[i][1]) for i in (range(len(tasks)) if only is None else only) if _hit(i, keys, hits, cache) is None]
 
 
+def progress_row(r: dict, holds: dict[str, tuple[str, str]]) -> dict:
+    """Target ``r``'s line in ``progress``: its ``failures`` those the verdict counts (`checks.counted`), and ``held``, why
+    ``holds`` (`block_held.held`) holds it past the block, when it does."""
+    failures, held = CK.counted(r, holds)
+    return {"kind": r["kind"], "target": r["target"], "peak_gb": r.get("peak_gb"), "rss_start_gb": r.get("rss_start_gb"),
+            "seconds": r.get("seconds"), "seconds_by_check": r.get("seconds_by_check"), "failures": failures,
+            **({"held": held} if held is not None else {}), **({"killed": True} if r.get("killed") else {})}
+
+
 def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, log, jobs: int,
                  cache: Path | None, mem_gb: int | None, progress: Path | None, isolated: bool, tracing: bool,
                  zygote: list[Zygote] | None, mem_file: Path | None = None, keys: list[dict] | None = None,
@@ -1077,14 +1087,13 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
     out: list[dict | None] = [None] * len(tasks)
     keys = keys if keys is not None else []
     stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
+    holds = BH.held() if progress is not None else {}
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
         out[i] = r
         if progress is not None:
             with progress.open("a") as f:
-                f.write(json.dumps({"kind": r["kind"], "target": r["target"], "peak_gb": r.get("peak_gb"), "rss_start_gb": r.get("rss_start_gb"), "seconds": r.get("seconds"),
-                                    "seconds_by_check": r.get("seconds_by_check"), "failures": len(r["failures"]),
-                                    **({"killed": True} if r.get("killed") else {})}) + "\n")
+                f.write(json.dumps(progress_row(r, holds)) + "\n")
         if tracing and got is not None:
             if _errored(r):
                 stats["errors"].append(r["target"])
@@ -1850,7 +1859,8 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
               + (f" ({v['lazy']['count']} read lazily)" if v["lazy"]["count"] else ""))
     what = what or f"{len(rep['targets'])} target(s)"
     u = s["unchecked"]
-    print(f"circuit-check: {what}, {s['failures']} failure(s), {u['items']} unchecked (warnings, which never fail) on {u['definitions']} Definition(s)"
+    print(f"circuit-check: {what}, {s['failures']} failure(s), {len(s.get('block_held', {}))} held past the block, "
+          f"{u['items']} unchecked (warnings, which never fail) on {u['definitions']} Definition(s)"
           + (f", {len(across)} Boolean Call(s) recomputing {sum(across.values())} gate(s) across units (Q_word v2)" if across else "")
           + (f", {len(refused)} Definition(s) Q_call v1 refuses" if refused else "")
           + (f", report {out}" if out else ""))
