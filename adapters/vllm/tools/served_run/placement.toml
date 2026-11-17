@@ -23,6 +23,20 @@ TAPS_AT = "962b517e613e5c0eece1dce159083c3ee4ec85d0"
 "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager" = "r20261115-161425-7366"
 "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager" = "r20261116-212008-a373"
 
+[node.vy-spot-glm53.env_files]
+# each a mode-600 file on the node that sets the address its variable names, which no file of the tree holds
+VY_CHALLENGER_1_HOST = "/root/.config/verity/challenger-1.env"
+VY_AUDITOR_2_HOST = "/root/.config/verity/auditor-2.env"
+
+[node.vy-spot-glm53.bindings]
+# for a run on the auditor's coins, by binding key: `run.sh bindings DEMO` binds each to every party of the demo whose
+# piece reads it
+gate = "research@${VY_CHALLENGER_1_HOST}"
+peer = "vy-spot-glm53"
+key = "tests/benchmarks/pouw/fixtures/challenger-key.json"
+gate-key = "${HOME}/.ssh/vllm_lane_ed25519"
+address = "${VY_AUDITOR_2_HOST}:47611"
+
 [node.vy-nebius-cpu-14]
 
 [run.setup]
@@ -56,12 +70,11 @@ env = { POUW = "h1", H1_GATE = "", V3C_CLASS = "", COMPOSITE = "" }
 
 [run.window.tie]
 # V3C_AUDIT_MEM_GB above node A's memory defers the records audit off the node
-env = { POUW = "pearlplus", PEARLPLUS_TIE = "1", V3C_CLASS = "4,32,4", V3C_LAW = "${V3C_LAW:-stratified-rate:1/2097152}", PRECISION = "bfloat16", H1_PEER = "vy-spot-glm53", V3C_AUDIT_MEM_GB = "2100" }
+env = { POUW = "pearlplus", PEARLPLUS_TIE = "1", V3C_CLASS = "4,32,4", V3C_LAW = "${V3C_LAW:-stratified-rate:1/2097152}", PRECISION = "bfloat16", V3C_AUDIT_MEM_GB = "2100", POUW_TIMEOUT = "300m", PEARLPLUS_LEAN_TIMEOUT = "13500" }
 
 [run.window.coins.gate]
 main_line = true
-# CHALLENGER_ENV: the node's mode-600 env file that sets VY_CHALLENGER_1_HOST, the gate's address
-env = { PP_CHALLENGER = "gate", CHALLENGER_ENV = "/root/.config/verity/challenger-1.env", PP_PEER = "vy-spot-glm53", PP_GATE_KEY = "~/.ssh/vllm_lane_ed25519", PP_CHALLENGER_KEY = "tests/benchmarks/pouw/fixtures/challenger-key.json" }
+env = { PP_CHALLENGER = "gate:research@${VY_CHALLENGER_1_HOST}", PP_GATE_KEY = "${HOME}/.ssh/vllm_lane_ed25519", PP_CHALLENGER_KEY = "tests/benchmarks/pouw/fixtures/challenger-key.json" }
 
 [run.window.coins.development]
 env = { PP_CHALLENGER = "local", PEARLC_CHALLENGER_GATE = "", DEVELOPMENT = "1" }
