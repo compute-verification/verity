@@ -1,14 +1,14 @@
 module
 
-public import MemoryChallenger.WipeProtocol
-public import Properties.Pous.MemoryChallenger
+public import MemoryAttester.WipeProtocol
+public import Properties.Pous.MemoryAttester
 public import Definitions.Pous.Model.StreamedWipe
 import Mathlib.Basic.ENNReal.Real
 
 /-!
 # An accepted wipe is the memory challenger's own run, and that run is the streamed wipe's accepted session
 
-`MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`, the wipe's component) accepts a signed session whose
+`MemoryAttester.WipeProtocol.protocol` (`verity/wipe/v0`, the wipe's component) accepts a signed session whose
 signature verifies under a trusted memory challenger's key. `WipeSigned` says what that acceptance means, over a model
 of the memory challengers (`SignedWipeParty`): the session is a wipe the challenger holding the key ran itself, and
 that run is the streamed-label wipe's accepted session (`WipeRun.Accepted`): the challenger recorded an answer to each
@@ -19,7 +19,7 @@ hashes the strings the run hashes and outputs two distinct ones with one SHA-512
 (`wipeForger`) outputs the prover's signature and the message it signs, which verifies under the trusted key and which
 the challenger never signed under it (`euf-cma/lms-sha512-n64`).
 
-It is the step from the code to the game that `MemoryChallenger.Properties.WipeSurvivorBound` and the composition
+It is the step from the code to the game that `MemoryAttester.Properties.WipeSurvivorBound` and the composition
 read: the accepted wipe is the game's accepted session at the run's labels and reads, so the streamed
 wipe's guarantees (`Pous.Guarantees.StreamedWipe` and its instances at 2152 reads) bound it, with nothing between the
 code and the game but the game's shape (C5, C6 and every tier declared), which the challenger's deployment makes true.
@@ -36,7 +36,7 @@ previous one's answer arrived (`challenge` refuses while a batch is open); `rece
 time), refuses an answer that is not one label long, and records batch `b` as `(b, b, 1, send, receipt, wrong,
 SHA-512(u64 index ‖ answer))`, `wrong` 1 when the answer is not the read's label; the first late batch ends the session
 `late`, the first wrong one `wrong`, the `k`-th `complete`; `close()` signs the ended session once, the message
-`memoryChallengerMessage(I, session, message(commitment, ended, start_mark, fill_start, fill_end, batches))` under its
+`memoryAttesterMessage(I, session, message(commitment, ended, start_mark, fill_start, fill_end, batches))` under its
 key. It signs no egress count: the challenger is given none, and the wipe's check takes its one count as evidence
 beside the signed session (`WipeProtocol.Evidence.egress`).
 
@@ -52,7 +52,7 @@ is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`C
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties
+namespace MemoryAttester.Properties
 
 open Flock
 
@@ -129,16 +129,16 @@ structure SignedWipeParty where
   wipes : ByteArray → List WipeRun
 
 /-- The messages the challenger signs under the key `pk`: its PoUS sessions' (`Signed`), and for each wipe it runs under
-`pk` and ends, `memoryChallengerMessage` of the key's identifier, the session id and the wipe's `message`. -/
+`pk` and ends, `memoryAttesterMessage` of the key's identifier, the session id and the wipe's `message`. -/
 def SignedWipeParty.Signed (dev : SignedWipeParty) (pk m : ByteArray) : Prop :=
-  MemoryChallenger.Properties.Signed dev.device pk m ∨
+  MemoryAttester.Properties.Signed dev.device pk m ∨
     ∃ r ∈ dev.wipes pk, ∃ ended rec, r.recorded.ended = some ended ∧ r.message ended = .ok rec ∧
-      memoryChallengerMessage (pk.extract 0 16) r.commitment.session rec = .ok m
+      memoryAttesterMessage (pk.extract 0 16) r.commitment.session rec = .ok m
 
-/-- The message a signed wipe's signature signs: `memoryChallengerMessage` of its key's identifier, its session id and
+/-- The message a signed wipe's signature signs: `memoryAttesterMessage` of its key's identifier, its session id and
 its `message`. -/
 def wipeMessage (s : StreamedWipe.Signed) : Option ByteArray :=
-  (s.message >>= memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session).toOption
+  (s.message >>= memoryAttesterMessage (s.publicKey.extract 0 16) s.commitment.session).toOption
 
 /-! ### The strings a wipe hashes -/
 
@@ -152,7 +152,7 @@ def wipeTreeStrings (d : FV3.Sha512.Domain) (values : Array ByteArray) : List By
       FV3.input "node" [d.id, FV3.uint l, FV3.uint i, levels[l]![2 * i]!, levels[l]![2 * i + 1]!]
 
 /-- What SHA-512 hashes for a wipe `(c, ended, the start mark, the fill's readings, batches)` signed under the
-key `pk`: its records tree, the input of its `message`, and that of `memoryChallengerMessage`. -/
+key `pk`: its records tree, the input of its `message`, and that of `memoryAttesterMessage`. -/
 def signedWipeStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (ended : String) (startMark : ByteArray)
     (fillStartNs fillEndNs : Int) (batches : Array StreamedWipe.Batch) : List ByteArray :=
   let head := (StreamedWipe.header c ended startMark fillStartNs fillEndNs batches.size).toUTF8
@@ -334,4 +334,4 @@ def unencodedParams : WipeProtocol.Params := ⟨MEASURED_SERVER, MEASURED_SESSIO
 /-- The memory challengers that ran nothing. -/
 def idleChallenger : SignedWipeParty := ⟨⟨fun _ => []⟩, fun _ => []⟩
 
-end MemoryChallenger.Properties
+end MemoryAttester.Properties
