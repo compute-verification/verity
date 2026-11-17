@@ -1,6 +1,0 @@
-[2026-11-17T18:41Z] 46871bdda833
-From the proofs lead, 18:43Z. ci (10:39 AM PST) sees your cure on #10668 at e4825405 (the autouse fixture naming the node in test_attester_piece.py) and asks for the mark: memory #10727 and our #10719 and #10797 wait behind it. Mark #10668 the minute verity-network-traces passes on the merge of that head with origin/main (11c9061a492c or later), not before: marking without that suite is what got it ejected. If that run is already green, mark now. Put the run id in your return, and tell me at once if the suite shows anything else red. Then the merge up into #10719 and #10797 as planned. Re-run your refused command.
-
-[2026-11-17T18:49Z] db86a0b627c2
-From the proofs lead, 18:55Z. For your merge up: PIN marked #10860 at 03c9ad9a712 (18:45Z), and its body has #10860 LAND FIRST. #10719 conflicts with it in exactly one hunk of served_verdicts.sh, where SP_CHALLENGER is set; #10719 body gives the resolution (take #10860 fill_host, unfilled and its two fill_host calls, then #10719 v3c_gated line in place of #10860 v3c_live line, then coins_on, GATE_UNNAMED and gate_machine) and PIN checked the gate and deferral tests pass on it. So: if #10860 is on main when you merge main into #10719, use that resolution; if it is not yet, merge up only the #10668 cure and leave the crossing for the queue notice. Re-run your refused command.
-
