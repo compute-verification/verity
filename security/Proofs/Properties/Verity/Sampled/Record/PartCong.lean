@@ -3,22 +3,7 @@ module
 public import Flock.HmRow
 public import Flock.RecSetup
 
-/-!
-# The session's setup reads its partition object only through what the partition's readers make of it
-
-`Stmt.setupTables`, `Stmt.setupH` and `Stmt.setupHidden` read the verifier's partition object `obj` in a few places
-only: whether there is one, the binding check (`HmRow.checkPartition`), a stratified or a work sample's design
-(`HmRow.stratifiedSamplingDesign`, `HmRow.workSamplingDesign`), the template test on its query, and the units derived from the program
-(`HmRow.deriveTemplateUnits`, `HmRow.qwordFinding`). `PartView` holds those readers at one object (`view obj`).
-
-* `setupHV`, `setupHiddenV`, `setupTablesV`: the three setups' text with each read of `obj` made through a `PartView`.
-  They are this file's own and are named in no statement another file reads: each is the verifier's function by `rfl`
-  (`setupH_view`, `setupHidden_view`, `setupTables_view`), so a change to the verifier breaks this file's build, and
-  nothing else.
-* `setupTables_congr`: two partitions with the same view set the session up alike.
-* `checks_none`: `RecSetup.checks` without an inner shape reads no partition (`RecVStar.checkStmt` at `inner = none`
-  reads only its statement's unit name).
--/
+/-! The session's setup reads its partition object only through what the partition's readers make of it. -/
 
 @[expose] public section
 
@@ -26,8 +11,6 @@ namespace Flock.PartCong
 
 open Lean (Json)
 
-/-- What the session's setup reads of a partition object: its binding check at a circuit, a stratified and a work
-sample's design at a program, whether its query is a template query, and the units derived at a circuit and program. -/
 structure PartView where
   check : Circuit → V HmRow.PartitionFinding
   strat : ByteArray → Nat → V (Draw.SamplingDesign × Nat)
@@ -36,7 +19,6 @@ structure PartView where
   derive : Circuit → ByteArray → Array Nat → V String
   qword : Circuit → Public → ByteArray → HmRow.PartitionFinding → V (Option HmRow.PartitionFinding)
 
-/-- The readers at the object `obj`, as the setups call them. -/
 def view (obj : Json) : PartView where
   check c := HmRow.checkPartition c (some obj)
   strat := HmRow.stratifiedSamplingDesign obj
@@ -48,7 +30,6 @@ def view (obj : Json) : PartView where
   derive c := HmRow.deriveTemplateUnits c obj
   qword c pub := HmRow.qwordFinding c pub obj
 
-/-- The binding check at a view, `HmRow.checkPartition`'s without an object. -/
 def checkV (c : Circuit) : Option PartView → V HmRow.PartitionFinding
   | none => HmRow.checkPartition c none
   | some v => v.check c
@@ -275,7 +256,6 @@ theorem setupTables_view (tags : Tags) (circuitFile publicFile : ByteArray) (coi
         closure publicInputs := by
   cases partition <;> rfl
 
-/-- **Two partitions with the same view set the session up alike.** -/
 theorem setupTables_congr (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray)) (draw : Option Json) {pa pb : Option Json} (h : pa.map view = pb.map view)
     (program : Option ByteArray) (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
@@ -286,7 +266,6 @@ theorem setupTables_congr (tags : Tags) (circuitFile publicFile : ByteArray) (co
         publicInputs := by
   rw [setupTables_view, setupTables_view, h]
 
-/-- **Without an inner shape, `RecSetup.checks` reads no partition.** -/
 theorem checks_none (tags : Tags) (tables : List (String × ByteArray)) (sts : Array Stmt) (circuitB : ByteArray)
     (pa pb : Option Json) (program : Option ByteArray) (registered : Option (Array Registered.Port)) :
     RecSetup.checks none none tags tables sts circuitB pa program registered none none none =

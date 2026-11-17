@@ -4,36 +4,7 @@ public import Proofs.Properties.Verity.Sampled
 public import Proofs.Core.Game.TwoRun
 public import Proofs.Flock.Claims.Prob
 
-/-!
-# SPOT's coupling: the messages
-
-`CouplingTarget`'s messages piece: each message the evidence reveals for a round the device opens after its digest, and
-the record the commitment is a digest of, is the most likely one at its digest, but on plays whose chance is at most the
-square root of a two-continuation finder's success (`Core.Game.TwoRun`), one finder per round and one for the record.
-
-* **The miss on a tape** (`DigestCut.missOn`): a uniform tape of the play (`CoinTape`) misses at a cut where it reaches
-  the cut and the play's output reveals there a message other than the most likely one, and that has the miss's
-  probability (`DigestCut.pr_missOn`). By the union bound, an event is at most as likely as the event on the tapes that
-  miss at none of a family of cuts, plus each cut's miss (`DigestCut.prob_le_noMiss_add_missP`), and at cuts whose
-  revealed messages open one digest, plus the square root of each cut's finder's success
-  (`DigestCut.prob_le_noMiss_add_sqrt`).
-* **The period's game as one game** (`relK`, `releases_bind`, `game_eq_relK`): the prover's request, the device's
-  releases and then the close (`finish`), each release's continuation carrying the log after it, so a cut follows the
-  frames the prover sends.
-* **Where the messages are fixed** (`Reading`): round `j` at the first frame the prover sends that the reading's
-  `round j` picks after the device's log before it, its digest the bytes the frame answers (an opening's `after`, the
-  SHA-512 of the round's message, `Spot.Challenger.linkAfter` and each rep round's `msg_sha512`); the record
-  at the play's start, its digest the reading's. Which opening is round `j` and what the evidence reveals for it are
-  the rounds piece's, so everything here is at any reading.
-* **The cuts and the finders** (`roundCut`, `recordCut`, `msgFinder`, `recordFinder`): each cut reveals only messages
-  whose SHA-512 is its digest, so its messages agree (`DigestCut.Agrees`) by construction (`DigestCut.AgreeCut`). The
-  finders are the cuts' two-continuation finders at `2t + 2h` calls on every coin, `Constructions`' `msgFinder`,
-  `recordFinder`, `msg_calls` and `record_calls` (`msgFinder_calls`, `recordFinder_calls`).
-* **The messages' bound** (`prob_le_messages`): an event of the period's game is at most as likely as the event on the
-  tapes that miss at no round and not at the record (`NoMiss`), plus `CouplingTarget`'s messages terms, the square root
-  of each round's finder's success and of the record's. So `CouplingTarget` holds once the sampled verdict off the
-  misses is bounded by its other terms (`couplingTarget_of_noMiss`).
--/
+/-! SPOT's coupling: the messages. -/
 
 @[expose] public section
 
@@ -42,8 +13,6 @@ namespace Verity.Game
 open scoped ENNReal
 
 variable {α V : Type}
-
-/-! ## The union bound over uniform coins -/
 
 theorem pr_or_le {Ω : Type} [Fintype Ω] (p q : Ω → Prop) :
     Claims.Pr (fun x => p x ∨ q x) ≤ Claims.Pr p + Claims.Pr q := by
@@ -65,7 +34,6 @@ theorem pr_exists_le {Ω ι : Type} [Fintype Ω] (M : ι → Ω → Prop) (t : F
     · exact Or.inl hm
     · exact Or.inr ⟨i, hi, hm⟩
 
-/-- **An event is at most as likely as the event off a finite family of events, plus each one's probability.** -/
 theorem pr_le_and_forall_not_add {Ω ι : Type} [Fintype Ω] [Fintype ι] (E : Ω → Prop) (M : ι → Ω → Prop) :
     Claims.Pr E ≤ Claims.Pr (fun x => E x ∧ ∀ i, ¬ M i x) + ∑ i, Claims.Pr (M i) := by
   refine (Claims.Pr_mono fun x hx => ?_).trans
@@ -74,8 +42,6 @@ theorem pr_le_and_forall_not_add {Ω ι : Type} [Fintype Ω] [Fintype ι] (E : �
   · exact Or.inr h
   · exact Or.inl ⟨hx, fun i hi => h ⟨i, Finset.mem_univ i, hi⟩⟩
 
-/-- **A coin, then a uniform dependent function**: an event of the function's value at the coin is averaged over the
-coin. -/
 theorem pr_pi_eval_fst {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [∀ c, Fintype (T c)]
     [∀ c, Nonempty (T c)] (P : (c : C) → T c → Prop) :
     Claims.Pr (fun x : C × ((c : C) → T c) => P x.1 (x.2 x.1)) = (∑ c, Claims.Pr (P c)) / Fintype.card C := by
@@ -90,18 +56,12 @@ theorem pr_pi_eval_fst {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [
   simp only [key]
   rw [← Finset.sum_mul, Fintype.card_prod, Nat.cast_mul, mul_div_mul_right _ _ hP]
 
-/-- **`prob` is the tapes' share**: the probability of an event of the play is the share of uniform tapes whose play
-it holds at. -/
 theorem prob_eq_ofReal_pr (p : α → Prop) (g : Game α) (s : Strategy g) :
     prob p g s = ENNReal.ofReal (Claims.Pr fun x : CoinTape g s => p (CoinTape.run g s x)) := by
   rw [pr_tape, ← prob_toReal, ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one p g s))]
 
 namespace DigestCut
 
-/-! ## The miss on a tape -/
-
-/-- **A tape misses at the cut**: it reaches the cut, and the play's output reveals there a message other than the
-most likely one (`revealMode`). -/
 def missOn [Nonempty V] : {g : Game α} → DigestCut V g → (s : Strategy g) → CoinTape g s → Prop
   | _, .skip, _, _ => False
   | g, .here rv, s, x => ∃ w, rv (CoinTape.run g s x) = some w ∧ w ≠ revealMode rv g s
@@ -124,8 +84,6 @@ noncomputable def modeOn [Nonempty V] : {g : Game α} → DigestCut V g → (s :
   | _, .send K, s, x => modeOn (K s.1) s.2 x
   | _, @DigestCut.coin _ _ _ _ _ _ K, s, x => modeOn (K x.1) (s x.1) (x.2 x.1)
 
-/-- **Off the miss, the revealed message is the most likely one**: a tape misses at the cut exactly where its play
-reveals a message there that isn't the most likely one. -/
 theorem missOn_iff [Nonempty V] : ∀ {g : Game α} (K : DigestCut V g) (s : Strategy g) (x : CoinTape g s),
     K.missOn s x ↔ ∃ w, K.revealOn s x = some w ∧ K.modeOn s x ≠ some w
   | _, .skip, _, _ => by simp [missOn, revealOn]
@@ -135,7 +93,6 @@ theorem missOn_iff [Nonempty V] : ∀ {g : Game α} (K : DigestCut V g) (s : Str
   | _, .send K, s, x => missOn_iff (K s.1) s.2 x
   | _, @DigestCut.coin _ _ _ _ _ _ K, s, x => missOn_iff (K x.1) (s x.1) (x.2 x.1)
 
-/-- **The tapes that miss at a cut have the miss's probability.** -/
 theorem pr_missOn [Nonempty V] : ∀ {g : Game α} (K : DigestCut V g) (s : Strategy g),
     Claims.Pr (K.missOn s) = K.miss s
   | _, .skip, _ => Claims.Pr_false
@@ -154,8 +111,6 @@ theorem missP_eq_ofReal [Nonempty V] {g : Game α} (K : DigestCut V g) (s : Stra
     K.missP s = ENNReal.ofReal (Claims.Pr (K.missOn s)) := by
   rw [pr_missOn, ← missP_toReal, ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (K.missP_le_one s))]
 
-/-- **An event, off the misses of a family of cuts**: an event of the play is at most as likely as the event on the
-tapes that miss at none of the cuts, plus each cut's miss. -/
 theorem prob_le_noMiss_add_missP [Nonempty V] {ι : Type} [Fintype ι] (E : α → Prop) (g : Game α) (s : Strategy g)
     (Ks : ι → DigestCut V g) :
     prob E g s ≤
@@ -167,9 +122,6 @@ theorem prob_le_noMiss_add_missP [Nonempty V] {ι : Type} [Fintype ι] (E : α �
     ← ENNReal.ofReal_add (Claims.Pr_nonneg _) (Finset.sum_nonneg fun i _ => Claims.Pr_nonneg _)]
   exact ENNReal.ofReal_le_ofReal (pr_le_and_forall_not_add _ _)
 
-/-- **An event, off the misses of a family of cuts whose messages agree**: at most as likely as the event on the tapes
-that miss at none of the cuts, plus the square root of each cut's two-continuation finder's success (`finder`, at any
-budget). -/
 theorem prob_le_noMiss_add_sqrt (H : Claims.Msg → Claims.Msg) {ι : Type} [Fintype ι] (E : α → Prop) (g : Game α)
     (s : Strategy g) (Ks : ι → DigestCut Claims.Msg g) (hK : ∀ i, (Ks i).Agrees H) (q : ι → ℕ) :
     prob E g s ≤
@@ -177,8 +129,6 @@ theorem prob_le_noMiss_add_sqrt (H : Claims.Msg → Claims.Msg) {ι : Type} [Fin
         ∑ i, ENNReal.ofReal (Real.sqrt (((Ks i).finder s (q i)).Pr H)) :=
   (prob_le_noMiss_add_missP E g s Ks).trans
     (add_le_add le_rfl (Finset.sum_le_sum fun i _ => missP_le H (Ks i) (hK i) s (q i)))
-
-/-! ## Cuts whose messages agree -/
 
 /-- **A cut whose revealed messages all have one image under `H`**, with its `Agrees`. -/
 structure AgreeCut {D : Type} (H : V → D) (g : Game α) : Type 1 where
@@ -225,8 +175,6 @@ end Verity.Game
 namespace Verity
 
 open Game
-
-/-! ## The period's game as one game -/
 
 /-- An option's two continuations: `n` at `none`, `y x` at `some x`. -/
 def optGame {γ β : Type} : Option γ → Game β → (γ → Game β) → Game β
@@ -301,8 +249,6 @@ theorem play_eq (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : A
   funext a
   exact releases_bind _ _ _ _
 
-/-! ## The cuts at the frames the prover sends -/
-
 /-- **The messages `rv` reveals that open the digest `dg`**: those whose SHA-512 is `dg`. -/
 def digestReveal {β : Type} (rv : β → Option Claims.Msg) (dg : Claims.Msg) (o : β) : Option Claims.Msg :=
   (rv o).filter fun w => decide (sha512Msg w = dg)
@@ -362,7 +308,6 @@ open scoped ENNReal
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The period's game is the prover's request, the device's releases, then the close**, as one game. -/
 theorem game_eq_relK (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
     V.game θ F c = .send ByteArray fun a =>
       relK (frames (V.families θ)) (V.families θ) [] (finish (V.signer θ) θ F c a) :=
@@ -396,14 +341,9 @@ noncomputable def roundCut (rd : Reading R) (j : Fin R) : DigestCut.AgreeCut sha
 noncomputable def recordCut (rd : Reading R) : DigestCut.AgreeCut sha512Msg (V.game θ F c) :=
   cutAt rd.record rd.recordDigest
 
-/-- **A tape that misses at no round and not at the record**: its play reveals, at each round's cut and the record's
-it reaches, only the most likely message there (`DigestCut.missOn_iff`). -/
 def NoMiss (rd : Reading R) (σ : Game.Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ) : Prop :=
   (∀ j, ¬ (roundCut V θ F c rd j).cut.missOn σ x) ∧ ¬ (recordCut V θ F c rd).cut.missOn σ x
 
-/-- **The messages' bound at a reading and a budget**: an event of the period's game is at most as likely as the event
-on the tapes that miss at no round and not at the record, plus the square root of each round's two-continuation
-finder's success and of the record's. -/
 theorem prob_le_noMiss_add (rd : Reading R) (σ : Game.Strategy (V.game θ F c)) (q : ℕ) (E : Exchange → Prop) :
     Game.prob E (V.game θ F c) σ ≤
       ENNReal.ofReal (Claims.Pr fun x : CoinTape (V.game θ F c) σ =>
@@ -450,9 +390,6 @@ theorem recordFinder_calls (rd : Readings) : ∀ (A : Live) (θ : ByteArray) (F 
   simp [Live.qM]
 
 omit θ F c in
-/-- **The messages' bound at constructions whose two-continuation finders are these** (`msgFinder`, `recordFinder`):
-an event of the period's game is at most as likely as the event on the tapes that miss at no round and not at the
-record, plus `CouplingTarget`'s messages terms. -/
 theorem prob_le_messages (rd : Readings) (K : Constructions V) (hM : K.msgFinder = msgFinder V rd)
     (hR : K.recordFinder = recordFinder V rd) (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (E : Exchange → Prop) :
@@ -465,10 +402,6 @@ theorem prob_le_messages (rd : Readings) (K : Constructions V) (hM : K.msgFinder
   exact prob_le_noMiss_add V θ F c (rd A θ F c) σ _ E
 
 omit θ F c in
-/-- **The coupling off the messages' misses**: at constructions whose two-continuation finders are these,
-`CouplingTarget` holds once the sampled verdict on the tapes that miss at no round and not at the record is at most as
-likely as the live audit's acceptance at the projected strategy, plus the square root of the bound digests' finder's
-success, the hiding term, the read finder's collision and the forger's forgery. -/
 theorem couplingTarget_of_noMiss (k : Verity.Registration.Composite) (rd : Readings) (K : Constructions V)
     (hM : K.msgFinder = msgFinder V rd) (hR : K.recordFinder = recordFinder V rd) (A : Live) (θ : ByteArray)
     (F : Array ByteArray)

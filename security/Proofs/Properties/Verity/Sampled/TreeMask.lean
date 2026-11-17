@@ -2,18 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.OpenEmpty
 
-/-!
-# hm96-sha512's mask at any key is the Hankel product
-
-`Flock.Hm96.sha512.mask key y` sets bit `t < 512` of its output to `⊕_{j < 1536} key_{t+j} · y_j` (`bitL_sha512_mask`)
-at every key, where `Hm.bitL_mask` has it at the pinned key only: the executable's loop is a fold over the output's bits
-(`sha512_mask_eq`), each step setting its own bit and keeping the others (`MaskInv`, `maskInv_step`).
-
-* **A coin tree's mask** (`treeMy_eq_hankel`): `treeMy key y`, the mask of a sample's salt under the key `key` as bits, is
-  `CROnly.hankel` of the key's bits applied to the salt's bits over `ZMod 2`.
-* **At a sampled key** (`treeMy_treeKey`): at the key `treeKey κ` of the device's 2047 bits `κ`, it is the Hankel
-  product of `κ` itself, the mask whose hiding gap `CROnly.hm96_sha512_sum` averages over the key.
--/
+/-! hm96-sha512's mask at any key is the Hankel product. -/
 
 @[expose] public section
 
@@ -22,14 +11,12 @@ namespace Verity.Game
 open FlockSoundness.Discharge.Hm (bitL get!_eq_getD maskV foldl_range'_induct)
 open FlockSoundness.Discharge.ZkView (testBit_foldr_bit foldr_bit_lt)
 
-/-- `Hm96.bit` is `Hm.bitL` of the bytes. -/
 theorem hm96Bit_eq_bitL (b : ByteArray) (t : ℕ) : Flock.Hm96.bit b t = bitL b.data.toList t := by
   rw [bitL, ← get!_eq_getD]
   simp only [Flock.Hm96.bit, Nat.testBit_eq_decide_div_mod_eq, Nat.shiftRight_eq_div_pow]
   generalize (b.get! (t / 8)).toNat / 2 ^ (t % 8) % 2 = r
   by_cases h : r = 1 <;> simp [h]
 
-/-- **The bytes of `8·n` bits read them back**: bit `t < 8·n` of `bytesOfBits n f` is `f t`. -/
 theorem bit_bytesOfBits (n : ℕ) (f : ℕ → Bool) {t : ℕ} (ht : t < 8 * n) :
     Flock.Hm96.bit (bytesOfBits n f) t = f t := by
   obtain ⟨q, r, hr, rfl⟩ : ∃ q r, r < 8 ∧ t = 8 * q + r := ⟨t / 8, t % 8, Nat.mod_lt _ (by omega), by omega⟩
@@ -48,7 +35,6 @@ theorem bit_bytesOfBits (n : ℕ) (f : ℕ → Bool) {t : ℕ} (ht : t < 8 * n) 
   rw [hfold, Nat.toUInt8_eq, UInt8.toNat_ofNat', Nat.mod_eq_of_lt hlt, testBit_foldr_bit, List.getD_eq_getElem?_getD,
     List.getElem?_map, List.getElem?_range hr, Option.map_some, Option.getD_some]
 
-/-- A loop in `Id` whose every step yields `g` of its state is a fold. -/
 theorem forIn_id_eq_foldl {α β : Type} (l : List α) (g : β → α → β) (f : α → β → Id (ForInStep β))
     (hf : ∀ a b, f a b = ForInStep.yield (g b a)) (init : β) : forIn l init f = l.foldl g init := by
   induction l generalizing init with
@@ -57,15 +43,12 @@ theorem forIn_id_eq_foldl {α β : Type} (l : List α) (g : β → α → β) (f
     rw [List.forIn_cons, hf a init]
     exact ih (g init a)
 
-/-- Whether hm96-sha512's mask sets bit `i`: the XOR of the key's bits `i + j` over the salt's set bits `j`. -/
 def maskCond (key y : ByteArray) (i : ℕ) : Bool :=
   ((List.range 1536).filter (Flock.Hm96.bit y ·)).foldl (fun acc j => acc ^^ Flock.Hm96.bit key (i + j)) false
 
-/-- hm96-sha512's mask loop's step at bit `i`. -/
 def maskStep (key y : ByteArray) (out : ByteArray) (i : ℕ) : ByteArray :=
   if maskCond key y i then out.set! (i / 8) (out.get! (i / 8) ||| (1 <<< (i % 8).toUInt8)) else out
 
-/-- **hm96-sha512's mask is a fold of its steps** over the 512 output bits, from 64 zero bytes. -/
 theorem sha512_mask_eq (key y : ByteArray) :
     Flock.Hm96.sha512.mask key y =
       (List.range' 0 512).foldl (maskStep key y) (ByteArray.mk (Array.replicate 64 0)) := by
@@ -100,8 +83,6 @@ theorem testBit_or_shl (x : UInt8) {s b : ℕ} (hs : s < 8) (hb : b < 8) :
   rw [h1, Nat.testBit_mod_two_pow, show (1 : UInt8).toNat = 1 from rfl, Nat.one_shiftLeft, Nat.testBit_two_pow]
   simp [hb]
 
-/-- **The mask loop's invariant before bit `i`**: 64 bytes, whose bit `t < 512` is `maskCond`'s at `t` where `t < i`
-and clear elsewhere. -/
 def MaskInv (key y : ByteArray) (i : ℕ) (out : ByteArray) : Prop :=
   out.size = 64 ∧ ∀ t < 512, bitL out.data.toList t = (decide (t < i) && maskCond key y t)
 
@@ -162,12 +143,10 @@ theorem foldl_filter_xor (p f : ℕ → Bool) : ∀ (l : List ℕ) (acc : Bool),
     · rw [ite_eq_left rfl, List.foldl_cons, Bool.and_true]
       exact foldl_filter_xor p f l _
 
-/-- **hm96-sha512's mask at any key**: bit `t < 512` of `mask key y` is `⊕_{j < 1536} key_{t+j} · y_j` (`Hm.maskV`). -/
 theorem bitL_sha512_mask (key y : ByteArray) {t : ℕ} (ht : t < 512) :
     bitL (Flock.Hm96.sha512.mask key y).data.toList t = maskV key (Flock.Hm96.bit y) t := by
   rw [(maskInv_final key y).2 t ht, decide_eq_true ht, Bool.true_and, maskCond, maskV, foldl_filter_xor]
 
-/-- **A coin tree's mask is the Hankel product** of the key's bits and the salt's, over `ZMod 2`. -/
 theorem treeMy_eq_hankel (key : ByteArray) (y : Fin 1536 → Bool) :
     treeMy key y = FlockSoundness.CROnly.hankel (n := 512) (l := 1536)
       (fun s => if Flock.Hm96.bit key s.val then (1 : ZMod 2) else 0) (fun j => if y j then 1 else 0) := by
@@ -178,7 +157,6 @@ theorem treeMy_eq_hankel (key : ByteArray) (y : Fin 1536 → Bool) :
     ← FlockSoundness.Discharge.ZkView.maskV_eq, ← bitL_sha512_mask key (treeSalt y) t.isLt]
   rfl
 
-/-- **A coin tree's mask at a sampled key** `treeKey κ` is the Hankel product of the key's 2047 bits `κ`. -/
 theorem treeMy_treeKey (κ : Fin 2047 → Bool) (y : Fin 1536 → Bool) :
     treeMy (treeKey κ) y = FlockSoundness.CROnly.hankel (n := 512) (l := 1536)
       (fun s => if κ s then (1 : ZMod 2) else 0) (fun j => if y j then 1 else 0) := by

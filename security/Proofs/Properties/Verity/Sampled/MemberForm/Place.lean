@@ -2,23 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.MemberForm.Order
 
-/-!
-# The sessions' trees are the trees the read opens, in the sessions' order
-
-A window's sessions are placed by the trees the device's log opens, in the order it first opens them
-(`Verity.Sampled.openedTrees`): the `j`-th session's tree is the `j`-th of them. The members' check gives the
-sessions' trees as the read numbers them, the sessions' rounds one session after another and each session's closing
-round in the read (`members_read`). So:
-
-* **A log opens the tree of each of its openings** (`opening_mem_openedTrees`).
-* **The sessions' places** (`session_place`, `session_count`): where a numbering of `m` sessions' trees gives no
-  tree to two sessions, every opening of the log is of a session's tree, the sessions' rounds are opened one session
-  after another and each session's tree has an opening, the `j`-th tree the log opens is session `j`'s, and the log
-  opens `m` trees.
-* **By the members' check** (`members_place`, `members_count`): where `Spot.Challenger.membersTreeReason` accepts
-  the sessions' records against the release log's lines, the `j`-th tree the read opens is the `j`-th session's, and
-  the read opens as many trees as sessions.
--/
+/-! The sessions' trees are the trees the read opens, in the sessions' order. -/
 
 @[expose] public section
 
@@ -27,9 +11,6 @@ namespace Verity.Sampled.MemberForm
 open Lean (Json)
 open Spot Spot.Challenger
 
-/-! ## The sessions' places -/
-
-/-- **A log opens the tree of each of its openings.** -/
 theorem opening_mem_openedTrees {L : List Verity.Release} {r : Verity.Release} (hr : r ∈ L) {i s n : ℕ}
     (hf : r.frame = .opening i s n) : i ∈ openedTrees L := by
   obtain ⟨a, b, rfl⟩ := List.append_of_mem hr
@@ -41,9 +22,6 @@ theorem opening_mem_openedTrees {L : List Verity.Release} {r : Verity.Release} (
     rw [he]
     exact List.mem_append_right _ List.mem_cons_self
 
-/-- **The sessions' trees are the trees the log opens, in the sessions' order**: where `tree` numbers `m` sessions'
-trees, no tree two sessions', every opening of the log is of a session's tree, the sessions' rounds are opened one
-session after another and each session's tree has an opening, the `j`-th tree the log opens is session `j`'s. -/
 theorem session_place {tree : ℕ → ℕ} {m : ℕ} {L : List Verity.Release}
     (hinj : ∀ j j', j < m → j' < m → tree j = tree j' → j = j')
     (hall : ∀ r ∈ L, ∀ i s n, r.frame = .opening i s n → ∃ j, j < m ∧ tree j = i)
@@ -107,8 +85,6 @@ theorem session_place {tree : ℕ → ℕ} {m : ℕ} {L : List Verity.Release}
   rw [← he, hlen] at h1
   exact h1
 
-/-- **The log opens as many trees as sessions**: where `tree` numbers `m` sessions' trees, no tree two sessions',
-every opening of the log is of a session's tree and each session's tree has an opening. -/
 theorem session_count {tree : ℕ → ℕ} {m : ℕ} {L : List Verity.Release}
     (hinj : ∀ j j', j < m → j' < m → tree j = tree j' → j = j')
     (hall : ∀ r ∈ L, ∀ i s n, r.frame = .opening i s n → ∃ j, j < m ∧ tree j = i)
@@ -127,15 +103,10 @@ theorem session_count {tree : ℕ → ℕ} {m : ℕ} {L : List Verity.Release}
       exact opening_mem_openedTrees (List.mem_append_right _ List.mem_cons_self) hcf
   rw [hperm.length_eq, List.length_map, List.length_range]
 
-/-! ## By the members' check -/
-
 variable {label : String} {after : ByteArray} {recs : List Json} {ξ : ByteArray} {lines : List String}
   {log : List Verity.Release} {trees : Array LoggedTree}
   {records : Array (String × Array (String × Option ℕ) × Json × String)}
 
-/-- What `session_place` and `session_count` ask of the read, by the members' check: no tree two sessions', every
-opening a session's tree's, the sessions' rounds one session after another, and each session's tree with an
-opening, its closing round. -/
 theorem members_sessions (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     (hM : membersTreeReason trees lines records = none) {tree : ℕ → ℕ}
     (htree : ∀ j ρ, (usedOf records)[j]? = some ρ → (heldTrees trees).findIdx? (·.1 == ρ) = some (tree j)) :
@@ -157,9 +128,6 @@ theorem members_sessions (hT : coinTreesOf lines = .ok trees) (hR : readLog labe
     subst hi
     exact ⟨Lc, c, L₂, s, n, he, hcf⟩
 
-/-- **The `j`-th tree the read opens is the `j`-th session's**: where `coinTreesOf` accepts the release log's
-lines, `readLog` reads them, `membersTreeReason` accepts the sessions `records` against them and `tree` numbers
-each session's tree as the read does. -/
 theorem members_place (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     (hM : membersTreeReason trees lines records = none) {tree : ℕ → ℕ}
     (htree : ∀ j ρ, (usedOf records)[j]? = some ρ → (heldTrees trees).findIdx? (·.1 == ρ) = some (tree j))
@@ -167,8 +135,6 @@ theorem members_place (hT : coinTreesOf lines = .ok trees) (hR : readLog label a
   obtain ⟨hinj, hall, hord, hclose⟩ := members_sessions hT hR hM htree
   exact session_place hinj hall hord hclose hj
 
-/-- **The read opens as many trees as sessions**, where `membersTreeReason` accepts the sessions `records` against
-the release log's lines. -/
 theorem members_count (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     (hM : membersTreeReason trees lines records = none) : (openedTrees log).length = records.size := by
   obtain ⟨tree, htree⟩ := members_tree hT hR hM

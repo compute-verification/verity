@@ -2,17 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Trees
 
-/-!
-# v2's read of the release log, up to its first opening
-
-`Verity.Sampled.readLog` reads the release log's lines into the device's log as v2's check reads them. Where a release
-it reads opens a round and none before it does (`readLog_first`), the release is the read (`Verity.Sampled.treeStep`)
-of a coin tree's line whose event isn't a tree's sample, no line before that line opens a round
-(`Verity.Sampled.openLine`), and the trees read before it are those whose specs the releases before it show sampled
-(`Verity.Sampled.helloSpecs`), in order. The read of such a line (`step_open`) names the tree it opens by its root, the
-stream and round it opens, the tree's place among those read and the stream's among its spec's, and gives the coins
-a record of that tree gives that round.
--/
+/-! v2's read of the release log, up to its first opening. -/
 
 @[expose] public section
 
@@ -21,11 +11,6 @@ namespace Verity.Sampled.LinkRead
 open Lean (Json)
 open Spot Spot.Challenger
 
-/-! ## A coin tree's line -/
-
-/-- **A coin tree's line whose event isn't a tree's sample reads as a round opened**: of the tree its line names by its
-root, of the stream and round it names, at the place `i` of that tree among the trees read and `s` of the stream among
-its spec's, with the coins a record of that tree gives that round (none where no record does). -/
 theorem step_open {records : List Json} {ts ts' : List (String × Json)} {d : Json} {r : Verity.Release}
     (h : Verity.Sampled.treeStep records ts d = some (r, ts'))
     (hT : jsonStrIs (getD d "event") TREE_EVENT = false) :
@@ -59,8 +44,6 @@ theorem step_open {records : List Json} {ts ts' : List (String × Json)} {d : Js
     · simp at h
   · simp at h
 
-/-- **A coin tree's line whose event is a tree's sample reads as its `Hello`**: it adds its tree's line spec to the
-trees read, which parses to the `Hello`'s spec (`Verity.Sampled.specOf`). -/
 theorem step_hello {records : List Json} {ts ts' : List (String × Json)} {d : Json} {r : Verity.Release}
     (h : Verity.Sampled.treeStep records ts d = some (r, ts'))
     (hT : jsonStrIs (getD d "event") TREE_EVENT = true) :
@@ -93,14 +76,12 @@ theorem event_ok {l : String} {j : Json} (h : (event l).toOption = some j) : eve
     rw [he] at h
     simp [Except.toOption] at h
 
-/-- A line whose event is a tree's sample opens no round. -/
 theorem openLine_tree {l : String} {d : Json} (hev : event l = .ok d)
     (hT : jsonStrIs (getD d "event") TREE_EVENT = true) : Verity.Sampled.openLine l = false := by
   simp only [Verity.Sampled.openLine, hev]
   rw [Trees.strIs hT]
   simp [jsonStrIs, TREE_EVENT, OPEN_EVENT]
 
-/-- A line that is no coin tree's opens no round. -/
 theorem openLine_not_tree {l : String} (ht : ¬ treeLine l = true) : Verity.Sampled.openLine l = false := by
   cases hev : event l with
   | error _ => simp only [Verity.Sampled.openLine, hev]
@@ -111,8 +92,6 @@ theorem openLine_not_tree {l : String} (ht : ¬ treeLine l = true) : Verity.Samp
     cases ho : jsonStrIs (getD d "event") OPEN_EVENT
     · rfl
     · exact absurd (by rw [htl, ho, Bool.or_true]) ht
-
-/-! ## The trees read and the specs sampled -/
 
 theorem forall₂_snoc' {α β : Type} {R : α → β → Prop} {a : α} {b : β} :
     ∀ {l : List α} {l' : List β}, List.Forall₂ R l l' → R a b → List.Forall₂ R (l ++ [a]) (l' ++ [b])
@@ -155,7 +134,6 @@ theorem mapM_getElem?_arr' {α β : Type} {f : α → Option β} {xs : Array α}
     | some l' => exact ⟨l', rfl, by simpa [hm] using h⟩
   rw [List.getElem?_toArray, mapM_getElem?' hl', Array.getElem?_toList]
 
-/-- **A stream a coin tree's line spec names is its parsed spec's**, at the same place. -/
 theorem specOf_streams' {j : Json} {sp : Flock.CoinTree.Spec} (h : Verity.Sampled.specOf j = some sp) {s : ℕ}
     {x : String} (hx : (Verity.Sampled.specStreams j)[s]? = some (.str x)) : sp.streams[s]? = some x := by
   unfold Verity.Sampled.specOf at h
@@ -171,12 +149,6 @@ theorem specOf_streams' {j : Json} {sp : Flock.CoinTree.Spec} (h : Verity.Sample
     rfl
   | _ => simp [hss] at h
 
-/-! ## The read up to its first opening -/
-
-/-- **`readTail`'s first opening**: where the releases `readTail` reads from `lines` after the trees `ts` are
-`pre ++ y :: post`, `y` opens a round and no release of `pre` does, `y` is the read of a line of `lines` that
-`coinTreesOf` reads as an opening, no line before it opens a round, and the trees read before it are `ts`, then those
-whose specs `pre` shows sampled. -/
 theorem readTail_first {label : String} {after : ByteArray} {records : List Json} :
     ∀ (lines : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
       (H : List Flock.CoinTree.Spec) (pre post : List Verity.Release) (y : Verity.Release) (i s n : ℕ),
@@ -277,10 +249,6 @@ theorem readTail_first {label : String} {after : ByteArray} {records : List Json
           obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
           exact key rest _ _ lab hrest (Option.some.inj hR) (by rfl)
 
-/-- **`readLog`'s first opening**: where the releases `readLog` reads from the release log's lines are
-`pre ++ y :: post`, `y` opens a round and no release of `pre` does, `y` is the read of a line of the log that
-`coinTreesOf` reads as an opening, no line before it opens a round, and the trees read before it are those whose specs
-`pre` shows sampled. -/
 theorem readLog_first {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {pre post : List Verity.Release} {y : Verity.Release} {i s n : ℕ}
     (hR : Verity.Sampled.readLog label after records ξ lines = some (pre ++ y :: post))

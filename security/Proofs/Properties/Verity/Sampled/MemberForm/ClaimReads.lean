@@ -4,28 +4,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.OpensOwn
 public import Proofs.Properties.Verity.Sampled.MemberForm.Consts
 public import Proofs.Properties.Verity.Sampled.Window.Instance
 
-/-!
-# What the claim reads at the per-member form's windows
-
-The claim's transfer at a window reads the committed files member by member (`ExecutionPhaseInstance.ClaimReads`,
-`Flock.Guarantees.ReadsWith`): each member's files pass the verifier's files check, the vocabulary's read is the
-member's, the vocabulary's openings hold wherever the member's deployed commitment opens and at its files'
-constants, and the extracted transcript is, at the member's gates, the member's transcript. This module proves it
-of the windows the verifier sets up at the per-member form (`ExecutionPhaseInstance.executionPhases`, `MemberForm.MembersSetUp`):
-
-* **The seats' traces side by side are each seat's own** (`traceLeft_beside`, `traceRight_beside`,
-  `seat_trace_heq`): the first's at the first member's gates and the rest's at theirs, and a seat's trace at its
-  member's files is the member's transcript, where those files' circuit is the member's parsed circuit file's.
-* **Member by member** (`readsWith_of`, `readsWith_members`): seats whose members' files are the ones side by side
-  in order, each `Checked`, are read at the claim at their own traces side by side (`tracesWith`), under openings
-  that hold wherever each member's deployed commitment opens (`OpensWith`) and at each member's constants
-  (`ConstsWith`).
-* **A deployment's windows** (`claimReads`): at each window the verifier sets up, the window is laid out, the
-  published share and the units are the window's, and the committed files are read at the claim at every strategy.
-
-The verifier parses parameters in either form (`Spot.OneStageZk.paramsEitherOfJson`), so it sets up a window of
-members where they name members, and `claimReads` speaks of those windows. Its proof reads none of that.
--/
+/-! What the claim reads at the per-member form's windows. -/
 
 @[expose] public section
 
@@ -35,7 +14,6 @@ open Flock.Guarantees (MemberV5 Seat ReadsWith tracesWith JointAuditV5)
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **Two traces side by side, at the first circuit's gates, are the first.** -/
 theorem traceLeft_beside {C D : Verity.Circuit} (tC : C.Trace) (tD : D.Trace) :
     Verity.Circuit.traceLeft (Verity.Circuit.traceBeside tC tD) = tC := by
   funext i
@@ -43,7 +21,6 @@ theorem traceLeft_beside {C D : Verity.Circuit} (tC : C.Trace) (tD : D.Trace) :
   rw [Fin.addCases_left]
   exact BitVec.cast_cast ..
 
-/-- **Two traces side by side, at the second circuit's gates, are the second.** -/
 theorem traceRight_beside {C D : Verity.Circuit} (tC : C.Trace) (tD : D.Trace) :
     Verity.Circuit.traceRight (Verity.Circuit.traceBeside tC tD) = tD := by
   funext j
@@ -51,18 +28,12 @@ theorem traceRight_beside {C D : Verity.Circuit} (tC : C.Trace) (tD : D.Trace) :
   rw [Fin.addCases_right]
   exact BitVec.cast_cast ..
 
-/-- **A seat's trace at files whose circuit is its member's parsed circuit file's is the member's transcript** at
-the seat's trace. -/
 theorem seat_trace_heq {Reg : Type} {nJ : ℕ} (s : Seat Reg nJ) {r : Verity.FileRead}
     (h : r.circuit = Flock.Bridge.circuitOf s.m.D s.m.hU s.m.n) : HEq (s.trace r) (s.m.transcript s.Xv) := by
   unfold Flock.Guarantees.Seat.trace
   rw [dite_eq_left h]
   exact cast_heq _ _
 
-/-- **Seats whose members' files are the ones side by side are read at the claim at their own traces**: a first
-member's files and the rest's, and seats whose members' files are those in order, each member `Checked`; under
-openings that hold wherever each member's deployed commitment opens and at each member's constants, the files are
-read at the claim by the seats, at the seats' traces side by side. -/
 theorem readsWith_of {Reg : Type} {nJ : ℕ} : ∀ (r : Verity.FileRead) (rs : List Verity.FileRead)
     (op : (g : Fin (Verity.FileRead.circuitWith r rs).N) → BitVec ((Verity.FileRead.circuitWith r rs).w g) → Prop)
     (ss : List (Seat Reg nJ)), ss.map (fun s => s.m.fileRead) = r :: rs → (∀ s ∈ ss, s.m.Checked) →
@@ -101,8 +72,6 @@ theorem readsWith_of {Reg : Type} {nJ : ℕ} : ∀ (r : Verity.FileRead) (rs : L
         exact readsWith_of r' rs _ ss' (List.tail_eq_of_cons_eq hf)
           (fun s' h' => hc s' (List.mem_cons_of_mem _ h')) hrest hk.2
 
-/-- **Seats of the members `ms` are read at the claim at their own traces** (`readsWith_of`), at members whose
-files are the ones side by side in order, each `Checked`. -/
 theorem readsWith_members {Reg : Type} {nJ : ℕ} (r : Verity.FileRead) (rs : List Verity.FileRead)
     (op : (g : Fin (Verity.FileRead.circuitWith r rs).N) → BitVec ((Verity.FileRead.circuitWith r rs).w g) → Prop)
     (ss : List (Seat Reg nJ)) {ms : List (MemberV5 Reg nJ)} (hm : ss.map (·.m) = ms)
@@ -112,19 +81,12 @@ theorem readsWith_members {Reg : Type} {nJ : ℕ} (r : Verity.FileRead) (rs : Li
   exact readsWith_of r rs op ss (List.map_map.symm.trans hf)
     (fun s hs => hc s.m (List.mem_map.2 ⟨s, hs, rfl⟩)) ho hk
 
-/-- **A window's seats' members are the window's**, in order. -/
 theorem seats_members (w : JointAuditV5) [Nonempty w.EndΩ] (τ : FlockSoundness.Game.Strategy w.game) :
     (w.seats τ).map (·.m) = w.ms := by
   unfold Flock.Guarantees.JointAuditV5.seats
   rw [List.map_ofFn]
   exact List.ofFn_get w.ms
 
-/-- **What the claim reads at the deployment's windows, at the per-member form** (`ExecutionPhaseInstance.ClaimReads`):
-each window the verifier sets up is laid out, with the published share and the committed files' units its own
-(`MembersSetUp`); and at every strategy the committed files are read at the claim at the projected strategy, by
-the window's members in order (`ExecutionPhaseOn.reads_toV5`), each `Checked` (`MembersSetUp.checked`), under the
-vocabulary's openings, which hold wherever each member's deployed commitment opens (`MembersSetUp.opensWith`, at
-the instance's places) and at each member's constants (`constsWith_read`), at the seats' traces side by side. -/
 theorem claimReads (I : ExecutionPhaseInstance d α) (K : ExecutionPhaseConstructions I.base) : I.ClaimReads K where
   laid θ F W hW := (show MembersSetUp I.base I.pinned θ F W from (I.executionPhases_some hW).2).laid
   share θ F W hW := (show MembersSetUp I.base I.pinned θ F W from (I.executionPhases_some hW).2).toExecutionPhaseOn.share

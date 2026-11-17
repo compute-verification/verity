@@ -2,22 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Window.UnboundMember
 
-/-!
-# The claim at a window: across its members
-
-`JointAuditV5.unboundIncorrect` proves the window's statement of `Proofs.Properties.Verity.Sampled.Window.Unbound`
-(`JointAuditV5.UnboundIncorrect`) for every window, and `Verity.Sampled.ExecutionPhase.unboundIncorrect` at every cost: where the
-window's members are laid out in order and the window's read, openings and trace are its members' side by side
-(`JointAuditV5.ReadsAt`), every unit the trace doesn't bind is one of the window's incorrect proof blocks.
-
-The proof goes a member at a time, in the members' order (`JointAuditV5.faulty_of_readsWith`): the units of two
-circuits side by side that a trace doesn't bind are the first's, then the second's (`Verity.unbound_beside`); the
-first's are faulty at the first member (`MemberV5.unboundFaulty`), whose read has its population's units
-(`MemberV5.fileRead_units`), so the rest's start where the next member's proof blocks do (`MemberLayout.base_succ`).
-A member's incorrect proof block is one of its proof blocks (`MemberV5.lt_of_mem_faulty`) and incorrect
-(`MemberV5.faultyIncorrect`), and the window's incorrect proof blocks are its members' at their places
-(`JointAuditV5.Laid.mem_incorrectSet`).
--/
+/-! The claim at a window: across its members. -/
 
 @[expose] public section
 
@@ -34,11 +19,9 @@ open Classical
 
 variable {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ)
 
-/-- **A member's read has its population's units**, at files that parse to its descriptor, unit rows and population. -/
 theorem fileRead_units (hc : m.Checked) : m.fileRead.units = m.n :=
   Flock.Bridge.unitsOfFile_eq hc.parsed
 
-/-- **A member's incorrect proof blocks are among its proof blocks.** -/
 theorem lt_of_mem_faulty {Xv : Fin m.Cc.N → Bool} {v : ℕ} (h : v ∈ m.faulty Xv) : v < m.n := by
   have hv : v < m.blocks.blocks.length := Finset.mem_range.1 (Finset.mem_filter.1 h).1
   have hl : m.blocks.blocks.length = m.n := Flock.Bridge.blocks_length_partOf m.P (ns := [m.n]) (by simp)
@@ -55,8 +38,6 @@ variable (w : JointAuditV5) [Nonempty w.EndΩ]
 theorem seats_length (τ : Strategy w.game) : (w.seats τ).length = w.ms.length := by
   simp [seats]
 
-/-- **The seats from place `j` on**: member `j` at the trace the window's extractor gives it, then the seats from
-`j + 1` on. -/
 theorem seats_drop (τ : Strategy w.game) {j : ℕ} {s : Seat w.Reg w.nJ} {ss : List (Seat w.Reg w.nJ)}
     (e : (w.seats τ).drop j = s :: ss) :
     ∃ h : j < w.ms.length, s = ⟨w.ms.get ⟨j, h⟩, w.memberX τ ⟨j, h⟩⟩ ∧ ss = (w.seats τ).drop (j + 1) := by
@@ -73,9 +54,6 @@ theorem seats_drop (τ : Strategy w.game) {j : ℕ} {s : Seat w.Reg w.nJ} {ss : 
   rw [← h1]
   simp only [seats, List.getElem_ofFn]
 
-/-- **From member `j` on**: where the members from `j` on are read at `r` and `rs` side by side, every unit the trace
-doesn't bind is an incorrect proof block of one of them, a member whose files pass the verifier's checks, at its place among the
-window's proof blocks less member `j`'s. -/
 theorem faulty_of_readsWith (τ : Strategy w.game) :
     ∀ (rs : List Verity.FileRead) (r : Verity.FileRead)
       (op : (g : Fin (Verity.FileRead.circuitWith r rs).N) → BitVec ((Verity.FileRead.circuitWith r rs).w g) → Prop)
@@ -108,8 +86,6 @@ theorem faulty_of_readsWith (τ : Strategy w.game) :
           (congrArg (MemberLayout.base w.counts j + ·) (w.counts_get ⟨j, hj⟩))
       exact ⟨k, v, hc, hv, by omega⟩
 
-/-- **Across members, the units a window's trace doesn't bind are the window's incorrect proof blocks**
-(`JointAuditV5.UnboundIncorrect`). -/
 theorem unboundIncorrect : w.UnboundIncorrect := by
   intro hl R op tr τ hr x hx
   obtain ⟨u, hu, rfl⟩ := Finset.mem_image.1 hx
@@ -137,8 +113,6 @@ end Flock.Guarantees
 
 namespace Verity.Sampled
 
-/-- **Across a window's members, the units its trace doesn't bind are its incorrect proof blocks**, at every cost
-(`ExecutionPhase.UnboundIncorrect`). -/
 theorem ExecutionPhase.unboundIncorrect (W : ExecutionPhase) : W.UnboundIncorrect := fun t _ => (W.joint t).unboundIncorrect
 
 end Verity.Sampled

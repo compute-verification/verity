@@ -4,28 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Sessions
 public import Proofs.Properties.Verity.Sampled.Window.Order
 public import Proofs.Properties.Verity.Sampled.Window.Answered
 
-/-!
-# SPOT's coupling over a window: which session each answered release is of
-
-The members' sessions' traces answer releases of the one play's log (`Window/Answered.lean`), and the window's
-readings say which opening is which session's round by the order the trees are first opened in
-(`Window/Sessions.lean`). This module ties the two, on lists alone: the walk's `u`-th session answers exactly the
-releases the `u`-th session's rounds pick.
-
-* **The release that first opens a tree** (`mem_openedTrees`, `openedTrees_first_at`, `openedTrees_new_at`): each
-  tree a log opened is opened by one of its releases, the `u`-th after a log that opened `u` trees and not it.
-* **The sessions held one after another** (`OpensLast`, `opensLast_of_inOrder`): an opening of a tree opened before
-  is of the last tree opened, which `OpensInOrder` gives where the sessions' trees are the log's opened trees in
-  order.
-* **The sessions' rounds in a log** (`SessionPicks`): what the lemmas below read of the readings, which the window's
-  readings have in a log that serves each opening (`sessionPicks_executionPhaseReadingAt`).
-* **What the walk has answered is the sessions before the `u`-th** (`SessDone`): it holds with nothing answered
-  (`sessDone_nil`); while it holds and the `u`-th tree is opened, not every pick is answered (`SessDone.not_all`);
-  the next release picked is the `u`-th session's link's (`SessDone.first_stop`), the ones a session's trace answers
-  after it are the `u`-th session's other rounds' (`SessDone.rep_stop`), the stop after them is the session's closing
-  round's or another of its rounds' (`SessDone.close_stop`), and past the closing round, the tree's last opening, the
-  sessions before the `u + 1`-th are answered (`SessDone.closed`).
--/
+/-! SPOT's coupling over a window: which session each answered release is of. -/
 
 @[expose] public section
 
@@ -33,11 +12,8 @@ namespace Verity.Sampled
 
 theorem slotAt_zero : slotAt 0 = .link := rfl
 
-/-- A session's first place holds the link's slot, at more than one round a session. -/
 theorem slotOf_zero (T : ℕ) {per : ℕ} (hper : 1 < per) : slotOf T per 0 = .link :=
   (slotOf_of_ne T (by omega)).trans slotAt_zero
-
-/-! ## The trees a log opens, and the release that first opens each -/
 
 theorem _root_.Verity.Frame.tree?_some {fr : Frame} {i : ℕ} (h : fr.tree? = some i) : ∃ s n, fr = .opening i s n := by
   cases fr with
@@ -69,7 +45,6 @@ theorem foldl_openStep_mem {i : ℕ} : ∀ (l : List Release) (acc : List ℕ), 
             exact Or.inr ⟨r, List.mem_cons_self .., s, n, hf⟩
     · exact Or.inr ⟨r', List.mem_cons_of_mem _ hr', s, n, hf⟩
 
-/-- **A tree a log opened is opened by one of its releases.** -/
 theorem mem_openedTrees {L : List Release} {i : ℕ} (h : i ∈ openedTrees L) :
     ∃ r ∈ L, ∃ s n, r.frame = .opening i s n := by
   rcases foldl_openStep_mem L [] h with h | h
@@ -109,14 +84,11 @@ theorem foldl_openStep_first {i : ℕ} : ∀ (l : List Release) (acc : List ℕ)
           obtain ⟨s, n, hf⟩ := Frame.tree?_some ht
           exact ⟨[], r, l, s, n, rfl, hf, hi, hua.symm⟩
 
-/-- **The release that first opens the `u`-th tree a log opens**: an opening of that tree after a log that didn't open
-it and opened `u` trees. -/
 theorem openedTrees_first_at {L : List Release} {u i : ℕ} (h : (openedTrees L)[u]? = some i) :
     ∃ L₁ x L₂ s n, L = L₁ ++ x :: L₂ ∧ x.frame = .opening i s n ∧ i ∉ openedTrees L₁ ∧
       (openedTrees L₁).length = u :=
   foldl_openStep_first L [] u h (Nat.zero_le _)
 
-/-- **A log that opened a tree not opened before has that tree after the ones opened before.** -/
 theorem openedTrees_new_at {L : List Release} {r : Release} {i s n : ℕ} (hr : r.frame = .opening i s n)
     (hi : i ∉ openedTrees L) (d : List Release) :
     (openedTrees (L ++ r :: d))[(openedTrees L).length]? = some i ∧
@@ -128,14 +100,10 @@ theorem openedTrees_new_at {L : List Release} {r : Release} {i s n : ℕ} (hr : 
   · rw [List.length_append, List.length_cons]
     omega
 
-/-- **An opening of a tree opened before is of the last tree opened**, at each release of the log `Lg`: the members'
-sessions' rounds are opened one session after another. -/
 def OpensLast (Lg : List Release) : Prop :=
   ∀ L₁ x L₂ i s n, Lg = L₁ ++ x :: L₂ → x.frame = .opening i s n → ∀ u, (openedTrees L₁)[u]? = some i →
     u + 1 = (openedTrees L₁).length
 
-/-- **The sessions held one after another open each tree opened before last** (`OpensInOrder`), where the sessions'
-trees are the log's opened trees in the order it first opens them. -/
 theorem opensLast_of_inOrder {tree : ℕ → ℕ} {Lg : List Release}
     (ht : ∀ u i, (openedTrees Lg)[u]? = some i → tree u = i)
     (h : OpensInOrder tree (openedTrees Lg).length Lg) : OpensLast Lg := by
@@ -154,9 +122,6 @@ theorem opensLast_of_inOrder {tree : ℕ → ℕ} {Lg : List Release}
     (List.getElem?_eq_some_iff.1 hv').1 s' n' (by rw [h2]; exact hqf)
   omega
 
-/-- **The sessions held one after another open each tree opened before last**, where every opening is of a session's
-tree (`OpensInOrder`, at any numbering `tree` of the sessions' trees). Had another tree been opened first after the
-opening's own, its session would be at or before the opening's, and the opening's at or before its. -/
 theorem opensLast_of_sessions {tree : ℕ → ℕ} {m : ℕ} {Lg : List Release}
     (hall : ∀ r ∈ Lg, ∀ i s n, r.frame = .opening i s n → ∃ j, j < m ∧ tree j = i)
     (h : OpensInOrder tree m Lg) : OpensLast Lg := by
@@ -203,17 +168,10 @@ theorem opensLast_of_sessions {tree : ℕ → ℕ} {m : ℕ} {Lg : List Release}
   have huv := ((openedTrees_nodup L₁).getElem?_inj hul).1 (hu.trans hv.symm)
   omega
 
-/-! ## The sessions' rounds in a log -/
-
 section Sessions
 
 variable {R : ℕ}
 
-/-- **The sessions' rounds in the log `Lg`**, at the readings `P`, round `j` of session `su j`, the link's where
-`lk j`: a link round picks an opening of a tree not opened before, after as many trees were opened as its session's
-place; any other round picks an opening of the tree its session's link opened; the release that first opens a tree is
-the pick of the link round of the session at as many trees as were opened before; no two rounds pick one release; each
-session has one link round; and each round picks at most one release. -/
 structure SessionPicks (P : Fin R → List Release → Frame → Prop) (su : Fin R → ℕ) (lk : Fin R → Prop)
     (Lg : List Release) : Prop where
   link : ∀ j L₁, lk j → PicksIn P Lg j L₁ → ∃ x L₂ i s n, Lg = L₁ ++ x :: L₂ ∧ x.frame = .opening i s n ∧
@@ -226,21 +184,16 @@ structure SessionPicks (P : Fin R → List Release → Frame → Prop) (su : Fin
   link_inj : ∀ j j', lk j → lk j' → su j = su j' → j = j'
   once : PicksOnce P Lg
 
-/-- **What the walk has answered is the sessions before the `u`-th**: a release of `Lg` a round picks is after an
-answered log exactly where the round is of a session before the `u`-th. -/
 def SessDone (P : Fin R → List Release → Frame → Prop) (su : Fin R → ℕ) (Lg : List Release)
     (done : List (List Release)) (u : ℕ) : Prop :=
   ∀ j L₁, PicksIn P Lg j L₁ → (L₁ ∈ done ↔ su j < u)
 
-/-- **Nothing answered is no session done.** -/
 theorem sessDone_nil (P : Fin R → List Release → Frame → Prop) (su : Fin R → ℕ) (Lg : List Release) :
     SessDone P su Lg [] 0 :=
   fun _ _ _ => ⟨fun h => absurd h List.not_mem_nil, fun h => absurd h (Nat.not_lt_zero _)⟩
 
 variable {P : Fin R → List Release → Frame → Prop} {su : Fin R → ℕ} {lk : Fin R → Prop} {Lg : List Release}
 
-/-- **A session's link round's pick opens the session's tree**: the tree at the session's place among the trees `Lg`
-opens, not opened before it. -/
 theorem SessionPicks.link_opens (hS : SessionPicks P su lk Lg) {j : Fin R} {L₁ : List Release} (hl : lk j)
     (hp : PicksIn P Lg j L₁) : ∃ x L₂ i s n, Lg = L₁ ++ x :: L₂ ∧ x.frame = .opening i s n ∧
       i ∉ openedTrees L₁ ∧ (openedTrees L₁).length = su j ∧ (openedTrees Lg)[su j]? = some i := by
@@ -249,7 +202,6 @@ theorem SessionPicks.link_opens (hS : SessionPicks P su lk Lg) {j : Fin R} {L₁
   rw [he, ← hc]
   exact (openedTrees_new_at hx hni L₂).1
 
-/-- **Any other round's pick opens the session's tree**, opened before it. -/
 theorem SessionPicks.rep_opens (hS : SessionPicks P su lk Lg) {j : Fin R} {L₁ : List Release} (hl : ¬ lk j)
     (hp : PicksIn P Lg j L₁) : ∃ x L₂ i s n, Lg = L₁ ++ x :: L₂ ∧ x.frame = .opening i s n ∧
       (openedTrees L₁)[su j]? = some i ∧ (openedTrees Lg)[su j]? = some i := by
@@ -258,7 +210,6 @@ theorem SessionPicks.rep_opens (hS : SessionPicks P su lk Lg) {j : Fin R} {L₁ 
   rw [he]
   exact openedTrees_getElem?_append hti _
 
-/-- **The link round of a session whose tree a prefix of `Lg` opened picks before that prefix's end.** -/
 theorem SessionPicks.link_before (hS : SessionPicks P su lk Lg) {L d : List Release} (hLg : Lg = L ++ d) {v : ℕ}
     (hv : v < (openedTrees L).length) :
     ∃ j L₁, lk j ∧ su j = v ∧ PicksIn P Lg j L₁ ∧ L₁.length < L.length := by
@@ -269,7 +220,6 @@ theorem SessionPicks.link_before (hS : SessionPicks P su lk Lg) {L d : List Rele
   rw [he, List.length_append, List.length_cons]
   omega
 
-/-- **Not every pick is answered while a session's tree is opened and its session not done.** -/
 theorem SessDone.not_all (hS : SessionPicks P su lk Lg) {done : List (List Release)} {u : ℕ}
     (hD : SessDone P su Lg done u) (hu : u < (openedTrees Lg).length)
     (hall : ∀ j L₁, PicksIn P Lg j L₁ → L₁ ∈ done) : False := by
@@ -277,9 +227,6 @@ theorem SessDone.not_all (hS : SessionPicks P su lk Lg) {done : List (List Relea
   have := (hD j L₁ hp).1 (hall j L₁ hp)
   omega
 
-/-- **The first release picked after the sessions before the `u`-th is the `u`-th session's link's**: where every
-pick before the log `L₀` is answered and every answered log is shorter than `L₀`, a round that picks after `L₀` is the
-link round of session `u`. -/
 theorem SessDone.first_stop (hS : SessionPicks P su lk Lg) {done : List (List Release)} {u : ℕ}
     (hD : SessDone P su Lg done u) {j₀ : Fin R} {L₀ : List Release} (h₀ : PicksIn P Lg j₀ L₀)
     (hF : ∀ j L₁, PicksIn P Lg j L₁ → L₁.length < L₀.length → L₁ ∈ done)
@@ -298,10 +245,6 @@ theorem SessDone.first_stop (hS : SessionPicks P su lk Lg) {done : List (List Re
     have := (hD j L₁ hp).1 (hF j L₁ hp hlen)
     omega
 
-/-- **A release picked after the `u`-th session's link's, among releases no link round picks, is the `u`-th
-session's**: where the `u`-th session's link round picks after `L₀`, each log of `ms` is longer, picked by a round
-that is no link's, and every pick before one of them is after `L₀`, after one of `ms` or answered, a round that picks
-after a log of `ms` is of session `u` and no link's. -/
 theorem SessDone.rep_stop (hS : SessionPicks P su lk Lg) {done : List (List Release)} {u : ℕ}
     (hD : SessDone P su Lg done u) {j₀ : Fin R} {L₀ : List Release} (h₀ : PicksIn P Lg j₀ L₀) (hu₀ : su j₀ = u)
     {ms : List (List Release)} (hms : ∀ m ∈ ms, ∃ j, ¬ lk j ∧ PicksIn P Lg j m)
@@ -329,13 +272,6 @@ theorem SessDone.rep_stop (hS : SessionPicks P su lk Lg) {done : List (List Rele
     · have := (hD j₁ L₁ hp).1 h
       omega
 
-/-- **The stop after a session's answered rounds is its closing round's, or another of its rounds'**: where the
-sessions before the `u`-th are answered (`SessDone`), session `u`'s link's pick is answered, the walk stands
-(`Walked`) with the closing round `jc` of session `u` picking after a log `Lc` not answered, and from where the walk
-stands no live round picks through `L`, after which the play ends or a live round picks, the play does not end there:
-a live round picks, and it is `jc`, picking after `Lc`, or another round of session `u` that is no link's. An
-opening of a tree opened before is of the last tree opened (`OpensLast`), so no later session's round picks before
-`Lc`. -/
 theorem SessDone.close_stop (hS : SessionPicks P su lk Lg) (hO : OpensLast Lg) {done : List (List Release)} {u : ℕ}
     (hD : SessDone P su Lg done u) {j₀ : Fin R} {L₀ : List Release} (h₀ : PicksIn P Lg j₀ L₀) (hl₀ : lk j₀)
     (hu₀ : su j₀ = u) {done' : List (List Release)} (hd : ∀ L₁ ∈ done, L₁ ∈ done') (hL₀ : L₀ ∈ done')
@@ -399,11 +335,6 @@ theorem SessDone.close_stop (hS : SessionPicks P su lk Lg) (hO : OpensLast Lg) {
       have h1 := (List.getElem?_eq_some_iff.1 hti).1
       exact ⟨by omega, hl, hjc⟩
 
-/-- **Past a session's closing round the session is answered**: where the sessions before the `u`-th are answered
-(`SessDone`), the answered logs are those, the one session `u`'s link's round picks after, the logs `ms` rounds of
-session `u` pick after and the one `Lc` its closing round `jc` picks after, the walk stands at `Lc` with those
-answered (`Walked`), and no round of session `u` picks after a log longer than `Lc`, the sessions before the
-`u + 1`-th are answered. -/
 theorem SessDone.closed (hS : SessionPicks P su lk Lg) {done : List (List Release)} {u : ℕ}
     (hD : SessDone P su Lg done u) {j₀ : Fin R} {L₀ : List Release} (h₀ : PicksIn P Lg j₀ L₀) (hu₀ : su j₀ = u)
     {ms : List (List Release)} (hrep : ∀ m ∈ ms, ∀ j, PicksIn P Lg j m → su j = u) {jc : Fin R}
@@ -437,12 +368,6 @@ theorem SessDone.closed (hS : SessionPicks P su lk Lg) {done : List (List Releas
 
 end Sessions
 
-/-! ## The window's readings' sessions -/
-
-/-- **The window's readings' rounds are the sessions' rounds** (`SessionPicks`) in a log that serves each opening,
-whose trees each name their streams distinctly and are no more than the sessions the readings' rounds hold: round `j`
-is session `j / per`'s, the link's at the session's first place. The closing round's pick, as a rep round's, is an
-opening of the tree the session's link opened. -/
 theorem sessionPicks_executionPhaseReadingAt {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup)
     (hT : 0 < tables.size) {per : ℕ} (hper : 1 < per) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {Lg : List Release}

@@ -6,32 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import all Lean.Data.Json.Basic
 import Mathlib.Data.String.Basic
 
-/-!
-# SPOT's link: the message the challenger opened the link points after
-
-The challenger opens a `--zk` session's link points, its coin tree's `session` stream at round 0, after the SHA-512 of
-the link's `root_F` and every `link.root_b` entry (`Spot.Challenger.linkAfter`), and v2 holds the session's
-record to the openings the challenger logged (`Spot.OneStageZk.treesHeld`). `Flock.Record.decode` reads
-`link.root_b` only at the session's tables (S5); v2 refuses a record whose `link.root_b` keys are not exactly its
-session's tables (`Spot.Challenger.LINK_TABLES`), so the two read one message. The message carries no length
-prefix, and v2 refuses, before it hashes the message, a `root_B` of any length but the one the session's statement
-fixes, its table's level-0 cap of `2^cap₀` digests (`Spot.Challenger.LINK_ROOT_LEN`, at the lengths
-`Spot.OneStageZk.rootBTables` reads off the session v2 sets up). That fixed length is what makes the message
-parse one way: the `root_B`s are its last bytes, of their tables' lengths in table order, and `root_F` is the rest.
-
-* `checkBlobsAt_link`: where v2's check accepts, the challenger's log shows one coin tree, and the challenger opened
-  its `session` round 0 after the SHA-512 of `linkMsg record spec.tables`, the link's message in the record v2
-  verified at the session it set up (`V2Verified`): the statement's `Σ` (S6/D1's `root_F`), then the one `root_B`
-  `Flock.Record.decode` read, `rb`, of the length the statement fixes (`rootBLen` of the session's table). `root_B` is
-  a cap of `2^cap₀` nodes, not one 64-byte root, and is the message's only part of the prover's choosing, after a `Σ`
-  the statement fixes, so the message determines it (`ByteArray.append_right_inj`) without a length prefix.
-
-The steps: what v2's check held of its one session's record (`checkBlobsAt_trees`, `treesHeld_one`,
-`sessionsTreeReason_one`), what a record `sessionTreeReason` accepts shows of its link (`sessionTreeReason_link`), the
-one table of the session v2 sets up (`setupAt_tables`), the one entry of a JSON object with one key (`keys?_single`,
-`get?_mem`), and `Flock.Record`'s readers against `Spot.getD` (`fld_getD`, `str_getD`, `str_get?`).
-`checkBlobsAt_link` reads that table's `root_B` length off `rootBTables` at the schedule `zk_verify_ok` gives.
--/
+/-! SPOT's link: the message the challenger opened the link points after. -/
 
 @[expose] public section
 
@@ -42,9 +17,6 @@ open Flock (SessionSpec RunRecord)
 open FlockSoundness.Refine (ebind_ok)
 open Claims.Bridge.Custody (decode_ok RootField)
 
-/-! ## JSON objects -/
-
-/-- A key `get?` finds in an object's tree map is an entry of it, with the value found. -/
 theorem get?_mem {kvs : Std.TreeMap.Raw String Json} {k : String} {v : Json} (h : kvs.get? k = some v) :
     (k, v) ∈ kvs.toArray := by
   obtain ⟨⟨t⟩⟩ := kvs
@@ -64,7 +36,6 @@ theorem get?_mem {kvs : Std.TreeMap.Raw String Json} {k : String} {v : Json} (h 
       cases h
       exact Or.inr (Or.inl (by rw [compare_eq_iff_eq.1 hc]))
 
-/-- An object whose sorted keys are one key `x` has one entry, at `x`. -/
 theorem keys?_single {kvs : Std.TreeMap.Raw String Json} {x : String}
     (h : Spot.keys? (.obj kvs) = some #[x]) : ∃ w, kvs.toArray = #[(x, w)] := by
   simp only [Spot.keys?, Option.some.injEq] at h
@@ -76,7 +47,6 @@ theorem keys?_single {kvs : Std.TreeMap.Raw String Json} {x : String}
   obtain ⟨⟨k, w⟩, hkw, rfl⟩ := hl
   exact ⟨w, Array.toList_inj.1 hkw⟩
 
-/-- A field `Flock.Record.fld` reads is the one `Spot.getD` reads. -/
 theorem fld_getD {j v : Json} {k : String} (h : Flock.Record.fld j k = .ok v) : Spot.getD j k = v := by
   unfold Flock.Record.fld at h
   unfold Spot.getD Spot.field?
@@ -87,7 +57,6 @@ theorem fld_getD {j v : Json} {k : String} (h : Flock.Record.fld j k = .ok v) : 
     rfl
   · cases h
 
-/-- A string field `Flock.Record.str` reads is the one `Spot.getD` reads. -/
 theorem str_getD {j : Json} {k s : String} (h : Flock.Record.str j k = .ok s) : Spot.getD j k = .str s := by
   unfold Flock.Record.str at h
   obtain ⟨v, hv, h⟩ := ebind_ok h
@@ -95,7 +64,6 @@ theorem str_getD {j : Json} {k s : String} (h : Flock.Record.str j k = .ok s) : 
   cases v <;> cases h
   rfl
 
-/-- A string field `Flock.Record.str` reads in an object is the tree map's value at its key. -/
 theorem str_get? {kvs : Std.TreeMap.Raw String Json} {k s : String} (h : Flock.Record.str (.obj kvs) k = .ok s) :
     kvs.get? k = some (.str s) := by
   have hg := str_getD h
@@ -107,10 +75,6 @@ theorem str_get? {kvs : Std.TreeMap.Raw String Json} {k s : String} (h : Flock.R
     exact congrArg some hg
   · cases hg
 
-/-! ## What v2's check held of its session's record -/
-
-/-- **Where v2's check accepts on parameters that name no members, it held the evidence's sessions to the
-challenger's trees.** -/
 theorem checkBlobsAt_trees {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
@@ -129,8 +93,6 @@ theorem checkBlobsAt_trees {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
     obtain ⟨⟨⟩, hth, -⟩ := ebind_ok hr
     exact ⟨ts, hts, hth⟩
 
-/-- **`treesHeld` on one session**: its record, read as `Record.decode` reads it, is held to the trees at the
-statement's tables, each with the `root_B` length the session it sets up fixes (`rootBTables`). -/
 theorem treesHeld_one {p : _root_.Spot.OneStageZk.Own} {ts : Array _root_.Spot.Challenger.LoggedTree}
     {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {rs : _root_.Spot.OneStageZk.RunFiles} {recB : ByteArray} {record : String} (hs : e.sessions = #[rs])
@@ -154,7 +116,6 @@ theorem treesHeld_one {p : _root_.Spot.OneStageZk.Own} {ts : Array _root_.Spot.C
   | none => intro _; rfl
   | some w => intro h; cases h
 
-/-- **`sessionsTreeReason` on one session**: its record's coins are a logged tree's, and the log shows one tree. -/
 theorem sessionsTreeReason_one {trees : Array _root_.Spot.Challenger.LoggedTree}
     {tables : Array (String × Option ℕ)} {n : String} {J : Json}
     (h : _root_.Spot.Challenger.sessionsTreeReason trees #[(n, tables, J)] = none) :
@@ -171,10 +132,6 @@ theorem sessionsTreeReason_one {trees : Array _root_.Spot.Challenger.LoggedTree}
       exact h1.symm
     · cases h
 
-/-- **What a record `sessionTreeReason` accepts on one table `x` of length `n?` shows of its link**: a logged tree
-`t`, the record's `link.root_b` an object whose one entry is `x`'s, a string naming bytes `rb`, `n?`'s length where it
-is one (`LINK_ROOT_LEN`, refused before the hash), and the tree's `session` round 0 opened after the SHA-512 of the
-link's `root_F` bytes, then `rb`. -/
 theorem sessionTreeReason_link {trees : Array _root_.Spot.Challenger.LoggedTree} {x : String}
     {n? : Option ℕ} {J : Json} (h : _root_.Spot.Challenger.sessionTreeReason trees #[(x, n?)] J = none) :
     ∃ t kvs s rb sf rootF o, t ∈ trees ∧
@@ -248,10 +205,6 @@ theorem sessionTreeReason_link {trees : Array _root_.Spot.Challenger.LoggedTree}
     · cases h
   · cases h
 
-/-! ## The session v2 sets up -/
-
-/-- **The session v2 sets up has one table**: `setupAt` at one table's inputs (`inputsOf`'s count) sets up a
-one-table spec (`SetupTablesOkAny`). -/
 theorem setupAt_tables {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {draw : Option Json}
     {spec : SessionSpec} {tabs : Array Flock.Setup} {rest : Json × Json} (hc : I.count = 1)
     (h : _root_.Spot.OneStageZk.setupAt I rd draw = .ok (spec, tabs, rest)) : ∃ y, spec.tables = #[y] := by
@@ -288,18 +241,6 @@ theorem setupAt_tables {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.R
   · exact ⟨st.tags.table, by rw [hsp]; rfl⟩
   · omega
 
-/-! ## The binding -/
-
-/-- **Where v2's check accepts, the challenger opened the link points after the SHA-512 of the record's link
-message.** v2's check at the coins `ξ` accepts the evidence `e` on the blobs `bs`; then it verified the session's
-record `record` and proof files at the session `(spec, tabs)` it set up (`V2Verified`), `Flock.Record.decode` read the
-record as `sess` with one table's `root_B`, `rb`, of the length the session's table `st` fixes (`rootBLen st`, its
-level-0 cap of `2^cap₀` digests), the challenger's log shows one coin tree `t`, and the challenger opened `t`'s
-`session` round 0, the link points, after the SHA-512 of the link's message `linkMsg record spec.tables`: the
-statement's `Σ`, then `rb`. The message has no length prefix; v2 refuses any other length of `rb` before it hashes the
-message (`Spot.Challenger.LINK_ROOT_LEN` in `sessionTreeReason`, at the lengths
-`Spot.OneStageZk.rootBTables` reads off the session it sets up), and that fixed length is what makes the
-message parse one way, as `Σ` then `rb`. So the prover fixed that table's `root_B` before the link's coins. -/
 theorem checkBlobsAt_link {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}

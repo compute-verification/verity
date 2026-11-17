@@ -5,24 +5,7 @@ public import Proofs.Properties.Verity.Sampled.ParseBridge
 public import Proofs.Properties.Verity.Sampled.LinkTrees
 public import Proofs.Properties.Verity.Sampled.LinkRead
 
-/-!
-# The link points the device's log shows are the record's
-
-`MovesOf` asks that the link points written at the link (`linkBits fieldEnc pts`, the coins of the device's log's
-first opening) be those of the session v2's record decodes to. Where the sampled verdict accepts, the log v2's check
-read is the device's (`Binding.Logged Binding.readsV2`) and the device's first opening is of the stream
-`Spot.Challenger.TREE_SESSION` of the tree it opens (the order `SampleLinkFirst` states), they are
-(`link_pts`):
-
-* **v2's read of that opening** (`link_read`): v2's read of the release log shows it as the read of the log's first
-  line opening a round, which `coinTreesOf` takes only as round 0 of a tree the log shows sampled
-  (`LinkTrees.first_round`); the log shows one tree, the record's (`LinkTrees.treesHeld_size`, `Trees.records_held`),
-  so the opening's coins are those the record gives the session stream's round 0, its link points.
-* **The read of the device's log** (`logged_split`): the read v2's check shows of a release, in order, has its frame,
-  and its coins wherever it shows any.
-* **The link points' coins are some** (`SetsUp.mPts_pos`, `link_bits_ne`): the session `--zk` sets up at `A` has
-  points of `PT_LOCAL + nbl` coordinates, so the record's link coins are 128 bits a coordinate, never none.
--/
+/-! The link points the device's log shows are the record's. -/
 
 @[expose] public section
 
@@ -37,10 +20,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## The link points' coins are some -/
-
-/-- **The session `--zk` sets up at `A` has points of some coordinates**, `PT_LOCAL + nbl` of them, wherever v2 sets
-`A` up. -/
 theorem SetsUp.mPts_pos {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {record : String} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hs : Exec.setupOfP (ZkExec.zkInputs A.I) A.own record = .ok (spec, sts)) : 0 < spec.mPts := by
@@ -55,7 +34,6 @@ theorem SetsUp.mPts_pos {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} 
     omega
   · exact absurd h1 (by show ¬ 1 < A.I.count; omega)
 
-/-- **The link's coins a decoded record gives are some bits**, at two points of some coordinates. -/
 theorem link_bits_ne {spec : Flock.SessionSpec} {record : String} {sess : Flock.RunRecord} {J : Json}
     {b : ByteArray} (hd : Flock.Record.decode spec record = .ok sess) (hJ : Flock.JsonParse.parse record = .ok J)
     (hp2 : spec.points = 2) (hpos : 0 < spec.mPts) (hb : recordRound J TREE_SESSION 0 = some b) :
@@ -71,11 +49,6 @@ theorem link_bits_ne {spec : Flock.SessionSpec} {record : String} {sess : Flock.
   rw [length_chunks fieldBits, List.length_nil, Array.length_toList, Array.size_append, hsz] at hl
   omega
 
-/-! ## The read of the device's log -/
-
-/-- **The read v2's check shows of the device's log, at a release**: where the reads of `lr` are of the releases
-`L₀ ++ r :: L`, `lr` reads `r` at its place, after reads of `L₀`'s frames, with `r`'s frame, and with `r`'s coins
-wherever it shows any. -/
 theorem logged_split {r : Verity.Release} {L : List Verity.Release} :
     ∀ {L₀ lr : List Verity.Release}, List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) (L₀ ++ r :: L) →
       ∃ pre y post, lr = pre ++ y :: post ∧ List.Forall₂ (fun a b => a.frame = b.frame) pre L₀ ∧
@@ -95,7 +68,6 @@ theorem logged_split {r : Verity.Release} {L : List Verity.Release} :
     obtain ⟨pre, y, post, rfl, hfr, hy, hc⟩ := logged_split h.2
     exact ⟨y' :: pre, y, post, rfl, .cons h.1.1 hfr, hy, hc⟩
 
-/-- Releases of the same frames show the same coin trees' specs sampled. -/
 theorem helloSpecs_frames :
     ∀ {l l' : List Verity.Release}, List.Forall₂ (fun a b => a.frame = b.frame) l l' → helloSpecs l = helloSpecs l'
   | _, _, .nil => rfl
@@ -104,7 +76,6 @@ theorem helloSpecs_frames :
     simp only [helloSpecs, List.filterMap_cons, h] at e ⊢
     rw [e]
 
-/-- Releases of the frames of releases that open no round open none. -/
 theorem noOpening_frames :
     ∀ {l l' : List Verity.Release}, List.Forall₂ (fun a b => a.frame = b.frame) l l' →
       (∀ q ∈ l', ∀ i s n, q.frame ≠ .opening i s n) → ∀ q ∈ l, ∀ i s n, q.frame ≠ .opening i s n
@@ -116,13 +87,6 @@ theorem noOpening_frames :
       exact hl' _ (List.mem_cons_self ..) i s n
     · exact noOpening_frames t (fun q hq => hl' q (List.mem_cons_of_mem _ hq)) q hq
 
-/-! ## v2's read of the link's opening -/
-
-/-- **v2's read of the release log's first opening shows the record's link points**: where v2 reads the release log
-`lines`, with the one record `J`, as `pre ++ y :: post`, `coinTreesOf` reads the log to one tree, which `J` holds to
-(`sessionTreeReason`), `y` opens a round and no release of `pre` does, and `y` opens the stream `TREE_SESSION` of the
-tree it opens (by the specs `pre` shows sampled), `y`'s coins are the bits of the coins `J` gives the session stream's
-round 0. -/
 theorem link_read {label : String} {after : ByteArray} {J : Json} {ξ : ByteArray} {lines : List String}
     {pre post : List Verity.Release} {y : Verity.Release} {trees : Array LoggedTree} {i s n : ℕ}
     (hR : readLog label after [J] ξ lines = some (pre ++ y :: post)) (hct : coinTreesOf lines = .ok trees)
@@ -152,13 +116,6 @@ theorem link_read {label : String} {after : ByteArray} {J : Json} {ξ : ByteArra
   rw [hcoins]
   simp [hrt, hb]
 
-/-! ## The link points -/
-
-/-- **The link points the device's log shows are the record's** (`MovesOf`'s link points): where `A` is the session
-v2 sets up on the parameters, the sampled verdict accepts, the log v2's check read is the device's, and the device's
-first opening `r`, after releases `L₀` that open none, opens the stream `TREE_SESSION` of the tree it opens with coins
-`linkBits fieldEnc pts`, the session that v2's record decodes to at the session `--zk` sets up at `A` has the link
-points `pts`. -/
 theorem link_pts {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {A : Live} {x : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ) (hv : V.Verdict k .sampled x)
     (hl : Binding.Logged Binding.readsV2 x) {L₀ L : List Verity.Release} {r : Verity.Release} {i s n : ℕ}

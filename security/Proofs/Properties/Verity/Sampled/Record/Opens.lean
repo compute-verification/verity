@@ -9,35 +9,7 @@ public import Proofs.Flock.Claims.Recursion.VStarParts
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 import all Init.Data.Array.QSort.Basic
 
-/-!
-# A checked unit's Flock witness opens its proof block correct (`SessionOpens`)
-
-At the record's statement every checked unit's session is the one verity-verify-proof `--zk` session at the statement the
-sample file sets up (`sessionOf`). A Flock witness in that session's relation satisfies its one table (`tableLowers`),
-which is V5's sampled table for the unit (`tabOfZHJP_one`), so the message packing it (`packZ`) reveals openings that
-make the unit's proof block correct wherever the values carry those that open (`correct_of_revealV5`).
-
-* **What a witness reveals** (`revealRec`, the record's `Ext.reveal`): at unit `u` of the run's sample file, V5's
-  openings (`revealV5`) of the message packing the witness's bits at the session's table, set up at that sample file and
-  the unit (`TableSetup`); none where it doesn't set up. The openings are computed from the witness; only the table's
-  setup is chosen, and it is unique (`SampleSetupZHJP.table_congr`). At most one per committed wire (`revealsLe`).
-* **What the record takes beside acceptance**:
-  * `Names`, v2's reads of the registered file and `A`'s partition object as v2's: through them, wherever verity-verify-proof
-    reads the session's statement at a sample file that fits its length words, the reading is `--zk` at `A`'s inputs,
-    with no public input words, and sets up as `A`'s session at the sample file's JSON (`SessionIns`, `sessionIns_of`
-    through `read_sess`); the sample file round keeps only a sample file that fits (`sampleOk`, `fits_of_sampleOk`);
-  * `ProvedIn`: every unit the coins sample is one the kept sample file proves, below the population. v2 credits the
-    public file's `units.indices` of the instances the sample names (`provedOf`), and refuses a public file whose
-    `units.indices` are not the population's units in order, so the indices are the instances themselves
-    (`provedIn_of_range`);
-  * one table: `SetsUp`'s, as `Spot.OneStageZk.inputsOf` hands v2's inputs;
-  * the record's commitment the deployed one (`A.Cd`), which `record_commit` gives at a circuit of `sha512/row/v2`
-    rows: the record's commitment hashes each row as a `sha512/row/v2` row.
-* `sessionOpens`: `SessionOpens` at SHA-512, at any interior roots: an accepted run kept its sample file
-  (`accepted_sample`), whose session's witness satisfies the session's one table (`session_lowers`), the table V5 sets
-  up at each sampled proof block (`session_table`). The statement stays a variable equal to `xOf A o` throughout (`parse_at`,
-  `checked_at`, `session_at`).
--/
+/-! A checked unit's Flock witness opens its proof block correct (`SessionOpens`). -/
 
 @[expose] public section
 
@@ -52,33 +24,25 @@ open FlockSoundness.Discharge.ZkSession (TabZK tabOfZ)
 
 variable (A : Live)
 
-/-! ## What a session's witness reveals -/
-
-/-- **The session's table set up at unit `u` and the sample `J`**, at some proved-unit count `kd`. -/
 abbrev TableSetup (u : Fin A.n) (J : Json) : Type :=
   Σ kd : ℕ, SampleSetupZHJP (inputsJ A.I 0) none (mPtsOf A.D.unroll.g (kd / nTab A.I)) {u} J
 
-/-- Unit `u`'s table at the setup `y`, as V5 reads it. -/
 noncomputable abbrev unitTab (u : Fin A.n) (J : Json) {mPts : ℕ} {S₀ : Finset (Fin A.n)} {d₀ : Json}
     (y : SampleSetupZHJP (inputsJ A.I 0) none mPts S₀ d₀) : TabZK FlockLevel3.GF128 mPts :=
   tabOfZ (planZHJP (Reg := Unit) (fun _ => J) y) (tabZHJP (fun _ => J) y) {u} () u
 
-/-- **The openings a witness reveals at unit `u`'s table**: V5's openings of the message packing the witness's bits at
-the table's statement. -/
 noncomputable def revealAt (u : Fin A.n) (J : Json) {mPts : ℕ} {S₀ : Finset (Fin A.n)} {d₀ : Json}
     (y : SampleSetupZHJP (inputsJ A.I 0) none mPts S₀ d₀) (wF : Claims.Flock.Wit) : List (List Msg × Opening Bool) :=
   Flock.Bridge.revealV5 A.ht A.hD A.hU A.hpi A.hpub A.hscope (fun _ => J) y {u} () u
     (Flock.Bridge.packZ (unitTab A u J y) (Flock.Readable.zOf 1 wF 0 (unitTab A u J y).S.m))
 
 open Classical in
-/-- `revealAt` at the sample file's reading, where the table sets up. -/
 noncomputable def revealJ (u : Fin A.n) (wF : Claims.Flock.Wit) :
     Except String Json → List (List Msg × Opening Bool)
   | .ok J =>
     if h : Nonempty (TableSetup A u (Flock.norm J)) then revealAt A u (Flock.norm J) (Classical.choice h).2 wF else []
   | .error _ => []
 
-/-- **What a session's witness reveals at unit `u`**: `revealAt` at the run's sample file, at a unit of the population. -/
 noncomputable def revealRec (_s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) :
     List (List Msg × Opening Bool) :=
   if hu : u < A.n then revealJ A ⟨u, hu⟩ wF (FlockDeploy.jsonOf "draw" ⟨(drawOf v).toArray⟩) else []
@@ -107,8 +71,6 @@ theorem revealRec_length_le (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Clai
   · exact revealJ_length_le A _ wF _
   · exact Nat.zero_le _
 
-/-- **At most one opening per committed wire**, where the record's reveal is `revealRec` and its count at least the
-circuit's wires. -/
 theorem revealsLe (o : Own) (e : Ext) (he : e.reveal = revealRec A) (hN : ∀ x, A.Cc.N ≤ e.reveals x) :
     SamplingDeploy.RevealsLe (code A o e) := by
   intro x s _ u v wF
@@ -116,11 +78,6 @@ theorem revealsLe (o : Own) (e : Ext) (he : e.reveal = revealRec A) (hN : ∀ x,
   rw [he]
   exact (revealRec_length_le A s u v wF).trans (hN x)
 
-/-! ## What the record takes -/
-
-/-- **verity-verify-proof reads the session's statement as `A`'s session**: wherever it reads the statement at a sample file
-that fits its length words, the reading is `--zk` at `A`'s tags, with no public input words, set up at `A`'s inputs and
-the sample file's JSON. -/
 def SessionIns (o : Own) : Prop :=
   ∀ (d : Msg) (r : Flock.Readable.Read), Fits A o d → FlockDeploy.readOf true (sessStmt A o d) = some r →
     ∃ J, FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J ∧
@@ -129,23 +86,13 @@ def SessionIns (o : Own) : Prop :=
         A.I.publicFile (FlockSoundness.Discharge.ZkExec.zkCoins A.I) A.I.count A.I.tables (some (Flock.norm J))
         A.I.partition A.I.program
 
-/-- **Every unit the coins sample is one the kept sample file proves**, below the population. -/
 def ProvedIn (o : Own) : Prop :=
   ∀ d cs (J : Json) (D : Flock.Draw.UnitSample), sampleOk A o d cs → FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J →
     Flock.Draw.UnitSample.ofJson (Flock.norm J) = .ok D → ∀ u ∈ drawn A (sampleBytes cs), u < A.n ∧ u ∈ D.proved
 
-/-! ## v2's units check gives `ProvedIn`
-
-v2 refuses a public file whose `units.indices` are not the population's units `0, …, n − 1` in order
-(`Spot.OneStageZk.publicHeld`, `indicesHeld`), and its acceptance gives that match at the loaded header
-(`Properties.Spot.Credited.units_of_checkBlobsAt`): `FilePart.indicesOf` reads `Array.range n`. There the
-entry at each slot is the slot, so the unit `unitsAt` reads at each instance a sample names is the instance itself. -/
-
 theorem nat?_num (m : ℕ) : _root_.Spot.nat? (.num ⟨Int.ofNat m, 0⟩) = some m := by
   simp [_root_.Spot.nat?, _root_.Spot.int?]
 
-/-- **At such a header every unit a sample proves is a sampled proof block, below the population**: `unitsAt` reads the sample's
-instance `i` as the header's entry at slot `i`, which is `i`. -/
 theorem units_of_range {h D : Json} {n : ℕ} {us : Array ℕ} {Dd : Flock.Draw.UnitSample}
     (hidx : _root_.Spot.FilePart.indicesOf h = .ok (Array.range n))
     (hu : _root_.Properties.Spot.Units.unitsAt h D = some us)
@@ -189,8 +136,6 @@ theorem mem_proved {D : Flock.Draw.UnitSample} {u : ℕ} (h : u ∈ D.units) : u
   · exact h
   · exact (FlockSoundness.Audit.SampleExec.mem_qsort _ _ _).2 (Array.mem_append_left _ h)
 
-/-- **v2's units check gives `ProvedIn`**: at a public file whose header's `units.indices` are the population's units
-`0, …, A.n − 1`. -/
 theorem provedIn_of_range (o : Own)
     (hidx : _root_.Spot.FilePart.indicesOf A.pub.header = .ok (Array.range A.n)) : ProvedIn A o := by
   intro d cs J D hdOk hJ hD u hu
@@ -220,7 +165,6 @@ theorem zkCoins_inputsAt (hc1 : A.I.count = 1) :
   rw [hc1]
   rfl
 
-/-- **v2's names give `SessionIns`**, at one table and v2's partition object (`read_sess`). -/
 theorem sessionIns_of {o : Own} (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
     {rd : _root_.Spot.OneStageZk.Reads}
     (hrd : _root_.Spot.OneStageZk.readsOf p.own.registered = .ok rd) (hc1 : A.I.count = 1)
@@ -233,15 +177,10 @@ theorem sessionIns_of {o : Own} (hn : Names A o p bs) (hpl : A.I.tags.plainLeave
 
 end Names
 
-/-! ## The run's session -/
-
 theorem take_coinsAt {k : ℕ} (r : Fin k → FlockDeploy.Coin) :
     ((List.range (SAMPLE_ROUNDS + 1)).map (coinSeq r)).take SAMPLE_ROUNDS = coinsAt r := by
   rw [← List.map_take, List.take_range, Nat.min_eq_left (by omega : SAMPLE_ROUNDS ≤ SAMPLE_ROUNDS + 1)]
   rfl
-
-/-! The record's fields, at a statement `x` held equal to `xOf A o` (`hx`) rather than substituted: a step that unfolds
-a field at `xOf A o` itself evaluates the statement's bytes. -/
 
 section Fields
 
@@ -277,16 +216,12 @@ theorem seen_msgs (t : Claims.Transcript) : t.seen.msgs = t.msgs := rfl
 theorem sampleOf_of {v : Seen} {d : Msg} {a : Claims.Out} (hv : v.msgs[SAMPLE_ROUNDS]? = some (d, a)) : drawOf v = d := by
   simp only [drawOf, List.getD_eq_getElem?_getD, List.getElem?_map, hv, Option.map_some, Option.getD_some]
 
-/-- A view whose sample file round kept `d` at the statement's numbers, `d` fitting its length words, shows the session
-at `d`. -/
 theorem sessionOf_kept (o : Own) {v : Seen} {d : Msg} (hv : v.msgs[SAMPLE_ROUNDS]? = some (d, .msg []))
     (hn : numsOk A o d ∧ Fits A o d) :
     sessionOf A o v = (sessStmt A o d, ⟨v.msgs.drop (SAMPLE_ROUNDS + 1), v.out⟩) := by
   unfold sessionOf
   simp only [hv, hn, and_self, ↓reduceIte]
 
-/-- **An accepted run kept its sample file**: at the record's statement the sample file round's check passed (`run_pre` at
-`prefixAt`), on the sample file the run shows and the sampling coins. -/
 theorem accepted_sample (o : Own) (e : Ext) {x : Msg} (hx : x = xOf A o) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r : Fin ((record A o e).V.k x) → FlockDeploy.Coin)
     (hacc : (run FlockDeploy.sha512 P (record A o e).V x ω r).out = .acc) :
@@ -318,9 +253,6 @@ theorem nTab_one (hc1 : A.I.count = 1) : nTab A.I = 1 := by
   unfold FlockSoundness.Discharge.Composed.nTab
   exact ite_eq_left (by omega)
 
-/-- **A Flock witness the session's statement checks satisfies its one table**: verity-verify-proof reads the statement at the
-kept sample file, which fits its length words (`fits_of_sampleOk`), as `A`'s session at the sample file's JSON (`SessionIns`),
-which sets up one table (`setupTables_okHP`) that the witness satisfies (`tableLowers`). -/
 theorem session_lowers (o : Own) (hc1 : A.I.count = 1) (hins : SessionIns A o) {d : Msg}
     {cs : List FlockDeploy.Coin} (hdOk : sampleOk A o d cs) {wF : Claims.Flock.Wit}
     (hchk : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (sessStmt A o d) wF = true) :
@@ -351,8 +283,6 @@ theorem session_lowers (o : Own) (hc1 : A.I.count = 1) (hins : SessionIns A o) {
     exact Flock.Readable.tableLowers (j := 0) (st := st) hpP ht hpin hR rfl hwf
   · exact absurd hc (by omega)
 
-/-- **The session's table at a sampled proof block is V5's**: where the kept sample file proves the unit, the session's one table
-sets up at it (`TableSetup`, `sampleSetupHP_of_setupHiddenI`), and every such setup is that table's. -/
 theorem session_table (o : Own) (hc1 : A.I.count = 1) (hpr : ProvedIn A o) {d : Msg} {cs : List FlockDeploy.Coin}
     (hdOk : sampleOk A o d cs) {J : Json} (hJ : FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J) {st : Flock.Stmt}
     (hst : Flock.Stmt.setupHidden (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.circuitFile A.I.publicFile
@@ -383,7 +313,6 @@ theorem session_table (o : Own) (hc1 : A.I.count = 1) (hpr : ProvedIn A o) {d : 
     (sch := sch) (tPad := tPad) (by rw [hxx]; exact hz)
   exact ⟨hun, ⟨⟨D.proved.size, y⟩⟩, fun y' => Except.ok.inj (y'.2.x.h.symm.trans hstJ)⟩
 
-/-- A witness satisfying a statement's table satisfies the `--zk` table of every setup of it. -/
 theorem table_satisfies {mPts : ℕ} {S₀ : Finset (Fin A.n)} {d₀ : Json}
     (y : SampleSetupZHJP (inputsJ A.I 0) none mPts S₀ d₀) {st : Flock.Stmt} (hy : y.x.st = st) {wF : Claims.Flock.Wit}
     (hsat : ∀ hwf : FlockSoundness.Refine.StmtWF st,
@@ -393,7 +322,6 @@ theorem table_satisfies {mPts : ℕ} {S₀ : Finset (Fin A.n)} {d₀ : Json}
   subst hy
   exact hsat y.x.wf.1
 
-/-- `revealRec` at a unit whose table sets up at the run's sample file is `revealAt` at the chosen setup. -/
 theorem revealRec_eq {u : ℕ} (hun : u < A.n) {v : Seen} {d : Msg} (hdv : drawOf v = d) {J : Json}
     (hJ : FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J) (hne : Nonempty (TableSetup A ⟨u, hun⟩ (Flock.norm J)))
     (s : AuditStatement) (wF : Claims.Flock.Wit) :
@@ -402,11 +330,6 @@ theorem revealRec_eq {u : ℕ} (hun : u < A.n) {v : Seen} {d : Msg} (hdv : drawO
   rw [dite_eq_left hun, hdv, hJ]
   exact dite_eq_left hne
 
-/-! ## The openings make the proof block correct -/
-
-/-- **A witness satisfying unit `u`'s table reveals openings that make `u`'s proof block correct**, at one table
-(`tabOfZHJP_one`, `wit_packZ`, `correct_of_revealV5`), where equal roots at the session's leaf map have one domain
-(`hroots`). -/
 theorem correct_revealAt (hc1 : A.I.count ≤ 1) (hroots : Flock.Bridge.RootFixesDomainL A.D.unroll A.Lm)
     {u : Fin A.n} {J : Json} {kd : ℕ}
     (y : SampleSetupZHJP (inputsJ A.I 0) none (mPtsOf A.D.unroll.g (kd / nTab A.I)) {u} J) {wF : Claims.Flock.Wit}
@@ -426,14 +349,6 @@ theorem correct_revealAt (hc1 : A.I.count ≤ 1) (hroots : Flock.Bridge.RootFixe
     (Flock.Bridge.packZ (unitTab A u J y) (Flock.Readable.zOf 1 wF 0 (unitTab A u J y).S.m))
     (Eq.mpr (congrArg (fun z => (unitTab A u J y).S.Satisfies z) h2) hM) val ι hval
 
-/-- **`SessionOpens` at the record**, at SHA-512: on an accepted run, a checked unit's session's Flock witness reveals
-(`revealRec`) openings such that values carrying those that open under the statement's roots make the unit's proof block
-correct, whatever its interior values. At a session v2 sets up (`SetsUp`, one table among its inputs): where v2 reads
-`A`'s and `o`'s inputs (`Names`, with v2's reads and partition object), verity-verify-proof reads the session as `A`'s
-(`sessionIns_of`); where the public file's `units.indices` are the population's units in order, as v2 holds them
-(`units_of_checkBlobsAt`), the kept sample file proves every sampled proof block (`provedIn_of_range`); and where the record's
-commitment is the deployed one (`hcd`; `record_commit` at a circuit of `sha512/row/v2` rows), an opening under it is
-one under `A`'s, whose equal roots have one domain (`hroots`). -/
 theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : ResourceAccounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
     {p : _root_.Spot.OneStageZk.Params} {bs : Core.Blobs}

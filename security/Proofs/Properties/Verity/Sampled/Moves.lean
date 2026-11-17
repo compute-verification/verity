@@ -8,38 +8,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Retained
 public import Proofs.Flock.Soundness.ExecStrataOf
 import all Init.Data.Repr
 
-/-!
-# SPOT's coupling: the live audit's typed moves, from what v2 reads
-
-The logged coupling reads a play of the period's game as a play of Flock's live audit (`Live.game`): the prover sends
-its registration, the tables' roots `rootB`, a submission (`SubmitJ`) for each round of a rep stream, and the proof
-files. In the period's game those moves are only in the evidence, and the messages piece (`Reading`) fixes each one at
-its cut. This module reads them back, from what v2 reads of the evidence and from the messages the evidence reveals,
-and holds what it reads to v2's check and to the writer.
-
-* **What v2 reads** (`sessionRecord`, `sessionProofs`, `sentRecord`, `sentProofs`, `registrationIn`, `proofsIn`): the
-  session's record and its proof files on the blobs, as `Spot.OneStageZk.run` reads them, and the
-  registration v2's case decodes. Where v2's check accepts, they are the record and the files `Flock.Zk.verify`
-  accepted, at the session v2 set up (`checkBlobsAt_verified`, `sent_verified`, `V2Verified`).
-* **The messages** (`linkMsg`, `roundMsg`, `linkIn`, `roundIn`): the link's message, `root_F` then the tables' `root_B`
-  in lexicographic table order (S14's), and a rep round's retained bytes (S12's `msg`), each read off the record.
-  Each parses the record with `Flock.JsonParse.parse`, as `Record.decode` does, and refuses (`none`) wherever a parse
-  fails, so no reading defaults.
-* **The typed moves** (`rootBOf`, `repOf`, `submitOf`, `repsOf`): `rootB` from the link's message, past `Σ`'s bytes;
-  a round's submission from its stream's name (`<table>/rep<r>`) and its message; and the rounds a list of answered
-  submissions leaves on each rep stream, as `Tables.liveRoundsJ` appends them.
-* **Against the record v2 decodes** (`rootBOf_linkMsg`, `roundMsg_decode`, `repsOf_stream`): at one table, the roots
-  read from the link's message are the decoded session's `root_B`; under retained rounds, a round's message is its
-  decoded bytes; and answered submissions whose rounds are a decoded stream's, in order, leave that stream's rounds.
-* **Against the writer** (`WritesView`, `writesView_wrZP`, `eq_viewZP`, `wr_accepts`): an outcome whose roots, link
-  points, rounds and proof files are an accepted transcript's decoded ones is that transcript's view, and where the
-  session's writer keeps an accepted transcript's view (`WritesView`, which `wrZP` does), what it writes for that
-  outcome is accepted.
-
-What the link's message binds is the record's: `Spot.Challenger.sessionTreeReason` opens the link points after
-the SHA-512 of `root_F` and every `link.root_b` entry, while `Record.decode` reads only the tables' entries. The two are
-one message where `link.root_b` names exactly the session's tables, which v2 doesn't check today.
--/
+/-! SPOT's coupling: the live audit's typed moves, from what v2 reads. -/
 
 @[expose] public section
 
@@ -54,8 +23,6 @@ open Claims.Bridge.CustodyZkP (sessOf sessOf_eq repRounds viewA viewZP wrZP acce
 open FlockSoundness.Discharge.ZkHidden (AcceptsZKP)
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## Lists, arrays and options -/
 
 theorem forall₂_swap {α β : Type} {R : α → β → Prop} :
     ∀ {l : List α} {l' : List β}, List.Forall₂ R l l' → List.Forall₂ (fun b a => R a b) l' l
@@ -97,8 +64,6 @@ theorem eq_single {α : Type} {xs : Array α} (h : xs.size = 1) : xs = #[xs[0]] 
     subst this
     rfl
 
-/-! ## What v2 reads -/
-
 /-- **The session's record as v2 reads it** on the blobs `bs`: the blob the evidence's first session names for it, as
 UTF-8 (`Spot.OneStageZk.step`). -/
 def sessionRecord (e : _root_.Spot.OneStageZk.Evidence) (bs : _root_.Core.Blobs) : Option String :=
@@ -128,14 +93,11 @@ def sentRecord (s : Verity.Sent) : Option String :=
 def sentProofs (s : Verity.Sent) : Option (Array ByteArray) :=
   (caseOf s).toOption.bind fun x => sessionProofs x.1 x.2.2 (_root_.Core.Blobs.ofArray s.blobs)
 
-/-- **The registration**, as v2's case decodes it in what the prover sent. -/
 def registrationIn (o : Verity.Exchange) : Option _root_.Spot.OneStage.Commitment :=
   (caseOf o.sent).toOption.map (·.2.1)
 
 /-- **The proof files** of the play that ended with `o`, as v2 reads them. -/
 def proofsIn (o : Verity.Exchange) : Option (Array ByteArray) := sentProofs o.sent
-
-/-! ## The messages -/
 
 /-- Table `t`'s `root_B` in the record's link `l` (S5's reading). -/
 def rootBAt (l : Json) (t : String) : Flock.V ByteArray :=
@@ -169,8 +131,6 @@ def linkIn (tables : Array String) (o : Verity.Exchange) : Option Claims.Msg :=
 def roundIn (name : String) (k : ℕ) (o : Verity.Exchange) : Option Claims.Msg :=
   (sentRecord o.sent).bind (roundMsg · name k)
 
-/-! ## The typed moves -/
-
 /-- **The tables' roots in the link's message `m`**, past `Σ`'s bytes `σ`: none where `m` does not start with `σ`. -/
 def rootBOf (σ : ByteArray) (m : Claims.Msg) : Option (Array ByteArray) :=
   if m.take σ.size = σ.data.toList then some #[⟨(m.drop σ.size).toArray⟩] else none
@@ -178,18 +138,14 @@ def rootBOf (σ : ByteArray) (m : Claims.Msg) : Option (Array ByteArray) :=
 /-- Table `t`'s rep `r` stream, `<t>/rep<r>` (`SessionSpec.repStreams`). -/
 def repStreamName (t : String) (r : ℕ) : String := s!"{t}/rep{r}"
 
-/-- **The rep stream the name `name` is**, among the tables `tables`. -/
 def repOf {J : ℕ} (tables : Fin J → String) (name : String) : Option (Fin J × Fin 2) :=
   ((List.finRange J).flatMap fun j => [(j, 0), (j, 1)]).find? fun x => repStreamName (tables x.1) x.2.val == name
 
-/-- **The submission of a round** on the stream `name` with `n` coins and the message `m`. -/
 def submitOf {J : ℕ} (tables : Fin J → String) (name : String) (n : ℕ) (m : Claims.Msg) : Option (SubmitJ J) :=
   (repOf tables name).map fun x => ⟨x.1, x.2, ⟨m.toArray⟩, n⟩
 
-/-- A submission with the coins the live session answered it with. -/
 abbrev Answered (J : ℕ) := (s : SubmitJ J) × (Fin s.n → 𝔽)
 
-/-- **The rounds the answered submissions `as` leave on each rep stream**, as `Tables.liveRoundsJ` appends them. -/
 def repsOf (dg : ByteArray → ByteArray) {J : ℕ} (as : List (Answered J)) : Fin J → Fin 2 → List Round :=
   as.foldl (fun rs a => addRoundJ rs a.1.tab a.1.rep (roundOf dg a.1.bytes a.1.n a.2)) fun _ _ => []
 
@@ -200,7 +156,6 @@ theorem take_drop (σ rb : ByteArray) :
   rw [ByteArray.data_append, Array.toList_append, List.take_left' hl, List.drop_left' hl, Array.toArray_toList]
   exact ⟨rfl, rfl⟩
 
-/-- `rootBOf` reads `rb` back from `σ ‖ rb`. -/
 theorem rootBOf_append (σ rb : ByteArray) : rootBOf σ (σ ++ rb).data.toList = some #[rb] := by
   obtain ⟨h1, h2⟩ := take_drop σ rb
   rw [rootBOf, ite_eq_left h1, h2]
@@ -216,7 +171,6 @@ theorem repStreamName_inj {t t' : String} {r r' : Fin 2} (h : repStreamName t r.
   have keyr : ∀ a b : Fin 2, (toString a.val).toList = (toString b.val).toList → a = b := by decide
   exact ⟨String.toList_inj.1 ht, keyr r r' hr'⟩
 
-/-- **A rep stream's name reads back as that stream** among tables with distinct names. -/
 theorem repOf_name {J : ℕ} {tables : Fin J → String} (hinj : Function.Injective tables) (j : Fin J) (r : Fin 2) :
     repOf tables (repStreamName (tables j) r.val) = some (j, r) := by
   refine find?_unique (fun x => ?_) (List.mem_flatMap.2 ⟨j, List.mem_finRange j, ?_⟩)
@@ -229,13 +183,11 @@ theorem repOf_name {J : ℕ} {tables : Fin J → String} (hinj : Function.Inject
       rfl
   · fin_cases r <;> simp
 
-/-- `repOf_name`'s submission. -/
 theorem submitOf_name {J : ℕ} {tables : Fin J → String} (hinj : Function.Injective tables) (j : Fin J) (r : Fin 2)
     (n : ℕ) (m : Claims.Msg) : submitOf tables (repStreamName (tables j) r.val) n m = some ⟨j, r, ⟨m.toArray⟩, n⟩ := by
   rw [submitOf, repOf_name hinj]
   rfl
 
-/-- At one table every name is distinct. -/
 theorem injective_one (tables : Fin 1 → String) : Function.Injective tables := fun a b _ => Subsingleton.elim a b
 
 theorem foldl_addRound (dg : ByteArray → ByteArray) {J : ℕ} :
@@ -253,14 +205,11 @@ theorem foldl_addRound (dg : ByteArray → ByteArray) {J : ℕ} :
     · rw [addRoundJ_ne _ _ fun h' => h ⟨h'.1.symm, h'.2.symm⟩]
       simp [h]
 
-/-- **The rounds on stream `(j, r)`** are the answered submissions to it, in order. -/
 theorem repsOf_eq (dg : ByteArray → ByteArray) {J : ℕ} (as : List (Answered J)) (j : Fin J) (r : Fin 2) :
     repsOf dg as j r =
       ((as.filter fun a => decide (a.1.tab = j ∧ a.1.rep = r)).map fun a => roundOf dg a.1.bytes a.1.n a.2) := by
   rw [repsOf, foldl_addRound]
   rfl
-
-/-! ## What v2's check accepted -/
 
 theorem push_ok {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {programSha : Option String}
     {want : Json} {r r' : _root_.Spot.OneStageZk.Run} {s : _root_.Spot.OneStageZk.RunFiles}
@@ -291,8 +240,6 @@ theorem verdictOf_ok {I : Flock.Witness.Inputs} {scope ksFiles population : Floc
   obtain ⟨_, hv, -⟩ := ebind_ok h
   exact ⟨proofs, spec, tabs, rest, hf, hst, hv⟩
 
-/-- **One session's `step` after a run that accepted so far, where every session accepted**: its record is a blob,
-UTF-8, set up at its own sample, its proof files the blobs it names, and `Flock.Zk.verify` accepts them. -/
 theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads}
     {bs : _root_.Core.Blobs} {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
     {s : _root_.Spot.OneStageZk.RunFiles} {r : _root_.Spot.OneStageZk.Run}
@@ -315,10 +262,6 @@ theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Re
     exact ⟨recB, record, spec, tabs, rest, proofs, hb, hrec, hst, hf, hv⟩
   · cases h
 
-/-- **v2's run on one session, where it accepted**: the statement's tags, the circuit and public files and the
-registered reads, the session's `step` from the empty run at the population check of the public file
-(`FilePart.check`), which ends with the run, and, at the units `want` v1 proved where the run accepted every session,
-the run's proved units held to them (`provedHeld`). -/
 theorem run_verified {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.RunFiles}
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p #[s] pu bs = .ok r) :
@@ -362,8 +305,6 @@ theorem run_verified {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZ
     exact ⟨tags0, circuitB, pubB, rd, htags, hc, hp, hrd, _, _, _, _, foldlM_single hr', hw⟩
   · cases h
 
-/-- **v2's check at the coins `ξ` accepts only where its run on the evidence's one session accepted it**, on the public
-file v2 held to the registration (`publicHeld`). -/
 theorem checkBlobsAt_run {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
@@ -402,9 +343,6 @@ theorem checkBlobsAt_run {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.On
       | reject _ => intro h; cases h
       | undecided _ => intro h; cases h
 
-/-- **What v2's check verified of the evidence `e` on the blobs `bs`**: its one session `rs`, the statement's tags, the
-parameters' circuit and public files and registered reads, the session's record `record` (`sessionRecord`), the session
-`(spec, tabs)` v2 sets up at its sample, and its proof files `proofs`, which `Flock.Zk.verify` accepts. -/
 def V2Verified (p : _root_.Spot.OneStageZk.Params) (e : _root_.Spot.OneStageZk.Evidence)
     (bs : _root_.Core.Blobs) (record : String) (spec : SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json)
     (proofs : Array ByteArray) : Prop :=
@@ -427,7 +365,6 @@ theorem sessionRecord_eq {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core
   rw [hb]
   exact hr
 
-/-- **`sessionProofs` reads the files v2 verified.** -/
 theorem sessionProofs_of {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {record : String} {spec : SessionSpec} {tabs : Array Flock.Setup} {rest : Json × Json}
     {proofs : Array ByteArray} (h : V2Verified p e bs record spec tabs rest proofs) :
@@ -437,7 +374,6 @@ theorem sessionProofs_of {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.On
   simp only [sessionProofs, hs, h0, ht, hc, hp, hrd, hrec, hst, hf, ok_toOption, Option.bind_eq_bind,
     Option.bind_some]
 
-/-- **Where v2's check accepts, it verified the session's record and proof files** (`V2Verified`). -/
 theorem checkBlobsAt_verified {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
@@ -451,9 +387,6 @@ theorem checkBlobsAt_verified {p : _root_.Spot.OneStageZk.Params}
   exact ⟨record, spec, tabs, rest, proofs, e.sessions[0], tags0, circuitB, pubB, rd, hs, ht, hc, hp, hrd,
     sessionRecord_eq hs hb hrec, hst, hf, hv⟩
 
-/-- **What v2 accepted in what the prover sent is what `sentRecord` and `sentProofs` read**: where v2's case accepts
-in an accepted composition, its record and proof files are the ones `Flock.Zk.verify` accepted at the session v2 set
-up. -/
 theorem sent_verified {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : _root_.Properties.Challenger.Draws}
@@ -471,10 +404,7 @@ theorem sent_verified {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
   · simp only [sentRecord, hcs, ok_toOption, Option.bind_some, hrec]
   · simp only [sentProofs, hcs, ok_toOption, Option.bind_some, sessionProofs_of hv]
 
-/-! ## The messages against the record v2 decodes -/
-
 set_option maxHeartbeats 1000000 in
-/-- **`root_F` as `Record.decode` reads it** (S6): the record's link's `root_f`, which is `Σ`. -/
 theorem decode_rootF {spec : SessionSpec} {text : String} {sess : RunRecord} (h : Flock.Record.decode spec text = .ok sess) :
     ∃ j l s, Flock.JsonParse.parse text = .ok j ∧ Flock.Record.fld j "link" = .ok l ∧
       Flock.Record.str l "root_f" = .ok s ∧ Flock.unhex s = .ok sess.rootF ∧ sess.rootF = spec.sigma := by
@@ -501,7 +431,6 @@ theorem rootBAt_of {l : Json} {t : String} {rb : ByteArray} (h : RootField l t r
   rw [h2]
   exact h3
 
-/-- **At one table, the roots read from the link's message are the decoded session's `root_B`.** -/
 theorem rootBOf_linkMsg {spec : SessionSpec} {record : String} {sess : RunRecord} {t : String}
     (hd : Flock.Record.decode spec record = .ok sess) (ht : spec.tables = #[t]) :
     (linkMsg record spec.tables).bind (rootBOf spec.sigma) = some sess.rootB := by
@@ -523,8 +452,6 @@ theorem rootBOf_linkMsg {spec : SessionSpec} {record : String} {sess : RunRecord
     rfl
   rw [hm, Option.bind_some, hσ, rootBOf_append, hB]
 
-/-- **Under retained rounds, a decoded round's message is its bytes**: round `k` of the decoded stream named `name`
-has bytes `b`, and `roundMsg` reads them. -/
 theorem roundMsg_decode {spec : SessionSpec} {record : String} {sess : RunRecord} {name : String} {y : StreamRec}
     {k : ℕ} (hd : Flock.Record.decode spec record = .ok sess) (hret : spec.retainRounds = true)
     (hy : sess.streams.find? (·.name == name) = some y) (hk : k < y.rounds.size) :
@@ -556,7 +483,6 @@ theorem roundMsg_decode {spec : SessionSpec} {record : String} {sess : RunRecord
   simp only [roundMsg, hp, hrecs, hx', hrs, Array.getElem?_eq_getElem hrk, hnull, hs, hu, ok_toOption,
     Option.bind_some, ok_bind, Option.map_some, Bool.false_eq_true, ↓reduceIte]
 
-/-- A recorded round is `roundOf` of its bytes, its digest, its coin count and its coins. -/
 theorem eq_roundOf {dg : ByteArray → ByteArray} {rd : Round} {b : ByteArray} {n : ℕ} {c : Fin n → 𝔽}
     (hb : rd.bytes = some b) (hs : rd.sha = dg b) (hn : rd.n = n) (hz : rd.coins.size = n)
     (hc : ∀ i : Fin n, (c i).val = rd.coins[i.val]!) : rd = roundOf dg b n c := by
@@ -570,9 +496,6 @@ theorem eq_roundOf {dg : ByteArray → ByteArray} {rd : Round} {b : ByteArray} {
   · intro i h1 h2
     rw [Array.getElem_ofFn, hc ⟨i, by simpa using h2⟩, getElem!_pos coins i h1]
 
-/-- **Answered submissions whose rounds are a decoded stream's leave that stream's rounds**: where the submissions to
-`(j, r)` are, in order, the rounds `rds` (each round's bytes the submission's, its digest theirs under `dg`, its coin
-count and coins the submission's), `repsOf` leaves `rds` on `(j, r)`. -/
 theorem repsOf_stream {dg : ByteArray → ByteArray} {J : ℕ} {as : List (Answered J)} {j : Fin J} {r : Fin 2}
     {rds : List Round}
     (h : List.Forall₂ (fun (a : Answered J) (rd : Round) => rd.bytes = some a.1.bytes ∧ rd.sha = dg a.1.bytes ∧
@@ -587,10 +510,6 @@ theorem repsOf_stream {dg : ByteArray → ByteArray} {J : ℕ} {as : List (Answe
     obtain ⟨hb, hs, hn, hz, hc⟩ := hab
     rw [List.map_cons, ih, ← eq_roundOf hb hs hn hz hc]
 
-/-! ## The moves against the writer -/
-
-/-- **The view of a transcript, field by field**: an outcome whose roots, link points, rounds and proof files are those
-of the session an accepted record decodes to, and of the transcript's files, is the transcript's view. -/
 theorem eq_viewZP {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteArray} {J mPts : ℕ}
     {t : FlockSoundness.Discharge.Exec.Transcript} {spec : SessionSpec} {sts : Array Flock.Stmt} {sess : RunRecord}
     (hs : FlockSoundness.Discharge.Exec.setupOfP (FlockSoundness.Discharge.ZkExec.zkInputs I) own t.record =
@@ -607,15 +526,11 @@ theorem eq_viewZP {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteA
   funext j r
   exact hR j r
 
-/-- **The session's writer keeps an accepted transcript's view**: what `A.wr` writes, at a sample `S` and a registration
-`R`, for the view of a transcript `AcceptsZKP A.I A.own` accepts whose record carries the sample `A.dj S`, is accepted.
-`wrZP` does (`writesView_wrZP`); the writer the period's record names is to. -/
 def WritesView (A : Live) : Prop :=
   ∀ (S : Finset (Fin A.n)) (R : A.Reg) (t : FlockSoundness.Discharge.Exec.Transcript), AcceptsZKP A.I A.own t →
     FlockSoundness.Discharge.Exec.recordDraw t.record = some (A.dj S) →
       AcceptsZKP A.I A.own (A.wr S R (viewZP A.I A.own _ _ t))
 
-/-- **`wrZP` keeps an accepted transcript's view** (`acceptsZKP_wrZP_planZHJP`, under the session's hidden outputs). -/
 theorem writesView_wrZP (A : Live)
     (hw : A.wr = wrZP A.I A.own A.dj fun S R => (FlockSoundness.Discharge.ZkHidden.planZHJP A.dj A.y₀ S R).length) :
     WritesView A := by
@@ -623,9 +538,6 @@ theorem writesView_wrZP (A : Live)
   rw [hw]
   exact acceptsZKP_wrZP_planZHJP A.hTags.1 A.dj A.y₀ ha hd
 
-/-- **What the writer writes for the moves read off an accepted transcript is accepted**: where the session's writer
-keeps an accepted transcript's view (`WritesView`), an outcome whose roots, link points, rounds and proof files are the
-accepted transcript's decoded ones (`eq_viewZP`) is written to a transcript `AcceptsZKP A.I A.own` accepts. -/
 theorem wr_accepts {A : Live} (hW : WritesView A) {S : Finset (Fin A.n)} {R : A.Reg}
     {t : FlockSoundness.Discharge.Exec.Transcript} (ha : AcceptsZKP A.I A.own t)
     (hdr : FlockSoundness.Discharge.Exec.recordDraw t.record = some (A.dj S)) {spec : SessionSpec}
