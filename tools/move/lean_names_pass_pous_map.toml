@@ -1,0 +1,15 @@
+# The pous verifier package's names, whole tokens only: its namespace, modules, Lake package and targets, executables and suite, wherever code spells them.
+[words]
+
+[[words_in]]
+files = ["*"]
+[words_in.words]
+"PousCheck" = "PousVerifier"
+"pous-check" = "pous-verifier"
+"pous_check" = "pous_verifier"
+
+[keep]
+patterns = ['\bpous_check(?=\()']
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "**/fixtures/**", "fixtures/**", "*.patch", "tools/research/src/research/store/**", "tests/tools/move/**", "GLOSSARY.md"]
