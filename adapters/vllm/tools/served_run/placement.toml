@@ -6,6 +6,8 @@ tied_row = "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 [node.vy-spot-glm53]
 VENV = "/workspace/venv312"
 CUDA_HOME = "/usr/local/cuda-12.9"
+# CUDA 12.9 has no nvdisasm, which cuobjdump needs for the Pearl-C cubin's SASS
+NVDISASM_PATH = "/usr/local/cuda-13.0/bin"
 HF_HOME = "/workspace/research/vllm-servedproof/hf"
 LLAMA_ROOT = "/workspace/research/vllm-servedproof/llama"
 FLOCK_WORK = "/workspace/research/vllm-servedproof/flock-work"
