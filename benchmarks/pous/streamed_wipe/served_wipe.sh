@@ -24,7 +24,7 @@
 #                    give the wipe (period.json's deployment), and otherwise reads a rehearsal with no bound
 #   WIPE_READS       the reads the gate's verb runs, which the subprotocol holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
-# --run-keys is a development run's: the memory challenger is demo.sh's own on this node, under a key it makes for the
+# --run-keys is a development run's: the memory attester is demo.sh's own on this node, under a key it makes for the
 # run in SERVE_DIR/private/run-keys/wipe (0700), removed when the wipe ends, and trusted for this run alone, so
 # served.json says key_pin run and trusted-device reads rehearsal. It is refused beside WIPE_KEY_SHA512, WIPE_ADDRESS,
 # WIPE_CHALLENGER or WIPE_COMMAND. Further arguments go to demo.sh. The Lean judge (wipe-protocol) is built before the card is checked, in a
@@ -66,8 +66,8 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key,
   stamp start
   if [ -n "$RUN_KEYS" ]; then
     for v in WIPE_KEY_SHA512 WIPE_ADDRESS WIPE_CHALLENGER WIPE_COMMAND; do
-      [ -z "${!v+set}" ] || refuse "--run-keys runs the memory challenger on this node under a key made for the run," \
-        "and $v is set: unset $v, or drop --run-keys and bind the auditor's memory challenger"
+      [ -z "${!v+set}" ] || refuse "--run-keys runs the memory attester on this node under a key made for the run," \
+        "and $v is set: unset $v, or drop --run-keys and bind the auditor's memory attester"
     done
   else
     [ -n "$PIN" ] || refuse "no challenger key is pinned: set WIPE_KEY_SHA512, the SHA-512 of the public key of $CH's" \

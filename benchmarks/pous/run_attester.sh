@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The auditor's attesters of a development run, which served_piece.sh --run-keys starts in place of the gate's verbs
-# (host.py's party_argv): PoUS's memory challenger and PoUB's bandwidth party on this node, listening on loopback only,
+# (host.py's party_argv): PoUS's memory attester and PoUB's bandwidth party on this node, listening on loopback only,
 # under the key made for the run in DIR/pous, with PY the tree's Python:
 #
 #   run_attester.sh challenger_party PY DIR

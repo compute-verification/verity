@@ -35,7 +35,7 @@
 # --bw-*, --no-bandwidth), which this script evaluates: `verity run` builds it from the configuration and its bindings
 # alone, and a caller who exports it by hand runs whatever it holds, on its own machine.
 #
-# --run-keys among them is a development run's: the memory challenger and the bandwidth party start on this node
+# --run-keys among them is a development run's: the memory attester and the bandwidth party start on this node
 # (run_attester.sh, listening on loopback), under one key made for the run in SERVE_DIR/private/run-keys (0700) before
 # the card is asked for, which both sessions are trusted under for this run alone, so the record says key_pin run and
 # trusted-device rehearsal; the directory is removed when this script exits. It is refused beside a pin or an
@@ -62,7 +62,7 @@ if [ -n "$RUN_KEYS" ]; then
   for a in ${EXTRA[@]+"${EXTRA[@]}"}; do
     case $a in
       --trusted-sha512 | --bw-trusted-sha512 | --challenger-host | --challenger-address | --challenger-command | --bw-host | --bw-party)
-        echo "POUS REFUSED: --run-keys starts the memory challenger and the bandwidth party on this node under a key" \
+        echo "POUS REFUSED: --run-keys starts the memory attester and the bandwidth party on this node under a key" \
           "made for the run, and POUS_ARGS also names $a: drop $a, or drop --run-keys and bind the auditor's attesters"
         stamp refused; exit 2 ;;
     esac

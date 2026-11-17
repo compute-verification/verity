@@ -851,7 +851,7 @@ def test_run_keys_beside_a_pin_or_an_attesters_flag_is_refused_before_the_card(t
 
 def test_the_run_attesters_take_the_gates_words_and_the_runs_key(tmp_path):
     """run_attester.sh's verbs are the gate's (host.py's party_argv) on loopback: the bandwidth party's --pous-session
-    and --session read the memory challenger's device in the run's key directory, and any other word is refused."""
+    and --session read the memory attester's device in the run's key directory, and any other word is refused."""
     py, keys = executable(tmp_path, "python", ARGS0), tmp_path / "run-keys"
     env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path)}
 
