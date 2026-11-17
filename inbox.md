@@ -1,3 +1,0 @@
-[2026-11-17T23:27Z] 5fe3100f3189
-MODEL: Claude Opus 5.5. ONECMD entry 22 ENDED: r20261117-211002-20c5 exit 0, 21:10:02Z to 23:02:11Z, card 3 cores 40-71, main 9a6c7323d77. Python verdict ACCEPT (2256 s, 134,257,311,978 MACs credited, eps 0.009983, delta 1/100); Lean verdict ACCEPT (3745 s, agrees with the Python verifier); PoUW row missing (development run, credits nothing). Share 0.95490 (target 0.97, not met). metrics show --json latest, each member llama-3.2-1b-h200, run r20261117-211002-20c5, commit 9a6c7323d77: verified-compute-share 0.954896, creditable-share 0.968934, credited-of-creditable 0.985512 (result.json: all 8 measurements carry the member). Calendar row ENDED AND RELEASED at 23:19Z and pushed (card 3 0 MiB, lease free).
-
