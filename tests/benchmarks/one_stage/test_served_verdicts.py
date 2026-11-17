@@ -1577,7 +1577,7 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
 def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_covers(tmp_path, monkeypatch, capsys):
     from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-    monkeypatch.setenv("PP_PEER", "vy-auditor-2")
+    monkeypatch.setenv(S.NODE_NAME, "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
     answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": R.digest(LEAN_RECORD)}
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
@@ -2590,7 +2590,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     Pearl+'s answer with the Lean's work, and remote's record composes it with W_cert that work, nothing missing, pending
     the remote check's answer."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setenv("PP_PEER", "vy-dc-h200")
+    monkeypatch.setenv(S.NODE_NAME, "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
