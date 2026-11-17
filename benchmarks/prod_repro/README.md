@@ -234,17 +234,28 @@ one card (`TOPK_CUT.jsonl`, the timing of `benchmarks/dsa_topk`'s passes at the 
 
 - **The rows each call reads** come from the schedule: each counted pass's decode steps in the arm's step trace, with
   the rows past the indexer's k keys and the longest of them. A decode step makes 22 calls on each card.
-- **The rows whose fast selection failed** come from the model's outputs: the top-k's counters (`topk_counters.json`).
-  Those are lifetime totals over the processes, so the reader takes a card's share and the counted passes' share of
-  the lifetime's decode rows. It places them in calls three ways: packed, a request's rows to a call, and one row a
-  call. The bounds and the point are those placements, with each pass's time ranged over the distributions it was timed on.
+- **The rows whose fast selection failed** come from the model's outputs. Where a lifetime kept the top-k's counts by
+  step (`dsa_topk_steps.*.jsonl` beside its step trace), each counted step's failed rows are its own, on its slowest
+  card, joined to the trace by step and tokens. Else they are the counters' lifetime totals (`topk_counters.json`): a
+  card's share, scaled to the counted passes' share of the lifetime's decode rows, and a lower bound by the rows a
+  killed process read last. The reader places a step's failed rows in its calls three ways: packed, a request's rows
+  to a call, and one row a call. Where the counts by step hold the calls a remedy failed in (`calls_bisected`,
+  `calls_refined`), it reads that number in place of the placements. The bounds and the point are those placements,
+  with each pass's time ranged over the distributions it was timed on.
+- **Prefill steps** (a step with a row of more than a decode request's tokens) are priced only at prefill unit times,
+  `--prefill-units FILE` in `TOPK_CUT.jsonl`'s form, with their own failed rows where the counts are by step. Without
+  that file they are refused, and the reader gives their measured added seconds instead: ours's prefill steps less the
+  reference's, from both arms' step traces, as a term marked measured.
 - **What it gives:** the layer's cost in percent of the reference's counted serving time, beside the job's own measured
-  layer (`prod_repro.json`'s `layers`) and the difference in points. The point under
-  `vllm/prod-serving-cost-glm53` (member `…-priced`, `mark` `modeled`, `--result` under a run) is that layer plus the
-  job's measured `prod-trace` over `prod`. It names the job's run as the run that tests it.
+  layer (`prod_repro.json`'s `layers`) and the difference in points. Beside the measured layer is the same layer with
+  each pass's seconds adjusted for its engine steps (each pass paired with the reference's of the same lifetime and
+  rep, at the slope of ln seconds on ln steps within each arm), marked modelled. The point under
+  `vllm/prod-serving-cost-glm53` (member `…-priced`, `mark` `modeled`, `--result` under a run) is that layer, plus the
+  measured prefill term where prefill was not priced, plus the job's measured `prod-trace` over `prod`. It names the
+  job's run as the run that tests it, and each measured term in its inputs.
 - **When it writes no point:** where the counters hold no failed rows, or where the job measured no layer below.
-- **What it doesn't price:** prefill steps, which have no device times at prefill shapes; the host's time; and the
-  cards differing (each card is taken to fail the same rows).
+- **What it doesn't price:** the host's time, and a failed row's own keys (each failed call is priced at its step's
+  longest row).
 
 ## What is not yet true
 
