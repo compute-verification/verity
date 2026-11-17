@@ -16,7 +16,7 @@ its two strides reach in the period of the array holding them (`residues_mem`).
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
 /-! ## The residues of a stride -/
@@ -390,4 +390,4 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
       · exact hjp _ _ h
     · exact hjp _ _ h
 
-end InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths

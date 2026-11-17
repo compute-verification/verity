@@ -26,7 +26,7 @@ check requiring this package reads one definition. The period check takes its sl
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.DefinitionDigest
+namespace InferenceOnlyVerifier.DefinitionDigest
 
 open Lean (Json)
 open Flock (V)
@@ -121,4 +121,4 @@ def closureDigest (j : Json) (key : String) : V String := do
   unless todo.isEmpty do throw s!"program: {key}'s callees outrun its descriptor's nodes"
   pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (Json.mkObj seen.toList)).toUTF8))
 
-end InferenceOnlyCheck.DefinitionDigest
+end InferenceOnlyVerifier.DefinitionDigest

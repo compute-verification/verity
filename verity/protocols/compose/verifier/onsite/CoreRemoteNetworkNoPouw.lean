@@ -38,7 +38,7 @@ def protocolId : String := "verity/remote-network-no-pouw/v0"
 
 /-- The subprotocols, in the order of their ids: the network attester's period, the policy and SPOT. -/
 def components : List BlobProtocol :=
-  [NetworkCheck.Period.protocol, InferenceOnlyCheck.Protocol.protocol, VStar.Recursive.Sampled.protocol]
+  [NetworkCheck.Period.protocol, InferenceOnlyVerifier.Protocol.protocol, VStar.Recursive.Sampled.protocol]
 
 /-- Every compute audit of the network attester's period on the policy's record; no window tie, since no
 subprotocol reads a PoUW period. -/
@@ -65,7 +65,7 @@ private def ids : List String := components.map (·.id)
 #guard Core.Remote.tied.all ids.contains
 #guard ties.all fun t => t.names.all fun n => ids.contains n.1
 #guard ties.all fun t => t.names.all fun n => n.1 != PouwVerifier.Period.protocolId
-#guard ties.map (fun t => (t.what, t.names.map (·.1))) == [("record", [InferenceOnlyCheck.Protocol.protocolId, NetworkCheck.Period.protocolId])]
+#guard ties.map (fun t => (t.what, t.names.map (·.1))) == [("record", [InferenceOnlyVerifier.Protocol.protocolId, NetworkCheck.Period.protocolId])]
 #guard protocolId != Core.RemoteNetwork.protocolId
 
 -- every subprotocol refuses its case: the composite rejects on each, and makes nothing public
@@ -76,19 +76,19 @@ private def allRefused : Answer := answer (components.map refused)
 #guard components.all fun P => (allRefused.reason.map (contains · s!"{P.id} reject: params: ")).getD false
 -- PoUW's period is not a subprotocol of it: its case is refused by name, beside the three, and remote with the network
 -- attester's four cases are not this composite's
-#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol, refused PouwVerifier.Period.protocol,
+#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyVerifier.Protocol.protocol, refused PouwVerifier.Period.protocol,
     refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/pouw/period/v1 is not a component of this composition"
 #guard (answer (Core.RemoteNetwork.components.map refused)).reason ==
   some "params: verity/pouw/period/v1 is not a component of this composition"
 -- each of the three is needed
-#guard (answer [refused InferenceOnlyCheck.Protocol.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
+#guard (answer [refused InferenceOnlyVerifier.Protocol.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/certifier/v0 is missing"
 #guard (answer [refused NetworkCheck.Period.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/inference-only/v0 is missing"
-#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol]).reason ==
+#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyVerifier.Protocol.protocol]).reason ==
   some "params: verity/sampled-proofs/v1 is missing"
-#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol,
+#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyVerifier.Protocol.protocol,
     refused Spot.OneStage.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 
@@ -96,7 +96,7 @@ private def allRefused : Answer := answer (components.map refused)
 private def record (n : Nat) : String := s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"registered\":[]}"
 
 private def recordsOf (policy sampled : String) : Answer :=
-  answer [refused NetworkCheck.Period.protocol, { refused InferenceOnlyCheck.Protocol.protocol with commitment := policy.toUTF8 },
+  answer [refused NetworkCheck.Period.protocol, { refused InferenceOnlyVerifier.Protocol.protocol with commitment := policy.toUTF8 },
     { refused VStar.Recursive.Sampled.protocol with commitment := sampled.toUTF8 }]
 
 #guard (recordsOf (record 0) (record 0)).reason.map (·.startsWith "verity/certifier/v0 reject: params: ") == some true

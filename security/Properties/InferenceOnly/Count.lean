@@ -1,7 +1,7 @@
 module
 
 public import Definitions.InferenceOnly
-public import InferenceOnlyCheck.Count
+public import InferenceOnlyVerifier.Count
 public import Properties.InferenceOnly
 
 /-!
@@ -31,7 +31,7 @@ as wide as the gate it names.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json toJson)
 open Flock.Program (Prog)
@@ -82,4 +82,4 @@ count publishes (`Count.check`) has `complies` `true`, the instance is `CountWit
 def DescCountsCK : Prop :=
   ∀ j : Json, (Count.check j).getObjVal? "complies" = .ok (.bool true) → CountWitnessed j
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

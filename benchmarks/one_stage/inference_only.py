@@ -444,17 +444,17 @@ def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int
             flags.append("--detail")
         p = subprocess.run([str(exe), *flags, path], capture_output=True, text=True, timeout=timeout_s)
     except subprocess.TimeoutExpired:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} gave no verdict within {timeout_s} s"}
+        return {"flags": flags, "error": f"inference-only-verifier {' '.join(flags)} gave no verdict within {timeout_s} s"}
     finally:
         os.unlink(path)
     if p.returncode != 0:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} exit {p.returncode}", "said": p.stderr.strip()[-300:]}
+        return {"flags": flags, "error": f"inference-only-verifier {' '.join(flags)} exit {p.returncode}", "said": p.stderr.strip()[-300:]}
     try:
         out = json.loads(p.stdout)
         if not isinstance(out, dict):
             raise ValueError("not an object")
     except ValueError:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} printed no JSON object",
+        return {"flags": flags, "error": f"inference-only-verifier {' '.join(flags)} printed no JSON object",
                 "said": p.stdout.strip()[-300:]}
     return {"flags": flags, "out": out}
 
@@ -470,7 +470,7 @@ def lean_said(call: Mapping[str, Any], gates: int) -> dict[str, Any]:
         return {key: out[key] for key in ("error", "message") if key in out}
     rows = out.get("blocks")
     if not (isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], list) and len(rows[0]) == 4):
-        return {"error": f"inference-only-check {' '.join(call['flags'])} printed no row of the block"}
+        return {"error": f"inference-only-verifier {' '.join(call['flags'])} printed no row of the block"}
     _, g, x, _ = rows[0]
     return {"gates": g, "agrees_on_gates": g == gates, "with_theta_empty": {"fresh": x, "complies": out.get("complies")}}
 
@@ -545,7 +545,7 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
             private["lean_detail"] = call
             base["lean"] = said = lean_said(call, row["gates"])
             if "gates" in said and not said["agrees_on_gates"]:
-                raise Undecided(f"inference-only-check --count counts {said['gates']} gates a block, and this {row['gates']}")
+                raise Undecided(f"inference-only-verifier --count counts {said['gates']} gates a block, and this {row['gates']}")
         if got["complies"]:
             base |= {"verdict": "accept", "reason": None}
         else:
@@ -581,8 +581,8 @@ def line(v: Mapping[str, Any]) -> str:
         return f"{v['verdict']}: {v['reason']}"
     (d, g, x), = v["classes"]
     lean = v.get("lean")
-    said = ("" if lean is None else f"; inference-only-check --count: {lean['error']}" if "error" in lean else
-            f"; inference-only-check --count: {lean['gates']} gates a block ({'agrees' if lean['agrees_on_gates'] else 'DIFFERS'})")
+    said = ("" if lean is None else f"; inference-only-verifier --count: {lean['error']}" if "error" in lean else
+            f"; inference-only-verifier --count: {lean['gates']} gates a block ({'agrees' if lean['agrees_on_gates'] else 'DIFFERS'})")
     return (f"{v['verdict']}{'' if v['reason'] is None else ': ' + v['reason']}: session {d[:16]}… "
             f"({'the registered one' if v.get('registered_session') else 'not the registered one'}), {g} gates and {x} "
             f"fresh bits a block, against c {v['c']}, k {v['k']}, n {v['n']} (no count published: n is judged on the "
@@ -612,8 +612,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     v.add_argument("--circuit", type=Path, required=True, help="the picked window's circuit record at the policy's class")
     v.add_argument("--registration", type=Path, required=True, help="the window's registration (its roots)")
     v.add_argument("--pins", type=Path, default=None, help="the weights registration, the verifier's pins")
-    v.add_argument("--lean", type=Path, default=None, help="inference-only-check, to run --count on one window's session Program")
-    v.add_argument("--lean-timeout", type=int, default=1800, help="inference-only-check --count's limit in seconds (default 1800)")
+    v.add_argument("--lean", type=Path, default=None, help="inference-only-verifier, to run --count on one window's session Program")
+    v.add_argument("--lean-timeout", type=int, default=1800, help="inference-only-verifier --count's limit in seconds (default 1800)")
     v.add_argument("--retroactive", default=None, help="why a policy written after the serve began is read anyway")
     v.add_argument("--out", type=Path, required=True)
     v.add_argument("--private", type=Path, required=True)

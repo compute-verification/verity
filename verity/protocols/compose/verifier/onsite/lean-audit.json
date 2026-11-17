@@ -17,7 +17,7 @@
     "CoreRemote",
     "MemoryAttester.WipeCount",
     "MemoryAttester.WipeProtocol",
-    "InferenceOnlyCheck.Protocol",
+    "InferenceOnlyVerifier.Protocol",
     "NetworkCheck.Period",
     "NetworkCheck.Span",
     "PousCheck.RunProtocol",

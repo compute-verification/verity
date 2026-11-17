@@ -57,7 +57,7 @@ def auditRecords (k : Case) : Option (List ByteArray) := do
 
 /-- Every compute audit of the network attester's period on the policy's record. -/
 def egress : Tie :=
-  ⟨"record", [(InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord), (NetworkCheck.Period.protocolId, auditRecords)]⟩
+  ⟨"record", [(InferenceOnlyVerifier.Protocol.protocolId, Core.Remote.policyRecord), (NetworkCheck.Period.protocolId, auditRecords)]⟩
 
 def ties : List Tie := [Core.Remote.executionPhases, egress]
 
@@ -89,9 +89,9 @@ private def allRefused : Answer := answer (components.map refused)
 -- remote's subprotocols alone are not this composite's, nor is the network attester's period alone
 #guard (answer (Core.Remote.components.map refused)).reason == some "params: verity/certifier/v0 is missing"
 #guard (answer [refused NetworkCheck.Period.protocol]).reason == some "params: verity/inference-only/v0 is missing"
-#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol,
+#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyVerifier.Protocol.protocol,
     refused PouwVerifier.Period.protocol]).reason == some "params: verity/sampled-proofs/v1 is missing"
-#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol,
+#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyVerifier.Protocol.protocol,
     refused PouwVerifier.Period.protocol, refused Spot.OneStage.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 
@@ -99,7 +99,7 @@ private def allRefused : Answer := answer (components.map refused)
 private def record (n : Nat) : String := s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"registered\":[]}"
 
 private def recordsOf (policy sampled : String) : Answer :=
-  answer [refused NetworkCheck.Period.protocol, { refused InferenceOnlyCheck.Protocol.protocol with commitment := policy.toUTF8 },
+  answer [refused NetworkCheck.Period.protocol, { refused InferenceOnlyVerifier.Protocol.protocol with commitment := policy.toUTF8 },
     refused PouwVerifier.Period.protocol, { refused VStar.Recursive.Sampled.protocol with commitment := sampled.toUTF8 }]
 
 #guard (recordsOf (record 0) (record 0)).reason.map (·.startsWith "verity/certifier/v0 reject: params: ") == some true
@@ -116,7 +116,7 @@ private def monitoringPeriodOn (audits : List String) : Case :=
   { refused NetworkCheck.Period.protocol with
     commitment := s!"\{\"audits\":[{",".intercalate audits}],\"windows\":[]}".toUTF8 }
 
-private def policyOn (r : String) : Case := { refused InferenceOnlyCheck.Protocol.protocol with commitment := r.toUTF8 }
+private def policyOn (r : String) : Case := { refused InferenceOnlyVerifier.Protocol.protocol with commitment := r.toUTF8 }
 
 private def digestOf (r : String) : String :=
   ((Lean.Json.parse r).toOption.bind fun j => (Flock.WindowRecord.digestHex j).toOption).getD ""

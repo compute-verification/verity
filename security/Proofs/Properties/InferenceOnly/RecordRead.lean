@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Record
 public import Spot.Bits
 
 /-!
@@ -23,7 +23,7 @@ widths summed (`Spot.Bits.bitsOf`), on every type.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 open Lean (Json)
@@ -205,4 +205,4 @@ theorem declared_of_heldAt {j tr : Json} {c : Case} (h : read j tr = .ok c) {r :
   rw [hd']
   exact heldAt_declared hh
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

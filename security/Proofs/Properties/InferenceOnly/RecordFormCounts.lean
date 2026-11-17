@@ -22,9 +22,9 @@ the check reads lays out, a block reads at most the summary's fresh bits and has
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
-open InferenceOnlyCheck.Record.SecurityProofs (form FreshRows fresh_rows)
+open InferenceOnlyVerifier.Record.SecurityProofs (form FreshRows fresh_rows)
 
 /-- **The summary counts every block**, where the fresh rows of a slot are within the summary's fresh: a block reads
 at most the summary's fresh bits (`block_fresh`), and has the summary's gates or none (`block_gates`). -/
@@ -35,4 +35,4 @@ theorem counts_of_fresh (hFR : FreshRows) : Counts form := fun _ _ _ h _ hd u =>
 most the summary's fresh bits, and has the summary's gates or none. -/
 theorem form_counts : Counts form := counts_of_fresh fresh_rows
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

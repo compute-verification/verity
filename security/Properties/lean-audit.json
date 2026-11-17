@@ -152,27 +152,27 @@
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
    "why": "The protocol accepts: the event the statement conditions on."
   },
-  "InferenceOnlyCheck.Properties.Record.Accepts": {
+  "InferenceOnlyVerifier.Properties.Record.Accepts": {
    "owner": "@lean",
    "digest": "ea193639d2966116a00123c3f6273327ce63618c0908d61466b30cba1af866b4",
    "why": "The check accepts: the event the statement conditions on."
   },
-  "InferenceOnlyCheck.Properties.Record.RowLeaf": {
+  "InferenceOnlyVerifier.Properties.Record.RowLeaf": {
    "owner": "@lean",
    "digest": "c1876276bbe49c1ffb6cd23bb49c631d7ad3f10badf137c92ab8fc5fce02550b",
    "why": "The gates a clause of the record's circuit speaks of: each leaf of a reader row."
   },
-  "InferenceOnlyCheck.Properties.Record.Served": {
+  "InferenceOnlyVerifier.Properties.Record.Served": {
    "owner": "@lean",
    "digest": "19d371f2b675cbb3b4c5825d727f78ca7050d7092233fc4204fb6448df9e8e84",
    "why": "The circuits the rate rule speaks of: each one the record the check read lays out."
   },
-  "InferenceOnlyCheck.Properties.Record.UnitAt": {
+  "InferenceOnlyVerifier.Properties.Record.UnitAt": {
    "owner": "@lean",
    "digest": "c1891afe248e99850e185388a4069c1c62f8fecc7816738b475388f4b9317ad6",
    "why": "The units a clause of the record's circuit speaks of: each activation the Program's root gives a template."
   },
-  "InferenceOnlyCheck.Properties.Record.WriterLeaf": {
+  "InferenceOnlyVerifier.Properties.Record.WriterLeaf": {
    "owner": "@lean",
    "digest": "e66acfdea3f4acba0eab789b08d8e3e6f6c555f6ebe0d968737cee6af634a840",
    "why": "The gates a clause of the record's circuit speaks of: each leaf of the output row a reader row is wired to."
@@ -287,55 +287,55 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "InferenceOnlyCheck.Properties.Divides": {
+  "InferenceOnlyVerifier.Properties.Divides": {
    "owner": "@network-accounting",
    "digest": "36bf4fa185c841239d31322d9763e2061e90f0e03f60cf7005d5c7ff7fc11cd5",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "InferenceOnlyCheck.Properties.Expands": {
+  "InferenceOnlyVerifier.Properties.Expands": {
    "owner": "@network-accounting",
    "digest": "8eff41408a8823cd660b4880e450caf3f03520e1505748fc8b47bf9ebc149d49",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "InferenceOnlyCheck.Properties.LaysOut": {
+  "InferenceOnlyVerifier.Properties.LaysOut": {
    "owner": "@network-accounting",
    "digest": "572ffad490cae81e4b2403b095dc39ec2031734cd79f913c3aa316e74147b574",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "InferenceOnlyCheck.Properties.Names": {
+  "InferenceOnlyVerifier.Properties.Names": {
    "owner": "@network-accounting",
    "digest": "b5c720cd0ed773119a3f9f0bd8af6ed52f74f65af09f28bdd7faf1b91c4e44a3",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "InferenceOnlyCheck.Properties.Parses": {
+  "InferenceOnlyVerifier.Properties.Parses": {
    "owner": "@network-accounting",
    "digest": "41be47d18f92368133cbc1aef00292c9786ec9514247d1693f4550347b99e940",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "InferenceOnlyCheck.Properties.Record.Counts": {
+  "InferenceOnlyVerifier.Properties.Record.Counts": {
    "owner": "@training",
    "digest": "6403a072c620bf523ddf8987b2ddcd8f79b9b5a76b25481f982a5369f4b891cd",
    "issue": "TRN-103",
    "due": "2026-11-30"
   },
-  "InferenceOnlyCheck.Properties.Record.LaidOut": {
+  "InferenceOnlyVerifier.Properties.Record.LaidOut": {
    "owner": "@training",
    "digest": "e953c092230beba6ebf9483eebf2d471a9b17bf8dd4f9b720a3e609de1c859d4",
    "issue": "TRN-103",
    "due": "2026-11-30"
   },
-  "InferenceOnlyCheck.Properties.Record.Owns": {
+  "InferenceOnlyVerifier.Properties.Record.Owns": {
    "owner": "@training",
    "digest": "eb01fa9ffd1a9f4688586cb7a31ca04acd03fb10f2704ea210ad1fdd86ece3a9",
    "issue": "TRN-103",
    "due": "2026-11-30"
   },
-  "InferenceOnlyCheck.Properties.Record.Rates": {
+  "InferenceOnlyVerifier.Properties.Record.Rates": {
    "owner": "@training",
    "digest": "9f1b1f8d7e1dbf759e2e5badc4342b3eb3a67b322909b8f60b77714ba93f933c",
    "issue": "TRN-103",
@@ -1093,11 +1093,11 @@
   "Definitions.Slowdown",
   "Definitions.Slowdown.Assumptions.Threads",
   "Definitions.InferenceOnly.Assumptions.Theta",
-  "InferenceOnlyCheck.Check",
-  "InferenceOnlyCheck.Theta",
-  "InferenceOnlyCheck.Desc",
-  "InferenceOnlyCheck.Protocol",
-  "InferenceOnlyCheck.DefinitionDigest",
+  "InferenceOnlyVerifier.Check",
+  "InferenceOnlyVerifier.Theta",
+  "InferenceOnlyVerifier.Desc",
+  "InferenceOnlyVerifier.Protocol",
+  "InferenceOnlyVerifier.DefinitionDigest",
   "Spot.RecordText",
   "Flock",
   "Base",
@@ -1562,8 +1562,8 @@
    "honest": ["Properties.NetworkPeriod.rowsStartCharged_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsStartCharged_nontrivial"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
-   "nontrivial": "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
+  "InferenceOnlyVerifier.Properties.SecurityProofs.ProtocolAccepts": {
+   "nontrivial": "InferenceOnlyVerifier.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
   },
   "Properties.Poub.codeLayoutTiles": {
    "honest": ["Properties.Poub.codeLayoutTiles_honest"],
@@ -1629,93 +1629,93 @@
   }
  },
  "unwitnessed": {
-  "InferenceOnlyCheck.Properties.SecurityProofs.AcceptsExactly": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.AcceptsExactly": {
    "type_hash": "a43b585bc36b28179d01e9d2851eb98689ebb66557da72329c53e01f9f2ed287",
    "unfolded_hash": "fb897d4a55a20b8fc3080409ef5824d5fd607ed1f5263e767a76b3d14b6cdc22"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.CheckAccepts": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.CheckAccepts": {
    "type_hash": "c80d8cc3ada6075975cf2980452c983209bdc2556826904e87265873c5652e01",
    "unfolded_hash": "a42dd9de8885cdf6e5317d80cc789152953574e162051bf2df5607318bb3becf"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.CheckRefuses": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.CheckRefuses": {
    "type_hash": "bf67363b68eb9485c28baad438542a3bdebd7d4e4ea8764b96df7b6884d4f215",
    "unfolded_hash": "8fb346cadce9e47a8e8e8ee7f7caefa2b091a43f5a57f03d9d64df4d244f77b5"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.CheckedCoverTraining": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.CheckedCoverTraining": {
    "type_hash": "72b8c538521510f9f0fd5ef0954ed51a3c6f8fef0b78f83f2102371f195c7298",
    "unfolded_hash": "09cf71fa07e394fa1ce69cdacf467b7ba842144cedffa8036d943d8c08d1bf15"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.Decodes": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.Decodes": {
    "type_hash": "7051803b3edd6bca3b39ebfac1093f510cc35570847829bd96f8df818f7d4f68",
    "unfolded_hash": "ecea40867833913688699d2c14bb21c5373296f1fb4cf39f7c5c6a1168efdf07"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescAgrees": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.DescAgrees": {
    "type_hash": "41704c5f2810bc54f5a05aa16a3fef24e23dcfd93fd24c5e8370938dbaba65b0",
    "unfolded_hash": "8c6f4d4d7a65801883f7fed3e89362db0a7449048ed20ddf0f2f290042b13c6a"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescReports": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.DescReports": {
    "type_hash": "d2e6fd16b4ed391507084db4bee62eec6ff4345be9ab6b301c32c50f785ad439",
    "unfolded_hash": "5fae6317a2832d637d43c29e2db19738d1fc2d0aa05e07235eddbe5dc768234f"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottles": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottles": {
    "type_hash": "d9e1aa94a609289767cf55e69e7e022ed0adb2a25a84166f823eb5fc5839f64e",
    "unfolded_hash": "11e3291bf2eb2a058eb9b21681950a9ce31d7f764ee67bfd837bbea5c660bac0"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDark": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesDark": {
    "type_hash": "79fbf915740ce88cd329fb62bc129099f49236e3aae9a04b7f99935d8cf85e7f",
    "unfolded_hash": "27ed6faecc75dc58eaa83b6a962060e4259828556a60fa8099e2e2e6040295a5"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesDarkSlots": {
    "type_hash": "633e2eae5a0660201b93c5b83c7231bb56d21781d06a10632c2473a7ee5e497c",
    "unfolded_hash": "a11193eafb8e2fe857d5ba90cc9ed295d9112f8537f04073f096efb321b0d05b"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesSlots": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesSlots": {
    "type_hash": "105b8effbf7403429cb714670b56178a844c3ea393fd6fc950235b1d0cb831d1",
    "unfolded_hash": "3cc64dfce9bd58aac8aca41b2c62a0687f202e8d86493cb262e4833a07d72d6f"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.DescWitnesses": {
    "type_hash": "a708ce47c6e516e896fd1c156d5b98d5640b3e578cb913dbc784399b40b6f9bf",
    "unfolded_hash": "8e8d4eb76c36d3b9b419f15c17fadcbc47cff415d2301e2b499c7bd7ec80814c"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.ProtocolAccepts": {
    "type_hash": "98fbd672bf9ca2d86f5ca107c3b1f4d66184d0e45dbf756569c1ab447f559a32",
    "missing": "honest",
    "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov",
    "unfolded_hash": "3a601832f85cbba5c03aa1787859f02dfc050672452082311fa6b1d39732ff70"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.RejectsExactly": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.RejectsExactly": {
    "type_hash": "1b352837b8c09161745c4453c8b0e9c46915b5a7d1fe1bf04aae004fdf7a5d5f",
    "unfolded_hash": "96fab0726774fd3f5ead4a9014aa0fa2a95e74ce5d3c200cc155f210ac04ff42"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.Reports": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.Reports": {
    "type_hash": "8f054509badf4e2ed6b57043a02f8645ae94812800adf40cb4c6a487f8eab48d",
    "unfolded_hash": "002d0b770daa3b58ee543c88c57034e10f9e0b2c7eb8977b28ca4b6dd0b83f5b"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.ThetaProvenance": {
    "type_hash": "7108941ce4f679e998d90b5989a08b109f0941aaa6d48ef5cfbcc09debe22b5a",
    "unfolded_hash": "e534016a5c63ccffdc1c53be5420ff8a9d0f298d93a45dab040e20bcb33bfa29"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.Throttles": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.Throttles": {
    "type_hash": "34063b313a135459b45ac2a002da751ae96f00e14d308d76187a39d4b9c801b0",
    "unfolded_hash": "a88d95b76af27fd5e22cbfc8efabbf010c3c6fb143e5b70749ec11680bb149a8"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesDark": {
    "type_hash": "15f970b12f5309709e4fcd823ecc1dc3e123ac57f91f159d8cf789e4f90fcd4f",
    "unfolded_hash": "6c464e43768ecf3ffc1cb0ba8374e3455c71ef15c694a3ca9670dcdcecd5e8fd"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesDarkSlots": {
    "type_hash": "dcfb295a2e956dbca21005a7503b2dd8ddd652b388dd47354f81e62a56653c5f",
    "unfolded_hash": "56eecb00aed2288f989ed2b0afe962636658b9605f0be9b91940ee15d6cb7936"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesSlots": {
    "type_hash": "dfe42a85f0d7f37c9531744792306891b6b359065dfe500b3a926bdbbb62c004",
    "unfolded_hash": "6a4af8e3234d51085d6d952c43dd1a4235a4b29423962876da2b3f8a1cf7c633"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.Witnesses": {
+  "InferenceOnlyVerifier.Properties.SecurityProofs.Witnesses": {
    "type_hash": "ccf127a1a4080a85166f7c8644a42fb27b52353f34d31da43497feb95e4530fe",
    "unfolded_hash": "20f78f07465e627c79f3a4cc16e8b06f237db8cdef21034b2cb6885ebb0b07ea"
   },
-  "InferenceOnlyCheck.SecurityProofs.ServedComplies": {
+  "InferenceOnlyVerifier.SecurityProofs.ServedComplies": {
    "type_hash": "6bbc24f684535d887959a57fcbf7e4dd684567dcaf6a1ad2f1ee39e7a7e0eff9",
    "unfolded_hash": "7e3d634257d08a2c13fc2f28dab44fea8b432a24299ca7f3c2f6c7f260ccf054"
   },
@@ -2673,11 +2673,11 @@
     "Definitions.InferenceOnly",
     "Definitions.Slowdown.Assumptions.Threads",
     "Definitions.InferenceOnly.Assumptions.Theta",
-    "InferenceOnlyCheck.Check",
-    "InferenceOnlyCheck.Theta",
-    "InferenceOnlyCheck.Protocol",
-    "InferenceOnlyCheck.Count",
-    "InferenceOnlyCheck.Record",
+    "InferenceOnlyVerifier.Check",
+    "InferenceOnlyVerifier.Theta",
+    "InferenceOnlyVerifier.Protocol",
+    "InferenceOnlyVerifier.Count",
+    "InferenceOnlyVerifier.Record",
     "Properties.InferenceOnly.Record",
     "Properties.InferenceOnly"
    ],
@@ -2691,20 +2691,20 @@
     "Definitions.InferenceOnly",
     "Definitions.InferenceOnly.Assumptions.Theta",
     "Definitions.Slowdown.Assumptions.Cover",
-    "InferenceOnlyCheck.Check",
-    "InferenceOnlyCheck.Theta",
-    "InferenceOnlyCheck.Desc",
+    "InferenceOnlyVerifier.Check",
+    "InferenceOnlyVerifier.Theta",
+    "InferenceOnlyVerifier.Desc",
     "Properties.InferenceOnly",
     "Properties.InferenceOnly.Desc",
     "Definitions.Slowdown.BitView"
    ],
    "except": [],
-   "why": "the description-sized check's properties are stated over the code they are about (InferenceOnlyCheck.Desc, and InferenceOnlyCheck.Theta, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.InferenceOnly.Assumptions), never over a proof",
+   "why": "the description-sized check's properties are stated over the code they are about (InferenceOnlyVerifier.Desc, and InferenceOnlyVerifier.Theta, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.InferenceOnly.Assumptions), never over a proof",
    "sealed": true
   },
   "Properties.InferenceOnly.Record": {
    "imports": [
-    "InferenceOnlyCheck.DefinitionDigest",
+    "InferenceOnlyVerifier.DefinitionDigest",
     "Spot.RecordText",
     "Flock.TemplateQuery",
     "Spot.Wires",
@@ -14584,92 +14584,92 @@
     "function": "MemoryAttester.Session.Properties.code",
     "outcome": "none"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.AcceptsExactly": {
-    "function": "InferenceOnlyCheck.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.AcceptsExactly": {
+    "function": "InferenceOnlyVerifier.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.CheckAccepts": {
-    "function": "InferenceOnlyCheck.check",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.CheckAccepts": {
+    "function": "InferenceOnlyVerifier.check",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.CheckRefuses": {
-    "function": "InferenceOnlyCheck.check",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.CheckRefuses": {
+    "function": "InferenceOnlyVerifier.check",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.Decodes": {
-    "function": "InferenceOnlyCheck.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.Decodes": {
+    "function": "InferenceOnlyVerifier.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.RejectsExactly": {
-    "function": "InferenceOnlyCheck.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.RejectsExactly": {
+    "function": "InferenceOnlyVerifier.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.Reports": {
-    "function": "InferenceOnlyCheck.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.Reports": {
+    "function": "InferenceOnlyVerifier.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.Witnesses": {
-    "function": "InferenceOnlyCheck.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.Witnesses": {
+    "function": "InferenceOnlyVerifier.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.Throttles": {
-    "function": "InferenceOnlyCheck.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.Throttles": {
+    "function": "InferenceOnlyVerifier.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark": {
-    "function": "InferenceOnlyCheck.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesDark": {
+    "function": "InferenceOnlyVerifier.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
-    "function": "InferenceOnlyCheck.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesDarkSlots": {
+    "function": "InferenceOnlyVerifier.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots": {
-    "function": "InferenceOnlyCheck.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesSlots": {
+    "function": "InferenceOnlyVerifier.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance": {
-    "function": "InferenceOnlyCheck.Theta.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.ThetaProvenance": {
+    "function": "InferenceOnlyVerifier.Theta.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesSlots": {
-    "function": "InferenceOnlyCheck.Desc.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesSlots": {
+    "function": "InferenceOnlyVerifier.Desc.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.DescAgrees": {
-    "function": "InferenceOnlyCheck.Desc.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.DescAgrees": {
+    "function": "InferenceOnlyVerifier.Desc.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDark": {
-    "function": "InferenceOnlyCheck.Desc.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesDark": {
+    "function": "InferenceOnlyVerifier.Desc.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
-    "function": "InferenceOnlyCheck.Desc.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesDarkSlots": {
+    "function": "InferenceOnlyVerifier.Desc.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.DescReports": {
-    "function": "InferenceOnlyCheck.Desc.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.DescReports": {
+    "function": "InferenceOnlyVerifier.Desc.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses": {
-    "function": "InferenceOnlyCheck.Desc.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.DescWitnesses": {
+    "function": "InferenceOnlyVerifier.Desc.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottles": {
-    "function": "InferenceOnlyCheck.Desc.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottles": {
+    "function": "InferenceOnlyVerifier.Desc.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.CheckedCoverTraining": {
-    "function": "InferenceOnlyCheck.Theta.evaluate",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.CheckedCoverTraining": {
+    "function": "InferenceOnlyVerifier.Theta.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
-    "function": "InferenceOnlyCheck.Protocol.check",
+   "InferenceOnlyVerifier.Properties.SecurityProofs.ProtocolAccepts": {
+    "function": "InferenceOnlyVerifier.Protocol.check",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.SecurityProofs.ServedComplies": {
-    "function": ["InferenceOnlyCheck.Properties.Record.Form.read", "InferenceOnlyCheck.Properties.Record.Form.rate"],
+   "InferenceOnlyVerifier.SecurityProofs.ServedComplies": {
+    "function": ["InferenceOnlyVerifier.Properties.Record.Form.read", "InferenceOnlyVerifier.Properties.Record.Form.rate"],
     "outcome": "accept"
    },
    "Properties.Poub.acceptChecksOpenings": {
@@ -14900,7 +14900,7 @@
    "Pous.Component.SecurityProofs.wipeAccepts_meets": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: WipeAccepts' honest instance: a key of the deployed LMS parameters signs a one-batch session that the compiled wipe check accepts",
    "Pous.Component.SecurityProofs.runAccepts_meets": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: RunAccepts' honest instance: a key of the deployed LMS parameters signs a one-round session over setup's accepted two-block store that the compiled run check accepts",
    "Pous.Component.SecurityProofs.runBinds_meets": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: RunBinds' honest instance: runAccepts_meets' run, accepted twice under one setup",
-   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, then the prover's request and the device as the prover drives it, the parameters fixing only the coin commitment's families and the device's signer (Verity.releases: a family's next coin, a coin tree's Hello, an opening of a tree's stream's next unopened round, in any order, each release after the frame and the bytes it answers), then the close, at which the device draws each coin's salt and the coins it didn't release and releases its signatures on its record, its close and its ledger lines (Verity.finish, Verity.Signer), the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite, a list of its subprotocols' ids, as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite's list (Verity.Registration.Composite.onsite, whose verifier is Core.Onsite.protocol, Verity.verifier_onsite, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the claims read the circuit file and the public file, the committed files the parameters name by their digests (Verity.Vocab.read, programDigest, publicDigest), and the commit phase's check asks for a committed file with each digest (Verity.Vocab.Registered); every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (Spot.OneStageZk), PoUW's period credit, the inference-only policy (InferenceOnlyCheck.Protocol), PoUS's run check, PoUB-P2 (Poub.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryAttester.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, every window of PoUW's period on that record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are ResourceAccounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Properties.Remote.PolicyHeld of every case of the policy in the play's messages (Verity.PolicyCase), and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is ResourceAccounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls), the premises at the other finders its bound reads (Vocab.finderCR, by finderCROf over Vocab.finders: each a FinderSpec whose budget, a function of the strategy's calls, bounds its calls, and which finds a collision with probability at most that budget over 2^256): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkAttesterSound, WipeSound) as a hypothesis until each is proved (InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis), Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
+   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, then the prover's request and the device as the prover drives it, the parameters fixing only the coin commitment's families and the device's signer (Verity.releases: a family's next coin, a coin tree's Hello, an opening of a tree's stream's next unopened round, in any order, each release after the frame and the bytes it answers), then the close, at which the device draws each coin's salt and the coins it didn't release and releases its signatures on its record, its close and its ledger lines (Verity.finish, Verity.Signer), the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite, a list of its subprotocols' ids, as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite's list (Verity.Registration.Composite.onsite, whose verifier is Core.Onsite.protocol, Verity.verifier_onsite, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the claims read the circuit file and the public file, the committed files the parameters name by their digests (Verity.Vocab.read, programDigest, publicDigest), and the commit phase's check asks for a committed file with each digest (Verity.Vocab.Registered); every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (Spot.OneStageZk), PoUW's period credit, the inference-only policy (InferenceOnlyVerifier.Protocol), PoUS's run check, PoUB-P2 (Poub.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryAttester.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, every window of PoUW's period on that record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are ResourceAccounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Properties.Remote.PolicyHeld of every case of the policy in the play's messages (Verity.PolicyCase), and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is ResourceAccounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls), the premises at the other finders its bound reads (Vocab.finderCR, by finderCROf over Vocab.finders: each a FinderSpec whose budget, a function of the strategy's calls, bounds its calls, and which finds a collision with probability at most that budget over 2^256): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkAttesterSound, WipeSound) as a hypothesis until each is proved (InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis), Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
    "Verity.remote_soundness_of_subprotocols": "frozen (premise): Verity.soundness_of_subprotocols's statement restricted to remote's subprotocols: the union bound at the compiled verifier of remote's list (Verity.Registration.Composite.remote, whose verifier is Core.Remote.V1.protocol, verity/remote/v1, Verity.verifier_remote, tiedSameB over the blobs sent: the committed files, then the evidence's blobs) in the same causal game, from Verity.soundness_at_of_targets at remote; its three subprotocols are sampled proofs v2, PoUW by Pearl+'s run verdict (PouwVerifier.PearlPlus.Protocol) and the inference-only policy, the policy and sampled proofs committed to one record and Pearl+'s run on it (Properties.Composition.AcceptSame, AcceptTied), with the same errors and Vocab, the policy's claim PolicyHeld of its sent case, and PoUW's claim Pearl+'s in MACs at the credit its check published; it takes the three targets (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound at remote) as hypotheses until each is proved; InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis",
    "Verity.soundness_at_of_targets": "frozen (premise): the union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOf: Verity.Vocab.SoundnessAt from each of the composite's subprotocols' targets, Verity.Vocab.Target), the one statement Verity.soundness_of_subprotocols states at onsite and Verity.remote_soundness_of_subprotocols at remote; each target is a hypothesis until its subprotocol's piece proves it, Vocab's fields are given until each subprotocol defines them, and each subprotocol's error is ResourceAccounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR) and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top",
    "Verity.soundness_at_of_componentBounds": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfComponents: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component (Verity.Vocab.ComponentBound: the component's acceptance of its own case in what the prover sent while the claim fails, at most the subprotocol's error) in place of its target; each bound gives its target by monotonicity (Verity.Vocab.sound_of, one family over every composite and subprotocol, at remote's three Vocab.spotSound_of, pouwSound_of and inferenceOnlySound_of), so a composite with one more subprotocol takes one more bound under the same statement; each bound is a hypothesis until its subprotocol's piece proves it of its compiled component, with the same claims, errors and Vocab",
@@ -14935,8 +14935,8 @@
    "Properties.Spot.MonitoringPeriod.LedgerOfDeviceSigned": "unstated: every line of the ledger the period's check reads (Spot.MonitoringPeriod.read) but the last is the device's own line whole, its signature included, so the LMS leaf read from each is the device's, or the finder at the lines' whole texts (Properties.Spot.MonitoringPeriod.findLineBreak: Properties.Challenger.findBreak on the ledger, else a SHA-512 collision among the presented lines' and the device's whole texts) outputs a break; the last presented line's signature stays free; it takes Properties.Spot.MonitoringPeriod.Numbered and Properties.Spot.MonitoringPeriod.Chained (the device's line after a line names as prev the SHA-512 of that line's whole text), hypotheses of this statement alone that no guarantee takes, and lemmas of the modelled device once the model builds its whole ledger; proved from them in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDeviceSigned; no guarantee entry while it takes them",
    "Properties.Challenger.SampledByDevice": "unstated: Challenger.sampleCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Drawn.sampledByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Verity.plain_soundness_of_subprotocols": "frozen (premise): Verity.remote_soundness_of_subprotocols's statement at remote's plain sibling: the union bound at the compiled verifier of the plain sibling's list (Verity.Registration.Composite.plain, remote's list with the inference-only policy's rows check, verity/inference-only/rows/v1, in v0's place; Verity.componentsOf_plain) in the same causal game, from Verity.soundness_at_of_targets at the plain sibling; its three subprotocols are sampled proofs v2, PoUW by Pearl+'s run verdict (PouwVerifier.PearlPlus.Protocol) and the inference-only policy decided by the rows check (Verity.rowsCheck, whose behavior Verity.rowsUnbuilt leaves unstated until a compiled check carries its id), with the same errors, Vocab and claims as at remote; it takes the three targets (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound at the plain sibling) as hypotheses until each is proved, and the code refuses the plain sibling's list until then (Core.Composites.ofIds, Verity.ofIds_plain)",
-   "InferenceOnlyCheck.Properties.DescCountsCK": "unstated: a published complies of the count of (c, k)-inference blocks (InferenceOnlyCheck.Count.check, the judgment against n alone) means the Boolean declaration the Program lowers to by the gate table complies with InferenceOnly.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and InferenceOnlyCheck.Desc's summaries to cover the parameter leaves a Definition's gates read",
-   "InferenceOnlyCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
+   "InferenceOnlyVerifier.Properties.DescCountsCK": "unstated: a published complies of the count of (c, k)-inference blocks (InferenceOnlyVerifier.Count.check, the judgment against n alone) means the Boolean declaration the Program lowers to by the gate table complies with InferenceOnly.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and InferenceOnlyVerifier.Desc's summaries to cover the parameter leaves a Definition's gates read",
+   "InferenceOnlyVerifier.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
    "Properties.Poub.Subprotocol.QBytesAtSubprotocol": "unstated: on the subprotocol's acceptance, the `q_bytes` it publishes is at most `BLOCK_BYTES` times the record's receipts the trace gets right, except with `LineHeldAtSubprotocol`'s bound at `DELTA`, under `Live`, `Refused` and `Counted`; unproved, a statement that gets a guarantee entry, and a shape.properties entry naming `Poub.Protocol.check`'s accept, with its proof",
    "Properties.Poub.Subprotocol.PublishedQBytes": "unstated: on the subprotocol's acceptance, `q_bytes` plus `BLOCK_BYTES` times the pooled bound of the record's samples at `DELTA` is at most `BLOCK_BYTES` times its receipts, with no premise: what `Poub.Protocol.certify` computes; unproved, a statement that gets a guarantee entry beside `publishedEps`'s, and a shape.properties entry naming `Poub.Protocol.check`'s accept, with its proof",
    "Properties.Pouw.MonitoringPeriod.SecurityProofs.checkedWorkMonitoringPeriod": "frozen (no-function,world-unlisted): E2E-POUW's bridge (#4363, red team at 28a6d49e15), CircuitWorkMonitoringPeriod at the period's proofs with the deployed check's verdict (Properties.Pouw.MonitoringPeriod.checkedRun): a window is credited exactly when PouwVerifier.protocol.check accepts it and every earlier window, so the accepted prefix and its live words are the check's (checkedLive); except with probability delta_s + n (delta_bind + delta_ks). The check is read inside the event, through the prefix, not as one acceptance hypothesis, and the event is a Pouw.RelativeSecurity.prob that shape.events does not list. Its premises off the premises list: CircuitWorkMonitoringPeriod's claims; RegisteredBeforeDraw, SampleIsCoin and ServiceSound (in place of JointSound) are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): RegisteredBeforeDraw and SampleIsCoin protocol-code facts to prove (the record doesn't order registration before the draw coin, CMP-91's to fix; the check's draw is the model's), ServiceSound standard crypto (C-Flock's soundness under live coins); proved from CircuitWorkMonitoringPeriod (Proofs.Pouw.MonitoringPeriod).",
@@ -14959,10 +14959,10 @@
    "Properties.Remote.CallerCheckSound": "unstated: CallerCheckMeans' forward half, proved in security_proofs by Properties.Remote.callerCheckSound from callerCheckMeans; it is the hypothesis stage_held and stageHeld_of_accepts take. Listed under `guarantees` with CallerCheckMeans after the architecture landing",
    "PousCheck.Properties.SetupInProofs.CheckReads": "unstated: the in-proofs setup check's acceptance property (an accepting `PousCheck.SetupInProofs.check` read a valid parameter set, a 24-byte salt and the claim's sampling design, and published its store root), stated and not yet proved, so no guarantee states it",
    "Properties.Poub.SpanDeployed.RowsBind": "unstated: a premise, not a claim: `SpanInProofsDeployed` takes it for the `o0` rows a span opens (two rows that open to one `b ‖ c` are one row under one salt, or their SHA-512 inputs collide), and no guarantee states it",
-   "InferenceOnlyCheck.Properties.Record.PinnedReadBinds": "unstated: stated in the properties tree and proved by InferenceOnlyCheck.Properties.Record.SecurityProofs.pinnedReadBinds in Proofs.Properties.InferenceOnly.Lemmas.Opening, listed as a guarantee after the landing, NET-451, Wed 18 Nov",
-   "InferenceOnlyCheck.Properties.Record.PinnedReadHonest": "unstated: PinnedReadBinds's witness that the check's own form has a pinned read, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
-   "InferenceOnlyCheck.Properties.Record.PinnedReadNontrivial": "unstated: PinnedReadBinds's witness that at the verdict bit 0 some pinned read does not return its table's row, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
-   "InferenceOnlyCheck.Properties.Record.OpenedRowReturned": "unstated: that an opening's declared row is the row its reader returns, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
+   "InferenceOnlyVerifier.Properties.Record.PinnedReadBinds": "unstated: stated in the properties tree and proved by InferenceOnlyVerifier.Properties.Record.SecurityProofs.pinnedReadBinds in Proofs.Properties.InferenceOnly.Lemmas.Opening, listed as a guarantee after the landing, NET-451, Wed 18 Nov",
+   "InferenceOnlyVerifier.Properties.Record.PinnedReadHonest": "unstated: PinnedReadBinds's witness that the check's own form has a pinned read, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
+   "InferenceOnlyVerifier.Properties.Record.PinnedReadNontrivial": "unstated: PinnedReadBinds's witness that at the verdict bit 0 some pinned read does not return its table's row, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
+   "InferenceOnlyVerifier.Properties.Record.OpenedRowReturned": "unstated: that an opening's declared row is the row its reader returns, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
    "Properties.Site.RefusedAt": "unstated: a site entry's refusal, the first of its checks it fails, whose guarantee Properties.Site.refusedAt left the lock by name with its honest and nontrivial witnesses; it is listed again with them (owner @lean)."
   },
   "conjectures": {

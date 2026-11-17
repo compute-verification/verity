@@ -2695,7 +2695,7 @@ def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
     """`--records network_check` names the package whose `lakefile.toml` says `name = "network_check"`: matching it by
     path alone refused it as matching no package, after the run had waited for its slot."""
     pkgs = ["verity/protocols/resource_accounting/network/verifier/lean", "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean", "security"]
-    for p, n in zip(pkgs, ["network_check", "inference_only_check", "security"]):
+    for p, n in zip(pkgs, ["network_check", "inference_only_verifier", "security"]):
         (tmp_path / p).mkdir(parents=True)
         (tmp_path / p / "lakefile.toml").write_text(f'name = "{n}"\n\n[[require]]\nname = "mathlib"\n')
     assert LC.matching("network_check", pkgs, tmp_path) == ["verity/protocols/resource_accounting/network/verifier/lean"]

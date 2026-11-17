@@ -1,24 +1,24 @@
 module
 
-public import InferenceOnlyCheck.Check
-public import InferenceOnlyCheck.Difftest
-public import InferenceOnlyCheck.Desc
-public import InferenceOnlyCheck.DescDifftest
-public import InferenceOnlyCheck.DescLiveness
-public import InferenceOnlyCheck.DescFuzz
-public import InferenceOnlyCheck.Theta
+public import InferenceOnlyVerifier.Check
+public import InferenceOnlyVerifier.Difftest
+public import InferenceOnlyVerifier.Desc
+public import InferenceOnlyVerifier.DescDifftest
+public import InferenceOnlyVerifier.DescLiveness
+public import InferenceOnlyVerifier.DescFuzz
+public import InferenceOnlyVerifier.Theta
 public import Spot.RecordText
-public import InferenceOnlyCheck.Record
-public import InferenceOnlyCheck.RecordCount
-public import InferenceOnlyCheck.RecordRows
-public import InferenceOnlyCheck.RecordChosen
-public import InferenceOnlyCheck.RecordDifftest
-public import InferenceOnlyCheck.ThetaDifftest
-public import InferenceOnlyCheck.Protocol
-public import InferenceOnlyCheck.RowsProtocol
-public import InferenceOnlyCheck.Count
-public import InferenceOnlyCheck.CountDifftest
-public import InferenceOnlyCheck.DefinitionDigest
+public import InferenceOnlyVerifier.Record
+public import InferenceOnlyVerifier.RecordCount
+public import InferenceOnlyVerifier.RecordRows
+public import InferenceOnlyVerifier.RecordChosen
+public import InferenceOnlyVerifier.RecordDifftest
+public import InferenceOnlyVerifier.ThetaDifftest
+public import InferenceOnlyVerifier.Protocol
+public import InferenceOnlyVerifier.RowsProtocol
+public import InferenceOnlyVerifier.Count
+public import InferenceOnlyVerifier.CountDifftest
+public import InferenceOnlyVerifier.DefinitionDigest
 
 /-!
 # The inference-only policy's check
