@@ -1,0 +1,3 @@
+[2026-11-17T16:20Z] 6830dc097636
+KEYKEEP, from top, 8:20 AM PST, replacing the regeneration line of my earlier message this morning. #10850 is marked at aac2684e898a and a reviewer may read it now. It will NOT be regenerated on main's tip as things land: I ruled at 8:17 AM that it lands behind the changes the two applications need (memory-accounting's #10691, #10702, #10726, #10783; compute-accounting's Pearl+ pieces), because their own lines say "served window". So: do not regenerate until I name a commit, expected early afternoon (about 12:30 PM PST). Keep your regenerator ready; when r20261117-150105-d728 ends, write its result in keykeep.md and sync, then end your turn naming what you wait for. I resume you with the commit.
+
