@@ -1,0 +1,66 @@
+# The calibration move's Lean lines, step 1: each path the move sends to calibration/,
+# renamed only after its backtick in the files that name it. Written by gen_lean_handin.py at main f572beba1c53.
+
+[words]
+
+[[words_in]]
+files = ["security/Definitions/Core/Assumptions/Accel.lean"]
+[words_in.words]
+"`hardware/cards/<sku>.toml`" = "`calibration/hardware/cards/<sku>.toml`"
+
+[[words_in]]
+files = ["security/Definitions/Core/NaiveStrassen.lean"]
+[words_in.words]
+"`hardware/cards/<sku>.toml`" = "`calibration/hardware/cards/<sku>.toml`"
+
+[[words_in]]
+files = ["security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean"]
+[words_in.words]
+"`hardware/cards/rtx-pro-6000-server.toml`" = "`calibration/hardware/cards/rtx-pro-6000-server.toml`"
+
+[[words_in]]
+files = ["security/Definitions/Pous/Model/StreamedWipeDisk.lean"]
+[words_in.words]
+"`hardware/nodes/h200-sxm-141gb-x1.toml`" = "`calibration/hardware/nodes/h200-sxm-141gb-x1.toml`"
+
+[[words_in]]
+files = ["security/Definitions/Pouw/Assumptions/TS.lean"]
+[words_in.words]
+"`benchmarks/pouw/theory/fold_opt.py`" = "`calibration/pouw/theory/fold_opt.py`"
+
+[[words_in]]
+files = ["security/Definitions/Pouw/DitherInstance.lean"]
+[words_in.words]
+"`benchmarks/pouw/theory/d5_v2.py`" = "`calibration/pouw/theory/d5_v2.py`"
+"`hardware/cards/h200-sxm-141gb.toml`" = "`calibration/hardware/cards/h200-sxm-141gb.toml`"
+"`hardware/cards/rtx-pro-6000-server.toml`" = "`calibration/hardware/cards/rtx-pro-6000-server.toml`"
+
+[[words_in]]
+files = ["security/Definitions/Pouw/Guarantees/HeadlineDc.lean"]
+[words_in.words]
+"`benchmarks/pouw/theory/fold_min.py`" = "`calibration/pouw/theory/fold_min.py`"
+
+[[words_in]]
+files = ["security/Definitions/Pouw/Guarantees/Receipt.lean"]
+[words_in.words]
+"`benchmarks/pouw/theory/duo_proj.c`" = "`calibration/pouw/theory/duo_proj.c`"
+
+[[words_in]]
+files = ["security/Definitions/Pouw/PearlC/Device.lean"]
+[words_in.words]
+"`hardware/cards/h200-sxm-141gb.toml`" = "`calibration/hardware/cards/h200-sxm-141gb.toml`"
+
+[[words_in]]
+files = ["security/Definitions/Registration/Assumptions/Sheet.lean"]
+[words_in.words]
+"`benchmarks/pouw/theory/isa_escape.py`" = "`calibration/pouw/theory/isa_escape.py`"
+
+[[words_in]]
+files = ["security/Properties/Pous/PeriodDeployed.lean"]
+[words_in.words]
+"`hardware/cards/h200-sxm-141gb.toml`" = "`calibration/hardware/cards/h200-sxm-141gb.toml`"
+
+[[words_in]]
+files = ["security/Properties/Pouw/PearlPlus.lean"]
+[words_in.words]
+"`hardware/cards/h200-sxm-141gb.toml`" = "`calibration/hardware/cards/h200-sxm-141gb.toml`"

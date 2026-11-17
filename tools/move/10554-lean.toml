@@ -1,0 +1,45 @@
+# memory-accounting's Lean hand-in for lean's pass: #10554's Lean part, certifier -> network attester, in the 11
+# `.lean` files #10554 touches and nowhere else (the network certifier's own Lean, `NetworkCertifier`, is not ours and
+# is not here). Read from `git diff origin/main d104a2d9497e` at main 3b2d2b7425b1. It renames no Lean name, namespace,
+# path or tag: prose under `security/`, and in the wipe's Lean one docstring line and three string literals, whose
+# Python twins change in the same commit (the second [[words_in]]). Replayed on main's 11 files, these pairs give
+# #10554's text on every line but 8, where the map goes further than #10554 did (10554-lean-lines.md, "Where the map
+# and #10554 differ").
+scope = "prose"
+
+[words]
+
+# Docstrings and comments under security/: no record of either lock moves.
+[[words_in]]
+files = ["security/Definitions/Poub/Assumptions/RemoteOutside.lean",
+         "security/Definitions/Poub/Guarantees/RemoteSketchLine.lean",
+         "security/Definitions/Poub/Remote/Outside.lean",
+         "security/Proofs/Poub/RemoteHeld/Line.lean",
+         "security/Proofs/Poub/RemoteHeld/Outside.lean",
+         "security/Proofs/Properties/Poub/Remote/SubprotocolWitnesses.lean",
+         "security/Properties/Poub/Remote/Line.lean",
+         "security/Properties/Poub/Remote/Subprotocol.lean",
+         "security/Properties/Pous/Wipe.lean"]
+[words_in.words]
+"certifiers" = "network attesters"
+"certifier" = "network attester"
+"Certifiers" = "Network attesters"
+
+# The wipe's Lean: three string literals (`EXPERIMENTAL`, `writerGap` with its `#guard`, `NO_COUNT`) and one docstring
+# line. The lock's records of `MemoryChallenger.WipeProtocol.EXPERIMENTAL` and `.writerGap` change in both locks (a
+# change, not a move: `check.py --update`, no moves file).
+# TWINNED IN PYTHON, SAME COMMIT: `wipe_period.py` (76, 84, 162-163 at #10554's head) and the expected texts in
+# `test_wipe_protocol.py` (124-125) and `test_pous_wipe_period.py`.
+[[words_in]]
+files = ["verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/WipeCount.lean",
+         "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/WipeProtocol.lean",
+         "verity/protocols/resource_accounting/memory/pous/verifier/wipe_period.py",
+         "tests/verity/protocols/resource_accounting/memory/pous/attester/lean/test_wipe_protocol.py",
+         "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_wipe_period.py"]
+[words_in.words]
+"network certifier" = "network attester"
+"the certifier's" = "the network attester's"
+
+[keep]
+# the named assumption's id (RemoteOutside.lean:19, :58)
+patterns = ['certifier-coverage']
