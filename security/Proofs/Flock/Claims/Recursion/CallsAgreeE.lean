@@ -38,16 +38,8 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width
 
-/-!
-# The calls half where the proof files agree, at the element-level verifier
-
-`plain_calls_agree` at `nextE`: two accepted element-level decisions on one setup, link, coin and round messages, with
-the same proof files, call SHA-512 on one set, where the sessions their records decode have the same rounds at each
-rep stream as replay reads them (`Round.erase`). The element-level verdict computes every digest the plain one does
-(`verdictK_log`, `decodeK_log`), a round's calls read only its bytes (`streamLog_erase`), and a rep reads its rounds
-only up to erasure (`Flock.With.verifyRepWith_erase`, at the logging oracle). With `sess_rounds_eqK`,
-`RecDeploy.PlainCallsOfProofsE` holds at SHA-512, and so does `RecDeploy.PlainCallsBindOrSlackE`.
--/
+/-! `plain_calls_agree` at the element-level verifier `nextE`, and the calls half at `VE` at SHA-512
+(`plainCallsOfProofsE_sha512`). -/
 
 @[expose] public section
 
@@ -55,9 +47,6 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness.Refine
 
-/-! ## The public words, as the element-level decoder reads them -/
-
-/-- `decode_pubs` at `Record.decodeWithK keep`, whatever the hashes. -/
 theorem decodeWithK_pubs (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∃ j l pubs, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
@@ -96,7 +85,6 @@ theorem decodeWithK_pubs (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Se
       · rw [← Except.ok.inj h]
         exact hp'
 
-/-- `decode_publics` at `Record.decodeWithK keep`. -/
 theorem decodeWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} {lv : Live} (hd : Record.decodeWithK keep hs spec text = .ok sess)
     (hl : liveOf spec text = .ok lv) : sess.publics = lv.publics := by
@@ -110,12 +98,9 @@ theorem decodeWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec :
   cases hp1'
   exact Array.ext' (Claims.Bridge.Custody.forall₂_unique (R := PubField pubs) (fun _ _ _ => pubField_unique) hf hf')
 
-/-! ## The element-level verdict's calls -/
-
 theorem roundLog_erase (spec : SessionSpec) (rd : Round) : roundLog spec rd.erase = roundLog spec rd := by
   simp only [roundLog, Round.erase_bytes]
 
-/-- A stream's calls read its rounds only as replay does. -/
 theorem streamLog_erase {spec : SessionSpec} {s s' : StreamRec}
     (h : s.rounds.map Round.erase = s'.rounds.map Round.erase) : streamLog spec s = streamLog spec s' := by
   have e : ∀ l : List Round, l.flatMap (roundLog spec) = (l.map Round.erase).flatMap (roundLog spec) := by
@@ -126,7 +111,6 @@ theorem streamLog_erase {spec : SessionSpec} {s s' : StreamRec}
   unfold streamLog
   rw [e s.rounds.toList, e s'.rounds.toList, ← Array.toList_map, ← Array.toList_map, h]
 
-/-- `verdict_calls` at `verifyLoggedE`. -/
 theorem verdictE_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} {L : Array ByteArray} (hv : verifyLoggedE h spec tabs record proofs = (.ok (), L)) :
     ∃ (sess : RunRecord) (schs : Array Schedule) (ds : List (List ByteArray)),
@@ -153,7 +137,6 @@ theorem verdictE_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs 
   rw [hL, hl₁]
   simp only [List.nil_append, List.append_assoc]
 
-/-- `verdict_calls_sub` at `verifyLoggedE`, with the rep streams' rounds compared after `Round.erase`. -/
 theorem verdictE_calls_sub {spec : SessionSpec} {tabs : Array Setup} {record record' : String}
     {proofs : Array ByteArray} {L L' : Array ByteArray} {sess sess' : RunRecord}
     (hv : verifyLoggedE Sha512.hash spec tabs record proofs = (.ok (), L))
@@ -234,9 +217,6 @@ theorem verdictE_calls_sub {spec : SessionSpec} {tabs : Array Setup} {record rec
   · exact .inl (.inr hb)
   · exact .inr hb
 
-/-! ## The element-level decision's calls -/
-
-/-- `decisionAt_log` at `decisionAtE`. -/
 theorem decisionAtE_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
     (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
     (f : Final) :
@@ -246,7 +226,6 @@ theorem decisionAtE_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessio
   rcases hv : (verifyWithME Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs).run.eval H with ⟨r, l⟩
   cases r <;> exact List.append_nil l
 
-/-- `next_decide_calls` at `nextE`. -/
 theorem nextE_decide_calls (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
@@ -262,7 +241,6 @@ theorem nextE_decide_calls (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as 
   show l ++ ((decisionAtE s spec sts x link c₁ mids f).run.eval H).2 = _
   rw [decisionAtE_log]
 
-/-- `acc_verifyLogged` at `nextE`. -/
 theorem accE_verifyLogged {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {f : Final} (h : act false x as cs = .decide s spec sts link c₁ mids f)
@@ -276,7 +254,6 @@ theorem accE_verifyLogged {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coi
   rw [hOf_sha512] at hv
   exact ⟨Prod.ext ((verifyLoggedE_fst _ _ _ _ _ _).trans hv) rfl, hc⟩
 
-/-- `next_calls_toFinset` at `nextE`. -/
 theorem nextE_calls_toFinset {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
     {mids mids' : List (Claims.Msg × Coin)} {f f' : Final}
@@ -306,7 +283,6 @@ theorem nextE_calls_toFinset {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs'
     exact ⟨p', hp', ofMsg_inj e⟩
   exact toFinset_eq_of_queries (eval_log_ans _ _) (eval_log_ans _ _) (hq hl hl' hsub) (hq hl' hl hsub')
 
-/-- `plain_decide_shared` at `nextE`. -/
 theorem plainE_decide_shared {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
     {f f' : Final} (hc : cs.length = ms.length + 1)
     (hacc : ((nextE x (ms ++ [l]) cs).eval sha512).1 = .acc)
@@ -352,9 +328,6 @@ theorem plainE_decide_shared {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Cla
   obtain rfl := Option.some.inj (e'.symm.trans hfl')
   exact ⟨_, _, _, _, _, _, hact, hact'⟩
 
-/-- **Two accepted element-level decisions on one setup, link, coin and round messages, with the same proof files,
-call SHA-512 on one set**, where the sessions their records decode have the same rounds at each rep stream as replay
-reads them (`plain_calls_agree`'s, at `nextE`). -/
 theorem plainE_calls_agree {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f f' : Final}
@@ -401,7 +374,6 @@ namespace RecDeploy
 
 open Claims (Msg)
 
-/-- **The calls half at `VE` where the proof files agree, at SHA-512** (`plainCallsOfProofs_sha512`'s). -/
 theorem plainCallsOfProofsE_sha512 : PlainCallsOfProofsE FlockDeploy.sha512 := by
   intro x ms l l' cs f f' _ hc _ hacc hacc' hfl hfl' hpf
   obtain ⟨s, spec, sts, link, c₁, mids, hact, hact'⟩ := FlockDeploy.KS.plainE_decide_shared hc hacc hacc' hfl hfl'
@@ -423,7 +395,6 @@ theorem plainCallsOfProofsE_sha512 : PlainCallsOfProofsE FlockDeploy.sha512 := b
   cases hz'
   exact hzz
 
-/-- **The calls half at `VE`, at SHA-512.** -/
 theorem plainCallsBindOrSlackE_sha512 : PlainCallsBindOrSlackE FlockDeploy.sha512 :=
   plainCallsBindOrSlackE_of_proofs plainCallsOfProofsE_sha512
 

@@ -34,13 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.VStarTraceAt
 
-/-!
-# hp before the last round on the honest run, with every part staged (`hpEarly_staged`)
-
-`hpEarly_deployed` takes `TraceOkAt` and `CircOkAt`. At the deployed V\* both follow from every part of `x` being
-staged (`VStarTraceAt.traceAt_staged`: `traceOkAt_staged` and `SlotsDeployed.circOkAt_staged`), so hp before the last
-round needs only that and the fitted rows (`RowsFit`).
--/
+/-! hp before the last round on the honest run, with every part staged (`hpEarly_staged`). -/
 
 @[expose] public section
 
@@ -50,8 +44,6 @@ open _root_.Flock
 open Claims (Msg)
 open RecDeploy.VStarBuild
 
-/-- **hp before the last round on the honest run, every part staged**: `hpEarly_run` with `TraceAt` from
-`VStarTraceAt.traceAt_staged`. -/
 theorem hpEarly_staged (mask : ℕ → ℕ → Bool) (I : InnerRec) (IV : Claims.Verifier FlockDeploy.Coin) (b : Brings)
     (w : Claims.Flock.Wit) {x : Msg} {xr : XR} (hx : readX x = some xr) (hk : IV.k (xIOf x) = RestRead.kI x)
     (ω : RecDeploy.Tape (finB b (A0 mask) I x))

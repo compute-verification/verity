@@ -38,36 +38,8 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The compiled verifier runs each V* session as the outer verifier (`SessionRuns`)
-
-`SessionRuns` is the recursion analysis's code fact that the compiled verifier runs session `s` as the outer Flock's
-verifier at its V* statement: on a run that accepts, a fork at the session's first round (`offO`) shows through
-`D.session` the run of the prover's continuation (`sessP`) against the outer verifier at the fork's coins from that
-round on, and that run's SHA-512 calls are among the compiled verifier's. A session's first round is past the inner
-and staging rounds (`offO`).
-
-`sessionRuns` proves the analysis' `SessionRuns` at `deployRec I.V ivScope b` and `deployZkRec rel`, at every oracle
-where the outer verifier
-accepts only at its last round (`OuterAtEnd`), which SHA-512 is (`sessionRuns_sha512`, by `nextO_acc_length_sha512`):
-
-* the fork's first `offO` rounds are the judged run's (`stepWith_agree`), so `offO` is the compiled verifier's session
-  offset: the inner and staging rounds' messages are the judged run's (`innerPairs_run`) and the V* statements read
-  off them are its;
-* at each round of session `s` the compiled verifier's step is the outer verifier's (`ract_eq`, `next_sess`): its
-  numbers and `decided` checks read only the inner rounds and the rounds before the session, where the judged run,
-  which accepts, passed them (`run_round`);
-* the session's answers are the outer verifier's as `sessOut` gives them, which `D.session` reads back (`sim`): an
-  acceptance at the session's last round, `.msg []` before the last session, as `.acc` (the outer verifier's other
-  answers are coins' bytes, never empty, `coin_bytes_ne_nil`), and a session that ends on a coin refused at the next
-  session's first round (`decided`);
-* the log inclusion: each of the session's oracle calls is its outer verifier's, which `next_sess` logs as the
-  compiled verifier's.
-
-At an oracle where the outer verifier can accept before its last round, the compiled verifier refuses that round while
-the session's own run accepts, so `sessionRuns` takes `OuterAtEnd`, which `nextO_acc_length` gives wherever Flock's
-setup at `H` has its recursive setup's rounds (`hr`).
--/
+/-! `SessionRuns` at `deployRec`: the compiled verifier runs each V\* session as the outer verifier (`sessionRuns`,
+`sessionRuns_sha512`). -/
 
 @[expose] public section
 
@@ -76,11 +48,7 @@ namespace RecDeploy
 open Claims (Msg Out Seen Transcript Prover stepWith run coinSeq)
 open FlockDeploy (Coin)
 
-/-! ## The goal, as the recursion's analysis states it (`Claims.Recursion.SessionRuns`) -/
-
 open Claims.Recursion (outMsg sessProver sessCoins sessStmt offO sessP SessionRuns)
-
-/-! ## Runs -/
 
 section Steps
 
@@ -112,7 +80,6 @@ theorem stepWith_succ_rej (vn : List Msg → Claims.OC Out) (f : ℕ) (hist : Li
                pLog := t.pLog ++ ((P.next x hist ω).eval H).2, vLog := t.vLog ++ lo, out := .rej } := by
   simp only [stepWith, h]
 
-/-- **A run only appends** to its state's messages and verifier log, at most one message per round left. -/
 theorem stepWith_mono (vn : List Msg → Claims.OC Out) :
     ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       t.msgs <+: (stepWith H P x ω vn f hist as t).msgs ∧ t.vLog <+: (stepWith H P x ω vn f hist as t).vLog ∧
@@ -137,7 +104,6 @@ theorem stepWith_mono (vn : List Msg → Claims.OC Out) :
       rw [stepWith_succ_rej H P x ω vn f hist as t hvb]
       exact ⟨List.prefix_append _ _, List.prefix_append _ _, by simp⟩
 
-/-- A round left is a message more. -/
 theorem stepWith_length_succ (vn : List Msg → Claims.OC Out) (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg)
     (t : Transcript) : t.msgs.length < (stepWith H P x ω vn (f + 1) hist as t).msgs.length := by
   rcases hvb : (vn (as ++ [((P.next x hist ω).eval H).1])).eval H with ⟨o, lo⟩
@@ -153,8 +119,6 @@ theorem stepWith_length_succ (vn : List Msg → Claims.OC Out) (f : ℕ) (hist :
   | acc => rw [stepWith_succ_acc H P x ω vn f hist as t hvb]; simp
   | rej => rw [stepWith_succ_rej H P x ω vn f hist as t hvb]; simp
 
-/-- **A run that goes past round `m` reaches its state after `m` rounds**: the history and messages so far, its
-messages its first `m` new ones, and `m` fewer rounds left. -/
 theorem stepWith_reach (vn : List Msg → Claims.OC Out) :
     ∀ (m f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       t.msgs.length + m < (stepWith H P x ω vn f hist as t).msgs.length →
@@ -198,8 +162,6 @@ theorem stepWith_reach (vn : List Msg → Claims.OC Out) :
       rw [stepWith_succ_rej H P x ω vn f hist as t hvb] at h
       simp at h
 
-/-- **A run's message at round `i`**, past its state: the prover's message after the history so far, answered by the
-verifier on the messages so far and it. -/
 theorem stepWith_get (vn : List Msg → Claims.OC Out) (i f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript)
     (h : t.msgs.length + i < (stepWith H P x ω vn f hist as t).msgs.length) :
     ∃ new : List (Msg × Out), new.length = i ∧
@@ -234,8 +196,6 @@ theorem stepWith_get (vn : List Msg → Claims.OC Out) (i f : ℕ) (hist : List 
     rw [stepWith_succ_rej H P x ω vn k _ _ t' hvb, ← ht']
     simp
 
-/-- **Two verifiers that answer alike on the first `m` rounds' messages give the same first `m` rounds**, and the
-runs go past round `m` together. -/
 theorem stepWith_agree (vn vn' : List Msg → Claims.OC Out) :
     ∀ (f m : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t t' : Transcript), t.msgs = t'.msgs →
       (∀ bs : List Msg, bs.length ≤ as.length + m → ((vn bs).eval H).1 = ((vn' bs).eval H).1) →
@@ -279,7 +239,6 @@ theorem stepWith_agree (vn vn' : List Msg → Claims.OC Out) :
       rw [stepWith_succ_rej H P x ω vn f hist as t hvb, stepWith_succ_rej H P x ω vn' f hist as t' hvb']
       simp [ht]
 
-/-- **An accepted run accepts at its last message**: its verifier accepts the run's messages. -/
 theorem stepWith_acc_length (vn : List Msg → Claims.OC Out) :
     ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as.length = t.msgs.length →
       (stepWith H P x ω vn f hist as t).out = .acc →
@@ -298,7 +257,6 @@ theorem stepWith_acc_length (vn : List Msg → Claims.OC Out) :
       rw [stepWith_succ_rej H P x ω vn f hist as t hvb] at h
       cases h
 
-/-- **A run that refuses a round ends refused.** -/
 theorem stepWith_rej_out (vn : List Msg → Claims.OC Out) :
     ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (a : Msg),
       (stepWith H P x ω vn f hist as t).msgs[t.msgs.length + i]? = some (a, .rej) →
@@ -327,9 +285,6 @@ theorem stepWith_zero (vn : List Msg → Claims.OC Out) (hist : List (Msg × Msg
 
 end Steps
 
-/-! ## A session's run beside the compiled run -/
-
-/-- **A session's view in a run's view** at its first round `off` and its `n` rounds, as `session` reads it. -/
 def sview (last : Bool) (off n : ℕ) (v : Seen) : Seen :=
   ⟨fixLast last n ((v.msgs.drop off).take n),
     if v.out = .acc then .acc else segOut (fixLast last n ((v.msgs.drop off).take n))⟩
@@ -377,12 +332,6 @@ variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (PS :
   (vS vF : List Msg → Claims.OC Out) (last : Bool) (n e : ℕ) (hist₀ : List (Msg × Msg)) (as₀ : List Msg)
   (M₀ : List (Msg × Out))
 
-/-- **A session's run is the compiled run's from the session's first round on**: where the session's prover is the
-compiled run's prover after its first rounds (`hP`), the compiled verifier answers each of the session's rounds as
-`sessOut` gives the session verifier's answer (`hV`), the session verifier accepts only at its last round (`hacc`) and
-answers no empty message (`hmsg`), and the compiled verifier refuses the round after a session that ended on a message
-(`hnext`, with `hlast`: the last session has no round after it), the session's view is `sview` of the compiled run's,
-and its oracle log is in the compiled run's. -/
 theorem sim (hP : ∀ hs, PS.next xO hs () = P.next x (hist₀ ++ hs) ω)
     (hV : ∀ bs : List Msg, 0 < bs.length → bs.length ≤ n →
       (vF (as₀ ++ bs)).eval H = (sessOut last (bs.length == n) ((vS bs).eval H).1, ((vS bs).eval H).2))
@@ -523,8 +472,6 @@ theorem sim (hP : ∀ hs, PS.next xO hs () = P.next x (hist₀ ++ hs) ω)
 
 end Sim
 
-/-! ## Coins -/
-
 theorem coinSeq_fork_lt {C : Type} [Inhabited C] {k : ℕ} (off : ℕ) (r d : Fin k → C) {i : ℕ} (h : i < off) :
     coinSeq (Claims.Recursion.fork off r d) i = coinSeq r i := by
   by_cases hk : i < k <;> simp [coinSeq, Claims.Recursion.fork, hk, h]
@@ -546,7 +493,6 @@ theorem range_map_drop {α : Type} (f : ℕ → α) (a b : ℕ) :
   rw [List.range_add, List.map_append, List.drop_left' (by simp), List.map_map]
   rfl
 
-/-- **The coins from round `off` on of a fork at `off`** are the session's coins (`sessCoins`) at the second sample. -/
 theorem fork_drop_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {b n : ℕ} (hb : b ≤ n) :
     ((List.range (off + b)).map (coinSeq (Claims.Recursion.fork off r d))).drop off =
       (List.range b).map (coinSeq (sessCoins off d n)) := by
@@ -555,7 +501,6 @@ theorem fork_drop_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {b n : ℕ}
   rw [List.mem_range] at hi
   rw [coinSeq_fork_ge off r d (Nat.le_add_right _ _), coinSeq_sessCoins off d n (by omega)]
 
-/-- **The coins before round `off` of a fork at `off`** are the first sample's. -/
 theorem fork_take_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {m : ℕ} (hm : m ≤ off) :
     (List.range m).map (coinSeq (Claims.Recursion.fork off r d)) = (List.range m).map (coinSeq r) :=
   List.map_congr_left fun i hi => coinSeq_fork_lt off r d (by rw [List.mem_range] at hi; omega)
@@ -567,15 +512,12 @@ theorem coin_bytes_ne_nil (c : Coin) : c.bytes ≠ [] := by
   rw [FlockSoundness.Refine.toBytes_length] at this
   cases this
 
-/-! ## The outer verifier's answers -/
-
 theorem VO_k_pos (xO : Msg) : 0 < VO.k xO := by
   show 0 < (match setupO xO with | some (_, spec, sts) => 2 + FlockDeploy.rounds true spec sts | none => 1)
   split
   · exact Nat.add_pos_left Nat.two_pos _
   · exact Nat.one_pos
 
-/-- **The outer verifier answers a message only at a coin**, with the coin's bytes. -/
 theorem nextO_msg (H : Msg → Msg) {xO : Msg} {as : List Msg} {cs : List Coin} {m : Msg}
     (h : ((nextO xO as cs).eval H).1 = .msg m) : ∃ c, actO xO as cs = .coin c ∧ m = c.bytes := by
   cases ha : actO xO as cs with
@@ -592,14 +534,11 @@ theorem nextO_msg_ne_nil (H : Msg → Msg) {xO : Msg} {as : List Msg} {cs : List
   rw [hm]
   exact coin_bytes_ne_nil c
 
-/-- A session that the outer verifier answers with a message has not decided. -/
 theorem decided_of_msg (H : Msg → Msg) {xO : Msg} {as : List Msg} {cs : List Coin} {m : Msg}
     (h : ((nextO xO as cs).eval H).1 = .msg m) : decided xO as cs = false := by
   obtain ⟨c, ha, -⟩ := nextO_msg H h
   unfold decided
   rw [ha]
-
-/-! ## The compiled verifier's step -/
 
 theorem locate_eq : ∀ (ks : List ℕ) {s j : ℕ}, s < ks.length → j < ks.getD s 0 →
     locate ks ((ks.take s).sum + j) = some (s, j)
@@ -627,8 +566,6 @@ theorem ract_inner {IV : Claims.Verifier Coin} {st : Stage} {x : Msg} {as : List
   rw [ite_eq_left hk, hc]
 
 open Classical in
-/-- **The compiled verifier's step past the inner rounds**, at the round `locate` places: part `s`'s numbers check,
-then at a session's first round the session before it, then the session's round. -/
 theorem ract_eq {IV : Claims.Verifier Coin} {st : Stage} {x : Msg} {as : List Msg} {cs : List Coin} {xr : XR}
     (hx : readX x = some xr) (hk : IV.k (xIOf x) + kS x < as.length) {s j : ℕ}
     (hl : locate ((vstar st x (innerPairs (IV.k (xIOf x) + kS x) as cs)).map VO.k)
@@ -659,15 +596,10 @@ theorem take_sum_le (l : List ℕ) (m : ℕ) : (l.take m).sum ≤ l.sum := by
   have := List.sum_take_add_sum_drop l m
   omega
 
-/-! ## The compiled verifier's runs -/
-
-/-- The compiled verifier's next message at coins `r`, as a run asks it. -/
 noncomputable def vnOf (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {k : ℕ} (r : Fin k → Coin)
     (as : List Msg) : Claims.OC Out :=
   next IV st x as ((List.range as.length).map (coinSeq r))
 
-/-- **A run's message at round `i`**: the prover's after the run's first `i` messages, answered by the verifier on
-the prover's messages so far and the first `i + 1` coins. -/
 theorem run_get {C : Type} [Inhabited C] (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (V' : Claims.Verifier C)
     (x : Msg) (ω : Ω) (r : Fin (V'.k x) → C) (i : ℕ) (h : i < (run H P V' x ω r).msgs.length) :
     ∃ new : List (Msg × Out), new = (run H P V' x ω r).msgs.take i ∧
@@ -699,7 +631,6 @@ theorem run_acc_length (h : (run H P (V IV st) x ω r).out = .acc) :
   rw [run_eq, ← hl]
   exact next_acc_length H ha
 
-/-- **An inner or staging round's answer is its coin's bytes.** -/
 theorem run_inner {xr : XR} (hx : readX x = some xr) {i : ℕ} (hi : i < (IV.k (xIOf x) + kS x))
     (hl : i < (run H P (V IV st) x ω r).msgs.length) :
     ∃ a, (run H P (V IV st) x ω r).msgs[i]? = some (a, .msg (coinSeq r i).bytes) := by
@@ -716,8 +647,6 @@ theorem run_inner {xr : XR} (hx : readX x = some xr) {i : ℕ} (hi : i < (IV.k (
   show some (_, ((next IV st x _ _).eval H).1) = _
   rw [next_coin H hc]
 
-/-- **An accepted run's inner and staging rounds are its messages with their coins' bytes**, so messages that extend
-its first `off ≥ k_I + k_S` and coins that extend its first `k_I + k_S` show them as `innerPairs`. -/
 theorem innerPairs_run (h : (run H P (V IV st) x ω r).out = .acc) {off : ℕ} (hk : IV.k (xIOf x) + kS x ≤ off)
     (ho : off ≤ (V IV st).k x) (bs : List Msg) {cs : List Coin}
     (hc : cs.take (IV.k (xIOf x) + kS x) = (List.range (IV.k (xIOf x) + kS x)).map (coinSeq r)) :
@@ -739,8 +668,6 @@ theorem innerPairs_run (h : (run H P (V IV st) x ω r).out = .acc) {off : ℕ} (
   simp [Option.some.inj ha]
 
 open Classical in
-/-- **An accepted run passed session `s`'s checks at its first round**: part `s`'s staged numbers are its numbers,
-and the session before it ended on a decision. -/
 theorem run_round (hacc : (run H P (V IV st) x ω r).out = .acc) {s off : ℕ} {xs : List Msg} (hs : s < nS x)
     (hxs : xs = vstar st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)))
     (hoff : off = (IV.k (xIOf x) + kS x) + ((xs.take s).map VO.k).sum) :
@@ -800,9 +727,6 @@ theorem run_round (hacc : (run H P (V IV st) x ω r).out = .acc) {s off : ℕ} {
 
 end Runs
 
-/-! ## Each session's run -/
-
-/-- **The outer verifier accepts only at its last round** at the oracle `H`, with one coin per message. -/
 def OuterAtEnd (H : Msg → Msg) : Prop :=
   ∀ (xO : Msg) (as : List Msg) (cs : List Coin), cs.length = as.length → ((nextO xO as cs).eval H).1 = .acc →
     as.length = VO.k xO
@@ -810,9 +734,6 @@ def OuterAtEnd (H : Msg → Msg) : Prop :=
 theorem outerAtEnd_sha512 : OuterAtEnd FlockDeploy.sha512 := fun _ _ _ hcs h => nextO_acc_length_sha512 hcs h
 
 open Classical in
-/-- **Session `s` of an accepted run, run alone**: at its first round `off` and its V* statement `xO`, read off the
-judged run's inner rounds, the outer verifier's run against `P` after the judged run's first `off` messages, at the
-second sample's coins from `off` on, is `session`'s view of the fork at `off`, and its oracle calls are the fork's. -/
 theorem session_core (H : Msg → Msg) (hO : OuterAtEnd H) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {s : ℕ}
     (hs : s < nS x) {Ω : Type} (P : Prover Ω) (ω : Ω) (r d : Fin ((V IV st).k x) → Coin)
     (hacc : (run H P (V IV st) x ω r).out = .acc) {off : ℕ} {xs : List Msg} {xO : Msg}
@@ -979,14 +900,13 @@ theorem session_core (H : Msg → Msg) (hO : OuterAtEnd H) (IV : Claims.Verifier
   rw [hsess]
   exact key
 
-/-- **`SessionRuns` at the compiled verifier** and the outer record, at every oracle where the outer verifier accepts
-only at its last round. -/
+/-- Takes `OuterAtEnd`: where the outer verifier accepts before its last round, the compiled verifier refuses that round
+while the session's own run accepts. -/
 theorem sessionRuns {W : Type} (H : Msg → Msg) (hO : OuterAtEnd H) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
     SessionRuns H (deployRec I.V ivScope b) I (deployZkRec rel) :=
   fun x s _ P ω r d hacc => session_core H hO I.V b.st x s.2 P ω r d hacc rfl rfl rfl
 
-/-- **`SessionRuns` at SHA-512.** -/
 theorem sessionRuns_sha512 {W : Type} (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool) (b : Brings)
     (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
     SessionRuns FlockDeploy.sha512 (deployRec I.V ivScope b) I (deployZkRec rel) :=

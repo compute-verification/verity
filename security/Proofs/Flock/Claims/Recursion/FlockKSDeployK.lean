@@ -41,18 +41,8 @@ import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 
-/-!
-# The code facts and the accepted run's decision at `FlockDeploy.VK keep`
-
-`FlockKSDeployE`'s code facts and `ConflictTiedE`'s accepted-run decision, at every `keep`, by the same proofs at
-`nextK keep` (`nextK_decide`): `VK keep` shows each round's coin (`coinsShown_VK`), accepts only at its last round
-(`accLast_VK`, `streams_size_plainK` holding at every `keep`), decides without the last coin (`decideFree_VK`) and never
-accepts the empty message (`refusable_VK`); an accepted run of it decides within its own verifier log (`accK_decide`),
-so its verdict accepts with SHA-512 answered only within that log (`decisionK_runs`, `verdictK_within`).
-
-At `keep := fun _ => true` these are the facts at `VE` (`VK_true`), and at `keep := id` the ones at `V false`
-(`VK_id`), so a proof that reads them at `VK keep` holds at both.
--/
+/-! `VE`'s code facts and accepted-run decision at every `keep` (`VK keep`), so a proof that reads them holds at both
+`VE` and `V false`. -/
 
 @[expose] public section
 
@@ -61,7 +51,6 @@ namespace FlockDeploy
 open Flock
 open Claims.Recursion
 
-/-- **Where `VK keep` answers, the deployed plain verifier answers alike.** -/
 theorem next_msg_of_nextK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg}
     {as : List Claims.Msg} {cs : List Coin} {m : Claims.Msg} (h : ((nextK keep x as cs).eval H).1 = .msg m) :
     ((next false x as cs).eval H).1 = .msg m := by
@@ -105,8 +94,6 @@ theorem decideFree_VK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) : D
     unfold nextK
     rw [act_cons_snoc false x as c₀ cs' c c' ha]
 
-/-- **Wherever `VK keep` accepts, the prover sent the rounds of the session the statement sets up against `H`**
-(`nextE_acc_length_setup`'s proof, `streams_size_plainK` at `keep`). -/
 theorem nextK_acc_length_setup (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg}
     {as : List Claims.Msg} {cs : List Coin} (hcs : cs.length = as.length) (h : ((nextK keep x as cs).eval H).1 = .acc) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Flock.Stmt) (spec' : SessionSpec) (sts' : Array Flock.Stmt),
@@ -129,7 +116,6 @@ theorem nextK_acc_length_setup (keep : Bool → Bool) (H : Claims.Msg → Claims
     simp only [List.getElem_map, List.getElem_range, Array.getElem_toList, Array.length_toList]
     exact hk k _
 
-/-- **At SHA-512, `VK keep` accepts only at its last round.** -/
 theorem accLast_VK (keep : Bool → Bool) : AccLast sha512 (VK keep) := fun x as cs hcs h => by
   obtain ⟨s, spec, sts, spec', sts', hso, hsu, hl⟩ := nextK_acc_length_setup keep sha512 hcs h
   rw [hOf_sha512, setupWith_sha512, Ins.setup_read (setupOf_some hso).2] at hsu
@@ -146,7 +132,6 @@ namespace FlockDeploy.KS
 open Flock
 open Claims (OC OCV)
 
-/-- **An accepted run of `VK keep` decides, within its own verifier log** (`accE_decide`'s proof, at `nextK keep`). -/
 theorem accK_decide (keep : Bool → Bool) {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω}
     {x : Claims.Msg} {ω : Ω} {r : Fin ((VK keep).k x) → Coin} (h : (Claims.run H P (VK keep) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,
@@ -170,8 +155,6 @@ theorem accK_decide (keep : Bool → Bool) {H : Claims.Msg → Claims.Msg} {Ω :
     · simp only [nextK, hact, outOf_log]
       exact hp
 
-/-- **A decision read through `keep`, within `L`**, at SHA-512 on a statement that sets up at `(spec, sts)`: the
-verdict read through `keep` within `L`, and the checks (`decisionE_runs`'s proof). -/
 theorem decisionK_runs (keep : Bool → Bool) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     {L : List Claims.Msg} (hs : s.setup = .ok (spec, sts))
@@ -189,7 +172,6 @@ theorem decisionK_runs (keep : Bool → Bool) {s : Ins} {spec : SessionSpec} {st
   obtain ⟨⟨⟩, h1, h2⟩ := Runs.bind h
   exact ⟨h1, Runs.lift h2⟩
 
-/-- **The verdict read through `keep` within `L` is that verdict with SHA-512 answered only within `L`.** -/
 theorem verdictK_within (keep : Bool → Bool) {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} {L : List Claims.Msg}
     (h : Runs sha512 (verifyWithMK keep Claims.Hashes.oc spec tabs record proofs) () L) :

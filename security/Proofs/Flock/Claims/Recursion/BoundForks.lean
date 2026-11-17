@@ -34,19 +34,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The recursion's KS where the inner rounds' forks bind
-
-`KS_of_flockKS_coll` (`InnerAcceptsKS.lean`) reads `CallsOpenPlayed` at two places only, `Pr_bad_le_fork` and
-`sum_opensDiffer_le`, and there only through `forkColl_of_opening`: two extractions at a fork at round `j` whose inner
-views differ at message `j` show a collision `Be` finds at that fork. `ForksBind` is that conclusion, stated as the
-premise. At option (d) the inner views' rounds before the last are the run's (`RecDeploy.ReadersRunPlayed`) and the
-last is bound by `IVStar`'s decision (`Bound.LastBindsEC`), with no `Opening` of a commit string to read, so
-`CallsOpenPlayed` has nothing to say there and `ForksBind` is proved directly.
-
-This file is the chain with `ForksBind` in place of `CallsOpenPlayed` (`Pr_bad_le_fork_binds`, `Pr_bad_le_binds`,
-`bad_rej_le_binds`, `innerKS_of_KSAbort_binds`, `KS_of_flockKS_binds`), at the same bound.
--/
+/-! The recursion's KS chain with `ForksBind` in place of `CallsOpenPlayed`, at the same bound
+(`KS_of_flockKS_binds`). -/
 
 @[expose] public section
 
@@ -58,14 +47,11 @@ section Coupling
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The inner rounds' forks bind**: at every sample of `Be`'s fork at round `j` where `E_O` gives witnesses on both
-runs and the inner views read off them differ at message `j`, `Be` finds a collision there. -/
 def ForksBind (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (j : ℕ)
     (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x × (EO D I DO decO).C x),
     OpensDiffer H D I DO decO P x j t → forkColl H D I DO decO P x j t
 
-/-- **`ForksBind` at the statement `x`**: what the bound at one statement reads of it. -/
 def ForksBindAt (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (x : Msg) :
     Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (Ω : Type) (P : Prover Ω) (j : ℕ)
@@ -76,7 +62,6 @@ theorem ForksBind.toAt {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {D
     (h : ForksBind H D I DO) (x : Msg) : ForksBindAt H D I DO x :=
   fun decO => h decO x
 
-/-- **A sample is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le_fork`, from `ForksBind`. -/
 theorem Pr_bad_le_fork_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
@@ -85,8 +70,6 @@ theorem Pr_bad_le_fork_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
   exact (Pr_bad_le_opens H D I DO decO x P).trans (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
     (Finset.sum_le_sum fun j _ => Pr_mono fun t => hFk decO x Ω P j t) (Nat.cast_nonneg _)))
 
-/-- **The inner rounds' forks cost at most `k(x)·Pr[Be]`**: they are among the compiled verifier's (`InnerRounds`),
-whose forks' collisions average to `Pr[Be]`. -/
 theorem sum_forkColl_inner_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hR : InnerRounds D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
@@ -107,7 +90,6 @@ theorem sum_forkColl_inner_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     rw [hS]
     exact mul_nonneg (Nat.cast_nonneg _) (PrBe_nonneg H D I DO decO P x)
 
-/-- **A sample is bad at most as `√(k_I·k(x)·Pr[Be])`**: `Pr_bad_le`, from `ForksBind`. -/
 theorem Pr_bad_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (hR : InnerRounds D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
@@ -117,8 +99,6 @@ theorem Pr_bad_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {
   exact (Pr_bad_le_fork_binds hFk decO x P).trans
     (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (sum_forkColl_inner_le hR decO x P) (Nat.cast_nonneg _)))
 
-/-- **Bad reruns and a rejecting judged sample together cost what `InnerKS` holds for bad reruns**: `bad_rej_le`, from
-`ForksBind`. -/
 theorem bad_rej_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (hT : CallsTrue H D I DO) (hR : InnerRounds D I) (hA : InnerAcceptsColl H D I DO)
     (hN0 : CallsNil H D) (hM : RoundsMargin H D I)
@@ -176,8 +156,6 @@ theorem bad_rej_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
     _ = NI D I x * Real.sqrt (I.V.k (xI D x) * D.V.k x * PrBe H D I DO decO P x) := by
         rw [mul_assoc, htot, hsplit]
 
-/-- **`InnerKS` from `Inner.KSAbort` where the inner rounds' forks bind**: `innerKS_of_KSAbort_coll`, from
-`ForksBind` (`bad_rej_le_binds`), at the same bound. -/
 theorem innerKS_of_KSAbort_binds [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
     (hR : InnerRounds D I) (hV : InnerViewRun H D I DO) (hT : CallsTrue H D I DO) (hL : CallsLogColl H D I DO)
@@ -207,8 +185,6 @@ section RecursionKS
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- **The recursion's KS from Flock's KS at the outer deployment and the inner protocol's KS against provers that may
-abort, where the inner rounds' forks bind**: `KS_of_flockKS_coll` with `ForksBind` for `CallsOpenPlayed`. -/
 theorem KS_of_flockKS_binds [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO)
     (hKS : I.KSAbort H) (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO)

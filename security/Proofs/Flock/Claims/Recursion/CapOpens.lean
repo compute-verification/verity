@@ -48,23 +48,8 @@ import Proofs.Flock.VBridge.Pinned
 import Proofs.Flock.VBridge.Sparse.Unit
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# RecCap's part holds round 0 as the challenger's live-coin part recorded it
-
-At `layoutBTops`, RecCap's part holds round 0 whole: port `top`'s hm96 slot at each of its `N` instances, in order
-(`capHold`). `PartOpensB` at `cmtTr recRead` asks those bytes to be the record's round 0, the challenger's live-coin part's `root_B`
-(`Record.msgs`, `link.roots`). This is that half (`cap_cmt`).
-
-* The setup runs `RecCoins.check` at RecCap, which refuses a `rec-cap/…` unit not named as `VStar.capName l N` gives
-  (`capParams_of_check`), and so runs `checkCap` at its `(l, N)` (`capCheck_of_check`): the verifier's reads have a port
-  `top` reading `rec-top-L<l>` at node `n` in instance `n`, and the table labels its instances `0` to `n - 1` in order
-  (`checkCap_ok`).
-* `RecVStar.checkTopRows` holds each table row of `top` to `topRow`'s row at its registered position
-  (`checkTopRows_rows`), and `RecCoins.checkLink` holds `root_B` to the cap's `N` nodes at level 0
-  (`root_of_checkLink`).
-* So instance `n`'s slot at `top` reads `topRow lk l n` (`capRow_bytes`), node `n` of `root_B` at level 0, and the `N`
-  slots in order are `root_B`'s nodes, the record's round 0 (`staged_reads_link`, `FlockC3.VStarList.checkReads_ok`).
--/
+/-! RecCap's part holds round 0 as the challenger's live-coin part recorded it (`cap_cmt`), so `PartOpensB` at
+`layoutBTops` reduces to the tops rounds' pieces. -/
 
 @[expose] public section
 
@@ -74,8 +59,6 @@ open Flock
 open Claims (Msg)
 open FlockDeploy (Coin)
 open Lean (Json)
-
-/-! ## RecCap's name -/
 
 theorem capName_of_params {name : String} {l N : ℕ} (h : VStar.capParams name = some (l, N)) :
     VStar.capName l N = name := by
@@ -98,7 +81,6 @@ theorem capName_startsWith (l N : ℕ) : (VStar.capName l N).startsWith "rec-cap
   rw [capName_eq]
   simp [String.startsWith_string_iff]
 
-/-- **The name `rec-cap/n<N>` or `rec-cap/n<N>-l<l>` determines `l` and `N`.** -/
 theorem capName_inj {l N l' N' : ℕ} (h : VStar.capName l N = VStar.capName l' N') : l = l' ∧ N = N' := by
   have h := congrArg String.toList h
   rw [capName_toList, capName_toList] at h
@@ -152,7 +134,6 @@ theorem stackedParams_cap (l N : ℕ) : RecCoins.stackedParams (VStar.capName l 
   rw [hs]
   rfl
 
-/-- **RecCap's name is no other V\* unit's**: none of `RecCoins.check`'s other readers reads it. -/
 theorem params_cap (l N : ℕ) :
     RecOpen.params (VStar.capName l N) = none ∧ RecResiduals.params (VStar.capName l N) = none ∧
       RecSparse.params (VStar.capName l N) = none ∧ RecCoins.stackedParams (VStar.capName l N) = none ∧
@@ -177,8 +158,6 @@ theorem params_cap (l N : ℕ) :
     | some p =>
       obtain ⟨m, c, j⟩ := p
       exact absurd (Flock.Readable.openingName_of_params hp) ((FlockC3.Compose.openingName_ne m c j).2.2.2.2 l N)
-
-/-! ## What `RecCoins.check` and `checkLink` pin at RecCap -/
 
 theorem capCheck_of_check {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
     {c3 : Option RecCoins.C3} (h : RecCoins.check st own f c3 = .ok ()) {l N : ℕ}
@@ -226,8 +205,6 @@ theorem capNamed_of_check {st : Stmt} {own : Option (Array Registered.Port)} {f 
         · cases h
         · cases h
 
-/-- **A unit `RecCoins.check` accepted under the name `capName l N` gives back `(l, N)`**: the check refuses a
-`rec-cap/…` unit `capParams` reads nothing of, and any pair it reads has the same name. -/
 theorem capParams_of_check {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
     {c3 : Option RecCoins.C3} (h : RecCoins.check st own f c3 = .ok ()) {l N : ℕ}
     (hn : st.c.unit.name = VStar.capName l N) : VStar.capParams st.c.unit.name = some (l, N) := by
@@ -238,8 +215,6 @@ theorem capParams_of_check {st : Stmt} {own : Option (Array Registered.Port)} {f
   obtain ⟨rfl, rfl⟩ := capName_inj ((capName_of_params hc).trans hn)
   exact hc
 
-/-- **`checkCap` accepting**: the verifier's reads have a port `top` reading `rec-top-L<l>` at node `i` in instance
-`i`, and the table labels its instances in order. -/
 theorem checkCap_ok {c : Circuit} {pub : Public} {own : Array Registered.Port} {l N : ℕ}
     (h : RecCoins.checkCap c pub own l N = .ok ()) :
     ∃ reg ∈ own, reg.name = "top" ∧ reg.value = s!"rec-top-L{l}" ∧ reg.reads = (Array.range N).map some ∧
@@ -267,7 +242,6 @@ theorem checkCap_ok {c : Circuit} {pub : Public} {own : Array Registered.Port} {
     simpa using hi
   · exact absurd h (Registered.throw_ne_ok _ _)
 
-/-- At level 0, `checkLink` holds the challenger's live-coin part's `root_B` to RecCap's `N` nodes. -/
 theorem root_of_checkLink {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
     {lk : RecVStar.InnerLink} (h : RecCoins.checkLink st own f (some lk) = .ok ()) {N : ℕ}
     (hc : VStar.capParams st.c.unit.name = some (0, N)) : lk.root.size = N := by
@@ -277,12 +251,9 @@ theorem root_of_checkLink {st : Stmt} {own : Option (Array Registered.Port)} {f 
   · exact hne
   · simp [hne] at h
 
-/-! ## `checkTopRows` -/
-
 theorem topLevel_top (l : ℕ) : RecVStar.topLevel s!"rec-top-L{l}" = some l :=
   FlockC3.Reps.index_pre "rec-top-L" l rfl
 
-/-- **`checkTopRowsAt` accepting**: every row `r` of the port's table is `topRow`'s row at its position. -/
 theorem checkTopRowsAt_rows {unit name value : String} {lk : RecVStar.InnerLink} {l : ℕ} {positions : Array ℕ}
     {row : ℕ → ByteArray} (h : RecVStar.checkTopRowsAt unit name value lk l positions row = .ok ()) :
     ∀ r < positions.size, ∃ wh c, RecVStar.topRow lk l (positions.getD r 0) = .ok (wh, c) ∧ row r = c := by
@@ -307,9 +278,6 @@ theorem checkTopRowsAt_rows {unit name value : String} {lk : RecVStar.InnerLink}
   · obtain ⟨_, h1, -⟩ := Registered.except_bind_ok hi
     exact absurd h1 (Registered.throw_ne_ok _ _)
 
-/-- **`checkTopRows` accepting**: at each port of the reads registering `rec-top-L<l>`, the public file is a table, the
-port is the circuit's first of its name, and each table row is `topRow`'s row at the position the port's entry gives
-it. -/
 theorem checkTopRows_rows {st : Stmt} {own : Array Registered.Port} {lk : RecVStar.InnerLink}
     (h : RecVStar.checkTopRows st (some own) (some lk) = .ok ()) {reg : Registered.Port} (hmem : reg ∈ own)
     {l : ℕ} (hl : RecVStar.topLevel reg.value = some l) :
@@ -362,8 +330,6 @@ theorem topRow_zero {lk : RecVStar.InnerLink} {n : ℕ} {wh : String} {c : ByteA
     rw [Array.getD_eq_getD_getElem?, hc', Option.getD_some]
   · cases h
 
-/-! ## RecCap's slots are the challenger's live-coin part's tops -/
-
 theorem findIdx_of_find_range {α : Type} [Inhabited α] {a : Array α} {f : α → Bool} {p : ℕ}
     (hp : (List.range a.size).find? (fun j => f a[j]!) = some p) : a.findIdx? f = some p := by
   rw [List.find?_range_eq_some] at hp
@@ -375,12 +341,7 @@ theorem findIdx_of_find_range {α : Type} [Inhabited α] {a : Array α} {f : α 
   rw [getElem!_pos a j (by omega)] at this
   simpa using this
 
-/-- **RecCap's slot at instance `n` is row `n` of its level's tops**: at a staged RecCap part `.cap l N` the witness
-checks against, port `top`'s hm96 slot at instance `n < N`, read off the witness (`hmCommit`), is `topRow lk l n`, the
-challenger's live-coin part's node `n` of `root_B` at level 0 (where `root_B` has the cap's `N` nodes) or of the reps' level-`l` tops.
-The slot is its instance's public row (`slotPub_table`); `RecCoins.check` ran `checkCap` at the unit's `(l, N)`
-(`capParams_of_check`), so `top` reads `rec-top-L<l>` at node `n` in instance `n`, whose label is `n` (`checkCap_ok`),
-and `checkTopRows` pins that row to `topRow lk l n` (`checkTopRows_rows`). -/
+/-- Port `top`'s hm96 slot at instance `n < N` is node `n` of `root_B` at level 0, or of the reps' level-`l` tops. -/
 theorem capRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {l N : ℕ}
@@ -475,8 +436,6 @@ theorem capRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   refine ⟨wh, cc, htr, ?_⟩
   rw [hsl, hrow, byteArray_toList_eq]
 
-/-! ## Round 0 is `root_B` -/
-
 theorem link_of_input {wr : RecRaw} {src : Option RecCoins.Source} {t : ByteArray} {tt record : String} {tr : Json}
     {lk : RecVStar.InnerLink} {o : Option RecVStar.InnerLink} (ht : wr.transcript = some t)
     (hrec : src.map (·.record) = some record) (htx : String.fromUTF8? t = some tt) (hp : Flock.JsonParse.parse tt = .ok tr)
@@ -490,8 +449,6 @@ theorem link_of_input {wr : RecRaw} {src : Option RecCoins.Source} {t : ByteArra
     all_goals rfl
   exact Except.ok.inj (h.symm.trans e)
 
-/-- **A staged part's transcript and link, as the verifier read them**: `staged_reads`, with the link the setup holds
-(`i.link`, `linkInputOf`) the one `checkReads` read off the same transcript and record (`RecVStar.innerLink`). -/
 theorem staged_reads_link {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) :
     ∃ (i : RecIns) (sh : RecVStar.Inner) (cs : RecVStar.InnerCommits) (tt : String) (tr : Json) (record : String)
       (r : RecRecord.Record) (lk : RecVStar.InnerLink),
@@ -545,10 +502,6 @@ theorem msgs_zero (rc : RecRecord.Record) (t : List UInt8) (nodes : List (List U
     (h : rc.roots = [(t, nodes)]) : (rc.msgs.map Prod.fst).getD 0 [] = nodes.flatten := by
   simp [RecRecord.Record.msgs, h]
 
-/-- **RecCap's part holds round 0 as the challenger's live-coin part recorded it**: at a staged part the witness checks against, what
-part `s` holds whole at round 0 at `layoutBTops` is RecCap's `N` slots at port `top` in order (`capHold`), each node `n`
-of the challenger's live-coin part's `root_B` (`capRow_bytes`), which has `N` nodes, so the record's round 0 (`Record.msgs`,
-`FlockC3.VStarList.checkReads_ok`), which is round 0 as `cmtTr recRead` reads it (`staged_reads_link`). -/
 theorem cap_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st : Stage} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {m : Msg}
@@ -583,10 +536,6 @@ theorem cap_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st 
     rw [hb, topRow_zero htop]
   · cases hseg
 
-/-! ## `PartOpensB` at `layoutBTops`, but the tops rounds' pieces -/
-
-/-- **Every round a staged part holds whole is the record's message there**: round 0 at RecCap's part (`cap_cmt`), a
-later round at its held row's part (`held_cmt`). -/
 theorem heldB_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st : Stage} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) (i : ℕ) {m : Msg}
@@ -595,10 +544,6 @@ theorem heldB_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {s
   | zero => exact cap_cmt fin hS hck hm
   | succ j => exact held_cmt fin hS hck hm
 
-/-- **`PartOpensB` at `layoutBTops` reduces to the tops rounds' pieces**: at `showsPart recRead` every round a part
-holds whole is the record's (`heldB_cmt`), and before the last round only a stream round that commits tops has pieces
-(`stepPieces`, `topsPieces`). So `PartOpensB` holds wherever each such piece of a staged part reads the record's
-message at its offset. -/
 theorem partOpensB_layoutBTops (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (b : Brings)
     {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop} {s : ℕ}
     (hP : ∀ (x : Msg) st, D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Claims.Flock.Wit),

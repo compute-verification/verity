@@ -38,23 +38,8 @@ import Proofs.Flock.Claims.Recursion.DeployHonest
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.OpensReads
 
-/-!
-# The challenger's live-coin part's round the coin tie names is the only one of its stream and round number
-
-`CoinTie` gives, for each round `m` of rep `r`'s coins as check 5 loads them, a round `g` of the challenger's live-coin part's record
-`R` of that rep's stream at round `sp m` whose coins they are. Check 5's verdict reads the inner session's rounds by
-stream and position, so a consumer of the tie that pins `g` by its stream and round number needs `g` to be the only
-such round of `R`. This file proves that from what the verifier checks, with no premise:
-
-* `RecSetup.checkReads` holds `R`'s rounds, in order, to the transcript JSON's (`jsonRounds_both`), so two rounds of
-  `R` with one stream and round number are two such rounds of the JSON;
-* `RecVStar.innerCommits` checks that the JSON's rounds of each stream the inner record names, sorted by round number
-  (`transcriptRounds`, a `qsort` of a `filter`, so a permutation of them), number `0 … n-1` (`repCoins_places`), so
-  there is at most one at each number (`count_le_one`).
-
-`coinTie_unique` is that in the verifier's code, and `staged_coinTie_unique` and `staged_coinTie_sampled_unique` are
-`staged_coinTie` and `staged_coinTie_sampled` with each round `g` unique.
--/
+/-! The coin tie's round of the challenger's live-coin part is the only one of its stream and round number, from the
+verifier's checks with no premise (`coinTie_unique`). -/
 
 @[expose] public section
 
@@ -95,14 +80,10 @@ theorem two_le_countP {α : Type} {p : α → Bool} :
     rw [List.countP_cons]
     split <;> omega
 
-/-- A transcript JSON round's round number is `κ`. -/
 def kIs (κ : Nat) (x : Json) : Bool := (x.getObjValAs? Nat "k").toOption == some κ
 
-/-- A transcript JSON round's stream is `s`. -/
 def streamIs (s : String) (x : Json) : Bool := (x.getObjValAs? String "stream").toOption == some s
 
-/-- **At most one of the transcript JSON's rounds has a checked stream and a given round number**: `innerCommits`
-numbers that stream's rounds `0 … n-1` (`repCoins_places`), and they are its rounds, permuted (`qsort_perm`). -/
 theorem count_le_one {name : String} {rounds streams : Array Json} (h : CoinsAgree name rounds streams) (κ : Nat) :
     rounds.toList.countP (fun x => kIs κ x && streamIs name x) ≤ 1 := by
   obtain ⟨cc, hcc, -⟩ := h
@@ -123,8 +104,6 @@ theorem count_le_one {name : String} {rounds streams : Array Json} (h : CoinsAgr
   rw [hc, List.count_range]
   split <;> omega
 
-/-- **Two rounds of `R` of a checked stream with one round number are one round**, where `R`'s rounds are the
-transcript JSON's, round for round (`jsonRounds_both`). -/
 theorem stream_unique {name : String} {rounds streams : Array Json} {R : RecRecord.Record}
     (hagree : CoinsAgree name rounds streams)
     (hBoth : Pairs (fun x y => ∃ coins, (RecVStar.coinsOf x).toList.mapM f128OfHex = .ok coins ∧
@@ -155,8 +134,6 @@ theorem stream_unique {name : String} {rounds streams : Array Json} {R : RecReco
   have h1 := count_le_one hagree R.rounds[g].k
   omega
 
-/-- **The coin tie's rounds are unique, in the verifier's code**: under `coinTie_core`'s checks, the record `R` that
-`checkReads` reads has at most one round of the decoded record's stream `name` at each round number. -/
 theorem coinTie_unique {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option RecVStar.StackedShape} {cs : RecVStar.InnerCommits} {ish : RecVStar.Inner} {tt : String}
     {spec : SessionSpec} {sess : RunRecord} {name : String} {st : StreamRec}
@@ -187,10 +164,6 @@ theorem coinTie_unique {tr : Json} {record : String} {reg : Option Json} {bound 
     stream_unique (hall name hmem) (jsonRounds_both hrounds hJR) hg hg' hs hs' hk⟩
 
 
-/-! ## At a staged part -/
-
-/-- **`staged_coinTie`, with each round unique**: the round `g` of `R` that holds rep `r`'s round `m`'s coins is the
-only round of `R` of its stream at its round number. -/
 theorem staged_coinTie_unique {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) :
     ∃ (i : RecIns) (R : Flock.RecRecord.Record), insO xO = some i ∧
       shownOf recRead x xO = some (R.msgs.map fun mc => (mc.1, mc.2.toArray)) ∧
@@ -233,8 +206,6 @@ theorem staged_coinTie_unique {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPa
   obtain ⟨g, hg, h1, h2, h3⟩ := hall m (by simpa using hm)
   exact ⟨g, hg, h1, h2, by simpa using h3, fun g' hg' hs hk => huniq g g' hg hg' h1 (hs.trans h1) hk⟩
 
-/-- **`staged_coinTie_sampled`, with each round unique**: the inner round `g + 1` whose coin drew rep `r`'s round `m`'s
-coins is the only round of `R` of its stream at its round number. -/
 theorem staged_coinTie_sampled_unique {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
     (hc : showsTr recRead s x xO c) :
     ∃ (i : RecIns) (R : Flock.RecRecord.Record), insO xO = some i ∧

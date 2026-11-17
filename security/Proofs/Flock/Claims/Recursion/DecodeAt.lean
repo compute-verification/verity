@@ -55,24 +55,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.VBridge.Family.Lig
 
-/-!
-# The record the verdict reads decodes, at a decision of `nextR`
-
-At a dense inner statement where the last step reads and the base checks hold, the record value the verdict reads
-(`jAt`) decodes at the setup SHA-512 gives (`decode_at`, `TargetDecode` with `At` unfolded), with no JSON
-premise: the verifier keeps the public header and the sample normalized, so both are well-formed (`unitSample_of`,
-`sample_wf`), and the statement's coin tree is its coins' (`setupOne_stmt`), none at `.seed` (`tree?_none`). `jAt` is the reader's record (`recJ`) with its digests and coins
-substituted, so it is alike the honest record whose rounds hold the fill's coins (`same_coinSubJ`, with the fill finding
-a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-table statement decodes
-(`decodeJ_same`). What `decodeJ_same` asks:
-
-* **The statement** (`dense_stmt`): one table, no coin tree, a non-empty Σ, a printable sample that decodes to the
-  statement's instances, two link points, at most 1024 regions, and a `fast100` schedule.
-* **The link's `root_B`** is round 0's level-0 nodes joined, which the first proof's cap is, so it is non-empty (the
-  `shaped` base check).
-* **The streams** (`repSchedAt_bounds`): rep `k`'s rounds are its schedule's, which has a round, each of between 1
-  and 65536 coins.
--/
+/-! The record the verdict reads decodes at a decision of `nextR`, with no JSON premise (`decode_at`). -/
 
 @[expose] public section
 
@@ -86,8 +69,6 @@ open FlockDeploy (Coin FinalP ReadOkR holdsR liveOfJ coinSubJ pointsOf tabsOf sh
   recStreams)
 open FlockComplete.JsonRT (SampleOk)
 
-/-! ## Bytes -/
-
 theorem foldl_append_size : ∀ (l : List ByteArray) (a : ByteArray),
     (l.foldl (· ++ ·) a).size = a.size + (l.map ByteArray.size).sum
   | [], a => by simp
@@ -99,17 +80,12 @@ theorem le_sum_of_mem' : ∀ {l : List ℕ} {a : ℕ}, a ∈ l → a ≤ l.sum
   | _ :: _, _, .head _ => by rw [List.sum_cons]; omega
   | _ :: _, _, .tail _ h => by rw [List.sum_cons]; have := le_sum_of_mem' h; omega
 
-/-- Bytes joined from a list holding a non-empty one are non-empty. -/
 theorem foldl_append_pos {l : List ByteArray} {b : ByteArray} (hb : b ∈ l) (h : 0 < b.size) :
     0 < (l.foldl (· ++ ·) ByteArray.empty).size := by
   rw [foldl_append_size]
   have := le_sum_of_mem' (List.mem_map.2 ⟨b, hb, rfl⟩ : b.size ∈ l.map ByteArray.size)
   omega
 
-/-! ## The statement -/
-
-/-- **The inner statement is sampled**: the plain verifier sets an inner statement the reader accepts up at a sample
-(`checkForm_ok`: a sample of every one of the files' units). -/
 theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true)
     {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : FlockDeploy.setupOf false r.w.inner = some (s, spec, sts)) : s.read.draw.isSome = true := by
@@ -146,9 +122,6 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
   rw [hd9, ← hm]
   rfl
 
-/-- **What the record needs of a dense inner statement**: the plain verifier sets it up as one table, with no coin
-tree, a non-empty Σ, a printable sample that decodes to its instances, two link points, at most 1024 regions and a
-`fast100` schedule. -/
 theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.CompiledStatement}
     (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : FlockDeploy.setupOf false (xIOf xo) = some (s, spec, sts)) :
@@ -213,10 +186,6 @@ theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.CompiledStatement}
   · rw [hU]
     exact hg
 
-/-! ## The schedule -/
-
-/-- **A rep's schedule at a `fast100` table**: it has a round, and each round counts between 1 and 65536 coins, at
-a claim count of at most 65536. -/
 theorem repSchedAt_bounds {spec : SessionSpec} {st : Stmt} (hf : (fast100 st.m).isSome)
     (hc : 2 + spec.points * st.regions.size ≤ 65536) :
     0 < (RecDeploy.repSchedAt spec st).length ∧
@@ -258,10 +227,6 @@ theorem repSchedAt_bounds {spec : SessionSpec} {st : Stmt} (hf : (fast100 st.m).
     · exact hHb x h
     · exact hTb x h
 
-/-! ## The decode -/
-
-/-- **The record the verdict reads decodes** at a decision at a dense inner statement where the last step reads and
-the base checks hold, at the setup SHA-512 gives. -/
 theorem decode_jAt {rd : Msg → Option FinalP} {x : Msg}
     {ms : List Msg} {cs : List Coin} {xo : Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hr : ReadOkR rd x ms cs)
@@ -385,8 +350,6 @@ theorem decode_jAt {rd : Msg → Option FinalP} {x : Msg}
   rw [streamOffset_shaSubJ]
   exact fill_of_live hnd hlv i hi hS k hk
 
-/-- **`TargetDecode`** (`At` unfolded): at a dense inner statement where the last step reads and the base
-checks hold, a decision's record value the verdict reads decodes at the setup SHA-512 gives. -/
 theorem decode_at (rd : Msg → Option FinalP)
     (P : Msg → List Msg → List Coin → Prop) :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin),

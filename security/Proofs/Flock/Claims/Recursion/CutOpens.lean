@@ -33,13 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `finalR`'s cut over openings laid row then salt, and commit strings laid end to end
-
-The layout-free half of `OpensSlots`: where the openings `finalR` reads are each a row then its 192-byte salt, laid
-round after round, `cutRounds` at their rows' lengths gives back each round's rows and salts (`cutRounds_groups`); and
-where a round's message is 128-byte commit strings end to end, `commitAt` reads the `i`-th (`commitAt_flatten`).
--/
+/-! The layout-free half of `OpensSlots`: `finalR`'s cut over openings laid row then 192-byte salt, and 128-byte commit
+strings laid end to end. -/
 
 @[expose] public section
 
@@ -49,7 +44,6 @@ open Claims (Msg)
 
 theorem saltBytes_eq : Flock.Hm96.sha512.saltBytes = 192 := rfl
 
-/-- **One round's cut gives back its rows and salts**, each row then its 192-byte salt, laid end to end. -/
 theorem cutRound_pairs (rest : Msg) : ∀ l : List (Msg × Msg), (∀ p ∈ l, p.2.length = 192) →
     DeployedR.cutRound (l.map (·.1.length)) (l.flatMap (fun p => p.1 ++ p.2) ++ rest) =
       some (l.map fun p => (p.1, DeployedR.saltOf p.2), rest)
@@ -65,7 +59,6 @@ theorem cutRound_pairs (rest : Msg) : ∀ l : List (Msg × Msg), (∀ p ∈ l, p
     simp only [hc, ↓reduceIte]
     rfl
 
-/-- **Every round's cut gives back each round's rows and salts**, the rounds laid one after another. -/
 theorem cutRounds_groups (rest : Msg) : ∀ L : List (List (Msg × Msg)), (∀ l ∈ L, ∀ p ∈ l, p.2.length = 192) →
     DeployedR.cutRounds (L.map fun l => l.map (·.1.length)) (L.flatMap (·.flatMap fun p => p.1 ++ p.2) ++ rest) =
       some (L.map fun l => l.map fun p => (p.1, DeployedR.saltOf p.2), rest)
@@ -75,7 +68,6 @@ theorem cutRounds_groups (rest : Msg) : ∀ L : List (List (Msg × Msg)), (∀ l
       cutRound_pairs (L.flatMap (·.flatMap fun p => p.1 ++ p.2) ++ rest) l (h l List.mem_cons_self), Option.bind_some,
       cutRounds_groups rest L fun l' hl' => h l' (List.mem_cons_of_mem _ hl'), Option.map_some]
 
-/-- **The `i`-th of 128-byte commit strings laid end to end** is what `commitAt` reads at `i`. -/
 theorem commitAt_flatten : ∀ (l : List Msg), (∀ m ∈ l, m.length = 128) → ∀ i (hi : i < l.length),
     Claims.Recursion.VStarB.commitAt l.flatten i = l[i]
   | [], _, _, hi => absurd hi (by simp)

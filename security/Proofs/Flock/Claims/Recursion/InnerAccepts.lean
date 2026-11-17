@@ -40,29 +40,8 @@ import Proofs.Flock.Claims.Recursion.Cost
 import Proofs.Flock.Claims.Recursion.InnerAbort
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# `InnerAccepts` at the inner shapes
-
-`InnerAccepts` (`Recursion/Inner.lean`) is the code fact that wherever `E_O` gives witnesses on an accepted run, the
-inner view read off them is accepted. This file reduces it to what V*'s circuits compute, at each inner shape the
-recursion's claims cover, read off the compiled verifier's own inner shape (`Form`): dense (`Form.Dense`: public inner
-units, no sparse phase; `PublicAudit`'s), holo (`Form.Holo`: private inner circuits; `RecursiveAuditHolo`'s) and sparse
-(`Form.Sparse`: public inner units with candidate 3's RecSparse phase). The three cover every form
-(`Form.shape_cases`), so no statement falls outside them.
-
-* `E_O` gives only witnesses in the outer Flock's relation at the run's V* statements (`eoGives_outerHolds`): each
-  session's `E^rep` returns only a candidate `Flock.check` accepts at its statement, served or not.
-* `VStarAcceptsExact shape`: V*'s circuits compute the inner verifier at that shape: on an accepted run of a statement
-  of the shape, witnesses in the outer relation at its V* statements give an accepted inner view. With `Refuses`, the
-  three shapes' give `InnerAccepts` (`innerAccepts_of_vstar`).
-* `VStarAccepts shape`: the same, or two of the witnesses' recorded calls collide. V*'s parts, and the units within a
-  part, each open the inner session's commit strings themselves, so two openings of one commit string, a SHA-512
-  collision, can pass every part while no one inner transcript is accepted; at SHA-512 this is the form V* can meet.
-  With `Refuses`, the three shapes' give `InnerAcceptsColl` (`innerAcceptsColl_of_vstar`), and where `InnerAcceptsColl`
-  holds, an accepted run whose `E_O` witnesses give a rejected inner view is a collision `Be` finds at every fork
-  (`Pr_innerRejects_le_fork`), so it costs at most `Pr[Be]` (`Pr_innerRejects_le`). `InnerAcceptsKS.lean` carries
-  `InnerKS` over it at the same `γ_eA`.
--/
+/-! `InnerAccepts` from what V\*'s circuits compute at the dense, holo and sparse inner shapes, which cover every form
+(`innerAccepts_of_vstar`, `innerAcceptsColl_of_vstar`). -/
 
 @[expose] public section
 
@@ -70,25 +49,17 @@ namespace Claims.Recursion
 
 open Claims
 
-/-! ## The inner shapes -/
-
 /-- **Dense**: public inner units and no sparse phase (`PublicAudit`'s inner protocol). -/
 def Form.Dense (f : Form) : Prop := f.holo = false ∧ f.sparse = none
 
-/-- **Holo**: private inner circuits (`RecursiveAuditHolo`'s inner protocol). -/
 def Form.Holo (f : Form) : Prop := f.holo = true
 
-/-- **Sparse**: public inner units with candidate 3's RecSparse phase. -/
 def Form.Sparse (f : Form) : Prop := f.holo = false ∧ f.sparse.isSome = true
 
-/-- **The three shapes cover every form.** -/
 theorem Form.shape_cases (f : Form) : f.Dense ∨ f.Holo ∨ f.Sparse := by
   rcases f with ⟨m, kLog, regions, claims, holo, sparse, stacked, u⟩
   cases holo <;> cases sparse <;> simp [Form.Dense, Form.Holo, Form.Sparse]
 
-/-! ## `E_O`'s witnesses are in the outer relation -/
-
-/-- `collect` returns, in order, what each of its programs returned. -/
 theorem collect_some {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     ∀ (ps : List (RP R (Option α))) (as : List α), ((collect ps).eval H run).1 = some as →
       List.Forall₂ (fun p a => (p.eval H run).1 = some a) ps as
@@ -115,7 +86,6 @@ theorem stepWith_acc_pos {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg)
   | 0, _, _, _, h => by simp [stepWith] at h
   | _ + 1, _, _, _, _ => Nat.succ_pos _
 
-/-- **A verifier that takes no rounds accepts no run.** -/
 theorem run_acc_pos {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg)
     (ω : Ω) (r : Fin (V.k x) → Coin) (h : (run H P V x ω r).out = .acc) : 0 < V.k x :=
   stepWith_acc_pos H P x ω _ _ _ _ _ h
@@ -129,14 +99,9 @@ def runVstar (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) {Ω : Type} 
     (r : Fin (D.V.k x) → Coin) : List Msg :=
   D.vstar x ((run H P D.V x ω r).msgs.take (I.V.k (xI D x) + D.kS x))
 
-/-- **The outer witnesses are in the outer Flock's relation at the V\* statements `xs`**: `n` of them, each accepted
-by `Flock.check` at its session's statement. -/
 def OuterHolds (DO : Flock.Deploy Coin Col T) (xs : List Msg) (n : ℕ) (ws : List Flock.Wit) : Prop :=
   ws.length = n ∧ ∀ (s : ℕ) (h : s < ws.length), Flock.check DO.parse (xs.getD s []) ws[s] = true
 
-/-- **`E_O` gives only witnesses in the outer relation at the run's V\* statements**: one per session, each the
-candidate its session's `E^rep` returned, which `Flock.check` accepted (`firstWait_some`, through the serving,
-`RP.serve_eval`). -/
 theorem eoGives_outerHolds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {x : Msg} {Ω : Type} {P : Prover Ω} {ω : Ω} {r : Fin (D.V.k x) → Coin}
     {c : (EO D I DO decO).C x} {ws : List Flock.Wit} (h : EOGives H D I DO decO P x ω r c ws) :
@@ -152,23 +117,14 @@ theorem eoGives_outerHolds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
   rw [serve_eq, (RP.serve_eval H _ _ _).1] at h1
   exact firstWait_some H _ _ _ _ _ _ _ h1
 
-/-! ## V*'s circuits compute the inner verifier -/
-
-/-- **V\*'s circuits compute the inner verifier at the inner shape `shape`, exactly** (a code fact about V*'s
-circuits, the compiled verifier's V* statements and the readers its inner view reads): on an accepted run of a statement
-whose form has the shape, outer witnesses in the outer Flock's relation at the run's V* statements give an accepted
-inner view. -/
 def VStarAcceptsExact (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (shape : Form → Prop) : Prop :=
   ∀ (x : Msg) (s : CompiledStatement), D.parse x = some s → shape s.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ ws, OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws → (D.innerView H x r ws).out = .acc
 
-/-- **V\*'s circuits compute the inner verifier at the inner shape `shape`, off a collision** (a code fact about V*'s
-circuits, the compiled verifier's V* statements and the readers its inner view reads): on an accepted run of a statement
-whose form has the shape, outer witnesses in the outer Flock's relation at the run's V* statements, whose recorded
-calls are true evaluations, give an accepted inner view, or two of their recorded calls are a collision, which
-`findColl` finds. -/
+/-- V\*'s parts each open the inner session's commit strings themselves, so a SHA-512 collision can pass every part with
+no one inner transcript accepted; at SHA-512 this is the form V\* can meet. -/
 def VStarAccepts (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (shape : Form → Prop) : Prop :=
   ∀ (x : Msg) (s : CompiledStatement), D.parse x = some s → shape s.form →
@@ -181,8 +137,6 @@ theorem VStarAcceptsExact.toColl {H : Msg → Msg} {D : Deploy Coin} {I : Inner 
     {shape : Form → Prop} (h : VStarAcceptsExact H D I DO shape) : VStarAccepts H D I DO shape :=
   fun x s hs hf Ω P ω r hacc ws ho _ => Or.inl (h x s hs hf Ω P ω r hacc ws ho)
 
-/-- **`InnerAccepts` off a collision** (a code fact): wherever `E_O` gives witnesses on an accepted run, the inner view
-read off them is accepted, or two of the witnesses' recorded calls are a collision. -/
 def InnerAcceptsColl (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
     (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
@@ -192,8 +146,8 @@ theorem InnerAccepts.toColl {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin 
     (h : InnerAccepts H D I DO) : InnerAcceptsColl H D I DO :=
   fun decO x Ω P ω r c ws hg => Or.inl (h decO x Ω P ω r c ws hg)
 
-/-- **`InnerAcceptsColl` at the statement `x`**: the bound at one statement reads `InnerAcceptsColl` only there, so a
-bound scoped to statements of one shape needs V*'s circuits only at that shape. -/
+/-- The bound at one statement reads `InnerAcceptsColl` only there, so a bound scoped to statements of one shape needs
+V\*'s circuits only at that shape. -/
 def InnerAcceptsCollAt (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (x : Msg) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
@@ -204,9 +158,6 @@ theorem InnerAcceptsColl.toAt {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     (h : InnerAcceptsColl H D I DO) (x : Msg) : InnerAcceptsCollAt H D I DO x :=
   fun decO => h decO x
 
-/-- **`InnerAccepts` from V\*'s circuits at the three inner shapes**: an accepted run's statement parses (`Refuses`),
-its form is dense, holo or sparse (`Form.shape_cases`), and `E_O`'s witnesses are in the outer relation at the run's V*
-statements (`eoGives_outerHolds`). -/
 theorem innerAccepts_of_vstar {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hRef : Refuses H D) (hD : VStarAcceptsExact H D I DO Form.Dense) (hH : VStarAcceptsExact H D I DO Form.Holo)
     (hS : VStarAcceptsExact H D I DO Form.Sparse) : InnerAccepts H D I DO := by
@@ -218,8 +169,6 @@ theorem innerAccepts_of_vstar {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
   · exact hH x s hs hf Ω P ω r hg.1 ws ho
   · exact hS x s hs hf Ω P ω r hg.1 ws ho
 
-/-- **`InnerAcceptsColl` from V\*'s circuits at the three inner shapes, off a collision**: as `innerAccepts_of_vstar`,
-the witnesses' recorded calls true evaluations by `CallsTrue`. -/
 theorem innerAcceptsColl_of_vstar {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hRef : Refuses H D) (hT : CallsTrue H D I DO) (hD : VStarAccepts H D I DO Form.Dense)
     (hH : VStarAccepts H D I DO Form.Holo) (hS : VStarAccepts H D I DO Form.Sparse) : InnerAcceptsColl H D I DO := by
@@ -232,8 +181,6 @@ theorem innerAcceptsColl_of_vstar {H : Msg → Msg} {D : Deploy Coin} {I : Inner
   · exact hH x s hs hf Ω P ω r hg.1 ws ho ht
   · exact hS x s hs hf Ω P ω r hg.1 ws ho ht
 
-/-- **`InnerAcceptsColl` at a dense statement from V\*'s circuits at the dense shape**: an accepted run's statement
-parses (`Refuses`), and at `x` every parse is dense. -/
 theorem innerAcceptsCollAt_of_dense {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} (hRef : Refuses H D) (hT : CallsTrue H D I DO)
     (hD : VStarAccepts H D I DO Form.Dense) {x : Msg} (hx : ∀ s, D.parse x = some s → s.form.Dense) :
@@ -242,10 +189,6 @@ theorem innerAcceptsCollAt_of_dense {H : Msg → Msg} {D : Deploy Coin} {I : Inn
   obtain ⟨s, hs, -⟩ := hRef x Ω P ω r hg.1
   exact hD x s hs (hx s hs) Ω P ω r hg.1 ws (eoGives_outerHolds hg) (hT decO x Ω P ω r c ws hg)
 
-/-! ## The collision's cost -/
-
-/-- **An accepted run whose inner view rejects**, at the tape, the compiled verifier's coins and `E_O`'s: `E_O` gives
-witnesses there, and the inner view read off them is not accepted. -/
 def InnerRejects (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg)
     (t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Prop :=
@@ -263,9 +206,6 @@ theorem unifMap_judged {Ω R C : Type} [Fintype Ω] [Fintype R] [Fintype C] [Non
     simp only [Ex_const]
   exact (UnifMap.equiv e).comp hfst
 
-/-- **A rejected inner view is a collision at every fork**: where `InnerAcceptsColl` holds, it is a collision among the
-judged run's recorded calls, which `Be`'s fork at any round `j` records as well (`findColl_isSome_of_sub`; every call
-`Be` reads is a true evaluation, by `CallsTrue` and `CallsNil`). -/
 theorem Pr_innerRejects_le_fork_at {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {x : Msg} (hA : InnerAcceptsCollAt H D I DO x) (hT : CallsTrue H D I DO)
     (hN0 : CallsNil H D) (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω] (P : Prover Ω) (j : ℕ) :
@@ -295,8 +235,6 @@ theorem Pr_innerRejects_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner C
     Pr (InnerRejects H D I DO decO P x) ≤ Pr (forkColl H D I DO decO P x j) :=
   Pr_innerRejects_le_fork_at (hA.toAt x) hT hN0 decO P j
 
-/-- **A rejected inner view costs at most `Pr[Be]`**: it is a collision at each of `Be`'s forks
-(`Pr_innerRejects_le_fork`), and `Be` averages its forks. -/
 theorem Pr_innerRejects_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hA : InnerAcceptsColl H D I DO) (hT : CallsTrue H D I DO) (hN0 : CallsNil H D)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :

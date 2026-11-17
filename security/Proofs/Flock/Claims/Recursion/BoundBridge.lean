@@ -43,40 +43,14 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The bridge at the bound record (option (d))
-
-`Claims.Recursion.Bridge`: `Inner.KSAbort` at `IVStar` (`Bound.deploy`) from `Inner.KSAbort` at the element-level Flock
-`DE`, where the commit strings bind (`Bound.Binds`) and `γ`'s weight covers the loss (`Bound.WeightCovers`).
-
-From a prover `P` against `IVStar` and its aborts `keep`, the plurality prover (`Bound.plurP`) plays `DE`: at each round,
-on the coins so far (`IVStar` is public-coin), it sends the element-level message that `IVStar`'s accepted continuations
-of those coins open most often there (`Bound.plurAt`). Its run is kept where `P`'s run against `IVStar` accepts and opens
-the plurality at every round (`Bound.plurKeep`); there it is `P`'s run opened (`Bound.plurRun`), so `E^rep` at `DE`
-sees what `E^rep` at `IVStar` sees, off the runs that open otherwise (`Bound.BadA`). So:
-
-* `E^rep` at `IVStar` fails at most as `E^rep` at `DE` fails against the plurality prover's aborting runs, plus `N_I`
-  times one run's chance to be bad (`Bound.PrBadAbort_le`, Wald's identity at `E^rep`'s reruns);
-* `B` at the plurality prover's aborting runs finds only collisions `B` at `P`'s finds (`Bound.PrBAbort_le`): a kept
-  run's calls are among `P`'s run's;
-* a run is bad at most as `k_I · √Pr[B]` (`Bound.Pr_badA_le`): off the plurality at round `j` at most as
-  `√(Pr[two runs forked at j open round j differently])` (`Pr_plur_fork`), and two accepted runs that share their
-  coins before `j` and open round `j` differently open one commit string two ways (`Bound.fork_tied`), a collision
-  `B`'s fork at `j` finds; the rounds' roots sum to at most `k_I · √Pr[B]` (Cauchy–Schwarz);
-* `WeightCovers` turns `N_I · k_I · √Pr[B]` into the difference of `√γ` at the two records (`Bound.bridge_of_dec`).
-
-At the deployed bound record `ans` is a coin's bytes, which a decoder inverts, so the bridge holds there at every
-choice the code side makes (`RecDeploy.bridge_bdDeployed`), which `KSBoundRouteCols`' route takes
-(`RecDeploy.ksBoundRoute_of_bridge_cols`); no theorem takes it at the deployed outer relation.
--/
+/-! The bridge at the bound record (option (d)), `Inner.KSAbort` at `IVStar` from `Inner.KSAbort` at `DE` through the
+plurality prover; no theorem takes it at the deployed outer relation. -/
 
 @[expose] public section
 
 namespace Claims.Recursion
 
 open Claims
-
-/-! ## Oracle programs -/
 
 theorem eval_bindOC_full (H : Msg → Msg) {α β : Type} (p : OC α) (f : α → OC β) :
     OC.eval H (bindOC p f) =
@@ -85,7 +59,6 @@ theorem eval_bindOC_full (H : Msg → Msg) {α β : Type} (p : OC α) (f : α �
   | ret a => simp [bindOC, OC.eval]
   | query q k ih => simp only [bindOC, OC.eval, ih, List.cons_append]
 
-/-- **Programs in order all return `true`**: each does, its calls among theirs. -/
 theorem allOC_true (H : Msg → Msg) : ∀ (ps : List (OC Bool)), ((allOC ps).eval H).1 = true →
     ∀ p ∈ ps, (p.eval H).1 = true ∧ ∀ e ∈ (p.eval H).2, e ∈ ((allOC ps).eval H).2
   | [], _, _, hq => by simp at hq
@@ -101,8 +74,6 @@ theorem allOC_true (H : Msg → Msg) : ∀ (ps : List (OC Bool)), ((allOC ps).ev
         exact ⟨h1, fun e he => List.mem_append_right _ (h2 e he)⟩
     · rw [ite_eq_right hb] at h
       simp [OC.eval] at h
-
-/-! ## Lists -/
 
 theorem getD_range_map {α : Type} (f : ℕ → α) (d : α) {j k : ℕ} (h : j < k) :
     ((List.range k).map f).getD j d = f j := by
@@ -127,10 +98,6 @@ theorem zip_range_map {β : Type} (l : List Msg) (g : ℕ → β) {k : ℕ} (h :
   simp only [List.getElem_zip, List.getElem_map, List.getElem_range]
   rw [List.getD_eq_getElem _ _ (by simp at h2; omega)]
 
-/-! ## Replayed runs -/
-
-/-- **Replaying a prover's own messages gives its messages, its verifier's calls and its decision**: at each round the
-replayed message is the prover's, so the verifier answers alike. -/
 theorem stepWith_replay_same {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (vn : List Msg → OC Out) (ms : List Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t t' : Transcript), hist.length = t.msgs.length →
@@ -164,7 +131,6 @@ theorem stepWith_replay_same {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : 
     · simp [stepWith, e1, hv, hm, hvl]
     · simp [stepWith, e1, hv, hm, hvl]
 
-/-- **Replaying a run's own messages gives its messages, its verifier's calls and its decision.** -/
 theorem run_replay_same {C : Type} [Inhabited C] {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (V : Verifier C)
     (x : Msg) (ω : Ω) (r : Fin (V.k x) → C) :
     (run H (replay ((run H P V x ω r).msgs.map Prod.fst)) V x () r).msgs = (run H P V x ω r).msgs ∧
@@ -172,9 +138,6 @@ theorem run_replay_same {C : Type} [Inhabited C] {Ω : Type} (H : Msg → Msg) (
       (run H (replay ((run H P V x ω r).msgs.map Prod.fst)) V x () r).out = (run H P V x ω r).out :=
   stepWith_replay_same H P x ω _ _ (V.k x) [] [] _ _ rfl rfl rfl fun _ _ _ => rfl
 
-/-- **Replaying messages to a verifier whose answers are known**: a message at each round before the last and
-acceptance at the last, so the run plays every round and accepts, its messages the replayed ones with those answers and
-its calls the verifier's at each prefix. -/
 theorem stepWith_replay_known (H : Msg → Msg) (x : Msg) (vn : List Msg → OC Out) (ms : List Msg) (k : ℕ)
     (b : ℕ → Out) (hv : ∀ j < k, ((vn ((List.range (j + 1)).map fun i => ms.getD i [])).eval H).1 = b j)
     (hb : ∀ j, j + 1 < k → ∃ m, b j = .msg m) (hlast : b (k - 1) = .acc) :
@@ -221,8 +184,6 @@ theorem stepWith_replay_known (H : Msg → Msg) (x : Msg) (vn : List Msg → OC 
     · simp only [hp, has, hvL, List.length_append, List.length_singleton, List.append_assoc, List.range'_succ,
         List.map_cons, List.flatten_cons, List.singleton_append, List.append_nil]
 
-/-- **A replayed run at known answers, in closed form**: it plays every round, answered as known, accepts, and its
-calls are the verifier's at the prefixes. -/
 theorem run_replay_known {C : Type} [Inhabited C] (H : Msg → Msg) (V : Verifier C) (x : Msg) (ms : List Msg)
     (r : Fin (V.k x) → C) (b : ℕ → Out) (hk : 0 < V.k x)
     (hv : ∀ j < V.k x, ((V.next x ((List.range (j + 1)).map fun i => ms.getD i [])
@@ -246,8 +207,6 @@ theorem run_replay_known {C : Type} [Inhabited C] (H : Msg → Msg) (V : Verifie
   obtain ⟨l, hl, hel⟩ := List.mem_flatten.1 he
   obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hl
   exact ⟨j, List.mem_range.1 hj, by simpa using hel⟩
-
-/-! ## `E^rep` at two openings -/
 
 theorem waitAcc_rel₂ {R Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Transcript) (opens₁ opens₂ : Seen → List Op) (k : ℕ)
     (h : ∀ r, ((run₁ r).seen.out = .acc ↔ (run₂ r).seen.out = .acc) ∧
@@ -289,8 +248,6 @@ theorem firstWait_rel₂ {R W Op : Type} (H : Msg → Msg) (run₁ run₂ : R �
       · exact firstWait_rel₂ H run₁ run₂ opens₁ opens₂ k assemble check h rss
     · exact firstWait_rel₂ H run₁ run₂ opens₁ opens₂ k assemble check h rss
 
-/-- **`E^rep` at two openings of two runs gives one result** where the runs accept alike and, where they accept, open
-alike. -/
 theorem erep_rel₂ {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Transcript) (m k K : ℕ) (opens₁ opens₂ : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (d₀ : D) (ρ : Fin m → Fin K → D)
     (h : ∀ r, ((run₁ r).seen.out = .acc ↔ (run₂ r).seen.out = .acc) ∧
@@ -304,8 +261,6 @@ theorem erep_rel₂ {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Tra
   · rw [ite_eq_right hv, ite_eq_right fun h' => hv ((h d₀).1.2 h')]
     rfl
 
-/-- **An event at some sample `E^rep` reruns at is at most `1 + m·k` times as likely as at one sample** (Wald's identity at
-the event's indicator as the weight), over a tape, the judged sample and the waits' samples. -/
 theorem Pr_exists_rerun_samples {D W Op : Type} [Fintype D] [Nonempty D] {Ω : Type} [Fintype Ω] (H : Msg → Msg)
     (run : Ω → D → Transcript) (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool)
     (Q : Ω → D → Prop) :
@@ -343,8 +298,6 @@ theorem Pr_exists_rerun_samples {D W Op : Type} [Fintype D] [Nonempty D] {Ω : T
     _ ≤ Ex fun ω => (1 + m * k) * Ex (w ω) := Ex_mono fun ω => erepProg_cost_exp H _ (hw ω) _ _ _ _ _ _
     _ = (1 + m * k) * Pr (fun t : Ω × D => Q t.1 t.2) := by rw [Ex_mul_left, hPr]
 
-/-- **The weight's margin pays the bridge's loss**: in `γ = 16·(√(2·k·C) + k)²`, `√(γ·β)` grows by
-`4·√(2k)·(√C' − √C)·√β` from `C` to `C'`, which is at least `N·k·√β` where `√C + N·√(k/32) ≤ √C'`. -/
 theorem sqrt_gamma_gap {k N Cd Ci β : ℝ} (hk : 0 ≤ k)
     (hW : Real.sqrt Cd + N * Real.sqrt (k / 32) ≤ Real.sqrt Ci) :
     Real.sqrt (16 * (Real.sqrt (2 * k * Cd) + k) ^ 2 * β) + N * (k * Real.sqrt β) ≤
@@ -375,8 +328,6 @@ section Bound
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-! ## What `IVStar` checks when it accepts -/
-
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 theorem Bound.opens_eval (Bd : Bound Coin Col T) (H : Msg → Msg) (a row : Msg) (y : Fin Bd.saltLen → UInt8) :
     (Bd.opens a row y).eval H =
@@ -385,8 +336,6 @@ theorem Bound.opens_eval (Bd : Bound Coin Col T) (H : Msg → Msg) (a row : Msg)
   rfl
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-/-- **Two openings of one commit string to different rows or salts collide** among their calls (`Bound.opens`), where
-`rowIn` is injective: on the salts' hashes where the salts differ, on the rows' digests where they share it. -/
 theorem Bound.opens_coll (Bd : Bound Coin Col T) (H : Msg → Msg) (hB : Bd.Binds) {a row row' : Msg}
     {y y' : Fin Bd.saltLen → UInt8} (h : ((Bd.opens a row y).eval H).1 = true)
     (h' : ((Bd.opens a row' y').eval H).1 = true) (hne : (row, y) ≠ (row', y')) :
@@ -403,7 +352,6 @@ theorem Bound.opens_coll (Bd : Bound Coin Col T) (H : Msg → Msg) (hB : Bd.Bind
       fun he => hy (List.ofFn_injective (List.append_cancel_left he)), by rw [h.1, h'.1]⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-/-- **A round message that opens**: it is the rows' count of 128-byte commit strings, each opening to its row. -/
 theorem Bound.opensRound_true (Bd : Bound Coin Col T) (H : Msg → Msg) {a : Msg}
     {os : List (Msg × (Fin Bd.saltLen → UInt8))} (h : ((Bd.opensRound a os).eval H).1 = true) :
     a.length = 128 * os.length ∧ ∀ (i : ℕ) (hi : i < os.length),
@@ -424,8 +372,6 @@ theorem Bound.opensRound_true (Bd : Bound Coin Col T) (H : Msg → Msg) {a : Msg
     simp [OC.eval] at h
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-/-- **The element-level verifier accepts the opened messages**: at each round it answers as `IVStar` does (the round's
-coin before the last, acceptance at the last), its calls among `agrees`'. -/
 theorem Bound.agrees_true (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {ms : List Msg} {cs : List Coin}
     (h : ((Bd.agrees x ms cs).eval H).1 = true) (j : ℕ) (hj : j < ms.length) :
     ((Bd.DE.V.next x (ms.take (j + 1)) (cs.take (j + 1))).eval H).1 =
@@ -443,9 +389,6 @@ theorem Bound.agrees_true (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {m
   exact ⟨h1, h2⟩
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-/-- **What `IVStar` checks when it accepts at its last round**: `final` reads the last message, the schedule's counts
-hold, each earlier round opens and the element-level verifier accepts the opened messages, each check's calls among the
-decision's. -/
 theorem Bound.ivstar_acc (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List Coin)
     (hl : ¬ as.length < Bd.DE.V.k x) (h : ((Bd.IVStar.next x as cs).eval H).1 = .acc) :
     ∃ os last, Bd.final (as.getLastD []) = some (os, last) ∧ os.length + 1 = as.length ∧
@@ -485,7 +428,6 @@ theorem Bound.ivstar_acc (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (as
       simp [OC.eval] at h
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-/-- **What `IVStar`'s decision on replayed messages checks when it accepts**, round by round. -/
 theorem Bound.decAt_acc (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) (hk : 0 < Bd.DE.V.k x) (h : (Bd.decAt H x ms r).1 = .acc) :
     ∃ os last, Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = some (os, last) ∧ os.length + 1 = Bd.DE.V.k x ∧
@@ -518,14 +460,9 @@ omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 theorem Bound.coinSeq_iv (Bd : Bound Coin Col T) (x : Msg) (r : Fin (Bd.IVStar.k x) → Coin) :
     @coinSeq Coin _ (Bd.IVStar.k x) r = @coinSeq Coin _ (Bd.DE.V.k x) r := rfl
 
-/-- `IVStar`'s answer at round `j` of a run it accepts at the coins `r`: the round's coin before the last, then
-acceptance. -/
 def Bound.ansAt (Bd : Bound Coin Col T) (x : Msg) (r : Fin (Bd.IVStar.k x) → Coin) (j : ℕ) : Out :=
   if j + 1 < Bd.DE.V.k x then .msg (Bd.ans (coinSeq r j)) else .acc
 
-/-- **A run `IVStar` accepts**, at any prover: it has rounds; `final` reads its last message; each earlier round opens
-to as many rows as the schedule fixes, its calls the run's; the element-level verifier answers the opened messages as
-`IVStar` does, its calls the run's; and the run, opened, is the opened messages with `IVStar`'s answers, accepted. -/
 theorem Bound.accFacts (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r : Fin (Bd.IVStar.k x) → Coin) (hacc : (run H P Bd.IVStar x ω r).out = .acc) :
     0 < Bd.DE.V.k x ∧ ∃ os last,
@@ -605,48 +542,34 @@ theorem Bound.opened_getD_lt (Bd : Bound Coin Col T) {os : List (List (Msg × (F
   rw [List.getD_eq_getElem _ _ (by simp; omega), List.getElem_append_left h', List.getElem_map,
     List.getD_eq_getElem _ _ h]
 
-/-! ## The plurality prover -/
-
 section Plur
 
 variable (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {Ω A : Type} (P : Prover Ω)
   (keep : Ω → (Fin (Bd.IVStar.k x) → Coin) → A → Bool)
 
-/-- A run against `IVStar`, as it may abort, accepted. -/
 def Bound.gA (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) : Prop :=
   (abortRun H P Bd.IVStar x keep ω d).out = .acc
 
-/-- The element-level message a run against `IVStar`, as it may abort, opens at round `j`. -/
 def Bound.fA (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) (j : ℕ) : Msg :=
   ((Bd.openView (abortRun H P Bd.IVStar x keep ω d).seen).msgs.map Prod.fst).getD j []
 
-/-- **The plurality prover's message at round `j`**, on the coins `l` so far: the element-level message that
-`IVStar`'s accepted continuations of those coins open most often there (`plur`). -/
 noncomputable def Bound.plurAt [Fintype A] (ω : Ω) (j : ℕ) (l : List Coin) : Msg :=
   plur (fun u : (Fin (Bd.IVStar.k x) → Coin) × A => Bd.gA H x P keep ω (fork j (preCoins l) u.1, u.2))
     (fun u => Bd.fA H x P keep ω (fork j (preCoins l) u.1, u.2) j)
 
-/-- **The plurality prover against `DE`**: at the tape, it reads the coins so far off the answers (`decC`) and sends
-`plurAt` there. -/
 noncomputable def Bound.plurP [Fintype A] (decC : Msg → Msg → Coin) : Prover Ω :=
   ⟨fun _ hist ω => .ret (Bd.plurAt H x P keep ω hist.length (hist.map fun h => decC x h.2))⟩
 
-/-- The run opens the plurality at every round. -/
 def Bound.OnPlur [Fintype A] (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) : Prop :=
   ∀ j < Bd.DE.V.k x, Bd.fA H x P keep ω d j = Bd.plurAt H x P keep ω j ((List.range j).map (coinSeq d.1))
 
-/-- **A run the plurality prover's runs don't show**: accepted, and off the plurality at some round. -/
 def Bound.BadA [Fintype A] (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) : Prop :=
   Bd.gA H x P keep ω d ∧ ¬ Bd.OnPlur H x P keep ω d
 
 open Classical in
-/-- **The plurality prover's aborts**: a run is kept where `IVStar`'s run at its coins, as it may abort, accepts and
-opens the plurality at every round. -/
 noncomputable def Bound.plurKeep [Fintype A] (ω : Ω) (r : Fin (Bd.DE.V.k x) → Coin) (a : A) : Bool :=
   decide (Bd.gA H x P keep ω (r, a) ∧ Bd.OnPlur H x P keep ω (r, a))
 
-/-- `P`'s run against `IVStar`, as it may abort, opened where it accepts, and aborted elsewhere: what `E^rep` at `DE`
-sees of it. -/
 def Bound.openRun (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) : Transcript :=
   if (abortRun H P Bd.IVStar x keep ω d).out = .acc then
     ⟨(Bd.openView (abortRun H P Bd.IVStar x keep ω d).seen).msgs, [], [], .acc⟩
@@ -663,8 +586,6 @@ theorem Bound.gA_run {ω : Ω} {d : (Fin (Bd.IVStar.k x) → Coin) × A} (h : Bd
   · rw [ite_eq_right hk] at h
     simp [abortTranscript] at h
 
-/-- **On the plurality, the plurality prover's run is `P`'s run opened**: it sends at each round what `P`'s run opens
-there, which `DE` answers as `IVStar` does, so it accepts, sees `P`'s run opened, and makes only calls `P`'s run makes. -/
 theorem Bound.plurRun [Fintype A] (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) (ω : Ω)
     (d : (Fin (Bd.DE.V.k x) → Coin) × A) (hg : Bd.gA H x P keep ω d) (hp : Bd.OnPlur H x P keep ω d) :
     (run H (Bd.plurP H x P keep decC) Bd.DE.V x ω d.1).seen = Bd.openView (abortRun H P Bd.IVStar x keep ω d).seen ∧
@@ -726,8 +647,6 @@ theorem Bound.plurRun [Fintype A] (decC : Msg → Msg → Coin) (hdec : ∀ x c,
     exact (hag j hj).2 e hej
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-/-- **`P`'s runs and their openings accept alike**, and an accepted run's opening at the bound record is `DE`'s of
-the run opened. -/
 theorem Bound.openRun_rel (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) :
     ((abortRun H P Bd.IVStar x keep ω d).seen.out = .acc ↔ (Bd.openRun H x P keep ω d).seen.out = .acc) ∧
       ((abortRun H P Bd.IVStar x keep ω d).seen.out = .acc →
@@ -742,8 +661,6 @@ theorem Bound.openRun_rel (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) :
     rw [e]
     exact ⟨⟨fun h' => absurd h' h, fun h' => by simp [abortTranscript, Transcript.seen] at h'⟩, fun h' => absurd h' h⟩
 
-/-- **Off the bad runs, the plurality prover's aborting runs show `E^rep` at `DE` what `P`'s runs opened show it**: a
-run on the plurality is kept and is `P`'s run opened (`plurRun`); a run `IVStar` rejects aborts at both. -/
 theorem Bound.openRun_seen [Fintype A] (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) (ω : Ω)
     (d : (Fin (Bd.IVStar.k x) → Coin) × A) (hb : ¬ Bd.BadA H x P keep ω d) :
     (Bd.openRun H x P keep ω d).seen =
@@ -767,7 +684,6 @@ theorem Bound.openRun_seen [Fintype A] (decC : Msg → Msg → Coin) (hdec : ∀
     unfold abortRun
     rw [ite_eq_right hk]
 
-/-- The plurality prover's aborting runs make only calls `P`'s runs, as they abort, make. -/
 theorem Bound.plurAbort_vLog [Fintype A] (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) (ω : Ω)
     (d : (Fin (Bd.DE.V.k x) → Coin) × A) :
     ∀ e ∈ (abortRun H (Bd.plurP H x P keep decC) Bd.DE.V x (Bd.plurKeep H x P keep) ω d).vLog,
@@ -783,10 +699,6 @@ theorem Bound.plurAbort_vLog [Fintype A] (decC : Msg → Msg → Coin) (hdec : �
     rw [ite_eq_right hk] at he
     simp [abortTranscript] at he
 
-/-- **`E^rep` at `IVStar` fails at most as `E^rep` at `DE` fails against the plurality prover's aborting runs, plus
-`N_I` times one run's chance to be bad**: off the bad runs `E^rep` reruns at, it sees at `DE` what it sees at
-`IVStar` (`openRun_rel`, `openRun_seen`), and the judged run is the plurality prover's, accepted; a bad rerun costs
-`N_I` times one sample's (`Pr_exists_rerun_samples`). -/
 theorem Bound.PrBadAbort_le [Fintype Ω] [Fintype A] [Nonempty A] (decI : List (ℕ × Col) → List T)
     (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) :
     (Inner.ofFlock Bd.deploy decI).PrBadAbort H x P keep ≤
@@ -847,8 +759,6 @@ theorem Bound.PrBadAbort_le [Fintype Ω] [Fintype A] [Nonempty A] (decI : List (
     Pr_exists_rerun_samples H (Bd.openRun H x P keep) _ _ _ _ _ _ (Bd.BadA H x P keep)
   exact hYZ.trans (add_le_add hY.le hZ)
 
-/-- **`B` at the plurality prover's aborting runs finds only collisions `B` at `P`'s finds**: a kept run's calls are
-among `P`'s run's (`plurRun`), and an aborted run makes none. -/
 theorem Bound.PrBAbort_le [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (decC : Msg → Msg → Coin)
     (hdec : ∀ x c, decC x (Bd.ans c) = c) :
     PrBAbort H Bd.DE.V (Bd.plurP H x P keep decC) x (Bd.plurKeep H x P keep) ≤ PrBAbort H Bd.IVStar P x keep := by
@@ -878,9 +788,6 @@ theorem Bound.PrBAbort_le [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (d
     rw [h0]
     exact PrBAbort_nonneg H Bd.IVStar P x keep
 
-/-- **Two accepted runs that share their coins before round `j` and open it differently open one commit string two
-ways**, a collision among `IVStar`'s calls in the two runs: at the last round `final` reads one message, so they open
-alike; before it the round's message is one, so their rows differ at some commit string (`opens_coll`). -/
 theorem Bound.fork_tied (hB : Bd.Binds) (j : Fin (Bd.IVStar.k x)) (ω : Ω)
     (d d' : (Fin (Bd.IVStar.k x) → Coin) × A)
     (h : Bd.gA H x P keep ω d ∧ Bd.gA H x P keep ω (forkSample j d d') ∧
@@ -935,9 +842,6 @@ theorem Bound.fork_tied (hB : Bd.Binds) (j : Fin (Bd.IVStar.k x)) (ω : Ω)
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hf)
     exact hne (hfA.trans hfA'.symm)
 
-/-- **A run is bad at most as `k_I · √Pr[B]`**: it is off the plurality at some round `j`, at most as
-`√(Pr[two runs forked at j open round j differently])` (`Pr_plur_fork`), a collision `B`'s fork at `j` finds
-(`fork_tied`); the rounds' roots sum to at most `√k_I · √(Σ_j Pr[B's fork at j]) = k_I · √Pr[B]` (Cauchy–Schwarz). -/
 theorem Bound.Pr_badA_le [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (hB : Bd.Binds) :
     Pr (fun t : Ω × (Fin (Bd.IVStar.k x) → Coin) × A => Bd.BadA H x P keep t.1 t.2) ≤
       (Bd.DE.V.k x : ℝ) * Real.sqrt (PrBAbort H Bd.IVStar P x keep) := by
@@ -994,10 +898,6 @@ theorem Bound.Pr_badA_le [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (hB
 
 end Plur
 
-/-- **The bridge at a record whose answers a decoder inverts** (`hdec`): `E^rep` at `IVStar` against `P` fails at most
-as `E^rep` at `DE` against the plurality prover's aborting runs, which `Inner.KSAbort` at `DE` bounds, plus
-`N_I · k_I · √Pr[B]` (`PrBadAbort_le`, `Pr_badA_le`); `B` there finds only what `B` at `P` finds (`PrBAbort_le`), and
-`WeightCovers` pays the loss in `√γ` (`sqrt_gamma_gap`). -/
 theorem Bound.bridge_of_dec [Zero Col] (H : Msg → Msg) (Bd : Bound Coin Col T) (decC : Msg → Msg → Coin)
     (hdec : ∀ x c, decC x (Bd.ans c) = c) : Bridge H Bd := by
   intro decI _ hB hWC hKS x Ω _ _ P A _ _ keep
@@ -1035,8 +935,6 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **The bridge at the deployed bound record**, at every choice the code side makes: its answers are a coin's bytes
-(`bdDeployed_ans`), which `FlockDeploy.decCoin` reads back (`coin_bytes_injective`). -/
 theorem bridge_bdDeployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

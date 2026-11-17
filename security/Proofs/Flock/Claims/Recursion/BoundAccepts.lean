@@ -2,23 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Recursion.BoundRun
 
-/-!
-# The inner view accepts, at V*'s bound layout (option (d))
-
-At the compiled record whose readers are V*'s bound layout's (`LayoutB.readers`), an accepted run's inner view is
-accepted, or two of the parts' recorded calls collide (`RecDeploy.vstarAccepts_bound`, `VStarAccepts` at each shape).
-Each part's inner check holds on the readers' messages, at the run's coins:
-
-* the staging off the run (`VStar.RunPairs`, `VStarB.VstarShowsB`) makes each part's statement show the run's coins and
-  the run's commit strings;
-* at a round a part holds whole, it holds that commit string (`VStarB.PartOpensB`), and the readers' message there is the
-  run's (`RecDeploy.ReadersRunPlayed`); the last round is never held whole (`VStarB.HeldB`);
-* at an assembled round, each of the part's pieces sits in the readers' message at its offset
-  (`VStarB.LayoutB.assembled_piece`).
-
-So `VStarB.PartChecksB` gives each part's check on the readers' messages, and `VStarB.DecompB` gives the inner verifier's
-acceptance. With `Refuses` and `ReadersTrue`, the three shapes give `InnerAcceptsColl` (`RecDeploy.innerAcceptsColl_bound`).
--/
+/-! The inner view accepts at V\*'s bound layout (option (d)), or two of the parts' recorded calls collide
+(`innerAcceptsColl_bound`). -/
 
 @[expose] public section
 
@@ -31,7 +16,6 @@ theorem readForms_length (w : Flock.Wit) (fs : List _root_.Flock.HmNets.Lin) :
     (readForms w fs).length = (fs.length + 7) / 8 := by
   simp [readForms, VStar.bytesOf]
 
-/-- A piece's bytes have the length its segments fix. -/
 theorem readSegs_length (w : Flock.Wit) (segs : List (Msg × List _root_.Flock.HmNets.Lin)) :
     (readSegs w segs).length = pieceLen segs := by
   simp [readSegs, pieceLen, List.length_flatMap, readForms_length]
@@ -59,7 +43,6 @@ theorem mem_foldl_pieces (w : Flock.Wit) (s : ℕ) :
       rw [he]
       simp [Nat.add_assoc]
 
-/-- **Each of part `s`'s pieces of a round is one of the round's pieces**, its offset the pieces' lengths before it. -/
 theorem LayoutB.mem_piecesOf {L : LayoutB} {x : Msg} {s : ℕ} {w : Flock.Wit} {i : ℕ} {e : ℕ × Msg}
     (h : e ∈ L.piecesOf x s w i) :
     ∃ pre p post, L.pieceAt x i = pre ++ p :: post ∧ p.1 = s ∧
@@ -68,7 +51,6 @@ theorem LayoutB.mem_piecesOf {L : LayoutB} {x : Msg} {s : ℕ} {w : Flock.Wit} {
   · simp at h
   · exact ⟨pre, p, post, hl, hp, by rw [he, Nat.zero_add]⟩
 
-/-- **An assembled round holds each piece at its offset**, read off its part's witness. -/
 theorem LayoutB.assembled_piece {L : LayoutB} {x : Msg} {ws : List Flock.Wit} {i s : ℕ} (hs : s < ws.length)
     {pre post : List (ℕ × List (Msg × List _root_.Flock.HmNets.Lin))}
     {p : ℕ × List (Msg × List _root_.Flock.HmNets.Lin)}
@@ -95,7 +77,6 @@ theorem LayoutB.msgs_getD (L : LayoutB) (x : Msg) (ws : List Flock.Wit) {i : ℕ
     (L.msgs x ws).getD i [] = L.msg x ws i := by
   simp [LayoutB.msgs, List.getD_eq_getElem?_getD, hi]
 
-/-- A round with pieces that the statement doesn't fix is read assembled. -/
 theorem LayoutB.msg_of_pieces {L : LayoutB} {x : Msg} {ws : List Flock.Wit} {i : ℕ} (hf : L.fixedAt x i = none)
     (hp : L.pieceAt x i ≠ []) : L.msg x ws i = L.assembled x ws i := by
   simp only [LayoutB.msg, hf, List.isEmpty_iff, hp, ↓reduceIte]
@@ -107,10 +88,6 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`VStarAccepts` at V\*'s bound layout** (option (d)), at one shape: from the staging off the run (`RunPairs`,
-`VstarShowsB`), the layout's rounds (`HeldB`), each part's check and holdings (`PartChecksB`, `PartOpensB`), the
-decomposition (`DecompB`) and the readers' rounds before the last (`ReadersRunPlayed`), at an inner verifier that plays
-all its rounds on replayed messages (`hplay`, as `IVStar` does). -/
 theorem vstarAccepts_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop) (decC : Msg → Msg → Coin)
@@ -149,7 +126,6 @@ theorem vstarAccepts_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recurs
     refine ⟨m, ?_, hd⟩
     rwa [List.getD_eq_getElem?_getD, List.getElem?_take_of_lt hi, ← List.getD_eq_getElem?_getD]
   have hsh := hShows x st hst hf _ hpl (Claims.coinSeq r) hc
-  -- The readers' rounds before the last are the run's.
   have hlA := runAs_length H I.V { b with rd := L.readers } x P ω r hacc
   have hcA : (runCs (I.V.k (xIOf x) + kS x) r).length = _ :=
     (runCs_length I.V { b with rd := L.readers } x r).trans hlA.symm
@@ -172,13 +148,11 @@ theorem vstarAccepts_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recurs
       hag j hj' hj
     rw [Claims.Recursion.VStar.run_replay_fst H I.V (xIOf x) (L.msgs x ws) _ hj'] at h1
     exact h1
-  -- A part whose own calls collide gives the collision.
   by_cases hpc : ∃ s, ∃ hs : s < ws.length, (Claims.findColl (L.calls x s ws[s])).isSome
   · obtain ⟨s, hs, h⟩ := hpc
     exact Or.inr (Claims.Recursion.VStar.coll_of_part (calls := L.calls) hs htrue h)
   have hpc' : ∀ s (hs : s < ws.length), ¬ (Claims.findColl (L.calls x s ws[s])).isSome :=
     fun s hs h => hpc ⟨s, hs, h⟩
-  -- Every part's check holds on the readers' messages, at the run's coins.
   have hchk : ∀ s < (deployRec I.V ivScope { b with rd := L.readers }).nS x,
       chk s x (Claims.coinSeq r) (L.msgs x ws) := by
     intro s hs
@@ -220,7 +194,6 @@ theorem vstarAccepts_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recurs
   · exact Or.inl hd
   · exact Or.inr (Claims.Recursion.VStar.coll_of_sub htrue (fun _ h => h) hd)
 
-/-- **`InnerAcceptsColl` at V\*'s bound layout**: `VStarAccepts` at the three shapes, with `Refuses` and `ReadersTrue`. -/
 theorem innerAcceptsColl_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (hT : ReadersTrue H I.V { b with rd := L.readers } DO)

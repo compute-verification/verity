@@ -34,23 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# What each V\* part's circuit accepts, on an accepted run (`PartAccepts`, with the vcalls escape)
-
-`RecursiveKS` at the deployed layout reads `DecompB` at `PartAccepts`, which is non-vacuous only if `PartAccepts`
-holds where an honest prover runs. On an accepted run, the staging (`StagedB`, at `deployRec`
-`stagedB_deployRec_part`) gives each part's V\* statement showing the run's coins and its commit strings at every
-inner round before the last. So `PartAccepts` at messages `ms` that are the run's at those rounds is what the part's
-outer witness `w` brings at the V\* statement the run stages (`partAccepts_of_run`, `partAccepts_run_deployRec`):
-
-* `Flock.check` passes;
-* its recorded calls are true evaluations;
-* none of them collides with another or with the compiled verifier's own evaluations there (`vcallsAt`, the
-  escape), a decidable equation about the run;
-* it agrees with `ms` at the rounds it holds whole and at its pieces, and on the shared rows it reads (`RowsRead`).
-
-The commit strings (`LayoutB.CmtAgrees`) and the coins (`shows`) come from the staging, not from the witness.
--/
+/-! Each V\* part's circuit accepts on an accepted run where its outer witness brings `Flock.check`, true uncolliding
+calls and the run's messages (`partAccepts_run_deployRec`). -/
 
 @[expose] public section
 
@@ -62,11 +47,6 @@ section Honest
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **Part `s`'s circuit accepts on an accepted run**: at a compiled statement of the shape and an accepted run, where
-the staging shows the run (`StagedB`), `PartAccepts` holds at messages `ms` that are the run's at each inner round
-before the last, wherever the part's outer witness `w` passes `Flock.check` at the V\* statement the run stages, its
-recorded calls are true and collide neither with each other nor with the compiled verifier's evaluations there, and it
-agrees with `ms` where it holds rounds, pieces and shared rows. -/
 theorem partAccepts_of_run {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {L : LayoutB} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
     (hSt : StagedB H D I L shape shows cmt) {x : Msg} {st : CompiledStatement} (hx : D.parse x = some st) (hf : shape st.form)
@@ -92,9 +72,6 @@ namespace RecDeploy
 open Claims (Msg)
 open FlockDeploy (Coin)
 
-/-- **Part `s`'s circuit accepts on an accepted run at `deployRec`**, with V\*'s staging (`showsPart`, `cmtTr`):
-`partAccepts_of_run` at `stagedB_deployRec_part`, wherever the reader `untr` reads the challenger's live-coin part's transcript back
-(`ReadsBackB`, which `readsBack_recTr` gives at `recRead`) and the layout's holdings pin its rounds (`HeldB`). -/
 theorem partAccepts_run_deployRec {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (untr : TrReader) (DO : Claims.Flock.Deploy Coin Col T)
     (L : Claims.Recursion.VStarB.LayoutB) (shape : Claims.Recursion.Form → Prop)

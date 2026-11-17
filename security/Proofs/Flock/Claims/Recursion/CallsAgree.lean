@@ -46,22 +46,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Walk
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Two accepted plain decisions on one set of proof files make one set of calls
-
-* `tables_nodup`, `repNames_nodup`: a session the statement sets up names its tables apart (`Tags.tableNames`, at most
-  `Tags.MAX_TABLES`), so its rep streams too.
-* `streams_pinned`: S11's count and names then leave a decoded session no stream but the one it finds at each rep
-  stream's name.
-* `decode_publics`: the public words `Record.decode` reads (S7) are `liveOf`'s.
-* `verdict_calls_sub`: every SHA-512 input of an accepting plain verdict (`verdict_calls`: the decoder's, S17's, the
-  reps') is one of another's on the same proof files, where the decoded sessions have the same `root_B`, points, public
-  words and rep rounds. S10 pins `y`, and a public word one record hashes and the other leaves empty is `ε`, which each
-  stream's first round hashes (`eps_mem`).
-* `plain_calls_agree`: two accepted plain decisions on one setup, link, coin and round messages, with the same proof
-  files and the same rep rounds, make one set of calls: a decision logs the setup's calls, then the verdict's
-  (`next_decide_calls`), and custody pins the rest. `plain_decide_shared` gives the shared decision.
--/
+/-! Two accepted plain decisions on one setup, link, coin and round messages, with the same proof files, make one set of
+SHA-512 calls (`plain_calls_agree`). -/
 
 @[expose] public section
 
@@ -69,9 +55,6 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness.Refine
 
-/-! ## The tables' names are distinct -/
-
-/-- A table index's digits read back. -/
 def digitsVal (l : List Char) : ℕ := l.foldl (fun n c => 10 * n + (c.toNat - 48)) 0
 
 theorem digitsVal_pad : ∀ j < 64, digitsVal ((if j < 10 then ['0'] else []) ++ Nat.toDigits 10 j) = j := by
@@ -100,7 +83,6 @@ theorem tableNames_nodup (t : Tags) {count : ℕ} (h : count ≤ Tags.MAX_TABLES
     rw [pad_toList, pad_toList] at e2
     rw [← digitsVal_pad i (by omega), ← digitsVal_pad j (by omega), e2]
 
-/-- **A session the statement sets up names its tables apart.** -/
 theorem tables_nodup {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hs : s.setup = .ok (spec, sts))
     (hpi : s.read.publicInputs = none) : spec.tables.toList.Nodup := by
   have h := Ins.setup_read hs
@@ -114,7 +96,6 @@ theorem tables_nodup {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hs : s.s
 
 theorem toDigits_two_inj : ∀ r < 2, ∀ r' < 2, Nat.toDigits 10 r = Nat.toDigits 10 r' → r = r' := by decide
 
-/-- **Tables named apart name their rep streams apart.** -/
 theorem repNames_nodup {spec : SessionSpec} (h : spec.tables.toList.Nodup) :
     (spec.repStreams.toList.map (·.2.2)).Nodup := by
   rw [repStreams_toList, List.map_map]
@@ -133,8 +114,6 @@ theorem repNames_nodup {spec : SessionSpec} (h : spec.tables.toList.Nodup) :
   have := toDigits_two_inj _ (Nat.mod_lt _ (by omega)) _ (Nat.mod_lt _ (by omega)) e2
   omega
 
-/-! ## S11 leaves no stream but the rep streams -/
-
 theorem find?_self_of_nodup {α β : Type} [BEq β] [LawfulBEq β] (key : α → β) :
     ∀ {l : List α}, (l.map key).Nodup → ∀ {s : α}, s ∈ l → l.find? (fun x => key x == key s) = some s
   | [], _, _, h => by cases h
@@ -149,8 +128,6 @@ theorem find?_self_of_nodup {α β : Type} [BEq β] [LawfulBEq β] (key : α →
       rw [List.find?_cons_of_neg (p := fun x => key x == key s) hne]
       exact find?_self_of_nodup key hn.2 h
 
-/-- **S11 pins a decoded session's streams**: with the rep streams named apart, as many streams as rep streams, and
-one found at each rep stream's name, every stream is the one found at some rep stream's name. -/
 theorem streams_pinned {spec : SessionSpec} {sess : RunRecord} (hn : (spec.repStreams.toList.map (·.2.2)).Nodup)
     (hsz : sess.streams.size = spec.repStreams.size)
     (hf : ∀ x ∈ spec.repStreams.toList, ∃ s, sess.streams.find? (·.name == x.2.2) = some s) :
@@ -185,14 +162,11 @@ theorem streams_pinned {spec : SessionSpec} {sess : RunRecord} (hn : (spec.repSt
   rw [hxs]
   exact find?_self_of_nodup StreamRec.name hnN hs
 
-/-! ## The decoded public words are `liveOf`'s -/
-
 section Publics
 
 open Lean (Json)
 open Claims.Bridge.Custody
 
-/-- Table `t`'s public words as the record's link has them: empty where absent. -/
 def PubField (pubs : Json) (t : String) (p : ByteArray) : Prop :=
   (Record.isNull pubs t = true → p = ByteArray.empty) ∧
     (Record.isNull pubs t = false → ∃ s, Record.str pubs t = .ok s ∧ unhex s = .ok p)
@@ -219,7 +193,6 @@ theorem pubField_of {pubs : Json} {t : String} {p : ByteArray}
     obtain ⟨s, hs, h⟩ := ebind_ok h
     exact ⟨s, hs, h⟩
 
-/-- **What `Record.decode` reads of the public words.** -/
 theorem decode_pubs {spec : SessionSpec} {text : String} {sess : RunRecord} (h : Record.decode spec text = .ok sess) :
     ∃ j l pubs, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (PubField pubs) spec.tables.toList sess.publics.toList := by
@@ -257,7 +230,6 @@ theorem decode_pubs {spec : SessionSpec} {text : String} {sess : RunRecord} (h :
         · rw [← Except.ok.inj h]
           exact hp'
 
-/-- **What `liveOf` reads of the public words.** -/
 theorem liveOf_pubs {spec : SessionSpec} {record : String} {lv : Live} (h : liveOf spec record = .ok lv) :
     ∃ j l pubs, Flock.JsonParse.parse record = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (PubField pubs) spec.tables.toList lv.publics.toList := by
@@ -273,7 +245,6 @@ theorem liveOf_pubs {spec : SessionSpec} {record : String} {lv : Live} (h : live
     refine ⟨j, _, _, rfl, by assumption, by assumption, ?_⟩
     exact List.Forall₂.imp (fun t p h => pubField_of h) (mapM_forall₂ (by assumption))
 
-/-- **The decoded session's public words are `liveOf`'s.** -/
 theorem decode_publics {spec : SessionSpec} {text : String} {sess : RunRecord} {lv : Live}
     (hd : Record.decode spec text = .ok sess) (hl : liveOf spec text = .ok lv) : sess.publics = lv.publics := by
   obtain ⟨j, l, pubs, hp, hl1, hp1, hf⟩ := decode_pubs hd
@@ -287,8 +258,6 @@ theorem decode_publics {spec : SessionSpec} {text : String} {sess : RunRecord} {
   exact Array.ext' (forall₂_unique (R := PubField pubs) (fun _ _ _ => pubField_unique) hf hf')
 
 end Publics
-
-/-! ## The plain verdict's calls at a decoded session -/
 
 theorem forall₂_mem_right {α β : Type} {R : α → β → Prop} :
     ∀ {l : List α} {l' : List β}, List.Forall₂ R l l' → ∀ b ∈ l', ∃ a ∈ l, R a b
@@ -304,7 +273,6 @@ theorem f128_zero {c : F128} (h : c.isZero = true) : c = ⟨0, 0⟩ := by
   simp only [F128.isZero, Bool.and_eq_true, beq_iff_eq] at h
   rw [h.1, h.2]
 
-/-- S10 pins `y`: zero, of the configured size. -/
 theorem y_pinned {a b : Array F128} (hs : a.size = b.size) (ha : ∀ c ∈ a, c.isZero = true)
     (hb : ∀ c ∈ b, c.isZero = true) : a = b :=
   Array.ext hs fun _ h1 h2 => by rw [f128_zero (ha _ (Array.getElem_mem h1)), f128_zero (hb _ (Array.getElem_mem h2))]
@@ -319,7 +287,6 @@ theorem mem_dgl {spec : SessionSpec} {b p : ByteArray} : b ∈ dgl spec p ↔ sp
   unfold dgl
   split <;> simp_all
 
-/-- `H(ε)` is among a session's round calls where the digests are SHA-512 and there is a table. -/
 theorem eps_mem {spec : SessionSpec} {sess : RunRecord} (hd : spec.sha512Digests = true) (hne : 0 < spec.tables.size)
     (hf : ∀ x ∈ spec.repStreams.toList,
       ∃ s, sess.streams.find? (·.name == x.2.2) = some s ∧ 0 < s.rounds.size) :
@@ -332,8 +299,6 @@ theorem eps_mem {spec : SessionSpec} {sess : RunRecord} (hd : spec.sha512Digests
   refine List.mem_flatMap.2 ⟨s.rounds[0], Array.getElem_mem_toList hr, ?_⟩
   simp [roundLog, dgl, hd]
 
-/-- **The plain verdict's SHA-512 calls, where it accepts**, at the session it decodes: the decoder's (`decode_log`),
-S17's digests of the files, and each table's two reps' own. -/
 theorem verdict_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} {L : Array ByteArray} (hv : verifyLogged h spec tabs record proofs = (.ok (), L)) :
     ∃ (sess : RunRecord) (schs : Array Schedule) (ds : List (List ByteArray)),
@@ -360,9 +325,6 @@ theorem verdict_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs :
   rw [hL, hl₁]
   simp only [List.nil_append, List.append_assoc]
 
-/-- **Two accepting plain verdicts on one set of proof files call SHA-512 on the same inputs**, where the sessions they
-decode have the same `root_B`, points and public words, and the same rounds at each rep stream: every call of the
-first is a call of the second. -/
 theorem verdict_calls_sub {spec : SessionSpec} {tabs : Array Setup} {record record' : String}
     {proofs : Array ByteArray} {L L' : Array ByteArray} {sess sess' : RunRecord}
     (hv : verifyLogged Sha512.hash spec tabs record proofs = (.ok (), L))
@@ -442,9 +404,6 @@ theorem verdict_calls_sub {spec : SessionSpec} {tabs : Array Setup} {record reco
   · exact .inl (.inr hb)
   · exact .inr hb
 
-/-! ## The decision's calls -/
-
-/-- Every entry of an oracle program's log is a query with `H`'s answer. -/
 theorem eval_log_ans (H : Claims.Msg → Claims.Msg) {α : Type} (x : Claims.OC α) :
     ∀ p ∈ (x.eval H).2, p.2 = H p.1 := by
   induction x with
@@ -460,7 +419,6 @@ theorem ofMsg_inj {a b : Claims.Msg} (h : Claims.ofMsg a = Claims.ofMsg b) : a =
   have := congrArg Claims.toMsg h
   simpa [Claims.toMsg, Claims.ofMsg] using this
 
-/-- Two logs of `H`'s answers with the same queries are one set. -/
 theorem toFinset_eq_of_queries {H : Claims.Msg → Claims.Msg} {L L' : List (Claims.Msg × Claims.Msg)}
     (hL : ∀ p ∈ L, p.2 = H p.1) (hL' : ∀ p ∈ L', p.2 = H p.1) (h : ∀ p ∈ L, ∃ p' ∈ L', p'.1 = p.1)
     (h' : ∀ p ∈ L', ∃ p' ∈ L, p'.1 = p.1) : L.toFinset = L'.toFinset := by
@@ -474,7 +432,6 @@ theorem toFinset_eq_of_queries {H : Claims.Msg → Claims.Msg} {L L' : List (Cla
   simp only [List.mem_toFinset]
   exact ⟨key hL hL' h p, key hL' hL h' p⟩
 
-/-- The decision at a session logs its verdict's calls: the checks call nothing. -/
 theorem decisionAt_log (H : Claims.Msg → Claims.Msg) (zk : Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
     (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
     (f : Final) :
@@ -484,7 +441,6 @@ theorem decisionAt_log (H : Claims.Msg → Claims.Msg) (zk : Bool) (s : Ins) (sp
   rcases hv : (verdictM zk Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs).run.eval H with ⟨r, l⟩
   cases r <;> exact List.append_nil l
 
-/-- **A step that decides logs the setup's calls, then the verdict's**, where the setup is `.ok`. -/
 theorem next_decide_calls (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
@@ -500,7 +456,6 @@ theorem next_decide_calls (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claim
   show l ++ ((decisionAt zk s spec sts x link c₁ mids f).run.eval H).2 = _
   rw [decisionAt_log]
 
-/-- **An accepting plain step at SHA-512** has a logged verdict that accepts, and its checks pass. -/
 theorem acc_verifyLogged {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {f : Final} (h : act false x as cs = .decide s spec sts link c₁ mids f)
@@ -514,8 +469,6 @@ theorem acc_verifyLogged {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin
   rw [hOf_sha512] at hv
   exact ⟨Prod.ext ((verifyLogged_fst _ _ _ _ _ _).trans hv) rfl, hc⟩
 
-/-- **Two plain steps that decide on one setup call SHA-512 on one set**, where each verdict's calls are among the
-other's: the decision's calls are the setup's, then the verdict's. -/
 theorem next_calls_toFinset {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
     {mids mids' : List (Claims.Msg × Coin)} {f f' : Final}
@@ -545,8 +498,6 @@ theorem next_calls_toFinset {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' 
     exact ⟨p', hp', ofMsg_inj e⟩
   exact toFinset_eq_of_queries (eval_log_ans _ _) (eval_log_ans _ _) (hq hl hl' hsub) (hq hl' hl hsub')
 
-/-- **Two accepted plain last messages after the same rounds and coins decide on one setup, link, coin and round
-messages.** -/
 theorem plain_decide_shared {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
     {f f' : Final} (hc : cs.length = ms.length + 1)
     (hacc : ((next false x (ms ++ [l]) cs).eval sha512).1 = .acc)
@@ -592,10 +543,6 @@ theorem plain_decide_shared {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Clai
   obtain rfl := Option.some.inj (e'.symm.trans hfl')
   exact ⟨_, _, _, _, _, _, hact, hact'⟩
 
-/-- **Two accepted plain decisions on one setup, link, coin and round messages, with the same proof files, call
-SHA-512 on one set**, where the sessions their records decode have the same rounds at each rep stream. Custody pins
-both records' `root_B`, points and public words to the link and the first coin; S10 pins `y`; the statement's tables
-are named apart (`tables_nodup`), so S11 leaves no stream but the rep streams (`verdict_calls_sub`). -/
 theorem plain_calls_agree {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f f' : Final}

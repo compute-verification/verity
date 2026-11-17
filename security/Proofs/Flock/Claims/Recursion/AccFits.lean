@@ -36,16 +36,7 @@ import Proofs.Flock.C3.PubRows.Shape
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.VBridge.Family.Structure
 
-/-!
-# The chain's `acc` holdings are instances of their statement (`AccFits`)
-
-`RecVStar.accReads` reads the `rec-acc` chain at a level's `acc`: at the table's level `l`, over `2 q` units
-(`fast100` at the inner `m`), at R's level `l`, over `q` units (`fast100` at R's `m`). The verifier's list
-(`RecVStar.statements`) holds the table's level `l` as V\*'s `recOpen l … (2 q)` (`statementsOf_eq`, at
-`VStar.Algebra.Shape.sched`, which is `fast100` at the inner `m`), and R's level `l` as candidate 3's
-`recOpenStacked l … q` (`candidate3Statements`, at `fast100` at R's `m`); no other statement reads `acc`. So every
-unit a statement reads `acc` at is below its instances.
--/
+/-! `AccFits`: a statement reads the `rec-acc` chain only at a table level or an R level, below its instances. -/
 
 @[expose] public section
 
@@ -53,9 +44,6 @@ namespace RecDeploy.MoreSlots
 
 open Flock
 
-/-! ## The verifier's list -/
-
-/-- **The verifier's list**, as `FlockC3.VStarList.statements_ok`, at V\*'s shape with the inner `m`. -/
 theorem statements_vsh {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     ∃ vsh A C K L n, VStar.statementsOf vsh i.holo = .ok A ∧ RecVStar.candidate3Statements i = .ok C ∧
       VStar.levelCapStatements vsh = .ok K ∧ RecVStar.linkStatements i = .ok L ∧
@@ -86,7 +74,6 @@ theorem statements_vsh {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSta
   cases h
   exact ⟨_, A, C, K, L, n, hA, hC, hK, hL, hK0, by simp only [Array.append_assoc], rfl⟩
 
-/-- V\*'s schedule at a shape is `fast100`'s at its `m`. -/
 theorem sched_fast100 {vsh : VStar.Algebra.Shape} {s : Schedule} (h : vsh.sched = .ok s) :
     fast100 vsh.m = some s := by
   unfold VStar.Algebra.Shape.sched at h
@@ -102,7 +89,6 @@ theorem sched_fast100 {vsh : VStar.Algebra.Shape} {s : Schedule} (h : vsh.sched 
     cases h
     rfl
 
-/-- Candidate 3's statements are no table level's. -/
 theorem recOpen_not_c3 {i : RecVStar.Inner} {C : Array VStar.Stmt} (hC : RecVStar.candidate3Statements i = .ok C)
     {l L H n : ℕ} : VStar.Stmt.recOpen l L H n ∉ C := by
   intro hm
@@ -118,8 +104,6 @@ theorem recOpen_not_c3 {i : RecVStar.Inner} {C : Array VStar.Stmt} (hC : RecVSta
     · simp at hm
     · rcases hk _ hm with ⟨_, _, _, _, he⟩ | ⟨_, _, _, _, _, _, he⟩ <;> cases he
 
-/-- **Candidate 3's R levels**: `recOpenStacked l … n` is R's level `l` over its `q` openings, at `fast100` at R's
-`m`. -/
 theorem stacked_mem {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVStar.candidate3Statements i = .ok C)
     {l L H n : ℕ} (hm : VStar.Stmt.recOpenStacked l L H n ∈ C) :
     ∃ r sch, i.stacked = some r ∧ fast100 r.m = some sch ∧ n = (sch.levels[l]!).q := by
@@ -166,8 +150,6 @@ theorem stacked_mem {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVStar.ca
       · obtain ⟨_, _, _, _, _, _, he⟩ := FlockC3.PubRows.openingParts_kind hx _ hm
         cases he
 
-/-! ## What `accReads` reads -/
-
 theorem accReads_recOpen {i : RecVStar.Inner} {sch : Schedule} (hf : fast100 i.m = some sch) (l L H n : ℕ) :
     ∃ Xs, RecVStar.accReads i (.recOpen l L H n) = .ok (some Xs) ∧ Xs.size = 2 * (sch.levels[l]!).q :=
   ⟨_, by unfold RecVStar.accReads; simp only [hf]; try rfl, by simp⟩
@@ -177,7 +159,6 @@ theorem accReads_stacked {i : RecVStar.Inner} {r : RecVStar.StackedShape} {sch s
     ∃ Xs, RecVStar.accReads i (.recOpenStacked l L H n) = .ok (some Xs) ∧ Xs.size = (sr.levels[l]!).q :=
   ⟨_, by unfold RecVStar.accReads; simp only [hf, hr, hsr]; try rfl, by simp⟩
 
-/-- Where a statement reads `acc` at unit `u`, `u` is one of `accReads`' units. -/
 theorem lt_of_accRead {r : XR} {st : VStar.Stmt} {u : ℕ} {Xs : Array (Option ℕ)}
     (hX : RecVStar.accReads r.shape st = .ok (some Xs)) (hi : ∀ j nm pt, st ≠ .inner j nm pt)
     (h : (accRead r st "acc" u).isSome = true) : u < Xs.size := by
@@ -204,10 +185,6 @@ theorem lt_stacked {r : XR} {R : RecVStar.StackedShape} {sch sr : Schedule} (hf 
   have := lt_of_accRead hX (fun _ _ _ he => by cases he) h
   omega
 
-/-! ## `AccFits` -/
-
-/-- **`AccFits` holds**: a statement reads `acc` only at a table level (`recOpen l … (2 q)`, V\*'s, `2 q` units) or
-an R level (`recOpenStacked l … q`, candidate 3's, `q` units), at the schedule its instances count. -/
 theorem accFits : AccFits := by
   intro r ss s sv hss hsv u h
   have hmem : sv ∈ ss := Array.mem_of_getElem? hsv

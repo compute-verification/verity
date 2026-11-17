@@ -38,24 +38,8 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.BadLin
 import Proofs.Flock.Claims.Recursion.Cost
 
-/-!
-# The recursion's KS, linearly
-
-`KSLin` (`Definitions.Claims.RecursionLin`) at the same premises `KS_of_flockKS_binds` reads, which are the deployed
-route's (`RecDeploy.ksBoundRoute_of_bridge_cols`). The inner stage fails where `E^rep` fails against `P_I`'s aborting runs,
-at a bad rerun, or where the judged sample's inner view rejects (`PrBadGood_le_abort_rej`):
-
-* against `P_I`'s aborting runs, `κ_I + √(γ_I·Pr[B_I])` (`Inner.KSAbort`, `PrBAbort_le_PrBI`), with `B_I` its own
-  finder (`Binner` is `BI`, `PrBinner_eq`), not `k(x)·Pr[Be]`;
-* at the `N_I` expected reruns, a bad sample at most `k_I·(Pr[Fdev] + 1/(M+1))` (`Pr_bad_le_PrFdev`, from
-  `Pr_bad_le_lin`), so `β·(Pr[Fdev] + 1/(M+1))` with `β = N_I·k_I`;
-* a rejecting judged sample is a collision at every fork (`Pr_innerRejects_le_fork`), so at most the inner rounds'
-  average, `Pr[B_I]` (`Pr_innerRejects_le_PrBI`), which `γ_BI = (√γ_I + 1)²` holds under `B_I`'s root
-  (`sqrt_add_le_γBI`).
-
-The outer sessions are `KS_of`'s (`κ` and `√(γ·Pr[B])`). `KSLin_of_flockKS_binds` is the result, and
-`KSLin_of_flockKS` the same where the played rounds' openings are recorded (`forksBind_of_opening`).
--/
+/-! The recursion's KS, linearly, at the premises `KS_of_flockKS_binds` reads (`KSLin_of_flockKS_binds`,
+`KSLin_of_flockKS`). -/
 
 @[expose] public section
 
@@ -67,7 +51,6 @@ section Coupling
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **`B_I` as its own finder is `B_I`.** -/
 theorem PrBinner_eq (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
     PrBinner H D I DO decO P x = PrBI H D I DO decO P x :=
@@ -94,8 +77,6 @@ theorem PrFdev_nonneg (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO
   · exact Pr_nonneg _
   · exact le_rfl
 
-/-- **A bad sample at most `k_I·(Pr[Fdev] + 1/(M+1))`**: `Pr_bad_le_lin`, and no bad sample where the inner protocol takes no
-rounds. -/
 theorem Pr_bad_le_PrFdev {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (M : ℕ) :
@@ -111,8 +92,6 @@ theorem Pr_bad_le_PrFdev {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
       le_antisymm ((Pr_mono fun t ht => ht.2 fun j hj => absurd hj (by omega)).trans_eq Pr_false) (Pr_nonneg _)
     rw [hb, h0, Nat.cast_zero, zero_mul]
 
-/-- **A rejecting judged sample costs at most `Pr[B_I]`**: it is a collision at every fork (`Pr_innerRejects_le_fork`),
-so at most their average over the inner rounds, of which an accepted run shows one (`RoundsMargin`). -/
 theorem Pr_innerRejects_le_PrBI_at {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {x : Msg} (hA : InnerAcceptsCollAt H D I DO x) (hT : CallsTrue H D I DO)
     (hN0 : CallsNil H D) (hM : RoundsMargin H D I) (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω]
@@ -144,7 +123,6 @@ theorem Pr_innerRejects_le_PrBI {H : Msg → Msg} {D : Deploy Coin} {I : Inner C
     Pr (InnerRejects H D I DO decO P x) ≤ PrBI H D I DO decO P x :=
   Pr_innerRejects_le_PrBI_at (hA.toAt x) hT hN0 hM decO P
 
-/-- `√(g·p) + p ≤ √((√g + 1)²·p)` at a probability `p`. -/
 theorem sqrt_add_le_γBI {g p : ℝ} (hp0 : 0 ≤ p) (hp1 : p ≤ 1) :
     Real.sqrt (g * p) + p ≤ Real.sqrt ((Real.sqrt g + 1) ^ 2 * p) := by
   have hs : Real.sqrt (g * p) ≤ Real.sqrt g * Real.sqrt p := by
@@ -159,8 +137,6 @@ theorem sqrt_add_le_γBI {g p : ℝ} (hp0 : 0 ≤ p) (hp1 : p ≤ 1) :
   rw [Real.sqrt_mul' ((Real.sqrt g + 1) ^ 2) hp0, Real.sqrt_sq (by positivity)]
   nlinarith [Real.sqrt_nonneg p]
 
-/-- **The inner stage, linearly, where the inner rounds' forks bind**: at most
-`κ_I + √(γ_BI·Pr[B_I]) + β·(Pr[Fdev] + 1/(M+1))`, at every `M`. -/
 theorem innerLin_of_KSAbort_binds [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
     (hR : InnerRounds D I) (hV : InnerViewRun H D I DO) (hT : CallsTrue H D I DO) (hL : CallsLogColl H D I DO)
@@ -198,14 +174,10 @@ theorem innerLin_of_KSAbort_binds [DecidableEq Col] [Zero Col] {H : Msg → Msg}
 
 end Coupling
 
-/-! ## The recursion's KS, linearly -/
-
 section RecursionKS
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- **`KSLin` from the outer sessions' KS and the inner stage's linear bound**: `KS_of`'s split, with the inner stage
-at `κ_I + √(γ_BI·Pr[B_I]) + β·(Pr[Fdev] + 1/(M+1))` in place of `InnerKS`. -/
 theorem KSLin_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (hRef : Refuses H D) (hO : OuterKS H D I DO)
     (hI : ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (M : ℕ),
@@ -255,8 +227,6 @@ theorem KSLin_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin 
   have hmul := mul_le_mul_of_nonneg_left hEO hA0
   nlinarith [hsplit, hgood, hin, hmul, hB]
 
-/-- **The recursion's KS, linearly, from Flock's KS at the outer deployment and the inner protocol's KS against provers
-that may abort, where the inner rounds' forks bind**: `KS_of_flockKS_binds`'s premises, `KSLin`'s bound. -/
 theorem KSLin_of_flockKS_binds [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO)
     (hKS : I.KSAbort H) (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO)
@@ -268,7 +238,6 @@ theorem KSLin_of_flockKS_binds [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I
   KSLin_of H D I DO hRef (outerKS_of_flockKS hF hN hε hRd hS hR)
     fun decO _ x _ _ _ P M => innerLin_of_KSAbort_binds hKS hRounds hV hT hL hFk hA hM hpc hN0 decO x P M
 
-/-- **`KSLin_of_flockKS_binds` where the played rounds' openings are recorded** (`forksBind_of_opening`). -/
 theorem KSLin_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (opening : Opening) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO)
     (hKS : I.KSAbort H) (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO)

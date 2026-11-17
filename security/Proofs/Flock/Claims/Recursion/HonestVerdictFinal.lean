@@ -51,22 +51,7 @@ import Proofs.Flock.Claims.Complete.WalkPacked
 import Proofs.Flock.Claims.Recursion.HonestVerdictJson
 import Proofs.Flock.Claims.Recursion.NextRRows
 
-/-!
-# The verdict passes on the honest proofs at the reader's record
-
-`HonestVerdict sha512`: at every plain completeness run (`FlockComplete.Run`) and the deployed verifier's coins, the
-verdict on the honest proofs at the reader's record (`verifyJPWith` at `jAt` of `recJ`) accepts. The reader's record is
-the honest record (`recStreams_eq`, `recLink_eq`, `recordObj_liveRound`), its proof files are the session's
-(`filesAt_eq`), and with the digests and coins substituted it is alike the record (`same_coinSub_recordObj`), so it
-decodes as the printed record does (`decodeJ_recordObj`). The verdict at it is the plain verdict on the printed record,
-which accepts (`Run.verdict_ok`).
-
-* **The goals** (`goals_plain`): `complete_plain`'s goals, at 64-byte outputs.
-* **SHA-512's outputs are 64 bytes** (`out64_sha512`).
-* **The verdict at a value that decodes as the record** (`verifyJWithM_eq_verifyWithM`).
-* **The honest record's reads** (`run_recordJ`): `Run.json`'s, with the decode of every value alike the record.
-* **The verdict** (`honestVerdict`).
--/
+/-! The verdict passes on the honest proofs at the reader's record (`honestVerdict`). -/
 
 @[expose] public section
 
@@ -74,7 +59,6 @@ namespace FlockComplete.Replay
 
 open Flock Transcript FlockDeploy
 
-/-- **`complete_plain`'s goals**, at the record's JSON and the oracle's 64-byte outputs. -/
 theorem goals_plain (H : Claims.Msg → Claims.Msg) (h64 : Claims.Out64 H) :
     Goals H Readable.relation := by
   have hP : JsonRT.ProverOk H Readable.relation := proverOk h64
@@ -129,8 +113,6 @@ open Lean (Json JsonNumber)
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The honest run's record, read as a value**: `Run.json`'s single table, streams, rounds and session, the printed
-record printable, and every value alike it decoding as `sessOf`. -/
 theorem run_recordJ (h64 : Claims.Out64 H) (hP : ProverOk H rel)
     (o : Run H rel) :
     ∃ st rb streams, o.sts = #[st] ∧ o.spec.tables = #[st.tags.table] ∧
@@ -178,7 +160,6 @@ end FlockComplete.JsonRT
 
 namespace Flock
 
-/-- **The verdict at a parsed value is the verdict at a record** whose decode is the value's. -/
 theorem verifyJWithM_eq_verifyWithM (hs : Hashes V) (spec : SessionSpec) (tabs : Array Setup) (proofs : Array ByteArray)
     {j : Lean.Json} {record : String} (h : Record.decodeJWith hs spec j = Record.decodeWith hs spec record) :
     verifyJWithM hs spec tabs j proofs = verifyWithM hs spec tabs record proofs := by
@@ -190,7 +171,6 @@ namespace FlockDeploy
 
 open Flock FlockComplete
 
-/-- **SHA-512's outputs are 64 bytes.** -/
 theorem out64_sha512 : Claims.Out64 sha512 := fun m => by
   show (Claims.toMsg (Sha512.hash (Claims.ofMsg m))).length = 64
   have h := Sha512.hash_size (Claims.ofMsg m)
@@ -200,8 +180,6 @@ theorem out64_sha512 : Claims.Out64 sha512 := fun m => by
   rw [Array.length_toList]
   exact h
 
-/-- **The verdict passes on the honest proofs at the reader's record**: at every plain
-completeness run and the deployed verifier's coins, `verifyJPWith` at `jAt` of `recJ` accepts. -/
 theorem honestVerdict : HonestVerdict sha512 := by
   intro o cs hcs spec' sts' hs
   have h64 := out64_sha512

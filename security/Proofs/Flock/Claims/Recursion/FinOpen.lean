@@ -35,25 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The last round's pieces at the parts that commit the earlier rounds (`finOpen`), and `FinPieces` there
-
-The bound record's last message is, per earlier round in order, that round's rows with their salts in commit order,
-then the element-level last message (`Claims.Recursion.Bound.final`). Each earlier round's commit strings sit at fixed
-parts and ports at `layoutBTops`: round 0's at RecCap's port `top` (`capAt`, `capHold`), a stream round's tops at their
-level's caps (`capPieceAt`) and its row at the first part whose port reads it (`rowPiece`). `finOpen rest` reads each
-string's opening at the part and port that commit it: the port's row at the instance (`rowHidden`), then its hm96
-slot's salt (`hmSalt`) (`openSegs`). The element-level last message follows at the parts `rest` names, a parameter,
-each index one of the list's parts.
-
-`finPieces_finOpen` proves `FinPieces (finOpen rest)` at every shape: round 0's piece is RecCap's part, the list's last
-(`capAt_readX`), and every piece is a part's (`roundOpen_lt`, as `topsPiecesAt_held`). `ksLin2_deployed_open` and
-`bitsLin2_deployed_open` are `ksLin2_deployed_staged` and `bitsLin2_deployed_staged` at `finOpen rest`, with
-`FinPieces` dropped.
-
-`FinPieces` is structural. That these pieces read the last message's bytes (the rows and salts at the offsets `final`
-reads them, and `rest`'s at the element-level message's) is what `PartChecksBV` and `DecompB` take, unchanged here.
--/
+/-! The last round's pieces at the parts that commit the earlier rounds (`finOpen`) and `FinPieces` there; that they
+read the last message's bytes stays with `PartChecksBV` and `DecompB`. -/
 
 @[expose] public section
 
@@ -62,8 +45,6 @@ namespace RecDeploy
 open Flock
 open Claims (Msg)
 open FlockDeploy (Coin)
-
-/-! ## The openings -/
 
 /-- **A commit string's opening** at port `q` (named `nm`) at instance `n`: the row the port reads there
 (`rowHidden`), then its hm96 slot's salt (`hmSalt`). -/
@@ -109,9 +90,6 @@ def finOpen (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List
   | some r => openPieces r ++ (rest r).map fun p => (p.1.val, p.2)
   | none => []
 
-/-! ## `FinPieces` at `finOpen` -/
-
-/-- The row's opening is a part's. -/
 theorem rowOpen_lt {r : XR} {j : ℕ} {p : ℕ × List (Msg × List HmNets.Lin)} (hp : p ∈ rowOpen r j) :
     p.1 < r.w.parts.length := by
   unfold rowOpen at hp
@@ -123,7 +101,6 @@ theorem rowOpen_lt {r : XR} {j : ℕ} {p : ℕ × List (Msg × List HmNets.Lin)}
   obtain ⟨c, -, rfl⟩ := hfa
   exact List.mem_range.1 ha
 
-/-- **A stream round's openings are parts'**, where the later caps come before V\*'s last statement. -/
 theorem roundOpen_lt {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ} (hpos : 0 < rs.size)
     (hlen : (RecVStar.topSizes rs).length ≤ r.w.parts.length - 1) {p : ℕ × List (Msg × List HmNets.Lin)}
     (hp : p ∈ roundOpen r rs j) : p.1 < r.w.parts.length := by
@@ -136,9 +113,6 @@ theorem roundOpen_lt {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ} (hpos :
     omega
   · exact rowOpen_lt hp
 
-/-- **`FinPieces` at `finOpen`**, at every shape: wherever a compiled statement parses, `readX` reads it
-(`readX_of_parse`), round 0's opening is at RecCap's part (`capAt_readX`), and every piece is a part's: RecCap's the
-list's last, each stream round's at the list's parts (`roundOpen_lt`, `topsLen_readX`), `rest`'s by its type. -/
 theorem finPieces_finOpen (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) : FinPieces (finOpen rest) shape := by
   intro x st hst _
@@ -165,13 +139,8 @@ theorem finPieces_finOpen (rest : (r : XR) → List (Fin r.w.parts.length × Lis
   · obtain ⟨q, -, rfl⟩ := List.mem_map.1 hp
     exact q.1.isLt
 
-/-! ## `KSLin2` and `BitsLin2` at `finOpen` -/
-
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`**: `ksLin2_deployed_staged` with
-`FinPieces` from `finPieces_finOpen`. The last round's pieces are every earlier round's openings at the parts that
-commit them, then the element-level last message's at the parts `rest` names. What stays open at the dense form is
-`PartChecksBV` and `PartOpensB` at `showsPart`/`cmtTr`, and `DecompB`; then the readers' two facts and `untr` reading the
-challenger's live-coin part's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are open. -/
+/-- Bounds no number by itself: `PartChecksBV`, `PartOpensB`, `DecompB`, the readers' two facts and `ReadsBackB` stay
+open. -/
 theorem ksLin2_deployed_open (b : Brings)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
@@ -196,9 +165,7 @@ theorem ksLin2_deployed_open (b : Brings)
   exact ksLin2_deployed_staged b (finOpen rest) wE join final w untr hrb
     (fun shape hsh => ⟨finPieces_finOpen rest shape, hP shape hsh⟩) hRT
 
-/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`**: `bitsLin2_deployed_staged`
-with `FinPieces` from `finPieces_finOpen`. It reads `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision
-assumptions, and `ksLin2_deployed_open`'s open premises: a bound on a number under named premises, not a proved
+/-- A bound on a number under `StrictBirthday`, `ExpectedCR` and `ksLin2_deployed_open`'s open premises, not a proved
 security level. -/
 theorem bitsLin2_deployed_open (b : Brings)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)

@@ -35,37 +35,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import VCVio.Prelude.Core
 
-/-!
-# A V* part's statement: its bytes, its parser and its recursive setup
-
-A statement of the outer verifier the compiled verifier runs per V* part, `verity-verify-proof verify --zk` with its recursive
-flags, is the canonical byte encoding (`RecRaw.encode`) of exactly what that command reads besides the session
-directory: Flock's statement (`FlockDeploy.Raw`, `--zk` on) and the bytes and numbers of `--rec-inner`, `--rec-part`,
-`--rec-bindings`, `--rec-rows`, the inner statement's files (`--rec-inner-circuit`, `--rec-inner-public`,
-`--rec-inner-partition`; `--rec-inner-coins`, which the verifier refuses), the inner session's record
-(`--rec-inner-session`'s `session.json`), the challenger's live-coin part's transcript (`--rec-inner-transcript`), the circuit
-registration (`--rec-inner-registration`) and how the inner statement is set up (`--rec-inner-statement`,
-`--rec-inner-tables`' tables, `--rec-inner-draw`), the inner population's link table
-(`--rec-links`: its root and row count) and the verifier's program of the inner statement (`--rec-inner-program`).
-`decodeRec` keeps only a reading whose encoding is `x`, so it is injective (`decodeRec_injective`), and refuses every
-other format, `flock-verify-rec-statement/v3` (with the inner statement's coins) among them.
-
-`RecRaw.ins` runs the verifier's readers on those bytes as `Main.verifyCmd` runs them: Flock's (`Raw.ins`), then
-`RecLinkTree.linksArg`'s checks of the link table's root and row count (`linksOf`), `RecVStar.Inner.ofJson`,
-`RecVStar.ownBindingsOfJson`, `RecCoins.filesInput`'s source, the inner circuit's META binding
-(`innerMetaRegistration`, from the header's first nine lines, `metaOf`), `recTranscriptInput`'s commits
-(`RecSetup.commits`), `recLinkInput`'s tops and link points (`RecVStar.innerLink`, `linkInputOf`) and `Registered.ofJson`
-on `--rec-rows`. `RecIns.setup` is `verifyCmd`'s `setupOf` at the statement's sample with those inputs and no
-`--identifier`, in its order: `RecSetup.checkInner`, `RecLinkPart.checkShape` (the link table the inner shape's),
-`RecBudget.regs`, `RecBudget.statements`, the session's statement (`Stmt.setupTables`) with each table's registered
-reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `RecSetup.oneFull`, `RecBudget.table`,
-`Zk.shapeOk`,
-`RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`
-(through `checkOpenTops` and `checkLevelTopReads`), `RecLinkPart.check` (the link table's part against the table and
-the inner statement), `RecVStar.checkLabels` and the sample's sampling design.
-Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
-shipped ones, outside the oracle.
--/
+/-! A V\* part's statement: the canonical encoding of what `verify --zk` with its recursive flags reads
+(`RecRaw.encode`), its parser and its recursive setup (`RecIns.setup`). -/
 
 @[expose] public section
 
@@ -75,8 +46,6 @@ open Flock
 open FlockDeploy (Raw encNat encBytes encStr encBool encOpt encList Rd rdTake rdNat rdBytes rdStr rdBool rdOpt rdList
   jsonOf Ins noIdentifier)
 open Lean (Json)
-
-/-! ## The statement's bytes -/
 
 /-- **What `verity-verify-proof verify --zk` reads of a V* part's statement** besides the session directory: Flock's statement,
 then `--rec-inner`, `--rec-part`, `--rec-bindings`, `--rec-rows`, `--rec-inner-circuit`, `--rec-inner-public`,
@@ -160,12 +129,9 @@ theorem decodeRec_encode {x : Claims.Msg} {w : RecRaw} (h : decodeRec x = some w
     exact he
   · cases h
 
-/-- **The decoder is injective.** -/
 theorem decodeRec_injective {x y : Claims.Msg} {w : RecRaw} (hx : decodeRec x = some w) (hy : decodeRec y = some w) :
     x = y :=
   (decodeRec_encode hx).symm.trans (decodeRec_encode hy)
-
-/-! ## The verifier's readers -/
 
 /-- A file read as text, as `IO.FS.readFile` reads one: UTF-8. -/
 def textOf (what : String) (b : ByteArray) : Except String String :=
@@ -334,7 +300,6 @@ def setupO (x : Claims.Msg) : Option (RecIns × SessionSpec × Array Stmt) := do
   let (spec, sts) ← s.setup.toOption
   pure (s, spec, sts)
 
-/-- The recursive setup's session is the verifier's statement's (`Read.setup`, `Stmt.setupTables`). -/
 theorem RecIns.setup_read {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts)) :
     s.base.read.setup = .ok (spec, sts) := by
   unfold RecIns.setup at h
@@ -364,7 +329,6 @@ theorem RecRaw.ins_base {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) : w.base.i
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; assumption)
 
-/-- A statement of the outer verifier is read as masked. -/
 theorem readOfO_zk {x : Claims.Msg} {r : Readable.Read} (h : readOfO x = some r) : r.zk = true := by
   unfold readOfO insO at h
   obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.1 h
@@ -380,9 +344,6 @@ theorem readOfO_zk {x : Claims.Msg} {r : Readable.Read} (h : readOfO x = some r)
     rw [FlockDeploy.Raw.ins_zk (RecRaw.ins_base hi)]
     simpa using hz
 
-/-! ## Flock's statements and the V* parts' -/
-
-/-- Flock's statement reader reads Flock's format string first. -/
 theorem read_format {x : Claims.Msg} {p : Raw × Claims.Msg} (h : FlockDeploy.Raw.read.run x = some p) :
     ∃ r, rdStr.run x = some (FlockDeploy.FORMAT, r) := by
   unfold FlockDeploy.Raw.read at h
@@ -395,7 +356,6 @@ theorem read_format {x : Claims.Msg} {p : Raw × Claims.Msg} (h : FlockDeploy.Ra
     · exact ⟨r, by rw [e]⟩
     · (simp [hs, e] at h) <;> cases h
 
-/-- A V* part's statement reader reads its format string first. -/
 theorem RecRaw.read_format {x : Claims.Msg} {p : RecRaw × Claims.Msg} (h : RecRaw.read.run x = some p) :
     ∃ r, rdStr.run x = some (RFORMAT, r) := by
   unfold RecRaw.read at h
@@ -410,7 +370,6 @@ theorem RecRaw.read_format {x : Claims.Msg} {p : RecRaw × Claims.Msg} (h : RecR
 
 theorem formats_ne : FlockDeploy.FORMAT ≠ RFORMAT := by decide
 
-/-- **No statement is both Flock's and a V* part's**: the two encodings' first fields, their format strings, differ. -/
 theorem decodeRec_none {x : Claims.Msg} {w : Raw} (h : FlockDeploy.decode x = some w) : decodeRec x = none := by
   unfold FlockDeploy.decode at h
   split at h
@@ -430,12 +389,10 @@ theorem decode_none {x : Claims.Msg} {w : RecRaw} (h : decodeRec x = some w) : F
   | none => rfl
   | some v => rw [decodeRec_none hd] at h; cases h
 
-/-- A statement that decodes as no V* part's has no recursive setup. -/
 theorem setupO_none {x : Claims.Msg} (h : decodeRec x = none) : setupO x = none := by
   unfold setupO insO
   simp [h]
 
-/-- A statement that decodes as no Flock statement sets up no session of Flock's. -/
 theorem setupOf_none {zk : Bool} {x : Claims.Msg} (h : FlockDeploy.decode x = none) : FlockDeploy.setupOf zk x = none := by
   unfold FlockDeploy.setupOf FlockDeploy.insOf
   simp [h]
@@ -460,7 +417,6 @@ theorem decode_of_readOf {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : F
   | none => simp [hd] at h
   | some w => exact ⟨w, rfl⟩
 
-/-- What a deployed parser parses, its reader reads. -/
 theorem read_of_parseOf {rel : Readable.Parsed → Readable.Relation} {rd : Claims.Msg → Option Readable.Read}
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (h : Readable.parseOf rel rd x = some s) : ∃ r, rd x = some r := by
   unfold Readable.parseOf Readable.parseBytes at h

@@ -34,21 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `RecursiveKS`'s nontrivial fixture: what the deployed readers make of it
-
-`RecursiveKS`'s nontrivial lemma (`Flock.Guarantees.recursiveKS_nontrivial`) is about one compiled statement that the
-deployed readers read: dense, with at least one V\* session, its inner statement in the plain scope (the checks
-`PlainIn` reads, `setupView`), and its V\* parts in scope at a live-coin record. Its inner statement need not be
-false: at the verifier that accepts everything the record stages no V\* statement, so `E*` extracts nothing from the
-silent prover, whatever the inner statement. What the kernel can't build is the reading: the deployed reader reads a
-statement only through `jsonOf`, whose `Lean.Json.Parser.anyCore` is a `partial def` the kernel can't unfold, and only
-where every V\* part's circuit is V\*'s byte for byte (`RecDeploy.partsVStar`). So the named assumption
-`DeployedParses x` says only what the deployed readers make of the statement's bytes `x`, and `PartsInScope` states
-the V\* parts' scope at the run's live-coin record, the premises `RecDeploy.lamLin2_deployed_ge_dep` takes at every
-statement. Wherever no statement reads, `RecursiveKS` holds at the verifier that accepts everything
-(`Flock.Guarantees.recursiveKSAtAll_of_readX_none`), so some such reading is needed.
--/
+/-! `RecursiveKS`'s nontrivial fixture (`DeployedParses`, `PartsInScope`), assumed because the deployed reader parses
+through a `partial def` the kernel can't unfold. -/
 
 @[expose] public section
 

@@ -34,21 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A rep's frames absorb its proof's values in w's order
-
-`repFrames` absorbs a decoded proof's values phase by phase: the zerocheck's (`round1_ab`, `round1_c`, each round's
-pair, `(final_a, final_b)`), the lincheck's (each round's pair, `z_partial`), the ring switches', then Ligerito's (`T`,
-the out-of-domain values and the sumcheck messages level by level, the final `yr`). V*'s `rounds` lists the same
-elements, by name, in the same order. So at a plain shape whose dimensions are the setup's, and a proof of its sizes,
-the values the frames absorb are the rounds' names read in the proof (`vals_repFrames_rounds`): `keyVal` reads a name's
-value off the proof, and `T`.
-
-* **Phase by phase** (`vals_zcFrames`, `vals_lcFrames`, `vals_rsFrames`, `vals_ligFrames`, `vals_repFrames`): each
-  phase's frames absorb `keyVal` at that phase's element list (`zcEls`, `lcEls`, `rsEls`, `ligEls`).
-* **The rounds' names** (`ligRounds_els`, `rounds_els`): Ligerito's rounds, through `ligRounds_eq`'s folds and level
-  loop, flatten to `ligEls`; at a plain shape, all the rounds flatten to the four lists in turn.
--/
+/-! A rep's frames absorb its proof's values in w's order (`vals_repFrames_rounds`). -/
 
 @[expose] public section
 
@@ -62,10 +48,6 @@ open FlockSoundness.Discharge.Exec
   (repFrames zcFrames lcFrames rsFrames ligFrames levelFr introFr queryFr chFr kFr capFr)
 open FlockC3.Reps (ligF1 ligF2 lig0 ligMid ligLast ligLevels ligRounds_eq)
 
-/-! ## Values -/
-
-/-- **A message element's value in a decoded proof** `p`, with Ligerito's batched value `T`; `0` at an element no frame
-absorbs (`h`, the running sums, a transpose, the comb or a consistency sum). -/
 def keyVal (p : Proof) (T : F128) : Key → F128
   | .ab i => p.zerocheck.round1ab[i]!
   | .c i => p.zerocheck.round1c[i]!
@@ -85,25 +67,17 @@ def keyVal (p : Proof) (T : F128) : Key → F128
   | .yr j => p.ligerito.finalProof.yr[j]!
   | _ => 0
 
-/-! ## The elements, phase by phase -/
-
-/-- Sumcheck message `i`'s four elements. -/
 def msgEls (i : ℕ) : List Key := [Key.msg i 0 0, Key.msg i 0 1, Key.msg i 1 0, Key.msg i 1 1]
 
-/-- The zerocheck's elements at `m` variables: `round1_ab`, `round1_c`, each round's pair, `(final_a, final_b)`. -/
 def zcEls (m : ℕ) : List Key :=
   (List.range' 0 64).map Key.ab ++ (List.range' 0 64).map Key.c ++
     (List.range' 0 (m - 6)).flatMap (fun i => [Key.g1 i, Key.ginf i]) ++ [Key.fa, Key.fb]
 
-/-- The lincheck's elements at `k_log`: each round's pair, then `z_partial`. -/
 def lcEls (kLog : ℕ) : List Key :=
   (List.range' 0 (kLog - 6)).flatMap (fun j => [Key.q1 j, Key.qinf j]) ++ (List.range' 0 64).map Key.zp
 
-/-- The ring switches' elements, for `n` claims. -/
 def rsEls (n : ℕ) : List Key := (List.range' 0 n).flatMap fun k => (List.range' 0 128).map (Key.rs k)
 
-/-- Level `i` of Ligerito's loop: four folding messages; then, below the last level, two out-of-domain values with
-their messages and the query message, and at the last the final `yr`. -/
 def lvEls (sch : Schedule) (i : ℕ) : List Key :=
   (List.range' (sch.k0 + 4 + 7 * i) 4).flatMap msgEls ++
     if i + 1 < sch.levels.size - 1 then
@@ -111,14 +85,10 @@ def lvEls (sch : Schedule) (i : ℕ) : List Key :=
         msgEls (sch.k0 + 10 + 7 * i)
     else (List.range' 0 (2 <<< sch.ext)).map Key.yr
 
-/-- Ligerito's elements: `T`, level 0's out-of-domain value, its `k₀ + 1` folding messages, two out-of-domain values
-with their messages, the query message, then the level loop's. -/
 def ligEls (sch : Schedule) : List Key :=
   Key.T :: Key.ood 0 :: (msgEls 0 ++ (List.range' 1 sch.k0).flatMap msgEls ++
     (Key.ood 1 :: msgEls (sch.k0 + 1) ++ Key.ood 2 :: msgEls (sch.k0 + 2) ++ msgEls (sch.k0 + 3))) ++
     (List.range' 0 (sch.levels.size - 1)).flatMap (lvEls sch)
-
-/-! ## The frames' values -/
 
 theorem vals_nil : vals [] = [] := rfl
 theorem vals_dom (b : ByteArray) (fs : List Frame) : vals (.dom b :: fs) = vals fs := rfl
@@ -152,7 +122,6 @@ theorem flatMap_congr' {α β : Type} {F G : α → List β} :
     rw [List.flatMap_cons, List.flatMap_cons, h a List.mem_cons_self,
       flatMap_congr' fun b hb => h b (List.mem_cons_of_mem _ hb)]
 
-/-- An array of `n` entries, as its entries in order. -/
 theorem toList_range' {α : Type} [Inhabited α] {a : Array α} {n : ℕ} (h : a.size = n) :
     a.toList = (List.range' 0 n).map (a[·]!) := by
   rw [← List.range_eq_range']
@@ -222,7 +191,6 @@ theorem vals_rsFrames (n : ℕ) (hrs : ∀ k < n, (p.ringSwitches[k]!).size = 12
   rw [toList_range' (hrs k (by omega))]
   rfl
 
-/-- **A rep's frames absorb its proof's elements, phase by phase**, at sizes of the decoded proof's shape. -/
 theorem vals_repFrames (st : Setup) (sch : Schedule) (dom : ByteArray) (n : ℕ)
     (hab : p.zerocheck.round1ab.size = 64) (hc : p.zerocheck.round1c.size = 64)
     (hz : p.lincheck.zPartial.size = 64) (hrs : ∀ k < n, (p.ringSwitches[k]!).size = 128)
@@ -233,8 +201,6 @@ theorem vals_repFrames (st : Setup) (sch : Schedule) (dom : ByteArray) (n : ℕ)
     vals_rsFrames p T n hrs, vals_ligFrames p T sch hyr, List.map_append]
 
 end frames
-
-/-! ## The rounds' elements -/
 
 theorem flat_push (out : Array (Array Key)) (r : Array Key) :
     (out.push r).flatten.toList = out.flatten.toList ++ r.toList := by
@@ -324,7 +290,6 @@ theorem ligLevels_els (sch : Schedule) : ∀ (n a : ℕ) (init : ℕ × ℕ × A
       rw [List.range'_zero, ligLevels_nil, List.flatMap_nil, List.append_nil, ligLast_els]
       simp only [lvEls, ha, ↓reduceIte]
 
-/-- **Ligerito's rounds' elements**, in order. -/
 theorem ligRounds_els (sch : Schedule) : (ligRounds sch).flatten.toList = ligEls sch := by
   rw [ligRounds_eq]
   obtain ⟨h1, h2, h3⟩ := lig0_els sch
@@ -336,7 +301,6 @@ theorem flat_range_map (f : ℕ → Array Key) (n : ℕ) :
   rw [Array.toList_flatten, Array.toList_map, Array.toList_range, List.map_map, List.range_eq_range']
   rfl
 
-/-- **The rounds' elements at a plain shape**, phase by phase: w's names but the running sums. -/
 theorem rounds_els {sh : Shape} (hh : sh.holo = false) :
     (rounds sh).flatten.toList = zcEls sh.m ++ lcEls sh.kLog ++ rsEls sh.claims ++ ligEls sh.sched := by
   simp only [rounds, hRound, hh, Bool.false_eq_true, ↓reduceIte, Array.flatten_append, Array.toList_append,
@@ -345,8 +309,6 @@ theorem rounds_els {sh : Shape} (hh : sh.holo = false) :
     List.flatten_cons, List.flatten_nil, List.append_nil, Array.toList_append, Array.toList_map, Array.toList_range,
     List.range_eq_range', List.append_assoc]
 
-/-- **A rep's frames absorb its proof's values in w's order**: at a plain shape of the setup's dimensions and the
-decoded proof's sizes, the frames' values are `keyVal` at the rounds' elements. -/
 theorem vals_repFrames_rounds {sh : Shape} {st : Setup} {sch : Schedule} {n : ℕ} (dom : ByteArray) (p : Proof)
     (T : F128) (hm : st.m = sh.m) (hk : st.fold.kLog = sh.kLog) (hn : n = sh.claims) (hs : sch = sh.sched)
     (hh : sh.holo = false) (hab : p.zerocheck.round1ab.size = 64) (hc : p.zerocheck.round1c.size = 64)

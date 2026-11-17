@@ -39,30 +39,8 @@ import Proofs.Flock.Claims.Recursion.NextRRows
 import Proofs.Flock.Claims.Recursion.SchedCount
 import Proofs.Flock.Recursive.HoloRepCoins
 
-/-!
-# The inner verifier's own calls at the deployed bound record (`hU`)
-
-`BitsLin2`'s `n` bounds the compiled record's inner-verifier calls (`Deploy.innerCalls`): `IVStar`'s run on the inner
-messages the outer witnesses give, at any coins. Those are the verifier's own hash evaluations, not the prover's, so
-they are counted here rather than assumed.
-
-* `IVStar` calls nothing before its last round (`Bound.run_ivstar`). At its last it opens each earlier round's commit
-  roundStrings, two calls each, as many as the schedule fixes (`Bound.nAt`), then replays the element-level verifier on the
-  opened messages (`Bound.agrees`), stopping at the first step that answers other than the run's coin. An element-level
-  step that answers a coin calls nothing, so the replay costs at most one step's calls (`Bound.agrees_calls_le`), and
-  the run at most `2 · Σ_{j < k-1} nAt j + c_E` (`innerCallsOf_ivstar_le`).
-* At the deployed schedule (`nAtSched`) round 0 carries each table's level-0 top, `2^{cap₀} ≤ 128` roundStrings
-  (`level0Nodes_le`), and each later round at most one top of `2^{cap} ≤ 128` strings and one row
-  (`repRounds_caps`); a rep has at most `2200` rounds (`repSchedAt_length_le`). At a plain session in scope
-  (`PlainIn`: at most `200` tables, `k_log ≤ 27`, `1026` regions at two link points) the schedule's roundStrings number at
-  most `2^27` (`sum_nAtSched_plainIn`).
-* At the deployed plain verifier's steps a coin answer calls nothing (`plainNext_msg`) and a decision calls its setup's
-  `setupCallsOf` and its verdict's `shaCallsOf` (`plainNext_calls_le`).
-
-So at a statement the compiled verifier accepts, the inner-verifier calls are at most `2^28 + c_B + c_V`
-(`innerCalls_plain_le_acc`), `c_B` bounding the inner setup's calls and `c_V` its verdict's at every oracle, both counts
-of the verifier's own code; `lamLin2_plain_ge_acc` is `λ₂ ≥ 100` there wherever `2^28 + c_B + c_V ≤ 2^55`.
--/
+/-! The inner verifier's calls at the deployed bound record (`hU`), counted rather than assumed as they are the
+verifier's own: at most `2^28 + c_B + c_V` at an accepted statement (`innerCalls_plain_le_acc`). -/
 
 @[expose] public section
 
@@ -83,7 +61,6 @@ theorem allOC_cons_calls (H : Msg → Msg) (p : OC Bool) (ps : List (OC Bool)) :
   · first | rfl | simp [OC.eval]
   · first | rfl | simp [OC.eval]
 
-/-- `allOC`'s calls are at most its programs'. -/
 theorem allOC_calls_le_sum (H : Msg → Msg) : ∀ ps : List (OC Bool),
     ((allOC ps).eval H).2.length ≤ (ps.map fun p => (p.eval H).2.length).sum
   | [] => by simp [allOC, OC.eval]
@@ -92,8 +69,6 @@ theorem allOC_calls_le_sum (H : Msg → Msg) : ∀ ps : List (OC Bool),
     have ih := allOC_calls_le_sum H ps
     split <;> omega
 
-/-- **`allOC` stops at the first `false`**: where each program calls at most `c` and each before the last that returns
-`true` calls nothing, the whole calls at most `c`. -/
 theorem allOC_calls_le (H : Msg → Msg) (c : ℕ) : ∀ ps : List (OC Bool),
     (∀ p ∈ ps, (p.eval H).2.length ≤ c) →
     (∀ (i : ℕ) (hi : i + 1 < ps.length), (ps[i].eval H).1 = true → (ps[i].eval H).2 = []) →
@@ -138,7 +113,6 @@ theorem Bound.opensRound_calls_le (Bd : Bound Coin Col T) (H : Msg → Msg) (a :
       | simp [Nat.mul_comm]
   · simp [OC.eval]
 
-/-- Each earlier round's openings call twice a row. -/
 theorem Bound.opensRounds_calls_le (Bd : Bound Coin Col T) (H : Msg → Msg) :
     ∀ (as : List Msg) (os : List (List (Msg × (Fin Bd.saltLen → UInt8)))),
       ((allOC ((as.zip os).map fun p => Bd.opensRound p.1 p.2)).eval H).2.length ≤ 2 * (os.map List.length).sum
@@ -150,8 +124,6 @@ theorem Bound.opensRounds_calls_le (Bd : Bound Coin Col T) (H : Msg → Msg) :
     have h2 := Bound.opensRounds_calls_le Bd H as os
     split <;> omega
 
-/-- **The element-level replay calls at most one step's calls**: each step before the last that matches the run's
-answer answered a coin, which calls nothing (`h0`). -/
 theorem Bound.agrees_calls_le (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (cE : ℕ)
     (hE : ∀ as cs, ((Bd.DE.V.next x as cs).eval H).2.length ≤ cE)
     (h0 : ∀ as cs m, ((Bd.DE.V.next x as cs).eval H).1 = .msg m → ((Bd.DE.V.next x as cs).eval H).2 = [])
@@ -178,8 +150,6 @@ theorem sum_map_length_eq {β : Type} : ∀ (f : ℕ → ℕ) (os : List (List �
     try beta_reduce
     omega
 
-/-- **`IVStar`'s step calls**: nothing before the last round; at the last, two a commit string the schedule fixes for
-the earlier rounds, then at most one element-level step's. -/
 theorem Bound.ivstar_calls_le (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (cE : ℕ)
     (hE : ∀ as cs, ((Bd.DE.V.next x as cs).eval H).2.length ≤ cE)
     (h0 : ∀ as cs m, ((Bd.DE.V.next x as cs).eval H).1 = .msg m → ((Bd.DE.V.next x as cs).eval H).2 = [])
@@ -218,8 +188,6 @@ open Flock
 open Claims (Msg Out Prover run coinSeq)
 open FlockDeploy (Coin Ins)
 
-/-- **`IVStar`'s calls on the inner messages, at any coins**: at most two a commit string the schedule fixes before the
-last round, and one element-level step's. -/
 theorem innerCallsOf_ivstar_le {Col T : Type} [DecidableEq Col] (Bd : Claims.Recursion.Bound Coin Col T)
     (H : Msg → Msg) (rd : Readers) (x : Msg) (cE : ℕ)
     (hE : ∀ as cs, ((Bd.DE.V.next (xIOf x) as cs).eval H).2.length ≤ cE)
@@ -241,9 +209,6 @@ theorem innerCallsOf_ivstar_le {Col T : Type} [DecidableEq Col] (Bd : Claims.Rec
     rw [List.length_map, List.length_range] at h
     exact h
 
-/-! ## The deployed schedule's commit roundStrings -/
-
-/-- A table's level-0 top: `2^{cap₀} ≤ 2^7` nodes. -/
 theorem level0Nodes_le (st : Stmt) : level0Nodes st ≤ 128 := by
   unfold level0Nodes
   cases hf : fast100 st.m with
@@ -254,7 +219,6 @@ theorem level0Nodes_le (st : Stmt) : level0Nodes st ≤ 128 := by
     calc 2 ^ (s.levels.getD 0 default).cap ≤ 2 ^ 7 := Nat.pow_le_pow_right (by norm_num) (hb.2.2.2 0 (by norm_num))
       _ = 128 := by norm_num
 
-/-- **A rep's rounds commit at most one top of at most `2^7` nodes each.** -/
 theorem repRounds_caps {m kLog claims : ℕ} {out : Array RecVStar.SchedRound}
     (h : RecVStar.repRounds m kLog claims = some out) : ∀ r ∈ out, r.2.1.toList.sum ≤ 128 := by
   unfold RecVStar.repRounds at h
@@ -316,7 +280,6 @@ theorem repRounds_caps {m kLog claims : ℕ} {out : Array RecVStar.SchedRound}
       subst hx
       first | exact hnil _ _ _ | exact hcap _ _ _ _ | (simp; done)
 
-/-- **A rep's rounds**, at `k_log ≤ 27` and at most `2054` claims: at most `2200`. -/
 theorem repSchedAt_length_le (spec : SessionSpec) (st : Stmt) (hk : st.c.kLog ≤ 27)
     (hc : 2 + spec.points * st.regions.size ≤ 2054) : (repSchedAt spec st).length ≤ 2200 := by
   unfold repSchedAt
@@ -341,11 +304,9 @@ theorem repSchedAt_length_le (spec : SessionSpec) (st : Stmt) (hk : st.c.kLog �
     generalize spec.points * st.regions.size = c at hc hsz
     omega
 
-/-- The schedule's recorded rounds in order: each table's two reps. -/
 def schedRoundsAll (spec : SessionSpec) (sts : Array Stmt) : List RecVStar.SchedRound :=
   sts.toList.flatMap fun st => repSchedAt spec st ++ repSchedAt spec st
 
-/-- A round's commit strings: its tops' cap nodes, then one row where it absorbs. -/
 def roundStrings (r : RecVStar.SchedRound) : ℕ := r.2.1.toList.sum + if r.2.2.2 then 1 else 0
 
 theorem roundStrings_le {spec : SessionSpec} {sts : Array Stmt} : ∀ r ∈ schedRoundsAll spec sts, roundStrings r ≤ 129 := by
@@ -414,7 +375,6 @@ theorem sum_getD_roundStrings_le (L : List RecVStar.SchedRound) (hL : ∀ r ∈ 
       rw [e2]
       omega
 
-/-- **The schedule's commit strings over any rounds**: each table's level-0 top, and at most `129` a recorded round. -/
 theorem sum_nAtSched_le {x : Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : FlockDeploy.setupOf false x = some (s, spec, sts)) (N : ℕ) :
     ∑ j ∈ Finset.range N, nAtSched x j ≤ 128 * sts.size + 129 * (schedRoundsAll spec sts).length := by
@@ -434,8 +394,6 @@ theorem sum_nAtSched_le {x : Msg} {s : Ins} {spec : SessionSpec} {sts : Array St
       exact (sum_getD_roundStrings_le _ roundStrings_le N).trans (Nat.mul_le_mul_left _ (Nat.min_le_right _ _))
     omega
 
-/-- **At a plain session in scope the schedule's commit roundStrings number at most `2^27`**: `200` tables, each a level-0
-top of `128` and two reps of at most `2200` rounds, `129` roundStrings each. -/
 theorem sum_nAtSched_plainIn {x : Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hin : FlockDeploy.PlainIn x s spec sts) (N : ℕ) : ∑ j ∈ Finset.range N, nAtSched x j ≤ 134217728 := by
   have h1 := sum_nAtSched_le hin.setup N
@@ -447,9 +405,6 @@ theorem sum_nAtSched_plainIn {x : Msg} {s : Ins} {spec : SessionSpec} {sts : Arr
   have hsz := hin.size_le
   omega
 
-/-! ## At the deployed plain verifier's steps -/
-
-/-- **A plain step that answers a coin calls nothing.** -/
 theorem plainNext_msg (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List Coin) (m : Msg)
     (h : ((FlockDeploy.next false x as cs).eval H).1 = .msg m) : ((FlockDeploy.next false x as cs).eval H).2 = [] := by
   cases ha : FlockDeploy.act false x as cs with
@@ -460,7 +415,6 @@ theorem plainNext_msg (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List Coi
     exact Claims.Bridge.outOf_ne_msg H (FlockDeploy.decision false s x link c₁ mids f) m
       (by unfold FlockDeploy.next at h; rw [ha] at h; exact h)
 
-/-- **A plain step's calls**: a decision's setup calls, then its verdict's. -/
 theorem plainNext_calls_le (H : Msg → Msg) (x : Msg) (cB cV : ℕ)
     (hB : ∀ s spec sts, FlockDeploy.setupOf false x = some (s, spec, sts) →
       FlockDeploy.setupCallsOf (Claims.hOf H) s.read ≤ cB)
@@ -488,11 +442,6 @@ theorem plainNext_calls_le (H : Msg → Msg) (x : Msg) (cB cV : ℕ)
       | (simp only [hw]; omega)
       | (simp [hw]; omega)
 
-/-! ## At an accepted statement -/
-
-/-- **`hU` at the deployed bound record, at an accepted statement**: on a run the compiled verifier accepts, the
-record's inner-verifier calls at any coins and witnesses are at most `2^28` openings' and one element-level step's
-(`c_E`), wherever the element-level steps answer a coin with no call (`h0`). -/
 theorem innerCalls_deployedB_le_acc (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -513,8 +462,6 @@ theorem innerCalls_deployedB_le_acc (rel : _root_.Flock.Readable.Parsed → _roo
   refine le_trans h ?_
   omega
 
-/-- **`hU` at the deployed plain verifier's steps, at an accepted statement**: `innerCalls_deployedB_le_acc` with
-`c_E` a decision's setup calls (`c_B`) and verdict calls (`c_V`), both bounds on the verifier's own code at `H`. -/
 theorem innerCalls_plain_le_acc (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -534,10 +481,8 @@ theorem innerCalls_plain_le_acc (rel : _root_.Flock.Readable.Parsed → _root_.F
     (fun as cs => plainNext_calls_le H (xIOf x) cB cV hB hV as cs)
     (fun as cs m hm => plainNext_msg H (xIOf x) as cs m hm)
 
-/-- **Route 2C's `λ₂ ≥ 100` at the deployed plain steps, at an accepted statement, with `hU` counted**:
-`lamLin2_deployedB_ge_acc` at `n = 2^28 + c_B + c_V` (`innerCalls_plain_le_acc`), wherever that is at most `2^55`.
-What is left is `hS` and the two counts of the verifier's own code, `c_B` (its inner setup's calls at `H`) and `c_V`
-(its verdict's). -/
+/-- What it still takes is `hS` and two counts of the verifier's own code: `c_B`, its inner setup's calls at `H`, and
+`c_V`, its verdict's. -/
 theorem lamLin2_plain_ge_acc (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -569,9 +514,6 @@ theorem lamLin2_plain_ge_acc (rel : _root_.Flock.Readable.Parsed → _root_.Floc
   ⟨innerCalls_plain_le_acc rel b L colsE wE join rowIn final w H hacc cB cV hB hV,
     lamLin2_deployedB_ge_acc rel b L (FlockDeploy.V false).next colsE wE join rowIn final w decI H hacc hS ps hc⟩
 
-/-! ## At the deployed reader's steps (`nextR`, the element-level steps KS's bound record reads) -/
-
-/-- **A step of `nextR` that answers a coin calls nothing.** -/
 theorem nextR_msg (rd : Msg → Option FlockDeploy.FinalP) (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List Coin)
     (m : Msg) (h : ((FlockDeploy.nextR rd x as cs).eval H).1 = .msg m) :
     ((FlockDeploy.nextR rd x as cs).eval H).2 = [] := by
@@ -583,8 +525,6 @@ theorem nextR_msg (rd : Msg → Option FlockDeploy.FinalP) (H : Msg → Msg) (x 
     exact Claims.Bridge.outOf_ne_msg H (FlockDeploy.decisionSF s x link c₁ mids f) m
       (by rw [FlockDeploy.nextR_decide ha] at h; exact h)
 
-/-- **A step of `nextR`'s calls**: a decision's setup calls at `H` (`c_B`), then its verdict's at whatever session the
-setup returns there (`c_V`: the files' digests and the plain verdict at the reader's record). -/
 theorem nextR_calls_le (rd : Msg → Option FlockDeploy.FinalP) (H : Msg → Msg) (x : Msg) (cB cV : ℕ)
     (hB : ∀ v, FlockDeploy.setupOf false x = some v → FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ cB)
     (hV : ∀ s spec sts link c₁ mids f,
@@ -618,8 +558,6 @@ theorem nextR_calls_le (rd : Msg → Option FlockDeploy.FinalP) (H : Msg → Msg
       omega
     · first | omega | (simp only [List.length_nil, Nat.add_zero]; omega) | (simp; omega)
 
-/-- **`hU` at KS's bound record, at an accepted statement**: `innerCalls_deployedB_le_acc` at the deployed reader's
-steps `nextR rd`, with `c_E` a decision's setup calls (`c_B`) and verdict calls (`c_V`). -/
 theorem innerCalls_R_le_acc (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (rd : Msg → Option FlockDeploy.FinalP)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -637,9 +575,7 @@ theorem innerCalls_R_le_acc (rel : _root_.Flock.Readable.Parsed → _root_.Flock
     (fun as cs => nextR_calls_le rd H (xIOf x) cB cV hB hV as cs)
     (fun as cs m hm => nextR_msg rd H (xIOf x) as cs m hm)
 
-/-- **Route 2C's `λ₂ ≥ 100` at KS's bound record (the deployed reader's steps), at an accepted statement, with `hU`
-counted**: `lamLin2_deployedB_ge_acc` at `nextE := nextR rd` and `n = 2^28 + c_B + c_V`, wherever that is at most `2^55`.
-What is left is `hS` and the two counts of the verifier's own code, `c_B` and `c_V`. -/
+/-- What it still takes is `hS` and the two counts of the verifier's own code, `c_B` and `c_V`. -/
 theorem lamLin2_R_ge_acc (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (rd : Msg → Option FlockDeploy.FinalP)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

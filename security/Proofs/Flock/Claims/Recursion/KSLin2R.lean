@@ -3,26 +3,8 @@ module
 public import Proofs.Flock.Claims.Recursion.KSFlockLinR
 public import Proofs.Flock.Claims.Recursion.LastCallsR
 
-/-!
-# `KSLin2` and `BitsLin2` at the deployed reader's steps (`FlockDeploy.nextR`)
-
-`StepsBase` fixes the bound record's columns at the deployed plain verifier's (`deployPlainTrim`). The deployed reader
-opens its own (`colsRV rd`, trimmed: `deployPlainTrimR`), so `StepsBaseC` is `StepsBase` at any columns `colsE`, and
-`ksLin2_stepsC_partAccepts` and `bitsLin2_stepsC_partAccepts` give `KSLin2` and `BitsLin2` at any steps and columns
-meeting it: `ksLin2_route_staged` at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record (`recTr`), which reads nothing of the columns beyond `StepsBaseC`.
-
-At the deployed reader's steps and trimmed columns (`stepsBase_R`):
-
-* `KSFlockLin` at `DE` is `ksFlockLin_R` (U3), from the reader's bound wherever some run accepts (`PlainRdInR`);
-* `LastBindsEC` is `lastStepBinds_R` carried to the trimmed columns (`lastStepBinds_RT`), from the reader's columns
-  half and calls half, both proved at SHA-512 (`rColsBind_sha512`, `rCallsBind_sha512`);
-* `LastCoinFree` holds at any columns (`lastCoinFree_R`).
-
-The inner verifier's calls need nothing of the steps: the finders search them at each sample's coins
-(`callsLogCollAt_deployRec`), so `StepsLogFree` is not among them. So `ksLin2_deployedR_partAccepts` and
-`bitsLin2_deployedR_partAccepts` are the B corollaries at the deployed reader, reopened on `PlainRdInR` and `DecompB`
-at `PartAccepts`. This bounds no number by itself: those premises are open.
--/
+/-! `KSLin2` and `BitsLin2` at the deployed reader's steps (`ksLin2_deployedR_partAccepts`), bounding no number by
+themselves: `PlainRdInR` and `DecompB` at `PartAccepts` are open. -/
 
 @[expose] public section
 
@@ -33,8 +15,6 @@ open Claims (Msg Out OC)
 open Claims.Recursion (Bound)
 open FlockDeploy (Coin FinalP nextR)
 
-/-- **What `ksLin2_route_staged` reads of the bound record's steps `nextE` and columns `colsE`**: `StepsBase` at any
-columns. -/
 def StepsBaseC (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) : Prop :=
@@ -45,11 +25,6 @@ def StepsBaseC (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (bdDeployed _root_.Flock.Readable.relation nextE colsE wE join rowInDeployed final w).LastCoinFree
       FlockDeploy.sha512
 
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the challenger's live-coin part's record
-(`recTr`), and any steps and columns meeting `StepsBaseC`, from `DecompB`**: `ksLin2_route_staged` with `HeldB` from
-`heldB_layoutBTops`, `StagedB` from `stagedB_deployRec_part` at `recRead` (`readsBack_recTr`), the inner check
-`PartAccepts` (`exists_chk_iff`), `PartOpensB` from `partOpensB_recRead` and `ReadersTrue` from
-`readersTrue_layoutBTops`. -/
 theorem ksLin2_stepsC_partAccepts (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -88,8 +63,6 @@ theorem ksLin2_stepsC_partAccepts (nextE : Msg → List Msg → List Coin → Cl
       (fun x st hst _ => hrb x st hst trivial) (hHe decI),
     hPC, fun _ => partOpensB_recRead (finOpen rest) bR (fun _ _ h => h) schedMatches_dense, hDc⟩
 
-/-- **`BitsLin2` at the same choice**: `ksLin2_stepsC_partAccepts` through `bitsLin2On_of_ksLin2On`
-(`sessionAccepts`). -/
 theorem bitsLin2_stepsC_partAccepts (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -113,9 +86,6 @@ theorem bitsLin2_stepsC_partAccepts (nextE : Msg → List Msg → List Coin → 
       { bR with rd := L.readers })
     (ksLin2_stepsC_partAccepts nextE colsE b aux nOf hd recRest rest wE join final w hB hD)
 
-/-! ## `StepsBaseC` at the deployed reader -/
-
-/-- The trimmed columns at the deployed reader agree wherever the untrimmed ones do. -/
 theorem plainTrimR_cols_congr (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (rd : Msg → Option FinalP) {v v' : Claims.Seen} (h : FlockDeploy.colsRV rd v = FlockDeploy.colsRV rd v') :
     (FlockDeploy.deployPlainTrimR rel rd).cols v = (FlockDeploy.deployPlainTrimR rel rd).cols v' := by
@@ -123,8 +93,6 @@ theorem plainTrimR_cols_congr (rel : _root_.Flock.Readable.Parsed → _root_.Flo
     fun j => (FlockDeploy.colsRV rd v' j).map fun p => (p.1, FlockDeploy.trimCol p.2)
   rw [h]
 
-/-- **`LastStepBinds` at the deployed reader's steps and trimmed columns**: `lastStepBinds_R` at the untrimmed
-columns, as trimmed columns that differ come from untrimmed ones that differ (`plainTrimR_cols_congr`). -/
 theorem lastStepBinds_RT (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List Msg → Msg) (rowIn : Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
@@ -135,7 +103,6 @@ theorem lastStepBinds_RT (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Re
   exact lastStepBinds_R rel rd wE join rowIn final w h x ms l l' cs hk hc hearly hacc hacc'
     (hne.imp_left fun hc0 heq => hc0 (plainTrimR_cols_congr rel rd heq))
 
-/-- **(P4) modulo what `E*` reads, at the deployed reader's steps and trimmed columns**, from `RLastBinds`. -/
 theorem lastBindsEC_RT (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (h : RLastBinds FlockDeploy.sha512 rd) :
@@ -144,9 +111,6 @@ theorem lastBindsEC_RT (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
   Bound.lastBindsEC_of_lastStep (binds_deployed rel _ _ wE join final w) (lastStepFree_of_R _ rd _ rfl)
     (lastStepBinds_RT rel rd wE join rowInDeployed final w h)
 
-/-- **`StepsBaseC` at the deployed reader's steps and trimmed columns** (U6): `KSFlockLin` from `PlainRdInR`
-(`ksFlockLin_R`), `LastBindsEC` from the reader's last-message binding at SHA-512 (`rColsBind_sha512`,
-`rCallsBind_sha512`), and `LastCoinFree` at any columns. -/
 theorem stepsBase_R (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x) :
@@ -155,12 +119,7 @@ theorem stepsBase_R (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List
     lastBindsEC_RT _ rd wE join final w (rLastBinds_of (rColsBind_sha512 rd) (rCallsBind_sha512 rd)),
     lastCoinFree_R _ rd _ wE join rowInDeployed final w FlockDeploy.sha512⟩
 
-/-! ## The B corollaries at the deployed reader -/
-
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the challenger's live-coin part's record
-(`recTr`) and the deployed reader's steps and trimmed columns**: `ksLin2_stepsC_partAccepts` at `stepsBase_R`. Its
-premises are `DecompB` at `PartAccepts` and `PlainRdInR`; `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the
-deployed reader with none. -/
+/-- `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the deployed reader with none of its premises. -/
 theorem ksLin2_deployedR_partAccepts (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -181,9 +140,8 @@ theorem ksLin2_deployedR_partAccepts (rd : Msg → Option FinalP) (b : Brings)
   ksLin2_stepsC_partAccepts _ _ b aux nOf hd recRest rest wE join final w
     (stepsBase_R rd wE join final w hIn)
 
-/-- **`BitsLin2` at the same choice**: `bitsLin2_stepsC_partAccepts` at `stepsBase_R`. It reads `StrictBirthday` and
-`ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployedR_partAccepts`'s open premises: a bound on a
-number under named premises, not a proved security level. -/
+/-- A bound on a number under `StrictBirthday`, `ExpectedCR` and `ksLin2_deployedR_partAccepts`'s open premises, not a
+proved security level. -/
 theorem bitsLin2_deployedR_partAccepts (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)

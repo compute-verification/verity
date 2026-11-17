@@ -37,17 +37,7 @@ import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The scope refusals on an accepted run
-
-`DeployScope` proves the compiled verifier's scope refusals at one session decision (`decide_scope`). This file puts
-them on a run: every V* session of an accepted run ends on a decision the compiled verifier doesn't refuse
-(`run_decides`), at the session's last round. Before the last session, the next session's first round refuses a
-session that ended on a coin (`decided`, which `run_round` reads); the last session's last round is the run's, which
-accepts (`stepWith_acc_last`). So the compiled verifier refuses an accepted run whose inner shape the setup's checks
-refuse or one of whose V* records doesn't sample every unit (`run_acc_scope`; `DrawRecord.Full`, `run_acc_full`), and what it
-reads of the statement with the sessions' records is in `InScope` (`run_acc_inScope_records`).
--/
+/-! The scope refusals on every session of an accepted run (`run_acc_scope`, `run_acc_inScope_records`). -/
 
 @[expose] public section
 
@@ -57,8 +47,6 @@ open Flock
 open Claims (Msg Out Prover run coinSeq)
 open FlockDeploy (Coin Final Ins)
 
-/-- **A run that accepts ends on its acceptance**: an accepted run's last round is answered `.acc` (a run out of rounds
-is refused). -/
 theorem stepWith_acc_last {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (vn : List Msg → Claims.OC Out) :
     ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Claims.Transcript),
@@ -83,17 +71,12 @@ section Runs
 variable (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
   (r : Fin ((V IV st).k x) → Coin)
 
-/-- **Round `i` of a run is session `s`'s decision** on the final message `f`: at the run's messages `ms` through
-round `i` and its coins `r`, the compiled verifier takes session `s`'s round, where the outer verifier decides on
-`f`. -/
 def DecidesAt (ms : List (Msg × Out)) (i s : ℕ) (f : Final) : Prop :=
   ∃ (j : ℕ) (xO : Msg) (as' : List Msg) (cs' : List Coin) (ins : Ins) (spec : SessionSpec) (sts : Array Stmt)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Msg × Coin)),
     ract IV st x ((ms.take (i + 1)).map Prod.fst) ((List.range (i + 1)).map (coinSeq r)) = .sess s j xO as' cs' ∧
       actO xO as' cs' = .decide ins spec sts link c₁ mids f
 
-/-- **Every session of an accepted run ends on a decision the compiled verifier doesn't refuse**: session `s`'s last
-round is its decision. -/
 theorem run_decides (hacc : (run H P (V IV st) x ω r).out = .acc) {s : ℕ} (hs : s < nS x) :
     ∃ i f, i < (run H P (V IV st) x ω r).msgs.length ∧ DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧
       ((next IV st x (((run H P (V IV st) x ω r).msgs.take (i + 1)).map Prod.fst)
@@ -190,9 +173,6 @@ theorem run_decides (hacc : (run H P (V IV st) x ω r).out = .acc) {s : ℕ} (hs
     · rw [← has]
       exact hnrej
 
-/-- **The compiled verifier refuses an accepted run out of scope**: on an accepted run, the setup's checks accept the
-inner shape `x` carries, and every V* session's decision is on a record that samples every unit of its population
-(`RecScope.fullSampleOk`, hence `DrawRecord.Full` by `RecScope.fullSampleOk_iff`). -/
 theorem run_acc_scope (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∃ xr, readX x = some xr ∧ RecScope.accepts (readOf xr) = true ∧
       ∀ s < nS x, ∃ i f, i < (run H P (V IV st) x ω r).msgs.length ∧
@@ -222,8 +202,6 @@ theorem run_acc_scope (hacc : (run H P (V IV st) x ω r).out = .acc) :
   · obtain ⟨i, f, hi, hD, -, hf⟩ := hd s hs
     exact ⟨i, f, hi, hD, hf⟩
 
-/-- **Every V\* session of an accepted run samples every unit**: its decision's record holds a sample, and it is the full
-sample (`DrawRecord.Full`). -/
 theorem run_acc_full (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∀ s < nS x, ∃ i f, i < (run H P (V IV st) x ω r).msgs.length ∧
       DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧
@@ -233,8 +211,6 @@ theorem run_acc_full (hacc : (run H P (V IV st) x ω r).out = .acc) :
   obtain ⟨i, f, hi, hD, hf⟩ := hall s hs
   exact ⟨i, f, hi, hD, (RecScope.fullSampleOk_iff xr.shape f.record).1 hf⟩
 
-/-- **An accepted run is in scope with its records**: what the compiled verifier reads of `x` with the records each
-V* session decided on (`RecScope.toStmt`, at `readOf` with those records) is in `InScope`. -/
 theorem run_acc_inScope_records (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∃ xr, readX x = some xr ∧ ∃ fs : Fin (nS x) → Final,
       (∀ s : Fin (nS x), ∃ i, i < (run H P (V IV st) x ω r).msgs.length ∧

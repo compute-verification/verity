@@ -36,23 +36,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A `rec-residuals` piece of the final check, from `PartAccepts`
-
-The final check's residuals pieces are `GfResiduals`' groups: a `rec-residuals` part's copies compute its group's
-residuals at the elements their input columns read (`partAccepts_inner`), and check 5 asks them to be zero at the held
-messages' rows and the coins' coefficients. This file states that piece's lowering fact (`partAccepts_resZero`) with
-one hypothesis, check 5's tie at the `m<r>` rows (`ResTie`: a copy's output columns are zero and its `v` port reads the
-verifier's `v`), which is open: the tie goes from "same
-digest" to "same row" through a collision with the verifier's own evaluations, which only option A's escape charges.
-
-* **The residuals vanish where the tie holds** (`resVal_zero_of_tie`): a copy's output columns hold its residuals
-  (`ResOuts`), so where they are zero, so is every residual, at the rows the copy reads and the tie's `v`.
-* **The rows a copy reads are the messages'** (`rowsRead_msgs`): where the layout reads row port `j`'s columns as a
-  shared row (`rowAt`) that the messages carry (`rowIn`), `PartAccepts`' read-row agreement (`RowsRead`) gives the
-  port's elements as the message bytes there (`elemsOf`), with no hypothesis: `rowsRead_port` finds the port's
-  elements among the copy's columns, `readElems_of_colsHold` reads them as bytes.
--/
+/-! A `rec-residuals` piece of the final check from `PartAccepts` (`partAccepts_resZero`), at one open hypothesis, check
+5's tie `ResTie`. -/
 
 @[expose] public section
 
@@ -62,8 +47,6 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 open FlockSoundness.Discharge.Hm (bitL)
-
-/-! ## Where a row port's elements sit -/
 
 theorem rowCol_take : ∀ (ps : List (String × ℕ)) (k j e t : ℕ) (hj : j < ps.length), e < ps[j].2 → t < 128 →
     FlockVBridge.OfVStar.rowCol ps k (128 * ((ps.take j).map (·.2)).sum + (128 * e + t)) =
@@ -110,11 +93,8 @@ theorem take_sum_lt : ∀ (ns : List ℕ) (j : ℕ) (hj : j < ns.length) (e : �
     show n + (ns.take j).sum + e < n + ns.sum
     omega
 
-/-- The input column where an algebra part's row port `j` starts. -/
 def rowPortCol (ns : List ℕ) (j : ℕ) : ℕ := FlockVBridge.OfVStar.rowCol (ns.map ("", ·)) 0 (128 * (ns.take j).sum)
 
-/-- **A row port's elements among the rows a copy reads**: element `e` of row port `j` is the copy's element
-`(ns.take j).sum + e`, read from the port's columns. -/
 theorem rowsRead_port {ns : List ℕ} {nv : ℕ} {v : ℕ → Bool} {j : ℕ} (hj : j < ns.length) {e : ℕ}
     (he : e < ns[j]) :
     _root_.Flock.Readable.rowsRead ns nv v ((ns.take j).sum + e) =
@@ -128,10 +108,6 @@ theorem rowsRead_port {ns : List ℕ} {nv : ℕ} {v : ℕ → Bool} {j : ℕ} (h
   rw [take_ports] at h
   rw [Nat.mul_add, Nat.add_assoc, h]
 
-/-! ## Elements as bytes -/
-
-/-- The `n` elements a byte string carries from its start, 16 bytes an element (element `e`'s bit `t` its bit
-`128 e + t`), zero past `n`. -/
 def elemsOf (bs : List UInt8) (n e : ℕ) : _root_.Flock.F128 :=
   if e < n then FlockVBridge.ofBits fun t => bitL bs (128 * e + t) else 0
 
@@ -150,7 +126,6 @@ theorem getD_drop_of_take {l B pre : List UInt8} (h : l.take (pre ++ B).length =
     Nat.add_sub_cancel_left] at h1
   simp only [List.getD_eq_getElem?_getD, List.getElem?_drop, h1]
 
-/-- Where a byte string starts with `pre` then `B`, the elements after `pre` are `B`'s. -/
 theorem elemsOf_drop_of_take {l B pre : List UInt8} (h : l.take (pre ++ B).length = pre ++ B) {n : ℕ}
     (hn : 16 * n ≤ B.length) (e : ℕ) : elemsOf (l.drop pre.length) n e = elemsOf B n e := by
   unfold elemsOf
@@ -161,11 +136,6 @@ theorem elemsOf_drop_of_take {l B pre : List UInt8} (h : l.take (pre ++ B).lengt
     rw [getD_drop_of_take h (by omega)]
   · rfl
 
-/-- **The rows a copy reads are the messages'**: where part `s` reads the shared rows where the messages `ms` carry
-them (`RowsRead`, `PartAccepts`' read-row agreement) and the layout reads its row `r` as the frame `pre` then `N` bytes
-of a copy's columns from row port `j`'s start, within the copy's columns and covering the port, at a row the messages
-carry at round `i`, offset `off`, the copy's elements on port `j` are the elements of round `i`'s bytes after the
-frame. -/
 theorem rowsRead_msgs {L : LayoutB} {x : Msg} {s : ℕ} {w : Claims.Flock.Wit} {ms : List Msg}
     (hR : L.RowsRead x s w ms) {p : _root_.Flock.Readable.Parsed} {t : ℕ} {ht : t < p.sts.size} {o g u : ℕ}
     {ns : List ℕ} {nv j : ℕ} (hj : j < ns.length) {r N i off : ℕ} {pre : Msg}
@@ -185,17 +155,11 @@ theorem rowsRead_msgs {L : LayoutB} {x : Msg} {s : ℕ} {w : Claims.Flock.Wit} {
   rw [rowsRead_port hj he, readElems_of_colsHold hb (by rw [hs]; omega) e]
   exact (elemsOf_drop_of_take hmsg (by rw [hB]; omega) e).symm
 
-/-! ## The residuals vanish -/
-
-/-- **Check 5's tie at a copy of a `rec-residuals` part**: its output columns are zero (the zero tie: the part's `out`
-rows are zero) and its `v` port reads `vv` (the value tie: the verifier's `v` at the coins). -/
 def ResTie (S : _root_.Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ) (vv : ℕ → _root_.Flock.F128) (v : ℕ → Bool) :
     Prop :=
   (∀ q < 128 * S.res.length, v (FlockVBridge.OfVStar.partBase S ns nv + q) = false) ∧
     _root_.Flock.Readable.vRead ns nv v = vv
 
-/-- **A copy's residuals vanish where check 5's tie holds**: a copy holding its residuals on its output columns
-(`ResOuts`), at which the tie holds, has every residual zero at the rows it reads and the tie's `v`. -/
 theorem resVal_zero_of_tie {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {vv : ℕ → _root_.Flock.F128}
     {v : ℕ → Bool} (h : _root_.Flock.Readable.ResOuts S ns nv v) (htie : ResTie S ns nv vv v) :
     ∀ q (hq : q < S.res.length), FlockVBridge.resVal (FlockVBridge.gfsOf S)
@@ -208,13 +172,7 @@ theorem resVal_zero_of_tie {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : 
   rw [← h.1 q hq k hk, FlockVBridge.OfVStar.bitOf_zero]
   exact hz _ (by omega)
 
-/-- **A `rec-residuals` piece's lowering fact, at check 5's tie**: at the deployed outer record and the staging
-`showsPart`, where part `s`'s V\* statement at `x`'s inner shape is an algebra part (`.inner`) and check 5's tie holds
-at every copy of an accepted witness (`htie`, the one hypothesis, which waits on the vcalls ask), `PartAccepts` names a
-staged statement and an outer witness `w`, reading the shared rows where the messages `ms` carry them (`RowsRead`), at
-which every copy (table `t`, block `o`, VU `g`, copy `u`) has the verifier's part `(S, ns, nv)` its unit's name and
-META give, every residual of `S` zero at the rows the copy reads and the tie's `vv t o g u`, and on every row port the
-layout reads as a row the messages carry, the copy's rows are the messages' (`rowsRead_msgs`). -/
+/-- `htie`, check 5's tie at every copy of an accepted witness, is its one open hypothesis. -/
 theorem partAccepts_resZero {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
     {x : Msg} {c : ℕ → Coin} {ms : List Msg}
