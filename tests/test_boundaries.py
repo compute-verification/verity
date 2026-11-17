@@ -1116,10 +1116,7 @@ def test_core_never_reads_the_census() -> None:
 WORLD_DIRS = ("hardware", "calibration")
 WORLD_PATH = re.compile(r"(?<![\w.\-])(hardware|calibration)[/\\]")
 #: The files of ``verity`` that still name a path to ``hardware/`` or ``calibration/``, each with why.  It only shrinks.
-WORLD_PATHS_ALLOWED = {
-    "device.py": "proofs: the card and node readers' built-in directories, `CARDS` and `NODES`, until every caller names "
-                 "its own",
-}
+WORLD_PATHS_ALLOWED: dict[str, str] = {}
 
 
 def _world_paths(tree: ast.AST) -> list[int]:

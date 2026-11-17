@@ -53,13 +53,14 @@ from pathlib import Path
 import torch
 from verity.device import load_card, number
 
+from verity_vllm.config import CARD_FILES
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_fused as X
 from verity_vllm.engine import int8_wgmma as W
 from verity_vllm.engine.profiles.devices import CARD
 
 HERE = Path(__file__).resolve().parent
-H200 = load_card(CARD["NVIDIA H200"])
+H200 = load_card(CARD["NVIDIA H200"], directory=CARD_FILES)
 F_REF, PER_CLK = float(number(H200["clock"]["tensor"]) * 10**6), int(number(H200["rate"]["tensor"]))
 THETA = F_REF * PER_CLK * int(number(H200["sm"]["count"]))
 LINEARS = {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192)}

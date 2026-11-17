@@ -54,7 +54,7 @@ The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `held`, `re
 auditor's sheet too. Digests are SHA-512 over canonical JSON
 (`verity.channel.canonical`) under the registration log's tags; a rational is the string `n` or `n/d` in lowest terms.
 
-**The card files**: one TOML file per SKU (`<sku>.toml` in `CARDS`), the one source of each card's numbers. A card is a
+**The card files**: one TOML file per SKU (`<sku>.toml` in a directory of them), the one source of each card's numbers. A card is a
 GPU's (`kind = "gpu"`), a host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries), a
 server's (`kind = "server"`: a server model's network ports, apart from its CPUs, DRAM and GPUs) or a time base's
 (`kind = "timebase"`: the clock an auditor's device reads, apart from the host it runs in; its one section is `drift`:
@@ -71,20 +71,20 @@ that quotes a figure under every reading iterates it rather than naming a clock 
 
 ~~~python
 from verity.device import load_card, number, rate, readings, skus
-skus("host")                       # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
-drift = load_card("nebius-vm-monotonic-raw")["drift"]["max"]  # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
+skus("host", directory=cards)                       # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
+drift = load_card("nebius-vm-monotonic-raw", directory=cards)["drift"]["max"]  # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
 number(drift)                      # Fraction(1, 2000): the auditor's figure for its device's drift, under that premise
-card = load_card("h200-sxm-141gb")
+card = load_card("h200-sxm-141gb", directory=cards)
 card["clock"]["sm"]["value"]       # 1980 (MHz)
 card["memory"]["bandwidth"]        # {'value': 4916736000000.0, 'unit': 'B/s', 'mark': 'ceiling', 'source': ...}
-load_card("dgx-h200")["link"]["rate"]   # {'value': 5011000000000.0, 'unit': 'bit/s', 'mark': 'ceiling', 'source': ...}
+load_card("dgx-h200", directory=cards)["link"]["rate"]   # {'value': 5011000000000.0, 'unit': 'bit/s', 'mark': 'ceiling', 'source': ...}
 rate(card)                         # Fraction(989429760000000): s8 MACs a second, 132 SMs x 4096 x clock.tensor 1830 MHz
 rate(card, mhz=1980)               # Fraction(1070530560000000): the same at clock.sm's 1980 MHz, the second reading
 readings(card)                     # {'tensor': Fraction(989429760000000), 'sm': Fraction(1070530560000000)}: both
 rate(card, fmt="f16", mhz=1700)    # the f16 MACs a second at a 1700 MHz clock
 ~~~
 
-**The node files**: one TOML file per kind of node (`<kind>.toml` in `NODES`), holding what a node's registration
+**The node files**: one TOML file per kind of node (`<kind>.toml` in a directory of them), holding what a node's registration
 states that no card does. A node is a host and the GPUs it carries. Its file names the GPU card and how many of it the
 node carries (`device.sku`, `device.count`), the host card (`host.sku`), the host's own memory, one table a leaf
 (`memory.NAME`: its `tier`, `dram` or `disk`, its `bytes` and its `rate`, the most its bytes are read back at, in
@@ -115,10 +115,10 @@ the one that bounds the node's disks together, `leaves`'s for `disk`. A server w
 
 ~~~python
 from verity.device import Auditor, Registration, check, leaves, load_card, load_node, node_figures, ways_out
-node = load_node("rtx-pro-6000-server-x8")
-gpu, host = load_card(node["device"]["sku"]), load_card(node["host"]["sku"])
+node = load_node("rtx-pro-6000-server-x8", directory=nodes, cards_directory=cards)
+gpu, host = load_card(node["device"]["sku"], directory=cards), load_card(node["host"]["sku"], directory=cards)
 log = Registration("remote")
-out, own = ways_out(node, "node0"), leaves(node, "node0")
+out, own = ways_out(node, "node0", host), leaves(node, "node0", host)
 entry = log.node_entry(node, gpu, "node0", host_card=host, ways=out, leaves=own)
 memory, figures = node_figures(node, host, "node0", ways=out, leaves=own)
 site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("node0", figures)]))
@@ -128,15 +128,13 @@ site.tiers("node0")                 # {'hbm': 824633720832, 'dram': 187260574105
 each, tier = own
 [(leaf.id, leaf.bw) for leaf in each]   # [('node0/dram', 9011200000000), ('node0/vda', 5584738461544), ...], bit/s
 tier                                # {'dram': 9011200000000, 'disk': 5584738461544}, each tier's leaves together
-ways_out(node, "node0")            # (Way('node0/eth0', 400000000000, True), Way('node0/storage', 5584738461544, False))
+ways_out(node, "node0", host)      # (Way('node0/eth0', 400000000000, True), Way('node0/storage', 5584738461544, False))
 ~~~
 
-`CARDS` and `NODES`, the directories the sheets are in, are `hardware/cards/` and `hardware/nodes/` beside the `verity`
-package's directory, the first of this file's resolved parents so named. The readers of card files (`skus`,
-`load_card`) and of node files (`node_kinds`, `load_node`) take `directory`, and every reader of the node files that
-reads a card file (`load_node`, `leaves`, `ways_out`) takes `cards_directory`, the directories the files are in, so
-that a reader whose copy of them is elsewhere names where it is; `None` is `CARDS` for a card file and `NODES` for a
-node file, read when the reader is called.
+The readers of card files (`skus`, `load_card`) and of node files (`node_kinds`, `load_node`) take `directory`, and
+every reader of the node files that reads a card file (`load_node`, and `leaves` and `ways_out` when given no host
+card) takes `cards_directory`: the directories the files are in, which every caller names (`cards` and `nodes` in the
+examples above), `verity` naming none.
 
 Stdlib, the wire (`verity.channel`) and `verity.errors` only.
 """
@@ -1558,27 +1556,21 @@ def check(log: Registration, auditor: Auditor) -> Site:
 
 # --- the card files and the node files ---------------------------------------------------------------------------------
 
-_PACKAGE = next(p for p in Path(__file__).resolve().parents if p.name == "verity")
-"""The `verity` package's directory, the first of this file's resolved parents so named: the sheets are in the
-top-level `hardware/` beside it, whatever this file's depth in the package, and wherever a link to the package that
-imported it is (a `research run` job imports `verity` through one)."""
-CARDS = _PACKAGE.parent / "hardware" / "cards"
 CARD_KINDS = ("gpu", "host", "server", "timebase")
 MARKS = ("ceiling", "measurement", "premise", "placeholder")
 ENTRY = frozenset({"value", "unit", "mark", "source"})
 WORD = 4  # bytes in a 32-bit word, the unit of every store and of device memory's rate
 
 
-def skus(kind: str | None = None, *, directory: Path | None = None) -> list[str]:
-    """The SKUs with a card file in ``directory`` (``CARDS`` when ``None``), or those of one ``kind``."""
-    every = sorted(p.stem for p in (CARDS if directory is None else directory).glob("*.toml"))
+def skus(kind: str | None = None, *, directory: Path) -> list[str]:
+    """The SKUs with a card file in ``directory``, or those of one ``kind``."""
+    every = sorted(p.stem for p in directory.glob("*.toml"))
     return every if kind is None else [sku for sku in every if load_card(sku, directory=directory)["kind"] == kind]
 
 
-def load_card(sku: str, *, directory: Path | None = None) -> dict:
-    """The card file of ``sku`` in ``directory`` (``CARDS`` when ``None``) as parsed TOML, refused unless every number
-    in it carries its unit, mark and source, and a GPU's unless its ``clock.default`` is one of ``READINGS``."""
-    directory = CARDS if directory is None else directory
+def load_card(sku: str, *, directory: Path) -> dict:
+    """The card file of ``sku`` in ``directory`` as parsed TOML, refused unless every number in it carries its unit,
+    mark and source, and a GPU's unless its ``clock.default`` is one of ``READINGS``."""
     path = directory / f"{sku}.toml"
     if not path.is_file():
         raise KeyError(f"no card {sku!r}: the cards are {skus(directory=directory)} ({directory}/<sku>.toml)")
@@ -1659,7 +1651,6 @@ def _check_entry(entry: dict, at: str) -> None:
             raise InvalidArtifact(f"{at}: give it a {field}")
 
 
-NODES = _PACKAGE.parent / "hardware" / "nodes"
 CARD_KIND = {"device": "gpu", "host": "host"}
 """The kind of card each of a node's tables names by ``sku``."""
 TIER = {"dram": ("memory", "bandwidth_max"), "disk": ("disk", "read_max")}
@@ -1691,16 +1682,14 @@ class Way(NamedTuple):
     """Whether a network certifier may split it: an interface, yes; the storage path, no."""
 
 
-def node_kinds(*, directory: Path | None = None) -> list[str]:
-    """The kinds of node with a file in ``directory`` (``NODES`` when ``None``)."""
-    return sorted(p.stem for p in (NODES if directory is None else directory).glob("*.toml"))
+def node_kinds(*, directory: Path) -> list[str]:
+    """The kinds of node with a file in ``directory``."""
+    return sorted(p.stem for p in directory.glob("*.toml"))
 
 
-def load_node(kind: str, *, directory: Path | None = None, cards_directory: Path | None = None) -> dict:
-    """The node file of ``kind`` in ``directory`` (``NODES`` when ``None``) as parsed TOML, refused unless every number
-    in it is an entry and each card it names is a card of its kind in ``cards_directory`` (``CARDS`` when
-    ``None``)."""
-    directory = NODES if directory is None else directory
+def load_node(kind: str, *, directory: Path, cards_directory: Path) -> dict:
+    """The node file of ``kind`` in ``directory`` as parsed TOML, refused unless every number in it is an entry and
+    each card it names is a card of its kind in ``cards_directory``."""
     path = directory / f"{kind}.toml"
     if not path.is_file():
         raise KeyError(f"no node {kind!r}: the nodes are {node_kinds(directory=directory)} ({directory}/<kind>.toml)")
@@ -1748,11 +1737,13 @@ def leaves(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = 
     ``disk.read_max`` for ``disk``. The host reads a tier at no more than the smaller of its leaves' rates summed and
     the tier's.
 
-    ``card`` is the host card's table: the card the file names by ``host.sku``, in ``cards_directory``
-    (``CARDS`` when ``None``), when none is given. A leaf is refused
+    ``card`` is the host card's table: the card the file names by ``host.sku``, in ``cards_directory``, when none
+    is given. A leaf is refused
     when it states no ``rate``, a rate that is no ceiling in ``B/s`` above 0, a tier that is neither, or a rate above
     its tier's, since no leaf is read faster than the host's leaves of its tier together. A ``dram`` leaf's rate is
     its tier's exactly: DRAM has no interface narrower than the server's channels."""
+    if card is None and cards_directory is None:
+        raise TypeError("leaves: give the host card's table, or cards_directory, the directory its card file is in")
     try:
         card = load_card(node["host"]["sku"], directory=cards_directory) if card is None else card
         stated = [(name, leaf["tier"], leaf["bytes"], leaf.get("rate"))
