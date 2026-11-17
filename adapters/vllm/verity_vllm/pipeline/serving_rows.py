@@ -436,7 +436,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
 
 
 def partition_doc(window: CS.Binding, partition: Mapping[str, Any]) -> dict[str, Any]:
-    """The partition file as derived: the verifier's templates, law and scope, with the members, the partition object and digest."""
+    """The partition file as derived: the verifier's templates, sampling design and scope, with the members, the partition object and digest."""
     return {"format": PARTITION_FORMAT, "templates": list(dict.fromkeys(m.template for m in window.members)), "law": window.law,
             "query": window.query["name"], "scope": partition.get("scope"), "members": [[m.key, m.n] for m in window.members],
             **({"chunk_cap": partition["chunk_cap"]} if partition.get("chunk_cap") else {}),
