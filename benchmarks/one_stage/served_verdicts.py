@@ -1791,7 +1791,7 @@ def members_reached(members: Mapping[str, Any], answer: Mapping[str, Any]) -> di
         k = sum(lo <= u < hi for u in drawn for lo, hi in m["units"])
         if k:
             b = BR.integrity_bound(n, k, delta)
-            bounds.append(f"at most {b} incorrect of member {name}'s {n} proof blocks at δ {delta}")
+            bounds.append(f"at most {b} incorrect of member {name}'s {n} proof block{'' if n == 1 else 's'} at δ {delta}")
     return {"members": {"sampled": len(bounds), "registered": len(members)}, "bounds": bounds}
 
 
