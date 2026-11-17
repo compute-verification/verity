@@ -6,19 +6,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 
-/-!
-# The reference setup of a statement with no session
-
-A `--zk` table's reference setup (`SampleSetupZHJP`) is built from a setup `verify --zk` made. A statement no session
-samples has none of its own. `y₀_of_sibling` builds one from a setup at the sample of no unit on another public file
-of the same circuit file, tags, coins, tables, partition and program (`Hidden.setupHidden_noUnit`): at one table, the
-statement's public file loaded and held to its roots, its header naming no `public_inputs`, sets up a `--zk` table at
-the sample of no unit, at `mPtsOf g 0` points.
-
-A reference setup is the one value of its type (`drawSetupZHJP_subsingleton`): its statement is what
-`Stmt.setupHidden` returns, its sample what `Draw.UnitSample.ofJson` decodes, its schedules what `fast100` and
-`Zk.schedule` return, and the rest are proofs.
--/
+/-! The reference setup of a statement no session samples, built from a setup at the sample of no unit on another public
+file of the same circuit file. -/
 
 @[expose] public section
 
@@ -27,8 +16,6 @@ namespace FlockSoundness.Discharge.HiddenExec
 open Flock
 open FlockSoundness.Discharge.Exec (Inputs)
 
-/-- **Two setups of one sample at one statement's inputs are one**: the statement, the decoded sample and the
-schedule are each a function's value, and every other field is a proof. -/
 theorem drawSetupHP_eq {n : ℕ} {I : Inputs} {own : Option ByteArray} {mPts : ℕ} {S : Finset (Fin n)}
     {d : Lean.Json} : ∀ x x' : SampleSetupHP I own mPts S d, x = x'
   | ⟨st, h, D, hD, _, _, _, m, k0, l₀, l₁, rest, ext, hsch, _, _, _⟩,
@@ -45,8 +32,6 @@ namespace FlockSoundness.Discharge.ZkHidden
 open Flock Exec ZkExec Composed HiddenExec
 open Lean (Json)
 
-/-- **A reference setup is the one value of its type**: at given inputs, public inputs of the verifier's own, link
-points, sampled proof blocks and sample. -/
 theorem drawSetupZHJP_subsingleton {n : ℕ} (I' : Inputs) (own : Option ByteArray) (mPts : ℕ) (S : Finset (Fin n))
     (d : Json) : Subsingleton (SampleSetupZHJP I' own mPts S d) :=
   ⟨fun y y' => by
@@ -56,11 +41,6 @@ theorem drawSetupZHJP_subsingleton {n : ℕ} (I' : Inputs) (own : Option ByteArr
     cases Except.ok.inj (hz.symm.trans hz')
     rfl⟩
 
-/-- **The reference setup of a statement with no session**: at one table, a setup `verify --zk` makes at a sample
-of no unit on the public file `pf₁` (`hst₁`, `hn₁`), under the statement's own tags, circuit file, coins, tables,
-partition and program, that passes the `--zk` shape check, gives the statement a `--zk` table at the sample of no unit
-(`Hidden.emptySample`) and `mPtsOf g 0` points, when the statement's public file loads for that setup's circuit, is held
-to its roots (`HmOut.checkPublic`) and names no `public_inputs` in its header. -/
 theorem y₀_of_sibling (n : ℕ) {I : Inputs} {D : Flock.Desc} {pf₁ : ByteArray} {d₁ : Json} {st₁ : Flock.Stmt}
     {pop : Flock.Public} (hc1 : I.count = 1) (ht : I.tags.typed = false)
     (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D)

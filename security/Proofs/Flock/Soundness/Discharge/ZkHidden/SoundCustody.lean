@@ -21,15 +21,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# One hidden-output `--zk` sampled session is sound, under the record's custody
-
-`zk_session_soundH_custody`: `zk_session_soundH` with its two premises about the record, `hRec` (`RecordsLiveZK`) and
-`hDraw` (`SampleOkZKH` at each of `SamplingDesign.execOS`'s samples), replaced by one named assumption, `RecordCustodyZK`
-(`live-verifier`), at `mPts := mPtsOf c.g (∑ s, ks s)`, the link points verity-verify-proof sets up at each of the sampling design's samples
-(`sampleOkZKH_of_exec`), as `Composed.zk_session_sound_custody` is `zk_session_sound`'s. It rests on five: `cr/sha-512`
-(`hCR`), `ecr/sha-512` (A2, inside `ε_bind`), A3 (`hA3`), A6 and `live-verifier` (`hCust`).
--/
+/-! One hidden-output `--zk` sampled session is sound, under the record's custody. -/
 
 @[expose] public section
 
@@ -41,31 +33,21 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **One hidden-output `--zk` sampled session is sound, under `live-verifier`.** `zk_session_soundH` at the link
-points of the sampling design's own samples, `mPtsOf c.g (∑ s, ks s)`, with the record's custody (`RecordCustodyZK`) in place of
-`hRec` and `hDraw`: `hRec` is its first half, and `hDraw` at every sample of `SamplingDesign.execOS` is `sampleOkZKH_of_exec` from its
-second. -/
 theorem zk_session_soundH_custody
     (I : Inputs) (ht : I.tags.typed = false)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOkH c = true)
-    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the record, at the link points of the sampling design's samples
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut (mPtsOf c.g (∑ s, ks s)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
     (hTags : TagsOkH I) (hCust : Assumptions.Zk.RecordCustodyZK I dj wr (.stratified Kd (Array.ofFn St)) pop)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover, and cr/sha-512 for the knowledge finders of its simulation
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀

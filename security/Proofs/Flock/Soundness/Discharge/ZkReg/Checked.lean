@@ -23,19 +23,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
-/-!
-# The registered check at an accepted `--zk --registered` outcome
-
-`checked_of_accepts`: at an outcome `verify --zk --registered F` accepts, the shadow layout's registered reads that are
-the verifier's own at the outcome's sample (`OwnReads`) are `Checked` at the outcome's registration, through `regPaths`.
-The one table's statement is setupH's at the record's sample `d`, over `HmRow.drawn c pub d` (`setupH_sampled`);
-`checkRegistered` accepting it is `Registered.check` accepting it (`checkRegistered_ok`), at a circuit naming each port
-once (`dupName_of_checkRegistered`, `names_once_of_dupName`), which opens each sampled
-instance's row of each of `own`'s ports at the position `own` gives for its unit, through the path the header gives
-(`check_tables`, `checkPort_at`: `FlockProofs.Registered.check_ok` keeping the positions and paths). The sampled
-instance at `u`'s rank holds the population's row of `u` (`Hidden.sampled_digestW`), whose leaf is the layout's
-registered leaf at `(u, q)`.
--/
+/-! The registered check at an accepted `--zk --registered` outcome. -/
 
 @[expose] public section
 
@@ -44,22 +32,17 @@ namespace FlockSoundness.Discharge.ZkReg
 open Flock FlockLevel3 Refine ZkLink ZkExec ZkBind Integrate DecodeZL
 open FlockSoundness.Discharge.Exec (Inputs recordDraw)
 
-/-- `AcceptsZKR` is `AcceptsZK` with the registered check: it implies `AcceptsZK`. -/
 theorem acceptsZK_of_R {I : Inputs} {own : Array Registered.Port} {t : Exec.Transcript} (h : AcceptsZKR I own t) :
     AcceptsZK I t := by
   obtain ⟨spec, sts, hs, -, -, hshape, hv⟩ := h
   exact ⟨spec, sts, hs, hshape, hv⟩
 
-/-- **Every port of an accepted statement is a registered read**: at an outcome `verify --zk --registered F` accepts,
-every port of each table's circuit, each input port and each output row, is named by a port of `own`
-(`Registered.checkComplete_ok`). -/
 theorem complete_of_R {I : Inputs} {own : Array Registered.Port} {t : Exec.Transcript} (h : AcceptsZKR I own t) :
     ∃ spec sts, Exec.setupOf (zkInputs I) t.record = .ok (spec, sts) ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∀ p ∈ sts[j].c.ports, ∃ r ∈ own, r.name = p.name := by
   obtain ⟨spec, sts, hs, -, hc, -⟩ := h
   exact ⟨spec, sts, hs, fun j hj => Registered.checkComplete_ok (array_forM_ok hc j hj)⟩
 
-/-- `checkRegistered` accepting a statement is `Registered.check` accepting it. -/
 theorem checkRegistered_ok {st : Stmt} {r : Option (Array Registered.Port)} (h : checkRegistered st r = .ok ()) :
     Registered.check st.c st.pub r (Registered.derived st.partition) = .ok () := by
   unfold checkRegistered at h
@@ -69,7 +52,6 @@ theorem checkRegistered_ok {st : Stmt} {r : Option (Array Registered.Port)} (h :
     | ok u => rw [hn] at h; exact h
   · exact h
 
-/-- `checkRegistered` accepting with the verifier's own registered reads: no port of the circuit repeats a name. -/
 theorem dupName_of_checkRegistered {st : Stmt} {own : Array Registered.Port}
     (h : checkRegistered st (some own) = .ok ()) : Registered.dupName st.c = none := by
   unfold checkRegistered Registered.namesOnce at h
@@ -77,7 +59,6 @@ theorem dupName_of_checkRegistered {st : Stmt} {own : Array Registered.Port}
   | none => rfl
   | some q => rw [hd] at h; cases h
 
-/-- A circuit with no repeated port name (`Registered.dupName`) names each of its ports once. -/
 theorem names_once_of_dupName {c : Circuit} (hd : Registered.dupName c = none) :
     ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q' := by
   intro q q' he
@@ -95,8 +76,6 @@ theorem names_once_of_dupName {c : Circuit} (hd : Registered.dupName c = none) :
   · exact Fin.ext heq
   · exact (key q' q hgt he.symm).elim
 
-/-- `Registered.check` accepting with the verifier's own `own`: the public file has tables `t`, its header names the
-units `idx`, and `checkPort` accepts each of `own`'s ports. -/
 theorem check_tables {c : Circuit} {pub : Public} {own : Array Registered.Port} {derived : Bool}
     (h : Registered.check c pub (some own) derived = .ok ()) :
     ∃ t idx, pub.tables = some t ∧ Registered.unitIndices pub = .ok idx ∧
@@ -114,10 +93,6 @@ theorem check_tables {c : Circuit} {pub : Public} {own : Array Registered.Port} 
       · exact absurd h (Registered.throw_ne_ok _ _)
     · exact absurd h (Registered.throw_ne_ok _ _)
 
-/-- **`checkPort` accepting, with its positions and paths** (`FlockProofs.Registered.checkPort_ok`, keeping them): the
-port is the circuit's first port `p` of its name, the header's entry gives `positions` and `paths`, and every instance's
-ref names a row of its table, which opens the registered root at that row's position through that row's path, the
-position `reg` gives for the instance's unit. -/
 theorem checkPort_at {c : Circuit} {pub : Public} {t : Tables} {indices : Array Nat} {reg : Registered.Port}
     (h : Registered.checkPort c pub t indices reg = .ok ()) :
     ∃ p positions paths, (List.range c.ports.size).find? (fun p => c.ports[p]!.name == reg.name) = some p ∧
@@ -158,9 +133,6 @@ theorem checkPort_at {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **The registered reads are checked at every accepted outcome.** At an outcome `verify --zk --registered F`
-accepts (`own` F's ports), each registered read of the shadow layout that is the verifier's own at the outcome's sample
-(`OwnReads`) has its registered leaf open the root `own` holds at the position `own` gives, through `regPaths`. -/
 theorem checked_of_accepts (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZK I mPts S₀ (dj S₀))
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)

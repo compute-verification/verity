@@ -10,25 +10,8 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
 import VCVio.Prelude.Core
 
-/-!
-# `verify --zk --registered F`, as an event of the audit
-
-`verity-verify-proof verify --zk --registered F` (`Main.verifyCmd`) checks a `--zk` session as `ZkExec.AcceptsZK` does, and
-holds every table's statement to the verifier's own registered reads `own` (F's ports, `Registered.ofJson`): after
-`Stmt.setupTables` and before `Zk.shapeOk`, `Main.buildSession` runs `Flock.checkRegistered` on each statement, the
-library's definition, which `AcceptsZKR` reads as it is. `AcceptsZKR` is that verdict; it implies `AcceptsZK`.
-
-What the registered check reads at a sampled statement over a shared-row population `pub` (`Registered.check`): the
-statement's units, as its header names them (`Registered.unitIndices`, which `HmRow.drawn` sets to the population's
-units at the sample's proved instances), and the header's `registered` entry of each of `own`'s ports, a position and a
-path per table row (`Registered.entry`). Instance `r` of the sampled statement is the population's instance
-`D.proved[r]`, so a read at the population's instance `u` is the sampled statement's at `u`'s rank `D.proved.idxOf u`:
-
-* `OwnReads own c pub t`: the layout's registered reads are the verifier's own at the record's sample: each at a row
-  `(u, q)` of a sampled instance `u`, its port among `own` and the circuit's port `q` by name (`checkPort`'s `find?`),
-  at the position the verifier's program reads in the unit the sampled statement names for `u`;
-* `regPaths c pub t port`: the path the sampled statement's header gives for that row, at the table row `u`'s ref names.
--/
+/-! `verify --zk --registered F` as an event of the audit (`AcceptsZKR`), and what its registered check reads at a
+sampled statement. -/
 
 @[expose] public section
 
@@ -58,10 +41,6 @@ def LiveAcceptsZKR (I : Inputs) (own : Array Registered.Port) (o : Reg × Finset
 
 variable {Gate : Type}
 
-/-- **The registered reads are the verifier's own at the record's sample.** Each registered read `p` is the row `(u, q)`
-of a sampled instance `u` (the record's sample `d` decodes to `D`, and `u ∈ D.proved`), its port is one of `own` and is
-the circuit's port `q` by name, and its position is the one `own` gives for the unit the sampled statement over `pub`
-(`HmRow.drawn c pub d`) names for `u`. -/
 def OwnReads (own : Array Registered.Port) (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (isRead : (Fin n × Fin c.ports.size) ⊕ Gate → Prop) (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port)
     (readAt : (Fin n × Fin c.ports.size) ⊕ Gate → ℕ) : Prop :=
@@ -71,8 +50,6 @@ def OwnReads (own : Array Registered.Port) (c : Circuit) (pub : Public) (t : Exe
     Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
     (port p).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some (readAt p))
 
-/-- **The paths of the registered reads**: at the row `(u, q)`, the path the sampled statement's header gives port
-`port (u, q)` (`Registered.entry`) at the table row that `u`'s instance's ref names; empty elsewhere. -/
 def regPaths (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port) : (Fin n × Fin c.ports.size) ⊕ Gate → ByteArray
   | .inl (u, q) => Option.getD (do

@@ -29,28 +29,7 @@ public import Proofs.Flock.Soundness.Registered.Binding
 public import Proofs.Flock.Soundness.Types.ProgramPlaces
 public import Proofs.Flock.Soundness.CROnly
 
-/-!
-# The `--zk` tables at the executable's leaves, and the honest prover's pre-final messages
-
-`ZK.Table` leaves its leaf functions abstract. A `--zk` session's leaves are the executable's (`verity-verify-proof verify --zk`):
-a level-0 leaf is `MerkleScheme.hm96Sha512.leaf` of its row (68 lanes: the `2^k₀` witness lanes, then the extra lanes
-`R^0_0, R^0_1, R^1_0, R^1_1`), a pads leaf is `verifyInner`'s `Default512.leaf (SHA-512(a ‖ b))` of its column `(a, b)`, and
-`τ`'s commitment is `Zk.tauCommitment`; each under a 192-byte salt. Here:
-
-* `bitsOf`, `bytesOf`: a byte string's bits as a vector over `ZMod 2` (`Hm.bitL`'s order), and back.
-* `My`, `saltHash`, `leafH`: hm96-sha512's structure at the pinned key, `leaf(x; y) = H(x ⊕ M·y, c(y))` with `M·y` the
-  Hankel matrix of the pinned key `κ₀` applied to the salt's bits (`CROnly.hankel`), `c(y) = SHA-512(sp ‖ y)` and
-  `H(b, c) = SHA-512(lp ‖ b ‖ c)` (`LeafSplit` states that this is the executable's leaf).
-* `Sizes`, `Coined`, `Coined.tab`: a `--zk` table at one coin vector, everything but its leaves given (`Coined`), with the
-  executable's leaves (`tab`). The sizes do not depend on the coins: a table's opened sets are counted with their
-  padding to `t_pad` level-0 positions and `Q` pads positions per rep, so the real final message is a function of the
-  view (it opens fewer leaves); `Coined` places them in the trees (`s0`, `sP`).
-* `Coined.viewExe`, `Coined.simExe`: `Hm96.viewR` and `Hm96.simR` with the executable's hidden leaves.
-* `LeafPos`, `Leaves`, `Base`, `randOf`, `preWith`, `content`, `exeLeaf`: the honest prover's pre-final messages by tree
-  position. `msgsAt T out` are its messages at fixed answers, `out c` of the session's pre-final view cut where the
-  session stops at `c`'s coins, with the leaves at each position given; `honest T out hc` is the prover as a strategy
-  against an adaptive verifier, `Causal` saying that its message `i` reads the answers before `i` only.
--/
+/-! The `--zk` tables at the executable's leaves, and the honest prover's pre-final messages. -/
 
 @[expose] public section
 
@@ -59,8 +38,6 @@ namespace FlockSoundness.Discharge.ZkView
 open Flock ZK
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## Bits and hm96-sha512 -/
 
 /-- An hm96-sha512 salt (192 bytes) as its 1536 bits. -/
 abbrev Salt := Fin 1536 → ZMod 2
@@ -92,8 +69,6 @@ def saltHash (y : Salt) : ByteArray := Sha512.hash (Hm96.Default512.saltPrefix +
 
 /-- An hm96-sha512 leaf from its commit string's two halves: `H(b, c) = SHA-512(lp ‖ b ‖ c)`. -/
 def leafH (p : Bits × ByteArray) : ByteArray := Hm96.Default512.treeLeaf (bytesOf (k := 64) p.1 ++ p.2)
-
-/-! ## The leaves of a `--zk` table -/
 
 /-- A level-0 row: the witness lanes, then the extra lanes `R^0_0, R^0_1, R^1_0, R^1_1`. -/
 def row0 {nL : ℕ} (col : (Fin nL → 𝔽) × (Fin 2 → Fin 2 → 𝔽)) : Array F128 :=
@@ -160,9 +135,7 @@ structure Coined (K W Hi VL : Type) [Field K] (z : Sizes) where
   GpU : Fin z.nU → Fin z.tpad → 𝔽
   ChU : Fin 2 → Fin z.nPU → PadIdx z.nE → 𝔽
   CpU : Fin 2 → Fin z.nPU → Fin z.nPad → 𝔽
-  /-- Level 0's tree: the opened positions, then the others. -/
   s0 : Fin z.nS ⊕ Fin z.nU ≃ Fin (z.nS + z.nU)
-  /-- Rep `r`'s pads tree: its opened positions, then the others. -/
   sP : Fin 2 → (Fin z.nQ ⊕ Fin z.nPU ≃ Fin (z.nQ + z.nPU))
 
 variable {K W Hi VL : Type} [Field K] {z : Sizes}
@@ -207,8 +180,6 @@ def Coined.tab (T : Coined K W Hi VL z) : Table 𝔽 K W Salt (Bits × Salt) Byt
   leafT := leafT
   ideal := leafI
 
-/-! ## Lemma B's views with the executable's hidden leaves -/
-
 /-- Level 0's column at the `q`-th position nobody opens, all 68 lanes (the content `Table.Hm96.dig` hashes). -/
 noncomputable def Coined.hidCol0 (T : Coined K W Hi VL z) (w : W) (ω : T.tab.Rand) (q : Fin z.nU) :
     (Fin z.nL → 𝔽) × (Fin 2 → Fin 2 → 𝔽) :=
@@ -241,8 +212,6 @@ noncomputable def Coined.viewExe (T : Coined K W Hi VL z) (w : W) (ω : T.tab.Ra
 noncomputable def Coined.simExe (T : Coined K W Hi VL z) (w0 : W) (σ : T.tab.SimRand) (ys : T.tab.Hid → Salt) :
     T.tab.View :=
   T.tab.simWith w0 σ (T.hidExeS w0 σ ys)
-
-/-! ## Lemma C's prover, by tree position -/
 
 /-- A table's pre-final leaves by position: level 0's tree, each rep's pads tree, each rep's commitment to `τ`. -/
 abbrev LeafPos (z : Sizes) := Fin (z.nS + z.nU) ⊕ (Fin 2 × Fin (z.nQ + z.nPU)) ⊕ Fin 2
@@ -306,21 +275,16 @@ noncomputable def Coined.exeLeaf (T : Coined K W Hi VL z) (w : W) (b : Base z Hi
 
 variable {J n : ℕ} {Cn : Type} {zs : Fin J → Sizes}
 
-/-- The digest each pre-final leaf of the session commits, as bits. -/
 noncomputable def digAt (T : (Fin n → Cn) → ∀ j, Coined K W Hi VL (zs j)) (w : Fin J → W) (ω : ∀ j, Base (zs j) Hi)
     (c : Fin n → Cn) (l : Leaves zs) : Bits :=
   bitsOf ((T c l.1).content (w l.1) (ω l.1) l.2)
 
-/-- **The prover's messages at fixed answers `c`**, with the session's pre-final leaves `lv`: `out c` of every table's
-pre-final view, cut where the session stops at `c`'s coins. -/
 noncomputable def msgsAt (T : (Fin n → Cn) → ∀ j, Coined K W Hi VL (zs j))
     (out : ∀ c, (∀ j, (T c j).tab.Cut) → Fin n → ByteArray) (w : Fin J → W) (ω : ∀ j, Base (zs j) Hi)
     (c : Fin n → Cn) (lv : Leaves zs → ByteArray) : Fin n → ByteArray :=
   out c fun j => (T c j).tab.cut (Session.sent (fun j => (T c j).tab) (fun j => (T c j).rep) j)
     ((T c j).preWith (w j) (ω j) fun p => lv ⟨j, p⟩)
 
-/-- **The round encoding reads the answers before each round only**, whatever each leaf's pair `(M·y, c(y))`: message `i`
-at answers `c` is message `i` at any answers agreeing with `c` before `i`. -/
 def Causal (T : (Fin n → Cn) → ∀ j, Coined K W Hi VL (zs j)) (out : ∀ c, (∀ j, (T c j).tab.Cut) → Fin n → ByteArray) :
     Prop :=
   ∀ (w : Fin J → W) (ω : ∀ j, Base (zs j) Hi) (p : Leaves zs → Bits × ByteArray) (c c' : Fin n → Cn) (i : Fin n),
@@ -328,15 +292,12 @@ def Causal (T : (Fin n → Cn) → ∀ j, Coined K W Hi VL (zs j)) (out : ∀ c,
       msgsAt T out w ω c (fun l => leafH (digAt T w ω c l + (p l).1, (p l).2)) i =
         msgsAt T out w ω c' (fun l => leafH (digAt T w ω c' l + (p l).1, (p l).2)) i
 
-/-- The prover on each leaf's pair `(B, c)` in place of `(M·y, c(y))` (Lemma C's `P`). -/
 noncomputable def pairProver (T : (Fin n → Cn) → ∀ j, Coined K W Hi VL (zs j))
     (out : ∀ c, (∀ j, (T c j).tab.Cut) → Fin n → ByteArray) (hc : Causal T out) (w : Fin J → W) :
     Strategy ((∀ j, Base (zs j) Hi) × (Leaves zs → Bits × ByteArray)) ByteArray Cn n where
   msg x c := msgsAt T out w x.1 c fun l => leafH (digAt T w x.1 c l + (x.2 l).1, (x.2 l).2)
   causal x c c' i h := hc w x.1 x.2 c c' i h
 
-/-- **The honest `--zk` prover** against an adaptive verifier, on its randomness and every pre-final leaf's salt: each
-leaf `H(x ⊕ M·y, c(y))` (`HonestMsg`: the executable's leaf). -/
 noncomputable def honest (T : (Fin n → Cn) → ∀ j, Coined K W Hi VL (zs j))
     (out : ∀ c, (∀ j, (T c j).tab.Cut) → Fin n → ByteArray) (hc : Causal T out) (w : Fin J → W) :
     Strategy ((∀ j, Base (zs j) Hi) × (Leaves zs → Salt)) ByteArray Cn n :=

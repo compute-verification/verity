@@ -23,16 +23,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigFinal
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigRun
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# The hiding Ligerito accepts
-
-`zk_ligerito_accepts`: when `Zk.ligerito` accepts, the compiled masked phase's Ligerito, played with the proof's
-messages on the coins the executable consumed, ends in a result whose verdict at the proof's openings is true. The
-lane phase and level 0's padded queries are new (`lane_vals`, `queryLevel0_val`, `padE_eq`); the level loop is the
-non-ZK session's (`LigeritoRun.lean`), with an invariant that drops the non-ZK session's caps and requests (`LoopRelV`):
-level 0's request is on `2^k₀ + 4` wide rows, which the non-ZK session's `ReqOK` does not describe, and the verdict
-reads neither.
--/
+/-! The hiding Ligerito accepts: when `Zk.ligerito` accepts, the compiled masked phase's Ligerito ends in a result whose
+verdict at the proof's openings is true. -/
 
 @[expose] public section
 
@@ -43,7 +35,8 @@ open Flock Refine Exec Game Model DecodeZL Transcript
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- The level loop's invariant before iteration `i`: the non-ZK session's `LoopRel` without its caps and requests. -/
+/-- The level loop's invariant without the non-ZK session's caps and requests, because level 0's request is on
+`2^k₀ + 4` wide rows, which `ReqOK` does not describe. -/
 structure LoopRelV (sch : Flock.Schedule) (p : LigeritoProof) (o : Opens 𝔽 Dig) (i : ℕ)
     (v : ℕ × Array ByteArray × Array (Array F256) × ℕ) (stE : LState) (t : Flock.Transcript)
     (stM : LigStateC 𝔽 𝕂 Dig) : Prop where
@@ -60,7 +53,6 @@ structure LoopRelV (sch : Flock.Schedule) (p : LigeritoProof) (o : Opens 𝔽 Di
   pos : ∀ cs ∈ stE.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size
   level : stM.level = i + 1
 
-/-- What the level loop ends with: the non-ZK session's `LoopFinal` without its residual length, caps and requests. -/
 structure LoopFinalV (sch : Flock.Schedule) (p : LigeritoProof) (o : Opens 𝔽 Dig) (b : ℕ → 𝔽) (ini : List 𝕂)
     (v : ℕ × Array ByteArray × Array (Array F256) × ℕ) (stE : LState) (pend : PendL 𝔽 Dig) : Prop where
   size : v.2.2.1.size = sch.levels.size - 1
@@ -71,8 +63,6 @@ structure LoopFinalV (sch : Flock.Schedule) (p : LigeritoProof) (o : Opens 𝔽 
     (yrOf p sch.ext) (gOf stE.s)
   pos : ∀ cs ∈ stE.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size
 
-/-- **Level 0's padded consistency value, at the model's positions**: `consPad_eq` with the model's positions and
-consistency coins (`positions_eq`, `ofFn_vecOf`), on a level of rate 1 whose rows the openings give. -/
 theorem padE_eq (lv : Flock.Level) (hl : LevelSeam lv) (hrate : lv.rate = 1) (k0 : ℕ) (hk0 : lv.lanes = k0)
     (rows : Array (Array F128)) (o : Opens 𝔽 Dig) (r ℓ : ℕ) (cw cα : Array F128) (fold : Array F256) (tPad : ℕ)
     (rho : F256 × F256) (ρ : Fin 2 → 𝕂) (ybar : Array F256) (hcα : cα.size = Nat.log2 (lv.q - 1) + 1)
@@ -95,12 +85,6 @@ theorem padE_eq (lv : Flock.Level) (hl : LevelSeam lv) (hrate : lv.rate = 1) (k0
     (fun j hj => hR j (hsz ▸ hj)) (pos_le_alpha lv hl cw cα hcα) hrep hρ0 hρ1 hy ht
 
 set_option maxHeartbeats 8000000 in
-/-- **The hiding Ligerito accepts** (live PROTOCOL.md §7 with `Flock.Ligerito`). When `Zk.ligerito` accepts from `t` to
-`t'` on well-formed rounds, at a schedule whose dimensions and levels are the model's, whose levels' consistency coins
-are not one word, with at least one lane round, level 0 of rate 1 and the padding no longer than level 0's message,
-and with `basisAt` the model's `bHat` of `b` (`hbasis`), then at any pads and batched value, the compiled masked phase's
-Ligerito at `c₀ = PAD_C` and the executable's rep, played with the proof's messages on the rounds consumed, ends in a
-result whose verdict at the openings `o` (the proof's opened rows, `ho`) is true. -/
 theorem zk_ligerito_accepts (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0) (b : ℕ → 𝔽) (o : Opens 𝔽 Dig)
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))

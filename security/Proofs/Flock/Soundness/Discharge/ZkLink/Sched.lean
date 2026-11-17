@@ -10,13 +10,7 @@ public import Proofs.Flock.Soundness.Refine.WideLeafChecks
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Rep
 
-/-!
-# `Zk.schedule` at every m it accepts
-
-`Zk.schedule` accepts `m` from 25 to 35 (`schedule_spec`), at either statement version (`wideLeaf`: the wide-leaf
-schedule, or `fast100`; `schedule_at`). At each, its schedule has the shape `TabZK` needs, its `m`, and level 0 padded
-by `t_pad` meets `PadOK` (`schedule_zk`), from `zkSchedFacts_all`, checked by `decide +kernel` at each version and `m`.
--/
+/-! `Zk.schedule` at every `m` it accepts. -/
 
 @[expose] public section
 
@@ -26,7 +20,7 @@ open Flock Accounting Refine
 
 variable {wideLeaf : Bool}
 
-/-- What `SampleSetupZK` needs of `Zk.schedule m`'s schedule and `t_pad`, as a `Bool` (`true` where it refuses `m`). -/
+/-- `true` also where `Zk.schedule` refuses `m`. -/
 def zkSchedFacts (wideLeaf : Bool) (m : ℕ) : Bool :=
   match Zk.schedule wideLeaf m with
   | .ok (s, t) =>
@@ -38,11 +32,9 @@ def zkSchedFacts (wideLeaf : Bool) (m : ℕ) : Bool :=
       decide (100 * (2 ^ l.logCols + t) ≤ 98 * 2 ^ l.logLen)
   | .error _ => true
 
-/-- **The m check**: every `m` `Zk.schedule` accepts (25 to 35) meets `zkSchedFacts`, by the kernel's `decide`. -/
 theorem zkSchedFacts_all : ∀ m, 25 ≤ m → m ≤ 35 → zkSchedFacts wideLeaf m = true := by
   intro m h1 h2; cases wideLeaf <;> interval_cases m <;> decide +kernel
 
-/-- `Zk.schedule` accepts only `25 ≤ m ≤ 35`, and only where the statement version has a schedule (`fast100At`). -/
 theorem schedule_at {m : ℕ} {r : Flock.Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok r) :
     (25 ≤ m ∧ m ≤ 35) ∧ ∃ s, Flock.fast100At wideLeaf m = some s := by
   unfold Zk.schedule at h
@@ -56,8 +48,6 @@ theorem schedule_at {m : ℕ} {r : Flock.Schedule × ℕ} (h : Zk.schedule wideL
   | none => intro h; cases h
   | some s => intro _; exact ⟨s, rfl⟩
 
-/-- `Zk.schedule` accepts only `25 ≤ m ≤ 35`, where `fast100` has a schedule too (the two versions' tables cover the
-same `m`, `fast100At_isSome`). -/
 theorem schedule_spec {m : ℕ} {r : Flock.Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok r) :
     25 ≤ m ∧ m ≤ 35 ∧ ∃ s, Flock.fast100 m = some s := by
   obtain ⟨hm, s, hs⟩ := schedule_at h
@@ -66,7 +56,6 @@ theorem schedule_spec {m : ℕ} {r : Flock.Schedule × ℕ} (h : Zk.schedule wid
   exact ⟨hm.1, hm.2, Option.isSome_iff_exists.1 hsome.symm⟩
 
 
-/-- **`Zk.schedule`'s schedule has `SampleSetupZK`'s shape, `m` and padding** (`PadOK`, its radius from `ρ' ≤ 0.98`). -/
 theorem schedule_zk {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Zk.schedule wideLeaf m = .ok (sch, tPad)) :
     (2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
       (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧

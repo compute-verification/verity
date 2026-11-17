@@ -33,19 +33,7 @@ import Proofs.Flock.Soundness.Game
 
 set_option Elab.async false
 
-/-!
-# The registered `--zk` session of `J` tables at the session's statement circuit
-
-`checked_of_acceptsHJ` and `zk_session_soundHJR` read the session's circuit from `HmOut.parse`, which refuses a templated
-file. Their `…St` forms here read it from `HmOut.parseStmt` (`hcS`, a templated file's committed circuit unrolled), with
-the rows' fit `hv1 : RowsFitS c` given, at `ZkHidden`'s statement-circuit rows (`layShHJSt`, `rsShHJSt`, `rsZHJSt`), which
-read no `pub.tables = none`, so a shared-row public file is in.
-
-Each table's statement commits the committed circuit `cs` (`HmOut.unrolled cs = c`), and `checkRegistered` reads it
-there. Unrolling changes only the unit net and the template (`Hidden.Committed.unrolled_eq`), and the registered check,
-the public file's load and the sample read neither (`check_unrolledOf`, `loadPublic_unrolledOf`, `sampled_unrolledOf`), so the
-check at `cs` is the check at `c`.
--/
+/-! The registered `--zk` session of `J` tables at the session's statement circuit. -/
 
 namespace FlockSoundness.Discharge.ZkReg
 
@@ -75,8 +63,6 @@ theorem sampled_unrolledOf (pub : Public) (d : Lean.Json) :
 
 end unrolled
 
-/-- **The registered reads are checked at every accepted hidden-output outcome of `J` tables**, at the session's
-statement circuit (`checked_of_acceptsHJ` at `HmOut.parseStmt`). -/
 theorem checked_of_acceptsHJSt (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
@@ -152,37 +138,28 @@ theorem checked_of_acceptsHJSt (I : Inputs) (ht : I.tags.typed = false) (own : A
   rw [hleaf, hra, hpath, hdig]
   exact hopens
 
-/-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound, and its registered reads are
-checked**, at the session's statement circuit (`zk_session_soundHJR` at `HmOut.parseStmt`). -/
 theorem zk_session_soundHJRSt
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the session's statement circuit, its rows' fit, and the public file
     {c : Flock.Circuit} (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
     (hv1 : Hidden.Any.RowsFitS c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
-    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_liveSt I ht hcS (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hRec hDraw)) τ
-    -- cr/sha-512 for the knowledge finders of its simulation
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZKR I own o ∧

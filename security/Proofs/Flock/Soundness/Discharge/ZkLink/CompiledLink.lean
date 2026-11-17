@@ -6,36 +6,7 @@ public import Proofs.Flock.Soundness.LinkCarry
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# `ε_bind` for the compiled `--zk` session, under expected-time collision resistance
-
-`Discharge/Exec/FlockLinkL.lean`'s link theorem for the compiled `--zk` session (`batchedSessionZC`), whose extractor
-fills each sampled proof block's level-0 oracle (68 lanes: the witness lanes and both reps' extra lanes) from the verifying
-openings of `k` accepted reruns (`extractTableZ`). It holds at the compiled analysis `analysisZC` at any knowledge bound,
-since the binding error does not read it, under expected-time collision resistance of SHA-512 for an explicit finder
-(`Assumptions.SHA512CRExpected`) and the binding of wires to commit strings (`ValueBindingZ`, named):
-
-* **Readings** (`readsAtZC`): after an extraction, the values sampled proof blocks open a commit string to, from the padded
-  witness each one's table settles on (`candZC`).
-* **The trial** (`trialGZC`) for a commit string `c`: a sample that reads `c`, uniform among such samples; a fresh compiled
-  session; if it accepts, `k` waits of at most `Rw` reruns each for a rerun in which it accepts. It reads what the
-  extraction from the runs found reads at `c` (`rdTZC`), and costs `t'` per run it plays (`cTZC`), `t'(1 + k)` in
-  expectation, `t'` one run's SHA-512 evaluations: the prover's and the verifier's, whose verdict the trial reads.
-* **The value layer** (`XplurZC`) is the plurality of the trial's single readings at each commit string.
-* **The finder** for `c` is `LinkFinder.finderG` on the trial. Its successes output collisions (`outCZC_spec`), so under
-  A2 the trial's link mass at `c` is at most `2t'(1 + k)/2^256 + 1/(eM)`.
-
-Against the value layer of any values `Xv` (`XlayerZC`), the binding error is at most
-`Σ_c π_c (ε_c + k/(eR_w))/(1 − ρ)`, with `ε_c` the trial's binding error at `c` against `Xv c` (`errZC`, `LinkFinder.errAt`;
-`zk_linkSoundC_at`). So a value layer other than the plurality, such as one value of a carried leaf shared by several
-sampling blocks, has its binding error from the trials' binding errors there.
-
-A2 is asked of one prover at a time (`LinkCRZC`), and the bound is `⊤` at any other (`linkBoundZC`). With `π c` the
-probability that a sample reads `c`, at the plurality (`zk_linkSoundC`):
-$$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2(1+k)\,t'}{2^{256}}+\frac{1}{eM}+
-\frac{k}{eR_w}\Big),\qquad Q_s=\sum_c\pi_c,$$
-with `ρ ≥ N₀/(ek)` for every table, `N₀` its level-0 positions.
--/
+/-! `ε_bind` for the compiled `--zk` session, under expected-time collision resistance. -/
 
 @[expose] public section
 
@@ -146,8 +117,6 @@ noncomputable def XvalZC (k Rw : ℕ) (c : vb.Pos) : vb.Val :=
 noncomputable def XplurZC (k Rw : ℕ) : Fin C.N → Bool :=
   fun g => vb.bit (XvalZC A Hs P planZ tab vb R τ k Rw (vb.pos g)) g
 
-/-! ## Openings, and the finder's output -/
-
 theorem cand_satZC {ω : L.Ω} {u : Fin n} {bs : List (List (OutZC F D Sl))}
     {M : Message F (tabOfZ planZ tab (L.draw ω) R u).sch.k0 (tabOfZ planZ tab (L.draw ω) R u).sch.level₀.logCols}
     (h : candZC A Hs planZ tab R τ ω u bs = some M) :
@@ -186,15 +155,12 @@ theorem opOfVZC_spec {c : vb.Pos} {e : TrialOutZC F L D Sl} {v : vb.Val}
         exact opensAt_specZC A Hs P planZ tab vb R τ hop
   · simp at hv
 
-/-- **Every success of the finder outputs a collision.** -/
 theorem outCZC_spec (c : vb.Pos) (x : TrialOutZC F L D Sl × List (TrialOutZC F L D Sl))
     (hS : Succ (rdTZC A Hs P planZ tab vb R τ c) x) :
     ∃ a b, outCZC A Hs P planZ tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
   outOf_spec (rdTZC A Hs P planZ tab vb R τ c) (opOfVZC A Hs P planZ tab vb R τ c) vb.collide
     (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hv => opOfVZC_spec A Hs P planZ tab vb R τ hv)
     (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
-
-/-! ## The trial's expectations -/
 
 theorem expect_trialZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw : ℕ)
     (F : TrialOutZC F L D Sl → ℝ) :
@@ -225,7 +191,6 @@ theorem cT_nonnegZC {t' : ℝ} (ht : 0 ≤ t') (e : TrialOutZC F L D Sl) : 0 ≤
     · exact le_rfl
   exact mul_nonneg ht (by linarith)
 
-/-- **A trial costs at most `t'(1 + k)` in expectation**, whatever the acceptance probability. -/
 theorem expect_cT_leZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw : ℕ) {t' : ℝ}
     (ht : 0 ≤ t') :
     expect (cTZC planZ R t') (trialGZC A Hs P planZ tab vb R τ c k Rw)
@@ -275,8 +240,6 @@ theorem expect_cT_leZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]; ring
 
 open Classical in
-/-- A trial's value for a function `Ψ` of the reruns: `Ψ` of the reruns its waits found, when the
-fresh session accepted and every wait found one. -/
 noncomputable def trialValZC (Ψ : L.Ω → List (List (OutZC F D Sl)) → ℝ) (e : TrialOutZC F L D Sl) : ℝ :=
   if accωZC planZ R e.1 e.2.1 then (firsts (accωZC planZ R e.1) e.2.2).elim 0 (Ψ e.1) else 0
 
@@ -320,11 +283,7 @@ theorem expect_trialValZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k
   simp only [Xs]
   ring
 
-/-! ## The link mass at one commit string -/
-
 open Classical in
-/-- **The link event's trace at commit string `c`**: the extraction from the reruns `bs` reads a
-value other than the plurality there. -/
 noncomputable def psiZC (k Rw : ℕ) (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) : ℝ :=
   if ∃ v ∈ readsAtZC A Hs P planZ tab vb R τ ω bs c, v ≠ XvalZC A Hs P planZ tab vb R τ k Rw c then 1 else 0
 
@@ -354,15 +313,11 @@ theorem readsAt_eq_emptyZC {c : vb.Pos} {ω : L.Ω} (h : ¬ ReadsSampleZ A P pla
   rintro ⟨o, u, hu, hrd, -⟩
   exact h ⟨u, hu, hrd⟩
 
-/-! ## The binding error against any value -/
-
 /-- **The value layer of a value at each commit string**: each wire's bit in the value `Xv` gives its commit
 string. The plurality value layer is the one at `XvalZC` (`XplurZC`). -/
 noncomputable def XlayerZC (Xv : vb.Pos → vb.Val) : Fin C.N → Bool := fun g => vb.bit (Xv (vb.pos g)) g
 
 open Classical in
-/-- **The binding error at `c` against the value `x`**: the trial's (`LinkFinder.errAt`), the probability that it
-reads two values or one other than `x`, and `0` when no sample reads `c`. -/
 noncomputable def errZC (c : vb.Pos) (k Rw : ℕ) (x : vb.Val) : ℝ :=
   if h : Nonempty (ΩcZ A P planZ tab vb L c) then
     haveI := h
@@ -386,8 +341,6 @@ theorem errZC_of (c : vb.Pos) [hne : Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw
   rw [dite_eq_left_of_eq_true (eq_true hne)]
 
 open Classical in
-/-- **The link event's trace at commit string `c` against the value `x`**: the extraction from the reruns `bs` reads a
-value other than `x` there. -/
 noncomputable def psiAtZC (x : vb.Val) (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) : ℝ :=
   if ∃ v ∈ readsAtZC A Hs P planZ tab vb R τ ω bs c, v ≠ x then 1 else 0
 
@@ -413,8 +366,6 @@ theorem trialVal_psiAtZC (x : vb.Val) (c : vb.Pos) (e : TrialOutZC F L D Sl) :
     | some bs => simp [ind, ha, hf, psiAtZC]
   · simp [ind, ha]
 
-/-- **The trace's mass in the trial is the binding error**: the trial's reruns read, at `c`, two values or one other
-than `x` with probability `errAt` there. -/
 theorem expect_psiAtZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw : ℕ) (x : vb.Val) :
     expect (trialValZC planZ R (psiAtZC A Hs P planZ tab vb R τ x c)) (trialGZC A Hs P planZ tab vb R τ c k Rw)
         (trialStratZC A Hs P planZ tab vb R τ c k Rw) =
@@ -433,7 +384,6 @@ theorem expect_psiAtZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw
   unfold errAt pRd
   ring
 
-/-- **The trial's binding error at the plurality**, under A2 for the finder: at most `2t'(1 + k)/2^256 + 1/(eM)`. -/
 theorem trial_err_leZC (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     [Nonempty (ΩcZ A P planZ tab vb L c)]
     (hCR : Assumptions.SHA512CRExpected Hc (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
@@ -453,7 +403,6 @@ theorem trial_err_leZC (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') 
   unfold errAt
   linarith
 
-/-- **The binding error at the plurality**, under A2 for the finder whenever a sample reads `c`. -/
 theorem errZC_le (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     (hCR : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), Assumptions.SHA512CRExpected Hc
       (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
@@ -468,9 +417,6 @@ theorem errZC_le (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : v
     rw [dite_eq_right_of_eq_false (eq_false hne)]
     positivity
 
-/-- **The ideal link mass at `c` against the value `x`**: the audit extractor's reading of `c` other than `x`,
-jointly with acceptance and averaged over the sample, is at most `π c` times the binding error there plus `k/(eRw)` for
-the waits that give up. -/
 theorem ideal_mass_le_atZC (x : vb.Val) (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) :
     (∑ ω : L.Ω, expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
         expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
@@ -485,7 +431,6 @@ theorem ideal_mass_le_atZC (x : vb.Val) (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Po
       (psiAtZC A Hs P planZ tab vb R τ x c ω) with hf
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
   have hB : 0 ≤ E + k / (Real.exp 1 * Rw) := add_nonneg (errZC_nonneg A Hs P planZ tab vb R τ c k Rw x) (by positivity)
-  -- off the samples that read `c`, the trace vanishes
   have hoff : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → f ω = 0 := by
     intro ω hω
     have hpsi : psiAtZC A Hs P planZ tab vb R τ x c ω = fun _ => 0 := funext fun bs => by
@@ -541,9 +486,6 @@ theorem ideal_mass_le_atZC (x : vb.Val) (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Po
       mul_nonneg (div_nonneg (Nat.cast_nonneg _) hΩ.le) hB
     nlinarith
 
-/-- **The ideal link mass at `c`**: the audit extractor's reading of `c` other than the
-plurality, jointly with acceptance and averaged over the sample, is at most `π c` times the trial's
-bound plus `k/(eRw)` for the waits that give up. -/
 theorem ideal_mass_leZC (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t')
     (c : vb.Pos)
     (hCR : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), Assumptions.SHA512CRExpected Hc
@@ -559,11 +501,6 @@ theorem ideal_mass_leZC (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ
   refine mul_le_mul_of_nonneg_left ?_ (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
   linarith [errZC_le A Hs P planZ tab vb R τ k Rw M hM ht c hCR]
 
-/-! ## The link theorem -/
-
-/-- **The link event leaves a trace**: if sampled proof block `u`'s extracted table is committed but every
-close satisfying message decodes, on `u`'s wires, differently from the value layer of `Xv`, then some commit
-string `c` reads a value other than `Xv c`. -/
 theorem linkEv_le_psiAtZC (Xv : vb.Pos → vb.Val) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw ω)
     (bs : List (List (OutZC F D Sl))) :
     ind (fun bs => LinkEvZK A P planZ tab decode (L.draw ω) R u (XlayerZC A P planZ tab vb Xv)
@@ -631,19 +568,11 @@ noncomputable def linkBoundZC (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont 
       (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
   else ⊤
 
-/-- **The link bound against the value layer of `Xv`, prover by prover**: `Σ_c π_c (ε_c + k/(eR_w))/(1 − ρ)`, with
-`ε_c` the binding error at `c` against `Xv R τ c` (`errZC`). -/
 noncomputable def errBoundZC (Xv : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → vb.Pos → vb.Val)
     (k Rw : ℕ) (ρ : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
     (errZC A Hs P planZ tab vb R τ c k Rw (Xv R τ c) + k / (Real.exp 1 * Rw))) / (1 - ρ))
 
-/-- **The link theorem against any value layer.** For the batched audit with the expected-time extractor
-(`analysisZC`, at any knowledge bound) and the value layer of any values `Xv` (`XlayerZC`), given the binding of wires
-to commit strings (`ValueBindingZ`), at every prover
-$$\delta_{\rm link}\le\frac{1}{1-\rho}\sum_c\pi_c\Big(\varepsilon_c+\frac{k}{eR_w}\Big),$$
-with `ε_c` the trial's binding error at `c` against `Xv c` (`errZC`), `π_c` the probability that a sample reads `c`,
-`ρ` a bound on every table's `N₀/(ek)` and `Rw` the waits' length. -/
 theorem zk_linkSoundC_at
     (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw : ℕ} (hRw : 1 ≤ Rw)
     {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -723,14 +652,6 @@ theorem zk_linkSoundC_at
         ring
     _ ≤ _ := div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => hc c) hρ1.le
 
-/-- **The link theorem: `ε_bind` under expected-time collision resistance, prover by prover.** For the batched audit
-with the expected-time extractor (`analysisZC`, at any knowledge bound) and the plurality value layer (`XplurZC`), given
-the binding of wires to commit strings (`ValueBindingZ`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCRZC`),
-$$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$
-with `Q_s = Σ_c π_c` the expected number of commit strings the sampled proof blocks read, `ρ` a bound on every table's `N₀/(ek)`,
-`t'` the SHA-512 evaluations of one session run, the prover's and the verifier's (`cTZC`), `M` the finder's further
-trials and `Rw` the waits' length. At any other prover the bound is `⊤` (`linkBoundZC`). It is `zk_linkSoundC_at` at
-the plurality, each binding error bounded under A2 (`errZC_le`). -/
 theorem zk_linkSoundC
     (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)

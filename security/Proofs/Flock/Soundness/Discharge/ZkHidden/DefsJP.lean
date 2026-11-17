@@ -10,25 +10,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 set_option Elab.async false
 
-/-!
-# One hidden-output `--zk` session of `J` tables at the verifier's public inputs
-
-`ZkHidden/DefsJ.lean` at the verifier's public inputs `own` (`verity-verify-proof verify --zk --public-inputs F`, which
-`Main.buildSessionOf` passes to `Stmt.setupTables`). `HmIn.checkOwn` holds the public file's public input words to `own`
-and changes nothing else `Stmt.setupHidden` returns, but at `own = none` it refuses a circuit with public input
-ports, so the acceptance is its own event (`AcceptsZKP`, which at `none` is `AcceptsZK`: `acceptsZKP_none`):
-
-* `AcceptsZKP`, `LiveAcceptsZKP`: `ZkExec.AcceptsZK` at `Exec.setupOfP (zkInputs I) own`.
-* `setupTables_partsHP`, `setupOf_tableJHP`: `setupTables_partsH`, `setupOf_tableJH` at `own`.
-* `SampleSetupZHJP`, `tableZHJP`, `planZHJP`, `tabZHJP`: `SampleSetupZHJ`, … with a `SampleSetupHP` at table `j`'s inputs.
-* `tableShHJP`, `planShHJP`, `tabShHJP`, `sitesShHJP`: the public tables (`HiddenExec.TableHP`) and their sites
-  (`SitesHP`), at the session's statement circuit `c` (`HmOut.parseStmt`, a templated file's committed circuit
-  unrolled).
-* `placeZHJP`, `layZHJP`, `rsZHJP`, `rsZHJP_computes`: `keyPlaceHP`, `keyLayoutHP` and `keyRowsHP` (the program
-  `Placed.keyProgP`, its outputs `Layout.outsOfP`, the registration the population's public file `HmIn.loadPublic`,
-  with or without shared rows), moved to the `--zk` tables.
-* `SampleOkZKHJP`, `opnAtZHJP`: `SampleOkZKHJ` and `opnAtZHJ` with `setupHidden … own`.
--/
+/-! One hidden-output `--zk` session of `J` tables at the verifier's public inputs `own`, whose acceptance is its own
+event because `HmIn.checkOwn` at `own = none` refuses a circuit with public input ports. -/
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -39,8 +22,6 @@ open FlockSoundness.Discharge.DecodeZLJ (partJson)
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## The acceptance -/
 
 /-- **verity-verify-proof `--zk` accepts the transcript at the verifier's public inputs `own`** (`AcceptsZK` with
 `Exec.setupOfP`). -/
@@ -55,8 +36,6 @@ def LiveAcceptsZKP {n : ℕ} {Reg : Type} (I : Inputs) (own : Option ByteArray)
     (o : Reg × Finset (Fin n) × Exec.Transcript) : Prop :=
   AcceptsZKP I own o.2.2
 
-/-! ## verity-verify-proof's tables at `count > 1` at `own` -/
-
 section Parts
 
 open Lean (Json)
@@ -66,7 +45,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Flock.Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- **`setupTables`'s tables at `count > 1` under hidden outputs at `own`** (`setupTables_partsH`). -/
 theorem setupTables_partsHP (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure own =
       .ok (spec, sts)) :
@@ -126,7 +104,6 @@ theorem setupTables_partsHP (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
 
 end Parts
 
-/-- **`verify --zk --public-inputs` sets table `j` up under its tags at its sample** (`setupOf_tableJH` at `own`). -/
 theorem setupOf_tableJHP {I : Inputs} {own : Option ByteArray} {record : String} {d : Lean.Json}
     {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hh : I.tags.hiddenOutputs = true) (hd : recordDraw record = some d)
@@ -160,15 +137,12 @@ theorem setupOf_tableJHP {I : Inputs} {own : Option ByteArray} {record : String}
     rw [e1, hpart]
     exact hall j hj
 
-/-- `HmIn.loadPublic` reads no identity, so it agrees at every table's tags. -/
 theorem loadPublicIn_tagsAt (tags : Tags) (count j : ℕ) (c : Flock.Circuit) (pi : HmIn.Ports) (b : ByteArray) :
     HmIn.loadPublic (tagsAt tags count j) c pi b = HmIn.loadPublic tags c pi b := by
   unfold tagsAt
   split_ifs <;> rfl
 
 variable {n mPts : ℕ} {Reg : Type}
-
-/-! ## The tables -/
 
 /-- **A hidden-output table `verify --zk` sets up at `own`**, on table `j`'s inputs `I'`: `SampleSetupZHJ` at a
 `SampleSetupHP`. -/
@@ -248,7 +222,6 @@ noncomputable def table : TabZK 𝔽 mPts := y.tabAt (regionsOf y.x.st) (stmtOf_
 noncomputable def refused : TabZK 𝔽 mPts :=
   y.tabAt (regionsOf y.x.st ++ Integrate.SampleSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
 
-/-- A table's `--zk` table is the same at every `SampleSetupZHJP` of it. -/
 theorem table_eq (y₁ y₂ : SampleSetupZHJP I' own mPts S d) : y₁.table = y₂.table := by
   obtain ⟨⟨st₁, h₁, D₁, hD₁, hS₁, hg₁, hb₁, m₁, k₁, a₁, b₁, r₁, e₁, hs₁, hm₁, hp₁, w₁⟩, sch₁, t₁, hz₁, _, _, _, _, _, _⟩ :=
     y₁
@@ -266,8 +239,6 @@ theorem table_lay : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
 
 end SampleSetupZHJP
 
-/-- A `SampleSetupHP` whose statement passes the `--zk` shape check, with `Zk.schedule`'s schedule at its `m`, is a
-`SampleSetupZHJP` (`sampleSetupZHJ_of`). -/
 theorem sampleSetupZHJP_of {I' : Inputs} {own : Option ByteArray} {S : Finset (Fin n)} {d : Lean.Json}
     (x : SampleSetupHP I' own mPts S d) (hshape : Flock.Zk.shapeOk x.st = .ok ()) {sch : Flock.Schedule} {tPad : ℕ}
     (hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)) :
@@ -372,7 +343,6 @@ theorem tableShHJP_typed (S : Finset (Fin n)) (j : Fin (nTab I)) :
 variable {c : Flock.Circuit} (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
 
 include ht hcS in
-/-- **One statement circuit per session, at every table** (`tableShHJ_parseStmt`). -/
 theorem tableShHJP_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
     HmOut.parseStmt (tableShHJP dj y₀ S j).1.tags (tableShHJP dj y₀ S j).1.circuitFile
       (tableShHJP dj y₀ S j).1.tables = .ok c := by
@@ -399,7 +369,6 @@ noncomputable def sitesShHJP : SitesHP (planShHJP (Reg := Reg) dj y₀) (tabShHJ
   o S R u h := Fin.cast (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShHJP_eq dj y₀ S R u)).symm
     ((tableShHJP dj y₀ S (partOf I (dj S) u.val)).2.o u (mem_partS h))
 
-/-- **One statement circuit per session**: every site's committed circuit unrolls to the session's `c`. -/
 theorem sitesShHJP_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
       HmOut.unrolled ((sitesShHJP dj y₀ ht hcS hscope).acc S R u h).st.c = c :=
@@ -416,7 +385,6 @@ theorem bcSiteHP_recast {T T' : Model.Statement} (a : AcceptedHP T) (e : T = T')
   hs
 
 include hU hpi hpub in
-/-- `BcSiteHP` at a table set up at table `j`'s inputs at `own` (`tableHP_bcSite` at `inputsJ I j`). -/
 theorem tableShHJP_bcSite {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableHP I' own mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parseStmt Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
     (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupHP (inputsJ I j) own mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
@@ -426,7 +394,6 @@ theorem tableShHJP_bcSite {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableHP I
   exact tableHP_bcSite p₁ p₂ hscope (fun _ => d) hU hpi ((loadPublicIn_tagsAt _ _ _ _ _ _).trans hpub) x h
 
 include hU hpi hpub in
-/-- **`BcSiteHP` at every satisfiable public site** at `J` tables at `own` (`sitesShHJ_bcSite`). -/
 theorem sitesShHJP_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShHJP dj y₀) (tabShHJP dj y₀) S R u),
@@ -455,7 +422,6 @@ noncomputable abbrev layShHJP :
     (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_stmt (zkTyped ht) hcS hscope) (Layout.outsOutP_outsOfP c hU n pi)
 
 include ht hcS hscope in
-/-- **`KeysRowP` from `scopeOkH`** at the session's statement circuit (`Hidden.keysRow_stmt`). -/
 theorem keysRowP_of_scopeZ : Layout.KeysRowP c hU pi (Layout.portRowW c) :=
   Layout.keysRowP_of_keysRow (Hidden.keysRow_stmt (zkTyped ht) hcS (Layout.scopeOkH_spec hU hscope).1
     (Layout.scopeOkH_spec hU hscope).2.2)
@@ -481,7 +447,6 @@ noncomputable def placeZHJP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
   placeCast (planZHJP_S dj y₀ S R u)
     (keyPlaceHP (sitesShHJP_parse dj y₀ ht hcS hscope) hpi (Layout.outsOfP c hU n pi) S R u h)
 
-/-- **The decoders agree**: the `--zk` places and the public places read one witness alike. -/
 theorem decAgreeHJP :
     DecAgree (P := (keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) (planZHJP_S (Reg := Reg) dj y₀)
       (decZ := decodeOfPlace execArith ((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) (planZHJP dj y₀)
@@ -506,16 +471,12 @@ noncomputable abbrev rsZHJP : HmRowsZX (layZHJP dj y₀ ht hcS hscope hU hpi (po
   HmRowsZX.ofShadow (planZHJP_S dj y₀) (decAgreeHJP dj y₀ ht hcS hscope hU hpi)
     (rsShHJP dj y₀ ht hcS hscope hU hpi hpub)
 
-/-- **`hHm` at the hidden-output `--zk` tables' rows at `own`** (`rsShHJP_computes`, moved along). -/
 theorem rsZHJP_computes : (rsZHJP dj y₀ ht hcS hscope hU hpi hpub (Reg := Reg)).Computes :=
   HmRowsZX.ofShadow_computes (planZHJP_S dj y₀) (decAgreeHJP dj y₀ ht hcS hscope hU hpi) _
     (rsShHJP_computes dj y₀ ht hcS hscope hU hpi hpub)
 
 end Shadow
 
-/-! ## The challenger's live-coin part's samples, and the openings, at `own` -/
-
-/-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables at `own`** (`SampleOkZKHJ` with `setupHidden … own`). -/
 def SampleOkZKHJP (I : Inputs) (own : Option ByteArray) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ)
     (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),
