@@ -58,7 +58,10 @@
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
 #     them.
-#  3. SPOT, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
+#  3. SPOT, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; under
+#     PEARLPLUS_TIE the fixed load's, the one window holding its requests and no other, with CERTIFIER_FRONT's group in a
+#     window of its own, the one whose requests are all the network attester's, which the network attester's piece takes
+#     and the record's `not_covered` names, its case left out of the composite; the
 #     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
 #     the window circuit's classes beside network attestation's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
@@ -834,7 +837,7 @@ EOF
 # member, finds no free span in `records_audit.PORTS` at a class window. Under H1_TIE the audit is tied to H1's W
 # (records_audit's --tie W --tie-prefix h1/, `tie_of`): the tables the circuit reads are W's, R registers them as its
 # outputs, and each sampled reader proves its rows at W's roots. Its rule is then a stratified rate (V3C_LAW), which
-# samples a stratum of each table's readers, so every table W registers has a sampled reader
+# samples a stratum of each reader template, so a table W registers has a sampled reader where its readers are templates of its own
 # (Record.checks), and V3C_PORTS defaults to the size of R's sample, its strata's k summed: at most a session for each
 # sampled proof block. The preflight refuses H1_TIE on a tree whose records_audit.py takes no --tie, or at another rule.
 # With V3C_WARM_JOBS=N, `records_audit.py warm` first composes every template of the committed window into
@@ -884,7 +887,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   if [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ]; then
     if [ -n "${H1_TIE:-}" ]; then tie=(--tie "$D/h1/w$K/registration.json" --tie-prefix h1/)
     else tie=(--tie "$(pearl_dir)/registration.json"); fi
-    [ -n "${V3C_PORTS:-}" ] || [ "${PEARLPLUS_TIE_UNIFORM:-}" = 1 ] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
+    [ -n "${V3C_PORTS:-}" ] || [[ $V3C_LAW == rate:* ]] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
       "$VW/window/registration.json") || { say "V3C-AUDIT: R, the window's registration, has no strata to size the audit's ports by: set V3C_PORTS"; return 1; }
   fi
   leanb=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin
@@ -1116,7 +1119,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   weights
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period served "$D" 2>&1 | tail -1)"
   if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier in front of the endpoint, before the requests
-    # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests.
+    # below: its group closes into a window of its own, the run's earliest: never the window of record under
+    # PEARLPLUS_TIE (that is the fixed load's), and otherwise the window of record only where it has the most requests.
     # Its session, bundle and log hold the group's prompts, request and cells, so they stay in the serve dir's private/
     (umask 077; mkdir -p "$D/private")
     (cd "$TREE" && timeout -k 1m "${CERTIFIER_FRONT_TIMEOUT:-20m}" bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$D/private/certifier-front") \
@@ -1236,7 +1240,7 @@ block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each
   done
 }
 IO_POLICY=${IO_POLICY:-$OUT/inference-only-policy.json}
-IO_LEAN=$TREE/verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-check
+IO_LEAN=$TREE/verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-verifier
 io_class() {  # the inference-only verdict's class: IO_CLASS, else the first of CLASSES but `record`
   local c
   [ -z "${IO_CLASS:-}" ] || { echo "$IO_CLASS"; return 0; }
@@ -1577,7 +1581,8 @@ EOF
     printf '%s\n' "$1/summary.json" "$1/window/audit.json" "$1/window/registration.json" "$1/runs.json" h1/log.jsonl \
       deployment-registration.json \
       private/pouw/period/case.json private/pouw/period/answer.json "pearlplus/w$K/tie/window/registration.json" \
-      "pearlplus/w$K/tie/summary.json" "pearlplus/w$K/tie/circuit-record.json" served-compare/served_compare.json
+      "pearlplus/w$K/tie/summary.json" "pearlplus/w$K/tie/circuit-record.json" served-compare/served_compare.json \
+      private/front-window
     for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
       printf "$a/window/%s\n" case.json case-v2.json case-error.txt case-v2-error.txt
     done
@@ -1861,11 +1866,25 @@ fi
 }
 window() {
 # the pick (its number, steps, requests and users, and each window refused and why) stays in the serve dir's private/
-PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$D/private/window.err")
+TIED_BY=()
+[ -z "$PEARLPLUS_TIE" ] || TIED_BY=(--of-load "$D/load.jsonl")
+PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} \
+  ${TIED_BY[@]+"${TIED_BY[@]}"} 2> "$D/private/window.err")
 [ -n "$PICK" ] || { say "WINDOW refused: no sealed window qualifies (why, by window, in the serve dir's private/window.err)"; stop window 12; }
 (umask 077; echo "$PICK" > "$D/private/window.json")
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
-say "WINDOW: $([ -n "${WINDOW:-}" ] && echo "the one WINDOW names" || echo "the sealed one with the most requests"), none carried across windows, at the class's $SLOTS slots (the pick in the serve dir's private/window.json)"
+say "WINDOW: $(if [ -n "$PEARLPLUS_TIE" ]; then echo "the fixed load's, the one sealed window holding its requests (load.jsonl's) and no other"
+  elif [ -n "${WINDOW:-}" ]; then echo "the one WINDOW names"; else echo "the sealed one with the most requests"; fi), none carried across windows, at the class's $SLOTS slots (the pick in the serve dir's private/window.json)"
+KN=$K
+rm -f "$D/private/front-window"
+if [ -n "$PEARLPLUS_TIE" ] && [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network attester's row from its front's own window
+  KN=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" --attested 2>> "$D/private/window.err" \
+    | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])' 2> /dev/null)
+  [ -n "$KN" ] && [ "$KN" != "$K" ] \
+    || { say "WINDOW refused: the network attester's front's group is in no one sealed window of its own apart from the fixed load's (why in the serve dir's private/window.err)"; stop window 12; }
+  (umask 077; echo "$KN" > "$D/private/front-window")
+  say "NETWORK-WINDOW: the network attester's row is over its front's group, the one sealed window of its requests alone, not the tied load's: it stands as its own verdict, its case left out of the composite"
+fi
 say "CLASSES: the window circuit's ${CLASSES}; the certifier's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
 }
 advice() {
@@ -2076,8 +2095,8 @@ if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under
       say "PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS $V3C, whose window circuit CLASSES ($CLASSES) doesn't count: add it"; exit 3 ;; esac
     [[ " ${SERVE_ARGS:-} " != *" --prefix-caching "* ]] \
       || { say "PREFLIGHT: under PEARLPLUS_TIE each request's prefill computes every row of its prompt, at which the cut circuit reads Pearl+'s tables, and SERVE_ARGS turns vLLM's prefix cache on (--prefix-caching): drop it"; exit 3; }
-    [ -z "${CERTIFIER_FRONT:-}" ] \
-      || { say "PREFLIGHT: under PEARLPLUS_TIE the window is V3C_CLASS's fixed load, and CERTIFIER_FRONT's group closes into a window of its own, which the run's pick takes on a tie in requests: unset CERTIFIER_FRONT"; exit 3; }
+    [ -z "${WINDOW:-}" ] \
+      || { say "PREFLIGHT: under PEARLPLUS_TIE the window of record is the fixed load's, named by its requests, and WINDOW names one by number: unset it"; exit 3; }
     grep -q -- '"--pearl-passes"' "$TREE/benchmarks/prove_path/prove_path.py" \
       || { say "PREFLIGHT: PEARLPLUS_TIE needs window-commit's --pearl-passes, its circuit cut at Pearl+'s linears, which this tree's prove_path.py doesn't take"; exit 3; }
     [ -z "$PEARLC_CHALLENGER_GATE" ] || [ -n "${MAIN_FILE:-}" ] \
@@ -2093,8 +2112,12 @@ if [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # V3c's audit 
     || { say "PREFLIGHT: under $TIED V3c's audit is tied to $WHOSE W, whose tables the circuit reads, with records_audit's --tie, which this tree's records_audit.py doesn't take"; exit 3; }
   [ -n "$V3C_LAW" ] \
     || { say "PREFLIGHT: under PEARLPLUS_TIE V3C_LAW has no default: the window is cut at Pearl+'s linears, and how many proof blocks each of its templates holds is not known here. The launch states V3C_LAW, a stratified rate: stratified-rate:1/DEN samples one proof block of each template while none holds more than DEN"; exit 3; }
-  [[ $V3C_LAW == stratified-rate:* ]] || { [ "$TIED" = PEARLPLUS_TIE ] && [ "${PEARLPLUS_TIE_UNIFORM:-}" = 1 ]; } \
-    || { say "PREFLIGHT: under $TIED every table $WHOSE W registers needs a sampled reader, which only a stratified rate (stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is $V3C_LAW"; exit 3; }
+  stratified=; [[ $V3C_LAW == stratified-rate:* ]] && stratified=1
+  [ -n "$stratified" ] || { [ "$TIED" = PEARLPLUS_TIE ] && [ "${PEARLPLUS_TIE_UNIFORM:-}" = 1 ]; } \
+    || { say "PREFLIGHT: under $TIED every table $WHOSE W registers needs a sampled reader, and a stratified rate (stratified-rate:NUM/DEN), the one rule the tie takes without PEARLPLUS_TIE_UNIFORM, samples a stratum of each reader template, which reaches every table only where each table's readers are templates of their own: V3C_LAW is $V3C_LAW"; exit 3; }
+  [ -z "$stratified" ] || [ "$TIED" != PEARLPLUS_TIE ] \
+    || grep -qs '"ROUND", "CALL"\]' "$TREE/adapters/vllm/verity_vllm/definitions/registry/linear_cut.py" \
+    || { say "PREFLIGHT: under PEARLPLUS_TIE this tree's cut reads every call of a linear shape with one template (its LinearARow takes no ROUND and CALL), so a stratified rate's stratum is a shape and its sample can leave a table Pearl+'s W registers with no sampled reader, and no rule that samples a stratum of each table's readers is written yet: set PEARLPLUS_TIE_UNIFORM=1 with a uniform rate (rate:NUM/DEN), whose record states its weaker tie"; exit 3; }
 fi
 # V3c's rule is a rate: window-commit and the audit's stream take no fixed count, and the class circuit has no work table
 [ -z "$V3C" ] || [ -n "$COMPOSE" ] || [[ $V3C_LAW == rate:* || $V3C_LAW == stratified-rate:* ]] \
@@ -2153,8 +2176,8 @@ mkdir -p "$D" "$ROOT/cache" "$FW"
 if [ -z "$FOLLOW$COMPOSE" ] && { [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; }; then
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
     | sh -s -- -y --default-toolchain none > "$OUT/elan.log" 2>&1
-  (cd "$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-check-difftest) > "$OUT/h1-lean.log" 2>&1 \
-    || { tail -20 "$OUT/h1-lean.log"; say "PREFLIGHT: H1's Lean verifier (pouw-check-difftest) didn't build"; exit 3; }
+  (cd "$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-verifier-difftest) > "$OUT/h1-lean.log" 2>&1 \
+    || { tail -20 "$OUT/h1-lean.log"; say "PREFLIGHT: H1's Lean verifier (pouw-verifier-difftest) didn't build"; exit 3; }
 fi
 if [ "${1:-}" = predict ]; then predict; exit $?; fi
 
@@ -2174,9 +2197,9 @@ build() {  # what prove_path.sh builds, here while the endpoint serves; prove_pa
     RESEARCH_RUN_DIR=$OUT/m0-build-gpu FLOCK_WORK=$FW/gpu CUDA_TK=$tk MODE=build GPU=1 flock "$FW/.build.lock" \
       bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || return 6
   fi
-  # after verity-verify-proof's build, whose package it requires by path: the inference-only verdict's `inference-only-check --count`,
+  # after verity-verify-proof's build, whose package it requires by path: the inference-only verdict's `inference-only-verifier --count`,
   # without which the verdict is the Python count's alone
-  (cd verity/protocols/workload_classification/training_detection/inference_only/verifier/lean && lake build inference-only-check) || echo "inference-only-check didn't build"
+  (cd verity/protocols/workload_classification/training_detection/inference_only/verifier/lean && lake build inference-only-verifier) || echo "inference-only-verifier didn't build"
 }
 if [ -n "$COMPOSE" ]; then ( unset PYTHONPATH; compose_build ) > "$OUT/build.log" 2>&1 &
 else ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
@@ -2265,7 +2288,7 @@ if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest pie
   # kept off CPUs 0 and 1 (CERT_CPUS), which PoUS's answers need idle: the chain's load stretches a round past Δ + RTT
   CERT_TASKSET=(); NCPU=$(nproc)
   command -v taskset > /dev/null && [ "$NCPU" -gt 2 ] && CERT_TASKSET=(taskset -c "${CERT_CPUS:-2-$((NCPU - 1))}")
-  ${CERT_TASKSET[@]+"${CERT_TASKSET[@]}"} "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" \
+  ${CERT_TASKSET[@]+"${CERT_TASKSET[@]}"} "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$KN" --out "$OUT/pieces" \
     --product "$PRODUCT" --only certifier > "$OUT/pieces-certifier.txt" 2>&1 &
   CERT=$!
 fi
@@ -2300,7 +2323,12 @@ sampled_coins || stop sampled-proofs 20
 
 # 6. here with the split certifier, whose period check reads V3c's period.json: its piece then reads the answer it wrote
 if [ -n "$SPLIT" ]; then
-  v3c_commit && v3c_proved
+  if ! v3c_commit; then why="V3c's window commit at class $V3C did not finish within V3C_TIMEOUT ($V3C_TIMEOUT) or failed (its WINDOW-COMMIT line), so the split network attester's chain and period check, which read it, did not run"
+  elif ! v3c_proved; then why="V3c's audit of its committed window wrote no period.json, which the split network attester's period check reads (v3c-audit/ in the run's out)"
+  else why=; fi
+  mkdir -p "$OUT/pieces/certifier"
+  [ -z "$why" ] || [ -e "$OUT/pieces/certifier/answer.json" ] || [ -e "$OUT/pieces/certifier/refused.txt" ] \
+    || echo "$why" > "$OUT/pieces/certifier/refused.txt"
   export CERTIFIER_CMD=true
 fi
 

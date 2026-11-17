@@ -1,7 +1,7 @@
 module
 
-public import MemoryChallenger.WipeProtocol
-public import Properties.Pous.MemoryChallenger
+public import MemoryAttester.WipeProtocol
+public import Properties.Pous.MemoryAttester
 public import Definitions.Pous.Model.StreamedWipe
 import Mathlib.Basic.ENNReal.Real
 
@@ -52,7 +52,7 @@ is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`C
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties
+namespace MemoryAttester.Properties
 
 open Flock
 
@@ -131,14 +131,14 @@ structure SignedWipeParty where
 /-- The messages the challenger signs under the key `pk`: its PoUS sessions' (`Signed`), and for each wipe it runs under
 `pk` and ends, `memoryChallengerMessage` of the key's identifier, the session id and the wipe's `message`. -/
 def SignedWipeParty.Signed (dev : SignedWipeParty) (pk m : ByteArray) : Prop :=
-  MemoryChallenger.Properties.Signed dev.device pk m ∨
+  MemoryAttester.Properties.Signed dev.device pk m ∨
     ∃ r ∈ dev.wipes pk, ∃ ended rec, r.recorded.ended = some ended ∧ r.message ended = .ok rec ∧
-      memoryChallengerMessage (pk.extract 0 16) r.commitment.session rec = .ok m
+      memoryAttesterMessage (pk.extract 0 16) r.commitment.session rec = .ok m
 
 /-- The message a signed wipe's signature signs: `memoryChallengerMessage` of its key's identifier, its session id and
 its `message`. -/
 def wipeMessage (s : StreamedWipe.Signed) : Option ByteArray :=
-  (s.message >>= memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session).toOption
+  (s.message >>= memoryAttesterMessage (s.publicKey.extract 0 16) s.commitment.session).toOption
 
 /-! ### The strings a wipe hashes -/
 
@@ -334,4 +334,4 @@ def unencodedParams : WipeProtocol.Params := ⟨MEASURED_SERVER, MEASURED_SESSIO
 /-- The memory challengers that ran nothing. -/
 def idleChallenger : SignedWipeParty := ⟨⟨fun _ => []⟩, fun _ => []⟩
 
-end MemoryChallenger.Properties
+end MemoryAttester.Properties
