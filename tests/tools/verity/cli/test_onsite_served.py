@@ -127,10 +127,12 @@ def test_the_configuration_states_no_host_or_address():
 def test_the_memory_attester_s_two_keys_are_pinned_and_hashed():
     cfg = R.load(CONFIG, REG)
     assert [(p["party"], p["protocol"], p["scheme"]) for p in cfg["pin"]] == [
-        ("memory-challenger", "pous", K.SCHEMES[0]), ("memory-challenger", "wipe", K.SCHEMES[0])]
+        (T.BANDWIDTH_VERIFIER, T.P2.COMPONENT, K.SCHEMES[0]), ("memory-challenger", "pous", K.SCHEMES[0]),
+        ("memory-challenger", "wipe", K.SCHEMES[0])]
     stated = {p["protocol"]: p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"]}
     assert {p["protocol"]: p["key-sha512"] for p in cfg["pin"]} == stated
     assert all(re.fullmatch("[0-9a-f]{128}", k) for k in stated.values()) and stated["pous"] != stated["wipe"]
+    assert stated["bandwidth"] == stated["pous"]   # the bandwidth close is signed with the PoUS key
     assert T.configuration(cfg["program"]["commit"])["pin"] == cfg["pin"]   # the table states no key of its own
     bare = {k: v for k, v in K.parse(CONFIG.read_text()).items() if k != "pin"}
     assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
@@ -156,7 +158,7 @@ def test_a_memory_attesters_placement_reads_the_configurations_pins_under_its_ha
     monkeypatch.setattr(mc, "committed", lambda: frozenset())
     assert T.placement(cfg, piece["wipe"], {"public_key": key["wipe"]})[mc.PREMISE].startswith(mc.UNCOMMITTED)
     assert T.placement(cfg, T.PARTIES["pous"]["prover"], {"public_key": key["pous"]}) is None
-    assert pin.keys() == {"pous", "wipe"}
+    assert pin.keys() == {"pous", "wipe", "bandwidth"}
 
 
 def test_the_registration_names_the_runs_own_configuration_and_is_not_written_yet(tmp_path):
@@ -269,6 +271,17 @@ def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
     assert rc == 0 and got["dry"][0]["unbound"] == UNBOUND
     assert next(e["dials"] for x in got["plan"] if x["party"] == "prover" for e in x["entries"]
                 if e["component"] == "pous") == "<memory-challenger.pous.address>"
+
+
+@pytest.mark.parametrize("demo", ["onsite_network", "onsite_compute"])
+def test_a_dry_run_of_a_smaller_onsite_demo_resolves_every_party_and_channel(capsys, demo):
+    path = ROOT / "demos" / f"{demo}.toml"
+    rc, got, err = dry(capsys, config=path)
+    cfg = R.load(path, REG)
+    assert rc == 0, err
+    assert K.composite(cfg["protocols"], REG.components) in K.UNACCEPTED
+    assert sorted(x["party"] for x in got["plan"]) == sorted(p["name"] for p in cfg["party"])
+    assert len(got["channel"]) == len(cfg["channel"]) and got["dry"][0]["configuration"] == K.digest(cfg)
 
 
 def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
@@ -410,16 +423,10 @@ def test_the_bandwidth_verifiers_start_reads_the_memory_attesters_run_beside_it(
     assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
 
 
-def test_the_bandwidth_verifiers_start_is_handed_pouss_pin_check(tmp_path):
-    """The table hands PoUB's verifier PoUS's device's pin check (`onsite.pin`, `onsite.signer`), which `p2_parties`
-    may not load: a configuration that pins no PoUS key is refused before the directory is read, and a directory holding
-    no key after."""
+def test_the_bandwidth_verifiers_start_is_not_yet_a_path_that_runs(tmp_path):
     start = T.POUB.protocol().starts[T.P2.VERIFIER]
-    with pytest.raises(Refused, match="pins no key"):
+    with pytest.raises(NotImplementedError, match=T.P2.GOAL):
         start({}, {"challenger": str(tmp_path)}, None)
-    pin = {"party": T.CS.CHALLENGER, "protocol": T.CS.COMPONENT, "key-sha512": "00" * 64}
-    with pytest.raises(Refused, match="holds no memory attester's key"):
-        start({"pin": [pin]}, {"challenger": str(tmp_path)}, None)
 
 
 def test_the_runtime_components_channels_are_their_protocols_manifests():
@@ -535,6 +542,36 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
 
 #: the prover node's parties whose pieces are the served window's alone: its prover's are runtime parties (`live`)
 SERVED_PARTIES = ("--party", "workers", "--party", "firewall")
+
+
+def test_the_workloads_piece_is_the_prover_nodes_first_and_each_verb_it_names_is_the_runners(capsys):
+    rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
+    first = got["plan"][0]["entries"][0]
+    assert rc == 0 and (got["plan"][0]["party"], first["component"]) == (T.WORKERS, T.SERVED_WINDOW)
+    assert first["verbs"] == ["predict", "serve", "seal", "window", "advice", "circuits", "publish"]
+    runner = (ROOT / T.RUNNER).read_text()
+    assert [v for v in first["verbs"] if f'if [ "${{1:-}}" = {v} ]; then' not in runner] == []
+    assert first["writes"] and all(w.split("/", 1)[0] in ("D", "OUT") for w in first["writes"])
+    assert all("verbs" not in e for x in got["plan"] for e in x["entries"] if e is not first)
+
+
+#: what the adapter's `run.sh settings MODEL -- verity run ...` sets of the node the workload runs on
+NODE_SETTINGS = ("VENV", "CUDA_HOME", "HF_HOME", "FLOCK_WORK", "DISK_FLOOR_GB", "HIDDEN_SO", "NORM_TAP_SO",
+                 "SERVE_ROOT", "ROW", "ROW_ID")
+
+
+def test_the_workloads_piece_hands_the_runner_the_nodes_settings(tmp_path, capsys, monkeypatch):
+    settings = {k: str(tmp_path / "node" / k.lower()) for k in NODE_SETTINGS}
+    for k, v in settings.items():
+        monkeypatch.setenv(k, v)
+    names = "|".join(NODE_SETTINGS)
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", f'mkdir -p "$OUT"\n/usr/bin/env | grep -E '
+                                                                    f"'^({names})=' | sort > \"$OUT/node.txt\"\n"))
+    state = tmp_path / "state"
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path), "--state",
+                     str(state)], REG)
+    assert rc == 0, capsys.readouterr().err
+    assert dict(x.split("=", 1) for x in (state / "out" / "node.txt").read_text().splitlines()) == settings
 
 
 def test_serve_openais_flags_are_every_listed_pieces():
