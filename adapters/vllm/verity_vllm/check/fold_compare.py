@@ -48,7 +48,6 @@ from verity.circuits.evaluation.reference import evaluate_call
 from verity.circuits.layout import FunctionCall
 from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple as TupleT
-from verity_vllm.definitions.registry import b1
 
 from verity_vllm.check.fold_sources import _EXTRA_NORM_SOURCES as _EXTRA_NORM_SOURCES
 from verity_vllm.check.fold_sources import _LAYER_FIELDS as _LAYER_FIELDS
@@ -77,6 +76,7 @@ from verity_vllm.check.fold_sources import _qkv_neox_permute as _qkv_neox_permut
 from verity_vllm.check.fold_sources import _storage_indices as _storage_indices
 from verity_vllm.check.fold_sources import hf_safetensors_glob as hf_safetensors_glob
 from verity_vllm.config import option
+from verity_vllm.definitions.registry import b1
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.fold import FoldResult, summarize
 from verity_vllm.program.frontend.rules.family import (

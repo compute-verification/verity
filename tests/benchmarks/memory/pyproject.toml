@@ -15,7 +15,7 @@ core = "verity bench memory"
 # settings.py is built on verity_config's registry, the result is written through the harness kit's writer, and a
 # number is printed or not by the reporting grid's rule for a row's error (`verity.protocol`); of `verity`, what
 # PoUB's verifier, which the command reads its record with, imports; --local serves the checkpoint core's pin names
-inputs = ["benchmarks/memory", "benchmarks/remote_session/summary.py",
+inputs = ["benchmarks/memory", "benchmarks/poub_session/summary.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json",
     "verity/protocol.py", "verity/channel.py", "tools/config/verity_config",
     "verity/__init__.py",

@@ -63,7 +63,7 @@ left out.
   | 11 Onsite demo: all four protocols accept | Onsite demo done |
   | The check reads what the serve registers | Inference-only demo done |
   | The eleven's numbers live on the console | Console shows core system metrics |
-  | The certifier's term is zero without a failure | Network attestation adds no exfiltration capacity unless a connection fails |
+  | The network attester's term is zero without a failure | Network attestation adds no exfiltration capacity unless a connection fails |
   | ci's slice reads clean | CI code cleaned up for review |
   | A candidate's check launch registers in three minutes | Check launches within three minutes |
   | GLM-5.3's long DSA rows in provable units | 128k-context attention fits in proof blocks |

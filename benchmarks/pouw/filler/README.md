@@ -13,8 +13,8 @@ quantization are left out, so a step here is a lower bound on a served step. `co
 Llama-3.1-70B tensor-parallel decode step, one process a rank, with the filler inside its collectives.
 
 The kernels are in PoUW's prover, `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/`: `dcap.cu`,
-`pfill.cuh` with its host build `pfill_host.cpp`, `lfill.cuh` and `flin.cuh`; their Python twins, `pfill_ref.py` and
-`dfill_ref.py`, are here. This directory's jobs and drivers (`dscore.cu`, `fscore.cu`, `pscore.cu`, `comm/tpcomm.cu`) build them
+`pfill.cuh` with its host build `pfill_host.cpp`, `lfill.cuh` and `flin.cuh`; `pfill.cuh`'s Python twin, `pfill_ref.py`,
+is here. This directory's jobs and drivers (`dscore.cu`, `fscore.cu`, `pscore.cu`, `comm/tpcomm.cu`) build them
 from there.
 
 ## Jobs
@@ -56,8 +56,8 @@ read) and `errors.txt`, and a job that flips coins writes `coins.txt`.
 ## Arms
 
 An arm is a filler and its placement beside the step; the scorer owns the workload, the timing, the gates and the
-arithmetic (`arms.py`'s docstring is the contract). `arms.py` holds the baselines, `pfill_arm.py`, `fused_arm.py` and
-`psched_arm.py` the others, and `fused_score.py`, `psched_score.py` and `pfill_fp_score.py` measure the arms whose
+arithmetic (`arms.py`'s docstring is the contract). `arms.py` holds the baseline, `pfill_arm.py` and `fused_arm.py`
+the others, and `fused_score.py`, `psched_score.py` and `pfill_fp_score.py` measure the arms whose
 placement the contract can't name, through their own drivers (`fscore.cu`, `pscore.cu`), into rows the scorer reads.
 The files an arm lists as its `sources` are its variant: their bytes' digest is the id its record carries, so an edit
 to one of them, a comment included, is a new variant. `score.py check ARM` runs an arm's contract and record checks on
@@ -83,16 +83,16 @@ python3 benchmarks/pouw/filler/comm/report.py OUT [--json]                      
 
 ## What the directory offers
 
-`dfill_ref.py` and `pfill_ref.py` are the filler tiles' receipts in Python, held to the kernels'
+`pfill_ref.py` is the filler tile's receipts in Python, held to the kernel's
 own host reference (`pfill_host.cpp` builds `pfill.cuh`'s with g++ for the tests); `pfill_ref.py` and `pfill.cuh` take
 their folds, key rules and lane starts from the receipts reference
 (`verity/protocols/resource_accounting/compute/pouw/verifier/receipts/`). One test outside the directory,
 `../../../tests/benchmarks/pouw/test_receipts_adopters.py`, loads `pfill_ref.py`, `pfill.cuh` and `scoring.py`'s `FOLDS` and `RECEIPT_TAGS`
 and holds them to that reference; nothing else outside the directory loads its Python, and nothing else includes the
-kernels. `arms.py`, `score.py`, `scoring.py`, `share.py`, `pfill_ref.py`, `dfill_ref.py`, `capacity_of.py`,
+kernels. `arms.py`, `score.py`, `scoring.py`, `share.py`, `pfill_ref.py`, `capacity_of.py`,
 `pfill_proved.py` and `comm/report.py` list in `__all__` the names other files read; the other files in an arm's
 `sources` list none, since a byte changed in one is a new variant of every arm that lists it. `scoring.py`, `share.py`,
-the two references and the readers above start no process and touch no GPU, and import nothing beyond the standard
+the reference and the readers above start no process and touch no GPU, and import nothing beyond the standard
 library, numpy, the receipts reference and `verity_machine_model`; `score.py` and the three arm runners build with
 `nvcc` and take a lease.
 
