@@ -87,6 +87,8 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
 #: each component's row in the record: Pearl+'s is ``work``, as H1's is
 ROWS = {v: k for k, v in RECORD_NAMES.items()} | {"pearl-plus": "work"}
+#: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
+AS_WRITTEN = "as the served node wrote it"
 
 
 # --- what each component and the workload declare -------------------------------------------------------------------
@@ -716,20 +718,21 @@ def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     if line.get("product") != "remote":
         raise Refused("record", f"the record in {base} is composed for {line.get('product')!r}, not remote")
     report = json.loads(f.read_text())
-    rows = report.get("protocols", {})
+    rows = report.get("protocols", {}) if composed else {}
     components = {c: rows.get(ROWS.get(c, c), {}).get("verdict", "absent") for c in cfg["protocols"]}
-    io = base / "record" / "inference-only.json"
-    if components.get("inference-only") == "absent" and io.is_file():
-        components["inference-only"] = json.loads(io.read_text()).get("verdict", "absent")
     held = sorted(f"{c} {v}" for c, v in components.items() if v != "accept")
-    verdict = VERDICTS.get(line.get("composed"), "undecided")
+    if components.get("inference-only") == "accept" \
+            and str(rows[ROWS["inference-only"]].get("answer_from", AS_WRITTEN)).startswith(AS_WRITTEN):
+        held.append(f"inference-only {AS_WRITTEN}")
+    verdict = VERDICTS.get(line.get("composed"), "undecided") if composed else "undecided"
     reason = (None if composed else f"no compose answer in {answer}: remote's final record is composed off the "
-                                    "served node, from its compose hand-off") \
+                                    "served node, from its compose hand-off (the served node's own record says "
+                                    f"{line.get('composed')!r})") \
         or line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
         or (f"not accepted: {', '.join(held)}" if held else None)
     return {"block": report.get("window"), "components": components, "product": REMOTE, "reason": reason,
             "registration": None, "coins": coins_of(cfg),
-            "verdict": "undecided" if verdict == "accept" and (held or not composed) else verdict}
+            "verdict": "undecided" if verdict == "accept" and held else verdict}
 
 
 def pending(cfg: Mapping[str, Any], state: Path, rc: int) -> str | None:

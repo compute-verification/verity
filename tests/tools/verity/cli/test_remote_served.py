@@ -2,9 +2,9 @@
 every party, Pearl+'s included, and without bindings names the three Pearl+ lacks; the runner's variables under remote
 are Pearl+'s, onsite's carry none of them; Pearl+'s class is refused by name when it disagrees with the workload's slots
 or window-steps, and its uniform tie is asked for only by its parameter. Under remote alone, the runner's exit 2 with
-the compose hand-off written is pending, and the verifier reads the compose answer's record (Pearl+'s row under
-``work``, inference-only's as the answer holds it), undecided without one. The runner and the records are stand-ins
-written by each test."""
+the compose hand-off written is pending, and the verifier reads only the compose answer's record (Pearl+'s row under
+``work``; inference-only's row holds the verdict while the served node wrote it), undecided with no cell read without
+one. The runner and the records are stand-ins written by each test."""
 from __future__ import annotations
 
 import json
@@ -205,13 +205,17 @@ def written(base: Path, line: dict | None, rows: dict | None, inference_only: di
 
 
 ACCEPTED = {"integrity": {"verdict": "accept"}, "work": {"verdict": "accept"}}
+#: inference-only's row as a verifier-side run would write it: its answer recomputed off the served node
+CHECKED = {"verdict": "accept", "answer_from": "recomputed on this host by its Lean verifier"}
 ALL_ACCEPTED = {c: "accept" for c in T.DEMOS["remote"]}
+ABSENT = {c: "absent" for c in T.DEMOS["remote"]}
+YES = {"composed": "accept", "product": "remote"}
 
 
 def test_remotes_verifier_reads_the_compose_answers_record_pearl_plus_under_work(tmp_path):
     cfg = R.load(CONFIG, REG)
     written(tmp_path / "out", {"composed": "pending", "product": "remote"}, {"work": {"verdict": "missing"}})
-    written(tmp_path / "out" / "compose", {"composed": "accept", "product": "remote"}, ACCEPTED, {"verdict": "accept"})
+    written(tmp_path / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
     got = T.remote_check(cfg, tmp_path)
     assert (got["verdict"], got["product"], got["block"], got["reason"]) == ("accept", T.REMOTE, 3, None)
     assert got["components"] == ALL_ACCEPTED
@@ -220,26 +224,46 @@ def test_remotes_verifier_reads_the_compose_answers_record_pearl_plus_under_work
     assert T.remote_check(cfg, tmp_path)["verdict"] == "reject"
 
 
-def test_inference_onlys_row_is_what_the_compose_answer_holds_and_absent_without_it(tmp_path):
+def test_inference_onlys_row_is_the_composed_records_and_no_file_of_the_prover_nodes_side_changes_a_cell(tmp_path):
     cfg = R.load(CONFIG, REG)
     base = tmp_path / "out" / "compose"
-    written(base, {"composed": "accept", "product": "remote"}, ACCEPTED, {"verdict": "refuse"})
-    got = T.remote_check(cfg, tmp_path)
-    assert got["components"]["inference-only"] == "refuse" and got["verdict"] == "undecided"
-    assert got["reason"] == "not accepted: inference-only refuse"
-    (base / "record" / "inference-only.json").unlink()
+    written(base, YES, ACCEPTED, {"verdict": "accept"})
     got = T.remote_check(cfg, tmp_path)
     assert got["components"]["inference-only"] == "absent" and got["verdict"] == "undecided"
-    written(base, None, {**ACCEPTED, "inference-only": {"verdict": "accept"}}, {"verdict": "refuse"})
-    assert T.remote_check(cfg, tmp_path)["components"]["inference-only"] == "accept"
+    assert got["reason"] == "not accepted: inference-only absent"
+    for rows in (ACCEPTED, {**ACCEPTED, "inference-only": CHECKED}, {"work": {"verdict": "reject"}}):
+        written(base, YES, rows)
+        (tmp_path / "out" / "record").mkdir(parents=True, exist_ok=True)
+        for f in ("verdicts.txt", "record/verdicts.json", "record/inference-only.json"):
+            (tmp_path / "out" / f).unlink(missing_ok=True)
+        alone = T.remote_check(cfg, tmp_path)
+        written(tmp_path / "out", YES, {k: {"verdict": "accept"} for k in ("integrity", "work", "inference-only")},
+                {"verdict": "accept"})
+        (base / "record" / "inference-only.json").write_text(json.dumps({"verdict": "accept"}))
+        assert T.remote_check(cfg, tmp_path) == alone, rows
 
 
-def test_without_a_compose_answer_remotes_verdict_is_undecided_and_says_why(tmp_path):
+def test_inference_onlys_row_as_the_served_node_wrote_it_holds_the_verdict(tmp_path):
     cfg = R.load(CONFIG, REG)
-    written(tmp_path / "out", {"composed": "accept", "product": "remote"}, ACCEPTED, {"verdict": "accept"})
+    for row in ({"verdict": "accept", "answer_from": f"{T.AS_WRITTEN} (inference-only.json)"}, {"verdict": "accept"}):
+        written(tmp_path / "out" / "compose", YES, {**ACCEPTED, "inference-only": row})
+        got = T.remote_check(cfg, tmp_path)
+        assert got["components"] == ALL_ACCEPTED and got["verdict"] == "undecided"
+        assert got["reason"] == f"not accepted: inference-only {T.AS_WRITTEN}"
+    text = (ROOT / "benchmarks" / "one_stage" / "served_verdicts.py").read_text()
+    assert f'AS_WRITTEN = "{T.AS_WRITTEN}"' in text
+
+
+def test_without_a_compose_answer_no_cell_reads_the_prover_nodes_own_record(tmp_path):
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out", YES, {**ACCEPTED, "inference-only": CHECKED}, {"verdict": "accept"})
     got = T.remote_check(cfg, tmp_path)
-    assert got["verdict"] == "undecided" and got["reason"].startswith(f"no compose answer in {tmp_path / 'out' / 'compose'}")
-    assert got["components"] == ALL_ACCEPTED
+    assert got["verdict"] == "undecided" and got["components"] == ABSENT
+    assert got["reason"].startswith(f"no compose answer in {tmp_path / 'out' / 'compose'}")
+    assert got["reason"].endswith("(the served node's own record says 'accept')")
+    written(tmp_path / "out", {"composed": "reject", "product": "remote"}, {"work": {"verdict": "reject"}})
+    got = T.remote_check(cfg, tmp_path)
+    assert got["verdict"] == "undecided" and got["components"] == ABSENT
 
 
 def test_remotes_verifier_refuses_by_name_a_record_it_cannot_read_or_of_another_product(tmp_path):
@@ -262,7 +286,7 @@ def test_every_declared_component_has_its_records_row():
 
 def test_remotes_verifier_gives_its_verdict_line_on_its_own_machine(tmp_path, capsys):
     state = tmp_path / "state"
-    written(state / "out" / "compose", {"composed": "accept", "product": "remote"}, ACCEPTED, {"verdict": "accept"})
+    written(state / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
     rc = R.run_main([str(CONFIG), "--on", T.AUDITOR_REMOTE, "--state", str(state)], REG)
     out = capsys.readouterr()
     lines = said(out.out, "VERDICT")
