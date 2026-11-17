@@ -24,8 +24,8 @@ def test_the_writer_appends_measurements_in_the_form_a_reader_of_numbers_takes(t
     w = kit.writer(out)
     stamp = kit.host_stamp()
     first = w.measurement("served_tok_s", 4120.5, "tok/s", mark="measured")
-    assert first == {"name": "served_tok_s", "value": 4120.5, "unit": "tok/s", "mark": "measured", "commit": SHA, "run": RUN,
-                     "ci95": None, "target": None, "verdict": None, "inputs": ["measured"], "host": stamp}
+    assert first == {"name": "served_tok_s", "value": 4120.5, "unit": "tok/s", "mark": "measured", "version": 1,
+                     "commit": SHA, "run": RUN, "ci95": None, "target": None, "verdict": None, "inputs": ["measured"], "host": stamp}
     assert _result(out) == {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [first]}
     second = kit.writer(out).measurement("serving_cost", 0.031, "ratio", interval=(0.029, 0.034), target=0.05,
                                          verdict="within target", inputs=("served_tok_s", "stock_tok_s"), mark="measured")
@@ -326,7 +326,7 @@ def test_a_measurement_over_a_period_and_a_scope_holds_each_as_its_own_field_and
     w, stamp = kit.writer(tmp_path), kit.host_stamp()
     year = w.measurement("gb", 14240.0, "GB a world year", mark="modeled", period="year", over="world")
     assert year == {"name": "gb", "value": 14240.0, "unit": "GB a world year", "mark": "modeled", "period": "year",
-                    "over": "world", "commit": SHA, "run": RUN, "ci95": None, "target": None, "verdict": None,
+                    "over": "world", "version": 1, "commit": SHA, "run": RUN, "ci95": None, "target": None, "verdict": None,
                     "inputs": ["modeled"], "host": stamp}
     week = w.measurement("gb", 273.1, "GB a datacenter week", mark="modeled", period="week", over="datacenter")
     phase = w.measurement("gb", None, "GB a phase", mark="modeled", period="phase", why="no phase's rows")
@@ -395,9 +395,11 @@ def test_a_measurement_with_no_why_is_written_byte_for_byte_as_it_was_and_one_wi
     w.measurement("served_tok_s", 4120.5, "tok/s", interval=(4100, 4140), target=4000, verdict="within target", inputs="reps",
                   mark="measured")
     w.measurement("stock_tok_s", None, "tok/s", mark="measured")
-    entries = [{"name": "served_tok_s", "value": 4120.5, "unit": "tok/s", "mark": "measured", "commit": SHA, "run": RUN,
+    entries = [{"name": "served_tok_s", "value": 4120.5, "unit": "tok/s", "mark": "measured", "version": 1, "commit": SHA,
+                "run": RUN,
                 "ci95": [4100, 4140], "target": 4000, "verdict": "within target", "inputs": ["measured", "reps"], "host": stamp},
-               {"name": "stock_tok_s", "value": None, "unit": "tok/s", "mark": "measured", "commit": SHA, "run": RUN,
+               {"name": "stock_tok_s", "value": None, "unit": "tok/s", "mark": "measured", "version": 1, "commit": SHA,
+                "run": RUN,
                 "ci95": None, "target": None, "verdict": None, "inputs": ["measured"], "host": stamp}]
     doc = {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": entries}
     assert (tmp_path / kit.RESULT).read_text() == json.dumps(doc, indent=1) + "\n"
@@ -429,19 +431,19 @@ def test_a_measurement_carries_its_benchmarks_extra_keys_and_none_that_the_entry
     assert research_result.check_doc(tmp_path, doc, RUN).valid
 
 
-def test_a_registered_ids_measurement_carries_its_metrics_version_and_no_caller_gives_one(tmp_path, no_gpu, monkeypatch):
+def test_every_measurement_carries_its_metrics_version_and_no_caller_gives_one(tmp_path, no_gpu, monkeypatch):
     from research import result as research_result
-    from verity_bench import metric_versions
+    from verity_bench import kit_report
 
     w = kit.writer(tmp_path)
     registered = w.measurement("benchmarks/exfiltration-total-gb", 1.0, "GB", mark="modeled")
     assert registered["version"] == 1 and list(registered)[:5] == ["name", "value", "unit", "mark", "version"]
-    assert "version" not in w.measurement("served_tok_s", 4120.5, "tok/s", mark="measured")
-    with pytest.raises(ValueError, match="'version' is a key the measurement already has a meaning for"):
-        w.measurement("served_tok_s", 1, "tok/s", mark="measured", member="b8", extra={"version": 2})
-    with pytest.raises(ValueError, match="'version' is a key the measurement already has a meaning for"):
-        w.measurement("benchmarks/exfiltration-total-gb", 1.0, "GB", mark="modeled", member="b8", extra={"version": 2})
-    monkeypatch.setattr(metric_versions, "pins", lambda: {"vllm/x": {"version": 2, "unit": "s"}})
+    spanned = w.measurement("served_tok_s", 4120.5, "tok/s", mark="measured", period="year", member="b1")
+    assert spanned["version"] == 1 and list(spanned)[:7] == ["name", "value", "unit", "mark", "period", "member", "version"]
+    for name in ("served_tok_s", "benchmarks/exfiltration-total-gb"):
+        with pytest.raises(ValueError, match="'version' is a key the measurement already has a meaning for"):
+            w.measurement(name, 1, "GB", mark="measured", member="b8", extra={"version": 2})
+    monkeypatch.setattr(kit_report, "VERSIONS", {"vllm/x": 2})
     assert w.measurement("vllm/x", 1.0, "s", mark="measured")["version"] == 2
-    assert "version" not in w.measurement("benchmarks/exfiltration-compute-audit-gb", 1.0, "GB", mark="modeled")
+    assert w.measurement("vllm/y", 1.0, "s", mark="measured")["version"] == 1
     assert research_result.check_doc(tmp_path, _result(tmp_path), RUN).valid

@@ -10,5 +10,5 @@ inputs = ["benchmarks/kernels/steady_walk.py", "benchmarks/kernels/metrics.toml"
           "benchmarks/harness/specs/llama32-1b-flock-steady-gemm-h200-walk.toml",
           "benchmarks/kernels/wide_leaf/statement.toml",
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
-          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py", "benchmarks/harness/verity_bench/metric_versions.py", "benchmarks/harness/verity_bench/metric_versions.json",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
           "tools/config/verity_config", "verity/__init__.py", "verity/errors.py"]

@@ -25,7 +25,7 @@ inputs = ["benchmarks/certifier_term", "benchmarks/network_traces/leak_bounds.py
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/kit.py",
     "benchmarks/harness/verity_bench/kit_report.py",
-    "benchmarks/harness/verity_bench/settings.py", "benchmarks/harness/verity_bench/metric_versions.py", "benchmarks/harness/verity_bench/metric_versions.json",
+    "benchmarks/harness/verity_bench/settings.py",
     "verity/__init__.py",
     "verity/errors.py",
     "tools/config/verity_config/verity_settings.py",
