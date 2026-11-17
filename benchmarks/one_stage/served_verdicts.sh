@@ -951,7 +951,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --ports "$ports" "${link[@]}" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
-  "$PY" "$SV" unhost "$OUT/v3c-audit/audit.log" "$OUT/v3c-audit/audit.err"
+  "$PY" "$SV" unhost "$OUT/v3c-audit/audit.log" "$OUT/v3c-audit/audit.err" "$VW/audit"
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
   [ -z "$PEARLPLUS_TIE" ] || say "V3C-TIE: $(grep -m1 '^TIE ' "$OUT/v3c-audit/audit.log" | "$PY" -c 'import json, sys
 line = sys.stdin.read()

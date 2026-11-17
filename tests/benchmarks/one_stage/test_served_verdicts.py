@@ -4231,19 +4231,26 @@ def _holding(tmp_path: Path, *dirs: str) -> list[Path]:
 @pytest.mark.parametrize("refuses", ["gate", "audit"])
 def test_a_gate_whose_ssh_refuses_is_named_by_its_machine_and_no_line_or_kept_file_holds_its_address(tmp_path, refuses):
     """ssh's own refusal names the host it reached: where the gate's check (`served_verdicts.py gate`) or V3c's audit
-    quotes it, the gate's address (VY_CHALLENGER_1_HOST's) is its machine's name, in the published line and in every file
-    under $OUT and the serve dir's private/."""
+    quotes it (in its stderr, and in the summaries its coins session's error reaches), the gate's address
+    (VY_CHALLENGER_1_HOST's) is its machine's name, in the published line and in every file under $OUT and the serve dir,
+    whose audit files a hand-off carries off the node."""
     env = {**_live(tmp_path, [LEDGER_LINE]), "PP_CHALLENGER": BY_HOST, "VY_CHALLENGER_1_HOST": DOC_HOST}
     audit = FAKE_RECORDS_AUDIT
     if refuses == "gate":
         _script(tmp_path / "gate" / "ssh", f'echo "{SSH_REFUSED}" >&2\nexit 255')
     else:
-        audit = audit.replace('if a[0] == "audit":\n', f'if a[0] == "audit":\n    sys.exit("{SSH_REFUSED}")\n', 1)
+        audit = audit.replace('if a[0] == "audit":\n', 'if a[0] == "audit":\n    (out / "window").mkdir(parents=True)\n'
+                              '    for f in ("summary.json", "window/summary.json"):\n'
+                              f'        (out / f).write_text(json.dumps({{"coins_session": {{"error": "{SSH_REFUSED}"}}}}))\n'
+                              f'    sys.exit("{SSH_REFUSED}")\n', 1)
     rc, lines, _order, _limits = _v3c(tmp_path, records_audit=audit, **env)
     said = [x for x in lines if NAMED_REFUSED in x]
     assert rc != 0 and said and said[0].startswith("V3C-GATE refused: " if refuses == "gate" else "V3C-AUDIT: no RECORDS"), lines
     assert not [x for x in lines if DOC_HOST in x], lines
-    assert not _holding(tmp_path, "out", "serve/private")
+    assert not _holding(tmp_path, "out", "serve")
+    if refuses == "audit":
+        kept = json.loads((tmp_path / "out" / "v3c-audit" / "summary.json").read_text())
+        assert kept == {"coins_session": {"error": NAMED_REFUSED}}, kept
 
 
 def test_a_compose_gate_whose_ssh_refuses_is_named_by_its_machine_in_its_line_and_its_kept_stderr(tmp_path):

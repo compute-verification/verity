@@ -22,7 +22,7 @@ SPOT, and the one record of every verdict (the block record).
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
                               [--tree SHA [--tree-on BRANCH]] [--served-compare FILE] [--composite DIR]
     served_verdicts.py witness < PATHS
-    served_verdicts.py unhost FILE...
+    served_verdicts.py unhost FILE|DIR...
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
     served_verdicts.py public-registration REGISTRATION
@@ -944,6 +944,10 @@ def unhosted(text: str) -> str:
     for k, v in sorted(held, key=lambda kv: -len(kv[1])):
         text = text.replace(v, k[:-len("_HOST")].lower().replace("_", "-"))
     return text
+
+
+#: the files of a directory `unhost` rewrites: the text an audit writes (its summaries, logs and errors), never a binary
+UNHOSTED = (".json", ".jsonl", ".txt", ".log", ".err")
 
 
 def _gate_out(gate: str, *words: str) -> bytes:
@@ -2724,9 +2728,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"WITNESS {path}: {why}", flush=True)
         return 1 if found else 0
     if a.cmd == "unhost":
-        for f in a.files:
-            if f.is_file():
-                f.write_text(unhosted(f.read_text(errors="replace")))
+        for f in (g for x in a.files for g in ([x] if x.is_file() else sorted(x.rglob("*")) if x.is_dir() else [])):
+            if f.is_file() and (f in a.files or f.suffix in UNHOSTED):
+                with contextlib.suppress(UnicodeDecodeError):
+                    if (got := unhosted(text := f.read_text())) != text:
+                        f.write_text(got)
         return 0
     if a.cmd == "rebase":
         try:
