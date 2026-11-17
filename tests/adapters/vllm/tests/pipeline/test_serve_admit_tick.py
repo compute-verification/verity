@@ -265,7 +265,8 @@ def test_the_engine_waits_for_the_watermark_and_admits_at_the_bucket_close():
     assert not g.step() and g.gate.T == 320_000                      # T is past bucket 2's close: its line is wanted
     g.lines(3)
     assert g.step() and g.sched.added == ["r0", "r1", "r2"] and g.sched.steps[-1] == ["r1", "r2"]
-    assert g.log[0] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [0, 1], "t": 0.0}
+    assert g.log[0] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [0, 1], "held_steps": [0], "t": 0.0}
+    assert [r["held_steps"] for r in g.log] == [[0], [0], [2]]       # r2 came, then r1 stepped twice before its bucket
 
 
 def test_a_missing_release_no_line_names_lost_holds_the_later_ones_until_its_skip_and_comes_late():
@@ -300,7 +301,8 @@ def test_a_lost_release_at_the_head_is_not_waited_for_and_never_added_should_it_
         g.arrive(f"r{n}")
     g.mark(3, lost=[0])
     assert g.gate.lost == {0} and g.step() and g.sched.added == ["r1", "r2"]         # at once: the clock never moved
-    assert g.log[-1] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [1, 3], "t": 0.0}
+    assert g.log[-1] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [1, 3], "held_steps": [0, 0],
+                         "t": 0.0}
     assert counts(g) == {"admitted": 2, "lost": 1, "dropped": 0, "aborted": 0, "held_now": 0}
     g.release(0, bucket=0)                           # its bytes arrive after all, once the gate is past it
     g.arrive("r0")

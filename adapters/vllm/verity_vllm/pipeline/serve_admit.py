@@ -349,7 +349,8 @@ class TickGate:
     ``pull()``, if given, returns the records that came since its last call (a `tick_plugin.FeedReader`). The rest runs
     on the engine's thread: `add` is the scheduler's ``add_request``, `finished` its ``finish_requests``, `ready` comes
     before each engine iteration and `scheduled` after each ``schedule()``. ``clock`` (seconds) times only the holds and
-    the waits, ``log`` gets one dict per admission and per event.
+    the waits, ``log`` gets one dict per admission and per event; an admission's ``held_steps`` are, for each request it
+    adds, the steps the engine scheduled between the request's arrival and its admission.
 
     After a line that names N lost, N is in ``lost`` for the rest of its run and the gate holds no request of N's: the
     one it held is dropped, never added to the scheduler, and so is one that comes later (`add`). ``next`` steps over N
@@ -384,6 +385,8 @@ class TickGate:
         self.ended = False
         self.held: dict[int, tuple[Any, Callable[[Any], Any]]] = {}     # N -> (request, the scheduler's add)
         self.held_ids: dict[str, int] = {}
+        self.held_at: dict[int, int] = {}               # N -> the gate's step count when its request came
+        self.held_steps: list[int] = []
         self.buckets: dict[int, int] = {}               # N -> its x-verity-release-bucket
         self.gone: set[int] = set()                     # N past `next` that won't reach the engine
         self.lost: set[int] = set()                     # N a watermark line named lost: never waited for, never added
@@ -441,6 +444,7 @@ class TickGate:
         self.lost.add(n)
         self.counts["lost"] += 1
         held = self.held.pop(n, None)
+        self.held_at.pop(n, None)
         if held is not None:
             self.held_ids.pop(held[0].request_id, None)
             self.dropped_ids.add(held[0].request_id)
@@ -474,6 +478,7 @@ class TickGate:
         n = k[1]
         self.held[n] = (request, add)
         self.held_ids[request.request_id] = n
+        self.held_at[n] = self.steps
         self.gone.discard(n)
         self.missing.pop(n, None)
         self.max_held = max(self.max_held, len(self.held))
@@ -483,6 +488,7 @@ class TickGate:
         request, add = self.held.pop(n)
         self.held_ids.pop(request.request_id, None)
         self.counts["admitted"] += 1
+        self.held_steps.append(self.steps - self.held_at.pop(n, self.steps))
         add(request)
 
     def finished(self, ids: str | Iterable[str] | None) -> Iterable[str] | None:
@@ -502,6 +508,7 @@ class TickGate:
                 rest.append(rid)
                 continue
             del self.held[n]
+            self.held_at.pop(n, None)
             self.gone.add(n)
             self.counts["aborted"] += 1
         return rest
@@ -529,7 +536,7 @@ class TickGate:
         if b >= len(self.lines) and not self.ended:
             return self._wait()
         target = self.lines[min(b, len(self.lines) - 1)] if b >= 0 and self.lines else 0
-        first = self.next
+        first, self.held_steps = self.next, []
         while self.next < target:
             n = self.next
             if n in self.held:
@@ -554,7 +561,8 @@ class TickGate:
 
     def _admitted(self, first: int, b: int) -> None:
         if self.next > first and self.log is not None:
-            self.log({"step": self.steps, "T": self.T, "bucket": b, "admitted": [first, self.next], "t": self.clock()})
+            self.log({"step": self.steps, "T": self.T, "bucket": b, "admitted": [first, self.next],
+                      "held_steps": self.held_steps, "t": self.clock()})
 
     def _past_end(self) -> bool:
         """The run has ended and every release it numbered is in: what the gate still holds is added now."""
