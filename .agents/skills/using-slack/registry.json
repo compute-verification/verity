@@ -134,7 +134,7 @@
         "security/Definitions/Hash/",
         "security/Proofs/Hash/",
         "verity/protocols/registration/verifier/registration.py",
-        "benchmarks/two_stage/",
+        "tests/benchmarks/one_stage/settings.py",
         "benchmarks/definitions/numerics/cuda/",
         "verity/protocols/interface/",
         "security/Properties/Challenger.lean",
