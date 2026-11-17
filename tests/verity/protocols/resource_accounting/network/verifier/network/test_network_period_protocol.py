@@ -97,7 +97,7 @@ def refused_by_lean_alone(case: dict, server, why: str) -> None:
     assert why in json.loads(x.value.lean[1])["reason"], x.value
 
 
-def test_a_mirror_that_skips_the_ingress_certificate_is_caught(server, monkeypatch):
+def test_a_mirror_that_skips_the_ingress_attestation_is_caught(server, monkeypatch):
     """A mirror that reads only the egress records' attestations accepts a period whose requests' attestation is forged,
     and Lean refuses it at the attestations."""
     real = PC._certifies_on
@@ -256,7 +256,7 @@ def test_an_execution_phase_picks_its_entry_and_is_signed_at_its_sessions_number
 OUTSIDE_STRETCH = ("rows-two-signers", "rows-cert-outside-stretch", "rows-reg-outside-stretch")
 
 
-def test_a_mirror_that_looks_the_entry_up_by_the_certificates_id_is_caught(server, monkeypatch):
+def test_a_mirror_that_looks_the_entry_up_by_the_attestations_id_is_caught(server, monkeypatch):
     """The execution phase picks the entry, and nothing an attestation names does. A period of two listed entries whose
     execution phases the second's stretch holds, in which the first entry signs too, in its own session at its own
     number for the execution phase (every other signature in `two-signers`, one attestation or one row registration in

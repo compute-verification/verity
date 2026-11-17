@@ -6,7 +6,7 @@ connection to the server, the watermark stream, opened at the run's start with n
 reads.
 
 That the watermark stream changes no record and no client's cell is held beside the network attester's other tests,
-by `test_the_watermark_moves_nothing_certified_and_never_waits_on_the_server`."""
+by `test_the_watermark_moves_nothing_attested_and_never_waits_on_the_server`."""
 
 from __future__ import annotations
 
