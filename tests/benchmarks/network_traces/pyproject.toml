@@ -90,7 +90,8 @@ inputs = ["calibration/census/deployments.json", "calibration/census/adversary.j
           "benchmarks/certifier_term/run.py",
           "tests/benchmarks/one_stage/interfaces/fixtures/block-record-r2-period0.json",
           "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/records_audit.py",
-          "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py", "benchmarks/network_traces",
+          "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py",
+          "tools/verity/cli/verity_cli/__init__.py", "tools/verity/cli/verity_cli/settings.py", "benchmarks/network_traces",
           # record.py writes its metric through the harness kit's writer, whose settings are verity_config's
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",

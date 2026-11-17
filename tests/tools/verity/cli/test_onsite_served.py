@@ -58,7 +58,7 @@ VARIABLES = {
     "CLASSES": "4,32,4 8,32,4,4,16", "V3C_CLASS": "8,32,4,4,16",
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
                        "--gate user@gate-1 --peer peer-1",
-    "DEVELOPMENT": "1", "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
+    "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
     "PRECISION": "verity_int8", "REPO": "verity-int8/Llama-3.2-1B-INT8",
     "REV": "15b0976d400d796ee589e7737d03a919526bf800", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
     "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16", "WIPE_ADDRESS": "192.0.2.1:7001",
@@ -250,7 +250,16 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
             if "SERVE_ARGS" in e["hooks"]} == {"certifier": T.ID_FORM}
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
     assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1") and "PP_CHALLENGER" not in hooks
-    assert hooks["DEVELOPMENT"] == "1"
+    assert "DEVELOPMENT" not in hooks
+
+
+def test_with_no_gate_bound_spots_coins_are_simulated_and_only_the_placement_hold_makes_the_run_a_development_run(
+        monkeypatch):
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    assert T._spot_challenger({}, {}, {"peer": "peer-1"}) == {"PP_PEER": "peer-1"}
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
+    assert T._spot_challenger({}, {}, {"peer": "peer-1"}) == {"PP_PEER": "peer-1", "DEVELOPMENT": "1"}
+    assert T._spot_challenger({}, {}, {"gate": "u@g"}) == {"PP_CHALLENGER": "gate:u@g"}
 
 
 def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_clock_and_channels(tmp_path, capsys,
@@ -319,7 +328,7 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert T.variables(cfg, BINDINGS) == VARIABLES | deployed
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(KEYS) == UNBOUND
     unbound = T.variables(cfg, {})
-    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS"} | set(deployed)
+    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS"} | set(deployed) | {"DEVELOPMENT"}
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>' "
                                                "--peer '<network-certifier.certifier.peer>'")
     assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
@@ -609,18 +618,23 @@ echo "${COMPOSITE-unset}|${COMPOSE_OFF_NODE-unset}" > "$OUT/composite.txt"
 
 
 @pytest.mark.parametrize("named, sets, got", [
-    ({}, {"COMPOSITE": ""}, "|unset"),
+    ({}, {}, "unset|unset"),
+    ({"VERITY_HOLD_PLACEMENT": "1"}, {"COMPOSITE": ""}, "|unset"),
     ({"COMPOSE_OFF_NODE": "1"}, {"COMPOSITE": ""}, "|1"),
     ({"COMPOSITE": "1"}, {}, "1|unset"),
     ({"COMPOSITE": ""}, {}, "|unset"),
     ({"COMPOSE_OFF_NODE": "0"}, {}, "unset|0"),
+    ({"COMPOSE_OFF_NODE": "0", "VERITY_HOLD_PLACEMENT": "1"}, {}, "unset|0"),
+    ({"PRODUCT": "remote"}, {}, "unset|unset"),
+    ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "1"}, {"COMPOSITE": ""}, "|1"),
+    ({"PRODUCT": "remote", "VERITY_HOLD_PLACEMENT": "1"}, {"COMPOSITE": ""}, "|unset"),
 ])
 def test_the_served_window_asks_for_no_composite_unless_its_caller_names_one(tmp_path, capsys, monkeypatch, named,
                                                                              sets, got):
-    """The runner composes off the node by default and refuses onsite's composite there, so the table hands it
-    ``COMPOSITE`` empty; a caller that names ``COMPOSITE``, or ``COMPOSE_OFF_NODE=0`` for a development composite on
-    the node, gets the runner what it named and nothing more."""
-    for name in ("COMPOSITE", "COMPOSE_OFF_NODE"):
+    """The runner composes on the node by default, remote's as onsite's; where it composes off the node (a caller's
+    COMPOSE_OFF_NODE=1, or the default under VERITY_HOLD_PLACEMENT=1), where it refuses onsite's, the table hands it
+    ``COMPOSITE`` empty; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE`` gets the runner what it named."""
+    for name in ("COMPOSITE", "COMPOSE_OFF_NODE", "VERITY_HOLD_PLACEMENT", "PRODUCT"):
         monkeypatch.delenv(name, raising=False)
     for name, value in named.items():
         monkeypatch.setenv(name, value)
