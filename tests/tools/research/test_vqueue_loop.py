@@ -3,6 +3,7 @@ listings and results as `FileTransport` files, a fake GitHub and fake labels, an
 Every test reads the clock it injects."""
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -4373,6 +4374,25 @@ def test_a_tick_reads_every_run_it_judges_once_and_at_once_before_its_first_judg
     assert sorted(runs.asked) == [(f"c-{k}", EVIDENCE, 0) for k in range(4, 7)], "a check decided is read no more"
 
 
+def _carrying(monkeypatch) -> list[str | None]:
+    """The runs `vqueue_slim._carrying` is handed, comma-joined, at the list's end while a launch starts (None outside one)."""
+    now: list[str | None] = [None]
+    real = vqueue_slim._carrying
+
+    @contextlib.contextmanager
+    def carrying(runs):
+        runs = list(runs)
+        now.append(",".join(runs) or None)
+        try:
+            with real(runs):
+                yield
+        finally:
+            now.append(None)
+
+    monkeypatch.setattr(vqueue_slim, "_carrying", carrying)
+    return now
+
+
 def _check(env: Env, monkeypatch, decide=vqueue.decide, **kw) -> tuple[Loop, Runs]:
     loop = env.loop(decide, slim=vqueue_slim, gate="check", **kw)
     return loop, Runs(env, loop, monkeypatch)
@@ -4504,10 +4524,10 @@ def test_under_gate_check_a_lone_member_s_failure_rerun_afresh_carries_the_passe
         runs.end(sha, 3, "pytest", "Killed\n", (_row(beyond=True),))
     monkeypatch.setattr(vqueue_slim, "left", lambda d, rid: any(rid in ids for ids, _ in env.cancelled)
                         or runs.state.get(rid, ("running",))[0] == "done")
-    carried, launch = [], loop.world.slim_driver().launch_after_landing
+    carried, launch, carry = [], loop.world.slim_driver().launch_after_landing, _carrying(monkeypatch)
 
     def launched(repo, commit, *a, **kw):
-        carried.append((commit, os.environ.get(vqueue_slim.CARRY_ENV)))
+        carried.append((commit, carry[-1]))
         return launch(repo, commit, *a, **kw)
 
     loop.world.slim_driver().launch_after_landing = launched
@@ -4527,10 +4547,10 @@ def test_under_gate_check_a_suite_killed_at_its_time_limit_is_named_where_it_is_
     sha = built["sha"]
     runs.end(main)
     runs.end(sha, 3, "pytest", rows=({**_row(), "timed_out": True},))
-    carried, launch = [], loop.world.slim_driver().launch_after_landing
+    carried, launch, carry = [], loop.world.slim_driver().launch_after_landing, _carrying(monkeypatch)
 
     def launched(repo, commit, *a, **kw):
-        carried.append(os.environ.get(vqueue_slim.CARRY_ENV))
+        carried.append(carry[-1])
         return launch(repo, commit, *a, **kw)
 
     loop.world.slim_driver().launch_after_landing = launched
@@ -4675,10 +4695,10 @@ def test_under_gate_check_each_rebuild_above_a_red_reuses_the_passes_of_the_chec
 
     loop.world.build = slow
     monkeypatch.setattr(vqueue_slim, "left", lambda d, rid: any(rid in ids for ids, _ in env.cancelled))
-    carried, launch = [], loop.world.slim_driver().launch_after_landing
+    carried, launch, carry = [], loop.world.slim_driver().launch_after_landing, _carrying(monkeypatch)
 
     def launched(repo, commit, *a, **kw):
-        carried.append((commit, os.environ.get(vqueue_slim.CARRY_ENV)))
+        carried.append((commit, carry[-1]))
         return launch(repo, commit, *a, **kw)
 
     loop.world.slim_driver().launch_after_landing = launched
