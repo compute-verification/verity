@@ -80,3 +80,7 @@ root = "InferenceOnlyVerifier.ProtocolMain"
 [[lean_exe]]
 name = "inference-only-rows"
 root = "InferenceOnlyVerifier.RowsProtocolMain"
+
+[[lean_exe]]
+name = "inference-only-wires-stages"
+root = "InferenceOnlyVerifier.WiresStagesMain"
