@@ -21,10 +21,10 @@ public import Proofs.Flock.Claims.ZK.FrameZK
   them at the model's history so far.
 * `nextAt`: the model's next round's rep stream and its index there. `SeenAt`: the rep streams seen are those with a
   round before the model's next. `seenAt_nil`: none before the model's first round.
-* `BuiltAt`: every level 0 bound to the session the one the loop sampled for its table, `Level0.ofSamples` on what the
+* `BuiltAt`: every level 0 bound to the session the one the loop drew for its table, `Level0.ofSamples` on what the
   host and the operating system handed it for the table's rep 0 (`LoopModel.src`). `builtAt_stays`: kept where the
   session's tables' level 0 stay. `build_of_ofSamples`, `cap_of_sampled`: such a level 0 is a `build`, so its table's
-  commitment's cap is its root. `builtAt_commit`: past the session's `Commit`, where the loop sampled those level 0s.
+  commitment's cap is its root. `builtAt_commit`: past the session's `Commit`, where the loop drew those level 0s.
 * `LoopJ`: the session stopped in the loop's frames exactly where its `Hello` left and an earlier round of the model's
   run failed; no stream seen before the `Hello` left; `RepJ` at each rep stream seen; the session's plan the setup's
   (`PlanOk`); `SeenAt` at the model's history so far; no stream seen before the model's link; `BuiltAt` past the
@@ -43,7 +43,7 @@ public import Proofs.Flock.Claims.ZK.FrameZK
   **`loopKept_hello`**: and at the `Hello`, whose round the model's run passes, where the model's coin check reads
   the setup's `Hello` at the relay's nonce. `liveBefore_one`: past the `Hello` every earlier round passed.
   **`loopKept_commit`**: and at the `Commit`, where the worker's link is the ZK server's own, below the `Finish`, the
-  loop's level 0s for the session being those `Session.level0` sampled (`LoopRead`), the model's requests the loop's and
+  loop's level 0s for the session being those `Session.level0` drew (`LoopRead`), the model's requests the loop's and
   its frame taking the coins after the `Hello`.
 -/
 
@@ -153,7 +153,7 @@ theorem seenAt_nil {spec : SessionSpec} {sts : Array Stmt} {h : List (Claims.Msg
   rw [show h.length - 2 = 0 by omega, Loop.locate_zero] at h0
   exact absurd h0 (Nat.lt_irrefl 0)
 
-/-- **Every level 0 the slots `L0` bind to session `sid` is the one the loop sampled for its table**, against the model's
+/-- **Every level 0 the slots `L0` bind to session `sid` is the one the loop drew for its table**, against the model's
 run `M`: bound for the table `name`, it is `Level0.ofSamples` at table `j`'s statement's `m` on what the host and the
 operating system handed the loop for rep stream `2j` (`LoopModel.src`), `name` being table `j`'s. -/
 def BuiltAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Array Stmt)
@@ -213,7 +213,7 @@ theorem cap_of_sampled {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Fl
   rw [hcm]
   exact cap_root_build hb
 
-/-- **Past the session's `Commit` each level 0 bound to it is the one the loop sampled for its table**: where the loop sampled
+/-- **Past the session's `Commit` each level 0 bound to it is the one the loop drew for its table**: where the loop drew
 `ls` for the session (`SampleInv`: none bound to it yet, and the level 0s sampled for it `ls`'s), table `j`'s being
 `Level0.ofSamples` at its statement's `m` on what the host and the operating system handed the loop for rep stream `2j`,
 the level 0 the slots `commitRead` leaves bind to the session's table `name` is the one sampled for the table the
@@ -270,7 +270,7 @@ rounds came being `seen`, the loop at `σ`: the session stopped in the loop's fr
 an earlier round of the model's run failed (`liveBefore`); no stream seen before the `Hello` left; `RepJ` at each rep
 stream seen; the session's plan the setup's once its `Hello` left; the streams seen those with a round before the
 model's next (`SeenAt`); none seen while the session's slots took at most the model's `Hello`; past the `Commit`
-every level 0 bound to the session the one the loop sampled for its table (`BuiltAt`); once its `Hello` left the
+every level 0 bound to the session the one the loop drew for its table (`BuiltAt`); once its `Hello` left the
 session's entry the setup's (`SessOn`); the session's `Hello` and coins at the setup's link points (`LinksOk`); past
 the `Commit`, where a level 0 is bound to the session, its entry linked to the history's link coins (`LinkOn`); once
 its `Hello` left the setup's sizes within its frames' (`Session.sizesOk`); and, while the model's run has a message

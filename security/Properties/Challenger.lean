@@ -6,7 +6,7 @@ public import Spot.OneStageZk
 # Coins from the device's log: what a sample's coins are, stated against the code that reads them
 
 A component whose sample reads live coins (`Core.Live`) decides at the coins it reads from the challenger's signed record in its evidence. These properties say
-what that record shows, for every input: the coins the challenger device sampled, or a break the run carries.
+what that record shows, for every input: the coins the challenger device drew, or a break the run carries.
 
 * `LiveAnswer`: what `Protocol.answer` accepts, `Protocol.answerAt` accepts at the coins its evidence's record shows.
   It follows from `Live.factors` and reads no device.
@@ -35,7 +35,7 @@ the root enters soundness. It also signs the auditor's ledger, line by line. `Si
 role per key: a key also used for another role is outside the model, and a `forgery` witness is then an EUF-CMA break
 only under that one-role reading.
 
-**The coins are raw bits.** A coin is `Challenger.COIN_BYTES` bytes the device sampled, and a sample reads the concatenation
+**The coins are raw bits.** A coin is `Challenger.COIN_BYTES` bytes the device drew, and a sample reads the concatenation
 of the coins it was released (`take`, in `Spot.Draw.sampleUnits`), with no hash between: no SHA-512-expanded
 stream is read as uniform. In the causal game each coin is one release of `8 * COIN_BYTES` bits (`bitsOf`), after the
 bytes it answers (for one-stage, the registration's digest), at most `MAX_COINS` of them (`oneStageRounds`); a withheld
@@ -358,7 +358,7 @@ def Break (dev : History) (key : ChallengerKey) (label : String) (coins : Json) 
 
 /-! ## The coins, as raw bits -/
 
-/-- A byte string's bits in order, bit `t` being bit `t mod 8` of byte `⌊t/8⌋`: a coin's raw bits, as the device sampled them
+/-- A byte string's bits in order, bit `t` being bit `t mod 8` of byte `⌊t/8⌋`: a coin's raw bits, as the device drew them
 and a sample reads them. -/
 def bitsOf (b : ByteArray) : List Bool :=
   b.toList.flatMap fun x => (List.range 8).map fun i => x.toNat.testBit i
@@ -380,7 +380,7 @@ def SampledByDeviceAt (read : ChallengerKey → String → String → ByteArray 
       (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
         Break dev key label coins
 
-/-- **The coins a sample reads are the ones its challenger sampled.** For every challenger device, if `sampleCoins` reads `ξ`
+/-- **The coins a sample reads are the ones its challenger drew.** For every challenger device, if `sampleCoins` reads `ξ`
 from `coins` under the verifier's key `key`, window `w` (its open root, lowercase hex) and family `label`, released
 after `after`, then `ξ` is the coins of `label` that a run of the device under `key` released after `after`, a
 run the device's own ledger opens on `w`; or the fixed finder outputs a break from the run (`Break`). -/
@@ -461,7 +461,7 @@ structure ReadsChallenger (P : Core.Protocol) (L : Core.Live P) where
   reads : ∀ p c d, source p c = some d → ∀ e ξ, L.coins p c e = .ok ξ →
     ∃ raw, sampleCoins d.key d.window d.label d.after (record e) = .ok raw ∧ decode raw = ξ
 
-/-- **What a component accepts, it accepts at the coins its challenger device sampled, or the run carries a
+/-- **What a component accepts, it accepts at the coins its challenger device drew, or the run carries a
 break.** For every protocol whose check reads its coins through the challenger's reader (`ReadsChallenger`) and every
 challenger device: if `answer` accepts `a`, `b`, `e`, they decode to `p`, `c`, `ev`, and `answerAt` accepts them at
 the coins `ξ` the evidence's record shows; and where `p` and `c` name a challenger (`source`), `ξ` is the decoding of

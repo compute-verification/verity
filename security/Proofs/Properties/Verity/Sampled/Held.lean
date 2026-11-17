@@ -31,7 +31,7 @@ v2's hold on the record's `unit_draw` (`SampleHeld`). This module gives what v2'
   `--zk` (`ProvedScope.sampleDesign`, `samplingDesignWhy_zk`), the subset or the stratified sampling design; and the session v2 sets up has no
   `--stratified` input, so `Stmt.setupTables` refuses a stratified sample (`setupTables_stratified`). So the record's sample
   is the `.subset` print of the member's share of the window's sample under the verifier's sampling design, which `SampleHeld` reads at
-  the units v2 sampled; the bound is that sampling design's, from v1's window check (`Spot.OneStage.checkAt`), not the
+  the units v2 drew; the bound is that sampling design's, from v1's window check (`Spot.OneStage.checkAt`), not the
   print's.
 * **A subset sample that decodes is its own print** (`ofJson_subset_eq`): a value `norm` fixes that `UnitSample.ofJson`
   decodes to a subset sample is an object of exactly `samplingDesign`, `population`, `k` and `units` (`obj_eq_mkObj4`), so it is the
@@ -44,10 +44,10 @@ v2's hold on the record's `unit_draw` (`SampleHeld`). This module gives what v2'
 * **The record sample's units** (`provedUnits_eq`, `checkAt_proved`): where v2's run accepts, the session passed the
   population check, so the public file's unit indices are `0, …, N − 1`
   (`Properties.Spot.FilePart.check_indices`), and proved the units the record's sample names (`step_proved`),
-  which v2 holds to the units v1 proved (`provedHeld_ok`); v1's window check proves the units it sampled, a sample v2's
+  which v2 holds to the units v1 proved (`provedHeld_ok`); v1's window check proves the units it drew, a sample v2's
   evidence gives without a closure (`evidenceOf_closure`).
 * **`SampleHeld`** (`sampleHeld_of`, `sampleHeld`): wherever the subset sample the record's decodes to is over v2's `n` units at
-  the units v2 sampled, `SampleHeld` holds; and it is, for every composite.
+  the units v2 drew, `SampleHeld` holds; and it is, for every composite.
 -/
 
 @[expose] public section
@@ -813,7 +813,7 @@ theorem filterMap_nat {us : Array Json} {ps : Array ℕ}
     apply Array.toList_inj.1
     rw [Array.toList_filterMap, this]
 
-/-- **v1's window check at the coins `ξ` proves the units it sampled**: where it accepts a sample without a closure, the
+/-- **v1's window check at the coins `ξ` proves the units it drew**: where it accepts a sample without a closure, the
 evidence's proved units are the sample's (`UnitsProved`, `Drawn`). -/
 theorem checkAt_proved {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStage.Evidence} {pub : _root_.Spot.OneStage.Public}
@@ -848,7 +848,7 @@ theorem checkAt_proved {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneSta
     exact filterMap_nat hm
 
 /-- **`SampleHeld` from the record sample's units**: where, wherever composite `k` accepted what the prover sent and v2
-sampled `units` over `n` units there, the subset sample the record's decodes to is over `n` units at `units`, v2 holds the
+drew `units` over `n` units there, the subset sample the record's decodes to is over `n` units at `units`, v2 holds the
 record's sample to its own. v2 accepts only a subset record sample (`recordSample_subset`), which is its own print
 (`recordSampled_of_subset`). -/
 theorem sampleHeld_of {k : Verity.Registration.Composite}
@@ -864,10 +864,10 @@ theorem sampleHeld_of {k : Verity.Registration.Composite}
 
 /-- **v2 holds the record's sample to its own**, for every composite `k`: the subset sample the record's decodes to is over
 the record's population, since the session loads the public file to the sample's population (`setupTables_population`),
-which v2 held to the record's (`population_held`); and it is at the units v2 sampled, since the session proved the public
+which v2 held to the record's (`population_held`); and it is at the units v2 drew, since the session proved the public
 file's units the record samples (`provedUnits_eq`, at the indices the population check pins,
 `Properties.Spot.FilePart.check_indices`), v2 held them to the units v1 proved (`provedHeld_ok`), and v1's
-window check proves the units it sampled (`checkAt_proved`). -/
+window check proves the units it drew (`checkAt_proved`). -/
 theorem sampleHeld (k : Verity.Registration.Composite) : SampleHeld k := by
   refine sampleHeld_of fun s dr L n ξ units record dj D kd hS hd hone hr hdj hD hl => ?_
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, ⟨_, _, _, -, hn, -⟩, hu, -⟩ := hd

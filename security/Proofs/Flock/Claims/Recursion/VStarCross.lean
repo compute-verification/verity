@@ -59,7 +59,7 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
   (`run_inner`), which `FlockDeploy.decCoin` reads back.
 * **`Staged` at `deployRec`** (`staged_deployRec`), at the coins and commit strings a V* statement's transcript shows
   read by a reader `untr` (`showsTr`, `cmtTr`): wherever, at the compiled statements of the shape, `untr` reads the challenger's
-  live-coin part's transcript of an accepted run's inner rounds back to their prover messages and the values their coins sampled
+  live-coin part's transcript of an accepted run's inner rounds back to their prover messages and the values their coins drew
   (`ReadsBack`), and the layout spans no more than the inner rounds.
   `VstarShows` does not hold at `deployRec`:
   a V* statement staged at rounds where its numbers aren't the part's is the one staged at `pick`, which shows `pick`'s
@@ -164,17 +164,17 @@ theorem runPairs_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.In
 /-! ## The staged statements show the run -/
 
 /-- **A reader of the challenger's live-coin part's transcript**: at a compiled statement `x`, the rounds a transcript's bytes say,
-each as the prover's message and the coin values the round sampled. -/
+each as the prover's message and the coin values the round drew. -/
 abbrev TrReader : Type := Msg → ByteArray → Option (List (Msg × Array Flock.F128))
 
-/-- **The values `vs` are the coin `c`'s first ones**: what a round that sampled `vs.size` values shows of its coin. The
-challenger's live-coin part's record keeps only the values a round sampled (its `n`), so a transcript shows no more of a coin. -/
+/-- **The values `vs` are the coin `c`'s first ones**: what a round that drew `vs.size` values shows of its coin. The
+challenger's live-coin part's record keeps only the values a round drew (its `n`), so a transcript shows no more of a coin. -/
 def Drawn (c : Coin) (vs : Array Flock.F128) : Prop := vs = c.vals vs.size
 
 /-- **The reader reads the challenger's live-coin part's transcript back at an accepted run** (a named premise): at each compiled
 statement of the shape, on every accepted run of `V IV b.st`, `untr` reads `b.tr x` of the run's inner rounds back to
-those rounds' prover messages, each with values its round's coin sampled (`Drawn`). It asks nothing at a list of rounds
-no accepted run sends, and nothing of a coin past what its round sampled. -/
+those rounds' prover messages, each with values its round's coin drew (`Drawn`). It asks nothing at a list of rounds
+no accepted run sends, and nothing of a coin past what its round drew. -/
 def ReadsBack (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape : Claims.Recursion.Form → Prop)
     (untr : TrReader) : Prop :=
   ∀ x st, parse x = some st → shape st.form → ∀ (Ω : Type) (P : Prover Ω) (ω : Ω)
@@ -209,7 +209,7 @@ theorem readsBackB_of_readsBack {H : Msg → Msg} {IV : Claims.Verifier Coin} {b
 def shownOf (untr : TrReader) (x xO : Msg) : Option (List (Msg × Array Flock.F128)) :=
   ((decodeRec xO).bind RecRaw.transcript).bind (untr x)
 
-/-- **The coins a V\* statement shows**: at each round its transcript shows, the values that round sampled are the coin's
+/-- **The coins a V\* statement shows**: at each round its transcript shows, the values that round drew are the coin's
 first ones (`Drawn`). It shows nothing of a coin past them, so a part's check at the coins it shows (`PartChecksB`)
 holds at every coin with those values. -/
 def showsTr (untr : TrReader) (_s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop :=
@@ -222,7 +222,7 @@ def cmtTr (untr : TrReader) (x : Msg) (i : ℕ) (xO : Msg) : Msg :=
 /-- **`Staged` at `deployRec`**, at every shape: each V* statement of an accepted run is part `s`'s staged one at the
 run's inner and staging rounds (`run_round`), which reads back (`staged_ne_nil`, `staged_decode`) with the challenger's
 live-coin part's transcript of the run's inner rounds; read by `untr`, wherever it reads that transcript back (`ReadsBack`),
-each round shows values its coin sampled, and the rounds' prover messages are the run's commit strings, at each round the
+each round shows values its coin drew, and the rounds' prover messages are the run's commit strings, at each round the
 layout spans, which are inner rounds. -/
 theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (untr : TrReader) (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop)
