@@ -200,6 +200,8 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear/__init__.py",
           "verity/circuits/ops/boolean/versions.py", "benchmarks/pouw"]
 parallel = true
+worker_gb = 4
+workers = 4
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
 # check runs it as three parts by test id (`lean-suites:verity-pouw-benchmarks:K/3`, `suites.py`'s `id_part_of`), each
