@@ -580,7 +580,7 @@ def parameters(m: Model, s: Serving, share: float) -> list[list[str]]:
          "large: the Phase 2 model's estimate (a sizing script, not measured)"],
         ["block", f"{s.block_s:.0f} s, {m.requests:,} requests",
          "assumed (`BLOCK_S`)" + ("; requests from the step" if s.step_s is not None else "; requests the demo's")],
-        ["datacenter", f"{SERVERS:,} servers", "assumed (`SERVERS`); not in benchmarks/census"],
+        ["datacenter", f"{SERVERS:,} servers", "assumed (`SERVERS`); not in calibration/census"],
         ["replay", f"{s.replay:g} GPU-s a drawn request", "large: the Phase 2 model's estimate"],
         ["serve-time commitments", "units' outputs, request bytes, KV carry, PoUW h1 receipts, bandwidth receipts",
          "h1 assumed; commitment rate `inputs.commit_per_byte`"],
