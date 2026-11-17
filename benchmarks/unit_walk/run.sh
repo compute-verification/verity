@@ -68,7 +68,7 @@ for i, unit in enumerate(units):
     res.measurement("proofs/unit-walk-cpu-per-slot", best and us(best), "CPU microseconds a slot", mark="measured",
                     member=re.sub(r"[^a-z0-9]+", "-", unit.lower()).strip("-") + "-cpu",
                     why=None if best else "no walk of this type was ok and its first run's",
-                    extra={"unit": unit, "baseline_us": min(base) if base else None,
+                    extra={"block_type": unit, "baseline_us": min(base) if base else None,
                            **({k: best[k] for k in ("wide", "ahead", "keep", "threads", "slots", "rows")} if best else {})})
 EOF
 log "unit-walk: done, rc $rc"
