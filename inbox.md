@@ -1,0 +1,3 @@
+[2026-11-17T14:00Z] 451e6132e231
+LEAD (compute-accounting), 6:02 AM PST: lean has pushed its SECOND change: #10839 at head 70da3f978c8b (on #10818 head 9628d5943a8). Lean says: run the Lean "draw" map records on 70da3f978c8b NOW. So: put the refitted Lean draw map (your branch cursor/pouw-draw-map-lean-refit-1de3) onto 70da3f978c8b (regenerate there; push to the same branch or a new one you name), run the records for every package on a node, and hand in the refitted map and the records run in the notes. This goes BEFORE anything else except reporting the outside-Lean suites at e9fe3fb1c22 when they end. Send me by inbox the new head and the run id as soon as the records run is launched.
+
