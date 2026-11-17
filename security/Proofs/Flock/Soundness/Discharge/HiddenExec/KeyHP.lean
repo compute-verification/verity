@@ -8,26 +8,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.OutsP
 
 set_option Elab.async false
 
-/-!
-# `lay` and `rs` at `keyProgP`'s places in hidden-output tables at public inputs
-
-`KeyH.lean` at `SitesHP.progPlaces_keyProgP`, whose units read the gates of their keys with public inputs
-(`Placed.keyProgP`). Its rows are the input rows (`Layout.keyRowOfP`) and the output rows (`outRowOfP`), as `KeyH`'s;
-its single gates are the constant, the zero, and each unit's public gates (`Layout.keyPubOf`), whose bit is the unit's
-public input word's in the population's public file (`pubBitOf`):
-
-* `pub_siteHP`: at a sampled proof block's site (`BcSiteHP`), a stacked unit input whose key is bit `t` of public word `q` holds
-  bit `t` of word `q` of the proved unit's public inputs (`pub_block`, `Hidden.inVal_sampledP`);
-* `rowOfHP`, `keyReadersHP`: `Layout.Readers.ofRows` at those rows, at each sampled proof block's site (`siteAddrHP`), and single
-  gates with `Layout.keyGateP (pubBitOf pi popOf) (fun _ _ => false)`; a public gate is no row's bit (`rowOfHP_pub`);
-* `keyProgHP_copies`: Δ's copies, from `copy_siteHP` at an input row (its key a message bit, so off a public leaf) and
-  `out_copyHP` at an output row (`out_copy_keyP`);
-* `keyProgHP_bcPinned`: each row's `b ‖ c` at a sampled proof block's site is the population's (`bc_site_ofHP`);
-* `keyProgHP_gate`, `keyProgHP_valPinned`: the single gates are the constant, the zero and the public gates
-  (`Layout.single_gateP`, with every computed committed gate an output row's bit, `OutsOutP`), holding 1, 0
-  (`constCols_keyProgHP`, `zeroCols_keyProgHP`) and the public input words' bits (`pub_siteHP`);
-* `keyLayoutHP`, `keyRowsHP` and `keyRowsHP_computes`, `HmRowComputes` at them (`bc_site_commitHP`, `keyRowHP_enc`).
--/
+/-! `lay` and `rs` at `keyProgP`'s places in hidden-output tables at public inputs, where a unit's public gates hold its public input word's bits in the population's public file. -/
 
 namespace FlockSoundness.Discharge.HiddenExec
 
@@ -36,12 +17,6 @@ open FlockSoundness.Discharge.Layout (keyN portRowW OutColAt outDecode OutsOutP 
 
 variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {pi : HmIn.Ports}
 
-/-! ## Public gates at a site -/
-
-/-- **A sampled proof block's input at a public leaf holds its public word's bit**: in a satisfying witness of an accepted
-statement at public inputs, at a site (`BcSiteHP`: block `o`, template instance `g`, proved unit `u`), a stacked unit
-input whose key is bit `t` of public word `q` holds bit `t` of word `q` of `u`'s public inputs in the population's
-public file (`pub_block`, `Hidden.inVal_sampledP`). -/
 theorem pub_siteHP {T : Model.Statement} {a : AcceptedHP T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ}
     (hs : BcSiteHP a pop o g u) {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) (x : Fin a.rows.w)
     (hx : x.val < a.rows.nIn) {q t : ℕ} (hk : Aliased.srcKeyP a.st.c a.pi x.val = .pub q t) :
@@ -86,7 +61,6 @@ public file. -/
 def pubBitOf {Reg : Type} (pi : HmIn.Ports) (popOf : Reg → Public) (R : Reg) (u : Fin n) (q t : ℕ) : Bool :=
   ((popOf R).outputs.getD (u.val * pi.words + q) 0).testBit t
 
-/-- `keyGateP` at a public gate is `pubBit`'s. -/
 theorem keyGateP_pub {Reg : Type} (pubBit : Reg → Fin n → ℕ → ℕ → Bool) (outBit : Reg → Fin (keyN c hU n) → Bool)
     (R : Reg) {g : Fin (keyN c hU n)} {u : Fin n} {q t : ℕ} (h : keyPubOf c hU n pi g = some (u, q, t)) :
     keyGateP c hU n pi pubBit outBit R g = pubBit R u q t := by
@@ -99,9 +73,6 @@ theorem keyGateP_pub {Reg : Type} (pubBit : Reg → Fin n → ℕ → ℕ → Bo
     simp [Layout.zeroG, Placed.zeroGate] at h2 <;> omega
   simp only [keyGateP, h1, h0, h, ↓reduceIte]
 
-/-! ## Output rows' bits -/
-
-/-- **A unit's own column on a gate it computes** is a computed column, of that unit (`unit_wire` at `keyProgP`). -/
 theorem unit_wireP (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fin ((keyProgP c pi hU n).rows u).w)
     (h : (keyProgP c pi hU n).unit ((Const.Prog.instC (keyProgP c pi hU n) outs u).wire x) = some u') :
     u' = u ∧ ((keyProgP c pi hU n).rows u).nIn ≤ x.val := by
@@ -186,8 +157,6 @@ theorem rowOfHP_none (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
   · rw [rowOfHP_of_key outs hk] at h
     cases h
 
-/-- **A public gate is no row's bit**: its key is a public word's bit, so it is no input row's (`keyRowOfP`), and it is
-an input gate of `keyProgP` (`Layout.unit_uniform_input`), so no unit computes it (`outRowOfP`). -/
 theorem rowOfHP_pub (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)} {u : Fin n} {q t : ℕ}
     (h : keyPubOf c hU n pi g = some (u, q, t)) : rowOfHP c hU n pi outs g = none := by
   obtain ⟨h2, hlt, -, hk⟩ := Layout.keyPubOf_spec h
@@ -203,7 +172,6 @@ theorem rowOfHP_pub (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)} 
   unfold outRowOfP
   rw [hun]
 
-/-- **A row bit of a unit's own instance is that unit's row**. -/
 theorem rowOfHP_wire_unit (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n}
     (x : Fin ((keyProgP c pi hU n).rows u).w) {q : Fin c.ports.size} {k : Fin (portRowW c q)}
     (h : rowOfHP c hU n pi outs ((Const.Prog.instC (keyProgP c pi hU n) outs u).wire x) = some (u', ⟨q, k⟩)) :
@@ -215,10 +183,6 @@ theorem rowOfHP_wire_unit (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n}
     rw [h] at hk
     exact (Layout.keyRowOfP_wire outs x hk).1
 
-/-! ## Output-row copies at an accepted statement -/
-
-/-- **A returned output's column holds its output row's bit** at public inputs, at the statement circuit `c`
-(`out_copy_key`, through `out_copyHP`). -/
 theorem out_copy_keyP {T : Model.Statement} (a : AcceptedHP T) (hce : HmOut.unrolled a.st.c = c)
     (ho : c.outNet = c.unitNet)
     (hrf : Hidden.Any.RowsFitS c)
@@ -249,8 +213,6 @@ theorem out_copy_keyP {T : Model.Statement} (a : AcceptedHP T) (hce : HmOut.unro
     (by rw [er]; exact hx) hjo hkk hw
   rw [hq, hk]
   exact this
-
-/-! ## The readers -/
 
 section places
 
@@ -309,9 +271,6 @@ variable (ho : c.outNet = c.unitNet) (hrf : Hidden.Any.RowsFitS c)
   (houts : OutsOutP c hU n pi outs)
 
 include hparse hpi ho hrf houts in
-/-- **Δ's copies at `keyProgP`'s sites in hidden-output tables**: a column on an input row's bit, its key a message bit
-and so off a public leaf, holds the witness's bit at its key's message column (`copy_siteHP`); a column on an output
-row's bit holds the bit at the output row's message column (`out_copy_keyP`). -/
 theorem keyProgHP_copies : (keyReadersHP hparse hpi outs popOf).Copies (keyPlaceHP hparse hpi outs) := by
   refine Layout.ofRows_copies _ fun S R u hu M hM x hx u' q k hr => ?_
   have hq := (si.acc S R u hu).pi_eqU (hparse S R u hu) hpi
@@ -353,9 +312,6 @@ theorem keyProgHP_copies : (keyReadersHP hparse hpi outs popOf).Copies (keyPlace
     exact this
 
 include hparse hpi in
-/-- **The rows' `b ‖ c` at `keyProgP`'s sites in hidden-output tables is the registration's**: at each row a sampled
-proof block reads, the bytes at its `hm96` output are the population's `b ‖ c` of the unit (`bc_site_ofHP`, at a
-`BcSiteHP`). -/
 theorem keyProgHP_bcPinned
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteHP (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
@@ -372,11 +328,6 @@ theorem keyProgHP_bcPinned
   exact this
 
 include hparse hpi ho hrf houts in
-/-- **A single gate at a sampled proof block's site holds the registration's bit**: when every input a row reads has a key with
-public inputs (`KeysRowP`), a committed gate that is no row's bit is the zero, the constant, a public gate of the unit,
-or a computed gate (`Layout.single_gateP`); a computed one is a returned output's (`OutsOutP`), so an output row's bit.
-So the gate holds 0, 1 (`zeroCols_keyProgHP`, `constCols_keyProgHP`) or, at a public gate, the unit's public input
-word's bit (`pub_siteHP`, at each sampled proof block's site, `BcSiteHP`). -/
 theorem keyProgHP_gate (hkeys : KeysRowP c hU pi (portRowW c))
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteHP (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
@@ -427,8 +378,6 @@ theorem keyProgHP_gate (hkeys : KeysRowP c hU pi (portRowW c))
     exact outBitRow_ne_none_of_rowsOut hcr hrf u hwlt ht hno'
 
 include hparse hpi ho hrf houts in
-/-- **The single gates at `keyProgP`'s sites in hidden-output tables hold the registration's bits**
-(`keyProgHP_gate`). -/
 theorem keyProgHP_valPinned (hkeys : KeysRowP c hU pi (portRowW c))
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteHP (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
@@ -456,7 +405,6 @@ noncomputable def keyRowsHP
     (keyProgHP_bcPinned hparse hpi outs popOf hsite)
     (keyProgHP_valPinned hparse hpi outs popOf ho hrf houts hkeys hsite)
 
-/-- **The bytes a row's hash reads at `keyProgP`'s places in hidden-output tables** (`keyRowH_enc`). -/
 theorem keyRowHP_enc {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S) (M : Binding.Msg plan tab S R u)
     (u' : Fin n) (q : Fin c.ports.size) (hrw : portRowW c q = 16 * c.ports[q.val]!.words)
     (hb : c.ports[q.val]!.bits = 16 * c.ports[q.val]!.words) :
@@ -490,8 +438,6 @@ theorem keyRowHP_enc {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S) (
   · rw [hb, ← hrw, Layout.encSeg_row hrw hle, hbytes]
   · rw [Layout.rowEncP_row _ hrw hle, hbytes]
 
-/-- **`HmRowComputes` at `keyProgP`'s rows in hidden-output tables** (`keyRowsH_computes` at public inputs, through
-`bc_site_commitHP` and `keyRowHP_enc`). -/
 theorem keyRowsHP_computes
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteHP (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)

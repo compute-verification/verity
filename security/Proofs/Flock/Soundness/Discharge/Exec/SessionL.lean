@@ -4,20 +4,7 @@ public import Proofs.Flock.Soundness.Instance
 public import Proofs.Flock.Soundness.SessionBatch
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# The batched session under a leaf scheme (`Flock.Record`, `Flock.Merkle`)
-
-`batchedSession` (`Audit/FlockBatched.lean`) checks every opened path from the unsalted leaf `H(encode row)`
-(`OpensOK`). The statements the headline is about commit their proof rows with `hm96-sha512/v1` leaves, whose salts the
-prover sends with the openings, and verity-verify-proof checks those paths from the salted leaf (`verify_refines_hm96`:
-`OpensOKL` at `leaf512`). An honest hm96 transcript fails `OpensOK`, so verity-verify-proof's acceptance refines the session
-below, not `batchedSession`.
-
-The session is `sessionB` with each table's run after the link points `tableAfterL`: `tableAfter`, whose openings'
-message also carries the salts (`Opens F D × Salts Sl`), and whose paths verify from their rows' leaves under those
-salts (`OpensOKL`). Its one table is `Model.tableCL` (`tableCL_eq`), and at `Leaf.plain` it is the unsalted session
-(`opensOKL_plain_pair`, up to the salts' `Unit` message). `batchedSessionL` is `batchedSession` over it.
--/
+/-! The batched session under a leaf scheme (`batchedSessionL`), which verity-verify-proof's acceptance refines because an honest `hm96-sha512/v1` transcript fails `batchedSession`'s unsalted `OpensOK`. -/
 
 @[expose] public section
 
@@ -42,7 +29,6 @@ noncomputable def tableAfterL (A : Arith F K) (H : List UInt8 → D) (E : Merkle
         os.1, os.2⟩
 
 omit [Fintype K] in
-/-- One table's salted session is its level-0 cap, the link points, then `tableAfterL`. -/
 theorem tableCL_eq (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
     tableCL A H E Lf S sch hm ptLocal mPts =
@@ -105,8 +91,6 @@ theorem acceptedBL_eq [Inhabited D] [Inhabited Sl] (ts : List (TabSpec mPts)) (o
   Iff.rfl
 
 omit [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] in
-/-- The salts' leaf scheme `Leaf.plain` checks what `OpensOK` checks: at it, a table's salted verdict is the
-unsalted one, whatever the (unit) salts. -/
 theorem opensOKL_plain_pair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap₀ : Cap D)
     (pend : PendL F D × PendL F D) (os : Opens F D × Salts Unit) :
     (OpensOKL H E (Merkle.Leaf.plain H E) cap₀ 0 pend.1 os.1 os.2 ∧
@@ -125,8 +109,6 @@ noncomputable def batchedSessionL {n : ℕ} {Reg : Type} [Inhabited D] [Inhabite
   (sessionBL execArith H E Lf (plan S R)).map fun outs => decide (acceptedBL (plan S R) outs)
 
 open Classical in
-/-- **The batched session on a sample, over any table run**: `sessionG tab` accepted by `acc`. `batchedSessionL` is its
-instance at `tabAfterL` (`batchedSessionL_eq`). -/
 noncomputable def batchedSessionG {n : ℕ} {Reg Cm Out : Type}
     (tab : TabSpec mPts → Cm → (Fin 2 → Fin mPts → 𝔽) → Game Out) (acc : Out → Bool) (dflt : Out)
     (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (S : Finset (Fin n)) (R : Reg) : Game Bool :=

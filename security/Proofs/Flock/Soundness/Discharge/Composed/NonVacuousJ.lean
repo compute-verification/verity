@@ -21,31 +21,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
-/-!
-# The `J`-table statements' sample hypotheses hold together
-
-`zk_session_soundJ`, `zk_session_soundJ_custody` and `zk_session_soundJ_custody_json` take a reference setup `y₀` (the
-refused table's stand-in, `tableZJ`) and, directly or through the sample file's custody, `SampleOkZKJ` at every sample of the
-sampling design, all at one link-point count. `y₀` is a setup at table 0's inputs, not a `SampleSetupZK` of the whole statement at the
-whole sample: that one has the whole sample's link points, `mPtsOf c.g kd`, while the tables have their part's,
-`mPtsOf c.g (kd / nTab I)`; at 16 sampled proof blocks, two tables and one unit per block these are 28 and 27, and no such `y₀`
-exists. This file proves the hypotheses satisfiable together and the whole-draw binder empty:
-
-* `setupZJ_of_acceptsZK`: every table of a session `verify --zk` accepts at a sample `SampleOkZKJ` admits is set up
-  (`SampleSetupZJ` at table `j`'s inputs and sample).
-* `sampleHypsZJ`: at the challenger's live-coin part's sample file (`SampleFileZK`, `subset kd`) with the tables dividing `kd`, `SampleOkZKJ`
-  holds at every sample and every table of an accepted session is set up, all at `mPtsOf c.g (kd / nTab I)` link points.
-* `zk_session_soundJ_nonvacuous`, `zk_session_soundJ_custody_nonvacuous`, `zk_session_soundJ_custody_json_nonvacuous`:
-  each statement's `y₀` and sample hypotheses at one accepted session, each proof applying its statement to the `y₀` it
-  builds, so a binder that no longer admits it fails the build.
-* `sampleSetupZK_whole_mPts`, `e2e_forces_mPts`, `sampleSetupZK_whole_empty_16_2_1`: a whole-draw `SampleSetupZK` at the sample
-  file has `mPtsOf c.g kd` link points, so at 16 sampled proof blocks, two tables and `g = 1` that binder is empty.
-* `y0_binder_16_2_1`: at the same sample the statements' `y₀` exists at 27 link points and the whole-draw one doesn't.
-
-What none of this covers: that a session `verify --zk` accepts exists at a sample of the file (the live run's fact, which
-the kernel can't evaluate: setupH hashes and parses the inputs), `RecordsLiveZKJ` (custody of `wr`), the input facts
-`hU`, `hpub`, `hpt`, `hscope`, `hkd`, A3, and the count curve's parameters and `TableCRZ`.
--/
+/-! The `J`-table statements' reference setup `y₀` and sample hypotheses hold together, and a whole-draw `y₀` does not exist; that a session `verify --zk` accepts exists at a sample of the file is not covered. -/
 
 @[expose] public section
 
@@ -56,9 +32,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 
 variable {n mPts : ℕ}
 
-/-- **Every table of a session `verify --zk` accepts is set up.** On untyped tags with public outputs, at a session
-`verify --zk` accepts whose record carries the sample `dj S`, at which `SampleOkZKJ` holds at `mPts` link points: table `j`
-has a `SampleSetupZJ` at its inputs, its sample's units of `S` and its sample. -/
 theorem setupZJ_of_acceptsZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t)
     (hd : recordDraw t.record = some (dj S)) (hok : Assumptions.Zk.SampleAtZKJ I dj mPts S)
@@ -81,10 +54,6 @@ theorem setupZJ_of_acceptsZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (h
   obtain ⟨y, -, -, -⟩ := sampleSetupZJ_of ht' x (sch := schs[j.val].1) (tPad := schs[j.val].2) (by rw [hx]; exact hz')
   exact ⟨y⟩
 
-/-- **The `J`-table sample hypotheses hold together at an accepted session.** On untyped inputs under `TagsOkZJ`'s tags,
-whose circuit file parses to `c`: when the record's sample file is the verifier's `subset kd` sample (`SampleFileZK`) and the
-tables divide `kd`, `SampleOkZKJ` holds at every sample, and at a session `verify --zk` accepts at the sample `dj S` every
-table is set up, all at `mPtsOf c.g (kd / nTab I)` link points. -/
 theorem sampleHypsZJ (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZJ I) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) n)
@@ -95,11 +64,8 @@ theorem sampleHypsZJ (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZJ 
   ⟨sampleOkZKJ_of_file I ht hc kd n hdiv dj hdj,
     setupZJ_of_acceptsZK I hTags.1 ht dj h hd (sampleOkZKJ_of_file I ht hc kd n hdiv dj hdj S)⟩
 
-/-- **`zk_session_soundJ`'s `y₀` and `hDraw` hold together.** At the challenger's live-coin part's sample file (`SampleFileZK`, `subset kd`,
-the tables dividing `kd`) and one session `verify --zk` accepts at the sample `dj S`, on the inputs `ht`, `hTags` and `hc`
-describe: at `mPts = mPtsOf c.g (kd / nTab I)` there is a `y₀` (table 0's setup), every table is set up, and `SampleOkZKJ`
-holds at every sample, so at every sample of the sampling design (`hDraw`). The proof applies `zk_session_soundJ` to this `y₀` and
-`hDraw`. Not covered: the session's existence, `hRec`, `hU`, `hpub`, `hpt`, `hscope`, `hkd`, `hA3`, the count curve's
+/-- The proof applies `zk_session_soundJ` to this `y₀` and `hDraw`, so a binder that no longer admits them fails the build.
+Not covered: the session's existence, `hRec`, `hU`, `hpub`, `hpt`, `hscope`, `hkd`, `hA3`, the count curve's
 parameters and `TableCRZ`. -/
 theorem zk_session_soundJ_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZJ I)
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd : ℕ) (hdiv : kd % nTab I = 0)
@@ -117,13 +83,8 @@ theorem zk_session_soundJ_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (h
       (pub := pub) (kd := kd) (Ω := Unit) (Lb := Lb) (src := src) (hDraw := fun _ => hok _)
   exact ⟨⟨y₀⟩, hy, hok⟩
 
-/-- **`zk_session_soundJ_custody`'s `y₀` and the custody's sample file hold together.** At the sample file `hCust.2` is
-(`SampleFileZK`, `subset kd`), the tables dividing `kd` (`hdiv`), and a session `verify --zk` accepts at the sample `dj S`,
-on the inputs `ht`, `hTags` and `hc` describe: there is a `y₀` at `mPtsOf c.g (kd / nTab I)` link points (table 0's
-setup), every table is set up there, and `SampleOkZKJ`, which the statement derives from the sample file, holds at every
-sample at the same count. The proof applies `zk_session_soundJ_custody` to this `y₀`. Not covered: the session's
-existence, `hCust.1` (`RecordsLiveZKJ`), `hU`, `hpub`, `hpt`, `hscope`, `hkd`, `hA3`, the count curve's parameters and
-`TableCRZ`. -/
+/-- The proof applies `zk_session_soundJ_custody` to this `y₀`. Not covered: the session's existence, `hCust.1`
+(`RecordsLiveZKJ`), `hU`, `hpub`, `hpt`, `hscope`, `hkd`, `hA3`, the count curve's parameters and `TableCRZ`. -/
 theorem zk_session_soundJ_custody_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZJ I)
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) n)
@@ -139,10 +100,8 @@ theorem zk_session_soundJ_custody_nonvacuous (I : Inputs) (ht : I.tags.typed = f
     zk_session_soundJ_custody (Reg := Unit) (I := I) (c := c) (pub := pub) (kd := kd) (dj := dj) (y₀ := y₀)
   exact ⟨⟨y₀⟩, hy, hok⟩
 
-/-- **`zk_session_soundJ_custody_json`'s `y₀` and `hdj` hold together.** As `zk_session_soundJ_custody_nonvacuous`, with
-each sample file the JSON value `verity-verify-proof draw` printed for the verifier's `subset kd` sample (`hdj`). The proof applies
-`zk_session_soundJ_custody_json` to the `y₀` it builds and to `hdj`. Not covered: the session's existence, `hRec`,
-`hU`, `hpub`, `hpt`, `hscope`, `hkd`, `hA3`, the count curve's parameters and `TableCRZ`. -/
+/-- The proof applies `zk_session_soundJ_custody_json` to the `y₀` it builds and to `hdj`. Not covered: the session's
+existence, `hRec`, `hU`, `hpub`, `hpt`, `hscope`, `hkd`, `hA3`, the count curve's parameters and `TableCRZ`. -/
 theorem zk_session_soundJ_custody_json_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZJ I)
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : ∀ S, dj S = (drawOf (.subset kd) n S).toJson)
@@ -159,9 +118,6 @@ theorem zk_session_soundJ_custody_json_nonvacuous (I : Inputs) (ht : I.tags.type
       (Ω := Unit) (hdj := hdj) (k := k) (Rw := Rw) (M := M)
   exact ⟨⟨y₀⟩, hy, hok⟩
 
-/-! ## The whole-draw binder -/
-
-/-- A sample file of the verifier's `subset kd` sample proves `kd` units. -/
 theorem sampleFileZK_proved_size {kd pop : ℕ} {dj : Finset (Fin n) → Lean.Json} (hdj : SampleFileZK dj (.subset kd) pop)
     (S : Finset (Fin n)) : ∀ D, Draw.UnitSample.ofJson (dj S) = .ok D → D.proved.size = kd := by
   intro D hD
@@ -169,9 +125,6 @@ theorem sampleFileZK_proved_size {kd pop : ℕ} {dj : Finset (Fin n) → Lean.Js
   have hsz : D.units.size = kd := (ofJson_shape hD).2.2 kd (by rw [hDe]; rfl)
   rw [hDe, sampleOf_proved, ← hDe, hsz]
 
-/-- **A whole-draw setup has the whole sample's link points.** On untyped tags whose circuit file parses to `c` under the
-`--zk` tags, a `SampleSetupZK` of the whole statement at a sample file of the verifier's `subset kd` sample has
-`mPtsOf c.g kd` link points. -/
 theorem sampleSetupZK_whole_mPts (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) {kd pop : ℕ}
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) pop) {S₀ : Finset (Fin n)}
@@ -183,8 +136,6 @@ theorem sampleSetupZK_whole_mPts (I : Inputs) (ht : I.tags.typed = false) {c : F
   have hst : y₀.x.st.c = c := Except.ok.inj (hcst.symm.trans hc)
   rw [← y₀.x.hmPts, hm, hst, sampleFileZK_proved_size hdj S₀ ud hud]
 
-/-- **A whole-draw `y₀` forces the whole sample's link points onto a table's**: a whole-draw `SampleSetupZK` at
-`mPtsOf c.g (kd / nTab I)` link points, at a sample file of the verifier's `subset kd` sample, makes both counts equal. -/
 theorem e2e_forces_mPts (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd : ℕ)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
@@ -193,13 +144,10 @@ theorem e2e_forces_mPts (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circ
     mPtsOf c.g kd = mPtsOf c.g (kd / nTab I) :=
   (sampleSetupZK_whole_mPts I ht hc dj hdj y₀).symm
 
-/-- 16 sampled proof blocks at one unit per block take 28 link points, 8 take 27. -/
 theorem mPtsOf_16_8 : mPtsOf 1 16 = 28 ∧ mPtsOf 1 8 = 27 := by decide
 
 theorem mPtsOf_16_ne_8 : mPtsOf 1 16 ≠ mPtsOf 1 8 := by decide
 
-/-- **At 16 sampled proof blocks, two tables and `g = 1`, the whole-draw binder is empty**: no whole-draw `SampleSetupZK` at
-`mPtsOf c.g (16 / nTab I)` link points exists at a sample file of the verifier's `subset 16` sample. -/
 theorem sampleSetupZK_whole_empty_16_2_1 (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hJ : nTab I = 2) (hg : c.g = 1)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset 16) n) (S₀ : Finset (Fin n)) :
@@ -209,9 +157,6 @@ theorem sampleSetupZK_whole_empty_16_2_1 (I : Inputs) (ht : I.tags.typed = false
     rw [hJ, hg] at h
     exact mPtsOf_16_ne_8 h⟩
 
-/-- **At 16 sampled proof blocks, two tables and `g = 1`, the statements' `y₀` exists and a whole-draw one doesn't.** At the
-verifier's `subset 16` sample file and one session `verify --zk` accepts at the sample `dj S`: the tables' count is 27, a
-`y₀` (`zk_session_soundJ`'s `SampleSetupZJ` at table 0's inputs) exists at it, and no whole-draw `SampleSetupZK` does. -/
 theorem y0_binder_16_2_1 (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZJ I) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hJ : nTab I = 2) (hg : c.g = 1)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset 16) n)

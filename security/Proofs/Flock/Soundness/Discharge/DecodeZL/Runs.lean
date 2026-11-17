@@ -21,19 +21,7 @@ import Proofs.Flock.Soundness.Discharge.PlaysCoin.Tape
 public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 public import Proofs.Flock.Soundness.Discharge.PlaysCoin
 
-/-!
-# A rep's run, from its rounds' frames (`DecodesOn`'s message half)
-
-`Discharge/PlaysCoin`'s `DecodesOnOfRuns` asks each rep for a `RepRun`: a run on its rounds' coins whose messages, cut at the spine's
-coins, are the decoder's groups of the rounds. This file gives it from the executable's side:
-
-* `coinPat_eq`: `Carries`' coin pattern is `Discharge/PlaysCoin`'s, so `cutOfPat` cuts a `Carries` back into its rounds.
-* `roundGroups_eq`: on rounds that retained the encodings of `F`'s chunks, the decoder `decOf W`'s groups are
-  `rdChunks W F`.
-* `repRun_at`: at a table whose statement, schedule and link layout are `stmtOf`'s, `fast100`'s and `PT_LOCAL`, the rep
-  run `accepts_verdict_hm96` gives, on rounds that retained `repFrames`' chunks (`accepts_rep_rounds`), is a `RepRun`
-  for the decoder `wZL ++ (wOP ++ wLIG)`, given the opening's and Ligerito's chunk lemmas.
--/
+/-! A rep's `RepRun` for `DecodesOnOfRuns`, from the executable's rounds' frames. -/
 
 @[expose] public section
 
@@ -59,8 +47,6 @@ theorem groupPat_length : ∀ (ns : List ℕ) (t : ℕ), (groupPat ns t).length 
         List.length_cons, List.length_nil] at this ⊢
       omega
 
-/-- **A `Carries` cuts back into its rounds**: the messages, laid along the spine and cut at its coins, are the rounds'
-messages then the tail. -/
 theorem cut_of_carries {W : List (List Wire)} {σ : List Exec.Kind} {F : List Frame} {ms t : List Msg}
     (h : Carries W σ F ms t) : PlaysCoin.cut σ ms = rdChunks W F ++ [t] := by
   obtain ⟨-, -, rfl, hpat⟩ := h
@@ -70,7 +56,6 @@ theorem rdChunks_length (W : List (List Wire)) (F : List Frame) :
     (rdChunks W F).length = min W.length (chunks F).1.length := by
   simp [rdChunks]
 
-/-- A `Carries`' spine is as long as its messages and rounds. -/
 theorem carries_length {W : List (List Wire)} {σ : List Exec.Kind} {F : List Frame} {ms t : List Msg}
     (h : Carries W σ F ms t) : σ.length = ms.length + (chunks F).1.length := by
   obtain ⟨-, hW, rfl, hpat⟩ := h
@@ -104,8 +89,6 @@ theorem bytes_of_retains {rd : Round} {L : List UInt8} (h : Retains rd L) :
       subst h
       simp
 
-/-- **The decoder's groups are the chunks' reads**: on rounds that retained the encodings of `F`'s chunks, one round
-per chunk and one wire list per chunk, the groups `decOf W` reads off the rounds are `rdChunks W F`. -/
 theorem roundGroups_eq (W : List (List Wire)) (F : List Frame) (rds : Array Round)
     (hW : W.length = (chunks F).1.length) (hl : (chunks F).1.length = rds.size)
     (hret : ∀ k < rds.size, Retains rds[k]! (encs ((chunks F).1.getD k []))) :
@@ -130,10 +113,6 @@ theorem extraClaims_length (S : Model.Statement) (pl mPts : ℕ) (pts : Fin 2 �
   | nil => rfl
   | cons R rs ih => rw [List.flatMap_cons, List.length_append, ih]; simp; omega
 
-/-- **A rep's run is a `RepRun`** for the decoder `wZL ++ (wOP ++ wLIG)`: at a table `T` whose statement is `stmtOf st`,
-whose schedule is `fast100`'s and whose link layout is `PT_LOCAL`, a run of rep `r` on its rounds' coins with its proof's
-messages (`accepts_verdict_hm96`), on rounds that retained the encodings of `repFrames`' chunks (`accepts_rep_rounds`),
-cuts at `repSpine`'s coins into the decoder's groups of the rounds, with no tail. -/
 theorem repRun_at {mPts : ℕ} {wOP : ℕ → List (List Wire)} {wLIG : Accounting.Schedule → List (List Wire)}
     (hOP : OPCarries wOP) (hLIG : LIGCarries wLIG) (sizes : DecodeSizes) (T : TabSpec mPts) (st : Flock.Stmt)
     (hwf : StmtWF st) (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (hdl : st.merkle.digestLen = 64)

@@ -74,14 +74,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
 public import Proofs.Flock.Soundness.Discharge.ZkBind.At
 public import Proofs.Flock.Soundness.Discharge.ZkBind.AtM1
 
-/-!
-# One `--zk` sampled session: the pieces the soundness half reads
-
-* `Gz`, `outz`, `accz`: the compiled `--zk` table at each sample (one table) as `modelTable`'s pieces, so that
-  `ZkExec.sessionZC` at them is `ZkLink.batchedSessionZC` at the one-table plan (`sessionZC_planOf`).
-* `DecodesOnZK`, `simZ`, `execRefinesZK_on`: `DecodesZK`, `simAuditZK` and `execRefinesZK_one` at the sampling design's samples only
-  (as `Tables.DecodesOnJ` is on the public path), the simulated strategy carried into the compiled batched session.
--/
+/-! The pieces the soundness half of one `--zk` sampled session reads. -/
 
 @[expose] public section
 
@@ -160,8 +153,6 @@ noncomputable def simZ (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
   cast (congrArg (fun g => Strategy (audit L Reg g)) (sessionZC_planOf A Hs T))
     (simAuditZKOn A Hs T I wr opn dg dec one fin capOf N hdec τ)
 
-/-- **The refinement at `--zk` from the decoder at the sampling design's samples** (`execRefinesZK_one`'s proof, reading `hdec` only
-there). -/
 theorem execRefinesZK_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
     ExecRefines (auditLive L Reg (liveOf dg mPts N wr)) τ (LiveAcceptsZK I) (fun _ => False)
@@ -186,8 +177,6 @@ theorem execRefinesZK_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L
     (dec (L.draw ω) τ.1) (one (L.draw ω) τ.1) (fin (L.draw ω) τ.1) (capOf (L.draw ω) τ.1) N (Gz A Hs T (L.draw ω) τ.1)
     (fun pts r => allInh_repZCAt A Hs (T (L.draw ω) τ.1) pts r) (hdec ω τ.1) _
 
-/-- **The `--zk` headline at verity-verify-proof's acceptance, from the decoder at the sampling design's samples**: a bound on the compiled
-batched audit's acceptance with any event `Q` at `simZ … τ` bounds verity-verify-proof `--zk`'s acceptance with `Q`. -/
 theorem zk_headline_exec_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) (Q : Prop) (B : ℝ≥0∞)
     (hB : prob (fun o => o.1 = true ∧ Q) (audit L Reg (batchedSessionZC A Hs (planOf T)))
@@ -208,7 +197,6 @@ theorem zk_headline_exec_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capO
   rwa [prob_eq_zero_of_out (fun _ _ h => h) τ, add_zero] at h
 
 omit [Fintype K] in
-/-- **The decoder at the sampling design's samples from `RunsOnZC`** (`ZkExec.decodes_of_runsOnZC`, the coin step `true`). -/
 theorem decodesOnZK_of_runsOnZC (h : RunsOnZC A Hs T I wr opn dec fin capOf L) :
     DecodesOnZK A Hs T I wr opn dec (fun _ _ _ => true) fin capOf L :=
   fun ω R => decodes_of_runsOnZC A Hs T I wr opn dec fin capOf h ω R

@@ -7,21 +7,7 @@ import Mathlib.Data.List.GetD
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# The frames a run emits (for the decoder premise)
-
-A run of the replay transcript appends frames to its pending bytes, and each squeeze of at least one coin closes a
-round: the round retained the pending bytes and the squeeze's header, when the server retains round bytes (every
-`hm96Rows` tag pinned today does: `accepts_allRetained`, for public-output statements, `hiddenOutputs = false`).
-`Emitted t t' fs` says a run from `t` to `t'` absorbed and squeezed the frames `fs`, in order.
-
-* `chunks fs`: the rounds `fs` closes, each the frames up to and including its squeeze, and the frames after the last.
-* `Emitted`: the run consumed one round per chunk, each retaining its chunk's bytes (the first also `t`'s pending bytes)
-  and issuing the coins of the squeeze that closes its chunk, and left the rest pending.
-* `Emitted.trans`: runs compose by appending their frames (`chunks_append`).
-* The transcript's steps (`label_emitted`, `absorbF_emitted`, …, `squeeze_emitted`, `sample_emitted`) and loops
-  (`forIn_emitted`).
--/
+/-! The frames a run of the replay transcript emits, round by round (`Emitted`), for the decoder premise. -/
 
 @[expose] public section
 
@@ -152,8 +138,6 @@ theorem Emitted.trans {t t₁ t₂ : Transcript} {fs₁ fs₂ : List Frame} (h�
           refine ⟨c', kd, ?_⟩
           simpa [Nat.add_comm 1 j] using hc'
 
-/-! ## The transcript's steps -/
-
 theorem emitted_absorb {f : Frame} (hf : closes f = false) {t t₁ : Transcript} (hr : t₁.rounds = t.rounds)
     (hk : t₁.k = t.k) (hp : t₁.pending.data.toList = t.pending.data.toList ++ f.enc) : Emitted t t₁ [f] := by
   have hc : chunks [f] = ([], [f]) := by simp [chunks, hf]
@@ -237,7 +221,6 @@ theorem sampleK_emitted {t t₁ : Transcript} {v : F256} (h : sampleK t = .ok (v
     subst hi0
     exact ⟨[], 2, by simp [hN]⟩
 
-/-- **A loop emits its iterations' frames**, in order, when each iteration emits its own. -/
 theorem forIn_emitted {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (F : ℕ → List Frame)
     (hbody : ∀ i s t b t', AllRetained t.rounds → body i s t = .ok (b, t') →
       ∃ s', b = ForInStep.yield s' ∧ Emitted t t' (F i)) :

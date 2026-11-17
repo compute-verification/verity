@@ -23,17 +23,7 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# Ligerito's rounds carry its messages (`DecodesOn`'s message half)
-
-`lig_carries`: Ligerito's frames `ligFrames`, read by `wLIG`, are `ligMsgs`, cut at `ligShape`'s coins. `Carries` reads
-the spine only through its coin pattern, so the rounds are proved at a pattern (`CarriesP`) and glued with
-`CarriesP.append`: the start, the first out-of-domain value (`carriesP_f`), the `k0` folding rounds (`carriesP_fold`),
-the last one with the level-1 cap (`carriesP_cap`), level 0's out-of-domain samples and queries (`carriesP_mid`), and
-the level loop (`carriesP_levels`, by recursion on the levels left, ending at `yr` with `carriesP_yr`). `fast100`'s
-schedules fold 4 lanes above level 0, so `ligShape`'s pattern is the rounds' (`isCoin_rec`), and their caps and query
-counts fit the frames' bounds (`fast100_small`).
--/
+/-! Ligerito's frames `ligFrames`, read by `wLIG`, carry its messages `ligMsgs` (`lig_carries`). -/
 
 @[expose] public section
 
@@ -48,8 +38,6 @@ theorem le64_size (x : UInt64) : (le64 x).size = 8 := by
   simp [le64, Std.Legacy.Range.forIn_eq_forIn_range', List.range', ByteArray.size_push]
   rfl
 
-/-- `fast100`'s schedules: `m` from 22 to 35, and per level fewer than 64 columns, 1 to 255 queries and a cap below
-8. -/
 theorem fast100At_small (wide : Bool) (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100At wide m = some s) :
     22 ≤ s.m ∧ s.m ≤ 35 ∧ ∀ lv ∈ s.levels, lv.cols < 64 ∧ 0 < lv.q ∧ lv.q < 256 ∧ lv.cap < 8 := by
   by_cases hm : m < 40
@@ -68,8 +56,6 @@ theorem fast100At_small (wide : Bool) (m : ℕ) (s : Flock.Schedule) (hs : Flock
 theorem fast100_small (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) :
     22 ≤ s.m ∧ s.m ≤ 35 ∧ ∀ lv ∈ s.levels, lv.cols < 64 ∧ 0 < lv.q ∧ lv.q < 256 ∧ lv.cap < 8 :=
   fast100At_small false m s hs
-
-/-! ## Carrying at a coin pattern -/
 
 /-- `Carries` at a coin pattern: `Carries W σ` is `CarriesP W (coinPat σ)`. -/
 def CarriesP (W : List (List Wire)) (P : List Bool) (F : List Frame) (ms tail : List Msg) : Prop :=
@@ -98,12 +84,9 @@ theorem carriesP_one {fs : List Frame} {g : Frame} {w : List Wire} {ms : List Ms
   refine ⟨by rw [hc], by rw [hc]; rfl, by rw [hr]; simp, ?_⟩
   rw [hr]; simp [groupPat]
 
-/-- A round that carries nothing. -/
 theorem carriesP_none {fs : List Frame} {g : Frame} (hfs : ∀ f ∈ fs, closes f = false) (hg : closes g = true) :
     CarriesP [[]] [true] (fs ++ [g]) [] [] := by
   simpa using carriesP_one (w := []) hfs hg (decRound_nil _)
-
-/-! ## Ligerito's rounds -/
 
 theorem wf_bytes {b : ByteArray} (h : b.size < 2 ^ 64) : (Frame.bytes b).WF := h
 
@@ -138,7 +121,6 @@ theorem wf_capFr {c : Array ByteArray} (h : ∀ x ∈ c.toList, x.size = 64) (hs
   have : (2 : ℕ) ^ 32 < 2 ^ 58 := by norm_num
   omega
 
-/-- A round of one sumcheck message. -/
 theorem carriesP_kk (m : F256 × F256) {xs : List Frame} {g : Frame} (hxs : ∀ f ∈ xs, closes f = false)
     (hwxs : ∀ f ∈ xs, f.WF) (hg : closes g = true) (hwg : g.WF) :
     CarriesP [[.kk]] [false, true] ((kFr m ++ xs) ++ [g]) [kMsg m] [] := by
@@ -157,7 +139,6 @@ theorem carriesP_kk (m : F256 × F256) {xs : List Frame} {g : Frame} (hxs : ∀ 
   · rw [decRound_encs hwf, List.append_assoc, valsOf_kFr]
     simp [readAll, Wire.kk, kMsg]
 
-/-- A round of an out-of-domain value and its intro message. -/
 theorem carriesP_fkk (o : F128) (m : F256 × F256) (x : UInt64) :
     CarriesP [[.f, .kk]] [false, false, true] ((.one o :: kFr m ++ [.bytes (le64 x)]) ++ [.sq 1 1])
       [fMsg o, kMsg m] [] := by
@@ -179,7 +160,6 @@ theorem carriesP_fkk (o : F128) (m : F256 × F256) (x : UInt64) :
   · rw [decRound_encs hwf]
     simp [readAll, Wire.f, Wire.kk, kMsg, fMsg, valsOf, bytesOf, kFr, Frame.vals, Frame.byteStr]
 
-/-- The round of the first out-of-domain value. -/
 theorem carriesP_f (o : F128) (x : UInt64) :
     CarriesP [[.f]] [false, true] ([.one o, .bytes (le64 x)] ++ [.sq 1 1]) [fMsg o] [] := by
   have hwf : ∀ f ∈ [Frame.one o, .bytes (le64 x)] ++ [.sq 1 1], f.WF := by
@@ -192,7 +172,6 @@ theorem carriesP_f (o : F128) (x : UInt64) :
   rw [decRound_encs hwf]
   simp [readAll, Wire.f, fMsg, valsOf, bytesOf, Frame.vals, Frame.byteStr]
 
-/-- The last fold round of a level below the last: its message and the next level's cap. -/
 theorem carriesP_cap (m : F256 × F256) {c : Array ByteArray} (hc : ∀ x ∈ c.toList, x.size = 64)
     (hcs : c.size < 2 ^ 32) {dim : ℕ} (hd : dim ≠ 0) (hdw : dim < 2 ^ 64) :
     CarriesP [[.kk, .cap]] [false, false, true] ((kFr m ++ [capFr c]) ++ [.sq 2 dim])
@@ -212,7 +191,6 @@ theorem carriesP_cap (m : F256 × F256) {c : Array ByteArray} (hc : ∀ x ∈ c.
   · rw [decRound_encs hwf, List.append_assoc, valsOf_kFr, bytesOf_kFr]
     simp [readAll, Wire.kk, Wire.cap, kMsg, bytesOf, Frame.byteStr, capFr, capOfRoot_eq hc rfl]
 
-/-- The last level's last fold round: its message and the clear residual `yr`. -/
 theorem carriesP_yr (m : F256 × F256) {yr : Array F128} {N : ℕ} (hN : yr.size = N) (x : UInt64) {q : ℕ}
     (hq : q ≠ 0) (hqw : q < 2 ^ 64) :
     CarriesP [[.kk, .v N]] [false, false, true] ((kFr m ++ (yr.toList.map .one ++ [.bytes (le64 x)])) ++ [.sq 2 q])
@@ -244,8 +222,6 @@ theorem kMsgs_succ (lp : LigeritoProof) (a k : ℕ) :
     kMsgs lp a (k + 1) = kMsg lp.messages[a]! :: kMsgs lp (a + 1) k := by
   simp [kMsgs, List.range'_succ]
 
-/-- **The folding rounds** from message `a`: `k` rounds of one message, each closed by its fold coin, then the round of
-message `a + k`, which carries on into `ys`. -/
 theorem carriesP_fold (lp : LigeritoProof) {W : List (List Wire)} {P : List Bool} {ys : List Frame} {msY : List Msg} :
     ∀ (k a : ℕ), CarriesP W P (kFr lp.messages[a + k]! ++ ys) (kMsg lp.messages[a + k]! :: msY) [] →
       CarriesP (List.replicate k [.kk] ++ W) ((List.replicate k [false, true]).flatten ++ P)
@@ -259,7 +235,6 @@ theorem carriesP_fold (lp : LigeritoProof) {W : List (List Wire)} {P : List Bool
         kMsgs_succ]
       simpa [List.replicate_succ, List.append_assoc] using this
 
-/-- `carriesP_fold`, with the round of message `a + k` given as its frames and messages. -/
 theorem carriesP_fold' (lp : LigeritoProof) {W : List (List Wire)} {P : List Bool} {xs rest : List Frame} {g : Frame}
     {ms₁ ms₂ : List Msg} (k a : ℕ)
     (h : CarriesP W P (((kFr lp.messages[a + k]! ++ xs) ++ [g]) ++ rest) ((kMsg lp.messages[a + k]! :: ms₁) ++ ms₂)
@@ -276,8 +251,6 @@ def wMid : List (List Wire) := [[.f, .kk], [], [.f, .kk], [], [], [.kk]]
 /-- `wMid`'s coin pattern. -/
 def pMid : List Bool := [false, false, true, true, false, false, true, true, true, false, true]
 
-/-- **A level's out-of-domain samples and queries**: two out-of-domain values with their intro messages, the queries'
-coins, and the query message. -/
 theorem carriesP_mid (lp : LigeritoProof) (dim o₁ o₂ x₁ x₂ x₃ c₁ c₂ c₃ qn cn : ℕ) (lv : Flock.Level) (hd : dim ≠ 0)
     (hq : lv.q ≠ 0) :
     CarriesP wMid pMid
@@ -332,7 +305,6 @@ theorem caps_small {lp : LigeritoProof} {sch : Flock.Schedule}
 
 theorem lt_two64 {x : ℕ} (h : x < 256) : x < 2 ^ 64 := lt_of_lt_of_le h (by norm_num)
 
-/-- **The level loop**: with `j` levels left from level `i + 1`, its rounds carry `recMsgs`. -/
 theorem carriesP_levels (sch : Flock.Schedule) (lp : LigeritoProof)
     (hsm : ∀ lv ∈ sch.levels, lv.cols < 64 ∧ 0 < lv.q ∧ lv.q < 256 ∧ lv.cap < 8)
     (hrc : lp.recursiveCaps.size = sch.levels.size - 1)
@@ -384,8 +356,6 @@ theorem carriesP_levels (sch : Flock.Schedule) (lp : LigeritoProof)
         show 3 + 2 * i + 2 = 3 + 2 * (i + 1) by omega]
       simpa [wLev, pLev, introFr, List.append_assoc] using this
 
-/-! ## The coin pattern of Ligerito's spine -/
-
 theorem isCoin_fold (F K : Type) : ∀ k, (foldShape F K k).map isCoin = (List.replicate k [true, false]).flatten
   | 0 => rfl
   | k + 1 => by
@@ -398,7 +368,6 @@ theorem shift_pat : ∀ (k : ℕ) (l : List Bool),
   | 0, l => rfl
   | k + 1, l => by simp [List.replicate_succ, shift_pat k]
 
-/-- The level loop's spine has pattern `pLev`, when every level folds 4 lanes. -/
 theorem isCoin_rec (F K D : Type) (ext : ℕ) : ∀ lvs : List Accounting.Level, (∀ lv ∈ lvs, lv.lanes = 4) →
     (recShape F K D ext lvs).map isCoin = pLev lvs.length
   | [], _ => rfl

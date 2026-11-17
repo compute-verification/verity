@@ -16,14 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# A hidden-output statement's Δ (`HiddenDelta`)
-
-`HmOut.delta` is `HmRow.delta`'s pairs, then the output rows' message bits: per template instance `g`, output port `j`, row word `k` and
-bit `t < 16`, the pairs `outPairs` lists, then the pinned outputs' (`HmOut.pinPairs`, `pinList`), none where no output is
-pinned (`hidden_delta_unpinned`). Its loops are `forIn_range_append`'s, but for the port loop, which also carries
-the template instance's first output word of port `j`, `outAt c j` (`forIn_range_at`).
--/
+/-! A hidden-output statement's Δ (`HiddenDelta`): `HmRow.delta`'s pairs, then `outPairs`, then the pinned outputs' (`pinList`). -/
 
 @[expose] public section
 
@@ -43,8 +36,6 @@ theorem outAt_succ (c : Circuit) {j : ℕ} (hj : j < c.outPorts.size) :
     getElem!_pos c.outPorts j hj]
   simp
 
-/-- A loop over `range' s m` whose state is an array and a counter, `A a` at step `a`: each step appends `G a` and adds
-`W a` to the counter. -/
 theorem forIn_list_at {γ : Type} (G : ℕ → List γ) (A W : ℕ → ℕ)
     {f : ℕ → Array γ × ℕ → Id (ForInStep (Array γ × ℕ))} :
     ∀ (m s : ℕ), (∀ a, s ≤ a → a < s + m → A (a + 1) = A a + W a) →
@@ -76,7 +67,6 @@ theorem run_pair (m : Id (Array (ℕ × ℕ))) (da db e : Array (ℕ × ℕ)) (L
   show (da ++ Id.run m ++ e, db ++ Id.run m ++ e) = _
   rw [← hm, Array.toArray_toList]
 
-/-- **Δ's pairs on the pinned outputs are `pinList`.** -/
 theorem pinPairs_toList (c : Circuit) : (HmOut.pinPairs c).toList = pinList c := by
   unfold HmOut.pinPairs
   simp only [bind_pure]
@@ -102,7 +92,6 @@ theorem hidden_delta' : HiddenDelta := by
   simp only [Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
   rfl
 
-/-- A statement that pins no output has no pinned output word. -/
 theorem pinnedWords_zero {c : Circuit} (h : HmRow.pinnedCount c.metaJ = 0) : HmOut.pinnedWords c = 0 := by
   unfold HmOut.pinnedWords
   rw [h, Nat.sub_zero, ← Array.foldl_toList, Array.toList_extract, List.extract_eq_take_drop]
@@ -113,7 +102,6 @@ theorem pinList_nil {c : Circuit} (h : HmRow.pinnedCount c.metaJ = 0) : pinList 
   rw [pinnedWords_zero h]
   simp
 
-/-- **`HiddenDelta` where no output is pinned**: `HmRow.delta`, then `outPairs`. -/
 theorem hidden_delta_unpinned {c : Circuit} (h : HmRow.pinnedCount c.metaJ = 0) (pin : ℕ) :
     HmOut.delta c pin = ((HmRow.delta c pin).1 ++ (outPairs c).toArray, (HmRow.delta c pin).2 ++ (outPairs c).toArray) := by
   rw [hidden_delta', pinList_nil h]

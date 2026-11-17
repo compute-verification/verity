@@ -18,17 +18,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# verity-verify-proof's acceptance at the verifier's public inputs
-
-`Exec.setupOf` sets the session up with no `--public-inputs`; `Exec.setupOfP I own` passes `own`, the verifier's own
-recomputation of the public input words (`HmIn.checkOwn`), and `Exec.AcceptsP` is `Exec.Accepts` at it. At `own = none`
-both are the deployed ones (`setupOfP_none`, `acceptsP_none`).
-
-`setupTables_okHP` is `setupTables_okH` at any `own`, by the same walk; `setupTables_specP` puts it together with
-`Hidden.setupHidden_specP`: every table of a hidden-output session accepted at `own` is its `SpecP`, at its circuit's
-public input ports.
--/
+/-! verity-verify-proof's acceptance at the verifier's own public input words `own` (`AcceptsP`), which at `own = none` is the deployed one. -/
 
 @[expose] public section
 
@@ -43,7 +33,6 @@ def setupOfP (I : Inputs) (own : Option ByteArray) (record : String) : Flock.V (
   Flock.Stmt.setupTables I.tags I.circuitFile I.publicFile I.coins I.count I.tables (recordDraw record) I.partition I.program
     I.work I.stratified I.closure own
 
-/-- **verity-verify-proof accepts the transcript at the verifier's public inputs `own`**. -/
 def AcceptsP (I : Inputs) (own : Option ByteArray) (t : Transcript) : Prop :=
   ∃ spec sts, setupOfP I own t.record = .ok (spec, sts) ∧
     Flock.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok ()
@@ -66,8 +55,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
 
 -- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
-/-- **`setupTables` sets up each table with `setupHidden` at the verifier's public inputs** under a tag with hidden
-outputs (`setupTables_okH` at any `own`). -/
 theorem setupTables_okHP (hh : tags.hiddenOutputs = true)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure own =
       .ok (spec, sts)) :
@@ -106,8 +93,6 @@ theorem setupTables_okHP (hh : tags.hiddenOutputs = true)
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
     exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, ok_of_refuse (hall j hj)⟩, mPts_of_any (by assumption), rfl⟩
 
-/-- **Every table of a hidden-output session accepted at the verifier's public inputs is its `SpecP`**: under the
-table's tags (`tagsAt`), at some sample (the session's, for one table), and at its circuit's public input ports. -/
 theorem setupTables_specP (hh : tags.hiddenOutputs = true)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure own =
       .ok (spec, sts)) :
@@ -127,8 +112,6 @@ theorem setupTables_specP (hh : tags.hiddenOutputs = true)
       ite_eq_right (by omega)
     exact ⟨some d, pi, by rw [ht]; exact hp, fun h1 => absurd h1 (by omega)⟩
 
-/-- **verity-verify-proof's acceptance at the verifier's public inputs, table by table**: under hidden outputs, when
-`AcceptsP I own t`, every table's statement is its `SpecP` at `own`. -/
 theorem acceptsP_specP {I : Inputs} {own : Option ByteArray} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = true)
     (h : AcceptsP I own t) :
     ∃ spec sts, setupOfP I own t.record = .ok (spec, sts) ∧

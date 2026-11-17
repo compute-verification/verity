@@ -17,23 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The decoder at the hidden-output headline's samples: statements
-
-`flock_headline_exec_hidden`'s open guarantee is `hdec : DecodesOn …` at the hidden tables `tablesAtH`.
-`DecodesOnExec` (`Discharge/DecodeZL`) is the same guarantee at the plain headline's tables, under `Stmt.setupH`; the
-decoder `decAt`, the number of extra claims `nX`, `RecordsLive` and the chunk lemmas (`zl_carries`, `op_carries` at
-`wOP`, `lig_carries` at `wLIG`) are generic in the table or the setup and are DecodeZL's. What changes is where the sample
-is set up:
-
-* `TagsOkH`: DecodeZL's `TagsOk` with hidden outputs (`hiddenOutputs = true`); `TagsOkHL` also admits plain SHA-512
-  leaves.
-* `SampleOkH`: DecodeZL's `SampleOk` with `Stmt.setupHidden` for `Stmt.setupH`.
-* `opnAtH`: DecodeZL's `opnAt` at `Stmt.setupHidden`'s statement.
-* `DecodesOnExecH`: `DecodesOn` at the hidden tables and the tags' leaf (`leafOfId`), the decoder `decAt` at
-  DecodeZL's wires `wOP` and `wLIG`, `one := true`, no final messages, `capOfRoot`. `DecodesOnExecHSt` is it at the
-  statement circuit (`HmOut.parseStmt`, a templated file's template unrolled).
--/
+/-! The decoder premise at the hidden-output headline's samples: DecodeZL's statements with `Stmt.setupHidden` for `Stmt.setupH`. -/
 
 @[expose] public section
 

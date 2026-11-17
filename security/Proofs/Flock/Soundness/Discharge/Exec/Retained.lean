@@ -7,22 +7,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# The proving statements retain every round's bytes
-
-`liveTable` (`Refine/Live.lean`) is the challenger that keeps each round's framed bytes (`roundOf`'s
-`bytes := some b`), and the alignment `DecodesAll` asks for rests on it: with retained bytes, round `k`'s coins answer
-only the framed bytes absorbed since round `k - 1`, exactly (`Transcript.squeeze`, R2). This file shows that every
-`hm96Rows` tag pinned today is of that kind, and that a record verity-verify-proof accepts under it has every round's bytes.
-
-* `retainRounds_circuitEb90718f`, `retainRounds_circuit`, `retainRounds_circuit967b8d06`, `retainRounds_circuitTypes`:
-  each `hm96Rows` tag has `retainRounds = true`, inherited from `circuit631567f7` (rfl).
-* `setupH_tags`, `setupTables_retain`: the session's spec retains rounds when its tags do.
-* `decode_retained`: when the spec retains rounds, `Record.decode` gives every round of every stream its bytes (S12).
-* `accepts_retained`: so every round of a record verity-verify-proof accepts under such tags carries its bytes.
-* `accepts_allRetained`: the same as `Refine.AllRetained` for every stream, the hypothesis of `Refine/Frames.lean`'s
-  squeeze and sampling lemmas: these tags retain too, so those lemmas apply to the proving statements.
--/
+/-! Every pinned `hm96Rows` tag retains each round's bytes, so every round of a record verity-verify-proof accepts under it carries them. -/
 
 @[expose] public section
 
@@ -39,7 +24,6 @@ theorem retainRounds_circuit967b8d06 : Tags.circuit967b8d06.retainRounds = true 
 theorem retainRounds_circuitTypes : Tags.circuitTypes.retainRounds = true := rfl
 
 set_option maxHeartbeats 4000000 in
-/-- `setupH`'s statement carries the tags it was set up under. -/
 theorem setupH_tags {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : st.tags = tags := by
@@ -57,7 +41,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- The session's spec retains rounds exactly when its tags do, for one table or several. -/
 theorem setupTables_retain (hh : tags.hiddenOutputs = false)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -91,8 +74,6 @@ theorem setupTables_retain (hh : tags.hiddenOutputs = false)
   all_goals rfl
 
 set_option maxHeartbeats 1000000 in
-/-- **An accepted record has every round's bytes** when its spec retains rounds: `Record.decode` refuses a round
-without them (S12). -/
 theorem decode_retained {text : String} {sess : RunRecord} (hr : spec.retainRounds = true)
     (h : Record.decode spec text = .ok sess) :
     ∀ s ∈ sess.streams.toList, ∀ r ∈ s.rounds.toList, ∃ b, r.bytes = some b := by
@@ -130,8 +111,6 @@ theorem decode_retained {text : String} {sess : RunRecord} (hr : spec.retainRoun
       subst hx hg
       exact ⟨b, rfl⟩
 
-/-- **verity-verify-proof's acceptance under retaining tags has every round's bytes**: the session's spec retains rounds, and
-every round of every stream of the record it decodes carries its framed bytes. -/
 theorem accepts_retained {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false)
     (hr : I.tags.retainRounds = true) (h : Accepts I t) :
     ∃ spec sts sess, setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
@@ -141,14 +120,11 @@ theorem accepts_retained {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutput
   have hsr : spec.retainRounds = true := (setupTables_retain hh hs).trans hr
   exact ⟨spec, sts, sess, hs, hd, hsr, decode_retained hsr hd⟩
 
-/-- `decode_retained` as `Refine/Frames.lean`'s `AllRetained`, for every stream. -/
 theorem decode_allRetained {text : String} {sess : RunRecord} (hr : spec.retainRounds = true)
     (h : Record.decode spec text = .ok sess) : ∀ s ∈ sess.streams.toList, AllRetained s.rounds := fun s hs i hi => by
   rw [getElem!_pos s.rounds i hi]
   exact decode_retained hr h s hs _ (Array.getElem_mem_toList hi)
 
-/-- **verity-verify-proof's acceptance under retaining tags gives `AllRetained`** (`Refine/Frames.lean`) for every stream of
-the record it decodes: the hypothesis `squeeze_bindA`, `sample_bindA` and `forIn_answers` take. -/
 theorem accepts_allRetained {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false)
     (hr : I.tags.retainRounds = true) (h : Accepts I t) :
     ∃ spec sts sess, setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧

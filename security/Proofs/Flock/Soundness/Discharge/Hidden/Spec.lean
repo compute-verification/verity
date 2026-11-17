@@ -19,12 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# What `Stmt.setupHidden` checked and produced (`Spec`)
-
-`setupHidden_spec` walks `Stmt.setupHidden` as `setupH_spec` walks `Stmt.setupH`: every return is the statement its
-checks built. `Facts.lean` reads off it what `Discharge/HiddenExec` reads.
--/
+/-! What `Stmt.setupHidden` checked and produced (`Spec`), walked as `setupH_spec` walks `Stmt.setupH`. -/
 
 @[expose] public section
 
@@ -41,8 +36,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (Strin
 theorem klog_of {k m : ℕ} (h : ¬ (decide (k > 27) || decide (m > 35)) = true) : k ≤ 27 ∧ m ≤ 35 := by
   simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at h
   omega
-
-/-! ## A statement without the verifier's public inputs names no public input port -/
 
 theorem checkOwn_none {pi : HmIn.Ports} {pop : Public} (h : HmIn.checkOwn pi pop none = .ok ()) :
     pi.ports.isEmpty = true := by
@@ -88,7 +81,6 @@ theorem regions_noPorts {c : Circuit} {pi : HmIn.Ports} {pub : Public} {r : Arra
 
 -- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 4000000 in
-/-- **What `Stmt.setupHidden` accepted** is its `Spec`. -/
 theorem setupHidden_spec' (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     Spec tags cf pf coins tables draw st := by
   cases draw <;> unfold Stmt.setupHidden at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>

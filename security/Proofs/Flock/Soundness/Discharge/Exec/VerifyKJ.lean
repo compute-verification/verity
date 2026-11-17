@@ -7,22 +7,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 
-/-!
-# verity-verify-proof's acceptance through `keep`, at the record's parsed value
-
-`VerifyK.lean`'s walkers read `Record.decodeWithK keep` and `verifyWithMK keep` on the record's text. The recursion's
-last step at the parsed value (`FlockDeploy.nextJ`) runs the verdict on a parsed value `j`, never on a text, so the KS
-and Bits route reads the same walkers at `j` (`Record.decodeJWithK`, `verifyJWithMK`, `Flock/With/VerifyE.lean`):
-
-* `verifyJWithMK_tables_cap`, `verifyJK_ok_tables`, `verifyJK_one_ok`, `decodeJWithK_points`, `decodeJWithK_roundsWF`,
-  `decodeJWithK_retained`, `decodeJWithK_allRetained`: each text walker at `j`, with the same proof less the parse.
-* **The transfer** (`decodeWithK_ok_iff`, `verifyWithMK_ok_iff`): the text forms accept exactly where the record parses
-  and the forms at its parsed value accept. So each walker here gives its text form, and a statement over every parsed
-  value covers every record text.
-
-At `keep := id` and SHA-512, `Record.decodeJWithK` on a record's parsed value is `Record.decode` on the record
-(`decode_eq_decodeJWithK_id`).
--/
+/-! `VerifyK`'s walkers at the record's parsed value, which the recursion's last step (`FlockDeploy.nextJ`) reads, with their transfer to the record's text. -/
 
 @[expose] public section
 
@@ -33,9 +18,6 @@ namespace FlockSoundness.Discharge.Exec
 open Flock Refine
 open Lean (Json)
 
-/-! ## The tables at the parsed value -/
-
-/-- **`verifyWithMK_tables_cap` at the record's parsed value `j`.** -/
 theorem verifyJWithMK_tables_cap (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     {j : Json} {proofs : Array ByteArray} (h : verifyJWithMK keep hs spec tabs j proofs = .ok ()) :
     ∃ (sess : RunRecord) (schs : Array Flock.Schedule), Record.decodeJWithK keep hs spec j = .ok sess ∧
@@ -90,7 +72,6 @@ theorem verifyJWithMK_tables_cap (keep : Bool → Bool) (hs : Hashes Flock.V) {s
   | none => rw [hm] at hf; cases hf
   | some s => rw [hm] at hf; cases hf; rfl
 
-/-- **`verifyK_ok_tables` at the record's parsed value `j`.** -/
 theorem verifyJK_ok_tables (keep : Bool → Bool) {spec : SessionSpec} {tabs : Array Setup} {j : Json}
     {proofs : Array ByteArray} (hN : ∀ st ∈ tabs, st.merkle.Named)
     (h : verifyJWithMK keep With.std spec tabs j proofs = .ok ()) :
@@ -106,7 +87,6 @@ theorem verifyJK_ok_tables (keep : Bool → Bool) {spec : SessionSpec} {tabs : A
   rw [With.verifyRepWith_std _ _ (hN _ (Array.getElem_mem hi))] at h₀ h₁
   exact ⟨hs, c, hf, h₀, h₁⟩
 
-/-- **`verifyK_one_ok` at the record's parsed value `j`.** -/
 theorem verifyJK_one_ok (keep : Bool → Bool) {spec : SessionSpec} {st : Setup} {j : Json}
     {proofs : Array ByteArray} (hN : st.merkle.Named)
     (h : verifyJWithMK keep With.std spec #[st] j proofs = .ok ()) :
@@ -116,10 +96,7 @@ theorem verifyJK_one_ok (keep : Bool → Bool) {spec : SessionSpec} {st : Setup}
   obtain ⟨hs, c, hf, h₀, h₁⟩ := hall 0 (by simp)
   exact ⟨sess, schs[0], c, hd, hf, h₀, h₁⟩
 
-/-! ## What the decoder reads through `keep`, at the parsed value -/
-
 set_option maxHeartbeats 1000000 in
-/-- **`decodeWithK_points` at the record's parsed value `j`.** -/
 theorem decodeJWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
     {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     sess.points.size = spec.points ∧ ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
@@ -132,7 +109,6 @@ theorem decodeJWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec :
     exact check_pts (by assumption)
 
 set_option maxHeartbeats 1000000 in
-/-- **`decodeWithK_roundsWF` at the record's parsed value `j`.** -/
 theorem decodeJWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
     {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∀ s ∈ sess.streams.toList, RoundsWF s.rounds := by
@@ -161,7 +137,6 @@ theorem decodeJWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec
         exact check_coins (by assumption)
 
 set_option maxHeartbeats 1000000 in
-/-- **`decodeWithK_retained` at the record's parsed value `j`.** -/
 theorem decodeJWithK_retained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
     {sess : RunRecord} (hr : spec.retainRounds = true) (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∀ s ∈ sess.streams.toList, ∀ r ∈ s.rounds.toList, ∃ b, r.bytes = some b := by
@@ -198,17 +173,12 @@ theorem decodeJWithK_retained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec
       subst hx hg
       exact ⟨b, rfl⟩
 
-/-- **`decodeWithK_allRetained` at the record's parsed value `j`.** -/
 theorem decodeJWithK_allRetained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
     {sess : RunRecord} (hr : spec.retainRounds = true) (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∀ s ∈ sess.streams.toList, AllRetained s.rounds := fun s hs' i hi => by
   rw [getElem!_pos s.rounds i hi]
   exact decodeJWithK_retained keep hs hr h s hs' _ (Array.getElem_mem_toList hi)
 
-/-! ## The transfer -/
-
-/-- **The decoder read through `keep` accepts a record text exactly where the record parses and the decoder accepts
-its parsed value** (`Record.decodeWithK_of_parse`; a record that doesn't parse is refused). -/
 theorem decodeWithK_ok_iff (keep : Bool → Bool) (hs : Hashes Flock.V) (spec : SessionSpec) (text : String)
     (sess : RunRecord) :
     Record.decodeWithK keep hs spec text = .ok sess ↔
@@ -224,8 +194,6 @@ theorem decodeWithK_ok_iff (keep : Bool → Bool) (hs : Hashes Flock.V) (spec : 
     rw [Record.decodeWithK_of_parse keep hs spec hp]
     exact ⟨fun h => ⟨j, rfl, h⟩, fun ⟨_, hj, h⟩ => by cases hj; exact h⟩
 
-/-- **The verdict read through `keep` accepts a record text exactly where the record parses and the verdict accepts
-its parsed value** (`verifyWithMK_of_parse`). -/
 theorem verifyWithMK_ok_iff (keep : Bool → Bool) (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup)
     (record : String) (proofs : Array ByteArray) :
     verifyWithMK keep hs spec tabs record proofs = .ok () ↔
@@ -241,7 +209,6 @@ theorem verifyWithMK_ok_iff (keep : Bool → Bool) (hs : Hashes Flock.V) (spec :
     rw [verifyWithMK_of_parse keep hs spec tabs proofs hp]
     exact ⟨fun h => ⟨j, rfl, h⟩, fun ⟨_, hj, h⟩ => by cases hj; exact h⟩
 
-/-- **At `keep := id` and SHA-512, the decoder at a record's parsed value is `Record.decode` on the record.** -/
 theorem decode_eq_decodeJWithK_id {spec : SessionSpec} {text : String} {j : Json} (h : Flock.JsonParse.parse text = .ok j) :
     Record.decode spec text = Record.decodeJWithK id With.std spec j :=
   (decodeWithK_id_std spec text).symm.trans (Record.decodeWithK_of_parse id With.std spec h)

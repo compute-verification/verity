@@ -3,27 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
 public import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
-/-!
-# The headline over the salted session, and at the executable
-
-`Prog.flock_headline` (`Headline.lean`) restated for the session at a leaf scheme `Lp` (`batchedSessionL H512 enc512 Lp
-plan`), the session verity-verify-proof checks for `hm96Rows` statements: `leaf512` under `hm96-sha512/v1` leaves, `leafPlain`
-under plain SHA-512 leaves. Every term is generic in `Lp`; its binding is `Lp.bind`, a collision of `H512`:
-
-* `Prog.flock_headline_L`: the count curve on the statement's rows, at the live sample, with the same bound as
-  `Prog.flock_headline`: `miss(K) + ksAvgStrict + linkBoundE + δ_tree`, under the same assumptions
-  (`SHA512CRStrict` through `hKS` and `hT`, `SHA512CRExpected` through `hCR`, A3 through `hA3`) and the same named
-  obligations (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, `tr`). Its knowledge and binding errors are
-  `ksAvgBE_le_strictL` and `flock_batched_linkSoundEL`, through `flock_e2e_count_hm96L`.
-* `Prog.flock_headline_execL`: the headline at the executable for the salted session. Flock-verify's verdict on the
-  live audit (`LiveAccepts I`) with at least `K` incorrect proof blocks of `σ`'s committed values has probability at most
-  `miss(K) + ksAvgStrict + linkBoundE + Pr[bad]`, given the refinement `hRef` (`ExecRefines` at one strategy pair,
-  `Event.lean`) of the live audit by the audit with `batchedSessionL H512 enc512 Lp plan`. Its hypotheses are
-  `Prog.flock_headline_L`'s at `tr := TreeRewind.ofNever` (`δ_tree = 0`), with `hRef` in place of `tr` and `hT`.
-
-What stays open of the refinement is `hRef` itself: a strategy `σ` of this audit built from the live prover `τ`, the
-challenger's per-round coins (A6) as the audit's coins, and the live event `bad` bounded.
--/
+/-! The headline over the salted session `batchedSessionL H512 enc512 Lp plan`, and at the executable, where the refinement `hRef` is not proved. -/
 
 @[expose] public section
 
@@ -36,15 +16,6 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- **The headline over the salted session**: `Prog.flock_headline` for the batched session at the leaf scheme `Lp`
-(`batchedSessionL H512 enc512 Lp plan`). If `execAccept` holds, the probability that at least `K` units of
-the program's rows circuit are incorrect at the committed values (1 on `ones`, 0 on `zeros`, the plurality of the prover's
-openings elsewhere) is at most `miss(K) + ε_ks + ε_bind + δ_tree`:
-* `miss(K)`, `SamplingDesign.stratified`'s count curve, under A3 (`hA3`);
-* `ε_ks = ksAvgStrict`, under `SHA512CRStrict` (`cr/sha-512`) for each table's knowledge finders at budgets `qF`, `qS`
-  (`hKS`, `TableCRL`);
-* `ε_bind = linkBoundE`, under `SHA512CRExpected` (`ecr/sha-512`) for the prover's link finders (`hCR`, `LinkCRL`);
-* `δ_tree = TreeRewind.bound qT`, under `SHA512CRStrict` (`cr/sha-512`) for the serving roots' rewinding finder (`hT`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_L {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -85,7 +56,6 @@ theorem _root_.FlockSoundness.Prog.flock_headline_L {Lp : Merkle.Leaf (List Floc
     hk hRw hM hρ hr ht K σ hCR hKS tr hT).trans
     (add_le_add (add_le_add (add_le_add (SamplingDesign.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K) le_rfl) le_rfl) le_rfl)
 
-/-- `Prog.flock_headline_L` at rows each under its own encoding (`Binding.HmRowsX`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_LX {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -126,12 +96,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_LX {Lp : Merkle.Leaf (List Flo
     hk hRw hM hρ hr ht K σ hCR hKS tr hT).trans
     (add_le_add (add_le_add (add_le_add (SamplingDesign.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K) le_rfl) le_rfl) le_rfl)
 
-/-- **The headline at the executable, for the salted session.** Let the verifier sample the units as in
-`Prog.flock_headline_L` (the live stratified sample under A3), and let the live audit `auditLive Lx Reg live`, played by
-the prover `τ`, refine the audit with `batchedSessionL H512 enc512 Lp plan` played by `σ`, up to the live event
-`bad` (`hRef`). If `σ`'s committed values have at least `K` incorrect proof blocks, verity-verify-proof accepts with probability at most
-`miss(K) + ε_ks + ε_bind + Pr[bad]`. `pp`, `hConst`, `hZero`, `lay`, `rs` and `hHm` are open as in
-`Prog.flock_headline`; `hRef` is the refinement. -/
+/-- `pp`, `hConst`, `hZero`, `lay`, `rs` and `hHm` are open as in `Prog.flock_headline`, and `hRef` is the refinement. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_execL {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -176,7 +141,6 @@ theorem _root_.FlockSoundness.Prog.flock_headline_execL {Lp : Merkle.Leaf (List 
   rw [StrictCR.TreeRewind.ofNever_bound, ENNReal.ofReal_zero, add_zero] at hH
   exact flock_headline_exec_L plan I live τ σ hRef _ hH
 
-/-- `Prog.flock_headline_execL` at rows each under its own encoding (`Binding.HmRowsX`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_execLX {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)

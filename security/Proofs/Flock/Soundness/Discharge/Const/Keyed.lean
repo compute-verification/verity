@@ -5,15 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 
-/-!
-# `hConst` at the proving program's places
-
-The proving (untyped) statement's program is `Placed.keyProg c hU n`: `n` units of the circuit's template instance
-rows, each input on the gate of its Δ source key, each constant on the one gate `Placed.oneGate`
-(`Zero.oneGate_uniform`). `Placed.Sites.progPlaces_keyProg` places it from the sites and the parse alone, with the
-program's own instance (`Placed.Sites.progPlaces_keyProg_inst`). So only a unit's constant column sits on the one gate:
-`constCols_keyProg`, the twin of `Zero.zeroCols_keyProg`, at the same places and from the same arguments.
--/
+/-! `hConst` at the proving program's places (`constCols_keyProg`), the twin of `Zero.zeroCols_keyProg`. -/
 
 @[expose] public section
 
@@ -24,8 +16,6 @@ open FlockSoundness Audit Flock
 variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length} {c : Flock.Circuit}
 
-/-- **`hConst` at `Placed.Sites.progPlaces_keyProg`**, the places of the circuit's program on Δ's source keys that take
-only the sites and the parse: only a unit's constant column sits on the one gate. -/
 theorem constCols_keyProg (hU : Built c.unit) {si : Placed.Sites plan tab}
     (hparse : ∀ S R u (h : u ∈ S),
       HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)

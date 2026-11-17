@@ -8,25 +8,7 @@ public import Proofs.Flock.Soundness.Refine.Frames
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
-/-!
-# verity-verify-proof's acceptance with its digest comparisons read through `keep`
-
-`Exec.Accepts` reads `Flock.verify`. The plain verdict's text with each comparison of a record digest with the digest
-of an encoding read through `keep` is `Flock.verifyWithMK keep` (`Flock/With/VerifyE.lean`): at `keep := id` it is
-`verify`, on every session `Stmt.setupTables` sets up (`accepts_iff_acceptsK_id`), and at `keep := fun _ => true` it is
-the element-level verdict, which accepts wherever `verify` does (`acceptsK_true_of_accepts`). This file restates what
-the acceptance walkers read of `verify` at every `keep`:
-
-* `AcceptsK keep`: `Exec.Accepts` with `verifyWithMK keep With.std` for `verify`.
-* `verifyK_ok_tables`, `verifyK_one_ok`: `verify_ok_tables` and `verify_one_ok` at `keep`. Each table's reps accept
-  under `verifyRep`, as there (the reps read no record digest), on the session `Record.decodeWithK keep` decodes.
-* `decodeWithK_points`, `decodeWithK_roundsWF`, `decodeWithK_retained`, `decodeWithK_allRetained`: `decode_points`,
-  `decode_roundsWF`, `decode_retained` and `decode_allRetained` at `keep`. Each reads a check `keep` leaves alone (S9's
-  point shape, S12's coin count and its retained bytes' presence).
-
-At `keep := id` the decoder is `Record.decode` (`decodeWithK_id_std`), so each statement here at `keep := id` is the
-shipped one.
--/
+/-! What the acceptance walkers read of `verify` with its digest comparisons read through `keep`; at `keep := id` each statement is the shipped one. -/
 
 @[expose] public section
 
@@ -37,15 +19,10 @@ namespace FlockSoundness.Discharge.Exec
 open Flock Refine
 open Lean (Json)
 
-/-- **At `keep := id` and SHA-512, the decoder read through `keep` is `Record.decode`.** -/
 theorem decodeWithK_id_std (spec : SessionSpec) (text : String) :
     Record.decodeWithK id With.std spec text = Record.decode spec text :=
   (Record.decodeWith_eq_decodeWithK With.std spec text).symm.trans (With.decodeWith_std spec text)
 
-/-! ## The tables -/
-
-/-- **The verdict read through `keep` accepts each table's reps with one cap**, whatever the hashes:
-`verify_ok_tables`'s walk at `verifyWithMK keep hs`, with the reps' checks at `hs`. -/
 theorem verifyWithMK_tables_cap (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     {record : String} {proofs : Array ByteArray} (h : verifyWithMK keep hs spec tabs record proofs = .ok ()) :
     ∃ (sess : RunRecord) (schs : Array Flock.Schedule), Record.decodeWithK keep hs spec record = .ok sess ∧
@@ -100,9 +77,6 @@ theorem verifyWithMK_tables_cap (keep : Bool → Bool) (hs : Hashes Flock.V) {sp
   | none => rw [hm] at hf; cases hf
   | some s => rw [hm] at hf; cases hf; rfl
 
-/-- **`verify_ok_tables` at `keep`**: where the verdict read through `keep` accepts at SHA-512, on tables of registry
-schemes, the record decodes through `keep`, there is one statement per table, and each table's schedule is `fast100`'s
-and both reps' checks accept with one cap. -/
 theorem verifyK_ok_tables (keep : Bool → Bool) {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} (hN : ∀ st ∈ tabs, st.merkle.Named)
     (h : verifyWithMK keep With.std spec tabs record proofs = .ok ()) :
@@ -118,7 +92,6 @@ theorem verifyK_ok_tables (keep : Bool → Bool) {spec : SessionSpec} {tabs : Ar
   rw [With.verifyRepWith_std _ _ (hN _ (Array.getElem_mem hi))] at h₀ h₁
   exact ⟨hs, c, hf, h₀, h₁⟩
 
-/-- **`verify_one_ok` at `keep`**: a one-table acceptance read through `keep`, on a table of a registry scheme. -/
 theorem verifyK_one_ok (keep : Bool → Bool) {spec : SessionSpec} {st : Setup} {record : String}
     {proofs : Array ByteArray} (hN : st.merkle.Named)
     (h : verifyWithMK keep With.std spec #[st] record proofs = .ok ()) :
@@ -128,10 +101,7 @@ theorem verifyK_one_ok (keep : Bool → Bool) {spec : SessionSpec} {st : Setup} 
   obtain ⟨hs, c, hf, h₀, h₁⟩ := hall 0 (by simp)
   exact ⟨sess, schs[0], c, hd, hf, h₀, h₁⟩
 
-/-! ## What the decoder reads through `keep` -/
-
 set_option maxHeartbeats 1000000 in
-/-- **`decode_points` at `keep`**: the record's link points have the configured shape (S9). -/
 theorem decodeWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     sess.points.size = spec.points ∧ ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
@@ -144,7 +114,6 @@ theorem decodeWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : 
     exact check_pts (by assumption)
 
 set_option maxHeartbeats 1000000 in
-/-- **`decode_roundsWF` at `keep`**: the record's rounds are well formed (S12's coin count). -/
 theorem decodeWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ s ∈ sess.streams.toList, RoundsWF s.rounds := by
@@ -173,8 +142,6 @@ theorem decodeWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
         exact check_coins (by assumption)
 
 set_option maxHeartbeats 1000000 in
-/-- **`decode_retained` at `keep`**: when the spec retains rounds, every round of every stream has its bytes (S12's
-presence check, which `keep` leaves alone). -/
 theorem decodeWithK_retained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (hr : spec.retainRounds = true) (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ s ∈ sess.streams.toList, ∀ r ∈ s.rounds.toList, ∃ b, r.bytes = some b := by
@@ -211,34 +178,26 @@ theorem decodeWithK_retained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
       subst hx hg
       exact ⟨b, rfl⟩
 
-/-- `decodeWithK_retained` as `AllRetained`, for every stream (`decode_allRetained` at `keep`). -/
 theorem decodeWithK_allRetained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (hr : spec.retainRounds = true) (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ s ∈ sess.streams.toList, AllRetained s.rounds := fun s hs' i hi => by
   rw [getElem!_pos s.rounds i hi]
   exact decodeWithK_retained keep hs hr h s hs' _ (Array.getElem_mem_toList hi)
 
-/-! ## The acceptance -/
-
-/-- **verity-verify-proof accepts the transcript, its digest comparisons read through `keep`**: `Accepts` with
-`verifyWithMK keep With.std` for `verify`. -/
 def AcceptsK (keep : Bool → Bool) (I : Inputs) (t : Transcript) : Prop :=
   ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧
     verifyWithMK keep With.std spec (sts.map Setup.ofCircuit) t.record t.proofs = .ok ()
 
-/-- Every table a session `setupOf` sets up has a registry scheme (`With.setupTables_named`). -/
 theorem named_of_setupOf {I : Inputs} {record : String} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (h : setupOf I record = .ok (spec, sts)) : ∀ s ∈ sts.map Setup.ofCircuit, s.merkle.Named :=
   With.named_ofCircuit (With.setupTables_named _ _ _ _ _ _ _ _ _ _ _ _ _ _ h)
 
-/-- **`AcceptsK id` is `Accepts`**: on every session `setupOf` sets up, `verify` is `verifyWith Sha512.hash`. -/
 theorem accepts_iff_acceptsK_id (I : Inputs) (t : Transcript) : Accepts I t ↔ AcceptsK id I t := by
   unfold Accepts AcceptsK
   refine exists_congr fun spec => exists_congr fun sts => and_congr_right fun hs => ?_
   rw [verify_eq_verifyWith _ _ _ _ (named_of_setupOf hs)]
   exact Iff.rfl
 
-/-- **The element-level acceptance holds wherever `Accepts` does** (`verifyWithE_of_verifyWith`). -/
 theorem acceptsK_true_of_accepts {I : Inputs} {t : Transcript} (h : Accepts I t) : AcceptsK (fun _ => true) I t := by
   obtain ⟨spec, sts, hs, hv⟩ := (accepts_iff_acceptsK_id I t).1 h
   exact ⟨spec, sts, hs, verifyWithE_of_verifyWith _ _ _ _ _ hv⟩

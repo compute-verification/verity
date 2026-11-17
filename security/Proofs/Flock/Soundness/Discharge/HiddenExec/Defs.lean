@@ -16,15 +16,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
 public import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 public import Proofs.Flock.Soundness.Discharge.Exec
 
-/-!
-# The statement verity-verify-proof sets up for one table, under either tag
-
-`Stmt.setupTables` sets up each table with its `setup`: `Stmt.setupHidden` under a tag with hidden outputs
-(`Tags.hiddenOutputs`: `verity/flock-circuit`, the default `--statement`, and `verity/flock-circuit/types`), and
-`Stmt.setupH` otherwise (`verity/flock-circuit@967b8d06` and the older tags). `setupOne` is that `setup`, reading the flag
-off the tags it is given; `setupTables` gives each table its session's tags with only `identity` changed
-(`Exec.tagsAt`), so the flag is the session's.
--/
+/-! The statement verity-verify-proof sets up for one table, under either tag (`setupOne`), reading the hidden-outputs flag off the session's tags. -/
 
 @[expose] public section
 

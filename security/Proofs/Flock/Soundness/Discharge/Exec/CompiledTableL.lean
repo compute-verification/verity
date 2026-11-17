@@ -3,17 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
 public import Proofs.Flock.Soundness.CompiledAlign
 
-/-!
-# The salted compiled bound for any level-0 table
-
-`CompiledTable.lean` over a leaf scheme `Lf`. The salted locksteps for two level-0 tables are aligned
-(`aligned_lockTableL`), so the reps' fork probabilities do not depend on the level-0 table (`advRTL_eq`), and
-
-> `Pr[accepted ∧ T uncommitted] ≤ ε_c⁻ + Pr[a run opens a level-0 position off T]`
-> (`table_sound_compiled_of_tableL`),
-
-with `ε_c⁻ = tableError + Σ √(N_ℓ·Q_ℓ·Adv_{r,ℓ}) + Pr[self-clash]` (`epsCminusL`), one number for every `T`.
--/
+/-! The salted compiled bound for any level-0 table, with `ε_c⁻` one number for every table (`table_sound_compiled_of_tableL`). -/
 
 @[expose] public section
 
@@ -24,7 +14,6 @@ open Game Model Accounting
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D Sl : Type}
 
-/-- **The salted table's locksteps for two level-0 tables are aligned.** -/
 theorem aligned_lockTableL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
     (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₁ C₂ : Oracle F)
@@ -48,8 +37,6 @@ noncomputable def advRTL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (lockTableL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts T σ.1) σ.2
 
 open Classical in
-/-- **The salted bad runs, cap by cap, for any level-0 table `C₀`**, given a bound `x₀` on the level-0 rewinding
-term. -/
 theorem bad_le_genL [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₀ : Oracle F)
@@ -103,7 +90,6 @@ theorem bad_le_genL [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Me
   rw [eS]
   linarith
 
-/-- **The reps' salted fork probabilities do not depend on the level-0 table.** -/
 theorem advRTL_eq [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (T : Oracle F) (r ℓ : ℕ)
@@ -135,9 +121,6 @@ def Off₀L (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf
   ∃ p, Rewinding.Off (op₀L H E Lf sch cap₀) (rowT (lvOf sch 0).lanes (lvOf sch 0).logLen T) out p
 
 open Classical in
-/-- **Salted compiled soundness for any level-0 table.** For every prover `P*` of `tableCL A H E Lf` and every table
-`T`: `Pr[accepted ∧ no codeword near T packs a satisfying witness]` is at most `ε_c⁻` plus the probability that a
-run opens a level-0 position off `T`. -/
 theorem table_sound_compiled_of_tableL (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)

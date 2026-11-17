@@ -4,20 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.TablesP
 
-/-!
-# What a hidden-output setup at public inputs establishes
-
-`Hidden/Facts.lean`, `HiddenExec/Setup.lean`, `Accepts.lean` and `Accepted.lean` at the verifier's public inputs `own`,
-read off `Hidden.SpecP` (`Hidden.setupHidden_specP`) and the walk of `setupTables_okHP`:
-
-* `Hidden.regionsIn_wf`: every region `HmIn.regions` builds is `mkRegion`'s, so well formed;
-* `Hidden.setupHidden_tagsP`, `setupHidden_hm96P`, `setupHidden_wfP`, `setupHidden_parseCP`, `setupHidden_nP`,
-  `setupHidden_sampledP`: `setupHidden_tags`, `setupHidden_hm96`, `setupHidden_wf`, `setupHidden_parseC`,
-  `setupHidden_n` and `setupHidden_sampled` (the sample over the public input ports, `HmIn.drawn`);
-* `setupTables_retainHP`, `setupTables_pointsHP`: `setupTables_retainH` and `setupTables_pointsAny` under hidden
-  outputs;
-* `sampleSetupHP_of_setupHiddenI`: `sampleSetupH_of_setupHiddenI`.
--/
+/-! What a hidden-output setup at the verifier's own public input words `own` establishes, read off `Hidden.SpecP` and the walk of `setupTables_okHP`. -/
 
 @[expose] public section
 
@@ -28,7 +15,6 @@ namespace FlockSoundness.Discharge.Hidden
 open Flock FlockLevel3 Refine
 open Lean (Json)
 
-/-- Every region `HmIn.regions` builds is `mkRegion`'s, so well formed (none without public input ports). -/
 theorem regionsIn_wf {c : Circuit} {pi : HmIn.Ports} {pub : Public} {regs : Array Region}
     (h : HmIn.regions c pi pub = .ok regs) : ∀ x ∈ regs.toList, RegionWF c.kLog x := by
   unfold HmIn.regions at h
@@ -48,18 +34,15 @@ theorem regionsIn_wf {c : Circuit} {pi : HmIn.Ports} {pub : Public} {regs : Arra
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Json} {program own : Option ByteArray} {st : Stmt}
 
-/-- `SpecP.tagsEq`. -/
 theorem setupHidden_tagsP (h : Stmt.setupHidden tags cf pf coins tables draw partition program own = .ok st) :
     st.tags = tags :=
   (setupHidden_specP h).choose_spec.tagsEq
 
-/-- `SpecP.parseF`, at a flat statement's tags. -/
 theorem setupHidden_parseCP (hi : tags.isTmpl = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program own = .ok st) :
     HmOut.parse tags cf tables = .ok st.c :=
   (setupHidden_specP h).choose_spec.parseF hi
 
-/-- **The leaf scheme at `own`** (`setupHidden_hm96`). -/
 theorem setupHidden_hm96P (hl : tags.merkleLeaf = "hm96-sha512/v1")
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program own = .ok st) :
     st.merkle = MerkleScheme.hm96Sha512 := by
@@ -68,7 +51,6 @@ theorem setupHidden_hm96P (hl : tags.merkleLeaf = "hm96-sha512/v1")
   rw [parseCommit_leafScheme s.parse, hl, Exec.find_hm96] at hf
   exact (Option.some.inj hf).symm
 
-/-- **The statement is well formed at `own`** (`setupHidden_wf`): its regions are `HmOut`'s and `HmIn`'s. -/
 theorem setupHidden_wfP (h : Stmt.setupHidden tags cf pf coins tables draw partition program own = .ok st) :
     StmtWF st ∧ RegionsWF st := by
   obtain ⟨pi, s⟩ := setupHidden_specP h
@@ -80,13 +62,11 @@ theorem setupHidden_wfP (h : Stmt.setupHidden tags cf pf coins tables draw parti
   · exact regions_wf hro x hx
   · exact regionsIn_wf hri x hx
 
-/-- `SpecP.n` and `SpecP.nbl` (`HiddenExec.setupHidden_n`). -/
 theorem setupHidden_nP (h : Stmt.setupHidden tags cf pf coins tables draw partition program own = .ok st) :
     st.n = st.pub.n ∧ st.nbl = max 3 (log2ceil (max ((st.n + st.c.g - 1) / st.c.g) 1)) := by
   have s := (setupHidden_specP h).choose_spec
   exact ⟨s.n, by rw [s.nbl, s.blocksReal]⟩
 
-/-- `SpecP.pub` at a sample: the statement's public file is the population's sampled over the public input ports. -/
 theorem setupHidden_sampledP {d : Json}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program own = .ok st) :
     ∃ pi pop, HmIn.parse st.c = .ok pi ∧ HmIn.loadPublic tags st.c pi pf = .ok pop ∧
@@ -111,8 +91,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Flock.Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- The session's spec retains rounds exactly when its tags do, under hidden outputs at `own`
-(`setupTables_retainH`). -/
 theorem setupTables_retainHP (hh : tags.hiddenOutputs = true)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure own =
       .ok (spec, sts)) :
@@ -144,8 +122,6 @@ theorem setupTables_retainHP (hh : tags.hiddenOutputs = true)
   · exact congrArg Tags.retainRounds (Hidden.setupHidden_tagsP (FlockSoundness.Discharge.Exec.ok_of_refuse (by assumption)))
   all_goals rfl
 
-/-- The session's two link points have every table's length, under hidden outputs at `own`
-(`setupTables_pointsAny`). -/
 theorem setupTables_pointsHP (hh : tags.hiddenOutputs = true)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure own =
       .ok (spec, sts)) :
@@ -163,8 +139,6 @@ variable {I : Inputs} {own : Option ByteArray} {mPts n : ℕ} {S : Finset (Fin n
   (ht : I.tags.typed = false)
 include ht
 
-/-- **A `SampleSetupHP` from setupHidden's acceptance at `own` at a sample** (`sampleSetupH_of_setupHiddenI`), a `fast100`
-schedule of its `m`, the sample proving `S`, and its link points `mPts`. -/
 theorem sampleSetupHP_of_setupHiddenI {st : Flock.Stmt}
     (h : Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program own =
       .ok st)

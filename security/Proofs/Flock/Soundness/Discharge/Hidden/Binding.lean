@@ -16,14 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
-/-!
-# The row commitment binds an output row (`cr/sha-512`)
-
-`commitPair_spec`: two different rows' bytes with one commit string `b ‖ c` give a SHA-512 collision, in the row hash when
-the salts agree (the masks then cancel) and in the salt digest when they differ. `outputs_binding_of`: two sessions that
-`OutputsCommitted` covers, on one circuit file, public file and tables, read one registered `b ‖ c` for one unit's output
-row, so when their template instances' output words differ, `commitPair` of the two rows is a collision.
--/
+/-! The row commitment binds an output row (`cr/sha-512`): two rows' bytes with one commit string give a SHA-512 collision (`commitPair_spec`, `outputs_binding_of`). -/
 
 @[expose] public section
 
@@ -43,14 +36,12 @@ theorem commitPair_spec' : CommitPairSpec := by
     exact ⟨hr, enc512.dig_inj hx⟩
   · exact ⟨fun e => hy (List.append_cancel_left e), enc512.dig_inj (Binding.commitString_split h).2⟩
 
-/-- Two statements `Stmt.setupHidden` accepts on one circuit file and tables have one circuit. -/
 theorem setupHidden_c {tags : Tags} {cf pf pf' : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)}
     {draw draw' partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
     (h' : Stmt.setupHidden tags cf pf' coins' tables draw' partition' program' = .ok st') : st.c = st'.c :=
   Except.ok.inj ((setupHidden_spec' h).parse.symm.trans (setupHidden_spec' h').parse)
 
-/-- **`OutputsBinding` from `OutputsCommitted`**. -/
 theorem outputs_binding_of (hC : OutputsCommitted) : OutputsBinding := by
   intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hi hs hs' pop hpop hpt D D' hD
     hDp hD' hDp' ho hv1 L regs hregs L' regs' hregs' z hz z' hz' o o' g g' j hg hg2 hg' hg2' hj hr hr' hidx hne

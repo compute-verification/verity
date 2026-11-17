@@ -23,19 +23,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
-/-!
-# The tags of a statement `verify --zk --registered F` accepts
-
-`ZkReg.AcceptsZKR` runs `checkRegistered` on every table's statement, and `Registered.check` with the verifier's own
-reads accepts only a statement over a shared-row public file (`ZkReg.check_tables`). At a record that carries a sample,
-each table's statement is sampled from the population the statement check loads (`pubZ I`), and sampling keeps its tables
-(`Layout.sampled_spec`), so `pubZ I` is a shared-row file (`tables_of_acceptsZKR`). The statement check passes a shared-row
-file only at `hiddenOutputs && registered` and `hm96-sha512/v1` leaves (`Checks.tables`, `ProvedScope.sharedRowsOk`):
-
-* `not_scopeZ_of_acceptsZKR`: no such outcome passes `ScopeZ`, the check without `--registered`;
-* `hidden_of_acceptsZKR`, `tagsOkZHJ_of_acceptsZKR`: at one that passes `ScopeZR`, the statement has hidden outputs, and
-  the hidden-output chain's tags `TagsOkZHJ` hold.
--/
+/-! A statement `verify --zk --registered F` accepts has a shared-row public file, so it fails `ScopeZ` and, where it passes `ScopeZR`, has hidden outputs and the hidden-output chain's tags. -/
 
 @[expose] public section
 
@@ -47,9 +35,6 @@ open FlockSoundness.Discharge.ZkHidden (TagsOkZHJ)
 
 variable {I : Inputs} {own : Array Registered.Port} {t : Exec.Transcript} {d : Lean.Json}
 
-/-- **An accepted `--zk --registered` statement's population is a shared-row file**: at a transcript whose record
-carries a sample and that `AcceptsZKR` accepts, under a statement check that passes (with or without `--registered`), the
-public file the check loads has tables. -/
 theorem tables_of_acceptsZKR {reg : Bool} (hck : Checks (zkTags I) true I reg) (hd : recordDraw t.record = some d)
     (h : AcceptsZKR I own t) : ∃ tb, (pubZ I).tables = some tb := by
   obtain ⟨spec, sts, hs, hreg, -, -⟩ := h
@@ -96,14 +81,11 @@ theorem tables_of_acceptsZKR {reg : Bool} (hck : Checks (zkTags I) true I reg) (
   | none => rw [hp] at hpt; simp at hpt
   | some a => exact ⟨a, rfl⟩
 
-/-- **No accepted `--zk --registered` outcome passes `ScopeZ`**: `ScopeZ` is the statement check without the verifier's
-registered reads, which passes no shared-row public file. -/
 theorem not_scopeZ_of_acceptsZKR (hd : recordDraw t.record = some d) (h : AcceptsZKR I own t) : ¬ ScopeZ I := by
   intro hs
   obtain ⟨tb, htb⟩ := tables_of_acceptsZKR hs hd h
   exact absurd ((ScopeZ.tables hs).symm.trans htb) (by simp)
 
-/-- **An accepted `--zk --registered` statement that passes `ScopeZR` has hidden outputs.** -/
 theorem hidden_of_acceptsZKR (hs : ScopeZR I) (hd : recordDraw t.record = some d) (h : AcceptsZKR I own t) :
     I.tags.hiddenOutputs = true := by
   obtain ⟨tb, htb⟩ := tables_of_acceptsZKR hs hd h
@@ -111,7 +93,6 @@ theorem hidden_of_acceptsZKR (hs : ScopeZR I) (hd : recordDraw t.record = some d
   · exact absurd (hn.symm.trans htb) (by simp)
   · exact (zkTags_hiddenOutputs I).symm.trans hh
 
-/-- **The hidden-output chain's tags at an accepted `--zk --registered` statement that passes `ScopeZR`.** -/
 theorem tagsOkZHJ_of_acceptsZKR (hs : ScopeZR I) (hd : recordDraw t.record = some d) (h : AcceptsZKR I own t) :
     TagsOkZHJ I :=
   hs.tagsOkZHJ (hidden_of_acceptsZKR hs hd h)
