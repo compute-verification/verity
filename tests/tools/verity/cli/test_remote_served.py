@@ -119,14 +119,14 @@ def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute
     rc, got, err = dry(capsys, config=f)
     written = {f"{p}.{c}.{k}" for p, s in T.STARTS.items() for c, ks in s.writes.items() for k in ks}
     assert rc == 0 and got["dry"][0]["unbound"] == sorted(set(ONSITE_UNBOUND) - written), err
-    assert hooks_of(got) == LOCAL | {"PRODUCT": "onsite"}
+    assert hooks_of(got) == LOCAL | ASKED | {"PRODUCT": "onsite"}
     assert not {"H1_GATE", "H1_PEER"} & set(T.variables(R.load(f, REG), {}))
     tables = json.loads(json.dumps(STARTED))
     for key in ONSITE_UNBOUND:
         p, c, k = key.split(".")
         tables.setdefault(p, {}).setdefault(c, {})[k] = "192.0.2.1:7000"
     rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, tables), config=f)
-    assert rc == 0 and hooks_of(got) == PEARLPLUS | STARTED_HOOKS | {"PRODUCT": "onsite"}, err
+    assert rc == 0 and hooks_of(got) == PEARLPLUS | ASKED | STARTED_HOOKS | {"PRODUCT": "onsite"}, err
     assert T.unbound(R.load(f, REG), {}) == ONSITE_UNBOUND
 
 
