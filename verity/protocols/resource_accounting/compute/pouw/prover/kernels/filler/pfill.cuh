@@ -1,7 +1,5 @@
-// pfill: a DRAM-free filler in Theorem E's own setting. dcap.cu includes this file in place of FILL
-// v1's chained filler unless DFILL_V1 is defined, under the same ABI (dfill_k<NC>, DFill, dfill_launch, dfill_prep,
-// dfill_make, dfill_check, dfill_ref), so dcap's d* modes and dscore.cu run it unchanged. The scorer's fill-v1 arm (and
-// fused_arm.py's chained arms) pass -DDFILL_V1 through NVCC_APPEND_FLAGS to build v1's chained filler instead.
+// pfill: a DRAM-free filler in Theorem E's own setting, under the ABI dcap's d* modes and dscore.cu run (dfill_k<NC>,
+// DFill, dfill_launch, dfill_prep, dfill_make, dfill_check, dfill_ref).
 //
 // A tile is one noise GEMM C = A B with A (TM x 32) and B (32 x PF_TN) i.i.d. uniform on {±1} and nothing else in either
 // operand (A_M = B_M = 0), so K = L = 32: every m16n8k32 output is a whole k32 prefix sum, folded into the receipt at once
