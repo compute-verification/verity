@@ -29,7 +29,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
 
 - **Cards** (`cards.py`, schema `spot-card/v1`): every number the figures read arrives as one JSON card in a slot
   (`workload`, `proof_overhead`, `commitment`, `replay`, `design`, `references`, `infiltration`,
-  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`, `headline`, `serving_rate`, `certifier`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
+  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`, `headline`, `serving_rate`, `attester`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
   them. A card is published to the evidence store and kept in `cards/SLOT.MODEL.json` with its art id; a model's
   `references` cards add up, each kept as `cards/references.MODEL.ART.json`:
 
@@ -228,7 +228,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
       proof blocks, each charged its own blocks' committed bits, so a wholly incorrect request is charged every bit it
       commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, each of
       its tokens as the token select's 32-bit output word, the `design` card's `token_bytes` (`served_bits`): at most
-      the response cap of the model's `certifier` card, the network attester's schedule (`NetworkAttesterParams`), whose cap
+      the response cap of the model's `attester` card, the network attester's schedule (`NetworkAttesterParams`), whose cap
       ingress refuses a request past and `NetTiming.Guarantees.ResponseCapped` holds each response to, else every one
       of its tokens (`--served request` takes every token under a cap too), in
       `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`), which still counts which of a request's proof

@@ -17,15 +17,15 @@ import servetax_plugin as P
 ARM = "tick-certifier"
 
 
-def test_the_arm_is_the_tick_arm_with_the_certifier_in_front(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_the_arm_is_the_tick_arm_with_the_attester_in_front(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """The arm's engine is the tick arm's, with the two changes of the plugin that an id request and the tick's
     server make necessary: each request held to its length, and the prefix cache emptied by the engine. Its tick's
     bucket is the network attester's. Its cost holds a change no part of the target counts, so it has no verdict against
     it."""
     glm, tick, arm = S.MODELS["glm53"], S.ARMS["tick"], S.ARMS[ARM]
-    assert replace(arm, parent=tick.parent, what=tick.what, plugin=tick.plugin, certifier=False) == tick
-    assert (arm.parent, arm.plugin, arm.certifier) == ("tick", ("record", "to_length", "idle_reset"), True)
-    assert [n for n, x in S.ARMS.items() if x.certifier] == [ARM]
+    assert replace(arm, parent=tick.parent, what=tick.what, plugin=tick.plugin, attester=False) == tick
+    assert (arm.parent, arm.plugin, arm.attester) == ("tick", ("record", "to_length", "idle_reset"), True)
+    assert [n for n, x in S.ARMS.items() if x.attester] == [ARM]
     assert S.server_argv(arm, glm, Path("/ck"), 8000) == S.server_argv(tick, glm, Path("/ck"), 8000)
     assert S.entry_points(arm) == S.entry_points(tick)
     (tmp_path / "tick_plugin.py").touch()
@@ -65,13 +65,13 @@ def test_the_schedule_has_a_lane_and_a_queue_place_for_each_request_in_flight():
             S.certified_loads(ARM, text)
 
 
-def test_each_sides_commands_are_the_fronts_the_certifiers_and_the_shims(tmp_path: Path):
+def test_each_sides_commands_are_the_fronts_the_attesters_and_the_shims(tmp_path: Path):
     cells = S.certifier_cells(None, {"chat": (96,)})
     assert S.front_argv(8000, 18746, S.cell_payload(cells), tmp_path / "front.jsonl")[1:] == [
         "-m", "verity_vllm.pipeline.cli", "ids-front", "--upstream", "127.0.0.1:8000", "--listen", "127.0.0.1:18746",
         "--id-payload", "4087", "--log", str(tmp_path / "front.jsonl")]
-    argv = S.certifier_argv(cells, tmp_path / "certifier", 18746, tmp_path / "key", "ab" * 32, 16)
-    assert argv[1:3] == [str(S.CERTIFIER), "serve"] and S.CERTIFIER.is_file() and "--watermark" in argv
+    argv = S.attester_argv(cells, tmp_path / "certifier", 18746, tmp_path / "key", "ab" * 32, 16)
+    assert argv[1:3] == [str(S.ATTESTER), "serve"] and S.ATTESTER.is_file() and "--watermark" in argv
     named = {argv[i]: argv[i + 1] for i in range(3, len(argv) - 1) if argv[i].startswith("--") and argv[i] != "--watermark"}
     assert named == {"--out": str(tmp_path / "certifier"), "--listen": "127.0.0.1:0", "--upstream": "127.0.0.1:18746",
                      "--key": str(tmp_path / "key"), "--session": "ab" * 32, "--windows": "16", "--egress": "id",
@@ -84,7 +84,7 @@ def test_each_sides_commands_are_the_fronts_the_certifiers_and_the_shims(tmp_pat
     assert S.SHIM.is_file()
 
 
-def test_the_servers_side_holds_its_engine_until_the_certifiers_run_ends_or_its_stop_time(tmp_path: Path):
+def test_the_servers_side_holds_its_engine_until_the_attesters_run_ends_or_its_stop_time(tmp_path: Path):
     feed = tmp_path / "tick-feed.jsonl"
     assert S.runs_ended(feed) == 0
     lines = [{"key": "chat@96-r1-0", "run": "aa", "n": 0, "bucket": 21}, {"run": "aa", "t": 21, "n": 1},
@@ -107,21 +107,21 @@ def line(index: int, outcome: str, ids: int | None, max_tokens: int = 8) -> dict
             "kinds": "", "arrivals_ms": [], "response": {"completion_tokens": ids}}
 
 
-def test_the_certifiers_record_says_whether_its_run_is_accepted_and_every_answer_whole():
+def test_the_attesters_record_says_whether_its_run_is_accepted_and_every_answer_whole():
     lines = [line(0, "end", 8), line(1, "end", 5), line(2, "refused", None), line(3, "fail", 2), line(4, "cut", 8),
              {"index": 5, "id": "x", "status": 400, "unsent": "an id request has no stop"}]
     check = {"accepted": False, "problems": [f"connection {k}" for k in range(9)],
              "summary": {"certified_windows": 6, "withheld_windows": [1], "cells_in_their_bucket": [40, 41],
                          "tick_lateness_ms": {"max": 3.5}}}
-    assert S.certifier_record(check, lines) == {
+    assert S.attester_record(check, lines) == {
         "accepted": False, "problems": [f"connection {k}" for k in range(5)], "connections": 5, "unsent": 1, "ended": 2,
         "refused": 1, "failed": 2, "short": 1, "certified_windows": 6, "withheld_windows": [1],
         "cells_in_their_bucket": [40, 41], "tick_lateness_ms": {"max": 3.5}}
-    none = S.certifier_record(None, lines[:1])
+    none = S.attester_record(None, lines[:1])
     assert (none["accepted"], none["problems"], none["ended"], none["short"]) == (False, [], 1, 0)
 
 
-def test_an_arm_behind_the_certifier_is_served_by_its_two_sides_and_by_vllms_client(tmp_path: Path,
+def test_an_arm_behind_the_attester_is_served_by_its_two_sides_and_by_vllms_client(tmp_path: Path,
                                                                                     monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
     run = ["run", "--arm", ARM, "--model-id", "glm53", "--out", str(tmp_path / "out")]
@@ -129,7 +129,7 @@ def test_an_arm_behind_the_certifier_is_served_by_its_two_sides_and_by_vllms_cli
     for argv, why in (
             ([*run, "--c4", "c4", "--rates", "light=1"], "sent by vLLM's client, through the network certifier"),
             (bench, "served by two commands: --side server on the node"),
-            ([*bench, "--side", "client"], "--certifier-windows N"),
+            ([*bench, "--side", "client"], "--attester-windows N"),
             ([*bench, "--side", "client", "--sampled"], "is served greedy"),
             ([*run, "--client", "vllm-bench", "--loads", "long", "--side", "client"], "not long"),
             ([*run, "--client", "vllm-bench", "--loads", "agentic", "--side", "client"], "not agentic"),
@@ -262,7 +262,7 @@ def result(sends: int, tok: float, duration: float = 300.0) -> dict:
 
 
 @pytest.mark.parametrize(("windows", "short", "exits"), [(200, 0, 0), (200, 1, 1), (130, 0, 1)])
-def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_certifier_found(
+def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_attester_found(
         windows: int, short: int, exits: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture):
     """From the network attester's start to its record: the network attester before the id front and the shim to it are started in
@@ -291,7 +291,7 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
 
     def popen(argv, stdout, stderr, env, text):
         assert str(S.ROOT) in env["PYTHONPATH"].split(":") and text
-        if argv[1] == str(S.CERTIFIER):
+        if argv[1] == str(S.ATTESTER):
             (out / "certifier" / "deployment.json").write_text(json.dumps({"origin_unix": 1005.0}))
             events.append(("certifier", int(argv[argv.index("--windows") + 1]), Path(argv[argv.index("--key") + 1])))
             return Proc({"listening": ["127.0.0.1", 4000]}, events, "certifier")
@@ -300,7 +300,7 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
         return Proc({"listening": ["127.0.0.1", 5000]}, events, "shim")
 
     def run(argv, stdout, stderr=None, env=None):
-        if argv[1] == str(S.CERTIFIER):
+        if argv[1] == str(S.ATTESTER):
             events.append((argv[2],))
             if argv[2] == "check":
                 assert argv[3:] == ["--run", str(out / "certifier")]
@@ -324,7 +324,7 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
 
     a = argparse.Namespace(
         arm=ARM, model_id="glm53", checkpoint=str(tmp_path / "ck"), client=S.BENCH, loads="chat=2", dataset=None,
-        pass_prompts="chat=3", reps=3, seed=0, warm_s=20.0, front=18746, cells="window=40", certifier_windows=windows,
+        pass_prompts="chat=3", reps=3, seed=0, warm_s=20.0, front=18746, cells="window=40", attester_windows=windows,
         lifetime=None, leave_out=0, out=str(out), side=S.CLIENT)
     rc = S.certified_client(a, run=run, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
     said = capsys.readouterr().out
@@ -338,7 +338,7 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
         ("waited", S.IDLE_S), ("scrape", 18746), ("pass", "http://127.0.0.1:5000", "2", 3, 1011.0 + 306.0 * k),
         ("scrape", 18746))]
     last = 1011.0 + 306.0 * reps + 300.0
-    assert events[4:] == [*sent, ("ended", "certifier", end - last + S.CERTIFIER_END_S), ("check",),
+    assert events[4:] == [*sent, ("ended", "certifier", end - last + S.ATTESTER_END_S), ("check",),
                           ("terminated", "shim"), ("ended", "shim", None)]
     meta = json.loads((out / "meta.json").read_text())
     assert (meta["arm"], meta["parent"], meta["side"], meta["client"]) == (ARM, "tick", "client", "vllm-bench")
@@ -381,18 +381,18 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     assert "turns on the network certifier in front, which the target has no part for" in text
 
 
-def test_the_cost_of_an_arm_behind_the_certifier_says_what_it_is_of():
+def test_the_cost_of_an_arm_behind_the_attester_says_what_it_is_of():
     """The report's text never calls such an arm's cost GPU time a token: it names the schedule's ceiling on its
     tokens a second, and what the network attester's check found of the run."""
     cells = S.certifier_cells(None, {"chat": (96,)})
     k = {"cells": cells, "windows": 16, "ceiling_tok_per_s": S.ceiling(cells)}
-    assert S.certifier_text(ARM, None) == []
-    first, second = S.certifier_text(ARM, k)
+    assert S.attester_text(ARM, None) == []
+    first, second = S.attester_text(ARM, k)
     assert ("lets one id leave a connection each 250 ms, the first 15 s after its admission: its 96 lanes carry at "
             "most 384 output tokens a second whatever its engine does") in first
     assert "is not GPU time a token" in first and "has no check: the arm stopped before it" in second
-    found = S.certifier_record({"accepted": True, "problems": [], "summary": {}}, [line(k, "end", 8) for k in range(1152)])
-    assert S.certifier_text(ARM, k | found)[1] == (
+    found = S.attester_record({"accepted": True, "problems": [], "summary": {}}, [line(k, "end", 8) for k in range(1152)])
+    assert S.attester_text(ARM, k | found)[1] == (
         "    the network certifier's run is accepted by its offline check: 1,152 of 1,152 connections ended, 0 "
         "refused, 0 failed, 0 answers short of their length")
-    assert "NOT accepted" in S.certifier_text(ARM, k | found | {"accepted": False})[1]
+    assert "NOT accepted" in S.attester_text(ARM, k | found | {"accepted": False})[1]
