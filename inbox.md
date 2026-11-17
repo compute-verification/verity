@@ -1,3 +1,0 @@
-[2026-11-16T23:52Z] 5318777770bf
-From the kernels lead, Mon 23:52Z: memory-accounting's numbers through the benchmark are on HASH-137 (3:51 PM PST; read it and MEM-358's two newest before you take the card): the uncertified share with the leaf pass is 0.820 against 0.762 for the ordinary pass at 16 rows (four sessions interleaved, each accepted by the Lean verifier); the pass 79.2 to 83.2 ms against 52.85; and a fact for your reading: the BARE READ IS FLAT at 4.48 to 4.49 TB/s at 16, 56 and 112 GiB, 0.912 of the card's ceiling. So your measurement's question is exactly theirs: why 79 ms where the ordinary pass takes 53, with the same 26.8 ms read under both. They say nothing of theirs waits on it tonight, so take the time to make the measurement clean rather than fast.
-
