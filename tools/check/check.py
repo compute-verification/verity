@@ -211,6 +211,11 @@ doesn't name:
                     else origin/main): whether the change from BASE adds a retired term, an issue id or a run id to a file.
                     Off the gate (policy.toml's `off_gate`), so a red holds nothing; a ready mark's preflight and the
                     sync run `main`'s copy as a warn gate (drive.toml's `warn_gates`)
+    landing-gates   once lean-audit has passed, where the run holds it: `tools/check/landing_gates.py BASE OUT`, every gate
+                    drive.toml lists in `landing_gates` at BASE (as for added-lines), each as BASE has it, on a commit of
+                    HEAD's tree with the locks lean-audit regenerated written in, whose one parent is HEAD's merge base with
+                    BASE: the candidate's whole change, whatever merges or dates its commits carry.  A gate that fails or
+                    can't judge fails it, naming the gate and its lines; skipped when BASE lists none
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run, whose every step also runs with Lake's
 local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical inputs:
@@ -2140,6 +2145,22 @@ def added_lines(out: Path) -> list[str] | str:
     return ["bash", "-c", script, "added-lines", base, ADDED_LINES, sys.executable]
 
 
+def landing_gates(out: Path) -> list[str] | str:
+    """landing-gates' command: `landing_gates.py BASE OUT`, BASE being the commit in the run's `BASE_FILE` (`--record --on` sends
+    it), else origin/main; skipped where BASE names no commit here or its drive.toml lists no `landing_gates`."""
+    sent = out / "inputs" / BASE_FILE
+    named = sent.read_text().strip() if sent.is_file() else "origin/main"
+    if not (base := _rev(f"{named}^{{commit}}")):
+        return f"skipped: no base: {named} names no commit here"
+    try:
+        listed = _load("landing_gates").gates(base, ROOT)
+    except ValueError as e:
+        return f"failed: {e}"
+    if not listed:
+        return f"skipped: drive.toml at {named} lists no landing_gates"
+    return [sys.executable, str(ROOT / "tools" / "check" / "landing_gates.py"), base, str(out)]
+
+
 def suite_args(held: list[str], splits: dict[str, dict] | None, out: Path) -> list[str]:
     """`suites.py`'s arguments for a shard's suites of one step (``held``: `SUITE` or `SUITE:K/M`): each suite once, a split one
     as `SUITE:K1,K2/M` with the parts it holds, pinned to the partition ``splits`` names (`@` its digest) when it names one; and
@@ -2240,7 +2261,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
              "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT),
              "ratchet-gate": ("ratchet-gate", ratchet_gate(out, cache), ROOT),
-             "added-lines": ("added-lines", added_lines(out), ROOT)}
+             "added-lines": ("added-lines", added_lines(out), ROOT),
+             "landing-gates": ("landing-gates", landing_gates(out), ROOT)}
     if len(lean) > 1:
         built |= {s[0]: s for s in lean}
     else:

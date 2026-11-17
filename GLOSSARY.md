@@ -380,7 +380,8 @@ run side by side are one workload. vLLM's workload files (`adapters/vllm/workloa
   - **Suspect**: a PR of a failed candidate whose change touches what a failure its base doesn't share names (every PR
     when none does); a lone suspect is ejected, its ready mark withdrawn, and several are bisected.
   - **Preflight**: `research queue ready`'s checks of a head before the mark.
-  - **Landing gate**: a script at `main` that a head must pass at its mark's preflight (drive.toml's `landing_gates`).
+  - **Landing gate**: a script at `main` that a head must pass at its mark's preflight, and a candidate on its whole change from
+    its merge base with `main` in its check's `landing-gates` step (drive.toml's `landing_gates`).
   - **Warn gate**: a script run as a landing gate is, whose failure only warns (drive.toml's `warn_gates`).
   - **Off-gate step**: a step of the check off the merge gate (policy.toml's `off_gate` and drive.toml's `warn_steps`:
     circuit-check, ratchet-gate, added-lines); a candidate's check still runs it, and its red holds nothing. Under `--gate check`, a
