@@ -13,7 +13,7 @@ Commit window and writes ``summary.json``.
   one ``data:`` event a token, then ``data: [DONE]``), each chunk carrying its ``token_ids`` and the first its
   ``prompt_token_ids``, as vLLM's server does under ``return_token_ids``. A request is a varied body of
   token ids: its prompt as token ids, ``max_tokens``, greedy (temperature 0, top_p 1), no stop
-  strings, its ``user`` the id the certified I/O names it by. Its prompt and ``max_tokens`` must fit the engine's
+  strings, its ``user`` the id the attested I/O names it by. Its prompt and ``max_tokens`` must fit the engine's
   context, as vLLM refuses a request past ``max_model_len``. Any other body is answered 400.
 * **The scheduler** (`Scheduler`) is vLLM V1's synchronous one as the derived rules model it
   (`verity_vllm.pipeline.advice_code.derived`'s walk): first come first served, the running requests in admission order
