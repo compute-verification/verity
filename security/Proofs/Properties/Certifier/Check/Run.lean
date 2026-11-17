@@ -24,8 +24,8 @@ certificate message's input names one certifier session, execution phase and dig
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check
 open Flock
 open NetworkAttester (ClockSync LogicalFrame expectedRow)
 

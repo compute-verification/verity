@@ -1,4 +1,4 @@
-// The streamed wipe's fill on the memory challenger's CPUs (streamed_wipe.py, wipe_party.py):
+// The streamed wipe's fill on the memory attester's CPUs (streamed_wipe.py, wipe_party.py):
 //
 //   L_i = SHA-512(LABEL_TAG ‖ K ‖ u64be i)      75 bytes, one SHA-512 compression a 64-byte label
 //

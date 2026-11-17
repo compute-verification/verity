@@ -49,14 +49,14 @@ def test_a_deferred_run_runs_only_its_steps_and_what_they_need_inside_a_recorded
 
 
 def test_a_recorded_check_runs_every_job_on_the_gate_and_passes_without_circuit_check(monkeypatch, tmp_path):
-    """circuit-check and ratchet-gate are off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared
+    """circuit-check, ratchet-gate and added-lines are off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared
     command in a run) leaves them out, and its `check/v1` passes on the jobs on the gate alone."""
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache" / "check"))
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "cache" / "tests"))
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     rc, only = _main(monkeypatch, run_dir, ["--keep-going"])
-    off = {"circuit-check", "ratchet-gate"}
+    off = {"circuit-check", "ratchet-gate", "added-lines"}
     assert rc == 0 and only == [p for p in CHECK.shard_parts() if p.partition(":")[0] not in off] == CHECK.gated_parts()
     assert {p.partition(":")[0] for p in only} == {j.name for j in CHECK.JOBS} - off
     doc = json.loads((run_dir / "result.json").read_text())

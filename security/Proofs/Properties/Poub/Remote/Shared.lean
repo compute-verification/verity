@@ -135,7 +135,7 @@ theorem sclose_spec {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s'
     (h : Shared.close g s t now = .ok (r, s')) :
     ((∃ why, r = .refused why) ∧ s' = s) ∨
     (∃ u f, r = .rejected u f none ∧ s' = ({ s with windows := finalize (grp g t.toNat) s.windows }.fail u f).2) ∨
-    (∃ sampled, r = .drew sampled ∧ 0 ≤ t ∧ t.toNat < s.windows.size ∧ s.windows[t.toNat]!.drawn = none ∧
+    (∃ sampled, r = .sampled sampled ∧ 0 ≤ t ∧ t.toNat < s.windows.size ∧ s.windows[t.toNat]!.drawn = none ∧
       t.toNat + 1 = min (t.toNat / g * g + g) s.params.windows ∧
       (∀ j, j < t.toNat / g * g → (dr s.windows j).isSome) ∧
       (∀ u ∈ grp g t.toNat, s.params.minPasses ≤ s.windows[u]!.roots.size) ∧
@@ -353,7 +353,7 @@ theorem find_none' {p : Nat → Bool} {l : List Nat} (h : ∀ u, l.find? p = som
 
 theorem sclose_coins {g : Nat} {s : State} {c : Array ByteArray} {t : Int} {now : Nat} {r : Result} {s₁ : State}
     (h₁ : Shared.close g s t now = .ok (r, s₁))
-    (hc : (∃ d, r = .drew d) → c[s.params.windows + t.toNat / g]! = s.coins[s.params.windows + t.toNat / g]!) :
+    (hc : (∃ d, r = .sampled d) → c[s.params.windows + t.toNat / g]! = s.coins[s.params.windows + t.toNat / g]!) :
     Shared.close g (C c s) t now = .ok (r, C c s₁) := by
   generalize hres : Shared.close g (C c s) t now = res
   unfold Shared.close at h₁ hres
@@ -460,7 +460,7 @@ theorem range_of_div {g j : Nat} (hg : 0 < g) : j / g * g ≤ j ∧ j < j / g * 
 theorem sclose_dr {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : State}
     (h : Shared.close g s t now = .ok (r, s₁)) :
     (∀ u, (dr s.windows u).isSome → (dr s₁.windows u).isSome) ∧
-    (∀ d, r = .drew d → (dr s₁.windows t.toNat).isSome) ∧
+    (∀ d, r = .sampled d → (dr s₁.windows t.toNat).isSome) ∧
     (0 < g → DP g s.params.windows s.windows → DP g s.params.windows s₁.windows) ∧
     s₁.params = s.params ∧ s₁.coins = s.coins := by
   rcases sclose_spec h with ⟨⟨_, hr⟩, rfl⟩ | ⟨u, f, hr, rfl⟩ | ⟨d, hr, ht0, hts, hund, hm, hpre, hfew, hdraws, rfl⟩
@@ -604,7 +604,7 @@ theorem sstep {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {s' 
 theorem sstep_coins {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {s₁ : State} {c : Array ByteArray}
     (he : Shared.step g s e = .ok (r, s₁)) (h0 : c[0]! = s.coins[0]!)
     (hW : ∀ k, k < s.params.windows → c[k]! = s.coins[k]!)
-    (hd : ∀ t now, e = .close t now → (∃ d, r = .drew d) →
+    (hd : ∀ t now, e = .close t now → (∃ d, r = .sampled d) →
       c[s.params.windows + t.toNat / g]! = s.coins[s.params.windows + t.toNat / g]!) :
     Shared.step g (C c s) e = .ok (r, C c s₁) := by
   unfold Shared.step at he ⊢

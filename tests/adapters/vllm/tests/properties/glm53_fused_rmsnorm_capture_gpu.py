@@ -32,8 +32,6 @@ bindings, no error.
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import glob
 import hashlib

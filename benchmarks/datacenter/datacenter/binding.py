@@ -11,7 +11,7 @@ node's. The placement is private and committed. A crossing is a census
 value produced in one block and read in another; crossings are derived, never declared, since moving a value doesn't
 change it.
 
-What is public is the placement's `Profile`: the occupancy each certifier port must show, the committed bits each block
+What is public is the placement's `Profile`: the occupancy each attester port must show, the committed bits each block
 exports through it, the work each block runs, the ANDs it is credited and the proof blocks they rest on, the trusted
 data each block consumes, the registered stores and the registration's root. `audit` and `account` read the profile; only `audit`, which runs inside the proof, reads the
 placement itself.
@@ -155,7 +155,7 @@ class Placed:
         """The committed bits each egress port carries out of its block in the epoch: every crossing from a block, to
         another block or outside, at the first egress port on its path, read within `plan.epoch`. With the
         datacenter's pair links sealed (`Datacenter.sealed`), a crossing to another block is ciphertext between the two
-        blocks' certifiers, which only they open, so only a crossing to a reader off every block counts: the export at
+        blocks' attesters, which only they open, so only a crossing to a reader off every block counts: the export at
         the facility boundary."""
         dc, out = self.datacenter, {}
         for x in crossings(self):
@@ -197,7 +197,7 @@ class Placed:
         return units, how
 
     def _custody(self, registration: int) -> tuple[dict[str, float], ...]:
-        """For each block whose own certifier releases a salt into it: the salt's bits, the bits other than timing that
+        """For each block whose own attester releases a salt into it: the salt's bits, the bits other than timing that
         could carry it out before registration (the values the salt reaches that cross out, and the block's inside inputs
         that reach anything crossing out, both at the census's grain, which can only over-count), and the ANDs of the
         block's work that depends on it, gate by gate within the Calls it reaches (`logical.reach`; none past the
@@ -239,11 +239,11 @@ class Placed:
 @dataclass(frozen=True)
 class Profile:
     """A placement's public properties, with the declaration and the verifier's plan they are read against: the frames
-    each certifier port shows in each bucket (`occupancy`), the work each block runs, by kind (`work`, never credited),
+    each attester port shows in each bucket (`occupancy`), the work each block runs, by kind (`work`, never credited),
     its Calls' ANDs (`ands`, its credit; none, and `uncounted` says why, for a Program the census can't lower to bits),
     the trusted data each block consumes (`forced`, in bits), the registered stores and the registration's root
     (`registered`), and the digest of the census/v1 it is read from (`census`, which names the Program's digest and the
-    lowering). For a block whose certifier holds a salt for it: the salt's bits (`salt`), what besides timing could
+    lowering). For a block whose attester holds a salt for it: the salt's bits (`salt`), what besides timing could
     carry it out before registration (`salt_out`, in bits), and the ANDs of the block's work that depends on it
     (`pinned`). For a block whose work PoUW timed: its proved bound (`ticks`, in block-ticks), which the account credits
     in place of the per-facet loads, since a prover may route work to another facet than the honest design does. Each
@@ -401,7 +401,7 @@ def crossings(p: Placed) -> list[Crossing]:
 
 
 def traffic(p: Placed) -> dict[Port, dict[int, list[Value]]]:
-    """The honest run's traffic at each certifier port, bucket by bucket: the crossing values it carries, each in the
+    """The honest run's traffic at each attester port, bucket by bucket: the crossing values it carries, each in the
     bucket of its read tick."""
     out: dict[Port, dict[int, list[Value]]] = {}
     bucket = p.datacenter.cadence.bucket_ticks
@@ -418,6 +418,6 @@ def frames(values: list[Value], frame_bits: int) -> int:
 
 
 def occupancy(p: Placed) -> dict[Port, dict[int, int]]:
-    """The public occupancy profile: for each certifier port and each bucket, the frames the honest run shows there."""
+    """The public occupancy profile: for each attester port and each bucket, the frames the honest run shows there."""
     fb = p.datacenter.cadence.frame_bits
     return {port: {b: frames(vs, fb) for b, vs in row.items()} for port, row in traffic(p).items()}

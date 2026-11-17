@@ -19,15 +19,15 @@ import numpy as np
 import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, bind
-from verity.commitments.periods import rows as CS
 from verity.circuits.ops.boolean import versions as BB
-from verity_vllm.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
+from verity.commitments.periods import rows as CS
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from tests.pipeline import served_rope as SR
-from tests.pipeline.served_rope import HEADS, DESIGN, ROPE, D
+from tests.pipeline.served_rope import DESIGN, HEADS, ROPE, D
+from verity_vllm.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW

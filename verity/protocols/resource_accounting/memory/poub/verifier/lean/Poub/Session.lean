@@ -118,7 +118,7 @@ inductive Result
   | released (coin : Option Nat)
   | appended (first : Nat) (coin : ByteArray)
   | ok
-  | drew (draws : Array (Nat × Nat))
+  | sampled (draws : Array (Nat × Nat))
   | accepted (window : Nat)
 
 /-- A session before its first event: `Session.__init__` on parameters and coins already checked. -/
@@ -281,7 +281,7 @@ def close (s : State) (t : Int) (now : Nat) : Except String (Result × State) :=
   if t + 1 == s.params.windows && s.joined.size < s.appends.size then return s.fail t .coin
   let some sampled := receiptSample s.digest t s.coins[s.params.windows + t]! s.params.samples (w.plans.map (·.length))
     | throw "the openings' draw ran past its reads"
-  return (.drew sampled, { s with windows := s.windows.modify t ({· with drawn := some sampled, openedNs := some now}) })
+  return (.sampled sampled, { s with windows := s.windows.modify t ({· with drawn := some sampled, openedNs := some now}) })
 
 def verify (s : State) (t : Int) (openings : Array Opening) : Result × State := Id.run do
   if let some r := live s then return (r, s)

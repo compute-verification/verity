@@ -72,6 +72,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
+CARD_FILES = REPO / "calibration/hardware/cards"
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
@@ -82,7 +83,7 @@ from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS  # noqa: E4
 #: a templated statement's id (`verity_flock.circuit.TMPL_STATEMENT`): its prover and server read the placed unit
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 
-#: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
+#: ANDs of the pieces of a unit with its rows' openings (calibration/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
 S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): a `full` statement's
 MAX_BITS = 1 << 35
@@ -691,7 +692,7 @@ def overhead(a) -> int:
     from verity.device import load_card, rate
     out = Path(a.out)
     # --card none: a CPU node's sessions, which no GPU's peak divides
-    card = None if a.card == "none" else load_card(a.card)
+    card = None if a.card == "none" else load_card(a.card, directory=CARD_FILES)
     stages = [r for r in read_jsonl(out / "records" / "stage.jsonl") if r.get("unit")]
     proves = [r for r in read_jsonl(out / "records" / "prove.jsonl") if r.get("unit") and r["accepted"]]
     verifies = [r for r in read_jsonl(out / "records" / "verify.jsonl") if r.get("unit")]

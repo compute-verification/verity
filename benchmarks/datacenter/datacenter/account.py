@@ -14,7 +14,7 @@ concludes:
   weights needs only small inputs and outputs. Work is pinned to the block only by data it must consume that only the
   block receives, a trusted device's fresh data (a run input placed on a trusted device), which a helper could get only through the
   block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the proposed assumption `FLEET_CLOSED`. Or,
-  under the proposed assumption `SALT_CUSTODY`, by a salt the block's own certifier releases only into it: the work that depends
+  under the proposed assumption `SALT_CUSTODY`, by a salt the block's own attester releases only into it: the work that depends
   on it is pinned while `custody`, k, the bits that could carry the salt out before registration (the block's egress
   timing advice, the profile's advice, inside inputs and salt-dependent values crossing out), stays at most 384. With
   none, it is unbounded and nothing is attributed;
@@ -30,7 +30,7 @@ advice, timing advice, inputs, every refused port-window charged at its link's f
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas). Beside the
 covert budget, which is only what goes beyond the committed computation, it reports the export (λ_out, `export_bits`):
 the committed bits that crossed a certified boundary out of a block, by port. They count as fresh input read by
-their receivers once the declaration's certifiers cover every link; until then the export is reported
+their receivers once the declaration's attesters cover every link; until then the export is reported
 as not applicable, with the uncovered links named.
 
 Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, (1 − ε)
@@ -58,7 +58,7 @@ from .time import Interval
 
 #: the premise that no unregistered hardware is reachable from a block
 FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
-#: salt custody (unproved): a salt the block's certifier releases only into it pins the work that depends on it, while
+#: salt custody (unproved): a salt the block's attester releases only into it pins the work that depends on it, while
 #: k, the bits that could carry it out before registration, stays at most this many
 SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
 #: a block's proof blocks counted under the served query (Q_word v1 at X = 16) because no one-stage registration named the
@@ -89,7 +89,7 @@ class BlockAccount:
     reads_local_at_least: float = 0.0
     forced: float = 0.0
     assumptions: list[str] = field(default_factory=list)
-    #: for a block with a salt in its certifier's custody, k: the bits that could carry it out before registration
+    #: for a block with a salt in its network attester's custody, k: the bits that could carry it out before registration
     custody: float | None = None
     #: each facet's share of the epoch
     loads: dict[str, float] = field(default_factory=dict)
@@ -138,7 +138,7 @@ class Account:
     @property
     def export_bits(self) -> float:
         """The export, λ_out: the committed bits that crossed a certified boundary out of a block, fresh input
-        read by their receivers. Charged only when the declaration's certifiers cover every link (`export_charged`)."""
+        read by their receivers. Charged only when the declaration's attesters cover every link (`export_charged`)."""
         return sum(self.exported.values())
 
     @property
@@ -155,7 +155,7 @@ class Account:
     @property
     def sound(self) -> bool:
         """No refused port-window and nothing overcredited: the AND over this model's own record check
-        (`claims.check_records`), with no ε or share credit. The network verdict of record is the certifier's
+        (`claims.check_records`), with no ε or share credit. The network verdict of record is the attester's
         `TransferBlocks.network_verdict` (`verity/protocols/resource_accounting/network/verifier/service.py`), the same AND over a link's outcomes
         of record; this model builds no proof-system streams, so it doesn't read it."""
         return not self.refused and not self.overcredited
@@ -185,7 +185,7 @@ class Account:
             ports = ", ".join(f"{p!r}: {v:g}" for p, v in sorted(self.exported.items(), key=lambda kv: repr(kv[0])))
             lines.append(f"export: {self.export_bits:g} committed bits out of blocks ({ports}), " + (
                 "charged as novel information read by their receivers" if self.export_charged else
-                f"not applicable while no certifier covers {', '.join(self.uncovered)}"))
+                f"not applicable while no attester covers {', '.join(self.uncovered)}"))
         for s, where in self.located.items():
             lines.append(f"store {s}: held on {where[0]}" if len(where) == 1 else
                          f"store {s}: held on one of {', '.join(where)}" if where else
@@ -287,7 +287,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                                    reads_local[b.name], profile.forced[b.name], names, k, dict(loads), anchor,
                                    {kind: n for kind, n in profile.work.get(b.name, {}).items() if kind.startswith("mac:")}))
 
-    links = {repr(port): dc.uplink(port.certifier) for port in dc.ports}
+    links = {repr(port): dc.uplink(port.attester) for port in dc.ports}
     window_seconds = dc.cadence.seconds(dc.cadence.window_ticks)
     voided = {(r.on.name, r.on.during) for r in refused if r.on.kind == "port"}
     refused_bits = sum(float(links[name].capacity) * window_seconds for name, _ in voided if name in links)
@@ -380,7 +380,7 @@ class Accounts:
         """The share of the registered weights, `registered_bits`, that could have left over the epochs: each
         epoch's covert budget, its export where it is charged, and σ (`sigma`) from each of its servers over its real
         duration. Weight custody over a horizon needs this share well below 1. The covert budget's inbound channels
-        (inputs, ingress timing) count too, and the certifier protocol's free fields don't, since no record here has
+        (inputs, ingress timing) count too, and network attestation's free fields don't, since no record here has
         any."""
         return Custody(registered_bits, self.covert_bits, sum(a.export_bits for a in self.epochs if a.export_charged),
                        float(sigma) * sum(a.seconds * a.servers for a in self.epochs), sigma,

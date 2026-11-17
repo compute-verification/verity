@@ -18,14 +18,14 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from verity_vllm.definitions.numerics import rows as RK
-from verity_vllm.definitions.numerics.rows import EVALUATORS
 
 from verity_vllm.check.c2_rules import (
     _complete_replay_population_gap,
     _no_evaluator_gaps,
 )
 from verity_vllm.check.commit_pass import commit_verdict
+from verity_vllm.definitions.numerics import rows as RK
+from verity_vllm.definitions.numerics.rows import EVALUATORS
 from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.gemm_targets import REGISTERED
 from verity_vllm.records.replay_codes import NOT_YET, why_class

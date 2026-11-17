@@ -52,6 +52,7 @@ inputs = [
     "benchmarks/harness/specs",
     "infra/cluster/kinds/benchmarks.toml",
     "adapters/vllm/verity_vllm/engine/hooks.py",
+    "adapters/vllm/verity_vllm/engine/profiles/hf_configs/LLAMA32_1B.config.json",
     "adapters/vllm/verity_vllm/protocols/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/credit_gate.py",
     "adapters/vllm/verity_vllm/protocols/interface.py",
@@ -104,13 +105,13 @@ inputs = [
     "tools/research/src/research/pods/nebius/slot_only.py",
     # the overhead table scales γ by the census's datacenter, world and datasheet rates and the slowdown calculator's FLOP-to-gates conversion,
     # and `verity bench overhead` is the door's runner, which a test runs
-    "benchmarks/census/deployments.json",
-    "benchmarks/census/adversary.json",
-    "benchmarks/census/hardware.json",
+    "calibration/census/deployments.json",
+    "calibration/census/adversary.json",
+    "calibration/census/hardware.json",
     "benchmarks/slowdown/data/hardware.toml",
     "benchmarks/overhead/run.py",
     # a card the door measures on reads its SMs and L2 from its card file through verity.device
-    "hardware/cards",
+    "calibration/hardware/cards",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
     # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
     # door's runner, which a test runs
@@ -135,7 +136,7 @@ inputs = [
     "benchmarks/recursion_figures", "tests/test_vllm_public_api.py",
     # `verity bench compute` and `verity bench memory` print and write through the kit's report, which a test holds
     # each to on its own suite's fixtures and stand-in store, and they read what their own suites declare
-    "benchmarks/compute", "benchmarks/memory", "benchmarks/remote_session/summary.py", "verity/protocol.py",
+    "benchmarks/compute", "benchmarks/memory", "benchmarks/poub_session/summary.py", "verity/protocol.py",
     "verity/channel.py", "verity/device.py", "verity/errors.py", "verity/party.py", "verity/runtime/__init__.py",
     "verity/runtime/handshake.py", "verity/runtime/framing.py", "tools/config/verity_config",
     # and `verity bench inference_only --stated-only`, run as its own process, prices the stated policy with the
