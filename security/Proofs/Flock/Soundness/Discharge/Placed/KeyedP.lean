@@ -6,14 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
-/-!
-# The circuit's program on Δ's source keys with public inputs
-
-`keyProgP c pi hU n` is `keyProg` at the keys with public inputs (`Aliased.keyIdxP`): each unit's inputs at one bit of
-one public word share one gate, its other inputs are on `keyProg`'s gates. Two inputs of one unit are on one gate only
-when they have one key (`keyProgP_wire_key`), which `HiddenExec.aliased_of_keyP` reads; without a public leaf map it is
-`keyProg` (`keyProgP_empty`).
--/
+/-! `keyProg` at the keys with public inputs (`Placed.keyProgP c pi hU n`). -/
 
 @[expose] public section
 
@@ -29,13 +22,10 @@ noncomputable abbrev keyProgP (c : Flock.Circuit) (pi : HmIn.Ports) (hU : Built 
     Prog (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n) n :=
   circuitProg c hU n (circuitRows c hU).nIn (Aliased.keyIdxP c pi (circuitRows c hU).nIn)
 
-/-- **Without a public leaf map, `keyProgP` is `keyProg`.** -/
 theorem keyProgP_empty {c : Flock.Circuit} {pi : HmIn.Ports} (h : pi.leaves = #[]) (hU : Built c.unit) (n : ℕ) :
     keyProgP c pi hU n = keyProg c hU n := by
   simp only [keyProgP, keyProg, Aliased.keyIdxP_empty h]
 
-/-- **Two inputs of one unit of `keyProgP` on one gate have one key** (`Aliased.srcKeyP`), in the program's own
-instance. -/
 theorem keyProgP_wire_key {c : Flock.Circuit} {pi : HmIn.Ports} (hU : Built c.unit) {n : ℕ}
     (outs : Finset (Fin (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n))) (u : Fin n)
     (x x' : Fin ((keyProgP c pi hU n).rows u).w) (hx : x.val < ((keyProgP c pi hU n).rows u).nIn)

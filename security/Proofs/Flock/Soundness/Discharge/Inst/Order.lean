@@ -12,19 +12,7 @@ import Proofs.Flock.Soundness.Discharge.Inst.Place
 import Proofs.Flock.Soundness.ExecLookup
 import Proofs.Flock.Soundness.SparseRows
 
-/-!
-# Every column with a row is in the order, once the wires are acyclic
-
-`order c` (`Inst/Rows.lean`) lists a template instance's logical inputs, then pass by pass every column whose row reads
-only listed columns. `ProvedScope.wiresAcyclic` fills, from the units' leaf ports and the leaf cuts, each input port a wire
-reaches once every input port its source port reads (`outReads`) is filled, and accepts when every port is filled and
-every slot's rows read only port bits and earlier rows. Then every column with a row is in the order (`order_complete`):
-- the order is a fixpoint: a column that is not in it is not ready (`order_stable`);
-- a filled port's bits are in the order (`Filled`), by induction on the passes of the fill (`AvOk`): a wire-fed bit's
-  row is the copy of its source bit (`addSelf` cancels its own entry), and the source port's bits are computed from the
-  ports `outReads` names (`ok_mem_order`, a lookup slot's from its input port, `lookup_mem_order`);
-- a computed row reads only filled ports' bits, earlier rows and the constant.
--/
+/-! Every column with a row is in `order c` once the wires are acyclic (`order_complete`). -/
 
 @[expose] public section
 
@@ -34,12 +22,8 @@ namespace FlockSoundness.Discharge.Inst
 
 open Compose
 
-/-! ## The order is a fixpoint -/
-
-/-- No column left out of `l` is ready. -/
 def Stable (c : Circuit) (l : List ℕ) : Prop := ∀ x ∈ cols c, x ∉ l → ready c l x = false
 
-/-- The columns left out of `l`. -/
 def left (c : Circuit) (l : List ℕ) : ℕ := ((cols c).filter fun y => !decide (y ∈ l)).length
 
 theorem step_stable {c : Circuit} {l : List ℕ} (h : Stable c l) : step c l = l := by
@@ -83,7 +67,6 @@ theorem iter_stable (c : Circuit) (l : List ℕ) :
       have := left_lt hx hxl (by simpa using hr)
       omega
 
-/-- **The order is a fixpoint**: no column left out of it is ready. -/
 theorem order_stable (c : Circuit) : Stable c (order c) := by
   rcases iter_stable c (inCols c) (cols c).length with h | h
   · exact h
@@ -119,8 +102,6 @@ theorem ready_some {c : Circuit} {l : List ℕ} {x : ℕ} {p : List ℕ × List 
 theorem row_code (c : Circuit) (n i o : ℕ) : row c (code n i o) = rowAt c n i o := by
   simp [row]
 
-/-! ## Each column's row -/
-
 section rows
 
 variable {c : Circuit} {n i : ℕ} (hn : n < c.nets.size) (hsha : n ≠ c.shaNet) (hhm : n ≠ c.hmNet)
@@ -143,14 +124,11 @@ theorem rowAt_feed_eq {o s : ℕ} (hlo : o < netIn c n) (hc : netIn c n ≤ (net
   unfold rowAt
   rw [ite_eq_left ⟨hn, hsha, hhm, hi, hw⟩, ite_eq_right (by omega), ite_eq_right (by omega), hf]
 
-/-- **A slot's constant is in the order.** -/
 theorem const_mem_order (hw : (netOf c n).constPos < netW c n) : code n i (netOf c n).constPos ∈ order c := by
   refine mem_order_of_ready (code_mem_cols hn hi hw) ?_
   unfold ready
   rw [row_code, rowAt_const_eq hn hsha hhm hi hw]
 
-/-- **A slot's computed rows are in the order**, each that is `Good`, when every read of a `Good` computed row is the
-constant, an earlier `Good` computed row, or a column already in the order. -/
 theorem comp_mem_order (hw : (netOf c n).constPos < netW c n) (Good : ℕ → Prop)
     (hstep : ∀ r, Good r → netIn c n ≤ r → r < (netOf c n).constPos → ∀ j, j < netW c n →
       (entA c n r j = 1 ∨ entB c n r j = 1) →
@@ -177,18 +155,13 @@ theorem comp_mem_order (hw : (netOf c n).constPos < netW c n) (Good : ℕ → Pr
 
 end rows
 
-/-! ## Filled ports -/
-
-/-- **Input port `p` of net `n`'s slot `i` is filled**: its bits are in the order. -/
 def Filled (c : Circuit) (n i p : ℕ) : Prop :=
   ∀ t < ((portCols (netOf c n).inGroups).getD p default).2,
     code n i (((portCols (netOf c n).inGroups).getD p default).1 + t) ∈ order c
 
-/-- Every bit of `m` is a bit of `m'`. -/
 def Sub (m m' : ℕ) : Prop := ∀ b, m.testBit b = true → m'.testBit b = true
 
-/-- **A mask of filled ports** in net `n`'s slot `i`: no bit 0 (no read of a column no port carries, nor out of order),
-and bit `p + 1` only for a filled port `p`. -/
+/-- Bit 0 marks a read of a column no port carries, or a read out of order. -/
 def Ok (c : Circuit) (n i m : ℕ) : Prop :=
   m.testBit 0 = false ∧ ∀ p < (portCols (netOf c n).inGroups).size, m.testBit (p + 1) = true → Filled c n i p
 
@@ -256,39 +229,30 @@ theorem entry_mem {m : Sparse} {rows : Array (Array ℕ)} {width : ℕ} (h : Spa
 theorem zmod2_add_ne {a b : ZMod 2} (h : a + b = 1) : a ≠ 0 ∨ b ≠ 0 := by
   revert a b; decide
 
-/-! ## What a stage's output ports read (`outReads`) -/
-
 section masks
 
 variable (net : Net)
 
-/-- `outReads`' input rows. -/
 abbrev mN : ℕ := min (net.inWords * WORD) net.constPos
 
-/-- `outReads`' input mask: bit `p + 1` at port `p`'s bits, `1` at another input column. -/
 def mIn : Array ℕ :=
   (Array.range (portCols net.inGroups).size).foldl (fun m p =>
       (Array.range ((portCols net.inGroups).getD p default).2).foldl (fun m x =>
         m.setIfInBounds (((portCols net.inGroups).getD p default).1 + x) (1 <<< (p + 1))) m)
     (Array.replicate (mN net) 1)
 
-/-- `outReads`' mask of column `x`, against the computed rows' masks `rows`. -/
 def mCol (rows : Array ℕ) (x : ℕ) : ℕ :=
   if x < mN net then (mIn net).getD x 1 else if x < net.constPos then rows.getD (x - mN net) 1
   else if x == net.constPos then 0 else 1
 
-/-- `outReads`' union of two masks. -/
 def mUnion (m y : ℕ) : ℕ := if y == 0 || y == m then m else if m == 0 then y else m ||| y
 
-/-- The mask of computed row `mN + i`, against the masks `rows` of the rows before it. -/
 def mRow (rows : Array ℕ) (i : ℕ) : ℕ :=
   ProvedScope.foldRow net.b (mN net + i) (fun m x => mUnion m (mCol net rows x))
     (ProvedScope.foldRow net.a (mN net + i) (fun m x => mUnion m (mCol net rows x)) 0)
 
-/-- `outReads`' computed rows' masks. -/
 def mRows : Array ℕ := Nat.fold (net.constPos - mN net) (fun i _ rows => rows.push (mRow net rows i)) #[]
 
-/-- `outReads`' output ports' masks. -/
 def mMasks : Array ℕ :=
   (portCols net.outGroups).map fun q => (Array.range q.2).foldl (fun m x => mUnion m (mCol net (mRows net) (q.1 + x))) 0
 
@@ -337,8 +301,6 @@ theorem mCol_even {rows : Array ℕ} {y : ℕ} (h : (mCol net rows y).testBit 0 
         exact Or.inr (by simpa using h3)
       · exact absurd h (by decide)
 
-/-- The first `k` computed rows' masks: each read of one is the constant or an earlier column, its mask inside the
-row's, unless the row's mask has bit 0. -/
 def MJ (k : ℕ) (rows : Array ℕ) : Prop :=
   rows.size = k ∧ ∀ i < k, ∀ y ∈ (net.a.row (mN net + i)).toList ++ (net.b.row (mN net + i)).toList,
     (rows.getD i 0).testBit 0 = true ∨ ((y < mN net + i ∨ y = net.constPos) ∧ Sub (mCol net rows y) (rows.getD i 0))
@@ -404,7 +366,6 @@ theorem mask_sub (q : ℕ × ℕ) {x : ℕ} (hx : x < q.2) :
   rw [hfun, ← Array.foldl_toList, Array.toList_range]
   exact (foldl_or (fun x => mCol net (mRows net) (q.1 + x)) _ 0).2 x (List.mem_range.2 hx)
 
-/-- An input column's mask is `1`, or bit `p + 1` alone, for a port `p` it is a bit of. -/
 def MInOk (m : Array ℕ) : Prop :=
   ∀ x, m.getD x 1 = 1 ∨ ∃ p t, p < (portCols net.inGroups).size ∧ t < ((portCols net.inGroups).getD p default).2 ∧
     x = ((portCols net.inGroups).getD p default).1 + t ∧ m.getD x 1 = 2 ^ (p + 1)
@@ -431,8 +392,6 @@ variable {c : Circuit} {n i : ℕ} (hn : n < c.nets.size) (hsha : n ≠ c.shaNet
   (hi : i < c.perVu.getD n 0)
 include hn hsha hhm hi
 
-/-- **A built slot's columns of filled ports' masks are in the order**: an input column of a filled port, a computed row
-reading only filled ports' bits, earlier such rows and the constant, or the constant. -/
 theorem ok_mem_order (hb : Built (netOf c n)) (hc : netIn c n ≤ (netOf c n).constPos)
     (hw : (netOf c n).constPos < netW c n) :
     ∀ x, Ok c n i (mCol (netOf c n) (mRows (netOf c n)) x) → code n i x ∈ order c := by
@@ -494,9 +453,6 @@ theorem ok_mem_order (hb : Built (netOf c n)) (hc : netIn c n ≤ (netOf c n).co
 
 end built
 
-/-! ## A lookup slot -/
-
-/-- A decoder of two bits or more ends with its combining rows, past the rows it was given. -/
 theorem decode_first (bd : Lookup.Builder) (bits : List ℕ) (fuel : ℕ) (h2 : 2 ≤ bits.length)
     (hlen : bits.length ≤ fuel + 1) : bd.a.size ≤ (Lookup.decode bd bits fuel).2.2 := by
   cases fuel with
@@ -514,8 +470,6 @@ theorem decode_first (bd : Lookup.Builder) (bits : List ℕ) (fuel : ℕ) (h2 : 
       (by intro e; have := congrArg List.length e; rw [hdl] at this; simp at this; omega) (by rw [hdl]; omega)
     exact A1.size.1.trans A2.size.1
 
-/-- **What a lookup slot's rows read**: its input port is its first `nb` columns, each a self row; a computed row reads
-the constant or an earlier column, an input column only of the port; and its output port is computed rows. -/
 theorem lookup_facts {nm : String} {tb : ByteArray} {nb lo bits : ℕ} {net : Net}
     (hb : Lookup.build nm tb nb lo bits = .ok net) (hlog : net.unitLog ≤ 32) :
     portCols net.inGroups = #[(0, nb)] ∧ net.inWords * WORD = 128 ∧
@@ -621,7 +575,6 @@ variable {c : Circuit} {n i : ℕ} (hn : n < c.nets.size) (hsha : n ≠ c.shaNet
   (hi : i < c.perVu.getD n 0)
 include hn hsha hhm hi
 
-/-- **A lookup slot whose input port is filled has its computed rows in the order.** -/
 theorem lookup_mem_order {nm : String} {tb : ByteArray} {nb lo bits : ℕ}
     (hb : Lookup.build nm tb nb lo bits = .ok (netOf c n)) (hlog : (netOf c n).unitLog ≤ 32)
     (hw : (netOf c n).constPos < netW c n) (hf : Filled c n i 0) :
@@ -644,11 +597,6 @@ theorem lookup_mem_order {nm : String} {tb : ByteArray} {nb lo bits : ℕ}
 
 end lookup
 
-/-! ## A net with slots -/
-
-/-- **What the order's completeness reads of a net with slots**: its rows in `rd32`'s words, its input rows before its
-constant and its constant in its slot, its input ports inside its input rows and apart, and built by `Net.ofRows` or
-`Lookup.build`. -/
 structure NetFit (c : Circuit) (n : ℕ) : Prop where
   log : (netOf c n).unitLog ≤ 32
   inConst : netIn c n ≤ (netOf c n).constPos
@@ -664,7 +612,6 @@ theorem port_mem {gs : Array Flock.Group} {p t : ℕ} (hp : p < (portCols gs).si
   rw [getElem!_pos (portCols gs) p hp]
   exact Array.getElem_mem_toList hp
 
-/-- **An input port bit's own rows are self rows**, `[x]·[x]`. -/
 theorem port_rows {c : Circuit} {n : ℕ} (hF : NetFit c n) {o : ℕ} (ho : o ∈ portBits (netOf c n).inGroups) (j : ℕ) :
     entA c n o j = (if j = o then 1 else 0) ∧ entB c n o j = if j = o then 1 else 0 := by
   rcases hF.kind with hb | ⟨nm, tb, nb, lo, bits, hb⟩
@@ -692,48 +639,36 @@ theorem reads_addSelf {c : Circuit} {n i o : ℕ} {e : ℕ → ZMod 2} (he : ∀
   · rw [ite_eq_left h] at hj; exact absurd hj (by decide)
   · rw [ite_eq_right h] at hj; exact absurd hj (by decide)
 
-/-! ## The fill `wiresAcyclic` runs -/
-
 section fill
 
 variable (c : Circuit)
 
-/-- `wiresAcyclic`'s slots of net `n`: none for the rows' circuits. -/
 def fSlots (n : ℕ) : ℕ := if (n == c.shaNet || n == c.hmNet) = true then 0 else c.perVu.getD n 0
 
-/-- `wiresAcyclic`'s input ports per net. -/
 def fPorts : Array ℕ := c.nets.map fun e => (portCols e.2.inGroups).size
 
-/-- One step of `wiresAcyclic`'s port numbering. -/
 def fBaseStep (b : Array ℕ) (n : ℕ) : Array ℕ := b.push (b.back?.getD 0 + fSlots c n * (fPorts c).getD n 0)
 
-/-- `wiresAcyclic`'s first port number of each net. -/
 def fBase : Array ℕ := (Array.range c.nets.size).foldl (fBaseStep c) #[0]
 
-/-- `wiresAcyclic`'s number of input port `p` of net `n`'s slot `i`. -/
 def fNode (n i p : ℕ) : ℕ := (fBase c).getD n 0 + i * (fPorts c).getD n 0 + p
 
-/-- `wiresAcyclic`'s input ports: of a slot outside the rows' circuits. -/
 def fIn (n i p : ℕ) : Bool := decide (i < fSlots c n) && decide (p < (fPorts c).getD n 0)
 
-/-- `wiresAcyclic`'s reads of each net's output ports. -/
 def fReads : Array (Array (Array ℕ) × Bool) :=
   (Array.range c.nets.size).map fun n => if fSlots c n == 0 then (#[], true) else ProvedScope.outReads (c.nets.getD n default).2
 
-/-- `wiresAcyclic`'s ports filled to start: the units' leaf ports and the leaf cuts. -/
 def fAv0 : Array Bool :=
   c.leafCuts.foldl (fun av e => if fIn c c.unitNet e.1 e.2.1 then av.set! (fNode c c.unitNet e.1 e.2.1) true else av)
     ((Array.range c.upv).foldl (fun av u => (Array.range (c.unit.inGroups.getD 0 default).bits.size).foldl (fun av p =>
       if fIn c c.unitNet u p then av.set! (fNode c c.unitNet u p) true else av) av)
       (Array.replicate ((fBase c).getD c.nets.size 0) false))
 
-/-- `wiresAcyclic`'s wire ready to fill its port: its source slot's ports its source port reads are filled. -/
 def fReady (av : Array Bool) (w : Wire) : Bool :=
   decide (w.src.2.1 < fSlots c w.src.1) && match ((fReads c).getD w.src.1 (#[], false)).1[w.src.2.2]? with
     | some ps => ps.all fun q => av.getD (fNode c w.src.1 w.src.2.1 q) false
     | none => false
 
-/-- `wiresAcyclic`'s port a wire fills. -/
 def fDst (w : Wire) : Option ℕ :=
   if fIn c w.dst.1 w.dst.2.1 w.dst.2.2 then some (fNode c w.dst.1 w.dst.2.1 w.dst.2.2) else none
 
@@ -767,7 +702,6 @@ theorem fPorts_getD (n : ℕ) :
     rw [Array.getElem?_eq_none (by omega)]
     rfl
 
-/-- The ports numbered before net `k`'s. -/
 def pre (k : ℕ) : ℕ := ((List.range k).map fun m => fSlots c m * (fPorts c).getD m 0).sum
 
 theorem pre_succ (k : ℕ) : pre c (k + 1) = pre c k + fSlots c k * (fPorts c).getD k 0 := by
@@ -866,7 +800,6 @@ theorem fNode_inj {n i p n' i' p' : ℕ} (h : fIn c n i p = true) (h' : fIn c n'
 theorem fNode_size {n i p : ℕ} (h : fIn c n i p = true) : fNode c n i p < pre c c.nets.size :=
   lt_of_lt_of_le (fNode_lt c h).2 (pre_mono c (fIn_spec c h).1)
 
-/-- **The fill's invariant**: every filled port's bits are in the order. -/
 def AvOk (av : Array Bool) : Prop :=
   av.size = pre c c.nets.size ∧ ∀ n i p, fIn c n i p = true → av.getD (fNode c n i p) false = true → Filled c n i p
 
@@ -882,7 +815,6 @@ theorem avOk_set {av : Array Bool} (h : AvOk c av) {n i p : ℕ} (hin : fIn c n 
 
 variable {c}
 
-/-- **A unit's input port no wire reaches is filled**: its bits are logical inputs. -/
 theorem in_filled (hF : NetFit c c.unitNet) {u p : ℕ} (hu : u < c.upv)
     (hp : p < (portCols (netOf c c.unitNet).inGroups).size)
     (hnw : (c.wires.toList.filter fun w => decide (w.dst = (c.unitNet, u, p))) = []) : Filled c c.unitNet u p := by
@@ -913,7 +845,6 @@ theorem in_filled (hF : NetFit c c.unitNet) {u p : ℕ} (hu : u < c.upv)
   · unfold inCode
     rw [hdiv, hmod]
 
-/-- The wire into a port `HmRow.check` wired is its only one. -/
 theorem filter_wire (C : CheckFacts c) {w : Wire} (hw : w ∈ c.wires.toList) (hsha : w.dst.1 ≠ c.shaNet)
     (hhm : w.dst.1 ≠ c.hmNet) :
     (c.wires.toList.filter fun w' => decide (w'.dst = (w.dst.1, w.dst.2.1, w.dst.2.2))) = [w] := by
@@ -968,7 +899,6 @@ theorem avOk_init : AvOk c (fAv0 c) := by
     · exact hav
 
 omit hF C hpv in
-/-- The reads `wiresAcyclic` checked, of every net with slots. -/
 abbrev ReadsOk : Prop := ∀ n < c.nets.size, fSlots c n ≠ 0 → (ProvedScope.outReads (netOf c n)).2 = true
 
 omit hF C hpv in
@@ -984,7 +914,6 @@ theorem readsOk_of (h : ((Array.range c.nets.size).all fun n => fSlots c n == 0 
   exact this
 
 omit C hpv in
-/-- **A ready wire's source port's bits are in the order**: computed from the filled ports its source port reads. -/
 theorem src_mem (hR : ReadsOk (c := c)) {av : Array Bool} (hav : AvOk c av) {w : Wire} (hr : fReady c av w = true) :
     ∀ t < ((portCols (netOf c w.src.1).outGroups).getD w.src.2.2 default).2,
       code w.src.1 w.src.2.1 (((portCols (netOf c w.src.1).outGroups).getD w.src.2.2 default).1 + t) ∈ order c := by
@@ -1054,8 +983,6 @@ theorem src_mem (hR : ReadsOk (c := c)) {av : Array Bool} (hav : AvOk c av) {w :
     exact hcomp _ (by show _ * _ ≤ _; rw [hiw]; omega) (by omega)
 
 omit hpv in
-/-- **A wire's port is filled once its source port's bits are in the order**: each bit of the port copies its source
-port's bit at the same place. -/
 theorem fill_filled {w : Wire} (hw : w ∈ c.wires.toList) (hin : fIn c w.dst.1 w.dst.2.1 w.dst.2.2 = true)
     (hs : ∀ t < ((portCols (netOf c w.src.1).outGroups).getD w.src.2.2 default).2,
       code w.src.1 w.src.2.1 (((portCols (netOf c w.src.1).outGroups).getD w.src.2.2 default).1 + t) ∈ order c) :
@@ -1090,7 +1017,6 @@ theorem fill_filled {w : Wire} (hw : w ∈ c.wires.toList) (hin : fIn c w.dst.1 
   exact hsrc t ht
 
 omit hpv in
-/-- **A pass of the fill keeps the invariant.** -/
 theorem avOk_pass (hR : ReadsOk (c := c)) {av : Array Bool} (hav : AvOk c av) :
     AvOk c (ProvedScope.fillPass (fReady c) (fDst c) c.wires av).1 := by
   unfold ProvedScope.fillPass
@@ -1113,7 +1039,6 @@ theorem avOk_pass (hR : ReadsOk (c := c)) {av : Array Bool} (hav : AvOk c av) :
   · exact hb
 
 omit hpv in
-/-- **The fill keeps the invariant**, through every pass. -/
 theorem avOk_loop (hR : ReadsOk (c := c)) (fuel : ℕ) :
     ∀ {av : Array Bool}, AvOk c av →
       AvOk c (ProvedScope.fillLoop (ProvedScope.fillPass (fReady c) (fDst c) c.wires) fuel av) := by
@@ -1131,8 +1056,6 @@ theorem avOk_loop (hR : ReadsOk (c := c)) (fuel : ℕ) :
       rw [h] at hp
       exact hp
 
-/-- **Every input port of every slot outside the rows' circuits is filled** when `wiresAcyclic` passed, and every net
-with slots reads in order. -/
 theorem all_filled (hw : ProvedScope.wiresAcyclic c = true) :
     ReadsOk (c := c) ∧ ∀ n i p, fIn c n i p = true → Filled c n i p := by
   rw [wiresAcyclic_eq, Bool.and_eq_true] at hw
@@ -1147,8 +1070,6 @@ theorem all_filled (hw : ProvedScope.wiresAcyclic c = true) :
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
   exact hall _ (Array.getElem_mem hlt)
 
-/-- **Order completeness**: when `wiresAcyclic` passed, every column of the template instance with a row is in the
-logical order. -/
 theorem order_complete_of (hw : ProvedScope.wiresAcyclic c = true) :
     ∀ n i o, rowAt c n i o ≠ none → code n i o ∈ order c := by
   obtain ⟨hR, hfill⟩ := all_filled hF C hpv hw
@@ -1191,8 +1112,6 @@ theorem order_complete_of (hw : ProvedScope.wiresAcyclic c = true) :
 
 end fill
 
-/-- **Order completeness** of an accepted circuit whose wires `wiresAcyclic` passed: every column of the template
-instance with a row is in the logical order. -/
 theorem order_complete {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (P : ParseFacts tags st.c)
     (C : CheckFacts st.c) (hg : 0 < st.c.g) (hw : ProvedScope.wiresAcyclic st.c = true) :
     ∀ n i o, rowAt st.c n i o ≠ none → code n i o ∈ order st.c :=

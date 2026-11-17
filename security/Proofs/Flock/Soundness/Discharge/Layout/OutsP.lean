@@ -10,16 +10,7 @@ import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
 set_option Elab.async false
 
-/-!
-# The returned outputs' bits as the program's outputs, on the keys with public inputs
-
-`Outs.lean` at `Placed.keyProgP c pi hU n`, whose units read the gates of their keys with public inputs:
-
-* `OutsOutP`: `OutsOut` at `keyProgP`, every committed gate a unit computes on a returned output's column;
-* `keyProgP_reads`: `keyProgP`'s units read only input gates besides their own;
-* `outsOfP`, `outsOutP_outsOfP`: the gates the units' instances put on returned outputs' columns, at which `OutsOutP`
-  holds (`computed_committed_output`).
--/
+/-! `Outs.lean` at `Placed.keyProgP c pi hU n`, on the keys with public inputs. -/
 
 namespace FlockSoundness.Discharge.Layout
 
@@ -33,7 +24,6 @@ def OutsOutP (outs : Finset (Fin (keyN c hU n))) : Prop :=
     ∀ x : Fin ((keyProgP c pi hU n).rows u).w, (Const.Prog.instC (keyProgP c pi hU n) outs u).wire x = g →
       ∃ u' j t, OutColAt c hU x.val u' j t
 
-/-- **`keyProgP`'s units read only input gates besides their own**, as `keyProg_reads`. -/
 theorem keyProgP_reads (outs : Finset (Fin (keyN c hU n))) (u : Fin n) (y : Fin ((keyProgP c pi hU n).rows u).w)
     (hy : ∀ i, y ≠ ((keyProgP c pi hU n).rows u).comp i) :
     ((keyProgP c pi hU n).partition outs).unit ((Const.Prog.instC (keyProgP c pi hU n) outs u).wire y) = none := by
@@ -73,7 +63,6 @@ noncomputable def outsOfP : Finset (Fin (keyN c hU n)) :=
   @Finset.filter _ (fun g => ∃ u x, (Const.Prog.rowsWireC (keyProgP c pi hU n) u).wire x = g ∧
     ∃ u' j t, OutColAt c hU x.val u' j t) (Classical.decPred _) Finset.univ
 
-/-- **`OutsOutP` at the returned outputs' bits**, as `outsOut_outsOf`. -/
 theorem outsOutP_outsOfP : OutsOutP c hU n pi (outsOfP c hU n pi) := by
   intro u g hg hgu x hx
   have hmem : g ∈ outsOfP c hU n pi :=

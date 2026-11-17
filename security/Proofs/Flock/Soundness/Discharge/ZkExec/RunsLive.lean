@@ -25,15 +25,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
-/-!
-# `RunsZC` at the live `--zk` tables, from `TablesAtZKLive`
-
-`runsZC_live`: at each of the sampling design's samples, on an outcome verity-verify-proof `--zk` accepts, `TablesAtZKLive` puts the sample's
-table at `tablesAtZK` (`SampleSetupZK.table`, at the executable's dimensions, pads and inner code: `table_seam`,
-`table_lay`), the acceptance peels to the one table's two `verifyRep` successes (`setupTables_ok`, `zk_verify_ok`) and
-each rep's run (`zk_verifyRep_ok`), `zk_rep_run_plays` makes each run a `RepRun` for `decAtZ` at the result it plays on
-the proof's messages, and `zk_table_verdict` makes the table's verdict accept at the two results.
--/
+/-! `RunsZC` at the live `--zk` tables, from `TablesAtZKLive` (`runsZC_live`). -/
 
 @[expose] public section
 
@@ -48,19 +40,15 @@ section Table
 
 variable {n mPts : ℕ} {I : Inputs} {S : Finset (Fin n)} {d : Lean.Json}
 
-/-- A sample's `--zk` table is at the executable's dimensions. -/
 theorem table_seam (y : ZkLink.SampleSetupZK I mPts S d) :
     ZkTabSeam y.table (Setup.ofCircuit y.x.st) y.sch y.tPad :=
   ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-/-- A sample's `--zk` table has the executable's pads and inner code. -/
 theorem table_lay (y : ZkLink.SampleSetupZK I mPts S d) : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
   constructor <;> intros <;> rfl
 
 end Table
 
-/-- **A `--zk` rep's `RepRun`, at the result it plays on the proof's messages**: `zk_rep_run`, with the run of the
-compiled rep on `repMsgsZ` that the `RepRun` is at. -/
 theorem zk_rep_run_plays {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray)
@@ -97,8 +85,6 @@ theorem zk_rep_run_plays {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig S
   · rw [hσ]
     exact hcut
 
-/-- **`RunsZC` at the live `--zk` tables, at the sampling design's samples** (`RunsZCLive`): `TablesAtZKLive` at the sample, the two
-reps' `verifyRep` successes, `zk_rep_run_plays` for each rep, and `zk_table_verdict` at the two results. -/
 theorem runsZC_live : RunsZCLive := by
   intro n mPts Reg I ht dj S₀ y₀ wr L hTab hT hRec hDraw ω R o hacc
   obtain ⟨hh, hrr, hl, hc1⟩ := hT

@@ -25,23 +25,7 @@ import Proofs.Flock.Soundness.ParseStmt
 
 set_option Elab.async false
 
-/-!
-# The sites, the layout and the rows at a plain session of `J` hidden-output tables, at the template instance's program
-
-`ZkHidden/BindInst.lean`'s `J`-table shadow (`sitesShHJI`, `layShHJI`, `rsShHJI`) at the plain inputs
-`PlainJ.inputsPJ I j` and the plan `planPHJ` itself, with no move to compiled tables: the plain session's tables are the
-public tables the binding reads. The circuit conditions are `HiddenExec.HeadlineInst`'s: the rows' fit (`hrf`), the
-unit's reads (`hpr`) and the wires' order (`hw`).
-
-* `tablePHJ_typed`, `tablePHJ_parse`: each table's inputs are untyped and parse the session's circuit (`tagsAt` changes
-  the identity alone, which an untyped `HmOut.parse` does not read).
-* `sitesPHJI`, `sitesPHJI_parse`, `sitesPHJI_bcSite`: each sampled proof block's acceptance, VU and block, the one circuit they
-  parse, and `BcSiteH` at every satisfiable site (`HiddenExec.tableH_bcSiteI` at table `j`'s inputs).
-* `ppPHJI`, `layPHJI`, `rsPHJI`, `rsPHJI_computes`: `SitesH.progPlaces_instProg`, `instLayoutH` and `instRowsH` at those
-  sites, `InstKeysRow` from the parse at the reference setup's statement (`instKeysRowPHJ`).
-* `ppPHJ`, `layPHJ`, `rsPHJ`, `rsPHJ_computes`: where the wires feed neither the unit nor the outputs, the same sites at
-  the rows' fit `scopeOkH` gives, with `keyLayoutH` and `keyRowsH` at the unit's key program `Placed.keyProg c hU n`.
--/
+/-! The sites, the layout and the rows at a plain session of `J` hidden-output tables. -/
 
 namespace FlockSoundness.Discharge.PlainHJ
 
@@ -67,7 +51,6 @@ theorem tablePHJ_typed (S : Finset (Fin n)) (j : Fin (nTab I)) : (tablePHJ dj x�
     exact typedPJ ht 0
 
 include ht hc in
-/-- **One circuit per session, at every table**: each table's inputs parse the session's circuit file to `c`. -/
 theorem tablePHJ_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
     HmOut.parse (tablePHJ dj x₀ S j).1.tags (tablePHJ dj x₀ S j).1.circuitFile (tablePHJ dj x₀ S j).1.tables =
       .ok c := by
@@ -101,13 +84,11 @@ theorem sitesPHJI_parse :
         ((sitesPHJI dj x₀ ht hc hrf).acc S R u h).tables = .ok c :=
   fun S _ _ _ => (HiddenExec.parse_untyped (tablePHJ_typed dj x₀ ht S _) (tablePHJ_parse dj x₀ ht hc S _)).1
 
-/-- Every site's committed circuit is the session's circuit `c` (the flat `instProg` path). -/
 theorem sitesPHJI_c :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), ((sitesPHJI dj x₀ ht hc hrf).acc S R u h).st.c = c :=
   fun S R u h => ((sitesPHJI dj x₀ ht hc hrf).acc S R u h).c_eq
     (HmOut.parse_isTmpl (tablePHJ_parse dj x₀ ht hc S (partOf I (dj S) u.val))) (sitesPHJI_parse dj x₀ ht hc hrf S R u h)
 
-/-- Every site's statement circuit is the session's circuit `c`, which is flat (the `keyProg` path). -/
 theorem sitesPHJI_stmt :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
       HmOut.unrolled ((sitesPHJI dj x₀ ht hc hrf).acc S R u h).st.c = c :=
@@ -118,7 +99,6 @@ theorem sitesPHJI_stmt :
 variable {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub)
 
 include hpub in
-/-- `BcSiteH` at a table set up at table `j`'s inputs (`tableH_bcSiteI` at `inputsPJ I j`). -/
 theorem tablePHJ_bcSiteI {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parse Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
     (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupH (inputsPJ I j) mPts S' d), Tb = ⟨inputsPJ I j, x.table⟩)
@@ -128,8 +108,6 @@ theorem tablePHJ_bcSiteI {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' 
   exact tableH_bcSiteI p₁ p₂ hrf (fun _ => d) ((loadPublicH_tagsAt _ _ _ _ _).trans hpub) x h
 
 include hpub in
-/-- **`BcSiteH` at every satisfiable site** at `J` hidden-output tables: at a table verity-verify-proof sets up by
-`tablePHJ_bcSiteI`; at a refused one no message satisfies the table. -/
 theorem sitesPHJI_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planPHJ dj x₀) (tabPHJ dj x₀) S R u),
@@ -163,8 +141,6 @@ noncomputable abbrev layPHJI :
 variable (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true)
 
 include ht hc x₀ hU hpr hw in
-/-- **`InstKeysRow` at the session's circuit**, from the parse at table 0's reference setup (`instKeysRowH` at
-`inputsPJ I 0`). -/
 theorem instKeysRowPHJ : InstKeysRow c (portRowW c) :=
   instKeysRowH (typedPJ ht 0) ((parseH_tagsAt ht _ _ _ _).trans hc) (fun _ => d₀) x₀ hU hpr hw
 
@@ -175,17 +151,10 @@ noncomputable abbrev rsPHJI : Binding.HmRowsX (layPHJI dj x₀ ht hc hrf (pub :=
     (pinFit_of_rowsS ht hc hrf.1)
     (sitesPHJI_bcSite dj x₀ ht hc hrf hpub) (instKeysRowPHJ x₀ ht hc hU hpr hw)
 
-/-- **`hHm` at the plan's rows, at `instProg`** (`instRowsH_computes`, a unit per VU from the check). -/
 theorem rsPHJI_computes : (rsPHJI dj x₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).Computes :=
   instRowsH_computes (sitesPHJI_c dj x₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
     (pinFit_of_rowsS ht hc hrf.1)
     (checkFactsH ht hc).upv_pos (sitesPHJI_bcSite dj x₀ ht hc hrf hpub) (instKeysRowPHJ x₀ ht hc hU hpr hw)
-
-/-! ## Where the wires feed neither the unit nor the outputs: the unit's key program
-
-`HiddenExec.HeadlineExec`'s `ppH`, `layAtH`, `rsAtH` at the plan of `J` tables: the sites `sitesPHJI` at the rows' fit
-`scopeOkH` gives (`rowsFit_of_scopeH`), `keyLayoutH` and `keyRowsH` at the key program `Placed.keyProg c hU n`, its
-circuit conditions from `scopeOkH`. -/
 
 variable (hscope : Layout.scopeOkH c = true)
 
@@ -213,7 +182,6 @@ noncomputable abbrev rsPHJ : Binding.HmRowsX (layPHJ dj x₀ ht hc hU hscope (pu
     (Layout.keysRow_of_parse (HiddenExec.parse_untyped ht hc).1 (Layout.scopeOkH_spec hU hscope).1
       (Layout.scopeOkH_spec hU hscope).2.2)
 
-/-- **`hHm` at the plan's rows, at `keyProg`** (`keyRowsH_computes`). -/
 theorem rsPHJ_computes : (rsPHJ dj x₀ ht hc hpub hU hscope (Reg := Reg)).Computes :=
   keyRowsH_computes (sitesPHJI_stmt dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n)
     (fun _ => pub) (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH ht hc hscope)

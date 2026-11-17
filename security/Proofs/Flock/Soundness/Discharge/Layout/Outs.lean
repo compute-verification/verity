@@ -8,22 +8,12 @@ import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
 set_option Elab.async false
 
-/-!
-# The returned outputs' bits as the program's outputs
-
-`keyProg_hout` takes `OutsOut`, a condition on the program's outputs `outs`: every committed gate a unit computes is on a
-returned output's column. `outsOf` is the outputs that make it hold: the gates the units' instances put on returned
-outputs' columns (`outsOut_outsOf`). It holds because a committed gate a unit computes is an output when the units read
-only input gates besides their own (`computed_committed_output`), which `keyProg`'s units do (`keyProg_reads`), and a
-unit's instance puts distinct computed columns on distinct gates (`IsRowsUnit.shared`).
--/
+/-! The returned outputs' bits as the program's outputs (`outsOf`), at which `OutsOut` holds. -/
 
 namespace FlockSoundness.Discharge.Layout
 
 open Flock FlockLevel3 Audit Placed
 
-/-- **A committed gate a unit computes is an output**, when every unit reads, besides its own computed gates, only input
-gates. -/
 theorem computed_committed_output {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {R : Fin n → Rows}
     (I : ∀ u, P.IsRowsUnit u (R u))
     (hread : ∀ u (y : Fin (R u).w), (∀ i, y ≠ (R u).comp i) → P.unit ((I u).wire y) = none)
@@ -57,8 +47,6 @@ theorem computed_committed_output {C : Verity.Boolean.Circuit} {n : ℕ} {P : Au
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
 
-/-- **`keyProg`'s units read only input gates besides their own**: a column of a unit's instance that is no computed
-column, an input or the constant, is on a program input. -/
 theorem keyProg_reads (outs : Finset (Fin (keyN c hU n))) (u : Fin n) (y : Fin ((keyProg c hU n).rows u).w)
     (hy : ∀ i, y ≠ ((keyProg c hU n).rows u).comp i) :
     ((keyProg c hU n).partition outs).unit ((Const.Prog.instC (keyProg c hU n) outs u).wire y) = none := by
@@ -92,8 +80,6 @@ theorem keyProg_reads (outs : Finset (Fin (keyN c hU n))) (u : Fin n) (y : Fin (
     rw [h0]
     exact Fin.isLt _
 
-/-- **`OutsOut` at the returned outputs' bits**: every committed gate a unit computes is on a returned output's column of
-the unit's instance. -/
 theorem outsOut_outsOf : OutsOut c hU n (outsOf c hU n) := by
   intro u g hg hgu x hx
   have hmem : g ∈ outsOf c hU n :=

@@ -3,14 +3,8 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
 public import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
-/-!
-# The refinement at `--zk`, one table, and the `--zk` headline at verity-verify-proof's acceptance
-
-* `execRefinesZK_one : ExecRefinesZKOne …`: the live `--zk` audit simulated in the compiled `--zk` audit, by the live
-  challenger's simulation (`live_le`, `Refine/LiveSim.lean`) at each sample, with `bad = ⊥`, given `DecodesZK`.
-* `zk_headline_exec_one : ZkHeadlineExecOne …`: from it, any bound on the compiled audit's acceptance with an event of
-  the simulated prover bounds verity-verify-proof `--zk`'s acceptance with that event (`exec_le_of_refines`).
--/
+/-! The refinement at `--zk` for one table (`execRefinesZK_one`) and the `--zk` headline at verity-verify-proof's
+acceptance. -/
 
 @[expose] public section
 

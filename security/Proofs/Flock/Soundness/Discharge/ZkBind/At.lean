@@ -22,26 +22,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Site
 import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
 
-/-!
-# The sites, the layout and the rows at the `--zk` tables
-
-`zk_flock_countC_execOS_keyProg` takes the sites `si`, the parse `hparse`, the layout `lay`, the rows `rs` and
-`HmRowComputes` `hHm`. Here they are built at item 3's `--zk` tables (`ZkLink.tablesAtZK dj y₀`: at each sample `S` the
-table of a `SampleSetupZK` at the challenger's sample `dj S`, a refused table otherwise), as `Integrate.sitesAt`, `layAt`,
-`rsAt` and `rsAt_computes` are at the public path's `tablesAt`:
-
-* `tableSh`: the public table (`Integrate.Table`) at the same sample: the `SampleSetupZK`'s `SampleSetup` at `zkInputs I` and
-  its `table`, or `y₀`'s refused one. Its statement is the `--zk` table's (`tableAtZK_S`: `Layout.model` of setupH's
-  statement is `stmtOf` of it, `Integrate.model_eq_stmtOf`).
-* `sitesZAt`: the `--zk` sites, each sampled proof block at its rank in the sample's proved units (`sitesZAt_at`), and
-  `sitesZAt_parse` from the session's one circuit file.
-* `layZAt`, `rsZAt`: `Layout.keyedLayout` and `Layout.keyedRowsOuts` at `tableSh`'s sites, moved to the `--zk` tables
-  (`LayoutZ.ofShadow`, `HmRowsZ.ofShadow`), the decoders agreeing (`decAgreeAt`); `rsZAt_computes` is
-  `Hm.keyedRowsOuts_computes` moved along.
-
-None of them takes a sample premise: like `tablesAtZK` they are defined at every sample. `sitesZAt_at` reads the sample's own
-`SampleSetupZK`, which item 3 gives from `AcceptsZK` and `SampleOkZK I dj mPts S` at the session's own sample `S`.
--/
+/-! The sites, the layout and the rows at the `--zk` tables, defined at every sample. -/
 
 @[expose] public section
 
@@ -69,8 +50,6 @@ noncomputable def tableSh (S : Finset (Fin n)) : Integrate.Table mPts S :=
   if h : Nonempty (SampleSetupZK I mPts S (dj S)) then (Classical.choice h).x.table (zkTyped ht)
   else y₀.x.refusedC (zkTyped ht) S
 
-/-- **The `--zk` table's statement is the accepted model statement** (`stmtOf st` is `Layout.model` of setupH's
-statement at its regions, `Integrate.model_eq_stmtOf`), at every sample. -/
 theorem tableAtZK_S (S : Finset (Fin n)) : (tableAtZK dj y₀ S).S = (tableSh ht dj y₀ S).T.S := by
   unfold tableAtZK tableSh
   split_ifs with h
@@ -112,7 +91,6 @@ noncomputable def sitesZAt : SitesZ (planZAt (Reg := Reg) dj y₀) (tabZAt dj y�
 variable {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c)
 
 include hc in
-/-- **One circuit per session**: every `--zk` site's acceptance parses the session's one circuit file to `c`. -/
 theorem sitesZAt_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
     HmRow.parse ((sitesZAt ht dj y₀).acc S R u h).tags ((sitesZAt ht dj y₀).acc S R u h).cf
       ((sitesZAt ht dj y₀).acc S R u h).tables = .ok c := by
@@ -134,9 +112,6 @@ theorem sitesSh_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
   · rw [dite_eq_left_of_eq_true (eq_true hS)]; exact hc
   · rw [dite_eq_right_of_eq_false (eq_false hS)]; exact hc
 
-/-- **Each sampled proof block's site at its sample's `SampleSetupZK`**: at a sample `S` that `verify --zk` sets up (`y`), each sampled
-proof block's acceptance is setupH's statement at `dj S`, its block and template instance its rank `r` among the sample's proved
-units: block `r / c.g`, template instance `r % c.g`. -/
 theorem sitesZAt_at {S : Finset (Fin n)} (y : SampleSetupZK I mPts S (dj S)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     ((sitesZAt (Reg := Reg) ht dj y₀).acc S R u h).st = y.x.st ∧
       ((sitesZAt (Reg := Reg) ht dj y₀).acc S R u h).draw = some (dj S) ∧
@@ -163,7 +138,6 @@ theorem sitesZAt_at {S : Finset (Fin n)} (y : SampleSetupZK I mPts S (dj S)) (R 
 variable (hU : Built c.unit) {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub)
   (hpt : pub.tables = none) (hscope : Layout.scopeOk c = true)
 
-/-- **The decoders agree**: the `--zk` sites' places and the public sites' places read one witness alike. -/
 theorem decAgreeAt : DecAgree (P := (keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt_S (Reg := Reg) ht dj y₀)
     (decZ := decodeOfPlace execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
       ((sitesZAt ht dj y₀).placeKey hU (sitesZAt_parse ht dj y₀ hc) (Layout.outsOf c hU n)))
@@ -218,21 +192,12 @@ noncomputable abbrev rsZAt : HmRowsZ (layZAt (Reg := Reg) ht dj y₀ hc hU (pub 
       (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
       (sitesSh_bcSite ht dj y₀ hc hU hpub hpt hscope))
 
-/-- **`hHm` at the `--zk` tables' rows** (`Hm.keyedRowsOuts_computes`, moved along): in a satisfying witness of a
-sampled proof block's `--zk` table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under
-the salt at its `hm96` slot. -/
 theorem rsZAt_computes : (rsZAt (Reg := Reg) ht dj y₀ hc hU hpub hpt hscope).Computes :=
   HmRowsZ.ofShadow_computes (planZAt_S ht dj y₀) (decAgreeAt ht dj y₀ hc hU) _
     (Hm.keyedRowsOuts_computes (sitesSh_parse ht dj y₀ hc) hc (Layout.scopeOk_spec hU hscope).1
       (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope)
       (sitesSh_bcSite ht dj y₀ hc hU hpub hpt hscope))
 
-/-- **The compiled `--zk` count curve at the `--zk` tables, its places and binding built.**
-`zk_flock_countC_execOS_keyProg` at item 3's tables (`tablesAtZK dj y₀`), with `si := sitesZAt`, `hparse :=
-sitesZAt_parse`, the program's outputs the returned outputs' bits (`Layout.outsOf`), `lay := layZAt`, `rs := rsZAt`
-and `hHm := rsZAt_computes`. Past the count curve's own hypotheses it takes the session's inputs: untyped tags (`ht`),
-one circuit file parsing to `c` under the `--zk` tags (`hc`), a public file without shared-row tables (`hpub`,
-`hpt`), and the circuit in `rs`'s scope (`hscope`). -/
 theorem zk_flock_countC_execOS_at (Hs : Hashes 𝔽 Dig (List UInt8))
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)

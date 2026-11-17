@@ -16,17 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# The tables of a one-table hidden-output session at public inputs
-
-`Tables.lean` at the verifier's public inputs `own` (`Exec.setupOfP I own`):
-
-* `SampleSetupHP I own mPts S d`: `SampleSetupH` with `Stmt.setupHidden … own`;
-* `TableHP I own mPts S`: `TableH` with that run, and its regions holding the statement's (`hregs`, which
-  `AcceptedHP` reads);
-* `SampleSetupHP.table`, `SampleSetupHP.refused`, `tableAtHP`, `planAtHP`, `tabAtHP`, `tablesAtHP`: `SampleSetupH.table`,
-  `SampleSetupH.refused`, `tableAtH`, `planAtH`, `tabAtH`, `tablesAtH` at `own`.
--/
+/-! The tables of a one-table hidden-output session at the verifier's public inputs `own`. -/
 
 @[expose] public section
 
@@ -134,7 +124,6 @@ noncomputable def table : TableHP I own mPts S where
   hvu _ _ := Nat.mod_lt _ x.hg
   o u h := ⟨x.rank u / x.st.c.g, x.rank_div_lt h⟩
 
-/-- The regions of a refused sample's table: the reference setup's, and Integrate's `contra`. -/
 theorem refused_wf : ∀ R ∈ regionsOf x.st ++ SampleSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog),
     R.free.Nodup ∧ R.free.length ≤ PT_LOCAL := by
   intro R hR
@@ -166,11 +155,9 @@ end SampleSetupHP
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupHP I own mPts S₀ (dj S₀))
 
 open Classical in
-/-- **The table at sample `S`** at `own` (`tableAtH`). -/
 noncomputable def tableAtHP (S : Finset (Fin n)) : TableHP I own mPts S :=
   if h : Nonempty (SampleSetupHP I own mPts S (dj S)) then (Classical.choice h).table else x₀.refused S
 
-/-- **A refused sample's table is unsatisfiable** (`tableAtH_unsat`). -/
 theorem tableAtHP_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (SampleSetupHP I own mPts S (dj S)))
     (z : Witness (tableAtHP dj x₀ S).T.S.m) : ¬ (tableAtHP dj x₀ S).T.S.Satisfies z := by
   revert z
@@ -180,14 +167,11 @@ theorem tableAtHP_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (SampleSetupHP I 
 
 variable {Reg : Type}
 
-/-- The one-table plan at `own` (`planAtH`). -/
 noncomputable abbrev planAtHP : Finset (Fin n) → Reg → List (TabSpec mPts) := fun S _ => [(tableAtHP dj x₀ S).T]
 
-/-- Every sampled proof block is in the plan's one table. -/
 abbrev tabAtHP : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planAtHP (Reg := Reg) dj x₀ S R).length :=
   fun _ _ _ => ⟨0, Nat.zero_lt_one⟩
 
-/-- The one-table plan's tables at `own` (`tablesAtH`). -/
 noncomputable abbrev tablesAtHP : Finset (Fin n) → Reg → TabSpec mPts := fun S _ => (tableAtHP dj x₀ S).T
 
 end FlockSoundness.Discharge.HiddenExec

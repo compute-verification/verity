@@ -3,27 +3,8 @@ module
 public import Proofs.Flock.Soundness.Binding.Rows
 public import Proofs.Flock.Soundness.Discharge.Layout.Readers
 
-/-!
-# A layout and its rows from three pinning facts
-
-`Prog.flock_headline` takes the layout's facts as `lay : Binding.Layout` and `rs : Binding.HmRows lay`. This file builds
-both from fixed readers (`Readers`: each commit string's row, salt and `b ‖ c` addresses in a sampled proof block's table, which
-commit strings are `hm96-sha512/row/v1` rows, and what the registration holds at each: the public `b ‖ c` of a row, the
-value of any other commit string) and three facts about every satisfying witness of a sampled proof block's table:
-
-* `Readers.Copies`: each column of the unit on a committed wire holds the bit the witness has at the wire's row address
-  (Δ's copy into the row's message bit for an input; the column itself for an output);
-* `Readers.BcPinned`: at a row, the 128 bytes at `bcAt` are the registration's `b ‖ c` (the statement's regions pin the
-  `hm96` slots' outputs to the public `b ‖ c`);
-* `Readers.ValPinned`: at another commit string, the bits at `rowAt` are the registration's value.
-
-The registered leaf (`Readers.regLeaf`) is `SHA-512(leaf_prefix ‖ b ‖ c)` of the registration's `b ‖ c` at a row, the
-leaf the verifier computes from the public `b ‖ c` and holds, in its frame-v3-sha512 tree, to the public file's header
-root (`HmRow.checkPublic`, stated by `FailClosed.flock_verify_public_ties`; that root is the registration's by the
-auditor's `matches_public`, not by anything here), and `SHA-512(enc v)` of the registration's
-value elsewhere. That the serving roots commit to these leaves is the serving roots' rewinding (`StrictCR.TreeRewind`),
-paid once in the headline as `δ_tree`; nothing here is cryptographic.
--/
+/-! `lay` and `rs` from fixed readers and three pinning facts of every satisfying witness; nothing here is
+cryptographic, because the serving roots' commitment to the registered leaves is paid in the headline as `δ_tree`. -/
 
 @[expose] public section
 

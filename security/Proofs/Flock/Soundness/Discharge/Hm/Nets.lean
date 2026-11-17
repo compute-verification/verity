@@ -17,13 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Verifier.HmNets
 
-/-!
-The two row nets of a parsed circuit: `HmNets.check` makes its `sha512x3` and `hm96` nets `Net.ofRows` of the verifier's
-layouts (`shaNet_ofRows`, `hmNet_ofRows`), so their input ports sit at `cv_k = 1536 k`, `msg_k = 1536 k + 512`
-(`shaIn_eq`) and `cv = 0`, `pad = 512`, `y = 1536` (`hmIn_eq`), and their outputs at the layouts' output groups
-(`shaOut_eq`, `hmOut_eq`). `port_commit_rows` is `port_commit` with the slots holding the nets' rows (`LaidRows`) in
-place of the builder's rows, and the nets' places from `HmNets.check`.
--/
+/-! The two row nets of a parsed circuit, which `HmNets.check` makes `Net.ofRows` of the verifier's layouts. -/
 
 @[expose] public section
 
@@ -62,7 +56,6 @@ theorem hmNet_groups {c : Circuit} (h : HmNets.check c = .ok ()) :
   rw [hi, ho, hmLaid_eq, layout_inGroups, layout_outGroups]
   exact ⟨rfl, rfl⟩
 
-/-- **The `sha512x3` net's inputs**: `cv_s` at column `1536 s`, `msg_s` at `1536 s + 512`. -/
 theorem shaIn_eq {c : Circuit} (h : HmNets.check c = .ok ()) :
     ∀ s < 3, shaIn c (2 * s) = 1536 * s ∧ shaIn c (2 * s + 1) = 1536 * s + 512 := by
   intro s hs
@@ -74,7 +67,6 @@ theorem shaIn_eq {c : Circuit} (h : HmNets.check c = .ok ()) :
   · decide
   · omega
 
-/-- **The `hm96` net's inputs**: `cv` at column 0, `pad` at 512, `y` at 1536. -/
 theorem hmIn_eq {c : Circuit} (h : HmNets.check c = .ok ()) : hmIn c 0 = 0 ∧ hmIn c 1 = 512 ∧ hmIn c 2 = 1536 := by
   unfold hmIn
   rw [(hmNet_groups h).1]
@@ -99,14 +91,12 @@ theorem portCols_HM_OUT (S : ℕ) (hS : S / WORD * WORD = S) :
   subst hS
   rfl
 
-/-- **The `sha512x3` net's outputs**: `out_s` at its output group's start plus `512 s`. -/
 theorem shaOut_eq {c : Circuit} (h : HmNets.check c = .ok ()) {s : ℕ} (hs : s < 3) :
     shaOut c s = outStart (compression3.run St.empty).2 SHA_IN SHA_OUT + 512 * s := by
   unfold shaOut
   rw [(shaNet_groups h).2]
   exact portCols_SHA_OUT _ (outStart_word _ _ _) hs
 
-/-- **The `hm96` net's output** `b ‖ c` at its output group's start. -/
 theorem hmOut_eq {c : Circuit} (h : HmNets.check c = .ok ()) :
     hmOut c = outStart ((hm96Row Hm96.Default512.key).run St.empty).2 HM_IN HM_OUT := by
   unfold hmOut
@@ -124,12 +114,6 @@ theorem sum_HM_IN : HM_IN.foldl (· + ·) 0 = 3072 := by decide
 theorem inRows_SHA_IN : inRowsOf SHA_IN = 8192 := by decide
 theorem inRows_HM_IN : inRowsOf HM_IN = 4096 := by decide
 
-/-- **A port's row at its columns, from the slots' rows.** As `port_commit`, with what the slots hold stated on the
-circuit's own nets: the circuit passed `HmNets.check` (its `sha512x3` and `hm96` nets are the verifier's), each
-compression `k`'s `sha512x3` slot holds that net's rows (`LaidRows`, from row 8192, past its input rows), and the row's
-`hm96` slot holds that net's rows (from row 4096). The block holds Δ's copies (`hcv0`, `hchain`, `hcvh`, `hpad`). Then
-the 128 bytes at `bcCol` are `commitString (rowPrefix words ‖ row) salt`, the row the `2 · words` bytes at
-`Typed.msgCol` and the salt the 192 bytes at `saltCol`. -/
 theorem port_commit_rows (c : Circuit) (w : ℕ → Bool) (g p : ℕ) {words n : ℕ} (hs : c.ports[p]!.segs = none)
     (hn : 0 < n)
     (hw : 2 * words = 128 * n) (hslots : n ≤ ((HmRow.rowSlots c.ports).2[p]!).size) (hck : HmNets.check c = .ok ())

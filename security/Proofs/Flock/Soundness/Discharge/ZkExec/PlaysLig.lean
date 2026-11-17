@@ -19,16 +19,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
 import Proofs.Flock.Soundness.Refine.Plays
 
-/-!
-# The hiding Ligerito's runs
-
-`zk_ligerito_plays`: `Zk.ligerito` refines the model's masked level 0 with Ligerito's levels compiled. The model's
-games branch only on the schedule, so each of them has a run at any claim, polynomial and state, given its messages and
-coins of the right sizes (`foldRoundsC_any`, `foldRoundsZK_any`, `sampleKs_any`, `twoOodC_any`,
-`queryAndBatchPadC_any`, `ligTailC_any`, `ligeritoPadZC_any`); and its Ligerito verdict is not a reject, since the last
-recursive round records a query. What the executable gives is the coins: every round it consumes issued the number of
-coins the model samples there (`fold_coins`, `lane_coins`, `queryLevel0_bind`).
--/
+/-! `Zk.ligerito` refines the model's masked level 0 with Ligerito's levels compiled (`zk_ligerito_plays`). -/
 
 @[expose] public section
 
@@ -40,8 +31,6 @@ local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
 variable {D α β : Type}
-
-/-! ## Runs at any values -/
 
 theorem ex_bind {g : Game α} {f : α → Game β} {ms₁ ms₂ ms : List Msg} {cs₁ cs₂ cs : List (Array F128)}
     (h₁ : ∃ a, Plays fOf g ms₁ cs₁ a) (h₂ : ∀ a, ∃ b, Plays fOf (f a) ms₂ cs₂ b) (hms : ms = ms₁ ++ ms₂)
@@ -110,8 +99,6 @@ theorem exQ_sampleOne {Q : β → Prop} {iF : Fintype 𝔽} {iN : Nonempty 𝔽}
     ∃ b, Plays fOf (@Game.draw 𝔽 iF iN >>= f) ms (c :: cs) b ∧ Q b :=
   let ⟨b, hb, hQ⟩ := h _
   ⟨b, Plays.bind' (@Plays.drawOne _ _ _ fOf iF iN c hc) hb rfl rfl, hQ⟩
-
-/-! ## The model's phases at any values -/
 
 theorem foldRoundsC_any (p : LigeritoProof) :
     ∀ (k a : ℕ) (sM : Opens 𝔽 D → 𝕂) (qM : Opens 𝔽 D → Model.Quad 𝕂) (cs : List (Array F128)),
@@ -222,8 +209,6 @@ theorem ligeritoPadZC_any {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : Accountin
   exact exQ_ret (ligTailC_any r sch tp c₀ 2 b lv₀ lv₁ rest z β ini ρ ybar T' m' C₁ htwo hqb (hrec ini))
     fun _ h => h
 
-/-! ## The executable's coins -/
-
 theorem absorbK_ok {v : F256} {t t₁ : Flock.Transcript} {u : Unit} (h : absorbK v t = .ok (u, t₁)) : Keeps t t₁ := by
   obtain ⟨t₂, k, h'⟩ := absorbK_bind (f := fun _ => pure ()) (by rw [bind_pure]; exact h)
   obtain ⟨-, rfl⟩ := pure_ok h'
@@ -250,7 +235,6 @@ theorem consumed_sizes {rs : Array Round} (hwf : RoundsWF rs) {k K n : ℕ} (h :
   obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hc
   rw [RoundsWF.get hwf, h j (List.mem_range.1 hj)]
 
-/-- Ligerito's sumcheck challenges: `k` rounds of two coins each. -/
 theorem fold_coins (p : LigeritoProof) :
     ∀ (k a : ℕ) (chs chs' : Array F256) (stE stE' : LState) (t t' : Flock.Transcript),
       forIn (List.range' a k) chs (fun _ chs => challenge p >>= fun x => pure (ForInStep.yield (chs.push x)))
@@ -278,7 +262,6 @@ theorem fold_coins (p : LigeritoProof) :
         rw [show t.k + (j + 1) = t₁.k + j by omega, ← hr₂]
         exact this
 
-/-- The lane rounds: one `K` coin each, and the last one's two `ρ` coins after it. -/
 theorem lane_coins {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (K : ℕ)
     (hbody : ∀ i s st t b st' t', i < K → body i s st t = .ok ((b, st'), t') →
       ∃ s', b = .yield s' ∧ t'.rounds = t.rounds ∧ t'.k = t.k + 1 + (if i + 1 = K then 2 else 0) ∧
@@ -314,7 +297,6 @@ theorem lane_coins {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (K : �
         rw [show t.k + (j + 1) = t₁.k + j by omega, ← hr]
         exact this
 
-/-- Level 0's queries sample `q` query coins and `⌊log₂(q − 1)⌋ + 1` consistency coins. -/
 theorem queryLevel0_bind {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level} {cap : Array ByteArray}
     {fold : Array F256} (hq : lv.q ≠ 0)
     {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState} {t t' : Flock.Transcript} {b : β}
@@ -350,10 +332,6 @@ theorem queryLevel0_bind {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Lev
     rw [show t.k + 1 = t₅.k by rw [k₅.1, hk₄, k₃.1], show t.rounds = t₅.rounds by rw [k₅.2, hr₄, k₃.2]]
     exact hn₆
 
-/-! ## Ligerito under `--zk` -/
-
--- one proof of several hundred lines down `Zk.ligerito`'s unfolded levels, a `*_bind` step per bind and `rw` and
--- `omega` on the round indices
 set_option maxHeartbeats 4000000 in
 theorem zk_ligerito_plays : ZkLigeritoPlays := by
   intro ms sch T cap p basisAt zl t t' rec hdim hlv hα1 hk0 hwf h

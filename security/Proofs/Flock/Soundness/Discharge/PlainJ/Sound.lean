@@ -16,27 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Tables.Headline
 
-/-!
-# The soundness half of one plain sampled session of `J` tables
-
-`plain_session_soundJ`: for any live prover `τ` of a public-output plain session of `J ≥ 1` tables
-(`verity-verify-proof verify --plain-tables --session-tables J`, no `--zk`, `J = nTab I`),
-`Pr[verity-verify-proof accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key program's
-partition, each read at its site in the table it is sampled into (`sitesPJ`, `tabPJ`) and bound to the rows it commits
-(`rsPJ`), at the simulated prover `simAuditJ … τ` in the batched session of the `J` tables `planPJ`.
-
-It is `Integrate.flock_headline_exec` with the session's tables in place of its one, and two changes the tables force,
-as `Composed.zk_session_soundJ` makes them under `--zk`:
-
-* the sampling design is the live subset sample `SamplingDesign.execOS src (.subset kd) n` (`--plain-tables` refuses every other sampling design,
-  `ProvedScope.samplingDesignWhy` at `plainTables`), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` at `K ≤ n`
-  (`SamplingDesign.subset_miss`), under A3 at its one byte source;
-* the tags, the record and the samples are `TagsOkZJ` (public outputs, retained rounds, `hm96-sha512/v1` leaves),
-  `DecodeZLJ.RecordsLiveJ` and `SampleOkPJ`, the challenger's live-coin part's sample setting each table up at its part.
-
-The assumptions are `flock_headline_exec`'s: A3 (`hA3`), `cr/sha-512` for the knowledge finders (`hKS`) and
-`ecr/sha-512` for the link finders (`hCR`), with A6 the live session itself.
--/
+/-! The soundness half of one plain sampled session of `J` tables (`plain_session_soundJ`). -/
 
 @[expose] public section
 
@@ -51,28 +31,21 @@ open scoped ENNReal
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **One plain sampled session of `J` tables is sound.** -/
 theorem plain_session_soundJ
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (x₀ : SampleSetup (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPJ (Reg := Reg) ht dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOk c = true)
-    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkPJ I dj mPts ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZJ I) (hRec : RecordsLiveJ I dj (fun S R => (planPJ (Reg := Reg) ht dj x₀ S R).length) wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planPJ (Reg := Reg) ht dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K : ℕ)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg (planPJ ht dj x₀) N wr)))
     {qF qS : ℝ} :
     let σ := simAuditJ H512 enc512 leaf512 (planPJ ht dj x₀) I wr (opnPJ I (planPJ ht dj x₀) dj) dg

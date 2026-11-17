@@ -6,27 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
-/-!
-# `lay` and `rs` at the program of the whole template instance
-
-`Layout.keyProg_copies`, `keyProg_bcPinned` and `keyProg_valPinned` at `instProg c n` (`Inst/Prog.lean`) in place of
-`keyProg`. A stacked unit input a wire fills is no input of `instProg`: it is the computed gate of its column, whose row
-copies the wire's source (`Inst/Rows.lean`). So a composite input's key is never `Src.wire` (`keyOf_ne_wire`), and
-`InstKeysRow`, the hypothesis `instProg_valPinned` takes in place of `KeysRow`, asks a row key (`RowKey`) only of the
-stacked inputs no wire fills: it holds where a computed row reads a stacked input with `srcKey c x = .wire n i col`.
-
-* `row_of_wire_key`: `copies_of_key`'s `Src.wire n i col`, resolved: that stacked input's column copies column `col` of
-  net `n`'s slot `i` (`feed_of_wire_key`), which sits where the key's column does (`pos_wire_key`);
-* `instRowOf_wire`: a column of unit `u`'s own instance on a row bit of unit `u'` is a composite input of `u = u'` with
-  that message key;
-* `instProg_copies`: Δ's copies (`copy_site_inst` at each sampled proof block's template instance and block);
-* `instProg_bcPinned`: the rows' `b ‖ c` is the registration's (`bc_site_of`), at each sampled proof block's site (`BcSite`, which
-  `Layout.bcSite_keyProg` gives here too);
-* `instProg_valPinned`: the single gates hold the registration's bits, when every composite input a row reads has a row
-  key (`InstKeysRow`).
-
-`instLayout` and `instHmRows` are `lay` and `rs` there.
--/
+/-! `Layout.keyProg_copies`, `keyProg_bcPinned` and `keyProg_valPinned` at `instProg c n` in place of `keyProg`. -/
 
 @[expose] public section
 
@@ -36,10 +16,6 @@ namespace FlockSoundness.Discharge.Inst
 
 open Model Audit Binding Placed _root_.FlockSoundness.Discharge.Layout
 
-/-! ## A wire-fed input is no input -/
-
-/-- **A stacked unit input no wire fills has no wire key**: `srcKey`'s `Src.wire` is the first wire into the input's
-port, which `feed` reads too. -/
 theorem srcKey_ne_wire {c : Flock.Circuit} {x : ℕ}
     (hf : feed c c.unitNet (x / netIn c c.unitNet) (x % netIn c c.unitNet) = none) (n i col : ℕ) :
     Aliased.srcKey c x ≠ .wire n i col := by
@@ -66,14 +42,11 @@ theorem srcKey_ne_wire {c : Flock.Circuit} {x : ℕ}
         · cases h
   · cases h
 
-/-- **A composite input's key is never a wire's.** -/
 theorem keyOf_ne_wire {c : Flock.Circuit} {ℓ : ℕ} (hℓ : ℓ < (instRows c).nIn) (n i col : ℕ) :
     keyOf c ℓ ≠ .wire n i col := by
   obtain ⟨-, hm⟩ := inCols_getD (c := c) hℓ
   exact srcKey_ne_wire (Option.isNone_iff_eq_none.1 (List.mem_filter.1 hm).2) n i col
 
-/-- **A wire-keyed stacked input is fed its key's column**: `srcKey`'s `Src.wire n i col` is column `col` of net `n`'s
-slot `i`, which `feed` copies in. -/
 theorem feed_of_wire_key {c : Flock.Circuit} {x n i col : ℕ} (h : Aliased.srcKey c x = .wire n i col) :
     feed c c.unitNet (x / netIn c c.unitNet) (x % netIn c c.unitNet) = some (code n i col) := by
   unfold Aliased.srcKey at h
@@ -100,8 +73,6 @@ theorem feed_of_wire_key {c : Flock.Circuit} {x n i col : ℕ} (h : Aliased.srcK
         · cases h
   · cases h
 
-/-- **A wire-keyed stacked input's column copies the wire's source** (`copies_of_key`'s `Src.wire`, resolved): its row
-is the unit's local row there with Δ's pairs `(x, x)` and `(x, code n i col)`, in every slot whose rows `rowAt` has. -/
 theorem row_of_wire_key {c : Flock.Circuit} {x n i col : ℕ} (h : Aliased.srcKey c x = .wire n i col)
     (hd : c.unitNet < c.nets.size ∧ c.unitNet ≠ c.shaNet ∧ c.unitNet ≠ c.hmNet ∧
       x / netIn c c.unitNet < c.perVu.getD c.unitNet 0 ∧ x % netIn c c.unitNet < netW c c.unitNet)
@@ -117,14 +88,10 @@ theorem row_of_wire_key {c : Flock.Circuit} {x n i col : ℕ} (h : Aliased.srcKe
   unfold rowAt
   rw [ite_eq_left hd, ite_eq_right (by omega), ite_eq_right (by omega), feed_of_wire_key h]
 
-/-- **The source column sits at the key's place**: `pos` of `code n i col` is `Aliased.realize` of `Src.wire n i col`,
-the column `copies_of_key` aliases a wire-keyed stacked input to. -/
 theorem pos_wire_key (c : Flock.Circuit) (g n i col : ℕ) :
     pos c g (code n i col) = Aliased.realize c g (.wire n i col) := by
   rw [pos_code]
   rfl
-
-/-! ## The program's gates -/
 
 variable (c : Flock.Circuit) (n : ℕ)
 
@@ -181,7 +148,6 @@ theorem instRowOf_spec {g : Fin (instN c n)} {u : Fin n} {q : Fin c.ports.size} 
     all_goals exact absurd h (by simp)
   · exact absurd h (by simp)
 
-/-- The first composite input with an input's key has that key. -/
 theorem instIdx_some {m : ℕ} {x b : Fin m} (h : instIdx c m x = some b) : keyOf c b.val = keyOf c x.val := by
   unfold instIdx at h
   split at h
@@ -191,8 +157,6 @@ theorem instIdx_some {m : ℕ} {x b : Fin m} (h : instIdx c m x = some b) : keyO
 theorem rows_instProg (u : Fin n) : (instProg c n).rows u = instRows c :=
   rows_uniform _ _ _ _ (insOf_ne_one n _ (instIdx c (instB c))) n u
 
-/-- **A column of a unit's own instance on a row bit** is a composite input of that unit, whose Δ key is the row bit's
-message bit. -/
 theorem instRowOf_wire (outs : Finset (Fin (instN c n))) {u u' : Fin n} (x : Fin ((instProg c n).rows u).w)
     {q : Fin c.ports.size} {k : Fin (rowW q)}
     (h : instRowOf c n rowW ((Const.Prog.instC (instProg c n) outs u).wire x) = some (u', ⟨q, k⟩)) :
@@ -248,7 +212,6 @@ theorem instRowOf_wire (outs : Finset (Fin (instN c n))) {u u' : Fin n} (x : Fin
         | exact Fin.ext (hu.trans hd)
         | rw [hm, instIdx_some hb] at hkey; exact hkey
 
-/-- **A message-keyed composite input's row bit is in the row.** -/
 theorem instRowOf_ne_none {g : Fin (instN c n)} (h2 : 2 ≤ g.val) (hlt : g.val < 2 + n * instB c) {q byte bit : ℕ}
     (hk : keyOf c ((g.val - 2) % instB c) = .msg q byte bit) (hq : q < c.ports.size)
     (hw : 8 * byte + bit < rowW ⟨q, hq⟩) (hb : bit < 8) : instRowOf c n rowW g ≠ none := by
@@ -264,7 +227,6 @@ def InstKeysRow : Prop :=
   ∀ (i : Fin (instRows c).nComp) (x : Fin (instRows c).w), x ∈ (instRows c).a i ++ (instRows c).b i →
     x.val < (instRows c).nIn → RowKey c rowW ((inX c).getD x.val 0)
 
-/-- `InstKeysRow` at a unit of `instProg`, whose rows are the template instance's. -/
 theorem keysRow_instProg (hkeys : InstKeysRow c rowW) (u : Fin n) (i : Fin ((instProg c n).rows u).nComp)
     (x : Fin ((instProg c n).rows u).w) (hx : x ∈ ((instProg c n).rows u).a i ++ ((instProg c n).rows u).b i)
     (hxn : x.val < ((instProg c n).rows u).nIn) : RowKey c rowW ((inX c).getD x.val 0) := by
@@ -288,8 +250,6 @@ def instGate {Reg : Type} (outBit : Reg → Fin (instN c n) → Bool) (R : Reg) 
 theorem instZeroG_ne_instOneG : instZeroG (c := c) (n := n) ≠ instOneG := fun h =>
   absurd (congrArg Fin.val h) (by simp [instZeroG, instOneG, zeroGate, oneGate])
 
-/-- **A single committed gate of a unit's own instance** is the zero, the constant, or one of the unit's computed gates,
-when every composite input a row reads has a row key (`InstKeysRow`). -/
 theorem inst_single_gate (outs : Finset (Fin (instN c n))) (hkeys : InstKeysRow c rowW) {u : Fin n}
     {g : Fin (instN c n)}
     (hgx : ∃ x : Fin ((instProg c n).rows u).w, (Const.Prog.instC (instProg c n) outs u).wire x = g)
@@ -364,12 +324,6 @@ theorem inst_single_gate (outs : Finset (Fin (instN c n))) (hkeys : InstKeysRow 
       · rw [h, hgate_in (by show 1 < 2 + n * instB c; omega)] at hm
         cases hm
 
-/-! ## At a sampled proof block's site -/
-
-/-- **A sampled proof block's message-keyed composite input holds its row's bit**: in a satisfying witness of an accepted
-statement, at block `o` and template instance `g`, the composite input `x` whose Δ key is message bit `bit` of byte
-`byte` of row port `q` holds the witness's bit at that message column (`Typed.msgCol`), when the column is in the block.
-`Layout.copy_site` at the template instance's rows. -/
 theorem copy_site_inst {T : Model.Statement} (a : Accepted T) {z : Witness T.m} (hz : T.Satisfies z)
     (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin (instRows a.st.c).w) (hx : x.val < (instRows a.st.c).nIn)
     {q byte bit : ℕ} (hk : keyOf a.st.c x.val = .msg q byte bit)
@@ -400,8 +354,6 @@ variable {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabS
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   (si : Sites plan tab)
 
-/-- **Row port `q`'s salt at a sampled proof block's site**: `saltCol` at the unit's template instance, in its block
-(`Layout.keySaltAddr` on `instProg`'s gates). -/
 noncomputable def instSaltAddr (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ) (S : Finset (Fin n)) (R : Reg)
     (u : Fin n) (q : (Fin n × Fin c.ports.size) ⊕ Fin (instN c n)) (j : Fin 192) (t : Fin 8) :
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
@@ -417,14 +369,11 @@ variable (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
   (outs : Finset (Fin (instN c n)))
 
-/-- The places of the program of the whole template instance (`Sites.progPlaces_instProg`). -/
 noncomputable abbrev instPlace := (Sites.progPlaces_instProg hparse outs).derived.place
 
 variable (rowW) (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ) (popOf : Reg → Public)
   (outBit : Reg → Fin (instN c n) → Bool)
 
-/-- **The readers at `instProg`'s sites**: `Layout.keyReaders` on `instProg`'s row bits (`instRowOf`) and single gates
-(`instGate`). -/
 noncomputable def instReaders : Readers ((instProg c n).circuit outs) plan tab :=
   Readers.ofRows (instPlace hparse outs) (instN_pos c n) rowW (W := Finset.univ.sup rowW + 1)
     (fun q => (Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)) (Nat.le_add_left 1 _) (instRowOf c n rowW)
@@ -434,8 +383,6 @@ noncomputable def instReaders : Readers ((instProg c n).circuit outs) plan tab :
 variable {rowW}
 
 include hparse in
-/-- **Δ's copies at `instProg`'s sites**: each column of a sampled proof block on a row bit holds the witness's bit at the
-message column of its key (`copy_site_inst`), in the block by the parse (`msgCol_lt_of_parse`). -/
 theorem instProg_copies :
     (instReaders rowW hparse outs saltCol popOf outBit).Copies (instPlace hparse outs) := by
   refine ofRows_copies _ fun S R u hu M hM x hx u' q k hr => ?_
@@ -456,8 +403,6 @@ theorem instProg_copies :
   exact this
 
 include hparse in
-/-- **The rows' `b ‖ c` at `instProg`'s sites is the registration's** (`bc_site_of`, at every site whose rank is the
-unit). -/
 theorem instProg_bcPinned
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
@@ -475,9 +420,6 @@ theorem instProg_bcPinned
   exact this
 
 include hparse in
-/-- **The single gates hold the registration's bits** at `instProg`'s sites: 1 at the constant (`hc1`), 0 at the zero
-(`hz1`), and at a unit's committed gate the registration's bit (`hout`), when every composite input a row reads has a
-row key (`InstKeysRow`). -/
 theorem instProg_valPinned (hkeys : InstKeysRow c rowW)
     (hc1 : ((instProg c n).partition outs).ConstCols plan tab (instPlace hparse outs) {instOneG (c := c) (n := n)})
     (hz1 : ((instProg c n).partition outs).ZeroCols plan tab (instPlace hparse outs) {instZeroG (c := c) (n := n)})
@@ -498,7 +440,6 @@ theorem instProg_valPinned (hkeys : InstKeysRow c rowW)
     simp only [instGate, h1, h2, ↓reduceIte]
 
 variable (rowW) in
-/-- **`lay` at `instProg`'s places**: the readers' layout (`Readers.layout`), with Δ's copies from `instProg_copies`. -/
 noncomputable def instLayout (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8) :
     Binding.Layout ((instProg c n).partition outs) plan tab
       (((instProg c n).partition outs).placeDecoder plan tab (instPlace hparse outs)) :=
@@ -506,8 +447,6 @@ noncomputable def instLayout (encO : BitVal (Finset.univ.sup rowW + 1) → List 
     (instProg_copies hparse outs saltCol popOf outBit)
 
 variable (rowW) in
-/-- **`rs` at `instProg`'s places**: the readers' rows (`Readers.rows`), from `instProg_copies`, `instProg_bcPinned`
-and `instProg_valPinned`. -/
 noncomputable def instHmRows (enc : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
     (enc_inj : Function.Injective enc) (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
     (encO_inj : Function.Injective encO)

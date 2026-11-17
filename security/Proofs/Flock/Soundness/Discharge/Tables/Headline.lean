@@ -8,25 +8,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
 import Proofs.Flock.Soundness.Discharge.Exec.Headline
 import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
 
-/-!
-# The headline at the executable, for sessions of `J` tables
-
-`Prog.flock_headline_live_on` (`Exec/LiveOn.lean`) is the headline for one-table plans. Here the plan is any list of
-tables at each sample, `plan S R` of length `J`, and the live session is `liveSession` over them.
-
-* `Prog.flock_headline_live_tables`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_tables`, at the
-  live stratified sample, which verity-verify-proof splits over `J > 1` tables as one sample (`Stmt.setupTables`, `Draw.tablesWhy`:
-  several tables need a subset or stratified sample).
-* `Prog.flock_headline_live_tables_subset`: the same at the live subset sample `SamplingDesign.execOS src (.subset kd) n`, whose
-  count curve is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` (`SamplingDesign.subset_miss`), under A3.
-* `Prog.flock_headline_live_tables_subset_missX`: the same at rows each under its own encoding (`HmRowsX`), the rows of
-  hidden-output tables.
-
-The error term is `miss(K) + ksAvgStrict + linkBoundE`. None of the three grows with `J`: `miss(K)` is the sampling design's;
-`ksAvgStrict` averages over samples the supremum over the session's tables of each table's knowledge error, so `J`
-tables cost their worst table's, not a sum, at `J` per-table hypotheses (`hKS` at every table `j`); and `linkBoundE`
-reads the plan only through the positions the sample reads and `ρ`, a bound on every table's rate.
--/
+/-! The headline at the executable for sessions of `J` tables, whose error term
+`miss(K) + ksAvgStrict + linkBoundE` does not grow with `J`. -/
 
 @[expose] public section
 
@@ -39,15 +22,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
 
-/-- **The headline at the executable, for sessions of `J` tables of the challenger, at the live stratified
-sample.** Let the verifier sample the units as in `Prog.flock_headline_L` (the live stratified sample under A3), let each
-sample's session be the plan's tables `plan S R`, and let the live session be `liveSession` over them (the challenger,
-its coins uniform per round and sampled after the round's retained bytes, on the `2J` rep streams), written out as a
-session directory by `wr`. Against any live prover `τ`, verity-verify-proof accepts with at least `K` incorrect proof blocks of the
-committed values of the simulated prover (`simAuditJ … τ`) with probability at most `miss(K) + ε_ks + ε_bind`:
-`Prog.flock_headline_execL` with `hRef` discharged by `execRefines_tables`, so `Pr[bad] = 0`. Beyond
-`Prog.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`, `hCR`),
-it takes `hdec`: the decoder is right on the sessions verity-verify-proof accepts, at the samples the sampling design makes, table by table. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_tables
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -98,16 +72,11 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables
     (execRefines_tables H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ) hCR hKS
   rwa [prob_eq_zero_of_out (p := fun _ => False) (fun _ _ h => h) τ, add_zero] at h
 
-/-- The live subset sample's count curve is at most the uniform `kd`-subset's, under A3. -/
 theorem execOS_subset_miss_le (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src) (c : ℕ) :
     (SamplingDesign.execOS (n := n) src (.subset kd) n).miss c ≤ (SamplingDesign.subset n kd hkd).miss c :=
   iSup₂_mono fun B _ => SamplingDesign.execOS_subset_escape_le n kd hkd Lb src hA3 B
 
-/-- **The headline at the executable, for sessions of `J` tables of the challenger, at the live subset sample**,
-the sample verity-verify-proof takes at more than one table. As `Prog.flock_headline_live_tables`, with the verifier's sample the
-live `kd`-subset sample of the `n` units under A3 (`hA3`), whose count curve at `K ≤ n` incorrect proof blocks is
-`C(n − K, kd) / C(n, kd)`. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset
     (kd : ℕ) (hkd : kd ≤ n)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
@@ -166,8 +135,6 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset
   rw [← SamplingDesign.subset_miss hkd hK]
   exact execOS_subset_miss_le kd hkd Lb src hA3 K
 
-/-- **`Prog.flock_headline_live_tables_subset` at every `K`**, its count curve the uniform `kd`-subset sampling design's
-(`SamplingDesign.subset n kd hkd`), which is `C(n − K, kd) / C(n, kd)` at `K ≤ n` (`SamplingDesign.subset_miss`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset_miss
     (kd : ℕ) (hkd : kd ≤ n)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
@@ -224,8 +191,6 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset_miss
   rw [prob_eq_zero_of_out (p := fun _ => False) (fun _ _ h => h) τ, add_zero] at h
   exact h.trans (add_le_add (add_le_add (execOS_subset_miss_le kd hkd Lb src hA3 K) le_rfl) le_rfl)
 
-/-- `Prog.flock_headline_live_tables_subset_miss` at rows each under its own encoding (`HmRowsX`, the hidden-output
-rows), through `flock_e2e_count_hm96LX`. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset_missX
     (kd : ℕ) (hkd : kd ≤ n)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)

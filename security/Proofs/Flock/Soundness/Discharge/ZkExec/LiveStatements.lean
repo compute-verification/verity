@@ -17,20 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# `RunsZC` at the live `--zk` tables, from `TablesAtZKLive` (statement)
-
-`RunsZC` at `Discharge/ZkLink`'s live tables `tablesAtZK` (`ZkLink/TablesAt.lean`): on every live outcome verity-verify-proof
-`--zk` accepts, each rep has a `RepRun` on its rounds along `repShapeZ` and the compiled table accepts at the two runs'
-ends. Its pieces are proved or frozen apart: the per-rep runs (`zk_rep_plays`, `zk_rep_run`), the verdict
-(`ZkTableVerdict`) and the table being the executable's (`TablesAtZKLive`, taken here as a hypothesis).
-
-* `nXZ`, `decAtZ`, `opnAtZ`: the non-ZK session's `nX`, `decAt` and `opnAt` at `--zk`: the table's number of extra
-  claims, the decoder `decZ` at the table's dimensions, and the openings `opnZ` at the statement setupH sets up at the
-  record's sample under the `--zk` tags and its `--zk` schedule, on the first two proof files.
-* `RunsZCLive`: given `TablesAtZKLive`, the tags (`TagsOk`), `wr` the challenger's record and its sample at each of the
-  sampling design's samples, `RunsZC` holds at the sampling design's samples (`RunsOnZC`) at `tablesAtZK` with those, no tail and `capOfRoot`.
--/
+/-! `RunsZC` at the live `--zk` tables, with `TablesAtZKLive` taken as a hypothesis (statement). -/
 
 @[expose] public section
 
@@ -63,12 +50,8 @@ noncomputable def opnAtZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : I
     | .error _ => default
   | .error _ => default
 
-/-- **`RunsZC` at the live `--zk` tables, at the sampling design's samples** (the decoder premise's message half at `--zk`). Given that wherever
-verity-verify-proof accepts the `--zk` table is the executable's (`TablesAtZKLive`), on untyped one-table inputs under the tags
-`TagsOk` fixes, with `wr` the challenger's record of the live `--zk` session and each of the sampling design's samples proving its
-units at `mPts` link points (`SampleOkZK` at `L.draw ω`: the link points depend on `|S|`, so no `mPts` holds at every
-sample), `RunsZC` holds at the sampling design's samples (`RunsOnZC`) at the tables `tablesAtZK` under `hm96-sha512/v1` (`hs512`), with
-the decoder `decAtZ`, the openings `opnAtZ`, no tail and `capOfRoot`. The reference setup `y₀` is data. -/
+/-- Takes `SampleOkZK` at each of the sampling design's samples because the link points depend on `|S|`, so no
+`mPts` holds at every sample. -/
 def RunsZCLive : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (y₀ : ZkLink.SampleSetupZK I mPts S₀ (dj S₀))
