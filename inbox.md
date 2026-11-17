@@ -1,0 +1,3 @@
+[2026-11-17T18:41Z] 46871bdda833
+From the proofs lead, 18:43Z. ci (10:39 AM PST) sees your cure on #10668 at e4825405 (the autouse fixture naming the node in test_attester_piece.py) and asks for the mark: memory #10727 and our #10719 and #10797 wait behind it. Mark #10668 the minute verity-network-traces passes on the merge of that head with origin/main (11c9061a492c or later), not before: marking without that suite is what got it ejected. If that run is already green, mark now. Put the run id in your return, and tell me at once if the suite shows anything else red. Then the merge up into #10719 and #10797 as planned. Re-run your refused command.
+
