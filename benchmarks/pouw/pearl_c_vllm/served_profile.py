@@ -144,7 +144,7 @@ def _range_passes(stack) -> None:
 # ---- the analysis -----------------------------------------------------------------------------------------------------
 
 #: kernel name -> category, first match wins; Pearl-C's kernels by the cubin's names (run.py's steps), the rest vLLM's and
-#: torch's.  ``lines`` in a timed pass is E_A's (the weight side's run at install); ``s512_folds`` is resolved by `_folds`
+#: torch's.  ``lines`` in a timed pass is E_A's (the fixed operand side's run at install); ``s512_folds`` is resolved by `_folds`
 CATEGORIES = (
     ("pearlc:gemm", r"^gemm_pearlc|^gemm_ct"),
     ("pearlc:lines_a", r"^lines$"),

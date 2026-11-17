@@ -9,7 +9,7 @@ public import Flock.Bytes
 `opening` reads each opened tile's rows, leaf and y rows from the pass's files as `verify_run.Opened` does: each file is
 held to its manifest entry's size and, where the entry has one, its SHA-256 (`verify_run.Files`); rows are BF16
 widened to the committed FP32 words, each followed by its hm96 salt under the manifest's salt key (nonces: the call's
-index for A, 2^62 + the weight for B, 2^63 for the transcript, 2^61 + the call's index for y), and a path is read from a
+index for A, 2^62 + the fixed operand's id for B, 2^63 for the transcript, 2^61 + the call's index for y), and a path is read from a
 tree file laid out as the device writes it (level 0 padded to a power of two, then each level above it, 64 bytes a node).
 A y file that fails is the y opening's failure (`Opened.open_y`), met only once the tile has passed. A y row is the words
 its file holds of it (`f32Slice`, `f32_row`'s slice): a file that ends inside a row opens a row shorter than the call's

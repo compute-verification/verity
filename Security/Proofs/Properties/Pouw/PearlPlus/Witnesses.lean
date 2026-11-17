@@ -358,8 +358,8 @@ theorem refusedBeforeTheCoin_nontrivial :
 
 The honest pass loads in the kernel once `load` is unfolded down to the salt coin's hm96 leaf, whose mask at its zero salt
 is given (`maskOr`) and whose leaf prefix is a literal (`Witness.leafPrefix_eq`), to the salt's and the draw's `derive`,
-whose sorted contexts are given (`qsort_salt`, `qsort_run`), and to the weight ids' `String.toNat?`, whose value on digits
-is given (`toNatOr`): the kernel computes the rest, the coin's opening, the salt, the weights' and records' roots, and
+whose sorted contexts are given (`qsort_salt`, `qsort_run`), and to the fixed operands' ids' `String.toNat?`, whose value on digits
+is given (`toNatOr`): the kernel computes the rest, the coin's opening, the salt, the fixed operands' and records' roots, and
 `plan`'s commitment and draw on that pass. -/
 
 namespace Witness
@@ -411,7 +411,7 @@ end Witness
 open Witness
 
 /-- `load` reads the honest pass from its manifest under the epoch's coins: its salt coin opens against them after the
-weights' root, the salt is the coin's, and its records keep the caps and are the ones whose root it published. -/
+fixed operands' root, the salt is the coin's, and its records keep the caps and are the ones whose root it published. -/
 theorem loadedGivesUp_honest : load honestCoins honestManifest = .ok honestPass := by
   apply eq_ok_of_toOption
   simp only [load, epochSalt, coinReason, leafValue, Flock.Hm96.Default512.leaf, Flock.Hm96.Default512.treeLeaf,
