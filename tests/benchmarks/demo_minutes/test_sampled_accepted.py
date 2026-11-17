@@ -80,7 +80,11 @@ def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_sampled
     (m,) = doc["measurements"]
     assert (m["name"], m["value"], m["target"], m["sampled"], m["accepted"], m["reason"]) == (M.METRIC, 100, 100, 6, 6, None)
     assert m["inputs"][0].startswith("measured: ") and m["mark"] == "measured"
-    assert (doc["validation"]["status"], doc["validation"]["detail"]) == ("passed", "6 of 6 sampled proof blocks accepted")
+    where = ("its record was composed on the workload's node (auditor), which the prover controls, so no guarantee "
+             "applies to it" if served_node else "its record was composed off the workload's node, on auditor")
+    assert m["composed_on"] == {"host": "auditor", "served_node": served_node}
+    assert (doc["validation"]["status"], doc["validation"]["detail"]) == ("passed",
+                                                                         f"6 of 6 sampled proof blocks accepted; {where}")
     assert capsys.readouterr().out.startswith("ACCEPTED {")
 
 
@@ -92,7 +96,7 @@ def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_sampled
 def test_anything_short_of_that_accepts_no_unit_and_says_why(tmp_path, repo, row, served_node, off, why):
     r, on, off_sha = repo
     m = M.share(demo(tmp_path / "runs", off_sha if off else on, row, served_node), tmp_path / "runs", "main", r)
-    assert (m["value"], m["accepted"]) == (0, 0)
+    assert (m["value"], m["accepted"]) == (0, 0) and m["composed_on"]["served_node"] is served_node
     assert re.search(why, m["reason"]), m["reason"]
 
 
