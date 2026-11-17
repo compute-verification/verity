@@ -34,17 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The session rep's `τ` is its view's (`RepTau`)
-
-`repTau_of` derives `RepTau` from `InnerTauVal`.
-
-The session's rep's inner proof is what the phases hybrids 2 and 3 share (`innerPre`) leave to `innerP`
-(`repPZk_map_inner`). Answered by the opened coins (`asksCut`), an `innerP` that returns has answered `ε` and the
-batching coins, and its `τ` is `InZ.tau` at the coins from the round it began (`innerP_cut_tau`). `innerPre_slot` puts
-that round at the rep's `ε` slot. With no refusal at the opened coins (`not_refused_of_admits`), the run of the shared
-phases is `InnerAt`, and `InnerTauVal` gives `τ` as the view's.
--/
+/-! The session rep's `τ` is its view's (`RepTau`) where no refusal shows at the opened coins. -/
 
 @[expose] public section
 
@@ -60,7 +50,6 @@ namespace FinTau
 
 open FlockComplete FlockComplete.SimInner
 
-/-- A returning run of a bind returns at its first step and continues from there. -/
 theorem runT_bind_ok {α β : Type} {x : _root_.Flock.TMW FlockComplete.PS α}
     {f : α → _root_.Flock.TMW FlockComplete.PS β} {t t'' : _root_.Flock.Transcript} {l l'' : Array Msg} {b : β}
     (h : ((x >>= f).run t).go l = (.ok (b, t''), l'')) :
@@ -69,13 +58,11 @@ theorem runT_bind_ok {α β : Type} {x : _root_.Flock.TMW FlockComplete.PS α}
   obtain ⟨⟨a, t'⟩, l', h1, h2⟩ := JsonRT.go_bind_ok h
   exact ⟨a, t', l', h1, h2⟩
 
-/-- A returning run returns its value's image under a map. -/
 theorem run_map_ok {α β : Type} {m : _root_.Flock.TMW FlockComplete.PS α} (F : α → β)
     {s t : _root_.Flock.Transcript} {l l' : Array Msg} {p : α} (h : (m.run s).go l = (.ok (p, t), l')) :
     ((F <$> m).run s).go l = (.ok (F p, t), l') := by
   simp only [StateT.run_map, FlockComplete.go_map', h, Except.map]
 
-/-- A returning run has the value of a field its every run has. -/
 theorem field_of_map {α β : Type} {m : _root_.Flock.TMW FlockComplete.PS α} (F : α → β) {b : β}
     (hm : F <$> m = (fun _ => b) <$> m) {s t : _root_.Flock.Transcript} {l l' : Array Msg} {p : α}
     (h : (m.run s).go l = (.ok (p, t), l')) : F p = b := by
@@ -83,8 +70,6 @@ theorem field_of_map {α β : Type} {m : _root_.Flock.TMW FlockComplete.PS α} (
   simp only [StateT.run_map, FlockComplete.go_map', h, Except.map, Except.ok.injEq] at e
   exact (Prod.mk.inj e).1
 
-/-- **The session's rep's inner proof is the shared phases' `innerP`**: `repPZk` runs `innerPre`'s phases, level 0's
-opening unerased (`replay_eraseL`, `ligeritoConstraints_eraseL`), then `innerP` on their `final_c` and constraints. -/
 theorem repPZk_map_inner (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS)
     (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (tr : FlockComplete.Trace) (t : Array _root_.Flock.F128) (cm0 : Commit) (extras : Array _root_.Flock.Claim)
@@ -98,8 +83,6 @@ theorem repPZk_map_inner (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes 
   simp only [bind_assoc, pure_bind, map_bind, map_pure, bind_pure, FinRep.replay_eraseL,
     FinRep.ligeritoConstraints_eraseL]
 
-/-- **An inner proof answered by the opened coins that returns** has had `ε` and the batching coins answered, and its
-`τ` is `InZ.tau` at the coins from the round it began. -/
 theorem innerP_cut_tau {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {h : ByteArray → ByteArray}
     {lay : _root_.Flock.Zk.PadLayout} {p : PadsZk} {ic : InnerCommit} {finalC : _root_.Flock.F128}
     {cons : Array (String × _root_.Flock.Zk.Lin)} {t t' : _root_.Flock.Transcript} {l l' : Array Msg}
@@ -127,11 +110,7 @@ theorem innerP_cut_tau {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {h :
 
 end FinTau
 
-/-- **`RepTau` from `InnerTauVal`**: the session's rep's inner proof is `innerP` after the shared phases
-(`FinTau.repPZk_map_inner`), whose run at the opened coins is `InnerAt` (no refusal there,
-`not_refused_of_admits`) and ends at the rep's `ε` slot (`innerPre_slot`); `innerP` returning there has answered the
-batching coins, and its `τ` is `InZ.tau` at the slot's coins (`FinTau.innerP_cut_tau`), the view's by
-`InnerTauVal`. -/
+/-- **`RepTau` from `InnerTauVal`**, at opened coins where no refusal shows (`not_refused_of_admits`). -/
 theorem repTau_of (hT : InnerTauVal) : RepTau := by
   intro x w τ c spec i hi r cm0 extras ic l hC q t l' e hr
   obtain ⟨hx, hw, hA, ⟨s, hsx⟩, -, -, -, hex, hl⟩ := hC

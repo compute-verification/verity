@@ -44,28 +44,11 @@ import Proofs.Flock.Claims.Scope.Sizes
 import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
-/-!
-# The deployed round plan reads the coins before each round only (`CausalExe`)
-
-`QE`'s round `n ≥ 1` is body `n` of `sessionCut` on the cut's sources at the coins `c`, answered by `asksCut`, which
-returns coin `k` right after body `k` and throws once body `n` is sent. So body `n` reads the coins before `n` through
-the sends (`asksCut_congr`), and the sources through what the session reads before it sends body `n`. Every source
-value the session reads while it has sent `s` bodies reads only the coins before `s` (its fields at `restAt`'s slots,
-and the guards before them), and `s ≤ n` until the throw, so body `n` is the same at any coins agreeing before `n`.
-
-* **Equal runs** and **the phases at sources that agree where read** (`RepAgree`): `CutEq`.
-* **The cut's sources agree where read** (`repAgree_czExe`): at coins agreeing before `n`, each field `repSrcCut` reads
-  is the same wherever the session reads it before body `n`.
--/
+/-! The deployed round plan reads the coins before each round only (`CausalExe`). -/
 
 @[expose] public section
 
-/-! ## The pads trees by tree position
-
-`Round1Pads` (`Claims/ZK/Round1Pads.lean`), here under `Cx`: a rep's pads leaf at tree position `p`
-commits a column that reads no coin (`Cx.digOf_pads`), and a cut's pads leaf at `q` is the leaf at `q`
-(`Cx.padLeafCut_cutAt`). `treeEquiv` is irreducible here: unfolding it decides its `∃ e, …` over the tree's size.
--/
+/-! `treeEquiv` is irreducible here: unfolding it decides its `∃ e, …` over the tree's size. -/
 
 namespace FlockSoundness.Discharge.Composed.Cx
 
@@ -77,8 +60,6 @@ variable (P : LigProver) {mPts : ℕ}
 
 attribute [local irreducible] treeEquiv
 
-/-- **Each rep's pads tree places every position at its index** at every coin vector of a `--zk` table whose pads code
-has `Q ≤ n ≤ 2^63` positions: the opened ones at `padPos`, the others at `unPos`. -/
 theorem coinedOf_sP_val (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest)
     (hQ : Zk.Q ≤ padNOf Tz st) (hN : padNOf Tz st ≤ 2 ^ 63) (r : Fin 2)
     (x : Fin (coinedOf P Tz st).z.nQ ⊕ Fin (coinedOf P Tz st).z.nPU) :
@@ -97,32 +78,23 @@ theorem coinedOf_sP_val (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedO
   exact treeEquiv_val_pos (t := Zk.Q) (N := padNOf Tz st) _ (padPos_injective _ hQ')
     (fun i => lt_of_lt_of_eq (padPos_lt _ hQ' i) hL) hQ x
 
-/-- **A `--zk` table's exposed pad `h_fa`** (`coinedOf`'s `ia`), the same at every coin vector. -/
 theorem coinedOf_ia (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest) :
     ((coinedOf P Tz st).T c).ia = ⟨(Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fa, Nat.lt_of_succ_lt (fa_lt Tz st)⟩ :=
   rfl
 
-/-- **A `--zk` table's exposed pad `h_fb`** (`coinedOf`'s `ib`), the same at every coin vector. -/
 theorem coinedOf_ib (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest) :
     ((coinedOf P Tz st).T c).ib = ⟨(Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fb, fa_lt Tz st⟩ :=
   rfl
 
-/-- **A rep's pads at its `h`** (`ZK.Table.hFull` at `ia`, `ib`): `h`'s entries, then `h_x`, `h_y`, `h_ia·h_ib`,
-`h_x·h_y`. -/
 noncomputable def padH {nE : ℕ} (ia ib : Fin nE) (h : (Fin nE → 𝔽) × 𝔽 × 𝔽) : ZK.PadIdx nE → 𝔽
   | .inl i => h.1 i
   | .inr j => ![h.2.1, h.2.2, h.1 ia * h.1 ib, h.2.1 * h.2.2] j
 
-/-- **Rep `r`'s pads column at the code symbol of position `p`**: `(C_h, C_μ)` at `X = p + 1` (`innerPt`), pad `i`
-(`padH` at `ia`, `ib`) at `X^(padIdx i)` and padding symbol `j` at `X^(len + j)`. -/
 noncomputable def padColAt {Hi : Type} {z : ZkView.Sizes} (ia ib : Fin z.nE) (padLen : ℕ) (b : ZkView.Base z Hi)
     (r : Fin 2) (p : ℕ) : 𝔽 × 𝔽 :=
   (∑ i, innerPt p ^ padIdx i * padH ia ib (b.2.2.1 r) i + ∑ j : Fin z.nPad, innerPt p ^ (padLen + j.val) * b.2.2.2.1 r j,
     ∑ i, innerPt p ^ padIdx i * b.2.2.2.2.2.1 r i + ∑ j : Fin z.nPad, innerPt p ^ (padLen + j.val) * b.2.2.2.2.1 r j)
 
-/-- **Rep `r`'s pads column at tree position `p` is `padColAt` at `X = p + 1`**, at every coin vector of a `--zk` table
-whose pads code has `Q ≤ n ≤ 2^63` positions (`coinedOf_sP_val`): an opened column and a hidden one are both the code
-there. -/
 theorem coinedOf_colPAt (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest)
     (hQ : Zk.Q ≤ padNOf Tz st) (hN : padNOf Tz st ≤ 2 ^ 63)
     (w : Model.Witness (coinedOf P Tz st).S.m) (b : ZkView.Base (coinedOf P Tz st).z (coinedOf P Tz st).Hi) (r : Fin 2)
@@ -198,8 +170,6 @@ open Claims FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge
 
 attribute [local irreducible] Composed.treeEquiv
 
-/-- **A live table's pads code has `Q ≤ n ≤ 2^63` positions**: `n = innerN`, a power of two below `2^64` holding the
-`len + K_PAD ≥ Q` symbols. -/
 theorem padN_bounds (x : Msg) (j : Fin (jOf x)) :
     _root_.Flock.Zk.Q ≤ Composed.padNOf (zkTab x j).table (stAt x j) ∧
       Composed.padNOf (zkTab x j).table (stAt x j) ≤ 2 ^ 63 := by
@@ -215,7 +185,6 @@ theorem padN_bounds (x : Msg) (j : Fin (jOf x)) :
     have := (Nat.pow_lt_pow_iff_right (by norm_num : 1 < 2)).1 h64
     omega)
 
-/-- **Table `j`'s rep `r` pads column at tree position `p`** is `padColAt` at `X = p + 1`, at every coin vector. -/
 theorem colPAt_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Composed.CoinsZK (tabC P x j).Rest)
     (w : Model.Witness (tabC P x j).S.m) (b : ZkView.Base (tabC P x j).z (tabC P x j).Hi) (r : Fin 2)
     (p : Fin ((tabC P x j).z.nQ + (tabC P x j).z.nPU)) :
@@ -228,7 +197,6 @@ theorem colPAt_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Co
         (Composed.padLenOf (zkTab x j).table (stAt x j)) b r p.val :=
   Composed.Cx.coinedOf_colPAt P (zkTab x j).table (stAt x j) c (padN_bounds x j).1 (padN_bounds x j).2 w b r p
 
-/-- **A cut's pads leaf at tree position `q` is the leaf at `q`**, whatever the coins' tree. -/
 theorem padLeafCut_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (lv : ZkView.Leaves (fun j => (tabC P x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2) {q : ℕ}
@@ -245,7 +213,6 @@ theorem padLeafCut_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Compose
   · have e : ((tabC P x j).T (cz j)).sP r (.inr u) = ⟨q, hq⟩ := by rw [← h, Equiv.apply_symm_apply]
     simp only [e]
 
-/-- **A pads leaf's digest is the same at every coin vector** (`colPAt_tabC`). -/
 theorem digOf_pads (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi) (j : Fin (jOf x))
     (r : Fin 2) (p : Fin ((tabC P x j).z.nQ + (tabC P x j).z.nPU)) :
@@ -255,8 +222,6 @@ theorem digOf_pads (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.
   rw [colPAt_tabC, colPAt_tabC]
 
 end Claims.ZKMal.Masked.Cx
-
-/-! ## The honest clear values read their coins in order -/
 
 namespace FlockSoundness.Discharge.Composed.Cx
 
@@ -380,7 +345,6 @@ theorem honestAt_f (hO : c.rest.rOuter r = c'.rest.rOuter r) (hz : c.rest.zc r =
   · simp only [ite_eq_right ha, ite_eq_left hb, h2]
   simp only [ite_eq_right ha, ite_eq_right hb, ite_eq_left (show k = (layOf Tz st).fc by omega), h3]
 
-/-- Past the zerocheck: the lincheck's and later regions. -/
 theorem honestAt_past (k : ℕ) (hk : 131 + 2 * (st.m - 6) ≤ k) :
     honestAt Tz st c r zw R k =
       let lay := layOf Tz st
@@ -442,7 +406,6 @@ theorem honestAt_ood (hp : c.rest.oodPt r = c'.rest.oodPt r) {k : ℕ}
   simp only [ite_eq_right (show ¬ k < (layOf Tz st).zp 0 by omega), ite_eq_right (show ¬ k < (layOf Tz st).zp 64 by omega),
     ite_eq_left (show k < (layOf Tz st).lgMsg 0 0 by omega), h]
 
-/-- What level 0's basis reads: the ring switch's coins, the claims' points and the out-of-domain sample. -/
 structure B0Agree : Prop where
   link : c.rest.link = c'.rest.link
   rOuter : c.rest.rOuter r = c'.rest.rOuter r
@@ -532,7 +495,6 @@ theorem honestAt_end {k : ℕ} (hk : 200 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) 
     ite_eq_right (show ¬ k < (layOf Tz st).lgMsg 0 0 by omega), ite_eq_right (show ¬ k < (layOf Tz st).lgE 0 0 by omega),
     ite_eq_right (show ¬ k < (layOf Tz st).hab by omega)]
 
-/-- **Every masked value of rep `r` reads only the coins of its PIOP and level 0's lane phase.** -/
 theorem honestAt_all (h0 : B0Agree Tz st c c' r) (hz : c.rest.zc r = c'.rest.zc r)
     (ha : c.rest.lcAlpha r = c'.rest.lcAlpha r) (hb : c.rest.lcBeta r = c'.rest.lcBeta r)
     (hl : c.rest.lane r = c'.rest.lane r) (k : ℕ) :
@@ -558,8 +520,6 @@ theorem honestAt_all (h0 : B0Agree Tz st c c' r) (hz : c.rest.zc r = c'.rest.zc 
   · exact honestAt_E Tz st c c' r zw R h0 hl (by omega) h8
   · exact (honestAt_end Tz st c r zw R (by omega)).trans (honestAt_end Tz st c' r zw R (by omega)).symm
 
-/-- What rep `r`'s inner proof reads of its coins: level 0's basis, the PIOP's, the lanes, the restart's pair, `ε`
-and the `γ`s. -/
 structure InAgree extends B0Agree Tz st c c' r : Prop where
   zc : c.rest.zc r = c'.rest.zc r
   lcAlpha : c.rest.lcAlpha r = c'.rest.lcAlpha r
@@ -570,7 +530,6 @@ structure InAgree extends B0Agree Tz st c c' r : Prop where
   zeta : c.rest.zeta r = c'.rest.zeta r
   gammas : c.rest.gammas r = c'.rest.gammas r
 
-/-- **Rep `r`'s ten constraints read its coins and its two masked claims' `ŝ`.** -/
 theorem rowsOf_congr {nE nC : ℕ} (v : Fin nE → 𝔽) (sh sh' : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) (ρσ : 𝔽 × 𝔽)
     (hA : InAgree Tz st c c' r) (hs0 : sHatAt sh (2 * r.val) = sHatAt sh' (2 * r.val))
     (hs1 : sHatAt sh (2 * r.val + 1) = sHatAt sh' (2 * r.val + 1)) :
@@ -591,8 +550,6 @@ theorem rowsOf_congr {nE nC : ℕ} (v : Fin nE → 𝔽) (sh sh' : Fin nC → Fi
   simp only [rowsOf, rowCEval, rowAB, rowLC, rowRsAb, rowRsC, laneRow, abClaim, cClaim, combvOf, zcF, rF, rhoF, tsF,
     innerEps, rhoK, e0, e1, hrun, hA.zc, hA.rOuter, hA.rho, hA.lcAlpha, hA.lcBeta, hA.ts, hA.rPrime, hA.rhoP, hA.zeta]
 
-/-- **The inner proof's batched coefficients read rep `r`'s masked values, its two masked claims' `ŝ`, the restart's
-`T'`, the triple's `(ρ, σ)` and its coins.** -/
 theorem lamOf_congr {z : Sizes} (pre pre' : PreOf z) (hA : InAgree Tz st c c' r) (hv : pre.2.1 r = pre'.2.1 r)
     (hs0 : sHatAt pre.1 (2 * r.val) = sHatAt pre'.1 (2 * r.val))
     (hs1 : sHatAt pre.1 (2 * r.val + 1) = sHatAt pre'.1 (2 * r.val + 1))
@@ -679,7 +636,6 @@ theorem coined_val_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T T' :
     fun v => T'.nu w q v + ∑ y, T'.eqw q y * ZK.Table.castF (F := 𝔽) (u y v)
   rw [h1, h2]
 
-/-- **`τ` reads its batched coefficients** (and the base's `μ`). -/
 theorem coined_tau_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T T' : ZkView.Coined K W Hi VL z) (w : W)
     (b : ZkView.Base z Hi) (r : Fin 2)
     (h : T.lam r (T.tab.view w (T.randOf b 0)).pre = T'.lam r (T'.tab.view w (T'.randOf b 0)).pre) :
@@ -688,7 +644,6 @@ theorem coined_tau_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T T' :
     ∑ i, T'.lam r (T'.tab.view w (T'.randOf b 0)).pre i * b.2.2.2.2.2.1 r i
   rw [h]
 
-/-- **The rank check reads its claims' points** (of the reps up to `r`). -/
 theorem rankOn_congr (r : Fin 2)
     (h : ∀ k, ((coinedOf P Tz st).T c).rep k ≤ r → pointsOf c.rest k = pointsOf c'.rest k) :
     ((coinedOf P Tz st).T c).tab.RankOn (fun k => ((coinedOf P Tz st).T c).rep k ≤ r) ↔
@@ -696,7 +651,6 @@ theorem rankOn_congr (r : Fin 2)
   show _ ↔ ((coinedOf P Tz st).T c').tab.RankOn (fun k => ((coinedOf P Tz st).T c).rep k ≤ r)
   exact coined_rankOn _ _ _ fun k hk => eqw_congr P Tz st c c' k (h k hk)
 
-/-- **The restart's check reads its pair coins.** -/
 theorem wr_congr (r : Fin 2) (h : c.rho r = c'.rho r) :
     Function.Bijective (fun p : 𝔽 × 𝔽 => ((coinedOf P Tz st).T c).tab.Wr r p.1 p.2) ↔
       Function.Bijective (fun p : 𝔽 × 𝔽 => ((coinedOf P Tz st).T c').tab.Wr r p.1 p.2) := by
@@ -706,7 +660,6 @@ theorem wr_congr (r : Fin 2) (h : c.rho r = c'.rho r) :
     simp only [ZK.Table.Wr, coinedOf_rho, coinedOf_embed, h]
   rw [e]
 
-/-- **The inner proof's check reads its `β`.** -/
 theorem beta_congr (r : Fin 2) (h : c.beta r = c'.beta r) :
     ((coinedOf P Tz st).T c).tab.β r ≠ 0 ↔ ((coinedOf P Tz st).T c').tab.β r ≠ 0 := by
   rw [coinedOf_beta, coinedOf_beta, h]
@@ -757,7 +710,6 @@ namespace FlockComplete.ZkTables
 
 open FlockDeploy FlockSoundness FlockSoundness.Discharge
 
-/-- **A masked session in scope links at two points.** -/
 theorem points_of_setup {x : Claims.Msg} {s : Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hscope : Claims.Flock.Scope (deployZk _root_.Flock.Readable.relation) x)
     (hsetup : setupOf true x = some (s, spec, sts)) : spec.points = 2 := by
@@ -786,7 +738,6 @@ open FlockComplete.CutEq
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **The cut at the coins `c`** on the simulator's leaves `H(dig ⊕ b, c)` (`RoundPlan.Causal`'s). -/
 noncomputable abbrev cutC (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
     (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
     (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray) (c : Fin (refK x) → FlockDeploy.Coin) :
@@ -797,8 +748,6 @@ noncomputable abbrev cutC (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (t
 theorem stsOf_of {x : Msg} {s spec sts} (h : FlockDeploy.setupOf true x = some (s, spec, sts)) : stsOf x = sts := by
   unfold stsOf
   rw [h]
-
-/-! ## The commitments read no coin -/
 
 theorem commit0Cut_congr (ms : _root_.Flock.MerkleScheme) (lv : _root_.Flock.Level) {src src' : FlockComplete.TabSrc}
     (h0 : src.leaf0 = src'.leaf0) (h1 : src.row0 = src'.row0) (h2 : src.salt0 = src'.salt0) :
@@ -871,10 +820,6 @@ theorem padLeaf_agree (c c' : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x
 
 end Agree
 
-/-! ## The reps' bookkeeping -/
-
-/-- **Each rep's sources agree where read**, at coins agreeing below `n`: table `j`'s rep `r`, from its first body
-`repStartZk (2j + r)`, with its region claims. -/
 def RepOk : Prop :=
   ∀ x, Live x → ∀ wt ω p (c c' : Fin (refK x) → FlockDeploy.Coin) (n : ℕ),
     (∀ j : Fin (refK x), j.val < n → c j = c' j) → ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
@@ -892,7 +837,6 @@ section Generic
 variable {x : Msg} (cut : ∀ c : Fin (refK x) → FlockDeploy.Coin, ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Cut)
   {c c' : Fin (refK x) → FlockDeploy.Coin}
 
-/-- **The commitments of cuts whose level-0 and pads leaves agree are the same.** -/
 theorem commitsCut_agree
     (hl : ∀ j, leafAt PE x (czExe PE x c) (cut c) j = leafAt PE x (czExe PE x c') (cut c') j)
     (hpl : ∀ j r, padLeafCut PE x (czExe PE x c) (cut c) j r = padLeafCut PE x (czExe PE x c') (cut c') j r) :
@@ -915,8 +859,6 @@ theorem commitsCut_agree
       · rw [tabSrcCut_rep_dead _ _ h hr, tabSrcCut_rep_dead _ _ h hr]
     · rw [tabSrcCut_dead _ _ h, tabSrcCut_dead _ _ h]
 
-/-- **Each rep stream's sources agree where read from its first body** at cuts whose reps' sources do, table `j`'s
-rep `r` from `repStartZk (2j + r)`. -/
 theorem repStreams_agree (hx : Live x) {n : ℕ} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (hR : ∀ (j : Fin (jOf x)) (r : Fin 2) (e : Array _root_.Flock.Claim),
@@ -975,8 +917,6 @@ theorem repStreams_agree (hx : Live x) {n : ℕ} {s : FlockDeploy.Ins} {spec : _
   · have := hR ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ extras hes
     rwa [show 2 * (⟨k / 2, hj⟩ : Fin (jOf x)).val + (⟨k % 2, hr⟩ : Fin 2).val = k by simp only; omega] at this
 
-/-- **The deployed round encodings of cuts agree at coins agreeing below the round** where the cuts' level-0 and pads
-leaves agree and, at a live statement, each rep's sources agree where read. -/
 theorem encExe_congr {n : ℕ} (hcc : ∀ k : Fin (refK x), k.val < n → c k = c' k)
     (hl : ∀ j, leafAt PE x (czExe PE x c) (cut c) j = leafAt PE x (czExe PE x c') (cut c') j)
     (hpl : ∀ j r, padLeafCut PE x (czExe PE x c) (cut c) j r = padLeafCut PE x (czExe PE x c') (cut c') j r)
@@ -1017,14 +957,11 @@ theorem encExe_congr {n : ℕ} (hcc : ∀ k : Fin (refK x), k.val < n → c k = 
 
 end Generic
 
-/-- **The deployed plan is causal given each rep's sources agree where read** (`encExe_congr` at `cutC`). -/
 theorem causalExe_of_rep (h : RepOk) : CausalExe := by
   intro x wt ω p c c' n hcc
   show encExe PE x c n (cutC x wt ω p c) = encExe PE x c' n (cutC x wt ω p c')
   exact encExe_congr (cutC x wt ω p) hcc (leaf0_agree x wt ω p c c') (padLeaf_agree x wt ω p c c')
     fun hx s spec hsx => h x hx wt ω p c c' n hcc s spec hsx
-
-/-! ## The pads layout's positions -/
 
 section Layout
 
@@ -1061,14 +998,10 @@ theorem pl_lgE (i t : ℕ) :
 
 end Layout
 
-/-! ## The cut's fields -/
-
-/-- A rep's sent `y₁` (`repSrcCut`'s `y1`). -/
 def y1Arr {L : ℕ} : Option (Fin L → 𝕂) → Array _root_.Flock.F256
   | some f => Array.ofFn fun c => kVal (f c)
   | none => #[]
 
-/-- A rep's sent `Y` (`repSrcCut`'s `y`). -/
 def yArr {nE nPad : ℕ} (Y2 : Fin nPad → 𝔽) : Option (PadIdx nE → 𝔽) → Array _root_.Flock.F128
   | some Y1 => Array.ofFn (yAt Y1 Y2)
   | none => #[]
@@ -1187,7 +1120,6 @@ theorem cutAt_ybar_congr (hrbar : ((C j).T (cz j)).rbar r = ((C j).T (cz' j)).rb
         ((C j).T (cz' j)).ρ r 1 * ((C j).T (cz' j)).embed ((ω j).2.1.2.2 r 1 i)))
   rw [hrbar, hρ, he]
 
-/-- **A rep's `τ` commitment reads its `τ`** (at the executable's leaves). -/
 theorem cutC_tauCom_congr (p : ZkView.Leaves (fun j => (C j).z) → ZkView.Bits × ByteArray)
     (htau : (((C j).T (cz j)).tab.view (wt j) (((C j).T (cz j)).randOf (ω j) 0)).tau r =
       (((C j).T (cz' j)).tab.view (wt j) (((C j).T (cz' j)).randOf (ω j) 0)).tau r) :
@@ -1342,7 +1274,6 @@ theorem rep_y_congr
   (repSrcCut_y x cz j r _).trans
     ((cutAt_y_congr (tabC PE x) cz wt ω lv j r cz' lv' hfin hβ ha hb).trans (repSrcCut_y x cz' j r _).symm)
 
-/-- **Rep `r`'s `τ` reads only its coins below the inner proof's `β`** and its own masked claims' points. -/
 theorem view_tau_congr (hA : Composed.Cx.InAgree (zkTab x j).table (stAt x j) (cz j) (cz' j) r)
     (hpt : ∀ k (h : k < (tabC PE x j).z.nC), (k = 2 * r.val ∨ k = 2 * r.val + 1) →
       Composed.pointsOf ((cz j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) ⟨k, h⟩ =
@@ -1402,10 +1333,6 @@ theorem rep_tauCom_congr (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkVie
 
 end Masked
 
-/-! ## Each coin at its round -/
-
-/-- **The rounds a check reads below**: table `j`'s rep `r`'s rank check, after its lincheck's last coin; its restart,
-after the lane phase's pair; its inner check, after `β`. -/
 noncomputable def gateAt (spec : _root_.Flock.SessionSpec) (x : Msg) (j : Fin (jOf x)) (r : Fin 2) :
     FlockSoundness.ZK.Session.Phase → ℕ
   | .opening => FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) + 6 + ((stAt x j).m - 6) +
@@ -1647,7 +1574,6 @@ theorem guard_agree (p : Session.Phase) (h : gateAt spec x j r p ≤ n) :
     exact Composed.Cx.beta_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r
       (beta_agree hsx j r hcc (by omega))
 
-/-- **Whether the session reaches a check reads only the coins below its gate.** -/
 theorem passes_agree (p : Session.Phase) (h : gateAt spec x j r p ≤ n) :
     famPasses (fun j => ((tabC PE x j).T (czExe PE x c j)).tab) (fun j => ((tabC PE x j).T (czExe PE x c j)).rep)
         j r p ↔
@@ -1825,7 +1751,6 @@ theorem repOk : RepOk := by
   · exact fun _ => ⟨(repSrcCut_tau x _ j r _).1.trans (repSrcCut_tau x _ j r _).1.symm,
       (repSrcCut_tau x _ j r _).2.trans (repSrcCut_tau x _ j r _).2.symm⟩
 
-/-- **Sent's `hc`**: every value the executable sends reads only the coins flipped before it. -/
 theorem causalExe : CausalExe := causalExe_of_rep repOk
 
 end Claims.ZKMal.Masked

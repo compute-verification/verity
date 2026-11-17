@@ -45,34 +45,9 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
-/-!
-# The deployed masked session's tables: `Tables`, `DummyReg` and `Complete`
-
-The masked session's tables are `setupOf true x`'s (`stsOf`). Each is a `--zk` table built from its statement alone
-(`ZkHidden.ZkTab`, `ZkTab.table`: the plan of the single-input-group form, which the tree had only at a hidden-output
-sample, `SampleSetupZHJ.table`), so every table is a table the session sets up (`setupTable_zkTab`).
-
-* `ZkHidden.schedule_ok_of_shapeOk`: a statement the `--zk` shape check passes has a `--zk` schedule (`queries0` puts
-  `m` in `[25, 35]`, where `Zk.schedule` accepts, `scheduleOkB_all`).
-* `Readable.tableAt_zk`: each table the masked verifier parses passes the shape check, is a `MaskSetup` and has
-  whole-word regions (`setupH_whole` at the scope's `outNet = unitNet` where the outputs are not hidden, or
-  `setupHidden_whole`).
-* `Readable.tableLowers`: the relation at a parse makes each table's share satisfy the table's lowered statement
-  (`stmtOf`). `OneTableLowers` is its one-table case (`oneTableLowers`), the converse of `good_of_committed_plain`'s
-  reading; it needs `Parses p`, an untyped statement and no public input ports, under which the readable table's
-  matrices are `stmtOf`'s (`tableAt_model`), and none of `SetupTable`'s other side conditions.
-* `Readable.parsed_zk`: what the masked scope and the relation give the parse (`FlockComplete.ZkTables.Case.parsed`
-  without the case, the verifier's parse of `x`, and the scope's `outNet = unitNet` where the outputs are not hidden).
-* `Masked.Live`: the statements in the masked scope each of whose tables has a `ZkTab`; `jOf` is their table count
-  (`0` elsewhere), `tabC` their tables, `dummy` a witness holding the regions (`RegionsHold`), and `wtOf` the shares.
-  `live_of`: every statement of the scope with a witness is `Live`. So `Tables` (`setupTable_tabC`) and `DummyReg`
-  (`dummyReg_tabC`, `coinedOf_reg_of`) hold at every statement, and `Complete` (`complete_tabC`) at every statement with
-  a witness.
--/
+/-! The deployed masked session's tables: `Tables`, `DummyReg` and `Complete`. -/
 
 @[expose] public section
-
-/-! ## A `--zk` table from its statement alone -/
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -83,7 +58,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {wideLeaf : Bool}
 
-/-- `queries0` accepts `m` only from 25 to 35. -/
 theorem queries0_range {m q : ℕ} (h : Flock.Zk.queries0 wideLeaf m = .ok q) : 25 ≤ m ∧ m ≤ 35 := by
   unfold Flock.Zk.queries0 at h
   refine ⟨?_, ?_⟩ <;> by_contra hc
@@ -91,7 +65,6 @@ theorem queries0_range {m q : ℕ} (h : Flock.Zk.queries0 wideLeaf m = .ok q) : 
   · simp [show ¬ m ≤ 24 by omega, show m ≠ 25 by omega, show m ≠ 26 by omega, show m ≠ 27 by omega,
       show ¬ m ≤ 31 by omega, show ¬ m ≤ 35 by omega, throw, throwThe, MonadExceptOf.throw] at h
 
-/-- Whether `Zk.schedule` accepts `m`. -/
 def scheduleOkB (wideLeaf : Bool) (m : ℕ) : Bool :=
   match Flock.Zk.schedule wideLeaf m with
   | .ok _ => true
@@ -102,8 +75,6 @@ theorem scheduleOkB_all : ∀ m, 25 ≤ m → m ≤ 35 → scheduleOkB wideLeaf 
   intro m h1 h2
   cases wideLeaf <;> interval_cases m <;> decide +kernel
 
-/-- **A statement the `--zk` shape check passes has a `--zk` schedule**: `queries0` puts `m` in `[25, 35]`, where
-`Zk.schedule` accepts. -/
 theorem schedule_ok_of_shapeOk {st : Flock.Stmt} (h : Flock.Zk.shapeOk st = .ok ()) :
     ∃ p, Flock.Zk.schedule st.wideLeaf st.m = .ok p := by
   unfold Flock.Zk.shapeOk at h
@@ -190,13 +161,10 @@ end ZkTab
 
 end FlockSoundness.Discharge.ZkHidden
 
-/-! ## What the masked scope gives each table -/
-
 namespace Flock.Readable
 
 open FlockSoundness FlockSoundness.Discharge Exec
 
-/-- Under `--zk`, every table `Read.tablesOf` accepts passes `Zk.shapeOk`. -/
 theorem tablesOf_shapeOk {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (hz : r.zk = true) :
     sts.forM Zk.shapeOk = .ok () := by
   unfold Read.tablesOf at hs
@@ -209,9 +177,6 @@ theorem tablesOf_shapeOk {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some s
     · cases hs
   · cases hs
 
-/-- **Each table the masked verifier parses is a `--zk` table it sets up**: untyped, without public input ports, at a
-circuit whose output is its unit's where its outputs are not hidden (the scope's `scopeOk`), each table passes the shape
-check, is a `MaskSetup` and has whole-word regions. -/
 theorem tableAt_zk {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (hz : r.zk = true)
     (ht : r.tags.typed = false) (hpi : r.publicInputs = none) {c : Circuit}
     (hc : ProvedScope.circuitOf r.tags r.I.circuitFile r.I.tables = .ok c)
@@ -239,9 +204,6 @@ theorem tableAt_zk {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (h
     simp only [↓reduceIte] at hd
     exact ⟨ZkHidden.maskSetup_of_setupHidden ht' hd, Composed.setupHidden_whole hd⟩
 
-/-- **The relation at a parse makes each table's share satisfy the table's lowered statement**: at a parse of an untyped
-statement without public input ports, a witness in the readable relation is, at table `j` (`zOf` at `j`), a witness of
-`stmtOf` at the table's own regions. -/
 theorem tableLowers {p : Parsed} (hp : Parses p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none)
     {w : Claims.Flock.Wit} (hR : Claims.Flock.RelS (toReadable relation p) w) {j : ℕ} {st : Stmt}
     (hst : p.sts[j]? = some st) (hwf : Refine.StmtWF st) :
@@ -262,10 +224,6 @@ theorem tableLowers {p : Parsed} (hp : Parses p) (ht : p.tags.typed = false) (hp
   rw [hA, hB] at this
   exact this
 
-/-- **The relation at a one-table parse makes the witness satisfy the table's lowered statement**: at a parse of an
-untyped statement without public input ports whose one table is `st`, a witness in the readable relation is, as its
-model witness (`zOf`), a witness of `stmtOf st` at its own regions. The converse of `good_of_committed_plain`'s
-reading, which `RefSession.Complete` needs at each table's share (`Readable.tableWit`, `zOf_tableWit`). -/
 def OneTableLowers : Prop :=
   ∀ (p : Parsed) (st : Stmt) (w : Claims.Flock.Wit) (hwf : Refine.StmtWF st), Parses p → p.tags.typed = false →
     p.publicInputs = none → p.sts = #[st] → Claims.Flock.RelS (toReadable relation p) w →
@@ -276,10 +234,6 @@ theorem oneTableLowers : OneTableLowers := by
   have h := tableLowers hp ht hpi hR (j := 0) (by simp [hpe]) hwf
   rwa [show p.sts.size = 1 by simp [hpe]] at h
 
-/-- **What the masked scope and the relation give the parse**: at a statement of the masked record's scope with a
-witness in its relation, whose setup has the tables `sts`, the verifier's parse is masked, untyped, without public input
-ports, has the tables `sts`, the witness is in its readable relation, and the circuit's output is its unit's where its
-outputs are not hidden. -/
 theorem parsed_zk {rel : Parsed → Relation} {x : Claims.Msg} {w : Claims.Flock.Wit} {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hsc : Claims.Flock.Scope (FlockDeploy.deployZk rel) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk rel).parse x w)
@@ -332,8 +286,6 @@ theorem parsed_zk {rel : Parsed → Relation} {x : Claims.Msg} {w : Claims.Flock
   exact ⟨p, hps, hz, hRu.2.1, hpi, hpe, hparse, hR', c, hcirc, ho⟩
 
 end Flock.Readable
-
-/-! ## The masked session's tables -/
 
 namespace Claims.ZKMal.Masked
 
@@ -389,13 +341,10 @@ noncomputable def zkTab (x : Msg) (j : Fin (jOf x)) : ZkHidden.ZkTab (stAt x j) 
 noncomputable def tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) : Composed.CoinedSetup :=
   Composed.coinedOf P (zkTab x j).table (stAt x j)
 
-/-- **A `ZkTab`'s `Coined` tables are a table the session sets up**: `ZkTab`'s fields are `SetupTable`'s side
-conditions, with mask avoidance from the shape check (`avoidsMask_of_shapeOk`). -/
 theorem setupTable_zkTab (P : Composed.LigProver) {st : _root_.Flock.Stmt} (y : ZkHidden.ZkTab st) :
     SetupTable (Composed.coinedOf P y.table st) :=
   ⟨st.mPts, P, y.table, st, y.wf.1, y.wf.2, rfl, y.mask, FailClosed.avoidsMask_of_shapeOk y.wf.2 y.hzk, y.whole, rfl⟩
 
-/-- **Every table of the masked session is a table the session sets up.** -/
 theorem setupTable_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) : SetupTable (tabC P x j) :=
   setupTable_zkTab P (zkTab x j)
 
@@ -409,7 +358,6 @@ theorem dummy_holds {S : FlockSoundness.Model.Statement} (h : ∃ z, Composed.Re
   rw [dummy, dite_eq_left h]
   exact h.choose_spec
 
-/-- **The dummy's table witnesses carry the public region data**, at every table and coin (`coinedOf_reg_of`). -/
 theorem dummyReg_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Composed.CoinsZK (tabC P x j).Rest) :
     ((tabC P x j).T c).tab.sReg (dummy (tabC P x j).S) = ((tabC P x j).T c).tab.pubReg :=
   Composed.coinedOf_reg_of P (zkTab x j).table (stAt x j) (zkTab x j).wf.1 (zkTab x j).wf.2 rfl (zkTab x j).whole c _
@@ -420,8 +368,6 @@ noncomputable def wtOf (P : Composed.LigProver) (x : Msg) (w : Claims.Flock.Wit)
     FlockSoundness.Model.Witness (tabC P x j).S.m :=
   _root_.Flock.Readable.zOf 1 (_root_.Flock.Readable.tableWit (stsOf x).size w j.val) 0 (tabC P x j).S.m
 
-/-- **The lowering's completeness at the masked session's tables**: at a statement with a witness in the deployed
-relation, each table's share is valid (`tableLowers`, `zOf_tableWit`). -/
 theorem complete_tabC (P : Composed.LigProver) {x : Msg} {w : Claims.Flock.Wit}
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (j : Fin (jOf x)) :
     (tabC P x j).Valid (wtOf P x w j) := by
@@ -433,9 +379,6 @@ theorem complete_tabC (P : Composed.LigProver) {x : Msg} {w : Claims.Flock.Wit}
   rw [hpe, ← _root_.Flock.Readable.zOf_tableWit hj] at h
   exact h
 
-/-- **Every statement of the masked scope with a witness is `Live`**: each of its tables is a `--zk` table it sets up
-(`tableAt_model`, `tableAt_zk`), with a schedule (`schedule_ok_of_shapeOk`), whose regions the witness's share holds
-(`tableLowers`). -/
 theorem live_of {x : Msg} {w : Claims.Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) : Live x := by
@@ -451,7 +394,6 @@ theorem live_of {x : Msg} {w : Claims.Flock.Wit}
   have hsat := _root_.Flock.Readable.tableLowers hp ht hpi hRp (by rw [hpe]; exact Array.getElem?_eq_getElem hj) hwf
   exact ⟨⟨⟨hwf, hrw⟩, hzk, hmask, hwhole, ⟨_, Composed.RegionsHold.of_satisfies hsat⟩, sch, tPad, hsch⟩⟩
 
-/-- At a statement with a witness, `Live` is the masked scope. -/
 theorem live_iff {x : Msg} {w : Claims.Flock.Wit}
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) :
     Live x ↔ Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x :=

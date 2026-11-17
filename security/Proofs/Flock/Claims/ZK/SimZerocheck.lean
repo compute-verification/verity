@@ -36,24 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A rep's zerocheck from the cut, against the session's (`SimPiop`'s first phase)
-
-`SimPiop` (`Claims.ZKMal.Masked`, `Split`) compares a rep's PIOP read from the cut (`piopCut`) with the session's
-(`piopPZk`), both answered by `asksCut`, which throws right after the send at round `n`. Either may throw at any squeeze,
-so the two are compared in lockstep (`GoAlike R`): both throw the same error after the same bodies, or both return, at the
-same transcript and bodies, values related by `R`.
-
-* **Lockstep** (`GoAlike`): a bind of related programs whose continuations are related from every common return
-  (`alike_bind`, `alike_bind_eq` for a shared prefix), a loop whose every step yields related states (`forIn_alike`).
-* **`asksCut`'s squeezes**: before round `n` a squeeze sends the framed bytes and returns the coins at `l.size`
-  (`squeezeP_cut_ok`, `sampleP_cut_ok`); at or after it, it throws once the bytes are sent (`squeezeP_cut_err`,
-  `sampleP_cut_err`); a squeeze that returned was before round `n` (`squeezeP_cut_inv`, `sampleP_cut_inv`).
-* **The zerocheck** (`zerocheckCut_alike`): where the cut's masked values at the layout's indices are the plain
-  prover's messages at the zerocheck's coins (`zcCoins`) plus their pads, the cut's zerocheck sends what the session's
-  sends and returns the session's proof, both at the `z`, `ρ` and `r` of those coins (`ZcOutAt`; the cut's `v_A`,
-  `v_B`, `v_C` are zeros).
--/
+/-! A rep's zerocheck from the cut, against the session's (`SimPiop`'s first phase). -/
 
 @[expose] public section
 
@@ -61,10 +44,6 @@ namespace FlockComplete
 
 open Flock Transcript Replay
 
-/-! ## Lockstep -/
-
-/-- **Two runs in lockstep**: both threw the same error after the same bodies, or both returned at the same transcript
-after the same bodies `L`, with values related by `R` at `L`. -/
 abbrev GoAlike {α β : Type} (R : α → β → Array Claims.Msg → Prop)
     (x : Except String (α × Transcript) × Array Claims.Msg) (y : Except String (β × Transcript) × Array Claims.Msg) :
     Prop :=
@@ -93,7 +72,6 @@ theorem alike_pure {α β : Type} {R : α → β → Array Claims.Msg → Prop} 
     GoAlike R (((pure a : TMW PS α).run t).go l) (((pure b : TMW PS β).run t).go l) :=
   .inr ⟨a, b, t, l, rfl, rfl, h⟩
 
-/-- **A bind in lockstep**: related programs, and continuations related from every common return. -/
 theorem alike_bind {α β γ δ : Type} {R : α → β → Array Claims.Msg → Prop} {S : γ → δ → Array Claims.Msg → Prop}
     {x : TMW PS α} {y : TMW PS β} {f : α → TMW PS γ} {g : β → TMW PS δ} {t : Transcript} {l : Array Claims.Msg}
     (hxy : GoAlike R ((x.run t).go l) ((y.run t).go l))
@@ -105,7 +83,6 @@ theorem alike_bind {α β γ δ : Type} {R : α → β → Array Claims.Msg → 
   · rw [bind_go hx, bind_go hy]
     exact hfg a b t' L hx hy hR
 
-/-- **A shared step**: the same program, then continuations related from each of its returns. -/
 theorem alike_bind_eq {α γ δ : Type} {S : γ → δ → Array Claims.Msg → Prop} {x y : TMW PS α}
     {f : α → TMW PS γ} {g : α → TMW PS δ} {t : Transcript} {l : Array Claims.Msg} (hxy : x = y)
     (hfg : ∀ a t' l', (x.run t).go l = (.ok (a, t'), l') → GoAlike S (((f a).run t').go l') (((g a).run t').go l')) :
@@ -113,8 +90,6 @@ theorem alike_bind_eq {α γ δ : Type} {S : γ → δ → Array Claims.Msg → 
   subst hxy
   exact alike_bind (GoAlike.refl _) fun a b t' l' hx _ (hab : a = b) => by subst hab; exact hfg a t' l' hx
 
-/-- **A loop in lockstep**: if step `i`, from states related by `I i` with `L + i` bodies sent, yields states related by
-`I (i + 1)` after one more body, the loops over `[0:n]` end in states related by `I n` after `L + n` bodies. -/
 theorem forIn_alike {σ τ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (body' : ℕ → τ → TMW PS (ForInStep τ))
     (I : ℕ → σ → τ → Prop) (L n : ℕ)
     (hb : ∀ i < n, ∀ (s : σ) (s' : τ) (t : Transcript) (l : Array Claims.Msg), l.size = L + i → I i s s' →
@@ -142,8 +117,6 @@ theorem forIn_alike {σ τ : Type} (body : ℕ → σ → TMW PS (ForInStep σ))
     obtain ⟨u, u', rfl, rfl, hI₁, hl₁⟩ := hr
     exact ih (a + 1) u u' t₁ l₁ (by omega) (by omega) hI₁
 
-/-! ## `asksCut`'s squeezes -/
-
 theorem asksCut_round_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Claims.Msg) :
     ((asksCut coin n).round c).go l =
       ((if n ≤ l.size then throw "past the openings" else pure (coin l.size) : PS (ℕ → F128)).go
@@ -166,7 +139,6 @@ theorem squeezeP_cut_err (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) 
   rw [go_bind, asksCut_round_go, ite_eq_left hl]
   rfl
 
-/-- **A squeeze that returned** was before round `n`, returned the coins at `l.size` and sent the framed bytes. -/
 theorem squeezeP_cut_inv (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) {k : ℕ} (hk : k ≠ 0) {t t' : Transcript}
     {l l' : Array Claims.Msg} {a : Array F128} (h : ((squeezeP (asksCut coin n) kind k).run t).go l = (.ok (a, t'), l')) :
     l.size < n ∧ a = (Array.range k).map (coin l.size) ∧ t' = afterSq t kind k (coin l.size) ∧
@@ -209,26 +181,16 @@ theorem sampleP_cut_inv (coin : ℕ → ℕ → F128) {n : ℕ} {t t' : Transcri
     obtain ⟨⟨rfl, rfl⟩, rfl⟩ := h
     exact ⟨by omega, rfl, rfl, rfl⟩
 
-/-- A transcript action sends nothing. -/
 theorem liftTM_inv {α : Type} {x : TM α} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
     (h : ((liftTM x : TMW PS α).run t).go l = (.ok (a, t'), l')) : l = l' :=
   congrArg Prod.snd ((liftTM_go x t l).symm.trans h)
 
-/-! ## The zerocheck -/
-
-/-- **The zerocheck's coins at the cut's coins** from round `L` on: `r_skip`'s at `L`, `r_outer`'s at `L + 1`, `z`'s at
-`L + 2`, residual round `i`'s at `L + 3 + i`. -/
 def zcCoins (coin : ℕ → ℕ → F128) (L : ℕ) : Zc.Challenges :=
   ⟨coin L, coin (L + 1), coin (L + 2), fun i => coin (L + 3 + i)⟩
 
-/-- **A zerocheck's `z`, `ρ` and `r` at the coins `cs`**, those `Zc.out` returns. -/
 abbrev ZcOutAt (m : ℕ) (cs : Zc.Challenges) (o : ZcOut) : Prop :=
   o.z = cs.z ∧ o.rho = pushes cs.ρ (m - 6) ∧ o.rRest = cs.r m
 
-/-- **The cut's zerocheck in lockstep with the session's**: answered by `asksCut` from `l`, where the masked values `mk`
-at `round1_ab`'s, `round1_c`'s, each residual round's and the finals' pad indices are the plain prover's values at the
-coins from `l.size` on (`zcCoins`) plus their pads `h`, the two send the same `3 + (m − 6)` bodies, throw together, and
-return the same proof, both with the `z`, `ρ` and `r` of those coins. -/
 theorem zerocheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray)
     (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (mk : ℕ → F128) (t : Transcript) (l : Array Claims.Msg)
     (hab : ∀ i < 64, mk (lay.r1ab i) = (Zc.r1ab tr (m - 6) ((zcCoins coin l.size).r m))[i]! + h[lay.r1ab i]!)

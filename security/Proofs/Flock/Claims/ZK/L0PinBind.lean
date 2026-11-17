@@ -38,26 +38,7 @@ import Proofs.Flock.Claims.ZK.FinishSwPts
 import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.FrameOuter
 
-/-!
-# The frame at a rep's binding
-
-Level 0's binding (`LeanRelease.answered_openBind`) needs the frame's state where it takes the coins of the ring
-switch's last round, `γ`'s: outside every masked phase, past the algebraic phase's opening, before level 0 and the inner
-proof, at the algebraic phase's last position. This file gives it at the loop's state (`repState_opened`), from the
-rep's schedule so far:
-
-* **The opening's rounds so far** (`schedSoFar_sentQ`, `feed_part`): past the algebraic phase's rounds, a rep's schedule
-  is what its opening sent, fed, with the round it asks for next; fed fewer coins than it asks for, one more round than
-  coins.
-* **The ring switch cut at `γ`** (`ringSwitchCut_gamma`, `openStep_switch`): the cut run stops at `γ`'s squeeze having
-  sent the switch's bodies (`Switch.rsBody`), so the opening's first `claims + 1` rounds are those, after the PIOP's
-  empty pending bytes.
-* **Their counts** (`sched_count`, `openList_lt`, `openList_at`): `7` a claim, then `claims` for `γ`.
-* **The flags** (`repState_opened`): the switch's first round is the opening's (`Flags.PcsRound`), the rest quiet, so
-  `Flags.sched_flags` carries the frame there, and the coins keep it.
-* **Level 0's rounds** (`sched_binding`, `sched_l0`): fed level 0's first `j` coins as well, the schedule's next
-  rounds are level 0's first `j + 1` bodies at zero pads (`openStep_l0`), the binding first, with the opening's counts.
--/
+/-! The frame at a rep's binding. -/
 
 @[expose] public section
 
@@ -74,10 +55,6 @@ open FlockComplete.LigLock.Fed (feedR sentQ pendC feed_eq CoinAt repOpening_feed
 open Switch (rsBody)
 open Loop
 
-/-! ## The opening's rounds so far -/
-
-/-- **Fed fewer coins than it asks for**, a step program that has not failed sent a round for each and asks for one
-more. -/
 theorem feed_part {α : Type} : ∀ (s : Step α) (cs : List (Array F128)) (ns : List ℕ),
     Count.SP (fun _ ns => ns = []) s ns → cs.length < ns.length → (∀ e, (feedR s cs).1 ≠ .fail e) →
     (sentQ (feedR s cs)).length = cs.length + 1
@@ -93,8 +70,6 @@ theorem feed_part {α : Type} : ∀ (s : Step α) (cs : List (Array F128)) (ns :
     have e2 : sentQ (feedR (.ask c n k) (z :: rest)) = c :: sentQ (feedR (k z) rest) := rfl
     rw [e2, List.length_cons, ih, List.length_cons]
 
-/-- **A rep's schedule past its algebraic phase** is what its opening, fed the rest of the coins, sent and asks for
-next, and the feeding has not failed. -/
 theorem schedSoFar_sentQ {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -130,7 +105,6 @@ theorem schedSoFar_sentQ {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom
       simp [sentQ, pendC]
     | fail e => cases hs
 
-/-- A schedule's entry past `A`, from the rounds past `A`. -/
 theorem sched_entry {sched : Array (ByteArray × ℕ)} {A : ℕ} {q : List ByteArray}
     (h : (sched.toList.map Prod.fst).drop A = q) {i : ℕ} (hi : i < q.length) :
     (sched.getD (A + i) (.empty, 0)).1 = q[i] := by
@@ -142,7 +116,6 @@ theorem sched_entry {sched : Array (ByteArray × ℕ)} {A : ℕ} {q : List ByteA
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hsz, Option.getD_some]
   simp only [List.getElem_drop, List.getElem_map, Array.getElem_toList]
 
-/-- A schedule's entry past `A`, from the rounds past `A` and their first `N + 1` bodies. -/
 theorem sched_bytes {sched : Array (ByteArray × ℕ)} {A N : ℕ} {q : List ByteArray} {B : ℕ → Claims.Msg}
     (h : (sched.toList.map Prod.fst).drop A = q)
     (hq : (q.take (N + 1)).map Claims.toMsg = (List.range (N + 1)).map B) (hlen : N < q.length) {i : ℕ}
@@ -153,8 +126,6 @@ theorem sched_bytes {sched : Array (ByteArray × ℕ)} {A N : ℕ} {q : List Byt
     exact this
   rw [sched_entry h (by omega)]
   exact e1
-
-/-! ## The opening's counts -/
 
 theorem openList_eq {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) :
     Count.openList N sch = List.replicate N 7 ++ N ::
@@ -182,7 +153,6 @@ theorem ligeritoCoins_cons (sch : _root_.Flock.Schedule) :
   simp only [Array.toList_append, List.append_assoc, List.toList_toArray, List.cons_append, List.nil_append]
   exact ⟨_, rfl⟩
 
-/-- Past the ring switch's, the opening's first count is level 0's binding's, `n`. -/
 theorem openList_bind {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) (hn0 : sch.n ≠ 0) :
     N + 1 < (Count.openList N sch).length ∧ (Count.openList N sch).getD (N + 1) 0 = sch.n := by
   obtain ⟨rest, hr⟩ := ligeritoCoins_cons sch
@@ -193,7 +163,6 @@ theorem openList_bind {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) (hn
       show N + 1 - N = 1 by omega]
     rfl
 
-/-- **A rep's schedule past its algebraic phase squeezes the opening's counts.** -/
 theorem sched_count {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -212,10 +181,6 @@ theorem sched_count {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : By
   rw [← e, Array.getD_eq_getD_getElem?, List.getElem?_toArray, List.getElem?_append_right (by simp),
     List.length_map, Array.length_toList, Nat.add_sub_cancel_left, List.getD_eq_getElem?_getD]
 
-/-! ## The ring switch cut at `γ` -/
-
-/-- **The cut ring switch, cut at `γ`'s squeeze**: from `l`, cut at its last ask, it stops having sent `rsBody` after
-`t`'s pending bytes, `γ`'s squeeze its last body. -/
 theorem ringSwitchCut_gamma (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128)
     (claims : Array _root_.Flock.Claim) (hN : claims.size ≠ 0) (t : Flock.Transcript) (l : Array Claims.Msg)
     (hl : n = l.size + claims.size) :
@@ -246,8 +211,6 @@ theorem ringSwitchCut_gamma (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ �
     List.map_append, List.map_cons, List.map_nil, List.append_assoc]
   rw [Switch.rsLast sv coin l.size (Switch.pcsT t) hN t.pending.data.toList]
 
-/-- **The opening's first rounds are the ring switch's**: fed past `γ`'s squeeze, `openStep`'s first `claims + 1`
-rounds are the switch's bodies from empty pending bytes, each claim's switched vector of `128` words. -/
 theorem openStep_switch (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) (hdom : dom.size < 2 ^ 64)
     (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
@@ -295,12 +258,6 @@ theorem openStep_switch (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom 
     Nat.sub_zero] at e2
   exact e2.symm
 
-/-! ## The frame at the binding -/
-
-/-- **The loop's state at the coins of a rep's `γ`**: after the algebraic phase's rounds and the ring switch's
-`xs.size + 2` claim rounds and `γ`'s, the frame, where it takes `γ`'s coins at the layout `c''`, is outside every masked
-phase, past the algebraic phase's opening, before level 0 and the inner proof, at the algebraic phase's last position
-`c.nPiop`, and owes nothing. -/
 theorem repState_opened {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
@@ -391,17 +348,12 @@ theorem repState_opened {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[
     simp only [↓reduceIte] at ha
     exact absurd ha (answer_owed_none cs rfl)
 
-/-! ## Level 0's binding in the schedule -/
-
 theorem coinAt_getD (cs : List (Array F128)) :
     CoinAt (fun j i => (cs.getD j #[])[i]!) (#[] : Array Claims.Msg).size cs := by
   intro j hj
   funext i
   simp [List.getD_eq_getElem?_getD, hj]
 
-/-- **A rep's schedule holds level 0's binding**: fed the coins of the algebraic phase's rounds, the ring switch's and
-`γ`'s, a rep's schedule asks next for level 0's binding, at the switch's target `T` and the level-0 cap, with `z`'s
-squeeze of `n` coins. -/
 theorem sched_binding {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -468,8 +420,6 @@ theorem sched_binding {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : 
   unfold Claims.toMsg at hk2
   rw [hk2, openBind]
 
-/-! ## Level 0's rounds in the schedule -/
-
 theorem ligeritoCoins_l0 (sch : _root_.Flock.Schedule) :
     ∃ rest, (_root_.Flock.ZkServer.Session.ligeritoCoins sch).toList =
       sch.n :: 1 :: (List.replicate sch.k0 2 ++ 2 :: 2 :: rest) := by
@@ -478,7 +428,6 @@ theorem ligeritoCoins_l0 (sch : _root_.Flock.Schedule) :
     List.nil_append]
   exact ⟨_, rfl⟩
 
-/-- Past the ring switch's, the opening's counts reach past level 0's first `k₀ + 4` rounds. -/
 theorem openList_len_l0 {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) (hn0 : sch.n ≠ 0) :
     N + 1 + (sch.k0 + 4) ≤ (Count.openList N sch).length := by
   obtain ⟨rest, hr⟩ := ligeritoCoins_l0 sch
@@ -489,9 +438,6 @@ theorem openList_len_l0 {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) (
   simp only [List.length_append, List.length_replicate, List.length_cons]
   omega
 
-/-- **A rep's schedule holds level 0's rounds**: fed the coins of the algebraic phase's rounds, the ring switch's, `γ`'s
-and level 0's first `j`, a rep's schedule past the ring switch's rounds is level 0's first `j + 1` bodies at zero pads,
-at the fed coins from the binding on, the switch's target and basis, with the opening's counts. -/
 theorem sched_l0 {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =

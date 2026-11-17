@@ -37,16 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.ZK.Statement
 
-/-!
-# `ZKmalR` at two provers with the same messages
-
-* `runStar_msgs_congr`, `runStar_pLog_congr`: two provers whose messages agree at every history within `V*`'s rounds
-  give the same transcript, and where one's calls include the other's, so do its run's.
-* `fork_pr_mono`: `Fork` finds at least as much at a prover with the same messages and more calls.
-* `zkmalR_congr`, `zkmalR_congr_eq`: so `ZKmalR` carries over to such a prover, at `γ ≥ 0`, and to a prover with the
-  same messages and calls, at every `γ`; `zkmalR_congr_on`: the first with the two provers agreeing only on the
-  relation's statements.
--/
+/-! `ZKmalR` at two provers with the same messages. -/
 
 @[expose] public section
 
@@ -54,9 +45,6 @@ namespace Claims.ZKMal
 
 open Claims
 
-/-! ## Two provers with the same messages within the rounds -/
-
-/-- Two provers whose messages agree at every history shorter than `K` give the same transcript of at most `K` rounds. -/
 theorem interact_congr_lt (ask : List Msg → Out) (pm pm' : List (Msg × Msg) → Msg) (K : ℕ)
     (hv : ∀ hist : List (Msg × Msg), hist.length < K → pm hist = pm' hist) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)), hist.length + n ≤ K → interact ask pm n hist = interact ask pm' n hist
@@ -106,7 +94,6 @@ theorem runStar_pLog_congr {Ω Θ : Type} (H : Msg → Msg) (P Q : Prover Ω) (V
     (runStar H P Vs x ω θ).pLog ⊆ (runStar H Q Vs x ω θ).pLog :=
   stepWith_pLog_congr H P Q x ω _ (Vs.k x) hv hl (Vs.k x) [] [] _ _ (by simp) (List.Subset.refl _)
 
-/-- **`Fork` finds at least as much at a prover with the same messages and more calls** within `V*`'s rounds. -/
 theorem fork_pr_mono {N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
     (P Q : Prover (N × Ω)) (Vs : VStar Θ) (θ : Θ) (x : Msg)
     (hv : ∀ (hist : List (Msg × Msg)) ω, hist.length < Vs.k x →
@@ -129,8 +116,6 @@ theorem fork_pr_mono {N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Non
         (runStar_pLog_congr H P Q Vs x _ θ (fun h hh => hv h _ hh) (fun h hh => hl h _ hh) he)
   exact (findColl_ne_none_iff _).mpr ⟨p, hsub p hp, q, hsub q hq, h₁, h₂⟩
 
-/-- **`ZKmalR` carries over to a prover with the same messages and more calls where the relation holds**, within the
-rounds, at `γ ≥ 0`: the real transcripts are the same, and its `Fork` finds at least as much. -/
 theorem zkmalR_congr_on {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg}
     {k : Msg → ℕ} {P Q : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ} (hγ : ∀ x, 0 ≤ γ x)
     (hv : ∀ w x, R x w → ∀ (hist : List (Msg × Msg)) ω, hist.length < k x →
@@ -146,7 +131,6 @@ theorem zkmalR_congr_on {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [N
     (fork_pr_mono H (P w) (Q w) Vs θ x (fun hist ω hh => hv w x hR hist ω (hk ▸ hh))
       (fun hist ω hh => hl w x hR hist ω (hk ▸ hh))) (hγ x)))
 
-/-- **`ZKmalR` carries over to a prover with the same messages and more calls** within the rounds, at `γ ≥ 0`. -/
 theorem zkmalR_congr {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg} {k : Msg → ℕ}
     {P Q : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ} (hγ : ∀ x, 0 ≤ γ x)
     (hv : ∀ w x (hist : List (Msg × Msg)) ω, hist.length < k x →
@@ -156,7 +140,6 @@ theorem zkmalR_congr {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [None
     (h : ZKmalR H k P R S εzk γ) : ZKmalR H k Q R S εzk γ :=
   zkmalR_congr_on hγ (fun w x _ => hv w x) (fun w x _ => hl w x) h
 
-/-- **`ZKmalR` carries over to a prover with the same messages and the same calls** within the rounds, at every `γ`. -/
 theorem zkmalR_congr_eq {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg}
     {k : Msg → ℕ} {P Q : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ}
     (hv : ∀ w x (hist : List (Msg × Msg)) ω, hist.length < k x →

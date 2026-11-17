@@ -38,24 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# The frame's rank check is the prover's (`FrameAdmits`)
-
-At the opening's label the deployed frame refuses coins at which the mask slot's weights have GF(2)-rank short of
-`128 k` over the `k` claim points so far (`Frame.Masker.label`, `Frame.maskRank`): it reduces each word's weight row,
-`2 k` limbs of 64 bits, into an echelon basis whose pivot is the row's lowest set bit, and counts the rows it inserts.
-`FrameAdmits` needs that a rank the frame finds full is the session's (`MaskRank.maskRankOk`, the weights' GF(2)-span
-all of `GF(2^128)^k`):
-
-* `lowBit_spec`: `Frame.lowBit v` is `v`'s lowest set bit (`v &&& -v` isolates it).
-* `span_of_pivots`: rows with a pivot at every one of the `128 k` columns, each in an additive subgroup `W`, put every
-  vector in `W`.
-* `maskRank_inv`: every row the frame inserts has its pivot at its column and is a GF(2)-sum of weight rows, and the
-  rank counts the columns filled.
-* **`maskRankOk_of_maskRank`**: so `maskRank points m kLog = 128 · points.size` gives `maskRankOk` at the points and
-  the slot's words, which at the statement's slot (`Drive.maskSlot`) are its mask words (`words_maskSlot`,
-  `Composed.maskWordsOf`).
--/
+/-! The frame's rank check is the prover's (`FrameAdmits`). -/
 
 @[expose] public section
 
@@ -65,8 +48,6 @@ open _root_.Flock (F128)
 open _root_.Flock.ZkServer.Frame (MaskSlot maskRank lowBit)
 open FlockLevel3 (GF128)
 open FlockComplete.MaskRank (maskRankOk weights maskRankOk_iff)
-
-/-! ## Loops in `Id` -/
 
 theorem forIn_inv {α β : Type} (P : β → Prop) (f : α → β → Id (ForInStep β)) :
     ∀ (l : List α), (∀ a ∈ l, ∀ b, P b → P (f a b).run.value) → ∀ b, P b → P (forIn l b f).run
@@ -80,7 +61,6 @@ theorem forIn_inv {α β : Type} (P : β → Prop) (f : α → β → Id (ForInS
     | done b' => exact h
     | yield b' => exact forIn_inv P f l (fun a' ha' => hf a' (List.mem_cons_of_mem _ ha')) b' h
 
-/-- **A loop over `[:N]` in `Id` keeps an invariant** each step keeps, and so whatever the invariant gives. -/
 theorem forIn_range_elim {β : Type} (P : β → Prop) (Q : β → Prop) {N : ℕ} {f : ℕ → β → Id (ForInStep β)} {b : β}
     (hb : P b) (hf : ∀ a < N, ∀ b, P b → P (f a b).run.value) (hQ : ∀ r, P r → Q r) :
     Q (forIn [:N] b f).run := by
@@ -88,8 +68,6 @@ theorem forIn_range_elim {β : Type} (P : β → Prop) (Q : β → Prop) {N : �
   refine hQ _ (forIn_inv P f _ (fun a ha => hf a ?_) b hb)
   simp only [List.mem_range'_1, Std.Legacy.Range.size] at ha
   omega
-
-/-! ## Bits -/
 
 theorem testBit_ge_64 (u : UInt64) {j : ℕ} (hj : 64 ≤ j) : u.toNat.testBit j = false :=
   Nat.testBit_lt_two_pow (lt_of_lt_of_le u.toNat_lt (Nat.pow_le_pow_right (by decide) hj))
@@ -106,7 +84,6 @@ theorem limb_eq_zero (u : UInt64) (h : ∀ j < 64, u.toNat.testBit j = false) : 
 theorem toNat_testBit (u : UInt64) (j : ℕ) : u.toNat.testBit j = u.toBitVec.getLsbD j :=
   BitVec.testBit_toNat u.toBitVec
 
-/-- **`lowBit v` is `v`'s lowest set bit**, for `v ≠ 0`: `v &&& (0 - v)` is `2^t` at `v`'s lowest set bit `t`. -/
 theorem lowBit_spec (v : UInt64) (hv : v ≠ 0) :
     lowBit v < 64 ∧ v.toNat.testBit (lowBit v) = true ∧ ∀ j < lowBit v, v.toNat.testBit j = false := by
   classical
@@ -157,15 +134,10 @@ theorem lowBit_spec (v : UInt64) (hv : v ≠ 0) :
   rw [hlow]
   exact ⟨ht64, ht, hmin⟩
 
-/-! ## Rows of limbs -/
-
-/-- The point vector a row of limbs carries: point `i`'s word is limbs `2 i` (low) and `2 i + 1` (high). -/
 def vecOf (n : ℕ) (row : Array UInt64) : Fin n → GF128 := fun i => GF128.of ⟨row[2 * i.val]!, row[2 * i.val + 1]!⟩
 
-/-- Bit `col` of a row of limbs. -/
 def bitAt (row : Array UInt64) (col : ℕ) : Bool := (row[col / 64]!).toNat.testBit (col % 64)
 
-/-- A row whose lowest set bit is `col`. -/
 def Piv (row : Array UInt64) (col : ℕ) : Prop := bitAt row col = true ∧ ∀ c < col, bitAt row c = false
 
 theorem getElem!_mapRange (N : ℕ) (g : ℕ → UInt64) {t : ℕ} (ht : t < N) : ((Array.range N).map g)[t]! = g t := by
@@ -179,7 +151,6 @@ theorem vecOf_xor (n : ℕ) (row b r : Array UInt64) (h : ∀ q < 2 * n, r[q]! =
   rw [h _ (by omega), h _ (by omega), FlockLevel3.GF128.add_eq]
   rfl
 
-/-- The limbs below a pivot's are zero. -/
 theorem limb_zero_of_piv {b : Array UInt64} {col q : ℕ} (hp : Piv b col) (hq : 64 * (q + 1) ≤ col) : b[q]! = 0 := by
   apply limb_eq_zero
   intro j hj
@@ -187,7 +158,6 @@ theorem limb_zero_of_piv {b : Array UInt64} {col q : ℕ} (hp : Piv b col) (hq :
   unfold bitAt at this
   rwa [show (64 * q + j) / 64 = q by omega, show (64 * q + j) % 64 = j by omega] at this
 
-/-- A row with no set bit below `128 n` carries the zero vector. -/
 theorem vecOf_zero (n : ℕ) (v : Array UInt64) (h : ∀ c < 64 * (2 * n), bitAt v c = false) : vecOf n v = 0 := by
   have hl : ∀ q < 2 * n, v[q]! = 0 := fun q hq => limb_eq_zero _ fun j hj => by
     have := h (64 * q + j) (by omega)
@@ -200,8 +170,6 @@ theorem vecOf_zero (n : ℕ) (v : Array UInt64) (h : ∀ c < 64 * (2 * n), bitAt
 
 theorem add_self_vec {n : ℕ} (a : Fin n → GF128) : a + a = 0 := FlockComplete.MaskRank.add_self_pi a
 
-/-- **Pivots at every column span**: rows in `W` with their pivot at each column below `128 n` put every row of
-limbs' vector in `W` (by downward induction on the lowest column a row may have set). -/
 theorem span_of_pivots (n : ℕ) (W : AddSubgroup (Fin n → GF128)) (piv : ℕ → Array UInt64)
     (hp : ∀ c < 64 * (2 * n), Piv (piv c) c ∧ vecOf n (piv c) ∈ W) :
     ∀ d (v : Array UInt64), (∀ c < 64 * (2 * n) - d, bitAt v c = false) → vecOf n v ∈ W := by
@@ -240,9 +208,6 @@ theorem span_of_pivots (n : ℕ) (W : AddSubgroup (Fin n → GF128)) (piv : ℕ 
     rw [heq]
     exact W.add_mem hin hW
 
-/-! ## The frame's reduction -/
-
-/-- Rows from position `w` of a range, found or not. -/
 theorem find?_range'_some {p : ℕ → Bool} :
     ∀ (len w k : ℕ), List.find? p (List.range' w len) = some k →
       w ≤ k ∧ k < w + len ∧ p k = true ∧ ∀ t, w ≤ t → t < k → p t = false
@@ -296,7 +261,6 @@ theorem replicate_none (F c : ℕ) : (Array.replicate F (none : Option (Array UI
   · rw [getElem!_neg _ c (by simpa using h)]
     rfl
 
-/-- A loop in `Id` followed by `k`: whatever `k` makes of a state the loop's invariant holds at. -/
 theorem forIn_range_elim_bind {β γ : Type} (P : β → Prop) (Q : γ → Prop) {N : ℕ} {f : ℕ → β → Id (ForInStep β)}
     {b : β} (k : β → Id γ) (hb : P b) (hf : ∀ a < N, ∀ b, P b → P (f a b).run.value)
     (hQ : ∀ r, P r → Q (k r).run) : Q (forIn [:N] b f >>= k).run :=
@@ -304,13 +268,10 @@ theorem forIn_range_elim_bind {β γ : Type} (P : β → Prop) (Q : γ → Prop)
 
 variable (n : ℕ) (W : AddSubgroup (Fin n → GF128))
 
-/-- **The basis so far**: `full` slots, the rank the count of those filled, and each filled slot `c` a row in `W` with
-its pivot at `c`. -/
 def OutInv (full : ℕ) (B : Array (Option (Array UInt64))) (rank : ℕ) : Prop :=
   B.size = full ∧ rank = (List.range full).countP (fun c => (B[c]!).isSome) ∧
     ∀ c b, B[c]! = some b → Piv b c ∧ vecOf n b ∈ W
 
-/-- **A row mid-reduction**: the basis's invariant, the row's limbs below `w` zero, and the row in `W`. -/
 def InInv (full : ℕ) (s : Array (Option (Array UInt64)) × ℕ × Array UInt64 × ℕ) : Prop :=
   OutInv n W full s.1 s.2.1 ∧ (∀ t < s.2.2.2, s.2.2.1[t]! = 0) ∧ vecOf n s.2.2.1 ∈ W
 
@@ -350,8 +311,6 @@ theorem step_facts : k < L ∧ row[k]! ≠ 0 ∧ (∀ t < k, row[t]! = 0) ∧ Pi
     · rw [show c / 64 = k by omega]
       exact hlbl _ (by omega)
 
-/-- **A reduction step**: the row's pivot column holds a basis row `b`, and the row less `b` from limb `k` on keeps
-the invariant at `k`. -/
 theorem step_xor (hL : L = 2 * n) {b : Array UInt64} (hb : B[64 * k + lowBit row[k]!]! = some b) :
     InInv n W (64 * L) (B, rank, (Array.range L).map (fun t => if t ≥ k then row[t]! ^^^ b[t]! else row[t]!), k) := by
   obtain ⟨hkL, -, hzk, -, -⟩ := step_facts hs hfind
@@ -372,7 +331,6 @@ theorem step_xor (hL : L = 2 * n) {b : Array UInt64} (hb : B[64 * k + lowBit row
       · rw [hbz q (by omega), UInt64.xor_zero])]
     exact W.add_mem hrowW hbW
 
-/-- **An insertion**: the row's pivot column is free, and the row fills it. -/
 theorem step_insert (hL : L = 2 * n) (hb : B[64 * k + lowBit row[k]!]! = none) :
     InInv n W (64 * L) (B.set! (64 * k + lowBit row[k]!) (some row), rank + 1, row, k) := by
   obtain ⟨-, -, hzk, hpiv, hcol⟩ := step_facts hs hfind
@@ -397,8 +355,6 @@ theorem step_insert (hL : L = 2 * n) (hb : B[64 * k + lowBit row[k]!]! = none) :
     · exact hBrow c b' h
 
 end Step
-
-/-! ## The weight rows -/
 
 theorem row0_toList (E : Array F128 → F128) :
     ∀ (l : List (Array F128)) (acc : Array UInt64),
@@ -428,7 +384,6 @@ theorem eqWord_frame (p : Array F128) (x : ℕ) :
   rw [hs, List.range_eq_range']
   rfl
 
-/-- **The frame's row for the word `x` carries the weight vector at `x`.** -/
 theorem vecOf_row0 (points : Array (Array F128)) (x : ℕ) :
     vecOf (points.map Array.toList).size
         (points.foldl (fun acc p => (acc.push (_root_.Flock.ZkServer.Frame.eqWord p x).lo).push
@@ -445,12 +400,8 @@ theorem vecOf_row0 (points : Array (Array F128)) (x : ℕ) :
   simp only [List.nil_append]
   rw [h0, h1, Array.getElem!_toList, getElem!_pos points i.val hi, Fin.getElem_fin, Array.getElem_map, eqWord_frame]
 
-/-! ## The rank check -/
-
 def toF (a : GF128) : F128 := a
 
-/-- **A rank the frame finds full is the prover's** (`zk_veil::mask_rank_ok`): where the frame's reduction over the slot's
-words fills all `128 k` columns, every vector of `GF(2^128)^k` is a GF(2)-sum of the weight rows. -/
 theorem maskRankOk_of_maskRank (points : Array (Array F128)) (m : MaskSlot) (kLog : ℕ)
     (h : maskRank points m kLog = 64 * (2 * points.size)) :
     maskRankOk (points.map Array.toList) ((List.range (m.blocks * m.n)).map (m.word kLog)) = true := by
@@ -529,7 +480,6 @@ theorem maskRankOk_of_maskRank (points : Array (Array F128)) (m : MaskSlot) (kLo
     exact span_of_pivots pts.size W (fun c => (B[c]!).getD #[]) hp (64 * (2 * pts.size)) v
       (fun c hc => by omega)
 
-/-- The slot's words block by block. -/
 theorem words_split (B N K w0 : ℕ) (hN : 0 < N) :
     (List.range (B * N)).map (fun i => i / N * K + w0 + i % N) =
       (List.range B).flatMap fun b => (List.range N).map fun j => b * K + w0 + j := by
@@ -546,8 +496,6 @@ theorem words_split (B N K w0 : ℕ) (hN : 0 < N) :
     have h2 : (B * N + j) % N = j := by rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hj']
     simp only [Function.comp, h1, h2]
 
-/-- **The statement's mask slot's words are its mask words**: the slot `Drive.maskSlot` takes, word by word, is
-`Composed.maskWordsOf`. -/
 theorem words_maskSlot {st : _root_.Flock.Stmt} {m : MaskSlot} (h : _root_.Flock.ZkServer.Drive.maskSlot st = .ok m) :
     (List.range (m.blocks * m.n)).map (m.word st.c.kLog) = FlockSoundness.Discharge.Composed.maskWordsOf st := by
   unfold _root_.Flock.ZkServer.Drive.maskSlot at h

@@ -58,27 +58,7 @@ import Proofs.Flock.Claims.ZK.RepFree
 import Proofs.Flock.Claims.ZK.RepReplay
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# A rep returns on its coins alone
-
-The cut's rep (`repCut`), answered by `asksCut` from its first send, returns wherever the coins it samples pass its
-checks: each phase returns from any source with as many sends as it has. No step reads the source's values, and no
-step needs a run of the session's rep.
-
-* `Readable.stmtT_of_scope`: each table of the masked scope is a parsed one (`StmtT`), with no witness.
-* `CutFree.piopCut_ret`: the PIOP returns where its rank check passes, at `3 + (m − 6) + 3 + (k_log − 6) + 2 + |e| + 1`
-  sends.
-* `CutFree.ligeritoCut_ret`: the Ligerito opening returns where its pair's coins are independent, at `k₀ + 7 + 11R`
-  sends, with a record of the layout's shape: `ligeritoPZk` returns at the replies (`ligeritoPZk_ret`), so at the cut's
-  coins (the coupling `ligeritoPZk_agree`, whose throw at send `n + 1` its send count rules out), so the cut opening
-  does (`ligeritoPZk_cut_fw`).
-* `CutFree.innerCut_ret`: the inner proof returns where `β ≠ 0`, at `4` sends.
-* `CutFree.repCut_ret`: the rep returns at `repSends` sends where its rank check passes, its pair's coins are
-  independent and its `β` is nonzero.
-* **`Masked.repCut_ret`**: at a `Live` statement, table `k / 2`'s rep `k % 2`, answered by the opened coins from its
-  first send `repBase x k`, returns at `repBase x (k + 1)` where the coins below round `n`, past the rep's `β` round,
-  show no refusal.
--/
+/-! A rep returns on its coins alone. -/
 
 @[expose] public section
 
@@ -89,8 +69,6 @@ namespace Flock.Readable
 
 open FlockSoundness FlockSoundness.Discharge Exec
 
-/-- **Each table of the masked scope is a parsed one** (`StmtT`): the scope's parse is untyped, has no public input
-ports and has the setup's tables. -/
 theorem stmtT_of_scope {rel : Parsed → Relation} {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hsc : Claims.Flock.Scope (FlockDeploy.deployZk rel) x)
     (hset : FlockDeploy.setupOf true x = some (s, spec, sts)) {j : ℕ} (hj : j < sts.size) :
@@ -123,9 +101,6 @@ open Flock Transcript Replay
 
 variable {wideLeaf : Bool}
 
-/-- **The cut's PIOP returns where its rank check passes**: answered by `asksCut` with room for its sends, with the
-circuit's fold defined at every point of the lincheck's shape, from any source, at `3 + (m − 6) + 3 + (k_log − 6) +
-2 + |e| + 1` sends. -/
 theorem piopCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {st : Setup} (hm : 14 ≤ st.m) (hkm : st.fold.kLog ≤ st.m)
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
       ∃ v, st.fold.fold a lw ρ = .ok v)
@@ -165,8 +140,6 @@ theorem piopCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {st : Setup} (hm : 1
   try dsimp only
   exact ⟨_, t₃, l₃, pure_go _ _ _, by omega⟩
 
-/-- **The cut's inner proof returns where `β ≠ 0`**: answered by `asksCut` with room for its `4` sends, from any
-source and constraints, at `4` sends. -/
 theorem innerCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128)
     (src : RepSrc) (cons : Array (String × Zk.Lin)) (t : Transcript) (l : Array Claims.Msg) (hl : l.size + 4 ≤ n)
     (hb : (coin (l.size + 2) 0).isZero = false) :
@@ -196,11 +169,6 @@ theorem innerCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) (lay : Zk.PadLayout
   try dsimp only
   exact ⟨_, _, _, pure_go _ _ _, by simp only [Array.size_push]; try omega⟩
 
-/-- **The cut's Ligerito opening returns where its pair's coins are independent**: answered by `asksCut` with room for
-its `k₀ + 7 + 11R` sends at a `--zk` schedule of `m ∈ [25, 35]`, from any source and basis, with a record of the
-layout's shape. `ligeritoPZk` returns at the replies (`ligeritoPZk_ret`), so at the cut's coins, where the coupling
-(`ligeritoPZk_agree`) throws only at send `n + 1`, past its send count; the cut opening returns with it
-(`ligeritoPZk_cut_fw`), at its exact send count (`ligeritoCut_eqAt`). -/
 theorem ligeritoCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {sch : Schedule} {tPad : ℕ} (hz : Zk.schedule wideLeaf m = .ok (sch, tPad))
     (ms : MerkleScheme) (T : F128) (cm0 : Commit) (b : Array F128) (lay : Zk.PadLayout) (src : RepSrc)
@@ -250,10 +218,6 @@ theorem ligeritoCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → 
     omega
 
 set_option maxHeartbeats 4000000 in
-/-- **The cut's rep returns on its coins alone**: answered by `asksCut` with room for its `repSends` sends, at a `--zk`
-schedule of `m ∈ [25, 35]` and a fold defined at every point of the lincheck's shape, from any source, level-0
-commitment, pads commitment and extra claims, the rep returns at `repSends` sends wherever its rank check passes, its
-pair's coins are independent and its `β` is nonzero. -/
 theorem repCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {st : Setup} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hkm : st.fold.kLog ≤ st.m) (hkk : st.kLog = st.fold.kLog)
     (hfold : ∀ (a b : F128) (lw ρ ts : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
@@ -328,11 +292,8 @@ open CoinLayer
 namespace Masked
 
 set_option maxHeartbeats 1000000 in
-/-- **A rep returns on the opened coins alone** (`runCut_cutPiop_of_ret`'s `hprev`): at a `Live` statement whose coins
-below round `n`, past table `k / 2`'s rep `k % 2`'s `β` round, show no refusal, the cut rep answered by the opened coins
-from its first send `repBase x k`, from any source, level-0 commitment and pads commitment, returns at
-`repBase x (k + 1)`. Its rank check passes (`rank_at_unrefused`), its pair's coins are independent and its `β` is
-nonzero, all below round `n`. -/
+/-- **A rep returns on the opened coins alone** (`runCut_cutPiop_of_ret`'s `hprev`), where its coins show
+no refusal below round `n`. -/
 theorem repCut_ret {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin) {n : ℕ}
     (hn : ¬ Refused x c n) {s0} {spec : _root_.Flock.SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x)) {schs : Array (_root_.Flock.Schedule × ℕ)}

@@ -47,19 +47,7 @@ import Proofs.Flock.Claims.ZK.FrameTaken
 import Proofs.Flock.Claims.ZK.L0PinBind
 import Proofs.Flock.Claims.ZK.L0PinLive
 
-/-!
-# Level 0 at the session loop
-
-`L0PinChain`'s `l0_chain` at the loop's release (`ofLoop`): on a live history of `refK x` openings whose last coins the
-frame takes, at a rep's binding round `J` (past its algebraic phase and ring switch), the sent rounds from `J` through
-level 0's are the binding and level 0's bodies at the rep's own table and samples (**`LeanRelease.ofLoop_l0`**).
-
-* The loop's counts there: `z`'s `n` (under `64` at every `--zk` schedule, `Count.sched_n`), then level 0's `1, 1, 2, …`
-  (`Count.openList_l0`, `Count.repPlan_l0`).
-* The rep's schedules at the round's prefixes agree where both reach (`Loop.sched_mono`), and read the opened coins
-  (`Loop.wordsAt_take`).
-* The bodies' coins are the opened coins from the binding's (`Loop.l0Body_clean`).
--/
+/-! Level 0 at the session loop. -/
 
 @[expose] public section
 
@@ -67,13 +55,11 @@ namespace Claims.ZKServer.Count
 
 variable {wideLeaf : Bool}
 
-/-- Every `--zk` schedule's `n` (the packed table's variables, `m − 7`) is under `64`. -/
 def nOk (wideLeaf : Bool) (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) => decide (sch.n < 64)
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
 theorem nOk_lt : ∀ (w : Bool) (m : Fin 36), nOk w m.val = true := by decide +kernel
 
 theorem sched_n {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
@@ -91,8 +77,6 @@ theorem rep2_get {k0 e : ℕ} (rest : List ℕ) (he : e ≤ k0) : (List.replicat
       show e - k0 = 0 by omega]
     rfl
 
-/-- **The opening's counts at level 0**: past the ring switch's `N + 1` rounds, `z`'s `n` and then level 0's
-(`l0Nc`). -/
 theorem openList_l0 (sch : _root_.Flock.Schedule) {N : ℕ} (hN : N ≠ 0) (hn0 : sch.n ≠ 0) {i : ℕ}
     (hi : i ≤ sch.k0 + 2) :
     (openList N sch)[N + 1 + i]? = some (if i = 0 then sch.n else l0Nc i) := by
@@ -108,7 +92,6 @@ theorem openList_l0 (sch : _root_.Flock.Schedule) {N : ℕ} (hN : N ≠ 0) (hn0 
   · rw [List.getElem?_cons_succ, List.getElem?_cons_succ, rep2_get _ (by omega)]
     simp [l0Nc]
 
-/-- **A rep's plan at its binding and level 0**: `z`'s `n`, then level 0's counts. -/
 theorem repPlan_l0 {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
     (h : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) {i : ℕ} (hi : i ≤ sch.k0 + 2) :
     (_root_.Flock.ZkServer.Session.repPlan spec st).getD
@@ -130,8 +113,6 @@ theorem flatten_ones (n : ℕ) : (List.replicate n [1]).flatten = List.replicate
   | zero => rfl
   | succ n ih => rw [List.replicate_succ, List.flatten_cons, ih]; rfl
 
-/-- **The algebraic phase's counts**: the zerocheck's `6`, `m − 13` and `1`, one for each of its `m − 6` residual rounds,
-the lincheck's `1, 1`, one for each of its `k_log − 6` rounds, and `r'`'s `1`. -/
 theorem piop_list {m kLog : ℕ} (hm : 14 ≤ m) :
     (_root_.Flock.ZkServer.Session.replayCoins m kLog).toList.filter (· != 0) =
       6 :: (m - 13) :: 1 :: (List.replicate (m - 6) 1 ++ 1 :: 1 :: (List.replicate (kLog - 6) 1 ++ [1])) := by
@@ -147,8 +128,6 @@ theorem plan_get {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch
         openList (2 + spec.points * st.regions.size) sch)[p]?).getD 0 := by
   rw [Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, repPlan_list h, List.getElem?_append_left hp]
 
-/-- **A rep's plan in its PIOP and ring switch**: the zerocheck's `r_outer` round squeezes `m − 13` coins, its residual
-rounds and the lincheck's rounds one each, then each of the `N` claims' ring switch `7` and their batching `N`. -/
 theorem repPlan_piop {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
     (h : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) (hm : 14 ≤ st.m) :
     (_root_.Flock.ZkServer.Session.repPlan spec st).getD 1 0 = st.m - 13 ∧
@@ -209,7 +188,6 @@ namespace Claims.ZKServer.Loop
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 
-/-- The words a prefix of the openings reads at an earlier round are the openings'. -/
 theorem wordsAt_take (x : Msg) (ops : List (Msg × Msg)) {s p : ℕ} (hp : p < s) :
     wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) p =
       wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) p := by
@@ -223,7 +201,6 @@ theorem rangeMap_congr {α : Type} {n : ℕ} {f g : ℕ → α} (h : ∀ i, i < 
   simp only [Array.size_map, Array.size_range] at h1
   simp [h i h1]
 
-/-- A rep's schedule so far reads its table's algebraic rounds. -/
 theorem schedSoFar_rounds {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {sched : Array (ByteArray × ℕ)}
     (h : schedSoFar t rep dom xs hi cr = .ok sched) :
@@ -233,8 +210,6 @@ theorem schedSoFar_rounds {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {do
   obtain ⟨alg, hal, -⟩ := bindV_ok h
   exact ⟨alg, hal⟩
 
-/-- **A rep's schedules so far agree where both reach**: fed the coins of `a` rounds and of `b ≥ a` rounds, every
-schedule between answered, the shorter's rounds are the longer's (`schedSoFar_pop_getD`, one round at a time). -/
 theorem sched_mono {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} (f : ℕ → Array F128) {a : ℕ} {sa : Array (ByteArray × ℕ)}
     (hsa : schedSoFar t rep dom xs hi ((Array.range a).map f) = .ok sa) {k : ℕ} (hk : k < sa.size) :
@@ -258,7 +233,6 @@ theorem sched_mono {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : Byt
     obtain ⟨e3, e4⟩ := schedSoFar_pop_getD hs' hsb (by simp) e2
     exact ⟨e1.trans e3, e4⟩
 
-/-- **A rep stream's start fixes its layout**: `Drive.start` lays the pads out at its statement's schedule. -/
 theorem start_lay {st : Stmt} {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.ZkServer.Frame.MaskSlot}
     (h : _root_.Flock.ZkServer.Drive.start st = .ok (lay, mask)) :
     ∃ sch tp, _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp) ∧
@@ -296,7 +270,6 @@ theorem rec_raw (W : ℕ → Array F128) {R A C k S : ℕ} (hk : k < A) (hA : A 
     simp only [Array.size_map, Array.size_range] at hc
     omega
 
-/-- The algebraic phase's points at the recorded coins are its points at the opened coins from `R` on. -/
 theorem pts_raw (W : ℕ → Array F128) {m kLog R A C : ℕ} {zc : _root_.Flock.ZcOut}
     {lc : _root_.Flock.LcOut} (hA : 3 + (m - 6) + 3 + (kLog - 6) ≤ A) (hC : A ≤ C)
     (h : FlockComplete.LigLock.Fed.PtsAt m kLog
@@ -305,7 +278,6 @@ theorem pts_raw (W : ℕ → Array F128) {m kLog R A C : ℕ} {zc : _root_.Flock
   FlockComplete.LigLock.Fed.ptsAt_congr (fun i _ => rec_raw W (by omega) hC (by omega) i)
     (fun i _ => rec_raw W (by omega) hC (by omega) 0) (fun i _ => rec_raw W (by omega) hC (by omega) 0) h
 
-/-- The ring switch at the schedule's coins past the algebraic phase `A` is the one at the opened coins. -/
 theorem sws_raw (W : ℕ → Array F128) {R A C N L S : ℕ} (cl : Array _root_.Flock.Claim) (hN : cl.size = N)
     (hC : A + N < C) (hL : R + A = L) (hS : R + A + N = S) :
     FlockComplete.Replay.Rs.sws cl
@@ -322,8 +294,6 @@ theorem sws_raw (W : ℕ → Array F128) {R A C N L S : ℕ} (cl : Array _root_.
   · intro k _
     exact (coin_raw W (R := R) (e := k) hC).trans (by show _ = (W S)[k]!; rw [← hS, Nat.add_assoc])
 
-/-- **Level 0's bodies at the schedule's coins are its bodies at the opened coins** from the binding's on: the
-schedule reads round `p`'s coins at the `p`-th of the rounds past the algebraic phase's `A`. -/
 theorem l0Body_clean (W : ℕ → Array F128) {R A N C S : ℕ} {P : List UInt8} {T : F128} {cap : ByteArray}
     {sch : _root_.Flock.Schedule} {t b : Array F128} {lay : _root_.Flock.Zk.PadLayout} {h : Array F128} {rep : ℕ}
     {extra : ℕ → ℕ → F128} {nonce : ℕ → ℕ → UInt64} (hC : A + N + 1 + (sch.k0 + 2) ≤ C)
@@ -352,7 +322,6 @@ open _root_.Flock (V F128 Stmt SessionSpec Transcript TMW)
 open FlockSoundness.Refine (Frame encs)
 open Loop
 
-/-- A live history at a masked round has the frame's coins answered. -/
 theorem answered_ok_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked)
     (hl : L.toSrv.live wk x w ρ κ h = true) : ∃ m, L.answered x ρ h = .ok m := by
@@ -365,11 +334,6 @@ theorem answered_ok_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Wor
 -- one proof of a few hundred lines down `FlockComplete.piopRoundsZk`'s unfolded rounds, `rw` and `omega` on the round
 -- indices
 set_option maxHeartbeats 2000000 in
-/-- **The loop's level-0 messages**: at a `Live` statement the loop serves, on a live history of `refK x` openings
-whose last coins the frame takes, whose messages are the release's own and whose tables are the loop's (`RealTabs`),
-table `j`'s rep `r`'s binding round `J` (past its algebraic phase and ring switch) sends the binding at its table's cap
-and `z`'s squeeze of `n`, and its level-0 rounds `J + i` send level 0's bodies at its table, its samples' pads and the
-opened coins from the binding's on, each tagged `0`. -/
 theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -456,7 +420,6 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
   rw [← hRd] at hend
   have hs1 : 1 ≤ R := by rw [hRd]; unfold FlockComplete.repStartZk; omega
   have hP1 : 1 ≤ P := by rw [hPd]; unfold FlockComplete.piopRoundsZk; omega
-  -- the bounds of level 0's rounds
   have hJK : J + y.sch.k0 + 2 ≤ refK x := by omega
   have hlast : (ofLoop T L₀ real).last x = refK x + 1 := loop_last loopNr T (withFrames T L₀ real) x
   have hlen : ((m₀, ρ₀) :: ops).length = refK x + 1 := by simp [hl]
@@ -491,7 +454,6 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
   have htl' : ∀ c, c ≤ ops.length → (ops.take c).length = c := fun c hc => by
     rw [List.length_take]
     omega
-  -- the placeholder at the binding: the frame's state there
   obtain ⟨mA, hA⟩ := answered_ok_of_live (ofLoop T L₀ real) wk x w ρ κ (((m₀, ρ₀) :: ops).take J)
     (by rw [htl J (by omega)]; exact hkd J le_rfl (by omega))
     ((ofLoop T L₀ real).live_take wk x w ρ κ _ hlive J)
@@ -581,14 +543,12 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
     rw [hOL, hN, ← hPd, ← htsch] at hFO
     omega
   have hkk : y.sch.k0 = t.sch.k0 := by rw [htsch]
-  -- the frame's state at the binding
   rw [show P - 1 + 1 = alg.size + (xs.size + 2) + 1 by omega] at hAJ
   obtain ⟨hdA, honA, -, hl0A, hiA, hpA, -⟩ := Bind.repState_opened
     (by rw [hc']; exact ofSamples_order _ _ _) hal hm14 hmb hdg (placeholder_cap hph) (hdm ▸ hdom') hmk hxb hk0 hn hq
     (by simp only [Array.size_push, Array.size_map, Array.size_range]; omega) hAJ
   have hcfg := (ofLoop_cfg_place T L₀ real x ρ (((m₀, ρ₀) :: ops).take J) hsx (q := J - 2) (j := P - 1)
     (by rw [List.length_take]; omega) (by rw [hloc (J - 2) (P - 1 + 1) (by omega) (by omega)]) hph).1
-  -- the rep's own table, and its schedules at level 0's prefixes
   have hxs0 : _root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[(2 * j + r) / 2]!
       (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[(2 * j + r) / 2]!
         (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)) = xs := by
@@ -657,7 +617,6 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
     simp only [List.length_map, Array.length_toList] at e1 e2
     omega
   have hdom : dom.size < 2 ^ 64 := hdm ▸ hdom'
-  -- the binding and level 0 at the rep's own table
   obtain ⟨hJlt, T₀, hT₀, -⟩ := Bind.sched_binding halr hsJ hdom hdgr hcapA.2 hmr hmkr hxb hk0r hnr hqr hn0r
     (by simp only [Array.size_map, Array.size_range]; omega)
   obtain ⟨sX, hsX⟩ := hex' (P + y.sch.k0 + 2) (by omega) le_rfl

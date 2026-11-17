@@ -36,25 +36,12 @@ import Proofs.Flock.Claims.Complete.Runs
 import Proofs.Flock.Claims.ZK.SimLig
 import Proofs.Flock.Claims.ZK.SimZerocheck
 
-/-!
-# The cut rep returns on its coins alone
-
-Answered by `asksCut`, a rep's sends are counted by its coins and its public sizes: every squeeze sends one body and is
-answered by the coin of the log's size, every absorb, commitment and state step sends nothing, and the only refusals
-past the PIOP read coins (the pair `ρ₀, ρ₁`, `β`). So where the ZK server's rep returns, the rep from any source returns
-from a log of the same size, with a log of the same size, whatever values either sends.
-
-* **Forward runs** (`Fw R x y`): where `x` returns, `y` returns with a log of the same size and a result related by
-  `R`. Binds (`fw_bind`), the shared squeezes (`Coined`), and on Ligerito's state, `FwL`: from states with as many
-  messages, the same.
-* **`ligeritoPZk_cut_fw`**: the ZK server's masked Ligerito opening and the cut's, from logs of one size: where the
-  ZK server's returns, the cut's returns, with as many messages, lane challenges and out-of-domain values.
--/
+/-! The cut rep returns on its coins alone. -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 namespace FlockComplete.CutFree
 
@@ -62,9 +49,6 @@ open Flock Transcript Replay LigLock
 
 variable {α β γ δ : Type}
 
-/-! ## Forward runs -/
-
-/-- **Where `x` returns, `y` returns** with a log of the same size and a result related by `R`. -/
 def Fw (R : α → β → Prop) (x : Except String (α × Transcript) × Array Claims.Msg)
     (y : Except String (β × Transcript) × Array Claims.Msg) : Prop :=
   ∀ a t L, x = (.ok (a, t), L) → ∃ b t' L', y = (.ok (b, t'), L') ∧ L'.size = L.size ∧ R a b
@@ -98,7 +82,6 @@ theorem fw_pure {R : α → β → Prop} {a : α} {b : β} {t t' : Transcript} {
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ := hc
   exact ⟨b, t', l', pure_go _ _ _, hl, h⟩
 
-/-- **Two transcript actions that send nothing**, the second one that never throws. -/
 theorem fw_liftTM_bind {S : γ → δ → Prop} {x x' : TM Unit} {f : Unit → TMW PS γ} {g : Unit → TMW PS δ}
     {t t' : Transcript} {l l' : Array Claims.Msg} (hx' : ∃ t₁', x' t' = .ok ((), t₁'))
     (h : ∀ t₁ t₁', Fw S (((f ()).run t₁).go l) (((g ()).run t₁').go l')) :
@@ -110,10 +93,6 @@ theorem fw_liftTM_bind {S : γ → δ → Prop} {x x' : TM Unit} {f : Unit → T
   rw [bind_go (liftTM_ok e l')]
   exact h t₁ t₁' c t₂ L₂ h₂
 
-/-! ## The shared squeezes -/
-
-/-- **A step whose return reads only the log's size**: from a log of the same size it returns the same, with a log of
-the same size. -/
 def Coined (m : TMW PS α) : Prop :=
   ∀ (t t' : Transcript) (l l' : Array Claims.Msg) (a : α) (t₁ : Transcript) (L : Array Claims.Msg),
     (m.run t).go l = (.ok (a, t₁), L) → l'.size = l.size →
@@ -164,13 +143,8 @@ theorem coined_sampleKP (coin : ℕ → ℕ → F128) (n : ℕ) : Coined (sample
 theorem coined_sampleVecP (coin : ℕ → ℕ → F128) (n k : ℕ) : Coined (sampleVecP (asksCut coin n) k) :=
   coined_squeezeP coin n 2 k
 
-/-! ## Ligerito's steps -/
-
-/-- Two Ligerito states with as many messages. -/
 abbrev SR (s s' : LigState) : Prop := s.msgs.size = s'.msgs.size
 
-/-- **Forward Ligerito runs**: from states with as many messages, transcripts and logs of one size, where `x` returns,
-`y` returns, with as many messages, a log of the same size and a result related by `R`. -/
 def FwL (R : α → β → Prop) (x : LP PS α) (y : LP PS β) : Prop :=
   ∀ (s s' : LigState) (t t' : Transcript) (l l' : Array Claims.Msg), SR s s' → l'.size = l.size →
     Fw (fun a b => R a.1 b.1 ∧ SR a.2 b.2) (((x.run s).run t).go l) (((y.run s').run t').go l')
@@ -197,7 +171,6 @@ theorem fwL_coined {m : TMW PS α} (hm : Coined m) : FwL (· = ·) (liftT m) (li
   obtain ⟨t₁', L', e₁, hL⟩ := hm t t' l l' a t₁ L h₁ hl
   exact ⟨(a, s'), t₁', L', by rw [liftT_run, bind_go e₁]; rfl, hL, rfl, hS⟩
 
-/-- **Two transcript actions that send nothing**, the second one that never throws. -/
 theorem fwL_liftTM {x x' : TM Unit} (hx' : ∀ t', ∃ t₁', x' t' = .ok ((), t₁')) :
     FwL (fun _ _ => True) (liftT (liftTM x)) (liftT (liftTM x')) := by
   intro s s' t t' l l' hS hl c t₂ L₂ hc
@@ -265,7 +238,6 @@ theorem fwL_powP (nonce : ℕ → ℕ → UInt64) (kind : ℕ) : FwL (fun _ _ =>
   refine fwL_bind (fwL_set ?_) fun _ _ _ => fwL_liftTM fun _ => ⟨_, rfl⟩
   rcases kind with _ | _ | kind <;> exact hS
 
-/-- A level's commitment sends nothing and returns. -/
 theorem lift_commit_go (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (g : Array F128)
     (salt : ℕ → ByteArray) (t : Transcript) (l : Array Claims.Msg) :
     ∃ cm, ((StateT.lift (commitP (Hashes.ofSha512 h) ms lv g salt) : TMW PS Commit).run t).go l = (.ok (cm, t), l) := by
@@ -286,8 +258,6 @@ theorem fwL_commit {h h' : ByteArray → ByteArray} {ms ms' : MerkleScheme} {lv 
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ := hc
   exact ⟨(cm', s'), t', l', by rw [liftT_run, bind_go e']; rfl, hl, trivial, hS⟩
 
-/-- **A loop of forward steps**: if step `i`, from values related by `I i`, yields values related by `I (i + 1)`, the
-loops over `[0:n]` end related by `I n`. -/
 theorem fwL_forIn {σ τ : Type} (n : ℕ) (body : ℕ → σ → LP PS (ForInStep σ)) (body' : ℕ → τ → LP PS (ForInStep τ))
     (I : ℕ → σ → τ → Prop)
     (hb : ∀ i < n, ∀ u u', I i u u' →
@@ -311,7 +281,6 @@ theorem fwL_forIn {σ τ : Type} (n : ℕ) (body : ℕ → σ → LP PS (ForInSt
     obtain ⟨v, v', rfl, rfl, hI₁⟩ := hr
     exact ih (a + 1) v v' (by omega) hI₁
 
-/-- **A run that sends nothing and keeps the state.** -/
 def Quiet (x : LP PS α) : Prop :=
   ∀ s t l, ∃ a t', (((x.run s).run t).go l) = (.ok ((a, s), t'), l)
 
@@ -400,7 +369,6 @@ theorem fwL_challengeP (coin : ℕ → ℕ → F128) (n : ℕ) {split : Bool} :
     refine fwL_get fun _ _ _ => ?_
     exact fwL_bind (fwL_sendMsg _ _) fun _ _ _ => fwL_pure trivial
 
-/-- **A run of Ligerito's program, then a transcript step**, forward. -/
 theorem fw_runL_bind {R : α → β → Prop} {S : γ → δ → Prop} {x : LP PS α} {y : LP PS β}
     {f : α × LigState → TMW PS γ} {g : β × LigState → TMW PS δ} {s s' : LigState} {t t' : Transcript}
     {l l' : Array Claims.Msg} (hxy : FwL R x y) (hS : SR s s') (hl : l'.size = l.size)
@@ -410,14 +378,8 @@ theorem fw_runL_bind {R : α → β → Prop} {S : γ → δ → Prop} {x : LP P
   fw_bind (hxy s s' t t' l l' hS hl) fun p q t₁ t₁' L L' hL hpq =>
     hfg p.1 q.1 p.2 q.2 t₁ t₁' L L' hL hpq.1 hpq.2
 
-/-! ## The Ligerito opening -/
-
 -- `ligeritoPZk`'s and `ligeritoCut`'s unfolded runs taken together, a `*_bind` step per bind on both sides
 set_option maxHeartbeats 4000000 in
-/-- **The cut's Ligerito opening returns where the ZK server's did**: answered by `asksCut` from logs of one size, where
-the masked opening (`ligeritoPZk`, every nonce `0`) returns, the opening from any source returns, with a log of the
-same size and as many messages, lane challenges and out-of-domain values; whatever the tables, bases, layouts, pads,
-commitments, schemes and hashes on either side. -/
 theorem ligeritoPZk_cut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (h h' : ByteArray → ByteArray) (ms ms' : MerkleScheme)
     (sch : Schedule) (T T' : F128) (cm0 cm0' : Commit) (t b b' : Array F128) (lay lay' : Zk.PadLayout)
     (hp : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (src : RepSrc)

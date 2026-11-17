@@ -4,28 +4,7 @@ public import Proofs.Flock.Claims.ZK.Refusals
 public import Proofs.Flock.Claims.Complete.ZkTables.Refuse
 public import Proofs.Flock.Claims.Complete.ZkTables.Pass
 
-/-!
-# The masked session's `β`, pair-coin and rank refusals, as its first refusal
-
-`sessionPZk_pass` reads the masked session forwards: a session that returns passed every rep's `β`, pair-coin and rank
-checks at their rounds. Read the other way, it is the first refusal. At a refused `β` (`0`), a dependent pair `ρ₀, ρ₁`
-or a table's claim points of less than full rank over its mask slot the session does not return, so `honestPR` sends
-`[]` (`honestPR_err`). This discharges `honestOffOn_stop_of`'s `hβ`, `hρ` and `hrank` at any coin plan that reads
-each rep's `β`, pair coins and claim points at the executable's rounds (`CoinReads`, `PointReads`; `withPoints` is
-one).
-
-* `betaSlot`, `rhoSlot`: rep `2j + r`'s `β` round and its `ρ₀` round (`ρ₁` is the next), as `betaSlotsZk` and
-  `rhoSlotsZk` list them; `betaAt` and `rhoAt` read the opened coins there (`slotAt`).
-* `honestPR_refused`: after `refK x` openings, a refused `β` or a dependent pair at one of a table's reps makes
-  `honestPR` send `[]`.
-* `ptsOpen`: a rep's claim points at the opened coins from its first round (`repBase`). `honestPR_rank`: after `refK x`
-  openings, a table whose reps' four points miss full rank makes `honestPR` send `[]`. A plan reading the points at
-  those rounds has the executable's points (`pointsOf_reads`) and its rank check (`maskRankOk_compose`).
-* `Flock.zk_deployZk_masked_exe_reads_gap`: `Flock.zk_deployZk_masked_exe_stop_gap` without `hβ` and `hρ`, at a plan
-  that reads the outer coins (`OuterReads`), `β` and the pair coins (`CoinReads`) at their rounds.
-  `Flock.zk_deployZk_masked_exe_refusals_gap`: without `hrank` too, at a plan that also reads the claim points
-  (`PointReads`). Left: the plan's `Causal`, its round `0`, the rounds after the first and the last round.
--/
+/-! The masked session's `β`, pair-coin and rank refusals, as its first refusal. -/
 
 @[expose] public section
 
@@ -65,7 +44,6 @@ def rhoAt {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j r : ℕ) : _root_
   (⟨slotAt c (rhoSlot x j r) 0, slotAt c (rhoSlot x j r) 1⟩,
     ⟨slotAt c (rhoSlot x j r + 1) 0, slotAt c (rhoSlot x j r + 1) 1⟩)
 
-/-- **A coin plan reads each rep's `β` and pair coins at the executable's rounds** (`betaAt`, `rhoAt`). -/
 def CoinReads {P : Composed.LigProver}
     (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) : Prop :=
   ∀ x c (j : Fin (jOf x)) (r : Fin 2), (cz x c j).beta r = betaAt c j.val r.val ∧ (cz x c j).rho r = rhoAt c j.val r.val
@@ -90,7 +68,6 @@ theorem refK_eq {x : Msg} {s spec sts} (hsx : FlockDeploy.setupOf true x = some 
     refK x = 1 + FlockDeploy.rounds true spec sts :=
   refK_of_flock hsx
 
-/-- **An opened coin's element is its opening's**, at a round of the openings. -/
 theorem slotAt_padOps {x : Msg} (ops : List (Msg × Msg)) (hl : ops.length = refK x) {k : ℕ} (hk : k < refK x)
     {i : ℕ} (hi : i < 65536) :
     slotAt (padOps (x := x) ops) k i = FlockComplete.coinOf ((ops.map fun p => coinOfD p.2).getD k []) i := by
@@ -100,9 +77,6 @@ theorem slotAt_padOps {x : Msg} (ops : List (Msg × Msg)) (hl : ops.length = ref
   rw [List.getD_eq_getElem _ _ (by simpa using hk'), List.getD_eq_getElem _ _ (by simpa using hk')]
   simp only [List.getElem_map, rd]
 
-/-- **A refused `β` or a dependent pair stops the honest prover**: after `refK x` openings `ops` at which table `j`'s
-rep `r` has `β = 0` or dependent pair coins, the masked session on any witness does not return at the openings'
-answers (`sessionPZk_pass`), so `honestPR`'s message is `[]` (`honestPR_err`). -/
 theorem honestPR_refused (H : Msg → Msg) {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (ω : FlockComplete.TapeZk)
     (ops : List (Msg × Msg)) (hl : ops.length = refK x) {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2)
     (hbad : (betaAt (padOps (x := x) ops) j r).isZero = true ∨
@@ -178,8 +152,6 @@ theorem honestPR_refused (H : Msg → Msg) {x : Msg} (hx : Live x) (w : Claims.F
     rw [hρ'] at hb
     cases hb
 
-/-! ## The rank refusal -/
-
 /-- **Rep `q`'s first round**, `repStartZk q` at `x`'s session; `0` where `x` does not set up. -/
 def repBase (x : Msg) (q : ℕ) : ℕ :=
   match FlockDeploy.setupOf true x with
@@ -201,9 +173,6 @@ def ptsOpen {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (st : _root_.Flock
     Array (List _root_.Flock.F128) :=
   FlockComplete.MaskRank.claimPoints st.m st.c.kLog fun n e => slotAt c (repBase x q + n) e
 
-/-- **A coin plan reads each rep's claim points at the executable's rounds**: the zerocheck's residual `ρ` at the
-rep's rounds `3 …`, the lincheck's coins at its rounds `5 + (m − 6) …`, and the outer coins at round `1`
-(`outerAt`), coin `0` of each but the outer round's. -/
 def PointReads {P : Composed.LigProver}
     (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) : Prop :=
   ∀ x c (j : Fin (jOf x)) (r : Fin 2),
@@ -241,8 +210,6 @@ theorem outerReads_withPoints {P : Composed.LigProver}
   obtain ⟨i, rfl⟩ := List.mem_ofFn.1 hy
   exact ⟨i.val, i.isLt, rfl⟩
 
-/-- **The executable's rank check is the plan's** (`Composed.MaskRankOk`): where its points `A` have full rank over the
-words `ws`, so do the plan's points `pts`, `A`'s, over `ws` read with `getD`. -/
 theorem maskRankOk_compose {A : Array (List _root_.Flock.F128)} {ws : List ℕ} {k : ℕ}
     {pts : Fin k → List _root_.Flock.F128} (hk : A.size = k) (hp : ∀ i : Fin k, pts i = A[i.val]!)
     (h : FlockComplete.MaskRank.maskRankOk A ws = true) :
@@ -260,7 +227,6 @@ theorem maskRankOk_compose {A : Array (List _root_.Flock.F128)} {ws : List ℕ} 
   rw [hp i, getElem!_pos A i.val i.isLt, List.getD_eq_getElem _ _ x.isLt]
   cases f x <;> simp
 
-/-- **The plan's claim points are the executable's** where the plan reads them at a rep's coins `f r`. -/
 theorem pointsOf_reads {q0 L0 k0 m kLog nCl nOod mP R : ℕ} {qs : ℕ → ℕ}
     (ρ : Composed.RestZK q0 L0 k0 m kLog nCl nOod mP R qs) (f : ℕ → ℕ → ℕ → _root_.Flock.F128)
     (hrho : ∀ r : Fin 2, ρ.rho r = fun i => f r.val (3 + i.val) 0)
@@ -284,10 +250,6 @@ theorem pointsOf_reads {q0 L0 k0 m kLog nCl nOod mP R : ℕ} {qs : ℕ → ℕ}
   rw [e1, e2, e3]
   interval_cases k <;> simp [_root_.Flock.abcClaims, FlockComplete.MaskRank.claimPoints]
 
-/-- **A rank-deficient mask slot stops the honest prover**: after `refK x` openings `ops` at which table `j`'s four claim
-points, its reps' at the opened coins (`ptsOpen`), miss full rank over its mask slot's words, the masked session on
-any witness does not return at the openings' answers (`sessionPZk_pass`, rep `2j + 1`'s rank check), so `honestPR`'s
-message is `[]` (`honestPR_err`). -/
 theorem honestPR_rank (H : Msg → Msg) {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (ω : FlockComplete.TapeZk)
     (ops : List (Msg × Msg)) (hl : ops.length = refK x) {j : ℕ} (hj : j < (stsOf x).size)
     (hbad : FlockComplete.MaskRank.maskRankOk (ptsOpen (padOps (x := x) ops) (stsOf x)[j] (2 * j) ++
@@ -338,8 +300,6 @@ theorem honestPR_rank (H : Msg → Msg) {x : Msg} (hx : Live x) (w : Claims.Floc
   rw [hpass] at hbad
   cases hbad
 
-/-- **`hrank` at a plan reading the claim points at their rounds**: `honestPR_rank`, the plan's points being the
-executable's at the opened coins (`pointsOf_reads`) and its rank check the executable's (`maskRankOk_compose`). -/
 theorem rank_refused {P : Composed.LigProver}
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}
     (hp : PointReads cz) (H : Msg → Msg) {T : Type} (tz : T → FlockComplete.TapeZk) :
@@ -360,7 +320,6 @@ theorem rank_refused {P : Composed.LigProver}
   unfold outerAt slotAt
   rw [outerSlot_eq hsx]
 
-/-- **`hβ` at a plan reading `β` at its rounds**: `honestPR_refused` at a refused `β`. -/
 theorem beta_refused {P : Composed.LigProver}
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}
     (hr : CoinReads cz) (H : Msg → Msg) {T : Type} (tz : T → FlockComplete.TapeZk) :
@@ -371,7 +330,6 @@ theorem beta_refused {P : Composed.LigProver}
   rw [(hr x _ j r).1] at hb
   exact honestPR_refused H hx w _ ops hl (lt_of_jOf j) r.isLt (.inl hb)
 
-/-- **`hρ` at a plan reading the pair coins at their rounds**: `honestPR_refused` at a dependent pair. -/
 theorem rho_refused {P : Composed.LigProver}
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}
     (hr : CoinReads cz) (H : Msg → Msg) {T : Type} (tz : T → FlockComplete.TapeZk) :
@@ -387,10 +345,6 @@ end Masked
 open Masked
 
 open Classical in
-/-- **Flock's zero knowledge at the deployed masked session, at the executable's layout and a stopping round plan that
-reads the outer coins, `β` and the pair coins at their rounds**: `Flock.zk_deployZk_masked_exe_stop_gap` with its `hβ`
-and `hρ` from the session's first refusal (`honestPR_refused`). Left: the plan's `Causal`, its round `0` `enc0`, the
-rounds after the first, the last round where every table admits, and the rank refusal. -/
 theorem Flock.zk_deployZk_masked_exe_reads_gap (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash)
     (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}
@@ -418,11 +372,6 @@ theorem Flock.zk_deployZk_masked_exe_reads_gap (H : Msg → Msg) (hH : Claims.hO
     (rho_refused hr H _)
 
 open Classical in
-/-- **Flock's zero knowledge at the deployed masked session, at the executable's layout and a stopping round plan that
-reads every refused coin at its round**: `Flock.zk_deployZk_masked_exe_reads_gap` with its `hrank` from the session's
-first refusal too (`rank_refused`), at a plan that also reads the claim points at their rounds (`PointReads`;
-`withPoints` reads all four). Left: the plan's `Causal`, its round `0` `enc0`, the rounds after the first and the last
-round where every table admits. -/
 theorem Flock.zk_deployZk_masked_exe_refusals_gap (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash)
     (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}

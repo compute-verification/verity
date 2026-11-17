@@ -35,25 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The deployed masked session's round plan
-
-The coin plan, the round encodings and the last message of `flock-circuit --zk` at the executable's rounds, as
-`RoundPlan.stop` takes them, with levels ≥ 1's prover `ofSalts PcExe`:
-
-* `restAt`, `czRaw`, `czExe`: each table's coins, every field read at the session's round for it (rep `q`'s PIOP rounds
-  from `repBase x q`, its Ligerito and inner rounds from `repSlot x q`, the link points at round `0`); `czExe` is
-  `withPoints czRaw`, so `ZKR1`'s `OuterReads`, `CoinReads` and `PointReads` hold at it.
-* `repSrcCut`, `tabSrcCut`: what `FlockComplete.sessionCut` reads from a cut: each rep's masked values by pad index, its
-  switched vectors (`ŝ` of `ab`, `c`, then the region claims'), `y₁'`, `ȳ`, levels ≥ 1's salts read back from the
-  rep's levels ≥ 1 value (`blobSalt`), the triple's openings, `τ`'s commitment, `Y` in the pads layout's order, and
-  level 0's and the pads' leaves by tree position (`leafAt`, `padLeafCut`).
-* `viewCut`, `tabSrcView`: a view as a cut with every guarded message sent, and the source of the last message, which
-  also reads level 0's opened rows and salts, `τ`, its salt and the pads' opened columns and salts by tree position.
-* `encExe`: round `0` is `enc0`; round `n ≥ 1` is body `n` of `sessionCut` stopped at round `n`, tagged `0`, or `[]`
-  where it stops before. `finExe`: `Final.encode` of `sessionCut`'s record and proof files on the view, `[]` where it
-  stops.
--/
+/-! The deployed masked session's round plan. -/
 
 @[expose] public section
 
@@ -66,8 +48,6 @@ local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
 namespace Masked
-
-/-! ## The coins -/
 
 /-- The link points' coordinate count of `x`'s session. -/
 def mPtsOf (x : Msg) : ℕ :=
@@ -142,8 +122,6 @@ noncomputable def czRaw (P : Composed.LigProver) (x : Msg) (c : Fin (refK x) →
 noncomputable def czExe (P : Composed.LigProver) :
     (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest :=
   withPoints (czRaw P)
-
-/-! ## The sources -/
 
 /-- A `GF256` element as the executable's value. -/
 def kVal (a : 𝕂) : _root_.Flock.F256 := a
@@ -265,8 +243,6 @@ noncomputable def tabSrcView (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Com
         else default }
   else default
 
-/-! ## The round encodings and the last message -/
-
 /-- **`sessionCut` at `x`'s session**, answered by the opened coins `c` and stopped right after round `n`'s send, on the
 sources `src`. -/
 noncomputable def runCut (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (spec : _root_.Flock.SessionSpec)
@@ -297,8 +273,6 @@ noncomputable def finExe (P : Composed.LigProver) (x : Msg) (c : Fin (refK x) �
     match (runCut x c (refK x) spec (tabSrcView P x (czExe P x c) v)).1 with
     | .ok (record, proofs) => FlockDeploy.Final.encode ⟨x, record, proofs⟩
     | .error _ => []
-
-/-! ## What holds by construction -/
 
 theorem encExe_zero (P : Composed.LigProver) (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin)
     (cut : ∀ j, ((tabC P x j).T (czExe P x c j)).tab.Cut) : encExe P x c 0 cut = enc0 P x (czExe P x c) cut :=

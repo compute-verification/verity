@@ -38,26 +38,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
-/-!
-# A rep's rank check from the source, at coins that show no refusal
-
-`Flock.ZkServer.Finish.repCut_fw` asks (`hpiop`) that the rank check pass at the rounds the source's zerocheck and lincheck
-leave, answered by `asksCut`. Those rounds carry the coins of the sends they made, whatever the masked values, so the
-check reads the claim points at the coins from the rep's first send; where every table admits the opened coins, no
-refusal shows (`not_refused_of_admits`), so the check passes there.
-
-* **The rounds' coins** (`CoinsAt`, `growS`): under `asksCut coin n`, a squeeze from `l` records a round answered by
-  `coin l.size`, and nothing else adds rounds or sends, so every round from the rep's first is answered by the coin at
-  its send, and the rounds only grow (`Replay.Prefix`): `zerocheckCut_grows`, `lincheckCut_grows`.
-* **Round `1`** (`zerocheckCut_round1`): the zerocheck's second squeeze records `m − 13` outer coins, and the rounds after
-  it only grow.
-* **The claim points** (`roundPoints_cut`): the zerocheck's and lincheck's `m + k_log − 6` rounds (`CutEq`'s counts) read as
-  `claimPoints` at the coins from the rep's first send.
-* **Where no refusal shows** (`Claims.ZKMal.Masked.rankOk_of_unrefused`, **`rank_at_unrefused`**): table `j`'s rep `r`'s
-  check, after rep `0`'s points at rep `1` (`priorE`), passes at the opened coins when `¬ Refused x c i` with its rounds
-  at most `i`, so at any coins that are the opened ones through the rep's rank check. **At admitted coins**
-  (`rankOk_of_admits`, `rank_at_admits`) no refusal shows at any `i`.
--/
+/-! A rep's rank check from the source, at coins that show no refusal. -/
 
 @[expose] public section
 
@@ -65,9 +46,6 @@ namespace FlockComplete.RankAt
 
 open Flock Transcript FlockComplete FlockDeploy With
 
-/-! ## The rounds' coins -/
-
-/-- **Round `j` of `R` is answered by `coin (L + j)`**, with at least one coin. -/
 def CoinsAt (coin : ℕ → ℕ → F128) (L : ℕ) (R : Array Round) : Prop :=
   ∀ j < R.size, 0 < R[j]!.n ∧ R[j]!.coins = (Array.range R[j]!.n).map (coin (L + j))
 
@@ -88,16 +66,13 @@ theorem coinsAt_push {coin : ℕ → ℕ → F128} {L : ℕ} {R : Array Round} (
     subst hj'
     exact ⟨Nat.pos_of_ne_zero hn, rfl⟩
 
-/-- The rounds from the log's `L`th send on are answered by their sends' coins, one round to each send. -/
 def Inv (coin : ℕ → ℕ → F128) (L : ℕ) (t : Transcript) (l : Array Claims.Msg) : Prop :=
   CoinsAt coin L t.rounds ∧ l.size = L + t.rounds.size
 
-/-- **A transcript computation that only adds rounds**, each answered by its send's coin. -/
 def Grows (coin : ℕ → ℕ → F128) (L : ℕ) {α : Type} (y : TMW PS α) : Prop :=
   ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
     (y.run t).go l = (.ok (a, t'), l') → Replay.Prefix t.rounds t'.rounds ∧ (Inv coin L t l → Inv coin L t' l')
 
-/-- **The simulation of `Grows`**: a transcript computation of the pure session is related to itself when it grows. -/
 def growS (coin : ℕ → ℕ → F128) (L : ℕ) : With.Sim (TMW PS) (TMW PS) where
   R _ y := Grows coin L y
   pure a t l a' t' l' h := by
@@ -128,7 +103,6 @@ section Asks
 
 variable (coin : ℕ → ℕ → F128) (n L : ℕ)
 
-/-- A verifier action that keeps the rounds. -/
 theorem liftTM_grows {α : Type} (x : TM α) (hx : ∀ t a t', x t = .ok (a, t') → t'.rounds = t.rounds) :
     (growS coin L).R (liftTM x : TMW PS α) (liftTM x) := by
   intro t l a t' l' h
@@ -157,7 +131,6 @@ theorem absorbBytes_grows (b : ByteArray) :
     (growS coin L).R (liftTM (absorbBytes b) : TMW PS Unit) (liftTM (absorbBytes b)) :=
   liftTM_grows coin L _ fun _ _ _ h => by cases h; rfl
 
-/-- **`asksCut`'s squeeze** records, where it returns, one round answered by the coin at its send. -/
 theorem squeezeP_grows (kind : UInt8) (k : ℕ) :
     (growS coin L).R (squeezeP (asksCut coin n) kind k) (squeezeP (asksCut coin n) kind k) := by
   intro t l a t' l' h
@@ -202,8 +175,6 @@ theorem prefix_of_grows {α : Type} {y : TMW PS α} (hy : (growS coin L).R y y) 
     {l l' : Array Claims.Msg} {a : α} (h : (y.run t).go l = (.ok (a, t'), l')) : Replay.Prefix t.rounds t'.rounds :=
   (hy t l a t' l' h).1
 
-/-- **Round `1` of a zerocheck that returned** holds its `m − 13` outer coins, and its first send was before round
-`n`. -/
 theorem zerocheckCut_round1 {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray) (lay : Zk.PadLayout)
     (mk : ℕ → F128) {t t' : Transcript} {l l' : Array Claims.Msg} {res : ZerocheckProof × ZcOut}
     (h : ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l = (.ok (res, t'), l')) :
@@ -228,8 +199,6 @@ theorem zerocheckCut_round1 {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArr
     Array.getElem_append_left (by simp only [Replay.afterSq, Array.size_push]; omega)]
   simp [Replay.afterSq, Array.getElem_push, Replay.sent]
 
-/-- **The claim points at the rounds a rep's zerocheck and lincheck leave** from no rounds: the coins from the rep's
-first send `l.size`. -/
 theorem roundPoints_cut {m kLog : ℕ} (hm : 14 ≤ m) (hk : 6 ≤ kLog) (digest cap root : ByteArray)
     (lay : Zk.PadLayout) (mk : ℕ → F128) (fold : CircuitFold) (hfk : fold.kLog = kLog) {t₀ : Transcript}
     (ht₀ : t₀.rounds = #[]) {l : Array Claims.Msg} {zp : ZerocheckProof} {zc : ZcOut} {t₁ : Transcript}
@@ -302,18 +271,13 @@ theorem rankOk_of_unrefused {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockD
   by_contra hb
   exact hn (.inr ⟨j, hj, r, hr, .inl ⟨hm, hk6, h0, hi, Bool.eq_false_iff.2 hb⟩⟩)
 
-/-- **Where every table admits the opened coins, every rank check passes there**: table `j`'s rep `r`'s, after rep `0`'s
-points at rep `1`. -/
 theorem rankOk_of_admits {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin}
     (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2) :
     FlockComplete.MaskRank.maskRankOk (priorE c j r ++ ptsOpen c (stsOf x)[j]! (2 * j + r))
       (Composed.maskWordsOf (stsOf x)[j]!) = true :=
   rankOk_of_unrefused hx (not_refused_of_admits hx hA (rankSlot x j 0 + rankSlot x j r)) hj hr (by omega) (by omega)
 
-/-- **A rep's rank check from the source, where the coins show no refusal by its round** (`¬ Refused x c i` with the
-rank check's rounds at most `i`): table `j`'s rep `r`, its zerocheck and lincheck run from no rounds at its first send
-`repBase x (2j + r)` and answered by coins that are the opened ones through its rank check, leaves rounds at which the
-check, after rep `0`'s points at rep `1` (`priorE`), passes over the table's mask words. -/
+/-- **A rep's rank check from the source, where the coins show no refusal by its round**. -/
 theorem rank_at_unrefused {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin} {i : ℕ}
     (hn : ¬ Refused x c i) {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2) (h0 : rankSlot x j 0 ≤ i)
     (hi : rankSlot x j r ≤ i) (coin : ℕ → ℕ → _root_.Flock.F128) (n : ℕ)
@@ -344,10 +308,6 @@ theorem rank_at_unrefused {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDep
   rw [hpts]
   exact rankOk_of_unrefused hx hn hj hr h0 hi
 
-/-- **A rep's rank check from the source, at coins every table admits** (`repCut_fw`'s `hpiop`, its first half): table
-`j`'s rep `r`, its zerocheck and lincheck run from no rounds at its first send `repBase x (2j + r)` and answered by
-coins that are the opened ones through its rank check, leaves rounds at which the check, after rep `0`'s points at rep
-`1` (`priorE`), passes over the table's mask words. -/
 theorem rank_at_admits {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin}
     (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2)
     (coin : ℕ → ℕ → _root_.Flock.F128) (n : ℕ)

@@ -54,24 +54,7 @@ import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.ZK.SimSession
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# `InnerBatched`: the batched constraint at the honest pads
-
-`innerBatched : InnerBatched`. Wherever the phases hybrids 2 and 3 share (`innerPreE`) reach a rep's inner proof
-(`InnerAt`), every constraint they hand it vanishes at the rep's honest pads (`innerAt_holds`), so the batch of them and
-the triple's vanishes there at every coin (`innerP_batched`).
-
-* `piopPZk_split`, `innerPre_split`: the shared phases answered by `asksS` that return, stage by stage, as
-  `repPZk_split` has the masked rep.
-* `TableM`, `replay_holdsM`: completeness's `TableT` and `replay_holds` without the readiness check's `RegionsFit`,
-  which the replay's algebra never reads.
-* `innerPre_holds`: the shared phases' constraints (the replay's, the two ring-switch rows and the lanes') vanish at the
-  honest pads, at a table and its trace, outer coins that are not `1` and extra claims at points of the table's `m_pts`.
-* `innerPre_cut` (private, as InnerSlot states it too): answered by `asksCut`, the shared phases that return are
-  answered by `asksS` at the same coins.
-* `tableM_mask`: each table and its trace at the mask witness have `TableM` (`maskFree_relation`, `relS_only`).
-* `outer_ne_one`: no refusal seen up to a stop past the rep's `ε` slot means its outer coins are not `1`.
--/
+/-! `InnerBatched`: the batched constraint at the honest pads. -/
 
 @[expose] public section
 
@@ -79,8 +62,6 @@ namespace FlockComplete.ZkTables
 
 open Flock Transcript FlockComplete FlockComplete.Replay
 
-/-- **A returning masked PIOP (`piopPZk`), in closed form**: zerocheck, lincheck and ring switch at the replies' coins,
-the rank check keeping the transcript and the sends. -/
 theorem piopPZk_split (resp : ℕ → Claims.Msg) (st : Setup) (lay : Zk.PadLayout) (hp : Array F128) (tr : Trace)
     (cap root : ByteArray) (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m)
     (t : Transcript) (l : Array Claims.Msg)
@@ -133,9 +114,6 @@ theorem piopPZk_split (resp : ℕ → Claims.Msg) (st : Setup) (lay : Zk.PadLayo
   · rw [show l₂.size = l.size + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6) by omega, e₂]
     rfl
 
-/-- **The shared phases (`innerPre`) that return, stage by stage**: the masked PIOP in closed form (`piopPZk_split`),
-then the masked Ligerito from `tPiop`, the verifier's replay of the proof with level 0's openings erased, and level 0's
-lane constraints; the constraints they return are the replay's, the two ring-switch rows and the lanes'. -/
 theorem innerPre_split (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -193,14 +171,12 @@ namespace FlockComplete.ZkTables
 
 open Flock Transcript FlockComplete FlockDeploy JsonRT FlockComplete.Replay FlockSoundness.Refine
 
-/-- **A table and its honest trace, as the replay's algebra reads them**: `TableT` without the readiness check's
-`RegionsFit`, which `TableT.model` and `replay_holds` never read. -/
+/-- `TableT` without the readiness check's `RegionsFit`, which `TableT.model` and `replay_holds` never read. -/
 def TableM (st : Flock.Stmt) (tr : Trace) : Prop :=
   25 ≤ st.m ∧ st.m ≤ 35 ∧ st.merkle = MerkleScheme.hm96Sha512 ∧
     ∃ (p : Readable.Parsed) (w : Claims.Flock.Wit), p.sts = #[st] ∧
       Claims.Flock.RelS (Readable.toReadable Readable.relation p) w ∧ tr = traceOf st w.hid.toArray 0 ∧ StmtT st
 
-/-- `TableT.model` at `TableM`. -/
 theorem TableM.model {st : Flock.Stmt} {tr : Trace} (hT : TableM st tr) :
     ∃ (w : Claims.Flock.Wit) (hwf : StmtWF st), RegionsWF st ∧
       (∀ a b : Fin (2 ^ st.c.kLog), FlockLevel3.placedA st a b = matA st a.val b.val ∧
@@ -228,7 +204,6 @@ theorem TableM.model {st : Flock.Stmt} {tr : Trace} (hT : TableM st tr) :
   · subst htr
     exact traceOf_r1cs hf hb hx
 
-/-- `replay_holds` at `TableM`. -/
 theorem replay_holdsM {st : Flock.Stmt} {tr : Trace} (hT : TableM st tr) (lay : Zk.PadLayout) (h : Array F128)
     (hsz : h.size = lay.len) (hab : h[lay.hab]! = h[lay.fa]! * h[lay.fb]!) (hn : st.m - 6 ≤ lay.nMlv)
     (hn' : st.c.kLog - 6 ≤ lay.nLc) (zcs : Zc.Challenges) (lcs : Lc.Challenges) (full : Array F128)
@@ -268,11 +243,6 @@ theorem replay_holdsM {st : Flock.Stmt} {tr : Trace} (hT : TableM st tr) (lay : 
   · rw [Rs.proof_get 1 (by omega), abc_get1]
     exact hsw _ (cClaim_mem _ _ _ _ _)
 
-/-- **The shared phases' constraints vanish at the honest pads**: at a table and its honest trace (`TableM`) and its
-`--zk` schedule `v`, wherever the shared phases (`innerPre`), answered by `asksS resp` from the empty transcript,
-return, at outer coins that are not `1` and extra claims at points of the table's `m_pts`, every constraint they hand
-the inner proof (the replay's, the two ring-switch rows and the lanes') vanishes at the rep's pads (`replay_holdsM`,
-`lanes_hold`). -/
 theorem innerPre_holds (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) {st : Flock.Stmt} {tr : Trace}
     (hT : TableM st tr) {v : Schedule × ℕ} (hv : Zk.schedule st.wideLeaf st.m = .ok v) (rep : ℕ) (dom : ByteArray)
     (cm0 : Commit) (pts : Array (Array F128)) (hpts : ∀ a ∈ pts, a.size = st.mPts) (e : Array Claim)
@@ -335,8 +305,7 @@ namespace Masked
 
 open FlockComplete Flock.With
 
-/-- **The phases hybrids 2 and 3 share, answered by `asksCut`, that return** are those answered by `asksS` at the same
-coins. Private: InnerSlot states the same `innerPre_cut`, and the two files are imported together. -/
+/-- Private: InnerSlot states the same `innerPre_cut`, and the two files are imported together. -/
 private theorem innerPre_cut {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace)
@@ -356,8 +325,6 @@ theorem tabsOf_ofCircuit (x : Msg) (j : Fin (jOf x)) :
   rw [getElem!_pos _ _ (by simpa [FlockDeploy.tabsOf] using lt_of_jOf j)]
   simp [FlockDeploy.tabsOf, stAt]
 
-/-- **Each table and its trace at the mask witness** (`TableM`): the relation does not read the mask slots
-(`maskFree_relation`), so the mask witness is in it, and table `j`'s share satisfies table `j` alone (`relS_only`). -/
 theorem tableM_mask {x : Msg} {w : Claims.Flock.Wit} (hL : Live x) (hw : RZk x w) (ω : FlockComplete.TapeZk)
     {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) :
@@ -379,8 +346,8 @@ theorem tableM_mask {x : Msg} {w : Claims.Flock.Wit} (hL : Live x) (hw : RZk x w
   rw [FlockComplete.ZkTables.traces_getElem (stsOf x) _ hj]
   exact ⟨h1, h2, h3, p.only j.val, _, hone, hJ, rfl, FlockComplete.ZkTables.stmtT_of htab hty hpi hj⟩
 
-/-- **The outer coins after the rep's first round are not `1`** where no refusal is seen up to a stop past the rep's
-`ε` slot: the outer coins' round is the rep's second, before its `ε` slot (`outerSlot_eq`, `repSlot_eq`). -/
+/-- **The outer coins after the rep's first round are not `1`** where no refusal is seen up to a stop past the
+rep's `ε` slot. -/
 theorem outer_ne_one {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin} {n : ℕ} (hnr : ¬ Refused x c n)
     {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
@@ -408,10 +375,6 @@ theorem outer_ne_one {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin} {n : ℕ}
     rw [e, outerSlot_eq hsx]
     exact h1
 
-/-- **The shared phases' constraints vanish at the honest pads** wherever they reach a rep's inner proof
-(`InnerAt`) at a stop past its `ε` slot: answered by `asksCut` they are answered by `asksS` at the same coins
-(`innerPre_cut`), where `innerPre_holds` gives them at the mask witness's table and trace (`tableM_mask`), the outer
-coins not `1` (`outer_ne_one`). -/
 theorem innerAt_holds {x : Msg} {w : Claims.Flock.Wit} {τ : UE.Tape} {c : Fin (refK x) → FlockDeploy.Coin} {n : ℕ}
     {j : Fin (jOf x)} {r : Fin 2} {cons : Array (String × _root_.Flock.Zk.Lin)} {L : ℕ}
     (hA : InnerAt x w τ c n j r cons L) (hn : innerSlotE x j r + 1 < n) :
@@ -440,8 +403,6 @@ theorem innerAt_holds {x : Msg} {w : Claims.Flock.Wit} {τ : UE.Tape} {c : Fin (
   rw [tabsOf_ofCircuit x j]
   exact hcons
 
-/-- **`InnerBatched`**: the shared phases' constraints vanish at the honest pads (`innerAt_holds`), so the batch of
-them and the triple's vanishes there at every coin (`innerP_batched`). -/
 theorem innerBatched : InnerBatched := by
   intro x w τ c n j r cons L hA hn
   exact FlockComplete.innerP_batched (UE.tapeZk τ) j.val r.val (innerLayE x j) (innerAt_holds hA hn)

@@ -39,28 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
-/-!
-# The deployed masked session at one tape
-
-The masked scope caps a session's tables at `Claims.Flock.zkTableCap` (`InScope`), so every statement's table count is
-at most the cap (`jOf_le_cap`) and `not_fibersEq_live`'s hypothesis fails (`not_unbounded_live`). One tape then serves
-every statement: `zkTableCap` cells, one per table, each statement reading its tables from the first `jOf x` cells.
-
-* `TapeLayout`: one table's cell of tape (`Cell`), read as table `j`'s randomness at each statement `x` (`read`) with
-  fibers of one size (`fibers`), with its mask-slot words (`maskAt`) the packing of the slot bits every reading gives
-  (`mask_read`). A reading is the table's coordinates at their places in the cell, an injection of places, so it has
-  fibers of one size whatever the places are (`fibersEq_comp_emb`); which place each coordinate takes is the layout's
-  choice, and the rounds ask the one `flock-circuit --zk`'s tape takes (`TapeZk`'s indices).
-* `TapePlan.ofLayout`: the tape `Fin zkTableCap → Cell`, statement `x` reading table `j` from cell `j` and joining the
-  tables (`rejoin`, a bijection); the masked prover's tape `z`'s, with `TapeZk.mask` table `c`'s cell's words. It is read
-  with fibers of one size at every statement (`fibersEq_ofLayout`), and each table's share of `ZkTables.honestPR`'s
-  witness is the tables' `zWith` at the slot bits the statement reads (`zOf_ofLayout`).
-* `TapeLayout.prefix`: a layout, every coordinate at its index in a cell of the live tables' largest sizes (`zMax`,
-  `schMax`; `fits_zkTab`: the mask slot within `2^35` words, the pads below `2^64`, the schedule's sizes at their largest
-  over `m ∈ [25, 35]`).
-* `Flock.zk_deployZk_masked_layout_gap`: `Flock.zk_deployZk_masked_gap` at any layout's tape, `hT` discharged; what is
-  left is the round plan's `Causal` and the three rounds at that tape.
--/
+/-! The deployed masked session at one tape. -/
 
 @[expose] public section
 
@@ -73,11 +52,8 @@ open CoinLayer
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-! ## Fibers of one size under restriction -/
-
 theorem fibersEq_id {α : Type} : FibersEq (id : α → α) := fibersEq_of_bijective Function.bijective_id
 
-/-- Fibers of one size, componentwise over a pair. -/
 theorem FibersEq.prodMap {α β γ δ : Type} {f : α → β} {g : γ → δ} (hf : FibersEq f) (hg : FibersEq g) :
     FibersEq (Prod.map f g) := by
   have e : ∀ p : β × δ, {a // Prod.map f g a = p} ≃ {a // f a = p.1} × {c // g c = p.2} := fun p =>
@@ -88,13 +64,10 @@ theorem FibersEq.prodMap {α β γ δ : Type} {f : α → β} {g : γ → δ} (h
   intro b b'
   rw [Nat.card_congr (e b), Nat.card_congr (e b'), Nat.card_prod, Nat.card_prod, hf b.1 b'.1, hg b.2 b'.2]
 
-/-- Fibers of one size, coordinatewise over a finite index, one map at every coordinate. -/
 theorem FibersEq.piConst {ι α β : Type} [Fintype ι] {f : α → β} (h : FibersEq f) :
     FibersEq fun (a : ι → α) i => f (a i) :=
   FibersEq.pi (α := fun _ => α) (β := fun _ => β) (f := fun _ => f) fun _ => h
 
-/-- **Reading a function at an injection's points has fibers of one size**: the fiber at `g` is the functions on the
-points the injection misses. -/
 theorem fibersEq_comp_emb {A B Cod : Type} (ι : A ↪ B) : FibersEq fun f : B → Cod => f ∘ ι := by
   classical
   refine fibersEq_of_equiv (D := {b // b ∉ Set.range ι} → Cod)
@@ -130,10 +103,6 @@ def cut {Cod : Type} {n N : ℕ} (h : n ≤ N) (f : Fin N → Cod) : Fin n → C
 theorem fibersEq_cut {Cod : Type} {n N : ℕ} (h : n ≤ N) : FibersEq (cut (Cod := Cod) h) :=
   fibersEq_comp_emb (castEmb h)
 
-/-! ## The table count -/
-
-/-- **The masked session has at most `zkTableCap` tables**: the masked scope caps the parsed statement's (`InScope`), and
-the setup makes as many as it counts (`setupOf_size_eq_tables`). -/
 theorem jOf_le_cap (x : Msg) : jOf x ≤ Claims.Flock.zkTableCap := by
   unfold jOf
   split_ifs with h
@@ -152,13 +121,10 @@ theorem jOf_le_cap (x : Msg) : jOf x ≤ Claims.Flock.zkTableCap := by
       exact max_le (by unfold Claims.Flock.zkTableCap; omega) h9
   · exact Nat.zero_le _
 
-/-- **`Live`'s table count is bounded**, so `not_fibersEq_live` does not apply to the masked scope. -/
 theorem not_unbounded_live : ¬ ∀ N, ∃ x, Live x ∧ N ≤ jOf x := fun h => by
   obtain ⟨x, -, hx⟩ := h (Claims.Flock.zkTableCap + 1)
   have := jOf_le_cap x
   omega
-
-/-! ## A tape of one cell per table -/
 
 /-- **One table's randomness** at the sizes `z`: its base, and each of its pre-final leaves' salt and ideal seed. -/
 abbrev TabRand (z : ZkView.Sizes) (Hi : Type) : Type :=
@@ -209,8 +175,6 @@ theorem TapePlan.ofLayout_mask {P : Composed.LigProver} (L : TapeLayout P)
       fun c k => if hc : c < Claims.Flock.zkTableCap then L.maskAt (t ⟨c, hc⟩) k else 0 :=
   rfl
 
-/-- **A layout's tape is read with fibers of one size at every statement**: the first `jOf x` cells, each read with fibers
-of one size, then joined by a bijection. -/
 theorem fibersEq_ofLayout {P : Composed.LigProver} (L : TapeLayout P)
     (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (x : Msg) :
     FibersEq ((TapePlan.ofLayout L z).tape x) := by
@@ -220,8 +184,6 @@ theorem fibersEq_ofLayout {P : Composed.LigProver} (L : TapeLayout P)
     FibersEq.pi (f := fun j => L.read x j) fun j => L.fibers x j
   exact (h1.comp h2).comp (fibersEq_of_bijective (rejoin_bijective (tabC P) x))
 
-/-- **Table `j`'s share of `honestPR`'s witness at a layout's tape is the tables' `zWith`**: the share of `w` (`wtOf`)
-with the slot's word `k` set to the bits `k` statement `x` reads from cell `j`. -/
 theorem zOf_ofLayout {P : Composed.LigProver} (L : TapeLayout P)
     (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (x : Msg)
     (t : Fin Claims.Flock.zkTableCap → L.Cell) (w : Claims.Flock.Wit) (j : Fin (jOf x)) :
@@ -248,8 +210,6 @@ theorem zOf_ofLayout {P : Composed.LigProver} (L : TapeLayout P)
   rw [L.mask_read x j (t ⟨j.val, hc⟩) k.val hk]
   exact toZ_wordOfBits _ v
 
-/-- **Where no outer coin is `1`, `honestPR` at a layout's tape is `honestP` at its mask witness** (`honestPR_next`),
-whose table `j`'s share is the tables' `zWith` (`zOf_ofLayout`). -/
 theorem honestPR_ofLayout {P : Composed.LigProver} (L : TapeLayout P)
     (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (w : Claims.Flock.Wit) (x : Msg)
     (t : Fin Claims.Flock.zkTableCap → L.Cell) (hist : List (Msg × Msg))
@@ -258,8 +218,6 @@ theorem honestPR_ofLayout {P : Composed.LigProver} (L : TapeLayout P)
       (FlockComplete.ZkTables.honestP (FlockComplete.ZkTables.maskWOf x w
         ((TapePlan.ofLayout L z).tapeZk t).mask)).next x hist ((TapePlan.ofLayout L z).tapeZk t) :=
   FlockComplete.ZkTables.honestPR_next h
-
-/-! ## A layout: every coordinate at its index in a cell of the largest sizes -/
 
 /-- Sizes `z` within `zM`, field by field (the fields the randomness reads). -/
 structure Fits (z zM : ZkView.Sizes) : Prop where
@@ -274,7 +232,6 @@ structure Fits (z zM : ZkView.Sizes) : Prop where
   nPU : z.nPU ≤ zM.nPU
   nPad : z.nPad ≤ zM.nPad
 
-/-- `PadIdx n` in `PadIdx N`: the exposed pads at their indices, the last four as themselves. -/
 def padEmb {n N : ℕ} (h : n ≤ N) : PadIdx n ↪ PadIdx N :=
   Function.Embedding.sumMap (castEmb h) (Function.Embedding.refl _)
 
@@ -284,7 +241,6 @@ def leafEmb {z zM : ZkView.Sizes} (hz : Fits z zM) : ZkView.LeafPos z ↪ ZkView
     (Function.Embedding.sumMap (Function.Embedding.prodMap (Function.Embedding.refl _)
       (castEmb (Nat.add_le_add hz.nQ hz.nPU))) (Function.Embedding.refl _))
 
-/-- **A base at sizes `z` from one at `zM`**: each coordinate at its index. -/
 def resBase {z zM : ZkView.Sizes} (hz : Fits z zM) {h hM : ℕ} (hh : h ≤ hM) :
     ZkView.Base zM (Fin hM → ZkView.Salt) → ZkView.Base z (Fin h → ZkView.Salt) :=
   Prod.map (cut hz.nMask)
@@ -314,7 +270,6 @@ theorem fibersEq_resBase {z zM : ZkView.Sizes} (hz : Fits z zM) {h hM : ℕ} (hh
                 ((FibersEq.piConst (fibersEq_cut _)).prodMap
                   (fibersEq_id.prodMap (FibersEq.piConst (fibersEq_cut _))))))))))
 
-/-- **A table's randomness at sizes `z` from one at `zM`**: its base's coordinates and its leaves' at their indices. -/
 def resTab {z zM : ZkView.Sizes} (hz : Fits z zM) {h hM : ℕ} (hh : h ≤ hM) :
     TabRand zM (Fin hM → ZkView.Salt) → TabRand z (Fin h → ZkView.Salt) :=
   Prod.map (resBase hz hh) (Prod.map (fun f => f ∘ leafEmb hz) (fun f => f ∘ leafEmb hz))
@@ -359,13 +314,8 @@ theorem bnd_le {st : _root_.Flock.Stmt} (y : ZkHidden.ZkTab st) : bnd (y.sch, y.
   rw [← e]
   exact hw.trans h
 
-/-- The largest schedule sizes at today's statement version alone: `bnd` at its largest over today's `--zk`
-schedules. -/
 def schMaxToday : ℕ := (Finset.Icc 25 35).sup (schB false)
 
-/-- **The largest schedule sizes are today's**: no wide-leaf schedule's sizes pass today's at `m = 35` (one kernel
-check per `m`), so the largest over both statement versions is the largest over today's, and the layout's sizes are
-the numbers they were. -/
 theorem schMax_eq_today : schMax = schMaxToday := by
   have key : ∀ k : Fin 11, schB true (k.val + 25) ≤ schB false 35 := by decide +kernel
   have h35 : schB false 35 ≤ schMaxToday :=
@@ -404,8 +354,6 @@ theorem length_flatMap_const {α β : Type} (l : List α) (f : α → List β) (
     simp only [List.flatMap_cons, List.length_append, h, ih, List.length_cons]
     ring
 
-/-- **The mask slot has at most `2^m` words**: `2^nbl` blocks of `2^(slotLog − 7)` words, the slot within a block of
-`2^kLog` bits (`MaskSetup.mask`), and `m = kLog + nbl`. -/
 theorem maskWordsOf_length_le {st : _root_.Flock.Stmt} (M : Composed.MaskSetup st) (hm : st.m ≤ 35) :
     (Composed.maskWordsOf st).length ≤ 2 ^ 35 := by
   unfold Composed.maskWordsOf
@@ -424,7 +372,6 @@ theorem bnd_parts {a b c d e M : ℕ} (h : a + b + c + d + e ≤ M) :
     a ≤ M ∧ b ≤ M ∧ c ≤ M ∧ d ≤ M ∧ e ≤ M := by
   omega
 
-/-- **A live table's sizes fit `zMax`.** -/
 theorem fits_zkTab (P : Composed.LigProver) {st : _root_.Flock.Stmt} (y : ZkHidden.ZkTab st) :
     Fits (Composed.coinedOf P y.table st).z zMax := by
   have hB := bnd_le y
@@ -448,15 +395,12 @@ theorem fits_zkTab (P : Composed.LigProver) {st : _root_.Flock.Stmt} (y : ZkHidd
   · show ZkExec.innerN (ZkLink.layOf st y.sch) - _root_.Flock.Zk.Q ≤ 2 ^ 64
     omega
 
-/-- **A live table's levels ≥ 1 have at most `schMax` salts.** -/
 theorem hi_le {st : _root_.Flock.Stmt} (y : ZkHidden.ZkTab st) : Composed.hiCount y.table ≤ schMax := by
   have hB := bnd_le y
   simp only [bnd] at hB
   show 2 * ((FlockSoundness.Refine.schedOf y.sch).levels.tail.map fun l => 2 ^ l.logLen).sum ≤ schMax
   exact (bnd_parts hB).2.2.2.2
 
-/-- **The prefix layout**: a cell of a table's randomness at `zMax` and `schMax` salts, each statement's table reading
-every coordinate at its index (`resTab`); the mask words the cell's slot bits, packed. -/
 noncomputable def TapeLayout.prefix (P : Composed.LigProver) : TapeLayout P where
   Cell := TabRand zMax (Fin schMax → ZkView.Salt)
   read x j := resTab (fits_zkTab P (zkTab x j)) (hi_le (zkTab x j))
@@ -475,10 +419,6 @@ end Masked
 open Masked
 
 open Classical in
-/-- **Flock's zero knowledge at the deployed masked session, at one tape**: `Flock.zk_deployZk_masked_gap` at a layout's
-tape (`TapePlan.ofLayout L z`), read with fibers of one size at every statement (`fibersEq_ofLayout`), at
-`ε_zk = 8·n_L·gap + 8t·n_L·gap + 2·3^{-t}` on the masked scope and `1` outside it, with no hiding premise. Left: the round
-plan's `Causal` and `refP`'s three rounds `ZkTables.honestPR`'s at that tape, on `Live`, at the relation's witnesses. -/
 theorem Flock.zk_deployZk_masked_layout_gap (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     (Q : RoundPlan (tabC P)) (L : TapeLayout P) (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk)
     (t : ℕ) (ht : 0 < t) (hc : Q.Causal)
@@ -497,9 +437,6 @@ theorem Flock.zk_deployZk_masked_layout_gap (H : Msg → Msg) (nr : Msg → ℕ 
     hoff
 
 open Classical in
-/-- **`Flock.zk_deployZk_masked_layout_gap` at a stopping round plan** (`RoundPlan.stop`): the third round is
-`ZkTables.honestPR`'s alone (`honestOffOn_stop_iff`): after `refK x` openings whose coins some table refuses, its next
-message is `[]`. -/
 theorem Flock.zk_deployZk_masked_layout_stop_gap (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((tabC P x j).T (cz x c j)).tab.Cut) → Msg)

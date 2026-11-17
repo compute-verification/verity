@@ -36,24 +36,10 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 import Proofs.Flock.Claims.ZK.FinishSwMk
 
-/-!
-# The switched source's masked values, with or without the rows
-
-The switched prover's pre-final view (`Table.swPre`) is the worker's view where its rows hold, and elsewhere the honest
-prover's on the pads moved by Lemma A's amounts (`Table.shift`, `Table.padShift`), which moves each exposed pad by the
-difference between the worker's clear value and the honest one. Either way its masked values are the worker's clear
-values plus the sampled pads, so the readings `FinishSwMk` takes where the rows hold hold everywhere:
-
-* **`Table.swPre_masked_any`**: the switched pre-final view's masked values are the worker's view's, at any values.
-* `Masked.swCutE_masked_any`, `Masked.swSrcE_masked_any`, **`Masked.swSrcE_masked_pad_any`**: so the switched source's
-  masked value at a sent index is the worker's clear value plus the tape's pad, and below `h_ab` plus the session's pad
-  array's entry (`padsOf`), with no hypothesis on the rows.
--/
+/-! The switched source's masked values, with or without the rows. -/
 
 @[expose] public section
 
-/-- **The switched pre-final view's masked values are the worker's view's**, whether or not its rows hold: where they
-fail, the honest values on the moved pads add up to the worker's on the sampled ones. -/
 theorem FlockSoundness.ZK.Table.swPre_masked_any {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).masked = (T.onVals.view (w, v) ω).masked := by
@@ -72,7 +58,6 @@ open CoinLayer
 
 namespace Masked
 
-/-- The switched cut's masked values are the worker's view's, at any values. -/
 theorem swCutE_masked_any (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) :
     (swCutE x c w v τ j).masked =
@@ -81,8 +66,6 @@ theorem swCutE_masked_any (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w :
   rw [swCutE_masked]
   exact Table.swPre_masked_any _ _ _ _
 
-/-- **The switched source's masked value at a sent index** `k < n_E` is the worker's clear value there plus the tape's
-pad `k` of table `j`'s rep `r`, with no hypothesis on the rows (`swSrcE_masked` at `swCutE_masked_any`). -/
 theorem swSrcE_masked_any (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     {k : ℕ} (hk : k < (tabC PE x j).z.nE) :
@@ -116,8 +99,6 @@ theorem swSrcE_masked_any (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w :
   congr 1
   exact (congrArg FlockLevel3.GF128.val (tH ⟨k, by omega⟩)).symm
 
-/-- **The switched source's masked value below `h_ab`** is the worker's clear value plus the session's pad
-(`padsOf`), with no hypothesis on the rows (`swSrcE_masked_pad` at `swSrcE_masked_any`). -/
 theorem swSrcE_masked_pad_any (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     {k : ℕ} (hkE : k < (tabC PE x j).z.nE) :

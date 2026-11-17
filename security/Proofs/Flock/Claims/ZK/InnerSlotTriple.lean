@@ -33,14 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `InnerSlot` and `InnerTriple`
-
-Two of `SplitInner`'s statements, each from its `SimInner` lemma at `InnerAt`'s run:
-
-* **`innerSlot_holds`**: the shared phases end at the rep's `ε` slot (`innerPre_slot`).
-* **`innerTriple_holds`**: the cut's `ρ_in`, `σ_in` are the session's at the honest pads (`innerTripleE`).
--/
+/-! `InnerSlot` and `InnerTriple`, two of `SplitInner`'s statements. -/
 
 @[expose] public section
 

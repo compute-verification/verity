@@ -4,20 +4,7 @@ public import Proofs.Flock.Claims.ZK.FrameTape
 public import Proofs.Flock.Claims.ZK.Round1Root
 import all Init.Data.Nat.Power2.Basic
 
-/-!
-# The frame's pads root is the masked prover's
-
-At a rep's start the Lean frame commits the pads it drew (`Flock.ZkServer.Frame.padsRoot`): `treeRoot` of the leaves
-`H(H(c_h(j) ‖ c_μ(j)), salt j)`, a level at a time. The masked prover commits its tape's pads with `innerCommitP`, whose
-root is `layerOf`'s of the same leaves at its own salts (`FlockComplete.innerCommitP_root_layerOf`). On the tape of the
-frames' samples they are one root:
-
-* `treeRoot_layerOf`: `treeRoot` of `2^d` leaves is `layerOf`'s root, so `padsRoot` is `layerOf`'s root of the frame's
-  leaves (`padsRoot_layerOf`), over `codeLen` columns (`ofBytes_cols`).
-* `padsRoot_tapeOfSamples`: at frame rep `rep i r`'s samples of `sampleBytes` bytes, the frame's `padsRoot` is the root
-  `innerCommitP` commits table `i`'s rep `r`'s pads under on `tapeOfSamples`: the pads are the frame's
-  (`padsOf_tapeOfSamples`) and so are the leaf salts (`innerSalt_fit`).
--/
+/-! The frame's pads root is the masked prover's. -/
 
 @[expose] public section
 
@@ -25,8 +12,6 @@ namespace Claims.ZKServer
 
 open _root_.Flock.ZkServer.Frame (Draws sampleBytes codeLen SALT treeRoot padsRoot)
 
-/-- `treeRoot`'s loop from level `h` of `layerOf`'s tree of depth `d`, with fuel for the `d - h` levels above it, is the
-tree's root. -/
 theorem treeRoot_go_layerOf (lf : ℕ → ByteArray) (d : ℕ) :
     ∀ k h, h + k = d → ∀ fuel, k ≤ fuel →
       treeRoot.go (FlockComplete.layerOf (fun l r => _root_.Flock.Sha512.hash (l ++ r)) d lf h) fuel =
@@ -48,13 +33,11 @@ theorem treeRoot_go_layerOf (lf : ℕ → ByteArray) (d : ℕ) :
     rw [treeRoot.go, ite_cond_eq_false _ _ (eq_false (by omega))]
     exact treeRoot_go_layerOf lf d k (h + 1) (by omega) f (by omega)
 
-/-- **`treeRoot` of `2^d` leaves is `layerOf`'s root.** -/
 theorem treeRoot_layerOf (lf : ℕ → ByteArray) (d : ℕ) :
     treeRoot ((Array.range (2 ^ d)).map lf) =
       (FlockComplete.layerOf (fun l r => _root_.Flock.Sha512.hash (l ++ r)) d lf d)[0]! :=
   treeRoot_go_layerOf lf d d 0 (by omega) _ (by simpa using Nat.le_of_lt (Nat.lt_two_pow_self (n := d)))
 
-/-- `layerOf` reads its leaves only below `2^d`. -/
 theorem layerOf_congr (nd : ByteArray → ByteArray → ByteArray) (d : ℕ) {lf lf' : ℕ → ByteArray}
     (h : ∀ j < 2 ^ d, lf j = lf' j) : ∀ k, FlockComplete.layerOf nd d lf k = FlockComplete.layerOf nd d lf' k
   | 0 => by
@@ -64,13 +47,11 @@ theorem layerOf_congr (nd : ByteArray → ByteArray → ByteArray) (d : ℕ) {lf
       exact h j (by simpa using h1)
   | k + 1 => by simp only [FlockComplete.layerOf, layerOf_congr nd d h k]
 
-/-- The rows the frame's pads tree encodes, `h ‖ pad_h`, take `codeLen` columns. -/
 theorem ofBytes_cols (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
     ((Draws.ofBytes l b).h ++ (Draws.ofBytes l b).padH).size.nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE =
       codeLen l := by
   simp [Draws.ofBytes, _root_.Flock.ZkServer.Frame.words, codeLen]
 
-/-- **The frame's pads root is `layerOf`'s root** of its leaves: column `j`'s leaf under the samples' `j`-th salt. -/
 theorem padsRoot_layerOf (l : _root_.Flock.Zk.PadLayout) (d : Draws) :
     padsRoot l d = (FlockComplete.layerOf (fun l r => _root_.Flock.Sha512.hash (l ++ r)) (Nat.log2 (codeLen l))
       (fun j => _root_.Flock.Hm96.Default512.leaf (_root_.Flock.Sha512.hash
@@ -83,8 +64,6 @@ theorem padsRoot_layerOf (l : _root_.Flock.Zk.PadLayout) (d : Draws) :
   unfold padsRoot
   rw [hD, Nat.log2_two_pow, treeRoot_layerOf]
 
-/-- **The frame's pads root is the masked prover's**: at frame rep `rep i r`'s samples of `sampleBytes` bytes, the frame's
-`padsRoot` is the root `innerCommitP` commits table `i`'s rep `r`'s pads under, on the tape of the frames' samples. -/
 theorem padsRoot_tapeOfSamples (t : FlockComplete.TapeZk) (lay : ℕ → _root_.Flock.Zk.PadLayout) (B : ℕ → ByteArray)
     (rep : ℕ → ℕ → ℕ) (i r : ℕ) (hs : (B (rep i r)).size = sampleBytes (lay (rep i r)))
     {ic : FlockComplete.InnerCommit}

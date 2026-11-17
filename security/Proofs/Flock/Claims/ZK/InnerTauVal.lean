@@ -35,23 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# `InnerTauVal` from its seven rows
-
-`InZ.tau` is `dot (combo γ (cons ++ triple)).a μ` and the real view's `τ` is `Σ_i λ_i μ_i`, with
-`λ = batchCoef γ (rowsOf …)` read through `padEquiv`. The two agree term by term once the ten rows do:
-
-* **`tau_of_rows`**: the reduction, for any layout, pads, constraints and coins whose rows, `γ` and `μ` match.
-* **`viewTauE_eq`**, **`gammaE`**, **`muE_eq`**: the real view's `τ` unfolds to the batch (`rfl`), the batching coins
-  are `czExe`'s at the round after `ε`, and the pads' `μ` by layout index is the tape's by pad.
-* **`triple_coef`**, **`tripleE`**: `Zk.triple`'s three rows are `tripleRows`' at the layout's six indices, and at the
-  deployed table they are `rowsOf`'s last three on the view's `ρ_in, σ_in` (`innerTripleE`).
-* **`TauRows`**: the open part, that `cons` is `rowsOf`'s first seven rows (the replay's five and the Ligerito check's
-  two limbs), each of the layout's length.
-* **`innerTauVal_of`**: `TauRows → InnerTauVal`.
-* **`TauRep`**, **`TauLig`**, **`tauRows_of`**: `TauRows` as its first five rows (the replay's three and the two
-  ring-switch rows) and its last two (level 0's lane limbs); `innerTauVal_of_rows : TauRep → TauLig → InnerTauVal`.
--/
+/-! `InnerTauVal` from its seven rows. -/
 
 @[expose] public section
 
@@ -62,8 +46,6 @@ open CoinLayer
 open FlockSoundness.Refine (fOf)
 namespace Masked
 
-/-- **The batch, term by term**: where `all`'s ten rows have the layout's length, their coefficients are `R`'s, the
-coins are `γ` and the pads' `μ` is `μ` through `padEquiv`, `τ` is `Σ_i batchCoef γ R (padEquiv i) · μ_i`. -/
 theorem tau_of_rows {nE : ℕ} (lay : _root_.Flock.Zk.PadLayout) (p : FlockComplete.PadsZk)
     (cons : Array (String × _root_.Flock.Zk.Lin)) (cs : FlockComplete.Replay.InZ.Challenges)
     (γ : Fin (7 + 3) → FlockLevel3.GF128) (R : Fin (7 + 3) → ZkSession.Lin FlockLevel3.GF128 (nE + 4))
@@ -107,17 +89,14 @@ theorem tau_of_rows {nE : ℕ} (lay : _root_.Flock.Zk.PadLayout) (p : FlockCompl
   refine Finset.sum_congr rfl fun k _ => ?_
   rw [hcoef k, ← hμ ((Composed.padEquiv nE).symm k), Equiv.apply_symm_apply]
 
-/-- Table `j`'s real view at the opened coins `c` (`viewsAt`). -/
 noncomputable abbrev viewE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) :=
   (session (fun _ _ => 0) (tableData PE QE UE)).viewsAt x c (wtOf PE x w) τ j
 
-/-- Table `j`'s rep `r` mask `μ` at the tape `τ`, by pad. -/
 noncomputable abbrev muE (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
     PadIdx (tabC PE x j).z.nE → FlockLevel3.GF128 :=
   fun i => (τ ⟨j.val, lt_of_lt_of_le j.isLt (jOf_le_cap x)⟩).1.2.2.2.2.2.1 r (padEmb' (fits_zkTab PE (zkTab x j)) i)
 
-/-- Table `j`'s rep `r` ten constraint rows (`Composed.rowsOf`) on its real view's messages. -/
 noncomputable abbrev rowsE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) : Fin (7 + 3) → ZkSession.Lin FlockLevel3.GF128 ((tabC PE x j).z.nE + 4) :=
   Composed.rowsOf (zkTab x j).table (stAt x j) (czExe PE x c j) r ((viewE x c w τ j).pre.2.1 r)
@@ -152,7 +131,6 @@ theorem innerLayE_len (x : Msg) (j : Fin (jOf x)) : (innerLayE x j).len = (tabC 
   rw [tabE_nE, innerLayE_eq]
   rfl
 
-/-- The batching coins `γ` are `czExe`'s, at the round after the rep's `ε` slot. -/
 theorem gammaE {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) (k : Fin (7 + 3)) :
     fOf ((innerCoinsE c j r).cg k.val) = Composed.innerGamma (zkTab x j).table (stAt x j) (czExe PE x c j) r k := by
@@ -172,7 +150,6 @@ theorem padEquiv_val {nE : ℕ} (i : PadIdx nE) : (Composed.padEquiv nE i).val =
   · rfl
   · fin_cases k <;> rfl
 
-/-- The pads' `μ` by layout index is the tape's `μ` by pad (`padsOf`, `padEmb'`). -/
 theorem muE_eq (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (i : PadIdx (tabC PE x j).z.nE) :
     fOf (innerPadsE x τ j r).mu[(Composed.padEquiv _ i).val]! = muE x τ j r i := by
   have hc : j.val < Claims.Flock.zkTableCap := lt_of_lt_of_le j.isLt (jOf_le_cap x)
@@ -188,7 +165,6 @@ theorem muE_eq (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (i : PadId
   rw [hm, tapeMu_eq τ hc r ⟨Composed.padIdx i, by omega⟩]
   rfl
 
-/-- `Zk.triple`'s three rows' coefficients are `tripleRows`' at the layout's six indices. -/
 theorem triple_coef {nE : ℕ} (Ly : _root_.Flock.Zk.PadLayout) (hE : Ly.hab = nE) (eps rho sigma : _root_.Flock.F128)
     (q : Fin 3) (i : Fin (nE + 4)) :
     fOf ((_root_.Flock.Zk.triple Ly eps rho sigma)[q.val]!).2.a[i.val]! =
@@ -237,7 +213,6 @@ theorem triple_coef {nE : ℕ} (Ly : _root_.Flock.Zk.PadLayout) (hE : Ly.hab = n
     simp only [Fin.ext_iff]
     split_ifs <;> first | omega | simp [FlockSoundness.Refine.fOf_zero, FlockSoundness.Refine.fOf_one]
 
-/-- The inner proof's three triple rows are `rowsOf`'s last three, at the real view's `ρ_in, σ_in`. -/
 theorem tripleE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) (q : Fin 3) (i : Fin ((tabC PE x j).z.nE + 4)) :
     fOf ((_root_.Flock.Zk.triple (innerLayE x j) ((innerCoinsE c j r).ce 0)
@@ -267,17 +242,12 @@ theorem triple_size (Ly : _root_.Flock.Zk.PadLayout) (eps rho sigma : _root_.Flo
     ((_root_.Flock.Zk.triple Ly eps rho sigma)[q]!).2.a.size = Ly.len := by
   interval_cases q <;> simp [_root_.Flock.Zk.triple]
 
-/-- **The seven constraints before the triple**: where the shared phases reach table `j`'s rep `r`'s inner proof, its
-replay's five constraints (`c_eval`, the final `a·b`, the lincheck's, the two ring-switch claims) and the Ligerito
-check's two limbs are `rowsOf`'s first seven on the real view's messages, each of the layout's length. -/
 def TauRows : Prop :=
   ∀ x w τ c n j r cons L, InnerAt x w τ c n j r cons L → innerSlotE x j r + 1 < n →
     cons.size = 7 ∧ (∀ k < 7, (cons[k]!).2.a.size = (innerLayE x j).len) ∧
       ∀ (k : Fin 7) (i : Fin ((tabC PE x j).z.nE + 4)),
         fOf (cons[k.val]!).2.a[i.val]! = (rowsE x c w τ j r (Fin.castAdd 3 k)).coef i
 
-/-- `InnerTauVal` from the seven rows: the batch `dot (combo γ all).a μ` is `Σ_i λ_i μ_i` term by term, the triple's
-rows by `tripleE`, `γ` by `gammaE` and `μ` by `muE_eq`. -/
 theorem innerTauVal_of (h : TauRows) : InnerTauVal := by
   intro x w τ c n j r cons L hA hn
   obtain ⟨hsz, hasz, hrow⟩ := h x w τ c n j r cons L hA hn
@@ -304,15 +274,11 @@ theorem innerTauVal_of (h : TauRows) : InnerTauVal := by
         (by simp [_root_.Flock.Zk.triple])]
       exact tripleE x c w τ j r q i
 
-/-- **The replay's rows** (`TauRows`' first five): `cons` begins with the replay's three constraints and the two
-ring-switch rows, which are `rowsOf`'s first five by coefficient, each of the layout's length. -/
 def TauRep : Prop :=
   ∀ x w τ c n j r cons L, InnerAt x w τ c n j r cons L → innerSlotE x j r + 1 < n →
     5 ≤ cons.size ∧ ∀ (k : ℕ) (hk : k < 5), (cons[k]!).2.a.size = (innerLayE x j).len ∧
       ∀ i : Fin ((tabC PE x j).z.nE + 4), fOf (cons[k]!).2.a[i.val]! = (rowsE x c w τ j r ⟨k, by omega⟩).coef i
 
-/-- **Level 0's lane rows** (`TauRows`' last two): `cons` has seven rows, and its last two (`ligeritoConstraints`' two
-limbs) are `rowsOf`'s `limbRows` of `laneRow` by coefficient, each of the layout's length. -/
 def TauLig : Prop :=
   ∀ x w τ c n j r cons L, InnerAt x w τ c n j r cons L → innerSlotE x j r + 1 < n →
     cons.size = 7 ∧ ∀ (k : ℕ) (hk : 5 ≤ k ∧ k < 7), (cons[k]!).2.a.size = (innerLayE x j).len ∧
@@ -327,7 +293,6 @@ theorem tauRows_of (hR : TauRep) (hL : TauLig) : TauRows := by
     fun k hk => if h5 : k < 5 then hR k h5 else hL k ⟨by omega, hk⟩
   exact ⟨hsz, fun k hk => (hrow k hk).1, fun k i => (hrow k.val k.isLt).2 i⟩
 
-/-- **`InnerTauVal` from the replay's rows and level 0's lane rows.** -/
 theorem innerTauVal_of_rows (hR : TauRep) (hL : TauLig) : InnerTauVal := innerTauVal_of (tauRows_of hR hL)
 
 end Masked

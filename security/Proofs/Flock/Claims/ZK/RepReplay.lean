@@ -43,22 +43,7 @@ import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# The cut rep's replay returns on its coins alone
-
-The replay re-derives each of the rep's coins from the rounds the rep recorded, so it returns where the rep's own
-zerocheck and lincheck absorbed what the replay absorbs. The cut's zerocheck and lincheck at masked values `mk` are the
-masked prover's at the pads `mk` and the empty trace, whose plain values are all `0`: so their proofs and transcripts
-are `ZcZ`'s and `LcZ`'s, and `replayWith_ok` runs the replay to its end wherever the circuit fold at the coins returns
-a vector of width `64`. That fold reads only coins, so it is the ZK server's.
-
-* **The empty trace** (`tr0`): every plain zerocheck and lincheck value is `0` (`zc_msg_nil`, `lc_msg_nil`, …).
-* **Closed forms** (`zerocheckCut_closed`, `lincheckCut_closed`): answered by `asksCut` at replies with its coins, the
-  cut's zerocheck and lincheck at `mk` return `ZcZ`'s and `LcZ`'s proofs and transcripts at the pads `padsOf lay mk`.
-* **`replay_cut_ok`**: on rounds that begin with the cut's, the replay of a proof whose zerocheck and lincheck are the
-  cut's returns, wherever the fold at the coins returns a vector of width `64`.
-* **`Lincheck.replay_fold_w`**: a returned replay's fold at its rounds' coins returned a vector of width `64`.
--/
+/-! The cut rep's replay returns on its coins alone. -/
 
 @[expose] public section
 
@@ -68,8 +53,6 @@ set_option synthInstance.maxHeartbeats 1000000
 namespace FlockComplete.CutFree
 
 open Flock Transcript Replay
-
-/-! ## Words -/
 
 section Arith
 open FlockSoundness.Refine
@@ -103,9 +86,6 @@ theorem sumF_eq_zero {f : ℕ → F128} : ∀ {n : ℕ}, (∀ i < n, f i = 0) �
 
 theorem sumF_zero (n : ℕ) : sumF n (fun _ => 0) = 0 := sumF_eq_zero fun _ _ => rfl
 
-/-! ## The empty trace -/
-
-/-- **The empty trace**: no bits, so every plain value is `0`. -/
 abbrev tr0 : Trace := ⟨#[], #[], #[]⟩
 
 theorem skipHat_nil (w : Array F128) (x : ℕ) : skipHat #[] w x = 0 := by
@@ -156,13 +136,11 @@ theorem lc_msg_nil (c : CircuitFold) (m : ℕ) (zc : ZcOut) (full : Array F128) 
     Lc.msg c m tr0 zc full cs j = (0, 0) := by
   simp only [Lc.msg, lc_zrT_nil, f_add_zero, f_mul_zero, sumF_zero]
 
-/-- **The masked values as pads**, on the layout's length. -/
 def padsOf (lay : Zk.PadLayout) (mk : ℕ → F128) : Array F128 := (Array.range lay.len).map mk
 
 theorem padsOf_get {lay : Zk.PadLayout} {mk : ℕ → F128} {i : ℕ} (hi : i < lay.len) : (padsOf lay mk)[i]! = mk i := by
   rw [padsOf, getElem!_pos _ i (by simpa using hi), Array.getElem_map, Array.getElem_range]
 
-/-- Pad indices below the layout's length. -/
 theorem lay_lt_len (lay : Zk.PadLayout) :
     (∀ i < 64, lay.r1ab i < lay.len) ∧ (∀ i < 64, lay.r1c i < lay.len) ∧
       (∀ j < lay.nMlv, ∀ t < 2, lay.ml j t < lay.len) ∧ lay.fa < lay.len ∧ lay.fb < lay.len ∧ lay.fc < lay.len ∧
@@ -171,10 +149,6 @@ theorem lay_lt_len (lay : Zk.PadLayout) :
     Zk.PadLayout.fb Zk.PadLayout.fa Zk.PadLayout.ml Zk.PadLayout.r1c Zk.PadLayout.r1ab
   refine ⟨fun _ _ => ?_, fun _ _ => ?_, fun _ _ _ _ => ?_, ?_, ?_, ?_, fun _ _ _ _ => ?_, fun _ _ => ?_⟩ <;> omega
 
-/-! ## Closed forms -/
-
-/-- **The cut's zerocheck is the masked prover's at the pads `mk` and the empty trace**: answered by `asksCut` at
-replies with its coins, where it returns from `l`, its proof and transcript are `ZcZ`'s at the coins from `l.size`. -/
 theorem zerocheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray) {lay : Zk.PadLayout}
     (hn : m - 6 ≤ lay.nMlv) (mk : ℕ → F128) {t t₁ : Transcript} {l l₁ : Array Claims.Msg} {zp : ZerocheckProof}
@@ -206,9 +180,6 @@ theorem zerocheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ 
   rw [hc] at hab
   exact ⟨hab, by rw [hc]⟩
 
-/-- **The cut's lincheck is the masked prover's at the pads `mk` and the empty trace**: answered by `asksCut` at replies
-with its coins, from a zerocheck output with the `z` and `ρ` of `zcs`, where it returns from `l`, its fold at `α`
-returned some `full`, and its proof and transcript are `LcZ`'s at the coins from `l.size`. -/
 theorem lincheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) (c : CircuitFold) (m : ℕ) {lay : Zk.PadLayout} (hn' : c.kLog - 6 ≤ lay.nLc)
     (mk : ℕ → F128) (zcs : Zc.Challenges) {zc : ZcOut} (hz : zc.z = (Zc.out m zcs tr0).z)
@@ -244,12 +215,6 @@ theorem lincheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ �
   rw [hc] at hab
   exact ⟨full, hfull, hab, by rw [hc]⟩
 
-/-! ## The replay -/
-
-/-- **The cut rep's replay returns**: answered by `asksCut` at replies with its coins, where the cut's zerocheck and
-lincheck at any masked values `mk` returned from the empty transcript of domain `d` and the log `l`, the replay of a
-proof whose zerocheck and lincheck they returned, on rounds that begin with the lincheck's, returns, wherever the
-circuit fold at the coins from `l.size` returns a vector of width `64`. -/
 theorem replay_cut_ok (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {st : Setup} (hm : 14 ≤ st.m) (hkk : st.kLog = st.fold.kLog) {lay : Zk.PadLayout} (hn : st.m - 6 ≤ lay.nMlv)
     (hn' : st.fold.kLog - 6 ≤ lay.nLc) (mk : ℕ → F128) (p : Proof) (root d : ByteArray)
@@ -282,8 +247,6 @@ namespace FlockSoundness.Discharge.Composed.Lincheck
 
 open Flock FlockLevel3 Model Refine
 
-/-- **A returned replay's fold returned a vector of width `64`**, at the lincheck's `α`, `β`, the skip weights at `z`,
-`ρ[.. k_log − 6]` and the round coins of the rounds it consumed (`replay_lincheck`'s, with the width check after it). -/
 theorem replay_fold_w (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) (hm : 14 ≤ st.m)
     {t t' : Flock.Transcript} {rp : Zk.Replayed} (h : Zk.replay st lay p root t = .ok (rp, t')) :
     ∃ combv : Array F128,
@@ -416,9 +379,6 @@ namespace FlockComplete.CutFree
 
 open Flock Transcript Replay
 
-/-- **A returned replay's fold at coins from `L`**: on rounds whose round `j` is answered by `coin (L + j)`, a returned
-replay's fold at the lincheck's `α`, `β`, the skip weights at `z`, `ρ[.. k_log − 6]` and the round coins, read at the
-coins from `L`, returned a vector of width `64`: `replay_cut_ok`'s `hL`. -/
 theorem replay_fold_coins (coin : ℕ → ℕ → F128) {L : ℕ} {R : Array Round} (hR : RankAt.CoinsAt coin L R)
     {st : Setup} (hm : 14 ≤ st.m) (hkk : st.kLog = st.fold.kLog) (lay : Zk.PadLayout) (p : Proof) (root d : ByteArray)
     {rp : Zk.Replayed} {t' : Transcript} (h : (Zk.replay st lay p root).run (Transcript.init R d) = .ok (rp, t')) :

@@ -2,28 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.FrameParse
 
-/-!
-# The frame reads a round's shape alone
-
-The loop's release runs each rep's frame on the scheduled rounds
-at placeholder samples, salts and level-0 cap, so the frame's state after a round must not read what those change: the
-samples' values (the pads, their root and rows), a bytes frame's body (a commitment's cap), an observe's values, and
-whether the rep is stopped. Over a round's frames (`roundFree_encs`), the frame's step (`stepAt`) reads a label's bytes,
-a bytes frame's size, an observe's length and the configuration's layout, and nothing else of them:
-
-* `RelM f x y`: two runs alike in `f` (both return, at results equal under `f`, or both fail with one error), with its
-  `bind` and `map` (`relM_bind`, `relM_map`).
-* `CfgAlike`: two configurations of one layout, mask slot and pad count, whatever their samples; `unstop`: a state but
-  for `stopped`.
-* `Alike`: two frames of one shape (the same frame but for a bytes frame's body and an observe's values).
-* `absorb_alike`, `label_alike`, `absorb1_alike`, `foldlM_absorb1_alike`, `stepAt_alike`: each step, at alike frames and
-  configurations, from states equal but for `stopped` and the round's release so far, returns states equal but for
-  them, or the same error.
-* **`foldlM_stepAt_alike`**: so does the fold over alike frames.
-* **`roundFree_alike`**: and so the frame's round over alike frames, outside the inner proof, returns the same state but
-  for `stopped` and the same free offsets, or the same error; **`roundFree_alike_ok`**: where both rounds are taken,
-  inside the inner proof too (whose `innerOwn` reads the round's values), the same state and offsets.
--/
+/-! The frame reads a round's shape alone. -/
 
 @[expose] public section
 
@@ -34,7 +13,6 @@ open _root_.Flock.Transcript (header)
 open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS roundFree)
 open FlockSoundness.Refine (Frame encs)
 
-/-- **Two runs alike in `f`**: both return, at results equal under `f`, or both fail with one error. -/
 def RelM {α β : Type} (f : α → β) : V α → V α → Prop
   | .ok a, .ok b => f a = f b
   | .error e, .error e' => e = e'
@@ -64,7 +42,6 @@ theorem relM_map {α β γ δ : Type} {f : α → γ} {g : β → δ} {x y : V �
     | error e' => exact (h : False).elim
     | ok b => exact hk a b h
 
-/-- **Two configurations of one rep's layout**: equal but for the samples (the pads' values, their root and the rows). -/
 structure CfgAlike (c c' : Cfg) : Prop where
   lay : c.lay = c'.lay
   order : c.order = c'.order
@@ -73,7 +50,6 @@ structure CfgAlike (c c' : Cfg) : Prop where
   mask : c.mask = c'.mask
   size : c.h.size = c'.h.size
 
-/-- A state but for `stopped`. -/
 def unstop (s : Masker) : Masker := { s with stopped := false }
 
 theorem eq_unstop {s s' : Masker} (h : unstop s = unstop s') : s' = { s with stopped := s'.stopped } := by
@@ -136,7 +112,6 @@ def Alike : Frame → Frame → Prop
   | .sq k n, .sq k' n' => k = k' ∧ n = n'
   | _, _ => False
 
-/-- The part of a step's state the frame keeps, but for `stopped`. -/
 abbrev keep (r : Masker × ByteArray × Array ℕ × ℕ) : Masker × Array ℕ × ℕ := (unstop r.1, r.2.2)
 
 theorem keep_with {r r' : Masker × ByteArray × Array ℕ × ℕ} (h : keep r = keep r') :
@@ -165,8 +140,6 @@ theorem foldlM_absorb1_alike {c c' : Cfg} (hc : CfgAlike c c') : ∀ (vs vs' : L
     exact relM_bind (absorb1_alike hc r b _ v v') fun a a' _ _ ha =>
       foldlM_absorb1_alike hc vs vs' (by simpa using h) a a' ha
 
-/-- **The frame's step at alike frames and configurations**, from states alike but for `stopped`, reads only their
-shape. -/
 theorem stepAt_alike {c c' : Cfg} (hc : CfgAlike c c') (r r' : Masker × ByteArray × Array ℕ × ℕ)
     (hr : keep r = keep r') (f f' : Frame) (hf : Alike f f') : RelM keep (stepAt c r f) (stepAt c' r' f') := by
   obtain ⟨b, o', rfl⟩ := keep_with hr
@@ -234,8 +207,6 @@ theorem roundFree_alike_core {c c' : Cfg} (hc : CfgAlike c c') (s : Masker) (b :
   show ({ unstop a.1 with owed := some n }, a.2.2.1) = ({ unstop a'.1 with owed := some n }, a'.2.2.1)
   rw [e1, e2]
 
-/-- **The frame's round, where both alike rounds are taken**, leaves states alike but for `stopped`, with the same free
-offsets: inside the inner proof too, where `innerOwn` reads the round's values. -/
 theorem roundFree_alike_ok_core {c c' : Cfg} (hc : CfgAlike c c') (s : Masker) (b : Bool) (fs fs' : List Frame) (k : UInt8)
     (n : ℕ) (X X' : ByteArray) (hA : List.Forall₂ Alike fs fs')
     (he : roundFree c s X n =
@@ -277,8 +248,6 @@ theorem roundFree_alike_ok_core {c c' : Cfg} (hc : CfgAlike c c') (s : Masker) (
       exact ⟨show { unstop a.1 with owed := some n } = { unstop a'.1 with owed := some n } by rw [e1], e2⟩
 
 
-/-- **The frame's round over alike frames and configurations**, from states equal but for `stopped`, outside the inner
-proof, returns the same state but for `stopped` and the same free offsets, or the same error. -/
 theorem roundFree_alike {c c' : Cfg} (hc : CfgAlike c c') (s : Masker) (b : Bool) (fs fs' : List Frame) (k : UInt8)
     (n : ℕ) (hs : s.inner ≠ some INNER_ROUNDS) (hm : ∀ f ∈ fs, midFrame f) (hm' : ∀ f ∈ fs', midFrame f)
     (hk : k = 2 ∨ (k = 1 ∧ n = 1)) (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) (hA : List.Forall₂ Alike fs fs')
@@ -289,8 +258,6 @@ theorem roundFree_alike {c c' : Cfg} (hc : CfgAlike c c') (s : Masker) (b : Bool
   roundFree_alike_core hc s b fs fs' k n _ _ hA (roundFree_encs c s fs k n hs hm hk h0 hn)
     (roundFree_encs c' { s with stopped := b } fs' k n hs hm' hk h0 hn) hI
 
-/-- **The frame's round where both alike rounds are taken** leaves the same state but for `stopped` and the same free
-offsets, inside the inner proof too. -/
 theorem roundFree_alike_ok {c c' : Cfg} (hc : CfgAlike c c') (s : Masker) (b : Bool) (fs fs' : List Frame) (k : UInt8)
     (n : ℕ) (hs : s.inner ≠ some INNER_ROUNDS) (hm : ∀ f ∈ fs, midFrame f) (hm' : ∀ f ∈ fs', midFrame f)
     (hk : k = 2 ∨ (k = 1 ∧ n = 1)) (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) (hA : List.Forall₂ Alike fs fs')
