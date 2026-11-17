@@ -31,7 +31,7 @@ def _w(tmp_path: Path, case: str) -> Path:
     y = {"value": "pearl-y/0/0", "leaves": 1, "words": 64, "word_bits": 32}
     registered = [a, *([] if case == "missing" else [y]), *([{**a, "value": "pearl-a/1/0"}] if case == "extra" else [])]
     (w := tmp_path / "w.json").write_text(json.dumps(
-        {"window": {"scheme": "pearl-c-h100-v1" if case == "scheme" else SCHEME}, "registered": registered}))
+        {"window": {"scheme": "pearl-c-sm120-v1-h3" if case == "scheme" else SCHEME}, "registered": registered}))
     return w
 
 

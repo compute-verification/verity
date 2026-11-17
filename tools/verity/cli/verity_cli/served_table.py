@@ -56,7 +56,7 @@ from verity.protocols.workload_classification.training_detection.inference_only.
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.registration.verifier import registration as RL
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
@@ -76,7 +76,7 @@ ONSITE = "verity/onsite/v0"
 #: the deploy bindings `begin` keeps beside the run (`verity_cli.run.BINDINGS`)
 BINDINGS = "bindings.json"
 WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
-CHALLENGER, MEMORY_CHALLENGER = SP.CHALLENGER, WP.CHALLENGER
+CHALLENGER, MEMORY_ATTESTER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = P2.CLOSER_PARTY, NC.NETWORK_CERTIFIER
 #: served_verdicts.py's record reads each piece's answer by its runner name
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
@@ -97,7 +97,7 @@ def _design(sampling_design: str, params: Mapping[str, Any]) -> None:
 
 
 def _pous(params: Mapping[str, Any]) -> dict[str, Any]:
-    """PoUS's served piece: ``challenges``, the memory challenger's reads in the period (320: ε = 1% + 2^-128,
+    """PoUS's served piece: ``challenges``, the memory attester's reads in the period (320: ε = 1% + 2^-128,
     ``period.certify``'s, since more reads than a certificate's keep its ε)."""
     if extra := sorted(set(params) - {"challenges"}):
         raise Refused("unknown-key", f"[params.\"{SP.IDS['pous']}\"]: {', '.join(extra)} (known: challenges)")
@@ -156,7 +156,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("pearl-plus", SP.IDS["pearl-plus"], parties=(_VERIFIER,), needs=frozenset({"windows"})),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
-              channels=(*CS.MANIFEST.channels, Channel(MEMORY_CHALLENGER, VERIFIER, ("SignedRun",), after=("End",))),
+              channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("SignedRun",), after=("End",))),
               needs=frozenset({"store"}), params=_pous, default_params={"challenges": 320}),
     Component("bandwidth", SP.IDS["bandwidth"], parties=(*_P2_PARTIES, _VERIFIER),
               channels=(*_P2_CHANNELS, Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
@@ -165,7 +165,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=((CHALLENGER, NETWORK_CERTIFIER),)),
     Component("wipe", "verity/wipe/v0", parties=(*WP.MANIFEST.parties, _VERIFIER),
-              channels=(*WP.MANIFEST.channels, Channel(MEMORY_CHALLENGER, VERIFIER, ("WipeReport",), after=("End",)))),
+              channels=(*WP.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("WipeReport",), after=("End",)))),
 )}
 SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receipts", "ingress-relay"}),
                   (Role(WORKERS, "developer", needs=("serve",)),), _served,
@@ -185,7 +185,7 @@ PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host
 AUDITOR_REMOTE = "auditor-remote"
 #: each party's machine: the developer's on the prover node, the auditor's devices on machines it doesn't control
 PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
-             NETWORK_CERTIFIER: GATE_HOST, MEMORY_CHALLENGER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
+             NETWORK_CERTIFIER: GATE_HOST, MEMORY_ATTESTER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
 #: the configuration this table's demo runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
 CONFIG = ROOT / "demos" / "onsite_full.toml"
@@ -200,11 +200,11 @@ HEADERS = {
     "onsite_compute": (
         "The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory",
         "wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,",
-        "each party on its machine, and the key the auditor pinned for its memory challenger.", _NOT_YET),
+        "each party on its machine, and the key the auditor pinned for its memory attester.", _NOT_YET),
     "onsite_network": (
         "The served window under the network certifier, SPOT and the memory wipe (verity/onsite-network/v0, a",
         "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
-        "its memory challenger.", _NOT_YET),
+        "its memory attester.", _NOT_YET),
     "remote": (
         "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
         "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
@@ -405,7 +405,7 @@ DEVELOPMENT = {"DEVELOPMENT": "1"}
 
 
 WIPE_SCRIPT = "benchmarks/pous/streamed_wipe/served_wipe.sh"
-#: served_wipe.sh's variable for each binding of the wipe's memory challenger
+#: served_wipe.sh's variable for each binding of the wipe's memory attester
 _WIPE = {"address": "WIPE_ADDRESS", "host": "WIPE_CHALLENGER", "command": "WIPE_COMMAND"}
 
 
@@ -415,7 +415,7 @@ def _wipe(cfg, params, bound):
     if "address" not in bound:
         return {"WIPE_CMD": f'bash {WIPE_SCRIPT} "$1" "$2" "$3" {RUN_KEYS}', **DEVELOPMENT}
     pin = next((p["key-sha512"] for p in cfg.get("pin", [])
-                if (p["party"], p["protocol"]) == (MEMORY_CHALLENGER, "wipe")), "")
+                if (p["party"], p["protocol"]) == (MEMORY_ATTESTER, "wipe")), "")
     return {"WIPE_CMD": f'WIPE_KEY_SHA512={pin} bash {WIPE_SCRIPT} "$1" "$2" "$3"',
             **{v: bound[k] for k, v in _WIPE.items() if k in bound}}
 
@@ -423,7 +423,7 @@ def _wipe(cfg, params, bound):
 POUS_SCRIPT, ONSITE_PIECES = "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh"
 ATTESTER_SCRIPT = "benchmarks/pous/run_attester.sh"
 BANDWIDTH_SCRIPT = "benchmarks/one_stage/served_bandwidth.py"
-#: served_piece.py's flag for each binding of PoUS's memory challenger, and of PoUB's bandwidth verifier
+#: served_piece.py's flag for each binding of PoUS's memory attester, and of PoUB's bandwidth verifier
 _POUS = {"address": "--challenger-address", "host": "--challenger-host", "command": "--challenger-command"}
 _BANDWIDTH = {"host": "--bw-host", "command": "--bw-party"}
 
@@ -433,9 +433,9 @@ def _pinned(cfg: Mapping[str, Any], party: str, protocol: str) -> list[str]:
 
 
 def _pous_piece(cfg, params, bound):
-    """The memory challenger's key is the configuration's pin alone, on the command line; with no pin the piece
+    """The memory attester's key is the configuration's pin alone, on the command line; with no pin the piece
     trusts no session. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
-    pin = _pinned(cfg, MEMORY_CHALLENGER, "pous") if "address" in bound else []
+    pin = _pinned(cfg, MEMORY_ATTESTER, "pous") if "address" in bound else []
     words = [*(["--trusted-sha512", *pin] if pin else []), *([] if "address" in bound else [RUN_KEYS]),
              "--rounds", str(params["challenges"]),
              *(w for k, flag in _POUS.items() if k in bound for w in (flag, bound[k]))]
@@ -457,22 +457,22 @@ def _bandwidth_piece(cfg, params, bound):
 #: monotonic clock
 POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.challenger_party:PROTOCOL",
                 "verity.protocols.resource_accounting.memory.pous.prover.challenger_prover:PROTOCOL"),
-               {MEMORY_CHALLENGER: CS.CHALLENGER, PROVER: CS.PROVER}, {CS.CHALLENGER: (time.monotonic_ns, MONOTONIC)},
-               MEMORY_CHALLENGER)
+               {MEMORY_ATTESTER: CS.CHALLENGER, PROVER: CS.PROVER}, {CS.CHALLENGER: (time.monotonic_ns, MONOTONIC)},
+               MEMORY_ATTESTER)
 #: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
-#: the verifier's monotonic clock; the verifier reads the memory challenger's PoUS key from that party's run beside it
+#: the verifier's monotonic clock; the verifier reads the memory attester's PoUS key from that party's run beside it
 #: on the auditor's device (``challenger``)
 POUB = Session(("verity.protocols.resource_accounting.memory.poub.verifier.p2_parties:PROTOCOLS",
                 "verity.protocols.resource_accounting.memory.poub.prover.p2_party_prover:PROTOCOL"),
                {BANDWIDTH_VERIFIER: P2.VERIFIER, PROVER: P2.PROVER}, {P2.VERIFIER: (time.monotonic_ns, MONOTONIC)},
-               BANDWIDTH_VERIFIER, reads={BANDWIDTH_VERIFIER: {"challenger": ("pous", MEMORY_CHALLENGER)}},
+               BANDWIDTH_VERIFIER, reads={BANDWIDTH_VERIFIER: {"challenger": ("pous", MEMORY_ATTESTER)}},
                starts=P2.starts())
 
 
-#: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
+#: what the network attester's front asks of serve-openai: its id-form requests answered in the id form, an id event the
 #: 503-byte payload of the front's 512-byte cells; every other request is answered as before
 ID_FORM = "--protocol ids --id-payload 503"
-#: the certifier's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
+#: network attestation's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
 #: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
 #: served_verdicts.sh's default class
 SCAN_CLASS = "8,32,4,4,16"
@@ -519,14 +519,14 @@ PARTIES: dict[str, dict[str, Piece]] = {
     },
     "pous": {
         PROVER: Piece("pous", PROVER, SERVED_WINDOW, "PoUS's prover after the workload (POUS_CMD, served_piece.sh): "
-                      "the memory challenger's timed reads answered from the served weights held as P2's C* on the "
-                      "card, its session trusted only under the key the configuration pins for the memory challenger's "
-                      "PoUS sessions; unbound, under a key made for the run, with the memory challenger on the "
+                      "the memory attester's timed reads answered from the served weights held as P2's C* on the "
+                      "card, its session trusted only under the key the configuration pins for the memory attester's "
+                      "PoUS sessions; unbound, under a key made for the run, with the memory attester on the "
                       "workload's machine in a development run", scripts=(POUS_SCRIPT, ONSITE_PIECES, ATTESTER_SCRIPT),
-                      reaches=MEMORY_CHALLENGER, optional=("address", "host", "command"), hooks=_pous_piece,
+                      reaches=MEMORY_ATTESTER, optional=("address", "host", "command"), hooks=_pous_piece,
                       development="address"),
-        MEMORY_CHALLENGER: Piece("pous", MEMORY_CHALLENGER, GATE, "the gate: PoUS's memory challenger, on its own "
-                                 "coins and clock, signing the session"),
+        MEMORY_ATTESTER: Piece("pous", MEMORY_ATTESTER, GATE, "the gate: PoUS's memory attester, on its own "
+                               "coins and clock, signing the session"),
         VERIFIER: Piece("pous", VERIFIER, CHECK, "PoUS's row"),
     },
     "bandwidth": {
@@ -554,12 +554,12 @@ PARTIES: dict[str, dict[str, Piece]] = {
     "wipe": {
         PROVER: Piece("wipe", PROVER, SERVED_WINDOW, "the streamed wipe of the card before the workload's engine loads "
                       "(WIPE_CMD, served_wipe.sh), its session trusted only under the key the configuration pins for "
-                      "the memory challenger's wipe; unbound, under a key made for the run, with the memory "
-                      "challenger on the workload's machine in a development run", scripts=(WIPE_SCRIPT,),
-                      reaches=MEMORY_CHALLENGER, optional=("address", "host", "command"), hooks=_wipe,
+                      "the memory attester's wipe; unbound, under a key made for the run, with the memory "
+                      "attester on the workload's machine in a development run", scripts=(WIPE_SCRIPT,),
+                      reaches=MEMORY_ATTESTER, optional=("address", "host", "command"), hooks=_wipe,
                       development="address"),
-        MEMORY_CHALLENGER: Piece("wipe", MEMORY_CHALLENGER, GATE, "the gate: the wipe's memory challenger, on its own "
-                                 "coins and raw clock, signing the session"),
+        MEMORY_ATTESTER: Piece("wipe", MEMORY_ATTESTER, GATE, "the gate: the wipe's memory attester, on its own "
+                               "coins and raw clock, signing the session"),
         VERIFIER: Piece("wipe", VERIFIER, CHECK, "the wipe's row"),
     },
 }
@@ -659,11 +659,11 @@ def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], pi
 
 
 def placement(cfg: Mapping[str, Any], piece: Piece, outcome: Mapping[str, Any] | None) -> dict[str, str] | None:
-    """`trusted-device`'s premise for a memory challenger's ``piece``, from its outcome: the key its session is signed
+    """`trusted-device`'s premise for a memory attester's ``piece``, from its outcome: the key its session is signed
     under (the outcome's ``public_key``) against the pins the configuration gives that party for that protocol, under the
-    configuration's hash (`memory_challenger.trusted_device`, `committed` its committed set). ``None`` for a party that
+    configuration's hash (`memory_attester.trusted_device`, `committed` its committed set). ``None`` for a party that
     signs no session; a session that reports no key reads rehearsal."""
-    if piece.party != MEMORY_CHALLENGER:
+    if piece.party != MEMORY_ATTESTER:
         return None
     key = (outcome or {}).get("public_key")
     machine = {p["name"]: p["machine"] for p in cfg["party"]}[piece.party]
@@ -781,7 +781,7 @@ def coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, s
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     """The pieces of the parties ``here`` (module docstring): each runtime party's run beside the served window; the
-    served window when the workload's party is here; a gate's side as started by the gate; and the onsite check when the verifier is here, its line with each memory challenger's `trusted-device`
+    served window when the workload's party is here; a gate's side as started by the gate; and the onsite check when the verifier is here, its line with each memory attester's `trusted-device`
     premise as `placement` read it from the challenger's outcome here (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
     binding is missing, and raised while a runtime party's `held` does, before anything starts."""
     bindings = bindings_of(state)

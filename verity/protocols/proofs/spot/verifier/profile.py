@@ -441,7 +441,7 @@ class Stratified:
         object.__setattr__(self, "strata", tuple(self.strata))
         if not self.strata or not all(isinstance(s, Stratum) for s in self.strata) \
                 or len({s.name for s in self.strata}) != len(self.strata):
-            raise ValueError("a stratified law needs strata with distinct names")
+            raise ValueError("a stratified sampling design needs strata with distinct names")
 
     @classmethod
     def uniform(cls, n: int, k: int, name: str = "unit") -> Stratified:

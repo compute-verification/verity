@@ -1,6 +1,6 @@
 """PoUS's piece of the composed served run (`benchmarks/one_stage/served_verdicts.sh`'s ``POUS_CMD``): one period of
 PoUS over the served checkpoint's linear weights, held as P2's ``C*`` on the card the window served on, with the memory
-challenger on the auditor's device; its core answer in ``DIR/answer.json``.
+attester on the auditor's device; its core answer in ``DIR/answer.json``.
 
     served_piece.py SERVE_DIR WINDOW DIR --hf-home H [--p2-lib LIB] [--device cuda] [--node NAME] [--private P]
       [--rounds K] [--challenger-host NAME --challenger-address HOST:PORT --challenger-command ARGV] [--trusted-sha512 HEX]
@@ -25,11 +25,11 @@ same sessions, which no second session replaces. With neither, one process does 
    serving adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest
    run doesn't need.
 2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, ``pous:p2-16448/v4``, its registered point): the
-   commitment to ``W``, then the salt, which the memory challenger samples after it from its own host's OS and logs under
+   commitment to ``W``, then the salt, which the memory attester samples after it from its own host's OS and logs under
    the window's binding (`binding`; `challenger_session.salt`, the gate's ``challenger_party`` verb on a salt request),
-   ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory challenger's table and the root. Setup's own
+   ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory attester's table and the root. Setup's own
    inputs are kept as it sent them, for the tie. A challenger that samples no salt leaves the period undecided.
-3. **The session**: the memory challenger's side started on its host by ``--challenger-command`` (the auditor gate's
+3. **The session**: the memory attester's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each of ``--rounds``
    indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_prover.session`). The request names the window's
    binding and setup's published outputs; the challenger refuses it unless they carry the salt it logged and the
@@ -41,7 +41,7 @@ same sessions, which no second session replaces. With neither, one process does 
    (`served_case.pous_answer`, `period.answer`): the tie, the run's
    check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused;
    ``pous.json``'s ``key_pinned`` says whether it was signed under that pin, and ``key_pin`` whether the pin is the
-   configuration's for the memory challenger's PoUS sessions, ``configuration``, or the run's own, ``run``), and what
+   configuration's for the memory attester's PoUS sessions, ``configuration``, or the run's own, ``run``), and what
    an accepted run certifies (`period.certify`): ``⌊ρ·|C|⌋`` bits at ``1% + 2^-128``, at `ROUNDS` challenges as at
    105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The check's cost is the tie, which reads all of
    ``C*``, not the rounds. With ``--case-exe``
@@ -58,7 +58,7 @@ same sessions, which no second session replaces. With neither, one process does 
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
    placement and the weights' public properties: their model, count and size. The placement's `trusted-device` holds
    only under a committed configuration, for a session signed under a key its ``[[pin]]`` entries give the memory
-   challenger (`memory_challenger.trusted_device`, the run's deployment by `from_runner`): a run's own
+   attester (`memory_attester.trusted_device`, the run's deployment by `from_runner`): a run's own
    ``--trusted-sha512`` gets its session accepted, but its record is a rehearsal's, with no bound. Its ``setup``
    is `challenger_session.SETUP`: the tie ran on the developer's node, so every verdict rests on setup checked by the
    developer, not the auditor, which the ``POUS`` line prints after the premise.
@@ -114,7 +114,7 @@ import torch
 
 from verity.runtime.stream import Side
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
@@ -209,7 +209,7 @@ def _linear_types() -> tuple[type, ...]:
 
 
 class NoSalt(Exception):
-    """The memory challenger drew no salt for the window's setup."""
+    """The memory attester drew no salt for the window's setup."""
 
 
 def _salt_source(party: Side, audit: bytes):
@@ -463,7 +463,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
         try:
             comp = PO.install(model, ctx)
         except NoSalt as e:
-            why = f"the memory challenger on {party.host} drew no salt for the setup: {e}"[:1000]
+            why = f"the memory attester on {party.host} drew no salt for the setup: {e}"[:1000]
             if bw_party is not None:
                 HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
             return done(_no("undecided", why, None, protocol))
@@ -489,7 +489,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
                 key = bytes.fromhex(rep["public_key"])
                 session = R.ChallengePhaseRecord.from_json(rep["session"])
             except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
-                why = (f"the memory challenger's session on {party.host} did not complete: "
+                why = (f"the memory attester's session on {party.host} did not complete: "
                        f"{type(e).__name__}: {e}"[:1000])
                 if bw_party is not None:
                     HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
@@ -497,7 +497,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
             session_s = round(time.monotonic() - t, 3)
             _stamp(out, "PoUS's session done")
             if rep.get("session_id") != sid.hex():
-                return done(_no("reject", "the memory challenger's report is of a session under another id than the one "
+                return done(_no("reject", "the memory attester's report is of a session under another id than the one "
                                 "the window's binding and its setup fix (challenger_session.session_id)", None, protocol),
                             session_s=session_s)
             _private(private, {
@@ -539,7 +539,7 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
     ``pous.json`` to ``out`` and returned. ``schemes`` and ``protocol`` are the signatures the verifier accepts and the
     id it answers under (a test signer's in tests), ``deployment`` what `trusted-device`'s premise reads
     (`period.deployment`: the configuration's hash, its pins and the committed set), by default `from_runner()`'s,
-    ``trusted_sha512`` the challenger key it trusts, by default the one its pins give the memory challenger for PoUS
+    ``trusted_sha512`` the challenger key it trusts, by default the one its pins give the memory attester for PoUS
     (none pinned: no session is accepted), ``case_exe`` the
     run protocol's Lean (``pous-run-protocol``), whose answer on the case is then the verdict; without it the Python's
     reject or undecided stands and its accept is undecided (`period.unjudged`). What the sessions kept
@@ -693,7 +693,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--challenger-address", default=CHALLENGER_ADDRESS, help="HOST:PORT the prover connects to")
     ap.add_argument("--challenger-command", help="the argv that starts the challenger's side, one shell-split line")
     ap.add_argument("--trusted-sha512", help="the SHA-512 of the challenger key the verifier trusts (default: the one "
-                                             "VERITY_PINS pins for the memory challenger's PoUS sessions)")
+                                             "VERITY_PINS pins for the memory attester's PoUS sessions)")
     ap.add_argument("--case-exe", help="pous-run-protocol, whose answer on the case is the verdict and must agree with "
                                        "period.answer (else period.answer's accept is undecided)")
     part = ap.add_mutually_exclusive_group()

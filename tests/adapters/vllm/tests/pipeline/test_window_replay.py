@@ -19,10 +19,10 @@ from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided
 from verity.circuits.types import axis_runs
 from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.registry import dead_free as DF
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
+from verity_vllm.definitions.registry import dead_free as DF
 from verity_vllm.pipeline import window_replay as WR
 from verity_vllm.program.predict.window_builder import Grain, Row, _Builder
 
@@ -106,8 +106,11 @@ def _cells(circuit: IF.Circuit) -> dict[tuple[str, str], dict[tuple[int, int], t
 def _sources(refs, pos: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Leaves ``pos`` of ``refs``: whether each is a node's, its node or parameter, and its leaf there."""
     if isinstance(refs, Concat):
-        starts = np.cumsum([0, *(p.count for p in refs.parts)])
+        starts: np.ndarray = np.cumsum([0, *(p.count for p in refs.parts)])
         part = np.searchsorted(starts, pos, side="right") - 1
+        node: np.ndarray
+        idx: np.ndarray
+        leaf: np.ndarray
         node, idx, leaf = np.zeros(len(pos), bool), np.zeros(len(pos), np.int64), np.zeros(len(pos), np.int64)
         for k in np.unique(part).tolist():
             at = part == k
@@ -131,6 +134,7 @@ def read_back(defn) -> tuple[dict, dict[str, dict[str, int]]]:
     that is asked of each stretch of the row the axis leaves whole. Any other read of a node is refused. It walks every
     unit: a test's reference, no verifier's."""
     nodes = defn.body.nodes
+    seen: dict
     at, seen = [], {}
     for node in nodes:
         tid = descriptor_id(node.fn)
@@ -216,6 +220,7 @@ def _unit_outputs(circuit: IF.Circuit, given: dict[str, list[int]]) -> dict[tupl
             fn, args = fns[tid][0], []
             for p, ty in fn.signature()[0]:
                 k = circuit.cuts.get(tid, {}).get(p, 1)
+                leaves: list
                 L, leaves = ty.leaves // k, []
                 for j in range(k):
                     if (src := wired.get((tid, p), {}).get((u, j))) is not None:

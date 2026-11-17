@@ -21,7 +21,7 @@ from verity.channel import Message
 from verity.party import Finish, Identity, Received, Send
 from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover, p2_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import coins, p2, p2_parties, receipts
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import setup
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check
@@ -238,7 +238,7 @@ def test_the_verifiers_start_is_not_yet_a_path_that_runs_and_reads_no_key(tmp_pa
 def test_the_party_refuses_a_closer_key_other_than_the_one_its_pin_names_before_any_session(tmp_path, capsys) -> None:
     from types import SimpleNamespace
 
-    key = SimpleNamespace(public_key=b"the memory challenger's key")
+    key = SimpleNamespace(public_key=b"the memory attester's key")
     pin = hashlib.sha512(key.public_key).hexdigest()
     absent = tmp_path / "no-registration.json"
     mc.SessionLog.create(tmp_path / "sessions")

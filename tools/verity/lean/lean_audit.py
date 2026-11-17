@@ -166,7 +166,7 @@ def sandboxed() -> bool:
     return lean_check().sandboxed()
 
 
-def runs_code(pkg: Path) -> str | None:
+def runs_code(pkg: Path, staged: Path | None = None) -> str | None:
     """The first source that runs code while it compiles, in ``pkg`` or a package it requires by path, or None: as
     check.py scans for it (`check.COMPILE_TIME`, comments aside), outside a `compile_time` listing of its package's lock
     reviewed at the file's digest (`check.listings`); or a `lakefile.lean`, which runs whenever Lake loads its package. A
@@ -176,9 +176,14 @@ def runs_code(pkg: Path) -> str | None:
     a module runs while it compiles can write there what it likes: another module's outputs, their `.hash` files and
     its trace, which nothing then tells from Lake's. A passing audit says there is no such code in the package it
     audits (`check.scans`); the artifact cache takes builds no audit passed, so `LakeArtifacts.put` asks it of every
-    build, the sources being the ones the build read: the sandbox lets no build write them."""
+    build, the sources being the ones the build read: the sandbox lets no build write them. ``staged``: the copy of the
+    tree the caller made and built ``pkg`` in, where its path dependencies must lie (`check.home`)."""
     a = lean_check()
-    for d in [pkg.resolve(), *a.path_deps(pkg)]:
+    try:
+        dirs = [pkg.resolve(), *a.path_deps(pkg, staged)]
+    except a.OutsideTree as e:
+        return f"{pkg.name}: {e}"
+    for d in dirs:
         try:
             if (d / "lakefile.lean").exists():
                 return f"{d.name}/lakefile.lean runs code whenever Lake loads the package"
@@ -224,15 +229,27 @@ def own_files(pkg: str, files: list[str]) -> list[str]:
             and not any(fnmatch.fnmatchcase(f.rsplit("/", 1)[-1], p) for p in UNREAD_NAMES)]
 
 
+def in_tree(pkg: str, entry: str, file: str) -> str:
+    """``entry`` of ``pkg``'s ``file`` (a path dependency's `dir`, a `proved_in` package) as a repository path: a kept build
+    is taken into it and its `.lake` built, so one outside the tree is refused (`check.OutsideTree`)."""
+    p = os.path.relpath(os.path.normpath(ROOT / pkg / entry), ROOT)
+    if p == ".." or p.startswith("../"):
+        raise lean_check().OutsideTree(f"{pkg}/{file}: {entry!r} names {p}, outside the tree, whose .lake a build of {pkg} "
+                                       f"would write: a package it requires by path or names under proved_in must lie in "
+                                       f"the tree")
+    return p
+
+
 def path_deps(pkg: str) -> list[str]:
-    """The packages ``pkg`` requires by path, as `audit.path_deps` reads them (its manifest lists the inherited ones too)."""
+    """The packages ``pkg`` requires by path, as `audit.path_deps` reads them (its manifest lists the inherited ones too),
+    each in the tree (`in_tree`)."""
     m = ROOT / pkg / "lake-manifest.json"
     if not m.exists():
         return []
     out = []
     for d in json.loads(m.read_text()).get("packages", []):
         if d.get("type") == "path":
-            out.append(os.path.relpath(os.path.normpath(ROOT / pkg / d["dir"]), ROOT))
+            out.append(in_tree(pkg, d["dir"], "lake-manifest.json"))
     return sorted(set(out))
 
 
@@ -243,7 +260,7 @@ def provers(pkg: str) -> list[str]:
         named = json.loads(p.read_text()).get("proved_in", []) if p.is_file() else []
     except (OSError, ValueError, AttributeError):
         return []                                       # the audit fails the policy
-    return sorted({os.path.relpath(os.path.normpath(ROOT / pkg / d), ROOT) for d in named if isinstance(d, str)})
+    return sorted({in_tree(pkg, d, "lean-audit.json") for d in named if isinstance(d, str)})
 
 
 #: How the audit runs, and so part of every key
@@ -1113,9 +1130,10 @@ class LakeArtifacts:
         fcntl.flock(f, fcntl.LOCK_EX)
         return f
 
-    def put(self, reports: dict[Path, dict], since: float | None = None, log=print) -> int:
+    def put(self, reports: dict[Path, dict], since: float | None = None, log=print, staged: Path | None = None) -> int:
         """Index each module of the builds of ``reports``' packages (each with what check.py said of its build: its report,
-        or `builds`' record of a run that didn't end) that the build compiled (a trace written after ``since``, and not
+        or `builds`' record of a run that didn't end; ``staged``: the copy of the tree the caller made and built them in,
+        `runs_code`'s) that the build compiled (a trace written after ``since``, and not
         one Lake restored) under its key; the number of entries new to the index. Whether the run passed is not read: a
         key names what a compile read, and a failed or killed run's compile of those is the compile a passing run's is,
         given the two things a passing audit said of the build, which are asked here of every build instead.
@@ -1177,7 +1195,7 @@ class LakeArtifacts:
                     if (m := todo.pop()) not in need:
                         need.add(m)
                         todo += MK.loads(m, keyed)
-                if refused := runs_code(pkg) if need else None:
+                if refused := runs_code(pkg, staged) if need else None:
                     log(f"lean-audit: {pkg}: {refused}. Such code can write any module's outputs in the build, so none of "
                         "its modules go into the artifact cache")
                 outs = MK.read_digests({m: k for m, k in keyed.items() if m in need},
@@ -1733,7 +1751,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             kept = {work / p for p in ok}
             try:
                 mine = {at: rep for at, rep in built(out).items() if work in at.resolve().parents}
-                log(f"lean-audit: {artifacts.put(mine, since, log)} module version(s) new in the artifact cache")
+                log(f"lean-audit: {artifacts.put(mine, since, log, work)} module version(s) new in the artifact cache")
                 if bundle and artifacts.added:
                     log(f"lean-audit: {bundled(*artifacts.bundle_into(out), len(artifacts.added))}")
             except OSError as e:

@@ -3,7 +3,7 @@
 The checkpoint is a safetensors file of two decoder layers in the int8 pin's form (each linear int8 [N, K] beside its f32
 [N, 1] scale, a bf16 embedding and norms) in an HF cache, held to a manifest the test writes; `served_bf16` is the same
 model in the BF16 pin's form, each linear bf16 [N, K] with no scale. P2 runs at the small point's
-1,024-bit blocks, 8 a segment (`weight_store.geometry`), so the adapter encodes it in milliseconds. The memory challenger's side is
+1,024-bit blocks, 8 a segment (`weight_store.geometry`), so the adapter encodes it in milliseconds. The memory attester's side is
 `challenger_party.serve` in a thread, signed by the PoUS tests' test signer on a counter clock, and the prover answers it
 over a socket pair, as `challenger_prover.session` would across hosts. The answer is read back as the composed run reads it
 (`served_verdicts.piece_row`, `block_record.subprotocol`).
@@ -35,7 +35,7 @@ from verity.runtime.stream import Side
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
@@ -180,7 +180,7 @@ def _in_process_party(signer, log, keep=None, record=lambda request: request):
 
 
 class Auditor:
-    """The memory challenger's side in this process, as `challenger_party.main` serves it, on one device (a salt log and
+    """The memory attester's side in this process, as `challenger_party.main` serves it, on one device (a salt log and
     a session log) across a test's runs: a salt request answered by `challenger_party.give_salt` from ``sample``, a
     session refused before it listens as `designate` refuses it (the `RuntimeError` `Side.talk` raises), then served by
     `_in_process_party` with the device's salt log, which `_run` binds into `challenger_party.serve`, and kept in
@@ -201,7 +201,7 @@ class Auditor:
         try:
             source = CP.give_salt(self.salts, {"audit": audit.hex(), "commitment": commitment.hex()}, self.draw)
         except CP.Refusal as e:
-            raise RuntimeError(f"the memory challenger on {party.host} drew no salt: {e}") from None
+            raise RuntimeError(f"the memory attester on {party.host} drew no salt: {e}") from None
         self.sources.append(source)
         return source
 
@@ -228,7 +228,7 @@ BW_KEY = hashlib.sha512(ts.AtLeaf(b"p2-party-at-leaf").public_key).hexdigest()
 
 
 def _deployment(key: str, bw: str | None = BW_KEY) -> dict:
-    """A committed configuration (`CONF`) that pins ``key`` for the memory challenger's PoUS sessions and ``bw`` for
+    """A committed configuration (`CONF`) that pins ``key`` for the memory attester's PoUS sessions and ``bw`` for
     the bandwidth close."""
     scheme = "lms-sha512/n64-w1-h20/v0"
     pins = [{"key-sha512": key, "party": "memory-challenger", "protocol": "pous", "scheme": scheme}]
@@ -343,7 +343,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert "KV cache" in prof["outside"]["serving"] and prof["window"] == 3
     assert prof["placement"][CS.PREMISE] == (
         f"holds: the session is signed under the key configuration {CONF} pins for memory-challenger's pous sessions; "
-        f"the memory challenger ran on {AUDITOR}, not the prover's {NODE}")
+        f"the memory attester ran on {AUDITOR}, not the prover's {NODE}")
     assert prof["placement"]["setup"] == CS.SETUP == "setup checked by the developer, not the auditor"
     assert set(period.profile(period.point_for(1))) <= set(prof)                      # the run protocol's own profile
     party, request = calls[0]
@@ -365,13 +365,13 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
 def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(served, tmp_path, monkeypatch, host):
     """A run that passes its own challenger key's SHA-512 as the pin has its session accepted under it (`key_pinned`),
     and its record says the pin was the run's (`key_pin`) and that `trusted-device` is a rehearsal's, with no bound:
-    the committed configuration pins another key for the memory challenger, so naming the auditor's device changes
+    the committed configuration pins another key for the memory attester, so naming the auditor's device changes
     nothing."""
     answer, _ = _run(served, tmp_path, monkeypatch, host=host, deployment=_deployment("ab" * 64))
     assert answer["verdict"] == "accept", answer["reason"]
     where = answer["profile"]["placement"]
     assert where["kind"] == "own-host" and where[CS.PREMISE] == (
-        f"{mc.REHEARSAL} (configuration {CONF}); the memory challenger ran on {host}, not the prover's {NODE}")
+        f"{mc.REHEARSAL} (configuration {CONF}); the memory attester ran on {host}, not the prover's {NODE}")
     doc = json.loads((served.out / "pous.json").read_text())
     assert doc["key_pinned"] and doc["key_pin"] == "run" and doc["key_sha512"] != "ab" * 64
     assert SP.line(answer).endswith(f"; {CS.PREMISE} {where[CS.PREMISE]}; setup checked by the developer, not the auditor")
@@ -380,7 +380,7 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(
 def test_the_line_reads_a_placement_recorded_before_the_rename():
     """An answer recorded before the assumption's id was renamed names its premise under `mc.PREMISE_BEFORE`: its line
     says the same premise as the answer under `trusted-device`."""
-    premise = f"holds: the session is signed under the key configuration {CONF} pins; the memory challenger ran on x"
+    premise = f"holds: the session is signed under the key configuration {CONF} pins; the memory attester ran on x"
     answer = {"verdict": "accept", "public": {}, "profile": {"weights": {}, "placement": {CS.PREMISE: premise}}}
     before = answer | {"profile": {"weights": {}, "placement": {mc.PREMISE_BEFORE: premise}}}
     assert SP.line(before) == SP.line(answer) and f"; {CS.PREMISE} {premise}; " in SP.line(answer)
@@ -407,7 +407,7 @@ def test_a_plain_bf16_checkpoint_is_held_as_its_linears_at_twice_the_bytes(serve
 
 
 def test_the_challenger_samples_the_salt_and_the_verdict_derives_the_session_id(served, tmp_path, monkeypatch):
-    """Setup's salt is the one the memory challenger drew after the commitment and logged under the window's binding, and
+    """Setup's salt is the one the memory attester drew after the commitment and logged under the window's binding, and
     the session runs under the id derived from that binding, the commitment and the salt, which the verdict computes
     itself: the request names the binding and setup's published outputs, and the private record carries the id."""
     auditor = Auditor(tmp_path)
@@ -435,12 +435,12 @@ def test_a_second_session_under_the_windows_binding_is_refused(served, tmp_path,
     assert first["verdict"] == "accept", first["reason"]
     again, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert again["verdict"] == "undecided" and len(calls) == 1
-    assert again["reason"].startswith(f"the memory challenger on {AUDITOR} drew no salt for the setup: ")
+    assert again["reason"].startswith(f"the memory attester on {AUDITOR} drew no salt for the setup: ")
     assert "draws one salt an audit, and a retry never redraws it" in again["reason"]
     monkeypatch.setattr(auditor, "salt", lambda party, audit, commitment: auditor.sources[0])
     replay, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert replay["verdict"] == "undecided" and len(calls) == 1
-    assert replay["reason"].startswith(f"the memory challenger's session on {AUDITOR} did not complete: RuntimeError: "
+    assert replay["reason"].startswith(f"the memory attester's session on {AUDITOR} did not complete: RuntimeError: "
                                        f"the side on {AUDITOR} refused: a session has run for the request's `audit`")
     assert len(auditor.log.path.read_text().splitlines()) == 2
 
@@ -455,7 +455,7 @@ def test_a_session_whose_setup_salt_is_not_the_challengers_is_refused(served, tm
     answer, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert answer["verdict"] == "undecided" and calls == []
     assert answer["reason"].endswith("refused: setup's published outputs (`published`) do not carry the commitment and "
-                                     "salt the memory challenger logged for the request's `audit`")
+                                     "salt the memory attester logged for the request's `audit`")
     assert auditor.log.path.read_text() == f"{mc.SESSION_LOG}\n"
 
 
@@ -465,7 +465,7 @@ def test_a_report_of_a_session_under_another_id_is_rejected(served, tmp_path, mo
     is rejected by the run's check."""
     answer, calls = _run(served, tmp_path, monkeypatch, Auditor(tmp_path, forget=True))
     assert answer["verdict"] == "reject" and len(calls) == 1
-    assert answer["reason"].startswith("the memory challenger's report is of a session under another id")
+    assert answer["reason"].startswith("the memory attester's report is of a session under another id")
     lie, _ = _run(served, tmp_path, monkeypatch, Auditor(tmp_path, forget=True, claim=True))
     assert lie["verdict"] == "reject" and lie["reason"] == "the session does not run under the id the auditor designated"
 
@@ -668,7 +668,7 @@ def test_a_challenger_whose_side_does_not_start_leaves_the_period_undecided(serv
                     party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
                     pins=[served.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     assert answer["verdict"] == "undecided" and answer["reason"].startswith(
-        f"the memory challenger on {AUDITOR} drew no salt for the setup: ")
+        f"the memory attester on {AUDITOR} drew no salt for the setup: ")
     assert SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
     assert not (served.private / "case.json").exists()
 
@@ -979,7 +979,7 @@ def test_no_pous_session_leaves_the_bandwidth_piece_undecided_naming_why(served,
            party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
            pins=[served.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, bw_party="false")
     bw = json.loads((served.out.parent / "bandwidth" / "answer.json").read_text())
-    assert bw["verdict"] == "undecided" and bw["reason"].startswith("no PoUS session bound a store: the memory challenger")
+    assert bw["verdict"] == "undecided" and bw["reason"].startswith("no PoUS session bound a store: the memory attester")
     assert SV.piece_row("bandwidth", served.out.parent)["verdict"] == "undecided"
     assert not (served.serve / "private" / "bandwidth").exists()
     doc = json.loads((served.out.parent / "bandwidth" / "bandwidth.json").read_text())
