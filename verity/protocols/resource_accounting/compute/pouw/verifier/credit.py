@@ -819,12 +819,12 @@ def no_template(k: int) -> str:
             "R × C and in the same form at every K")
 
 
-def _chunks(k: int) -> int | None:
-    """`weights.chunks` of `k`, or None for a K it refuses."""
+def _chunks(k: int) -> int | str:
+    """`weights.chunks` of `k`, or why it refuses that K."""
     try:
         return chunks(k)
-    except ValueError:
-        return None
+    except ValueError as e:
+        return str(e)
 
 
 def tile_k(k: int) -> str:
@@ -853,7 +853,7 @@ def _tile(dj: Any, tid: str, k: int) -> tuple[int, int, bool] | None:
             and [p[0] for p in ps] in ([f"a_k{k}", f"b_k{k}", *SHARED], [f"a_k{k}", f"b_k{k}", *SHARED_J10R])):
         return None
     rows, n = [p[1] for p in ps[:2]], _chunks(k)
-    if n is None or not all(type(t) is list and len(t) == 3 and t[0] == "Array" and _nat(t[1]) and t[1] >= 1
+    if type(n) is not int or not all(type(t) is list and len(t) == 3 and t[0] == "Array" and _nat(t[1]) and t[1] >= 1
                             and t[1] % n == 0 and _bits(t[2]) == 8 * (k // n) + 32 for t in rows):
         return None
     return rows[0][1] // n, rows[1][1] // n, len(ps) == 2 + len(SHARED_J10R)
@@ -1309,11 +1309,10 @@ def established(layout: dict, credited_calls: list[int], served: list[int], k: i
     sampling design's sample of K misses a set of work εC with probability at most (1 − εC/W)^K, each stratum sampling K·W_s/W of its
     units rounded up. Its cap is K >= W, where every stratum is sampled whole; never the unit count n, since a sample of
     K = n samples a stratum of little work only in part."""
-    try:
-        return Wd.eps_at(k, DELTA, credited_work(layout, credited_calls, served),
-                         sum(size * work for size, work in call_work(layout)), 1)
-    except ValueError:
+    c, w = credited_work(layout, credited_calls, served), sum(size * work for size, work in call_work(layout))
+    if not (type(k) is int and 0 < c <= w and k >= Wd.k_prime(Fraction(1), DELTA, c, w, 1)):
         return None
+    return Wd.eps_at(k, DELTA, c, w, 1)
 
 
 def _drawn(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[dict], k: Any
@@ -3159,9 +3158,13 @@ def pearl_c_period_credit_twin(key: Any, ledger: Any, pins: Any, main: Any, name
 
 
 def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
-    """The verdict of record on a credit period's presented roots: the Lean `Credit.periodRoots`'s, not yet written, so
-    this raises (`verifier.not_written`); `period_twin` is its Python twin."""
-    return V.not_written("period", "PouwCheck.Credit.periodRoots")
+    """The verdict of record on a credit period's presented roots, (code, why) or None: the Lean `Credit.period`'s
+    (`verifier.of_record` on ``period-roots``), with `period_twin` its Python twin; a disagreement is the refusal
+    ``verifier.DISAGREE``."""
+    why = period_twin(key, ledger, name, roots, verify)
+    said = V.of_record("period-roots", {"key": key, "ledger": ledger, "name": name, "roots": roots},
+                       None if why is None else {"refused": list(why)})
+    return None if said is None else tuple(said["refused"])
 
 
 def passes_distinct(passes: Any) -> tuple[str, str] | None:
@@ -3241,6 +3244,13 @@ def _once(verify: Ch.Verify) -> Ch.Verify:
     return once
 
 
+def presented(windows: list[dict]) -> list[Any]:
+    """The roots a period's formed `windows` present to `period`, in its close's order: each window's open root, then
+    its sample's."""
+    return [r for w in windows for r in (w["window"].get("root") if isinstance(w["window"], dict) else None,
+                                         w["draw"].get("root") if isinstance(w["draw"], dict) else None)]
+
+
 def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
                run: Run | None, kept: list[_Outcomes] | None = None, files_of: Any = None
                ) -> tuple[dict | None, tuple[str, str] | None]:
@@ -3250,9 +3260,7 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
     keys, form = (PROVED_KEYS, WINDOWS_FORM) if run is None else (PERIOD_KEYS, PERIOD_FORM)
     if not _formed(windows, keys):
         return None, ("period", form)
-    roots = [r for w in windows for r in (w["window"].get("root") if isinstance(w["window"], dict) else None,
-                                          w["draw"].get("root") if isinstance(w["draw"], dict) else None)]
-    why = period_twin(key, ledger, name, roots, verify)
+    why = period_twin(key, ledger, name, presented(windows), verify)
     if why is not None:
         return None, why
     big_k, why = committed_k(ledger, name)
@@ -3608,7 +3616,7 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     rows: dict[int, int] = {}
     for _name, k, n in layout["linears"]:
         rows[k] = rows.get(k, 0) + n
-    if bad := sorted(k for k in rows if _chunks(k) is None):
+    if bad := sorted(k for k in rows if type(_chunks(k)) is not int):
         return None, ("layout", f"the window's K = {bad} have no chunks (weights.chunks: K <= {CHUNK_MAX}, or K/n a "
                                 f"multiple of {CHUNK_ALIGN} codes for some n >= K/{CHUNK_MAX}), so no row of them is leaves")
     names = {f"{prefix}b/{k}": k for k in rows}
@@ -3653,6 +3661,6 @@ __all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "CO
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
            "credited_work", "domain_of", "draw_root", "drawn", "drawn_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "sampling_design", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
            "merkle_depth", "partition_of", "passes_distinct", "passes_distinct_twin", "pearl_c_period_credit",
-           "pearl_c_period_credit_twin", "period", "period_twin", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
+           "pearl_c_period_credit_twin", "period", "period_twin", "presented", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
            "weights_root", "window"]

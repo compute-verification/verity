@@ -9,10 +9,9 @@ with r = 2 mi + (e >> 1) its row slot and c = 2 ni + (e & 1) its column slot. Af
 
 Receipts are checkpointed every S segments. Window w covers segments w S .. w S + S - 1; its fold starts from keys the coin
 gives the (tile, thread, window), absorbs the S + 1 prefix-word sets T_(w S - 1), T_(w S), ..., T_(w S + S - 1) (the
-window's incoming words, then each of its segments'), and commits one word, R_w. A step-j check therefore recomputes j's
-window from its keys (the last checkpoint) to its committed word, and both T_(j-1) and T_j are among the words it absorbs.
-A call's receipts are KS / S words a thread (KS = k / 32), 4 KS / S bytes, laid out (tile, window, thread) and committed
-RW = 512 words a leaf, so a leaf is one window of one tile.
+window's incoming words, then each of its segments'), and commits one word, R_w. A verifier recomputes each window from its
+keys (the last checkpoint) to its committed word. A call's receipts are KS / S words a thread (KS = k / 32), 4 KS / S bytes,
+laid out (tile, window, thread) and committed RW = 512 words a leaf, so a leaf is one window of one tile.
 
 The fold is a parameter (``FOLD``, `FOLDS`):
 
@@ -45,28 +44,10 @@ rows o' + 8 (c >> 1) + (c & 1) of B's leaf, o' = 32 (wn % 2) + 2 q (8 offsets).
 Each has a Boolean twin (``_v2``, traced from a `forms` builder, word view its ``_v1``). The segment dots' twins
 (`PouwSegDot_v2`, and `PouwSegDot0_v2` from 0 below) are bound to the wrapping s8 IMMA coordinate they compute
 (`census.silicon_step`), so census/v1 counts their gates as `tc:int8`, and serve none of their products (`census.serves_none`:
-Lean's `ResourceAccounting.Gates.roleOf` puts an H1 tile's lanes at `Place.other`). The spot check of one thread at segment j is
+Lean's `ResourceAccounting.Gates.roleOf` puts an H1 tile's lanes at `Place.other`). No check here calls `PouwWinOk_v1`;
+Lean's gate registry classes it.
 
-    PouwSegCheck_v2{S, FOLD}  (a: Array<64, Array<32, i8>>, asel: Array<16, bit>, u: Array<4, Array<32, i8>>,
-                               b: Array<64, Array<32, i8>>, bsel: Array<8, bit>, f: Array<8, Array<32, bit>>,
-                               p: Array<S + 1, Array<32, u32>>, st: Array<FW, u32>, rc: Array<512, u32>,
-                               rsel: Array<16, u32>, jsel: Array<JW, bit>, first: bit) -> bit       (bits, LSB first)
-
-over A's and B's tile leaves at segment j with the one-hot offsets of the thread's rows in them, U's rows and F's (or the
-dither's) bits for those rows, the window's S + 1 absorbed prefix-word sets (witness), the window's fold keys (FW words:
-16 for duo, 8 for xin), the receipt leaf holding the thread's window word and its one-hot position (512 bits as 16 words),
-the one-hot position of j in its window (its first S bits; JW = `jsel_bits`(S), the rest zero), and whether the window is
-the first. It computes T_j = T_(j-1) + A'_j B'_j^T entry by entry from p's set at j's position, folds the window, and returns 1 exactly when the fold is the leaf's word, T_j is p's next
-set, and in the first window the incoming set is 0. A statement holds ``a``, ``b`` and ``rc`` to the trees committed before
-and after the coin, recomputes ``u``, ``f``, ``st`` and the selections from the coin and the sample, and reads the result
-through a row of known content.
-
-    PouwSegCheckDither_v2{S, FOLD}   the same with the dither on the served side: B' = B + d (`PouwI8AddBit_v2`),
-                                     d in {0, 1} the coin bit ``f`` carries (the served X = floor(x / s) + b)
-
-v2 is unsound: it ties only T_j to T_(j-1), so every other set of ``p`` is free
-witness, and a meet-in-the-middle over two of their words opens any committed R_w (`tests/test_circuit_segment.py`). The
-checks below take no prefix word as witness: every word a fold absorbs is recomputed in the proof from committed operands
+The spot checks take no prefix word as witness: every word a fold absorbs is recomputed in the proof from committed operands
 and the coin, from T_(-1) = 0, so a thread's (or warp's) whole call is one unit and the committed value is binding by
 SHA-512 alone.
 
@@ -74,9 +55,10 @@ SHA-512 alone.
                                    b: Array<KS, Array<64, Array<32, i8>>>, bsel: Array<16, bit>,
                                    f: Array<KS, Array<8, Array<32, bit>>>, st: Array<KS / S, Array<FW, u32>>,
                                    rc: Array<KS / S, Array<512, u32>>, rsel: Array<16, u32>) -> bit
-    PouwSegCheckDither_v3{KS, S, FOLD}   the same under the dither (B' = B + f)
+    PouwSegCheckDither_v3{KS, S, FOLD}   the same under the dither: B' = B + f (`PouwI8AddBit_v2`), f in {0, 1} the coin
+                                         bit (the served X = floor(x / s) + b)
 
-v2's receipts (windows of S segments, one word each, the same keys and leaves), checked whole: A's and B's leaves at every
+The windowed receipts above (windows of S segments, one word each), checked whole: A's and B's leaves at every
 segment, every window's keys and receipt leaf (the thread at the same position ``rsel`` in each), bsel's bits 8.. unread.
 1 exactly when every window's fold of T_(wS-1), T_(wS), ..., T_(wS+S-1), the T recomputed, is its leaf's word.
 
@@ -98,26 +80,22 @@ thread's dither bits, coin bits, U and digit coins z_d(row slot, residue), its k
 leaf with the thread's N words at slot rsel: FOLD ``duo`` or ``fx1``, OUT ``chains`` (H1's 8 words, N = 8) or ``state``
 (the full state, N = 16). 1 exactly when the leaf's N words are the fold's over the recomputed words.
 
-LI-CP-W: li's chains (8 a lane: chain c absorbs `li_entries`(c) as two
-half steps a set, y <- (y ^ d0 ^ `LK`[c][h]) `LA`[c][h] + d1, from duo's y keys) and a checkpoint after every set, the XOR
-of the warp's chain states (redux.sync.xor), one word a set, KS + m words a warp in leaves of their own.
+LI-CP-W: li's chains (8 a lane: chain c absorbs `li_entries`(c) as two half steps a set, y <- (y ^ d0 ^ `LK`[c][h])
+`LA`[c][h] + d1, from duo's y keys) and a checkpoint after every set, the XOR of the warp's chain states (redux.sync.xor),
+one word a set. DUO-CP-W and FX1-CP-W: duo's or fx1's chains with a full-state checkpoint after every set, the XOR over the
+warp of every chain's y and, separately, of every chain's z (`warp_checkpoint`), two words a set. A warp's KS + m
+checkpoints are in leaves of their own.
 
-    PouwWarpCheck_v1{KS, NL}  (x, xsel: Array<NL, ...>, b: Array<NL, ...>, w, wsel: Array<NL, ...>, c: Array<NL, ...>,
-                               u: Array<NL, ...>, z: Array<NL, ...>, st: Array<NL, Array<8, u32>>, rc: Array<512 L, u32>) -> bit
+    PouwWarpCheck_v2{KS, NL, FOLD}  (x, xsel: Array<NL, ...>, b: Array<NL, ...>, w, wsel: Array<NL, ...>, c: Array<NL, ...>,
+                                     u: Array<NL, ...>, z: Array<NL, ...>, st: Array<NL, Array<P 8, u32>>,
+                                     rc: Array<512 L, u32>) -> bit
 
 `PouwCallCheck_v1`'s ports with a lane axis on the thread's own (NL = 32 a warp; fewer lanes check that many lanes'
-XOR), 1 exactly when word s of rc is the checkpoint after set s for every s < KS + m. rc is the warp's receipt, L =
-ceil(P (KS + m) / 512) leaves in order (P = 1 here; L = 2 for duo and fx1 at K = 8192: KS = 256, m = 3, 518 words), and
-the words after the last checkpoint are unread.
-
-DUO-CP-W and FX1-CP-W: duo's or fx1's chains with a full-state checkpoint after every set, the XOR over the warp
-of every chain's y and, separately, of every chain's z (`warp_checkpoint`), two words a set.
-
-    PouwWarpCheck_v2{KS, NL, FOLD}  (PouwWarpCheck_v1's ports, st: Array<NL, Array<P 8, u32>>) -> bit
-
-FOLD li (P = 1, `PouwWarpCheck_v1`), duo or fx1 (P = 2, st each lane's y then z); 1 exactly when words P s .. P s + P - 1
-of rc are the checkpoint after set s for every s < KS + m. The checkpoint is a set's, never spaced wider: the
-binding proved without a whole-state assumption is a set's 4 words a chain.
+XOR), FOLD li (P = 1) or duo or fx1 (P = 2, st each lane's y then z); 1 exactly when words P s .. P s + P - 1 of rc are
+the checkpoint after set s for every s < KS + m. rc is the warp's receipt, L = ceil(P (KS + m) / 512) leaves in order (at
+K = 8192, KS = 256 and m = 3: li's 259 words in one, duo's and fx1's 518 in two), and the words after the last
+checkpoint are unread. The checkpoint is a set's, never spaced wider: the binding proved without a whole-state assumption
+is a set's 4 words a chain.
 
 A statement holds the operand leaves and ``rc`` to the trees committed before and after the coin, and recomputes the
 noise, keys and selections from the coin and the sample.
@@ -169,11 +147,8 @@ __all__ = [
     "PouwI8Pm1",
     "PouwI8Pm1Word",
     "PouwCallCheck",
-    "PouwSegCheck",
-    "PouwSegCheckDither",
     "PouwSegCheckDitherV3",
     "PouwSegCheckV3",
-    "PouwWarpCheck",
     "PouwWarpCheckV2",
     "PouwSegDot",
     "PouwSegDotWord",
@@ -196,12 +171,10 @@ __all__ = [
     "fold_final",
     "fold_keys",
     "init",
-    "jsel_bits",
     "key_ok",
     "mix32",
     "row_slot",
     "seg_dot",
-    "win_check",
     "CALL_FOLDS",
     "CALL_OUTS",
     "LA",
@@ -371,37 +344,6 @@ def fold_final(fold: str, st: list[int]) -> int:
         for v in st:
             out ^= v
     return out
-
-
-def win_check(a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first, fold: str = "duo", dither: bool = False) -> int:
-    """`PouwSegCheck_v2` (``dither``: `PouwSegCheckDither_v2`) on words: a and b (64 x 32) int8 encodings, asel (16) and bsel
-    (8) one-hot, u (4 x 32), f (8 x 32) bits, p (S + 1 sets of 32), st (the fold's state words), rc and rsel (512 each),
-    jsel (S), first."""
-    oa = [a_offset(i) for i, s in enumerate(asel) if s & 1]
-    ob = [b_offset(i) for i, s in enumerate(bsel) if s & 1]
-    ar = [[0] * 32 for _ in range(4)]
-    br = [[0] * 32 for _ in range(8)]
-    for o in oa:
-        ar = [[x ^ y for x, y in zip(ar[r], a[o + 8 * r])] for r in range(4)]
-    for o in ob:
-        br = [[x ^ y for x, y in zip(br[c], b[o + 8 * (c >> 1) + (c & 1)])] for c in range(8)]
-    ap = [[(x + v) & 0xFF for x, v in zip(ar[r], u[r])] for r in range(4)]
-    bp = [[(x + ((s & 1) if dither else 1 - 2 * (s & 1))) & 0xFF for x, s in zip(br[c], f[c])] for c in range(8)]
-    prev, tw = [0] * 32, [0] * 32
-    for i, s in enumerate(jsel):
-        if s & 1:
-            prev = [x ^ y for x, y in zip(prev, p[i])]
-            tw = [x ^ y for x, y in zip(tw, p[i + 1])]
-    tj = [seg_dot(prev[q], ap[row_slot(q)], bp[col_slot(q)]) for q in range(32)]
-    state = list(st)
-    for ps in p:
-        state = fold_absorb(fold, state, ps)
-    w = 0
-    for i, s in enumerate(rsel):
-        if s & 1:
-            w ^= rc[i]
-    return int(fold_final(fold, state) == w & M32 and tj == [v & M32 for v in tw]
-               and (not first & 1 or all(v & M32 == 0 for v in p[0])))
 
 
 def _words(v: int, n: int) -> list[int]:
@@ -640,61 +582,11 @@ def _xor_tree(B, words: list, xor):
     return words[0]
 
 
-def _check_signature(S):
-    if S.FOLD not in FOLDS:
-        raise ValueError(f"PouwSegCheck: FOLD {S.FOLD!r} is none of {sorted(FOLDS)}")
-    return ((("a", Array(RL, Array(32, I8))), ("asel", Array(16, BIT)), ("u", Array(4, Array(32, I8))),
-             ("b", Array(RL, Array(32, I8))), ("bsel", Array(8, BIT)), ("f", Array(8, Array(32, BIT))),
-             ("p", Array(S.S + 1, Array(32, U32))), ("st", Array(FOLDS[S.FOLD][2] // 32, U32)), ("rc", Array(RW, U32)),
-             ("rsel", Array(RW // 32, U32)), ("jsel", Array(jsel_bits(S.S), BIT)), ("first", BIT)), BIT)
-
-
-def jsel_bits(s: int) -> int:
-    """jsel's width: S one-hot bits and zero bits up to the width that makes bsel, jsel and first whole u16 words (a
-    statement's rows are)."""
-    return 16 * -(-(s + 9) // 16) - 9
-
-
-@composite("PouwSegCheck", 2, ["S", "FOLD"], _check_signature, conformance="protocol-defined")
-def PouwSegCheck(B, S, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first):
-    """One thread's spot check at the segment ``jsel`` places in its window: the thread's rows out of A's and B's tile leaves
-    (`PouwSel8_v2` and `PouwXor8_v2`), A' and B' (`PouwI8Add_v2`, `PouwI8Pm1_v2`), T_(j-1) and the set after it out of p
-    (`PouwSel32_v2`, `PouwXor32_v2`), T_j (`PouwSegDot_v2` an entry), the window's fold (FOLD's absorb on each of p's S + 1
-    sets, then its final), the leaf's word (`PouwSel32_v2`), and `PouwWinOk_v2`."""
-    return _seg_check_body(B, S, PouwI8Pm1, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first)
-
-
-@composite("PouwSegCheckDither", 2, ["S", "FOLD"], _check_signature, conformance="protocol-defined")
-def PouwSegCheckDither(B, S, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first):
-    """`PouwSegCheck_v2` with the served side under the dither: B' = B + f (`PouwI8AddBit_v2`), f the coin bit."""
-    return _seg_check_body(B, S, PouwI8AddBit, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first)
-
-
 def _pick_row(B, leaf, sel, offs: list[int]):
     return _xor_tree(B, [B.batch(PouwSel8, sel[i], leaf[o], axes=(None, 0)) for i, o in enumerate(offs)], PouwXor8)
 
 
-def _seg_check_body(B, S, served, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first):
-    if S.S < 1:
-        raise ValueError("PouwSegCheck: a window of at least one segment")
-    absorb, final, _ = FOLDS[S.FOLD]
-    ar = [_pick_row(B, a, asel, [a_offset(i) + 8 * r for i in range(16)]) for r in range(4)]
-    br = [_pick_row(B, b, bsel, [b_offset(i) + 8 * (c >> 1) + (c & 1) for i in range(8)]) for c in range(8)]
-    ap = [B.batch(PouwI8Add, ar[r], u[r], axes=(0, 0)) for r in range(4)]
-    bp = [B.batch(served, br[c], f[c], axes=(0, 0)) for c in range(8)]
-    prev = [_xor_tree(B, [B.call(PouwSel32, jsel[i], p[i][q]) for i in range(S.S)], PouwXor32) for q in range(32)]
-    tw = array_of([_xor_tree(B, [B.call(PouwSel32, jsel[i], p[i + 1][q]) for i in range(S.S)], PouwXor32) for q in range(32)])
-    tj = array_of([B.call(PouwSegDot, prev[q], ap[row_slot(q)], bp[col_slot(q)]) for q in range(32)])
-    state = st.reshape(Array(FOLDS[S.FOLD][2], BIT))
-    for i in range(S.S + 1):
-        state = B.call(absorb, state, p[i])
-    r = B.call(final, state)
-    rsel = rsel.reshape(Array(RW, BIT))
-    w = _xor_tree(B, [B.call(PouwSel32, rsel[i], rc[i]) for i in range(RW)], PouwXor32)
-    return B.call(PouwWinOk, r, w, tj, tw, p[0], first)
-
-
-# --- every absorbed word recomputed: PouwSegCheck_v3, PouwCallCheck_v1, PouwWarpCheck_v1 and _v2 --------------------------------
+# --- every absorbed word recomputed: PouwSegCheck_v3, PouwCallCheck_v1 and PouwWarpCheck_v2 ---------------------------
 
 def fx1_key(q: int) -> int:
     """fx1's multiplier of entry q (egemm.cu's fx_chain<FX1, t, e>: key_mul(1, 32 q), q = 4 t + e)."""
@@ -866,9 +758,9 @@ def warp_checkpoint(states: list[list[int]]) -> list[int]:
 
 
 def warp_check(x, xsel, b, w, wsel, c, u, z, st, rc, fold: str = "li") -> int:
-    """`PouwWarpCheck_v1` (``fold`` li) and `PouwWarpCheck_v2` on words: x and w KS leaves, then per lane xsel, b, wsel, c,
-    u, z and st (li: 8 words; duo, fx1: 16) as `call_check`'s, and rc (512 L words, the warp's L receipt leaves: P words
-    after each set s at P s .. P s + P - 1, P the state's parts)."""
+    """`PouwWarpCheck_v2` on words: x and w KS leaves, then per lane xsel, b, wsel, c, u, z and st (li: 8 words; duo, fx1:
+    16) as `call_check`'s, and rc (512 L words, the warp's L receipt leaves: P words after each set s at P s .. P s + P - 1,
+    P the state's parts)."""
     states = [list(s) for s in st]
     sets = [lane_words(x, w, xsel[ln], b[ln], wsel[ln], c[ln], u[ln], z[ln]) for ln in range(len(st))]
     ok = True
@@ -1223,10 +1115,6 @@ def _warp_ports(name: str, ks: int, nl: int, fold: str):
              ("rc", Array(RW * -(-n // RW), U32))), BIT)
 
 
-def _warp_signature(S):
-    return _warp_ports("PouwWarpCheck_v1", S.KS, S.NL, "li")
-
-
 def _warp2_signature(S):
     return _warp_ports("PouwWarpCheck_v2", S.KS, S.NL, S.FOLD)
 
@@ -1250,19 +1138,11 @@ def _warp_body(B, ks, nl, fold, x, xsel, b, w, wsel, c, u, z, st, rc):
     return _all_equal(B, pairs)
 
 
-@composite("PouwWarpCheck", 1, ["KS", "NL"], _warp_signature, conformance="protocol-defined")
-def PouwWarpCheck(B, S, x, xsel, b, w, wsel, c, u, z, st, rc):
-    """A warp's whole H1 call under li with a checkpoint a set (LI-CP-W): each of NL lanes' sets (`_call_sets`) absorbed by
-    `PouwLiAbsorb_v2` from the lane's keys, each set's checkpoint the XOR of every lane's 8 chain states
-    (`PouwXinFinal_v2`, the XOR of a state's words, then `PouwXor32_v2` across lanes, redux.sync.xor), equal to the leaf's
-    word at the set's index."""
-    return _warp_body(B, S.KS, S.NL, "li", x, xsel, b, w, wsel, c, u, z, st, rc)
-
-
 @composite("PouwWarpCheck", 2, ["KS", "NL", "FOLD"], _warp2_signature, conformance="protocol-defined")
 def PouwWarpCheckV2(B, S, x, xsel, b, w, wsel, c, u, z, st, rc):
-    """`PouwWarpCheck_v1` for FOLD li, duo or fx1, with a full-state checkpoint a set (DUO-CP-W): each lane's sets
-    absorbed by FOLD (`PouwLiAbsorb_v2`, `PouwDuoAbsorb_v2`, `PouwFx1Absorb_v2`) from its keys (li: y; duo, fx1: y, then
-    z), and after set s, per part of the state, the XOR over lanes and chains equal to the leaf's word: li's y at s; duo's
-    and fx1's y at 2 s and z at 2 s + 1."""
+    """A warp's whole H1 call under FOLD li, duo or fx1 with a checkpoint a set (LI-CP-W; DUO-CP-W and FX1-CP-W, a full-state
+    one): each of NL lanes' sets (`_call_sets`) absorbed by FOLD (`PouwLiAbsorb_v2`, `PouwDuoAbsorb_v2`, `PouwFx1Absorb_v2`)
+    from its keys (li: y; duo, fx1: y, then z), and after set s, per part of the state, the XOR over lanes and chains
+    (`PouwXinFinal_v2`, the XOR of a state's words, then `PouwXor32_v2` across lanes, redux.sync.xor) equal to the leaf's
+    word: li's y at s; duo's and fx1's y at 2 s and z at 2 s + 1."""
     return _warp_body(B, S.KS, S.NL, S.FOLD, x, xsel, b, w, wsel, c, u, z, st, rc)

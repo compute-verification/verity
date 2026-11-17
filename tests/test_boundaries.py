@@ -82,7 +82,7 @@ INTEGRATION_SITES = _integration_sites()
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
-                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor", "adapters", "demos")
+                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor", "adapters", "applications")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.
 DEPENDENCIES = {"numpy"}
@@ -195,7 +195,7 @@ PROVER_ONLY = {
 #: process (the layout's ``verity/runtime/``, ``tests/tree.toml``).
 RUNTIME = ("verity.runtime", *sorted(f"verity.runtime.{p.stem}" for p in (ROOT / "verity" / "runtime").glob("*.py")
                                      if p.stem != "__init__"))
-#: The trees whose files import no module of the runtime: only what starts a run does (a demo, a benchmark, the `verity`
+#: The trees whose files import no module of the runtime: only what starts a run does (an application, a benchmark, the `verity`
 #: command), and it hands a protocol's file the stream, the side or the driver it needs.
 RUNTIME_FREE = ("verity/protocols/", "adapters/")
 #: Files of ``RUNTIME_FREE``, outside its tests, that import the runtime all the same, each with its owner and what it
@@ -1005,7 +1005,7 @@ def test_a_runtime_import_is_found() -> None:
                                         "from verity.party import Party\n"),
         "verity/protocols/x/c.py": "import verity.runtime\nfrom verity import runtime\n",
         "verity/protocols/x/tests/test_a.py": f"from {module} import run\n",
-        "demos/d/run.py": f"from {package} import {name}\n",
+        "applications/d/run.py": f"from {package} import {name}\n",
     }
     assert _runtime_importers(texts) == {
         "adapters/y/z.py": [f"1: {RUNTIME[-1]}"],
@@ -1801,8 +1801,8 @@ ORDER_TREE = {
     "verity/protocols/proofs/spot/lean/lakefile.toml": 'name = "spot"\n[[lean_lib]]\nname = "Spot"\n',
     "verity/protocols/proofs/spot/lean/Spot/X.lean": "",
     BY_PATH: ("import sys\nfrom pathlib import Path\n"
-              f"sys.path.insert(0, str(Path(__file__).resolve().parents[{BY_PATH.count('/')}] / 'demos' / 'e2e'))\nimport prof\n"),
-    "demos/e2e/prof.py": "",
+              f"sys.path.insert(0, str(Path(__file__).resolve().parents[{BY_PATH.count('/')}] / 'applications' / 'e2e'))\nimport prof\n"),
+    "applications/e2e/prof.py": "",
     "tools/lazy.py": "def f():\n    from benchmarks.probe import run\n",
     "benchmarks/probe/run.py": "import tools.lazy\n",
     "benchmarks/probe/tests/test_run.py": "import infra.cluster.usage\n",
@@ -1862,7 +1862,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         ("verity/commitments/periods", "verity/protocols/proofs/flock"): ["verity/commitments/periods/package_above.py"],
         ("verity/protocols/proofs/flock/verifier", "verity/protocols/proofs/spot"): ["verity/protocols/proofs/flock/verifier/Flock/V.lean", "verity/protocols/proofs/flock/verifier/lakefile.toml"],
         ("verity/protocols/proofs/flock", "verity/protocols/resource_accounting/compute/pouw"): ["verity/protocols/proofs/flock/prover/stage.py"],
-        ("verity/protocols/proofs/spot", "demos"): ["verity/protocols/proofs/spot/by_path.py"],
+        ("verity/protocols/proofs/spot", "applications"): ["verity/protocols/proofs/spot/by_path.py"],
         ("tools", "benchmarks"): ["tools/lazy.py"],
         ("tools", "infra"): ["tools/tests/test_console.py"],
         ("benchmarks", "infra"): ["benchmarks/probe/tests/test_run.py"],
@@ -1898,7 +1898,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
                                   device, prover, verifier, "verity/protocols/proofs/spot"]), list(found)
     assert [sorted(x) for x in found["verity/circuits"]] == [["verity/runtime"], [], []], found["verity/circuits"]
     assert [sorted(x) for x in found["verity/runtime"]] == [["verity/circuits"], [], []], found["verity/runtime"]
-    assert [sorted(x) for x in found["verity/protocols/proofs/spot"]] == [["demos/e2e"], [], []], found["verity/protocols/proofs/spot"]
+    assert [sorted(x) for x in found["verity/protocols/proofs/spot"]] == [["applications/e2e"], [], []], found["verity/protocols/proofs/spot"]
     assert [sorted(x) for x in found[prover]] == [[verifier], [], []], found[prover]
     direct, reach, loaders = found[verifier]
     assert sorted(direct) == ["verity/circuits", "verity/commitments/crypto", prover], direct
@@ -1951,8 +1951,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{verifier} reaches verity/runtime: {verifier}/check.py -> "):
         _hold_places(loads, files, without(verifier, reaches="verity/runtime"))
     aside = Load("verity/circuits/in_function.py", "verity/protocols/proofs/spot/by_path.py", 3, "python import", "verity.protocols.proofs.spot.by_path")
-    with pytest.raises(AssertionError, match=f"gains no load(.|\n)*{verifier} reaches demos/e2e: {verifier} -> verity/circuits -> "
-                                             f"verity/protocols/proofs/spot -> demos/e2e\n\\s*{verifier} reaches verity/protocols/proofs/spot: "):
+    with pytest.raises(AssertionError, match=f"gains no load(.|\n)*{verifier} reaches applications/e2e: {verifier} -> verity/circuits -> "
+                                             f"verity/protocols/proofs/spot -> applications/e2e\n\\s*{verifier} reaches verity/protocols/proofs/spot: "):
         _hold_places((*loads, aside), files, also("verity/circuits", loads="verity/protocols/proofs/spot"))
     with pytest.raises(AssertionError, match=f"only shrinks.*\n\\s*{device} is loaded by {prover}/tests/test_build.py:1: "):
         _hold_places(loads, files, without(device, loaded_by=f"{prover}/tests/test_build.py"))

@@ -453,14 +453,11 @@ def test_cli(capsys):
     assert reg["dither-1s"]["ppl"] == "adopted" and reg["dither-c"]["ppl"] == "co32c-pv"
 
 
-SM89 = DEVICES / "sm_89"
-
-
 def test_devices_follow_the_layout():
     """README "Devices": sm_120 is data/ and the default; any other device is data/devices/sm_NN/, priced once it has a
     model.toml, every row of its census some vector's, and every design's honest MMA a class of its census."""
     assert device() == device("sm_120") == device("sm120") == DATA and devices()[0] == "sm_120"
-    assert device("sm89") == device("sm_89") == SM89 and "sm_89" in devices()
+    assert device("sm90") == device("sm_90") == DEVICES / "sm_90" and "sm_90" in devices()
     for name in devices()[1:]:
         d = device(name)
         pi = E.machine("", d)
@@ -472,41 +469,6 @@ def test_devices_follow_the_layout():
             assert set(ds.fold) | set(ds.baseline) | set(ds.floor) | set(h.per_mma) <= set(pi.c), (name, n)
     with pytest.raises(SystemExit, match="isn't a device directory"):
         device("sm_7")
-
-
-def test_sm89_the_fold_binds_honest():
-    """The L40S: at L = 16 duo's two ALU-pipe instructions a word hold the floor program on row A, 8 a MMA at
-    ALU's measured rate, above IMMA.16816's issue, so no lane route saves time at any q*. The uniform route does: UNI
-    runs on UP at 2.0 a SM-clock (uniform.cu, every form) and costs issue and JI89 its measured cost beside honest16, so
-    a cheater writes words there in JI89's slack, less of them as q* grows, and ε_machine never reaches its floor. At
-    L = 32, with IMMA.16832's ALU and FFMA facets refitted to the schedule search
-    (opcode_probe/sm89/ji.py), JI89 binds the floor program and the cheater alike: lane words save time only below
-    JI89's q*0 (IMMA.16832's coefficient over a thread's 4 words, 1.9), and UNI's JI89 cost leaves the uniform route
-    nothing."""
-    pi = E.machine("", SM89)
-    assert pi.vector == "ADA-89" and set(pi.c[E.UNI]) == {"UP", "issue", "JI89"}
-    assert pi.c[E.UNI]["UP"] == pytest.approx(4 / (2.0 * 1.02), rel=1e-3)   # UNI's rate + 2%
-    assert pi.c[E.UNI]["JI89"] < pi.c[E.UNI]["issue"] < pi.c["ALU"]["issue"]
-    alu = 4 / (1.9985 * 1.02)                            # an ALU instruction's SMSP-cycles on A, its rate + 2%
-    d16 = E.design("dither-1s-l16", SM89)
-    s16 = E.setup(d16, pi, SM89, "floor", "floor")
-    assert s16.as_built.T * 128 == pytest.approx(8 * alu, rel=1e-9) and "A" in s16.as_built.binding
-    assert all(s16.machine_eps(q, uniform=False) == 0 for q in (2, 8, 16)) and E.threshold(s16, uniform=False) == 0
-    m = [s16.machine_eps(q) for q in (2, 8, 16)]
-    assert 1e-3 > m[0] > m[1] > m[2] > 0 and E.threshold(s16) is None
-    assert {"JI89", "A"} <= set(s16.cheat(8).binding) and s16.cheat(8).words["lanes"] == 0
-    e = E.eps(d16, pi, 2.0, SM89, operands="floor", credit="floor")
-    assert e.machine_eps == pytest.approx(m[0]) and e.core() > e.skip
-    assert e.T_honest * 128 == pytest.approx(19.069) and e.T_honest_source == "measured"
-    assert e.gamma_clock == pytest.approx(e.gamma * 2520 / 1680, rel=1e-6)
-    s32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor")
-    assert "JI89" in s32.as_built.binding and 1.8 < E.threshold(s32) < 2
-    assert all(s32.machine_eps(q) == pytest.approx(0, abs=1e-9) for q in (2, 8, 16)) and s32.machine_eps(1.5) > 0
-    assert all(s32.machine_eps(q) == pytest.approx(s32.machine_eps(q, uniform=False), abs=1e-12) for q in (1.5, 2, 8))
-    t = E.table(SM89)
-    assert t.l2 is None and t.per_cycle() is None and t.mhz == 2520 and t.sms == 142
-    open32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor", table=t)
-    assert open32.machine_eps(8) == pytest.approx(s32.machine_eps(t.q), abs=1e-9)   # unbounded L2: lanes at q*_T
 
 
 def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
@@ -698,8 +660,7 @@ def test_dc_the_headline_holds_the_2pct_margin():
     reads moves 2% in the cheater's favour, at the measured reading (operands free, q* = 1.22), ε_luck
     in the core (Corollary D3). A family whose core is at or over 1% before the margin is the headline's own row
     (test_headline pins it, with its reason), so the audit holds only the families under 1% to 1%; the margin never
-    lowers a core. It doesn't move the A100 or the RTX PRO 6000, and it moves the L40S by under 0.01 points. How far it
-    moves the H200 and the B200 depends on their designs, which the audit reads rather than pins.
+    lowers a core. It doesn't move the RTX PRO 6000. How far it moves the H200 and the B200 depends on their designs, which the audit reads rather than pins.
     dither-2s-li-l32, the H200's headline before LI-CP-W, is the thin design: its 0.02 FFMA filler puts honest on JI90_0
     by only the ALU pipe's 1.5% issue slack, so a 2% rise in JPA90_0 (ALU lanes beside the tensor) moves honest's
     binding off JI90_0 and opens the lane route, taking core to 1.084% with the peel at sm_90a's own counts (0.98%
@@ -715,10 +676,7 @@ def test_dc_the_headline_holds_the_2pct_margin():
         assert worst[dev][1] >= base - 1e-12, f"{dev} {name} on {vec}: the margin lowered core"
         if base < 0.01:
             assert worst[dev][1] < 0.01, f"{dev} {name} on {vec}: {worst[dev][1]*100:.3f}% over 1% under the 2% margin"
-    assert {"sm_80", "sm_89", "sm_120"} <= set(worst)
-    for dev in ("sm_80", "sm_120"):
-        assert worst[dev][1] == pytest.approx(worst[dev][0], rel=1e-9), f"{dev}: the margin moved core"
-    assert 0 < worst["sm_89"][1] - worst["sm_89"][0] < 1e-4
+    assert worst["sm_120"][1] == pytest.approx(worst["sm_120"][0], rel=1e-9), "sm_120: the margin moved core"
     # dither-2s-li-l32 is thin at its 0.02 filler; 0.05 FFMA a word restores the margin to the floor
     sm90 = device("sm_90")
     p90 = E.machine("", sm90)
@@ -728,21 +686,6 @@ def test_dc_the_headline_holds_the_2pct_margin():
     assert _worst_core_under_margin(sm90, p90, thin, 0.016) < 0.01 < _worst_core_under_margin(sm90, p90, thin, 0.018)
     wide = replace(thin, filler=(E.lane_fill(0.05, {"FFMA": 1.0}),))
     assert _worst_core_under_margin(sm90, p90, wide, 0.02) == pytest.approx(0.00679, abs=5e-5)
-
-
-def test_cli_device(capsys):
-    assert main(["eps", "--device", "sm89", "--table", "--credit", "floor", "--operands", "floor"]) == 0
-    lines = capsys.readouterr().out.splitlines()
-    assert lines[0].startswith("Π ADA-89") and lines[1].split()[3:5] == ["γ", "γ_f"]
-    assert [x.split()[0] for x in lines[2:]] == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (16, 32)]
-    assert main(["--device", "sm_89", "eps", "dither-2s-l16", "--lookups", "--json"]) == 0
-    d = json.loads(capsys.readouterr().out)
-    assert d["lookups"]["l2"] is None and d["gamma_clock"] > d["gamma"] and d["data"] == str(SM89)
-    assert main(["--device", "sm89", "eps", "--lookups"]) == 0
-    out = capsys.readouterr().out
-    assert out.startswith("dither-1s-l16: ") and "L2 unbounded: unmeasured on this device" in out
-    with pytest.raises(SystemExit, match="--device or --data"):
-        main(["--data", str(SM89), "--device", "sm89", "eps"])
 
 
 QPIN = "VF3q-16"                   # the per-form numbers below were read on it (its JI3q rows)

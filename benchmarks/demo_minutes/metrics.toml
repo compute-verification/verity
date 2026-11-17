@@ -2,29 +2,6 @@
 # enforces it.
 
 [[metric]]
-id = "vllm/served-sampled-proofs-accepted"
-title = "Workload proofs accepted"
-owner = "vllm"
-unit = "percent of units"
-axis = "Percent of a workload's sampled proof blocks whose proofs the Lean verifier accepted on the auditor's machine."
-better = "higher"
-command = "research run --cwd source -- python3 benchmarks/demo_minutes/sampled_accepted.py WORKLOAD_RUN VERDICT_RUN"
-every = "7d"
-goal = "vllm/served-run-sampled-proofs-accepted"
-
-[[metric]]
-id = "vllm/remote-demo-minutes"
-title = "Remote demo run time"
-owner = "vllm"
-unit = "minutes"
-axis = "Minutes from the first command to the verdict."
-better = "lower"
-command = "research run --cwd source -- python3 benchmarks/demo_minutes/minutes.py FIRST_RUN [RUN ...] VERDICT_RUN"
-every = "7d"
-floor = 60
-goal = "demos/remote-demo"
-
-[[metric]]
 id = "vllm/onsite-demo-minutes"
 title = "Onsite demo run time"
 owner = "vllm"

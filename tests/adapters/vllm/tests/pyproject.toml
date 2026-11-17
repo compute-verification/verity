@@ -57,7 +57,6 @@ untraced = [
     "protocols/test_pouw_pearl_c_served.py",
     "protocols/test_rt4_h1_challenger.py",
     "tools/test_ratchet_gate.py",
-    "tools/test_scorecard.py",
     "tools/test_suite_parts.py",
 ]
 # In place of its dependencies' directories (`inputs_only`): `verity` whole, since the code identity (`source_identity.code_identity`,
@@ -86,12 +85,14 @@ untraced = [
 # rules' sources.
 # tests/commit/test_census_and_memory_map.py builds `core_requirement` (verity/circuits/requirement) against the
 # difftest harness's Lean (tools/difftest), and loads that package's test_requirement_difftest.py by its path.
+# tests/tools/test_workload.py reads `run.sh bindings`' output for the applications' configurations with `verity run`'s reader.
 # tests/pipeline/test_serve_h1.py loads adapters/torch's test_pouw_h1_receipts.py by its path, for its lanes-form Window;
 # tests/protocols/test_pous_option.py runs the memory attester, which reads the configuration hashes the verity command
 # commits (tools/verity/cli/verity_cli/configurations.toml).
 inputs_only = true
 inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "hardware/cards", "verity/README.md",
           "tools/config/verity_config", "artifacts.json", "adapters/vllm/tools/workload/workloads/SHA256SUMS",
+          "applications/remote.toml", "applications/onsite_network.toml",
           ".gitignore",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/lakefile.toml",
           "verity/protocols/resource_accounting/memory/poub/verifier/lean/lakefile.toml",
@@ -120,7 +121,7 @@ inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "a
           "tools/research/src/research/pipefail.py",
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py", "tools/difftest",
-          "tests/adapters/torch/tests/pouw/test_pouw_h1_receipts.py", "tools/verity/cli/verity_cli/configurations.toml"]
+          "tests/adapters/torch/tests/pouw/test_pouw_h1_receipts.py", "tools/verity/cli/verity_cli"]
 parallel = true
 # verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
@@ -246,10 +247,6 @@ tests = [
     "pipeline/test_tp_world_n.py",
 ]
 paths = ["adapters/vllm/verity_vllm/acquire", "adapters/vllm/verity_vllm/pipeline/tp"]
-
-[[tool.verity.tests.reads]]
-tests = ["pipeline/test_glue.py"]
-paths = ["tests/adapters/vllm/tests", "adapters/vllm/verity_vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["pipeline/test_row.py"]

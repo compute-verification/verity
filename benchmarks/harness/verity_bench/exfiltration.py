@@ -25,8 +25,8 @@ machine that reaches the store, with no GPU and no node.
   in β, a least-squares line over the pinned budgets, and ln(bound) is linear in ln β between the two that bracket
   it. The row plans for the weights / λ (`weights_bits / target_bits`), and the part is λ times its bound. The requests
   a row is priced over are its sampled replays over the probability a request is sampled (`replay_sample / q`); its
-  `requests` field is the planner's default scope's count, another request's, and is not read. That part is the
-  headline figure; the planner's driver prints the same rows' bound at the plan's own budget (`headline plan`) and,
+  `requests` field is the planner's default scope's count, another request's, and is not read. The planner's driver
+  prints the same rows' bound at the plan's own budget (`headline plan`) and,
   times λ, at the share between the two pinned budgets that bracket it (`headline rows`), and the print says so.
 * **How that part's proving is priced** is read from the row's plan: each block family's share of the plan's proving
   time, each family priced as the rows say (`split.families`: its share by way, `ways`, else its ways, `priced`); a
@@ -114,9 +114,9 @@ The command refuses a record nothing carries and a scope two unsuperseded runs b
 A run of record that is superseded, or holds no rows of the case, is left out and listed under "Refused".
 
 Under a research run, a runner that names metric ids for the figures (`benchmarks/exfiltration/run.py`'s `METRICS`)
-has `record` write them through the harness kit (`measurements`): the headline figure, the compute audit's part and
-the network attester's, each over every monitoring period of the document it has a value over at the share (the
-world's year always, and last, the dashboard's headline), each with its `period` and the compute it is `over`, its mark
+has `record` write them through the harness kit (`measurements`): the compute audit's part, the network attester's
+and the two together, each over every monitoring period of the document it has a value over at the share (the
+world's year always, and last), each with its `period` and the compute it is `over`, its mark
 at the head of its first input and its error over that period in the next, the document as `DOCUMENT` and what ran in
 the fingerprint. What it prints is the same in a run as outside one.
 """
@@ -263,11 +263,11 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     `FIGURES` its value names, over that period at the document's share, in GB. The other periods come in the
     document's order and the world's year last, so a reader that keys a result's measurements by name alone, the last
     of a name winning, reads the world's year. Each has its `mark`, which also heads its first input, then its error
-    over its period (the compute audit's δ; the network attester's ε at its scans' δ; the headline's, the compute
-    audit's part, its δ), then the runs of record it read. The network attester's part is modeled, with the mark its
-    calculator gives the `scan` row where it gives one. A figure with no value over a period (a period no run of record
-    holds, or the network attester's where its ε is 1 or more) is left out, but over the world's year, where it has
-    no value and says why: `NO_BOUND` with that ε."""
+    over its period (the compute audit's δ; the network attester's ε at its scans' δ; the two together's, the two
+    summed, then each part's own), then the runs of record it read.
+    The network attester's part is modeled, with the mark its calculator gives the `scan` row where it gives one. A
+    figure with no value over a period (a period no run of record holds, or one whose error is 1 or more) is left out,
+    but over the world's year, where it has no value and says why: `NO_BOUND` with that error."""
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):
         raise ValueError(f"no figure of the document is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
@@ -285,17 +285,19 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
                                          [f"modeled{f' ({scan})' if scan else ''}: {term}", error],
                                          f"{NO_BOUND}: ε = {_n(eps)} over the {span}")}
         head = next((x for x in doc["compute_audit"] if x["scope"] == scope), None)
-        for figure, mark, what in (("headline", doc["status"], "the headline figure"),
-                                   ("compute_audit", "modeled", "the compute audit's part")):
-            if head is None:
-                continue
+        if head is not None:
             label = (_row_label(head) if doc["row"] == ASSUMED_ROW else None) or head.get("note")
-            audit = (f"the planner's row `{doc['row']}`{f', {label}' if label else ''}, read where its total is "
-                     f"{_pct(share)} of compute, β = {_part(head['beta'])}{'' if head['inside'] else ' (extrapolated)'}: "
-                     f"λ = {_n(head['lambda'])} times its bound, {_n(head['bound']['GB'])} GB")
-            figures[figure] = (head["GB"], mark, [f"{mark}: {what}, {audit}",
-                                                  (f"its error: δ = {_n(head['delta'])} over the {span}, the compute "
-                                                  "audit's"), *runs], None)
+            audit = (f"the compute audit's part, the planner's row `{doc['row']}`{f', {label}' if label else ''}, read "
+                     f"where its total is {_pct(share)} of compute, β = {_part(head['beta'])}"
+                     f"{'' if head['inside'] else ' (extrapolated)'}: λ = {_n(head['lambda'])} times its bound, "
+                     f"{_n(head['bound']['GB'])} GB")
+            figures["compute_audit"] = (head["GB"], "modeled", [
+                f"modeled: {audit}", f"its error: δ = {_n(head['delta'])} over the {span}, the compute audit's", *runs], None)
+            figures["total"] = (p["together"]["scan"]["GB"], "modeled", [
+                f"modeled: the two parts together {TOGETHER['scan']}, a link's execution phase carrying K = schedules + "
+                f"cells + jitter + min(entries, advice + the compute audit's part), at D_j = {att['of_record']}, with no "
+                "advice priced", f"its error: at most {_n(p['error'])} over the {span}, the two parts' errors summed",
+                audit, term, *runs], f"{NO_BOUND}: the two parts' errors summed are {_n(p['error'])} over the {span}")
         for name, figure in metrics.items():
             value, mark, inputs, why = figures.get(figure, (None,) * 4)
             if value is None and scope != "world year":

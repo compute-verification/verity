@@ -19,7 +19,7 @@ The Commit: it commits a workload's values while it serves. The package's docstr
   `RowTableLibrary`), and re-export none of it. Not yet behind an `__all__`: one
   module of another package reads `store_dump._as_bytes`.
 - **Loaded by:** the integration's `pipeline`, `check`, `acquire`, `protocols`, `engine` and
-  `program.predict` packages and its `glue`, and `benchmarks/served_commit` and the other benchmarks that commit or open
+  `program.predict` packages, and `benchmarks/served_commit` and the other benchmarks that commit or open
   a run's values.
 - **Loads:** `verity.commitments`, `verity.circuits`, `verity.commitments.cuda`, `verity.commitments.periods`,
   `verity.commitments.randomness`, `verity_vllm.definitions` and `verity.errors`; `verity.protocols.proofs.spot.verifier`, in

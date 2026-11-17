@@ -7,7 +7,6 @@
     "build": "benchmarks/stacked_share/job.sh",
     "int8-checkpoint": "tests/adapters/vllm/tests/protocols/pous_gpu.sh",
     "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
-    "serve-openai": "adapters/vllm/tools/workload/serve.sh",
     "served-match": "adapters/vllm/verity_vllm/ops/served_build.sh",
     "served-pin": "benchmarks/served_commit/served_arm.sh",
     "serving-rows": "benchmarks/one_stage/a5.sh",
@@ -19,7 +18,6 @@
   },
   "entries": [
     {"file": "verity_vllm/engine/fp8_checkpoint.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "fp8-checkpoint"},
-    {"file": "verity_vllm/glue.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "glue"},
     {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "commit-arb"},
     {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "coverage-workloads"},
     {"file": "verity_vllm/pipeline/program_graph.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "program-graph"},

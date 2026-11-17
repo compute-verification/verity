@@ -47,7 +47,6 @@ LEFT: list[tuple[str, str]] = [
     ("ReportedAdvice writer adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py", IN_PROCESS),
     ("ReportedAdvice writer adapters/vllm/verity_vllm/program/predict/scan_state.py", "the circuits lane's file"),
     ("ReportedAdvice writer adapters/vllm/verity_vllm/program/predict/window_rows.py", "the circuits lane's file"),
-    ("RunTotals reader adapters/vllm/tools/workload/serve.sh", "a shell script that copies the file; it reads no body"),
     ("Values writer adapters/vllm/verity_vllm/pipeline/serving_rows.py", IN_PROCESS),
 ]
 

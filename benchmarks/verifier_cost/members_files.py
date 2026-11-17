@@ -8,7 +8,7 @@ With --members, the case is a stand-in window's (`benchmarks/one_stage/members_s
 over two templates, half each, under ``stratified-rate:1/1``, so every member is sampled and shares its template's circuit
 file), audited as a workload's audit step runs it (``records_audit.py audit``
 on a local challenger, ``--deployed-key``, FLOCK_CHALLENGER=1) into DIR/audit, which writes the case. With --case, it
-is one a driver wrote (an audit's ``window/case-v2-members.json``). Either way v2's ``check`` must accept the case
+is one a driver wrote (an audit's ``window/case-v2.json``). Either way v2's ``check`` must accept the case
 (`case_files.run`, each blob under a short name), so the pass `members-files-time` times is an accepted audit's; it
 refuses otherwise. Prints one JSON line: the case's members, blobs and their bytes, the audit's seconds, and the
 check's seconds and peak RSS.
@@ -41,9 +41,9 @@ def audited(out: Path, members: int, flock: Path, lean: Path) -> tuple[Path, flo
     env.update(RAYON_NUM_THREADS=str(len(os.sched_getaffinity(0))), RUST_MIN_STACK=str(64 << 20), FLOCK_CHALLENGER="1")
     t = time.monotonic()
     p = subprocess.run(MS.audit_argv(win, out / "audit", main, flock, lean), capture_output=True, text=True, env=env)
-    case = out / "audit" / "window" / "case-v2-members.json"
+    case = out / "audit" / "window" / "case-v2.json"
     if p.returncode != 0 or not case.is_file():
-        why = out / "audit" / "window" / "case-v2-members-error.txt"
+        why = out / "audit" / "window" / "case-v2-error.txt"
         said = why.read_text() if why.is_file() else "no reason written"
         raise SystemExit(f"the audit of the stand-in window wrote no per-member case (exit {p.returncode}): {said}\n"
                          f"{p.stdout[-3000:]}\n{p.stderr[-3000:]}")

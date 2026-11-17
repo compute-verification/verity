@@ -22,8 +22,10 @@ the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says w
 ~~~sh
 verity bench verifier_cost measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES]
 verity bench verifier_cost partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES]
-research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone -- \
+research run --on auto --project verity --source . --cwd clone --cpus 16 --mem-gb 64 --timeout 3h -- \
   bash benchmarks/verifier_cost/job.sh measure|partition --unrolled-max 40000000   # every config, on a node
+research run --on auto --project verity --source . --cwd clone -- \
+  bash benchmarks/verifier_cost/job.sh measure --config b0 --ir boolean   # the dashboard's proofs/verifier-seconds-served-description
 verity bench verifier_cost store RUN                     # its results.json or partition.json to the store; prints the art: id
 verity bench verifier_cost plot ART --to PNG             # from the store
 ~~~
@@ -171,7 +173,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
 
 `members_files.sh N|all...` times the per-member form's pass over every member's files against the members of one
 circuit file. `members_files.py` writes one per-member case as the executable's `check` takes it: a driver's (`MF_CASE`,
-an audit's `window/case-v2-members.json`), or a stand-in window's of `MEMBERS` members (default 300) of one proof block over
+an audit's `window/case-v2.json`), or a stand-in window's of `MEMBERS` members (default 300) of one proof block over
 two templates (`benchmarks/one_stage/members_standin.py`'s: one member of each template sampled, the rest sharing their
 template's circuit file unsampled), audited as a workload's audit step runs it, on Flock's prover, the Lean
 verifier and the ZK server; v2's `check` must accept the case, and its seconds and peak RSS go to inputs.jsonl.

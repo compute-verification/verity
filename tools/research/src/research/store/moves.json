@@ -5152,6 +5152,11 @@
     },
     {
       "paths": {
+        "demos/": "applications/"
+      }
+    },
+    {
+      "paths": {
         "adapters/vllm/tools/served_run/": "adapters/vllm/tools/workload/",
         "benchmarks/sampling_plan/served_window_inputs.json": "benchmarks/sampling_plan/workload_inputs.json",
         "tests/adapters/vllm/tests/tools/test_served_run.py": "tests/adapters/vllm/tests/tools/test_workload.py",

@@ -22,7 +22,7 @@ untraced = ["test_lean_deployed.py", "test_lean_try.py", "test_onsite_served.py"
 # (`verity.config`), what step 0's declarations read (`NetworkAttesterParams`, the sampling design's parser) and the core parties
 # the test's table (`tests/step0.py`) runs. The workload's onsite configuration and its table
 # (`tests/test_onsite_served.py`): `verity_cli/served_table.py`, the piece scripts whose existence its dry run checks, and
-# each demo file (`served_table.DEMOS`), which it holds to the table's rendering byte for byte (`onsite_full.toml` is also
+# each application's file (`served_table.DEMOS`), which it holds to the table's rendering byte for byte (`onsite_full.toml` is also
 # where the table reads the auditor's pins).
 # `verity lean try` (`tests/test_lean_try.py`): the axiom probe it loads, and `siblings.py` (with the `headers.py` it
 # loads), which gives every try its package's Lean options. `verity lean deployed` (`tests/test_lean_deployed.py`): the Lean
@@ -33,8 +33,8 @@ inputs = ["verity", "tools/difftest/python/verity_difftest", "tools/verity/lean/
           "tools/verity/lean/headers.py", "tools/verity/lean/check.py", "security/lean-audit.json",
           "security/Properties/lean-audit.json", "security/Proofs/lean-audit.json",
           "benchmarks/one_stage/served_verdicts.sh", "benchmarks/one_stage/served_verdicts.py",
-          "benchmarks/network_traces/certifier_piece.py", "demos/onsite_full.toml", "demos/onsite_compute.toml",
-          "demos/onsite_network.toml", "demos/remote.toml"]
+          "benchmarks/network_traces/certifier_piece.py", "applications/onsite_full.toml", "applications/onsite_compute.toml",
+          "applications/onsite_network.toml", "applications/remote.toml"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

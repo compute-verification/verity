@@ -15,7 +15,7 @@ SCHEMA = "exfiltration/v5"
 #: the network attester's document the command reads: its `value` the term of record, its rows' `term` by jitter
 #: bound and their ε (`eps`), its inputs, and the label of what rests on a set-time card, at its top and on each row
 #: that carries it
-TERM_SCHEMA = "certifier-term/v2"
+TERM_SCHEMA = "certifier-term/v3"
 #: the network attester's scopes the command prints
 SCOPES = ("datacenter", "world")
 #: the error a monitoring period's figure is to carry at most. Given no δ for the network attester's scans, the
@@ -188,8 +188,8 @@ LEAN_BOUND = "CompiledTwo.eventTwoX_le_cls_at_budget"
 #: printed where no Lean theorem gives a number at a design's sizes
 NOT_PROVED = "not proved at these sizes"
 #: the figures a runner records under a research run (`record`), each over every monitoring period at the share: the
-#: one the command calls the headline, the compute audit's part and the network attester's
-FIGURES = ("headline", "compute_audit", "network_attester")
+#: compute audit's part, the network attester's and the two together
+FIGURES = ("compute_audit", "network_attester", "total")
 #: the document a run's result keeps beside its measurements, relative to the run's directory
 DOCUMENT = "out/exfiltration.json"
 

@@ -178,7 +178,6 @@ writers = [
 ]
 readers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "run / \"summary\\.json\"" },
-    { lane = "vllm", file = "adapters/vllm/tools/workload/serve.sh", find = "pauses\\.jsonl summary\\.json" },
 ]
 
 [[message]]

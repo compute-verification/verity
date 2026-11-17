@@ -43,8 +43,6 @@ inputs = [
     "benchmarks/prove_path/records_audit.py",
     "verity/commitments/cuda/commit_slots/slots.py",
     "adapters/vllm/tools/workload/serve_load.py",
-    "adapters/vllm/tools/workload/serve.sh",
-    "adapters/vllm/tools/workload/commit.sh",
     "adapters/vllm/tools/workload/published.sh",
     "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.json",
     "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.bin",

@@ -128,7 +128,7 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   goes by `inbox.py send` or a resume, a document on a Linear issue or in Notion. It opens its own PR,
   or reports its branch and SHA for its launcher to.
 - **Name a worker's model**, as `Task`'s `model`, a standing request for every agent here, on every launch, never
-  `inherit` or left out: `claude-opus-5-5-high`, or `claude-sonnet-5-5-high` for a fully specified task (a move by a
+  `inherit` or left out: `claude-opus-5-5-medium`, or `claude-sonnet-5-5-high` for a fully specified task (a move by a
   map, a count, a rename, a rerun, a change its tests decide). No worker runs Fable 5.2: only leads may, at medium
   effort, and they plan, design and decide. A worker holds no timer or subscription, since a turn that its lead's
   resume didn't start can run on Fable: its brief has it end such a turn at once. A Fable worker is not resumed: its

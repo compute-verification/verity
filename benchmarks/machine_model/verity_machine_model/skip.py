@@ -382,7 +382,7 @@ APV_TAIL = {"IMMA": 4, "IMAD": 4.0, "ALU": 11.5}
 #: 6.15 a tile (+40%) and vfold's sums 0.760 an entry, the most over shapes. sm_100a's (tail 17.26, served f 4.53,
 #: vfold 0.706) are under sm_120's, so the B200 keeps sm_120's, which overstate its ε_skip.
 SASS = {"sm_90": {"APV_TAIL": {"IMMA": 4, "IMAD": 6.93, "ALU": 16.09}, "c_apv_serve": 6.15 / 128, "c_vfold": 0.760}}
-#: mma.sync m16n8k32's census class: sm_120, sm_80 and sm_89 name it IMMA16832, sm_90 and sm_100 IMMA16832_S8
+#: mma.sync m16n8k32's census class: sm_120 names it IMMA16832, sm_90 and sm_100 IMMA16832_S8
 IMMA16832 = ("IMMA16832", "IMMA16832_S8")
 #: The TS model's cheater SMSP-cycles a transcript MMA (4096 MACs) of a checked leaf's component (`ts_tile`): co32c
 #: does every MMA and folds every word (4·TS_FOLD warp instructions a MMA's 128 words); cohalf at k = 128 does 4

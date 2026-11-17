@@ -82,7 +82,7 @@ properties are stated in `security/Properties/Pouw/PearlPlus.lean` (`AcceptMeans
 
 **What the credit rests on.** That a credited MAC was computed rests on SHA-512's collision resistance and on Pearl's
 conjecture TT_OUT rev1 (`TTOutPearlCDevRev1`, per tile `TTOutTilePearlCH100Rev1`), which proofs' red-team rating
-refutes (`verity/protocols/resource_accounting/compute/pouw/verifier/README.md`), and no proved guarantee covers a Pearl+ run's credit:
+refutes (`security/Definitions/Pouw/Guarantees/PearlCS8.lean`), and no proved guarantee covers a Pearl+ run's credit:
 the number counts what the verifier credits, and that this is work done is an open assumption. A bridge from acceptance
 to the audit game is proved (`acceptGivesTheAudit` in `security/Proofs/Pouw/PearlPlus/Sample.lean`).
 
@@ -222,7 +222,10 @@ step and no number. `COINS=local`, the default, runs a local challenger:
 infra's gate code on a scratch auditor host with a test key, each session's challenger its own process on 127.0.0.1,
 so the Lean verdict is taken of record. Of record here means only that the Lean verifier took its of-record path
 (`--of-record`) against the local challenger's key, the test key this run made, not the auditor's: the `ran with`
-line says `Lean verdict of record against the local challenger's key`. `COINS=in-process` holds the challenger in the
+line says `Lean verdict of record against the local challenger's key`. Under it the serve runs inside a Pearl-C period
+of the local gate's lane, opened before the serve on the run's circuit record (built first, on the CPU) and closed once
+the serve's salt session has ended, so the verifier's sample is the lane's first reserve after the close, as PoUW's verdict
+of record requires (`out/pieces/pouw/period.json` holds the period). `COINS=in-process` holds the challenger in the
 serving process. `out/compute-run.json` says which (`challenger`), and the salt coin as the piece states it
 (`salt_coin`). The serving machine's passes stay outside the record and are removed on exit, so the run leaves nothing
 in `/tmp`.
@@ -264,8 +267,9 @@ The paths below are relative to the record directory.
 - `out/pieces/pouw/pearlplus-lean.json` and `out/pieces/pouw/pearlplus-lean-check.json`: the Lean verifier's verdict,
   and the record's comparison of it with the answer. Without either there is no number (exit 1, naming the file).
 - `out/record/verdicts.json` (optional): the run's composed record, every protocol's verdict on the run, of which PoUW's
-  verdict is printed beside the number. A workload on your own card reads `missing` there: the credit is then the
-  Pearl+ verifier's alone.
+  verdict is printed beside the number. serve.sh writes PoUW's row as the window's compose reads it
+  (`benchmarks/one_stage/served_verdicts.py`'s `piece`): `missing` with the first condition of record the run fails,
+  as no window registration of SPOT's is made on your own card. The credit is then the Pearl+ verifier's alone.
 - `out/pieces/pouw/verify.json` (optional): the Pearl+ verifier's document. Its per-call split says whether the
   passes hold the LM head's calls, and `--per-call` prints it.
 - `out/pieces/pouw/development.json` (optional): the Pearl+ verifier's development document. Only its `coin_source`,

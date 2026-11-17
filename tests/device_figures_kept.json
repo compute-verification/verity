@@ -1,6 +1,7 @@
 {
   "rule": "a number that equals a device's figure and stays, saying why (tests/lint/test_device_figures.py)",
   "entries": [
-    {"file": "adapters/vllm/tools/description_sizes.json", "count": 18, "lane": "vllm", "why": "a template's description size in bytes (1830), not a clock"}
+    {"file": "adapters/vllm/tools/description_sizes.json", "count": 18, "lane": "vllm", "why": "a template's description size in bytes (1830), not a clock"},
+    {"file": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/fp8atom_cover.json", "count": 3, "lane": "compute-accounting", "why": "indices into fp8atom_vectors.py's steps and adds (4187, 1830, 2430), not a device's figures"}
   ]
 }

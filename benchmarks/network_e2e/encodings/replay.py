@@ -989,17 +989,19 @@ def kept_bits(trace: Trace, arrivals: Iterable[Code] = ()) -> dict[str, Any]:
     Beside them, and not sent: `counts[k]`, the rows that verified drafts, emitted and kept k; `entropy`, theirs in bits
     a row (at most `max`, log2(K + 1)); and `alone`, that entropy over those rows, what the counts would come to taken
     each alone. `alone` bounds `charged` from neither side: the code reads each request's count before. The rows and
-    the drafts each carried are the replay's, so it refuses a trace the replay doesn't reproduce."""
+    the drafts each carried are the replay's, so it refuses a trace the replay doesn't reproduce. With no draft no row
+    keeps one, and every term is 0."""
     K = trace.engine.num_speculative_tokens
-    if not K:
-        raise ValueError("the trace's engine serves with no draft, so no row keeps one")
-    if trace.emitted is None:
+    if K and trace.emitted is None:
         raise ValueError("the drafts a row kept are the trace's `emitted` less one, which this trace does not record")
     with KP.emitting() as emitted:
         rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
     m = compare(rp.steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
+    if not K:
+        return {"K": 0, "rows": 0, "counts": [0], "entropy": 0.0, "max": 0.0, "alone": 0.0, "charged": 0, "ideal": 0,
+                "derived": 0}
     counts = [0] * (K + 1)
     for st, em in zip(rp.steps, trace.emitted):
         for i, d in st.drafts.items():
@@ -1017,7 +1019,7 @@ def kept_bits(trace: Trace, arrivals: Iterable[Code] = ()) -> dict[str, Any]:
 
 def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s: float = 0.1,
                 window_buckets: int = 600) -> dict[str, Any]:
-    """A trace served with a draft, as the two classes of advice its replay takes, in bits over the trace: `arrivals`,
+    """A trace, with a draft or none, as the two classes of advice its replay takes, in bits over the trace: `arrivals`,
     the residual advice under each of `contexts` (`encode`, the replay asked each row's kept count as the row emits),
     which a serve under the certified tick does not send; and `kept_count` (`kept_bits`). Each context's arrivals and
     the kept count's string, with the certified record and nothing else, decode back to the trace's steps and counts.
