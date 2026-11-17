@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts one of the served run's runs where placement.toml places it (the README's Commands).
+# Starts one of the workload's runs where placement.toml places it (the README's Commands).
 set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$HERE/../../../.."

@@ -19,7 +19,7 @@ record, the window's root and its period, and refuses a record under another key
 manifest doesn't name, outside the window's period or opened for another layout, a round root the challenger didn't
 receive, a salt that isn't its round's coin's, and a sample after another root; an address without its session id is
 refused, and with neither the coins are in-process and labelled not certified; serve.py refuses ``--gate``, naming
-vllm's H1 path as the gated served window of record."""
+vllm's H1 path as the gated workload of record."""
 from __future__ import annotations
 
 import dataclasses
@@ -507,7 +507,7 @@ def _calls(rounds: int) -> list[dict]:
 
 
 def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
-    """A served window's coin path on `cs`: the salt coin after the window's root, round s's coin after step s's round
+    """A workload's coin path on `cs`: the salt coin after the window's root, round s's coin after step s's round
     root and the step's units under its live salt, then the sampling coin after the receipts root; the manifest, its window
     `WINDOW`."""
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
@@ -1023,7 +1023,7 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
     """serve.py's coins follow the session: given one (here `$POUW_CHALLENGER`, `$POUW_CHALLENGER_SESSION` and
     `$POUW_CHALLENGER_SECRET_FILE`) and no ``--coins``, it opens the challenger's session before anything else (this
     host's layout isn't the window's, so it stops there), and ``--coins seeded`` beside a session is refused.
-    ``--gate`` is refused, with a session or without, and the refusal names the gated served window of record, vllm's H1
+    ``--gate`` is refused, with a session or without, and the refusal names the gated workload of record, vllm's H1
     path (`verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py`)."""
     host = _Host(tmp_path, EPOCH, ROUNDS + 1)
     CO.write_secret(tmp_path / "secret", host.secret)

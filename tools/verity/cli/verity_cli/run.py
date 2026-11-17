@@ -14,7 +14,7 @@ soundness covers; `verity.config.UNACCEPTED`; H1's development composite is refu
 the parties it places on the machines this host stands for (``--on``, once for each, default ``local``, and for NAME each
 of the application's machines), or only the ``--party`` ones, for ``--periods`` periods (default 1), in the shared state
 ``--state`` (default a new directory under the system's temporary one). The parties are those of the static table
-`REGISTRY` names: the served window's (`tools/verity/cli/verity_cli/served_table.py`);
+`REGISTRY` names: the workload's (`tools/verity/cli/verity_cli/served_table.py`);
 `verity_cli`'s tests also run the toy's (`tests/tools/verity/cli/step0.py`). With no table, `verity run` and
 `verity config` are refused by name (``no-table``).
 

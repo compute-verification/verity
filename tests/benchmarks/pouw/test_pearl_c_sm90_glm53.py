@@ -181,7 +181,7 @@ def _llama():
 def test_llama_linears_are_one_cards_and_all_in_the_domain():
     """Llama-3.2-1B at TP 1: qkv (32 + 2 · 8 heads of 64), o, the merged gate and up, down; every one in the sm_90a kernels'
     domain, with γ at both FADD readings (the data sheet's above the record's) by glm53's formula, and the decode M
-    the vLLM served run serves at (8) among DECODE_M."""
+    the vLLM workload serves at (8) among DECODE_M."""
     L = _llama()
     rows = {r["name"]: r for r in L.table()}
     assert {x: (r["n"], r["k"]) for x, r in rows.items()} == {

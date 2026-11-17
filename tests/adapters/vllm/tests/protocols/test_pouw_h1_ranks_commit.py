@@ -98,7 +98,7 @@ class Rank(HC.RankCommit):
 
 
 def _window(monkeypatch, edits=(None, None), ids=lambda tp, s, x: x, served=None, moe=False, negative=None):
-    """A served window at TP 2 with the Commit on each rank: the holder and its ranks. ``edits`` makes each rank's codes H1
+    """A workload at TP 2 with the Commit on each rank: the holder and its ranks. ``edits`` makes each rank's codes H1
     is handed of what its arm quantized; ``ids`` the input ids rank tp's Commit acquires at step s of the honest ones;
     ``moe`` serves `MoEModel`'s ranks; ``negative`` (a `pouw_h1_ranks_gpu.KINDS` kind) is the GPU harness's edit on rank
     1 (`pouw_h1_ranks_gpu._w_edit`), the site it zeroed in ``holder.edited``."""

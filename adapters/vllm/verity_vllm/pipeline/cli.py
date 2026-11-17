@@ -33,9 +33,9 @@ PROG = "verity-vllm"
 
 #: command -> (module, one-line help).  Modules are imported only when their command runs.
 COMMANDS: dict[str, tuple[str, str]] = {
-    "advice": ("verity_vllm.pipeline.advice", "a served run's advice (I1) for the precommitted compiler, from its step trace and Commit record"),
+    "advice": ("verity_vllm.pipeline.advice", "a workload's advice (I1) for the precommitted compiler, from its step trace and Commit record"),
     "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
-    "block-counts": ("verity_vllm.program.predict.block_counts", "a day's (c, k)-inference blocks from its served windows' circuit records, judged against its declared n: the judgment public, the counts private"),
+    "block-counts": ("verity_vllm.program.predict.block_counts", "a day's (c, k)-inference blocks from its workloads' circuit records, judged against its declared n: the judgment public, the counts private"),
     "boundary-plan": ("verity_vllm.pipeline.boundary_plan", "a row's call-boundary check over its Commit's Programs, and the Commit's call-boundary plan, keyed"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),

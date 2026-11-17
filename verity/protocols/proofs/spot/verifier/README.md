@@ -151,7 +151,7 @@ per proof block matching this partition (a tile family built with `each` over th
 
 Serving's record is not yet the scheme the audit proves: the benchmark's first run (`benchmarks/one_stage/a0.py`)
 registers a stand-in, a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). Its
-served run (`benchmarks/one_stage/a5.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
+workload (`benchmarks/one_stage/a5.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any sample are
 `served`: serving's own commitment, with no claim that they hold the values under the Commit's roots. A deferred run's serving becomes
@@ -328,7 +328,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (which refuses a
     `closure=`), `session`, `deliver` and `outcome`, which
     raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
-    is one subcircuit, or a window's several in order (a TP rank's served window): the check's `program` is then their
+    is one subcircuit, or a window's several in order (a TP rank's workload): the check's `program` is then their
     digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
     and the window is sampled once, a stratum per subcircuit.
   - `Fleet()` has `attach(stream, operator)`, before the stream's first docket; `halted` maps each halted

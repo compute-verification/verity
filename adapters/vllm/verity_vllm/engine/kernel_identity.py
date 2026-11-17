@@ -7,7 +7,7 @@ module depends on the whole Inductor config (so it differs between serving and a
 ``CompilationConfig`` differs); the *sources* are what actually ran. This module collects, per
 process, the set of generated kernel sources and wrapper programs by content hash. Equality of two
 processes' kernel-source sets (``summary.kernel_set_sha256``, which a run's record pins) is the
-evidence that a replay executed the served run's generated kernels.
+evidence that a replay executed the workload's generated kernels.
 
 Also collected: Triton's compiled artifacts in ``TRITON_CACHE_DIR`` when it is set: per kernel the
 ``*.cubin`` hash and the hash of the *code* part of its PTX. Triton embeds the path of the Python

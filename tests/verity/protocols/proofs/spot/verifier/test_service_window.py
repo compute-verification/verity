@@ -1,4 +1,4 @@
-"""The proof system over a window of templates (a TP rank's served window): one `Stream` whose check is each template's
+"""The proof system over a window of templates (a TP rank's workload): one `Stream` whose check is each template's
 digest and `Q_template_instances` in the window's order, each docket's population the templates' mixed population
 at the challenger's own counts (`register(counts=)`), sampled once by `stratified:K`, a stratum per template each sampled at
 least once, and its whole run held to the Lean verifier's (`Run.run`) as one template's is."""

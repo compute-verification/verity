@@ -1,4 +1,4 @@
-"""A served window's boundary commitment of one size class (`verity-vllm/boundary-rows/v1`, `FILE`): the public part
+"""A workload's boundary commitment of one size class (`verity-vllm/boundary-rows/v1`, `FILE`): the public part
 `pipeline.boundary_rows` writes under ``w<window>/p<P>-o<O>/`` as the window closes, which the challenger's copy of the
 class's layout (`boundary_rows.layout_of`), its registration (`boundary_rows.record`) and a recommit from the prover's files
 (`boundary_rows.reopen`) read. Its id is under ``format``, since ``schema`` is each value's row schema."""

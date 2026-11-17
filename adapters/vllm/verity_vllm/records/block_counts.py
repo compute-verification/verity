@@ -1,5 +1,5 @@
 """A day's inference-block judgment (`verity-vllm/inference-block-judgment/v1`), as `program.predict.block_counts` writes it
-from that day's served windows' circuit records: whether the day's blocks are at most n (c, k)-inference blocks, against
+from that day's workloads' circuit records: whether the day's blocks are at most n (c, k)-inference blocks, against
 the day's declaration of c, k and n (by SHA-512); each rule's outcome; per block class (its session Definition, by SHA-512)
 its shape (its slots and steps, a block's Boolean gates, its unpriced primitives and its fresh-input bits); and the gate
 table the gates are counted by. It holds no count of blocks or windows, padded or exact, and no window, run, request,

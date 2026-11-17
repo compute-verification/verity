@@ -1,5 +1,5 @@
-"""The class-of-record window's commit against its target, 0.20 to 0.25 of the served window: a `class_rows.py` census priced in
-SHA-512 compressions, seconds on the H200 and AND gates, beside the served window's ANDs and seconds, each lever alone and
+"""The class-of-record window's commit against its target, 0.20 to 0.25 of the workload: a `class_rows.py` census priced in
+SHA-512 compressions, seconds on the H200 and AND gates, beside the workload's ANDs and seconds, each lever alone and
 all of them stacked; the pad pass (positions whose values the engine never computed, recomputed) at three traffics; the
 registration's size; and the totals over monitoring periods of one week, one month and one year.
 
@@ -7,7 +7,7 @@ Costs. A fresh output row is its digest x (`class_rows.blocks(128 + b)`: P(8 nby
 (hm96's c and h, two each, the frame leaf, and a port-tree node); an input row a wire or a registered read fills is re-leafed in
 its reader's port tree for `Costs.reused` (h, the leaf, the node). `CENSUS` is class_rows' model, a node one compression;
 `ENGINE` is the commit engine's, a node two (`commit_slots`: nine compressions a one-block row-slot). Compressions are priced
-in AND rows at `SHA512_ROWS` each (`Sha512Compress_v1`'s pin, the copies Flock proves included); the served window is the
+in AND rows at `SHA512_ROWS` each (`Sha512Compress_v1`'s pin, the copies Flock proves included); the workload is the
 class circuit's ANDs (`unit_ands`).
 
 Levers (`LEVERS`), each a change to the circuit's layout or the commitment's format, not to what the model computes:
@@ -37,7 +37,7 @@ Serving commits its own stream as well, while it serves and before the window's 
 it. ``F`` leaves out of it the attention interiors (the FA2 and FA3 M1 taps, `fa2.m1/` and `fa3.m1/`: each query row's
 scores and probabilities at every key and each key block's running state), which nothing reads after the seal: the window
 circuit's units read wired, registered (weights) and ingress rows only, its key blocks' running states are its own units'
-outputs (`window_rows` evaluates them), and a served window samples no openings.
+outputs (`window_rows` evaluates them), and a workload samples no openings.
 
     python window_cost.py CENSUS.json [--target h200|sm120] [--served-s 1.7] [--step-ms 23]
         [--project S,PROMPT,OUTPUTS[,LANES,EVERY]] [--measure-cpu SCRATCH | --cpu-rates FILE] [--stream SIZING] [--out FILE]
@@ -678,7 +678,7 @@ def report(doc: dict) -> str:
              f"the registration on {cpu['host']}'s CPU, one thread: SHA-512 {cpu['sha512_bytes_s'] / 1e9:.2f} GB/s, JSON "
              f"{cpu['json_bytes_s'] / 1e6:.0f} MB/s, writes {cpu['write_bytes_s'] / 1e9:.2f} GB/s, {cpu['files_s']:,.0f} files/s")
     lines = [f"class {c['slots']} × {c['positions']} positions ({c['prompt']} ids, {c['outputs']} outputs), target "
-             f"{doc['target']}; served window {served_s} s; a decode step {doc['step_s'] * 1e3:.0f} ms; "
+             f"{doc['target']}; workload {served_s} s; a decode step {doc['step_s'] * 1e3:.0f} ms; "
              f"{doc['sha512_ands']:,} ANDs a compression; target 0.20–0.25×; {source}; {rates}",
              "", "| levers | rows compr. | registration compr. | commit ANDs | served ANDs | ratio, ANDs | commit s at 3.1 "
              "(4.79) G/s | ratio, time | with the full window's pad pass: ANDs, time |",
@@ -740,7 +740,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("census", help="class_rows.py --out's JSON")
     ap.add_argument("--target", choices=("h200", "sm120"), default="h200")
-    ap.add_argument("--served-s", type=float, default=1.7, help="the served window's seconds (an estimate: 4 prefill and 63 "
+    ap.add_argument("--served-s", type=float, default=1.7, help="the execution phase's seconds (an estimate: 4 prefill and 63 "
                     "decode steps)")
     ap.add_argument("--step-ms", type=float, default=23.0, help="a batch decode step's ms (a dry run's)")
     ap.add_argument("--project", default=None, metavar="SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]",

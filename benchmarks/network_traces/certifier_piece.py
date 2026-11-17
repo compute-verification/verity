@@ -115,8 +115,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   releases through its own hold and refuses as
   the piece does, keeping ``served_verdicts.sh``'s logs (`LOGS`).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
-* **front --session** and **close** put the gate's relay session (`auditor.py`'s "A relay session") around the served
-  run's own load, in the rehearsal front's place: the load's clients are the run's, and the front sends no group.
+* **front --session** and **close** put the gate's relay session (`auditor.py`'s "A relay session") around the workload's own load, in the rehearsal front's place: the load's clients are the run's, and the front sends no group.
   - ``front --session`` asks the gate for ``relay-session``: PORT is the endpoint's, ``--client-port`` the port of
     the peer's loopback the load's clients connect to and ``--windows`` the session's length in execution phases.
     ``--height`` at the piece's default, 10, which signs 204 of them, is raised to the least whose key signs the

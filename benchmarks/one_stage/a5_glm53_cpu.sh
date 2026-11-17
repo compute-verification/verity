@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, its CPU half over GLM-5.3's TP8 Commit (a5_glm53_commit.sh), run from a VM that reaches both machines
-# over ssh: the Commit's handoff (its record and served windows, private bodies included: prover only) copied from the
+# over ssh: the Commit's handoff (its record and workloads, private bodies included: prover only) copied from the
 # GPU machine to the CPU machine, every file's sha256 compared on both ends, then ONE run there, a5_tp.sh: flock-circuit
 # and verity-verify-proof built from this tree, each rank's window of record, its Lean sample, M0's --zk sessions and Lean verify --zk.
 #   bash benchmarks/one_stage/a5_glm53_cpu.sh GPU_RUN [GPU_MACHINE]      (GPU_MACHINE: the Commit's)

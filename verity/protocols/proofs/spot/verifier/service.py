@@ -29,7 +29,7 @@ declares them; hiding them waits on the hidden layout (`one_stage.hidden_sample`
 The `Stream` runs `check_public` by the verifier before one-stage's R1 to R7, reading an entry's fields in key
 order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 
-**A window of templates.** A `Stream` takes one template, or a window's several (a TP rank's served window, every
+**A window of templates.** A `Stream` takes one template, or a window's several (a TP rank's workload, every
 provable family of its step): the check's program is each template's digest and its query `Q_template_instances`, in
 the window's order, and each docket's population program is the templates' mixed population at the challenger's
 own counts (`register(counts=)`), sampled once by the Spec's sampling design, `stratified-rate:NUM/DEN` or `work-rate:NUM/DEN`
@@ -1585,7 +1585,7 @@ class Stream:
 
     `unit` is the challenger's own copy of the proof-block check's Definition: its Program's digest is the check's, and the
     challenger builds each docket's population program from it and the docket's N. Or `unit` is a window's
-    templates, a sequence of Definitions (a TP rank's served window: each provable family of the step): the check's
+    templates, a sequence of Definitions (a TP rank's workload: each provable family of the step): the check's
     `program` is their digests and its query `Q_template_instances` over them, both in the window's order, and each
     docket's population program is their mixed population (`partition.mixed_population_program`) at the counts
     `register` is given, under one sample by the Spec's sampling design (`stratified:K`: a stratum per template, each sampled at least

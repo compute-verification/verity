@@ -389,7 +389,7 @@ def replay_run(sides: Sides, out: Path, passes: dict[str, Path]) -> dict:
 
 def replay_v2(sides: Sides, root: Path) -> list[dict]:
     """A4's v2 registrations, each through both sides under the served path's pinned check item (`V2_TILE`), so each
-    reaches the registration rules: none is a PoUW window (no served window), and its `registered` values wait on R7."""
+    reaches the registration rules: none is a PoUW window (no workload), and its `registered` values wait on R7."""
     tile = CC.TILES[V2_TILE]
     rows = []
     for p in sorted(root.rglob("registration.json")):
@@ -414,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="run records beside the store's (or --runs'), such as runs the store has not indexed yet")
     ap.add_argument("--v2", type=Path)
     ap.add_argument("--pass", dest="passes", action="append", default=[], metavar="RUN=MANIFEST",
-                    help="a served run's retained pass manifest, for its windows' pass checks")
+                    help="a workload's retained pass manifest, for its windows' pass checks")
     a = ap.parse_args(argv)
     passes = {k: Path(v) for k, _, v in (x.partition("=") for x in a.passes)}
     a.out.mkdir(parents=True, exist_ok=True)

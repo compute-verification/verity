@@ -67,7 +67,7 @@ class Releases:
 
 @dataclass
 class Trace:
-    """A served run's step trace (`verity-vllm/step-trace/v1`), its requests in the order they reached the engine, with
+    """A workload's step trace (`verity-vllm/step-trace/v1`), its requests in the order they reached the engine, with
     the attester's view of its timing when the trace has a clock: each request's ingress time and each step's release
     time (its output's tokens leaving through the egress certifier), or each kept output's own (`output_t`) where the
     recorder saw them leave one by one; and `releases`, a run served under the certified tick's releases."""
@@ -570,7 +570,7 @@ class _Egress:
     same step, which the certified egress shows; of any of them, since a frontend streams one step's outputs over some
     milliseconds. They are compared up to i's first change of bucket, where some earlier request's must change too (2: no
     earlier request's output to compare with). With a draft the fork keeps none of the drafts its rows carry (`_asked`),
-    so each of its rows emits one token, and it is the served run only up to the first of its rows that kept a draft
+    so each of its rows emits one token, and it is the workload only up to the first of its rows that kept a draft
     in the serve: from there its outputs fall behind the served ones, and their buckets need not line up under either
     hypothesis."""
 

@@ -10,7 +10,7 @@ machine that reaches the store, with no GPU and no node.
   gap and the share then not claimed; and where it is claimed, the compute audit's part at it beside the part at the
   given share. A part whose entries are all on 0 GPUs adds no GPU-seconds and is printed `ON_CPUS` beside its 0.
   Proving read from its sessions' seconds, their wait included (`PROVE_SOURCE`), is measured, at most, and so is the
-  share that sums it. Without a record it prints the share as `NO_RUN`. With a record the resampling holes are read at the served run's
+  share that sums it. Without a record it prints the share as `NO_RUN`. With a record the resampling holes are read at the workload's
   own commits (`spot_status.served`), and where the tree holds `served_row`, its section on what the audit showed
   is printed between the figures and the holes.
 

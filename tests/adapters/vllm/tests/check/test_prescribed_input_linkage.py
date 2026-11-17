@@ -39,7 +39,7 @@ class _Store:
 
 def _world(reqs: dict[str, tuple[int, int, int | None]], *, seed_word=None):
     """reqs: rid -> (arrive, n_steps, declared seed).  An honest committed world: prompt ids at arrival, chained ids, one seed word per
-    live (step, request) == the declared seed.  `seed_word`: overrides {(rid, step): word} to forge a committed word (the served run
+    live (step, request) == the declared seed.  `seed_word`: overrides {(rid, step): word} to forge a committed word (the workload
     consumed something else than declared)."""
     blocks: dict = {}
     wreq = []
@@ -91,7 +91,7 @@ def test_greedy_row_checks_nothing_and_says_so_verdict_unchanged():
 # ----------------------------------------------------------------------------------------------------------------------- negatives
 
 def test_a_committed_seed_that_is_not_the_declared_one_fails_by_name_at_the_step():
-    # the served run consumed its own seed at step 2 of r0 (the evaluator alone would replay it consistently)
+    # the workload consumed its own seed at step 2 of r0 (the evaluator alone would replay it consistently)
     store, wreq = _world({"r0": (0, 4, 1077402498)}, seed_word={("r0", 2): 4242})
     lk = _lk(store, wreq)
     assert lk["result"] is False and lk["unlinked_n"] == 1

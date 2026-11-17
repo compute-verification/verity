@@ -5,7 +5,7 @@ measured parts (`measured`: `cache_step_v3`'s PoolSlot_v1, PoolEntry_v1 and Pool
 
     python3 cost.py [--json OUT] [--quick] [--from REPORT] [--served NAME=RAW@CONFIG@STEPS]... [--only]
 
-A served run is a load too (``--served``, `served_load`): the hook's record of it (RAW, the trace's ``raw/`` directory:
+A workload is a load too (``--served``, `served_load`): the hook's record of it (RAW, the trace's ``raw/`` directory:
 `requests.PID.jsonl.gz` and `steps.PID.jsonl.gz`) replayed under the scheduler's configuration (CONFIG, a JSON object as
 a step trace's header records it, `replay.Engine.from_header`), its busiest STEPS consecutive steps the window. ``--only``
 prices the served loads alone.
@@ -132,7 +132,7 @@ def glm_load(seed: int, *, kind: str, steps: int = 3000, NB: int = 5000, B: int 
 
 
 def served_load(raw: Path, config: dict[str, Any]) -> tuple[RP.Engine, list[RP.RequestIO], list[int], dict[str, int]]:
-    """A served run from its hook's record under the scheduler's configuration `config`: its requests in the order the
+    """A workload from its hook's record under the scheduler's configuration `config`: its requests in the order the
     engine first scheduled them, each visible from that step (FCFS schedules new requests in arrival order), its prompt
     and outputs its tokens, and only steps that scheduled a token counted, as `replay.read_corpus_trace` takes them; and
     the served steps and tokens, which the replay of it should give again."""
@@ -332,7 +332,7 @@ def main() -> None:
     ap.add_argument("--node-share", action="append", default=[], metavar="NAME=SHARE@ANDS",
                     help="the share of the node a window of ANDS ANDs takes under proving setting NAME, scaled to each window")
     ap.add_argument("--served", action="append", default=[], metavar="NAME=RAW@CONFIG@STEPS",
-                    help="a served run's hook record RAW replayed under the scheduler configuration CONFIG (a JSON file), "
+                    help="a workload's hook record RAW replayed under the scheduler configuration CONFIG (a JSON file), "
                          "its busiest STEPS consecutive steps the window")
     ap.add_argument("--only", action="store_true", help="price the --served loads alone")
     ap.add_argument("--lookups", nargs="+", default=["walked", "certified", "memo"], choices=("walked", "certified", "memo"))

@@ -33,7 +33,7 @@ def git(tree: Path, *args: str) -> str:
 
 
 def make_tree(tmp_path: Path, tied_build: bool = True) -> Path:
-    """The served run's files in a repository whose origin's main is its one commit, the workloads stand-ins."""
+    """The workload's files in a repository whose origin's main is its one commit, the workloads stand-ins."""
     tree = tmp_path / "tree"
     (tree / SERVED_RUN).mkdir(parents=True)
     shutil.copy(HERE / "run.sh", tree / SERVED_RUN / "run.sh")

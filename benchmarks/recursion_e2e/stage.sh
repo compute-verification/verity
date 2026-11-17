@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The recursion bench over an inner statement rec_inner.py stages rather than 85's build (85's STAGE=0): N seeded
-# inputs to SUBCIRCUIT (`rec_inner.py stage --subcircuit`), or with WINDOW every proof block of a served window's
+# inputs to SUBCIRCUIT (`rec_inner.py stage --subcircuit`), or with WINDOW every proof block of a workload's
 # member MEMBER (`rec_inner.py stage-window`: prove_path.py commit's window dir, the prover's files included). Both write
 # $FLOCK_WORK/data/$TAG/stage (plain leaves, the recursive inner) and stage-zk (hm96, today's --zk on the same proof
 # blocks) with the partition, program and full sample (draw.json) beside them (own-partition), then run job.sh on them

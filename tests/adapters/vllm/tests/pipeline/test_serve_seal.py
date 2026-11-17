@@ -1,4 +1,4 @@
-"""A served window sealed as a deferred Commit's row dir (`serve_seal.seal_window`) and opened as PROVE-PATH opens it
+"""A workload sealed as a deferred Commit's row dir (`serve_seal.seal_window`) and opened as PROVE-PATH opens it
 (`deferred_rows.of_record`), and the registered registered compiler (`advice_windows.Capped`, PROVE-PATH's, with the cap ℓ).  CPU only."""
 from __future__ import annotations
 
@@ -161,8 +161,8 @@ def _i64(xs, T):
 
 
 def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None, kept=None, by=None):
-    """The record's committed tensors of steps 0 and 1 (shapes cut to the served window's 5 and 2 token rows) committed and sealed
-    as a served window of two requests, by a committer that carries the row's manifest (as `serve_seal.committer` leaves it) or not.
+    """The record's committed tensors of steps 0 and 1 (shapes cut to the workload's 5 and 2 token rows) committed and sealed
+    as a workload of two requests, by a committer that carries the row's manifest (as `serve_seal.committer` leaves it) or not.
     With ``port`` ({step: (ids, positions)}) each step's stream starts with the step-input port and, as `serve_seal.single_ids`
     leaves the committer, the embedding's own ids aren't committed, unless ``embed_ids`` ({step: ids}) commits them beside it;
     its `served_record.SamplerInputsSource` kept the rows ``kept`` (`SERVED_ROWS` by default). Sealed by `serve_seal.seal_window`,

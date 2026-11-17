@@ -20,7 +20,7 @@ untraced = ["test_lean_deployed.py", "test_lean_try.py", "test_onsite_served.py"
             "test_verify_proof.py"]
 # `verity run` and `verity config` (`tests/test_run.py`): `verity`, the configuration's checks
 # (`verity.config`), what step 0's declarations read (`NetworkAttesterParams`, the sampling design's parser) and the core parties
-# the test's table (`tests/step0.py`) runs. The served window's onsite configuration and its table
+# the test's table (`tests/step0.py`) runs. The workload's onsite configuration and its table
 # (`tests/test_onsite_served.py`): `verity_cli/served_table.py`, the piece scripts whose existence its dry run checks, and
 # each application's file (`served_table.DEMOS`), which it holds to the table's rendering byte for byte (`onsite_full.toml` is also
 # where the table reads the auditor's pins).

@@ -4,7 +4,7 @@ Exact mode (the default; `VERITY_PINNED_EXACT=0` for torch's allocator) maps sha
 registers it with `cudaHostRegister`, so the process RSS is the pool's accounting and `release()` returns it to the OS (`_pinned_block`).
 A fresh block's pages are faulted in by `populate_threads` helper threads before the caller registers it, and `reserve` makes a burst
 of blocks together.  torch is imported where a block is made: the offline core builds a pool and never allocates from it.
-`lend` takes a run's blocks out of the pool for a reader on another thread (a served window's seal) and `restore` brings them back.
+`lend` takes a run's blocks out of the pool for a reader on another thread (a workload's seal) and `restore` brings them back.
 """
 
 from __future__ import annotations

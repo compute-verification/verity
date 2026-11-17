@@ -1,4 +1,4 @@
-"""Replay one served window of a ``record`` arm (`serve_tax`) under its recorded schedule, and say how close it came.
+"""Replay one workload of a ``record`` arm (`serve_tax`) under its recorded schedule, and say how close it came.
 
     replay.py --arm-dir OUT/record --load NAME [--rep 1] [--checkpoint DIR] [--eager] [--against EARLIER_OUT] [--tp N]
               [--capture ID,... [--capture-template T]] [--private DIR] --out DIR
@@ -22,7 +22,7 @@ too, under the arm's environment (`served_under`), and ``--private`` is where th
 (the top-k's counters; not kept without it). Its own step trace (`StepTrace`) is
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
 that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
-differing requests (each one's lengths and first differing position), the replay's wall time beside the served window's
+differing requests (each one's lengths and first differing position), the replay's wall time beside the workload's
 (first arrival to last step), the cards its engine held (``gpus``, the tensor-parallel width ``--tp``) and the value
 settings in force in its engine's environment (``settings``, as the served
 arm's meta.json has its server's: `serve_tax.value_settings`); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
@@ -81,7 +81,7 @@ def unapplied(sampling: dict) -> dict:
 
 
 def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
-    """The load's served window: its requests (engine id, prompt ids, served ids), arrivals by step and steps, with
+    """The load's workload: its requests (engine id, prompt ids, served ids), arrivals by step and steps, with
     step indices from the window's first. The ids are the plan's and the corpus client's (client.jsonl), or, for a
     pass whose client kept none, the ones the arm's server kept (`served_ids`). A request served with a sampling field
     the replay does not apply is refused (`unapplied`)."""

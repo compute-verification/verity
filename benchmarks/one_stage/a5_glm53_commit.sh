@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, its GPU half: GLM-5.3's TP8 Commit on an 8xH200, the Commit of record's row (its Build, Match and
 # manifest of record, read in place from sweep-b3) Committed once more with the verifier's SiluMul_v2 partition
-# (glm53_silu_mul_v2_tp8.json) committed as served windows, one per rank (SERVING_ROWS, REPLAY_DEFERRED=1), one pair, into its
+# (glm53_silu_mul_v2_tp8.json) committed as workloads, one per rank (SERVING_ROWS, REPLAY_DEFERRED=1), one pair, into its
 # own sweep dir (sweep-a5): the Commit of record's commit/ is never written.
 #   bash benchmarks/one_stage/a5_glm53_commit.sh
 #   (a job run from the source tree, up to 12 h, keeping out/**)

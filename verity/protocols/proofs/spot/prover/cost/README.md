@@ -115,7 +115,7 @@ uv run python verity/protocols/proofs/spot/prover/cost/recursion.py --result rec
 `../audit/class_size.py` sizes a class circuit in ANDs and Flock blocks, and `benchmarks/prove_path/class_rows.py` counts its rows by what fills them and
 their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` prices a
 window's commit from that census, or from a probe projected to a class (`--project 8,1024,64`, which reproduces the exact
-census proof block for proof block), against its target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a
+census proof block for proof block), against its target of 0.20 to 0.25 of the workload. It reports in ANDs (58,120 a
 compression) and in seconds (the window's rows on the GPU's hashing rates, the docket on the CPU's, which
 `--measure-cpu` measures). It covers each lever alone and the plan stacked, the pad pass at three traffics, the
 docket's bytes and files, and totals over a week, a month and a year. With `--stream SIZING` it also prices serving's

@@ -75,7 +75,7 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
     ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0, on the
     execution phases the reader's answer holds (``term``'s `stop`); where it names none, no sum leaves the output
     count out and the inputs list none.
-    ``served`` is the share a served run measures (`served_share`): with a run's record, each of its fields with its
+    ``served`` is the share a workload measures (`served_share`): with a run's record, each of its fields with its
     mark, a field the record lacks marked missing with its gap. ``stop`` is the stop class's verdicts of record
     (`stop_class`): where it is complete the output count's 0 carries its mark and names each verdict, its run and
     its verifier; otherwise, and with none, the output count is as without it."""

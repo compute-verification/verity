@@ -126,7 +126,7 @@ def statement_key(ctx: Ctx, ln: int | None, ch: int | None) -> tuple:
 
 
 def derived(ctx: Ctx, kind: str, ch: int | None) -> RN.Bound:
-    """``kind``'s statement (a chunk's ``ch``) as a served window's verifier derives it (`h1window.leaf_program`)."""
+    """``kind``'s statement (a chunk's ``ch``) as a workload's verifier derives it (`h1window.leaf_program`)."""
     program, query = HW.leaf_program(ctx.win, ctx.k, kind, ch)
     part = P.partition(program, query)
     if P.units(program, query) != 1:

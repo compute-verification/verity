@@ -1,7 +1,7 @@
 """The bandwidth audit's piece (`served_bandwidth.sh`, BANDWIDTH_CMD) as `served_verdicts.py pieces` runs it, on the toy's
 P2 store on the CPU (P2's reference decode) against `p2_parties --listen` on loopback in the auditor gate's party shape:
 the honest session's answer is a core accept that `piece_row` reads, with its credited reads, eps, δ and γ, and the
-scope beside the served window; a prover that serves later passes from its cache of the first's, reading nothing of
+scope beside the workload; a prover that serves later passes from its cache of the first's, reading nothing of
 the store, is rejected (`receipt`); and a session that left no record, asked about a window that wasn't served, is a
 reject that says both. ``collect``, the composed run's piece, reads the answer the PoUS piece's session wrote, which
 `pieces` has run first; it names the audit missing where there is none, and refuses another window's or protocol's."""

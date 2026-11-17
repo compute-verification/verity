@@ -1,6 +1,6 @@
 """`run.sh`'s summary: per statement and mode (``MODES``), the timed sessions' prove times from the prover's ``LIVE``
 records, the verifier's verdicts, the GPU's busy share, tensor-pipe activity and power over the timed sessions' window, the
-prover's CPU seconds and peak memory, the staged statement's size (a served window's member: its staging record and
+prover's CPU seconds and peak memory, the staged statement's size (a workload's member: its staging record and
 served-root check), and Lean's verdicts and times over the kept sessions (``lean``, the lean step's).
 
     python summary.py OUT_DIR      prints the summary as JSON
@@ -110,7 +110,7 @@ def session_set(d: Path, gpu: bool = True) -> dict:
 
 def statement(st: Path) -> dict:
     """A staged statement: class_statement's ``rec.json`` (an int8 row block) or ``rec_inner.py stage-window``'s record,
-    ``stage.json``, with its served-root check (a served window's member), its files' sizes and the staging process."""
+    ``stage.json``, with its served-root check (a workload's member), its files' sizes and the staging process."""
     s = {"sizes": text(st / "sizes.txt"), "stage_process": time_v(st / "time-stage.txt")}
     if (st / "rec.json").exists():
         rec = json.loads(text(st / "rec.json"))
