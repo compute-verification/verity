@@ -1,4 +1,4 @@
-"""Advice v0: what serving decided, as one canonical bit string per certifier session (PROTOCOL.md, "Advice v0").
+"""Advice v0: what serving decided, as one canonical bit string per attester session (PROTOCOL.md, "Advice v0").
 
 The precommitted AOT compiler turns the advice into each executed engine step's circuit; the attester certifies the
 I/O; SPOT holds the committed values to the compiled circuits and to the certified I/O. v0 is the committed
@@ -245,7 +245,7 @@ def _replay(requests: tuple[RequestAdvice, ...], steps: tuple[StepAdvice, ...]) 
 
 @dataclass(frozen=True, slots=True)
 class Advice:
-    """One certifier session's advice: its requests, its steps, and the egress bucket each kept output is released in."""
+    """One attester session's advice: its requests, its steps, and the egress bucket each kept output is released in."""
 
     requests: tuple[RequestAdvice, ...]
     steps: tuple[StepAdvice, ...]

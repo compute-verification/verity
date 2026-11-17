@@ -81,7 +81,7 @@ def test_the_class_is_eight_byte_ids_in_and_twenty_four_out_and_its_model_says_s
             S.Shape(**bad)
 
 
-def test_a_network_certifiers_id_request_of_the_class_is_answered_id_form_its_ids_below_the_vocabulary_then_the_trailer():
+def test_a_network_attesters_id_request_of_the_class_is_answered_id_form_its_ids_below_the_vocabulary_then_the_trailer():
     """With or without the release headers the network attester puts on the server's copy, the answer is the prompt's
     24 ids (`outputs`, fixed by the prompt alone), each an id event of P bytes, then the trailer: whole id-form, as the
     network attester's rehearsal reads it (`network_attester_serve.parse_id_response`), and the scan's cells' payloads cut from
@@ -115,7 +115,7 @@ def test_an_id_request_off_the_class_is_refused_over_http(kw, why):
     assert why in refused(respond(ids_request(**kw)))
 
 
-def test_what_isnt_a_network_certifiers_id_request_is_refused_and_the_models_list_is_the_one_model():
+def test_what_isnt_a_network_attesters_id_request_is_refused_and_the_models_list_is_the_one_model():
     """An id request built for smaller cells (a class request is one scan cell, so a larger cell's is the same bytes), a
     forwarded copy whose release header isn't where the network attester puts it, a vLLM-shaped body and another path
     are none of the network attester's id requests."""
