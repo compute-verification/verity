@@ -20,6 +20,7 @@ last tick's ingress block) and `egress-0`: four sessions over 2T + 1 blocks.
 | proving seconds for each second of execution phase | (the round's sessions' seconds + their staging) / (G · T · tick). A session's seconds are its prover process's, start to exit, with the ZK server's work and the waits on the live verifier inside them; staging is each member's statement made ready for its session |
 | the Lean verifier's CPU seconds for each second of execution phase, on one core | the CPU seconds, user and system, of the Lean verifier processes that verify the round's sessions / (G · T · tick), each process pinned to one core |
 
+Each of the two is written with the scan class as its `member` (`w63k4`), the identity's `class`.
 The verifier's wall seconds are written beside its number and are not the number: the core a verifier process is
 pinned to, the job's lowest, is one of the 21 the prover's work also runs on, so its wall is contended. The first
 number is also written a tick (`proving seconds a tick`). Lowering the class's three Definitions is paid once a
