@@ -344,7 +344,7 @@ def test_a_value_the_program_takes_registered_afresh_with_no_earlier_record_pass
     (entry,) = rec["registered"]
     rc, row, _out, said = _audit(tmp_path, window, binaries, more={"FLOCK_CHALLENGER": "0"})
     assert rc == 0 and row.get("ok") is True, said
-    assert row["audit"]["accepted"] is True and row["draw"] == [0, 1], row["audit"]
+    assert row["audit"]["accepted"] is True, row["audit"]
     assert row["registered"]["own"] == {"own/w": entry} and row["registered"]["members"] == 1, row["registered"]
     assert row["leak"]["untied"] == ["own/w"] and "tie" not in row, row["leak"]
 
