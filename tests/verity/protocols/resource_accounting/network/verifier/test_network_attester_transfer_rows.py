@@ -28,7 +28,7 @@ def rows(n: int, words: int, seed: int = 1) -> list[list[int]]:
 
 
 def attested(tmp_path, data=None):
-    """A load value of 4 one-word rows in window 0 on `LINK`, its certificate and the issuer that signed it."""
+    """A load value of 4 one-word rows in window 0 on `LINK`, its attestation and the issuer that signed it."""
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
     t, cert = TR.attest(issuer, LINK, Direction.INGRESS, 0, "load", PROGRAM, "bias", data or rows(4, 1))
     assert cert is not None
