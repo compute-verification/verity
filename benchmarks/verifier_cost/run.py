@@ -34,7 +34,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
-EXE = INFERENCE_ONLY_PACKAGE / ".lake/build/bin/inference-only-check"
+EXE = INFERENCE_ONLY_PACKAGE / ".lake/build/bin/inference-only-verifier"
 SCHEMA = "verity/verifier-cost/v1"
 METRIC = "proofs/verifier-seconds-served-description"
 
@@ -189,7 +189,7 @@ def measure(args) -> int:
                                  | {"desc_s": round(row["desc"]["seconds"], 3),
                                     "unrolled_s": row["unrolled"].get("seconds"), "agrees": row["unrolled"].get("agrees")}),
                       flush=True)
-    result = {"schema": SCHEMA, "verifier": "inference-only-check", "workload": "Serve_v1", "repeat": args.repeat,
+    result = {"schema": SCHEMA, "verifier": "inference-only-verifier", "workload": "Serve_v1", "repeat": args.repeat,
               "unrolled_max": args.unrolled_max, "rows": rows}
     (out / "results.json").write_text(json.dumps(result, indent=1) + "\n")
     bad = [r["config"] + "/" + r["ir"] for r in rows
@@ -206,7 +206,7 @@ def record(out: Path, rows: list[dict], bad: list[str]) -> None:
 
     res = kit.writer(out)
     res.validation("failed" if bad else "passed",
-                   "inference-only-check --policy exits 0 on every row and agrees with --unrolled wherever both ran",
+                   "inference-only-verifier --policy exits 0 on every row and agrees with --unrolled wherever both ran",
                    ", ".join(bad) or "ok")
 
     for r in rows:
@@ -339,11 +339,11 @@ def plot(args) -> int:
                                 label=f"{query}, {'population program' if shape == 'population' else 'Serve_v1'}, {ir}")
                 continue
             rs = sorted((r for r in res["rows"] if r["ir"] == ir), key=lambda r: r[x])
-            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"InferenceOnlyCheck.Desc, {ir}")
+            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"InferenceOnlyVerifier.Desc, {ir}")
             us = [r for r in rs if "seconds" in r["unrolled"]]
             if us:
                 ax.plot([r[x] for r in us], [r["unrolled"]["seconds"] for r in us], marker=marker, linestyle="--",
-                        label=f"InferenceOnlyCheck.check (unrolled), {ir}")
+                        label=f"InferenceOnlyVerifier.check (unrolled), {ir}")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(label)

@@ -1,6 +1,6 @@
 module
 
-public import PousCheck.Merkle
+public import PousVerifier.Merkle
 public import Poub.Window
 
 /-!
@@ -87,8 +87,8 @@ def Registration.digest (r : Registration) : ByteArray :=
 /-- `VerifierKey.check_path(j, block, path)` on the registration's root-only vk: PoUS's leaf of block j under its
 salt, on the root of N leaves. -/
 def Registration.checkPath (r : Registration) (j : Nat) (block : ByteArray) (path : Array ByteArray) : Bool :=
-  block.size == BLOCK_BYTES && PousCheck.Merkle.verifyPath r.root r.blocks j
-    (PousCheck.Merkle.packageLeaf r.salt (j / r.blocksPerSegment) (j % r.blocksPerSegment) block) path
+  block.size == BLOCK_BYTES && PousVerifier.Merkle.verifyPath r.root r.blocks j
+    (PousVerifier.Merkle.packageLeaf r.salt (j / r.blocksPerSegment) (j % r.blocksPerSegment) block) path
 
 /-- `receipts.sign_bits(seed, rows, 8224)`: S_i's rows of 1,028 bytes. -/
 def unitSigns (seed : ByteArray) (rows : Nat) : Array ByteArray :=
