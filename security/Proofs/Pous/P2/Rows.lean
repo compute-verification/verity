@@ -197,4 +197,7 @@ theorem hist_gamma_le (B ℓ S T g k : ℕ) (hk : 1 ≤ k) (hgB : g ≤ B)
   rw [hL, ← ENNReal.ofReal_ofNat 2, ← ENNReal.ofReal_inv_of_pos (by norm_num), ← ENNReal.ofReal_pow (by norm_num)]
   exact ENNReal.ofReal_le_ofReal hXle
 
+theorem pr_false {α : Type} [Fintype α] : pr (fun _ : α => False) = 0 := by
+  rw [pr_def, Finset.filter_false, Finset.card_empty, Nat.cast_zero, ENNReal.zero_div]
+
 end PousP2
