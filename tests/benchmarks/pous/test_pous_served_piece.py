@@ -318,6 +318,8 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     answer, calls = _run(served, tmp_path, monkeypatch)
     assert answer["verdict"] == "accept", answer["reason"]
     assert json.loads((served.out / "answer.json").read_text()) == answer and pous.linear_types is types
+    assert json.loads((served.out / "pous.json").read_text())["key_pin"] == "run"
+    assert not mc.holds(answer["profile"]["placement"])
     row = SV.piece_row("space", served.out.parent)
     assert row["verdict"] == "accept" and row["owner"] == "memory-accounting" and row["protocol"] == TEST_PROTOCOL
     assert row["quantity"] == answer["public"] == {"certified": False, "eps": "0", "s_bits": 0}
