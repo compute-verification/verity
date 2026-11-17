@@ -11,15 +11,16 @@ fixed pseudorandom pattern.  The tests replay the schedule against `audit.AuditR
 `deadline` is the least allowance A that never makes the honest prover late: the boundary message's trip down, the pass
 in flight, its root's reduction and its trip up, each trip at its longest.
 
-`live_mu` and `live_best_interval` are the steady state of the alternative `PROTOCOL.md`'s appendix weighs: a live coin a
+`live_mu` and `live_best_interval` are the steady state of the alternative to the chain: a live coin a
 pass and no chain, so that passes are ordered by the clock alone.
 
-`stated` is the claim of `PROTOCOL.md` §1 and §10 read through `audit.ledger`: the honest prover's session on one
+`stated` is the claim read through `audit.ledger`: the honest prover's session on one
 node at the node's R and S_chip, under the default codec at the node's stated squaring ceiling, every window's whole
-γ_t and the horizon's.  `spanning` is the store that spans every tier in proportion to its read rate, and
+γ_t and the horizon's.  No Lean property covers γ's terms but the pooled bound's (`Properties.Poub.PooledCovers`), and
+the conservation statements γ is modelled on are not shown to cover a paced session.  `spanning` is the store that spans every tier in proportion to its read rate, and
 `store_floor` the store below which no T brings every window under 1%.
 
-`sketch_reading` is where sketch-sha512's bound is read (`PROTOCOL.md` §4): the rank r* that minimizes `sketch_rate`,
+`sketch_reading` is where sketch-sha512's bound is read: the rank r* that minimizes `sketch_rate`,
 the failure each SHA-512 compression of the prover's buys, a guess's 2^-8r beside a fresh key's chance of signs of rank
 below r on one of a block's 128 sectors (`sign_rank_at_most`, exact through F2: `gf2_rank_at_most`).  `sketch_failure`
 is a session's, and `grind_compressions` what one grinding try costs.
@@ -134,7 +135,8 @@ class Figures:
     """A node's device figures, the parameters a session's ledger reads, which its caller hands in: how many GPUs, one
     GPU's and the host's read rates (measured and specified) and on-chip storage, one GPU's memory, SHA-512 rate and
     squaring ceiling per width, the disks' measured read rate and one link burst.  Each unprefixed property is the node's, the
-    sum over its devices; a write ceiling is its tier's specified rate (`GPU_WRITE_BYTES_PER_S`'s reason)."""
+    sum over its devices.  A read rate is of plain reads: the encoded store's words are never constant, so the GPU's
+    compression engine reads it no faster than plain bytes.  A write ceiling is its tier's specified rate (`GPU_WRITE_BYTES_PER_S`'s reason)."""
     gpus: int
     gpu_read_bytes_per_s: float
     gpu_spec_bytes_per_s: float
