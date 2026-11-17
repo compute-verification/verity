@@ -52,7 +52,7 @@ AUDITOR = {"onsite": Auditor((SHEET_A, SHEET_B), TOLERANCE,
                              tuple(MEMORY.items()), tuple(HOSTS.items())),
            "remote": Auditor((SHEET_A, SHEET_B), TOLERANCE, (), tuple(MEMORY.items()), tuple(HOSTS.items()))}
 """The auditor's data sheets for the simulated SKUs, 1 GHz clocks at 64 and 128 MACs a nanosecond in every operand class,
-its 5% tolerance around them, its own devices' keys, each with its scheme (onsite a certifier and a challenger), and
+its 5% tolerance around them, its own devices' keys, each with its scheme (onsite a network attester and a challenger), and
 its figures for the hosts and their leaves. The node registers the auditor's own sheets."""
 
 
@@ -526,10 +526,10 @@ def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> 
     lone = _entry_of(Registration("remote"), one, "n0", ways=alone)
     assert lone.links == (QUIET, PATH)
     assert refusal(onsite, _reached(_entry_of(onsite, one, "n0", ways=alone)), auditor) is None
-    with pytest.raises(Malformed, match=r"network certifier 'cert0': the interfaces \['n0/eth0'\].*takes no certifier"):
+    with pytest.raises(Malformed, match=r"network attester 'cert0': the interfaces \['n0/eth0'\].*takes no certifier"):
         _entry_of(Registration("remote"), one, "n0", certifier=("cert0", "dummy-cert0-key", SCHEME), ways=alone)
     mixed = {**node, "interface": {**PORTS, "eth2": UNRATED["eth0"]}}
-    with pytest.raises(Malformed, match=r"network certifier 'cert0': the interfaces \['n0/eth2'\].*takes no certifier"):
+    with pytest.raises(Malformed, match=r"network attester 'cert0': the interfaces \['n0/eth2'\].*takes no certifier"):
         _entry_of(Registration("remote"), mixed, "n0", certifier=("cert0", "dummy-cert0-key", SCHEME),
                   ways=(*_ways()[:2], ("n0/eth2", None, True), ("n0/storage", DISKS, False)))
 
@@ -612,7 +612,7 @@ AUDITOR_JSON = {
     "keys": [{"id": "cert0", "key": "k0", "scheme": "lms-sha512/n64-w1-h20/v0"}],
     "memory": [{"bw": 6554, "bytes": 2147483648, "host": "node0", "id": "dram0"}], "sheets": [],
     "timebases": [{"id": "vm0", "sku": "tb0"}], "tolerance": "0"}
-"""`SiteV2Guards.lean`'s auditor: a certifier's key and scheme, a host's figures and a leaf's, and the drift and the
+"""`SiteV2Guards.lean`'s auditor: a network attester's key and scheme, a host's figures and a leaf's, and the drift and the
 time base of a host of its own."""
 
 
@@ -943,7 +943,7 @@ G_UPLINKS = (Link("up0", ("node0", "cert0"), 1, 0), Link("up1", ("cert0", OUTSID
 G_KEYED = replace(G_AUDITOR, keys=(("cert0", "k0", ROOT2),))
 VM_KEYED = replace(G_KEYED, keys=(*G_KEYED.keys, ("vm0", "k1", ROOT2)), timebases=(("vm0", "tb0"),))
 """`SiteV2Guards.lean`'s certifier, at the site and in the auditor's device `vm0`, its two uplinks, and the auditors
-that hold the certifier's key and, beside it, the host's key and time base."""
+that hold the network attester's key and, beside it, the host's key and time base."""
 
 
 def g_vm(parent: str = "site0") -> Loc:
