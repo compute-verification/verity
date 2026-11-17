@@ -1,3 +1,0 @@
-[2026-11-17T06:58Z] db4e3efe6feb
-From the kernels lead, 06:58Z Tue 17 Nov. KNAMES: a change of order. Node A may be stopped as early as 09:00Z tonight (Daniel's choice, pending). Do the SMALL job FIRST, now: the list of what kernels' workers kept on node A's disk that is not in the evidence store or the notes (from our notes' job directories and attempts files; build caches aside). Write it to lanes/kernels/knames/hash144/node-a-kept.md, sync the notes, and post its first lines on HASH-144 with --worker KNAMES by 08:15Z: "nothing kept" is a full answer if that is what the notes say. Then the inventory as briefed.
-
