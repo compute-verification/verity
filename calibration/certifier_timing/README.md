@@ -95,7 +95,7 @@ the observer's two stamps. A run whose guard fails reports no number.
 
 A stated parameter, not a measurement. The network attester's timing channel may carry 300 GB (2.4e12 bits) a year over all
 compute, spread evenly over its nodes, each behind one network attester. The nodes are the census's world
-(`benchmarks/census/adversary.json`, `world-inference-2027`: 9.36e30 FLOP a year) on eight-GPU nodes
+(`calibration/census/adversary.json`, `world-inference-2027`: 9.36e30 FLOP a year) on eight-GPU nodes
 (`benchmarks/slowdown/data/hardware.toml`, `location.h200-hgx`) at two utilizations: 0.4, the
 fleet's (`benchmarks/slowdown/data/reference.toml`, `fleet.world-h200`: 4.687e7 nodes), which is a
 bit a node every 616 seconds, and 1, 1.875e7 nodes, a bit every 246 seconds. `channel.SECONDS_A_BIT` holds the two

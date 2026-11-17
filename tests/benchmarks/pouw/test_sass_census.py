@@ -186,7 +186,7 @@ def test_a_gap_row_carries_the_cheapest_escape():
 def test_the_isa_reference_tables_are_whole():
     p = Path(__file__).resolve().parents[3] / "benchmarks" / "machine_model" / "data" / "cover" / "sass_isa_tables.json"
     assert p.is_file(), (f"{p} isn't fetched: "
-                         "`uv run research data fetch-fixtures benchmarks/machine_model/data/cover`")
+                         "`uv run research data fetch-fixtures calibration/machine_model/data/cover`")
     t = json.loads(p.read_text())["tables"]
     assert {k: len(v) for k, v in t.items()} == {"hopper": 199, "blackwell": 253, "ampere": 166, "turing": 160}
     assert "DMMA" in t["hopper"] and "UTCIMMA" in t["blackwell"]
