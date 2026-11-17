@@ -4146,7 +4146,7 @@ def test_v3c_reserves_no_session_on_a_run_root_the_gate_opened_or_while_its_lane
 
 
 def _not_development(challenger: str) -> str:
-    return ("PREFLIGHT: V3c's audit is the sampled-proofs audit of record, and V3C_CHALLENGER (default PP_CHALLENGER) is "
+    return ("PREFLIGHT: V3c's audit is the SPOT audit of record, and V3C_CHALLENGER (default PP_CHALLENGER) is "
             f"{challenger}, a development session, which under VERITY_HOLD_PLACEMENT=1 only a development run takes: set "
             "PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or "
             "VERITY_HOLD_PLACEMENT unset")
@@ -5511,7 +5511,7 @@ def _run_end(tmp_path: Path, **env: str | None) -> tuple[int, list[str], list[st
     (out / "verdicts.txt").touch()
     full = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOST": "vy-dc-h200", "TPY": sys.executable,
             "ORDER": str(tmp_path / "order"), "D": str(tmp_path / "serve"), "OUT": str(out), "K": "7",
-            "SP": str(tmp_path / "serve" / "sampled-proofs-served"), "PRODUCT": "remote", "H1_KEY_SHA512": "ab" * 64,
+            "SP": str(tmp_path / "serve" / "spot-served"), "PRODUCT": "remote", "H1_KEY_SHA512": "ab" * 64,
             "COMPOSE_OFF_NODE": "0", **env}
     run = subprocess.run(["bash", "-c", RUN_END + script[start:end]], cwd=tree, check=False, capture_output=True,
                          text=True, env={k: v for k, v in full.items() if v is not None})
