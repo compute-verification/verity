@@ -652,8 +652,8 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     swapped[1] = {**swapped[1], "opening": swapped[2]["opening"]}
     assert refused(coins={**m["coins"], "rounds": swapped}) == {"rounds", "salts"}
     assert refused(salts={**e["salts"], 2: e["salts"][1]}) == {"salts"}
-    assert refused(flip_after=other) == {"draw"}
-    assert refused(flip_after=None) == {"draw"}
+    assert refused(draw_after=other) == {"draw"}
+    assert refused(draw_after=None) == {"draw"}
     assert refused(draw_out=None) == {"draw"}
     assert refused(draw_out=session) == {"draw"}
     assert refused(heads=resigned("unwithheld", lambda x: x[4]["body"].pop("withheld"))) == {"draw"}

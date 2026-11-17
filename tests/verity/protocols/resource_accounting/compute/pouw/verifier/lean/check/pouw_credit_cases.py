@@ -451,7 +451,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     if name == "never-received":
         received = [rng.randbytes(64) for _ in log]
 
-    def flip_after(rec) -> bytes:
+    def draw_after(rec) -> bytes:
         opened = rec.openings if name != "never-received" else [
             dataclasses.replace(o, after=bytes.fromhex(x["root"])) for o, x in zip(rec.openings, log)]
         d["rounds"] = [{**x, "coin": o.to_json()} for x, o in zip(log, opened)]
@@ -459,7 +459,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
         return bytes.fromhex(d["draw"]["root"])
 
     s = rc.Session(rng, ch, received, salt=None, sid=sid, leaf=leaf)
-    root = flip_after(s.rounds)
+    root = draw_after(s.rounds)
     dch = Wd.sample_challenger(ch.commitment.epoch, rng.randbytes)
     ds = rc.Session(rng, dch, [], salt=None, sid=rc.session_id(rng), leaf=sample_leaf,
                     sample=None if name == "no-draw" else (lambda _: rng.randbytes(64)) if name == "draw-after-other"

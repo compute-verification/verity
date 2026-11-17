@@ -16,7 +16,7 @@ size, missing or short salt keys); openings of those trees, honest and tampered 
 path and value lengths); execution phase coin openings from a `Challenger`, honest and tampered to hit each of `coin_reason`'s
 refusals and each refusal of the JSON forms; `salt_of` and `Epoch.unverified`'s salt over random coins, seeds (empty among
 them), execution phases and weights' roots; `Epoch.start`'s salt and `flip_coin`'s coin from honest and tampered openings, and a sample
-with no coin commitment; the audit, sample and replay keys and `flip_after`; and the clear audit's work-weighted samples
+with no coin commitment; the audit, sample and replay keys and `draw_after`; and the clear audit's work-weighted samples
 (``verity/protocols/resource_accounting/compute/pouw/prover/clear``: `Sampled.select`'s and `clear_work.sample`'s), each run as written with only its tickets given
 (`tickets` patched), over ticket lists with zeros, totals past 64 bits, none, or all zero.
 """
@@ -326,7 +326,7 @@ def generate(seed: int = 0) -> list[dict]:
                 return CW.sample_key(source, tr, rd, salt).value.hex()
             if which == "replay":
                 return CW.replay_key(CW.RecordedSample(rnd, source), tr, rd, salt).value.hex()
-            return CW.flip_after(tr, rd).hex()
+            return CW.draw_after(tr, rd).hex()
         add("key", {"which": which, "source": source.hex(), "transcript": tr.hex(), "records": rd.hex(), "salt": salt.hex(),
                     "round": rnd}, _outcome(key))
 
