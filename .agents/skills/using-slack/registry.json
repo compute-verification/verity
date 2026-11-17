@@ -674,6 +674,7 @@
         "benchmarks/prove_path/",
         "benchmarks/certifier_timing/",
         "benchmarks/scan_cost/",
+        "benchmarks/attester_load/",
         "security/Definitions/Certifier.lean",
         "security/Definitions/Certifier/NetWitness.lean",
         "security/Definitions/Pouw/Guarantees/Bridges.lean",
@@ -760,7 +761,6 @@
         "tools/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",
-        "tools/verity/landq/",
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
@@ -888,7 +888,8 @@
       "owns": [
         "verity/commitments/periods/",
         "adapters/vllm/",
-        "benchmarks/demo_minutes/metrics.toml", "benchmarks/demo_minutes/minutes.py", "tests/benchmarks/demo_minutes/pyproject.toml", "benchmarks/demo_minutes/settings.py", "tests/benchmarks/demo_minutes/test_minutes.py",
+        "benchmarks/demo_minutes/metrics.toml", "benchmarks/demo_minutes/run_minutes.py", "tests/benchmarks/demo_minutes/pyproject.toml", "benchmarks/demo_minutes/settings.py", "tests/benchmarks/demo_minutes/test_run_minutes.py",
+        "benchmarks/application_runs/", "tests/benchmarks/application_runs/",
         "benchmarks/prod_repro/",
         "benchmarks/serve_tax/metrics.toml",
         "ruff.toml"

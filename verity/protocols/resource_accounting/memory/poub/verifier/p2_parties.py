@@ -40,9 +40,8 @@ the prover (`verity/protocols/resource_accounting/memory/poub/prover/p2_party_pr
 whole as its body (`Lines`), so the Lean reads every line the prover sent as it sent it, and the verifier takes the line
 it waits for whatever its key, one it can't name as `Malformed`. `session` and the prover's `prove` step each side over
 the channel with PoUS's loop (`drive`, `challenger_session.run`), the verifier's side handed a failed write as its
-channel failing (`broken`). The runtime starts the verifier from a configuration and its deploy bindings (`start`,
-`starts`): its closer's key is refused unless the configuration pins it (`pinned_signer`), by the pin check what starts
-it beside PoUS's device hands in.
+channel failing (`broken`). The runtime's start of the verifier from a configuration and its deploy bindings (`start`,
+`starts`) raises `NotImplementedError` (`GOAL`): no source the runtime gives a party holds its registration or session.
 
 The verifier is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
 untrusted provenance, and Python is never trusted: the process `poub-verifier` (`p2_lean.py`,
@@ -56,10 +55,10 @@ Lean takes as given is the clock's readings and the coins the challenger (`coins
 
 `python -m verity.protocols.resource_accounting.memory.poub.verifier.p2_parties (--registration FILE | --pous-record DIR --pous-session SID)
 (--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE] [--challenger DIR
---session SID]` is the verifier's side (`main`), each session with fresh coins, the memory attester's key and session
-log in `--challenger`'s directory (the key loaded by the `device_key` the caller hands `main`, PoUS's device's
-`onsite.device_key` in the auditor's gate) signing the close of the one session the auditor
-named `--session SID`, which is claimed in its log before the session's first coin, the
+--session SID --trusted-sha512 HEX]` is the verifier's side (`main`), each session with fresh coins, the memory
+attester's key and session log in `--challenger`'s directory (the key loaded by the `device_key` the caller hands
+`main`, PoUS's device's `onsite.device_key` in the auditor's gate, refused unless `--trusted-sha512` pins it) signing the
+close of the one session the auditor named `--session SID`, which is claimed in its log before the session's first coin, the
 Lean built in its package (`lake build poub-verifier`) unless `--lean-exe` names a built one, or, without `lake`
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
@@ -71,6 +70,7 @@ digest too, the chain its signed close signs, a line of `private/case-digests.tx
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -83,7 +83,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.channel import Body, Message, Refused, Schema
+from verity.channel import Body, Message, Schema
 from verity.party import Finish, Identity, Received, Send, Timer
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Start, Starter
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
@@ -629,7 +629,7 @@ def hold(lean: Lean, data: bytes, chunk: int = CHUNK,
 
 class Closer:
     """The memory attester that signs a session's close (`p2_case.close_of`): its `signer`
-    (`memory_attester.Signer`, the key it signs PoUS's sessions and the wipe's with), its session log (`log`,
+    (`memory_attester.Signer`, the key it signs PoUS's sessions with), its session log (`log`,
     `memory_attester.SessionLog`), and the session id the auditor gave it for this session (`session`, 32 bytes),
     which `claim` records in the log before the session's first coin and refuses once it is there."""
 
@@ -965,12 +965,17 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
                                                     "the caller's `device_key` loads, and session log, which sign the "
                                                     "session's close (`Closer`)")
     ap.add_argument("--session", help="with --challenger: the session id (64 hex) the auditor gave the memory "
-                                      "attester for this session; without them, no session has a case")
+                                      "challenger for this session; without them, no session has a case")
+    ap.add_argument("--trusted-sha512", help="with --challenger: the SHA-512 (128 hex) of the key the configuration "
+                                             f"pins for the close ({CLOSER_PARTY}'s for {COMPONENT}); the "
+                                             "challenger's key is refused before any session unless it is that key")
     a = ap.parse_args(argv)
     if (a.pous_record is None) != (a.pous_session is None):
         ap.error("--pous-record and --pous-session go together")
-    if (a.challenger is None) != (a.session is None):
-        ap.error("--challenger and --session go together")
+    if not ((a.challenger is None) == (a.session is None) == (a.trusted_sha512 is None)):
+        ap.error("--challenger, --session and --trusted-sha512 go together: the close is signed only under the pinned key")
+    if a.trusted_sha512 is not None and not re.fullmatch(r"[0-9a-f]{128}", a.trusted_sha512):
+        ap.error("--trusted-sha512 is a key's SHA-512, 128 lowercase hex digits")
     if a.session is not None and not re.fullmatch(r"[0-9a-f]{64}", a.session):
         ap.error("--session is a session id, 64 lowercase hex digits")
     if a.session is not None and a.listen is not None and a.sessions != 1:
@@ -978,6 +983,13 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
     if a.challenger is not None and device_key is None:
         ap.error("--challenger needs the memory attester's key loader handed to main (device_key): run the party as "
                  "the auditor's gate does (live_verifier/host.py's bw_party)")
+    closer = None
+    if a.challenger is not None:
+        signer = device_key(a.challenger)
+        if hashlib.sha512(signer.public_key).hexdigest() != a.trusted_sha512:
+            ap.error(f"the memory attester's key in {a.challenger} is not the one --trusted-sha512 pins for the close: "
+                     "it signs no session's close")
+        closer = Closer(signer, mc.SessionLog(a.challenger / "sessions"), bytes.fromhex(a.session))
     data = a.registration.read_bytes() if a.registration is not None else pous_record(a.pous_record, a.pous_session)
     cases = None
     if a.device is not None:
@@ -1008,11 +1020,6 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
         if cases is not None:
             _keep(cases, case)
 
-    closer = None
-    if a.challenger is not None:
-        signer = device_key(a.challenger)
-        closer = Closer(signer, mc.SessionLog(a.challenger / "sessions"), bytes.fromhex(a.session))
-
     def served(r: BinaryIO, w: BinaryIO) -> dict[str, Any]:
         """One session on a Lean process of its own, so that one the prover crashes ends only its session."""
         with Lean(exe) as lean:
@@ -1038,6 +1045,8 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
 GOAL = CS.ONSITE_GOAL
 #: PoUB's P2 session's name in a deployment configuration: in its `protocols` and a binding's table
 COMPONENT = "bandwidth"
+#: its `[[pin]]` names PoUS's key: it signs the close with the memory attester's PoUS key
+CLOSER_PARTY = "bandwidth-verifier"
 
 
 def deployed_request(configuration: Mapping[str, Any], bound: Mapping[str, Any]) -> dict[str, Any]:
@@ -1046,52 +1055,23 @@ def deployed_request(configuration: Mapping[str, Any], bound: Mapping[str, Any])
     raise NotImplementedError(GOAL)
 
 
-type Pin = Callable[[Mapping[str, Any], str, str], str]
-"""`pin(configuration, party, protocol)`: the SHA-512 of the key the configuration pins for the party in the protocol,
-in hex, `Refused` (``pin``) when it pins none (PoUS's device's `onsite.pin`)."""
-type Load = Callable[[Path, str], mc.LmsSigner]
-"""`signer(directory, key_sha512)`: the memory attester's signer from its device's directory, `Refused` (``pin``)
-before its key is read unless its public key's SHA-512 is `key_sha512` (PoUS's device's `onsite.signer`)."""
+def starts() -> dict[str, Starter]:
+    return {VERIFIER: start}
 
 
-def pinned_signer(configuration: Mapping[str, Any], directory: Path, pin: Pin, signer: Load) -> mc.LmsSigner:
-    """The key that signs each session's close: the memory attester's PoUS key, in its device's `directory`, refused
-    unless the configuration pins it for PoUS, by the check its starter hands in (`pin`, `signer`). A directory holding
-    no key is refused, never given a new one, which no pin could name."""
-    key_sha512 = pin(configuration, CS.CHALLENGER, CS.COMPONENT)
-    if not (directory / "seed").is_file():
-        raise Refused("state", f"{directory} holds no memory attester's key; its setup makes one")
-    return signer(directory, key_sha512)
-
-
-def starts(pin: Pin, signer: Load) -> dict[str, Starter]:
-    """The verifier's start (`start`) with the memory attester's pin check handed in, by what starts the verifier
-    beside PoUS's device (`verity_cli.served_table`'s `POUB`)."""
-    return {VERIFIER: lambda configuration, bound, state: start(configuration, bound, state, pin=pin, signer=signer)}
-
-
-def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None, *, pin: Pin,
-          signer: Load) -> Start:
-    """The verifier's start on the auditor's device (`ProtocolDef.starts`, through `starts`), from the configuration, its
-    deploy bindings (`bound`, its `[bandwidth-verifier.bandwidth]`: `address`, and `challenger`, the memory attester's
-    PoUS device directory on this host) and its own `state` directory: the closer's key, pinned by the check handed in
-    (`pinned_signer`); its case digests under `state`'s `private/` (`CASE_DIGESTS`, `_keep`, the `keep` capability); the
-    session parameters `SESSION`; and the runtime's own clock (`Start.clock` None), `CLOCK_MONOTONIC` in ns, which
-    `Twin`'s windows are timed on. It raises `NotImplementedError(GOAL)` past the key: the registration (PoUS setup's
-    record on that device, `pous_record`, for the setup's session id), the session id the auditor gives the memory
-    attester, and the Lean process holding the registration (`hold`) have no source the runtime gives a party."""
-    pinned_signer(configuration, Path(bound["challenger"]), pin, signer)
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
+    """Raises `NotImplementedError(GOAL)`: the runtime gives a party no registration, session id or held Lean yet."""
     raise NotImplementedError(GOAL)
 
 
 PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier})}
 
 
-__all__ = ["Books", "CASE_DIGESTS", "COIN_BYTES", "COMPONENT", "Closer", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "GOAL",
-           "ID", "LINES", "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "Pin", "Load", "SESSION", "Twin",
+__all__ = ["Books", "CASE_DIGESTS", "CLOSER_PARTY", "COIN_BYTES", "COMPONENT", "Closer", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "GOAL",
+           "ID", "LINES", "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "SESSION", "Twin",
            "VERIFIER", "VERSION", "Verifier", "answer", "broken", "case_digest", "core_answer", "deployed_request",
            "drive", "held_json", "hold", "line_of", "main", "message", "opening_json", "opening_of", "params_of",
-           "pinned_signer", "plan_of", "pous_record", "recv", "registration_json", "registration_of",
+           "plan_of", "pous_record", "recv", "registration_json", "registration_of",
            "registration_of_setup", "request_of", "send", "session", "start", "starts", "verdict_json"]
 
 if __name__ == "__main__":
