@@ -145,7 +145,7 @@ its report keeps each arm's steps and seconds a pass, the replay's verdict and, 
 files in OUT, with its cost over stock only as a reading that every part runs on one card. What transfers from it to GLM-5.3 is per call and per step: the seconds a call of the canonical top-k's pass, of the step
 record, of keeping the ids and of the seeds, the tick's admission and the snapshot's pause, and that these parts run
 together with MTP, the FP8 cache and the prefix cache. What does not transfer: its serving time; how often
-top-k takes its slow path, since random rows almost never tie or miss at the k-th key and a real model's do; a step
+top-k takes its slow path, since random weights' rows tie at the k-th key at their own rate, not a real model's; a step
 waiting for its slowest card, the all-reduce and the balance of tokens across experts, which only eight cards have.
 
 ~~~text
