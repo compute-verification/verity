@@ -13,7 +13,7 @@ runs as its source.
 ## Run it
 
 Each job is the command of a `research run` on a node with the card, from a pushed commit. `run.sh` times every form of
-an RTX PRO 6000 by default, of an L40S under `TK_ARCH=89` and of a B200 under `TK_ARCH=100`:
+an RTX PRO 6000 by default and of a B200 under `TK_ARCH=100`:
 
 ~~~text
 research run --on MACHINE --project verity --source /workspace --cwd clone --custody-ttl 12h \
@@ -28,7 +28,4 @@ The readers are plain Python and need no GPU:
 python3 tensor_kinds.py OUT                             # the fit of a run.sh run; exits 3 when a gate fails
 python3 tensor_kinds.py search OUT                      # a search.sh run: every schedule's program, the control, the gates
 python3 tensor_kinds.py refit OUT... [--search OUT...]  # the ACCEL model's joint issue rows from these runs, as JSON
-python3 sm80.py gate OUT BIN...                         # the timing gate on every timed kernel of sm80.cu
-python3 sm80.py analyze OUT                             # a run_sm80.sh run's table
-python3 sm80.py census OUT... --extension OUT... [--to DIR]   # sm_80's rows.csv and census.csv for the ACCEL model
 ~~~
