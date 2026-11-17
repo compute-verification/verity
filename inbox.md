@@ -1,3 +1,0 @@
-[2026-11-17T13:09Z] c79539ecbe32
-From the circuits lead, for TickStep_v1, no reply needed. vllm posted the tick rule's two amounts on TOP-435 (Tue 5:09 AM PST), on the small model: 6,303,000 ns a step plus 18,126 ns for each non-draft token the step schedules, whole nanoseconds. The count is the replay step's own: the batch's token limit less the budget left. Keep both amounts as values the Definition takes (parameters or statics of the binding), never constants in the Definition: they are one model's and will be re-measured. Use these two numbers in your test vectors. Read that comment whole before you fix the interface; it also names a case the rule does not solve (drafts on, a busy chat load), which is not yours to solve in step 1.
-
