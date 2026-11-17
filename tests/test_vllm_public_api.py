@@ -297,10 +297,10 @@ PUBLIC = {
                                               "attach), which benchmarks/pouw's Pearl-C arms attach",
     "verity_vllm.protocols.poub.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
                                                      "weights it binds (model_weights, WeightRegion, Every), which "
-                                                     "benchmarks/remote_session and benchmarks/vllm_encoded serve under",
+                                                     "benchmarks/poub_session and benchmarks/vllm_encoded serve under",
     "verity_vllm.protocols.poub.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
-                                                     "pipeline.remote_session reaches through protocols.driver and "
-                                                     "benchmarks/remote_session serves under",
+                                                     "pipeline.poub_session reaches through protocols.driver and "
+                                                     "benchmarks/poub_session serves under",
     "verity_vllm.query.manifest.format": "I7: the required-value manifest's format, the vocabulary every manifest producer and "
                                          "consumer shares (load_program), which benchmarks/prove_path reads",
 }

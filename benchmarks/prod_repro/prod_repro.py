@@ -791,6 +791,14 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
             "metric": METRICS.get(mine.get("model_id")) if (stock, ours) == (PROD[0], PROD[2]) else None}
 
 
+def scope(c: dict) -> str:
+    """What a measured cost line's figure is of: serving time at one operating point on one node, never compute."""
+    h = c["how"]
+    at = f"{h['rate']:g} requests a second" if h["client"] != S.BENCH else \
+        f"{h['rung']} {'users' if h.get('sessions') else 'in flight'}, {'' if h['saturated'] else 'un'}saturated"
+    return f"serving time, one node, one load at {at}"
+
+
 # --------------------------------------------------------------------------------------------------------- the advice
 
 def encodings() -> object:
@@ -963,7 +971,7 @@ def measurement(r: dict) -> dict | None:
             "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"], "commit": r["commit"],
             "run": r["run"],
             "inputs": [f"measured: {r['arms']['ours']}'s serving time over {r['arms']['stock']}'s on the {r['load']} load, "
-                       f"the mean over {life['pairs']} server lifetime{'s' * (life['pairs'] != 1)} an arm"]}
+                       f"the mean over {life['pairs']} server lifetime{'s' * (life['pairs'] != 1)} an arm ({scope(c)})"]}
 
 
 def measurements(r: dict) -> list[dict]:
@@ -995,6 +1003,16 @@ def measurements(r: dict) -> list[dict]:
     return out
 
 
+def against_target(validation: dict, c: dict) -> dict:
+    """``validation`` with the cost line's verdict against its target as a field (``target``) and in its ``detail``.
+    Its ``status`` stays the run's own gates': a cost over its target is a result, not a run that broke."""
+    t = {"value": S._pct(c["value"]) if c["measured"] else None, "target": c.get("target") or TARGET,
+         "verdict": c["verdict"] if c["measured"] else NOT_SHOWN}
+    told = (f"MISSES its target: {t['value']:+.2f}% of stock's serving time, against under {t['target']:g}%"
+            if t["verdict"] == OVER else f"the cost against its target of under {t['target']:g}%: {t['verdict']}")
+    return {**validation, "detail": "; ".join(filter(None, (validation.get("detail"), told))), "target": t}
+
+
 def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
     """Under research run, where ``out`` is the run's own out/: the run's result.json names `outputs` among its
     artifacts, so a reader finds them as the run's files without listing its record, and holds the cost, the replay's
@@ -1016,6 +1034,8 @@ def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
     doc["artifacts"] = sorted({*(doc.get("artifacts") or ()), *outputs(out, replay_dir)})
     ids = {*METRICS.values(), *MATCH.values(), *ADVICE.values()}
     doc["measurements"] = [*(x for x in doc.get("measurements") or () if x.get("name") not in ids), *measurements(r)]
+    if isinstance(doc.get("validation"), dict):
+        doc["validation"] = against_target(doc["validation"], r["cost"])
     tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, f)
@@ -1462,6 +1482,7 @@ def text(r: dict) -> str:
             lines.append(f"  STOCK DIFFERS FROM STOCK: the noise floor's interval leaves out 0, so two servers of {stock} "
                          + ("differ by more than their passes do" if noise["over"] == "passes" else
                             "did not serve at the same rate"))
+        lines.append(f"  what it is: {scope(c)}")
     if c.get("settings_differ"):
         lines.append(f"  NOT at the same settings: {ours} and {stock} differ in {', '.join(c['settings_differ'])}, so the "
                      "figure is not our changes' cost")

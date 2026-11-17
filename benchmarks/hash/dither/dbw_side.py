@@ -101,7 +101,7 @@ def main() -> int:
         name, _, value = a.prover_args.pop(0).partition("=")
         own[name] = value
     store = ["--lib", a.lib, "--kv", a.kv, "--gib", str(a.gib)] if a.lib else []
-    cmd = [a.prover_py, str(ROOT / "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
+    cmd = [a.prover_py, str(ROOT / "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
            "--plan", a.plan, *store, *a.prover_args]
     if a.prover_cpus:
         cmd = ["taskset", "-c", a.prover_cpus, *cmd]

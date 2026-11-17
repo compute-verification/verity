@@ -39,7 +39,7 @@ DEFAULT_S = 2.6
 #: each test module's seconds of test time, the modules over 20 s, from a run in 8 parts (each part's 4 workers on 4 CPUs);
 #: `--seconds REPORT...` prints the table from the suites.py reports of a full run or of every part of one (each part's
 #: `out/logs/adapters_vllm.json`). One module over 20 s is left out and takes `DEFAULT_S`: the PoUB tests'
-#: `test_remote_session.py`, whose directory's name is a term the glossary retires, so this file does not spell its path
+#: `test_poub_session.py`, whose directory's name is a term the glossary retires, so this file does not spell its path
 SECONDS: dict[str, float] = {
     "protocols/test_pouw_h1_handoff.py": 481,
     "program/test_sparse_mla_split.py": 455,
