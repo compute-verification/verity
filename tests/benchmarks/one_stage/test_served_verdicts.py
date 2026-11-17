@@ -1365,15 +1365,15 @@ def test_a_network_row_over_the_fronts_group_says_so_and_reaches_no_block_record
                                                **ACCEPTS["certifier"]}))
     (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
     servers = {k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]}
-    _, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
-                            servers=servers)
-    assert rec["composed"]["legs"]["certifier"] == "accept" and "not_covered" not in line
-    report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
-                                 servers=servers, front_group=True)
+    _, _, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                          servers=servers)
+    assert "certifier" not in line["record_missing"] and "not_covered" not in line
+    report, _, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                               servers=servers, front_group=True)
     assert report["protocols"]["communication"]["requests"] == S.FRONT_GROUP
-    assert line["not_covered"] == {"the network certifier": S.FRONT_GROUP}
-    assert rec["legs"]["certifier"] is None and "certifier" in line["record_missing"]
-    assert line["verdicts"]["the network certifier"] == "accept"
+    name = S.NAMES["communication"]
+    assert line["not_covered"] == {name: S.FRONT_GROUP} and line["verdicts"][name] == "accept"
+    assert "certifier" in line["record_missing"]
 
 
 @pytest.mark.parametrize(("said", "why", "verdict"), [
