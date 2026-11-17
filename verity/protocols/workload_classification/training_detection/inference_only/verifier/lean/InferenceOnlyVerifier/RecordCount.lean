@@ -1,7 +1,7 @@
 module
 
-public import InferenceOnlyCheck.Count
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Count
+public import InferenceOnlyVerifier.Record
 
 /-!
 # The count of `(c, k)`-inference blocks on an execution phase's circuit record
@@ -39,7 +39,7 @@ in the private record (`checkDetail`).
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.RecordCount
+namespace InferenceOnlyVerifier.RecordCount
 
 open Lean (Json toJson)
 
@@ -99,12 +99,12 @@ def evaluate (j tr limits : Json) : Except String Json := do
 def checkDetail (j tr limits : Json) : Json :=
   match evaluate j tr limits with
   | .ok r => r
-  | .error code => InferenceOnlyCheck.refusal code
+  | .error code => InferenceOnlyVerifier.refusal code
 
 /-- What the count would publish: the judgment against `n`, `{complies}` from `evaluate`'s verdict, or the refusal. -/
 def check (j tr limits : Json) : Json :=
   match evaluate j tr limits with
   | .ok r => Json.mkObj [("complies", r.getObjValD "complies")]
-  | .error code => InferenceOnlyCheck.refusal code
+  | .error code => InferenceOnlyVerifier.refusal code
 
-end InferenceOnlyCheck.RecordCount
+end InferenceOnlyVerifier.RecordCount

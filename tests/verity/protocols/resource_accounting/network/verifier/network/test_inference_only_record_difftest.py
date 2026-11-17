@@ -80,7 +80,7 @@ def _load(name: str):
 
 vectors = _load("record_difftest_vectors")
 ref, IF, codec = vectors.ref, vectors.IF, vectors.codec
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.RecordDifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyVerifier.RecordDifftestMain"]
 #: the random cases the quick tests read, enough of them to reach every way of `BROKEN`
 SEEDS = range(500)
 #: the form's own refusals of a record `verity.commitments.periods.interface` takes: a wire's leaves, a pinned reader's

@@ -3,7 +3,7 @@ module
 public import Definitions.Slowdown.BitView
 public import Definitions.InferenceOnly.Assumptions.Theta
 public import Definitions.Slowdown.Assumptions.Cover
-public import InferenceOnlyCheck.Theta
+public import InferenceOnlyVerifier.Theta
 public import Properties.InferenceOnly.Desc.Verdict
 
 /-!
@@ -26,7 +26,7 @@ the check of record, on every expansion of the instance gate by gate (`OnExpansi
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json)
 open Flock.Program (Prog)
@@ -60,4 +60,4 @@ of the reference training circuit's fresh input. On every verdict of `InferenceO
 def CheckedCoverTraining : Prop :=
   ∀ (j tr out : Json), Theta.evaluate j tr = .ok out → OnExpansions CoverTrained j out
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

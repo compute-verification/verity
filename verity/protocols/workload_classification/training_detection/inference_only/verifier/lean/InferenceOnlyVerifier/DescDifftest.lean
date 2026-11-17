@@ -1,7 +1,7 @@
 module
 
-public import InferenceOnlyCheck.Desc
-public import InferenceOnlyCheck.Difftest
+public import InferenceOnlyVerifier.Desc
+public import InferenceOnlyVerifier.Difftest
 
 /-!
 # The difftest of the description-sized check: against the unrolled one, and against the Python reference
@@ -15,13 +15,13 @@ it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.DescDifftest
+namespace InferenceOnlyVerifier.DescDifftest
 
 open Lean (Json)
 
 /-- How `a` differs from `b`, one line per field of `InferenceOnlyCheck.Difftest.fields`. -/
 def compare (i : Nat) (what : String) (a b : Json) : List String :=
-  InferenceOnlyCheck.Difftest.fields.filterMap fun k =>
+  InferenceOnlyVerifier.Difftest.fields.filterMap fun k =>
     let x := a.getObjValD k
     let y := b.getObjValD k
     if x == y then none else some s!"instance {i}: {k}: Desc {x.compress}, {what} {y.compress}"
@@ -35,13 +35,13 @@ def differences (i : Nat) (inst exp python : String) : List String :=
   | _, _, .error e => [s!"instance {i}: Python's results don't parse: {e}"]
   | .ok j, .ok x, .ok py =>
     let desc := Desc.check j
-    compare i "Python" desc py ++ (if x.isNull then [] else compare i "InferenceOnlyCheck.check" desc (check x))
+    compare i "Python" desc py ++ (if x.isNull then [] else compare i "InferenceOnlyVerifier.check" desc (check x))
 
 /-- `lake env lean --run InferenceOnlyCheck/DescDifftestMain.lean INSTANCES EXPANDED PYTHON N`: fails unless the three files have
 `N` lines each and no line differs. -/
 def main (args : List String) : IO UInt32 := do
   let [insts, exp, py, n] := args
-    | IO.eprintln "usage: InferenceOnlyCheck/DescDifftestMain.lean INSTANCES EXPANDED PYTHON N"; return 2
+    | IO.eprintln "usage: InferenceOnlyVerifier/DescDifftestMain.lean INSTANCES EXPANDED PYTHON N"; return 2
   let lines (p : String) : IO (Array String) := do
     return ((← IO.FS.readFile p).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   let a ← lines insts
@@ -56,4 +56,4 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"desc difftest: {a.size} instances compared, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
-end InferenceOnlyCheck.DescDifftest
+end InferenceOnlyVerifier.DescDifftest

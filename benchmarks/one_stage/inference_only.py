@@ -497,7 +497,7 @@ def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int
     within = SC.limits() if within is None else within
     flags = ["--count"]
     if within.refusal is not None:
-        return {"flags": flags, "error": f"inference-only-check not started: {within.refusal}"}
+        return {"flags": flags, "error": f"inference-only-verifier not started: {within.refusal}"}
     behind = tuple(within.scope or ())
     fd, path = tempfile.mkstemp(dir=scratch, suffix=".json")
     with os.fdopen(fd, "w") as fh:
@@ -507,19 +507,19 @@ def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int
             flags.append("--detail")
         p = subprocess.run([*behind, str(exe), *flags, path], capture_output=True, text=True, timeout=timeout_s)
     except subprocess.TimeoutExpired:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} gave no verdict within {timeout_s} s",
+        return {"flags": flags, "error": f"inference-only-verifier {' '.join(flags)} gave no verdict within {timeout_s} s",
                 "memory": within.memory}
     finally:
         os.unlink(path)
     if p.returncode != 0:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} exit {p.returncode}",
+        return {"flags": flags, "error": f"inference-only-verifier {' '.join(flags)} exit {p.returncode}",
                 "said": p.stderr.strip()[-300:], "memory": within.memory}
     try:
         out = json.loads(p.stdout)
         if not isinstance(out, dict):
             raise ValueError("not an object")
     except ValueError:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} printed no JSON object",
+        return {"flags": flags, "error": f"inference-only-verifier {' '.join(flags)} printed no JSON object",
                 "said": p.stdout.strip()[-300:], "memory": within.memory}
     return {"flags": flags, "out": out, "memory": within.memory}
 
@@ -535,7 +535,7 @@ def lean_said(call: Mapping[str, Any], gates: int) -> dict[str, Any]:
         return {key: out[key] for key in ("error", "message") if key in out}
     rows = out.get("blocks")
     if not (isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], list) and len(rows[0]) == 4):
-        return {"error": f"inference-only-check {' '.join(call['flags'])} printed no row of the block"}
+        return {"error": f"inference-only-verifier {' '.join(call['flags'])} printed no row of the block"}
     _, g, x, _ = rows[0]
     failure = out.get("failure")
     return {"gates": g, "agrees_on_gates": g == gates, "fresh": x, "complies": out.get("complies") is True,
@@ -692,8 +692,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     v.add_argument("--circuit", type=Path, required=True, help="the picked window's circuit record at the policy's class")
     v.add_argument("--registration", type=Path, required=True, help="the window's registration (its roots)")
     v.add_argument("--pins", type=Path, default=None, help="the weights registration, the verifier's pins")
-    v.add_argument("--lean", type=Path, default=None, help="the Lean verifier, inference-only-check, whose --count on one window's session Program is the verdict")
-    v.add_argument("--lean-timeout", type=int, default=1800, help="inference-only-check --count's limit in seconds (default 1800)")
+    v.add_argument("--lean", type=Path, default=None, help="the Lean verifier, inference-only-verifier, whose --count on one window's session Program is the verdict")
+    v.add_argument("--lean-timeout", type=int, default=1800, help="inference-only-verifier --count's limit in seconds (default 1800)")
     v.add_argument("--retroactive", default=None, help="why a policy written after the serve began is read anyway")
     v.add_argument("--out", type=Path, required=True)
     v.add_argument("--private", type=Path, required=True)

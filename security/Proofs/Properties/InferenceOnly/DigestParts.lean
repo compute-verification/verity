@@ -22,12 +22,12 @@ agree on equivalent values, and its space reads agree even where the parts drop 
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Claims.Json (Wf)
 open FlockDeploy (JsonEquiv jsonEquiv_arr_iff)
-open InferenceOnlyCheck.DefinitionDigest (written)
+open InferenceOnlyVerifier.DefinitionDigest (written)
 
 theorem concat_mkObj1 (v : Json) : ((Json.mkObj [("concat", v)]).getObjVal? "concat").toOption = some v := by
   simp only [Json.mkObj, Json.getObjVal?]
@@ -71,11 +71,11 @@ theorem written_jsonEquiv {ps ps' : Array Json} (hw : ∀ p ∈ ps, Wf p) (hw' :
     rw [concat_mkObj1, concat_mkObj1] at this
     exact (jsonEquiv_arr_iff ps ps').1 this
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 end
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock Flock.Program
@@ -398,11 +398,11 @@ private theorem parse_none {n : Nat} {j : Json} {leaves : Bool → Nat → Optio
     injection h
   | _ => cases h
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock Flock.Program
@@ -463,6 +463,6 @@ theorem part_jsonEquiv {n m : Nat} {j j' : Json} {leaves : Bool → Nat → Opti
       (fun k h₁ h₂ => hel k h₁ h₂) hl]
     exact hrs
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 end

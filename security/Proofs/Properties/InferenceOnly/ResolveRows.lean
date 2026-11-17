@@ -17,10 +17,10 @@ at references of their own (`memberIdx_inj`).
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
 open Flock.Program
-open InferenceOnlyCheck.Record.SecurityProofs (runOf unitsOf partsIn Apart runs_apart part_run batch_dims runOf_some
+open InferenceOnlyVerifier.Record.SecurityProofs (runOf unitsOf partsIn Apart runs_apart part_run batch_dims runOf_some
   axisDims_of_removeAxis)
 
 /-- A walk whose first step moves on and whose second ends has the second's result. -/
@@ -359,4 +359,4 @@ theorem unit_leaf_inj {k k' : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
 
 end
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve

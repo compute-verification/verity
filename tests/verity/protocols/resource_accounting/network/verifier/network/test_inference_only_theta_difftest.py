@@ -39,7 +39,7 @@ def _load(name: str):
 
 vectors = _load("theta_difftest_vectors")
 reference = vectors.reference
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.ThetaDifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyVerifier.ThetaDifftestMain"]
 
 
 @pytest.mark.slow
