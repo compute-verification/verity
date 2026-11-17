@@ -5,6 +5,7 @@ nothing is built. The suite keys without its Markdown, so the section's runs are
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -16,8 +17,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 SCRIPT = ROOT / "benchmarks" / "one_stage" / "proof_layers.sh"
 TEXT = SCRIPT.read_text()
-SETTINGS = ["A5_CARD", "A5_CORES", "WORK", "GPU_LEASE_WHO"]
-LAWS = {"flock": "stratified-rate:880/880", "zk": "subset:880", "sampling": "subset:256"}
+SETTINGS = ["A5_CARD", "A5_CORES", "WORK", "GPU_LEASE_WHO", "A5_STEPS"]
+LAWS = {"flock": "stratified-rate:880/880", "zk": "$ZK_LAW", "sampling": "subset:256"}
 PLAIN = {"flock": "A5_PLAIN=1 ", "zk": "", "sampling": ""}
 
 
@@ -28,12 +29,30 @@ def test_the_script_parses():
 def test_its_runs_and_partitions_are_the_readmes():
     script_laws = {name: law for law, name in re.findall(r"\$\(part (\S+) (\w+)\)", TEXT)}
     script_runs = {name: plain for plain, name in re.findall(r'\$\(run "(A5_PLAIN=1 )?" (\w+)\)', TEXT)}
-    assert script_laws == LAWS
+    assert script_laws == LAWS and "ZK_LAW=subset:880 " in TEXT
     assert script_runs == PLAIN
     assert "A5_COINS=challenger $1A5_PARTITION=" in TEXT and "bash benchmarks/one_stage/a5_llama1b_h200.sh" in TEXT
     assert "pod_bootstrap.sh --cases LLAMA32_1B_INT8" in TEXT
     assert "verity bench prove layers --flock" in TEXT and "--recursion" not in TEXT
 
+
+@pytest.mark.parametrize("steps", ["", "1-16"])
+def test_its_partition_files_are_the_trees_with_the_layers_law_and_a5_steps_scope(steps, tmp_path):
+    """Unset, A5_STEPS leaves the tree's partition file as it is but for its law; set, it gives each file its scope's
+    steps, and the zero-knowledge layer every proof block by rate."""
+
+    lines = TEXT.splitlines()
+    start = lines.index(next(x for x in lines if x.startswith("part() {")))
+    defs = "\n".join([x for x in lines if x.startswith(("q() {", "PART=", "ZK_LAW="))] + lines[start:lines.index("}", start) + 1])
+    made = {}
+    for law, name in (("stratified-rate:880/880", "flock"), ("$ZK_LAW", "zk")):
+        script = f'WORK={tmp_path}; A5_STEPS={steps}\n{defs}\neval "$(part {law} {name})"'
+        subprocess.run(["bash", "-c", script], cwd=ROOT, check=True)
+        made[name] = json.loads((tmp_path / f"partition-{name}.json").read_text())
+    tree = json.loads((ROOT / "benchmarks" / "one_stage" / "llama32_1b_rope_d64_l0.json").read_text())
+    scope = {**tree["scope"], "steps": [1, 16]} if steps else tree["scope"]
+    assert made == {"flock": {**tree, "law": "stratified-rate:880/880", "scope": scope},
+                    "zk": {**tree, "law": "rate:1/1" if steps else "subset:880", "scope": scope}}
 
 def test_its_steps_run_in_the_readmes_order():
     steps = re.search(r"^STEPS=\((.*?)\)$", TEXT, re.M).group(1).split()
@@ -45,7 +64,7 @@ def test_it_reads_only_the_settings_it_names():
     assigned = set(re.findall(r"(?:^|[\s;(])(?:local )?([A-Za-z_]\w*)=", TEXT)) | {"s", "t", "n", "f", "o", "k"}
     read = set(re.findall(r"\$\{?!?([A-Za-z_]\w*)", TEXT)) - (assigned - set(SETTINGS))
     # HOME and PATH are the shell's; RESEARCH_RUN_DIR is a research run's own directory, the results' default
-    assert read - {"HOME", "PATH", "RESEARCH_RUN_DIR", "SECONDS", "PIPESTATUS"} == set(SETTINGS)
+    assert read - {"HOME", "PATH", "RESEARCH_RUN_DIR", "SECONDS", "PIPESTATUS", "BASH_REMATCH"} == set(SETTINGS)
     header = TEXT.split("set -uo pipefail", 1)[0]
     assert all(f"#   {s} " in header for s in SETTINGS)
 
@@ -85,3 +104,11 @@ def test_a_lease_without_its_owner_is_refused(tmp_path):
     run = subprocess.run(["bash", str(SCRIPT), "--dry-run"], cwd=ROOT, env=env, capture_output=True, text=True)
     assert run.returncode == 2
     assert run.stderr.startswith("proof_layers.sh: no GPU_LEASE_WHO:")
+
+
+@pytest.mark.parametrize("steps", ["8-1", "8", "a-b"])
+def test_a5_steps_that_are_no_range_of_steps_are_refused(steps, tmp_path):
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "A5_CARD": "0", "A5_CORES": "0", "WORK": str(tmp_path / "w"),
+           "A5_STEPS": steps}
+    run = subprocess.run(["bash", str(SCRIPT), "--dry-run"], cwd=ROOT, env=env, capture_output=True, text=True)
+    assert run.returncode == 2 and run.stderr.startswith(f"proof_layers.sh: A5_STEPS={steps}: LO-HI")

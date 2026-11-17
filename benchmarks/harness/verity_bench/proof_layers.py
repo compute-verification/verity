@@ -190,6 +190,39 @@ def _epsilon(e: Any) -> str | None:
             f" (summary.json epsilon, the first and last of its {len(pairs)} pairs)")
 
 
+#: a5_llama1b_h200.sh's steps.txt: a step's start and its exit (``HH:MM:SSZ NAME: ARGS``, ``HH:MM:SSZ NAME rc=N``), and the
+#: build step's ``build cache:`` line
+STEP_AT = re.compile(r"^(\d\d):(\d\d):(\d\d)Z (build)(?:: | rc=(\d+)$)")
+BUILD_CACHE = re.compile(r"^\d\d:\d\d:\d\dZ build cache: (.+)$")
+
+
+def _build(steps: str) -> tuple[float | None, str]:
+    """steps.txt's build step: its wall seconds, from its start line to an ``rc=0`` line after it (None without both), and its
+    ``build cache:`` line's words (`NOT_STATED` without one)."""
+
+    start = end = None
+    cache = NOT_STATED
+    for line in steps.splitlines():
+        if m := STEP_AT.match(line):
+            at = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+            if m.group(5) is None:
+                start, end = at, None
+            elif start is not None and m.group(5) == "0":
+                end = at
+        elif m := BUILD_CACHE.match(line):
+            cache = m.group(1)
+    return (None if start is None or end is None else float((end - start) % 86400)), cache
+
+
+def _statement_instances(d: Path) -> int | None:
+    """The proof blocks the run's Flock statement holds, by its prover's ``statement NAME instances=N`` line: the proof server's
+    log, or a plain session's prove.log; None unless every such line states one number."""
+
+    logs = [*sorted(d.glob("a5/window/proof-server/prover-*.log")), *sorted(d.glob("a5/window/session-*/prove.log"))]
+    counts = {int(m.group(1)) for f in logs for m in re.finditer(r"^statement \S+ instances=(\d+)", _text(f), re.M)}
+    return counts.pop() if len(counts) == 1 else None
+
+
 def read_recursion(d: Path, result: Result) -> None:
     """recursion_e2e.json: the headline's verdict (an accept only where Lean composed V*'s parts into the recursive
     statement and accepted it: ``ok`` and ``composed``), one recursive run's path without Lean's step as the prover's
@@ -346,8 +379,8 @@ def read_prove_path(d: Path, result: Result) -> None:
 
 def read_a5(d: Path, result: Result) -> None:
     """a5_llama1b_h200.sh's out (or a5.sh's): the audit's last A5 line (its Lean verify verdicts), the audit's summary.json
-    for its timing, its coins and its arm, summary.txt's STOPPED, REGISTERED and rc lines, machine.txt's row dir and
-    verdicts.txt's serving stages."""
+    for its timing, its coins and its arm, summary.txt's STOPPED, REGISTERED and rc lines, machine.txt's row dir,
+    verdicts.txt's serving stages, steps.txt's build step and the prover's log for its statement's proof blocks."""
 
     summary_txt = _text(d / "summary.txt")
     log = next((_text(d / f) for f in ("a5/a5.log", "a5.log") if (d / f).is_file()), summary_txt)
@@ -382,6 +415,12 @@ def read_a5(d: Path, result: Result) -> None:
                     + _sampled(counts, summary.get("population")) + (f" ({window})" if window else ""))
     if summary.get("timing"):
         _per_block(result, [per_unit(summary["timing"], counts)])
+    result.prover_batch = _statement_instances(d)
+    if result.prover_batch is not None and result.prover_what:
+        result.prover_what += f"; its Flock statement holds {result.prover_batch:,} proof blocks, the prover's batch"
+    result.build_s, result.build_cache = _build(_text(d / "steps.txt"))
+    result.build_what = ("steps.txt's build step: the served workload's step, request and workload Programs, every Definition's, "
+                         "not only the partition's") if result.build_s is not None else ""
     verdicts = ((a5 or {}).get("audit") or {}).get("verdicts") or {}
     challengers = sorted(k for k in verdicts if k.startswith("challenger/"))
     coins = summary.get("coins") or {}

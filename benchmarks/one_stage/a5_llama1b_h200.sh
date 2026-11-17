@@ -172,7 +172,14 @@ window_off() {  # the Commit's window from KEPT, the stages' run dir, to WD, its
 }
 stop() { window_off; records; echo "STOPPED at $1" | tee -a "$OUT/summary.txt"; exit "$2"; }
 
+jit=$(find "$ROOT/cache" -type f 2>/dev/null | wc -l)
 row build --stages build --config-run 1 --replay-k 460 || stop build 10
+hits=$(grep -rls --include='*.log' '^program cache hit' "$D" | wc -l)
+program="no Program cache"
+[ -n "${PROGRAM_CACHE:-}" ] && program="the Program cache restored $hits derives"
+if [ "$hits" -gt 0 ]; then reused=yes; elif [ "$jit" -gt 0 ]; then reused=unknown; else reused=no; fi
+echo "$(date -u +%H:%M:%SZ) build cache: $reused ($program; the JIT caches under $ROOT/cache held $jit files before it)" \
+  >> "$OUT/steps.txt"
 row match --stages match --config-run 0 || stop match 11
 row commit --stages commit --config-run 1 --replay-k 460 --replay-deferred 1 --serving-rows "$PART" || stop commit 12
 window_off

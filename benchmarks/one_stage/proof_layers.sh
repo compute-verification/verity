@@ -6,7 +6,7 @@
 # values.) The recursion benchmark is not run here: its job wants 32 cores of a CPU node, and the printer takes it as a
 # fourth input.
 #
-#   A5_CARD=N A5_CORES=CPUS WORK=DIR GPU_LEASE_WHO=NAME bash benchmarks/one_stage/proof_layers.sh [--out DIR] [--dry-run]
+#   A5_CARD=N A5_CORES=CPUS WORK=DIR GPU_LEASE_WHO=NAME [A5_STEPS=LO-HI] bash benchmarks/one_stage/proof_layers.sh [--out DIR] [--dry-run]
 #
 # from the tree's root. Settings:
 #   A5_CARD        the H200's index, as nvidia-smi numbers the cards (gpu-lease's --on)
@@ -14,6 +14,10 @@
 #   WORK           a new or empty directory for the bootstrap's environment, the partition files and the three runs,
 #                  removed when the script ends, success or failure, after their records are copied to --out
 #   GPU_LEASE_WHO  who every lease is recorded for, where gpu-lease is installed
+#   A5_STEPS       optional, the prover's batch: the request steps [LO, HI) whose proof blocks the window holds (the
+#                  partition file's scope.steps; unset, the file's own), so the proof blocks each layer's Flock statement
+#                  holds; set, the zero-knowledge layer proves every proof block by rate:1/1 in place of subset:880, and
+#                  the sampling layer still samples 256 of them
 #   --out DIR      where the results go (default $RESEARCH_RUN_DIR/out in a research run, else ./out): the three runs'
 #                  records (out-flock, out-zk, out-sampling), the bootstrap's (bootstrap), the printer's table
 #                  (proof-layers.txt, and proof-layers.json in a research run), each step's output (STEP.log) and GNU
@@ -37,7 +41,7 @@ while [ $# -gt 0 ]; do
   case $1 in
     --dry-run) DRY=1; shift ;;
     --out) [ $# -ge 2 ] || refuse "--out needs a directory"; RESULTS=$2; shift 2 ;;
-    *) refuse "$1: the settings are A5_CARD, A5_CORES, WORK and GPU_LEASE_WHO in the environment, then --out DIR and --dry-run" ;;
+    *) refuse "$1: the settings are A5_CARD, A5_CORES, WORK, GPU_LEASE_WHO and A5_STEPS in the environment, then --out DIR and --dry-run" ;;
   esac
 done
 for s in A5_CARD A5_CORES WORK; do
@@ -46,6 +50,9 @@ done
 LEASE=; command -v gpu-lease >/dev/null && LEASE=1
 [ -z "$LEASE" ] || [ -n "${GPU_LEASE_WHO:-}" ] || refuse "no GPU_LEASE_WHO: this machine leases its cards through gpu-lease, and every lease is recorded for GPU_LEASE_WHO (unset, a5_llama1b_h200.sh records its leases as vllm-sha512); set it to your name"
 [[ $A5_CARD =~ ^[0-9]+$ ]] || refuse "A5_CARD=$A5_CARD: a card's index, as nvidia-smi numbers them"
+A5_STEPS=${A5_STEPS:-}
+[ -z "$A5_STEPS" ] || { [[ $A5_STEPS =~ ^([0-9]+)-([0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" -lt "${BASH_REMATCH[2]}" ]; } \
+  || refuse "A5_STEPS=$A5_STEPS: LO-HI, the request steps [LO, HI) the window holds, LO below HI, e.g. 1-8; or unset for the partition file's"
 [ -f "$ME" ] || refuse "run from the tree's root: cd to the clone, then bash $ME"
 for t in nvidia-smi taskset python3; do
   command -v "$t" >/dev/null || refuse "no $t on PATH: the runs need it; install it and rerun"
@@ -82,9 +89,10 @@ done
 q() { printf '%q' "$1"; }
 PART=benchmarks/one_stage/llama32_1b_rope_d64_l0.json
 if [ -n "$LEASE" ]; then ON="gpu-lease 1 --wait --on $A5_CARD --cores $(q "$A5_CORES") --"; else ON="taskset -c $(q "$A5_CORES")"; fi
-part() {  # LAW NAME: the tree's partition file with its sampling design (its `law` key) set to LAW
-  echo "python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); p[\"law\"] = sys.argv[2]; json.dump(p, open(sys.argv[3], \"w\"))' $PART $1 $(q "$WORK/partition-$2.json")"
+part() {  # LAW NAME: the tree's partition file with its sampling design (its `law` key) set to LAW, and its scope's steps to A5_STEPS's
+  echo "python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); p[\"law\"] = sys.argv[2]; s = sys.argv[4:] and sys.argv[4].split(\"-\"); s and p[\"scope\"].update(steps=[int(s[0]), int(s[1])]); json.dump(p, open(sys.argv[3], \"w\"))' $PART $1 $(q "$WORK/partition-$2.json")${A5_STEPS:+ $A5_STEPS}"
 }
+ZK_LAW=subset:880 BATCH="of the partition file's scope"; [ -z "$A5_STEPS" ] || ZK_LAW=rate:1/1 BATCH=$A5_STEPS
 run() {  # SETTINGS NAME: one run of a5_llama1b_h200.sh on NAME's partition file, its record in WORK/out-NAME
   echo "A5_COINS=challenger $1A5_PARTITION=$(q "$WORK/partition-$2.json") OUT=$(q "$WORK/out-$2") taskset -c $(q "$A5_CORES") bash benchmarks/one_stage/a5_llama1b_h200.sh"
 }
@@ -92,7 +100,7 @@ STEPS=(bootstrap partition-flock partition-zk partition-sampling flock zk sampli
 declare -A CMD=(
   [bootstrap]="cd adapters/vllm && $ON bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B_INT8 --out $(q "$WORK/bootstrap")"
   [partition-flock]=$(part stratified-rate:880/880 flock)
-  [partition-zk]=$(part subset:880 zk)
+  [partition-zk]=$(part $ZK_LAW zk)
   [partition-sampling]=$(part subset:256 sampling)
   [flock]=$(run "A5_PLAIN=1 " flock)
   [zk]=$(run "" zk)
@@ -100,7 +108,7 @@ declare -A CMD=(
   [layers]="PATH=\$HOME/.local/bin:\$PATH uv run verity bench prove layers --flock $(q "$WORK/out-flock") --zk $(q "$WORK/out-zk") --sampling $(q "$WORK/out-sampling") | tee $(q "$RESULTS/proof-layers.txt")"
 )
 HOW="card $A5_CARD taken directly (no gpu-lease)"; [ -z "$LEASE" ] || HOW="leases recorded for $GPU_LEASE_WHO"
-echo "proof_layers.sh: card $A5_CARD ($card), $mem_gb GB of host memory available, CPUs $A5_CORES, $free_gb GB free under $d, $HOW; WORK=$WORK, results in $RESULTS$([ "$DRY" = 1 ] && echo '; a dry run, which runs nothing')"
+echo "proof_layers.sh: card $A5_CARD ($card), $mem_gb GB of host memory available, CPUs $A5_CORES, $free_gb GB free under $d, $HOW; prover's batch: request steps $BATCH; WORK=$WORK, results in $RESULTS$([ "$DRY" = 1 ] && echo '; a dry run, which runs nothing')"
 if [ "$DRY" = 1 ]; then
   i=0; for n in "${STEPS[@]}"; do i=$((i + 1)); echo "STEP $i/${#STEPS[@]} $n: ${CMD[$n]}"; done
   [ -z "$LEASE" ] || echo "(each run of a5_llama1b_h200.sh leases card $A5_CARD with CPUs $A5_CORES itself, from A5_CARD and A5_CORES)"

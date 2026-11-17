@@ -59,8 +59,8 @@ def render(results: Sequence[Result]) -> str:
                                                                      NOT_STATED if r.status == "read" else "—")
                                            for r in results)
                  + "; a benchmark result reruns from main only where its commit is on main (`git merge-base --is-ancestor COMMIT origin/main`)")
-    lines += ["", "| layer | workload | proof | device | ε at δ | prover | Lean verifier | Lean | proof bytes |",
-              "|---|---|---|---|---|---|---|---|---|"]
+    lines += ["", "| layer | workload | proof | device | ε at δ | prover | Lean verifier | Lean | proof bytes | circuit build |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
     for r in results:
         read = r.status == "read"
         proof = r.proof or (NOT_STATED if read else "—")
@@ -68,8 +68,9 @@ def render(results: Sequence[Result]) -> str:
                   _statements(r, "proof_bytes", "one rep's proof")) if r.statements else
                  (_cell(r.prover_s, 's', r.per, r.prover_what), _cell(r.lean_s, 's', r.per, r.lean_what),
                   _cell(r.proof_bytes, 'bytes', r.per, r.bytes_what)))
+        build = "—" if r.build_s is None else f"{r.build_s:.0f} s a build, wall ({r.build_what}; build cache: {r.build_cache})"
         lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {proof} | {r.device if read else '—'} | "
-                     f"{r.eps_delta if read else '—'} | {cells[0]} | {r.lean} | {cells[1]} | {cells[2]} |")
+                     f"{r.eps_delta if read else '—'} | {cells[0]} | {r.lean} | {cells[1]} | {cells[2]} | {build} |")
     lines += ["", *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in results if r.why)]
     lines += [f"- {LAYERS[r.layer]}: {n}" for r in results for n in r.notes]
     return "\n".join(lines).rstrip()
@@ -83,8 +84,9 @@ def document(results: Sequence[Result]) -> dict[str, Any]:
 
 def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
     """The writer's measurements: under each of `metrics`' ids (each naming one of `FIGURES`), one a layer of `MEMBERS`,
-    in its order. A layer's value is its figure a proof block, only where its Lean verdict is an accept; else the value is
-    None, with why. Recursion's benchmark result is no member: its seconds are a whole recursive run's."""
+    in its order. A layer's value is its figure a proof block, or its build step's wall for ``build_s``, only where its Lean
+    verdict is an accept; else the value is None, with why. Recursion's benchmark result is no member: its seconds are a
+    whole recursive run's."""
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):
         raise ValueError(f"metric ids name {bad}, not one of {sorted(FIGURES)}")
@@ -93,12 +95,15 @@ def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict
     for name, figure in metrics.items():
         for layer, member in MEMBERS.items():
             r = by_layer[layer]
-            value = getattr(r, figure) if r.accepted and r.per_block else None
+            value = getattr(r, figure) if r.accepted and (r.per_block or figure == "build_s") else None
             why = None if value is not None else r.why or (
+                "its output gives no build step's wall (steps.txt)" if figure == "build_s" else
                 f"{r.workload.split(':')[0]}: its figures are a statement's, not a proof block's" if r.statements else
                 f"its output gives no {figure} a proof block" if r.per_block else "its output gives no figure a proof block")
             out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": member, "why": why,
                         "inputs": [r.given] if r.given else [],
                         "extra": {"layer": LAYERS[layer], "status": r.status, "format": r.format, "workload": r.workload,
-                                  "lean": r.lean, "ran_with": r.ran_with, "detail": r.detail, "proof": r.proof}})
+                                  "lean": r.lean, "ran_with": r.ran_with, "detail": r.detail, "proof": r.proof,
+                                  "prover_batch": r.prover_batch,
+                                  **({"build_cache": r.build_cache} if figure == "build_s" else {})}})
     return out

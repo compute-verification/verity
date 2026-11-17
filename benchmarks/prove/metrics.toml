@@ -57,7 +57,7 @@ command = "research run --on auto --project verity --source . --cwd source --sto
 every = "7d"
 goal = "benchmarks/proof-system-performance"
 
-# `run.py layers`'s three: under each, the Flock layer (member "flock"), the zero-knowledge layer (member
+# `run.py layers`'s four: under each, the Flock layer (member "flock"), the zero-knowledge layer (member
 # "flock-zero-knowledge") and last the sampling layer (member "sampling") (benchmarks/prove/README.md's "The
 # proof benchmark by layer"). Each run its command takes is a layer's run of record (a served run of layer 0's 880 RoPE
 # heads of Llama 3.2 1B int8), which its owner fills in: the numbers are those runs', so the loop doesn't rerun them.
@@ -89,6 +89,17 @@ title = "Proof size a sampled proof block"
 owner = "benchmarks"
 unit = "bytes a proof block"
 axis = "Bytes of proof for each sampled proof block of Llama 3.2 1B's served blocks, with zero knowledge at the sampling plan as served, with the Flock and zero-knowledge layers listed beside it as members."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock FLOCK_RUN --zk ZK_RUN --sampling SAMPLING_RUN"
+every = "7d"
+goal = "proofs/layers-in-one-table"
+
+[[metric]]
+id = "benchmarks/proof-layer-build-seconds"
+title = "Circuit build time a run"
+owner = "benchmarks"
+unit = "s a build"
+axis = "Seconds the build step of each layer's run takes to build the served workload's whole circuit, the step and request Programs of Llama 3.2 1B int8's workload llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager and the workload's Program over them, every Definition's and not only the proved RoPEHead_v1{D=64}'s, each point's build_cache field saying whether the build reused a cache (the Program cache's hits, and whether the run's JIT caches held files before it), with the Flock, zero-knowledge and sampling layers as members."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock FLOCK_RUN --zk ZK_RUN --sampling SAMPLING_RUN"
 every = "7d"

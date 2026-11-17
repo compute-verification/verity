@@ -292,7 +292,7 @@ verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] 
 |---|---|---|---|
 | `--flock` | `benchmarks/prove_path` with `PP_PLAIN=1`: an arm's `audit.log` (its `PROVE-PATH` and `A5` lines, or under `PP_RECORDS=1` its `RECORDS` line), its `summary.json` and its rank or window `summary.json`, and `ran-with.txt` beside the output; or `a5_llama1b_h200.sh`'s plain out | Flock's prover a sampled proof block, the mean over every rank's sampled proof blocks | every rank accepted, each rank's own audited `A5` line with `lean-verify/m0` true |
 | `--zk` | `prove_path`'s zk arm, or `benchmarks/one_stage/a5_llama1b_h200.sh`'s out | as above | as above |
-| `--sampling` | `a5_llama1b_h200.sh`'s out (`summary.txt`, `verdicts.txt`, `machine.txt`, a5.sh's `a5/a5.log` and `a5/a5/summary.json`), or a `prove_path` arm | as above, from the audit's `summary.json` timing | the audit accepted, with `lean-verify/m0` true |
+| `--sampling` | `a5_llama1b_h200.sh`'s out (`summary.txt`, `verdicts.txt`, `machine.txt`, `steps.txt`, a5.sh's `a5/a5.log` and `a5/a5/summary.json`, the prover's log), or a `prove_path` arm | as above, from the audit's `summary.json` timing | the audit accepted, with `lean-verify/m0` true |
 | `--recursion` | `benchmarks/recursion_e2e`'s `recursion_e2e.json` | wall, one recursive run's path without Lean's step | the headline's `ok` and `composed` both true |
 | `--flock`, `--zk`, `--sampling` | `benchmarks/one_stage/layers.sh`'s layer: its `out/layers.txt`, `out/job.log`, `out/a6/summary.json`, each session's `lean-verify.log` and `gpu-lease-usage.jsonl` beside `out/`; the run's directory gives each layer its own (`flock/`, `zk/`, `sampled/`) | Flock's `prove_total_s` a statement | the plain run's every statement accepted, or the audit accepted and complete with every Lean verdict, every check before the sample and every negative case true |
 
@@ -365,22 +365,31 @@ The table's columns, after the layer and its workload:
   another's: `2.5 s a sampled proof block (Flock's prove_total_s, the mean over 8)`, `400,000 bytes a sampled proof
   block (...)`, and recursion's `1500 s a run, wall (one recursive run's path without Lean's step: ...)`. The four
   benchmark results stay one table: the three a sampled proof block compare cell for cell, and recursion's figures are
-  a whole run's.
+  a whole run's. An a5 result's prover cell adds the proof blocks its Flock statement holds, the prover's batch, from
+  the prover's `statement NAME instances=N` line (`proof_layers.sh`'s `A5_STEPS` sets it).
+- **circuit build:** an a5 result's build step's wall, from its `steps.txt` (the step's start line to its `rc=0` line):
+  `89 s a build, wall (...; build cache: CACHE)`, CACHE the step's `build cache:` line, which says whether the build
+  reused a cache (`yes` where the Program cache restored a derive, `unknown` where none did but the run's JIT caches
+  already held files, `no` otherwise), or "not stated" where no such line was written. The step builds the served
+  workload's whole circuit (its step, request and workload Programs, every Definition's), the same in each layer
+  whatever its partition, so it is a build's figure and no proof block's.
 
 The table is followed by its JSON line, and under a research run, or with `$OUT` set, it writes `proof-layers.json`.
 Its schema is `verity-bench/proof-layers/v2`: `{schema, audit, results}`, one object for each layer's benchmark result.
 v1 named that list `rows`; nothing reads either by key.
 
-Run as `benchmarks/prove/run.py layers` (`LAYER_METRICS`), it also writes three of `metrics.toml`'s metrics through the
-kit's writer, each a figure a sampled proof block:
+Run as `benchmarks/prove/run.py layers` (`LAYER_METRICS`), it also writes four of `metrics.toml`'s metrics through the
+kit's writer, the first three a figure a sampled proof block and the last a build:
 
 | id | figure |
 |---|---|
 | `benchmarks/proof-layer-prover-seconds` | Flock's `prove_total_s`, the mean over the sampled proof blocks |
 | `benchmarks/proof-layer-lean-seconds` | Lean's verify seconds, the mean over the sampled proof blocks |
 | `benchmarks/proof-layer-proof-bytes` | one proof's bytes over its sampled proof blocks: an a5, `layers.sh` or prove_path result's one rep's (its reps are timed repeats of one proof, and differing reps give none). prove_path's own `per_unit` sums the reps, so its benchmark result reads them from the arm's rank or window `summary.json`, and prints `every rep's` only where no such file states them |
+| `benchmarks/proof-layer-build-seconds` | the build step's wall seconds, a5's only, with its `build_cache` |
 
-Under each id it writes three measurements, in this order:
+Each measurement's fields name its `prover_batch`, and the build's its `build_cache`. Under each id it writes three
+measurements, in this order:
 
 1. the Flock layer, member `flock`;
 2. the zero-knowledge layer, member `flock-zero-knowledge`;
@@ -454,7 +463,7 @@ result, so a changed partition is a different benchmark result.
 ## The metrics
 
 `run.py`'s `METRICS` are the first five metrics of `benchmarks/prove/metrics.toml`, and its `LAYER_METRICS` the last
-three (above, "The proof benchmark by layer"). `METRICS` are the prover GPUs a serving GPU needs (the headline), the
+four (above, "The proof benchmark by layer"). `METRICS` are the prover GPUs a serving GPU needs (the headline), the
 prover GPU-seconds, the Lean verifier's seconds and the proof's bytes a served token, each SPOT's at the workload's
 sampling plan of record; and the prover GPUs a serving GPU at the exfiltration run of record's design
 (`benchmarks/prover-gpus-per-serving-gpu-at-record`, modeled, its input the run it is read from). Under a research run,
