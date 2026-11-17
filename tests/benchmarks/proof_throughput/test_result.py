@@ -81,6 +81,16 @@ def test_a_run_without_a_session_record_fails_with_its_reason(hardware):
     assert doc["validation"]["detail"].startswith("live verifier: staging: out of memory; contract:")
 
 
+def test_the_slowest_and_fastest_timed_session_give_the_lowest_and_highest_rate(record, hardware):
+    record["live"]["prove_total_s_runs"] = [5.0, 6.0, 7.0]
+    doc = point(record, hardware, LEAN)
+    assert contract.validate(doc) == []
+    assert RS.value(doc, "vu.per_second_lowest") == pytest.approx(16 / 7.6)
+    assert RS.value(doc, "vu.per_second_highest") == pytest.approx(16 / 5.6)
+    del record["live"]["prove_total_s_runs"]
+    assert RS.value(point(record, hardware, LEAN), "vu.per_second_lowest") is None
+
+
 def test_statement_seconds_takes_the_pipelined_witness_when_it_is_slower():
     assert RS.statement_seconds({"witness_s": 1.0, "prove_total_s": 5.0}) == 6.0
     assert RS.statement_seconds({"witness_s": 0.0, "prove_total_s": 5.0, "witness_prebuilt_s": 40.0, "pipeline_depth": 4}) == 10.0
