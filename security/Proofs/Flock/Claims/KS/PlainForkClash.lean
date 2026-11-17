@@ -3,25 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.PlainFork
 public import Proofs.Flock.Claims.KS.PlainClashRunK
 
-/-!
-# The live fork event's collision
-
-`PlainForkClash` asks that two accepting runs of `P` at the concrete simulator's coins whose decoded live outcomes have
-`ForkEvL` at rep `r`'s level `ℓ + 1` collide among the verifier's calls in the two. Each live outcome is its run's
-(`plainSimRun`), and where `verify` accepts what `wrPD` writes for it, rep `r`'s recorded caps are its proof's
-recursive caps and its level-`ℓ + 1` openings its deployed entries (`plain_laterEntriesAt`), each an `Opening` in the
-run's log against the flattened `ℓ`-th recursive cap (`plain_levelOpening`). One recorded cap in both runs is one cap of
-64-byte digests (`capDig_inj`), so one root, and two rows opened at one position of it that differ collide in the joined
-logs (`tiedColl_of_openings`).
-
-* `plain_liveOpening`: at an accepted run, its live outcome's output records its proof's recursive caps, and a
-  later-level opening there is an `Opening` in the run's log against one of them.
-* `capDig_inj`, `opRL_eq_some`, `forkEvL_entries`: two caps of 64-byte digests with one `capDig` are one, and
-  `ForkEvL` is one recorded cap and two openings of one position of it to different rows.
-* `plainForkQ_of`, `plainForkClash`: so `PlainForkClash` holds at every statement.
-* `plain_liveOpeningK`, `plainForkQ_ofK`, `plainForkClashK`: the same at `VK keep` (`plainSimK keep`, `wrPDK keep`,
-  `rawLevelCols_plainK`), so `PlainForkClashK keep` holds at every statement.
--/
+/-! Two accepting runs at the concrete simulator whose decoded live outcomes have `ForkEvL` collide in their joined logs. -/
 
 @[expose] public section
 
@@ -35,13 +17,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **An accepted run's live outcome records its proof's caps and opens rows of them in its log**: at the concrete
-simulator's coins where `P`'s run accepts and `verify` accepts what `wrPD` writes for the live outcome, in an output
-whose rep `k` records the deployed rep's caps and later openings (`LaterEntriesAt`), the recorded caps are the decoded
-proof's recursive caps, and each level-`ℓ ≥ 1` opening `(q, v)` is a row `v` of an `Opening` of `q` against the
-flattened `ℓ − 1`-th of them, a cap of `2^cap` 64-byte digests, in the run's log: the live outcome is the run's
-(`plainSimRun`), the opening one of the run's level-`ℓ` rows (`rawLevelCols_plain`), an `Opening` there
-(`plain_levelOpening`). -/
 theorem plain_liveOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -131,7 +106,6 @@ theorem plain_liveOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
   obtain rfl := Except.ok.inj (hp.symm.trans hp₁)
   exact ⟨row, hrow, hcs, hcw, hop⟩
 
-/-- **Two caps of 64-byte digests, of one size, with one `capDig`, are one.** -/
 theorem capDig_inj {c₁ c₂ : Array ByteArray} (h : capDig c₁ = capDig c₂) (hs : c₁.size = c₂.size)
     (h₁ : ∀ b ∈ c₁.toList, b.size = 64) (h₂ : ∀ b ∈ c₂.toList, b.size = 64) : c₁ = c₂ := by
   refine Array.ext hs fun i hi₁ hi₂ => ?_
@@ -141,8 +115,6 @@ theorem capDig_inj {c₁ c₂ : Array ByteArray} (h : capDig c₁ = capDig c₂)
   rwa [toDig_val (h₁ _ (Array.getElem_mem_toList hi₁)), toDig_val (h₂ _ (Array.getElem_mem_toList hi₂))] at e
 
 open Classical in
-/-- **An opened position at a rep's cap is a verifying opening there**: where rep `r`'s level-`ℓ` openings at `cap`
-open `p`, one of them is at `p`, opened to that row. -/
 theorem opRL_eq_some {D Sl : Type} {Hc : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D}
     {Lf : Merkle.Leaf (List 𝔽) Sl D Hc} {sch : FlockSoundness.Accounting.Schedule} {r ℓ : ℕ} {cap : Model.Cap D}
     {out : Model.OutCL 𝔽 D Sl} {p : Fin (2 ^ (lvOf sch ℓ).logLen)}
@@ -156,8 +128,6 @@ theorem opRL_eq_some {D Sl : Type} {Hc : List UInt8 → D} {E : Merkle.Enc (List
   rw [List.mem_filter, decide_eq_true_eq] at hmem
   exact ⟨x, hmem.1, hmem.2.1, by rw [hx]; rfl⟩
 
-/-- **The fork event's two entries**: `ForkEvL` at rep `r`'s level `ℓ + 1` is one recorded cap `d` in both outputs
-and an opening in each of one position to different rows. -/
 theorem forkEvL_entries {D Sl : Type} [Inhabited D] [Inhabited Sl] {Hc : List UInt8 → D}
     {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D Hc} {sch : FlockSoundness.Accounting.Schedule} {r ℓ : ℕ}
     {a a' : List (Model.OutCL 𝔽 D Sl)} (h : ForkEvL Hc E Lf sch r ℓ a a') :
@@ -172,13 +142,6 @@ theorem forkEvL_entries {D Sl : Type} [Inhabited D] [Inhabited Sl] {Hc : List UI
   show opRL Hc E Lf sch r (ℓ + 1) dc (a.getD 0 dfltOutL) p = opRL Hc E Lf sch r (ℓ + 1) dc (a'.getD 0 dfltOutL) p
   rw [he₁, he₂, he]
 
-/-- **The live fork event's collision, at decoders whose outputs record the deployed reps' caps and later openings**:
-where `verify`'s acceptance of what `wrPD` writes for an outcome makes the decoded output's reps record the deployed
-reps' caps and later entries (`hE`, as `plain_laterEntriesAt` and `plain_laterEntriesHAt` give), two accepting runs of
-`P` whose live outcomes decode to `ForkEvL` at rep `r`'s level `ℓ + 1` record one cap `d` there, the `capDig` of each
-run's proof's `ℓ`-th recursive cap, so one cap of 64-byte digests (`capDig_inj`), and open one position of it to two
-different rows, each an `Opening` against that cap in its run's log (`plain_liveOpening`), which collide in the joined
-logs (`tiedColl_of_openings`). -/
 theorem plainForkQ_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -212,8 +175,6 @@ theorem plainForkQ_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false
   rw [hcap, hq] at ho₁
   exact tiedColl_of_openings ho₁ ho₂ fun he => hne (by rw [hrow₁, hrow₂, he])
 
-/-- **The live fork event's collision holds at every statement**: `plainForkQ_of` at `plain_laterEntriesAt` and
-`plain_laterEntriesHAt`. -/
 theorem plainForkClash (x : Claims.Msg) : PlainForkClash x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω
   exact ⟨fun hh => plainForkQ_of hs hin hset h hd _ _ _
@@ -221,9 +182,6 @@ theorem plainForkClash (x : Claims.Msg) : PlainForkClash x := by
     fun hh hl => plainForkQ_of hs hin hset h hd _ _ _
       (plain_laterEntriesHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω⟩
 
-/-! ## At `VK keep` -/
-
-/-- `plain_liveOpening` at `VK keep`. -/
 theorem plain_liveOpeningK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -310,7 +268,6 @@ theorem plain_liveOpeningK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.F
   obtain rfl := Except.ok.inj (hp.symm.trans hp₁)
   exact ⟨row, hrow, hcs, hcw, hop⟩
 
-/-- `plainForkQ_of` at `VK keep`. -/
 theorem plainForkQ_ofK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -344,7 +301,6 @@ theorem plainForkQ_ofK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock
   rw [hcap, hq] at ho₁
   exact tiedColl_of_openings ho₁ ho₂ fun he => hne (by rw [hrow₁, hrow₂, he])
 
-/-- `plainForkClash` at `VK keep`. -/
 theorem plainForkClashK (keep : Bool → Bool) (x : Claims.Msg) : PlainForkClashK keep x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω
   exact ⟨fun hh => plainForkQ_ofK keep hs hin hset h hd _ _ _

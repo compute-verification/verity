@@ -4,15 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Off the table without a self-clash
-
-`session_sound_of_table_accL` with its level-0 term read only on runs that do not self-clash: for an event `Acc` of the
-session's outputs that implies the table accepts, and any level-0 table `T`,
-`Pr[Acc ∧ T uncommitted] ≤ ε_c⁻ + Pr[Acc ∧ no self-clash ∧ a run opens a level-0 position off T]`
-(`session_sound_of_table_accL_sc`). `ε_c⁻` already counts the self-clash, so a bad run that self-clashes is charged
-there (`bad_pointwise_ofL_sc`).
--/
+/-! `session_sound_of_table_accL` with its level-0 term read only on runs that do not self-clash, as `ε_c⁻` already counts the self-clash. -/
 
 @[expose] public section
 
@@ -21,7 +13,6 @@ namespace FlockSoundness.Discharge.Exec
 open Game Model Accounting
 
 open Classical in
-/-- `bad_pointwise_ofL` with the level-0 term only where the run does not self-clash. -/
 theorem bad_pointwise_ofL_sc {F : Type} [Field F] [Fintype F] [DecidableEq F] {D Sl : Type} [Inhabited D]
     [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch : Schedule) (C₀ : Oracle F) (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F) (n : ℕ)
@@ -65,10 +56,6 @@ theorem bad_pointwise_ofL_sc {F : Type} [Field F] [Fintype F] [DecidableEq F] {D
     exact h
 
 open Classical in
-/-- **Compiled soundness for any level-0 table, in a batched session, off the table without a self-clash.** For every
-event `Acc` of the session's outputs that implies the table accepts, every session strategy after `Commit` and every
-table `T`: `Acc` holds with `T` uncommitted with probability at most `ε_c⁻` plus the probability that `Acc` holds in a
-run that does not self-clash and opens a level-0 position off `T`. -/
 theorem session_sound_of_table_accL_sc {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] {D Sl : Type} (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)

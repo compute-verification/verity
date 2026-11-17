@@ -40,24 +40,7 @@ import Proofs.Flock.Claims.Recursion.FlockKSRecord
 import Proofs.Flock.Claims.Recursion.InnerAbort
 import Proofs.Flock.Claims.Recursion.KSStated
 
-/-!
-# The recursion's KS over the masked record at every number of tables, from every table's bound counted per round
-
-`ZkAbortR` at several tables, with no premise that the statement has one table. One wait over samples holds at every
-table's word's positions (`Claims.Recursion.opDJ`, `Claims.Recursion.firstTable_opDJ`, `Claims.Recursion.oneWaitDJ`,
-as `oneWait_of_tableBoundJ` over runs): at a sample list that does not extract, the first table that does not is not
-`GoodTableAt` there. Every table's bound with escapes on accepted runs counted per round
-(`Claims.Recursion.TableBoundJOnAccR`, at every statement `Flock.TableBoundJAccAtR`) gives it at the abort distribution
-(`Claims.Recursion.TableBoundJAbortR`, `Claims.Recursion.tableBoundJAbortR_of_onAccR`), so one wait there with the
-escapes and the conflict fork merged by round (`Claims.Recursion.oneWaitAbort_of_tableBoundJR`), so `Inner.KSAbort`
-wherever the statement parses where some run accepts (`Claims.Recursion.KSAbort_of_tableBoundJOnAccR`). At the masked
-record the claims read, every table's bound at full-width columns at the untrimmed record carries to the trimmed one
-by padding back, `0` being a trimmed full-width column (`Claims.Recursion.tableBoundJOnAccR_mapCols`,
-`FlockDeploy.KS.zk_tableBoundJOnAccR_trim`), so the record meets `Inner.KSAbort` and the recursion's KS over it holds
-from that bound alone (`FlockDeploy.KS.zk_KSAbortJR`, `FlockDeploy.KS.zk_KSFlockJR`), so from a simulator of each
-masked prover where some run accepts (`FlockDeploy.KS.zk_tableBoundJOnAccR_of_simWJ`,
-`FlockDeploy.KS.zk_KSAbort_of_simWJ_tables`, `FlockDeploy.KS.zk_KSFlock_of_simWJ_tables`).
--/
+/-! The recursion's KS over the masked record at every number of tables, from every table's bound counted per round. -/
 
 @[expose] public section
 
@@ -65,22 +48,17 @@ namespace Claims.Recursion
 
 open Claims Claims.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Rewinding
 
-/-! ## One wait over samples at every table -/
-
 section OneWaitDJ
 
 variable {Dr Coin Col T : Type} [Fintype Dr] [Nonempty Dr] [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
   [DecidableEq Col] [Zero Col]
 
 open Classical in
-/-- **An accepted run's openings over samples** at the words' positions, its first column of table `j` at table `j`'s;
-none on a rejected run. -/
 noncomputable def opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Transcript) (d : Dr)
     (p : PosJ D N x) : Option Col :=
   if (tr d).out = .acc then lookCol (D.cols (tr d).seen p.1) p.2.val else none
 
 omit [Fintype Dr] [Nonempty Dr] [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-/-- **On accepted samples the extractor's table is the zero-filled words.** -/
 theorem firstTable_opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Transcript) (bs : List Dr)
     (hacc : ∀ b ∈ bs, AccD tr b) (p : PosJ D N x) :
     firstTable (opDJ D N x tr) (fun _ => 0) bs p =
@@ -92,8 +70,6 @@ theorem firstTable_opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) 
       simp only [show (tr b).out = .acc from hacc b hb, ↓reduceIte]]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **One wait's bound over samples, from every table's bound**: `oneWaitD` at a statement of several tables, the
-positions every table's word's (`PosJ`). -/
 theorem oneWaitDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Transcript) {s : Flock.Stmt}
     (hs : D.parse x = some s) (Ok : Msg → ℕ → Col → Prop) (hz : ∀ j, Ok x j 0)
     (hok : ∀ d j q u, (tr d).out = .acc → j < nTab D x → q < N x j → lookCol (D.cols (tr d).seen j) q = some u →
@@ -175,19 +151,14 @@ theorem oneWaitDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : M
 
 end OneWaitDJ
 
-/-! ## The chain at the abort distribution at every table, counted per round -/
-
 section TableBound
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **Every table's bound with escapes on accepted runs counted per round**: `Flock.TableBoundJAccAtR` at every
-statement. -/
 def TableBoundJOnAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop) :
     Prop :=
   ∀ x, Flock.TableBoundJAccAtR H D N Ok x
 
-/-- **Every table's bound at the abort distribution, counted per round** (`EscapesD.FitsForkR`). -/
 def TableBoundJAbortR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop) :
     Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (A : Type) [Fintype A] [Nonempty A]
@@ -199,8 +170,6 @@ def TableBoundJAbortR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg �
             ∃ (p : Fin (N x j)) (u : Col),
               lookCol (D.cols (abortRun H P D.V x keep ω d).seen j) p.val = some u ∧ u ≠ C p
 
-/-- **Every table's bound at the abort distribution counted per round, from every table's bound with escapes on accepted runs
-counted per round**: `tableBoundθAbortR_of_onAccR` at each table. -/
 theorem tableBoundJAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (Ok : Msg → ℕ → Col → Prop) (decC : Msg → Msg → Coin) (htab : TableBoundJOnAccR H D N Ok)
     (hVk : ∀ x, 0 < D.V.k x) (hpc : CoinsShown H D.V decC) (hlast : AccLast H D.V) (hfree : DecideFree H D.V)
@@ -215,9 +184,6 @@ theorem tableBoundJAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col
     (fun s => ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols s j) p.val = some u ∧ u ≠ C p) ω
     (fun g => hb (ω, g) j hj C hC hg)
 
-/-- **Flock's one-wait bound at the abort distribution, from every table's bound there counted per round**: when the words
-together are no longer than `N₀` and the statement parses wherever some run accepts, `oneWaitAbort_of_tableBoundR` at
-every table's positions (`oneWaitDJ`). -/
 theorem oneWaitAbort_of_tableBoundJR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (hN : ∀ x, ((∑ j : Fin (nTab D x), N x j : ℕ) : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x)
     (hVk : ∀ x, 0 < D.V.k x) (hk : ∀ x, 1 ≤ D.k x ∨ NoAcc H D.V x)
@@ -280,8 +246,6 @@ theorem oneWaitAbort_of_tableBoundJR (H : Msg → Msg) (D : Flock.Deploy Coin Co
     exact div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right (hN x) hε.le) (by positivity)
   linarith
 
-/-- **Flock as the inner protocol meets `Inner.KSAbort`, from every table's bound counted per round**:
-`KSAbort_of_tableBoundOnAccR` at every number of tables, the statement parsing wherever some run accepts. -/
 theorem KSAbort_of_tableBoundJOnAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (Ok : Msg → ℕ → Col → Prop) (decC : Msg → Msg → Coin)
     (hN : ∀ x, ((∑ j : Fin (nTab D x), N x j : ℕ) : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x)
@@ -295,7 +259,6 @@ theorem KSAbort_of_tableBoundJOnAccR (H : Msg → Msg) (D : Flock.Deploy Coin Co
       (tableBoundJAbortR_of_onAccR H D N Ok decC htab hVk hpc hlast hfree href)) decode hdec
 
 omit [Nonempty Coin] in
-/-- **`TableBoundJOnAccR` through `f`, by padding back**, as `tableBoundJR_mapCols`. -/
 theorem tableBoundJOnAccR_mapCols (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (f : Col → Col)
     (hf : f 0 = 0) (Ok : Msg → ℕ → Col → Prop) (hok : ColsOkJ H D N Ok)
     (hinj : ∀ x j u v, Ok x j u → Ok x j v → f u = f v → u = v) (htab : TableBoundJOnAccR H D N Ok) :
@@ -323,8 +286,6 @@ namespace FlockDeploy.KS
 open Flock
 open Claims.Recursion
 
-/-- **Every masked table's bound with escapes on accepted runs counted per round at the trimmed record**, at its
-trimmed columns or `0`, from the bound at full-width tables at the untrimmed record (`zk_tableBoundJR_trim`). -/
 theorem zk_tableBoundJOnAccR_trim (rel : Readable.Parsed → Readable.Relation)
     (htab : TableBoundJOnAccR sha512 (deployZk rel) (wordLenJ true) (wideJ true)) :
     TableBoundJOnAccR sha512 (deployZkTrim rel) (wordLenJ true)
@@ -339,9 +300,6 @@ theorem zk_tableBoundJOnAccR_trim (rel : Readable.Parsed → Readable.Relation)
     exact okThroughJ_nil true x j (Nat.lt_of_le_of_lt (Nat.zero_le _) p.isLt)
   · exact hp
 
-/-- **The masked (`--zk`) record the claims read meets `Inner.KSAbort`**, at SHA-512 at the deployed relation, at
-every number of tables and every decoder within the radius, from every table's bound with escapes on accepted runs
-counted per round over full-width tables at the untrimmed record. -/
 theorem zk_KSAbortJR
     (htab : TableBoundJOnAccR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true))
     (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.ZkTrace)
@@ -359,8 +317,6 @@ theorem zk_KSAbortJR
     (coinsShown_V sha512 true) (accLast_V_sha512 true) (decideFree_V sha512 true) (refusable_V sha512 true)
     decode hdec
 
-/-- **KS of the recursion over the masked (`--zk`) record the claims read as the inner protocol**, at SHA-512 at the
-deployed relation, at every number of tables: `zk_KSFlockR` with `Inner.KSAbort` from `zk_KSAbortJR`. -/
 theorem zk_KSFlockJR (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)
@@ -380,22 +336,16 @@ theorem zk_KSFlockJR (D : Deploy Coin)
     (zk_KSAbortJR htab decI h) hRef hRounds hN hε (hRd decI) hS (hR decI) (hV decI) (hT decI) (hL decI)
     (hO decI) (hAcc decI) (coinsShown_V sha512 true) hN0
 
-/-- **Every masked table's bound with escapes on accepted runs counted per round**, at full-width columns, from a
-simulator of each prover at the statements some run accepts (`zkXferWJ_of_simWJ`, `zk_tableBoundJAccAtR`). -/
 theorem zk_tableBoundJOnAccR_of_simWJ (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimWJ x) :
     TableBoundJOnAccR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) :=
   zk_tableBoundJAccAtR fun x hno => zkLiveAccWJ_of_xferWJ hno (zkXferWJ_of_simWJ (hs x hno))
 
-/-- **The masked record the claims read meets `Inner.KSAbort`** at the deployed relation, at every number of tables,
-from a simulator of each prover at the statements some run accepts. -/
 theorem zk_KSAbort_of_simWJ_tables (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimWJ x)
     (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.ZkTrace)
     (hdec : decOK (deployZkTrim Readable.relation) decode) :
     (Inner.ofFlock (deployZkTrim Readable.relation) decode).KSAbort sha512 :=
   zk_KSAbortJR (zk_tableBoundJOnAccR_of_simWJ hs) decode hdec
 
-/-- **KS of the recursion over the masked record the claims read** at the deployed relation, at every number of
-tables, from a simulator of each prover at the statements some run accepts (`zk_KSFlockJR`). -/
 theorem zk_KSFlock_of_simWJ_tables (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)

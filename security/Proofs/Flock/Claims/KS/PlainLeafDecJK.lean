@@ -39,12 +39,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
-/-!
-# The plain-leaf decoders at the sample, at the parsed record
-
-`PlainLeafDecK` at `wrPDJK` and `plainVerdictAtJK` (`plain_hdecHUAtJK`). `TagsOkHU` and `plain_setupHiddenU` are
-`PlainLeafDecK`'s.
--/
+/-! `PlainLeafDecK` at `wrPDJK` and `plainVerdictAtJK`. -/
 
 @[expose] public section
 
@@ -60,8 +55,6 @@ open Flock FlockLevel3 Refine Game Transcript Model Accounting
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **verity-verify-proof's acceptance at `dr` through `keep` under hidden outputs and plain SHA-512 leaves makes each table's
-verdict accept at the plain leaf** (`accepts_verdict_plainAnyD`). -/
 theorem accepts_verdict_plainAnyDJK (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option Json} {t : TranscriptJ}
     (hh : I.tags.hiddenOutputs = true) (hl : I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")
     (h : AcceptsAtDJK keep I dr t) :
@@ -113,8 +106,6 @@ theorem accepts_verdict_plainAnyDJK (keep : Bool → Bool) {I : Exec.Inputs} {dr
     (ofCircuit_fold sts[j] hwf _) hms _ sess hext (decodeJWithK_roundsWF keep With.std hsess) schs[j] hf j _ _
     c h0 h1
 
-/-- **Plain SHA-512 leaves as a leaf form**: `flock-leaf/sha512-unsalted`, `leafPlain`, with
-`accepts_verdict_plainAnyDJK`. -/
 noncomputable abbrev LeafFormJ.plain : LeafFormJ where
   tag := "flock-leaf/sha512-unsalted"
   lf := leafPlain
@@ -133,8 +124,6 @@ section Req0
 open Flock Refine Model Game FlockSoundness.Discharge.Exec
 open Lean (Json)
 
-/-- **At verity-verify-proof's acceptance at `dr` through `keep`, each table's level-0 openings at the plain leaf are its
-reps' deployed entries** (`accepts_opens₀LDU`): `accepts_opens₀LDLfJK` at `leafPlain`. -/
 theorem accepts_opens₀LDUJK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : TranscriptJ} (h : AcceptsAtDJK keep I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
@@ -186,8 +175,6 @@ open Flock Refine Exec Game Model Accounting Audit
 open FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **verity-verify-proof's acceptance at `dr` through `keep` of a one-table session under hidden outputs and plain SHA-512
-leaves, rep by rep** (`accepts_repsOneDU`): `accepts_repsOneDLfJK` at `leafPlain`. -/
 theorem accepts_repsOneDUJK (keep : Bool → Bool)
     {I : Inputs} {dr : Option Json} {t : TranscriptJ} (hrr : I.tags.retainRounds = true)
     (hh : I.tags.hiddenOutputs = true) (hl : I.tags.merkleLeaf = "flock-leaf/sha512-unsalted") (hc1 : I.count ≤ 1)
@@ -231,8 +218,6 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at a record writer at hidden outputs under plain SHA-512 leaves**:
-`decodesTable_wrK_scHLf_ofJ` at `LeafFormJ.plain`. -/
 theorem decodesTable_wrK_scHU_ofJ (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -254,8 +239,6 @@ theorem decodesTable_wrK_scHU_ofJ (keep : Bool → Bool)
   decodesTable_wrK_scHLf_ofJ keep LeafFormJ.plain ht hc dj x₀ hT hS R hN C rootB₀ wr hwr j
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at `wrPDJK` at hidden outputs under plain SHA-512 leaves**
-(`decodesTable_wrK_scHU_ofJ` at `wrPDJK`). -/
 theorem decodesTable_wrPDK_scHUJ (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -286,8 +269,6 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
-SHA-512 leaves, at a record writer**: `plain_hdecHLfAtK_ofJ` at `LeafFormJ.plain`. -/
 theorem plain_hdecHUAtK_ofJ (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -317,9 +298,6 @@ theorem plain_hdecHUAtK_ofJ (keep : Bool → Bool)
     hwr
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
-SHA-512 leaves**: `plain_hdecHUAt` with `plainVerdictAtJK keep` for `plainVerdictAt` (`plain_hdecHUAtK_ofJ` at
-`wrPDJK`). -/
 theorem plain_hdecHUAtJK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}

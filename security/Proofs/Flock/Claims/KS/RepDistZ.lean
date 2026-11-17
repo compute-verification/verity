@@ -37,26 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.SlotLead
 
-/-!
-# A masked rep's level caps, at a distance fixed by the statement and the schedule
-
-A masked rep's lockstep (`lockRepZ`) meets its level-`ℓ + 1` cap's table node, `slotOf r (ℓ + 1)` moved four up, after
-the same number of coins on every path that meets it: the masked zerocheck's, lincheck's and opening's coins (the
-non-ZK session's shapes), level 0's two first coins, its `k0` masked lane rounds and its `e` extra samples, then, per
-level passed, plain's count (`RepDist`). The pads root and `τ`'s commitment sit at slots below four, and a path whose
-opening rejects goes to the inner proof and meets no cap.
-
-* `coinsK_foldShapeZ`, `coinsK_replicate_coin`: the masked lane rounds' and the extra samples' coins;
-* `noSlot_lockQueryZ`, `noSlot_lockFoldZK`, `noSlot_lockQuery0Z`, `noSlot_lockInnerZ`: the phases between caps, and
-  the inner proof, have no level table node;
-* `dist_lockRecZ`, `dist_lockLigTailZ`, `dist_lockLigPadZ`, `dist_lockRestZ`, `dist_lockMaskedZ`: each cap's distance
-  through the recursion, the masked level 0 (`ligPadSlotDist`), the opening and the whole masked phase
-  (`maskedSlotDist`);
-* `noSlot_reindex`, `dist_reindex`: moving a lockstep's slots by an injective map moves its distances;
-* `dist_lockRepZ`: so a whole masked rep's;
-* `noSlot_lockRecZ_ge`, `noSlot_lockLigTailZ_ge`, `noSlot_lockLigPadZ_ge`, `noSlot_lockRestZ_ge`,
-  `noSlot_lockMaskedZ_ge`, `noSlot_lockRepZ_ge`: past the last level there is no cap.
--/
+/-! A masked rep's level caps are met after a number of coins the statement and the schedule fix, on every path that meets them. -/
 
 @[expose] public section
 
@@ -70,7 +51,6 @@ variable {α β T Dd I J : Type} {getI : I → ℕ → Option (T × Dd)} {getJ :
   {R : I → α → β → Prop} (emb : I → J) (sl : ℕ → ℕ) (hget : ∀ i s, getJ (emb i) (sl s) = getI i s)
   (hoff : ∀ i i' s, (∀ s', sl s' ≠ s) → getJ (emb i) s = getJ (emb i') s)
 
-/-- **Moving the slots keeps no table node of a slot**, moved. -/
 theorem noSlot_reindex (hsl : Function.Injective sl) {slot : ℕ} {i : I} {g : Game α} {g' : Game β}
     {L : Lock T Dd getI R i g g'} (h : Lock.NoSlot slot L) :
     Lock.NoSlot (sl slot) (lockReindex emb sl hget hoff L) := by
@@ -80,7 +60,6 @@ theorem noSlot_reindex (hsl : Function.Injective sl) {slot : ℕ} {i : I} {g : G
   | send M _ ih => exact .send M ih
   | table s hne _ ih => exact .table (sl s) (fun h => hne (hsl h)) ih
 
-/-- **Moving the slots keeps a slot's distance**, at the moved slot. -/
 theorem dist_reindex (hsl : Function.Injective sl) {slot j : ℕ} {i : I} {g : Game α} {g' : Game β}
     {L : Lock T Dd getI R i g g'} (h : Lock.Dist slot j L) :
     Lock.Dist (sl slot) j (lockReindex emb sl hget hoff L) := by
@@ -108,8 +87,6 @@ theorem coinsK_replicate_coin (C : Type) : ∀ e, Lock.coinsK (List.replicate e 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D Sl : Type} {mPts : ℕ}
 
-/-! ## The recursive rounds -/
-
 theorem noSlot_lockQueryZ (A : Arith F K) (r slot : ℕ) (C₀ : Oracle F) (w₀ : ℕ) (i : IRep F D) (lv : Level)
     (ch : List K) (start start' : ℕ) (hstart : start = start') (st : LigState F K) (stC : LigStateC F K D)
     (h : StRelZ r C₀ w₀ i st stC) (hlev : stC.level ≠ 0) (wm : Bool) :
@@ -119,7 +96,6 @@ theorem noSlot_lockQueryZ (A : Arith F K) (r slot : ℕ) (C₀ : Oracle F) (w₀
   · exact .coin _ fun _ => .coin _ fun _ => .coin _ fun _ => .ret _
   · exact .coin _ fun _ => .coin _ fun _ => .send _ fun _ => .coin _ fun _ => .ret _
 
-/-- **The last level has no cap.** -/
 theorem noSlot_lockRecZ_single (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ → F) (initial : List K)
     (ext : ℕ) (C₀ : Oracle F) (w₀ : ℕ) (sch : Schedule) (slot : ℕ) (lv : Level) (i : IRep F D) (st : LigState F K)
     (stC : LigStateC F K D) (h : RecInvZ r C₀ w₀ sch [lv] i st stC) :
@@ -139,7 +115,6 @@ theorem noSlot_lockRecZ_single (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) 
   subst i3
   exact .ret _
 
-/-- **The masked recursion's caps' distances**, plain's (`recSlotDist`). -/
 theorem dist_lockRecZ (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ → F) (initial : List K) (ext : ℕ)
     (C₀ : Oracle F) (w₀ : ℕ) (sch : Schedule) :
     ∀ (levs : List Level) (i : IRep F D) (st : LigState F K) (stC : LigStateC F K D)
@@ -198,8 +173,6 @@ theorem dist_lockRecZ (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ 
       unfold slotOf
       omega
 
-/-! ## The masked level 0 -/
-
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
 theorem noSlot_lockFoldZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (r slot : ℕ) (i : IRep F D) :
     ∀ (k j : ℕ) (s : LinK K np) (q : QuadL K np), Lock.NoSlot slot (lockFoldZK A P r i k j s q)
@@ -219,8 +192,6 @@ theorem noSlot_lockQuery0Z (A : Arith F K) (r slot : ℕ) (C₀ : Oracle F) (w�
     Lock.NoSlot slot (lockQuery0Z A r C₀ w₀ i lv v col hcol st stC h hlev) :=
   .coin _ fun _ => .coin _ fun _ => .send _ fun _ => .coin _ fun _ => .ret _
 
-/-- **Levels 1+ of the masked level 0: the caps' distances** from the code-switch message, plain Ligerito's after its
-level-0 folds (`ligSlotDist`). -/
 theorem dist_lockLigTailZ (A : Arith F K) (r : ℕ) (hr : r < 2) (sch : Schedule) (t : ℕ) (c₀ : F) (e : ℕ)
     (b : ℕ → F) (C₀ : Oracle F) (lv₀ : Level) (z₀ : Fin (sch.m - 7) → F) (β₀ : F) (initial : List K)
     (hinit : initial.length = sch.k0) (ρ : Fin e → K) (ybar : Fin t → K) (s : K) (ℓ : ℕ) :
@@ -257,12 +228,9 @@ theorem dist_lockLigTailZ (A : Arith F K) (r : ℕ) (hr : r < 2) (sch : Schedule
         unfold slotOf
         omega
 
-/-- The coins from the masked level 0's start to its level-`ℓ + 1` cap: its two first coins, its `k0` lane rounds,
-its `e` extra samples, then `ligSlotDist`. -/
 def ligPadSlotDist (sch : Schedule) (e ℓ : ℕ) : ℕ :=
   ligSlotDist sch.levels.tail ℓ + e + sch.k0 + 1 + 1
 
-/-- **The masked level 0's caps' distances.** -/
 theorem dist_lockLigPadZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P : Pads0 np e) (t : ℕ) (c₀ : F)
     (T : F) (b : ℕ → F) (C₀ : Oracle F) (ℓ : ℕ) :
     ∀ sch : Schedule, Lock.Dist (slotOf r (ℓ + 1)) (ligPadSlotDist sch e ℓ)
@@ -287,9 +255,6 @@ theorem dist_lockLigPadZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P 
       intro _ _ _ _
       exact .ret _
 
-/-! ## The masked phase -/
-
-/-- **The rest of a masked rep: the caps' distances**, after the opening's coins. -/
 theorem dist_lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F) (extra : List (Claim F S.m))
     (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) (ℓ : ℕ) :
@@ -307,12 +272,9 @@ theorem dist_lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀
     intro _ _ _ _
     exact .send _ fun _ => .ret _
 
-/-- The coins from a masked rep's masked phase to its level-`ℓ + 1` cap: the zerocheck's, the lincheck's, the
-opening's of its `nExtra + 2` claims, then `ligPadSlotDist`. -/
 def maskedSlotDist (m kLog nExtra : ℕ) (sch : Schedule) (e ℓ : ℕ) : ℕ :=
   ligPadSlotDist sch e ℓ + (nExtra + 2 + 1) + (kLog - 6 + 3) + (m - 6 + 3)
 
-/-- **The masked phase's caps' distances.** -/
 theorem dist_lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
     (tr : Triple np) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) (ℓ : ℕ) :
@@ -338,8 +300,6 @@ theorem dist_lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P�
     exact .ret _
   exact dist_lockRestZ A r hr P₀ PA S sch hm t c₀ C₀ extra o.1 o₂.1 ℓ
 
-/-! ## The inner proof, and a rep -/
-
 theorem noSlot_lockInnerZ (Hs : Hashes F D Sl) (r : ℕ) (hr : r < 2) {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ)
     (pos : F → Fin N) {nA : ℕ} (rows : Fin nA → Lin F s) (tr : Triple s) (lev : IRep F D) (O : Oracle F)
     (c : Cap D) (slot : ℕ) (hs : 4 ≤ slot) :
@@ -347,8 +307,6 @@ theorem noSlot_lockInnerZ (Hs : Hashes F D Sl) (r : ℕ) (hr : r < 2) {N : ℕ} 
   .coin _ fun _ => .send _ fun _ => .coin _ fun _ => .table _ (by omega) fun _ _ =>
     .coin _ fun _ => .send _ fun _ => .coin _ fun _ => .ret _
 
-/-- **A masked rep's caps' distances**: every path of rep `r` that meets its level-`ℓ + 1` cap's table node meets it
-after `maskedSlotDist` coins; the pads root and the inner proof hold no coin before it and no level slot. -/
 theorem dist_lockRepZ (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (r : ℕ) (hr : r < 2)
     (C₀ : Oracle F) (extra : List (Claim F T.S.m)) (ℓ : ℕ) :
     Lock.Dist (slotOf r (ℓ + 1) + 4) (maskedSlotDist T.S.m T.S.kLog extra.length T.sch T.e ℓ)
@@ -371,9 +329,6 @@ theorem dist_lockRepZ (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (r
   · exact Lock.Dist.mono _ (dist_reindex _ (· + 4) _ _ (add_left_injective 4)
       (dist_lockMaskedZ A r hr T.pads T.padsA T.tr T.S T.sch T.hm T.t T.c₀ C₀ extra ℓ))
 
-/-! ## Past the last cap -/
-
-/-- **No cap past the masked recursion's last level.** -/
 theorem noSlot_lockRecZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ → F) (initial : List K) (ext : ℕ)
     (C₀ : Oracle F) (w₀ : ℕ) (sch : Schedule) :
     ∀ (levs : List Level) (i : IRep F D) (st : LigState F K) (stC : LigStateC F K D)
@@ -415,7 +370,6 @@ theorem noSlot_lockRecZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b :
         omega
       · simp only [List.length_cons] at hp ⊢; omega
 
-/-- **No cap past the masked level 0's last level**, from the code-switch message. -/
 theorem noSlot_lockLigTailZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (sch : Schedule) (t : ℕ) (c₀ : F) (e : ℕ)
     (b : ℕ → F) (C₀ : Oracle F) (lv₀ : Level) (z₀ : Fin (sch.m - 7) → F) (β₀ : F) (initial : List K)
     (hinit : initial.length = sch.k0) (ρ : Fin e → K) (ybar : Fin t → K) (s : K) (ℓ : ℕ) :
@@ -448,7 +402,6 @@ theorem noSlot_lockLigTailZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (sch : Sch
         omega
       · simp only [List.length_cons]; omega
 
-/-- **No cap past the masked level 0's last level.** -/
 theorem noSlot_lockLigPadZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P : Pads0 np e) (t : ℕ) (c₀ : F)
     (T : F) (b : ℕ → F) (C₀ : Oracle F) (ℓ : ℕ) :
     ∀ sch : Schedule, sch.levels.length ≤ ℓ + 1 → Lock.NoSlot (slotOf r (ℓ + 1))
@@ -471,7 +424,6 @@ theorem noSlot_lockLigPadZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ
       intro _ _ _ _
       exact .ret _
 
-/-- **No cap past the last level in the rest of a masked rep.** -/
 theorem noSlot_lockRestZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F) (extra : List (Claim F S.m))
     (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) (ℓ : ℕ) (hℓ : sch.levels.length ≤ ℓ + 1) :
@@ -487,7 +439,6 @@ theorem noSlot_lockRestZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} 
     intro _ _ _ _
     exact .send _ fun _ => .ret _
 
-/-- **No cap past the last level in the masked phase.** -/
 theorem noSlot_lockMaskedZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
     (tr : Triple np) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) (ℓ : ℕ) (hℓ : sch.levels.length ≤ ℓ + 1) :
@@ -509,7 +460,6 @@ theorem noSlot_lockMaskedZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ
     exact .ret _
   exact noSlot_lockRestZ_ge A r hr P₀ PA S sch hm t c₀ C₀ extra o.1 o₂.1 ℓ hℓ
 
-/-- **No cap past a masked rep's last level.** -/
 theorem noSlot_lockRepZ_ge (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (r : ℕ) (hr : r < 2)
     (C₀ : Oracle F) (extra : List (Claim F T.S.m)) (ℓ : ℕ) (hℓ : T.sch.levels.length ≤ ℓ + 1) :
     Lock.NoSlot (slotOf r (ℓ + 1) + 4) (lockRepZ A Hs T r hr C₀ extra) := by

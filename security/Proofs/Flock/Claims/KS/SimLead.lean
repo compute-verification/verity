@@ -38,23 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# The simulated strategy leads with rep 0
-
-The simulation of a one-table session (`simRJ`) follows the live prover round by round. When the live prover submits
-its next `r₀` rounds on rep 0 and then only rep 1's, the simulated strategy, read at its one table (`unB`), is to lead
-with rep 0 for `r₀` coins (`Lock.Lead`), except below a part of the run whose every reached outcome is a dead
-branch's, answering the openings with `nul`.
-
-* `playSteps`: a strategy along a path of the model's messages;
-* `unB`: a table's strategy out of its one-position batch's, and how it reads a step of rep 0 (`unB_ctxAt_send₁`,
-  `unB_ctxAt_coin₁`);
-* `reach_mapDead`: what a simulated strategy reaches, by the simulation's returns and dead branches;
-* `lead_lift`, `lead_coin`: a lead through rep 0's messages and coins, read at the table;
-* `roundJ_none`, `roundJ_some`, `coinJ_coin`: the simulation's round, unfolded;
-* `SchedL`: the live prover submits its next `r₀` rounds on rep 0, then only rep 1's;
-* `lead_simRJ`: so the simulated strategy, read at the table, leads with rep 0 for `r₀` coins.
--/
+/-! The simulation of a one-table session, read at its one table, leads with rep 0 when the live prover submits its next `r₀` rounds on rep 0 first. -/
 
 @[expose] public section
 
@@ -68,7 +52,6 @@ section Steps
 
 variable {α : Type}
 
-/-- **A strategy along a path of the model's messages**: the path's messages, then `σ`. -/
 def playSteps : {g g' : Game α} → Steps g g' → Strategy g' → Strategy g
   | _, _, .refl _, σ => σ
   | _, _, .send m s, σ => ⟨m, playSteps s σ⟩
@@ -86,7 +69,6 @@ theorem playSteps_lift_ofEq_heq {A : Type} {C : Game A → Game α} (c : Ctx C) 
   subst h
   rfl
 
-/-- A context up to pointwise equality sends what it sends. -/
 theorem playSteps_congr_send {A : Type} {C C' : Game A → Game α} (c : Ctx C) (h : ∀ g, C g = C' g) {M : Type}
     (k : M → Game A) (m : M) (σ : Strategy (C' (k m))) (σ' : Strategy (C (k m))) (hσ : HEq σ σ') :
     HEq (playSteps ((c.congr h).send k m) σ) (playSteps (c.send k m) σ') := by
@@ -96,7 +78,6 @@ theorem playSteps_congr_send {A : Type} {C C' : Game A → Game α} (c : Ctx C) 
   rw [playSteps_trans, playSteps_trans, eq_of_heq (playSteps_ofEq_heq (h (k m)) σ)]
   exact playSteps_ofEq_heq _ _
 
-/-- A context up to pointwise equality takes the path to a coin it takes. -/
 theorem playSteps_congr_coin {A : Type} {C C' : Game A → Game α} (c : Ctx C) (h : ∀ g, C g = C' g) {Cm : Type}
     [Fintype Cm] [Nonempty Cm] (k : Cm → Game A) (ψ : Strategy (.coin Cm (c.coin k).next)) :
     HEq (playSteps ((c.congr h).coin k).steps ψ) (playSteps (c.coin k).steps ψ) := by
@@ -106,8 +87,6 @@ theorem playSteps_congr_coin {A : Type} {C C' : Game A → Game α} (c : Ctx C) 
   exact playSteps_ofEq_heq _ _
 
 end Steps
-
-/-! ## A simulated strategy -/
 
 section SimStrategy
 
@@ -156,8 +135,6 @@ theorem out_of_reach : ∀ {L : Game β} {s : Strategy L} {b : β}, Lock.Reach L
   | .send _ _, s, _, h => .send s.1 (out_of_reach h)
   | @Game.coin _ _ _ _ _, _, _, ⟨c, h⟩ => .coin c (out_of_reach h)
 
-/-- **What a simulated strategy reaches**: a return's model outcome, whose live outcome the live strategy reaches, or
-an outcome a dead branch's replaced strategy reaches. -/
 theorem reach_mapDead (f : (g : Game α) → Strategy g → Strategy g) {R : β → α → Prop}
     {D : (g : Game α) → Strategy g → Prop} :
     ∀ {L : Game β} {g : Game α} (d : Sim pL pg L g), Sim.All R D d → ∀ (s : Strategy L) (a : α),
@@ -172,13 +149,10 @@ theorem reach_mapDead (f : (g : Game α) → Strategy g → Strategy g) {R : β 
 
 end SimStrategy
 
-/-! ## A table's strategy out of its one-position batch's -/
-
 section One
 
 variable {A : Type}
 
-/-- **A table's strategy out of its one-position batch's.** -/
 noncomputable def unB (X : Game A) (σ : Strategy (batch [X])) : Strategy X :=
   Strategy.ofMap (·, ([] : List A)) _ (cast (congrArg Strategy (Lock.interleave_ret [] X))
     (Strategy.ofMap (fun x : A × List A => x.1 :: x.2) (X.interleave (.ret [])) σ))
@@ -225,7 +199,6 @@ theorem reach_answerWith {Op : Type} (nul : Op) : ∀ {g : Game A}, AllInh g →
         exact .send σ.1 (fun e => absurd ⟨e, (hg.send_k _).strategy⟩ hc) (reach_answerWith nul (hg.send_k _) _ a h)
   | @Game.coin _ _ _ _ k, hg, σ, a, ⟨c, h⟩ => .coin c (reach_answerWith nul (hg.coin_k c) (σ c) a h)
 
-/-- **A message at the one position of a batch** is the table's message. -/
 theorem unB_batchFn_send (f : Fin 1 → Game A) {M : Type} (k : M → Game A) (m : M)
     (σ : Strategy (batch (List.ofFn (Function.update f 0 (k m))))) :
     unB (.send M k) (playSteps ((Ctx.batchFn f 0).send k m) σ) = ⟨m, unB (k m) σ⟩ :=
@@ -234,7 +207,6 @@ theorem unB_batchFn_send (f : Fin 1 → Game A) {M : Type} (k : M → Game A) (m
     (fun g => congrArg batch (ofFn_update f 0 g).symm) k m σ σ HEq.rfl))).trans
   (congrArg (Sigma.mk m) (unB_eq (k m) σ _ (playSteps_lift_ofEq_heq _ _ σ)))
 
-/-- **A path at the one position of a batch** is the table's path. -/
 theorem unB_batchFn_lift (f : Fin 1 → Game A) :
     ∀ {Y Y' : Game A} (t : Steps Y Y') (σ : Strategy (batch (List.ofFn (Function.update f 0 Y')))),
       unB Y (playSteps ((Ctx.batchFn f 0).lift t) σ) = playSteps t (unB Y' σ)
@@ -243,7 +215,6 @@ theorem unB_batchFn_lift (f : Fin 1 → Game A) :
       (congrArg (unB _) (playSteps_trans ((Ctx.batchFn f 0).send _ m) ((Ctx.batchFn f 0).lift t) σ)).trans
         ((unB_batchFn_send f _ m _).trans (congrArg (Sigma.mk m) (unB_batchFn_lift f t σ)))
 
-/-- **A coin at the one position of a batch** is the table's coin. -/
 theorem unB_batchFn_coin (f : Fin 1 → Game A) {C : Type} [Fintype C] [Nonempty C] (k : C → Game A)
     (ψ : Strategy (.coin C ((Ctx.batchFn f 0).coin k).next)) :
     unB (.coin C k) (playSteps ((Ctx.batchFn f 0).coin k).steps ψ) =
@@ -255,13 +226,10 @@ theorem unB_batchFn_coin (f : Fin 1 → Game A) {C : Type} [Fintype C] [Nonempty
 
 end One
 
-/-! ## Rep 0's steps, read at the table -/
-
 section Rep0
 
 variable {P OutT Cp Op : Type} [Nonempty Op] (out : Fin 1 → Cp → P × P → Op → OutT) (caps : Fin 1 → Cp)
 
-/-- The two reps' positions of one table. -/
 def twoReps (g₀ g₁ : Game P) : Fin 1 → Fin 2 → Game P := fun _ r => if r = 0 then g₀ else g₁
 
 theorem twoReps_eq (gs : Fin 1 → Fin 2 → Game P) : gs = twoReps (gs 0 0) (gs 0 1) := by
@@ -269,7 +237,6 @@ theorem twoReps_eq (gs : Fin 1 → Fin 2 → Game P) : gs = twoReps (gs 0 0) (gs
   obtain rfl := Subsingleton.elim j 0
   fin_cases r <;> rfl
 
-/-- **A message of rep 0 against rep 1 sending**: the table chooses rep 0, then the message. -/
 theorem unB_ctxAt_send₁ (g₀ : Game P) {M₂ : Type} (k₂ : M₂ → Game P) {M : Type} (k : M → Game P) (m : M)
     (ρ : Strategy (posOf out caps (upd (twoReps g₀ (.send M₂ k₂)) 0 0 (k m)))) :
     unB (tabG out caps (upd (twoReps g₀ (.send M₂ k₂)) 0 0 (.send M k)) 0)
@@ -283,7 +250,6 @@ theorem unB_ctxAt_send₁ (g₀ : Game P) {M₂ : Type} (k₂ : M₂ → Game P)
   (unB_batchFn_lift (tabG out caps (twoReps g₀ (.send M₂ k₂)))
     ((Ctx.bind (KgJ out 0 (caps 0))).lift ((Ctx.left (.send M₂ k₂)).send k m)) ρ)
 
-/-- **A message of rep 0 against rep 1 at a coin**: the table chooses rep 0, then the message. -/
 theorem unB_ctxAt_send₂ (g₀ : Game P) {C₂ : Type} [Fintype C₂] [Nonempty C₂] (k₂ : C₂ → Game P) {M : Type}
     (k : M → Game P) (m : M) (ρ : Strategy (posOf out caps (upd (twoReps g₀ (.coin C₂ k₂)) 0 0 (k m)))) :
     unB (tabG out caps (upd (twoReps g₀ (.coin C₂ k₂)) 0 0 (.send M k)) 0)
@@ -297,7 +263,6 @@ theorem unB_ctxAt_send₂ (g₀ : Game P) {C₂ : Type} [Fintype C₂] [Nonempty
   (unB_batchFn_lift (tabG out caps (twoReps g₀ (.coin C₂ k₂)))
     ((Ctx.bind (KgJ out 0 (caps 0))).lift ((Ctx.left (.coin C₂ k₂)).send k m)) ρ)
 
-/-- **A coin of rep 0**, read at the table: rep 0's path to the coin in the table, then the table's coin. -/
 theorem unB_ctxAt_coin (gs : Fin 1 → Fin 2 → Game P) {C : Type} [Fintype C] [Nonempty C] (k : C → Game P)
     (ψ : Strategy (.coin C ((ctxAt out caps gs 0 0).coin k).next)) :
     unB (tabG out caps (upd gs 0 0 (.coin C k)) 0) (playSteps ((ctxAt out caps gs 0 0).coin k).steps ψ) =
@@ -316,7 +281,6 @@ theorem unB_ctxAt_coin (gs : Fin 1 → Fin 2 → Game P) {C : Type} [Fintype C] 
     (playSteps ((Ctx.batchFn (tabG out caps gs) 0).coin
       (((Ctx.left (gs 0 1)).comp (Ctx.bind (KgJ out 0 (caps 0)))).coin k).next).steps ψ)))
 
-/-- **A coin of rep 0 against rep 1 sending**: the table chooses rep 0, then the coin. -/
 theorem unB_ctxAt_coin₁ (g₀ : Game P) {M₂ : Type} (k₂ : M₂ → Game P) {C : Type} [Fintype C] [Nonempty C]
     (k : C → Game P) (ψ : Strategy (.coin C ((ctxAt out caps (twoReps g₀ (.send M₂ k₂)) 0 0).coin k).next)) :
     unB (tabG out caps (upd (twoReps g₀ (.send M₂ k₂)) 0 0 (.coin C k)) 0)
@@ -329,7 +293,6 @@ theorem unB_ctxAt_coin₁ (g₀ : Game P) {M₂ : Type} (k₂ : M₂ → Game P)
       (fun c => interleave (k c) (.send M₂ k₂) |>.bind (KgJ out 0 (caps 0))) ψ).trans
       (funext fun _ => congrArg (unB _) (eq_of_heq ((cast_heq _ _).trans (cast_heq _ _).symm)))))
 
-/-- **A coin of rep 0 against rep 1 at a coin**: the table chooses rep 0, then the coin. -/
 theorem unB_ctxAt_coin₂ (g₀ : Game P) {C₂ : Type} [Fintype C₂] [Nonempty C₂] (k₂ : C₂ → Game P) {C : Type}
     [Fintype C] [Nonempty C] (k : C → Game P)
     (ψ : Strategy (.coin C ((ctxAt out caps (twoReps g₀ (.coin C₂ k₂)) 0 0).coin k).next)) :
@@ -344,8 +307,6 @@ theorem unB_ctxAt_coin₂ (g₀ : Game P) {C₂ : Type} [Fintype C₂] [Nonempty
       (funext fun _ => congrArg (unB _) (eq_of_heq ((cast_heq _ _).trans (cast_heq _ _).symm)))))
 
 end Rep0
-
-/-! ## Leading with rep 0, step by step -/
 
 section Leads
 
@@ -364,7 +325,6 @@ theorem dead_of_outN (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {caps' : F
   rw [show c = out 0 (caps' 0) pend nul from hp]
   exact hnul _ _
 
-/-- **A dead node answered with `nul`**: the table reaches only `Dead` outputs. -/
 theorem lead_answerWith (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {gs : Fin 1 → Fin 2 → Game P}
     (h : ∀ j r, AllInh (gs j r)) (σ : Strategy (posOf out caps gs)) {n : ℕ} :
     Lock.Lead (KgJ out 0 (caps 0)) Dead n (gs 0 0) (gs 0 1)
@@ -372,7 +332,6 @@ theorem lead_answerWith (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {gs : F
   .dead fun c hc => dead_of_outN out nul hnul
     (reach_answerWith nul (allInh_posOf out caps h) σ [c] (reach_unB _ _ c hc))
 
-/-- **A dead node of a simulation**, its strategy answered with `nul`. -/
 theorem lead_of_dead (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {β : Type} {pL : β → Prop}
     {pg : List OutT → Prop} {L : Game β} {gs : Fin 1 → Fin 2 → Game P} (h : ∀ j r, AllInh (gs j r))
     (d : Sim pL pg L (posOf out caps gs)) (hd : ∃ hp σ, d = Sim.dead hp σ) (s : Strategy L) {n : ℕ} :
@@ -381,7 +340,6 @@ theorem lead_of_dead (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {β : Type
   obtain ⟨hp, σ, rfl⟩ := hd
   exact lead_answerWith out caps nul hnul h σ
 
-/-- **No accepted live outcome below**: everything the table reaches is a dead branch's, answered with `nul`. -/
 theorem lead_noAcc (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {β : Type} {pL : β → Prop}
     {pg : List OutT → Prop} {L : Game β} {gs : Fin 1 → Fin 2 → Game P} {m : ℕ}
     {G : Fin 1 → (Fin 2 → Fin m → 𝔽) → Fin 2 → Game P} (d : Sim pL pg L (posOf out caps gs))
@@ -395,7 +353,6 @@ theorem lead_noAcc (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {β : Type} 
     · exact absurd hp (hno b hb)
     · exact dead_of_outN out nul hnul (reach_answerWith nul (allInh_posOf out caps' hinh) σ [c] hr)
 
-/-- **Rep 0's messages**, read at the table: the table chooses rep 0 at each, until rep 1 has ended. -/
 theorem lead_lift (g₀ : Game P) : ∀ (g₂ : Game P) {g g' : Game P} (t : Steps g g')
     (ρ : Strategy (posOf out caps (upd (twoReps g₀ g₂) 0 0 g'))) {n : ℕ},
     Lock.Lead (KgJ out 0 (caps 0)) Dead n g' g₂ (unB (tabG out caps (upd (twoReps g₀ g₂) 0 0 g') 0) ρ) →
@@ -416,7 +373,6 @@ theorem lead_lift (g₀ : Game P) : ∀ (g₂ : Game P) {g g' : Game P} (t : Ste
           (unB_ctxAt_send₂ out caps g₀ k₂ k m (playSteps ((ctxAt out caps (twoReps g₀ (.coin _ k₂)) 0 0).lift t) ρ))).symm
         (.sendCoin m (lead_lift g₀ _ t ρ hL))
 
-/-- **A coin of rep 0**, read at the table: the table chooses rep 0, then the coin, until rep 1 has ended. -/
 theorem lead_coin (g₀ : Game P) : ∀ (g₂ : Game P) {C : Type} [Fintype C] [Nonempty C] (k : C → Game P)
     (ψ : Strategy (.coin C ((ctxAt out caps (twoReps g₀ g₂) 0 0).coin k).next)) {n : ℕ},
     (∀ x, Lock.Lead (KgJ out 0 (caps 0)) Dead n (k x) g₂ (unB (tabG out caps (upd (twoReps g₀ g₂) 0 0 (k x)) 0)
@@ -429,8 +385,6 @@ theorem lead_coin (g₀ : Game P) : ∀ (g₂ : Game P) {C : Type} [Fintype C] [
   | @Game.coin _ _ _ _ k₂, _, _, _, k, ψ, _, hL => lead_of_eq (unB_ctxAt_coin₂ out caps g₀ k₂ k ψ).symm (.coinCoin hL)
 
 end Leads
-
-/-! ## A round of the simulation -/
 
 section Eqns
 
@@ -497,8 +451,6 @@ theorem coinJ_coin {Cm : Type} [Fintype Cm] [Nonempty Cm] (kk : Cm → Game P) (
 
 end Eqns
 
-/-! ## The simulated strategy leads with rep 0 -/
-
 section Sched
 
 variable {P OutT Cp Op : Type} [Nonempty Op] {mPts : ℕ} (out : Fin 1 → Cp → P × P → Op → OutT)
@@ -508,8 +460,6 @@ variable {P OutT Cp Op : Type} [Nonempty Op] {mPts : ℕ} (out : Fin 1 → Cp �
   (pts : Fin 2 → Fin mPts → 𝔽) (nul : Op) {Dead : OutT → Prop}
   {G : Fin 1 → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P}
 
-/-- **The live strategy's next `r₀` rounds are rep 0's, and the rest rep 1's**: it does not stop, nor run out of
-rounds, before rep 0's `r₀` are in. -/
 def SchedL : (n : ℕ) → (rs : Fin 1 → Fin 2 → List Flock.Round) → ℕ →
     Strategy ((liveRoundsJ dg 1 n rs).bind (KLJ rootB pts)) → Prop
   | 0, _, r₀, _ => r₀ = 0
@@ -518,7 +468,6 @@ def SchedL : (n : ℕ) → (rs : Fin 1 → Fin 2 → List Flock.Round) → ℕ �
     | ⟨some s, τ⟩ => s.rep = (if r₀ = 0 then 1 else 0) ∧
         ∀ c, SchedL n (addRoundJ rs s.tab s.rep (roundOf dg s.bytes s.n c)) (r₀ - 1) (τ c)
 
-/-- Under a schedule with no rep 0 rounds left, rep 0's stream ends as it is. -/
 theorem reps_of_sched0 : ∀ (n : ℕ) (rs : Fin 1 → Fin 2 → List Flock.Round)
     (σ : Strategy ((liveRoundsJ dg 1 n rs).bind (KLJ rootB pts))), SchedL dg rootB pts n rs 0 σ →
       ∀ o, Lock.Reach _ σ o → o.reps 0 0 = rs 0 0
@@ -530,7 +479,6 @@ theorem reps_of_sched0 : ∀ (n : ℕ) (rs : Fin 1 → Fin 2 → List Flock.Roun
         (addRoundJ_ne rs _ fun e => absurd (e.2.trans (hS.1.trans (ite_eq_left rfl))) (by decide))
 
 omit [Nonempty Op] in
-/-- **No accepted live outcome when rep 0 has not ended and no rep 0 round is left**: its tape is over. -/
 theorem noAcc_of_sched0 (hfin : ∀ proofs, fin 0 0 proofs = []) {n : ℕ} {rs : Fin 1 → Fin 2 → List Flock.Round}
     {gs : Fin 1 → Fin 2 → Game P}
     (hI : InvJ out ok pL opn caps ((liveRoundsJ dg 1 n rs).bind (KLJ rootB pts)) gs (restJ dec one fin rs))
@@ -545,7 +493,6 @@ theorem noAcc_of_sched0 (hfin : ∀ proofs, fin 0 0 proofs = []) {n : ℕ} {rs :
   rw [hr] at h0
   exact hg _ (PlaysT.nil_inv h0)
 
-/-- **No rep 0 round left**: rep 0 has ended, or no accepted live outcome is below. -/
 theorem lead_zero (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) (hfin : ∀ proofs, fin 0 0 proofs = []) (n : ℕ)
     (rs : Fin 1 → Fin 2 → List Flock.Round) (gs : Fin 1 → Fin 2 → Game P) (h : ∀ j r, AllInh (gs j r))
     (hI : InvJ out ok pL opn caps ((liveRoundsJ dg 1 n rs).bind (KLJ rootB pts)) gs (restJ dec one fin rs))
@@ -565,7 +512,6 @@ theorem lead_zero (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) (hfin : ∀ p
       exact lead_noAcc out caps nul hnul _ hA Pr
         (noAcc_of_sched0 out ok pL opn dg dec one fin caps rootB pts hfin hI hS fun _ e => by simp [twoReps] at e)
 
-/-- **A round's coins on rep 0**, read at the table. -/
 theorem lead_coinJ (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {n : ℕ} {rs : Fin 1 → Fin 2 → List Flock.Round}
     {b : ByteArray} {k : ℕ} (g₁ g₂ : Game P) (h : ∀ j r, AllInh (twoReps g₁ g₂ j r))
     (next : (c : Fin k → 𝔽) → (gs' : Fin 1 → Fin 2 → Game P) → (∀ j r, AllInh (gs' j r)) →
@@ -608,7 +554,6 @@ theorem lead_coinJ (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {n : ℕ} {r
             (next (e x) (upd (twoReps g₁ g₂) 0 0 (kk x)) (allInh_upd h 0 0 (hg.coin_k x)) (hI' x)) (τ (e x)))).symm
           (hnext (e x) (kk x) _ (hI' x) (all_castR_inv _ _ (all_ofSteps_inv _ _ hA x)))
 
-/-- **A round on rep 0**, read at the table: its messages, then its coins. -/
 theorem lead_round (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {n : ℕ} {rs : Fin 1 → Fin 2 → List Flock.Round}
     {b : ByteArray} {k : ℕ} (g₁ g₂ : Game P) (h : ∀ j r, AllInh (twoReps g₁ g₂ j r))
     (hI : InvJ out ok pL opn caps (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs 0 0 b k)) (twoReps g₁ g₂)
@@ -642,9 +587,6 @@ theorem lead_round (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {n : ℕ} {r
       (lead_coinJ out ok dflt pL opn dg dec one fin caps rootB pts nul hnul g₁ g₂ h next τ hnext g' _ _
         (all_ofSteps_inv _ _ hA))
 
-/-- **The simulated strategy leads with rep 0** for `r₀` coins, read at the one table, with every dead branch
-answered with `nul`, when the live strategy's next `r₀` rounds are rep 0's and the rest rep 1's (`SchedL`), and rep
-0 sends no final message. -/
 theorem lead_simRJ (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) (hfin : ∀ proofs, fin 0 0 proofs = []) :
     ∀ (n : ℕ) (rs : Fin 1 → Fin 2 → List Flock.Round) (gs : Fin 1 → Fin 2 → Game P) (h : ∀ j r, AllInh (gs j r))
       (hI : InvJ out ok pL opn caps ((liveRoundsJ dg 1 n rs).bind (KLJ rootB pts)) gs (restJ dec one fin rs))

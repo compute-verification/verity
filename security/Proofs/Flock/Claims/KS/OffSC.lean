@@ -3,20 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.Refit
 public import Proofs.Flock.Claims.KS.ConflictTied
 
-/-!
-# Off the table without a self-clash, at the deployed reader
-
-The plain decoder's verdict is right when the decoded output opens no level-0 position off `C` unless it self-clashes
-(`PlainBound`). That needs, at a deployed run accepting with every looked-up column on `C`, no such opening. The
-deployed reader keeps one column per position below `2^d` (`distinctBelow`); a position it is given is looked up, to a
-column it was given there (`lookCol_distinctBelow_of_mem`). So a salted output whose level-0 openings all verify
-against its own cap, sit below `2^d`, and are, with their rows, the reader's entries, opens a position off the oracle of
-`C` without a self-clash only where the reader looks up a column off `C` (`exists_ne_of_off₀L_sc`): two verifying
-openings of one position with different rows are a self-clash, so the opening off `C` and the column looked up there
-have one row. Only which entries the reader is given matters, not their order. An accepted salted table's level-0
-openings verify against its cap when both reps' level-0 requests have level 0's lanes and path length
-(`verified_slotOpensL`, `verified_opens₀L`).
--/
+/-! An output that opens a position off `C` without a self-clash has the deployed reader look up a column off `C`. -/
 
 @[expose] public section
 
@@ -26,7 +13,6 @@ open FlockSoundness FlockSoundness.Discharge.Exec
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A position the reader is given below `2^d` is looked up**, to a column it was given there. -/
 theorem lookCol_distinctBelow_of_mem {d : ℕ} {os : List (ℕ × List 𝔽)} {e : ℕ × List 𝔽} (he : e ∈ os)
     (hlt : e.1 < 2 ^ d) : ∃ u, lookCol (distinctBelow d os) e.1 = some u ∧ (e.1, u) ∈ os := by
   have hex : ∃ b ∈ distinctBelow d os, b.1 = e.1 := by
@@ -49,10 +35,6 @@ theorem lookCol_distinctBelow_of_mem {d : ℕ} {os : List (ℕ × List 𝔽)} {e
   rw [← hce]
   exact this
 
-/-- **The salted level-0 event without a self-clash is a looked-up column off the word**: when every level-0 opening
-of the output verifies against its own cap `cap₀` and sits below `2^d`, every entry the reader is given is a level-0
-opening's position and row, and every opening's is one, an output that opens a position off the oracle of `C` and does
-not self-clash has the reader look up a column off `C`. -/
 theorem exists_ne_of_off₀L_sc {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : FlockSoundness.Accounting.Schedule) (cap₀ : Model.Cap D)
     (out : Model.OutCL 𝔽 D Sl) {N : ℕ} (hN : N = 2 ^ (lvOf sch 0).logLen) (C : Fin N → List 𝔽) (d : ℕ)
@@ -82,8 +64,6 @@ theorem exists_ne_of_off₀L_sc {D Sl : Type} (H : List UInt8 → D) (E : Merkle
   refine ⟨y, hyo, x, hxo, hy1, hver y hyo, hver x hxo, fun h => hne ?_⟩
   rw [← hy2, h]
 
-/-- **A rep's level-0 openings verify** against the output's cap when its openings are `OpensOKL` and its level-0
-requests have `lanes` lanes and paths of length `depth`. -/
 theorem verified_slotOpensL {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (out : Model.OutCL 𝔽 D Sl) (r Q lanes depth : ℕ)
     (hok : Model.OpensOKL H E Lf out.cap₀ r (if r = 0 then out.pend.1 else out.pend.2) out.opens out.salts)
@@ -111,8 +91,6 @@ theorem verified_slotOpensL {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc
     rw [hd, hpos] at h2
     exact ⟨h1, h2⟩
 
-/-- **An accepted salted table's level-0 openings verify** against its cap, at level 0's lanes and path length, when
-both reps' level-0 requests have them: acceptance is both reps' `OpensOKL` at the cap. -/
 theorem verified_opens₀L {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : FlockSoundness.Accounting.Schedule) (cap : Model.Cap D)
     (pend : Model.PendL 𝔽 D × Model.PendL 𝔽 D) (os : Model.Opens 𝔽 D × Model.Salts Sl)

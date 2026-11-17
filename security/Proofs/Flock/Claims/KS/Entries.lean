@@ -3,25 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.OffSC
 public import Proofs.Flock.Claims.KS.LevelZeroAcc
 
-/-!
-# The deployed reader's level-0 entries at verity-verify-proof's acceptance
-
-`exists_ne_of_off₀L_sc` (`OffSC`) needs, of a salted output, that its level-0 openings verify, sit below `2^d`, and are,
-with their rows, the deployed reader's entries. This file proves all three at verity-verify-proof's acceptance:
-
-* `Claims.Flock.slotOpensL_entries`: a rep whose first request is level 0's, at the positions `Flock.positions` samples
-  from `coins`, with one opened row per position, opens at level 0 exactly the entries `zkRepCols` reads off `coins`
-  and those rows, in order.
-* `Claims.Flock.plainRepColsOf_ok`, `Claims.Flock.lt_of_mem_positions`: the deployed plain reader's entries at a proof
-  that decodes are `zkRepCols`'s, and a sampled position is below `2^d` at a level `fast100` uses.
-* `Claims.Flock.exists_ne_of_entries`: `exists_ne_of_off₀L_sc` with the entries given as one list equation.
-* `accepts_opens₀L`: when `Accepts I t`, whether or not the outputs are hidden, at every table, every pair of the
-  reps' runs on the proof files' messages and the streams' coins whose salted output accepts at a cap has every level-0
-  opening verifying against that cap, at level 0's lanes and path length, below `2^d`, and its level-0 openings'
-  positions and rows are its reps' `plainRepColsOf` entries at the session's shape, stream rounds and proof files
-  (`accepts_req0`, `verified_opens₀L`); `accepts_verdict_hm96` gives such runs, accepted at `capOfRoot` of the table's
-  `root_B`.
--/
+/-! At verity-verify-proof's acceptance the level-0 openings verify, sit below `2^d` and are, with their rows, the deployed reader's entries. -/
 
 @[expose] public section
 
@@ -31,9 +13,6 @@ open FlockSoundness FlockSoundness.Discharge.Exec
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A rep's level-0 openings are the reader's entries**: when the rep's first request is level 0's, at the positions
-`Flock.positions` samples from `coins`, `q` of them, and its openings are `rows`, one per position, its level-0 openings'
-positions and rows are `zkRepCols`'s entries, in order. -/
 theorem slotOpensL_entries {D Sl : Type} (out : Model.OutCL 𝔽 D Sl) (r : ℕ) (lv : _root_.Flock.Level)
     (coins : Array _root_.Flock.F128) (rows : Array (Array _root_.Flock.F128)) (R : Model.Req)
     (rest : List Model.Req) (hreqs : (if r = 0 then out.pend.1 else out.pend.2).reqs = R :: rest)
@@ -51,7 +30,6 @@ theorem slotOpensL_entries {D Sl : Type} (out : Model.OutCL 𝔽 D Sl) (r : ℕ)
     simp only [List.length_map, List.length_zipIdx] at h1
     simp [hop, hrows, h1]
 
-/-- An entry `zkRepCols` reads is at a sampled position. -/
 theorem fst_mem_positions_of_mem_zkRepCols {lv : _root_.Flock.Level} {coins : Array _root_.Flock.F128}
     {rows : Array (Array _root_.Flock.F128)} {e : ℕ × List 𝔽} (he : e ∈ zkRepCols lv coins rows) :
     e.1 ∈ (_root_.Flock.positions lv coins).toList := by
@@ -59,14 +37,12 @@ theorem fst_mem_positions_of_mem_zkRepCols {lv : _root_.Flock.Level} {coins : Ar
   obtain ⟨pr, hpr, rfl⟩ := List.mem_map.1 he
   exact (List.of_mem_zip hpr).1
 
-/-- A position `Flock.positions` samples at a level of the model's shape is below `2^d`. -/
 theorem lt_of_mem_positions {lv : _root_.Flock.Level} (hl : Refine.LevelSeam lv) {coins : Array _root_.Flock.F128}
     {p : ℕ} (hp : p ∈ (_root_.Flock.positions lv coins).toList) : p < 2 ^ lv.d := by
   rw [← Refine.positions_eq lv hl coins] at hp
   rw [hl.2.2.2.2]
   exact positions_lt _ _ _ _ p hp
 
-/-- A round's coins read with a default round are the coins read with no coins as the default. -/
 theorem coins_getElem! (rs : Array _root_.Flock.Round) (i : ℕ) :
     (rs[i]!).coins = (rs[i]?.map (·.coins)).getD #[] := by
   by_cases h : i < rs.size
@@ -74,8 +50,6 @@ theorem coins_getElem! (rs : Array _root_.Flock.Round) (i : ℕ) :
   · simp [h]
     rfl
 
-/-- The deployed plain reader's entries at a proof that decodes: `zkRepCols` at level 0, the coins of round
-`plainQueryRound` and the proof's level-0 rows. -/
 theorem plainRepColsOf_ok {sh : _root_.Flock.Shape} {rounds : Array _root_.Flock.Round} {bytes : ByteArray}
     {p : _root_.Flock.Proof} (h : _root_.Flock.decodeProof sh bytes = .ok p) :
     plainRepColsOf sh rounds bytes = zkRepCols (sh.sched.levels.getD 0 default)
@@ -83,9 +57,6 @@ theorem plainRepColsOf_ok {sh : _root_.Flock.Shape} {rounds : Array _root_.Flock
   unfold plainRepColsOf
   rw [h, coins_getElem!]
 
-/-- **`exists_ne_of_off₀L_sc` at a list of entries**: when the level-0 openings verify below `2^d` and their positions
-and rows are `os`, an output that opens a position off the oracle of `C` without a self-clash has the reader look up a
-column off `C`. -/
 theorem exists_ne_of_entries {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : FlockSoundness.Accounting.Schedule) (cap₀ : Model.Cap D)
     (out : Model.OutCL 𝔽 D Sl) {N : ℕ} (hN : N = 2 ^ (lvOf sch 0).logLen) (C : Fin N → List 𝔽) (d : ℕ)
@@ -107,12 +78,6 @@ open Flock Refine Model Game
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **At verity-verify-proof's acceptance, each table's level-0 openings are its reps' deployed entries** (§9–§14). When
-`Accepts I t`, at every table `j`, its `fast100` schedule and the statement read off its layout,
-every pair of the reps' runs on the proof files' messages and the streams' coins whose salted output accepts at a cap
-has its level-0 openings verifying against that cap at level 0's lanes and path length, below `2^d`, and its level-0
-openings' positions and rows are the reps' `plainRepColsOf` entries, rep 0's then rep 1's, at the table's shape, the
-reps' stream rounds and the proof files. -/
 theorem accepts_opens₀L {I : Inputs} {t : Transcript} (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧

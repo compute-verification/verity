@@ -38,28 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The old table at the filled word
-
-`TableBoundθ` (`KS.Joint`) is the old theorems' fixed-table bound at the deployed verifier. The old bound's event is
-`¬ Committed A S sch T` at an oracle `T`, the spec's `¬ GoodTable C` at a word of columns `C`. This file maps one to
-the other.
-
-* **The word as the old oracle** (`oracleOf`): lane `ℓ` at position `q` is column `q`'s symbol `ℓ`. When every column
-  has the code's width, `Close γ` (every lane agreeing on a `1 − γ` fraction of the positions) is whole columns
-  agreeing on that fraction (`agree_of_close`).
-* **The plain record**: the deployed code is the old `encode` (`plainEncD_encode`), the read step the bits of the old
-  `witnessOf` (`plainReadD_hid`), and the deployed schedule the old model's (`fast100_plainSched`), whose level 0 is
-  the deployed one (`level₀_plainSched`) with the deployed `θ` as its `radius` (`radius_plain`). So a table of
-  full-width columns whose oracle is `Committed` at the deployed schedule extracts (`good_of_committed_plain`), given
-  that a satisfying old witness reads as a witness of table 0's statement.
-* **The masked record**: a masked message's lanes are coefficient rows of the old padded code (`zkRowsOf`,
-  `zkEnc_eq_encAt`), the read step reads the old `padWit` of them (`zkReadD_eq_padWit`), and the deployed `θ` is the
-  old `padRadius` (`radius_zk`). A masked column is an opened row's witness lanes, so the old masked bound's
-  `CommittedPad` (`padList` with no extra lanes) reads exactly the masked columns: a table of witness-lane columns
-  whose oracle is `CommittedPad` at the deployed masked schedule and padding extracts (`good_of_committed_zk`), its
-  rows taken back to a masked message (`zkOfRows`).
--/
+/-! The session theorems' fixed-table event, `¬ Committed` at an oracle, mapped to the spec's `¬ GoodTable` at a word of columns. -/
 
 @[expose] public section
 
@@ -69,16 +48,9 @@ open FlockSoundness FlockSoundness.Model FlockSoundness.Accounting FlockSoundnes
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The word as the old oracle -/
-
-/-- **A word of columns as the old oracle**: lane `ℓ` at position `q` is column `q`'s symbol `ℓ`; `0` past the word or
-the column. -/
 def oracleOf {F : Type} [Zero F] {N : ℕ} (C : Fin N → List F) : ℕ → ℕ → F :=
   fun ℓ q => if h : q < N then (C ⟨q, h⟩).getD ℓ 0 else 0
 
-/-- **`Close` is whole columns agreeing**: when every column has the code's `2^lanes` symbols and is the codeword's
-column wherever every lane agrees, a `γ`-close oracle's word agrees with the codeword on a `1 − γ` fraction of the
-positions. -/
 theorem agree_of_close {F : Type} [Field F] [DecidableEq F] {lanes d N : ℕ} (hN : N = 2 ^ d) {γ : ℝ}
     (C : Fin N → List F) (hw : ∀ q, (C q).length = 2 ^ lanes) (U : Table F lanes d) (f : ℕ → List F)
     (hf : ∀ q : Fin (2 ^ d), f q = List.ofFn fun ℓ => U ℓ q)
@@ -97,16 +69,11 @@ theorem agree_of_close {F : Type} [Field F] [DecidableEq F] {lanes d N : ℕ} (h
     Option.getD_some] at e
   simpa using e.symm
 
-/-! ## The plain record -/
-
-/-- **The deployed plain code is the old `encode`**: a trace's column at a position is every lane's old codeword
-symbol there. -/
 theorem plainEncD_encode (i : PlainIdx) (M : Message 𝔽 (plainLanes i) (plainCols i)) (q : Fin (2 ^ plainLen i)) :
     plainEncD ⟨i, M⟩ q = List.ofFn fun ℓ => encode execArith (plainLen i) M ℓ q := by
   rw [plainEncD_eq]
   rfl
 
-/-- **The deployed plain read step is the old witness's bits**: hidden value `a` is `witnessOf`'s bit `a`. -/
 theorem plainReadD_hid (i : PlainIdx) (M : Message 𝔽 (plainLanes i) (plainCols i)) (a : Fin (2 ^ i.m)) :
     (plainReadD ⟨i, M⟩).hid.getD a false = decide (witnessOf execArith i.m (plainLanes i) (plainCols i) M a = 1) :=
   readTrace_hid _ _ _ _ _ _
@@ -118,12 +85,10 @@ theorem plainSched_some (i : PlainIdx) : _root_.Flock.fast100 i.m = some (plainS
   | none => rw [hf] at h; cases h
   | some s => rfl
 
-/-- **The deployed plain schedule is the old model's** (`fast100_schedOf`). -/
 theorem fast100_plainSched (i : PlainIdx) : Accounting.fast100 i.m = some (schedOf (plainSched i.m)) := by
   rw [← fast100_schedOf, plainSched_some]
   rfl
 
-/-- The plain level 0's rate is `1/2` (`log 1`), and the old model's level 0 is the deployed one. -/
 theorem plainLevel_table : ∀ i : PlainIdx,
     (plainLevel0 i.m).rate = 1 ∧ (schedOf (plainSched i.m)).level₀ = levelOf (plainLevel0 i.m) := by
   decide +kernel
@@ -138,7 +103,6 @@ theorem logLen_plain (i : PlainIdx) : (levelOf (plainLevel0 i.m)).logLen = plain
   rw [(plainLevel_table i).1, (plainShape_table i).2.2.2.1]
   rfl
 
-/-- **The deployed plain `θ` is the old level-0 `radius`**, `1 − √(1/2) − 1/200`. -/
 theorem radius_plain (M : PlainTrace) : plainThetaD M = (levelOf (plainLevel0 M.1.m)).radius := by
   obtain ⟨i, M⟩ := M
   have hd : plainLen i = plainCols i + 1 := (plainShape_table i).2.2.2.1
@@ -151,19 +115,14 @@ theorem radius_plain (M : PlainTrace) : plainThetaD M = (levelOf (plainLevel0 M.
     field_simp
   rw [e]
 
-/-! ## The masked record -/
-
-/-- **A masked message's coefficient rows**: each lane's first `2^cols + t` coefficients (`zkCoeffs`). -/
 def zkRowsOf {F : Type} [Field F] (c₀ : F) {s cols t : ℕ} (M : ZkMessage F s cols t) :
     Fin s → Fin (2 ^ cols + t) → F :=
   fun ℓ => zkCoeffs c₀ (M.1 ℓ) (M.2 ℓ)
 
-/-- **A masked lane is the old padded code's** at its coefficient row. -/
 theorem zkEnc_eq_encAt {F K : Type} [Field F] [Field K] (A : Arith F K) (d : ℕ) (c₀ : F) {s cols t : ℕ}
     (M : ZkMessage F s cols t) (q : ℕ) (ℓ : Fin s) :
     zkEnc A d c₀ M q ℓ = encAt A d (2 ^ cols + t) (zkRowsOf c₀ M ℓ) q := rfl
 
-/-- **The old padded witness of a masked message's rows is its witness lanes' messages.** -/
 theorem padWit_zkRowsOf {F : Type} [Field F] (c₀ : F) {lanes e cols t : ℕ} (M : ZkMessage F (2 ^ lanes + e) cols t) :
     padWit c₀ (zkRowsOf c₀ M) = zkWitnessMsg M := by
   funext ℓ x
@@ -174,7 +133,6 @@ theorem padWit_zkRowsOf {F : Type} [Field F] (c₀ : F) {lanes e cols t : ℕ} (
     ring
   · ring
 
-/-- **The deployed masked read step reads the old padded witness** of the message's rows. -/
 theorem zkReadD_eq_padWit (i : ZkIdx) (M : ZkMessage 𝔽 (zkWidth i) (zkCols i) (zkPad i)) :
     zkReadD ⟨i, M⟩ = readTrace execArith i.m (zkLanes i) (zkCols i)
       (padWit (e := 0) (FlockLevel3.GF128.of _root_.Flock.Zk.PAD_C)
@@ -185,7 +143,6 @@ theorem zkReadD_eq_padWit (i : ZkIdx) (M : ZkMessage 𝔽 (zkWidth i) (zkCols i)
 theorem zkLevel_rate : ∀ i : ZkIdx, (zkLevel0 i.wideLeaf i.m).rate = 1 := by
   decide +kernel
 
-/-- **The deployed masked `θ` is the old `padRadius`** at the deployed padding. -/
 theorem radius_zk (M : ZkTrace) : zkThetaD M = (levelOf (zkLevel0 M.1.wideLeaf M.1.m)).padRadius (zkPad M.1) := by
   obtain ⟨i, M⟩ := M
   have hd : zkLen i = zkCols i + 1 := (zkShape_table i).2.2.2.1
@@ -198,8 +155,6 @@ theorem radius_zk (M : ZkTrace) : zkThetaD M = (levelOf (zkLevel0 M.1.wideLeaf M
   push_cast
   rfl
 
-/-- **Rows as a masked message**: lane `ℓ`'s message the row's `padMsgAt`, its padding the row's last `t`
-coefficients. -/
 def zkOfRows {F : Type} [Field F] (c₀ : F) {s cols t : ℕ} (R : Fin s → Fin (2 ^ cols + t) → F) :
     ZkMessage F s cols t :=
   (fun ℓ => padMsgAt c₀ (R ℓ), fun ℓ j => R ℓ (Fin.natAdd (2 ^ cols) j))
@@ -218,7 +173,6 @@ theorem zkRowsOf_zkOfRows {F : Type} [Field F] (c₀ : F) {s cols t : ℕ} (R : 
   · rw [zkRowsOf, zkCoeffs_right]
     rfl
 
-/-- The masked schedule's level 0 is the deployed one, and its `k0` the witness lanes. -/
 theorem zkLevel_table : ∀ i : ZkIdx,
     (schedOf (zkSched i.wideLeaf i.m).1).level₀ = levelOf (zkLevel0 i.wideLeaf i.m) ∧ (schedOf (zkSched i.wideLeaf i.m).1).k0 = zkLanes i := by
   decide +kernel
@@ -230,16 +184,12 @@ theorem logLen_zk (i : ZkIdx) : (levelOf (zkLevel0 i.wideLeaf i.m)).logLen = zkL
 
 end Claims.Flock
 
-/-! ## A committed table extracts, at the plain record -/
-
 namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Model FlockSoundness.Refine Claims.Flock
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A close table extracts**, at the plain record: a table of full-width columns at a statement whose table 0 is at
-index `i`, `θ`-close to the old encoding of a message whose read step is a witness. -/
 theorem good_of_close_plain (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).table x 0 = some s) (i : PlainIdx)
     (hN : wordLen false x = 2 ^ plainLen i) (C : Fin (wordLen false x) → List 𝔽)
@@ -257,9 +207,6 @@ theorem good_of_close_plain (rel : Readable.Parsed → Readable.Relation)
   push_cast
   exact this
 
-/-- **A committed table extracts**, at the plain record: a table of full-width columns at a statement whose table 0 is
-at index `i`, whose oracle is `Committed` for the old statement `S` at the deployed schedule, when a satisfying old
-witness of `S` reads as a witness of table 0's statement. -/
 theorem good_of_committed_plain (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).table x 0 = some s) (i : PlainIdx)
     (hN : wordLen false x = 2 ^ plainLen i) (C : Fin (wordLen false x) → List 𝔽)
@@ -284,7 +231,6 @@ theorem good_of_committed_plain (rel : Readable.Parsed → Readable.Relation)
     exact logLen_plain i
   · rw [level₀_plainSched]
 
-/-- **At table 0's index**: the word is `2^d` long and a full-width column has `2^lanes` symbols. -/
 theorem plain_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
     (h : (tables false x).head? = some (spec, st)) {i : PlainIdx} (hi : i.m = st.m) :
     wordLen false x = 2 ^ plainLen i ∧ ∀ u, wide false x u ↔ u.length = 2 ^ plainLanes i := by
@@ -296,9 +242,6 @@ theorem plain_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
     rw [h]
     simp [plainLanes, hi]
 
-/-- **An uncommitted old table**, at the plain record: a table of full-width columns that does not extract has an
-oracle that is not `Committed` at the deployed schedule, for an old statement whose satisfying witnesses read as
-witnesses of table 0's statement. -/
 theorem not_committed_plain (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).table x 0 = some s) {spec : SessionSpec}
     {st : _root_.Flock.Stmt}
@@ -311,8 +254,6 @@ theorem not_committed_plain (rel : Readable.Parsed → Readable.Relation)
   hg (good_of_committed_plain rel x s hs i (plain_at hst hi).1 C (fun q => ((plain_at hst hi).2 _).1 (hw q)) S hwit
     hc)
 
-/-! ## A committed table extracts, at the masked record -/
-
 /-- `PAD_C`, the masked padding's constant, in GF(2^128). -/
 abbrev padC : 𝔽 := FlockLevel3.GF128.of _root_.Flock.Zk.PAD_C
 
@@ -321,9 +262,6 @@ theorem padLane_zero (k0 r : ℕ) (ℓ : Fin (2 ^ k0 + 0)) : padLane k0 0 r ℓ 
   rw [this, padLane, Fin.addCases_left]
   rfl
 
-/-- **A close table extracts**, at the masked record: a table of witness-lane columns at a statement whose table 0 is
-at index `i`, close at the deployed `θ` to the old padded encoding of coefficient rows whose padded witness reads as a
-witness. -/
 theorem good_of_close_zk (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x 0 = some s) (i : ZkIdx)
     (hN : wordLen true x = 2 ^ zkLen i) (C : Fin (wordLen true x) → List 𝔽)
@@ -355,9 +293,6 @@ theorem good_of_close_zk (rel : Readable.Parsed → Readable.Relation)
     push_cast
     exact this
 
-/-- **A committed table extracts**, at the masked record: a table of witness-lane columns at a statement whose table 0
-is at index `i`, whose oracle is `CommittedPad` for the old statement `S` at the deployed masked schedule and padding,
-when a satisfying old witness of `S` reads as a witness of table 0's statement. -/
 theorem good_of_committed_zk (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x 0 = some s) (i : ZkIdx)
     (hN : wordLen true x = 2 ^ zkLen i) (C : Fin (wordLen true x) → List 𝔽)
@@ -383,7 +318,6 @@ theorem good_of_committed_zk (rel : Readable.Parsed → Readable.Relation)
   obtain ⟨P, ⟨R, hR, rfl⟩, hsat⟩ := hc
   exact key _ _ (zkLevel_table i).2 (zkLevel_table i).1 R hR hsat
 
-/-- **At table 0's index**, masked: the word is `2^d` long and a column has the `2^lanes` witness lanes. -/
 theorem zk_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
     (h : (tables true x).head? = some (spec, st)) {i : ZkIdx} (hi : i.At st.wideLeaf st.m) :
     wordLen true x = 2 ^ zkLen i ∧ ∀ u, wide true x u ↔ u.length = 2 ^ zkLanes i := by
@@ -395,9 +329,6 @@ theorem zk_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
     rw [h]
     simp [zkLanes, hi.level0]
 
-/-- **An uncommitted old table**, at the masked record: a table of witness-lane columns that does not extract has an
-oracle that is not `CommittedPad` at the deployed masked schedule, for an old statement whose satisfying witnesses read
-as witnesses of table 0's statement. -/
 theorem not_committed_zk (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x 0 = some s) {spec : SessionSpec}
     {st : _root_.Flock.Stmt}

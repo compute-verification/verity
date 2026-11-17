@@ -37,42 +37,17 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The fork bound's slack and one more escape per round
-
-A simulated fork at round `j` falls short of the deployed one only where the fork's coins agree with its first run's
-on what the simulator reads, round after round: a chance `δ_t` at round `t`, so `Δ_{j,i} = Π_{j ≤ t < i} δ_t` through
-round `i` (`slackΔ`). There the fork moves on to round `i`, and past the last round it is the first run itself, so the
-simulated fork's bound is the deployed fork's, at round `j`, and the slack
-`Σ_{j<i<K} Δ_{j,i}·Pr[F_i] + Δ_{j,K}·Pr[F_K]` (`forkSlack`), with `F_i` the accepting fork at round `i` with a
-collision (`forkEv`) and `F_K` the accepting run with a collision (`oneEv`, `forkPrAt`).
-
-* **The coupling.** `ForkCoinCoupling` is the step on the fork's coin distribution: the simulated fork at round `t` is at most
-  the deployed one there and `δ_t` times the simulated fork at `t + 1`, and past the last round at most `F_K`;
-  `sim_le_slack` unrolls it into the slack, so the coupling gives the slack form (`slack_of_coupling`). At a
-  simulator's coins `Φ` the simulated fork is `simForkPr`, the two runs at the tape and the live coins of a live
-  fork's two branches.
-* **One more escape per round.** The slack folds into one fork event per round `i`, `F_i` or, at the last round, the
-  one-run event (`slackG`), of weight `C_i = (Σ_{r,ℓ} √(2^{d_{ℓ+1}}·Q_{ℓ+1}·w_{r,ℓ,i}))²` (`slackC`) at the slack's
-  weights `w` (`slackW`), since `√(c·(p + Σ_i w_i·q_i)) ≤ √(c·p) + Σ_i √(c·w_i)·√q_i` (`sum_sqrt_slack_le`). The old
-  escapes with those (`slackEsc`) bound the old fork terms at the slack (`slackEsc_term`, `forkSlack_le`).
-* **The fit.** With the plain fork rounds past round 0 (`plainJ_ne_zero`), the old escapes, the fork of weight `k` and
-  one more event a round are still two a round, so they fit the plain weight when `Σ_i C_i ≤ 2·2^{d₀}·Q₀`
-  (`slackEsc_fitsFork_plain`, from `plain_fork_room`).
--/
+/-! The fork bound's slack, folded into one more escape per round that still fits the plain weight. -/
 
 @[expose] public section
 
 namespace Claims.Flock
 
-/-- `Δ_{j,i} = Π_{j ≤ t < i} δ_t`. -/
 noncomputable def slackΔ (δ : ℕ → ℝ) (j i : ℕ) : ℝ := ∏ t ∈ Finset.Ico j i, δ t
 
 theorem slackΔ_nonneg {δ : ℕ → ℝ} (hδ : ∀ t, 0 ≤ δ t) (j i : ℕ) : 0 ≤ slackΔ δ j i :=
   Finset.prod_nonneg fun t _ => hδ t
 
-/-- **The slack's weight at round `i`** of a fork at round `j`, of `K` rounds: `Δ_{j,i}` past `j`, and at the last
-round `Δ_{j,K}` more, the one-run event's. -/
 noncomputable def slackW (K : ℕ) (δ : ℕ → ℝ) (j i : ℕ) : ℝ :=
   (if j < i then slackΔ δ j i else 0) + (if i + 1 = K then slackΔ δ j K else 0)
 
@@ -80,9 +55,6 @@ theorem slackW_nonneg {δ : ℕ → ℝ} (hδ : ∀ t, 0 ≤ δ t) (K j i : ℕ)
   unfold slackW
   refine add_nonneg ?_ ?_ <;> split_ifs <;> first | exact slackΔ_nonneg hδ _ _ | exact le_rfl
 
-/-- **The fork's slack, unrolled**: where the simulated fork at each round `t < K` is at most the deployed one there
-and `δ_t` times the simulated fork at `t + 1`, and past the last round at most `dep K`, the simulated fork at `j < K`
-is at most `dep j + Σ_{j<i<K} Δ_{j,i}·dep i + Δ_{j,K}·dep K`. -/
 theorem sim_le_slack (K : ℕ) (δ sim dep : ℕ → ℝ) (hδ : ∀ t, 0 ≤ δ t)
     (hstep : ∀ t < K, sim t ≤ dep t + δ t * sim (t + 1)) (hlast : sim K ≤ dep K) :
     ∀ j < K, sim j ≤ dep j + (∑ i ∈ Finset.Ico (j + 1) K, slackΔ δ j i * dep i) + slackΔ δ j K * dep K := by
@@ -126,30 +98,24 @@ section Events
 
 variable {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
 
-/-- **Two accepting runs with a collision** among the verifier's calls in the two. -/
 def pairEv (ω : Ω) (s s' : Fin (V.k x) → Coin) : Prop :=
   (run H P V x ω s).out = .acc ∧ (run H P V x ω s').out = .acc ∧
     TiedColl H ((run H P V x ω s).vLog ++ (run H P V x ω s').vLog)
 
-/-- **An accepting fork at round `i` with a collision** among the verifier's calls in its two runs. -/
 def forkEv (i : Fin (V.k x)) (ω : Ω) (s s' : Fin (V.k x) → Coin) : Prop :=
   pairEv H V P x ω s (forkCoins i s s')
 
-/-- **An accepting run with a collision** among the verifier's calls: the fork past the last round. -/
 def oneEv (ω : Ω) (s : Fin (V.k x) → Coin) : Prop :=
   (run H P V x ω s).out = .acc ∧ TiedColl H (run H P V x ω s).vLog
 
-/-- **The fork events' probabilities by round**: `F_i`'s for `i < K`, and the one-run event's past the last round. -/
 noncomputable def forkPrAt [Fintype Coin] (ω : Ω) (i : ℕ) : ℝ :=
   if h : i < V.k x then Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => forkEv H V P x ⟨i, h⟩ ω s.1 s.2
   else Pr fun s : Fin (V.k x) → Coin => oneEv H V P x ω s
 
-/-- **The fork's slack** at round `j` and chances `δ`: `Σ_{j<i<K} Δ_{j,i}·Pr[F_i] + Δ_{j,K}·Pr[F_K]`. -/
 noncomputable def forkSlack [Fintype Coin] (δ : ℕ → ℝ) (j : ℕ) (ω : Ω) : ℝ :=
   (∑ i ∈ Finset.Ico (j + 1) (V.k x), slackΔ δ j i * forkPrAt H V P x ω i) +
     slackΔ δ j (V.k x) * forkPrAt H V P x ω (V.k x)
 
-/-- **The slack's events, one a round**: `F_i`, or at the last round the one-run event. -/
 def slackG (i : Fin (V.k x)) (ω : Ω) (s s' : Fin (V.k x) → Coin) : Prop :=
   forkEv H V P x i ω s s' ∨ (i.val + 1 = V.k x ∧ oneEv H V P x ω s)
 
@@ -159,8 +125,6 @@ theorem slackG_tied (i : Fin (V.k x)) (ω : Ω) (s s' : Fin (V.k x) → Coin) (h
   · exact h.2.2
   · exact h.2.2.append_right _
 
-/-- **The slack is at most the slack's events at their weights**: `F_i` is in round `i`'s event and the one-run event
-in the last round's, whose probability over a fork's pairs is its own (`Pr_fst`). -/
 theorem forkSlack_le [Fintype Coin] [Nonempty Coin] {δ : ℕ → ℝ} (hδ : ∀ t, 0 ≤ δ t) (j₀ : Fin (V.k x)) (ω : Ω) :
     forkSlack H V P x δ j₀.val ω ≤ ∑ i : Fin (V.k x), slackW (V.k x) δ j₀.val i.val *
       Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => slackG H V P x i ω s.1 s.2 := by
@@ -205,24 +169,14 @@ theorem forkSlack_le [Fintype Coin] [Nonempty Coin] {δ : ℕ → ℝ} (hδ : �
     rw [Finset.sum_eq_single (K - 1) (fun b _ hb => ite_eq_right_of_eq_false _ _ (eq_false (by omega))) (fun h => absurd
       (Finset.mem_range.2 (by omega)) h), ite_eq_left_of_eq_true _ _ (eq_true (by omega))]
 
-/-- **A simulated fork at deployed round `t`**: the two runs at a simulator's coins `Φ`, at its tape and the live
-coins of each branch of a live fork (`lf t`, the second branch's live coins at the first's and fresh ones) accept with
-a collision. -/
 noncomputable def simForkPr [Fintype Coin] {τ LC : Type} [Fintype τ] [Fintype LC] {n : ℕ}
     (Φ : τ × (Fin n → LC) → Fin (V.k x) → Coin) (lf : ℕ → (Fin n → LC) → (Fin n → LC) → Fin n → LC) (ω : Ω)
     (t : ℕ) : ℝ :=
   Pr fun p : τ × (Fin n → LC) × (Fin n → LC) => pairEv H V P x ω (Φ (p.1, p.2.1)) (Φ (p.1, lf t p.2.1 p.2.2))
 
-/-- **The coupling of the fork's coin distribution**: at chances `δ`, the simulated forks `sim` are at most the deployed fork
-at each round `t` and `δ_t` times the simulated fork at `t + 1`, and past the last round at most the one-run event.
-At a simulator whose tape holds uniform functions of its live coins' history (`fnC`), against the deployed verifier
-revealing whole coins, `δ_t` is the chance that a fresh live coin agrees with the first branch's on the function's
-key. -/
 def ForkCoinCoupling [Fintype Coin] (δ sim : ℕ → ℝ) (ω : Ω) : Prop :=
   (∀ t < V.k x, sim t ≤ forkPrAt H V P x ω t + δ t * sim (t + 1)) ∧ sim (V.k x) ≤ forkPrAt H V P x ω (V.k x)
 
-/-- **The coupling gives the slack**: a simulated fork at round `j` is at most the deployed one there and the slack
-(`sim_le_slack`). -/
 theorem slack_of_coupling [Fintype Coin] {δ sim : ℕ → ℝ} (hδ : ∀ t, 0 ≤ δ t) {ω : Ω}
     (hc : ForkCoinCoupling H V P x δ sim ω) (j : Fin (V.k x)) :
     sim j ≤ (Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => forkEv H V P x j ω s.1 s.2) +
@@ -237,8 +191,6 @@ theorem slack_of_coupling [Fintype Coin] {δ sim : ℕ → ℝ} (hδ : ∀ t, 0 
   linarith
 
 end Events
-
-/-! ## One more escape per round -/
 
 theorem sqrt_add_le_add {a b : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) : Real.sqrt (a + b) ≤ Real.sqrt a + Real.sqrt b := by
   rw [show Real.sqrt a + Real.sqrt b = Real.sqrt ((Real.sqrt a + Real.sqrt b) ^ 2) from
@@ -257,8 +209,6 @@ theorem sqrt_sum_le {ι : Type} (s : Finset ι) (f : ι → ℝ) (hf : ∀ i ∈
       (Finset.sum_nonneg fun i hi => hf i (Finset.mem_insert_of_mem hi))).trans
       (add_le_add le_rfl (ih fun i hi => hf i (Finset.mem_insert_of_mem hi)))
 
-/-- **The slack folds into one root per round**: `Σ_a √(c_a·(p_a + Σ_i w_{a,i}·q_i))` is at most `Σ_a √(c_a·p_a)` and
-`Σ_i √(C_i·q_i)`, `C_i = (Σ_a √(c_a·w_{a,i}))²`. -/
 theorem sum_sqrt_slack_le {A I : Type} [Fintype A] [Fintype I] (c p : A → ℝ) (w : A → I → ℝ) (q : I → ℝ)
     (hc : ∀ a, 0 ≤ c a) (hp : ∀ a, 0 ≤ p a) (hw : ∀ a i, 0 ≤ w a i) (hq : ∀ i, 0 ≤ q i) :
     ∑ a, Real.sqrt (c a * (p a + ∑ i, w a i * q i)) ≤
@@ -279,13 +229,10 @@ theorem sum_sqrt_slack_le {A I : Type} [Fintype A] [Fintype I] (c p : A → ℝ)
   rw [← Finset.sum_mul, Real.sqrt_mul (sq_nonneg _),
     Real.sqrt_sq (Finset.sum_nonneg fun a _ => Real.sqrt_nonneg _)]
 
-/-- **Round `i`'s weight in the slack's escapes**: `(Σ_{r,ℓ} √(2^{d_{ℓ+1}}·Q_{ℓ+1}·w r ℓ i))²`. -/
 noncomputable def slackC {n : ℕ} (sch : FlockSoundness.Accounting.Schedule)
     (w : Fin 2 → Fin sch.levels.length → Fin n → ℝ) (i : Fin n) : ℝ :=
   (∑ a : Fin 2 × Fin sch.levels.length, Real.sqrt (cOf sch (a.2.val + 1) * w a.1 a.2 i)) ^ 2
 
-/-- **The old escapes and one more fork event a round**: `oldEsc`'s, and at each round `i` the event `G i` with
-weight `slackC sch w i`. -/
 noncomputable def slackEsc {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω)
     (x : Msg) (sch : FlockSoundness.Accounting.Schedule) (j : Fin 2 → Fin sch.levels.length → Fin (V.k x))
     (ev : Fin 2 → Fin sch.levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
@@ -313,9 +260,6 @@ noncomputable def slackEsc {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (
     | .inr i => tiedG i
   tied₁ _ := tied₁
 
-/-- **The old fork terms at the slack are at most the slack's escapes' term**: where each fork term's `Adv` is at most
-its fork event's probability and the slack's events at weights `w`, and the self-clash at most the one-run event's
-(`sum_sqrt_slack_le`). -/
 theorem slackEsc_term {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin)
     (P : Prover Ω) (x : Msg) (sch : FlockSoundness.Accounting.Schedule)
     (j : Fin 2 → Fin sch.levels.length → Fin (V.k x))
@@ -369,7 +313,6 @@ namespace FlockDeploy.KS
 
 open Flock
 
-/-- **The plain fork rounds are past round 0**: each is after the link message. -/
 theorem plainJ_ne_zero {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) {sch : FlockSoundness.Accounting.Schedule}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some sch) (r : Fin 2) (ℓ : Fin sch.levels.length) :
@@ -377,9 +320,6 @@ theorem plainJ_ne_zero {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
   simp only [plainJ, forkRound]
   omega
 
-/-- **The slack's escapes fit the plain weight with the fork event of weight `k`**, when the slack's weights total at
-most level 0's `2·2^{d₀}·Q₀`: the plain fork rounds are distinct and past round 0, so with one more event a round and
-the fork at round 0 there are two a round, and `plain_fork_room` leaves that much of the weight. -/
 theorem slackEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
@@ -443,9 +383,6 @@ theorem slackEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {�
     exact_mod_cast V_k_pos false x
 
 open FlockSoundness.Discharge.Exec in
-/-- **The salted session's mean `ε_c⁻` at one table, at the slack**: at most `ε_table` and the slack's escapes' term,
-when each fork term's mean `Adv` is at most its fork event's probability and the slack's events at weights `w`, and
-the mean self-clash at most the one-run event's (`mean_epsSL_le` at `slackEsc_term`). -/
 theorem mean_epsSL_le_slack {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
     {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K) (Hc : List UInt8 → D)
     (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc) {x : Claims.Msg}

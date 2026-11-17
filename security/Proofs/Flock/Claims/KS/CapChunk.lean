@@ -37,31 +37,13 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The round of a rep's frames that absorbs a recursive cap
-
-A rep's frames (`repFrames`) absorb Ligerito's `ℓ`-th recursive cap as one frame (`capFr`), right before the squeeze
-of the next level's first out-of-domain point. So the round that squeeze closes holds the cap, `preLig +
-capRound k0 (ℓ + 1)` rounds into the rep's stream (`Rounds.lean`), and two reps whose frames have one header list and
-whose rounds there retained the same bytes absorbed one cap.
-
-* `chunks_length`: a frame list has one round per squeeze that closes one.
-* `chunks_getD_split`: the round a squeeze closes right after a frame is the frames pending before that frame, the
-  frame and the squeeze.
-* `chunks_getD_hd`: frame lists with one header list have rounds with one header list.
-* `repFrames_capSplit`: a rep's frames split at the `ℓ`-th recursive cap, for `ℓ + 1` below the schedule's levels,
-  with `preLig + capRound k0 (ℓ + 1)` closing squeezes before it.
-* `frame_eq_of_chunk`, `capFr_eq_of_chunk`: two such splits of frame lists with one header list, whose rounds at the
-  split have the same bytes, split at one frame, so at one cap.
--/
+/-! The round of a rep's frames that absorbs Ligerito's recursive cap, so two reps whose rounds there retained the same bytes absorbed one cap. -/
 
 @[expose] public section
 
 namespace FlockDeploy.KS
 
 open Flock FlockSoundness.Refine FlockSoundness.Discharge.Exec
-
-/-! ## Rounds of a frame list -/
 
 theorem chunks_length : ∀ fs : List Frame, (chunks fs).1.length = fs.countP closes
   | [] => rfl
@@ -116,8 +98,6 @@ theorem chunks_getD_hd {fs fs' : List Frame} (h : fs.map Frame.hd = fs'.map Fram
   simp only [List.getD_eq_getElem?_getD]
   rcases h1 : (chunks fs).1[i]? with _ | a <;> rcases h2 : (chunks fs').1[i]? with _ | b <;>
     simp_all
-
-/-! ## Squeezes that close a round, stage by stage -/
 
 theorem countP_flatMap_range' {F : ℕ → List Frame} {c : ℕ} :
     ∀ (n a : ℕ), (∀ i, a ≤ i → i < a + n → (F i).countP closes = c) →
@@ -176,16 +156,11 @@ theorem countP_rsFrames {n : ℕ} (hn : n ≠ 0) (rs : Array (Array F128)) : (rs
   simp only [rsFrames, List.countP_cons, List.countP_append, hb]
   simp [closes, hn]
 
-/-! ## The round that absorbs a recursive cap -/
-
 theorem range'_split {i n : ℕ} (h : i < n) :
     List.range' 0 n = List.range' 0 i ++ i :: List.range' (i + 1) (n - (i + 1)) := by
   obtain ⟨k, rfl⟩ : ∃ k, n = i + (k + 1) := ⟨n - (i + 1), by omega⟩
   rw [← List.range'_append_1, Nat.zero_add, List.range'_succ, show i + (k + 1) - (i + 1) = k by omega]
 
-/-- **A rep's frames split at its `ℓ`-th recursive cap**, for `ℓ + 1` below the schedule's levels: the cap's frame is
-followed by a squeeze that closes a round, and `preLig + capRound k0 (ℓ + 1)` squeezes that close one come before it
-(zerocheck's `3 + (m − 6)`, lincheck's `3 + (kLog − 6)`, the ring switch's `n + 1`, then Ligerito's). -/
 theorem repFrames_capSplit (st : Setup) (sch : Flock.Schedule) (domain : ByteArray) (n : ℕ) (p : Proof) (T : F128)
     (hm : 14 ≤ st.m) (hn : n ≠ 0) (hn0 : sch.n ≠ 0) (hq : ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0)
     {ℓ : ℕ} (hℓ : ℓ + 1 < sch.levels.size) :
@@ -252,10 +227,6 @@ theorem repFrames_capSplit (st : Setup) (sch : Flock.Schedule) (domain : ByteArr
       simp [closes, capFr, hn0, capRound]
       omega
 
-/-! ## Two reps' frames at the round that absorbs a cap -/
-
-/-- **Two frame lists with one header list, split before a squeeze that closes a round after as many closing squeezes,
-whose rounds at the split have the same bytes, split at one frame.** -/
 theorem frame_eq_of_chunk {F F' : List Frame} (hhd : F.map Frame.hd = F'.map Frame.hd)
     {a b a' b' : List Frame} {c c' s s' : Frame} (hF : F = a ++ c :: s :: b) (hF' : F' = a' ++ c' :: s' :: b')
     (hc : closes c = false) (hc' : closes c' = false) (hs : closes s = true) (hs' : closes s' = true)
@@ -269,8 +240,6 @@ theorem frame_eq_of_chunk {F F' : List Frame} (hhd : F.map Frame.hd = F'.map Fra
   simp only [List.cons.injEq] at this
   exact this.1
 
-/-- **Two frame lists with one header list, split at caps after as many closing squeezes, whose rounds at the split
-have the same bytes, split at one cap.** -/
 theorem capFr_eq_of_chunk {F F' : List Frame} (hhd : F.map Frame.hd = F'.map Frame.hd)
     {a b a' b' : List Frame} {c c' : Array ByteArray} {s s' : Frame} (hF : F = a ++ capFr c :: s :: b)
     (hF' : F' = a' ++ capFr c' :: s' :: b') (hs : closes s = true) (hs' : closes s' = true)

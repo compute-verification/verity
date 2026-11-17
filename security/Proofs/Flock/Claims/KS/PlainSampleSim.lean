@@ -40,21 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.PlainSampleK
 
-/-!
-# The plain chain from a simulator, at the statement's sample
-
-The session set up at the record's sample would need the record to carry the statement's sample as the same term, which
-the checks do not give (`sampleEq_ne`). The chain here reads `plainVerdictAt`, the session set up at the statement's
-sample, which needs nothing of the record's sample: an accepting run gives `plainVerdictAt` at its live outcome
-(`plainVerdictAt_of_run`), and the deployed decoders are right for it (`plain_hdecAt`, `plain_hdecHAt`).
-
-* `plain_first_of_simD`: the plain mixture's first bound from a simulation (`PlainSim`), by `Pr_le_liveMix`.
-* `PlainSimWrPAtD`, `PlainSimWD`: a simulator of each prover at `plainVerdictAt`, at `plain_hdecAt` and
-  `plain_hdecHAt`.
-* `plain_tableBoundθAt_of_simD`: the table bound at a statement from a simulator at the verdict at the sample.
-* `plain_first_of_simDK`, `PlainSimWrPAtDK`, `PlainSimWDK`: the same at `VK keep`, reading `plainVerdictAtK keep`
-  (`plainVerdictAtK_of_run`, `plain_hdecAtK`, `plain_hdecHAtK`).
--/
+/-! The plain chain from a simulator at `plainVerdictAt`, which needs nothing of the record's sample. -/
 
 @[expose] public section
 
@@ -69,11 +55,6 @@ open FlockSoundness.Discharge.Tables Claims.Bridge.Custody Claims.Bridge.Live
 open Lean (Json)
 
 open Classical in
-/-- **The plain mixture's first bound at the statement's sample, from a simulation**: where a prover `P'` of the live
-session at one table simulates `P` (`PlainSim`), `V false`'s accepting runs with no column off `C` are no likelier
-than the average over `u` of `plainVerdictAt` against `P'`'s strategies, at the root of `P`'s first message. An
-accepting run gives `plainVerdictAt` at its live outcome whatever sample its record carries (`plainVerdictAt_of_run`),
-so with no premise on the record's sample. -/
 theorem plain_first_of_simD {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {M : ℕ}
     (C : Fin M → List 𝔽) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec} {sts₀ : Array Stmt} {d : Json}
     (hset : setupOf false x = some (s₀, spec₀, sts₀)) (hd : s₀.read.draw = some d)
@@ -121,14 +102,7 @@ open FlockSoundness.Discharge.Tables Claims.Bridge.Live
 open Lean (Json)
 
 open Classical in
-/-- **A simulator of each prover at the verdict at the sample**: for each prover `P` and tape `ω`, a live prover `P'`
-with a finite tape `τ` and coins `Φ` of `V false` at the tape and the live coins, of uniform distribution, whose strategies send
-`P`'s roots, that simulates `P`'s accepting runs at `Φ` (`PlainSimRun`), whose live self-clashes against
-`plainVerdictAt` give `P`'s accepting runs with a collision there (`PlainClashRun`), and whose strategies' fork bound
-at each plain fork round `j` is no more than an accepting fork's with a collision there (`plainForkEv`) and the slack
-at chances `δ` (`Flock.forkSlack`), at `δ` fixed per prover whose slack weights total at most level 0's `2·2^{d₀}·Q₀`
-(`Flock.slackC`, `Flock.slackW`). Uniform functions of the live coins as the tape (`fnAt`, `Pr_fnAt`) are one such
-choice. -/
+/-- Uniform functions of the live coins as the tape (`fnAt`, `Pr_fnAt`) are one such choice. -/
 def PlainSimWrPAtD {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -177,9 +151,6 @@ def PlainSimWrPAtD {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables
             Claims.Flock.forkSlack sha512 (V false) P x δ (plainJ (tables_head_one h) hsch r ℓ).val ω)
 
 open Classical in
-/-- **A simulator at the verdict at the sample gives the plain table bound at a statement**: the first bound is
-`plain_first_of_simD`'s, so with no premise on the record's sample, the third `liveMix_le_Pr`'s, and the fork bound with
-its slack fits the plain weight (`slackEsc_fitsFork_plain`). -/
 theorem plain_tableBoundθAt_of_simD {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
@@ -235,9 +206,6 @@ theorem plain_tableBoundθAt_of_simD {x : Claims.Msg} {ins : Ins} {spec : Sessio
         (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
         (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ) hsc'))
 
-/-- **A simulator at a plain statement, at the verdict at the sample**: `PlainSimWrPAtD` at the statements in scope that
-set up at a sample, at their one table's `fast100` schedule, with the decoders `plain_hdecAt` where the outputs are
-public and `plain_hdecHAt` where they are hidden under hm96 leaves. -/
 def PlainSimWD (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -264,8 +232,6 @@ open FlockSoundness.Discharge.Tables Claims.Bridge.Custody Claims.Bridge.Live
 open Lean (Json)
 
 open Classical in
-/-- **The plain mixture's first bound at the statement's sample, from a simulation, at `VK keep`**
-(`plain_first_of_simD`'s proof, at `plainVerdictAtK keep` by `plainVerdictAtK_of_run`). -/
 theorem plain_first_of_simDK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     {M : ℕ} (C : Fin M → List 𝔽) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec} {sts₀ : Array Stmt} {d : Json}
     (hset : setupOf false x = some (s₀, spec₀, sts₀)) (hd : s₀.read.draw = some d)
@@ -306,9 +272,6 @@ theorem plain_first_of_simDK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prov
   exact hv d hd hno
 
 open Classical in
-/-- **A simulator of each prover at the verdict at the sample, at `VK keep`**: `PlainSimWrPAtD` with `VK keep`'s runs,
-`plainVerdictAtK keep`, and the simulation, clash and fork events at `keep` (`PlainSimRunK`, `PlainClashRunK`,
-`plainForkEvK`). -/
 def PlainSimWrPAtDK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -357,8 +320,6 @@ def PlainSimWrPAtDK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec}
             plainForkEvK keep h hsch P r ℓ ω s.1 s.2) +
             Claims.Flock.forkSlack sha512 (VK keep) P x δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val ω)
 
-/-- **A simulator at a plain statement, at the verdict at the sample, at `VK keep`**: `PlainSimWD` at
-`PlainSimWrPAtDK keep`, with the decoders `plain_hdecAtK keep` and `plain_hdecHAtK keep`. -/
 def PlainSimWDK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)

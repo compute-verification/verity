@@ -3,20 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.DecodeSC
 public import Proofs.Flock.Claims.KS.PlainAcc
 
-/-!
-# The deployed plain decoders at the plain table
-
-`PlainLiveAccAt` asks for decoders right at `plainTab`, table 0's model statement. `decodesTable_wrP_sc` gives them at
-`Integrate.tablesAt`, the table of the sample a session's inputs set up. At a plain statement in scope with public
-outputs whose sample is `d`, the two are one table:
-
-* `plain_setupH`: the statement's inputs are untyped, have the tags `DecodeZL.TagsOk` asks, parse its one table's
-  circuit, which returns the outputs, and set that table up at `d`, with `22 ≤ m ≤ 35`.
-* `tableAt_plainTab`: the table of a sample that sets up `st` is `plainTab` at `st`, whatever its layout.
-* `plain_wordLen`: the plain codeword length is `2^logLen` at level 0 of the table's schedule.
-* `plain_hdec`: so at the sample `d` and no sampled proof block, `decodesTable_wrP_sc` is the decoders' fact `PlainLiveAccAt`
-  asks, at `plainTab`.
--/
+/-! The deployed plain decoders are right at `plainTab` at a plain statement in scope with public outputs. -/
 
 @[expose] public section
 
@@ -27,9 +14,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A plain statement in scope with public outputs sets up its one table at its sample**: its inputs are untyped and
-have the tags `DecodeZL.TagsOk` asks, they parse the table's circuit, which returns the outputs, setupH sets the
-table up at the sample `d`, the session's spec is the table's, and `22 ≤ m ≤ 35`. -/
 theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -81,8 +65,6 @@ theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
   · simpa [hm] using hm₁
   · simpa [hm] using hm₂
 
-/-- **The table of a sample that sets up `st` is `plainTab` at `st`**: the layout is a proposition, and the schedule is
-`fast100`'s at `st.m`. -/
 theorem tableAt_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ} (dj : Finset (Fin n) → Json)
     {spec : SessionSpec} {S₀ : Finset (Fin n)} (x₀ : Integrate.SampleSetup I spec.mPts S₀ (dj S₀))
     {S : Finset (Fin n)} (x : Integrate.SampleSetup I spec.mPts S (dj S)) {st : Stmt} (hx : x.st = st) (L : Layout st)
@@ -102,7 +84,6 @@ theorem tableAt_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ}
   obtain ⟨rfl, rfl, ⟨rfl, rfl, rfl⟩, rfl⟩ := hs
   rfl
 
-/-- **The plain codeword length is `2^logLen` at level 0**, at the one table's `fast100` schedule. -/
 theorem plain_wordLen {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (h22 : 22 ≤ st.m) (h35 : st.m ≤ 35) {m k0 : ℕ} {l₀ l₁ : Accounting.Level} {rest : List Accounting.Level}
     {ext : ℕ} (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) :
@@ -121,10 +102,6 @@ theorem plain_wordLen {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tab
   rfl
 
 open Classical Discharge.Tables Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
-/-- **The deployed plain decoders are right at `plainTab`**: at a plain statement in scope with public outputs whose
-sample is `d`, `decodesTable_wrP_sc` at `d` and no sampled proof block, on the outcomes whose `wrP` transcript verity-verify-proof
-accepts, whose root is `rootB₀`'s and on which the reader looks up no column off `C`, with the verdict
-`PlainLiveAccAt` reads. -/
 theorem plain_hdec {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])

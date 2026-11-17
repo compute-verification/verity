@@ -6,18 +6,7 @@ import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Prob
 
-/-!
-# Flock: what `E^rep` finds, its one wait finds at half the rate
-
-`Flock.E₁` is Flock's extractor with one wait in place of its `m′`: the same accepted reruns per wait, the same
-truncation, decoder and check. From one wait's bound (`Flock.OneWait`), under `Flock.KS_of_oneWait`'s side
-conditions, the extractor returns a witness with a property `G` of the run's coins, on an accepted run, with
-probability at most twice the one-wait extractor's, plus `2·κ + √(γ·Pr[B])` (`Flock.finds_of_oneWait`, the claim
-`Claims.Finds`): `ERep_finds` at the per-tape bound `KS_of_oneWait` reads, with `Escapes.le` on the escapes.
-
-A bound on what the one-wait extractor's witness holds is then a bound on what the extractor's holds. The one-wait
-extractor makes at most `1 + k` runs' worth of calls where the extractor's first-hit count reads `1 + m′·k`.
--/
+/-! What Flock's extractor finds, its one-wait extractor `Flock.E₁` finds at half the rate, from one wait's bound. -/
 
 @[expose] public section
 
@@ -27,13 +16,9 @@ namespace Flock
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **Flock's extractor with one wait**: `E^rep` at a decoder with one wait for `k` accepted reruns among `K`
-samples, where `Flock.E` makes `m′`. -/
 noncomputable def E₁ (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) : Extractor Coin Wit D.V :=
   ERep D.V (fun _ => 1) D.k D.cap (fun v => [D.cols v]) (assemble D.parse D.table decode D.read) (check D.parse)
 
-/-- **Flock: what the extractor finds, its one wait finds at half the rate**, from one wait's bound, under
-`KS_of_oneWait`'s side conditions, at every decoder that meets the list-decoding spec. -/
 theorem finds_of_oneWait (H : Msg → Msg) (D : Deploy Coin Col T) (hK : ∀ x, 0 < D.cap x)
     (hk : ∀ x, (8 ≤ D.k x ∧ Splits D x) ∨ NoAcc H D.V x) (hεt : ∀ x, 0 ≤ D.εtable x) (h : OneWait H D)
     (decode : List (ℕ × Col) → List T) (hlw : ListWithin D.len D.enc D.θ decode) :

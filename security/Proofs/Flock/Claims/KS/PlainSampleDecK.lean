@@ -51,24 +51,7 @@ import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The deployed plain decoders at the statement's sample, at `VK keep`
-
-The deployed plain decoders for the verdict at the statement's sample read through `keep`, on `PlainSampleAccK`'s
-acceptance lemmas, at any record writer `wr` whose transcripts record their outcome at the setup at the sample
-(`RecordsLiveAtDK`). The one place they meet the outcome's rounds is the rep's run (`PlaysCoin.RepRun`), which reads a
-round's coin count, coins and bytes and never its digest, so the decoded rounds carry it to the outcome's up to their
-digests (`PlaysCoin.repRun_of_erase`). At `wrPDK` they are the decoders for `plainVerdictAtK keep`, and at `keep := id`
-and `wrPD` `PlainSampleDec`'s for `plainVerdictAt`:
-
-* `recordsLive_wrK1_of`, `recordsLive_wrPDK1`: a recording transcript, and `wrPDK`, at a one-table outcome record it as
-  one table's, the rounds up to their digests.
-* `decodesTable_wrK_sc_of`, `decodesTable_wrK_scH_of`: the decoders right at public and at hidden outputs, on the
-  outcomes whose transcript `verifyWithMK keep` accepts at the sample `dj S` with no column off `C` (`AcceptsAtDK`,
-  `TxNoOffAtK`); `decodesTable_wrPDK_sc`, `decodesTable_wrPDK_scH` at `wrPDK`.
-* `plain_hdecAtK_of`, `plain_hdecHAtK_of`: at `plainTab`; `plain_hdecAtK`, `plain_hdecHAtK` at `wrPDK`, with
-  `plainVerdictAtK keep`.
--/
+/-! The deployed plain decoders at the statement's sample through `keep`, at any record writer whose transcripts record their outcome there. -/
 
 @[expose] public section
 
@@ -82,8 +65,6 @@ theorem roundGroups_erase (dec : ℕ → ByteArray → List Msg) :
   | j, rd :: rs => by
     simp only [List.map_cons, roundGroups, Round.erase_bytes, roundGroups_erase dec (j + 1) rs]
 
-/-- **A rep's run reads its rounds as replay does**: `RepRun` reads a round's coin count, coins and bytes and never
-its digest, so rounds that agree after `Round.erase` run alike. -/
 theorem repRun_of_erase {P : Type} {g : Game P} {σ : List Exec.Kind} {dec : ℕ → ByteArray → List Msg}
     {rs rs' : List Round} {tail : List Msg} {p : P} (h : rs.map Round.erase = rs'.map Round.erase)
     (hr : RepRun g σ dec rs tail p) : RepRun g σ dec rs' tail p := by
@@ -102,9 +83,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A transcript that records one table's live session at the setup at `d`, through `keep`**: its proof files are
-the outcome's, and the session its record decodes to through `keep` there has the outcome's root, link points and rep
-streams' rounds up to their digests, read as one table's (`oneOf`). -/
 theorem recordsLive_wrK1_of (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {mPts : ℕ} (o : Tables.LiveOutJ 1 mPts)
     {t : Exec.Transcript} (hrl : RecordsLiveAtDK keep I d o t) (hacc : AcceptsAtDK keep I (some d) t) :
     t.proofs = (oneOf o).proofs ∧
@@ -125,7 +103,6 @@ theorem recordsLive_wrK1_of (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) 
   rw [hr]
   fin_cases r <;> rfl
 
-/-- **`wrPDK` records one table's live session at the setup at `d`** (`recordsLive_wrK1_of`). -/
 theorem recordsLive_wrPDK1 (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {mPts : ℕ} (o : Tables.LiveOutJ 1 mPts)
     (hacc : AcceptsAtDK keep I (some d) (wrPDK keep I d o)) :
     (wrPDK keep I d o).proofs = (oneOf o).proofs ∧
@@ -139,11 +116,6 @@ theorem recordsLive_wrPDK1 (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {
   recordsLive_wrK1_of keep I d o (recordsLiveAtDK_wrPDK keep I d o) hacc
 
 open DecodeZL Integrate in
-/-- **The deployed plain decoders are right at a record writer for accepting with no opening off `C` without a
-self-clash**, at one table: `decodesTable_wrPD_sc` through `keep`, at any writer `wr` whose transcripts record their
-outcome at the setup at the sample `dj S` (`RecordsLiveAtDK`), on the outcomes whose transcript `verifyWithMK keep`
-accepts there, whose root is `rootB₀`'s and on which the deployed plain reader looks up no column off `C` there
-(`TxNoOffAtK`). -/
 theorem decodesTable_wrK_sc_of (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
@@ -261,8 +233,6 @@ theorem decodesTable_wrK_sc_of (keep : Bool → Bool)
     hver hent hoff hsc
 
 open DecodeZL Integrate in
-/-- **The deployed plain decoders are right at `wrPDK` for accepting with no opening off `C` without a self-clash**
-(`decodesTable_wrK_sc_of` at `wrPDK`). -/
 theorem decodesTable_wrPDK_sc (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
@@ -284,8 +254,6 @@ theorem decodesTable_wrPDK_sc (keep : Bool → Bool)
     (recordsLiveAtDK_wrPDK keep I (dj S)) j
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at a record writer at hidden outputs, at a leaf form `F`**:
-`decodesTable_wrK_sc_of` at the hidden tables and their openings `opnAtH` (`decodesTable_wrPD_scH` through `keep`). -/
 theorem decodesTable_wrK_scHLf_of (keep : Bool → Bool) (F : LeafForm)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -403,9 +371,6 @@ theorem decodesTable_wrK_scHLf_of (keep : Bool → Bool) (F : LeafForm)
     hver hent hoff hsc
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at a record writer at hidden outputs**: `decodesTable_wrK_sc_of` at the
-hidden tables and their openings `opnAtH` (`decodesTable_wrPD_scH` through `keep`):
-`decodesTable_wrK_scHLf_of` at `LeafForm.hm96`. -/
 theorem decodesTable_wrK_scH_of (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -427,7 +392,6 @@ theorem decodesTable_wrK_scH_of (keep : Bool → Bool)
   decodesTable_wrK_scHLf_of keep LeafForm.hm96 ht hc dj x₀ hT hS R hN C rootB₀ wr hwr j
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at `wrPDK` at hidden outputs** (`decodesTable_wrK_scH_of` at `wrPDK`). -/
 theorem decodesTable_wrPDK_scH (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -458,9 +422,6 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at a record writer**:
-`plain_hdecAt` through `keep`, at any writer `wr` whose transcripts record their outcome at the setup at `d`, from
-`decodesTable_wrK_sc_of` at `d` and no sampled proof block. -/
 theorem plain_hdecAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -516,9 +477,6 @@ theorem plain_hdecAtK_of (keep : Bool → Bool)
   exact hdec
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and a leaf
-form `F`, at a record writer**: `plain_hdecHAt` through `keep`, at any writer `wr` whose transcripts record their
-outcome at the setup at `d`, from `decodesTable_wrK_scHLf_of`. -/
 theorem plain_hdecHLfAtK_of (keep : Bool → Bool) (F : AtSample.LeafForm)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -576,9 +534,6 @@ theorem plain_hdecHLfAtK_of (keep : Bool → Bool) (F : AtSample.LeafForm)
   exact hdec
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and
-`hm96-sha512/v1` leaves, at a record writer**: `plain_hdecHAt` through `keep`, at any writer `wr` whose transcripts
-record their outcome at the setup at `d`: `plain_hdecHLfAtK_of` at `LeafForm.hm96`. -/
 theorem plain_hdecHAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -608,8 +563,6 @@ theorem plain_hdecHAtK_of (keep : Bool → Bool)
     hwr
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample**: `plain_hdecAt` with
-`plainVerdictAtK keep` for `plainVerdictAt` (`plain_hdecAtK_of` at `wrPDK`). -/
 theorem plain_hdecAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -636,9 +589,6 @@ theorem plain_hdecAtK (keep : Bool → Bool)
     (recordsLiveAtDK_wrPDK keep ins.read.I d)
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and
-`hm96-sha512/v1` leaves**: `plain_hdecHAt` with `plainVerdictAtK keep` for `plainVerdictAt` (`plain_hdecHAtK_of` at
-`wrPDK`). -/
 theorem plain_hdecHAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}

@@ -36,22 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Bridge.CustodyPlain
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 
-/-!
-# The reader's premise between the text and parsed-value writers
-
-`TxNoOffAtK` reads the session `wrPDK` writes and `TxNoOffAtJK` the one `wrPDJK` writes. Each writer picks an accepted
-record of the same live outcome, and the two records' rep streams agree with the outcome's only up to their rounds'
-digests (`Round.erase`). The deployed plain reader reads a round's coins only (`plainRepColsOf`), so it reads both
-alike:
-
-* `plainRepColsOf_erase`: rounds equal up to `Round.erase` give one rep's columns.
-* `txNoOffAtJK_of_records`: two accepted parsed sessions that record one outcome have the same `TxNoOffAtJK`.
-* `txNoOffAtK_iff_JK`, `txNoOffAtK_wrPDK_iff_J`: an accepted record text of an outcome and an accepted parsed session
-  of it have the same reader's premise (through `acceptsAtDK_iff_exists_J`, `txNoOffAtK_iff_J`), so where verity-verify-proof
-  accepts what `wrPDK` writes, which then records the outcome (`recordsLiveAtDK_wrPDK_of`), `TxNoOffAtK` there is
-  `TxNoOffAtJK` at what `wrPDJK` writes.
-* `plainVerdictAtJK_of_K`: `plainVerdictAtK` gives `plainVerdictAtJK` at the same outcome and root.
--/
+/-! The reader's premise moves between the text and parsed-value writers, as the deployed plain reader reads only a round's coins. -/
 
 @[expose] public section
 
@@ -59,8 +44,6 @@ namespace FlockDeploy.KS
 
 open Flock
 
-/-- **The plain reader's columns ignore the rounds' digests**: rounds equal up to `Round.erase` give one rep's columns
-(`plainRepColsOf` reads the coins). -/
 theorem plainRepColsOf_erase (sh : Shape) {a b : Array Round} (bytes : ByteArray)
     (h : a.toList.map Round.erase = b.toList.map Round.erase) :
     Claims.Flock.plainRepColsOf sh a bytes = Claims.Flock.plainRepColsOf sh b bytes := by
@@ -80,9 +63,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **Two accepted parsed sessions that record one outcome have the same reader's premise**: their proof files are the
-outcome's, and at the setup at `d` table 0's rep streams are the outcome's up to the rounds' digests, which the reader
-does not read (`plainRepColsOf_erase`). -/
 theorem txNoOffAtJK_of_records {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} {N mPts : ℕ} {C : Fin N → List 𝔽}
     {o : Tables.LiveOutJ 1 mPts} {t t' : TranscriptJ} (hA : AcceptsAtDJK keep I (some d) t)
     (hR : RecordsLiveAtDJK keep I d o t) (hA' : AcceptsAtDJK keep I (some d) t')
@@ -105,9 +85,6 @@ theorem txNoOffAtJK_of_records {keep : Bool → Bool} {I : Exec.Inputs} {d : Jso
   rw [plainRepColsOf_erase _ _ (hr₀'.trans hr₀.symm), plainRepColsOf_erase _ _ (hr₁'.trans hr₁.symm), hpr', ← hpr]
   exact hno
 
-/-- **An accepted record text of an outcome and an accepted parsed session of it have the same reader's premise**:
-the text parses (`acceptsAtDK_iff_exists_J`), its premise is the one at its parsed value (`txNoOffAtK_iff_J`), and two
-parsed sessions of one outcome agree (`txNoOffAtJK_of_records`). -/
 theorem txNoOffAtK_iff_JK {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} {N mPts : ℕ} {C : Fin N → List 𝔽}
     {o : Tables.LiveOutJ 1 mPts} {t : Exec.Transcript} {t' : TranscriptJ} (hA : AcceptsAtDK keep I (some d) t)
     (hR : RecordsLiveAtDK keep I d o t) (hA' : AcceptsAtDJK keep I (some d) t')
@@ -117,8 +94,6 @@ theorem txNoOffAtK_iff_JK {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} {N
   exact (txNoOffAtK_iff_J t.proofs hj).trans
     ⟨txNoOffAtJK_of_records hAj hRj hA' hR', txNoOffAtJK_of_records hA' hR' hAj hRj⟩
 
-/-- **What `wrPDK` writes records the outcome wherever verity-verify-proof accepts it**: otherwise it is a record without
-proof files, whose parsed value no verdict accepts (`not_acceptsAtDJK_nil`). -/
 theorem recordsLiveAtDK_wrPDK_of {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} {J mPts : ℕ}
     {o : Tables.LiveOutJ J mPts} (hA : AcceptsAtDK keep I (some d) (wrPDK keep I d o)) :
     RecordsLiveAtDK keep I d o (wrPDK keep I d o) := by
@@ -131,10 +106,6 @@ theorem recordsLiveAtDK_wrPDK_of {keep : Bool → Bool} {I : Exec.Inputs} {d : J
     obtain ⟨j, -, hAj⟩ := (acceptsAtDK_iff_exists_J _).1 hA
     exact absurd hAj (not_acceptsAtDJK_nil _ _ _ _)
 
-/-- **The reader's premise moves from `wrPDK` to `wrPDJK`**: where verity-verify-proof accepts what `wrPDK` writes for the
-outcome at the setup at `d`, that record records the outcome (`recordsLiveAtDK_wrPDK_of`), so `wrPDJK` accepts a parsed
-session of it (`acceptsAtDJK_wrPDJK_of_K`), and the two writers' sessions have the same `TxNoOff`
-(`txNoOffAtK_iff_JK`). -/
 theorem txNoOffAtK_wrPDK_iff_J {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} {N mPts : ℕ} {C : Fin N → List 𝔽}
     {o : Tables.LiveOutJ 1 mPts} (hA : AcceptsAtDK keep I (some d) (wrPDK keep I d o)) :
     TxNoOffAtK keep I d C (wrPDK keep I d o) ↔ TxNoOffAtJK keep I d C (wrPDJK keep I d o) :=
@@ -150,9 +121,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The verdict at the text writer gives the verdict at the parsed-value writer**, at the same outcome and root:
-`wrPDJK` accepts where `wrPDK` does (`acceptsAtDJK_wrPDJK_of_K`), and the reader's premise moves with it
-(`txNoOffAtK_wrPDK_iff_J`). -/
 theorem plainVerdictAtJK_of_K {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} {N mPts : ℕ} {C : Fin N → List 𝔽}
     {rootB₀ : Array ByteArray} {o : Tables.LiveOutJ 1 mPts} (h : plainVerdictAtK keep I d C rootB₀ o) :
     plainVerdictAtJK keep I d C rootB₀ o := by

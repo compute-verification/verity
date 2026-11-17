@@ -9,24 +9,7 @@ public import Proofs.Flock.Claims.Recursion.FlockKSAcc
 public import Proofs.Flock.Claims.Recursion.FlockKSRecord
 public import Proofs.Flock.Claims.KS.PlainRdRunK
 
-/-!
-# `KSFlockLin` at the deployed plain record
-
-The plain record's KS chain with the cap terms linear: each cap slot's term is charged to `FC` at the deployed caps
-`CpDep` (`Pr_rdAt_le_capHit`) instead of a square root, and the one-run event to `BAbort`.
-
-* `tableBoundAbortLin_mapCols`: `TableBoundAbortLin` through `f`, by padding back, as `tableBoundθOnAcc_mapCols`.
-* `plain_tableBoundAbortLin`: `TableBoundAbortLin` at the untrimmed deployed plain instance over full-width tables, at
-  `CpDep`. At a statement some run accepts it is `plain_accPr_le_rdAll` at the refuser's runs, with the read sets
-  `rdAt` (what each run reads at a cap position) and the tables `capPlurRd` (the plurality single reading after the
-  slot's fork round), averaged over the refuser's last coin (`Pr_refSample`). The term on each tape is the one-run
-  event's chance at the abort distribution and each cap position's read-set chance, whose average is at most
-  `k·Pr[BAbort] + W·(Pr[FC] + 1/(M+1))` (`Pr_one_le_PrBAbort`, `Pr_rdAt_le_capHit`, `Ex_capHits`): the schedule's top
-  slot reads nothing (`plainRawLevelCols_top`), and the others are `CpDep`'s positions.
-* `plain_KSFlockLin`: `KSFlockLin` at SHA-512 at the trimmed record `deployPlainTrim` and `CpDep`, from
-  `KSFlockLin_of_tableBoundAbortLin` with the record's code facts and numbers (`plain_KSAbort`'s).
-* `plain_tableBoundAbortLinK`: `plain_tableBoundAbortLin` at `deployPlainK keep`, from `plain_accPr_le_rdAllK`.
--/
+/-! `KSFlockLin` at the deployed plain record: each cap slot's term charged linearly to `FC` at `CpDep`, the one-run event to `BAbort`. -/
 
 @[expose] public section
 
@@ -34,9 +17,6 @@ namespace Claims.Recursion
 
 open Claims Claims.Flock
 
-/-- **`TableBoundAbortLin` through `f`, by padding back**: at a table of columns through `f` of ones `Ok` admits, from
-the bound at the table they came from, with the same term, when `f` keeps `0`, accepted runs open only columns `Ok`
-admits, and `f` is one to one on them (`tableBoundθOnAcc_mapCols`). -/
 theorem tableBoundAbortLin_mapCols {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     [DecidableEq Col] [Zero Col] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (f : Col → Col)
     (hf : f 0 = 0) (Ok : Msg → Col → Prop) (Cp : Caps Coin) (hok : ColsOk H D N Ok)
@@ -70,7 +50,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- A triple sum over `Fin`s, with the last one's size read from the middle index, as one over `range`s. -/
 theorem sum3_range {L : ℕ} (lg : ℕ → ℕ) (f : ℕ → ℕ → ℕ → ℝ) :
     (∑ r : Fin 2, ∑ ℓ : Fin L, ∑ q : Fin (2 ^ lg ℓ.val), f r.val ℓ.val q.val) =
       ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.range L, ∑ q ∈ Finset.range (2 ^ lg ℓ), f r ℓ q :=
@@ -81,7 +60,6 @@ theorem sum3_range {L : ℕ} (lg : ℕ → ℕ) (f : ℕ → ℕ → ℕ → ℝ
             Fin.sum_univ_eq_sum_range (fun ℓ => ∑ q : Fin (2 ^ lg ℓ), f r ℓ q.val) L
         _ = _ := Finset.sum_congr rfl fun ℓ _ => Fin.sum_univ_eq_sum_range (f r ℓ) _
 
-/-- A sum over `CpDep`'s positions of `x`, as one over reps, slots and level positions. -/
 theorem sum_depIdx (x : Claims.Msg) (f : ℕ → ℕ → ℕ → ℝ) :
     (∑ j : DepIdx x, f j.1.val j.2.1.val j.2.2.val) =
       ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.range (depL x), ∑ q ∈ Finset.range (2 ^ depLogLen x (ℓ + 1)), f r ℓ q := by
@@ -90,12 +68,6 @@ theorem sum_depIdx (x : Claims.Msg) (f : ℕ → ℕ → ℕ → ℝ) :
   exact sum3_range (fun ℓ => depLogLen x (ℓ + 1)) f
 
 open Classical in
-/-- **The deployed plain record's table bound at the abort distribution, linearly, at `CpDep`**, at the untrimmed instance over
-full-width tables: where no run accepts, the term `0`; elsewhere, on each tape, the chance that the run as it aborts
-ties a collision among its own calls and, at each cap position, that it reads there anything but the plurality single
-reading after the slot's fork round. The first averages to at most `Pr[BAbort]` (`Pr_one_le_PrBAbort`), and each
-position's to at most its `FC` hits and `1/(M+1)` (`Pr_rdAt_le_capHit`). The bound itself is `plain_accPr_le_rdAll`
-at the refuser's runs with those read sets and tables, averaged over the refuser's last coin (`Pr_refSample`). -/
 theorem plain_tableBoundAbortLin :
     Claims.Recursion.TableBoundAbortLin sha512 (deployPlain Readable.relation) (wordLen false) (wide false) CpDep := by
   classical
@@ -306,10 +278,6 @@ theorem plain_tableBoundAbortLin :
     linarith
   exact key
 
-/-- **`KSFlockLin` at the deployed plain record**, at SHA-512, at the trimmed record the claims read and the deployed
-caps `CpDep`: `KSFlockLin_of_tableBoundAbortLin` from `plain_tableBoundAbortLin` carried to the trimmed columns
-(`tableBoundAbortLin_mapCols`), with the record's numbers, one table wherever some run accepts (`plain_hone`), and
-`ColsOk` and `ConflictTied` at the trimmed full-width columns. -/
 theorem plain_KSFlockLin : Claims.Recursion.KSFlockLin sha512 (deployPlainTrim Readable.relation) CpDep :=
   Claims.Recursion.KSFlockLin_of_tableBoundAbortLin sha512 (deployPlainTrim Readable.relation) (wordLen false)
     (trimWide false) CpDep (wordLen_le_N₀ false) (fun x => εtable_nonneg false x) (fun _ => cap_pos)
@@ -322,10 +290,7 @@ theorem plain_KSFlockLin : Claims.Recursion.KSFlockLin sha512 (deployPlainTrim R
     (Claims.Recursion.tableBoundAbortLin_mapCols sha512 (deployPlain Readable.relation) (wordLen false) trimCol rfl
       (wide false) CpDep (plain_colsOk sha512 Readable.relation) (wide_trimCol_inj false) plain_tableBoundAbortLin)
 
-/-! ## At `VK keep` -/
-
 open Classical in
-/-- `plain_tableBoundAbortLin` at `VK keep`. -/
 theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
     Claims.Recursion.TableBoundAbortLin sha512 (deployPlainK keepV Readable.relation) (wordLen false) (wide false) CpDep := by
   classical

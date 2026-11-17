@@ -3,12 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.PlainLeafClashK
 public import Proofs.Flock.Claims.KS.PlainClashRunK
 
-/-!
-# The live self-clash at plain SHA-512 leaves, at `VK keep`
-
-`PlainLeafClash`'s run-level half over the verifier `VK keep`: `plainDecQUK`, `PlainClashQUK`, `plainClashQ₀UK`,
-`plainClashQ_orUK`, `plainClashQLUK` and `plainSimClashHUK`, from `PlainLeafClashK`'s clashes at the sample.
--/
+/-! `PlainLeafClash`'s run-level half at `VK keep`. -/
 
 @[expose] public section
 
@@ -22,7 +17,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- `plainDecQU` at `VK keep`. -/
 def plainDecQUK (keep : Bool → Bool) {mPts : ℕ} (Q : Model.OutCL 𝔽 Refine.Dig (List UInt8) → Prop) (T : TabSpec mPts) (I : Exec.Inputs)
     (d : Json) {M : ℕ} (C : Fin M → List 𝔽) (rootB₀ : Array ByteArray)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)) (o : LiveOutJ 1 mPts) :
@@ -32,7 +26,6 @@ def plainDecQUK (keep : Bool → Bool) {mPts : ℕ} (Q : Model.OutCL 𝔽 Refine
     (fun rs _ => capOfRoot rs[0]!) (fun j => repsOf (D := Refine.Dig) execArith ([T].get j)) o a ∧
     Q (a.getD 0 dfltOutL)
 
-/-- `PlainClashQU` at `VK keep`. -/
 def PlainClashQUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
@@ -43,7 +36,6 @@ def PlainClashQUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x :
     (Claims.run sha512 P (VK keep) x ω (plainΦ x spec st (u, r'))).out = .acc →
     PlainRawClashLK keep P x ω (plainΦ x spec st (u, r'))
 
-/-- `plainClashQ₀U` at `VK keep`. -/
 theorem plainClashQ₀UK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -118,7 +110,6 @@ theorem plainClashQ₀UK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flo
     exact hqv
   exact Or.inl ⟨q, a₁, b₁, hcl' ha, hcl' hb, hab⟩
 
-/-- `plainClashQ_orU` at `VK keep`. -/
 theorem plainClashQ_orUK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8)}
@@ -130,7 +121,6 @@ theorem plainClashQ_orUK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover �
   · exact h₁ C u r' ⟨a, ha, hq⟩ hacc
   · exact h₂ C u r' ⟨a, ha, hq⟩ hacc
 
-/-- `plainClashQLU` at `VK keep`. -/
 theorem plainClashQLUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -200,7 +190,6 @@ theorem plainClashQLUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock
     exact hqv
   exact Or.inr (Or.inl (plain_levelClashK keep hacc (hcl' ha) (hcl' hb) hab))
 
-/-- `plainSimClashHU` at `VK keep`. -/
 theorem plainSimClashHUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])

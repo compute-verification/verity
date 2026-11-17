@@ -41,19 +41,7 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteHP
 
-/-!
-# The deployed plain decoders at plain SHA-512 leaves
-
-The scope admits hidden outputs under plain SHA-512 leaves (`flock-leaf/sha512-unsalted`) without `--zk`
-(`ProvedScope.leafOk`), whose model leaf is `Refine.leafPlain`. Here the decoders there are right for `plainVerdictAt`:
-`PlainLeafDecK`'s lemmas at `keep := id` and the writer `wrPD`, where `AcceptsAtDK id` is `AcceptsAtD`
-(`acceptsAtD_iff_acceptsAtDK_id`) and the record decodes through `Record.decode` (`decodeWithK_id_std`):
-
-* `accepts_opens₀LDU`, `accepts_repsOneDU`: `accepts_opens₀LD`, `accepts_repsOneD` at `leafPlain`.
-* `decodesTable_wrPD_scHU`: `decodesTable_wrPD_scH` under plain SHA-512 leaves (`decodesTable_wrK_scHU_of` at
-  `wrPD`).
-* `plain_hdecHUAt`: `plain_hdecHAt` there (`plain_hdecHUAtK_of` at `wrPD`).
--/
+/-! The deployed plain decoders are right for `plainVerdictAt` at hidden outputs under plain SHA-512 leaves (`Refine.leafPlain`). -/
 
 @[expose] public section
 
@@ -69,8 +57,6 @@ section Req0
 open Flock Refine Model Game FlockSoundness.Discharge.Exec
 open Lean (Json)
 
-/-- **At verity-verify-proof's acceptance at `dr`, each table's level-0 openings at the plain leaf are its reps' deployed
-entries** (`accepts_opens₀LD` at `leafPlain`). -/
 theorem accepts_opens₀LDU {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtD I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
@@ -121,8 +107,6 @@ open Flock Refine Exec Game Model Accounting Audit
 open FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **verity-verify-proof's acceptance at `dr` of a one-table session under hidden outputs and plain SHA-512 leaves, rep by
-rep** (`accepts_repsOneD` at `leafPlain`). -/
 theorem accepts_repsOneDU {I : Inputs} {dr : Option Json} {t : Exec.Transcript} (hrr : I.tags.retainRounds = true)
     (hh : I.tags.hiddenOutputs = true) (hl : I.tags.merkleLeaf = "flock-leaf/sha512-unsalted") (hc1 : I.count ≤ 1)
     (h : AcceptsAtD I dr t) :
@@ -166,8 +150,6 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at `wrPD` at hidden outputs under plain SHA-512 leaves**:
-`decodesTable_wrPD_scH` at `leafPlain` (`decodesTable_wrK_scHU_of` at `keep := id` and `wrPD`). -/
 theorem decodesTable_wrPD_scHU {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
@@ -200,8 +182,6 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
-SHA-512 leaves**: `plain_hdecHAt` at `leafPlain` (`plain_hdecHUAtK_of` at `keep := id` and `wrPD`). -/
 theorem plain_hdecHUAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])

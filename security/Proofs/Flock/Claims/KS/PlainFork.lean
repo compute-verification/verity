@@ -4,26 +4,7 @@ public import Proofs.Flock.Claims.KS.PlainClashLater
 public import Proofs.Flock.Claims.KS.PlainPartsK
 public import Proofs.Flock.Claims.KS.ForkSim
 
-/-!
-# The concrete simulator's fork advantage, from its alignment and its clash
-
-`PlainSimForkLe` bounds the strategies' fork advantage at rep `r`'s level `ℓ + 1` (`plainAdv`, `Lock.forkE` at that
-slot's table node) by the simulated fork at the plain fork round `plainJ r ℓ`. It splits in two:
-
-* `PlainForkAlign`: against the simulated strategy after `Commit` (`plainSimAt`), the fork at the slot's node is at
-  most the fork after `plainJ r ℓ` coins of the event `ForkEvL`: both runs record one cap `d` for rep `r`'s level
-  `ℓ + 1` and open a position of it to different rows;
-* `PlainForkClash`: two accepting runs of `P` at the concrete simulator's coins whose decoded live outcomes have
-  `ForkEvL` collide among the verifier's calls in the two (`PlainForkQ`).
-
-The rest is the simulation's: a fork after `j` coins against the simulated strategy is at most the live fork after `j`
-coins of the decoded event (`forkC_simAt_le`, by `Claims.Bridge.Sim.forkC_le`, the dead branches' empty openings
-opening nothing, `opRL_nul`), which is the deployed runs' fork at round `j` (`forkC_liveStrat`).
-
-* `plainAdv_le_of`, `plainSimForkLe_of`: so `PlainSimForkLe` holds from `PlainForkAlign` and `PlainForkClash`.
-* `PlainHDecK`, …, `plainSimForkLe_ofK`: the same at `VK keep` (`plainSimK keep`, `plainVerdictAtK keep`), so
-  `PlainSimForkLeK keep` holds from `PlainForkAlignK keep` and `PlainForkClashK keep`.
--/
+/-! The concrete simulator's fork advantage (`PlainSimForkLe`) from its alignment (`PlainForkAlign`) and its clash (`PlainForkClash`). -/
 
 @[expose] public section
 
@@ -34,9 +15,6 @@ open Claims.Bridge.Live
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## Through the simulation -/
-
-/-- **Two live outcomes decoding to a pair with `Ev`** under `R`. -/
 def LiveEv {β α : Type} (R : β → α → Prop) (Ev : α → α → Prop) (b b' : β) : Prop :=
   ∃ a a', R b a ∧ R b' a' ∧ Ev a a'
 
@@ -78,7 +56,6 @@ theorem forkC_simSessG {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [No
   unfold simSessG
   exact forkC_eqRec _ _ _ _
 
-/-- **The dead branches' empty openings open nothing.** -/
 theorem opRL_nul {D Sl : Type} [Inhabited Sl] (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ) (d cap : Model.Cap D)
     (pend : Model.PendL 𝔽 D × Model.PendL 𝔽 D) (p : Fin (2 ^ (lvOf sch ℓ).logLen)) :
@@ -91,9 +68,6 @@ theorem opRL_nul {D Sl : Type} [Inhabited Sl] (Hc : List UInt8 → D) (E : Merkl
       (slotOpensL_row_nil (tableOutL_nulOp_opens Hc E Lf cap pend) hx)
 
 open Classical in
-/-- **A fork after `j` coins against the simulated strategy after `Commit`** is at most the live fork after `j` coins
-of the decoded event, for an event `Ev` of two model outcomes whose each run is in an event `Q` no output at the empty
-openings has. -/
 theorem forkC_simAt_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inhabited D]
     [Inhabited Sl] {mPts : ℕ} (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (t : TabSpec mPts) (ok : Model.OutCL 𝔽 D Sl → Prop)
@@ -135,8 +109,6 @@ theorem forkC_simAt_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [No
   exact Claims.Bridge.Sim.forkC_le hFQ hFQ' (fun b b' => ind_nonneg _ _)
     (fun b a b' a' hb hb' => ind_le_ind fun h1 => ⟨a, a', hb, hb', h1⟩) _ hall j Pr
 
-/-- **The live fork after `j` coins is the deployed runs' fork at round `j`**: two runs at coins sharing their first
-`j` (`Claims.forkCoins`). -/
 theorem forkC_liveStrat {nMax J mPts : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
     (w : Claims.Msg → Wire nMax J mPts) (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) (ω : Ω) (F : LiveOutJ J mPts → LiveOutJ J mPts → ℝ) (j : Fin (N x + 2)) :
@@ -151,14 +123,9 @@ theorem forkC_liveStrat {nMax J mPts : ℕ} (N : Claims.Msg → ℕ) (dg : ByteA
     (Claims.Bridge.Live.sessionLe (w x) dg (N x) _) j F).trans
     (Claims.Bridge.Live.forkX_sessionK (w x) dg (N x) F j.val _)).symm
 
-/-! ## The fork event at a rep's later level -/
-
-/-- Rep `r`'s recorded cap at index `ℓ`, its level-`ℓ + 1` cap, is `d`. -/
 def CapAtL {D Sl : Type} (r ℓ : ℕ) (out : Model.OutCL 𝔽 D Sl) (d : Model.Cap D) : Prop :=
   (if r = 0 then out.pend.1 else out.pend.2).caps[ℓ]? = some d
 
-/-- **The fork event at rep `r`'s level `ℓ + 1`**: table 0's outputs in both runs record one cap `d` for it and open a
-position of it to different rows. -/
 def ForkEvL {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ) (a a' : List (Model.OutCL 𝔽 D Sl)) :
     Prop :=
@@ -166,7 +133,6 @@ def ForkEvL {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D) (
     ∃ p, Rewinding.ConflictAt (fun outs : List (Model.OutCL 𝔽 D Sl) =>
       opRL Hc E Lf sch r (ℓ + 1) d (outs.getD 0 dfltOutL)) (a, a') p
 
-/-- Table 0's output opens some position at rep `r`'s level `ℓ + 1`. -/
 def OpensAtL {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ) (a : List (Model.OutCL 𝔽 D Sl)) :
     Prop :=
@@ -187,13 +153,9 @@ theorem not_opensAtL_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List U
   rw [h, opRL_nul] at hs
   exact Bool.false_ne_true hs
 
-/-! ## At the concrete simulator -/
-
 open Flock FlockSoundness.Discharge
 open Lean (Json)
 
-/-- The decoders `plainAdv` reads: right, at the verdict at the sample, for accepting with no level-0 opening off `C`
-unless it self-clashes. -/
 abbrev PlainHDec {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -209,8 +171,6 @@ abbrev PlainHDec {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (
       (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
       j
 
-/-- **The simulated strategy after `Commit` at the concrete simulator's tape `u`**: `simAt` at `plainSim P`'s live
-strategy and its roots (`plainSim_root`), as `plainAdv` reads it. -/
 noncomputable def plainSimAt {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -225,8 +185,6 @@ noncomputable def plainSimAt {spec : SessionSpec} {st : Stmt} (L : Layout st) (m
     (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
       (plainSim P x spec st) x (ω, u)) (plainSim_root P x spec st ω hw u)
 
-/-- **The strategies' fork advantage at tape `u`**: `plainAdv`'s term, `Adv` at rep `r`'s level `ℓ + 1` against
-`plainSimAt`. -/
 noncomputable def plainAdvAt {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -239,8 +197,6 @@ noncomputable def plainAdvAt {spec : SessionSpec} {st : Stmt} (L : Layout st) (m
     hm PT_LOCAL spec.mPts [] [] (capOfRoot (plainRoot P x ω)[0]!) r.val (ℓ.val + 1)
     (plainSimAt L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- **The simulated fork's alignment at tape `u`**: against `plainSimAt`, the fork at rep `r`'s level-`ℓ + 1` table
-node is at most the fork after `j` coins of `ForkEvL`. -/
 def PlainAlignQ {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -255,8 +211,6 @@ def PlainAlignQ {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l
       ForkEvL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val ℓ.val p.1 p.2) (a, a')) j
       _ (plainSimAt L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- **The live fork event at the concrete simulator**: the live outcomes at live coins `r₁` and `r₂` decode, at the
-verdict at the sample, to outputs with `ForkEvL` at rep `r`'s level `ℓ + 1`. -/
 def PlainLiveFork {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
@@ -271,8 +225,6 @@ def PlainLiveFork {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) 
     (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSim P x spec st) x
       (ω, u) r₂)
 
-/-- **The live fork event gives `P`'s two accepting runs a collision**: wherever `PlainLiveFork` holds and `V false`
-accepts `P` at `plainΦ x` at both live coins, the verifier's calls in the two runs collide. -/
 def PlainForkQ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
@@ -284,11 +236,6 @@ def PlainForkQ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {sp
     Claims.TiedColl sha512 ((Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r₁))).vLog ++
       (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r₂))).vLog)
 
-/-- **The simulated fork is aligned with the plain fork round**: at every plain statement in scope and its one table's
-`fast100` schedule, at the plain decoders where the outputs are public (`plainOpn`, `plain_hdecAt`) and where they are
-hidden under hm96 leaves (`plainOpnH`, `plain_hdecHAt`), at each tape the fork at rep `r`'s level-`ℓ + 1` table node
-against the simulated strategy after `Commit` is at most the fork after `plainJ r ℓ` coins of `ForkEvL`
-(`PlainAlignQ`). -/
 def PlainForkAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -308,10 +255,6 @@ def PlainForkAlign (x : Claims.Msg) : Prop :=
         (plain_hdecHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
         (plainJ (tables_head_one h) hsch r ℓ).val u)
 
-/-- **The live fork event's collision**: at every plain statement in scope and its one table's `fast100` schedule, at
-the plain decoders' openings where the outputs are public (`plainOpn`) and where they are hidden under hm96 leaves
-(`plainOpnH`), the live fork event at the concrete simulator gives `P`'s two accepting runs a collision
-(`PlainForkQ`). -/
 def PlainForkClash (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -330,9 +273,6 @@ def PlainForkClash (x : Claims.Msg) : Prop :=
         ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
 
 open Classical in
-/-- **The fork advantage from the alignment and the live fork's pair**: `plainAdv` is at most the simulated fork at the
-plain fork round `plainJ r ℓ`, where at each tape the fork at the slot's node is at most the fork after `plainJ r ℓ`
-coins of `ForkEvL` and the live fork event gives the deployed runs' pair event. -/
 theorem plainAdv_le_of {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) (hL : plainN x + 2 = (V false).k x) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -367,8 +307,6 @@ theorem plainAdv_le_of {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (ω, u) _ ⟨_, hj⟩)) ?_
   exact Claims.Ex_mono fun rr => ind_le_ind fun h => hpair u _ _ h
 
-/-- **A live fork event's pair**: where `P'` aborts on rejected runs, the live fork event gives two accepting runs,
-which collide by `PlainForkQ`. -/
 theorem pairEv_of_forkQ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)} {sch : FlockSoundness.Accounting.Schedule}
@@ -383,8 +321,6 @@ theorem pairEv_of_forkQ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω 
   have h₂ := plain_acc_of_abort habort ha'.1
   exact ⟨h₁, h₂, hq C u r₁ r₂ r ℓ h h₁ h₂⟩
 
-/-- **The fork bound from the alignment and the clash**: `PlainSimForkLe` from `PlainForkAlign` and `PlainForkClash`,
-by `plainAdv_le_of` at the abort (`plainSimAbortAt`). -/
 theorem plainSimForkLe_of {x : Claims.Msg} (ha : PlainForkAlign x) (hc : PlainForkClash x) : PlainSimForkLe x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω _ _ P ω
   have hL := plainN_add hset
@@ -397,13 +333,8 @@ theorem plainSimForkLe_of {x : Claims.Msg} (ha : PlainForkAlign x) (hc : PlainFo
     fun hh hl C _ r ℓ => plainAdv_le_of (tables_head_one h) hL L m k0 l₀ l₁ rest ext hsch hk0 hm hlay _ _ _ _ _ P ω
       C r ℓ (ha'.2 hh hl C r ℓ) fun _ _ _ hq => pairEv_of_forkQ (hab C) (hc'.2 hh hl) hq⟩
 
-/-! ## At `VK keep`
+/-! The originals read `plainVerdictAt`, which `plainVerdictAtK id` is not definitionally, so they stay beside these. -/
 
-The concrete simulator's fork advantage at every `keep`: `plainSimK keep`, the runs of `VK keep` and the verdict at the
-sample `plainVerdictAtK keep`. The originals read `plainVerdictAt`, which `plainVerdictAtK id` is not definitionally, so
-they stay beside these. -/
-
-/-- The decoders `plainAdvK keep` reads (`PlainHDec` at `plainVerdictAtK keep`). -/
 abbrev PlainHDecK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
@@ -420,7 +351,6 @@ abbrev PlainHDecK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : L
       (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
       j
 
-/-- **The simulated strategy after `Commit` at tape `u`, at `keep`** (`plainSimAt` at `plainSimK keep`). -/
 noncomputable def plainSimAtK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
@@ -436,7 +366,6 @@ noncomputable def plainSimAtK (keep : Bool → Bool) {spec : SessionSpec} {st : 
     (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
       (plainSimK keep P x spec st) x (ω, u)) (plainSim_rootK keep P x spec st ω hw u)
 
-/-- **The strategies' fork advantage at tape `u`, at `keep`** (`plainAdvAt` at `plainSimAtK keep`). -/
 noncomputable def plainAdvAtK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
@@ -450,7 +379,6 @@ noncomputable def plainAdvAtK (keep : Bool → Bool) {spec : SessionSpec} {st : 
     hm PT_LOCAL spec.mPts [] [] (capOfRoot (plainRoot P x ω)[0]!) r.val (ℓ.val + 1)
     (plainSimAtK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- **The simulated fork's alignment at tape `u`, at `keep`** (`PlainAlignQ` at `plainSimAtK keep`). -/
 def PlainAlignQK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
@@ -466,8 +394,6 @@ def PlainAlignQK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : La
       ForkEvL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val ℓ.val p.1 p.2) (a, a')) j
       _ (plainSimAtK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- **The live fork event at the concrete simulator, at `keep`** (`PlainLiveFork` at `plainVerdictAtK keep` and
-`plainSimK keep`). -/
 def PlainLiveForkK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     {spec : SessionSpec} (st : Stmt) (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs)
     (d : Json) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
@@ -482,7 +408,6 @@ def PlainLiveForkK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x 
     (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
       (plainSimK keep P x spec st) x (ω, u) r₂)
 
-/-- **The live fork event gives `P`'s two accepting runs of `VK keep` a collision** (`PlainForkQ` at `keep`). -/
 def PlainForkQK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec}
     (st : Stmt) (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
@@ -494,8 +419,6 @@ def PlainForkQK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : C
     Claims.TiedColl sha512 ((Claims.run sha512 P (VK keep) x ω (plainΦ x spec st (u, r₁))).vLog ++
       (Claims.run sha512 P (VK keep) x ω (plainΦ x spec st (u, r₂))).vLog)
 
-/-- **The simulated fork is aligned with the plain fork round, at `keep`** (`PlainForkAlign` at `PlainAlignQK keep`,
-with the decoders `plain_hdecAtK keep` and `plain_hdecHAtK keep`). -/
 def PlainForkAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -515,7 +438,6 @@ def PlainForkAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
         (plain_hdecHAtK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω
         C r ℓ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val u)
 
-/-- **The live fork event's collision, at `keep`** (`PlainForkClash` at `PlainForkQK keep`). -/
 def PlainForkClashK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -534,8 +456,6 @@ def PlainForkClashK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
         ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
 
 open Classical in
-/-- **The fork advantage from the alignment and the live fork's pair, at `keep`** (`plainAdv_le_of`'s proof at
-`plainSimK keep`). -/
 theorem plainAdv_le_ofK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) (hL : plainN x + 2 = (V false).k x) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -570,7 +490,6 @@ theorem plainAdv_le_ofK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionS
     (plainSimK keep P x spec st) x (ω, u) _ ⟨_, hj⟩)) ?_
   exact Claims.Ex_mono fun rr => ind_le_ind fun h => hpair u _ _ h
 
-/-- **A live fork event's pair, at `keep`** (`pairEv_of_forkQ` at `PlainSimAbortK keep`). -/
 theorem pairEv_of_forkQK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {spec : SessionSpec} {st : Stmt} {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs}
     {d : Json} {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
@@ -585,8 +504,6 @@ theorem pairEv_of_forkQK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover �
   have h₂ := plain_acc_of_abortK keep habort ha'.1
   exact ⟨h₁, h₂, hq C u r₁ r₂ r ℓ h h₁ h₂⟩
 
-/-- **The fork bound from the alignment and the clash, at `keep`**: `PlainSimForkLeK keep` from `PlainForkAlignK keep`
-and `PlainForkClashK keep`, by `plainAdv_le_ofK` at the abort (`plainSimAbortAtK`). -/
 theorem plainSimForkLe_ofK (keep : Bool → Bool) {x : Claims.Msg} (ha : PlainForkAlignK keep x)
     (hc : PlainForkClashK keep x) : PlainSimForkLeK keep x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω _ _ P ω
