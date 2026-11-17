@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Credit
+public import PouwVerifier.Credit
 import all Spot.ChallengerSession
 
 /-!
@@ -104,7 +104,7 @@ theorem replayAt_checked (ledger : Json) (k0 : ChallengerKey) : replayAt ledger 
 
 end Spot.Challenger.Once
 
-namespace PouwCheck.Once
+namespace PouwVerifier.Once
 
 open Lean (Json)
 open Spot.Challenger (ChallengerKey LiveOpening)
@@ -128,16 +128,16 @@ theorem roundsCheck_eq (key ledger pins main window session roots openings : Jso
     roundsCheck key ledger pins main window session roots openings =
       roundsCheckWith (Spot.Challenger.checked ledger) key pins main window session roots openings := rfl
 
-end PouwCheck.Once
+end PouwVerifier.Once
 
-namespace PouwCheck.Credit.Once
+namespace PouwVerifier.Credit.Once
 
 open Lean (Json)
 open PouwCommit (Part tagged Domain)
 open Spot.Challenger (ChallengerKey LiveOpening liveReason)
 open Spot.Challenger.Once (Replay trustedChallengePhaseOfWith auditedChallengePhaseWith creditedChallengePhaseWith
   replayAt replayAt_checked)
-open PouwCheck.Once (roundsCheckWith)
+open PouwVerifier.Once (roundsCheckWith)
 
 /-- `drawChallengePhase` with `replay` its ledger's replay. -/
 def drawSessionWith (replay : Replay) (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
@@ -370,4 +370,4 @@ def periodCreditOnce (key ledger pins main name windows : Json) : R PeriodCredit
   · rw [replayAt_checked]
   · rfl
 
-end PouwCheck.Credit.Once
+end PouwVerifier.Credit.Once

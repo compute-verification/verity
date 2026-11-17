@@ -30,7 +30,7 @@ Its machine gives it:
 - ``sample(phase, registration, opening) -> bytes``: the proof blocks the sampling challenge samples, a uniform subset
   of K′ of the registered N, as `core_check` holds a sample to;
 - ``check(phase, registration, salt, opening, sample, proof) -> {"verdict", "reason"}``: the Lean verifier over the
-  sampled proof blocks' proofs and `pouw-check`'s `check` of the phase (`PouwCheck.check`), on the challenges it was
+  sampled proof blocks' proofs and `pouw-verifier`'s `check` of the phase (`PouwVerifier.check`), on the challenges it was
   given.
 
 Each phase's line is an output entry of the record, and the verifier finishes with every line:

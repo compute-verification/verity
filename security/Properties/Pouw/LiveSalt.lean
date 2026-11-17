@@ -1,7 +1,7 @@
 module
 
-public import PouwCheck
-public import PouwCheck.Pass
+public import PouwVerifier
+public import PouwVerifier.Pass
 
 /-!
 # PoUW's Pearl-C live salt: what the check of a pass salted by a live challenger session must establish
@@ -21,10 +21,10 @@ caps fit, and the salt fixes seed_B, so B~ is formed once per epoch. Each pass's
 its `pass_index` is the epoch's `k`.
 
 `Check` is the signature of the check `core_check` gains for such a pass: it applies `saltCheck`'s rule with the epoch's
-root in place of the window-open root and returns the pass's salt. Its port will be `PouwCheck.liveSaltCheck`
+root in place of the window-open root and returns the pass's salt. Its port will be `PouwVerifier.liveSaltCheck`
 (`core_check.live_salt`, the live branch of `_epoch_salt`, taken when the manifest's coins are of `LIVE_SCHEME`). This file
 states its properties before the check exists, so its proof shows `AcceptMeans`, `OnePair` and `OneRoot` of
-`PouwCheck.liveSaltCheck`, with `LiveCoinBinding` and `EpochRootBinding`. It also states what the Pearl-C period's credit
+`PouwVerifier.liveSaltCheck`, with `LiveCoinBinding` and `EpochRootBinding`. It also states what the Pearl-C period's credit
 must show of the passes it credits (`CreditDistinct`), with `RowSeedBinding`.
 
 What the check accepts (`Accepted`) is a pass of `MANIFEST_SCHEMA` that names its session and meets these conditions:
@@ -89,7 +89,7 @@ check's.
 namespace Properties.Pouw.LiveSalt
 
 open Lean (Json)
-open PouwCheck (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
+open PouwVerifier (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
 open Spot.Challenger (Audited ChallengerKey Families LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
   leafOf liveReason pinnedChallengePhase challengePhaseNamed)
 
@@ -113,7 +113,7 @@ def WeightsRoot (m : Json) (w : ByteArray) : Prop :=
 def EPOCH_OPEN_TAG : ByteArray := "verity/pouw-epoch-open/v1".toUTF8
 
 /-- What `epochOpenRoot w k` hashes: `EPOCH_OPEN_TAG` ‖ `w` ‖ u64be(`k`), concatenated with no separator, as
-`PouwCheck.executionPhaseOpenRoot` concatenates its parts. With `w` 64 bytes and `k` below 2^64 it is 97 bytes, every part at a
+`PouwVerifier.executionPhaseOpenRoot` concatenates its parts. With `w` 64 bytes and `k` below 2^64 it is 97 bytes, every part at a
 fixed offset. -/
 def epochMessage (w : ByteArray) (k : Nat) : ByteArray := EPOCH_OPEN_TAG ++ w ++ PouwCommit.be8 k
 

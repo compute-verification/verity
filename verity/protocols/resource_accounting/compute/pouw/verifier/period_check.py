@@ -1,4 +1,4 @@
-"""A PoUW period as a core protocol, ``verity/pouw/period/v1``: the Python the Lean `PouwCheck.Period` (``pouw-period``,
+"""A PoUW period as a core protocol, ``verity/pouw/period/v1``: the Python the Lean `PouwVerifier.Period` (``pouw-period``,
 PoUW's verifier for a period and onsite's work component) is held to by ``lean/check/tests/test_period_difftest.py``.
 
 Its parameters are the verifier's own, ``{key, main, name, sessions}``: the challenger key it pins, its copy of main's
@@ -40,7 +40,7 @@ CHALLENGE_PHASES_FORM = ("sessions is not a list of the ids of the sessions the 
 
 
 def params(j: Any) -> dict:
-    """`PouwCheck.Period.paramsOf`: the session list where the parameters carry one; without it the period's close is
+    """`PouwVerifier.Period.paramsOf`: the session list where the parameters carry one; without it the period's close is
     checked against no list."""
     if not isinstance(j, dict) or sorted(j) not in (list(PARAMS_KEYS), list(ALONE_KEYS)):
         raise CC.Refused(KEYS_FORM)
@@ -80,7 +80,7 @@ COVERED_TILE = "PouwH1Tile_v5{"
 
 
 def _window_form(nm: str, i: int, w: Any) -> str | None:
-    """`PouwCheck.Period.windowForm`: why window `i` of period `nm` is a form `GUARANTEE` doesn't cover, read from its
+    """`PouwVerifier.Period.windowForm`: why window `i` of period `nm` is a form `GUARANTEE` doesn't cover, read from its
     evidence alone, or None for a covered window and for evidence too malformed to read (`credit.period_credit`
     refuses it)."""
     if isinstance(w, dict) and sorted(w) == list(Cr.PEARL_C_KEYS):
@@ -137,7 +137,7 @@ def _window_form(nm: str, i: int, w: Any) -> str | None:
 
 
 def form(nm: str, windows: Any) -> str | None:
-    """`PouwCheck.Period.form`: the first window of `windows` in a form `GUARANTEE` doesn't cover, else None."""
+    """`PouwVerifier.Period.form`: the first window of `windows` in a form `GUARANTEE` doesn't cover, else None."""
     for i, w in enumerate(windows if type(windows) is list else []):
         if (why := _window_form(nm, i, w)) is not None:
             return why
@@ -149,7 +149,7 @@ def _period_entry(ledger: list, kind: str, name: str) -> dict | None:
 
 
 def ledger_challenge_phases(ledger: list, name: str) -> list[str]:
-    """`PouwCheck.Period.ledgerChallengePhases` on a ledger the challenger's checks have trusted: the sessions period
+    """`PouwVerifier.Period.ledgerChallengePhases` on a ledger the challenger's checks have trusted: the sessions period
     `name`'s close lists, in its order (each window's session, then its sample's), the empty list when it closes no
     period `name`."""
     close = _period_entry(ledger, "period-close", name)
@@ -157,7 +157,7 @@ def ledger_challenge_phases(ledger: list, name: str) -> list[str]:
 
 
 def challenge_phases_refusal(name: str, listed: list[str], got: list[str]) -> str | None:
-    """`PouwCheck.Period.challengePhasesRefusal`: the first session of `got` the parameters don't list (`listed`) or
+    """`PouwVerifier.Period.challengePhasesRefusal`: the first session of `got` the parameters don't list (`listed`) or
     that repeats one before it, else None."""
     seen: set[str] = set()
     for i, s in enumerate(got):
@@ -171,7 +171,7 @@ def challenge_phases_refusal(name: str, listed: list[str], got: list[str]) -> st
 
 
 def published(credit: dict, p: dict, ledger: list) -> dict:
-    """`PouwCheck.Period.Published.toJson`: the period's credit, its parameters' challenger key, and from the trusted
+    """`PouwVerifier.Period.Published.toJson`: the period's credit, its parameters' challenger key, and from the trusted
     ledger its close's open roots and its span (the period-open's seq and the entries from it to its close, inclusive).
     It names no device: the accounting layer binds the challenger key to a registered device."""
     o, c = (_period_entry(ledger, k, p["name"]) for k in ("period-open", "period-close"))
@@ -180,7 +180,7 @@ def published(credit: dict, p: dict, ledger: list) -> dict:
 
 
 def check_twin(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] | None]:
-    """The Python twin of `PouwCheck.Period.check`, for the difftest: the first window in a form the period's guarantee doesn't cover (``form``), else the
+    """The Python twin of `PouwVerifier.Period.check`, for the difftest: the first window in a form the period's guarantee doesn't cover (``form``), else the
     period's credit or the first refusal, then a session of its close the parameters don't list or that repeats; on
     acceptance what it publishes (`published`) and its profile."""
     if (why := form(p["name"], e["windows"])) is not None:

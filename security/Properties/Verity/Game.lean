@@ -41,8 +41,8 @@ states either, and the code refuses the plain sibling's list (`Core.Composites.o
 | subprotocol | `Audit` | its compiled check | onsite | remote | plain |
 | --- | --- | --- | --- | --- | --- |
 | SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | yes | yes | yes |
-| PoUW | `.pouw` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | | |
-| | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes | yes |
+| PoUW | `.pouw` | `PouwVerifier.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | | |
+| | | `PouwVerifier.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes | yes |
 | the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes | |
 | | | `rowsCheck` (`verity/inference-only/rows/v1`, the rows check, not yet compiled) | | | yes |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | | |
@@ -202,8 +202,8 @@ and v0 elsewhere; every other subprotocol's is one check, the same in every comp
 def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → BlobProtocol
   | .sampled, _ => VStar.Recursive.Sampled.protocol
   | .pouw, k =>
-    if PouwCheck.PearlPlus.Protocol.protocolId ∈ k then PouwCheck.PearlPlus.Protocol.protocol
-    else PouwCheck.Period.protocol
+    if PouwVerifier.PearlPlus.Protocol.protocolId ∈ k then PouwVerifier.PearlPlus.Protocol.protocol
+    else PouwVerifier.Period.protocol
   | .inferenceOnly, k => if rowsId ∈ k then rowsCheck else InferenceOnlyCheck.Protocol.protocol
   | .pous, _ => PousCheck.RunProtocol.protocol
   | .poub, _ => Poub.P2Protocol.protocol
@@ -315,14 +315,14 @@ def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : 
 
 /-- **The credit Pearl+'s check publishes in what the prover sent composite `k`**: the three byte strings decode,
 Pearl+'s case decodes under the parameters `k` names for it, and Pearl+'s check on the blobs sent accepts it with the
-credit `w` (`PouwCheck.PearlPlus.Protocol.checkBlobs`), whose `macs`, `rho` and `epsilon` its answer publishes. -/
-def PearlPlusCredits (k : Verity.Registration.Composite) (s : Sent) (w : PouwCheck.PearlPlus.Credit) : Prop :=
+credit `w` (`PouwVerifier.PearlPlus.Protocol.checkBlobs`), whose `macs`, `rho` and `epsilon` its answer publishes. -/
+def PearlPlusCredits (k : Verity.Registration.Composite) (s : Sent) (w : PouwVerifier.PearlPlus.Credit) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components k) ps ev,
-    x.2.2.id = PouwCheck.PearlPlus.Protocol.protocolId ∧ ∃ p cm e prof,
-      (canonicalJson x.2.1.params.toUTF8 >>= PouwCheck.PearlPlus.Protocol.paramsOf) = .ok p ∧
-      PouwCheck.PearlPlus.Protocol.commitmentOf x.2.2.commitment = .ok cm ∧
-      PouwCheck.PearlPlus.Protocol.evidenceOf x.2.2.evidence = .ok e ∧
-      PouwCheck.PearlPlus.Protocol.checkBlobs p cm e (Blobs.ofArray s.blobs) = .accept w prof
+    x.2.2.id = PouwVerifier.PearlPlus.Protocol.protocolId ∧ ∃ p cm e prof,
+      (canonicalJson x.2.1.params.toUTF8 >>= PouwVerifier.PearlPlus.Protocol.paramsOf) = .ok p ∧
+      PouwVerifier.PearlPlus.Protocol.commitmentOf x.2.2.commitment = .ok cm ∧
+      PouwVerifier.PearlPlus.Protocol.evidenceOf x.2.2.evidence = .ok e ∧
+      PouwVerifier.PearlPlus.Protocol.checkBlobs p cm e (Blobs.ofArray s.blobs) = .accept w prof
 
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
 accepted composition of `k`'s subprotocols on the blobs sent, whose record subprotocols (`tied k`) committed to one
@@ -915,7 +915,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
     Subprotocol → Exchange → Prop
   | .sampled, o => (V.live k θ F c).Holds (V.certOf θ) σ .sampled o
   | .pouw, o =>
-    if PouwCheck.PearlPlus.Protocol.protocolId ∈ k then
+    if PouwVerifier.PearlPlus.Protocol.protocolId ∈ k then
       ∃ w, PearlPlusCredits k o.sent w ∧ (1 - (w.rho : ℝ)) * (1 - (w.epsilon : ℝ)) * w.macs ≤ V.macs θ F c σ o
     else (V.live k θ F c).Holds (V.certOf θ) σ .pouw o
   | .pous, o => (V.live k θ F c).Holds (V.certOf θ) σ .pous o
