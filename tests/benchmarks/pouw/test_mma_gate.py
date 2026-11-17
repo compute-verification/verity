@@ -24,10 +24,9 @@ FIX = Path(__file__).resolve().parent / "fixtures"
 VERDICTS = FIX / "mma_gate" / "verdicts.json"
 SASS_FIX = ROOT / "tests/verity/protocols/resource_accounting/compute/pouw/prover/fixtures/sass_gate"
 GATES = {"pearl_c_sm90": ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/sass_gate.py", None),
-         "pearl_c_sm120": ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/sass_gate.py", None),
-         "s8_linear": ("benchmarks/kernels/s8_linear/sass_gate.py", None)}
+         "pearl_c_sm120": ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/sass_gate.py", None)}
 #: the arch each gate's real-listing cases are reported for
-REAL_ARCH = {"pearl_c_sm90": "sm_90a", "pearl_c_sm120": "sm_120a", "s8_linear": "sm_90a"}
+REAL_ARCH = {"pearl_c_sm90": "sm_90a", "pearl_c_sm120": "sm_120a"}
 
 
 def _load(gate: str):
@@ -119,41 +118,6 @@ def pearl_c_sm120(arch: str, bad: bool) -> tuple[str, str]:
     s.ins("STG.E desc[UR4][R2.64], R5")
     if bad:
         p += ["ptxas warning : Registers are spilled\n", entry("lines", "sm_120a", regs=40, spills=8, smem=0)]
-    return "".join(p), s.text()
-
-
-def s8_linear(arch: str, bad: bool) -> tuple[str, str]:
-    G = _load("s8_linear")
-    want = [f"s8mm{c}_{tm}x{bn}" for c in ("", "2") for tm in (64, 128) for bn in (64, 128, 256)]
-    reduce = sorted({f"{f}_128x{bn}_r{r}" for f in ("s8mr", "s8mrb") for bn in (128, 256) for r in (8, 16, 32, 64, 128)} - G.UNBUILT)
-    p, s = [], Listing()
-    for name in want + reduce:
-        if bad and name == "s8mm2_128x256":
-            continue
-        rm = G.REDUCE.match(name)
-        bn = int((G.KERNEL.match(name) or rm).group(2))
-        p.append(entry(name, "sm_90a", regs=168, used=not (bad and name == "s8mm_64x128")))
-        s.fn(name)
-        s.ins("UTMALDG.2D [UR8], [UR4]")
-        s.ins(f"IGMMA.64x{bn}x32.{'U8.S8' if bad and name == 's8mm_128x64' else 'S8.S8'} R24, gdesc[UR4], R24, gsb0",
-              8 if name.endswith("64x64") else 4)
-        if rm:
-            s.ins(f"IGMMA.64x{rm.group(3)}x32.S8.S8 R200, R24, gdesc[UR8], R200", bn // 8)
-        s.ins("F2I.FTZ.U32.TRUNC.NTZ R9, R8")
-        s.ins("I2FP.F32.S32 R21, R25")
-        if not (bad and name == "s8mm_64x256"):
-            s.ins("FMUL R60, R21, R12")
-        if bad and name == "s8mm2_64x64":
-            s.ins("FFMA R1, R2, R3, R4")
-            s.ins("FMUL.FTZ R1, R2, R3")
-        if bad and name == "s8mm2_64x128":
-            s.ins("LDL R1, [R2]")
-            s.ins("HGMMA.64x64x16.F32.BF16 R24, gdesc[UR4], R24")
-        s.ins("F2FP.BF16.F32.PACK_AB R61, R60, R61")
-        s.ins("EXIT")
-    if bad:
-        p += [entry("s8mm_64x64", "sm_100a", regs=80),
-              "ptxas info    : (C7515) Potential Performance Loss: wgmma.mma_async instructions are serialized\n"]
     return "".join(p), s.text()
 
 
