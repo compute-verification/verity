@@ -24,7 +24,7 @@ every = "7d"
 goal = "accounting/network-glm53"
 
 [[metric]]
-id = "benchmarks/exfiltration-network-certifier-gb"
+id = "benchmarks/exfiltration-network-attester-gb"
 title = "Exfiltration capacity, network attestation"
 owner = "benchmarks"
 unit = "GB"

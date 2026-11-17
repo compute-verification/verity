@@ -32,6 +32,10 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.commitments.crypto import lms
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import manifest as PPM
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
@@ -47,17 +51,13 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 )
 from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
+from verity_torch.pouw.pearl_c import passes as PP
+from verity_torch.pouw.pearl_c import run_device as PPDR
 
 from tests.protocols import challenger_host as CH
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity_torch.pouw.pearl_c import run_device as PPDR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import manifest as PPM
-from verity_torch.pouw.pearl_c import passes as PP
 
 SCHEME = "pearl-c-sm120-v1-h3"
 ENTRY = f"pouw:{SCHEME}"

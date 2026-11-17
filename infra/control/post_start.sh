@@ -37,7 +37,6 @@ packages() {
  # the image's /start.sh gives root the pod's PUBLIC_KEY again at every start, so each boot makes them again from
  # /data/boot/door, once it holds the keys, and locks root again if it was locked.
  [ ! -s /data/boot/door/gate-keys ] || { /data/infra/vy-control-setup; echo "$(date -u +%FT%TZ) vy-control-setup rc=$?"; }
- setsid -f /data/infra/drive.sh > /dev/null 2>&1 < /dev/null
  # The landing loop, ci's verified queue: ci's boot.sh, on the volume, rebuilds its clone and code on the container disk and
  # starts its loop, which stays idle while ci's stop file exists.
  setsid -f /data/vqueue/boot.sh >> /data/vqueue/live/boot.log 2>&1 < /dev/null) >> /data/boot/packages.log 2>&1 &

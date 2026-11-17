@@ -23,6 +23,7 @@ untraced = [
     "test_deploy.py",
     "test_deploy_register.py",
     "test_drive_sh.py",
+    "test_fixtures_export_sh.py",
     "test_gh_read_token.py",
     "test_keeper.py",
     "test_loop_metrics.py",
@@ -58,6 +59,8 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "tools/research/src/research/velocity.py", "tools/research/src/research/goals_audit.py",
           # drive's loop, whose checkout per verb is tested here
           "infra/control/drive.sh",
+          # the fixture export's loop, whose candidate pass is tested here
+          "infra/control/fixtures_export.sh",
           # the silent-excepts lint, whose own definition holds deploy's slot reader (BUSY), a string the lint can't see
           "tests/lint/test_repo_silent_excepts.py",
           # infra's checkout on the nodes, which needs no sudo there

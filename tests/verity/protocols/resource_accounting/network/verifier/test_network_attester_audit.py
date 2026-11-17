@@ -123,7 +123,7 @@ def test_a_link_with_another_sync_is_advice_in_that_window_only():
 
 
 def ingress_run(arrivals, faults=None):
-    """An ingress certifier's network certificates: `arrivals[w][t]` frames reach it in bucket t of window w, when the outside chooses,
+    """An ingress network attester's network certificates: `arrivals[w][t]` frames reach it in bucket t of window w, when the outside chooses,
     and window w faults with `faults[w]` from its start when given."""
     certifier = Certifier("requests", P)
     records = []
