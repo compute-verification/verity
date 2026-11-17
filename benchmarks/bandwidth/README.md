@@ -9,7 +9,8 @@ machine.
 
 **Writes:** a probe's records are its result, under its run's `$OUT`: `chip.json` and `ur.jsonl` (`chip`),
 `write.jsonl` (`write_gpu`) and `write_host.jsonl` (`write_host`), beside the build's and the device's logs. Each
-script's header lists its files. No code reduces a probe's records to one number, so no probe writes a `result.json`.
+script's header lists its files. `write_host` writes its fastest record as `metrics.toml`'s number into the run's `result.json` (`result.py`); no code reduces
+the GPU probes' records to one number, so neither writes a `result.json`.
 
 ## Write ceilings
 
