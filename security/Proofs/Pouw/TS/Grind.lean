@@ -4,23 +4,7 @@ public import Proofs.Pouw.TS.Steer
 public import Mathlib.Analysis.MeanInequalitiesPow
 public import Proofs.ResourceAccounting.Lemmas.TS.Grind
 
-/-!
-# The grinding premium under hashed seeds: proofs
-
-`ExchangeTail` is Markov at `e^{θπ}`. `GrindTail` is `Steer.GrindUnion`'s split: query `q`'s answer split off the coins
-(`Steer.splitAt`), its event bounded over that answer with the rest fixed, then a union over the `T` queries.
-`GrindPremium` is the two, plus `Break` by a union; `GrindPremiumAt` sets `π` so that `T·M·e^{-θπ} = δ`. `GrindMass`
-sums the same split's per-query bound instead of taking a union.
-
-`LuckMoment` splits the exponential at the luck indicator (`Grind.exp_gain`) and counts the lucky coins. `PrivateMoment`
-is Fubini over the private coins (`Grind.sum_exp_pi`). `TileLuck` takes both AM-GM steps:
-
-* pointwise in a column's coins, `∏_i e^{θ g_i} ≤ (1/r)·Σ_i e^{rθ g_i}` (`Grind.prod_exp_le_mean`), so a column of `r`
-  units is at most the mean of its units each at rate `rθ`, which `LuckMoment` bounds by `f` when the unit is alive and
-  `e^{rθw}` when dead;
-* pointwise in the shared coins, `∏_k H_k ≤ (1/n)·Σ_k H_k^n` (`Grind.prod_le_mean_pow`), and `H_k^n` is at most the
-  mean of its units' `n`th powers (the power mean), each of which is `f^n` off its dead event and `e^{n·rθw}` on it.
--/
+/-! The grinding premium under hashed seeds. -/
 
 @[expose] public section
 
@@ -90,7 +74,6 @@ theorem exp_neg_le (a : ℝ) (ha : 0 ≤ a) : Real.exp (-a) ≤ 1 / (1 + a) := b
   rw [Real.exp_neg, ← one_div]
   exact one_div_le_one_div_of_le (by linarith) (by linarith [Real.add_one_le_exp a])
 
-/-- A dead word's term: `2^{-w}·e^{w/8} ≤ (4/7)^w`, from `e^{1/8} < 8/7`. -/
 theorem dead_le (w : ℕ) : (1 / 2 : ℝ) ^ w * Real.exp (32 * (1 / 256 * w)) ≤ (4 / 7) ^ w := by
   have h8 : Real.exp (1 / 8) ≤ 8 / 7 := by
     have := Real.exp_bound_div_one_sub_of_interval' (x := 1 / 8) (by norm_num) (by norm_num)
@@ -102,7 +85,6 @@ theorem dead_le (w : ℕ) : (1 / 2 : ℝ) ^ w * Real.exp (32 * (1 / 256 * w)) �
   rw [he, ← mul_pow]
   exact pow_le_pow_left₀ (by positivity) (by linarith) w
 
-/-- An alive word's term over its 32 columns, from `e^x ≤ 1 + x + x²` on `|x| ≤ 1` and `1 + x ≤ e^x`. -/
 theorem alive_le (x : ℝ) (h0 : 0 ≤ x) (h32 : x ≤ 32) :
     (1 / 2 * Real.exp (1 / 256 * x) + (1 - 1 / 2) * Real.exp (-(4 * (1 / 256) * x))) ^ 32 ≤
       Real.exp (-(3 / 16) * x + 17 / 4096 * x ^ 2) := by
@@ -268,7 +250,6 @@ theorem TileLuck : ResourceAccounting.Guarantees.TS.TileLuck := by
     simp only [hh]; split_ifs
     · exact (Real.exp_pos _).le
     · exact hf0 k i
-  -- one unit at rθ, given the shared coins
   have hunit : ∀ k i ω₀, ∑ x : E, Real.exp (r * θ * gain k i ω₀ x) ≤ h k i ω₀ * Fintype.card E := by
     intro k i ω₀
     by_cases hd : dead k i ω₀
@@ -284,7 +265,6 @@ theorem TileLuck : ResourceAccounting.Guarantees.TS.TileLuck := by
       have := LuckMoment (lucky k i ω₀) (p k i) (w k i) (r * θ) κ (hw k i) hrθ hκ (halive k i ω₀ hd)
       calc _ ≤ _ := this
         _ = f k i * Fintype.card E := by simp only [hf]
-  -- a column's r units share its coins: AM-GM over them, pointwise in the coins
   set H : Fin n → Ω₀ → ℝ := fun k ω₀ => (∑ i, h k i ω₀) / r with hH
   have hrpos : (0 : ℝ) < r := by exact_mod_cast hr
   have hcol : ∀ k ω₀, ∑ x : E, Real.exp (θ * ∑ i, gain k i ω₀ x) ≤ H k ω₀ * Fintype.card E := by
@@ -299,7 +279,6 @@ theorem TileLuck : ResourceAccounting.Guarantees.TS.TileLuck := by
       _ = H k ω₀ * Fintype.card E := by simp only [hH]; rw [← Finset.sum_mul]; ring
   have hH0 : ∀ k ω₀, 0 ≤ H k ω₀ := fun k ω₀ => by
     simp only [hH]; exact div_nonneg (Finset.sum_nonneg fun i _ => hh0 k i ω₀) hrpos.le
-  -- the shared coins: each unit's dead mass
   have hpow : ∀ k i, ∑ ω₀, h k i ω₀ ^ n ≤ M * Fintype.card Ω₀ := by
     intro k i
     have hc := card_filter_le (dead k i) (hdead k i)

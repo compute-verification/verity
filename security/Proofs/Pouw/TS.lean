@@ -16,22 +16,7 @@ public import Proofs.Pouw.TS.Keyed
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# The tensor–scalar model's proofs
-
-Each guarantee of `Definitions.Pouw.Guarantees.TS` as `ResourceAccounting.SecurityProofs.TS.G`. One file per prover
-group: the price lemmas (`TS/Price.lean`), the round lemmas
-(`TS/Rounds.lean`), Lemma 1 with Corollaries D1 and D2 (`TS/Facets.lean`), T1 and Lemma 2 (`TS/Tensor.lean`), the
-fan-in count with FOLD-OPT and FILL-OPT from it (`TS/FanIn.lean`), the fan-in floor of a fold of binding steps and
-of duo's and fx1's runs (`TS/FoldFanIn.lean`), the low bit of a one-register fold and of li (`TS/LowBit.lean`); this file keeps the theorems built from them
-(EPS1-SPEC §2.2, §2.4, §2.7).
-
-All five run one chain: a price lower bound `Φ(π) ≤ π·n(M)` (from (RD), `price_of_rd`, or from the parts,
-`price_of_parts`), then `π·n ≤ B(n)` (`price_le_bound`) and `B(n) ≤ f_max·T(M)` (`TimeBound`), and `identity` reads
-`Φ(π)/B(L)` as the terms (`honest_of_price`, `floor_of_price`). D-ideal's luck is `ε_luck` at
-`d̄ = ln(1/δ′)/(ln(1/p)·S)`, off `luck_rounds`' event at `K = ⌈ln(1/δ′)/ln(1/p)⌉` (`p^K ≤ δ′`, `pow_ceil_le`); Lemma C's
-is `ε_luck` at `d̄ = Λ·ln(1/δ′)/S`, off `budget_tail`'s event at `t = ln(1/δ′)`.
--/
+/-! The tensor–scalar model's proofs: the theorems built from the lemmas under `TS/`. -/
 
 @[expose] public section
 
@@ -39,7 +24,6 @@ namespace ResourceAccounting.SecurityProofs.TS
 
 open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
-/-- Steps 1 and 3 of Theorem D(a): `π·n ≤ B(n) ≤ f_max·T(M)` on a run whose facets are ceilings. -/
 theorem price_le_time {K R : Type} [Fintype K] [Fintype R] [Nonempty R] (G : Machine K R) (lam : R → ℝ)
     (M : Run K) (h : IsCert lam) (hf : 0 < G.fmax) (hM : FacetCeilings G M) :
     G.price lam M.n ≤ G.fmax * M.time := by
@@ -48,7 +32,6 @@ theorem price_le_time {K R : Type} [Fintype K] [Fintype R] [Nonempty R] (G : Mac
   rw [div_le_iff₀ hf] at h2
   linarith
 
-/-- `Φ/B · B/C_H · f_H/f_max ≤ T/(C_H/f_H)` when `Φ ≤ f_max·T`. -/
 theorem ratio_honest {Φ B CH fH fmax t : ℝ} (hB : 0 < B) (hCH : 0 < CH) (hfH : 0 < fH) (hf : 0 < fmax)
     (h : Φ ≤ fmax * t) : Φ / B * (1 - (1 - B / CH)) * (1 - (1 - fH / fmax)) ≤ t / (CH / fH) := by
   have := hB.ne'
@@ -62,14 +45,11 @@ theorem ratio_honest {Φ B CH fH fmax t : ℝ} (hB : 0 < B) (hCH : 0 < CH) (hfH 
   have := mul_le_mul_of_nonneg_right h (le_of_lt (mul_pos hfH hCH))
   linarith
 
-/-- `Φ/B ≤ T/(B/f_max)` when `Φ ≤ f_max·T`. -/
 theorem ratio_floor {Φ B fmax t : ℝ} (hB : 0 < B) (h : Φ ≤ fmax * t) :
     Φ / B ≤ t / (B / fmax) := by
   rw [div_div_eq_mul_div]
   exact div_le_div_of_nonneg_right (by linarith) hB.le
 
-/-- The honest form of steps 3–4: a price lower bound `Φ(π) ≤ π·n(M)` on a run whose facets are ceilings gives
-`T(M)/T(H) ≥ (1 − ε_skip − ε_mand − ε_machine − ε_luck − ε_adapt)(1 − ε_sched)(1 − ε_clock)`. -/
 theorem honest_of_price {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty R] (Z : Model K R T L U F X) (H : Honest K) (lam : R → ℝ)
     (dbar abar : ℝ) (M : Run K) (h : IsCert lam) (hZ : Z.Wf H.prog) (hCH : 0 < H.CH) (hfH : 0 < H.fH)
@@ -89,8 +69,6 @@ theorem honest_of_price {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype 
   rw [e, Model.epsSched, Model.epsClock, Honest.time]
   exact ratio_honest hB hCH hfH hf (hΦ.trans (price_le_time Z.G lam M h hf hM))
 
-/-- The floor form of steps 3–4: a price lower bound `Φ(π) ≤ π·n(M)` on a run whose facets are ceilings gives
-`T(M)/T_cred ≥ 1 − ε^♭_skip − ε^♭_cert − ε^♭_route − ε^♭_mand − ε^♭_luck − ε^♭_adapt`. -/
 theorem floor_of_price {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty R] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
     (dbar abar : ℝ) (M : Run K) (h : IsCert lam) (hZ : Z.Wf Fl) (hM : FacetCeilings Z.G M)
@@ -109,7 +87,6 @@ theorem floor_of_price {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T
   rw [e, Model.credit]
   exact ratio_floor hB (hΦ.trans (price_le_time Z.G lam M h hf hM))
 
-/-- The fixed words' part of `Φ`: `fixed ≥ (1 − d̄ − ā)·N_w` and (RD) in price form give `Φ(π) ≤ π·n`. -/
 theorem phi_le_of_fixed {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] (Z : Model K R T L U F X) (lam : R → ℝ) (dbar abar fixed price : ℝ)
     (hw : 0 ≤ Z.wStar lam) (hfix : (1 - dbar - abar) * Z.Nw ≤ fixed)
@@ -119,7 +96,6 @@ theorem phi_le_of_fixed {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype 
   have := mul_le_mul_of_nonneg_right hfix hw
   linarith
 
-/-- One bet a round reaches `δ′`: `p^⌈ln(1/δ′)/ln(1/p)⌉ ≤ δ′` for `p ∈ (0, 1)` and `δ′ > 0`. -/
 theorem pow_ceil_le {p δ' : ℝ} (hp0 : 0 < p) (hp1 : p < 1) (hδ : 0 < δ') :
     p ^ ⌈Real.log (1 / δ') / Real.log (1 / p)⌉₊ ≤ δ' := by
   set t := Real.log (1 / δ') / Real.log (1 / p) with ht
@@ -133,7 +109,6 @@ theorem pow_ceil_le {p δ' : ℝ} (hp0 : 0 < p) (hp1 : p < 1) (hδ : 0 < δ') :
     _ ≤ Real.exp (Real.log δ') := Real.exp_le_exp.mpr (by linarith)
     _ = δ' := Real.exp_log hδ
 
-/-- Theorem D(a): `price_le_bound`, `price_of_rd`, `identity` and `TimeBound`. -/
 theorem DecompositionD : ResourceAccounting.Guarantees.TS.DecompositionD := by
   intro K R T L U F X _ _ _ _ _ _ _ _ _ _ Z H Ω _ accepts M fixed lam dbar abar δ h hZ hCH hfH hM hRD hLk
   refine le_trans (prob_mono ?_) hLk
@@ -145,8 +120,6 @@ theorem DecompositionD : ResourceAccounting.Guarantees.TS.DecompositionD := by
   exact phi_le_of_fixed Z lam dbar abar (fixed ω) _ (stars_nonneg Z H.prog lam hZ h).2.1 hfix
     (price_of_rd Z H.prog (M ω).n (fixed ω) lam h hZ (hRD ω ha))
 
-/-- D-ideal's union bound: off `ProofsSound`'s event `E` and the luck's event `B`, an accepted window is accepted by
-the ideal game with deficiency `< D₀`, so its fixed words are at least `(1 − D₀/S)·N_w`. -/
 theorem fixed_of_tail {Ω K T L U : Type} [Fintype Ω] {S : ℕ} (P : Play Ω S K T L U) (Nw D₀ : ℝ) (hS : 0 < S)
     (hNw : 0 < Nw) (E : Paths Ω S → Prop)
     (hacc : ∀ x, P.accepts x → ¬ E x → P.game.accepts x ∧ (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed)
@@ -265,12 +238,10 @@ theorem CompilerC : ResourceAccounting.Guarantees.TS.CompilerC := by
     _ ≤ S * (δbind + nπ * δzk) + δ' := add_le_add hE hB
     _ = δ := by rw [hδ']; ring
 
-/-- A star is at most the price of each route of its menu. -/
 theorem iInf_le_price {ι R : Type} [Finite ι] [Fintype R] (lam : R → ℝ) (d : ι → R → ℝ) (i : ι) :
     ⨅ j, demandPrice lam (d j) ≤ demandPrice lam (d i) :=
   ciInf_le (Set.finite_range _).bddBelow i
 
-/-- The price of a load that is a nonnegative combination of routes: `π·(Σ_i c_i d_i) = Σ_i c_i·(π·d_i)`. -/
 theorem price_of_combination {K R ι : Type} [Fintype K] [Fintype R] [Fintype ι] (G : Machine K R)
     (lam : R → ℝ) (n : K → ℝ) (c : ι → ℝ) (d : ι → R → ℝ) (hn : ∀ r, G.load n r = ∑ i, c i * d i r) :
     G.price lam n = ∑ i, c i * demandPrice lam (d i) := by
@@ -279,7 +250,6 @@ theorem price_of_combination {K R ι : Type} [Fintype K] [Fintype R] [Fintype ι
   rw [Finset.sum_comm]
   exact Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun r _ => by ring
 
-/-- Corollary D3: `price_of_rd`, `identity` at ♭, `TimeBound`; the signs from `FloorKnown`. -/
 theorem FloorCreditD3 : ResourceAccounting.Guarantees.TS.FloorCreditD3 := by
   intro K R T L U F X _ _ _ _ _ _ _ _ _ _ Z H Fl Ω _ accepts M fixed lam dbar abar δ h hZ hCH hfH hM hRD hLk
   have hZ' := hZ

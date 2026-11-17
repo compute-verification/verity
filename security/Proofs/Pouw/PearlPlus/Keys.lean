@@ -5,14 +5,8 @@ public import Proofs.Pouw.PearlC.CoreOps
 public import Proofs.Pouw.PearlC.RowStats
 public import Proofs.Pouw.PearlC.TileValues
 
-/-!
-# Pearl+'s bridge, part (c), the debit's keys: `key` is the value order, `least` a threshold, `carried` the rounded add
-
-`Rule.wordInertWork` replays a word's later promotions on keys rather than on values: `Rule.key` writes a finite FP32 word as
-an integer in [−TOP, TOP] in value order (±0 one key), `Rule.least` bisects for the least key at which a monotone predicate
-holds, and `Rule.carried x w` is the key of RN(x's value + w's value). `keyVal` is a key's value; the three statements
-here are what the debit's replay (`InertWork`) reads of them.
--/
+/-! Pearl+'s bridge, part (c), the debit's keys: `key` is the value order, `least` a threshold, `carried` the rounded
+add. -/
 
 @[expose] public section
 
@@ -24,11 +18,8 @@ open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 def magVal (u : ℕ) : ℚ :=
   (((if u / 2 ^ 23 = 0 then 0 else 2 ^ 23) + u % 2 ^ 23 : ℕ) : ℚ) * (2 : ℚ) ^ (((max (u / 2 ^ 23) 1 : ℕ) : ℤ) - 150)
 
-/-- The value of a key. -/
 def keyVal (x : ℤ) : ℚ := if x < 0 then -magVal x.natAbs else magVal x.natAbs
 
-/-- **The key is the value's order**: `keyVal` is strictly increasing; a finite word's key is in [−TOP, TOP] and its value
-is the key's; and every key in [−TOP, TOP] is a finite word's, `Rule.wordOf`'s. -/
 def KeyIsTheValue : Prop :=
   StrictMono keyVal ∧
     (∀ w : ℕ, w < 2 ^ 32 → (w >>> 23) % 256 ≠ 255 →
@@ -36,26 +27,17 @@ def KeyIsTheValue : Prop :=
     ∀ x : ℤ, -Rule.TOP ≤ x → x ≤ Rule.TOP →
       Rule.wordOf x < 2 ^ 32 ∧ (Rule.wordOf x >>> 23) % 256 ≠ 255 ∧ Rule.key (Rule.wordOf x) = x
 
-/-- **`least` is the threshold**: for a predicate monotone on [−TOP, TOP], `Rule.least` is in [−TOP, TOP + 1], and a key
-in [−TOP, TOP] is at least it exactly when the predicate holds there. -/
 def LeastIsTheThreshold : Prop :=
   ∀ pred : ℤ → Bool, (∀ x y, -Rule.TOP ≤ x → x ≤ y → y ≤ Rule.TOP → pred x = true → pred y = true) →
     -Rule.TOP ≤ Rule.least pred ∧ Rule.least pred ≤ Rule.TOP + 1 ∧
       ∀ x, -Rule.TOP ≤ x → x ≤ Rule.TOP → (Rule.least pred ≤ x ↔ pred x = true)
 
-/-- **`carried` is the rounded add**: where the check's FP32 add is the semantics' on finite words, a key in [−TOP, TOP]
-carried through a finite word of magnitude below 2⁴⁶ (a promotion group's word) stays in [−TOP, TOP], and its value is
-`rnAdd` of the two values. -/
 def CarriedIsTheAdd : Prop :=
   (∀ a b : ℕ, (wordQ a).isSome → (wordQ b).isSome → Evaluate.Fp32.f32AddV2 a b = TileCircuit.f32Add a b) →
     ∀ (x : ℤ) (w : ℕ) (y : ℚ), -Rule.TOP ≤ x → x ≤ Rule.TOP → wordQ w = some y → |y| < 2 ^ 46 →
       -Rule.TOP ≤ Rule.carried x w ∧ Rule.carried x w ≤ Rule.TOP ∧ keyVal (Rule.carried x w) = rnAdd (keyVal x) y
 
-/-! ## Proofs -/
-
 namespace KeysSim
-
-/-! ### Keys and words -/
 
 theorem or_top {n : ℕ} (h : n < 2 ^ 31) : n ||| 0x80000000 = n + 2 ^ 31 := by
   rw [Nat.or_comm, show (0x80000000 : ℕ) = 1 <<< 31 from rfl, ← Nat.shiftLeft_add_eq_or_of_lt h, Nat.shiftLeft_eq]
@@ -95,8 +77,6 @@ theorem wordOf_ok {x : ℤ} (h1 : -Rule.TOP ≤ x) (h2 : x ≤ Rule.TOP) :
     rcases key_cases hw with ⟨h, -⟩ | ⟨-, -, hk⟩
     · rw [Nat.shiftRight_eq_div_pow] at h; omega
     · rw [hk]; omega
-
-/-! ### Values -/
 
 theorem magVal_zero : magVal 0 = 0 := by simp [magVal]
 
@@ -181,7 +161,6 @@ theorem keyVal_abs_le {x : ℤ} (h1 : -Rule.TOP ≤ x) (h2 : x ≤ Rule.TOP) : |
   rw [keyVal_top] at a
   exact abs_le.2 ⟨by linarith, a⟩
 
-/-- Below `(2²⁴ − 1/2)·2¹⁰⁴`, half an ulp past the largest finite value, a value's word is finite. -/
 theorem f32Word_fin {v : ℚ} (hv : |v| < (2 ^ 24 - 1 / 2) * 2 ^ 104) : (f32Word v >>> 23) % 256 ≠ 255 := by
   by_cases h127 : |v| < 2 ^ 127
   · obtain ⟨t, ht, -⟩ := AtomErr.f32Word_spec h127
@@ -206,8 +185,6 @@ theorem f32Word_fin {v : ℚ} (hv : |v| < (2 ^ 24 - 1 / 2) * 2 ^ 104) : (f32Word
   dsimp only
   rw [hb, show max (127 : ℤ) (-126) = 127 by norm_num]
   split_ifs <;> first | omega | (rw [Nat.shiftRight_eq_div_pow]; omega)
-
-/-! ### Bisection -/
 
 section Loops
 
@@ -244,14 +221,12 @@ theorem forIn_range_id {n : ℕ} {body : ℕ → σ → Id (ForInStep σ)} (P : 
 
 end Loops
 
-/-- `Rule.least`'s loop body on `(lo, hi)`. -/
 def leastStep (pred : ℤ → Bool) : ℕ → ℤ × ℤ → Id (ForInStep (ℤ × ℤ)) := fun _ s =>
   if s.1 < s.2 then
     if pred ((s.1 + s.2).fdiv 2) = true then pure (ForInStep.yield (s.1, (s.1 + s.2).fdiv 2))
     else pure (ForInStep.yield ((s.1 + s.2).fdiv 2 + 1, s.2))
   else pure (ForInStep.yield (s.1, s.2))
 
-/-- One bisection step halves `hi − lo`. -/
 theorem half_step {lo hi m : ℤ} {i : ℕ} (hd : m * 2 ≤ hi - lo) (h6 : (hi - lo) * 2 ^ i ≤ 2 * Rule.TOP) :
     m * 2 ^ (i + 1) ≤ 2 * Rule.TOP := by
   have := mul_le_mul_of_nonneg_right hd (pow_nonneg (show (0 : ℤ) ≤ 2 by norm_num) i)
@@ -260,14 +235,11 @@ theorem half_step {lo hi m : ℤ} {i : ℕ} (hd : m * 2 ≤ hi - lo) (h6 : (hi -
 
 end KeysSim
 
-/-- **The key is the value's order.** -/
 theorem keyIsTheValue : KeyIsTheValue := by
   unfold KeyIsTheValue
   exact ⟨KeysSim.keyVal_strictMono, fun _ hw he => ⟨KeysSim.key_value hw he, KeysSim.key_bound hw he⟩,
     fun _ h1 h2 => KeysSim.wordOf_ok h1 h2⟩
 
-/-- **`least` is the threshold**: the bisection keeps `pred hi`, `¬ pred` below `lo`, and `(hi − lo)·2^i ≤ 2·TOP`, so
-after 64 steps `lo = hi`. -/
 theorem leastIsTheThreshold : LeastIsTheThreshold := by
   intro pred hmono
   have hT : Rule.TOP = 0x7F7FFFFF := rfl
@@ -325,8 +297,6 @@ theorem leastIsTheThreshold : LeastIsTheThreshold := by
     refine ⟨by omega, by omega, fun x hx1 hx2 => ⟨fun h => by omega, fun hx => ?_⟩⟩
     exact absurd (hmono x Rule.TOP hx1 hx2 (by omega) hx) htop
 
-/-- **`carried` is the rounded add**: `wordOf x` is finite with value `keyVal x`, the sum is below half an ulp past the
-largest finite value, so the promotion is finite and its value is `rnAdd` (`TileCircuit.promoteWord_wordQ`). -/
 theorem carriedIsTheAdd : CarriedIsTheAdd := by
   intro H x w y hx1 hx2 hw hy
   obtain ⟨ha32, hae, hka⟩ := KeysSim.wordOf_ok hx1 hx2

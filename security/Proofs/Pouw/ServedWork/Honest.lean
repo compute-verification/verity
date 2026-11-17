@@ -38,26 +38,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.ServedWork
 
-/-!
-# `ServedWork` is honest and nontrivial
-
-The honest and nontrivial lemmas of `Properties.Pouw.Served.ServedWork`, over `Proofs.Pouw.MonitoringPeriodJ10R.Honest`'s honest J10-R
-period, conditional as `j10r_meets` is on `Credit.executionPhase`'s verdict on the execution phases' inputs (`hacc`, `hsalt`, `hdraw`).
-
-* `fm`, `fa c`: a flat machine. A program is any function, and every run uses `c` units of one resource at rate 1 and
-  exchanges nothing, so its cost at price 1 is `c` (`fa_cost`). It meets the device premises (`fa_G1`, `fa_G2`).
-* `sakServed_fa`: `SAKServed` holds on `fa c` at a price `p` a credited word whenever `c` pays for every word, with no
-  degenerate salt.
-* The honest inventory: one instance (`Unit`), no advice, and a program whose every tile's word is the window's salt bit
-  (`hon`, `work`): it gets every tile right.
-* `served_rest`, `served_meets`: at any `c ≥ 0` and `p = 1` the honest inventory meets every premise `ServedWork` adds
-  to `H1J10RCheckedCreditMonitoringPeriod`'s, which `j10r_meets` gives, but `SAKServed`, and at `c = N_p` that one too;
-  `served_honest` is the conclusion there.
-* `served_nontrivial`: `ServedWork` is false without `SAKServed`. On the free machine (`fa 0`), at `n ≥ 17` execution phases
-  and `δ_s = e^{−1}`, every other premise holds, `SAKServed` fails (`not_sakServed_free`: the honest program gets
-  every tile right at no cost), and every path is accepted and earns credit `(1 − ε(n))·N_p·n > 0` for no work, so the
-  event has probability 1, past the bound `e^{−1}`.
--/
+/-! `ServedWork` is honest and nontrivial, conditional as `j10r_meets` is on `Credit.executionPhase`'s verdict on the
+execution phases' inputs. -/
 
 @[expose] public section
 
@@ -68,8 +50,6 @@ open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.S
 open Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
-
-/-! ## A flat machine -/
 
 /-- Programs are functions; the machine's own costs are zero (the accelerator's `use` prices runs). -/
 abbrev fm : Machine where
@@ -130,8 +110,6 @@ theorem rightWords_le {I D W : Type} {Np : ℕ} (hon : I → D → Fin Np → W)
   unfold Pouw.Assumptions.rightWords
   exact Finset.sum_le_sum fun t _ => by split_ifs; exacts [le_rfl, hwt t]
 
-/-- **`SAKServed` on the flat machine**: at a price `p ≥ 0` a credited word, with `c` paying for every word less `lam`,
-every program meets it with no degenerate salt. -/
 theorem sakServed_fa {I D W : Type} [Fintype D] {Np : ℕ} (Reg : Set I) (hon : I → D → Fin Np → W)
     (wt : Fin Np → ℝ) (p c : ℝ) (lam : I → ℝ) (hwt : ∀ t, 0 ≤ wt t) (hp : 0 ≤ p)
     (hc : ∀ a ∈ Reg, p * ∑ t, wt t - lam a ≤ c) :
@@ -142,12 +120,9 @@ theorem sakServed_fa {I D W : Type} [Fintype D] {Np : ℕ} (Reg : Set I) (hon : 
   have := mul_le_mul_of_nonneg_left (rightWords_le hon wt hwt a d ((fa c).Mc.eval Mw (s, d))) hp
   linarith [hc a ha]
 
-/-! ## The honest inventory -/
-
 /-- The honest words: every tile's word is the window's salt bit. -/
 def hon {Np : ℕ} : Unit → Bool → Fin Np → Bool := fun _ d _ => d
 
-/-- The honest program: the honest words of its salt, on any advice. -/
 def work (c : ℝ) {Ω : Type} {n Np : ℕ} : Paths Ω n → Fin n → (fa c).Mc.Alg (Unit × Bool) (Fin Np → Bool) :=
   fun _ _ sd _ => sd.2
 
@@ -162,8 +137,6 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
   (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
-/-- **The honest inventory meets every premise `ServedWork` adds but `SAKServed`**, in its order, on the flat machine
-at any use `c ≥ 0` a run, with `p = 1` and no advice (`B = 0`). -/
 theorem served_rest {c : ℝ} (hc : 0 ≤ c) (n : ℕ) :
     (fa c).G1 ∧ (fa c).G2 ∧ (fa c).P1 ∧ (fa c).P2 ∧
     (∃ e : Unit → Fin (2 ^ 0), Function.Injective e) ∧
@@ -188,8 +161,6 @@ theorem served_rest {c : ℝ} (hc : 0 ≤ c) (n : ℕ) :
   refine le_of_eq (Eq.symm ((Finset.sum_congr rfl fun w _ => h w).trans ?_))
   simp
 
-/-- **The honest inventory meets every premise `ServedWork` adds**, in its order, on the flat machine at `c = N_p`
-(a window's words at price 1) with `p = 1`, no luck allowance, no degenerate salts and no advice (`B = 0`). -/
 theorem served_meets (n : ℕ) :
     (fa (tileCount σ sT)).G1 ∧ (fa (tileCount σ sT)).G2 ∧ (fa (tileCount σ sT)).P1 ∧ (fa (tileCount σ sT)).P2 ∧
     Pouw.Assumptions.SAKServed (fa (tileCount σ sT)) (fun _ => 1) Set.univ (hon (Np := tileCount σ sT))
@@ -207,9 +178,6 @@ theorem served_meets (n : ℕ) :
   exact ⟨g1, g2, p1, p2, sakServed_fa _ _ _ 1 _ _ (fun _ => Nat.cast_nonneg _) zero_le_one fun _ _ => by
     simp [sum_tileWords], hSt, hext, hIn, hp, hFix, hRight⟩
 
-/-- **`ServedWork`'s conclusion at the honest J10-R period with the honest inventory**: `j10r_meets` and
-`served_meets` give it every premise, so except with probability `δ_s` its `N_p` a window of priced work is at least
-`(1 − ε(n))₊` of its `N_p·n` live words. -/
 theorem served_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
@@ -233,8 +201,6 @@ theorem served_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts
     (work (tileCount σ sT)) hS one_pos le_rfl hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks hUF
     g1 g2 p1 p2 hSAK hSt hext hIn hp hFix hRight
 
-/-! ## Nontrivial -/
-
 theorem zeroCone_circuit (N : ℕ) : zeroCone Honest.scheme (circuit N) N = 0 := by
   unfold zeroCone
   exact Finset.sum_eq_zero fun t _ => ite_eq_right (by rw [tileWords_eq]; exact one_ne_zero)
@@ -246,8 +212,6 @@ theorem prob_true {Ω : Type} [Fintype Ω] [Nonempty Ω] {P : Ω → Prop} (h : 
   exact div_self (Nat.cast_pos.mpr Fintype.card_pos).ne'
 
 include hk in
-/-- **The credit of the honest period is positive** past `n ≥ 17` execution phases at `δ_s = e^{−1}`: `ε(n) = Λ/n` with
-`Λ = j10rRate (k s_T) 1 ≤ 16`. -/
 theorem creditPrefix_pos (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β)) (n : ℕ) (hn : 17 ≤ n)
     (x : Paths (Ω1 σ sT) n) :
     0 < creditPrefix Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)
@@ -285,9 +249,6 @@ theorem prob_pos_of {Ω : Type} [Fintype Ω] {P : Ω → Prop} (ω : Ω) (h : P 
     (Nat.cast_pos.mpr (Fintype.card_pos_iff.mpr ⟨ω⟩))
 
 include hk in
-/-- **`SAKServed` fails on the free machine** (`fa 0`: every program costs nothing) at price 1 a credited word, with
-no luck allowance and no degenerate salts: the honest program gets every tile right, `N_p > 0` credited words, at
-cost 0, at every salt, and no salt is degenerate (`κ_deg = 0`). -/
 theorem not_sakServed_free (hKd : 1 ≤ k sT) :
     ¬ Pouw.Assumptions.SAKServed (fa 0) (fun _ => 1) Set.univ (hon (Np := tileCount σ sT))
       (fun t => (tileWords Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t : ℝ)) 1 (fun _ => 0)
@@ -303,11 +264,8 @@ theorem not_sakServed_free (hKd : 1 ≤ k sT) :
   have hN : (0 : ℝ) < tileCount σ sT := Nat.cast_pos.mpr (Nat.lt_of_lt_of_le hKd (hk sT))
   linarith
 
-/-- **`ServedWork` is false without `SAKServed`.** On the free machine (`fa 0`: every program costs nothing), at the
-honest J10-R period of `n ≥ 17` execution phases, `δ_s = e^{−1}`, price 1 a word, no luck allowance, no degenerate salts and
-the honest inventory, every other premise of `ServedWork` holds, in its order (`j10r_meets`, `served_rest`), and
-`SAKServed` fails (`not_sakServed_free`). The conclusion fails with it: every accepted path is in its event, with no
-work and positive credit (`creditPrefix_pos`), so its probability is 1, past the bound `e^{−1}`. -/
+/-- **`ServedWork` is false without `SAKServed`.** On the free machine every other premise of `ServedWork` holds and
+`SAKServed` fails, and the conclusion fails with it. -/
 theorem served_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧

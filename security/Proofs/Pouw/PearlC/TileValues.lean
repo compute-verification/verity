@@ -7,31 +7,13 @@ import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
-/-!
-# The tile unit computes the ticket and the useful value (proofs)
-
-L3's step 5 for the tile template: the words `TileCircuit.tile_correct` puts on the tile unit's outputs read back as
-the values Pearl-C's protocol names at the record `devAt p 4` (`tile_values`, `tile_devAt`). Given row `i` of `A′`,
-row `j` of `B̃` and the factor rows U's pinned order forms from them (`PeelExactProofsP.peelRowsP`), `C̃_ij`'s word has
-the ticket's value `Accum.chainAt p 4` and `U_ij`'s the useful value `peelExactValP p 4`, at every entry of every tile.
-`C̃_ij`'s needs only the chain to be finite (`tile_ticket`).
-
-* **The chain** (`chainWordP_value`): `chainWordP? p G`'s word reads back as `Accum.chainP p G`, for every step `p` and
-  period `G`. A window's word is its group's (`windowWord_group`), and a promotion on words is `rnAdd` on values
-  (`promoteWord_wordQ`): FP32 values lie on the grid `2^−149`, where a finite `f32Word y` has the value `rn y`
-  (`f32Word_value`), exactly below `2^−126` and rounded to 24 bits above it, while `rn` has no exponent range.
-* **U** (`wordQ_uFold`): the template's four K16 steps run on any words. A step on a NaN or infinite accumulator writes
-  NaN or an infinity (`k16Step_nonfin`), so their word reads back as `uWord?`'s, `none` once a step leaves the finite
-  range, as the useful value does.
--/
+/-! The tile unit computes the ticket and the useful value. -/
 
 @[expose] public section
 
 namespace Pouw.PearlC.TileCircuit
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.PearlC Pouw.PearlC.PeelExact Pouw.PearlC.PeelExactP
-
-/-! ## FP32 words and their values -/
 
 section Words
 
@@ -54,8 +36,6 @@ theorem wordQ_nonfin {w : ℕ} (h : (w >>> 23) % 256 = 255) : wordQ w = none := 
 theorem roundEven_intCast (z : ℤ) : roundEven (z : ℚ) = z := by
   simp [roundEven]
 
-/-- **`f32Word` on FP32's grid**: a finite word of a value on the grid `2^−149` has the value `rn y`. Below `2^−126`
-such a value is exact in both; above, `f32Word` rounds to 24 bits as `rn` does. -/
 theorem f32Word_value {y : ℚ} (hg : ∃ m : ℤ, y = m * 2 ^ (-149 : ℤ)) (hf : (f32Word y >>> 23) % 256 ≠ 255) :
     wordQ (f32Word y) = some (rn y) := by
   rcases eq_or_ne y 0 with rfl | hy0
@@ -172,7 +152,6 @@ theorem f32Word_value {y : ℚ} (hg : ∃ m : ℤ, y = m * 2 ^ (-149 : ℤ)) (hf
       omega
     exact (rn_exact ⟨m, -149, hm23, hm⟩).symm
 
-/-- **A promotion's value**: a finite promotion of two finite words is `rnAdd` of their values. -/
 theorem promoteWord_wordQ {t w s : ℕ} {x y : ℚ} (hx : wordQ t = some x) (hy : wordQ w = some y)
     (h : promoteWord? t w = some s) : wordQ s = some (rnAdd x y) := by
   obtain ⟨s', hs', hss⟩ := PeelExactProofs.promoteWord_val h
@@ -203,8 +182,6 @@ theorem windowWord_group (p : Pipeline) : ∀ (g : List AtomIn) (w0 w : ℕ),
     obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h1
     exact windowWord_group p xs _ w h
 
-/-- **Step 5, the chain**: the pinned order's word chain reads back as the value chain, `Accum.chainP`, the ticket of
-the record `devAt p G`. -/
 theorem chainWordP_value (p : Pipeline) (G : ℕ) (atoms : List AtomIn) {c : ℕ}
     (h : chainWordP? p G atoms = some c) : Accum.chainP p G atoms = wordQ c := by
   unfold chainWordP? at h
@@ -237,8 +214,6 @@ theorem chainWordP_value (p : Pipeline) (G : ℕ) (atoms : List AtomIn) {c : ℕ
 
 end Words
 
-/-! ## U on any accumulator -/
-
 section U
 
 theorem packValue_nonfin : ∀ v : Value, (∀ t, v ≠ .fin t) → (packValue v >>> 23) % 256 = 255
@@ -246,7 +221,6 @@ theorem packValue_nonfin : ∀ v : Value, (∀ t, v ≠ .fin t) → (packValue v
   | .inf s, _ => by cases s <;> decide
   | .fin t, h => absurd rfl (h t)
 
-/-- A K16 step on a NaN or infinite accumulator writes NaN or an infinity. -/
 theorem k16Step_nonfin {acc : ℕ} (x y : Fin 16 → ℕ) (h : (acc >>> 23) % 256 = 255) :
     (k16Step acc x y >>> 23) % 256 = 255 := by
   unfold k16Step
@@ -279,21 +253,15 @@ theorem foldl_wordQ (pa pb : List ℕ) : ∀ (l : List ℕ) (c : ℕ),
     · have e : k16Step c (slice16 pa s) (slice16 pb s) = c' := (PeelExactProofs.finite?_eq_some hf).1.symm
       rw [e]; exact foldl_wordQ pa pb l c'
 
-/-- **U's word on any accumulator** reads back as `uWord?`'s, `none` once a step leaves the finite range. -/
 theorem wordQ_uFold (pa pb : List ℕ) (c : ℕ) : wordQ (uFold pa pb c) = (uWord? c pa pb).bind wordQ :=
   foldl_wordQ pa pb _ c
 
 end U
 
-/-! ## The tile unit's values -/
-
 section Tile
 
 variable (p : Pipeline)
 
-/-- **The ticket**: a transcript whose one unit is correct, holding at entry `(ti, tj)`'s inputs row `i` of `A′` and row
-`j` of `B̃`, has `C̃`'s word of value `Accum.chainAt p 4` at `(i, j)` wherever the pinned order's chain is finite, whether
-or not U's factor rows exist. -/
 theorem tile_ticket {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw) TM TN).toCircuit.Trace)
     (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
     (Aq : Matrix (Fin m) (Fin (128 * nw)) Code) (Bq : Matrix (Fin n) (Fin (128 * nw)) Code) (i : Fin m) (j : Fin n)
@@ -305,11 +273,6 @@ theorem tile_ticket {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * 
   rw [tile_out p TM TN X hX _ (cGate_mem p TM TN _ hti htj), tileVal_chain p TM TN hnw X _ _ hti htj hA hB hc]
   exact (chainWordP_value p 4 _ hc).symm
 
-/-- **The tile unit computes the ticket and the useful value** (L3's steps 4 and 5 for the tile template): a transcript
-whose one unit is correct, holding at entry `(ti, tj)`'s inputs row `i` of `A′`, row `j` of `B̃` and the factor rows
-`P_A,i`, `P_B,j` that U's pinned order forms from them (`peelRowsP`), has on entry `(ti, tj)`'s outputs `C̃`'s word of
-value `Accum.chainAt p 4` and `U`'s of value `peelExactValP p 4` at `(i, j)`: the record `devAt p 4`'s ticket and
-useful value (`tile_devAt`). -/
 theorem tile_values {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw) TM TN).toCircuit.Trace)
     (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
     (Aq : Matrix (Fin m) (Fin (128 * nw)) Code) (Bq : Matrix (Fin n) (Fin (128 * nw)) Code)
@@ -328,8 +291,6 @@ theorem tile_values {nw m n TM TN : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * 
   rw [hU, wordQ_uFold]
   simp only [peelExactValP, PeelExactProofsP.peelExactP_eq_rows, hr, Option.bind_some]
 
-/-- `tile_values` at a device record `devAt p 4 pr`: its ticket and useful value, `pearl-c-sm120` v1's
-(`devSm120v1 pr = devAt sm120E4m3 4 pr`) among them. -/
 theorem tile_devAt (pr : Prices) {nw m n TM TN : ℕ} (hnw : 0 < nw)
     (X : (tileSpec p (128 * nw) TM TN).toCircuit.Trace) (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
     (Aq : Matrix (Fin m) (Fin (128 * nw)) Code) (Bq : Matrix (Fin n) (Fin (128 * nw)) Code)

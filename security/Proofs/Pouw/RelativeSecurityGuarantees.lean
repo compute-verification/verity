@@ -35,22 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.RelativeSecurity
 public import Proofs.Pouw.RelativeSecurityFork
 
-/-!
-# Relative security's guarantees for the staged window: the proofs
-
-`Pouw.SecurityProofs.RelativeSecurity.G : Pouw.Guarantees.RelativeSecurity.G` for each guarantee of
-`Definitions.Pouw.Guarantees.RelativeSecurity`, from `Proofs.Pouw.RelativeSecurity`: Theorem S by the stages'
-supermartingale at the luck ¾ (`RoundGame.expBound_of_staged`, `StagedPlay.game_staged`), and the floor by
-`roundsHyp_of_staged` with the chain bound at factor 1 from Lemma G over F₂ (`chainBound_gProd`, `toF2`) and
-`serviceFloor_of_rounds` at `D = 160 ln 2`. With overlapping stages, Theorem S by the per-draw luck's `PassBound (3/4)`
-(`OvPlay.passBound_game`, `RoundGame.pathBound_of_passBound`), and the floor by `roundsHyp_of_overlap` with the same
-chain bound on every stage's shape. For one-sided operands of any form, the floors by `roundsHyp_of_stagedP` and
-`roundsHyp_of_overlapP` (the parity luck 427/500 in the product deficit, charging purity) at `toF2_wRe_zero`, and
-`serviceFloor_of_rounds` at `D = 274 ln 2` (`ModelB.exp_parity_274`). Each floor per prover by the same chain one
-adversary and one value of its coins at a time (`roundsSlice_of_staged`, `roundsSlice_of_overlap`,
-`roundsSlice_of_stagedP`, `roundsSlice_of_overlapP`), each slice's breaks read at the adversary's fork finders and
-the slices averaged with each capped at 1 (`serviceFloorPerProver_breakPr_of_slices`).
--/
+/-! Relative security's guarantees for the staged window. -/
 
 @[expose] public section
 

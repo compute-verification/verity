@@ -5,37 +5,7 @@ public import Proofs.Pouw.PearlPlus.InertWork
 public import Proofs.Pouw.PearlC.InertBound.SaltDead
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# Pearl+'s bridge, part (c): a passed tile is within the game's inert-work bound
-
-The bound the game reads is `TileGood`'s first conjunct, `inertBoundOK` of `pearlCTilesDevRev1 devH100` at the deployed
-semantics and `ρ = 1/400`: the tile's replayed inert work (`tileInertWorkRev1`: its flagged atom-words, its later promotions
-into a +0 total, its forming and its words' mends) on its rows that pass the rules and all its columns is at most
-`ρ·creditDevRev1` times their share. Acceptance doesn't read it: `Sample` puts a sampled tile with good words in
-`goodDeclTiles` within the bound and in `overInertBoundTiles` over it. The credit does: the tolerant audit's deduction grows
-with the samples on `overInertBoundTiles`, and a passed tile within the bound keeps those to the samples the check finds over
-its own bound.
-
-The check's bound (`Rule.inertBoundCheck`, as `TileKeepsTheInertBound` states it) is on the record's credited rows and columns under
-the band rule (`UnitRecord.credited`: a real row neither excluded nor in a 64-row band with a voluntary A row, and a
-column whose 64-column block holds no excluded or voluntary B row). It counts `n` times each credited word's replayed
-inert work and mends (`Rule.wordMend`) and `64·|cc|` per forming element of a credited row (`Rule.rowElements`). A tile
-that keeps a row and a column carries a ticket (`CarriesATicket`). Such a tile has no voluntary row and no excluded or
-voluntary column, its filler rows are zero and fail the rules, and its excluded rows fail them, so the check's credited
-rows are the tile's `passRows` and its credited columns all its columns.
-
-* `tilePassGivesTheInertBound`: a passed tile that carries a ticket is within the bound. The check's inert work per word is
-  the game's chain (`wordFlagsIsTheReplay`, `codes_eq`) on rows that pass the rules exactly when the game's do
-  (`RowsAreTheRules`).
-  The check's element count covers the game's forming elements (`formingElems_le`, `row_forming`): an element the game
-  finds salt-dead the check finds salt-dead (`saltDeadP_iff_ends_hopper` and the check's float arithmetic,
-  `saltDead_of_ends`), and an element whose block every column's word flags the check counts by those flags. The
-  check's mends cover the game's (`MendSim.wordMend_le`, `MendSim.row_ends`): its end codes are the game's `endRow`
-  (`endCodes_eq`), and its cut flags on them the game's `chainCuts` (`MendSim.wordCuts_eq`). The forming and the mends
-  are the rest of the game's inert work (`tileInertWorkRev1_split`), and the check's credit per credited row,
-  `creditOf(1, kKept, n)`, is at most `creditDevRev1`'s (`credit_le`), with equality at `kKept = k`.
-* `tilePassGivesTheChainInertBound`: the chain's part of the game's inert work (`tileChainInertWork`) is within the bound.
--/
+/-! Pearl+'s bridge, part (c): a passed tile is within the game's inert-work bound. -/
 
 @[expose] public section
 
@@ -87,7 +57,6 @@ noncomputable def tileMendInertWork {Q R S : Type} (sem : PearlCSem Q R S) (d : 
     (wordMend d sem.alpha sem.beta (wordsVal sh.m sh.k act e.1)
       (wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u)) e.2) : ℚ)
 
-/-- A tile's replayed inert work is its chain's, its forming's and its mends'. -/
 theorem tileInertWorkRev1_split {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
     (U : Pouw.PearlC.Workload) (u : ℕ) (rows cols : Finset ℕ) (act : Codes) :
     sem.tileInertWorkRev1 d H s U u rows cols act =
@@ -142,8 +111,6 @@ namespace Pouw.PearlPlus.Cap
 
 open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset
 
-/-! ## A tile's rows and columns -/
-
 theorem tile_nodup {p : Pass} {tid pos : ℕ} {rows cols : List ℕ} (h : p.tile? tid = some (pos, rows, cols)) :
     rows.Nodup ∧ cols.Nodup := by
   obtain ⟨hp, x, hx, -, hg⟩ := Sample.tile?_some h
@@ -172,7 +139,6 @@ theorem cols_band {L : Pouw.PearlC.Layout} {g j j' : ℕ} (hj : j ∈ (auditTili
   have h2' := lt_of_lt_of_le h2.2 (min_le_left _ _)
   omega
 
-/-- A tile in one 64-row band whose credited rows aren't empty has no voluntary A row in its band. -/
 theorem band_anyA {r : UnitRecord} {rows cols : List ℕ} (hband : ∀ i ∈ rows, ∀ i' ∈ rows, i / 64 = i' / 64)
     (h : (r.credited rows cols).1 ≠ []) (i : ℕ) (hi : i ∈ rows) :
     r.voluntaryA.any (· / UnitRecord.BAND == i / UnitRecord.BAND) = false := by
@@ -186,7 +152,6 @@ theorem band_anyA {r : UnitRecord} {rows cols : List ℕ} (hband : ∀ i ∈ row
   · rw [hv] at hc
     simp at hc
 
-/-- A tile in one 64-column block whose credited columns aren't empty credits all its columns. -/
 theorem credited_cols {r : UnitRecord} {rows cols : List ℕ} (hband : ∀ j ∈ cols, ∀ j' ∈ cols, j / 64 = j' / 64)
     (h : (r.credited rows cols).2 ≠ []) : (r.credited rows cols).2 = cols := by
   obtain ⟨j0, hj0⟩ := List.exists_mem_of_ne_nil _ h
@@ -197,8 +162,6 @@ theorem credited_cols {r : UnitRecord} {rows cols : List ℕ} (hband : ∀ j ∈
   have he : j / UnitRecord.BAND = j0 / UnitRecord.BAND := hband j hj j0 hj0c
   rw [he]
   exact hj0n
-
-/-! ## What a passed tile's check keeps of its filler and excluded rows -/
 
 theorem rowsFailure_filler {r : UnitRecord} {rows cols : List ℕ} {ops : Words.Ops}
     (h : Rule.rowsFailure r rows cols ops = none) {x : ℕ} (hx : x < rows.length) (hf : r.realRows ≤ rows[x]) :
@@ -271,7 +234,6 @@ theorem rowsFailure_excluded {r : UnitRecord} {rows cols : List ℕ} {ops : Word
       · rename_i hrp
         exact Bool.eq_false_iff.2 hrp
 
-/-- A tile whose rows keep the rules and that is within the check's bound passes `check_opened`. -/
 theorem checkOpened_none {s : Scheme} {r : UnitRecord} {rows cols : List ℕ} {ops : Words.Ops}
     (hr : Rule.rowsFailure r rows cols ops = none) (hc : Rule.inertBoundCheck s r rows cols ops = .ok none) :
     Rule.checkOpened s r rows cols ops = none := by
@@ -285,16 +247,12 @@ theorem zero_of_any {x : Array ℕ} (h : (x.any fun w => w != 0) = false) (l : �
   · rw [getElem!_neg x l hl]
     rfl
 
-/-- A row of zeros isn't live. -/
 theorem liveRow_zero {x : Array ℕ} (hk : 0 < x.size) (hz : ∀ l : ℕ, x[l]! = 0) : Rule.liveRow x = false := by
   have hs : Rule.sq300 0 = 0 := by decide
   rw [Bridge.liveRow_eq]
   simp [hz, hs]
   omega
 
-/-! ## A row's statistics -/
-
-/-- Each row `formV1` forms keeps its words, and its ρ, α and β are `s5_stats`' of them. -/
 theorem formV1_stats {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h : Words.formV1 rows eRows f = .ok out) :
     ∀ j < (rows.zip eRows).size, out.x[j]! = (rows.zip eRows)[j]!.1 ∧
       ∃ s, Words.s5Stats out.x[j]! = .ok (s, out.rho[j]!, out.alpha[j]!, out.beta[j]!) := by
@@ -338,7 +296,6 @@ theorem formV1_stats {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h 
       rw [List.getElem!_eq_getElem?_getD, hj, ha]
       rfl
 
-/-- The A rows `encode` forms are the parsed openings, and their ρ, α and β are `s5_stats`' of them. -/
 theorem encode_stats {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k : ℕ} {rows : List ℕ}
     {aRows : List ByteArray} {cols : List ℕ} {bRows : List ByteArray} {ops : Words.Ops}
     (ha : aRows.length = rows.length) (h : Words.encode salt rootB wn index k rows aRows cols bRows = .ok ops) :
@@ -368,7 +325,6 @@ theorem encode_stats {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k :
   rw [getElem!_pos aRows x (by omega)]
   exact this
 
-/-- The B rows `encode` forms are the parsed openings, and their ρ, α and β are `s5_stats`' of them. -/
 theorem encode_stats_b {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k : ℕ} {rows : List ℕ}
     {aRows : List ByteArray} {cols : List ℕ} {bRows : List ByteArray} {ops : Words.Ops}
     (hb : bRows.length = cols.length) (h : Words.encode salt rootB wn index k rows aRows cols bRows = .ok ops) :
@@ -397,8 +353,6 @@ theorem encode_stats_b {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k
   rw [getElem!_pos _ z (by simp; omega), List.getElem_toArray, getElem!_pos xb z (by omega)] at this
   rw [getElem!_pos bRows z (by omega)]
   exact this
-
-/-! ## The check's replayed inert work, summed -/
 
 theorem mapM_ok_zip {ε α β : Type} {f : α → Except ε β} :
     ∀ {l : List α} {l' : List β}, l.mapM f = .ok l' → ∀ q ∈ l.zip l', f q.1 = .ok q.2
@@ -463,8 +417,6 @@ theorem inertWorkUnits_eq (n c a z e : ℕ) : Rule.inertWorkUnits n c a z e = n 
   show n * ((32 + 32 / 4) * a + 32 * z) + 64 * c * e = _
   norm_num
 
-/-- The check's inert work on a tile, summed as `TileKeepsTheInertBound` sums it, is `n` times its words' `40·F + 32·Z` and
-`64·|cc|` per element. -/
 theorem rowInertWork_sum (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es : List ℕ) (h : ws.length = es.length) :
     ((ws.zip es).map fun (we : List (Array Bool × ℕ) × ℕ) => Rule.inertWorkUnits n c
       (we.1.foldl (fun t w => t + (w.1.filter id).size) 0) (we.1.foldl (fun t w => t + w.2) 0) we.2).foldl
@@ -486,8 +438,6 @@ theorem rowInertWork_sum (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es 
         foldl_map_eq (fun v : Array Bool × ℕ => v.2)]
       ring
 
-/-- The check's inert work with its mends, as `TileKeepsTheInertBound` sums it: `rowInertWork_sum` and `n` times every credited
-word's `wordMend`. -/
 theorem rowInertWork_sum_mend (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es : List ℕ)
     (eA eB : List (Array ℕ × Array ℕ × Array Bool)) (h : ws.length = es.length) (h' : es.length = eA.length) :
     (((ws.zip es).zip eA).map fun (we : (List (Array Bool × ℕ) × ℕ) × (Array ℕ × Array ℕ × Array Bool)) =>
@@ -529,7 +479,6 @@ theorem sum_le_zip {α β : Type} (g : α → ℕ) (h : β → ℕ) :
     exact Nat.add_le_add (hq (a, b) (by simp))
       (sum_le_zip g h L L' (by simpa using hl) fun q hq' => hq q (by simp [hq']))
 
-/-- Over distinct rows and columns, per-row sums of `40·F + 32·Z` are its sum over the cells. -/
 theorem cells_sum (cr cc : List ℕ) (hcr : cr.Nodup) (hcc : cc.Nodup) (F Z : ℕ → ℕ → ℕ) :
     (cr.map fun i => 40 * (cc.map (F i)).sum + 32 * (cc.map (Z i)).sum).sum =
       ∑ i ∈ cr.toFinset, ∑ j ∈ cc.toFinset, (40 * F i j + 32 * Z i j) := by
@@ -538,8 +487,6 @@ theorem cells_sum (cr cc : List ℕ) (hcr : cr.Nodup) (hcc : cc.Nodup) (F Z : �
   try dsimp only
   rw [← List.sum_toFinset _ hcc, ← List.sum_toFinset _ hcc, Finset.mul_sum, Finset.mul_sum, ← Finset.sum_add_distrib]
   try rfl
-
-/-! ## The game's chain inert work, cell by cell -/
 
 open Classical in
 /-- Cell `(i, j)`'s flagged atoms at the H100 record, `0` off the unit. -/
@@ -580,8 +527,6 @@ theorem sum_fin_filter {β : Type} [AddCommMonoid β] {m n : ℕ} (P C : Finset 
   · intro q hq
     rw [dite_eq_left ⟨hP _ (Finset.mem_product.1 hq).1, hC _ (Finset.mem_product.1 hq).2⟩]
 
-/-- At the H100 record a tile's chain inert work is `40` per flagged atom and `32` per later +0 promotion, summed over
-its cells. -/
 theorem tileChainInertWork_cells {Q R S : Type} (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload)
     (u : ℕ) (act : Codes) (P C : Finset ℕ) (hP : ∀ i ∈ P, i < (U.layout.shape u).m)
     (hC : ∀ j ∈ C, j < (U.layout.shape u).n) :
@@ -609,7 +554,6 @@ noncomputable def cellM {Q R S : Type} (sem : PearlCSem Q R S) (U : Pouw.PearlC.
       (wordsVal (U.layout.shape u).n (U.layout.shape u).k (U.fixed (U.layout.fixedId u)) ⟨j, h.2⟩)
   else 0
 
-/-- A tile's mends are its cells'. -/
 theorem tileMendInertWork_cells {Q R S : Type} (sem : PearlCSem Q R S) (U : Pouw.PearlC.Workload) (u : ℕ) (act : Codes)
     (P C : Finset ℕ) (hP : ∀ i ∈ P, i < (U.layout.shape u).m) (hC : ∀ j ∈ C, j < (U.layout.shape u).n) :
     Bridge.tileMendInertWork sem devH100 U u P C act = ((∑ i ∈ P, ∑ j ∈ C, cellM sem U u act i j : ℕ) : ℚ) := by
@@ -620,8 +564,6 @@ theorem tileMendInertWork_cells {Q R S : Type} (sem : PearlCSem Q R S) (U : Pouw
   have h : i < (U.layout.shape u).m ∧ j < (U.layout.shape u).n := ⟨hP i hi, hC j hj⟩
   simp only [cellM, dif_pos h]
 
-/-! ## The game's forming elements, row by row -/
-
 open Classical in
 /-- Row `i`'s forming elements in the game: its elements that are salt-dead or whose atom block every column of `C`
 flags. -/
@@ -631,7 +573,6 @@ noncomputable def rowGame {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevi
     d.saltDead sem.alpha sem.beta k (wordsVal m k act ⟨i, hi⟩) ⟨l, hl⟩ ∨
       ∀ j : Fin n, (j : ℕ) ∈ C → d.flags A B ⟨i, hi⟩ j (l / 32) = true).card
 
-/-- A tile's forming elements are its rows'. -/
 theorem formingElems_le {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
     (U : Pouw.PearlC.Workload) (u : ℕ) (P C : Finset ℕ) (act : Codes) :
     Bridge.formingElems sem d H s U u P C act ≤
@@ -655,8 +596,6 @@ theorem formingElems_le {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice
       simp only [Finset.mem_coe, Finset.mem_filter, Finset.mem_univ, true_and] at he he'
       exact Prod.ext (Fin.ext (he.2.trans he'.2.symm)) (Fin.ext h)
 
-/-! ## The credit -/
-
 theorem creditDevRev1_h100 (sh : Pouw.PearlC.Shape) :
     creditDevRev1 devH100 sh = 5 / 4 * sh.m * sh.k * sh.n + 96 * sh.m * sh.k + 96 * sh.m * sh.n := by
   have hG : devH100.G = 4 := rfl
@@ -668,8 +607,6 @@ theorem creditDevRev1_h100 (sh : Pouw.PearlC.Shape) :
   push_cast
   ring
 
-/-- Four times the check's credit per credited row, at a kept width within a whole number of windows, is at most
-`5nk + 384k + 384n`, four times `creditDevRev1`'s per row. -/
 theorem credit_nat {K k n : ℕ} (hK : K ≤ k) (hk : k % 128 = 0) (hk0 : 0 < k) :
     4 * PouwCheck.PearlPlus.creditOf 1 K n ≤ 5 * (n * k) + 384 * k + 384 * n := by
   simp only [PouwCheck.PearlPlus.creditOf, PouwCheck.PearlPlus.wref, PouwCheck.PearlPlus.FADD,
@@ -728,15 +665,11 @@ open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset
 
 namespace FormingSim
 
-/-! ## The check's forming count covers the game's -/
-
 theorem step_acc (p : Pouw.Fp8Atom.Pipeline) {a a' : ℕ}
     (h : Pouw.Fp8Atom.fp32Value a = Pouw.Fp8Atom.fp32Value a') (l l' : List Code) : p.step a l l' = p.step a' l l' := by
   unfold Pouw.Fp8Atom.Pipeline.step
   rw [h]
 
-/-- The forming's accumulator, `f32(α·x)` in the check's arithmetic, is the game's `f32Word (α·x)` as the atom reads
-it: the two differ at most in a zero's sign. -/
 theorem mul_fp32Value {αw w : ℕ} {y : ℚ} (hα : AccumProofs.StepWord αw) (hw : w < 2 ^ 32) (hy : wordQ w = some y) :
     Pouw.Fp8Atom.fp32Value (Verity.Fp32.f32MulV2 αw w) =
       Pouw.Fp8Atom.fp32Value (f32Word (PearlC.wordVal αw * y)) := by
@@ -754,7 +687,6 @@ theorem mul_fp32Value {αw w : ℕ} {y : ℚ} (hα : AccumProofs.StepWord αw) (
     rw [h, h0, show f32Word 0 = 0 by simp [f32Word]]
     rfl
 
-/-- A step the check takes and casts, where it is the game's step, is the game's code. -/
 theorem step_code {acc : ℕ} {a b : List ℕ} {D c : ℕ} (P : ℕ) (hP : Words.atom acc a b = P)
     (hPstep : ∃ acc' l l', P = hopperE4m3K32.step acc' l l') (hD : Rule.step acc a b = .ok D)
     (hc : Words.toFp8 D = .ok c) :
@@ -793,8 +725,6 @@ def endStep (αw βw : ℕ) (y : ℚ) (minus : Bool) : ℕ :=
 def CastOf (c P : ℕ) : Prop :=
   c = (e4m3Word P).val ∧ e4m3 (PearlC.wordVal P) = e4m3Word P ∧ (e4m3Word P).isNaN = false
 
-/-- **The check's end codes are the game's**: on a row whose α and β are step words, β positive, where `flat_code` and
-`end_codes` are values, the check's codes at the support's two ends are the casts of the game's steps there. -/
 theorem endCodes_eq {αw βw cb w : ℕ} {c : ℕ × ℕ} {y : ℚ} (hα : AccumProofs.StepWord αw)
     (hβ : AccumProofs.StepWord βw)
     (hβpos : 0 < PearlC.wordVal βw) (hw : w < 2 ^ 32) (hy : wordQ w = some y) (hcb : Rule.flatCode βw = .ok cb)
@@ -867,8 +797,6 @@ theorem endCodes_eq {αw βw cb w : ℕ} {c : ℕ × ℕ} {y : ℚ} (hα : Accum
   obtain rfl := WordsSim.pure_ok hc
   exact ⟨step_code _ (hstep _ _ hFp) ⟨_, _, _, rfl⟩ hDp hcp, step_code _ (hstep _ _ hFm) ⟨_, _, _, rfl⟩ hDm hcm⟩
 
-/-- Where the support's two ends agree in the game (`saltDeadP_iff_ends_hopper`'s `EndsAgree`), the check's end codes
-agree (`ends_agree`). -/
 theorem endsAgree_of_endCodes {αw βw cb w : ℕ} {c : ℕ × ℕ} {y : ℚ} (hα : AccumProofs.StepWord αw)
     (hβ : AccumProofs.StepWord βw)
     (hβpos : 0 < PearlC.wordVal βw) (hw : w < 2 ^ 32) (hy : wordQ w = some y) (hcb : Rule.flatCode βw = .ok cb)
@@ -882,9 +810,6 @@ theorem endsAgree_of_endCodes {αw βw cb w : ℕ} {c : ℕ × ℕ} {y : ℚ} (h
   rw [hcp', hcm']
   exact endsAgree_of ((Pouw.PearlC.InertBound.codeVal_eq_iff _ _ hnp hnm).1 hE')
 
-/-- **An element the game finds salt-dead the check finds salt-dead**: on a row whose α and β are step words, β
-positive, where `flat_code` and `salt_dead` are values, the support's two ends agree in the game
-(`saltDeadP_iff_ends_hopper`'s `EndsAgree`) only where the check's `ends_agree` holds. -/
 theorem saltDead_of_ends {αw βw cb w : ℕ} {d : Bool} {y : ℚ} (hα : AccumProofs.StepWord αw)
     (hβ : AccumProofs.StepWord βw)
     (hβpos : 0 < PearlC.wordVal βw) (hw : w < 2 ^ 32) (hy : wordQ w = some y) (hcb : Rule.flatCode βw = .ok cb)
@@ -895,8 +820,6 @@ theorem saltDead_of_ends {αw βw cb w : ℕ} {d : Bool} {y : ℚ} (hα : AccumP
   obtain rfl := WordsSim.pure_ok hd
   exact endsAgree_of_endCodes hα hβ hβpos hw hy hcb hc hE
 
-/-- `row_elements` counts at least every element of a property each of whose elements is in an atom block every word
-flags or is salt-dead in the check. -/
 theorem rowElements_covers {αw βw k e : ℕ} {x : Array ℕ} {flags : List (Array Bool)} (Pl : ℕ → Prop)
     {inst : DecidablePred Pl} (hre : Rule.rowElements αw βw x flags = .ok e) (hk : k % 32 = 0) (hx : x.size = k)
     (hfl : flags ≠ []) (hsz : ∀ f ∈ flags, f.size = k / 32)
@@ -933,10 +856,6 @@ theorem rowElements_covers {αw βw k e : ℕ} {x : Array ℕ} {flags : List (Ar
     · right
       exact hs cb dead[l]! hcb (hdA l (by omega))
 
-/-- **A row's forming elements in the game are within the check's count**: on a credited row of `k` finite words (a
-whole number of promotion groups within the domain) that passes the rules, whose `s5_stats` are a value, where every
-column's word flags the blocks the game's flags do and `row_elements` is a value, the game's forming elements of the
-row (`rowGame`) are at most `row_elements`'. -/
 theorem row_forming {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) {m n k i e s' ρw αw βw : ℕ}
     {A : Matrix (Fin m) (Fin k) Code} {B : Matrix (Fin n) (Fin k) Code} {act : Codes} {C : Finset ℕ}
     {xw : Array ℕ} {flags : List (Array Bool)} (hi : i < m) (hk : k % 128 = 0) (hk0 : 0 < k) (hkK : k ≤ 2 ^ 16)
@@ -986,19 +905,14 @@ end FormingSim
 
 namespace MendSim
 
-/-! ## The check's mends cover the game's -/
-
 theorem aligned_toDef (w : ℕ) (E : ℤ) (t : Evaluate.TC.Fp8Atom.Term) :
     Evaluate.TC.Fp8Atom.aligned w E t = Pouw.Fp8Atom.aligned w E (termToDef t) := rfl
 
-/-- One group's cut flags at an exponent, on the evaluator's model and on the Definitions'. -/
 theorem cutMap_toDef (w : ℕ) (E : ℤ) (L : List (Fin 256 × Fin 256)) :
     (L.map fun x => Evaluate.TC.Fp8Atom.aligned w E (Evaluate.TC.Fp8Atom.product x.1 x.2) == 0) =
       L.map fun x => Pouw.Fp8Atom.aligned w E (Pouw.Fp8Atom.product x.1 x.2) == 0 :=
   List.map_congr_left fun x _ => by rw [aligned_toDef, product_toDef]
 
-/-- The check's cut flags (`Rule.cutFold`, on the evaluator's grouped-sum model) are the Definitions' (`Mend.cutFold`),
-on every pipeline, incoming value and operand codes. -/
 theorem cutFold_toDef (p : Evaluate.TC.Fp8Atom.Pipeline) (gs : List ℕ) (v : Evaluate.TC.Fp8Atom.Value)
     (ab : List (Fin 256 × Fin 256)) :
     Rule.cutFold p gs v ab = Mend.cutFold (pipelineToDef p) gs (valueToDef v) ab := by
@@ -1040,7 +954,6 @@ theorem cutFold_toDef (p : Evaluate.TC.Fp8Atom.Pipeline) (gs : List ℕ) (v : Ev
           ((ab.take size).map fun x => Pouw.Fp8Atom.productTotal x.1 x.2)) (ab.drop size)
     rw [ih, groupStepTotal_toDef, hps, hE, cutMap_toDef]
 
-/-- The check's cut flags of one H100 atom step are `Mend.cuts` at `hopperE4m3K32` on its operands' codes. -/
 theorem cuts_eq (acc : ℕ) (a b : List ℕ) :
     Rule.cuts acc a b = Mend.cuts hopperE4m3K32 acc (a.map TileCircuit.code) (b.map TileCircuit.code) :=
   (cutFold_toDef Evaluate.TC.Fp8Atom.hopperE4m3K32 Evaluate.TC.Fp8Atom.hopperE4m3K32.groups
@@ -1049,7 +962,6 @@ theorem cuts_eq (acc : ℕ) (a b : List ℕ) :
       rw [fp32Value_toDef]
       rfl)
 
-/-- Two folds from one state agree where their steps agree at each position. -/
 theorem foldl_rel {α β σ : Type} (f : σ → α → σ) (g : σ → β → σ) :
     ∀ (L : List α) (L' : List β) (s : σ), L.length = L'.length →
       (∀ i (h : i < L.length) (h' : i < L'.length) (s : σ), f s L[i] = g s L'[i]) → L.foldl f s = L'.foldl g s
@@ -1062,7 +974,6 @@ theorem foldl_rel {α β σ : Type} (f : σ → α → σ) (g : σ → β → σ
     exact foldl_rel f g L L' _ (by simpa using hl) fun i hi hi' s =>
       h (i + 1) (Nat.succ_lt_succ hi) (Nat.succ_lt_succ hi') s
 
-/-- One atom of the check's chain of cuts is the game's, on operands that are the game's atom's codes. -/
 theorem cutStep_eq (st : ℕ × ℕ × List Bool) (x : List ℕ × List ℕ) (y : AtomIn)
     (h1 : x.1.map TileCircuit.code = List.ofFn y.1) (h2 : x.2.map TileCircuit.code = List.ofFn y.2) :
     Rule.cutStep st x = Mend.chainStep hopperE4m3K32 4 st y := by
@@ -1076,8 +987,6 @@ theorem cutStep_eq (st : ℕ × ℕ × List Bool) (x : List ℕ × List ℕ) (y 
       st.2.2 ++ Mend.cuts hopperE4m3K32 (if st.1 % 4 = 0 then 0 else st.2.1) (List.ofFn y.1) (List.ofFn y.2))
   rw [hstep, hcuts]
 
-/-- **The check's cut flags of a word are the game's**: on two rows of `K` codes, `Rule.wordCuts` is `Mend.chainCuts`
-at the H100 (`hopperE4m3K32`, promoted every 4 atoms) of the rows' atoms. -/
 theorem wordCuts_eq {K : ℕ} {a b : Array ℕ} {A B : Fin K → Code} (ha : a.size = K) (hb : b.size = K)
     (hA : ∀ t (ht : t < K), a[t]! = (A ⟨t, ht⟩).val) (hB : ∀ t (ht : t < K), b[t]! = (B ⟨t, ht⟩).val) :
     Rule.wordCuts a b = Mend.chainCuts hopperE4m3K32 4 (rowAtoms A B) := by
@@ -1111,10 +1020,6 @@ theorem getElem!_map {α β : Type} [Inhabited α] [Inhabited β] (f : α → β
     (hl : l < xs.size) : (xs.map f)[l]! = f xs[l]! := by
   rw [getElem!_pos _ l (by rw [Array.size_map]; exact hl), Array.getElem_map, getElem!_pos xs l hl]
 
-/-- **A row's ends in the check are the game's**: on a row of `k` finite words (a whole number of promotion groups
-within the domain) that passes the rules, whose `s5_stats` are a value, where `row_ends` is a value, the check's end
-codes are the game's `endRow` at each end (`endCodes_eq`) and every element the game finds salt-dead is flagged
-(`endsAgree_of_endCodes`). -/
 theorem row_ends {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) {m k i s' ρw αw βw : ℕ} {act : Codes}
     {xw : Array ℕ} {e : Array ℕ × Array ℕ × Array Bool} (hi : i < m) (hk : k % 128 = 0) (hk0 : 0 < k)
     (hkK : k ≤ 2 ^ 16) (hxs : xw.size = k)
@@ -1191,9 +1096,6 @@ theorem row_ends {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List
     rw [getElem!_map _ _ (by omega)]
     exact FormingSim.endsAgree_of_endCodes hαS hβS hβpos h32 hy hcb (hall l (by omega)) hE0
 
-/-- **A word's mends in the game are within the check's**: where the two rows' ends in the check are the game's
-(`EndsOf`), the game's `wordMend` at the H100 record, its dead pairs and its forced zeros, is at most the check's
-`word_mend`. The forced zeros are the same products (`wordCuts_eq`); the check may flag more elements salt-dead. -/
 theorem wordMend_le {Q R S : Type} (sem : PearlCSem Q R S) {k : ℕ} {x w : Fin k → ℚ}
     {ea eb : Array ℕ × Array ℕ × Array Bool} (ha : EndsOf sem x ea) (hb : EndsOf sem w eb) :
     wordMend devH100 sem.alpha sem.beta x w ≤ Rule.wordMend ea eb := by
@@ -1222,9 +1124,6 @@ theorem wordMend_le {Q R S : Type} (sem : PearlCSem Q R S) {k : ℕ} {x w : Fin 
 end MendSim
 
 open InertWorkSim in
-/-- **A word's codes**: where `k` is whole promotion groups, the check's A′ and B̃ rows of a word whose rows pass the
-rules are `unitChain`'s codes at `semH3`'s noise, whose lines and bases are the check's (`seedsAreTheSpec`,
-`lineIsTheSpec`, `fixedNoiseIsTheSpec`). -/
 theorem codes_eq {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
     (U : Pouw.PearlC.Workload) (u : ℕ) (act : Codes) (salt rootB : ByteArray) (wn : Words.FixedNoise)
     (rows cols : List ℕ) (ops : Words.Ops) (hsalt : bytesNat salt = saltOf s)
@@ -1272,11 +1171,6 @@ theorem codes_eq {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List
   rw [hA, hB, hU1, hU2]
   exact ⟨rfl, rfl⟩
 
-/-- **(c)** from what a passed tile establishes (`TileAcceptMeans`), the check's inert-work bound (`TileKeepsTheInertBound`),
-what a loaded pass's records keep (`load_facts`), the per-row rules (`RowsAreTheRules`), the replay
-(`wordFlagsIsTheReplay`, `codes_eq`), the forming count (`formingElems_le`, `row_forming`) and the mends
-(`MendSim.row_ends`, `MendSim.wordMend_le`): a tile as in `TilePassGivesTheInertBound` has its chain's inert work, its forming
-and its mends within the game's bound. -/
 theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Properties.Pouw.PearlPlus.TileKeepsTheInertBound)
     (hR : RowsAreTheRules) {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
     (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
@@ -1602,8 +1496,6 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
     (by rw [show devH100.prices.costs.fs = 64 from rfl]; norm_num) (Nat.cast_le.2 hFE) (Nat.cast_le.2 hM)
     (by exact_mod_cast hD') hcred
 
-/-- **(c)'s chain part** from `TileAcceptMeans`, the check's cap (`TileKeepsTheInertBound`) and `RowsAreTheRules`:
-`tile_bound` less its forming and its mends, which are nonnegative. -/
 theorem tilePassGivesTheChainInertBound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
     (hK : Properties.Pouw.PearlPlus.TileKeepsTheInertBound) (hR : RowsAreTheRules) : TilePassGivesTheChainInertBound := by
   intro Q R S saltOf rootOf H s coins man p tid o U g c hload hof hsalt hroot hwOK hopen hticket hpass
@@ -1621,8 +1513,6 @@ theorem tilePassGivesTheChainInertBound (hT : Properties.Pouw.PearlPlus.TileAcce
     exact Finset.sum_nonneg fun _ _ => Nat.cast_nonneg _
   exact le_trans (le_add_of_nonneg_right h0) (le_trans (le_add_of_nonneg_right h1) h)
 
-/-- **(c)** from `TileAcceptMeans`, the check's cap (`TileKeepsTheInertBound`) and `RowsAreTheRules`: `tile_bound`, whose
-chain, forming and mends are `tileInertWorkRev1`. -/
 theorem tilePassGivesTheInertBound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
     (hK : Properties.Pouw.PearlPlus.TileKeepsTheInertBound) (hR : RowsAreTheRules) : TilePassGivesTheInertBound := by
   intro Q R S saltOf rootOf H s coins man p tid o U g c hload hof hsalt hroot hwOK hopen hticket hpass

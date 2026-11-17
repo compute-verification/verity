@@ -8,13 +8,7 @@ import Mathlib.Tactic.NormNum.Pow
 import Mathlib.Tactic.SetLike
 import Proofs.Pouw.Receipt.Duo
 
-/-!
-# fx1's words are bound wherever duo's are
-
-fx1 is duo on the words times odd multipliers: `fx1Word k a r m s = duoWord k a r s ∘ (· * m)`, and so on for pairs,
-triples, quadruples and runs (`fx1Run_eq`). Multiplying by an odd `m` is injective (`mul_odd_cancel`), so each of
-duo's injectivity statements composes with it into fx1's, and the state bijection is duo's at the word `d·m`.
--/
+/-! fx1's words are bound wherever duo's are. -/
 
 @[expose] public section
 
@@ -66,7 +60,6 @@ theorem fx1Quad_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : 
   exact Prod.ext (mul_odd_injective m₁ h'.1) (Prod.ext (mul_odd_injective m₂ h'.2.1)
     (Prod.ext (mul_odd_injective m₃ h'.2.2.1) (mul_odd_injective m₄ h'.2.2.2)))
 
-/-- An fx1 run is duo's run on the words times their multipliers. -/
 theorem fx1Run_eq {n : ℕ} :
     ∀ {L : ℕ} (k a : Fin L → BitVec n) (r : Fin L → ℕ) (m w : Fin L → BitVec n) (s : BitVec n × BitVec n),
       fx1Run k a r m w s = duoRun k a r (fun j => w j * m j) s

@@ -11,21 +11,7 @@ public import Proofs.Pouw.Receipt.AtState
 public import Proofs.Pouw.Receipt.Xor
 public import Proofs.Pouw.Lemmas.Receipt
 
-/-!
-# The receipt folds duo's, fx1's and li's guarantees
-
-duo's four words anywhere in a run, its checkpoints every four words and the kernel of its long runs are in
-`Receipt/Window.lean`.
-
-Each statement of `Definitions/Pouw/Guarantees/Receipt.lean`: duo's words, pairs, triples and quadruples in
-`Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, the served receipt in
-`Receipt/DuoReceipt.lean`, fx1's transport of each in `Receipt/Fx1.lean`, and li's half steps and checkpoints in
-`Receipt/Li.lean`.
-
-Runs at one start state, the counting bound past two words and the served chain's two-word counterexample, are in
-`Receipt/AtState.lean`. Two words' all-state XOR kernel, the warp checkpoint's cross-chain cancellation, is in
-`Receipt/Xor.lean`.
--/
+/-! Collects the proofs of `Definitions/Pouw/Guarantees/Receipt.lean`'s statements from `Receipt/`. -/
 
 @[expose] public section
 

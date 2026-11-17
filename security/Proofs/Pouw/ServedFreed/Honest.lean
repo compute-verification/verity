@@ -39,26 +39,8 @@ import Proofs.Pouw.RelativeSecurity
 import Proofs.Pouw.ServedFreed
 import Proofs.Pouw.ServedWork
 
-/-!
-# `ServedFreed` is honest and nontrivial
-
-The twins of `Properties.Pouw.Served.ServedFreed`, over `Proofs.Pouw.ServedWork.Honest`'s flat machine and honest
-inventory at the honest J10-R period, conditional as `served_honest` is on `Credit.window`'s verdict on the
-execution phases' inputs (`hacc`, `hsalt`, `hdraw`).
-
-* `pd c H`: the registered devices' period on the flat machine: `H` seconds of its one resource, all of it the honest
-  use and worth `H`, beside one other job worth 1 a unit at one unit of the resource. `pd_dualOpt`: price 1 is its
-  dual price, the honest strategy leaving nothing.
-* `outsource_fa`: on the flat machine nothing is exchanged, so every program is its own exchange-free replacement
-  (`OutsourceWithinEgress` at `β = 0`). `certified_fa`: a certifier that accepts every period meets
-  `CertifiedExchange` at `K = δ = 0`.
-* `servedFreed_honest`: at `c = N_p`, `p = 1` and `H = N_p·n`, the honest inventory meets every premise
-  `ServedFreed` adds to `ServedWork`'s, so the conclusion holds there.
-* `servedFreed_nontrivial`: `ServedFreed` is false without `SAKServed`. On the free machine (`fa 0`) every other
-  premise holds and `SAKServed` fails (`not_sakServed_free`), and every accepted path leaves the whole period free for
-  the other job: worth `2H` against an honest strategy's `H`, past `H + ε(x) H` since its credit is positive
-  (`creditPrefix_pos`) and so `ε(x) < 1`. The event has probability 1, past the bound `e^{−1}`.
--/
+/-! `ServedFreed` is honest and nontrivial, conditional as `served_honest` is on `Credit.window`'s verdict on the
+execution phases' inputs. -/
 
 @[expose] public section
 
@@ -70,8 +52,6 @@ open Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
-/-! ## The registered devices' period -/
-
 /-- The flat machine's period: `H` seconds of its one resource, all of it the honest use, worth `H`, and one other job
 worth 1 a unit at one unit of the resource. -/
 def pd (c H : ℝ) : Pouw.Dither.Period (fa c) where
@@ -82,8 +62,6 @@ def pd (c H : ℝ) : Pouw.Dither.Period (fa c) where
   hon _ := H
   rv := H
 
-/-- Price 1 is the period's dual price at one credit: the honest strategy uses the whole period and leaves the other
-job nothing. -/
 theorem pd_dualOpt (c H : ℝ) : (pd c H).DualOpt (fun _ => 1) 1 := by
   refine ⟨fun _ => zero_le_one, fun _ _ => zero_le_one, fun _ => ?_, fun _ => 0, ⟨fun _ => le_rfl, fun _ => ?_⟩, ?_⟩
   · show (1 : ℝ) ≤ ∑ _r : Unit, (1 : ℝ) * 1
@@ -97,7 +75,6 @@ theorem pd_cap (c H : ℝ) : ∑ r, (fun _ => (1 : ℝ)) r * (1 * (pd c H).hon r
   show ∑ _r : Unit, (1 : ℝ) * (1 * H) = H
   simp
 
-/-- **The whole period free is worth more than an honest strategy's plus `ε H`**, for `ε < 1`. -/
 theorem not_freed {c H ε C : ℝ} (hH : 0 < H) (hC : C = H) (hε : ε < 1) :
     ¬ (pd c H).FreedWithin 1 (fun _ => H) ε C := by
   rintro ⟨W', z', -, ⟨-, hfit⟩, hv⟩
@@ -113,14 +90,10 @@ theorem eps_lt_one {S F : ℝ} (hS : 0 < S) (hF : 0 < F) : max 0 (S - F + 0 * 0)
   rw [div_lt_one hS]
   exact max_lt hS (by linarith)
 
-/-! ## The exchange and its certifier -/
-
-/-- On the flat machine every program is its own exchange-free replacement. -/
 theorem outsource_fa (c : ℝ) : Pouw.Assumptions.OutsourceWithinEgress (fa c) (fun _ => 1) 0 := by
   intro _ _ _ _ _ _ f
   exact ⟨f, fun _ => ⟨rfl, rfl, le_add_of_nonneg_right (by simp)⟩⟩
 
-/-- A certifier that accepts every period counts the flat machine's exchange at `K = δ = 0`. -/
 theorem certified_fa (c : ℝ) {Ω St C O : Type} [Fintype Ω] {n : ℕ} (work : Ω → Fin n → (fa c).Mc.Alg (St × C) O)
     (i : Ω → Fin n → St × C) :
     CertifiedExchange (fun _ => True) (fun x => ∑ w, (fa c).ext (work x w) (i x w)) 0 0 := by
@@ -137,9 +110,6 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
   (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
-/-- **`ServedFreed`'s conclusion at the honest J10-R period with the honest inventory**: `j10r_meets` and
-`served_meets` give it `ServedWork`'s premises, and the flat machine's period (`pd`, at `H = N_p·n`), its
-exchange-free programs and a certifier that accepts every period the rest. -/
 theorem servedFreed_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
@@ -174,13 +144,8 @@ theorem servedFreed_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAc
     (outsourceServed_of_perProgram _ (hr1 _) _ _ _ _ _ (outsource_fa _))
     (certified_fa _ (work (tileCount σ sT)) fun x w => ((), saltCoin (hr1 _) x w))
 
-/-- **`ServedFreed` is false without `SAKServed`.** On the free machine (`fa 0`), at the honest J10-R period of
-`n ≥ 17` execution phases, `δ_s = e^{−1}`, price 1 a word, no luck allowance, no degenerate salts, the honest inventory, the
-period `pd 0 H` at `H = N_p·n`, `β = K = δ = 0` and a certifier that accepts every period, every other premise of
-`ServedFreed` holds, in its order (`j10r_meets`, `served_rest`, `pd_dualOpt`, `outsource_fa`, `certified_fa`), and
-`SAKServed` fails (`not_sakServed_free`). The conclusion fails with it: every accepted path's execution phases use nothing, so
-the other job fits the whole period (`z = H`), worth `2H` against an honest strategy's `H`, and `ε(x) < 1` since its
-credit is positive (`creditPrefix_pos`). So its event has probability 1, past the bound `e^{−1}`. -/
+/-- **`ServedFreed` is false without `SAKServed`.** On the free machine every other premise of `ServedFreed` holds and
+`SAKServed` fails, and the conclusion fails with it. -/
 theorem servedFreed_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧

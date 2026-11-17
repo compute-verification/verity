@@ -8,24 +8,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 import Proofs.Pouw.PearlC.PeelExactProofs
 
-/-!
-# The tile unit computes `C̃` and `U` (proofs)
-
-`TileCircuit.tileSpec p K TM TN`, the tile template at tile `TM × TN`, evaluates to the pinned order's words: for each
-entry `(i, j)`, on inputs holding the codes of `A′_i` and `B̃_j` and the factor rows `P_A,i` and `P_B,j`, its two outputs
-are `chainWordP? p 4` over the row's atoms and U's four K16 steps from it (`tile_words`), at every depth `K = 128·nw`
-(sm_120's `K = 8192` among them) and every tile (the deployed `64 × 64` among them). A transcript whose one unit is
-correct carries them (`tile_correct`, by core's `Verity.Partition.compose`). This is L3's step 4 for the tile template.
-
-* **Per gate** (`gate_entry`, `tileVal_atom`, `tileVal_add`, `tileVal_peel`, `tileVal_input`): entry `(i, j)`'s block is
-  `entryGate` at its rows, and each gate's value is read from the gates it reads.
-* **A window** (`tileVal_window`): its four atoms write the window's word, a step word (`AccumProofs.StepWord`).
-* **The promotions** (`tileVal_chain`): the template adds each window's word into the total by `F32Add_v2`, which does
-  not read `−0` as `+0` as `promoteWord?` does. They agree because a sum of two step words is never `−0`
-  (`addWord_step`): FP32 values lie on the grid `2^−149`, so a nonzero sum is at least the least subnormal, which
-  `f32Word` writes as a nonzero word (`f32Word_ne_negZero`), and an exact zero sum is `−0` only for `(−0) + (−0)`.
-* **U** (`tileVal_uFold`): the four K16 steps from `C̃`'s word (`uFold`), on any words.
--/
+/-! The tile unit computes `C̃` and `U`, at every depth `K = 128·nw` and every tile. -/
 
 @[expose] public section
 
@@ -65,7 +48,6 @@ theorem gate_input {g : ℕ} (hg : g < tileIn K TM TN) : (tileGate p K TM TN g).
   unfold tileGate
   split_ifs <;> first | omega | rfl
 
-/-- Entry `(i, j)`'s block: `entryGate` at the rows `A′_i`, `B̃_j`, `P_A,i` and `P_B,j`. -/
 theorem gate_entry {i j r : ℕ} (hj : j < TN) (hr : r < blockLen K) :
     tileGate p K TM TN (entryBase K TM TN i j + r) =
       entryGate p K (i * K) (TM * K + j * K) ((TM + TN) * K + 64 * i) ((TM + TN) * K + 64 * TM + 64 * j)
@@ -124,7 +106,6 @@ theorem entry_lt {i j : ℕ} (hi : i < TM) (hj : j < TN) : entryBase K TM TN i j
   unfold entryBase tileN
   omega
 
-/-- The circuit's values. -/
 abbrev tileVal (a : (tileSpec p K TM TN).toCircuit.Trace) : ℕ → ℕ := val ((tileSpec p K TM TN).toCircuit.eval a)
 
 theorem tileVal_atom (a : (tileSpec p K TM TN).toCircuit.Trace) {i j q r : ℕ} (hi : i < TM) (hj : j < TN)
@@ -211,7 +192,6 @@ theorem tileVal_peel (a : (tileSpec p K TM TN).toCircuit.Trace) {i j s : ℕ} (h
 
 theorem code_val (c : Code) : code c.val = c := Fin.ext (Nat.mod_eq_of_lt c.isLt)
 
-/-- The atoms' inputs: entry `(i, j)`'s atom `t` reads positions `32t, …` of rows `A′_i` and `B̃_j`. -/
 theorem atom_inputs (a : (tileSpec p K TM TN).toCircuit.Trace) (A B : Fin K → Code) {i j : ℕ} (hi : i < TM)
     (hj : j < TN) (hA : ∀ l : Fin K, val a (i * K + l) = (A l).val)
     (hB : ∀ l : Fin K, val a (TM * K + j * K + l) = (B l).val) {t : ℕ} (ht : t < (rowAtoms A B).length) :
@@ -239,7 +219,6 @@ theorem take_drop_four {α : Type} (l : List α) {n : ℕ} (h : n + 3 < l.length
     List.drop_eq_getElem_cons h]
   rfl
 
-/-- **A window's word**: entry `(i, j)`'s four atoms of window `q` write the window's word, a step word. -/
 theorem tileVal_window (a : (tileSpec p K TM TN).toCircuit.Trace) (A B : Fin K → Code) {i j : ℕ} (hi : i < TM)
     (hj : j < TN) (hA : ∀ l : Fin K, val a (i * K + l) = (A l).val)
     (hB : ∀ l : Fin K, val a (TM * K + j * K + l) = (B l).val) {q : ℕ} (hq : q < K / 128) {w : ℕ}
@@ -289,11 +268,9 @@ theorem foldl_of_foldlM (pa pb : List ℕ) : ∀ (l : List ℕ) (c u : ℕ), l.f
     obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some h1
     exact foldl_of_foldlM pa pb l _ u h
 
-/-- Where every step is finite, the fold is `uWord?`'s word. -/
 theorem uFold_of_uWord {c u : ℕ} {pa pb : List ℕ} (h : uWord? c pa pb = some u) : uFold pa pb c = u :=
   foldl_of_foldlM pa pb _ c u h
 
-/-- **U's gate**: entry `(i, j)`'s four K16 steps from its `C̃` gate over the factor rows `P_A,i` and `P_B,j`. -/
 theorem tileVal_uFold (a : (tileSpec p K TM TN).toCircuit.Trace) {i j : ℕ} (hi : i < TM) (hj : j < TN)
     (pa pb : List ℕ) (hpa : ∀ q < 64, val a ((TM + TN) * K + 64 * i + q) = pa.getD q 0)
     (hpb : ∀ q < 64, val a ((TM + TN) * K + 64 * TM + 64 * j + q) = pb.getD q 0) :
@@ -323,8 +300,6 @@ theorem tileVal_uFold (a : (tileSpec p K TM TN).toCircuit.Trace) {i j : ℕ} (hi
   rfl
 
 end Gates
-
-/-! ## The promotion on words -/
 
 section AddWord
 
@@ -359,7 +334,6 @@ theorem f32Word_N_pos {a : ℚ} (ha : 2 ^ (-149 : ℤ) ≤ a) :
   have h2 : 1 ≤ ⌊a / 2 ^ (max (binade a) (-126) - 23)⌋ := Int.le_floor.2 (by exact_mod_cast hge)
   omega
 
-/-- `f32Word`'s words are 32-bit. -/
 theorem f32Word_lt (y : ℚ) : f32Word y < 2 ^ 32 := by
   unfold f32Word
   dsimp only
@@ -371,7 +345,6 @@ theorem f32Word_lt (y : ℚ) : f32Word y < 2 ^ 32 := by
   generalize max (binade |y|) (-126) = E₀
   split_ifs <;> omega
 
-/-- `f32Word` writes `−0` only below the least subnormal. -/
 theorem f32Word_ne_negZero {y : ℚ} (hy : 2 ^ (-149 : ℤ) ≤ |y|) : f32Word y ≠ 0x80000000 := by
   have ha : 0 < |y| := lt_of_lt_of_le (two_zpow_pos _) hy
   unfold f32Word
@@ -414,8 +387,6 @@ theorem le_abs_add {x y : ℚ} (hx : ∃ m : ℤ, x = m * 2 ^ (-149 : ℤ)) (hy 
   push_cast at h1
   nlinarith [two_zpow_pos (-149)]
 
-/-- **One FP32 add of step words is a step word**: a sum of two finite words is `−0` only for `(−0) + (−0)`, and a
-step word is never `−0`. -/
 theorem addWord_step {t w s : ℕ} (ht : StepWord t) (h : addWord? t w = some s) : StepWord s := by
   unfold addWord? at h
   rcases hx : wordQ t with _ | x
@@ -470,7 +441,6 @@ open AccumProofs
 
 variable (p : Pipeline) (TM TN : ℕ)
 
-/-- **`C̃_ij`'s gate** at depth `128·nw`: entry `(i, j)`'s promotions write the chain's word over rows `A′_i`, `B̃_j`. -/
 theorem tileVal_chain {nw : ℕ} (hnw : 0 < nw) (a : (tileSpec p (128 * nw) TM TN).toCircuit.Trace)
     (A B : Fin (128 * nw) → Code) {i j : ℕ} (hi : i < TM) (hj : j < TN)
     (hA : ∀ l : Fin (128 * nw), val a (i * (128 * nw) + l) = (A l).val)
@@ -523,9 +493,6 @@ theorem tileVal_chain {nw : ℕ} (hnw : 0 < nw) (a : (tileSpec p (128 * nw) TM T
   rw [ite_eq_right (by omega)] at hv
   rw [show cGate (128 * nw) TM TN i j = entryBase (128 * nw) TM TN i j + (5 * (nw - 1) + 4) by unfold cGate; omega, hv]
 
-/-- **The tile unit's words** at depth `128·nw`: on inputs holding the codes of `A′_i` and `B̃_j` and the factor rows
-`P_A,i` and `P_B,j`, entry `(i, j)`'s two outputs are `C̃_ij` under the pinned order (`chainWordP? p 4`) and U's four
-K16 steps from it (`uFold`). -/
 theorem tile_words {nw : ℕ} (hnw : 0 < nw) (a : (tileSpec p (128 * nw) TM TN).toCircuit.Trace)
     (A B : Fin (128 * nw) → Code) (pa pb : List ℕ) {i j : ℕ} (hi : i < TM) (hj : j < TN)
     (hA : ∀ l : Fin (128 * nw), val a (i * (128 * nw) + l) = (A l).val)
@@ -546,8 +513,6 @@ theorem uGate_mem (K : ℕ) {i j : ℕ} (hi : i < TM) (hj : j < TN) : uGate K TM
   Finset.mem_union_right _ (Finset.mem_image.2 ⟨(i, j), Finset.mem_product.2 ⟨Finset.mem_range.2 hi,
     Finset.mem_range.2 hj⟩, rfl⟩)
 
-/-- A transcript whose one unit is correct holds the circuit's values on every output (core's
-`Verity.Partition.compose`). -/
 theorem tile_out {K : ℕ} (X : (tileSpec p K TM TN).toCircuit.Trace)
     (hX : (tileSpec p K TM TN).part.Correct X 0) :
     ∀ g ∈ (tileSpec p K TM TN).outs, val X g = tileVal p K TM TN X g := by
@@ -567,8 +532,6 @@ theorem tile_out {K : ℕ} (X : (tileSpec p K TM TN).toCircuit.Trace)
     Verity.Partition.mem_committed_of_output _ (Finset.mem_filter.2 ⟨Finset.mem_univ _, hg⟩)
   rw [tileVal, val_of_lt _ hlt, val_of_lt _ hlt, (tileSpec p K TM TN).part.compose X X (fun _ _ => rfl) hw _ hg']
 
-/-- **The tile unit, correct**: a transcript whose one unit is correct carries `C̃_ij` and `U_ij` on entry `(i, j)`'s
-outputs. -/
 theorem tile_correct {nw : ℕ} (hnw : 0 < nw) (X : (tileSpec p (128 * nw) TM TN).toCircuit.Trace)
     (hX : (tileSpec p (128 * nw) TM TN).part.Correct X 0)
     (A B : Fin (128 * nw) → Code) (pa pb : List ℕ) {i j : ℕ} (hi : i < TM) (hj : j < TN)

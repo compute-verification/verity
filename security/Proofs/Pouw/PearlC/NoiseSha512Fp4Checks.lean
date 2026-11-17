@@ -2,15 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.NoiseSha512Fp4
 
-/-!
-# Checks of Pearl-C4's SHA-512 noise
-
-`seedB_vec`, `seedA_vec`, `lineEA_vec`, `lineFA_vec`, `lineEB_vec`, `lineFB_vec`: `NoiseSha512Fp4` against
-`verity/protocols/pouw/prover/schemes/pearl_c4.py` (`seed_b`, `unit_seed_a`, `line`) with salt `0, 1, …, 31`, weight root
-`(7i + 3) mod 256`, activation root `(5i + 1) mod 256` and unit 5, evaluated by the kernel. The lines are one of each
-role, at line indices whose block (`⌊i/4⌋`) and quarter (`i mod 4`) differ: `E_A` line 1, `F_A` line 4, `E_B` line 0 and
-`F_B` line 6. `F_A`'s and `F_B`'s are `pearl_c4.basis`'s rows 4 and 6 too.
--/
+/-! Checks of `NoiseSha512Fp4` against `pearl_c4`'s `seed_b`, `unit_seed_a` and `line`, evaluated by the kernel. -/
 
 @[expose] public section
 
@@ -18,7 +10,6 @@ namespace Pouw.PearlC.NoiseSha512Fp4Checks
 
 open Pouw.PearlC Pouw.PearlC.NoiseSha512Fp4
 
-/-- The salt `0, 1, …, 31`. -/
 def vSalt : List ℕ := List.range 32
 
 /-- A 64-byte weight root. -/

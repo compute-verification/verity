@@ -2,27 +2,7 @@ module
 
 public import Proofs.Pouw.PearlC.TileGap
 
-/-!
-# The gap under the tolerant sampled audit, from TT_OUT per tile
-
-The tolerant audit accepts a sampled tile that is good, of a blank unit, or over its inert-work bound
-(`overInertBoundTiles`), and credits the last nothing.
-- An accepted run certifies `T ≥ (1 − g)·(S − u(X_O)·W)`, where `S` is the credit (the claimed work; the type `S` in
-  the signatures below is the salt's), `W` is the layout's work, `g` is the gap (the statements' `γ`), `X_O` is the
-  number of samples on tiles over their bound, and `u` is a table with a miss bound at `δ` (`MissBound`).
-- That is `S ≤ (1 + ε)·T`, at the advantage `1 + ε = (1 + ε_a)/(1 − ε_s)`, with `1 + ε_a = 1/(1 − g)` and the sampling
-  tolerance `ε_s = u(X_O)·W/S`, except with failure probability `δ + η`.
-- TT_OUT's credit set is unchanged, since a good tile is within its bound (`TileGood`), so no premise is added.
-
-* `sampledOfGoodTol`: `sampledOfGood` with `u(X_O)` in place of `ε_s`. Pointwise, an accepted run either has more than
-  `u(X_O)` of the layout's tickets outside the good and blank tiles, and since no sample landed on a tile that is bad and
-  within its bound, `X_O` counts the samples outside them, which the miss bound gives with probability at most `δ`; or
-  its good tiles carry the claimed work less `u(X_O)·W`, and then TT_OUT's event holds.
-* `gapSampledTol`: `TTOutTile` at the gap `γ₀` gives `GGapSampledTol` at the gap `1 − (1 − γ₀)/Ω`, under
-  `gapSampled`'s hypotheses.
-* `missBound_strict` and `gapSampled_of_tol`: the audit that accepts only good and blank tiles is the table `u 0 = ε_s`,
-  `u x = 1` otherwise, at `δ = (1 − ε_s)^t` (`workWeightedSampling`), so `GGapSampledTol` gives `GGapSampled`.
--/
+/-! The gap under the tolerant sampled audit, from TT_OUT per tile; the type `S` in the signatures is the salt's. -/
 
 @[expose] public section
 
@@ -30,7 +10,6 @@ namespace Pouw.PearlC
 
 open Finset _root_.Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
-/-- A tile over its inert-work bound is neither good, whose bound holds, nor of a blank unit. -/
 theorem overInertBoundTiles_disjoint {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R)
     (s : S) (τ : Trace) : Disjoint (goodTiles P TR U H s τ ∪ blankTiles TR U τ) (overInertBoundTiles TR U H s τ) := by
   classical
@@ -49,7 +28,6 @@ theorem overInertBoundTiles_disjoint {Q R S : Type} (P : Protocol Q R S) (TR : T
     rw [mem_filter, hc] at hg
     exact Option.some_ne_none _ hg.2
 
-/-- On a tolerant acceptance with `O` disjoint from `K`, the samples in `O` are those outside `K`. -/
 theorem drawsIn_eq_of_acceptsTol {w : ℕ → ℕ} {N t : ℕ} {K O : Finset ℕ} (c : Fin t → Ticket w N) (hdisj : Disjoint K O)
     (hacc : AuditAcceptsTol K O c) : drawsIn O c = drawsIn (range N \ K) c := by
   unfold drawsIn
@@ -60,9 +38,6 @@ theorem drawsIn_eq_of_acceptsTol {w : ℕ → ℕ} {N t : ℕ} {K O : Finset ℕ
   · exact fun hO => ⟨(c i).1.isLt, fun hK => Finset.disjoint_left.mp hdisj hK hO⟩
   · exact fun hS => (hacc i).resolve_left hS.2
 
-/-- **The audit that accepts only checked units is a miss-bound table**: `u 0 = ε_s` and `u x = 1` otherwise, at
-`δ = (1 − ε_s)^t`. A set holding more than `ε_s` of the tickets is missed by all `t` samples with at most that
-probability (`workWeightedSampling`), and no set holds more than all of them. -/
 theorem missBound_strict (t : ℕ) (εs : ℝ) (hεs : εs ≤ 1) :
     MissBound t (fun x => if x = 0 then εs else 1) ((1 - εs) ^ t) := by
   classical
@@ -94,10 +69,6 @@ theorem missBound_strict (t : ℕ) (εs : ℝ) (hεs : εs ≤ 1) :
   rw [← pr_equiv (Equiv.punitProd (Fin t → Ticket w N)).symm] at h
   exact h
 
-/-- **The tolerant sampled audit's bound over any set of accepted tiles.** As `sampledOfGood`, with a set `over` of
-committed tiles, disjoint from the good and blank ones, that the audit accepts and credits nothing, and a table `u` with
-a miss bound at `δ`: the audit that accepts `good ∪ blank` and `over` does so while `T` is below `1 − γ` (the gap) of
-the claimed work less `u(X_O)` of the layout's, `X_O` the samples in `over`, with probability at most `δ + e`. -/
 theorem sampledOfGoodTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (TR : TileRules Q R S)
     (U : Workload) (τ : (Q → R) → S → Trace) (good over : (Q → R) → S → Finset ℕ) (γ₀ Ω T e : ℝ)
     (hγ₀ : γ₀ < 1) (hΩ : 0 < Ω) (hsub : ∀ H s, good H s ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U (τ H s))
@@ -221,9 +192,6 @@ theorem gapSampledTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fi
   rw [hact]
   exact hW U hU H s g (mem_range.mp hgr) c.act hgc.1
 
-/-- **The audit that accepts only checked tiles is the tolerant one's strict case**: `GGapSampledTol` at the table
-`u 0 = ε_s`, `u x = 1` otherwise (`missBound_strict`) gives `GGapSampled`, since a run every sample of which lands on a
-good or blank tile has none on a tile over its inert-work bound. -/
 theorem gapSampled_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
     {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop} {g : ℝ} {δ : ℕ → ℕ → ℝ}
     (h : GGapSampledTol CM P TR D g δ) : GGapSampled CM P TR D g δ := by

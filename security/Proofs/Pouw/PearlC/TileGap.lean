@@ -5,26 +5,7 @@ public import Proofs.Pouw.Sampling
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 
-/-!
-# g under the sampled audit, from TT_OUT per tile
-
-Staged; nothing pinned. The pins proposed are `pearlCSampled8192`, `pearlCSampled16384`, `pearlCTiles_total` and
-`ttOutTilePearlCWitness`.
-
-* `gapSampled`: if every good tile's `W_ref` is at most `Ω` times its credit, `TTOutTile(g₀)` gives `GGapSampled` at
-  `g = 1 − (1 − g₀)/Ω` with error `(1 − ε_s)^t + ε(q, N)`. Pointwise, an accepted run either has more than `ε_s` of the
-  layout's tickets on bad tiles of committed units, which `t` work-weighted samples all miss with probability at most
-  `(1 − ε_s)^t` (`workWeightedSampling`, pinned), or its good tiles carry the claimed work less `ε_s`, and then TT_OUT's
-  event holds.
-* **The headlines are the unit-level worst case under the cap.** A good tile's credit is `(1 − ρ)·creditOf` times its
-  share and its `W_ref` is `wrefOf` times the same share, so `Ω = wrefOf/((1 − ρ)·creditOf)` per shape and g is
-  `pearlCGap8192`'s and `pearlCGap16384`'s: `281273/52340000` (0.5374%) at 8192³ and `536953/103540000` (0.5186%) at
-  16384³. The sampled audit certifies `(1 − g)·(W_claimed − ε_s·W)`.
-* `pearlCTiles_total`: the audit grid covers each unit's words once, so the `W` that `GGapSampled` certifies against is
-  the layout's `∑_u wrefOf`.
-* `ttOutTilePearlCWitness`: `TTOutTilePearlC` is satisfiable, beside an honest reference whose cost is at most the
-  layout's `W_ref` tile by tile, and an in-domain workload whose one tile is within the cap and has positive credit.
--/
+/-! g under the sampled audit, from TT_OUT per tile, staged. -/
 
 @[expose] public section
 
@@ -45,10 +26,6 @@ theorem goodTiles_subset {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R
   rw [mem_filter, hc] at hb
   exact Option.some_ne_none _ hb.2
 
-/-- **The sampled audit's bound over any set of accepted tiles.** Fix a workload, the transcripts `τ` and, for each
-oracle and salt, a set `good` of committed tiles of `τ` on which `Wcred ≤ Ω·credit`. If their credit exceeds `T/(1 − γ₀)`
-with probability at most `e`, then the audit that accepts `good ∪ blank` does so while `T` is below `1 − γ` of the
-claimed work less `ε_s` of the layout's, `γ = 1 − (1 − γ₀)/Ω`, with probability at most `(1 − ε_s)^t + e`. -/
 theorem sampledOfGood {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (TR : TileRules Q R S)
     (U : Workload) (τ : (Q → R) → S → Trace) (good : (Q → R) → S → Finset ℕ) (γ₀ Ω T e : ℝ) (hγ₀ : γ₀ < 1)
     (hΩ : 0 < Ω) (hsub : ∀ H s, good H s ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U (τ H s))
@@ -158,7 +135,6 @@ theorem gapSampled {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
   rw [hact]
   exact hW U hU H s g (mem_range.mp hgr) c.act hgc.1
 
-/-- TT_OUT per tile on a domain gives it on any smaller domain. -/
 theorem ttOutTile_mono_domain {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D D' : Layout → Prop} {g₀ : ℝ}
     {δ : ℕ → ℕ → ℝ} (hD : ∀ L, D' L → D L) (h : TTOutTile CM P TR D g₀ δ) : TTOutTile CM P TR D' g₀ δ :=
@@ -176,7 +152,6 @@ theorem auditTiling_unit_lt (tm tn : ℕ) (L : Layout) {g : ℕ} (hg : g < (audi
   rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hg, Option.getD_some]
   exact gridTiles_unit_lt (List.getElem_mem hg)
 
-/-- On a one-shape domain where `W_ref = ω·(1 − ρ)·creditOf`, every tile's credited `W_ref` is `ω` times its credit. -/
 theorem pearlCTiles_wref {Q R S : Type} (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (sh : Shape) (ω : ℚ)
     (hω : wrefOf Params.pi c sh = ω * ((1 - ρ) * creditOf Params.pi c sh)) :
     ∀ U : Workload, U.InDomain (pearlCProtocol sem c ρ) (pearlCDomainAt Params.pi sh) → ∀ (H : Q → R) (s : S),
@@ -210,14 +185,11 @@ theorem wrefOf_nonneg (c : Costs) (s : Shape) : 0 ≤ wrefOf Params.pi c s := by
   unfold wrefOf creditOf Params.pi
   positivity
 
-/-- A tile's credited `W_ref` is at most its `W_ref`. -/
 theorem pearlCTiles_wcred_le {Q R S : Type} (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (L : Layout) (g : ℕ)
     (act : Codes) : (pearlCTiles sem c ρ).Wcred L g act ≤ (pearlCTiles sem c ρ).Wref L g := by
   simp only [pearlCTiles]
   exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ act _) _) (wrefOf_nonneg c _)
 
-/-- The headline pattern: `TTOutTilePearlC` at costs `c` and cap `ρ` gives `GGapSampled` on the one-shape domain at
-`γ = 1 − (399/400)/ω`, where `W_ref = ω·(1 − ρ)·creditOf`. -/
 theorem pearlCSampledAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω)
     (hω : wrefOf Params.pi c s = ω * ((1 - ρ) * creditOf Params.pi c s)) (hγ : γ = 1 - (1 - 1 / 400) / ω)
@@ -230,7 +202,6 @@ theorem pearlCSampledAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [
   rw [e]
   exact key
 
-/-- The sampled audit at 8192³ under the deployment cap `ρ = 1/400`, credit `(1 − ρ)·creditOf` per accepted tile. -/
 theorem pearlCSampled8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (sem : PearlCSem Q R S) (hTT : TTOutTilePearlC CM sem Costs.adopted (1 / 400)) :
     GGapSampled CM (pearlCProtocol sem Costs.adopted (1 / 400)) (pearlCTiles sem Costs.adopted (1 / 400))
@@ -238,15 +209,12 @@ theorem pearlCSampled8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]
   pearlCSampledAt CM sem _ _ _ (130850 / 130473) _ (by norm_num)
     (by norm_num [wrefOf, creditOf, Params.pi, Costs.adopted, sh8192]) (by norm_num) hTT
 
-/-- The sampled audit at 16384³ under the deployment cap `ρ = 1/400`. -/
 theorem pearlCSampled16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (sem : PearlCSem Q R S) (hTT : TTOutTilePearlC CM sem Costs.adopted (1 / 400)) :
     GGapSampled CM (pearlCProtocol sem Costs.adopted (1 / 400)) (pearlCTiles sem Costs.adopted (1 / 400))
       (pearlCDomainAt Params.pi sh16384) ((536953 / 103540000 : ℚ) : ℝ) δPearlC :=
   pearlCSampledAt CM sem _ _ _ (258850 / 258153) _ (by norm_num)
     (by norm_num [wrefOf, creditOf, Params.pi, Costs.adopted, sh16384]) (by norm_num) hTT
-
-/-! ## The audit grid partitions each unit's words, so `W` is the layout's `W_ref` -/
 
 theorem sum_range_getD {α : Type} (F : α → ℝ) (d : α) : ∀ l : List α,
     ∑ g ∈ range l.length, F (l.getD g d) = (l.map F).sum
@@ -283,7 +251,6 @@ theorem card_blocks_all (t m : ℕ) (ht : 0 < t) :
   rw [Nat.mul_comm] at h1
   omega
 
-/-- One unit's tiles: their shares of `w` add up to `w`. -/
 theorem unit_blocks (w : ℚ) (m n : ℕ) (hm : 0 < m) (hn : 0 < n) :
     ∑ bi ∈ range ((m + 64 - 1) / 64), ∑ bj ∈ range ((n + 64 - 1) / 64),
       w * (((Ico (bi * 64) (min ((bi + 1) * 64) m)).card * (Ico (bj * 64) (min ((bj + 1) * 64) n)).card : ℚ) /
@@ -300,8 +267,6 @@ theorem unit_blocks (w : ℚ) (m n : ℕ) (hm : 0 < m) (hn : 0 < n) :
   have hn' : (n : ℚ) ≠ 0 := by exact_mod_cast hn.ne'
   field_simp
 
-/-- On a layout of nonempty units, the audit tiles' `W_ref` adds up to the layout's: each unit's words are covered
-once, so the `W` of `GGapSampled` is `∑_u wrefOf`. -/
 theorem pearlCTiles_total {Q R S : Type} (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (L : Layout)
     (hpos : ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n) :
     tileWrefTotal (pearlCTiles sem c ρ) L = ∑ u ∈ range L.N, (wrefOf Params.pi c (L.shape u) : ℝ) := by
@@ -323,8 +288,6 @@ theorem pearlCTiles_total {Q R S : Type} (sem : PearlCSem Q R S) (c : Costs) (ρ
   refine sum_congr rfl fun bi _ => ?_
   rw [Rat.cast_sum]
   rfl
-
-/-! ## TT_OUT per tile for Pearl-C is satisfiable -/
 
 /-- The witness cost model for a tiled protocol: `true` runs `P`'s honest reference at the tiles' credit of the
 activations it is given (each at least 0), `false` commits nothing. -/
@@ -382,12 +345,9 @@ theorem tileShare_nonneg (sh : Shape) (rows cols : Finset ℕ) : 0 ≤ tileShare
   unfold tileShare
   positivity
 
-/-- The witness layout's one tile: unit 0, row 0, column 0. -/
 theorem witness_gridTiles : gridTiles 64 64 witnessWorkload.layout = [(0, 0, 0)] := by decide
 
 open Classical in
-/-- The witness tile's debit is zero: no atom of its word is flagged, no element is salt-dead, and its word needs every
-element. -/
 theorem witness_tileInertWork_zero (H : Unit → Unit) (s : Unit) :
     witnessSem.tileInertWork Costs.adopted H s witnessWorkload 0 (Ico 0 1) (Ico 0 1) (witnessAct 0) = 0 := by
   unfold PearlCSem.tileInertWork
@@ -428,7 +388,6 @@ theorem PearlCSem.rowOK_of_operandOK {Q R S : Type} (sem : PearlCSem Q R S) {p q
     (h : sem.OperandOK p q W) {i : ℕ} (hi : i < p) : sem.RowOK p q W i :=
   ⟨fun l hl => h.1 i hi l hl, fun hi' => h.2 ⟨i, hi'⟩⟩
 
-/-- The witness tile's one row passes Π's rules, so it is credited. -/
 theorem witness_passRows :
     witnessSem.passRows (witnessWorkload.layout.shape 0) (witnessAct 0) (Ico 0 1) = Ico 0 1 := by
   classical

@@ -6,14 +6,7 @@ import Proofs.Registration.Device
 import Proofs.Pouw.Game
 import Proofs.Pouw.Prob
 
-/-!
-# Proof that PoUW's guarantee is a joint run's compute guarantee
-
-At a value `o` of the other audits' coins, a bound `T` on the compute account's work on every compute coin bounds the
-adversary `adv o` within `(T, q)` (`q` the device's oracle queries over the compute window): its cost on an oracle and
-salt is at most the compute account's work at those and any tickets, and its oracle calls at most the compute account's
-oracle queries, which the device's limits bound. PoUW's EndToEnd then bounds its audit, which is the compute audit.
--/
+/-! PoUW's guarantee is a joint run's compute guarantee. -/
 
 @[expose] public section
 

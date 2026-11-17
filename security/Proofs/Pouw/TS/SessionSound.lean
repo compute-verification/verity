@@ -35,17 +35,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.EndToEndRegisteredRows
 import Proofs.Flock.SoundAtBridge.Reduce
 
-/-!
-# The served layer is sound through its Flock sessions (the proof)
-
-`ResourceAccounting.SecurityProofs.TS.SessionSoundAt` is `Flock.SoundAtBridge.soundAt_of_sessions` on the served layer `pf`,
-with `ServedRootsLinked`'s event as the event off the sessions' bad events. It needs neither `RelOfRows` nor
-`OpenedPlurAt` on every path: the named premises state them only on the accepted sessions whose sampled proof blocks are right,
-and every other unsound proof is `RowsSession.BadU`.
-
-This module imports `Proofs.Flock.SoundAtBridge`, whose imports make `X` a token (ArkLib's `notation3 "X"`), so
-`Proofs/ResourceAccounting.lean` imports it rather than `Proofs/Pouw/TS.lean`, whose theorems bind `X`.
--/
+/-! The served layer is sound through its Flock sessions; `Proofs/ResourceAccounting.lean` imports this module rather
+than `Proofs/Pouw/TS.lean` because its imports make `X` a token. -/
 
 @[expose] public section
 

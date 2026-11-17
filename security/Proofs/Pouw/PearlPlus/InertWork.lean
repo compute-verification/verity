@@ -7,23 +7,8 @@ public import Proofs.Pouw.PearlC.Freeze
 public import Proofs.Pouw.PearlC.AccumProofs
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# Pearl+'s bridge, part (c), the inert-work replay: `word_inert_work` counts the game's flags and later +0 promotions
-
-`Rule.wordInertWork` replays a word's inert work on its two rows of codes: each promotion group's `2^G` masked words
-(`Rule.masked`), the running totals, from the last group back the band of keys a total may take before each group and
-still promote to the word's total (`least` and `carried`), and per group the nonzero masks whose promoted word lands in
-the next group's band. `inertWorkIsTheReplay` proves its two counts are the game's: a mask is kept exactly when `Skip.keeps`
-holds, since a key in the band is a total the later promotions carry to the word's total (`KeyBand`), so the flagged
-atoms are `Skip.unitFlags`'; and the later promotions into a +0 total are `laterZeroPromos`' at the H100 record. It reads
-the keys' three statements (`Keys`); a group of finite atoms has a word below 2⁴⁶ in magnitude (`Freeze.tame_inWord`),
-the range `carried` is the rounded add on, and an atom the replay steps finitely is finite.
-
-`replayReadsTheCodes` puts the replay on the semantics' codes. Where a word's rows are whole promotion groups and pass the
-rules, the check's A′ and B̃ rows are `pc8Sem`'s codes at the H100 atom bit for bit (`formRow_quant8`: the forming reads
-a −0 word as +0 and its atom never steps to −0), and these are `unitChain`'s at `semH3`'s noise. Elsewhere `word_inert_work`
-refuses both words alike.
--/
+/-! Pearl+'s bridge, part (c), the inert-work replay: `word_inert_work` counts the game's flags and later +0
+promotions. -/
 
 @[expose] public section
 
@@ -32,8 +17,6 @@ namespace Pouw.PearlPlus.Bridge
 open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 
 namespace InertWorkSim
-
-/-! ## Loops in `Except` -/
 
 section Loops
 
@@ -83,8 +66,6 @@ end Loops
 
 theorem range_size (n : ℕ) : [:n].size = n := by simp [Std.Legacy.Range.size]
 
-/-! ## Arrays -/
-
 section Arrays
 
 variable {α : Type} [Inhabited α]
@@ -107,8 +88,6 @@ theorem rev_get (xs : Array α) (g : ℕ) (hg : g < xs.size) : xs.reverse[g]! = 
 
 end Arrays
 
-/-! ## Atoms: the check's atom on a word's slices is the game's step -/
-
 /-- The check's two slices `p` are the game's atom `x`: stepping them is `Skip.step` from every word. -/
 def AtomRel (p : List ℕ × List ℕ) (x : AtomIn) : Prop := ∀ w, Words.atom w p.1 p.2 = Skip.step w x
 
@@ -127,7 +106,6 @@ theorem groupStepTotal_nan (wd : ℕ) (ze : ℤ) (acc : Value) (ps : List Value)
   unfold groupStepTotal
   simp only [h, ↓reduceIte]
 
-/-- An atom with a NaN code steps every word to NaN, whose exponent field is 255. -/
 theorem step_nan (w : ℕ) (x : AtomIn) (hx : ¬ Freeze.FiniteAtom x) : Skip.step w x = 0x7FFFFFFF := by
   have hv : (fp32Value w :: ((((List.ofFn x.1).zip (List.ofFn x.2)).take 32).map
       fun c => productTotal c.1 c.2)).any Value.isNaN = true := by
@@ -148,7 +126,6 @@ theorem step_nan (w : ℕ) (x : AtomIn) (hx : ¬ Freeze.FiniteAtom x) : Skip.ste
 
 theorem rowAtoms_length {k : ℕ} (a b : Fin k → Code) : (rowAtoms a b).length = k / 32 := List.length_ofFn
 
-/-- Atom `j` of group `g` of the word's chunks is the check's slice pair at `32·(4g + j)`. -/
 theorem atomRel_chunk {k : ℕ} (a b : Fin k → Code) (g j : ℕ) (hg : g < ((rowAtoms a b).toChunks 4).length)
     (hj : j < (((rowAtoms a b).toChunks 4)[g]'hg).length) :
     AtomRel (Words.slice (Array.ofFn fun l => (a l).val) (32 * (4 * g + j)) 32,
@@ -186,7 +163,6 @@ theorem chunk_len {k : ℕ} (a b : Fin k → Code) (hk : k % 128 = 0) (g : ℕ) 
   exact Freeze.length_getElem_toChunks_of_dvd (G := 4) (l := rowAtoms a b) (by norm_num)
     (by rw [rowAtoms_length]; omega) g hg'
 
-/-- The check's group `g`, its four slice pairs, is the game's group `g`. -/
 theorem group_rel {k : ℕ} (a b : Fin k → Code) (hk : k % 128 = 0) (g : ℕ) (hg : g < k / 128) :
     List.Forall₂ AtomRel ((List.range 4).map fun j =>
       (Words.slice (Array.ofFn fun l => (a l).val) (32 * (4 * g + j)) 32,
@@ -201,15 +177,12 @@ theorem group_rel {k : ℕ} (a b : Fin k → Code) (hk : k % 128 = 0) (g : ℕ) 
     (((rowAtoms a b).toChunks 4)[g]'hg') (fun j hj => atomRel_chunk a b g j hg' hj)
   rwa [hl] at this
 
-/-! ## Promotions -/
-
 theorem stepWord_zero : AccumProofs.StepWord 0 := ⟨by norm_num, by decide, WordsSim.finite?_of (by decide)⟩
 
 theorem promote_some {w : ℕ} {t y : ℚ} (hy : wordQ w = some y) :
     Pouw.PearlC.promote (some t) w = some (rnAdd t y) := by
   simp only [Pouw.PearlC.promote, hy]
 
-/-- The check's FP32 add is the semantics' on any two finite words. -/
 theorem addAgrees : ∀ a b : ℕ, (wordQ a).isSome → (wordQ b).isSome →
     Evaluate.Fp32.f32AddV2 a b = TileCircuit.f32Add a b := by
   intro a b ha hb
@@ -224,7 +197,6 @@ theorem addAgrees : ∀ a b : ℕ, (wordQ a).isSome → (wordQ b).isSome →
   rw [CoreOps.roundSum_eq _ _ _ _ Nat.one_pos]
   simp only [Nat.cast_one, div_one, CoreOps.val_eq_zero]
 
-/-- A promotion the check takes is of two finite words, and its word is the rounded add of their values. -/
 theorem promote_ok {T w o : ℕ} (h : Rule.promote T w = .ok o) :
     ∃ t y, wordQ T = some t ∧ wordQ w = some y ∧ AccumProofs.StepWord o ∧ wordQ o = some (rnAdd t y) := by
   unfold Rule.promote at h
@@ -254,8 +226,6 @@ theorem promote_ok {T w o : ℕ} (h : Rule.promote T w = .ok o) :
       exact stepWord_zero
     · rw [ite_eq_right (by simpa using h0)]
       exact ⟨hlt, h0, WordsSim.finite?_of he⟩
-
-/-! ## Masks: `Rule.masked` is every mask's `Skip.wordIn` -/
 
 /-- A mask as the check's bits: bit `j` set skips atom `j`. -/
 def encMask : List Bool → ℕ
@@ -344,7 +314,6 @@ theorem maskSet_nil : MaskSet [] [(0, 0)] := by
   rw [List.length_eq_zero_iff.1 hm]
   exact List.mem_singleton.2 rfl
 
-/-- One atom's step of `Rule.masked`: each entry runs the atom and passes it through, with bit `n` set. -/
 def maskNext (x : AtomIn) (n : ℕ) (W : List (ℕ × ℕ)) : List (ℕ × ℕ) :=
   W.flatMap fun e => [(e.1, Skip.step e.2 x), (e.1 ||| 1 <<< n, e.2)]
 
@@ -429,7 +398,6 @@ theorem masked_aux {F : List (ℕ × ℕ) → (List ℕ × List ℕ) × ℕ → 
       exact this (by decide)
     · exact h2 y hy
 
-/-- **`Rule.masked` on a group's slices** is every mask's word of the game's group, and the group's atoms are finite. -/
 theorem masked_spec {ps : List (List ℕ × List ℕ)} {g : List AtomIn} {L : List (ℕ × ℕ)}
     (hR : List.Forall₂ AtomRel ps g) (h : Rule.masked ps = .ok L) :
     MaskSet g L ∧ ∀ x ∈ g, Freeze.FiniteAtom x := by
@@ -458,7 +426,6 @@ theorem lookup_some (k0 v : ℕ) : ∀ L : List (ℕ × ℕ), (∀ e ∈ L, e.1 
       · exact absurd he1.symm hk
       · exact ⟨e, he, he1⟩
 
-/-- The check's `base`, the mask-0 word, is the group's word. -/
 theorem base_eq {g : List AtomIn} {L : List (ℕ × ℕ)} (hL : MaskSet g L) : (L.lookup 0).getD 0 = groupWord g := by
   have h0 : L.lookup 0 = some (groupWord g) := by
     refine lookup_some 0 _ L (fun e he he0 => ?_) ⟨_, hL.2 (List.replicate g.length false) (by simp), ?_⟩
@@ -468,8 +435,6 @@ theorem base_eq {g : List AtomIn} {L : List (ℕ × ℕ)} (hL : MaskSet g L) : (
       exact Freeze.foldMask_replicate Skip.step 0 g
     · exact encMask_replicate g.length
   rw [h0, Option.getD_some]
-
-/-! ## Groups and totals -/
 
 theorem term_abs_lt (t : Term) (hm : t.mag < 2 ^ 24) (he : t.exp ≤ 44) : |t.value| < 2 ^ 46 := by
   have h1 : (2 : ℚ) ^ (t.exp - 23) ≤ 2 ^ (21 : ℤ) := zpow_le_zpow_right₀ (by norm_num) (by omega)
@@ -485,7 +450,6 @@ theorem term_abs_lt (t : Term) (hm : t.mag < 2 ^ 24) (he : t.exp ≤ 44) : |t.va
   rw [abs_lt]
   constructor <;> split_ifs <;> linarith
 
-/-- A group of four finite atoms has a finite word below 2⁴⁶ in magnitude. -/
 theorem groupWord_bound (g : List AtomIn) (hfin : ∀ x ∈ g, Freeze.FiniteAtom x) (hl : g.length = 4) :
     ∃ y, wordQ (groupWord g) = some y ∧ |y| < 2 ^ 46 := by
   have ht := Freeze.tame_inWord g (by omega) hfin 4 (by omega)
@@ -510,8 +474,6 @@ theorem total_eq_inTotal (gs : List (List AtomIn)) : Pouw.PearlC.total gs = Skip
   rw [Freeze.total_eq_foldl]
   unfold Skip.inTotal
   rw [List.take_length]
-
-/-! ## Bands: the totals before a group that promote to the word's total -/
 
 /-- The groups from `g` on promoted into a total of value `v`. -/
 def laterFrom (gs : List (List AtomIn)) (g : ℕ) (v : ℚ) : Option ℚ :=
@@ -541,7 +503,6 @@ theorem band_last (hK : KeyIsTheValue) (gs : List (List AtomIn)) {T : ℕ} (hT :
     have := hK.1.injective (Option.some.inj h)
     exact ⟨le_of_eq this.symm, le_of_eq this⟩
 
-/-- **One step back**: `least` over `carried` through group `g`'s word turns the band after it into the band before. -/
 theorem band_step (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC : CarriedIsTheAdd)
     (gs : List (List AtomIn)) (g : ℕ) (hg : g < gs.length) {w : ℕ} {y : ℚ}
     (hw : w = groupWord (gs.getD g [])) (hy : wordQ (groupWord (gs.getD g [])) = some y) (hy46 : |y| < 2 ^ 46)
@@ -570,8 +531,6 @@ theorem band_step (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC : CarriedI
   dsimp only
   rw [hl.2.2 x hx1 hx2, Int.le_sub_one_iff, ← not_le, hu.2.2 x hx1 hx2]
   simp only [decide_eq_true_eq, not_lt, ge_iff_le, gt_iff_lt]
-
-/-! ## Counting -/
 
 theorem length_filter_range (q : ℕ → Bool) : ∀ n : ℕ,
     ((List.range n).filter q).length = ((Finset.range n).filter fun g => q g = true).card
@@ -630,7 +589,6 @@ theorem rowAtoms_prefix {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Mat
     simp only [rowAtoms, List.getElem_ofFn, List.getElem_take]
     rfl
 
-/-- The H100 record's ticket on the first `128·g` columns is the total after `g` groups. -/
 theorem ticket_prefix {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code)
     (i : Fin m) (j : Fin n) (g : ℕ) (h : 128 * g ≤ k) :
     devH100.ticket (prefixCols A (128 * g) h) (prefixCols B (128 * g) h) i j =
@@ -648,8 +606,6 @@ theorem unitFlags_eq {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Matrix
 theorem getD_map_range {γ : Type} (F : ℕ → γ) (d : γ) {jj n : ℕ} (h : jj < n) :
     ((List.range n).map F).getD jj d = F jj := by
   rw [List.getD_eq_getElem _ _ (by simpa using h), List.getElem_map, List.getElem_range]
-
-/-! ## Flags: a kept mask is `Skip.keeps` -/
 
 theorem keepsLoop {T : ℕ} {lo hi : ℤ} {f : ℕ × ℕ → List ℕ → Except String (ForInStep (List ℕ))}
     (L : List (ℕ × ℕ)) {keeps : List ℕ} (h : forIn L [] f = .ok keeps)
@@ -708,7 +664,6 @@ theorem keepsLoop {T : ℕ} {lo hi : ℤ} {f : ℕ × ℕ → List ℕ → Excep
       · obtain rfl := List.mem_singleton.1 he
         exact ⟨o, ho⟩
 
-/-- A masked word promoted into the total before group `g` lands in the band after it exactly when `Skip.keeps`. -/
 theorem keep_iff (hK : KeyIsTheValue) (gs : List (List AtomIn)) (g : ℕ) (hg : g < gs.length) {T : ℕ}
     (hT : wordQ T = Skip.inTotal gs g) {b : ℤ × ℤ} (hband : KeyBand gs (g + 1) b) (m : List Bool) {w o : ℕ}
     (hw : w = Skip.wordIn (gs.getD g []) m) (ho : Rule.promote T w = .ok o) :
@@ -729,7 +684,6 @@ theorem keep_iff (hK : KeyIsTheValue) (gs : List (List AtomIn)) (g : ℕ) (hg : 
   rw [decide_eq_true_iff, e3, e2]
   exact hband (Rule.key o) hk1 hk2
 
-/-- **A group's flag** `jj` in the replay (some kept mask has bit `jj`) is its joint flag. -/
 theorem flag_iff (hK : KeyIsTheValue) (gs : List (List AtomIn)) (g : ℕ) (hg : g < gs.length)
     (hl : (gs.getD g []).length = 4) {L : List (ℕ × ℕ)} (hMS : MaskSet (gs.getD g []) L)
     {T : ℕ} (hT : wordQ T = Skip.inTotal gs g) {b : ℤ × ℤ} (hband : KeyBand gs (g + 1) b) {keeps : List ℕ}
@@ -793,9 +747,6 @@ theorem count_push (c : Array Bool) (b : Bool) (N : ℕ) (q : ℕ → Bool)
 end InertWorkSim
 
 open InertWorkSim in
-/-- **The atom flags the check replays are the game's**, from the keys' three statements: where `word_flags` is a value
-on a word's two rows of codes, its flags are `Skip.unitFlags`' at each of the row's `k/32` atom blocks, so many of them
-are set as the game flags, and its later promotions into a +0 total are `laterZeroPromos`' at the H100 record. -/
 theorem wordFlagsIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC : CarriedIsTheAdd) {m n k : ℕ}
     (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code) (i : Fin m) (j : Fin n) {fl : Array Bool}
     {z : ℕ} (h : Rule.wordFlags (Array.ofFn fun l => (A i l).val) (Array.ofFn fun l => (B j l).val) = .ok (fl, z)) :
@@ -816,7 +767,6 @@ theorem wordFlagsIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (
   have hgl : gs.length = k / 128 := by rw [hgs]; exact chunks_len (A i) (B j) hk
   have hlen4 : ∀ g < k / 128, (gs.getD g []).length = 4 := fun g hg => by
     rw [hgs]; exact chunk_len (A i) (B j) hk g hg
-  -- the groups' masked words
   obtain ⟨groups, hgr, h⟩ := WordsSim.bind_ok h
   obtain ⟨-, hgall⟩ := WordsSim.mapM_ok hgr
   have hgrp : ∀ g < k / 128, MaskSet (gs.getD g []) groups[g]! ∧ ∀ x ∈ gs.getD g [], Freeze.FiniteAtom x := by
@@ -832,7 +782,6 @@ theorem wordFlagsIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (
     fun g hg => base_eq (hgrp g hg).1
   have hgw : ∀ g < k / 128, ∃ y, wordQ (groupWord (gs.getD g [])) = some y ∧ |y| < 2 ^ 46 :=
     fun g hg => groupWord_bound _ (hgrp g hg).2 (hlen4 g hg)
-  -- the running totals
   obtain ⟨totals, htot, h⟩ := WordsSim.bind_ok h
   have hT : totals.size = k / 128 + 1 ∧ ∀ q ≤ k / 128, AccumProofs.StepWord totals[q]! ∧
       wordQ totals[q]! = Skip.inTotal gs q := by
@@ -856,7 +805,6 @@ theorem wordFlagsIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (
   have hTs := (hT.2 _ le_rfl).1
   have hTv : wordQ totals[k / 128]! = Pouw.PearlC.total gs := by
     rw [(hT.2 _ le_rfl).2, total_eq_inTotal, hgl]
-  -- the bands, from the last group back
   obtain ⟨bnd, hbnd, h⟩ := WordsSim.bind_ok h
   have hB : bnd.2.2.size = k / 128 - 1 + 1 ∧ (∀ q ≤ k / 128 - 1, KeyBand gs (k / 128 - q) bnd.2.2[q]!) ∧
       (bnd.1, bnd.2.1) = bnd.2.2[k / 128 - 1]! := by
@@ -891,7 +839,6 @@ theorem wordFlagsIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (
     rw [rev_get _ g (by rw [hB.1]; omega), hB.1]
     have := hB.2.1 (k / 128 - 1 + 1 - 1 - g) (by omega)
     rwa [show k / 128 - (k / 128 - 1 + 1 - 1 - g) = g + 1 by omega] at this
-  -- the flagged atoms
   obtain ⟨fl0, hfl, h⟩ := WordsSim.bind_ok h
   have hfz := WordsSim.pure_ok h
   simp only [Prod.mk.injEq] at hfz
@@ -944,7 +891,6 @@ theorem wordFlagsIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (
   obtain ⟨hFs, hFg, hFn⟩ := hF
   have hk32 : k / 32 = 4 * (k / 128) := by omega
   refine ⟨by rw [← hf, hFs, hk32], fun t ht => by rw [← hf]; exact hFg t (by omega), by rw [← hf, hFn, hk32], ?_⟩
-  -- the later promotions into a +0 total
   · rw [← hz]
     unfold laterZeroPromos
     rw [ite_eq_right (show ¬ devH100.G = 0 by decide), show devH100.G = 4 from rfl, show (32 : ℕ) * 4 = 128 from rfl]
@@ -962,7 +908,6 @@ theorem wordFlagsIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (
       rw [ticket_prefix A B i j (g + 1) h', ← hgs, ← hq.2] at h0
       exact AccumProofs.wordQ_zero_word hq.1 h0
 
-/-- **The inert-work replay is the game's**, from the keys' three statements: `word_inert_work` counts `word_flags`' flags. -/
 theorem inertWorkIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC : CarriedIsTheAdd) :
     InertWorkIsTheReplay := by
   intro m n k A B i j f z h
@@ -974,7 +919,6 @@ theorem inertWorkIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (
   obtain ⟨-, -, hn, hzz⟩ := wordFlagsIsTheReplayOf hK hL hC A B i j hw
   exact ⟨by rw [← hf, hn], by rw [← hz]; exact hzz⟩
 
-/-- **(c) The atom flags the check replays are the game's.** -/
 theorem wordFlagsIsTheReplay {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code)
     (i : Fin m) (j : Fin n) {fl : Array Bool} {z : ℕ}
     (h : Rule.wordFlags (Array.ofFn fun l => (A i l).val) (Array.ofFn fun l => (B j l).val) = .ok (fl, z)) :
@@ -983,15 +927,11 @@ theorem wordFlagsIsTheReplay {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B 
       z = laterZeroPromos devH100 A B i j :=
   wordFlagsIsTheReplayOf keyIsTheValue leastIsTheThreshold carriedIsTheAdd A B i j h
 
-/-- **(c) The inert-work replay is the game's.** -/
 theorem inertWorkIsTheReplay : InertWorkIsTheReplay :=
   inertWorkIsTheReplayOf keyIsTheValue leastIsTheThreshold carriedIsTheAdd
 
 namespace InertWorkSim
 
-/-! ## The check's codes -/
-
-/-- `word_flags` refuses a word whose first row is not whole promotion groups. -/
 theorem wordFlags_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
     Rule.wordFlags a b = .error "a word's rows are whole promotion groups" := by
   have hG : PouwCheck.PearlPlus.G = 4 := rfl
@@ -1002,14 +942,12 @@ theorem wordFlags_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
   · rename_i hcond
     exact (hcond (by simp [h])).elim
 
-/-- `word_inert_work` refuses a word whose first row is not whole promotion groups. -/
 theorem wordInertWork_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
     Rule.wordInertWork a b = .error "a word's rows are whole promotion groups" := by
   unfold Rule.wordInertWork
   rw [wordFlags_ungrouped h]
   rfl
 
-/-- `semH3`'s noisy codes are `pc8Sem`'s `quant8A` and `quant8B` at its noise. -/
 theorem unitChain_h3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
     (U : Pouw.PearlC.Workload) (u : ℕ) (act : Codes) :
     ((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).1 =
@@ -1020,9 +958,6 @@ theorem unitChain_h3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → 
           ((semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act) (U.fixed (U.layout.fixedId u)) :=
   ⟨rfl, rfl⟩
 
-/-- **A word's codes**: over a noise `z` whose lines and bases are the check's (`hEA`, `hEB`, `hFA`, `hFB`), where the
-check's fixed noise and operands are values, entry `x`'s A′ row and entry `y`'s B̃ row have `k` codes, and where `8 ∣ k`
-on rows that are `Row8OK` they are `pc8Sem`'s codes at the H100 atom. -/
 theorem encode_codes {m n k u : ℕ} {act wt : Codes} {z : Noise m n k Params.pi.r} {salt rootB : ByteArray}
     {wn : Words.FixedNoise} {rows cols : List ℕ} {ops : Words.Ops}
     (hkK : k ≤ 2 ^ 16) (hact : ∀ i ∈ rows, ∀ l < k, act i l < 2 ^ 32) (hwt : ∀ j ∈ cols, ∀ l < k, wt j l < 2 ^ 32)
@@ -1098,10 +1033,6 @@ theorem encode_codes {m n k u : ℕ} {act wt : Codes} {z : Noise m n k Params.pi
 end InertWorkSim
 
 open InertWorkSim in
-/-- **(c) The replay reads the semantics' codes.** The check's A′ and B̃ rows of a word have `k` codes; where `k` is
-whole promotion groups, on rows that pass the rules (`row8OK_of_floor`), they are `pc8Sem`'s codes at `semH3`'s noise,
-whose lines and bases are the check's (`seedsAreTheSpec`, `lineIsTheSpec`, `fixedNoiseIsTheSpec`), and so
-`unitChain`'s; where it isn't, `word_inert_work` refuses both words. -/
 theorem replayReadsTheCodes : ReplayReadsTheCodes := by
   intro Q R S saltOf rootOf H s U u act salt rootB wn rows cols ops hsalt hroot hk _ _ hact hwt hW hwn henc x y i j
     hxi hyj hR

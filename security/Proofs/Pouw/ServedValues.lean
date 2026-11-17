@@ -3,16 +3,8 @@ module
 public import Properties.Pouw.ServedValues
 public import Proofs.Pouw.MonitoringPeriodJ10R
 
-/-!
-# Proof of `RightValues`
-
-`H1J10RCheckedCreditMonitoringPeriod` at the play whose fixed words are the right blocks' words (`rightWords`) and whose folded
-words are the blocks not skipped whole. There `UnitFixed` holds with equality, so H1 bounds the right blocks' words
-below `(1 − ε(j))₊·N_live` with no premise on the play's anatomy. The step to size is deterministic: a right block is
-live in a credited window (`good_live`, through `credited_iff`), so the size the right blocks miss of `S` is at most
-`σ` times the words they miss of `N_live` (`creditedSize_sub_le`), and `(1 − ε(j))₊·N_live` right words give
-`(1 − ε_skip)₊·S` right size (`creditFloor_le`).
--/
+/-! Proof of `RightValues` from `H1J10RCheckedCreditMonitoringPeriod` at the play whose fixed words are the right
+blocks' words. -/
 
 @[expose] public section
 
@@ -21,8 +13,6 @@ namespace Properties.Pouw.ServedValues.SecurityProofs
 open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
-/-- **The blocks' sizes sum to at most the credit** of the registered declaration under its pinned lowering: the
-blocks are disjoint, so their AND gates outside the ledger are among `lower D`'s AND gates. -/
 theorem sum_size_le_creditSize {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.RegisteredCircuit → Verity.Circuit}
     {D : Verity.RegisteredCircuit} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) :
     ∑ t, M.size ledger t ≤ Verity.creditSize lower D := by
@@ -35,7 +25,6 @@ theorem sum_size_le_creditSize {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower 
     exact Finset.disjoint_filter_filter ((M.disjoint t t' h).mono Finset.sdiff_subset Finset.sdiff_subset)
 
 open Classical in
-/-- **The right blocks' words**: the credited words of every block `good` names in each window. -/
 noncomputable def rightWords {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
     (good : Fin n → Fin Np → Prop) : ℝ :=
   ∑ w : Fin n, ∑ t : Fin Np, if good w t then (tileWords Sc Cd Np t : ℝ) else 0
@@ -46,7 +35,6 @@ theorem sizePerWord_nonneg {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np 
     split_ifs
     exacts [le_rfl, div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)]
 
-/-- **A block of credited words carries at most `σ` a word.** -/
 theorem size_le_sizePerWord {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np : ℕ} (sz : Fin Np → ℕ) (t : Fin Np)
     (h : tileWords Sc Cd Np t ≠ 0) : (sz t : ℝ) ≤ sizePerWord Sc Cd Np sz * tileWords Sc Cd Np t := by
   have hle : (if tileWords Sc Cd Np t = 0 then 0 else (sz t : ℝ) / (tileWords Sc Cd Np t : ℝ)) ≤
@@ -80,8 +68,6 @@ theorem rightSize_nonneg {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n 
   split_ifs
   exacts [Nat.cast_nonneg _, le_rfl]
 
-/-- **The size the right blocks miss is at most `σ` times the words they miss**, when every right block is live in a
-credited window. -/
 theorem creditedSize_sub_le {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
     (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditExecutionPhases (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) (good : Fin n → Fin Np → Prop)
@@ -120,8 +106,6 @@ theorem creditedSize_sub_le {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι)
     have h1 : ∀ t, ¬ good w t := fun t h => hw (hgood w t h).1
     simp [h1]
 
-/-- **`(1 − ε)₊·N_live` words give `(1 − ε_skip)₊·S` size**, at `ε_skip = σ·ε·N_live/S`, when the size missed is at
-most `σ` times the words missed. -/
 theorem creditFloor_le {N S σ ε Gw Gs : ℝ} (hN : 0 ≤ N) (hS : 0 ≤ S) (hσ : 0 ≤ σ) (hGs : 0 ≤ Gs)
     (hsub : S - Gs ≤ σ * (N - Gw)) (hW : max (1 - ε) 0 * N ≤ Gw) :
     max (1 - σ * ε * N / S) 0 * S ≤ Gs := by
@@ -139,7 +123,6 @@ theorem creditFloor_le {N S σ ε Gw Gs : ℝ} (hN : 0 ≤ N) (hS : 0 ≤ S) (h�
       rw [hS']
       linarith
 
-/-- **A good block is live in a credited window**: it is paid, and `monitoringPeriodMode` skips every other block whole. -/
 theorem good_live {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ} (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB)
     (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
     (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)

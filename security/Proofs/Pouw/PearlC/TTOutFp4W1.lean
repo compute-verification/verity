@@ -5,14 +5,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 import Proofs.Pouw.PearlC.TTOutW1
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# TT_OUT-FP4 at W1 is TT_OUT-FP4 at the cost model `W1.w1Priced`
-
-Each FP4 form at W1 (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`) is the abstract form at
-`CM := W1.w1Priced dv salt` (`ttOutFp4W1_iff`, …), since `w1Priced` meets `CostModel.Queries`
-(`TTOutW1.w1Priced_queries`). The `_of_w1` lemmas give the forms the FP4 g readers' reductions take, so each reader at
-W1 is its reduction at that cost model.
--/
+/-! TT_OUT-FP4 at W1 is TT_OUT-FP4 at the cost model `W1.w1Priced`. -/
 
 @[expose] public section
 

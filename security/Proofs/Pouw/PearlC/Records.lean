@@ -6,26 +6,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4Sm120W1
 
-/-!
-# Pearl-C's device records
-
-The served record's prices (`Prices.sm120Loop`) and W1 setting (`W1Device.sm120Loop`),
-`pearl-c-sm120` v2's (`devSm120v2`), the RTX PRO 6000's issue-bound prices
-(`Prices.sm120`), Pearl-C4's issue-bound prices (`Fp4Prices.sm120Issue`), the other W1 settings
-(`W1Device.h100`, `.sm120`, the S8 settings `.s8Sm120` and `.s8H100`, and their fragment lists), and the
-TT_OUT conjectures stated at them. sm_120's W1 prices (`W1Prices.sm120`, `.sm120Loop`, `.fp4Sm120`), Pearl-C4's W1
-setting (`W1Device.fp4Sm120`) and its TT_OUT at W1 (`TTOutFp4Sm120W1`, `TTOutTileFp4Sm120W1`) are in
-`Definitions.Pouw.PearlC.W1Fp4Sm120` and `Definitions.Pouw.Assumptions.PearlC.TTOutFp4Sm120W1`, since Pearl-C4's listed
-statements (`Definitions.Pouw.Guarantees.PearlC4`) read them. No listed statement reads one: the listed forms are stated over every device record
-(`Definitions.Pouw.Guarantees.PearlCDev`, and `PearlCSampledByDeadline` from them), and these are the numbers the lemmas at
-device records (`Proofs.Pouw.Lemmas.PearlCRecords`, `Proofs.Pouw.Lemmas.Deadline`) and their proofs instantiate them at.
-The H100's record (`devH100`, `Prices.h100`), its W1 prices (`W1Prices.h100`) and
-its INT8 fragments (`h100Frags`, `h100S8Frags`, `W1Device.s8H100At`) stay in `Definitions.Pouw.PearlC.Device` and `.W1`,
-since `devH100Tensor` and `W1Device.s8H100Tensor`, which `Definitions.Pouw.Guarantees.PearlCS8` reads, are built on them.
-`benchmarks/pouw/tests/test_price_twins_accounting.py` holds the served prices to the RTX PRO 6000's card file.
-Pearl-C4's record on sm_120 (`devFp4Sm120`, `Fp4Prices.sm120`) stays in `Definitions.Pouw.PearlC.DeviceFp4`, since
-`Pouw.Guarantees.PearlC.TileCheck4WordsCore` reads it.
--/
+/-! Pearl-C's device records, their W1 settings, and the TT_OUT conjectures stated at them. -/
 
 @[expose] public section
 
@@ -33,21 +14,15 @@ namespace Pouw.PearlC
 
 open Finset Pouw.Fp8Atom
 
-/-- **`pearl-c-sm120` v2's record**: the same E4M3 step `sm120E4m3` without promotion (`G = 0`), at prices `pr`. The
-ticket is the pure chain over all of k (`AccumProofs.chainAt_zero_eq_pure`), and the inert-work flags are the pure chain's
-lone skips (`SkipP.pureFlagsP`, `FreezePPure.unitFlagsAt_zero_iff`). -/
+/-- **`pearl-c-sm120` v2's record**: the same E4M3 step `sm120E4m3` without promotion (`G = 0`), at prices `pr`. -/
 def devSm120v2 (pr : Prices) : PearlCDevice := devAt sm120E4m3 0 pr
 
 /-- sm_120's W1 prices, issue-bound: an FP32 add 8, a BF16 MAC 2, credited forming 40 and A-only forming 1 per element. -/
 def Prices.sm120 : Prices := ⟨8, 2, ⟨40, 1⟩⟩
 
-/-- **sm_120's W1 prices in the measured loop**, the served record's (node 2 at locked 2,100 MHz): an FP32 add
-`1047/125 = 8.376` per word (3 loop instructions per 64), a BF16 MAC 2, the credited forming 40 per element (the k32 noise
-atom, 32, and the E4M3 cast at its cheapest implementation, 8.0, at both FP32 prices) and the A-only forming 2 per element
-(one FFMA on every 8th element at 8.376, 1.047, rounded up). `Costs` counts the forming in whole units, and rounding `qa`
-up raises `W_ref` and not the credit, so g here is above g at the measured 1.047 (0.37349% against 0.36218% for v2 at
-the bound 1/1,000, 8192³). The add is exact. The gap's price rule computes g at this record and at the issue-bound
-`Prices.sm120`, and publishes the larger. -/
+/-- **sm_120's W1 prices in the measured loop**: an FP32 add `1047/125 = 8.376` per word, a BF16 MAC 2, the credited
+forming 40 and the A-only forming 2 per element. `Costs` counts the forming in whole units, and rounding `qa` up from
+1.047 raises `W_ref` and not the credit, so g here is above g at 1.047. -/
 def Prices.sm120Loop : Prices := ⟨1047 / 125, 2, ⟨40, 2⟩⟩
 
 end Pouw.PearlC
@@ -69,17 +44,15 @@ def sm120S8Frags : List Frag := sm120Frags ++ [⟨.s8, 16, 8⟩]
 /-- The H100 at prices `pr`: `hopperE4m3K32` and `hopperBf16K16`; no E2M1 fragment. -/
 def W1Device.h100At (pr : W1Prices) : W1Device := ⟨pr, hopperE4m3K32, hopperBf16K16, sm120Nvf4, h100Frags⟩
 
-/-- `devH100`'s setting (`Prices.h100`). It omits the card's integer tensor core (`W1Device.s8H100` has it), pending
-the restatement of its readers on an S8 setting. -/
+/-- `devH100`'s setting (`Prices.h100`), without the card's integer tensor core, which `W1Device.s8H100` has. -/
 def W1Device.h100 (sha fetch : ℚ) : W1Device := W1Device.h100At (W1Prices.h100 sha fetch)
 
 /-- `devSm120v1 Prices.sm120` and `devSm120v2 Prices.sm120`'s setting: both run the same E4M3 step (`G` is the
-program's choice, not the machine's). It omits the card's integer tensor core (`W1Device.s8Sm120` has it), pending
-the restatement of its readers on an S8 setting. -/
+program's choice, not the machine's), without the card's integer tensor core, which `W1Device.s8Sm120` has. -/
 def W1Device.sm120 (sha fetch : ℚ) : W1Device := W1Device.sm120At (W1Prices.sm120 sha fetch)
 
-/-- `devSm120v1 Prices.sm120Loop` and `devSm120v2 Prices.sm120Loop`'s setting. It omits the card's integer tensor
-core (`W1Device.s8Sm120` has it), pending the restatement of its readers on an S8 setting. -/
+/-- `devSm120v1 Prices.sm120Loop` and `devSm120v2 Prices.sm120Loop`'s setting, without the card's integer tensor core,
+which `W1Device.s8Sm120` has. -/
 def W1Device.sm120Loop (sha fetch : ℚ) : W1Device := W1Device.sm120At (W1Prices.sm120Loop sha fetch)
 
 /-- **The RTX PRO 6000 (sm_120) with INT8** at prices `pr`: `sm120At pr`'s steps, and `sm120S8Frags`, its three
@@ -98,14 +71,13 @@ namespace Pouw.PearlC.Assumptions
 
 variable {Q R S : Type}
 
-/-- **`tt-out/pearl-c-h100-rev1`**: rev1 at the H100 record, the repair of `TTOutPearlC · Costs.adopted`, with `CM` the
-H100's W1 accounting, a `wgmma` priced by its whole shape. -/
+/-- **`tt-out/pearl-c-h100-rev1`**: rev1 at the H100 record, with `CM` the H100's W1 accounting, a `wgmma` priced by
+its whole shape. -/
 def TTOutPearlCH100Rev1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutPearlCDevRev1 CM devH100 sem ρ
 
-/-- **`tt-out-tile/pearl-c-h100-rev1`**: rev1 per audit tile at the H100 record, the repair of
-`TTOutTilePearlC · Costs.adopted`. -/
+/-- **`tt-out-tile/pearl-c-h100-rev1`**: rev1 per audit tile at the H100 record. -/
 def TTOutTilePearlCH100Rev1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutTilePearlCDevRev1 CM devH100 sem ρ
@@ -120,9 +92,8 @@ def TTOutTilePearlCH100Rev1W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S
     (salt : S → List ℕ) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutTilePearlCDevRev1W1 (W1.W1Device.h100 sha fetch) salt devH100 sem ρ
 
-/-- **The named assumption `tt-out/fp4-sm120`: TT_OUT(1/400) for Pearl-C4 on sm_120** (`pearl-c-nvfp4-v0`, theory §2
-and §5): `TTOutFp4` at `devFp4Sm120`, with `CM` the sm_120 accounting in FP4 units. What it says and carries is
-`TTOutFp4`'s. At W1 it is `TTOutFp4Sm120W1`. -/
+/-- **The named assumption `tt-out/fp4-sm120`: TT_OUT(1/400) for Pearl-C4 on sm_120**: `TTOutFp4` at `devFp4Sm120`,
+with `CM` the sm_120 accounting in FP4 units. At W1 it is `TTOutFp4Sm120W1`. -/
 def TTOutFp4Sm120 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : Fp4Sem Q R S)
     (ρ : ℚ) : Prop :=
   TTOutFp4 CM devFp4Sm120 sem ρ

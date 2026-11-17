@@ -2,23 +2,7 @@ module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 
-/-!
-# The fragment argument: the counting theorem (staging, nothing pinned)
-
-The fragment argument. A skip
-program omits `mma.sync m16n8k32` instructions, each a slot `(b, J, t)` (16-row block `b`, 8-column group `J`, atom
-`t`), and routes at most 5 of a slot's 128 words to generic cores. Its words stay correct only if each word's omitted
-atoms form a skip set (`SkipSetU`).
-
-* **The counting theorem** `fragSkip_count_le`: if every word stays correct and each slot's atom is undebited in the
-  slot's unpatched words, then `11·#slots ≤ Σ_i fragCount i`. A slot has at least 11 rows whose 8 words are all
-  unpatched (`fragCleanRows_card`), and each `(i, J, t)` lies in at most one slot (`fragSlots_card_le`).
-* **The saving** `fragSkip_saving_le`: at 4,096 units a slot, at most `(4096/11)·Σ_i fragCount i`, about `372` units
-  per unit of `fragCount`.
-
-The sample side is in `RowSeedSkip.lean`: `ttOutRowSeed_skipClass` bounds a skip-class program's saving under the named
-assumption `Assumptions.FragDraw` at `Λ = 100`, (C4) and (C6), through the union bound `qtree_union_bound`.
--/
+/-! The fragment argument's counting theorem, staged. -/
 
 @[expose] public section
 
@@ -26,15 +10,10 @@ namespace Pouw.PearlC
 
 open Finset Pouw.Fp8Atom
 
-/-! ## The counting theorem -/
-
-/-- The rows of 16-row block `b`. -/
 def fragRows (b : ℕ) : Finset ℕ := Ico (16 * b) (16 * b + 16)
 
-/-- The columns of 8-column group `J`. -/
 def fragCols (J : ℕ) : Finset ℕ := Ico (8 * J) (8 * J + 8)
 
-/-- The rows of a slot's block none of whose words in the slot's column group is patched. -/
 def fragCleanRows (patch : Finset (ℕ × ℕ)) (b J : ℕ) : Finset ℕ :=
   (fragRows b).filter fun i => ∀ j ∈ fragCols J, (i, j) ∉ patch
 
@@ -54,9 +33,6 @@ theorem fragCleanRows_card (patch : Finset (ℕ × ℕ)) (b J : ℕ) (hp : patch
   unfold fragCleanRows
   omega
 
-/-- **The counting theorem, generically.** Slots `(b, J, t)` (a 16-row block, an 8-column group, an atom), each with at
-most 5 patched words, where every unpatched word `(i, j)` of the slot has `ok i j t`: then `11·#slots` is at most the
-number of `(i, J, t)` with `ok i j t` for all 8 columns `j` of `J`. -/
 theorem fragSlots_card_le (ok : ℕ → ℕ → ℕ → Prop) [∀ i j t, Decidable (ok i j t)] (m nJ kT : ℕ)
     (slots : Finset (ℕ × ℕ × ℕ)) (patch : ℕ × ℕ × ℕ → Finset (ℕ × ℕ))
     (hb : ∀ s ∈ slots, 16 * s.1 + 16 ≤ m) (hJ : ∀ s ∈ slots, s.2.1 < nJ) (ht : ∀ s ∈ slots, s.2.2 < kT)
@@ -101,11 +77,6 @@ theorem fragSlots_card_le (ok : ℕ → ℕ → ℕ → Prop) [∀ i j t, Decida
         rw [sum_boole, Nat.cast_id]
     _ ≤ _ := sum_le_sum hrow
 
-/-- **The counting theorem**: a skip program omits slots `(b, J, t)`, the `mma.sync` at atom `t` over the fragment of
-16-row block `b` and 8-column group `J`, each with at most 5 patched words. If every word stays
-correct (its omitted atoms form a skip set) and each slot's atom is undebited in its unpatched words, then
-`11·#slots ≤ Σ_i fragCount i`: each such slot has at least 11 rows whose 8 words are all unpatched, and each
-`(i, J, t)` lies in at most one slot. -/
 theorem fragSkip_count_le (p : Pipeline) (G : ℕ) {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code)
     (B : Matrix (Fin n) (Fin k) Code) (slots : Finset (ℕ × ℕ × ℕ)) (patch : ℕ × ℕ × ℕ → Finset (ℕ × ℕ))
     (hb : ∀ s ∈ slots, 16 * s.1 + 16 ≤ m) (hJ : ∀ s ∈ slots, s.2.1 < n / 8) (ht : ∀ s ∈ slots, s.2.2 < k / 32)
@@ -131,8 +102,6 @@ theorem fragSkip_count_le (p : Pipeline) (G : ℕ) {m n k : ℕ} (A : Matrix (Fi
   have := hall j (by simp only [fragCols, mem_Ico]; omega) i.isLt j.isLt
   exact this
 
-/-- **The saving bound** (`fragSkip_saving_le`): at 4,096 units per omitted instruction, the undebited slots of a skip
-program whose words stay correct save at most `(4096/11)·Σ_i fragCount i`. -/
 theorem fragSkip_saving_le (p : Pipeline) (G : ℕ) {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code)
     (B : Matrix (Fin n) (Fin k) Code) (slots : Finset (ℕ × ℕ × ℕ)) (patch : ℕ × ℕ × ℕ → Finset (ℕ × ℕ))
     (hb : ∀ s ∈ slots, 16 * s.1 + 16 ≤ m) (hJ : ∀ s ∈ slots, s.2.1 < n / 8) (ht : ∀ s ∈ slots, s.2.2 < k / 32)

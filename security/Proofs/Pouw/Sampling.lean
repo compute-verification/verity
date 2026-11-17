@@ -10,9 +10,7 @@ public import Mathlib.Tactic.Ring
 public import Definitions.Pouw.Guarantees.Game
 public import Proofs.Pouw.Lemmas.Game
 
-/-!
-# (c) Work-weighted sampling: `δ_s = (1 − ε_s)^t`
--/
+/-! Work-weighted sampling: `δ_s = (1 − ε_s)^t`. -/
 
 @[expose] public section
 
@@ -46,8 +44,6 @@ theorem sum_split (K : Finset ℕ) :
   refine Finset.sum_congr rfl fun u _ => ?_
   split_ifs <;> simp
 
-/-- One work-weighted sample lands in `K` with probability `(∑_{u ∈ K} w u)/∑_u w u`; `t` independent samples all
-do with that to the `t`. -/
 theorem pr_all_in (K : Finset ℕ) (t : ℕ) :
     pr (fun c : Fin t → Ticket w N => AuditAccepts K c)
       = (((∑ u ∈ range N, if u ∈ K then w u else 0 : ℕ) : ℝ) / (∑ u ∈ range N, w u : ℕ)) ^ t := by
@@ -59,7 +55,6 @@ theorem pr_all_in (K : Finset ℕ) (t : ℕ) :
   push_cast
   rw [div_pow]
 
-/-- **(c)** `Pr[accept ∧ ∑_{u∉K} w(u) > ε_s·∑_u w(u)] ≤ (1 − ε_s)^t`. -/
 theorem workWeightedSampling : Pouw.Guarantees.WorkWeightedSampling := by
   intro α _ w N t K εs hεs
   have hp : (0 : ℝ) ≤ (1 - εs) ^ t := pow_nonneg (by linarith) t

@@ -37,18 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# li units bind their words a checkpoint a segment, and one word a window does not
-
-`right_of_same` (Lemma B for `LiUnits`): segment by segment, the earlier segments' words are honest, so each chain
-starts the segment from the honest state (`state_congr`); the warp's checkpoint is the checkpoint of all its chains
-(`redux_eq`, XOR is associative), and the run's chains differ from the honest ones in one word of one half step of one
-chain (`ofFn_split`, three times), so `Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective` gives the word right.
-
-`executionPhaseUnbound`: at width `n + 1` the top bit `T` passes through a half step with an odd multiplier as XOR
-(`(x ⊕ T)·a = x·a ⊕ T`, `Pouw.ReceiptProofs.add_twoPow_top`, `twoPow_mul_odd`), so a flip of `d₀`'s top bit moves the
-state by `T`, and a second flip of the next segment's `d₀` takes it back.
--/
+/-! li units bind their words a checkpoint a segment, and one word a window does not. -/
 
 @[expose] public section
 
@@ -66,7 +55,6 @@ theorem ofFn_eq_set {α : Type} {m : ℕ} (F G : Fin m → α) (i : Fin m) (h : 
   · subst hij; rfl
   · exact h ⟨j, by simpa using h1⟩ fun e => hij (by rw [← e])
 
-/-- Two functions on `Fin m` that agree but at `i` give lists that share what lies before and after `i`. -/
 theorem ofFn_split {α : Type} {m : ℕ} (F G : Fin m → α) (i : Fin m) (h : ∀ j, j ≠ i → G j = F j) :
     ∃ B A : List α, List.ofFn F = B ++ F i :: A ∧ List.ofFn G = B ++ G i :: A := by
   have hlen : (i : ℕ) < (List.ofFn F).length := by simp
@@ -85,7 +73,6 @@ theorem liCheckpoint_append {n : ℕ} (l₁ l₂ : List (List (LiHalfStep n) × 
   unfold liCheckpoint
   rw [List.foldl_append, foldl_xor _ l₂]
 
-/-- The warp's XOR of its lanes' checkpoints is the checkpoint of all its chains. -/
 theorem redux_eq {n : ℕ} (ls : List (List (List (LiHalfStep n) × BitVec n))) :
     (ls.map liCheckpoint).foldl (· ^^^ ·) 0 = liCheckpoint ls.flatten := by
   induction ls with
@@ -101,15 +88,12 @@ def segment {n W C H : ℕ} (k : Fin W × Fin C × Fin H → BitVec n) (a : Fin 
     ((List.ofFn fun j => (k (ℓ, c, j), (a (ℓ, c, j)).1, (w (ℓ, c, j, 0), w (ℓ, c, j, 1)))), y ℓ c))).foldl
     (· ^^^ ·) 0
 
-/-- **A segment's warp checkpoint is injective in each word**: the honest words with the word at `p` replaced by `v`
-keep the checkpoint only if `v` is the honest word. -/
 theorem segment_update {n W C H : ℕ} (k : Fin W × Fin C × Fin H → BitVec n) (a : Fin W × Fin C × Fin H → OddKey n)
     (y : Fin W → Fin C → BitVec n) (w : LiPlace W C H → BitVec n) (p : LiPlace W C H) (v : BitVec n)
     (h : segment k a y (Function.update w p v) = segment k a y w) : v = w p := by
   obtain ⟨ℓ₀, c₀, j₀, i₀⟩ := p
   set w' := Function.update w (ℓ₀, c₀, j₀, i₀) v with hw'
   have hoff : ∀ q, q ≠ (ℓ₀, c₀, j₀, i₀) → w' q = w q := fun q hq => Function.update_of_ne hq _ _
-  -- the half steps of a chain, as odd half steps
   let odd (x : LiPlace W C H → BitVec n) (ℓ : Fin W) (c : Fin C) : Fin H → LiOddHalfStep n :=
     fun j => (k (ℓ, c, j), a (ℓ, c, j), (x (ℓ, c, j, 0), x (ℓ, c, j, 1)))
   let chain (x : LiPlace W C H → BitVec n) (ℓ : Fin W) (c : Fin C) : List (LiHalfStep n) × BitVec n :=
@@ -124,7 +108,6 @@ theorem segment_update {n W C H : ℕ} (k : Fin W × Fin C × Fin H → BitVec n
     simp only [Function.comp, chain, List.map_ofFn, odd]
     rfl
   rw [hchain, hchain] at h
-  -- the lanes but `ℓ₀`, the chains of `ℓ₀` but `c₀`, the half steps of chain `c₀` but `j₀` agree
   obtain ⟨B, A, hF, hG⟩ := ofFn_split (fun ℓ => List.ofFn fun c => chain w ℓ c)
     (fun ℓ => List.ofFn fun c => chain w' ℓ c) ℓ₀ fun ℓ hℓ => by
       have e : ∀ c j i, w' (ℓ, c, j, i) = w (ℓ, c, j, i) := fun c j i => hoff _ (by simp [hℓ])
@@ -152,7 +135,6 @@ theorem segment_update {n W C H : ℕ} (k : Fin W × Fin C × Fin H → BitVec n
     simp only [odd, LiOddHalfStep.val, hv0, hv1] at h
     exact e.2 h
 
-/-- The chains' states at segment `s` read only the words of the segments before it. -/
 theorem state_congr {Ω U : Type} {n S W C H : ℕ} (D : LiUnits Ω U n S W C H) (ω : Ω) (u : U)
     (w w' : ℕ → LiPlace W C H → BitVec n) :
     ∀ s, (∀ t < s, w' t = w t) → D.state ω u w' s = D.state ω u w s
@@ -162,7 +144,6 @@ theorem state_congr {Ω U : Type} {n S W C H : ℕ} (D : LiUnits Ω U n S W C H)
     simp only [LiUnits.state]
     rw [h s (Nat.lt_succ_self s), state_congr D ω u w w' s fun t ht => h t (Nat.lt_succ_of_lt ht)]
 
-/-- **Lemma B for li units**: every segment's checkpoint the honest one gives every segment's deficient word right. -/
 theorem right_of_same {Ω U : Type} {n S W C H : ℕ} (D : LiUnits Ω U n S W C H) (ω : Ω) (h : D.same ω) :
     D.right ω := by
   intro u
@@ -191,7 +172,6 @@ theorem xor_top_mul_odd {n : ℕ} (x : BitVec (n + 1)) {a : BitVec (n + 1)} (ha 
     (x ^^^ BitVec.twoPow (n + 1) n) * a = x * a ^^^ BitVec.twoPow (n + 1) n := by
   rw [← add_twoPow_top, ← add_twoPow_top, add_mul, twoPow_mul_odd ha]
 
-/-- A flip of `d₀`'s top bit moves a half step with an odd multiplier by the top bit. -/
 theorem liHalf_top₀ {n : ℕ} (k : BitVec (n + 1)) {a : BitVec (n + 1)} (ha : a.toNat % 2 = 1)
     (y d₀ d₁ : BitVec (n + 1)) :
     liHalf k a y (d₀ ^^^ BitVec.twoPow (n + 1) n, d₁) = liHalf k a y (d₀, d₁) ^^^ BitVec.twoPow (n + 1) n := by
@@ -205,7 +185,6 @@ theorem liHalf_top₀ {n : ℕ} (k : BitVec (n + 1)) {a : BitVec (n + 1)} (ha : 
   rw [e, xor_top_mul_odd _ ha, ← add_twoPow_top, ← add_twoPow_top]
   ring
 
-/-- A state moved by the top bit and a flip of `d₀`'s top bit cancel in a half step. -/
 theorem liHalf_top_cancel {n : ℕ} (k a z e₀ e₁ : BitVec (n + 1)) :
     liHalf k a (z ^^^ BitVec.twoPow (n + 1) n) (e₀ ^^^ BitVec.twoPow (n + 1) n, e₁) = liHalf k a z (e₀, e₁) := by
   simp only [liHalf]
@@ -228,7 +207,6 @@ theorem xor_top_ne {n : ℕ} (x : BitVec (n + 1)) : x ^^^ BitVec.twoPow (n + 1) 
   calc BitVec.twoPow (n + 1) n = x ^^^ (x ^^^ BitVec.twoPow (n + 1) n) := (xor_xor_self_left _ _).symm
     _ = 0 := by rw [h, BitVec.xor_self]; rfl
 
-/-- One chain, one half step a segment: the checkpoint after segment `s` is the half step from the state. -/
 theorem checkpoint_one {Ω U : Type} {n S : ℕ} (D : LiUnits Ω U n S 1 1 1) (ω : Ω) (u : U)
     (w : ℕ → LiPlace 1 1 1 → BitVec n) (s : ℕ) :
     D.checkpoint ω u w s = D.state ω u w (s + 1) 0 0 := by

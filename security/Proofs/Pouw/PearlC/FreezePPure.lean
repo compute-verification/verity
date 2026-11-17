@@ -4,29 +4,7 @@ public import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 public import Proofs.Pouw.PearlC.AccumProofs
 public import Proofs.Pouw.PearlC.FreezeP
 
-/-!
-# `pearl-c-sm120-v2`: the pure chain's lone skips and its identities (staging)
-
-Without promotion (`G = 0`) the chain is `Accum.pureChain p`, one fold of `p`'s step over all of a word's atoms from
-`+0`, and the debit is its lone skips (`SkipP.pureFlagsP`).
-
-* **The device record's flags** (`flagsAt p G`, `unitFlagsAt p G`): `pureFlagsP p` at `G = 0`, `wordFlagsP p G`
-  otherwise. At the H100 record they are `Skip.wordFlags` and `Skip.unitFlags` by `rfl` (`flagsAt_hopper`,
-  `unitFlagsAt_hopper`).
-* **Soundness and completeness** (`pureFlags_iff`): `pureFlagsP` flags atom `t` exactly when `t < k/32` and skipping it
-  alone leaves the pure chain's output unchanged, which is `FreezeP.skipOneP` on the chain's one group
-  (`pureFlags_iff_skipOne`) and `FreezeP.absorbedP` there (`pureFlags_iff_absorbed`, from `skipOne_iffP`). While the
-  output is finite, unchanged output is unchanged word (`pureFlags_iff_word`). The skip resumes from the atom's incoming
-  word (`pureSkip_resume`), so an identity atom is flagged (`pureFlags_of_identity`). The unit's form, the ticket
-  `chainAt p 0` (`unitFlagsAt_zero_iff`), and `inertWorkDev`'s count and `needed` at `G = 0` (`pureInertWork_eq`,
-  `pureNeeded_iff`).
-* **Identities on sm_120** (`sm120_no_identity`, `sm120_pure_no_identity`): the pure chain's words stay `+0` or normal
-  at exponent at least `−11 − w`, each at most the absolute mass `Σ |a·b|` of the atoms before it
-  (`pure_inWordW`). By (a) (`FreezeP.identity_cellW`) an atom of exact sum `S`, products at most `M` and incoming mass
-  `C` is not an identity once `9·2^−23·C + 2^−14·M < |S|`; with every product at most `P`, once
-  `(9·2^−23·32t + 2^−14)·P < |S|` (`sm120_pure_no_identity_of_le`). No bound on the products alone excludes an
-  identity: an atom whose products cancel is one on any word (`sm120_cancel_identity`, products `±1` on `1.0`).
--/
+/-! `pearl-c-sm120-v2`, staged: the pure chain's lone skips and its identities. -/
 
 @[expose] public section
 
@@ -35,12 +13,8 @@ namespace Pouw.PearlC.FreezePPure
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs Pouw.PearlC Pouw.PearlC.Skip
   Pouw.PearlC.Freeze Pouw.PearlC.Accum Pouw.PearlC.SkipP Pouw.PearlC.FreezeP
 
-/-! ## The device record's flags -/
-
-/-- The H100 record's word flags are `flagsAt` at `hopperE4m3K32` and `G = 4`. -/
 theorem flagsAt_hopper : flagsAt hopperE4m3K32 4 = wordFlags := rfl
 
-/-- The H100 record's flags (`devH100.flags`) are `unitFlagsAt` at `hopperE4m3K32` and `G = 4`. -/
 theorem unitFlagsAt_hopper {m n k : ℕ} : @unitFlagsAt hopperE4m3K32 m n k 4 = unitFlags := rfl
 
 section Pure
@@ -49,9 +23,6 @@ variable (p : Pipeline)
 
 theorem length_rowAtoms {k : ℕ} (a b : Fin k → Code) : (rowAtoms a b).length = k / 32 := List.length_ofFn
 
-/-! ## The lone skip -/
-
-/-- Skipping one atom by a one-hot mask is folding the list without it. -/
 theorem foldMask_oneMask {α β : Type} (f : β → α → β) (w : β) (xs : List α) (j : Nat) :
     foldMask f w xs (oneMask xs.length j) = (xs.eraseIdx j).foldl f w := by
   induction xs generalizing w j with
@@ -64,14 +35,11 @@ theorem foldMask_oneMask {α β : Type} (f : β → α → β) (w : β) (xs : Li
       rw [List.length_cons, oneMask, foldMask, ite_eq_right Bool.false_ne_true, List.eraseIdx_cons_succ, List.foldl_cons,
         ih]
 
-/-- **The lone skip resumes from the atom's incoming word**: the pure chain with atom `t` skipped folds the atoms after
-`t` from the word before it (`FreezeP.inWordP`). -/
 theorem pureSkip_resume (atoms : List AtomIn) (t : Nat) :
     pureSkipP p atoms t = wordQ ((atoms.drop (t + 1)).foldl (stepP p) (inWordP p atoms t)) := by
   rw [pureSkipP, pureChain, List.eraseIdx_eq_take_drop_succ, List.foldl_append]
   rfl
 
-/-- The pure chain is the chain's one group, promoted once (`FreezeP.skipOneP` on `atoms.toChunks 0`). -/
 theorem skipOne_single (g : List AtomIn) (t : Nat) : skipOneP p [g] 0 t = pureSkipP p g t := by
   rw [skipOneP, show [g].getD 0 [] = g from rfl, skipIn_eqP p [g] 0 _ (by simp)]
   change promote (some 0) (foldMask (stepP p) 0 g (oneMask g.length t)) = _
@@ -85,7 +53,6 @@ theorem pureSkip_iff_skipOne (atoms : List AtomIn) (t : Nat) (ht : t < atoms.len
   | cons x xs =>
     rw [AccumProofs.chainP_zero, show (x :: xs).toChunks 0 = [x :: xs] from rfl, skipOne_single]
 
-/-- An identity atom's lone skip leaves the pure chain unchanged. -/
 theorem pureSkip_of_identity (atoms : List AtomIn) (t : Nat) (ht : t < atoms.length)
     (hid : stepP p (inWordP p atoms t) atoms[t] = inWordP p atoms t) : pureSkipP p atoms t = pureChain p atoms := by
   rw [pureSkip_resume, ← hid]
@@ -93,17 +60,12 @@ theorem pureSkip_of_identity (atoms : List AtomIn) (t : Nat) (ht : t < atoms.len
   rw [foldl_split (stepP p) atoms t ht 0]
   rfl
 
-/-! ## `pureFlagsP` is the lone skips -/
-
-/-- **`pureFlagsP` is sound and complete**: it flags atom `t` of the word over `a` and `b` exactly when the word has
-atom `t` and skipping it alone leaves the pure chain's output unchanged. -/
 theorem pureFlags_iff (k : ℕ) (a b : Fin k → Code) (t : ℕ) :
     pureFlagsP p k a b t = true ↔
       t < k / 32 ∧ pureChain p ((rowAtoms a b).eraseIdx t) = pureChain p (rowAtoms a b) := by
   unfold pureFlagsP pureSkipP
   rw [Bool.and_eq_true, decide_eq_true_iff, decide_eq_true_iff]
 
-/-- `pureFlags_iff` on the chain with no promotion, `chainP p 0` and its one group: `FreezeP.skipOneP`. -/
 theorem pureFlags_iff_skipOne (k : ℕ) (a b : Fin k → Code) (t : ℕ) :
     pureFlagsP p k a b t = true ↔
       t < k / 32 ∧ skipOneP p ((rowAtoms a b).toChunks 0) 0 t = chainP p 0 (rowAtoms a b) := by
@@ -111,8 +73,6 @@ theorem pureFlags_iff_skipOne (k : ℕ) (a b : Fin k → Code) (t : ℕ) :
   exact and_congr_right fun ht =>
     (pureSkip_iff_skipOne p _ t (by rwa [length_rowAtoms])).symm
 
-/-- **The analogue of `skipOne_iff`**: `pureFlagsP` flags atom `t` exactly when it is absorbed in the chain's one group
-(`FreezeP.absorbedP`: its lone skip leaves the group's word, or its promotion from `0`, unchanged). -/
 theorem pureFlags_iff_absorbed (k : ℕ) (a b : Fin k → Code) (t : ℕ) :
     pureFlagsP p k a b t = true ↔ t < k / 32 ∧ absorbedP p ((rowAtoms a b).toChunks 0) 0 t = true := by
   rw [pureFlags_iff_skipOne]
@@ -123,14 +83,11 @@ theorem pureFlags_iff_absorbed (k : ℕ) (a b : Fin k → Code) (t : ℕ) :
   have hi : 0 < ((rowAtoms a b).toChunks 0).length := by rw [hx]; exact Nat.zero_lt_one
   exact skipOne_iffP p _ 0 t hi
 
-/-- An identity atom of the pure chain is flagged. -/
 theorem pureFlags_of_identity (k : ℕ) (a b : Fin k → Code) (t : ℕ) (ht : t < k / 32)
     (hid : stepP p (inWordP p (rowAtoms a b) t) ((rowAtoms a b)[t]'(by rwa [length_rowAtoms])) =
       inWordP p (rowAtoms a b) t) :
     pureFlagsP p k a b t = true :=
   (pureFlags_iff p k a b t).2 ⟨ht, pureSkip_of_identity p _ t _ hid⟩
-
-/-! ## Unchanged output is unchanged word -/
 
 theorem fold_word (atoms : List AtomIn) :
     ∀ c : Nat, c < 2 ^ 32 → c ≠ 0x80000000 →
@@ -146,7 +103,6 @@ theorem exp_ne_of_wordQ {w : Nat} {y : ℚ} (h : wordQ w = some y) : (w >>> 23) 
   simp only [wordQ, fp32Value, he, ite_true] at h
   split_ifs at h <;> simp [Value.finite?] at h
 
-/-- Two words below `2^32`, neither `−0`, of the same finite value are equal. -/
 theorem word_eq_of_wordQ {w w' : Nat} (hw : w < 2 ^ 32) (hw0 : w ≠ 0x80000000) (hw' : w' < 2 ^ 32)
     (hw0' : w' ≠ 0x80000000) {y : ℚ} (h : wordQ w = some y) (h' : wordQ w' = some y) : w = w' := by
   by_cases hy : y = 0
@@ -159,7 +115,6 @@ theorem word_eq_of_wordQ {w w' : Nat} (hw : w < 2 ^ 32) (hw0 : w ≠ 0x80000000)
   · rw [← AccumProofs.f32Word_word hw (exp_ne_of_wordQ h) h hy,
       AccumProofs.f32Word_word hw' (exp_ne_of_wordQ h') h' hy]
 
-/-- Two pure chains of the same finite output end on the same word. -/
 theorem pureWord_eq {atoms atoms' : List AtomIn} (h : pureChain p atoms' = pureChain p atoms)
     (hf : pureChain p atoms ≠ none) : atoms'.foldl (stepP p) 0 = atoms.foldl (stepP p) 0 := by
   obtain ⟨y, hy⟩ := Option.ne_none_iff_exists'.1 hf
@@ -167,20 +122,14 @@ theorem pureWord_eq {atoms atoms' : List AtomIn} (h : pureChain p atoms' = pureC
   have h2 := fold_word p atoms' 0 (by norm_num) (by decide)
   exact word_eq_of_wordQ h2.1 h2.2 h1.1 h1.2 (h.trans hy) hy
 
-/-- **`pureFlags_iff` on words**: while the pure chain's output is finite, `pureFlagsP` flags atom `t` exactly when
-skipping it alone leaves the final word unchanged. -/
 theorem pureFlags_iff_word (k : ℕ) (a b : Fin k → Code) (t : ℕ) (hf : pureChain p (rowAtoms a b) ≠ none) :
     pureFlagsP p k a b t = true ↔
       t < k / 32 ∧ ((rowAtoms a b).eraseIdx t).foldl (stepP p) 0 = (rowAtoms a b).foldl (stepP p) 0 := by
   rw [pureFlags_iff]
   exact and_congr_right fun _ => ⟨fun h => pureWord_eq p h hf, fun h => congrArg wordQ h⟩
 
-/-! ## The unit's form, for `inertWorkDev` at `G = 0` -/
-
 variable {m n k : ℕ}
 
-/-- **The unit's flags at `G = 0`** flag atom `t` of word `(i, j)` exactly when skipping it alone leaves the ticket
-`chainAt p 0` (the device record's `ticket`) unchanged. -/
 theorem unitFlagsAt_zero_iff (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (i : Fin m)
     (j : Fin n) (t : ℕ) :
     unitFlagsAt p 0 Aq Bq i j t = true ↔
@@ -188,8 +137,6 @@ theorem unitFlagsAt_zero_iff (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fi
   rw [AccumProofs.chainAt_zero_eq_pure]
   exact pureFlags_iff p k (Aq i) (Bq j) t
 
-/-- **The debit's atoms at `G = 0`** (`inertWorkDev`'s `x.atoms`, `Skip.chainInertWork`): the unit's atoms whose lone skip leaves
-the ticket unchanged. -/
 theorem pureInertWork_eq (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (c : ℚ) :
     chainInertWork k c (unitFlagsAt p 0 Aq Bq) = c * ∑ i : Fin m, ∑ j : Fin n, ((Finset.range (k / 32)).filter fun t =>
       pureChain p ((rowAtoms (Aq i) (Bq j)).eraseIdx t) = chainAt p 0 Aq Bq i j).card := by
@@ -201,8 +148,6 @@ theorem pureInertWork_eq (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n)
   unfold chainInertWork
   simp only [h]
 
-/-- **`needed` at `G = 0`**, on `k` a multiple of 32: element `(i, l)` of `A′` is needed exactly when some word `(i, j)`
-changes when its atom `l / 32` is skipped alone. -/
 theorem pureNeeded_iff (hk : 32 ∣ k) (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code)
     (i : Fin m) (l : Fin k) :
     needed (unitFlagsAt p 0 Aq Bq) i l ↔
@@ -213,8 +158,6 @@ theorem pureNeeded_iff (hk : 32 ∣ k) (Aq : Matrix (Fin m) (Fin k) Code) (Bq : 
   rw [Bool.eq_false_iff, ne_eq, unitFlagsAt_zero_iff, and_iff_right hl]
 
 end Pure
-
-/-! ## Identities of the pure chain on sm_120 -/
 
 /-- An atom's exact sum `Σ a·b`. -/
 def sumAt (x : AtomIn) : ℚ := ∑ l, val (x.1 l) * val (x.2 l)
@@ -245,7 +188,6 @@ theorem term_abs_value (t : Term) : |t.value| = (t.mag : ℚ) * 2 ^ (t.exp - 23)
   rw [abs_mul, abs_mul, abs_of_nonneg (by positivity : (0 : ℚ) ≤ t.mag), abs_of_pos (two_zpow_pos _)]
   split <;> simp
 
-/-- A term of magnitude at least `2^j` is at least `2^(exp − 23 + j)`. -/
 theorem pow_le_abs_value (t : Term) (j : ℕ) (h : 2 ^ j ≤ t.mag) :
     (2 : ℚ) ^ (t.exp - 23 + j) ≤ |t.value| := by
   rw [term_abs_value, zpow_add₀ two_ne_zero, zpow_natCast]
@@ -261,7 +203,6 @@ theorem product_mag_ge (a b : Code) (h : (product a b).mag ≠ 0) : 2 ^ 17 ≤ (
   have : s ≠ 0 := fun h0 => h (by rw [h0, zero_mul])
   omega
 
-/-- A nonzero product's exponent is at most its value's binade plus 6. -/
 theorem product_pow_le (a b : Code) (h : (product a b).mag ≠ 0) :
     (2 : ℚ) ^ (product a b).exp ≤ 64 * |(product a b).value| := by
   have h1 := pow_le_abs_value _ 17 (product_mag_ge a b h)
@@ -274,7 +215,6 @@ theorem product_pow_le (a b : Code) (h : (product a b).mag ≠ 0) :
   rw [h64]
   linarith
 
-/-- The alignment exponent is the floor or a nonzero term's exponent. -/
 theorem maxExp_cases (z : ℤ) (ts : List Term) :
     maxExp z ts = z ∨ ∃ t ∈ ts, t.mag ≠ 0 ∧ maxExp z ts = t.exp := by
   induction ts generalizing z with
@@ -290,7 +230,6 @@ theorem maxExp_cases (z : ℤ) (ts : List Term) :
       · exact Or.inl h
       · exact Or.inr ⟨t, List.mem_cons_of_mem _ ht, hm, h⟩
 
-/-- With a nonzero term above the floor, `2^E ≤ B` once every nonzero term has `2^exp ≤ B`. -/
 theorem pow_maxExp_le {z : ℤ} {B : ℚ} (ts : List Term) (hts : ∃ t ∈ ts, t.mag ≠ 0 ∧ z < t.exp)
     (h : ∀ t ∈ ts, t.mag ≠ 0 → (2 : ℚ) ^ t.exp ≤ B) : (2 : ℚ) ^ maxExp z ts ≤ B := by
   rcases maxExp_cases z ts with h1 | ⟨t, ht, htm, h1⟩
@@ -303,7 +242,6 @@ theorem val_mul_eq (a b : Code) (ha : a.isNaN = false) (hb : b.isNaN = false) :
     val a * val b = (product a b).value :=
   (productExact _ _ _ _ (val_eq ha) (val_eq hb)).symm
 
-/-- On finite codes, a nonzero product's exponent is at most `2^6·M`, `M` bounding the products. -/
 theorem prod_exp_le {a b : Fin 32 → Code} (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) {M : ℚ}
     (hM : ∀ l, |val (a l) * val (b l)| ≤ M) (l : Fin 32) (hl : (product (a l) (b l)).mag ≠ 0) :
     (2 : ℚ) ^ (product (a l) (b l)).exp ≤ 64 * M := by
@@ -311,7 +249,6 @@ theorem prod_exp_le {a b : Fin 32 → Code} (ha : ∀ l, (a l).isNaN = false) (h
   rw [← val_mul_eq _ _ (ha l) (hb l)] at this
   linarith [hM l]
 
-/-- The grid of 32 products at width 26: `32·2^(E − 25) = 2^−20·2^E`. -/
 theorem grid_bound {E : ℤ} {B : ℚ} (hE : (2 : ℚ) ^ E ≤ B) :
     (32 : ℚ) * 2 ^ (E - ((26 : ℕ) : ℤ) + 1) ≤ 2 ^ (-20 : ℤ) * B := by
   have : (32 : ℚ) * 2 ^ (E - ((26 : ℕ) : ℤ) + 1) = 2 ^ (-20 : ℤ) * 2 ^ E := by
@@ -336,8 +273,6 @@ theorem bitLength_mul_pow {M : ℕ} (h1 : 2 ^ 23 ≤ M) (h2 : M < 2 ^ 24) (s : �
         _ ≤ M * 2 ^ s := Nat.mul_le_mul_right _ h1
   omega
 
-/-- **One step of the pure chain** at width `24 ≤ w ≤ 115` and floor at most −126, on finite codes: from a word of
-magnitude at most `C ≥ 0`, the next word is at most `C` plus the atom's mass, while that is at most `2^100`. -/
 theorem pure_stepW {w : ℕ} (hw24 : 24 ≤ w) (hw : w ≤ 115) {z : ℤ} (hz : z ≤ -126) {C : ℚ} (hC0 : 0 ≤ C)
     {acc : Nat} (hacc : PureWordW w C acc) (x : AtomIn) (hx : FiniteAtom x) (hC : C + massAt x ≤ 2 ^ 100) :
     PureWordW w (C + massAt x) (stepP ⟨[32], w, z⟩ acc x) := by
@@ -425,9 +360,6 @@ theorem pure_stepW {w : ℕ} (hw24 : 24 ≤ w) (hw : w ≤ 115) {z : ℤ} (hz : 
   right
   exact ⟨_, fp32Value_packTerm m1 m2 (by rw [e1]; omega) e2, m1, by rw [e1]; exact hlow, habs⟩
 
-/-- **The pure chain's running words** at width `24 ≤ w ≤ 115`, floor at most −126, on finite atoms of total mass at
-most `2^100`: the word before atom `t` is `+0` or normal at exponent at least `−11 − w`, of magnitude at most the mass
-of the atoms before it. -/
 theorem pure_inWordW {w : ℕ} (hw24 : 24 ≤ w) (hw : w ≤ 115) {z : ℤ} (hz : z ≤ -126) (atoms : List AtomIn)
     (hfin : ∀ x ∈ atoms, FiniteAtom x) (hm : mass atoms ≤ 2 ^ 100) :
     ∀ t ≤ atoms.length, PureWordW w (mass (atoms.take t)) (inWordP ⟨[32], w, z⟩ atoms t) := by
@@ -445,10 +377,6 @@ theorem pure_inWordW {w : ℕ} (hw24 : 24 ≤ w) (hw : w ≤ 115) {z : ℤ} (hz 
     rw [← mass_take_succ atoms t htl]
     exact (mass_take_le _ _).trans hm
 
-/-- **No identity on sm_120** (floor at most −126), on finite codes: on a running word `+0` or normal at exponent at
-least `−37` of magnitude at most `C ≥ 0`, an atom whose products are at most `M` and whose exact sum `S` has
-`9·2^−23·C + 2^−14·M < |S|` is not an identity. The first term is (a)'s nine ulps of the word; the second is the grid
-of a product above the word (`2^6` for a subnormal product's exponent). -/
 theorem sm120_no_identity {z : ℤ} (hz : z ≤ -126) {C : ℚ} (hC0 : 0 ≤ C) {acc : Nat} (hacc : PureWordW 26 C acc)
     (x : AtomIn) (hx : FiniteAtom x) {M : ℚ} (hM : ∀ l, |val (x.1 l) * val (x.2 l)| ≤ M)
     (h : 9 * 2 ^ (-23 : ℤ) * C + 2 ^ (-14 : ℤ) * M < |sumAt x|) :
@@ -513,9 +441,6 @@ theorem sm120_no_identity {z : ℤ} (hz : z ≤ -126) {C : ℚ} (hC0 : 0 ≤ C) 
     unfold sumAt at h
     linarith
 
-/-- **No identity in sm_120's pure chain** (floor at most −126), on finite atoms of total mass at most `2^100`: atom
-`t`, of exact sum `S` and products at most `M`, is not an identity once `9·2^−23·C + 2^−14·M < |S|`, `C` the absolute
-mass of the atoms before it. -/
 theorem sm120_pure_no_identity {z : ℤ} (hz : z ≤ -126) (atoms : List AtomIn) (hfin : ∀ x ∈ atoms, FiniteAtom x)
     (hm : mass atoms ≤ 2 ^ 100) (t : Nat) (ht : t < atoms.length) {M : ℚ}
     (hM : ∀ l, |val (atoms[t].1 l) * val (atoms[t].2 l)| ≤ M)
@@ -538,9 +463,6 @@ theorem mass_le_of_le {P : ℚ} (atoms : List AtomIn) (hP : ∀ x ∈ atoms, ∀
     push_cast
     linarith
 
-/-- **`sm120_pure_no_identity` with every product at most `P`** (Π's domain: `P ≤ 448²`, and at most `k/64` spike
-entries): atom `t` is not an identity once `(9·2^−23·32t + 2^−14)·P < |S|`, i.e. about `k·P < 2^19.8·|S|` at the
-chain's end, `k = 32t`. -/
 theorem sm120_pure_no_identity_of_le {z : ℤ} (hz : z ≤ -126) (atoms : List AtomIn)
     (hfin : ∀ x ∈ atoms, FiniteAtom x) {P : ℚ} (hP : ∀ x ∈ atoms, ∀ l, |val (x.1 l) * val (x.2 l)| ≤ P)
     (hk : 32 * atoms.length * P ≤ 2 ^ 100) (t : Nat) (ht : t < atoms.length)
@@ -554,9 +476,8 @@ theorem sm120_pure_no_identity_of_le {z : ℤ} (hz : z ≤ -126) (atoms : List A
     mul_le_mul_of_nonneg_left h1 (by positivity)
   linarith
 
-/-- **No bound on the products alone excludes an identity**: on the word `1.0` (`0x3F800000`), the atom with `a = 1.0`
-throughout and `b = 1.0` on its first 16 positions and `−1.0` on the rest (products `±1`, of sum 0) is an identity on
-sm_120, at any floor at most −126 (`FreezeP.sm120_floor`). -/
+/-- **No bound on the products alone excludes an identity**: on the word `1.0`, an atom of products `±1` and sum 0
+is an identity on sm_120, at any floor at most −126. -/
 theorem sm120_cancel_identity {z : ℤ} (hz : z ≤ -126) :
     stepP (sm120E4m3K32 z) 0x3F800000 (fun _ => 0x38, fun l => if (l : ℕ) < 16 then 0x38 else 0xB8) = 0x3F800000 := by
   unfold stepP

@@ -12,31 +12,8 @@ import Proofs.Pouw.Prob
 import Proofs.Pouw.Reduction
 import Proofs.Pouw.Witness
 
-/-!
-# Sanity: degenerate instances and side conditions
-
-Each degenerate instance named in the task has a lemma here saying what happens there, and which side condition of
-the guarantees excludes it or makes it harmless.
-
-| Instance | Lemma |
-|---|---|
-| empty workload | `wins_empty`, `tt_event_empty`: nothing can be won or certified |
-| unbounded `N` | `index_collision`, `identical_checked`: two units get identical noise (why `InDomain` bounds `N`) |
-| a unit alone in its group | `single_unit_not_inDomain`: outside the milestone domain; `lone_unit_over_budget`: its `m1Wref` exceeds `(199/198)·W_mm` |
-| full groups of 16 on one weight | `fullGroups_inDomain`: inside the milestone domain |
-| shared work in `W_ref` | `rowShare_covers`: the rounded-up row shares cover the group's and the weight's work |
-| `m`, `k` or `n = 0` | `default_pos` (excluded from the default domain), `Wmm_eq_zero`, `Wref_eq_zero_of_Wmm` |
-| `r = 0` | `noisedAct_rank_zero`, `tt_false_rank_zero` |
-| `d = 0`, `d ∤ k` | `checkIdx_depth_zero`, `tt_false_depth_zero`; `blockEnd_full`, `blockEnd_last`, `Y_last` |
-| zero noise | `tt_false_zero_noise` |
-| `T = 0` | `wins_T_zero_iff` |
-| `q = 0` | `trace_indep_of_q_zero` |
-| `Ω_max < 1/(1 − g)` | `certified_le`, `omega_lt_inv_one_sub`, `reductionGap_lt_of_omega_lt_one` |
-| `g₀ ≥ 1` | `tt_false_of_gap0_ge_one`, and `tt_admitsRef_bound` for `g₀ < 1` |
-| randomized adversaries | `randomized_of_deterministic` |
-| R_copy with zero noise | `copy_zero_noise`: Nz fails and R_copy's bound fails |
-| (d′)'s hypotheses together | `milestone_hypotheses_consistent` (at `W_ref = m1Wref`, `Ω_max = Ω_M1`) |
--/
+/-! Degenerate instances and side conditions: what happens at each, and which side condition of the guarantees
+excludes it or makes it harmless. -/
 
 @[expose] public section
 
@@ -48,8 +25,6 @@ variable {Q R S : Type}
 
 theorem pr_of_isEmpty {α : Type} [Fintype α] [IsEmpty α] (P : α → Prop) : pr P = 0 :=
   pr_eq_zero fun x => isEmptyElim x
-
-/-! ## Empty workload -/
 
 theorem wins_empty (P : Protocol Q R S) (U : Workload) (hN : U.layout.N = 0) {g T : ℝ} (hg : g < 1) (hT : 0 ≤ T)
     (τ : Trace) (H : Q → R) (s : S) : ¬ Wins P U g T τ H s := by
@@ -71,8 +46,6 @@ theorem tt_event_empty (P : Protocol Q R S) (U : Workload) (hN : U.layout.N = 0)
   rw [this, Finset.sum_empty, not_lt]
   exact div_nonneg hT (by linarith)
 
-/-! ## Zero dimensions -/
-
 theorem Wmm_eq_zero (sh : Shape) (h : sh.m = 0 ∨ sh.k = 0 ∨ sh.n = 0) : sh.Wmm = 0 := by
   unfold Shape.Wmm; rcases h with h | h | h <;> simp [h]
 
@@ -80,13 +53,10 @@ theorem default_pos (sh : Shape) (h : sh.InDefaultDomain) : 0 < sh.m ∧ 0 < sh.
   obtain ⟨hm, -, hk, -, -, hn, -⟩ := h
   exact ⟨hm, by omega, by omega⟩
 
-/-- Under the reduction's `Ω_max` bound a zero-work unit has `W_ref = 0`: it certifies nothing. -/
 theorem Wref_eq_zero_of_Wmm (P : Protocol Q R S) (L : Layout) (u : ℕ) (Ωmax : ℝ)
     (hW : (P.Wref L u : ℝ) ≤ Ωmax * ((L.shape u).Wmm : ℝ)) (h0 : (L.shape u).Wmm = 0) : P.Wref L u = 0 := by
   rw [h0] at hW
   exact_mod_cast le_antisymm (by simpa using hW) (Nat.cast_nonneg _)
-
-/-! ## Rank, depth and the last block -/
 
 theorem noisedAct_rank_zero (P : D1.Params Q R S) (hr : P.r = 0) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
     (A : Mat) : P.noisedAct H s U u A = A := by
@@ -96,7 +66,6 @@ theorem noisedAct_rank_zero (P : D1.Params Q R S) (hr : P.r = 0) (H : Q → R) (
 theorem checkIdx_depth_zero (P : D1.Params Q R S) (hd : P.d = 0) (sh : Shape) : P.checkIdx sh = ∅ := by
   simp [D1.Params.checkIdx, D1.nSegments, hd]
 
-/-- Every block but the last is a full step of `d`. -/
 theorem blockEnd_full {d k t : ℕ} (hd : 0 < d) (ht : t + 1 < D1.nSegments d k) : D1.blockEnd d k t = (t + 1) * d := by
   unfold D1.blockEnd
   unfold D1.nSegments at ht
@@ -106,7 +75,6 @@ theorem blockEnd_full {d k t : ℕ} (hd : 0 < d) (ht : t + 1 < D1.nSegments d k)
     omega
   exact min_eq_left this
 
-/-- The last block ends at `k`, whether or not `d ∣ k`. -/
 theorem blockEnd_last {d k : ℕ} (hd : 0 < d) (hk : 0 < k) : D1.blockEnd d k (D1.nSegments d k - 1) = k := by
   unfold D1.blockEnd D1.nSegments
   have h1 := Nat.div_add_mod (k + d - 1) d
@@ -118,15 +86,12 @@ theorem blockEnd_last {d k : ℕ} (hd : 0 < d) (hk : 0 < k) : D1.blockEnd d k (D
     omega
   exact min_eq_right this
 
-/-- The last checked block is the whole noised product. -/
 theorem Y_last (P : D1.Params Q R S) (hd : 0 < P.d) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat)
     (hk : 0 < (U.layout.shape u).k) :
     P.Y H s U u A (D1.nSegments P.d (U.layout.shape u).k - 1)
       = mm (U.layout.shape u).k (P.noisedAct H s U u A) (P.noisedWt H s U u) := by
   unfold D1.Params.Y
   rw [blockEnd_last hd hk]
-
-/-! ## TT fails in degenerate protocols -/
 
 /-- A cost model in which every constant trace is a free program with no oracle calls that hashes nothing. -/
 def FreeConstants (CM : CostModel Q R S) : Prop :=
@@ -137,8 +102,6 @@ def FreeConstants (CM : CostModel Q R S) : Prop :=
 theorem freeModel_freeConstants : FreeConstants (freeModel Q R S) :=
   fun τ => ⟨fun _ _ _ _ => QTree.done τ, fun _ _ _ _ _ => ⟨rfl, le_rfl, rfl, rfl⟩⟩
 
-/-- If a constant trace has every unit's checked values correct for every `H` and `s`, TT fails at `q = 0`
-in every model with free constants, on every workload with positive work. -/
 theorem tt_false_of_const [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
     (CM : CostModel Q R S) (hCM : FreeConstants CM) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload)
     (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (τ : Trace)
@@ -171,7 +134,6 @@ theorem checkedSet_zeroTrace (P : Protocol Q R S) (U : Workload) (H : Q → R) (
   refine ⟨⟨0, 0, 0⟩, by simp [zeroTrace, hu], zero_actOK _, fun x hx => ?_⟩
   rw [hY u hu x hx]; rfl
 
-/-- **Zero noise**: with zero activation noise, the zero-input trace is correct for free, so TT fails. -/
 theorem tt_false_zero_noise [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] (CM : CostModel Q R Salt)
     (hCM : FreeConstants CM) (P : D1.Params Q R Salt)
     (hE : ∀ sh a b, mm P.r (P.expAct sh a b).1 (P.expAct sh a b).2 = 0) (D : Layout → Prop) (U : Workload)
@@ -185,14 +147,12 @@ theorem tt_false_zero_noise [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R]
     unfold D1.Params.noisedAct D1.Params.actF; rw [hE]; simp
   rw [h0]; simp [mm]
 
-/-- **`r = 0`**: the noise vanishes and TT fails. -/
 theorem tt_false_rank_zero [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] (CM : CostModel Q R Salt)
     (hCM : FreeConstants CM) (P : D1.Params Q R Salt) (hr : P.r = 0) (D : Layout → Prop) (U : Workload)
     (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (g₀ : ℝ)
     (ε : ℕ → ℕ → ℝ) (hTT : Assumptions.TT CM P.toProtocol D g₀ ε) : 1 ≤ ε 0 U.layout.N :=
   tt_false_zero_noise CM hCM P (fun sh a b => by funext i l; simp [mm, hr]) D U hU hpos g₀ ε hTT
 
-/-- **`d = 0`**: nothing is compared and TT fails. -/
 theorem tt_false_depth_zero [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
     (CM : CostModel Q R S) (hCM : FreeConstants CM) (P : D1.Params Q R S) (hd : P.d = 0) (D : Layout → Prop)
     (U : Workload) (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (g₀ : ℝ)
@@ -203,13 +163,10 @@ theorem tt_false_depth_zero [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] 
   rw [checkIdx_depth_zero P hd] at this
   exact absurd this (Finset.notMem_empty x)
 
-/-! ## `T = 0` and `q = 0` -/
-
 theorem wins_T_zero_iff (P : Protocol Q R S) (U : Workload) (g : ℝ) (τ : Trace) (H : Q → R) (s : S) :
     Wins P U g 0 τ H s ↔ 0 < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ) := by
   unfold Wins; rw [zero_div]
 
-/-- At `q = 0` an adversary of the witness model commits the same trace against every oracle. -/
 theorem trace_indep_of_q_zero (A : Adversary (outputPriced Q R S)) (U : Workload) (T : ℝ)
     (hA : A.Bounded U T 0) (H H' : Q → R) (s : S) : A.trace U H s = A.trace U H' s := by
   have h := (hA H s).2
@@ -220,9 +177,6 @@ theorem trace_indep_of_q_zero (A : Adversary (outputPriced Q R S)) (U : Workload
   show (A.online U A.act (A.pre.eval H) s).eval H = (A.online U A.act (A.pre.eval H') s).eval H'
   rw [QTree.eval_of_calls_eq_zero h1 H', QTree.eval_of_calls_eq_zero h2 H']
 
-/-! ## The certified work and `Ω_max` -/
-
-/-- What the reduction certifies per unit is `(1 − g)·W_ref ≤ (1 − g₀)·W_mm < W_mm`. -/
 theorem certified_le {g₀ Ωmax Wref Wmm : ℝ} (hΩ : 0 < Ωmax) (hg₀ : g₀ < 1) (hW : Wref ≤ Ωmax * Wmm) :
     (1 - reductionGap g₀ Ωmax) * Wref ≤ (1 - g₀) * Wmm := by
   rw [one_sub_reductionGap]
@@ -230,20 +184,16 @@ theorem certified_le {g₀ Ωmax Wref Wmm : ℝ} (hΩ : 0 < Ωmax) (hg₀ : g₀
   calc (1 - g₀) / Ωmax * Wref ≤ (1 - g₀) / Ωmax * (Ωmax * Wmm) := mul_le_mul_of_nonneg_left hW h
     _ = (1 - g₀) * Wmm := by field_simp
 
-/-- For `g₀ > 0`, the reduction's `g` always has `Ω_max < 1/(1 − g)`: the game certifies less than `m·k·n`. -/
 theorem omega_lt_inv_one_sub {g₀ Ωmax : ℝ} (hΩ : 0 < Ωmax) (h0 : 0 < g₀) (h1 : g₀ < 1) :
     Ωmax < 1 / (1 - reductionGap g₀ Ωmax) := by
   rw [one_sub_reductionGap, one_div_div, lt_div_iff₀ (by linarith)]
   nlinarith
 
-/-- An `H_ref` cheaper than the GEMM (`Ω_max < 1`) gives `g < g₀`. -/
 theorem reductionGap_lt_of_omega_lt_one {g₀ Ωmax : ℝ} (hΩ : 0 < Ωmax) (hΩ1 : Ωmax < 1) (h1 : g₀ < 1) :
     reductionGap g₀ Ωmax < g₀ := by
   unfold reductionGap
   have : 1 - g₀ < (1 - g₀) / Ωmax := by rw [lt_div_iff₀ hΩ]; nlinarith
   linarith
-
-/-! ## TT against the honest reference -/
 
 theorem honest_checkedSet (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Mat) (hP : P.Complete D) (hU : U.InDomain D) (hact : ∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) :
@@ -253,8 +203,6 @@ theorem honest_checkedSet (P : Protocol Q R S) (D : Layout → Prop) (U : Worklo
   · rw [← honest_correctSet P D U H s act hP hU hact]
     exact correctSet_subset_checkedSet P U H s _
 
-/-- The honest reference is an adversary of TT's game: if TT holds with `ε(qref) < 1` in a model that hashes
-nothing, the model's `H_ref` costs at least `(1 − g₀)·∑ W_mm`. -/
 theorem tt_admitsRef_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
     (CM : CostModel Q R S) (hH : CM.Hashless) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) (hP : P.Complete D)
     (hAdm : AdmitsRef CM P D qref) (U : Workload) (hU : U.InDomain D) (hq : qref U ≤ 2 ^ 64) (g₀ : ℝ)
@@ -276,8 +224,6 @@ theorem tt_admitsRef_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [
     exact hlt
   linarith
 
-/-- **`g₀ ≥ 1`**: TT is unsatisfiable (error below 1) whenever `H_ref` runs in a model that hashes nothing on a
-workload with work. -/
 theorem tt_false_of_gap0_ge_one [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
     (CM : CostModel Q R S) (hH : CM.Hashless) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) (hP : P.Complete D)
     (hAdm : AdmitsRef CM P D qref) (U : Workload) (hU : U.InDomain D) (hq : qref U ≤ 2 ^ 64)
@@ -297,9 +243,6 @@ theorem wins_of_gap_ge_one (P : Protocol Q R S) (U : Workload) {g T : ℝ} (hg :
     Wins P U g T τ H s :=
   lt_of_le_of_lt (div_nonpos_of_nonneg_of_nonpos hT (by linarith)) hpos
 
-/-! ## Unbounded `N` -/
-
-/-- With a finite query type and `c` queries per unit, some two indices get the same queries. -/
 theorem index_collision [Finite Q] (P : D1.Params Q R S) (c : ℕ) (hc : P.QueryBound c) (s : S) (A : Mat)
     (w : ℕ) : ∃ u u', u ≠ u' ∧ P.qAct s u A w = P.qAct s u' A w ∧ P.qWt s u w = P.qWt s u' w := by
   let T := {l : List Q // l.length ≤ c}
@@ -321,10 +264,6 @@ theorem identical_checked [Finite Q] (P : D1.Params Q R S) (c : ℕ) (hc : P.Que
   unfold D1.Params.Y D1.Params.noisedAct D1.Params.noisedWt D1.Params.actF D1.Params.wtF
   rw [hs, hw, hw', h1, h2]
 
-/-! ## The milestone domain and (d′)'s hypotheses -/
-
-/-- A milestone-shape unit alone in its group on its weight (`2^12` rows) is outside the milestone domain, so its
-group's and its weight's shared work are never charged to a single unit. -/
 theorem single_unit_not_inDomain :
     ¬ (⟨⟨1, fun _ => milestoneShape, fun _ => 0⟩, fun _ => 0⟩ : Workload).InDomain D1.m1Domain := by
   intro h
@@ -335,9 +274,6 @@ theorem single_unit_not_inDomain :
   unfold milestoneShape
   norm_num
 
-/-- **Full groups are in the milestone domain**: a layout of milestone shapes and 64-bit weight ids in which every
-unit's group `16·⌊u/16⌋ … 16·⌊u/16⌋ + 15` lies below `N` and on the unit's weight satisfies `m1Domain`'s rows
-condition (`16·2^12 = 2^16`). -/
 theorem fullGroups_inDomain (L : Layout) (hsh : ∀ u < L.N, D1.M1Shape (L.shape u) ∧ L.fixedId u < 2 ^ 64)
     (hfull : ∀ u < L.N, ∀ t < 16, 16 * (u / 16) + t < L.N ∧ L.fixedId (16 * (u / 16) + t) = L.fixedId u) :
     D1.m1Domain L := by
@@ -375,9 +311,6 @@ theorem milestone_hypotheses_consistent :
   obtain ⟨hTT, hAdm⟩ := ttWitness D1.m1Wref fun U hU u hu => (hW U hU u hu).1
   exact ⟨_, by unfold D1.m1Omega; norm_num, hΩ, fun U hU u hu => (hW U hU u hu).2, hAdm, hTT⟩
 
-/-- **The shares cover the shared work**: over units whose rows sum to `rows > 0`, the rounded-up shares
-`⌈work·m_u/rows⌉` add up to at least `work`. `m1Wref` charges each (epoch, weight, group) product over the group's
-units on the weight, and each (epoch, weight) product over the weight's units, this way. -/
 theorem rowShare_covers (T : Finset ℕ) (mu : ℕ → ℕ) (work : ℕ) (h : 0 < ∑ u ∈ T, mu u) :
     work ≤ ∑ u ∈ T, D1.rowShare work (mu u) (∑ u ∈ T, mu u) := by
   set rows := ∑ u ∈ T, mu u with hrows
@@ -420,10 +353,6 @@ theorem lone_unit_over_budget :
   unfold Shape.Wmm milestoneShape
   norm_num
 
-/-! ## Randomized adversaries -/
-
-/-- **Deterministic adversaries suffice**: an adversary using coins `C` independent of `(H, s)`, within `(T, q)` for
-every coin value, wins with no break with probability at most `δ`. -/
 theorem randomized_of_deterministic [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (P : Protocol Q R S) (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) (hG : GGap CM P D g δ) (U : Workload)
     (hU : U.InDomain D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64) (C : Type) [Fintype C] [Nonempty C]
@@ -440,8 +369,6 @@ theorem randomized_of_deterministic [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
     exact (pr_nonneg _).trans (hG U hU T hT q hq (A c) (hA c))
   calc _ = pr W := pr_equiv e W
     _ ≤ _ := pr_prod_le W _ hδ fun c => hG U hU T hT q hq (A c) (hA c)
-
-/-! ## R_copy without noise -/
 
 /-- **R_copy's bound needs the noise**: with constant values Nz fails, and the one-class adversary is correct on a
 two-position unit at cost 16, so for `0 < g₀ < 1/2` the event has probability 1, above the bound `2^(−2g₀)`. -/

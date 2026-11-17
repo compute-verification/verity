@@ -5,23 +5,8 @@ public import Proofs.Pouw.TS.SessionSound
 public import Proofs.Pouw.FillerLuck
 public import Proofs.Pouw.MonitoringPeriod.Honest
 
-/-!
-# PoUW's proof system soundness from its proof layer (the proof)
-
-`ResourceAccounting.SecurityProofs.Bridge.CheckProofSystemSound` is a union bound over a window's sessions: where the check
-accepts a window and some sampled proof block `u` fails its relation, the session `sessOf x w u` that proves `u` is accepted and
-its statement fails at its opening, so the event lies in the union of the window's `n_π` unsound sessions, each at most
-`δ`. `serviceSound_of_sessions` composes it with `ResourceAccounting.SecurityProofs.TS.SessionSoundAt`: a window's sessions
-that are Flock sessions meeting that guarantee's named premises give `ServiceSound` at `n_π · (δ_s + δ)`.
-
-The witnesses' statements name no instance. Each proof takes H1's honest live-salt period
-(`Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1`), one window and one session: there the check accepts every window on
-every path and its layer is sound at `0`, and with relations that every opening fails `ServiceSound` fails at `0`,
-since the check accepts and samples a unit on every path.
-
-This module imports `Proofs.Pouw.TS.SessionSound`, whose imports make `X` a token, so `Proofs/ResourceAccounting.lean`
-imports it and no theorem here binds `X`.
--/
+/-! PoUW's proof system soundness from its proof layer; no theorem here binds `X`, because
+`Proofs.Pouw.TS.SessionSound`'s imports make it a token. -/
 
 @[expose] public section
 
@@ -29,9 +14,6 @@ namespace ResourceAccounting.SecurityProofs.Bridge
 
 open Pouw.RelativeSecurity Properties.Certifier.JointBridge Properties.Certifier.JointBridge.Sessions
 
-/-- **A window's drawn-unit failures are a union of its unsound sessions**: the window is accepted and some sampled proof block
-fails its relation with probability at most `n_π · δ` when each session of the layer is unsound with probability at
-most `δ`. -/
 theorem prob_drawn_le {Ω U V : Type} [Fintype Ω] {n nπ : ℕ} (acc : Paths Ω n → Fin n → Prop)
     (drawn : Paths Ω n → Fin n → U → Prop) (key : U → ℕ)
     (opened : Paths Ω n → Fin n → ℕ → ℕ → V) (rel : Paths Ω n → Fin n → U → (ℕ → V) → Prop)
@@ -60,9 +42,6 @@ theorem CheckProofSystemSound : Properties.Certifier.JointBridge.CheckProofSyste
 open Flock.SoundAtBridge
 open scoped ENNReal
 
-/-- **`ServiceSound` from a window's Flock sessions**: when the check layer's proofs are Flock sessions `sess` that
-meet `ResourceAccounting.Guarantees.TS.SessionSoundAt`'s named premises, the check accepts a window and some sampled proof block fails
-its relation with probability at most `n_π · (δ_s + δ)`. -/
 theorem serviceSound_of_sessions {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n nπ : ℕ} (p : PouwCheck.Params)
     (ws : Properties.Pouw.MonitoringPeriod.Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
