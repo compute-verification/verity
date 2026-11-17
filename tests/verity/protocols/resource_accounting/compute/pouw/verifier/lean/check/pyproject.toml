@@ -77,7 +77,7 @@ untraced = [
     "test_live_verified_difftest.py",
     "test_verified_difftest.py",
 ]
-# check runs it as three parts by test id (`lean-suites:verity-pouw-verifier-difftest:K/3`, `suites.py`'s `id_part_of`), each
+# check runs it as three parts by test id (`lean-suites:verity-pouw-check-difftest:K/3`, `suites.py`'s `id_part_of`), each
 # collecting every file and running the tests whose node id hashes to K, so that ci.toml's plans spread its one process over
 # three shards
 parts = 3

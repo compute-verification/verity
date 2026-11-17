@@ -19,7 +19,7 @@ after-sample value, `leaf_lanes.produced_values`).
   1's last chunk is 0, so the combine's ok is 0 against its known 1 (REJECT); ``lane1-last-ok-row-zero``, that chunk on
   that tree, its ok 1 against the row's 0 (REJECT). At n = 1 only the ok-row ones.
 
-`pouw-leaf-own-window` (`PouwVerifier.LeafOwn`) states v1's statements only, so this runner has no leaf-own check;
+`pouw-leaf-own-window` (`PouwCheck.LeafOwn`) states v1's statements only, so this runner has no leaf-own check;
 `summarize` exits 1 unless every check's verdict is the expected one, the honest statements' reported roots are the
 produced record's (`produced.opened`) and their opened rows its openings (`produced.shared`).
 """

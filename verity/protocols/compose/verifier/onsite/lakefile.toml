@@ -24,7 +24,7 @@ name = "core_composition"
 path = "../lean"
 
 # The ported subprotocols: SPOT's one-stage audit (integrity) and PoUW's period credit (work,
-# `PouwVerifier.Period`).
+# `PouwCheck.Period`).
 [[require]]
 name = "core_spot"
 path = "../../../proofs/spot/verifier/lean"

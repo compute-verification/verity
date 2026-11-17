@@ -16,7 +16,7 @@
 #   seal    the Commit with --seal: each closed window sealed to UTIL_ROOT's scratch (deleted after the run)
 #   h1      the Commit (sealed iff H1_SEAL=1) and PoUW H1 at T and S 1 with the epoch's in-process coins (no challenger
 #           gate: it credits nothing; the gate's own costs are not in this run). H1's verifier is the Lean
-#           `pouw-verifier-difftest`, built here with lake (elan under $HOME), so run this arm with `--cwd clone`
+#           `pouw-check-difftest`, built here with lake (elan under $HOME), so run this arm with `--cwd clone`
 #   graphs  stock with the engine's options overridden by UTIL_ENGINE_JSON (default: enforce_eager off, so torch.compile
 #           with CUDA graphs captured at every power of two up to T, and async scheduling on), without the bench row. Not
 #           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off. Under async

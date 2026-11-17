@@ -42,7 +42,7 @@ path = "../../../workload_classification/training_detection/inference_only/verif
 name = "core_vstar_recursive"
 path = "../../../proofs/spot_flock/verifier/lean"
 
-# Work in the composite of record: Pearl+'s run verdict as a core protocol (`PouwVerifier.PearlPlus.Protocol`).
+# Work in the composite of record: Pearl+'s run verdict as a core protocol (`PouwCheck.PearlPlus.Protocol`).
 [[require]]
 name = "pouw_pearlplus"
 path = "../../../resource_accounting/compute/pouw/verifier/lean/pearlplus"

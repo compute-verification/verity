@@ -140,7 +140,7 @@ def LEVELS : Nat := 64
 table's rows are the layout's own (`tableRows`), every weights' value's too (`Internal.weights`), and no entry's leaves
 are bounded otherwise. -/
 def MAX_ROWS : Nat := 2 ^ 24
-/-- `weights.chunks` (`PouwVerifier.Chunks.chunks`): the leaves an A or B row of K = `k` codes is cut into; none for a K it
+/-- `weights.chunks` (`PouwCheck.Chunks.chunks`): the leaves an A or B row of K = `k` codes is cut into; none for a K it
 refuses (Python's `ValueError`). -/
 def chunks? (k : Nat) : Option Nat := (Chunks.chunks k).toOption
 
@@ -1061,14 +1061,14 @@ def OK_ROW : Array Nat := #[1]
 /-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's). -/
 def OK_SALT_TAG : ByteArray := Domains.POUW_H1_OK_ROW_SALT.toUTF8.push 0
 
-/-- `core_check.ok_salt`: `PouwVerifier.saltBytes` bytes of SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for
-`c < PouwVerifier.saltBytes / 64`, each output whole, over msg = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position). -/
+/-- `core_check.ok_salt`: `PouwCheck.saltBytes` bytes of SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for
+`c < PouwCheck.saltBytes / 64`, each output whole, over msg = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position). -/
 def okSalt (context : String) (position : Nat) : ByteArray :=
   let msg := (OK_SALT_TAG ++ context.toUTF8).push 0 ++ PouwCommit.be8 position
   (List.range (PouwVerifier.saltBytes / 64)).foldl (fun acc c => acc ++ Flock.Sha512.hash (msg ++ Flock.be32 c.toUInt32))
     ByteArray.empty
 
-/-- `core_check.public_words`: `PouwVerifier.publicRow` as a `row/v2` row of 16-bit leaves, word w its bytes 2w (low) and
+/-- `core_check.public_words`: `PouwCheck.publicRow` as a `row/v2` row of 16-bit leaves, word w its bytes 2w (low) and
 2w + 1. -/
 def publicWords (salt : ByteArray) (position : Nat) (roots : ByteArray × ByteArray)
     (j10r : Option (Nat × Nat × Nat) := none) : Array Nat :=
@@ -1921,7 +1921,7 @@ def knownRoot (program executionPhase v : String) (rows : Array (Array Nat × By
 /-- `credit._live_finding`: round s's live@<s> finding as its statement reads it (`live_reads.reads_file`),
 `(port, value, root)`: each slot port at round s's slot table, each header port at round 0's request table (their
 roots `roots`), `m` at the known `<pre>m@<s>` of `m` and `s` at the known `<pre>round@<s>` of s (`live_reads.m_table`,
-`round_table`: each one row of its two 16-bit words under `PouwVerifier.publicRowSalt` of the execution phase's open root and s),
+`round_table`: each one row of its two 16-bit words under `PouwCheck.publicRowSalt` of the execution phase's open root and s),
 each `cap_<i>` at the known `<pre>caps`, whose root is `caps` (`capsRoot`), and `o0` at the known `<pre>live-ok` rows,
 whose root is `ok`. -/
 def liveFinding (program pre executionPhase : String) (t s m : Nat) (roots : List (String × String)) (caps ok : String) :
@@ -1937,7 +1937,7 @@ def liveFinding (program pre executionPhase : String) (t s m : Nat) (roots : Lis
     [(LIVE_OK_PORT, s!"{pre}{LIVE_OK_VALUE}", ok)])
 
 /-- `live_reads.caps_table`'s root: the v2 unit's public caps `<pre>caps`, T = `t` rows, row q the public max_tokens of
-request q (`maxTokens`, `committedLength`), 0 past them, as two 16-bit words under `PouwVerifier.publicRowSalt` of the
+request q (`maxTokens`, `committedLength`), 0 past them, as two 16-bit words under `PouwCheck.publicRowSalt` of the
 execution phase's open root and q. -/
 def capsRoot (program pre executionPhase : String) (t : Nat) (maxTokens : List Nat) : R String :=
   knownRoot program executionPhase s!"{pre}{CAPS}"
