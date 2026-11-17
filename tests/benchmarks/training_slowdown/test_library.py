@@ -6,7 +6,7 @@ import pytest
 from conftest import calculators_count
 from synthetic import SHAPE, VOCAB, tiny_registry, write_config
 
-from training_slowdown import calculator, config, formalism, gates, library, starts, work
+from training_slowdown import calculator, config, gates, library, starts, work
 from training_slowdown.capture import products
 
 
@@ -45,7 +45,7 @@ def test_a_traced_steps_slowdown_is_the_calculators_bound_on_its_work():
 
 def test_a_figure_with_no_term_for_the_last_sub_work_reads_as_before(monkeypatch):
     """A figure written before the calculator's last sub-work (`min_cut.SUBWORKS`) had a term in its `subsets` reads
-    as one written after: the library's row and the words a row publishes read only the sub-work that binds."""
+    as one written after: the library's row and the rest of its figure read only the sub-work that binds."""
     c = GATES / 100
     after = library.bound(trace(), c, K)
     last, real = list(after["figure"]["subsets"])[-1], calculator.slowdown
@@ -59,7 +59,8 @@ def test_a_figure_with_no_term_for_the_last_sub_work_reads_as_before(monkeypatch
     got = library.bound(trace(), c, K)
     assert last == "one operand kind" and last not in got["figure"]["subsets"]
     assert (got["slowdown"], got["binds"], got["bound"]) == (after["slowdown"], after["binds"], after["bound"])
-    assert formalism.he_rests_on(got["figure"]) == formalism.he_rests_on(after["figure"])
+    assert {k: v for k, v in got["figure"].items() if k != "subsets"} == {
+        k: v for k, v in after["figure"].items() if k != "subsets"}
 
 
 def test_a_step_the_bound_cant_read_has_no_slowdown_and_says_why():
@@ -116,7 +117,8 @@ def test_the_command_traces_each_entry_and_prints_its_row_and_its_run_over_each_
 def test_a_run_of_every_entry_writes_its_least_slowdown_under_the_metrics_id(tmp_path, monkeypatch, capsys):
     """A run of every entry at the registered starts writes the least slowdown of the entries that have one into the
     run's result, under the id `metrics.toml` declares: partial while the coded entry has none, measured once every
-    entry has one. A run of named entries, or at other starts, is not the library's and writes none."""
+    entry has one. A run of one named entry writes its slowdown, partial, for that entry with its start as the model,
+    and prints the point as its last line; a run of several named entries, or at other starts, writes none."""
     from verity_bench import kit
 
     for name in ("OUT", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR"):
@@ -142,7 +144,14 @@ def test_a_run_of_every_entry_writes_its_least_slowdown_under_the_metrics_id(tmp
     (m,) = json.loads((tmp_path / "every" / "result.json").read_text())["measurements"]
     assert row["id"] == library.METRIC and a["slowdown"] is not None and b["slowdown"] is None
     assert (m["name"], m["value"], m["unit"], m["mark"]) == (row["id"], a["slowdown"], row["unit"], "partial")
-    assert library.main([str(adapted), "--out", str(tmp_path / "named")]) == 0
+    capsys.readouterr()
+    assert library.main([str(adapted), "--out", str(tmp_path / "one")]) == 0
+    (m,) = json.loads((tmp_path / "one" / "result.json").read_text())["measurements"]
+    assert (m["value"], m["mark"], m["member"], m["model"]) == (a["slowdown"], "partial", "adapted", a["start"])
+    assert json.loads(capsys.readouterr().out.splitlines()[-1]) == {
+        "name": row["id"], "value": a["slowdown"], "unit": row["unit"], "mark": "partial", "member": "adapted",
+        "model": a["start"], "card": None}
+    assert library.main([str(adapted), str(attacks / "coded.toml"), "--out", str(tmp_path / "named")]) == 0
     assert library.main(["--starts", str(tiny_registry(tmp_path / "other")), "--out", str(tmp_path / "other")]) == 0
     for part in ("named", "other"):
         assert (tmp_path / part / "library.json").is_file() and not (tmp_path / part / "result.json").exists()

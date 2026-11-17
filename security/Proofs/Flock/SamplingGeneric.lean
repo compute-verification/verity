@@ -14,7 +14,7 @@ public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Flock.SamplingGeneric.RegAt
 public import Proofs.Flock.SamplingGeneric.RegTrace
 public import Proofs.Flock.SamplingGeneric.RegX
-public import Proofs.Flock.SamplingGeneric.RegCanon
+public import Proofs.Core.Game.RewindingCanon
 public import Proofs.Flock.SamplingGeneric.Efficient
 public import Proofs.Flock.SamplingGeneric.Counter
 public import Proofs.Flock.SamplingGeneric.Deployed
