@@ -842,6 +842,9 @@ class DeviceStore:
                     raise RuntimeError(f"rs_leaf_pass on GPU {gpu.index}: the shard does not fit the leaf pass (h0 "
                                        f"{self.h0} over 8, or its kernels on this device); "
                                        "pass_mode(0) is rs_pass's")
+                if leaf and rc == 6:
+                    raise RuntimeError(f"rs_leaf_pass on GPU {gpu.index}: the library was built without "
+                                       "-DLEAF_PASS64, which rows.sh passes for a run of 64 rows with the leaf pass")
                 if rc:
                     raise RuntimeError(f"{'rs_leaf_pass' if leaf else 'rs_pass'} on GPU {gpu.index}: {rc}")
                 if host:

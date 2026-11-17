@@ -9,7 +9,9 @@
 # unless the build holds every one, and also when there is no base, the base does not compile or cuobjdump fails.
 # It ends there too unless the build's chained pass hashes its sign key and rows as the reference does (`sign_key.py`).
 # The kernels the base has none of, the 64-row pass's, get a record and their listings (`sass_gate.py`,
-# out/sass_gate.json, out/sass64), and the run ends there too (exit 5) if one holds what that gate refuses.
+# out/sass_gate.json, out/sass64), and the run ends there too (exit 5) if one holds what that gate refuses. The leaf
+# pass's two (leaf_pass64_kernel, leaf_consumer64_kernel) are built, with -DLEAF_PASS64 to both builds, only for a run
+# with 64 among ROWS and --leaf-ctas in ROWS_ARGS; that gate refuses them in any other build.
 # BUILD_ONLY=1 ends after the build, so a machine with no GPU checks that it compiles (TOOLKIT=1 assembles CUDA
 # 12.9's nvcc first, `benchmarks/pouw/harness/jobs/toolkit.sh`; CUDA_HOME names a toolkit, which goes first).
 # DEFS are session.cu's own nvcc arguments (-DSK64_PER_SM=2: the 64-row receipt kernels at 128 registers a thread).
@@ -108,6 +110,8 @@ export B
 } > "$O/machine.txt" 2>&1
 
 FLAGS=(-O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+LEAF64=() NO_LEAF64=(--no-leaf64)
+if [[ " $ROWS " == *" 64 "* && "${ROWS_ARGS:-}" == *--leaf-ctas* ]]; then LEAF64=(-DLEAF_PASS64) NO_LEAF64=(); fi
 BASE_REV=${BASE_REV:-$(git -C "$TREE" merge-base HEAD origin/main 2> /dev/null)}
 # The base's session.cu where the tree's is, beside the tree's own includes (the circuits' kernels and the reader).
 mkdir -p "$B/base/$PR/remote_session"
@@ -117,10 +121,10 @@ BASE=$B/base/$PR/remote_session/session.cu
 { [ -n "$BASE_REV" ] && git -C "$TREE" show "$BASE_REV:$PR/remote_session/session.cu" > "$BASE" 2> /dev/null; } \
   || rm -f "$BASE"
 # shellcheck disable=SC2086
-"$NVCC" "${FLAGS[@]}" ${DEFS:-} -o "$B/session.so" $PR/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
+"$NVCC" "${FLAGS[@]}" "${LEAF64[@]}" ${DEFS:-} -o "$B/session.so" $PR/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
 "$NVCC" "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" $PR/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
 M=
-[ -f "$BASE" ] && { "$NVCC" "${FLAGS[@]}" -o "$B/base.so" "$BASE" > "$O/base.ptxas" 2>&1 & M=$!; }
+[ -f "$BASE" ] && { "$NVCC" "${FLAGS[@]}" "${LEAF64[@]}" -o "$B/base.so" "$BASE" > "$O/base.ptxas" 2>&1 & M=$!; }
 wait $S || { grep -n -m 40 -A 3 'error' "$O/session.ptxas"; say "BUILD: session.cu does not compile for sm_$ARCH"; exit 4; }
 wait $K || { tail -n 40 "$O/kv.ptxas"; say "BUILD: kv.cu does not compile for sm_$ARCH"; exit 4; }
 [ -n "$M" ] || {
@@ -136,7 +140,7 @@ wait "$M" || {
 sha256sum "$B"/*.so > "$O/libs.sha256"
 same=$(python3 $RS/same_sass.py "$B/base.so" "$B/session.so" --out "$O/same_sass.json" --listings "$O/sass" 2>&1)
 rc=$?
-say "build: sm_$ARCH; against $BASE_REV: $same"
+say "build: sm_$ARCH ${LEAF64[*]:-without -DLEAF_PASS64}; against $BASE_REV: $same"
 [ $rc = 0 ] || {
   say "BUILD: same_sass.py exits $rc: this build is not shown to hold every kernel of the base's as it was, so" \
     "nothing runs (out/same_sass.json, out/sass)"
@@ -152,7 +156,7 @@ cuobjdump -sass "$B/session.so" > "$B/session.sass" 2> "$O/cuobjdump.err" || {
   exit 5
 }
 gate=$(python3 $RS/sass_gate.py "$O/session.ptxas" "$B/session.sass" "$O/sass_gate.json" --arch "sm_$ARCH" \
-  --listings "$O/sass64" 2>&1)
+  --listings "$O/sass64" "${NO_LEAF64[@]}" 2>&1)
 rc=$?
 say "build: the 64-row kernels: $gate"
 [ $rc = 0 ] || {
