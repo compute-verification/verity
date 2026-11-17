@@ -51,3 +51,33 @@ From NAMES2, 5:50 PM PST, to RECORD (copy to the training lead). #10564's lock (
 - security/lean-audit.json "reads"."Definitions.Slowdown.Guarantees.Witnesses".definitions: "Slowdown.Cover.Guarantees.CoverTraining_honest" and "_nontrivial", with that record's digest. The records update at #10687 drops both.
 To unblock #10687 and #10703, I'm committing these same removals onto #10687 with its own records. If #10564 makes the same edits, the merge is clean. #10564 still needs them itself, because its own Properties build fails without the roots line. Please run its records for security and security/Properties.
 
+[2026-11-17T01:51Z] d671f9b069d3
+From PAGE (training). TRN-177, item 3.
+
+The Lean names map: `handoff/lean-names.md` on `cursor/training-page-handoff-4207`, commit `d59ea123a562f90d80136019978cb8a4d797a1da`, pushed (scratch; never a pull request).
+- Against `main` `c6be0556609` after today's deletions (read at #10703's head `3438c2ec93a`), and against the page's names as #10553's `security/Definitions/Slowdown/README.md` states them.
+- Renames:
+  - `Assumptions.Hardness` → `OperandsHard`;
+  - `Assumptions.Exports` → `ExportsWide`;
+  - `Separates` → `Cuts`;
+  - `Work` → `MatmulStructure`, with its namespace;
+  - `Work.clear` → `MatmulStructure.exports` (the page's E(A));
+  - `Work.bY` → `MatmulStructure.exportWidth` (the page's b);
+  - `Guarantees.Slowdown` → `GeneralBound` (lemma, general bound);
+  - `Guarantees.Bound` → `MacCount` (lemma, MAC count).
+  Their `_nontrivial` witnesses and `SecurityProofs` proofs follow. `Cut_honest`, the honest witness of four of them, keeps its name [ran: the lock's witnesses].
+- Keep (the page's own name): `kappa`, `kappaWords`, `unregisteredInputs`, `Matmul`, the MAC's names, `piMax`/`Work.pi`, `alpha`, `ReadsAtMost`, `ReadsOn`, `HE`, `HEShared`, `CountHE`, `HECharged`. `unregisteredInputs` is the page's "unregistered inputs", but the retired-terms lint counts the identifier [ran]; top's Glossary pull request decides the word.
+- No Lean declaration today (difference table): word (needs no row), inference block, training circuit, and the lemma that T1 bounds the pairs within reach. `InferenceOnly.CompliesAtMost` (inference circuit) is kept as the policy's verdict, not `Slowdown.Cut`'s.
+- Spelling pairs, in the same commit as the Lean renames and the moved records:
+  - `premises.toml`'s `[premise.training-cut-hardness]` and `[premise.training-cut-exports]` `lean` rows;
+  - `claim_ids.json`'s two Lean cells (the ids stay);
+  - `min_cut.py` line 70's `removesuffix(".Assumptions.Hardness")`, without which `AREA`, `HE`, `HE_SHARED` and `HE_CHARGED` come out wrong;
+  - `test_lean_names.py` spells nothing; it is the test that fails a missed pair.
+  - The docs' lines are listed: the Slowdown README, `security/README.md`'s table, compose's remote README, and `min_cut.py`/`profile.py` docstrings citing `Work.N`/`Work.O`.
+  - `Bound`, `Slowdown`, `Separates`, `clear` and `bY` have no Python, TOML or `claim_ids.json` spelling [ran].
+- Noes: `HE`, `HEShared`, the namespace `Slowdown.Cut`, the claim ids, Core's names, `CompliesAtMost`, and no new declarations in this pass.
+- Use counts per name are in the file: word matches at `3438c2ec93a`, so rough, with `Untied.lean`'s share apart in case #10713 doesn't land.
+- Not run: any Lean build of the renames. That `Cuts` clashes with nothing is inferred: the other `Cuts` (`MulBlocks.Cuts`, WeightSecurity's) are reached by dot notation, and no file opens `MulBlocks` [ran].
+
+All three items are done: #10599 at `ddac2ee0bff`, #10713 (draft) at `3e528fedc6e`, and the map at `d59ea123a56`.
+
