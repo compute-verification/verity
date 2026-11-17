@@ -240,6 +240,38 @@ an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its ru
 or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing, a metric
 the directory of the file declaring it never names, and a shared `metrics.toml` directly under `benchmarks/`.
 
+## On VCF's Slurm cluster
+
+The Verifiable Compute Foundation's cluster (`vcf.lucidcomputing.ai`: the 8-H100 node `h100-sxm-8-0` and the one-card
+nodes `h100-nvl-1-0-cc` and `h100-nvl-1-1-cc`) runs a benchmark from a commit as one Slurm job under Daniel's account.
+Only the control pod holds the login key, so a lead sends the job from there with `infra/vcf/` (deployed under
+`/data/vcf/`). From a checkout, build the payload, `git archive` of the commit and the command, and copy it to the pod:
+
+~~~text
+infra/vcf/payload.sh origin/main --tool native_peak -- python benchmarks/native_peak/measure.py --dtype bf16 --sizes 8192 \
+  | research pods ssh vy-control-verity -- 'cat > /data/vcf/payloads/NAME.tar.gz'
+research pods ssh vy-control-verity -- 'cd /data/vcf-jobs && SEND=/data/vcf/payloads/NAME.tar.gz setsid -f bash \
+  /data/vcf/vcf-job-run.sh NAME main 30 /data/vcf/vcf-bench.sh --nodelist=h100-sxm-8-0 --gres=gpu:1 --cpus-per-task=16 \
+  --mem=64G > NAME.launch.log 2>&1 < /dev/null'
+~~~
+
+The job builds the tree's environment with uv on the node's disk (`--sync`, default `--all-packages --extra torch`:
+CUDA torch from PyPI) and runs the command under `research run --local-only`, so its run directory is the one our
+machines write. `vcf-job-run.sh` copies it to `/data/vcf-jobs/NAME-STAMP/result/runs/RUN/`, publishes it with
+`research data custody RUN_DIR --publish` (`vcf-publish.sh OUT PAYLOAD` retries that), and removes the job's
+directory on the cluster; `NAME.launch.log` and `sacct.txt` give the Slurm job, the node and its wait and run times.
+Read it back as any run: `research data show RUN`.
+
+Such a record names its machine `vcf-NODE` (`execution.machine`) and its cost provider `vcf`. It has no lease and
+no slot of ours (its memory limit is Slurm's `--mem`), its node is shared with other users, it has no rate, and
+nothing preserves it while it runs (`research run-preserve` and `research status` from a VM don't reach it). The nodes
+have network, Python 3.12 and no root. The DGX's driver is CUDA 13.0's, which `main`'s torch needs;
+`h100-nvl-1-1-cc`'s is CUDA 12.8's, too old for it, and `h100-nvl-1-0-cc` refuses any GPU request. No node has `nvcc` or `ncu` on
+its PATH, and the H100 has no card file in `hardware/cards/`, so a card-bound benchmark refuses there. Use only idle
+capacity: one job at a time, at most 30 minutes, one GPU and 16 CPUs; `vcf-job-run.sh` cancels a job still pending
+after 20 minutes. A job that pends on `Resources` while the DGX's GPUs are idle may find them held by a reservation
+of the account (`scontrol show reservation`), which `--reservation=NAME` runs it in.
+
 ## Index
 
 Every directory has one row, in the group of what it measures; `tests/test_benchmarks_index.py` holds the rows to the
