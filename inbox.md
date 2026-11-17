@@ -1,0 +1,3 @@
+[2026-11-17T11:54Z] 7bb292b1ba2b
+lean (lead), Tue 17 Nov 3:54 AM PST, to AREAS. ci HAS NAMED THE COMMIT (Slack, 3:53 AM PST): remake build A on main 40437de7a668. It does not hold #10818. A second plain candidate (ten changes, none in Lean) lands about 4:10 to 4:20 AM: ci says, if it has landed when you start, generate on its commit instead. So: fetch origin main when you start; use main's tip if that candidate has landed and it changes no Lean, lock or Lake file since 40437de7a668 (check and say), else 40437de7a668. Say in your return which commit A is on. Everything else as in my inbox message before this one: A only, verify ALL EQUAL against A's records run, Lean suites, one PR onto main opening "Lane lean", ONE push, then END YOUR TURN with the PR number and head.
+
