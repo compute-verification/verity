@@ -154,7 +154,7 @@ def test_start_launches_the_steps_beside_the_executors_check_with_main_below_as_
     only when what it checks changed between them, and its record, with ``base``."""
     h, base, sha, asked = _harness(world, monkeypatch, agreement)
     rec = start(h.d, sha, base)
-    steps = ["lean-agreement", "ratchet-gate"] if agreement else ["ratchet-gate"]
+    steps = ["lean-agreement", "landing-gates", "ratchet-gate"] if agreement else ["landing-gates", "ratchet-gate"]
     assert h.posted == [(sha, ",".join(steps), {"base": base, "agreement": agreement, "no_regenerate": True,
                                                 "train_from": OWN_TRAIN})]
     assert rec == {"ids": ["r-post-0"], "tip": sha, "base": base, "at": h.clock, "steps": steps,
@@ -171,14 +171,14 @@ def test_a_detached_launch_is_pending_until_it_prints_its_run_ids_which_judge_pu
     printed: list[list[str] | None] = [None]
     h.d.launched = lambda got: (printed[0], "")
     rec = start(h.d, sha, base)
-    assert rec == {"ids": [], "launch": launch, "tip": sha, "base": base, "at": h.clock, "steps": ["ratchet-gate"],
+    assert rec == {"ids": [], "launch": launch, "tip": sha, "base": base, "at": h.clock, "steps": ["landing-gates", "ratchet-gate"],
                    "skip": ["lean-agreement"]}
     assert judge(h.d, rec) == Verdict(PENDING) and rec["launch"] == launch
     h.clock += LAUNCH_LOST_S
     printed[0] = ["r-1"]
     h.run_state["r-1"] = ("running", None, None)
     assert judge(h.d, rec) == Verdict(PENDING)
-    assert rec == {"ids": ["r-1"], "tip": sha, "base": base, "at": h.clock, "steps": ["ratchet-gate"], "skip": ["lean-agreement"]}
+    assert rec == {"ids": ["r-1"], "tip": sha, "base": base, "at": h.clock, "steps": ["landing-gates", "ratchet-gate"], "skip": ["lean-agreement"]}
 
 
 def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
@@ -229,7 +229,7 @@ def test_a_dry_run_or_a_shadow_queue_launches_nothing(world, monkeypatch, how):
     h, base, sha, _ = _harness(world, monkeypatch, **({"shadow": True} if how == "shadow" else {}))
     h.d.dry_run = how == "dry_run"
     assert start(h.d, sha, base) is None and h.posted == []
-    assert any(x.startswith(f"research queue vqueue: would launch train.sh {sha[:12]} m1 --deferred ratchet-gate --base")
+    assert any(x.startswith(f"research queue vqueue: would launch train.sh {sha[:12]} m1 --deferred landing-gates,ratchet-gate --base")
                for x in world.logs), world.logs
 
 
@@ -267,8 +267,8 @@ def test_a_run_that_passed_every_step_it_judges_passes(world, monkeypatch, tmp_p
     h, base, sha, _ = _harness(world, monkeypatch)
     rec = start(h.d, sha, base)
     d = _slim(h, tmp_path)
-    assert [st["step"] for st in step_records(d)] == [*PREFLIGHTS, "ratchet-gate"]
-    assert judge(h.d, rec) == Verdict(PASS) and rec["verdict"] == {"state": PASS, "passed": list(PREFLIGHTS)}
+    assert [st["step"] for st in step_records(d)] == [*PREFLIGHTS, "landing-gates", "ratchet-gate"]
+    assert judge(h.d, rec) == Verdict(PASS) and rec["verdict"] == {"state": PASS, "passed": ["landing-gates", *PREFLIGHTS]}
 
 
 def test_a_failed_preflight_fails_the_candidate_with_the_paths_its_failure_names(world, monkeypatch, tmp_path):

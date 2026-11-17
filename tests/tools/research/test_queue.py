@@ -1090,17 +1090,12 @@ def test_a_member_merged_again_onto_the_same_tree_takes_its_recorded_merge_and_s
     assert _trees(world, rebuilt) == _trees(world, members) and _git(world.origin, "rev-parse", f"{rebuilt[0].commit}^1") == moved
 
 
-def test_a_merge_is_made_again_when_its_head_its_parents_tree_or_the_drivers_change_and_judged_again_when_the_gates_do(
-        world, monkeypatch):
+def test_a_merge_is_made_again_when_its_head_its_parents_tree_or_the_drivers_change(world, monkeypatch):
     """A merge record stands only for what it read: a new head, a parent tree that changed (`main` moved under `next`) or a
-    merge driver's command each merge again; a merge taken from its record with the gates changed is judged again, as the
-    gates' verdicts are kept only under `main` and its gates."""
+    merge driver's command each merge again."""
     from research import clone
 
-    _move_main(world, {**GATED, "gates/h.py": "import sys\nsys.exit(0)\n"})
-    real, judged = Q.gate_refusal, []
-    monkeypatch.setattr(Q, "gate_refusal", lambda repo, m, merge, gates, onto, kind: judged.append(merge) or real(
-        repo, m, merge, gates, onto=onto, kind=kind))
+    _move_main(world, GATED)
     world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"b.txt": "2\n"}))
     world.queue().sync()
@@ -1115,14 +1110,8 @@ def test_a_merge_is_made_again_when_its_head_its_parents_tree_or_the_drivers_cha
     _git(world.origin, "update-ref", "-d", "refs/heads/next")
     assert [m.pr for m in world.queue().sync()[0]] == [1, 2] and calls == [h1, h2]
     calls.clear()
-    judged.clear()
     _git(world.origin, "update-ref", "-d", "refs/heads/next")
-    assert [m.pr for m in world.queue().sync()[0]] == [1, 2] and calls == [] and judged == []
-    monkeypatch.setattr(Q, "gates_at", lambda repo, ref, key="landing_gates": ("gates/g.py", "gates/h.py")
-                        if key == "landing_gates" else ())
-    _git(world.origin, "update-ref", "-d", "refs/heads/next")
-    members, _ = world.queue().sync()
-    assert [m.pr for m in members] == [1, 2] and calls == [] and judged == [m.commit for m in members]
+    assert [m.pr for m in world.queue().sync()[0]] == [1, 2] and calls == []
 
 
 def test_a_recorded_conflict_stays_a_conflict_onto_its_tree_and_the_member_merges_afresh_onto_another(world, monkeypatch):

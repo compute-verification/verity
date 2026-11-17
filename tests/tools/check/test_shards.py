@@ -77,13 +77,13 @@ def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
 def test_the_plans_are_the_documented_ones():
     build = ("lean-build", "lean-unit-cut")
     assert D.plans() == {
-        3: ((*NAMED, "pytest:*", *BESIDE_AUDIT),
+        3: ((*NAMED, "landing-gates", "pytest:*", *BESIDE_AUDIT),
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", *PYTEST_BESIDE_BUILD),
             ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST)),
-        4: ((*NAMED, "circuit-check:1/4", *BESIDE_AUDIT),
+        4: ((*NAMED, "landing-gates", "circuit-check:1/4", *BESIDE_AUDIT),
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "circuit-check:2/4"),
             ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", *WITH_RUST)),
-        5: ((*NAMED, "pytest:adapters/vllm/verity_vllm/definitions", *BESIDE_AUDIT),
+        5: ((*NAMED, "landing-gates", "pytest:adapters/vllm/verity_vllm/definitions", *BESIDE_AUDIT),
             ("flock-circuit-build", "flock-rust-tests", "lean-audit:*", *WITH_RUST, "ratchet-gate", "added-lines"),
             (*build, *BESIDE_BUILD, "lean-agreement"), ("pytest:*",), ("circuit-check",))}
 
@@ -686,7 +686,7 @@ def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
         assert CHECK.record(["--base", "HEAD", "--on", "pod", *args]) == 0
     pytest = sorted(f"pytest:{s.name}" for s in CHECK.SUITES.discover() if s.name not in CHECK.AFTER_LEAN)
-    assert parts == [[["pytest:adapters/vllm/verity_vllm/definitions", *SECURITY, *sorted(BESIDE_AUDIT)]],
+    assert parts == [[["pytest:adapters/vllm/verity_vllm/definitions", *SECURITY, "landing-gates", *sorted(BESIDE_AUDIT)]],
                      [[p for p in pytest if p != "pytest:adapters/vllm/verity_vllm/definitions"]], [[]], []], "an unsharded check sends none"
 
 

@@ -32,8 +32,8 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
                           is off the merge gate
     added-lines           no verdict, never required: it judges the change from the check's base, not COMMIT's tree, and
                           is off the merge gate
-    landing-gates         `must-run`, always: it judges the change from the check's base (drive.toml's `landing_gates`), which
-                          no key of COMMIT's tree covers
+    landing-gates         no verdict, never required of a tree: it judges the change from the check's base (drive.toml's
+                          `landing_gates`), not COMMIT's tree, so each candidate's check runs it
 
 A job off the merge gate (drive's policy, policy.toml's `off_gate`: circuit-check, ratchet-gate, added-lines) is listed, and none of its parts is
 required.
@@ -465,8 +465,8 @@ def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = 
             parts.append(Part(j, j, None, "no-verdict", why="it judges the change from the check's base, not the tree: the "
                               "train's check and the mark's preflight run it", required=False))
         elif j == "landing-gates":
-            parts.append(Part(j, j, None, "must-run", why="it judges the change from the check's base, which no key of the tree "
-                              "covers: each candidate's check runs it"))
+            parts.append(Part(j, j, None, "no-verdict", why="it judges the change from the check's base, not the tree: each "
+                              "candidate's check runs it", required=False))
         elif j in IMPLIED:
             parts.append(Part(j, j, None, "implied"))
         elif j != "pytest":

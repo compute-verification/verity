@@ -2944,7 +2944,7 @@ class Queue:
             if not e.pr.move and commit not in (None, tip) and (drops := self._lock_drops(tip, e.pr.head, commit)):
                 commit, why = None, lock_drop_refusal(drops, self.branch)
             if commit is not None and gates:
-                refused, unjudged = gate_refusal(self.workdir, main, commit, gates, onto=self.branch)
+                refused, unjudged = gate_refusal(self.workdir, main, commit, gates, onto=self.branch, kind="landing gate")
                 if unjudged and not refused:
                     wait(n, f"a landing gate can't judge it yet: {' | '.join(unjudged)}; retried next sync")
                     continue

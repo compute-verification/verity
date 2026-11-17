@@ -90,8 +90,8 @@ def judge(base: str, head: str, out: Path, repo: Path = ROOT) -> list[str]:
         if rc == 1:
             try:
                 failures = [(str(f["why"]), [str(x) for x in (f.get("fix") or [])][:FIX_LINES]) for f in json.loads(text)["failures"]]
-            except (ValueError, TypeError, KeyError, AttributeError):
-                failures = []
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                text = f"its --json isn't {{\"failures\": [{{\"why\", \"fix\"}}]}} ({type(e).__name__}: {e}): {text}"
         if not failures:
             said.append(f"{path} at {base[:12]} can't judge {head[:12]}'s change from {mb[:12]} "
                         f"({text.strip()[-400:] if rc is None else f'exit {rc}: {text.strip()[-400:]}'})")
