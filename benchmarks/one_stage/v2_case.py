@@ -51,7 +51,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import a5
-from composite import canonical, write_private
+from verity.protocols.compose.prover.composite import canonical, write_private
 
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 

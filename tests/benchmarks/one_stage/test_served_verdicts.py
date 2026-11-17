@@ -5155,7 +5155,8 @@ def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[s
     """The follow-on of `_deferred`'s deferral: `served_verdicts.sh v3c` with D alone (no K, class or attester) on
     cpu-6, a node with V3c's audit's memory, at the served node's tree, in `_v3c`'s toy tree with a record and a
     composite that note their arguments (``extra`` adds to the environment, None unsetting): `_v3c`'s outcome."""
-    _script(tmp_path / "tree" / "benchmarks" / "one_stage" / "served_composite.sh", FAKE_SERVED_COMPOSITE)
+    _script(tmp_path / "tree" / "verity" / "protocols" / "compose" / "prover" / "served_composite.sh", FAKE_SERVED_COMPOSITE)
+    (tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
     (tmp_path / "tree" / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
     env = {"K": None, "V3C_CLASS": None, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "COMPOSITE": None,
            "PATH": f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", "HOST": "cpu-6", "NODE_MEM_GB": "755",
@@ -5742,6 +5743,7 @@ def _compose(tmp_path: Path, keep: tuple[str, ...] = (), link: tuple[str, Path] 
                        (bin_ / "lake", "exit 0"),
                        (tree / "verity" / "protocols" / "compose" / "prover" / "served_composite.sh", FAKE_COMPOSE_COMPOSITE)):
         _script(path, body)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
     env = {"PATH": f"{_hosts(tmp_path)}:{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
            "D": str(d), "OUT": str(tmp_path / "compose-out"), "SERVE_ROOT": str(tmp_path / "root"),
@@ -6818,6 +6820,7 @@ def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks
     if v1:
         (remote / "RemoteV1Main.lean").write_text("")
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "verity" / "protocols" / "compose" / "prover").mkdir(parents=True)
     (tree / "verity" / "protocols" / "compose" / "prover" / "composite.py").write_text(PRODUCT_COMPOSITE)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "PRODUCT": "remote", "SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1", **({"POUW": pouw} if pouw else {})}
@@ -6870,6 +6873,7 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "verity" / "protocols" / "compose" / "prover").mkdir(parents=True)
     (tree / "verity" / "protocols" / "compose" / "prover" / "composite.py").write_text(FAKE_COMPOSITE)
     v2 = d / "private" / "sampled-proofs-v2"
     (tree / "verity" / "protocols" / "compose" / "prover" / "served_cases.py").write_text(f'''import json, sys
@@ -7061,7 +7065,8 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parents[2] / "verity" / "protocols" / "compose" / "prover" / "composite.py", tree / "benchmarks" / "one_stage")
+    (tree / "verity" / "protocols" / "compose" / "prover").mkdir(parents=True)
+    shutil.copy(HERE.parents[2] / "verity" / "protocols" / "compose" / "prover" / "composite.py", (tree / "verity" / "protocols" / "compose" / "prover"))
 
     def case(where: str, of: str) -> None:
         (d / "private" / where).mkdir(parents=True)
@@ -7126,7 +7131,8 @@ def test_the_composite_takes_no_case_from_the_attester_pieces_private_directory_
     for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parents[2] / "verity" / "protocols" / "compose" / "prover" / "composite.py", tree / "benchmarks" / "one_stage")
+    (tree / "verity" / "protocols" / "compose" / "prover").mkdir(parents=True)
+    shutil.copy(HERE.parents[2] / "verity" / "protocols" / "compose" / "prover" / "composite.py", (tree / "verity" / "protocols" / "compose" / "prover"))
     own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])
            if p != attester}
     for p, where in own.items():

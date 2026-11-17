@@ -1518,7 +1518,7 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
     ``{"auditor", "composite"}``, and the log, which its check accepts (`registration.check_log`, held to
     `Core.Registration` by difftest), whose auditor holds the record's key for a network attester the log places.
     ``holds``, that ``attester`` where it does and ``why`` where it doesn't, and ``from``, each input's SHA-512."""
-    import composite as CO
+    from verity.protocols.compose.prover import composite as CO
     from benchmarks.network_traces import network_attester_chain as WC
     from verity.protocols.registration.verifier import registration as REG
 
@@ -1758,7 +1758,7 @@ def registered_files(found: Mapping[str, tuple[str, dict[str, Any]]], case: Path
     digest its evidence names (the file v2 verified its sessions against), is one a5 pinned, as staged before the draw
     or as completed once the tie held (``pin``, `pinned`). ``holds``, ``read_by``, those composites' ids, ``compared``,
     the statements' names, and ``why`` where it doesn't hold."""
-    import composite as CO
+    from verity.protocols.compose.prover import composite as CO
 
     stated = {p: c.get("params_sha512") for p, (_, doc) in found.items() for c in doc.get("cases") or ()
               if c.get("id") == SAMPLED_ID}
@@ -1915,7 +1915,7 @@ def alpha_gamma(path: Path | None) -> dict[str, str]:
         return {"missing": ALPHA_GAMMA_UNSTATED}
     if not path.exists():
         return {"read": "given", "is": ALPHA_GAMMA_GIVEN}
-    from served_cases import FROM_DIVISION
+    from verity.protocols.compose.prover.served_cases import FROM_DIVISION
     try:
         read = json.loads(path.read_text()).get("read")
     except (OSError, ValueError, AttributeError) as e:

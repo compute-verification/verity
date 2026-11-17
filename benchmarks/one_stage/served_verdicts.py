@@ -1868,7 +1868,7 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
     doesn't make or answer, or an answer about another record, is the row's error. An accept of a case in the
     per-member form carries ``covers`` (`MEMBERS_COVER`), ``members`` (sampled of registered) and each sampled
     member's bound over its own proof blocks (``bounds``), and no ε over the workload."""
-    import served_cases as SC
+    from verity.protocols.compose.prover import served_cases as SC
 
     if not (audit_dir / "window" / "case-v2.json").is_file():
         return {**spot_row(audit_dir, run),
@@ -2382,7 +2382,7 @@ def window_digest(audit: Path) -> tuple[str | None, str]:
     """The digest of the window's docket R, the record SPOT's audit ``audit`` sampled against
     and every case of the window commits to (`served_cases.window_case`, `served_cases.record_of`), and where it was
     read; or None and why there is none."""
-    import served_cases as SC
+    from verity.protocols.compose.prover import served_cases as SC
 
     try:
         return SC.record_of(SC.window_case(audit))[1], f"{audit}/window/case.json"
@@ -2397,8 +2397,8 @@ def composite_tie(doc: Mapping[str, Any], window: str | None, read: str) -> str 
     cases to the same record (`Core.Composition.same`, `Core.Remote.windows`), and accepts only where every case names
     its digest and the commitment binds them (`Core.Composition.judge`); a composite that accepts with a case naming no
     digest is refused here too."""
-    import composite as C
-    import served_cases as SC
+    from verity.protocols.compose.prover import composite as C
+    from verity.protocols.compose.prover import served_cases as SC
 
     if window is None:
         return f"there is no window record to tie it to ({read})"

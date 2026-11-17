@@ -356,6 +356,16 @@ reaches = [
 
 [[place]]
 paths = [
+    "verity/protocols/compose/prover",
+]
+loads = [
+    "verity/circuits",
+    "verity/protocols/proofs/spot/verifier",
+    "verity/protocols/resource_accounting/compute/pouw/verifier",
+]
+
+[[place]]
+paths = [
     "verity/protocols/compose/verifier",
 ]
 trusted = true

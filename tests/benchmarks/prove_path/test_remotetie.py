@@ -384,8 +384,8 @@ def _one_stage() -> SimpleNamespace:
     them (`replay` under the name its own tests load it by)."""
     if str(ONE_STAGE) not in sys.path:
         sys.path.insert(0, str(ONE_STAGE))
-    import composite
-    import served_cases
+    from verity.protocols.compose.prover import composite
+    from verity.protocols.compose.prover import served_cases
     replay = sys.modules.get("one_stage_replay")
     if replay is None:
         spec = importlib.util.spec_from_file_location("one_stage_replay", ONE_STAGE / "replay.py")

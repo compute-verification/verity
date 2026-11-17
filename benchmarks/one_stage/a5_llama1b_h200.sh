@@ -231,7 +231,7 @@ import json, subprocess, sys
 from pathlib import Path
 
 sys.path.insert(0, "benchmarks/one_stage")
-from composite import canonical, write_private
+from verity.protocols.compose.prover.composite import canonical, write_private
 
 case, out, exe = json.loads(Path(sys.argv[1]).read_text()), Path(sys.argv[2]), sys.argv[3]
 files = {"params.json": canonical(case["params"]), "commitment.bin": bytes.fromhex(case["commitment"]),

@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_a5_case_v2 import RP  # noqa: F401 -- the fixture: this suite's `replay` under the name the window audit's `case_v2` imports
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage")))
-import composite as C
+from verity.protocols.compose.prover import composite as C
 import v2_case as V
 
 LOG = Path(__file__).resolve().parent / "fixtures" / "served-window-m0" / "compose.log"

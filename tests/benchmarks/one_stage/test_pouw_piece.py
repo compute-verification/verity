@@ -20,7 +20,7 @@ import pytest
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage")))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"))
-import composite as C
+from verity.protocols.compose.prover import composite as C
 import pouw_check_cases
 import pouw_period_cases
 import pouw_piece as P

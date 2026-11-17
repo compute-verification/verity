@@ -31,7 +31,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 
 import inference_only as IO  # noqa: E402
-import served_cases as SC  # noqa: E402
+from verity.protocols.compose.prover import served_cases as SC  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 from verity.circuits.ops.boolean import versions as BL  # noqa: E402
 from verity_vllm.definitions.registry.catalog import load  # noqa: E402
@@ -605,7 +605,7 @@ def test_inference_only_check_counts_the_verdicts_gates_on_the_session_program(s
     """The compiled `inference-only-check --count` on `small`'s session Program counts the record's gates and fresh bits a
     block and accepts: the Lean verifier whose verdict it is reads the instance it is given, as only the built executable can show (the
     reference test holds the instance to the Python count, and `inference-only-count-difftest` the Lean to the reference)."""
-    import served_cases as SC
+    from verity.protocols.compose.prover import served_cases as SC
 
     exe = SC.build(SC.INFERENCE_ONLY_LEAN[0], "inference-only-verifier")
     row = IO.session_row(small, None, None)

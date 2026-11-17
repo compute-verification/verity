@@ -64,9 +64,9 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 
-import composite as CO  # noqa: E402
+from verity.protocols.compose.prover import composite as CO  # noqa: E402
 import onsite_record as OR  # noqa: E402
-import served_cases as SC  # noqa: E402
+from verity.protocols.compose.prover import served_cases as SC  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 from benchmarks.network_traces import network_attester_chain as WC  # noqa: E402

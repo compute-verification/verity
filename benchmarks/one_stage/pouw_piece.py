@@ -55,7 +55,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from composite import line, outcome, write_private
+from verity.protocols.compose.prover.composite import line, outcome, write_private
 
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
